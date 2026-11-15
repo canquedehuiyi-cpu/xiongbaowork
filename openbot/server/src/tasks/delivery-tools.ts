@@ -8,6 +8,7 @@ import { type GrantedTool, REFUSAL_MARKER } from "../plugins/tools";
 import { TenantContextError } from "../tenant/context";
 import { emitRunEvent } from "../threads/run-side-events";
 import type { Delivery } from "./delivery";
+import { DELIVERY_EVENTS } from "./delivery-events";
 import { dueRefusalText, readDueTime } from "./due-time";
 import { DELIVERY_ITEM_KINDS, type EvidenceGate } from "./evidence-gate";
 import type { TaskProjector, TriggerSource } from "./projector";
@@ -53,15 +54,8 @@ const PLAIN_QUESTIONS = "问一句答一句的普通对话不要用这三个工�
 export const EXTERNAL_DELIVERY_GUIDE =
   "你没有接活、交付、延期的工具，服务器按你的回复替你走这三步：接下时在回复里写「预计 HH:MM」或「预计 N 分钟」报预计时间（换成真实的钟点或时长）；做完的改动会自动当作交付物，没有改动的就写一句「结论：」开头的交付结论，都用「自查：」开头的一句写你怎么查过的；交不了就写缺什么，并写「延到 HH:MM」说要延到几点。";
 
-/** The card-drawing events the chat renders (Task 9). */
-export const DELIVERY_EVENTS = {
-  accepted: "delivery.accepted",
-  extensionRequested: "delivery.extension_requested",
-  delivered: "delivery.delivered",
-  bounced: "delivery.bounced",
-  /** The person's answer to a 延期申请, so the chat's card can say it was granted or not. */
-  extensionDecided: "delivery.extension_decided",
-} as const;
+/** The card-drawing events the chat renders (Task 9); named in a leaf module both sides read. */
+export { DELIVERY_EVENTS };
 
 /**
  * Said, in its instructions, to a turn that is a round of a card the person asked to follow and the

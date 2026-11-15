@@ -124,6 +124,59 @@ async function bot(
   return profile.id;
 }
 
+/** 交付卡的内容（规格第 6 节：卡片按租户隔离），没有一个字可以出现在群回复里。 */
+const TASK_ID = "11111111-1111-4111-8111-111111111111";
+const ACCEPTED = {
+  taskId: TASK_ID,
+  dueAt: "2026-11-15T08:00:00.000Z",
+  criteria: "保密的验收标准。必需：A、B、C",
+};
+const BOUNCED = { taskId: TASK_ID, reason: "保密的挡回原因：缺 C。" };
+const DELIVERED = {
+  taskId: TASK_ID,
+  deliverable: {
+    kind: "deliverable",
+    links: [{ url: "https://secret.example.test/sheet", title: "保密的表格" }],
+    notes: ["保密的结论"],
+    checks: ["保密的自查"],
+  },
+};
+const EXTENSION = {
+  taskId: TASK_ID,
+  dueAt: "2026-11-15T09:00:00.000Z",
+  reason: "保密的延期理由",
+};
+const DELIVERY_CONTENT = [
+  "保密的验收标准",
+  "保密的挡回原因",
+  "secret.example.test",
+  "保密的表格",
+  "保密的结论",
+  "保密的自查",
+  "保密的延期理由",
+];
+
+function expectNoDeliveryContent(seen: unknown) {
+  const text = JSON.stringify(seen);
+  for (const secret of DELIVERY_CONTENT) expect(text).not.toContain(secret);
+}
+
+/** 标记去掉时刻（时刻另查是不是时间），便于整体比较；没有标记为 null。 */
+function marksWithoutTime(marks: unknown): unknown {
+  if (marks === undefined) return null;
+  expect(Array.isArray(marks)).toBe(true);
+  return (marks as Record<string, unknown>[]).map(({ at, ...rest }) => {
+    expect(typeof at === "string" && !Number.isNaN(Date.parse(at))).toBe(true);
+    // 只有这几个字段，不带内容。
+    expect(
+      Object.keys(rest).every((key) =>
+        ["kind", "taskId", "agentId", "dueAt"].includes(key),
+      ),
+    ).toBe(true);
+    return rest;
+  });
+}
+
 function service(options: {
   replies: Record<
     string,
@@ -762,25 +815,16 @@ describe("group conversations in PostgreSQL", () => {
     expect(theirs.messages.some((row) => "compaction" in row)).toBe(false);
   });
 
-  test("交付卡事件记在回复上，群里每个人都看得到", async () => {
+  test("交付卡在群回复上只记不带内容的状态标记，群里每个人读到的一样", async () => {
     const owner = await person();
     const teammate = await person();
     const ada = await as(owner, () => bot(owner, "Ada"));
     // 群组至少两位员工；Grace 这一轮什么卡也没发，它的回复不带 `delivery`。
     const grace = await as(owner, () => bot(owner, "Grace"));
-    const accepted = {
-      taskId: "11111111-1111-4111-8111-111111111111",
-      dueAt: "2026-11-15T02:30:00.000Z",
-      criteria: "三家全部在售款。必需：A、B、C",
-    };
-    const bounced = {
-      taskId: accepted.taskId,
-      reason: "验收标准里的必需项没对上：缺 C。",
-    };
     const { conversations } = service({
       replies: {
         [ada]: (input) => {
-          input.onCustom?.({ name: "delivery.accepted", value: accepted });
+          input.onCustom?.({ name: "delivery.accepted", value: ACCEPTED });
           // 别的事件、答复延期的事件、缺卡片 id 的都不记。
           input.onCustom?.({
             name: "xiongbao.compaction.done",
@@ -788,10 +832,10 @@ describe("group conversations in PostgreSQL", () => {
           });
           input.onCustom?.({
             name: "delivery.extension_decided",
-            value: { taskId: accepted.taskId, decision: "grant" },
+            value: { taskId: TASK_ID, decision: "grant" },
           });
           input.onCustom?.({ name: "delivery.delivered", value: {} });
-          input.onCustom?.({ name: "delivery.bounced", value: bounced });
+          input.onCustom?.({ name: "delivery.bounced", value: BOUNCED });
           return "已接下";
         },
         [grace]: () => "g",
@@ -810,33 +854,32 @@ describe("group conversations in PostgreSQL", () => {
       });
       await drain(conversations);
     });
-    const cards = [
-      { name: "delivery.accepted", value: accepted },
-      { name: "delivery.bounced", value: bounced },
+    const marks = [
+      {
+        kind: "accepted",
+        taskId: TASK_ID,
+        agentId: ada,
+        dueAt: ACCEPTED.dueAt,
+      },
+      { kind: "bounced", taskId: TASK_ID, agentId: ada },
     ];
-    const mine = await as(owner, () =>
-      conversations.list(owner.id, channel.id),
-    );
-    expect(
-      mine.messages.map((row) => [
-        row.agentId,
-        row.ownerUserId,
-        row.delivery ?? null,
-      ]),
-    ).toEqual([
-      [null, owner.id, null],
-      [ada, owner.id, cards],
-      [grace, owner.id, null],
-    ]);
-    // 同事读到同样的卡，也读得到这一轮是谁发起的（界面据此不给他按钮）。
-    const theirs = await as(teammate, () =>
-      conversations.list(teammate.id, channel.id),
-    );
-    expect(theirs.messages.find((row) => row.agentId === ada)).toMatchObject({
-      agentId: ada,
-      ownerUserId: owner.id,
-      delivery: cards,
-    });
+    for (const reader of [owner, teammate]) {
+      const seen = await as(reader, () =>
+        conversations.list(reader.id, channel.id),
+      );
+      expect(
+        seen.messages.map((row) => [
+          row.agentId,
+          row.ownerUserId,
+          marksWithoutTime(row.delivery),
+        ]),
+      ).toEqual([
+        [null, owner.id, null],
+        [ada, owner.id, marks],
+        [grace, owner.id, null],
+      ]);
+      expectNoDeliveryContent(seen);
+    }
   });
 
   test("员工这一轮里服务器放的交付卡，经真实的轮次跑到群回复的 details.delivery 上", async () => {
@@ -958,7 +1001,7 @@ describe("group conversations in PostgreSQL", () => {
         row.agentId,
         row.status,
         row.ownerUserId,
-        row.delivery ?? null,
+        marksWithoutTime(row.delivery),
       ]),
     ).toEqual([
       [null, "completed", owner.id, null],
@@ -966,10 +1009,282 @@ describe("group conversations in PostgreSQL", () => {
         ada,
         "completed",
         owner.id,
-        [{ name: "delivery.accepted", value: card }],
+        [
+          {
+            kind: "accepted",
+            taskId: card.taskId,
+            agentId: ada,
+            dueAt: card.dueAt,
+          },
+        ],
       ],
       [grace, "completed", owner.id, null],
     ]);
+  });
+
+  /** 打开分享检查（每次回复都问派活人，按 `decision` 答）。 */
+  function askingShare(id: string) {
+    const state = {
+      decision: "pending" as "pending" | "approved" | "denied",
+      asked: 0,
+    };
+    const privateShare = createPrivateShareCheck({
+      approvals: {
+        open: async () => {
+          state.asked += 1;
+          return { id, status: state.decision } as never;
+        },
+        list: async () => [],
+        rules: async () => [],
+      },
+    });
+    return { state, privateShare };
+  }
+
+  /** 同事读到 Ada 那一行：状态、正文、标记（去掉时刻）。 */
+  async function adaRowFor(
+    reader: AgentActor,
+    conversations: ReturnType<typeof service>["conversations"],
+    channelId: string,
+    ada: string,
+  ) {
+    const seen = await as(reader, () =>
+      conversations.list(reader.id, channelId),
+    );
+    expectNoDeliveryContent(seen);
+    const row = seen.messages.find((message) => message.agentId === ada);
+    return {
+      status: row?.status,
+      text: row?.text,
+      marks: marksWithoutTime(row?.delivery),
+    };
+  }
+
+  test("空正文、只调了交付工具的回复：分享检查打开，群里非派活人读到的只有状态标记", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { state, privateShare } = askingShare(`${prefix}-quiet-share`);
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({ name: "delivery.bounced", value: BOUNCED });
+          input.onCustom?.({ name: "delivery.delivered", value: DELIVERED });
+          return "";
+        },
+      },
+      privateShare,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-quiet`,
+        text: "交一下",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    // 正文为空，没有可问的：直接发出，只带标记。
+    expect(state.asked).toBe(0);
+    expect(await adaRowFor(teammate, conversations, channel.id, ada)).toEqual({
+      status: "completed",
+      text: "",
+      marks: [
+        { kind: "bounced", taskId: TASK_ID, agentId: ada },
+        { kind: "delivered", taskId: TASK_ID, agentId: ada },
+      ],
+    });
+    const raw = await rawTranscript(teammate, channel.id);
+    for (const secret of DELIVERY_CONTENT) expect(raw).not.toContain(secret);
+  });
+
+  for (const decided of ["approved", "denied"] as const)
+    test(`等派活人放行时标记照样在；${decided === "approved" ? "放行后正文和标记都在" : "不放行时正文照旧隐藏，标记照样显示"}`, async () => {
+      const owner = await person();
+      const teammate = await person();
+      const ada = await as(owner, () => bot(owner, "Ada"));
+      const grace = await as(owner, () => bot(owner, "Grace"));
+      const approvalId = `${prefix}-held-${decided}`;
+      const { state, privateShare } = askingShare(approvalId);
+      const { conversations } = service({
+        replies: {
+          [ada]: (input) => {
+            input.onCustom?.({ name: "delivery.accepted", value: ACCEPTED });
+            input.onCustom?.({
+              name: "delivery.extension_requested",
+              value: EXTENSION,
+            });
+            return "接下了，另外想延一延。";
+          },
+        },
+        privateShare,
+      });
+      const channel = await as(owner, () =>
+        conversations.create(owner.id, { agentIds: [ada, grace] }),
+      );
+      await as(owner, async () => {
+        await conversations.addMember(owner.id, channel.id, {
+          email: await emailOf(teammate),
+        });
+        await conversations.send(owner.id, channel.id, {
+          id: `${prefix}-held-${decided}-ask`,
+          text: "整理一下",
+          agentId: ada,
+        });
+        await drain(conversations);
+      });
+      const marks = [
+        {
+          kind: "accepted",
+          taskId: TASK_ID,
+          agentId: ada,
+          dueAt: ACCEPTED.dueAt,
+        },
+        {
+          kind: "extension_requested",
+          taskId: TASK_ID,
+          agentId: ada,
+          dueAt: EXTENSION.dueAt,
+        },
+      ];
+      expect(state.asked).toBe(1);
+      expect(await adaRowFor(teammate, conversations, channel.id, ada)).toEqual(
+        { status: "waiting", text: "", marks },
+      );
+
+      state.decision = decided;
+      await as(owner, () =>
+        conversations.continueWaiting(approvalId, async () => {
+          throw new Error("a held reply is shown, not re-run");
+        }),
+      );
+      const after = await adaRowFor(teammate, conversations, channel.id, ada);
+      expect(after.marks).toEqual(marks);
+      if (decided === "approved") {
+        expect(after).toMatchObject({
+          status: "completed",
+          text: "接下了，另外想延一延。",
+        });
+      } else {
+        expect(after.status).toBe("failed");
+        expect(after.text).not.toContain("接下了，另外想延一延");
+      }
+      const raw = await rawTranscript(teammate, channel.id);
+      for (const secret of DELIVERY_CONTENT) expect(raw).not.toContain(secret);
+    });
+
+  test("轮次中途等工具审批：等之前和恢复后走的步骤都记在这一行上，分享检查照常", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const shareId = `${prefix}-tool-share`;
+    const { state, privateShare } = askingShare(shareId);
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({ name: "delivery.accepted", value: ACCEPTED });
+          throw new HeadlessToolSuspension("Waiting for your approval.", {
+            kind: "approval",
+            approvalId: `${prefix}-tool-wait`,
+          });
+        },
+      },
+      privateShare,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-tool-ask`,
+        text: "整理一下",
+        agentId: ada,
+      });
+    });
+    await runAsTenant("platform", () => drain(conversations));
+    const acceptedMark = {
+      kind: "accepted",
+      taskId: TASK_ID,
+      agentId: ada,
+      dueAt: ACCEPTED.dueAt,
+    };
+    expect(await adaRowFor(teammate, conversations, channel.id, ada)).toEqual({
+      status: "waiting",
+      text: "",
+      marks: [acceptedMark],
+    });
+
+    // 派活人准了工具：恢复的这一轮交了成果，回复还要过分享检查。
+    const resumed = await as(owner, () =>
+      conversations.continueWaiting(`${prefix}-tool-wait`, async (hooks) => {
+        hooks?.onCustom?.({ name: "delivery.delivered", value: DELIVERED });
+        return { replyText: "交了，请验收。" };
+      }),
+    );
+    expect(resumed).toEqual({ replyText: "" });
+    expect(state.asked).toBe(1);
+    const deliveredMark = { kind: "delivered", taskId: TASK_ID, agentId: ada };
+    expect(await adaRowFor(teammate, conversations, channel.id, ada)).toEqual({
+      status: "waiting",
+      text: "",
+      marks: [acceptedMark, deliveredMark],
+    });
+
+    state.decision = "approved";
+    await as(owner, () =>
+      conversations.continueWaiting(shareId, async () => {
+        throw new Error("a held reply is shown, not re-run");
+      }),
+    );
+    expect(await adaRowFor(teammate, conversations, channel.id, ada)).toEqual({
+      status: "completed",
+      text: "交了，请验收。",
+      marks: [acceptedMark, deliveredMark],
+    });
+    // 派活人自己读到的也一样：内容从卡片接口读，不在群回复里。
+    expect(
+      (await adaRowFor(owner, conversations, channel.id, ada)).marks,
+    ).toEqual([acceptedMark, deliveredMark]);
+  });
+
+  test("外部员工的轮次（detached）不记交付卡标记", async () => {
+    const owner = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({
+      replies: {},
+      // 外部员工在群里的轮次只回一句「开始了」，它的三步在设备那一轮里走。
+      runTurn: (async (input) => {
+        input.onCustom?.({ name: "delivery.accepted", value: ACCEPTED });
+        return { replyText: "已开始。", detached: true };
+      }) as TurnRunner,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-detached`,
+        text: "整理一下",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    expect(await adaRowFor(owner, conversations, channel.id, ada)).toEqual({
+      status: "completed",
+      text: "已开始。",
+      marks: null,
+    });
   });
 
   test("a member can add another signed-in person, who then reads the shared transcript", async () => {

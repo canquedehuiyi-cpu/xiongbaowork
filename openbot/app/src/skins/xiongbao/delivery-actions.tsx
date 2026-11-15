@@ -391,14 +391,18 @@ export function ExtendDialog({
   card,
   onClose,
   now = new Date(),
-  title,
+  mode = "extend",
 }: {
   card: ActionCard;
   onClose: () => void;
   now?: Date;
-  /** 弹层标题；对话里接活回执上的「改预计时间」用自己的说法。 */
-  title?: string;
+  /**
+   * `edit` 是对话里接活回执上的「改预计时间」：标题、输入框和按钮都按「改预计时间」说；员工有待答复的
+   * 延期申请时，在说明里讲明这次填的时间会作为对那条申请的答复。
+   */
+  mode?: "extend" | "edit";
 }) {
+  const editing = mode === "edit";
   const events = useQuery(taskEventsQueryOptions(card.id));
   const pending = events.data ? pendingExtension(events.data) : null;
   const requested = pending?.dueAt ? clockText(pending.dueAt, now) : "";
@@ -428,11 +432,17 @@ export function ExtendDialog({
       busy={busy}
       description={
         pending
-          ? `员工申请延期${requested ? `到 ${requested}` : ""}。可以照准，也可以改一个时间，或者不批。`
+          ? editing
+            ? `员工有一条待答复的延期申请${requested ? `（要延到 ${requested}）` : ""}。这里填的时间会作为对它的答复：按你填的时间准许。也可以不批。`
+            : `员工申请延期${requested ? `到 ${requested}` : ""}。可以照准，也可以改一个时间，或者不批。`
           : "给员工一个新的预计时间，到点还没交，服务器照常催、照常记逾期。"
       }
       onClose={onClose}
-      title={title ?? `准许「${card.title}」延期到……`}
+      title={
+        editing
+          ? `改「${card.title}」的预计时间`
+          : `准许「${card.title}」延期到……`
+      }
     >
       <form
         className="flex flex-col gap-3"
@@ -444,7 +454,7 @@ export function ExtendDialog({
         }}
       >
         <input
-          aria-label="延到几点"
+          aria-label={editing ? "改到几点" : "延到几点"}
           className={cn(FIELD, "h-10")}
           maxLength={100}
           onChange={(event) => setTyped(event.target.value)}
@@ -473,7 +483,9 @@ export function ExtendDialog({
           busyLabel="正在改…"
           disabled={!value.trim() || events.isPending || unknown}
           onClose={onClose}
-          submit="准许延期"
+          submit={
+            editing ? (pending ? "按这个时间准许" : "改预计时间") : "准许延期"
+          }
         />
       </form>
     </ActionDialog>

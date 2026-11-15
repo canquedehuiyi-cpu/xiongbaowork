@@ -8,10 +8,10 @@ import {
 } from "@ag-ui/client";
 import { asc, eq } from "drizzle-orm";
 import { Observable } from "rxjs";
-import { GROUP_DELIVERY_EVENTS } from "../src/channels/group";
+import { lastMessageIdAfter } from "../../shared/delivery-anchor";
 import { createDatabase } from "../src/db/client";
 import { threadRunEvents, users } from "../src/db/schema";
-import { DELIVERY_EVENTS } from "../src/tasks/delivery-tools";
+import { DELIVERY_EVENTS } from "../src/tasks/delivery-events";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import {
@@ -24,10 +24,10 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * 交付闭环 Task 9 的回放链路：员工这一轮里服务器放的卡（`emitRunEvent`，接活、交付、延期工具就是这么放的）
  * → 跟着这一轮存进库（压缩后的事件） → 打开对话时连上回放。
  *
- * 对话里的卡画在哪一行下面，是浏览器按「卡出现时最后那条消息」认的（`app/src/lib/tasks/delivery-chat.ts`
- * `lastMessageIdAfter`）：一轮开始时带的新消息、文字消息的 id、工具调用的 parentMessageId、工具结果的
- * messageId。这里用同一条规则读存下来的和回放出来的事件，认出的位置必须仍是调工具的那条回复——不能因为
- * 存库时的压缩把卡挪到工具结果之后、下一条回复上，或挪到一轮开头。
+ * 对话里的卡画在哪一行下面，是浏览器按「卡出现时最后那条消息」认的，规则在 `shared/delivery-anchor.ts`
+ * （浏览器 `use-delivery-chat-events.ts` 用的就是它，连同消息快照、CHUNK 类事件）。这里用同一条规则读存
+ * 下来的和回放出来的事件，认出的位置必须仍是调工具的那条回复——不能因为存库时的压缩把卡挪到工具结果之后、
+ * 下一条回复上，或挪到一轮开头；回放如果先发一个整段的消息快照，卡会全挂到对话末尾，这里也会失败。
  */
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const suite = randomUUID().slice(0, 8);
@@ -42,23 +42,14 @@ afterAll(async () => {
 
 type Loose = BaseEvent & Record<string, unknown>;
 
-/** 浏览器认位置的同一条规则（见文件头）。 */
+/** 卡出现之前最后那条消息：浏览器认位置用的同一条规则（`shared/delivery-anchor.ts`）。 */
 function anchorBefore(events: readonly Loose[], index: number): string | null {
-  let last: string | null = null;
-  for (const event of events.slice(0, index)) {
-    if (event.type === EventType.RUN_STARTED) {
-      const messages = (event.input as { messages?: { id?: string }[] })
-        ?.messages;
-      last = messages?.at(-1)?.id ?? last;
-    } else if (
-      event.type === EventType.TEXT_MESSAGE_START ||
-      event.type === EventType.TOOL_CALL_RESULT
-    )
-      last = (event.messageId as string | undefined) ?? last;
-    else if (event.type === EventType.TOOL_CALL_START)
-      last = (event.parentMessageId as string | undefined) ?? last;
-  }
-  return last;
+  return events
+    .slice(0, index)
+    .reduce<string | null>(
+      (last, event) => lastMessageIdAfter(last, event as Loose),
+      null,
+    );
 }
 
 /**
@@ -227,11 +218,4 @@ test("回执卡跟着这一轮存进库，连上对话时回放，仍画在调�
   const replayedAt = replayed.findIndex(isCard);
   expect(replayed[replayedAt]?.value).toEqual(card);
   expect(anchorBefore(replayed, replayedAt)).toBe(`said-${runId}`);
-});
-
-test("群聊记下的卡和员工工具放的卡是同一组事件名", () => {
-  const { extensionDecided: _answer, ...cards } = DELIVERY_EVENTS;
-  expect([...GROUP_DELIVERY_EVENTS].sort()).toEqual(
-    Object.values(cards).sort(),
-  );
 });

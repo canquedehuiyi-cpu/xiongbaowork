@@ -28,10 +28,16 @@ export type GroupMessage = {
    */
   compaction?: { outcome: "done" | "failed" };
   /**
-   * 这一轮里服务器画的交付卡（接活回执、延期申请、交付卡、被挡回），按出现的先后：员工这一轮事件流里的
-   * `delivery.*` 事件原样（`server/src/channels/group.ts`）。群里每个人都看得到；能点的只有发起这一轮的人。
+   * 这一轮里员工走到了三步里的哪一步（接下、申请延期、交付、被挡回）：不带内容的状态标记
+   * （`server/src/channels/group.ts` `GroupDeliveryMark`），按出现的先后。完整内容只有派活的人从卡片接口读。
    */
-  delivery?: { name: string; value: unknown }[];
+  delivery?: {
+    kind: string;
+    taskId: string;
+    at: string;
+    agentId: string;
+    dueAt?: string;
+  }[];
 };
 export type GroupPerson = {
   userId: string;

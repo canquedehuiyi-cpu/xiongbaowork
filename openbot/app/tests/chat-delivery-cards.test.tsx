@@ -31,16 +31,15 @@ import {
   bounceText,
   type ChatDeliveryEvent,
   lastMessageIdAfter,
+  matchByContent,
+  matchByMark,
   placeDeliveryEvent,
-  positionsFromEnd,
   readDeliveryEvent,
+  sameJson,
 } from "@/lib/tasks/delivery-chat";
 import { useDeliveryChatEvents } from "@/lib/tasks/use-delivery-chat-events";
 import { setSkin } from "@/skins/store";
-import {
-  DeliveryChatCard,
-  deliveryNotes,
-} from "@/skins/xiongbao/delivery-chat";
+import { DeliveryChatCard } from "@/skins/xiongbao/delivery-chat";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -192,8 +191,32 @@ const delivered: ChatDeliveryEvent = {
     checks: ["三家 142 款都在", "降价 9 款已标红"],
   },
 };
+/** 流水里的一行，和服务器记的一样（`server/src/tasks/delivery.ts`）。 */
+let flowId = 0;
+const flow = (
+  kind: string,
+  createdAt: string,
+  detail: Record<string, unknown> = {},
+) => ({
+  id: `flow-${++flowId}`,
+  actor: "agent:agent-zhou",
+  kind,
+  createdAt,
+  detail,
+});
+/** jsonb 存进库会重排键：流水里的交付物，键的顺序和事件里的不一样。 */
+const stored = (deliverable: unknown) =>
+  JSON.parse(
+    JSON.stringify(deliverable, (_key, value) =>
+      value && typeof value === "object" && !Array.isArray(value)
+        ? Object.fromEntries(Object.entries(value).reverse())
+        : value,
+    ),
+  );
+const delivery = (event: ChatDeliveryEvent) =>
+  event.kind === "delivered" ? event.deliverable : null;
 
-test("事件认得出四种卡，字段不全的不画；同类卡按倒数第几张对回流水", () => {
+test("事件认得出四种卡，字段不全的不画", () => {
   expect(
     readDeliveryEvent("delivery.accepted", {
       taskId: TASK,
@@ -218,8 +241,51 @@ test("事件认得出四种卡，字段不全的不画；同类卡按倒数第�
       reason: "x",
     }),
   ).toBeNull();
-  // 交付、退回、再交付：前一张交付卡是倒数第 1 张，后一张是 0；接活回执自己数。
-  expect(positionsFromEnd([accepted, delivered, delivered])).toEqual([0, 1, 0]);
+});
+
+test("卡按内容对回流水：交付物（不管键的顺序）、延期时间、预计时间；对不上为 -1", () => {
+  const other = {
+    kind: "deliverable",
+    notes: ["补上了 C 家"],
+    checks: ["核对过"],
+  };
+  const history = [
+    flow("accepted", todayAt(9, 40), { dueAt: todayAt(10, 30) }),
+    flow("delivered", todayAt(10, 40), { deliverable: stored(other) }),
+    flow("returned", todayAt(10, 45), { reason: "缺 B 家" }),
+    flow("delivered", todayAt(11, 10), {
+      deliverable: stored(delivery(delivered)),
+    }),
+  ];
+  expect(sameJson(stored(delivery(delivered)), delivery(delivered))).toBe(true);
+  expect(matchByContent(history, delivered)).toBe(3);
+  expect(
+    matchByContent(history, {
+      kind: "delivered",
+      taskId: TASK,
+      deliverable: other,
+    }),
+  ).toBe(1);
+  expect(matchByContent(history, accepted)).toBe(0);
+  // 流水里没有这条申请（比如是别的活的）：对不上，不给按钮。
+  expect(matchByContent(history, extension)).toBe(-1);
+  // 群回复上的标记按种类、预计时间和时刻对。
+  expect(
+    matchByMark(history, {
+      kind: "delivered",
+      taskId: TASK,
+      at: new Date(Date.parse(todayAt(11, 10)) + 800).toISOString(),
+      agentId: XIAOZHOU.id,
+    }),
+  ).toBe(3);
+  expect(
+    matchByMark(history, {
+      kind: "delivered",
+      taskId: TASK,
+      at: todayAt(12, 30),
+      agentId: XIAOZHOU.id,
+    }),
+  ).toBe(-1);
 });
 
 test("卡画在它出现时最后那条消息下面；回放重复的只记一次", () => {
@@ -352,7 +418,7 @@ test("这一轮里的回执卡画在调接活的那条回复下面；连上对�
   expect(result.current[0]?.anchor).toBe("a1");
 });
 
-test("挡回原因念给你听：不带字段名和工具名，员工叫「它」", () => {
+test("挡回原因念给你听：不带字段名和工具名，员工叫「它」，引号里的名字照原样", () => {
   expect(
     bounceText(
       "只有文字结论时，至少写一条你怎么查过的（checks），比如核对了哪些数据、跑了什么测试。",
@@ -366,8 +432,8 @@ test("挡回原因念给你听：不带字段名和工具名，员工叫「它�
     ),
   ).toBe("验收标准里的必需项没对上：缺 C 家");
   expect(
-    bounceText("附件「report.xlsx」不是你在这件活里做出来的文件，交不了。"),
-  ).toBe("附件「report.xlsx」不是它在这件活里做出来的文件，交不了");
+    bounceText("附件「你的报告.xlsx」不是你在这件活里做出来的文件，交不了。"),
+  ).toBe("附件「你的报告.xlsx」不是它在这件活里做出来的文件，交不了");
   expect(bounceText("items[0].ref is not a valid attachment_id")).toBe(
     "交的东西没过核对",
   );
@@ -396,27 +462,47 @@ test("转录把卡画在锚定那一行下面，没有锚点的画在最后", ()
   expect(text.indexOf("收到。")).toBeLessThan(text.indexOf("卡二"));
 });
 
-test("接活回执：预计时间、验收标准，「改验收标准」发 PATCH", async () => {
-  const calls = serve({});
+test("接活回执：预计时间、验收标准；「改验收标准」发 PATCH，「改预计时间」按改预计时间说并发 PATCH", async () => {
+  const calls = serve({
+    events: [flow("accepted", todayAt(9, 40), { dueAt: todayAt(10, 30) })],
+  });
   const view = withQueries(
-    <DeliveryChatCard agentName="小周" event={accepted} fromEnd={0} />,
+    <DeliveryChatCard agentName="小周" event={accepted} />,
   );
   const receipt = await view.findByRole("group", { name: "接活回执" });
-  await within(receipt).findByText(/竞品价格表更新/);
-  expect(receipt.textContent).toContain("已接下");
-  expect(receipt.textContent).toContain("预计 10:30 交");
+  await within(receipt).findByRole("button", { name: "改预计时间" });
+  expect(receipt.textContent).toContain("竞品价格表更新 · 预计 10:30 交");
   expect(receipt.textContent).toContain(
     "验收标准：三家全部在售款，带本周和上周价格，降价的标红。",
   );
-  within(receipt).getByRole("button", { name: "改预计时间" });
   await userEvent.click(
     within(receipt).getByRole("button", { name: "改验收标准" }),
   );
-  const dialog = await view.findByRole("dialog");
-  const field = within(dialog).getByRole("textbox", { name: "验收标准" });
-  await userEvent.type(field, "必需：A、B、C");
+  let dialog = await view.findByRole("dialog");
+  await userEvent.type(
+    within(dialog).getByRole("textbox", { name: "验收标准" }),
+    "必需：A、B、C",
+  );
   await userEvent.click(
     within(dialog).getByRole("button", { name: "改验收标准" }),
+  );
+  await waitFor(() => expect(view.queryByRole("dialog")).toBeNull());
+
+  await userEvent.click(
+    within(receipt).getByRole("button", { name: "改预计时间" }),
+  );
+  dialog = await view.findByRole("dialog");
+  expect(
+    within(dialog).getByRole("heading", {
+      name: "改「竞品价格表更新」的预计时间",
+    }),
+  ).toBeTruthy();
+  const field = await within(dialog).findByRole("textbox", {
+    name: "改到几点",
+  });
+  await userEvent.type(field, "16:00");
+  await userEvent.click(
+    await within(dialog).findByRole("button", { name: "改预计时间" }),
   );
   await waitFor(() =>
     expect(writes(calls)).toEqual([
@@ -428,22 +514,42 @@ test("接活回执：预计时间、验收标准，「改验收标准」发 PATC
             "三家全部在售款，带本周和上周价格，降价的标红。必需：A、B、C",
         },
       },
+      { method: "PATCH", path: `/api/tasks/${TASK}`, body: { dueAt: "16:00" } },
     ]),
   );
 });
 
-test("延期申请：「准许」照员工要的时间准，「不准」维持原时间", async () => {
-  const events = [
-    { kind: "accepted", createdAt: todayAt(9, 40) },
-    {
-      kind: "extension_requested",
-      createdAt: todayAt(10, 20),
-      detail: { dueAt: todayAt(11, 30) },
-    },
-  ];
-  const calls = serve({ events });
+test("接活回执：成果已交或已验收时不给「改预计时间」「改验收标准」", async () => {
+  for (const [status, said] of [
+    ["awaiting_review", "成果已经交了，等你验收"],
+    ["done", "这件活已经验收了"],
+  ] as const) {
+    serve({
+      card: card({ status }),
+      events: [flow("accepted", todayAt(9, 40), { dueAt: todayAt(10, 30) })],
+    });
+    const view = withQueries(
+      <DeliveryChatCard agentName="小周" event={accepted} />,
+    );
+    const receipt = await view.findByRole("group", { name: "接活回执" });
+    await within(receipt).findByText(said);
+    expect(within(receipt).queryAllByRole("button")).toHaveLength(0);
+    cleanup();
+  }
+});
+
+test("延期申请：「准许」带上卡上写的时间，「不准」维持原时间；答复后按钮收起", async () => {
+  const calls = serve({
+    events: [
+      flow("accepted", todayAt(9, 40), { dueAt: todayAt(10, 30) }),
+      flow("extension_requested", todayAt(10, 20), {
+        dueAt: todayAt(11, 30),
+        reason: "C 家官网改版了，抓不到旧价格",
+      }),
+    ],
+  });
   const view = withQueries(
-    <DeliveryChatCard agentName="小周" event={extension} fromEnd={0} />,
+    <DeliveryChatCard agentName="小周" event={extension} />,
   );
   const ask = await view.findByRole("group", { name: "延期申请" });
   await within(ask).findByRole("button", { name: "准许" });
@@ -451,14 +557,36 @@ test("延期申请：「准许」照员工要的时间准，「不准」维持�
   expect(ask.textContent).toContain("原因：C 家官网改版了，抓不到旧价格");
   expect(ask.textContent).toContain("原来的预计时间还算数，你准了才改。");
   await userEvent.click(within(ask).getByRole("button", { name: "准许" }));
-  await userEvent.click(within(ask).getByRole("button", { name: "不准" }));
+  await within(ask).findByText("已答复");
+  // 流水还没重读回来，按钮已经收起，不会连点出第二个请求。
+  expect(within(ask).queryAllByRole("button")).toHaveLength(0);
+  expect(writes(calls)).toEqual([
+    {
+      method: "POST",
+      path: `/api/tasks/${TASK}/extension`,
+      body: { decision: "grant", dueAt: todayAt(11, 30) },
+    },
+  ]);
+});
+
+test("延期申请：「不准」发 deny", async () => {
+  const calls = serve({
+    events: [
+      flow("extension_requested", todayAt(10, 20), {
+        dueAt: todayAt(11, 30),
+        reason: "C 家官网改版了，抓不到旧价格",
+      }),
+    ],
+  });
+  const view = withQueries(
+    <DeliveryChatCard agentName="小周" event={extension} />,
+  );
+  const ask = await view.findByRole("group", { name: "延期申请" });
+  await userEvent.click(
+    await within(ask).findByRole("button", { name: "不准" }),
+  );
   await waitFor(() =>
     expect(writes(calls)).toEqual([
-      {
-        method: "POST",
-        path: `/api/tasks/${TASK}/extension`,
-        body: { decision: "grant" },
-      },
       {
         method: "POST",
         path: `/api/tasks/${TASK}/extension`,
@@ -468,38 +596,94 @@ test("延期申请：「准许」照员工要的时间准，「不准」维持�
   );
 });
 
-test("已经答复过的延期申请只写结果，不给按钮", async () => {
+test("两张延期卡：旧卡（准过了）不给按钮，只有新卡能准，准的是新卡上的时间", async () => {
+  const later: ChatDeliveryEvent = {
+    kind: "extension_requested",
+    taskId: TASK,
+    dueAt: todayAt(14, 0),
+    reason: "B 家也改版了",
+  };
   const calls = serve({
     card: card({ dueAt: todayAt(11, 30) }),
     events: [
+      flow("extension_requested", todayAt(10, 20), {
+        dueAt: todayAt(11, 30),
+        reason:
+          extension.kind === "extension_requested" ? extension.reason : "",
+      }),
+      flow("extension_granted", todayAt(10, 22), { dueAt: todayAt(11, 30) }),
+      flow("extension_requested", todayAt(11, 20), {
+        dueAt: todayAt(14, 0),
+        reason: "B 家也改版了",
+      }),
+    ],
+  });
+  // 转录只回放到第一张（回放被截断）：它不会冒充最新那条申请。
+  const only = withQueries(
+    <DeliveryChatCard agentName="小周" event={extension} />,
+  );
+  const first = await only.findByRole("group", { name: "延期申请" });
+  await within(first).findByText("你 10:22 准许了，延到 11:30");
+  expect(within(first).queryAllByRole("button")).toHaveLength(0);
+  cleanup();
+
+  const both = withQueries(
+    <div>
+      <DeliveryChatCard agentName="小周" event={extension} />
+      <DeliveryChatCard agentName="小周" event={later} />
+    </div>,
+  );
+  const [older, newer] = await both.findAllByRole("group", {
+    name: "延期申请",
+  });
+  if (!older || !newer) throw new Error("两张延期卡都该在");
+  await userEvent.click(
+    await within(newer).findByRole("button", { name: "准许" }),
+  );
+  expect(within(older).queryAllByRole("button")).toHaveLength(0);
+  await waitFor(() =>
+    expect(writes(calls)).toEqual([
       {
-        kind: "extension_requested",
-        createdAt: todayAt(10, 20),
-        detail: { dueAt: todayAt(11, 30) },
+        method: "POST",
+        path: `/api/tasks/${TASK}/extension`,
+        body: { decision: "grant", dueAt: todayAt(14, 0) },
       },
-      {
-        kind: "extension_granted",
-        createdAt: todayAt(10, 22),
-        detail: { dueAt: todayAt(11, 30) },
-      },
+    ]),
+  );
+});
+
+test("延期申请：成果已经交了时先不用答复，不给按钮", async () => {
+  serve({
+    card: card({ status: "awaiting_review", stage: "delivered" }),
+    events: [
+      flow("extension_requested", todayAt(10, 20), {
+        dueAt: todayAt(11, 30),
+        reason: "C 家官网改版了，抓不到旧价格",
+      }),
+      flow("delivered", todayAt(10, 50), {
+        deliverable: stored(delivery(delivered)),
+      }),
     ],
   });
   const view = withQueries(
-    <DeliveryChatCard agentName="小周" event={extension} fromEnd={0} />,
+    <DeliveryChatCard agentName="小周" event={extension} />,
   );
   const ask = await view.findByRole("group", { name: "延期申请" });
-  await within(ask).findByText("你 10:22 准许了，延到 11:30");
+  await within(ask).findByText("成果已经交了，这条申请先不用答复");
   expect(within(ask).queryAllByRole("button")).toHaveLength(0);
-  expect(writes(calls)).toEqual([]);
 });
 
 test("交付卡：交付物和自查，「验收」发验收，「退回」要写原因", async () => {
   const calls = serve({
     card: card({ status: "awaiting_review", stage: "delivered" }),
-    events: [{ kind: "delivered", createdAt: todayAt(11, 20) }],
+    events: [
+      flow("delivered", todayAt(11, 20), {
+        deliverable: stored(delivery(delivered)),
+      }),
+    ],
   });
   const view = withQueries(
-    <DeliveryChatCard agentName="小周" event={delivered} fromEnd={0} />,
+    <DeliveryChatCard agentName="小周" event={delivered} />,
   );
   const handIn = await view.findByRole("group", { name: "交付卡" });
   await within(handIn).findByRole("button", { name: "验收" });
@@ -547,12 +731,14 @@ test("已验收的交付卡写「你 10:52 验收了」，不给按钮，也不�
   const calls = serve({
     card: card({ status: "done", stage: "reviewed" }),
     events: [
-      { kind: "delivered", createdAt: todayAt(10, 40) },
-      { kind: "reviewed", createdAt: todayAt(10, 52) },
+      flow("delivered", todayAt(10, 40), {
+        deliverable: stored(delivery(delivered)),
+      }),
+      flow("reviewed", todayAt(10, 52)),
     ],
   });
   const view = withQueries(
-    <DeliveryChatCard agentName="小周" event={delivered} fromEnd={0} />,
+    <DeliveryChatCard agentName="小周" event={delivered} />,
   );
   const handIn = await view.findByRole("group", { name: "交付卡" });
   await within(handIn).findByText("你 10:52 验收了");
@@ -561,42 +747,36 @@ test("已验收的交付卡写「你 10:52 验收了」，不给按钮，也不�
   expect(writes(calls)).toEqual([]);
 });
 
-test("退回后又交了一次：前一张交付卡写退回的结果，按钮只在最新那张上", async () => {
+test("退回后又交了一次：旧交付卡写退回的结果，按钮只在新的那张上；只回放到旧卡时也不给按钮", async () => {
+  const second: ChatDeliveryEvent = {
+    kind: "delivered",
+    taskId: TASK,
+    deliverable: { kind: "deliverable", notes: ["补上了"], checks: ["核对过"] },
+  };
   serve({
     card: card({ status: "awaiting_review", stage: "delivered", returns: 1 }),
     events: [
-      { kind: "delivered", createdAt: todayAt(10, 40) },
-      {
-        kind: "returned",
-        createdAt: todayAt(10, 45),
-        detail: { reason: "B 家漏了两款新品" },
-      },
-      { kind: "delivered", createdAt: todayAt(11, 10) },
+      flow("delivered", todayAt(10, 40), {
+        deliverable: stored(delivery(delivered)),
+      }),
+      flow("returned", todayAt(10, 45), { reason: "B 家漏了两款新品" }),
+      flow("delivered", todayAt(11, 10), {
+        deliverable: stored(delivery(second)),
+      }),
     ],
   });
-  const notes = deliveryNotes(
-    [
-      { key: "d1", anchor: "a1", event: delivered },
-      {
-        key: "d2",
-        anchor: "a2",
-        event: {
-          ...delivered,
-          deliverable: {
-            kind: "deliverable",
-            notes: ["补上了"],
-            checks: ["核对过"],
-          },
-        },
-      },
-    ],
-    "小周",
+  const only = withQueries(
+    <DeliveryChatCard agentName="小周" event={delivered} />,
   );
+  const lone = await only.findByRole("group", { name: "交付卡" });
+  await within(lone).findByText("你 10:45 退回了：B 家漏了两款新品");
+  expect(within(lone).queryAllByRole("button")).toHaveLength(0);
+  cleanup();
+
   const view = withQueries(
     <div>
-      {notes.map((note) => (
-        <div key={note.key}>{note.node}</div>
-      ))}
+      <DeliveryChatCard agentName="小周" event={delivered} />
+      <DeliveryChatCard agentName="小周" event={second} />
     </div>,
   );
   const [older, newer] = await view.findAllByRole("group", { name: "交付卡" });
@@ -605,6 +785,25 @@ test("退回后又交了一次：前一张交付卡写退回的结果，按钮�
   expect(within(older).queryAllByRole("button")).toHaveLength(0);
   await within(newer).findByRole("button", { name: "验收" });
   within(newer).getByRole("button", { name: "退回" });
+});
+
+test("流水里对不上的交付卡不给按钮", async () => {
+  serve({
+    card: card({ status: "awaiting_review", stage: "delivered" }),
+    events: [
+      flow("delivered", todayAt(11, 10), {
+        deliverable: { kind: "deliverable", notes: ["别的东西"] },
+      }),
+    ],
+  });
+  const view = withQueries(
+    <DeliveryChatCard agentName="小周" event={delivered} />,
+  );
+  const handIn = await view.findByRole("group", { name: "交付卡" });
+  await settleReactWork();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(handIn.textContent).toContain("竞品价格表-第46周.xlsx");
+  expect(within(handIn).queryAllByRole("button")).toHaveLength(0);
 });
 
 test("被挡回是一行灰字，说清缺什么，不出现字段名", () => {
@@ -618,7 +817,6 @@ test("被挡回是一行灰字，说清缺什么，不出现字段名", () => {
         reason:
           "只有文字结论时，至少写一条你怎么查过的（checks），比如核对了哪些数据、跑了什么测试。",
       }}
-      fromEnd={0}
     />,
   );
   const line = view.getByRole("note");
@@ -628,7 +826,29 @@ test("被挡回是一行灰字，说清缺什么，不出现字段名", () => {
   expect(line.textContent).not.toContain("checks");
 });
 
+/** 群回复上的标记（`server/src/channels/group.ts`）：只有状态，没有内容。 */
+const MARK_AT = {
+  accepted: todayAt(9, 40),
+  bounced: todayAt(11, 18),
+  delivered: todayAt(11, 20),
+};
+
 function groupConversation() {
+  const reply = (
+    id: string,
+    text: string,
+    createdAt: string,
+    delivery: Record<string, unknown>[],
+  ) => ({
+    id,
+    channelId: "chan-1",
+    ownerUserId: ME.id,
+    agentId: XIAOZHOU.id,
+    text,
+    status: "completed",
+    createdAt,
+    delivery,
+  });
   return {
     bots: [{ id: XIAOZHOU.id, name: XIAOZHOU.name }],
     people: [
@@ -645,47 +865,46 @@ function groupConversation() {
         status: "completed",
         createdAt: todayAt(9, 38),
       },
-      {
-        id: "m2",
-        channelId: "chan-1",
-        ownerUserId: ME.id,
-        agentId: XIAOZHOU.id,
-        text: "好的，接下了。",
-        status: "completed",
-        createdAt: todayAt(9, 40),
-        delivery: [
-          {
-            name: "delivery.accepted",
-            value: {
-              taskId: TASK,
-              dueAt: todayAt(10, 30),
-              criteria: "三家全部在售款。",
-            },
-          },
-        ],
-      },
-      {
-        id: "m3",
-        channelId: "chan-1",
-        ownerUserId: ME.id,
-        agentId: XIAOZHOU.id,
-        text: "做好了，请验收。",
-        status: "completed",
-        createdAt: todayAt(11, 20),
-        delivery: [
-          {
-            name: "delivery.bounced",
-            value: {
-              taskId: TASK,
-              reason: "验收标准里的必需项没对上：缺 C 家。",
-            },
-          },
-          { name: "delivery.delivered", value: delivered },
-        ],
-      },
+      reply("m2", "好的，接下了。", MARK_AT.accepted, [
+        {
+          kind: "accepted",
+          taskId: TASK,
+          at: MARK_AT.accepted,
+          agentId: XIAOZHOU.id,
+          dueAt: todayAt(10, 30),
+        },
+      ]),
+      reply("m3", "做好了，请验收。", MARK_AT.delivered, [
+        {
+          kind: "bounced",
+          taskId: TASK,
+          at: MARK_AT.bounced,
+          agentId: XIAOZHOU.id,
+        },
+        {
+          kind: "delivered",
+          taskId: TASK,
+          at: MARK_AT.delivered,
+          agentId: XIAOZHOU.id,
+        },
+      ]),
     ],
   };
 }
+
+/** 派活人读到的流水：内容都在这里。 */
+const GROUP_FLOW = [
+  flow("accepted", MARK_AT.accepted, {
+    dueAt: todayAt(10, 30),
+    criteria: "三家全部在售款。",
+  }),
+  flow("bounced", MARK_AT.bounced, {
+    reason: "验收标准里的必需项没对上：缺 C 家。",
+  }),
+  flow("delivered", MARK_AT.delivered, {
+    deliverable: stored(delivery(delivered)),
+  }),
+];
 
 function renderGroup() {
   const queryClient = new QueryClient({
@@ -705,39 +924,49 @@ function renderGroup() {
   );
 }
 
-test("群聊里派活的人看到卡和按钮", async () => {
+test("群聊里派活的人按标记读卡片和流水，看到完整的卡和按钮", async () => {
   serve({
     me: ME,
     card: card({ status: "awaiting_review", stage: "delivered" }),
-    events: [{ kind: "delivered", createdAt: todayAt(11, 20) }],
+    events: GROUP_FLOW,
     group: groupConversation(),
   });
   const view = renderGroup();
   const handIn = await view.findByRole("group", { name: "交付卡" });
   await within(handIn).findByRole("button", { name: "验收" });
   within(handIn).getByRole("button", { name: "退回" });
-  const receipt = view.getByRole("group", { name: "接活回执" });
-  expect(receipt.textContent).toContain("预计 10:30 交");
-  expect(view.getByRole("note").textContent).toContain(
-    "小周想交付 · 被挡回：验收标准里的必需项没对上：缺 C 家，已让它补齐",
-  );
-});
-
-test("群聊里不是派活的人看得到卡，没有按钮，也不去读这张卡", async () => {
-  const calls = serve({
-    me: TEAMMATE,
-    group: groupConversation(),
-  });
-  const view = renderGroup();
-  const handIn = await view.findByRole("group", { name: "交付卡" });
   expect(handIn.textContent).toContain("竞品价格表-第46周.xlsx");
   expect(handIn.textContent).toContain(
     "自查：三家 142 款都在；降价 9 款已标红",
   );
   const receipt = view.getByRole("group", { name: "接活回执" });
-  expect(receipt.textContent).toContain("验收标准：三家全部在售款。");
+  expect(receipt.textContent).toContain("预计 10:30 交");
+  // 验收标准以卡上此刻的为准（派活人可能改过）。
+  expect(receipt.textContent).toContain(
+    "验收标准：三家全部在售款，带本周和上周价格，降价的标红。",
+  );
+  expect(view.getByRole("note").textContent).toContain(
+    "小周想交付 · 被挡回：验收标准里的必需项没对上：缺 C 家，已让它补齐",
+  );
+});
+
+test("群聊里不是派活的人只看到状态行：没有内容、没有按钮，也不去读这张卡", async () => {
+  const calls = serve({
+    me: TEAMMATE,
+    group: groupConversation(),
+  });
+  const view = renderGroup();
+  await view.findByText("小周已交成果，等我验收");
+  const lines = view.getAllByRole("note").map((line) => line.textContent);
+  expect(lines).toEqual([
+    "小周已接下，预计 10:30 交",
+    "小周的交付被挡回了",
+    "小周已交成果，等我验收",
+  ]);
   await settleReactWork();
-  expect(within(handIn).queryAllByRole("button")).toHaveLength(0);
-  expect(within(receipt).queryAllByRole("button")).toHaveLength(0);
+  expect(view.queryAllByRole("group")).toHaveLength(0);
+  const page = view.container.textContent ?? "";
+  for (const secret of ["竞品价格表", "自查", "验收标准", "缺 C 家"])
+    expect(page).not.toContain(secret);
   expect(calls.some((call) => call.path.startsWith("/api/tasks/"))).toBe(false);
 });

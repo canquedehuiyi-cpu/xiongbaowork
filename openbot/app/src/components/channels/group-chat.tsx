@@ -37,15 +37,11 @@ import {
 import { newId } from "@/lib/new-id";
 import { startRunMutationOptions } from "@/lib/pipelines/mutations";
 import { pipelineTemplatesQueryOptions } from "@/lib/pipelines/queries";
-import {
-  type ChatDeliveryEvent,
-  positionsFromEnd,
-  readDeliveryEvent,
-} from "@/lib/tasks/delivery-chat";
+import { type DeliveryMark, readDeliveryMark } from "@/lib/tasks/delivery-chat";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import {
-  DeliveryChatCard,
   DeliveryChatCards,
+  GroupDeliveryMark,
 } from "@/skins/xiongbao/delivery-chat";
 import { ChannelAvatar } from "./avatar";
 import {
@@ -256,6 +252,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
               }
               mine={message.ownerUserId === me?.id}
               delivery={deliveryOf.get(message.id)}
+              ownerName={people.get(message.ownerUserId) ?? "派活的人"}
             />
           ))}
         </div>
@@ -399,27 +396,17 @@ export function groupQuestion(
   return inbox?.questions.find((question) => question.channelId === channelId);
 }
 
-/** 一张交付卡，和它是同一件活同一种卡里倒数第几张（见 `DeliveryChatCard`）。 */
-type GroupDeliveryCard = { event: ChatDeliveryEvent; fromEnd: number };
-
-/** 每行回复带的交付卡；倒数第几张按整段群聊数。 */
+/** 每行回复带的交付卡状态标记；形状不对的不画。 */
 export function groupDeliveryCards(
   messages: readonly GroupMessage[],
-): Map<string, GroupDeliveryCard[]> {
-  const found = messages.flatMap((message) =>
-    (message.delivery ?? []).flatMap((entry) => {
-      const event = readDeliveryEvent(entry?.name, entry?.value);
-      return event ? [{ messageId: message.id, event }] : [];
-    }),
-  );
-  const positions = positionsFromEnd(found.map((entry) => entry.event));
-  const cards = new Map<string, GroupDeliveryCard[]>();
-  found.forEach((entry, index) => {
-    cards.set(entry.messageId, [
-      ...(cards.get(entry.messageId) ?? []),
-      { event: entry.event, fromEnd: positions[index] ?? 0 },
-    ]);
-  });
+): Map<string, DeliveryMark[]> {
+  const cards = new Map<string, DeliveryMark[]>();
+  for (const message of messages) {
+    const marks = (message.delivery ?? []).flatMap(
+      (entry) => readDeliveryMark(entry) ?? [],
+    );
+    if (marks.length > 0) cards.set(message.id, marks);
+  }
   return cards;
 }
 
@@ -430,13 +417,16 @@ function GroupLine({
   answeredBy,
   mine,
   delivery,
+  ownerName,
 }: {
   message: GroupMessage;
   name: string;
   answeredBy?: string;
   mine: boolean;
-  /** 这一轮里服务器画的交付卡；能点的只有发起这一轮的人（`ownerUserId`）。 */
-  delivery?: readonly GroupDeliveryCard[];
+  /** 这一轮里员工走到哪一步的标记；完整的卡和按钮只给发起这一轮的人（`ownerUserId`）。 */
+  delivery?: readonly DeliveryMark[];
+  /** 发起这一轮的人怎么称呼（状态行里「等<他>验收」）。 */
+  ownerName: string;
 }) {
   if (message.agentId === null)
     return (
@@ -543,14 +533,13 @@ function GroupLine({
         )}
         {delivery && delivery.length > 0 ? (
           <DeliveryChatCards>
-            {delivery.map((card, index) => (
-              <DeliveryChatCard
+            {delivery.map((mark) => (
+              <GroupDeliveryMark
                 agentName={name}
-                event={card.event}
-                fromEnd={card.fromEnd}
-                // biome-ignore lint/suspicious/noArrayIndexKey: 一行回复里的卡按出现的先后排，不会挪动
-                key={index}
+                key={`${mark.kind}:${mark.taskId}:${mark.at}`}
+                mark={mark}
                 ownerId={message.ownerUserId}
+                ownerName={ownerName}
               />
             ))}
           </DeliveryChatCards>

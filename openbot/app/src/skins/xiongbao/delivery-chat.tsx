@@ -9,21 +9,28 @@ import {
   deliveryErrorText,
   denyExtension,
   type EvidenceRow,
+  eventsInOrder,
   evidenceOf,
   type FollowedCard,
   followedCardQueryOptions,
   grantExtension,
   pendingExtension,
+  type TaskEvent,
   taskEventsQueryOptions,
 } from "@/lib/tasks/delivery";
 import {
   bounceText,
   type ChatDeliveryEvent,
   type ChatOutcome,
+  type DeliveryMark,
   deliveredOutcome,
+  eventFromFlow,
   extensionOutcome,
+  isLatestOfKind,
+  markLine,
+  matchByContent,
+  matchByMark,
   type PlacedDeliveryEvent,
-  positionsFromEnd,
 } from "@/lib/tasks/delivery-chat";
 import { cn } from "@/lib/utils";
 import {
@@ -40,9 +47,14 @@ import {
  * 对话里的四种交付卡（交付闭环 Task 9，设计稿 3）：接活回执、延期申请、交付卡，和被挡回时的一行灰字。
  * 单聊和群聊都用它；颜色只取 `--wb-*`，别的皮肤里由 `useWbFallback` 接到应用自己的令牌上。
  *
- * 谁能点：只有派活的人。单聊是你自己的线程；群聊里是那一行回复的发起人（`ownerId`），不是你就不读卡、不给
- * 按钮，只画事件里带的字。能点的时候也以卡片此刻的状态为准（`GET /api/tasks/:id` 和流水）：已经验收、
- * 退回、答复过的卡只写结果，不再给按钮，转录里的旧卡不会对已经结束的活发请求。
+ * 谁看得到什么、谁能点：
+ * - 单聊是你自己的线程，卡的内容来自事件本身。
+ * - 群聊的回复上只有不带内容的状态标记（`server/src/channels/group.ts`）。派活的人（回复行的发起人）按
+ *   标记读卡片接口和流水，画出完整的卡和按钮；其他人只看到一行状态，不读卡、不试探接口。
+ *
+ * 卡对回流水（`GET /api/tasks/:id/events`）按内容认，不按位置（`matchByContent`、`matchByMark`）。对上、
+ * 是流水里最新的同类行、卡片此刻的状态允许，才给按钮；已经验收、退回、答复过的只写结果，转录里的旧卡
+ * 不会对已经结束的活发请求。
  */
 
 /** 卡片接口多给的一项：卡属于哪位（派活的人）。 */
@@ -144,30 +156,24 @@ function outcomeText(outcome: ChatOutcome, now: Date): string {
   }
 }
 
-/**
- * 卡片此刻的状态：派活的人才读（群聊里别人的回复不读，不去试探接口）。返回卡、是不是你的、要不要读流水。
- */
-function useChatCard(taskId: string, ownerId: string | undefined) {
+/** 卡片此刻的状态和它的流水（按时间正序）；`enabled` 为假时都不读。 */
+function useCardState(taskId: string, enabled: boolean) {
   const me = useQuery(currentUserQueryOptions()).data;
-  // 群聊里别人发起的那一轮：不是你派的活，卡也读不到，不读。
-  const mayRead = ownerId === undefined || (me != null && me.id === ownerId);
   const card = useQuery({
     ...followedCardQueryOptions<ChatCard>(taskId),
-    enabled: mayRead,
-    refetchInterval: CHAT_REFRESH_MS,
-  });
-  const data = mayRead ? card.data : undefined;
-  // 按卡片自带的派活人和当前用户判断。
-  const mine = data !== undefined && me != null && data.tenantId === me.id;
-  return { card: data, mine };
-}
-
-function useChatEvents(taskId: string, enabled: boolean) {
-  return useQuery({
-    ...taskEventsQueryOptions(taskId),
     enabled,
     refetchInterval: CHAT_REFRESH_MS,
   });
+  const data = enabled ? card.data : undefined;
+  // 按卡片自带的派活人和当前用户判断。
+  const mine = data !== undefined && me != null && data.tenantId === me.id;
+  const events = useQuery({
+    ...taskEventsQueryOptions(taskId),
+    enabled: enabled && mine,
+    refetchInterval: CHAT_REFRESH_MS,
+  });
+  const history = mine && events.data ? eventsInOrder(events.data) : undefined;
+  return { card: data, mine, history };
 }
 
 const actionCardOf = (card: ChatCard): ActionCard => ({
@@ -176,19 +182,27 @@ const actionCardOf = (card: ChatCard): ActionCard => ({
   executorAgentId: card.executorAgentId,
 });
 
+/** 一张卡要知道的：卡片此刻的状态、流水、对上的那一行。 */
+type CardState = {
+  card: ChatCard | undefined;
+  mine: boolean;
+  history: readonly TaskEvent[] | undefined;
+  /** 对上的流水行；对不上或还没读到为 -1。 */
+  index: number;
+  now: Date;
+};
+
 /** 接活回执：预计几点交、验收标准，「改预计时间」「改验收标准」。 */
 function AcceptedCard({
   event,
-  ownerId,
-  now,
+  state,
 }: {
   event: Extract<ChatDeliveryEvent, { kind: "accepted" }>;
-  ownerId?: string;
-  now: Date;
+  state: CardState;
 }) {
-  const { card, mine } = useChatCard(event.taskId, ownerId);
+  const { card, mine, index, now } = state;
   const [dialog, setDialog] = useState<"due" | "criteria" | null>(null);
-  const editable = mine && card !== undefined && canExtend(card);
+  const editable = mine && card !== undefined && index >= 0 && canExtend(card);
   const criteria = card?.criteria ?? event.criteria;
   const currentDue = card?.dueAt ?? null;
   const moved =
@@ -212,6 +226,9 @@ function AcceptedCard({
         ) : null}
       </span>
       {criteria ? <Muted>验收标准：{criteria}</Muted> : null}
+      {card && mine && card.status === "awaiting_review" ? (
+        <ResultLine>成果已经交了，等你验收</ResultLine>
+      ) : null}
       {card && mine && card.status === "done" ? (
         <ResultLine>这件活已经验收了</ResultLine>
       ) : null}
@@ -239,8 +256,8 @@ function AcceptedCard({
       {card && dialog === "due" ? (
         <ExtendDialog
           card={actionCardOf(card)}
+          mode="edit"
           onClose={() => setDialog(null)}
-          title={`改「${card.title}」的预计时间`}
         />
       ) : null}
       {card && dialog === "criteria" ? (
@@ -257,40 +274,41 @@ function AcceptedCard({
 /** 延期申请：延到几点、为什么，「准许」「不准」。 */
 function ExtensionCard({
   event,
-  fromEnd,
-  ownerId,
-  now,
+  state,
 }: {
   event: Extract<ChatDeliveryEvent, { kind: "extension_requested" }>;
-  fromEnd: number;
-  ownerId?: string;
-  now: Date;
+  state: CardState;
 }) {
-  const { card, mine } = useChatCard(event.taskId, ownerId);
-  const events = useChatEvents(event.taskId, mine);
+  const { card, mine, history, index, now } = state;
   const queryClient = useQueryClient();
+  // 答复成功以后、流水重读回来之前，按钮就收起来，不让连点。
+  const [answered, setAnswered] = useState(false);
   const settled = () =>
     void queryClient.invalidateQueries({ queryKey: ["tasks"] });
   const grant = useMutation({
-    mutationFn: (id: string) => grantExtension(id),
+    // 显式带上卡上写的时间：准许的就是你在这张卡上看到的时间。
+    mutationFn: (id: string) => grantExtension(id, event.dueAt),
     retry: false,
+    onSuccess: () => setAnswered(true),
     onSettled: settled,
   });
   const deny = useMutation({
     mutationFn: (id: string) => denyExtension(id),
     retry: false,
+    onSuccess: () => setAnswered(true),
     onSettled: settled,
   });
-  const history = events.data;
-  const outcome = history ? extensionOutcome(history, fromEnd) : null;
-  // 只有最新那条申请、此刻还没答复、员工手上还没交（交了要先退回才能答复），才给按钮。
+  const outcome =
+    history && index >= 0 ? extensionOutcome(history, index) : null;
+  // 对上的是流水里最新的那条申请、此刻还没答复、员工手上还没交（交了要先退回才能答复），才给按钮。
   const open =
+    !answered &&
     mine &&
     card !== undefined &&
     history !== undefined &&
-    fromEnd === 0 &&
+    isLatestOfKind(history, index) &&
     outcome === null &&
-    pendingExtension(history) !== null &&
+    pendingExtension([...history]) !== null &&
     canExtend(card);
   const from = open && card ? deadlineOf(card) : null;
   const to = clockText(event.dueAt, now);
@@ -305,7 +323,8 @@ function ExtensionCard({
     >
       {event.reason ? <Muted>原因：{event.reason}</Muted> : null}
       {outcome ? <ResultLine>{outcomeText(outcome, now)}</ResultLine> : null}
-      {!outcome && mine && card?.status === "awaiting_review" ? (
+      {!outcome && answered ? <ResultLine>已答复</ResultLine> : null}
+      {!outcome && !answered && mine && card?.status === "awaiting_review" ? (
         <ResultLine>成果已经交了，这条申请先不用答复</ResultLine>
       ) : null}
       {!outcome &&
@@ -412,17 +431,12 @@ function EvidenceItem({
 /** 交付卡：交付物、自查，「验收」「退回」。 */
 function DeliveredCard({
   event,
-  fromEnd,
-  ownerId,
-  now,
+  state,
 }: {
   event: Extract<ChatDeliveryEvent, { kind: "delivered" }>;
-  fromEnd: number;
-  ownerId?: string;
-  now: Date;
+  state: CardState;
 }) {
-  const { card, mine } = useChatCard(event.taskId, ownerId);
-  const events = useChatEvents(event.taskId, mine);
+  const { card, mine, history, index, now } = state;
   const writes = useDeliveryWrites();
   const [returning, setReturning] = useState(false);
   const rows = evidenceOf(event.deliverable);
@@ -431,13 +445,14 @@ function DeliveredCard({
       row.kind !== "check",
   );
   const checks = rows.filter((row) => row.kind === "check");
-  const outcome = events.data ? deliveredOutcome(events.data, fromEnd) : null;
-  // 只有最新那次交付、卡此刻还在等你验收，才给按钮。
+  const outcome =
+    history && index >= 0 ? deliveredOutcome(history, index) : null;
+  // 对上的是流水里最新的那次交付、卡此刻还在等你验收，才给按钮。
   const open =
     mine &&
     card !== undefined &&
-    events.data !== undefined &&
-    fromEnd === 0 &&
+    history !== undefined &&
+    isLatestOfKind(history, index) &&
     outcome === null &&
     card.status === "awaiting_review";
   const busy = card ? writes.busy.has(card.id) : false;
@@ -497,68 +512,110 @@ function DeliveredCard({
   );
 }
 
-/** 被挡回：居中一行灰字，不打扰你，员工自己补齐。 */
-function BouncedLine({
-  event,
-  agentName,
-}: {
-  event: Extract<ChatDeliveryEvent, { kind: "bounced" }>;
-  agentName: string;
-}) {
+/** 居中一行灰字：被挡回，或群里别人看到的状态。 */
+function SystemLine({ children, kind }: { children: ReactNode; kind: string }) {
   const fallback = useWbFallback();
   return (
     <p
       className="m-0 self-center rounded-(--wb-radius-pill) bg-(--wb-card2) px-3 py-1 text-center text-(--wb-muted) text-[12px] leading-[1.6] [overflow-wrap:anywhere]"
-      data-delivery-card="被挡回"
+      data-delivery-card={kind}
       role="note"
       style={fallback}
     >
-      {agentName}想交付 · 被挡回：{bounceText(event.reason)}，已让它补齐
+      {children}
     </p>
   );
 }
 
-/**
- * 对话里的一张交付卡。`fromEnd` 是同一件活的同一种卡在这段对话里倒数第几张（最新的是 0），用来把它对回
- * 流水里的那一次；`ownerId` 是群聊里那一行回复的发起人（派活的人），单聊不给。
- */
-export function DeliveryChatCard({
+/** 一张卡的内容和状态都有了，画出来。 */
+function CardBody({
   event,
-  fromEnd,
   agentName,
-  ownerId,
-  now = new Date(),
+  state,
 }: {
   event: ChatDeliveryEvent;
-  fromEnd: number;
   agentName: string;
-  ownerId?: string;
-  now?: Date;
+  state: CardState;
 }) {
   switch (event.kind) {
     case "accepted":
-      return <AcceptedCard event={event} now={now} ownerId={ownerId} />;
+      return <AcceptedCard event={event} state={state} />;
     case "extension_requested":
-      return (
-        <ExtensionCard
-          event={event}
-          fromEnd={fromEnd}
-          now={now}
-          ownerId={ownerId}
-        />
-      );
+      return <ExtensionCard event={event} state={state} />;
     case "delivered":
-      return (
-        <DeliveredCard
-          event={event}
-          fromEnd={fromEnd}
-          now={now}
-          ownerId={ownerId}
-        />
-      );
+      return <DeliveredCard event={event} state={state} />;
     case "bounced":
-      return <BouncedLine agentName={agentName} event={event} />;
+      // 不打扰你，员工自己补齐。
+      return (
+        <SystemLine kind="被挡回">
+          {agentName}想交付 · 被挡回：{bounceText(event.reason)}，已让它补齐
+        </SystemLine>
+      );
   }
+}
+
+/** 单聊里的一张交付卡：内容来自事件本身，按内容对回流水。 */
+export function DeliveryChatCard({
+  event,
+  agentName,
+  now = new Date(),
+}: {
+  event: ChatDeliveryEvent;
+  agentName: string;
+  now?: Date;
+}) {
+  const { card, mine, history } = useCardState(
+    event.taskId,
+    event.kind !== "bounced",
+  );
+  const index = history ? matchByContent(history, event) : -1;
+  return (
+    <CardBody
+      agentName={agentName}
+      event={event}
+      state={{ card, mine, history, index, now }}
+    />
+  );
+}
+
+/**
+ * 群聊回复上的一个状态标记。派活的人（`ownerId` 是你）按标记读卡片和流水，画出完整的卡；其他人只看到一行
+ * 状态，不读卡。派活的人那边对不上流水（还没读到、读不到）时也只画状态。
+ */
+export function GroupDeliveryMark({
+  mark,
+  agentName,
+  ownerId,
+  ownerName,
+  now = new Date(),
+}: {
+  mark: DeliveryMark;
+  agentName: string;
+  ownerId: string;
+  ownerName: string;
+  now?: Date;
+}) {
+  const me = useQuery(currentUserQueryOptions()).data;
+  const owner = me != null && me.id === ownerId;
+  const { card, mine, history } = useCardState(mark.taskId, owner);
+  const index = history ? matchByMark(history, mark) : -1;
+  const line = index >= 0 && history ? history[index] : undefined;
+  const event = line ? eventFromFlow(line, mark.taskId) : null;
+  if (!owner || !event)
+    return (
+      <SystemLine kind="状态">
+        {markLine(mark, agentName, owner ? "你" : ownerName, (at) =>
+          clockText(at, now),
+        )}
+      </SystemLine>
+    );
+  return (
+    <CardBody
+      agentName={agentName}
+      event={event}
+      state={{ card, mine, history, index, now }}
+    />
+  );
 }
 
 /** 单聊里的交付卡，交给转录画在各自那条消息下面。 */
@@ -566,17 +623,10 @@ export function deliveryNotes(
   placed: readonly PlacedDeliveryEvent[],
   agentName: string,
 ): TranscriptNote[] {
-  const positions = positionsFromEnd(placed.map((entry) => entry.event));
-  return placed.map((entry, index) => ({
+  return placed.map((entry) => ({
     key: entry.key,
     anchor: entry.anchor,
-    node: (
-      <DeliveryChatCard
-        agentName={agentName}
-        event={entry.event}
-        fromEnd={positions[index] ?? 0}
-      />
-    ),
+    node: <DeliveryChatCard agentName={agentName} event={entry.event} />,
   }));
 }
 

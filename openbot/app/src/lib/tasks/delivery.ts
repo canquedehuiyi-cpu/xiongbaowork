@@ -670,11 +670,14 @@ export const extendTask = (id: string, dueAt: string, answering: boolean) =>
         fallback: "预计时间没改成，请稍后再试。",
       });
 
-/** 照员工申请的时间准许延期（对话里延期卡上的「准许」）：不带时间，服务器取那条申请要的时间。 */
-export const grantExtension = (id: string) =>
+/**
+ * 照员工申请的时间准许延期（对话里延期卡上的「准许」）。显式带上卡上写的时间：服务器准许的就是你在卡上
+ * 看到的那个时间，不会是后来另一条申请要的。
+ */
+export const grantExtension = (id: string, dueAt: string) =>
   client(`${cardPath(id)}/extension`, {
     method: "POST",
-    body: { decision: "grant" },
+    body: { decision: "grant", dueAt },
     fallback: "延期没准成，请稍后再试。",
   });
 

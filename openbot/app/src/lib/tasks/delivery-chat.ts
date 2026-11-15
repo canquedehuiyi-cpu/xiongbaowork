@@ -1,4 +1,5 @@
-import { eventsInOrder, type TaskEvent } from "./delivery";
+import { lastMessageIdAfter } from "../../../../shared/delivery-anchor";
+import type { TaskEvent } from "./delivery";
 
 /*
  * 对话里的四种交付卡（交付闭环 Task 9，规格第 4 节）：服务器在员工这一轮的事件流里放的 `CUSTOM` 事件
@@ -79,63 +80,8 @@ export function readDeliveryEvent(
   }
 }
 
-/** 同一件活的同一种卡，在这段对话里是倒数第几张（最新的是 0）；按出现的先后给。 */
-export function positionsFromEnd(
-  events: readonly ChatDeliveryEvent[],
-): number[] {
-  const seen = new Map<string, number>();
-  const result = new Array<number>(events.length);
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (!event) continue;
-    const key = `${event.kind}:${event.taskId}`;
-    const count = seen.get(key) ?? 0;
-    result[index] = count;
-    seen.set(key, count + 1);
-  }
-  return result;
-}
-
-const lastIdOf = (messages: unknown): string | null => {
-  if (!Array.isArray(messages) || messages.length === 0) return null;
-  const last = messages.at(-1) as { id?: unknown } | undefined;
-  return typeof last?.id === "string" && last.id ? last.id : null;
-};
-
-/**
- * 跟着一段事件流，记下此刻最后出现的那条消息。员工调接活、交付、延期时，服务器的卡片事件就在这一轮
- * 那条消息（带着工具调用的那条）之后，卡片就画在那一行下面。连上对话时回放的历史也走同一条路。
- */
-export function lastMessageIdAfter(
-  previous: string | null,
-  event: { type?: unknown } & Record<string, unknown>,
-): string | null {
-  switch (event.type) {
-    case "TEXT_MESSAGE_START":
-    case "TEXT_MESSAGE_CHUNK":
-    case "TOOL_CALL_RESULT":
-    case "ACTIVITY_SNAPSHOT":
-      return typeof event.messageId === "string" && event.messageId
-        ? event.messageId
-        : previous;
-    case "TOOL_CALL_START":
-    case "TOOL_CALL_CHUNK":
-      return typeof event.parentMessageId === "string" && event.parentMessageId
-        ? event.parentMessageId
-        : previous;
-    case "MESSAGES_SNAPSHOT":
-      return lastIdOf(event.messages) ?? previous;
-    // 一轮开始时带着这一轮新来的消息（你刚说的话）：卡至少画在它下面。
-    case "RUN_STARTED":
-      return (
-        lastIdOf(
-          (event.input as { messages?: unknown } | undefined)?.messages,
-        ) ?? previous
-      );
-    default:
-      return previous;
-  }
-}
+/** 卡画在哪一行下面的规则，浏览器和服务器的回放测试共用（`shared/delivery-anchor.ts`）。 */
+export { lastMessageIdAfter };
 
 /** 一张卡在对话里：画在哪条消息后面（null 是还没有消息，画在最后），以及去重用的键。 */
 export type PlacedDeliveryEvent = {
@@ -173,23 +119,172 @@ const detailText = (event: TaskEvent, key: string) => {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 };
 
+/** 群回复上记的状态标记（`server/src/channels/group.ts` `GroupDeliveryMark`）：不带内容。 */
+export type DeliveryMark = {
+  kind: ChatDeliveryEvent["kind"];
+  taskId: string;
+  at: string;
+  agentId: string;
+  dueAt?: string;
+};
+
+/** 一条群回复上的标记，形状不对的不要。 */
+export function readDeliveryMark(value: unknown): DeliveryMark | null {
+  if (!value || typeof value !== "object") return null;
+  const record = value as Record<string, unknown>;
+  const kind = Object.values(NAMES).find((known) => known === record.kind);
+  const taskId = textOr(record.taskId, null);
+  const at = validTime(record.at);
+  const agentId = textOr(record.agentId, null);
+  if (!kind || !taskId || !at || !agentId) return null;
+  const dueAt = validTime(record.dueAt);
+  return { kind, taskId, at, agentId, ...(dueAt ? { dueAt } : {}) };
+}
+
+/** 两段 JSON 是不是同一个值：jsonb 存进库会重排对象的键，所以按排好序的键比。 */
+export function sameJson(a: unknown, b: unknown): boolean {
+  const canonical = (value: unknown): unknown =>
+    Array.isArray(value)
+      ? value.map(canonical)
+      : value && typeof value === "object"
+        ? Object.fromEntries(
+            Object.keys(value as Record<string, unknown>)
+              .sort()
+              .map((key) => [
+                key,
+                canonical((value as Record<string, unknown>)[key]),
+              ]),
+          )
+        : value;
+  return JSON.stringify(canonical(a)) === JSON.stringify(canonical(b));
+}
+
+const sameInstant = (a: unknown, b: unknown) =>
+  (a ?? null) === null || (b ?? null) === null
+    ? (a ?? null) === (b ?? null)
+    : typeof a === "string" &&
+      typeof b === "string" &&
+      Date.parse(a) === Date.parse(b);
+
 /**
- * 流水里和对话里倒数第 `fromEnd` 张同类卡对应的那一行，之后第一件把它了结的事。对不上（对话里的卡比流水多）
- * 或还没了结为 null。
+ * 对话里的这张卡，对的是流水（按时间正序）里的哪一行：按内容认，不按位置。交付卡比交付物，延期卡比要延到
+ * 的时间（和理由），接活回执比报的预计时间，挡回比原因。同样内容的有几行时取最后一行。对不上为 -1，这时
+ * 卡上不给按钮。
  */
+export function matchByContent(
+  history: readonly TaskEvent[],
+  event: ChatDeliveryEvent,
+): number {
+  const same = (line: TaskEvent): boolean => {
+    const detail = line.detail ?? {};
+    switch (event.kind) {
+      case "delivered":
+        return sameJson(detail.deliverable, event.deliverable);
+      case "extension_requested":
+        return (
+          sameInstant(detail.dueAt, event.dueAt) &&
+          (typeof detail.reason !== "string" ||
+            !event.reason ||
+            detail.reason.trim() === event.reason)
+        );
+      case "accepted":
+        return sameInstant(detail.dueAt, event.dueAt);
+      case "bounced":
+        return (
+          typeof detail.reason !== "string" ||
+          detail.reason.trim() === event.reason
+        );
+    }
+  };
+  return history.findLastIndex(
+    (line) => line.kind === event.kind && same(line),
+  );
+}
+
+/** 群回复上的标记和流水里的那一行差多久还算同一件事。 */
+const MARK_SLACK_MS = 2 * 60_000;
+
+/**
+ * 群回复上的标记对的是流水里的哪一行：同一种、预计时间相同（标记带了的话）、时刻最接近、相差不超过两分钟。
+ * 对不上为 -1。
+ */
+export function matchByMark(
+  history: readonly TaskEvent[],
+  mark: DeliveryMark,
+): number {
+  const at = Date.parse(mark.at);
+  let best = -1;
+  let gap = Number.POSITIVE_INFINITY;
+  history.forEach((line, index) => {
+    if (line.kind !== mark.kind) return;
+    if (mark.dueAt && !sameInstant(line.detail?.dueAt, mark.dueAt)) return;
+    const distance = Math.abs(Date.parse(line.createdAt) - at);
+    if (distance <= MARK_SLACK_MS && distance < gap) {
+      best = index;
+      gap = distance;
+    }
+  });
+  return best;
+}
+
+/** 流水里对上的那一行，换成和对话里一样的卡（群聊的派活人用它画完整的卡）。 */
+export function eventFromFlow(
+  line: TaskEvent,
+  taskId: string,
+): ChatDeliveryEvent | null {
+  const detail = line.detail ?? {};
+  switch (line.kind) {
+    case "accepted":
+      return {
+        kind: "accepted",
+        taskId,
+        dueAt: validTime(detail.dueAt),
+        criteria: textOr(detail.criteria, null),
+      };
+    case "extension_requested": {
+      const dueAt = validTime(detail.dueAt);
+      return dueAt
+        ? {
+            kind: "extension_requested",
+            taskId,
+            dueAt,
+            reason: textOr(detail.reason, "") ?? "",
+          }
+        : null;
+    }
+    case "delivered":
+      return {
+        kind: "delivered",
+        taskId,
+        deliverable: detail.deliverable ?? null,
+      };
+    case "bounced":
+      return {
+        kind: "bounced",
+        taskId,
+        reason: textOr(detail.reason, "") ?? "",
+      };
+    default:
+      return null;
+  }
+}
+
+/** 对上的那一行是不是流水里最新的同类行（只有最新的那张卡给按钮）。 */
+export const isLatestOfKind = (
+  history: readonly TaskEvent[],
+  index: number,
+): boolean =>
+  index >= 0 &&
+  history.findLastIndex((line) => line.kind === history[index]?.kind) === index;
+
+/** 流水里第 `index` 行之后，第一件把它了结的事；还没了结为 null。 */
 function outcomeAfter(
-  events: readonly TaskEvent[],
-  kind: string,
-  fromEnd: number,
+  history: readonly TaskEvent[],
+  index: number,
   closers: Record<string, (event: TaskEvent) => ChatOutcome | null>,
 ): ChatOutcome | null {
-  const history = eventsInOrder([...events]);
-  const matches = history
-    .map((event, index) => ({ event, index }))
-    .filter(({ event }) => event.kind === kind);
-  const match = matches[matches.length - 1 - fromEnd];
-  if (!match) return null;
-  for (const event of history.slice(match.index + 1)) {
+  if (index < 0) return null;
+  for (const event of history.slice(index + 1)) {
     const close = closers[event.kind];
     const outcome = close ? close(event) : null;
     if (outcome) return outcome;
@@ -197,12 +292,12 @@ function outcomeAfter(
   return null;
 }
 
-/** 交付卡：验收了、退回了、取消了，还是换人了。 */
+/** 交付卡（流水第 `index` 行）：验收了、退回了、取消了，还是换人了。 */
 export function deliveredOutcome(
-  events: readonly TaskEvent[],
-  fromEnd: number,
+  history: readonly TaskEvent[],
+  index: number,
 ): ChatOutcome | null {
-  return outcomeAfter(events, "delivered", fromEnd, {
+  return outcomeAfter(history, index, {
     reviewed: (event) => ({ kind: "reviewed", at: event.createdAt }),
     returned: (event) => ({
       kind: "returned",
@@ -214,12 +309,12 @@ export function deliveredOutcome(
   });
 }
 
-/** 延期卡：准了、没准，还是因为换人、取消、又申请了一次而不用答复了。 */
+/** 延期卡（流水第 `index` 行）：准了、没准，还是因为换人、取消、又申请了一次而不用答复了。 */
 export function extensionOutcome(
-  events: readonly TaskEvent[],
-  fromEnd: number,
+  history: readonly TaskEvent[],
+  index: number,
 ): ChatOutcome | null {
-  return outcomeAfter(events, "extension_requested", fromEnd, {
+  return outcomeAfter(history, index, {
     extension_granted: (event) => ({
       kind: "granted",
       at: event.createdAt,
@@ -236,6 +331,29 @@ export function extensionOutcome(
   });
 }
 
+/** 群里不是派活人的人看到的一行状态，不带任何内容。 */
+export function markLine(
+  mark: DeliveryMark,
+  agentName: string,
+  ownerName: string,
+  clock: (at: string) => string,
+): string {
+  switch (mark.kind) {
+    case "accepted":
+      return mark.dueAt
+        ? `${agentName}已接下，预计 ${clock(mark.dueAt)} 交`
+        : `${agentName}已接下`;
+    case "extension_requested":
+      return mark.dueAt
+        ? `${agentName}申请延到 ${clock(mark.dueAt)}`
+        : `${agentName}申请了延期`;
+    case "delivered":
+      return `${agentName}已交成果，等${ownerName}验收`;
+    case "bounced":
+      return `${agentName}的交付被挡回了`;
+  }
+}
+
 /**
  * 挡回原因说给你听。服务器的原因是写给员工的（「在交付物标题或自查里逐一写到再交」），这里只取第一句、
  * 去掉括号里的字段名（「（checks）」）；剩下的话里还夹着英文标识符（工具名、字段名）时，换成一句通用的。
@@ -244,8 +362,8 @@ export function bounceText(reason: string): string {
   const cleaned = reason
     .replace(/[（(]\s*[A-Za-z_][\w.]*\s*[）)]/g, "")
     .replace(/accept_task|deliver_task|request_extension/g, "")
-    // 原话是对员工说的「你」；念给派活的人听，员工是「它」。
-    .replace(/你/g, "它")
+    // 原话是对员工说的「你」；念给派活的人听，员工是「它」。「」里的名字（文件名）照原样。
+    .replace(/「[^」]*」|你/g, (found) => (found === "你" ? "它" : found))
     .trim();
   const first = (cleaned.split("。")[0] ?? "")
     .trim()
