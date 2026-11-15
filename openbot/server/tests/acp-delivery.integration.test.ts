@@ -681,6 +681,52 @@ describe("external employees in the delivery loop", () => {
     expect(textOf(work.events)).not.toContain("它没交东西");
   });
 
+  test("an edit that failed is not a change: the turn ends normally but nothing is handed in", async () => {
+    const h = await harness();
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const work = h.say(threadId, "修一下登录页的校验", {
+      dispatched: true,
+    });
+    const { turnId } = await h.open(threadId, 0);
+    // The diff it meant to write, and then the edit failed.
+    await h.update(threadId, turnId, {
+      sessionUpdate: "tool_call",
+      toolCallId: "edit-1",
+      kind: "edit",
+      title: "改 login.ts",
+      status: "in_progress",
+      content: [
+        {
+          type: "diff",
+          path: "src/login.ts",
+          oldText: "a\n",
+          newText: "a\nb\nc\n",
+        },
+      ],
+    });
+    await h.update(threadId, turnId, {
+      sessionUpdate: "tool_call_update",
+      toolCallId: "edit-1",
+      status: "failed",
+    });
+    await h.said(
+      threadId,
+      turnId,
+      "改好了。\n自查：跑了登录页的单测，全部通过。",
+    );
+    await h.end(threadId, turnId);
+    await work.done;
+
+    const card = await h.cardOf(threadId);
+    if (!card) throw new Error("no card");
+    expect(card.status).toBe("running");
+    expect(stageOf(card)).toBe("accepted");
+    expect(card.deliverableRef).toBeNull();
+    const kinds = (await h.history(card.id)).map((row) => row.kind);
+    expect(kinds).not.toContain("delivered");
+    expect(textOf(work.events)).toContain("它没交东西");
+  });
+
   test("a turn with no diff or attachment stays accepted and posts 它没交东西", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;

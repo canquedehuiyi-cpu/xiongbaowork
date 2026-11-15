@@ -19,10 +19,17 @@ const record = (value: unknown): Record<string, unknown> | null =>
  * again as it progresses, so only its latest count of each file is kept, then each file's counts are
  * added up over the turn's tool calls. What the board's deliverable shows (`deliverableFromEvents`)
  * and what an external employee hands in (`DeliverableRef.diffs`, `diffSummary`).
+ *
+ * Only a tool call that COMPLETED changed anything: the latest `status` its `acp.diff` events carry
+ * (the translator stamps how the call ended on them) must be `completed`. A call that failed, or that
+ * the turn closed on before it finished, reported the diff it meant to write, and nothing was written:
+ * counting it would let a turn whose every edit failed read as handed in.
  */
 export function editedFiles(events: readonly BaseEvent[]): DiffFile[] {
   /** Per tool call and file, its latest count. */
-  const edits = new Map<string, DiffFile>();
+  const edits = new Map<string, DiffFile & { call: string }>();
+  /** Per tool call, the latest status its diffs said. */
+  const ended = new Map<string, unknown>();
   for (const event of events) {
     if (event.type !== EventType.CUSTOM) continue;
     const { name, value } = event as BaseEvent & {
@@ -30,10 +37,13 @@ export function editedFiles(events: readonly BaseEvent[]): DiffFile[] {
       value?: unknown;
     };
     if (name !== "acp.diff") continue;
-    const { toolCallId, files } = (record(value) ?? {}) as {
+    const { toolCallId, files, status } = (record(value) ?? {}) as {
       toolCallId?: unknown;
       files?: unknown;
+      status?: unknown;
     };
+    const call = String(toolCallId ?? "");
+    ended.set(call, status);
     if (!Array.isArray(files)) continue;
     for (const file of files) {
       const { path, added, removed } = record(file) ?? {};
@@ -44,15 +54,12 @@ export function editedFiles(events: readonly BaseEvent[]): DiffFile[] {
         typeof removed !== "number"
       )
         continue;
-      edits.set(JSON.stringify([String(toolCallId ?? ""), path]), {
-        path,
-        added,
-        removed,
-      });
+      edits.set(JSON.stringify([call, path]), { call, path, added, removed });
     }
   }
   const files = new Map<string, DiffFile>();
-  for (const { path, added, removed } of edits.values()) {
+  for (const { call, path, added, removed } of edits.values()) {
+    if (ended.get(call) !== "completed") continue;
     const file = files.get(path) ?? { path, added: 0, removed: 0 };
     file.added += added;
     file.removed += removed;
