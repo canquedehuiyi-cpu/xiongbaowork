@@ -1,11 +1,11 @@
 import type { RunAgentInput } from "@ag-ui/client";
+import { and, desc, eq, inArray, max, notLike } from "drizzle-orm";
+import { z } from "zod";
 import {
   CONTEXT_SHARE_KEYS,
   type ContextShareKey,
   type ContextUsage,
-} from "@openbot/shared/conversation-sidebar";
-import { and, desc, eq, inArray, max, notLike } from "drizzle-orm";
-import { z } from "zod";
+} from "../../../shared/conversation-sidebar";
 import type { Database } from "../db/client";
 import {
   type ContextShares,
@@ -495,8 +495,7 @@ const PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
  * 压缩会话的摘要放进 `RunAgentInput.context` 的那一条（`threads/compaction.ts`）。它是对话历史的替身，算
  * `messages`，不算系统提示：内置员工丢掉历史里的 system 行，所以摘要只能这样送到模型面前。
  */
-export const COMPACTION_SUMMARY_CONTEXT =
-  "OpenBot earlier conversation summary";
+export const COMPACTION_SUMMARY_CONTEXT = "Earlier conversation summary";
 
 /** 一次运行用的配置里与字数有关的部分：系统提示和配置的工具。 */
 export type ContextBreakdownConfiguration = {
@@ -543,7 +542,7 @@ function schemaLength(parameters: unknown): number {
 }
 
 /**
- * 一次运行发给模型的东西按类别数字数，和 CopilotKit 内置 agent 拼请求的方式一致：系统提示 = 配置的
+ * 一次运行发给模型的东西按类别数字数，和内置员工运行时拼请求的方式一致：系统提示 = 配置的
  * prompt + `context` 各条 + 状态（`context` 里压缩摘要那条算消息）；历史消息里的 system / developer 不发；
  * 工具 = 请求带的 + 配置的（同名算一个）减去等在搜索后面的。字数为 0 的段不列。
  */

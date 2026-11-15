@@ -1,16 +1,4 @@
 import {
-  type ContextUsage,
-  type ConversationSidebar,
-  SIDEBAR_OUTPUT_LIMIT,
-  type SidebarCompaction,
-  type SidebarContext,
-  type SidebarEnvironment,
-  type SidebarGoal,
-  type SidebarGoalStatus,
-  type SidebarMemberStatus,
-  type SidebarOutput,
-} from "@openbot/shared/conversation-sidebar";
-import {
   and,
   asc,
   count,
@@ -21,6 +9,18 @@ import {
   isNull,
   min,
 } from "drizzle-orm";
+import {
+  type ContextUsage,
+  type ConversationSidebar,
+  SIDEBAR_OUTPUT_LIMIT,
+  type SidebarCompaction,
+  type SidebarContext,
+  type SidebarEnvironment,
+  type SidebarGoal,
+  type SidebarGoalStatus,
+  type SidebarMemberStatus,
+  type SidebarOutput,
+} from "../../../shared/conversation-sidebar";
 import { ownerOfBotRow } from "../agents/bot-owner";
 import { readAgentPresence } from "../agents/presence";
 import { agentAccessFilter } from "../agents/profile-store";

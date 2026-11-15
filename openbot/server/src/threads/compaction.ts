@@ -8,8 +8,6 @@ import {
   type RunAgentInput,
   type ToolCall,
 } from "@ag-ui/client";
-import type { ContextUsage } from "@openbot/shared/conversation-sidebar";
-import { answeredBy } from "@openbot/shared/handoff-markers";
 import { generateText, type LanguageModel } from "ai";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import postgres from "postgres";
@@ -22,6 +20,8 @@ import {
   of,
   switchMap,
 } from "rxjs";
+import type { ContextUsage } from "../../../shared/conversation-sidebar";
+import { answeredBy } from "../../../shared/handoff-markers";
 import {
   GROUP_PERSON_SPEAKER,
   GROUP_TRANSCRIPT_HEADER,
@@ -57,7 +57,7 @@ import {
 export const COMPACTION_KEEP_LAST = 10;
 
 /** 组装历史时替代较早消息的那条系统消息的 id 与开头。 */
-export const COMPACTION_SUMMARY_MESSAGE_ID = "openbot:compaction-summary";
+export const COMPACTION_SUMMARY_MESSAGE_ID = "xiongbao:compaction-summary";
 export const COMPACTION_SUMMARY_PREFIX = "早前对话摘要：";
 
 /**
@@ -65,8 +65,8 @@ export const COMPACTION_SUMMARY_PREFIX = "早前对话摘要：";
  * （`{auto: true, compactionId, tokensBefore, tokensAfter}`），或者失败了（`{auto: true}`，这一轮照常跑）。
  * 界面据此画「已自动压缩」分隔线或提示一次。
  */
-export const COMPACTION_DONE_EVENT = "openbot.compaction.done";
-export const COMPACTION_FAILED_EVENT = "openbot.compaction.failed";
+export const COMPACTION_DONE_EVENT = "xiongbao.compaction.done";
+export const COMPACTION_FAILED_EVENT = "xiongbao.compaction.failed";
 
 /** 总结指令：保留用户的决定和约定、未完成的事、关键事实与数字、文件和链接名；去掉寒暄、重复、已被推翻的内容。 */
 export const COMPACTION_INSTRUCTION = [
@@ -164,7 +164,7 @@ export function shouldAutoCompact(
 }
 
 /**
- * 摘要那条系统消息挪进 context，内置员工才看得到：CopilotKit 内置 agent 把历史里的 system 行丢掉
+ * 摘要那条系统消息挪进 context，内置员工才看得到：内置员工的运行时把历史里的 system 行丢掉
  * （`forwardSystemMessages` 从不打开），context 则拼进系统提示。分类统计把这一条算作消息
  * （{@link COMPACTION_SUMMARY_CONTEXT}）。没有摘要行时原样返回，审批续跑带着的上次摘要 context 因此留着。
  */
