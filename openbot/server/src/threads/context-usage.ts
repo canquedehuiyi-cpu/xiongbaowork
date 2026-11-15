@@ -172,13 +172,18 @@ export type ReadContextUsageDeps = {
  *
  * 模型库行还是平台模型池行，由那次调用记下的 `model_ref` 认：部署默认模型记的是全零 UUID，两边都不查；
  * 平台模型池的调用把池行 id 同时记作 `credential_id`（见 `models/runtime-resolver.ts` 的 `poolModel`）。
+ *
+ * 分类比例默认也在 `tenantId` 里读；`sharesTenantId` 给出时改在那个租户里读：员工用主人的模型库时计量行
+ * 记在主人名下，比例行却记在发起运行的人名下（`contextBreakdownRecorder`），两者各在写入的租户里读。
  */
 export async function readContextUsage(
   tenantId: string,
   threadId: string,
   agentId: string,
   deps: ReadContextUsageDeps,
+  options: { sharesTenantId?: string } = {},
 ): Promise<ContextUsage> {
+  const sharesTenantId = options.sharesTenantId ?? tenantId;
   const { database } = deps;
   return runAsTenant(tenantId, async () => {
     const [call] = await database
@@ -246,18 +251,20 @@ export async function readContextUsage(
         catalogue: deps.contextWindowFor,
       },
     );
-    const [breakdown] = await database
-      .select({ shares: threadContextBreakdowns.shares })
-      .from(threadContextBreakdowns)
-      .where(
-        and(
-          eq(threadContextBreakdowns.tenantId, tenantId),
-          eq(threadContextBreakdowns.threadId, threadId),
-          eq(threadContextBreakdowns.agentId, agentId),
-        ),
-      )
-      .orderBy(desc(threadContextBreakdowns.createdAt))
-      .limit(1);
+    const [breakdown] = await runAsTenant(sharesTenantId, () =>
+      database
+        .select({ shares: threadContextBreakdowns.shares })
+        .from(threadContextBreakdowns)
+        .where(
+          and(
+            eq(threadContextBreakdowns.tenantId, sharesTenantId),
+            eq(threadContextBreakdowns.threadId, threadId),
+            eq(threadContextBreakdowns.agentId, agentId),
+          ),
+        )
+        .orderBy(desc(threadContextBreakdowns.createdAt))
+        .limit(1),
+    );
     return contextUsageFrom({
       used: usedTokens(call),
       limit,

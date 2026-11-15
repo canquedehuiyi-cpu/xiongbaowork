@@ -35,3 +35,93 @@ export type ContextUsage = {
   /** 最近一次调用实际用的服务商和模型名；没有调用时为 null。 */
   lastModel: { provider: string; name: string } | null;
 };
+
+/*
+ * 侧栏接口（`GET /api/threads/:threadId/sidebar`、`GET /api/channels/:channelId/sidebar`）一次返回的四块。
+ * 单聊和群组共用一个形状：群组多出 `environment.members` 与 `context.perAgent`。
+ */
+
+/** 员工此刻：在忙、空闲、被暂停、所在电脑离线，或读不到。 */
+export type SidebarMemberStatus =
+  | "working"
+  | "resting"
+  | "paused"
+  | "offline"
+  | "unknown";
+
+/** 环境：员工在哪干活、在哪个项目或工作文件夹、用什么模型；群组里是成员列表。 */
+export type SidebarEnvironment = {
+  kind: "cloud" | "device";
+  /** 设备模式与外部员工：电脑名；看不到那台电脑时不给。 */
+  deviceName?: string;
+  online?: boolean;
+  /** 设备模式下员工在这台电脑上的当前项目；没有时为 null。 */
+  project?: { id: string; name: string } | null;
+  /** 外部员工的工作文件夹名（设备上报的共享文件夹名）；对不上时为 null。 */
+  workdirName?: string | null;
+  /** 员工绑定的模型；外部员工带 `external`；远程员工与群组为 null。 */
+  model: { label: string; external?: { harness: string } } | null;
+  members?: {
+    agentId: string;
+    name: string;
+    status: SidebarMemberStatus;
+    /** 在哪：「云端」、电脑名，或看不到电脑名时的「电脑」。 */
+    where: string;
+    doing: string | null;
+  }[];
+};
+
+/** 任务卡的五种状态（同看板）。 */
+export type SidebarGoalStatus =
+  | "running"
+  | "needs_action"
+  | "awaiting_review"
+  | "done"
+  | "failed";
+
+/** 目标：最近一张任务卡；没有卡时为 null。 */
+export type SidebarGoal = {
+  title: string;
+  status: SidebarGoalStatus;
+  /** 这个对话跑过几轮（`thread_runs` 计数）。 */
+  rounds: number;
+  /** 状态一句话，加员工最近一条回复的第一句（截 60 字）。 */
+  lastCheck: string;
+  /** 卡在等人确认时挂着的审批；否则为 null。 */
+  pendingApprovalId: string | null;
+} | null;
+
+/** 上下文：用量与分类明细；外部员工只有 `managedBy`；群组每位员工一行 `perAgent`。 */
+export type SidebarContext = {
+  /** 外部员工：上下文由谁自己管理（如「Codex」）。 */
+  managedBy?: string;
+  usage?: ContextUsage;
+  perAgent?: {
+    agentId: string;
+    name: string;
+    percent: number | null;
+    managedBy?: string;
+    compactedAt?: string | null;
+  }[];
+  lastCompaction?: { id: string; auto: boolean; at: string } | null;
+};
+
+/** 输出内容一行：文件（附件）、表格、链接、改动、报告。 */
+export type SidebarOutput = {
+  kind: "file" | "table" | "link" | "diff" | "report";
+  title: string;
+  href: string;
+  at: string;
+  byAgentId?: string;
+};
+
+/** 侧栏可显示的输出内容条数，多出来的看「查看全部 N 项」。 */
+export const SIDEBAR_OUTPUT_LIMIT = 3;
+
+export type ConversationSidebar = {
+  environment: SidebarEnvironment;
+  goal: SidebarGoal;
+  context: SidebarContext;
+  /** 按时间倒序、去重；`items` 最多 {@link SIDEBAR_OUTPUT_LIMIT} 条，`total` 是去重后的总数。 */
+  outputs: { items: SidebarOutput[]; total: number };
+};

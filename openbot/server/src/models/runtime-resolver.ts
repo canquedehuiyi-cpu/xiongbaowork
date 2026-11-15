@@ -349,6 +349,40 @@ export async function boundModelName(
   }
 }
 
+/**
+ * The tenant a run of this coworker started in the current frame writes its `model_token_calls` rows
+ * under, decided as the resolver below decides it: a usable library binding meters under the library
+ * row's tenant, a pool binding under its payer, and anything that falls back to the deployment default
+ * under the frame itself (`meteredDeploymentModel`). Null when that is nobody (the frame is not a
+ * person's). Reads no key: a binding whose vault row is gone or revoked falls back, as the run does.
+ *
+ * For readers of usage (the conversation sidebar), which must look for a coworker's calls where they
+ * were written, not where the person asking happens to be.
+ */
+export async function meteringTenantFor(
+  database: Database,
+  agentId: string,
+  environment: PoolKeyEnvironment = process.env,
+): Promise<string | null> {
+  const binding = await bindingFor(database, agentId, environment).catch(
+    (error) => {
+      if (error instanceof TenantContextError) throw error;
+      return null;
+    },
+  );
+  if (binding?.kind === "pool") return binding.tenantId;
+  if (binding?.kind === "library") {
+    const [secret] = await database
+      .select({ revokedAt: credentialRows.revokedAt })
+      .from(credentialRows)
+      .where(eq(credentialRows.id, binding.credentialId))
+      .limit(1);
+    if (secret && !secret.revokedAt) return binding.tenantId;
+  }
+  const frame = currentTenant();
+  return isPersonTenant(frame) ? frame : null;
+}
+
 /** The model a coworker's run will speak with, and its `provider/model` name, decided together. */
 export type ResolvedAgentModel = { model: LanguageModel; name: string };
 

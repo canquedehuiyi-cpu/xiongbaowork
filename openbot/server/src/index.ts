@@ -317,6 +317,7 @@ import { installDeepSeekThinkingOff } from "./models/deepseek-thinking";
 import { createModelRoutes, createModelShelf } from "./models/routes";
 import {
   createNamedAgentModelResolver,
+  meteringTenantFor,
   modelOf,
 } from "./models/runtime-resolver";
 import { databaseTokenCallSink } from "./models/token-metering";
@@ -508,6 +509,8 @@ import {
   type ThreadPlatform,
 } from "./threads/local-platform";
 import { PostgresAgentRunner } from "./threads/postgres-runner";
+import { createConversationSidebar } from "./threads/sidebar";
+import { createSidebarRoutes } from "./threads/sidebar-routes";
 import { createTranslationRoutes } from "./translations/routes";
 import { createTranslationStore, translatePending } from "./translations/store";
 import { createTranslator } from "./translations/translator";
@@ -5139,6 +5142,33 @@ await startupLifecycle.run(async (startup) => {
         : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
+
+  /*
+   * The conversation sidebar (环境 · 目标 · 上下文 · 输出内容): `GET /api/threads/:threadId/sidebar` and
+   * `GET /api/channels/:channelId/sidebar`, read in the caller's own frame; a coworker's usage is read
+   * where its calls were metered (`meteringTenantFor`), once the caller is known to see the conversation.
+   */
+  const sidebarRoutes = createSidebarRoutes(
+    createConversationSidebar({
+      database,
+      runtime: config.tenantRuntime,
+      deploymentModelLabel: runtimeModel.label ?? runtimeModel.defaultModel,
+      contextWindowFor: (provider, modelName, baseUrl) =>
+        modelCatalogue.contextWindowFor(provider, modelName, baseUrl),
+      meteringTenant: (agentId) => meteringTenantFor(database, agentId),
+      ...(config.tenantRuntime === "device"
+        ? {
+            machineOf: (agentId: string) =>
+              deviceSelector.forBot(agentId).catch(() => null),
+          }
+        : {}),
+    }),
+    config.singleUser
+      ? createDevRequireUser(config.singleUserAccess)
+      : createRequireUser(auth as AuthService, roleRepository),
+  );
+  app.route("/api/threads", sidebarRoutes.threads);
+  app.route("/api/channels", sidebarRoutes.channels);
 
   /*
    * The task board (ticket 007): the projector is the only writer, these
