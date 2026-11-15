@@ -1,5 +1,6 @@
 tests/account-argument.test.ts
 tests/acp-agent.test.ts
+tests/acp-e2e.integration.test.ts
 tests/acp-group.integration.test.ts
 tests/acp-hire.integration.test.ts
 tests/acp-permissions.integration.test.ts
