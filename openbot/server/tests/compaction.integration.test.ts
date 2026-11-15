@@ -987,6 +987,8 @@ describe("auto compaction before a turn", () => {
     autoTimeoutMs?: number;
     /** 这么久之后按 Stop（`abortRun()`，生产里 `runner.stop()` 走的就是它）。 */
     stopAfterMs?: number;
+    /** 部署开关 `SIDEBAR_AUTO_COMPACTION`；不给时按 `runCompaction` 的默认（开）。 */
+    auto?: boolean;
   }) {
     const recorder = new LLMock();
     const originalBase = process.env.OPENAI_BASE_URL;
@@ -1026,6 +1028,7 @@ describe("auto compaction before a turn", () => {
           runCompaction({
             ...deps,
             tenantId: input.tenantId,
+            ...(input.auto === undefined ? {} : { auto: input.auto }),
             ...(input.autoTimeoutMs
               ? { autoTimeoutMs: input.autoTimeoutMs }
               : {}),
@@ -1262,5 +1265,64 @@ describe("auto compaction before a turn", () => {
     expect(types[0]).toBe(EventType.RUN_STARTED);
     expect(types[types.length - 1]).toBe(EventType.RUN_FINISHED);
     expect(await compactionRows(viewer, threadId)).toHaveLength(0);
+  });
+
+  test("the SIDEBAR_AUTO_COMPACTION switch: off never auto-compacts (a manual summary still applies), on compacts", async () => {
+    const { viewer, agentId, threadId } = await nearlyFull(95_000, 100_000);
+    const messages = [
+      ...history(20),
+      { id: "now", role: "user" as const, content: "接着做吧。" },
+    ];
+    const summarize = fakeSummarize("SUMMARY-SWITCH：开关打开后压的。");
+
+    const off = await turn({
+      tenantId: viewer,
+      agentId,
+      threadId,
+      messages,
+      summarize,
+      auto: false,
+    });
+    expect(summarize.prompts).toHaveLength(0);
+    expect(off.notices).toHaveLength(0);
+    expect(off.sent).toContain("用户第 0 句");
+    expect(await compactionRows(viewer, threadId)).toHaveLength(0);
+
+    // 关着的时候，手动压缩留下的摘要照样换进这一轮。
+    await runAsTenant(viewer, () =>
+      database.insert(threadCompactions).values({
+        threadId,
+        agentId,
+        uptoMessageId: "m5",
+        summary: "MANUAL-SUMMARY：手动压的。",
+        auto: false,
+        // 早于那次用量的调用：用量不是「压过之后的旧数」，开关打开时照样该压。
+        createdAt: new Date(clock - 60_000),
+      }),
+    );
+    const manual = await turn({
+      tenantId: viewer,
+      agentId,
+      threadId,
+      messages,
+      summarize,
+      auto: false,
+    });
+    expect(summarize.prompts).toHaveLength(0);
+    expect(manual.sent).toContain("MANUAL-SUMMARY：手动压的。");
+    expect(manual.sent).not.toContain("用户第 0 句");
+
+    // 开关打开：同样的用量照旧自动压缩。
+    const on = await turn({
+      tenantId: viewer,
+      agentId,
+      threadId,
+      messages,
+      summarize,
+      auto: true,
+    });
+    expect(summarize.prompts).toHaveLength(1);
+    expect(on.notices[0]).toMatchObject({ name: COMPACTION_DONE_EVENT });
+    expect(on.sent).toContain("SUMMARY-SWITCH：开关打开后压的。");
   });
 });

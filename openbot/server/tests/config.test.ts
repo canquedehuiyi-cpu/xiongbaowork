@@ -80,6 +80,20 @@ describe("deployment configuration", () => {
     expect(config.auth).toBeUndefined();
     expect(config.organizationAuthUrl).toBe("https://openbot.company.example");
   });
+  test("SIDEBAR_AUTO_COMPACTION is off unless set to true or 1", () => {
+    expect(loadConfig(baseEnvironment).sidebarAutoCompaction).toBe(false);
+    for (const value of ["true", "TRUE", "1"])
+      expect(
+        loadConfig({ ...baseEnvironment, SIDEBAR_AUTO_COMPACTION: value })
+          .sidebarAutoCompaction,
+      ).toBe(true);
+    for (const value of ["false", "0", "off", ""])
+      expect(
+        loadConfig({ ...baseEnvironment, SIDEBAR_AUTO_COMPACTION: value })
+          .sidebarAutoCompaction,
+      ).toBe(false);
+  });
+
   test("resolves the local runtime, which is the only runtime", () => {
     const config = loadConfig(baseEnvironment);
 

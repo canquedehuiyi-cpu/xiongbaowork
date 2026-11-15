@@ -3500,9 +3500,13 @@ await startupLifecycle.run(async (startup) => {
     // 对话侧栏的上下文分类：每次内置运行开始时记一行比例，记在发起的人名下。
     recordContextBreakdownForActor: (actorId) =>
       contextBreakdownRecorder(database, actorId),
-    // 压缩会话：每一轮开始前按需自动压缩、换上摘要，记录在发起的人名下。
+    // 压缩会话：每一轮开始前换上摘要；部署开关 `SIDEBAR_AUTO_COMPACTION`（默认关）打开时先按需自动压缩。
     compactionForActor: (actorId) =>
-      runCompaction({ ...compactionDeps, tenantId: actorId }),
+      runCompaction({
+        ...compactionDeps,
+        tenantId: actorId,
+        auto: config.sidebarAutoCompaction,
+      }),
     // Published Automatic Learning skills, only with a connected Intelligence.
     acquireLearnedSkills: learning?.acquire,
   });
@@ -5203,8 +5207,12 @@ await startupLifecycle.run(async (startup) => {
                 Awaited<ReturnType<typeof deviceStore.list>>
               >();
               for (const owner of new Set(owners.values()))
-                if (owner) machinesByOwner.set(owner, await deviceStore.list(owner));
-              const result = new Map<string, { tenantId: string; deviceId: string }>();
+                if (owner)
+                  machinesByOwner.set(owner, await deviceStore.list(owner));
+              const result = new Map<
+                string,
+                { tenantId: string; deviceId: string }
+              >();
               for (const agentId of agentIds) {
                 const owner = owners.get(agentId);
                 if (!owner) continue;
