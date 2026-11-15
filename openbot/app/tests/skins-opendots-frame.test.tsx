@@ -194,6 +194,16 @@ async function serve(path: string, init?: RequestInit): Promise<Response> {
   if (url.pathname === "/api/waker-groups" && method === "GET") {
     return Response.json({ groups: wakerGroups });
   }
+  /*
+   * Asked when 「解散群组」 opens its confirmation, to count the flows that go with the group. Answered
+   * here rather than left to the 404 below: a failed read is retried once after a second's backoff, and
+   * that second is the whole of the wait the confirm button sits through — long enough to lose the race
+   * on a loaded runner. The hold-while-counting behaviour has its own tests (crew-card-states,
+   * group-settings); this frame only needs the dialog to open ready.
+   */
+  if (url.pathname === "/api/group-pipelines/templates") {
+    return Response.json({ templates: [] });
+  }
   if (url.pathname === "/api/routines") {
     return Response.json({
       routines: [],
@@ -407,8 +417,9 @@ describe("OpenDots frame", () => {
       name: "确认解散「站会群」",
     });
     // Held back while the count of what goes with the group is still being read.
-    await waitFor(() =>
-      expect((confirm as HTMLButtonElement).disabled).toBe(false),
+    await waitFor(
+      () => expect((confirm as HTMLButtonElement).disabled).toBe(false),
+      { timeout: 5000 },
     );
     fireEvent.click(confirm);
     await waitFor(() =>

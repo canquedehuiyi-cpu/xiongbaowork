@@ -130,8 +130,17 @@ function renderApp(
   return { view, router };
 }
 
-/** The real tree mounts the root's providers and the authed layout first; give it room. */
-const LOAD = { timeout: 5000 };
+/**
+ * The real tree mounts the root's providers and the authed layout first, so the first test in the
+ * file pays for loading every route's chunk; the others pay for a whole route tree each.
+ *
+ * Warm on one file these are a few hundred milliseconds. Run with the other six hundred files they
+ * have gone past five seconds on CI and past twenty here, so the ceiling is set from the slowest
+ * machine we have seen rather than from the fast one. Keep `LOAD` under `TEST_MS`: a real hang then
+ * still reports the role that never arrived instead of a bare "this test timed out".
+ */
+const LOAD = { timeout: 25000 };
+const TEST_MS = 30000;
 
 function pressedRails(view: ReturnType<typeof render>) {
   const rail = within(view.getByRole("navigation", { name: "入口" }));
@@ -163,7 +172,7 @@ test("默认皮肤下 /settings/plans 仍在工作台外壳里，亮「我」，
   ).toBeTruthy();
   // 原来的侧栏外壳不在。
   expect(view.queryByRole("navigation", { name: "主导航" })).toBeNull();
-});
+}, TEST_MS);
 
 test("管理员打开 /admin/audit 仍在工作台外壳里，亮「工作台」", async () => {
   const { view, router } = renderApp("/admin/audit", admin, "xiongbao");
@@ -174,7 +183,7 @@ test("管理员打开 /admin/audit 仍在工作台外壳里，亮「工作台」
   expect(
     within(main).getByRole("navigation", { name: "管理导航" }),
   ).toBeTruthy();
-});
+}, TEST_MS);
 
 test("经典皮肤下 /settings/plans 照旧是原来的侧栏外壳", async () => {
   const { view } = renderApp("/settings/plans", member, "classic");
@@ -183,7 +192,7 @@ test("经典皮肤下 /settings/plans 照旧是原来的侧栏外壳", async () 
   ).toBeTruthy();
   expect(view.getByRole("navigation", { name: "设置导航" })).toBeTruthy();
   expect(view.queryByRole("navigation", { name: "入口" })).toBeNull();
-});
+}, TEST_MS);
 
 test("自己画外壳的其他皮肤（OpenDots）在设置页也照旧是原来的侧栏外壳", async () => {
   const { view } = renderApp("/settings/plans", member, "opendots");
@@ -191,7 +200,7 @@ test("自己画外壳的其他皮肤（OpenDots）在设置页也照旧是原来
     await view.findByRole("navigation", { name: "主导航" }, LOAD),
   ).toBeTruthy();
   expect(view.queryByRole("navigation", { name: "入口" })).toBeNull();
-});
+}, TEST_MS);
 
 test("默认皮肤下 /contacts 是组织架构，在工作台外壳里亮「通讯录」", async () => {
   const { view, router } = renderApp("/contacts", member, "xiongbao");
@@ -202,7 +211,7 @@ test("默认皮肤下 /contacts 是组织架构，在工作台外壳里亮「通
   expect(
     await within(main).findByRole("heading", { name: "组织架构" }, LOAD),
   ).toBeTruthy();
-});
+}, TEST_MS);
 
 test("经典皮肤下 /contacts 也打得开，画在原来的侧栏外壳里", async () => {
   const { view } = renderApp("/contacts", member, "classic");
@@ -213,7 +222,7 @@ test("经典皮肤下 /contacts 也打得开，画在原来的侧栏外壳里", 
     await view.findByRole("heading", { name: "组织架构" }, LOAD),
   ).toBeTruthy();
   expect(view.queryByRole("navigation", { name: "入口" })).toBeNull();
-});
+}, TEST_MS);
 
 test("默认皮肤下 /workbench 是工作台首页，在工作台外壳里亮「工作台」", async () => {
   const { view, router } = renderApp("/workbench", member, "xiongbao");
@@ -229,7 +238,7 @@ test("默认皮肤下 /workbench 是工作台首页，在工作台外壳里亮�
     ),
   ).toBeTruthy();
   expect(within(main).getByRole("region", { name: "今日数据" })).toBeTruthy();
-});
+}, TEST_MS);
 
 test("经典皮肤下 /workbench 也打得开，画在原来的侧栏外壳里", async () => {
   const { view } = renderApp("/workbench", member, "classic");
@@ -240,4 +249,4 @@ test("经典皮肤下 /workbench 也打得开，画在原来的侧栏外壳里",
     await view.findByRole("region", { name: "今日数据" }, LOAD),
   ).toBeTruthy();
   expect(view.queryByRole("navigation", { name: "入口" })).toBeNull();
-});
+}, TEST_MS);
