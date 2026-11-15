@@ -1572,6 +1572,14 @@ afterAll(async () => {
       await database.delete(tasks).where(eq(tasks.tenantId, id));
     });
   }
+  /*
+   * The queue items these people's turns left behind -- above all an approval's `approval.resume`,
+   * which outlives the approval it names. Left in a shared database they are claimed ahead of a later
+   * suite's own, run by run (`tests/tasks.integration.test.ts` gives its resume ten tries).
+   */
+  await runAsTenant("platform", () =>
+    database.delete(workItems).where(inArray(workItems.tenantId, tenants)),
+  );
   // `task_events` is append-only for the application role; its rows stay, under tenants nobody has.
   await runAsTenant("platform", () =>
     database.delete(users).where(inArray(users.id, tenants)),
