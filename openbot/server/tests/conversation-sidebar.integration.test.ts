@@ -680,6 +680,62 @@ describe("conversation sidebar", () => {
     expect(writerMember.harness).toBeUndefined();
   });
 
+  test("group: a member sees the external employee another member hired, by name and agent only", async () => {
+    const hirer = await person();
+    const member = await person();
+    const writer = await employee(member, "写手");
+    const coder = await employee(hirer, "代码熊", {
+      type: "device_acp",
+      configuration: {
+        deviceId: "laptop-1",
+        harness: "codex",
+        workdirRef: "fld_secretsecretsecret12",
+        permissions: { push: "ask" },
+      },
+    });
+    const channelId = `${suite}-group-${randomUUID()}`;
+    channelIds.push(channelId);
+    await runAsTenant(member, async () => {
+      await database.insert(channels).values({
+        id: channelId,
+        tenantId: TEAM_TENANT,
+        name: "群组",
+        description: "",
+      });
+      for (const userId of [member, hirer])
+        await database
+          .insert(channelMemberships)
+          .values({ channelId, userId, tenantId: TEAM_TENANT });
+      await database
+        .insert(channelAgents)
+        .values({ channelId, agentId: writer, tenantId: TEAM_TENANT });
+      await database.insert(intelligenceChannelMappings).values({
+        userId: member,
+        channelId,
+        threadId: randomUUID(),
+      });
+    });
+    // Its hirer puts it in the group (only the hirer may).
+    await runAsTenant(hirer, () =>
+      database
+        .insert(channelAgents)
+        .values({ channelId, agentId: coder, tenantId: TEAM_TENANT }),
+    );
+    const { status, body } = await routesFor(member).channel(channelId);
+    expect(status).toBe(200);
+    const members = body.environment.members ?? [];
+    // Counted with the member's own employee: two employees here, not one.
+    expect(members.map((row) => row.agentId).sort()).toEqual(
+      [writer, coder].sort(),
+    );
+    const row = members.find((entry) => entry.agentId === coder);
+    expect(row).toMatchObject({ name: "代码熊", harness: "Codex", where: "" });
+    // Nothing of where it runs or what it may do.
+    const read = JSON.stringify(body);
+    for (const hidden of ["laptop-1", "fld_secretsecretsecret12", "push"])
+      expect(read).not.toContain(hidden);
+  });
+
   test("group: members list, per-agent usage is the viewer's own thread per employee", async () => {
     const viewer = await person();
     const other = await person();

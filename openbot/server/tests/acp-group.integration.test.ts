@@ -52,7 +52,7 @@ import {
 } from "../src/proactive/private-share";
 import { createQuotaService } from "../src/quota/limits";
 import { createTaskProjector } from "../src/tasks/projector";
-import { currentTenant, runAsTenant } from "../src/tenant/context";
+import { asPlatform, currentTenant, runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { createWorkQueue } from "../src/work/queue";
 import { createMemoryAcpTurnStore } from "./support/acp-turns-memory";
@@ -731,6 +731,9 @@ describe("an external employee in a group", () => {
           message.agentId === external && message.status === "waiting",
       );
     await until(async () => Boolean(await waiting()), "the held answer");
+    // Every member is told what it waits on, in their own words: a share, and nothing of it.
+    expect(await waiting()).toMatchObject({ waitKind: "share" });
+    expect(await waiting()).not.toHaveProperty("approvalId");
     expect(JSON.stringify(await list(channel.id, teammate))).not.toContain(
       "配置写错了",
     );
@@ -1001,6 +1004,42 @@ describe("an external employee in a group", () => {
       "--force",
     );
     expect(JSON.stringify(announced)).not.toContain("--force");
+  });
+
+  test("a member reads the external employee hired into the group by its name and agent only", async () => {
+    const group = await permissionGroup();
+    const { owner, teammate, external, channel, list } = group;
+    const forMember = (await list(channel.id, teammate)).bots.find(
+      (bot) => bot.id === external,
+    );
+    // Its name, its hirer and which agent it is: never its computer, folder, rules or app.
+    expect(forMember).toEqual({
+      id: external,
+      name: "小码",
+      hiredBy: owner.id,
+      harness: "codex",
+    });
+    const read = JSON.stringify(await list(channel.id, teammate));
+    for (const hidden of [
+      "laptop",
+      "fld_work",
+      "workdirRef",
+      "rules",
+      "deviceId",
+    ])
+      expect(read).not.toContain(hidden);
+
+    // The conversation list names it too when it spoke last, instead of calling it gone.
+    await asPlatform(() =>
+      database
+        .update(channels)
+        .set({ lastMessageAgentId: external, lastMessageAt: new Date() })
+        .where(eq(channels.id, channel.id)),
+    );
+    const row = (
+      await runAsTenant(teammate.id, () => channelStore.list(teammate))
+    ).channels.find((summary) => summary.id === channel.id);
+    expect(row?.lastMessageAgentName).toBe("小码");
   });
 
   test("a request the hirer's new allow rule withdraws is settled by the poll, in the hirer's frame", async () => {

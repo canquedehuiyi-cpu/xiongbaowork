@@ -26,6 +26,7 @@ import {
   type SidebarMemberStatus,
   type SidebarOutput,
 } from "../../../shared/conversation-sidebar";
+import { externalEmployeesAmong } from "../agents/acp/external";
 import { ownerOfBotRow } from "../agents/bot-owner";
 import { readAgentPresence } from "../agents/presence";
 import { agentAccessFilter } from "../agents/profile-store";
@@ -1201,6 +1202,39 @@ export function createConversationSidebar(
       })),
       places,
     );
+    /*
+     * An external employee somebody else hired into this group (spec §6): every member works with it
+     * here, so it is named and counted, with which agent it is — never its computer, folder or rules
+     * (those stay its hirer's). Only while its hirer is still in the group, as the group's roster has it.
+     */
+    const unseen = chat.agentIds.filter((id) => !people.has(id));
+    const hiredHere = unseen.length
+      ? await externalEmployeesAmong(database, unseen)
+      : new Map();
+    const inGroup = hiredHere.size
+      ? new Set(
+          (
+            await database
+              .select({ userId: channelMemberships.userId })
+              .from(channelMemberships)
+              .where(eq(channelMemberships.channelId, chat.channelId))
+          ).map((row) => row.userId),
+        )
+      : new Set<string>();
+    const others = [...hiredHere.entries()]
+      .filter(([, hired]) => inGroup.has(hired.hirer))
+      .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
+    const othersPresence = new Map(
+      others.length
+        ? (
+            await readAgentPresence(
+              database,
+              viewer,
+              others.map(([id]) => id),
+            )
+          ).map((row) => [row.agentId, row])
+        : [],
+    );
     const members = bots.map((bot) => {
       const place = places.get(bot.id);
       const now = presence.get(bot.id);
@@ -1218,6 +1252,18 @@ export function createConversationSidebar(
           : {}),
       };
     });
+    for (const [agentId, hired] of others) {
+      const now = othersPresence.get(agentId);
+      members.push({
+        agentId,
+        name: hired.name,
+        status: now?.status ?? "unknown",
+        // Where it runs is its hirer's to know.
+        where: "",
+        doing: now?.status === "working" ? (now.doing ?? null) : null,
+        harness: HARNESS_LABELS[hired.harness] ?? "自定义智能体",
+      });
+    }
 
     const threadIds = requested
       ? [mine.get(requested)].filter((id): id is string => Boolean(id))

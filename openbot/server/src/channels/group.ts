@@ -90,6 +90,8 @@ export type GroupBot = {
    * person's, whoever in the group asked (spec §6).
    */
   hiredBy?: string;
+  /** An external employee's agent (Codex, Claude Code…), for its mark: every member may read it. */
+  harness?: "codex" | "claude-code" | "hermes" | "custom";
 };
 
 /**
@@ -387,6 +389,7 @@ async function writeOrder(
  */
 const SHARED_DETAILS: ReadonlySet<string> = new Set([
   "acpPermission",
+  "shareWait",
   "agentIds",
   "answeredBy",
   "compaction",
@@ -1317,6 +1320,8 @@ export function createGroupConversations(deps: {
       details: {
         ...verdict.suspension.waiting,
         message: verdict.message,
+        // What it waits on, said to every member in their own words (`waitKind`): nothing else of it.
+        shareWait: true,
         // What will be shown once the owner allows it. Never listed while it waits.
         privateShare: { text: input.text, continuation },
       },
@@ -2477,6 +2482,10 @@ export function createGroupConversations(deps: {
             : {}),
           ...(message.status === "waiting"
             ? {
+                // A reply held until its owner says it may reach this group (`shareGate`).
+                ...(details.shareWait === true
+                  ? { waitKind: "share" as const }
+                  : {}),
                 reason:
                   typeof details.message === "string"
                     ? details.message

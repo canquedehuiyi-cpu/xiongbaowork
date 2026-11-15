@@ -31,7 +31,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { useBotNames } from "@/lib/agents/bot-names";
+import { GONE_BOT, useBotNames } from "@/lib/agents/bot-names";
 import { hiredRun, useExternalDevices } from "@/lib/agents/external";
 import {
   knownPresence,
@@ -422,14 +422,17 @@ function GroupMosaic({
  * 最后一条消息是谁说的：员工说的写员工名（一对一会话就是会话名，群组里按员工 id 查名字，还没查到就不写），
  * 自己说的写「我」。没有消息时为空。
  */
-function speakerOf(
+export function speakerOf(
   channel: ChannelSummary,
   botName: (botId: string) => string,
 ): string {
   if (!channel.lastMessageAgentId) return "我";
-  return isGroupChannel(channel)
-    ? botName(channel.lastMessageAgentId)
-    : channel.name;
+  if (!isGroupChannel(channel)) return channel.name;
+  const named = botName(channel.lastMessageAgentId);
+  // 别人招进群的外部员工不在自己的员工名单里：用服务器给的名字，不说它「已不在」。
+  return channel.lastMessageAgentName && (named === GONE_BOT || named === "")
+    ? channel.lastMessageAgentName
+    : named;
 }
 
 /**

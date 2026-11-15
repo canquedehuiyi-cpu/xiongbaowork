@@ -9,7 +9,9 @@ import {
 import { eq } from "drizzle-orm";
 import { EMPTY } from "rxjs";
 import {
+  ACP_WAITING_MS,
   type AcpPermissionRequest,
+  BUN_IDLE_TIMEOUT_MS,
   createAcpSessionHints,
   createAcpTurnStarter,
   DeviceAcpAgent,
@@ -1317,4 +1319,59 @@ test("stopped while it is being decided whether the computer is elsewhere, the q
   await until(() => t.turns.rows[0]?.status === "cancelled", "the cancel");
   expect(run.state.done).toBe(true);
   expect(texts(run.events)).toBe("这件活已停止。");
+});
+
+describe("a run waiting for its owner keeps the watcher's stream open", () => {
+  /*
+   * Bun closes a response that has sent nothing for 10 s (its default `idleTimeout`). A run waiting
+   * on a permission sends nothing but its beat, so the beat must come sooner: at 20 s the person who
+   * asked lost the stream and their page said "network error" while the turn went on.
+   */
+  test(
+    "a response that only beats every ACP_WAITING_MS outlives Bun's idle timeout",
+    async () => {
+      expect(ACP_WAITING_MS).toBeLessThan(BUN_IDLE_TIMEOUT_MS);
+      let beat: ReturnType<typeof setInterval> | undefined;
+      const server = Bun.serve({
+        port: 0,
+        fetch: () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                controller.enqueue(new TextEncoder().encode(": open\n\n"));
+                beat = setInterval(
+                  () =>
+                    controller.enqueue(
+                      new TextEncoder().encode(": acp.waiting\n\n"),
+                    ),
+                  ACP_WAITING_MS,
+                );
+              },
+              cancel() {
+                clearInterval(beat);
+              },
+            }),
+            { headers: { "content-type": "text/event-stream" } },
+          ),
+      });
+      try {
+        const response = await fetch(`http://127.0.0.1:${server.port}/`);
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("no body");
+        const started = Date.now();
+        let beats = 0;
+        while (Date.now() - started < BUN_IDLE_TIMEOUT_MS + 1_500) {
+          const { done } = await reader.read();
+          expect(done).toBe(false);
+          beats += 1;
+        }
+        expect(beats).toBeGreaterThanOrEqual(2);
+        await reader.cancel();
+      } finally {
+        clearInterval(beat);
+        server.stop(true);
+      }
+    },
+    { timeout: 20_000 },
+  );
 });

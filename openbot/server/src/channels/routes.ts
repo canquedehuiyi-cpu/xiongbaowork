@@ -16,6 +16,7 @@ import {
 } from "drizzle-orm";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import { externalEmployeesAmong } from "../agents/acp/external";
 import {
   AgentNotFoundError,
   type AgentProfileStore,
@@ -81,6 +82,11 @@ export type ChannelSummary = AgentChannel & {
   opening: string | null;
   lastMessage: string | null;
   lastMessageAgentId: string | null;
+  /**
+   * The name of who said the last thing, when the reader's own roster cannot name them: an external
+   * employee another member hired into this group (spec §6). Its name only, as the group shows it.
+   */
+  lastMessageAgentName?: string;
   createdAt: Date;
   /** Whether the caller pinned this channel. A pin is per-member, so this is the caller's, only. */
   pinned: boolean;
@@ -911,6 +917,22 @@ export function createChannelStore(
           canRename: row.canRename,
           task: row.task,
         });
+      }
+      // A group's last word from an external employee the reader cannot see elsewhere: named anyway.
+      const speakers = [...summaries.values()].flatMap((summary) =>
+        summary.agentIds.length > 1 && summary.lastMessageAgentId
+          ? [summary.lastMessageAgentId]
+          : [],
+      );
+      if (speakers.length > 0) {
+        const hired = await externalEmployeesAmong(database, speakers);
+        for (const summary of summaries.values()) {
+          const name = summary.lastMessageAgentId
+            ? hired.get(summary.lastMessageAgentId)?.name
+            : undefined;
+          if (name && summary.agentIds.length > 1)
+            summary.lastMessageAgentName = name;
+        }
       }
       return { channels: [...summaries.values()], nextCursor };
     },
@@ -1869,6 +1891,9 @@ function channelSummaryDto(
     opening: channel.opening,
     lastMessage: channel.lastMessage,
     lastMessageAgentId: channel.lastMessageAgentId,
+    ...(channel.lastMessageAgentName
+      ? { lastMessageAgentName: channel.lastMessageAgentName }
+      : {}),
     createdAt: channel.createdAt.toISOString(),
     pinned: channel.pinned,
     // Serialised as ISO-8601 like lastMessageAt, so the browser can compare the two as strings.

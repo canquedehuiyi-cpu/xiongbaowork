@@ -36,6 +36,7 @@ import {
   type TranscriptAcpCards,
 } from "@/components/channels/chat-transcript";
 import { GroupChat } from "@/components/channels/group-chat";
+import { GONE_BOT } from "@/lib/agents/bot-names";
 import { carryingOnAfterApproval } from "@/lib/approvals";
 import {
   type AcpCard,
@@ -45,6 +46,7 @@ import {
 import { type GroupMessage, groupRefetchInterval } from "@/lib/groups";
 import { queryClient } from "@/query-client";
 import { Route as ApprovalsRoute } from "@/routes/_authed/_app/approvals";
+import { speakerOf } from "@/skins/xiongbao/message-list";
 import { settleReactWork } from "./settle-react-work";
 
 type Sent = { url: string; method: string; body: unknown };
@@ -714,7 +716,7 @@ describe("群里的许可状态行", () => {
     });
     single.set("/api/groups/g-1", {
       bots: [
-        { id: "ext-codex", name: "代码熊" },
+        { id: "ext-codex", name: "代码熊", hiredBy: HIRER, harness: "codex" },
         { id: "a1", name: "产品官" },
       ],
       people: [
@@ -808,6 +810,52 @@ describe("群里的许可状态行", () => {
         body: { decision: "allow_once" },
       }),
     );
+  });
+
+  /** 外部员工的回答停在招聘人的「分享到群」检查上（服务器只给状态和 waitKind）。 */
+  const shareWait: GroupMessage = {
+    id: "handoff:abc",
+    channelId: "g-1",
+    ownerUserId: HIRER,
+    agentId: "ext-codex",
+    threadId: GROUP_THREAD,
+    text: "",
+    status: "waiting",
+    createdAt: "2026-11-15T08:02:00.000Z",
+    reason:
+      "Waiting for permission to share private information with this group conversation. Nothing was sent.",
+    waitKind: "share",
+    answeredBy: "ext-codex",
+  };
+
+  test("a member is told whose word the answer waits on, in Chinese, with nothing to do", async () => {
+    inbox = [];
+    const view = openGroup(MEMBER, shareWait);
+    const line = await view.findByText(
+      "代码熊的回答要等 何总 确认能不能发到群里",
+    );
+    expect(line.closest("[data-waiting-other]")).toBeTruthy();
+    expect(view.queryByText("需要你处理")).toBeNull();
+    expect(view.queryByRole("link", { name: "去审批" })).toBeNull();
+    expect(view.container.textContent).not.toContain("Waiting for permission");
+    // Its own answer, not one somebody else gave for it; and its mark beside its name.
+    expect(view.container.textContent).not.toContain("代答");
+    expect(
+      view.container.querySelector("[data-external-mark]")?.textContent,
+    ).toBe("外部员工 · Codex");
+  });
+
+  test("the hirer is asked to decide whether the answer may reach the group", async () => {
+    inbox = [];
+    const view = openGroup(HIRER, shareWait);
+    expect(await view.findByText("需要你处理")).toBeTruthy();
+    expect(
+      view.getByText(
+        "代码熊的回答要等你确认能不能发到群里，确认前群里看不到。",
+      ),
+    ).toBeTruthy();
+    expect(view.getByRole("link", { name: "去审批" })).toBeTruthy();
+    expect(view.container.textContent).not.toContain("Waiting for permission");
   });
 
   test("once decided the line says how it ended, for everyone", async () => {
@@ -1055,5 +1103,83 @@ describe("外部员工的工具步骤", () => {
     expect(await view.findByText("运行了命令")).toBeTruthy();
     expect(view.getByText("git push origin fix/login")).toBeTruthy();
     expect(view.container.textContent).not.toMatch(/acp/i);
+  });
+});
+
+describe("分享到群的审批", () => {
+  test("the approvals list says in a sentence where the answer would go, and offers 批准 and 拒绝 only", async () => {
+    single.set("/api/me", {
+      user: { id: "user-he", role: "user", email: "he@example.test" },
+    });
+    single.set("/api/channels/g-1", {
+      channel: { id: "g-1", name: "产品研发组", agentIds: ["ext-codex", "a1"] },
+    });
+    inbox = [
+      {
+        id: "share-1",
+        status: "pending",
+        createdAt: "2026-11-15T08:02:00.000Z",
+        action: {
+          botId: "ext-codex",
+          // The check's own name, as the server stores it: never shown.
+          toolRef: ["openbot", "share_private_information"].join("/"),
+          effect: "share_private",
+          scope: "group:g-1:members:abc",
+          threadId: "t-group-codex",
+          toolCallId: "group-post:handoff:abc",
+          args: {
+            audience: "this group conversation",
+            recipients: 2,
+            contentDigest: "e7ce2fd2",
+            preview: "修好了，已推送到 fix/build。",
+          },
+          target: { kind: "group", id: "g-1" },
+        },
+      },
+    ];
+    const view = openApproval("");
+    const card = within(await view.findByRole("region", { name: "分享到群" }));
+    expect(
+      await card.findByText(
+        "代码熊想把回答发到群「产品研发组」，里面可能有你的私人信息",
+      ),
+    ).toBeTruthy();
+    expect(card.getByText("修好了，已推送到 fix/build。")).toBeTruthy();
+    expect(
+      card.getAllByRole("button").map((button) => button.textContent),
+    ).toEqual(["批准", "拒绝"]);
+    const text = view.container.textContent ?? "";
+    for (const internal of [
+      "share_private",
+      "share private",
+      "openbot",
+      "contentDigest",
+      "{",
+    ])
+      expect(text).not.toContain(internal);
+    const user = userEvent.setup({ document });
+    await user.click(card.getByRole("button", { name: "批准" }));
+    await waitFor(() =>
+      expect(sent.find((request) => request.method === "POST")).toMatchObject({
+        url: "/api/approvals/share-1/decision",
+        body: { decision: "allow_once" },
+      }),
+    );
+  });
+});
+
+describe("会话列表里群的最后发言人", () => {
+  test("an external employee another member hired is named by the server, not called gone", () => {
+    const group = {
+      id: "g-1",
+      name: "产品研发组",
+      agentIds: ["ext-codex", "a1"],
+      lastMessageAgentId: "ext-codex",
+      lastMessageAgentName: "代码熊",
+    } as never;
+    // Not in the reader's own roster.
+    expect(speakerOf(group, () => GONE_BOT)).toBe("代码熊");
+    // In it: the roster's name wins.
+    expect(speakerOf(group, () => "小码")).toBe("小码");
   });
 });

@@ -44,6 +44,7 @@ import {
   hostAccessQueryOptions,
 } from "@/lib/computers/host-access";
 import { approvalTargetName } from "./inline-approval";
+import { isShareApproval, ShareApprovalCard } from "./share-approval-card";
 import { afterChinese } from "./waiting";
 
 const HOST_LABELS: Record<HostCommandPolicy, string> = {
@@ -254,7 +255,35 @@ export function ApprovalInbox({
             </p>
           ) : (
             pending.map((request) =>
-              acpCardOf(request.action) ? (
+              isShareApproval(request.action) ? (
+                // 「分享到群」检查：一句话说发到哪里、为什么问你，加上要发的那段话；批准或拒绝。
+                <div
+                  className={
+                    request.id === focus
+                      ? "rounded-[14px] ring-2 ring-signal/60"
+                      : ""
+                  }
+                  id={`approval-${request.id}`}
+                  key={request.id}
+                  {...(request.id === focus
+                    ? { ref: focused, "data-focus": "" }
+                    : {})}
+                >
+                  <ShareApprovalCard
+                    botName={botName(request.action.botId)}
+                    error={
+                      decision.variables?.id === request.id
+                        ? decisionErrorText(decision.error)
+                        : null
+                    }
+                    onDecide={(choice) =>
+                      decision.mutate({ id: request.id, choice })
+                    }
+                    request={request}
+                    submitting={decision.isPending}
+                  />
+                </div>
+              ) : acpCardOf(request.action) ? (
                 /*
                  * 外部员工请求许可（外部员工 Task 12）：和对话里同一张卡。一句话说它要做什么、命令或路径原文，
                  * 三个选项对应 ACP（底线和管理员拒绝的只有两个），不给「在这里总是允许」（服务器也不收）。

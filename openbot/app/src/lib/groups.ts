@@ -31,6 +31,8 @@ export type GroupMessage = {
   createdAt: string;
   /** Why a waiting Bot is waiting, when it is. */
   reason?: string;
+  /** 等的是什么：`share` 是员工的回答要等它的主人确认能不能发到群里。 */
+  waitKind?: "share";
   /**
    * The approval this line is stopped on, for the person who must decide it — the id the approvals
    * page can land on. Absent for a durable wait (a computer still offline, an action handed to the
@@ -55,7 +57,14 @@ export type GroupPerson = {
   /** Made the group; the one who may take others out of it. */
   creator: boolean;
 };
-export type GroupBot = { id: string; name: string };
+export type GroupBot = {
+  id: string;
+  name: string;
+  /** 外部员工招它的人（服务器名单带的）。 */
+  hiredBy?: string;
+  /** 外部员工是哪个智能体：每个成员都看得到，用来画「外部员工 · Codex」。 */
+  harness?: "codex" | "claude-code" | "hermes" | "custom";
+};
 export type GroupConversation = {
   bots: GroupBot[];
   people: GroupPerson[];
