@@ -73,6 +73,8 @@ const HOUR = 60 * MINUTE;
 export { BRIEFING_WINDOW_MS };
 /** How long a briefing's claim may stay unsent before another pass may take it back. */
 export const BRIEFING_CLAIM_LEASE_MS = 10 * MINUTE;
+/** Lately closed cards a briefing may be filed under when it names no open one. */
+const CLOSED_SCOPE_CARDS = 20;
 /** How far back a closed card or a 验收 line is read: enough to cover "today" on any zone. */
 const LOOKBACK_MS = 48 * HOUR;
 /** The statuses of a followed card that has not ended. */
@@ -717,6 +719,29 @@ export function createTaskNotices(deps: {
       ...briefing.awaitingReview,
       ...briefing.inProgress,
     ].map((item) => item.taskId);
+    /*
+     * Then the followed work that closed lately, newest first. On the day every piece of work was
+     * reviewed the briefing names no open card ("今天验收了 N 件"), and a push must be filed under
+     * some conversation the person can still reach (`notifyPerson` queues none without one): without
+     * these, a person with a phone and no chat account would miss exactly that day's 收工清点. Its
+     * deep link is `/briefing` whichever conversation it is filed under.
+     */
+    const closed = (
+      await database
+        .select({ id: tasks.id })
+        .from(tasks)
+        .where(
+          and(
+            eq(tasks.tenantId, tenantId),
+            eq(tasks.tracked, true),
+            gte(tasks.updatedAt, new Date(now.getTime() - LOOKBACK_MS)),
+          ),
+        )
+        .orderBy(desc(tasks.updatedAt), desc(tasks.id))
+        .limit(CLOSED_SCOPE_CARDS)
+    )
+      .map((row) => row.id)
+      .filter((id) => !ids.includes(id));
     const { title, body } = briefingText(kind, briefing, hours.timeZone, now);
     const reached = await deps.router.notifyPerson({
       ownerUserId: tenantId,
@@ -724,7 +749,10 @@ export function createTaskNotices(deps: {
       id: `${kind}:${localDay(now, hours.timeZone)}`,
       title,
       body,
-      scopes: await scopesOf(tenantId, await cardsOf(tenantId, ids)),
+      scopes: await scopesOf(
+        tenantId,
+        await cardsOf(tenantId, [...ids, ...closed]),
+      ),
     });
     // Every place it reached, now or by an earlier try of this same briefing that failed part-way.
     return reached.queued + reached.already;

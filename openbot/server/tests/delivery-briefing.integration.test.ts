@@ -1062,6 +1062,40 @@ test("a claim left by a server that died before sending is taken back within the
   expect((await claims()).map((row) => row.offered)).toEqual([1]);
 });
 
+test("on the day every followed piece of work is reviewed, the end briefing still reaches a phone-only person", async () => {
+  const mae = await person("all-done", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  await phone(mae);
+  // Taken on and reviewed today: nothing open is left to file the briefing under.
+  const done = await card(mae, {
+    status: "done",
+    acceptedAt: at(MONDAY_9, HOUR),
+  });
+  await line(mae, done, "reviewed", at(MONDAY_9, 3 * HOUR));
+  const pass = briefingsFor([mae]);
+  await pass.runBriefings(at(MONDAY_9, 9 * HOUR));
+  expect(pass.sent.map((item) => item.kind)).toEqual(["end"]);
+  const [sent] = pass.sent;
+  if (!sent) throw new Error("no briefing");
+  expect(sent.briefing.reviewed).toBe(1);
+  expect(sent.briefing.awaitingReview).toEqual([]);
+  expect(sent.briefing.inProgress).toEqual([]);
+  expect(sent.briefing.overdue).toEqual([]);
+  // Pushed to the phone, filed under the conversation of the work reviewed today.
+  const queued = await outbox(mae, "briefing");
+  expect(queued.map((row) => [row.transport, row.channelId])).toEqual([
+    ["push", mae.channelId],
+  ]);
+  const claims = await runAsTenant(mae.id, () =>
+    database
+      .select()
+      .from(taskBriefings)
+      .where(eq(taskBriefings.tenantId, mae.id)),
+  );
+  expect(claims.map((row) => row.offered)).toEqual([1]);
+});
+
 test("two people on the same platform each get their own briefing that day", async () => {
   const nia = await person("slack-one", {
     workHours: { timeZone: "Asia/Shanghai" },
