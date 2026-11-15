@@ -246,6 +246,18 @@ export function deliveryTools(options: {
               channelRef: card?.channelRef ?? run.threadId,
               // The run's own card is filed under the run id; a second card must not be found by it.
               ...(card ? {} : { runRef: run.runId }),
+              /*
+               * Taken on during a crew's step: the board reaches a crew's card only through the run it
+               * belongs to (`tasks/routes.ts` `openTargetsFor`), so the new card hangs under the same
+               * crew card as the step -- or under the card itself when it is the crew's -- and opens
+               * the run as the step does. It is charged on its own, not out of the steps' reservation.
+               */
+              ...(card?.source === "group_run"
+                ? {
+                    parentTaskId: card.parentTaskId ?? card.id,
+                    outsideReservation: true,
+                  }
+                : {}),
               deviceId: card?.deviceId ?? null,
             });
           } catch (error) {

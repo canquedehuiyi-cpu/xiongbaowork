@@ -63,6 +63,8 @@ export type RunCard = {
   deviceId: string | null;
   threadRef: string | null;
   criteria: string | null;
+  /** The crew card it hangs under, for a pipeline step's card (`source = 'group_run'`). */
+  parentTaskId: string | null;
 };
 
 export type Delivery = {
@@ -352,6 +354,7 @@ export function createDelivery(database: Database): Delivery {
             deviceId: tasks.deviceId,
             threadRef: tasks.threadRef,
             criteria: tasks.criteria,
+            parentTaskId: tasks.parentTaskId,
           })
           .from(tasks)
           .where(

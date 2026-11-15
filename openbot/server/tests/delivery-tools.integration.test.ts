@@ -11,6 +11,7 @@ import {
   type RunAgentResult,
 } from "@ag-ui/client";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import type { MiddlewareHandler } from "hono";
 import { Observable, of } from "rxjs";
 import { z } from "zod";
 import { toolDisabled } from "../src/approvals/policy";
@@ -20,6 +21,7 @@ import {
 } from "../src/approvals/questions";
 import { createApprovalStore } from "../src/approvals/store";
 import { approvalAction } from "../src/approvals/types";
+import type { AppVariables } from "../src/auth/guards";
 import {
   buildAgents,
   builtInAgentConfiguration,
@@ -30,12 +32,14 @@ import {
   approvalRequests,
   attachments,
   channels,
+  groupTaskRuns,
   intelligenceChannelMappings,
   tasks,
   threadRunEvents,
   threadRuns,
   threads,
   users,
+  wakerGroups,
   workItems,
 } from "../src/db/schema";
 import { withModelRun } from "../src/models/token-metering";
@@ -55,6 +59,7 @@ import {
   createTaskProjector,
   type TaskProjector,
 } from "../src/tasks/projector";
+import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { withRunSideEvents } from "../src/threads/run-side-events";
@@ -830,6 +835,106 @@ describe("accept_task in a turn that filed its own card", () => {
       ["accepted", "progress", "run_ended"],
     );
     expect((await cardsOf(tenantId, agentId)).length).toBe(1);
+  });
+});
+
+describe("accept_task in a pipeline step's turn", () => {
+  test("a second piece of work keeps the run's ancestry: the board opens the run, and it takes none of the run's reserved slots", async () => {
+    const tenantId = await tenant("step-second");
+    const agentId = `agent-${suite}-step-second`;
+    const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+    const groupId = randomUUID();
+    const crew = randomUUID();
+    const stepRef = `step-${suite}-${randomUUID().slice(0, 8)}`;
+    await runAsTenant(tenantId, async () => {
+      await database
+        .insert(wakerGroups)
+        .values({ id: groupId, tenantId, name: `steps ${suite}` });
+      await database
+        .insert(groupTaskRuns)
+        .values({ id: crew, tenantId, groupId, status: "running", steps: [] });
+    });
+    // The crew's parent, keyed by the run, reserving its two steps (`pipeline/store.ts` `start`).
+    const parent = await projector.opened({
+      tenantId,
+      title: "周报流水线",
+      source: "group_run",
+      runRef: crew,
+      quotaUnits: 3,
+    });
+    const step = await projector.opened({
+      tenantId,
+      title: "整理周报",
+      executorAgentId: agentId,
+      source: "group_run",
+      runRef: stepRef,
+      parentTaskId: parent,
+    });
+    // The step's turn runs with its own card (the step's), as the crew runs it.
+    const round = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "整理周报",
+      entry: { cardRef: stepRef },
+      work: async (run) => {
+        await run.call("accept_task", { criteria: "周报写清楚。" });
+        await run.call("accept_task", {
+          title: "顺便整理待办",
+          criteria: "待办按人列出。",
+        });
+      },
+    });
+    expect(parsed(round.results[0] ?? "{}").taskId).toBe(step);
+    const second = parsed(round.results[1] ?? "{}");
+    expect(second.accepted).toBe(true);
+    const secondId = second.taskId as string;
+    await roundLogged(tenantId, secondId, round.runId);
+    const row = await cardRow(tenantId, secondId);
+    expect(row).toBeDefined();
+    expect(row?.source).toBe("group_run");
+    expect(row?.parentTaskId).toBe(parent);
+    expect(row?.tracked).toBe(true);
+    // Charged on its own, like any second piece of work, not out of the run's reservation.
+    expect(row?.quotaUnits).toBe(1);
+
+    // The board opens it where its step opens: the crew's run.
+    const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
+      context,
+      next,
+    ) => {
+      context.set("actor", {
+        id: tenantId,
+        email: `${tenantId}@example.test`,
+        role: "user" as const,
+      });
+      await next();
+    };
+    const routes = createTaskRoutes(database, requireUser, projector);
+    const read = await runAsTenant(tenantId, async () => {
+      const response = await routes.request(
+        new Request(`http://board.test/${secondId}`),
+      );
+      return (await response.json()) as { task?: { open?: unknown } };
+    });
+    expect(read.task).toBeDefined();
+    expect(read.task?.open).toEqual({ kind: "pipeline", id: crew });
+
+    // The run's second step still has its reserved slot.
+    const nextStep = await projector.opened({
+      tenantId,
+      title: "复核周报",
+      executorAgentId: agentId,
+      source: "group_run",
+      runRef: `step-${suite}-${randomUUID().slice(0, 8)}`,
+      parentTaskId: parent,
+    });
+    expect((await cardRow(tenantId, nextStep))?.quotaUnits).toBe(0);
+
+    await runAsTenant(tenantId, async () => {
+      await database.delete(groupTaskRuns).where(eq(groupTaskRuns.id, crew));
+      await database.delete(wakerGroups).where(eq(wakerGroups.id, groupId));
+    });
   });
 });
 

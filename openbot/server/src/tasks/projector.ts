@@ -59,6 +59,12 @@ export type TaskProjector = {
     /** Reserve parent + children before a pipeline can execute its first step. */
     quotaUnits?: number;
     /**
+     * A card filed under a crew's parent that is not one of its steps -- a second piece of work a
+     * step's coworker took on (`accept_task`): charged on its own like any other card, never out of
+     * the run's reserved step slots, so the steps still to come keep theirs.
+     */
+    outsideReservation?: boolean;
+    /**
      * The parent's card, named by the RUN that asked rather than by a card id.
      *
      * Only a handoff passes it: the hop knows its parent's run id from the queue (`work.runId`) and
@@ -387,7 +393,11 @@ export function createTaskProjector(
           let units = input.quotaUnits ?? 1;
           if (!Number.isSafeInteger(units) || units < 1)
             throw new TypeError("Task quota units must be a positive integer");
-          if (input.source === "group_run" && parentTaskId) {
+          if (
+            input.source === "group_run" &&
+            parentTaskId &&
+            !input.outsideReservation
+          ) {
             const [parent] = await transaction
               .select({ quotaUnits: tasks.quotaUnits, source: tasks.source })
               .from(tasks)
@@ -399,6 +409,7 @@ export function createTaskProjector(
               )
               .limit(1);
             if (parent?.source === "group_run" && parent.quotaUnits > 1) {
+              // The slots taken: children opened out of the reservation (charged nothing themselves).
               const [children] = await transaction
                 .select({ value: count() })
                 .from(tasks)
@@ -406,6 +417,7 @@ export function createTaskProjector(
                   and(
                     eq(tasks.tenantId, input.tenantId),
                     eq(tasks.parentTaskId, parentTaskId),
+                    eq(tasks.quotaUnits, 0),
                   ),
                 );
               if ((children?.value ?? 0) >= parent.quotaUnits - 1)
