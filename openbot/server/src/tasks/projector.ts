@@ -1,5 +1,5 @@
 import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
-import { and, count, eq, lt, sql } from "drizzle-orm";
+import { and, count, eq, lt, ne, sql } from "drizzle-orm";
 import { NOT_SHOWN } from "../../../shared/component-markers";
 import { attachmentIdsIn } from "../channels/attachment-parts";
 import { HEADLESS_COMPONENTS } from "../components/headless";
@@ -28,9 +28,14 @@ export type TriggerSource =
 
 /**
  * The board's projector: every fact the run machinery already emits gets one
- * narrow function here that turns it into task state. Nothing else writes
- * `tasks`, so the board can be rebuilt from scratch by replaying these calls,
- * and no execution path reads the result.
+ * narrow function here that turns it into task state. For a card nobody follows
+ * (`tracked = false`) nothing else writes `tasks`, so the board can be rebuilt
+ * from scratch by replaying these calls, and no execution path reads the result.
+ *
+ * A followed card (`tracked = true`, the delivery loop) is the exception: it spans
+ * turns, and its reads and writes live in `tasks/delivery.ts`. The transitions here
+ * leave it to that module -- `finished` skips it, and the reclaim pass never closes
+ * it. A `cancelled` card is over, and no transition here moves it.
  *
  * Callers pass the tenant explicitly rather than trusting ambient scope,
  * because a routine fires outside any person's request -- the same reason the
@@ -428,6 +433,7 @@ export function createTaskProjector(
             and(
               eq(tasks.tenantId, input.tenantId),
               eq(tasks.runRef, input.runRef),
+              ne(tasks.status, "cancelled"),
               ...(input.pipelineRunId
                 ? [
                     sql`exists (select 1 from ${groupTaskRuns} where ${groupTaskRuns.id} = ${input.pipelineRunId} and ${groupTaskRuns.tenantId} = ${input.tenantId} and ${groupTaskRuns.status} = 'awaiting_action')`,
@@ -452,6 +458,7 @@ export function createTaskProjector(
             and(
               eq(tasks.tenantId, input.tenantId),
               eq(tasks.pendingApprovalId, input.approvalId),
+              ne(tasks.status, "cancelled"),
             ),
           );
         announce(input.tenantId);
@@ -460,6 +467,12 @@ export function createTaskProjector(
 
     async finished(input) {
       return runAsTenant(input.tenantId, async () => {
+        /*
+         * Not a followed card: one of its rounds ending is not the work ending (spec 2026-11-15-delivery-loop
+         * §3), so its status and its hand-in stay as they are, and the round's line is written by
+         * `tasks/delivery.ts`'s `runEnded`. Not a cancelled card either: a run that ends after the person
+         * cancelled must not bring the card back.
+         */
         await database
           .update(tasks)
           .set({
@@ -472,6 +485,8 @@ export function createTaskProjector(
             and(
               eq(tasks.tenantId, input.tenantId),
               eq(tasks.runRef, input.runRef),
+              eq(tasks.tracked, false),
+              ne(tasks.status, "cancelled"),
               ...(input.onlyUnsettled
                 ? [sql`${tasks.status} in ('running', 'needs_action')`]
                 : []),
@@ -508,7 +523,8 @@ export function createTaskProjector(
       const ok = await runAsTenant(input.tenantId, () =>
         database.transaction(async (transaction) => {
           // Archiving is the one human-authored transition, and it only moves
-          // sideways into the finished lane -- never back into running.
+          // sideways into the finished lane -- never back into running. A followed
+          // card's archive is its 验收, and `tasks/delivery.ts` writes that.
           const reviewed = await transaction
             .update(tasks)
             .set({ status: "done", updatedAt: new Date() })
@@ -517,6 +533,7 @@ export function createTaskProjector(
                 eq(tasks.tenantId, input.tenantId),
                 eq(tasks.id, input.taskId),
                 eq(tasks.status, "awaiting_review"),
+                eq(tasks.tracked, false),
               ),
             )
             .returning({ id: tasks.id });
@@ -610,7 +627,7 @@ export function createTaskProjector(
            * ledgers, not the board: which cards may be closed is decided by whether the work behind
            * them is still recorded as in flight. Note that `group_run` is no longer in this pass — a
            * crew's cards are reconciled by `pipeline/reap.ts`, which knows the parent and its parked
-           * step apart.
+           * step apart. A followed card (`tracked`) is never closed here: only the person ends one.
            */
           .where(staleUnattendedCards(input.olderThanMs))
           .returning({ id: tasks.id });

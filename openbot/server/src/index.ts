@@ -478,6 +478,7 @@ import {
   createThreadVisibility,
 } from "./staffing/routes";
 import { createStaffingProposalStore } from "./staffing/store";
+import { createDelivery } from "./tasks/delivery";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
 import { createTaskRunner } from "./tasks/runner";
@@ -4264,6 +4265,8 @@ await startupLifecycle.run(async (startup) => {
      * lands in 需要操作 when the coworker stops to ask, and comes back on its own when the person answers.
      */
     board: taskProjector,
+    // A person's message on a thread with an open followed card is a round of that card (一件活一张卡).
+    delivery: createDelivery(database),
     activity: async (turn, agentId, text, sourceId) =>
       channelStore.recordActivity(
         await actorFor(turn.ownerUserId),

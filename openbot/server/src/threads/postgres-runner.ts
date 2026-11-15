@@ -21,17 +21,24 @@ import {
   switchMap,
   tap,
 } from "rxjs";
-import type { Database } from "../db/client";
 import {
-  takeLocalRunTicket,
-  localDigest,
-  localRunPlan,
   type LocalReceipt,
   type LocalRunTicket,
+  localDigest,
+  localRunPlan,
+  takeLocalRunTicket,
 } from "../approvals/continuation-target-local";
+import type { Database } from "../db/client";
 import { threadRunEvents, threadRuns, threads } from "../db/schema";
 import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { QuotaService } from "../quota/limits";
+import {
+  createDelivery,
+  type Delivery,
+  firstSentenceOf,
+  replyTextOf,
+  runErrorOf,
+} from "../tasks/delivery";
 import { deliverableFromEvents, type TaskProjector } from "../tasks/projector";
 import {
   currentTenant,
@@ -181,6 +188,9 @@ export function fileRunnerCardAs<T>(lane: RunnerCardLane, body: () => T): T {
  * commits finalized runs to, and `appendRun` is how a finished run enters it.
  */
 export class PostgresAgentRunner extends InMemoryAgentRunner {
+  /** The followed cards a turn may hang on (`tasks/delivery.ts`); asked only when there is a board. */
+  private readonly delivery: Delivery;
+
   constructor(
     private readonly database: Database,
     private readonly board?: TaskProjector,
@@ -198,6 +208,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     ) => Promise<string | null>,
   ) {
     super({ onConcurrentRun: "supersede" });
+    this.delivery = createDelivery(database);
   }
 
   /** Trusted AP entry only: reserve/start CAS happens before the runtime; a
@@ -410,11 +421,17 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       return new Observable((subscriber) =>
         subscriber.error(new ThreadUnavailableError()),
       );
-    const ceiling = cardIsTaken ? undefined : quota;
+    const agentId = request.agent.agentId ?? "unknown";
     /*
      * Two questions before the model is called, each deferred rather than awaited because a runner
      * answers with a stream, and a refusal has to arrive as that stream failing — which is how the
      * browser already shows a run that could not start.
+     *
+     * Before either, whether this turn is a round of work already on the board (一件活一张卡, spec
+     * 2026-11-15-delivery-loop §2): a thread whose coworker holds an open followed card hangs every
+     * turn on that card. Such a turn is a taken card exactly as a `suppressRunnerCard` entry's is —
+     * the card exists and was charged once when it was opened — so it neither asks the month nor files
+     * a second row. An entry that already owns its card is not asked: its card is its own.
      *
      * The month comes first. A turn that runs and is then refused leaves a person charged for work
      * they got and a task card that never appeared; the ceiling on tasks per month only means
@@ -424,16 +441,31 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       let inner: Subscription | undefined;
       let closed = false;
       void (async () => {
+        const followed =
+          this.board && !cardIsTaken
+            ? await this.delivery
+                .openTrackedCard(tenant, request.threadId, agentId)
+                .catch((error) => {
+                  console.error("tracked card lookup failed", error);
+                  return null;
+                })
+            : null;
+        const ceiling = cardIsTaken || followed ? undefined : quota;
         if (ceiling) await ceiling.assertCapacity(tenant, "tasksPerMonth");
         // The thread's stored history goes into the store before this run is appended after it.
         await this.hydrate();
         await this.claim(request, tenant);
+        return followed;
       })().then(
-        () => {
+        (followed) => {
           if (closed) return;
-          inner = this.stream(request, tenant, cardIsTaken, lane).subscribe(
-            subscriber,
-          );
+          inner = this.stream(
+            request,
+            tenant,
+            cardIsTaken || followed !== null,
+            lane,
+            followed ?? undefined,
+          ).subscribe(subscriber);
         },
         (thrown: unknown) => subscriber.error(thrown),
       );
@@ -498,6 +530,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     cardIsTaken: boolean,
     /** An unattended entry's lane for the card filed here; absent is a person's `chat` turn. */
     lane?: RunnerCardLane,
+    /** The followed card this turn is a round of, when it is one (`cardIsTaken` is then true). */
+    followed?: { id: string },
   ): Observable<BaseEvent> {
     const { threadId } = request;
     const runId = request.input.runId;
@@ -506,7 +540,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const agentId = request.agent.agentId ?? "unknown";
     const startedAt = Date.now();
     const events: BaseEvent[] = [];
-    // The board's chat lane: one task per turn, titled by what the person asked.
+    // The board's chat lane: one task per turn, titled by what the person asked -- unless the turn is a
+    // round of a followed card, which spans turns (`followed` above).
     const lastUser = [...request.input.messages]
       .reverse()
       .find((message) => message.role === "user");
@@ -546,7 +581,34 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
               return null;
             })
         : undefined;
-    const finish = (failed: boolean) => {
+    if (followed)
+      void this.delivery
+        .attachRun(tenant, followed.id, runId)
+        .catch((error) => console.error("task projection failed", error));
+    /*
+     * A round of a followed card ends here, for the card this turn hangs on or for the card it opened
+     * and followed while it ran (`accept_task`): its status stays, and the card records the round and
+     * the reply's first sentence. For a card nobody follows `runEnded` matches nothing.
+     */
+    const roundEnded = (taskId: string, failed: boolean, thrown?: unknown) =>
+      this.delivery.runEnded(tenant, taskId, {
+        runId,
+        failed,
+        ...(failed
+          ? {
+              error:
+                runErrorOf(events) ??
+                (thrown instanceof Error ? thrown.message : undefined),
+            }
+          : { firstSentence: firstSentenceOf(replyTextOf(events)) }),
+      });
+    const finish = (failed: boolean, thrown?: unknown) => {
+      if (followed) {
+        void roundEnded(followed.id, failed, thrown).catch((error) =>
+          console.error("task projection failed", error),
+        );
+        return;
+      }
       if (!card) return;
       /*
        * What the turn produced rides on the card (spec A9), read from the stream before it is handed
@@ -566,15 +628,16 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       };
       const deliverableRef = failed ? undefined : produced();
       void card
-        .then(() =>
+        .then(async (taskId) => {
           // biome-ignore lint/style/noNonNullAssertion: a board is set before any run is accepted here
-          this.board!.finished({
+          await this.board!.finished({
             tenantId: tenant,
             runRef: runId,
             failed,
             deliverableRef,
-          }),
-        )
+          });
+          if (taskId) await roundEnded(taskId, failed, thrown);
+        })
         .catch((error) => console.error("task projection failed", error));
     };
     const stream = () =>
@@ -603,8 +666,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
               );
             }, 0);
           },
-          error: () => {
-            finish(true);
+          error: (thrown: unknown) => {
+            finish(true, thrown);
           },
         }),
       );

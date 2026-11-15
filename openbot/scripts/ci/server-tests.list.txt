@@ -314,6 +314,7 @@ tests/decision-waits.integration.test.ts
 tests/deepseek-thinking.test.ts
 tests/delivery-attention.integration.test.ts
 tests/delivery-link-audit.test.ts
+tests/delivery-one-card.integration.test.ts
 tests/delivery-providers.test.ts
 tests/delivery-router.test.ts
 tests/delivery-routes.test.ts

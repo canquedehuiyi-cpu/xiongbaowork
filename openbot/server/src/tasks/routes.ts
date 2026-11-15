@@ -28,6 +28,7 @@ import {
   wakerGroupMembers,
 } from "../db/schema";
 import { taskArchives } from "../db/schema/task-archives";
+import { createDelivery } from "./delivery";
 import type { TaskProjector } from "./projector";
 
 type Ctx = { Variables: AppVariables };
@@ -331,6 +332,7 @@ export function createTaskRoutes(
   projector: TaskProjector,
 ) {
   const routes = new Hono<Ctx>();
+  const delivery = createDelivery(database);
 
   const filters = (context: {
     req: { query: (k: string) => string | undefined };
@@ -528,11 +530,24 @@ export function createTaskRoutes(
     if (!(await cardIsHere(tenantId, taskId))) {
       return context.json({ error: "No such task here." }, 404);
     }
-    const ok = await projector.archived({
+    /*
+     * On a followed card, archiving is 验收 (spec 2026-11-15-delivery-loop §3): `awaiting_review` →
+     * `done` with a 「验收（从归档）」 line, through `tasks/delivery.ts`. `null` says the card is not
+     * followed, and archiving it is what it always was.
+     */
+    const reviewed = await delivery.review(
       tenantId,
       taskId,
-      archivedBy: context.var.actor.id,
-    });
+      `user:${context.var.actor.id}`,
+      "archive",
+    );
+    const ok =
+      reviewed ??
+      (await projector.archived({
+        tenantId,
+        taskId,
+        archivedBy: context.var.actor.id,
+      }));
     return ok
       ? context.json({ ok: true })
       : context.json({ error: "Cannot archive from this state." }, 409);

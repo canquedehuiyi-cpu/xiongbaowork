@@ -49,6 +49,8 @@ export const DISPATCH_LEDGER_KIND = "channel.dispatch";
  *   card's `run_ref`. A dispatch card is closed when that row says the turn is no longer in flight:
  *   finished, or handed out (the queue hands a dispatch out once) and no longer leased. A row still
  *   waiting to be claimed is a backlog, not a wreck. A chat card with no such row is never touched.
+ * - `tracked = true`. A followed card (the delivery loop) outlives every turn it spans; a round that
+ *   stopped is the delivery checker's to chase, not a reason to close the work.
  * - `status = 'needs_action'`. Those cards are held against an approval row, which is a person's claim
  *   to answer, not a crashed process's leftover: deciding it — either way — moves the card through
  *   `board.resumed`. Reaping by age would silently retire a decision somebody is coming back to make,
@@ -68,6 +70,9 @@ export function staleUnattendedCards(olderThanMs: number) {
       ),
     ),
     eq(tasks.status, "running"),
+    // A followed card is never a wreck: a round of it failing or stopping leaves it with its coworker,
+    // and only the person ends it (spec 2026-11-15-delivery-loop §3).
+    eq(tasks.tracked, false),
     sql`${tasks.updatedAt} < now() - (${olderThanMs} * interval '1 millisecond')`,
     /*
      * Not open in EITHER ledger, so each card is asked of the book its own source keeps. The `source`
