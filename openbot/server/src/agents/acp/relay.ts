@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { DeviceChannel, DispatchTarget } from "../../devices/channel";
 import {
   type AcpTurnRow,
@@ -47,7 +48,9 @@ import {
  * the database with no run of this process following it (`subscribe` with `run: true`) and none
  * being started. Its frames are not swallowed: `adoptTurn` starts a run that follows the turn from
  * here on (posted into its thread, finishing the board card the turn answers for), and the frame is
- * then taken in for it. A permission request with no run to carry it goes straight to `permission`
+ * then taken in for it. The updates the gone run had already taken in (up to `lastSeq`) are lost with
+ * it, so the adopting run gets their replay too, once each, without moving `lastSeq` (`replayTo`).
+ * One adoption per turn: a frame that comes while one is under way waits for it. A permission request with no run to carry it goes straight to `permission`
  * (the bridge), so its hirer still gets the card. A turn that cannot be adopted (its employee is
  * gone, moved, or the thread is not its own any more) is cancelled on the device (`acp.cancel`) and
  * ended `interrupted`. An adoption that throws takes nothing in (the device sends it all again).
@@ -64,7 +67,9 @@ import {
  * EVERY JOB HAS A DEADLINE (`jobTimeoutMs`). A query that hangs must not hold one device's chain for
  * ever (every later frame and heartbeat of the device waits on it, reconnecting included): past the
  * deadline the job counts as failed (its frame is not taken in, so `drain` answers false and the
- * device sends it again on its next connection) and the chain goes on.
+ * device sends it again on its next connection) and the chain goes on. A job given up on changes
+ * nothing afterwards: every result it still awaits is refused (`guarded`), so a late status write
+ * neither delivers nor moves `lastSeq`, and a late claim is put back in the queue.
  */
 
 /** Where an up frame came from: the socket's tenant and device, and which connection of it. */
@@ -174,6 +179,12 @@ type Turn = {
   errors: Set<string>;
   saving: boolean;
   dirty: boolean;
+  /**
+   * Adopted after a restart: the updates up to here were taken in by a run that is gone, and the run
+   * that follows the turn now gets their replay once each (`replayed`: the last one it got).
+   */
+  replayTo?: number;
+  replayed: number;
 };
 
 /** Heartbeats after an inventory before a turn it listed as ended, with no end since, is gone. */
@@ -189,19 +200,25 @@ class RelayJobTimeout extends Error {
   override name = "RelayJobTimeout";
 }
 
-/** `work`, or a rejection once `ms` have passed (`work` itself is left to settle on its own). */
-function withDeadline<T>(work: Promise<T>, ms: number): Promise<T> {
+/**
+ * `work`, or a rejection once `ms` have passed (`expired` is called then). `work` itself is left to
+ * settle on its own: what it awaits afterwards is refused (`guarded`), so it changes nothing more.
+ */
+function withDeadline<T>(
+  work: Promise<T>,
+  ms: number,
+  expired: () => void,
+): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(
-      () =>
-        reject(
-          new RelayJobTimeout(
-            `a job took longer than ${ms} ms and was given up on`,
-          ),
+    timer = setTimeout(() => {
+      expired();
+      reject(
+        new RelayJobTimeout(
+          `a job took longer than ${ms} ms and was given up on`,
         ),
-      ms,
-    );
+      );
+    }, ms);
     timer.unref?.();
   });
   // A late failure of the abandoned job is not an unhandled rejection.
@@ -240,7 +257,45 @@ const TURN_FRAMES = new Set([
 ]);
 
 export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
-  const { channel, turns, startQueuedTurn } = deps;
+  const { channel, startQueuedTurn } = deps;
+  /**
+   * The job of a device's chain this code runs in. Once it is given up on (`expired`), every result it
+   * still awaits is refused, so a job that finishes late changes nothing: no status, no `lastSeq`, no
+   * delivery. A claim that lands late is put back.
+   */
+  const jobScope = new AsyncLocalStorage<{ expired: boolean }>();
+  function guarded<T>(work: Promise<T>, late?: (value: T) => void): Promise<T> {
+    const scope = jobScope.getStore();
+    if (!scope) return work;
+    return work.then((value) => {
+      if (!scope.expired) return value;
+      late?.(value);
+      throw new RelayJobTimeout(
+        "a job given up on finished late; what it found is dropped",
+      );
+    });
+  }
+  /** The store itself, for writes that belong to no job (`saveSeq`, putting a claim back). */
+  const store = deps.turns;
+  /** The store as a job of the chain uses it (`guarded`). */
+  const turns = new Proxy(store, {
+    get(target, property, receiver) {
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value !== "function") return value;
+      return (...args: unknown[]) => {
+        const out = value.apply(target, args) as Promise<unknown>;
+        if (property !== "claim") return guarded(out);
+        return guarded(out, (row) => {
+          if (row)
+            void store
+              .unclaim(args[0] as string, args[1] as string)
+              .catch(() => undefined);
+        });
+      };
+    },
+  }) as AcpTurnStore;
+  /** turnId → its adoption still under way, shared by every frame that waits for it. */
+  const adopting = new Map<string, Promise<boolean>>();
   const log = deps.log ?? ((message: string) => console.warn(message));
   const jobTimeoutMs = deps.jobTimeoutMs ?? ACP_RELAY_JOB_TIMEOUT_MS;
 
@@ -281,9 +336,12 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     critical: boolean,
   ): Promise<T> {
     const key = keyOf(target);
-    const run = (chains.get(key) ?? Promise.resolve()).then(() =>
-      withDeadline(job(), jobTimeoutMs),
-    );
+    const run = (chains.get(key) ?? Promise.resolve()).then(() => {
+      const scope = { expired: false };
+      return withDeadline(jobScope.run(scope, job), jobTimeoutMs, () => {
+        scope.expired = true;
+      });
+    });
     const tail = run.then(
       () => undefined,
       (error) => {
@@ -328,6 +386,7 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     lastSeq: row.lastSeq,
     ...(acpPromptOf(row).runRef ? { runRef: acpPromptOf(row).runRef } : {}),
     row,
+    replayed: 0,
     requests: new Set(),
     errors: new Set(),
     saving: false,
@@ -396,7 +455,7 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     }
     turn.saving = true;
     const seq = turn.lastSeq;
-    turns
+    store
       .recordSeq(turn.tenantId, turn.turnId, seq)
       .catch((error) =>
         log(
@@ -433,19 +492,23 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
   async function tellClosed(turn: Turn, carried: boolean) {
     if (!deps.closed) return;
     try {
-      await deps.closed(
-        {
-          tenantId: turn.tenantId,
-          deviceId: turn.deviceId,
-          agentId: turn.agentId,
-          threadId: turn.threadId,
-          turnId: turn.turnId,
-          ...(turn.runRef ? { runRef: turn.runRef } : {}),
-          status: turn.status,
-        },
-        { followed: carried },
+      await guarded(
+        deps.closed(
+          {
+            tenantId: turn.tenantId,
+            deviceId: turn.deviceId,
+            agentId: turn.agentId,
+            threadId: turn.threadId,
+            turnId: turn.turnId,
+            ...(turn.runRef ? { runRef: turn.runRef } : {}),
+            status: turn.status,
+          },
+          { followed: carried },
+        ),
       );
     } catch (error) {
+      // Given up on: the job stops here.
+      if (error instanceof RelayJobTimeout) throw error;
       log(
         `acp: what turn ${turn.turnId} left behind could not be closed: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -486,7 +549,7 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
       return false;
     }
     turn.row = row;
-    if (await deps.adoptTurn(row)) {
+    if (await guarded(adoption(turn, row, deps.adoptTurn))) {
       if (followed(turn.turnId)) return true;
       throw new Error(`turn ${turn.turnId}: the run that adopted it is gone`);
     }
@@ -497,6 +560,40 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     await interrupt(turn);
     return false;
   }
+
+  /**
+   * One adoption per turn: a frame that comes while an earlier one is still under way (its job was
+   * given up on) waits for that one instead of starting a second run. The run it starts gets the
+   * replay of what the gone run had taken in.
+   */
+  function adoption(
+    turn: Turn,
+    row: AcpTurnRow,
+    adopt: (row: AcpTurnRow) => Promise<boolean>,
+  ): Promise<boolean> {
+    const running = adopting.get(turn.turnId);
+    if (running) return running;
+    const started = jobScope
+      .exit(() => adopt(row))
+      .then((ok) => {
+        if (ok && turn.lastSeq > 0) {
+          turn.replayTo = turn.lastSeq;
+          turn.replayed = 0;
+        }
+        return ok;
+      });
+    adopting.set(turn.turnId, started);
+    void started
+      .finally(() => {
+        if (adopting.get(turn.turnId) === started) adopting.delete(turn.turnId);
+      })
+      .catch(() => undefined);
+    return started;
+  }
+
+  /** An update the gone run had taken in that the adopting run has not had yet. */
+  const replayWanted = (turn: Turn, seq: number) =>
+    turn.replayTo !== undefined && seq <= turn.replayTo && seq > turn.replayed;
 
   async function interrupt(turn: Turn): Promise<void> {
     await finish(turn, "interrupted", {
@@ -539,14 +636,23 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
         cancelOnDevice(from, turn);
       return;
     }
-    // An update already taken in needs nobody: a replay is dropped before anything is adopted.
-    if (
+    // An update already taken in: dropped, unless the run that adopts the turn here (after a restart)
+    // has not had it yet. Replays only deliver: no status, no `lastSeq`.
+    const replay =
       type === "acp.update" &&
       typeof frame.seq === "number" &&
-      frame.seq <= turn.lastSeq
-    )
+      frame.seq <= turn.lastSeq;
+    if (replay && followed(turnId) && !replayWanted(turn, frame.seq as number))
       return;
     if (!(await follow(from, turn))) return;
+    if (replay) {
+      const seq = frame.seq as number;
+      if (replayWanted(turn, seq)) {
+        turn.replayed = seq;
+        deliver(turnId, frame);
+      }
+      return;
+    }
 
     if (type === "acp.turn.ack") {
       if (!arrived(turn)) return;
@@ -563,7 +669,11 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
       // Taken in only once the status is written: a write that fails leaves `lastSeq` where it was,
       // so the replay that follows the closed socket is not mistaken for a repeat.
       if (arrived(turn) && !(await setStatus(turn, "running"))) return;
+      // Asked again after the wait: `lastSeq` only ever goes up, and each update goes out once.
+      if (seq <= turn.lastSeq) return;
       turn.lastSeq = seq;
+      // Past what the gone run had: the replay for the adopting run is over.
+      turn.replayTo = undefined;
       deliver(turnId, frame);
       saveSeq(turn);
       return;
@@ -716,34 +826,46 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
   ): Promise<number> {
     const { tenantId, deviceId } = target;
     const source = { tenantId, deviceId };
-    const claimed = await serial(
-      source,
-      async () => {
-        if (beat) await settleEnded(source);
-        if (!channel.isReachable(source)) return [];
-        const queued = await turns.queuedForDevice(tenantId, deviceId);
-        if (queued.length === 0) return [];
-        const busy = new Set(
-          (await turns.activeForDevice(tenantId, deviceId)).map((row) =>
-            laneOf(source, row.agentId, row.threadId),
-          ),
-        );
-        const picked: AcpTurnRow[] = [];
-        for (const row of queued) {
-          const lane = laneOf(source, row.agentId, row.threadId);
-          if (busy.has(lane)) continue;
-          // The lane's oldest queued turn, and nothing after it in the same lane.
-          busy.add(lane);
-          const got = await turns.claim(tenantId, row.turnId);
-          if (!got) continue;
-          starting.add(got.turnId);
-          known.set(got.turnId, fromRow(got));
-          picked.push(got);
-        }
-        return picked;
-      },
-      false,
-    );
+    /** Claimed by the job so far: put back if it fails or is given up on. */
+    const picked: AcpTurnRow[] = [];
+    let claimed: AcpTurnRow[];
+    try {
+      claimed = await serial(
+        source,
+        async () => {
+          if (beat) await settleEnded(source);
+          if (!channel.isReachable(source)) return [];
+          const queued = await turns.queuedForDevice(tenantId, deviceId);
+          if (queued.length === 0) return [];
+          const busy = new Set(
+            (await turns.activeForDevice(tenantId, deviceId)).map((row) =>
+              laneOf(source, row.agentId, row.threadId),
+            ),
+          );
+          for (const row of queued) {
+            const lane = laneOf(source, row.agentId, row.threadId);
+            if (busy.has(lane)) continue;
+            // The lane's oldest queued turn, and nothing after it in the same lane.
+            busy.add(lane);
+            const got = await turns.claim(tenantId, row.turnId);
+            if (!got) continue;
+            starting.add(got.turnId);
+            known.set(got.turnId, fromRow(got));
+            picked.push(got);
+          }
+          return [...picked];
+        },
+        false,
+      );
+    } catch (error) {
+      for (const row of picked) {
+        starting.delete(row.turnId);
+        const turn = known.get(row.turnId);
+        if (turn) forget(turn);
+        await store.unclaim(tenantId, row.turnId).catch(() => undefined);
+      }
+      throw error;
+    }
     const outcomes = await Promise.allSettled(
       claimed.map((row) => startQueuedTurn(row)),
     );
@@ -760,7 +882,7 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
       );
       const turn = known.get(row.turnId);
       if (turn) forget(turn);
-      await turns.unclaim(tenantId, row.turnId).catch(() => undefined);
+      await store.unclaim(tenantId, row.turnId).catch(() => undefined);
     }
     return started;
   }

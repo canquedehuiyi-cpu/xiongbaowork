@@ -969,13 +969,22 @@ describe("an external employee, end to end", () => {
     expect((await after.turnRows(agentId)).map((row) => row.status)).toEqual([
       "done",
     ]);
-    // The answer reached the conversation: announced, and in the thread's stored run.
+    // The whole answer reached the conversation, what was said before the restart included:
+    // announced, and in the thread's stored run.
     await until(() => after.announced.length > 0, "the answer to be announced");
-    expect(after.announced[0]?.text).toContain("改好了，测试也过了。");
+    expect(after.announced).toHaveLength(1);
+    expect(after.announced[0]?.text).toBe("我先看看代码。改好了，测试也过了。");
     expect(after.announced[0]?.failed).toBe(false);
-    expect(eventTexts(await after.threadEvents(threadId))).toContain(
-      "改好了，测试也过了。",
+    await until(
+      async () =>
+        eventTexts(await after.threadEvents(threadId)).includes(
+          "改好了，测试也过了。",
+        ),
+      "the run to be stored",
     );
+    const stored = eventTexts(await after.threadEvents(threadId));
+    expect(stored).toContain("我先看看代码。");
+    expect(stored).toContain("改好了，测试也过了。");
     // Nothing was cancelled, and the turn was prompted once, by the server before the restart.
     expect(after.down.filter((frame) => frame.type === "acp.cancel")).toEqual(
       [],
@@ -1147,7 +1156,7 @@ describe("an external employee, end to end", () => {
     // Its approval did not stay open.
     await d.bridge.poll();
     await until(
-      async () => (await d.approvalRows())[0]?.status !== "pending",
+      async () => (await d.approvalRows())[0]?.status === "denied",
       "the approval to expire",
     );
     // Nothing was answered on the computer for it.

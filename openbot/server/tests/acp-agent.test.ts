@@ -365,6 +365,24 @@ describe("DeviceAcpAgent", () => {
     expect(replayed.some(isWaiting)).toBe(false);
   });
 
+  test("a turn stopped in the moment before its prompt goes out is never given to the device", async () => {
+    const t = setup();
+    const run = watch(t.agent(), input("修一下登录页"));
+    await until(() => t.sent("acp.open").length === 1, "acp.open");
+    // The hirer's cancel lands while the device is still opening the session.
+    await t.turns.setStatus(t.target.tenantId, "turn-1", "cancelled");
+    // Its session answer belongs to no open turn of the lane any more: dropped, so no prompt follows.
+    await t.device({ type: "acp.session", sessionId: "s", loaded: true });
+    expect(t.sent("acp.prompt")).toEqual([]);
+    // The run sees the turn over on two beats in a row and ends, saying so.
+    t.tick();
+    await Bun.sleep(5);
+    t.tick();
+    await until(() => run.state.done, "the run to end");
+    expect(t.sent("acp.prompt")).toEqual([]);
+    expect(texts(run.events)).toContain("这件活已取消。");
+  });
+
   test("unreachable run queues the turn and answers the queued sentence", async () => {
     const t = setup({ reachable: false });
     const run = watch(t.agent(), input("跑一下测试"));

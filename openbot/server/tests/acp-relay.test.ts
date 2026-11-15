@@ -923,7 +923,10 @@ describe("acp relay: turns nobody here follows", () => {
       followed: boolean;
       status: string;
     }[] = [];
-    const mode = { adopt };
+    const mode: { adopt: typeof adopt; gate: Promise<void> | null } = {
+      adopt,
+      gate: null,
+    };
     const t = setup({
       deps: () => ({
         ...(mode.adopt === "none"
@@ -931,6 +934,7 @@ describe("acp relay: turns nobody here follows", () => {
           : {
               adoptTurn: async (row: AcpTurnRow) => {
                 adopted.push(row);
+                if (mode.gate) await mode.gate;
                 if (mode.adopt === "throws") throw new Error("thread mid-run");
                 if (mode.adopt === "impossible") return false;
                 t.relay.subscribe(
@@ -1236,5 +1240,107 @@ describe("acp relay: turns nobody here follows", () => {
     t.relay.fromRunner(t.from(), update("turn-1", 1));
     expect(await t.settle()).toBeTrue();
     expect(seqs(one)).toEqual([1]);
+  });
+
+  test("the run that adopts a turn after a restart gets the replay of what the gone run had taken in", async () => {
+    const t = orphans();
+    await t.running("turn-1");
+    // The old server took in 1..2 (stored), then went away with its run.
+    await t.turns.recordSeq(target.tenantId, "turn-1", 2);
+    t.relay.fromRunner(
+      t.from(),
+      inventory([{ turnId: "turn-1", state: "running" }]),
+    );
+    for (const seq of [1, 2, 3])
+      t.relay.fromRunner(t.from(), update("turn-1", seq));
+    expect(await t.settle()).toBeTrue();
+    expect(t.adopted).toHaveLength(1);
+    expect(seqs(t.runFrames)).toEqual([1, 2, 3]);
+    // Another replay on the next connection: nothing twice.
+    for (const seq of [1, 2, 3, 4])
+      t.relay.fromRunner(t.from("conn-2"), update("turn-1", seq));
+    expect(
+      await t.relay.drain({ ...target, connectionId: "conn-2" }),
+    ).toBeTrue();
+    expect(seqs(t.runFrames)).toEqual([1, 2, 3, 4]);
+    await Bun.sleep(5);
+    expect(t.turns.rows[0]?.lastSeq).toBe(4);
+  });
+
+  test("a claim that lands after its job was given up on is put back, and the turn starts later", async () => {
+    const t = orphans("none", 50);
+    await t.running("turn-1", "queued");
+    const claim = t.turns.claim.bind(t.turns);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let hold = true;
+    t.turns.claim = async (tenantId, turnId) => {
+      if (hold) await held;
+      return claim(tenantId, turnId);
+    };
+    await expect(t.relay.resumeQueued(target)).rejects.toThrow("given up on");
+    // The database answers late: the claim lands, and is put back at once.
+    release();
+    await Bun.sleep(20);
+    expect(t.statusOf("turn-1")).toBe("queued");
+    expect(t.started).toEqual([]);
+    // Nothing holds its lane: an inventory without it interrupts nothing, the next beat starts it.
+    hold = false;
+    expect(await t.relay.resumeQueued(target)).toBe(1);
+    expect(t.started.map((row) => row.turnId)).toEqual(["turn-1"]);
+    expect(t.statusOf("turn-1")).toBe("sent");
+  });
+
+  test("an update whose status write lands after its job was given up on neither delivers nor moves lastSeq back", async () => {
+    const t = orphans("none", 50);
+    await t.running("turn-1", "sent");
+    const frames = t.heard("turn-1");
+    const setStatus = t.turns.setStatus.bind(t.turns);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let first = true;
+    t.turns.setStatus = async (...args) => {
+      if (first) {
+        first = false;
+        await held;
+      }
+      return setStatus(...args);
+    };
+    t.relay.fromRunner(t.from(), update("turn-1", 1));
+    t.relay.fromRunner(t.from(), update("turn-1", 2));
+    expect(await t.settle()).toBeFalse();
+    expect(seqs(frames)).toEqual([2]);
+    // The stuck write finishes: nothing of the given-up job happens.
+    release();
+    await Bun.sleep(20);
+    expect(seqs(frames)).toEqual([2]);
+    t.relay.fromRunner(t.from(), update("turn-1", 2));
+    t.relay.fromRunner(t.from(), update("turn-1", 3));
+    expect(await t.settle()).toBeTrue();
+    expect(seqs(frames)).toEqual([2, 3]);
+  });
+
+  test("an adoption past its job's deadline is not started again by the next frame", async () => {
+    const t = orphans("run", 50);
+    await t.running("turn-1");
+    let release!: () => void;
+    t.mode.gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    t.relay.fromRunner(t.from(), update("turn-1", 1));
+    expect(await t.settle()).toBeFalse();
+    // The replay waits for the adoption already under way, which now finishes.
+    t.relay.fromRunner(t.from("conn-2"), update("turn-1", 1));
+    await Bun.sleep(10);
+    release();
+    expect(
+      await t.relay.drain({ ...target, connectionId: "conn-2" }),
+    ).toBeTrue();
+    expect(t.adopted).toHaveLength(1);
+    expect(seqs(t.runFrames)).toEqual([1]);
   });
 });
