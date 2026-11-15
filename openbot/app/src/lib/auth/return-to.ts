@@ -35,6 +35,9 @@ export function safeReturnPath(value: unknown): string | null {
     return null;
   }
   if (url.origin !== base) return null;
+  // 解析会把 `/.//evil.example`、`/a/..//evil.example` 归一成 `//evil.example`：交出去之前再查一遍，
+  // 归一后的路径同样不能以 `//` 开头。
+  if (url.pathname.startsWith("//")) return null;
   // 回到登录页本身没有意义，还会绕圈。
   if (url.pathname === "/sign" || url.pathname.startsWith("/sign/"))
     return null;
