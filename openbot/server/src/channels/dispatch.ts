@@ -29,12 +29,15 @@
  */
 import { createHash } from "node:crypto";
 import type { Message } from "@ag-ui/client";
+import { and, eq } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import type { AgentActor } from "../agents/profile-types";
 import { PERSON_INITIATOR } from "../audit";
 import type { AppVariables } from "../auth/guards";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
+import type { Database } from "../db/client";
+import { workItems } from "../db/schema";
 import { QuotaExceeded } from "../quota/limits";
 import type { TurnRunner } from "../routines/runner";
 import type { TaskProjector } from "../tasks/projector";
@@ -44,6 +47,33 @@ import type { WorkQueue } from "../work/queue";
 
 /** The work-queue kind of a dispatched turn. `tasks/reclaim.ts` reads it as the dispatch ledger. */
 export const CHANNEL_DISPATCH_KIND = DISPATCH_LEDGER_KIND;
+
+/**
+ * Whether a run is a dispatch's: the person handed the work to the coworker with `@` (`submit`), which
+ * files the run in this queue -- the dispatch ledger -- under its run id before anything runs, and the
+ * row outlives the turn. How the delivery loop tells work handed to an external employee (派活, which it
+ * follows) from a question asked in its own conversation (which it does not; spec
+ * 2026-11-15-delivery-loop §1). Asked in the person's frame: the row is theirs.
+ */
+export function channelDispatched(
+  database: Pick<Database, "select">,
+): (tenantId: string, runId: string) => Promise<boolean> {
+  return (tenantId, runId) =>
+    runAsTenant(tenantId, async () => {
+      const [row] = await database
+        .select({ key: workItems.key })
+        .from(workItems)
+        .where(
+          and(
+            eq(workItems.tenantId, tenantId),
+            eq(workItems.kind, CHANNEL_DISPATCH_KIND),
+            eq(workItems.key, runId),
+          ),
+        )
+        .limit(1);
+      return row !== undefined;
+    });
+}
 
 /** Long enough for a whole turn and its grace (`run-turn.ts`: five minutes plus five seconds). */
 export const CHANNEL_DISPATCH_LEASE_MS = 15 * 60_000;

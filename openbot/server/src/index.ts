@@ -190,6 +190,7 @@ import {
   markAttachmentsSent,
 } from "./channels/attachments";
 import {
+  channelDispatched,
   createChannelDispatch,
   createChannelDispatchRoutes,
 } from "./channels/dispatch";
@@ -2790,6 +2791,8 @@ await startupLifecycle.run(async (startup) => {
   const acpDelivery = createAcpDelivery({
     delivery: deliveryLoop,
     gate: evidenceGate,
+    // Work handed to an external employee with `@` (派活) is followed; a question in its own chat is not.
+    dispatched: channelDispatched(database),
     timeZone: async (tenantId) =>
       (await readWorkHours(database, tenantId)).timeZone,
   });

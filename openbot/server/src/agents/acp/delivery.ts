@@ -23,8 +23,16 @@ import type { AcpTurnStore } from "./turns";
  * external employee runs on its owner's computer and cannot call `accept_task`, `deliver_task` or
  * `request_extension`, so the server walks the steps for it, from what its turns do:
  *
- * - QUEUED (`queued`): the card the turn answers for becomes followed -- 派出 · 待接下 -- as soon as the
- *   turn is in the queue, whether the computer is there or not.
+ * - QUEUED (`queued`): when the turn is work handed to the employee (派活), the card it answers for
+ *   becomes followed -- 派出 · 待接下 -- as soon as the turn is in the queue, whether the computer is
+ *   there or not. Work is handed to it in three ways, as to any coworker (spec §1): asked of it in a
+ *   group (`createAcpGroupTurn`, a peer's 转交 excepted), handed to it with `@` in another
+ *   conversation (`POST /api/channels/:id/dispatch`, whose run is in the dispatch ledger:
+ *   `dispatched`), or followed by the person (`POST /api/tasks/:id/track`, which follows the card
+ *   itself). A question asked in its own conversation is not work handed to it: the card stays a
+ *   conversation's card, nothing below touches it (every later hook asks for a followed card), and
+ *   it is neither told the rules, nor 「它没交东西」, nor nudged, nor recorded overdue. A later turn of
+ *   a thread whose followed card is still open hangs on that card (一件活一张卡), as for any coworker.
  * - STARTED (`opening`, then `started`): the card's first round is told the four rules before its
  *   prompt (once per card: a later round, a resumed or re-opened session, is not told again), and the
  *   moment its prompt is on the computer the work is taken on: `accepted_at` is then, and the round
@@ -53,8 +61,14 @@ export type AcpDeliveryTurn = {
   cardRef?: string;
 };
 
+/**
+ * Where a turn was queued from: a group (`group`: work asked of the employee there, followed) or its
+ * own conversation (`conversation`: followed only when the run is a 派活's).
+ */
+export type AcpQueuedFrom = "group" | "conversation";
+
 export type AcpDelivery = {
-  queued(turn: AcpDeliveryTurn): Promise<void>;
+  queued(turn: AcpDeliveryTurn, from: AcpQueuedFrom): Promise<void>;
   /** Before the prompt goes out: the words to put in front of it, on the card's first round only. */
   opening(turn: AcpDeliveryTurn): Promise<string | undefined>;
   started(turn: AcpDeliveryTurn): Promise<void>;
@@ -201,6 +215,11 @@ export function externalProtocol(): string {
 export function createAcpDelivery(options: {
   delivery: Delivery;
   gate: EvidenceGate;
+  /**
+   * Whether the run is a 派活's (`channelDispatched`): work handed to the employee with `@` in another
+   * conversation, which the loop follows. Absent: no run queued from a conversation is one.
+   */
+  dispatched?: (tenantId: string, runId: string) => Promise<boolean>;
   /** The person's zone (`readWorkHours`), for 「预计 16:00」. */
   timeZone?: (tenantId: string) => Promise<string>;
   now?: () => Date;
@@ -273,13 +292,26 @@ export function createAcpDelivery(options: {
   }
 
   return {
-    queued: guarded("queued", undefined, async (turn: AcpDeliveryTurn) => {
-      const card = await cardOf(turn);
-      if (!card || card.tracked) return;
-      await delivery.markTracked(turn.tenantId, card.id, "system", {
-        threadRef: turn.threadId,
-      });
-    }),
+    queued: guarded(
+      "queued",
+      undefined,
+      async (turn: AcpDeliveryTurn, from: AcpQueuedFrom) => {
+        const card = await cardOf(turn);
+        if (!card || card.tracked) return;
+        // A question in its own conversation is not work handed to it: only a 派活's run is.
+        if (
+          from === "conversation" &&
+          !(await options.dispatched?.(
+            turn.tenantId,
+            turn.cardRef ?? turn.runId,
+          ))
+        )
+          return;
+        await delivery.markTracked(turn.tenantId, card.id, "system", {
+          threadRef: turn.threadId,
+        });
+      },
+    ),
 
     opening: guarded(
       "opening",

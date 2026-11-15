@@ -145,7 +145,7 @@ export function createAcpGroupTurn(options: {
   }) => Promise<boolean>;
   newTurnId?: () => string;
   log?: (message: string) => void;
-  /** The delivery loop's part for external employees (delivery.ts): queued work is followed at once. */
+  /** The delivery loop's part for external employees (delivery.ts): work asked of it here is followed at once. */
   delivery?: Pick<AcpDelivery, "queued">;
 }): (input: {
   agentId: string;
@@ -184,12 +184,15 @@ export function createAcpGroupTurn(options: {
      * peer's hop: 员工互相 @ 的转交 is not followed by itself (spec 2026-11-15-delivery-loop §1).
      */
     if (input.runId && input.initiator?.kind !== "handoff")
-      await options.delivery?.queued({
-        tenantId,
-        agentId: employee.id,
-        threadId: input.threadId,
-        runId: input.runId,
-      });
+      await options.delivery?.queued(
+        {
+          tenantId,
+          agentId: employee.id,
+          threadId: input.threadId,
+          runId: input.runId,
+        },
+        "group",
+      );
     let replyText: string;
     if (options.channel.isReachable(target)) {
       replyText = `${employee.name}开始干这件活了，做完会在群里回复。`;
@@ -333,7 +336,7 @@ export type DeviceAcpAgentConfig = {
   log?: (message: string) => void;
   /**
    * The delivery loop's three steps, walked by the server for this employee (delivery.ts): the queued
-   * turn's card followed, the card's first prompt told the rules and taken on when it starts, the first
+   * turn's card followed when it is work handed to the employee (派活), the card's first prompt told the rules and taken on when it starts, the first
    * 「预计」 its due time, and what the turn changed handed in when it ends. Absent: none of it.
    */
   delivery?: AcpDelivery;
@@ -604,7 +607,7 @@ class AcpRun {
       };
       if (!config.reachable()) {
         await turns.enqueue(turn);
-        await config.delivery?.queued(this.deliveryTurn);
+        await config.delivery?.queued(this.deliveryTurn, "conversation");
         if (this.aborted) {
           await turns.setStatus(config.tenantId, turnId, "cancelled");
           return;
@@ -618,8 +621,11 @@ class AcpRun {
         return;
       }
       await turns.enqueue(turn);
-      // 派出 · 待接下 from the moment it is queued, whether it starts now or waits.
-      await config.delivery?.queued(this.deliveryTurn);
+      /*
+       * Work handed to it (派活) is 派出 · 待接下 from the moment it is queued, whether it starts now or
+       * waits; a question asked in its own conversation is not followed (`AcpDelivery.queued`).
+       */
+      await config.delivery?.queued(this.deliveryTurn, "conversation");
       const next = await turns.nextForThread(
         config.tenantId,
         input.threadId,

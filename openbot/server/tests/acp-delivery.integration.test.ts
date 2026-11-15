@@ -4,6 +4,7 @@ import { type BaseEvent, EventType, type RunAgentInput } from "@ag-ui/client";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   ACP_DELIVERY_LATE_NOTE,
+  createAcpGroupTurn,
   createAcpTurnStarter,
   DeviceAcpAgent,
   type DeviceAcpEmployee,
@@ -16,6 +17,11 @@ import {
   externalProtocol,
   externalTurnWaiting,
 } from "../src/agents/acp/delivery";
+import {
+  CHANNEL_DISPATCH_KIND,
+  channelDispatched,
+  createChannelDispatch,
+} from "../src/channels/dispatch";
 import { isExternalEmployee } from "../src/agents/acp/external";
 import { createAcpRelay } from "../src/agents/acp/relay";
 import { type AcpTurnRow, createAcpTurnStore } from "../src/agents/acp/turns";
@@ -54,11 +60,13 @@ import { createNudgeRuns, handoverText } from "../src/tasks/nudge-run";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /*
- * 外部员工按交付规约走三步（spec 2026-11-15-delivery-loop §9）：外部员工调不了熊宝的工具，由服务器替它走。
- * 排队即「派出 · 待接下」，轮次开始即接下，第一轮的提示前加四条规约（每张卡一次），回复里第一次出现的
+ * 外部员工按交付规约走三步（spec 2026-11-15-delivery-loop §1、§9）：外部员工调不了熊宝的工具，由服务器替它走。
+ * 只有派给它的活进三步（在群里派任务、在一对一对话里用 @ 派活、你点「当作一件活来跟」），在它自己的单聊里
+ * 一问一答照普通对话走。派给它的活排队即「派出 · 待接下」，轮次开始即接下，第一轮的提示前加四条规约（每张卡一次），回复里第一次出现的
  * 「预计 HH:MM / N 分钟」记作预计时间，结束时有改动汇总就当交付物过证据门，没有就留在「已接下」并说一句
  * 「它没交东西」；取消卡片连排队的轮次一起取消。
  *
@@ -209,6 +217,7 @@ async function harness(
   const realDelivery = createAcpDelivery({
     delivery,
     gate,
+    dispatched: channelDispatched(database),
     timeZone: async () => "Asia/Shanghai",
     now: () => NOW,
     log: () => undefined,
@@ -252,10 +261,31 @@ async function harness(
     await relay.drain(from);
   };
 
-  /** The person says `text` in `threadId`; resolves with the run's id and, once it ends, its events. */
-  const say = (threadId: string, text: string) => {
+  /**
+   * The person says `text` in `threadId`; resolves with the run's id and, once it ends, its events.
+   * `dispatched`: the run is a 派活's (`POST /api/channels/:id/dispatch`), which files its run in the
+   * dispatch ledger before anything runs -- written here as the dispatch worker leaves it once it took
+   * the item (finished), so no sweep in this file can take it again. The test of the dispatch itself,
+   * below, goes through the real route's service end to end.
+   */
+  const say = (
+    threadId: string,
+    text: string,
+    options: { dispatched?: boolean } = {},
+  ) => {
     const runId = `acpdl-run-${randomUUID().slice(0, 8)}`;
     const events: BaseEvent[] = [];
+    const filed = options.dispatched
+      ? runAsTenant(tenantId, () =>
+          database.insert(workItems).values({
+            kind: CHANNEL_DISPATCH_KIND,
+            key: runId,
+            attempts: 1,
+            finishedAt: new Date(),
+            payload: { ownerUserId: tenantId, agentId, text },
+          }),
+        )
+      : Promise.resolve();
     // As the runtime hands it over: the agent's own thread is the conversation's.
     const agent = agentOf();
     const message = {
@@ -266,26 +296,28 @@ async function harness(
     agent.threadId = threadId;
     agent.setMessages([message]);
     const done = new Promise<void>((resolve) => {
-      runAsTenant(tenantId, () =>
-        runner
-          .run({
-            threadId,
-            agent,
-            input: {
-              runId,
+      void filed.then(() =>
+        runAsTenant(tenantId, () =>
+          runner
+            .run({
               threadId,
-              state: {},
-              tools: [],
-              context: [],
-              forwardedProps: {},
-              messages: [message],
-            } as unknown as RunAgentInput,
-          })
-          .subscribe({
-            next: (event) => events.push(event),
-            complete: () => resolve(),
-            error: () => resolve(),
-          }),
+              agent,
+              input: {
+                runId,
+                threadId,
+                state: {},
+                tools: [],
+                context: [],
+                forwardedProps: {},
+                messages: [message],
+              } as unknown as RunAgentInput,
+            })
+            .subscribe({
+              next: (event) => events.push(event),
+              complete: () => resolve(),
+              error: () => resolve(),
+            }),
+        ),
       );
     }).then(async () => {
       // The runner writes the run through one macrotask after it ends.
@@ -365,29 +397,30 @@ async function harness(
    */
   const notices: DeliveryNotice[] = [];
   const nudges: string[] = [];
+  const runTurn = createTurnRunner({
+    intelligence: {
+      getOrCreateThread: async (params: { threadId: string }) => ({
+        thread: { id: params.threadId },
+        created: false,
+      }),
+      getThreadMessages: async () => ({ messages: [] }),
+      ɵacquireThreadLock: async (params: {
+        threadId: string;
+        runId: string;
+      }) => ({
+        threadId: params.threadId,
+        runId: params.runId,
+        joinToken: "test",
+      }),
+      ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
+      ɵcleanupThreadLock: async () => undefined,
+    } as never,
+    runner: runner as never,
+    buildAgentFor: async () => agentOf(),
+  });
   const nudgeRuns = createNudgeRuns({
     database,
-    runTurn: createTurnRunner({
-      intelligence: {
-        getOrCreateThread: async (params: { threadId: string }) => ({
-          thread: { id: params.threadId },
-          created: false,
-        }),
-        getThreadMessages: async () => ({ messages: [] }),
-        ɵacquireThreadLock: async (params: {
-          threadId: string;
-          runId: string;
-        }) => ({
-          threadId: params.threadId,
-          runId: params.runId,
-          joinToken: "test",
-        }),
-        ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
-        ɵcleanupThreadLock: async () => undefined,
-      } as never,
-      runner: runner as never,
-      buildAgentFor: async () => agentOf(),
-    }),
+    runTurn,
     runner,
     isExternal: (tenant, agent) => isExternalEmployee(database, tenant, agent),
   });
@@ -425,6 +458,9 @@ async function harness(
   return {
     tenantId,
     agentId,
+    employee,
+    acpDelivery,
+    runTurn,
     state,
     target,
     relay,
@@ -452,11 +488,13 @@ const textOf = (events: readonly BaseEvent[]) =>
     .join("");
 
 describe("external employees in the delivery loop", () => {
-  test("queued external work is pending_accept; turn start sets accepted_at", async () => {
+  test("work handed to it by 派活 is pending_accept once queued; turn start sets accepted_at", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
     h.state.reachable = false;
-    const queued = h.say(threadId, "帮我把登录页的报错修一下");
+    const queued = h.say(threadId, "帮我把登录页的报错修一下", {
+      dispatched: true,
+    });
     await queued.done;
     expect(textOf(queued.events)).toContain("这件活已排队");
 
@@ -504,7 +542,9 @@ describe("external employees in the delivery loop", () => {
   test("protocol prefix is added once per card, not on resumed turns", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const first = h.say(threadId, "把首页的按钮改成蓝色");
+    const first = h.say(threadId, "把首页的按钮改成蓝色", {
+      dispatched: true,
+    });
     const one = await h.open(threadId, 0);
     expect(one.content[0]).toEqual({
       type: "text",
@@ -518,7 +558,10 @@ describe("external employees in the delivery loop", () => {
     await h.end(threadId, one.turnId);
     await first.done;
 
-    // The same card's next turn, even in a new session on the computer: no rules again.
+    /*
+     * The person's follow-up in the conversation is the same card's next turn (一件活一张卡), even in a
+     * new session on the computer: no rules again.
+     */
     const from = h.down.length;
     const second = h.say(threadId, "顺便把字号也调大一点");
     const two = await h.open(threadId, from, false);
@@ -541,7 +584,9 @@ describe("external employees in the delivery loop", () => {
   test("预计 16:00 / 预计 40 分钟 in the reply sets due_at and due_reported", async () => {
     const h = await harness();
     const clockThread = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const clock = h.say(clockThread, "把发票导出做完");
+    const clock = h.say(clockThread, "把发票导出做完", {
+      dispatched: true,
+    });
     const a = await h.open(clockThread, 0);
     await h.said(clockThread, a.turnId, "已接下，预计 16:00 交。");
     // Only the first 「预计」 counts.
@@ -565,7 +610,9 @@ describe("external employees in the delivery loop", () => {
 
     const spanThread = `acpdl-thread-${randomUUID().slice(0, 8)}`;
     const from = h.down.length;
-    const span = h.say(spanThread, "整理一下周报");
+    const span = h.say(spanThread, "整理一下周报", {
+      dispatched: true,
+    });
     const b = await h.open(spanThread, from);
     await h.said(spanThread, b.turnId, "收到，预计 40 分钟。");
     await h.end(spanThread, b.turnId);
@@ -581,7 +628,9 @@ describe("external employees in the delivery loop", () => {
   test("edit diffs become a deliverable and pass the gate", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const work = h.say(threadId, "修一下登录页的校验");
+    const work = h.say(threadId, "修一下登录页的校验", {
+      dispatched: true,
+    });
     const { turnId } = await h.open(threadId, 0);
     await h.update(threadId, turnId, {
       sessionUpdate: "tool_call",
@@ -630,7 +679,9 @@ describe("external employees in the delivery loop", () => {
   test("a turn with no diff or attachment stays accepted and posts 它没交东西", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const work = h.say(threadId, "查一下为什么构建变慢了");
+    const work = h.say(threadId, "查一下为什么构建变慢了", {
+      dispatched: true,
+    });
     const { turnId } = await h.open(threadId, 0);
     await h.said(threadId, turnId, "我看了一下，还在查。");
     await h.end(threadId, turnId);
@@ -651,7 +702,9 @@ describe("external employees in the delivery loop", () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
     h.state.reachable = false;
-    const queued = h.say(threadId, "把旧接口下线");
+    const queued = h.say(threadId, "把旧接口下线", {
+      dispatched: true,
+    });
     await queued.done;
     const card = await h.cardOf(threadId);
     if (!card) throw new Error("no card");
@@ -697,7 +750,9 @@ describe("external employees in the delivery loop", () => {
   test("an employee repeating the rules back sets no due time", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const work = h.say(threadId, "把首页的按钮改成蓝色");
+    const work = h.say(threadId, "把首页的按钮改成蓝色", {
+      dispatched: true,
+    });
     const { turnId, content } = await h.open(threadId, 0);
     expect(content[0]).toEqual({ type: "text", text: externalProtocol() });
     // It says the rules back, examples and all, before it gives a time of its own.
@@ -717,7 +772,9 @@ describe("external employees in the delivery loop", () => {
   test("a words-only answer with 自查 is handed in, and is not nudged again", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const work = h.say(threadId, "查一下为什么构建变慢了");
+    const work = h.say(threadId, "查一下为什么构建变慢了", {
+      dispatched: true,
+    });
     const { turnId } = await h.open(threadId, 0);
     await h.said(
       threadId,
@@ -744,7 +801,9 @@ describe("external employees in the delivery loop", () => {
   test("「延到 18:00」 in the reply is its 延期申请", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const work = h.say(threadId, "把支付回调接上");
+    const work = h.say(threadId, "把支付回调接上", {
+      dispatched: true,
+    });
     const { turnId } = await h.open(threadId, 0);
     await h.said(
       threadId,
@@ -778,7 +837,9 @@ describe("external employees in the delivery loop", () => {
   test("「交不了，延到 18:00。自查：…」 is only a 延期申请, never a hand-in", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const work = h.say(threadId, "把支付回调接上");
+    const work = h.say(threadId, "把支付回调接上", {
+      dispatched: true,
+    });
     const { turnId } = await h.open(threadId, 0);
     await h.said(
       threadId,
@@ -802,7 +863,9 @@ describe("external employees in the delivery loop", () => {
   test("progress with a 自查 line is not a hand-in", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const work = h.say(threadId, "把导出改成异步");
+    const work = h.say(threadId, "把导出改成异步", {
+      dispatched: true,
+    });
     const { turnId } = await h.open(threadId, 0);
     await h.said(threadId, turnId, "还在改。\n自查：已经跑了一半测试。");
     await h.end(threadId, turnId);
@@ -823,7 +886,9 @@ describe("external employees in the delivery loop", () => {
       deliverySettleMs: 50,
     });
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const work = h.say(threadId, "把导出改成异步");
+    const work = h.say(threadId, "把导出改成异步", {
+      dispatched: true,
+    });
     const { turnId } = await h.open(threadId, 0);
     await h.said(threadId, turnId, "改好了。");
     await h.end(threadId, turnId);
@@ -837,7 +902,9 @@ describe("external employees in the delivery loop", () => {
   test("an overdue external card is nudged in its own words, naming no tool it does not have", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const work = h.say(threadId, "把发票导出做完");
+    const work = h.say(threadId, "把发票导出做完", {
+      dispatched: true,
+    });
     const first = await h.open(threadId, 0);
     await h.said(threadId, first.turnId, "已接下，预计 16:00 交。");
     await h.end(threadId, first.turnId);
@@ -890,10 +957,189 @@ describe("external employees in the delivery loop", () => {
     expect(handover).toContain("改动 2 个文件 · +10 −3");
   });
 
+  test("a plain question in its own conversation is not followed: no rules, no 它没交东西, never nudged or told", async () => {
+    const h = await harness();
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const asked = h.say(threadId, "这个报错是什么意思？");
+    const { turnId, content } = await h.open(threadId, 0);
+    // The question as asked, nothing in front of it.
+    expect(content).toEqual([{ type: "text", text: "这个报错是什么意思？" }]);
+    await h.said(threadId, turnId, "这是类型不匹配：把 a 改成数字就好。");
+    await h.end(threadId, turnId);
+    await asked.done;
+    expect(textOf(asked.events)).toContain("这是类型不匹配");
+    expect(textOf(asked.events)).not.toContain("它没交东西");
+
+    const [card] = await h.cards();
+    if (!card) throw new Error("the turn opened no card");
+    expect(card.tracked).toBe(false);
+    expect(stageOf(card)).toBeNull();
+    expect(card.acceptedAt).toBeNull();
+    expect(await h.history(card.id)).toEqual([]);
+
+    // Asked while the computer is away: queued, and still only a question.
+    h.state.reachable = false;
+    const later = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const queued = h.say(later, "顺便问下这个配置项干嘛的？");
+    await queued.done;
+    expect(textOf(queued.events)).toContain("已排队");
+    const waiting = await h.cards();
+    expect(waiting.map((row) => row.tracked)).toEqual([false, false]);
+
+    // Hours on: nobody is nudged, the person is told nothing.
+    for (const hours of [3, 6, 24])
+      await h.check(new Date(NOW.getTime() + hours * 60 * 60_000));
+    expect(h.nudges).toEqual([]);
+    expect(h.notices).toEqual([]);
+    expect(
+      h.down.filter(
+        (frame) =>
+          frame.type === "acp.prompt" &&
+          JSON.stringify(frame.content).includes(deliveryProtocol()),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a conversation the person follows (当作一件活来跟) walks the three steps from its next turn", async () => {
+    const h = await harness();
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const asked = h.say(threadId, "看看登录页为什么慢");
+    const one = await h.open(threadId, 0);
+    expect(one.content).toEqual([{ type: "text", text: "看看登录页为什么慢" }]);
+    await h.said(threadId, one.turnId, "主要是首屏请求太多。");
+    await h.end(threadId, one.turnId);
+    await asked.done;
+    const [card] = await h.cards();
+    if (!card) throw new Error("no card");
+    expect(card.tracked).toBe(false);
+
+    // What `POST /api/tasks/:id/track` does.
+    const followed = await delivery.track(
+      h.tenantId,
+      card.id,
+      `user:${h.tenantId}`,
+    );
+    expect(followed).toEqual({ ok: true, threadRef: threadId });
+    expect(stageOf((await h.cardOf(threadId)) ?? card)).toBe("pending_accept");
+
+    const from = h.down.length;
+    const next = h.say(threadId, "那就把请求合并一下");
+    const two = await h.open(threadId, from);
+    expect(two.content[0]).toEqual({ type: "text", text: externalProtocol() });
+    await until(
+      async () => (await h.cardOf(threadId))?.acceptedAt != null,
+      "accepted_at",
+    );
+    await h.said(threadId, two.turnId, "在改，还没好。");
+    await h.end(threadId, two.turnId);
+    await next.done;
+    expect(textOf(next.events)).toContain("它没交东西");
+    const taken = await h.cardOf(threadId);
+    expect(taken?.id).toBe(card.id);
+    expect(stageOf(taken ?? card)).toBe("accepted");
+    expect(await h.cards()).toHaveLength(1);
+    expect((await h.history(card.id)).map((row) => row.kind)).toEqual([
+      "dispatched",
+      "accepted",
+      "progress",
+      "run_ended",
+    ]);
+  });
+
+  test("work handed to it with @ in another conversation (派活) walks the three steps", async () => {
+    const h = await harness();
+    const channelId = `acpdl-ch-${randomUUID().slice(0, 8)}`;
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    // The real dispatch service, its real work queue and board; the conversation is another coworker's.
+    const dispatch = createChannelDispatch({
+      queue: createWorkQueue(database),
+      owner: `acpdl-dispatch-${suite}`,
+      board: projector,
+      channel: async () => ({
+        id: channelId,
+        threadId,
+        agentIds: ["acpdl-pinned"],
+      }),
+      bot: async (_actor, agentId) =>
+        agentId === h.agentId ? { id: h.agentId, name: "小码" } : null,
+      actorFor: async (id) => ({ id, role: "user" }),
+      runTurn: h.runTurn,
+    });
+    const submitted = await runAsTenant(h.tenantId, () =>
+      dispatch.submit({ id: h.tenantId, role: "user" }, channelId, {
+        id: `msg-${randomUUID()}`,
+        agentId: h.agentId,
+        text: "把发票导出做完",
+      }),
+    );
+    const ran = dispatch.sweep();
+    const turn = await h.open(threadId, 0);
+    expect(turn.content[0]).toEqual({ type: "text", text: externalProtocol() });
+    await h.said(threadId, turn.turnId, "已接下，预计 16:00 交。");
+    await h.end(threadId, turn.turnId);
+    expect(await ran).toBe(true);
+    const card = (await h.cards()).find((row) => row.id === submitted.taskId);
+    if (!card) throw new Error("the dispatch opened no card");
+    expect(card.tracked).toBe(true);
+    expect(card.threadRef).toBe(threadId);
+    expect(stageOf(card)).toBe("accepted");
+    expect(card.dueAt?.toISOString()).toBe("2026-11-16T08:00:00.000Z");
+    expect((await h.history(card.id)).map((row) => row.kind)).toEqual(
+      expect.arrayContaining(["dispatched", "accepted"]),
+    );
+  });
+
+  test("work asked of it in a group is followed; a peer's 转交 is not", async () => {
+    const h = await harness();
+    const groupTurn = createAcpGroupTurn({
+      turns,
+      relay: h.relay,
+      channel: { isReachable: () => false },
+      employeeFor: async () => h.employee,
+      delivery: h.acpDelivery,
+      log: () => undefined,
+    });
+    const groupThread = `acpdl-group-${randomUUID().slice(0, 8)}`;
+    const opened = async (runId: string) =>
+      runAsTenant(h.tenantId, () =>
+        projector.opened({
+          tenantId: h.tenantId,
+          title: "把发票导出做完",
+          executorAgentId: h.agentId,
+          source: "chat",
+          channelRef: `acpdl-group-channel-${suite}`,
+          runRef: runId,
+        }),
+      );
+    const asked = `acpdl-run-${randomUUID().slice(0, 8)}`;
+    const askedCard = await opened(asked);
+    await groupTurn({
+      agentId: h.agentId,
+      threadId: groupThread,
+      instruction: "@小码 把发票导出做完",
+      runId: asked,
+    });
+    const handed = `acpdl-run-${randomUUID().slice(0, 8)}`;
+    const handedCard = await opened(handed);
+    await groupTurn({
+      agentId: h.agentId,
+      threadId: `${groupThread}-hop`,
+      instruction: "@小码 你帮看下",
+      runId: handed,
+      initiator: { kind: "handoff" },
+    });
+    const byId = new Map((await h.cards()).map((row) => [row.id, row]));
+    expect(byId.get(askedCard)?.tracked).toBe(true);
+    expect(byId.get(askedCard)?.threadRef).toBe(groupThread);
+    expect(byId.get(handedCard)?.tracked).toBe(false);
+  });
+
   test("an offline, queued external card is still recorded overdue and its hirer told, but not nudged", async () => {
     const h = await harness();
     const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
-    const work = h.say(threadId, "把发票导出做完");
+    const work = h.say(threadId, "把发票导出做完", {
+      dispatched: true,
+    });
     const first = await h.open(threadId, 0);
     await h.said(threadId, first.turnId, "已接下，预计 16:00 交。");
     await h.end(threadId, first.turnId);
