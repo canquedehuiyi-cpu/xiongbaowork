@@ -518,7 +518,14 @@ export function createTaskRoutes(
     if (!(await cardIsHere(tenantId, taskId))) {
       return context.json({ error: "No such task here." }, 404);
     }
-    const ok = await projector.reviewed({ tenantId, taskId });
+    // A followed card's 验收 is written by `tasks/delivery.ts`, with its 「验收」 line.
+    const ok =
+      (await delivery.review(
+        tenantId,
+        taskId,
+        `user:${context.var.actor.id}`,
+        "review",
+      )) ?? (await projector.reviewed({ tenantId, taskId }));
     return ok
       ? context.json({ ok: true })
       : context.json({ error: "Not awaiting review." }, 409);

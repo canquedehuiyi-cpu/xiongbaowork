@@ -581,10 +581,15 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
               return null;
             })
         : undefined;
-    if (followed)
-      void this.delivery
-        .attachRun(tenant, followed.id, runId)
-        .catch((error) => console.error("task projection failed", error));
+    /*
+     * Hung on the card before the turn starts, as a card the turn opens is: an approval the round
+     * raises is filed under this run id, and the board finds the card by it once this write has landed.
+     */
+    const attached = followed
+      ? this.delivery
+          .attachRun(tenant, followed.id, runId)
+          .catch((error) => console.error("task projection failed", error))
+      : undefined;
     /*
      * A round of a followed card ends here, for the card this turn hangs on or for the card it opened
      * and followed while it ran (`accept_task`): its status stays, and the card records the round and
@@ -671,7 +676,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
           },
         }),
       );
-    return card ? from(card).pipe(switchMap(stream)) : stream();
+    const before = card ?? attached;
+    return before ? from(before).pipe(switchMap(stream)) : stream();
   }
 
   private async persist(

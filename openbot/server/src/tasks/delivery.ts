@@ -41,8 +41,9 @@ export type Delivery = {
     agentId: string,
   ): Promise<{ id: string } | null>;
   /**
-   * Hang a turn on the card. No row records the hanging itself -- the round's own line is written by
-   * {@link Delivery.runEnded}, with its run id -- but the card is touched so the board shows it moving.
+   * Hang a turn on the card: its `active_run_ref` names the run until the round ends, so an approval
+   * raised in the round (filed under the run id) parks this card. The round's own history line is
+   * written by {@link Delivery.runEnded}, with its run id.
    */
   attachRun(tenantId: string, taskId: string, runId: string): Promise<void>;
   /**
@@ -50,7 +51,8 @@ export type Delivery = {
    * (`deliver_task` is), and a round failing is not the work failing (spec §3). A failure records
    * `last_error` and `run_failed`; a success clears `last_error` and records `run_ended`. With a first
    * sentence, one `progress` line goes before it. Once per run: a second call for the same run writes
-   * nothing. A card that is not followed, or has ended, is not touched.
+   * nothing. A card that is not followed, or has ended, is not touched. `active_run_ref` is cleared
+   * when it still names this run.
    */
   runEnded(
     tenantId: string,
@@ -84,7 +86,7 @@ export type Delivery = {
     tenantId: string,
     taskId: string,
     actor: TaskEventActor,
-    via: "archive",
+    via: "archive" | "review",
   ): Promise<boolean | null>;
 };
 
@@ -112,11 +114,11 @@ export function createDelivery(database: Database): Delivery {
         return row ? { id: row.id } : null;
       }),
 
-    attachRun: (tenantId, taskId, _runId) =>
+    attachRun: (tenantId, taskId, runId) =>
       runAsTenant(tenantId, async () => {
         await database
           .update(tasks)
-          .set({ updatedAt: new Date() })
+          .set({ activeRunRef: runId, updatedAt: new Date() })
           .where(openTracked(tenantId, taskId));
       }),
 
@@ -131,7 +133,12 @@ export function createDelivery(database: Database): Delivery {
          */
         const [card] = await database
           .update(tasks)
-          .set({ lastError: error, updatedAt: new Date() })
+          .set({
+            lastError: error,
+            // The round is over; a later round of the card writes its own.
+            activeRunRef: sql`case when ${tasks.activeRunRef} = ${round.runId} then null else ${tasks.activeRunRef} end`,
+            updatedAt: new Date(),
+          })
           .where(
             and(
               openTracked(tenantId, taskId),

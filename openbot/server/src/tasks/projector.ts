@@ -1,5 +1,5 @@
 import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
-import { and, count, eq, lt, ne, sql } from "drizzle-orm";
+import { and, count, eq, lt, ne, or, sql } from "drizzle-orm";
 import { NOT_SHOWN } from "../../../shared/component-markers";
 import { attachmentIdsIn } from "../channels/attachment-parts";
 import { HEADLESS_COMPONENTS } from "../components/headless";
@@ -296,6 +296,14 @@ export function deliverableFromEvents(
   return deliverableRefOf({ components, attachments });
 }
 
+/**
+ * The card a run's facts belong to: the card the run opened (`run_ref`), or the followed card the run
+ * is a round of right now (`active_run_ref`, written by `tasks/delivery.ts`'s `attachRun`).
+ */
+function runOf(runRef: string) {
+  return or(eq(tasks.runRef, runRef), eq(tasks.activeRunRef, runRef));
+}
+
 export function createTaskProjector(
   database: Database,
   notify?: (tenantId: string) => void,
@@ -421,7 +429,8 @@ export function createTaskProjector(
     async needsAction(input) {
       return runAsTenant(input.tenantId, async () => {
         // A run that parks on an approval parks its task; the run id is the
-        // join because that is what the approval row already carries.
+        // join because that is what the approval row already carries. A round
+        // hung on a followed card is found by the card's `active_run_ref`.
         await database
           .update(tasks)
           .set({
@@ -432,7 +441,7 @@ export function createTaskProjector(
           .where(
             and(
               eq(tasks.tenantId, input.tenantId),
-              eq(tasks.runRef, input.runRef),
+              runOf(input.runRef),
               ne(tasks.status, "cancelled"),
               ...(input.pipelineRunId
                 ? [
@@ -450,7 +459,13 @@ export function createTaskProjector(
         await database
           .update(tasks)
           .set({
-            status: input.failed ? "failed" : "running",
+            /*
+             * A denial fails an untracked card's run, and with it the card. A followed card is not
+             * ended by one round: it goes back to its coworker (spec 2026-11-15-delivery-loop §3).
+             */
+            status: input.failed
+              ? sql`case when ${tasks.tracked} then 'running'::task_status else 'failed'::task_status end`
+              : "running",
             pendingApprovalId: null,
             updatedAt: new Date(),
           })
@@ -484,7 +499,7 @@ export function createTaskProjector(
           .where(
             and(
               eq(tasks.tenantId, input.tenantId),
-              eq(tasks.runRef, input.runRef),
+              runOf(input.runRef),
               eq(tasks.tracked, false),
               ne(tasks.status, "cancelled"),
               ...(input.onlyUnsettled

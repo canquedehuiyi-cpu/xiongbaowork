@@ -11,6 +11,8 @@ import { and, asc, eq, inArray, like } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
+import { createApprovalStore } from "../src/approvals/store";
+import { approvalAction } from "../src/approvals/types";
 import type { AppVariables } from "../src/auth/guards";
 import {
   createGroupConversations,
@@ -22,6 +24,7 @@ import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
   agents,
+  approvalRequests,
   channels,
   groupTaskRuns,
   intelligenceChannelMappings,
@@ -444,6 +447,111 @@ describe("one tracked piece of work, one card", () => {
     ).toBe(1);
   });
 
+  test("an approval raised in a round hung on a tracked card parks the card, and the decision brings it back", async () => {
+    const tenantId = await tenant("approval");
+    const agentId = `agent-${suite}-i`;
+    const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+    const approvals = createApprovalStore(database, projector);
+    const first = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "把报表写进项目目录",
+      events: reply("已接下。"),
+      during: acceptInTurn(tenantId, agentId, threadId),
+    });
+    const card = await cardOfRun(tenantId, first);
+    if (!card) throw new Error("no card");
+    await roundLogged(tenantId, card.id, first);
+
+    /** A later round that stops to ask, the way the approval gate files it: under the round's run id. */
+    const askingRound = async (label: string) => {
+      let approvalId = "";
+      const runId = await turn({
+        tenantId,
+        agentId,
+        threadId,
+        ask: `写入 ${label}`,
+        events: reply("需要你批准写文件。"),
+        during: async (round) => {
+          const opened = await runAsTenant(tenantId, () =>
+            approvals.open(
+              approvalAction({
+                actorId: tenantId,
+                botId: agentId,
+                toolRef: "computer_write_file",
+                effect: "write",
+                scope: "project",
+                args: { path: `${label}.txt`, contents: "saved" },
+                target: { filePath: `project/${label}.txt` },
+                continuation: {
+                  runId: round,
+                  threadId,
+                  toolCallId: `call-${label}-${suite}`,
+                  toolName: "computer_write_file",
+                  args: { path: `${label}.txt`, contents: "saved" },
+                  messages: [],
+                  state: {},
+                  context: [],
+                  forwardedProps: {},
+                },
+              }),
+            ),
+          );
+          approvalId = opened.id;
+          await until(
+            async () => (await cardsOf(tenantId, eq(tasks.id, card.id)))[0],
+            (row) => row?.pendingApprovalId === approvalId,
+          );
+        },
+      });
+      await roundLogged(tenantId, card.id, runId);
+      return { runId, approvalId };
+    };
+
+    const allowed = await askingRound("allow");
+    let [row] = await cardsOf(tenantId, eq(tasks.id, card.id));
+    // The round is over, and the card still waits on the person: the round ending does not move it.
+    expect(row?.status).toBe("needs_action");
+    expect(row?.pendingApprovalId).toBe(allowed.approvalId);
+    expect(row?.activeRunRef).toBeNull();
+    await runAsTenant(tenantId, () =>
+      approvals.decide(tenantId, allowed.approvalId, "allow_once"),
+    );
+    row = (
+      await until(
+        () => cardsOf(tenantId, eq(tasks.id, card.id)),
+        (rows) => rows[0]?.status === "running",
+      )
+    )[0];
+    expect(row?.status).toBe("running");
+    expect(row?.pendingApprovalId).toBeNull();
+
+    // A denial ends that round's action, not the work: a followed card never becomes `failed`.
+    const denied = await askingRound("deny");
+    await runAsTenant(tenantId, () =>
+      approvals.decide(tenantId, denied.approvalId, "deny"),
+    );
+    row = (
+      await until(
+        () => cardsOf(tenantId, eq(tasks.id, card.id)),
+        (rows) => rows[0]?.pendingApprovalId === null,
+      )
+    )[0];
+    expect(row?.status).toBe("running");
+    expect(
+      (await cardsOf(tenantId, eq(tasks.executorAgentId, agentId))).length,
+    ).toBe(1);
+
+    await runAsTenant(tenantId, () =>
+      database
+        .delete(approvalRequests)
+        .where(
+          inArray(approvalRequests.id, [allowed.approvalId, denied.approvalId]),
+        ),
+    );
+  });
+
   test("untracked cards keep one card per turn", async () => {
     const tenantId = await tenant("untracked");
     const agentId = `agent-${suite}-e`;
@@ -672,6 +780,53 @@ describe("one tracked piece of work, one card", () => {
     expect(again.status).toBe(409);
     expect(await eventsOf(tenantId, id)).toHaveLength(1);
   });
+});
+
+test("reviewing a tracked awaiting_review card logs reviewed", async () => {
+  const tenantId = await tenant("review");
+  const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
+    context,
+    next,
+  ) => {
+    context.set("actor", {
+      id: tenantId,
+      email: `${tenantId}@example.test`,
+      role: "user",
+    });
+    await next();
+  };
+  const routes = createTaskRoutes(database, requireUser, projector);
+  const id = randomUUID();
+  await runAsTenant(tenantId, () =>
+    database.insert(tasks).values({
+      id,
+      tenantId,
+      title: "等验收的活",
+      executorAgentId: `agent-${suite}-j`,
+      source: "chat",
+      status: "awaiting_review",
+      tracked: true,
+      threadRef: `thread-${suite}-review`,
+    }),
+  );
+  const review = () =>
+    runAsTenant(tenantId, () =>
+      routes.request(
+        new Request(`http://openbot.test/${id}/review`, { method: "POST" }),
+      ),
+    );
+  expect((await review()).status).toBe(200);
+  const [row] = await cardsOf(tenantId, eq(tasks.id, id));
+  expect(row?.status).toBe("done");
+  expect(
+    (await eventsOf(tenantId, id)).map((line) => [
+      line.kind,
+      line.actor,
+      line.detail,
+    ]),
+  ).toEqual([["reviewed", `user:${tenantId}`, { via: "review" }]]);
+  expect((await review()).status).toBe(409);
+  expect(await eventsOf(tenantId, id)).toHaveLength(1);
 });
 
 describe("first sentence of a reply", () => {

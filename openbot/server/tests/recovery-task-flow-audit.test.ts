@@ -354,6 +354,7 @@ const ADDED_AFTER_CAPSULE: Record<
       "last_error",
       "nudges",
       "returns",
+      "active_run_ref",
     ],
     indexes: [
       "tasks_channel_ref_idx",

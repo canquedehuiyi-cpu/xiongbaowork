@@ -112,6 +112,13 @@ export const tasks = pgTable(
     nudges: integer("nudges").notNull().default(0),
     /** How many times the person sent the work back. */
     returns: integer("returns").notNull().default(0),
+    /**
+     * The round running on a followed card right now, when it is not the run that opened it: written
+     * when a later turn hangs on the card, cleared when that round ends. An approval raised in that
+     * round names this run, and this is how the board finds the card it parks (one round per thread
+     * at a time, so one column is enough).
+     */
+    activeRunRef: text("active_run_ref"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
