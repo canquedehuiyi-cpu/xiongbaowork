@@ -1,6 +1,6 @@
 # 交付闭环：派出去的活，一件都不丢
 
-日期：2026-11-15 · 状态：定稿，待用户确认
+日期：2026-11-15 · 状态：用户已确认（2026-11-15「通过」）
 设计稿：https://claude.ai/artifact/RVcerNZLZcgPsKuzayCvKv （六屏：看板、任务卡详情、对话里的接活与交付、开工/收工清点、逾期催办、侧栏目标与外部员工规约；用户确认「可以，写成正式设计文档」）
 调研：`docs/research/2026-11-15-solo-to-team-skills.md`
 相关：对话侧栏（`docs/specs/2026-11-15-conversation-sidebar.md`）的「目标」块；外部员工（`docs/specs/2026-11-15-external-agents.md`）；IM 推送（规划中）。
