@@ -601,7 +601,7 @@ export function chooseOpenAIApi(
 type RuntimeAgentRow = {
   id: string;
   name: string;
-  type: "built_in" | "remote_ag_ui" | "remote_mastra";
+  type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
   configuration: unknown;
   title: string;
   roleDescription: string;

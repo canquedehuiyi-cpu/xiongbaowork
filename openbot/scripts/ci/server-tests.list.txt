@@ -363,6 +363,7 @@ tests/entra-profile.test.ts
 tests/env-alias-dockerfiles.test.ts
 tests/env-aliases.test.ts
 tests/env-name.test.ts
+tests/external-agents-schema.integration.test.ts
 tests/github-oauth-signup.test.ts
 tests/goal-conversation.integration.test.ts
 tests/goal-run-busy-conversation.integration.test.ts

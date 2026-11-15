@@ -1,4 +1,8 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import {
+  type ChildProcess,
+  type ChildProcessWithoutNullStreams,
+  spawn,
+} from "node:child_process";
 import { statSync } from "node:fs";
 import { homedir } from "node:os";
 import { win32 } from "node:path";
@@ -84,6 +88,15 @@ const PROTOCOL_VERSION = "2025-06-18";
 const DEFAULT_TIMEOUTS = { initMs: 20_000, listMs: 20_000, callMs: 120_000 };
 const RESULT_LIMIT_BYTES = 1_000_000;
 const STDERR_LIMIT_BYTES = 4096;
+/**
+ * The longest stdout line read from a child (characters of the decoded text). A longer one is never
+ * held whole: it is dropped as it streams in, logged, and, when it was a request to us, answered
+ * with a JSON-RPC error (a response to one of ours fails that call), so a runaway child cannot grow
+ * the runner's memory without bound.
+ */
+export const STDOUT_LINE_LIMIT = 64 * 1024 * 1024;
+/** How much of a dropped line is kept to find its `id` and `method`. */
+const DROPPED_HEAD = 4096;
 const MAX_LIST_PAGES = 10;
 const CLIENT_INFO = { name: "xiongbao-runner", version: "1" };
 
@@ -137,16 +150,19 @@ function rpcError(method: string, error: unknown): McpAppError {
 
 /**
  * The parent's environment without anything of ours (`XIONGBAO_*` carries the runner's token and
- * server settings), with the entry's own `env` laid over it. The entry's `env` is the owner's
- * choice, so it is applied as given.
+ * server settings) and without the names in `unset`, with the entry's own `env` laid over it. The
+ * entry's `env` is the owner's choice, so it is applied as given.
  */
 export function childEnv(
   parent: Record<string, string | undefined>,
   entryEnv: Record<string, string>,
+  unset: readonly string[] = [],
 ): Record<string, string> {
+  const dropped = new Set(unset);
   const env: Record<string, string> = {};
   for (const [key, value] of Object.entries(parent)) {
-    if (value === undefined || key.startsWith("XIONGBAO_")) continue;
+    if (value === undefined || key.startsWith("XIONGBAO_") || dropped.has(key))
+      continue;
     env[key] = value;
   }
   return { ...env, ...entryEnv };
@@ -183,7 +199,7 @@ function winEnvValue(
   return found;
 }
 
-function isFileOnDisk(path: string): boolean {
+export function isFileOnDisk(path: string): boolean {
   try {
     return statSync(path).isFile();
   } catch {
@@ -254,6 +270,20 @@ function commandNotFound(command: string): McpAppError {
 }
 
 /**
+ * What starting a child takes: a registered stdio app (`AppEntry` of kind `stdio`) is one, and so is
+ * an ACP agent's adapter (`acp/client.ts`). `runtime: "bundled"` is the device's own Bun (MCP apps).
+ */
+export type StdioLaunch = {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+  /** Variables of the parent's environment the child does not get (the entry's own `env` still applies). */
+  unsetEnv?: string[];
+  cwd?: string;
+  runtime?: "bundled";
+};
+
+/**
  * How to start a stdio app. On Windows the usual commands (`npx`, `bunx`, `uvx`) are `.cmd` shims
  * that `spawn` cannot run directly (ENOENT), so the whole command goes through
  * `cmd.exe /d /s /c "<each part quoted>"`. With `/s`, cmd drops the first and last quote of that
@@ -271,7 +301,7 @@ function commandNotFound(command: string): McpAppError {
  * be tested anywhere.
  */
 export function launchSpec(
-  entry: AppEntry,
+  entry: StdioLaunch | AppEntry,
   platform: NodeJS.Platform,
   env: Record<string, string | undefined>,
   isFile: (path: string) => boolean = isFileOnDisk,
@@ -284,7 +314,7 @@ export function launchSpec(
   env?: Record<string, string>;
   windowsVerbatimArguments?: boolean;
 } {
-  if (entry.kind !== "stdio") throw new Error("Only a stdio app is launched.");
+  if ("url" in entry) throw new Error("Only a stdio app is launched.");
   // --- app discovery (sub-project 3) ---
   // The device's own Bun: started directly, never through cmd.exe, and with the environment it needs.
   if (entry.runtime === "bundled") {
@@ -322,8 +352,40 @@ export function launchSpec(
  * working folder, which for the device app is its private data folder and means nothing to the
  * owner (and an app given a relative path should find it where the owner would look).
  */
-export function childCwd(entry: AppEntry, home: string): string {
-  return entry.kind === "stdio" && entry.cwd ? entry.cwd : home;
+export function childCwd(entry: StdioLaunch | AppEntry, home: string): string {
+  return "cwd" in entry && entry.cwd ? entry.cwd : home;
+}
+
+/**
+ * Takes down a child and everything it started: a group kill on POSIX (the child must have been
+ * spawned `detached`, so it leads its own group), `taskkill /T /F` on Windows. Nothing is done for a
+ * child that has already exited: its pid may belong to someone else by now.
+ */
+export function killProcessTree(child: ChildProcess): void {
+  const { pid } = child;
+  if (pid === undefined) return;
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === "win32") {
+    const systemRoot =
+      process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
+    const killer = spawn(
+      win32.join(systemRoot, "System32", "taskkill.exe"),
+      ["/PID", String(pid), "/T", "/F"],
+      { windowsHide: true, stdio: "ignore" },
+    );
+    killer.once("error", () => {
+      child.kill();
+    });
+    killer.once("close", (code) => {
+      if (code !== 0) child.kill();
+    });
+    return;
+  }
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // Already gone, or the group went with it.
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -336,7 +398,32 @@ type Pending = {
   method: string;
 };
 
-class StdioTransport implements Transport {
+/** A request (with `id`) or a notification the child sent us. */
+export type IncomingMessage = {
+  id?: string | number;
+  method: string;
+  params?: unknown;
+};
+
+/**
+ * What a protocol other than MCP changes about the stdio transport (ACP, `acp/client.ts`). Without
+ * them it is MCP's: `ping` is answered, any other request refused, notifications ignored, and a
+ * request that times out or is aborted is followed by `notifications/cancelled`.
+ */
+export type StdioHooks = {
+  /** Every request and notification from the child; requests are answered with `reply`. */
+  onMessage?: (message: IncomingMessage) => void;
+  /** The notice sent after a request of ours timed out or was aborted; `null` sends none. */
+  cancelNotice?:
+    | ((requestId: number, reason: string) => { method: string; params: Json })
+    | null;
+  /** Once, when the connection ends: closed by us, the child exited or could not start. */
+  onEnd?: () => void;
+  /** The longest stdout line read (`STDOUT_LINE_LIMIT`); longer ones are dropped. */
+  maxLineLength?: number;
+};
+
+export class StdioTransport implements Transport {
   private closing = false;
   private child: ChildProcessWithoutNullStreams;
   private nextId = 1;
@@ -345,14 +432,20 @@ class StdioTransport implements Transport {
   private ready = false;
   private stderr = Buffer.alloc(0);
   private buffer = "";
+  /** The head of a line over the limit still streaming in, which is being dropped; else null. */
+  private dropping: string | null = null;
+  private dropped = 0;
   private decoder = new TextDecoder("utf-8");
   private exited: Promise<void>;
   private stopping = false;
 
-  constructor(entry: AppEntry) {
-    if (entry.kind !== "stdio") throw new Error("stdio entry expected");
+  constructor(
+    entry: StdioLaunch,
+    private hooks: StdioHooks = {},
+  ) {
+    if ("url" in entry) throw new Error("stdio entry expected");
     // The command is looked up in the PATH the child will have, which the entry may extend.
-    const env = childEnv(process.env, entry.env);
+    const env = childEnv(process.env, entry.env, entry.unsetEnv);
     const spec = launchSpec(entry, process.platform, env);
     // --- app discovery (sub-project 3) ---
     // The runtime's own variables (BUN_BE_BUN) go over the entry's: without them it is not bun.
@@ -413,17 +506,78 @@ class StdioTransport implements Transport {
     this.dead = new McpAppError(kind, message, this.stderrTail());
     for (const pending of this.pending.values()) pending.reject(this.dead);
     this.pending.clear();
+    this.hooks.onEnd?.();
   }
 
   private onStdout(chunk: Buffer) {
-    this.buffer += this.decoder.decode(chunk, { stream: true });
+    const limit = this.hooks.maxLineLength ?? STDOUT_LINE_LIMIT;
+    let text = this.decoder.decode(chunk, { stream: true });
+    if (this.dropping !== null) {
+      // The rest of a line over the limit: thrown away up to its end.
+      const end = text.indexOf("\n");
+      if (end < 0) {
+        this.dropped += text.length;
+        return;
+      }
+      this.dropped += end;
+      this.onDropped(this.dropping, this.dropped);
+      this.dropping = null;
+      text = text.slice(end + 1);
+    }
+    this.buffer += text;
     let newline = this.buffer.indexOf("\n");
     while (newline >= 0) {
       const line = this.buffer.slice(0, newline).trim();
       this.buffer = this.buffer.slice(newline + 1);
       newline = this.buffer.indexOf("\n");
-      if (line) this.onLine(line);
+      if (line.length > limit)
+        this.onDropped(line.slice(0, DROPPED_HEAD), line.length);
+      else if (line) this.onLine(line);
     }
+    if (this.buffer.length > limit) {
+      this.dropping = this.buffer.slice(0, DROPPED_HEAD);
+      this.dropped = this.buffer.length;
+      this.buffer = "";
+    }
+  }
+
+  /**
+   * A line over the limit, gone: logged, and answered when its head shows a request to us (an
+   * error) or a response to one of ours (that call fails). Only the envelope before `params`,
+   * `result` or `error` is looked at, so an `id` inside the payload is not taken for the message's.
+   */
+  private onDropped(head: string, length: number) {
+    console.log(
+      `runner: dropped a ${length}-character line from an app's stdout, over the limit`,
+    );
+    const body = head.search(/"(params|result|error)"\s*:/);
+    const envelope = body < 0 ? head : head.slice(0, body);
+    const idMatch = /"id"\s*:\s*("(?:[^"\\]|\\.)*"|-?\d+)/.exec(envelope);
+    if (!idMatch?.[1]) return;
+    let id: string | number;
+    try {
+      id = JSON.parse(idMatch[1]) as string | number;
+    } catch {
+      return;
+    }
+    if (/"method"\s*:/.test(envelope)) {
+      this.write({
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32600, message: "Message over the size limit" },
+      });
+      return;
+    }
+    if (typeof id !== "number") return;
+    const pending = this.pending.get(id);
+    if (!pending) return;
+    this.pending.delete(id);
+    pending.reject(
+      new McpAppError(
+        "protocol",
+        `${pending.method} answered with a message over the limit (${length} characters).`,
+      ),
+    );
   }
 
   private onLine(line: string) {
@@ -442,6 +596,13 @@ class StdioTransport implements Transport {
       return;
     }
     const { id, method } = message;
+    if (typeof method === "string" && this.hooks.onMessage) {
+      const incoming: IncomingMessage = { method };
+      if (typeof id === "string" || typeof id === "number") incoming.id = id;
+      if (message.params !== undefined) incoming.params = message.params;
+      this.hooks.onMessage(incoming);
+      return;
+    }
     if (typeof method === "string") {
       // The app is asking us something. Answer `ping`, refuse the rest; notifications need nothing.
       if (id !== undefined) {
@@ -471,6 +632,14 @@ class StdioTransport implements Transport {
     this.child.stdin.write(`${JSON.stringify(message)}\n`);
   }
 
+  /** Answers a request the child sent (see `StdioHooks.onMessage`); nothing once it has gone. */
+  reply(
+    id: string | number,
+    answer: { result: unknown } | { error: { code: number; message: string } },
+  ) {
+    this.write({ jsonrpc: "2.0", id, ...answer });
+  }
+
   request(
     method: string,
     params: Json | undefined,
@@ -492,26 +661,33 @@ class StdioTransport implements Transport {
         this.pending.delete(id);
       };
       const cancel = (reason: string) => {
-        this.notify("notifications/cancelled", { requestId: id, reason }).catch(
-          () => {},
-        );
+        const notice =
+          this.hooks.cancelNotice === undefined
+            ? {
+                method: "notifications/cancelled",
+                params: { requestId: id, reason },
+              }
+            : this.hooks.cancelNotice?.(id, reason);
+        if (notice) this.notify(notice.method, notice.params).catch(() => {});
       };
       const onAbort = () => {
         settle();
         cancel("aborted");
         reject(abortError());
       };
-      timer = setTimeout(() => {
-        settle();
-        cancel("timeout");
-        reject(
-          new McpAppError(
-            "timeout",
-            `${method} did not answer within ${timeoutMs} ms.`,
-            this.stderrTail(),
-          ),
-        );
-      }, timeoutMs);
+      // No time limit at all: a turn may wait hours for the owner's approval.
+      if (Number.isFinite(timeoutMs))
+        timer = setTimeout(() => {
+          settle();
+          cancel("timeout");
+          reject(
+            new McpAppError(
+              "timeout",
+              `${method} did not answer within ${timeoutMs} ms.`,
+              this.stderrTail(),
+            ),
+          );
+        }, timeoutMs);
       signal?.addEventListener("abort", onAbort, { once: true });
       this.pending.set(id, {
         method,
@@ -554,32 +730,11 @@ class StdioTransport implements Transport {
 
   /** The whole process tree: a group kill on POSIX, `taskkill /T /F` on Windows. */
   private stop() {
-    const { pid } = this.child;
-    if (pid === undefined || this.stopping) return;
+    if (this.stopping) return;
     // Already exited: its pid may belong to someone else by now.
     if (this.child.exitCode !== null || this.child.signalCode !== null) return;
     this.stopping = true;
-    if (process.platform === "win32") {
-      const systemRoot =
-        process.env.SystemRoot ?? process.env.SYSTEMROOT ?? "C:\\Windows";
-      const killer = spawn(
-        win32.join(systemRoot, "System32", "taskkill.exe"),
-        ["/PID", String(pid), "/T", "/F"],
-        { windowsHide: true, stdio: "ignore" },
-      );
-      killer.once("error", () => {
-        this.child.kill();
-      });
-      killer.once("close", (code) => {
-        if (code !== 0) this.child.kill();
-      });
-      return;
-    }
-    try {
-      process.kill(-pid, "SIGKILL");
-    } catch {
-      // Already gone, or the group went with it.
-    }
+    killProcessTree(this.child);
   }
 }
 

@@ -211,7 +211,7 @@ test("compiled with --data-dir: a new device pairs as a UUID, lists its files, a
   const tmp = emptyDir("a-tmp");
   // Not created beforehand: the runner makes it.
   const dataDir = join(root, "a-data", "nested");
-  const { code } = await memory.store.mintPairCode(TENANT);
+  const { code } = await memory.store.mintPairCode(TENANT, TENANT);
 
   const child = startRunner(
     ["--pair", code, "--data-dir", dataDir, "--name", "package-test"],
@@ -280,7 +280,7 @@ test("compiled with OPENBOT_RUNNER_DATA_DIR: a state file from before stage 0 co
   const tmp = emptyDir("b-tmp");
   const dataDir = emptyDir("b-data");
   const oldId = "old-laptop-1a2b3c4d";
-  const { code } = await memory.store.mintPairCode(TENANT);
+  const { code } = await memory.store.mintPairCode(TENANT, TENANT);
   const paired = await memory.store.redeemPairCode({
     code,
     deviceId: oldId,
@@ -321,7 +321,7 @@ test("compiled with neither: the runner keeps today's layout in the directory it
   const launch = emptyDir("c-launch");
   const home = emptyDir("c-home");
   const tmp = emptyDir("c-tmp");
-  const { code } = await memory.store.mintPairCode(TENANT);
+  const { code } = await memory.store.mintPairCode(TENANT, TENANT);
 
   const child = startRunner(["--pair", code, "--name", "default-layout"], {
     cwd: launch,
@@ -421,7 +421,7 @@ test("compiled: a dropped connection is reported as such and dialled again", asy
   const home = emptyDir("d-home");
   const tmp = emptyDir("d-tmp");
   const dataDir = emptyDir("d-data");
-  const { code } = await memory.store.mintPairCode(TENANT);
+  const { code } = await memory.store.mintPairCode(TENANT, TENANT);
 
   const child = startRunner(
     ["--pair", code, "--data-dir", dataDir, "--name", "dropped"],

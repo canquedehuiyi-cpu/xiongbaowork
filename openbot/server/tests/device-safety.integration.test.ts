@@ -241,7 +241,7 @@ test("unknown online outcomes block fresh identities across replicas until the o
       }),
   );
   const store = createDeviceStore(database);
-  const code = await store.mintPairCode(target.tenantId);
+  const code = await store.mintPairCode(target.tenantId, target.tenantId);
   const registered = await store.redeemPairCode({
     code: code.code,
     deviceId: target.deviceId,
@@ -453,7 +453,7 @@ test("real runner sockets stop after removal, credential rotation, ban, or owner
       validationIntervalMs: 10,
     });
     const pair = async () => {
-      const code = await store.mintPairCode(target.tenantId);
+      const code = await store.mintPairCode(target.tenantId, target.tenantId);
       const paired = await store.redeemPairCode({
         code: code.code,
         deviceId: target.deviceId,

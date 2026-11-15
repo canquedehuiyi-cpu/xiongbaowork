@@ -36,6 +36,8 @@ export type DeviceRecord = {
   platform: string | null;
   lastSeenAt: Date | null;
   online: boolean;
+  /** Who minted the pair code that admitted this machine; null for a machine paired before this was recorded. */
+  pairedByUserId: string | null;
   /** The read-only folders the machine offers (story F1, stage 2): a reference and a name, no path. */
   roots: DeviceRoot[];
   /** The local apps (MCP) the machine offers: a reference and a name, no command or path. */
@@ -123,6 +125,7 @@ export type DeviceStore = {
   /** A code for the person's screen, minted under their own tenant. */
   mintPairCode: (
     tenantId: string,
+    mintedByUserId: string,
   ) => Promise<{ code: string; expiresAt: Date }>;
   /**
    * Turn a code into a device, and return the token exactly once.
@@ -258,6 +261,7 @@ const record = (row: {
   name: string;
   platform: string | null;
   lastSeenAt: Date | null;
+  pairedByUserId?: string | null;
   roots?: DeviceRoot[] | null;
   apps?: DeviceApp[] | null;
   createdAt?: Date;
@@ -267,6 +271,7 @@ const record = (row: {
   name: row.name,
   platform: row.platform,
   lastSeenAt: row.lastSeenAt,
+  pairedByUserId: row.pairedByUserId ?? null,
   roots: reportedRoots(row.roots) ?? [],
   apps: reportedApps(row.apps) ?? [],
   online:
@@ -320,11 +325,13 @@ export function createDeviceStore(
    * nothing of — and "nothing" arriving quietly is how a device ends up permanently offline.
    */
   return {
-    async mintPairCode(tenantId) {
+    async mintPairCode(tenantId, mintedByUserId) {
       const code = mintCode();
       const expiresAt = new Date(Date.now() + CODE_TTL_MS);
       await runAsTenant(tenantId, () =>
-        database.insert(devicePairCodes).values({ code, tenantId, expiresAt }),
+        database
+          .insert(devicePairCodes)
+          .values({ code, tenantId, mintedByUserId, expiresAt }),
       );
       return { code, expiresAt };
     },
@@ -351,7 +358,10 @@ export function createDeviceStore(
                 gt(devicePairCodes.expiresAt, new Date()),
               ),
             )
-            .returning({ tenantId: devicePairCodes.tenantId });
+            .returning({
+              tenantId: devicePairCodes.tenantId,
+              mintedByUserId: devicePairCodes.mintedByUserId,
+            });
           if (!code) return null;
           // A refusal rolls the code claim back too. Re-pairing an existing id consumes no new seat.
           if (quota) {
@@ -387,6 +397,7 @@ export function createDeviceStore(
               deviceId: input.deviceId,
               name: input.name,
               platform: input.platform,
+              pairedByUserId: code.mintedByUserId,
               tokenHash: hashDeviceToken(token),
               lastSeenAt: new Date(),
             })
@@ -395,6 +406,7 @@ export function createDeviceStore(
               set: {
                 name: input.name,
                 platform: input.platform,
+                pairedByUserId: code.mintedByUserId,
                 tokenHash: hashDeviceToken(token),
                 lastSeenAt: new Date(),
                 updatedAt: new Date(),

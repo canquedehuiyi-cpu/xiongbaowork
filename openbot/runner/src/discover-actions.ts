@@ -1,4 +1,10 @@
 import { readFileSync, statSync } from "node:fs";
+import {
+  type AgentProbeDeps,
+  discoverAgents,
+  machineProbeDeps,
+} from "./acp/discover";
+import { acpProcessEnv } from "./acp/login-path";
 import { AppHostError, type createAppHost } from "./app-host";
 import {
   APP_NAME_LIMIT,
@@ -44,6 +50,8 @@ import { McpAppError, resolveWindowsCommand } from "./mcp-client";
 export const DISCOVER_ACTIONS: ReadonlySet<string> = new Set([
   "apps.discover",
   "apps.enable",
+  // External agents (acp/discover.ts): only reads, and only booleans and a version leave.
+  "agents.discover",
 ]);
 
 export type DiscoverActions = (
@@ -169,6 +177,8 @@ export function createDiscoverActions(opts: {
    * this machine and goes nowhere else; never for what the server asks.
    */
   detailedErrors?: boolean;
+  /** How `agents.discover` looks at this machine; the real one when absent. */
+  agents?: AgentProbeDeps;
 }): DiscoverActions {
   const env = opts.deps?.env ?? process.env;
   const deps: DiscoverDeps = {
@@ -314,7 +324,16 @@ export function createDiscoverActions(opts: {
         enabling = outcome.catch(() => {});
         return await outcome;
       }
-      const outcome = await discover(body);
+      const outcome =
+        action === "agents.discover"
+          ? {
+              ok: true as const,
+              output: await discoverAgents(
+                // The login shell's PATH too: what Finder-opened apps miss on macOS.
+                opts.agents ?? machineProbeDeps(await acpProcessEnv()),
+              ),
+            }
+          : await discover(body);
       // Only reads were done, so a stop is a plain failure: nothing to check on the device.
       return signal?.aborted ? { ok: false, error: STOPPED } : outcome;
     } catch (error) {

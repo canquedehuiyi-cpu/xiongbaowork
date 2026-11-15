@@ -273,7 +273,7 @@ type TenantAgent = {
   persona?: Persona;
   /** Its department (`department:`, at most 32 characters), carried to a summoned copy; unset means none. */
   department?: string;
-  type: "built_in" | "remote_ag_ui" | "remote_mastra";
+  type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
   configuration: Record<string, unknown>;
   /**
    * The package skills this coworker is given, by slug.

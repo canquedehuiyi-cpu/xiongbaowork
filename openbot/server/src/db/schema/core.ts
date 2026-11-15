@@ -34,6 +34,9 @@ export const agentType = pgEnum("agent_type", [
   // A Mastra server, reached through `@ag-ui/mastra` rather than an AG-UI route of its own. Governed
   // identically: the difference ends at `remoteTransport`. See migration 0028.
   "remote_mastra",
+  // An external ACP agent (Codex, Claude Code, Hermes) running on one of the tenant's own devices,
+  // driven through the device channel rather than a URL. See migration 0215.
+  "device_acp",
 ]);
 export const credentialKind = pgEnum("credential_kind", [
   "model",

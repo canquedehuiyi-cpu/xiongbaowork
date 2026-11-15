@@ -68,6 +68,11 @@ export const registeredDevices = pgTable(
      * An older runner reports nothing and this stays empty.
      */
     apps: jsonb("apps").$type<DeviceApp[]>().notNull().default([]),
+    /**
+     * The person who paired this machine (migration 0215): the owner an external ACP agent running
+     * on it answers to. Null for a device paired before 0215 in a tenant with more than one user.
+     */
+    pairedByUserId: text("paired_by_user_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -115,6 +120,8 @@ export const devicePairCodes = pgTable(
     createdAt: createdAt(),
     /** The device this code admitted, kept so a spent code still explains the machine it made. */
     deviceId: text("device_id"),
+    /** The signed-in person who minted this code; becomes the device's `pairedByUserId`. */
+    mintedByUserId: text("minted_by_user_id"),
   },
   (table) => [
     index("device_pair_codes_tenant_idx").on(table.tenantId),

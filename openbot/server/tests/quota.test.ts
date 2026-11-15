@@ -139,7 +139,7 @@ const makeCoworker = (name: string) => {
 
 /** A pairing code as the owner's screen mints one. */
 async function pairCode(): Promise<string> {
-  return (await deviceStore.mintPairCode(tenant)).code;
+  return (await deviceStore.mintPairCode(tenant, tenant)).code;
 }
 
 await runAsTenant("platform", async () => {

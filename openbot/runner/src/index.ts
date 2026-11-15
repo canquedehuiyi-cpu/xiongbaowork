@@ -18,6 +18,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { hostname, platform, tmpdir } from "node:os";
 import { dirname, join, resolve, sep } from "node:path";
 import { APP_REF, type AppEntry, type AppInput, createAppRegistry } from "./apps";
+import { type AcpHost, createAcpHost } from "./acp/host";
 import { createAppHost } from "./app-host";
 import { createRunnerBrowser, type RunnerBrowser } from "./browser";
 import {
@@ -114,6 +115,11 @@ const DESKTOP_ENGINES: ReadonlySet<string> = new Set<DesktopEngine>([
   "legacy",
   "agent-desktop",
 ]);
+
+/** Where the external employees' adapters start (acp/manifest.ts): a folder of the runner's own. */
+export function acpAdapterDir(dataDir: string): string {
+  return join(dataDir, "acp-adapters");
+}
 
 /** Where agent-desktop's state lives inside the data directory. */
 function desktopStateDir(dataDir: string): string {
@@ -455,6 +461,8 @@ function runnerPrivatePaths(paths: RunnerPaths, profileRoot: string): string[] {
     // Control names and the values of fields agent-desktop read.
     desktopStateDir(paths.dataDir),
     // --- end desktop control ---
+    // A shared folder there could plant an `.npmrc` or `node_modules` for the adapters.
+    acpAdapterDir(paths.dataDir),
     ...(paths.explicitDataDir ? [paths.dataDir] : []),
   ];
 }
@@ -971,6 +979,7 @@ function connect(
   roots: RootRegistry,
   apps: ReturnType<typeof createAppRegistry>,
   desktop: DesktopBeat,
+  acp: AcpHost,
 ): Promise<void> {
   return new Promise((resolve) => {
     const url = `${options.server.replace(/^http/, "ws")}/api/runner/ws?token=${encodeURIComponent(token)}`;
@@ -992,6 +1001,8 @@ function connect(
       if (beat) clearInterval(beat);
       desktop.now = undefined;
       void screens.stopAll();
+      // The external agents keep working; what they say waits in the host for the next connection.
+      acp.detach();
       // Said once per connection that was up. A desktop shell reads these lines for its tray
       // (desktop-device/src-tauri/src/supervise.rs `classify`): without it, a dropped connection would
       // look online until the next dial failed, which can be half a minute away.
@@ -1018,6 +1029,8 @@ function connect(
             apps,
             desktop.sessions,
           );
+          // Its ack proves the external agents' frames sent before it arrived (acp/host.ts).
+          acp.heartbeatSent();
         } catch {
           stop();
         }
@@ -1025,6 +1038,12 @@ function connect(
       sendBeat();
       beat = setInterval(sendBeat, options.intervalMs);
       desktop.now = sendBeat;
+      // A throw keeps the frame in the host: a socket that is closing would drop it without one.
+      acp.attach((frame) => {
+        if (socket.readyState !== WebSocket.OPEN)
+          throw new Error("The runner socket is not open.");
+        socket.send(JSON.stringify(frame));
+      });
     });
     socket.addEventListener("message", (event) => {
       const text = String(event.data);
@@ -1034,6 +1053,7 @@ function connect(
         dispatch,
         `${options.server}/${deviceId}`,
         screens,
+        acp,
       );
     });
     socket.addEventListener("close", stop);
@@ -1173,6 +1193,17 @@ export async function main(
     },
   );
   running = executor;
+  /*
+   * The external employees' adapters (acp/host.ts). One host for the whole run: it outlives each
+   * connection, so a turn keeps going while the network is away. Working folders are the shared
+   * folders the heartbeat reports; a custom agent is a registered app.
+   */
+  const acpHost = createAcpHost({
+    roots: (ref) => roots.list().find((root) => root.ref === ref)?.path ?? null,
+    apps: (ref) => apps.byRef(ref) ?? null,
+    adapterDir: acpAdapterDir(parsed.paths.dataDir),
+  });
+  runningAcp = acpHost;
 
   // Backoff between dials, capped: a deployment that is down should cost one request every half
   // minute, not one per second for a day.
@@ -1189,6 +1220,7 @@ export async function main(
       roots,
       apps,
       desktopBeat,
+      acpHost,
     );
     await new Promise((resolve) => setTimeout(resolve, delay));
     delay = Math.min(delay * 2, 30_000);
@@ -1199,6 +1231,7 @@ export async function main(
 const SHUTDOWN_BUDGET_MS = 8_000;
 
 let running: RunnerExecutor | undefined;
+let runningAcp: AcpHost | undefined;
 let stopping = false;
 
 /**
@@ -1227,6 +1260,7 @@ async function shutDown(reason: string): Promise<void> {
         // --- desktop control (sub-project 2) ---
         running?.closeDesktop() ?? Promise.resolve(),
         // --- end desktop control ---
+        runningAcp?.closeAll() ?? Promise.resolve(),
       ]),
       budget,
     ]);
@@ -1248,6 +1282,7 @@ async function handleFrame(
   dispatch: ReturnType<typeof createRunnerDispatcher>,
   scope: string,
   screens: ReturnType<typeof createRunnerScreens>,
+  acp: AcpHost,
 ): Promise<void> {
   let frame: {
     type?: unknown;
@@ -1266,8 +1301,16 @@ async function handleFrame(
     console.log(`runner: the deployment said ${JSON.stringify(frame)}`);
     return;
   }
+  // A heartbeat's answer: what the external agents sent before that beat has arrived.
+  if (frame.type === "ack") {
+    acp.acked();
+    return;
+  }
   // The live screen is not an action: nothing is journalled, and nothing is answered with a result.
   if (await screens.handle(frame as Record<string, unknown>).catch(() => true))
+    return;
+  // Nor are the external agents' frames (acp/host.ts): they answer with acp.* frames of their own.
+  if (await acp.handle(frame as Record<string, unknown>).catch(() => true))
     return;
   try {
     await dispatch(scope, frame as Record<string, unknown>, (result) =>

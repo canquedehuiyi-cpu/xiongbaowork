@@ -111,7 +111,7 @@ async function pairedDevice(
       .values({ id: tenant, email: `${tenant}@example.test`, name: "Owner" }),
   );
   const deviceStore = createDeviceStore(database);
-  const code = await deviceStore.mintPairCode(tenant);
+  const code = await deviceStore.mintPairCode(tenant, tenant);
   const paired = await deviceStore.redeemPairCode({
     code: code.code,
     deviceId: "studio",

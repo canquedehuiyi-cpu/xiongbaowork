@@ -7275,7 +7275,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       return null;
     },
 
-    /** 员工的类型（`built_in` / `remote_ag_ui` / `remote_mastra`）；这一帧看不见或不存在时为 undefined。 */
+    /** 员工的类型（`built_in` / `remote_ag_ui` / `remote_mastra` / `device_acp`）；这一帧看不见或不存在时为 undefined。 */
     async agentType(agentId: string): Promise<string | undefined> {
       const [row] = await database
         .select({ type: agents.type })

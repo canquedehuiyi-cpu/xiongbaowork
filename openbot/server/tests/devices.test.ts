@@ -84,6 +84,7 @@ type DeviceRow = {
   platform: string | null;
   lastSeenAt: string | null;
   online: boolean;
+  pairedByUserId: string | null;
 };
 
 /** Pair a machine end to end, the way the runner does it: mint, then spend. */
@@ -226,6 +227,33 @@ test("no token and a token that is not a device both get 401", async () => {
     token: "sk-somebody-elses-key",
   });
   expect(wrongShape.status).toBe(401);
+});
+
+test("a device remembers who minted its pair code", async () => {
+  const { device } = await pair(`${suite}-owned`);
+  expect(device.pairedByUserId).toBe(tenant);
+  const listed = await store.list(tenant);
+  expect(
+    listed.find((row) => row.deviceId === `${suite}-owned`)?.pairedByUserId,
+  ).toBe(tenant);
+});
+
+test("re-pairing by another person moves the owner", async () => {
+  const deviceId = `${suite}-moved`;
+  for (const person of ["person-a", "person-b"]) {
+    const minted = await store.mintPairCode(tenant, person);
+    const paired = await store.redeemPairCode({
+      code: minted.code,
+      deviceId,
+      name: "Shared box",
+      platform: null,
+    });
+    expect(paired?.device.pairedByUserId).toBe(person);
+  }
+  const listed = await store.list(tenant);
+  const rows = listed.filter((row) => row.deviceId === deviceId);
+  expect(rows.length).toBe(1);
+  expect(rows[0]?.pairedByUserId).toBe("person-b");
 });
 
 test("re-pairing the same machine replaces its token rather than adding a device", async () => {

@@ -143,7 +143,11 @@ function setup(
 }
 
 test("apps.discover answers candidates and installed through the executor", async () => {
-  expect([...DISCOVER_ACTIONS]).toEqual(["apps.discover", "apps.enable"]);
+  expect([...DISCOVER_ACTIONS]).toEqual([
+    "apps.discover",
+    "apps.enable",
+    "agents.discover",
+  ]);
   const { execute } = setup();
   const outcome = await execute({ action: "apps.discover", payload: {} });
   expect(outcome).toEqual({
