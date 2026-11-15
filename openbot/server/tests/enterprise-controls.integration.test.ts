@@ -12,6 +12,7 @@ import {
   installEnterpriseControls,
   skillSharingAllowed,
   skillSharingInSnapshot,
+  summaryCallRefusal,
 } from "../src/admin/controls";
 import { createEnterpriseGate } from "../src/admin/gate";
 import { createEnterpriseAdminRoutes } from "../src/admin/routes";
@@ -42,12 +43,12 @@ import {
   teamBotPublications,
   users,
 } from "../src/db/schema";
+import { TEAM_TENANT } from "../src/db/schema/tenant";
 import {
   createHostAccessBroker,
   HostAccessRefusedError,
 } from "../src/host-access/broker";
 import { hostAccessTools } from "../src/host-access/tools";
-import { TEAM_TENANT } from "../src/db/schema/tenant";
 import { createTurnRunner } from "../src/routines/run-turn";
 import { createTeamBots } from "../src/team-bots/team-bots";
 import { runAsTenant } from "../src/tenant/context";
@@ -209,6 +210,12 @@ function appFor(actor: { id: string; email: string; role: "admin" | "user" }) {
     context.json({ ok: true }),
   );
   app.patch("/api/agents/:id", (context) => context.json({ saved: true }));
+  app.post("/api/threads/:id/compact", (context) =>
+    context.json({ compacted: true }),
+  );
+  app.post("/api/channels/:id/compact", (context) =>
+    context.json({ compacted: true }),
+  );
   // Mounted the way app.ts mounts the CopilotKit runtime: a basePath sub-app that takes every path
   // under it. The runtime then matches a run by its TRAILING segments (fetch-router `matchSegments`:
   // `.../agent/<id>/run` anywhere under the base), so this stub answers whatever path reaches it.
@@ -753,6 +760,85 @@ describe("headless turns obey the same switches", () => {
       });
     }
     expect(ran).toBe(0);
+  });
+});
+
+describe("conversation compaction obeys the same switches", () => {
+  test("the gate refuses both compaction routes without Use Bots", async () => {
+    const compact = (path: string) =>
+      asMember.request(path, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ agentId: bot }),
+      });
+    expect((await compact("/api/threads/t-1/compact")).status).toBe(200);
+    await put(asAdmin, "/api/admin/enterprise/capabilities", {
+      scopeKind: "organization",
+      capability: "useBots",
+      allowed: false,
+    });
+    try {
+      for (const path of [
+        "/api/threads/t-1/compact",
+        "/api/channels/c-1/compact",
+      ]) {
+        const refused = await compact(path);
+        expect(refused.status).toBe(403);
+        expect((await refused.json()).capability).toBe("useBots");
+      }
+      // 不经过 gate 的自动压缩，由同一个检查拒绝。
+      expect(
+        await asMemberTenant(() =>
+          summaryCallRefusal({
+            ownerUserId: member.id,
+            agentId: bot,
+            threadId: `thread-${suite}`,
+          }),
+        ),
+      ).toEqual({ reason: "use_bots" });
+    } finally {
+      await put(asAdmin, "/api/admin/enterprise/capabilities", {
+        scopeKind: "organization",
+        capability: "useBots",
+        allowed: true,
+      });
+    }
+  });
+
+  test("the allowlist judges the model the summary actually calls, not the conversation's pick", async () => {
+    await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
+      value: { enabled: true, models: ["openai/gpt-picked"] },
+    });
+    // 这一轮选的模型在白名单里，但总结用的是部署默认模型（员工没绑模型），它不在。
+    pickedModels.set(`thread-${suite}`, "gpt-picked");
+    try {
+      expect(
+        await asMemberTenant(() =>
+          summaryCallRefusal({
+            ownerUserId: member.id,
+            agentId: bot,
+            threadId: `thread-${suite}`,
+          }),
+        ),
+      ).toEqual({ reason: "model", model: "openai/gpt-test" });
+      await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
+        value: { enabled: true, models: ["openai/gpt-test"] },
+      });
+      expect(
+        await asMemberTenant(() =>
+          summaryCallRefusal({
+            ownerUserId: member.id,
+            agentId: bot,
+            threadId: `thread-${suite}`,
+          }),
+        ),
+      ).toBeNull();
+    } finally {
+      pickedModels.clear();
+      await put(asAdmin, "/api/admin/enterprise/settings/modelAllowlist", {
+        value: { enabled: false, models: [] },
+      });
+    }
   });
 });
 

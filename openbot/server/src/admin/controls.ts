@@ -1412,6 +1412,70 @@ export async function headlessTurnRefusal(input: {
   }
 }
 
+/** Why a model call a person starts outside a run was refused. See {@link summaryCallRefusal}. */
+export type SummaryCallRefusal =
+  | { reason: "use_bots" }
+  | { reason: "model"; model: string }
+  | { reason: "unchecked" };
+
+/**
+ * Whether the conversation-compaction summary (`threads/compaction.ts`) may call this Bot's model for
+ * this person, judged as {@link headlessTurnRefusal} judges a turn: "Use Bots", then the model
+ * allowlist. The model judged is the one the summary actually calls — the Bot's bound model, else the
+ * deployment's ({@link EnterpriseDeps.builtInModel}); never the conversation's pick, which the summary
+ * does not use. A refused model leaves a refused usage row and a `model.refused` audit row, as a
+ * refused turn does. Fails closed (`unchecked`) when the controls cannot be read; null without them.
+ */
+export async function summaryCallRefusal(input: {
+  ownerUserId: string;
+  agentId: string;
+  threadId: string;
+}): Promise<SummaryCallRefusal | null> {
+  const controls = installed;
+  if (!controls) return null;
+  try {
+    if (!(await controls.capabilityFor(input.ownerUserId, "useBots")))
+      return { reason: "use_bots" };
+    const allowlist = controls.snapshot()?.settings.modelAllowlist;
+    if (!allowlist?.enabled) return null;
+    const bound = await modelBoundFor(controls, input.agentId);
+    const model = bound ?? controls.deps.builtInModel;
+    if (!model || allowlist.models.includes(model)) return null;
+    await controls.store
+      .recordModelUsage({
+        userId: input.ownerUserId,
+        agentId: input.agentId,
+        threadId: input.threadId,
+        runId: null,
+        model,
+        source: bound ? "bound" : "configured",
+        allowed: false,
+      })
+      .catch(() => undefined);
+    await recordAuditEvent(controls.deps.auditStore, {
+      eventType: "model.refused",
+      targetType: "agent",
+      targetId: input.agentId,
+      actorUserId: input.ownerUserId,
+      payload: {
+        model,
+        source: bound ? "bound" : "configured",
+        compaction: true,
+      },
+    }).catch(() => undefined);
+    return { reason: "model", model };
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        type: "summary-capability-check-failed",
+        agentId: input.agentId,
+        error: String(error),
+      }),
+    );
+    return { reason: "unchecked" };
+  }
+}
+
 /** See {@link EnterpriseDeps.agentModelName}: the bound model this Bot's run will speak, or null. */
 async function modelBoundFor(
   controls: EnterpriseControls,

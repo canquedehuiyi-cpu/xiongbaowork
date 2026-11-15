@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { ConversationSidebar } from "@openbot/shared/conversation-sidebar";
+import { SQL } from "bun";
 import { inArray } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import type { AppVariables } from "../src/auth/guards";
@@ -102,8 +103,31 @@ afterAll(async () => {
       .where(inArray(credentials.tenantId, people));
     await database.delete(users).where(inArray(users.id, people));
   });
+  for (const id of poolIds)
+    await admin`delete from platform_model_pool where id = ${id}`;
+  await admin.close();
   await database.$client.close();
 });
+
+/** platform_model_pool 应用角色只读，运维用库主人写；同 platform-model-pool 测试的做法。 */
+function ownerConnection(): SQL {
+  const raw = process.env.TEST_DATABASE_ADMIN_URL?.trim();
+  if (!raw)
+    throw new Error("TEST_DATABASE_ADMIN_URL must name the database owner.");
+  const adminUrl = new URL(raw);
+  const target = new URL(testDatabaseUrl());
+  return new SQL({
+    adapter: "postgres",
+    hostname: adminUrl.hostname,
+    port: adminUrl.port ? Number(adminUrl.port) : 5432,
+    username: decodeURIComponent(adminUrl.username),
+    password: decodeURIComponent(adminUrl.password),
+    database: decodeURIComponent(target.pathname.replace(/^\//, "")),
+    max: 1,
+  });
+}
+const admin = ownerConnection();
+const poolIds: string[] = [];
 
 async function person(): Promise<string> {
   const id = `${suite}-user-${randomUUID()}`;
@@ -124,6 +148,7 @@ async function employee(
     type?: "built_in" | "device_acp";
     configuration?: Record<string, unknown>;
     modelRef?: string | null;
+    platformModelRef?: string | null;
   } = {},
 ): Promise<string> {
   const id = `${suite}-agent-${randomUUID()}`;
@@ -143,6 +168,7 @@ async function employee(
       avatarSeed: id,
       visibility: "private",
       modelRef: options.modelRef ?? null,
+      platformModelRef: options.platformModelRef ?? null,
     });
   });
   return id;
@@ -509,6 +535,42 @@ describe("conversation sidebar", () => {
     }).channel(channelId);
     expect(byChannel.status).toBe(200);
     expect(byChannel.body).toEqual(body);
+  });
+
+  test("a platform pool model the run cannot use is shown as the deployment's model", async () => {
+    const viewer = await person();
+    const KEY = "OPENBOT_POOL_SIDEBAR_TEST";
+    const pool = async (enabled: boolean, tiers: string) => {
+      const id = randomUUID();
+      poolIds.push(id);
+      await admin`insert into platform_model_pool (id, provider, model_name, label, api_key_env, tiers, enabled)
+                  values (${id}, 'deepseek', ${`m-${randomUUID()}`}, ${`池模型-${id.slice(0, 4)}`}, ${KEY}, ${tiers}::text[], ${enabled})`;
+      return id;
+    };
+    const label = async (
+      platformModelRef: string,
+      environment: Record<string, string>,
+    ) => {
+      const agentId = await employee(viewer, "池员工", { platformModelRef });
+      const { threadId } = await directChat(viewer, agentId);
+      const { body } = await routesFor(viewer, { environment }).thread(
+        threadId,
+      );
+      return body.environment.model?.label;
+    };
+    const usable = await pool(true, "{free,pro}");
+    // 能用（开着、对免费套餐开放、部署配了钥匙）：显示池模型的名字。
+    expect(await label(usable, { [KEY]: "sk-test" })).toBe(
+      `池模型-${usable.slice(0, 4)}`,
+    );
+    // 部署没配钥匙、被停用、不对查看者的套餐开放：运行落回部署默认模型，侧栏也显示它。
+    expect(await label(usable, {})).toBe("openai/gpt-default");
+    expect(
+      await label(await pool(false, "{free,pro}"), { [KEY]: "sk-test" }),
+    ).toBe("openai/gpt-default");
+    expect(await label(await pool(true, "{pro}"), { [KEY]: "sk-test" })).toBe(
+      "openai/gpt-default",
+    );
   });
 
   test("no usage yet → context.usage.used null", async () => {

@@ -407,6 +407,56 @@ async function poolBindingFrom(
   };
 }
 
+/** Which row a coworker's run will speak through: a library entry, a platform pool row, or neither. */
+export type BindingRef =
+  | { kind: "library"; modelRef: string }
+  | { kind: "pool"; poolId: string };
+
+/**
+ * What each coworker's run will be bound to, by the same decision the runtime makes (`bindingsFor`,
+ * with {@link poolBindingFrom}'s eligibility for a pool row: switched on, open to the payer's plan, a
+ * key configured), read without touching any key. `null` means the run falls back to the deployment's
+ * model, so a display (the conversation sidebar) names that one rather than a binding the run will not
+ * use. A library binding whose vault row is gone or revoked is also `null`, as {@link boundModelName}
+ * reads it.
+ */
+export async function bindingRefsFor(
+  database: Database,
+  agentIds: readonly string[],
+  environment: PoolKeyEnvironment = process.env,
+): Promise<Map<string, BindingRef | null>> {
+  const bindings = await bindingsFor(database, agentIds, environment);
+  const library = [...bindings.values()].flatMap((binding) =>
+    binding?.kind === "library" ? [binding.credentialId] : [],
+  );
+  // A vault row that is gone or revoked names nothing, as in boundModelName.
+  const usable = new Set(
+    library.length > 0
+      ? (
+          await database
+            .select({
+              id: credentialRows.id,
+              revokedAt: credentialRows.revokedAt,
+            })
+            .from(credentialRows)
+            .where(inArray(credentialRows.id, [...new Set(library)]))
+        ).flatMap((row) => (row.revokedAt ? [] : [row.id]))
+      : [],
+  );
+  return new Map(
+    [...bindings].map(([agentId, binding]) => [
+      agentId,
+      !binding
+        ? null
+        : binding.kind === "pool"
+          ? { kind: "pool", poolId: binding.poolId }
+          : usable.has(binding.credentialId)
+            ? { kind: "library", modelRef: binding.modelRef }
+            : null,
+    ]),
+  );
+}
+
 /**
  * The model this coworker is bound to, in the `provider/model` shape the deployment's own model and
  * the administrator's allowlist both use — for the usage record and the allowlist check, which need
