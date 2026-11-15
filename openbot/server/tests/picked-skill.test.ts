@@ -21,8 +21,8 @@ import {
 import {
   leadingSkillCommand,
   PICKED_SKILL_PROP,
-  pickedSkillGuidance,
   type PickableSkill,
+  pickedSkillGuidance,
 } from "../src/plugins/picked-skill";
 
 /*
@@ -120,6 +120,18 @@ describe("leadingSkillCommand", () => {
     ["/pirate-haiku, about coffee", undefined],
     ["https://example.com/pirate-haiku", undefined],
     ["", undefined],
+    /*
+     * 移植进来的技能全部是 `包--技能` 这种双连字符 slug（市场里 `<包名>--<技能名>` 拼出来）。
+     * 它们才是这一页要验的那批，选不中就是整条「按技能正文办事」的路对它们全关。
+     */
+    [
+      "/humanize-ppt-team--frontend-slides 做一份五页的 PPT",
+      "humanize-ppt-team--frontend-slides",
+    ],
+    ["/workbuddy-market-export--inner 导出", "workbuddy-market-export--inner"],
+    ["  /a--b--c\n继续", "a--b--c"],
+    // 连字符不能吃掉结尾：`/a--` 是一个没写完的名字，不是一条命令。
+    ["/a-- 继续", undefined],
   ])("%j picks %j", (text, slug) => {
     expect(leadingSkillCommand(text)).toBe(slug);
   });
