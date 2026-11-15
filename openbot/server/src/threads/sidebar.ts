@@ -111,6 +111,23 @@ export type ConversationSidebarService = {
     channelId: string,
     agentId?: string,
   ): Promise<ConversationSidebar | null>;
+  /**
+   * 压缩会话压的是哪条线程：查看者在这个对话里和这位员工的那条（单聊是他的对话线程，群组是他和这位员工
+   * 的 `group_bot_threads` 线程）。可见性与侧栏相同，看不到、员工不在对话里一律 null（路由答 404）；群组按
+   * 频道问必须给 `agentId`。还没开过线程时 `threadId` 为 null。
+   */
+  compactionTarget(
+    viewer: AgentActor,
+    where: { threadId: string } | { channelId: string },
+    agentId?: string,
+  ): Promise<CompactionTargetOf | null>;
+};
+
+/** {@link ConversationSidebarService.compactionTarget} 的答案；`external` 为外部员工（不压缩）。 */
+export type CompactionTargetOf = {
+  threadId: string | null;
+  agentId: string;
+  external: boolean;
 };
 
 /** 侧栏里读到的员工资料。 */
@@ -1059,45 +1076,129 @@ export function createConversationSidebar(
       : direct(viewer, chat, chat.threadId, agentId);
   }
 
+  /**
+   * 这条线程是查看者的哪一条：他在某个频道的映射线程，或他在群组里和某位员工的那条；都不是时为 null。
+   */
+  async function ownThread(
+    viewer: AgentActor,
+    threadId: string,
+  ): Promise<
+    | { kind: "mapped"; channelId: string }
+    | { kind: "group"; channelId: string; agentId: string }
+    | null
+  > {
+    const [mapped] = await database
+      .select({ channelId: intelligenceChannelMappings.channelId })
+      .from(intelligenceChannelMappings)
+      .where(
+        and(
+          eq(intelligenceChannelMappings.threadId, threadId),
+          eq(intelligenceChannelMappings.userId, viewer.id),
+        ),
+      )
+      .limit(1);
+    if (mapped) return { kind: "mapped", channelId: mapped.channelId };
+    const [own] = await database
+      .select({
+        channelId: groupBotThreads.channelId,
+        agentId: groupBotThreads.agentId,
+      })
+      .from(groupBotThreads)
+      .where(
+        and(
+          eq(groupBotThreads.threadId, threadId),
+          eq(groupBotThreads.ownerUserId, viewer.id),
+        ),
+      )
+      .limit(1);
+    return own ? { kind: "group", ...own } : null;
+  }
+
+  /** 单聊里要压的员工：在这条线程里出现过、查看者看得到；不给时是频道的员工。 */
+  async function directTarget(
+    viewer: AgentActor,
+    chat: Conversation,
+    threadId: string | null,
+    requested: string | undefined,
+  ): Promise<CompactionTargetOf | null> {
+    const agentId = requested ?? chat.agentIds[0];
+    if (!agentId) return null;
+    if (
+      !(await participants(viewer, chat.agentIds, threadId)).includes(agentId)
+    )
+      return null;
+    const employee = (await employees(viewer, [agentId])).get(agentId);
+    if (!employee) return null;
+    return { threadId, agentId, external: employee.type !== "built_in" };
+  }
+
+  /** 群组里要压的员工：必须点名、在群里、查看者看得到；线程是查看者和它的那条。 */
+  async function groupTarget(
+    viewer: AgentActor,
+    chat: Conversation,
+    requested: string | undefined,
+  ): Promise<CompactionTargetOf | null> {
+    if (!requested || !chat.agentIds.includes(requested)) return null;
+    const employee = (await employees(viewer, [requested])).get(requested);
+    if (!employee) return null;
+    const [own] = await database
+      .select({ threadId: groupBotThreads.threadId })
+      .from(groupBotThreads)
+      .where(
+        and(
+          eq(groupBotThreads.channelId, chat.channelId),
+          eq(groupBotThreads.ownerUserId, viewer.id),
+          eq(groupBotThreads.agentId, requested),
+        ),
+      )
+      .limit(1);
+    return {
+      threadId: own?.threadId ?? null,
+      agentId: requested,
+      external: employee.type !== "built_in",
+    };
+  }
+
   return {
     forChannel: (viewer, channelId, agentId) =>
       runAsTenant(viewer.id, () => forChannel(viewer, channelId, agentId)),
 
     forThread: (viewer, threadId, agentId) =>
       runAsTenant(viewer.id, async () => {
-        const [mapped] = await database
-          .select({ channelId: intelligenceChannelMappings.channelId })
-          .from(intelligenceChannelMappings)
-          .where(
-            and(
-              eq(intelligenceChannelMappings.threadId, threadId),
-              eq(intelligenceChannelMappings.userId, viewer.id),
-            ),
-          )
-          .limit(1);
-        if (mapped) {
-          const chat = await conversation(viewer, mapped.channelId);
+        const own = await ownThread(viewer, threadId);
+        if (own?.kind === "mapped") {
+          const chat = await conversation(viewer, own.channelId);
           if (!chat) return null;
           return chat.agentIds.length > 1
             ? group(viewer, chat, agentId)
             : direct(viewer, chat, threadId, agentId);
         }
         // 查看者在群组里和某位员工的那条线程：那位员工的明细。
-        const [own] = await database
-          .select({
-            channelId: groupBotThreads.channelId,
-            agentId: groupBotThreads.agentId,
-          })
-          .from(groupBotThreads)
-          .where(
-            and(
-              eq(groupBotThreads.threadId, threadId),
-              eq(groupBotThreads.ownerUserId, viewer.id),
-            ),
-          )
-          .limit(1);
         if (!own || (agentId && agentId !== own.agentId)) return null;
         return forChannel(viewer, own.channelId, own.agentId);
+      }),
+
+    compactionTarget: (viewer, where, agentId) =>
+      runAsTenant(viewer.id, async () => {
+        if ("channelId" in where) {
+          const chat = await conversation(viewer, where.channelId);
+          if (!chat) return null;
+          return chat.agentIds.length > 1
+            ? groupTarget(viewer, chat, agentId)
+            : directTarget(viewer, chat, chat.threadId, agentId);
+        }
+        const own = await ownThread(viewer, where.threadId);
+        if (
+          !own ||
+          (own.kind === "group" && agentId && agentId !== own.agentId)
+        )
+          return null;
+        const chat = await conversation(viewer, own.channelId);
+        if (!chat) return null;
+        if (own.kind === "group") return groupTarget(viewer, chat, own.agentId);
+        return chat.agentIds.length > 1
+          ? groupTarget(viewer, chat, agentId)
+          : directTarget(viewer, chat, where.threadId, agentId);
       }),
   };
 }

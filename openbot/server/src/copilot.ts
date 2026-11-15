@@ -157,6 +157,7 @@ import {
   runAsTenant,
   TenantContextError,
 } from "./tenant/context";
+import { CompactionMiddleware, type RunCompaction } from "./threads/compaction";
 import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
 import { inlineToolImages } from "./tool-images";
@@ -1362,6 +1363,11 @@ export async function buildAgents(
    * 不传则不记。
    */
   recordContextBreakdown?: RecordContextBreakdown,
+  /**
+   * 压缩会话（`threads/compaction.ts`）：内置员工每一轮开始前按需自动压缩，并把最近的摘要换进这一轮的历史。
+   * 追加在最后，原因同上；不传则不压缩、不替换。
+   */
+  compaction?: RunCompaction,
 ): Promise<Record<string, AbstractAgent>> {
   let vendors: readonly string[] = [];
   try {
@@ -1462,6 +1468,12 @@ export async function buildAgents(
           resolveAgentModel,
           recordContextBreakdown,
         );
+        /*
+         * 压缩排在个人记忆前面：中间件按加入的顺序从外往里跑，它要看到浏览器送来的原历史，替换完再让
+         * 个人记忆往前插它那一行。外部员工和远程员工的上下文不归这里管。
+         */
+        if (compaction && agent.type === "built_in")
+          built.use(new CompactionMiddleware(agent.id, compaction));
         if (loadPersonalMemory)
           built.use(new PersonalMemoryMiddleware(agent.id, loadPersonalMemory));
         return [agent.id, built];
@@ -3311,6 +3323,8 @@ export async function resolveRuntimeAgents(
   loadCurrentProject?: LoadCurrentProject,
   /** 运行开始时记上下文分类比例。追加在最后；见 {@link buildAgents}。 */
   recordContextBreakdown?: RecordContextBreakdown,
+  /** 压缩会话。追加在最后；见 {@link buildAgents}。 */
+  compaction?: RunCompaction,
 ): Promise<Record<string, AbstractAgent>> {
   const all = await loadAgents();
   if (all.length === 0) {
@@ -3360,6 +3374,7 @@ export async function resolveRuntimeAgents(
     loadAvatarSources,
     loadCurrentProject,
     recordContextBreakdown,
+    compaction,
   );
 }
 

@@ -4,7 +4,7 @@ import {
   type ContextShareKey,
   type ContextUsage,
 } from "@openbot/shared/conversation-sidebar";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, max, notLike } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "../db/client";
 import {
@@ -21,7 +21,7 @@ import { isPersonTenant, runAsTenant } from "../tenant/context";
  * 对话侧栏「上下文」一块：某员工在某对话里用了多少上下文、上限多少、分别占在哪。
  *
  * - 已用只来自 `model_token_calls`：本线程、本员工最近一次 `outcome = completed` 且 `usage_status` 为
- *   reported 或 partial 的调用（{@link usedTokens} 定口径）。取不到就是 null，不编数。
+ *   reported 或 partial 的调用（{@link usedTokens} 定口径），压缩那次总结调用不算。取不到就是 null，不编数。
  * - 上限跟着那次调用实际用的模型走，不看员工当前配置（{@link resolveContextLimit}）。
  * - 分类是估算：每次运行开始时按组装 prompt 的各部分字数算比例，写一行 `thread_context_breakdowns`
  *   （{@link contextBreakdownRecorder}），读的时候用最近一行的比例分摊已用总量。
@@ -29,6 +29,22 @@ import { isPersonTenant, runAsTenant } from "../tenant/context";
 
 /** 自动压缩预留占上限的比例。 */
 export const AUTO_COMPACT_RESERVE = 0.1;
+
+/**
+ * 压缩会话那次总结调用的运行 id 前缀（`threads/compaction.ts`）。那次调用照常计量、算在本线程，但它的输入是
+ * 被总结的历史，不是员工这一轮的上下文，所以「已用」不取它。
+ */
+export const COMPACTION_RUN_PREFIX = "compaction:";
+
+/** 已用的口径：本线程、本员工、已结束、报了用量、不是压缩那次总结调用。 */
+function countedCalls(tenantId: string) {
+  return and(
+    eq(modelTokenCalls.tenantId, tenantId),
+    eq(modelTokenCalls.outcome, "completed"),
+    inArray(modelTokenCalls.usageStatus, ["reported", "partial"]),
+    notLike(modelTokenCalls.runId, `${COMPACTION_RUN_PREFIX}%`),
+  );
+}
 
 /**
  * 一次调用占用的上下文（token）= 计量记录的 `input_tokens`；没报时为 null。
@@ -270,15 +286,13 @@ export async function readContextUsages(
           .from(modelTokenCalls)
           .where(
             and(
-              eq(modelTokenCalls.tenantId, tenantId),
+              countedCalls(tenantId),
               inArray(modelTokenCalls.threadId, [
                 ...new Set(batch.map((request) => request.threadId)),
               ]),
               inArray(modelTokenCalls.agentId, [
                 ...new Set(batch.map((request) => request.agentId)),
               ]),
-              eq(modelTokenCalls.outcome, "completed"),
-              inArray(modelTokenCalls.usageStatus, ["reported", "partial"]),
             ),
           )
           .orderBy(
@@ -422,6 +436,31 @@ export async function readContextUsages(
   return result;
 }
 
+/**
+ * 「已用」取的那次调用是什么时候开始的（口径同 {@link readContextUsage}），在 `tenantId` 的帧里读；没有时为
+ * null。自动压缩用它判断上一轮的用量是不是压缩之前的旧数。
+ */
+export async function latestUsageCallAt(
+  database: Database,
+  tenantId: string,
+  threadId: string,
+  agentId: string,
+): Promise<Date | null> {
+  const [row] = await runAsTenant(tenantId, () =>
+    database
+      .select({ at: max(modelTokenCalls.startedAt) })
+      .from(modelTokenCalls)
+      .where(
+        and(
+          countedCalls(tenantId),
+          eq(modelTokenCalls.threadId, threadId),
+          eq(modelTokenCalls.agentId, agentId),
+        ),
+      ),
+  );
+  return row?.at ?? null;
+}
+
 /** 一段 prompt 的类别和字数。 */
 export type ContextSection = { key: ContextShareKey; chars: number };
 
@@ -451,6 +490,13 @@ const PROMPT_SECTION_CATEGORIES: Readonly<Record<string, ContextShareKey>> = {
 
 /** 个人记忆中间件放进 `RunAgentInput.context` 的那一条（`memory/tools.ts`）。 */
 const PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
+
+/**
+ * 压缩会话的摘要放进 `RunAgentInput.context` 的那一条（`threads/compaction.ts`）。它是对话历史的替身，算
+ * `messages`，不算系统提示：内置员工丢掉历史里的 system 行，所以摘要只能这样送到模型面前。
+ */
+export const COMPACTION_SUMMARY_CONTEXT =
+  "OpenBot earlier conversation summary";
 
 /** 一次运行用的配置里与字数有关的部分：系统提示和配置的工具。 */
 export type ContextBreakdownConfiguration = {
@@ -498,8 +544,8 @@ function schemaLength(parameters: unknown): number {
 
 /**
  * 一次运行发给模型的东西按类别数字数，和 CopilotKit 内置 agent 拼请求的方式一致：系统提示 = 配置的
- * prompt + `context` 各条 + 状态；历史消息里的 system / developer 不发；工具 = 请求带的 + 配置的（同名
- * 算一个）减去等在搜索后面的。字数为 0 的段不列。
+ * prompt + `context` 各条 + 状态（`context` 里压缩摘要那条算消息）；历史消息里的 system / developer 不发；
+ * 工具 = 请求带的 + 配置的（同名算一个）减去等在搜索后面的。字数为 0 的段不列。
  */
 export function runContextSections(run: ContextBreakdownRun): ContextSection[] {
   const sections: ContextSection[] = [];
@@ -520,6 +566,8 @@ export function runContextSections(run: ContextBreakdownRun): ContextSection[] {
   for (const entry of run.input.context ?? []) {
     if (entry.description === PERSONAL_MEMORY_CONTEXT)
       add("memory", entry.value.length);
+    else if (entry.description === COMPACTION_SUMMARY_CONTEXT)
+      add("messages", entry.value.length);
     else add("system", entry.description.length + entry.value.length);
   }
   const state = run.input.state;

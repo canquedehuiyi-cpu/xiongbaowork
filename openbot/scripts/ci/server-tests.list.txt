@@ -224,6 +224,8 @@ tests/channel-titler.test.ts
 tests/channel-work.integration.test.ts
 tests/check-in-offer.test.ts
 tests/comments-say-the-reason.test.ts
+tests/compaction.integration.test.ts
+tests/compaction.test.ts
 tests/component-catalogue-entries.test.ts
 tests/component-catalogue.test.ts
 tests/component-decision-functions.test.ts
