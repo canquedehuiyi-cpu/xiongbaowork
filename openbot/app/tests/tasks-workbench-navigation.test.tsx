@@ -450,6 +450,7 @@ test("the 状态 and 数据周期 dropdowns write their axes and keep the others
       "awaiting_review",
       "done",
       "failed",
+      "cancelled",
       "ended",
     ],
   );

@@ -222,6 +222,7 @@ const STATUS_WORDS: Readonly<Record<SidebarGoalStatus, string>> = {
   awaiting_review: "已完成，待查收",
   done: "已完成",
   failed: "失败",
+  cancelled: "已取消",
 };
 
 /** 「上次检查」里员工回复第一句的长度上限（字）。 */
@@ -862,7 +863,7 @@ export function createConversationSidebar(
     const fileIds = [
       ...new Set(
         produced.flatMap((card) =>
-          card.deliverable.attachments.filter(
+          (card.deliverable.attachments ?? []).filter(
             (id): id is string => typeof id === "string" && UUID.test(id),
           ),
         ),
@@ -890,7 +891,7 @@ export function createConversationSidebar(
       const by = card.executorAgentId
         ? { byAgentId: card.executorAgentId }
         : {};
-      for (const id of card.deliverable.attachments) {
+      for (const id of card.deliverable.attachments ?? []) {
         // 查看者看不到的附件（或不是附件 id 的值）打不开，不列。
         const name = typeof id === "string" ? names.get(id) : undefined;
         if (name)
@@ -902,7 +903,7 @@ export function createConversationSidebar(
             ...by,
           });
       }
-      for (const component of card.deliverable.components) {
+      for (const component of card.deliverable.components ?? []) {
         const kind = component.name === "showTable" ? "table" : "report";
         const named = component.args?.title;
         const title =

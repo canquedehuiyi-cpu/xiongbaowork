@@ -77,7 +77,8 @@ export type SidebarGoalStatus =
   | "needs_action"
   | "awaiting_review"
   | "done"
-  | "failed";
+  | "failed"
+  | "cancelled";
 
 /** 目标：最近一张任务卡；没有卡时为 null。 */
 export type SidebarGoal = {

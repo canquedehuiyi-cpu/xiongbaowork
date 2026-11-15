@@ -317,6 +317,7 @@ tests/delivery-link-audit.test.ts
 tests/delivery-providers.test.ts
 tests/delivery-router.test.ts
 tests/delivery-routes.test.ts
+tests/delivery-schema.integration.test.ts
 tests/delivery-store.integration.test.ts
 tests/delivery-turn.test.ts
 tests/demoted-admin-enterprise.integration.test.ts

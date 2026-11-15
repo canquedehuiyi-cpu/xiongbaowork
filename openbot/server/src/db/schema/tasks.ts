@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import {
+  boolean,
   index,
   integer,
   pgEnum,
@@ -35,15 +37,17 @@ export const taskStatus = pgEnum("task_status", [
   "awaiting_review",
   "done",
   "failed",
+  "cancelled",
 ]);
 
 /**
  * A task: the unit QoderWake's board is built from.
  *
  * A projection, not a second engine -- every row is written from facts the
- * run/approval/routine machinery already produces, and the execution path
- * never consults this table. That is what keeps the board honest and the
- * risk of drift low.
+ * run/approval/routine machinery already produces. A card that is not being followed
+ * (`tracked = false`) is never read by the execution path, which is what keeps the board honest and
+ * the risk of drift low. A followed card (`tracked = true`, the delivery loop: 派出 → 已接下 →
+ * 已交成果 → 验收) is read and written by `tasks/delivery.ts`, and by nothing else.
  */
 export const tasks = pgTable(
   "tasks",
@@ -82,6 +86,32 @@ export const tasks = pgTable(
      * happened on a laptop that has since been unpaired still has to read as having happened there.
      */
     deviceId: text("device_id"),
+    /*
+     * The delivery loop (spec 2026-11-15-delivery-loop §3, migration 0217). Every column below means
+     * something only when `tracked` is true; an untracked card keeps the defaults.
+     */
+    /** Whether the card goes through 派出 → 已接下 → 已交成果 → 验收. */
+    tracked: boolean("tracked").notNull().default(false),
+    /** The thread a followed card hangs on (a group thread for a group, not the channel id). */
+    threadRef: text("thread_ref"),
+    /** When the coworker took the work on. Null: still 待接下. */
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    /** The delivery time in force; only the person (or a granted extension) moves it. */
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    /** The time the coworker first promised. Never rewritten, so an overdue record cannot vanish. */
+    originalDueAt: timestamp("original_due_at", { withTimezone: true }),
+    /** First time the card was recorded overdue; kept after delivery. */
+    overdueAt: timestamp("overdue_at", { withTimezone: true }),
+    /** Whether the coworker named a time (false: checked against a two-hour default). */
+    dueReported: boolean("due_reported").notNull().default(false),
+    /** What counts as done, in the coworker's words; "必需：A、B" lists required items. */
+    criteria: text("criteria"),
+    /** One sentence about the last round's failure, cleared by the next round that succeeds. */
+    lastError: text("last_error"),
+    /** How many times the checker nudged the coworker. */
+    nudges: integer("nudges").notNull().default(0),
+    /** How many times the person sent the work back. */
+    returns: integer("returns").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -98,6 +128,15 @@ export const tasks = pgTable(
       table.channelRef,
       table.updatedAt,
     ),
+    index("tasks_tracked_due_idx").on(
+      table.tenantId,
+      table.tracked,
+      table.status,
+      table.dueAt,
+    ),
+    index("tasks_tracked_thread_idx")
+      .on(table.tenantId, table.threadRef, table.executorAgentId)
+      .where(sql`${table.tracked}`),
   ],
 );
 

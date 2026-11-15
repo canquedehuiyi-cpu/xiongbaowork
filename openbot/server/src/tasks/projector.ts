@@ -127,12 +127,21 @@ export type DeliverableComponent = {
  *
  * `kind` is what the board keys on. Other writers may put other shapes in the same column, and the
  * board's chip is drawn only for this one, so a record that is not an output is never shown as one.
+ *
+ * The delivery loop (spec 2026-11-15-delivery-loop §4) adds four more kinds of thing a hand-in can
+ * name: `links`, `diffs` (an external coworker's change summary), `notes` (a words-only conclusion)
+ * and `checks` (the coworker's self-check lines). All six arrays are optional; a record written
+ * before this existed, with only `components` and `attachments`, is still a deliverable.
  */
 export type DeliverableRef = {
   kind: "deliverable";
-  components: DeliverableComponent[];
+  components?: DeliverableComponent[];
   /** Attachment ids, as `/api/attachments/<id>` serves them. */
-  attachments: string[];
+  attachments?: string[];
+  links?: { url: string; title: string }[];
+  diffs?: { files: number; added: number; removed: number; ref: string }[];
+  notes?: string[];
+  checks?: string[];
 };
 
 /**
@@ -152,14 +161,35 @@ export function deliverableRefOf(input: {
   return { kind: "deliverable", components, attachments };
 }
 
-/** Whether a stored `deliverable_ref` is a run's output rather than some other record. */
+const DELIVERABLE_ARRAYS = [
+  "components",
+  "attachments",
+  "links",
+  "diffs",
+  "notes",
+  "checks",
+] as const;
+
+/**
+ * Whether a stored `deliverable_ref` is a run's output rather than some other record: the right
+ * `kind`, at least one of the six lists present, and every list that is present really a list.
+ * Accepts both the original `{components, attachments}` shape and the delivery loop's.
+ */
 export function isDeliverableRef(value: unknown): value is DeliverableRef {
   if (!value || typeof value !== "object") return false;
-  const ref = value as Partial<DeliverableRef>;
-  return (
-    ref.kind === "deliverable" &&
-    Array.isArray(ref.components) &&
-    Array.isArray(ref.attachments)
+  const ref = value as Record<string, unknown>;
+  if (ref.kind !== "deliverable") return false;
+  const present = DELIVERABLE_ARRAYS.filter((key) => ref[key] !== undefined);
+  if (
+    present.length === 0 ||
+    !present.every((key) => Array.isArray(ref[key]))
+  ) {
+    return false;
+  }
+  return (["attachments", "notes", "checks"] as const).every(
+    (key) =>
+      ref[key] === undefined ||
+      (ref[key] as unknown[]).every((item) => typeof item === "string"),
   );
 }
 
