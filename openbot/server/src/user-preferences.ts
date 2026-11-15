@@ -16,7 +16,10 @@ import { runAsTenant } from "./tenant/context";
 export type WorkHours = {
   /** "HH:MM". */
   start: string;
-  /** "HH:MM"; "24:00" is the end of the day. */
+  /**
+   * "HH:MM", later than `start`. A saved one is at most "23:59"; "24:00" (the end of the day) is
+   * understood by the work-hours check for a value built in code, never stored.
+   */
   end: string;
   /** An IANA zone, e.g. "Asia/Shanghai". */
   timeZone: string;
@@ -71,12 +74,23 @@ export function savedTimeZone(value: unknown): string | undefined {
   }
 }
 
-/** Whether `value` is a work-hours clock: "HH:MM", and "24:00" too for an end. */
-export function isWorkClock(value: unknown, end = false): value is string {
-  return (
-    typeof value === "string" &&
-    (CLOCK.test(value) || (end && value === "24:00"))
-  );
+/** Whether `value` is a work-hours clock: "HH:MM", 00:00 to 23:59. */
+export function isWorkClock(value: unknown): value is string {
+  return typeof value === "string" && CLOCK.test(value);
+}
+
+/** The minute of the day a work-hours clock names. */
+export function minuteOfClock(clock: string): number {
+  const [hours, minutes] = clock.split(":").map(Number);
+  return (hours ?? 0) * 60 + (minutes ?? 0);
+}
+
+/**
+ * Whether a day's work hours are a real stretch: the start before the end, on one day. Hours across
+ * midnight are not supported; such hours would hold every reminder for the briefing and push none.
+ */
+export function isWorkStretch(start: string, end: string): boolean {
+  return minuteOfClock(start) < minuteOfClock(end);
 }
 
 /** The work hours a stored row says, over the defaults; anything malformed reads as the default. */
@@ -85,9 +99,16 @@ function workHoursOf(stored: Record<string, unknown>): WorkHours {
     stored.workHours && typeof stored.workHours === "object"
       ? (stored.workHours as Record<string, unknown>)
       : {};
+  const start = isWorkClock(hours.start)
+    ? hours.start
+    : DEFAULT_WORK_HOURS.start;
+  const end = isWorkClock(hours.end) ? hours.end : DEFAULT_WORK_HOURS.end;
+  // A row with the start not before the end (written around the save's check) reads as the default day.
+  const day = isWorkStretch(start, end)
+    ? { start, end }
+    : { start: DEFAULT_WORK_HOURS.start, end: DEFAULT_WORK_HOURS.end };
   return {
-    start: isWorkClock(hours.start) ? hours.start : DEFAULT_WORK_HOURS.start,
-    end: isWorkClock(hours.end, true) ? hours.end : DEFAULT_WORK_HOURS.end,
+    ...day,
     // An older row may hold the zone at the top level; the product's own zone when there is none.
     timeZone:
       savedTimeZone(hours.timeZone) ??

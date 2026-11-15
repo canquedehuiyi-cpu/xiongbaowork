@@ -61,6 +61,10 @@ import {
 } from "../src/tasks/projector";
 import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
+import {
+  createUserPreferencesStore,
+  readWorkHours,
+} from "../src/user-preferences";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { withRunSideEvents } from "../src/threads/run-side-events";
 import { suppressRunnerCard } from "../src/threads/unattended-card";
@@ -230,6 +234,8 @@ async function turn(input: {
   runId?: string;
   /** The board the runner writes through; the plain projector by default. */
   board?: TaskProjector;
+  /** The coworker's tools; `toolsFor` (on {@link ZONE}) by default. */
+  tools?: GrantedTool[];
 }): Promise<{ runId: string; results: string[] }> {
   const runId = input.runId ?? `run-${suite}-${randomUUID().slice(0, 8)}`;
   const runner = new PostgresAgentRunner(
@@ -238,7 +244,7 @@ async function turn(input: {
     quota,
   );
   const agent = new ScriptedCoworker(
-    toolsFor(input.tenantId, input.agentId),
+    input.tools ?? toolsFor(input.tenantId, input.agentId),
     input.work ?? (async () => {}),
     input.reply ?? "好的。",
     input.agentId,
@@ -1413,6 +1419,80 @@ describe("request_extension", () => {
       dueAt: asked[0]?.detail.dueAt,
       reason: "C 家发票还没寄到",
     });
+  });
+});
+
+describe("the person's own clock", () => {
+  test("a round with no browser zone reads the coworker's times on the person's saved zone", async () => {
+    // A person in New York; their browser wrote the zone once. Monday 09:00 there.
+    const tenantId = await tenant("new-york");
+    await runAsTenant(tenantId, () =>
+      createUserPreferencesStore(database).patch(tenantId, {
+        browserTimeZone: "America/New_York",
+      }),
+    );
+    const agentId = `agent-${suite}-new-york`;
+    const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+    const monday9 = new Date("2026-11-16T14:00:00.000Z");
+    // As production builds them: no zone of the call's own, the saved one to fall back on.
+    const tools = deliveryTools({
+      delivery,
+      gate,
+      board: projector,
+      ownerUserId: tenantId,
+      agentId,
+      now: () => monday9,
+      savedTimeZone: async () =>
+        (await readWorkHours(database, tenantId)).timeZone,
+    });
+
+    // The rounds carry no browser zone (`forwardedProps: {}`), as a nudge or a hand-over does.
+    const taken = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "核对三家供应商的发票",
+      reply: "已接下。",
+      tools,
+      work: (run) =>
+        run
+          .call("accept_task", {
+            due_at: "明早 10 点",
+            criteria: "核对三家供应商的发票。",
+          })
+          .then(() => {}),
+    });
+    const [card] = await cardsOf(tenantId, agentId);
+    if (!card) throw new Error("no card");
+    await roundLogged(tenantId, card.id, taken.runId);
+    // 10:00 on Tuesday in New York, not 10:00 in Shanghai (02:00Z).
+    expect(card.dueAt?.toISOString()).toBe("2026-11-17T15:00:00.000Z");
+    expect(parsed(taken.results[0] ?? "{}").note).toContain("10:00");
+
+    const asked = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "【系统催办】进展如何？",
+      reply: "申请延期。",
+      tools,
+      work: (run) =>
+        run
+          .call("request_extension", {
+            due_at: "明天下午3点",
+            reason: "C 家发票还没寄到",
+          })
+          .then(() => {}),
+    });
+    await roundLogged(tenantId, card.id, asked.runId);
+    const extension = (await eventsOf(tenantId, card.id)).find(
+      (line) => line.kind === "extension_requested",
+    );
+    // 15:00 on Tuesday in New York (20:00Z); Shanghai's would be 07:00Z.
+    expect(extension?.detail).toMatchObject({
+      dueAt: "2026-11-17T20:00:00.000Z",
+    });
+    expect(parsed(asked.results[0] ?? "{}").note).toContain("15:00");
   });
 });
 

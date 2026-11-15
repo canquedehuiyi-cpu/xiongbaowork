@@ -2801,6 +2801,9 @@ await startupLifecycle.run(async (startup) => {
       board: taskProjector,
       ownerUserId: actorId,
       agentId: botId,
+      // A round with no browser behind it (a nudge, a hand-over) reads times on the person's saved zone.
+      savedTimeZone: async () =>
+        (await readWorkHours(database, actorId)).timeZone,
     }),
     // 上游在这里给每位员工 `show_app_access`；fork 放在下面 `request_app_access` 旁边（X2）。
     /*

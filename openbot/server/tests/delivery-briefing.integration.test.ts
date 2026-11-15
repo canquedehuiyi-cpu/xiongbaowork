@@ -607,20 +607,24 @@ test("each briefing is sent once per local day even across restarts", async () =
   expect(sends()).toBe(1);
   expect((await outbox(fay, "briefing")).length).toBe(1);
 
-  // The day is the person's own: 01:00 Tuesday in Shanghai is still Monday morning in New York.
-  expect(new Date("2026-11-16T17:00:00.000Z").getUTCDate()).toBe(16);
+  // Still inside the hour after the start: nothing more.
   await briefingsFor([fay]).runBriefings(new Date("2026-11-16T14:59:00.000Z"));
   expect((await outbox(fay, "briefing")).length).toBe(1);
+
+  // The clock is the person's own: 09:00 Tuesday in Shanghai is 20:00 Monday in New York.
+  const shanghaiMorning = briefingsFor([fay]);
+  await shanghaiMorning.runBriefings(new Date("2026-11-17T01:00:00.000Z"));
+  expect(shanghaiMorning.sent).toEqual([]);
 
   // Past the hour after the start, a briefing never sent that day is not sent late.
   const late = briefingsFor([fay]);
   await late.runBriefings(new Date("2026-11-17T15:30:00.000Z"));
   expect(late.sent).toEqual([]);
 
-  // The next morning in New York, a new one.
-  const tuesday = briefingsFor([fay]);
-  await tuesday.runBriefings(new Date("2026-11-18T14:00:00.000Z"));
-  expect(tuesday.sent.map((item) => item.kind)).toEqual(["start"]);
+  // Another morning in New York (Wednesday), a new one.
+  const wednesday = briefingsFor([fay]);
+  await wednesday.runBriefings(new Date("2026-11-18T14:00:00.000Z"));
+  expect(wednesday.sent.map((item) => item.kind)).toEqual(["start"]);
   expect((await outbox(fay, "briefing")).length).toBe(2);
   const claims = await runAsTenant(fay.id, () =>
     database
@@ -693,7 +697,7 @@ test("overdue also goes to a bound Slack binding and respects the daily cap", as
   const hal = await person("slack", {
     workHours: {
       start: "00:00",
-      end: "24:00",
+      end: "23:59",
       weekends: true,
       timeZone: "Asia/Shanghai",
     },
@@ -818,6 +822,10 @@ test("timeZone is written on first save from the browser value", async () => {
     { browserTimeZone: "+05:00" },
     { workHours: { start: "25:00" } },
     { workHours: { end: "9am" } },
+    // No "24:00", and the start before the end, counting what is saved (start 10:00).
+    { workHours: { end: "24:00" } },
+    { workHours: { end: "10:00" } },
+    { workHours: { start: "18:00", end: "09:00" } },
     { workHours: {} },
     { workHours: { timeZone: "UTC", lunch: "12:00" } },
   ])
@@ -828,6 +836,121 @@ test("timeZone is written on first save from the browser value", async () => {
     timeZone: "Europe/London",
     weekends: false,
   });
+  // A row that holds a day the other way round (written around the check) reads as the default day.
+  await runAsTenant(ivy.id, () =>
+    database
+      .update(users)
+      .set({
+        preferences: {
+          workHours: { start: "20:00", end: "08:00", timeZone: "UTC" },
+        },
+      })
+      .where(eq(users.id, ivy.id)),
+  );
+  expect(await readWorkHours(database, ivy.id)).toEqual({
+    start: "09:00",
+    end: "18:00",
+    timeZone: "UTC",
+    weekends: false,
+  });
+});
+
+test("a briefing that could not be sent is tried again within the hour, and goes out once", async () => {
+  const kim = await person("retry", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  await phone(kim);
+  await card(kim, { acceptedAt: at(MONDAY_9, -1 * HOUR) });
+  let failures = 1;
+  const tries: number[] = [];
+  const briefings = createBriefings({
+    database,
+    workHours: savedWorkHours(database),
+    agentName: async () => "小财",
+    send: async (tenantId, kind, briefing, now) => {
+      tries.push(now.getTime());
+      // The first try writes its push and then fails, as a dropped connection would.
+      const offered = await notices.sendBriefing(tenantId, kind, briefing, now);
+      if (failures-- > 0) throw new Error("connection lost");
+      return offered;
+    },
+    onlyTenants: [kim.id],
+  });
+
+  await briefings.runBriefings(MONDAY_9);
+  // Not sent: the claim is let go.
+  const claims = () =>
+    runAsTenant(kim.id, () =>
+      database
+        .select()
+        .from(taskBriefings)
+        .where(eq(taskBriefings.tenantId, kim.id)),
+    );
+  expect(await claims()).toEqual([]);
+
+  // The next minute tries again; what went out before the failure is not offered twice.
+  await briefings.runBriefings(at(MONDAY_9, 1 * MINUTE));
+  await briefings.runBriefings(at(MONDAY_9, 2 * MINUTE));
+  expect(tries.length).toBe(2);
+  expect((await outbox(kim, "briefing")).length).toBe(1);
+  expect((await claims()).map((row) => row.offered)).toEqual([1]);
+});
+
+test("a reminder that reached nobody in work hours is held for the next start briefing, uncounted", async () => {
+  // Nothing to reach them on: no phone, no chat account.
+  const lou = await person("nobody", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  const due = at(MONDAY_9, 1 * HOUR);
+  const taskId = await card(lou, {
+    acceptedAt: at(due, -2 * HOUR),
+    dueAt: due,
+    dueReported: true,
+  });
+  await checkerFor([lou]).check(at(due, 35 * MINUTE));
+  const row = await cardRow(lou, taskId);
+  expect(row.overdueAt).not.toBeNull();
+  // Not counted against the day's three, and kept for the briefing.
+  expect(row.notifiedCount).toBe(0);
+  expect(row.reminderHeldAt).not.toBeNull();
+  expect(await outbox(lou)).toEqual([]);
+
+  const pass = briefingsFor([lou]);
+  await pass.runBriefings(at(MONDAY_9, 24 * HOUR));
+  expect(pass.sent.map((item) => item.briefing.deferred)).toEqual([
+    [expect.stringContaining("『核对发票』已逾期")],
+  ]);
+});
+
+test("a number that replied STOP is not a place the person was told", async () => {
+  const max = await person("stopped", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  const sms = await bound(max, "sms");
+  await runAsTenant(max.id, () =>
+    database
+      .update(deliveryBindings)
+      .set({ optedOutAt: new Date() })
+      .where(eq(deliveryBindings.id, sms.id)),
+  );
+  const taskId = await card(max, {
+    acceptedAt: at(MONDAY_9, -3 * HOUR),
+    dueAt: at(MONDAY_9, -1 * HOUR),
+  });
+  const result = await runAsTenant(max.id, () =>
+    notices.notify(
+      max.id,
+      {
+        kind: "overdue",
+        taskId,
+        text: "『核对发票』已逾期 1 小时（小财，催过 0 次）",
+      },
+      at(MONDAY_9, 1 * HOUR),
+    ),
+  );
+  // Nobody was told, so the reminder waits for the start briefing.
+  expect(result).toBe("deferred");
+  expect(await outbox(max)).toEqual([]);
 });
 
 afterAll(async () => {

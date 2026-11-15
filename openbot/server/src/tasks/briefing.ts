@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNotNull, lte, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import type { AppVariables } from "../auth/guards";
 import type { Database } from "../db/client";
@@ -18,7 +18,7 @@ import {
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
-import type { WorkHours } from "../user-preferences";
+import { minuteOfClock, type WorkHours } from "../user-preferences";
 import {
   type DeliveryNotice,
   localDay,
@@ -115,11 +115,6 @@ const log = (type: string, detail: Record<string, unknown>) =>
 const reasonOf = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-const minutesOf = (clock: string): number => {
-  const [hours, minutes] = clock.split(":").map(Number);
-  return (hours ?? 0) * 60 + (minutes ?? 0);
-};
-
 /** The weekday and the minute of the day an instant is on a zone's clock. */
 function localClock(instant: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -185,171 +180,183 @@ export function createBriefings(deps: BriefingDeps) {
     kind: BriefingKind,
     now: Date,
   ): Promise<Briefing | null> {
-    return runAsTenant(tenantId, async () => {
-      const hours = await deps.workHours(tenantId);
-      const today = localDay(now, hours.timeZone);
-      const since = new Date(now.getTime() - LOOKBACK_MS);
-      const cards = await database
-        .select({
-          id: tasks.id,
-          title: tasks.title,
-          status: tasks.status,
-          executorAgentId: tasks.executorAgentId,
-          acceptedAt: tasks.acceptedAt,
-          dueAt: tasks.dueAt,
-          overdueAt: tasks.overdueAt,
-          nudges: tasks.nudges,
-          reminderHeldAt: tasks.reminderHeldAt,
-          updatedAt: tasks.updatedAt,
-        })
-        .from(tasks)
-        .where(
-          and(
-            eq(tasks.tenantId, tenantId),
-            eq(tasks.tracked, true),
-            or(
-              inArray(tasks.status, [...OPEN_STATUSES]),
-              gte(tasks.updatedAt, since),
-            ),
+    return runAsTenant(
+      tenantId,
+      async () =>
+        (await compose(tenantId, kind, now, await deps.workHours(tenantId)))
+          ?.briefing ?? null,
+    );
+  }
+
+  /** The briefing on these work hours, and which cards' held reminders it carries. */
+  async function compose(
+    tenantId: string,
+    kind: BriefingKind,
+    now: Date,
+    hours: WorkHours,
+  ): Promise<{ briefing: Briefing; carried: string[] } | null> {
+    const today = localDay(now, hours.timeZone);
+    const since = new Date(now.getTime() - LOOKBACK_MS);
+    const cards = await database
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        status: tasks.status,
+        executorAgentId: tasks.executorAgentId,
+        acceptedAt: tasks.acceptedAt,
+        dueAt: tasks.dueAt,
+        overdueAt: tasks.overdueAt,
+        nudges: tasks.nudges,
+        reminderHeldAt: tasks.reminderHeldAt,
+        updatedAt: tasks.updatedAt,
+      })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.tenantId, tenantId),
+          eq(tasks.tracked, true),
+          or(
+            inArray(tasks.status, [...OPEN_STATUSES]),
+            gte(tasks.updatedAt, since),
           ),
-        );
-      const reviewedLines = await database
+        ),
+      );
+    const reviewedLines = await database
+      .select({ taskId: taskEvents.taskId, at: taskEvents.createdAt })
+      .from(taskEvents)
+      .where(
+        and(
+          eq(taskEvents.tenantId, tenantId),
+          eq(taskEvents.kind, "reviewed"),
+          gte(taskEvents.createdAt, since),
+        ),
+      );
+    const reviewed = new Set(
+      reviewedLines
+        .filter((line) => localDay(line.at, hours.timeZone) === today)
+        .map((line) => line.taskId),
+    ).size;
+    const open = cards.filter((card) =>
+      (OPEN_STATUSES as readonly string[]).includes(card.status),
+    );
+    const takenOnToday = cards.some(
+      (card) =>
+        card.acceptedAt && localDay(card.acceptedAt, hours.timeZone) === today,
+    );
+    if (open.length === 0 && !takenOnToday && reviewed === 0) return null;
+
+    const names = new Map<string, string>();
+    const nameOf = async (agentId: string | null) => {
+      if (!agentId) return "员工";
+      const known = names.get(agentId);
+      if (known) return known;
+      const name =
+        (await deps.agentName?.(tenantId, agentId).catch(() => null)) ?? "员工";
+      names.set(agentId, name);
+      return name;
+    };
+
+    const handedIn = open.filter((card) => card.status === "awaiting_review");
+    const handedAt = new Map<string, Date>();
+    if (handedIn.length)
+      for (const line of await database
         .select({ taskId: taskEvents.taskId, at: taskEvents.createdAt })
         .from(taskEvents)
         .where(
           and(
             eq(taskEvents.tenantId, tenantId),
-            eq(taskEvents.kind, "reviewed"),
-            gte(taskEvents.createdAt, since),
+            eq(taskEvents.kind, "delivered"),
+            inArray(
+              taskEvents.taskId,
+              handedIn.map((card) => card.id),
+            ),
           ),
-        );
-      const reviewed = new Set(
-        reviewedLines
-          .filter((line) => localDay(line.at, hours.timeZone) === today)
-          .map((line) => line.taskId),
-      ).size;
-      const open = cards.filter((card) =>
-        (OPEN_STATUSES as readonly string[]).includes(card.status),
-      );
-      const takenOnToday = cards.some(
-        (card) =>
-          card.acceptedAt &&
-          localDay(card.acceptedAt, hours.timeZone) === today,
-      );
-      if (open.length === 0 && !takenOnToday && reviewed === 0) return null;
+        )
+        .orderBy(desc(taskEvents.createdAt)))
+        if (!handedAt.has(line.taskId)) handedAt.set(line.taskId, line.at);
+    const awaitingReview: Briefing["awaitingReview"] = [];
+    for (const card of handedIn)
+      awaitingReview.push({
+        taskId: card.id,
+        title: card.title,
+        agentName: await nameOf(card.executorAgentId),
+        deliveredAt: (handedAt.get(card.id) ?? card.updatedAt).toISOString(),
+      });
+    awaitingReview.sort((a, b) => a.deliveredAt.localeCompare(b.deliveredAt));
 
-      const names = new Map<string, string>();
-      const nameOf = async (agentId: string | null) => {
-        if (!agentId) return "员工";
-        const known = names.get(agentId);
-        if (known) return known;
-        const name =
-          (await deps.agentName?.(tenantId, agentId).catch(() => null)) ??
-          "员工";
-        names.set(agentId, name);
-        return name;
-      };
-
-      const handedIn = open.filter((card) => card.status === "awaiting_review");
-      const handedAt = new Map<string, Date>();
-      if (handedIn.length)
-        for (const line of await database
-          .select({ taskId: taskEvents.taskId, at: taskEvents.createdAt })
-          .from(taskEvents)
-          .where(
-            and(
-              eq(taskEvents.tenantId, tenantId),
-              eq(taskEvents.kind, "delivered"),
-              inArray(
-                taskEvents.taskId,
-                handedIn.map((card) => card.id),
-              ),
-            ),
-          )
-          .orderBy(desc(taskEvents.createdAt)))
-          if (!handedAt.has(line.taskId)) handedAt.set(line.taskId, line.at);
-      const awaitingReview: Briefing["awaitingReview"] = [];
-      for (const card of handedIn)
-        awaitingReview.push({
+    const working = open.filter((card) =>
+      (WORKING_STATUSES as readonly string[]).includes(card.status),
+    );
+    const inProgress: (Briefing["inProgress"][number] & { at: number })[] = [];
+    const overdue: Briefing["overdue"] = [];
+    for (const card of working) {
+      const deadline = deadlineOf(card);
+      if (card.overdueAt) {
+        overdue.push({
           taskId: card.id,
           title: card.title,
-          agentName: await nameOf(card.executorAgentId),
-          deliveredAt: (handedAt.get(card.id) ?? card.updatedAt).toISOString(),
+          minutes: deadline
+            ? Math.max(
+                0,
+                Math.floor((now.getTime() - deadline.getTime()) / MINUTE),
+              )
+            : 0,
+          nudges: card.nudges,
         });
-      awaitingReview.sort((a, b) => a.deliveredAt.localeCompare(b.deliveredAt));
-
-      const working = open.filter((card) =>
-        (WORKING_STATUSES as readonly string[]).includes(card.status),
-      );
-      const inProgress: (Briefing["inProgress"][number] & { at: number })[] =
-        [];
-      const overdue: Briefing["overdue"] = [];
-      for (const card of working) {
-        const deadline = deadlineOf(card);
-        if (card.overdueAt) {
-          overdue.push({
-            taskId: card.id,
-            title: card.title,
-            minutes: deadline
-              ? Math.max(
-                  0,
-                  Math.floor((now.getTime() - deadline.getTime()) / MINUTE),
-                )
-              : 0,
-            nudges: card.nudges,
-          });
-          continue;
-        }
-        inProgress.push({
-          taskId: card.id,
-          title: card.title,
-          agentName: await nameOf(card.executorAgentId),
-          dueAt: deadline?.toISOString() ?? null,
-          at: deadline?.getTime() ?? Number.POSITIVE_INFINITY,
-        });
+        continue;
       }
-      inProgress.sort((a, b) => a.at - b.at);
-      overdue.sort((a, b) => b.minutes - a.minutes);
+      inProgress.push({
+        taskId: card.id,
+        title: card.title,
+        agentName: await nameOf(card.executorAgentId),
+        dueAt: deadline?.toISOString() ?? null,
+        at: deadline?.getTime() ?? Number.POSITIVE_INFINITY,
+      });
+    }
+    inProgress.sort((a, b) => a.at - b.at);
+    overdue.sort((a, b) => b.minutes - a.minutes);
 
-      const deferred: string[] = [];
-      const held = working.filter((card) => card.reminderHeldAt !== null);
-      if (kind === "start" && held.length) {
-        const said = new Map<string, string>();
-        for (const line of await database
-          .select({ taskId: taskEvents.taskId, detail: taskEvents.detail })
-          .from(taskEvents)
-          .where(
-            and(
-              eq(taskEvents.tenantId, tenantId),
-              eq(taskEvents.kind, "notified"),
-              inArray(
-                taskEvents.taskId,
-                held.map((card) => card.id),
-              ),
+    const deferred: string[] = [];
+    const held = working.filter((card) => card.reminderHeldAt !== null);
+    if (kind === "start" && held.length) {
+      const said = new Map<string, string>();
+      for (const line of await database
+        .select({ taskId: taskEvents.taskId, detail: taskEvents.detail })
+        .from(taskEvents)
+        .where(
+          and(
+            eq(taskEvents.tenantId, tenantId),
+            eq(taskEvents.kind, "notified"),
+            inArray(
+              taskEvents.taskId,
+              held.map((card) => card.id),
             ),
-          )
-          .orderBy(desc(taskEvents.createdAt))) {
-          const detail = line.detail as { result?: unknown; text?: unknown };
-          if (
-            !said.has(line.taskId) &&
-            detail.result === "deferred" &&
-            typeof detail.text === "string" &&
-            detail.text
-          )
-            said.set(line.taskId, detail.text);
-        }
-        for (const card of held)
-          deferred.push(said.get(card.id) ?? `『${card.title}』有一条提醒`);
+          ),
+        )
+        .orderBy(desc(taskEvents.createdAt))) {
+        const detail = line.detail as { result?: unknown; text?: unknown };
+        if (
+          !said.has(line.taskId) &&
+          detail.result === "deferred" &&
+          typeof detail.text === "string" &&
+          detail.text
+        )
+          said.set(line.taskId, detail.text);
       }
+      for (const card of held)
+        deferred.push(said.get(card.id) ?? `『${card.title}』有一条提醒`);
+    }
 
-      return {
+    return {
+      briefing: {
         reviewed,
         awaitingReview,
         inProgress: inProgress.map(({ at: _at, ...item }) => item),
         overdue,
         deferred,
-      };
-    });
+      },
+      carried: kind === "start" ? held.map((card) => card.id) : [],
+    };
   }
 
   /** One person's briefings due now, each claimed once for their local day. */
@@ -359,7 +366,7 @@ export function createBriefings(deps: BriefingDeps) {
     if (clock.weekend && !hours.weekends) return;
     const day = localDay(now, hours.timeZone);
     for (const kind of ["start", "end"] as const) {
-      const at = minutesOf(kind === "start" ? hours.start : hours.end);
+      const at = minuteOfClock(kind === "start" ? hours.start : hours.end);
       if (clock.minute < at || clock.minute >= at + BRIEFING_WINDOW_MS / MINUTE)
         continue;
       // The claim, committed on its own: whoever inserts the row briefs; anybody after finds it there.
@@ -369,34 +376,41 @@ export function createBriefings(deps: BriefingDeps) {
         .onConflictDoNothing()
         .returning({ kind: taskBriefings.kind });
       if (!claimed) continue;
-      const briefing = await buildBriefing(tenantId, kind, now);
+      const claim = and(
+        eq(taskBriefings.tenantId, tenantId),
+        eq(taskBriefings.kind, kind),
+        eq(taskBriefings.localDay, day),
+      );
       let offered = 0;
-      if (briefing && deps.send) {
-        offered = await deps.send(tenantId, kind, briefing, now);
-        // The held reminders went out with it: the next start briefing does not carry them again.
-        if (kind === "start" && briefing.deferred.length && offered > 0)
-          await database
-            .update(tasks)
-            .set({ reminderHeldAt: null })
-            .where(
-              and(
-                eq(tasks.tenantId, tenantId),
-                eq(tasks.tracked, true),
-                isNotNull(tasks.reminderHeldAt),
-                lte(tasks.reminderHeldAt, now),
-              ),
-            );
+      try {
+        const composed = await compose(tenantId, kind, now, hours);
+        if (composed && deps.send) {
+          offered = await deps.send(tenantId, kind, composed.briefing, now);
+          // The held reminders went out with it: the next start briefing does not carry them again.
+          if (composed.carried.length && offered > 0)
+            await database
+              .update(tasks)
+              .set({ reminderHeldAt: null })
+              .where(
+                and(
+                  eq(tasks.tenantId, tenantId),
+                  inArray(tasks.id, composed.carried),
+                  lte(tasks.reminderHeldAt, now),
+                ),
+              );
+        }
+      } catch (error) {
+        /*
+         * Not sent: the claim is let go, so the next minute's pass, inside the same hour, tries again.
+         * Trying again cannot send twice -- each place's row is keyed by the briefing's kind and day
+         * (`notifyPerson`), so what did go out before the failure is not offered a second time.
+         */
+        await database
+          .delete(taskBriefings)
+          .where(and(claim, isNull(taskBriefings.offered)));
+        throw error;
       }
-      await database
-        .update(taskBriefings)
-        .set({ offered })
-        .where(
-          and(
-            eq(taskBriefings.tenantId, tenantId),
-            eq(taskBriefings.kind, kind),
-            eq(taskBriefings.localDay, day),
-          ),
-        );
+      await database.update(taskBriefings).set({ offered }).where(claim);
     }
   }
 

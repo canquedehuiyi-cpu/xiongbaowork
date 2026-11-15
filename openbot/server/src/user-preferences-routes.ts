@@ -8,6 +8,7 @@ import { z } from "zod";
 import type { AppVariables } from "./auth/guards";
 import {
   isWorkClock,
+  isWorkStretch,
   savedTimeZone,
   type UserPreferencesStore,
 } from "./user-preferences";
@@ -30,7 +31,7 @@ const workHoursPatch = z
       .optional(),
     end: z
       .string()
-      .refine((value) => isWorkClock(value, true))
+      .refine((value) => isWorkClock(value))
       .optional(),
     timeZone: timeZone.optional(),
     weekends: z.boolean().optional(),
@@ -95,6 +96,19 @@ export function userPreferencesRoutes(
         },
         400,
       );
+    }
+    /*
+     * The work hours as they would stand after this save must be one stretch of a day, the start
+     * before the end: otherwise no time would ever be inside them, and nothing would ever be pushed.
+     */
+    const hours = parsed.data.workHours;
+    if (hours?.start !== undefined || hours?.end !== undefined) {
+      const saved = (await store.read(context.var.actor.id)).workHours;
+      if (!isWorkStretch(hours.start ?? saved.start, hours.end ?? saved.end))
+        return context.json(
+          { error: "开工时间要早于收工时间（同一天内，最晚 23:59）。" },
+          400,
+        );
     }
     return context.json({
       preferences: await store.patch(context.var.actor.id, parsed.data),

@@ -154,14 +154,25 @@ export function deliveryTools(options: {
   now?: () => Date;
   /** The person's zone for this call; the run's own, read from the call, by default. */
   timeZone?: () => string | undefined;
+  /**
+   * The zone the person saved (`readWorkHours`), for a round that carries none of its own: a nudge,
+   * a hand-over, any round the server starts without a browser behind it. Read only when needed.
+   */
+  savedTimeZone?: () => Promise<string>;
   /** Where the card-drawing events go; the run's own stream by default. */
   emit?: (runId: string, event: BaseEvent) => void;
 }): GrantedTool[] {
   const { delivery, gate, board, ownerUserId: tenantId, agentId } = options;
   const now = options.now ?? (() => new Date());
-  const zone = () =>
+  /*
+   * The zone a time the coworker writes is read on: the call's own, else the one the round's browser
+   * said, else the one the person saved -- so 「下午三点」 in a nudge round is the person's 3pm, not
+   * the product's -- and only then the product's.
+   */
+  const zone = async (): Promise<string> =>
     options.timeZone?.() ??
     runTimeZone(currentApprovalContext()?.forwardedProps) ??
+    (await options.savedTimeZone?.().catch(() => undefined)) ??
     DEFAULT_TIME_ZONE;
   const emit =
     options.emit ??
@@ -171,9 +182,9 @@ export function deliveryTools(options: {
   const actor = `agent:${agentId}` as const;
   const said = (runId: string, name: string, value: Record<string, unknown>) =>
     emit(runId, { type: EventType.CUSTOM, name, value } as BaseEvent);
-  const localTime = (instant: Date) =>
+  const localTime = (instant: Date, timeZone: string) =>
     new Intl.DateTimeFormat("zh-CN", {
-      timeZone: zone(),
+      timeZone,
       month: "numeric",
       day: "numeric",
       hour: "2-digit",
@@ -223,8 +234,9 @@ export function deliveryTools(options: {
       async (value) => {
         const run = currentRun();
         if (!run) return OUTSIDE_A_RUN;
+        const timeZone = await zone();
         const due = value.due_at
-          ? readDueTime(value.due_at, now(), zone())
+          ? readDueTime(value.due_at, now(), timeZone)
           : null;
         const dueAt = due?.at ?? null;
         const card = await cardOf(run);
@@ -296,7 +308,7 @@ export function deliveryTools(options: {
               }
             : {}),
           note: dueAt
-            ? `已接下，预计 ${localTime(dueAt)} 交。做完用 deliver_task 交付物和自查；交不了就用 request_extension。`
+            ? `已接下，预计 ${localTime(dueAt, timeZone)} 交。做完用 deliver_task 交付物和自查；交不了就用 request_extension。`
             : due && due.at === null
               ? `已接下，但预计时间「${value.due_at}」没有记上（${dueRefusalText(due.why)}）：这件活按没报时间处理，接下后 2 小时核对。可以在回复里告诉对方大概几点交。`
               : "已接下，没报预计时间：接下后 2 小时核对。",
@@ -372,7 +384,8 @@ export function deliveryTools(options: {
         const card = await cardOf(run);
         if (!card?.tracked)
           return `${REFUSAL_MARKER} 这一轮没有接下的活，不用申请延期。`;
-        const due = readDueTime(value.due_at, now(), zone());
+        const timeZone = await zone();
+        const due = readDueTime(value.due_at, now(), timeZone);
         if (due.at === null)
           return `${REFUSAL_MARKER} 「${value.due_at}」不能用来申请延期（${dueRefusalText(due.why)}）：换成「1 小时」「17:30」「明早 10 点」这样、30 天以内的时间再申请。`;
         const dueAt = due.at;
@@ -392,7 +405,7 @@ export function deliveryTools(options: {
           requested: true,
           taskId: card.id,
           dueAt: dueAt.toISOString(),
-          note: `已申请延到 ${localTime(dueAt)}；对方准许前，预计时间不变。`,
+          note: `已申请延到 ${localTime(dueAt, timeZone)}；对方准许前，预计时间不变。`,
         });
       },
     ),

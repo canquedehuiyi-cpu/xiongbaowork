@@ -331,7 +331,8 @@ export function createDeliveryRouter(deps: {
    * Tell the person something about their followed work (spec 2026-11-15-delivery-loop §10): a start
    * or end briefing, or a reminder about one late card. Offered once to each of their push devices and
    * once on each chat platform they connected (Slack, Teams, SMS), as a ping is; returns how many
-   * places it was offered to, so a caller that reached nobody can keep it for the workbench.
+   * places it was offered to, so a caller that reached nobody can keep it for the workbench. A number
+   * that replied STOP, and a platform with no provider here, are passed over and not counted.
    *
    * WHERE. A chat platform's account in one of `scopes` (the card's conversation, best first) is
    * preferred, else the account the person used last on that platform; the push is filed under the
@@ -383,6 +384,14 @@ export function createDeliveryRouter(deps: {
     for (const binding of candidates) {
       if (chosen.has(binding.transport)) continue;
       if (binding.ownerUserId !== input.ownerUserId) continue;
+      /*
+       * Only a place that can carry it counts as reached: a number that replied STOP is never texted
+       * (its row would only be marked opted out), and a platform this deployment has no provider for
+       * would only fail. Counted, either one would tell the checker the person was told when nobody
+       * was, and the reminder would miss the start briefing.
+       */
+      if (binding.optedOutAt) continue;
+      if (!deps.providers[binding.transport]) continue;
       const carrier = await routeFor({
         ownerUserId: input.ownerUserId,
         agentId: binding.agentId,
@@ -412,7 +421,7 @@ export function createDeliveryRouter(deps: {
       ownerUserId: input.ownerUserId,
       kind: "attention",
     });
-    if (!route.allows("push")) return offered;
+    if (!deps.providers.push || !route.allows("push")) return offered;
     const devices = await deps.store.devices(input.ownerUserId);
     if (devices.length === 0) return offered;
     let scope: DeliveryScope | null = null;
