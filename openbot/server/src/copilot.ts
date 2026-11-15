@@ -149,6 +149,7 @@ import { type ProjectForPrompt, projectGuidance } from "./projects/context";
 import { withQuotaRunErrors } from "./quota/limits";
 import { createTrajectoryConnect } from "./recorder/trajectory-connect";
 import { corsOrigin } from "./request-trust";
+import { deliveryProtocolGuidance } from "./tasks/delivery-tools";
 import type { ProductTelemetry } from "./telemetry/product";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
 import {
@@ -167,6 +168,10 @@ import {
 } from "./threads/compaction";
 import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
+import {
+  withoutServerOnlyEvents,
+  withRunSideEvents,
+} from "./threads/run-side-events";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 import { withBrowserWireCodeRunner } from "./wire-codes";
@@ -1134,6 +1139,14 @@ export function builtInAgentConfiguration(
       }),
       // M3: the fork's guidance; see the note on the plugins imports.
       ...promptSection("apps", holdings),
+      /*
+       * The delivery loop's four rules, for a coworker that holds `accept_task` and only then: one whose
+       * 接活 is switched off does not work in three steps (spec 2026-11-15-delivery-loop §4).
+       */
+      ...promptSection(
+        "delivery",
+        deliveryProtocolGuidance(tools.map((tool) => tool.name)),
+      ),
       /*
        * Only for a run that holds the computer. A third of the prompt is about the browser, and a
        * Linear-and-Notion routine that never opens one read all of it ahead of its own job.
@@ -2232,14 +2245,22 @@ async function buildAgent(
           input: runInput,
           waiting: held,
         });
-        return sayingProviderRefusals(
-          withModelRun(
-            { runId: runInput.runId, threadId: runInput.threadId },
-            observeModelConnection(stream, { refusalsSaidByCaller: true }),
+        /*
+         * Outermost, the events the run's own tools add for the person to see (the delivery loop's
+         * cards), sent in this stream so they are stored and replayed with the run. See
+         * `threads/run-side-events.ts`.
+         */
+        return withRunSideEvents(
+          runInput.runId,
+          sayingProviderRefusals(
+            withModelRun(
+              { runId: runInput.runId, threadId: runInput.threadId },
+              observeModelConnection(stream, { refusalsSaidByCaller: true }),
+            ),
+            agent,
+            refusingProvider(runModel),
+            { untilError: true },
           ),
-          agent,
-          refusingProvider(runModel),
-          { untilError: true },
         );
       },
       ...(admit ? { admitTools: admit } : {}),
@@ -2474,14 +2495,16 @@ async function remoteTransport(
     return sayingWhenUnreachable(
       withoutGenerativeUIEnvelope(
         heldToToolLimit(
-          new HttpAgent({
-            url: agent.endpoint,
-            agentId: agent.id,
-            // The customer's own key, if their agent sits behind one. `HttpAgentConfig` is
-            // `{ url, headers?, fetch? }`, verified against @ag-ui/client 0.0.57.
-            ...(agent.headers ? { headers: agent.headers } : {}),
-            ...(dial ? { fetch: dial } : {}),
-          }),
+          withoutForgedServerEvents(
+            new HttpAgent({
+              url: agent.endpoint,
+              agentId: agent.id,
+              // The customer's own key, if their agent sits behind one. `HttpAgentConfig` is
+              // `{ url, headers?, fetch? }`, verified against @ag-ui/client 0.0.57.
+              ...(agent.headers ? { headers: agent.headers } : {}),
+              ...(dial ? { fetch: dial } : {}),
+            }),
+          ),
         ),
       ),
       agent,
@@ -2530,11 +2553,28 @@ async function remoteTransport(
   return sayingWhenUnreachable(
     withoutGenerativeUIEnvelope(
       heldToToolLimit(
-        quotingConversationSystemRows(roster[picked] as AbstractAgent),
+        withoutForgedServerEvents(
+          quotingConversationSystemRows(roster[picked] as AbstractAgent),
+        ),
       ),
     ),
     agent,
   );
+}
+
+/**
+ * An endpoint's stream without the events only this server may send (the delivery loop's
+ * `delivery.*` cards, `threads/run-side-events.ts`). The endpoint is somebody else's code; a card it
+ * sends would be drawn as a hand-in nobody checked. Dropped here, before the runner stores or relays
+ * anything, so it is neither in the conversation nor in its stored history.
+ */
+function withoutForgedServerEvents(transport: AbstractAgent): AbstractAgent {
+  const run = transport.run.bind(transport);
+  const clone = transport.clone.bind(transport);
+  return Object.assign(transport, {
+    run: (input: RunAgentInput) => withoutServerOnlyEvents(run(input)),
+    clone: () => withoutForgedServerEvents(clone() as AbstractAgent),
+  });
 }
 
 /**

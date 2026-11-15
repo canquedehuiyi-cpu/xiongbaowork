@@ -1,5 +1,3 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   IconActivity,
   IconArrowsExchange,
@@ -15,6 +13,8 @@ import {
   IconStack2,
   IconUsersGroup,
 } from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { LabeledSelect } from "@/components/layout/labeled-select";
@@ -158,7 +158,7 @@ export const boardQuery = (
   if (trigger) axes.push(`source=${trigger.sources.join(",")}`);
   const scope = [`period=${search.period}`, ...axes];
   const list = [`period=${search.listPeriod ?? search.period}`, ...axes];
-  // `ended` is three statuses, which the endpoint cannot be asked for at once: see `shownForStatus`.
+  // `ended` is four statuses, which the endpoint cannot be asked for at once: see `shownForStatus`.
   if (search.status && search.status !== "ended")
     list.push(`status=${encodeURIComponent(search.status)}`);
   if (search.q) list.push(`q=${encodeURIComponent(search.q)}`);
@@ -309,7 +309,8 @@ export const LANES: { key: string; label: string; statuses: string[] }[] = [
     label: "需要操作",
     statuses: ["needs_action", "awaiting_review", "failed"],
   },
-  { key: "finished", label: "已结束", statuses: ["done"] },
+  // A cancelled card is work the person called off: it ended, so it sits with the finished work.
+  { key: "finished", label: "已结束", statuses: ["done", "cancelled"] },
 ];
 
 /**
@@ -328,6 +329,7 @@ const STATUS_LABEL: Record<string, string> = {
   // Spec A3: both ways work ends say that it ended first, and then how.
   done: "已结束-已完成",
   failed: "已结束-失败",
+  cancelled: "已结束-已取消",
 };
 
 /**
@@ -486,6 +488,7 @@ export const STATUS_FILTERS = [
   { key: "awaiting_review", label: "查收结果" },
   { key: "done", label: "已结束-已完成" },
   { key: "failed", label: "已结束-失败" },
+  { key: "cancelled", label: "已结束-已取消" },
   { key: "ended", label: "已结束（全部）" },
 ] as const;
 
@@ -498,7 +501,12 @@ export const STATUS_FILTERS = [
  * `ended` is the screen's own filter key, not a server status: the list endpoint takes one status, so
  * this one is applied to what came back rather than asked for.
  */
-export const ENDED_STATUSES = ["done", "failed", "awaiting_review"];
+export const ENDED_STATUSES = [
+  "done",
+  "failed",
+  "awaiting_review",
+  "cancelled",
+];
 
 /**
  * The bar's four numbers and the filter each one is. The three parts partition every status the
@@ -785,10 +793,13 @@ function modelLabel(model: string): string {
  */
 export function deliverableSummary(ref: unknown): string | null {
   if (!ref || typeof ref !== "object") return null;
-  const { kind, components, attachments } = ref as {
+  const { kind, components, attachments, links, diffs, notes } = ref as {
     kind?: unknown;
     components?: unknown;
     attachments?: unknown;
+    links?: unknown;
+    diffs?: unknown;
+    notes?: unknown;
   };
   if (kind !== "deliverable") return null;
   const titles = Array.isArray(components)
@@ -810,9 +821,24 @@ export function deliverableSummary(ref: unknown): string | null {
       ]
     : [];
   const files = Array.isArray(attachments) ? attachments.length : 0;
+  const linkCount = Array.isArray(links) ? links.length : 0;
+  const changedFiles = Array.isArray(diffs)
+    ? diffs.reduce<number>(
+        (sum, diff) =>
+          sum +
+          (diff && typeof (diff as { files?: unknown }).files === "number"
+            ? (diff as { files: number }).files
+            : 0),
+        0,
+      )
+    : 0;
+  const noteCount = Array.isArray(notes) ? notes.length : 0;
   const parts = [
     ...(titles.length > 0 ? [titles.join("、")] : []),
     ...(files > 0 ? [`${files} 个附件`] : []),
+    ...(linkCount > 0 ? [`${linkCount} 个链接`] : []),
+    ...(changedFiles > 0 ? [`改动 ${changedFiles} 个文件`] : []),
+    ...(noteCount > 0 ? [`${noteCount} 条文字结论`] : []),
   ];
   return parts.length > 0 ? `产出：${parts.join(" · ")}` : null;
 }

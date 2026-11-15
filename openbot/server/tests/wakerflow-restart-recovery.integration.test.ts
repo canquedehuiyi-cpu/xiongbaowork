@@ -1,6 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { WakerFlowPlan } from "../../shared/wakerflows";
 import { createDatabase } from "../src/db/client";
 import {
@@ -762,4 +762,40 @@ test("a planning request the crash left pending is settled uncertain, never re-p
   expect((await live.outstanding).status).toBe("completed");
   expect((await otherLive.outstanding).status).toBe("completed");
   expect(await restarted.store.remove(f.tenantId, f.flow.id)).toBeTrue();
+});
+
+test("a followed card among a crashed Flow run's cards is left with its coworker; the others settle failed", async () => {
+  const f = await savedFlow();
+  const run = await f.crashedRun();
+  const stepRef = (await f.runRow(run.runId)).steps[0]?.runRef;
+  expect(stepRef).toBeDefined();
+  const stepCard = (await f.cards()).find((card) => card.runRef === stepRef);
+  expect(stepCard).toBeDefined();
+  const board = createTaskProjector(database);
+  // Step 1's coworker took its card on (`accept_task`), and took a second piece of work on beside it.
+  const second = await board.opened({
+    tenantId: f.tenantId,
+    title: "顺便整理待办",
+    source: "group_run",
+    parentTaskId: run.taskId,
+  });
+  const followed = [stepCard?.id as string, second];
+  await runAsTenant(f.tenantId, () =>
+    database
+      .update(tasks)
+      .set({ tracked: true, acceptedAt: new Date(), threadRef: "step-thread" })
+      .where(inArray(tasks.id, followed)),
+  );
+
+  await restartPhase()();
+
+  // The run and its parent are over; the followed cards stay where they were (spec §3: only the
+  // person ends a followed card).
+  expect((await f.runRow(run.runId)).status).toBe("failed");
+  const status = new Map(
+    (await f.cards()).map((card) => [card.id, card.status]),
+  );
+  expect(status.get(run.taskId)).toBe("failed");
+  expect(status.get(stepCard?.id as string)).toBe("running");
+  expect(status.get(second)).toBe("running");
 });

@@ -243,7 +243,11 @@ function metadata(table: PgTable): Table {
       const value: unknown = column.default;
       if (is(value, SQL)) item.default = render(value);
       else {
-        assert.ok(typeof value === "number" || typeof value === "string");
+        assert.ok(
+          typeof value === "number" ||
+            typeof value === "string" ||
+            typeof value === "boolean",
+        );
         item.default =
           typeof value === "string" ? dialect.escapeString(value) : value;
       }
@@ -255,7 +259,10 @@ function metadata(table: PgTable): Table {
   for (const index of config.indexes) {
     const cfg = index.config;
     assert.ok(cfg.name);
-    assert.equal(cfg.where, undefined);
+    // Only the delivery loop's partial index (0217) has a WHERE; it is dropped again below.
+    assert.ok(
+      cfg.where === undefined || cfg.name === "tasks_tracked_thread_idx",
+    );
     assert.equal(cfg.only, false);
     const columns = cfg.columns.map((column) => {
       assert.ok("name" in column && typeof column.name === "string");
@@ -324,18 +331,37 @@ function metadata(table: PgTable): Table {
   return result;
 }
 /**
- * What `tasks` gained after the 0121 capsule (migration 0216, the conversation sidebar). The capsule
- * is a frozen record of what this migration's target tables looked like, so later additions are
- * removed from the live Drizzle table before it is compared, rather than rewriting the capsule. Only
- * these named objects are removed; everything else is still compared in full.
+ * What `tasks` gained after the 0121 capsule (migrations 0216, the conversation sidebar, and 0217,
+ * the delivery loop). The capsule is a frozen record of what this migration's target tables looked
+ * like, so later additions are removed from the live Drizzle table before it is compared, rather than
+ * rewriting the capsule. Only these named objects are removed; everything else is still compared in
+ * full.
  */
 const ADDED_AFTER_CAPSULE: Record<
   string,
   { columns: string[]; indexes: string[] }
 > = {
   tasks: {
-    columns: [],
-    indexes: ["tasks_channel_ref_idx"],
+    columns: [
+      "tracked",
+      "thread_ref",
+      "accepted_at",
+      "due_at",
+      "original_due_at",
+      "overdue_at",
+      "due_reported",
+      "criteria",
+      "last_error",
+      "nudges",
+      "returns",
+      "active_run_ref",
+      "return_pending_at",
+    ],
+    indexes: [
+      "tasks_channel_ref_idx",
+      "tasks_tracked_due_idx",
+      "tasks_tracked_thread_idx",
+    ],
   },
 };
 function withoutLaterAdditions(table: Table): Table {

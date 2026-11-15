@@ -167,6 +167,14 @@ function sidebar(over: Partial<SidebarData> = {}): SidebarData {
     goal: {
       title: "整理本周周报，下午给我",
       status: "needs_action",
+
+      stage: null,
+
+      dueAt: null,
+
+      overdue: false,
+
+      returns: 0,
       rounds: 6,
       lastCheck: "等你确认 · 草稿写到第 3 / 4 节",
       pendingApprovalId: "ap1",
@@ -767,6 +775,14 @@ test("去确认 follows the inbox's newest approval for this conversation", asyn
       goal: {
         title: "整理本周周报，下午给我",
         status: "needs_action",
+
+        stage: null,
+
+        dueAt: null,
+
+        overdue: false,
+
+        returns: 0,
         rounds: 6,
         lastCheck: "等你确认",
         pendingApprovalId: "ap-stale",

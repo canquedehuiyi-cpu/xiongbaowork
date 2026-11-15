@@ -102,6 +102,10 @@ export async function reapAbandonedPipelineRuns(
      * half-answer ticket 032 was written against, and the board is what the person reads. The parent
      * card is keyed by the run id itself (see `store.ts`'s `start`), which is why no lookup is needed
      * to close it.
+     *
+     * A followed card (`tracked`, the delivery loop) among them is left as it is: `finished` skips it,
+     * because a step that stopped is a round of that work stopping, not the work failing, and only the
+     * person ends a followed card.
      */
     for (const record of open) {
       if (!record.runRef) continue;

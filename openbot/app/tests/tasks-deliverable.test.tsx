@@ -181,3 +181,26 @@ test("a card names the machine its work ran on, read from the row's deviceId", (
   const chip = view.getByText("dev-laptop · 离线");
   expect(chip.getAttribute("data-device-online")).toBe("false");
 });
+
+test("board deliverable label renders for a ref with only links", () => {
+  expect(
+    deliverableSummary({
+      kind: "deliverable",
+      links: [{ url: "https://example.com/r", title: "报告" }],
+    }),
+  ).toBe("产出：1 个链接");
+  expect(
+    deliverableSummary({
+      kind: "deliverable",
+      attachments: ["a"],
+      links: [{ url: "https://example.com/r", title: "报告" }],
+      diffs: [{ files: 2, added: 10, removed: 3, ref: "t" }],
+      notes: ["结论"],
+    }),
+  ).toBe("产出：1 个附件 · 1 个链接 · 改动 2 个文件 · 1 条文字结论");
+  // Old shape unchanged.
+  expect(
+    deliverableSummary({ kind: "deliverable", attachments: ["a", "b"] }),
+  ).toBe("产出：2 个附件");
+  expect(deliverableSummary({ kind: "deliverable" })).toBeNull();
+});

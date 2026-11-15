@@ -9,6 +9,9 @@ import {
   isNotNull,
   isNull,
   min,
+  notInArray,
+  or,
+  sql,
 } from "drizzle-orm";
 import {
   type CompactionEstimate,
@@ -46,6 +49,7 @@ import {
   projectContextBindings,
   registeredDevices,
   resourceProjects,
+  taskEvents,
   tasks,
   threadCompactions,
   threadRuns,
@@ -56,6 +60,9 @@ import {
   type PoolKeyEnvironment,
 } from "../models/runtime-resolver";
 import type { MachineTarget } from "../projects/context";
+import { stageOf } from "../tasks/delivery";
+import { DEFAULT_TIME_ZONE } from "../tasks/delivery-tools";
+import { QUIET_TASK_EVENT_KINDS, taskEventSentence } from "../tasks/events";
 import { isDeliverableRef } from "../tasks/projector";
 import { isPersonTenant, runAsTenant } from "../tenant/context";
 import { compactionEstimate, latestCompaction } from "./compaction";
@@ -229,6 +236,7 @@ const STATUS_WORDS: Readonly<Record<SidebarGoalStatus, string>> = {
   awaiting_review: "已完成，待查收",
   done: "已完成",
   failed: "失败",
+  cancelled: "已取消",
 };
 
 /** 「上次检查」里员工回复第一句的长度上限（字）。 */
@@ -787,16 +795,53 @@ export function createConversationSidebar(
     threadIds: readonly string[],
     reply: () => Promise<string | null>,
   ): Promise<SidebarGoal> {
+    /*
+     * 这个对话里未结束的在跟卡排在最前（交付闭环：一件活一张卡，跨多轮），挑法同看板的
+     * `openTrackedCard`：最近接下的，没接下的按最近派出的；没有才取最近更新的一张卡。一次查询。
+     */
+    const followed =
+      threadIds.length > 0
+        ? and(
+            eq(tasks.tracked, true),
+            inArray(tasks.threadRef, [...threadIds]),
+            inArray(tasks.status, [
+              "running",
+              "needs_action",
+              "awaiting_review",
+            ]),
+          )
+        : undefined;
     const [card] = await database
-      .select({ title: tasks.title, status: tasks.status })
+      .select({
+        id: tasks.id,
+        title: tasks.title,
+        status: tasks.status,
+        tracked: tasks.tracked,
+        acceptedAt: tasks.acceptedAt,
+        dueAt: tasks.dueAt,
+        overdueAt: tasks.overdueAt,
+        returns: tasks.returns,
+      })
       .from(tasks)
       .where(
         and(
           eq(tasks.tenantId, viewer.id),
-          inArray(tasks.channelRef, [...refs]),
+          followed
+            ? or(inArray(tasks.channelRef, [...refs]), followed)
+            : inArray(tasks.channelRef, [...refs]),
         ),
       )
-      .orderBy(desc(tasks.updatedAt))
+      .orderBy(
+        ...(followed
+          ? [
+              desc(sql`coalesce(${followed}, false)`),
+              desc(
+                sql`case when ${followed} then coalesce(${tasks.acceptedAt}, ${tasks.createdAt}) end`,
+              ),
+            ]
+          : []),
+        desc(tasks.updatedAt),
+      )
       .limit(1);
     if (!card) return null;
     const [runs] =
@@ -806,17 +851,60 @@ export function createConversationSidebar(
             .from(threadRuns)
             .where(inArray(threadRuns.threadId, [...threadIds]))
         : [{ value: 0 }];
-    const said = await reply();
-    const sentence = said ? firstSentence(said) : "";
     return {
       title: card.title,
       status: card.status,
+      stage: stageOf(card),
+      dueAt: card.dueAt?.toISOString() ?? null,
+      overdue: card.overdueAt !== null,
+      returns: card.returns,
       rounds: Number(runs?.value ?? 0),
-      lastCheck: [STATUS_WORDS[card.status], sentence]
-        .filter(Boolean)
-        .join(" · "),
+      lastCheck: card.tracked
+        ? await lastLineOf(viewer, card.id, card.status)
+        : await statusAndReply(card.status, reply),
       pendingApprovalId: await pendingApproval(viewer, refs),
     };
+  }
+
+  /** 不在跟的卡的「上次检查」：状态一句话，加员工最近一条回复的第一句。 */
+  async function statusAndReply(
+    status: SidebarGoalStatus,
+    reply: () => Promise<string | null>,
+  ): Promise<string> {
+    const said = await reply();
+    const sentence = said ? firstSentence(said) : "";
+    return [STATUS_WORDS[status], sentence].filter(Boolean).join(" · ");
+  }
+
+  /**
+   * 在跟的卡的「上次检查」：最近一条说得出话的流水（本轮结束、没发出的催办不算），转成一句话；
+   * 时间按产品默认时区读（作息时区接上前）。一条都没有时退回状态一句话。
+   */
+  async function lastLineOf(
+    viewer: AgentActor,
+    taskId: string,
+    status: SidebarGoalStatus,
+  ): Promise<string> {
+    const [line] = await database
+      .select({ kind: taskEvents.kind, detail: taskEvents.detail })
+      .from(taskEvents)
+      .where(
+        and(
+          eq(taskEvents.tenantId, viewer.id),
+          eq(taskEvents.taskId, taskId),
+          notInArray(taskEvents.kind, [...QUIET_TASK_EVENT_KINDS]),
+        ),
+      )
+      .orderBy(desc(taskEvents.createdAt), desc(taskEvents.id))
+      .limit(1);
+    return (
+      (line &&
+        taskEventSentence(line, {
+          now: new Date(),
+          timeZone: DEFAULT_TIME_ZONE,
+        })) ||
+      STATUS_WORDS[status]
+    );
   }
 
   /** 单聊里员工最近一条回复：线程快照里最后一条助手消息，没有快照时用频道记下的最后一句（员工说的）。 */
@@ -907,7 +995,7 @@ export function createConversationSidebar(
     const fileIds = [
       ...new Set(
         produced.flatMap((card) =>
-          card.deliverable.attachments.filter(
+          (card.deliverable.attachments ?? []).filter(
             (id): id is string => typeof id === "string" && UUID.test(id),
           ),
         ),
@@ -935,7 +1023,7 @@ export function createConversationSidebar(
       const by = card.executorAgentId
         ? { byAgentId: card.executorAgentId }
         : {};
-      for (const id of card.deliverable.attachments) {
+      for (const id of card.deliverable.attachments ?? []) {
         // 查看者看不到的附件（或不是附件 id 的值）打不开，不列。
         const name = typeof id === "string" ? names.get(id) : undefined;
         if (name)
@@ -947,7 +1035,7 @@ export function createConversationSidebar(
             ...by,
           });
       }
-      for (const component of card.deliverable.components) {
+      for (const component of card.deliverable.components ?? []) {
         const kind = component.name === "showTable" ? "table" : "report";
         const named = component.args?.title;
         const title =

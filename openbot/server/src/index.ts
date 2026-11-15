@@ -478,6 +478,14 @@ import {
   createThreadVisibility,
 } from "./staffing/routes";
 import { createStaffingProposalStore } from "./staffing/store";
+import { createDelivery } from "./tasks/delivery";
+import { createCardTurns } from "./tasks/card-turns";
+import {
+  ACCEPT_TASK_REF,
+  deliveryTools,
+  offeredDeliveryTools,
+} from "./tasks/delivery-tools";
+import { createEvidenceGate } from "./tasks/evidence-gate";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
 import { createTaskRunner } from "./tasks/runner";
@@ -2619,8 +2627,12 @@ await startupLifecycle.run(async (startup) => {
         loadGrantedToolsForActor(actorId, initiator, botId),
         approvalService.disabledTools(actorId, botId),
       ]);
-      return tools.filter((tool) => !disabled(tool.ref));
+      // 关掉 `accept_task` 就是这位员工不走三步：交付和延期跟着不给。
+      return offeredDeliveryTools(tools.filter((tool) => !disabled(tool.ref)));
     };
+  /** The delivery loop's followed cards and the gate a hand-in passes (spec 2026-11-15-delivery-loop). */
+  const deliveryLoop = createDelivery(database);
+  const evidenceGate = createEvidenceGate(database);
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -2635,6 +2647,17 @@ await startupLifecycle.run(async (startup) => {
     ...offeredMemoryTools(config.edition, {
       store: personalMemoryStore,
       ingestion: memoryIngestion,
+      ownerUserId: actorId,
+      agentId: botId,
+    }),
+    /*
+     * 交付闭环的三步（接活、交付、延期）：每位员工默认都有，工具权限里关掉 `accept_task` 即不走三步
+     * （见上面的 `offeredDeliveryTools`）。卡片的租户是这一轮的人。
+     */
+    ...deliveryTools({
+      delivery: deliveryLoop,
+      gate: evidenceGate,
+      board: taskProjector,
       ownerUserId: actorId,
       agentId: botId,
     }),
@@ -4264,6 +4287,8 @@ await startupLifecycle.run(async (startup) => {
      * lands in 需要操作 when the coworker stops to ask, and comes back on its own when the person answers.
      */
     board: taskProjector,
+    // A person's message on a thread with an open followed card is a round of that card (一件活一张卡).
+    delivery: deliveryLoop,
     activity: async (turn, agentId, text, sourceId) =>
       channelStore.recordActivity(
         await actorFor(turn.ownerUserId),
@@ -5262,6 +5287,29 @@ await startupLifecycle.run(async (startup) => {
         ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
       taskProjector,
+      {
+        /*
+         * A followed card's 退回 is said in its thread as the person and answered there, on the same
+         * unattended runner a dispatched `@` runs on (a group card's, in the group); a 取消 stops the
+         * round through the runner's stop.
+         * External coworkers' turns (`cancelExternalTurn`) wait for their ACP runtime.
+         */
+        turns: createCardTurns({
+          database,
+          runTurn: unattendedTurnRunner,
+          runner: localThreadRunner,
+          // A group card's words go to the group, through the group's own send, as the person.
+          groupSend: (ownerUserId, channelId, input, options) =>
+            groupConversations.send(ownerUserId, channelId, input, options),
+          botName: async (tenantId, agentId) =>
+            (await agentProfileStore.get(await actorFor(tenantId), agentId))
+              ?.name ?? null,
+        }),
+        acceptTaskDisabled: async (tenantId, agentId) =>
+          (await approvalService.disabledTools(tenantId, agentId))(
+            ACCEPT_TASK_REF,
+          ),
+      },
     ),
   );
 

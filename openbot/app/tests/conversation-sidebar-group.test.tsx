@@ -221,6 +221,14 @@ function group(over: Partial<SidebarData["context"]> = {}): SidebarData {
     goal: {
       title: "周五发布 2.3 版",
       status: "running",
+
+      stage: null,
+
+      dueAt: null,
+
+      overdue: false,
+
+      returns: 0,
       rounds: 3,
       lastCheck: "进行中",
       pendingApprovalId: null,

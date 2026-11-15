@@ -147,6 +147,12 @@ export type TurnRunner = (input: {
   /** The reply so far, each time more of it arrives, for a surface that shows a turn in progress. */
   onText?: (text: string) => void;
   /**
+   * Called once, when the run's first event arrives: the turn got past its admission, holds the
+   * thread's lock and is running, so the person's message is in it. A caller that must not report a
+   * turn it could not start waits for this; a failure before it rejects the turn's promise instead.
+   */
+  onStarted?: () => void;
+  /**
    * Each CUSTOM event of the run, for a host that reports one to its surface (a group's reply row
    * notes that the Bot's context was compacted before this turn, or could not be).
    */
@@ -825,6 +831,7 @@ export function createTurnRunner(options: {
       runId: suppliedRunId,
       depth,
       onText,
+      onStarted,
       onCustom,
       skill,
     } = hostTurn;
@@ -1126,6 +1133,7 @@ export function createTurnRunner(options: {
       });
       const completed = new Promise<void>((resolve, reject) => {
         let terminal: Error | undefined;
+        let began = false;
         /*
          * A stop this turn makes (its cancel, a pause, the deadline) is recorded with Intelligence
          * before the run's terminal event, so the run reads as cancelled. The runner does the
@@ -1153,6 +1161,10 @@ export function createTurnRunner(options: {
              * answered with nothing.
              */
             next: (event) => {
+              if (!began) {
+                began = true;
+                onStarted?.();
+              }
               // Snapshots are skipped: they restate the whole conversation, and a model is named in an
               // event of its own, not in the history.
               if (

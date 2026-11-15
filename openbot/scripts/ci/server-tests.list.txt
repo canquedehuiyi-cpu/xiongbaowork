@@ -314,10 +314,15 @@ tests/decision-waits.integration.test.ts
 tests/deepseek-thinking.test.ts
 tests/delivery-attention.integration.test.ts
 tests/delivery-link-audit.test.ts
+tests/delivery-one-card.integration.test.ts
 tests/delivery-providers.test.ts
+tests/delivery-return-failure.test.ts
 tests/delivery-router.test.ts
+tests/delivery-routes.integration.test.ts
 tests/delivery-routes.test.ts
+tests/delivery-schema.integration.test.ts
 tests/delivery-store.integration.test.ts
+tests/delivery-tools.integration.test.ts
 tests/delivery-turn.test.ts
 tests/demoted-admin-enterprise.integration.test.ts
 tests/demoted-admin-platform-writes.integration.test.ts
@@ -346,6 +351,7 @@ tests/devices.test.ts
 tests/dictation-provider.test.ts
 tests/dictation-routes.test.ts
 tests/dockerfile-runtime-tree.test.ts
+tests/due-time.test.ts
 tests/duplicate-run.test.ts
 tests/edition-routes.test.ts
 tests/egress-policy-delivery.integration.test.ts
@@ -369,6 +375,7 @@ tests/entra-profile.test.ts
 tests/env-alias-dockerfiles.test.ts
 tests/env-aliases.test.ts
 tests/env-name.test.ts
+tests/evidence-gate-required.test.ts
 tests/external-agents-schema.integration.test.ts
 tests/github-oauth-signup.test.ts
 tests/goal-conversation.integration.test.ts
@@ -709,6 +716,7 @@ tests/run-built-agent-cancellation.test.ts
 tests/run-mode.test.ts
 tests/run-model-built-in.test.ts
 tests/run-model.test.ts
+tests/run-side-events.test.ts
 tests/runner-browser-probe.test.ts
 tests/runner-browser.test.ts
 tests/runner-channel.test.ts

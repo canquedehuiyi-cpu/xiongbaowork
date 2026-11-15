@@ -178,6 +178,35 @@ describe("what a run produced, read from its stream", () => {
     expect(isDeliverableRef({ file: "report.md" })).toBe(false);
     expect(isDeliverableRef(null)).toBe(false);
   });
+
+  test("isDeliverableRef accepts links, diffs, notes and checks and still accepts the old shape", () => {
+    expect(
+      isDeliverableRef({
+        kind: "deliverable",
+        components: [],
+        attachments: ["a"],
+      }),
+    ).toBe(true);
+    expect(
+      isDeliverableRef({
+        kind: "deliverable",
+        links: [{ url: "https://example.com/r", title: "报告" }],
+      }),
+    ).toBe(true);
+    expect(
+      isDeliverableRef({
+        kind: "deliverable",
+        diffs: [{ files: 2, added: 10, removed: 3, ref: "turn-1" }],
+        notes: ["结论：三家都对上了"],
+        checks: ["测试通过"],
+      }),
+    ).toBe(true);
+    // A new array that is not an array is not a deliverable.
+    expect(isDeliverableRef({ kind: "deliverable", links: "x" })).toBe(false);
+    expect(isDeliverableRef({ kind: "deliverable", notes: [1] })).toBe(false);
+    // A record with none of the arrays says nothing to look at.
+    expect(isDeliverableRef({ kind: "deliverable" })).toBe(false);
+  });
 });
 
 /**

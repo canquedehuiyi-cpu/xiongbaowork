@@ -1,5 +1,5 @@
 import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
-import { and, count, eq, lt, sql } from "drizzle-orm";
+import { and, count, eq, lt, notInArray, or, sql } from "drizzle-orm";
 import { NOT_SHOWN } from "../../../shared/component-markers";
 import { attachmentIdsIn } from "../channels/attachment-parts";
 import { HEADLESS_COMPONENTS } from "../components/headless";
@@ -28,9 +28,14 @@ export type TriggerSource =
 
 /**
  * The board's projector: every fact the run machinery already emits gets one
- * narrow function here that turns it into task state. Nothing else writes
- * `tasks`, so the board can be rebuilt from scratch by replaying these calls,
- * and no execution path reads the result.
+ * narrow function here that turns it into task state. For a card nobody follows
+ * (`tracked = false`) nothing else writes `tasks`, so the board can be rebuilt
+ * from scratch by replaying these calls, and no execution path reads the result.
+ *
+ * A followed card (`tracked = true`, the delivery loop) is the exception: it spans
+ * turns, and its reads and writes live in `tasks/delivery.ts`. The transitions here
+ * leave it to that module -- `finished` skips it, and the reclaim pass never closes
+ * it. A `done` or `cancelled` card is over, and no run fact here moves it.
  *
  * Callers pass the tenant explicitly rather than trusting ambient scope,
  * because a routine fires outside any person's request -- the same reason the
@@ -53,6 +58,12 @@ export type TaskProjector = {
     parentTaskId?: string;
     /** Reserve parent + children before a pipeline can execute its first step. */
     quotaUnits?: number;
+    /**
+     * A card filed under a crew's parent that is not one of its steps -- a second piece of work a
+     * step's coworker took on (`accept_task`): charged on its own like any other card, never out of
+     * the run's reserved step slots, so the steps still to come keep theirs.
+     */
+    outsideReservation?: boolean;
     /**
      * The parent's card, named by the RUN that asked rather than by a card id.
      *
@@ -127,12 +138,21 @@ export type DeliverableComponent = {
  *
  * `kind` is what the board keys on. Other writers may put other shapes in the same column, and the
  * board's chip is drawn only for this one, so a record that is not an output is never shown as one.
+ *
+ * The delivery loop (spec 2026-11-15-delivery-loop §4) adds four more kinds of thing a hand-in can
+ * name: `links`, `diffs` (an external coworker's change summary), `notes` (a words-only conclusion)
+ * and `checks` (the coworker's self-check lines). All six arrays are optional; a record written
+ * before this existed, with only `components` and `attachments`, is still a deliverable.
  */
 export type DeliverableRef = {
   kind: "deliverable";
-  components: DeliverableComponent[];
+  components?: DeliverableComponent[];
   /** Attachment ids, as `/api/attachments/<id>` serves them. */
-  attachments: string[];
+  attachments?: string[];
+  links?: { url: string; title: string }[];
+  diffs?: { files: number; added: number; removed: number; ref: string }[];
+  notes?: string[];
+  checks?: string[];
 };
 
 /**
@@ -152,14 +172,35 @@ export function deliverableRefOf(input: {
   return { kind: "deliverable", components, attachments };
 }
 
-/** Whether a stored `deliverable_ref` is a run's output rather than some other record. */
+const DELIVERABLE_ARRAYS = [
+  "components",
+  "attachments",
+  "links",
+  "diffs",
+  "notes",
+  "checks",
+] as const;
+
+/**
+ * Whether a stored `deliverable_ref` is a run's output rather than some other record: the right
+ * `kind`, at least one of the six lists present, and every list that is present really a list.
+ * Accepts both the original `{components, attachments}` shape and the delivery loop's.
+ */
 export function isDeliverableRef(value: unknown): value is DeliverableRef {
   if (!value || typeof value !== "object") return false;
-  const ref = value as Partial<DeliverableRef>;
-  return (
-    ref.kind === "deliverable" &&
-    Array.isArray(ref.components) &&
-    Array.isArray(ref.attachments)
+  const ref = value as Record<string, unknown>;
+  if (ref.kind !== "deliverable") return false;
+  const present = DELIVERABLE_ARRAYS.filter((key) => ref[key] !== undefined);
+  if (
+    present.length === 0 ||
+    !present.every((key) => Array.isArray(ref[key]))
+  ) {
+    return false;
+  }
+  return (["attachments", "notes", "checks"] as const).every(
+    (key) =>
+      ref[key] === undefined ||
+      (ref[key] as unknown[]).every((item) => typeof item === "string"),
   );
 }
 
@@ -203,16 +244,39 @@ export function deliverableFromEvents(
   events: readonly BaseEvent[],
   earlier: ReadonlySet<string> = new Set(),
 ): DeliverableRef | undefined {
+  const attachments: string[] = [];
+  for (const event of events) {
+    if (event.type !== EventType.MESSAGES_SNAPSHOT) continue;
+    const messages = (event as BaseEvent & { messages?: Message[] }).messages;
+    attachments.push(
+      ...producedAttachments(
+        (messages ?? []).filter((message) => !earlier.has(message.id)),
+      ),
+    );
+  }
+  const components = drawnComponents(events).map(({ name, args }) => ({
+    name,
+    args,
+  }));
+  return deliverableRefOf({ components, attachments });
+}
+
+/**
+ * The display components a stream drew, each with the id of the call that drew it, in the order the
+ * calls started. A component counts when its call named a display component and carried JSON
+ * arguments, and no result in the same stream refused it (see {@link deliverableFromEvents}).
+ */
+export function drawnComponents(
+  events: readonly BaseEvent[],
+): (DeliverableComponent & { toolCallId: string })[] {
   const calls = new Map<string, { name: string; args: string }>();
   const refused = new Set<string>();
-  const attachments: string[] = [];
   for (const event of events) {
     const value = event as BaseEvent & {
       toolCallId?: string;
       toolCallName?: string;
       delta?: string;
       content?: unknown;
-      messages?: Message[];
     };
     switch (event.type) {
       case EventType.TOOL_CALL_START:
@@ -241,24 +305,29 @@ export function deliverableFromEvents(
         )
           refused.add(value.toolCallId);
         break;
-      case EventType.MESSAGES_SNAPSHOT:
-        attachments.push(
-          ...producedAttachments(
-            (value.messages ?? []).filter(
-              (message) => !earlier.has(message.id),
-            ),
-          ),
-        );
-        break;
     }
   }
-  const components: DeliverableComponent[] = [];
-  for (const [id, call] of calls) {
-    if (!DISPLAY_COMPONENTS.has(call.name) || refused.has(id)) continue;
+  const components: (DeliverableComponent & { toolCallId: string })[] = [];
+  for (const [toolCallId, call] of calls) {
+    if (!DISPLAY_COMPONENTS.has(call.name) || refused.has(toolCallId)) continue;
     const args = parsedArgs(call.args);
-    if (args) components.push({ name: call.name, args });
+    if (args) components.push({ toolCallId, name: call.name, args });
   }
-  return deliverableRefOf({ components, attachments });
+  return components;
+}
+
+/**
+ * A card that is over: the person reviewed it or cancelled it. No run fact moves it again -- not a late
+ * close, not an approval or a question a round raised after the person ended the work.
+ */
+const ENDED = ["done", "cancelled"] as const;
+
+/**
+ * The card a run's facts belong to: the card the run opened (`run_ref`), or the followed card the run
+ * is a round of right now (`active_run_ref`, written by `tasks/delivery.ts`'s `attachRun`).
+ */
+function runOf(runRef: string) {
+  return or(eq(tasks.runRef, runRef), eq(tasks.activeRunRef, runRef));
 }
 
 export function createTaskProjector(
@@ -324,7 +393,11 @@ export function createTaskProjector(
           let units = input.quotaUnits ?? 1;
           if (!Number.isSafeInteger(units) || units < 1)
             throw new TypeError("Task quota units must be a positive integer");
-          if (input.source === "group_run" && parentTaskId) {
+          if (
+            input.source === "group_run" &&
+            parentTaskId &&
+            !input.outsideReservation
+          ) {
             const [parent] = await transaction
               .select({ quotaUnits: tasks.quotaUnits, source: tasks.source })
               .from(tasks)
@@ -336,6 +409,7 @@ export function createTaskProjector(
               )
               .limit(1);
             if (parent?.source === "group_run" && parent.quotaUnits > 1) {
+              // The slots taken: children opened out of the reservation (charged nothing themselves).
               const [children] = await transaction
                 .select({ value: count() })
                 .from(tasks)
@@ -343,6 +417,7 @@ export function createTaskProjector(
                   and(
                     eq(tasks.tenantId, input.tenantId),
                     eq(tasks.parentTaskId, parentTaskId),
+                    eq(tasks.quotaUnits, 0),
                   ),
                 );
               if ((children?.value ?? 0) >= parent.quotaUnits - 1)
@@ -386,18 +461,26 @@ export function createTaskProjector(
     async needsAction(input) {
       return runAsTenant(input.tenantId, async () => {
         // A run that parks on an approval parks its task; the run id is the
-        // join because that is what the approval row already carries.
+        // join because that is what the approval row already carries. A round
+        // hung on a followed card is found by the card's `active_run_ref`.
         await database
           .update(tasks)
           .set({
-            status: "needs_action",
+            /*
+             * Except a followed card already handed in (已交成果): a later round on it -- a follow-up
+             * the person asked after the hand-in -- waiting on them does not take the hand-in back.
+             * The card stays awaiting review, and `pending_approval_id` says it also waits on them
+             * (spec 2026-11-15-delivery-loop §3: 「等你操作」 is added to the card, not a lane).
+             */
+            status: sql`case when ${tasks.tracked} and ${tasks.status} = 'awaiting_review' then ${tasks.status} else 'needs_action'::task_status end`,
             pendingApprovalId: input.approvalId,
             updatedAt: new Date(),
           })
           .where(
             and(
               eq(tasks.tenantId, input.tenantId),
-              eq(tasks.runRef, input.runRef),
+              runOf(input.runRef),
+              notInArray(tasks.status, [...ENDED]),
               ...(input.pipelineRunId
                 ? [
                     sql`exists (select 1 from ${groupTaskRuns} where ${groupTaskRuns.id} = ${input.pipelineRunId} and ${groupTaskRuns.tenantId} = ${input.tenantId} and ${groupTaskRuns.status} = 'awaiting_action')`,
@@ -414,7 +497,14 @@ export function createTaskProjector(
         await database
           .update(tasks)
           .set({
-            status: input.failed ? "failed" : "running",
+            /*
+             * A denial fails an untracked card's run, and with it the card. A followed card is not
+             * ended by one round: it goes back to its coworker (spec 2026-11-15-delivery-loop §3) --
+             * unless it was handed in, which a round after the hand-in does not undo (`needsAction`).
+             */
+            status: input.failed
+              ? sql`case when ${tasks.tracked} and ${tasks.status} = 'awaiting_review' then ${tasks.status} when ${tasks.tracked} then 'running'::task_status else 'failed'::task_status end`
+              : sql`case when ${tasks.tracked} and ${tasks.status} = 'awaiting_review' then ${tasks.status} else 'running'::task_status end`,
             pendingApprovalId: null,
             updatedAt: new Date(),
           })
@@ -422,6 +512,7 @@ export function createTaskProjector(
             and(
               eq(tasks.tenantId, input.tenantId),
               eq(tasks.pendingApprovalId, input.approvalId),
+              notInArray(tasks.status, [...ENDED]),
             ),
           );
         announce(input.tenantId);
@@ -430,6 +521,12 @@ export function createTaskProjector(
 
     async finished(input) {
       return runAsTenant(input.tenantId, async () => {
+        /*
+         * Not a followed card: one of its rounds ending is not the work ending (spec 2026-11-15-delivery-loop
+         * §3), so its status and its hand-in stay as they are, and the round's line is written by
+         * `tasks/delivery.ts`'s `runEnded`. Not an ended card either (reviewed or cancelled): a run that
+         * ends after the person ended the work must not bring the card back.
+         */
         await database
           .update(tasks)
           .set({
@@ -441,7 +538,9 @@ export function createTaskProjector(
           .where(
             and(
               eq(tasks.tenantId, input.tenantId),
-              eq(tasks.runRef, input.runRef),
+              runOf(input.runRef),
+              eq(tasks.tracked, false),
+              notInArray(tasks.status, [...ENDED]),
               ...(input.onlyUnsettled
                 ? [sql`${tasks.status} in ('running', 'needs_action')`]
                 : []),
@@ -478,7 +577,8 @@ export function createTaskProjector(
       const ok = await runAsTenant(input.tenantId, () =>
         database.transaction(async (transaction) => {
           // Archiving is the one human-authored transition, and it only moves
-          // sideways into the finished lane -- never back into running.
+          // sideways into the finished lane -- never back into running. A followed
+          // card's archive is its 验收, and `tasks/delivery.ts` writes that.
           const reviewed = await transaction
             .update(tasks)
             .set({ status: "done", updatedAt: new Date() })
@@ -487,6 +587,7 @@ export function createTaskProjector(
                 eq(tasks.tenantId, input.tenantId),
                 eq(tasks.id, input.taskId),
                 eq(tasks.status, "awaiting_review"),
+                eq(tasks.tracked, false),
               ),
             )
             .returning({ id: tasks.id });
@@ -580,7 +681,7 @@ export function createTaskProjector(
            * ledgers, not the board: which cards may be closed is decided by whether the work behind
            * them is still recorded as in flight. Note that `group_run` is no longer in this pass — a
            * crew's cards are reconciled by `pipeline/reap.ts`, which knows the parent and its parked
-           * step apart.
+           * step apart. A followed card (`tracked`) is never closed here: only the person ends one.
            */
           .where(staleUnattendedCards(input.olderThanMs))
           .returning({ id: tasks.id });
