@@ -322,6 +322,39 @@ describe("group conversations in PostgreSQL", () => {
     });
   });
 
+  /*
+   * The wording is unit-tested in `group-conversations.test.ts`; this is the half that says it
+   * reaches the Bot: the prompt a group turn is really sent, not a template sitting unused beside it.
+   * `message_bot` is in that prompt's tool list too, and a Bot left to choose between the two picked
+   * the one that waits for an approval this conversation never shows anybody (L4-3, 2026-11-15).
+   */
+  test("a group turn is sent the rule that naming a peer is what reaches them", async () => {
+    const owner = await person();
+    await as(owner, async () => {
+      const ada = await bot(owner, "Ada");
+      const grace = await bot(owner, "Grace");
+      // The group answers in its roster order, which is the channel's Bot order; the ids decide it.
+      const [first = "", second = ""] = [ada, grace].sort();
+      const secondName = first === ada ? "Grace" : "Ada";
+      const channel = await channelStore.create(owner, [first, second]);
+      createdChannels.push(channel.id);
+      const { conversations, calls } = service({
+        replies: { [ada]: () => "On it.", [grace]: () => "On it." },
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-framing`,
+        text: "Split this between you",
+      });
+      await drain(conversations);
+      expect(calls[0]?.agentId).toBe(first);
+      const said = String(calls[0]?.userMessage?.content);
+      // The example has to be the peer and not the Bot being written for, or it is its own name.
+      expect(said).toContain(`@${secondName}`);
+      expect(said).toContain("the only way a request reaches them");
+      expect(said).toContain("message_bot");
+    });
+  });
+
   test("a person's message that starts with a skill's command states it for each Bot's turn, and a peer's never does", async () => {
     const owner = await person();
     // The owner's request: in their own frame, as the neighbouring cases run (G01).
