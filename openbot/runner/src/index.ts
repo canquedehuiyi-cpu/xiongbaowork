@@ -1022,6 +1022,8 @@ function connect(
             apps,
             desktop.sessions,
           );
+          // Its ack proves the external agents' frames sent before it arrived (acp/host.ts).
+          acp.heartbeatSent();
         } catch {
           stop();
         }
@@ -1289,6 +1291,11 @@ async function handleFrame(
   if (!frame || typeof frame !== "object" || Array.isArray(frame)) return;
   if (frame?.type === "error") {
     console.log(`runner: the deployment said ${JSON.stringify(frame)}`);
+    return;
+  }
+  // A heartbeat's answer: what the external agents sent before that beat has arrived.
+  if (frame.type === "ack") {
+    acp.acked();
     return;
   }
   // The live screen is not an action: nothing is journalled, and nothing is answered with a result.

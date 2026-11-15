@@ -44,7 +44,12 @@ import { permissionFacts } from "./paths";
  * and every `attach` replays all kept frames in the order they were made (the server drops repeats
  * by `(turnId, seq)`). Once a turn has ended, all its kept frames (its end included) stay until one
  * `attach` has replayed them, then the turn is forgotten; a frame of no turn (`acp.session`, an
- * open's `acp.error`) is kept the same way. Past `bufferLimit` updates or bytes for one turn, that turn's
+ * open's `acp.error`) is kept the same way. On a connection that stays up for days the heartbeat
+ * releases them instead: the runner tells the host when a beat went up (`heartbeatSent`) and when
+ * the server acked one (`acked`, one ack per beat, in order), and since the socket is ordered, the
+ * ack of a beat proves that every frame sent on this connection before that beat arrived; those of
+ * ended turns and of no turn are then dropped. As a backstop, past `endedLimit` (100 ended turns or
+ * 50 MB) the oldest ended turns are dropped first. Past `bufferLimit` updates or bytes for one turn, that turn's
  * kept updates are compacted to the latest plan and each tool call's last state (its `tool_call`
  * and updates merged into one); after that, updates of other kinds still go up live but are not
  * kept, and only a plan or tool-call update compacts again. Acks, ends, sessions and errors are
@@ -65,6 +70,8 @@ import { permissionFacts } from "./paths";
  */
 
 export const ACP_BUFFER_LIMIT = { count: 1000, bytes: 5 * 1024 * 1024 };
+/** Ended turns kept until delivered: past these the oldest ended turns are dropped first. */
+export const ACP_ENDED_LIMIT = { turns: 100, bytes: 50 * 1024 * 1024 };
 
 /** How many finished turns are remembered, so a resent `acp.prompt` is not run again. */
 const REMEMBERED_TURNS = 1000;
@@ -76,6 +83,10 @@ export type AcpHost = {
   handle(frame: Record<string, unknown>): Promise<boolean>;
   attach(send: (frame: Record<string, unknown>) => void): void;
   detach(): void;
+  /** A heartbeat just went up the attached connection (sent before or after `attach`). */
+  heartbeatSent(): void;
+  /** The server acknowledged a heartbeat of this connection (acks come one per beat). */
+  acked(): void;
   closeAll(): Promise<void>;
 };
 
@@ -89,6 +100,8 @@ export type AcpHostDeps = {
   bufferLimit?: { count: number; bytes: number };
   /** Told each time a turn's kept updates are compacted (tests). */
   onCompact?: (turnId: string) => void;
+  /** At most this many ended turns, and bytes of them, wait for proof of delivery. */
+  endedLimit?: { turns: number; bytes: number };
 };
 
 const HARNESSES: readonly AcpHarness[] = [
@@ -158,6 +171,9 @@ type Entry = {
   turnId: string | null;
   kind: "turn" | "once";
   bytes: number;
+  /** The attach (connection) it last went up on, and its place in the send order; 0 when never. */
+  sentOn: number;
+  sentSeq: number;
 };
 
 /** A turn's kept updates, and whether they were compacted already. */
@@ -183,6 +199,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   const spawn = deps.spawn ?? createAcpClient;
   const idleMs = deps.idleMs ?? IDLE_MS;
   const limit = deps.bufferLimit ?? ACP_BUFFER_LIMIT;
+  const endedLimit = deps.endedLimit ?? ACP_ENDED_LIMIT;
 
   const procs = new Map<string, Proc>();
   const threads = new Map<string, Thread>();
@@ -194,6 +211,14 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   const held = new Map<string, Held>();
   let send: ((frame: Frame) => void) | null = null;
   let closed = false;
+  /** Which attach this is, and how many frames have gone up so far (the send order). */
+  let connection = 0;
+  let sendSeq = 0;
+  /** `sendSeq` when each heartbeat of this connection went up, oldest first, until its ack. */
+  let beats: number[] = [];
+  /** When each turn still kept as ended ended, for dropping the oldest first. */
+  const endedAt = new Map<string, number>();
+  let ends = 0;
 
   // --- up the socket ---
 
@@ -228,23 +253,69 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       turnId,
       kind: turnId === null || isEnd ? "once" : "turn",
       bytes: sizeOf(frame),
+      sentOn: 0,
+      sentSeq: 0,
     };
+    // Sent first, so the stamp is on whatever entry ends up kept (a compaction copies it).
+    if (trySend(frame)) stamp(entry);
     if (
       entry.kind === "turn" &&
       frame.type === "acp.update" &&
       turnId !== null
     ) {
-      if (!hold(entry, turnId)) {
-        // Past the limit, a chunk of text is not kept; it still goes up now if it can.
-        trySend(frame);
-        return;
-      }
+      // Past the limit, a chunk of text is not kept (it went up above if it could).
+      hold(entry, turnId);
     } else outbox.push(entry);
     if (isEnd && turnId !== null) {
       for (const kept of outbox) if (kept.turnId === turnId) kept.kind = "once";
       held.delete(turnId);
+      endedAt.set(turnId, ++ends);
+      capEnded();
     }
-    trySend(frame);
+  }
+
+  function stamp(entry: Entry) {
+    entry.sentOn = connection;
+    entry.sentSeq = ++sendSeq;
+  }
+
+  /** Drops kept frames for which `gone` is true, and forgets ended turns with nothing left. */
+  function drop(gone: (entry: Entry) => boolean) {
+    outbox = outbox.filter((entry) => !gone(entry));
+    if (endedAt.size === 0) return;
+    const left = new Set(outbox.map((entry) => entry.turnId));
+    for (const turnId of endedAt.keys())
+      if (!left.has(turnId)) endedAt.delete(turnId);
+  }
+
+  /** The backstop on a connection that never ends: the oldest ended turns go first. */
+  function capEnded() {
+    const bytes = new Map<string, number>();
+    let total = 0;
+    for (const entry of outbox) {
+      if (entry.kind !== "once" || entry.turnId === null) continue;
+      if (!endedAt.has(entry.turnId)) continue;
+      bytes.set(entry.turnId, (bytes.get(entry.turnId) ?? 0) + entry.bytes);
+      total += entry.bytes;
+    }
+    if (bytes.size <= endedLimit.turns && total <= endedLimit.bytes) return;
+    const oldest = [...bytes.keys()].sort(
+      (a, b) => (endedAt.get(a) ?? 0) - (endedAt.get(b) ?? 0),
+    );
+    const evicted = new Set<string>();
+    let turnsLeft = bytes.size;
+    for (const turnId of oldest) {
+      if (turnsLeft <= endedLimit.turns && total <= endedLimit.bytes) break;
+      evicted.add(turnId);
+      turnsLeft -= 1;
+      total -= bytes.get(turnId) ?? 0;
+    }
+    drop(
+      (entry) =>
+        entry.kind === "once" &&
+        entry.turnId !== null &&
+        evicted.has(entry.turnId),
+    );
   }
 
   /** Sent now if possible, never kept (a repeated acknowledgement). */
@@ -757,6 +828,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
 
     attach(sender) {
       send = sender;
+      connection += 1;
       // Everything kept, in the order it was made: the server drops what it already has by seq.
       const replayed = new Set<Entry>();
       let through = true;
@@ -765,11 +837,11 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
           through = false;
           break;
         }
+        stamp(entry);
         if (entry.kind === "once") replayed.add(entry);
       }
       // Ended turns and frames of no turn have now been replayed once.
-      if (replayed.size > 0)
-        outbox = outbox.filter((entry) => !replayed.has(entry));
+      if (replayed.size > 0) drop((entry) => replayed.has(entry));
       if (!through) return;
       for (const { frame } of pending.values()) {
         if (!trySend(frame)) return;
@@ -778,6 +850,25 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
 
     detach() {
       send = null;
+      // Acks of a connection that is gone never come.
+      beats = [];
+    },
+
+    heartbeatSent() {
+      beats.push(sendSeq);
+    },
+
+    acked() {
+      // The socket is ordered: the ack of a beat proves everything sent before the beat arrived.
+      const mark = beats.shift();
+      if (mark === undefined) return;
+      drop(
+        (entry) =>
+          entry.kind === "once" &&
+          entry.sentOn === connection &&
+          entry.sentSeq > 0 &&
+          entry.sentSeq <= mark,
+      );
     },
 
     async closeAll() {

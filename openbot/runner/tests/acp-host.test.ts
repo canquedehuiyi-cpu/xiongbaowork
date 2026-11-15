@@ -60,6 +60,7 @@ function setup(
   opts: {
     idleMs?: number;
     bufferLimit?: { count: number; bytes: number };
+    endedLimit?: { turns: number; bytes: number };
     apps?: (ref: string) => AppEntry | null;
   } = {},
 ): Setup {
@@ -106,6 +107,7 @@ function setup(
     },
     ...(opts.idleMs === undefined ? {} : { idleMs: opts.idleMs }),
     ...(opts.bufferLimit ? { bufferLimit: opts.bufferLimit } : {}),
+    ...(opts.endedLimit ? { endedLimit: opts.endedLimit } : {}),
   });
   hosts.push(host);
   return {
@@ -937,9 +939,18 @@ test("a repeated prompt for a turn whose end is still kept adds no second end", 
   await t.host.handle(prompt("th_1", "turn_1"));
   await waitFor(() => t.settled() === 1);
   await new Promise((resolve) => setTimeout(resolve, 30));
-  await t.host.handle(prompt("th_1", "turn_1"));
+  for (let i = 0; i < 5; i++) await t.host.handle(prompt("th_1", "turn_1"));
   t.host.attach(t.send);
   expect(ofType(ofTurn(t.frames, "turn_1"), "acp.turn.end")).toHaveLength(1);
+
+  // Once the kept end is gone, a repeat keeps one new end, not one per repeat.
+  for (let i = 0; i < 5; i++) await t.host.handle(prompt("th_1", "turn_1"));
+  const mark = t.frames.length;
+  t.host.detach();
+  t.host.attach(t.send);
+  expect(
+    ofType(ofTurn(t.frames.slice(mark), "turn_1"), "acp.turn.end"),
+  ).toHaveLength(1);
 });
 
 test("a turn cancelled while its session is being made ends cancelled", async () => {
@@ -992,4 +1003,102 @@ test("an open with an unknown workdirRef leaves the thread's session in place", 
   });
   expect(t.spawns).toHaveLength(1);
   expect(ofType(t.frames, "acp.session")).toHaveLength(1);
+});
+
+test("an ack for a heartbeat sent after a turn's end releases the turn", async () => {
+  const t = setup({ turns: [{ steps: [{ update: chunk("x") }] }] });
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ended(t.frames, "turn_1"));
+  t.host.heartbeatSent();
+  t.host.acked();
+  t.host.detach();
+  const mark = t.frames.length;
+  t.host.attach(t.send);
+  // The turn and the session frame were both sent before the beat: nothing to replay.
+  expect(t.frames.slice(mark)).toEqual([]);
+});
+
+test("an ack for a heartbeat sent before a turn's end keeps the turn", async () => {
+  const t = setup({ turns: [{ steps: [{ update: chunk("x") }] }] });
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1);
+  t.host.heartbeatSent();
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ended(t.frames, "turn_1"));
+  t.host.acked();
+  // An ack with no beat waiting proves nothing either.
+  t.host.acked();
+  t.host.detach();
+  const mark = t.frames.length;
+  t.host.attach(t.send);
+  const replayed = t.frames.slice(mark);
+  expect(ofType(replayed, "acp.session")).toHaveLength(0);
+  expect(ofTurn(replayed, "turn_1").map((f) => [f.type, f.seq])).toEqual([
+    ["acp.turn.ack", undefined],
+    ["acp.update", 1],
+    ["acp.turn.end", undefined],
+  ]);
+});
+
+test("an ack releases only frames sent before its own beat on this connection", async () => {
+  const t = setup({ turns: [{ steps: [{ update: chunk("x") }] }] });
+  t.host.attach((frame) => frame);
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => t.settled() === 1);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  t.host.heartbeatSent();
+  t.host.detach();
+  // The new connection beats first, then attaches; its first ack is for that beat.
+  t.host.heartbeatSent();
+  t.host.attach((frame) => frame);
+  // A frame of no turn sent live on the new connection, after its first beat.
+  await t.host.handle(open("th_1"));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  t.host.acked();
+  t.host.detach();
+  t.host.attach(t.send);
+  expect(ofType(t.frames, "acp.session")).toEqual([
+    {
+      type: "acp.session",
+      threadId: "th_1",
+      sessionId: "sess_1",
+      loaded: true,
+    },
+  ]);
+});
+
+test("past the cap on ended turns the oldest are dropped first", async () => {
+  const t = setup(
+    { turns: [{ steps: [{ update: chunk("x") }] }] },
+    { endedLimit: { turns: 2, bytes: 50_000_000 } },
+  );
+  await t.host.handle(open("th_1"));
+  for (const turnId of ["turn_1", "turn_2", "turn_3"])
+    await t.host.handle(prompt("th_1", turnId));
+  await waitFor(() => t.settled() === 3);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  t.host.attach(t.send);
+  const ends = ofType(t.frames, "acp.turn.end").map((frame) => frame.turnId);
+  expect(ends).toEqual(["turn_2", "turn_3"]);
+  expect(ofTurn(t.frames, "turn_1")).toEqual([]);
+});
+
+test("past the byte cap on ended turns the oldest are dropped first", async () => {
+  const big = "y".repeat(4000);
+  const t = setup(
+    { turns: [{ steps: [{ update: chunk(big) }] }] },
+    { endedLimit: { turns: 100, bytes: 9000 } },
+  );
+  await t.host.handle(open("th_1"));
+  for (const turnId of ["turn_1", "turn_2", "turn_3"])
+    await t.host.handle(prompt("th_1", turnId));
+  await waitFor(() => t.settled() === 3);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  t.host.attach(t.send);
+  const ends = ofType(t.frames, "acp.turn.end").map((frame) => frame.turnId);
+  expect(ends).toEqual(["turn_2", "turn_3"]);
 });
