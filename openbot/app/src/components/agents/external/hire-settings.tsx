@@ -5,6 +5,7 @@ import {
   HarnessTile,
   harnessAbout,
 } from "@/components/agents/external/hire-from-computer";
+import { QueryError } from "@/components/layout/query-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,6 +14,7 @@ import {
   type AcpRuleKey,
   type AcpRuleValue,
   deviceStanding,
+  discoveryQueryOptions,
   HARNESS_LABEL,
   hireExternalMutationOptions,
   RULE_ROWS,
@@ -30,11 +32,14 @@ import { cn } from "@/lib/utils";
  * 招聘设置（外部员工 Task 10，设计稿第 2 屏）：名字、部门、工作文件夹（只列这台电脑共享的文件夹，传
  * `fld_…` 引用）、汇报说明；「哪些事要先问你」五项规则，默认值按规格；三条底线固定显示、不能关。
  *
- * - 任何一项选「直接做」，那一行下面写清楚这意味着什么；「运行命令」尤其：命令行上的付款、删除、外发
- *   熊宝尽量认出来，但拦不全。
+ * - 用户把一项改成「直接做」（不是这一项的默认值时），那一行下面写清楚这意味着什么；「运行命令」尤其：
+ *   命令行上的付款、删除、外发熊宝尽量认出来，但拦不全。「改工作文件夹里的文件」默认就是直接做，不提示。
+ * - 工作文件夹和本机智能体都不默认选，第一项是「请选择…」，没选不能招。
+ * - 打开时再问一次那台电脑：离线、这一家没装或接不上，就写明白并且不能招（地址可以直接打开这一页）。
  * - 招 Hermes 时写明：它有自己的智能审批，不能保证每个动作都先请求许可。
- * - 手动添加（`custom`）：选桌面端登记的本机智能体（`app_…`），并要再勾一次「我知道它可能从不请求许可」
- *   才能招（规格第 4 节）。
+ * - 手动添加（`custom`）：选桌面端登记的本机程序（`app_…`），并要再勾一次「我知道它可能从不请求许可」
+ *   才能招（规格第 4 节）。设备上报的本机程序没有标记哪些支持开放协议（`DeviceApp` 只有 ref 和名字），
+ *   所以这里列的是全部登记的本机程序，由用户自己挑支持开放协议的那个。
  * - 日报那一项等日报上线再显示；「做完一件事就交付并上看板」是现有行为，只写说明，不是开关。
  */
 
@@ -44,7 +49,7 @@ const NAME_MAX = 40;
 /** 底线文案：比设计稿的「删除整个文件夹」更严，和现有员工一致（规格第 4 节）。 */
 export const BOTTOM_LINE = "付款和下单 · 删除文件 · 对外发消息或邮件";
 
-/** 选「直接做」时那一行下面的话。 */
+/** 用户把一项改成「直接做」时那一行下面的话（默认就是直接做的那一项不提示）。 */
 function directWarning(key: AcpRuleKey): string {
   if (key === "runCommand")
     return `命令行上的付款、删除、外发，${shortName()}会尽量认出来，但拦不全。需要硬保证，请把这项设为「先问我」。`;
@@ -114,17 +119,28 @@ export function HireSettings({
     useState<Record<AcpRuleKey, AcpRuleValue>>(ACP_RULE_DEFAULTS);
   const [acknowledged, setAcknowledged] = useState(false);
 
-  // 没动过的就用默认：第一个共享文件夹、第一个登记的本机智能体、这家的名字。
-  const chosenWorkdir = workdirRef ?? roots[0]?.ref ?? "";
-  const chosenApp = appRef ?? apps[0]?.ref ?? "";
+  // 工作文件夹和本机程序必须本人选；名字没动过就用这家的名字。
+  const chosenWorkdir =
+    workdirRef && roots.some((root) => root.ref === workdirRef)
+      ? workdirRef
+      : "";
+  const chosenApp =
+    appRef && apps.some((app) => app.ref === appRef) ? appRef : "";
   const appName = apps.find((app) => app.ref === chosenApp)?.name;
   const label =
     harness === "custom" ? (appName ?? "本机智能体") : HARNESS_LABEL[harness];
   const chosenName = name ?? label;
 
+  const mine = !!device && deviceStanding(device, me) === "mine";
+  const discovery = useQuery({
+    ...discoveryQueryOptions(deviceId),
+    enabled: mine && !!device?.online && !custom,
+  });
+
   const back = onCancel ? (
     <button
       className="inline-flex w-fit items-center gap-0.5 text-[14px] text-muted-foreground hover:text-foreground"
+      data-slot="hire-back"
       onClick={onCancel}
       type="button"
     >
@@ -133,6 +149,18 @@ export function HireSettings({
     </button>
   ) : null;
 
+  if (devices.isError && !devices.data)
+    return (
+      <div className="flex flex-col gap-3">
+        {back}
+        <QueryError
+          error={devices.error}
+          label="读不到你的电脑"
+          onRetry={() => void devices.refetch()}
+          retrying={devices.isFetching}
+        />
+      </div>
+    );
   if (devices.isPending)
     return (
       <p className="text-[13px] text-muted-foreground" role="status">
@@ -162,7 +190,30 @@ export function HireSettings({
   ];
   const trimmedName = chosenName.trim();
   const trimmedDepartment = department.trim();
+  /** 为什么现在不能招；null 是能招。 */
+  const discovered =
+    harness === "custom"
+      ? undefined
+      : discovery.data?.agents.find((agent) => agent.harness === harness);
+  const blocker: string | null = !device.online
+    ? `电脑离线：打开这台电脑、让${shortName()}桌面端连上后再招。`
+    : custom
+      ? null
+      : discovery.isError && !discovery.data
+        ? null
+        : !discovery.data
+          ? "正在确认这台电脑上的情况…"
+          : !discovery.data.online
+            ? `电脑离线：打开这台电脑、让${shortName()}桌面端连上后再招。`
+            : !discovered?.installed
+              ? `这台电脑上还没装 ${label}，装好后再招。`
+              : !discovered.acpReady
+                ? `这台电脑上的 ${label} 还接不上，回到上一页看怎么处理。`
+                : null;
+  const checkFailed = !custom && discovery.isError && !discovery.data;
   const ready =
+    !blocker &&
+    !checkFailed &&
     trimmedName.length > 0 &&
     [...trimmedName].length <= NAME_MAX &&
     [...trimmedDepartment].length <= DEPARTMENT_MAX_CHARACTERS &&
@@ -213,6 +264,23 @@ export function HireSettings({
         </div>
       </div>
 
+      {checkFailed ? (
+        <QueryError
+          error={discovery.error}
+          label="读不到这台电脑上的智能体"
+          onRetry={() => void discovery.refetch()}
+          retrying={discovery.isFetching}
+        />
+      ) : blocker ? (
+        <p
+          className="m-0 rounded-xl border border-border bg-card p-3.5 text-[13px] text-muted-foreground"
+          data-slot="hire-notice"
+          role="status"
+        >
+          {blocker}
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap items-start gap-6">
         <Section title="基本信息">
           <div className="flex flex-col gap-1.5">
@@ -241,6 +309,7 @@ export function HireSettings({
               className="h-10"
               id={`${ids}-department`}
               list={`${ids}-departments`}
+              maxLength={DEPARTMENT_MAX_CHARACTERS}
               onChange={(event) => setDepartment(event.target.value)}
               placeholder="未分组"
               value={department}
@@ -250,6 +319,9 @@ export function HireSettings({
                 <option key={value} value={value} />
               ))}
             </datalist>
+            <span className="text-[12px] text-muted-foreground">
+              不填就是未分组；最多 {DEPARTMENT_MAX_CHARACTERS} 个字。
+            </span>
           </div>
           {custom ? (
             <div className="flex flex-col gap-1.5">
@@ -257,7 +329,7 @@ export function HireSettings({
                 className="text-[13px] text-muted-foreground"
                 htmlFor={`${ids}-app`}
               >
-                本机智能体
+                本机程序
               </label>
               {apps.length > 0 ? (
                 <select
@@ -267,6 +339,9 @@ export function HireSettings({
                   onChange={(event) => setAppRef(event.target.value)}
                   value={chosenApp}
                 >
+                  <option disabled value="">
+                    请选择…
+                  </option>
                   {apps.map((app) => (
                     <option key={app.ref} value={app.ref}>
                       {app.name}
@@ -275,11 +350,13 @@ export function HireSettings({
                 </select>
               ) : (
                 <p className="m-0 text-[13px] text-muted-foreground">
-                  这台电脑还没有登记本机智能体。在桌面端填好它的启动命令登记后，再回来招。
+                  这台电脑还没有登记本机程序。先在桌面端登记它的启动命令，再回来招。
                 </p>
               )}
               <span className="text-[12px] text-muted-foreground">
-                启动命令只存在这台电脑上，在桌面端填写和修改。
+                选一个支持开放协议的智能体启动程序。这里列的是桌面端登记的全部本机程序，
+                {shortName()}
+                分不出哪些支持开放协议；启动命令只存在这台电脑上。
               </span>
             </div>
           ) : null}
@@ -298,6 +375,9 @@ export function HireSettings({
                 onChange={(event) => setWorkdirRef(event.target.value)}
                 value={chosenWorkdir}
               >
+                <option disabled value="">
+                  请选择…
+                </option>
                 {roots.map((root) => (
                   <option key={root.ref} value={root.ref}>
                     {root.name}
@@ -364,7 +444,8 @@ export function HireSettings({
                     ))}
                   </select>
                 </div>
-                {rules[row.key] === "direct" ? (
+                {rules[row.key] === "direct" &&
+                ACP_RULE_DEFAULTS[row.key] !== "direct" ? (
                   <Warning>{directWarning(row.key)}</Warning>
                 ) : null}
               </li>

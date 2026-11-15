@@ -72,12 +72,9 @@ const MARK_ID: Record<DiscoveredHarness, string | null> = {
 
 /** 装了但还接不上时，卡片上说怎么办。 */
 const NOT_READY: Record<DiscoveredHarness, string> = {
-  codex:
-    "这台电脑上缺少启动接入组件用的 npx（随 Node.js 安装），装好后点「重新查找」。",
-  "claude-code":
-    "这台电脑上缺少启动接入组件用的 npx（随 Node.js 安装），装好后点「重新查找」。",
-  hermes:
-    "这个版本的 Hermes 还接不上开放协议，升级并装好 acp 组件后点「重新查找」。",
+  codex: "先在这台电脑上装好 Node.js，再点「重新查找」。",
+  "claude-code": "先在这台电脑上装好 Node.js，再点「重新查找」。",
+  hermes: "这个版本的 Hermes 还不支持开放协议，升级后点「重新查找」。",
 };
 
 export function harnessAbout(harness: DiscoveredHarness) {
@@ -275,7 +272,12 @@ export function HireFromComputer({
         me={me}
         onDeviceChange={onDeviceChange}
       />
-      <DeviceAgents device={device} me={me} onHire={onHire} />
+      <DeviceAgents
+        device={device}
+        me={me}
+        onHire={onHire}
+        onlyDevice={devices.data.length === 1}
+      />
     </div>
   );
 }
@@ -297,8 +299,10 @@ function DeviceBar({
     enabled: standing === "mine" && device.online,
   });
   const online = device.online && discovery.data?.online !== false;
+  // 只数现在就能招的：装了但还接不上的不算。
   const found = discovery.data?.online
-    ? discovery.data.agents.filter((agent) => agent.installed).length
+    ? discovery.data.agents.filter((agent) => agent.installed && agent.acpReady)
+        .length
     : undefined;
   return (
     <div
@@ -371,14 +375,29 @@ function DeviceBar({
   );
 }
 
+/** 唯一的一台电脑招不了时，给一条去配对别的电脑的路。 */
+function PairLink() {
+  return (
+    <Link
+      className="w-fit text-primary underline-offset-4 hover:underline"
+      to="/settings/devices"
+    >
+      去配对一台电脑
+    </Link>
+  );
+}
+
 function DeviceAgents({
   device,
   me,
   onHire,
+  onlyDevice,
 }: {
   device: RegisteredDevice;
   me: string | undefined;
   onHire: (deviceId: string, harness: AcpHarness) => void;
+  /** 只有这一台电脑：它招不了时没有「换一台电脑」，就给去配对的链接。 */
+  onlyDevice: boolean;
 }) {
   const standing = deviceStanding(device, me);
   const discovery = useQuery({
@@ -392,6 +411,7 @@ function DeviceAgents({
         <p className="m-0">
           这台电脑还没认主人，在桌面端重新登录一次即可认领，之后就能在上面招外部员工。
         </p>
+        {onlyDevice ? <PairLink /> : null}
       </Notice>
     );
   if (standing === "others")
@@ -400,6 +420,7 @@ function DeviceAgents({
         <p className="m-0">
           这台电脑是别人配对的。只能在你自己配对的电脑上招外部员工。
         </p>
+        {onlyDevice ? <PairLink /> : null}
       </Notice>
     );
   if (!device.online || discovery.data?.online === false)
@@ -410,6 +431,7 @@ function DeviceAgents({
           打开这台电脑、让{shortName()}
           桌面端连上后，这里会列出它上面能招的智能体。
         </p>
+        {onlyDevice ? <PairLink /> : null}
       </Notice>
     );
   if (discovery.isError && !discovery.data)

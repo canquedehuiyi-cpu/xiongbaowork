@@ -147,8 +147,13 @@ rememberForSession(() => {
 });
 
 export function rememberWakersSearch(search: WakersSearch): void {
-  // A dialog open at the time is not part of the wall the back link should return to.
-  lastWakersSearch = wallSearch(search);
+  /*
+   * A dialog open at the time is not part of the wall the back link should return to, and neither is
+   * a hire form (外部员工 Task 10): after hiring, deleting or hiding an employee, going back must not
+   * land on 「把 X 招进来」 again, one click from hiring it twice.
+   */
+  const { hire: _hire, ...wall } = wallSearch(search);
+  lastWakersSearch = wall;
 }
 
 export function wakersReturnSearch(): WakersSearch {

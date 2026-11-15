@@ -31,6 +31,10 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  wakersBackLink,
+  wakersReturnSearch,
+} from "@/components/wakers/wakers-search";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
@@ -39,7 +43,7 @@ import { settleReactWork } from "./settle-react-work";
 
 type Sent = { url: string; method: string; body: unknown };
 const sent: Sent[] = [];
-let respond: (request: Sent) => Response | undefined;
+let respond: (request: Sent) => Response | Promise<Response> | undefined;
 let originalFetch: typeof fetch;
 const clients: QueryClient[] = [];
 
@@ -56,7 +60,7 @@ beforeAll(() => {
       };
       sent.push(request);
       return (
-        respond(request) ??
+        (await respond(request)) ??
         Response.json({ error: "not served" }, { status: 404 })
       );
     },
@@ -310,7 +314,10 @@ test("an installed agent that cannot speak the protocol yet cannot be hired", as
       }) as HTMLButtonElement
     ).disabled,
   ).toBe(true);
-  expect(within(codex).getByText(/npx/)).toBeTruthy();
+  // 说怎么办，不提内部的工具名；也不把它算进「能招的」。
+  expect(within(codex).getByText(/先在这台电脑上装好 Node\.js/)).toBeTruthy();
+  expect(within(codex).queryByText(/npx|acp/)).toBeNull();
+  expect(screen.getByText("这台电脑上还没找到能招的智能体")).toBeTruthy();
 });
 
 test("offline device shows 电脑离线 and no hire buttons", async () => {
@@ -353,6 +360,17 @@ test("someone else's device cannot be hired on", async () => {
   expect(discoveries()).toEqual([]);
 });
 
+/** 选一个工作文件夹：默认不选，必须本人选。 */
+function pickFolder(form: HTMLElement, ref = "fld_shop") {
+  fireEvent.change(
+    within(form).getByLabelText("工作文件夹（它只在这里面干活）"),
+    { target: { value: ref } },
+  );
+}
+
+const hireButton = (form: HTMLElement) =>
+  within(form).getByRole("button", { name: "招进来" }) as HTMLButtonElement;
+
 test("workdir picker lists only the device's shared folders", async () => {
   serve({
     devices: [
@@ -367,22 +385,41 @@ test("workdir picker lists only the device's shared folders", async () => {
   });
   const { screen } = draw("/bots?source=computer&device=dev-mac&hire=codex");
 
-  const picker = (await screen.findByLabelText(
+  const form = await screen.findByRole("form", { name: "把 Codex 招进来" });
+  const picker = within(form).getByLabelText(
     "工作文件夹（它只在这里面干活）",
-  )) as HTMLSelectElement;
+  ) as HTMLSelectElement;
   expect([...picker.options].map((option) => option.textContent)).toEqual([
+    "请选择…",
     "xiongbao-shop",
     "产品文档",
   ]);
   expect([...picker.options].map((option) => option.value)).toEqual([
+    "",
     "fld_shop",
     "fld_docs",
   ]);
+  // 默认不选，没选不能招。
+  expect(picker.value).toBe("");
+  await waitFor(() => expect(within(form).queryByText(/正在确认/)).toBeNull());
+  expect(hireButton(form).disabled).toBe(true);
+  pickFolder(form, "fld_docs");
+  expect(picker.value).toBe("fld_docs");
+  expect(hireButton(form).disabled).toBe(false);
   expect(screen.getByText(/在 何总的 MacBook Pro 上干活/)).toBeTruthy();
 });
 
 test("custom agent requires the second confirmation checkbox", async () => {
-  serve();
+  serve({
+    devices: [
+      device({
+        apps: [
+          { ref: "app_gemini", name: "Gemini CLI" },
+          { ref: "app_files", name: "文件助手" },
+        ],
+      }),
+    ],
+  });
   const { screen, router } = draw("/bots?source=computer");
 
   // 从「手动添加」进招聘设置。
@@ -390,19 +427,32 @@ test("custom agent requires the second confirmation checkbox", async () => {
     await screen.findByRole("button", { name: /手动添加/ }),
   );
   const form = await screen.findByRole("form", {
-    name: "把 Gemini CLI 招进来",
+    name: "把 本机智能体 招进来",
   });
   expect(router.state.location.search).toMatchObject({
     source: "computer",
     device: "dev-mac",
     hire: "custom",
   });
+  // 本机程序也不默认选；说明请人自己挑支持开放协议的那个。
+  const app = within(form).getByLabelText("本机程序") as HTMLSelectElement;
+  expect(app.value).toBe("");
+  expect([...app.options].map((option) => option.textContent)).toEqual([
+    "请选择…",
+    "Gemini CLI",
+    "文件助手",
+  ]);
   expect(
-    (within(form).getByLabelText("本机智能体") as HTMLSelectElement).value,
-  ).toBe("app_gemini");
-  const hire = within(form).getByRole("button", {
-    name: "招进来",
-  }) as HTMLButtonElement;
+    within(form).getByText(/选一个支持开放协议的智能体启动程序/),
+  ).toBeTruthy();
+  fireEvent.change(app, { target: { value: "app_gemini" } });
+  pickFolder(form);
+  expect(
+    screen.getByRole("form", { name: "把 Gemini CLI 招进来" }),
+  ).toBeTruthy();
+
+  // 选齐了，没勾第二次确认还是不能招，点了也不发。
+  const hire = hireButton(form);
   expect(hire.disabled).toBe(true);
   await userEvent.click(hire);
   expect(sent.filter((request) => request.method === "POST")).toEqual([]);
@@ -451,8 +501,14 @@ test("hire posts rules with the spec defaults", async () => {
   expect(within(form).queryByText(/日报/)).toBeNull();
   expect(within(form).getByText(/同时推到你的手机。/)).toBeTruthy();
   expect(within(form).queryByText(/飞书/)).toBeNull();
+  // 部门最多 32 个字，输入框直接挡住。
+  expect(within(form).getByLabelText("部门").getAttribute("maxlength")).toBe(
+    "32",
+  );
 
-  await userEvent.click(within(form).getByRole("button", { name: "招进来" }));
+  pickFolder(form);
+  await waitFor(() => expect(hireButton(form).disabled).toBe(false));
+  await userEvent.click(hireButton(form));
   await waitFor(() =>
     expect(router.state.location.pathname).toBe("/bots/ext-1"),
   );
@@ -471,9 +527,19 @@ test("hire posts rules with the spec defaults", async () => {
       push: "ask",
     },
   });
+
+  // 招到以后「返回」回到「从我的电脑招」，不会又是一张「把 Codex 招进来」。
+  expect(wakersReturnSearch()).toEqual({
+    source: "computer",
+    device: "dev-mac",
+  });
+  await router.navigate(wakersBackLink() as never);
+  await waitFor(() => expect(router.state.location.pathname).toBe("/bots"));
+  expect(await screen.findByRole("article", { name: "Codex" })).toBeTruthy();
+  expect(screen.queryByRole("form", { name: /招进来/ })).toBeNull();
 });
 
-test("a rule set to 直接做 warns under its row, the command row most of all", async () => {
+test("a rule changed to 直接做 warns under its row, the command row most of all", async () => {
   serve();
   const { screen } = draw("/bots?source=computer&device=dev-mac&hire=codex");
   const form = await screen.findByRole("form", { name: "把 Codex 招进来" });
@@ -481,26 +547,33 @@ test("a rule set to 直接做 warns under its row, the command row most of all",
     within(form)
       .getByRole("combobox", { name: label })
       .closest("li") as HTMLElement;
+  const set = (label: string, value: string) =>
+    fireEvent.change(within(form).getByRole("combobox", { name: label }), {
+      target: { value },
+    });
 
-  // 「改工作文件夹里的文件」默认就是直接做，所以默认就有一条。
+  // 「改工作文件夹里的文件」默认就是直接做，不提示；默认状态一条警示都没有。
+  expect(within(form).queryByText(/不再问你/)).toBeNull();
+  expect(within(form).queryByText(/拦不全/)).toBeNull();
+
+  set("动工作文件夹以外的文件", "direct");
   expect(
-    within(row("改工作文件夹里的文件")).getByText(/不再问你/),
+    within(row("动工作文件夹以外的文件")).getByText(
+      /不再问你；删除文件、付款和下单、对外发消息仍然每次交给你/,
+    ),
   ).toBeTruthy();
-  expect(within(row("运行命令")).queryByText(/拦不全/)).toBeNull();
 
-  fireEvent.change(within(form).getByRole("combobox", { name: "运行命令" }), {
-    target: { value: "direct" },
-  });
+  set("运行命令", "direct");
   expect(
     within(row("运行命令")).getByText(
       /命令行上的付款、删除、外发.*拦不全.*先问我/,
     ),
   ).toBeTruthy();
 
-  fireEvent.change(within(form).getByRole("combobox", { name: "运行命令" }), {
-    target: { value: "ask" },
-  });
+  set("运行命令", "ask");
   expect(within(row("运行命令")).queryByText(/拦不全/)).toBeNull();
+  set("动工作文件夹以外的文件", "ask");
+  expect(within(form).queryByText(/不再问你/)).toBeNull();
 });
 
 test("hiring Hermes says it cannot promise every action asks first", async () => {
@@ -531,11 +604,132 @@ test("a refused hire shows the server's sentence and stays on the form", async (
     "/bots?source=computer&device=dev-mac&hire=codex",
   );
   const form = await screen.findByRole("form", { name: "把 Codex 招进来" });
-  await userEvent.click(within(form).getByRole("button", { name: "招进来" }));
+  pickFolder(form);
+  await waitFor(() => expect(hireButton(form).disabled).toBe(false));
+  await userEvent.click(hireButton(form));
   expect((await within(form).findByRole("alert")).textContent).toBe(
     "只能在你自己配对的电脑上招。",
   );
   expect(router.state.location.pathname).toBe("/bots");
+});
+
+test("the hire form opened by address on an offline computer cannot hire", async () => {
+  serve({ devices: [device({ online: false })] });
+  const { screen } = draw("/bots?source=computer&device=dev-mac&hire=codex");
+  const form = await screen.findByRole("form", { name: "把 Codex 招进来" });
+  pickFolder(form);
+  expect(within(form).getByRole("status").textContent).toMatch(/电脑离线/);
+  expect(hireButton(form).disabled).toBe(true);
+  expect(discoveries()).toEqual([]);
+});
+
+test("the hire form for an agent the computer does not have cannot hire", async () => {
+  serve({
+    discovery: {
+      online: true,
+      agents: [
+        ALL_INSTALLED[0],
+        {
+          harness: "hermes",
+          version: null,
+          installed: false,
+          acpReady: false,
+          signedIn: null,
+        },
+        { ...ALL_INSTALLED[1], acpReady: false },
+      ],
+    },
+  });
+  const { screen } = draw("/bots?source=computer&device=dev-mac&hire=hermes");
+  const form = await screen.findByRole("form", { name: "把 Hermes 招进来" });
+  pickFolder(form);
+  expect((await within(form).findByRole("status")).textContent).toMatch(
+    /这台电脑上还没装 Hermes/,
+  );
+  expect(hireButton(form).disabled).toBe(true);
+
+  cleanup();
+  const claude = draw(
+    "/bots?source=computer&device=dev-mac&hire=claude-code",
+  ).screen;
+  const claudeForm = await claude.findByRole("form", {
+    name: "把 Claude Code 招进来",
+  });
+  pickFolder(claudeForm);
+  expect((await within(claudeForm).findByRole("status")).textContent).toMatch(
+    /还接不上/,
+  );
+  expect(hireButton(claudeForm).disabled).toBe(true);
+});
+
+test("the hire form says so when the device list cannot be read", async () => {
+  respond = (request) =>
+    request.url === "/api/devices"
+      ? Response.json({ error: "服务器出错了。" }, { status: 500 })
+      : undefined;
+  const { screen } = draw("/bots?source=computer&device=dev-mac&hire=codex");
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("读不到你的电脑");
+  expect(within(alert).getByRole("button", { name: "重试" })).toBeTruthy();
+  expect(screen.queryByText("找不到这台电脑。")).toBeNull();
+  expect(screen.queryByRole("form")).toBeNull();
+});
+
+test("a failed discovery says so, offers a retry and no hire buttons", async () => {
+  serve();
+  const served = respond;
+  respond = (request) =>
+    /\/agents$/.test(request.url) && request.url.startsWith("/api/devices/")
+      ? Response.json(
+          { error: "没能读到这台电脑上的智能体，请稍后再试。" },
+          { status: 502 },
+        )
+      : served(request);
+  const { screen } = draw("/bots?source=computer");
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("读不到这台电脑上的智能体");
+  expect(within(alert).getByRole("button", { name: "重试" })).toBeTruthy();
+  expect(screen.queryAllByRole("button", { name: /招进来|手动添加/ })).toEqual(
+    [],
+  );
+});
+
+test("discovery in flight shows that it is looking, with no hire buttons yet", async () => {
+  serve();
+  const served = respond;
+  respond = (request) =>
+    /\/agents$/.test(request.url) && request.url.startsWith("/api/devices/")
+      ? new Promise<Response>(() => {})
+      : served(request);
+  const { screen } = draw("/bots?source=computer");
+  expect(await screen.findByText("正在这台电脑上找智能体…")).toBeTruthy();
+  expect(screen.queryAllByRole("button", { name: /招进来|手动添加/ })).toEqual(
+    [],
+  );
+});
+
+test("the only computer, offline or not mine, offers a way to pair another", async () => {
+  for (const only of [
+    device({ online: false }),
+    device({ pairedByUserId: null }),
+    device({ pairedByUserId: "user-other" }),
+  ]) {
+    serve({ devices: [only] });
+    const { screen } = draw("/bots?source=computer");
+    const link = await screen.findByRole("link", { name: "去配对一台电脑" });
+    expect(link.getAttribute("href")).toBe("/settings/devices");
+    cleanup();
+  }
+  // 有别的电脑可换时，用「换一台电脑」就够了。
+  serve({
+    devices: [
+      device({ online: false }),
+      device({ id: "row-pc", deviceId: "dev-pc", name: "办公室台式机" }),
+    ],
+  });
+  const { screen } = draw("/bots?source=computer&device=dev-mac");
+  await screen.findByText("打开这台电脑、让", { exact: false });
+  expect(screen.queryByRole("link", { name: "去配对一台电脑" })).toBeNull();
 });
 
 test("cloud tab is informational and has no hire button", async () => {

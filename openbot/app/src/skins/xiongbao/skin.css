@@ -410,3 +410,10 @@
   [data-hire-primary]:hover:not(:disabled) {
   filter: brightness(1.08);
 }
+
+/* 手机上工作台页头已经有「返回」，招聘设置自己的那个收起来，只留一个。 */
+:root:not([data-skin])
+  [data-workbench-frame][data-workbench-phone]
+  [data-slot="hire-back"] {
+  display: none;
+}
