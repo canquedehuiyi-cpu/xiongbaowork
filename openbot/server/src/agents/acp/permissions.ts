@@ -12,7 +12,7 @@ import {
   ONCE_ONLY_SOURCES,
   offersStandingRule,
 } from "../../../../shared/standing-rule";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { safetyRequirement } from "../../approvals/policy";
 import {
   type ApprovalAction,
@@ -26,7 +26,7 @@ import {
   isAcpAction,
 } from "../../approvals/types";
 import type { Database } from "../../db/client";
-import { agents, approvalRequests } from "../../db/schema";
+import { agentProfiles, agents, approvalRequests } from "../../db/schema";
 import type { TaskProjector } from "../../tasks/projector";
 import { runAsTenant } from "../../tenant/context";
 import { ownerTenantOfBot } from "../bot-owner";
@@ -776,7 +776,7 @@ export type AcpEmployeeForPermission = {
 /**
  * The employee a permission request is from, read in its hirer's tenant (the bridge's frame): its
  * name, its rules (`agents.configuration.permissions`), and the computer's name. Null when it is no
- * longer an external employee there.
+ * longer an external employee there, deleted included.
  */
 export function createAcpEmployeeLoader(
   database: Database,
@@ -792,7 +792,12 @@ export function createAcpEmployeeLoader(
         configuration: agents.configuration,
       })
       .from(agents)
-      .where(eq(agents.id, request.agentId))
+      // Deleting an employee soft-deletes its profile and leaves its agents row: gone all the same
+      // (as `loadDeviceAcpEmployee` reads it), so its rules allow nothing any more.
+      .innerJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
+      .where(
+        and(eq(agents.id, request.agentId), isNull(agentProfiles.deletedAt)),
+      )
       .limit(1);
     if (row?.type !== "device_acp") return null;
     const device = (await devices.list(request.tenantId)).find(

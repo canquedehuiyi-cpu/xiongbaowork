@@ -9,6 +9,7 @@ import {
 } from "../src/agents/acp/agent";
 import {
   ACP_BAD_OPTION,
+  ACP_EMPLOYEE_GONE,
   ACP_PERMISSION_EXPIRED,
   type AcpApprovalCard,
   createAcpApprovalHirer,
@@ -503,6 +504,32 @@ describe("an external employee's permission requests", () => {
     expect(answers()).toEqual([
       expect.objectContaining({ requestId: "req-mode", optionId: "no" }),
     ]);
+  });
+
+  test("an employee deleted mid-turn has its requests refused, not allowed by its old rules", async () => {
+    const hirer = await person("hirer");
+    const { agentId, request, answers, approvals, events } = await harness(
+      hirer,
+      { runCommand: "direct" },
+    );
+    // Its rules allow this outright while it is employed.
+    await request("req-1", "git status");
+    expect(answers()).toEqual([
+      expect.objectContaining({ requestId: "req-1", optionId: "yes" }),
+    ]);
+    // The hirer deletes it (the profile is soft-deleted; its agents row stays).
+    await runAsTenant(hirer.id, () => profileStore.softDelete(hirer, agentId));
+    await request("req-2", "git status");
+    expect(answers()).toEqual([
+      expect.objectContaining({ requestId: "req-1", optionId: "yes" }),
+      expect.objectContaining({ requestId: "req-2", optionId: "no" }),
+    ]);
+    expect(await approvals()).toEqual([]);
+    expect(
+      events
+        .filter((event) => event.type === EventType.TEXT_MESSAGE_CONTENT)
+        .map((event) => (event as { delta?: unknown }).delta),
+    ).toContain(ACP_EMPLOYEE_GONE);
   });
 
   test("deny answers reject_once", async () => {
