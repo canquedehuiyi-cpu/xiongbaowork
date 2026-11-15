@@ -29,12 +29,14 @@ import {
   useDeviceAcp,
 } from "./agents/acp/agent";
 import { createAcpContextLoader } from "./agents/acp/context";
+import { externalEmployeesAmong, externalHirerOf } from "./agents/acp/external";
 import {
   createAcpApprovalHirer,
   createAcpEmployeeLoader,
   createAcpPermissionBridge,
 } from "./agents/acp/permissions";
 import { createAcpRelay } from "./agents/acp/relay";
+import { createExternalAgentRoutes } from "./agents/acp/routes";
 import { type AcpTurnRow, createAcpTurnStore } from "./agents/acp/turns";
 import {
   CoworkerUnavailableError,
@@ -188,6 +190,7 @@ import {
   createGroupStore,
   groupSourceForRun,
 } from "./channels/group";
+import { createGroupRoster } from "./channels/group-roster";
 import { createModelChoices } from "./channels/model-choice";
 import { type ChannelStore, createChannelStore } from "./channels/routes";
 import { createStallGuard } from "./channels/stall-guard";
@@ -4332,21 +4335,23 @@ await startupLifecycle.run(async (startup) => {
       onlineElsewhere: deviceOnlineElsewhere,
     }),
   });
+  const groupStore = createGroupStore(database, () => threadIdentity.mint());
   const baseGroupConversations = createGroupConversations({
-    store: createGroupStore(database, () => threadIdentity.mint()),
+    store: groupStore,
     queue: createWorkQueue(database),
     owner: workOwner("group"),
-    roster: async (ownerUserId, channelId) => {
-      const actor = await actorFor(ownerUserId);
-      const channel = await channelStore.get(actor, channelId);
-      if (!channel || channel.agentIds.length < 2) return null;
-      const bots: { id: string; name: string }[] = [];
-      for (const agentId of channel.agentIds) {
-        const profile = await agentProfileStore.get(actor, agentId);
-        if (profile) bots.push({ id: agentId, name: profile.name });
-      }
-      return bots;
-    },
+    /*
+     * The Bots the asker may use, and an external employee its hirer put in the group for every
+     * member (spec §6): its profile stays private to the hirer everywhere else.
+     */
+    roster: createGroupRoster({
+      actorFor,
+      channel: (actor, channelId) => channelStore.get(actor, channelId),
+      profile: (actor, agentId) => agentProfileStore.get(actor, agentId),
+      externalEmployees: (agentIds) =>
+        externalEmployeesAmong(database, agentIds),
+      members: (channelId) => groupStore.members(channelId),
+    }),
     runTurn: groupTurnRunner,
     caps: config.handoff,
     // The handoff desk's own grant check, read per hop and failing closed.
@@ -4383,6 +4388,8 @@ await startupLifecycle.run(async (startup) => {
       channelStore.create(await actorFor(ownerUserId), agentIds, options),
     // Adding a Bot to an existing group passes the same access filter as naming it at creation.
     canUseBot: canUseGroupBot,
+    // Only its hirer adds or removes an external employee, whoever started the group (spec §6).
+    externalHirer: (agentId) => externalHirerOf(database, agentId),
     // The owner says whether a Bot's words may reach the other people in a group.
     privateShare: createPrivateShareCheck({ approvals: approvalService.store }),
     // A Team Bot's consent card raised in a group turn is drawn in the shared transcript.
@@ -5362,9 +5369,38 @@ await startupLifecycle.run(async (startup) => {
       (target) => {
         void deviceChannel.flush(target).catch(() => undefined);
       },
+      // 从我的电脑招: a read asked of the connected machine now, never queued (spec §2).
+      {
+        isReachable: (target) => deviceChannel.isReachable(target),
+        discover: (target) =>
+          deviceChannel.dispatch(
+            target,
+            "agents.discover",
+            {},
+            30_000,
+            undefined,
+            undefined,
+            { durable: false },
+          ),
+      },
     ),
   );
   app.route("/api/runner", createRunnerRoutes(deviceStore, quota));
+
+  // Hiring an external employee from the person's own computer (spec §1), and changing how it runs.
+  app.route(
+    "/api/agents/external",
+    createExternalAgentRoutes({
+      database,
+      profiles: agentProfileStore,
+      devices: deviceStore,
+      requireUser: config.singleUser
+        ? createDevRequireUser(config.singleUserAccess)
+        : createRequireUser(auth as AuthService, roleRepository),
+      quota,
+      auditStore: bootAuditStore,
+    }),
+  );
 
   // Story RES2: the signed-in person's projects on their own machines, in their own frame.
   app.route(

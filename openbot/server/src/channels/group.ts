@@ -63,7 +63,15 @@ import type { WorkQueue } from "../work/queue";
 export const GROUP_TURN_KIND = "group.turn";
 
 export type GroupMessage = typeof groupMessages.$inferSelect;
-export type GroupBot = { id: string; name: string };
+export type GroupBot = {
+  id: string;
+  name: string;
+  /**
+   * An external employee's hirer (`device_acp`): its work, its card and its quota are that
+   * person's, whoever in the group asked (spec §6).
+   */
+  hiredBy?: string;
+};
 
 /**
  * One queued turn: who it is for, which Bots answer it, and how deep in a Bot-to-Bot chain it is.
@@ -1032,6 +1040,11 @@ export function createGroupConversations(deps: {
    * to add Bots to an existing group.
    */
   canUseBot?: (ownerUserId: string, agentId: string) => Promise<boolean>;
+  /**
+   * The hirer of an external employee (`device_acp`), null for any other Bot. Only its hirer brings
+   * it into a group or takes it out, whoever started the group (spec §6).
+   */
+  externalHirer?: (agentId: string) => Promise<string | null>;
   /** How often a running reply's partial text is written for the transcript to show. */
   progressEveryMs?: number;
   /**
@@ -1396,6 +1409,12 @@ export function createGroupConversations(deps: {
     );
     const runId = runIdFor(id);
     /*
+     * An external employee's card is its hirer's, whoever asked: its turn runs in the hirer's queue
+     * and the run that does the work finishes the card it finds there (`adoptRunnerCard`). One card,
+     * one charge, in that tenant (spec §1, §6). Every other Bot's card is the asker's.
+     */
+    const cardTurn = bot.hiredBy ? { ...turn, ownerUserId: bot.hiredBy } : turn;
+    /*
      * The board's card for this answer, opened here and not when the message was queued.
      *
      * Everything above is a turn that never reached a Bot: it left the conversation, its earlier turn
@@ -1403,7 +1422,7 @@ export function createGroupConversations(deps: {
      * answered when nothing ran at all -- the same lie ticket 020's handoff cards were written to
      * avoid, where the open sits after the pause gate and the refusal for exactly this reason.
      */
-    const carded = await openCard(turn, agentId, runId);
+    const carded = await openCard(cardTurn, agentId, runId);
     /*
      * The skill the person picked, when their message starts with its command: under the group's
      * framing above, the message this Bot is sent no longer starts with it, so it is stated for the
@@ -1505,7 +1524,7 @@ export function createGroupConversations(deps: {
       }
       if (gate.status === "denied") {
         await deps.store.finish(id, gate.message, "failed");
-        await closeCard(turn, agentId, runId, true);
+        await closeCard(cardTurn, agentId, runId, true);
         return;
       }
       await deps.store.finish(id, result.replyText, "completed");
@@ -1515,7 +1534,7 @@ export function createGroupConversations(deps: {
        * does the work, which finishes it and announces its answer here (`announceHandoff`).
        */
       if (!(result as { detached?: boolean }).detached)
-        await closeCard(turn, agentId, runId, false);
+        await closeCard(cardTurn, agentId, runId, false);
       saved = true;
       savedReply = result.replyText;
       await deps.activity?.(turn, agentId, result.replyText, `group:${id}`);
@@ -1586,14 +1605,14 @@ export function createGroupConversations(deps: {
         const heldForApproval =
           typeof error.waiting.approvalId === "string" &&
           error.waiting.approvalId.length > 0;
-        if (!heldForApproval) await closeCard(turn, agentId, runId, false);
+        if (!heldForApproval) await closeCard(cardTurn, agentId, runId, false);
       } else {
         await deps.store.finish(
           id,
           error instanceof Error ? error.message : String(error),
           "failed",
         );
-        await closeCard(turn, agentId, runId, true);
+        await closeCard(cardTurn, agentId, runId, true);
       }
     }
   }
@@ -1604,6 +1623,31 @@ export function createGroupConversations(deps: {
     const creator = (await deps.store.people(channel))[0]?.userId;
     if (owner !== creator)
       throw new GroupRefusedError("只有发起这个群组的人才能调整群里的员工。");
+  };
+  /**
+   * Who may add or remove these Bots: the group's creator for ordinary Bots, and for an external
+   * employee its hirer and nobody else, the creator included. A change naming only the caller's own
+   * external employees needs them to be in the group, not to have started it.
+   */
+  const hirerOrCreator = async (
+    owner: string,
+    channel: string,
+    agentIds: readonly string[],
+    change: "add" | "remove",
+  ) => {
+    let others = false;
+    for (const id of agentIds) {
+      const hirer = (await deps.externalHirer?.(id)) ?? null;
+      if (hirer === null) others = true;
+      else if (hirer !== owner)
+        throw new GroupRefusedError(
+          change === "add"
+            ? "外部员工只能由招它的人拉进群组。"
+            : "外部员工只能由招它的人移出群组，群主也不行。",
+        );
+    }
+    if (others) await creatorOnly(owner, channel);
+    else await roster(owner, channel);
   };
   const botList = (input: unknown) => {
     const agentIds = z
@@ -1724,14 +1768,17 @@ export function createGroupConversations(deps: {
       await deps.store.seedOrder(owner, channel.id, body.agentIds);
       return channel;
     },
-    /** Add Bots to a group the caller started; they answer after the Bots already in it. */
+    /**
+     * Add Bots to a group the caller started; they answer after the Bots already in it. An external
+     * employee is brought in by its hirer alone, who need only be in the group (spec §6).
+     */
     async addBots(
       owner: string,
       channel: string,
       input: string[],
     ): Promise<{ added: string[] }> {
       const agentIds = botList(input);
-      await creatorOnly(owner, channel);
+      await hirerOrCreator(owner, channel, agentIds, "add");
       const current = new Set(await deps.store.bots(channel));
       const again = agentIds.find((id) => current.has(id));
       if (again) throw new GroupRefusedError(`员工 ${again} 已经在群里了。`);
@@ -1745,14 +1792,17 @@ export function createGroupConversations(deps: {
       await deps.store.addBots(owner, channel, agentIds);
       return { added: agentIds };
     },
-    /** Take Bots out of a group the caller started, leaving it at least two. */
+    /**
+     * Take Bots out of a group the caller started, leaving it at least two. An external employee is
+     * taken out by its hirer alone, not by whoever started the group (spec §6).
+     */
     async removeBots(
       owner: string,
       channel: string,
       input: string[],
     ): Promise<{ removed: string[] }> {
       const agentIds = botList(input);
-      await creatorOnly(owner, channel);
+      await hirerOrCreator(owner, channel, agentIds, "remove");
       const current = await deps.store.bots(channel);
       const missing = agentIds.find((id) => !current.includes(id));
       if (missing)

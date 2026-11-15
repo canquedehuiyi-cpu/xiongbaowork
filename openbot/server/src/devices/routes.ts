@@ -3,6 +3,8 @@ import { Hono } from "hono";
 import type { AppVariables } from "../auth/guards";
 import type { QuotaService } from "../quota/limits";
 import { QuotaExceeded } from "../quota/limits";
+import type { DispatchTarget } from "./channel";
+import { DeviceOfflineError } from "./channel";
 import type { DeviceQueue } from "./queue";
 import { QUEUE_ATTENTION_THRESHOLD } from "./queue";
 import type { DeviceStore } from "./store";
@@ -27,6 +29,15 @@ export function createDeviceRoutes(
    */
   queue?: DeviceQueue,
   onReviewed?: (target: { tenantId: string; deviceId: string }) => void,
+  /**
+   * Which agents a machine has that can be hired as external employees (spec §2): asked of the
+   * connected machine now (`agents.discover`, a read sent straight to its socket, never queued).
+   * Absent, `GET /:deviceId/agents` answers every machine as offline.
+   */
+  agentDiscovery?: {
+    isReachable: (target: DispatchTarget) => boolean;
+    discover: (target: DispatchTarget) => Promise<unknown>;
+  },
 ) {
   const routes = new Hono<Ctx>();
 
@@ -115,6 +126,36 @@ export function createDeviceRoutes(
     return context.json({ ok: true, uncertain, paused: uncertain > 0 });
   });
 
+  /*
+   * 从我的电脑招: what this machine has installed, signed in and ready to speak ACP. Only booleans and
+   * a version come back (the runner keeps everything else on the machine); whatever it sent is
+   * untrusted, so only those fields of the agents XiongBao knows are passed on. A machine that is not
+   * connected answers `{online: false, agents: []}`.
+   */
+  routes.get("/:deviceId/agents", requireUser, async (context) => {
+    const tenantId = context.var.actor.id;
+    const wanted = context.req.param("deviceId");
+    const device = (await store.list(tenantId)).find(
+      (row) => row.deviceId === wanted || row.id === wanted,
+    );
+    if (!device) return context.json({ error: "找不到该设备。" }, 404);
+    const target = { tenantId, deviceId: device.deviceId };
+    const offline = { online: false, agents: [] };
+    if (!agentDiscovery?.isReachable(target)) return context.json(offline);
+    try {
+      return context.json({
+        online: true,
+        agents: discoveredAgents(await agentDiscovery.discover(target)),
+      });
+    } catch (error) {
+      if (error instanceof DeviceOfflineError) return context.json(offline);
+      return context.json(
+        { error: "没能读到这台电脑上的智能体，请稍后再试。" },
+        502,
+      );
+    }
+  });
+
   routes.delete("/:id", requireUser, async (context) => {
     const removed = await store.remove(
       context.var.actor.id,
@@ -126,6 +167,37 @@ export function createDeviceRoutes(
   });
 
   return routes;
+}
+
+const DISCOVERED = new Set(["codex", "claude-code", "hermes"]);
+
+/** A machine's `agents.discover` answer, kept to the fields and agents XiongBao knows. */
+export function discoveredAgents(output: unknown): {
+  harness: "codex" | "claude-code" | "hermes";
+  version: string | null;
+  installed: boolean;
+  acpReady: boolean;
+  signedIn: boolean | null;
+}[] {
+  if (!Array.isArray(output)) return [];
+  const kept: ReturnType<typeof discoveredAgents> = [];
+  for (const entry of output) {
+    const { harness, version, installed, acpReady, signedIn } = (entry ??
+      {}) as Record<string, unknown>;
+    if (typeof harness !== "string" || !DISCOVERED.has(harness)) continue;
+    if (kept.some((agent) => agent.harness === harness)) continue;
+    kept.push({
+      harness: harness as "codex" | "claude-code" | "hermes",
+      version:
+        typeof version === "string" && /^[0-9A-Za-z.+-]{1,40}$/.test(version)
+          ? version
+          : null,
+      installed: installed === true,
+      acpReady: acpReady === true,
+      signedIn: typeof signedIn === "boolean" ? signedIn : null,
+    });
+  }
+  return kept;
 }
 
 /** What a runner sends when it arrives with a code from its owner's screen. */

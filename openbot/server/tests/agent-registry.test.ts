@@ -62,3 +62,24 @@ test("marks unavailable agents with safe reasons", () => {
     },
   ]);
 });
+
+test("an external employee is available by its computer, not an address", () => {
+  expect(
+    createAgentRegistry(
+      [
+        { id: "coder", name: "小码", type: "device_acp", deviceId: "laptop" },
+        { id: "lost", name: "丢了", type: "device_acp", deviceId: "" },
+      ],
+      new Set(),
+    ),
+  ).toEqual([
+    { id: "coder", name: "小码", type: "device_acp", available: true },
+    {
+      id: "lost",
+      name: "丢了",
+      type: "device_acp",
+      available: false,
+      reason: "No computer is set for this external employee.",
+    },
+  ]);
+});

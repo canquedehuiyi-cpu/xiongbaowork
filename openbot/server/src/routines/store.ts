@@ -36,6 +36,7 @@ import {
   ne,
   sql,
 } from "drizzle-orm";
+import { refuseExternalEmployeeWork } from "../agents/acp/external";
 import {
   conversationCalled,
   conversationName,
@@ -905,6 +906,12 @@ export function createRoutineStore(database: Database): RoutineStore {
 
     async create(input) {
       const instruction = validInstruction(input.instruction);
+      // Nobody is there to answer an external employee's permission requests on a schedule.
+      await refuseExternalEmployeeWork(
+        database,
+        input.ownerUserId,
+        input.agentId,
+      );
       const goal = await goalItRuns(
         input.ownerUserId,
         input.agentId,

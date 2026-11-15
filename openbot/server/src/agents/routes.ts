@@ -22,6 +22,7 @@ import {
   AgentNotFoundError,
   AgentNotManageableError,
   type AgentProfileStore,
+  ExternalAgentRefusedError,
   IsolationRefusedError,
   ManagedAgentUnavailableError,
   ModelBindingConflictError,
@@ -409,6 +410,8 @@ function parseRoleTemplateSource(
   }
   return { id, version };
 }
+
+const EXTERNAL_HIRED_ELSEWHERE = "外部员工只能在「从我的电脑招」里招进来。";
 
 function isAgentInputObject(input: unknown): input is AgentInputObject {
   return typeof input === "object" && input !== null && !Array.isArray(input);
@@ -1017,6 +1020,12 @@ export function createAgentRoutes(
   routes.post("/", requireUser, async (context) => {
     // Malformed JSON is a recoverable client-input error and is validated by the same parser.
     const body = await context.req.json().catch(() => null);
+    // An external employee is hired from the person's own computer, never made here (spec §1).
+    if (
+      isAgentInputObject(body) &&
+      ("external" in body || (body as { type?: unknown }).type === "device_acp")
+    )
+      return context.json({ error: EXTERNAL_HIRED_ELSEWHERE }, 409);
     const parsed = parseAgentInput(
       body,
       allowPrivateHosts,
@@ -1517,6 +1526,9 @@ function mapStoreError(context: Context, error: unknown): Response {
     return context.json({ error: error.message }, 409);
   }
   if (error instanceof OwnerlessBotPrivateError) {
+    return context.json({ error: error.message }, 409);
+  }
+  if (error instanceof ExternalAgentRefusedError) {
     return context.json({ error: error.message }, 409);
   }
   // Every route that can raise this records it first; this is the answer for any that is added later.

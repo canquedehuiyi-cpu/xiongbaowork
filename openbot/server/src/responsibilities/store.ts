@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq } from "drizzle-orm";
+import { refuseExternalEmployeeWork } from "../agents/acp/external";
 import type { Database } from "../db/client";
 import { routines } from "../db/schema/coworker";
 import {
@@ -111,6 +112,8 @@ export function createResponsibilityStore(
   const store: ResponsibilityStore = {
     async create(ownerUserId, input) {
       const value = parseResponsibilityInput(input);
+      // A duty runs with nobody asking, so nobody would answer an external employee's requests.
+      await refuseExternalEmployeeWork(database, ownerUserId, value.agentId);
       const target = await options.resolveTarget(
         ownerUserId,
         value.agentId,

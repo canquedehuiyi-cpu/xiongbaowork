@@ -10,6 +10,7 @@ import {
   type DeviceAcpEmployee,
   routeExternalTurns,
 } from "../src/agents/acp/agent";
+import { externalEmployeesAmong } from "../src/agents/acp/external";
 import { createAcpRelay } from "../src/agents/acp/relay";
 import type { AcpTurnRow } from "../src/agents/acp/turns";
 import { createAgentProfileStore } from "../src/agents/profile-store";
@@ -18,6 +19,7 @@ import {
   createGroupConversations,
   createGroupStore,
 } from "../src/channels/group";
+import { createGroupRoster } from "../src/channels/group-roster";
 import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
 import { createDatabase } from "../src/db/client";
@@ -31,9 +33,11 @@ import {
   threadRunEvents,
   threadRuns,
   threads,
+  usageCounters,
   users,
   workItems,
 } from "../src/db/schema";
+import { createQuotaService } from "../src/quota/limits";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
@@ -56,6 +60,7 @@ const profileStore = createAgentProfileStore(
 );
 const threadIdentity = createThreadIdentity("test-deployment");
 const channelStore = createChannelStore(database, profileStore, threadIdentity);
+const quota = createQuotaService(database);
 const prefix = `acp-group-${randomUUID()}`;
 const createdUsers: string[] = [];
 const createdAgents: string[] = [];
@@ -85,6 +90,9 @@ afterEach(async () => {
           .where(eq(threadRunEvents.tenantId, id));
         await database.delete(threadRuns).where(eq(threadRuns.tenantId, id));
         await database.delete(threads).where(eq(threads.tenantId, id));
+        await database
+          .delete(usageCounters)
+          .where(eq(usageCounters.tenantId, id));
       });
       await database.delete(users).where(eq(users.id, id));
     }
@@ -179,7 +187,8 @@ async function harness(owner: AgentActor) {
     },
     log: () => undefined,
   });
-  const projector = createTaskProjector(database);
+  // Charging the plan as production does, so a second card would show as a second charge.
+  const projector = createTaskProjector(database, undefined, quota);
   const runner = new PostgresAgentRunner(database, projector);
   const builtIn: string[] = [];
   const normal: TurnRunner = async (input) => {
@@ -188,30 +197,20 @@ async function harness(owner: AgentActor) {
       replyText: `${input.agentId === writer ? "Writer" : "Reviewer"} 看过了。`,
     };
   };
+  const groupStore = createGroupStore(database, () => threadIdentity.mint());
   const conversations = createGroupConversations({
-    store: createGroupStore(database, () => threadIdentity.mint()),
+    store: groupStore,
     queue: createWorkQueue(database),
     owner: `${prefix}-replica`,
-    /*
-     * The group's Bots as the asker may use them, except that the hirer's external employee is
-     * usable by every member of a group the hirer put it in (spec §1, §6; the roster rule is Task 8's).
-     */
-    roster: async (ownerUserId, channelId) => {
-      const actor: AgentActor = { id: ownerUserId, role: "user" };
-      const channel = await runAsTenant(ownerUserId, () =>
-        channelStore.get(actor, channelId),
-      );
-      if (!channel || channel.agentIds.length < 2) return null;
-      const bots = [];
-      for (const agentId of channel.agentIds) {
-        const profile = await runAsTenant(
-          agentId === external ? owner.id : ownerUserId,
-          () => profileStore.get(agentId === external ? owner : actor, agentId),
-        );
-        if (profile) bots.push({ id: agentId, name: profile.name });
-      }
-      return bots;
-    },
+    // The roster production uses: the hirer's external employee is every member's in this group.
+    roster: createGroupRoster({
+      actorFor: async (id) => ({ id, role: "user" }),
+      channel: (actor, channelId) => channelStore.get(actor, channelId),
+      profile: (actor, agentId) => profileStore.get(actor, agentId),
+      externalEmployees: (agentIds) =>
+        externalEmployeesAmong(database, agentIds),
+      members: (channelId) => groupStore.members(channelId),
+    }),
     runTurn: routeExternalTurns({
       isExternal: async (agentId) => agentId === external,
       normal,
@@ -483,6 +482,12 @@ describe("an external employee in a group", () => {
       conversations.addMember(owner.id, channel.id, { email }),
     );
 
+    const tasksUsed = async (tenant: string) =>
+      (await quota.usageFor(tenant)).tasks;
+    const [hirerBefore, teammateBefore] = [
+      await tasksUsed(owner.id),
+      await tasksUsed(teammate.id),
+    ];
     await runAsTenant(teammate.id, () =>
       conversations.send(teammate.id, channel.id, {
         id: `${prefix}-t1`,
@@ -490,6 +495,22 @@ describe("an external employee in a group", () => {
       }),
     );
     await sweepAll();
+    /*
+     * One piece of work, one card: in its hirer's tenant, where its turn runs and the run that does
+     * the work finishes it, and charged once there. Nothing lands on the teammate's board or plan.
+     */
+    const cards = () =>
+      runAsTenant("platform", () =>
+        database
+          .select({
+            tenantId: tasks.tenantId,
+            runRef: tasks.runRef,
+            status: tasks.status,
+          })
+          .from(tasks)
+          .where(eq(tasks.executorAgentId, external)),
+      );
+    expect((await cards()).map((card) => card.tenantId)).toEqual([owner.id]);
     expect(
       (await list(channel.id, teammate)).messages.map(
         (message) => message.text,
@@ -499,6 +520,8 @@ describe("an external employee in a group", () => {
     expect(turns.rows).toHaveLength(1);
     const turn = turns.rows[0] as AcpTurnRow;
     expect(turn.tenantId).toBe(owner.id);
+    const { runRef } = turn.prompt as { runRef: string };
+    expect((await cards())[0]?.runRef).toBe(runRef);
     await until(
       () => down.some((frame) => frame.type === "acp.open"),
       "acp.open",
@@ -562,5 +585,14 @@ describe("an external employee in a group", () => {
         "the answer in the group",
       );
     expect(turns.rows[0]?.status).toBe("done");
+    await until(
+      async () => (await cards())[0]?.status === "awaiting_review",
+      "the card to close",
+    );
+    expect(await cards()).toEqual([
+      { tenantId: owner.id, runRef, status: "awaiting_review" },
+    ]);
+    expect(await tasksUsed(owner.id)).toBe(hirerBefore + 1);
+    expect(await tasksUsed(teammate.id)).toBe(teammateBefore);
   });
 });
