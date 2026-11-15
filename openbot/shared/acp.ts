@@ -229,6 +229,11 @@ export type AcpInventoryFrame = {
   instanceId: string;
   turns: AcpInventoryTurn[];
   requestIds: string[];
+  /**
+   * The inventory did not fit in 1 MB: ended turns were left out first (oldest first), and past
+   * that both lists may be empty. A turn missing from a truncated inventory may still be running.
+   */
+  truncated?: boolean;
 };
 
 export type AcpUpFrame =

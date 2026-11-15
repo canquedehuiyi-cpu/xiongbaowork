@@ -13,7 +13,7 @@ import {
   type AcpSpawnSpec,
   createAcpClient,
 } from "../src/acp/client";
-import { type AcpHost, createAcpHost } from "../src/acp/host";
+import { type AcpHost, capFrame, createAcpHost } from "../src/acp/host";
 import type { AppEntry } from "../src/apps";
 import type { FakeAcpScript } from "./fixtures/fake-acp-agent";
 
@@ -71,6 +71,7 @@ function setup(
     apps?: (ref: string) => AppEntry | null;
     processEnv?: () => Promise<Record<string, string | undefined>>;
     cancelGraceMs?: number;
+    frameLimit?: number;
   } = {},
 ): Setup {
   const frames: Frame[] = [];
@@ -86,6 +87,7 @@ function setup(
     ...(opts.cancelGraceMs === undefined
       ? {}
       : { cancelGraceMs: opts.cancelGraceMs }),
+    ...(opts.frameLimit === undefined ? {} : { frameLimit: opts.frameLimit }),
     spawn: (spec, handlers, clientOpts) => {
       spawns.push(spec);
       const log = join(scratch, `log-${++logs}.jsonl`);
@@ -1716,3 +1718,144 @@ test("an agent that honours session/cancel in time is left running", async () =>
   });
   expect(t.clients[0]?.alive).toBe(true);
 });
+
+test("an owner's own agent without a folder of its own starts in the adapters' folder, never the working folder", async () => {
+  const t = setup({});
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1);
+  expect(t.spawns[0]?.cwd).toBe(ADAPTERS);
+  // The working folder reaches it only through session/new.
+  const created = received(t.logs[0] ?? "").filter(
+    (message) => message.method === "session/new",
+  );
+  expect((created[0]?.params as Frame | undefined)?.cwd).toBe(work);
+  // A folder the owner set on the app is the owner's choice.
+  const own = setup(
+    {},
+    { apps: (ref) => (ref === APP ? { ...FAKE_APP, cwd: scratch } : null) },
+  );
+  own.host.attach(own.send);
+  await own.host.handle(open("th_1"));
+  await waitFor(() => ofType(own.frames, "acp.session").length === 1);
+  expect(own.spawns[0]?.cwd).toBe(scratch);
+});
+
+test("a cut never splits a surrogate pair", () => {
+  // The first cut keeps 65 536 code units; the emoji's high surrogate is unit 65 536.
+  const text = `${"a".repeat(65_535)}${"\u{1F600}".repeat(40_000)}`;
+  const cut = capFrame(
+    {
+      type: "acp.update",
+      agentId: "agent_1",
+      threadId: "th_1",
+      turnId: "turn_1",
+      seq: 1,
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text },
+      },
+    },
+    200_000,
+  );
+  expect(cut.truncated).toBe(true);
+  const kept = ((cut.update as Frame).content as Frame).text as string;
+  expect(kept.length).toBeLessThan(text.length);
+  expect(kept.isWellFormed()).toBeTrue();
+  expect(kept.endsWith("a…")).toBeTrue();
+});
+
+test("an inventory over the frame limit drops ended turns first and says truncated", async () => {
+  const limit = 400;
+  const t = setup(
+    (spawn) =>
+      spawn === 1
+        ? { turns: [{ steps: [{ update: chunk("x") }] }] }
+        : { turns: [{ steps: [{ waitForCancel: true }] }] },
+    { frameLimit: limit },
+  );
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  for (const turnId of ["turn_1", "turn_2", "turn_3", "turn_4", "turn_5"]) {
+    await t.host.handle(prompt("th_1", turnId));
+    await waitFor(() => ended(t.frames, turnId));
+  }
+  await t.host.handle(open("th_2", { agentId: "agent_2" }));
+  await t.host.handle(prompt("th_2", "turn_live", "agent_2"));
+  await waitFor(() => t.clients.length === 2);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  t.host.detach();
+  const mark = t.frames.length;
+  t.host.attach(t.send);
+  const inventory = t.frames[mark] as Frame;
+  expect(inventory.type).toBe("acp.inventory");
+  expect(inventory.truncated).toBe(true);
+  expect(bytesOf(inventory)).toBeLessThanOrEqual(limit);
+  const turns = inventory.turns as Frame[];
+  expect(turns.length).toBeGreaterThan(0);
+  expect(turns.length).toBeLessThan(6);
+  expect(turns.find((turn) => turn.turnId === "turn_live")).toMatchObject({
+    state: "running",
+  });
+  // The oldest ended turns went first: what is kept of them is the newest.
+  const endedKept = turns
+    .filter((turn) => turn.state === "ended")
+    .map((turn) => String(turn.turnId));
+  expect(
+    ["turn_1", "turn_2", "turn_3", "turn_4", "turn_5"].slice(
+      5 - endedKept.length,
+    ),
+  ).toEqual(endedKept);
+});
+
+test("a session forgotten for leaving the ask mode is never loaded again, not even from the open's sessionHint", async () => {
+  const t = setup({
+    loadSession: true,
+    modes: {
+      currentModeId: "agent",
+      availableModes: [
+        { id: "read-only", name: "Read only" },
+        { id: "agent", name: "Agent" },
+      ],
+    },
+    setModeFailOn: [2],
+    turns: [
+      {
+        steps: [
+          {
+            update: {
+              sessionUpdate: "current_mode_update",
+              currentModeId: "agent",
+            },
+          },
+          { waitForCancel: true },
+        ],
+      },
+      { steps: [{ update: chunk("asking again") }] },
+    ],
+  });
+  t.host.attach(t.send);
+  await t.host.handle(
+    open("th_1", {
+      harness: "codex",
+      appRef: undefined,
+      sessionHint: "sess_old",
+    }),
+  );
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1, 15_000);
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ended(t.frames, "turn_1"));
+  await t.host.handle(prompt("th_1", "turn_2"));
+  await waitFor(() => ended(t.frames, "turn_2"));
+  expect(
+    ofType(t.frames, "acp.session").map((f) => [f.sessionId, f.loaded]),
+  ).toEqual([
+    ["sess_old", true],
+    ["sess_1", false],
+  ]);
+  const loads = received(t.logs[0] ?? "").filter(
+    (message) => message.method === "session/load",
+  );
+  expect(loads).toHaveLength(1);
+}, 20_000);
