@@ -53,17 +53,18 @@ import { workItems } from "../db/schema/work";
 import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import { type Delivery, firstSentenceOf } from "../tasks/delivery";
+import { DELIVERY_EVENTS } from "../tasks/delivery-tools";
 import type { TaskProjector } from "../tasks/projector";
 import {
   currentTenant,
   runAsClaimedTenant,
   runAsTenant,
 } from "../tenant/context";
-import { roundHungByEntry } from "../threads/unattended-card";
 import {
   COMPACTION_DONE_EVENT,
   COMPACTION_FAILED_EVENT,
 } from "../threads/compaction";
+import { roundHungByEntry } from "../threads/unattended-card";
 import type { WorkQueue } from "../work/queue";
 import {
   GROUP_PERSON_SPEAKER,
@@ -381,6 +382,7 @@ const SHARED_DETAILS: ReadonlySet<string> = new Set([
   "answeredBy",
   "compaction",
   "consent",
+  "delivery",
   "message",
   "via",
 ]);
@@ -401,6 +403,46 @@ function compactionNoteOf(name: string): GroupCompactionNote | null {
   if (name === COMPACTION_DONE_EVENT) return { outcome: "done" };
   if (name === COMPACTION_FAILED_EVENT) return { outcome: "failed" };
   return null;
+}
+
+/**
+ * 这一轮里服务器画的交付卡（交付闭环 Task 9：接活回执、延期申请、交付卡、被挡回），记在回复行的
+ * `details.delivery` 上，按出现的先后，事件原样（`tasks/delivery-tools.ts` `DELIVERY_EVENTS`）。群里每个人都
+ * 读得到，和回复的字一样：只在回复过了分享检查、发出来以后才记。能点卡上按钮的只有发起这一轮的人，由界面按
+ * 回复行的 `ownerUserId` 判断，接口也只认卡片租户的人。
+ */
+type GroupDeliveryNote = { name: string; value: Record<string, unknown> };
+
+const GROUP_DELIVERY_EVENTS: ReadonlySet<string> = new Set([
+  DELIVERY_EVENTS.accepted,
+  DELIVERY_EVENTS.extensionRequested,
+  DELIVERY_EVENTS.delivered,
+  DELIVERY_EVENTS.bounced,
+]);
+
+function deliveryNoteOf(
+  name: string,
+  value: unknown,
+): GroupDeliveryNote | null {
+  if (!GROUP_DELIVERY_EVENTS.has(name)) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  return typeof record.taskId === "string" ? { name, value: record } : null;
+}
+
+function isDeliveryNotes(value: unknown): value is GroupDeliveryNote[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (note) =>
+        note &&
+        typeof note === "object" &&
+        deliveryNoteOf(
+          (note as { name?: unknown }).name as string,
+          (note as { value?: unknown }).value,
+        ) !== null,
+    )
+  );
 }
 
 function splitDetails(details: Record<string, unknown>) {
@@ -1640,6 +1682,7 @@ export function createGroupConversations(deps: {
         });
     };
     let compacted: GroupCompactionNote | null = null;
+    const delivered: GroupDeliveryNote[] = [];
     try {
       // A round hung on a followed card says so, so the runner asks whether that card still waits.
       const hungOn =
@@ -1653,8 +1696,10 @@ export function createGroupConversations(deps: {
             latest = text;
             flush();
           },
-          onCustom: ({ name }) => {
+          onCustom: ({ name, value }) => {
             compacted = compactionNoteOf(name) ?? compacted;
+            const note = deliveryNoteOf(name, value);
+            if (note) delivered.push(note);
           },
           ownerUserId: turn.ownerUserId,
           telemetry: {
@@ -1735,7 +1780,11 @@ export function createGroupConversations(deps: {
         await closeCard(cardTurn, agentId, runId, true, round(gate.message));
         return;
       }
-      await deps.store.finish(id, result.replyText, "completed", compaction);
+      // 交付卡跟着发出来的回复一起给群里看；没过分享检查的（上面两种）不带。
+      await deps.store.finish(id, result.replyText, "completed", {
+        ...compaction,
+        ...(delivered.length > 0 ? { delivery: delivered } : {}),
+      });
       /*
        * An external employee's turn answers at once that it started and goes on on its owner's
        * computer (agents/acp/agent.ts `createAcpGroupTurn`): its card stays open for the run that
@@ -2309,6 +2358,9 @@ export function createGroupConversations(deps: {
             : {}),
           ...(details.consent && typeof details.consent === "object"
             ? { consent: details.consent }
+            : {}),
+          ...(isDeliveryNotes(details.delivery)
+            ? { delivery: details.delivery }
             : {}),
           // 压的是发起人和这位员工的线程：只告诉他自己。
           ...(message.ownerUserId === owner &&

@@ -27,6 +27,11 @@ export type GroupMessage = {
    * 这一轮开始前，这位员工在你和它那条线程上的上下文自动压缩了（`done`）或没压成（`failed`）。只给发起的人。
    */
   compaction?: { outcome: "done" | "failed" };
+  /**
+   * 这一轮里服务器画的交付卡（接活回执、延期申请、交付卡、被挡回），按出现的先后：员工这一轮事件流里的
+   * `delivery.*` 事件原样（`server/src/channels/group.ts`）。群里每个人都看得到；能点的只有发起这一轮的人。
+   */
+  delivery?: { name: string; value: unknown }[];
 };
 export type GroupPerson = {
   userId: string;

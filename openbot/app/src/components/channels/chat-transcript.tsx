@@ -31,6 +31,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
 import {
   createContext,
+  Fragment,
   memo,
   useCallback,
   useContext,
@@ -197,9 +198,45 @@ export function compactionRowId(
   return row?.id ?? null;
 }
 
+/**
+ * 画在某条消息那一行下面的东西（交付闭环的接活回执、延期申请、交付卡，见 `skins/xiongbao/delivery-chat.tsx`）。
+ * `anchor` 是消息 id；为 null 或这段对话里找不到那条消息时，画在最后一行下面。
+ */
+export type TranscriptNote = {
+  key: string;
+  anchor: string | null;
+  node: React.ReactNode;
+};
+
+/** 每条附注画在哪一行下面（行的 id），同一行的按给的先后。 */
+export function noteRows(
+  messages: ReadonlyArray<Readonly<Message>>,
+  items: readonly TranscriptItem[],
+  notes: readonly TranscriptNote[],
+): Map<string, TranscriptNote[]> {
+  const rows = new Map<string, TranscriptNote[]>();
+  const last = items.at(-1)?.id;
+  for (const note of notes) {
+    const row =
+      (note.anchor
+        ? compactionRowId(messages, items, {
+            uptoMessageId: note.anchor,
+            summarizedCount: null,
+          })
+        : null) ?? last;
+    if (!row) continue;
+    rows.set(row, [...(rows.get(row) ?? []), note]);
+  }
+  return rows;
+}
+
+const NO_NOTES: readonly TranscriptNote[] = [];
+
 type ChatTranscriptProps = {
   /** Server-owned thread identity, used only to correlate rendered result messages. */
   threadId?: string;
+  /** 跟在某条消息下面的附注；见 {@link TranscriptNote}。 */
+  notes?: readonly TranscriptNote[];
   /** 压缩会话的分隔线；见 {@link TranscriptCompaction}。 */
   compaction?: TranscriptCompaction | null;
   busy?: boolean;
@@ -2213,6 +2250,7 @@ function TranscriptRenderersWatch({
 
 export function ChatTranscript({
   threadId,
+  notes = NO_NOTES,
   compaction = null,
   busy = false,
   commandLabels = "",
@@ -2352,8 +2390,26 @@ export function ChatTranscript({
   const dividerRow = compaction
     ? compactionRowId(messages, items, compaction)
     : null;
-  const after = (id: string) =>
-    id === dividerRow ? (compaction?.divider ?? null) : null;
+  // 交付卡这类附注也放进那一行自己的格子里，理由同上。
+  const notesAt = notes.length > 0 ? noteRows(messages, items, notes) : null;
+  const after = (id: string) => {
+    const divider = id === dividerRow ? (compaction?.divider ?? null) : null;
+    const attached = notesAt?.get(id);
+    if (!attached) return divider;
+    return (
+      <>
+        {divider}
+        <div
+          className="mt-2.5 flex flex-col items-start gap-2.5"
+          data-transcript-notes=""
+        >
+          {attached.map((note) => (
+            <Fragment key={note.key}>{note.node}</Fragment>
+          ))}
+        </div>
+      </>
+    );
+  };
 
   /*
    * Decided once, from the rows present when the scroller mounts, and forgotten while restoring so

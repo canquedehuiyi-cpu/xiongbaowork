@@ -670,6 +670,22 @@ export const extendTask = (id: string, dueAt: string, answering: boolean) =>
         fallback: "预计时间没改成，请稍后再试。",
       });
 
+/** 照员工申请的时间准许延期（对话里延期卡上的「准许」）：不带时间，服务器取那条申请要的时间。 */
+export const grantExtension = (id: string) =>
+  client(`${cardPath(id)}/extension`, {
+    method: "POST",
+    body: { decision: "grant" },
+    fallback: "延期没准成，请稍后再试。",
+  });
+
+/** 改验收标准（你改的直接生效；交了成果以后服务器会拒，退回后可以再改）。 */
+export const editCriteria = (id: string, criteria: string) =>
+  client(cardPath(id), {
+    method: "PATCH",
+    body: { criteria },
+    fallback: "验收标准没改成，请稍后再试。",
+  });
+
 /** 不批延期：维持原来的预计时间（规格第 4 节）。 */
 export const denyExtension = (id: string) =>
   client(`${cardPath(id)}/extension`, {
@@ -685,6 +701,7 @@ export type DeliveryVerb =
   | "return"
   | "extend"
   | "deny"
+  | "criteria"
   | "reassign";
 
 /** 一个动作被服务器拒（409）时，没有中文原话可用的说法。 */
@@ -695,6 +712,7 @@ const REFUSED: Record<DeliveryVerb, string> = {
   return: "这件活已经不在等你验收了，不能退回。",
   extend: "这件活现在不能改预计时间（已交成果或已结束）。",
   deny: "这条延期申请已经答复过了。",
+  criteria: "这件活现在不能改验收标准（已交成果或已结束）。",
   reassign: "这件活现在不能换人。",
 };
 

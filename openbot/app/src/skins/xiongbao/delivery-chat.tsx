@@ -1,0 +1,593 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type ReactNode, useState } from "react";
+import type { TranscriptNote } from "@/components/channels/chat-transcript";
+import { currentUserQueryOptions } from "@/lib/auth/queries";
+import {
+  canExtend,
+  clockText,
+  deadlineOf,
+  deliveryErrorText,
+  denyExtension,
+  type EvidenceRow,
+  evidenceOf,
+  type FollowedCard,
+  followedCardQueryOptions,
+  grantExtension,
+  pendingExtension,
+  taskEventsQueryOptions,
+} from "@/lib/tasks/delivery";
+import {
+  bounceText,
+  type ChatDeliveryEvent,
+  type ChatOutcome,
+  deliveredOutcome,
+  extensionOutcome,
+  type PlacedDeliveryEvent,
+  positionsFromEnd,
+} from "@/lib/tasks/delivery-chat";
+import { cn } from "@/lib/utils";
+import {
+  type ActionCard,
+  CriteriaDialog,
+  deliveryButton,
+  ExtendDialog,
+  ReturnDialog,
+  useDeliveryWrites,
+  useWbFallback,
+} from "./delivery-actions";
+
+/*
+ * 对话里的四种交付卡（交付闭环 Task 9，设计稿 3）：接活回执、延期申请、交付卡，和被挡回时的一行灰字。
+ * 单聊和群聊都用它；颜色只取 `--wb-*`，别的皮肤里由 `useWbFallback` 接到应用自己的令牌上。
+ *
+ * 谁能点：只有派活的人。单聊是你自己的线程；群聊里是那一行回复的发起人（`ownerId`），不是你就不读卡、不给
+ * 按钮，只画事件里带的字。能点的时候也以卡片此刻的状态为准（`GET /api/tasks/:id` 和流水）：已经验收、
+ * 退回、答复过的卡只写结果，不再给按钮，转录里的旧卡不会对已经结束的活发请求。
+ */
+
+/** 卡片接口多给的一项：卡属于哪位（派活的人）。 */
+type ChatCard = FollowedCard & { tenantId?: string };
+
+/** 卡和流水在对话里不用看板那么勤地重读。 */
+const CHAT_REFRESH_MS = 15_000;
+
+const LABEL = "font-semibold text-[12px] tracking-[0.02em]";
+
+function CardFrame({
+  label,
+  tone,
+  ariaLabel,
+  children,
+  highlighted = false,
+}: {
+  label: ReactNode;
+  tone: "green" | "amber" | "blue";
+  ariaLabel: string;
+  children: ReactNode;
+  highlighted?: boolean;
+}) {
+  const fallback = useWbFallback();
+  return (
+    <fieldset
+      aria-label={ariaLabel}
+      className={cn(
+        "m-0 flex w-full min-w-0 max-w-[560px] flex-col gap-2 rounded-(--wb-radius) border bg-(--wb-card) px-3.5 py-3 text-(--wb-fg) text-[13px] leading-[1.6]",
+        highlighted ? "border-(--wb-blue-line)" : "border-(--wb-line2)",
+      )}
+      data-delivery-card={ariaLabel}
+      style={fallback}
+    >
+      <span
+        className={cn(
+          LABEL,
+          tone === "green"
+            ? "text-(--wb-green-fg)"
+            : tone === "amber"
+              ? "text-(--wb-amber-fg)"
+              : "text-(--wb-blue)",
+        )}
+      >
+        {label}
+      </span>
+      {children}
+    </fieldset>
+  );
+}
+
+const Muted = ({ children }: { children: ReactNode }) => (
+  <span className="text-(--wb-muted) text-[12.5px] [overflow-wrap:anywhere]">
+    {children}
+  </span>
+);
+
+/** 卡上做过的事：「你 10:52 验收了」。 */
+function ResultLine({ children }: { children: ReactNode }) {
+  return (
+    <span
+      className="text-(--wb-fg2) text-[12.5px] [overflow-wrap:anywhere]"
+      data-delivery-result=""
+    >
+      {children}
+    </span>
+  );
+}
+
+const Buttons = ({ children }: { children: ReactNode }) => (
+  <div className="flex flex-wrap gap-1.5">{children}</div>
+);
+
+const Failure = ({ children }: { children: ReactNode }) => (
+  <span className="text-(--wb-danger-fg) text-[12.5px]" role="alert">
+    {children}
+  </span>
+);
+
+function outcomeText(outcome: ChatOutcome, now: Date): string {
+  const at = clockText(outcome.at, now);
+  switch (outcome.kind) {
+    case "reviewed":
+      return `你 ${at} 验收了`;
+    case "returned":
+      return `你 ${at} 退回了${outcome.reason ? `：${outcome.reason}` : ""}`;
+    case "cancelled":
+      return `你 ${at} 取消了这件活`;
+    case "reassigned":
+      return `${at} 换了员工接手`;
+    case "granted":
+      return outcome.dueAt
+        ? `你 ${at} 准许了，延到 ${clockText(outcome.dueAt, now)}`
+        : `你 ${at} 准许了延期`;
+    case "denied":
+      return `你 ${at} 没准，按原时间交`;
+    case "superseded":
+      return `${at} 员工又申请了一次，这条不用答复了`;
+  }
+}
+
+/**
+ * 卡片此刻的状态：派活的人才读（群聊里别人的回复不读，不去试探接口）。返回卡、是不是你的、要不要读流水。
+ */
+function useChatCard(taskId: string, ownerId: string | undefined) {
+  const me = useQuery(currentUserQueryOptions()).data;
+  // 群聊里别人发起的那一轮：不是你派的活，卡也读不到，不读。
+  const mayRead = ownerId === undefined || (me != null && me.id === ownerId);
+  const card = useQuery({
+    ...followedCardQueryOptions<ChatCard>(taskId),
+    enabled: mayRead,
+    refetchInterval: CHAT_REFRESH_MS,
+  });
+  const data = mayRead ? card.data : undefined;
+  // 按卡片自带的派活人和当前用户判断。
+  const mine = data !== undefined && me != null && data.tenantId === me.id;
+  return { card: data, mine };
+}
+
+function useChatEvents(taskId: string, enabled: boolean) {
+  return useQuery({
+    ...taskEventsQueryOptions(taskId),
+    enabled,
+    refetchInterval: CHAT_REFRESH_MS,
+  });
+}
+
+const actionCardOf = (card: ChatCard): ActionCard => ({
+  id: card.id,
+  title: card.title,
+  executorAgentId: card.executorAgentId,
+});
+
+/** 接活回执：预计几点交、验收标准，「改预计时间」「改验收标准」。 */
+function AcceptedCard({
+  event,
+  ownerId,
+  now,
+}: {
+  event: Extract<ChatDeliveryEvent, { kind: "accepted" }>;
+  ownerId?: string;
+  now: Date;
+}) {
+  const { card, mine } = useChatCard(event.taskId, ownerId);
+  const [dialog, setDialog] = useState<"due" | "criteria" | null>(null);
+  const editable = mine && card !== undefined && canExtend(card);
+  const criteria = card?.criteria ?? event.criteria;
+  const currentDue = card?.dueAt ?? null;
+  const moved =
+    currentDue !== null &&
+    event.dueAt !== null &&
+    new Date(currentDue).getTime() !== new Date(event.dueAt).getTime();
+  const subject = card?.title;
+  return (
+    <CardFrame ariaLabel="接活回执" label="已接下" tone="green">
+      <span className="[overflow-wrap:anywhere]">
+        {subject ? `${subject} · ` : null}
+        {event.dueAt ? (
+          <>
+            预计 <b>{clockText(event.dueAt, now)}</b> 交
+          </>
+        ) : (
+          "没报预计时间，按接下后 2 小时核对"
+        )}
+        {moved && currentDue ? (
+          <Muted>（现在预计 {clockText(currentDue, now)} 交）</Muted>
+        ) : null}
+      </span>
+      {criteria ? <Muted>验收标准：{criteria}</Muted> : null}
+      {card && mine && card.status === "done" ? (
+        <ResultLine>这件活已经验收了</ResultLine>
+      ) : null}
+      {card && mine && card.status === "cancelled" ? (
+        <ResultLine>这件活已经取消了</ResultLine>
+      ) : null}
+      {editable ? (
+        <Buttons>
+          <button
+            className={deliveryButton()}
+            onClick={() => setDialog("due")}
+            type="button"
+          >
+            改预计时间
+          </button>
+          <button
+            className={deliveryButton()}
+            onClick={() => setDialog("criteria")}
+            type="button"
+          >
+            改验收标准
+          </button>
+        </Buttons>
+      ) : null}
+      {card && dialog === "due" ? (
+        <ExtendDialog
+          card={actionCardOf(card)}
+          onClose={() => setDialog(null)}
+          title={`改「${card.title}」的预计时间`}
+        />
+      ) : null}
+      {card && dialog === "criteria" ? (
+        <CriteriaDialog
+          card={actionCardOf(card)}
+          current={card.criteria ?? event.criteria}
+          onClose={() => setDialog(null)}
+        />
+      ) : null}
+    </CardFrame>
+  );
+}
+
+/** 延期申请：延到几点、为什么，「准许」「不准」。 */
+function ExtensionCard({
+  event,
+  fromEnd,
+  ownerId,
+  now,
+}: {
+  event: Extract<ChatDeliveryEvent, { kind: "extension_requested" }>;
+  fromEnd: number;
+  ownerId?: string;
+  now: Date;
+}) {
+  const { card, mine } = useChatCard(event.taskId, ownerId);
+  const events = useChatEvents(event.taskId, mine);
+  const queryClient = useQueryClient();
+  const settled = () =>
+    void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  const grant = useMutation({
+    mutationFn: (id: string) => grantExtension(id),
+    retry: false,
+    onSettled: settled,
+  });
+  const deny = useMutation({
+    mutationFn: (id: string) => denyExtension(id),
+    retry: false,
+    onSettled: settled,
+  });
+  const history = events.data;
+  const outcome = history ? extensionOutcome(history, fromEnd) : null;
+  // 只有最新那条申请、此刻还没答复、员工手上还没交（交了要先退回才能答复），才给按钮。
+  const open =
+    mine &&
+    card !== undefined &&
+    history !== undefined &&
+    fromEnd === 0 &&
+    outcome === null &&
+    pendingExtension(history) !== null &&
+    canExtend(card);
+  const from = open && card ? deadlineOf(card) : null;
+  const to = clockText(event.dueAt, now);
+  const busy = grant.isPending || deny.isPending;
+  return (
+    <CardFrame
+      ariaLabel="延期申请"
+      label={
+        from ? `申请延期 · ${clockText(from, now)} → ${to}` : `申请延期到 ${to}`
+      }
+      tone="amber"
+    >
+      {event.reason ? <Muted>原因：{event.reason}</Muted> : null}
+      {outcome ? <ResultLine>{outcomeText(outcome, now)}</ResultLine> : null}
+      {!outcome && mine && card?.status === "awaiting_review" ? (
+        <ResultLine>成果已经交了，这条申请先不用答复</ResultLine>
+      ) : null}
+      {!outcome &&
+      mine &&
+      (card?.status === "done" || card?.status === "cancelled") ? (
+        <ResultLine>这件活已经结束，不用再答复</ResultLine>
+      ) : null}
+      {open && card ? (
+        <>
+          <Muted>原来的预计时间还算数，你准了才改。</Muted>
+          <Buttons>
+            <button
+              className={deliveryButton(true)}
+              disabled={busy}
+              onClick={() => grant.mutate(card.id)}
+              type="button"
+            >
+              {grant.isPending ? "正在准许…" : "准许"}
+            </button>
+            <button
+              className={deliveryButton()}
+              disabled={busy}
+              onClick={() => deny.mutate(card.id)}
+              type="button"
+            >
+              {deny.isPending ? "正在答复…" : "不准"}
+            </button>
+          </Buttons>
+        </>
+      ) : null}
+      {grant.error ? (
+        <Failure>{deliveryErrorText(grant.error, "extend")}</Failure>
+      ) : null}
+      {deny.error ? (
+        <Failure>{deliveryErrorText(deny.error, "deny")}</Failure>
+      ) : null}
+    </CardFrame>
+  );
+}
+
+function FileIcon({ kind }: { kind: EvidenceRow["kind"] }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className="shrink-0 text-(--wb-fg2)"
+      fill="none"
+      height="16"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      viewBox="0 0 24 24"
+      width="16"
+    >
+      {kind === "link" ? (
+        <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1 1M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1-1" />
+      ) : kind === "note" ? (
+        <path d="M5 5h14M5 10h14M5 15h9" />
+      ) : kind === "diff" ? (
+        <path d="M12 5v14M5 12h14" />
+      ) : (
+        <path d="M6 3h8l4 4v14H6z" />
+      )}
+    </svg>
+  );
+}
+
+function EvidenceItem({
+  row,
+  linked,
+}: {
+  row: Exclude<EvidenceRow, { kind: "check" }>;
+  /** 附件只有派活的人打得开（在它和员工的线程里）。 */
+  linked: boolean;
+}) {
+  const link = "text-inherit underline-offset-2 hover:underline";
+  const label =
+    row.kind === "attachment" && linked ? (
+      <a
+        className={link}
+        href={`/api/attachments/${encodeURIComponent(row.id)}`}
+        rel="noreferrer"
+        target="_blank"
+      >
+        {row.label}
+      </a>
+    ) : row.kind === "link" ? (
+      <a className={link} href={row.url} rel="noreferrer" target="_blank">
+        {row.label}
+      </a>
+    ) : row.kind === "diff" ? (
+      `${row.label} · ${row.detail}`
+    ) : (
+      row.label
+    );
+  return (
+    <span className="flex items-start gap-2">
+      <span className="pt-[3px]">
+        <FileIcon kind={row.kind} />
+      </span>
+      <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
+    </span>
+  );
+}
+
+/** 交付卡：交付物、自查，「验收」「退回」。 */
+function DeliveredCard({
+  event,
+  fromEnd,
+  ownerId,
+  now,
+}: {
+  event: Extract<ChatDeliveryEvent, { kind: "delivered" }>;
+  fromEnd: number;
+  ownerId?: string;
+  now: Date;
+}) {
+  const { card, mine } = useChatCard(event.taskId, ownerId);
+  const events = useChatEvents(event.taskId, mine);
+  const writes = useDeliveryWrites();
+  const [returning, setReturning] = useState(false);
+  const rows = evidenceOf(event.deliverable);
+  const items = rows.filter(
+    (row): row is Exclude<EvidenceRow, { kind: "check" }> =>
+      row.kind !== "check",
+  );
+  const checks = rows.filter((row) => row.kind === "check");
+  const outcome = events.data ? deliveredOutcome(events.data, fromEnd) : null;
+  // 只有最新那次交付、卡此刻还在等你验收，才给按钮。
+  const open =
+    mine &&
+    card !== undefined &&
+    events.data !== undefined &&
+    fromEnd === 0 &&
+    outcome === null &&
+    card.status === "awaiting_review";
+  const busy = card ? writes.busy.has(card.id) : false;
+  return (
+    <CardFrame
+      ariaLabel="交付卡"
+      highlighted={open}
+      label={open ? "已交成果 · 等你验收" : "已交成果"}
+      tone="blue"
+    >
+      {card?.title ? (
+        <span className="font-medium [overflow-wrap:anywhere]">
+          {card.title}
+        </span>
+      ) : null}
+      {items.map((row) => (
+        <EvidenceItem
+          key={`${row.kind}:${row.label}`}
+          linked={mine}
+          row={row}
+        />
+      ))}
+      {checks.length > 0 ? (
+        <span className="text-(--wb-fg2) text-[12.5px] [overflow-wrap:anywhere]">
+          自查：{checks.map((row) => row.label).join("；")}
+        </span>
+      ) : null}
+      {outcome ? <ResultLine>{outcomeText(outcome, now)}</ResultLine> : null}
+      {open && card ? (
+        <Buttons>
+          <button
+            className={deliveryButton(true)}
+            disabled={busy}
+            onClick={() => writes.run(actionCardOf(card), "review")}
+            type="button"
+          >
+            {busy ? "正在验收…" : "验收"}
+          </button>
+          <button
+            className={deliveryButton()}
+            disabled={busy}
+            onClick={() => setReturning(true)}
+            type="button"
+          >
+            退回
+          </button>
+        </Buttons>
+      ) : null}
+      {writes.failure ? <Failure>{writes.failure.message}</Failure> : null}
+      {card && returning ? (
+        <ReturnDialog
+          card={actionCardOf(card)}
+          onClose={() => setReturning(false)}
+        />
+      ) : null}
+    </CardFrame>
+  );
+}
+
+/** 被挡回：居中一行灰字，不打扰你，员工自己补齐。 */
+function BouncedLine({
+  event,
+  agentName,
+}: {
+  event: Extract<ChatDeliveryEvent, { kind: "bounced" }>;
+  agentName: string;
+}) {
+  const fallback = useWbFallback();
+  return (
+    <p
+      className="m-0 self-center rounded-(--wb-radius-pill) bg-(--wb-card2) px-3 py-1 text-center text-(--wb-muted) text-[12px] leading-[1.6] [overflow-wrap:anywhere]"
+      data-delivery-card="被挡回"
+      role="note"
+      style={fallback}
+    >
+      {agentName}想交付 · 被挡回：{bounceText(event.reason)}，已让它补齐
+    </p>
+  );
+}
+
+/**
+ * 对话里的一张交付卡。`fromEnd` 是同一件活的同一种卡在这段对话里倒数第几张（最新的是 0），用来把它对回
+ * 流水里的那一次；`ownerId` 是群聊里那一行回复的发起人（派活的人），单聊不给。
+ */
+export function DeliveryChatCard({
+  event,
+  fromEnd,
+  agentName,
+  ownerId,
+  now = new Date(),
+}: {
+  event: ChatDeliveryEvent;
+  fromEnd: number;
+  agentName: string;
+  ownerId?: string;
+  now?: Date;
+}) {
+  switch (event.kind) {
+    case "accepted":
+      return <AcceptedCard event={event} now={now} ownerId={ownerId} />;
+    case "extension_requested":
+      return (
+        <ExtensionCard
+          event={event}
+          fromEnd={fromEnd}
+          now={now}
+          ownerId={ownerId}
+        />
+      );
+    case "delivered":
+      return (
+        <DeliveredCard
+          event={event}
+          fromEnd={fromEnd}
+          now={now}
+          ownerId={ownerId}
+        />
+      );
+    case "bounced":
+      return <BouncedLine agentName={agentName} event={event} />;
+  }
+}
+
+/** 单聊里的交付卡，交给转录画在各自那条消息下面。 */
+export function deliveryNotes(
+  placed: readonly PlacedDeliveryEvent[],
+  agentName: string,
+): TranscriptNote[] {
+  const positions = positionsFromEnd(placed.map((entry) => entry.event));
+  return placed.map((entry, index) => ({
+    key: entry.key,
+    anchor: entry.anchor,
+    node: (
+      <DeliveryChatCard
+        agentName={agentName}
+        event={entry.event}
+        fromEnd={positions[index] ?? 0}
+      />
+    ),
+  }));
+}
+
+/** 群聊里一行回复带的交付卡，竖着排在回复下面。 */
+export function DeliveryChatCards({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className="mt-2.5 flex w-full flex-col items-start gap-2.5"
+      data-delivery-cards=""
+    >
+      {children}
+    </div>
+  );
+}

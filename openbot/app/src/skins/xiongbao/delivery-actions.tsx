@@ -14,6 +14,7 @@ import {
   type DeliveryVerb,
   deliveryErrorText,
   denyExtension,
+  editCriteria,
   extendTask,
   nudgeTask,
   pendingExtension,
@@ -56,6 +57,7 @@ const WB_FALLBACK = {
   "--wb-amber-soft": "rgba(245, 165, 36, 0.15)",
   "--wb-amber-fg": "#b06f00",
   "--wb-green": "#2f9e6a",
+  "--wb-green-fg": "#1f9d63",
   "--wb-radius": "12px",
   "--wb-radius-pill": "99px",
 } as CSSProperties;
@@ -389,10 +391,13 @@ export function ExtendDialog({
   card,
   onClose,
   now = new Date(),
+  title,
 }: {
   card: ActionCard;
   onClose: () => void;
   now?: Date;
+  /** 弹层标题；对话里接活回执上的「改预计时间」用自己的说法。 */
+  title?: string;
 }) {
   const events = useQuery(taskEventsQueryOptions(card.id));
   const pending = events.data ? pendingExtension(events.data) : null;
@@ -427,7 +432,7 @@ export function ExtendDialog({
           : "给员工一个新的预计时间，到点还没交，服务器照常催、照常记逾期。"
       }
       onClose={onClose}
-      title={`准许「${card.title}」延期到……`}
+      title={title ?? `准许「${card.title}」延期到……`}
     >
       <form
         className="flex flex-col gap-3"
@@ -469,6 +474,65 @@ export function ExtendDialog({
           disabled={!value.trim() || events.isPending || unknown}
           onClose={onClose}
           submit="准许延期"
+        />
+      </form>
+    </ActionDialog>
+  );
+}
+
+/**
+ * 改验收标准（对话里接活回执上的「改验收标准」）：你改的直接生效，员工交付时按新的核对，里面写的
+ * 「必需：A、B、C」照样逐项核对。交了成果以后改不了，退回后可以再改。
+ */
+export function CriteriaDialog({
+  card,
+  current,
+  onClose,
+}: {
+  card: ActionCard;
+  /** 此刻的验收标准，预先填好。 */
+  current: string | null;
+  onClose: () => void;
+}) {
+  const [typed, setTyped] = useState(current ?? "");
+  const settled = useSettled();
+  const send = useMutation({
+    mutationFn: (criteria: string) => editCriteria(card.id, criteria),
+    retry: false,
+    onSuccess: () => onClose(),
+    onSettled: settled,
+  });
+  const text = typed.trim();
+  return (
+    <ActionDialog
+      busy={send.isPending}
+      description="改了直接生效，员工交付时按新的标准核对。要求必须交的项，可以在末尾写「必需：A、B、C」。"
+      onClose={onClose}
+      title={`改「${card.title}」的验收标准`}
+    >
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (text && text !== (current ?? "").trim() && !send.isPending)
+            send.mutate(text);
+        }}
+      >
+        <textarea
+          aria-label="验收标准"
+          className={cn(FIELD, "min-h-[96px] resize-y leading-[1.6]")}
+          maxLength={1000}
+          onChange={(event) => setTyped(event.target.value)}
+          placeholder="例如：三家全部在售款，带本周和上周价格。必需：A 家、B 家、C 家"
+          value={typed}
+        />
+        <DialogFailure error={send.error} verb="criteria" />
+        <DialogButtons
+          busy={send.isPending}
+          busyLabel="正在改…"
+          disabled={!text || text === (current ?? "").trim()}
+          onClose={onClose}
+          submit="改验收标准"
         />
       </form>
     </ActionDialog>

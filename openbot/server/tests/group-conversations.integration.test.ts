@@ -746,6 +746,79 @@ describe("group conversations in PostgreSQL", () => {
     expect(theirs.messages.some((row) => "compaction" in row)).toBe(false);
   });
 
+  test("交付卡事件记在回复上，群里每个人都看得到", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const accepted = {
+      taskId: "11111111-1111-4111-8111-111111111111",
+      dueAt: "2026-11-15T02:30:00.000Z",
+      criteria: "三家全部在售款。必需：A、B、C",
+    };
+    const bounced = {
+      taskId: accepted.taskId,
+      reason: "验收标准里的必需项没对上：缺 C。",
+    };
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({ name: "delivery.accepted", value: accepted });
+          // 别的事件、答复延期的事件、缺卡片 id 的都不记。
+          input.onCustom?.({
+            name: "xiongbao.compaction.done",
+            value: { auto: true },
+          });
+          input.onCustom?.({
+            name: "delivery.extension_decided",
+            value: { taskId: accepted.taskId, decision: "grant" },
+          });
+          input.onCustom?.({ name: "delivery.delivered", value: {} });
+          input.onCustom?.({ name: "delivery.bounced", value: bounced });
+          return "已接下";
+        },
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-delivery`,
+        text: "把竞品价格整理成表",
+      });
+      await drain(conversations);
+    });
+    const cards = [
+      { name: "delivery.accepted", value: accepted },
+      { name: "delivery.bounced", value: bounced },
+    ];
+    const mine = await as(owner, () =>
+      conversations.list(owner.id, channel.id),
+    );
+    expect(
+      mine.messages.map((row) => [
+        row.agentId,
+        row.ownerUserId,
+        row.delivery ?? null,
+      ]),
+    ).toEqual([
+      [null, owner.id, null],
+      [ada, owner.id, cards],
+    ]);
+    // 同事读到同样的卡，也读得到这一轮是谁发起的（界面据此不给他按钮）。
+    const theirs = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(theirs.messages.at(-1)).toMatchObject({
+      agentId: ada,
+      ownerUserId: owner.id,
+      delivery: cards,
+    });
+  });
+
   test("a member can add another signed-in person, who then reads the shared transcript", async () => {
     const owner = await person();
     const teammate = await person();

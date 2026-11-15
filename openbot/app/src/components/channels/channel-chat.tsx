@@ -101,6 +101,7 @@ import { useConversationModel } from "@/lib/models/run-model";
 import { useSkillCommands } from "@/lib/plugins/skill-commands";
 import { reportIfQuotaError } from "@/lib/quota/guidance";
 import { publishedSandboxedQueryOptions } from "@/lib/sandboxed/queries";
+import { useDeliveryChatEvents } from "@/lib/tasks/use-delivery-chat-events";
 import {
   compactionOutcomeOf,
   invalidateConversationSidebar,
@@ -124,6 +125,7 @@ import { useVoiceCall } from "@/lib/voice/use-voice-call";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { queryClient } from "@/query-client";
 import { useSkinId } from "@/skins/store";
+import { deliveryNotes } from "@/skins/xiongbao/delivery-chat";
 import type { SidebarContext } from "../../../../shared/conversation-sidebar";
 import { newId } from "../../lib/new-id";
 
@@ -582,6 +584,12 @@ export function ChannelChat({
   useEffect(() => {
     if (isReady) openReadyGate.current();
   }, [isReady]);
+
+  /*
+   * 交付闭环的卡（接活回执、延期申请、交付卡、被挡回）：这一轮和回放的历史里服务器放的 `delivery.*` 事件。
+   * 在下面连上对话的 effect 之前订阅，回放才交得到它。
+   */
+  const deliveryEvents = useDeliveryChatEvents(agent, channel.threadId);
 
   // Join the gateway socket, restore durable history, then release the first-message gate.
   useEffect(() => {
@@ -1491,6 +1499,7 @@ export function ChannelChat({
             autoFocus
             threadId={channel.threadId}
             compaction={compaction}
+            notes={deliveryNotes(deliveryEvents, botName)}
             // The clock beside `+`: a routine for the Bot this conversation talks to, posting here.
             routine={
               channel.active
