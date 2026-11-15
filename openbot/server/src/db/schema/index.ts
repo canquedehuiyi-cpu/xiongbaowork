@@ -1,5 +1,6 @@
 /** One import path for every table, with schema files grouped by owner. */
 
+export * from "./acp-turns";
 export * from "./admin";
 export * from "./agent-security-settings";
 export * from "./app-access-requests";
@@ -13,7 +14,6 @@ export * from "./coworker";
 export * from "./defaults";
 export * from "./delivery";
 export * from "./demonstrations";
-export * from "./acp-turns";
 export * from "./devices";
 export * from "./flow-run-coordination";
 export * from "./flow-source-foundations";
