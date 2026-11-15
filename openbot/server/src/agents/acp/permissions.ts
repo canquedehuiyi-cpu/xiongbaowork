@@ -381,9 +381,15 @@ const FLOOR_SOURCES = new Set([
   "outbound_send",
   "share_access",
   "publish_post",
+  // The employee's sensitive-path and dangerous-command floors (SEC1, approvals/policy.ts
+  // `securityFloor`), read with its own security settings, as the computer's own tools are.
+  "sensitive_path",
+  "dangerous_command",
 ]);
 
 const FLOOR_NAMES: Record<string, string> = {
+  sensitive_path: "底线：可能保存密钥的文件",
+  dangerous_command: "底线：危险命令",
   safety: "底线：付款、凭据或安全设置",
   destructive_tool: "底线：删除",
   outbound_send: "底线：对外发消息或邮件",

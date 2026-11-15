@@ -1896,6 +1896,54 @@ describe("SEC1: the floors in the decision (§4.2)", () => {
     ).toBe("allow");
   });
 
+  test("an external employee's file request is held by the same floor, over every path it names", async () => {
+    const acp = (kind: string, paths: unknown) =>
+      candidate({
+        toolRef: `acp/${kind}`,
+        effect: kind === "read" ? "read" : "write",
+        scope: "editInside",
+        args: { paths },
+      });
+    for (const kind of ["read", "edit", "move", "delete", "search"]) {
+      // Any one of its paths: the second here.
+      expect(
+        securityFloor(acp(kind, ["src/a.ts", "config/.env.local"]), security)
+          ?.source,
+      ).toBe("sensitive_path");
+      // None it can read: asked, not waved through.
+      expect(securityFloor(acp(kind, []), security)?.source).toBe(
+        "sensitive_path",
+      );
+      expect(securityFloor(acp(kind, ["src/a.ts"]), security)).toBeUndefined();
+      expect(
+        securityFloor(acp(kind, [".env"]), {
+          ...security,
+          sensitivePaths: "off",
+        }),
+      ).toBeUndefined();
+    }
+    // The person's "ask before changes" default does not stand in for it: the floor is the answer.
+    expect(
+      await decideAction({
+        ...base,
+        askBeforeChanges: true,
+        candidate: acp("edit", [".env"]),
+      }),
+    ).toMatchObject({ behaviour: "ask", source: "sensitive_path" });
+    // For any other tool, an ask that came first is left as it was.
+    const file = candidate({
+      toolRef: "computer_write_file",
+      effect: "write",
+      scope: "workspace",
+      args: {},
+      target: { filePath: ".env" },
+    });
+    expect(
+      (await decideAction({ ...base, askBeforeChanges: true, candidate: file }))
+        .source,
+    ).toBe("default");
+  });
+
   test("a command that names a sensitive file asks too", async () => {
     expect(
       await decideAction({ ...base, candidate: command("cat .env") }),

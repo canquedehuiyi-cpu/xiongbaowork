@@ -22,6 +22,7 @@ import {
   DEFAULT_EMPLOYEE_SECURITY,
   type EmployeeSecuritySettings,
   type HostCommandPolicy,
+  isAcpAction,
   type RuleBehaviour,
   TIGHTENING_BEHAVIOURS,
 } from "./types";
@@ -1159,10 +1160,14 @@ export function sensitivePathsInForce(
   ];
 }
 
-/** The tools whose subject is a command, and the ones whose subject is a file path. */
+/**
+ * The tools whose subject is a command, and the ones whose subject is a file path: the computer's and
+ * the host's file tools, and an external employee's file requests (`acp/<kind>`, agents/acp), whose
+ * paths come as `args.paths`.
+ */
 const COMMAND_TOOLS = /^(computer_run_command|host\/run_command)$/;
 const PATH_TOOLS =
-  /^(computer_(read_file|write_file|list_files|download_file)|host\/(read_file|write_file|list_files))$/;
+  /^(computer_(read_file|write_file|list_files|download_file)|host\/(read_file|write_file|list_files)|acp\/(read|edit|move|delete|search))$/;
 
 function field(value: unknown, key: string): unknown {
   return value && typeof value === "object" && !Array.isArray(value)
@@ -1177,15 +1182,19 @@ function commandOf(candidate: ApprovalCandidate): unknown {
     : field(candidate.args, "command");
 }
 
-/** The path a file call names, or `undefined` when it names none this code can find. */
-function pathOf(candidate: ApprovalCandidate): unknown {
-  if (candidate.subject?.path !== undefined) return candidate.subject.path;
+/**
+ * The paths a file call names: the one path of a computer or host file tool, or every path of a
+ * request that names several (`args.paths`). Empty when it names none this code can find.
+ */
+function pathsOf(candidate: ApprovalCandidate): unknown[] {
+  if (candidate.subject?.path !== undefined) return [candidate.subject.path];
   for (const source of [candidate.target, candidate.args])
     for (const key of ["filePath", "relativePath", "path"]) {
       const value = field(source, key);
-      if (value !== undefined) return value;
+      if (value !== undefined) return [value];
     }
-  return undefined;
+  const several = field(candidate.args, "paths");
+  return Array.isArray(several) ? several : [];
 }
 
 /** The words of a command that could name a file, for the sensitive-path floor. */
@@ -1232,14 +1241,16 @@ export function securityFloor(
   if (security.sensitivePaths === "off") return undefined;
   const patterns = sensitivePathsInForce(security);
   if (PATH_TOOLS.test(candidate.toolRef)) {
-    const path = pathOf(candidate);
+    const paths = pathsOf(candidate);
     // A file call that names no path this code can read is asked about, not waved through.
-    const hit = sensitivePath(path === undefined ? null : path, patterns);
-    if (hit)
-      return {
-        source: "sensitive_path",
-        reason: `This touches a file that may hold secrets (${hit.pattern}), so it needs approval first.`,
-      };
+    for (const path of paths.length === 0 ? [null] : paths) {
+      const hit = sensitivePath(path, patterns);
+      if (hit)
+        return {
+          source: "sensitive_path",
+          reason: `This touches a file that may hold secrets (${hit.pattern}), so it needs approval first.`,
+        };
+    }
   }
   if (commandTool) {
     if (typeof command !== "string")
@@ -2060,9 +2071,18 @@ export async function decideAction(input: {
   // 公开发布）多做一步：规则、偏好或审查本来就要问的，也改记为这条底线，卡片才不会给出一条存了也
   // 永远用不上的「总是允许」或「在这段对话里都允许」；原来的理由接在后面保留。
   // --- desktop control (sub-project 2): the desktop's once-only floors (a session) are restated too ---
+  /*
+   * An external employee's request (`acp/…`): its bridge never lets the person's "ask before changes"
+   * default or a rule's ask stand for a floor (the employee's own rules decide there), so a floor that
+   * caught it is what the answer says, whatever asked first.
+   */
   const restated =
     floor !== undefined &&
-    (floor === onceOnly || desktopOnceOnly(floor)) &&
+    (floor === onceOnly ||
+      desktopOnceOnly(floor) ||
+      (isAcpAction(candidate) &&
+        (floor.source === "sensitive_path" ||
+          floor.source === "dangerous_command"))) &&
     decided.behaviour === "ask";
   // --- end desktop control ---
   const outcome: ApprovalPolicyOutcome =

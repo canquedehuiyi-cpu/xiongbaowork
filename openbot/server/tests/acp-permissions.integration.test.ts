@@ -506,6 +506,67 @@ describe("an external employee's permission requests", () => {
     ]);
   });
 
+  test("a file request on a file that may hold secrets asks every time, once only, even inside the working folder", async () => {
+    const hirer = await person("hirer");
+    const h = await harness(hirer);
+    const file = (requestId: string, kind: string, path: string) =>
+      h.device({
+        type: "acp.permission.request",
+        turnId: h.turnId,
+        requestId,
+        toolCall: {
+          toolCallId: `call-${requestId}`,
+          kind,
+          title: `${kind} ${path}`,
+          rawInput: { path },
+        },
+        options: OPTIONS,
+        facts: { insideWorkdir: true, paths: [path] },
+      });
+    // An ordinary file inside the working folder: its rules let it through, no approval.
+    await file("req-1", "edit", "src/login.ts");
+    await file("req-2", "read", "src/login.ts");
+    expect(h.answers()).toEqual([
+      expect.objectContaining({ requestId: "req-1", optionId: "yes" }),
+      expect.objectContaining({ requestId: "req-2", optionId: "yes" }),
+    ]);
+    // `.env` and a key, read or edited inside the folder: the sensitive-path floor asks.
+    await file("req-3", "read", ".env");
+    await file("req-4", "edit", "deploy/server.pem");
+    expect(h.answers()).toHaveLength(2);
+    const asked = await h.approvals();
+    expect(asked).toHaveLength(2);
+    for (const row of asked) {
+      expect(row.status).toBe("pending");
+      // A floor: never offered for the conversation.
+      expect(
+        (row.action.target as { acp: AcpApprovalCard }).acp.offerConversation,
+      ).toBe(false);
+      expect(row.action.policy?.closed).toBe(true);
+    }
+    // The employee's own sensitive paths count too.
+    await runAsTenant(hirer.id, () =>
+      service.setEmployeeSecurity(hirer.id, h.agentId, {
+        extraSensitivePaths: ["secrets/**"],
+      }),
+    );
+    await file("req-5", "read", "secrets/tokens.txt");
+    expect(h.answers()).toHaveLength(2);
+    expect(await h.approvals()).toHaveLength(3);
+    // An employee whose owner switched the floor off is not held by it, as with the computer's tools.
+    await runAsTenant(hirer.id, () =>
+      service.setEmployeeSecurity(hirer.id, h.agentId, {
+        sensitivePaths: "off",
+      }),
+    );
+    await file("req-6", "read", ".env.local");
+    expect(h.answers()).toEqual([
+      expect.objectContaining({ requestId: "req-1", optionId: "yes" }),
+      expect.objectContaining({ requestId: "req-2", optionId: "yes" }),
+      expect.objectContaining({ requestId: "req-6", optionId: "yes" }),
+    ]);
+  });
+
   test("an employee deleted mid-turn has its requests refused, not allowed by its old rules", async () => {
     const hirer = await person("hirer");
     const { agentId, request, answers, approvals, events } = await harness(
