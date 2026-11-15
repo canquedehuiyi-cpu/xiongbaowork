@@ -516,9 +516,49 @@ export type Briefing = {
 
 export type BriefingKind = "start" | "end";
 
-/** 上午看开工清点，过了中午看收工清点。 */
-export const briefingKindAt = (now: Date): BriefingKind =>
-  now.getHours() < 12 ? "start" : "end";
+/** 此刻在 `timeZone` 的钟上是几点（0–23）；不给时区或认不出时按浏览器的钟。 */
+export function hourIn(now: Date, timeZone?: string): number {
+  if (timeZone) {
+    try {
+      const hour = new Intl.DateTimeFormat("en-US", {
+        timeZone,
+        hour: "numeric",
+        hourCycle: "h23",
+      })
+        .formatToParts(now)
+        .find((part) => part.type === "hour")?.value;
+      if (hour !== undefined) return Number(hour) % 24;
+    } catch {
+      // 认不出的时区：按浏览器的钟。
+    }
+  }
+  return now.getHours();
+}
+
+/**
+ * 看哪一份清点：按你作息的时区，上午看开工清点，过了中午看收工清点（服务器的清点接口要人说是哪一份，
+ * 它不替你选）。作息时区取不到时按浏览器的钟。
+ */
+export const briefingKindAt = (now: Date, timeZone?: string): BriefingKind =>
+  hourIn(now, timeZone) < 12 ? "start" : "end";
+
+/** 「11 月 15 日」，按 `timeZone` 的日历；不给时区按浏览器的。 */
+export function dayText(now: Date, timeZone?: string): string {
+  const parts = (zone?: string) =>
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+      month: "numeric",
+      day: "numeric",
+    }).formatToParts(now);
+  let found: Intl.DateTimeFormatPart[];
+  try {
+    found = parts(timeZone);
+  } catch {
+    found = parts();
+  }
+  const of = (type: string) => found.find((part) => part.type === type)?.value;
+  return `${of("month")} 月 ${of("day")} 日`;
+}
 
 /** 清点条上的一句话，拆成几段，数字单独加粗（设计稿 1）。 */
 export type BriefingPiece = {

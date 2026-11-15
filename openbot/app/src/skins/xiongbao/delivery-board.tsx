@@ -9,7 +9,6 @@ import {
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   type Briefing,
-  briefingKindAt,
   briefingPieces,
   briefingQueryOptions,
   canExtend,
@@ -21,12 +20,12 @@ import {
   deliverableLine,
   deliveryLaneOf,
   type FollowedCard,
-  firstBriefingTask,
   isToday,
   overdueChip,
   overdueMinutes,
 } from "@/lib/tasks/delivery";
 import { cn } from "@/lib/utils";
+import { useBriefingKind } from "./briefing-page";
 import {
   DeliveryDialogs,
   deliveryButton,
@@ -301,7 +300,10 @@ function DeliveryCard({
   );
 }
 
-/** 开工 / 收工清点那一条（设计稿 1）。没有在跟的活时服务器不给清点，这一条就不画。 */
+/**
+ * 开工 / 收工清点那一条（设计稿 1）。没有在跟的活时服务器不给清点，这一条就不画。「逐件看」打开清点页
+ * （`/briefing`，设计稿 4），一件件列出来。
+ */
 function BriefingStrip({
   briefing,
   kind,
@@ -315,7 +317,11 @@ function BriefingStrip({
 }) {
   const navigate = useNavigate();
   const label = kind === "start" ? "开工清点" : "收工清点";
-  const first = firstBriefingTask(briefing);
+  const anything =
+    briefing.overdue.length +
+      briefing.awaitingReview.length +
+      briefing.inProgress.length >
+    0;
   return (
     <section
       aria-label={`${label}提示`}
@@ -342,17 +348,10 @@ function BriefingStrip({
           ),
         )}
       </span>
-      {first ? (
+      {anything ? (
         <button
           className={cn(deliveryButton(), "ml-auto")}
-          onClick={() =>
-            void navigate({
-              from: "/tasks",
-              params: { taskId: first },
-              search: (previous) => previous,
-              to: "/tasks/$taskId",
-            })
-          }
+          onClick={() => void navigate({ to: "/briefing" })}
           type="button"
         >
           逐件看
@@ -384,8 +383,12 @@ export function DeliveryBoard({
   const coworkers = useQuery(agentListQueryOptions());
   const coworkerOf = (id: string | null) =>
     id ? coworkers.data?.find((coworker) => coworker.id === id) : undefined;
-  const kind = briefingKindAt(now);
-  const briefing = useQuery(briefingQueryOptions(kind));
+  // 开工还是收工清点：按你作息的时区（读不到作息时按浏览器的钟），和清点页同一个判断。
+  const { kind } = useBriefingKind(now);
+  const briefing = useQuery({
+    ...briefingQueryOptions(kind ?? "start"),
+    enabled: kind !== undefined,
+  });
   const writes = useDeliveryWrites();
   const [dialog, setDialog] = useState<OpenDialog>(null);
   const [byCoworker, setByCoworker] = useState(false);
@@ -451,7 +454,7 @@ export function DeliveryBoard({
         </div>
       </header>
 
-      {briefing.data ? (
+      {briefing.data && kind ? (
         <BriefingStrip
           agentOfTask={agentOfTask}
           briefing={briefing.data}

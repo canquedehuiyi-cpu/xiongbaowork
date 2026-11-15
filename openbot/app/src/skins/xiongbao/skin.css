@@ -108,6 +108,9 @@
   --wb-danger-fg: #c43c3c;
   --wb-danger-soft: rgba(220, 70, 70, 0.1);
   --wb-danger-line: rgba(220, 70, 70, 0.5);
+  /* 清点页与侧栏目标（交付闭环 Task 10）：「已交成果」标签的浅蓝底和蓝字。 */
+  --wb-blue-soft: rgba(59, 114, 217, 0.12);
+  --wb-blue-text: #2f5fb8;
 }
 
 :root:not([data-skin]).dark {
@@ -207,6 +210,9 @@
   --wb-danger-fg: #f2a3a3;
   --wb-danger-soft: rgba(239, 107, 107, 0.16);
   --wb-danger-line: rgba(239, 107, 107, 0.55);
+  /* 清点页与侧栏目标（交付闭环 Task 10），数值取自设计稿 4、6。 */
+  --wb-blue-soft: rgba(91, 141, 239, 0.18);
+  --wb-blue-text: #8fb0f5;
 }
 
 /*

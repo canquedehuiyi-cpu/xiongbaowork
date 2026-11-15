@@ -43,6 +43,8 @@ import {
 /**
  * 任务卡详情（交付闭环 Task 8，设计稿 2）：四步进度、交付物与证据、验收标准、验收 / 退回（写原因）/ 取消、
  * 流水（按时间正序，只追加）。员工手上的卡还有「再催一次」「准许延期到……」「换个员工接手」（设计稿 5）。
+ * 逾期的卡就是手机上的「逾期页」：「逾期了，怎么办？」下面是服务器替你盯过的经过（流水里的催办、逾期、
+ * 通知），和一列四个处理按钮（Task 10）。
  *
  * 在看板上面从右边滑出来（手机上占满一屏），关上回到看板，看板的筛选不变。深链和手机推送也落到这里。
  * 颜色只从 `--wb-*` 令牌取（`skin.css`）；在别的皮肤里打开时，根上把这些令牌接到应用自己的令牌上
@@ -215,6 +217,84 @@ function EvidenceLine({ row }: { row: EvidenceRow }) {
   );
 }
 
+/**
+ * 逾期卡上「服务器替你盯着」那一段（设计稿 5）：流水里核对器替你做过的事——叫醒员工问进度（第几次）、记为
+ * 逾期、通知你（或留到开工清点）。只念流水里真有的行：没人核对过的时段不写成「一直在盯」。你自己点的「再催」
+ * 不算在这里（它在下面的流水里）。
+ */
+function WatchSteps({
+  history,
+  events,
+  now,
+  title,
+  nameOf,
+  agentId,
+}: {
+  history: TaskEvent[];
+  events: { isError: boolean; isPending: boolean };
+  now: Date;
+  title: string;
+  nameOf: (agentId: string) => string;
+  agentId: string | null;
+}) {
+  let nudges = 0;
+  const steps = history.flatMap((event) => {
+    const byServer = !event.actor.startsWith("user:");
+    if (
+      !(
+        (event.kind === "nudged" && byServer) ||
+        event.kind === "overdue" ||
+        event.kind === "notified"
+      )
+    )
+      return [];
+    const line = eventLine(event, { now, title, nameOf, agentId });
+    if (!line) return [];
+    if (event.kind === "nudged") nudges += 1;
+    return [
+      {
+        event,
+        text:
+          event.kind === "nudged"
+            ? `${line.text}（第 ${nudges} 次）`
+            : line.text,
+      },
+    ];
+  });
+  return (
+    <section
+      aria-label="服务器替你盯着"
+      className="flex flex-col gap-2 rounded-(--wb-radius) bg-(--wb-card) p-3.5"
+    >
+      <h4 className="m-0 font-semibold text-(--wb-fg2) text-[13px]">
+        服务器替你盯着
+      </h4>
+      {events.isError ? (
+        <p className="m-0 text-(--wb-danger-fg) text-[12.5px]" role="alert">
+          读不到核对经过，稍后再试。
+        </p>
+      ) : steps.length === 0 ? (
+        <p className="m-0 text-(--wb-muted) text-[12.5px]">
+          {events.isPending ? "正在读核对经过…" : "流水里还没有核对记录。"}
+        </p>
+      ) : (
+        <ol className="m-0 grid list-none grid-cols-[minmax(52px,max-content)_minmax(0,1fr)] gap-x-2.5 gap-y-2 p-0 text-[13px] leading-[1.6]">
+          {steps.map(({ event, text }) => (
+            <li className="contents" key={event.id}>
+              <time className="text-(--wb-muted)" dateTime={event.createdAt}>
+                {clockText(event.createdAt, now)}
+              </time>
+              <span className="text-(--wb-fg) [overflow-wrap:anywhere]">
+                {text}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 const lastOf = (events: TaskEvent[], kind: string) =>
   events.findLast((event) => event.kind === kind)?.createdAt ?? null;
 
@@ -314,9 +394,15 @@ function TaskDetail({ taskId }: { taskId: string }) {
   /*
    * 延期弹层要先知道员工有没有待答复的申请：流水读不到时不给打开（提交会绕过那条申请），在按钮旁说一句。
    */
+  /*
+   * 逾期卡（设计稿 5）：四个处理按钮一个一列、44px 高，「再催一次」是蓝的；别的时候一行排开、手机上一个一列。
+   */
+  const stacked = late !== null && status === "running";
+  const size = stacked ? "lg" : "md";
+  const wide = stacked ? "w-full" : "max-sm:w-full";
   const extendButton = (label: string) => (
     <button
-      className={cn(deliveryButton(false, "md"), "max-sm:w-full")}
+      className={cn(deliveryButton(false, size), wide)}
       disabled={events.isError || events.isPending}
       onClick={() => setDialog({ kind: "extend", card: task })}
       title={events.isError ? "读不到流水，稍后再试" : undefined}
@@ -327,7 +413,11 @@ function TaskDetail({ taskId }: { taskId: string }) {
   );
   const cancelButton = (
     <button
-      className={cn(deliveryButton(false, "md"), "max-sm:w-full sm:ml-auto")}
+      className={cn(
+        deliveryButton(false, size),
+        wide,
+        stacked ? null : "sm:ml-auto",
+      )}
       disabled={writes.busy.has(task.id)}
       onClick={() => {
         if (!confirmCancel) {
@@ -402,10 +492,15 @@ function TaskDetail({ taskId }: { taskId: string }) {
     );
   else if (followed && status === "running")
     actions = (
-      <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      <div
+        className={cn(
+          "flex flex-col gap-2",
+          stacked ? null : "sm:flex-row sm:flex-wrap",
+        )}
+      >
         {canNudge(task) ? (
           <button
-            className={cn(deliveryButton(late !== null, "md"), "max-sm:w-full")}
+            className={cn(deliveryButton(late !== null, size), wide)}
             disabled={writes.busy.has(task.id)}
             onClick={() => writes.run(task, "nudge")}
             type="button"
@@ -420,7 +515,7 @@ function TaskDetail({ taskId }: { taskId: string }) {
           : null}
         {canReassign(task) ? (
           <button
-            className={cn(deliveryButton(false, "md"), "max-sm:w-full")}
+            className={cn(deliveryButton(false, size), wide)}
             onClick={() => setDialog({ kind: "reassign", card: task })}
             type="button"
           >
@@ -499,6 +594,34 @@ function TaskDetail({ taskId }: { taskId: string }) {
         </div>
       ) : null}
 
+      {late !== null ? (
+        <section aria-label="逾期了，怎么办？" className="flex flex-col gap-3">
+          <h3 className="m-0 font-semibold text-(--wb-fg) text-[16px]">
+            逾期了，怎么办？
+          </h3>
+          <WatchSteps
+            agentId={task.executorAgentId}
+            events={events}
+            history={history}
+            nameOf={nameOf}
+            now={now}
+            title={task.title}
+          />
+          {stacked ? (
+            <>
+              <WriteFailure
+                failure={writes.failure}
+                onDismiss={writes.clearFailure}
+              />
+              {actions}
+            </>
+          ) : null}
+          <p className="m-0 text-(--wb-muted) text-[12px] leading-[1.6]">
+            逾期多久、催了几次都写进卡片流水，不会因为后来交了就抹掉。
+          </p>
+        </section>
+      ) : null}
+
       <section aria-label="交付物与证据" className="flex flex-col gap-2">
         <h3 className={SECTION_TITLE}>交付物与证据</h3>
         {evidence.length > 0 ? (
@@ -516,8 +639,15 @@ function TaskDetail({ taskId }: { taskId: string }) {
         </span>
       </section>
 
-      <WriteFailure failure={writes.failure} onDismiss={writes.clearFailure} />
-      {actions}
+      {stacked ? null : (
+        <>
+          <WriteFailure
+            failure={writes.failure}
+            onDismiss={writes.clearFailure}
+          />
+          {actions}
+        </>
+      )}
 
       <section
         aria-label="流水"

@@ -49,6 +49,8 @@ const WB_FALLBACK = {
   "--wb-blue": "var(--primary)",
   "--wb-blue-fg": "var(--primary-foreground)",
   "--wb-blue-line": "var(--primary)",
+  "--wb-blue-soft": "color-mix(in oklab, var(--primary) 14%, transparent)",
+  "--wb-blue-text": "var(--primary)",
   "--wb-danger-fg": "var(--destructive)",
   "--wb-danger-soft":
     "color-mix(in oklab, var(--destructive) 14%, transparent)",
@@ -58,6 +60,8 @@ const WB_FALLBACK = {
   "--wb-amber-fg": "#b06f00",
   "--wb-green": "#2f9e6a",
   "--wb-green-fg": "#1f9d63",
+  "--wb-main": "var(--background)",
+  "--wb-ctx-track": "var(--muted)",
   "--wb-radius": "12px",
   "--wb-radius-pill": "99px",
 } as CSSProperties;

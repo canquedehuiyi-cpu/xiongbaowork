@@ -20,6 +20,7 @@ import { Route as AuthedAppIndexRouteImport } from './routes/_authed/_app/index'
 import { Route as AuthedAppApprovalsRouteImport } from './routes/_authed/_app/approvals'
 import { Route as AuthedAppAutonomousRouteImport } from './routes/_authed/_app/autonomous'
 import { Route as AuthedAppBotRouteImport } from './routes/_authed/_app/bot'
+import { Route as AuthedAppBriefingRouteImport } from './routes/_authed/_app/briefing'
 import { Route as AuthedAppBrowserRouteImport } from './routes/_authed/_app/browser'
 import { Route as AuthedAppCapabilitiesRouteImport } from './routes/_authed/_app/capabilities'
 import { Route as AuthedAppContactsRouteImport } from './routes/_authed/_app/contacts'
@@ -193,6 +194,11 @@ const AuthedAppAutonomousRoute = AuthedAppAutonomousRouteImport.update({
 const AuthedAppBotRoute = AuthedAppBotRouteImport.update({
   id: '/bot',
   path: '/bot',
+  getParentRoute: () => AuthedAppRoute,
+} as any)
+const AuthedAppBriefingRoute = AuthedAppBriefingRouteImport.update({
+  id: '/briefing',
+  path: '/briefing',
   getParentRoute: () => AuthedAppRoute,
 } as any)
 const AuthedAppBrowserRoute = AuthedAppBrowserRouteImport.update({
@@ -869,6 +875,7 @@ export interface FileRoutesByFullPath {
   '/approvals': typeof AuthedAppApprovalsRoute
   '/autonomous': typeof AuthedAppAutonomousRoute
   '/bot': typeof AuthedAppBotRoute
+  '/briefing': typeof AuthedAppBriefingRoute
   '/browser': typeof AuthedAppBrowserRoute
   '/capabilities': typeof AuthedAppCapabilitiesRouteWithChildren
   '/contacts': typeof AuthedAppContactsRoute
@@ -998,6 +1005,7 @@ export interface FileRoutesByTo {
   '/approvals': typeof AuthedAppApprovalsRoute
   '/autonomous': typeof AuthedAppAutonomousRoute
   '/bot': typeof AuthedAppBotRoute
+  '/briefing': typeof AuthedAppBriefingRoute
   '/browser': typeof AuthedAppBrowserRoute
   '/contacts': typeof AuthedAppContactsRoute
   '/knowledge': typeof AuthedAppKnowledgeRoute
@@ -1130,6 +1138,7 @@ export interface FileRoutesById {
   '/_authed/_app/approvals': typeof AuthedAppApprovalsRoute
   '/_authed/_app/autonomous': typeof AuthedAppAutonomousRoute
   '/_authed/_app/bot': typeof AuthedAppBotRoute
+  '/_authed/_app/briefing': typeof AuthedAppBriefingRoute
   '/_authed/_app/browser': typeof AuthedAppBrowserRoute
   '/_authed/_app/capabilities': typeof AuthedAppCapabilitiesRouteWithChildren
   '/_authed/_app/contacts': typeof AuthedAppContactsRoute
@@ -1265,6 +1274,7 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/autonomous'
     | '/bot'
+    | '/briefing'
     | '/browser'
     | '/capabilities'
     | '/contacts'
@@ -1394,6 +1404,7 @@ export interface FileRouteTypes {
     | '/approvals'
     | '/autonomous'
     | '/bot'
+    | '/briefing'
     | '/browser'
     | '/contacts'
     | '/knowledge'
@@ -1525,6 +1536,7 @@ export interface FileRouteTypes {
     | '/_authed/_app/approvals'
     | '/_authed/_app/autonomous'
     | '/_authed/_app/bot'
+    | '/_authed/_app/briefing'
     | '/_authed/_app/browser'
     | '/_authed/_app/capabilities'
     | '/_authed/_app/contacts'
@@ -1731,6 +1743,13 @@ declare module '@tanstack/react-router' {
       path: '/bot'
       fullPath: '/bot'
       preLoaderRoute: typeof AuthedAppBotRouteImport
+      parentRoute: typeof AuthedAppRoute
+    }
+    '/_authed/_app/briefing': {
+      id: '/_authed/_app/briefing'
+      path: '/briefing'
+      fullPath: '/briefing'
+      preLoaderRoute: typeof AuthedAppBriefingRouteImport
       parentRoute: typeof AuthedAppRoute
     }
     '/_authed/_app/browser': {
@@ -2786,6 +2805,7 @@ interface AuthedAppRouteChildren {
   AuthedAppApprovalsRoute: typeof AuthedAppApprovalsRoute
   AuthedAppAutonomousRoute: typeof AuthedAppAutonomousRoute
   AuthedAppBotRoute: typeof AuthedAppBotRoute
+  AuthedAppBriefingRoute: typeof AuthedAppBriefingRoute
   AuthedAppBrowserRoute: typeof AuthedAppBrowserRoute
   AuthedAppCapabilitiesRoute: typeof AuthedAppCapabilitiesRouteWithChildren
   AuthedAppContactsRoute: typeof AuthedAppContactsRoute
@@ -2843,6 +2863,7 @@ const AuthedAppRouteChildren: AuthedAppRouteChildren = {
   AuthedAppApprovalsRoute: AuthedAppApprovalsRoute,
   AuthedAppAutonomousRoute: AuthedAppAutonomousRoute,
   AuthedAppBotRoute: AuthedAppBotRoute,
+  AuthedAppBriefingRoute: AuthedAppBriefingRoute,
   AuthedAppBrowserRoute: AuthedAppBrowserRoute,
   AuthedAppCapabilitiesRoute: AuthedAppCapabilitiesRouteWithChildren,
   AuthedAppContactsRoute: AuthedAppContactsRoute,

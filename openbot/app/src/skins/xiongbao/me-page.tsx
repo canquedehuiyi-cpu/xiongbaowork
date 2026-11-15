@@ -30,6 +30,7 @@ import {
   useNavigationItems,
 } from "@/lib/navigation";
 import { planSummaryQueryOptions } from "@/lib/quota/queries";
+import { useWorkHours, workHoursText } from "@/lib/settings/work-hours";
 import { cn } from "@/lib/utils";
 import { initialOf } from "./rail";
 
@@ -101,6 +102,7 @@ export function useMeMenu(): MeMenu {
   const theme = useOptionalTheme();
   const signOut = useSignOut();
   const signOutOffered = useSignOutOffered();
+  const workHours = useWorkHours();
 
   const plan = quota?.plan?.name;
   const plans = navigation.find((item) => item.id === "plans");
@@ -142,7 +144,10 @@ export function useMeMenu(): MeMenu {
       id: "notifications",
       label: "通知",
       icon: IconBell,
-      detail: "员工的更新在哪里收到",
+      // 作息读到了就写作息（开工、收工清点按它发），读不到写这一页是做什么的。
+      detail: workHours
+        ? `作息 ${workHoursText(workHours)}`
+        : "员工的更新在哪里收到",
       link: { to: "/settings/notifications" },
       path: "/settings/notifications",
       claims: true,
