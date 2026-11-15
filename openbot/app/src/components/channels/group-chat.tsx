@@ -460,6 +460,14 @@ function GroupLine({
             <Link
               className="font-medium underline underline-offset-2"
               to="/settings/approvals"
+              /*
+               * The line knows which approval would resume it, so the link names it and the page
+               * lands on that row. A durable wait has none -- nothing to land on -- and goes to the
+               * list, which is where its answer is.
+               */
+              {...(message.approvalId
+                ? { search: { focus: message.approvalId } }
+                : {})}
             >
               去审批
             </Link>
