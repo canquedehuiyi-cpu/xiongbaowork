@@ -97,6 +97,11 @@ export function createServerApprovalService(deps: {
   questions?: ApprovalQuestions;
   /** How an approved action is settled; see `createApprovalService`. */
   settlement?: "database";
+  /** Whose an external employee's approval is to answer; see `createApprovalService`. */
+  externalAgentHirer?: (
+    approvalId: string,
+    deciderId: string,
+  ) => Promise<string | null | undefined>;
   notify: (
     scope: DeliveryScope,
     input: { id: string; kind: "approval"; requestId: string; text: string },
@@ -209,6 +214,9 @@ export function createServerApprovalService(deps: {
     {
       review: deps.review,
       ...(deps.settlement ? { settlement: deps.settlement } : {}),
+      ...(deps.externalAgentHirer
+        ? { externalAgentHirer: deps.externalAgentHirer }
+        : {}),
     },
   );
 }

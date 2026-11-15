@@ -1,4 +1,13 @@
 tests/account-argument.test.ts
+tests/acp-agent.test.ts
+tests/acp-e2e.integration.test.ts
+tests/acp-group.integration.test.ts
+tests/acp-hire.integration.test.ts
+tests/acp-permissions.integration.test.ts
+tests/acp-permissions.test.ts
+tests/acp-relay.test.ts
+tests/acp-translate.test.ts
+tests/acp-turns.integration.test.ts
 tests/activity-folder-actions.integration.test.ts
 tests/activity-plumbing-rows.integration.test.ts
 tests/activity-report-counts.integration.test.ts

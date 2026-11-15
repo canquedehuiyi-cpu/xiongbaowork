@@ -1,5 +1,6 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { ExternalEmployeeWorkRefusedError } from "../agents/acp/external";
 import type { AppVariables } from "../auth/guards";
 import { plainFailure } from "../tasks/state";
 import type { ProactiveEngine } from "./engine";
@@ -79,6 +80,8 @@ export function createProactiveRoutes(
       return context.json({ error: error.message }, 404);
     if (error instanceof ProactiveRefusedError)
       return context.json({ error: error.message }, 400);
+    if (error instanceof ExternalEmployeeWorkRefusedError)
+      return context.json({ error: error.message }, 409);
     console.error(
       JSON.stringify({
         type: "proactive-route-error",

@@ -15,6 +15,7 @@ import {
 import { asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 import {
   EMPTY,
+  filter,
   finalize,
   from,
   Observable,
@@ -183,6 +184,39 @@ const runnerLane = new AsyncLocalStorage<RunnerCardLane>();
  */
 export function fileRunnerCardAs<T>(lane: RunnerCardLane, body: () => T): T {
   return runnerLane.run(lane, body);
+}
+
+const adoptedCard = new AsyncLocalStorage<string>();
+
+/**
+ * Run `body`, and let the turn it starts finish the card already on the board under `runRef` instead
+ * of filing one of its own: an external employee's turn that waited in the queue (agents/acp/agent.ts)
+ * is the same piece of work as the run that queued it, which left its card open (`acp.queued`). No
+ * second card, no second charge. Read at `run()`, like `fileRunnerCardAs`.
+ */
+export function adoptRunnerCard<T>(runRef: string, body: () => T): T {
+  return adoptedCard.run(runRef, body);
+}
+
+/**
+ * Events of an external employee's run that are kept out of the thread's stored history:
+ * `acp.waiting` says every 20 seconds that a run is still open, which means nothing once it is over,
+ * and a turn waiting days for a permission answer would otherwise store one row per beat.
+ */
+function transient(event: BaseEvent): boolean {
+  return (
+    event.type === EventType.CUSTOM &&
+    (event as { name?: unknown }).name === "acp.waiting"
+  );
+}
+
+/** A run that answered "queued": its card stays open for the run that does the work. */
+function leftQueued(events: readonly BaseEvent[]): boolean {
+  return events.some(
+    (event) =>
+      event.type === EventType.CUSTOM &&
+      (event as { name?: unknown }).name === "acp.queued",
+  );
 }
 
 /**
@@ -425,6 +459,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const forCard = targetedCard();
     // Read in the same breath and for the same reason: unset for every turn a person sends.
     const lane = runnerLane.getStore();
+    const adopted = adoptedCard.getStore();
     /*
      * A thread id another tenant holds here is refused before anything else is asked: the parent's
      * `run` would supersede that tenant's live turn, append this run to their history, and the
@@ -464,7 +499,9 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
                   return null;
                 })
             : null;
-        const ceiling = cardIsTaken || followed ? undefined : quota;
+        // A card already filed (and charged) is not asked about again: an entry's, a followed card,
+        // or the card a queued external employee's run left open (`adoptRunnerCard`).
+        const ceiling = cardIsTaken || followed || adopted ? undefined : quota;
         if (ceiling) await ceiling.assertCapacity(tenant, "tasksPerMonth");
         /*
          * A round of a card the person asked to follow that its coworker has not taken on yet (派出 ·
@@ -501,6 +538,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
             lane,
             followed ?? undefined,
             entryCardRef,
+            adopted,
           ).subscribe(subscriber);
         },
         (thrown: unknown) => subscriber.error(thrown),
@@ -570,9 +608,12 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     followed?: { id: string },
     /** The key the entry's own card is filed under, when it is not the run id. */
     entryCardRef?: string,
+    /** The card this turn finishes instead of filing its own (`adoptRunnerCard`). */
+    adopted?: string,
   ): Observable<BaseEvent> {
     const { threadId } = request;
     const runId = request.input.runId;
+    const cardRef = adopted ?? runId;
     // `RunAgentInput` carries no agent id, so the agent instance is the only place it lives; the
     // fallback is honest about a caller that ran an anonymous agent rather than inventing one.
     const agentId = request.agent.agentId ?? "unknown";
@@ -609,7 +650,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
                 source: lane?.source ?? "chat",
                 triggerSource: lane?.triggerSource ?? null,
                 channelRef: threadId,
-                runRef: runId,
+                runRef: cardRef,
                 deviceId: deviceId ?? null,
               }),
             )
@@ -686,7 +727,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         })().catch((error) => console.error("task projection failed", error));
         return;
       }
-      if (!card) {
+      // Only queued: the run that does the work finishes this card (`adoptRunnerCard`).
+      if (!card || (!failed && leftQueued(events))) {
         void otherRounds().catch((error) =>
           console.error("task projection failed", error),
         );
@@ -714,7 +756,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
           // biome-ignore lint/style/noNonNullAssertion: a board is set before any run is accepted here
           await this.board!.finished({
             tenantId: tenant,
-            runRef: runId,
+            runRef: cardRef,
             failed,
             deliverableRef,
           });
@@ -732,7 +774,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       beginTurn(runId, entryCardRef);
       return super.run(asStoreOwner(request, tenant)).pipe(
         tap({
-          next: (event) => events.push(event),
+          // What the thread keeps; a heartbeat is passed on and not kept (`transient`).
+          next: (event) => {
+            if (!transient(event)) events.push(event);
+          },
           complete: () => {
             /*
              * Which branch the stream took says nothing about whether the turn answered. A run can fail
@@ -899,6 +944,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         .orderBy(asc(threadRunEvents.runId), asc(threadRunEvents.seq));
       const eventsOf = new Map<string, BaseEvent[]>();
       for (const row of eventRows) {
+        if (transient(row.event as BaseEvent)) continue;
         const list = eventsOf.get(row.runId) ?? [];
         list.push(row.event as BaseEvent);
         eventsOf.set(row.runId, list);
@@ -1032,7 +1078,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
    */
   override connect(request: AgentRunnerConnectRequest): Observable<BaseEvent> {
     if (!ownedBy(request.threadId, currentTenant())) return EMPTY;
-    return super.connect({ ...request, ...storeScope(request.threadId) });
+    // A reconnect replays what the thread said, not the heartbeats of a run (`transient`).
+    return super
+      .connect({ ...request, ...storeScope(request.threadId) })
+      .pipe(filter((event) => !transient(event)));
   }
 
   /** Whether somebody else's thread is mid-turn is not this caller's to learn. */

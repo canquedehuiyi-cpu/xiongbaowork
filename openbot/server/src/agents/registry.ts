@@ -11,10 +11,20 @@ type RemoteAgent = {
    * How the endpoint is dialled. Both kinds are a URL this deployment posts a run to, and both are
    * available on the same condition, which is why availability below does not branch on it.
    */
-  type: "remote_ag_ui" | "remote_mastra" | "device_acp";
+  type: "remote_ag_ui" | "remote_mastra";
   endpoint: string;
 };
-type SeededAgent = BuiltInAgent | RemoteAgent;
+/**
+ * An external employee (`device_acp`): it has no address to check. It runs on its hirer's computer
+ * through the runner socket, so whether it can answer is that computer's presence, not a URL.
+ */
+type ExternalAgent = {
+  id: string;
+  name: string;
+  type: "device_acp";
+  deviceId: string;
+};
+type SeededAgent = BuiltInAgent | RemoteAgent | ExternalAgent;
 
 export function createAgentRegistry(
   agents: SeededAgent[],
@@ -32,6 +42,16 @@ export function createAgentRegistry(
             reason: "Model credential is not configured.",
           };
     }
+    if (agent.type === "device_acp")
+      return agent.deviceId
+        ? { id: agent.id, name: agent.name, type: agent.type, available: true }
+        : {
+            id: agent.id,
+            name: agent.name,
+            type: agent.type,
+            available: false,
+            reason: "No computer is set for this external employee.",
+          };
     const available = isHttpUrl(agent.endpoint);
     return available
       ? { id: agent.id, name: agent.name, type: agent.type, available: true }

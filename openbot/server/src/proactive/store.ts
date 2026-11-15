@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, gte, inArray, isNull, lte, ne, sql } from "drizzle-orm";
+import { refuseExternalEmployeeWork } from "../agents/acp/external";
 import type { Database } from "../db/client";
 import { auditEvents, users } from "../db/schema/core";
 import { botLifecycle } from "../db/schema/lifecycle";
@@ -431,6 +432,8 @@ export function createProactiveStore(database: Database) {
     ): Promise<ProactiveSetting> {
       const parsed = parseWith(proactiveSettingInputSchema, input);
       const sourceLink = parsed.sourceLink ?? null;
+      // Proactive work runs with nobody asking: not for an external employee (spec 「不做」).
+      await refuseExternalEmployeeWork(database, owner, parsed.agentId);
       return database.transaction(async (transaction) => {
         await lockDefaults(transaction, owner, parsed.agentId);
         const same = (

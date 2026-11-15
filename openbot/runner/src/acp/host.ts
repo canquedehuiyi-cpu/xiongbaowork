@@ -18,7 +18,7 @@ import {
   createAcpClient,
 } from "./client";
 import { acpProcessEnv } from "./login-path";
-import { adapterLaunch, withProcessPath } from "./manifest";
+import { adapterLaunch, prepareAdapterDir, withProcessPath } from "./manifest";
 import { permissionFacts } from "./paths";
 
 /**
@@ -116,6 +116,11 @@ export type AcpHost = {
   /** The server acknowledged a heartbeat of this connection (acks come one per beat). */
   acked(): void;
   closeAll(): Promise<void>;
+  /**
+   * The prompt a remembered turn still holds (diagnostics, tests): its content until it ends, then
+   * nothing (the person's words are not kept past their turn); undefined for a turn not remembered.
+   */
+  heldPrompt(turnId: string): unknown[] | undefined;
 };
 
 export type AcpHostDeps = {
@@ -247,10 +252,17 @@ function sizeOf(frame: Frame): number {
 /** Longest string kept, tried in turn, when a frame's payload must be cut down to the limit. */
 const CUTS = [65_536, 8_192, 1_024, 128];
 
-/** `value` with every string longer than `max` cut to `max` and marked with an ellipsis. */
+/**
+ * `value` with every string longer than `max` cut to `max` and marked with an ellipsis. A cut never
+ * lands inside a surrogate pair: half an emoji is a lone surrogate, which Postgres' jsonb refuses.
+ */
 function cutStrings(value: unknown, max: number): unknown {
-  if (typeof value === "string")
-    return value.length > max ? `${value.slice(0, max)}…` : value;
+  if (typeof value === "string") {
+    if (value.length <= max) return value;
+    const last = value.charCodeAt(max - 1);
+    const end = last >= 0xd800 && last <= 0xdbff ? max - 1 : max;
+    return `${value.slice(0, end)}…`;
+  }
   if (Array.isArray(value)) return value.map((item) => cutStrings(item, max));
   if (isRecord(value)) {
     const out: Frame = {};
@@ -340,6 +352,37 @@ export function capFrame(frame: Frame, limit = ACP_FRAME_LIMIT): Frame {
   return bare;
 }
 
+/**
+ * `acp.inventory` within `limit`: as it is when it fits. Otherwise the oldest ended turns go first,
+ * as many as it takes, and it says `truncated: true` (the server then interrupts nothing because a
+ * turn is missing from it). When even its unfinished turns and waiting requests do not fit, it is
+ * `capFrame`'s: empty lists, `truncated: true`.
+ */
+export function fitInventory(
+  inventory: AcpInventoryFrame,
+  limit = ACP_FRAME_LIMIT,
+): Frame {
+  if (sizeOf(inventory) <= limit) return inventory;
+  const marked = { ...inventory, truncated: true };
+  // Listed in the order this process first saw them: the oldest first.
+  const ended = inventory.turns.filter((turn) => turn.state === "ended");
+  let over = sizeOf(marked) - limit;
+  let drop = 0;
+  while (over > 0 && drop < ended.length) {
+    over -= Buffer.byteLength(JSON.stringify(ended[drop])) + 1;
+    drop += 1;
+  }
+  for (; drop <= ended.length; drop += 1) {
+    const gone = new Set(ended.slice(0, drop));
+    const cut = {
+      ...marked,
+      turns: inventory.turns.filter((turn) => !gone.has(turn)),
+    };
+    if (sizeOf(cut) <= limit) return cut;
+  }
+  return capFrame(marked, limit);
+}
+
 export function createAcpHost(deps: AcpHostDeps): AcpHost {
   const spawn = deps.spawn ?? createAcpClient;
   const processEnv = deps.processEnv ?? acpProcessEnv;
@@ -350,6 +393,12 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   const cancelGraceMs = deps.cancelGraceMs ?? ACP_CANCEL_GRACE_MS;
   /** Random per runner process: a new one tells the server every earlier turn is gone. */
   const instanceId = randomUUID();
+
+  /** Where an owner's own agent starts when its app names no folder: the adapters' own. */
+  function adapterHome(): string {
+    prepareAdapterDir(deps.adapterDir);
+    return deps.adapterDir;
+  }
 
   const procs = new Map<string, Proc>();
   const threads = new Map<string, Thread>();
@@ -583,6 +632,8 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   function endTurn(turn: Turn, stopReason: string, interrupted: boolean) {
     if (turn.state === "ended") return;
     turn.state = "ended";
+    // A replay needs only the turn's frames and its end: the person's words go with the turn.
+    turn.content = [];
     if (turn.backstop) clearTimeout(turn.backstop);
     turn.end = {
       type: "acp.turn.end",
@@ -723,7 +774,9 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
               args: app.args,
               // Found on the owner's login PATH like the known agents, unless the app sets PATH.
               env: withProcessPath(app.env, await processEnv()),
-              cwd: app.cwd ?? workdir,
+              // Like the known agents, never in the working folder unless the owner chose it:
+              // that reaches the agent only as the session's `cwd`.
+              cwd: app.cwd ?? adapterHome(),
               sessionMode: null,
             }
           : await adapterLaunch(
@@ -835,7 +888,10 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     }
   }
 
-  /** The thread's session, gone for good: neither reused nor loaded again. */
+  /**
+   * The thread's session, gone for good: neither reused nor loaded again, not even as the open's
+   * `sessionHint` (the session the server last heard of, which this one superseded or was).
+   */
   function forgetSession(thread: Thread, proc: Proc, sessionId: string) {
     proc.sessions.delete(sessionId);
     if (thread.sessionId === sessionId) {
@@ -844,6 +900,10 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     }
     const key = threadKey(thread.agentId, thread.threadId);
     if (known.get(key) === sessionId) known.delete(key);
+    if (thread.open.sessionHint !== undefined) {
+      const { sessionHint: _forgotten, ...open } = thread.open;
+      thread.open = open;
+    }
   }
 
   async function runTurn(thread: Thread, turn: Turn) {
@@ -1067,7 +1127,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       send = sender;
       connection += 1;
       // First what this process is and has, so the server can reconcile before the replay.
-      if (!trySend(capFrame(inventory(), frameLimit))) return;
+      if (!trySend(fitInventory(inventory(), frameLimit))) return;
       // Everything kept, in the order it was made: the server drops what it already has by seq.
       // Nothing is let go for having been replayed: only a beat's ack (or the cap) does that.
       for (const entry of outbox) {
@@ -1105,6 +1165,10 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     async closeAll() {
       closed = true;
       await Promise.allSettled([...procs.values()].map(retire));
+    },
+
+    heldPrompt(turnId) {
+      return turns.get(turnId)?.content;
     },
   };
 }

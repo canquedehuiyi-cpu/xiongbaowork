@@ -41,6 +41,10 @@ export function createRuntimeAgentLoader(
     for (const row of active) {
       const agent = registeredAgentFromRow(row);
       if (!agent) continue;
+      /*
+       * Only an agent at an address carries headers. An external employee (`device_acp`) is run
+       * through its owner's runner socket and has no endpoint to send a key or a token to.
+       */
       const isRemoteAgent =
         agent.type === "remote_ag_ui" || agent.type === "remote_mastra";
       // The key is resolved per load, rather than being cached on the row: revoking a
@@ -102,6 +106,7 @@ function selectActiveAgents(database: Database, actor: AgentActor) {
       roleDescription: agentProfiles.roleDescription,
       persona: agentProfiles.persona,
       bible: agentProfiles.bible,
+      ownerUserId: agentProfiles.ownerUserId,
     })
     .from(agents)
     .innerJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
@@ -118,6 +123,35 @@ function selectActiveAgents(database: Database, actor: AgentActor) {
             ),
       ),
     );
+}
+
+/**
+ * One external employee, as the runtime builds it, read in the caller's tenant frame: for running a
+ * turn of it that waited in the queue (`startQueuedTurn`), where nobody's request names a roster.
+ * Null when it is gone (deleted, or no longer an external employee) or its row cannot be built.
+ */
+export async function loadDeviceAcpEmployee(
+  database: Database,
+  agentId: string,
+): Promise<Extract<RegisteredAgent, { type: "device_acp" }> | null> {
+  const [row] = await database
+    .select({
+      id: agents.id,
+      name: agents.name,
+      type: agents.type,
+      configuration: agents.configuration,
+      title: agentProfiles.title,
+      roleDescription: agentProfiles.roleDescription,
+      persona: agentProfiles.persona,
+      bible: agentProfiles.bible,
+      ownerUserId: agentProfiles.ownerUserId,
+    })
+    .from(agents)
+    .innerJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
+    .where(and(eq(agents.id, agentId), isNull(agentProfiles.deletedAt)))
+    .limit(1);
+  const agent = row ? registeredAgentFromRow(row) : null;
+  return agent?.type === "device_acp" ? agent : null;
 }
 
 /**

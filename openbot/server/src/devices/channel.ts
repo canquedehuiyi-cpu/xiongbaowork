@@ -68,6 +68,11 @@ export type DeviceChannel = {
    */
   isAttached: (connectionId: string) => boolean;
   /**
+   * The id of the device's live connection to this process, null when there is none: which
+   * connection a frame written now goes out on (an external agent's inventory is per connection).
+   */
+  connectionOf: (target: DispatchTarget) => string | null;
+  /**
    * Write one frame that is not an action — the live screen's start, stop and input — to the device's
    * current socket. Nothing is waited for and nothing is queued: a screen frame for a machine that is
    * away is stale by the time it returns. False when nothing could be written from this process.
@@ -363,6 +368,13 @@ export function createDeviceChannel(options?: {
         sockets.has(connectionId) &&
         byDevice.get(keyOf(identity.target)) === connectionId
       );
+    },
+
+    connectionOf(target) {
+      const connectionId = byDevice.get(keyOf(target));
+      return connectionId !== undefined && sockets.has(connectionId)
+        ? connectionId
+        : null;
     },
 
     notify(target, frame) {

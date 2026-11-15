@@ -1,5 +1,6 @@
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import { ExternalEmployeeWorkRefusedError } from "../agents/acp/external";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { AppVariables } from "../auth/guards";
@@ -363,6 +364,9 @@ function mapStoreError(context: Context, error: unknown): Response {
    * and the status is what tells the screen to offer "switch one off" instead of "fix your schedule".
    */
   if (error instanceof RoutineLimitError) {
+    return context.json({ error: error.message }, 409);
+  }
+  if (error instanceof ExternalEmployeeWorkRefusedError) {
     return context.json({ error: error.message }, 409);
   }
   if (error instanceof RoutineRefusedError) {

@@ -44,6 +44,7 @@ import {
   type ApprovalContinuation,
   type ApprovalConversationGrant,
   type ApprovalDecision,
+  ApprovalForbiddenError,
   type ApprovalFreshProducerPort,
   ApprovalNotFoundError,
   type ApprovalPermit,
@@ -67,6 +68,7 @@ import {
   type EmployeeSecuritySettings,
   type EmployeeToolMode,
   type HostCommandPolicy,
+  isAcpAction,
   parseApprovalContinuation,
   validateApprovalRecoveryContext,
   withApprovalContext,
@@ -285,6 +287,16 @@ export function createApprovalService(
      * is never run again: it is answered "outcome unknown".
      */
     settlement?: "database";
+    /**
+     * Whose an external employee's approval is to answer (agents/acp/permissions.ts
+     * `createAcpApprovalHirer`), read in the decider's own frame: undefined for any other approval
+     * (or one the decider cannot see, which the store then answers 404), the hirer, or null for
+     * nobody.
+     */
+    externalAgentHirer?: (
+      approvalId: string,
+      deciderId: string,
+    ) => Promise<string | null | undefined>;
   } = {},
 ) {
   const fresh = options.freshProducer
@@ -391,6 +403,10 @@ export function createApprovalService(
     // The trusted protocol port committed receipt + approval.finish atomically.
     // Never call ordinary store.finish a second time here.
   }
+  /** Told of every decision once it is saved (`onDecided`). */
+  const decisionListeners = new Set<
+    (request: ApprovalRecord, decision: ApprovalDecision) => void
+  >();
   /**
    * A personal "allow" rule closes the requests it now covers that were only waiting on the person's
    * default or their own rules. Safety hand-offs, team rules and auto-review stops are left alone.
@@ -740,8 +756,49 @@ export function createApprovalService(
         throw new ApprovalRefusedError(
           "Choose allow once, allow for this conversation, always allow, deny, or done.",
         );
-      return store.decide(ownerUserId, id, decision);
+      /*
+       * AN EXTERNAL EMPLOYEE'S PERMISSION IS ITS HIRER'S TO GIVE (spec §1, §6): in a group, the
+       * member who asked it to work and the group's owner see the card and cannot answer it. Its
+       * three answers are allow once, allow for this conversation, and deny.
+       */
+      const hirer = await options.externalAgentHirer?.(id, ownerUserId);
+      if (hirer !== undefined) {
+        if (hirer !== ownerUserId) throw new ApprovalForbiddenError();
+        if (decision === "allow_always" || decision === "handled")
+          throw new ApprovalRefusedError(
+            "外部员工的许可只能「批准这一次」「这次对话里都允许」或「拒绝」。",
+          );
+      }
+      const decided = await store.decide(ownerUserId, id, decision);
+      for (const listener of [...decisionListeners]) {
+        try {
+          listener(decided, decision);
+        } catch (error) {
+          console.error("approval decision listener failed", error);
+        }
+      }
+      return decided;
     },
+    /**
+     * Told of every decision, synchronously, once it is saved (the permission bridge of external
+     * employees answers the agent from here). Returns the function that stops it.
+     */
+    onDecided(
+      listener: (request: ApprovalRecord, decision: ApprovalDecision) => void,
+    ): () => void {
+      decisionListeners.add(listener);
+      return () => {
+        decisionListeners.delete(listener);
+      };
+    },
+    /**
+     * Safety, rules, auto-review and the person's default for one action, settled and audited as
+     * the gate settles it, with nothing opened (the permission bridge of external employees asks
+     * through its own approvals). Undefined where there is no policy store.
+     */
+    policyOutcome: (
+      candidate: ApprovalCandidate,
+    ): Promise<ApprovalPolicyOutcome | undefined> => evaluate(candidate),
     revoke: (ownerUserId: string, id: string) => store.revoke(ownerUserId, id),
     /** Turn off one "Allow for this conversation": the next such call in it asks again. */
     async revokeConversationGrant(ownerUserId: string, id: string) {
@@ -1133,6 +1190,8 @@ export function createApprovalService(
     ): Promise<void> {
       const request = await store.get(ownerUserId, id);
       if (request.status === "completed") return;
+      // Answered to the agent on the hirer's computer by the permission bridge: nothing runs here.
+      if (isAcpAction(request.action)) return;
       if (request.status === "pending")
         throw new ApprovalRefusedError(
           "This action is still waiting for your decision.",

@@ -33,7 +33,6 @@ import {
   teamSettingsColumns,
 } from "./extra-columns";
 import {
-  accountBindingOf,
   type ApprovalAction,
   ApprovalNotFoundError,
   type ApprovalPolicyStore,
@@ -42,9 +41,11 @@ import {
   ApprovalRefusedError,
   type ApprovalStore,
   type ApprovalTeamSettings,
+  accountBindingOf,
   DEFAULT_EMPLOYEE_SECURITY,
   type EmployeePolicy,
   type EmployeeSecuritySettings,
+  isAcpAction,
   offersStandingRule,
   targetSubject,
   validateApprovalRecoveryContext,
@@ -396,24 +397,32 @@ export function createApprovalStore(
          */
         if (decision === "deny" && request.action.declined)
           await recordAuditEvent(trail, request.action.declined);
-        await tx
-          .insert(workItems)
-          .values({
-            kind: "approval.resume",
-            key: id,
-            payload: { ownerUserId: owner, approvalId: id },
-          })
-          .onConflictDoNothing();
-        await tx.execute(
-          sql`select pg_notify('openbot_work_offered', 'approval.resume')`,
-        );
+        /*
+         * An external employee's request is answered to the agent by its permission bridge
+         * (agents/acp/permissions.ts), which listens for this decision: nothing is resumed here, and
+         * a refusal does not end its turn, which goes on running on the hirer's computer.
+         */
+        const external = isAcpAction(request.action);
+        if (!external) {
+          await tx
+            .insert(workItems)
+            .values({
+              kind: "approval.resume",
+              key: id,
+              payload: { ownerUserId: owner, approvalId: id },
+            })
+            .onConflictDoNothing();
+          await tx.execute(
+            sql`select pg_notify('openbot_work_offered', 'approval.resume')`,
+          );
+        }
         // The person answered; the parked task runs again or ends denied.
         if (board) {
           void board
             .resumed({
               tenantId: owner,
               approvalId: id,
-              failed: decision === "deny",
+              failed: decision === "deny" && !external,
             })
             .catch((error) => console.error("task projection failed", error));
         }

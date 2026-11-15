@@ -1,0 +1,203 @@
+stripe payouts create --amount 100
+@@
+stripe transfers create --amount 1 --destination acct_1
+@@
+glab repo delete o/r
+@@
+glab release create v1
+@@
+glab api -X DELETE projects/1
+@@
+gh secret delete TOKEN
+@@
+gh secret set TOKEN
+@@
+gh variable delete NAME
+@@
+gh label delete bug
+@@
+gh cache delete --all
+@@
+gh issue delete 1 --yes
+@@
+gh repo archive o/r
+@@
+gh ssh-key add key.pub
+@@
+gh auth token
+@@
+rclone delete remote:x
+@@
+rclone deletefile remote:x
+@@
+rclone purge remote:x
+@@
+rclone rmdirs remote:x
+@@
+aws ec2 terminate-instances --instance-ids i-1
+@@
+aws lambda remove-permission --function-name f --statement-id s
+@@
+az storage blob delete-batch -s c
+@@
+helm uninstall app
+@@
+pulumi destroy --yes
+@@
+fly apps destroy app
+@@
+heroku apps:destroy app
+@@
+wrangler delete
+@@
+docker rmi img
+@@
+docker compose down -v
+@@
+dropdb prod
+@@
+prisma migrate reset --force
+@@
+prisma db push --force-reset
+@@
+supabase db reset
+@@
+git branch -d feature
+@@
+git branch -D feature
+@@
+git branch --delete feature
+@@
+git tag -d v1
+@@
+git update-ref -d refs/heads/x
+@@
+git reflog expire --all
+@@
+git gc --prune
+@@
+git worktree remove -f wt
+@@
+git read-tree -u --reset HEAD
+@@
+git switch -f main
+@@
+git filter-branch
+@@
+git push --delete origin v1
+@@
+git push origin :main
+@@
+vssadmin delete shadows /all
+@@
+format D
+@@
+diskpart
+@@
+cipher /w
+@@
+fsutil file setZeroData offset 0 length 1 x
+@@
+robocopy empty build /MIR
+@@
+robocopy a b /MOV
+@@
+cmake -E remove x
+@@
+7z a -sdel a.7z important.docx
+@@
+zip -m a.zip important.docx
+@@
+sed -i d important.docx
+@@
+npm token create
+@@
+npm owner add bob pkg
+@@
+npm access public pkg
+@@
+npm unpublish --force
+@@
+npm deprecate pkg msg
+@@
+npm dist-tag rm pkg beta
+@@
+cargo yank --version 1.0.0
+@@
+aws iam create-access-key
+@@
+git config --global core.hooksPath h
+@@
+pipx install x
+@@
+deno install x
+@@
+pipenv install
+@@
+mvn install
+@@
+gradle build
+@@
+mix deps.get
+@@
+uv run pytest
+@@
+uv sync
+@@
+corepack enable
+@@
+cargo build
+@@
+cargo test
+@@
+go build ./...
+@@
+go test ./...
+@@
+git ls-remote https://x.example/r.git
+@@
+git submodule add https://x.example/r.git
+@@
+dir %USERPROFILE%
+@@
+type %USERPROFILE%/.config/gh/hosts.yml
+@@
+type %USERPROFILE%/.docker/config.json
+@@
+cat %USERPROFILE%/.npmrc
+@@
+Get-ChildItem @home
+@@
+Get-Content @profile
+@@
+cat @home
+@@
+cat =ls
+@@
+bun run printenv
+@@
+bun run env
+@@
+npm run env
+@@
+yarn run env
+@@
+pnpm run env
+@@
+bun run logoff
+@@
+grep -rn AWS_SECRET
+@@
+grep -ri token
+@@
+grep -rl key
+@@
+grep -r BEGIN
+@@
+git show HEAD:.env
+@@
+git show :.env
+@@
+glab mr create --fill
+@@
+glab mr merge 1

@@ -23,7 +23,11 @@ import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { StatusDot } from "@/components/agents/status-dot";
 import { ConversationHeaderCard } from "@/components/channels/conversation-header-card";
-import { type Presence, usePresence } from "@/lib/agents/presence";
+import {
+  type Presence,
+  presenceSummary,
+  usePresence,
+} from "@/lib/agents/presence";
 import { authKeys } from "@/lib/auth/queries";
 import type { ChannelSummary } from "@/lib/channels/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
@@ -241,6 +245,57 @@ describe("StatusDot", () => {
     for (const token of ["--signal:", "--success:", "--muted-foreground:"]) {
       expect(theme.split(token).length - 1).toBeGreaterThanOrEqual(2);
     }
+  });
+
+  test("offline dot is gray and reads 离线 · 2 件排队中", () => {
+    const offline: Presence = {
+      agentId: "x1",
+      status: "offline",
+      doing: null,
+      queued: 2,
+    };
+    const view = render(
+      <StatusDot status="offline" title={presenceSummary(offline)} />,
+    );
+    const dot = view.getByRole("img", { name: "离线" });
+    // The paused gray, with the app's theme token behind it in other skins.
+    expect(dot.getAttribute("class")).toContain(
+      "var(--wb-paused,var(--muted-foreground))",
+    );
+    expect(dot.getAttribute("title")).toBe("离线 · 2 件排队中");
+    // Nothing waiting, or a group member who is not told the count: just the word.
+    expect(presenceSummary({ ...offline, queued: 0 })).toBe("离线");
+    expect(presenceSummary({ ...offline, queued: undefined })).toBe("离线");
+    // The count belongs to offline only; working still reads its task.
+    expect(
+      presenceSummary({
+        agentId: "x1",
+        status: "working",
+        doing: "跑测试",
+        queued: 3,
+      }),
+    ).toBe("忙碌 · 跑测试");
+    cleanup();
+    // The conversation header says it too.
+    const header = render(
+      <QueryClientProvider client={queryClient}>
+        <ConversationHeaderCard
+          agent={
+            {
+              id: "x1",
+              name: "小码",
+              title: "外部员工 · Codex",
+              avatarSeed: "x1",
+              visibility: "private",
+            } as never
+          }
+          presence={offline}
+        />
+      </QueryClientProvider>,
+    );
+    const line = header.container.querySelector("[data-presence]");
+    expect(line?.textContent?.trim()).toBe("离线 · 2 件排队中");
+    expect(line?.querySelector('[data-status-dot="offline"]')).toBeTruthy();
   });
 
   test("unknown 和没拿到的不画", () => {

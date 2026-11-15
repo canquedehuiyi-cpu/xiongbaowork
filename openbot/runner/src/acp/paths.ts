@@ -93,8 +93,21 @@ function isRecord(value: unknown): value is Json {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-/** Keys of a tool call's `rawInput` that adapters use for the file a tool acts on. */
-const RAW_PATH_KEYS = ["path", "file_path", "filePath", "notebook_path"];
+/**
+ * Keys of a tool call's `rawInput` that adapters use for the file a tool acts on, and for the folder
+ * a command runs in (Codex's `workdir`, a `cwd`): a command run elsewhere is not run in the working
+ * folder, whatever its words say. A value may be a string or a list of strings.
+ */
+const RAW_PATH_KEYS = [
+  "path",
+  "file_path",
+  "filePath",
+  "notebook_path",
+  "cwd",
+  "workdir",
+  "directory",
+  "dir_path",
+];
 
 /** Every path an ACP tool call names: its `locations`, its diffs, and its raw input's path fields. */
 function namedPaths(toolCall: unknown): string[] {
@@ -112,7 +125,11 @@ function namedPaths(toolCall: unknown): string[] {
       if (isRecord(item) && item.type === "diff") add(item.path);
   }
   if (isRecord(toolCall.rawInput)) {
-    for (const key of RAW_PATH_KEYS) add(toolCall.rawInput[key]);
+    for (const key of RAW_PATH_KEYS) {
+      const value = toolCall.rawInput[key];
+      if (Array.isArray(value)) for (const item of value) add(item);
+      else add(value);
+    }
   }
   return found;
 }
