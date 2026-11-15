@@ -7,7 +7,6 @@ import {
 } from "@ag-ui/client";
 import { and, eq } from "drizzle-orm";
 import { Observable } from "rxjs";
-import { isLockConflict } from "../../../toolkit/src/lease";
 import { type AuditInitiator, PERSON_INITIATOR } from "../audit";
 import type { Database } from "../db/client";
 import { groupBotThreads } from "../db/schema";
@@ -162,6 +161,18 @@ const log = (type: string, detail: Record<string, unknown>) =>
 
 const reasonOf = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
+
+/**
+ * Whether the platform refused the thread's lock because another runner holds it: its 409, matched on
+ * the shape as the toolkit's lease does (`PlatformRequestError` is not exported by the runtime).
+ */
+function isLockConflict(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.name === "PlatformRequestError" &&
+    (error as { status?: unknown }).status === 409
+  );
+}
 
 /** Why a turn did not start, as the person is told it. */
 function refusalOf(error: unknown): CardTurnRefused {
