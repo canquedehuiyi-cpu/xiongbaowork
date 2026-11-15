@@ -1,7 +1,6 @@
 import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
 import { and, count, eq, lt, notInArray, or, sql } from "drizzle-orm";
 import { NOT_SHOWN } from "../../../shared/component-markers";
-import { editedFiles } from "../agents/acp/translate";
 import { attachmentIdsIn } from "../channels/attachment-parts";
 import { HEADLESS_COMPONENTS } from "../components/headless";
 import type { Database } from "../db/client";
@@ -9,6 +8,7 @@ import { groupTaskRuns, tasks } from "../db/schema";
 import { taskArchives } from "../db/schema/task-archives";
 import type { QuotaService } from "../quota/limits";
 import { runAsTenant } from "../tenant/context";
+import { editedFiles } from "./diff-summary";
 import { staleUnattendedCards } from "./reclaim";
 
 /**

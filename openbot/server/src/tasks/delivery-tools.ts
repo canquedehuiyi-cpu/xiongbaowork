@@ -43,6 +43,16 @@ export function deliveryProtocol(): string {
 }
 const PLAIN_QUESTIONS = "问一句答一句的普通对话不要用这三个工具";
 
+/**
+ * How an external employee (`device_acp`, which holds none of the three tools) walks the same steps:
+ * the server reads them from its replies (`agents/acp/delivery.ts`). Said after the four rules in its
+ * first prompt on a card, and in every nudge and hand-over it is sent, so nothing it is told names a
+ * tool it does not have. The examples are placeholders (「HH:MM」「N 分钟」) on purpose: an employee
+ * repeating them back must not be read as having given a time.
+ */
+export const EXTERNAL_DELIVERY_GUIDE =
+  "你没有接活、交付、延期的工具，服务器按你的回复替你走这三步：接下时在回复里写「预计 HH:MM」或「预计 N 分钟」报预计时间（换成真实的钟点或时长）；做完的改动会自动当作交付物，没有改动的就在回复里写结论，都用「自查：」开头的一句写你怎么查过的；交不了就写缺什么，并写「延到 HH:MM」说要延到几点。";
+
 /** The card-drawing events the chat renders (Task 9). */
 export const DELIVERY_EVENTS = {
   accepted: "delivery.accepted",

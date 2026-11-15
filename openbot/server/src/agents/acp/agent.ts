@@ -76,6 +76,31 @@ export { acpPromptOf };
 export const ACP_WAITING_MS = 20_000;
 
 /**
+ * How long a run that ended waits for the delivery loop's hand-in before it ends anyway: a write that
+ * hangs (a pool with no connection left) must not leave the thread busy for good.
+ */
+export const ACP_DELIVERY_SETTLE_MS = 15_000;
+
+/** `work`, or `fallback` once `ms` have passed without it. */
+async function within<T>(
+  work: Promise<T> | undefined,
+  ms: number,
+  fallback: T,
+): Promise<T> {
+  if (!work) return fallback;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+    (timer as { unref?: () => void }).unref?.();
+  });
+  try {
+    return await Promise.race([work.catch(() => fallback), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * A group's turn runner: an external employee's turns go to `external` (`createAcpGroupTurn`, which
  * never holds the group's sweep), every other Bot's to `normal`.
  */
@@ -122,6 +147,8 @@ export function createAcpGroupTurn(options: {
   instruction: string;
   userMessage?: Message;
   runId?: string;
+  /** Who started the turn: a peer's hop (`handoff`) is a 转交, which the delivery loop does not follow. */
+  initiator?: { kind: string };
 }) => Promise<{ replyText: string; detached: true }> {
   const log = options.log ?? ((message: string) => console.warn(message));
   return async (input) => {
@@ -146,8 +173,11 @@ export function createAcpGroupTurn(options: {
         ...(input.runId ? { runRef: input.runId } : {}),
       },
     });
-    // 派出 · 待接下 from the moment it is queued: the group's card for it (filed under its run id).
-    if (input.runId)
+    /*
+     * 派出 · 待接下 from the moment it is queued: the group's card for it (filed under its run id). Not a
+     * peer's hop: 员工互相 @ 的转交 is not followed by itself (spec 2026-11-15-delivery-loop §1).
+     */
+    if (input.runId && input.initiator?.kind !== "handoff")
       await options.delivery?.queued({
         tenantId,
         agentId: employee.id,
@@ -301,6 +331,8 @@ export type DeviceAcpAgentConfig = {
    * 「预计」 its due time, and what the turn changed handed in when it ends. Absent: none of it.
    */
   delivery?: AcpDelivery;
+  /** How long the end waits for the hand-in ({@link ACP_DELIVERY_SETTLE_MS}). Injected for a test. */
+  deliverySettleMs?: number;
 };
 
 const defaultEvery = (ms: number, tick: () => void) => {
@@ -871,14 +903,21 @@ class AcpRun {
     this.ending = true;
     for (const event of this.translator.close()) this.out(event);
     const turn = this.deliveryTurn;
+    const cap = this.config.deliverySettleMs ?? ACP_DELIVERY_SETTLE_MS;
     void (async () => {
-      await this.startedWrite;
-      await this.dueWrite;
-      const sentence = await delivery.ended(turn, {
-        events: this.produced,
-        reply: this.reply,
-        name: this.name,
-      });
+      const sentence = await within(
+        (async () => {
+          await this.startedWrite;
+          await this.dueWrite;
+          return delivery.ended(turn, {
+            events: this.produced,
+            reply: this.reply,
+            name: this.name,
+          });
+        })(),
+        cap,
+        undefined,
+      );
       if (this.isOver()) return;
       this.finish([...(sentence ? this.note(sentence) : []), this.finished()]);
     })();

@@ -4,7 +4,9 @@ import {
   DEFAULT_TIME_ZONE,
   DELIVERY_EVENTS,
   deliveryProtocol,
+  EXTERNAL_DELIVERY_GUIDE,
 } from "../../tasks/delivery-tools";
+import { diffSummary, diffTitle, editedFiles } from "../../tasks/diff-summary";
 import { readDueTime } from "../../tasks/due-time";
 import {
   attachmentsProduced,
@@ -14,7 +16,6 @@ import {
 import { roundOnCard } from "../../tasks/turn-cards";
 import { emitRunEvent } from "../../threads/run-side-events";
 import type { AcpRelay } from "./relay";
-import { diffSummary, diffTitle, editedFiles } from "./translate";
 import type { AcpTurnStore } from "./turns";
 
 /**
@@ -98,12 +99,70 @@ export function selfChecksOf(reply: string): string[] {
   return checks;
 }
 
+/** How long a written conclusion handed in as a note may be. */
+const CONCLUSION_CHARS = 2000;
+
+/** The reply as a written conclusion: its lines other than the self-checks, or the whole reply. */
+function conclusionOf(reply: string, checks: readonly string[]): string {
+  const rest = reply
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line && !checks.some((check) => line.includes(check)))
+    .join("\n")
+    .trim();
+  return Array.from(rest || reply.trim())
+    .slice(0, CONCLUSION_CHARS)
+    .join("");
+}
+
+/** How long the reason of a 延期申请 read from a reply may be. */
+const REASON_CHARS = 500;
+
+/**
+ * A request for more time in a reply (规约第 3 条): 「延到 18:00」「延期到明早 10 点」「推迟到 17:30」, with
+ * the sentence it is in as the reason. The time is the longest start of what follows that reads as one
+ * (`readDueTime` decides); undefined when there is none.
+ */
+export function extensionSaidIn(
+  reply: string,
+): { due: string; reason: string } | undefined {
+  const asked =
+    /(?:延期?到|延后到|推迟到)\s*([^，,。；;！!？?\n）)」]{1,20})/.exec(reply);
+  if (!asked?.[1]) return undefined;
+  const words = asked[1].trim();
+  const probe = new Date();
+  let due: string | undefined;
+  for (let end = words.length; end > 0 && !due; end -= 1) {
+    const candidate = words.slice(0, end).trim();
+    const reading = readDueTime(candidate, probe, DEFAULT_TIME_ZONE);
+    if (reading.at !== null || reading.why !== "unreadable") due = candidate;
+  }
+  if (!due) return undefined;
+  const before = reply.slice(0, asked.index);
+  const start =
+    Math.max(
+      before.lastIndexOf("。"),
+      before.lastIndexOf("！"),
+      before.lastIndexOf("？"),
+      before.lastIndexOf("\n"),
+    ) + 1;
+  const after = reply.slice(asked.index);
+  const stop = after.search(/[。！？\n]/);
+  const sentence = reply
+    .slice(start, stop < 0 ? undefined : asked.index + stop)
+    .trim();
+  return {
+    due,
+    reason: Array.from(sentence).slice(0, REASON_CHARS).join(""),
+  };
+}
+
 /**
  * What the employee is told before its first prompt on a card: the four rules, word for word, and how
  * the server reads what it writes, since it has no tools to say it with.
  */
 export function externalProtocol(): string {
-  return `${deliveryProtocol()}\n你没有接活、交付的工具：在回复里写「预计 16:00」或「预计 40 分钟」就是报预计时间；做完的改动会自动当作交付物，用「自查：」开头的一句写你怎么查过的。`;
+  return `${deliveryProtocol()}\n${EXTERNAL_DELIVERY_GUIDE}`;
 }
 
 export function createAcpDelivery(options: {
@@ -151,6 +210,34 @@ export function createAcpDelivery(options: {
         return fallback;
       }
     };
+
+  /** A 「延到 …」 in the reply, as a 延期申请 on the card: true when one was filed. */
+  async function askedForMoreTime(
+    turn: AcpDeliveryTurn,
+    taskId: string,
+    reply: string,
+  ): Promise<boolean> {
+    const asked = extensionSaidIn(reply);
+    if (!asked) return false;
+    const timeZone =
+      (await options.timeZone?.(turn.tenantId).catch(() => undefined)) ??
+      DEFAULT_TIME_ZONE;
+    const reading = readDueTime(asked.due, now(), timeZone);
+    if (reading.at === null) return false;
+    const filed = await delivery.requestExtension(turn.tenantId, taskId, {
+      dueAt: reading.at,
+      reason: asked.reason,
+      runId: turn.runId,
+      actor: actor(turn),
+    });
+    if (filed)
+      said(turn.runId, DELIVERY_EVENTS.extensionRequested, {
+        taskId,
+        dueAt: reading.at.toISOString(),
+        reason: asked.reason,
+      });
+    return filed;
+  }
 
   return {
     queued: guarded("queued", undefined, async (turn: AcpDeliveryTurn) => {
@@ -229,17 +316,33 @@ export function createAcpDelivery(options: {
           });
         for (const id of attachmentsProduced(round.events))
           items.push({ kind: "attachment", ref: id });
-        if (items.length === 0)
+        const checks = selfChecksOf(round.reply);
+        /*
+         * Work with nothing to change (a question answered, something looked up) is handed in as its
+         * written conclusion, but only with a 「自查：」 line saying how it was checked -- what the gate
+         * asks of any words-only hand-in. Without one, words are an answer, not a delivery.
+         */
+        if (
+          items.length === 0 &&
+          checks.some((check) => check.startsWith("自查"))
+        ) {
+          const conclusion = conclusionOf(round.reply, checks);
+          if (conclusion) items.push({ kind: "note", ref: conclusion });
+        }
+        if (items.length === 0) {
           // Already handed in: a follow-up with nothing new is not 「没交东西」.
-          return card.status === "running"
-            ? nothingHandedIn(round.name)
-            : undefined;
+          if (card.status !== "running") return undefined;
+          // 交不了就说：「延到 HH:MM」 is its 延期申请, which the person grants or not.
+          if (await askedForMoreTime(turn, card.id, round.reply))
+            return undefined;
+          return nothingHandedIn(round.name);
+        }
         const verdict = await gate.checkEvidence({
           tenantId: turn.tenantId,
           taskId: card.id,
           threadRef: card.threadRef,
           items,
-          checks: selfChecksOf(round.reply),
+          checks,
           criteria: card.criteria,
           externalRun: turn.runId,
         });
@@ -293,5 +396,32 @@ export function cancelExternalTurns(deps: {
       turn.agentId,
     );
     for (const row of open) await deps.relay.cancelTurn(tenantId, row.turnId);
+  };
+}
+
+/**
+ * Whether an external employee's turn on a thread is still waiting to run, and whether its computer is
+ * away (the delivery checker's `turnQueued`): any turn of the thread that is not over, asked once the
+ * runner has said no run is open there -- so it is queued, or on a computer no run of this server
+ * follows. Null when none waits.
+ */
+export function externalTurnWaiting(deps: {
+  turns: Pick<AcpTurnStore, "openInThread">;
+  /** Whether the computer can be reached at all: connected here, or online on another server. */
+  reachable: (target: {
+    tenantId: string;
+    deviceId: string;
+  }) => Promise<boolean>;
+}): (
+  tenantId: string,
+  threadId: string,
+) => Promise<{ offline: boolean } | null> {
+  return async (tenantId, threadId) => {
+    const [waiting] = await deps.turns.openInThread(tenantId, threadId);
+    if (!waiting) return null;
+    const online = await deps
+      .reachable({ tenantId, deviceId: waiting.deviceId })
+      .catch(() => false);
+    return { offline: !online };
   };
 }

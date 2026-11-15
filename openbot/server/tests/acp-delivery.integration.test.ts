@@ -10,12 +10,19 @@ import {
 import {
   cancelExternalTurns,
   createAcpDelivery,
+  externalProtocol,
+  externalTurnWaiting,
 } from "../src/agents/acp/delivery";
+import { isExternalEmployee } from "../src/agents/acp/external";
 import { createAcpRelay } from "../src/agents/acp/relay";
 import { type AcpTurnRow, createAcpTurnStore } from "../src/agents/acp/turns";
+import { configureBotLifecycle } from "../src/agents/lifecycle";
+import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createDatabase } from "../src/db/client";
 import {
   acpTurns,
+  agentProfiles,
+  agents,
   tasks,
   threadRunEvents,
   threadRuns,
@@ -25,11 +32,21 @@ import {
   workItems,
 } from "../src/db/schema";
 import { createQuotaService } from "../src/quota/limits";
+import { createTurnRunner } from "../src/routines/run-turn";
 import { createCardTurns } from "../src/tasks/card-turns";
 import { createDelivery, stageOf } from "../src/tasks/delivery";
-import { deliveryProtocol } from "../src/tasks/delivery-tools";
+import {
+  type DeliveryNotice,
+  runDeliveryCheck,
+  threadRunning,
+} from "../src/tasks/delivery-checker";
+import {
+  deliveryProtocol,
+  EXTERNAL_DELIVERY_GUIDE,
+} from "../src/tasks/delivery-tools";
 import { listTaskEvents } from "../src/tasks/events";
 import { createEvidenceGate } from "../src/tasks/evidence-gate";
+import { createNudgeRuns, handoverText } from "../src/tasks/nudge-run";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
@@ -53,8 +70,16 @@ const projector = createTaskProjector(database, undefined, quota);
 const delivery = createDelivery(database);
 const gate = createEvidenceGate(database);
 const turns = createAcpTurnStore(database);
+const profiles = createAgentProfileStore(
+  database,
+  new URL("https://managed.example.test/ag-ui"),
+);
 const suite = randomUUID().slice(0, 8);
 const tenants: string[] = [];
+const hired: string[] = [];
+configureBotLifecycle({ database });
+/** The tools an external employee does not hold, which nothing it is told may name. */
+const TOOL_NAMES = /accept_task|deliver_task|request_extension/;
 /** 2026-11-16 10:00 in Shanghai: the clock the server reads 「预计」 on. */
 const NOW = new Date("2026-11-16T02:00:00.000Z");
 
@@ -87,9 +112,17 @@ afterAll(async () => {
         .where(eq(usageCounters.tenantId, id));
     });
   }
-  await runAsTenant("platform", () =>
-    database.delete(workItems).where(inArray(workItems.tenantId, tenants)),
-  );
+  await runAsTenant("platform", async () => {
+    await database
+      .delete(workItems)
+      .where(inArray(workItems.tenantId, tenants));
+    if (hired.length) {
+      await database
+        .delete(agentProfiles)
+        .where(inArray(agentProfiles.agentId, hired));
+      await database.delete(agents).where(inArray(agents.id, hired));
+    }
+  });
   // `task_events` is append-only for the application role; its rows stay, under tenants nobody has.
   await runAsTenant("platform", () =>
     database.delete(users).where(inArray(users.id, tenants)),
@@ -106,7 +139,33 @@ async function harness() {
       .values({ id: tenantId, email: `${tenantId}@example.test` }),
   );
   tenants.push(tenantId);
-  const agentId = `acpdl-agent-${randomUUID().slice(0, 8)}`;
+  // Hired from a computer, as the hiring flow leaves it: a `device_acp` Bot of this person's.
+  const profile = await runAsTenant(tenantId, () =>
+    profiles.create(
+      { id: tenantId, role: "user" },
+      {
+        name: "小码",
+        title: "Coder",
+        roleDescription: "Fix things.",
+        visibility: "private",
+      },
+    ),
+  );
+  hired.push(profile.id);
+  await runAsTenant("platform", () =>
+    database
+      .update(agents)
+      .set({
+        type: "device_acp",
+        configuration: {
+          deviceId: "laptop",
+          harness: "codex",
+          workdirRef: "fld_work",
+        },
+      })
+      .where(eq(agents.id, profile.id)),
+  );
+  const agentId = profile.id;
   const employee: DeviceAcpEmployee = {
     id: agentId,
     name: "小码",
@@ -283,6 +342,70 @@ async function harness() {
   const history = (taskId: string) =>
     runAsTenant(tenantId, () => listTaskEvents(database, { tenantId, taskId }));
 
+  /*
+   * The delivery checker as index.ts wires it, on a clock of the test's own: the nudge is the real
+   * nudge round (an unattended turn on the real runner, with this employee's transport, so it reaches
+   * the computer), the person's notices are recorded.
+   */
+  const notices: DeliveryNotice[] = [];
+  const nudges: string[] = [];
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: createTurnRunner({
+      intelligence: {
+        getOrCreateThread: async (params: { threadId: string }) => ({
+          thread: { id: params.threadId },
+          created: false,
+        }),
+        getThreadMessages: async () => ({ messages: [] }),
+        ɵacquireThreadLock: async (params: {
+          threadId: string;
+          runId: string;
+        }) => ({
+          threadId: params.threadId,
+          runId: params.runId,
+          joinToken: "test",
+        }),
+        ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
+        ɵcleanupThreadLock: async () => undefined,
+      } as never,
+      runner: runner as never,
+      buildAgentFor: async () => agentOf(),
+    }),
+    runner,
+    isExternal: (tenant, agent) => isExternalEmployee(database, tenant, agent),
+  });
+  const check = (now: Date) =>
+    runDeliveryCheck(
+      {
+        database,
+        workHours: async () => ({
+          start: "00:00",
+          end: "24:00",
+          weekends: true,
+          timeZone: "Asia/Shanghai",
+        }),
+        notify: async (_tenant, notice) => {
+          notices.push(notice);
+          return "sent";
+        },
+        nudge: async (tenant, taskId, text) => {
+          nudges.push(text);
+          return nudgeRuns.startNudgeRun(tenant, taskId, text);
+        },
+        turnRunning: threadRunning(runner),
+        turnQueued: externalTurnWaiting({
+          turns,
+          reachable: async () => state.reachable,
+        }),
+        isExternal: (tenant, agent) =>
+          isExternalEmployee(database, tenant, agent),
+        agentName: async () => "小码",
+        onlyTenants: [tenantId],
+      },
+      now,
+    );
+
   return {
     tenantId,
     agentId,
@@ -291,6 +414,10 @@ async function harness() {
     relay,
     runner,
     down,
+    notices,
+    nudges,
+    check,
+    frameAfter,
     say,
     open,
     said,
@@ -550,5 +677,164 @@ describe("external employees in the delivery loop", () => {
     await settle(50);
     expect(h.down.filter((frame) => frame.threadId === threadId)).toEqual([]);
     expect((await h.cardOf(threadId))?.status).toBe("cancelled");
+  });
+  test("an employee repeating the rules back sets no due time", async () => {
+    const h = await harness();
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const work = h.say(threadId, "把首页的按钮改成蓝色");
+    const { turnId, content } = await h.open(threadId, 0);
+    expect(content[0]).toEqual({ type: "text", text: externalProtocol() });
+    // It says the rules back, examples and all, before it gives a time of its own.
+    await h.said(threadId, turnId, `收到规约：\n${externalProtocol()}`);
+    await h.end(threadId, turnId);
+    await work.done;
+    const card = await h.cardOf(threadId);
+    if (!card) throw new Error("no card");
+    expect(card.dueReported).toBe(false);
+    expect(card.dueAt).toBeNull();
+    expect(card.originalDueAt).toBeNull();
+  });
+
+  test("a words-only answer with 自查 is handed in, and is not nudged again", async () => {
+    const h = await harness();
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const work = h.say(threadId, "查一下为什么构建变慢了");
+    const { turnId } = await h.open(threadId, 0);
+    await h.said(
+      threadId,
+      turnId,
+      "构建变慢是因为 CI 的缓存键每次都变。\n自查：对比了最近 20 次构建的日志。",
+    );
+    await h.end(threadId, turnId);
+    await work.done;
+    const card = await h.cardOf(threadId);
+    if (!card) throw new Error("no card");
+    expect(card.status).toBe("awaiting_review");
+    expect(card.deliverableRef).toEqual({
+      kind: "deliverable",
+      notes: ["构建变慢是因为 CI 的缓存键每次都变。"],
+      checks: ["自查：对比了最近 20 次构建的日志。"],
+    });
+    expect(textOf(work.events)).not.toContain("它没交东西");
+    // Hours past anything due: a card handed in waits for the person, nobody nudges it.
+    await h.check(new Date(NOW.getTime() + 6 * 60 * 60_000));
+    expect(h.nudges).toEqual([]);
+    expect(h.notices).toEqual([]);
+  });
+
+  test("「延到 18:00」 in the reply is its 延期申请", async () => {
+    const h = await harness();
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const work = h.say(threadId, "把支付回调接上");
+    const { turnId } = await h.open(threadId, 0);
+    await h.said(
+      threadId,
+      turnId,
+      "交不了：缺测试环境的商户号，要延到 18:00。",
+    );
+    await h.end(threadId, turnId);
+    await work.done;
+    const card = await h.cardOf(threadId);
+    if (!card) throw new Error("no card");
+    const asked = (await h.history(card.id)).filter(
+      (row) => row.kind === "extension_requested",
+    );
+    expect(asked.map((row) => row.detail)).toEqual([
+      {
+        runId: work.runId,
+        dueAt: "2026-11-16T10:00:00.000Z",
+        reason: "交不了：缺测试环境的商户号，要延到 18:00",
+      },
+    ]);
+    // Asked for, not granted: the due time is the person's to move.
+    expect(card.dueAt).toBeNull();
+    expect(textOf(work.events)).not.toContain("它没交东西");
+  });
+
+  test("an overdue external card is nudged in its own words, naming no tool it does not have", async () => {
+    const h = await harness();
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const work = h.say(threadId, "把发票导出做完");
+    const first = await h.open(threadId, 0);
+    await h.said(threadId, first.turnId, "已接下，预计 16:00 交。");
+    await h.end(threadId, first.turnId);
+    await work.done;
+    const card = await h.cardOf(threadId);
+    if (!card) throw new Error("no card");
+
+    // 16:40 in Shanghai: five minutes past due, the nudge; thirty-five, overdue and the hirer told.
+    const from = h.down.length;
+    await h.check(new Date("2026-11-16T08:40:00.000Z"));
+    expect(h.nudges).toHaveLength(1);
+    // The nudge round reaches the computer, and what it carries names no tool and says what to write.
+    const nudge = await h.open(threadId, from, true);
+    const told = nudge.content.map((block) => block.text ?? "").join("\n");
+    expect(told).not.toMatch(TOOL_NAMES);
+    expect(told).toContain(
+      "【系统催办】『把发票导出做完』预计 16:00 交，已经过了 40 分钟。",
+    );
+    expect(told).toContain(EXTERNAL_DELIVERY_GUIDE);
+    expect(told).toContain("「自查：」");
+    expect(told).toContain("「延到 HH:MM」");
+    await h.said(threadId, nudge.turnId, "在改，还差导出格式。");
+    await h.end(threadId, nudge.turnId);
+    await until(
+      async () =>
+        (await h.history(card.id)).filter((row) => row.kind === "run_ended")
+          .length === 2,
+      "the nudge round's end",
+    );
+    expect(h.notices.map((notice) => notice.kind)).toEqual(["overdue"]);
+    expect((await h.cardOf(threadId))?.overdueAt).not.toBeNull();
+
+    // A hand-over to an external employee is told the same way.
+    const handover = handoverText(
+      {
+        title: "把发票导出做完",
+        criteria: null,
+        deliverable: {
+          kind: "deliverable",
+          diffs: [{ files: 2, added: 10, removed: 3, ref: "run-1" }],
+        },
+        progress: "在改",
+      },
+      { external: true },
+    );
+    expect(handover).not.toMatch(TOOL_NAMES);
+    expect(handover).toContain(EXTERNAL_DELIVERY_GUIDE);
+    expect(handover).toContain("改动 2 个文件 · +10 −3");
+  });
+
+  test("an offline, queued external card is still recorded overdue and its hirer told, but not nudged", async () => {
+    const h = await harness();
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const work = h.say(threadId, "把发票导出做完");
+    const first = await h.open(threadId, 0);
+    await h.said(threadId, first.turnId, "已接下，预计 16:00 交。");
+    await h.end(threadId, first.turnId);
+    await work.done;
+    // The computer goes away; the person's follow-up waits in its queue.
+    h.state.reachable = false;
+    const followUp = h.say(threadId, "进展怎么样？");
+    await followUp.done;
+    expect(
+      (await turns.openInThread(h.tenantId, threadId)).map((row) => row.status),
+    ).toEqual(["queued"]);
+
+    await h.check(new Date("2026-11-16T08:40:00.000Z"));
+    const card = await h.cardOf(threadId);
+    if (!card) throw new Error("no card");
+    expect(card.overdueAt?.toISOString()).toBe("2026-11-16T08:40:00.000Z");
+    expect(h.notices).toEqual([
+      {
+        kind: "overdue",
+        taskId: card.id,
+        text: "『把发票导出做完』已逾期 40 分钟（小码，催过 0 次，电脑离线，活还在排队）",
+      },
+    ]);
+    expect(h.nudges).toEqual([]);
+    expect((await h.history(card.id)).map((row) => row.kind)).not.toContain(
+      "nudged",
+    );
   });
 });

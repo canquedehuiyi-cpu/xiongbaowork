@@ -32,8 +32,16 @@ import {
   useDeviceAcp,
 } from "./agents/acp/agent";
 import { createAcpContextLoader } from "./agents/acp/context";
-import { cancelExternalTurns, createAcpDelivery } from "./agents/acp/delivery";
-import { externalEmployeesAmong, externalHirerOf } from "./agents/acp/external";
+import {
+  cancelExternalTurns,
+  createAcpDelivery,
+  externalTurnWaiting,
+} from "./agents/acp/delivery";
+import {
+  externalEmployeesAmong,
+  externalHirerOf,
+  isExternalEmployee,
+} from "./agents/acp/external";
 import {
   type AcpPermissionBridge,
   createAcpApprovalHirer,
@@ -4585,6 +4593,9 @@ await startupLifecycle.run(async (startup) => {
       if (!(await agentProfileStore.get(actor, agentId))) return null;
       return (await channelStore.direct(actor, agentId)).threadId;
     },
+    // An external employee's 再催 and hand-over name no tool it does not hold.
+    isExternal: (tenantId, agentId) =>
+      isExternalEmployee(database, tenantId, agentId),
   });
   /*
    * Where the delivery loop speaks to the person outside a conversation (spec §10,
@@ -4619,14 +4630,18 @@ await startupLifecycle.run(async (startup) => {
                 taskNotices.notify(tenantId, notice, now),
               nudge: (tenantId, taskId, text) =>
                 nudgeRuns.startNudgeRun(tenantId, taskId, text),
+              turnRunning: threadRunning(localThreadRunner),
               /*
-               * An external employee's turn queued or on its computer is its turn running too: its
-               * card waits for it rather than being nudged into a second turn behind it (spec §8, §9).
+               * An external employee's turn still queued (its computer away, or its lane busy): the card
+               * is checked and the person told, saying so, but the employee is not nudged into a second
+               * turn behind it (spec §8, §9). Told in words for an external employee when it is one.
                */
-              turnRunning: async (tenantId, threadId) =>
-                (await threadRunning(localThreadRunner)(tenantId, threadId)) ||
-                (await acpTurnStore.openInThread(tenantId, threadId)).length >
-                  0,
+              turnQueued: externalTurnWaiting({
+                turns: acpTurnStore,
+                reachable: deviceReachableAnywhere,
+              }),
+              isExternal: (tenantId, agentId) =>
+                isExternalEmployee(database, tenantId, agentId),
               agentName: coworkerName,
             },
             new Date(),

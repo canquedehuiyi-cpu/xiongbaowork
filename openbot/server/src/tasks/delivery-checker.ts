@@ -15,6 +15,7 @@ import {
 } from "../user-preferences";
 import { TurnNotStarted } from "./card-turns";
 import { createDelivery, type Delivery } from "./delivery";
+import { EXTERNAL_DELIVERY_GUIDE } from "./delivery-tools";
 import { clockOf } from "./due-time";
 import { appendTaskEvent } from "./events";
 
@@ -35,6 +36,12 @@ import { appendTaskEvent } from "./events";
  * - While a turn is running on the card's thread nothing is done and nothing is written; the next pass
  *   looks again. "Running" is the runner's answer about the thread, never `active_run_ref` alone: a
  *   server that died mid-round leaves the column naming a round nothing runs any more.
+ * - An external employee's turn still waiting in its queue (its computer away, or its lane busy) is not
+ *   running: the card is recorded overdue and the person told as for any card, saying the work is
+ *   still queued, but the employee is not nudged -- a nudge would only queue a second turn behind the
+ *   first (`turnQueued`).
+ * - An external employee (`isExternal`) is nudged in words that name no tool it does not have: how the
+ *   server reads its replies instead (`EXTERNAL_DELIVERY_GUIDE`).
  *
  * TWO REPLICAS, ONE NUDGE. Each card is claimed under its row lock (`for update skip locked`): what is
  * due is decided from the locked row and written to it (`last_nudged_at`, `overdue_at`,
@@ -98,6 +105,16 @@ export type DeliveryCheckDeps = {
   ) => Promise<"started" | "skipped_running">;
   /** Whether a turn is running on the thread now: the runner's word ({@link threadRunning}). */
   turnRunning: (tenantId: string, threadId: string) => Promise<boolean>;
+  /**
+   * An external employee's turn on the thread still waiting to run (queued, not followed by any run):
+   * whether its computer is away. Null when none waits. Absent: none ever does.
+   */
+  turnQueued?: (
+    tenantId: string,
+    threadId: string,
+  ) => Promise<{ offline: boolean } | null>;
+  /** Whether the coworker is an external employee (`device_acp`), told in words for one. Absent: none is. */
+  isExternal?: (tenantId: string, agentId: string) => Promise<boolean>;
   /** The coworker's name as the person sees it, for what they are told. */
   agentName?: (tenantId: string, agentId: string) => Promise<string | null>;
   /** Narrow a pass to these tenants (a test's own people); absent, every tenant. */
@@ -315,14 +332,21 @@ export function nudgeTextOf(
   now: Date,
   timeZone: string,
   waitingSince?: Date,
+  /** An external employee: told what to write, not which tool to call (it holds none). */
+  options: { external?: boolean } = {},
 ): string {
   const title = `『${card.title}』`;
+  const external = options.external === true;
   if (!card.acceptedAt) {
     const since = waitingSince ?? card.createdAt ?? now;
-    return `【系统催办】${title}派给你 ${lengthOf(now.getTime() - since.getTime())}了，还没接下。能做就先调用 accept_task 回执：预计几点交、验收标准；做不了就直接说明原因。`;
+    const waited = `【系统催办】${title}派给你 ${lengthOf(now.getTime() - since.getTime())}了，还没接下。`;
+    return external
+      ? `${waited}能做就在回复里说已接下，并写「预计 HH:MM」或「预计 N 分钟」（换成真实的时间）；做不了就直接说明原因。\n${EXTERNAL_DELIVERY_GUIDE}`
+      : `${waited}能做就先调用 accept_task 回执：预计几点交、验收标准；做不了就直接说明原因。`;
   }
-  const what =
-    "做完的部分先用 deliver_task 交上来，写上你怎么查过的；交不了就用 request_extension 申请延期，说明缺什么、要延到几点。";
+  const what = external
+    ? `做完的部分现在就交：改动会自动当作交付物，没有改动的就在回复里写结论，并用「自查：」开头的一句写你怎么查过的；交不了就说明缺什么，并写「延到 HH:MM」（换成真实的时间）说要延到几点。\n${EXTERNAL_DELIVERY_GUIDE}`
+    : "做完的部分先用 deliver_task 交上来，写上你怎么查过的；交不了就用 request_extension 申请延期，说明缺什么、要延到几点。";
   if (!card.dueAt)
     return `【系统催办】${title}接下 ${lengthOf(now.getTime() - card.acceptedAt.getTime())}了还没交，也没报预计时间。${what}`;
   const late = now.getTime() - card.dueAt.getTime();
@@ -337,17 +361,26 @@ function noticeOf(
   schedule: Schedule,
   now: Date,
   name: string,
+  queued: { offline: boolean } | null,
 ): DeliveryNotice {
+  // The work is waiting in an external employee's queue: said, since that is why nothing moves.
+  const waiting = queued
+    ? queued.offline
+      ? "，电脑离线，活还在排队"
+      : "，活还在排队"
+    : "";
   if (!schedule.deadline)
     return {
       kind: "pending_accept",
       taskId: card.id,
-      text: `${name}还没接下『${card.title}』`,
+      text: queued
+        ? `${name}还没接下『${card.title}』（${waiting.slice(1)}）`
+        : `${name}还没接下『${card.title}』`,
     };
   return {
     kind: "overdue",
     taskId: card.id,
-    text: `『${card.title}』已逾期 ${lengthOf(now.getTime() - schedule.deadline.getTime())}（${name}，催过 ${card.nudges} 次）`,
+    text: `『${card.title}』已逾期 ${lengthOf(now.getTime() - schedule.deadline.getTime())}（${name}，催过 ${card.nudges} 次${waiting}）`,
   };
 }
 
@@ -440,6 +473,14 @@ async function checkCard(
   if (now < first.nudgeAt) return;
   // The coworker is at it right now: not a word, and not a line; the next pass looks again.
   if (await deps.turnRunning(tenantId, seen.threadRef)) return;
+  // Queued and not running: the card is still checked, but nobody is nudged into a second turn.
+  const queued =
+    (await deps.turnQueued?.(tenantId, seen.threadRef).catch(() => null)) ??
+    null;
+  const external =
+    (await deps
+      .isExternal?.(tenantId, seen.executorAgentId)
+      .catch(() => false)) ?? false;
 
   const hours = await deps.workHours(tenantId);
   const inHours = withinWorkHours(hours, now);
@@ -463,8 +504,9 @@ async function checkCard(
       await waitingSinceOf(transaction, tenantId, card),
     );
     const due = dueOn(card, schedule, now, { inHours, today });
+    if (queued) due.nudge = false;
     if (!due.nudge && !due.overdue && !due.notify) return null;
-    const notice = noticeOf(card, schedule, now, name);
+    const notice = noticeOf(card, schedule, now, name, queued);
     await transaction
       .update(tasks)
       .set({
@@ -520,7 +562,13 @@ async function checkCard(
       delivery,
       tenantId,
       taskId,
-      nudgeTextOf(claim.card, now, hours.timeZone, claim.schedule.waitingSince),
+      nudgeTextOf(
+        claim.card,
+        now,
+        hours.timeZone,
+        claim.schedule.waitingSince,
+        { external },
+      ),
       { now, previous: claim.card.lastNudgedAt },
     );
 }

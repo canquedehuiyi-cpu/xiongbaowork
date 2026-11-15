@@ -1,6 +1,5 @@
 import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { diffSummary, editedFiles } from "../agents/acp/translate";
 import type { Database } from "../db/client";
 import {
   attachments,
@@ -12,6 +11,7 @@ import {
 } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
 import { runEventsSoFar } from "../threads/run-side-events";
+import { diffSummary, editedFiles } from "./diff-summary";
 import {
   type DeliverableComponent,
   type DeliverableRef,

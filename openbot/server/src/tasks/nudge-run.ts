@@ -10,6 +10,8 @@ import {
 } from "./card-turns";
 import { createDelivery, type Delivery } from "./delivery";
 import { nudgeTextOf, waitingSinceOf } from "./delivery-checker";
+import { EXTERNAL_DELIVERY_GUIDE } from "./delivery-tools";
+import { diffTitle } from "./diff-summary";
 import type { TaskEventActor } from "./events";
 import type { DeliverableRef } from "./projector";
 
@@ -99,6 +101,11 @@ export type NudgeRunsDeps = Pick<
     tenantId: string,
     agentId: string,
   ) => Promise<string | null>;
+  /**
+   * Whether a coworker is an external employee (`device_acp`): it holds none of the delivery tools, so
+   * its 再催 and its hand-over say what to write instead (`EXTERNAL_DELIVERY_GUIDE`). Absent: none is.
+   */
+  isExternal?: (tenantId: string, agentId: string) => Promise<boolean>;
 };
 
 /** Why a card cannot be nudged: it is not followed and open, or names no thread or coworker. */
@@ -118,13 +125,16 @@ const log = (type: string, detail: Record<string, unknown>) =>
 const reasonOf = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
-/** What the new coworker is told on a hand-over. */
-function handoverText(card: {
-  title: string;
-  criteria: string | null;
-  deliverable: DeliverableRef | null;
-  progress: string | null;
-}): string {
+/** What the new coworker is told on a hand-over; an external employee is told what to write, not which tool to call. */
+export function handoverText(
+  card: {
+    title: string;
+    criteria: string | null;
+    deliverable: DeliverableRef | null;
+    progress: string | null;
+  },
+  options: { external?: boolean } = {},
+): string {
   const handedIn = card.deliverable
     ? [
         ...(card.deliverable.notes ?? []).map((note) => `结论：${note}`),
@@ -135,6 +145,7 @@ function handoverText(card: {
         ...(card.deliverable.components ?? []).map(
           (component) => `组件 ${component.name}`,
         ),
+        ...(card.deliverable.diffs ?? []).map((diff) => diffTitle(diff)),
         ...(card.deliverable.checks ?? []).map((check) => `自查：${check}`),
       ]
     : [];
@@ -145,12 +156,16 @@ function handoverText(card: {
       ? `已经交过的：${handedIn.join("；")}`
       : "已经交过的：还没有",
     `上一位员工最后的进度：${card.progress ?? "（没有记录）"}`,
-    "先调用 accept_task 接下（预计几点交、验收标准），再接着做。",
+    options.external
+      ? `先在回复里说已接下，并写「预计 HH:MM」或「预计 N 分钟」（换成真实的时间），再接着做。\n${EXTERNAL_DELIVERY_GUIDE}`
+      : "先调用 accept_task 接下（预计几点交、验收标准），再接着做。",
   ].join("\n");
 }
 
 export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
   const delivery = deps.delivery ?? createDelivery(deps.database);
+  const isExternal = async (tenantId: string, agentId: string) =>
+    (await deps.isExternal?.(tenantId, agentId).catch(() => false)) ?? false;
 
   const startNudgeRun: NudgeRuns["startNudgeRun"] = async (
     tenantId,
@@ -214,6 +229,7 @@ export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
               dueAt: tasks.dueAt,
               createdAt: tasks.createdAt,
               lastNudgedAt: tasks.lastNudgedAt,
+              agentId: tasks.executorAgentId,
             })
             .from(tasks)
             .where(
@@ -258,11 +274,15 @@ export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
               ),
             ),
         );
+      const external = claim.card.agentId
+        ? await isExternal(tenantId, claim.card.agentId)
+        : false;
       const text = nudgeTextOf(
         claim.card,
         input.now,
         input.timeZone,
         claim.waitingSince,
+        { external },
       );
       let outcome: "started" | "skipped_running";
       try {
@@ -336,8 +356,13 @@ export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
       let started = false;
       try {
         started =
-          (await startNudgeRun(tenantId, taskId, handoverText(moved))) ===
-          "started";
+          (await startNudgeRun(
+            tenantId,
+            taskId,
+            handoverText(moved, {
+              external: await isExternal(tenantId, agentId),
+            }),
+          )) === "started";
       } catch (error) {
         // Handed over all the same: the checker nudges the new coworker five minutes on.
         log("task-reassign-handover-not-started", {
