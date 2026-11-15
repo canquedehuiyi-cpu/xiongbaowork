@@ -78,8 +78,10 @@ const NOTHING: ReadonlySet<string> = new Set();
 
 type Coworker = { id: string; name: string; avatarSeed?: string | null };
 
-/** 卡上的「谁 · 什么时候」：员工头像和名字，后面一句。 */
-/** 员工不在名单里（已删、外部员工、名单没读到）时叫「员工」，不露内部 id。 */
+/**
+ * 卡上的「谁 · 什么时候」：员工头像和名字，后面一句。员工不在名单里（已删、外部员工、名单没读到）时
+ * 叫「员工」，不露内部 id。
+ */
 function Who({
   coworker,
   children,

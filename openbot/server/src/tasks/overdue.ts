@@ -8,7 +8,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { tasks } from "../db/schema";
-import { OVERDUE_AFTER_DUE_MS } from "./delivery-checker";
+import { OVERDUE_AFTER_DUE_MS } from "../../../shared/delivery-timing";
 
 /*
  * 「现在算不算逾期」的唯一口径（规格 2026-11-15-delivery-loop 第 3、8 节，控制方 Task 8 第 1 轮裁定）：

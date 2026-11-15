@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { OVERDUE_AFTER_DUE_MS } from "../../../../shared/delivery-timing";
 import { client } from "../client";
 
 /*
@@ -92,13 +93,6 @@ export const canExtend = (card: {
   (card.status === "running" || card.status === "needs_action");
 export const canReassign = (card: { status: string }): boolean =>
   card.status === "running";
-
-/**
- * 到期后多久才算逾期：核对器先在到期 5 分钟后催员工（`NUDGE_AFTER_MS`），再过 30 分钟记逾期并提醒你
- * （`NOTIFY_AFTER_NUDGE_MS`），合起来就是服务器 `server/src/tasks/delivery-checker.ts` 的
- * `OVERDUE_AFTER_DUE_MS`。浏览器这边没法引用服务器代码，所以照那两个值在这里写一份，两边要一起改。
- */
-export const OVERDUE_AFTER_DUE_MS = (5 + 30) * 60_000;
 
 /** 还在员工手上、没交没结束的状态（逾期口径用，和服务器 `tasks/overdue.ts` 一致）。 */
 const OVERDUE_OPEN_STATUSES = ["running", "needs_action"];
