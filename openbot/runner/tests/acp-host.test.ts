@@ -286,15 +286,9 @@ test("updates sent while detached are replayed in order on attach", async () => 
   ]);
   expect(ofType(t.frames.slice(before), "acp.session")).toHaveLength(1);
 
-  // The end was replayed once: the next attach sends it once more, the one after nothing.
+  // The ended turn was replayed once: the next attach sends nothing.
   t.host.detach();
-  let mark = t.frames.length;
-  t.host.attach(t.send);
-  expect(t.frames.slice(mark).map((frame) => frame.type)).toEqual([
-    "acp.turn.end",
-  ]);
-  t.host.detach();
-  mark = t.frames.length;
+  const mark = t.frames.length;
   t.host.attach(t.send);
   expect(t.frames.slice(mark)).toEqual([]);
 });
@@ -747,7 +741,7 @@ test("frames sent on a socket that silently drops are replayed on the next attac
   // The session went up on the attach before: not again.
   expect(ofType(t.frames.slice(mark), "acp.session")).toHaveLength(0);
 
-  // The turn ends on a socket that drops it again.
+  // The turn ends on a socket that swallows its last update and its end.
   t.host.detach();
   const lostAgain: Frame[] = [];
   t.host.attach((frame) => lostAgain.push(frame));
@@ -757,23 +751,64 @@ test("frames sent on a socket that silently drops are replayed on the next attac
     turnId: "turn_1",
   });
   await waitFor(() => ended(lostAgain, "turn_1"));
+  // The attach replayed 1 and 2 into it, then 3 and the end went the same way.
+  expect(ofType(lostAgain, "acp.update").map((frame) => frame.seq)).toEqual([
+    1, 2, 3,
+  ]);
   t.host.detach();
   mark = t.frames.length;
   t.host.attach(t.send);
-  expect(ofTurn(t.frames.slice(mark), "turn_1")).toEqual([
-    {
-      type: "acp.turn.end",
-      threadId: "th_1",
-      turnId: "turn_1",
-      stopReason: "cancelled",
-      interrupted: false,
-    },
+  const replayed = ofTurn(t.frames.slice(mark), "turn_1");
+  expect(replayed.map((frame) => [frame.type, frame.seq])).toEqual([
+    ["acp.turn.ack", undefined],
+    ["acp.update", 1],
+    ["acp.update", 2],
+    ["acp.update", 3],
+    ["acp.turn.end", undefined],
   ]);
+  expect((replayed[3]?.update as Frame | undefined)?.sessionUpdate).toBe(
+    "fake_cancel_seen",
+  );
+  expect(replayed[4]).toMatchObject({
+    stopReason: "cancelled",
+    interrupted: false,
+  });
   // Replayed once: the next attach leaves the ended turn alone.
   t.host.detach();
   mark = t.frames.length;
   t.host.attach(t.send);
   expect(ofTurn(t.frames.slice(mark), "turn_1")).toEqual([]);
+});
+
+test("a frame arriving after a turn's end is neither sent nor kept", async () => {
+  const t = setup({
+    turns: [
+      {
+        steps: [{ update: chunk("in time") }],
+        after: [chunk("late"), chunk("later")],
+      },
+    ],
+  });
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ended(t.frames, "turn_1"));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(ofType(ofTurn(t.frames, "turn_1"), "acp.update")).toHaveLength(1);
+
+  t.host.detach();
+  let mark = t.frames.length;
+  t.host.attach(t.send);
+  const replayed = ofTurn(t.frames.slice(mark), "turn_1");
+  expect(replayed.map((frame) => [frame.type, frame.seq])).toEqual([
+    ["acp.turn.ack", undefined],
+    ["acp.update", 1],
+    ["acp.turn.end", undefined],
+  ]);
+  t.host.detach();
+  mark = t.frames.length;
+  t.host.attach(t.send);
+  expect(t.frames.slice(mark)).toEqual([]);
 });
 
 test("past the limit, text updates are dropped without compacting again", async () => {

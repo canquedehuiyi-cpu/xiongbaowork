@@ -16,7 +16,8 @@ import { appendFileSync } from "node:fs";
  *   loadReplay       updates sent during `session/load`, before it answers
  *   loadFails        `session/load` answers an error (an unknown session)
  *   turns            one entry per `session/prompt`, the last one repeating: its `steps` run in
- *                    order, then the prompt answers `{stopReason}` (default "end_turn")
+ *                    order, then the prompt answers `{stopReason}` (default "end_turn"); its
+ *                    `after` updates are sent 50 ms later
  *   log              a file path: every message received is appended to it as one JSON line
  *
  * Steps of a turn:
@@ -50,7 +51,12 @@ export type FakeStep =
   | { sleepMs: number }
   | { exit: number };
 
-export type FakeTurn = { steps?: FakeStep[]; stopReason?: string };
+export type FakeTurn = {
+  steps?: FakeStep[];
+  stopReason?: string;
+  /** Updates sent 50 ms after the prompt has been answered: late, as some agents send them. */
+  after?: unknown[];
+};
 
 export type FakeAcpScript = {
   loadSession?: boolean;
@@ -147,6 +153,12 @@ async function runTurn(id: unknown, sessionId: string) {
     return;
   }
   send({ id, result: { stopReason: turn.stopReason ?? "end_turn" } });
+  if (turn.after?.length) {
+    const late = turn.after;
+    setTimeout(() => {
+      for (const value of late) update(sessionId, value);
+    }, 50);
+  }
 }
 
 function modeAnswer(kind: "ok" | "method_not_found" | "error", id: unknown) {

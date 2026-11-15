@@ -42,9 +42,9 @@ import { permissionFacts } from "./paths";
  * for minutes after a laptop slept or changed network, and what is sent on it then is lost, so a
  * sent frame is not taken as delivered: every frame of a turn not over yet is kept, sent or not,
  * and every `attach` replays all kept frames in the order they were made (the server drops repeats
- * by `(turnId, seq)`). A turn's end, once it has gone up, leaves only itself of that turn, kept
- * until the next `attach` has replayed it once; a frame of no turn (`acp.session`, an open's
- * `acp.error`) is kept the same way. Past `bufferLimit` updates or bytes for one turn, that turn's
+ * by `(turnId, seq)`). Once a turn has ended, all its kept frames (its end included) stay until one
+ * `attach` has replayed them, then the turn is forgotten; a frame of no turn (`acp.session`, an
+ * open's `acp.error`) is kept the same way. Past `bufferLimit` updates or bytes for one turn, that turn's
  * kept updates are compacted to the latest plan and each tool call's last state (its `tool_call`
  * and updates merged into one); after that, updates of other kinds still go up live but are not
  * kept, and only a plan or tool-call update compacts again. Acks, ends, sessions and errors are
@@ -149,16 +149,15 @@ type Thread = {
 };
 
 /**
- * A frame kept for replay. `turn`: a frame of a turn not over yet (kept, sent or not, until its end
- * has gone up). `end` and `once` (a frame of no turn): kept until the first attach after it first
- * went up has replayed it.
+ * A frame kept for replay. `turn`: a frame of a turn not over yet, kept (sent or not) and replayed
+ * on every attach. `once`: a frame of a turn that has ended (its end included), or of no turn;
+ * kept until one attach has replayed it.
  */
 type Entry = {
   frame: Frame;
   turnId: string | null;
-  kind: "turn" | "end" | "once";
+  kind: "turn" | "once";
   bytes: number;
-  delivered: boolean;
 };
 
 /** A turn's kept updates, and whether they were compacted already. */
@@ -210,40 +209,42 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     }
   }
 
-  /**
-   * A turn's end, or a frame of no turn, has gone up once: an end leaves only itself of its turn,
-   * and either is kept until the next attach has replayed it.
-   */
-  function delivered(entry: Entry) {
-    if (entry.kind === "turn" || entry.delivered) return;
-    entry.delivered = true;
-    if (entry.kind !== "end" || entry.turnId === null) return;
-    const turnId = entry.turnId;
-    outbox = outbox.filter(
-      (other) => other.turnId !== turnId || other.kind !== "turn",
-    );
-    held.delete(turnId);
+  /** A turn whose end has been emitted (one forgotten long ago is over too). */
+  function over(turnId: string): boolean {
+    const state = turns.get(turnId)?.state;
+    return state === undefined || state === "ended";
   }
 
-  /** Kept, so the next attach replays it whether or not this send got through. */
+  /**
+   * Kept, so the next attach replays it whether or not this send got through. A turn's end turns
+   * all its kept frames into `once`: the next attach replays the whole turn, then forgets it.
+   */
   function emit(frame: Frame, turnId: string | null = null) {
-    const kind: Entry["kind"] =
-      frame.type === "acp.turn.end" ? "end" : turnId === null ? "once" : "turn";
+    const isEnd = frame.type === "acp.turn.end";
+    // A late frame of a turn that is over is not sent and not kept: nothing would clear it.
+    if (turnId !== null && !isEnd && over(turnId)) return;
     const entry: Entry = {
       frame,
       turnId,
-      kind,
+      kind: turnId === null || isEnd ? "once" : "turn",
       bytes: sizeOf(frame),
-      delivered: false,
     };
-    if (!(kind === "turn" && frame.type === "acp.update" && turnId !== null))
-      outbox.push(entry);
-    else if (!hold(entry, turnId)) {
-      // Past the limit, a chunk of text is not kept; it still goes up now if it can.
-      trySend(frame);
-      return;
+    if (
+      entry.kind === "turn" &&
+      frame.type === "acp.update" &&
+      turnId !== null
+    ) {
+      if (!hold(entry, turnId)) {
+        // Past the limit, a chunk of text is not kept; it still goes up now if it can.
+        trySend(frame);
+        return;
+      }
+    } else outbox.push(entry);
+    if (isEnd && turnId !== null) {
+      for (const kept of outbox) if (kept.turnId === turnId) kept.kind = "once";
+      held.delete(turnId);
     }
-    if (trySend(frame)) delivered(entry);
+    trySend(frame);
   }
 
   /** Sent now if possible, never kept (a repeated acknowledgement). */
@@ -764,11 +765,9 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
           through = false;
           break;
         }
-        if (entry.kind === "turn") continue;
-        if (entry.delivered) replayed.add(entry);
-        else delivered(entry);
+        if (entry.kind === "once") replayed.add(entry);
       }
-      // Ends and frames of no turn that went up before this attach have now been replayed once.
+      // Ended turns and frames of no turn have now been replayed once.
       if (replayed.size > 0)
         outbox = outbox.filter((entry) => !replayed.has(entry));
       if (!through) return;
