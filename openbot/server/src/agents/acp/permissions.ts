@@ -3,16 +3,16 @@ import {
   type AcpPermissionOptionFrame,
   type AcpRuleKey,
   type AcpRuleValue,
-} from "@openbot/shared/acp";
+} from "../../../../shared/acp";
 import {
   WITHDRAWN_APPROVALS_OFF,
   WITHDRAWN_RULE_ALLOWS,
-} from "@openbot/shared/approval-outcomes";
+} from "../../../../shared/approval-outcomes";
 import {
   ONCE_ONLY_SOURCES,
   offersStandingRule,
-} from "@openbot/shared/standing-rule";
-import { eq, sql } from "drizzle-orm";
+} from "../../../../shared/standing-rule";
+import { and, eq, sql } from "drizzle-orm";
 import { safetyRequirement } from "../../approvals/policy";
 import {
   type ApprovalAction,
@@ -28,7 +28,7 @@ import {
 import type { Database } from "../../db/client";
 import { agents, approvalRequests } from "../../db/schema";
 import type { TaskProjector } from "../../tasks/projector";
-import { asPlatform, runAsTenant } from "../../tenant/context";
+import { runAsTenant } from "../../tenant/context";
 import { ownerTenantOfBot } from "../bot-owner";
 import type { AcpPermissionRequest } from "./agent";
 import { strictCharacters, strictlySafe } from "./command-allowlist";
@@ -639,15 +639,23 @@ export async function resolvePermission(input: {
 
 /**
  * Who may answer an approval, for `createApprovalService`'s `externalAgentHirer`: undefined when it
- * is not an external employee's; its employee's hirer when that is whom it was opened for; null
- * (nobody) otherwise. Read as `platform`: the approval lives in the hirer's tenant, and whoever is
- * refused must learn it is not theirs (403), not that it is missing. Only the answer leaves.
+ * is not an external employee's approval this decider can see; its employee's hirer when that is whom
+ * it was opened for; null (nobody) otherwise.
+ *
+ * Read in the DECIDER's own frame, never across tenants: the approval lives in its hirer's tenant,
+ * so only the hirer finds it here. Anybody else (a group member who asked it to work, the group's
+ * owner) reads nothing, and the store then answers them as it answers any approval that is not theirs
+ * (404): they learn neither that it exists nor whose it is. Only three facts leave the row: whom it
+ * was opened for, whether it is an external employee's, and which employee.
  */
 export function createAcpApprovalHirer(
   database: Database,
-): (approvalId: string) => Promise<string | null | undefined> {
-  return async (approvalId) => {
-    const [row] = await asPlatform(() =>
+): (
+  approvalId: string,
+  deciderId: string,
+) => Promise<string | null | undefined> {
+  return async (approvalId, deciderId) => {
+    const [row] = await runAsTenant(deciderId, () =>
       database
         .select({
           ownerUserId: approvalRequests.ownerUserId,
@@ -655,7 +663,12 @@ export function createAcpApprovalHirer(
           botId: sql<string | null>`${approvalRequests.action}->>'botId'`,
         })
         .from(approvalRequests)
-        .where(eq(approvalRequests.id, approvalId))
+        .where(
+          and(
+            eq(approvalRequests.id, approvalId),
+            eq(approvalRequests.ownerUserId, deciderId),
+          ),
+        )
         .limit(1),
     );
     if (!row || !isAcpAction({ toolRef: row.toolRef ?? "" })) return undefined;

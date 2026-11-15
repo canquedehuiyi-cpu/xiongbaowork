@@ -150,6 +150,12 @@ function doorCounts(files: Parsed[]): Record<string, Record<string, number>> {
 const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/admin/controls.ts": { 'runAsTenant("platform"': 6 },
   "src/admin/routes.ts": { "asAdminPlatform(": 1, 'runAsTenant("platform"': 1 },
+  // External employees (device_acp), reached from a member's request on purpose (group roster and
+  // presence): which of a group's Bots are someone's private external employee, and whose. A group
+  // member's frame cannot see another member's private employee; only {id, hirer, name} of a
+  // device_acp row named by id leaves, and everything done with it runs in the hirer's own frame.
+  // Same shape as bot-owner.ts's `ownerTenantsOfBots`; a SECURITY DEFINER lookup is the follow-up.
+  "src/agents/acp/external.ts": { "asPlatform(": 1 },
   "src/agents/bot-owner.ts": { "asPlatform(": 2 },
   "src/agents/handoff-runner.ts": { 'runAsTenant("platform"': 1 },
   // A Bot's audit trail for an administrator holding the capability (D07): finding another person's

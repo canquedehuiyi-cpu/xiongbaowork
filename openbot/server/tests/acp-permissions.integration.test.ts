@@ -400,7 +400,7 @@ describe("an external employee's permission requests", () => {
     });
   });
 
-  test("a group member who is not the hirer gets 403 deciding", async () => {
+  test("a group member who is not the hirer cannot decide (not theirs: 404)", async () => {
     const hirer = await person("hirer");
     const member = await person("member");
     const groupOwner = await person("owner");
@@ -408,10 +408,11 @@ describe("an external employee's permission requests", () => {
     await request("req-1", "git push origin main");
     const [row] = await approvals();
     if (!row) throw new Error("expected an approval");
-    // The member who @-mentioned it, and the group's owner: not theirs to answer.
+    // The member who @-mentioned it, and the group's owner: not theirs to answer, and not even
+    // theirs to see (read in their own frame, no cross-tenant lookup).
     for (const stranger of [member, groupOwner]) {
       const refused = await decide(stranger.id, row.id, "allow_once");
-      expect(refused.status).toBe(403);
+      expect(refused.status).toBe(404);
     }
     expect((await approvals())[0]?.status).toBe("pending");
     expect(answers()).toHaveLength(0);

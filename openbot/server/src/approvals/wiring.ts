@@ -100,6 +100,7 @@ export function createServerApprovalService(deps: {
   /** Whose an external employee's approval is to answer; see `createApprovalService`. */
   externalAgentHirer?: (
     approvalId: string,
+    deciderId: string,
   ) => Promise<string | null | undefined>;
   notify: (
     scope: DeliveryScope,

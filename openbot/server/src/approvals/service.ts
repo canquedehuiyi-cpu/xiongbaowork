@@ -289,11 +289,13 @@ export function createApprovalService(
     settlement?: "database";
     /**
      * Whose an external employee's approval is to answer (agents/acp/permissions.ts
-     * `createAcpApprovalHirer`): undefined for any other approval, the hirer, or null for nobody.
-     * Read across tenants, so that anybody else is told it is not theirs (403), not that it is missing.
+     * `createAcpApprovalHirer`), read in the decider's own frame: undefined for any other approval
+     * (or one the decider cannot see, which the store then answers 404), the hirer, or null for
+     * nobody.
      */
     externalAgentHirer?: (
       approvalId: string,
+      deciderId: string,
     ) => Promise<string | null | undefined>;
   } = {},
 ) {
@@ -759,7 +761,7 @@ export function createApprovalService(
        * member who asked it to work and the group's owner see the card and cannot answer it. Its
        * three answers are allow once, allow for this conversation, and deny.
        */
-      const hirer = await options.externalAgentHirer?.(id);
+      const hirer = await options.externalAgentHirer?.(id, ownerUserId);
       if (hirer !== undefined) {
         if (hirer !== ownerUserId) throw new ApprovalForbiddenError();
         if (decision === "allow_always" || decision === "handled")
