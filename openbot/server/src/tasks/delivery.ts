@@ -337,6 +337,11 @@ export type Delivery = {
       actor: TaskEventActor;
       decision: "grant" | "deny";
       dueAt?: string;
+      /**
+       * 答复的是要延到几点的那条申请（对话里延期卡上的时间）。给了就要和最新那条申请的时间一致，否则
+       * 拒绝（`stale_request`）：员工后来又申请了一次，不能拿旧卡上的答复去答新申请。
+       */
+      requestedDueAt?: string;
       now: Date;
       timeZone: string;
     },
@@ -348,7 +353,15 @@ export type Delivery = {
         agentId: string | null;
         runId: string | null;
       }
-    | { ok: false; why: "not_open" | "handed_in" | "no_request" | DueRefusal }
+    | {
+        ok: false;
+        why:
+          | "not_open"
+          | "handed_in"
+          | "no_request"
+          | "stale_request"
+          | DueRefusal;
+      }
   >;
   /**
    * The person changes the card (`PATCH /api/tasks/:id`): `due_at` and/or `criteria`, while the work
@@ -1183,6 +1196,12 @@ export function createDelivery(database: Database): Delivery {
           const requested = (latest.detail as { dueAt?: unknown }).dueAt;
           const requestedDueAt =
             typeof requested === "string" ? requested : null;
+          if (
+            input.requestedDueAt !== undefined &&
+            (requestedDueAt === null ||
+              Date.parse(requestedDueAt) !== Date.parse(input.requestedDueAt))
+          )
+            return { ok: false, why: "stale_request" } as const;
           const previousDueAt = card.dueAt?.toISOString() ?? null;
           const where = { tenantId, taskId, actor: input.actor };
           if (input.decision === "deny") {

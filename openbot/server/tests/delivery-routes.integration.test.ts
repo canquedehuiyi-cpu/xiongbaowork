@@ -1085,6 +1085,61 @@ test("cancel stops a running turn and marks cancelled", async () => {
   expect((await call("POST", `${taskId}/cancel`)).status).toBe(409);
 });
 
+test("answering an extension the chat's card names: a request that is no longer the latest is refused (409), nothing written", async () => {
+  const { tenantId, agentId, taskId, due } = await acceptedCard("stale-ext");
+  const call = routesFor(tenantId, { turns: cardTurns(new Recorder(agentId)) });
+  const first = new Date(Date.now() + 2 * 60 * 60_000);
+  const second = new Date(Date.now() + 5 * 60 * 60_000);
+  await delivery.requestExtension(tenantId, taskId, {
+    dueAt: first,
+    reason: "C 家还没回",
+  });
+  await delivery.requestExtension(tenantId, taskId, {
+    dueAt: second,
+    reason: "B 家也要等",
+  });
+  const before = await history(tenantId, taskId);
+
+  // The older card's 「准许」: its own time, naming its own request.
+  const stale = await call("POST", `${taskId}/extension`, {
+    decision: "grant",
+    dueAt: first.toISOString(),
+    requestedDueAt: first.toISOString(),
+  });
+  expect(stale.status).toBe(409);
+  expect(stale.body.error).toContain("不是最新");
+  // 「不准」 on the older card is refused the same way.
+  expect(
+    (
+      await call("POST", `${taskId}/extension`, {
+        decision: "deny",
+        requestedDueAt: first.toISOString(),
+      })
+    ).status,
+  ).toBe(409);
+  // Nothing written: the due time stands, and no answer is on the record.
+  expect((await row(tenantId, taskId))?.dueAt?.toISOString()).toBe(
+    due.toISOString(),
+  );
+  expect((await history(tenantId, taskId)).length).toBe(before.length);
+
+  // The latest card's 「准许」 goes through, at its own time.
+  const granted = await call("POST", `${taskId}/extension`, {
+    decision: "grant",
+    dueAt: second.toISOString(),
+    requestedDueAt: second.toISOString(),
+  });
+  expect(granted.status).toBe(200);
+  expect(granted.body.dueAt).toBe(second.toISOString());
+  expect((await history(tenantId, taskId)).at(-1)).toMatchObject({
+    kind: "extension_granted",
+    detail: {
+      requestedDueAt: second.toISOString(),
+      dueAt: second.toISOString(),
+    },
+  });
+});
+
 test("extension grant changes due_at, keeps original_due_at; deny keeps both", async () => {
   const { tenantId, agentId, threadId, taskId, due } =
     await acceptedCard("extension");

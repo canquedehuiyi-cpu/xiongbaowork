@@ -1724,6 +1724,11 @@ export function createGroupConversations(deps: {
     };
     let compacted: GroupCompactionNote | null = null;
     const marks: GroupDeliveryMark[] = [];
+    /*
+     * 外部员工的轮次（它的招聘人 `hiredBy`，或这一轮回了 `detached`）只回一句「开始了」，它的三步在设备
+     * 那一轮里走（`announceHandoff`），群回复上不记标记。挂起、出错这些拿不到 `detached` 的路径按员工认。
+     */
+    const ownMarks = () => (bot.hiredBy ? [] : marks);
     try {
       // A round hung on a followed card says so, so the runner asks whether that card still waits.
       const hungOn =
@@ -1798,8 +1803,7 @@ export function createGroupConversations(deps: {
             runId,
             text: result.replyText,
           });
-      // 外部员工的轮次只回了一句「开始了」，它的三步在设备那一轮里走（`announceHandoff`），这里不记。
-      const shownMarks = detached ? [] : marks;
+      const shownMarks = detached ? [] : ownMarks();
       if (gate.status === "pending") {
         await deps.store.finish(id, "", "waiting", {
           ...gate.details,
@@ -1894,7 +1898,7 @@ export function createGroupConversations(deps: {
           message: error.message,
           ...chainOf(turn),
           // 等工具审批前已经走过的步骤：恢复后接着记（`continueWaiting`）。
-          ...withMarks(marks),
+          ...withMarks(ownMarks()),
         });
         /*
          * Two different waits, and the board tells them apart.
@@ -1915,7 +1919,7 @@ export function createGroupConversations(deps: {
           await closeCard(cardTurn, agentId, runId, false, round());
       } else {
         const message = error instanceof Error ? error.message : String(error);
-        await deps.store.finish(id, message, "failed", withMarks(marks));
+        await deps.store.finish(id, message, "failed", withMarks(ownMarks()));
         await closeCard(cardTurn, agentId, runId, true, round(message));
       }
     }

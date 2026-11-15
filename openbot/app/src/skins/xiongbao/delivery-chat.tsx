@@ -293,7 +293,7 @@ function ExtensionCard({
     onSettled: settled,
   });
   const deny = useMutation({
-    mutationFn: (id: string) => denyExtension(id),
+    mutationFn: (id: string) => denyExtension(id, event.dueAt),
     retry: false,
     onSuccess: () => setAnswered(true),
     onSettled: settled,

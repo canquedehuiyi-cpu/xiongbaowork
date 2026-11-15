@@ -564,7 +564,11 @@ test("延期申请：「准许」带上卡上写的时间，「不准」维持�
     {
       method: "POST",
       path: `/api/tasks/${TASK}/extension`,
-      body: { decision: "grant", dueAt: todayAt(11, 30) },
+      body: {
+        decision: "grant",
+        dueAt: todayAt(11, 30),
+        requestedDueAt: todayAt(11, 30),
+      },
     },
   ]);
 });
@@ -590,7 +594,7 @@ test("延期申请：「不准」发 deny", async () => {
       {
         method: "POST",
         path: `/api/tasks/${TASK}/extension`,
-        body: { decision: "deny" },
+        body: { decision: "deny", requestedDueAt: todayAt(11, 30) },
       },
     ]),
   );
@@ -646,9 +650,46 @@ test("两张延期卡：旧卡（准过了）不给按钮，只有新卡能准�
       {
         method: "POST",
         path: `/api/tasks/${TASK}/extension`,
-        body: { decision: "grant", dueAt: todayAt(14, 0) },
+        body: {
+          decision: "grant",
+          dueAt: todayAt(14, 0),
+          requestedDueAt: todayAt(14, 0),
+        },
       },
     ]),
+  );
+});
+
+test("员工后来又申请了一次：服务器 409，卡上说这条申请已经不是最新的了", async () => {
+  serve({
+    events: [
+      flow("extension_requested", todayAt(10, 20), {
+        dueAt: todayAt(11, 30),
+        reason: "C 家官网改版了，抓不到旧价格",
+      }),
+    ],
+  });
+  const served = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) =>
+    init?.method === "POST"
+      ? new Response(
+          JSON.stringify({
+            error:
+              "员工后来又申请了一次延期，这条申请已经不是最新的了，刷新看看。",
+            code: "stale_request",
+          }),
+          { status: 409, headers: { "content-type": "application/json" } },
+        )
+      : served(input, init)) as typeof fetch;
+  const view = withQueries(
+    <DeliveryChatCard agentName="小周" event={extension} />,
+  );
+  const ask = await view.findByRole("group", { name: "延期申请" });
+  await userEvent.click(
+    await within(ask).findByRole("button", { name: "准许" }),
+  );
+  expect((await within(ask).findByRole("alert")).textContent).toBe(
+    "这条延期申请已经不是最新的了：员工后来又申请了一次，刷新看看。",
   );
 });
 
@@ -969,4 +1010,15 @@ test("群聊里不是派活的人只看到状态行：没有内容、没有按�
   for (const secret of ["竞品价格表", "自查", "验收标准", "缺 C 家"])
     expect(page).not.toContain(secret);
   expect(calls.some((call) => call.path.startsWith("/api/tasks/"))).toBe(false);
+});
+
+test("群里看不到的员工（别人私有的）叫「一位员工」，不说它不在群里", async () => {
+  serve({
+    me: TEAMMATE,
+    group: { ...groupConversation(), bots: [] },
+  });
+  const view = renderGroup();
+  await view.findByText("一位员工已接下，预计 10:30 交");
+  expect(view.container.textContent).not.toContain("不在本群");
+  expect(view.getAllByText("一位员工").length).toBeGreaterThan(0);
 });

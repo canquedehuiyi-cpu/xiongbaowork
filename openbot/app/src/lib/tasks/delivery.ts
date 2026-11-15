@@ -677,7 +677,8 @@ export const extendTask = (id: string, dueAt: string, answering: boolean) =>
 export const grantExtension = (id: string, dueAt: string) =>
   client(`${cardPath(id)}/extension`, {
     method: "POST",
-    body: { decision: "grant", dueAt },
+    // 答复的就是卡上这条申请：员工后来又申请了一次时，服务器拒绝（409），不拿旧卡去答新申请。
+    body: { decision: "grant", dueAt, requestedDueAt: dueAt },
     fallback: "延期没准成，请稍后再试。",
   });
 
@@ -689,11 +690,17 @@ export const editCriteria = (id: string, criteria: string) =>
     fallback: "验收标准没改成，请稍后再试。",
   });
 
-/** 不批延期：维持原来的预计时间（规格第 4 节）。 */
-export const denyExtension = (id: string) =>
+/**
+ * 不批延期：维持原来的预计时间（规格第 4 节）。对话里延期卡上的「不准」带上卡上申请的时间
+ * （`requestedDueAt`），和「准许」一样只答复这一条。
+ */
+export const denyExtension = (id: string, requestedDueAt?: string) =>
   client(`${cardPath(id)}/extension`, {
     method: "POST",
-    body: { decision: "deny" },
+    body: {
+      decision: "deny",
+      ...(requestedDueAt ? { requestedDueAt } : {}),
+    },
     fallback: "没答复成，请稍后再试。",
   });
 
@@ -723,12 +730,21 @@ const REFUSED: Record<DeliveryVerb, string> = {
  * 写失败时给人看的一句话。服务器的中文原话照用，但工具名（`accept_task` 之类）换成人话；英文原话（老接口的
  * 「Not awaiting review.」）和没收到回应，换成按动作写好的中文。
  */
+/**
+ * 服务器说员工后来又申请了一次延期（`POST /extension` 带的 `requestedDueAt` 不是最新那条，409）时的说法。
+ * 认服务器原话里的「不是最新」。
+ */
+export const STALE_EXTENSION_TEXT =
+  "这条延期申请已经不是最新的了：员工后来又申请了一次，刷新看看。";
+
 export function deliveryErrorText(error: unknown, verb: DeliveryVerb): string {
   const status =
     error && typeof error === "object" && "status" in error
       ? Number((error as { status: unknown }).status)
       : 0;
   const message = error instanceof Error ? error.message.trim() : "";
+  if (status === 409 && message.includes("不是最新"))
+    return STALE_EXTENSION_TEXT;
   const said = message
     .replace(/接活工具（accept_task）/g, "接活功能")
     .replace(/accept_task/g, "接活功能");

@@ -194,6 +194,8 @@ function service(options: {
   board?: Parameters<typeof createGroupConversations>[0]["board"];
   /** A real turn runner in place of the scripted replies, for the cases about what a run carries. */
   runTurn?: TurnRunner;
+  /** Bots that are someone's external employees (`hiredBy`), as the production roster marks them. */
+  hiredBy?: Record<string, string>;
 }) {
   const calls: Parameters<TurnRunner>[0][] = [];
   const audit: AuditEventInput[] = [];
@@ -209,7 +211,14 @@ function service(options: {
       const bots = [];
       for (const agentId of channel.agentIds) {
         const profile = await profileStore.get(actor, agentId);
-        if (profile) bots.push({ id: agentId, name: profile.name });
+        if (profile)
+          bots.push({
+            id: agentId,
+            name: profile.name,
+            ...(options.hiredBy?.[agentId]
+              ? { hiredBy: options.hiredBy[agentId] }
+              : {}),
+          });
       }
       return bots;
     },
@@ -1285,6 +1294,50 @@ describe("group conversations in PostgreSQL", () => {
       text: "已开始。",
       marks: null,
     });
+  });
+
+  test("外部员工的轮次挂起或出错时也不记交付卡标记", async () => {
+    const owner = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({ name: "delivery.accepted", value: ACCEPTED });
+          throw new HeadlessToolSuspension("Waiting for your approval.", {
+            kind: "approval",
+            approvalId: `${prefix}-external-wait`,
+          });
+        },
+        [grace]: (input) => {
+          input.onCustom?.({ name: "delivery.delivered", value: DELIVERED });
+          throw new Error("the device went away");
+        },
+      },
+      // 两位都是这位派活人自己招的外部员工。
+      hiredBy: { [ada]: owner.id, [grace]: owner.id },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, () =>
+      conversations.send(owner.id, channel.id, {
+        id: `${prefix}-external`,
+        text: "整理一下",
+      }),
+    );
+    await runAsTenant("platform", () => drain(conversations));
+    const seen = await as(owner, () =>
+      conversations.list(owner.id, channel.id),
+    );
+    expect(
+      seen.messages
+        .filter((row) => row.agentId)
+        .map((row) => [row.agentId, row.status, row.delivery ?? null]),
+    ).toEqual([
+      [ada, "waiting", null],
+      [grace, "failed", null],
+    ]);
   });
 
   test("a member can add another signed-in person, who then reads the shared transcript", async () => {

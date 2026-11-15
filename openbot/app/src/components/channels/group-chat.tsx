@@ -240,7 +240,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
               message={message}
               name={
                 message.agentId
-                  ? (names.get(message.agentId) ?? "一位已不在本群的员工")
+                  ? (names.get(message.agentId) ?? "一位员工")
                   : message.ownerUserId === me?.id
                     ? "你"
                     : (people.get(message.ownerUserId) ?? "一位同事")

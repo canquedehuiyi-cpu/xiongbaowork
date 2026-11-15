@@ -337,6 +337,8 @@ const returnBody = z.object({
 const extensionBody = z.object({
   decision: z.enum(["grant", "deny"]),
   dueAt: z.string().trim().min(1).max(100).optional(),
+  /** 答复的是哪一条申请（它要延到的时间）；和最新那条不一致时 409。 */
+  requestedDueAt: z.string().trim().min(1).max(100).optional(),
 });
 const editBody = z
   .object({
@@ -809,6 +811,9 @@ export function createTaskRoutes(
       actor: `user:${tenantId}`,
       decision: body.data.decision,
       ...(body.data.dueAt ? { dueAt: body.data.dueAt } : {}),
+      ...(body.data.requestedDueAt
+        ? { requestedDueAt: body.data.requestedDueAt }
+        : {}),
       now: now(),
       timeZone: await zoneOf(tenantId),
     });
@@ -819,6 +824,15 @@ export function createTaskRoutes(
         return context.json({ error: "成果已交，退回之后才能答复延期。" }, 409);
       if (decided.why === "no_request")
         return context.json({ error: "没有待答复的延期申请。" }, 409);
+      if (decided.why === "stale_request")
+        return context.json(
+          {
+            error:
+              "员工后来又申请了一次延期，这条申请已经不是最新的了，刷新看看。",
+            code: "stale_request",
+          },
+          409,
+        );
       return context.json({ error: `${dueRefusalText(decided.why)}。` }, 400);
     }
     const dueAt = decided.dueAt?.toISOString() ?? null;
