@@ -116,6 +116,11 @@ export type AcpHost = {
   /** The server acknowledged a heartbeat of this connection (acks come one per beat). */
   acked(): void;
   closeAll(): Promise<void>;
+  /**
+   * The prompt a remembered turn still holds (diagnostics, tests): its content until it ends, then
+   * nothing (the person's words are not kept past their turn); undefined for a turn not remembered.
+   */
+  heldPrompt(turnId: string): unknown[] | undefined;
 };
 
 export type AcpHostDeps = {
@@ -627,6 +632,8 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   function endTurn(turn: Turn, stopReason: string, interrupted: boolean) {
     if (turn.state === "ended") return;
     turn.state = "ended";
+    // A replay needs only the turn's frames and its end: the person's words go with the turn.
+    turn.content = [];
     if (turn.backstop) clearTimeout(turn.backstop);
     turn.end = {
       type: "acp.turn.end",
@@ -1158,6 +1165,10 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     async closeAll() {
       closed = true;
       await Promise.allSettled([...procs.values()].map(retire));
+    },
+
+    heldPrompt(turnId) {
+      return turns.get(turnId)?.content;
     },
   };
 }

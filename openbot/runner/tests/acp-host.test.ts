@@ -263,6 +263,35 @@ test("acp.prompt acks, streams numbered updates and ends the turn", async () => 
   expect(t.spawns[0]?.command).toBe(process.execPath);
 });
 
+test("an ended turn keeps no prompt content, only what a replay needs", async () => {
+  const t = setup({ turns: [{ steps: [{ update: chunk("done") }] }] });
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ended(t.frames, "turn_1"));
+  expect(t.host.heldPrompt("turn_1")).toEqual([]);
+  // A cancelled queued turn lets go of its words too.
+  await t.host.handle(prompt("th_1", "turn_2"));
+  await t.host.handle(prompt("th_1", "turn_3"));
+  await t.host.handle({
+    type: "acp.cancel",
+    agentId: "agent_1",
+    threadId: "th_1",
+    turnId: "turn_3",
+  });
+  await waitFor(() => ended(t.frames, "turn_3"));
+  expect(t.host.heldPrompt("turn_3")).toEqual([]);
+  // The replay still has everything: the end goes up again on the next attach.
+  t.host.detach();
+  const replay: Record<string, unknown>[] = [];
+  t.host.attach((frame) => replay.push(frame));
+  expect(
+    replay.some(
+      (frame) => frame.type === "acp.turn.end" && frame.turnId === "turn_1",
+    ),
+  ).toBe(true);
+});
+
 test("a turnId seen before is acknowledged again and never run twice", async () => {
   const t = setup({ turns: [{ steps: [{ update: chunk("once") }] }] });
   t.host.attach(t.send);
