@@ -9,14 +9,14 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor, within, act } from "@testing-library/react";
+import { act, cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MineScreen } from "@/components/resources/mine-screen";
 import type {
   PluginConnection,
-  PluginTeam,
   PluginsPage,
+  PluginTeam,
 } from "@/lib/plugins/queries";
-import { MineScreen } from "@/components/resources/mine-screen";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -155,6 +155,8 @@ const renderMine = async (
     connections?: PluginConnection[];
     /** 让那次读失败：以本人身份访问的应用不许在这种时候替人断言「待绑定」。 */
     connectionsFail?: boolean;
+    /** 开场就带着的锚点（不带 `#`），用来看「从别处带 # 进来」这一路。 */
+    hash?: string;
   } = {},
 ) => {
   globalThis.fetch = (async (input: unknown) => {
@@ -211,7 +213,9 @@ const renderMine = async (
   });
   const router = createRouter({
     context: { queryClient },
-    history: createMemoryHistory({ initialEntries: ["/"] }),
+    history: createMemoryHistory({
+      initialEntries: [options.hash ? `/#${options.hash}` : "/"],
+    }),
     routeTree: root.addChildren([mine, connections, channel, skillView]),
   });
   const view = render(
@@ -740,9 +744,18 @@ test("页首一行答出三块各多少，待连接的数只算真的待连接",
     ),
   );
   await waitFor(() => expect(view.getByText("甲")).toBeTruthy());
-  expect(
-    view.getByText("2 条技能 · 2 支团队 · 3 个连接器（1 个待连接）"),
-  ).toBeTruthy();
+  /*
+   * 三块各一段，待连接的数写在连接器那一段旁边而不进链接名：读屏念「3 个连接器」已经说清去处，
+   * 把括号也念进去只是把一句提示读成一个长名字。
+   */
+  const jumpNav = view.getByRole("navigation", {
+    name: "跳到这一页的各块",
+  });
+  const nav = within(jumpNav);
+  expect(nav.getByRole("link", { name: "2 条技能" })).toBeTruthy();
+  expect(nav.getByRole("link", { name: "2 支团队" })).toBeTruthy();
+  expect(nav.getByRole("link", { name: "3 个连接器" })).toBeTruthy();
+  expect(jumpNav.textContent).toContain("3 个连接器（1 个待连接）");
 });
 
 test("连接读不到时不写待连接几个，只说连接器总数", async () => {
@@ -813,6 +826,84 @@ test("整页读不到时不画总览——数字没有来源", async () => {
 });
 
 /**
+ * 总览把三块的规模答在页首了，但答案本身没有去处：109 条技能铺在最上面，团队和连接器要滚过三十
+ * 张技能卡才出现——三块里只有一块够得到。页首那一行是这一页唯一同时提到三块的地方，所以让每一项
+ * 各自成为一个锚点：点「3 支团队」就落在团队块。
+ *
+ * 断言里查目标 id 存不存在，因为 `href="#x"` 指向一个不存在的 id 是一条死链，只验 href 验不出来。
+ * `tabindex="-1"` 是同一件事的另一半：跳过去之后键盘要接着从那块走，而不是留在页首那个链接上。
+ */
+test("总览的每一项都跳到它自己那一块，落点真的存在", async () => {
+  const view = await renderMine(
+    page(
+      [skill("a", "甲", "full")],
+      [server("tapd", "TAPD", "deployment-bearer", false)],
+      [team("gstack", "软件工坊", 6)],
+      [listed("tapd", "deployment-bearer")],
+    ),
+  );
+  await waitFor(() => expect(view.getByText("甲")).toBeTruthy());
+
+  const nav = within(
+    view.getByRole("navigation", { name: "跳到这一页的各块" }),
+  );
+  const jumps = [
+    { name: "1 条技能", target: "mine-skills" },
+    { name: "1 支团队", target: "mine-teams" },
+    { name: "1 个连接器", target: "mine-connectors" },
+  ];
+  for (const jump of jumps) {
+    expect(
+      nav.getByRole("link", { name: jump.name }).getAttribute("href"),
+    ).toBe(`#${jump.target}`);
+    const anchor = document.getElementById(jump.target);
+    expect(anchor).toBeTruthy();
+    expect(anchor?.getAttribute("tabindex")).toBe("-1");
+  }
+});
+
+/**
+ * 跳转只给有的那几块：一个「0 支团队」的入口点下去会落在「还没有被给的团队」上，那是把一个不存在
+ * 的目的地画成可点的。只有技能的人拿到一个入口，只有团队的人也只拿到一个。
+ */
+test("总览只给有内容的块画跳转，没被给的块不画入口", async () => {
+  const skillsOnly = await renderMine(page([skill("a", "甲", "full")], []));
+  await waitFor(() => expect(skillsOnly.getByText("甲")).toBeTruthy());
+  const onlySkills = within(
+    skillsOnly.getByRole("navigation", { name: "跳到这一页的各块" }),
+  );
+  expect(onlySkills.getAllByRole("link").length).toBe(1);
+  expect(
+    onlySkills.getByRole("link", { name: "1 条技能" }).getAttribute("href"),
+  ).toBe("#mine-skills");
+  cleanup();
+
+  const view = await renderMine(
+    page([], [], [team("gstack", "软件工坊", 6), team("design", "设计所", 2)]),
+  );
+  await waitFor(() => expect(view.getByText("软件工坊")).toBeTruthy());
+  const nav = within(
+    view.getByRole("navigation", { name: "跳到这一页的各块" }),
+  );
+  expect(nav.getAllByRole("link").length).toBe(1);
+  expect(nav.getByRole("link", { name: "2 支团队" }).getAttribute("href")).toBe(
+    "#mine-teams",
+  );
+});
+
+/**
+ * 带 `#mine-teams` 从别处进来（一条分享出去的链接、一次刷新）就该落在团队块上，并且焦点也交给它：
+ * 别人的链接指过来的是一块内容，不是一句「往下滚一点」。浏览器自己做前半步，焦点得这里补。
+ */
+test("地址上带 #块名 进来，落在那一块并把焦点交过去", async () => {
+  const view = await renderMine(page([], [], [team("gstack", "软件工坊", 6)]), {
+    hash: "mine-teams",
+  });
+  await waitFor(() => expect(view.getByText("软件工坊")).toBeTruthy());
+  expect(document.activeElement?.id).toBe("mine-teams");
+});
+
+/**
  * 技能卡说「这条技能能干什么」，但说不清「它到底教员工做什么」——正文（`instructions`）在这一页
  * 从来没有一个读的地方，要看得去技能页，而那页翻开的是编辑面板、只有自己的技能点得开。清单里列
  * 出来的每一样都该能走过去读，所以卡片给一条到正文的路：`/capabilities/skills?view=<slug>`。
@@ -876,7 +967,12 @@ test("一次搜索同时收窄三块，被筛空的那些说没有匹配而不�
   expect(view.getByText("没有匹配的连接器")).toBeTruthy();
   expect(view.queryByText("还没有被给的连接器")).toBeNull();
   // 总览答的是「被给了多少」，不是搜出多少——一搜就变小的数字是筛子自己的答案。
-  expect(view.getByText("2 条技能 · 2 支团队 · 1 个连接器")).toBeTruthy();
+  const nav = within(
+    view.getByRole("navigation", { name: "跳到这一页的各块" }),
+  );
+  expect(nav.getByRole("link", { name: "2 条技能" })).toBeTruthy();
+  expect(nav.getByRole("link", { name: "2 支团队" })).toBeTruthy();
+  expect(nav.getByRole("link", { name: "1 个连接器" })).toBeTruthy();
 
   // 换一个只命中技能的词：现在轮到团队被筛空。
   await user.clear(view.getByRole("searchbox", { name: SEARCH_LABEL }));
