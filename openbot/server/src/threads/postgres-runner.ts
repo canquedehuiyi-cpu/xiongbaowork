@@ -925,8 +925,12 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
           subscriber.error(new ThreadBusyError()),
         );
       }
-      // Open for the delivery tools from here to the turn's end (`finish`, or a stop: `finalize`).
-      beginTurn(runId, entryCardRef);
+      /*
+       * Open for the delivery tools from here to the turn's end (`finish`, or a stop: `finalize`), with
+       * the key of the card it works for when that is not its own run id: an entry's, or the card a
+       * queued external employee's run left open (`adoptRunnerCard`).
+       */
+      beginTurn(runId, entryCardRef ?? adopted);
       // Running from here, as the store counts it; `finally` covers a `run` that throws instead.
       let started: Observable<BaseEvent>;
       try {

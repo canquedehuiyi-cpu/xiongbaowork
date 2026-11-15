@@ -366,3 +366,16 @@ export function clockOf(at: Date, now: Date, timeZone: string): string {
     parts.find((piece) => piece.type === type)?.value ?? "";
   return `${part("month")}月${part("day")}日 ${time}`;
 }
+
+/**
+ * The first due time a reply states, as an external employee states it (spec 2026-11-15-delivery-loop
+ * §9, which cannot call `accept_task`): 「预计 HH:MM」 or 「预计 N 分钟 / 小时」, the words after 「预计」
+ * ready for {@link readDueTime}. Undefined when the reply states none in that form.
+ */
+export function dueSaidIn(text: string): string | undefined {
+  const said =
+    /预计\s*(?:在\s*)?(\d{1,2}\s*[:：]\s*\d{2}|\d+(?:\.\d+)?\s*(?:个)?\s*(?:分钟|小时|钟头))/.exec(
+      text,
+    );
+  return said?.[1]?.replace(/\s*[:：]\s*/, ":").replace(/\s+/g, " ");
+}

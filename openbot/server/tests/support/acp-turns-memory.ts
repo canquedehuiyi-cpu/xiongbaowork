@@ -117,6 +117,17 @@ export function createMemoryAcpTurnStore(): AcpTurnStore & {
       const row = byTurn(tenantId, turnId);
       if (row?.status === "sent") row.status = "queued";
     },
+    async openInThread(tenantId, threadId, agentId) {
+      return ordered(
+        rows.filter(
+          (row) =>
+            row.tenantId === tenantId &&
+            row.threadId === threadId &&
+            (agentId === undefined || row.agentId === agentId) &&
+            !isFinalAcpTurnStatus(row.status),
+        ),
+      ).map(copy);
+    },
     async recordSeq(tenantId, turnId, lastSeq) {
       const row = byTurn(tenantId, turnId);
       if (row) row.lastSeq = Math.max(row.lastSeq, lastSeq);

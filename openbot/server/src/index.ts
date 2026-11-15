@@ -32,6 +32,7 @@ import {
   useDeviceAcp,
 } from "./agents/acp/agent";
 import { createAcpContextLoader } from "./agents/acp/context";
+import { cancelExternalTurns, createAcpDelivery } from "./agents/acp/delivery";
 import { externalEmployeesAmong, externalHirerOf } from "./agents/acp/external";
 import {
   type AcpPermissionBridge,
@@ -2774,6 +2775,18 @@ await startupLifecycle.run(async (startup) => {
   /** The delivery loop's followed cards and the gate a hand-in passes (spec 2026-11-15-delivery-loop). */
   const deliveryLoop = createDelivery(database);
   const evidenceGate = createEvidenceGate(database);
+  /*
+   * External employees walk the same three steps, the server walking them for them (spec §9,
+   * `agents/acp/delivery.ts`): their 「预计 16:00」 is read on the person's saved zone.
+   */
+  const acpDelivery = createAcpDelivery({
+    delivery: deliveryLoop,
+    gate: evidenceGate,
+    timeZone: async (tenantId) =>
+      (await readWorkHours(database, tenantId)).timeZone,
+  });
+  const acpRuntimeForDelivery = deviceAcpRuntime();
+  if (acpRuntimeForDelivery) acpRuntimeForDelivery.delivery = acpDelivery;
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -4464,6 +4477,7 @@ await startupLifecycle.run(async (startup) => {
       channel: deviceChannel,
       employeeFor: externalEmployee,
       onlineElsewhere: deviceOnlineElsewhere,
+      delivery: acpDelivery,
     }),
   });
   const groupStore = createGroupStore(database, () => threadIdentity.mint());
@@ -4536,8 +4550,8 @@ await startupLifecycle.run(async (startup) => {
   /*
    * A followed card's conversation (spec 2026-11-15-delivery-loop §6): a 退回 is said in its thread as
    * the person and answered there, on the same unattended runner a dispatched `@` runs on (a group
-   * card's, in the group); a 取消 or a hand-over stops the round through the runner's stop.
-   * External coworkers' turns (`cancelExternalTurn`) wait for their ACP runtime.
+   * card's, in the group); a 取消 or a hand-over stops the round through the runner's stop, and an
+   * external coworker's queued or running turns on the card's thread through the relay's own stop.
    */
   const cardTurns = createCardTurns({
     database,
@@ -4549,6 +4563,10 @@ await startupLifecycle.run(async (startup) => {
     botName: async (tenantId, agentId) =>
       (await agentProfileStore.get(await actorFor(tenantId), agentId))?.name ??
       null,
+    cancelExternalTurn: cancelExternalTurns({
+      turns: acpTurnStore,
+      relay: acpRelay,
+    }),
   });
   /*
    * The server's own rounds on a followed card (spec §8, `tasks/nudge-run.ts`): the checker's nudge,
@@ -4601,7 +4619,14 @@ await startupLifecycle.run(async (startup) => {
                 taskNotices.notify(tenantId, notice, now),
               nudge: (tenantId, taskId, text) =>
                 nudgeRuns.startNudgeRun(tenantId, taskId, text),
-              turnRunning: threadRunning(localThreadRunner),
+              /*
+               * An external employee's turn queued or on its computer is its turn running too: its
+               * card waits for it rather than being nudged into a second turn behind it (spec §8, §9).
+               */
+              turnRunning: async (tenantId, threadId) =>
+                (await threadRunning(localThreadRunner)(tenantId, threadId)) ||
+                (await acpTurnStore.openInThread(tenantId, threadId)).length >
+                  0,
               agentName: coworkerName,
             },
             new Date(),

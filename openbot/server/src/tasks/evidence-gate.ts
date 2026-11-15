@@ -1,5 +1,6 @@
 import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { diffSummary, editedFiles } from "../agents/acp/translate";
 import type { Database } from "../db/client";
 import {
   attachments,
@@ -25,7 +26,9 @@ import {
  *
  * In order, the first failure refusing the hand-in:
  * 1. at least one item, and every item real and this card's -- an attachment in the card's thread, a
- *    component drawn in one of the card's rounds, a link that is an http(s) address;
+ *    component drawn in one of the card's rounds, a link that is an http(s) address, a change summary
+ *    of one of the card's rounds that an external employee ran (`externalRun`: only the server's own
+ *    hand-in for that employee names one, never a coworker's `deliver_task`);
  * 2. a words-only hand-in (only `note`s) says how it was checked: at least one `checks` line;
  * 3. when the criteria list required items (「必需：A、B、C」), each one is named by an item's title
  *    or a check line, and the refusal says which are missing.
@@ -63,6 +66,13 @@ export type EvidenceGate = {
     items: readonly DeliveryItem[];
     checks: readonly string[];
     criteria: string | null;
+    /**
+     * The external employee's round the server hands in for (agents/acp/delivery.ts): the one run a
+     * `diff` item may name, its `ref` being that run's id, and only when the run is one of the card's.
+     * Absent, as for every `deliver_task`, a `diff` item is refused: a change summary is the server's
+     * reading of an external employee's edits, not something a coworker can report.
+     */
+    externalRun?: string;
   }): Promise<EvidenceVerdict>;
 };
 
@@ -169,7 +179,7 @@ export function createEvidenceGate(database: Database): EvidenceGate {
   async function roundsOf(
     tenantId: string,
     taskId: string,
-  ): Promise<BaseEvent[][]> {
+  ): Promise<{ runId: string; events: BaseEvent[] }[]> {
     const runIds = await runsOf(tenantId, taskId);
     if (runIds.length === 0) return [];
     const stored = await database
@@ -192,10 +202,10 @@ export function createEvidenceGate(database: Database): EvidenceGate {
       list.push(event);
       byRun.set(row.runId, list);
     }
-    return runIds.map((runId) => [
-      ...(byRun.get(runId) ?? []),
-      ...runEventsSoFar(runId),
-    ]);
+    return runIds.map((runId) => ({
+      runId,
+      events: [...(byRun.get(runId) ?? []), ...runEventsSoFar(runId)],
+    }));
   }
 
   /**
@@ -258,14 +268,18 @@ export function createEvidenceGate(database: Database): EvidenceGate {
           wantedAttachments,
         );
         const rounds = items.some(
-          (item) => item.kind === "component" || item.kind === "attachment",
+          (item) =>
+            item.kind === "component" ||
+            item.kind === "attachment" ||
+            (item.kind === "diff" && input.externalRun !== undefined),
         )
           ? await roundsOf(input.tenantId, input.taskId)
           : [];
-        const drawn = rounds.flatMap((events) => drawnComponents(events));
+        const drawn = rounds.flatMap(({ events }) => drawnComponents(events));
         const produced = new Set(
-          rounds.flatMap((events) => attachmentsProduced(events)),
+          rounds.flatMap(({ events }) => attachmentsProduced(events)),
         );
+        const diffs: NonNullable<DeliverableRef["diffs"]> = [];
 
         for (const item of items) {
           const name = nameOf(item);
@@ -311,12 +325,28 @@ export function createEvidenceGate(database: Database): EvidenceGate {
               links.push({ url, title: item.title?.trim() || url });
               break;
             }
-            case "diff":
-              return {
-                ok: false,
-                reason: "改动汇总只能来自外部员工的轮次，不能自己报。",
-                missing: [name],
-              };
+            case "diff": {
+              const runId = item.ref.trim();
+              const round =
+                input.externalRun !== undefined && runId === input.externalRun
+                  ? rounds.find((candidate) => candidate.runId === runId)
+                  : undefined;
+              if (!round)
+                return {
+                  ok: false,
+                  reason: "改动汇总只能来自外部员工的轮次，不能自己报。",
+                  missing: [name],
+                };
+              const files = editedFiles(round.events);
+              if (files.length === 0)
+                return {
+                  ok: false,
+                  reason: "这一轮没有改动任何文件，没有改动汇总可交。",
+                  missing: [name],
+                };
+              diffs.push({ ...diffSummary(files), ref: runId });
+              break;
+            }
             case "note": {
               const text = item.ref.trim() || item.title?.trim() || "";
               if (!text)
@@ -354,6 +384,7 @@ export function createEvidenceGate(database: Database): EvidenceGate {
         if (components.length) ref.components = components;
         if (attachmentIds.length) ref.attachments = [...new Set(attachmentIds)];
         if (links.length) ref.links = links;
+        if (diffs.length) ref.diffs = diffs;
         if (notes.length) ref.notes = notes;
         if (checks.length) ref.checks = checks;
         return { ok: true, ref };

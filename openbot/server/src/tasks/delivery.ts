@@ -166,7 +166,8 @@ export type Delivery = {
    * first time ever reported. A due time or criteria the person set while the card waited (`editTask`)
    * stand over the coworker's: 「你改的直接生效」. The answer carries the card's due time and criteria
    * as they now are. One `accepted` line, with what the coworker said. Null when the card is not open
-   * and not yet accepted.
+   * and not yet accepted. Without `criteria` (an external employee's turn starting, which the server
+   * takes on for it, spec §9) the card's criteria stay as they are.
    */
   accept(
     tenantId: string,
@@ -177,9 +178,34 @@ export type Delivery = {
       actor: TaskEventActor;
       title?: string;
       dueAt: Date | null;
-      criteria: string;
+      criteria?: string;
     },
   ): Promise<{ taskId: string; dueAt: Date | null; criteria: string } | null>;
+  /**
+   * The open card an external employee's turn answers for (spec §9): the card the run hangs on or
+   * opened, the card the run that queued it left open (`cardRef`, `adoptRunnerCard`), or else the
+   * open followed card of this employee on this thread. Null when there is none.
+   */
+  cardOfExternalTurn(
+    tenantId: string,
+    turn: {
+      runId: string;
+      agentId: string;
+      threadId: string;
+      cardRef?: string;
+    },
+  ): Promise<(RunCard & { dueReported: boolean }) | null>;
+  /**
+   * The due time an external employee said in its reply (「预计 16:00」, spec §9), the first one only:
+   * on an accepted, open followed card that has no reported time yet, `due_reported` becomes true,
+   * `original_due_at` takes it when empty, and `due_at` takes it unless the person set one of their
+   * own (an `edited` line naming `dueAt`), as for `accept`. False when nothing was written.
+   */
+  reportDue(
+    tenantId: string,
+    taskId: string,
+    input: { dueAt: Date },
+  ): Promise<boolean>;
   /**
    * The evidence gate passed (`deliver_task`): an accepted, running card -- or one already awaiting
    * review, handed more -- goes to `awaiting_review`, with this hand-in merged into its
@@ -445,6 +471,82 @@ export function createDelivery(database: Database): Delivery {
         return row ?? null;
       }),
 
+    cardOfExternalTurn: (tenantId, turn) =>
+      runAsTenant(tenantId, async () => {
+        const named = or(
+          eq(tasks.activeRunRef, turn.runId),
+          eq(tasks.runRef, turn.runId),
+          ...(turn.cardRef ? [eq(tasks.runRef, turn.cardRef)] : []),
+        );
+        const [row] = await database
+          .select({
+            id: tasks.id,
+            tracked: tasks.tracked,
+            status: tasks.status,
+            acceptedAt: tasks.acceptedAt,
+            title: tasks.title,
+            source: tasks.source,
+            triggerSource: tasks.triggerSource,
+            channelRef: tasks.channelRef,
+            deviceId: tasks.deviceId,
+            threadRef: tasks.threadRef,
+            criteria: tasks.criteria,
+            parentTaskId: tasks.parentTaskId,
+            dueReported: tasks.dueReported,
+          })
+          .from(tasks)
+          .where(
+            and(
+              eq(tasks.tenantId, tenantId),
+              eq(tasks.executorAgentId, turn.agentId),
+              inArray(tasks.status, [...OPEN_STATUSES]),
+              or(
+                named,
+                and(
+                  eq(tasks.tracked, true),
+                  eq(tasks.threadRef, turn.threadId),
+                ),
+              ),
+            ),
+          )
+          .orderBy(
+            desc(sql`${tasks.activeRunRef} is not distinct from ${turn.runId}`),
+            desc(sql`coalesce(${named}, false)`),
+            desc(sql`coalesce(${tasks.acceptedAt}, ${tasks.createdAt})`),
+            desc(tasks.createdAt),
+          )
+          .limit(1);
+        return row ?? null;
+      }),
+
+    reportDue: (tenantId, taskId, input) =>
+      runAsTenant(tenantId, async () => {
+        const at = input.dueAt.toISOString();
+        const rows = await database
+          .update(tasks)
+          .set({
+            dueAt: sql`case when exists (
+                select 1 from ${taskEvents}
+                where ${taskEvents.tenantId} = ${tenantId}
+                  and ${taskEvents.taskId} = ${tasks.id}
+                  and ${taskEvents.kind} = 'edited'
+                  and ${taskEvents.detail}->'after'->>'dueAt' is not null
+              ) then ${tasks.dueAt} else ${at}::timestamptz end`,
+            originalDueAt: sql`coalesce(${tasks.originalDueAt}, ${at}::timestamptz)`,
+            dueReported: true,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              openTracked(tenantId, taskId),
+              isNotNull(tasks.acceptedAt),
+              eq(tasks.dueReported, false),
+            ),
+          )
+          .returning({ id: tasks.id });
+        return rows.length > 0;
+      }),
+
     accept: (tenantId, taskId, input) =>
       runAsTenant(tenantId, () =>
         database.transaction(async (transaction) => {
@@ -481,7 +583,10 @@ export function createDelivery(database: Database): Delivery {
                * person made (an `edited` line naming `criteria`) counts; the coworker's words stay in
                * its 接下 line below.
                */
-              criteria: sql`case when exists (
+              criteria:
+                input.criteria === undefined
+                  ? sql`${tasks.criteria}`
+                  : sql`case when exists (
                   select 1 from ${taskEvents}
                   where ${taskEvents.tenantId} = ${tenantId}
                     and ${taskEvents.taskId} = ${tasks.id}
@@ -527,13 +632,13 @@ export function createDelivery(database: Database): Delivery {
               title: card.title,
               dueAt: input.dueAt?.toISOString() ?? null,
               dueReported: input.dueAt !== null,
-              criteria: input.criteria,
+              criteria: input.criteria ?? null,
             },
           });
           return {
             taskId,
             dueAt: card.dueAt,
-            criteria: card.criteria ?? input.criteria,
+            criteria: card.criteria ?? input.criteria ?? "",
           };
         }),
       ),
