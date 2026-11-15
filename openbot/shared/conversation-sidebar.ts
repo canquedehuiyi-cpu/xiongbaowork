@@ -106,12 +106,16 @@ export type SidebarContext = {
     managedBy?: string;
     compactedAt?: string | null;
   }[];
-  /** 最近一次压缩；`summarizedCount` 是被摘要替代的消息条数（没记下这个数的记录为 null）。 */
+  /**
+   * 最近一次压缩；`summarizedCount` 是被摘要替代的消息条数（没记下这个数的记录为 null），`uptoMessageId` 是
+   * 被替代的最后一条消息的 id（对话里的「已压缩」分隔线画在它后面）。
+   */
   lastCompaction?: {
     id: string;
     auto: boolean;
     at: string;
     summarizedCount: number | null;
+    uptoMessageId?: string | null;
   } | null;
 };
 

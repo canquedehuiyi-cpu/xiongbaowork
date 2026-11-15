@@ -612,6 +612,7 @@ export function createConversationSidebar(
                     agentId: threadCompactions.agentId,
                     auto: threadCompactions.auto,
                     summarizedCount: threadCompactions.summarizedCount,
+                    uptoMessageId: threadCompactions.uptoMessageId,
                     createdAt: threadCompactions.createdAt,
                   },
                 )
@@ -639,6 +640,7 @@ export function createConversationSidebar(
                 auto: row.auto,
                 at: row.createdAt.toISOString(),
                 summarizedCount: row.summarizedCount,
+                uptoMessageId: row.uptoMessageId,
               },
             ]),
           )

@@ -7,7 +7,13 @@ import {
   useCopilotKit,
 } from "@copilotkit/react-core/v2";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { BotOrb } from "@/components/agents/bot-orb";
 import { ConversationAllowances } from "@/components/approvals/conversation-allowances";
 import {
@@ -40,6 +46,7 @@ import { VoiceCallWidget } from "@/components/channels/voice-call-widget";
 import { HandoffResumeNotice } from "@/components/computer/handoff-resume-notice";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { StarterSuggestions } from "@/components/starter-tour/starter-suggestions";
+import { toast } from "@/components/ui/toast";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   answerPersonQuestionMutationOptions,
@@ -95,7 +102,14 @@ import { useConversationModel } from "@/lib/models/run-model";
 import { useSkillCommands } from "@/lib/plugins/skill-commands";
 import { reportIfQuotaError } from "@/lib/quota/guidance";
 import { publishedSandboxedQueryOptions } from "@/lib/sandboxed/queries";
-import { invalidateConversationSidebar } from "@/lib/threads/sidebar";
+import {
+  autoCompactionNotice,
+  COMPACTION_DONE_EVENT,
+  conversationalCount,
+  invalidateConversationSidebar,
+  publishTranscriptCount,
+  sidebarQueryOptions,
+} from "@/lib/threads/sidebar";
 import {
   askChannelAgent,
   messageText,
@@ -112,6 +126,7 @@ import {
 import { useVoiceCall } from "@/lib/voice/use-voice-call";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { queryClient } from "@/query-client";
+import type { SidebarContext } from "../../../../shared/conversation-sidebar";
 import { newId } from "../../lib/new-id";
 
 /**
@@ -415,6 +430,9 @@ function authoredComponents(): ReadonlySet<string> {
   );
 }
 
+/** 侧栏数据里的最近一次压缩。 */
+type LastCompaction = NonNullable<SidebarContext["lastCompaction"]>;
+
 /**
  * One channel's conversation with one coworker.
  *
@@ -424,9 +442,15 @@ function authoredComponents(): ReadonlySet<string> {
 export function ChannelChat({
   channel,
   runtimeAgentId,
+  compactionDivider,
 }: {
   channel: AgentChannel;
   runtimeAgentId: string;
+  /**
+   * 默认皮肤的对话侧栏：压缩会话的分隔线怎么画（侧栏里的组件，由路由给）。给了才读最近一次压缩、报对话消息
+   * 条数给压缩弹窗、接自动压缩的运行事件。
+   */
+  compactionDivider?: (compaction: LastCompaction) => ReactNode;
 }) {
   // The core attaches the frontend tool registry; direct agent runs do not.
   const { copilotkit } = useCopilotKit();
@@ -438,6 +462,9 @@ export function ChannelChat({
   const botProfile = agentProfiles?.find(
     (profile) => profile.id === runtimeAgentId,
   );
+  // 运行事件里的自动压缩只在默认皮肤（给了分隔线的）处理；见 `onCustomEvent`。
+  const compactingHere = useRef(false);
+  compactingHere.current = compactionDivider !== undefined;
   const localAgentId = channelAgentId(channel.id);
   const { agent, isReady } = useAgent({
     agentId: localAgentId,
@@ -1234,6 +1261,19 @@ export function ChannelChat({
       // A quota refusal also opens the guidance dialog (story K4); see `runErrorReason`.
       onRunErrorEvent: ({ event }) => fail(runErrorReason(event), true),
       onRunFailed: ({ error }) => fail(stoppedReason(error)),
+      /*
+       * 这一轮开始前自动压缩了：侧栏的用量和对话里的「已自动压缩」分隔线马上再读。没压成：这一轮照常跑，
+       * 提示一次（每轮至多一个这样的事件）。只在默认皮肤。
+       */
+      onCustomEvent: ({ event }) => {
+        if (!compactingHere.current) return;
+        if (event.name === COMPACTION_DONE_EVENT)
+          void invalidateConversationSidebar(queryClient, {
+            threadId: channel.threadId,
+          });
+        const notice = autoCompactionNotice(event);
+        if (notice) toast.add({ title: notice, type: "warning" });
+      },
       onRunFinishedEvent: ({ event }) => {
         // 对话侧栏的用量、目标和输出内容在这一轮里可能变了：马上再读，不等 15 秒的轮询。
         void invalidateConversationSidebar(queryClient, {
@@ -1337,6 +1377,30 @@ export function ChannelChat({
   const botName = botProfile?.name ?? channel.name;
   const botSeed = botProfile?.avatarSeed || runtimeAgentId;
 
+  /*
+   * 压缩会话（默认皮肤）：分隔线画在被替代的最后一条后面，数据是侧栏那一份（同一个查询，不多读）；压缩弹窗
+   * 要这段对话有几条消息，从这里报过去。
+   */
+  const sidebarSource = { threadId: channel.threadId };
+  const lastCompaction =
+    useQuery({
+      ...sidebarQueryOptions(sidebarSource),
+      enabled: compactionDivider !== undefined,
+    }).data?.context.lastCompaction ?? null;
+  const conversational = conversationalCount(agent.messages);
+  const reportsCount = compactionDivider !== undefined;
+  useEffect(() => {
+    if (reportsCount) publishTranscriptCount(channel.threadId, conversational);
+  }, [reportsCount, channel.threadId, conversational]);
+  const compaction =
+    compactionDivider && lastCompaction
+      ? {
+          uptoMessageId: lastCompaction.uptoMessageId ?? null,
+          summarizedCount: lastCompaction.summarizedCount,
+          divider: compactionDivider(lastCompaction),
+        }
+      : null;
+
   const sayRef = useRef(say);
   sayRef.current = say;
   const stopEpoch = useRef(0);
@@ -1431,6 +1495,7 @@ export function ChannelChat({
             // Remounted per conversation, so opening one puts the caret in its composer once.
             autoFocus
             threadId={channel.threadId}
+            compaction={compaction}
             // The clock beside `+`: a routine for the Bot this conversation talks to, posting here.
             routine={
               channel.active

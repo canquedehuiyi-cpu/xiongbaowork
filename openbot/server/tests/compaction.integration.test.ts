@@ -743,7 +743,13 @@ describe("reading a compaction back", () => {
     const sidebar = await routes.sidebar(threadId);
     expect(
       (sidebar.body.context as { lastCompaction?: unknown }).lastCompaction,
-    ).toMatchObject({ id, auto: false, summarizedCount: 10 });
+    ).toMatchObject({
+      id,
+      auto: false,
+      summarizedCount: 10,
+      // 分隔线画在被替代的最后一条后面：20 条保留最近 10 条，替代到第 10 条。
+      uptoMessageId: messages[9]?.id,
+    });
 
     // 再压一次：被替代的条数含上一次替代的。
     const more = [...messages, ...history(12, "n")];

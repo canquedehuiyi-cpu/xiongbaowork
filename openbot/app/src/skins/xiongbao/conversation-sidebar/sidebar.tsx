@@ -1,14 +1,16 @@
 import {
   IconChevronDown,
+  IconChevronLeft,
   IconChevronRight,
   IconChevronsLeft,
   IconLayoutSidebarRight,
 } from "@tabler/icons-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { useDetailPanelWidth } from "@/components/layout/detail-panel";
 import {
   type SidebarSource,
   useConversationSidebar,
+  useTranscriptCount,
 } from "@/lib/threads/sidebar";
 import { cn } from "@/lib/utils";
 import type { ConversationSidebar as SidebarData } from "../../../../../shared/conversation-sidebar";
@@ -18,11 +20,14 @@ import {
   ContextMeter,
   contextMeterLabel,
   contextSummary,
+  PerAgentContext,
 } from "./context";
 import {
   EnvironmentBody,
   EnvironmentIcon,
   environmentSummary,
+  MembersBody,
+  membersSummary,
 } from "./environment";
 import { GoalBody, GoalIcon, goalSummary, type PendingApproval } from "./goal";
 import { OutputsBody, OutputsIcon, outputsSummary } from "./outputs";
@@ -32,7 +37,11 @@ import { OutputsBody, OutputsIcon, outputsSummary } from "./outputs";
  *
  * - `panel`：桌面对话右边的一栏，宽 300px；整栏能收成 56px 图标条（目标有待确认时带橙点，上下文是
  *   百分比小条，输出内容带数量）。每块单独收起时标题右边留一句摘要。收起状态按对话记住（`collapse.ts`）。
- * - `page`：手机上的全屏页，四块同样排列，没有图标条。
+ * - `page`：手机上的全屏页（{@link SidebarPage}，对话顶栏的 {@link SidebarPageButton} 打开），四块同样排列，
+ *   没有图标条；每块收起与否和电脑上记在同一个键下。
+ *
+ * 群组（数据里有 `environment.members`）：环境是成员列表，上下文每位员工一根小条（点名字看明细和压缩），
+ * 目标和输出内容按查看者取（服务器按人隔离）。
  *
  * 画成什么样还看对话区留得出多宽（`DetailPanel` 用 ResizeObserver 量的宽度，{@link sidebarRoom}）：
  * 展开后对话区不足 640px 时只画图标条（记住的「展开」不改，窗口放宽了就回来）；连图标条加 400px 对话区
@@ -76,16 +85,26 @@ export function ConversationSidebar({
   source,
   variant,
   agentId,
+  title,
+  peopleCount,
 }: {
   source: SidebarSource;
   variant: "panel" | "page";
-  /** 单聊的员工：环境里的齿轮（去员工配置页）和项目选择器要用。 */
+  /** 单聊的员工：环境里的齿轮（去员工配置页）、项目选择器和压缩会话要用。 */
   agentId?: string;
+  /** 对话的名字：单聊是员工名（压缩弹窗里「产品官仍然记得要点」），群组是群名（「环境 · 产品研发组」）。 */
+  title?: string;
+  /** 群组里有几个人（「3 位员工 · 2 个人」）。 */
+  peopleCount?: number;
 }) {
   const collapse = useSidebarCollapse(collapseKeyOf(source));
   const room = sidebarRoom(useDetailPanelWidth());
   const { sidebar, pending: inboxPending } = useConversationSidebar(source);
+  const messageCount = useTranscriptCount(
+    "threadId" in source ? source.threadId : null,
+  );
   const data = sidebar.data;
+  const members = data?.environment.members;
   /*
    * 「去确认」指向哪一条：审批收件箱里这个对话最新的那条为准（对话里那张卡就是按它画的，点了一定滚得到
    * 或就地画得出）；收件箱里没有时才用服务器从任务卡读到的那条。
@@ -129,7 +148,13 @@ export function ConversationSidebar({
         </button>
         <button
           aria-label={
-            data ? `环境：${environmentSummary(data.environment)}` : "环境"
+            data
+              ? `环境：${
+                  members
+                    ? membersSummary(members, peopleCount)
+                    : environmentSummary(data.environment)
+                }`
+              : "环境"
           }
           className={STRIP_BUTTON}
           disabled={forced}
@@ -186,6 +211,7 @@ export function ConversationSidebar({
     name: SidebarSection,
     summary: string | null,
     body: ReactNode,
+    heading?: string,
   ) => {
     const { open, toggle } = collapse.section(name);
     return (
@@ -212,7 +238,7 @@ export function ConversationSidebar({
                 className="size-3 shrink-0 stroke-[2.5] text-(--wb-muted)"
               />
             )}
-            {SECTION_NAMES[name]}
+            {heading ?? SECTION_NAMES[name]}
             {!open && summary ? (
               <small
                 className="ml-auto min-w-0 truncate pl-2 font-normal text-(--wb-muted) text-[12px]"
@@ -261,10 +287,15 @@ export function ConversationSidebar({
       ) : null}
       {data ? (
         <Sections
-          data={data}
-          section={section}
-          pending={pending}
           agentId={agentId}
+          data={data}
+          messageCount={messageCount}
+          peopleCount={peopleCount}
+          pending={pending}
+          phone={variant === "page"}
+          section={section}
+          source={source}
+          title={title}
         />
       ) : null}
     </aside>
@@ -279,33 +310,71 @@ function Sections({
   section,
   pending,
   agentId,
+  source,
+  title,
+  peopleCount,
+  messageCount,
+  phone,
 }: {
   data: SidebarData;
   section: (
     name: SidebarSection,
     summary: string | null,
     body: ReactNode,
+    heading?: string,
   ) => ReactNode;
   pending: PendingApproval;
   agentId?: string;
+  source: SidebarSource;
+  title?: string;
+  peopleCount?: number;
+  messageCount: number | null;
+  phone: boolean;
 }) {
+  const members = data.environment.members;
+  const perAgent = data.context.perAgent;
   return (
     <>
-      {section(
-        "environment",
-        environmentSummary(data.environment),
-        <EnvironmentBody agentId={agentId} environment={data.environment} />,
-      )}
+      {members
+        ? section(
+            "environment",
+            membersSummary(members, peopleCount),
+            <MembersBody members={members} peopleCount={peopleCount} />,
+            title ? `环境 · ${title}` : undefined,
+          )
+        : section(
+            "environment",
+            environmentSummary(data.environment),
+            <EnvironmentBody
+              agentId={agentId}
+              environment={data.environment}
+            />,
+          )}
       {section(
         "goal",
         goalSummary(data.goal, pending),
         <GoalBody goal={data.goal} pending={pending} />,
       )}
-      {section(
-        "context",
-        contextSummary(data.context),
-        <ContextBody context={data.context} />,
-      )}
+      {members && perAgent
+        ? section(
+            "context",
+            contextSummary(data.context),
+            <PerAgentContext
+              perAgent={perAgent}
+              phone={phone}
+              source={source}
+            />,
+            "上下文 · 每位员工各算各的",
+          )
+        : section(
+            "context",
+            contextSummary(data.context),
+            <ContextBody
+              compact={{ source, agentId, name: title, messageCount }}
+              context={data.context}
+              phone={phone}
+            />,
+          )}
       {section(
         "outputs",
         outputsSummary(data.outputs),
@@ -341,5 +410,90 @@ export function SidebarCollapseButton({
         className="size-[18px] stroke-[1.8]"
       />
     </button>
+  );
+}
+
+/** 手机上对话顶栏的按钮：打开全屏侧栏。 */
+export function SidebarPageButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      aria-label="查看对话侧栏"
+      className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-(--wb-radius-sm) border border-(--wb-line2) bg-(--wb-card2) text-(--wb-fg) outline-none transition-colors hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-(--wb-accent)"
+      data-sidebar-page-button=""
+      onClick={onOpen}
+      type="button"
+    >
+      <IconLayoutSidebarRight
+        aria-hidden="true"
+        className="size-[18px] stroke-[1.8]"
+      />
+    </button>
+  );
+}
+
+/**
+ * 手机上的全屏侧栏（设计稿「手机」）：盖住整屏的一页，顶上「返回对话」和「<名字> · 这个对话」，下面四块
+ * 同样排列。打开时焦点落在「返回对话」上，Esc 也返回。
+ */
+export function SidebarPage({
+  source,
+  title,
+  agentId,
+  peopleCount,
+  onBack,
+}: {
+  source: SidebarSource;
+  title?: string;
+  agentId?: string;
+  peopleCount?: number;
+  onBack: () => void;
+}) {
+  const back = useRef<HTMLButtonElement>(null);
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+  useEffect(() => {
+    back.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented)
+        onBackRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  const heading = `${title ?? "对话"} · 这个对话`;
+  return (
+    <div
+      aria-label={heading}
+      aria-modal="true"
+      className="fixed inset-0 z-40 flex flex-col bg-(--wb-list) text-(--wb-fg) motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200"
+      data-full-screen=""
+      data-sidebar-page=""
+      role="dialog"
+    >
+      <header className="flex shrink-0 items-center gap-2 border-(--wb-line) border-b px-2 pt-[env(safe-area-inset-top)]">
+        <button
+          className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-0.5 rounded-(--wb-radius-sm) border-0 bg-transparent pr-2.5 pl-1 text-(--wb-accent) text-[15px] outline-none focus-visible:outline-2 focus-visible:outline-(--wb-accent)"
+          onClick={onBack}
+          ref={back}
+          type="button"
+        >
+          <IconChevronLeft
+            aria-hidden="true"
+            className="size-[22px] stroke-[1.8]"
+          />
+          返回对话
+        </button>
+        <b className="min-w-0 truncate font-semibold text-[16px]">{heading}</b>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+        <ConversationSidebar
+          agentId={agentId}
+          peopleCount={peopleCount}
+          source={source}
+          title={title}
+          variant="page"
+        />
+      </div>
+    </div>
   );
 }
