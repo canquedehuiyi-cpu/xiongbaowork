@@ -139,6 +139,14 @@ export function createModelRoutes(
      * tests.
      */
     outbound?: OutboundPolicy;
+    /**
+     * The catalogue's context window for a model (models.dev `limit.context`), used to pre-fill
+     * `context_window` when a model is added. Absent or undefined: the column stays null.
+     */
+    contextWindowFor?: (
+      provider: string,
+      modelName: string,
+    ) => Promise<number | undefined>;
   } = {},
 ) {
   const routes = new Hono<Ctx>();
@@ -153,6 +161,7 @@ export function createModelRoutes(
         baseUrl: modelRegistry.baseUrl,
         modelName: modelRegistry.modelName,
         label: modelRegistry.label,
+        contextWindow: modelRegistry.contextWindow,
         enabled: modelRegistry.enabled,
         updatedAt: modelRegistry.updatedAt,
       })
@@ -288,6 +297,11 @@ export function createModelRoutes(
      * its name — the row's `credential_id` is the reference — so the id is the only name it needs.
      */
     const registryId = crypto.randomUUID();
+    // Pre-filled from the catalogue; a lookup that fails leaves it unknown rather than failing the add.
+    const contextWindow =
+      (await options
+        .contextWindowFor?.(provider, modelName)
+        .catch(() => undefined)) ?? null;
     /*
      * ONE TRANSACTION FOR THE KEY AND THE ROW THAT POINTS AT IT.
      *
@@ -324,6 +338,7 @@ export function createModelRoutes(
             credentialId: credential.id,
             modelName,
             label: (body.label ?? "").trim() || null,
+            contextWindow,
           })
           .returning();
       });
@@ -451,11 +466,31 @@ export function createModelRoutes(
     const body = await context.req
       .json<Record<string, unknown>>()
       .catch((): Record<string, unknown> => ({}));
-    const patch: { enabled?: boolean; label?: string | null } = {};
+    const patch: {
+      enabled?: boolean;
+      label?: string | null;
+      contextWindow?: number | null;
+    } = {};
     if (typeof body.enabled === "boolean") patch.enabled = body.enabled;
     if (body.label === null) patch.label = null;
     else if (typeof body.label === "string")
       patch.label = body.label.trim().slice(0, 80) || null;
+    if ("contextWindow" in body) {
+      const value = body.contextWindow;
+      if (value === null) patch.contextWindow = null;
+      else if (
+        typeof value === "number" &&
+        Number.isSafeInteger(value) &&
+        value > 0 &&
+        value <= 2_147_483_647
+      )
+        patch.contextWindow = value;
+      else
+        return context.json(
+          { error: "contextWindow 必须是正整数或 null。" },
+          400,
+        );
+    }
     if (Object.keys(patch).length === 0) {
       return context.json({ error: "没有需要更改的内容。" }, 400);
     }

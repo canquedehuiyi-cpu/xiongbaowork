@@ -644,6 +644,8 @@ export type Capability = {
   tools?: boolean;
   text?: boolean;
   released?: number;
+  /** models.dev's `limit.context`: the context window in tokens. */
+  contextWindow?: number;
 };
 
 /** models.dev's catalogue, by `vendor/id`, for the four vendors a deployment can name directly. */
@@ -669,6 +671,8 @@ export function parseCapabilities(body: unknown): Capabilities {
       const outputs = (model.modalities as { output?: unknown } | undefined)
         ?.output;
       const cost = model.cost as { input?: unknown } | undefined;
+      const context = (model.limit as { context?: unknown } | undefined)
+        ?.context;
       found.set(`${vendor}/${id}`, {
         ...(typeof model.name === "string" ? { name: model.name } : {}),
         ...(typeof model.family === "string" ? { family: model.family } : {}),
@@ -684,6 +688,11 @@ export function parseCapabilities(body: unknown): Capabilities {
         ...(Array.isArray(outputs) ? { text: outputs.includes("text") } : {}),
         ...(typeof model.release_date === "string"
           ? { released: seconds(model.release_date) }
+          : {}),
+        ...(typeof context === "number" &&
+        Number.isSafeInteger(context) &&
+        context > 0
+          ? { contextWindow: context }
           : {}),
       });
     }
@@ -1109,6 +1118,20 @@ export function createModelCatalogue(options: {
     async allows(id: string): Promise<boolean> {
       const catalogue = await read();
       return catalogue.models.some((model) => model.id === id);
+    },
+    /**
+     * The context window models.dev lists for a model a tenant names, or undefined when the
+     * catalogue does not know it (a custom endpoint, a vendor outside the four). Reads the
+     * capability data at most as often as the schedule; a failed read answers undefined.
+     */
+    async contextWindowFor(
+      providerId: string,
+      modelName: string,
+    ): Promise<number | undefined> {
+      if (!CAPABILITY_VENDORS.includes(providerId)) return undefined;
+      await readCapabilities();
+      const bare = modelName.split("/").at(-1) ?? modelName;
+      return capabilities?.data.get(`${providerId}/${bare}`)?.contextWindow;
     },
     /** The efforts one offered model takes, or none. */
     async effortsFor(id: string): Promise<string[]> {

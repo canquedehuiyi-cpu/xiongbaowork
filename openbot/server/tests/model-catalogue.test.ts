@@ -11,6 +11,7 @@ import {
   modelLabel,
   modelsUrl,
   modelVendor,
+  parseCapabilities,
   REFRESH_MS,
   reportModelRejected,
 } from "../src/model-catalogue";
@@ -1412,5 +1413,51 @@ describe("GET /api/models/available", () => {
       "/available",
     );
     expect(response.status).toBe(403);
+  });
+});
+
+describe("model context window", () => {
+  test("parseCapabilities keeps limit.context as contextWindow", () => {
+    const found = parseCapabilities({
+      anthropic: {
+        models: {
+          "claude-x": {
+            name: "Claude X",
+            limit: { context: 200000, output: 8000 },
+          },
+          "claude-y": { name: "Claude Y", limit: { context: 0 } },
+          "claude-z": { name: "Claude Z" },
+        },
+      },
+    });
+    expect(found.get("anthropic/claude-x")?.contextWindow).toBe(200000);
+    expect(found.get("anthropic/claude-y")?.contextWindow).toBeUndefined();
+    expect(found.get("anthropic/claude-z")?.contextWindow).toBeUndefined();
+  });
+
+  test("contextWindowFor answers from the capability data, by provider and model name", async () => {
+    const { fetcher } = provider({
+      anthropic: {
+        models: {
+          "claude-x": { name: "Claude X", limit: { context: 200000 } },
+        },
+      },
+    });
+    const catalogue = createModelCatalogue({
+      model: { provider: "anthropic", defaultModel: "claude-x" },
+      apiKey: async () => KEY,
+      environment: {},
+      fetch: fetcher,
+      capabilitiesUrl: "https://capabilities.test/api.json",
+    });
+    expect(await catalogue.contextWindowFor("anthropic", "claude-x")).toBe(
+      200000,
+    );
+    expect(
+      await catalogue.contextWindowFor("anthropic", "claude-unknown"),
+    ).toBeUndefined();
+    expect(
+      await catalogue.contextWindowFor("custom", "claude-x"),
+    ).toBeUndefined();
   });
 });

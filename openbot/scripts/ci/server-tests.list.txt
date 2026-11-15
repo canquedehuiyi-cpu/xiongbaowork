@@ -293,6 +293,7 @@ tests/continuation-target-local.test.ts
 tests/continuation-target-store.integration.test.ts
 tests/control-refusal-end-to-end.test.ts
 tests/conversation-rename.integration.test.ts
+tests/conversation-sidebar-schema.integration.test.ts
 tests/conversation-title.integration.test.ts
 tests/copilot-forwarded-headers.test.ts
 tests/copilot-runtime-frames.integration.test.ts

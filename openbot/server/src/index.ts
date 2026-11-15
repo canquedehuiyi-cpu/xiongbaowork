@@ -5165,7 +5165,11 @@ await startupLifecycle.run(async (startup) => {
       credentialStore,
       config.keyEncryptionKey,
       quota,
-      { outbound: modelOutbound },
+      {
+        outbound: modelOutbound,
+        contextWindowFor: (provider, modelName) =>
+          modelCatalogue.contextWindowFor(provider, modelName),
+      },
     ),
   );
 
