@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { externalField } from "../src/agents/profile-store";
+import { externalFor } from "../src/agents/routes";
 
 /*
  * 外部员工 Task 11: what the generic agent DTO says about an external employee (`device_acp`), so its
@@ -74,6 +75,43 @@ describe("externalField", () => {
           workdirRef: "fld_web",
         },
       }),
+    ).toEqual({});
+  });
+});
+
+describe("externalFor", () => {
+  const run = externalField({
+    type: "device_acp",
+    configuration: {
+      deviceId: "dev-mac",
+      harness: "codex",
+      workdirRef: "fld_web",
+      permissions: {},
+    },
+  }).externalRun;
+
+  test("its hirer reads the whole run", () => {
+    expect(
+      externalFor(
+        { id: "hirer", role: "user" },
+        { ownerUserId: "hirer", externalRun: run },
+      ),
+    ).toEqual({ external: run });
+  });
+
+  test("anybody else, an administrator included, reads only which agent it is", () => {
+    for (const actor of [
+      { id: "admin", role: "admin" as const },
+      { id: "someone", role: "user" as const },
+    ])
+      expect(
+        externalFor(actor, { ownerUserId: "hirer", externalRun: run }),
+      ).toEqual({ external: { harness: "codex" } });
+  });
+
+  test("any other Bot says nothing", () => {
+    expect(
+      externalFor({ id: "hirer", role: "user" }, { ownerUserId: "hirer" }),
     ).toEqual({});
   });
 });

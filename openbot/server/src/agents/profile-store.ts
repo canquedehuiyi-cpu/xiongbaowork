@@ -1,10 +1,10 @@
 import { declaredHarness } from "@openbot/shared/harnesses";
 import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import {
-  ACP_RULE_DEFAULTS,
   type AcpHarness,
   type AcpRuleKey,
   type AcpRuleValue,
+  acpRulesFrom,
 } from "../../../shared/acp";
 import { capabilityRefusal } from "../admin/capabilities";
 import { englishName } from "../brand";
@@ -526,8 +526,8 @@ const EXTERNAL_HARNESSES: readonly AcpHarness[] = [
 
 /**
  * An external employee's computer, agent, folder and rules, read back out of its configuration. See
- * `AgentProfile.externalRun`. A rule saved with a value it cannot take reads as "ask", as the permission
- * bridge reads it (`acpRulesOf`); a configuration missing its computer or folder publishes none.
+ * `AgentProfile.externalRun`. Its rules are read exactly as the permission bridge reads them
+ * (`acpRulesFrom`); a configuration missing its computer or folder publishes none.
  */
 export function externalField(row: {
   type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
@@ -545,21 +545,7 @@ export function externalField(row: {
     !EXTERNAL_HARNESSES.includes(harness)
   )
     return {};
-  const stored =
-    saved.permissions && typeof saved.permissions === "object"
-      ? (saved.permissions as Record<string, unknown>)
-      : {};
-  const rules = { ...ACP_RULE_DEFAULTS };
-  for (const key of Object.keys(ACP_RULE_DEFAULTS) as AcpRuleKey[]) {
-    if (!(key in stored)) continue;
-    const value = stored[key];
-    rules[key] =
-      value === "direct" ||
-      value === "ask" ||
-      (value === "dangerous" && key === "runCommand")
-        ? (value as AcpRuleValue)
-        : "ask";
-  }
+  const rules = acpRulesFrom(saved);
   return {
     externalRun: {
       harness,

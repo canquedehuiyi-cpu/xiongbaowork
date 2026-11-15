@@ -1440,6 +1440,23 @@ function boundedText(
     : { ok: false, error };
 }
 
+/**
+ * What an external employee's DTO says about how it runs. Its hirer reads all of it: the computer,
+ * folder, own agent and rules its badge, card and settings show. Anybody else who can read the Bot at
+ * all (an administrator, through the admin doors) reads only which agent it is, for the badge: the
+ * hirer's computer, folders and rules are the hirer's own (外部员工 spec §1: only the hirer runs it).
+ */
+export function externalFor(
+  actor: AgentActor,
+  agent: Pick<AgentProfile, "externalRun" | "ownerUserId">,
+): { external?: AgentProfile["externalRun"] | { harness: string } } {
+  const run = agent.externalRun;
+  if (!run) return {};
+  return agent.ownerUserId === actor.id
+    ? { external: run }
+    : { external: { harness: run.harness } };
+}
+
 function agentDto(actor: AgentActor, agent: AgentProfile) {
   return {
     id: agent.id,
@@ -1480,8 +1497,9 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     ...(agent.instructions ? { instructions: agent.instructions } : {}),
     // What runs it, by name, so a page can say that where it would otherwise show an address.
     ...(agent.framework ? { framework: agent.framework } : {}),
-    // 外部员工: its computer, agent, folder and rules, by reference. Only its hirer sees the Bot.
-    ...(agent.externalRun ? { external: agent.externalRun } : {}),
+    // 外部员工: its computer, agent, folder and rules, by reference, to its hirer; which agent it
+    // is, to anyone else who can read it (an administrator).
+    ...externalFor(actor, agent),
     canManage: canManageAgent(actor, agent),
     // Ownership, kept separate from permission. `canManage` is also true for an administrator on
     // another user's coworker, so a roster that split "mine" on it would file other people's work

@@ -1,8 +1,9 @@
+import { and, eq, isNull, sql } from "drizzle-orm";
 import {
-  ACP_RULE_DEFAULTS,
   type AcpPermissionOptionFrame,
   type AcpRuleKey,
   type AcpRuleValue,
+  acpRulesFrom,
 } from "../../../../shared/acp";
 import {
   WITHDRAWN_APPROVALS_OFF,
@@ -12,7 +13,6 @@ import {
   ONCE_ONLY_SOURCES,
   offersStandingRule,
 } from "../../../../shared/standing-rule";
-import { and, eq, isNull, sql } from "drizzle-orm";
 import { safetyRequirement } from "../../approvals/policy";
 import {
   type ApprovalAction,
@@ -115,8 +115,6 @@ export const ACP_RULE_LABELS: Record<AcpRuleKey, string> = {
   network: "联网下载、装依赖",
   push: "提交并推送代码",
 };
-
-const ACP_RULE_KEYS = Object.keys(ACP_RULE_DEFAULTS) as AcpRuleKey[];
 
 /** The ACP tool kinds XiongBao knows; anything else is `other`. */
 const KNOWN_KINDS = new Set([
@@ -339,19 +337,7 @@ export function acpAllowKey(candidate: {
 export function acpRulesOf(
   configuration: unknown,
 ): Record<AcpRuleKey, AcpRuleValue> {
-  const saved = record(record(configuration)?.permissions) ?? {};
-  const rules = { ...ACP_RULE_DEFAULTS };
-  for (const key of ACP_RULE_KEYS) {
-    if (!(key in saved)) continue;
-    const value = saved[key];
-    rules[key] =
-      value === "direct" ||
-      value === "ask" ||
-      (value === "dangerous" && key === "runCommand")
-        ? value
-        : "ask";
-  }
-  return rules;
+  return acpRulesFrom(configuration);
 }
 
 export type AcpPermissionDecision =
