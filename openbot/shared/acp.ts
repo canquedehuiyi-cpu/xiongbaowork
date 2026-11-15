@@ -35,6 +35,11 @@ export const ACP_RULE_DEFAULTS: Record<AcpRuleKey, AcpRuleValue> = {
  * authenticated as, like the live screen's; nothing in a frame can change that. Paths and commands
  * never travel: a working folder is a `fld_…` reference and an owner's own agent an `app_…`
  * reference, both resolved on the device.
+ *
+ * EVERY FRAME NAMES ITS EMPLOYEE. Two external employees can share one group thread on the same
+ * computer, so the device keeps each `(agentId, threadId)` apart: its own session, its own turns.
+ * Every frame but `acp.inventory` carries `agentId`, down and up; a down frame without one is
+ * dropped.
  */
 
 /**
@@ -56,6 +61,7 @@ export type AcpOpenFrame = {
 /** Server → device: one turn. A `turnId` already seen is acknowledged again, never run twice. */
 export type AcpPromptFrame = {
   type: "acp.prompt";
+  agentId: string;
   threadId: string;
   turnId: string;
   /** ACP content blocks (`session/prompt`'s `prompt`). */
@@ -65,6 +71,7 @@ export type AcpPromptFrame = {
 /** Server → device: cancel a queued or running turn (`session/cancel` when running). */
 export type AcpCancelFrame = {
   type: "acp.cancel";
+  agentId: string;
   threadId: string;
   turnId: string;
 };
@@ -72,6 +79,7 @@ export type AcpCancelFrame = {
 /** Server → device: the answer to `acp.permission.request`; `null` answers `cancelled`. */
 export type AcpPermissionAnswerFrame = {
   type: "acp.permission.answer";
+  agentId: string;
   requestId: string;
   optionId: string | null;
 };
@@ -83,7 +91,12 @@ export type AcpDownFrame =
   | AcpPermissionAnswerFrame;
 
 /** Device → server: the turn was received and will run (the server takes it off its queue). */
-export type AcpTurnAckFrame = { type: "acp.turn.ack"; turnId: string };
+export type AcpTurnAckFrame = {
+  type: "acp.turn.ack";
+  agentId: string;
+  threadId: string;
+  turnId: string;
+};
 
 /**
  * Device → server: one `session/update` of a turn, as the agent sent it. `seq` counts from 1 per
@@ -94,6 +107,7 @@ export type AcpTurnAckFrame = { type: "acp.turn.ack"; turnId: string };
  */
 export type AcpUpdateFrame = {
   type: "acp.update";
+  agentId: string;
   threadId: string;
   turnId: string;
   seq: number;
@@ -123,6 +137,7 @@ export type AcpPermissionFacts = {
  */
 export type AcpPermissionRequestFrame = {
   type: "acp.permission.request";
+  agentId: string;
   threadId: string;
   turnId: string;
   requestId: string;
@@ -138,6 +153,7 @@ export type AcpPermissionRequestFrame = {
  */
 export type AcpTurnEndFrame = {
   type: "acp.turn.end";
+  agentId: string;
   threadId: string;
   turnId: string;
   stopReason: string;
@@ -151,6 +167,7 @@ export type AcpTurnEndFrame = {
  */
 export type AcpSessionFrame = {
   type: "acp.session";
+  agentId: string;
   threadId: string;
   sessionId: string;
   loaded: boolean;
@@ -170,6 +187,7 @@ export type AcpErrorCode =
 /** Device → server: `acp.open` or `acp.prompt` failed. `message` is Chinese, for a person. */
 export type AcpErrorFrame = {
   type: "acp.error";
+  agentId: string;
   threadId: string;
   turnId?: string;
   code: AcpErrorCode;

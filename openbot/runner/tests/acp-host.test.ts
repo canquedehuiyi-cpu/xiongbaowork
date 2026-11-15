@@ -138,8 +138,13 @@ const open = (threadId: string, extra: Frame = {}): Frame => ({
   appRef: APP,
   ...extra,
 });
-const prompt = (threadId: string, turnId: string): Frame => ({
+const prompt = (
+  threadId: string,
+  turnId: string,
+  agentId = "agent_1",
+): Frame => ({
   type: "acp.prompt",
+  agentId,
   threadId,
   turnId,
   content: [{ type: "text", text: "hello" }],
@@ -194,6 +199,7 @@ test("acp.prompt acks, streams numbered updates and ends the turn", async () => 
   expect(turn.slice(1, 4)).toEqual([
     {
       type: "acp.update",
+      agentId: "agent_1",
       threadId: "th_1",
       turnId: "turn_1",
       seq: 1,
@@ -201,6 +207,7 @@ test("acp.prompt acks, streams numbered updates and ends the turn", async () => 
     },
     {
       type: "acp.update",
+      agentId: "agent_1",
       threadId: "th_1",
       turnId: "turn_1",
       seq: 2,
@@ -208,6 +215,7 @@ test("acp.prompt acks, streams numbered updates and ends the turn", async () => 
     },
     {
       type: "acp.update",
+      agentId: "agent_1",
       threadId: "th_1",
       turnId: "turn_1",
       seq: 3,
@@ -216,6 +224,7 @@ test("acp.prompt acks, streams numbered updates and ends the turn", async () => 
   ]);
   expect(turn[4]).toEqual({
     type: "acp.turn.end",
+    agentId: "agent_1",
     threadId: "th_1",
     turnId: "turn_1",
     stopReason: "end_turn",
@@ -224,6 +233,7 @@ test("acp.prompt acks, streams numbered updates and ends the turn", async () => 
   expect(ofType(t.frames, "acp.session")).toEqual([
     {
       type: "acp.session",
+      agentId: "agent_1",
       threadId: "th_1",
       sessionId: "sess_1",
       loaded: false,
@@ -451,12 +461,14 @@ test("pending permission is re-sent after reattach with the same requestId", asy
   // An answer to a request nobody asked is ignored.
   await t.host.handle({
     type: "acp.permission.answer",
+    agentId: "agent_1",
     requestId: "perm_unknown",
     optionId: "opt-allow",
   });
   expect(
     await t.host.handle({
       type: "acp.permission.answer",
+      agentId: "agent_1",
       requestId: asked.requestId,
       optionId: "opt-allow",
     }),
@@ -488,6 +500,7 @@ test("child dies mid-turn → acp.turn.end interrupted: true", async () => {
   await waitFor(() => ended(t.frames, "turn_1"));
   expect(ofType(ofTurn(t.frames, "turn_1"), "acp.turn.end")[0]).toEqual({
     type: "acp.turn.end",
+    agentId: "agent_1",
     threadId: "th_1",
     turnId: "turn_1",
     stopReason: "interrupted",
@@ -516,6 +529,7 @@ test("idle adapter closes after idleMs and next open loads the session when supp
   await waitFor(() => ofType(t.frames, "acp.session").length === 2);
   expect(ofType(t.frames, "acp.session")[1]).toEqual({
     type: "acp.session",
+    agentId: "agent_1",
     threadId: "th_1",
     sessionId: "sess_1",
     loaded: true,
@@ -638,6 +652,7 @@ test("cancel ends a queued turn at once and cancels the running one", async () =
 
   await t.host.handle({
     type: "acp.cancel",
+    agentId: "agent_1",
     threadId: "th_1",
     turnId: "turn_2",
   });
@@ -649,6 +664,7 @@ test("cancel ends a queued turn at once and cancels the running one", async () =
 
   await t.host.handle({
     type: "acp.cancel",
+    agentId: "agent_1",
     threadId: "th_1",
     turnId: "turn_1",
   });
@@ -749,6 +765,7 @@ test("frames sent on a socket that silently drops are replayed on the next attac
   t.host.attach((frame) => lostAgain.push(frame));
   await t.host.handle({
     type: "acp.cancel",
+    agentId: "agent_1",
     threadId: "th_1",
     turnId: "turn_1",
   });
@@ -913,6 +930,7 @@ test("an answer naming an option not offered is answered cancelled and reported"
   const asked = ofType(t.frames, "acp.permission.request")[0] as Frame;
   await t.host.handle({
     type: "acp.permission.answer",
+    agentId: "agent_1",
     requestId: asked.requestId,
     optionId: "opt-always",
   });
@@ -978,7 +996,12 @@ test("a turn cancelled while its session is being made ends cancelled", async ()
   await host.handle(prompt("th_1", "turn_1"));
   // The open's own start failed; the turn is now starting the agent again.
   await waitFor(() => ofType(frames, "acp.error").length === 1);
-  await host.handle({ type: "acp.cancel", threadId: "th_1", turnId: "turn_1" });
+  await host.handle({
+    type: "acp.cancel",
+    agentId: "agent_1",
+    threadId: "th_1",
+    turnId: "turn_1",
+  });
   await waitFor(() => ended(frames, "turn_1"));
   expect(ofType(ofTurn(frames, "turn_1"), "acp.turn.end")[0]).toMatchObject({
     stopReason: "cancelled",
@@ -1064,6 +1087,7 @@ test("an ack releases only frames sent before its own beat on this connection", 
   expect(ofType(t.frames, "acp.session")).toEqual([
     {
       type: "acp.session",
+      agentId: "agent_1",
       threadId: "th_1",
       sessionId: "sess_1",
       loaded: true,
@@ -1101,4 +1125,99 @@ test("past the byte cap on ended turns the oldest are dropped first", async () =
   t.host.attach(t.send);
   const ends = ofType(t.frames, "acp.turn.end").map((frame) => frame.turnId);
   expect(ends).toEqual(["turn_2", "turn_3"]);
+});
+
+test("two employees in one thread get their own sessions, and every frame names its employee", async () => {
+  // Each spawn is one employee's process: its session ids and its text say which one it is.
+  const t = setup((spawn) => ({
+    loadSession: true,
+    sessionId: `sess_p${spawn}`,
+    turns: [
+      {
+        steps: [
+          { update: chunk(`from p${spawn}`) },
+          { sleepMs: 100 },
+          { update: chunk(`again p${spawn}`) },
+        ],
+      },
+    ],
+  }));
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1", { agentId: "agent_a" }));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1);
+  await t.host.handle(open("th_1", { agentId: "agent_b" }));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 2);
+  await t.host.handle(prompt("th_1", "a1", "agent_a"));
+  await t.host.handle(prompt("th_1", "b1", "agent_b"));
+  await t.host.handle(prompt("th_1", "a2", "agent_a"));
+  await t.host.handle(prompt("th_1", "b2", "agent_b"));
+  await waitFor(() =>
+    ["a1", "a2", "b1", "b2"].every((turnId) => ended(t.frames, turnId)),
+  );
+  expect(t.spawns).toHaveLength(2);
+  const sessions = ofType(t.frames, "acp.session");
+  expect(sessions).toEqual([
+    {
+      type: "acp.session",
+      agentId: "agent_a",
+      threadId: "th_1",
+      sessionId: "sess_p1",
+      loaded: false,
+    },
+    {
+      type: "acp.session",
+      agentId: "agent_b",
+      threadId: "th_1",
+      sessionId: "sess_p2",
+      loaded: false,
+    },
+  ]);
+  // agent_b's process never heard of agent_a's session.
+  expect(
+    received(t.logs[1] ?? "").filter((m) => m.method === "session/load"),
+  ).toHaveLength(0);
+  const process = { agent_a: "p1", agent_b: "p2" } as const;
+  for (const frame of t.frames) {
+    if (frame.type === "acp.inventory") continue;
+    expect(frame.agentId === "agent_a" || frame.agentId === "agent_b").toBe(
+      true,
+    );
+    const turnId = frame.turnId as string | undefined;
+    if (turnId) expect(frame.agentId).toBe(`agent_${turnId[0]}`);
+    if (frame.type === "acp.update") {
+      const text = ((frame.update as Frame).content as Frame).text as string;
+      expect(text.endsWith(process[frame.agentId as "agent_a"])).toBe(true);
+    }
+  }
+  for (const turnId of ["a1", "a2", "b1", "b2"]) {
+    expect(ofType(ofTurn(t.frames, turnId), "acp.turn.end")[0]).toMatchObject({
+      stopReason: "end_turn",
+      interrupted: false,
+    });
+  }
+  // Each process got its own two prompts, in its own session.
+  for (const [index, sessionId] of ["sess_p1", "sess_p2"].entries()) {
+    const prompts = received(t.logs[index] ?? "").filter(
+      (m) => m.method === "session/prompt",
+    );
+    expect(prompts.map((m) => (m.params as Frame).sessionId)).toEqual([
+      sessionId,
+      sessionId,
+    ]);
+  }
+});
+
+test("a down frame without an agentId is dropped", async () => {
+  const t = setup({});
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1);
+  const before = t.frames.length;
+  expect(
+    await t.host.handle({ ...prompt("th_1", "turn_x"), agentId: undefined }),
+  ).toBe(true);
+  expect(await t.host.handle({ ...open("th_2"), agentId: 7 })).toBe(true);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(t.frames.slice(before)).toEqual([]);
+  expect(t.spawns).toHaveLength(1);
 });

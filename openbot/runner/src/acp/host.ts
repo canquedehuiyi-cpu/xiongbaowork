@@ -27,7 +27,9 @@ import { permissionFacts } from "./paths";
  * `acp.open` (or the first turn after it went away) and closed after `idleMs` with no turn running,
  * as the MCP bridge closes its apps (`IDLE_MS`). Each XiongBao thread gets its own ACP session in
  * that process. Turns of one thread run one after another; turns of different threads, and of
- * different employees, run side by side.
+ * different employees, run side by side. Everything about a thread is kept per `(agentId,
+ * threadId)`: two employees in one group thread are two sessions in two processes, and neither ever
+ * sees (or `session/load`s) the other's session. Every frame up names its employee.
  *
  * WHAT STARTS. Codex, Claude Code and Hermes are started only from `adapterLaunch` (manifest.ts),
  * which carries the mode that makes them ask before acting; an owner's own agent (`custom`) from the
@@ -63,7 +65,7 @@ import { permissionFacts } from "./paths";
  * after an `acp.error` when it could not run. Cancelling a queued turn ends it at once; cancelling
  * the running one sends `session/cancel`, and the agent ends it.
  *
- * SESSIONS. Each thread's session id is remembered for the life of the runner. When a new process
+ * SESSIONS. Each employee's session id for a thread is remembered for the life of the runner. When a new process
  * starts for a thread and the agent can load sessions, the remembered id (else the server's
  * `sessionHint`) is loaded; otherwise a new session is made. `acp.session.loaded` says whether the
  * agent still has the earlier conversation.
@@ -128,6 +130,7 @@ class HostError extends Error {
 }
 
 type Turn = {
+  agentId: string;
   threadId: string;
   turnId: string;
   content: unknown[];
@@ -151,6 +154,7 @@ type Proc = {
 };
 
 type Thread = {
+  agentId: string;
   threadId: string;
   open: AcpOpenFrame;
   /** The process the live session is in, and the session; null when there is none. */
@@ -191,6 +195,10 @@ function isRecord(value: unknown): value is Frame {
 const str = (value: unknown): string | null =>
   typeof value === "string" && value !== "" ? value : null;
 
+/** Host state is per employee and thread: two employees can share one group thread. */
+const threadKey = (agentId: string, threadId: string): string =>
+  JSON.stringify([agentId, threadId]);
+
 function sizeOf(frame: Frame): number {
   return Buffer.byteLength(JSON.stringify(frame));
 }
@@ -204,7 +212,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   const procs = new Map<string, Proc>();
   const threads = new Map<string, Thread>();
   const turns = new Map<string, Turn>();
-  /** Each thread's latest session id, kept after its process has gone. */
+  /** Each (employee, thread)'s latest session id, kept after its process has gone. */
   const known = new Map<string, string>();
   const pending = new Map<string, Pending>();
   let outbox: Entry[] = [];
@@ -398,10 +406,16 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     held.set(turnId, stats);
   }
 
-  function emitError(threadId: string, code: AcpErrorCode, turnId?: string) {
+  function emitError(
+    agentId: string,
+    threadId: string,
+    code: AcpErrorCode,
+    turnId?: string,
+  ) {
     emit(
       {
         type: "acp.error",
+        agentId,
         threadId,
         ...(turnId === undefined ? {} : { turnId }),
         code,
@@ -427,6 +441,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     turn.state = "ended";
     turn.end = {
       type: "acp.turn.end",
+      agentId: turn.agentId,
       threadId: turn.threadId,
       turnId: turn.turnId,
       stopReason,
@@ -436,7 +451,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
   }
 
   function failTurn(turn: Turn, code: AcpErrorCode) {
-    emitError(turn.threadId, code, turn.turnId);
+    emitError(turn.agentId, turn.threadId, code, turn.turnId);
     endTurn(turn, "error", false);
   }
 
@@ -493,6 +508,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
         emit(
           {
             type: "acp.update",
+            agentId: turn.agentId,
             threadId: turn.threadId,
             turnId: turn.turnId,
             seq: turn.seq,
@@ -508,6 +524,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
         const requestId = `perm_${randomUUID()}`;
         const frame: AcpPermissionRequestFrame = {
           type: "acp.permission.request",
+          agentId: turn.agentId,
           threadId: turn.threadId,
           turnId: turn.turnId,
           requestId,
@@ -624,6 +641,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
         if (announce) {
           emit({
             type: "acp.session",
+            agentId: thread.agentId,
             threadId: thread.threadId,
             sessionId: thread.sessionId,
             loaded: true,
@@ -634,7 +652,8 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       if (thread.proc && thread.sessionId)
         thread.proc.sessions.delete(thread.sessionId);
       const { loadSession } = await proc.ready;
-      const earlier = known.get(thread.threadId) ?? thread.open.sessionHint;
+      const key = threadKey(thread.agentId, thread.threadId);
+      const earlier = known.get(key) ?? thread.open.sessionHint;
       let sessionId = "";
       let loaded = false;
       if (earlier && loadSession) {
@@ -651,9 +670,10 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       thread.proc = proc;
       thread.sessionId = sessionId;
       proc.sessions.set(sessionId, thread);
-      known.set(thread.threadId, sessionId);
+      known.set(key, sessionId);
       emit({
         type: "acp.session",
+        agentId: thread.agentId,
         threadId: thread.threadId,
         sessionId,
         loaded,
@@ -702,12 +722,13 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
 
   function onOpen(frame: Frame) {
     const threadId = str(frame.threadId);
-    if (!threadId) return;
     const agentId = str(frame.agentId);
+    // Nobody to answer: an error must name the employee and the thread.
+    if (!threadId || !agentId) return;
     const workdirRef = str(frame.workdirRef);
     const harness = HARNESSES.find((known) => known === frame.harness);
-    if (!agentId || !workdirRef || !harness) {
-      emitError(threadId, "bad_frame");
+    if (!workdirRef || !harness) {
+      emitError(agentId, threadId, "bad_frame");
       return;
     }
     const appRef = str(frame.appRef);
@@ -725,13 +746,15 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       target(open);
     } catch (error) {
       // A thread already open keeps its session and its turns; only this open is refused.
-      emitError(threadId, (error as HostError).code);
+      emitError(agentId, threadId, (error as HostError).code);
       return;
     }
-    let thread = threads.get(threadId);
+    const key = threadKey(agentId, threadId);
+    let thread = threads.get(key);
     if (thread) thread.open = open;
     else {
       thread = {
+        agentId,
         threadId,
         open,
         proc: null,
@@ -739,7 +762,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
         current: null,
         tail: Promise.resolve(),
       };
-      threads.set(threadId, thread);
+      threads.set(key, thread);
     }
     const opening = thread;
     enqueue(opening, async () => {
@@ -748,6 +771,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
         release(proc);
       } catch (error) {
         emitError(
+          agentId,
           threadId,
           error instanceof HostError ? error.code : "start_failed",
         );
@@ -755,13 +779,24 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     });
   }
 
+  function ackOf(turn: Turn): Frame {
+    return {
+      type: "acp.turn.ack",
+      agentId: turn.agentId,
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+    };
+  }
+
   function onPrompt(frame: Frame) {
+    const agentId = str(frame.agentId);
     const threadId = str(frame.threadId);
     const turnId = str(frame.turnId);
-    if (!threadId || !turnId) return;
+    if (!agentId || !threadId || !turnId) return;
+    // A turnId is the server's and unique: seen once in this process, never run again.
     const seen = turns.get(turnId);
     if (seen) {
-      sendLive({ type: "acp.turn.ack", turnId });
+      sendLive(ackOf(seen));
       if (!seen.end) return;
       // An end still in the outbox goes up again on the next attach anyway.
       if (outbox.some((entry) => entry.frame === seen.end)) sendLive(seen.end);
@@ -769,6 +804,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       return;
     }
     const turn: Turn = {
+      agentId,
       threadId,
       turnId,
       content: Array.isArray(frame.content) ? frame.content : [],
@@ -777,8 +813,8 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       seq: 0,
     };
     remember(turn);
-    emit({ type: "acp.turn.ack", turnId }, turnId);
-    const thread = threads.get(threadId);
+    emit(ackOf(turn), turnId);
+    const thread = threads.get(threadKey(agentId, threadId));
     if (!Array.isArray(frame.content)) failTurn(turn, "bad_frame");
     else if (!thread) failTurn(turn, "not_open");
     else enqueue(thread, () => runTurn(thread, turn));
@@ -786,30 +822,35 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
 
   function onCancel(frame: Frame) {
     const turn = turns.get(str(frame.turnId) ?? "");
-    if (!turn || turn.state === "ended" || turn.threadId !== frame.threadId)
+    if (
+      !turn ||
+      turn.state === "ended" ||
+      turn.agentId !== frame.agentId ||
+      turn.threadId !== frame.threadId
+    )
       return;
     turn.cancelled = true;
     if (turn.state === "queued") {
       endTurn(turn, "cancelled", false);
       return;
     }
-    const thread = threads.get(turn.threadId);
+    const thread = threads.get(threadKey(turn.agentId, turn.threadId));
     if (thread?.current === turn && thread.proc?.client && thread.sessionId)
       thread.proc.client.cancel(thread.sessionId);
   }
 
   function onAnswer(frame: Frame) {
     const waitingFor = pending.get(str(frame.requestId) ?? "");
-    if (!waitingFor) return;
+    if (!waitingFor || waitingFor.frame.agentId !== frame.agentId) return;
     const optionId = str(frame.optionId);
     if (optionId === null) {
       waitingFor.settle({ outcome: "cancelled" });
       return;
     }
-    const { threadId, turnId, options } = waitingFor.frame;
+    const { agentId, threadId, turnId, options } = waitingFor.frame;
     if (!options.some((option) => option.optionId === optionId)) {
       waitingFor.settle({ outcome: "cancelled" });
-      emitError(threadId, "bad_option", turnId);
+      emitError(agentId, threadId, "bad_option", turnId);
       return;
     }
     waitingFor.settle({ outcome: "selected", optionId });
