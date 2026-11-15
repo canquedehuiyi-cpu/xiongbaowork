@@ -13,7 +13,10 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import type { Observable } from "rxjs";
-import { configureBotLifecycle } from "../src/agents/lifecycle";
+import {
+  configureBotLifecycle,
+  resetBotLifecycleForTests,
+} from "../src/agents/lifecycle";
 import type { AppVariables } from "../src/auth/guards";
 import { createDatabase } from "../src/db/client";
 import {
@@ -759,6 +762,51 @@ test("a stale active_run_ref left by a crash does not hold the checker back", as
   expect((await row(tenantId, taskId)).overdueAt).not.toBeNull();
 });
 
+test("a nudge never supersedes a turn the person starts while the nudge is being admitted", async () => {
+  const due = new Date(Date.now() - HOUR);
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard("race", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const nudged = new Recorder(agentId, "收到。");
+  const working = new Working(agentId);
+  const runId = randomUUID();
+  let ended = false;
+  let turnDone: Promise<void> | undefined;
+  const real = runner();
+  /*
+   * The person sends a message in the gap between the nudge's "is the thread free?" and its turn:
+   * the answer was "free", and by the time the nudge's turn is admitted, it is not.
+   */
+  const racing = {
+    hydrate: () => real.hydrate(),
+    stop: (request: { threadId: string; runId?: string }) => real.stop(request),
+    isRunning: async (request: { threadId: string }) => {
+      const answer = await real.isRunning(request);
+      turnDone = personTurn({ tenantId, agent: working, threadId, runId }).then(
+        () => {
+          ended = true;
+        },
+      );
+      return answer;
+    },
+  };
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: unattendedTurn(() => nudged),
+    runner: racing as unknown as PostgresAgentRunner,
+  });
+  const outcome = await nudgeRuns.startNudgeRun(tenantId, taskId, "催一下");
+  await working.running;
+  await settle(150);
+  // The person's turn is still the one running; the nudge stood back and said nothing.
+  expect(outcome).toBe("skipped_running");
+  expect(ended).toBe(false);
+  expect(nudged.seen).toEqual([]);
+  await runAsTenant(tenantId, () => runner().stop({ threadId, runId }));
+  await turnDone;
+});
+
 test("nudge run attaches to the card, opens no card, does not push, does not touch wake-up quota or task quota", async () => {
   const due = new Date(Date.now() - HOUR);
   const { tenantId, agentId, threadId, taskId } = await acceptedCard("nudge", {
@@ -1462,6 +1510,8 @@ test("再催 nudges the coworker now, as the person, and is refused while a roun
 });
 
 afterAll(async () => {
+  // The pause switch read this file's database, which closes below: later suites must not inherit it.
+  resetBotLifecycleForTests();
   for (const id of tenants) {
     await runAsTenant(id, async () => {
       const own = database

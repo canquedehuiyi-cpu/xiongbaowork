@@ -15,7 +15,11 @@ import type { NoticeRunner } from "../devices/queued-results";
 import type { TurnRunner } from "../routines/run-turn";
 import { runAsTenant } from "../tenant/context";
 import { emitRunEvent } from "../threads/run-side-events";
-import { suppressRunnerCard, turnForCard } from "../threads/unattended-card";
+import {
+  onlyOnIdleThread,
+  suppressRunnerCard,
+  turnForCard,
+} from "../threads/unattended-card";
 
 /**
  * What the person's decisions on a followed card do in its conversation (spec 2026-11-15-delivery-loop
@@ -167,8 +171,10 @@ function refusalOf(error: unknown): CardTurnRefused {
   // "Use Bots" switched off, or the model is not on the allowlist: the gate's own sentence.
   if (name === "CapabilityRefusedError" && error instanceof Error)
     return new CardTurnRefused(error.message);
-  // Another runner holds the thread (the platform's 409 on its lock): somebody's turn, try again later.
-  if (isLockConflict(error)) return new ThreadBusy();
+  // Another runner holds the thread (the platform's 409 on its lock), or a turn here does
+  // (`ThreadBusyError`, the runner's own idle-only admission): somebody's turn, try again later.
+  if (isLockConflict(error) || name === "ThreadBusyError")
+    return new ThreadBusy();
   // Anything else did not start the turn and will not by waiting a minute: said as such, not as busy.
   log("task-card-turn-not-started", { reason: reasonOf(error) });
   return new TurnNotStarted(reasonOf(error));
@@ -236,23 +242,26 @@ export async function startThreadTurn(
       taskId ? turnForCard(taskId, body) : body();
     runAsTenant(tenantId, () =>
       forCard(() =>
-        deps.runTurn({
-          signal: giveUp.signal,
-          ownerUserId: tenantId,
-          routineId: origin.source,
-          agentId: to.agentId,
-          threadId: to.threadId,
-          instruction: text,
-          userMessage,
-          runId,
-          tenantId,
-          initiator: origin.initiator,
-          telemetry: origin.telemetry,
-          onStarted: () => {
-            began = true;
-            started();
-          },
-        }),
+        // Never over somebody's turn: refused if one runs, or starts, before this one is admitted.
+        onlyOnIdleThread(() =>
+          deps.runTurn({
+            signal: giveUp.signal,
+            ownerUserId: tenantId,
+            routineId: origin.source,
+            agentId: to.agentId,
+            threadId: to.threadId,
+            instruction: text,
+            userMessage,
+            runId,
+            tenantId,
+            initiator: origin.initiator,
+            telemetry: origin.telemetry,
+            onStarted: () => {
+              began = true;
+              started();
+            },
+          }),
+        ),
       ),
     ).then(
       () => started(),
@@ -424,25 +433,28 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
         const agent = new ServerNotice(where.agentId, event);
         agent.threadId = where.threadId;
         agent.setMessages(history);
-        await suppressRunnerCard(
-          () =>
-            new Promise<void>((resolve, reject) => {
-              deps.runner
-                .run({
-                  threadId: where.threadId,
-                  agent,
-                  input: {
+        // A turn that started since the check above is not superseded by a notice: it stands back.
+        await suppressRunnerCard(() =>
+          onlyOnIdleThread(
+            () =>
+              new Promise<void>((resolve, reject) => {
+                deps.runner
+                  .run({
                     threadId: where.threadId,
-                    runId: randomUUID(),
-                    messages: history,
-                    tools: [],
-                    context: [],
-                    state: {},
-                    forwardedProps: {},
-                  },
-                })
-                .subscribe({ error: reject, complete: resolve });
-            }),
+                    agent,
+                    input: {
+                      threadId: where.threadId,
+                      runId: randomUUID(),
+                      messages: history,
+                      tools: [],
+                      context: [],
+                      state: {},
+                      forwardedProps: {},
+                    },
+                  })
+                  .subscribe({ error: reject, complete: resolve });
+              }),
+          ),
         );
       });
     },

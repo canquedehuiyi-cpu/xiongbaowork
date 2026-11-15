@@ -51,6 +51,7 @@ import {
 } from "../tenant/context";
 import {
   entryHungRound,
+  onlyOnIdleThreadRequested,
   runnerCardSuppressed,
   suppressedCardRef,
   targetedCard,
@@ -131,6 +132,44 @@ export class ThreadUnavailableError extends Error {
   constructor() {
     super("This conversation is not available.");
   }
+}
+
+/**
+ * Why a turn that may only start on an idle thread (`onlyOnIdleThread`) did not: a turn is running on
+ * it, or has been accepted and is on its way in. Nothing of the refused turn ran or was written.
+ */
+export class ThreadBusyError extends Error {
+  override readonly name = "ThreadBusyError";
+  constructor() {
+    super("A turn is already running in this conversation.");
+  }
+}
+
+/**
+ * Per thread, the turns accepted here that have not reached the runtime's own `run` yet: they are
+ * still asking the board, the month and the thread's row (`run`'s preface below), and the store does
+ * not count them as running until they get there. Module-level for the reason the indexes above are.
+ *
+ * This is what makes "only if the thread is idle" one step: the question and the entry are taken in
+ * the same synchronous moment a turn is subscribed, so a turn that asks while another is on its way in
+ * sees it, and a turn on its way in cannot be overtaken by one that asked a moment before.
+ */
+const enteringRuns = new Map<string, Set<string>>();
+
+function entering(threadId: string): boolean {
+  return (enteringRuns.get(threadId)?.size ?? 0) > 0;
+}
+
+/** Whether the runtime's store has a turn running, or stopping, on the thread right now. */
+function storeRunning(threadId: string): boolean {
+  const store = (
+    ɵGLOBAL_STORE as unknown as {
+      peek?: (
+        threadId: string,
+      ) => { isRunning?: boolean; stopRequested?: boolean } | undefined;
+    }
+  ).peek?.(threadId);
+  return Boolean(store?.isRunning || store?.stopRequested);
 }
 
 /**
@@ -425,6 +464,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const forCard = targetedCard();
     // Read in the same breath and for the same reason: unset for every turn a person sends.
     const lane = runnerLane.getStore();
+    // A server-started turn (a nudge, a hand-over, a 退回) that stands back rather than supersede.
+    const idleOnly = onlyOnIdleThreadRequested();
     /*
      * A thread id another tenant holds here is refused before anything else is asked: the parent's
      * `run` would supersede that tenant's live turn, append this run to their history, and the
@@ -452,6 +493,28 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      * something if the fifty-first conversation does not happen at all. Then the thread: see `claim`.
      */
     return new Observable<BaseEvent>((subscriber) => {
+      /*
+       * The admission, in one synchronous step (see `enteringRuns`): a turn that may only start on an
+       * idle thread is refused while one runs there or is on its way in, and every turn is on its way
+       * in from here until the runtime's own `run` takes it (or it fails first).
+       */
+      const threadId = request.threadId;
+      const runId = request.input.runId;
+      if (idleOnly && (storeRunning(threadId) || entering(threadId))) {
+        subscriber.error(new ThreadBusyError());
+        return;
+      }
+      const runs = enteringRuns.get(threadId) ?? new Set<string>();
+      runs.add(runId);
+      enteringRuns.set(threadId, runs);
+      let entered = false;
+      const enter = () => {
+        if (entered) return;
+        entered = true;
+        runs.delete(runId);
+        if (runs.size === 0 && enteringRuns.get(threadId) === runs)
+          enteringRuns.delete(threadId);
+      };
       let inner: Subscription | undefined;
       let closed = false;
       void (async () => {
@@ -491,7 +554,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         return { followed, receiptAsked };
       })().then(
         ({ followed, receiptAsked }) => {
-          if (closed) return;
+          if (closed) {
+            enter();
+            return;
+          }
           inner = this.stream(
             receiptAsked
               ? { ...request, input: withReceiptAsked(request.input) }
@@ -501,12 +567,17 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
             lane,
             followed ?? undefined,
             entryCardRef,
+            enter,
           ).subscribe(subscriber);
         },
-        (thrown: unknown) => subscriber.error(thrown),
+        (thrown: unknown) => {
+          enter();
+          subscriber.error(thrown);
+        },
       );
       return () => {
         closed = true;
+        enter();
         inner?.unsubscribe();
       };
     });
@@ -570,6 +641,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     followed?: { id: string },
     /** The key the entry's own card is filed under, when it is not the run id. */
     entryCardRef?: string,
+    /** Called the moment the runtime's own `run` takes the turn: it is no longer on its way in. */
+    entered: () => void = () => {},
   ): Observable<BaseEvent> {
     const { threadId } = request;
     const runId = request.input.runId;
@@ -730,7 +803,14 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const stream = () => {
       // Open for the delivery tools from here to the turn's end (`finish`, or a stop: `finalize`).
       beginTurn(runId, entryCardRef);
-      return super.run(asStoreOwner(request, tenant)).pipe(
+      // Running from here, as the store counts it; `finally` covers a `run` that throws instead.
+      let started: Observable<BaseEvent>;
+      try {
+        started = super.run(asStoreOwner(request, tenant));
+      } finally {
+        entered();
+      }
+      return started.pipe(
         tap({
           next: (event) => events.push(event),
           complete: () => {
@@ -1035,10 +1115,14 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     return super.connect({ ...request, ...storeScope(request.threadId) });
   }
 
-  /** Whether somebody else's thread is mid-turn is not this caller's to learn. */
+  /**
+   * Whether somebody else's thread is mid-turn is not this caller's to learn. A turn accepted here and
+   * still on its way into the runtime (`enteringRuns`) counts as running: it is about to be.
+   */
   override isRunning(request: AgentRunnerIsRunningRequest): Promise<boolean> {
     if (!ownedBy(request.threadId, currentTenant()))
       return Promise.resolve(false);
+    if (entering(request.threadId)) return Promise.resolve(true);
     return super.isRunning({ ...request, ...storeScope(request.threadId) });
   }
 
