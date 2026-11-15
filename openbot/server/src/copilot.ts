@@ -50,7 +50,11 @@ import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
-import { type DeviceAcpEmployee, deviceAcpAgentFor } from "./agents/acp/agent";
+import {
+  ACP_UNAVAILABLE_REASON,
+  type DeviceAcpEmployee,
+  deviceAcpAgentFor,
+} from "./agents/acp/agent";
 import { acpPersonaText } from "./agents/acp/context";
 import {
   type ActorAgentResolver,
@@ -244,7 +248,7 @@ type RegisteredRemoteAgent =
 /**
  * An external employee (`device_acp`): Codex, Claude Code, Hermes or the owner's own agent on the
  * owner's computer, run through the runner socket (agents/acp/agent.ts), never at an address. The
- * standing role is kept for the runs answered on OpenBot's own runner instead (`onOpenBotRunner`).
+ * standing role is kept for the runs answered on this deployment's built-in runner instead.
  */
 type RegisteredDeviceAcpAgent = DeviceAcpEmployee & {
   type: "device_acp";
@@ -1808,10 +1812,16 @@ async function buildAgent(
     /*
      * Run by this deployment's own transport, on the owner's computer, never dialled: no tools, no
      * model, no endpoint. Its tools are its agent's own; what it may do is the permission bridge's.
-     * A run the runtime makes for itself (a title) is answered on OpenBot's own runner instead
-     * (`answersOwnRunsHere`), holding nothing, so it never reaches the computer.
+     * A run the runtime makes for itself (a title) is answered on the deployment's built-in runner
+     * instead (`answersOwnRunsHere`), holding nothing, so it never reaches the computer.
      */
-    const device = deviceAcpAgentFor(agent, { tenantId: currentTenant() });
+    const device =
+      deviceAcpAgentFor(agent, { tenantId: currentTenant() }) ??
+      new UnavailableAgent({
+        id: agent.id,
+        name: agent.name,
+        reason: ACP_UNAVAILABLE_REASON,
+      });
     if (!answersOwnRunsHere(agent, holdsTools)) return device;
     const asked = holdsTools as HoldsTools;
     return new RunBuiltAgent(

@@ -508,6 +508,7 @@ async function deployment(hirer: AgentActor, device: { deviceId: string }) {
     );
     if (!employee) throw new Error("no employee");
     const agent = deviceAcpAgentFor(employee, { tenantId: hirer.id });
+    if (!agent) throw new Error("no external employee runtime");
     const input: RunAgentInput = {
       threadId,
       runId: `${prefix}-run-${randomUUID().slice(0, 8)}`,

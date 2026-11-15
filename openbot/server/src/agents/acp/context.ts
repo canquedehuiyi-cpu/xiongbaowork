@@ -1,7 +1,8 @@
-import { type Persona, personaGuidance } from "@openbot/shared/persona";
+import { type Persona, personaGuidance } from "../../../../shared/persona";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Database } from "../../db/client";
 import { tasks, threads } from "../../db/schema";
+import { shortName } from "../../brand";
 import { runAsTenant } from "../../tenant/context";
 
 /**
@@ -37,7 +38,7 @@ export function buildFirstTurnContext(input: {
   const recent = input.recent
     .filter((message) => message.text.trim() !== "")
     .slice(-RECENT_LIMIT);
-  const sections = ["【熊宝这边的背景，供你参考；要做的事在后面】"];
+  const sections = [`【${shortName()}这边的背景，供你参考；要做的事在后面】`];
   if (input.persona.trim())
     sections.push(`你的身份：\n${input.persona.trim()}`);
   if (recent.length > 0)
@@ -65,7 +66,7 @@ export function acpPersonaText(profile: {
 }): string {
   const title = profile.title?.trim();
   return [
-    `你是熊宝团队里的员工「${profile.name}」${title ? `，${title}` : ""}。`,
+    `你是${shortName()}团队里的员工「${profile.name}」${title ? `，${title}` : ""}。`,
     profile.roleDescription?.trim() ?? "",
     personaGuidance(profile.persona) ?? "",
     profile.bible?.trim() ? `你的工作手册：\n${profile.bible.trim()}` : "",

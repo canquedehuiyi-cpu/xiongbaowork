@@ -6,8 +6,7 @@ import {
   type Message,
   type RunAgentInput,
 } from "@ag-ui/client";
-import type { AcpHarness } from "@openbot/shared/acp";
-import { UnavailableAgent } from "@openbot/toolkit/copilotkit/agents";
+import type { AcpHarness } from "../../../../shared/acp";
 import { eq } from "drizzle-orm";
 import { Observable, type Subscriber } from "rxjs";
 import type { Database } from "../../db/client";
@@ -939,21 +938,19 @@ export function deviceAcpRuntime(): DeviceAcpRuntime | null {
   return installed;
 }
 
+/** What a run of an external employee is refused with where no runtime is installed. */
+export const ACP_UNAVAILABLE_REASON = "外部员工在这台服务器上还不能运行。";
+
 /**
  * The agent for one external employee, in a tenant: a `DeviceAcpAgent` on the installed runtime, or
- * an agent that refuses every run where none is installed.
+ * null where none is installed (the caller refuses the run, `ACP_UNAVAILABLE_REASON`).
  */
 export function deviceAcpAgentFor(
   employee: DeviceAcpEmployee,
-  options: { tenantId: string; claimed?: AcpTurnRow },
-): AbstractAgent {
+  options: { tenantId: string; claimed?: AcpTurnRow; adopted?: boolean },
+): DeviceAcpAgent | null {
   const runtime = installed;
-  if (!runtime)
-    return new UnavailableAgent({
-      id: employee.id,
-      name: employee.name,
-      reason: "外部员工在这台服务器上还不能运行。",
-    });
+  if (!runtime) return null;
   const { tenantId } = options;
   const target = { tenantId, deviceId: employee.deviceId };
   return new DeviceAcpAgent({
