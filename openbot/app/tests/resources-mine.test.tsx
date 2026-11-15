@@ -52,6 +52,9 @@ const originalFetch = globalThis.fetch;
 /** 搜索框的可访问名字：它收窄的是这一页的三块，不只是技能。 */
 const SEARCH_LABEL = "搜索技能、团队和连接器";
 
+/** 落点亮多久是页面的事（1200ms）；这里等得比它久一点，看的是「会熄」这件事。 */
+const LIT_WAIT_MS = 1400;
+
 type Auth = PluginsPage["catalogue"][number]["auth"];
 
 const skill = (
@@ -914,6 +917,34 @@ test("地址上带 #块名 进来，落在那一块、把焦点交过去，并�
   expect(
     document.getElementById("mine-connectors")?.getAttribute("data-lit"),
   ).toBeNull();
+});
+
+/**
+ * 灯要会熄：一直亮着的标记没人再读，读的人也不知道「这是刚刚落下的点」还是「这块一直长这样」。
+ *
+ * 熄掉之后同一个入口还得能再走一次。人滚回页首再点「1 支团队」，地址里的 `#mine-teams` 跟上次
+ * 一模一样——只盯地址变化的话，这一次点击什么都不发生，而人是真的点了。所以点击要自己走一遍，
+ * 不能全靠「地址变了没有」。
+ */
+test("落点的灯会熄；地址没变时再点同一个入口，还是会亮、还是会落过去", async () => {
+  const view = await renderMine(page([], [], [team("gstack", "软件工坊", 6)]), {
+    hash: "mine-teams",
+  });
+  await waitFor(() => expect(view.getByText("软件工坊")).toBeTruthy());
+  const block = () => document.getElementById("mine-teams");
+  expect(block()?.getAttribute("data-lit")).toBe("true");
+
+  await act(async () => {
+    await new Promise((done) => setTimeout(done, LIT_WAIT_MS));
+  });
+  expect(block()?.getAttribute("data-lit")).toBeNull();
+
+  act(() => {
+    view.getByRole("link", { name: "1 支团队" }).click();
+  });
+  await settleReactWork();
+  expect(block()?.getAttribute("data-lit")).toBe("true");
+  expect(document.activeElement?.id).toBe("mine-teams");
 });
 
 /**
