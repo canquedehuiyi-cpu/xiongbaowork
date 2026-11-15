@@ -906,6 +906,75 @@ test("a deleting action's card offers no Always allow, and an always answer from
   expect(said(answered.events)).toContain("已允许这一次");
   expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once"]]);
 });
+for (const offerConversation of [true, false])
+  test(`an external employee's card answers 这次对话里都允许 as the web does${offerConversation ? "" : ", and a floor offers no second yes"}`, async () => {
+    // 外部员工的审批（Task 12）：三个选项和网页一样；底线和管理员拒绝的不给「这次对话里都允许」。
+    const f = fixture({
+      policySource: "acp_rule",
+      action: {
+        toolRef: "acp/execute",
+        scope: "push+runCommand:git push origin main",
+        args: { command: "git push origin main" },
+        target: {
+          acp: {
+            employee: "小码",
+            computer: "何总的 MacBook Pro",
+            action: "小码想要运行命令：git push origin main",
+            hit: "提交并推送代码",
+            reason: "「提交并推送代码」设成了先问你。",
+            summary: "",
+            files: [],
+            offerConversation,
+            deviceId: "laptop",
+            requestId: "req-1",
+            turnId: "turn-1",
+            options: [],
+          },
+        },
+      },
+      converse: {
+        kind: "waiting",
+        binding: bound,
+        inboxId: "in1",
+        replyText: "",
+        extras: { approvals: [APPROVAL], questions: [] },
+      },
+    });
+    const result = await run(f, {
+      context: [sender()],
+      messages: [{ id: "m9", role: "user", content: "<@UBOT> push it" }],
+    });
+    const card = result.events.find(
+      (e) => e.type === "CUSTOM" && e.name === "on_interrupt",
+    );
+    expect(card.value.__copilotkit_interrupt_value__.args.allow_always).toBe(
+      offerConversation,
+    );
+    const answered = await run(f, {
+      forwardedProps: {
+        command: {
+          resume: {
+            "0f8fad5bd9cb469fa16570867728950e": {
+              confirmed: true,
+              always: true,
+              by: "slack:T1:U1",
+            },
+          },
+        },
+      },
+    });
+    // Never "always allow here": the server refuses it for an external employee.
+    expect(f.decisions).toEqual([
+      [
+        "owner",
+        APPROVAL,
+        offerConversation ? "allow_conversation" : "allow_once",
+      ],
+    ]);
+    expect(said(answered.events)).toContain(
+      offerConversation ? "已在这次对话里都允许" : "已允许这一次",
+    );
+  });
 test("SMS STOP and START record opt-out without a turn or a second reply", async () => {
   const f = fixture();
   const signedRequest = (params: URLSearchParams) => {

@@ -32,9 +32,11 @@ import userEvent from "@testing-library/user-event";
 import { ACP_PHONE_NOTE } from "@/components/channels/acp-cards";
 import {
   ChatTranscript,
+  ServerToolLine,
   type TranscriptAcpCards,
 } from "@/components/channels/chat-transcript";
 import { GroupChat } from "@/components/channels/group-chat";
+import { carryingOnAfterApproval } from "@/lib/approvals";
 import {
   type AcpCard,
   type AcpCardTracker,
@@ -586,7 +588,7 @@ function openApproval(id: string) {
       authed.addChildren([app.addChildren([approvals])]),
     ]),
     history: createMemoryHistory({
-      initialEntries: [`/approvals?id=${id}`],
+      initialEntries: [id ? `/approvals?id=${id}` : "/approvals"],
     }),
   });
   return render(
@@ -951,5 +953,107 @@ describe("第 1 轮修复", () => {
     expect(await view.findByText(/这条请求请到审批列表里处理/)).toBeTruthy();
     expect(view.queryByRole("button")).toBeNull();
     expect(view.queryByText(/"command"/)).toBeNull();
+  });
+});
+
+describe("审批列表页", () => {
+  test("an external employee's request in the approvals list has its own three choices, not 在这里总是允许", async () => {
+    single.set("/api/me", {
+      user: { id: "user-he", role: "user", email: "he@example.test" },
+    });
+    inbox = [
+      acpApproval("ap-list"),
+      acpApproval("ap-floor", {
+        offerConversation: false,
+        hit: "底线：删除",
+      }),
+    ];
+    const view = openApproval("");
+    const rows = await waitFor(() => {
+      const found = view.container.querySelectorAll("[data-acp-inbox-row]");
+      expect(found).toHaveLength(2);
+      return [...found] as HTMLElement[];
+    });
+    const [first, floor] = rows as [HTMLElement, HTMLElement];
+    expect(
+      within(first)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["批准", "拒绝", "这次对话里都允许"]);
+    expect(
+      within(floor)
+        .getAllByRole("button")
+        .map((button) => button.textContent),
+    ).toEqual(["批准", "拒绝"]);
+    expect(view.queryByRole("button", { name: "在这里总是允许" })).toBeNull();
+    // 一句话加原文，没有原始的字段名。
+    expect(within(first).getByText("git push origin fix/login")).toBeTruthy();
+    expect(view.container.textContent).not.toContain('"command"');
+    expect(
+      within(first).getByRole("link", { name: "看详情" }).getAttribute("href"),
+    ).toBe("/approvals?id=ap-list");
+
+    const user = userEvent.setup({ document });
+    await user.click(
+      within(first).getByRole("button", { name: "这次对话里都允许" }),
+    );
+    await waitFor(() =>
+      expect(sent.find((request) => request.method === "POST")).toMatchObject({
+        url: "/api/approvals/ap-list/decision",
+        body: { decision: "allow_conversation" },
+      }),
+    );
+  });
+});
+
+describe("批准之后", () => {
+  test("an approved external employee's permission does not hold the conversation as the server carrying on", () => {
+    // 外部员工的许可答复给电脑上的智能体，它这一轮在对话已经跟着的事件流里接着跑；审批不会被标成 completed。
+    const now = Date.parse("2026-11-15T08:01:00.000Z");
+    const decided = (toolRef: string) => ({
+      enabled: true,
+      rules: [],
+      teamRules: [],
+      questions: [],
+      requests: [
+        {
+          ...acpApproval("ap-done"),
+          status: "approved",
+          decidedAt: "2026-11-15T08:00:30.000Z",
+          action: { ...acpApproval("ap-done").action, toolRef },
+        },
+      ],
+    });
+    expect(
+      carryingOnAfterApproval(decided("acp/execute") as never, "t-1", now),
+    ).toBe(false);
+    // 别的审批照旧：服务器在没有浏览器跟着的一轮里接着做。
+    expect(
+      carryingOnAfterApproval(
+        decided("computer_navigate") as never,
+        "t-1",
+        now,
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("外部员工的工具步骤", () => {
+  test("an external employee's step reads in words, with its own title, never as acp/execute", async () => {
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <ServerToolLine
+          args={JSON.stringify({
+            title: "git push origin fix/login",
+            kind: "execute",
+          })}
+          name="acp/execute"
+          result="完成。"
+        />
+      </QueryClientProvider>,
+    );
+    expect(await view.findByText("运行了命令")).toBeTruthy();
+    expect(view.getByText("git push origin fix/login")).toBeTruthy();
+    expect(view.container.textContent).not.toMatch(/acp/i);
   });
 });

@@ -3,7 +3,13 @@ import { IconLock } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { acpCardOf } from "@/components/channels/acp-cards";
+import {
+  type AcpApprovalCard,
+  AcpPermissionCard,
+  acpCardOf,
+  acpRawText,
+  decisionErrorText,
+} from "@/components/channels/acp-cards";
 import { CARD_FACE, Tag } from "@/components/resources/resource-kit";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -247,125 +253,157 @@ export function ApprovalInbox({
               没有需要你批准的动作。
             </p>
           ) : (
-            pending.map((request) => (
-              <article
-                className={`${ATTENTION_CARD} flex flex-col gap-3 p-[14px] ${
-                  request.id === focus ? "ring-2 ring-signal/60" : ""
-                }`}
-                id={`approval-${request.id}`}
-                key={request.id}
-                {...(request.id === focus
-                  ? { ref: focused, "data-focus": "" }
-                  : {})}
-              >
-                <div className="flex flex-col gap-[4px]">
-                  <div className="flex flex-wrap items-center gap-[8px]">
-                    <Tag tone="warning">
-                      {request.action.policy?.behaviour === "hand_off"
-                        ? "需要你来做"
-                        : "待批准"}
-                    </Tag>
-                    <h3 className="min-w-0 font-semibold text-[14px] leading-[20px]">
-                      {botName(request.action.botId)} 想要
-                      {afterChinese(
-                        request.action.toolRef
-                          .replace(/^computer_|^host\//, "")
-                          .replaceAll("_", " "),
-                      )}
-                    </h3>
-                  </div>
-                  <p className="text-[12px] text-muted-foreground">
-                    {approvalTargetName(request.action)}
-                  </p>
-                  {/* 外部员工的请求有一页详情（设计稿第 5 屏）：命令原文、这一轮改的文件，手机上按钮大。 */}
-                  {acpCardOf(request.action) ? (
-                    <Link
-                      className="w-fit text-[13px] underline underline-offset-2"
-                      search={{ id: request.id }}
-                      to="/approvals"
-                    >
-                      看详情
-                    </Link>
-                  ) : null}
-                  {request.action.policy ? (
-                    <p className="text-[13px]">
-                      {request.action.policy.behaviour === "hand_off"
-                        ? "交给你："
-                        : ""}
-                      {request.action.policy.reason}
-                      {POLICY_SOURCE_LABELS[request.action.policy.source] ? (
-                        <span className="ml-2 text-muted-foreground">
-                          （来源：
-                          {POLICY_SOURCE_LABELS[request.action.policy.source]}）
-                        </span>
-                      ) : null}
-                    </p>
-                  ) : null}
+            pending.map((request) =>
+              acpCardOf(request.action) ? (
+                /*
+                 * 外部员工请求许可（外部员工 Task 12）：和对话里同一张卡。一句话说它要做什么、命令或路径原文，
+                 * 三个选项对应 ACP（底线和管理员拒绝的只有两个），不给「在这里总是允许」（服务器也不收）。
+                 */
+                <div
+                  className={`flex flex-col gap-2 ${
+                    request.id === focus
+                      ? "rounded-[14px] ring-2 ring-signal/60"
+                      : ""
+                  }`}
+                  data-acp-inbox-row=""
+                  id={`approval-${request.id}`}
+                  key={request.id}
+                  {...(request.id === focus
+                    ? { ref: focused, "data-focus": "" }
+                    : {})}
+                >
+                  <AcpPermissionCard
+                    card={acpCardOf(request.action) as AcpApprovalCard}
+                    error={
+                      decision.variables?.id === request.id
+                        ? decisionErrorText(decision.error)
+                        : null
+                    }
+                    onDecide={(choice) =>
+                      decision.mutate({ id: request.id, choice })
+                    }
+                    raw={acpRawText(request.action.args)}
+                    submitting={decision.isPending}
+                  />
+                  <Link
+                    className="w-fit text-[13px] underline underline-offset-2"
+                    search={{ id: request.id }}
+                    to="/approvals"
+                  >
+                    看详情
+                  </Link>
                 </div>
-                <pre className="max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-[9px] border border-border bg-background p-3 font-mono text-[12px]">
-                  {JSON.stringify(request.action.args, null, 2)}
-                </pre>
-                {request.action.policy?.behaviour === "hand_off" ? (
-                  <div className="flex flex-wrap gap-[7px]">
-                    <Button
-                      disabled={decision.isPending}
-                      onClick={() =>
-                        decision.mutate({ id: request.id, choice: "handled" })
-                      }
-                    >
-                      我自己做了
-                    </Button>
-                    <Button
-                      variant="outline"
-                      disabled={decision.isPending}
-                      onClick={() =>
-                        decision.mutate({ id: request.id, choice: "deny" })
-                      }
-                    >
-                      别做
-                    </Button>
+              ) : (
+                <article
+                  className={`${ATTENTION_CARD} flex flex-col gap-3 p-[14px] ${
+                    request.id === focus ? "ring-2 ring-signal/60" : ""
+                  }`}
+                  id={`approval-${request.id}`}
+                  key={request.id}
+                  {...(request.id === focus
+                    ? { ref: focused, "data-focus": "" }
+                    : {})}
+                >
+                  <div className="flex flex-col gap-[4px]">
+                    <div className="flex flex-wrap items-center gap-[8px]">
+                      <Tag tone="warning">
+                        {request.action.policy?.behaviour === "hand_off"
+                          ? "需要你来做"
+                          : "待批准"}
+                      </Tag>
+                      <h3 className="min-w-0 font-semibold text-[14px] leading-[20px]">
+                        {botName(request.action.botId)} 想要
+                        {afterChinese(
+                          request.action.toolRef
+                            .replace(/^computer_|^host\//, "")
+                            .replaceAll("_", " "),
+                        )}
+                      </h3>
+                    </div>
+                    <p className="text-[12px] text-muted-foreground">
+                      {approvalTargetName(request.action)}
+                    </p>
+                    {request.action.policy ? (
+                      <p className="text-[13px]">
+                        {request.action.policy.behaviour === "hand_off"
+                          ? "交给你："
+                          : ""}
+                        {request.action.policy.reason}
+                        {POLICY_SOURCE_LABELS[request.action.policy.source] ? (
+                          <span className="ml-2 text-muted-foreground">
+                            （来源：
+                            {POLICY_SOURCE_LABELS[request.action.policy.source]}
+                            ）
+                          </span>
+                        ) : null}
+                      </p>
+                    ) : null}
                   </div>
-                ) : (
-                  <div className="flex flex-wrap gap-[7px]">
-                    <Button
-                      disabled={decision.isPending}
-                      onClick={() =>
-                        decision.mutate({
-                          id: request.id,
-                          choice: "allow_once",
-                        })
-                      }
-                    >
-                      允许一次
-                    </Button>
-                    {/* 删除类和对外发送底线问的动作每次都要问，存下的规则用不上，所以不画这个按钮。 */}
-                    {!offersStandingRule(request.action.policy) ? null : (
+                  <pre className="max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-[9px] border border-border bg-background p-3 font-mono text-[12px]">
+                    {JSON.stringify(request.action.args, null, 2)}
+                  </pre>
+                  {request.action.policy?.behaviour === "hand_off" ? (
+                    <div className="flex flex-wrap gap-[7px]">
+                      <Button
+                        disabled={decision.isPending}
+                        onClick={() =>
+                          decision.mutate({ id: request.id, choice: "handled" })
+                        }
+                      >
+                        我自己做了
+                      </Button>
                       <Button
                         variant="outline"
                         disabled={decision.isPending}
                         onClick={() =>
+                          decision.mutate({ id: request.id, choice: "deny" })
+                        }
+                      >
+                        别做
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-[7px]">
+                      <Button
+                        disabled={decision.isPending}
+                        onClick={() =>
                           decision.mutate({
                             id: request.id,
-                            choice: "allow_always",
+                            choice: "allow_once",
                           })
                         }
                       >
-                        在这里总是允许
+                        允许一次
                       </Button>
-                    )}
-                    <Button
-                      variant="outline"
-                      disabled={decision.isPending}
-                      onClick={() =>
-                        decision.mutate({ id: request.id, choice: "deny" })
-                      }
-                    >
-                      拒绝
-                    </Button>
-                  </div>
-                )}
-              </article>
-            ))
+                      {/* 删除类和对外发送底线问的动作每次都要问，存下的规则用不上，所以不画这个按钮。 */}
+                      {!offersStandingRule(request.action.policy) ? null : (
+                        <Button
+                          variant="outline"
+                          disabled={decision.isPending}
+                          onClick={() =>
+                            decision.mutate({
+                              id: request.id,
+                              choice: "allow_always",
+                            })
+                          }
+                        >
+                          在这里总是允许
+                        </Button>
+                      )}
+                      <Button
+                        variant="outline"
+                        disabled={decision.isPending}
+                        onClick={() =>
+                          decision.mutate({ id: request.id, choice: "deny" })
+                        }
+                      >
+                        拒绝
+                      </Button>
+                    </div>
+                  )}
+                </article>
+              ),
+            )
           )}
         </div>
       </section>

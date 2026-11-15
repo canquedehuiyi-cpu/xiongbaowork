@@ -27,7 +27,29 @@ export type ToolName = {
   detail?: string;
 };
 
+/**
+ * 外部员工的一步（`acp/<kind>`，服务器 `agents/acp/translate.ts` 起的名字）：按它是哪一类动作说一句中文，
+ * 不把「acp/execute」这种协议名摆到对话里。
+ */
+const ACP_STEP_WORDS: Record<string, readonly [string, string]> = {
+  read: ["正在读文件", "读了文件"],
+  edit: ["正在改文件", "改了文件"],
+  delete: ["正在删除文件", "删除了文件"],
+  move: ["正在移动文件", "移动了文件"],
+  search: ["正在搜索", "搜索了"],
+  execute: ["正在运行命令", "运行了命令"],
+  fetch: ["正在联网获取", "联网获取了内容"],
+  think: ["正在想", "想了想"],
+};
+
 export function readToolName(name: string, running = false): ToolName {
+  if (name.startsWith("acp/")) {
+    const [doing, done] = ACP_STEP_WORDS[name.slice(4)] ?? [
+      "正在做一步",
+      "做了一步",
+    ];
+    return { label: running ? doing : done };
+  }
   const own = ownToolLabel(name, running);
   if (own) return { label: own };
   const parts = name.split("__");

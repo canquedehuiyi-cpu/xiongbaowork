@@ -1922,7 +1922,9 @@ export function ServerToolLine({
     folderStepSubject(name, args, folders) ??
     ownToolSubject(name, args) ??
     // 文件夹里的命令：上面两处只认文件，命令本身也要写出来（「wc -c notes.txt · 你拒绝了这一步。」）。
-    (name.startsWith("host_") ? hostStepSubject(args) : undefined);
+    (name.startsWith("host_") ? hostStepSubject(args) : undefined) ??
+    // 外部员工的一步：它自己给这一步起的标题（「git push origin fix/login」）。
+    (name.startsWith("acp/") ? acpStepSubject(args) : undefined);
   /*
    * A refusal is not a result, and must not read like one.
    *
@@ -2034,6 +2036,18 @@ export function ServerToolLine({
 }
 
 /** 文件夹步骤针对的文件或命令，从调用参数里读；读不到就不写。授权 id 永远不上屏。 */
+/** 外部员工那一步的标题（服务器放在参数的 `title` 里），太长的截短。 */
+function acpStepSubject(args: string | undefined): string | undefined {
+  try {
+    const title = (JSON.parse(args ?? "") as { title?: unknown }).title;
+    if (typeof title !== "string" || !title.trim()) return undefined;
+    const text = title.trim();
+    return text.length > 80 ? `${text.slice(0, 79)}…` : text;
+  } catch {
+    return undefined;
+  }
+}
+
 function hostStepSubject(args: string | undefined): string | undefined {
   if (!args) return undefined;
   try {
