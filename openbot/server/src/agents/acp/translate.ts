@@ -27,6 +27,8 @@ export type AcpTranslator = {
   update(update: unknown): BaseEvent[];
   /** Ends the message still open and answers every tool call still waiting: the turn is over. */
   close(): BaseEvent[];
+  /** Ends the message still open, so something else can be said mid-turn; the next chunk opens another. */
+  pause(): BaseEvent[];
 };
 
 export type AcpDiffFile = { path: string; added: number; removed: number };
@@ -292,6 +294,7 @@ export function createAcpTranslator(
           return [];
       }
     },
+    pause: endMessage,
     close() {
       const events = endMessage();
       for (const [toolCallId, answered] of calls)

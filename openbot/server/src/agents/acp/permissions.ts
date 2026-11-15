@@ -1,0 +1,1218 @@
+import {
+  ACP_RULE_DEFAULTS,
+  type AcpPermissionOptionFrame,
+  type AcpRuleKey,
+  type AcpRuleValue,
+} from "@openbot/shared/acp";
+import {
+  WITHDRAWN_APPROVALS_OFF,
+  WITHDRAWN_RULE_ALLOWS,
+} from "@openbot/shared/approval-outcomes";
+import {
+  ONCE_ONLY_SOURCES,
+  offersStandingRule,
+} from "@openbot/shared/standing-rule";
+import { eq, sql } from "drizzle-orm";
+import {
+  OUTBOUND_SEND_REASON,
+  PUBLISH_POST_REASON,
+  SHARE_ACCESS_REASON,
+  safetyRequirement,
+  securityFloor,
+} from "../../approvals/policy";
+import {
+  type ApprovalAction,
+  type ApprovalCandidate,
+  type ApprovalContinuation,
+  type ApprovalDecision,
+  type ApprovalPolicyOutcome,
+  type ApprovalRecord,
+  type ApprovalStore,
+  approvalAction,
+  DEFAULT_EMPLOYEE_SECURITY,
+  isAcpAction,
+} from "../../approvals/types";
+import type { Database } from "../../db/client";
+import { agents, approvalRequests } from "../../db/schema";
+import type { TaskProjector } from "../../tasks/projector";
+import { asPlatform, runAsTenant } from "../../tenant/context";
+import { ownerTenantOfBot } from "../bot-owner";
+import type { AcpPermissionRequest } from "./agent";
+import type { AcpRelay } from "./relay";
+import { type AcpTurnStore, isFinalAcpTurnStatus } from "./turns";
+
+/**
+ * The permission bridge of an external employee (spec §4): what XiongBao answers when the agent on
+ * the owner's computer asks before it acts (`acp.permission.request`, handed over by the run in
+ * agent.ts).
+ *
+ * THE SAME POLICY ENGINE, FIVE LAYERS, STRICTEST FIRST (spec「和现有审批层的关系」):
+ *  1. Every floor this deployment has: deleting asks every time and only "allow once" (#398); paying,
+ *     credentials and security settings; sending to people; sharing and publishing. A floor the
+ *     engine would hand to the person is asked here instead (the agent cannot be "done by you").
+ *     The engine names its floors by the words of the action; commands that send, share or publish
+ *     have no app name to go by, so this file recognises those itself (`commandFloor`).
+ *  2. The admin's action kinds left to people themselves, a disabled tool (SEC1), a custom rule
+ *     saying no: refused outright, the rule named in the conversation.
+ *  3. A custom rule that asks (or hands off): asks.
+ *  4. The employee's own five rules (`AcpRuleKey`); several matched, the strictest wins.
+ *  5. Approvals switched off: what layer 4 asks goes through; layers 1–3 do not move.
+ * Floors and layer 2 never offer "allow for this conversation"; layers 3 and 4 do, and an answer of
+ * that kind lets the same kind of request (`acpAllowKey`) through for the rest of the thread.
+ *
+ * ASKING. An approval is opened in the hirer's tenant, for the hirer (a group's other members
+ * neither see nor answer it: the approval service refuses them, `externalAgentHirer`), with what the
+ * card shows (`AcpApprovalCard`). The turn's one board card (`runRef`, the card the queueing run left
+ * open) parks on it, and the store's `resumed` moves it back when it is answered.
+ *
+ * ANSWERING. XiongBao's three choices become the request's own options: allow once → `allow_once`,
+ * allow for this conversation → `allow_always`, deny → `reject_once`; an option the agent did not
+ * offer falls back to the closest stricter one, never to a looser one. Each `(tenant, device,
+ * requestId)` is opened once however often the device reports it; a report of one already answered
+ * (the device reconnected before the answer reached it) is answered again. An answer the agent does
+ * not recognise (`acp.error` `bad_option`) marks the approval failed and is not tried again.
+ *
+ * EXPIRING. A turn that ends (done, cancelled, interrupted, `ask_mode_lost`) takes its open
+ * approvals with it, and its card is not left parked.
+ */
+
+type Loose = Record<string, unknown>;
+
+const record = (value: unknown): Loose | null =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Loose)
+    : null;
+
+const str = (value: unknown): string | null =>
+  typeof value === "string" && value !== "" ? value : null;
+
+const clip = (text: string, limit: number) =>
+  text.length > limit ? `${text.slice(0, limit)}…` : text;
+
+/** What each rule is called on the hire settings page. */
+export const ACP_RULE_LABELS: Record<AcpRuleKey, string> = {
+  editInside: "改工作文件夹里的文件",
+  touchOutside: "动工作文件夹以外的文件",
+  runCommand: "运行命令",
+  network: "联网下载、装依赖",
+  push: "提交并推送代码",
+};
+
+const ACP_RULE_KEYS = Object.keys(ACP_RULE_DEFAULTS) as AcpRuleKey[];
+
+/** The ACP tool kinds XiongBao knows; anything else is `other`. */
+const KNOWN_KINDS = new Set([
+  "read",
+  "edit",
+  "delete",
+  "move",
+  "search",
+  "execute",
+  "think",
+  "fetch",
+]);
+
+/** What each kind of request is, in the card's one sentence. */
+const VERBS: Record<string, string> = {
+  read: "读取文件",
+  edit: "修改文件",
+  delete: "删除文件",
+  move: "移动文件",
+  search: "搜索文件",
+  execute: "运行命令",
+  think: "思考",
+  fetch: "联网获取内容",
+  switch_mode: "切换工作模式",
+  other: "执行一个操作",
+};
+
+/** Said where a request is refused, expired, or its answer went astray. */
+export const ACP_PERMISSION_EXPIRED = "这一轮已经结束，这条许可请求作废了。";
+export const ACP_EMPLOYEE_GONE = "这位外部员工已不在了，许可请求已拒绝。";
+export const ACP_BAD_OPTION =
+  "外部员工没有认出这个回答，已按取消处理。请让它再试一次。";
+
+export function kindOfRequest(value: unknown): string {
+  const kind = typeof value === "string" ? value : "";
+  return /^[a-z_]{1,32}$/.test(kind) ? kind : "other";
+}
+
+/** A permission request as the rules read it. */
+export type AcpPermissionAsk = {
+  kind: string;
+  title: string;
+  rawInput: unknown;
+  facts: { insideWorkdir: boolean | null; paths?: string[] };
+  /** Whose request it is, for the policy engine: the hirer and the employee. */
+  actorId?: string;
+  botId?: string;
+  continuation?: ApprovalContinuation;
+};
+
+/** The shells whose `-c` argument is the command an argv runs. */
+const SHELLS =
+  /^(?:.*[\\/])?(bash|sh|zsh|dash|fish|pwsh|powershell|cmd)(\.exe)?$/i;
+const SHELL_FLAG = /^(-c|-lc|-ic|-command|\/c)$/i;
+
+/**
+ * The command line an `execute` request runs: `rawInput.command` as a string (Claude Code, Hermes)
+ * or an argv (Codex; a shell wrapper unwrapped to what it runs). Null when there is none to read.
+ */
+export function commandOf(rawInput: unknown): string | null {
+  if (typeof rawInput === "string") return str(rawInput);
+  const raw = record(rawInput);
+  const command = raw?.command ?? raw?.cmd ?? raw?.commandLine;
+  if (typeof command === "string") return str(command);
+  if (
+    Array.isArray(command) &&
+    command.length > 0 &&
+    command.every((part) => typeof part === "string")
+  ) {
+    const argv = command as string[];
+    const flag = argv.findIndex(
+      (part, index) => index > 0 && SHELL_FLAG.test(part),
+    );
+    if (SHELLS.test(argv[0] as string) && flag > 0 && flag === argv.length - 2)
+      return str(argv[flag + 1]);
+    return str(argv.join(" "));
+  }
+  return null;
+}
+
+const urlOf = (rawInput: unknown): string | null => {
+  const raw = record(rawInput);
+  return str(raw?.url) ?? str(raw?.uri);
+};
+
+/** Installing dependencies or downloading: the network rule. */
+const NETWORK_COMMANDS = [
+  /\b(npm|pnpm|yarn|bun|cnpm)\s+(install|i|add|ci|update|upgrade|up|dlx|x)\b/i,
+  /\b(npx|pnpx|bunx|uvx|pipx)\s+\S/i,
+  /\byarn\s*($|[;&|])/i,
+  /\bpip3?\s+(install|download)\b/i,
+  /\bpython3?\s+-m\s+pip\s+install\b/i,
+  /\buv\s+(pip\s+install|add|sync|tool\s+install)\b/i,
+  /\b(poetry|pdm|conda|mamba)\s+(add|install|update)\b/i,
+  /\bcargo\s+(add|install|fetch|update)\b/i,
+  /\bgo\s+(get|install|mod\s+download)\b/i,
+  /\bgem\s+install\b/i,
+  /\bbundle\s+(install|update)\b/i,
+  /\b(brew|apt|apt-get|yum|dnf|apk|pacman|zypper|choco|winget|scoop|port)\s+(install|add|upgrade|-S)\b/i,
+  /\bcomposer\s+(install|require|update)\b/i,
+  /\bdotnet\s+(add\s+package|restore)\b/i,
+  /\b(curl|wget|aria2c|invoke-webrequest|iwr)\b/i,
+  /\bgit\s+(clone|fetch|pull)\b/i,
+];
+
+/** `git` with its global options (`-C dir`, `-c key=value`, `--no-pager`) before the subcommand. */
+const GIT = String.raw`\bgit(?:\s+(?:-C|-c|--git-dir|--work-tree|--namespace)\s+\S+|\s+--?[\w-]+(?:=\S+)?)*`;
+/** Committing and pushing code: the push rule. `git stash push` stays on the computer. */
+const PUSH_COMMANDS = [
+  new RegExp(`${GIT}\\s+push\\b`, "i"),
+  /\bgh\s+pr\s+(create|merge)\b/i,
+  /\b(hg|jj\s+git)\s+push\b/i,
+  /\bsvn\s+(commit|ci)\b/i,
+];
+
+/** Where a command line starts, so a word in an argument is not taken for the program. */
+const AT_START = String.raw`(?:^|[;&|(\n]\s*|\bsudo\s+)`;
+
+/**
+ * Commands that send to people, share or publish, which the engine's name-based floors cannot see
+ * (they read an app tool's name; a command has none): the same three floors, by the command line.
+ */
+const COMMAND_FLOORS: {
+  source: "outbound_send" | "share_access" | "publish_post";
+  reason: string;
+  pattern: RegExp;
+}[] = [
+  {
+    source: "outbound_send",
+    reason: OUTBOUND_SEND_REASON,
+    pattern: new RegExp(
+      `${AT_START}(mail|mailx|sendmail|mutt|msmtp|swaks)\\b` +
+        String.raw`|\bgh\s+(issue|pr)\s+(comment|review)\b|\bgh\s+issue\s+create\b` +
+        String.raw`|hooks\.slack\.com|slack\.com/api/chat\.|discord(app)?\.com/api/webhooks|api\.telegram\.org/bot|oapi\.dingtalk\.com|qyapi\.weixin\.qq\.com|open\.feishu\.cn/open-apis/bot|api\.twilio\.com|api\.sendgrid\.com|api\.mailgun\.net|\bsmtps?://`,
+      "i",
+    ),
+  },
+  {
+    source: "share_access",
+    reason: SHARE_ACCESS_REASON,
+    pattern:
+      /\bgh\s+repo\s+edit\b.*--visibility\b|\bgh\s+gist\s+create\b.*(--public|\s-p\b)|\bgh\s+api\b.*\/collaborators\//i,
+  },
+  {
+    source: "publish_post",
+    reason: PUBLISH_POST_REASON,
+    pattern:
+      /\b(npm|pnpm|yarn)\s+publish\b|\b(cargo|poetry|vsce|ovsx)\s+publish\b|\btwine\s+upload\b|\bgem\s+push\b|\bgh\s+release\s+create\b|\bdocker\s+push\b/i,
+  },
+];
+
+export type AcpClassified = {
+  /** The rules the request falls under, in name order. */
+  rules: AcpRuleKey[];
+  candidate: ApprovalCandidate;
+  kind: string;
+  /** For `execute`: the command line, or null when it could not be read. */
+  command: string | null;
+  url: string | null;
+  paths: string[];
+  /** A kind none of the five rules is about (`other`, `switch_mode`, …): asked. */
+  unrecognised: boolean;
+};
+
+const PATH_KINDS = new Set(["read", "edit", "move", "delete", "search"]);
+
+/**
+ * Which of the five rules a request falls under, and the action the policy engine weighs: the tool
+ * `acp/<kind>`, the command in `args.command` (as `computer_run_command` carries it), a path
+ * request's paths (relative to the working folder; a file name only, outside it) or a fetch's URL.
+ * A path the device could not place (`insideWorkdir: null`) is outside.
+ */
+export function classifyRequest(req: AcpPermissionAsk): AcpClassified {
+  const kind = kindOfRequest(req.kind);
+  const inside = req.facts.insideWorkdir === true;
+  const paths = (req.facts.paths ?? []).filter(
+    (path): path is string => typeof path === "string",
+  );
+  const command = kind === "execute" ? commandOf(req.rawInput) : null;
+  const url = kind === "fetch" ? urlOf(req.rawInput) : null;
+  const rules = new Set<AcpRuleKey>();
+  if (kind === "edit" || kind === "move" || kind === "delete")
+    rules.add(inside ? "editInside" : "touchOutside");
+  else if ((kind === "read" || kind === "search") && !inside)
+    rules.add("touchOutside");
+  else if (kind === "execute") {
+    rules.add("runCommand");
+    if (command !== null) {
+      if (NETWORK_COMMANDS.some((pattern) => pattern.test(command)))
+        rules.add("network");
+      if (PUSH_COMMANDS.some((pattern) => pattern.test(command)))
+        rules.add("push");
+    }
+    if (req.facts.insideWorkdir === false) rules.add("touchOutside");
+  } else if (kind === "fetch") rules.add("network");
+  const unrecognised = !KNOWN_KINDS.has(kind);
+  const sorted = [...rules].sort();
+  const args: Loose =
+    kind === "execute"
+      ? command === null
+        ? {}
+        : { command }
+      : kind === "fetch"
+        ? url === null
+          ? { title: req.title }
+          : { url }
+        : PATH_KINDS.has(kind)
+          ? { paths }
+          : { title: req.title };
+  return {
+    rules: sorted,
+    kind,
+    command,
+    url,
+    paths,
+    unrecognised,
+    candidate: {
+      actorId: req.actorId ?? "",
+      botId: req.botId ?? "",
+      toolRef: `acp/${kind}`,
+      effect:
+        kind === "read" || kind === "search" || kind === "think"
+          ? "read"
+          : "write",
+      scope: unrecognised ? "other" : sorted.join("+") || "none",
+      args,
+      ...(kind === "delete" ? { destructive: true as const } : {}),
+      ...(req.continuation ? { continuation: req.continuation } : {}),
+    },
+  };
+}
+
+/**
+ * The kind of request "allow for this conversation" lets through for the rest of a thread: the same
+ * tool under the same rules. Stored as a conversation answer (`approval_conversation_grants`), whose
+ * `toolRef` and `scope` are exactly these.
+ */
+export function acpAllowKey(candidate: {
+  toolRef: string;
+  scope: string;
+}): string {
+  return `${candidate.toolRef}|${candidate.scope}`;
+}
+
+/** An employee's saved rules (`agents.configuration.permissions`): defaults where missing, ask where unreadable. */
+export function acpRulesOf(
+  configuration: unknown,
+): Record<AcpRuleKey, AcpRuleValue> {
+  const saved = record(record(configuration)?.permissions) ?? {};
+  const rules = { ...ACP_RULE_DEFAULTS };
+  for (const key of ACP_RULE_KEYS) {
+    if (!(key in saved)) continue;
+    const value = saved[key];
+    rules[key] =
+      value === "direct" ||
+      value === "ask" ||
+      (value === "dangerous" && key === "runCommand")
+        ? value
+        : "ask";
+  }
+  return rules;
+}
+
+export type AcpPermissionDecision =
+  | { kind: "allow"; because: string }
+  | { kind: "deny"; reason: string }
+  | {
+      kind: "ask";
+      offerConversation: boolean;
+      /** Stored with the approval: why it asks, and whether a standing answer is offered. */
+      policy: ApprovalPolicyOutcome;
+      /** The rule or floor it hit, for the card. */
+      because: string;
+    };
+
+/** Who a refusal came from, as the conversation names it. */
+const REFUSED_BY: Record<string, string> = {
+  team_rule: "管理员的规则",
+  owner_rule: "员工主人的规则",
+  personal_rule: "你的规则",
+  host_command_cap: "团队的电脑命令设置",
+};
+
+/** The floors the engine names: asked every time, never answered for the conversation. */
+const FLOOR_SOURCES = new Set([
+  "safety",
+  "destructive_tool",
+  "outbound_send",
+  "share_access",
+  "publish_post",
+]);
+
+const FLOOR_NAMES: Record<string, string> = {
+  safety: "底线：付款、凭据或安全设置",
+  destructive_tool: "底线：删除",
+  outbound_send: "底线：对外发消息或邮件",
+  share_access: "底线：分享或改变谁能访问",
+  publish_post: "底线：公开发布",
+};
+
+/** Asked every time with allow once and deny only, whatever the source. */
+function onceOnly(policy: ApprovalPolicyOutcome): ApprovalPolicyOutcome {
+  const { kind, review, ruleId, reason, source } = policy;
+  return {
+    behaviour: "ask",
+    source,
+    reason,
+    ...(kind ? { kind } : {}),
+    ...(ruleId ? { ruleId } : {}),
+    ...(review ? { review } : {}),
+    ...(ONCE_ONLY_SOURCES.has(source) ? {} : { closed: true as const }),
+  };
+}
+
+/** A runCommand rule of `dangerous`: the dangerous-command and sensitive-path tables of SEC1. */
+function dangerous(classified: AcpClassified): string | undefined {
+  return securityFloor(
+    {
+      ...classified.candidate,
+      toolRef: "computer_run_command",
+      args: { command: classified.command },
+    },
+    DEFAULT_EMPLOYEE_SECURITY,
+    true,
+  )?.reason;
+}
+
+/**
+ * What XiongBao does with one permission request, layer by layer (see the top of this file).
+ * `policy` is the deployment's engine for the hirer (`approvalService.policyOutcome`), which reads
+ * the team's and the hirer's rules, the admin's settings and the employee's tool permissions;
+ * `approvalsOn` is the hirer's approvals switch.
+ */
+export async function resolvePermission(input: {
+  request: AcpPermissionAsk;
+  employeeRules: Record<AcpRuleKey, string>;
+  threadAllows: Set<string>;
+  approvalsOn: boolean;
+  policy: (candidate: ApprovalCandidate) => Promise<ApprovalPolicyOutcome>;
+}): Promise<AcpPermissionDecision> {
+  const classified = classifyRequest(input.request);
+  const { candidate } = classified;
+  const outcome = await input.policy(candidate);
+  const allowed = input.threadAllows.has(acpAllowKey(candidate));
+
+  // Layer 2: refused outright, the rule named.
+  if (outcome.behaviour === "deny") {
+    const by = REFUSED_BY[outcome.source] ?? "管理员的设置";
+    return {
+      kind: "deny",
+      reason: `已按${by}自动拒绝${outcome.ruleId ? `（规则 ${outcome.ruleId}）` : ""}。`,
+    };
+  }
+  const floor = safetyRequirement(candidate);
+  if (outcome.behaviour === "hand_off") {
+    // The admin left this kind of action to people themselves: an agent cannot do it for them.
+    if (
+      outcome.source === "safety" &&
+      outcome.kind !== undefined &&
+      !outcome.review &&
+      floor?.behaviour === "ask"
+    )
+      return {
+        kind: "deny",
+        reason: `已按管理员的设置自动拒绝：${outcome.reason}`,
+      };
+    // Layer 1 (paying, credentials, security settings), or a rule or the reviewer handing it to
+    // the person: the person decides, once.
+    return {
+      kind: "ask",
+      offerConversation: false,
+      policy: onceOnly(outcome),
+      because:
+        outcome.source === "safety"
+          ? (FLOOR_NAMES.safety as string)
+          : (REFUSED_BY[outcome.source] ?? "审查"),
+    };
+  }
+  // Layer 1: the engine's floors.
+  if (outcome.behaviour === "ask" && FLOOR_SOURCES.has(outcome.source))
+    return {
+      kind: "ask",
+      offerConversation: false,
+      policy: onceOnly(outcome),
+      because: FLOOR_NAMES[outcome.source] ?? "底线",
+    };
+  // Layer 1: a command that sends, shares or publishes.
+  const text = [classified.command, classified.url].filter(Boolean).join(" ");
+  const commandFloor = text
+    ? COMMAND_FLOORS.find((entry) => entry.pattern.test(text))
+    : undefined;
+  if (commandFloor)
+    return {
+      kind: "ask",
+      offerConversation: false,
+      policy: {
+        behaviour: "ask",
+        source: commandFloor.source,
+        reason: commandFloor.reason,
+      },
+      because: FLOOR_NAMES[commandFloor.source] as string,
+    };
+  // Layer 3: a custom rule, or the reviewer, asks. The engine's own "ask before changes" default
+  // is not one: for an external employee the switch is layer 5.
+  if (outcome.behaviour === "ask" && outcome.source !== "default") {
+    const offerConversation = offersStandingRule({ policy: outcome });
+    if (offerConversation && allowed)
+      return { kind: "allow", because: "这次对话里已允许" };
+    return {
+      kind: "ask",
+      offerConversation,
+      policy: offerConversation ? outcome : onceOnly(outcome),
+      because: REFUSED_BY[outcome.source] ?? "审查",
+    };
+  }
+  // Layer 4: the employee's own rules, strictest first.
+  const asking: { label: string; reason: string }[] = [];
+  if (classified.unrecognised)
+    asking.push({
+      label: "其他操作",
+      reason: "这个操作不在五项规则里，先问你。",
+    });
+  else if (classified.kind === "execute" && classified.command === null)
+    asking.push({
+      label: ACP_RULE_LABELS.runCommand,
+      reason: "看不到这条命令的内容，先问你。",
+    });
+  for (const key of classified.rules) {
+    const value = input.employeeRules[key];
+    if (value === "direct") continue;
+    if (value === "dangerous" && key === "runCommand") {
+      const why = classified.command === null ? null : dangerous(classified);
+      if (why === undefined) continue;
+      asking.push({
+        label: ACP_RULE_LABELS.runCommand,
+        reason: why ?? "看不到这条命令的内容，先问你。",
+      });
+      continue;
+    }
+    // `ask`, and anything that is not a choice, asks.
+    asking.push({
+      label: ACP_RULE_LABELS[key],
+      reason: `「${ACP_RULE_LABELS[key]}」设成了先问你。`,
+    });
+  }
+  if (asking.length === 0) return { kind: "allow", because: "规则允许" };
+  // Layer 5.
+  if (!input.approvalsOn) return { kind: "allow", because: "审批已关闭" };
+  if (allowed) return { kind: "allow", because: "这次对话里已允许" };
+  const labels = [...new Set(asking.map((entry) => entry.label))];
+  return {
+    kind: "ask",
+    offerConversation: true,
+    policy: {
+      behaviour: "ask",
+      source: "acp_rule",
+      reason: [...new Set(asking.map((entry) => entry.reason))].join(""),
+    },
+    because: labels.join("、"),
+  };
+}
+
+/**
+ * Who may answer an approval, for `createApprovalService`'s `externalAgentHirer`: undefined when it
+ * is not an external employee's; its employee's hirer when that is whom it was opened for; null
+ * (nobody) otherwise. Read as `platform`: the approval lives in the hirer's tenant, and whoever is
+ * refused must learn it is not theirs (403), not that it is missing. Only the answer leaves.
+ */
+export function createAcpApprovalHirer(
+  database: Database,
+): (approvalId: string) => Promise<string | null | undefined> {
+  return async (approvalId) => {
+    const [row] = await asPlatform(() =>
+      database
+        .select({
+          ownerUserId: approvalRequests.ownerUserId,
+          toolRef: sql<string | null>`${approvalRequests.action}->>'toolRef'`,
+          botId: sql<string | null>`${approvalRequests.action}->>'botId'`,
+        })
+        .from(approvalRequests)
+        .where(eq(approvalRequests.id, approvalId))
+        .limit(1),
+    );
+    if (!row || !isAcpAction({ toolRef: row.toolRef ?? "" })) return undefined;
+    if (!row.botId) return null;
+    const hirer = await ownerTenantOfBot(database, row.botId);
+    return hirer !== null && hirer === row.ownerUserId ? hirer : null;
+  };
+}
+
+/** What an external employee's approval card shows, beside the command or paths in its `args`. */
+export type AcpApprovalCard = {
+  employee: string;
+  computer: string;
+  /** One sentence, made here from the request's kind and title. */
+  action: string;
+  /** The rule or floor it hit. */
+  hit: string;
+  reason: string;
+  /** What this turn has done so far. */
+  summary: string;
+  /** The files this turn has changed so far. */
+  files: string[];
+  offerConversation: boolean;
+  deviceId: string;
+  requestId: string;
+  turnId: string;
+  /** The tool call the request is about, as the transcript names it (`<runId>:<agent's id>`). */
+  toolCallId?: string;
+  /** The device's options, to answer from the approval alone on any server. */
+  options: AcpPermissionOptionFrame[];
+};
+
+/** The card of an external employee's approval, or null for any other approval. */
+export function acpCardOf(
+  action: Pick<ApprovalAction, "toolRef" | "target">,
+): AcpApprovalCard | null {
+  if (!isAcpAction(action)) return null;
+  const card = record(record(action.target)?.acp);
+  return card ? (card as AcpApprovalCard) : null;
+}
+
+const OPTION_ORDER: Record<
+  "allow_once" | "allow_always" | "reject_once",
+  string[]
+> = {
+  // Never a looser answer than the one given: an agent told "always" stops asking.
+  allow_once: ["allow_once", "reject_once", "reject_always"],
+  allow_always: ["allow_always", "allow_once", "reject_once", "reject_always"],
+  reject_once: ["reject_once", "reject_always"],
+};
+
+/** The request's own option for an answer; null (`cancelled`) when it offered nothing close. */
+export function optionFor(
+  options: readonly AcpPermissionOptionFrame[],
+  want: keyof typeof OPTION_ORDER,
+): string | null {
+  for (const kind of OPTION_ORDER[want]) {
+    const found = options.find((option) => option.kind === kind);
+    if (found) return found.optionId;
+  }
+  return null;
+}
+
+/** What a settled approval answers the agent. */
+function answerOf(
+  request: Pick<ApprovalRecord, "status" | "decision" | "result">,
+): "allow_once" | "allow_always" | "reject_once" | null {
+  if (request.status === "pending") return null;
+  if (request.decision === "deny") return "reject_once";
+  if (request.decision === "allow_conversation") return "allow_always";
+  if (request.decision) return "allow_once";
+  // Closed without a decision: withdrawn because the person's rules or switch now let it through,
+  // or expired (its turn is over, and nothing is waiting for it).
+  const content = request.result?.content;
+  return content === WITHDRAWN_RULE_ALLOWS ||
+    content === WITHDRAWN_APPROVALS_OFF
+    ? "allow_once"
+    : "reject_once";
+}
+
+const parseOptions = (value: unknown): AcpPermissionOptionFrame[] =>
+  Array.isArray(value)
+    ? value.flatMap((entry) => {
+        const option = record(entry);
+        const optionId = str(option?.optionId);
+        return optionId
+          ? [
+              {
+                optionId,
+                kind: typeof option?.kind === "string" ? option.kind : "",
+                name: typeof option?.name === "string" ? option.name : "",
+              },
+            ]
+          : [];
+      })
+    : [];
+
+export type AcpEmployeeForPermission = {
+  name: string;
+  /** The computer's name, as the hirer paired it. */
+  computer: string;
+  rules: Record<AcpRuleKey, AcpRuleValue>;
+};
+
+/**
+ * The employee a permission request is from, read in its hirer's tenant (the bridge's frame): its
+ * name, its rules (`agents.configuration.permissions`), and the computer's name. Null when it is no
+ * longer an external employee there.
+ */
+export function createAcpEmployeeLoader(
+  database: Database,
+  devices: {
+    list(tenantId: string): Promise<{ deviceId: string; name: string }[]>;
+  },
+): (request: AcpPermissionRequest) => Promise<AcpEmployeeForPermission | null> {
+  return async (request) => {
+    const [row] = await database
+      .select({
+        name: agents.name,
+        type: agents.type,
+        configuration: agents.configuration,
+      })
+      .from(agents)
+      .where(eq(agents.id, request.agentId))
+      .limit(1);
+    if (row?.type !== "device_acp") return null;
+    const device = (await devices.list(request.tenantId)).find(
+      (entry) => entry.deviceId === request.deviceId,
+    );
+    return {
+      name: row.name,
+      computer: device?.name ?? "这台电脑",
+      rules: acpRulesOf(row.configuration),
+    };
+  };
+}
+
+export type AcpPermissionBridgeDeps = {
+  relay: Pick<AcpRelay, "send" | "subscribe">;
+  turns: Pick<AcpTurnStore, "get">;
+  /** The approval store as the approval service holds it (`approvalService.store`). */
+  approvals: ApprovalStore;
+  /** `approvalService.onDecided`. */
+  onDecided: (
+    listener: (request: ApprovalRecord, decision: ApprovalDecision) => void,
+  ) => () => void;
+  /** `approvalService.policyOutcome`: the engine for one action, audited, nothing opened. */
+  policy: (
+    candidate: ApprovalCandidate,
+  ) => Promise<ApprovalPolicyOutcome | undefined>;
+  board: Pick<TaskProjector, "needsAction" | "resumed">;
+  /** The employee as its hirer's tenant has it, or null when it is gone. */
+  employee: (
+    request: AcpPermissionRequest,
+  ) => Promise<AcpEmployeeForPermission | null>;
+  /** Calls `tick` every `ms` until stopped. Injected for a test's clock. */
+  every?: (ms: number, tick: () => void) => () => void;
+  /** How often settled approvals, unsent answers and ended turns are looked for. */
+  pollMs?: number;
+  log?: (message: string) => void;
+};
+
+export type AcpPermissionBridge = {
+  /** A permission request of a run (`AcpPermissionHook`). Never throws. */
+  onRequest(request: AcpPermissionRequest): Promise<void>;
+  /** One pass of what the timer does: answers decided elsewhere, unsent answers, ended turns. */
+  poll(): Promise<void>;
+  dispose(): void;
+};
+
+type Entry = {
+  key: string;
+  request: AcpPermissionRequest;
+  requestId: string;
+  options: AcpPermissionOptionFrame[];
+  /**
+   * `resolving`: being decided. `retry`: deciding failed, tried again on the next poll.
+   * `waiting`: an approval is open. `unsent` / `answered`: the answer could not be / was written.
+   * `over`: nothing more is done (the turn ended, or the answer was refused).
+   */
+  state: "resolving" | "retry" | "waiting" | "unsent" | "answered" | "over";
+  approvalId?: string;
+  toolCallId?: string;
+  runId?: string;
+  /** The board card was parked on the approval. */
+  parked: boolean;
+  /** The option answered, `null` for cancelled; undefined until there is one. */
+  answer?: string | null;
+};
+
+type WatchedTurn = {
+  tenantId: string;
+  turnId: string;
+  entries: Set<Entry>;
+  /** The request answered last: the one an `acp.error` `bad_option` is about. */
+  lastAnswered?: Entry;
+  ended: boolean;
+  unsubscribe: () => void;
+};
+
+const defaultEvery = (ms: number, tick: () => void) => {
+  const timer = setInterval(tick, ms);
+  timer.unref?.();
+  return () => clearInterval(timer);
+};
+
+export function createAcpPermissionBridge(
+  deps: AcpPermissionBridgeDeps,
+): AcpPermissionBridge {
+  const log = deps.log ?? ((message: string) => console.warn(message));
+  const entries = new Map<string, Entry>();
+  const byApproval = new Map<string, Entry>();
+  const watched = new Map<string, WatchedTurn>();
+
+  const keyOf = (request: AcpPermissionRequest, requestId: string) =>
+    JSON.stringify([request.tenantId, request.deviceId, requestId]);
+  const say = (entry: Entry, text: string) => {
+    try {
+      entry.request.say?.(text);
+    } catch (error) {
+      log(
+        `acp permissions: could not say it in the conversation: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  };
+  const inTenant = <T>(entry: Entry, work: () => Promise<T>) =>
+    runAsTenant(entry.request.tenantId, work);
+
+  function forget(entry: Entry) {
+    entry.state = "over";
+    if (entries.get(entry.key) === entry) entries.delete(entry.key);
+    if (entry.approvalId && byApproval.get(entry.approvalId) === entry)
+      byApproval.delete(entry.approvalId);
+  }
+
+  /** Writes the answer to the device; kept to send again while it is away. */
+  function answer(entry: Entry, optionId: string | null) {
+    if (entry.state === "over") return;
+    entry.answer = optionId;
+    const { request } = entry;
+    const sent = deps.relay.send(
+      { tenantId: request.tenantId, deviceId: request.deviceId },
+      {
+        type: "acp.permission.answer",
+        agentId: request.agentId,
+        requestId: entry.requestId,
+        optionId,
+      },
+    );
+    entry.state = sent ? "answered" : "unsent";
+    const turn = watched.get(request.turnId);
+    if (turn && sent) turn.lastAnswered = entry;
+  }
+
+  /** The card goes back to running: it parked on this approval. Idempotent. */
+  async function unpark(entry: Entry) {
+    if (!entry.parked || !entry.approvalId) return;
+    entry.parked = false;
+    await deps.board
+      .resumed({
+        tenantId: entry.request.tenantId,
+        approvalId: entry.approvalId,
+        failed: false,
+      })
+      .catch((error: unknown) =>
+        log(
+          `acp permissions: the card of approval ${entry.approvalId} could not move back: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+  }
+
+  /** An approval that is settled answers the agent. */
+  async function settle(entry: Entry, request: ApprovalRecord) {
+    if (entry.state !== "waiting") return;
+    const wanted = answerOf(request);
+    if (!wanted) return;
+    answer(entry, optionFor(entry.options, wanted));
+    await unpark(entry);
+  }
+
+  /**
+   * The turn is over: its approval, if still open, expires (only a pending one is touched), and its
+   * card does not stay parked.
+   */
+  async function expire(entry: Entry) {
+    forget(entry);
+    if (!entry.approvalId || entry.answer !== undefined) return;
+    const { toolCallId, runId } = entry;
+    await inTenant(entry, async () => {
+      await deps.approvals.policy?.withdrawPending(
+        entry.request.ownerUserId,
+        ACP_PERMISSION_EXPIRED,
+        (action) =>
+          isAcpAction(action) &&
+          action.toolCallId === toolCallId &&
+          action.runId === runId,
+        { resume: false },
+      );
+    }).catch((error: unknown) =>
+      log(
+        `acp permissions: approval ${entry.approvalId} could not be expired: ${error instanceof Error ? error.message : String(error)}`,
+      ),
+    );
+    await unpark(entry);
+  }
+
+  async function endTurn(turnId: string) {
+    const turn = watched.get(turnId);
+    if (!turn) return;
+    turn.ended = true;
+    turn.unsubscribe();
+    watched.delete(turnId);
+    for (const entry of [...turn.entries]) await expire(entry);
+  }
+
+  async function answerRefused(turnId: string) {
+    const entry = watched.get(turnId)?.lastAnswered;
+    if (!entry) return;
+    log(
+      `acp permissions: the agent did not take the answer to request ${entry.requestId} of turn ${turnId}`,
+    );
+    // Kept, settled: a report of the same request is not answered again, so nothing loops.
+    entry.state = "over";
+    if (entry.approvalId) byApproval.delete(entry.approvalId);
+    say(entry, ACP_BAD_OPTION);
+    if (entry.approvalId)
+      await inTenant(entry, () =>
+        deps.approvals.saveResult(
+          entry.request.ownerUserId,
+          entry.approvalId as string,
+          { content: ACP_BAD_OPTION, error: ACP_BAD_OPTION },
+        ),
+      ).catch((error: unknown) =>
+        log(
+          `acp permissions: approval ${entry.approvalId} could not be marked failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+  }
+
+  function watch(entry: Entry) {
+    const { tenantId, turnId } = entry.request;
+    let turn = watched.get(turnId);
+    if (!turn) {
+      const fresh: WatchedTurn = {
+        tenantId,
+        turnId,
+        entries: new Set(),
+        ended: false,
+        unsubscribe: () => undefined,
+      };
+      fresh.unsubscribe = deps.relay.subscribe(turnId, (frame) => {
+        if (frame.type === "acp.turn.end") void endTurn(turnId);
+        else if (frame.type === "acp.error" && frame.code === "ask_mode_lost")
+          void endTurn(turnId);
+        else if (frame.type === "acp.error" && frame.code === "bad_option")
+          void answerRefused(turnId);
+      });
+      watched.set(turnId, fresh);
+      turn = fresh;
+    }
+    turn.entries.add(entry);
+  }
+
+  const turnEnded = (entry: Entry) =>
+    entry.state === "over" || watched.get(entry.request.turnId) === undefined;
+
+  /** One sentence for the card, made here from the request's kind and title. */
+  const sentence = (name: string, kind: string, title: string) =>
+    `${name}想要${VERBS[kind] ?? VERBS.other}${title ? `：${clip(title, 200)}` : ""}`;
+
+  async function resolve(entry: Entry) {
+    const { request } = entry;
+    const frame = request.frame;
+    const toolCall = record(frame.toolCall) ?? {};
+    const facts = record(frame.facts);
+    const employee = await deps.employee(request);
+    if (turnEnded(entry)) return;
+    if (!employee) {
+      answer(entry, optionFor(entry.options, "reject_once"));
+      say(entry, ACP_EMPLOYEE_GONE);
+      return;
+    }
+    const kind = kindOfRequest(toolCall.kind);
+    const title = typeof toolCall.title === "string" ? toolCall.title : "";
+    const runId = `acp:${request.turnId}`;
+    const toolCallId = `acp:${request.deviceId}:${entry.requestId}`;
+    const ask: AcpPermissionAsk = {
+      kind,
+      title,
+      rawInput: toolCall.rawInput,
+      facts: {
+        insideWorkdir:
+          typeof facts?.insideWorkdir === "boolean"
+            ? facts.insideWorkdir
+            : null,
+        paths: Array.isArray(facts?.paths)
+          ? facts.paths.filter(
+              (path): path is string => typeof path === "string",
+            )
+          : [],
+      },
+      actorId: request.ownerUserId,
+      botId: request.agentId,
+      continuation: {
+        runId,
+        threadId: request.threadId,
+        toolCallId,
+        toolName: `acp/${kind}`,
+        args: {},
+        messages: [],
+        state: {},
+        context: [],
+        forwardedProps: {},
+      },
+    };
+    const grants =
+      (await deps.approvals.policy?.conversationGrants?.(
+        request.ownerUserId,
+        request.threadId,
+      )) ?? [];
+    const threadAllows = new Set(
+      grants
+        .filter(
+          (grant) => grant.botId === request.agentId && isAcpAction(grant),
+        )
+        .map(acpAllowKey),
+    );
+    const decided = await resolvePermission({
+      request: ask,
+      employeeRules: employee.rules,
+      threadAllows,
+      approvalsOn: await deps.approvals.enabled(request.ownerUserId),
+      policy: async (candidate) =>
+        (await deps.policy(candidate)) ?? {
+          behaviour: "allow",
+          source: "default",
+          reason: "No rule or preference asks about this.",
+        },
+    });
+    if (turnEnded(entry)) return;
+    if (decided.kind === "allow") {
+      answer(entry, optionFor(entry.options, "allow_once"));
+      return;
+    }
+    if (decided.kind === "deny") {
+      answer(entry, optionFor(entry.options, "reject_once"));
+      say(entry, `${sentence(employee.name, kind, title)}。${decided.reason}`);
+      return;
+    }
+    const classified = classifyRequest(ask);
+    const progress = request.progress ?? { done: [], files: [] };
+    const agentCallId = str(toolCall.toolCallId);
+    const card: AcpApprovalCard = {
+      employee: employee.name,
+      computer: employee.computer,
+      action: sentence(employee.name, kind, title),
+      hit: decided.because,
+      reason: decided.policy.reason,
+      summary:
+        progress.done.length > 0
+          ? `这一轮已完成：${progress.done
+              .slice(-5)
+              .map((step) => clip(step, 120))
+              .join("；")}`
+          : "这一轮还没有完成别的步骤。",
+      files: progress.files.slice(0, 50),
+      offerConversation: decided.offerConversation,
+      deviceId: request.deviceId,
+      requestId: entry.requestId,
+      turnId: request.turnId,
+      ...(agentCallId ? { toolCallId: `${request.runId}:${agentCallId}` } : {}),
+      options: entry.options,
+    };
+    const action: ApprovalAction = {
+      ...approvalAction({ ...classified.candidate, target: { acp: card } }),
+      policy: decided.policy,
+    };
+    entry.runId = runId;
+    entry.toolCallId = toolCallId;
+    const opened = await deps.approvals.open(action);
+    entry.approvalId = opened.id;
+    byApproval.set(opened.id, entry);
+    entry.state = "waiting";
+    if (opened.status !== "pending") {
+      // Opened before (another server, or before a restart) and answered since.
+      await settle(entry, opened);
+      return;
+    }
+    if (turnEnded(entry)) {
+      await expire(entry);
+      return;
+    }
+    entry.parked = true;
+    await deps.board.needsAction({
+      tenantId: request.tenantId,
+      runRef: request.runRef,
+      approvalId: opened.id,
+    });
+    // The turn ended while the card was being parked: it must not stay parked.
+    if (turnEnded(entry)) await unpark(entry);
+  }
+
+  async function decide(entry: Entry) {
+    entry.state = "resolving";
+    try {
+      await inTenant(entry, () => resolve(entry));
+    } catch (error) {
+      if (entry.state === "resolving") entry.state = "retry";
+      log(
+        `acp permissions: request ${entry.requestId} of turn ${entry.request.turnId} could not be decided, tried again shortly: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /** A request reported again: the device reconnected while it still waits. */
+  async function again(entry: Entry) {
+    if (entry.state === "unsent" || entry.state === "answered") {
+      answer(entry, entry.answer ?? null);
+      return;
+    }
+    if (entry.state === "retry") {
+      await decide(entry);
+      return;
+    }
+    if (entry.state === "waiting" && entry.approvalId) {
+      const approvalId = entry.approvalId;
+      const request = await inTenant(entry, () =>
+        deps.approvals.get(entry.request.ownerUserId, approvalId),
+      ).catch(() => null);
+      if (request) await settle(entry, request);
+    }
+  }
+
+  /** Decided on a server that does not hold the request: answered from the approval itself. */
+  function answerFromApproval(request: ApprovalRecord) {
+    const card = acpCardOf(request.action);
+    const wanted = answerOf(request);
+    if (!card || !wanted || !card.deviceId || !card.requestId) return;
+    deps.relay.send(
+      { tenantId: request.ownerUserId, deviceId: card.deviceId },
+      {
+        type: "acp.permission.answer",
+        agentId: request.action.botId,
+        requestId: card.requestId,
+        optionId: optionFor(parseOptions(card.options), wanted),
+      },
+    );
+  }
+
+  const stopListening = deps.onDecided((request) => {
+    if (!isAcpAction(request.action)) return;
+    const entry = byApproval.get(request.id);
+    if (entry) void settle(entry, request);
+    else answerFromApproval(request);
+  });
+
+  let polling = false;
+  async function poll() {
+    if (polling) return;
+    polling = true;
+    try {
+      for (const entry of [...entries.values()]) {
+        if (entry.state === "unsent") answer(entry, entry.answer ?? null);
+        else if (entry.state === "retry") await decide(entry);
+        else if (entry.state === "waiting" && entry.approvalId) {
+          const approvalId = entry.approvalId;
+          const request = await inTenant(entry, () =>
+            deps.approvals.get(entry.request.ownerUserId, approvalId),
+          ).catch(() => null);
+          if (request) await settle(entry, request);
+        }
+      }
+      // A turn ended where this server was not told (stopped while its computer was away).
+      for (const turn of [...watched.values()]) {
+        const row = await runAsTenant(turn.tenantId, () =>
+          deps.turns.get(turn.tenantId, turn.turnId),
+        ).catch(() => undefined);
+        if (row === null || (row && isFinalAcpTurnStatus(row.status)))
+          await endTurn(turn.turnId);
+      }
+      // Answered (or refused) and nothing heard back: forgotten once their turn is.
+      for (const entry of [...entries.values()])
+        if (
+          (entry.state === "answered" || entry.state === "over") &&
+          !watched.has(entry.request.turnId)
+        )
+          forget(entry);
+    } finally {
+      polling = false;
+    }
+  }
+  const stopPolling = (deps.every ?? defaultEvery)(deps.pollMs ?? 5_000, () => {
+    void poll().catch((error: unknown) =>
+      log(
+        `acp permissions: ${error instanceof Error ? error.message : String(error)}`,
+      ),
+    );
+  });
+
+  return {
+    async onRequest(request) {
+      const requestId = str(request.frame.requestId);
+      if (!requestId) return;
+      const key = keyOf(request, requestId);
+      const known = entries.get(key);
+      if (known) {
+        await again(known).catch((error: unknown) =>
+          log(
+            `acp permissions: ${error instanceof Error ? error.message : String(error)}`,
+          ),
+        );
+        return;
+      }
+      const entry: Entry = {
+        key,
+        request,
+        requestId,
+        options: parseOptions(request.frame.options),
+        state: "resolving",
+        parked: false,
+      };
+      entries.set(key, entry);
+      watch(entry);
+      await decide(entry);
+    },
+    poll,
+    dispose() {
+      stopPolling();
+      stopListening();
+      for (const turn of watched.values()) turn.unsubscribe();
+      watched.clear();
+      entries.clear();
+      byApproval.clear();
+    },
+  };
+}

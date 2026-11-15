@@ -24,10 +24,16 @@ import {
   createAcpGroupTurn,
   createAcpSessionHints,
   createAcpTurnStarter,
+  deviceAcpRuntime,
   routeExternalTurns,
   useDeviceAcp,
 } from "./agents/acp/agent";
 import { createAcpContextLoader } from "./agents/acp/context";
+import {
+  createAcpApprovalHirer,
+  createAcpEmployeeLoader,
+  createAcpPermissionBridge,
+} from "./agents/acp/permissions";
 import { createAcpRelay } from "./agents/acp/relay";
 import { type AcpTurnRow, createAcpTurnStore } from "./agents/acp/turns";
 import {
@@ -1389,9 +1395,34 @@ await startupLifecycle.run(async (startup) => {
      * `docs/restart-recovery.md`. The Root-attested ports are not composed here.
      */
     settlement: "database",
+    // An external employee's permission is answered by its hirer only (agents/acp/permissions.ts).
+    externalAgentHirer: createAcpApprovalHirer(database),
     // Assigned further down, once delivery is wired.
     notify: (scope, input) => deliveryNotifications(scope, input),
   });
+  /*
+   * The permission bridge of external employees: their agents' permission requests, weighed by the
+   * same policy engine and the employee's own rules, auto-answered or opened as the hirer's
+   * approvals, and the hirer's answer sent back to the computer.
+   */
+  const acpPermissions = startup.acquireSync(
+    () =>
+      createAcpPermissionBridge({
+        relay: acpRelay,
+        turns: acpTurnStore,
+        approvals: approvalService.store,
+        onDecided: (listener) => approvalService.onDecided(listener),
+        policy: (candidate) => approvalService.policyOutcome(candidate),
+        board: taskProjector,
+        employee: createAcpEmployeeLoader(database, deviceStore),
+      }),
+    (bridge) => bridge.dispose(),
+  );
+  const acpRuntime = deviceAcpRuntime();
+  if (acpRuntime)
+    acpRuntime.onPermission = (request) => {
+      void acpPermissions.onRequest(request);
+    };
   // Check-ins' settings, items, run ledger and pings. See proactive/store.ts.
   const proactiveStore = createProactiveStore(database);
   // Housekeeping on a schedule: audit rows when asked for, screenshots and the check-in ledger always,

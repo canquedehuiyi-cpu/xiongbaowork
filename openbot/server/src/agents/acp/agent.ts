@@ -177,6 +177,10 @@ export type AcpPermissionRequest = {
    * run that queued it (`adoptRunnerCard`).
    */
   runRef: string;
+  /** What this turn has done so far: the steps it finished and the files it changed. */
+  progress?: { done: string[]; files: string[] };
+  /** Says one sentence in the conversation while the run is open (a refusal, with its rule). */
+  say?: (text: string) => void;
 };
 
 export type AcpPermissionHook = (request: AcpPermissionRequest) => void;
@@ -343,6 +347,11 @@ class AcpRun {
   private readonly cardRef: string;
   /** The heartbeat before found the turn over with no end told to this run. */
   private endedUnseen = false;
+  /** What the turn has done, for a permission request's card: titles by tool call, steps done, files changed. */
+  private readonly titles = new Map<string, string>();
+  private readonly done: string[] = [];
+  private readonly doneIds = new Set<string>();
+  private readonly changed = new Set<string>();
 
   constructor(
     private readonly config: DeviceAcpAgentConfig,
@@ -641,8 +650,11 @@ class AcpRun {
         return;
       }
       case "acp.update":
-        for (const event of this.translator.update(frame.update))
+        this.track(frame.update);
+        for (const event of this.translator.update(frame.update)) {
+          this.trackDiff(event);
           this.emit(event);
+        }
         return;
       case "acp.permission.request": {
         const requestId = str(frame.requestId);
@@ -662,6 +674,8 @@ class AcpRun {
             turnId: this.turnId as string,
             runId: this.input.runId,
             runRef: this.cardRef,
+            progress: { done: [...this.done], files: [...this.changed] },
+            say: (text) => this.say(text),
           });
         } catch (error) {
           this.log(
@@ -676,6 +690,49 @@ class AcpRun {
       default:
         return;
     }
+  }
+
+  /** A step the agent finished, by its tool call's title. */
+  private track(update: unknown) {
+    const value =
+      update && typeof update === "object" && !Array.isArray(update)
+        ? (update as Record<string, unknown>)
+        : null;
+    if (
+      value?.sessionUpdate !== "tool_call" &&
+      value?.sessionUpdate !== "tool_call_update"
+    )
+      return;
+    const id = str(value.toolCallId);
+    if (!id) return;
+    const title = str(value.title);
+    if (title && (this.titles.has(id) || this.titles.size < 1000))
+      this.titles.set(id, title);
+    if (value.status !== "completed" || this.doneIds.has(id)) return;
+    this.doneIds.add(id);
+    const step = this.titles.get(id);
+    if (!step) return;
+    this.done.push(step);
+    if (this.done.length > 50) this.done.shift();
+  }
+
+  /** A file the turn changed (`acp.diff`). */
+  private trackDiff(event: BaseEvent) {
+    const { name, value } = event as { name?: unknown; value?: unknown };
+    if (event.type !== EventType.CUSTOM || name !== "acp.diff") return;
+    const files = (value as { files?: unknown } | undefined)?.files;
+    if (!Array.isArray(files)) return;
+    for (const file of files) {
+      const path = str((file as { path?: unknown } | null)?.path);
+      if (path && this.changed.size < 200) this.changed.add(path);
+    }
+  }
+
+  /** One sentence in the conversation while the run is open. */
+  private say(text: string) {
+    if (this.phase === "over") return;
+    for (const event of [...this.translator.pause(), ...this.note(text)])
+      this.emit(event);
   }
 
   private end(frame: Record<string, unknown>) {
