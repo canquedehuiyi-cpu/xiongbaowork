@@ -1398,11 +1398,5 @@
     "introducedIn": "0.2.10",
     "removeIn": "0.2.12",
     "device": true
-  },
-  {
-    "file": "server/src/threads/context-usage.ts",
-    "text": "\"OpenBot personal memory\"",
-    "reason": "parsed-exact-text: matches the personal-memory context entry memory/tools.ts writes, to count it under memory",
-    "category": "parsed-exact-text"
   }
 ]

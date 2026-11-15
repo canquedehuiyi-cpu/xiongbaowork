@@ -14,6 +14,7 @@ import {
   platformModelPool,
   threadContextBreakdowns,
 } from "../db/schema";
+import { PERSONAL_MEMORY_CONTEXT } from "../memory/tools";
 import { DEPLOYMENT_MODEL_REF } from "../models/runtime-resolver";
 import { isPersonTenant, runAsTenant } from "../tenant/context";
 
@@ -487,9 +488,6 @@ const PROMPT_SECTION_CATEGORIES: Readonly<Record<string, ContextShareKey>> = {
   apps: "tools",
   learned_skills: "skills",
 };
-
-/** 个人记忆中间件放进 `RunAgentInput.context` 的那一条（`memory/tools.ts`）。 */
-const PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
 
 /**
  * 压缩会话的摘要放进 `RunAgentInput.context` 的那一条（`threads/compaction.ts`）。它是对话历史的替身，算
