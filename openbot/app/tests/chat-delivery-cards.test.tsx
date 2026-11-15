@@ -538,6 +538,49 @@ test("接活回执：成果已交或已验收时不给「改预计时间」「�
   }
 });
 
+test("验收了、取消了的卡不再隔一会儿重读；还在做的照常重读", async () => {
+  for (const [status, polls] of [
+    ["running", true],
+    ["done", false],
+    ["cancelled", false],
+  ] as const) {
+    serve({
+      card: card({ status }),
+      events: [flow("accepted", todayAt(9, 40), { dueAt: todayAt(10, 30) })],
+    });
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <DeliveryChatCard agentName="小周" event={accepted} />
+      </QueryClientProvider>,
+    );
+    await view.findByRole("group", { name: "接活回执" });
+    await waitFor(() =>
+      expect(
+        queryClient.getQueryData(["tasks", "card", TASK, "events"]),
+      ).toBeDefined(),
+    );
+    // 卡片和流水两个查询，各自的观察者此刻要不要定时重读。
+    for (const key of [
+      ["tasks", "card", TASK],
+      ["tasks", "card", TASK, "events"],
+    ]) {
+      const query = queryClient
+        .getQueryCache()
+        .find({ queryKey: key, exact: true });
+      const observer = query?.observers[0];
+      expect(observer).toBeDefined();
+      const interval = observer?.options.refetchInterval;
+      const value =
+        typeof interval === "function" ? interval(query as never) : interval;
+      expect(Boolean(value)).toBe(polls);
+    }
+    cleanup();
+  }
+});
+
 test("延期申请：「准许」带上卡上写的时间，「不准」维持原时间；答复后按钮收起", async () => {
   const calls = serve({
     events: [

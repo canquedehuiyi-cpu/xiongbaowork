@@ -162,12 +162,20 @@ function outcomeText(
 }
 
 /** 卡片此刻的状态和它的流水（按时间正序）；`enabled` 为假时都不读。 */
+/** 结束了的卡：不会再变，不用再轮询。 */
+const ENDED = new Set(["done", "cancelled", "failed"]);
+
 function useCardState(taskId: string, enabled: boolean) {
   const me = useQuery(currentUserQueryOptions()).data;
+  /*
+   * 验收了、取消了的活不会再变：不再隔一会儿读一次（长对话、群里十几件活时，就是十几组常驻的请求）。
+   * 打开对话、看板改了卡（查询键都以 `tasks` 开头）时照样重读。
+   */
   const card = useQuery({
     ...followedCardQueryOptions<ChatCard>(taskId),
     enabled,
-    refetchInterval: CHAT_REFRESH_MS,
+    refetchInterval: (query) =>
+      ENDED.has(query.state.data?.status ?? "") ? false : CHAT_REFRESH_MS,
   });
   const data = enabled ? card.data : undefined;
   // 按卡片自带的派活人和当前用户判断。
@@ -175,7 +183,7 @@ function useCardState(taskId: string, enabled: boolean) {
   const events = useQuery({
     ...taskEventsQueryOptions(taskId),
     enabled: enabled && mine,
-    refetchInterval: CHAT_REFRESH_MS,
+    refetchInterval: ENDED.has(data?.status ?? "") ? false : CHAT_REFRESH_MS,
   });
   const history = mine && events.data ? eventsInOrder(events.data) : undefined;
   return { card: data, mine, history };
