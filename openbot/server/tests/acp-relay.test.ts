@@ -55,7 +55,7 @@ function setup(options: { startFails?: boolean } = {}) {
       turnId,
       prompt: [{ type: "text", text: turnId }],
     });
-    if (status) await turns.setStatus(turnId, status);
+    if (status) await turns.setStatus(target.tenantId, turnId, status);
   };
   const statusOf = (turnId: string) =>
     turns.rows.find((row) => row.turnId === turnId)?.status;
@@ -74,7 +74,7 @@ function setup(options: { startFails?: boolean } = {}) {
     turn,
     statusOf,
     from,
-    settle: () => relay.drain(target),
+    settle: () => relay.drain({ ...target, connectionId: state.connection }),
   };
 }
 
@@ -466,16 +466,96 @@ describe("acp relay", () => {
     expect(started).toEqual([]);
   });
 
-  test("drain says false when a frame could not be taken in", async () => {
+  test("an update whose status write failed is taken in when it is replayed", async () => {
+    const { relay, turn, heard, from, settle, turns, statusOf } = setup();
+    await turn("turn-1", {}, "sent");
+    const frames = heard("turn-1");
+    const write = turns.setStatus;
+    let blips = 1;
+    turns.setStatus = async (...args) => {
+      if (blips-- > 0) throw new Error("database blip");
+      return write(...args);
+    };
+    // The ack's write fails, then the update's too: the socket is closed and all is sent again.
+    relay.fromRunner(from(), update("turn-1", 1));
+    expect(await settle()).toBeFalse();
+    expect(frames).toEqual([]);
+    relay.fromRunner(from("conn-2"), update("turn-1", 1));
+    relay.fromRunner(from("conn-2"), update("turn-1", 2));
+    expect(await relay.drain({ ...target, connectionId: "conn-2" })).toBeTrue();
+    expect(seqs(frames)).toEqual([1, 2]);
+    expect(statusOf("turn-1")).toBe("running");
+  });
+
+  test("a failure on a connection that is gone does not fail the drain of the new one", async () => {
     const { relay, turn, from, turns } = setup();
+    await turn("turn-1", {}, "running");
+    const read = turns.get;
+    let blips = 1;
+    turns.get = async (...args) => {
+      if (blips-- > 0) throw new Error("database away");
+      return read(...args);
+    };
+    relay.fromRunner(from("conn-1"), update("turn-1", 1));
+    relay.fromRunner(from("conn-2"), update("turn-1", 1));
+    expect(await relay.drain({ ...target, connectionId: "conn-2" })).toBeTrue();
+  });
+
+  test("a runner of another tenant can neither answer nor take over a request id", async () => {
+    const { relay, turn, from, settle, statusOf, turns } = setup();
+    await turn("turn-a", {}, "running");
+    const other = { tenantId: "tenant-b", deviceId: "laptop" };
+    await turns.enqueue({
+      ...other,
+      agentId: "agent-1",
+      threadId: "thread-1",
+      turnId: "turn-b",
+      prompt: [],
+    });
+    await turns.setStatus(other.tenantId, "turn-b", "running");
+    const request = (turnId: string): Frame => ({
+      type: "acp.permission.request",
+      agentId: "agent-1",
+      threadId: "thread-1",
+      turnId,
+      requestId: "perm-1",
+      toolCall: {},
+      options: [],
+      facts: { insideWorkdir: true, paths: [] },
+    });
+    const answer = {
+      type: "acp.permission.answer",
+      agentId: "agent-1",
+      requestId: "perm-1",
+      optionId: "allow_once",
+    };
+    relay.fromRunner(from(), request("turn-a"));
+    await settle();
+    expect(statusOf("turn-a")).toBe("awaiting");
+    // Tenant B's runner reports the same request id for its own turn, and B's side answers it.
+    relay.fromRunner({ ...other, connectionId: "conn-b" }, request("turn-b"));
+    await relay.drain(other);
+    relay.send(other, answer);
+    await relay.drain(other);
+    await settle();
+    expect(statusOf("turn-a")).toBe("awaiting");
+    expect(statusOf("turn-b")).toBe("running");
+    // A's own answer still finds A's turn.
+    relay.send(target, answer);
+    await settle();
+    expect(statusOf("turn-a")).toBe("running");
+  });
+
+  test("drain says false when a frame could not be taken in", async () => {
+    const { relay, turn, from, turns, settle } = setup();
     await turn("turn-1", {}, "running");
     turns.get = async () => {
       throw new Error("database away");
     };
     relay.fromRunner(from(), update("turn-1", 1));
-    expect(await relay.drain(target)).toBeFalse();
+    expect(await settle()).toBeFalse();
     // Said once: the next drain starts clean.
-    expect(await relay.drain(target)).toBeTrue();
+    expect(await settle()).toBeTrue();
   });
 });
 
@@ -633,6 +713,72 @@ describe("runner socket and acp frames", () => {
       [connection, "acp.session"],
     ]);
     expect(ws.data.held).toBeUndefined();
+    runnerClose(ws, channel);
+  });
+
+  test("a heartbeat that arrives while the socket opens is acked only after the held frames are taken in", async () => {
+    const channel = createDeviceChannel();
+    let admit = (_value: boolean) => {};
+    let calls = 0;
+    const store = {
+      // The open's check is slow; the beat's own check is not.
+      isCurrent: () =>
+        ++calls === 1
+          ? new Promise<boolean>((resolve) => {
+              admit = resolve;
+            })
+          : Promise.resolve(true),
+      heartbeat: async () => undefined,
+    } as unknown as DeviceStore;
+    const sent: string[] = [];
+    const ws = {
+      data: { runner: owner } as {
+        runner: typeof owner;
+        connection?: string;
+        held?: Frame[];
+      },
+      send: (value: string) => sent.push(value),
+      close: () => undefined,
+    };
+    const order: string[] = [];
+    const acp = {
+      fromRunner: (_from: unknown, frame: Frame) =>
+        order.push(String(frame.type)),
+      drain: async () => {
+        order.push("drain");
+        return true;
+      },
+      resumeQueued: async () => 0,
+    };
+    const opening = runnerOpen(ws, store, channel, undefined, acp);
+    await runnerMessage(
+      ws,
+      store,
+      channel,
+      JSON.stringify({ type: "acp.turn.end" }),
+      undefined,
+      {
+        acp,
+      },
+    );
+    const beat = runnerMessage(
+      ws,
+      store,
+      channel,
+      JSON.stringify({ type: "heartbeat" }),
+      undefined,
+      { acp },
+    );
+    await Bun.sleep(5);
+    expect(sent).toEqual([]);
+    admit(true);
+    await opening;
+    await beat;
+    expect(order).toEqual(["acp.turn.end", "drain"]);
+    expect(sent).toEqual([
+      JSON.stringify({ type: "welcome" }),
+      JSON.stringify({ type: "ack" }),
+    ]);
     runnerClose(ws, channel);
   });
 

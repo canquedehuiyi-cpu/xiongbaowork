@@ -65,8 +65,8 @@ export function createMemoryAcpTurnStore(): AcpTurnStore & {
         ),
       ).map(copy);
     },
-    async setStatus(turnId, status, lastSeq) {
-      const row = rows.find((candidate) => candidate.turnId === turnId);
+    async setStatus(tenantId, turnId, status, lastSeq) {
+      const row = byTurn(tenantId, turnId);
       if (!row || isFinalAcpTurnStatus(row.status)) return false;
       row.status = status;
       if (lastSeq !== undefined) row.lastSeq = Math.max(row.lastSeq, lastSeq);

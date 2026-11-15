@@ -1,5 +1,4 @@
 import type { DeviceChannel, DispatchTarget } from "../../devices/channel";
-import { runAsTenant } from "../../tenant/context";
 import {
   type AcpTurnRow,
   type AcpTurnStore,
@@ -66,10 +65,11 @@ export type AcpRelay = {
    */
   resumeQueued(target: DispatchTarget): Promise<number>;
   /**
-   * Resolves once every frame from this device so far has been dealt with: true when all were
-   * taken in, false when one could not be (the database failed) since the last `drain`.
+   * Resolves once every frame from this device so far has been dealt with: false when a frame of
+   * this connection (`target.connectionId`) could not be taken in (the database failed) since the
+   * device's last `drain`, true otherwise.
    */
-  drain(target: DispatchTarget): Promise<boolean>;
+  drain(target: AcpFrameSource): Promise<boolean>;
 };
 
 export type AcpRelayDeps = {
@@ -133,8 +133,14 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
   const log = deps.log ?? ((message: string) => console.warn(message));
 
   const chains = new Map<string, Promise<void>>();
-  /** Devices where a frame could not be taken in since the last `drain`. */
-  const failed = new Set<string>();
+  /**
+   * device → the connections (or, for a source without one, the device itself) whose frame could
+   * not be taken in since the device's last `drain`. Per connection: a failure on a connection that
+   * is gone was replayed on the new one, and must not close that one too.
+   */
+  const failed = new Map<string, Set<string>>();
+  const failKey = (source: AcpFrameSource) =>
+    source.connectionId === undefined ? "" : source.connectionId;
   const known = new Map<string, Turn>();
   const listeners = new Map<string, Set<AcpFrameListener>>();
   /** turnId → the connection its `acp.prompt` last went out on. */
@@ -145,11 +151,14 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
   const endedPending = new Map<string, Map<string, number>>();
   /** lane → frames of no turn taken in since the lane's last `acp.open`. */
   const turnless = new Map<string, Set<string>>();
+  /** (tenant, device, requestId) → turnId: a request id is the device's, never global. */
   const requestTurn = new Map<string, string>();
+  const requestKey = (target: DispatchTarget, requestId: string) =>
+    JSON.stringify([target.tenantId, target.deviceId, requestId]);
 
   /** Runs `job` after everything queued for this device. `critical`: a failure fails `drain`. */
   function serial<T>(
-    target: DispatchTarget,
+    target: AcpFrameSource,
     job: () => Promise<T>,
     critical: boolean,
   ): Promise<T> {
@@ -158,7 +167,11 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     const tail = run.then(
       () => undefined,
       (error) => {
-        if (critical) failed.add(key);
+        if (critical) {
+          const set = failed.get(key) ?? new Set<string>();
+          set.add(failKey(target));
+          failed.set(key, set);
+        }
         log(
           `acp: ${target.tenantId}/${target.deviceId}: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -201,7 +214,8 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
   function forget(turn: Turn) {
     if (known.get(turn.turnId) === turn) known.delete(turn.turnId);
     promptedOn.delete(turn.turnId);
-    for (const requestId of turn.requests) requestTurn.delete(requestId);
+    for (const requestId of turn.requests)
+      requestTurn.delete(requestKey(turn, requestId));
     endedPending.get(keyOf(turn))?.delete(turn.turnId);
   }
 
@@ -233,8 +247,11 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     turn: Turn,
     status: AcpTurnRow["status"],
   ): Promise<boolean> {
-    const changed = await runAsTenant(turn.tenantId, () =>
-      turns.setStatus(turn.turnId, status, turn.lastSeq),
+    const changed = await turns.setStatus(
+      turn.tenantId,
+      turn.turnId,
+      status,
+      turn.lastSeq,
     );
     if (changed) turn.status = status;
     // Already final (ended or cancelled elsewhere): nothing of it is taken in any more.
@@ -324,8 +341,10 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
         return;
       }
       if (seq <= turn.lastSeq) return;
-      turn.lastSeq = seq;
+      // Taken in only once the status is written: a write that fails leaves `lastSeq` where it was,
+      // so the replay that follows the closed socket is not mistaken for a repeat.
       if (arrived(turn) && !(await setStatus(turn, "running"))) return;
+      turn.lastSeq = seq;
       deliver(turnId, frame);
       saveSeq(turn);
       return;
@@ -337,7 +356,7 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
         return;
       }
       turn.requests.add(requestId);
-      requestTurn.set(requestId, turnId);
+      requestTurn.set(requestKey(turn, requestId), turnId);
       if (turn.status !== "awaiting" && !(await setStatus(turn, "awaiting")))
         return;
       // Every report, repeats included: one the device sends again after a reconnect is still
@@ -556,9 +575,17 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
           turnless.delete(laneOf(target, agentId, threadId));
       } else if (frame.type === "acp.permission.answer") {
         const requestId = text(frame.requestId);
-        const turnId = requestId ? requestTurn.get(requestId) : undefined;
-        const turn = turnId ? known.get(turnId) : undefined;
-        if (requestId) requestTurn.delete(requestId);
+        const key = requestId ? requestKey(target, requestId) : null;
+        const turnId = key ? requestTurn.get(key) : undefined;
+        const found = turnId ? known.get(turnId) : undefined;
+        // Only a turn of the device the answer goes to.
+        const turn =
+          found &&
+          found.tenantId === target.tenantId &&
+          found.deviceId === target.deviceId
+            ? found
+            : undefined;
+        if (key && turn) requestTurn.delete(key);
         if (turn && requestId) {
           turn.requests.delete(requestId);
           if (turn.requests.size === 0 && turn.status === "awaiting")
@@ -582,7 +609,7 @@ export function createAcpRelay(deps: AcpRelayDeps): AcpRelay {
     async drain(target) {
       const key = keyOf(target);
       await (chains.get(key) ?? Promise.resolve());
-      const ok = !failed.has(key);
+      const ok = !failed.get(key)?.has(failKey(target));
       failed.delete(key);
       return ok;
     },

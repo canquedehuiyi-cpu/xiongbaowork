@@ -60,7 +60,7 @@ const setStatus = (
   id: string,
   status: AcpTurnRow["status"],
   lastSeq?: number,
-) => runAsTenant(tenantId, () => store.setStatus(id, status, lastSeq));
+) => store.setStatus(tenantId, id, status, lastSeq);
 
 function relayFor(tenantId: string) {
   const started: AcpTurnRow[] = [];
@@ -140,11 +140,17 @@ describe("acp turn store", () => {
     expect(row?.lastSeq).toBe(7);
   });
 
-  test("setStatus in another tenant's frame changes nothing", async () => {
+  test("setStatus naming another tenant changes nothing", async () => {
     const owner = await person();
     const stranger = await person();
     const id = await enqueue(owner);
     expect(await setStatus(stranger, id, "done")).toBeFalse();
+    // Whatever frame the caller is in, only the tenant it names.
+    expect(
+      await runAsTenant("platform", () =>
+        store.setStatus(stranger, id, "done"),
+      ),
+    ).toBeFalse();
     expect((await store.get(owner, id))?.status).toBe("queued");
   });
 
@@ -288,6 +294,28 @@ describe("acp relay on the real store", () => {
     await relay.drain(target);
     expect(started.map((row) => row.turnId)).toEqual([first, second, third]);
     expect((await store.get(owner, first))?.status).toBe("done");
+  });
+
+  test("a turn awaiting permission holds only its own lane", async () => {
+    const owner = await person();
+    const { relay, started, target } = relayFor(owner);
+    const waiting = await enqueue(owner, { threadId: "thread-a" });
+    await setStatus(owner, waiting, "awaiting");
+    await enqueue(owner, { threadId: "thread-a" });
+    const other = await enqueue(owner, { threadId: "thread-b" });
+    expect(await relay.resumeQueued(target)).toBe(1);
+    expect(started.map((row) => row.turnId)).toEqual([other]);
+    // The other lane's turn runs while the first still waits.
+    relay.fromRunner(target, {
+      type: "acp.turn.ack",
+      agentId: "agent-1",
+      threadId: "thread-b",
+      turnId: other,
+    });
+    expect(await relay.drain(target)).toBeTrue();
+    expect((await store.get(owner, other))?.status).toBe("running");
+    expect((await store.get(owner, waiting))?.status).toBe("awaiting");
+    expect(await relay.resumeQueued(target)).toBe(0);
   });
 
   test("two threads on one device run in parallel", async () => {

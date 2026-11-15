@@ -62,10 +62,11 @@ export type AcpTurnStore = {
   /** Every `queued` turn for this device, oldest first. */
   queuedForDevice(tenantId: string, deviceId: string): Promise<AcpTurnRow[]>;
   /**
-   * Moves a turn to `status` (and `lastSeq` up to `lastSeq`), in the caller's tenant frame. False when
-   * the turn is not there for that tenant or is already final.
+   * Moves the tenant's turn to `status` (and `lastSeq` up to `lastSeq`). False when the tenant has
+   * no such turn or it is already final.
    */
   setStatus(
+    tenantId: string,
     turnId: string,
     status: AcpTurnStatus,
     lastSeq?: number,
@@ -166,21 +167,24 @@ export function createAcpTurnStore(database: Database): AcpTurnStore {
       );
     },
 
-    async setStatus(turnId, status, lastSeq) {
-      const rows = await database
-        .update(acpTurns)
-        .set({
-          status,
-          updatedAt: sql`now()`,
-          ...(lastSeq === undefined ? {} : { lastSeq: raise(lastSeq) }),
-        })
-        .where(
-          and(
-            eq(acpTurns.turnId, turnId),
-            notInArray(acpTurns.status, [...FINAL_ACP_TURN_STATUSES]),
-          ),
-        )
-        .returning({ id: acpTurns.id });
+    async setStatus(tenantId, turnId, status, lastSeq) {
+      const rows = await runAsTenant(tenantId, () =>
+        database
+          .update(acpTurns)
+          .set({
+            status,
+            updatedAt: sql`now()`,
+            ...(lastSeq === undefined ? {} : { lastSeq: raise(lastSeq) }),
+          })
+          .where(
+            and(
+              eq(acpTurns.tenantId, tenantId),
+              eq(acpTurns.turnId, turnId),
+              notInArray(acpTurns.status, [...FINAL_ACP_TURN_STATUSES]),
+            ),
+          )
+          .returning({ id: acpTurns.id }),
+      );
       return rows.length > 0;
     },
 

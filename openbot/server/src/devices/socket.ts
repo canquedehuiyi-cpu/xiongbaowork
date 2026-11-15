@@ -28,6 +28,12 @@ export type RunnerSocketData = {
    * reconnect, not a corner case. Undefined once opened, or when it never will be.
    */
   held?: Record<string, unknown>[];
+  /**
+   * Settles once the socket has opened (or will not), with the held frames handed to the relay. A
+   * heartbeat that arrives while it is opening waits for it before its ack: the ack must come after
+   * those frames are taken in.
+   */
+  opening?: Promise<void>;
 };
 
 /** Frames held while a socket opens, at most; past that it is closed and the runner tries again. */
@@ -55,6 +61,10 @@ export async function runnerOpen(
 ): Promise<void> {
   // Before the first await: a frame can arrive while this waits on the database.
   ws.data.held = [];
+  let opened = () => {};
+  ws.data.opening = new Promise<void>((resolve) => {
+    opened = resolve;
+  });
   try {
     if (!(await store.isCurrent(ws.data.runner).catch(() => false))) {
       ws.close?.(1008, "Device access was revoked.");
@@ -73,6 +83,8 @@ export async function runnerOpen(
       acp?.fromRunner({ tenantId, deviceId, connectionId: connection }, frame);
   } finally {
     ws.data.held = undefined;
+    ws.data.opening = undefined;
+    opened();
   }
   const { tenantId, deviceId } = ws.data.runner;
   ws.send(JSON.stringify({ type: "welcome" }));
@@ -239,7 +251,16 @@ export async function runnerMessage(
      * that could not be taken in (the database failed) must not be let go: the socket is closed
      * instead, and the runner reconnects and sends it all again.
      */
-    if (options.acp && !(await options.acp.drain({ tenantId, deviceId }))) {
+    // A beat that came while the socket was opening: the held frames go in first.
+    if (ws.data.opening) await ws.data.opening;
+    if (
+      options.acp &&
+      !(await options.acp.drain({
+        tenantId,
+        deviceId,
+        connectionId: ws.data.connection,
+      }))
+    ) {
       if (ws.data.connection) channel.detach(ws.data.connection);
       ws.close?.(1011, "Some frames could not be taken in; send them again.");
       return;
