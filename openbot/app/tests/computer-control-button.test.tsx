@@ -13,11 +13,15 @@ import {
   ComputerControlButton,
 } from "@/components/computer/computer-controls";
 import type { ControlState } from "@/lib/computers/control";
+import { queryClient } from "@/query-client";
 
 const originalFetch = globalThis.fetch;
 beforeAll(() => GlobalRegistrator.register());
 afterEach(() => {
   cleanup();
+  // The fake server answers every path with the control state, the signed-in user's `/api/me`
+  // included; left in the shared cache, that answer is the next file's "user" with no email.
+  queryClient.clear();
   globalThis.fetch = originalFetch;
 });
 afterAll(() => GlobalRegistrator.unregister());

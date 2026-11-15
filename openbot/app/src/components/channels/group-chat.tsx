@@ -416,6 +416,8 @@ function GroupLine({
               mine ? undefined : "*:data-[slot=bubble-content]:bg-accent"
             }
             variant={mine ? "user" : "muted"}
+            // The person's own bubble, for the skins (the default skin's `--wb-me` gradient).
+            {...(mine ? { "data-mine": "" } : {})}
           >
             <BubbleContent>
               <span className="whitespace-pre-wrap">{message.text}</span>

@@ -1508,6 +1508,8 @@ export function ChannelChat({
              * "Thinking" line exists for. Same value as `pending`, deliberately.
              */
             busy={agent.isRunning || turnsInFlight > 0 || carryingOn}
+            // Named in the default skin's 「<员工名> 正在输入」 while that turn waits on the model.
+            typist={{ name: botName, agentId: runtimeAgentId }}
             // The `/` menu exposes only skills granted to this Bot.
             commands={skillCommands}
             modelPicker={

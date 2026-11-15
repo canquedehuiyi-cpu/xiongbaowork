@@ -11,6 +11,7 @@ import { useBotLook } from "@/components/agents/bot-look";
 import {
   ChatTranscript,
   skillLabels,
+  type Typist,
 } from "@/components/channels/chat-transcript";
 import {
   type AgentOption,
@@ -55,6 +56,7 @@ export function ConversationView({
   voiceCall,
   modelPicker,
   routine,
+  typist,
 }: {
   messages: readonly Message[];
   threadId?: string;
@@ -98,6 +100,8 @@ export function ConversationView({
   stopped?: string;
   /** Work the conversation waits on that is not this tab's run. Drawn at the end of the transcript. */
   working?: ReactNode;
+  /** Who is answering, for the default skin's 「正在输入」; see `ChatTranscript`. */
+  typist?: Typist;
   /**
    * There is a run for Stop to abort, which is a narrower fact than `pending` and is the honest one
    * to draw a Stop button from. Defaults to `pending` for a caller with no gap between the two.
@@ -482,6 +486,7 @@ export function ConversationView({
           queued={queued}
           restoring={restoring}
           {...(stopped ? { stopped } : {})}
+          {...(typist ? { typist } : {})}
           working={working}
         />
       </div>

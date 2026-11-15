@@ -160,8 +160,8 @@ function ContactsList() {
   );
 }
 
-/** 只在服务端说能为这个人跑浏览器时才有「教员工做事」，和侧栏的同一个判断。 */
-function useBrowserAvailable(): boolean {
+/** 只在服务端说能为这个人跑浏览器时才有「教员工做事」，和侧栏的同一个判断（工作台首页的格子也用它）。 */
+export function useBrowserAvailable(): boolean {
   const state = useQuery(browserStateQueryOptions());
   return Boolean(state.data?.available);
 }

@@ -2,6 +2,7 @@ import { IconSparkles } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { StatusDot } from "@/components/agents/status-dot";
 import {
   employeeGroups,
   isPendingSummon,
@@ -12,11 +13,18 @@ import {
   SidebarToggleBar,
   useSidebarToggleVisible,
 } from "@/components/layout/sidebar-toggle";
+import {
+  knownPresence,
+  type Presence,
+  presenceDoing,
+  usePresence,
+} from "@/lib/agents/presence";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { cn } from "@/lib/utils";
 import {
   EmployeeCard,
   NO_DEPARTMENT,
+  NowDoing,
   TONE,
   useEmployeeCard,
 } from "./employee-card";
@@ -74,11 +82,16 @@ const cardClassName = cn(
 
 function EmployeeTile({
   agent,
+  presence,
   onOpen,
 }: {
   agent: AgentProfile;
+  /** 此刻的状态；读不到时没有，卡上就不画状态点和「此刻」。 */
+  presence?: Presence;
   onOpen: (agentId: string) => void;
 }) {
+  const known = knownPresence(presence);
+  const doing = presenceDoing(known);
   return (
     <li className="flex">
       <button
@@ -89,8 +102,15 @@ function EmployeeTile({
         type="button"
       >
         <span className="flex min-w-0 items-center gap-2.5">
-          <span aria-hidden="true" className="shrink-0">
-            <ChannelAvatar participantIds={[agent.id]} size={42} />
+          <span className="relative shrink-0">
+            <span aria-hidden="true">
+              <ChannelAvatar participantIds={[agent.id]} size={42} />
+            </span>
+            <StatusDot
+              className="border-[color:var(--wb-card,var(--card))]"
+              overlay
+              status={known?.status}
+            />
           </span>
           <span className="flex min-w-0 flex-col">
             <span className="truncate font-semibold text-[14px]">
@@ -103,6 +123,7 @@ function EmployeeTile({
             ) : null}
           </span>
         </span>
+        {doing ? <NowDoing doing={doing} /> : null}
       </button>
     </li>
   );
@@ -175,6 +196,8 @@ function OrgChart({ onOpen }: { onOpen: (agentId: string) => void }) {
   const agents = useQuery(agentListQueryOptions());
   const showToggle = useSidebarToggleVisible();
   const employees = employeeGroups(listedEmployees(agents.data)).summoned;
+  // 整张组织架构一次读出所有员工此刻的状态，不是每张卡一个。
+  const presence = usePresence(employees.map((agent) => agent.id));
   const pending = (agents.data ?? []).filter(isPendingSummon);
   const groups = departmentGroups(employees);
   const research = groups.findIndex((group) => group.name === RECRUIT_AFTER);
@@ -184,7 +207,7 @@ function OrgChart({ onOpen }: { onOpen: (agentId: string) => void }) {
     <div className={cn("flex h-full min-h-0 flex-col", TONE.fg)} data-contacts>
       {showToggle ? <SidebarToggleBar /> : null}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="grid gap-[18px] px-[13px] py-[22px] md:px-[26px]">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-[18px] px-[13px] py-[22px] md:px-[26px]">
           <header className="flex items-baseline justify-between gap-3">
             <h1 className="m-0 font-bold text-[18px] tracking-[-.01em]">
               组织架构
@@ -240,6 +263,7 @@ function OrgChart({ onOpen }: { onOpen: (agentId: string) => void }) {
                       agent={agent}
                       key={agent.id}
                       onOpen={onOpen}
+                      presence={presence.get(agent.id)}
                     />
                   ))}
                   {index === recruitAt ? (

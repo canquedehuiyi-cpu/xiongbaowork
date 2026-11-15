@@ -9,9 +9,15 @@ import {
   useRef,
   useState,
 } from "react";
+import { StatusDot } from "@/components/agents/status-dot";
 import { latestDirectChannel } from "@/components/app-sidebar/roster";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { employeeNumber } from "@/components/summon/summon-card-flip";
+import {
+  knownPresence,
+  presenceDoing,
+  usePresence,
+} from "@/lib/agents/presence";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import { channelListQueryOptions } from "@/lib/channels/queries";
 import {
@@ -115,6 +121,34 @@ export function modelLabel(
   return "部署自带的模型";
 }
 
+/**
+ * 「此刻：正在做的事」（设计稿 `.status` / `.pcard .st`）：通讯录卡和名片上，员工忙碌时写它手上运行中的那件
+ * 任务的标题。不忙、读不到时调用的人不画它，不写占位。
+ */
+export function NowDoing({
+  doing,
+  className,
+}: {
+  doing: string;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "block truncate rounded-[8px] px-2 py-1.5 text-[12px]",
+        TONE.card2,
+        TONE.fg2,
+        className,
+      )}
+      data-now-doing=""
+      title={doing}
+    >
+      <b className={cn("font-semibold", TONE.fg)}>此刻：</b>
+      {doing}
+    </span>
+  );
+}
+
 const actionClassName = cn(
   "grid min-h-[38px] place-items-center rounded-[10px] px-2 py-[9px] text-center font-medium text-[13px]",
   TONE.focus,
@@ -150,10 +184,11 @@ function Action({
 
 function CardBody({
   agent,
-  onClose,
+  onLeave,
 }: {
   agent: AgentProfile;
-  onClose: () => void;
+  /** 点了去别处的按钮：名片收起，地址随后换到那一页。 */
+  onLeave: () => void;
 }) {
   const channels = useInfiniteQuery(channelListQueryOptions()).data;
   const bound = Boolean(agent.modelRef || agent.platformModelRef);
@@ -163,6 +198,8 @@ function CardBody({
   }).data;
   const skills = useQuery(agentPluginsQueryOptions(agent.id)).data?.skills;
   const direct = latestDirectChannel(channels, agent.id);
+  const presence = knownPresence(usePresence([agent.id]).get(agent.id));
+  const doing = presenceDoing(presence);
   // 最近的单聊，没有就开一段发给他的新对话，和侧栏员工行一样。
   const talk: LinkProps = direct
     ? { to: "/channel/$channelId", params: { channelId: direct.id } }
@@ -177,15 +214,21 @@ function CardBody({
     day === null ? "" : `入职第 ${day} 天`,
   ].filter(Boolean);
   return (
-    <div className="-mt-9 grid gap-2.5 px-[18px]">
+    <div className="-mt-9 grid grid-cols-[minmax(0,1fr)] gap-2.5 px-[18px]">
       <span
-        aria-hidden="true"
         className={cn(
           "relative w-fit rounded-full border-[3px] border-[color:var(--wb-frame,var(--background))]",
           TONE.frame,
         )}
       >
-        <ChannelAvatar participantIds={[agent.id]} size={72} />
+        <span aria-hidden="true" className="block">
+          <ChannelAvatar participantIds={[agent.id]} size={72} />
+        </span>
+        <StatusDot
+          className="right-0.5 bottom-0.5 size-3.5 border-[color:var(--wb-frame,var(--background))]"
+          overlay
+          status={presence?.status}
+        />
       </span>
       <h2 className="m-0 font-semibold text-[18px] leading-tight">
         {agent.name}
@@ -209,8 +252,9 @@ function CardBody({
           </span>
         ))}
       </p>
+      {doing ? <NowDoing className="text-[12.5px]" doing={doing} /> : null}
       {tone || model ? (
-        <dl className="m-0 grid grid-cols-[70px_1fr] gap-x-2.5 gap-y-2 text-[12.5px]">
+        <dl className="m-0 grid grid-cols-[70px_minmax(0,1fr)] gap-x-2.5 gap-y-2 text-[12.5px]">
           {tone ? (
             <>
               <dt className={TONE.muted}>性格</dt>
@@ -253,11 +297,11 @@ function CardBody({
         </div>
       ) : null}
       <div className="mt-1 grid grid-cols-2 gap-2">
-        <Action {...talk} onClick={onClose} primary>
+        <Action {...talk} onClick={onLeave} primary>
           发消息
         </Action>
         <Action
-          onClick={onClose}
+          onClick={onLeave}
           params={{ agentId: agent.id }}
           to="/bots/$agentId/setup"
         >
@@ -268,10 +312,10 @@ function CardBody({
          * 聚焦输入框（ChannelChat 的 `autoFocus`），发给他的新对话有了收件人也聚焦输入框——所以到了就能
          * 直接写任务。
          */}
-        <Action {...talk} onClick={onClose}>
+        <Action {...talk} onClick={onLeave}>
           交给他一个任务
         </Action>
-        <Action onClick={onClose} search={{ agent: agent.id }} to="/group/new">
+        <Action onClick={onLeave} search={{ agent: agent.id }} to="/group/new">
           拉进群
         </Action>
       </div>
@@ -286,13 +330,23 @@ function CardBody({
  *
  * 它不是模态框：页面还能点，抽屉盖在右边。打开时焦点落在「关闭」上，Esc 或「关闭」收起，焦点回到打开它的
  * 地方。挂在哪里由调用的人决定（工作台外壳；没有外壳时是通讯录页自己），它只要一个相对定位的祖先。
+ *
+ * 手机上（`fullScreen`）它不是抽屉，是盖住整个外壳的一页，像微信点开一个人的资料页：这时它是模态的
+ * （`aria-modal`），外壳把底下的都设成 `inert`。
+ *
+ * `onClose` 是「关闭」和 Esc；名片上去别处的四个按钮调 `onLeave`（不给时同 `onClose`）。分开是因为手机上
+ * 名片占着一条历史记录：「关闭」要把那条退掉，去别处的按钮不能退——后退和随后的跳转会撞在一起。
  */
 export function EmployeeCard({
   agentId,
   onClose,
+  onLeave = onClose,
+  fullScreen = false,
 }: {
   agentId: string;
   onClose: () => void;
+  onLeave?: () => void;
+  fullScreen?: boolean;
 }) {
   const agents = useQuery(agentListQueryOptions());
   const agent = agents.data?.find((candidate) => candidate.id === agentId);
@@ -337,14 +391,18 @@ export function EmployeeCard({
   return (
     <div
       aria-label="员工名片"
-      aria-modal="false"
+      aria-modal={fullScreen ? "true" : "false"}
       className={cn(
-        "absolute inset-y-0 right-0 z-30 w-[320px] max-w-full overflow-y-auto border-l pb-[18px] shadow-[var(--wb-drawer-shadow,var(--shadow-lg))] motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200",
+        "absolute z-30 overflow-y-auto motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200",
+        fullScreen
+          ? "inset-0 pb-[calc(18px+env(safe-area-inset-bottom))]"
+          : "inset-y-0 right-0 w-[320px] max-w-full border-l pb-[18px] shadow-[var(--wb-drawer-shadow,var(--shadow-lg))]",
         TONE.frame,
         TONE.line2,
         TONE.fg,
       )}
       data-employee-card={agentId}
+      data-full-screen={fullScreen ? "" : undefined}
       ref={drawerRef}
       role="dialog"
     >
@@ -363,7 +421,7 @@ export function EmployeeCard({
         </button>
       </div>
       {agent ? (
-        <CardBody agent={agent} onClose={onClose} />
+        <CardBody agent={agent} onLeave={onLeave} />
       ) : (
         <p className={cn("m-0 px-[18px] pt-4 text-[13px]", TONE.muted)}>
           {agents.isPending ? "正在加载…" : "找不到这位员工。"}

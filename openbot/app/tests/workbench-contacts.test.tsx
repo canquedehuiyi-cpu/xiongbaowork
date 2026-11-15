@@ -372,6 +372,18 @@ describe("组织架构", () => {
     ).toBeTruthy();
   });
 
+  test("手机宽度也不横向溢出：页面一列是 minmax(0,1fr)，两边留白", async () => {
+    const { view } = renderApp("/contacts");
+    const main = await orgChart(view);
+    const heading = await main.findByRole("heading", {
+      level: 1,
+      name: "组织架构",
+    });
+    const page = heading.closest("header")?.parentElement as HTMLElement;
+    expect(page.className).toContain("grid-cols-[minmax(0,1fr)]");
+    expect(page.className).toContain("px-[13px]");
+  });
+
   test("研发部末尾有「招一位新同事」卡，链 /bots", async () => {
     const { view } = renderApp("/contacts");
     const main = await orgChart(view);
@@ -431,6 +443,16 @@ describe("员工名片", () => {
     expect(skills.getAllByRole("listitem").map((li) => li.textContent)).toEqual(
       ["代码审查", "自动化测试"],
     );
+  });
+
+  test("名片的内容一列是 minmax(0,1fr)，长的「此刻」和模型名不把它撑出屏幕", async () => {
+    const { view } = renderApp("/contacts");
+    const card = await openCard(view, /代码熊/);
+    const body = card.getByRole("heading", { name: "代码熊" })
+      .parentElement as HTMLElement;
+    expect(body.className).toContain("grid-cols-[minmax(0,1fr)]");
+    const facts = (await card.findByText("模型")).parentElement as HTMLElement;
+    expect(facts.className).toContain("grid-cols-[70px_minmax(0,1fr)]");
   });
 
   test("四个按钮：发消息（最近的单聊）、配置、交给他一个任务、拉进群", async () => {

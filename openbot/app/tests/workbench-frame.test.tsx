@@ -150,6 +150,7 @@ function renderFrame(path: string, user: SignedIn = member) {
       page("/contacts", "组织架构页内容"),
       page("/channel/$channelId", "对话页内容"),
       page("/me", "我页面内容"),
+      page("/workbench", "工作台首页内容"),
     ]),
     history: createMemoryHistory({ initialEntries: [path] }),
   });
@@ -243,15 +244,36 @@ describe("WorkbenchFrame", () => {
   });
 
   test("点过别的入口后离开再后退回来，入口回到地址所属的那个", async () => {
-    const { view, user, router } = renderFrame("/");
-    await view.findByText("首页内容");
-    await user.click(rail(view).getByRole("button", { name: "工作台" }));
-    expect(pressed(view)).toEqual(["工作台"]);
+    // 「消息」是唯一只切列表栏、不换地址的入口（工作台、通讯录、我都直接落到自己的页面）。
+    const { view, user, router } = renderFrame("/me");
+    await view.findByText("我页面内容");
+    await user.click(rail(view).getByRole("button", { name: "消息" }));
+    expect(pressed(view)).toEqual(["消息"]);
     await router.navigate({ to: "/bots" as never });
     await view.findByText("人才市场页内容");
     router.history.back();
+    await view.findByText("我页面内容");
+    expect(pressed(view)).toEqual(["我"]);
+  });
+
+  test("点「工作台」落到工作台首页 /workbench", async () => {
+    const { view, user, router } = renderFrame("/");
     await view.findByText("首页内容");
+    await user.click(rail(view).getByRole("button", { name: "工作台" }));
+    await view.findByText("工作台首页内容");
+    expect(router.state.location.pathname).toBe("/workbench");
+    expect(pressed(view)).toEqual(["工作台"]);
+  });
+
+  test("已在 /workbench 时先看别的入口，再点「工作台」，列表栏回到工作台", async () => {
+    const { view, user } = renderFrame("/workbench");
+    await view.findByText("工作台首页内容");
+    await user.click(rail(view).getByRole("button", { name: "消息" }));
     expect(pressed(view)).toEqual(["消息"]);
+    await user.click(rail(view).getByRole("button", { name: "工作台" }));
+    expect(pressed(view)).toEqual(["工作台"]);
+    const list = within(view.getByRole("complementary", { name: "列表栏" }));
+    expect(list.getByRole("heading", { name: "工作台" })).toBeTruthy();
   });
 
   test("普通成员的工作台列表栏里没有管理", async () => {
@@ -295,8 +317,9 @@ describe("WorkbenchFrame", () => {
   test("已在 /me 时先看别的入口，再点「我」，列表栏回到「我」", async () => {
     const { view, user } = renderFrame("/me");
     await view.findByText("我页面内容");
-    await user.click(rail(view).getByRole("button", { name: "工作台" }));
-    expect(pressed(view)).toEqual(["工作台"]);
+    // 「消息」只切列表栏、不换地址，所以地址还在 /me。
+    await user.click(rail(view).getByRole("button", { name: "消息" }));
+    expect(pressed(view)).toEqual(["消息"]);
     await user.click(rail(view).getByRole("button", { name: "我" }));
     expect(pressed(view)).toEqual(["我"]);
     const list = within(view.getByRole("complementary", { name: "列表栏" }));

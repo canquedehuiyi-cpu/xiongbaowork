@@ -25,6 +25,7 @@ import {
   type BotLifecycleServices,
   createBotLifecycleRoutes,
 } from "./agents/lifecycle-routes";
+import type { AgentPresenceReader } from "./agents/presence";
 import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
 import { createAgentRoutes } from "./agents/routes";
@@ -561,6 +562,11 @@ export function createApp(
      * (agents/summon.ts). Absent, that route is not mounted.
      */
     summon?: SummonServices;
+    /**
+     * 员工此刻: a batch of Bots' busy / idle / paused and what each is doing, for
+     * `GET /api/agents/presence` (agents/presence.ts). Absent, that route answers 404.
+     */
+    presence?: AgentPresenceReader;
     /** Pause, reset, Activity and attention for a person's own Bots. See agents/lifecycle.ts. */
     lifecycle?: BotLifecycleServices;
     /**
@@ -2048,6 +2054,8 @@ export function createApp(
           : undefined,
         // Summoning a preset copies it as the person's own and opens the 1:1 conversation.
         coworker?.summon,
+        // 员工此刻: the status dots and 「此刻」 lines on the workbench, read for a batch at once.
+        coworker?.presence,
       ),
     );
     // Choosing a coworker for an untagged message needs the same permission-filtered roster the

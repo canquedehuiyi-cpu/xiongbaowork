@@ -198,6 +198,15 @@ describe("「我」页面", () => {
     expect(card.queryByText(/加入/)).toBeNull();
   });
 
+  test("手机宽度也不横向溢出：页面一列是 minmax(0,1fr)，两边留白", async () => {
+    const { view } = renderPage();
+    const card = await view.findByRole("region", { name: "个人卡" });
+    const page = card.parentElement as HTMLElement;
+    // 默认的 `auto` 列会被个人卡里不换行的长名字撑宽。
+    expect(page.className).toContain("grid-cols-[minmax(0,1fr)]");
+    expect(page.className).toContain("px-[13px]");
+  });
+
   test("没有套餐时不画徽标，员工数读到之前不写", async () => {
     answers.set("GET /api/quota", { ...QUOTA, plan: null });
     answers.delete("GET /api/agents");

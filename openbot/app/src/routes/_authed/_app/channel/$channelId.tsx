@@ -21,6 +21,7 @@ import { DetailPanel } from "@/components/layout/detail-panel";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { BearMascot } from "@/components/layout/workbench-empty";
 import { Button } from "@/components/ui/button";
+import { usePresence } from "@/lib/agents/presence";
 import {
   type AgentProfile as AgentProfileData,
   agentListQueryOptions,
@@ -28,6 +29,8 @@ import {
 import { useMarkOpenChannelRead } from "@/lib/channels/mark-read";
 import { type AgentChannel, channelQueryOptions } from "@/lib/channels/queries";
 import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
+import { useSkinId } from "@/skins/store";
+import { useEmployeeCard } from "@/skins/xiongbao/employee-card";
 
 const chatSearchSchema = z.object({
   settings: z.boolean().optional(),
@@ -197,6 +200,7 @@ function RouteComponent() {
             open={isWatching}
             onOpenChange={(open) => show(open ? "watch" : null)}
           />
+          {card ? <EmployeeCardButton agentId={card.id} /> : null}
           <Button
             aria-label="会话里的员工"
             aria-pressed={isSettingsOpen}
@@ -275,14 +279,61 @@ function ChannelBody({
   );
 }
 
-/** The pinned employee card atop a 单聊, its face animated by the same status read as {@link HeaderFace}. */
+/**
+ * The pinned employee card atop a 单聊. In the workbench skin it also says where the employee is now
+ * (status dot, 「忙碌 · 任务标题」) from the batch presence read (聊天工作台 Task 8), and its face moves
+ * by that same read, so the face and the words never disagree; the other skins draw the card as they
+ * always have, its face animated by the same status read as {@link HeaderFace}.
+ */
 function HeaderCard({ agent }: { agent: AgentProfileData }) {
+  return useSkinId() === "xiongbao" ? (
+    <PresenceHeaderCard agent={agent} />
+  ) : (
+    <StatusHeaderCard agent={agent} />
+  );
+}
+
+/** The workbench skin's card: dot, words and face all from one presence read. */
+function PresenceHeaderCard({ agent }: { agent: AgentProfileData }) {
+  const presence = usePresence([agent.id]).get(agent.id);
+  return (
+    <ConversationHeaderCard
+      agent={agent}
+      motion={presence?.status === "working" ? "working" : "idle"}
+      presence={presence}
+    />
+  );
+}
+
+/** Every other skin's card: no presence, the face by the 员工 detail page's status read. */
+function StatusHeaderCard({ agent }: { agent: AgentProfileData }) {
   const status = useProfileStatus(agent.id);
   return (
     <ConversationHeaderCard
       agent={agent}
       motion={status === "working" ? "working" : "idle"}
     />
+  );
+}
+
+/**
+ * 「名片」 in the header's tools, as the mock draws it (聊天工作台 Task 9): opens this employee's card
+ * (Task 7) on the workbench frame. Only the workbench frame carries the card, so in every other skin
+ * there is nothing to open and no button.
+ */
+function EmployeeCardButton({ agentId }: { agentId: string }) {
+  const cards = useEmployeeCard();
+  if (!cards) return null;
+  return (
+    <button
+      aria-haspopup="dialog"
+      className="h-8 shrink-0 cursor-pointer rounded-(--wb-radius-sm) border border-(--wb-line2) bg-(--wb-card) px-2.5 text-(--wb-fg2) text-[12px] outline-none transition-colors hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-(--wb-accent)"
+      data-employee-card-button=""
+      onClick={() => cards.openEmployeeCard(agentId)}
+      type="button"
+    >
+      名片
+    </button>
   );
 }
 

@@ -1,7 +1,14 @@
 import { BotOrb } from "@/components/agents/bot-orb";
+import { StatusDot } from "@/components/agents/status-dot";
 import { ChosenPortrait } from "@/components/channels/avatar";
 import { VisibilityTag } from "@/components/channels/visibility-tag";
 import type { AvatarMotionState } from "@/components/portraits/preset-animations";
+import {
+  knownPresence,
+  PRESENCE_WORD,
+  type Presence,
+  presenceDoing,
+} from "@/lib/agents/presence";
 import type { AgentProfile } from "@/lib/agents/queries";
 
 /**
@@ -16,14 +23,26 @@ export const CONVERSATION_HEADER_CLASS =
  * The compact employee card: avatar, name, title and who can see it, on one row each. The face
  * follows the same rule as everywhere else (`ChosenPortrait`: a chosen portrait, else the preset
  * face the employee was made with, else the orb).
+ *
+ * With `presence` (the workbench skin, 聊天工作台 Task 8) the second row is where the employee is
+ * now — the status dot and 「忙碌 · 任务标题」, 「空闲」 or 「已暂停」, as the mock's header draws it —
+ * and the title moves up beside the name. A presence that is missing or `unknown` changes nothing:
+ * the card is drawn exactly as without it, never with placeholder words.
  */
 export function ConversationHeaderCard({
   agent,
   motion,
+  presence,
 }: {
   agent: AgentProfile;
   motion?: AvatarMotionState;
+  presence?: Presence;
 }) {
+  const known = knownPresence(presence);
+  const doing = presenceDoing(known);
+  const now = known
+    ? [PRESENCE_WORD[known.status], doing].filter(Boolean).join(" · ")
+    : "";
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <span className="block size-10 shrink-0">
@@ -44,8 +63,26 @@ export function ConversationHeaderCard({
             className="h-5 shrink-0 px-1.5 font-semibold text-[11px]"
             visibility={agent.visibility}
           />
+          {known && agent.title ? (
+            <span
+              className="min-w-0 truncate text-[12px] text-muted-foreground"
+              title={agent.title}
+            >
+              {agent.title}
+            </span>
+          ) : null}
         </div>
-        {agent.title ? (
+        {known ? (
+          <p
+            className="flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground"
+            data-presence={known.status}
+          >
+            <StatusDot decorative status={known.status} />
+            <span className="min-w-0 truncate" title={now}>
+              {now}
+            </span>
+          </p>
+        ) : agent.title ? (
           <p
             className="truncate text-[12px] text-muted-foreground"
             title={agent.title}

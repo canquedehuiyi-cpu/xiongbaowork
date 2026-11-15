@@ -214,3 +214,30 @@ test("经典皮肤下 /contacts 也打得开，画在原来的侧栏外壳里", 
   ).toBeTruthy();
   expect(view.queryByRole("navigation", { name: "入口" })).toBeNull();
 });
+
+test("默认皮肤下 /workbench 是工作台首页，在工作台外壳里亮「工作台」", async () => {
+  const { view, router } = renderApp("/workbench", member, "xiongbao");
+  await view.findByRole("navigation", { name: "入口" }, LOAD);
+  expect(router.state.location.pathname).toBe("/workbench");
+  expect(pressedRails(view)).toEqual(["工作台"]);
+  const main = view.getByRole("main");
+  expect(
+    await within(main).findByRole(
+      "heading",
+      { level: 1, name: /^(早上好|下午好|晚上好)，Alice Park$/ },
+      LOAD,
+    ),
+  ).toBeTruthy();
+  expect(within(main).getByRole("region", { name: "今日数据" })).toBeTruthy();
+});
+
+test("经典皮肤下 /workbench 也打得开，画在原来的侧栏外壳里", async () => {
+  const { view } = renderApp("/workbench", member, "classic");
+  expect(
+    await view.findByRole("navigation", { name: "主导航" }, LOAD),
+  ).toBeTruthy();
+  expect(
+    await view.findByRole("region", { name: "今日数据" }, LOAD),
+  ).toBeTruthy();
+  expect(view.queryByRole("navigation", { name: "入口" })).toBeNull();
+});
