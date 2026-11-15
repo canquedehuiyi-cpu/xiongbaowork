@@ -928,7 +928,9 @@ export function createTaskRoutes(
               ? "这件活已经是这位员工在做。"
               : moved.why === "handed_in"
                 ? "成果已交，验收或退回之后才能换人。"
-                : "这件活不在跟或已经结束。",
+                : moved.why === "waiting_on_you"
+                  ? "这件活在等你处理（审批或提问），处理完再换人。"
+                  : "这件活不在跟或已经结束。",
         },
         409,
       );
@@ -959,9 +961,11 @@ export function createTaskRoutes(
           error:
             nudged.why === "running"
               ? "员工正在做这件活的一轮，稍后再催。"
-              : nudged.why === "refused"
-                ? nudged.message
-                : "这件活不在员工手上（未在跟、已交成果、在等你处理或已结束），不用催。",
+              : nudged.why === "just_nudged"
+                ? "刚催过，过一会儿再催。"
+                : nudged.why === "refused"
+                  ? nudged.message
+                  : "这件活不在员工手上（未在跟、已交成果、在等你处理或已结束），不用催。",
         },
         409,
       );

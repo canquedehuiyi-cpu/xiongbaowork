@@ -28,7 +28,11 @@ import { withinModelRun } from "../src/models/token-metering";
 import { REFUSAL_MARKER } from "../src/plugins/tools";
 import { createQuotaService } from "../src/quota/limits";
 import { createTurnRunner } from "../src/routines/run-turn";
-import { createCardTurns } from "../src/tasks/card-turns";
+import {
+  CardTurnRefused,
+  createCardTurns,
+  ThreadBusy,
+} from "../src/tasks/card-turns";
 import { createDelivery } from "../src/tasks/delivery";
 import {
   type DeliveryCheckDeps,
@@ -647,8 +651,10 @@ test("outside work hours: not pushed, kept for the next start briefing", async (
     weekends: false,
     timeZone: "Asia/Shanghai",
   });
-  // Somebody whose preferences name no zone is read on UTC.
-  expect((await workHours(await tenant("no-zone"))).timeZone).toBe("UTC");
+  // Somebody whose preferences name no zone is read on the product's default zone, as a due time is.
+  expect((await workHours(await tenant("no-zone"))).timeZone).toBe(
+    "Asia/Shanghai",
+  );
 
   const evening = await acceptedCard("evening", {
     tenantId,
@@ -894,6 +900,143 @@ test("what the nudge and the notice report back is recorded as it happened", asy
   expect(sent.reminderHeldAt).toBeNull();
 });
 
+test("with no time zone saved, the day and the work hours are the product's default zone", async () => {
+  // Nobody has saved a zone yet (Task 6 lets them): the checker reads the clock a due time is read on.
+  const tenantId = await tenant("default-zone");
+  const due = new Date("2026-11-16T00:25:00Z"); // 08:25 Monday in Shanghai, 00:25 in UTC
+  const { taskId } = await acceptedCard("default-zone", {
+    tenantId,
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const { nudges, notices, check } = checker([tenantId], {
+    workHours: readDefaultWorkHours(database),
+  });
+  const sent = () => notices.map((notice) => notice.at.toISOString());
+
+  await check(new Date("2026-11-16T00:30:00Z"));
+  const [nudge] = nudges;
+  expect(nudge).toBeDefined();
+  // The due time as the coworker said it, on the person's clock.
+  expect(nudge?.text).toContain("预计 08:25 交");
+  // 09:00 in Shanghai is a work hour (01:00 in UTC would not be): pushed, counted on the 16th.
+  await check(new Date("2026-11-16T01:00:00Z"));
+  expect(sent()).toEqual(["2026-11-16T01:00:00.000Z"]);
+  expect((await row(tenantId, taskId)).notifiedOn).toBe("2026-11-16");
+  await check(new Date("2026-11-16T03:00:00Z")); // 11:00
+  await check(new Date("2026-11-16T05:00:00Z")); // 13:00
+  await check(new Date("2026-11-16T07:00:00Z")); // 15:00: a fourth today -- capped
+  expect(sent().length).toBe(3);
+  // 18:30 in Shanghai is after work (10:30 in UTC would be inside it): held, not pushed.
+  await check(new Date("2026-11-16T10:30:00Z"));
+  expect(sent().length).toBe(3);
+  const evening = await row(tenantId, taskId);
+  expect(evening.reminderHeldAt?.toISOString()).toBe(
+    "2026-11-16T10:30:00.000Z",
+  );
+  // 09:00 the next morning in Shanghai: a new day of the person's, so a push goes out again.
+  await check(new Date("2026-11-17T01:00:00Z"));
+  expect(sent().length).toBe(4);
+  const next = await row(tenantId, taskId);
+  expect(next.notifiedOn).toBe("2026-11-17");
+  expect(next.notifiedCount).toBe(1);
+});
+
+test("a nudge the coworker cannot get is recorded and retried two hours on; a busy thread next minute", async () => {
+  const due = new Date("2026-11-16T03:00:00Z");
+  const { tenantId, taskId } = await acceptedCard("refused", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const gone = new Error("That Bot is not available to this owner.");
+  // Another runner holds the conversation, as the platform answers it.
+  const locked = Object.assign(
+    new Error(
+      'Intelligence platform error 409: {"error":{"code":"THREAD_LOCK_FAILED","retryable":true}}',
+    ),
+    { name: "PlatformRequestError", status: 409, retryable: true },
+  );
+  let failure: Error = gone;
+  let turns = 0;
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: async () => {
+      turns++;
+      throw failure;
+    },
+    runner: runner(),
+  });
+
+  // Gone is a refusal, not a busy thread.
+  const refused = await nudgeRuns
+    .startNudgeRun(tenantId, taskId, "催一下")
+    .catch((error: unknown) => error);
+  expect(refused).toBeInstanceOf(CardTurnRefused);
+  expect(refused).not.toBeInstanceOf(ThreadBusy);
+  // A conversation another runner holds is busy.
+  failure = locked;
+  expect(await nudgeRuns.startNudgeRun(tenantId, taskId, "催一下")).toBe(
+    "skipped_running",
+  );
+
+  failure = gone;
+  const { check } = checker([tenantId], {
+    nudge: (tenant, task, text) => nudgeRuns.startNudgeRun(tenant, task, text),
+  });
+  const skipped = async () =>
+    (await history(tenantId, taskId)).filter(
+      (event) => event.kind === "nudge_skipped",
+    );
+  turns = 0;
+  await check(at(due, 5 * MINUTE));
+  await check(at(due, 6 * MINUTE));
+  expect(turns).toBe(1);
+  const [first] = await skipped();
+  expect(first).toBeDefined();
+  expect(first?.detail).toMatchObject({
+    cause: "That Bot is not available to this owner.",
+  });
+  expect((await skipped()).length).toBe(1);
+  await check(at(due, 125 * MINUTE));
+  expect(turns).toBe(2);
+  expect((await skipped()).length).toBe(2);
+
+  // Busy: no line, the claim given back, and the next minute tries again.
+  failure = locked;
+  await check(at(due, 245 * MINUTE));
+  expect(turns).toBe(3);
+  expect((await row(tenantId, taskId)).lastNudgedAt?.toISOString()).toBe(
+    at(due, 125 * MINUTE).toISOString(),
+  );
+  await check(at(due, 246 * MINUTE));
+  expect(turns).toBe(4);
+  expect((await skipped()).length).toBe(2);
+});
+
+test("a pass that cannot check every card checks the ones due first", async () => {
+  const tenantId = await tenant("busy-board");
+  const overdue = await acceptedCard("busy-board-late", {
+    tenantId,
+    acceptedAt: new Date("2026-11-16T02:00:00Z"),
+    dueAt: new Date("2026-11-16T03:00:00Z"),
+  });
+  const later = await acceptedCard("busy-board-later", {
+    tenantId,
+    acceptedAt: new Date("2026-11-16T02:00:00Z"),
+    dueAt: new Date("2026-12-30T03:00:00Z"),
+  });
+  // The card nothing is due on changed least recently: an oldest-change-first pass would take it, every time.
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ updatedAt: new Date("2026-11-01T00:00:00Z") })
+      .where(eq(tasks.id, later.taskId)),
+  );
+  const { nudges, check } = checker([tenantId], { cardsPerPass: 1 });
+  await check(new Date("2026-11-16T03:40:00Z"));
+  expect(nudges.map((nudge) => nudge.taskId)).toEqual([overdue.taskId]);
+});
+
 test("two concurrent checks nudge and notify once", async () => {
   const due = new Date("2026-11-16T03:00:00Z");
   const { tenantId, taskId } = await acceptedCard("replicas", {
@@ -967,6 +1110,7 @@ test("reassign stops the old turn, swaps executor and thread, back to pending_ac
     (found) => found.activeRunRef === runId,
   );
 
+  let threadAsks = 0;
   const newcomer = new Recorder(newAgent, "我先看看。");
   const runTurn = unattendedTurn(() => newcomer);
   const nudgeRuns = createNudgeRuns({
@@ -974,8 +1118,10 @@ test("reassign stops the old turn, swaps executor and thread, back to pending_ac
     runTurn,
     runner: runner(),
     turns: createCardTurns({ database, runTurn, runner: runner() }),
-    coworkerThread: async (_tenantId, coworker) =>
-      coworker === newAgent ? newThread : null,
+    coworkerThread: async (_tenantId, coworker) => {
+      threadAsks++;
+      return coworker === newAgent ? newThread : null;
+    },
   });
   const call = routesFor(tenantId, { rounds: nudgeRuns });
 
@@ -1052,11 +1198,56 @@ test("reassign stops the old turn, swaps executor and thread, back to pending_ac
   const [closed] = oldRound;
   expect(closed).toBeDefined();
   expect(closed?.detail).toMatchObject({ reason: "reassigned" });
+  // Said as what happened, not as a failure of the round.
+  if (!closed) throw new Error("no closed round");
+  expect(
+    taskEventSentence(closed, { now: new Date(), timeZone: "Asia/Shanghai" }),
+  ).toBe("换人接手，原来那一轮停下了");
 
-  // The same coworker again: nothing to hand over.
+  // The same coworker again: nothing to hand over, and no conversation opened for the asking.
+  const asked = threadAsks;
   expect(
     (await call("POST", `${taskId}/reassign`, { agentId: newAgent })).status,
   ).toBe(409);
+  expect(threadAsks).toBe(asked);
+});
+
+test("reassign is refused while the card waits on the person", async () => {
+  const { tenantId, taskId } = await acceptedCard("reassign-waiting", {
+    acceptedAt: new Date(Date.now() - 10 * MINUTE),
+    dueAt: new Date(Date.now() + HOUR),
+  });
+  // An approval the round raised: deciding it carries on the old coworker's round.
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ status: "needs_action", pendingApprovalId: randomUUID() })
+      .where(eq(tasks.id, taskId)),
+  );
+  let threadAsks = 0;
+  const call = routesFor(tenantId, {
+    rounds: createNudgeRuns({
+      database,
+      runTurn: unattendedTurn((agentId) => new Recorder(agentId)),
+      runner: runner(),
+      coworkerThread: async () => {
+        threadAsks++;
+        return `thread-${suite}-never`;
+      },
+    }),
+  });
+  const response = await call("POST", `${taskId}/reassign`, {
+    agentId: `agent-${suite}-someone`,
+  });
+  expect(response.status).toBe(409);
+  expect(response.body.error).toBe(
+    "这件活在等你处理（审批或提问），处理完再换人。",
+  );
+  expect(threadAsks).toBe(0);
+  const card = await row(tenantId, taskId);
+  expect(card.status).toBe("needs_action");
+  expect(card.executorAgentId).toBe(`agent-${suite}-reassign-waiting`);
+  expect(await kinds(tenantId, taskId)).toEqual([]);
 });
 
 test("a late deliver_task from the old employee after reassign is refused", async () => {
@@ -1204,19 +1395,70 @@ test("再催 nudges the coworker now, as the person, and is refused while a roun
   const [line] = nudged;
   expect(line).toBeDefined();
   expect(line?.actor).toBe(`user:${tenantId}`);
-  const card = await row(tenantId, taskId);
-  expect(card.nudges).toBe(1);
-  expect(card.lastNudgedAt).not.toBeNull();
+  const nudgedCard = await row(tenantId, taskId);
+  expect(nudgedCard.nudges).toBe(1);
+  expect(nudgedCard.lastNudgedAt).not.toBeNull();
+
+  // Again within the minute: the coworker was just nudged (and the checker cannot slip one in between).
+  const again = await call("POST", `${taskId}/nudge`);
+  expect(again.status).toBe(409);
+  expect(again.body.error).toBe("刚催过，过一会儿再催。");
+  expect(recorder.seen.length).toBe(1);
 
   const working = new Working(agentId);
   const runId = randomUUID();
   const turnDone = personTurn({ tenantId, agent: working, threadId, runId });
   await working.running;
-  const busy = await call("POST", `${taskId}/nudge`);
+  const later = routesFor(tenantId, {
+    rounds: nudgeRuns,
+    now: () => new Date(Date.now() + 5 * MINUTE),
+  });
+  const busy = await later("POST", `${taskId}/nudge`);
   expect(busy.status).toBe(409);
-  expect((await row(tenantId, taskId)).nudges).toBe(1);
+  expect(busy.body.error).toBe("员工正在做这件活的一轮，稍后再催。");
+  const after = await row(tenantId, taskId);
+  expect(after.nudges).toBe(1);
+  // The refused nudge gave its claim back.
+  expect(after.lastNudgedAt?.toISOString()).toBe(
+    nudgedCard.lastNudgedAt?.toISOString(),
+  );
   await runAsTenant(tenantId, () => runner().stop({ threadId, runId }));
   await turnDone;
+
+  // A card handed over long after it was opened is said to have waited since the hand-over.
+  const waiting = await card(tenantId, {
+    executorAgentId: agentId,
+    threadRef: `thread-${suite}-nudge-waiting`,
+    channelRef: `thread-${suite}-nudge-waiting`,
+    createdAt: new Date(Date.now() - 3 * 24 * HOUR),
+  });
+  await runAsTenant(tenantId, () =>
+    appendTaskEvent(database, {
+      tenantId,
+      taskId: waiting,
+      kind: "reassigned",
+      actor: `user:${tenantId}`,
+      detail: {},
+    }),
+  );
+  const told = new Recorder(agentId, "这就接。");
+  const waitingCall = routesFor(tenantId, {
+    rounds: createNudgeRuns({
+      database,
+      runTurn: unattendedTurn(() => told),
+      runner: runner(),
+    }),
+    now: () => new Date(Date.now() + 10 * MINUTE),
+  });
+  expect((await waitingCall("POST", `${waiting}/nudge`)).status).toBe(200);
+  await until(
+    async () => told.seen.length,
+    (count) => count > 0,
+  );
+  const [heard] = told.seen;
+  expect(heard).toBeDefined();
+  const words = String(heard?.messages.at(-1)?.content ?? "");
+  expect(words).toContain("派给你 10 分钟了");
 });
 
 afterAll(async () => {

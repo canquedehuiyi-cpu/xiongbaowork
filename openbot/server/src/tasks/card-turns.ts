@@ -7,6 +7,7 @@ import {
 } from "@ag-ui/client";
 import { and, eq } from "drizzle-orm";
 import { Observable } from "rxjs";
+import { isLockConflict } from "../../../toolkit/src/lease";
 import { type AuditInitiator, PERSON_INITIATOR } from "../audit";
 import type { Database } from "../db/client";
 import { groupBotThreads } from "../db/schema";
@@ -85,13 +86,26 @@ export class CardTurnRefused extends Error {
 }
 
 /**
- * Refused because the thread is taken: a turn is already running on it, or the new one could not get
- * hold of it in time. Somebody is working; nothing is wrong, and later may do.
+ * Refused because the thread is taken: a turn is already running on it, another runner holds its lock
+ * (`isLockConflict`), or the new one could not get hold of it in time. Somebody is working; nothing is
+ * wrong, and later may do.
  */
 export class ThreadBusy extends CardTurnRefused {
   constructor() {
     super(BUSY);
     this.name = "ThreadBusy";
+  }
+}
+
+/**
+ * Refused for a reason that is neither a busy thread nor one the person can be told in their own words
+ * (the coworker gone, the gateway down, a fault): trying again in a minute would only fail the same
+ * way. `detail` keeps what the turn said, for the logs and a card's history.
+ */
+export class TurnNotStarted extends CardTurnRefused {
+  constructor(readonly detail?: string) {
+    super(NOT_STARTED);
+    this.name = "TurnNotStarted";
   }
 }
 
@@ -133,6 +147,7 @@ export type CardTurnsDeps = {
 };
 
 const BUSY = "员工这会儿正忙，稍后再试。";
+const NOT_STARTED = "没能让员工开始这一轮，稍后再试。";
 /** How long a 退回's turn may take to start (admission, the thread's lock) before it is given up. */
 export const START_TIMEOUT_MS = 30_000;
 const PAUSED = "这位员工已暂停，恢复后再试。";
@@ -152,8 +167,11 @@ function refusalOf(error: unknown): CardTurnRefused {
   // "Use Bots" switched off, or the model is not on the allowlist: the gate's own sentence.
   if (name === "CapabilityRefusedError" && error instanceof Error)
     return new CardTurnRefused(error.message);
-  // The thread is held (somebody's turn), or the turn could not take it: try again later.
-  return new ThreadBusy();
+  // Another runner holds the thread (the platform's 409 on its lock): somebody's turn, try again later.
+  if (isLockConflict(error)) return new ThreadBusy();
+  // Anything else did not start the turn and will not by waiting a minute: said as such, not as busy.
+  log("task-card-turn-not-started", { reason: reasonOf(error) });
+  return new TurnNotStarted(reasonOf(error));
 }
 
 /** How a server-started turn on a card's thread is said and filed. */

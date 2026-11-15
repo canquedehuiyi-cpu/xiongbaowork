@@ -319,13 +319,15 @@ export type Delivery = {
     | { ok: false; why: "not_followed" | "not_editable" }
   >;
   /**
-   * 换人接手 (`POST /api/tasks/:id/reassign`, spec §8): a followed card the coworker still has
-   * (`running` or `needs_action`) goes to `agentId`, on `threadRef` -- the new coworker's thread with
+   * 换人接手 (`POST /api/tasks/:id/reassign`, spec §8): a followed card the coworker has (`running`)
+   * goes to `agentId`, on `threadRef` -- the new coworker's thread with
    * the person -- and back to 派出 · 待接下 (`accepted_at` cleared, `running`): the new coworker takes it
    * on with its own `accept_task`. `original_due_at`, `due_at`, `overdue_at` and what was handed in
    * stay. The round running on the card is let go (`active_run_ref` cleared) and closed in the history
    * as `run_failed {reason: "reassigned"}`, so its late end writes nothing; one `reassigned` line.
-   * What comes back is the round to stop and what the new coworker is to be told.
+   * What comes back is the round to stop and what the new coworker is to be told. Refused while the
+   * card waits on the person (`needs_action`): deciding that approval or answering that question
+   * carries on the old coworker's round, so it is decided first.
    */
   reassign(
     tenantId: string,
@@ -345,7 +347,10 @@ export type Delivery = {
         /** The first coworker's latest progress line. */
         progress: string | null;
       }
-    | { ok: false; why: "not_open" | "handed_in" | "same_coworker" }
+    | {
+        ok: false;
+        why: "not_open" | "handed_in" | "waiting_on_you" | "same_coworker";
+      }
   >;
   /**
    * A nudge the coworker was given (the checker's, or the person's 再催): `nudges + 1`,
@@ -1113,6 +1118,8 @@ export function createDelivery(database: Database): Delivery {
           // Handed in: the work is the person's to review or send back, not anybody's to take over.
           if (card.status === "awaiting_review")
             return { ok: false, why: "handed_in" } as const;
+          if (card.status === "needs_action")
+            return { ok: false, why: "waiting_on_you" } as const;
           if (card.agentId === input.agentId)
             return { ok: false, why: "same_coworker" } as const;
           const [latest] = await transaction
@@ -1136,8 +1143,6 @@ export function createDelivery(database: Database): Delivery {
               // 派出 · 待接下 again: the new coworker answers with its own 接活回执.
               acceptedAt: null,
               status: "running",
-              // Whatever the old round was waiting on (an approval, a question) went with it.
-              pendingApprovalId: null,
               activeRunRef: null,
               lastError: null,
               returnPendingAt: null,

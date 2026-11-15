@@ -9,7 +9,7 @@ import {
   ThreadBusy,
 } from "./card-turns";
 import { createDelivery, type Delivery } from "./delivery";
-import { nudgeTextOf } from "./delivery-checker";
+import { nudgeTextOf, waitingSinceOf } from "./delivery-checker";
 import type { TaskEventActor } from "./events";
 import type { DeliverableRef } from "./projector";
 
@@ -54,7 +54,7 @@ export type NudgeRuns = {
     input: { actor: TaskEventActor; now: Date; timeZone: string },
   ): Promise<
     | { ok: true; nudges: number }
-    | { ok: false; why: "not_nudgeable" | "running" }
+    | { ok: false; why: "not_nudgeable" | "running" | "just_nudged" }
     | { ok: false; why: "refused"; message: string }
   >;
   /**
@@ -73,7 +73,12 @@ export type NudgeRuns = {
     | { ok: true; threadRef: string; started: boolean }
     | {
         ok: false;
-        why: "no_coworker" | "not_open" | "handed_in" | "same_coworker";
+        why:
+          | "no_coworker"
+          | "not_open"
+          | "handed_in"
+          | "waiting_on_you"
+          | "same_coworker";
       }
   >;
 };
@@ -103,6 +108,9 @@ export class NotNudgeable extends Error {
     this.name = "NotNudgeable";
   }
 }
+
+/** How long a nudge, the checker's or the person's, holds the card against another 再催. */
+const NUDGE_HOLD_MS = 60_000;
 
 const log = (type: string, detail: Record<string, unknown>) =>
   console.error(JSON.stringify({ type, ...detail }));
@@ -191,36 +199,84 @@ export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
     startNudgeRun,
 
     async nudgeNow(tenantId, taskId, input) {
-      const [card] = await runAsTenant(tenantId, () =>
-        deps.database
-          .select({
-            title: tasks.title,
-            acceptedAt: tasks.acceptedAt,
-            dueAt: tasks.dueAt,
-            createdAt: tasks.createdAt,
-          })
-          .from(tasks)
-          .where(
-            and(
-              eq(tasks.tenantId, tenantId),
-              eq(tasks.id, taskId),
-              eq(tasks.tracked, true),
-              eq(tasks.status, "running"),
-            ),
+      /*
+       * Claimed first, as the checker claims (`last_nudged_at`, under the row's lock): a nudge from
+       * either in the last minute holds the card, so the person's 再催 and the checker's nudge cannot
+       * both start a round on it -- the second would supersede the first. Given back if no round starts.
+       */
+      const claim = await runAsTenant(tenantId, () =>
+        deps.database.transaction(async (transaction) => {
+          const [card] = await transaction
+            .select({
+              id: tasks.id,
+              title: tasks.title,
+              acceptedAt: tasks.acceptedAt,
+              dueAt: tasks.dueAt,
+              createdAt: tasks.createdAt,
+              lastNudgedAt: tasks.lastNudgedAt,
+            })
+            .from(tasks)
+            .where(
+              and(
+                eq(tasks.tenantId, tenantId),
+                eq(tasks.id, taskId),
+                eq(tasks.tracked, true),
+                eq(tasks.status, "running"),
+              ),
+            )
+            .for("update");
+          if (!card) return { ok: false, why: "not_nudgeable" } as const;
+          if (
+            card.lastNudgedAt &&
+            Math.abs(input.now.getTime() - card.lastNudgedAt.getTime()) <
+              NUDGE_HOLD_MS
           )
-          .limit(1),
+            return { ok: false, why: "just_nudged" } as const;
+          await transaction
+            .update(tasks)
+            .set({ lastNudgedAt: input.now })
+            .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
+          return {
+            ok: true,
+            card,
+            // How long a card still waiting to be taken on has waited: since it was followed or handed over.
+            waitingSince: await waitingSinceOf(transaction, tenantId, card),
+          } as const;
+        }),
       );
-      if (!card) return { ok: false, why: "not_nudgeable" };
-      const text = nudgeTextOf(card, input.now, input.timeZone);
+      if (!claim.ok) return claim;
+      const giveBack = () =>
+        runAsTenant(tenantId, () =>
+          deps.database
+            .update(tasks)
+            .set({ lastNudgedAt: claim.card.lastNudgedAt })
+            .where(
+              and(
+                eq(tasks.tenantId, tenantId),
+                eq(tasks.id, taskId),
+                eq(tasks.lastNudgedAt, input.now),
+              ),
+            ),
+        );
+      const text = nudgeTextOf(
+        claim.card,
+        input.now,
+        input.timeZone,
+        claim.waitingSince,
+      );
       let outcome: "started" | "skipped_running";
       try {
         outcome = await startNudgeRun(tenantId, taskId, text);
       } catch (error) {
+        await giveBack();
         if (error instanceof NotNudgeable)
           return { ok: false, why: "not_nudgeable" };
         return { ok: false, why: "refused", message: reasonOf(error) };
       }
-      if (outcome === "skipped_running") return { ok: false, why: "running" };
+      if (outcome === "skipped_running") {
+        await giveBack();
+        return { ok: false, why: "running" };
+      }
       const nudged = await delivery.nudged(tenantId, taskId, {
         actor: input.actor,
         text,
@@ -230,6 +286,33 @@ export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
     },
 
     async reassignTask(tenantId, taskId, agentId, actor) {
+      /*
+       * What the card itself refuses is asked first, before the new coworker's conversation is looked
+       * up -- which opens one when there is none. `reassign` asks again under the row's lock.
+       */
+      const [card] = await runAsTenant(tenantId, () =>
+        deps.database
+          .select({ status: tasks.status, agentId: tasks.executorAgentId })
+          .from(tasks)
+          .where(
+            and(
+              eq(tasks.tenantId, tenantId),
+              eq(tasks.id, taskId),
+              eq(tasks.tracked, true),
+            ),
+          )
+          .limit(1),
+      );
+      if (
+        !card ||
+        !["running", "needs_action", "awaiting_review"].includes(card.status)
+      )
+        return { ok: false, why: "not_open" };
+      if (card.status === "awaiting_review")
+        return { ok: false, why: "handed_in" };
+      if (card.status === "needs_action")
+        return { ok: false, why: "waiting_on_you" };
+      if (card.agentId === agentId) return { ok: false, why: "same_coworker" };
       const threadRef = deps.coworkerThread
         ? await runAsTenant(tenantId, () =>
             // biome-ignore lint/style/noNonNullAssertion: checked above

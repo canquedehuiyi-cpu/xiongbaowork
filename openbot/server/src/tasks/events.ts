@@ -114,6 +114,9 @@ export function taskEventSentence(
     case "delivered":
       return "已交成果，等你验收";
     case "run_failed":
+      // Closed by the server rather than failed: handed to another coworker, or replaced by a later round.
+      if (detail.reason === "reassigned") return "换人接手，原来那一轮停下了";
+      if (detail.reason === "superseded") return "这一轮被后来的一轮接替了";
       return withReason("这一轮出错了", text("error"));
     case "nudged":
       return "催过员工";

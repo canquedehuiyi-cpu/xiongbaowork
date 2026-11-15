@@ -230,7 +230,14 @@ function unattendedTurn(
         threadId: string;
         runId: string;
       }) => {
-        if (options.lockRefused) throw new Error("Thread lock denied");
+        // The platform's answer while another runner holds the thread (`isLockConflict`).
+        if (options.lockRefused)
+          throw Object.assign(
+            new Error(
+              'Intelligence platform error 409: {"error":{"code":"THREAD_LOCK_FAILED","retryable":true}}',
+            ),
+            { name: "PlatformRequestError", status: 409, retryable: true },
+          );
         if (options.lockHangs) await new Promise(() => {});
         return {
           threadId: params.threadId,

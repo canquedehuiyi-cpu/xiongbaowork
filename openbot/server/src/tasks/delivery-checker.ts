@@ -8,7 +8,9 @@ import {
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
+import { TurnNotStarted } from "./card-turns";
 import { createDelivery, type Delivery } from "./delivery";
+import { DEFAULT_TIME_ZONE } from "./delivery-tools";
 import { clockOf } from "./due-time";
 import { appendTaskEvent } from "./events";
 
@@ -54,7 +56,7 @@ export const REPEAT_MS = 2 * HOUR;
 export const UNREPORTED_DUE_MS = 2 * HOUR;
 /** Reminders pushed to the person about one card in one of their days. */
 export const DAILY_NOTICES = 3;
-/** Cards one pass checks, oldest change first; the rest wait a minute. */
+/** Cards one pass checks, soonest-due first; the rest wait a minute. */
 const CARDS_PER_PASS = 500;
 
 /** When the person works, on their own clock (Task 6 reads it from their preferences). */
@@ -104,6 +106,8 @@ export type DeliveryCheckDeps = {
   agentName?: (tenantId: string, agentId: string) => Promise<string | null>;
   /** Narrow a pass to these tenants (a test's own people); absent, every tenant. */
   onlyTenants?: readonly string[];
+  /** How many cards one pass checks (default {@link CARDS_PER_PASS}). */
+  cardsPerPass?: number;
 };
 
 /** Whether a turn is running on a thread, as the deployment's runner knows it (one process, local mode). */
@@ -130,7 +134,9 @@ function knownZone(timeZone: unknown): timeZone is string {
 
 /**
  * Work hours until Task 6 lets the person set them: the defaults, on the time zone their preferences
- * already hold (`workHours.timeZone`, else `timeZone`), else UTC.
+ * already hold (`workHours.timeZone`, else `timeZone`), else the product's own zone
+ * (`DEFAULT_TIME_ZONE`) -- the zone a coworker's 「下午三点」 is read on, so the day the three reminders
+ * are counted in, the work hours and the due time a nudge quotes are all on one clock.
  */
 export function readDefaultWorkHours(database: Database) {
   return async (userId: string): Promise<WorkHours> => {
@@ -144,7 +150,7 @@ export function readDefaultWorkHours(database: Database) {
     const preferences = (user?.preferences ?? {}) as Record<string, unknown>;
     const hours = (preferences.workHours ?? {}) as Record<string, unknown>;
     const timeZone = [hours.timeZone, preferences.timeZone].find(knownZone);
-    return { ...DEFAULT_WORK_HOURS, timeZone: timeZone ?? "UTC" };
+    return { ...DEFAULT_WORK_HOURS, timeZone: timeZone ?? DEFAULT_TIME_ZONE };
   };
 }
 
@@ -272,10 +278,10 @@ function scheduleOf(card: CheckedCard, waitingSince: Date): Schedule {
  * Since when the card has waited for its 接活回执: its latest `dispatched` (followed) or `reassigned`
  * (handed to a new coworker) line, else when it was opened.
  */
-async function waitingSinceOf(
+export async function waitingSinceOf(
   database: Pick<Database, "select">,
   tenantId: string,
-  card: CheckedCard,
+  card: Pick<CheckedCard, "id" | "acceptedAt" | "createdAt">,
 ): Promise<Date> {
   if (card.acceptedAt) return card.acceptedAt;
   const [latest] = await database
@@ -400,8 +406,20 @@ export async function runDeliveryCheck(
             : []),
         ),
       )
-      .orderBy(tasks.updatedAt)
-      .limit(CARDS_PER_PASS),
+      /*
+       * Soonest-due first, by a rough next moment: five minutes past the due time (or the opening, for
+       * a card still waiting to be taken on), or two hours after the last nudge if that is later. A
+       * pass that cannot reach every card then leaves out the ones furthest from needing anything,
+       * not whichever changed least recently -- which a card nothing is due on stays forever.
+       */
+      .orderBy(
+        sql`greatest(
+          coalesce(${tasks.dueAt}, ${tasks.acceptedAt} + interval '2 hours', ${tasks.createdAt}) + interval '5 minutes',
+          coalesce(${tasks.lastNudgedAt} + interval '2 hours', '-infinity'::timestamptz)
+        )`,
+        tasks.id,
+      )
+      .limit(deps.cardsPerPass ?? CARDS_PER_PASS),
   );
   for (const card of cards) {
     // The row's own stamp is the only tenant a card is checked in (G01); a card stamped as nobody's is skipped.
@@ -606,7 +624,13 @@ async function nudgeCoworker(
       taskId,
       kind: "nudge_skipped",
       actor: "system",
-      detail: { reason: reasonOf(error), at: claim.now.toISOString() },
+      detail: {
+        reason: reasonOf(error),
+        ...(error instanceof TurnNotStarted && error.detail
+          ? { cause: error.detail }
+          : {}),
+        at: claim.now.toISOString(),
+      },
     });
     return;
   }
