@@ -1340,7 +1340,7 @@ test("a nudge the coworker cannot get is recorded and retried two hours on; a bu
   expect((await skipped()).length).toBe(2);
 });
 
-test("a pass that cannot check every card checks the ones due first", async () => {
+test("a pass checks the cards due first, one page at a time", async () => {
   const tenantId = await tenant("busy-board");
   const overdue = await acceptedCard("busy-board-late", {
     tenantId,
@@ -1362,6 +1362,52 @@ test("a pass that cannot check every card checks the ones due first", async () =
   const { nudges, check } = checker([tenantId], { cardsPerPass: 1 });
   await check(new Date("2026-11-16T03:40:00Z"));
   expect(nudges.map((nudge) => nudge.taskId)).toEqual([overdue.taskId]);
+});
+
+test("cards past the per-pass limit are still checked: cards that stay first never fill every pass", async () => {
+  const tenantId = await tenant("full-board");
+  /*
+   * Two cards queued with an offline external employee: never nudged, so `last_nudged_at` never moves
+   * them back, and the earliest due -- first in every pass's order, however often they are checked.
+   */
+  const stuck = await Promise.all(
+    [0, 1].map((index) =>
+      acceptedCard(`full-board-queued-${index}`, {
+        tenantId,
+        acceptedAt: new Date("2026-11-16T00:00:00Z"),
+        dueAt: new Date("2026-11-16T01:00:00Z"),
+      }),
+    ),
+  );
+  // Three more overdue cards behind them, with a coworker that can be nudged.
+  const behind = await Promise.all(
+    [0, 1, 2].map((index) =>
+      acceptedCard(`full-board-behind-${index}`, {
+        tenantId,
+        acceptedAt: new Date("2026-11-16T00:00:00Z"),
+        dueAt: new Date(`2026-11-16T02:0${index}:00Z`),
+      }),
+    ),
+  );
+  const queuedThreads = new Set(stuck.map((card) => card.threadId));
+  const { nudges, notices, check } = checker([tenantId], {
+    cardsPerPass: 2,
+    turnQueued: async (_tenantId, threadId) =>
+      queuedThreads.has(threadId) ? { offline: true } : null,
+  });
+  const now = new Date("2026-11-16T04:00:00Z");
+  for (const minutes of [0, 1, 2, 3]) await check(at(now, minutes * MINUTE));
+
+  // Every card was checked: each is recorded overdue and its person told once.
+  for (const card of [...stuck, ...behind])
+    expect((await row(tenantId, card.taskId)).overdueAt).not.toBeNull();
+  expect(notices.map((notice) => notice.notice.taskId).sort()).toEqual(
+    [...stuck, ...behind].map((card) => card.taskId).sort(),
+  );
+  // And only the cards whose coworker can take a nudge were nudged.
+  expect(nudges.map((nudge) => nudge.taskId).sort()).toEqual(
+    behind.map((card) => card.taskId).sort(),
+  );
 });
 
 test("two concurrent checks nudge and notify once", async () => {

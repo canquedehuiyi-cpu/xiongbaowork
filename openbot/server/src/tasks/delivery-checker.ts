@@ -93,7 +93,7 @@ export const DAILY_NUDGES = 3;
  * (a restart across the moment): the hour in which a held reminder is the start briefing's.
  */
 export const BRIEFING_WINDOW_MS = HOUR;
-/** Cards one pass checks, soonest-due first; the rest wait a minute. */
+/** Cards one page of a pass reads, soonest-due first; the pass reads page after page to the end. */
 const CARDS_PER_PASS = 500;
 
 /** When the person works, on their own clock: their preferences (`readWorkHours`). */
@@ -145,7 +145,7 @@ export type DeliveryCheckDeps = {
   agentName?: (tenantId: string, agentId: string) => Promise<string | null>;
   /** Narrow a pass to these tenants (a test's own people); absent, every tenant. */
   onlyTenants?: readonly string[];
-  /** How many cards one pass checks (default {@link CARDS_PER_PASS}). */
+  /** How many cards one page of a pass reads (default {@link CARDS_PER_PASS}). */
   cardsPerPass?: number;
 };
 
@@ -457,10 +457,59 @@ export async function runDeliveryCheck(
   now: Date,
 ): Promise<void> {
   const delivery = createDelivery(deps.database);
-  // Which cards to look at, across every tenant: their ids and tenants, and nothing else.
-  const cards = await asPlatform(() =>
+  const page = deps.cardsPerPass ?? CARDS_PER_PASS;
+  /** Where the last page ended: its last card's next moment (as text, to the microsecond) and id. */
+  let after: { moment: string; id: string } | null = null;
+  /** Cards this pass already checked: one whose next moment moved on as it was checked is not checked twice. */
+  const checked = new Set<string>();
+  for (;;) {
+    const cards = await cardsAfter(deps, after, page);
+    for (const card of cards) {
+      if (checked.has(card.id)) continue;
+      checked.add(card.id);
+      await checkOne(deps, delivery, card, now);
+    }
+    const last = cards.at(-1);
+    if (!last || cards.length < page) return;
+    after = { moment: last.moment, id: last.id };
+  }
+}
+
+/**
+ * Soonest-due first, by a rough next moment: five minutes past the due time (or the opening, for a card
+ * still waiting to be taken on), or two hours after the last nudge if that is later. The cards nearest
+ * to needing something are checked first in a pass, not whichever changed least recently.
+ */
+const nextMoment = sql`greatest(
+  coalesce(${tasks.dueAt}, ${tasks.acceptedAt} + interval '2 hours', ${tasks.createdAt}) + interval '5 minutes',
+  coalesce(${tasks.lastNudgedAt} + interval '2 hours', '-infinity'::timestamptz)
+)`;
+
+/**
+ * One page of the cards to look at, across every tenant -- their ids and tenants, and nothing else --
+ * after `after` in the pass's order.
+ *
+ * EVERY CARD, EVERY PASS: the pass reads page after page (keyset on the next moment and the id) until
+ * none is left, rather than one page and "the rest wait a minute". A card the pass can do nothing about
+ * -- queued with an external employee whose computer is away, outside the person's hours, out of the
+ * day's nudges -- keeps its next moment, so it stays first in the order however often it is checked,
+ * and a single page of such cards would have taken every pass forever: the cards behind them never
+ * checked, never recorded overdue, nobody told. The page bounds what one query holds, not what a pass
+ * does. Passes do not overlap (the loop waits for one to finish before the next minute's), and a card
+ * whose next moment moves while the pass runs is checked next pass at worst.
+ */
+async function cardsAfter(
+  deps: DeliveryCheckDeps,
+  after: { moment: string; id: string } | null,
+  page: number,
+): Promise<{ id: string; tenantId: string; moment: string }[]> {
+  return asPlatform(() =>
     deps.database
-      .select({ id: tasks.id, tenantId: tasks.tenantId })
+      .select({
+        id: tasks.id,
+        tenantId: tasks.tenantId,
+        moment: sql<string>`(${nextMoment})::text`,
+      })
       .from(tasks)
       .where(
         and(
@@ -469,43 +518,43 @@ export async function runDeliveryCheck(
           ...(deps.onlyTenants
             ? [inArray(tasks.tenantId, [...deps.onlyTenants])]
             : []),
+          ...(after
+            ? [
+                sql`(${nextMoment}, ${tasks.id}) > (${after.moment}::timestamptz, ${after.id}::uuid)`,
+              ]
+            : []),
         ),
       )
-      /*
-       * Soonest-due first, by a rough next moment: five minutes past the due time (or the opening, for
-       * a card still waiting to be taken on), or two hours after the last nudge if that is later. A
-       * pass that cannot reach every card then leaves out the ones furthest from needing anything,
-       * not whichever changed least recently -- which a card nothing is due on stays forever.
-       */
-      .orderBy(
-        sql`greatest(
-          coalesce(${tasks.dueAt}, ${tasks.acceptedAt} + interval '2 hours', ${tasks.createdAt}) + interval '5 minutes',
-          coalesce(${tasks.lastNudgedAt} + interval '2 hours', '-infinity'::timestamptz)
-        )`,
-        tasks.id,
-      )
-      .limit(deps.cardsPerPass ?? CARDS_PER_PASS),
+      .orderBy(nextMoment, tasks.id)
+      .limit(page),
   );
-  for (const card of cards) {
-    // The row's own stamp is the only tenant a card is checked in (G01); a card stamped as nobody's is skipped.
-    let tenantId: string;
-    try {
-      tenantId = assertPersonTenant(card.tenantId);
-    } catch (error) {
-      if (!(error instanceof TenantContextError)) throw error;
-      log("delivery-check-untrusted-tenant", { taskId: card.id });
-      continue;
-    }
-    try {
-      await runAsTenant(tenantId, () =>
-        checkCard(deps, delivery, tenantId, card.id, now),
-      );
-    } catch (error) {
-      log("delivery-check-card-failed", {
-        taskId: card.id,
-        reason: reasonOf(error),
-      });
-    }
+}
+
+/** Check one card of a pass, in the tenant stamped on its row. */
+async function checkOne(
+  deps: DeliveryCheckDeps,
+  delivery: Delivery,
+  card: { id: string; tenantId: string },
+  now: Date,
+): Promise<void> {
+  // The row's own stamp is the only tenant a card is checked in (G01); a card stamped as nobody's is skipped.
+  let tenantId: string;
+  try {
+    tenantId = assertPersonTenant(card.tenantId);
+  } catch (error) {
+    if (!(error instanceof TenantContextError)) throw error;
+    log("delivery-check-untrusted-tenant", { taskId: card.id });
+    return;
+  }
+  try {
+    await runAsTenant(tenantId, () =>
+      checkCard(deps, delivery, tenantId, card.id, now),
+    );
+  } catch (error) {
+    log("delivery-check-card-failed", {
+      taskId: card.id,
+      reason: reasonOf(error),
+    });
   }
 }
 
