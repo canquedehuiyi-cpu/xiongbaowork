@@ -122,7 +122,10 @@ import type {
   DeploymentModel,
 } from "./models/runtime-resolver";
 import { withModelRun } from "./models/token-metering";
-import { pickedSkillGuidance } from "./plugins/picked-skill";
+import {
+  heldSkillsGuidance,
+  pickedSkillGuidance,
+} from "./plugins/picked-skill";
 import { appCallsOfRun, withAppCallsOf } from "./plugins/run-calls";
 import type { SelectableSkill, Selection } from "./plugins/selection";
 import {
@@ -980,6 +983,14 @@ export function builtInAgentConfiguration(
    * whenever the deployment has a computer, as it always did.
    */
   run: { mode?: RunMode; usesComputer?: boolean } = {},
+  /**
+   * 员工手上握着的技能，一行一条：命令、名字、一句干什么、档位。索引，不是正文。
+   *
+   * 加在 `run` 之后，因为前面每个位置都被调用方按序占着，`runToolNames` 上面那条注释就记着错位
+   * 一次要付什么代价。正文仍旧只在消息以 `/slug` 开头时进 prompt（`picked-skill.ts`）：一次
+   * 一百多篇正文比整段对话都贵，但「有哪些」从来没说过，于是员工能做的事它自己不知道。
+   */
+  heldSkills?: string,
 ): BuiltInAgentConfiguration {
   const unattended = isUnattended(run.mode);
   if (!apiKey && !planModel && !agentModel) {
@@ -1132,6 +1143,11 @@ export function builtInAgentConfiguration(
           )
         : []),
       ...promptSection("learned_skills", learnedSkills?.catalog),
+      /*
+       * 它手上握着哪些技能，一行一条。跟着 grants 走，所以和 `learned_skills` 一样是稳定前缀；
+       * 而选中那条的正文在最后一段（`picked_skill`），随消息变。见 `heldSkillsGuidance`。
+       */
+      ...promptSection("skills_held", heldSkills),
       // A routine or a check-in, with nobody watching. Nothing for a person's own turn.
       ...promptSection("run_mode", runModeGuidance(run.mode ?? "attended")),
       /*
@@ -1778,6 +1794,11 @@ async function buildAgent(
    */
   const pickedSkillFor = (input: RunAgentInput) =>
     pickedSkillGuidance(input, skills);
+  /*
+   * 它手上握着哪些技能，作为索引交给模型。不带 input：同一批 grants 每次都是同一段字节，落在
+   * prompt 的稳定前缀里。见 `heldSkillsGuidance`。
+   */
+  const heldSkillsFor = heldSkillsGuidance(skills);
   const holdsInstructions = skills.some((skill) => skill.instructions);
   const narrowing =
     selection &&
@@ -1954,6 +1975,7 @@ async function buildAgent(
         : undefined,
       refusingProvider(model),
       holdsInstructions ? pickedSkillFor : undefined,
+      heldSkillsFor,
     );
   }
 
@@ -2135,6 +2157,7 @@ async function buildAgent(
            */
           ...(input ? { usesComputer: input.tools.some(isComputerTool) } : {}),
         },
+        heldSkillsFor,
       );
     const runToolNames = input?.tools.map((tool) => tool.name);
     const configuration = configurationFor(runToolNames);
@@ -2725,6 +2748,8 @@ function remoteAgentWithStandingRole(
    * M3: upstream's `apps` is still not taken; see the note on the plugins imports.
    */
   pickedSkillFor?: (input: RunAgentInput) => string | undefined,
+  /** 它手上握着哪些技能，一行一条。和 `pickedSkillFor` 分开：那份随消息变，这份随 grants 变。 */
+  heldSkills?: string,
 ) {
   const holds = (input: RunAgentInput) => !holdsTools || holdsTools(input);
   /*
@@ -2921,6 +2946,11 @@ function remoteAgentWithStandingRole(
           ...agent.standingMessage,
           content: [
             agent.standingMessage.content,
+            /*
+             * 它手上握着哪些技能。在 run_mode 之前：这一段只随 grants 变，是稳定前缀；选中那条的
+             * 正文在最后一段，随消息变。见 `heldSkillsGuidance`。
+             */
+            ...promptSection("skills_held", heldSkills),
             /*
              * A routine firing on a Bot that runs elsewhere is unattended too, and told so the way
              * a built-in Bot is. A check-in never reaches here: it runs on OpenBot's own runner.
