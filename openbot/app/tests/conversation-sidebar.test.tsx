@@ -33,6 +33,7 @@ import { Route as ModelsTabRoute } from "@/routes/_authed/_app/capabilities.mode
 import {
   ConversationSidebar,
   SidebarCollapseButton,
+  sidebarRoom,
 } from "@/skins/xiongbao/conversation-sidebar/sidebar";
 import type {
   ContextUsage,
@@ -667,6 +668,83 @@ test("too narrow for even the strip: no sidebar and no header button", async () 
   } finally {
     tight.restore();
   }
+});
+
+test("the strip and hiding switch exactly at 940 and 456", () => {
+  // 展开 300 + 对话区 640；图标条 56 + 对话区 400。
+  expect(sidebarRoom(940)).toBe("panel");
+  expect(sidebarRoom(939)).toBe("strip");
+  expect(sidebarRoom(456)).toBe("strip");
+  expect(sidebarRoom(455)).toBe("none");
+  // 不在 DetailPanel 里：不受限。
+  expect(sidebarRoom(null)).toBe("panel");
+});
+
+test("the panel stops observing its width when it unmounts", async () => {
+  const drawn = await drawInPanel(1072);
+  try {
+    await loaded(drawn.view);
+    expect(Observer.targets.size).toBe(1);
+    drawn.view.unmount();
+    expect(Observer.targets.size).toBe(0);
+  } finally {
+    drawn.restore();
+  }
+});
+
+test("an approval with the same tool call id in another conversation is never drawn here", async () => {
+  sidebars.set("t1", sidebar({ goal: null }));
+  const request = (id: string, threadId: string, createdAt: string) => ({
+    id,
+    status: "pending",
+    createdAt,
+    action: {
+      botId: "a1",
+      toolRef: "computer_click",
+      effect: "write",
+      scope: "browser",
+      threadId,
+      toolCallId: "call-same",
+      args: {},
+      target: null,
+      policy: { behaviour: "ask", source: "safety", reason: "先问你。" },
+    },
+  });
+  // 别的对话那条排在前面、也更新：只按工具调用 id 在整个收件箱里找，会先找到它。
+  inbox = [
+    request("ap-other", "t-other", "2026-11-15T09:00:00Z"),
+    request("ap-mine", "t1", "2026-11-15T08:00:00Z"),
+  ];
+  // 对话里的卡给了 threadId，也只认本对话那条。
+  const transcript = draw(() => (
+    <InlineApproval fallback={null} threadId="t1" toolCallId="call-same" />
+  ));
+  await waitFor(() => {
+    const card =
+      transcript.view.container.querySelector<HTMLElement>(
+        "[data-approval-id]",
+      );
+    if (card?.dataset.approvalId !== "ap-mine")
+      throw new Error("transcript card not this conversation's yet");
+  });
+  cleanup();
+
+  // 对话里没有那张卡，「去确认」就地画：目标块里只有本对话那条。
+  const { view, user } = drawSidebar();
+  const aside = await loaded(view);
+  const goal = aside.querySelector<HTMLElement>(
+    'section[aria-label="目标"]',
+  ) as HTMLElement;
+  await user.click(await within(goal).findByRole("button", { name: "去确认" }));
+  await waitFor(() => {
+    if (!goal.querySelector('[data-approval-id="ap-mine"]'))
+      throw new Error("card not drawn in the goal yet");
+  });
+  expect(
+    [...goal.querySelectorAll<HTMLElement>("[data-approval-id]")].map(
+      (card) => card.dataset.approvalId,
+    ),
+  ).toEqual(["ap-mine"]);
 });
 
 test("去确认 follows the inbox's newest approval for this conversation", async () => {
