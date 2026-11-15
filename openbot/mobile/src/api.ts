@@ -18,7 +18,16 @@ export async function api<T>(
     signal: input?.signal,
   });
   if (response.status === 204) return undefined as T;
-  const body: unknown = await response.json();
+  // Read as text first: a proxy's HTML error page is not JSON, and `json()` would throw a
+  // SyntaxError that hides the HTTP status.
+  const text = await response.text();
+  let body: unknown;
+  try {
+    body = text ? JSON.parse(text) : undefined;
+  } catch {
+    if (!response.ok) throw new Error(`Request failed (${response.status}).`);
+    throw new Error(`Unreadable response (${response.status}).`);
+  }
   if (!response.ok)
     throw new Error(
       body &&
