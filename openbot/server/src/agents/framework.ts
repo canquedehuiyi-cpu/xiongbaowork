@@ -34,7 +34,7 @@ const trimmed = (url: string) => url.trim().replace(/\/+$/, "");
 
 export function frameworkOf(
   agent: {
-    type: "built_in" | "remote_ag_ui" | "remote_mastra";
+    type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
     configuration: unknown;
   },
   environment: Record<string, string | undefined> = process.env,

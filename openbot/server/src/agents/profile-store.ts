@@ -473,7 +473,7 @@ function mapProfile(
 
 /** What runs it, by name, when OpenBot knows. See `AgentProfile.framework`. */
 function frameworkField(row: {
-  type: "built_in" | "remote_ag_ui" | "remote_mastra";
+  type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
   configuration: unknown;
 }): { framework?: string } {
   const framework = frameworkOf(row);
@@ -485,14 +485,14 @@ function frameworkField(row: {
  * instructions OpenBot sends a remote one in its standing role, after what it does.
  */
 export function starterInstructionsKey(
-  type: "built_in" | "remote_ag_ui" | "remote_mastra",
+  type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp",
 ): "systemPrompt" | "standingInstructions" {
   return type === "built_in" ? "systemPrompt" : "standingInstructions";
 }
 
 /** A personal starter's instructions, or null for any other Bot. See `AgentProfile.instructions`. */
 function starterInstructionsOf(row: {
-  type: "built_in" | "remote_ag_ui" | "remote_mastra";
+  type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
   configuration: unknown;
 }): string | null {
   const configuration = row.configuration as {
@@ -577,7 +577,7 @@ function promptOf(
 
 /** What a coworker is, and what it runs on: the two `agents` columns a copy has to reproduce. */
 export type AgentRun = {
-  type: "built_in" | "remote_ag_ui" | "remote_mastra";
+  type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
   configuration: Record<string, unknown>;
 };
 
@@ -611,7 +611,7 @@ export type AgentRun = {
  */
 export function runForDuplicate(
   source: {
-    type: "built_in" | "remote_ag_ui" | "remote_mastra";
+    type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
     configuration: unknown;
   },
   managed: Record<string, unknown> | undefined,
