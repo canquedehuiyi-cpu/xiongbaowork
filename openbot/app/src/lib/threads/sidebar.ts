@@ -4,11 +4,11 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef } from "react";
+import { toast } from "@/components/ui/toast";
 import { type ApprovalInboxData, approvalInboxOptions } from "@/lib/approvals";
 import { client, tryClient } from "@/lib/client";
 import type {
-  ContextUsage,
   ConversationSidebar,
   SidebarCompaction,
 } from "../../../../shared/conversation-sidebar";
@@ -81,9 +81,6 @@ export function compactionQueryOptions(
   });
 }
 
-/** 压缩时原样保留的最近消息条数（同服务器）。 */
-export const COMPACTION_KEEP_LAST = 10;
-
 /** 手动压缩的结果：压成了（前后用量，取不到的为 null），或者没压，为什么。 */
 export type CompactOutcome =
   | {
@@ -138,72 +135,6 @@ export async function compactConversation(
         ? (reason as "external" | "in_progress" | "too_short" | "failed")
         : "failed",
   };
-}
-
-/**
- * 压缩后预计用量，点「压缩」之前算：人设与系统提示、工具、技能、记忆照旧，消息只剩保留的最近
- * {@link COMPACTION_KEEP_LAST} 条（按条数比例从「消息」那一份里取）。摘要本身多少字压完才知道，不算进来，
- * 压完显示服务器报的实数。不知道已用、没有分类比例、或不知道这段对话有几条消息时为 null，不编数。
- */
-export function estimateAfterCompaction(
-  usage: ContextUsage | undefined,
-  messageCount: number | null,
-): number | null {
-  if (!usage || usage.used === null || messageCount === null) return null;
-  const tokens = (key: string) =>
-    usage.categories.find((category) => category.key === key)?.tokens;
-  const messages = tokens("messages");
-  if (messages === undefined) return null;
-  const others = ["system", "tools", "skills", "memory"].reduce(
-    (sum, key) => sum + (tokens(key) ?? 0),
-    0,
-  );
-  const kept =
-    messageCount <= COMPACTION_KEEP_LAST
-      ? messages
-      : (messages * COMPACTION_KEEP_LAST) / messageCount;
-  return Math.round(others + kept);
-}
-
-/*
- * 单聊对话里有几条对话消息（用户、员工、工具结果，同服务器压缩时数的口径）。对话区数，侧栏的压缩弹窗读：两者
- * 是兄弟组件，按线程 id 记在模块里。
- */
-const transcriptCounts = new Map<string, number>();
-const transcriptListeners = new Set<() => void>();
-
-/** 数对话消息：用户、员工、工具结果；系统消息、界面卡片之类不算。 */
-export function conversationalCount(
-  messages: ReadonlyArray<{ role?: unknown; id?: unknown }>,
-): number {
-  return messages.filter(
-    (message) =>
-      message.role === "user" ||
-      message.role === "assistant" ||
-      message.role === "tool",
-  ).length;
-}
-
-function subscribeTranscriptCounts(listener: () => void) {
-  transcriptListeners.add(listener);
-  return () => {
-    transcriptListeners.delete(listener);
-  };
-}
-
-export function publishTranscriptCount(threadId: string, count: number) {
-  if (transcriptCounts.get(threadId) === count) return;
-  transcriptCounts.set(threadId, count);
-  for (const listener of [...transcriptListeners]) listener();
-}
-
-/** 对话区报来的消息条数；还没报过（群组、对话没打开）时为 null。 */
-export function useTranscriptCount(threadId: string | null): number | null {
-  return useSyncExternalStore(
-    subscribeTranscriptCounts,
-    () => (threadId ? (transcriptCounts.get(threadId) ?? null) : null),
-    () => null,
-  );
 }
 
 /** 员工的一轮跑完了：用量、目标、输出内容都可能变了，马上再读。 */
@@ -294,12 +225,112 @@ export function formatPercent(value: number): string {
 export const COMPACTION_DONE_EVENT = "xiongbao.compaction.done";
 export const COMPACTION_FAILED_EVENT = "xiongbao.compaction.failed";
 
-/** 自动压缩没成功时给人看的那一句；别的事件为 null。 */
-export function autoCompactionNotice(event: {
-  name?: unknown;
-  value?: unknown;
-}): string | null {
-  return event.name === COMPACTION_FAILED_EVENT
-    ? "没能自动压缩这段对话，这一轮照常进行。"
-    : null;
+/** 自动压缩的结果：运行流事件名对应的那一种；别的事件为 null。 */
+export function compactionOutcomeOf(name: unknown): "done" | "failed" | null {
+  if (name === COMPACTION_DONE_EVENT) return "done";
+  if (name === COMPACTION_FAILED_EVENT) return "failed";
+  return null;
+}
+
+/** 自动压缩没成功时给人看的那一句。 */
+export const AUTO_COMPACTION_FAILED_NOTICE =
+  "没能自动压缩这段对话，这一轮照常进行。";
+
+/** 同一条线程（群组里是同一位员工）一天里至多提示一次「没压成」。 */
+const FAILURE_NOTICE_PREFIX = "xiongbao-compaction-failed:";
+const FAILURE_NOTICE_EVERY_MS = 24 * 60 * 60 * 1000;
+/** 浏览器不让存时退回到这一页里记着。 */
+const failureNoticesHere = new Map<string, number>();
+
+/**
+ * 这一次要不要提示「没压成」：同一个键一天之内只答一次 true（记在浏览器里，读写不了时记在这一页里）。
+ */
+export function shouldNoticeCompactionFailure(
+  key: string,
+  now = Date.now(),
+): boolean {
+  let last = failureNoticesHere.get(key);
+  try {
+    const stored = Number(
+      window.localStorage.getItem(FAILURE_NOTICE_PREFIX + key),
+    );
+    if (Number.isFinite(stored) && stored > 0)
+      last = Math.max(last ?? 0, stored);
+  } catch {
+    // 读不到：只看这一页里记的。
+  }
+  if (last !== undefined && now - last < FAILURE_NOTICE_EVERY_MS) return false;
+  failureNoticesHere.set(key, now);
+  try {
+    window.localStorage.setItem(FAILURE_NOTICE_PREFIX + key, String(now));
+  } catch {
+    // 存不下：这一页里记着就够了。
+  }
+  return true;
+}
+
+/**
+ * 收到一次自动压缩的结果（单聊来自运行流的自定义事件，群组来自回复行上的记号）：压成了马上再读侧栏（用量、
+ * 分隔线、员工行下的「已压缩」）；没压成时提示一次（同一个 `noticeKey` 一天一次），这一轮照常进行。
+ */
+export function receiveCompactionOutcome(
+  queryClient: QueryClient,
+  source: SidebarSource,
+  outcome: "done" | "failed",
+  noticeKey: string,
+) {
+  if (outcome === "done") {
+    void invalidateConversationSidebar(queryClient, source);
+    return;
+  }
+  if (shouldNoticeCompactionFailure(noticeKey))
+    toast.add({ title: AUTO_COMPACTION_FAILED_NOTICE, type: "warning" });
+}
+
+/** 群组回复行上记着的自动压缩结果（只有发起的人读得到）。 */
+type GroupReplyNote = {
+  id: string;
+  ownerUserId: string;
+  agentId: string | null;
+  compaction?: { outcome: "done" | "failed" };
+};
+
+/**
+ * 群组里的自动压缩：群组的一轮在服务器上跑，没有给这一页的运行流，结果记在那条回复上
+ * （`details.compaction`）。新出现的记号按 {@link receiveCompactionOutcome} 处理；打开群组时已经在的是旧事，
+ * 只记下不提示。「没压成」的提示键是「群组 × 员工」（压的是查看者和这位员工的线程）。
+ */
+export function useGroupCompactionOutcomes(
+  channelId: string,
+  messages: readonly GroupReplyNote[] | undefined,
+  viewerId: string | undefined,
+) {
+  const queryClient = useQueryClient();
+  const seen = useRef<{ channelId: string; ids: Set<string> } | null>(null);
+  useEffect(() => {
+    if (!messages || !viewerId) return;
+    const noted = messages.filter(
+      (message) =>
+        message.ownerUserId === viewerId &&
+        message.agentId !== null &&
+        message.compaction !== undefined,
+    );
+    if (seen.current?.channelId !== channelId) {
+      seen.current = {
+        channelId,
+        ids: new Set(noted.map((message) => message.id)),
+      };
+      return;
+    }
+    for (const message of noted) {
+      if (seen.current.ids.has(message.id) || !message.compaction) continue;
+      seen.current.ids.add(message.id);
+      receiveCompactionOutcome(
+        queryClient,
+        { channelId },
+        message.compaction.outcome,
+        `${channelId}:${message.agentId}`,
+      );
+    }
+  }, [messages, viewerId, channelId, queryClient]);
 }

@@ -4,6 +4,7 @@ import {
   beforeAll,
   beforeEach,
   expect,
+  spyOn,
   test,
 } from "bun:test";
 import type { Message } from "@ag-ui/core";
@@ -17,18 +18,23 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type ReactNode, useState } from "react";
 import { ChatTranscript } from "@/components/channels/chat-transcript";
+import { toast } from "@/components/ui/toast";
 import {
-  autoCompactionNotice,
-  publishTranscriptCount,
+  AUTO_COMPACTION_FAILED_NOTICE,
+  compactionOutcomeOf,
+  receiveCompactionOutcome,
+  shouldNoticeCompactionFailure,
+  useGroupCompactionOutcomes,
 } from "@/lib/threads/sidebar";
 import {
   ConversationSidebar,
   SidebarPage,
   SidebarPageButton,
+  usePhoneSidebarPage,
 } from "@/skins/xiongbao/conversation-sidebar/sidebar";
 import { CompactionDivider } from "@/skins/xiongbao/conversation-sidebar/summary-view";
 import type {
@@ -167,7 +173,16 @@ function direct(over: Partial<SidebarData> = {}): SidebarData {
       model: { label: "DeepSeek-V3" },
     },
     goal: null,
-    context: { usage: usage(), lastCompaction: null },
+    context: {
+      usage: usage(),
+      lastCompaction: null,
+      // 服务器按线程里的消息字数估的。
+      compactionEstimate: {
+        summarizable: 38,
+        keptAfter: 10,
+        estimatedAfter: 31_400,
+      },
+    },
     outputs: NO_OUTPUTS,
     ...over,
   };
@@ -192,6 +207,7 @@ function group(over: Partial<SidebarData["context"]> = {}): SidebarData {
           status: "working",
           where: "何总的 MacBook Pro",
           doing: "跑测试中",
+          harness: "Codex",
         },
         {
           agentId: "a3",
@@ -271,9 +287,9 @@ async function loaded(container: HTMLElement) {
     const aside = container.querySelector<HTMLElement>(
       "[data-conversation-sidebar]",
     );
-    if (!aside || aside.dataset.loaded !== "true")
+    if (aside?.dataset.loaded !== "true")
       throw new Error("sidebar not loaded yet");
-    return aside;
+    return aside as HTMLElement;
   });
 }
 
@@ -311,7 +327,8 @@ test("group sidebar lists members with status dots and where/doing", async () =>
   ]);
   expect(rows).toEqual([
     ["a1", "产品官", "云端 · 在写发版说明", "忙碌"],
-    ["a2", "代码熊", "何总的 MacBook Pro · 跑测试中", "忙碌"],
+    // 外部员工的名字后面带它用的是哪个。
+    ["a2", "代码熊 · Codex", "何总的 MacBook Pro · 跑测试中", "忙碌"],
     ["a3", "测试工程师", "云端 · 空闲", "空闲"],
   ]);
   // 目标和单聊一样，是查看者自己名下的那张卡。
@@ -388,6 +405,7 @@ test("group shows 已压缩 · 看摘要 under the employee row, not in the tran
           limit: 128_000,
           percent: 23.4,
           compactedAt: "2026-11-15T09:00:00.000Z",
+          compactedAuto: true,
         },
       ],
     }),
@@ -399,7 +417,7 @@ test("group shows 已压缩 · 看摘要 under the employee row, not in the tran
         usage: usage({ used: 30_000, percent: 23.4 }),
         lastCompaction: {
           id: "c1",
-          auto: false,
+          auto: true,
           at: "2026-11-15T09:00:00.000Z",
           summarizedCount: 24,
           uptoMessageId: "m23",
@@ -417,8 +435,8 @@ test("group shows 已压缩 · 看摘要 under the employee row, not in the tran
   const aside = await loaded(view.container);
   const row = aside.querySelector<HTMLElement>('[data-agent-row="a1"]');
   if (!row) throw new Error("no row for 产品官");
-  const note = within(row).getByText(/已压缩/);
-  expect(note.textContent).toContain("已压缩 · ");
+  const note = row.querySelector<HTMLElement>("[data-compacted-note] > span");
+  expect(note?.textContent).toBe("已自动压缩 · 看摘要");
   // 群组里不画分隔线（群消息是大家共享的），只在侧栏这一行下面。
   expect(document.querySelector("[data-compaction-divider]")).toBeNull();
   await user.click(within(row).getByRole("button", { name: "看摘要" }));
@@ -431,12 +449,12 @@ test("group shows 已压缩 · 看摘要 under the employee row, not in the tran
   // 摘要是模型写的：原样当文字画，不当 HTML。
   expect(summary.textContent).toContain("<b>不要</b>改登录页。");
   expect(summary.querySelector("b")).toBeNull();
+  // 点开读到记录以后，那一行的字不跳。
+  expect(note?.textContent).toBe("已自动压缩 · 看摘要");
 });
 
 test("compact dialog shows before → estimated after and calls the endpoint", async () => {
   answers.set("/api/threads/t1/sidebar", direct());
-  // 对话区数出来 48 条：保留最近 10 条，较早的 38 条总结掉。
-  publishTranscriptCount("t1", 48);
   const { view, user } = draw(() => (
     <ConversationSidebar
       agentId="a1"
@@ -457,9 +475,9 @@ test("compact dialog shows before → estimated after and calls the endpoint", a
       "把较早的 38 条消息总结成一段，产品官仍然记得要点。原来的消息照样留在对话里，随时可以往上翻。",
     ),
   ).toBeTruthy();
-  // 预计：人设与系统提示 + 工具 + 技能 + 记忆 = 22.2k，加保留的 10 条约 31.0k × 10 / 48 = 6.5k。
+  // 条数和预计都是服务器给的（`compactionEstimate`），前端不自己算。
   const numbers = dialog.querySelector<HTMLElement>("[data-compact-numbers]");
-  expect(numbers?.textContent).toBe("压缩前53.2k→预计压缩后约 28.7k");
+  expect(numbers?.textContent).toBe("压缩前53.2k→预计压缩后约 31.4k");
   expect(writes).toEqual([]);
 
   await user.click(within(dialog).getByRole("button", { name: "压缩" }));
@@ -482,7 +500,6 @@ test("compact dialog shows before → estimated after and calls the endpoint", a
 
 test("compact dialog says why when the server refuses", async () => {
   answers.set("/api/threads/t1/sidebar", direct());
-  publishTranscriptCount("t1", 48);
   compactAnswer = {
     status: 409,
     body: { error: "A compaction is already running.", reason: "in_progress" },
@@ -503,6 +520,88 @@ test("compact dialog says why when the server refuses", async () => {
   ).toBeTruthy();
   // 还能再试或取消。
   expect(within(dialog).getByRole("button", { name: "取消" })).toBeTruthy();
+});
+
+test("group compact dialog shows that employee's earlier messages and estimate", async () => {
+  answers.set("/api/channels/g1/sidebar", group());
+  answers.set(
+    "/api/channels/g1/sidebar?agentId=a1",
+    direct({
+      context: {
+        usage: usage({ used: 74_240, percent: 58 }),
+        lastCompaction: null,
+        compactionEstimate: {
+          summarizable: 24,
+          keptAfter: 10,
+          estimatedAfter: 40_100,
+        },
+      },
+    }),
+  );
+  const { view, user } = drawGroup();
+  const aside = await loaded(view.container);
+  const context = section(aside, "上下文");
+  await user.click(within(context).getByRole("button", { name: /产品官/ }));
+  const detail = await waitFor(() => {
+    const found = context.querySelector<HTMLElement>(
+      '[data-agent-detail="a1"]',
+    );
+    if (!found?.querySelector("[data-legend]")) throw new Error("not yet");
+    return found;
+  });
+  await user.click(within(detail).getByRole("button", { name: "压缩会话" }));
+  const dialog = await within(document.body).findByRole("dialog", {
+    name: "压缩这段对话？",
+  });
+  expect(
+    within(dialog).getByText(
+      "把较早的 24 条消息总结成一段，产品官仍然记得要点。原来的消息照样留在对话里，随时可以往上翻。",
+    ),
+  ).toBeTruthy();
+  expect(
+    dialog.querySelector<HTMLElement>("[data-compact-numbers]")?.textContent,
+  ).toBe("压缩前74.2k→预计压缩后约 40.1k");
+  await user.click(within(dialog).getByRole("button", { name: "压缩" }));
+  await waitFor(() => {
+    if (!dialog.querySelector("[data-compacted]")) throw new Error("not yet");
+  });
+  expect(writes).toEqual([
+    { path: "/api/channels/g1/compact", body: { agentId: "a1" } },
+  ]);
+});
+
+test("nothing earlier to compact yet: the dialog says so and 压缩 is off", async () => {
+  answers.set(
+    "/api/threads/t1/sidebar",
+    direct({
+      context: {
+        usage: usage(),
+        lastCompaction: null,
+        compactionEstimate: {
+          summarizable: 0,
+          keptAfter: 8,
+          estimatedAfter: 53_200,
+        },
+      },
+    }),
+  );
+  const { view, user } = draw(() => (
+    <ConversationSidebar source={{ threadId: "t1" }} variant="panel" />
+  ));
+  const aside = await loaded(view.container);
+  await user.click(
+    within(section(aside, "上下文")).getByRole("button", { name: "压缩会话" }),
+  );
+  const dialog = await within(document.body).findByRole("dialog", {
+    name: "压缩这段对话？",
+  });
+  expect(
+    within(dialog).getByText("这段对话还不长，没有可以压缩的较早消息。"),
+  ).toBeTruthy();
+  expect(
+    (within(dialog).getByRole("button", { name: "压缩" }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true);
 });
 
 test("employees who manage their own context have no compact button", async () => {
@@ -635,47 +734,183 @@ test("auto compaction divider reads 已自动压缩", async () => {
   expect(dividerAfter(view.container)).toBe("m5");
 });
 
-test("a failed auto compaction is told once per run", () => {
-  expect(
-    autoCompactionNotice({
-      name: "xiongbao.compaction.failed",
-      value: { auto: true },
-    }),
-  ).toBe("没能自动压缩这段对话，这一轮照常进行。");
-  expect(
-    autoCompactionNotice({
-      name: "xiongbao.compaction.done",
-      value: { auto: true, compactionId: "c3" },
-    }),
-  ).toBeNull();
-  expect(autoCompactionNotice({ name: "other", value: {} })).toBeNull();
+test("auto compaction outcomes: done refreshes the sidebar, failed is told once a day per thread", async () => {
+  const told = spyOn(toast, "add");
+  told.mockClear();
+  try {
+    answers.set("/api/channels/g9/sidebar", group());
+    type Note = {
+      id: string;
+      ownerUserId: string;
+      agentId: string | null;
+      compaction?: { outcome: "done" | "failed" };
+    };
+    let push: (messages: Note[]) => void = () => {};
+    function Group() {
+      const [messages, setMessages] = useState<Note[]>([
+        // 打开群组时就在的是旧事：不提示。
+        {
+          id: "old",
+          ownerUserId: "me",
+          agentId: "a1",
+          compaction: { outcome: "failed" },
+        },
+      ]);
+      push = setMessages;
+      useGroupCompactionOutcomes("g9", messages, "me");
+      return (
+        <ConversationSidebar source={{ channelId: "g9" }} variant="panel" />
+      );
+    }
+    const { view } = draw(() => <Group />);
+    await loaded(view.container);
+    expect(told).not.toHaveBeenCalled();
+    const sidebarReads = () =>
+      reads.filter((read) => read === "/api/channels/g9/sidebar").length;
+    const before = sidebarReads();
+    const old = {
+      id: "old",
+      ownerUserId: "me",
+      agentId: "a1",
+      compaction: { outcome: "failed" as const },
+    };
+    act(() =>
+      push([
+        old,
+        {
+          id: "r1",
+          ownerUserId: "me",
+          agentId: "a1",
+          compaction: { outcome: "done" },
+        },
+      ]),
+    );
+    await waitFor(() => {
+      if (sidebarReads() <= before) throw new Error("not refreshed yet");
+    });
+    expect(told).not.toHaveBeenCalled();
+    // 别人的回复上的记号不归这个人。
+    act(() =>
+      push([
+        old,
+        {
+          id: "r2",
+          ownerUserId: "someone-else",
+          agentId: "a1",
+          compaction: { outcome: "failed" },
+        },
+        {
+          id: "r3",
+          ownerUserId: "me",
+          agentId: "a1",
+          compaction: { outcome: "failed" },
+        },
+      ]),
+    );
+    await waitFor(() => {
+      if (told.mock.calls.length === 0) throw new Error("not told yet");
+    });
+    expect(told.mock.calls[0]?.[0]).toMatchObject({
+      title: AUTO_COMPACTION_FAILED_NOTICE,
+    });
+    // 同一位员工一天里再没压成：不再提示。
+    act(() =>
+      push([
+        old,
+        {
+          id: "r4",
+          ownerUserId: "me",
+          agentId: "a1",
+          compaction: { outcome: "failed" },
+        },
+      ]),
+    );
+    await settleReactWork();
+    expect(told).toHaveBeenCalledTimes(1);
+  } finally {
+    told.mockRestore();
+  }
 });
 
-test("phone: header button opens the full-screen sidebar with 返回对话", async () => {
+test("single chat: the run stream's compaction events map to outcomes, failure told once a day", () => {
+  const told = spyOn(toast, "add");
+  told.mockClear();
+  try {
+    expect(compactionOutcomeOf("xiongbao.compaction.done")).toBe("done");
+    expect(compactionOutcomeOf("xiongbao.compaction.failed")).toBe("failed");
+    expect(compactionOutcomeOf("other")).toBeNull();
+    const queryClient = client();
+    receiveCompactionOutcome(
+      queryClient,
+      { threadId: "t-once" },
+      "failed",
+      "t-once",
+    );
+    receiveCompactionOutcome(
+      queryClient,
+      { threadId: "t-once" },
+      "failed",
+      "t-once",
+    );
+    expect(told).toHaveBeenCalledTimes(1);
+    // 一天以后再没压成，再提示一次。
+    expect(
+      shouldNoticeCompactionFailure("t-once", Date.now() + 25 * 60 * 60 * 1000),
+    ).toBe(true);
+  } finally {
+    told.mockRestore();
+  }
+});
+
+/** 手机侧栏页挂在真的路由上（`?sidebar=1`），从 `initial` 进来。 */
+function drawPhone(initial: string) {
   answers.set("/api/threads/t1/sidebar", direct());
   function Phone() {
-    const [open, setOpen] = useState(false);
+    const page = usePhoneSidebarPage();
     return (
       <>
         <header>
-          <SidebarPageButton onOpen={() => setOpen(true)} />
+          <SidebarPageButton onOpen={page.open} />
         </header>
-        {open ? (
+        <p>对话</p>
+        {page.isOpen ? (
           <SidebarPage
-            onBack={() => setOpen(false)}
+            onBack={page.close}
             source={{ threadId: "t1" }}
             title="产品官"
           />
-        ) : (
-          <p>对话</p>
-        )}
+        ) : null}
       </>
     );
   }
-  const { view, user } = draw(() => <Phone />);
+  const root = createRootRoute({ component: () => <Outlet /> });
+  const page = createRoute({
+    getParentRoute: () => root,
+    path: "/",
+    component: Phone,
+  });
+  const router = createRouter({
+    routeTree: root.addChildren([page]),
+    history: createMemoryHistory({ initialEntries: [initial] }),
+  });
+  const view = render(
+    <QueryClientProvider client={client()}>
+      <RouterProvider router={router as never} />
+    </QueryClientProvider>,
+  );
+  return { view, router, user: userEvent.setup({ document }) };
+}
+
+test("phone: header button opens the full-screen sidebar with 返回对话", async () => {
+  const { view, router, user } = drawPhone("/");
   await user.click(await view.findByRole("button", { name: "查看对话侧栏" }));
   const page = await view.findByRole("dialog", { name: "产品官 · 这个对话" });
   expect(page.dataset.fullScreen).toBe("");
+  expect(router.state.location.search).toEqual({ sidebar: 1 });
+  // 底下的对话点不到、Tab 不进去，页面不跟着滚；焦点在「返回对话」上。
+  expect(view.container.hasAttribute("inert")).toBe(true);
+  expect(document.body.style.overflow).toBe("hidden");
+  expect(document.activeElement?.textContent).toBe("返回对话");
   const aside = await loaded(page);
   expect(
     [...aside.querySelectorAll("section[aria-label]")].map((found) =>
@@ -685,9 +920,13 @@ test("phone: header button opens the full-screen sidebar with 返回对话", asy
   // 没有 56px 图标条，也没有整栏收起。
   expect(aside.dataset.collapsed).toBe("false");
   expect(within(page).queryByRole("button", { name: "收起侧栏" })).toBeNull();
-  // 手机上上下文先列三类，「看全部 7 类」展开。
+  // 手机上上下文先列三类（不含预留和空余），「看全部 7 类」展开。
   const context = section(aside, "上下文");
-  expect(context.querySelectorAll("[data-legend]").length).toBe(3);
+  expect(
+    [...context.querySelectorAll<HTMLElement>("[data-legend]")].map(
+      (row) => row.dataset.legend,
+    ),
+  ).toEqual(["messages", "tools", "system"]);
   await user.click(
     within(context).getByRole("button", { name: "看全部 7 类" }),
   );
@@ -700,7 +939,45 @@ test("phone: header button opens the full-screen sidebar with 返回对话", asy
     ).closed,
   ).toEqual(["environment"]);
 
+  // 在这一页里打开的：「返回对话」后退一步，回到原来那条历史。
   await user.click(within(page).getByRole("button", { name: "返回对话" }));
-  expect(view.queryByRole("dialog")).toBeNull();
+  await waitFor(() => {
+    if (within(document.body).queryByRole("dialog")) throw new Error("open");
+  });
+  expect(router.state.location.search).toEqual({});
+  expect(router.history.location.state.__TSR_index).toBe(0);
+  expect(view.container.hasAttribute("inert")).toBe(false);
+  expect(document.body.style.overflow).toBe("");
   expect(view.getByText("对话")).toBeTruthy();
+});
+
+test("phone: the sidebar page opens again where it was scrolled", async () => {
+  const { view, user } = drawPhone("/");
+  await user.click(await view.findByRole("button", { name: "查看对话侧栏" }));
+  let page = await view.findByRole("dialog", { name: "产品官 · 这个对话" });
+  await loaded(page);
+  let body = page.querySelector<HTMLElement>("[data-sidebar-page-body]");
+  if (!body) throw new Error("no page body");
+  body.scrollTop = 240;
+  body.dispatchEvent(new Event("scroll"));
+  await user.click(within(page).getByRole("button", { name: "返回对话" }));
+  await waitFor(() => {
+    if (within(document.body).queryByRole("dialog")) throw new Error("open");
+  });
+  await user.click(view.getByRole("button", { name: "查看对话侧栏" }));
+  page = await view.findByRole("dialog", { name: "产品官 · 这个对话" });
+  body = page.querySelector<HTMLElement>("[data-sidebar-page-body]");
+  expect(body?.scrollTop).toBe(240);
+});
+
+test("phone: a direct link to the sidebar page goes back to the conversation in place", async () => {
+  const { view, router, user } = drawPhone("/?sidebar=1");
+  const page = await view.findByRole("dialog", { name: "产品官 · 这个对话" });
+  await user.click(within(page).getByRole("button", { name: "返回对话" }));
+  await waitFor(() => {
+    if (within(document.body).queryByRole("dialog")) throw new Error("open");
+  });
+  // 没有可退的历史：就地去掉参数，不后退到应用外面。
+  expect(router.state.location.search).toEqual({});
+  expect(router.history.location.state.__TSR_index).toBe(0);
 });

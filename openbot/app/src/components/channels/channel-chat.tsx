@@ -46,7 +46,6 @@ import { VoiceCallWidget } from "@/components/channels/voice-call-widget";
 import { HandoffResumeNotice } from "@/components/computer/handoff-resume-notice";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { StarterSuggestions } from "@/components/starter-tour/starter-suggestions";
-import { toast } from "@/components/ui/toast";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   answerPersonQuestionMutationOptions,
@@ -103,11 +102,9 @@ import { useSkillCommands } from "@/lib/plugins/skill-commands";
 import { reportIfQuotaError } from "@/lib/quota/guidance";
 import { publishedSandboxedQueryOptions } from "@/lib/sandboxed/queries";
 import {
-  autoCompactionNotice,
-  COMPACTION_DONE_EVENT,
-  conversationalCount,
+  compactionOutcomeOf,
   invalidateConversationSidebar,
-  publishTranscriptCount,
+  receiveCompactionOutcome,
   sidebarQueryOptions,
 } from "@/lib/threads/sidebar";
 import {
@@ -1263,16 +1260,18 @@ export function ChannelChat({
       onRunFailed: ({ error }) => fail(stoppedReason(error)),
       /*
        * 这一轮开始前自动压缩了：侧栏的用量和对话里的「已自动压缩」分隔线马上再读。没压成：这一轮照常跑，
-       * 提示一次（每轮至多一个这样的事件）。只在默认皮肤。
+       * 同一个对话一天提示一次。只在默认皮肤。
        */
       onCustomEvent: ({ event }) => {
         if (!compactingHere.current) return;
-        if (event.name === COMPACTION_DONE_EVENT)
-          void invalidateConversationSidebar(queryClient, {
-            threadId: channel.threadId,
-          });
-        const notice = autoCompactionNotice(event);
-        if (notice) toast.add({ title: notice, type: "warning" });
+        const outcome = compactionOutcomeOf(event.name);
+        if (outcome)
+          receiveCompactionOutcome(
+            queryClient,
+            { threadId: channel.threadId },
+            outcome,
+            channel.threadId,
+          );
       },
       onRunFinishedEvent: ({ event }) => {
         // 对话侧栏的用量、目标和输出内容在这一轮里可能变了：马上再读，不等 15 秒的轮询。
@@ -1378,8 +1377,7 @@ export function ChannelChat({
   const botSeed = botProfile?.avatarSeed || runtimeAgentId;
 
   /*
-   * 压缩会话（默认皮肤）：分隔线画在被替代的最后一条后面，数据是侧栏那一份（同一个查询，不多读）；压缩弹窗
-   * 要这段对话有几条消息，从这里报过去。
+   * 压缩会话（默认皮肤）：分隔线画在被替代的最后一条后面，数据是侧栏那一份（同一个查询，不多读）。
    */
   const sidebarSource = { threadId: channel.threadId };
   const lastCompaction =
@@ -1387,11 +1385,6 @@ export function ChannelChat({
       ...sidebarQueryOptions(sidebarSource),
       enabled: compactionDivider !== undefined,
     }).data?.context.lastCompaction ?? null;
-  const conversational = conversationalCount(agent.messages);
-  const reportsCount = compactionDivider !== undefined;
-  useEffect(() => {
-    if (reportsCount) publishTranscriptCount(channel.threadId, conversational);
-  }, [reportsCount, channel.threadId, conversational]);
   const compaction =
     compactionDivider && lastCompaction
       ? {

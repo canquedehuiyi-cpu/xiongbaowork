@@ -10,6 +10,10 @@ import { LLMock } from "@copilotkit/aimock";
 import { MockLanguageModelV3 } from "ai/test";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
+import type {
+  ContextUsage,
+  SidebarContext,
+} from "../../shared/conversation-sidebar";
 import type { AppVariables } from "../src/auth/guards";
 import { buildAgents } from "../src/copilot";
 import { createDatabase } from "../src/db/client";
@@ -48,6 +52,7 @@ import {
   COMPACTION_SUMMARY_MESSAGE_ID,
   type CompactionDeps,
   type CompactionResult,
+  compactionEstimate,
   compactThread,
   latestCompaction,
   modelSummarizer,
@@ -333,6 +338,7 @@ function routesFor(
     deploymentModelLabel: "openai/gpt-default",
     contextWindowFor: async () => undefined,
     meteringTenants: (ids) => meteringTenantsFor(database, ids),
+    loadMessages: (threadId) => snapshotOf(viewer, threadId),
   });
   const deps = { ...depsWith(summarize), ...overrides };
   const guard: MiddlewareHandler<{ Variables: AppVariables }> = async (
@@ -384,6 +390,8 @@ function routesFor(
     channel: (channelId: string, agentId?: string) =>
       post(`/api/channels/${channelId}/compact`, agentId ? { agentId } : {}),
     sidebar: (threadId: string) => get(`/api/threads/${threadId}/sidebar`),
+    channelSidebar: (channelId: string, agentId: string) =>
+      get(`/api/channels/${channelId}/sidebar?agentId=${agentId}`),
     summaryInThread: (threadId: string, compactionId: string) =>
       get(`/api/threads/${threadId}/compactions/${compactionId}`),
     summaryInChannel: (channelId: string, compactionId: string) =>
@@ -1330,5 +1338,101 @@ describe("auto compaction before a turn", () => {
     expect(summarize.prompts).toHaveLength(1);
     expect(on.notices[0]).toMatchObject({ name: COMPACTION_DONE_EVENT });
     expect(on.sent).toContain("SUMMARY-SWITCH：开关打开后压的。");
+  });
+});
+
+describe("压缩会话的预估", () => {
+  test("单聊：侧栏给出较早的 N 条和预计压缩后，压完以后没有可压的", async () => {
+    const viewer = await person();
+    const model = await libraryModel(viewer, 100_000);
+    const agentId = await employee(viewer, "助理", { modelRef: model });
+    const messages = history(25);
+    const { threadId } = await directChat(viewer, agentId, messages);
+    await call({
+      tenantId: viewer,
+      threadId,
+      agentId,
+      inputTokens: 40_000,
+      modelRef: model,
+    });
+    await runAsTenant(viewer, () =>
+      database.insert(threadContextBreakdowns).values({
+        threadId,
+        agentId,
+        runId: "run",
+        shares: { messages: 0.5, system: 0.5, tools: 0, skills: 0, memory: 0 },
+      }),
+    );
+    const routes = routesFor(viewer, fakeSummarize("用户决定用方案 B。"));
+    const before = await routes.sidebar(threadId);
+    const context = before.body.context as SidebarContext;
+    expect(context.compactionEstimate).toEqual(
+      compactionEstimate(messages, null, context.usage as ContextUsage),
+    );
+    expect(context.compactionEstimate).toMatchObject({
+      summarizable: 15,
+      keptAfter: 10,
+    });
+    // 其余 20 000 不动，消息 20 000 缩到保留的 10 条（约四成），再加新摘要的 800。
+    const after = context.compactionEstimate?.estimatedAfter as number;
+    expect(after).toBeGreaterThan(27_000);
+    expect(after).toBeLessThan(31_000);
+
+    expect((await routes.thread(threadId)).status).toBe(200);
+    const again = (await routes.sidebar(threadId)).body
+      .context as SidebarContext;
+    expect(again.compactionEstimate).toEqual({
+      summarizable: 0,
+      keptAfter: 10,
+      estimatedAfter: 40_000,
+    });
+  });
+
+  test("群组：查看者和这位员工那条线程的预估在 ?agentId= 的明细里", async () => {
+    const viewer = await person();
+    const model = await libraryModel(viewer, 100_000);
+    const writer = await employee(viewer, "写手", { modelRef: model });
+    const reviewer = await employee(viewer, "审核", { modelRef: model });
+    const channelId = `${suite}-group-${randomUUID()}`;
+    channelIds.push(channelId);
+    const mine = randomUUID();
+    await runAsTenant(viewer, async () => {
+      await database
+        .insert(channels)
+        .values({ id: channelId, name: "群组", description: "" });
+      await database
+        .insert(channelMemberships)
+        .values({ channelId, userId: viewer });
+      await database.insert(channelAgents).values([
+        { channelId, agentId: writer },
+        { channelId, agentId: reviewer },
+      ]);
+      await database
+        .insert(groupBotThreads)
+        .values([
+          { ownerUserId: viewer, channelId, agentId: writer, threadId: mine },
+        ]);
+      await database.insert(threads).values({
+        id: mine,
+        agentId: writer,
+        messagesSnapshot: history(20),
+      });
+    });
+    await call({
+      tenantId: viewer,
+      threadId: mine,
+      agentId: writer,
+      inputTokens: 30_000,
+      modelRef: model,
+    });
+    const routes = routesFor(viewer, fakeSummarize("摘要。"));
+    const detail = await routes.channelSidebar(channelId, writer);
+    expect(detail.status).toBe(200);
+    expect(
+      (detail.body.context as SidebarContext).compactionEstimate,
+    ).toMatchObject({ summarizable: 10, keptAfter: 10 });
+    // 还没和审核说过话：没有线程，也就没有预估。
+    const none = await routes.channelSidebar(channelId, reviewer);
+    expect((none.body.context as SidebarContext).compactionEstimate).toBeNull();
   });
 });

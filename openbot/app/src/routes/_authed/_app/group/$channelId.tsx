@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
-import { useRef } from "react";
+import { createFileRoute } from "@tanstack/react-router";
 import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { GroupChat } from "@/components/channels/group-chat";
@@ -9,9 +8,11 @@ import { GroupSettingsButton } from "@/components/channels/group-settings";
 import { DetailPanel } from "@/components/layout/detail-panel";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { useMarkOpenChannelRead } from "@/lib/channels/mark-read";
 import { channelQueryOptions } from "@/lib/channels/queries";
 import { groupQueryOptions } from "@/lib/groups";
+import { useGroupCompactionOutcomes } from "@/lib/threads/sidebar";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { useSkinId } from "@/skins/store";
 import {
@@ -19,6 +20,7 @@ import {
   SidebarCollapseButton,
   SidebarPage,
   SidebarPageButton,
+  usePhoneSidebarPage,
 } from "@/skins/xiongbao/conversation-sidebar/sidebar";
 
 /** A conversation with several employees. The channel is an ordinary channel with more than one. */
@@ -44,34 +46,18 @@ function RouteComponent() {
   const { channelId } = Route.useParams();
   const channel = useQuery(channelQueryOptions(channelId));
   const group = useQuery(groupQueryOptions(channelId));
-  const { settings, sidebar: sidebarPage } = Route.useSearch();
+  const { settings } = Route.useSearch();
   const navigate = Route.useNavigate();
-  const router = useRouter();
   /*
    * 默认皮肤（聊天工作台）：右边常驻对话侧栏，按群组频道取（成员、每位员工的上下文；目标和输出内容是查看者
-   * 自己名下的）。电脑上顶栏一个「收起侧栏 / 展开侧栏」，手机上一个按钮打开全屏侧栏（`?sidebar=1`，历史里
-   * 的一页：在这里打开的，「返回对话」后退一步；直达的就地去掉参数）。
+   * 自己名下的）。电脑上顶栏一个「收起侧栏 / 展开侧栏」，手机上一个按钮打开全屏侧栏（`usePhoneSidebarPage`）。
+   * 群组的一轮在服务器上跑，自动压缩的结果记在回复上（`useGroupCompactionOutcomes`）。
    */
   const workbench = useSkinId() === "xiongbao";
   const phone = useIsMobile();
 
   const peopleCount = group.data?.people.length;
-  const openedHere = useRef(false);
-  const openSidebarPage = () => {
-    openedHere.current = true;
-    void navigate({ search: (previous) => ({ ...previous, sidebar: 1 }) });
-  };
-  const closeSidebarPage = () => {
-    if (openedHere.current) {
-      openedHere.current = false;
-      router.history.back();
-      return;
-    }
-    void navigate({
-      replace: true,
-      search: (previous) => ({ ...previous, sidebar: undefined }),
-    });
-  };
+  const phonePage = usePhoneSidebarPage();
   // The group this chat is, when it is one the person made: its portrait stands in for the faces.
   const crew = useQuery(wakerGroupsQueryOptions()).data?.find(
     (candidate) => candidate.channelId === channelId,
@@ -88,6 +74,12 @@ function RouteComponent() {
     )
     .map((message) => message.agentId as string);
   useMarkOpenChannelRead(channelId);
+  const viewerId = useQuery(currentUserQueryOptions()).data?.id;
+  useGroupCompactionOutcomes(
+    channelId,
+    workbench ? group.data?.messages : undefined,
+    viewerId,
+  );
   const conversation = (
     <div className="flex h-full min-h-0 flex-col">
       <div
@@ -120,7 +112,7 @@ function RouteComponent() {
         {workbench ? (
           <span className="ml-auto flex shrink-0">
             {phone ? (
-              <SidebarPageButton onOpen={openSidebarPage} />
+              <SidebarPageButton onOpen={phonePage.open} />
             ) : (
               <SidebarCollapseButton collapseKey={channelId} />
             )}
@@ -149,9 +141,9 @@ function RouteComponent() {
       open={false}
     >
       {conversation}
-      {phone && sidebarPage === 1 ? (
+      {phone && phonePage.isOpen ? (
         <SidebarPage
-          onBack={closeSidebarPage}
+          onBack={phonePage.close}
           peopleCount={peopleCount}
           source={{ channelId }}
           title={groupName}

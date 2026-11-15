@@ -1,3 +1,4 @@
+import type { Message } from "@ag-ui/client";
 import {
   and,
   asc,
@@ -10,6 +11,7 @@ import {
   min,
 } from "drizzle-orm";
 import {
+  type CompactionEstimate,
   type ContextUsage,
   type ConversationSidebar,
   SIDEBAR_OUTPUT_LIMIT,
@@ -52,6 +54,7 @@ import {
 import type { MachineTarget } from "../projects/context";
 import { isDeliverableRef } from "../tasks/projector";
 import { isPersonTenant, runAsTenant } from "../tenant/context";
+import { compactionEstimate, latestCompaction } from "./compaction";
 import {
   contextUsageFrom,
   contextUsageKey,
@@ -97,6 +100,10 @@ export type SidebarDeps = {
   machinesOf?: (
     agentIds: readonly string[],
   ) => Promise<Map<string, MachineTarget>>;
+  /**
+   * 一条线程里的消息（同压缩会话读的线程存储），给「压缩会话」的预估数字数；不给时没有预估。在查看者的帧里调用。
+   */
+  loadMessages?: (threadId: string) => Promise<Message[]>;
 };
 
 export type ConversationSidebarService = {
@@ -686,8 +693,44 @@ export function createConversationSidebar(
         limit: context?.usage?.limit ?? null,
         percent: context?.usage?.percent ?? null,
         compactedAt: context?.compaction?.at ?? null,
+        compactedAuto: context?.compaction?.auto ?? null,
       };
     });
+  }
+
+  /**
+   * 压缩会话的预估（弹窗里的「较早的 N 条」和「预计压缩后」）：读这条线程的消息和查看者名下最近一次压缩，
+   * 只数字数，不调用模型。外部员工、没有用量、没有线程、读不到时为 null。
+   */
+  async function estimateOf(
+    viewer: AgentActor,
+    threadId: string | null,
+    agentId: string,
+    context: SidebarContext,
+  ): Promise<CompactionEstimate | null> {
+    const usage = context.usage;
+    if (
+      context.managedBy ||
+      !usage ||
+      usage.used === null ||
+      !threadId ||
+      !deps.loadMessages
+    )
+      return null;
+    try {
+      const [messages, previous] = await Promise.all([
+        deps.loadMessages(threadId),
+        latestCompaction(database, { tenantId: viewer.id, threadId, agentId }),
+      ]);
+      return compactionEstimate(messages, previous, usage);
+    } catch {
+      console.error({
+        error: "sidebar_compaction_estimate_failed",
+        context: { agentId },
+        timestamp: new Date().toISOString(),
+      });
+      return null;
+    }
   }
 
   /** 明细：外部员工只有 `managedBy`，其余是用量和最近一次压缩。 */
@@ -969,6 +1012,13 @@ export function createConversationSidebar(
       places,
     );
     const context = detailOf(contexts.get(agentId));
+    if (!context.managedBy)
+      context.compactionEstimate = await estimateOf(
+        viewer,
+        threadId,
+        agentId,
+        context,
+      );
     if (known.length > 1) context.perAgent = perAgentOf(known, contexts);
     const refs = threadId ? [threadId, chat.channelId] : [chat.channelId];
     return {
@@ -1064,6 +1114,9 @@ export function createConversationSidebar(
         status,
         where: place?.device?.name ?? (place?.onComputer ? "电脑" : "云端"),
         doing: status === "working" ? (now?.doing ?? null) : null,
+        ...(bot.type === "device_acp"
+          ? { harness: harnessLabel(bot, place?.device ?? null) }
+          : {}),
       };
     });
 
@@ -1074,6 +1127,13 @@ export function createConversationSidebar(
     const context: SidebarContext = requested
       ? detailOf(contexts.get(requested))
       : {};
+    if (requested && !context.managedBy)
+      context.compactionEstimate = await estimateOf(
+        viewer,
+        mine.get(requested) ?? null,
+        requested,
+        context,
+      );
     context.perAgent = perAgentOf(bots, contexts);
     return {
       environment: {

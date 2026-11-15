@@ -111,12 +111,11 @@ export function contextMeterLabel(context?: SidebarContext): string {
   return context ? `上下文：${contextSummary(context)}` : "上下文";
 }
 
-/** 「压缩会话」要的：压谁、对话有几条消息。不给就不画按钮。 */
+/** 「压缩会话」压谁。不给就不画按钮；预估在 `context.compactionEstimate` 里。 */
 export type CompactTarget = {
   source: SidebarSource;
   agentId?: string;
   name?: string;
-  messageCount: number | null;
 };
 
 /** 手机上图例先列几类（按用量从多到少），其余点「看全部 N 类」。 */
@@ -259,8 +258,8 @@ export function ContextBody({
           {untilAuto}
           <CompactButton
             agentId={compact.agentId}
+            estimate={context.compactionEstimate ?? null}
             large={phone}
-            messageCount={compact.messageCount}
             name={compact.name}
             source={compact.source}
             usage={usage}
@@ -272,6 +271,9 @@ export function ContextBody({
     </>
   );
 }
+
+/** 群组里点开了谁的明细，按对话记在这一页里。 */
+const openedBreakdowns = new Map<string, string>();
 
 /**
  * 群组：每位员工各算各的（查看者和这位员工那条线程的用量），一行一根小条。点名字在下面展开他的分类明细和
@@ -287,7 +289,18 @@ export function PerAgentContext({
   perAgent: NonNullable<SidebarContext["perAgent"]>;
   phone?: boolean;
 }) {
-  const [opened, setOpened] = useState<string | null>(null);
+  const key = "threadId" in source ? source.threadId : source.channelId;
+  const [opened, setOpenedHere] = useState<string | null>(
+    () => openedBreakdowns.get(key) ?? null,
+  );
+  // 记在这一页里：手机上返回对话再打开侧栏，明细还开着，滚动位置也就回得去。
+  const setOpened = (next: (now: string | null) => string | null) =>
+    setOpenedHere((now) => {
+      const value = next(now);
+      if (value) openedBreakdowns.set(key, value);
+      else openedBreakdowns.delete(key);
+      return value;
+    });
   return (
     <>
       {perAgent.map((agent) => (
@@ -342,7 +355,11 @@ export function PerAgentContext({
             )}
           </div>
           {agent.compactedAt ? (
-            <CompactedNote agentId={agent.agentId} source={source} />
+            <CompactedNote
+              agentId={agent.agentId}
+              auto={agent.compactedAuto === true}
+              source={source}
+            />
           ) : null}
           {opened === agent.agentId ? (
             <AgentDetail
@@ -380,7 +397,7 @@ function AgentDetail({
     >
       {detail.data ? (
         <ContextBody
-          compact={{ source, agentId, name, messageCount: null }}
+          compact={{ source, agentId, name }}
           context={detail.data.context}
           phone={phone}
         />

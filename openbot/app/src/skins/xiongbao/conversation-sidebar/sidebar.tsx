@@ -5,12 +5,19 @@ import {
   IconChevronsLeft,
   IconLayoutSidebarRight,
 } from "@tabler/icons-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { useDetailPanelWidth } from "@/components/layout/detail-panel";
 import {
   type SidebarSource,
   useConversationSidebar,
-  useTranscriptCount,
 } from "@/lib/threads/sidebar";
 import { cn } from "@/lib/utils";
 import type { ConversationSidebar as SidebarData } from "../../../../../shared/conversation-sidebar";
@@ -100,9 +107,6 @@ export function ConversationSidebar({
   const collapse = useSidebarCollapse(collapseKeyOf(source));
   const room = sidebarRoom(useDetailPanelWidth());
   const { sidebar, pending: inboxPending } = useConversationSidebar(source);
-  const messageCount = useTranscriptCount(
-    "threadId" in source ? source.threadId : null,
-  );
   const data = sidebar.data;
   const members = data?.environment.members;
   /*
@@ -289,7 +293,6 @@ export function ConversationSidebar({
         <Sections
           agentId={agentId}
           data={data}
-          messageCount={messageCount}
           peopleCount={peopleCount}
           pending={pending}
           phone={variant === "page"}
@@ -313,7 +316,6 @@ function Sections({
   source,
   title,
   peopleCount,
-  messageCount,
   phone,
 }: {
   data: SidebarData;
@@ -328,7 +330,6 @@ function Sections({
   source: SidebarSource;
   title?: string;
   peopleCount?: number;
-  messageCount: number | null;
   phone: boolean;
 }) {
   const members = data.environment.members;
@@ -370,7 +371,7 @@ function Sections({
             "context",
             contextSummary(data.context),
             <ContextBody
-              compact={{ source, agentId, name: title, messageCount }}
+              compact={{ source, agentId, name: title }}
               context={data.context}
               phone={phone}
             />,
@@ -431,9 +432,75 @@ export function SidebarPageButton({ onOpen }: { onOpen: () => void }) {
   );
 }
 
+/** 地址上的 `?sidebar=1`：手机上的全屏侧栏开着。 */
+function sidebarPageInSearch(search: unknown): boolean {
+  const value = (search as Record<string, unknown> | undefined)?.sidebar;
+  return value === 1 || value === "1";
+}
+
+/**
+ * 手机上的全屏侧栏开在地址上（`?sidebar=1`），是历史里的一页，单聊和群组共用：打开压一条；「返回对话」时，
+ * 在这一页里打开的就后退一步（安卓返回键也是这样回来），直达链接、刷新后没有可退的，就地去掉这个参数。
+ */
+export function usePhoneSidebarPage() {
+  const navigate = useNavigate();
+  const router = useRouter();
+  const isOpen = useRouterState({
+    select: (state) => sidebarPageInSearch(state.location.search),
+  });
+  const openedHere = useRef(false);
+  const withSidebar = (value: 1 | undefined) =>
+    ((previous: Record<string, unknown>) => ({
+      ...previous,
+      sidebar: value,
+    })) as never;
+  return {
+    isOpen,
+    open: () => {
+      openedHere.current = true;
+      void navigate({ to: ".", search: withSidebar(1) });
+    },
+    close: () => {
+      if (openedHere.current) {
+        openedHere.current = false;
+        router.history.back();
+        return;
+      }
+      void navigate({ to: ".", replace: true, search: withSidebar(undefined) });
+    },
+  };
+}
+
+/**
+ * 打开时，页面上别的东西（对话、外壳）都设成 `inert`：点不到、Tab 不进去、读屏读不到，焦点只能留在这一页；
+ * 页面也不跟着滚。关掉时原样还回去：底下的对话一直挂着，滚到哪里还在哪里。
+ */
+function useOnlyThisOnScreen(host: HTMLElement | null) {
+  useEffect(() => {
+    if (!host) return;
+    const covered = [...document.body.children].filter(
+      (element): element is HTMLElement =>
+        element instanceof HTMLElement &&
+        element !== host &&
+        !element.hasAttribute("inert"),
+    );
+    for (const element of covered) element.setAttribute("inert", "");
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      for (const element of covered) element.removeAttribute("inert");
+      document.body.style.overflow = overflow;
+    };
+  }, [host]);
+}
+
+/** 手机侧栏页滚到哪里，按对话记在这一页里：返回对话再打开，还在原处。 */
+const pageScroll = new Map<string, number>();
+
 /**
  * 手机上的全屏侧栏（设计稿「手机」）：盖住整屏的一页，顶上「返回对话」和「<名字> · 这个对话」，下面四块
- * 同样排列。打开时焦点落在「返回对话」上，Esc 也返回。
+ * 同样排列。画在 `body` 下面自己的一层里，底下的都 `inert`（{@link useOnlyThisOnScreen}）。打开时焦点落在
+ * 「返回对话」上，Esc 也返回。
  */
 export function SidebarPage({
   source,
@@ -451,6 +518,17 @@ export function SidebarPage({
   const back = useRef<HTMLButtonElement>(null);
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
+  const [host] = useState(() => document.createElement("div"));
+  const body = useRef<HTMLDivElement>(null);
+  const scrollKey = collapseKeyOf(source);
+  useLayoutEffect(() => {
+    host.dataset.sidebarPageHost = "";
+    document.body.append(host);
+    // 挂进文档以后才有版面，这时才能回到上次滚到的地方。
+    if (body.current) body.current.scrollTop = pageScroll.get(scrollKey) ?? 0;
+    return () => host.remove();
+  }, [host, scrollKey]);
+  useOnlyThisOnScreen(host);
   useEffect(() => {
     back.current?.focus();
     const onKey = (event: KeyboardEvent) => {
@@ -461,7 +539,7 @@ export function SidebarPage({
     return () => document.removeEventListener("keydown", onKey);
   }, []);
   const heading = `${title ?? "对话"} · 这个对话`;
-  return (
+  return createPortal(
     <div
       aria-label={heading}
       aria-modal="true"
@@ -485,7 +563,14 @@ export function SidebarPage({
         </button>
         <b className="min-w-0 truncate font-semibold text-[16px]">{heading}</b>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]">
+      <div
+        className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]"
+        data-sidebar-page-body=""
+        onScroll={(event) =>
+          pageScroll.set(scrollKey, event.currentTarget.scrollTop)
+        }
+        ref={body}
+      >
         <ConversationSidebar
           agentId={agentId}
           peopleCount={peopleCount}
@@ -494,6 +579,7 @@ export function SidebarPage({
           variant="page"
         />
       </div>
-    </div>
+    </div>,
+    host,
   );
 }

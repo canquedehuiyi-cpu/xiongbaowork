@@ -19,7 +19,7 @@ import type { SidebarEnvironment } from "../../../../../shared/conversation-side
  * 「环境」：员工在哪干活（云端，或哪台电脑、在不在线）、项目或工作文件夹、模型。齿轮去员工现有的
  * 配置页（侧栏里不编辑员工）；项目那一行的「+」打开现有的项目选择器。
  *
- * 群组里换成成员列表（{@link MembersBody}）：头像带状态点、名字、在哪 · 此刻在做什么。
+ * 群组里换成成员列表（{@link MembersBody}）：头像带状态点、名字（外部员工带「· Codex」）、在哪 · 此刻在做什么。
  */
 
 const ICON = "size-4 shrink-0 stroke-[1.8] text-(--wb-fg2)";
@@ -269,7 +269,9 @@ export function MembersBody({
           </span>
           <span className="min-w-0">
             <b className="block truncate font-semibold text-(--wb-fg) text-[13px]">
-              {member.name}
+              {member.harness
+                ? `${member.name} · ${member.harness}`
+                : member.name}
             </b>
             <small className="block truncate text-(--wb-muted) text-[12px]">
               {memberLine(member)}

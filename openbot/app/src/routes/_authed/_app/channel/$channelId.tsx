@@ -1,8 +1,7 @@
 import { IconSettings } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Navigate, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { motion, useReducedMotion } from "motion/react";
-import { useRef } from "react";
 import { z } from "zod";
 import { AgentProfile } from "@/components/agents/agent-profile";
 import { ConversationApprovals } from "@/components/approvals/inline-approval";
@@ -37,6 +36,7 @@ import {
   SidebarCollapseButton,
   SidebarPage,
   SidebarPageButton,
+  usePhoneSidebarPage,
 } from "@/skins/xiongbao/conversation-sidebar/sidebar";
 import { CompactionDivider } from "@/skins/xiongbao/conversation-sidebar/summary-view";
 import { useEmployeeCard } from "@/skins/xiongbao/employee-card";
@@ -45,8 +45,8 @@ const chatSearchSchema = z.object({
   settings: z.boolean().optional(),
   /** Opens the Bot's screen in the shared detail pane. */
   watch: z.boolean().optional(),
-  /** 默认皮肤的手机上：全屏的对话侧栏。 */
-  sidebar: z.boolean().optional(),
+  /** 默认皮肤的手机上：全屏的对话侧栏（`usePhoneSidebarPage`）。 */
+  sidebar: z.literal(1).optional(),
 });
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -67,7 +67,7 @@ export const Route = createFileRoute("/_authed/_app/channel/$channelId")({
 
 function RouteComponent() {
   const { channelId } = Route.useParams();
-  const { settings, watch, sidebar: sidebarPage } = Route.useSearch();
+  const { settings, watch } = Route.useSearch();
   const channel = useQuery(channelQueryOptions(channelId));
   const navigate = Route.useNavigate();
   const workbench = useSkinId() === "xiongbao";
@@ -85,8 +85,8 @@ function RouteComponent() {
       : undefined;
   /*
    * 默认皮肤（聊天工作台）：员工资料那一块换成对话侧栏（环境 · 目标 · 上下文 · 输出内容），常驻在对话右边，
-   * 顶栏的齿轮换成「收起侧栏 / 展开侧栏」。手机上顶栏换成一个按钮，打开全屏的侧栏（`?sidebar`，是历史里的
-   * 一页：返回键、「返回对话」都回到对话）。别的皮肤照旧是齿轮打开员工资料。
+   * 顶栏的齿轮换成「收起侧栏 / 展开侧栏」。手机上顶栏换成一个按钮，打开全屏的侧栏（`usePhoneSidebarPage`）。
+   * 别的皮肤照旧是齿轮打开员工资料。
    */
   const phone = useIsMobile();
   const sidebarThread =
@@ -268,7 +268,7 @@ function RouteComponent() {
         hasError={Boolean(channel.error)}
         workbench={workbench}
       />
-      {phone && sidebarThread && sidebarPage === true ? (
+      {phone && sidebarThread && phonePage.isOpen ? (
         <SidebarPage
           agentId={agentId}
           onBack={phonePage.close}
@@ -423,31 +423,4 @@ function HeaderFace({
       size={24}
     />
   );
-}
-
-/**
- * 手机上的全屏侧栏开在地址上（`?sidebar`），是历史里的一页：打开压一条，「返回对话」在这一页里打开的就后退
- * 一步（返回键也是这样回来），直达链接、刷新后没有可退的，就地去掉这个参数。
- */
-function usePhoneSidebarPage() {
-  const navigate = Route.useNavigate();
-  const router = useRouter();
-  const openedHere = useRef(false);
-  return {
-    open: () => {
-      openedHere.current = true;
-      void navigate({ search: (previous) => ({ ...previous, sidebar: true }) });
-    },
-    close: () => {
-      if (openedHere.current) {
-        openedHere.current = false;
-        router.history.back();
-        return;
-      }
-      void navigate({
-        replace: true,
-        search: (previous) => ({ ...previous, sidebar: undefined }),
-      });
-    },
-  };
 }

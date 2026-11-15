@@ -7,24 +7,25 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  COMPACTION_KEEP_LAST,
   type CompactOutcome,
   compactConversation,
-  estimateAfterCompaction,
   formatTokens,
   invalidateConversationSidebar,
   type SidebarSource,
 } from "@/lib/threads/sidebar";
 import { cn } from "@/lib/utils";
-import type { ContextUsage } from "../../../../../shared/conversation-sidebar";
+import type {
+  CompactionEstimate,
+  ContextUsage,
+} from "../../../../../shared/conversation-sidebar";
 
 /**
  * 「压缩会话」按钮和确认弹窗（设计稿「压缩会话」）：把较早的消息总结成一段，最近 10 条不动，原来的消息
  * 照样留在对话里。
  *
- * 弹窗里写「压缩前 X → 预计压缩后 Y」：Y 在调接口之前算（人设与系统提示、工具、技能、记忆照旧，加保留的
- * 10 条消息的估算，{@link estimateAfterCompaction}），前面写「约」；压完换成服务器报的实数。算不出来时不编，
- * 写「压完才知道」。
+ * 弹窗里写「较早的 N 条」和「压缩前 X → 预计压缩后 约 Y」，都是服务器按线程里的消息字数估的
+ * （`compactionEstimate`：非消息部分不变，消息只剩保留的 10 条，加新摘要的预计长度）；压完换成服务器报的实数。
+ * 没有预估（读不到线程）时不编，写「压完才知道」。
  *
  * 外部员工、远程员工（`managedBy`）的上下文由它们自己管，调用的人不画这个按钮。
  */
@@ -56,7 +57,7 @@ export function CompactButton({
   agentId,
   name,
   usage,
-  messageCount,
+  estimate,
   large = false,
 }: {
   source: SidebarSource;
@@ -65,8 +66,8 @@ export function CompactButton({
   /** 员工名，「产品官仍然记得要点」；不知道时写「员工」。 */
   name?: string;
   usage: ContextUsage;
-  /** 这段对话有几条消息（对话区数的）；不知道（群组）时为 null。 */
-  messageCount: number | null;
+  /** 服务器的预估；没有时为 null。 */
+  estimate: CompactionEstimate | null;
   /** 手机上按钮大一些，好点。 */
   large?: boolean;
 }) {
@@ -87,7 +88,7 @@ export function CompactButton({
       {open ? (
         <CompactDialog
           agentId={agentId}
-          messageCount={messageCount}
+          estimate={estimate}
           name={name}
           onClose={() => setOpen(false)}
           source={source}
@@ -103,25 +104,21 @@ function CompactDialog({
   agentId,
   name,
   usage,
-  messageCount,
+  estimate,
   onClose,
 }: {
   source: SidebarSource;
   agentId?: string;
   name?: string;
   usage: ContextUsage;
-  messageCount: number | null;
+  estimate: CompactionEstimate | null;
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
   const [phase, setPhase] = useState<Phase>({ step: "confirm" });
   const who = name ?? "员工";
-  const earlier =
-    messageCount === null
-      ? null
-      : Math.max(0, messageCount - COMPACTION_KEEP_LAST);
+  const earlier = estimate?.summarizable ?? null;
   const nothingYet = earlier === 0;
-  const estimate = estimateAfterCompaction(usage, messageCount);
 
   const compact = async () => {
     setPhase({ step: "working" });
@@ -145,7 +142,10 @@ function CompactDialog({
   if (done)
     after = phase.tokensAfter === null ? "—" : formatTokens(phase.tokensAfter);
   else
-    after = estimate === null ? "压完才知道" : `约 ${formatTokens(estimate)}`;
+    after =
+      estimate === null
+        ? "压完才知道"
+        : `约 ${formatTokens(estimate.estimatedAfter)}`;
 
   let sentence: string;
   if (done) sentence = "已压缩。较早的消息总结成了一段，原来的消息还在对话里。";

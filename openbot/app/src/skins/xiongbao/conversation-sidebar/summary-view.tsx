@@ -107,9 +107,12 @@ export function CompactionDivider({
 export function CompactedNote({
   source,
   agentId,
+  auto,
 }: {
   source: SidebarSource;
   agentId: string;
+  /** 最近那次是不是自动压缩（侧栏 `perAgent.compactedAuto`），点开前后写的字一样。 */
+  auto: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const detail = useQuery({
@@ -121,7 +124,7 @@ export function CompactedNote({
     <div className="flex flex-col gap-1.5" data-compacted-note="">
       {/* 和上面那一行的小条对齐；摘要展开时占满整栏宽。 */}
       <span className="pl-[84px] text-(--wb-muted) text-[12px]">
-        {last?.auto ? "已自动压缩" : "已压缩"} ·{" "}
+        {auto ? "已自动压缩" : "已压缩"} ·{" "}
         <SummaryToggle onToggle={() => setOpen((now) => !now)} open={open} />
       </span>
       {open ? (
