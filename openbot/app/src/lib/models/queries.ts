@@ -15,6 +15,11 @@ export type ConnectedModel = {
   baseUrl: string | null;
   modelName: string;
   label: string | null;
+  /**
+   * 上下文长度（token），对话侧栏算「已使用 %」和自动压缩用；接入时从模型目录预填，可改。null 是不知道，
+   * 侧栏只写已用数。旧服务器不带这个字段。
+   */
+  contextWindow?: number | null;
   enabled: boolean;
   updatedAt: string;
   /** How many coworkers answer on this one — the reason a row cannot be deleted carelessly. */

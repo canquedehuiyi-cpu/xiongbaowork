@@ -153,6 +153,11 @@ export type TurnRunner = (input: {
    */
   onStarted?: () => void;
   /**
+   * Each CUSTOM event of the run, for a host that reports one to its surface (a group's reply row
+   * notes that the Bot's context was compacted before this turn, or could not be).
+   */
+  onCustom?: (event: { name: string; value: unknown }) => void;
+  /**
    * The skill the person picked for this turn, by its command, when the host resolved one: a group
    * turn's message starts with the group's framing, so the `/<command>` the person began with is not
    * where the server looks for it. Only a slug; the server reads the skill's instructions from its
@@ -827,6 +832,7 @@ export function createTurnRunner(options: {
       depth,
       onText,
       onStarted,
+      onCustom,
       skill,
     } = hostTurn;
     const { runRef, tenantId } = hostTurn;
@@ -1032,6 +1038,17 @@ export function createTurnRunner(options: {
               onText(
                 [...chunks, `${textMessageBuffer}${event.delta}`].join("\n\n"),
               );
+            },
+          }
+        : {}),
+      ...(onCustom
+        ? {
+            onCustomEvent: ({
+              event,
+            }: {
+              event: { name: string; value: unknown };
+            }) => {
+              onCustom({ name: event.name, value: event.value });
             },
           }
         : {}),

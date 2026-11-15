@@ -2,7 +2,7 @@ import { IconPlus } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { QueryError } from "@/components/layout/query-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import {
   connectModelMutationOptions,
   deleteModelMutationOptions,
   modelReferencesMutationOptions,
+  setModelContextWindowMutationOptions,
   setModelEnabledMutationOptions,
   testModelMutationOptions,
 } from "@/lib/models/mutations";
@@ -35,6 +36,7 @@ import {
   PROVIDER_NAMES,
   poolChoiceName,
 } from "@/lib/models/queries";
+import { formatTokens } from "@/lib/threads/sidebar";
 import { cn } from "@/lib/utils";
 import { CARD_FACE, SectionHead, TabEmpty } from "./resource-kit";
 
@@ -413,6 +415,7 @@ function ModelRow({
             <span className="block text-destructive">{message}</span>
           ) : null}
         </ItemDescription>
+        <ContextWindowField model={model} queryClient={queryClient} />
       </ItemContent>
       <ItemActions className="flex-wrap justify-end">
         <Button
@@ -464,5 +467,95 @@ function ModelRow({
         )}
       </ItemActions>
     </Item>
+  );
+}
+
+/**
+ * 「上下文长度」：对话侧栏拿它算「已使用 %」和什么时候自动压缩。接入时从模型目录预填，这里能改；
+ * 留空保存就是不知道（侧栏只写已用数，也不自动压缩）。
+ */
+function ContextWindowField({
+  model,
+  queryClient,
+}: {
+  model: ConnectedModel;
+  queryClient: ReturnType<typeof useQueryClient>;
+}) {
+  const save = useMutation(setModelContextWindowMutationOptions(queryClient));
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [invalid, setInvalid] = useState(false);
+  const fieldId = useId();
+  const current = model.contextWindow ?? null;
+  if (!editing)
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground text-sm">
+        <span>上下文长度 {current ? formatTokens(current) : "未设置"}</span>
+        <Button
+          aria-label="改上下文长度"
+          onClick={() => {
+            setDraft(current ? String(current) : "");
+            setInvalid(false);
+            save.reset();
+            setEditing(true);
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          修改
+        </Button>
+      </div>
+    );
+  return (
+    <form
+      className="flex flex-wrap items-center gap-2 text-sm"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const text = draft.trim();
+        const value = text === "" ? null : Number(text);
+        if (value !== null && (!Number.isSafeInteger(value) || value <= 0)) {
+          setInvalid(true);
+          return;
+        }
+        save.mutate(
+          { id: model.id, contextWindow: value },
+          { onSuccess: () => setEditing(false) },
+        );
+      }}
+    >
+      <label htmlFor={fieldId}>上下文长度（token）</label>
+      <Input
+        className="h-8 w-32"
+        id={fieldId}
+        inputMode="numeric"
+        min={1}
+        onChange={(event) => {
+          setDraft(event.target.value);
+          setInvalid(false);
+        }}
+        placeholder="不知道就留空"
+        step={1}
+        type="number"
+        value={draft}
+      />
+      <Button disabled={save.isPending} size="sm" type="submit">
+        {save.isPending ? "正在保存…" : "保存"}
+      </Button>
+      <Button
+        onClick={() => setEditing(false)}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
+        取消
+      </Button>
+      {invalid || save.error ? (
+        <span className="basis-full text-destructive">
+          {invalid
+            ? "填一个正整数，或留空表示不知道。"
+            : (save.error?.message ?? "没能保存。")}
+        </span>
+      ) : null}
+    </form>
   );
 }

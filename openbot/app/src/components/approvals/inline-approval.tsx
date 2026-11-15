@@ -81,9 +81,18 @@ const CHOICE_WORDS: Record<
 
 export function InlineApproval({
   toolCallId,
+  threadId,
+  requestId,
   fallback,
 }: {
   toolCallId?: string;
+  /**
+   * 这张卡所在的对话。工具调用 id 在不同对话之间可能重复，给了就只认这个对话里的那条；不给时照旧
+   * 只按工具调用 id 找。
+   */
+  threadId?: string;
+  /** 已经知道是哪一条审批时（对话侧栏的「去确认」），直接按审批 id 取，不再按工具调用 id 找。 */
+  requestId?: string;
   fallback: ReactNode;
 }) {
   const cache = useQueryClient();
@@ -101,15 +110,20 @@ export function InlineApproval({
     onSuccess: (_, choice) => {
       setAnswered(choice);
       // Answered here, so the step's entry in Activity says when, even on a page opened after it was asked.
-      if (toolCallId) noteWatched(toolCallId);
+      const watched = request?.action.toolCallId ?? toolCallId;
+      if (watched) noteWatched(watched);
       return cache.invalidateQueries({ queryKey: ["approvals"] });
     },
   });
-  const request = toolCallId
-    ? inbox.data?.requests.find(
-        (candidate) => candidate.action.toolCallId === toolCallId,
-      )
-    : undefined;
+  const request = requestId
+    ? inbox.data?.requests.find((candidate) => candidate.id === requestId)
+    : toolCallId
+      ? inbox.data?.requests.find(
+          (candidate) =>
+            candidate.action.toolCallId === toolCallId &&
+            (threadId === undefined || candidate.action.threadId === threadId),
+        )
+      : undefined;
   const pending = request?.status === "pending";
   const handOff = request?.action.policy?.behaviour === "hand_off";
   const choices: ApprovalDecision[] = !request
@@ -132,6 +146,8 @@ export function InlineApproval({
         {pending && request ? (
           <motion.section
             aria-label="等你批准"
+            // 对话侧栏的「去确认」按这个找到卡滚过去。
+            data-approval-id={request.id}
             exit={{ height: 0, opacity: 0 }}
             key="approval"
             style={{ overflow: "hidden" }}

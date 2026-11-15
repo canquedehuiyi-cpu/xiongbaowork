@@ -637,6 +637,49 @@ describe("conversation sidebar", () => {
     });
   });
 
+  test("group: an external employee's member row names its harness", async () => {
+    const viewer = await person();
+    const writer = await employee(viewer, "写手");
+    const coder = await employee(viewer, "代码熊", {
+      type: "device_acp",
+      configuration: { deviceId: "laptop-1", harness: "codex" },
+    });
+    const channelId = `${suite}-group-${randomUUID()}`;
+    channelIds.push(channelId);
+    await runAsTenant(viewer, async () => {
+      await database.insert(channels).values({
+        id: channelId,
+        tenantId: TEAM_TENANT,
+        name: "群组",
+        description: "",
+      });
+      await database
+        .insert(channelMemberships)
+        .values({ channelId, userId: viewer, tenantId: TEAM_TENANT });
+      for (const agentId of [writer, coder])
+        await database
+          .insert(channelAgents)
+          .values({ channelId, agentId, tenantId: TEAM_TENANT });
+      await database.insert(intelligenceChannelMappings).values({
+        userId: viewer,
+        channelId,
+        threadId: randomUUID(),
+      });
+    });
+    const { status, body } = await routesFor(viewer).channel(channelId);
+    expect(status).toBe(200);
+    const members = new Map(
+      (body.environment.members ?? []).map((member) => [
+        member.agentId,
+        member,
+      ]),
+    );
+    expect(members.get(coder)?.harness).toBe("Codex");
+    const writerMember = members.get(writer);
+    if (!writerMember) throw new Error("writer is listed as a member");
+    expect(writerMember.harness).toBeUndefined();
+  });
+
   test("group: members list, per-agent usage is the viewer's own thread per employee", async () => {
     const viewer = await person();
     const other = await person();
@@ -773,10 +816,12 @@ describe("conversation sidebar", () => {
     expect(perAgent.get(writer)?.used).toBe(25_000);
     expect(perAgent.get(writer)?.limit).toBe(100_000);
     expect(perAgent.get(writer)?.compactedAt).toBeNull();
+    expect(perAgent.get(writer)?.compactedAuto).toBeNull();
     expect(perAgent.get(checker)?.percent).toBe(25);
     expect(perAgent.get(checker)?.used).toBe(50_000);
     expect(perAgent.get(checker)?.limit).toBe(200_000);
     expect(perAgent.get(checker)?.compactedAt).toEqual(expect.any(String));
+    expect(perAgent.get(checker)?.compactedAuto).toEqual(expect.any(Boolean));
     expect(body.context.usage).toBeUndefined();
     expect(body.goal).toEqual({
       title: "写一篇周报",

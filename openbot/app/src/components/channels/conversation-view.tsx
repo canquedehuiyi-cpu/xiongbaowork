@@ -11,6 +11,7 @@ import { useBotLook } from "@/components/agents/bot-look";
 import {
   ChatTranscript,
   skillLabels,
+  type TranscriptCompaction,
   type Typist,
 } from "@/components/channels/chat-transcript";
 import {
@@ -31,6 +32,7 @@ import { newId } from "../../lib/new-id";
 export function ConversationView({
   messages,
   threadId,
+  compaction,
   busy = false,
   notice,
   attached,
@@ -60,6 +62,8 @@ export function ConversationView({
 }: {
   messages: readonly Message[];
   threadId?: string;
+  /** 压缩会话的分隔线（默认皮肤）；见 `ChatTranscript`。 */
+  compaction?: TranscriptCompaction | null;
   busy?: boolean;
   /** Shown above the composer. An error, or why this conversation is read-only. */
   notice?: ReactNode;
@@ -473,6 +477,7 @@ export function ConversationView({
          * conversation to change nothing.
          */}
         <ChatTranscript
+          compaction={compaction}
           threadId={threadId}
           busy={busy}
           commandLabels={skillLabels(commands ?? [])}

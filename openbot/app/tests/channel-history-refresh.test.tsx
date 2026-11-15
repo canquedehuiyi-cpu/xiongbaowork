@@ -1231,3 +1231,19 @@ test.each(["mount", "refresh"])(
     expect(currentAgent().messages).toEqual([initial, local, fresh]);
   },
 );
+
+test("default skin: no introduction card over the conversation; an empty one shows a faint hint", async () => {
+  const view = mounting(async () => stored([]));
+  // 顶栏已经有员工的头像和名字，对话开头不再放介绍卡，也没有它滚动后折成的窄条。
+  expect(
+    await view.findByText(`跟${channel.name}说点什么吧`, {}, { timeout: 4000 }),
+  ).toBeTruthy();
+  expect(
+    view.container.querySelector('[data-slot="conversation-intro-bar"]'),
+  ).toBeNull();
+  cleanup();
+  queryClient.clear();
+  // 有消息时不画这一行。
+  const withHistory = await mounted();
+  expect(withHistory.queryByText(`跟${channel.name}说点什么吧`)).toBeNull();
+});

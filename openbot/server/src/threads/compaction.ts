@@ -20,7 +20,10 @@ import {
   of,
   switchMap,
 } from "rxjs";
-import type { ContextUsage } from "../../../shared/conversation-sidebar";
+import type {
+  CompactionEstimate,
+  ContextUsage,
+} from "../../../shared/conversation-sidebar";
 import { answeredBy } from "../../../shared/handoff-markers";
 import {
   GROUP_PERSON_SPEAKER,
@@ -613,6 +616,52 @@ function estimatedAfter(
   if (used === null || messages === undefined || chars.before <= 0) return null;
   const kept = Math.min(1, chars.after / chars.before);
   return Math.max(0, used - Math.round(messages * (1 - kept)));
+}
+
+/** 没有上一次摘要时，新摘要按这么多 token 估。 */
+export const ESTIMATED_SUMMARY_TOKENS = 800;
+
+/**
+ * 现在压缩会怎样（侧栏「压缩会话」弹窗的预计）。不调用模型，只对线程里的消息数字数：
+ *
+ * - 和真正压缩同一个切法（{@link compactionCut}）：上一次覆盖到的之后，保留最近 10 条，更早的并进摘要。
+ *   `summarizable` 同记录的 `summarizedCount`（含上一次已替代的）。
+ * - 预计用量 = 已用 ×（非消息部分的比例 + 消息部分 × 保留的 10 条在「上次摘要 + 之后的消息」里的字数比例）
+ *   + 新摘要的预计 token（上一次摘要的字数；没有上一次时按 {@link ESTIMATED_SUMMARY_TOKENS}）。
+ * - 没有已用时为 null，不编数；没有分类比例时把已用全算作消息。还没有可压的时 `summarizable` 为 0，
+ *   预计就是已用。
+ */
+export function compactionEstimate(
+  messages: readonly Message[],
+  previous: CompactionRecord | null,
+  usage: Pick<ContextUsage, "used" | "categories">,
+): CompactionEstimate | null {
+  const used = usage.used;
+  if (used === null) return null;
+  const history = conversational(messages);
+  const at = previous
+    ? history.findIndex((message) => message.id === previous.uptoMessageId)
+    : -1;
+  const rest = history.slice(at + 1);
+  const cut = compactionCut(rest);
+  if (cut <= 0)
+    return { summarizable: 0, keptAfter: rest.length, estimatedAfter: used };
+  const kept = rest.slice(cut);
+  const messagesNow =
+    usage.categories.find((category) => category.key === "messages")?.tokens ??
+    used;
+  const others = Math.max(0, used - messagesNow);
+  const charsNow = (previous?.summary.length ?? 0) + messageChars(rest);
+  const keptShare =
+    charsNow > 0 ? Math.min(1, messageChars(kept) / charsNow) : 1;
+  const summaryTokens = previous?.summary.length ?? ESTIMATED_SUMMARY_TOKENS;
+  return {
+    summarizable: at + 1 + cut,
+    keptAfter: kept.length,
+    estimatedAfter: Math.round(
+      others + messagesNow * keptShare + summaryTokens,
+    ),
+  };
 }
 
 /** 员工这一轮的调用计在哪个租户：问 `meteringTenant`，不是个人租户时就是发起的人。 */

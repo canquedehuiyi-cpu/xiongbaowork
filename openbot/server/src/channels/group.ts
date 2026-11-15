@@ -56,6 +56,10 @@ import { type Delivery, firstSentenceOf } from "../tasks/delivery";
 import type { TaskProjector } from "../tasks/projector";
 import { currentTenant, runAsClaimedTenant } from "../tenant/context";
 import { roundHungByEntry } from "../threads/unattended-card";
+import {
+  COMPACTION_DONE_EVENT,
+  COMPACTION_FAILED_EVENT,
+} from "../threads/compaction";
 import type { WorkQueue } from "../work/queue";
 import {
   GROUP_PERSON_SPEAKER,
@@ -354,10 +358,29 @@ async function writeOrder(
 const SHARED_DETAILS: ReadonlySet<string> = new Set([
   "agentIds",
   "answeredBy",
+  "compaction",
   "consent",
   "message",
   "via",
 ]);
+
+/**
+ * 这一轮开始前，这位员工在发起人那条线程上的上下文自动压缩了（`done`）或没压成（`failed`），记在回复行的
+ * `details.compaction` 上（运行流里的 `xiongbao.compaction.*` 事件，见 `threads/compaction.ts`）。读的时候只
+ * 交给发起人（压的是他和这位员工的线程），侧栏据此马上刷新、提示一次。
+ */
+type GroupCompactionNote = { outcome: "done" | "failed" };
+
+function isCompactionNote(value: unknown): value is GroupCompactionNote {
+  const outcome = (value as { outcome?: unknown } | null | undefined)?.outcome;
+  return outcome === "done" || outcome === "failed";
+}
+
+function compactionNoteOf(name: string): GroupCompactionNote | null {
+  if (name === COMPACTION_DONE_EVENT) return { outcome: "done" };
+  if (name === COMPACTION_FAILED_EVENT) return { outcome: "failed" };
+  return null;
+}
 
 function splitDetails(details: Record<string, unknown>) {
   const shared: Record<string, unknown> = {};
@@ -1500,6 +1523,7 @@ export function createGroupConversations(deps: {
           writing = null;
         });
     };
+    let compacted: GroupCompactionNote | null = null;
     try {
       // A round hung on a followed card says so, so the runner asks whether that card still waits.
       const hungOn = followed
@@ -1511,6 +1535,9 @@ export function createGroupConversations(deps: {
           onText: (text) => {
             latest = text;
             flush();
+          },
+          onCustom: ({ name }) => {
+            compacted = compactionNoteOf(name) ?? compacted;
           },
           ownerUserId: turn.ownerUserId,
           telemetry: {
@@ -1575,12 +1602,15 @@ export function createGroupConversations(deps: {
          */
         return;
       }
+      const compaction: Record<string, unknown> = compacted
+        ? { compaction: compacted }
+        : {};
       if (gate.status === "denied") {
-        await deps.store.finish(id, gate.message, "failed");
+        await deps.store.finish(id, gate.message, "failed", compaction);
         await closeCard(turn, agentId, runId, true, round(gate.message));
         return;
       }
-      await deps.store.finish(id, result.replyText, "completed");
+      await deps.store.finish(id, result.replyText, "completed", compaction);
       await closeCard(turn, agentId, runId, false, round(result.replyText));
       saved = true;
       savedReply = result.replyText;
@@ -2029,6 +2059,12 @@ export function createGroupConversations(deps: {
             : {}),
           ...(details.consent && typeof details.consent === "object"
             ? { consent: details.consent }
+            : {}),
+          // 压的是发起人和这位员工的线程：只告诉他自己。
+          ...(message.ownerUserId === owner &&
+          message.agentId &&
+          isCompactionNote(details.compaction)
+            ? { compaction: details.compaction }
             : {}),
           ...(message.status === "waiting"
             ? {

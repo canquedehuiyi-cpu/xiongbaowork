@@ -17,6 +17,8 @@ import {
   COMPACTION_SUMMARY_MESSAGE_ID,
   CompactionMiddleware,
   compactionCut,
+  compactionEstimate,
+  ESTIMATED_SUMMARY_TOKENS,
   SUMMARY_CONTEXT_NOTE,
   type SummaryEntry,
   shouldAutoCompact,
@@ -580,5 +582,78 @@ describe("CompactionMiddleware", () => {
     expect(agent.seen?.messages.map((message) => message.id)).toEqual(["u1"]);
     expect(events.map((event) => event.type)).toContain(EventType.RUN_FINISHED);
     expect(events.map((event) => event.type)).not.toContain(EventType.CUSTOM);
+  });
+});
+
+describe("压缩会话的预估（侧栏弹窗）", () => {
+  /** 字数一样的消息，好算比例。 */
+  const even = (count: number, from = 0): Message[] =>
+    Array.from({ length: count }, (_, index) => ({
+      id: `e${from + index}`,
+      role: index % 2 === 0 ? "user" : "assistant",
+      content: "一二三四五六七八九十",
+    })) as Message[];
+  const charsOf = (messages: Message[]) =>
+    runContextSections({
+      configuration: {},
+      input: { messages, context: [], state: {}, tools: [] },
+    }).reduce(
+      (sum, section) => sum + (section.key === "messages" ? section.chars : 0),
+      0,
+    );
+  const usage = {
+    used: 40_000,
+    categories: [
+      { key: "messages" as const, tokens: 20_000 },
+      { key: "system" as const, tokens: 20_000 },
+    ],
+  };
+
+  test("no usage → no estimate", () => {
+    expect(
+      compactionEstimate(even(20), null, { used: null, categories: [] }),
+    ).toBeNull();
+  });
+
+  test("first compaction: others stay, messages shrink to the kept 10 by characters, plus 800 for the summary", () => {
+    expect(ESTIMATED_SUMMARY_TOKENS).toBe(800);
+    expect(compactionEstimate(even(20), null, usage)).toEqual({
+      summarizable: 10,
+      keptAfter: 10,
+      // 20 000 + 20 000 × (10 / 20) + 800
+      estimatedAfter: 30_800,
+    });
+  });
+
+  test("after a compaction the previous summary counts in the messages now and stands in for the new one", () => {
+    const messages = even(30);
+    const summary = "摘".repeat(100);
+    const estimate = compactionEstimate(
+      messages,
+      { uptoMessageId: "e9", summary },
+      usage,
+    );
+    const rest = messages.slice(10);
+    const share = charsOf(rest.slice(10)) / (summary.length + charsOf(rest));
+    expect(estimate).toEqual({
+      // 上次替代的 10 条加这次的 10 条。
+      summarizable: 20,
+      keptAfter: 10,
+      estimatedAfter: Math.round(20_000 + 20_000 * share + summary.length),
+    });
+  });
+
+  test("nothing to compact yet → 0 and the estimate is what is used now", () => {
+    expect(compactionEstimate(even(10), null, usage)).toEqual({
+      summarizable: 0,
+      keptAfter: 10,
+      estimatedAfter: 40_000,
+    });
+  });
+
+  test("no category shares → all of it counts as messages", () => {
+    expect(
+      compactionEstimate(even(20), null, { used: 10_000, categories: [] }),
+    ).toEqual({ summarizable: 10, keptAfter: 10, estimatedAfter: 5_800 });
   });
 });

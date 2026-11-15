@@ -68,6 +68,8 @@ export type SidebarEnvironment = {
     /** 在哪：「云端」、电脑名，或看不到电脑名时的「电脑」。 */
     where: string;
     doing: string | null;
+    /** 外部员工用的是哪个（「Codex」），成员行写「代码熊 · Codex」；内置和远程员工没有。 */
+    harness?: string;
   }[];
 };
 
@@ -113,6 +115,17 @@ export type SidebarGoal = {
   pendingApprovalId: string | null;
 } | null;
 
+/**
+ * 现在压缩会怎样（不调用模型，按线程里的消息字数估）：`summarizable` 是会被摘要替代的消息条数（「较早的 N 条」，
+ * 含上一次已经替代的，同压缩记录的 `summarizedCount`；0 表示还没有可压的），`keptAfter` 是原样保留的条数，
+ * `estimatedAfter` 是压缩后预计用量（token）。
+ */
+export type CompactionEstimate = {
+  summarizable: number;
+  keptAfter: number;
+  estimatedAfter: number;
+};
+
 /** 上下文：用量与分类明细；外部员工只有 `managedBy`；群组每位员工一行 `perAgent`。 */
 export type SidebarContext = {
   /** 外部员工与远程员工：上下文由谁自己管理（如「Codex」；远程员工为「对方系统」）。这时不显示用量和压缩。 */
@@ -127,14 +140,24 @@ export type SidebarContext = {
     percent: number | null;
     managedBy?: string;
     compactedAt?: string | null;
+    /** 最近那次压缩是不是自动的（员工行下写「已自动压缩」还是「已压缩」）；没压过时为 null。 */
+    compactedAuto?: boolean | null;
   }[];
-  /** 最近一次压缩；`summarizedCount` 是被摘要替代的消息条数（没记下这个数的记录为 null）。 */
+  /**
+   * 最近一次压缩；`summarizedCount` 是被摘要替代的消息条数（没记下这个数的记录为 null），`uptoMessageId` 是
+   * 被替代的最后一条消息的 id（对话里的「已压缩」分隔线画在它后面）。
+   */
   lastCompaction?: {
     id: string;
     auto: boolean;
     at: string;
     summarizedCount: number | null;
+    uptoMessageId?: string | null;
   } | null;
+  /**
+   * 压缩会话的预估（单聊的 context、群组 `?agentId=` 的明细才有）；没有用量、外部员工、读不到线程时为 null。
+   */
+  compactionEstimate?: CompactionEstimate | null;
 };
 
 /** 一次压缩的摘要（`GET .../compactions/:compactionId`），「看摘要」用。 */
