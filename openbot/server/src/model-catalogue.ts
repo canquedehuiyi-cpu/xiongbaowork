@@ -688,16 +688,20 @@ export function parseContextWindows(body: unknown): ContextWindows {
  * A small table for the most common China-market models, used when the catalogue has no answer
  * (models.dev unreachable or blocked, which is normal for a deployment in China).
  *
- * NOTE: these values are the providers' documented windows as the author knew them; they could
- * not be copied from models.dev when this was written (no network in the build sandbox). Verify
- * against https://models.dev/api.json (`<vendor>.models.<id>.limit.context`) and correct here.
+ * Values were checked against the vendors' official model pages on 2026-11-15: DeepSeek "Models &
+ * Pricing" (api-docs.deepseek.com) and Alibaba Model Studio's text-generation model list
+ * (help.aliyun.com). The catalogue (models.dev), when reachable, takes precedence over this table,
+ * and an admin can override the value per model in the model library. `deepseek-chat` and
+ * `deepseek-reasoner` are deprecated by DeepSeek (2026-07-24) but kept for old configs.
  * Keys are lower-case bare model names, matched exactly.
  */
 export const KNOWN_CONTEXT_WINDOWS: Readonly<Record<string, number>> = {
   "deepseek-chat": 128_000,
   "deepseek-reasoner": 128_000,
-  "qwen-max": 32_768,
-  "qwen-plus": 131_072,
+  "deepseek-v4-flash": 1_000_000,
+  "deepseek-v4-pro": 1_000_000,
+  "qwen-max": 131_072,
+  "qwen-plus": 1_000_000,
   "qwen-turbo": 1_000_000,
   "moonshot-v1-8k": 8_192,
   "moonshot-v1-32k": 32_768,
