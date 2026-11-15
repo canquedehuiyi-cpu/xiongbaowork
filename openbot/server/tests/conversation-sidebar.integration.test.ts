@@ -670,7 +670,9 @@ describe("conversation sidebar", () => {
       ]),
     );
     expect(members.get(coder)?.harness).toBe("Codex");
-    expect(members.get(writer)?.harness).toBeUndefined();
+    const writerMember = members.get(writer);
+    if (!writerMember) throw new Error("writer is listed as a member");
+    expect(writerMember.harness).toBeUndefined();
   });
 
   test("group: members list, per-agent usage is the viewer's own thread per employee", async () => {

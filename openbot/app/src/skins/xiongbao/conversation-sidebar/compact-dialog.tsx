@@ -36,7 +36,7 @@ const DIALOG_BUTTON =
   "inline-flex min-h-10 cursor-pointer items-center justify-center rounded-[10px] px-4 text-[14px] outline-none focus-visible:outline-2 focus-visible:outline-(--wb-accent) disabled:cursor-default disabled:opacity-60";
 
 const REFUSED: Record<
-  Extract<CompactOutcome, { status: "refused" }>["reason"],
+  Exclude<Extract<CompactOutcome, { status: "refused" }>["reason"], "refused">,
   string
 > = {
   in_progress: "正在压缩，稍等一会儿再看。",
@@ -50,7 +50,8 @@ type Phase =
   | { step: "confirm" }
   | { step: "working" }
   | { step: "done"; tokensBefore: number | null; tokensAfter: number | null }
-  | { step: "refused"; reason: keyof typeof REFUSED };
+  /** `final`：再点也一样（企业管控拒绝），压缩按钮不再可点。 */
+  | { step: "refused"; message: string; final: boolean };
 
 export function CompactButton({
   source,
@@ -132,7 +133,11 @@ function CompactDialog({
       // 侧栏的用量、员工行下的「已压缩」、对话里的分隔线都从侧栏的数据来：马上再读。
       void invalidateConversationSidebar(queryClient, source);
     } else {
-      setPhase({ step: "refused", reason: outcome.reason });
+      setPhase(
+        outcome.reason === "refused"
+          ? { step: "refused", message: outcome.message, final: true }
+          : { step: "refused", message: REFUSED[outcome.reason], final: false },
+      );
     }
   };
 
@@ -189,7 +194,7 @@ function CompactDialog({
         </div>
         {phase.step === "refused" ? (
           <p className="m-0 text-(--wb-amber-fg) text-[13px]" role="alert">
-            {REFUSED[phase.reason]}
+            {phase.message}
           </p>
         ) : null}
         <div className="flex justify-end gap-2.5">
@@ -222,7 +227,11 @@ function CompactDialog({
                   DIALOG_BUTTON,
                   "border-0 bg-(image:--wb-me) px-[18px] font-semibold text-(--wb-me-fg)",
                 )}
-                disabled={phase.step === "working" || nothingYet}
+                disabled={
+                  phase.step === "working" ||
+                  nothingYet ||
+                  (phase.step === "refused" && phase.final)
+                }
                 onClick={() => void compact()}
                 type="button"
               >

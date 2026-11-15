@@ -22,7 +22,7 @@ import { act, cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { type ReactNode, useState } from "react";
 import { ChatTranscript } from "@/components/channels/chat-transcript";
-import { toast } from "@/components/ui/toast";
+import { Toaster, toast } from "@/components/ui/toast";
 import {
   AUTO_COMPACTION_FAILED_NOTICE,
   compactionOutcomeOf,
@@ -522,6 +522,49 @@ test("compact dialog says why when the server refuses", async () => {
   expect(within(dialog).getByRole("button", { name: "取消" })).toBeTruthy();
 });
 
+test("enterprise policy refusal shows the server's reason and turns 压缩 off", async () => {
+  for (const answer of [
+    {
+      status: 403,
+      body: { error: "管理员已暂停这位员工调用模型。", reason: "refused" },
+      shown: "管理员已暂停这位员工调用模型。",
+    },
+    {
+      status: 503,
+      body: { reason: "refused" },
+      shown: "企业管控不允许这位员工现在调用模型。",
+    },
+  ]) {
+    answers.set("/api/threads/t1/sidebar", direct());
+    compactAnswer = { status: answer.status, body: answer.body };
+    const { view, user } = draw(() => (
+      <ConversationSidebar source={{ threadId: "t1" }} variant="panel" />
+    ));
+    const aside = await loaded(view.container);
+    await user.click(
+      within(section(aside, "上下文")).getByRole("button", {
+        name: "压缩会话",
+      }),
+    );
+    const dialog = await within(document.body).findByRole("dialog", {
+      name: "压缩这段对话？",
+    });
+    const press = within(dialog).getByRole("button", { name: "压缩" });
+    await user.click(press);
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.textContent).toBe(answer.shown);
+    expect(alert.textContent).not.toContain("稍后再试");
+    // 再点也一样，压缩按钮不再可点；取消还能关。
+    expect((press as HTMLButtonElement).disabled).toBe(true);
+    await user.click(within(dialog).getByRole("button", { name: "取消" }));
+    await waitFor(() => {
+      if (within(document.body).queryByRole("dialog"))
+        throw new Error("still open");
+    });
+    view.unmount();
+  }
+});
+
 test("group compact dialog shows that employee's earlier messages and estimate", async () => {
   answers.set("/api/channels/g1/sidebar", group());
   answers.set(
@@ -949,6 +992,52 @@ test("phone: header button opens the full-screen sidebar with 返回对话", asy
   expect(view.container.hasAttribute("inert")).toBe(false);
   expect(document.body.style.overflow).toBe("");
   expect(view.getByText("对话")).toBeTruthy();
+});
+
+test("phone: the full-screen page leaves the Toaster and live regions reachable", async () => {
+  // 根路由的 Toaster 常驻在 body 下自己的 portal 里；另有一块读屏播报区。
+  const toaster = render(<Toaster />);
+  const live = document.createElement("div");
+  live.setAttribute("aria-live", "polite");
+  document.body.append(live);
+  // 外壳里也有播报区时：播报区留着，外壳的其余部分照样盖住。
+  const shell = document.createElement("div");
+  const shellLive = document.createElement("p");
+  shellLive.setAttribute("aria-live", "polite");
+  const shellButton = document.createElement("button");
+  shell.append(shellLive, shellButton);
+  document.body.append(shell);
+  try {
+    const { view, user } = drawPhone("/");
+    await user.click(
+      await view.findByRole("button", { name: "查看对话侧栏" }),
+    );
+    await view.findByRole("dialog", { name: "产品官 · 这个对话" });
+    expect(view.container.hasAttribute("inert")).toBe(true);
+    const viewport = document.querySelector<HTMLElement>(
+      '[data-slot="toast-viewport"]',
+    );
+    expect(viewport).not.toBeNull();
+    // 页面开着时，报错 toast 照样读得到、关得掉。
+    expect(viewport?.closest("[inert]")).toBeNull();
+    expect(live.hasAttribute("inert")).toBe(false);
+    expect(shellLive.closest("[inert]")).toBeNull();
+    expect(shellButton.hasAttribute("inert")).toBe(true);
+    // 关掉时原样还回去。
+    await user.click(
+      within(
+        await view.findByRole("dialog", { name: "产品官 · 这个对话" }),
+      ).getByRole("button", { name: "返回对话" }),
+    );
+    await waitFor(() => {
+      if (shellButton.hasAttribute("inert")) throw new Error("still inert");
+    });
+    expect(view.container.hasAttribute("inert")).toBe(false);
+  } finally {
+    shell.remove();
+    live.remove();
+    toaster.unmount();
+  }
 });
 
 test("phone: the sidebar page opens again where it was scrolled", async () => {

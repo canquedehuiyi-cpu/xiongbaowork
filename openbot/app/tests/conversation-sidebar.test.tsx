@@ -247,7 +247,7 @@ async function loaded(view: ReturnType<typeof render>) {
     const aside = view.container.querySelector<HTMLElement>(
       "[data-conversation-sidebar]",
     );
-    if (!aside || aside.dataset.loaded !== "true")
+    if (aside?.dataset.loaded !== "true")
       throw new Error("sidebar not loaded yet");
     return aside;
   });

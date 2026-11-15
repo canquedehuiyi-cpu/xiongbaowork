@@ -92,13 +92,18 @@ export type CompactOutcome =
   | {
       status: "refused";
       reason: "external" | "in_progress" | "too_short" | "failed" | "missing";
-    };
+    }
+  /** 企业管控不让这位员工调用模型（403，管控读不到时 503）：`message` 是服务器给的中文原因，没给时为兜底句。 */
+  | { status: "refused"; reason: "refused"; message: string };
+
+/** 服务器没给原因时，企业管控拒绝压缩的兜底说法。 */
+export const POLICY_REFUSED_FALLBACK = "企业管控不允许这位员工现在调用模型。";
 
 const REFUSALS = new Set(["external", "in_progress", "too_short", "failed"]);
 
 /**
  * 压缩会话：`POST .../compact {agentId}`。拒绝是答案不是异常（409 外部员工 / 正在压 / 没有可压的，502 没压成，
- * 404 看不到），所以读状态而不是抛。连不上服务器也算没压成。
+ * 403/503 企业管控不让调用模型，404 看不到），所以读状态而不是抛。连不上服务器也算没压成。
  */
 export async function compactConversation(
   source: SidebarSource,
@@ -128,6 +133,14 @@ export async function compactConversation(
     };
   if (response.status === 404) return { status: "refused", reason: "missing" };
   const reason = body?.reason;
+  if (reason === "refused") {
+    const error = typeof body?.error === "string" ? body.error.trim() : "";
+    return {
+      status: "refused",
+      reason: "refused",
+      message: error || POLICY_REFUSED_FALLBACK,
+    };
+  }
   return {
     status: "refused",
     reason:

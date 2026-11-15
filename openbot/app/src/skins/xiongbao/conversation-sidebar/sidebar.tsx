@@ -471,19 +471,39 @@ export function usePhoneSidebarPage() {
   };
 }
 
+/** 留着能用的：Toaster 的视口和读屏播报区（和 Base UI 自己的模态一样跳过 `[aria-live]`）。 */
+const STAYS_REACHABLE = '[data-slot="toast-viewport"], [aria-live]';
+
+/**
+ * `parent` 下除 `host` 以外要设 `inert` 的元素。包含 Toaster 或播报区的元素自己不设，往里走一层，只设它
+ * 旁边的（应用外壳里有播报区时，外壳的其余部分照样盖住）。
+ */
+function coveredAround(parent: Element, host: HTMLElement): HTMLElement[] {
+  const covered: HTMLElement[] = [];
+  for (const element of parent.children) {
+    if (
+      !(element instanceof HTMLElement) ||
+      element === host ||
+      element.hasAttribute("inert") ||
+      element.matches(STAYS_REACHABLE)
+    )
+      continue;
+    if (element.contains(host) || element.querySelector(STAYS_REACHABLE))
+      covered.push(...coveredAround(element, host));
+    else covered.push(element);
+  }
+  return covered;
+}
+
 /**
  * 打开时，页面上别的东西（对话、外壳）都设成 `inert`：点不到、Tab 不进去、读屏读不到，焦点只能留在这一页；
- * 页面也不跟着滚。关掉时原样还回去：底下的对话一直挂着，滚到哪里还在哪里。
+ * 页面也不跟着滚。Toaster 和播报区除外：报错 toast 不会自己消失，页面开着时也要读得到、关得掉。
+ * 关掉时原样还回去：底下的对话一直挂着，滚到哪里还在哪里。
  */
 function useOnlyThisOnScreen(host: HTMLElement | null) {
   useEffect(() => {
     if (!host) return;
-    const covered = [...document.body.children].filter(
-      (element): element is HTMLElement =>
-        element instanceof HTMLElement &&
-        element !== host &&
-        !element.hasAttribute("inert"),
-    );
+    const covered = coveredAround(document.body, host);
     for (const element of covered) element.setAttribute("inert", "");
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
