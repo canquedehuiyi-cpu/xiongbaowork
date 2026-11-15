@@ -53,6 +53,7 @@ import {
   entryHungRound,
   runnerCardSuppressed,
   suppressedCardRef,
+  targetedCard,
 } from "./unattended-card";
 
 /**
@@ -420,6 +421,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const entryCardRef = suppressedCardRef();
     // Whether that entry hung the turn on a followed card first (a group turn), read here for the same reason.
     const hungByEntry = cardIsTaken && entryHungRound();
+    // The followed card a person's decision started this turn for (a 退回), read here for the same reason.
+    const forCard = targetedCard();
     // Read in the same breath and for the same reason: unset for every turn a person sends.
     const lane = runnerLane.getStore();
     /*
@@ -455,7 +458,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         const followed =
           this.board && !cardIsTaken
             ? await this.delivery
-                .openTrackedCard(tenant, request.threadId, agentId)
+                .openTrackedCard(tenant, request.threadId, agentId, forCard)
                 .catch((error) => {
                   console.error("tracked card lookup failed", error);
                   return null;

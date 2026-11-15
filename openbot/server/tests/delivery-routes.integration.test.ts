@@ -491,6 +491,52 @@ test("return moves awaiting_review to running, returns+1, posts the reason as th
   ).toBe(409);
 });
 
+test("a return of the older of two open followed cards on one thread hangs its round on that card, not the newer one", async () => {
+  // The older card waits for 验收; the same coworker took a second piece of work on in the thread later.
+  const { tenantId, agentId, threadId, taskId } = await acceptedCard(
+    "return-older",
+    {
+      status: "awaiting_review",
+      acceptedAt: new Date(Date.now() - 30 * 60_000),
+    },
+  );
+  const newer = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: threadId,
+    channelRef: threadId,
+    acceptedAt: new Date(Date.now() - 5 * 60_000),
+    criteria: "差旅按人汇总",
+  });
+  const coworker = new Recorder(agentId);
+  const call = routesFor(tenantId, { turns: cardTurns(coworker) });
+
+  const response = await call("POST", `${taskId}/return`, {
+    reason: "缺 C 家的发票",
+  });
+  expect(response.status).toBe(200);
+  const runId = response.body.runId as string;
+  expect(typeof runId).toBe("string");
+
+  // The 修正轮次 is the returned card's: its history has the round, and the newer card never saw it.
+  const events = await roundEnded(tenantId, taskId, runId);
+  expect(events.map((event) => event.kind)).toEqual([
+    "returned",
+    "progress",
+    "run_ended",
+  ]);
+  expect(
+    (await history(tenantId, newer)).some(
+      (event) => (event.detail as { runId?: string }).runId === runId,
+    ),
+  ).toBe(false);
+  const newerRow = await row(tenantId, newer);
+  expect(newerRow).toBeDefined();
+  expect(newerRow?.activeRunRef).toBeNull();
+  expect(newerRow?.status).toBe("running");
+  expect((await row(tenantId, taskId))?.status).toBe("running");
+});
+
 /** A coworker of `owner`'s, as the people's own Bot builder makes one: an agent row and a profile. */
 async function coworker(owner: string, name: string): Promise<string> {
   const actor: AgentActor = { id: owner, role: "user" };
@@ -708,8 +754,13 @@ test("a return's claim on the card holds for two minutes, then a new return may 
   expect(after?.returnPendingAt).toBeNull();
 });
 
-test("return and the extension answer on a group card are said in the group, and the coworker's turn hangs on the card", async () => {
-  const ownerId = await tenant("group-return");
+/**
+ * A group of Ada and Grace as the deployment builds it: its own store and queue, the real unattended
+ * turn with the real admission, the board and the followed cards. The person has asked Ada for
+ * something there (`ask`), and the board carded it as usual; `taskId` is that card.
+ */
+async function groupAsk(label: string, ask: string, adaReply: string) {
+  const ownerId = await tenant(label);
   const owner: AgentActor = { id: ownerId, role: "user" };
   const ada = await coworker(ownerId, "Ada");
   const grace = await coworker(ownerId, "Grace");
@@ -718,7 +769,7 @@ test("return and the extension answer on a group card are said in the group, and
   );
   createdGroupChannels.push(channel.id);
   const recorders = new Map([
-    [ada, new Recorder(ada, "收到，我改表头。")],
+    [ada, new Recorder(ada, adaReply)],
     [grace, new Recorder(grace)],
   ]);
   const agentFor = (agentId: string) => {
@@ -726,8 +777,6 @@ test("return and the extension answer on a group card are said in the group, and
     if (!found) throw new Error(`no coworker ${agentId}`);
     return found;
   };
-  // The group as the deployment builds it: its own store and queue, the real unattended turn with the
-  // real admission, the board and the followed cards.
   const runTurn = unattendedTurn(agentFor);
   const conversations = createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
@@ -768,11 +817,10 @@ test("return and the extension answer on a group card are said in the group, and
         .where(eq(groupMessages.channelId, channel.id)),
     );
 
-  // The person asks Ada in the group; the board carded it as usual, and the person follows it.
   await runAsTenant(ownerId, () =>
     conversations.send(ownerId, channel.id, {
-      id: `${groupPrefix}-ask`,
-      text: "@Ada 做一张供应商对账表",
+      id: `${groupPrefix}-${label}-ask`,
+      text: ask,
     }),
   );
   await drain();
@@ -789,17 +837,45 @@ test("return and the extension answer on a group card are said in the group, and
       database,
       runTurn,
       runner: new PostgresAgentRunner(database, projector, quota),
-      groupSend: (ownerUserId, channelId, input) =>
-        conversations.send(ownerUserId, channelId, input),
+      groupSend: (ownerUserId, channelId, input, options) =>
+        conversations.send(ownerUserId, channelId, input, options),
       botName: async (tenantId, agentId) =>
         (await profileStore.get({ id: tenantId, role: "user" }, agentId))
           ?.name ?? null,
     }),
   });
+  return {
+    ownerId,
+    ada,
+    channelId: channel.id,
+    recorders,
+    drain,
+    groupLines,
+    taskId,
+    call,
+  };
+}
+
+test("return and the extension answer on a group card are said in the group, and the coworker's turn hangs on the card", async () => {
+  // The person asks Ada in the group; the board carded it as usual, and the person follows it.
+  const {
+    ownerId,
+    ada,
+    channelId,
+    recorders,
+    drain,
+    groupLines,
+    taskId,
+    call,
+  } = await groupAsk(
+    "group-return",
+    "@Ada 做一张供应商对账表",
+    "收到，我改表头。",
+  );
   const tracked = await call("POST", `${taskId}/track`);
   expect(tracked.status).toBe(200);
   const groupThread = tracked.body.threadRef as string;
-  expect(groupThread).not.toBe(channel.id);
+  expect(groupThread).not.toBe(channelId);
   await delivery.accept(ownerId, taskId, {
     runId: `accept-${suite}-group`,
     threadRef: groupThread,
@@ -886,6 +962,65 @@ test("return and the extension answer on a group card are said in the group, and
     ),
   ).toBe(false);
   await drain();
+});
+
+test("a return of the older of two open followed group cards hangs the group turn on that card, not the newer one", async () => {
+  const { ownerId, ada, drain, taskId, call } = await groupAsk(
+    "group-return-older",
+    "@Ada 做一张供应商对账表",
+    "收到，我改表头。",
+  );
+  const tracked = await call("POST", `${taskId}/track`);
+  expect(tracked.status).toBe(200);
+  const groupThread = tracked.body.threadRef as string;
+  await delivery.accept(ownerId, taskId, {
+    runId: `accept-${suite}-group-older`,
+    threadRef: groupThread,
+    actor: `agent:${ada}`,
+    dueAt: new Date(Date.now() + 3600_000),
+    criteria: "一张表",
+  });
+  await delivery.runEnded(ownerId, taskId, {
+    runId: `accept-${suite}-group-older`,
+    failed: false,
+  });
+  await runAsTenant(ownerId, () =>
+    database
+      .update(tasks)
+      .set({
+        status: "awaiting_review",
+        acceptedAt: new Date(Date.now() - 30 * 60_000),
+      })
+      .where(eq(tasks.id, taskId)),
+  );
+  // Ada took a second piece of work on in the same group thread later.
+  const newer = await card(ownerId, {
+    agentId: ada,
+    tracked: true,
+    threadRef: groupThread,
+    acceptedAt: new Date(Date.now() - 5 * 60_000),
+    criteria: "差旅按人汇总",
+  });
+
+  const returned = await call("POST", `${taskId}/return`, {
+    reason: "表头不对",
+  });
+  expect(returned.status).toBe(200);
+  await drain();
+
+  // Ada's group turn on the 退回 is the returned card's round; the newer card has none of it.
+  const kinds = (await history(ownerId, taskId)).map((event) => event.kind);
+  expect(kinds.slice(kinds.indexOf("returned"))).toEqual([
+    "returned",
+    "progress",
+    "run_ended",
+  ]);
+  expect((await history(ownerId, newer)).map((event) => event.kind)).toEqual(
+    [],
+  );
+  const newerRow = await row(ownerId, newer);
+  expect(newerRow).toBeDefined();
+  expect(newerRow?.activeRunRef).toBeNull();
 });
 
 test("cancel stops a running turn and marks cancelled", async () => {

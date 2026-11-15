@@ -87,6 +87,12 @@ export type GroupTurn = {
    * conversation tells it (`questionResponseMessage`).
    */
   inResponseTo?: string;
+  /**
+   * The followed card a person's decision on it said this message for (a 退回, `tasks/card-turns.ts`):
+   * the addressed coworker's turn hangs on that card, not on the newest open one it holds here. Set by
+   * server code only (`send`'s options), never from a request body.
+   */
+  taskId?: string;
 };
 const turnSchema = z.object({
   ownerUserId: z.string().min(1),
@@ -97,6 +103,7 @@ const turnSchema = z.object({
   depth: z.number().int().nonnegative().optional(),
   fromAgentId: z.string().min(1).optional(),
   inResponseTo: z.string().min(1).max(6000).optional(),
+  taskId: z.string().uuid().optional(),
 });
 
 /**
@@ -1447,7 +1454,7 @@ export function createGroupConversations(deps: {
     const followed =
       deps.board && deps.delivery && !turn.fromAgentId
         ? await deps.delivery
-            .openTrackedCard(turn.ownerUserId, threadId, agentId)
+            .openTrackedCard(turn.ownerUserId, threadId, agentId, turn.taskId)
             .catch(() => null)
         : null;
     if (followed)
@@ -2034,7 +2041,13 @@ export function createGroupConversations(deps: {
         })),
       };
     },
-    async send(owner: string, channel: string, input: unknown) {
+    async send(
+      owner: string,
+      channel: string,
+      input: unknown,
+      /** Server code only: the followed card this message is about (`GroupTurn.taskId`). */
+      options?: { taskId?: string },
+    ) {
       const body = z
         .strictObject({
           id: z
@@ -2064,6 +2077,7 @@ export function createGroupConversations(deps: {
         agentIds: body.agentId
           ? [body.agentId]
           : (named.length ? named : bots).map((bot) => bot.id),
+        ...(options?.taskId ? { taskId: options.taskId } : {}),
       };
       await deps.store.submit(turn);
       await deps.activity?.(turn, null, turn.text, `group:${turn.messageId}`);

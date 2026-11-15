@@ -710,7 +710,7 @@ export function createTaskRoutes(
         tenantId,
         { threadId: card.threadRef, agentId: card.agentId },
         `退回：${reason}`,
-        { source: `task-return:${taskId}` },
+        { source: `task-return:${taskId}`, taskId },
       );
     } catch (error) {
       await release();

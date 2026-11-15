@@ -14,7 +14,7 @@ import type { NoticeRunner } from "../devices/queued-results";
 import type { TurnRunner } from "../routines/run-turn";
 import { runAsTenant } from "../tenant/context";
 import { emitRunEvent } from "../threads/run-side-events";
-import { suppressRunnerCard } from "../threads/unattended-card";
+import { suppressRunnerCard, turnForCard } from "../threads/unattended-card";
 
 /**
  * What the person's decisions on a followed card do in its conversation (spec 2026-11-15-delivery-loop
@@ -40,12 +40,15 @@ export type CardTurns = {
    * refused); for a group card, when the group has taken the message and queued
    * its turn. Throws {@link CardTurnRefused} when it could not be said -- the thread is busy, the
    * coworker is paused, the group is gone -- and then nothing was said.
+   *
+   * `taskId` names the followed card the message is about (a 退回's): the coworker's turn on it is a
+   * round of THAT card, even when the coworker holds a newer open card on the same thread.
    */
   sendAsUser(
     tenantId: string,
     to: { threadId: string; agentId: string },
     text: string,
-    options?: { source?: string },
+    options?: { source?: string; taskId?: string },
   ): Promise<{ runId: string | null; groupMessageId: string | null }>;
   /**
    * Stop the round `runId` running on the card's thread, through the runner's own stop -- the one the
@@ -86,6 +89,8 @@ export type GroupSend = (
   ownerUserId: string,
   channelId: string,
   input: { id: string; text: string; agentId: string },
+  /** The followed card the message is about: the group's turn on it hangs on that card. */
+  options?: { taskId?: string },
 ) => Promise<unknown>;
 
 export type CardTurnsDeps = {
@@ -194,6 +199,7 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
     channelId: string,
     agentId: string,
     text: string,
+    taskId?: string,
   ): Promise<string> => {
     if (!deps.groupSend) throw new CardTurnRefused(GROUP_GONE);
     const name = await deps.botName?.(tenantId, agentId).catch(() => null);
@@ -201,11 +207,12 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
     try {
       await runAsTenant(tenantId, () =>
         // biome-ignore lint/style/noNonNullAssertion: checked above
-        deps.groupSend!(tenantId, channelId, {
-          id,
-          text: name ? `@${name} ${text}` : text,
-          agentId,
-        }),
+        deps.groupSend!(
+          tenantId,
+          channelId,
+          { id, text: name ? `@${name} ${text}` : text, agentId },
+          taskId ? { taskId } : undefined,
+        ),
       );
     } catch (error) {
       log("task-card-group-post-refused", {
@@ -228,6 +235,7 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
             channelId,
             to.agentId,
             text,
+            options?.taskId,
           ),
         };
 
@@ -258,24 +266,30 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
             deps.runner.stop({ threadId: to.threadId, runId }),
           ).catch(() => undefined);
         }, deps.startTimeoutMs ?? START_TIMEOUT_MS);
+        // A round of the card named, not of whichever card the thread's coworker took on last.
+        const taskId = options?.taskId;
+        const forCard = <T>(body: () => T): T =>
+          taskId ? turnForCard(taskId, body) : body();
         runAsTenant(tenantId, () =>
-          deps.runTurn({
-            signal: giveUp.signal,
-            ownerUserId: tenantId,
-            routineId: options?.source ?? "task-card",
-            agentId: to.agentId,
-            threadId: to.threadId,
-            instruction: text,
-            userMessage,
-            runId,
-            tenantId,
-            initiator: PERSON_INITIATOR,
-            telemetry: { trigger: "human" },
-            onStarted: () => {
-              began = true;
-              started();
-            },
-          }),
+          forCard(() =>
+            deps.runTurn({
+              signal: giveUp.signal,
+              ownerUserId: tenantId,
+              routineId: options?.source ?? "task-card",
+              agentId: to.agentId,
+              threadId: to.threadId,
+              instruction: text,
+              userMessage,
+              runId,
+              tenantId,
+              initiator: PERSON_INITIATOR,
+              telemetry: { trigger: "human" },
+              onStarted: () => {
+                began = true;
+                started();
+              },
+            }),
+          ),
         ).then(
           () => started(),
           (error) => {

@@ -5294,8 +5294,8 @@ await startupLifecycle.run(async (startup) => {
           runTurn: unattendedTurnRunner,
           runner: localThreadRunner,
           // A group card's words go to the group, through the group's own send, as the person.
-          groupSend: (ownerUserId, channelId, input) =>
-            groupConversations.send(ownerUserId, channelId, input),
+          groupSend: (ownerUserId, channelId, input, options) =>
+            groupConversations.send(ownerUserId, channelId, input, options),
           botName: async (tenantId, agentId) =>
             (await agentProfileStore.get(await actorFor(tenantId), agentId))
               ?.name ?? null,

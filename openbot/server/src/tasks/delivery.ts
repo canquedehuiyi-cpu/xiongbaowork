@@ -68,12 +68,15 @@ export type RunCard = {
 export type Delivery = {
   /**
    * The open followed card this thread's coworker is working on, if any: the most recently accepted
-   * (`accepted_at`), and among cards not yet accepted, the most recently created.
+   * (`accepted_at`), and among cards not yet accepted, the most recently created. `preferred` names
+   * the card a turn was started for (a 退回's, `threads/unattended-card.ts` `turnForCard`): that one
+   * when it is still an open followed card of this thread's coworker, otherwise the usual pick.
    */
   openTrackedCard(
     tenantId: string,
     threadRef: string,
     agentId: string,
+    preferred?: string,
   ): Promise<{ id: string; acceptedAt: Date | null } | null>;
   /**
    * Hang a turn on the card: its `active_run_ref` names the run until the round ends, so an approval
@@ -526,7 +529,7 @@ export function createDelivery(database: Database): Delivery {
         return true;
       }),
 
-    openTrackedCard: (tenantId, threadRef, agentId) =>
+    openTrackedCard: (tenantId, threadRef, agentId, preferred) =>
       runAsTenant(tenantId, async () => {
         const [row] = await database
           .select({ id: tasks.id, acceptedAt: tasks.acceptedAt })
@@ -541,6 +544,7 @@ export function createDelivery(database: Database): Delivery {
             ),
           )
           .orderBy(
+            ...(preferred ? [desc(sql`${tasks.id}::text = ${preferred}`)] : []),
             desc(sql`coalesce(${tasks.acceptedAt}, ${tasks.createdAt})`),
             desc(tasks.createdAt),
           )

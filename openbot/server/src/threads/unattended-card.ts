@@ -69,3 +69,21 @@ export function roundHungByEntry<T>(body: () => T): T {
 export function entryHungRound(): boolean {
   return hung.getStore() === true;
 }
+
+const targeted = new AsyncLocalStorage<string>();
+
+/**
+ * Run `body` -- a turn the person's decision on one followed card starts (a 退回) -- as a round of
+ * THAT card. The runner otherwise hangs a turn on the thread's newest open followed card
+ * (`tasks/delivery.ts` `openTrackedCard`), and a coworker with two open cards on one thread would
+ * have the 修正轮次 of the older one land on the newer: its progress, its approvals and its
+ * `deliver_task` all on the wrong card. Server code only, for the reason the marker above is.
+ */
+export function turnForCard<T>(taskId: string, body: () => T): T {
+  return targeted.run(taskId, body);
+}
+
+/** The followed card the turn now being accepted was started for, if one was named. */
+export function targetedCard(): string | undefined {
+  return targeted.getStore();
+}
