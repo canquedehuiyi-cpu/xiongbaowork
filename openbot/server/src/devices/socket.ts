@@ -1,4 +1,5 @@
 import { isScreenFrameType } from "../../../shared/device-screen";
+import type { AcpRelay } from "../agents/acp/relay";
 import type { DeviceChannel, DispatchTarget } from "./channel";
 import type { DeviceScreens } from "./screen";
 import { type DeviceOwner, type DeviceStore, reportedApps, reportedRoots } from "./store";
@@ -20,7 +21,17 @@ export type RunnerSocketData = {
    * detaching by device id would drop the live one.
    */
   connection?: string;
+  /**
+   * The external agents' frames that arrived while the socket was still opening (its registration
+   * waits on the database), in order, taken in once it is registered. A runner sends its inventory
+   * and its whole replay the moment the socket opens, so these are the first frames of every
+   * reconnect, not a corner case. Undefined once opened, or when it never will be.
+   */
+  held?: Record<string, unknown>[];
 };
+
+/** Frames held while a socket opens, at most; past that it is closed and the runner tries again. */
+const HELD_LIMIT = 200_000;
 
 export type RunnerSocketLike = {
   data: RunnerSocketData;
@@ -40,18 +51,30 @@ export async function runnerOpen(
   store: DeviceStore,
   channel: DeviceChannel,
   screens?: DeviceScreens,
+  acp?: Pick<AcpRelay, "fromRunner">,
 ): Promise<void> {
-  if (!(await store.isCurrent(ws.data.runner).catch(() => false))) {
-    ws.close?.(1008, "Device access was revoked.");
-    return;
+  // Before the first await: a frame can arrive while this waits on the database.
+  ws.data.held = [];
+  try {
+    if (!(await store.isCurrent(ws.data.runner).catch(() => false))) {
+      ws.close?.(1008, "Device access was revoked.");
+      return;
+    }
+    const { tenantId, deviceId } = ws.data.runner;
+    await store.heartbeat(tenantId, deviceId);
+    const connection = channel.attach(
+      { tenantId, deviceId },
+      ws,
+      ws.data.runner.credentialVersion,
+    );
+    ws.data.connection = connection;
+    // Registered and handed over in one go, so nothing that arrives later can overtake them.
+    for (const frame of ws.data.held ?? [])
+      acp?.fromRunner({ tenantId, deviceId, connectionId: connection }, frame);
+  } finally {
+    ws.data.held = undefined;
   }
   const { tenantId, deviceId } = ws.data.runner;
-  await store.heartbeat(tenantId, deviceId);
-  ws.data.connection = channel.attach(
-    { tenantId, deviceId },
-    ws,
-    ws.data.runner.credentialVersion,
-  );
   ws.send(JSON.stringify({ type: "welcome" }));
   // Anybody still watching a coworker on this machine gets the screen back without reloading.
   screens?.resume({ tenantId, deviceId });
@@ -62,6 +85,7 @@ export function runnerClose(
   ws: RunnerSocketLike,
   channel: DeviceChannel,
 ): void {
+  ws.data.held = undefined;
   if (ws.data.connection) channel.detach(ws.data.connection);
 }
 
@@ -84,6 +108,8 @@ export type RunnerMessageOptions = {
     target: DispatchTarget,
     info: DesktopStoppedInfo,
   ) => void | Promise<void>;
+  /** The external agents' `acp.*` frames (agents/acp/relay.ts). Absent, they are dropped quietly. */
+  acp?: Pick<AcpRelay, "fromRunner" | "drain" | "resumeQueued">;
 };
 
 /** A heartbeat's `desktopStopped`, kept only when it has the shape the runner sends. */
@@ -120,7 +146,7 @@ export async function runnerMessage(
    * this device's current socket, not detached, revoked or replaced, which the channel's own periodic
    * validation keeps true against the database. A screen frame from anything else is dropped.
    */
-  const early = screens ? readFrame(raw) : null;
+  const early = readFrame(raw);
   if (screens && early && isScreenFrameType(early.type)) {
     if (ws.data.connection && channel.isAttached(ws.data.connection)) {
       screens.fromRunner(
@@ -133,12 +159,46 @@ export async function runnerMessage(
     }
     return;
   }
+  /*
+   * The external agents' frames, checked the same way and for the same reason: their order is
+   * their meaning (an update's `seq`, an end after its updates), and frames that each waited on the
+   * database here could overtake each other. The relay keeps one device's frames in order from
+   * here on. None of them is ever "nothing handles": a runner that sends one is not waiting for an
+   * answer, and an unknown `acp.*` type is the relay's to log.
+   */
+  if (
+    early &&
+    typeof early.type === "string" &&
+    early.type.startsWith("acp.")
+  ) {
+    const held = ws.data.held;
+    if (held) {
+      if (held.length < HELD_LIMIT) held.push(early);
+      else ws.close?.(1011, "Too many frames before the socket opened.");
+      return;
+    }
+    if (
+      options.acp &&
+      ws.data.connection &&
+      channel.isAttached(ws.data.connection)
+    ) {
+      options.acp.fromRunner(
+        {
+          tenantId: ws.data.runner.tenantId,
+          deviceId: ws.data.runner.deviceId,
+          connectionId: ws.data.connection,
+        },
+        early,
+      );
+    }
+    return;
+  }
   if (!(await store.isCurrent(ws.data.runner).catch(() => false))) {
     if (ws.data.connection) channel.detach(ws.data.connection);
     ws.close?.(1008, "Device access was revoked.");
     return;
   }
-  const frame = readFrame(raw);
+  const frame = early;
   if (frame && frame.type === "result") {
     // An answer to something this process asked. It is consumed whether or not a request is waiting:
     // a late reply to a deadline that already passed must not be read as an unknown frame.
@@ -173,8 +233,26 @@ export async function runnerMessage(
       }
     }
     // --- end desktop control ---
+    /*
+     * The external agents' runner lets an ended turn's frames go when this beat's ack comes back,
+     * so the ack waits until the relay has taken in every frame that arrived before the beat. One
+     * that could not be taken in (the database failed) must not be let go: the socket is closed
+     * instead, and the runner reconnects and sends it all again.
+     */
+    if (options.acp && !(await options.acp.drain({ tenantId, deviceId }))) {
+      if (ws.data.connection) channel.detach(ws.data.connection);
+      ws.close?.(1011, "Some frames could not be taken in; send them again.");
+      return;
+    }
+    // THE ONLY `ack` THE SERVER SENDS. The runner matches acks to its heartbeats in order, one ack
+    // per heartbeat (runner/src/acp/host.ts `acked`): an ack sent for anything else, or a beat
+    // acked twice, would let it drop frames that have not arrived.
     ws.send(JSON.stringify({ type: "ack" }));
     void channel.flush({ tenantId, deviceId }).catch(() => undefined);
+    // External agents' turns that waited for this machine, oldest first per thread.
+    void options.acp
+      ?.resumeQueued({ tenantId, deviceId })
+      .catch(() => undefined);
     return;
   }
   /*

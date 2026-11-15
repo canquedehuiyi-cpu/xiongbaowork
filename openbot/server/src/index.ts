@@ -20,6 +20,8 @@ import {
   skillSharingInSnapshot,
 } from "./admin/controls";
 import { fixSettings } from "./admin/settings-store";
+import { createAcpRelay } from "./agents/acp/relay";
+import { createAcpTurnStore } from "./agents/acp/turns";
 import {
   CoworkerUnavailableError,
   createActorAgentResolver,
@@ -873,6 +875,21 @@ await startupLifecycle.run(async (startup) => {
     notify: (target, frame) => deviceChannel.notify(target, frame),
     holderOf: (target, botId) => deviceTakeovers.holder(target, botId),
     onViewerGone: (watch) => deviceTakeovers.viewerGone(watch),
+  });
+  /*
+   * External employees (Codex, Claude Code, Hermes on the owner's computer): their turns, queued per
+   * employee and thread, and their `acp.*` frames on the same runner sockets (agents/acp/*).
+   *
+   * Nothing starts a queued turn yet: the `device_acp` transport that runs one is not wired, so a
+   * claimed turn is put straight back. No turn can be queued before that transport exists either.
+   */
+  const acpTurnStore = createAcpTurnStore(database);
+  const acpRelay = createAcpRelay({
+    channel: deviceChannel,
+    turns: acpTurnStore,
+    startQueuedTurn: async () => {
+      throw new Error("外部员工的轮次在这台服务器上还不能运行。");
+    },
   });
   /*
    * Who holds the wheel of a coworker's browser on one of those machines. The gateway asks it before
@@ -5424,6 +5441,7 @@ await startupLifecycle.run(async (startup) => {
           store: deviceStore,
           channel: deviceChannel,
           screens: deviceScreens,
+          acp: acpRelay,
         },
         app,
       }),

@@ -1,4 +1,6 @@
 tests/account-argument.test.ts
+tests/acp-relay.test.ts
+tests/acp-turns.integration.test.ts
 tests/activity-folder-actions.integration.test.ts
 tests/activity-plumbing-rows.integration.test.ts
 tests/activity-report-counts.integration.test.ts
