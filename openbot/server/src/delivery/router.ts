@@ -26,6 +26,8 @@ import {
   DeliveryProviderError,
   DeliveryRefusedError,
   type DeliveryScope,
+  PERSON_DELIVERY_KINDS,
+  type PersonDeliveryKind,
   type TextTransport,
 } from "./types";
 /** What a paired chat turn produced besides its reply, surfaced in that same turn. */
@@ -176,7 +178,7 @@ export function createDeliveryRouter(deps: {
     input: {
       id: string;
       text: string;
-      kind: Exclude<DeliveryKind, "attention">;
+      kind: Exclude<DeliveryKind, PersonDeliveryKind>;
       requestId?: string | null;
     },
     includeBindings = true,
@@ -324,6 +326,119 @@ export function createDeliveryRouter(deps: {
         kind: "attention",
         requestId: null,
       });
+  }
+  /**
+   * Tell the person something about their followed work (spec 2026-11-15-delivery-loop §10): a start
+   * or end briefing, or a reminder about one late card. Offered once to each of their push devices and
+   * once on each chat platform they connected (Slack, Teams, SMS), as a ping is; returns how many
+   * places it was offered to, so a caller that reached nobody can keep it for the workbench.
+   *
+   * WHERE. A chat platform's account in one of `scopes` (the card's conversation, best first) is
+   * preferred, else the account the person used last on that platform; the push is filed under the
+   * first of `scopes` the person can still reach, and is not sent when they can reach none. Whether
+   * an account or a device may carry it is the person's routing for "Something needs you"
+   * (`attention`), asked as that conversation's Bot, as a ping is.
+   *
+   * WHEN is the caller's to decide: work hours and the three-a-day cap are kept by the delivery
+   * checker and the briefing pass before anything comes here. `id` keys the rows, so offering the same
+   * message again sends nothing new.
+   *
+   * Queued only from the person's own frame, as `notify` is; anything else is reported and dropped.
+   */
+  async function notifyPerson(input: {
+    ownerUserId: string;
+    kind: Exclude<PersonDeliveryKind, "attention">;
+    id: string;
+    title: string;
+    body: string;
+    scopes: DeliveryScope[];
+    /** The card a reminder is about, carried to the push so a tap opens it. */
+    taskId?: string | null;
+  }): Promise<number> {
+    if (
+      !trustedTenant(
+        isTenantFramed() ? requireTenant() : undefined,
+        input.ownerUserId,
+      )
+    ) {
+      console.error(
+        JSON.stringify({
+          type: "delivery-notify-untrusted-tenant",
+          kind: input.kind,
+          id: input.id,
+          framed: isTenantFramed(),
+        }),
+      );
+      return 0;
+    }
+    const routeFor = deps.routeFor ?? resolveUpdateRoute;
+    const text = input.body ? `${input.title}\n${input.body}` : input.title;
+    const requestId = input.taskId ?? null;
+    let offered = 0;
+    const candidates: DeliveryBinding[] = [];
+    for (const scope of input.scopes)
+      candidates.push(...(await deps.store.bindingsFor(scope)));
+    candidates.push(...(await deps.store.bindingsByUse(input.ownerUserId)));
+    const chosen = new Map<BindingTransport, DeliveryBinding>();
+    for (const binding of candidates) {
+      if (chosen.has(binding.transport)) continue;
+      if (binding.ownerUserId !== input.ownerUserId) continue;
+      const carrier = await routeFor({
+        ownerUserId: input.ownerUserId,
+        agentId: binding.agentId,
+        kind: "attention",
+      });
+      if (!carrier.allows(binding.transport)) continue;
+      if (!(await deps.authoriseScope(binding))) continue;
+      chosen.set(binding.transport, binding);
+    }
+    for (const [transport, binding] of chosen) {
+      await deps.store.offerOutbox({
+        ownerUserId: binding.ownerUserId,
+        channelId: binding.channelId,
+        agentId: binding.agentId,
+        threadId: binding.threadId,
+        dedupeKey: `${input.kind}:${input.id}:${transport}`,
+        bindingId: binding.id,
+        deviceId: null,
+        transport,
+        text,
+        kind: input.kind,
+        requestId,
+      });
+      offered += 1;
+    }
+    const route = await routeFor({
+      ownerUserId: input.ownerUserId,
+      kind: "attention",
+    });
+    if (!route.allows("push")) return offered;
+    const devices = await deps.store.devices(input.ownerUserId);
+    if (devices.length === 0) return offered;
+    let scope: DeliveryScope | null = null;
+    for (const candidate of input.scopes)
+      if (
+        candidate.ownerUserId === input.ownerUserId &&
+        (await deps.authoriseScope(candidate))
+      ) {
+        scope = candidate;
+        break;
+      }
+    if (!scope) return offered;
+    for (const device of devices) {
+      await deps.store.offerOutbox({
+        ...scope,
+        dedupeKey: `${input.kind}:${input.id}:device:${device.id}`,
+        bindingId: null,
+        deviceId: device.id,
+        transport: "push",
+        text,
+        kind: input.kind,
+        requestId,
+      });
+      offered += 1;
+    }
+    return offered;
   }
   /**
    * The conversation a ping's push is filed under: the check-in conversation of its newest item the
@@ -682,10 +797,11 @@ export function createDeliveryRouter(deps: {
           !deps.providers.push
         )
           throw new DeliveryRefusedError("Push device unavailable.");
-        const [title, body] =
-          row.kind === "attention"
-            ? headedText(row.text)
-            : [defaultPushTitle(), row.text];
+        const [title, body] = (
+          PERSON_DELIVERY_KINDS as readonly DeliveryKind[]
+        ).includes(row.kind)
+          ? headedText(row.text)
+          : [defaultPushTitle(), row.text];
         result = await deps.providers.push.send({
           token: device.token,
           title,
@@ -829,6 +945,7 @@ export function createDeliveryRouter(deps: {
     converse,
     notify,
     notifyAttention,
+    notifyPerson,
     smsOptOut,
     async receiveNative(
       scope: DeliveryScope,

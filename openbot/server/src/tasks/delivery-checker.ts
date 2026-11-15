@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { taskEvents, tasks, users } from "../db/schema";
+import { taskEvents, tasks } from "../db/schema";
 import type { NoticeRunner } from "../devices/queued-results";
 import {
   asPlatform,
@@ -8,9 +8,13 @@ import {
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
+import {
+  DEFAULT_WORK_HOURS,
+  readWorkHours,
+  type WorkHours,
+} from "../user-preferences";
 import { TurnNotStarted } from "./card-turns";
 import { createDelivery, type Delivery } from "./delivery";
-import { DEFAULT_TIME_ZONE } from "./delivery-tools";
 import { clockOf } from "./due-time";
 import { appendTaskEvent } from "./events";
 
@@ -59,24 +63,9 @@ export const DAILY_NOTICES = 3;
 /** Cards one pass checks, soonest-due first; the rest wait a minute. */
 const CARDS_PER_PASS = 500;
 
-/** When the person works, on their own clock (Task 6 reads it from their preferences). */
-export type WorkHours = {
-  /** "HH:MM". */
-  start: string;
-  /** "HH:MM"; "24:00" is the end of the day. */
-  end: string;
-  /** An IANA zone, e.g. "Asia/Shanghai". */
-  timeZone: string;
-  /** Whether Saturdays and Sundays are work days. */
-  weekends: boolean;
-};
-
-/** The default work hours: 09:00 to 18:00, weekdays (spec §10). */
-export const DEFAULT_WORK_HOURS: Omit<WorkHours, "timeZone"> = {
-  start: "09:00",
-  end: "18:00",
-  weekends: false,
-};
+/** When the person works, on their own clock: their preferences (`readWorkHours`). */
+export type { WorkHours };
+export { DEFAULT_WORK_HOURS };
 
 /** What the person is told about one card. */
 export type DeliveryNotice = {
@@ -92,8 +81,15 @@ export type DeliveryCheckDeps = {
   database: Database;
   /** The person's work hours and time zone. */
   workHours: (userId: string) => Promise<WorkHours>;
-  /** Tell the person (push, chat apps). Task 6 wires the real one. */
-  notify: (tenantId: string, notice: DeliveryNotice) => Promise<NoticeResult>;
+  /**
+   * Tell the person (push, chat apps: `tasks/briefing.ts` `createTaskNotices`). `now` is the pass's
+   * clock, which also keys the message.
+   */
+  notify: (
+    tenantId: string,
+    notice: DeliveryNotice,
+    now: Date,
+  ) => Promise<NoticeResult>;
   /** Nudge the card's coworker (`tasks/nudge-run.ts` `startNudgeRun`). */
   nudge: (
     tenantId: string,
@@ -121,37 +117,15 @@ export function threadRunning(
     });
 }
 
-/** Whether `timeZone` is one this runtime can read. */
-function knownZone(timeZone: unknown): timeZone is string {
-  if (typeof timeZone !== "string" || !timeZone) return false;
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /**
- * Work hours until Task 6 lets the person set them: the defaults, on the time zone their preferences
- * already hold (`workHours.timeZone`, else `timeZone`), else the product's own zone
- * (`DEFAULT_TIME_ZONE`) -- the zone a coworker's 「下午三点」 is read on, so the day the three reminders
+ * The person's work hours as the checker reads them: what they saved (`readWorkHours`) -- the
+ * defaults (09:00 to 18:00, weekdays) on the zone their browser wrote, else the product's own
+ * (`DEFAULT_TIME_ZONE`), the zone a coworker's 「下午三点」 is read on -- so the day the three reminders
  * are counted in, the work hours and the due time a nudge quotes are all on one clock.
  */
-export function readDefaultWorkHours(database: Database) {
-  return async (userId: string): Promise<WorkHours> => {
-    const [user] = await runAsTenant(userId, () =>
-      database
-        .select({ preferences: users.preferences })
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1),
-    );
-    const preferences = (user?.preferences ?? {}) as Record<string, unknown>;
-    const hours = (preferences.workHours ?? {}) as Record<string, unknown>;
-    const timeZone = [hours.timeZone, preferences.timeZone].find(knownZone);
-    return { ...DEFAULT_WORK_HOURS, timeZone: timeZone ?? DEFAULT_TIME_ZONE };
-  };
+export function savedWorkHours(database: Database) {
+  return (userId: string): Promise<WorkHours> =>
+    readWorkHours(database, userId);
 }
 
 /** The local calendar day of an instant on a zone's clock: "2026-11-16". */
@@ -568,7 +542,7 @@ async function remind(
 ): Promise<void> {
   let result: NoticeResult | null = null;
   try {
-    result = await deps.notify(tenantId, notice);
+    result = await deps.notify(tenantId, notice, now);
   } catch (error) {
     log("delivery-check-notify-failed", {
       taskId: notice.taskId,

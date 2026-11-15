@@ -358,8 +358,11 @@ export type TaskRouteOptions = {
    * cannot be followed.
    */
   acceptTaskDisabled?: (tenantId: string, agentId: string) => Promise<boolean>;
-  /** The person's time zone, for a due time written without one. */
-  timeZone?: (tenantId: string) => string;
+  /**
+   * The person's time zone (their saved work hours' zone, `readWorkHours`), for a due time written
+   * without one and for the times said back to them. Absent: the product's own zone.
+   */
+  timeZone?: (tenantId: string) => string | Promise<string>;
   now?: () => Date;
   /** The followed cards' writes; a test may stand in for them. Absent: `createDelivery(database)`. */
   delivery?: Delivery;
@@ -383,7 +386,8 @@ export function createTaskRoutes(
   const routes = new Hono<Ctx>();
   const delivery = options.delivery ?? createDelivery(database);
   const now = options.now ?? (() => new Date());
-  const zoneOf = options.timeZone ?? (() => DEFAULT_TIME_ZONE);
+  const zoneOf = async (tenantId: string): Promise<string> =>
+    (await options.timeZone?.(tenantId)) ?? DEFAULT_TIME_ZONE;
   const log = (type: string, detail: Record<string, unknown>) =>
     console.error(JSON.stringify({ type, ...detail }));
 
@@ -803,7 +807,7 @@ export function createTaskRoutes(
       decision: body.data.decision,
       ...(body.data.dueAt ? { dueAt: body.data.dueAt } : {}),
       now: now(),
-      timeZone: zoneOf(tenantId),
+      timeZone: await zoneOf(tenantId),
     });
     if (!decided.ok) {
       if (decided.why === "not_open")
@@ -815,6 +819,7 @@ export function createTaskRoutes(
       return context.json({ error: `${dueRefusalText(decided.why)}。` }, 400);
     }
     const dueAt = decided.dueAt?.toISOString() ?? null;
+    const zone = await zoneOf(tenantId);
     if (decided.threadRef && decided.agentId)
       await options.turns
         ?.say(
@@ -831,7 +836,7 @@ export function createTaskRoutes(
           } as BaseEvent,
           // In a group, said in the group: the transcript is where the person and the coworker read it.
           body.data.decision === "grant" && decided.dueAt
-            ? `准许延期到 ${clockOf(decided.dueAt, now(), zoneOf(tenantId))}`
+            ? `准许延期到 ${clockOf(decided.dueAt, now(), zone)}`
             : "延期不批，按原时间交",
         )
         .catch((error) =>
@@ -861,7 +866,11 @@ export function createTaskRoutes(
       );
     let dueAt: Date | undefined;
     if (body.data.dueAt !== undefined) {
-      const reading = readDueTime(body.data.dueAt, now(), zoneOf(tenantId));
+      const reading = readDueTime(
+        body.data.dueAt,
+        now(),
+        await zoneOf(tenantId),
+      );
       if (!reading.at)
         return context.json({ error: `${dueRefusalText(reading.why)}。` }, 400);
       dueAt = reading.at;
@@ -953,7 +962,7 @@ export function createTaskRoutes(
     const nudged = await options.rounds.nudgeNow(tenantId, taskId, {
       actor: `user:${tenantId}`,
       now: now(),
-      timeZone: zoneOf(tenantId),
+      timeZone: await zoneOf(tenantId),
     });
     if (!nudged.ok)
       return context.json(

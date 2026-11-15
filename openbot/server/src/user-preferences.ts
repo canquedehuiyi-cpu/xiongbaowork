@@ -6,27 +6,141 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "./db/client";
 import { users } from "./db/schema";
+import { DEFAULT_TIME_ZONE } from "./tasks/delivery-tools";
+import { runAsTenant } from "./tenant/context";
+
+/**
+ * When the person works, on their own clock (spec 2026-11-15-delivery-loop §10): the delivery checker
+ * pushes nothing outside it, and the start and end briefings go out at its two ends.
+ */
+export type WorkHours = {
+  /** "HH:MM". */
+  start: string;
+  /** "HH:MM"; "24:00" is the end of the day. */
+  end: string;
+  /** An IANA zone, e.g. "Asia/Shanghai". */
+  timeZone: string;
+  /** Whether Saturdays and Sundays are work days. */
+  weekends: boolean;
+};
+
+/**
+ * The default work hours: 09:00 to 18:00, weekdays. The zone is the one the person's browser writes the
+ * first time it saves ({@link UserPreferencesPatch.browserTimeZone}); until then, the product's own.
+ */
+export const DEFAULT_WORK_HOURS: Omit<WorkHours, "timeZone"> = {
+  start: "09:00",
+  end: "18:00",
+  weekends: false,
+};
+
+/** What the server keeps for a person: the shared preferences, and their work hours. */
+export type StoredUserPreferences = UserPreferences & { workHours: WorkHours };
+
+/** One save: any preference, any part of the work hours, and the zone the browser is on. */
+export type UserPreferencesPatch = Partial<UserPreferences> & {
+  workHours?: Partial<WorkHours>;
+  /**
+   * The zone the person's browser is set to. Written as `workHours.timeZone` only when none is saved
+   * yet -- the first save from a browser -- and never over one, so a zone the person chose stays theirs
+   * when they open the app on a laptop set to another.
+   */
+  browserTimeZone?: string;
+};
+
+const CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** An IANA Area/Location name (or a bare one such as `UTC`), never an offset such as `+05:00`. */
+const IANA_NAME = /^[A-Za-z][A-Za-z0-9_+-]*(?:\/[A-Za-z0-9_+-]+)*$/;
+
+/**
+ * The value as a time zone this runtime knows, canonicalised, or undefined for anything else -- the
+ * same check the shared helper gives a run's zone (`person-time-zone.ts`), for a saved one.
+ */
+export function savedTimeZone(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const zone = value.trim();
+  if (zone.length === 0 || zone.length > 64 || !IANA_NAME.test(zone))
+    return undefined;
+  try {
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: zone,
+    }).resolvedOptions().timeZone;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Whether `value` is a work-hours clock: "HH:MM", and "24:00" too for an end. */
+export function isWorkClock(value: unknown, end = false): value is string {
+  return (
+    typeof value === "string" &&
+    (CLOCK.test(value) || (end && value === "24:00"))
+  );
+}
+
+/** The work hours a stored row says, over the defaults; anything malformed reads as the default. */
+function workHoursOf(stored: Record<string, unknown>): WorkHours {
+  const hours =
+    stored.workHours && typeof stored.workHours === "object"
+      ? (stored.workHours as Record<string, unknown>)
+      : {};
+  return {
+    start: isWorkClock(hours.start) ? hours.start : DEFAULT_WORK_HOURS.start,
+    end: isWorkClock(hours.end, true) ? hours.end : DEFAULT_WORK_HOURS.end,
+    // An older row may hold the zone at the top level; the product's own zone when there is none.
+    timeZone:
+      savedTimeZone(hours.timeZone) ??
+      savedTimeZone(stored.timeZone) ??
+      DEFAULT_TIME_ZONE,
+    weekends:
+      typeof hours.weekends === "boolean"
+        ? hours.weekends
+        : DEFAULT_WORK_HOURS.weekends,
+  };
+}
 
 /*
  * What is stored, over the defaults. A skin a later build no longer ships stays in the row, so going
  * back to a build that has it brings it back, but this build answers with its default.
  */
-function withDefaults(stored: Partial<UserPreferences>): UserPreferences {
+function withDefaults(
+  stored: Partial<UserPreferences> & Record<string, unknown>,
+): StoredUserPreferences {
   const preferences = { ...DEFAULT_USER_PREFERENCES, ...stored };
   // A row saved before the rename holds the old default's name; it reads as the new one.
   return {
     ...preferences,
     skin: normalizeSkinId(String(preferences.skin)),
+    workHours: workHoursOf(stored),
   };
+}
+
+/**
+ * The person's work hours and time zone, read fresh from their preferences in their own frame
+ * (spec §10). Nobody found reads as the defaults on the product's zone.
+ */
+export async function readWorkHours(
+  database: Database,
+  userId: string,
+): Promise<WorkHours> {
+  const [user] = await runAsTenant(userId, () =>
+    database
+      .select({ preferences: users.preferences })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
+  );
+  return workHoursOf((user?.preferences ?? {}) as Record<string, unknown>);
 }
 
 export type UserPreferencesStore = {
   claimStarterTour: (userId: string, channelId: string) => Promise<void>;
-  read: (userId: string) => Promise<UserPreferences>;
+  read: (userId: string) => Promise<StoredUserPreferences>;
   patch: (
     userId: string,
-    preferences: Partial<UserPreferences>,
-  ) => Promise<UserPreferences>;
+    preferences: UserPreferencesPatch,
+  ) => Promise<StoredUserPreferences>;
 };
 
 export function createUserPreferencesStore(
@@ -58,12 +172,24 @@ export function createUserPreferencesStore(
       if (!user) throw new Error("User preferences could not be found.");
       return withDefaults(user.preferences);
     },
-    async patch(userId, preferences) {
+    async patch(userId, patch) {
+      const { workHours, browserTimeZone, ...preferences } = patch;
+      /*
+       * The work hours are merged one level down, so a save of the start time keeps the zone. The
+       * browser's zone goes in under what is stored, and what is stored under what this save names:
+       * the browser's zone only fills a gap, the person's own choice replaces.
+       */
+      const hours =
+        workHours !== undefined || browserTimeZone !== undefined
+          ? sql`|| jsonb_build_object('workHours', ${
+              browserTimeZone !== undefined ? { timeZone: browserTimeZone } : {}
+            }::jsonb || coalesce(${users.preferences} -> 'workHours', '{}'::jsonb) || ${workHours ?? {}}::jsonb)`
+          : sql``;
       const [user] = await database
         .update(users)
         .set({
           // Merge in Postgres so simultaneous updates to different preferences are preserved.
-          preferences: sql`${users.preferences} || ${preferences}::jsonb`,
+          preferences: sql`${users.preferences} || ${preferences}::jsonb ${hours}`,
           updatedAt: new Date(),
         })
         .where(eq(users.id, userId))

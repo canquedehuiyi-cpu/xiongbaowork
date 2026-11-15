@@ -283,6 +283,10 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/responsibilities/trigger-routes.ts": { 'runAsTenant("platform"': 1 },
   "src/routines/runner.ts": { 'runAsTenant("platform"': 1 },
   "src/routines/store.ts": { 'runAsTenant("platform"': 6 },
+  // 开工 / 收工清点 (spec 2026-11-15-delivery-loop §10): the minute pass asks as `platform` who has
+  // followed work, people's ids only, across every tenant; each person's briefing is then claimed,
+  // built and sent in the tenant stamped on their own cards (`assertPersonTenant`), never as `platform`.
+  "src/tasks/briefing.ts": { "asPlatform(": 1 },
   // The delivery checker (spec 2026-11-15-delivery-loop §8) asks as `platform` which cards are followed
   // and open, ids and tenants only, across every tenant; each card is then checked, claimed and written
   // in the tenant stamped on its own row (`assertPersonTenant`), never as `platform`.

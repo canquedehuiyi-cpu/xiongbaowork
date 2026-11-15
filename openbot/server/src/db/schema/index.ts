@@ -39,6 +39,7 @@ export * from "./responsibilities";
 export * from "./roles";
 export * from "./scim";
 export * from "./staffing";
+export * from "./task-briefings";
 export * from "./task-events";
 export * from "./tasks";
 export * from "./team-bots";

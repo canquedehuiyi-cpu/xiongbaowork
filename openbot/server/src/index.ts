@@ -504,10 +504,15 @@ import {
 } from "./staffing/routes";
 import { createStaffingProposalStore } from "./staffing/store";
 import { createDelivery } from "./tasks/delivery";
+import {
+  createBriefingRoutes,
+  createBriefings,
+  createTaskNotices,
+} from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
 import {
-  readDefaultWorkHours,
   runDeliveryCheck,
+  savedWorkHours,
   threadRunning,
 } from "./tasks/delivery-checker";
 import {
@@ -562,7 +567,7 @@ import { createTranslationRoutes } from "./translations/routes";
 import { createTranslationStore, translatePending } from "./translations/store";
 import { createTranslator } from "./translations/translator";
 import { createUserInstructionsStore } from "./user-instructions";
-import { createUserPreferencesStore } from "./user-preferences";
+import { createUserPreferencesStore, readWorkHours } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
 import {
@@ -4561,11 +4566,25 @@ await startupLifecycle.run(async (startup) => {
     },
   });
   /*
+   * Where the delivery loop speaks to the person outside a conversation (spec §10,
+   * `tasks/briefing.ts`): the checker's reminders and the start and end briefings, to their push
+   * devices and their connected Slack, Teams and SMS, filed under the card's conversation.
+   */
+  const taskNotices = createTaskNotices({
+    database,
+    router: deliveryRouter,
+    scopeFor: deliveryScopeFor,
+    workHours: savedWorkHours(database),
+  });
+  const coworkerName = async (tenantId: string, agentId: string) =>
+    (await agentProfileStore.get(await actorFor(tenantId), agentId))?.name ??
+    null;
+  /*
    * The delivery checker (spec §8, `tasks/delivery-checker.ts`): once a minute, every followed card
    * that has not ended -- the coworker nudged, the card recorded overdue, the person told. Each card is
    * claimed under its row lock, so replicas checking at once nudge and notify once, and is checked in
-   * the tenant stamped on its row. Work hours are the defaults on the person's saved zone, and the
-   * reminders are held for the start briefing, until Task 6 brings the person's own hours and the push.
+   * the tenant stamped on its row. Work hours are the person's own (`readWorkHours`); outside them a
+   * reminder is held for the start briefing.
    */
   startup.acquireSync(
     () =>
@@ -4574,14 +4593,13 @@ await startupLifecycle.run(async (startup) => {
           await runDeliveryCheck(
             {
               database,
-              workHours: readDefaultWorkHours(database),
-              notify: async () => "deferred",
+              workHours: savedWorkHours(database),
+              notify: (tenantId, notice, now) =>
+                taskNotices.notify(tenantId, notice, now),
               nudge: (tenantId, taskId, text) =>
                 nudgeRuns.startNudgeRun(tenantId, taskId, text),
               turnRunning: threadRunning(localThreadRunner),
-              agentName: async (tenantId, agentId) =>
-                (await agentProfileStore.get(await actorFor(tenantId), agentId))
-                  ?.name ?? null,
+              agentName: coworkerName,
             },
             new Date(),
           );
@@ -4589,6 +4607,36 @@ await startupLifecycle.run(async (startup) => {
           console.error(
             JSON.stringify({
               type: "delivery-check-error",
+              error: error instanceof Error ? error.name : "UnknownError",
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 60_000),
+    (resource) => resource.stop(),
+  );
+  /*
+   * 开工 / 收工清点 (spec §10, `tasks/briefing.ts`): once a minute, everybody with followed work whose
+   * work day starts or ends now gets that briefing, once per their local day -- claimed in
+   * `task_briefings` before it is built, so a restart or a second replica sends nothing again. Each
+   * person is briefed in the tenant stamped on their own cards.
+   */
+  const briefings = createBriefings({
+    database,
+    workHours: savedWorkHours(database),
+    agentName: coworkerName,
+    send: (tenantId, kind, briefing, now) =>
+      taskNotices.sendBriefing(tenantId, kind, briefing, now),
+  });
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          await briefings.runBriefings(new Date());
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "task-briefing-error",
               error: error instanceof Error ? error.name : "UnknownError",
               timestamp: new Date().toISOString(),
             }),
@@ -5510,6 +5558,9 @@ await startupLifecycle.run(async (startup) => {
       contextWindowFor: (provider, modelName, baseUrl) =>
         modelCatalogue.contextWindowFor(provider, modelName, baseUrl),
       meteringTenants: (agentIds) => meteringTenantsFor(database, agentIds),
+      // 「上次检查」里的时间按查看者作息里的时区读。
+      timeZone: async (tenantId) =>
+        (await readWorkHours(database, tenantId)).timeZone,
       // 「压缩会话」的预估数字数，读的和压缩同一个线程存储。
       loadMessages: async (threadId) => {
         await localThreadRunner.hydrate();
@@ -5576,6 +5627,9 @@ await startupLifecycle.run(async (startup) => {
         turns: cardTurns,
         // 再催 and 换人接手: the server's own rounds on a card, as the checker's nudges run.
         rounds: nudgeRuns,
+        // A due time typed without a zone, and the times said back, on the person's own clock.
+        timeZone: async (tenantId) =>
+          (await readWorkHours(database, tenantId)).timeZone,
         acceptTaskDisabled: async (tenantId, agentId) =>
           (await approvalService.disabledTools(tenantId, agentId))(
             ACCEPT_TASK_REF,
@@ -5696,6 +5750,17 @@ await startupLifecycle.run(async (startup) => {
         dispatch: (target, action, payload, timeoutMs) =>
           deviceChannel.dispatch(target, action, payload, timeoutMs),
       },
+    ),
+  );
+
+  // 开工 / 收工清点 as it stands now (spec §10), for the workbench and the phone's briefing page.
+  app.route(
+    "/api/me/briefing",
+    createBriefingRoutes(
+      config.singleUser
+        ? createDevRequireUser(config.singleUserAccess)
+        : createRequireUser(auth as AuthService, roleRepository),
+      briefings,
     ),
   );
 

@@ -135,6 +135,17 @@ export function taskEventSentence(
       return "换人接手";
     case "edited": {
       const after = (detail.after ?? {}) as Record<string, unknown>;
+      // The new due time on the person's own clock, when it is the due time that moved.
+      const raw =
+        typeof after.dueAt === "string" ? new Date(after.dueAt) : null;
+      const due =
+        raw && !Number.isNaN(raw.getTime())
+          ? clockOf(raw, clock.now, clock.timeZone)
+          : undefined;
+      if (due)
+        return "criteria" in after
+          ? `你把预计时间改到 ${due}，也改了验收标准`
+          : `你把预计时间改到 ${due}`;
       const changed = [
         ...("dueAt" in after ? ["预计时间"] : []),
         ...("criteria" in after ? ["验收标准"] : []),

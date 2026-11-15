@@ -42,7 +42,7 @@ import { createDelivery, type Delivery } from "../src/tasks/delivery";
 import {
   type DeliveryCheckDeps,
   type DeliveryNotice,
-  readDefaultWorkHours,
+  savedWorkHours,
   runDeliveryCheck,
   threadRunning,
   type WorkHours,
@@ -727,7 +727,7 @@ test("outside work hours: not pushed, kept for the next start briefing", async (
   const tenantId = await tenant("hours", {
     workHours: { timeZone: "Asia/Shanghai" },
   });
-  const workHours = readDefaultWorkHours(database);
+  const workHours = savedWorkHours(database);
   expect(await workHours(tenantId)).toEqual({
     start: "09:00",
     end: "18:00",
@@ -1135,7 +1135,7 @@ test("with no time zone saved, the day and the work hours are the product's defa
     dueAt: due,
   });
   const { nudges, notices, check } = checker([tenantId], {
-    workHours: readDefaultWorkHours(database),
+    workHours: savedWorkHours(database),
   });
   const sent = () => notices.map((notice) => notice.at.toISOString());
 
