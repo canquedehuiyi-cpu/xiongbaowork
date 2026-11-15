@@ -1,3 +1,4 @@
+import { type BaseEvent, EventType } from "@ag-ui/client";
 import {
   and,
   asc,
@@ -6,6 +7,7 @@ import {
   getTableColumns,
   gte,
   inArray,
+  isNotNull,
   isNull,
   like,
   or,
@@ -13,6 +15,7 @@ import {
 } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import { z } from "zod";
 import type { AppVariables } from "../auth/guards";
 import type { Database } from "../db/client";
 import {
@@ -28,6 +31,11 @@ import {
   wakerGroupMembers,
 } from "../db/schema";
 import { taskArchives } from "../db/schema/task-archives";
+import { CardTurnRefused, type CardTurns } from "./card-turns";
+import { createDelivery, type Delivery, stageOf } from "./delivery";
+import { DEFAULT_TIME_ZONE, DELIVERY_EVENTS } from "./delivery-tools";
+import { clockOf, dueRefusalText, readDueTime } from "./due-time";
+import { listTaskEvents } from "./events";
 import type { TaskProjector } from "./projector";
 
 type Ctx = { Variables: AppVariables };
@@ -318,6 +326,43 @@ async function modelsForRuns(
   return latest;
 }
 
+/** A 退回's reason: said in the conversation as the person's message, so a sentence, not an essay. */
+const RETURN_REASON_CHARS = 500;
+const CRITERIA_CHARS = 1000;
+
+const returnBody = z.object({
+  reason: z.string().trim().min(1).max(RETURN_REASON_CHARS),
+});
+const extensionBody = z.object({
+  decision: z.enum(["grant", "deny"]),
+  dueAt: z.string().trim().min(1).max(100).optional(),
+});
+const editBody = z
+  .object({
+    dueAt: z.string().trim().min(1).max(100).optional(),
+    criteria: z.string().trim().min(1).max(CRITERIA_CHARS).optional(),
+  })
+  .refine((body) => body.dueAt !== undefined || body.criteria !== undefined);
+
+export { clockOf };
+
+/** What the followed-card routes need beyond the board: the card's conversation, and the person's rules. */
+export type TaskRouteOptions = {
+  /** Where a decision on a followed card is said and acted on in its thread (`tasks/card-turns.ts`). */
+  turns?: CardTurns;
+  /**
+   * Whether this coworker's `accept_task` is switched off for this person (`delivery/accept_task`, as
+   * the approval rules disable a tool): such a coworker does not work in three steps, and its card
+   * cannot be followed.
+   */
+  acceptTaskDisabled?: (tenantId: string, agentId: string) => Promise<boolean>;
+  /** The person's time zone, for a due time written without one. */
+  timeZone?: (tenantId: string) => string;
+  now?: () => Date;
+  /** The followed cards' writes; a test may stand in for them. Absent: `createDelivery(database)`. */
+  delivery?: Delivery;
+};
+
 /**
  * The board's read side: one list endpoint carrying every filter the screen exposes, and the two
  * human transitions (review, archive). There is deliberately no second read for the header counts --
@@ -329,8 +374,14 @@ export function createTaskRoutes(
   database: Database,
   requireUser: MiddlewareHandler<Ctx>,
   projector: TaskProjector,
+  options: TaskRouteOptions = {},
 ) {
   const routes = new Hono<Ctx>();
+  const delivery = options.delivery ?? createDelivery(database);
+  const now = options.now ?? (() => new Date());
+  const zoneOf = options.timeZone ?? (() => DEFAULT_TIME_ZONE);
+  const log = (type: string, detail: Record<string, unknown>) =>
+    console.error(JSON.stringify({ type, ...detail }));
 
   const filters = (context: {
     req: { query: (k: string) => string | undefined };
@@ -417,6 +468,9 @@ export function createTaskRoutes(
       }
     }
     if (search) conditions.push(like(tasks.title, `%${search}%`));
+    // 逾期 (spec 2026-11-15-delivery-loop §11): a card the checker once found overdue stays so.
+    if (context.req.query("overdue") === "1")
+      conditions.push(isNotNull(tasks.overdueAt));
     if (deviceId) conditions.push(eq(tasks.deviceId, deviceId));
     const window = PERIODS[period ?? ""];
     if (window)
@@ -424,16 +478,15 @@ export function createTaskRoutes(
     return conditions.length ? and(...conditions) : undefined;
   };
 
-  routes.get("/", requireUser, async (context) => {
-    const where = filters(context);
-    /*
-     * `archivedAt` rides beside each card (spec A5/A7): a failure somebody filed away still reads
-     * `failed`, and this stamp is what moves it from 需要关注 to 已结束 on the screen. Joined on the
-     * tenant too, so a stamp can only ever describe a card of the same workspace -- and only while
-     * it is current: the projector writes the stamp and the card's `updatedAt` at one instant, so a
-     * card that moved again since (a re-run that failed afresh) no longer counts as filed away.
-     */
-    const rows = await database
+  /*
+   * `archivedAt` rides beside each card (spec A5/A7): a failure somebody filed away still reads
+   * `failed`, and this stamp is what moves it from 需要关注 to 已结束 on the screen. Joined on the
+   * tenant too, so a stamp can only ever describe a card of the same workspace -- and only while
+   * it is current: the projector writes the stamp and the card's `updatedAt` at one instant, so a
+   * card that moved again since (a re-run that failed afresh) no longer counts as filed away.
+   */
+  const cardRows = (where: ReturnType<typeof filters>, limit: number) =>
+    database
       .select({
         ...getTableColumns(tasks),
         archivedAt: taskArchives.archivedAt,
@@ -449,17 +502,32 @@ export function createTaskRoutes(
       )
       .where(where)
       .orderBy(desc(tasks.updatedAt))
-      .limit(200);
+      .limit(limit);
+
+  /*
+   * Which model answered each task, beside the task itself.
+   *
+   * The board's whole premise is that one lane can hold a developer's task and a reviewer's task
+   * that ran on different models, so a card that cannot say which one answered is a card somebody
+   * has to open. The answer is already on record in `model_usage` — written per run by the gate,
+   * including a `bound` row for a coworker with its own model — so this reads it rather than
+   * inventing a second account of it. A task with no usage row (a routine whose run never reached
+   * a model, or one from before the gate was mounted) answers with null and shows as unset.
+   *
+   * Where each card opens is resolved for the whole page at once (see `openTargetsFor`), and a
+   * followed card says where it is in the three steps (`stage`, spec 2026-11-15-delivery-loop §11).
+   */
+  const present = async (
+    tenantId: string,
+    rows: Awaited<ReturnType<typeof cardRows>>,
+  ) => {
     const models = await modelsForRuns(
       database,
       rows.map((row) => row.runRef),
     );
-    /*
-     * Where each card opens, resolved for the whole page at once. See `openTargetsFor`.
-     */
     const open = await openTargetsFor(
       database,
-      context.var.actor.id,
+      tenantId,
       rows.map((row) => ({
         id: row.id,
         source: row.source,
@@ -468,22 +536,18 @@ export function createTaskRoutes(
         parentTaskId: row.parentTaskId,
       })),
     );
-    /*
-     * Which model answered each task, beside the task itself.
-     *
-     * The board's whole premise is that one lane can hold a developer's task and a reviewer's task
-     * that ran on different models, so a card that cannot say which one answered is a card somebody
-     * has to open. The answer is already on record in `model_usage` — written per run by the gate,
-     * including a `bound` row for a coworker with its own model — so this reads it rather than
-     * inventing a second account of it. A task with no usage row (a routine whose run never reached
-     * a model, or one from before the gate was mounted) answers with null and shows as unset.
-     */
+    return rows.map((row) => ({
+      ...row,
+      stage: stageOf(row),
+      model: row.runRef ? (models.get(row.runRef) ?? null) : null,
+      open: open.get(row.id) ?? null,
+    }));
+  };
+
+  routes.get("/", requireUser, async (context) => {
+    const rows = await cardRows(filters(context), 200);
     return context.json({
-      tasks: rows.map((row) => ({
-        ...row,
-        model: row.runRef ? (models.get(row.runRef) ?? null) : null,
-        open: open.get(row.id) ?? null,
-      })),
+      tasks: await present(context.var.actor.id, rows),
     });
   });
 
@@ -516,7 +580,14 @@ export function createTaskRoutes(
     if (!(await cardIsHere(tenantId, taskId))) {
       return context.json({ error: "No such task here." }, 404);
     }
-    const ok = await projector.reviewed({ tenantId, taskId });
+    // A followed card's 验收 is written by `tasks/delivery.ts`, with its 「验收」 line.
+    const ok =
+      (await delivery.review(
+        tenantId,
+        taskId,
+        `user:${context.var.actor.id}`,
+        "review",
+      )) ?? (await projector.reviewed({ tenantId, taskId }));
     return ok
       ? context.json({ ok: true })
       : context.json({ error: "Not awaiting review." }, 409);
@@ -528,14 +599,336 @@ export function createTaskRoutes(
     if (!(await cardIsHere(tenantId, taskId))) {
       return context.json({ error: "No such task here." }, 404);
     }
-    const ok = await projector.archived({
+    /*
+     * On a followed card, archiving is 验收 (spec 2026-11-15-delivery-loop §3): `awaiting_review` →
+     * `done` with a 「验收（从归档）」 line, through `tasks/delivery.ts`. `null` says the card is not
+     * followed, and archiving it is what it always was.
+     */
+    const reviewed = await delivery.review(
       tenantId,
       taskId,
-      archivedBy: context.var.actor.id,
-    });
+      `user:${context.var.actor.id}`,
+      "archive",
+    );
+    const ok =
+      reviewed ??
+      (await projector.archived({
+        tenantId,
+        taskId,
+        archivedBy: context.var.actor.id,
+      }));
     return ok
       ? context.json({ ok: true })
       : context.json({ error: "Cannot archive from this state." }, 409);
+  });
+
+  const notHere = (context: {
+    json: (body: unknown, status: 404) => Response;
+  }) => context.json({ error: "No such task here." }, 404);
+  const bodyOf = async (context: { req: { json: () => Promise<unknown> } }) =>
+    await context.req.json().catch(() => null);
+
+  /*
+   * One card, for a deep link and the phone's card page (spec 2026-11-15-delivery-loop §11), shaped
+   * as the list shapes it. Every route below asks `cardIsHere` first, in the caller's own frame: a card
+   * of another tenant -- a group member's card, asked for by the group's owner, included (spec §6) --
+   * is not here, and every one of them answers 404 for it.
+   */
+  routes.get("/:id", requireUser, async (context) => {
+    const tenantId = context.var.actor.id;
+    const taskId = context.req.param("id");
+    if (!(await cardIsHere(tenantId, taskId))) return notHere(context);
+    const rows = await cardRows(
+      and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)),
+      1,
+    );
+    const [task] = await present(tenantId, rows);
+    return task ? context.json({ task }) : notHere(context);
+  });
+
+  /** The card's history, oldest first (spec §7). */
+  routes.get("/:id/events", requireUser, async (context) => {
+    const tenantId = context.var.actor.id;
+    const taskId = context.req.param("id");
+    if (!(await cardIsHere(tenantId, taskId))) return notHere(context);
+    return context.json({
+      events: await listTaskEvents(database, { tenantId, taskId }),
+    });
+  });
+
+  /*
+   * 退回 (spec §6): the work goes back to the coworker with the person's reason, which is said in the
+   * card's thread as the person's own message, and the coworker's turn on it starts there and then.
+   */
+  routes.post("/:id/return", requireUser, async (context) => {
+    const tenantId = context.var.actor.id;
+    const taskId = context.req.param("id");
+    if (!(await cardIsHere(tenantId, taskId))) return notHere(context);
+    const body = returnBody.safeParse(await bodyOf(context));
+    if (!body.success)
+      return context.json(
+        { error: `退回要写原因，${RETURN_REASON_CHARS} 字以内。` },
+        400,
+      );
+    const reason = body.data.reason;
+    /*
+     * The reason is said first, and the card moves only once it is in: a 退回 the coworker never
+     * hears -- the thread busy, the coworker paused, the group gone -- would leave the card with the
+     * coworker and the reason only in the history. So a reason that cannot be said refuses the whole
+     * 退回, and the card stays where it was, with nothing written.
+     */
+    if (!options.turns)
+      return context.json({ error: "现在退回不了，稍后再试。" }, 503);
+    const turns = options.turns;
+    /*
+     * The card is taken for this 退回 first (`return_pending_at`): two at once -- a double click --
+     * would otherwise both say the reason and both start a turn. The one that does not get it is told
+     * a 退回 is under way. The claim is let go on every way out below that does not return the card.
+     */
+    const claim = await delivery.claimReturn(tenantId, taskId);
+    if (!claim.ok)
+      return context.json(
+        {
+          error:
+            claim.why === "pending"
+              ? "正在退回，稍等一下。"
+              : "这件活不在等你验收，不能退回。",
+        },
+        409,
+      );
+    const card = { threadRef: claim.threadRef, agentId: claim.agentId };
+    const release = () =>
+      delivery.releaseReturn(tenantId, taskId, claim.claimedAt).catch((error) =>
+        log("task-return-release-failed", {
+          taskId,
+          reason: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    let said: { runId: string | null; groupMessageId: string | null };
+    try {
+      said = await turns.sendAsUser(
+        tenantId,
+        { threadId: card.threadRef, agentId: card.agentId },
+        `退回：${reason}`,
+        { source: `task-return:${taskId}`, taskId },
+      );
+    } catch (error) {
+      await release();
+      if (error instanceof CardTurnRefused)
+        return context.json({ error: error.message }, 409);
+      log("task-return-turn-failed", {
+        taskId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      return context.json({ error: "现在退回不了，稍后再试。" }, 503);
+    }
+    /** The reason was said but the card did not move: let the claim go and stop the turn just started. */
+    const undo = async () => {
+      await release();
+      if (said.runId)
+        await turns.stopRound(tenantId, {
+          threadId: card.threadRef,
+          agentId: card.agentId,
+          runId: said.runId,
+        });
+    };
+    let returned: Awaited<ReturnType<typeof delivery.returnTask>>;
+    try {
+      returned = await delivery.returnTask(tenantId, taskId, {
+        actor: `user:${tenantId}`,
+        reason,
+        claimedAt: claim.claimedAt,
+      });
+    } catch (error) {
+      // The card could not be written (a database fault): undone as if the reason was never said.
+      log("task-return-write-failed", {
+        taskId,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+      await undo();
+      return context.json({ error: "现在退回不了，稍后再试。" }, 503);
+    }
+    if (!returned) {
+      // Reviewed or cancelled in the moment between (or the claim ran out and another 退回 took it):
+      // the turn just started is stopped (a group's message, already in the transcript, stays).
+      await undo();
+      return context.json({ error: "这件活不在等你验收，不能退回。" }, 409);
+    }
+    return context.json({
+      ok: true,
+      returns: returned.returns,
+      runId: said.runId,
+      groupMessageId: said.groupMessageId,
+    });
+  });
+
+  /** 取消 (spec §6): the work is over, and the round running on it is stopped. */
+  routes.post("/:id/cancel", requireUser, async (context) => {
+    const tenantId = context.var.actor.id;
+    const taskId = context.req.param("id");
+    if (!(await cardIsHere(tenantId, taskId))) return notHere(context);
+    const cancelled = await delivery.cancelTask(
+      tenantId,
+      taskId,
+      `user:${tenantId}`,
+    );
+    if (!cancelled)
+      return context.json({ error: "这件活不在跟或已经结束。" }, 409);
+    if (cancelled.threadRef)
+      await options.turns?.stopRound(tenantId, {
+        threadId: cancelled.threadRef,
+        agentId: cancelled.agentId,
+        runId: cancelled.runId,
+      });
+    return context.json({ ok: true });
+  });
+
+  /*
+   * The person's answer to the coworker's 延期申请 (spec §4): only the latest, unanswered one. The
+   * chat's 延期申请 card learns the answer from a `delivery.extension_decided` event in the thread.
+   */
+  routes.post("/:id/extension", requireUser, async (context) => {
+    const tenantId = context.var.actor.id;
+    const taskId = context.req.param("id");
+    if (!(await cardIsHere(tenantId, taskId))) return notHere(context);
+    const body = extensionBody.safeParse(await bodyOf(context));
+    if (!body.success)
+      return context.json({ error: "decision 只能是 grant 或 deny。" }, 400);
+    const decided = await delivery.decideExtension(tenantId, taskId, {
+      actor: `user:${tenantId}`,
+      decision: body.data.decision,
+      ...(body.data.dueAt ? { dueAt: body.data.dueAt } : {}),
+      now: now(),
+      timeZone: zoneOf(tenantId),
+    });
+    if (!decided.ok) {
+      if (decided.why === "not_open")
+        return context.json({ error: "这件活不在跟或已经结束。" }, 409);
+      if (decided.why === "handed_in")
+        return context.json({ error: "成果已交，退回之后才能答复延期。" }, 409);
+      if (decided.why === "no_request")
+        return context.json({ error: "没有待答复的延期申请。" }, 409);
+      return context.json({ error: `${dueRefusalText(decided.why)}。` }, 400);
+    }
+    const dueAt = decided.dueAt?.toISOString() ?? null;
+    if (decided.threadRef && decided.agentId)
+      await options.turns
+        ?.say(
+          tenantId,
+          {
+            threadId: decided.threadRef,
+            agentId: decided.agentId,
+            runId: decided.runId,
+          },
+          {
+            type: EventType.CUSTOM,
+            name: DELIVERY_EVENTS.extensionDecided,
+            value: { taskId, decision: body.data.decision, dueAt },
+          } as BaseEvent,
+          // In a group, said in the group: the transcript is where the person and the coworker read it.
+          body.data.decision === "grant" && decided.dueAt
+            ? `准许延期到 ${clockOf(decided.dueAt, now(), zoneOf(tenantId))}`
+            : "延期不批，按原时间交",
+        )
+        .catch((error) =>
+          log("task-extension-notice-failed", {
+            taskId,
+            reason: error instanceof Error ? error.message : String(error),
+          }),
+        );
+    return context.json({ ok: true, decision: body.data.decision, dueAt });
+  });
+
+  /*
+   * The person changes the due time or the criteria (spec §4, §5.4): while the coworker has the work,
+   * not once it is handed in. Only `due_at` moves; `original_due_at` keeps what the coworker said.
+   */
+  routes.patch("/:id", requireUser, async (context) => {
+    const tenantId = context.var.actor.id;
+    const taskId = context.req.param("id");
+    if (!(await cardIsHere(tenantId, taskId))) return notHere(context);
+    const body = editBody.safeParse(await bodyOf(context));
+    if (!body.success)
+      return context.json(
+        {
+          error: `要改的是 dueAt 或 criteria（${CRITERIA_CHARS} 字以内）。`,
+        },
+        400,
+      );
+    let dueAt: Date | undefined;
+    if (body.data.dueAt !== undefined) {
+      const reading = readDueTime(body.data.dueAt, now(), zoneOf(tenantId));
+      if (!reading.at)
+        return context.json({ error: `${dueRefusalText(reading.why)}。` }, 400);
+      dueAt = reading.at;
+    }
+    const edited = await delivery.editTask(tenantId, taskId, {
+      actor: `user:${tenantId}`,
+      ...(dueAt ? { dueAt } : {}),
+      ...(body.data.criteria !== undefined
+        ? { criteria: body.data.criteria }
+        : {}),
+    });
+    if (!edited.ok)
+      return context.json(
+        {
+          error:
+            edited.why === "not_followed"
+              ? "这件活不在跟。"
+              : "成果已交或这件活已结束，退回之后才能改。",
+        },
+        409,
+      );
+    return context.json({
+      ok: true,
+      dueAt: edited.dueAt?.toISOString() ?? null,
+      criteria: edited.criteria,
+    });
+  });
+
+  /*
+   * 当作一件活来跟 (spec §1): the card waits for its coworker's 接活回执, which the coworker's next
+   * turn on the thread is asked for (`threads/postgres-runner.ts`). A coworker whose `accept_task` is
+   * switched off does not work in three steps, so its card cannot be followed.
+   */
+  routes.post("/:id/track", requireUser, async (context) => {
+    const tenantId = context.var.actor.id;
+    const taskId = context.req.param("id");
+    if (!(await cardIsHere(tenantId, taskId))) return notHere(context);
+    const [card] = await database
+      .select({ agentId: tasks.executorAgentId })
+      .from(tasks)
+      .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)))
+      .limit(1);
+    if (
+      card?.agentId &&
+      (await options.acceptTaskDisabled?.(tenantId, card.agentId))
+    )
+      return context.json(
+        {
+          error:
+            "这位员工的接活工具（accept_task）已关闭，不能当作一件活来跟。",
+        },
+        409,
+      );
+    const tracked = await delivery.track(tenantId, taskId, `user:${tenantId}`);
+    if (!tracked.ok)
+      return context.json(
+        {
+          error:
+            tracked.why === "followed"
+              ? "这件活已经在跟了。"
+              : tracked.why === "no_coworker"
+                ? "这张卡没有执行的员工，不能当作一件活来跟。"
+                : "这件活已经结束了。",
+        },
+        409,
+      );
+    return context.json({
+      ok: true,
+      stage: "pending_accept",
+      threadRef: tracked.threadRef,
+    });
   });
 
   return routes;

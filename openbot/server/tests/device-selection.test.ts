@@ -137,14 +137,20 @@ describe("device mode builds a computer gateway", () => {
         return new Response("{}", { status: 500 });
       }) as unknown as typeof fetch,
     });
-    const result = await gateway.runCommand(personSeat(ACTOR.id, "bot-1"), ACTOR, {
-      command: "pwd",
-    });
+    const result = await gateway.runCommand(
+      personSeat(ACTOR.id, "bot-1"),
+      ACTOR,
+      {
+        command: "pwd",
+      },
+    );
     expect(result).toMatchObject({ exitCode: 0 });
     expect(frames.map((frame) => frame.action)).toEqual(["exec"]);
     expect(fetched).toEqual([]);
     // The lifecycle answers are truthful for a machine the deployment does not host.
-    expect(await gateway.status(personSeat(ACTOR.id, "bot-1"))).toMatchObject({ state: "absent" });
+    expect(await gateway.status(personSeat(ACTOR.id, "bot-1"))).toMatchObject({
+      state: "absent",
+    });
   });
 });
 
@@ -190,6 +196,25 @@ describe("each task picks its own machine", () => {
     expect((await selector.forTask("bot-1", "run-1")).deviceId).toBe("desktop");
   });
 
+  test("peek answers what forBot would, and picks nothing", async () => {
+    const devices = [
+      { deviceId: "laptop", online: true },
+      { deviceId: "desktop", online: true },
+    ];
+    const selector = selectorFor(devices, () => true);
+    // Nothing picked yet: peek names the machine forBot would choose and leaves no pick behind, so
+    // a later task's load-balancing is not moved by somebody reading the sidebar.
+    expect(selector.peek("bot-1", TENANT, devices)?.deviceId).toBe("laptop");
+    expect(selector.peek("bot-1", TENANT, devices)?.deviceId).toBe("laptop");
+    expect((await selector.forTask("bot-2", "run-a")).deviceId).toBe("laptop");
+    // A Bot's latest task is where peek points, as forBot does.
+    const task = await selector.forTask("bot-1", "run-b");
+    expect(task.deviceId).toBe("desktop");
+    expect(selector.peek("bot-1", TENANT, devices)?.deviceId).toBe("desktop");
+    expect((await selector.forBot("bot-1")).deviceId).toBe("desktop");
+    expect(selector.peek("bot-3", TENANT, [])).toBeNull();
+  });
+
   test("a tenant with no paired machine is refused, and a Bot with no tenant too", async () => {
     const selector = selectorFor([], () => false);
     await expect(selector.forTask("bot-1", "run-1")).rejects.toThrow(
@@ -232,9 +257,13 @@ describe("a machine that is away", () => {
       resolveDevice: (botId) => selector.forBot(botId),
     });
 
-    const result = await gateway.runCommand(personSeat(ACTOR.id, "bot-1"), ACTOR, {
-      command: "make report",
-    });
+    const result = await gateway.runCommand(
+      personSeat(ACTOR.id, "bot-1"),
+      ACTOR,
+      {
+        command: "make report",
+      },
+    );
     expect(result).toMatchObject({ queued: true });
     expect(items.get(`${TENANT}/laptop`)?.map((item) => item.action)).toEqual([
       "exec",

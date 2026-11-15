@@ -1,20 +1,14 @@
-import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { Link, useLocation } from "@tanstack/react-router";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   connectsPerPerson,
   textMatch,
 } from "@/components/resources/capability-tabs";
 import {
-  RunnableBadge,
-  runnableGrade,
-} from "@/components/resources/runnable-badge";
-import { SkillViewLink } from "@/components/skills/skill-view";
-import {
   ConnectorCard,
   type ConnectorState,
 } from "@/components/resources/connector-card";
-import { TeamCard } from "@/components/resources/team-card";
 import {
   CardGrid,
   NoMatch,
@@ -24,13 +18,19 @@ import {
   TabHeader,
   TabSearch,
 } from "@/components/resources/resource-kit";
+import {
+  RunnableBadge,
+  runnableGrade,
+} from "@/components/resources/runnable-badge";
+import { TeamCard } from "@/components/resources/team-card";
+import { SkillViewLink } from "@/components/skills/skill-view";
 import { Button } from "@/components/ui/button";
 import {
   appKeyOf,
   connectionsQueryOptions,
+  type PluginServer,
   personalConnections,
   pluginsPageQueryOptions,
-  type PluginServer,
 } from "@/lib/plugins/queries";
 import { cn } from "@/lib/utils";
 
@@ -45,12 +45,21 @@ import { cn } from "@/lib/utils";
  * 「我能用什么」要滚到底才数得出来。所以档位数先答数、点一下按档位收窄，搜索按标题/说明/理由
  * 收窄；两者都只过滤这一份已读到的数据，不另发请求。
  *
+ * 搜索框原先是「搜索技能」，只收窄三块里的一块。人打的字其实是在问「这个部署里有没有和 X 有关的
+ * 东西」，答案不该只在一个块里，所以现在三块一起收窄。一块被搜索筛空时说自己那句「没有匹配的」，
+ * 不说「还没有被给的」——那个团还在，只是不叫这个名字，说成没被给会把人支去找管理员要。
+ *
  * 连接器块在 4d 之前只看 `hasCredential`——那是「部署手里有没有这一份凭据」。以本人身份访问的
  * 应用不是这样：凭据在每个人自己身上，于是已连上的人照样被画「待绑定」、照样被叫去连接。现在
  * 这类应用多读一次 `/api/plugins/connections`，读不到就说读不到，绝不替人断言没连。
  *
  * 团队块的卡片带一条进去的入口（`/channel/$channelId`，多员工的团由那条路由转给群聊）：这一页是
  * 「我被给了什么」的清单，列表里的每一样都该能从这里走到去用它。
+ *
+ * 页首那一行原先只是把三块念一遍，念完还是得自己滚：109 条技能铺满第一屏，团队和连接器在三十张卡
+ * 之外，三块里只有一块够得到。现在每一样都是它那一块的锚点（`#mine-teams`、`#mine-connectors`），
+ * 点一下落过去、焦点也交过去——否则跳完按 Tab 还留在页首。同一行仍是一句话，读屏听的是三个链接
+ * 而不是三段被拆散的碎片。
  */
 
 /**
@@ -107,6 +116,24 @@ const REASON_FOLD = 60;
  */
 const BATCH = 30;
 
+/**
+ * 三块各自的锚点 id。section 用它接住页首那一行的跳转，`SectionHead` 用 `<id>-head` 接
+ * `aria-labelledby`——两件事，两个 id。
+ */
+const SKILLS_ID = "mine-skills";
+const TEAMS_ID = "mine-teams";
+const CONNECTORS_ID = "mine-connectors";
+
+/** 落到哪一块之后那块亮多久：够看见，不够等到让人以为它一直在那儿。 */
+const LIT_MS = 1200;
+
+/**
+ * 一块亮了就描一圈。描边是 `ring`（不占位置），所以亮与不亮之间版面不动——否则跳过去的一瞬间
+ * 整块会挪一下，人刚被送到这里就被推走。
+ */
+const LIT_RING =
+  "ring-1 ring-foreground/15 ring-offset-4 ring-offset-background";
+
 export function MineScreen() {
   const page = useQuery(pluginsPageQueryOptions());
 
@@ -129,6 +156,37 @@ export function MineScreen() {
   const [openReasons, setOpenReasons] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
+
+  /*
+   * 页首那一行点下去落在哪一块。浏览器自己会把 `#mine-teams` 滚到位，但它不会把焦点交出去：键盘
+   * 用户跳过去之后按 Tab 还是从页首那个链接接着走。所以这里补上半步——滚到位，再把焦点放到那块
+   * 上（section 带 `tabIndex={-1}` 就为这一刻）。
+   *
+   * 焦点落在一块内容上本来是看不见的（下面把默认那个大框关掉了），所以落过去之后让那块亮一下再
+   * 熄掉：人是被一句话送到这里的，得知道落的是哪一截。人才市场的「去人才市场」用同一个做法。
+   *
+   * 走两条路是因为「地址变了」不等于「人要跳」：带 `#` 进来与第一次点，地址变了；滚回页首再点同一
+   * 个入口，地址一模一样，可人是真的点了。所以点击自己也走一遍，不能只等地址。
+   */
+  const hash = useLocation({ select: (location) => location.hash });
+  const [lit, setLit] = useState<string | null>(null);
+  const litTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const jumpTo = useCallback((id: string) => {
+    const target = document.getElementById(id);
+    if (!target) return;
+    target.scrollIntoView?.({ block: "start" });
+    target.focus({ preventScroll: true });
+    setLit(id);
+    if (litTimer.current) clearTimeout(litTimer.current);
+    litTimer.current = setTimeout(() => setLit(null), LIT_MS);
+  }, []);
+  useEffect(() => {
+    const id = hash.replace(/^#/, "");
+    if (id) jumpTo(id);
+    return () => {
+      if (litTimer.current) clearTimeout(litTimer.current);
+    };
+  }, [hash, jumpTo]);
 
   const counts = { full: 0, degraded: 0, blocked: 0, unevaluated: 0 };
   for (const skill of skills) {
@@ -156,6 +214,14 @@ export function MineScreen() {
   });
 
   /*
+   * 团队跟着同一个搜索词收窄。名字和说明都算：一个团的说明往往就是「它干什么」，找人找的常常正是
+   * 这件事。
+   */
+  const visibleTeams = teams.filter((team) =>
+    textMatch(query, team.name, team.description),
+  );
+
+  /*
    * 一批一批地给：`shown` 是这一轮已经画出来的条数，换筛选或搜索词就回到第一批——否则
    * 「还有几条没显示」说的是上一组的数。
    */
@@ -166,6 +232,11 @@ export function MineScreen() {
     setGrade("all");
     setQuery("");
     setShown(BATCH);
+    /*
+     * 连接器的「只看待连接的」也一起放开。这个是这一页的取消键，不是某个块自己的：三块各有各的
+     * 收窄（档位、要不要你去连、搜索词），只清一半就是把人留在另一个空列表里。
+     */
+    setOnlyPending(false);
   };
 
   const toggleReason = (slug: string) => {
@@ -229,11 +300,21 @@ export function MineScreen() {
     state: connectorState(server),
   }));
   const pendingConnectors = connectors.filter((row) => row.state === "pending");
+
+  /*
+   * 搜索也收窄这一块。挑出来的开关按搜索后的那一份算——否则搜索只剩一个已经连好的应用时，开关还
+   * 写着「1 个待连接」，点下去一张卡都没有。
+   */
+  const searchedConnectors = connectors.filter(({ server }) =>
+    textMatch(query, server.title, server.vendor, server.summary),
+  );
+  const blockPending = searchedConnectors.filter(
+    (row) => row.state === "pending",
+  );
   const canPickPending =
-    pendingConnectors.length > 0 &&
-    pendingConnectors.length < connectors.length;
+    blockPending.length > 0 && blockPending.length < searchedConnectors.length;
   const shownConnectors =
-    onlyPending && canPickPending ? pendingConnectors : connectors;
+    onlyPending && canPickPending ? blockPending : searchedConnectors;
 
   /*
    * 三块规模的单行答案。这一页是「我被给了什么」，但一共几样得滚过三段才数得出来：技能块自己带了
@@ -241,6 +322,9 @@ export function MineScreen() {
    *
    * 只说有的那几样：「0 支团队」是三块的空态已经在回答的事，再说一遍是噪音。待连接的数只在每个连接器
    * 都答得上来时才写——有一次读不到，写「0 个待连接」就是替人断言没连，那正是 4d 修掉的那个错。
+   *
+   * 每一样都是它那一块的入口：技能一多，团队和连接器就在三十张卡下面，而这一行是整页唯一同时提到
+   * 三块的地方。没被给的那块没有入口——点下去只会落在「还没有被给的」上。
    */
   const pendingCount =
     connectors.length > 0 &&
@@ -249,15 +333,19 @@ export function MineScreen() {
     )
       ? pendingConnectors.length
       : null;
-  const overview: string[] = [];
-  if (skills.length > 0) overview.push(`${skills.length} 条技能`);
-  if (teams.length > 0) overview.push(`${teams.length} 支团队`);
+  const overview: { label: string; note?: string; target: string }[] = [];
+  if (skills.length > 0) {
+    overview.push({ label: `${skills.length} 条技能`, target: SKILLS_ID });
+  }
+  if (teams.length > 0) {
+    overview.push({ label: `${teams.length} 支团队`, target: TEAMS_ID });
+  }
   if (servers.length > 0) {
-    overview.push(
-      pendingCount
-        ? `${servers.length} 个连接器（${pendingCount} 个待连接）`
-        : `${servers.length} 个连接器`,
-    );
+    overview.push({
+      label: `${servers.length} 个连接器`,
+      note: pendingCount ? `（${pendingCount} 个待连接）` : undefined,
+      target: CONNECTORS_ID,
+    });
   }
 
   return (
@@ -265,19 +353,47 @@ export function MineScreen() {
       <TabHeader
         description="这个员工被给了什么：技能、团队、连接器。技能的档位是移植时逐条审出来的——完整可用能照正文干，部分可用缺了引用的文件，暂不可用缺的是运行环境或授权。"
         search={
-          skills.length > 0 ? (
-            <TabSearch label="搜索技能" onChange={search} value={query} />
+          skills.length + teams.length + servers.length > 0 ? (
+            <TabSearch
+              label="搜索技能、团队和连接器"
+              onChange={search}
+              value={query}
+            />
           ) : undefined
         }
       />
 
       {overview.length > 0 ? (
-        <p className="mt-[14px] text-[12px] text-muted-foreground">
-          {overview.join(" · ")}
-        </p>
+        <nav
+          aria-label="跳到这一页的各块"
+          className="mt-[14px] text-[12px] text-muted-foreground"
+        >
+          {overview.map((entry, index) => (
+            <Fragment key={entry.target}>
+              {index > 0 ? " · " : null}
+              <a
+                className="underline-offset-2 hover:text-foreground hover:underline"
+                href={`#${entry.target}`}
+                onClick={() => jumpTo(entry.target)}
+              >
+                {entry.label}
+              </a>
+              {entry.note}
+            </Fragment>
+          ))}
+        </nav>
       ) : null}
 
-      <section aria-labelledby="mine-skills-head" className="mt-[16px]">
+      <section
+        aria-labelledby="mine-skills-head"
+        className={cn(
+          "mt-[16px] scroll-mt-[12px] rounded-[13px] outline-none transition-shadow",
+          lit === SKILLS_ID && LIT_RING,
+        )}
+        data-lit={lit === SKILLS_ID ? "true" : undefined}
+        id={SKILLS_ID}
+        tabIndex={-1}
+      >
         <SectionHead
           aside={
             skills.length > 0 ? (
@@ -415,7 +531,16 @@ export function MineScreen() {
         </QueryState>
       </section>
 
-      <section aria-labelledby="mine-teams-head" className="mt-[16px]">
+      <section
+        aria-labelledby="mine-teams-head"
+        className={cn(
+          "mt-[16px] scroll-mt-[12px] rounded-[13px] outline-none transition-shadow",
+          lit === TEAMS_ID && LIT_RING,
+        )}
+        data-lit={lit === TEAMS_ID ? "true" : undefined}
+        id={TEAMS_ID}
+        tabIndex={-1}
+      >
         <SectionHead id="mine-teams-head" title="团队" />
         <QueryState label="读不到你的团队" query={page}>
           {teams.length === 0 ? (
@@ -423,9 +548,11 @@ export function MineScreen() {
               description="品牌包把专家团给你后，这里会一支支列出来；团队对话在侧栏里。"
               title="还没有被给的团队"
             />
+          ) : visibleTeams.length === 0 ? (
+            <NoMatch onClear={clearFilters} title="没有匹配的团队" />
           ) : (
             <CardGrid className="mt-[9px]" label="被给的团队">
-              {teams.map((team) => (
+              {visibleTeams.map((team) => (
                 <TeamCard key={team.id} team={team} />
               ))}
             </CardGrid>
@@ -433,7 +560,16 @@ export function MineScreen() {
         </QueryState>
       </section>
 
-      <section aria-labelledby="mine-connectors-head" className="mt-[16px]">
+      <section
+        aria-labelledby="mine-connectors-head"
+        className={cn(
+          "mt-[16px] scroll-mt-[12px] rounded-[13px] outline-none transition-shadow",
+          lit === CONNECTORS_ID && LIT_RING,
+        )}
+        data-lit={lit === CONNECTORS_ID ? "true" : undefined}
+        id={CONNECTORS_ID}
+        tabIndex={-1}
+      >
         <SectionHead
           aside={
             canPickPending ? (
@@ -454,15 +590,22 @@ export function MineScreen() {
               description="品牌包或管理员把连接器加进部署后，这里会一个个列出来。"
               title="还没有被给的连接器"
             />
+          ) : shownConnectors.length === 0 ? (
+            <NoMatch onClear={clearFilters} title="没有匹配的连接器" />
           ) : (
             <CardGrid className="mt-[9px]" label="被给的连接器">
               {shownConnectors.map(({ server, state }) => (
                 <ConnectorCard
                   action={
                     state === "pending" ? (
+                      /*
+                       * 落在**这个应用**上，不是连接器列表：从「我被给了什么」过去的人已经认准了
+                       * 这一个，把他放到一张全表前面等于让他再找一遍。
+                       */
                       <Link
                         className="text-[11px] text-muted-foreground hover:text-foreground"
-                        to="/connections"
+                        params={{ key: appKeyOf(server) }}
+                        to="/connections/$key"
                       >
                         去连接
                       </Link>

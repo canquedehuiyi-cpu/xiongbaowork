@@ -128,7 +128,10 @@ import type {
   DeploymentModel,
 } from "./models/runtime-resolver";
 import { withModelRun } from "./models/token-metering";
-import { pickedSkillGuidance } from "./plugins/picked-skill";
+import {
+  heldSkillsGuidance,
+  pickedSkillGuidance,
+} from "./plugins/picked-skill";
 import { appCallsOfRun, withAppCallsOf } from "./plugins/run-calls";
 import type { SelectableSkill, Selection } from "./plugins/selection";
 import {
@@ -152,6 +155,7 @@ import { type ProjectForPrompt, projectGuidance } from "./projects/context";
 import { withQuotaRunErrors } from "./quota/limits";
 import { createTrajectoryConnect } from "./recorder/trajectory-connect";
 import { corsOrigin } from "./request-trust";
+import { deliveryProtocolGuidance } from "./tasks/delivery-tools";
 import type { ProductTelemetry } from "./telemetry/product";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
 import {
@@ -164,7 +168,17 @@ import {
   runAsTenant,
   TenantContextError,
 } from "./tenant/context";
+import {
+  CompactionMiddleware,
+  type RunCompaction,
+  stoppingCompactionOnAbort,
+} from "./threads/compaction";
+import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
+import {
+  withoutServerOnlyEvents,
+  withRunSideEvents,
+} from "./threads/run-side-events";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 import { withBrowserWireCodeRunner } from "./wire-codes";
@@ -1054,6 +1068,14 @@ export function builtInAgentConfiguration(
    * whenever the deployment has a computer, as it always did.
    */
   run: { mode?: RunMode; usesComputer?: boolean } = {},
+  /**
+   * 员工手上握着的技能，一行一条：命令、名字、一句干什么、档位。索引，不是正文。
+   *
+   * 加在 `run` 之后，因为前面每个位置都被调用方按序占着，`runToolNames` 上面那条注释就记着错位
+   * 一次要付什么代价。正文仍旧只在消息以 `/slug` 开头时进 prompt（`picked-skill.ts`）：一次
+   * 一百多篇正文比整段对话都贵，但「有哪些」从来没说过，于是员工能做的事它自己不知道。
+   */
+  heldSkills?: string,
 ): BuiltInAgentConfiguration {
   const unattended = isUnattended(run.mode);
   if (!apiKey && !planModel && !agentModel) {
@@ -1192,6 +1214,14 @@ export function builtInAgentConfiguration(
       // M3: the fork's guidance; see the note on the plugins imports.
       ...promptSection("apps", holdings),
       /*
+       * The delivery loop's four rules, for a coworker that holds `accept_task` and only then: one whose
+       * 接活 is switched off does not work in three steps (spec 2026-11-15-delivery-loop §4).
+       */
+      ...promptSection(
+        "delivery",
+        deliveryProtocolGuidance(tools.map((tool) => tool.name)),
+      ),
+      /*
        * Only for a run that holds the computer. A third of the prompt is about the browser, and a
        * Linear-and-Notion routine that never opens one read all of it ahead of its own job.
        */
@@ -1206,6 +1236,11 @@ export function builtInAgentConfiguration(
           )
         : []),
       ...promptSection("learned_skills", learnedSkills?.catalog),
+      /*
+       * 它手上握着哪些技能，一行一条。跟着 grants 走，所以和 `learned_skills` 一样是稳定前缀；
+       * 而选中那条的正文在最后一段（`picked_skill`），随消息变。见 `heldSkillsGuidance`。
+       */
+      ...promptSection("skills_held", heldSkills),
       // A routine or a check-in, with nobody watching. Nothing for a person's own turn.
       ...promptSection("run_mode", runModeGuidance(run.mode ?? "attended")),
       /*
@@ -1430,6 +1465,16 @@ export async function buildAgents(
   loadAvatarSources?: LoadAvatarSources,
   /** The current project of each built-in Bot (story RES2). Appended last; absent tells none. */
   loadCurrentProject?: LoadCurrentProject,
+  /**
+   * 每次内置运行开始时记一行上下文分类比例（对话侧栏，`threads/context-usage.ts`）。追加在最后，原因同上；
+   * 不传则不记。
+   */
+  recordContextBreakdown?: RecordContextBreakdown,
+  /**
+   * 压缩会话（`threads/compaction.ts`）：内置员工每一轮开始前按需自动压缩，并把最近的摘要换进这一轮的历史。
+   * 追加在最后，原因同上；不传则不压缩、不替换。
+   */
+  compaction?: RunCompaction,
 ): Promise<Record<string, AbstractAgent>> {
   let vendors: readonly string[] = [];
   try {
@@ -1528,10 +1573,22 @@ export async function buildAgents(
           pickedModel,
           botNames,
           resolveAgentModel,
+          recordContextBreakdown,
         );
+        /*
+         * 压缩排在个人记忆前面：中间件按加入的顺序从外往里跑，它要看到浏览器送来的原历史，替换完再让
+         * 个人记忆往前插它那一行。外部员工和远程员工的上下文不归这里管。
+         */
+        const compacting = compaction && agent.type === "built_in";
+        if (compacting)
+          built.use(new CompactionMiddleware(agent.id, compaction));
         if (loadPersonalMemory)
           built.use(new PersonalMemoryMiddleware(agent.id, loadPersonalMemory));
-        return [agent.id, built];
+        // Stop（`abortRun`）也要停住还在准备（等总结）的那一轮。
+        return [
+          agent.id,
+          compacting ? stoppingCompactionOnAbort(built, agent.id) : built,
+        ];
       }),
     ),
   );
@@ -1808,6 +1865,8 @@ async function buildAgent(
   botNames: ReadonlyMap<string, string> = new Map(),
   /** Which model a built-in coworker was bound to. See {@link buildAgents}. */
   resolveAgentModel?: AgentModelResolver,
+  /** 运行开始时记上下文分类比例。见 {@link buildAgents}。 */
+  recordContextBreakdown?: RecordContextBreakdown,
 ): Promise<AbstractAgent> {
   if (agent.type === "unavailable") {
     return new UnavailableAgent(agent);
@@ -1901,6 +1960,11 @@ async function buildAgent(
    */
   const pickedSkillFor = (input: RunAgentInput) =>
     pickedSkillGuidance(input, skills);
+  /*
+   * 它手上握着哪些技能，作为索引交给模型。不带 input：同一批 grants 每次都是同一段字节，落在
+   * prompt 的稳定前缀里。见 `heldSkillsGuidance`。
+   */
+  const heldSkillsFor = heldSkillsGuidance(skills);
   const holdsInstructions = skills.some((skill) => skill.instructions);
   const narrowing =
     selection &&
@@ -2077,6 +2141,7 @@ async function buildAgent(
         : undefined,
       refusingProvider(model),
       holdsInstructions ? pickedSkillFor : undefined,
+      heldSkillsFor,
     );
   }
 
@@ -2258,9 +2323,17 @@ async function buildAgent(
            */
           ...(input ? { usesComputer: input.tools.some(isComputerTool) } : {}),
         },
+        heldSkillsFor,
       );
     const runToolNames = input?.tools.map((tool) => tool.name);
     const configuration = configurationFor(runToolNames);
+    /*
+     * 构建时还不知道这次运行带不带浏览器工具（它们随 RunAgentInput.tools 才来），所以备好一份含
+     * 公开网页搜索引导的配置，运行时带了就换用它。已按某次运行构建的（有 input）不需要。
+     */
+    const browserConfiguration = runToolNames
+      ? undefined
+      : configurationFor(BROWSER_SEARCH_TOOLS);
     // What really waits: nothing, when the model could not be wrapped and is sent every tool.
     const held = searchesTools(
       "model" in configuration ? configuration.model : undefined,
@@ -2277,16 +2350,42 @@ async function buildAgent(
        * `provider-refusal.ts`. And around both, the run's ids reach the metered model through this
        * scope; see `models/token-metering`.
        */
-      observe: (stream, runInput) =>
-        sayingProviderRefusals(
-          withModelRun(
-            { runId: runInput.runId, threadId: runInput.threadId },
-            observeModelConnection(stream, { refusalsSaidByCaller: true }),
+      observe: (stream, runInput) => {
+        /*
+         * 这次运行发给模型的各部分各占多少字（对话侧栏的上下文分类）。用这次实际用的那份配置；
+         * 记录器自己推迟到下一轮事件循环、从不抛错，运行不等它。
+         */
+        const ran =
+          browserConfiguration &&
+          holdsBrowserSearchTools(runInput.tools.map((tool) => tool.name))
+            ? browserConfiguration
+            : configuration;
+        recordContextBreakdown?.({
+          runId: runInput.runId,
+          threadId: runInput.threadId,
+          agentId: agent.id,
+          configuration: "factory" in ran ? {} : ran,
+          input: runInput,
+          waiting: held,
+        });
+        /*
+         * Outermost, the events the run's own tools add for the person to see (the delivery loop's
+         * cards), sent in this stream so they are stored and replayed with the run. See
+         * `threads/run-side-events.ts`.
+         */
+        return withRunSideEvents(
+          runInput.runId,
+          sayingProviderRefusals(
+            withModelRun(
+              { runId: runInput.runId, threadId: runInput.threadId },
+              observeModelConnection(stream, { refusalsSaidByCaller: true }),
+            ),
+            agent,
+            refusingProvider(runModel),
+            { untilError: true },
           ),
-          agent,
-          refusingProvider(runModel),
-          { untilError: true },
-        ),
+        );
+      },
       ...(admit ? { admitTools: admit } : {}),
       ...(held.size > 0 ? { waiting: held } : {}),
       /*
@@ -2308,17 +2407,13 @@ async function buildAgent(
             : messages,
         ),
     };
-    /*
-     * 构建时还不知道这次运行带不带浏览器工具（它们随 RunAgentInput.tools 才来），所以备好一份含
-     * 公开网页搜索引导的配置，运行时带了就换用它。已按某次运行构建的（有 input）不需要。
-     */
-    return runToolNames
-      ? new BuiltInAgentWithSaneHistory(configuration, hooks)
-      : new BuiltInAgentSearchingWithBrowser(
+    return browserConfiguration
+      ? new BuiltInAgentSearchingWithBrowser(
           configuration,
-          configurationFor(BROWSER_SEARCH_TOOLS),
+          browserConfiguration,
           hooks,
-        );
+        )
+      : new BuiltInAgentWithSaneHistory(configuration, hooks);
   };
 
   const whole = withTools(granted);
@@ -2523,14 +2618,16 @@ async function remoteTransport(
     return sayingWhenUnreachable(
       withoutGenerativeUIEnvelope(
         heldToToolLimit(
-          new HttpAgent({
-            url: agent.endpoint,
-            agentId: agent.id,
-            // The customer's own key, if their agent sits behind one. `HttpAgentConfig` is
-            // `{ url, headers?, fetch? }`, verified against @ag-ui/client 0.0.57.
-            ...(agent.headers ? { headers: agent.headers } : {}),
-            ...(dial ? { fetch: dial } : {}),
-          }),
+          withoutForgedServerEvents(
+            new HttpAgent({
+              url: agent.endpoint,
+              agentId: agent.id,
+              // The customer's own key, if their agent sits behind one. `HttpAgentConfig` is
+              // `{ url, headers?, fetch? }`, verified against @ag-ui/client 0.0.57.
+              ...(agent.headers ? { headers: agent.headers } : {}),
+              ...(dial ? { fetch: dial } : {}),
+            }),
+          ),
         ),
       ),
       agent,
@@ -2579,11 +2676,28 @@ async function remoteTransport(
   return sayingWhenUnreachable(
     withoutGenerativeUIEnvelope(
       heldToToolLimit(
-        quotingConversationSystemRows(roster[picked] as AbstractAgent),
+        withoutForgedServerEvents(
+          quotingConversationSystemRows(roster[picked] as AbstractAgent),
+        ),
       ),
     ),
     agent,
   );
+}
+
+/**
+ * An endpoint's stream without the events only this server may send (the delivery loop's
+ * `delivery.*` cards, `threads/run-side-events.ts`). The endpoint is somebody else's code; a card it
+ * sends would be drawn as a hand-in nobody checked. Dropped here, before the runner stores or relays
+ * anything, so it is neither in the conversation nor in its stored history.
+ */
+function withoutForgedServerEvents(transport: AbstractAgent): AbstractAgent {
+  const run = transport.run.bind(transport);
+  const clone = transport.clone.bind(transport);
+  return Object.assign(transport, {
+    run: (input: RunAgentInput) => withoutServerOnlyEvents(run(input)),
+    clone: () => withoutForgedServerEvents(clone() as AbstractAgent),
+  });
 }
 
 /**
@@ -2848,6 +2962,8 @@ function remoteAgentWithStandingRole(
    * M3: upstream's `apps` is still not taken; see the note on the plugins imports.
    */
   pickedSkillFor?: (input: RunAgentInput) => string | undefined,
+  /** 它手上握着哪些技能，一行一条。和 `pickedSkillFor` 分开：那份随消息变，这份随 grants 变。 */
+  heldSkills?: string,
 ) {
   const holds = (input: RunAgentInput) => !holdsTools || holdsTools(input);
   /*
@@ -3044,6 +3160,11 @@ function remoteAgentWithStandingRole(
           ...agent.standingMessage,
           content: [
             agent.standingMessage.content,
+            /*
+             * 它手上握着哪些技能。在 run_mode 之前：这一段只随 grants 变，是稳定前缀；选中那条的
+             * 正文在最后一段，随消息变。见 `heldSkillsGuidance`。
+             */
+            ...promptSection("skills_held", heldSkills),
             /*
              * A routine firing on a Bot that runs elsewhere is unattended too, and told so the way
              * a built-in Bot is. A check-in never reaches here: it runs on OpenBot's own runner.
@@ -3402,6 +3523,10 @@ export async function resolveRuntimeAgents(
   loadAvatarSources?: LoadAvatarSources,
   /** Each built-in Bot's current project (story RES2). Appended last; see {@link buildAgents}. */
   loadCurrentProject?: LoadCurrentProject,
+  /** 运行开始时记上下文分类比例。追加在最后；见 {@link buildAgents}。 */
+  recordContextBreakdown?: RecordContextBreakdown,
+  /** 压缩会话。追加在最后；见 {@link buildAgents}。 */
+  compaction?: RunCompaction,
 ): Promise<Record<string, AbstractAgent>> {
   const all = await loadAgents();
   if (all.length === 0) {
@@ -3450,6 +3575,8 @@ export async function resolveRuntimeAgents(
     resolveAgentModel,
     loadAvatarSources,
     loadCurrentProject,
+    recordContextBreakdown,
+    compaction,
   );
 }
 

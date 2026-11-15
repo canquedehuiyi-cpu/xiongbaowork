@@ -153,9 +153,55 @@ import {
 } from "./transcript-turns";
 import { VoiceChatCard } from "./voice-chat-card";
 
+/**
+ * 压缩会话的分隔线（默认皮肤的对话侧栏）：较早的消息被总结成了一段，原消息照样在这里，分隔线画在被替代的
+ * 最后一条后面。那一条按 `uptoMessageId` 找；记录里没有、或这段对话里找不到时，按 `summarizedCount` 从头数
+ * 对话消息（用户、员工、工具结果，同服务器的口径）。
+ */
+export type TranscriptCompaction = {
+  uptoMessageId: string | null;
+  summarizedCount: number | null;
+  divider: React.ReactNode;
+};
+
+const CONVERSATIONAL_ROLES = new Set(["user", "assistant", "tool"]);
+
+/** 分隔线跟在哪一行后面（行的 id）；找不到那条消息时为 null，不画。 */
+export function compactionRowId(
+  messages: ReadonlyArray<Readonly<Message>>,
+  items: readonly TranscriptItem[],
+  compaction: Pick<TranscriptCompaction, "uptoMessageId" | "summarizedCount">,
+): string | null {
+  let at = compaction.uptoMessageId
+    ? messages.findIndex((message) => message.id === compaction.uptoMessageId)
+    : -1;
+  const count = compaction.summarizedCount;
+  if (at < 0 && count !== null && count > 0) {
+    let seen = 0;
+    at = messages.findIndex((message) => {
+      if (!CONVERSATIONAL_ROLES.has(message.role)) return false;
+      seen += 1;
+      return seen === count;
+    });
+  }
+  if (at < 0) return null;
+  // 那条及之前的消息画成的行；工具结果不单成一行，跟着它的调用。
+  const before = new Set(
+    toVisibleChatItems(messages.slice(0, at + 1)).map((item) => item.id),
+  );
+  const row = items.findLast((item) =>
+    item.kind === "tools"
+      ? item.steps.some((step) => before.has(step.id))
+      : before.has(item.id),
+  );
+  return row?.id ?? null;
+}
+
 type ChatTranscriptProps = {
   /** Server-owned thread identity, used only to correlate rendered result messages. */
   threadId?: string;
+  /** 压缩会话的分隔线；见 {@link TranscriptCompaction}。 */
+  compaction?: TranscriptCompaction | null;
   busy?: boolean;
   /**
    * The `/` commands, as JSON from each command to its name: tells a skill chip from a leading
@@ -2167,6 +2213,7 @@ function TranscriptRenderersWatch({
 
 export function ChatTranscript({
   threadId,
+  compaction = null,
   busy = false,
   commandLabels = "",
   empty,
@@ -2298,6 +2345,15 @@ export function ChatTranscript({
 
   /* One rule for both kinds of row — see `anchorRowIds`, which is where it is written down. */
   const anchorRows = anchorRowIds(items);
+  /*
+   * 压缩会话的分隔线放进那一行自己的格子里，排在行的内容后面，不另占一格：滚动容器按格子的位置认新来的行
+   * （见下面写在 `items.map` 前面的说明），多出一格会让新的一轮对不齐。
+   */
+  const dividerRow = compaction
+    ? compactionRowId(messages, items, compaction)
+    : null;
+  const after = (id: string) =>
+    id === dividerRow ? (compaction?.divider ?? null) : null;
 
   /*
    * Decided once, from the rows present when the scroller mounts, and forgotten while restoring so
@@ -2563,6 +2619,7 @@ export function ChatTranscript({
           spokeAfter={lastBotWords > index}
           steps={item.kind === "tools" ? item.steps : [item]}
         />
+        {after(item.id)}
       </MessageScrollerItem>
     ) : item.kind === "activity" ? (
       <MessageScrollerItem
@@ -2571,6 +2628,7 @@ export function ChatTranscript({
         {...openingProps(item.id)}
       >
         <TranscriptActivity message={item.message} />
+        {after(item.id)}
       </MessageScrollerItem>
     ) : item.kind === "text" ? (
       <MessageScrollerItem
@@ -2590,6 +2648,7 @@ export function ChatTranscript({
           }
           text={item.text}
         />
+        {after(item.id)}
       </MessageScrollerItem>
     ) : item.kind === "attachments" ? (
       <MessageScrollerItem
@@ -2599,6 +2658,7 @@ export function ChatTranscript({
         {...openingProps(item.id)}
       >
         <TranscriptAttachments attachments={item.attachments} />
+        {after(item.id)}
       </MessageScrollerItem>
     ) : (
       // Every member of the union is handled above. `assertNever` types `item` as

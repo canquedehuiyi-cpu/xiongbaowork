@@ -1,6 +1,13 @@
 import { IconX } from "@tabler/icons-react";
 import { motion, useReducedMotion } from "motion/react";
-import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { EASE_OUT } from "@/lib/motion";
@@ -18,11 +25,26 @@ import { EASE_OUT } from "@/lib/motion";
  * card) is drawn at the top of the sheet as well. A Bot's screen opens itself while the Bot works,
  * and on a narrow window that sheet used to hide the approval the Bot then stopped for, until the
  * person thought to close it. Beside the main pane it is already in view, and is not repeated.
+ *
+ * `aside` is a column that stays beside the main pane while no detail is open there (the default
+ * skin's conversation sidebar). It sizes itself from the width this pane measures, read with
+ * {@link useDetailPanelWidth}, and draws nothing when there is no room for it: a phone gets that
+ * content another way. Anything else inside the pane (a header button that works the aside) reads the
+ * same width, so it can step aside with it.
  */
 
 const ANIMATION_DURATION_SECONDS = 0.3;
 const DEFAULT_DETAIL_WIDTH = 400;
 const MIN_MAIN_WIDTH = 400;
+/**
+ * The width of the pane's row (main pane and aside together), as its ResizeObserver last measured it;
+ * null outside a `DetailPanel`, where nothing limits the width.
+ */
+const DetailPanelWidth = createContext<number | null>(null);
+
+export function useDetailPanelWidth(): number | null {
+  return useContext(DetailPanelWidth);
+}
 
 /**
  * The content overlaps the tail of the pane rather than following it.
@@ -40,6 +62,7 @@ export function DetailPanel({
   detail,
   detailWidth = DEFAULT_DETAIL_WIDTH,
   waiting,
+  aside,
   children,
 }: {
   open: boolean;
@@ -51,115 +74,125 @@ export function DetailPanel({
   detailWidth?: number;
   /** What in the main pane waits on the person: drawn atop the sheet, which would cover it. */
   waiting?: ReactNode;
+  /** A column beside the main pane while no detail is open beside it. */
+  aside?: ReactNode;
   children: ReactNode;
 }) {
   // Reduced motion keeps the fade, which explains the change, and drops the movement.
   const shouldReduceMotion = useReducedMotion();
   const container = useRef<HTMLDivElement>(null);
-  const [overlay, setOverlay] = useState(true);
+  const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
     const element = container.current;
     if (!element) return;
-    const measure = (width: number) =>
-      setOverlay(width < detailWidth + MIN_MAIN_WIDTH);
-    measure(element.getBoundingClientRect().width);
+    setWidth(element.getBoundingClientRect().width);
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) measure(entry.contentRect.width);
+      if (entry) setWidth(entry.contentRect.width);
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [detailWidth]);
+  }, []);
+  const overlay = width < detailWidth + MIN_MAIN_WIDTH;
+  // The aside gives way to a detail open beside the main pane; how much of it fits is its own call.
+  const showAside =
+    aside !== undefined && aside !== null && !(open && !overlay);
 
   return (
-    <div ref={container} className="flex h-full min-h-0">
-      <div className="flex flex-1 min-w-0 flex-col">{children}</div>
-      {overlay ? (
-        <Sheet
-          open={open}
-          onOpenChange={(next) => {
-            if (!next) onClose();
-          }}
-        >
-          <SheetContent
-            className="gap-0"
-            style={{ width: `min(${detailWidth}px, 100vw)`, maxWidth: "100vw" }}
+    <DetailPanelWidth.Provider value={width}>
+      <div ref={container} className="flex h-full min-h-0">
+        <div className="flex flex-1 min-w-0 flex-col">{children}</div>
+        {showAside ? aside : null}
+        {overlay ? (
+          <Sheet
+            open={open}
+            onOpenChange={(next) => {
+              if (!next) onClose();
+            }}
           >
-            <SheetTitle className="h-12 shrink-0 px-4 pr-12 flex items-center">
-              {title ?? "详情"}
-            </SheetTitle>
-            <div className="flex-1 min-h-0 overflow-y-auto">
-              {open && waiting ? (
-                <div className="px-4 pt-4 empty:hidden">{waiting}</div>
-              ) : null}
-              {open ? detail : null}
-            </div>
-          </SheetContent>
-        </Sheet>
-      ) : (
-        <motion.div
-          animate={{ width: open ? detailWidth : 0 }}
-          className="shrink-0 overflow-hidden"
-          // No entry animation on first paint: URL-opened panels should appear as initial state.
-          initial={false}
-          transition={{
-            duration: shouldReduceMotion ? 0 : ANIMATION_DURATION_SECONDS,
-            ease: EASE_OUT,
-          }}
-        >
-          <div
-            className="flex h-full flex-col bg-sidebar border-l border-border"
-            data-slot="detail-pane"
-            style={{ width: detailWidth }}
-          >
-            {/* Rendered for the whole animation, so the way out is available immediately. */}
-            <div
-              className="h-12 shrink-0 sticky top-0 flex flex-row items-center justify-between px-2 gap-2"
-              data-slot="detail-pane-header"
+            <SheetContent
+              className="gap-0"
+              style={{
+                width: `min(${detailWidth}px, 100vw)`,
+                maxWidth: "100vw",
+              }}
             >
+              <SheetTitle className="h-12 shrink-0 px-4 pr-12 flex items-center">
+                {title ?? "详情"}
+              </SheetTitle>
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                {open && waiting ? (
+                  <div className="px-4 pt-4 empty:hidden">{waiting}</div>
+                ) : null}
+                {open ? detail : null}
+              </div>
+            </SheetContent>
+          </Sheet>
+        ) : (
+          <motion.div
+            animate={{ width: open ? detailWidth : 0 }}
+            className="shrink-0 overflow-hidden"
+            // No entry animation on first paint: URL-opened panels should appear as initial state.
+            initial={false}
+            transition={{
+              duration: shouldReduceMotion ? 0 : ANIMATION_DURATION_SECONDS,
+              ease: EASE_OUT,
+            }}
+          >
+            <div
+              className="flex h-full flex-col bg-sidebar border-l border-border"
+              data-slot="detail-pane"
+              style={{ width: detailWidth }}
+            >
+              {/* Rendered for the whole animation, so the way out is available immediately. */}
               <div
-                className="flex min-w-0 w-full items-center gap-1.5"
-                data-slot="detail-pane-title"
+                className="h-12 shrink-0 sticky top-0 flex flex-row items-center justify-between px-2 gap-2"
+                data-slot="detail-pane-header"
               >
-                {title}
-              </div>
-              <div className="flex flex-row gap-1.5">
-                <Button
-                  aria-label="关闭详情"
-                  onClick={onClose}
-                  variant="ghost"
-                  size="icon"
+                <div
+                  className="flex min-w-0 w-full items-center gap-1.5"
+                  data-slot="detail-pane-title"
                 >
-                  <IconX className="size-4.5" />
-                </Button>
+                  {title}
+                </div>
+                <div className="flex flex-row gap-1.5">
+                  <Button
+                    aria-label="关闭详情"
+                    onClick={onClose}
+                    variant="ghost"
+                    size="icon"
+                  >
+                    <IconX className="size-4.5" />
+                  </Button>
+                </div>
               </div>
+              {/*
+               * Unmount while closed so dismissed form state and detail queries do not remain active.
+               */}
+              {open ? (
+                <motion.div
+                  animate={{ opacity: 1, transform: "translateY(0px)" }}
+                  className="flex-1 min-h-0 overflow-y-auto"
+                  initial={{
+                    opacity: 0,
+                    transform: shouldReduceMotion
+                      ? "none"
+                      : CONTENT_ENTRANCE_OFFSET,
+                  }}
+                  transition={{
+                    delay: shouldReduceMotion
+                      ? 0
+                      : CONTENT_ENTRANCE_DELAY_SECONDS,
+                    duration: CONTENT_ENTRANCE_SECONDS,
+                    ease: EASE_OUT,
+                  }}
+                >
+                  {detail}
+                </motion.div>
+              ) : null}
             </div>
-            {/*
-             * Unmount while closed so dismissed form state and detail queries do not remain active.
-             */}
-            {open ? (
-              <motion.div
-                animate={{ opacity: 1, transform: "translateY(0px)" }}
-                className="flex-1 min-h-0 overflow-y-auto"
-                initial={{
-                  opacity: 0,
-                  transform: shouldReduceMotion
-                    ? "none"
-                    : CONTENT_ENTRANCE_OFFSET,
-                }}
-                transition={{
-                  delay: shouldReduceMotion
-                    ? 0
-                    : CONTENT_ENTRANCE_DELAY_SECONDS,
-                  duration: CONTENT_ENTRANCE_SECONDS,
-                  ease: EASE_OUT,
-                }}
-              >
-                {detail}
-              </motion.div>
-            ) : null}
-          </div>
-        </motion.div>
-      )}
-    </div>
+          </motion.div>
+        )}
+      </div>
+    </DetailPanelWidth.Provider>
   );
 }

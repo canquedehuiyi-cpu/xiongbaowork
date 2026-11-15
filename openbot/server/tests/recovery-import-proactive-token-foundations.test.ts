@@ -1776,8 +1776,25 @@ function checkSQL(source: string): void {
 }
 
 function requireTable(tables:Record<string,Table>,name:string):Table {const t=tables["public."+name];assert.ok(t);return t;}
+/**
+ * What these tables gained after the 0107 snapshot (migration 0216, the conversation sidebar). The
+ * snapshot is a frozen record, so later additions are removed from the live Drizzle table before it
+ * is compared, rather than rewriting the snapshot. Only these named objects are removed; everything
+ * else is still compared in full.
+ */
+const ADDED_AFTER_SNAPSHOT: Record<string,{columns:string[];indexes:string[]}> = {
+  model_token_calls: { columns: [], indexes: ["model_token_calls_thread_agent_idx"] },
+};
+function withoutLaterAdditions(table: Table): Table {
+  const later = ADDED_AFTER_SNAPSHOT[table.name];
+  if (!later) return table;
+  const copy = structuredClone(table);
+  for (const name of later.columns) delete copy.columns[name];
+  for (const name of later.indexes) delete copy.indexes[name];
+  return copy;
+}
 function actualMetadata():Record<string,Table> {
-  return Object.fromEntries([flowImportProposals,proactiveRuns,modelTokenCalls].map(model=>{const t=metadata(model);return ["public."+t.name,t];}));
+  return Object.fromEntries([flowImportProposals,proactiveRuns,modelTokenCalls].map(model=>{const t=withoutLaterAdditions(metadata(model));return ["public."+t.name,t];}));
 }
 function checkSnapshot(value:Snapshot):void {
   assert.equal(previousRaw.length,604775);

@@ -19,10 +19,11 @@ import {
   type ToolSelection,
 } from "../src/copilot";
 import {
+  heldSkillsGuidance,
   leadingSkillCommand,
   PICKED_SKILL_PROP,
-  pickedSkillGuidance,
   type PickableSkill,
+  pickedSkillGuidance,
 } from "../src/plugins/picked-skill";
 
 /*
@@ -120,6 +121,18 @@ describe("leadingSkillCommand", () => {
     ["/pirate-haiku, about coffee", undefined],
     ["https://example.com/pirate-haiku", undefined],
     ["", undefined],
+    /*
+     * 移植进来的技能全部是 `包--技能` 这种双连字符 slug（市场里 `<包名>--<技能名>` 拼出来）。
+     * 它们才是这一页要验的那批，选不中就是整条「按技能正文办事」的路对它们全关。
+     */
+    [
+      "/humanize-ppt-team--frontend-slides 做一份五页的 PPT",
+      "humanize-ppt-team--frontend-slides",
+    ],
+    ["/workbuddy-market-export--inner 导出", "workbuddy-market-export--inner"],
+    ["  /a--b--c\n继续", "a--b--c"],
+    // 连字符不能吃掉结尾：`/a--` 是一个没写完的名字，不是一条命令。
+    ["/a-- 继续", undefined],
   ])("%j picks %j", (text, slug) => {
     expect(leadingSkillCommand(text)).toBe(slug);
   });
@@ -270,6 +283,23 @@ describe("a skill picked for a Bot on OpenBot's own harness", () => {
     expect(sentWire).toContain("ledger__lookup");
     expect(sentWire).not.toContain("wipe_everything");
   });
+  test("没选技能时，模型也看得到它手上有哪些技能——正文却没给它", async () => {
+    const wire = await sent([said("列出手上的技能")]);
+    expect(wire).toContain("<skills_held>");
+    expect(wire).toContain("/pirate-haiku");
+    expect(wire).toContain("Pirate haiku");
+    // 索引不是正文：没选它，正文就不该在。
+    expect(wire).not.toContain(MARKER);
+  });
+
+  test("选了技能时，清单与正文同时在：清单在前，正文在它自己的段里", async () => {
+    const wire = await sent([
+      said("/pirate-haiku write about my morning coffee"),
+    ]);
+    expect(wire).toContain("<skills_held>");
+    expect(wire).toContain(MARKER);
+    expect(wire.indexOf("<skills_held>")).toBeLessThan(wire.indexOf(MARKER));
+  });
 });
 
 describe("a skill picked for a Bot on a harness this deployment runs", () => {
@@ -346,6 +376,13 @@ describe("a skill picked for a Bot on a harness this deployment runs", () => {
     );
     expect(standingRole(seen)).toContain(MARKER);
   });
+
+  test("没选技能时，它手上的技能清单也在标准角色里", async () => {
+    const role = standingRole(await requests([said("列出手上的技能")]));
+    expect(role).toContain("/pirate-haiku");
+    expect(role).toContain("Pirate haiku");
+    expect(role).not.toContain(MARKER);
+  });
 });
 
 /**
@@ -417,6 +454,84 @@ describe("一条被打了档位的技能，交给模型时也带着档位", () =
     const guidance = pickedSkillGuidance(picked("deploy"), [held({})]);
     expect(guidance).not.toContain("cannot run");
     expect(guidance).not.toContain("partly");
+  });
+});
+
+/**
+ * 「我手上有哪些技能」——这件事从来没告诉过员工。
+ *
+ * 实测（本地 deepseek 真跑）：不点 `/` 菜单、直接问「列出手上的技能」，员工答「我没有读技能目录的
+ * 工具」，而它库里握着 109 条（62 full / 36 blocked / 11 degraded）。技能正文只在消息以 `/slug`
+ * 开头时才进 prompt，那是省 token 的边界，不动；可「有哪些」一次都没说过。于是它能做的事它自己
+ * 不知道，人也问不出该用哪条。
+ *
+ * 补的是索引：slug、标题、一句摘要、档位。正文仍旧只在选中时给——索引进 prompt 不等于把 109 篇
+ * 正文全塞进去。
+ */
+describe("员工知道自己手上握着哪些技能", () => {
+  const skill = (over: Partial<PickableSkill>): PickableSkill => ({
+    slug: "deploy",
+    title: "Deploy the site",
+    summary: "Ships the site and returns the URL",
+    instructions: "SECRET-BODY-777 run `bash scripts/deploy.sh`",
+    ...over,
+  });
+
+  test("清单里有命令、标题和摘要，正文一个字都不进去", () => {
+    const text = heldSkillsGuidance([skill({})]) ?? "";
+    expect(text).toContain("/deploy");
+    expect(text).toContain("Deploy the site");
+    expect(text).toContain("Ships the site and returns the URL");
+    expect(text).not.toContain("SECRET-BODY-777");
+  });
+
+  test("档位短的写在那一行上，长的原因留给选中的那条", () => {
+    const text =
+      heldSkillsGuidance([
+        skill({
+          slug: "a-blocked",
+          runnable: "blocked",
+          blockedReasonRef: "LONG-REASON-555 正文给出可执行的 shell 命令。",
+        }),
+        skill({ slug: "b-degraded", runnable: "degraded" }),
+        skill({ slug: "c-full", runnable: "full" }),
+      ]) ?? "";
+    const line = (slug: string) =>
+      text.split("\n").find((one) => one.includes(`/${slug}`)) ?? "";
+    expect(line("a-blocked")).toContain("cannot run it as written");
+    expect(line("b-degraded")).toContain("only partly run it");
+    expect(line("c-full")).not.toContain("cannot run");
+    expect(line("c-full")).not.toContain("partly");
+    expect(text).not.toContain("LONG-REASON-555");
+  });
+
+  test("按 slug 排序，同一批技能每次给出逐字节相同的一段（前缀能被缓存）", () => {
+    const one = skill({ slug: "zulu" });
+    const two = skill({ slug: "alpha" });
+    const three = skill({ slug: "mike", runnable: "blocked" });
+    const text = heldSkillsGuidance([one, two, three]) ?? "";
+    expect(text).toBe(heldSkillsGuidance([three, one, two]) ?? "");
+    expect(text.indexOf("/alpha")).toBeLessThan(text.indexOf("/mike"));
+    expect(text.indexOf("/mike")).toBeLessThan(text.indexOf("/zulu"));
+  });
+
+  test("一条都没有时不给空段", () => {
+    expect(heldSkillsGuidance([])).toBeUndefined();
+  });
+
+  test("告诉它：要用哪一条，得让人把消息以那条命令开头", () => {
+    const text = heldSkillsGuidance([skill({})]) ?? "";
+    expect(text).toContain("starts with its command");
+  });
+
+  /*
+   * 只写在什么条件下给正文，不写正文去哪儿了，模型就会在条件已经满足时仍旧答「我读不到正文」。
+   * 这条是本地 deepseek 真跑出来的：它把被选那条的正文读进了上下文，回人一句「我手里只有名字和
+   * 用途」。所以那一句必须同时指出 `picked_skill` 段。
+   */
+  test("并且说明条件满足后正文在哪一段", () => {
+    const text = heldSkillsGuidance([skill({})]) ?? "";
+    expect(text).toContain("picked_skill");
   });
 });
 

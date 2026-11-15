@@ -537,6 +537,10 @@ const OWN_TOOLS: Record<string, OwnTool> = {
   [SUBAGENT_TOOL]: { running: "正在处理子任务", done: "处理了子任务" },
   // A voice conversation handing what was said to the Bot behind it.
   ask_agent: { running: "正在问员工", done: "问了员工" },
+  // Carrying a tracked piece of work: taking it on, handing it in, asking for more time.
+  accept_task: { running: "正在接下这件活", done: "接下了这件活" },
+  deliver_task: { running: "正在交付", done: "交付了成果" },
+  request_extension: { running: "正在申请延期", done: "申请了延期" },
 
   // Skills: the ones it learned, and the ones a person writes with it.
   copilotkit_load_skill: { running: "正在使用技能", done: "使用了技能" },

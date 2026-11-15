@@ -106,6 +106,7 @@ export const modelTokenCalls = pgTable(
     observedAt: timestamp("observed_at", { withTimezone: true }),
   },
   (table) => [
+    index("model_token_calls_thread_agent_idx").on(table.tenantId, table.threadId, table.agentId, table.startedAt),
     index("model_token_calls_time_idx").on(table.tenantId.asc().nullsLast(), table.startedAt.desc().nullsLast(), table.callId.desc().nullsLast()),
     primaryKey({ name: "model_token_calls_tenant_id_call_id_pk", columns: [table.tenantId, table.callId] }),
     check("model_token_calls_owner", sql`"model_token_calls"."tenant_id" NOT IN ('system', 'platform')`),

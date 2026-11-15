@@ -37,6 +37,16 @@ export type DeviceSelector = {
   forTask: (botId: string, taskRef: string) => Promise<DispatchTarget>;
   /** The machine for an action of this Bot: the one its latest task picked, else its own default. */
   forBot: (botId: string) => Promise<DispatchTarget>;
+  /**
+   * The machine {@link forBot} would answer now, for a Bot owned by `tenantId` with these registered
+   * machines, WITHOUT picking: nothing is remembered and no machine's load changes. For readers (the
+   * conversation sidebar) that only show where a Bot works. Null when the tenant has no machine.
+   */
+  peek: (
+    botId: string,
+    tenantId: string,
+    devices: DeviceCandidate[],
+  ) => DispatchTarget | null;
 };
 
 const DEFAULT_PIN_TTL_MS = 12 * 60 * 60 * 1000;
@@ -138,6 +148,21 @@ export function createDeviceSelector(
       }
       latestTask.delete(botId);
       return (await pick(botId, `bot:${botId}`)).target;
+    },
+    peek(botId, tenantId, devices) {
+      const registered = (pin: Pin | undefined): pin is Pin =>
+        pin !== undefined &&
+        fresh(pin) &&
+        pin.tenantId === tenantId &&
+        devices.some((device) => device.deviceId === pin.deviceId);
+      const key = latestTask.get(botId);
+      const fromTask = key ? pins.get(key) : undefined;
+      if (registered(fromTask))
+        return { tenantId, deviceId: fromTask.deviceId };
+      const own = pins.get(`${tenantId}/bot:${botId}`);
+      if (registered(own)) return { tenantId, deviceId: own.deviceId };
+      const deviceId = choose(tenantId, devices);
+      return deviceId ? { tenantId, deviceId } : null;
     },
   };
 }

@@ -65,7 +65,7 @@ test("a full page says 200+ instead of claiming a total it did not read", () => 
   expect(boardStats(full)[0]?.value).toBe("200+");
 });
 
-test("the ended filter keeps exactly the three statuses it counts", () => {
+test("the ended filter keeps exactly the four statuses it counts", () => {
   expect(
     shownForStatus(board, "ended")
       .map((task) => task.status)
@@ -74,6 +74,7 @@ test("the ended filter keeps exactly the three statuses it counts", () => {
   // A copy: sorting the exported constant in place would reorder it for every later reader.
   expect([...ENDED_STATUSES].sort()).toEqual([
     "awaiting_review",
+    "cancelled",
     "done",
     "failed",
   ]);
@@ -170,4 +171,14 @@ test("the strip says 暂无任务 over an empty window and the ended share other
   expect(bar.querySelector("[role=img]")?.getAttribute("aria-label")).toBe(
     "任务状态分布：进行中 2，需要操作 1，已结束 5",
   );
+});
+
+test("a cancelled card counts as ended and is not counted as running", () => {
+  const cards = [{ status: "cancelled" }, { status: "running" }];
+  const byKey = Object.fromEntries(
+    boardStats(cards).map((stat) => [stat.key, stat.value]),
+  );
+  expect(byKey.ended).toBe("1");
+  expect(byKey.running).toBe("1");
+  expect(shownForStatus(cards, "ended")).toEqual([{ status: "cancelled" }]);
 });

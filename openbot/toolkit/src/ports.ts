@@ -106,6 +106,7 @@ export type TurnAnswered = (input: {
  * board card belongs to the caller (`cardOwnedByCaller`) or to the runner.
  */
 export type TurnScope = <T>(
-  input: { cardOwnedByCaller?: boolean },
+  /** `runRef`: the key the caller's own card is filed under, when it is not the run id. */
+  input: { cardOwnedByCaller?: boolean; runRef?: string },
   run: () => Promise<T>,
 ) => Promise<T>;

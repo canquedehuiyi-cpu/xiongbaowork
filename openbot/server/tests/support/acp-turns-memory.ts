@@ -109,7 +109,7 @@ export function createMemoryAcpTurnStore(): AcpTurnStore & {
     },
     async claim(tenantId, turnId) {
       const row = byTurn(tenantId, turnId);
-      if (!row || row.status !== "queued") return null;
+      if (row?.status !== "queued") return null;
       row.status = "sent";
       return copy(row);
     },

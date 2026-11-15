@@ -179,6 +179,13 @@ export async function recoverInterruptedFlowRuns(
          * In the same transaction as the run, so a run reported failed never leaves its cards saying
          * "running": the reaper does not look at a failed run again, so a card left open here would be
          * open for good. Only cards still open move; one a person already settled keeps its state.
+         *
+         * A followed card (`tracked`, the delivery loop) is not one of them, as in `pipeline/reap.ts`
+         * and the board's own `finished`: a step that stopped is a round of that work stopping, not the
+         * work failing, and only the person ends a followed card (spec 2026-11-15-delivery-loop §3). It
+         * stays with its coworker where it was: the person can still 取消 it, or 验收 what is handed in;
+         * the next round hung on it closes the dead one in its history (`attachRun`, "superseded"); and
+         * the delivery checker chases it when it falls due.
          */
         if (openCards.length > 0)
           await tx
@@ -193,6 +200,7 @@ export async function recoverInterruptedFlowRuns(
                 eq(tasks.tenantId, owner),
                 or(...openCards),
                 sql`${tasks.status} in ('running', 'needs_action')`,
+                eq(tasks.tracked, false),
               ),
             );
         return true;
@@ -356,6 +364,8 @@ async function settleStrandedRunRequests(
                 eq(tasks.tenantId, owner),
                 eq(tasks.runRef, runId),
                 sql`${tasks.status} in ('running', 'needs_action')`,
+                // A followed card only the person ends, as above.
+                eq(tasks.tracked, false),
               ),
             );
         return true;

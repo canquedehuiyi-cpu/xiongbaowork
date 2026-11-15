@@ -644,12 +644,164 @@ export type Capability = {
   tools?: boolean;
   text?: boolean;
   released?: number;
+  /** models.dev's `limit.context`: the context window in tokens. */
+  contextWindow?: number;
 };
 
 /** models.dev's catalogue, by `vendor/id`, for the four vendors a deployment can name directly. */
 export type Capabilities = Map<string, Capability>;
 
 const CAPABILITY_VENDORS = ["openai", "anthropic", "google", "xai"];
+
+/**
+ * Context windows (tokens) by `vendor/modelId`, for EVERY vendor in models.dev's `api.json`, not
+ * only the four above: the context bar and auto-compaction need a limit for DeepSeek, Qwen, Kimi
+ * and GLM too. Kept apart from {@link Capabilities} so the effort/price selection that reads the
+ * four vendors, and its emptiness check, are untouched.
+ */
+export type ContextWindows = Map<string, number>;
+
+/** Reads `limit.context` of every model of every vendor. Anything malformed is skipped. */
+export function parseContextWindows(body: unknown): ContextWindows {
+  const found: ContextWindows = new Map();
+  if (!body || typeof body !== "object") return found;
+  for (const [vendor, entry] of Object.entries(
+    body as Record<string, unknown>,
+  )) {
+    const models = (entry as { models?: unknown } | null)?.models;
+    if (!models || typeof models !== "object") continue;
+    for (const [id, raw] of Object.entries(models as Record<string, unknown>)) {
+      const context = (raw as { limit?: { context?: unknown } } | null)?.limit
+        ?.context;
+      if (
+        typeof context === "number" &&
+        Number.isSafeInteger(context) &&
+        context > 0
+      )
+        found.set(`${vendor}/${id}`, context);
+    }
+  }
+  return found;
+}
+
+/**
+ * A small table for the most common China-market models, used when the catalogue has no answer
+ * (models.dev unreachable or blocked, which is normal for a deployment in China).
+ *
+ * Values were checked against the vendors' official model pages on 2026-11-15: DeepSeek "Models &
+ * Pricing" (api-docs.deepseek.com) and Alibaba Model Studio's text-generation model list
+ * (help.aliyun.com). The catalogue (models.dev), when reachable, takes precedence over this table,
+ * and an admin can override the value per model in the model library. `deepseek-chat` and
+ * `deepseek-reasoner` are deprecated by DeepSeek (2026-07-24) but kept for old configs.
+ * Keys are lower-case bare model names, matched exactly.
+ */
+export const KNOWN_CONTEXT_WINDOWS: Readonly<Record<string, number>> = {
+  "deepseek-chat": 128_000,
+  "deepseek-reasoner": 128_000,
+  "deepseek-v4-flash": 1_000_000,
+  "deepseek-v4-pro": 1_000_000,
+  "qwen-max": 131_072,
+  "qwen-plus": 1_000_000,
+  "qwen-turbo": 1_000_000,
+  "moonshot-v1-8k": 8_192,
+  "moonshot-v1-32k": 32_768,
+  "moonshot-v1-128k": 131_072,
+  "kimi-k2-0711-preview": 131_072,
+  "kimi-k2-0905-preview": 262_144,
+  "glm-4": 128_000,
+  "glm-4-plus": 128_000,
+  "glm-4-air": 128_000,
+  "glm-4-flash": 128_000,
+  "glm-4.5": 131_072,
+  "glm-4.5-air": 131_072,
+};
+
+/**
+ * models.dev vendor ids a provider template id names, first one that has the model wins. Keys cover
+ * every id seeded in `provider_templates` (migration 0063: openai, anthropic, google, openrouter,
+ * deepseek, zhipu, moonshot; `custom` has no vendor and is matched by its base URL's host), plus
+ * names an operator may give a platform pool row.
+ */
+const TEMPLATE_VENDORS: Record<string, string[]> = {
+  openai: ["openai"],
+  anthropic: ["anthropic"],
+  google: ["google"],
+  xai: ["xai"],
+  // OpenRouter names its models `vendor/model`, and models.dev lists them under `openrouter/`.
+  openrouter: ["openrouter"],
+  deepseek: ["deepseek"],
+  qwen: ["alibaba", "alibaba-cn"],
+  alibaba: ["alibaba", "alibaba-cn"],
+  dashscope: ["alibaba", "alibaba-cn"],
+  moonshot: ["moonshotai", "moonshotai-cn"],
+  kimi: ["moonshotai", "moonshotai-cn"],
+  zhipu: ["zhipuai"],
+  zhipuai: ["zhipuai"],
+  glm: ["zhipuai"],
+  bigmodel: ["zhipuai"],
+};
+
+/** The models.dev vendors a provider template id names; none for an unknown id or `custom`. */
+export function templateVendors(providerId: string): readonly string[] {
+  return TEMPLATE_VENDORS[providerId.toLowerCase()] ?? [];
+}
+
+/** The same, by the host of a custom base URL. */
+const HOST_VENDORS: [RegExp, string[]][] = [
+  [/(^|\.)openrouter\.ai$/, ["openrouter"]],
+  [/(^|\.)deepseek\.com$/, ["deepseek"]],
+  [
+    /(^|\.)(dashscope[\w-]*\.aliyuncs\.com|aliyuncs\.com|aliyun\.com)$/,
+    ["alibaba", "alibaba-cn"],
+  ],
+  [/(^|\.)moonshot\.(cn|ai)$/, ["moonshotai", "moonshotai-cn"]],
+  [/(^|\.)(bigmodel\.cn|zhipuai\.cn|z\.ai)$/, ["zhipuai"]],
+];
+
+/** Failed capability reads are not retried sooner than this, so an unreachable models.dev costs nothing. */
+const CAPABILITIES_BACKOFF_MS = 10 * 60_000;
+
+/** Pure lookup: the vendor-aware match, then the name-only match when exactly one entry has it. */
+export function lookupContextWindow(
+  table: ContextWindows | undefined,
+  providerId: string,
+  modelName: string,
+  baseUrl?: string | null,
+): number | undefined {
+  const bare = modelName.split("/").at(-1) ?? modelName;
+  if (table) {
+    const vendors = [...templateVendors(providerId)];
+    if (baseUrl) {
+      try {
+        const host = new URL(baseUrl).hostname.toLowerCase();
+        for (const [pattern, ids] of HOST_VENDORS)
+          if (pattern.test(host)) vendors.push(...ids);
+      } catch {
+        // an unparsable address names no vendor
+      }
+    }
+    for (const vendor of vendors) {
+      const hit =
+        table.get(`${vendor}/${modelName}`) ?? table.get(`${vendor}/${bare}`);
+      if (hit !== undefined) return hit;
+    }
+    if (vendors.length === 0) {
+      let only: number | undefined;
+      let count = 0;
+      for (const [key, value] of table) {
+        const id = key.slice(key.indexOf("/") + 1);
+        if (id === modelName || id === bare) {
+          count += 1;
+          only = value;
+          if (count > 1) break;
+        }
+      }
+      if (count === 1) return only;
+      if (count > 1) return undefined;
+    }
+  }
+  return KNOWN_CONTEXT_WINDOWS[bare.toLowerCase()];
+}
 
 /** Reads models.dev's `api.json`. Anything malformed is skipped, never thrown. */
 export function parseCapabilities(body: unknown): Capabilities {
@@ -669,6 +821,8 @@ export function parseCapabilities(body: unknown): Capabilities {
       const outputs = (model.modalities as { output?: unknown } | undefined)
         ?.output;
       const cost = model.cost as { input?: unknown } | undefined;
+      const context = (model.limit as { context?: unknown } | undefined)
+        ?.context;
       found.set(`${vendor}/${id}`, {
         ...(typeof model.name === "string" ? { name: model.name } : {}),
         ...(typeof model.family === "string" ? { family: model.family } : {}),
@@ -684,6 +838,11 @@ export function parseCapabilities(body: unknown): Capabilities {
         ...(Array.isArray(outputs) ? { text: outputs.includes("text") } : {}),
         ...(typeof model.release_date === "string"
           ? { released: seconds(model.release_date) }
+          : {}),
+        ...(typeof context === "number" &&
+        Number.isSafeInteger(context) &&
+        context > 0
+          ? { contextWindow: context }
           : {}),
       });
     }
@@ -777,6 +936,9 @@ export function createModelCatalogue(options: {
   let snapshot: Snapshot | undefined;
   let attemptedAt: number | undefined;
   let capabilities: { data: Capabilities; at: number } | undefined;
+  let contextWindows: ContextWindows | undefined;
+  let capabilitiesFailedAt: number | undefined;
+  let capabilitiesFlight: Promise<void> | undefined;
   let inFlight: Promise<void> | undefined;
   let timer: ReturnType<typeof setInterval> | undefined;
 
@@ -840,11 +1002,15 @@ export function createModelCatalogue(options: {
         await response.body?.cancel();
         throw new Error(`HTTP ${response.status}`);
       }
-      const data = parseCapabilities(await response.json());
+      const body: unknown = await response.json();
+      const data = parseCapabilities(body);
       // An answer that names none of the four vendors is a broken mirror, not news.
       if (data.size === 0) throw new Error("empty");
       capabilities = { data, at: now() };
+      contextWindows = parseContextWindows(body);
+      capabilitiesFailedAt = undefined;
     } catch (error) {
+      capabilitiesFailedAt = now();
       // The last good copy keeps serving; without one, each provider's own data still applies.
       log(
         JSON.stringify({
@@ -1109,6 +1275,37 @@ export function createModelCatalogue(options: {
     async allows(id: string): Promise<boolean> {
       const catalogue = await read();
       return catalogue.models.some((model) => model.id === id);
+    },
+    /**
+     * The context window for a model a tenant names: the cached catalogue (every models.dev
+     * vendor), else the bundled table, else undefined. NEVER waits on the network: a stale or
+     * missing catalogue is refreshed in the background, and a failed read is not retried within
+     * {@link CAPABILITIES_BACKOFF_MS}.
+     */
+    async contextWindowFor(
+      providerId: string,
+      modelName: string,
+      baseUrl?: string | null,
+    ): Promise<number | undefined> {
+      if (
+        capabilitiesUrl &&
+        !capabilitiesFlight &&
+        !(capabilities && now() - capabilities.at < refreshMs) &&
+        !(
+          capabilitiesFailedAt !== undefined &&
+          now() - capabilitiesFailedAt < CAPABILITIES_BACKOFF_MS
+        )
+      ) {
+        capabilitiesFlight = readCapabilities().finally(() => {
+          capabilitiesFlight = undefined;
+        });
+      }
+      return lookupContextWindow(
+        contextWindows,
+        providerId,
+        modelName,
+        baseUrl,
+      );
     },
     /** The efforts one offered model takes, or none. */
     async effortsFor(id: string): Promise<string[]> {

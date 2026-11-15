@@ -73,6 +73,17 @@ export function withModelRun<T>(
   );
 }
 
+/**
+ * {@link withModelRun} for a call that is not a stream: `work` runs inside the run's scope, so the
+ * model calls it makes are metered to that run and thread (the compaction summary, `threads/compaction`).
+ */
+export function withinModelRun<T>(
+  scope: ModelRunScope,
+  work: () => Promise<T>,
+): Promise<T> {
+  return runScope.run(scope, work);
+}
+
 export function sha256Hex(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
 }

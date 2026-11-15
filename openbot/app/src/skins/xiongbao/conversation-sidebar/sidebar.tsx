@@ -1,0 +1,605 @@
+import {
+  IconChevronDown,
+  IconChevronLeft,
+  IconChevronRight,
+  IconChevronsLeft,
+  IconLayoutSidebarRight,
+} from "@tabler/icons-react";
+import { useNavigate, useRouter, useRouterState } from "@tanstack/react-router";
+import {
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { useDetailPanelWidth } from "@/components/layout/detail-panel";
+import {
+  type SidebarSource,
+  useConversationSidebar,
+} from "@/lib/threads/sidebar";
+import { cn } from "@/lib/utils";
+import type { ConversationSidebar as SidebarData } from "../../../../../shared/conversation-sidebar";
+import { type SidebarSection, useSidebarCollapse } from "./collapse";
+import {
+  ContextBody,
+  ContextMeter,
+  contextMeterLabel,
+  contextSummary,
+  PerAgentContext,
+} from "./context";
+import {
+  EnvironmentBody,
+  EnvironmentIcon,
+  environmentSummary,
+  MembersBody,
+  membersSummary,
+} from "./environment";
+import { GoalBody, GoalIcon, goalSummary, type PendingApproval } from "./goal";
+import { OutputsBody, OutputsIcon, outputsSummary } from "./outputs";
+
+/**
+ * 对话侧栏（默认皮肤）：环境 · 目标 · 上下文 · 输出内容，与 Claude Code 桌面端同样的四块。
+ *
+ * - `panel`：桌面对话右边的一栏，宽 300px；整栏能收成 56px 图标条（目标有待确认时带橙点，上下文是
+ *   百分比小条，输出内容带数量）。每块单独收起时标题右边留一句摘要。收起状态按对话记住（`collapse.ts`）。
+ * - `page`：手机上的全屏页（{@link SidebarPage}，对话顶栏的 {@link SidebarPageButton} 打开），四块同样排列，
+ *   没有图标条；每块收起与否和电脑上记在同一个键下。
+ *
+ * 群组（数据里有 `environment.members`）：环境是成员列表，上下文每位员工一根小条（点名字看明细和压缩），
+ * 目标和输出内容按查看者取（服务器按人隔离）。
+ *
+ * 画成什么样还看对话区留得出多宽（`DetailPanel` 用 ResizeObserver 量的宽度，{@link sidebarRoom}）：
+ * 展开后对话区不足 640px 时只画图标条（记住的「展开」不改，窗口放宽了就回来）；连图标条加 400px 对话区
+ * 都放不下时整栏不画，顶栏的收起按钮也不画。
+ *
+ * 颜色只取 `--wb-*` 令牌（`skin.css`）。
+ */
+
+const SECTION_NAMES: Record<SidebarSection, string> = {
+  environment: "环境",
+  goal: "目标",
+  context: "上下文",
+  outputs: "输出内容",
+};
+
+const PANEL_WIDTH = 300;
+const STRIP_WIDTH = 56;
+/** 侧栏展开时，对话区至少要留这么宽，否则只画图标条。 */
+const MIN_CONVERSATION_BESIDE_PANEL = 640;
+/** 图标条旁边的对话区至少这么宽（同 `DetailPanel` 的主区下限），否则侧栏不画。 */
+const MIN_CONVERSATION_BESIDE_STRIP = 400;
+const TOO_NARROW = "窗口再宽一些才能展开侧栏";
+
+/**
+ * 按对话区和侧栏合起来的宽度（`DetailPanel` 量的；不在 `DetailPanel` 里时为 null，不受限）决定侧栏能画
+ * 成什么：`panel` 可以展开，`strip` 只能是图标条，`none` 不画。
+ */
+export function sidebarRoom(width: number | null): "panel" | "strip" | "none" {
+  if (width === null) return "panel";
+  if (width >= PANEL_WIDTH + MIN_CONVERSATION_BESIDE_PANEL) return "panel";
+  if (width >= STRIP_WIDTH + MIN_CONVERSATION_BESIDE_STRIP) return "strip";
+  return "none";
+}
+
+/** 收起键：单聊是线程 id，群组是频道 id。 */
+export function collapseKeyOf(source: SidebarSource): string {
+  return "threadId" in source ? source.threadId : source.channelId;
+}
+
+export function ConversationSidebar({
+  source,
+  variant,
+  agentId,
+  title,
+  peopleCount,
+}: {
+  source: SidebarSource;
+  variant: "panel" | "page";
+  /** 单聊的员工：环境里的齿轮（去员工配置页）、项目选择器和压缩会话要用。 */
+  agentId?: string;
+  /** 对话的名字：单聊是员工名（压缩弹窗里「产品官仍然记得要点」），群组是群名（「环境 · 产品研发组」）。 */
+  title?: string;
+  /** 群组里有几个人（「3 位员工 · 2 个人」）。 */
+  peopleCount?: number;
+}) {
+  const collapse = useSidebarCollapse(collapseKeyOf(source));
+  const room = sidebarRoom(useDetailPanelWidth());
+  const { sidebar, pending: inboxPending } = useConversationSidebar(source);
+  const data = sidebar.data;
+  const members = data?.environment.members;
+  /*
+   * 「去确认」指向哪一条：审批收件箱里这个对话最新的那条为准（对话里那张卡就是按它画的，点了一定滚得到
+   * 或就地画得出）；收件箱里没有时才用服务器从任务卡读到的那条。
+   */
+  const pending: PendingApproval =
+    inboxPending ??
+    (data?.goal?.pendingApprovalId
+      ? { id: data.goal.pendingApprovalId }
+      : null);
+  // 只能画图标条：不改记住的「展开」，图标条上的按钮也点不开。
+  const forced = variant === "panel" && room === "strip";
+  const collapsed = variant === "panel" && (collapse.whole.collapsed || forced);
+
+  if (variant === "panel" && room === "none") return null;
+
+  if (collapsed) {
+    const reveal = (name: SidebarSection) =>
+      forced ? undefined : () => collapse.reveal(name);
+    return (
+      <aside
+        aria-label="对话侧栏"
+        className="flex h-full shrink-0 flex-col items-center gap-2 overflow-y-auto border-(--wb-line) border-l bg-(--wb-list) px-2 py-3.5 text-(--wb-fg2)"
+        data-collapsed="true"
+        data-forced={forced ? "true" : undefined}
+        data-conversation-sidebar=""
+        data-loaded={data ? "true" : "false"}
+        style={{ width: STRIP_WIDTH }}
+      >
+        <button
+          aria-label="展开侧栏"
+          className={cn(
+            STRIP_BUTTON,
+            "border border-(--wb-line2) bg-(--wb-card2) text-(--wb-fg) disabled:opacity-50 disabled:hover:bg-(--wb-card2)",
+          )}
+          disabled={forced}
+          onClick={collapse.whole.toggle}
+          title={forced ? TOO_NARROW : undefined}
+          type="button"
+        >
+          <IconChevronsLeft aria-hidden="true" className="size-4 stroke-[2]" />
+        </button>
+        <button
+          aria-label={
+            data
+              ? `环境：${
+                  members
+                    ? membersSummary(members, peopleCount)
+                    : environmentSummary(data.environment)
+                }`
+              : "环境"
+          }
+          className={STRIP_BUTTON}
+          disabled={forced}
+          onClick={reveal("environment")}
+          title={forced ? TOO_NARROW : undefined}
+          type="button"
+        >
+          <EnvironmentIcon environment={data?.environment} />
+        </button>
+        <button
+          aria-label={pending ? "目标：等你确认" : "目标"}
+          className={STRIP_BUTTON}
+          disabled={forced}
+          onClick={reveal("goal")}
+          title={forced ? TOO_NARROW : undefined}
+          type="button"
+        >
+          <GoalIcon />
+          {pending ? (
+            <span
+              aria-hidden="true"
+              className="absolute top-[7px] right-[7px] size-2 rounded-full bg-(--wb-amber)"
+              data-pending-dot=""
+            />
+          ) : null}
+        </button>
+        <button
+          aria-label={contextMeterLabel(data?.context)}
+          className={cn(STRIP_BUTTON, "flex-col gap-[3px] text-[10px]")}
+          disabled={forced}
+          onClick={reveal("context")}
+          title={forced ? TOO_NARROW : undefined}
+          type="button"
+        >
+          <ContextMeter context={data?.context} />
+        </button>
+        <button
+          aria-label={
+            data ? `输出内容：${outputsSummary(data.outputs)}` : "输出内容"
+          }
+          className={STRIP_BUTTON}
+          disabled={forced}
+          onClick={reveal("outputs")}
+          title={forced ? TOO_NARROW : undefined}
+          type="button"
+        >
+          <OutputsIcon count={data?.outputs.total} />
+        </button>
+      </aside>
+    );
+  }
+
+  const section = (
+    name: SidebarSection,
+    summary: string | null,
+    body: ReactNode,
+    heading?: string,
+  ) => {
+    const { open, toggle } = collapse.section(name);
+    return (
+      <section
+        aria-label={SECTION_NAMES[name]}
+        className={cn("flex flex-col", open ? "gap-1.5" : "gap-0")}
+        key={name}
+      >
+        <h3 className="m-0">
+          <button
+            aria-expanded={open}
+            className="flex w-full cursor-pointer items-center gap-1.5 rounded-(--wb-radius-sm) border-0 bg-transparent py-1 text-left font-semibold text-(--wb-fg) text-[13px] outline-none focus-visible:outline-2 focus-visible:outline-(--wb-accent)"
+            onClick={toggle}
+            type="button"
+          >
+            {open ? (
+              <IconChevronDown
+                aria-hidden="true"
+                className="size-3 shrink-0 stroke-[2.5] text-(--wb-muted)"
+              />
+            ) : (
+              <IconChevronRight
+                aria-hidden="true"
+                className="size-3 shrink-0 stroke-[2.5] text-(--wb-muted)"
+              />
+            )}
+            {heading ?? SECTION_NAMES[name]}
+            {!open && summary ? (
+              <small
+                className="ml-auto min-w-0 truncate pl-2 font-normal text-(--wb-muted) text-[12px]"
+                data-summary=""
+              >
+                {summary}
+              </small>
+            ) : null}
+          </button>
+        </h3>
+        {open ? (
+          <div
+            className={cn(
+              "flex flex-col",
+              name === "context"
+                ? "gap-2"
+                : name === "outputs"
+                  ? "gap-1"
+                  : "gap-1.5",
+            )}
+            data-section-body=""
+          >
+            {body}
+          </div>
+        ) : null}
+      </section>
+    );
+  };
+
+  return (
+    <aside
+      aria-label="对话侧栏"
+      className={cn(
+        "flex shrink-0 flex-col gap-[22px] overflow-y-auto bg-(--wb-list) px-[18px] py-5 text-(--wb-fg)",
+        variant === "panel" ? "h-full border-(--wb-line) border-l" : "w-full",
+      )}
+      data-collapsed="false"
+      data-conversation-sidebar=""
+      data-loaded={data ? "true" : "false"}
+      style={variant === "panel" ? { width: PANEL_WIDTH } : undefined}
+    >
+      {sidebar.isError && !data ? (
+        <p className="m-0 text-(--wb-muted) text-[12.5px]" role="status">
+          侧栏暂时读不到，稍后会再试。
+        </p>
+      ) : null}
+      {data ? (
+        <Sections
+          agentId={agentId}
+          data={data}
+          peopleCount={peopleCount}
+          pending={pending}
+          phone={variant === "page"}
+          section={section}
+          source={source}
+          title={title}
+        />
+      ) : null}
+    </aside>
+  );
+}
+
+const STRIP_BUTTON =
+  "relative flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-[10px] border-0 bg-transparent text-(--wb-fg2) outline-none hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-(--wb-accent) disabled:cursor-default disabled:hover:bg-transparent";
+
+function Sections({
+  data,
+  section,
+  pending,
+  agentId,
+  source,
+  title,
+  peopleCount,
+  phone,
+}: {
+  data: SidebarData;
+  section: (
+    name: SidebarSection,
+    summary: string | null,
+    body: ReactNode,
+    heading?: string,
+  ) => ReactNode;
+  pending: PendingApproval;
+  agentId?: string;
+  source: SidebarSource;
+  title?: string;
+  peopleCount?: number;
+  phone: boolean;
+}) {
+  const members = data.environment.members;
+  const perAgent = data.context.perAgent;
+  return (
+    <>
+      {members
+        ? section(
+            "environment",
+            membersSummary(members, peopleCount),
+            <MembersBody members={members} peopleCount={peopleCount} />,
+            title ? `环境 · ${title}` : undefined,
+          )
+        : section(
+            "environment",
+            environmentSummary(data.environment),
+            <EnvironmentBody
+              agentId={agentId}
+              environment={data.environment}
+            />,
+          )}
+      {section(
+        "goal",
+        goalSummary(data.goal, pending),
+        <GoalBody goal={data.goal} pending={pending} />,
+      )}
+      {members && perAgent
+        ? section(
+            "context",
+            contextSummary(data.context),
+            <PerAgentContext
+              perAgent={perAgent}
+              phone={phone}
+              source={source}
+            />,
+            "上下文 · 每位员工各算各的",
+          )
+        : section(
+            "context",
+            contextSummary(data.context),
+            <ContextBody
+              compact={{ source, agentId, name: title }}
+              context={data.context}
+              phone={phone}
+            />,
+          )}
+      {section(
+        "outputs",
+        outputsSummary(data.outputs),
+        <OutputsBody outputs={data.outputs} />,
+      )}
+    </>
+  );
+}
+
+/**
+ * 对话顶栏右边的「收起侧栏 / 展开侧栏」（设计稿顶栏的那个按钮），和侧栏读同一份收起状态。
+ */
+export function SidebarCollapseButton({
+  collapseKey,
+}: {
+  collapseKey: string;
+}) {
+  const { whole } = useSidebarCollapse(collapseKey);
+  const room = sidebarRoom(useDetailPanelWidth());
+  // 只能画图标条或根本不画侧栏时，这个按钮点了没有用，不画。
+  if (room !== "panel") return null;
+  return (
+    <button
+      aria-label={whole.collapsed ? "展开侧栏" : "收起侧栏"}
+      aria-pressed={!whole.collapsed}
+      className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-(--wb-radius-sm) border border-(--wb-line2) bg-(--wb-card2) text-(--wb-fg) outline-none transition-colors hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-(--wb-accent)"
+      data-sidebar-toggle=""
+      onClick={whole.toggle}
+      type="button"
+    >
+      <IconLayoutSidebarRight
+        aria-hidden="true"
+        className="size-[18px] stroke-[1.8]"
+      />
+    </button>
+  );
+}
+
+/** 手机上对话顶栏的按钮：打开全屏侧栏。 */
+export function SidebarPageButton({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      aria-label="查看对话侧栏"
+      className="inline-flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-(--wb-radius-sm) border border-(--wb-line2) bg-(--wb-card2) text-(--wb-fg) outline-none transition-colors hover:bg-(--wb-hover) focus-visible:outline-2 focus-visible:outline-(--wb-accent)"
+      data-sidebar-page-button=""
+      onClick={onOpen}
+      type="button"
+    >
+      <IconLayoutSidebarRight
+        aria-hidden="true"
+        className="size-[18px] stroke-[1.8]"
+      />
+    </button>
+  );
+}
+
+/** 地址上的 `?sidebar=1`：手机上的全屏侧栏开着。 */
+function sidebarPageInSearch(search: unknown): boolean {
+  const value = (search as Record<string, unknown> | undefined)?.sidebar;
+  return value === 1 || value === "1";
+}
+
+/**
+ * 手机上的全屏侧栏开在地址上（`?sidebar=1`），是历史里的一页，单聊和群组共用：打开压一条；「返回对话」时，
+ * 在这一页里打开的就后退一步（安卓返回键也是这样回来），直达链接、刷新后没有可退的，就地去掉这个参数。
+ */
+export function usePhoneSidebarPage() {
+  const navigate = useNavigate();
+  const router = useRouter();
+  const isOpen = useRouterState({
+    select: (state) => sidebarPageInSearch(state.location.search),
+  });
+  const openedHere = useRef(false);
+  const withSidebar = (value: 1 | undefined) =>
+    ((previous: Record<string, unknown>) => ({
+      ...previous,
+      sidebar: value,
+    })) as never;
+  return {
+    isOpen,
+    open: () => {
+      openedHere.current = true;
+      void navigate({ to: ".", search: withSidebar(1) });
+    },
+    close: () => {
+      if (openedHere.current) {
+        openedHere.current = false;
+        router.history.back();
+        return;
+      }
+      void navigate({ to: ".", replace: true, search: withSidebar(undefined) });
+    },
+  };
+}
+
+/** 留着能用的：Toaster 的视口和读屏播报区（和 Base UI 自己的模态一样跳过 `[aria-live]`）。 */
+const STAYS_REACHABLE = '[data-slot="toast-viewport"], [aria-live]';
+
+/**
+ * `parent` 下除 `host` 以外要设 `inert` 的元素。包含 Toaster 或播报区的元素自己不设，往里走一层，只设它
+ * 旁边的（应用外壳里有播报区时，外壳的其余部分照样盖住）。
+ */
+function coveredAround(parent: Element, host: HTMLElement): HTMLElement[] {
+  const covered: HTMLElement[] = [];
+  for (const element of parent.children) {
+    if (
+      !(element instanceof HTMLElement) ||
+      element === host ||
+      element.hasAttribute("inert") ||
+      element.matches(STAYS_REACHABLE)
+    )
+      continue;
+    if (element.contains(host) || element.querySelector(STAYS_REACHABLE))
+      covered.push(...coveredAround(element, host));
+    else covered.push(element);
+  }
+  return covered;
+}
+
+/**
+ * 打开时，页面上别的东西（对话、外壳）都设成 `inert`：点不到、Tab 不进去、读屏读不到，焦点只能留在这一页；
+ * 页面也不跟着滚。Toaster 和播报区除外：报错 toast 不会自己消失，页面开着时也要读得到、关得掉。
+ * 关掉时原样还回去：底下的对话一直挂着，滚到哪里还在哪里。
+ */
+function useOnlyThisOnScreen(host: HTMLElement | null) {
+  useEffect(() => {
+    if (!host) return;
+    const covered = coveredAround(document.body, host);
+    for (const element of covered) element.setAttribute("inert", "");
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      for (const element of covered) element.removeAttribute("inert");
+      document.body.style.overflow = overflow;
+    };
+  }, [host]);
+}
+
+/** 手机侧栏页滚到哪里，按对话记在这一页里：返回对话再打开，还在原处。 */
+const pageScroll = new Map<string, number>();
+
+/**
+ * 手机上的全屏侧栏（设计稿「手机」）：盖住整屏的一页，顶上「返回对话」和「<名字> · 这个对话」，下面四块
+ * 同样排列。画在 `body` 下面自己的一层里，底下的都 `inert`（{@link useOnlyThisOnScreen}）。打开时焦点落在
+ * 「返回对话」上，Esc 也返回。
+ */
+export function SidebarPage({
+  source,
+  title,
+  agentId,
+  peopleCount,
+  onBack,
+}: {
+  source: SidebarSource;
+  title?: string;
+  agentId?: string;
+  peopleCount?: number;
+  onBack: () => void;
+}) {
+  const back = useRef<HTMLButtonElement>(null);
+  const onBackRef = useRef(onBack);
+  onBackRef.current = onBack;
+  const [host] = useState(() => document.createElement("div"));
+  const body = useRef<HTMLDivElement>(null);
+  const scrollKey = collapseKeyOf(source);
+  useLayoutEffect(() => {
+    host.dataset.sidebarPageHost = "";
+    document.body.append(host);
+    // 挂进文档以后才有版面，这时才能回到上次滚到的地方。
+    if (body.current) body.current.scrollTop = pageScroll.get(scrollKey) ?? 0;
+    return () => host.remove();
+  }, [host, scrollKey]);
+  useOnlyThisOnScreen(host);
+  useEffect(() => {
+    back.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented)
+        onBackRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  const heading = `${title ?? "对话"} · 这个对话`;
+  return createPortal(
+    <div
+      aria-label={heading}
+      aria-modal="true"
+      className="fixed inset-0 z-40 flex flex-col bg-(--wb-list) text-(--wb-fg) motion-safe:animate-in motion-safe:slide-in-from-right motion-safe:duration-200"
+      data-full-screen=""
+      data-sidebar-page=""
+      role="dialog"
+    >
+      <header className="flex shrink-0 items-center gap-2 border-(--wb-line) border-b px-2 pt-[env(safe-area-inset-top)]">
+        <button
+          className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-0.5 rounded-(--wb-radius-sm) border-0 bg-transparent pr-2.5 pl-1 text-(--wb-accent) text-[15px] outline-none focus-visible:outline-2 focus-visible:outline-(--wb-accent)"
+          onClick={onBack}
+          ref={back}
+          type="button"
+        >
+          <IconChevronLeft
+            aria-hidden="true"
+            className="size-[22px] stroke-[1.8]"
+          />
+          返回对话
+        </button>
+        <b className="min-w-0 truncate font-semibold text-[16px]">{heading}</b>
+      </header>
+      <div
+        className="min-h-0 flex-1 overflow-y-auto pb-[env(safe-area-inset-bottom)]"
+        data-sidebar-page-body=""
+        onScroll={(event) =>
+          pageScroll.set(scrollKey, event.currentTarget.scrollTop)
+        }
+        ref={body}
+      >
+        <ConversationSidebar
+          agentId={agentId}
+          peopleCount={peopleCount}
+          source={source}
+          title={title}
+          variant="page"
+        />
+      </div>
+    </div>,
+    host,
+  );
+}

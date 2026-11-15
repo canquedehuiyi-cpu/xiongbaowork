@@ -630,7 +630,9 @@ describe("DeviceAcpAgent", () => {
     expect(t.sessions.get(lane)).toBeUndefined();
     watch(t.agent(), input("再试一次"));
     await until(() => t.sent("acp.open").length === 2, "the next open");
-    expect(t.sent("acp.open")[1]?.sessionHint).toBeUndefined();
+    const reopened = t.sent("acp.open")[1] as Frame;
+    expect(reopened).toBeDefined();
+    expect(reopened.sessionHint).toBeUndefined();
   });
 
   test("a failed open ends the run with the device's sentence", async () => {
