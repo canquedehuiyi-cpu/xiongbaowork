@@ -7,7 +7,7 @@
  *   2. 索引 `model_token_calls (tenant_id, thread_id, agent_id, started_at)`：按对话 + 员工取最近一次真实用量。
  *      索引 `tasks (tenant_id, channel_ref, updated_at)`：按对话列出任务（产出区）。
  *   3. 新表 `thread_context_breakdowns`：每次运行时上下文各部分（messages / system / tools / skills / memory）
- *      的占比快照，`shares` 是 0-1 小数，和为 1 由写入方保证。
+ *      的占比快照，`shares` 是 0-1 小数，五个键必须齐全（CHECK），和为 1 由写入方保证。
  *   4. 新表 `thread_compactions`：上下文压缩记录（摘要覆盖到哪条消息、压缩前后 token 数、是否自动触发）。
  * - 回填：无。`context_window` 留空，由模型库新增 / 编辑时按 models.dev 目录值填写；已有行显示为“未知”。
  * - 授权：两张新表开启并强制 RLS，租户策略同 `acp_turns`（本租户或 platform；读允许 system），
@@ -37,7 +37,8 @@ CREATE TABLE "public"."thread_context_breakdowns" (
 	"agent_id" text NOT NULL,
 	"run_id" text NOT NULL,
 	"shares" jsonb NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "thread_context_breakdowns_shares_keys" CHECK (jsonb_typeof("shares") = 'object' AND "shares" ?& ARRAY['messages','system','tools','skills','memory'])
 );
 --> statement-breakpoint
 CREATE INDEX "thread_context_breakdowns_thread_idx" ON "public"."thread_context_breakdowns" USING btree ("tenant_id","thread_id","agent_id","created_at");

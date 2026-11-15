@@ -19,6 +19,7 @@ import {
   tasks,
   users,
 } from "../src/db/schema";
+import { createModelCatalogue } from "../src/model-catalogue";
 import { createModelRoutes } from "../src/models/routes";
 import { createAgentModelResolver } from "../src/models/runtime-resolver";
 import type { TaskProjector } from "../src/tasks/projector";
@@ -624,4 +625,84 @@ test("admin can edit context_window", async () => {
   expect(
     library.body.models.find((m) => m.id === id)?.contextWindow,
   ).toBeNull();
+});
+
+test("another tenant cannot edit context_window through the route", async () => {
+  const created = await call<{ model: { id: string } }>("POST", "/", {
+    provider: `tpl-${suite}`,
+    modelName: "private-window-1",
+    apiKey: "sk-secret-window04",
+    baseUrl: "https://llm.internal/v1",
+  });
+  const id = created.body.model.id;
+  await call("PATCH", `/${id}`, { contextWindow: 64_000 });
+  const stolen = await call(
+    "PATCH",
+    `/${id}`,
+    { contextWindow: 1 },
+    otherTenant,
+  );
+  expect(stolen.status).toBe(404);
+  const library = await call<{
+    models: { id: string; contextWindow: number | null }[];
+  }>("GET", "/");
+  expect(library.body.models.find((m) => m.id === id)?.contextWindow).toBe(
+    64_000,
+  );
+});
+
+test("a DeepSeek model added through the deepseek template gets its context window from the catalogue", async () => {
+  await runAsTenant("platform", async () => {
+    await database
+      .insert(providerTemplates)
+      .values({ id: "deepseek", label: "DeepSeek", allowsBaseUrl: false })
+      .onConflictDoNothing();
+  });
+  const catalogue = createModelCatalogue({
+    model: { provider: "openai", defaultModel: "gpt-5.5" },
+    apiKey: async () => "sk-x",
+    environment: {},
+    fetch: (async (url: string | URL | Request) =>
+      String(url).includes("capabilities.test")
+        ? new Response(
+            JSON.stringify({
+              openai: { models: { "gpt-5.5": {} } },
+              deepseek: {
+                models: { "deepseek-v9": { limit: { context: 777_000 } } },
+              },
+            }),
+          )
+        : new Response(JSON.stringify({ data: [] }))) as typeof fetch,
+    capabilitiesUrl: "https://capabilities.test/api.json",
+  });
+  await catalogue.refresh();
+  const deepseekRoutes = createModelRoutes(
+    database,
+    requireUser,
+    credentialStore,
+    encryptionKey,
+    undefined,
+    {
+      contextWindowFor: (provider, name, baseUrl) =>
+        catalogue.contextWindowFor(provider, name, baseUrl),
+    },
+  );
+  const response = await runAsTenant(tenant, () =>
+    deepseekRoutes.request(
+      new Request("http://openbot.test/", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "deepseek",
+          modelName: "deepseek-v9",
+          apiKey: "sk-secret-deepseek1",
+        }),
+      }),
+    ),
+  );
+  expect(response.status).toBe(201);
+  const body = (await response.json()) as {
+    model: { contextWindow: number | null };
+  };
+  expect(body.model.contextWindow).toBe(777_000);
 });

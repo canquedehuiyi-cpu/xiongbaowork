@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   pgTable,
@@ -40,6 +42,10 @@ export const threadContextBreakdowns = pgTable(
     createdAt: createdAt(),
   },
   (table) => [
+    check(
+      "thread_context_breakdowns_shares_keys",
+      sql`jsonb_typeof(${table.shares}) = 'object' AND ${table.shares} ?& ARRAY['messages','system','tools','skills','memory']`,
+    ),
     index("thread_context_breakdowns_thread_idx").on(
       table.tenantId,
       table.threadId,

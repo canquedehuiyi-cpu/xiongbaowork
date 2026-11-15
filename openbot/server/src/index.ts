@@ -5167,8 +5167,8 @@ await startupLifecycle.run(async (startup) => {
       quota,
       {
         outbound: modelOutbound,
-        contextWindowFor: (provider, modelName) =>
-          modelCatalogue.contextWindowFor(provider, modelName),
+        contextWindowFor: (provider, modelName, baseUrl) =>
+          modelCatalogue.contextWindowFor(provider, modelName, baseUrl),
       },
     ),
   );

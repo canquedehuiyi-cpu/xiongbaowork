@@ -172,4 +172,53 @@ describe("conversation sidebar schema (0216)", () => {
         ))(),
     ).rejects.toThrow();
   });
+
+  test("thread_context_breakdowns requires the five share keys", async () => {
+    const a = await person();
+    const insert = (value: unknown) =>
+      (async () =>
+        await runAsTenant(a, () =>
+          database.insert(threadContextBreakdowns).values({
+            tenantId: a,
+            threadId: "thread-keys",
+            agentId: "agent-1",
+            runId: "run-1",
+            shares: value as typeof shares,
+          }),
+        ))();
+    await expect(insert({ messages: 1 })).rejects.toThrow();
+    await expect(insert([1, 0, 0, 0, 0])).rejects.toThrow();
+    await insert(shares);
+  });
+
+  test("another tenant cannot PATCH a model_registry row it does not own", async () => {
+    const a = await person();
+    const b = await person();
+    const [row] = await runAsTenant(a, () =>
+      database
+        .insert(modelRegistry)
+        .values({
+          tenantId: a,
+          provider: "openai",
+          modelName: `own-${randomUUID()}`,
+          contextWindow: 1000,
+        })
+        .returning(),
+    );
+    const updated = await runAsTenant(b, () =>
+      database
+        .update(modelRegistry)
+        .set({ contextWindow: 5 })
+        .where(eq(modelRegistry.id, row?.id as string))
+        .returning(),
+    );
+    expect(updated).toHaveLength(0);
+    const [after] = await runAsTenant(a, () =>
+      database
+        .select()
+        .from(modelRegistry)
+        .where(eq(modelRegistry.id, row?.id as string)),
+    );
+    expect(after?.contextWindow).toBe(1000);
+  });
 });

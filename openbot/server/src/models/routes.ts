@@ -146,6 +146,7 @@ export function createModelRoutes(
     contextWindowFor?: (
       provider: string,
       modelName: string,
+      baseUrl?: string | null,
     ) => Promise<number | undefined>;
   } = {},
 ) {
@@ -300,7 +301,7 @@ export function createModelRoutes(
     // Pre-filled from the catalogue; a lookup that fails leaves it unknown rather than failing the add.
     const contextWindow =
       (await options
-        .contextWindowFor?.(provider, modelName)
+        .contextWindowFor?.(provider, modelName, baseUrl || null)
         .catch(() => undefined)) ?? null;
     /*
      * ONE TRANSACTION FOR THE KEY AND THE ROW THAT POINTS AT IT.

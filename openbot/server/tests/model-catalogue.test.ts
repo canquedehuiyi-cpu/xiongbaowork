@@ -1435,29 +1435,118 @@ describe("model context window", () => {
     expect(found.get("anthropic/claude-z")?.contextWindow).toBeUndefined();
   });
 
-  test("contextWindowFor answers from the capability data, by provider and model name", async () => {
-    const { fetcher } = provider({
-      anthropic: {
-        models: {
-          "claude-x": { name: "Claude X", limit: { context: 200000 } },
+  const modelsDev = {
+    anthropic: {
+      models: {
+        "claude-x": {
+          name: "Claude X",
+          reasoning: false,
+          limit: { context: 200000 },
         },
       },
-    });
-    const catalogue = createModelCatalogue({
+    },
+    deepseek: {
+      models: { "deepseek-chat": { limit: { context: 131072 } } },
+    },
+    alibaba: { models: { "qwen-long-x": { limit: { context: 10000000 } } } },
+    moonshotai: {
+      models: { "kimi-only-here": { limit: { context: 262144 } } },
+    },
+    openrouter: {
+      models: {
+        "dup-model": { limit: { context: 1000 } },
+      },
+    },
+    siliconflow: { models: { "dup-model": { limit: { context: 2000 } } } },
+  };
+  const catalogueFor = (fetcher: typeof fetch) =>
+    createModelCatalogue({
       model: { provider: "anthropic", defaultModel: "claude-x" },
       apiKey: async () => KEY,
       environment: {},
       fetch: fetcher,
       capabilitiesUrl: "https://capabilities.test/api.json",
     });
+
+  test("contextWindowFor reads every vendor of the cached catalogue, by template or base URL", async () => {
+    const { fetcher } = provider(modelsDev);
+    const catalogue = catalogueFor(fetcher);
+    await catalogue.refresh();
     expect(await catalogue.contextWindowFor("anthropic", "claude-x")).toBe(
       200000,
     );
+    // A DeepSeek model added through the deepseek provider template.
+    expect(await catalogue.contextWindowFor("deepseek", "deepseek-chat")).toBe(
+      131072,
+    );
+    // A custom endpoint named by its host.
     expect(
-      await catalogue.contextWindowFor("anthropic", "claude-unknown"),
+      await catalogue.contextWindowFor(
+        "custom",
+        "qwen-long-x",
+        "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      ),
+    ).toBe(10000000);
+    // A custom endpoint with a name only one catalogue entry has.
+    expect(
+      await catalogue.contextWindowFor(
+        "custom",
+        "kimi-only-here",
+        "https://llm.internal/v1",
+      ),
+    ).toBe(262144);
+    // The same name under two vendors is ambiguous: unknown, not a guess.
+    expect(
+      await catalogue.contextWindowFor(
+        "custom",
+        "dup-model",
+        "https://llm.internal/v1",
+      ),
     ).toBeUndefined();
     expect(
-      await catalogue.contextWindowFor("custom", "claude-x"),
+      await catalogue.contextWindowFor("custom", "nobody-knows"),
     ).toBeUndefined();
+  });
+
+  test("the four-vendor effort and price behaviour is unchanged by the wider context table", () => {
+    const found = parseCapabilities(modelsDev);
+    expect([...found.keys()]).toEqual(["anthropic/claude-x"]);
+    expect(found.get("anthropic/claude-x")?.efforts).toEqual([]);
+  });
+
+  test("an unreachable catalogue answers at once from the bundled table and is not retried within the backoff", async () => {
+    let capabilityCalls = 0;
+    const fetcher = (async (url: string | URL | Request) => {
+      if (String(url).startsWith("https://capabilities.test")) {
+        capabilityCalls += 1;
+        throw new TypeError("offline");
+      }
+      return new Response(JSON.stringify(openAIListing(["gpt-5.5"])));
+    }) as typeof fetch;
+    const catalogue = catalogueFor(fetcher);
+    const started = Date.now();
+    expect(await catalogue.contextWindowFor("deepseek", "deepseek-chat")).toBe(
+      128_000,
+    );
+    expect(
+      await catalogue.contextWindowFor("custom", "no-such-model"),
+    ).toBeUndefined();
+    expect(Date.now() - started).toBeLessThan(1000);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(capabilityCalls).toBe(1);
+    await catalogue.contextWindowFor("deepseek", "deepseek-reasoner");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(capabilityCalls).toBe(1);
+  });
+
+  test("a hung catalogue never holds a model add", async () => {
+    const fetcher = (() =>
+      new Promise<Response>(() => {})) as unknown as typeof fetch;
+    const catalogue = catalogueFor(fetcher);
+    const answer = await Promise.race([
+      catalogue.contextWindowFor("deepseek", "deepseek-chat"),
+      new Promise((resolve) => setTimeout(() => resolve("waited"), 500)),
+    ]);
+    expect(answer).toBe(128_000);
   });
 });
