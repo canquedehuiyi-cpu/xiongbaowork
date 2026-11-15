@@ -1,9 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
+import {
+  ApprovalActions,
+  useApprovalDecision,
+} from "@/components/tasks/approval-actions";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import { RequestError } from "@/lib/client";
 import {
+  canExtend,
+  canNudge,
+  canReassign,
   clockText,
   deliveryLaneOf,
   type EvidenceRow,
@@ -12,19 +20,23 @@ import {
   evidenceOf,
   type FollowedCard,
   followedCardQueryOptions,
+  formerOverdueMinutes,
+  lengthText,
   overdueChip,
   overdueMinutes,
   pendingExtension,
   type TaskEvent,
   taskEventsQueryOptions,
-  withCoworker,
 } from "@/lib/tasks/delivery";
 import { cn } from "@/lib/utils";
 import {
   DeliveryDialogs,
   deliveryButton,
+  LastError,
   type OpenDialog,
+  TechnicalError,
   useDeliveryWrites,
+  useWbFallback,
   WriteFailure,
 } from "@/skins/xiongbao/delivery-actions";
 
@@ -33,7 +45,8 @@ import {
  * 流水（按时间正序，只追加）。员工手上的卡还有「再催一次」「准许延期到……」「换个员工接手」（设计稿 5）。
  *
  * 在看板上面从右边滑出来（手机上占满一屏），关上回到看板，看板的筛选不变。深链和手机推送也落到这里。
- * 颜色只从 `--wb-*` 令牌取（`skin.css`）。
+ * 颜色只从 `--wb-*` 令牌取（`skin.css`）；在别的皮肤里打开时，根上把这些令牌接到应用自己的令牌上
+ * （`useWbFallback`）。
  */
 export const Route = createFileRoute("/_authed/_app/tasks/$taskId")({
   component: TaskDetailPage,
@@ -54,6 +67,7 @@ function TaskDetailPage() {
       search: (previous) => previous,
       to: "/tasks",
     });
+  const fallback = useWbFallback();
   return (
     <Sheet
       onOpenChange={(open) => {
@@ -64,6 +78,7 @@ function TaskDetailPage() {
       <SheetContent
         className="gap-0 overflow-y-auto border-(--wb-line) bg-(--wb-list) p-0 text-(--wb-fg) data-[side=right]:w-full data-[side=right]:sm:max-w-[560px]"
         side="right"
+        style={fallback}
       >
         <TaskDetail taskId={taskId} />
       </SheetContent>
@@ -209,6 +224,7 @@ function TaskDetail({ taskId }: { taskId: string }) {
   const events = useQuery(taskEventsQueryOptions(taskId));
   const coworkers = useQuery(agentListQueryOptions());
   const writes = useDeliveryWrites();
+  const approval = useApprovalDecision();
   const [dialog, setDialog] = useState<OpenDialog>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -248,6 +264,8 @@ function TaskDetail({ taskId }: { taskId: string }) {
   });
   const followed = deliveryLaneOf(task) !== null;
   const late = overdueMinutes(task, now);
+  const formerly =
+    late === null ? formerOverdueMinutes(task, history, now) : null;
   const evidence = evidenceOf(task.deliverableRef);
   const asking = pendingExtension(history);
   const status = task.status;
@@ -293,6 +311,20 @@ function TaskDetail({ taskId }: { taskId: string }) {
         ? { to: "/channel/$channelId" as const, label: "来自单聊" }
         : null;
 
+  /*
+   * 延期弹层要先知道员工有没有待答复的申请：流水读不到时不给打开（提交会绕过那条申请），在按钮旁说一句。
+   */
+  const extendButton = (label: string) => (
+    <button
+      className={cn(deliveryButton(false, "md"), "max-sm:w-full")}
+      disabled={events.isError || events.isPending}
+      onClick={() => setDialog({ kind: "extend", card: task })}
+      title={events.isError ? "读不到流水，稍后再试" : undefined}
+      type="button"
+    >
+      {label}
+    </button>
+  );
   const cancelButton = (
     <button
       className={cn(deliveryButton(false, "md"), "max-sm:w-full sm:ml-auto")}
@@ -334,41 +366,67 @@ function TaskDetail({ taskId }: { taskId: string }) {
       </div>
     );
   else if (followed && status === "needs_action")
+    /*
+     * 等你审批或回答：在这里直接批准 / 拒绝 / 回答（和看板「待关注」同一套），处理完员工接着做。这时服务器
+     * 不让催、不让换人；已接下的卡还能改预计时间。
+     */
     actions = (
       <div className="flex flex-col gap-2">
         <p className="m-0 text-(--wb-amber-fg) text-[13px]">
-          等你操作：{who}在等你审批或回答，到对话里处理完它才能接着做。
+          等你操作：{who}在等你审批或回答，处理完它才能接着做。
         </p>
-        <div className="flex flex-wrap gap-2">{cancelButton}</div>
+        <div className="flex flex-wrap items-center gap-2 empty:hidden">
+          <ApprovalActions
+            onDecide={approval.decide}
+            pending={approval.pending}
+            task={task}
+          />
+        </div>
+        {approval.error ? (
+          <p className="m-0 text-(--wb-danger-fg) text-[13px]" role="alert">
+            {approval.error instanceof RequestError &&
+            /[\u4e00-\u9fff]/.test(approval.error.message)
+              ? `没处理成：${approval.error.message}`
+              : "没处理成，结果未确认，请刷新后核对。"}
+          </p>
+        ) : null}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+          {canExtend(task)
+            ? extendButton(
+                late !== null || asking ? "准许延期到……" : "改预计时间",
+              )
+            : null}
+          {cancelButton}
+        </div>
       </div>
     );
-  else if (followed && withCoworker(status))
+  else if (followed && status === "running")
     actions = (
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
-        <button
-          className={cn(deliveryButton(late !== null, "md"), "max-sm:w-full")}
-          disabled={writes.busy.has(task.id)}
-          onClick={() => writes.run(task, "nudge")}
-          type="button"
-        >
-          {late !== null ? "再催一次，让它先交做完的部分" : "催一下"}
-        </button>
-        {task.acceptedAt ? (
+        {canNudge(task) ? (
           <button
-            className={cn(deliveryButton(false, "md"), "max-sm:w-full")}
-            onClick={() => setDialog({ kind: "extend", card: task })}
+            className={cn(deliveryButton(late !== null, "md"), "max-sm:w-full")}
+            disabled={writes.busy.has(task.id)}
+            onClick={() => writes.run(task, "nudge")}
             type="button"
           >
-            {late !== null || asking ? "准许延期到……" : "改预计时间"}
+            {late !== null ? "再催一次，让它先交做完的部分" : "催一下"}
           </button>
         ) : null}
-        <button
-          className={cn(deliveryButton(false, "md"), "max-sm:w-full")}
-          onClick={() => setDialog({ kind: "reassign", card: task })}
-          type="button"
-        >
-          换个员工接手
-        </button>
+        {canExtend(task)
+          ? extendButton(
+              late !== null || asking ? "准许延期到……" : "改预计时间",
+            )
+          : null}
+        {canReassign(task) ? (
+          <button
+            className={cn(deliveryButton(false, "md"), "max-sm:w-full")}
+            onClick={() => setDialog({ kind: "reassign", card: task })}
+            type="button"
+          >
+            换个员工接手
+          </button>
+        ) : null}
         {cancelButton}
       </div>
     );
@@ -410,11 +468,21 @@ function TaskDetail({ taskId }: { taskId: string }) {
           {clockText(lastOf(history, "cancelled") ?? task.updatedAt, now)}）。
         </p>
       ) : null}
-      {late !== null || task.lastError || asking || (task.returns ?? 0) > 0 ? (
+      {late !== null ||
+      formerly !== null ||
+      task.lastError ||
+      asking ||
+      (task.returns ?? 0) > 0 ? (
         <div className="flex flex-col gap-1.5 text-[13px]">
           {late !== null ? (
             <span className="inline-flex items-center gap-[5px] self-start rounded-(--wb-radius-pill) bg-(--wb-danger-soft) px-2 py-[3px] text-(--wb-danger-fg) text-[12px]">
               {overdueChip(late, task.nudges ?? 0)}
+            </span>
+          ) : null}
+          {formerly !== null ? (
+            <span className="text-(--wb-muted)">
+              曾逾期 {lengthText(formerly)}
+              ，已给了更多时间或已交；逾期记录留在流水里。
             </span>
           ) : null}
           {asking ? (
@@ -424,11 +492,7 @@ function TaskDetail({ taskId }: { taskId: string }) {
               ，等你答复。
             </span>
           ) : null}
-          {task.lastError ? (
-            <span className="text-(--wb-danger-fg) [overflow-wrap:anywhere]">
-              上一轮出错：{task.lastError}
-            </span>
-          ) : null}
+          {task.lastError ? <LastError raw={task.lastError} /> : null}
           {(task.returns ?? 0) > 0 ? (
             <span className="text-(--wb-muted)">退回过 {task.returns} 次</span>
           ) : null}
@@ -488,6 +552,9 @@ function TaskDetail({ taskId }: { taskId: string }) {
                     </b>
                   ) : null}
                   {line.rest ?? ""}
+                  {line.technical ? (
+                    <TechnicalError raw={line.technical} />
+                  ) : null}
                 </span>
               </li>
             ))}

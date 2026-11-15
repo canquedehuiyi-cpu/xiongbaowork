@@ -2,12 +2,18 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import {
+  ApprovalActions,
+  type OnBoardAnswer,
+} from "@/components/tasks/approval-actions";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   type Briefing,
   briefingKindAt,
   briefingPieces,
   briefingQueryOptions,
+  canExtend,
+  canNudge,
   clockText,
   DELIVERY_LANES,
   type DeliveryLaneKey,
@@ -24,6 +30,7 @@ import { cn } from "@/lib/utils";
 import {
   DeliveryDialogs,
   deliveryButton,
+  LastError,
   type OpenDialog,
   useDeliveryWrites,
   WriteFailure,
@@ -67,16 +74,17 @@ function ClockIcon({
   );
 }
 
+const NOTHING: ReadonlySet<string> = new Set();
+
 type Coworker = { id: string; name: string; avatarSeed?: string | null };
 
 /** 卡上的「谁 · 什么时候」：员工头像和名字，后面一句。 */
+/** 员工不在名单里（已删、外部员工、名单没读到）时叫「员工」，不露内部 id。 */
 function Who({
   coworker,
-  fallback,
   children,
 }: {
   coworker: Coworker | undefined;
-  fallback: string | null;
   children: ReactNode;
 }) {
   return (
@@ -90,7 +98,7 @@ function Who({
         />
       ) : null}
       <span className="min-w-0">
-        {coworker?.name ?? fallback ?? "员工"} · {children}
+        {coworker?.name ?? "员工"} · {children}
       </span>
     </span>
   );
@@ -119,6 +127,8 @@ function DeliveryCard({
   busy,
   onAct,
   onOpen,
+  onDecide,
+  decidingIds,
 }: {
   card: FollowedCard;
   coworker: Coworker | undefined;
@@ -126,29 +136,38 @@ function DeliveryCard({
   busy: boolean;
   onAct: (card: FollowedCard, verb: "review" | "nudge") => void;
   onOpen: (open: OpenDialog) => void;
+  /** 等你审批或回答的卡，在卡上直接批准 / 拒绝 / 回答（和「待关注」里同一套）。 */
+  onDecide?: OnBoardAnswer;
+  decidingIds?: ReadonlySet<string>;
 }) {
   const place = deliveryLaneOf(card);
   const late = overdueMinutes(card, now);
   const waitingOnYou = card.status === "needs_action";
-  const fallback = card.executorAgentId
-    ? card.executorAgentId.slice(0, 8)
-    : null;
   const error = card.lastError ? (
-    <p className="m-0 text-(--wb-danger-fg) text-[12px] leading-[1.5] [overflow-wrap:anywhere]">
-      上一轮出错：{card.lastError}
-    </p>
+    <LastError className="text-[12px]" raw={card.lastError} />
   ) : null;
   const waitingChip = waitingOnYou ? (
-    <span className={cn(CHIP, "bg-(--wb-amber-soft) text-(--wb-amber-fg)")}>
-      等你操作
-    </span>
+    <>
+      <span className={cn(CHIP, "bg-(--wb-amber-soft) text-(--wb-amber-fg)")}>
+        等你操作
+      </span>
+      {onDecide ? (
+        <div className="flex flex-wrap items-center gap-1.5 empty:hidden">
+          <ApprovalActions
+            onDecide={onDecide}
+            pending={decidingIds ?? NOTHING}
+            task={card}
+          />
+        </div>
+      ) : null}
+    </>
   ) : null;
 
   if (place?.lane === "pending_accept")
     return (
       <article className={CARD} data-stage="pending_accept">
         <CardTitle card={card} />
-        <Who coworker={coworker} fallback={fallback}>
+        <Who coworker={coworker}>
           {card.createdAt ? `${clockText(card.createdAt, now)} 派出` : "派出"}
         </Who>
         {waitingChip ?? (
@@ -172,7 +191,7 @@ function DeliveryCard({
           data-stage="accepted"
         >
           <CardTitle card={card} />
-          <Who coworker={coworker} fallback={fallback}>
+          <Who coworker={coworker}>
             {deadline ? `预计 ${clockText(deadline, now)} 交` : "已接下"}
           </Who>
           <span
@@ -182,30 +201,34 @@ function DeliveryCard({
           </span>
           {waitingChip}
           {error}
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              className={deliveryButton()}
-              disabled={busy}
-              onClick={() => onAct(card, "nudge")}
-              type="button"
-            >
-              催一下
-            </button>
-            <button
-              className={deliveryButton()}
-              disabled={busy}
-              onClick={() => onOpen({ kind: "extend", card })}
-              type="button"
-            >
-              准许延期
-            </button>
+          <div className="flex flex-wrap gap-1.5 empty:hidden">
+            {canNudge(card) ? (
+              <button
+                className={deliveryButton()}
+                disabled={busy}
+                onClick={() => onAct(card, "nudge")}
+                type="button"
+              >
+                催一下
+              </button>
+            ) : null}
+            {canExtend(card) ? (
+              <button
+                className={deliveryButton()}
+                disabled={busy}
+                onClick={() => onOpen({ kind: "extend", card })}
+                type="button"
+              >
+                准许延期
+              </button>
+            ) : null}
           </div>
         </article>
       );
     return (
       <article className={CARD} data-stage="accepted">
         <CardTitle card={card} />
-        <Who coworker={coworker} fallback={fallback}>
+        <Who coworker={coworker}>
           {card.acceptedAt
             ? `${clockText(card.acceptedAt, now)} 接下`
             : "已接下"}
@@ -232,9 +255,7 @@ function DeliveryCard({
         data-stage="delivered"
       >
         <CardTitle card={card} />
-        <Who coworker={coworker} fallback={fallback}>
-          {clockText(card.updatedAt, now)} 交付
-        </Who>
+        <Who coworker={coworker}>{clockText(card.updatedAt, now)} 交付</Who>
         {line ? (
           <span className="text-(--wb-fg2) text-[12.5px] leading-[1.5] [overflow-wrap:anywhere]">
             {line}
@@ -267,7 +288,7 @@ function DeliveryCard({
   return (
     <article className={cn(CARD, "opacity-80")} data-stage={card.status}>
       <CardTitle card={card} />
-      <Who coworker={coworker} fallback={fallback}>
+      <Who coworker={coworker}>
         {card.status === "cancelled"
           ? `${clockText(card.updatedAt, now)} 取消`
           : returns > 0
@@ -342,10 +363,20 @@ function BriefingStrip({
 export function DeliveryBoard({
   cards,
   now: fixedNow,
+  onlyOverdue,
+  onOnlyOverdueChange,
+  onDecide,
+  decidingIds,
 }: {
   /** 看板这一次读到的在跟卡（不在跟的不传进来）。 */
   cards: FollowedCard[];
   now?: Date;
+  /** 「只看逾期」，在地址里（`overdue=1`），由看板页传进来。 */
+  onlyOverdue: boolean;
+  onOnlyOverdueChange: (next: boolean) => void;
+  /** 看板的审批 / 回答写入（`useApprovalDecision`），和「待关注」共用一个。 */
+  onDecide?: OnBoardAnswer;
+  decidingIds?: ReadonlySet<string>;
 }) {
   const now = fixedNow ?? new Date();
   const coworkers = useQuery(agentListQueryOptions());
@@ -355,7 +386,6 @@ export function DeliveryBoard({
   const briefing = useQuery(briefingQueryOptions(kind));
   const writes = useDeliveryWrites();
   const [dialog, setDialog] = useState<OpenDialog>(null);
-  const [onlyOverdue, setOnlyOverdue] = useState(false);
   const [byCoworker, setByCoworker] = useState(false);
 
   const placed = cards.flatMap((card) => {
@@ -371,7 +401,7 @@ export function DeliveryBoard({
     ({ card }) => !onlyOverdue || overdueMinutes(card, now) !== null,
   );
   const nameOf = (card: FollowedCard) =>
-    coworkerOf(card.executorAgentId)?.name ?? card.executorAgentId ?? "";
+    coworkerOf(card.executorAgentId)?.name ?? "员工";
   const ordered = byCoworker
     ? [...shown].sort((a, b) =>
         nameOf(a.card).localeCompare(nameOf(b.card), "zh-CN"),
@@ -411,7 +441,7 @@ export function DeliveryBoard({
           <button
             aria-pressed={onlyOverdue}
             className={toggle(onlyOverdue)}
-            onClick={() => setOnlyOverdue((value) => !value)}
+            onClick={() => onOnlyOverdueChange(!onlyOverdue)}
             type="button"
           >
             只看逾期
@@ -445,7 +475,9 @@ export function DeliveryBoard({
               coworker={coworkerOf(card.executorAgentId)}
               key={card.id}
               now={now}
+              decidingIds={decidingIds}
               onAct={(target, verb) => writes.run(target, verb)}
+              onDecide={onDecide}
               onOpen={setDialog}
             />
           );

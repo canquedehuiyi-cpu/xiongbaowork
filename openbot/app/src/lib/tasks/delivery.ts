@@ -76,9 +76,25 @@ export function deliveryLaneOf(card: {
   };
 }
 
-/** 员工手上（还没交）的状态：催办、延期、换人只对这些有意义。 */
-export const withCoworker = (status: string): boolean =>
-  status === "running" || status === "needs_action" || status === "failed";
+/*
+ * 卡片上的按钮按服务器真正接受的状态给（`server/src/tasks/nudge-run.ts`、`delivery.ts`），看板和详情用同一套：
+ * - 催：只有员工在做（`running`）；在等你处理（`needs_action`）时服务器一定拒。
+ * - 延期 / 改预计时间：员工已接下、手上还没交（`running` 或 `needs_action`）。
+ * - 换人：员工手上、不在等你处理（`running`）。
+ */
+export const canNudge = (card: { status: string }): boolean =>
+  card.status === "running";
+export const canExtend = (card: {
+  status: string;
+  acceptedAt?: string | null;
+}): boolean =>
+  Boolean(card.acceptedAt) &&
+  (card.status === "running" || card.status === "needs_action");
+export const canReassign = (card: { status: string }): boolean =>
+  card.status === "running";
+
+/** 还在员工手上、没交没结束的状态（逾期口径用，和服务器 `tasks/overdue.ts` 一致）。 */
+const OVERDUE_OPEN_STATUSES = ["running", "needs_action"];
 
 /** 当前生效的预计时间：`dueAt`，没报就是接下后 2 小时；还没接下为 null。 */
 export function deadlineOf(card: {
@@ -99,10 +115,50 @@ export function overdueMinutes(
   card: FollowedFields & { status: string },
   now: Date,
 ): number | null {
-  if (!isFollowed(card) || !card.overdueAt || !withCoworker(card.status))
+  if (
+    !isFollowed(card) ||
+    !card.overdueAt ||
+    !OVERDUE_OPEN_STATUSES.includes(card.status)
+  )
     return null;
+  // 准许延期、预计时间改到将来以后，此刻不算逾期（`overdue_at` 不清，流水里的记录照旧）。
+  if (card.dueAt && new Date(card.dueAt).getTime() > now.getTime()) return null;
   const deadline = deadlineOf(card) ?? new Date(card.overdueAt);
   return Math.max(0, Math.floor((now.getTime() - deadline.getTime()) / 60000));
+}
+
+/**
+ * 记过逾期、此刻已不算逾期的卡（给了更多时间，或逾期后交了）：当时逾期了多久。从流水里最近一条「逾期」
+ * 起，到此后第一次挪动预计时间（准许延期、你改预计时间）或交付为止，按那条逾期记下的截止时间算；流水里
+ * 找不到就按卡上记为逾期的时刻算。不曾逾期、或此刻仍逾期时为 null。
+ */
+export function formerOverdueMinutes(
+  card: FollowedFields & { status: string },
+  events: TaskEvent[],
+  now: Date,
+): number | null {
+  if (!isFollowed(card) || !card.overdueAt) return null;
+  if (overdueMinutes(card, now) !== null) return null;
+  const history = eventsInOrder(events);
+  const markIndex = history.findLastIndex((event) => event.kind === "overdue");
+  const mark = markIndex >= 0 ? history[markIndex] : undefined;
+  const dueText = mark?.detail?.dueAt;
+  const deadline =
+    typeof dueText === "string" ? new Date(dueText) : deadlineOf(card);
+  if (!deadline || Number.isNaN(deadline.getTime())) return null;
+  const until = history
+    .slice(markIndex + 1)
+    .find(
+      (event) =>
+        event.kind === "extension_granted" ||
+        event.kind === "delivered" ||
+        (event.kind === "edited" &&
+          typeof (event.detail?.after as Record<string, unknown> | undefined)
+            ?.dueAt === "string"),
+    );
+  const end = until ? new Date(until.createdAt) : new Date(card.overdueAt);
+  const minutes = Math.floor((end.getTime() - deadline.getTime()) / 60000);
+  return minutes > 0 ? minutes : null;
 }
 
 /** 「40 分钟」「1 小时 20 分钟」「2 天」。 */
@@ -246,7 +302,32 @@ export function eventsInOrder<T extends { createdAt: string }>(
 }
 
 /** 一行流水的说法：`warn` 是要标出来的那几个字（「被挡回」）。 */
-export type EventLine = { text: string; warn?: string; rest?: string };
+export type EventLine = {
+  text: string;
+  warn?: string;
+  rest?: string;
+  /** 说不成人话的出错原文：不放在句子里，折叠在「技术细节」下。 */
+  technical?: string;
+};
+
+/**
+ * 出错原因能不能原样给人看：像一句通俗中文（有汉字、英文字母不比汉字多、没有异常名、堆栈、代码符号、
+ * 网址）才行。不行时界面写「上一轮出错了」，原文折叠在「技术细节」里。
+ */
+export function plainErrorText(raw: string | null | undefined): string | null {
+  const text = raw?.trim();
+  if (!text) return null;
+  const han = (text.match(/[\u4e00-\u9fff]/g) ?? []).length;
+  const latin = (text.match(/[A-Za-z]/g) ?? []).length;
+  if (han < 2 || latin > han) return null;
+  if (
+    /[{}<>[\]`\\]|https?:\/\/|Error|Exception|ECONN|ETIMEDOUT|\bat\s|\bstatus\b|\b[45]\d\d\b|_[a-z]/.test(
+      text,
+    )
+  )
+    return null;
+  return text;
+}
 
 /**
  * 一行流水念给你听（设计稿 2 的口吻：谁、做了什么）。`nameOf` 把 `agent:<id>` 换成员工的名字；`user:` 是你。
@@ -329,11 +410,16 @@ export function eventLine(
         return { text: "换人接手，原来那一轮停下了" };
       if (detail.reason === "superseded")
         return { text: "这一轮被后来的一轮接替了" };
-      return {
-        text: "",
-        warn: "这一轮出错了",
-        rest: text("error") ? `：${text("error")}` : "",
-      };
+      {
+        const raw = text("error");
+        const plain = plainErrorText(raw);
+        return {
+          text: "",
+          warn: "这一轮出错了",
+          rest: plain ? `：${plain}` : "",
+          ...(raw && !plain ? { technical: raw } : {}),
+        };
+      }
     case "nudged":
       return {
         text: byUser ? `你催了${agent}一次` : `叫醒${agent}，问进度`,
@@ -575,6 +661,56 @@ export const extendTask = (id: string, dueAt: string, answering: boolean) =>
         body: { dueAt },
         fallback: "预计时间没改成，请稍后再试。",
       });
+
+/** 不批延期：维持原来的预计时间（规格第 4 节）。 */
+export const denyExtension = (id: string) =>
+  client(`${cardPath(id)}/extension`, {
+    method: "POST",
+    body: { decision: "deny" },
+    fallback: "没答复成，请稍后再试。",
+  });
+
+export type DeliveryVerb =
+  | "review"
+  | "cancel"
+  | "nudge"
+  | "return"
+  | "extend"
+  | "deny"
+  | "reassign";
+
+/** 一个动作被服务器拒（409）时，没有中文原话可用的说法。 */
+const REFUSED: Record<DeliveryVerb, string> = {
+  review: "这件活已经不在等你验收了，刷新看看。",
+  cancel: "这件活已经结束了，不用再取消。",
+  nudge: "这件活现在不用催（员工不在做它，或在等你处理）。",
+  return: "这件活已经不在等你验收了，不能退回。",
+  extend: "这件活现在不能改预计时间（已交成果或已结束）。",
+  deny: "这条延期申请已经答复过了。",
+  reassign: "这件活现在不能换人。",
+};
+
+/**
+ * 写失败时给人看的一句话。服务器的中文原话照用，但工具名（`accept_task` 之类）换成人话；英文原话（老接口的
+ * 「Not awaiting review.」）和没收到回应，换成按动作写好的中文。
+ */
+export function deliveryErrorText(error: unknown, verb: DeliveryVerb): string {
+  const status =
+    error && typeof error === "object" && "status" in error
+      ? Number((error as { status: unknown }).status)
+      : 0;
+  const message = error instanceof Error ? error.message.trim() : "";
+  const said = message
+    .replace(/接活工具（accept_task）/g, "接活功能")
+    .replace(/accept_task/g, "接活功能");
+  // 中文原话里不能夹着字段名、取值（「dueAt」「grant」）：夹着就不用它。
+  if (/[\u4e00-\u9fff]/.test(said) && !/[A-Za-z]{3,}/.test(said)) return said;
+  if (status === 404) return "这件活已经不在了，刷新看看。";
+  if (status === 409) return REFUSED[verb];
+  if (status === 400) return "填的内容服务器没认出来，改一下再试。";
+  if (status >= 500) return "服务器出了点问题，请稍后再试。";
+  return "没收到服务器的回应，结果未确认，请刷新后核对。";
+}
 
 export const reassignTask = (id: string, agentId: string) =>
   client(`${cardPath(id)}/reassign`, {

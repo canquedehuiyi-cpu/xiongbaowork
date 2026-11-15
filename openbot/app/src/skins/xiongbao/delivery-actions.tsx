@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import { type CSSProperties, type ReactNode, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -11,19 +11,59 @@ import { taskAction } from "@/lib/tasks/actions";
 import {
   cancelTask,
   clockText,
+  type DeliveryVerb,
+  deliveryErrorText,
+  denyExtension,
   extendTask,
   nudgeTask,
   pendingExtension,
+  plainErrorText,
   reassignTask,
   returnTask,
   taskEventsQueryOptions,
 } from "@/lib/tasks/delivery";
 import { cn } from "@/lib/utils";
+import { useSkinId } from "@/skins/store";
 
 /*
  * 在跟卡上的几个动作（交付闭环 Task 8）：验收、退回（写原因）、取消、催一下、准许延期、换人接手。看板的
  * 卡和卡片详情用同一套，接口见 `lib/tasks/delivery.ts`。颜色只从 `--wb-*` 令牌取（`skin.css`）。
  */
+
+/*
+ * 卡片详情和这些弹层也可能在别的皮肤里打开（手机推送、深链落到 `/tasks/<id>`），那里没有 `--wb-*`。
+ * 这时在弹出层的根上把用到的令牌接到应用自己的令牌上，颜色不至于透明。默认皮肤里什么都不加。
+ */
+const WB_FALLBACK = {
+  "--wb-bg": "var(--background)",
+  "--wb-list": "var(--popover)",
+  "--wb-card": "var(--card)",
+  "--wb-card2": "var(--muted)",
+  "--wb-hover": "var(--accent)",
+  "--wb-fg": "var(--foreground)",
+  "--wb-fg2": "var(--foreground)",
+  "--wb-muted": "var(--muted-foreground)",
+  "--wb-line": "var(--border)",
+  "--wb-line2": "var(--border)",
+  "--wb-blue": "var(--primary)",
+  "--wb-blue-fg": "var(--primary-foreground)",
+  "--wb-blue-line": "var(--primary)",
+  "--wb-danger-fg": "var(--destructive)",
+  "--wb-danger-soft":
+    "color-mix(in oklab, var(--destructive) 14%, transparent)",
+  "--wb-danger-line": "var(--destructive)",
+  "--wb-amber": "#d98a00",
+  "--wb-amber-soft": "rgba(245, 165, 36, 0.15)",
+  "--wb-amber-fg": "#b06f00",
+  "--wb-green": "#2f9e6a",
+  "--wb-radius": "12px",
+  "--wb-radius-pill": "99px",
+} as CSSProperties;
+
+/** 别的皮肤里给弹出层根元素的兜底令牌；默认皮肤为 undefined。 */
+export function useWbFallback(): CSSProperties | undefined {
+  return useSkinId() === "xiongbao" ? undefined : WB_FALLBACK;
+}
 
 /** 设计稿 1 的按钮：32px 高的灰按钮，`primary` 是验收那种蓝按钮。 */
 export const deliveryButton = (
@@ -82,8 +122,7 @@ export function useDeliveryWrites() {
     onError: (error, input) =>
       setFailure({
         title: input.card.title,
-        message:
-          error instanceof Error ? error.message : "没成功，请稍后再试。",
+        message: deliveryErrorText(error, input.verb),
       }),
     onSettled: (_data, _error, input) => {
       setBusy((current) => {
@@ -105,6 +144,58 @@ export function useDeliveryWrites() {
       write.mutate({ card, verb });
     },
   };
+}
+
+/**
+ * 卡上「上一轮出错」那一行。原因像一句通俗中文就照写；不像（英文异常、网关报错）就只说「上一轮出错了」，
+ * 原文折叠在「技术细节」里，要看的人点开看。
+ */
+export function LastError({
+  raw,
+  className,
+}: {
+  raw: string;
+  className?: string;
+}) {
+  const plain = plainErrorText(raw);
+  if (plain)
+    return (
+      <p
+        className={cn(
+          "m-0 text-(--wb-danger-fg) leading-[1.5] [overflow-wrap:anywhere]",
+          className,
+        )}
+      >
+        上一轮出错：{plain}
+      </p>
+    );
+  return <TechnicalError className={className} raw={raw} said="上一轮出错了" />;
+}
+
+/** 一句人话，后面折叠着原文。 */
+export function TechnicalError({
+  said,
+  raw,
+  className,
+}: {
+  /** 折叠前的那句人话；流水里那一行已经说了「这一轮出错了」，就不再说。 */
+  said?: ReactNode;
+  raw: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex flex-col gap-0.5 leading-[1.5]", className)}>
+      {said ? <span className="text-(--wb-danger-fg)">{said}</span> : null}
+      <details className="text-(--wb-muted)">
+        <summary className="cursor-pointer outline-none hover:text-(--wb-fg2) focus-visible:text-(--wb-fg)">
+          技术细节
+        </summary>
+        <code className="mt-1 block whitespace-pre-wrap break-all font-mono text-[11.5px]">
+          {raw}
+        </code>
+      </details>
+    </div>
+  );
 }
 
 /** 写失败时卡片上方的一行：哪件活、服务器怎么说。 */
@@ -149,6 +240,7 @@ function ActionDialog({
   onClose: () => void;
   busy: boolean;
 }) {
+  const fallback = useWbFallback();
   return (
     <Dialog
       onOpenChange={(next) => {
@@ -159,6 +251,7 @@ function ActionDialog({
       <DialogContent
         className="max-w-[460px] gap-3 rounded-[16px] border-(--wb-line2) bg-(--wb-card) p-[22px] text-(--wb-fg)"
         showCloseButton={false}
+        style={fallback}
       >
         <DialogTitle className="m-0 font-semibold text-(--wb-fg) text-[17px]">
           {title}
@@ -172,11 +265,17 @@ function ActionDialog({
   );
 }
 
-function DialogFailure({ error }: { error: unknown }) {
+function DialogFailure({
+  error,
+  verb,
+}: {
+  error: unknown;
+  verb: DeliveryVerb;
+}) {
   if (!error) return null;
   return (
     <p className="m-0 text-(--wb-danger-fg) text-[13px]" role="alert">
-      {error instanceof Error ? error.message : "没成功，请稍后再试。"}
+      {deliveryErrorText(error, verb)}
     </p>
   );
 }
@@ -269,7 +368,7 @@ export function ReturnDialog({
         <span className="text-(--wb-muted) text-[12px]">
           {text ? `${text.length} / 500` : "退回要写原因，写了才能提交。"}
         </span>
-        <DialogFailure error={send.error} />
+        <DialogFailure error={send.error} verb="return" />
         <DialogButtons
           busy={send.isPending}
           busyLabel="正在退回…"
@@ -307,12 +406,24 @@ export function ExtendDialog({
     onSuccess: () => onClose(),
     onSettled: settled,
   });
+  const deny = useMutation({
+    mutationFn: () => denyExtension(card.id),
+    retry: false,
+    onSuccess: () => onClose(),
+    onSettled: settled,
+  });
+  const busy = send.isPending || deny.isPending;
+  /*
+   * 读不到流水就不知道员工有没有待答复的延期申请：这时提交会绕过那条申请直接改时间，申请一直悬着。
+   * 所以读失败时不让提交，请人稍后再试。
+   */
+  const unknown = events.isError;
   return (
     <ActionDialog
-      busy={send.isPending}
+      busy={busy}
       description={
         pending
-          ? `员工申请延期${requested ? `到 ${requested}` : ""}。可以照准，也可以改一个时间。`
+          ? `员工申请延期${requested ? `到 ${requested}` : ""}。可以照准，也可以改一个时间，或者不批。`
           : "给员工一个新的预计时间，到点还没交，服务器照常催、照常记逾期。"
       }
       onClose={onClose}
@@ -323,7 +434,8 @@ export function ExtendDialog({
         onSubmit={(event) => {
           event.preventDefault();
           const dueAt = value.trim();
-          if (dueAt && !send.isPending) send.mutate(dueAt);
+          if (dueAt && !busy && !unknown && !events.isPending)
+            send.mutate(dueAt);
         }}
       >
         <input
@@ -334,11 +446,27 @@ export function ExtendDialog({
           placeholder="例如 16:00、40 分钟、明天上午十点"
           value={value}
         />
-        <DialogFailure error={send.error} />
+        {unknown ? (
+          <p className="m-0 text-(--wb-danger-fg) text-[13px]" role="alert">
+            读不到这件活的延期申请，先别改，稍后再试。
+          </p>
+        ) : null}
+        <DialogFailure error={send.error} verb="extend" />
+        <DialogFailure error={deny.error} verb="deny" />
+        {pending ? (
+          <button
+            className={cn(deliveryButton(false, "md"), "self-start")}
+            disabled={busy}
+            onClick={() => deny.mutate()}
+            type="button"
+          >
+            {deny.isPending ? "正在答复…" : "不批，按原时间交"}
+          </button>
+        ) : null}
         <DialogButtons
-          busy={send.isPending}
+          busy={busy}
           busyLabel="正在改…"
-          disabled={!value.trim() || events.isPending}
+          disabled={!value.trim() || events.isPending || unknown}
           onClose={onClose}
           submit="准许延期"
         />
@@ -394,7 +522,7 @@ export function ReassignDialog({
             </option>
           ))}
         </select>
-        <DialogFailure error={send.error} />
+        <DialogFailure error={send.error} verb="reassign" />
         <DialogButtons
           busy={send.isPending}
           busyLabel="正在换…"

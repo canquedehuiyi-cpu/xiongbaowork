@@ -183,10 +183,12 @@ export const Route = createFileRoute("/_authed/_app/tasks")({
    */
   validateSearch: (
     search: Record<string, unknown>,
-  ): Partial<BoardSearch> & { attention?: "review" } => ({
+  ): Partial<BoardSearch> & { attention?: "review"; overdue?: 1 } => ({
     ...boardSearch(search),
     // The attention area's tab rides along only when it is not the default, so a bare /tasks stays bare.
     ...(attentionOf(search) === "review" ? { attention: "review" } : {}),
+    // 「只看逾期」（交付闭环 Task 8），同样只在打开时出现在地址里。
+    ...(onlyOverdueOf(search) ? { overdue: 1 as const } : {}),
   }),
 });
 
@@ -199,6 +201,14 @@ export type AttentionTab = "needsYou" | "review";
 
 export const attentionOf = (search: Record<string, unknown>): AttentionTab =>
   search.attention === "review" ? "review" : "needsYou";
+
+/**
+ * 三步收货的「只看逾期」，地址里是 `overdue=1`（和服务器列表的筛选同名）。和 `attention` 一样是自己的键，
+ * 不进 `BoardSearch`：它只决定四列里画哪些卡，不改读什么。存成数字 1，地址里才是 `overdue=1`（存成字符串
+ * 会被路由器加上引号）；手写的 `"1"` 也认。
+ */
+export const onlyOverdueOf = (search: Record<string, unknown>): boolean =>
+  search.overdue === "1" || search.overdue === 1;
 
 /**
  * The 工作记录 banner's line, counted over the stat bar's read: how many tasks, how many distinct
@@ -1379,6 +1389,7 @@ function TasksPage() {
   const rawSearch = Route.useSearch();
   const address = boardSearch(rawSearch);
   const attention = attentionOf(rawSearch);
+  const onlyOverdue = onlyOverdueOf(rawSearch);
   const {
     machineId,
     crew,
@@ -1407,12 +1418,15 @@ function TasksPage() {
    * How far back this list reaches, now carried in the address: a month is the horizon a person
    * checks a coworker over, a week is did it run today, everything is the audit question.
    */
-  const patch = (over: Partial<BoardSearch> & { attention?: "review" }) =>
+  const patch = (
+    over: Partial<BoardSearch> & { attention?: "review"; overdue?: 1 },
+  ) =>
     navigate({
       replace: true,
       search: {
         ...address,
         ...(attention === "review" ? { attention } : {}),
+        ...(onlyOverdue ? { overdue: 1 as const } : {}),
         ...over,
       },
       to: "/tasks",
@@ -1695,7 +1709,15 @@ function TasksPage() {
         </div>
       ) : null}
       {tasks.data !== undefined && followed.length > 0 ? (
-        <DeliveryBoard cards={followed} />
+        <DeliveryBoard
+          cards={followed}
+          decidingIds={approval.pending}
+          onDecide={approval.decide}
+          onlyOverdue={onlyOverdue}
+          onOnlyOverdueChange={(next) =>
+            patch({ overdue: next ? 1 : undefined })
+          }
+        />
       ) : null}
       {/*
        * The parity plan's 工作记录横幅, drawn as the reference draws it: the panel HOLDS the window's
