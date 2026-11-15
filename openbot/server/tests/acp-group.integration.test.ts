@@ -37,9 +37,13 @@ import {
   users,
   workItems,
 } from "../src/db/schema";
+import {
+  type CheckPrivateShare,
+  createPrivateShareCheck,
+} from "../src/proactive/private-share";
 import { createQuotaService } from "../src/quota/limits";
 import { createTaskProjector } from "../src/tasks/projector";
-import { runAsTenant } from "../src/tenant/context";
+import { currentTenant, runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { createWorkQueue } from "../src/work/queue";
 import { createMemoryAcpTurnStore } from "./support/acp-turns-memory";
@@ -138,7 +142,10 @@ async function until(
 }
 
 /** A hirer's external employee and two built-in employees, the group service and a computer. */
-async function harness(owner: AgentActor) {
+async function harness(
+  owner: AgentActor,
+  options: { privateShare?: CheckPrivateShare } = {},
+) {
   const external = await bot(owner, "小码");
   const writer = await bot(owner, "Writer");
   const reviewer = await bot(owner, "Reviewer");
@@ -224,6 +231,7 @@ async function harness(owner: AgentActor) {
       }),
     }),
     caps: { maxDepth: 1, maxPerRun: 2 },
+    ...(options.privateShare ? { privateShare: options.privateShare } : {}),
     mayAddress: async () => true,
     auditStore: { insert: async () => undefined },
     progressEveryMs: 0,
@@ -594,5 +602,125 @@ describe("an external employee in a group", () => {
     ]);
     expect(await tasksUsed(owner.id)).toBe(hirerBefore + 1);
     expect(await tasksUsed(teammate.id)).toBe(teammateBefore);
+  });
+  test("asked by another member, its answer waits for its hirer's permission, never the asker's", async () => {
+    const owner = await person();
+    const teammate = await person();
+    let decision: "pending" | "approved" = "pending";
+    const opened: { actorId: string; frame: string }[] = [];
+    const privateShare = createPrivateShareCheck({
+      approvals: {
+        open: async (action) => {
+          opened.push({ actorId: action.actorId, frame: currentTenant() });
+          return {
+            id: `${prefix}-share-${opened.length}`,
+            status: decision,
+          } as never;
+        },
+        list: async () => [],
+        rules: async () => [],
+      },
+    });
+    const {
+      external,
+      writer,
+      turns,
+      down,
+      conversations,
+      device,
+      sweepAll,
+      list,
+    } = await harness(owner, { privateShare });
+    const channel = await runAsTenant(owner.id, () =>
+      conversations.create(owner.id, { agentIds: [external, writer] }),
+    );
+    createdChannels.push(channel.id);
+    const [{ email } = { email: "" }] = await runAsTenant(teammate.id, () =>
+      database
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, teammate.id)),
+    );
+    await runAsTenant(owner.id, () =>
+      conversations.addMember(owner.id, channel.id, { email }),
+    );
+
+    await runAsTenant(teammate.id, () =>
+      conversations.send(teammate.id, channel.id, {
+        id: `${prefix}-p1`,
+        text: "@小码 看看我的分支",
+      }),
+    );
+    await sweepAll();
+    // Its "started" notice is the server's own words: nobody is asked about it.
+    expect(opened).toEqual([]);
+    const turn = turns.rows[0] as AcpTurnRow;
+    await until(
+      () => down.some((frame) => frame.type === "acp.open"),
+      "acp.open",
+    );
+    await device({
+      type: "acp.session",
+      threadId: turn.threadId,
+      sessionId: "s",
+      loaded: true,
+    });
+    await until(
+      () => down.some((frame) => frame.type === "acp.prompt"),
+      "acp.prompt",
+    );
+    await device({
+      type: "acp.turn.ack",
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+    });
+    await device({
+      type: "acp.update",
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+      seq: 1,
+      update: {
+        sessionUpdate: "agent_message_chunk",
+        content: { type: "text", text: "分支里有个配置写错了。" },
+      },
+    });
+    await device({
+      type: "acp.turn.end",
+      threadId: turn.threadId,
+      turnId: turn.turnId,
+      stopReason: "end_turn",
+      interrupted: false,
+    });
+
+    // The ask goes to its hirer, in the hirer's frame; the member who asked is never asked.
+    await until(() => opened.length > 0, "the share ask");
+    expect(opened).toEqual([{ actorId: owner.id, frame: owner.id }]);
+    const waiting = async () =>
+      (await list(channel.id, teammate)).messages.find(
+        (message) =>
+          message.agentId === external && message.status === "waiting",
+      );
+    await until(async () => Boolean(await waiting()), "the held answer");
+    expect(JSON.stringify(await list(channel.id, teammate))).not.toContain(
+      "配置写错了",
+    );
+
+    // The hirer allows it, in their own frame: the held line is theirs, and the group reads it.
+    decision = "approved";
+    await runAsTenant(owner.id, () =>
+      conversations.continueWaiting(`${prefix}-share-1`, async () => {
+        throw new Error("a held answer is shown, not re-run");
+      }),
+    );
+    for (const reader of [teammate, owner])
+      expect(
+        (await list(channel.id, reader)).messages.some(
+          (message) =>
+            message.agentId === external &&
+            message.status === "completed" &&
+            message.text === "分支里有个配置写错了。",
+        ),
+      ).toBe(true);
+    expect(opened.every((ask) => ask.actorId === owner.id)).toBe(true);
   });
 });

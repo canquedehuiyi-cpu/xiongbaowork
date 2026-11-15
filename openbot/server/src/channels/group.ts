@@ -1498,15 +1498,23 @@ export function createGroupConversations(deps: {
           : PERSON_INITIATOR,
       });
       await writing;
-      const gate = await shareGate({
-        ownerUserId: turn.ownerUserId,
-        channelId: turn.channelId,
-        agentId,
-        threadId,
-        rowId: id,
-        runId,
-        text: result.replyText,
-      });
+      /*
+       * A detached turn (an external employee's, `createAcpGroupTurn`) answers only this server's own
+       * notice that it started: nothing of anyone's to hold back. Its real answer is gated when it is
+       * posted (`announceHandoff`), with its hirer.
+       */
+      const detached = (result as { detached?: boolean }).detached === true;
+      const gate = detached
+        ? ({ status: "allowed" } as const)
+        : await shareGate({
+            ownerUserId: turn.ownerUserId,
+            channelId: turn.channelId,
+            agentId,
+            threadId,
+            rowId: id,
+            runId,
+            text: result.replyText,
+          });
       if (gate.status === "pending") {
         await deps.store.finish(id, "", "waiting", {
           ...gate.details,
@@ -1533,8 +1541,7 @@ export function createGroupConversations(deps: {
        * computer (agents/acp/agent.ts `createAcpGroupTurn`): its card stays open for the run that
        * does the work, which finishes it and announces its answer here (`announceHandoff`).
        */
-      if (!(result as { detached?: boolean }).detached)
-        await closeCard(cardTurn, agentId, runId, false);
+      if (!detached) await closeCard(cardTurn, agentId, runId, false);
       saved = true;
       savedReply = result.replyText;
       await deps.activity?.(turn, agentId, result.replyText, `group:${id}`);
@@ -1685,13 +1692,41 @@ export function createGroupConversations(deps: {
     )
       return false;
     const bots = await orderedRoster(thread.ownerUserId, thread.channelId);
-    if (!bots?.some((bot) => bot.id === thread.agentId)) return true;
+    const speaking = bots?.find((bot) => bot.id === thread.agentId);
+    if (!speaking) return true;
+    /*
+     * Whose words these are. An external employee answers from its hirer's computer and files, so
+     * its hirer is asked whether they may reach the group, and its line is the hirer's: written in
+     * the hirer's frame, held in the hirer's private row, resumed by the hirer's decision
+     * (`continueWaiting` finds only the decider's own rows). Anyone else's relayed answer is the
+     * thread owner's, as before.
+     */
+    const owner =
+      input.via === "device_acp" && speaking.hiredBy
+        ? speaking.hiredBy
+        : thread.ownerUserId;
+    return owner === thread.ownerUserId
+      ? postAnswer(input, thread, owner)
+      : runAsTenant(owner, () => postAnswer(input, thread, owner));
+  }
+
+  /** The rest of `announceHandoff`: the share gate and the line, as `owner`'s, in `owner`'s frame. */
+  async function postAnswer(
+    input: {
+      threadId: string;
+      agentId: string;
+      text: string;
+      via?: "device_acp";
+    },
+    thread: { channelId: string; agentId: string },
+    owner: string,
+  ): Promise<boolean> {
     const id = `handoff:${createHash("sha256")
       .update(`${input.threadId}\n${input.agentId}\n${input.text}`)
       .digest("hex")
       .slice(0, 32)}`;
     const gate = await shareGate({
-      ownerUserId: thread.ownerUserId,
+      ownerUserId: owner,
       channelId: thread.channelId,
       agentId: thread.agentId,
       threadId: input.threadId,
@@ -1706,7 +1741,7 @@ export function createGroupConversations(deps: {
     if (gate.status !== "allowed") {
       await deps.store.append({
         id,
-        ownerUserId: thread.ownerUserId,
+        ownerUserId: owner,
         channelId: thread.channelId,
         agentId: thread.agentId,
         threadId: input.threadId,
@@ -1722,7 +1757,7 @@ export function createGroupConversations(deps: {
     }
     const added = await deps.store.append({
       id,
-      ownerUserId: thread.ownerUserId,
+      ownerUserId: owner,
       channelId: thread.channelId,
       agentId: thread.agentId,
       threadId: input.threadId,
@@ -1732,7 +1767,7 @@ export function createGroupConversations(deps: {
     if (added)
       await deps.activity?.(
         {
-          ownerUserId: thread.ownerUserId,
+          ownerUserId: owner,
           channelId: thread.channelId,
           messageId: id,
           agentIds: [thread.agentId],
