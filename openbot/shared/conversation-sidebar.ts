@@ -106,7 +106,7 @@ export type SidebarContext = {
     managedBy?: string;
     compactedAt?: string | null;
   }[];
-  /** 最近一次压缩；`summarizedCount` 是被摘要替代的消息条数（0217 之前的记录为 null）。 */
+  /** 最近一次压缩；`summarizedCount` 是被摘要替代的消息条数（没记下这个数的记录为 null）。 */
   lastCompaction?: {
     id: string;
     auto: boolean;

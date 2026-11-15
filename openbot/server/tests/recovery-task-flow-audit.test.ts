@@ -323,6 +323,29 @@ function metadata(table: PgTable): Table {
   }
   return result;
 }
+/**
+ * What `tasks` gained after the 0121 capsule (migration 0216, the conversation sidebar). The capsule
+ * is a frozen record of what this migration's target tables looked like, so later additions are
+ * removed from the live Drizzle table before it is compared, rather than rewriting the capsule. Only
+ * these named objects are removed; everything else is still compared in full.
+ */
+const ADDED_AFTER_CAPSULE: Record<
+  string,
+  { columns: string[]; indexes: string[] }
+> = {
+  tasks: {
+    columns: [],
+    indexes: ["tasks_channel_ref_idx"],
+  },
+};
+function withoutLaterAdditions(table: Table): Table {
+  const later = ADDED_AFTER_CAPSULE[table.name];
+  if (!later) return table;
+  const copy = structuredClone(table);
+  for (const name of later.columns) delete copy.columns[name];
+  for (const name of later.indexes) delete copy.indexes[name];
+  return copy;
+}
 function normalize(table: Table): Table {
   const copy = structuredClone(table);
   for (const column of Object.values(copy.columns))
@@ -556,7 +579,7 @@ describe("recovery task Flow audit exact structural candidate", () => {
   });
   test("actual Drizzle columns/defaults/check/FK/index/policies equal all3 complete target tables", () => {
     for (const table of [auditEvents, tasks, wakerFlows]) {
-      const value = metadata(table);
+      const value = withoutLaterAdditions(metadata(table));
       const target = expected[`public.${value.name}`];
       assert.ok(target);
       assert.deepEqual(normalize(value), normalize(target), value.name);

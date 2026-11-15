@@ -8,7 +8,8 @@
  *      索引 `tasks (tenant_id, channel_ref, updated_at)`：按对话列出任务（产出区）。
  *   3. 新表 `thread_context_breakdowns`：每次运行时上下文各部分（messages / system / tools / skills / memory）
  *      的占比快照，`shares` 是 0-1 小数，五个键必须齐全（CHECK），和为 1 由写入方保证。
- *   4. 新表 `thread_compactions`：上下文压缩记录（摘要覆盖到哪条消息、压缩前后 token 数、是否自动触发）。
+ *   4. 新表 `thread_compactions`：上下文压缩记录（摘要覆盖到哪条消息、压缩前后 token 数、被摘要替代的消息
+ *      条数 `summarized_count`（分隔线写「较早的 N 条」）、是否自动触发）。
  * - 回填：无。`context_window` 留空，由模型库新增 / 编辑时按 models.dev 目录值填写；已有行显示为“未知”。
  * - 授权：两张新表开启并强制 RLS，租户策略同 `acp_turns`（本租户或 platform；读允许 system），
  *   应用角色 `openbot_app` 授予 SELECT / INSERT / UPDATE / DELETE。`context_window` 两列继承原表权限
@@ -66,6 +67,7 @@ CREATE TABLE "public"."thread_compactions" (
 	"summary" text NOT NULL,
 	"tokens_before" integer,
 	"tokens_after" integer,
+	"summarized_count" integer,
 	"auto" boolean NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );

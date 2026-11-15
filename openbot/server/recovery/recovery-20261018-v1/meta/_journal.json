@@ -1380,13 +1380,6 @@
       "when": 1794572550901,
       "tag": "0216_conversation_sidebar",
       "breakpoints": true
-    },
-    {
-      "idx": 217,
-      "version": "7",
-      "when": 1794572550902,
-      "tag": "0217_thread_compaction_count",
-      "breakpoints": true
     }
   ]
 }
