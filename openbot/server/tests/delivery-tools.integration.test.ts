@@ -711,6 +711,56 @@ describe("accept_task", () => {
   });
 });
 
+describe("accept_task after the person changed the criteria", () => {
+  test("the person's criteria stand, and the coworker is told so", async () => {
+    const tenantId = await tenant("criteria-mine");
+    const agentId = `agent-${suite}-criteria-mine`;
+    const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+    // The person follows a card by hand and writes the criteria before the coworker answers.
+    await turn({ tenantId, agentId, threadId, ask: "看下报销" });
+    const [opened] = await cardsOf(tenantId, agentId);
+    if (!opened) throw new Error("no card");
+    await until(
+      () => cardRow(tenantId, opened.id),
+      (row) => row?.status === "awaiting_review",
+    );
+    await delivery.markTracked(tenantId, opened.id, `user:${tenantId}`, {
+      threadRef: threadId,
+    });
+    await runAsTenant(tenantId, () =>
+      database
+        .update(tasks)
+        .set({ status: "running" })
+        .where(eq(tasks.id, opened.id)),
+    );
+    const mine = "报销单逐张核对。必需：发票、行程单";
+    const edited = await delivery.editTask(tenantId, opened.id, {
+      actor: `user:${tenantId}`,
+      criteria: mine,
+    });
+    expect(edited.ok).toBe(true);
+
+    const round = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "接一下这件",
+      work: (run) =>
+        run.call("accept_task", { criteria: "报销单看一遍。" }).then(() => {}),
+    });
+    await roundLogged(tenantId, opened.id, round.runId);
+    const answer = parsed(round.results[0] ?? "{}");
+    expect(answer.accepted).toBe(true);
+    expect(answer.criteria).toBe(mine);
+    expect((await cardRow(tenantId, opened.id))?.criteria).toBe(mine);
+    // The receipt card in the chat shows the criteria that stand.
+    const custom = await storedCustom(tenantId, round.runId);
+    const receipt = custom.find((event) => event.name === "delivery.accepted");
+    expect(receipt).toBeDefined();
+    expect(receipt?.value).toMatchObject({ criteria: mine });
+  });
+});
+
 describe("accept_task in a turn that filed its own card", () => {
   test("a routine turn: its own card is followed and the round's end is written on it", async () => {
     const tenantId = await tenant("routine");

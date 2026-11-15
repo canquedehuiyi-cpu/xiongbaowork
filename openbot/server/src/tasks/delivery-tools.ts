@@ -281,11 +281,20 @@ export function deliveryTools(options: {
           dueAt: accepted.dueAt?.toISOString() ?? null,
           criteria: accepted.criteria,
         });
+        // The person's own criteria, set while the card waited, stand: the coworker is told which.
+        const theirs = accepted.criteria !== value.criteria;
         return JSON.stringify({
           accepted: true,
           taskId,
           dueAt: accepted.dueAt?.toISOString() ?? null,
           dueReported: dueAt !== null,
+          ...(theirs
+            ? {
+                criteria: accepted.criteria,
+                criteriaNote:
+                  "对方在你接下前改过验收标准，按对方的为准（含其中的必需项）。",
+              }
+            : {}),
           note: dueAt
             ? `已接下，预计 ${localTime(dueAt)} 交。做完用 deliver_task 交付物和自查；交不了就用 request_extension。`
             : due && due.at === null

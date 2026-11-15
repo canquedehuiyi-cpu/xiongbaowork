@@ -145,7 +145,10 @@ export type Delivery = {
    * it already has one), `accepted_at` is now, the criteria are the coworker's, and the round running
    * now is the card's (`active_run_ref`; no other card holds it any more). `dueAt` null means no time
    * was given: `due_reported` false, checked two hours after acceptance. `original_due_at` keeps the
-   * first time ever reported. One `accepted` line. Null when the card is not open and not yet accepted.
+   * first time ever reported. A due time or criteria the person set while the card waited (`editTask`)
+   * stand over the coworker's: 「你改的直接生效」. The answer carries the card's due time and criteria
+   * as they now are. One `accepted` line, with what the coworker said. Null when the card is not open
+   * and not yet accepted.
    */
   accept(
     tenantId: string,
@@ -404,7 +407,19 @@ export function createDelivery(database: Database): Delivery {
                 : sql`${tasks.dueAt}`,
               originalDueAt: sql`coalesce(${tasks.originalDueAt}, ${input.dueAt?.toISOString() ?? null}::timestamptz)`,
               dueReported: input.dueAt ? true : sql`${tasks.dueReported}`,
-              criteria: input.criteria,
+              /*
+               * The same for the criteria: the person's own, written while the card waited, stand --
+               * with their 必需 items, which the evidence gate holds the hand-in to. Only a change the
+               * person made (an `edited` line naming `criteria`) counts; the coworker's words stay in
+               * its 接下 line below.
+               */
+              criteria: sql`case when exists (
+                  select 1 from ${taskEvents}
+                  where ${taskEvents.tenantId} = ${tenantId}
+                    and ${taskEvents.taskId} = ${tasks.id}
+                    and ${taskEvents.kind} = 'edited'
+                    and ${taskEvents.detail}->'after'->'criteria' is not null
+                ) then ${tasks.criteria} else ${input.criteria} end`,
               ...(input.title ? { title: input.title.slice(0, 200) } : {}),
               activeRunRef: input.runId,
               updatedAt: now,
@@ -417,7 +432,11 @@ export function createDelivery(database: Database): Delivery {
                 isNull(tasks.acceptedAt),
               ),
             )
-            .returning({ dueAt: tasks.dueAt, title: tasks.title });
+            .returning({
+              dueAt: tasks.dueAt,
+              title: tasks.title,
+              criteria: tasks.criteria,
+            });
           if (!card) return null;
           // The round is this card's now: an approval it raises parks this card, not one taken on before.
           await transaction
@@ -443,7 +462,11 @@ export function createDelivery(database: Database): Delivery {
               criteria: input.criteria,
             },
           });
-          return { taskId, dueAt: card.dueAt, criteria: input.criteria };
+          return {
+            taskId,
+            dueAt: card.dueAt,
+            criteria: card.criteria ?? input.criteria,
+          };
         }),
       ),
 

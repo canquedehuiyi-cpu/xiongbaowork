@@ -1233,6 +1233,70 @@ test("the person's due time set while the card waits stands when the coworker ta
   expect(after?.dueReported).toBe(true);
 });
 
+test("the person's criteria set while the card waits stand when the coworker takes it on, 必需 items included", async () => {
+  const tenantId = await tenant("criteria-pending");
+  const agentId = `agent-${suite}-criteria-pending`;
+  const threadId = `thread-${suite}-criteria-pending`;
+  const taskId = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: threadId,
+    channelRef: threadId,
+  });
+  const mine = "三家发票逐张核对。必需：A家、B家";
+  expect(
+    (await routesFor(tenantId)("PATCH", taskId, { criteria: mine })).status,
+  ).toBe(200);
+  const accepted = await delivery.accept(tenantId, taskId, {
+    runId: `accept-${suite}-criteria-pending`,
+    threadRef: threadId,
+    actor: `agent:${agentId}`,
+    dueAt: null,
+    criteria: "列出本周发票",
+  });
+  expect(accepted).not.toBeNull();
+  // What the coworker is told it took on, and what the evidence gate will hold it to: the person's.
+  expect(accepted?.criteria).toBe(mine);
+  expect((await row(tenantId, taskId))?.criteria).toBe(mine);
+  // The coworker's own words are still on record in its 接下 line.
+  const acceptedLine = (await history(tenantId, taskId)).find(
+    (event) => event.kind === "accepted",
+  );
+  expect(acceptedLine).toBeDefined();
+  expect(acceptedLine?.detail).toMatchObject({ criteria: "列出本周发票" });
+});
+
+test("without the person's change, the coworker's criteria are the card's", async () => {
+  const tenantId = await tenant("criteria-theirs");
+  const agentId = `agent-${suite}-criteria-theirs`;
+  const threadId = `thread-${suite}-criteria-theirs`;
+  const taskId = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: threadId,
+    channelRef: threadId,
+  });
+  // Only the due time was changed: the criteria are still the coworker's to set.
+  expect(
+    (
+      await routesFor(tenantId)("PATCH", taskId, {
+        dueAt: new Date(Date.now() + 3600_000).toISOString(),
+      })
+    ).status,
+  ).toBe(200);
+  const accepted = await delivery.accept(tenantId, taskId, {
+    runId: `accept-${suite}-criteria-theirs`,
+    threadRef: threadId,
+    actor: `agent:${agentId}`,
+    dueAt: null,
+    criteria: "列出本周发票。必需：C家",
+  });
+  expect(accepted?.criteria).toBe("列出本周发票。必需：C家");
+  expect((await row(tenantId, taskId))?.criteria).toBe(
+    "列出本周发票。必需：C家",
+  );
+});
+
 test("PATCH after delivery is rejected; after a return it is allowed", async () => {
   const { tenantId, agentId, taskId } = await acceptedCard("patch-return", {
     status: "awaiting_review",
