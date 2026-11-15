@@ -45,6 +45,10 @@ import { cn } from "@/lib/utils";
  * 「我能用什么」要滚到底才数得出来。所以档位数先答数、点一下按档位收窄，搜索按标题/说明/理由
  * 收窄；两者都只过滤这一份已读到的数据，不另发请求。
  *
+ * 搜索框原先是「搜索技能」，只收窄三块里的一块。人打的字其实是在问「这个部署里有没有和 X 有关的
+ * 东西」，答案不该只在一个块里，所以现在三块一起收窄。一块被搜索筛空时说自己那句「没有匹配的」，
+ * 不说「还没有被给的」——那个团还在，只是不叫这个名字，说成没被给会把人支去找管理员要。
+ *
  * 连接器块在 4d 之前只看 `hasCredential`——那是「部署手里有没有这一份凭据」。以本人身份访问的
  * 应用不是这样：凭据在每个人自己身上，于是已连上的人照样被画「待绑定」、照样被叫去连接。现在
  * 这类应用多读一次 `/api/plugins/connections`，读不到就说读不到，绝不替人断言没连。
@@ -156,6 +160,14 @@ export function MineScreen() {
   });
 
   /*
+   * 团队跟着同一个搜索词收窄。名字和说明都算：一个团的说明往往就是「它干什么」，找人找的常常正是
+   * 这件事。
+   */
+  const visibleTeams = teams.filter((team) =>
+    textMatch(query, team.name, team.description),
+  );
+
+  /*
    * 一批一批地给：`shown` 是这一轮已经画出来的条数，换筛选或搜索词就回到第一批——否则
    * 「还有几条没显示」说的是上一组的数。
    */
@@ -166,6 +178,11 @@ export function MineScreen() {
     setGrade("all");
     setQuery("");
     setShown(BATCH);
+    /*
+     * 连接器的「只看待连接的」也一起放开。这个是这一页的取消键，不是某个块自己的：三块各有各的
+     * 收窄（档位、要不要你去连、搜索词），只清一半就是把人留在另一个空列表里。
+     */
+    setOnlyPending(false);
   };
 
   const toggleReason = (slug: string) => {
@@ -229,11 +246,21 @@ export function MineScreen() {
     state: connectorState(server),
   }));
   const pendingConnectors = connectors.filter((row) => row.state === "pending");
+
+  /*
+   * 搜索也收窄这一块。挑出来的开关按搜索后的那一份算——否则搜索只剩一个已经连好的应用时，开关还
+   * 写着「1 个待连接」，点下去一张卡都没有。
+   */
+  const searchedConnectors = connectors.filter(({ server }) =>
+    textMatch(query, server.title, server.vendor, server.summary),
+  );
+  const blockPending = searchedConnectors.filter(
+    (row) => row.state === "pending",
+  );
   const canPickPending =
-    pendingConnectors.length > 0 &&
-    pendingConnectors.length < connectors.length;
+    blockPending.length > 0 && blockPending.length < searchedConnectors.length;
   const shownConnectors =
-    onlyPending && canPickPending ? pendingConnectors : connectors;
+    onlyPending && canPickPending ? blockPending : searchedConnectors;
 
   /*
    * 三块规模的单行答案。这一页是「我被给了什么」，但一共几样得滚过三段才数得出来：技能块自己带了
@@ -265,8 +292,12 @@ export function MineScreen() {
       <TabHeader
         description="这个员工被给了什么：技能、团队、连接器。技能的档位是移植时逐条审出来的——完整可用能照正文干，部分可用缺了引用的文件，暂不可用缺的是运行环境或授权。"
         search={
-          skills.length > 0 ? (
-            <TabSearch label="搜索技能" onChange={search} value={query} />
+          skills.length + teams.length + servers.length > 0 ? (
+            <TabSearch
+              label="搜索技能、团队和连接器"
+              onChange={search}
+              value={query}
+            />
           ) : undefined
         }
       />
@@ -423,9 +454,11 @@ export function MineScreen() {
               description="品牌包把专家团给你后，这里会一支支列出来；团队对话在侧栏里。"
               title="还没有被给的团队"
             />
+          ) : visibleTeams.length === 0 ? (
+            <NoMatch onClear={clearFilters} title="没有匹配的团队" />
           ) : (
             <CardGrid className="mt-[9px]" label="被给的团队">
-              {teams.map((team) => (
+              {visibleTeams.map((team) => (
                 <TeamCard key={team.id} team={team} />
               ))}
             </CardGrid>
@@ -454,6 +487,8 @@ export function MineScreen() {
               description="品牌包或管理员把连接器加进部署后，这里会一个个列出来。"
               title="还没有被给的连接器"
             />
+          ) : shownConnectors.length === 0 ? (
+            <NoMatch onClear={clearFilters} title="没有匹配的连接器" />
           ) : (
             <CardGrid className="mt-[9px]" label="被给的连接器">
               {shownConnectors.map(({ server, state }) => (
