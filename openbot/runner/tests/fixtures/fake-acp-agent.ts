@@ -1,10 +1,11 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 
 /**
  * A scriptable ACP agent for the runner's tests: newline-delimited JSON-RPC 2.0 on stdio, like the
  * real adapters (codex-acp, claude-agent-acp, `hermes acp`). Shared by every ACP test, so what it
- * does is driven entirely by a script, given as JSON in the `FAKE_ACP_SCRIPT` environment variable
- * or as the first argument:
+ * does is driven entirely by a script, given as JSON in the `FAKE_ACP_SCRIPT` environment variable,
+ * in the file `FAKE_ACP_SCRIPT_FILE` names (for scripts too big for an environment variable), or as
+ * the first argument:
  *
  *   loadSession      advertise `agentCapabilities.loadSession` (default false)
  *   protocolVersion  the version `initialize` answers (default 1)
@@ -19,6 +20,7 @@ import { appendFileSync } from "node:fs";
  *                    order, then the prompt answers `{stopReason}` (default "end_turn"); its
  *                    `after` updates are sent 50 ms later
  *   log              a file path: every message received is appended to it as one JSON line
+ *   newSessionPad    `session/new` answers with an extra `_pad` string this long
  *
  * Steps of a turn:
  *   {update}          send `session/update` with this update
@@ -31,6 +33,9 @@ import { appendFileSync } from "node:fs";
  *   {waitForCancel}   wait until `session/cancel` arrives
  *   {sleepMs}         wait that long
  *   {exit}            exit the process with that code, mid-turn
+ *   {huge}            one stdout line of about `huge.chars` characters: a `session/update` (default),
+ *                     or with `asRequest` a `session/request_permission` whose response is reported
+ *                     as {sessionUpdate: "fake_request_result", response}
  *
  * Once `session/cancel` has arrived for the session, the turn stops after the current step, reports
  * {sessionUpdate: "fake_cancel_seen"} and answers `{stopReason: "cancelled"}`, as the spec demands.
@@ -49,7 +54,8 @@ export type FakeStep =
   | { request: { method: string; params?: unknown } }
   | { waitForCancel: true }
   | { sleepMs: number }
-  | { exit: number };
+  | { exit: number }
+  | { huge: { chars: number; asRequest?: boolean } };
 
 export type FakeTurn = {
   steps?: FakeStep[];
@@ -72,12 +78,15 @@ export type FakeAcpScript = {
   loadFails?: boolean;
   turns?: FakeTurn[];
   log?: string;
+  newSessionPad?: number;
 };
 
 type Json = Record<string, unknown>;
 
 const script: FakeAcpScript = JSON.parse(
-  process.env.FAKE_ACP_SCRIPT ?? process.argv[2] ?? "{}",
+  process.env.FAKE_ACP_SCRIPT_FILE
+    ? readFileSync(process.env.FAKE_ACP_SCRIPT_FILE, "utf8")
+    : (process.env.FAKE_ACP_SCRIPT ?? process.argv[2] ?? "{}"),
 );
 
 let sessions = 0;
@@ -105,6 +114,11 @@ function ask(method: string, params: unknown): Promise<Json> {
 }
 
 const methodNotFound = { code: -32601, message: "Method not found" };
+
+const chunk = (text: string) => ({
+  sessionUpdate: "agent_message_chunk",
+  content: { type: "text", text },
+});
 
 async function runTurn(id: unknown, sessionId: string) {
   const turns = script.turns ?? [{}];
@@ -144,6 +158,18 @@ async function runTurn(id: unknown, sessionId: string) {
       await new Promise((resolve) => setTimeout(resolve, step.sleepMs));
     } else if ("exit" in step) {
       process.exit(step.exit);
+    } else if ("huge" in step) {
+      const pad = "h".repeat(step.huge.chars);
+      if (step.huge.asRequest) {
+        const response = await ask("session/request_permission", {
+          sessionId,
+          toolCall: { toolCallId: "call_huge", pad },
+          options: [
+            { optionId: "opt-allow", name: "Allow", kind: "allow_once" },
+          ],
+        });
+        update(sessionId, { sessionUpdate: "fake_request_result", response });
+      } else update(sessionId, chunk(pad));
     }
     if (cancelled.has(sessionId)) break;
   }
@@ -195,7 +221,13 @@ function onMessage(message: Json) {
       const sessionId = sessions === 1 ? base : `${base}-${sessions}`;
       send({
         id,
-        result: { sessionId, ...(script.modes ? { modes: script.modes } : {}) },
+        result: {
+          sessionId,
+          ...(script.modes ? { modes: script.modes } : {}),
+          ...(script.newSessionPad
+            ? { _pad: "p".repeat(script.newSessionPad) }
+            : {}),
+        },
       });
       return;
     }

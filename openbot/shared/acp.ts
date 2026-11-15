@@ -40,6 +40,11 @@ export const ACP_RULE_DEFAULTS: Record<AcpRuleKey, AcpRuleValue> = {
  * computer, so the device keeps each `(agentId, threadId)` apart: its own session, its own turns.
  * Every frame but `acp.inventory` carries `agentId`, down and up; a down frame without one is
  * dropped.
+ *
+ * NO UP FRAME IS OVER 1 MB serialized. One that would be has the long strings of what the agent
+ * sent (`update`, `toolCall`) cut shorter and says `truncated: true`; if that is not enough, that
+ * payload becomes a stub of its ids (`{sessionUpdate?, toolCallId?, truncated: true}`), the
+ * frame's own ids and `seq` kept.
  */
 
 /**
@@ -113,6 +118,8 @@ export type AcpUpdateFrame = {
   turnId: string;
   seq: number;
   update: unknown;
+  /** The update was cut to fit the 1 MB limit. */
+  truncated?: true;
 };
 
 export type AcpPermissionOptionFrame = {
@@ -145,6 +152,8 @@ export type AcpPermissionRequestFrame = {
   toolCall: unknown;
   options: AcpPermissionOptionFrame[];
   facts: AcpPermissionFacts;
+  /** The tool call was cut to fit the 1 MB limit. */
+  truncated?: true;
 };
 
 /**

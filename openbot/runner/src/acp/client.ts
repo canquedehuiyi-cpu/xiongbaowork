@@ -125,7 +125,11 @@ function alreadyIn(result: unknown, mode: string): boolean {
 export function createAcpClient(
   spec: AcpSpawnSpec,
   handlers: AcpHandlers,
-  opts: { timeouts?: Partial<typeof DEFAULT_TIMEOUTS> } = {},
+  opts: {
+    timeouts?: Partial<typeof DEFAULT_TIMEOUTS>;
+    /** The longest stdout line read from the agent (`STDOUT_LINE_LIMIT`, 64 MB). */
+    maxLineLength?: number;
+  } = {},
 ): AcpClient {
   const timeouts = { ...DEFAULT_TIMEOUTS, ...opts.timeouts };
   /** Permission requests not answered yet, by the agent's request id. */
@@ -155,6 +159,9 @@ export function createAcpClient(
       method: "$/cancel_request",
       params: { requestId },
     }),
+    ...(opts.maxLineLength === undefined
+      ? {}
+      : { maxLineLength: opts.maxLineLength }),
   });
 
   function onMessage(message: IncomingMessage) {

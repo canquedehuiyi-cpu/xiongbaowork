@@ -1,5 +1,11 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -78,12 +84,14 @@ function setup(
       logFiles.push(log);
       const base =
         typeof script === "function" ? script(spawns.length) : script;
+      const scriptFile = join(scratch, `script-${logs}.json`);
+      writeFileSync(scriptFile, JSON.stringify({ ...base, log }));
       const client = createAcpClient(
         {
           ...spec,
           command: process.execPath,
           args: [fixture],
-          env: { FAKE_ACP_SCRIPT: JSON.stringify({ ...base, log }) },
+          env: { FAKE_ACP_SCRIPT_FILE: scriptFile },
           cwd: work,
         },
         handlers,
@@ -1374,3 +1382,172 @@ test("every attach sends the inventory first: this process, its turns and waitin
   other.host.attach(other.send);
   expect(other.frames[0]?.instanceId).not.toBe(instanceId);
 });
+
+const MB = 1024 * 1024;
+const bytesOf = (frame: Frame) => Buffer.byteLength(JSON.stringify(frame));
+
+test("an update over 1 MB has its long strings cut and says truncated", async () => {
+  const t = setup({
+    turns: [
+      {
+        steps: [
+          {
+            update: {
+              sessionUpdate: "tool_call",
+              toolCallId: "call_big",
+              title: "Edit big.txt",
+              kind: "edit",
+              status: "pending",
+              content: [
+                {
+                  type: "diff",
+                  path: "big.txt",
+                  oldText: "o".repeat(MB),
+                  newText: "n".repeat(2 * MB),
+                },
+                {
+                  type: "content",
+                  content: { type: "text", text: "t".repeat(MB) },
+                },
+              ],
+              rawInput: { file: "big.txt", text: "r".repeat(MB) },
+            },
+          },
+          { update: chunk("small") },
+        ],
+      },
+    ],
+  });
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ended(t.frames, "turn_1"), 15_000);
+  const [big, small] = ofType(t.frames, "acp.update");
+  expect(bytesOf(big as Frame)).toBeLessThanOrEqual(MB);
+  expect(big).toMatchObject({
+    agentId: "agent_1",
+    threadId: "th_1",
+    turnId: "turn_1",
+    seq: 1,
+    truncated: true,
+    update: {
+      sessionUpdate: "tool_call",
+      toolCallId: "call_big",
+      title: "Edit big.txt",
+      kind: "edit",
+      content: [{ type: "diff", path: "big.txt" }, { type: "content" }],
+      rawInput: { file: "big.txt" },
+    },
+  });
+  const diff = (
+    ((big as Frame).update as Frame).content as Frame[]
+  )[0] as Frame;
+  expect((diff.newText as string).startsWith("nnnn")).toBe(true);
+  expect((diff.newText as string).length).toBeLessThan(MB);
+  // A frame under the limit is untouched.
+  expect(small).toEqual({
+    type: "acp.update",
+    agentId: "agent_1",
+    threadId: "th_1",
+    turnId: "turn_1",
+    seq: 2,
+    update: chunk("small"),
+  });
+  // What is kept for replay is the cut frame.
+  t.host.detach();
+  const mark = t.frames.length;
+  t.host.attach(t.send);
+  for (const frame of t.frames.slice(mark))
+    expect(bytesOf(frame)).toBeLessThanOrEqual(MB);
+}, 20_000);
+
+test("an update still over 1 MB once cut becomes a stub that keeps its ids and seq", async () => {
+  const t = setup({
+    turns: [
+      {
+        steps: [
+          {
+            update: {
+              sessionUpdate: "tool_call_update",
+              toolCallId: "call_many",
+              content: Array.from({ length: 20_000 }, () => ({
+                type: "content",
+                content: { type: "text", text: "z".repeat(100) },
+              })),
+            },
+          },
+        ],
+      },
+    ],
+  });
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ended(t.frames, "turn_1"), 15_000);
+  expect(ofType(t.frames, "acp.update")).toEqual([
+    {
+      type: "acp.update",
+      agentId: "agent_1",
+      threadId: "th_1",
+      turnId: "turn_1",
+      seq: 1,
+      truncated: true,
+      update: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call_many",
+        truncated: true,
+      },
+    },
+  ]);
+}, 20_000);
+
+test("a permission request over 1 MB is cut, keeps its options and can still be answered", async () => {
+  const t = setup({
+    turns: [
+      {
+        steps: [
+          {
+            permission: {
+              toolCall: {
+                toolCallId: "call_big",
+                kind: "edit",
+                title: "Edit",
+                rawInput: { text: "p".repeat(3 * MB) },
+              },
+              options: [
+                { optionId: "opt-allow", name: "Allow", kind: "allow_once" },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1"));
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(
+    () => ofType(t.frames, "acp.permission.request").length === 1,
+    15_000,
+  );
+  const asked = ofType(t.frames, "acp.permission.request")[0] as Frame;
+  expect(bytesOf(asked)).toBeLessThanOrEqual(MB);
+  expect(asked).toMatchObject({
+    agentId: "agent_1",
+    turnId: "turn_1",
+    truncated: true,
+    toolCall: { toolCallId: "call_big", kind: "edit" },
+    options: [{ optionId: "opt-allow" }],
+  });
+  // Re-sent on attach as cut as it went the first time.
+  t.host.detach();
+  t.host.attach(t.send);
+  expect(ofType(t.frames, "acp.permission.request")[1]).toEqual(asked);
+  await t.host.handle({
+    type: "acp.permission.answer",
+    agentId: "agent_1",
+    requestId: asked.requestId,
+    optionId: "opt-allow",
+  });
+  await waitFor(() => ended(t.frames, "turn_1"));
+}, 20_000);

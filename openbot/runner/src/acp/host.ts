@@ -63,6 +63,11 @@ import { permissionFacts } from "./paths";
  * replay on every `attach`, with the same `requestId`; an answer naming an option the agent did not
  * offer is answered `cancelled` and reported as `acp.error` `bad_option`.
  *
+ * SIZE. No frame goes up over `ACP_FRAME_LIMIT` (1 MB) serialized (`capFrame`): the long strings of
+ * an update or a permission request's tool call are cut shorter and the frame says `truncated`; if
+ * that is not enough, the payload becomes a stub of its ids. What is kept for replay is the cut frame.
+ * (The adapter's stdout lines are capped too, at 64 MB, in the transport.)
+ *
  * TURNS. `acp.turn.ack` goes up as soon as a turn arrives; a `turnId` seen before is acknowledged
  * (and, when over, ended) again but never run twice. A turn ends with the agent's `stopReason`, with
  * `interrupted: true` when the adapter's process went away under it, or with `stopReason: "error"`
@@ -78,6 +83,11 @@ import { permissionFacts } from "./paths";
 export const ACP_BUFFER_LIMIT = { count: 1000, bytes: 5 * 1024 * 1024 };
 /** Ended turns kept until delivered: past these the oldest ended turns are dropped first. */
 export const ACP_ENDED_LIMIT = { turns: 100, bytes: 50 * 1024 * 1024 };
+/**
+ * No frame goes up bigger than this, serialized. The socket's own limit (Bun's 16 MB) would close
+ * the connection on a bigger one, and the frame would be replayed into the next connection forever.
+ */
+export const ACP_FRAME_LIMIT = 1024 * 1024;
 
 /** How many finished turns are remembered, so a resent `acp.prompt` is not run again. */
 const REMEMBERED_TURNS = 1000;
@@ -108,6 +118,8 @@ export type AcpHostDeps = {
   onCompact?: (turnId: string) => void;
   /** At most this many ended turns, and bytes of them, wait for proof of delivery. */
   endedLimit?: { turns: number; bytes: number };
+  /** No frame goes up bigger than this many bytes, serialized (`ACP_FRAME_LIMIT`). */
+  frameLimit?: number;
 };
 
 const HARNESSES: readonly AcpHarness[] = [
@@ -207,11 +219,108 @@ function sizeOf(frame: Frame): number {
   return Buffer.byteLength(JSON.stringify(frame));
 }
 
+/** Longest string kept, tried in turn, when a frame's payload must be cut down to the limit. */
+const CUTS = [65_536, 8_192, 1_024, 128];
+
+/** `value` with every string longer than `max` cut to `max` and marked with an ellipsis. */
+function cutStrings(value: unknown, max: number): unknown {
+  if (typeof value === "string")
+    return value.length > max ? `${value.slice(0, max)}…` : value;
+  if (Array.isArray(value)) return value.map((item) => cutStrings(item, max));
+  if (isRecord(value)) {
+    const out: Frame = {};
+    for (const [key, item] of Object.entries(value))
+      out[key] = cutStrings(item, max);
+    return out;
+  }
+  return value;
+}
+
+/** The short identifying fields of `value`, kept by a stub. */
+function pickIds(value: unknown, keys: readonly string[]): Frame {
+  const out: Frame = {};
+  if (!isRecord(value)) return out;
+  for (const key of keys) {
+    const item = value[key];
+    if (
+      typeof item === "number" ||
+      typeof item === "boolean" ||
+      (typeof item === "string" && item.length <= 256)
+    )
+      out[key] = item;
+  }
+  return out;
+}
+
+/** The field of an up frame that carries what the agent sent, which is what can be big. */
+const PAYLOAD: Record<string, { field: string; ids: readonly string[] }> = {
+  "acp.update": { field: "update", ids: ["sessionUpdate", "toolCallId"] },
+  "acp.permission.request": { field: "toolCall", ids: ["toolCallId", "kind"] },
+};
+
+const FRAME_IDS = [
+  "type",
+  "agentId",
+  "threadId",
+  "turnId",
+  "seq",
+  "requestId",
+  "sessionId",
+  "loaded",
+  "stopReason",
+  "interrupted",
+  "code",
+  "instanceId",
+] as const;
+
+/**
+ * `frame` itself when it fits in `limit` bytes serialized. Otherwise, with `truncated: true`: the
+ * strings of its payload (`update`, `toolCall`: diff texts, content text, `rawInput` …) cut shorter
+ * until it fits; else the payload replaced by a stub of its ids; else (whatever else made it big)
+ * only the frame's ids, with empty values where the frame's shape needs one.
+ */
+export function capFrame(frame: Frame, limit = ACP_FRAME_LIMIT): Frame {
+  if (sizeOf(frame) <= limit) return frame;
+  const payload = PAYLOAD[frame.type as string];
+  if (payload) {
+    for (const max of CUTS) {
+      const cut = {
+        ...frame,
+        [payload.field]: cutStrings(frame[payload.field], max),
+        truncated: true,
+      };
+      if (sizeOf(cut) <= limit) return cut;
+    }
+    const stub = {
+      ...frame,
+      [payload.field]: {
+        ...pickIds(frame[payload.field], payload.ids),
+        truncated: true,
+      },
+      truncated: true,
+    };
+    if (sizeOf(stub) <= limit) return stub;
+  }
+  const bare: Frame = { ...pickIds(frame, FRAME_IDS), truncated: true };
+  if (payload) bare[payload.field] = { truncated: true };
+  if (frame.type === "acp.permission.request") {
+    bare.options = [];
+    bare.facts = { insideWorkdir: null, paths: [] };
+  }
+  if (frame.type === "acp.inventory") {
+    bare.turns = [];
+    bare.requestIds = [];
+  }
+  if (frame.type === "acp.error") bare.message = MESSAGES.turn_failed;
+  return bare;
+}
+
 export function createAcpHost(deps: AcpHostDeps): AcpHost {
   const spawn = deps.spawn ?? createAcpClient;
   const idleMs = deps.idleMs ?? IDLE_MS;
   const limit = deps.bufferLimit ?? ACP_BUFFER_LIMIT;
   const endedLimit = deps.endedLimit ?? ACP_ENDED_LIMIT;
+  const frameLimit = deps.frameLimit ?? ACP_FRAME_LIMIT;
   /** Random per runner process: a new one tells the server every earlier turn is gone. */
   const instanceId = randomUUID();
 
@@ -258,7 +367,8 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
    * Kept, so the next attach replays it whether or not this send got through. A turn's end turns
    * all its kept frames into `once`: replayed whole on every attach until a beat's ack lets it go.
    */
-  function emit(frame: Frame, turnId: string | null = null) {
+  function emit(made: Frame, turnId: string | null = null) {
+    const frame = capFrame(made, frameLimit);
     const isEnd = frame.type === "acp.turn.end";
     // A late frame of a turn that is over is not sent and not kept: nothing would clear it.
     if (turnId !== null && !isEnd && over(turnId)) return;
@@ -334,7 +444,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
 
   /** Sent now if possible, never kept (a repeated acknowledgement). */
   function sendLive(frame: Frame) {
-    trySend(frame);
+    trySend(capFrame(frame, frameLimit));
   }
 
   /** An update kept for its turn, compacted past the limit; false when it is not kept at all. */
@@ -397,7 +507,8 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     const kept = new Map<Entry, Entry>();
     if (plan) kept.set(plan, plan);
     for (const { last, merged } of calls.values()) {
-      const frame = { ...last.frame, update: merged };
+      // Merged fields of several updates can add up past the limit.
+      const frame = capFrame({ ...last.frame, update: merged }, frameLimit);
       kept.set(last, { ...last, frame, bytes: sizeOf(frame) });
     }
     const stats = { count: 0, bytes: 0, compacted: true };
@@ -528,16 +639,19 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
         if (!turn || turn.state === "ended" || request.signal.aborted)
           return Promise.resolve({ outcome: "cancelled" });
         const requestId = `perm_${randomUUID()}`;
-        const frame: AcpPermissionRequestFrame = {
-          type: "acp.permission.request",
-          agentId: turn.agentId,
-          threadId: turn.threadId,
-          turnId: turn.turnId,
-          requestId,
-          toolCall: request.toolCall,
-          options: request.options,
-          facts: permissionFacts(proc.workdir, request.toolCall),
-        };
+        const frame = capFrame(
+          {
+            type: "acp.permission.request",
+            agentId: turn.agentId,
+            threadId: turn.threadId,
+            turnId: turn.turnId,
+            requestId,
+            toolCall: request.toolCall,
+            options: request.options,
+            facts: permissionFacts(proc.workdir, request.toolCall),
+          } satisfies AcpPermissionRequestFrame,
+          frameLimit,
+        ) as AcpPermissionRequestFrame;
         return new Promise((resolve) => {
           const settle = (answer: AcpPermissionAnswer) => {
             if (!pending.delete(requestId)) return;
@@ -900,7 +1014,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       send = sender;
       connection += 1;
       // First what this process is and has, so the server can reconcile before the replay.
-      if (!trySend(inventory())) return;
+      if (!trySend(capFrame(inventory(), frameLimit))) return;
       // Everything kept, in the order it was made: the server drops what it already has by seq.
       // Nothing is let go for having been replayed: only a beat's ack (or the cap) does that.
       for (const entry of outbox) {

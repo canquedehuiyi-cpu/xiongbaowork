@@ -43,12 +43,17 @@ const EDIT_CALL = {
   status: "pending",
 };
 
+type Json = Record<string, unknown>;
+
 type Seen = { updates: Array<{ sessionId: string; update: unknown }> };
 
 function start(
   script: FakeAcpScript,
   handlers: Partial<AcpHandlers> = {},
-  extra: { sessionMode?: string | null } = {},
+  extra: {
+    sessionMode?: string | null;
+    opts?: Parameters<typeof createAcpClient>[2];
+  } = {},
 ): { client: AcpClient; seen: Seen; log: string } {
   const log = join(scratch, `log-${++logs}.jsonl`);
   const seen: Seen = { updates: [] };
@@ -65,6 +70,7 @@ function start(
       onPermission: async () => ({ outcome: "cancelled" }),
       ...handlers,
     },
+    extra.opts,
   );
   open.push(client);
   return { client, seen, log };
@@ -493,4 +499,63 @@ test("close stops the child and alive becomes false", async () => {
   await client.close();
   expect(client.alive).toBe(false);
   await expect(client.newSession(scratch)).rejects.toThrow();
+});
+
+test("a stdout line over the limit is dropped; a request in it is answered with an error", async () => {
+  const lines: string[] = [];
+  const log = console.log;
+  console.log = (line: string) => lines.push(line);
+  try {
+    const { client, seen } = start(
+      {
+        turns: [
+          {
+            steps: [
+              { update: chunk("before") },
+              { huge: { chars: 200_000 } },
+              { update: chunk("between") },
+              { huge: { chars: 200_000, asRequest: true } },
+              { update: chunk("after") },
+            ],
+          },
+        ],
+      },
+      {},
+      { opts: { maxLineLength: 100_000 } },
+    );
+    await client.initialize();
+    const sessionId = await client.newSession(scratch);
+    expect(await client.prompt(sessionId, [])).toEqual({
+      stopReason: "end_turn",
+    });
+    const updates = seen.updates.map(({ update }) => update as Json);
+    expect(updates.map((update) => update.sessionUpdate)).toEqual([
+      "agent_message_chunk",
+      "agent_message_chunk",
+      "fake_request_result",
+      "agent_message_chunk",
+    ]);
+    expect(updates[2]?.response).toMatchObject({
+      id: "fake-1",
+      error: { code: -32600 },
+    });
+    expect(
+      lines.filter((line) => line.includes("over the limit")),
+    ).toHaveLength(2);
+  } finally {
+    console.log = log;
+  }
+});
+
+test("a response over the stdout limit fails its call at once", async () => {
+  const { client } = start(
+    { newSessionPad: 200_000 },
+    {},
+    { opts: { maxLineLength: 100_000 } },
+  );
+  await client.initialize();
+  const began = Date.now();
+  await expect(client.newSession(scratch)).rejects.toThrow(/over the limit/);
+  expect(Date.now() - began).toBeLessThan(5_000);
+  expect(client.alive).toBe(true);
 });

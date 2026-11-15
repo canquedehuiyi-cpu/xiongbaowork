@@ -88,6 +88,15 @@ const PROTOCOL_VERSION = "2025-06-18";
 const DEFAULT_TIMEOUTS = { initMs: 20_000, listMs: 20_000, callMs: 120_000 };
 const RESULT_LIMIT_BYTES = 1_000_000;
 const STDERR_LIMIT_BYTES = 4096;
+/**
+ * The longest stdout line read from a child (characters of the decoded text). A longer one is never
+ * held whole: it is dropped as it streams in, logged, and, when it was a request to us, answered
+ * with a JSON-RPC error (a response to one of ours fails that call), so a runaway child cannot grow
+ * the runner's memory without bound.
+ */
+export const STDOUT_LINE_LIMIT = 64 * 1024 * 1024;
+/** How much of a dropped line is kept to find its `id` and `method`. */
+const DROPPED_HEAD = 4096;
 const MAX_LIST_PAGES = 10;
 const CLIENT_INFO = { name: "xiongbao-runner", version: "1" };
 
@@ -405,6 +414,8 @@ export type StdioHooks = {
     | null;
   /** Once, when the connection ends: closed by us, the child exited or could not start. */
   onEnd?: () => void;
+  /** The longest stdout line read (`STDOUT_LINE_LIMIT`); longer ones are dropped. */
+  maxLineLength?: number;
 };
 
 export class StdioTransport implements Transport {
@@ -416,6 +427,9 @@ export class StdioTransport implements Transport {
   private ready = false;
   private stderr = Buffer.alloc(0);
   private buffer = "";
+  /** The head of a line over the limit still streaming in, which is being dropped; else null. */
+  private dropping: string | null = null;
+  private dropped = 0;
   private decoder = new TextDecoder("utf-8");
   private exited: Promise<void>;
   private stopping = false;
@@ -491,14 +505,74 @@ export class StdioTransport implements Transport {
   }
 
   private onStdout(chunk: Buffer) {
-    this.buffer += this.decoder.decode(chunk, { stream: true });
+    const limit = this.hooks.maxLineLength ?? STDOUT_LINE_LIMIT;
+    let text = this.decoder.decode(chunk, { stream: true });
+    if (this.dropping !== null) {
+      // The rest of a line over the limit: thrown away up to its end.
+      const end = text.indexOf("\n");
+      if (end < 0) {
+        this.dropped += text.length;
+        return;
+      }
+      this.dropped += end;
+      this.onDropped(this.dropping, this.dropped);
+      this.dropping = null;
+      text = text.slice(end + 1);
+    }
+    this.buffer += text;
     let newline = this.buffer.indexOf("\n");
     while (newline >= 0) {
       const line = this.buffer.slice(0, newline).trim();
       this.buffer = this.buffer.slice(newline + 1);
       newline = this.buffer.indexOf("\n");
-      if (line) this.onLine(line);
+      if (line.length > limit)
+        this.onDropped(line.slice(0, DROPPED_HEAD), line.length);
+      else if (line) this.onLine(line);
     }
+    if (this.buffer.length > limit) {
+      this.dropping = this.buffer.slice(0, DROPPED_HEAD);
+      this.dropped = this.buffer.length;
+      this.buffer = "";
+    }
+  }
+
+  /**
+   * A line over the limit, gone: logged, and answered when its head shows a request to us (an
+   * error) or a response to one of ours (that call fails). Only the envelope before `params`,
+   * `result` or `error` is looked at, so an `id` inside the payload is not taken for the message's.
+   */
+  private onDropped(head: string, length: number) {
+    console.log(
+      `runner: dropped a ${length}-character line from an app's stdout, over the limit`,
+    );
+    const body = head.search(/"(params|result|error)"\s*:/);
+    const envelope = body < 0 ? head : head.slice(0, body);
+    const idMatch = /"id"\s*:\s*("(?:[^"\\]|\\.)*"|-?\d+)/.exec(envelope);
+    if (!idMatch?.[1]) return;
+    let id: string | number;
+    try {
+      id = JSON.parse(idMatch[1]) as string | number;
+    } catch {
+      return;
+    }
+    if (/"method"\s*:/.test(envelope)) {
+      this.write({
+        jsonrpc: "2.0",
+        id,
+        error: { code: -32600, message: "Message over the size limit" },
+      });
+      return;
+    }
+    if (typeof id !== "number") return;
+    const pending = this.pending.get(id);
+    if (!pending) return;
+    this.pending.delete(id);
+    pending.reject(
+      new McpAppError(
+        "protocol",
+        `${pending.method} answered with a message over the limit (${length} characters).`,
+      ),
+    );
   }
 
   private onLine(line: string) {
