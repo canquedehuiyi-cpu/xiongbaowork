@@ -149,7 +149,7 @@ const server = Bun.serve<RunnerSocketData>({
 });
 const base = `http://127.0.0.1:${server.port}`;
 
-const { code } = await store.mintPairCode(TENANT);
+const { code } = await store.mintPairCode(TENANT, TENANT);
 const runnerArgs = [
   "--server",
   base,

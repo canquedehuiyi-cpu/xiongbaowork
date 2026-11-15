@@ -186,7 +186,7 @@ test("eight concurrent devices admit one, retain every refused code, and allow r
   const store = createDeviceStore(database);
   const routes = createRunnerRoutes(store, quota);
   const codes = await Promise.all(
-    Array.from({ length: 8 }, () => store.mintPairCode(tenant)),
+    Array.from({ length: 8 }, () => store.mintPairCode(tenant, tenant)),
   );
   const replies = await Promise.all(
     codes.map((code, i) =>
@@ -213,7 +213,7 @@ test("eight concurrent devices admit one, retain every refused code, and allow r
       expect(await store.tenantForCode(codes[index]?.code ?? "")).toBe(tenant);
   }
   const index = replies.findIndex((reply) => reply.status === 201);
-  const fresh = await store.mintPairCode(tenant);
+  const fresh = await store.mintPairCode(tenant, tenant);
   expect(
     (
       await post(routes, "/register", {

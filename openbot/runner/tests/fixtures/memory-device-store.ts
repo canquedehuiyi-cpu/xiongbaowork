@@ -15,6 +15,7 @@ import type {
 
 export function memoryDeviceStore() {
   const codes = new Map<string, string>();
+  const minters = new Map<string, string>();
   const devices = new Map<
     string,
     DeviceRecord & { tenantId: string; tokenHash: string }
@@ -33,9 +34,10 @@ export function memoryDeviceStore() {
   });
 
   const store: DeviceStore = {
-    async mintPairCode(tenantId) {
+    async mintPairCode(tenantId, mintedByUserId) {
       const code = randomBytes(4).toString("hex").toUpperCase();
       codes.set(code, tenantId);
+      minters.set(code, mintedByUserId);
       return { code, expiresAt: new Date(Date.now() + 600_000) };
     },
     async redeemPairCode(input) {
@@ -51,6 +53,7 @@ export function memoryDeviceStore() {
         platform: input.platform,
         lastSeenAt: null,
         online: false,
+        pairedByUserId: minters.get(input.code) ?? null,
         // The read-only folders the machine offers (F1 stage 2); a fresh pairing offers none.
         roots: [],
         // The local apps (MCP) it offers; a fresh pairing offers none.

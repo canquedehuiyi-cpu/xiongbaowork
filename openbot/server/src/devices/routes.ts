@@ -58,7 +58,10 @@ export function createDeviceRoutes(
   });
 
   routes.post("/pair", requireUser, async (context) => {
-    const code = await store.mintPairCode(context.var.actor.id);
+    const code = await store.mintPairCode(
+      context.var.actor.id,
+      context.var.actor.id,
+    );
     return context.json({ code: code.code, expiresAt: code.expiresAt }, 201);
   });
 
