@@ -1433,8 +1433,11 @@ describe("model context window", () => {
       },
     });
     expect(found.get("anthropic/claude-x")?.contextWindow).toBe(200000);
-    expect(found.get("anthropic/claude-y")?.contextWindow).toBeUndefined();
-    expect(found.get("anthropic/claude-z")?.contextWindow).toBeUndefined();
+    const claudeY = found.get("anthropic/claude-y");
+    const claudeZ = found.get("anthropic/claude-z");
+    if (!claudeY || !claudeZ) throw new Error("both models are catalogued");
+    expect(claudeY.contextWindow).toBeUndefined();
+    expect(claudeZ.contextWindow).toBeUndefined();
   });
 
   const modelsDev = {
