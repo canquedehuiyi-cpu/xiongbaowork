@@ -393,6 +393,8 @@ describe("registered Copilot agents", () => {
       "identity",
       "role",
       ...WORKING_SECTIONS,
+      // A Bot holding no `message_bot`: told plainly that it cannot hand work on.
+      "handing_over",
       "model_and_date",
     ]);
     expect(sectionOf(prompt, "identity")).toBe(identity("General Assistant"));
@@ -2202,6 +2204,8 @@ describe("a person's standing instructions", () => {
       ...WORKING_SECTIONS,
       "apps",
       "computer",
+      // These tools reach no other Bot, so it is told it cannot hand work on.
+      "handing_over",
       "model_and_date",
     ]);
     expect(sectionOf(prompt, "role")).toStartWith("Be helpful.");
@@ -2221,6 +2225,7 @@ describe("a person's standing instructions", () => {
         "identity",
         "role",
         ...WORKING_SECTIONS,
+        "handing_over",
         "model_and_date",
       ]);
       // M5: the asking section in this fork's words for its floors, as before.

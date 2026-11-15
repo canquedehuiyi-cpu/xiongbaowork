@@ -585,6 +585,31 @@ export function runModeGuidance(mode: RunMode): string {
 }
 
 /**
+ * What a run is told when it is offered no way to hand work to another Bot.
+ *
+ * NOT OFFERING THE TOOL DOES NOT STOP THE PROMISE. `agents/handoff-tool.ts` returns nothing when
+ * this deployment has nobody to ask, or is switched off, or the chain is already as deep as it may
+ * go, on the reasoning that a model offered a tool it may never use spends attention on it and
+ * tells the person it tried. What that misses is the other half: given no tool at all, a model
+ * with work it cannot finish says it asked somebody anyway. L4-2's second example (2026-11-15,
+ * `humanize-ppt-team`'s lead, a direct run with no `message_bot`) answered that the only thing
+ * missing was a share link, then went to hand the work to teammates — and nothing was sent.
+ *
+ * WORDED SO IT STAYS TRUE IN A CHANNEL. A Bot in a group reaches a peer by naming it (`@Name`,
+ * `channels/group.ts`), which needs no tool at all, so this says "unless you addressed them
+ * yourself" rather than "you cannot reach anybody": the rule is that the sentence has to match
+ * what was really sent, not that dispatch is impossible.
+ */
+export const NO_HANDOFF_GUIDANCE = asParagraphs([
+  "This run gives you no tool here for handing work to another Bot.",
+  "Whatever the job needs, do it yourself; where a part is beyond what you can do, finish everything",
+  "else and say which part is not done and what it would need.",
+  "Do not say you have asked a colleague, or that a colleague will deliver a part, unless you have",
+  "actually addressed that colleague yourself. The person reads such a sentence as the work being",
+  "under way, and waits for something that is not coming.",
+]);
+
+/**
  * One section of a Bot's prompt, in a tag named for what it holds.
  *
  * The prompt used to be one flat run of paragraphs from about a dozen sources, and a model reading
