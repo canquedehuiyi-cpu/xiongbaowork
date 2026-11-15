@@ -345,14 +345,20 @@ export function nudgeTextOf(
       : `${waited}能做就先调用 accept_task 回执：预计几点交、验收标准；做不了就直接说明原因。`;
   }
   const what = external
-    ? `做完的部分现在就交：改动会自动当作交付物，没有改动的就在回复里写结论，并用「自查：」开头的一句写你怎么查过的；交不了就说明缺什么，并写「延到 HH:MM」（换成真实的时间）说要延到几点。\n${EXTERNAL_DELIVERY_GUIDE}`
+    ? `做完的部分现在就交：改动会自动当作交付物，没有改动的就写一句「结论：」开头的交付结论，并用「自查：」开头的一句写你怎么查过的；交不了就说明缺什么，并写「延到 HH:MM」（换成真实的时间）说要延到几点。\n${EXTERNAL_DELIVERY_GUIDE}`
     : "做完的部分先用 deliver_task 交上来，写上你怎么查过的；交不了就用 request_extension 申请延期，说明缺什么、要延到几点。";
   if (!card.dueAt)
     return `【系统催办】${title}接下 ${lengthOf(now.getTime() - card.acceptedAt.getTime())}了还没交，也没报预计时间。${what}`;
   const late = now.getTime() - card.dueAt.getTime();
+  /*
+   * An external employee's 「预计 …」 is read off its replies (`dueSaidIn`): the card's time is quoted
+   * as 「原定」, so one repeating it back -- after a hand-over, its own first time still to come -- is
+   * not taken as having given it.
+   */
+  const promised = `${external ? "原定" : "预计"} ${clockOf(card.dueAt, now, timeZone)} 交`;
   return late > 0
-    ? `【系统催办】${title}预计 ${clockOf(card.dueAt, now, timeZone)} 交，已经过了 ${lengthOf(late)}。${what}`
-    : `【系统催办】${title}预计 ${clockOf(card.dueAt, now, timeZone)} 交，进展如何？${what}`;
+    ? `【系统催办】${title}${promised}，已经过了 ${lengthOf(late)}。${what}`
+    : `【系统催办】${title}${promised}，进展如何？${what}`;
 }
 
 /** What the person is told about the card. */

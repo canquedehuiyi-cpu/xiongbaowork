@@ -81,6 +81,12 @@ export const ACP_WAITING_MS = 20_000;
  */
 export const ACP_DELIVERY_SETTLE_MS = 15_000;
 
+/** Said when the hand-in was not settled within {@link ACP_DELIVERY_SETTLE_MS}. */
+export const ACP_DELIVERY_LATE_NOTE =
+  "这一轮的交付还在核对，结果以看板上这件活的状态为准。";
+/** What `within` answers when the hand-in ran out of time. */
+const LATE = Symbol("late");
+
 /** `work`, or `fallback` once `ms` have passed without it. */
 async function within<T>(
   work: Promise<T> | undefined,
@@ -905,7 +911,7 @@ class AcpRun {
     const turn = this.deliveryTurn;
     const cap = this.config.deliverySettleMs ?? ACP_DELIVERY_SETTLE_MS;
     void (async () => {
-      const sentence = await within(
+      const sentence = await within<string | undefined | typeof LATE>(
         (async () => {
           await this.startedWrite;
           await this.dueWrite;
@@ -916,10 +922,16 @@ class AcpRun {
           });
         })(),
         cap,
-        undefined,
+        LATE,
       );
       if (this.isOver()) return;
-      this.finish([...(sentence ? this.note(sentence) : []), this.finished()]);
+      if (sentence === LATE)
+        this.log(
+          `turn ${this.turnId}: the hand-in took over ${cap}ms; the run ended without waiting for it`,
+        );
+      // Too slow to wait for: said, so a card that moves later (or does not) is not a surprise.
+      const said = sentence === LATE ? ACP_DELIVERY_LATE_NOTE : sentence;
+      this.finish([...(said ? this.note(said) : []), this.finished()]);
     })();
   }
 

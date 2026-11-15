@@ -102,17 +102,44 @@ export function selfChecksOf(reply: string): string[] {
 /** How long a written conclusion handed in as a note may be. */
 const CONCLUSION_CHARS = 2000;
 
-/** The reply as a written conclusion: its lines other than the self-checks, or the whole reply. */
-function conclusionOf(reply: string, checks: readonly string[]): string {
-  const rest = reply
-    .split(/\n+/)
-    .map((line) => line.trim())
-    .filter((line) => line && !checks.some((check) => line.includes(check)))
-    .join("\n")
-    .trim();
-  return Array.from(rest || reply.trim())
-    .slice(0, CONCLUSION_CHARS)
-    .join("");
+/** What marks a written conclusion as one handed in (`EXTERNAL_DELIVERY_GUIDE`): a line that starts so. */
+const CONCLUSION_MARK = /^(?:[-*•·]\s*)?(?:结论|交付)\s*[：:]\s*/;
+/** Words that say the work is not done: a reply with them is not a hand-in, whatever else it says. */
+const NOT_DONE = /交不了|做不完|没做完/;
+
+/**
+ * The conclusion a words-only reply hands in, or undefined when it hands in none (规约第 2 条, for work
+ * with nothing to change). Only an explicit one: a line starting 「结论：」 (or 「交付：」), as the guide
+ * asks, with what follows it up to the first self-check line -- and never in a reply that says the work
+ * is not done or asks for more time (「交不了」「延到 …」), which is a 延期申请 or a progress report, not a
+ * delivery. Without the mark a reply is an answer or a progress line, even with a 「自查：」 in it.
+ *
+ * Only this section is the note, so the criteria's 必需 items are matched against the conclusion and the
+ * check lines, not against everything the reply said on the way.
+ */
+export function conclusionOf(reply: string): string | undefined {
+  if (NOT_DONE.test(reply) || extensionSaidIn(reply)) return undefined;
+  const lines = reply.split(/\n+/).map((line) => line.trim());
+  const start = lines.findIndex((line) => CONCLUSION_MARK.test(line));
+  if (start < 0) return undefined;
+  const section: string[] = [];
+  for (const [index, line] of lines.slice(start).entries()) {
+    const text = (
+      index === 0 ? line.replace(CONCLUSION_MARK, "") : line
+    ).trim();
+    // The self-checks are its checks, not its conclusion: the section ends where they start.
+    const cut = text.search(/(?:自查|测试)\s*[：:]/);
+    if (cut === 0) break;
+    if (cut > 0) {
+      section.push(text.slice(0, cut).trim());
+      break;
+    }
+    if (text) section.push(text);
+  }
+  const conclusion = section.join("\n").trim();
+  return conclusion
+    ? Array.from(conclusion).slice(0, CONCLUSION_CHARS).join("")
+    : undefined;
 }
 
 /** How long the reason of a 延期申请 read from a reply may be. */
@@ -126,8 +153,14 @@ const REASON_CHARS = 500;
 export function extensionSaidIn(
   reply: string,
 ): { due: string; reason: string } | undefined {
+  /*
+   * Its own request only: 「延到」 at the start of a clause or after 要 / 申请 / 想 / 得 / 请 -- not
+   * 「蔓延到」「顺延到」, nor a change it describes (「把超时延到 30 分钟」).
+   */
   const asked =
-    /(?:延期?到|延后到|推迟到)\s*([^，,。；;！!？?\n）)」]{1,20})/.exec(reply);
+    /(?:^|[^\u4e00-\u9fff]|要|申请|想|得|请)(?:延期?到|延后到|推迟到)\s*([^，,。；;！!？?\n）)」]{1,20})/.exec(
+      reply,
+    );
   if (!asked?.[1]) return undefined;
   const words = asked[1].trim();
   const probe = new Date();
@@ -317,25 +350,22 @@ export function createAcpDelivery(options: {
         for (const id of attachmentsProduced(round.events))
           items.push({ kind: "attachment", ref: id });
         const checks = selfChecksOf(round.reply);
-        /*
-         * Work with nothing to change (a question answered, something looked up) is handed in as its
-         * written conclusion, but only with a 「自查：」 line saying how it was checked -- what the gate
-         * asks of any words-only hand-in. Without one, words are an answer, not a delivery.
-         */
-        if (
-          items.length === 0 &&
-          checks.some((check) => check.startsWith("自查"))
-        ) {
-          const conclusion = conclusionOf(round.reply, checks);
-          if (conclusion) items.push({ kind: "note", ref: conclusion });
-        }
         if (items.length === 0) {
           // Already handed in: a follow-up with nothing new is not 「没交东西」.
           if (card.status !== "running") return undefined;
-          // 交不了就说：「延到 HH:MM」 is its 延期申请, which the person grants or not.
+          // 交不了就说：「延到 HH:MM」 is its 延期申请 first, which the person grants or not.
           if (await askedForMoreTime(turn, card.id, round.reply))
             return undefined;
-          return nothingHandedIn(round.name);
+          /*
+           * Work with nothing to change (a question answered, something looked up) is handed in as its
+           * written conclusion: an explicit 「结论：」 with a 「自查：」 line saying how it was checked,
+           * what the gate asks of any words-only hand-in. Anything less is an answer or a progress line.
+           */
+          const conclusion = checks.some((check) => check.startsWith("自查"))
+            ? conclusionOf(round.reply)
+            : undefined;
+          if (!conclusion) return nothingHandedIn(round.name);
+          items.push({ kind: "note", ref: conclusion });
         }
         const verdict = await gate.checkEvidence({
           tenantId: turn.tenantId,

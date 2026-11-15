@@ -3,13 +3,16 @@ import { randomUUID } from "node:crypto";
 import { type BaseEvent, EventType, type RunAgentInput } from "@ag-ui/client";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import {
+  ACP_DELIVERY_LATE_NOTE,
   createAcpTurnStarter,
   DeviceAcpAgent,
   type DeviceAcpEmployee,
 } from "../src/agents/acp/agent";
 import {
+  type AcpDelivery,
   cancelExternalTurns,
   createAcpDelivery,
+  extensionSaidIn,
   externalProtocol,
   externalTurnWaiting,
 } from "../src/agents/acp/delivery";
@@ -44,6 +47,7 @@ import {
   deliveryProtocol,
   EXTERNAL_DELIVERY_GUIDE,
 } from "../src/tasks/delivery-tools";
+import { dueSaidIn } from "../src/tasks/due-time";
 import { listTaskEvents } from "../src/tasks/events";
 import { createEvidenceGate } from "../src/tasks/evidence-gate";
 import { createNudgeRuns, handoverText } from "../src/tasks/nudge-run";
@@ -131,7 +135,13 @@ afterAll(async () => {
 });
 
 /** A hirer with an external employee on a computer, and the server that runs it. */
-async function harness() {
+async function harness(
+  options: {
+    /** Stands in for the delivery loop's end hook (a slow one, say). */
+    ended?: AcpDelivery["ended"];
+    deliverySettleMs?: number;
+  } = {},
+) {
   const tenantId = `acpdl-${suite}-${randomUUID().slice(0, 8)}`;
   await runAsTenant(tenantId, () =>
     database
@@ -196,13 +206,16 @@ async function harness() {
     },
     log: () => undefined,
   });
-  const acpDelivery = createAcpDelivery({
+  const realDelivery = createAcpDelivery({
     delivery,
     gate,
     timeZone: async () => "Asia/Shanghai",
     now: () => NOW,
     log: () => undefined,
   });
+  const acpDelivery: AcpDelivery = options.ended
+    ? { ...realDelivery, ended: options.ended }
+    : realDelivery;
   const runner = new PostgresAgentRunner(database, projector, quota);
   const agentOf = (claimed?: AcpTurnRow) =>
     new DeviceAcpAgent({
@@ -219,6 +232,9 @@ async function harness() {
       context: async () => [],
       every: () => () => undefined,
       delivery: acpDelivery,
+      ...(options.deliverySettleMs
+        ? { deliverySettleMs: options.deliverySettleMs }
+        : {}),
       ...(claimed ? { claimed } : {}),
       log: () => undefined,
     });
@@ -693,6 +709,9 @@ describe("external employees in the delivery loop", () => {
     expect(card.dueReported).toBe(false);
     expect(card.dueAt).toBeNull();
     expect(card.originalDueAt).toBeNull();
+    // Nor a time it only quotes, as a nudge or a hand-over puts the card's time to it.
+    expect(dueSaidIn("原定预计 16:00 交，我接着做。")).toBeUndefined();
+    expect(dueSaidIn("原定预计 16:00，现在预计 17:30 交。")).toBe("17:30");
   });
 
   test("a words-only answer with 自查 is handed in, and is not nudged again", async () => {
@@ -703,7 +722,7 @@ describe("external employees in the delivery loop", () => {
     await h.said(
       threadId,
       turnId,
-      "构建变慢是因为 CI 的缓存键每次都变。\n自查：对比了最近 20 次构建的日志。",
+      "结论：构建变慢是因为 CI 的缓存键每次都变。\n自查：对比了最近 20 次构建的日志。",
     );
     await h.end(threadId, turnId);
     await work.done;
@@ -749,6 +768,70 @@ describe("external employees in the delivery loop", () => {
     // Asked for, not granted: the due time is the person's to move.
     expect(card.dueAt).toBeNull();
     expect(textOf(work.events)).not.toContain("它没交东西");
+    // Only its own request: not a spread, a postponement nobody asked for, or a change it describes.
+    expect(extensionSaidIn("问题蔓延到 18:00 的那批订单。")).toBeUndefined();
+    expect(extensionSaidIn("会议顺延到 18:00。")).toBeUndefined();
+    expect(extensionSaidIn("我把超时延到 30 分钟了。")).toBeUndefined();
+    expect(extensionSaidIn("需要延到明早 10 点。")?.due).toBe("明早 10 点");
+  });
+
+  test("「交不了，延到 18:00。自查：…」 is only a 延期申请, never a hand-in", async () => {
+    const h = await harness();
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const work = h.say(threadId, "把支付回调接上");
+    const { turnId } = await h.open(threadId, 0);
+    await h.said(
+      threadId,
+      turnId,
+      "交不了，缺商户号，延到 18:00。\n自查：确认了测试环境里没有商户号配置。",
+    );
+    await h.end(threadId, turnId);
+    await work.done;
+    const card = await h.cardOf(threadId);
+    if (!card) throw new Error("no card");
+    expect(card.status).toBe("running");
+    expect(card.deliverableRef).toBeNull();
+    const kinds = (await h.history(card.id)).map((row) => row.kind);
+    expect(kinds).toContain("extension_requested");
+    expect(kinds).not.toContain("delivered");
+    // Still with the employee: the checker goes on watching it.
+    await h.check(new Date(NOW.getTime() + 3 * 60 * 60_000));
+    expect(h.nudges).toHaveLength(1);
+  });
+
+  test("progress with a 自查 line is not a hand-in", async () => {
+    const h = await harness();
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const work = h.say(threadId, "把导出改成异步");
+    const { turnId } = await h.open(threadId, 0);
+    await h.said(threadId, turnId, "还在改。\n自查：已经跑了一半测试。");
+    await h.end(threadId, turnId);
+    await work.done;
+    const card = await h.cardOf(threadId);
+    if (!card) throw new Error("no card");
+    expect(card.status).toBe("running");
+    expect(card.deliverableRef).toBeNull();
+    expect((await h.history(card.id)).map((row) => row.kind)).not.toContain(
+      "delivered",
+    );
+    expect(textOf(work.events)).toContain("它没交东西");
+  });
+
+  test("a hand-in too slow to wait for ends the round all the same, and says so", async () => {
+    const h = await harness({
+      ended: () => new Promise<string | undefined>(() => undefined),
+      deliverySettleMs: 50,
+    });
+    const threadId = `acpdl-thread-${randomUUID().slice(0, 8)}`;
+    const work = h.say(threadId, "把导出改成异步");
+    const { turnId } = await h.open(threadId, 0);
+    await h.said(threadId, turnId, "改好了。");
+    await h.end(threadId, turnId);
+    await work.done;
+    expect(textOf(work.events)).toContain(ACP_DELIVERY_LATE_NOTE);
+    expect(
+      work.events.filter((event) => event.type === EventType.RUN_FINISHED),
+    ).toHaveLength(1);
   });
 
   test("an overdue external card is nudged in its own words, naming no tool it does not have", async () => {
@@ -771,7 +854,7 @@ describe("external employees in the delivery loop", () => {
     const told = nudge.content.map((block) => block.text ?? "").join("\n");
     expect(told).not.toMatch(TOOL_NAMES);
     expect(told).toContain(
-      "【系统催办】『把发票导出做完』预计 16:00 交，已经过了 40 分钟。",
+      "【系统催办】『把发票导出做完』原定 16:00 交，已经过了 40 分钟。",
     );
     expect(told).toContain(EXTERNAL_DELIVERY_GUIDE);
     expect(told).toContain("「自查：」");
@@ -785,7 +868,9 @@ describe("external employees in the delivery loop", () => {
       "the nudge round's end",
     );
     expect(h.notices.map((notice) => notice.kind)).toEqual(["overdue"]);
-    expect((await h.cardOf(threadId))?.overdueAt).not.toBeNull();
+    const overdue = await h.cardOf(threadId);
+    if (!overdue) throw new Error("no card");
+    expect(overdue.overdueAt?.toISOString()).toBe("2026-11-16T08:40:00.000Z");
 
     // A hand-over to an external employee is told the same way.
     const handover = handoverText(

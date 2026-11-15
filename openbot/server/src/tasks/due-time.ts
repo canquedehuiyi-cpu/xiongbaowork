@@ -370,12 +370,17 @@ export function clockOf(at: Date, now: Date, timeZone: string): string {
 /**
  * The first due time a reply states, as an external employee states it (spec 2026-11-15-delivery-loop
  * §9, which cannot call `accept_task`): 「预计 HH:MM」 or 「预计 N 分钟 / 小时」, the words after 「预计」
- * ready for {@link readDueTime}. Undefined when the reply states none in that form.
+ * ready for {@link readDueTime}; a time it only quotes (「原定预计 16:00」) is not one it gives. Undefined
+ * when the reply states none in that form.
  */
 export function dueSaidIn(text: string): string | undefined {
-  const said =
-    /预计\s*(?:在\s*)?(\d{1,2}\s*[:：]\s*\d{2}|\d+(?:\.\d+)?\s*(?:个)?\s*(?:分钟|小时|钟头))/.exec(
-      text,
-    );
-  return said?.[1]?.replace(/\s*[:：]\s*/, ":").replace(/\s+/g, " ");
+  const stated =
+    /预计\s*(?:在\s*)?(\d{1,2}\s*[:：]\s*\d{2}|\d+(?:\.\d+)?\s*(?:个)?\s*(?:分钟|小时|钟头))/g;
+  for (const said of text.matchAll(stated)) {
+    // A time it quotes rather than gives: 「原定预计 16:00」「之前预计 16:00」.
+    if (/(?:原定|原来|原先|之前|此前|原)$/.test(text.slice(0, said.index)))
+      continue;
+    return said[1]?.replace(/\s*[:：]\s*/, ":").replace(/\s+/g, " ");
+  }
+  return undefined;
 }
