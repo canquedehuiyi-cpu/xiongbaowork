@@ -21,7 +21,9 @@ export type CompactConversation = (
  * - 压缩会话（给了 `compact` 才挂）：`POST /api/threads/:threadId/compact` 与
  *   `POST /api/channels/:channelId/compact`，body `{agentId?}`（群组按频道压必须给）。成功 200
  *   `{compactionId, tokensBefore, tokensAfter}`；外部员工 409 `{reason:"external"}`；正在压 409
- *   `{reason:"in_progress"}`；没有可压的 409 `{reason:"too_short"}`；总结失败 502 `{reason:"failed"}`。
+ *   `{reason:"in_progress"}`；没有可压的 409 `{reason:"too_short"}`；总结失败或出错 502 `{reason:"failed"}`。
+ * - 看摘要：`GET /api/threads/:threadId/compactions/:compactionId` 与
+ *   `GET /api/channels/:channelId/compactions/:compactionId`，答 `{summary, summarizedCount, auto, at}`。
  *
  * 看不到的对话、不存在的对话、不在对话里的员工答同一个 404，不说是哪一种。
  */
@@ -59,6 +61,35 @@ export function createSidebarRoutes(
     );
     return sidebar ? context.json(sidebar) : context.json(notFound, 404);
   });
+
+  /*
+   * 「看摘要」：`GET /api/threads/:threadId/compactions/:compactionId`（群组走
+   * `/api/channels/:channelId/compactions/:compactionId`），答 `{summary, summarizedCount, auto, at}`。
+   */
+  const compactionRoute =
+    (
+      where: (
+        param: (name: string) => string,
+      ) => { threadId: string } | { channelId: string },
+    ) =>
+    async (context: Context<{ Variables: AppVariables }>) => {
+      const found = await service.compaction(
+        context.var.actor,
+        where((name) => context.req.param(name) as string),
+        context.req.param("compactionId") as string,
+      );
+      return found ? context.json(found) : context.json(notFound, 404);
+    };
+  threads.get(
+    "/:threadId/compactions/:compactionId",
+    requireUser,
+    compactionRoute((param) => ({ threadId: param("threadId") })),
+  );
+  channels.get(
+    "/:channelId/compactions/:compactionId",
+    requireUser,
+    compactionRoute((param) => ({ channelId: param("channelId") })),
+  );
 
   if (compact) {
     const refusals = {
@@ -99,10 +130,21 @@ export function createSidebarRoutes(
         if (target.external) return refuse(context, "external");
         // 群组里还没和这位员工说过话：没有线程，也就没有可压的。
         if (!target.threadId) return refuse(context, "too_short");
-        const result = await compact(viewer, {
-          threadId: target.threadId,
-          agentId: target.agentId,
-        });
+        let result: CompactionResult;
+        try {
+          result = await compact(viewer, {
+            threadId: target.threadId,
+            agentId: target.agentId,
+          });
+        } catch {
+          // 锁连接建不起来、写库失败之类：不落到框架默认的 500，答明确的失败。不记抛出的值。
+          console.error({
+            error: "thread_compaction_route_failed",
+            context: { agentId: target.agentId },
+            timestamp: new Date().toISOString(),
+          });
+          result = { status: "skipped", reason: "failed" };
+        }
         return result.status === "compacted"
           ? context.json({
               compactionId: result.compactionId,

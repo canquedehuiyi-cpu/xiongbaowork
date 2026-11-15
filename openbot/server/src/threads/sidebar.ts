@@ -2,6 +2,7 @@ import {
   type ContextUsage,
   type ConversationSidebar,
   SIDEBAR_OUTPUT_LIMIT,
+  type SidebarCompaction,
   type SidebarContext,
   type SidebarEnvironment,
   type SidebarGoal,
@@ -121,6 +122,15 @@ export type ConversationSidebarService = {
     where: { threadId: string } | { channelId: string },
     agentId?: string,
   ): Promise<CompactionTargetOf | null>;
+  /**
+   * 一次压缩的摘要（「看摘要」）。记录在查看者名下，而且它压的那条线程正是查看者在这个对话里和那位员工的
+   * 那条（同 {@link compactionTarget}）；否则 null（路由答 404）。
+   */
+  compaction(
+    viewer: AgentActor,
+    where: { threadId: string } | { channelId: string },
+    compactionId: string,
+  ): Promise<SidebarCompaction | null>;
 };
 
 /** {@link ConversationSidebarService.compactionTarget} 的答案；`external` 为外部员工（不压缩）。 */
@@ -178,8 +188,21 @@ type Place = {
 type AgentContext = {
   managedBy?: string;
   usage?: ContextUsage;
-  compaction: { id: string; auto: boolean; at: string } | null;
+  compaction: NonNullable<SidebarContext["lastCompaction"]> | null;
 };
+
+/**
+ * 远程员工（AG-UI / Mastra 端点）的上下文由对方系统自己管理：我们不计它的用量、不压缩它
+ * （压缩接口对它答 409 external），所以侧栏和外部员工一样只写由谁管理，不出用量和压缩按钮。
+ */
+const REMOTE_MANAGED_BY = "对方系统";
+
+/** 上下文不归我们管的员工由谁管理；内置员工为 null。 */
+function managedByOf(employee: Employee, on: Device | null): string | null {
+  if (employee.type === "built_in") return null;
+  if (employee.type === "device_acp") return harnessLabel(employee, on);
+  return REMOTE_MANAGED_BY;
+}
 
 const HARNESS_LABELS: Readonly<Record<string, string>> = {
   codex: "Codex",
@@ -554,7 +577,8 @@ export function createConversationSidebar(
     const result = new Map<string, AgentContext>();
     const metered = rows.filter(
       (row): row is typeof row & { threadId: string } =>
-        row.employee?.type !== "device_acp" && row.threadId !== null,
+        (!row.employee || row.employee.type === "built_in") &&
+        row.threadId !== null,
     );
     const tenants =
       metered.length > 0
@@ -587,6 +611,7 @@ export function createConversationSidebar(
                     threadId: threadCompactions.threadId,
                     agentId: threadCompactions.agentId,
                     auto: threadCompactions.auto,
+                    summarizedCount: threadCompactions.summarizedCount,
                     createdAt: threadCompactions.createdAt,
                   },
                 )
@@ -613,19 +638,17 @@ export function createConversationSidebar(
                 id: row.id,
                 auto: row.auto,
                 at: row.createdAt.toISOString(),
+                summarizedCount: row.summarizedCount,
               },
             ]),
           )
-        : new Map<string, { id: string; auto: boolean; at: string }>();
+        : new Map<string, NonNullable<AgentContext["compaction"]>>();
     for (const row of rows) {
-      if (row.employee?.type === "device_acp") {
-        result.set(row.agentId, {
-          managedBy: harnessLabel(
-            row.employee,
-            places.get(row.agentId)?.device ?? null,
-          ),
-          compaction: null,
-        });
+      const managedBy = row.employee
+        ? managedByOf(row.employee, places.get(row.agentId)?.device ?? null)
+        : null;
+      if (managedBy) {
+        result.set(row.agentId, { managedBy, compaction: null });
         continue;
       }
       const key = row.threadId
@@ -1159,6 +1182,30 @@ export function createConversationSidebar(
     };
   }
 
+  /** 压缩会话压的是哪条线程，见 {@link ConversationSidebarService.compactionTarget}。在查看者的帧里调用。 */
+  async function targetOf(
+    viewer: AgentActor,
+    where: { threadId: string } | { channelId: string },
+    agentId: string | undefined,
+  ): Promise<CompactionTargetOf | null> {
+    if ("channelId" in where) {
+      const chat = await conversation(viewer, where.channelId);
+      if (!chat) return null;
+      return chat.agentIds.length > 1
+        ? groupTarget(viewer, chat, agentId)
+        : directTarget(viewer, chat, chat.threadId, agentId);
+    }
+    const own = await ownThread(viewer, where.threadId);
+    if (!own || (own.kind === "group" && agentId && agentId !== own.agentId))
+      return null;
+    const chat = await conversation(viewer, own.channelId);
+    if (!chat) return null;
+    if (own.kind === "group") return groupTarget(viewer, chat, own.agentId);
+    return chat.agentIds.length > 1
+      ? groupTarget(viewer, chat, agentId)
+      : directTarget(viewer, chat, where.threadId, agentId);
+  }
+
   return {
     forChannel: (viewer, channelId, agentId) =>
       runAsTenant(viewer.id, () => forChannel(viewer, channelId, agentId)),
@@ -1179,26 +1226,37 @@ export function createConversationSidebar(
       }),
 
     compactionTarget: (viewer, where, agentId) =>
+      runAsTenant(viewer.id, () => targetOf(viewer, where, agentId)),
+
+    compaction: (viewer, where, compactionId) =>
       runAsTenant(viewer.id, async () => {
-        if ("channelId" in where) {
-          const chat = await conversation(viewer, where.channelId);
-          if (!chat) return null;
-          return chat.agentIds.length > 1
-            ? groupTarget(viewer, chat, agentId)
-            : directTarget(viewer, chat, chat.threadId, agentId);
-        }
-        const own = await ownThread(viewer, where.threadId);
-        if (
-          !own ||
-          (own.kind === "group" && agentId && agentId !== own.agentId)
-        )
-          return null;
-        const chat = await conversation(viewer, own.channelId);
-        if (!chat) return null;
-        if (own.kind === "group") return groupTarget(viewer, chat, own.agentId);
-        return chat.agentIds.length > 1
-          ? groupTarget(viewer, chat, agentId)
-          : directTarget(viewer, chat, where.threadId, agentId);
+        if (!UUID.test(compactionId)) return null;
+        const [row] = await database
+          .select({
+            threadId: threadCompactions.threadId,
+            agentId: threadCompactions.agentId,
+            summary: threadCompactions.summary,
+            summarizedCount: threadCompactions.summarizedCount,
+            auto: threadCompactions.auto,
+            createdAt: threadCompactions.createdAt,
+          })
+          .from(threadCompactions)
+          .where(
+            and(
+              eq(threadCompactions.id, compactionId),
+              eq(threadCompactions.tenantId, viewer.id),
+            ),
+          )
+          .limit(1);
+        if (!row) return null;
+        const target = await targetOf(viewer, where, row.agentId);
+        if (!target || target.threadId !== row.threadId) return null;
+        return {
+          summary: row.summary,
+          summarizedCount: row.summarizedCount,
+          auto: row.auto,
+          at: row.createdAt.toISOString(),
+        };
       }),
   };
 }

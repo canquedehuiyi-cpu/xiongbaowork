@@ -72,6 +72,8 @@ export const threadCompactions = pgTable(
     summary: text("summary").notNull(),
     tokensBefore: integer("tokens_before"),
     tokensAfter: integer("tokens_after"),
+    /** 被摘要替代的消息条数（含更早几次压缩替代的），分隔线写「较早的 N 条」。迁移 0217；之前的记录为空。 */
+    summarizedCount: integer("summarized_count"),
     auto: boolean("auto").notNull(),
     createdAt: createdAt(),
   },

@@ -120,7 +120,10 @@ async function person(): Promise<string> {
 async function employee(
   owner: string,
   name: string,
-  options: { type?: "built_in" | "device_acp"; modelRef?: string } = {},
+  options: {
+    type?: "built_in" | "device_acp" | "remote_ag_ui";
+    modelRef?: string;
+  } = {},
 ): Promise<string> {
   const id = `${suite}-agent-${randomUUID()}`;
   agentIds.push(id);
@@ -132,7 +135,9 @@ async function employee(
       configuration:
         options.type === "device_acp"
           ? { deviceId: "desk", harness: "codex", workdirRef: "root" }
-          : { systemPrompt: "测试。" },
+          : options.type === "remote_ag_ui"
+            ? { url: "https://agent.example.test/run" }
+            : { systemPrompt: "测试。" },
     });
     await database.insert(agentProfiles).values({
       agentId: id,
@@ -317,7 +322,11 @@ const compactionRows = (tenantId: string, threadId: string) =>
       ),
   );
 
-function routesFor(viewer: string, summarize: Summarize) {
+function routesFor(
+  viewer: string,
+  summarize: Summarize,
+  overrides: Partial<CompactionDeps> = {},
+) {
   const sidebar = createConversationSidebar({
     database,
     runtime: "cloud",
@@ -325,7 +334,7 @@ function routesFor(viewer: string, summarize: Summarize) {
     contextWindowFor: async () => undefined,
     meteringTenants: (ids) => meteringTenantsFor(database, ids),
   });
-  const deps = depsWith(summarize);
+  const deps = { ...depsWith(summarize), ...overrides };
   const guard: MiddlewareHandler<{ Variables: AppVariables }> = async (
     context,
     next,
@@ -362,11 +371,23 @@ function routesFor(viewer: string, summarize: Summarize) {
       body: (await response.json()) as Record<string, unknown>,
     };
   };
+  const get = async (path: string) => {
+    const response = await app.request(path);
+    return {
+      status: response.status,
+      body: (await response.json()) as Record<string, unknown>,
+    };
+  };
   return {
     thread: (threadId: string, agentId?: string) =>
       post(`/api/threads/${threadId}/compact`, agentId ? { agentId } : {}),
     channel: (channelId: string, agentId?: string) =>
       post(`/api/channels/${channelId}/compact`, agentId ? { agentId } : {}),
+    sidebar: (threadId: string) => get(`/api/threads/${threadId}/sidebar`),
+    summaryInThread: (threadId: string, compactionId: string) =>
+      get(`/api/threads/${threadId}/compactions/${compactionId}`),
+    summaryInChannel: (channelId: string, compactionId: string) =>
+      get(`/api/channels/${channelId}/compactions/${compactionId}`),
   };
 }
 
@@ -694,6 +715,173 @@ describe("manual compaction", () => {
   });
 });
 
+describe("reading a compaction back", () => {
+  test("看摘要: the summary, how many messages it replaced, and the sidebar's lastCompaction", async () => {
+    const viewer = await person();
+    const stranger = await person();
+    const agentId = await employee(viewer, "助理");
+    const messages = history(20);
+    const { threadId, channelId } = await directChat(viewer, agentId, messages);
+    const summarize = fakeSummarize("第一次摘要。", "第二次摘要。");
+    const routes = routesFor(viewer, summarize);
+    const first = await routes.thread(threadId);
+    expect(first.status).toBe(200);
+    const id = first.body.compactionId as string;
+
+    const read = await routes.summaryInThread(threadId, id);
+    expect(read.status).toBe(200);
+    expect(read.body).toMatchObject({
+      summary: "第一次摘要。",
+      summarizedCount: 10,
+      auto: false,
+    });
+    expect(typeof read.body.at).toBe("string");
+    // 按频道问同一条也行（单聊频道）。
+    expect((await routes.summaryInChannel(channelId, id)).body).toMatchObject({
+      summary: "第一次摘要。",
+    });
+    const sidebar = await routes.sidebar(threadId);
+    expect(
+      (sidebar.body.context as { lastCompaction?: unknown }).lastCompaction,
+    ).toMatchObject({ id, auto: false, summarizedCount: 10 });
+
+    // 再压一次：被替代的条数含上一次替代的。
+    const more = [...messages, ...history(12, "n")];
+    await runAsTenant(viewer, () =>
+      database
+        .update(threads)
+        .set({ messagesSnapshot: more })
+        .where(eq(threads.id, threadId)),
+    );
+    const second = await routes.thread(threadId);
+    expect(
+      (
+        await routes.summaryInThread(
+          threadId,
+          second.body.compactionId as string,
+        )
+      ).body,
+    ).toMatchObject({ summary: "第二次摘要。", summarizedCount: 22 });
+
+    // 看不到的人、不像 id 的 id、别的线程上的记录：都是 404。
+    const notFound = {
+      status: 404,
+      body: { error: "Conversation not found." },
+    };
+    expect(
+      await routesFor(stranger, summarize).summaryInThread(threadId, id),
+    ).toEqual(notFound);
+    expect(await routes.summaryInThread(threadId, "not-a-uuid")).toEqual(
+      notFound,
+    );
+    const other = await directChat(viewer, agentId, history(3));
+    expect(await routes.summaryInThread(other.threadId, id)).toEqual(notFound);
+  });
+
+  test("group: only the viewer reads the summary of their own thread with that employee", async () => {
+    const viewer = await person();
+    const teammate = await person();
+    const writer = await employee(viewer, "写手");
+    const reviewer = await employee(viewer, "审核");
+    const channelId = `${suite}-group-${randomUUID()}`;
+    channelIds.push(channelId);
+    const mine = randomUUID();
+    await runAsTenant(viewer, async () => {
+      await database
+        .insert(channels)
+        .values({ id: channelId, name: "群组", description: "" });
+      await database
+        .insert(channelMemberships)
+        .values({ channelId, userId: viewer });
+      await database.insert(channelAgents).values([
+        { channelId, agentId: writer },
+        { channelId, agentId: reviewer },
+      ]);
+      await database.insert(groupBotThreads).values({
+        ownerUserId: viewer,
+        channelId,
+        agentId: writer,
+        threadId: mine,
+      });
+      await database.insert(threads).values({
+        id: mine,
+        agentId: writer,
+        messagesSnapshot: history(20),
+      });
+    });
+    await runAsTenant(teammate, () =>
+      database
+        .insert(channelMemberships)
+        .values({ channelId, userId: teammate }),
+    );
+    const summarize = fakeSummarize("群组摘要。");
+    const compacted = await routesFor(viewer, summarize).channel(
+      channelId,
+      writer,
+    );
+    const id = compacted.body.compactionId as string;
+    expect(
+      (await routesFor(viewer, summarize).summaryInChannel(channelId, id)).body,
+    ).toMatchObject({ summary: "群组摘要。", summarizedCount: 10 });
+    expect(
+      (await routesFor(teammate, summarize).summaryInChannel(channelId, id))
+        .status,
+    ).toBe(404);
+  });
+});
+
+describe("employees whose context is not ours", () => {
+  test("a remote employee: the sidebar says who manages it and shows no usage, and compaction is 409", async () => {
+    const viewer = await person();
+    const agentId = await employee(viewer, "远程助理", {
+      type: "remote_ag_ui",
+    });
+    const { threadId } = await directChat(viewer, agentId, history(20));
+    const model = await libraryModel(viewer, 100_000);
+    await call({
+      tenantId: viewer,
+      threadId,
+      agentId,
+      inputTokens: 95_000,
+      modelRef: model,
+    });
+    const summarize = fakeSummarize("不该被调用。");
+    const routes = routesFor(viewer, summarize);
+    const sidebar = await routes.sidebar(threadId);
+    expect(sidebar.status).toBe(200);
+    expect(sidebar.body.context).toEqual({ managedBy: "对方系统" });
+    expect(await routes.thread(threadId)).toEqual({
+      status: 409,
+      body: expect.objectContaining({ reason: "external" }),
+    });
+    expect(summarize.prompts).toHaveLength(0);
+  });
+});
+
+describe("the manual route never answers a bare 500", () => {
+  test("an unexpected failure (the lock connection, a write) is a 502 with reason failed", async () => {
+    const viewer = await person();
+    const agentId = await employee(viewer, "助理");
+    const { threadId } = await directChat(viewer, agentId, history(20));
+    const errors = console.error;
+    console.error = () => {};
+    const response = await routesFor(viewer, fakeSummarize("摘要。"), {
+      lock: async () => {
+        throw new Error("connection refused");
+      },
+    })
+      .thread(threadId)
+      .finally(() => {
+        console.error = errors;
+      });
+    expect(response).toEqual({
+      status: 502,
+      body: expect.objectContaining({ reason: "failed" }),
+    });
+    expect(await compactionRows(viewer, threadId)).toHaveLength(0);
+  });
+});
+
 describe("the compaction call", () => {
   test("the compaction call is metered on this thread", async () => {
     const viewer = await person();
@@ -796,6 +984,7 @@ describe("auto compaction before a turn", () => {
     threadId: string;
     messages: Message[];
     summarize: Summarize;
+    autoTimeoutMs?: number;
   }) {
     const recorder = new LLMock();
     const originalBase = process.env.OPENAI_BASE_URL;
@@ -832,7 +1021,13 @@ describe("auto compaction before a turn", () => {
           undefined,
           undefined,
           contextBreakdownRecorder(database, input.tenantId),
-          runCompaction({ ...deps, tenantId: input.tenantId }),
+          runCompaction({
+            ...deps,
+            tenantId: input.tenantId,
+            ...(input.autoTimeoutMs
+              ? { autoTimeoutMs: input.autoTimeoutMs }
+              : {}),
+          }),
         ),
       );
       const agent = built[input.agentId]?.clone() as AbstractAgent | undefined;
@@ -985,6 +1180,43 @@ describe("auto compaction before a turn", () => {
       name: COMPACTION_FAILED_EVENT,
       value: { auto: true },
     });
+    expect(await compactionRows(viewer, threadId)).toHaveLength(0);
+  });
+
+  test("an auto compaction that takes too long is skipped and the turn runs", async () => {
+    const { viewer, agentId, threadId } = await nearlyFull(95_000, 100_000);
+    let aborted = false;
+    const summarize: Summarize = ({ signal }) =>
+      new Promise((_resolve, reject) => {
+        signal?.addEventListener("abort", () => {
+          aborted = true;
+          reject(new Error("aborted"));
+        });
+      });
+    const errors = console.error;
+    console.error = () => {};
+    let result: Awaited<ReturnType<typeof turn>>;
+    const started = Date.now();
+    try {
+      result = await turn({
+        tenantId: viewer,
+        agentId,
+        threadId,
+        messages: history(21),
+        summarize,
+        autoTimeoutMs: 200,
+      });
+    } finally {
+      console.error = errors;
+    }
+    expect(aborted).toBe(true);
+    expect(Date.now() - started).toBeLessThan(10_000);
+    expect(result.events.map((event) => event.type)).toContain(
+      EventType.RUN_FINISHED,
+    );
+    expect(result.sent).toContain("用户第 0 句");
+    expect(result.notices).toHaveLength(1);
+    expect(result.notices[0]).toMatchObject({ name: COMPACTION_FAILED_EVENT });
     expect(await compactionRows(viewer, threadId)).toHaveLength(0);
   });
 });

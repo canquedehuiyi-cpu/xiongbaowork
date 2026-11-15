@@ -93,7 +93,7 @@ export type SidebarGoal = {
 
 /** 上下文：用量与分类明细；外部员工只有 `managedBy`；群组每位员工一行 `perAgent`。 */
 export type SidebarContext = {
-  /** 外部员工：上下文由谁自己管理（如「Codex」）。 */
+  /** 外部员工与远程员工：上下文由谁自己管理（如「Codex」；远程员工为「对方系统」）。这时不显示用量和压缩。 */
   managedBy?: string;
   usage?: ContextUsage;
   perAgent?: {
@@ -106,7 +106,21 @@ export type SidebarContext = {
     managedBy?: string;
     compactedAt?: string | null;
   }[];
-  lastCompaction?: { id: string; auto: boolean; at: string } | null;
+  /** 最近一次压缩；`summarizedCount` 是被摘要替代的消息条数（0217 之前的记录为 null）。 */
+  lastCompaction?: {
+    id: string;
+    auto: boolean;
+    at: string;
+    summarizedCount: number | null;
+  } | null;
+};
+
+/** 一次压缩的摘要（`GET .../compactions/:compactionId`），「看摘要」用。 */
+export type SidebarCompaction = {
+  summary: string;
+  summarizedCount: number | null;
+  auto: boolean;
+  at: string;
 };
 
 /** 输出内容一行：文件（附件）、表格、链接、改动、报告。 */
