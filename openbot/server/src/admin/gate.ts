@@ -88,6 +88,13 @@ export const GATED_ROUTES: Rule[] = [
     path: /^\/api\/agents\/[^/]+\/duplicate$/,
     needs: async () => ["useBots"],
   },
+  // Compacting a conversation calls the Bot's model to write the summary: part of using Bots. The
+  // allowlist on the model the summary calls is judged by the route (`summaryCallRefusal`).
+  {
+    method: "POST",
+    path: /^\/api\/(threads|channels)\/[^/]+\/compact$/,
+    needs: async () => ["useBots"],
+  },
   // Picking the model a Bot answers on is part of using Bots.
   {
     method: "PUT",

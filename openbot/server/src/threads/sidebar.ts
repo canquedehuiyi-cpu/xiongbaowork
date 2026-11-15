@@ -49,6 +49,10 @@ import {
   threadRuns,
   threads,
 } from "../db/schema";
+import {
+  bindingRefsFor,
+  type PoolKeyEnvironment,
+} from "../models/runtime-resolver";
 import type { MachineTarget } from "../projects/context";
 import { isDeliverableRef } from "../tasks/projector";
 import { isPersonTenant, runAsTenant } from "../tenant/context";
@@ -97,6 +101,8 @@ export type SidebarDeps = {
   machinesOf?: (
     agentIds: readonly string[],
   ) => Promise<Map<string, MachineTarget>>;
+  /** 平台池钥匙从哪读（判断池行能不能用）；不给时是进程环境，和运行时一样。 */
+  environment?: PoolKeyEnvironment;
 };
 
 export type ConversationSidebarService = {
@@ -472,25 +478,30 @@ export function createConversationSidebar(
     );
   }
 
+  /**
+   * 员工这一轮实际用的模型的显示名：和运行时同一个判断（`bindingRefsFor`）。模型库行看不到、停用、没有
+   * 钥匙或钥匙被撤销，平台池行停用、不对付费人的套餐开放或部署没配钥匙时，运行落回部署默认模型，这里也
+   * 写部署默认模型。
+   */
   async function modelLabel(employee: Employee): Promise<string | null> {
-    if (employee.modelRef) {
+    const binding = (
+      await bindingRefsFor(database, [employee.id], deps.environment)
+    ).get(employee.id);
+    if (binding?.kind === "library") {
       const [row] = await database
         .select({
           label: modelRegistry.label,
           modelName: modelRegistry.modelName,
-          enabled: modelRegistry.enabled,
-          credentialId: modelRegistry.credentialId,
         })
         .from(modelRegistry)
-        .where(eq(modelRegistry.id, employee.modelRef))
+        .where(eq(modelRegistry.id, binding.modelRef))
         .limit(1);
-      // 看不到、停用或没有钥匙的绑定：运行落回部署默认模型，这里也这么写。
-      if (row?.enabled && row.credentialId) return row.label || row.modelName;
-    } else if (employee.platformModelRef) {
+      if (row) return row.label || row.modelName;
+    } else if (binding?.kind === "pool") {
       const [row] = await database
         .select({ label: platformModelPool.label })
         .from(platformModelPool)
-        .where(eq(platformModelPool.id, employee.platformModelRef))
+        .where(eq(platformModelPool.id, binding.poolId))
         .limit(1);
       if (row) return row.label;
     }

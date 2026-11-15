@@ -858,6 +858,78 @@ describe("employees whose context is not ours", () => {
   });
 });
 
+describe("enterprise controls on the summary call", () => {
+  test("refused by Use Bots or the model allowlist: 403 with a Chinese reason, no model call, nothing written", async () => {
+    const viewer = await person();
+    const agentId = await employee(viewer, "助理");
+    const { threadId } = await directChat(viewer, agentId, history(20));
+    const summarize = fakeSummarize("不该被调用。");
+    const seen: unknown[] = [];
+    const useBotsOff = await routesFor(viewer, summarize, {
+      admit: async (target) => {
+        seen.push(target);
+        return { reason: "use_bots" };
+      },
+    }).thread(threadId);
+    expect(useBotsOff.status).toBe(403);
+    expect(useBotsOff.body).toMatchObject({ reason: "refused" });
+    expect(String(useBotsOff.body.error)).toContain(
+      "管理员关闭了你使用员工的权限",
+    );
+    expect(seen).toEqual([{ tenantId: viewer, threadId, agentId }]);
+
+    const offList = await routesFor(viewer, summarize, {
+      admit: async () => ({ reason: "model", model: "openai/gpt-off-list" }),
+    }).thread(threadId);
+    expect(offList.status).toBe(403);
+    expect(String(offList.body.error)).toContain(
+      "这位员工用的模型 openai/gpt-off-list 不在允许使用的模型里",
+    );
+
+    const unreadable = await routesFor(viewer, summarize, {
+      admit: async () => ({ reason: "unchecked" }),
+    }).thread(threadId);
+    expect(unreadable.status).toBe(503);
+    expect(String(unreadable.body.error)).toContain("暂时无法核对企业管控设置");
+
+    expect(summarize.prompts).toHaveLength(0);
+    expect(await compactionRows(viewer, threadId)).toHaveLength(0);
+  });
+});
+
+describe("files in the compacted messages", () => {
+  test("a user message that only carries a file still reaches the summary with its name and reference", async () => {
+    const viewer = await person();
+    const agentId = await employee(viewer, "助理");
+    const messages: Message[] = [
+      {
+        id: "files-only",
+        role: "user",
+        content: [
+          {
+            type: "document",
+            source: {
+              type: "url",
+              value: "/api/attachments/att-files-only",
+              mimeType: "application/pdf",
+            },
+            metadata: { filename: "季度报表.pdf" },
+          },
+        ],
+      } as Message,
+      ...history(15),
+    ];
+    const { threadId } = await directChat(viewer, agentId, messages);
+    const summarize = fakeSummarize("摘要：用户发了季度报表.pdf。");
+    expect((await routesFor(viewer, summarize).thread(threadId)).status).toBe(
+      200,
+    );
+    expect(summarize.prompts[0]).toContain("季度报表.pdf");
+    expect(summarize.prompts[0]).toContain("/api/attachments/att-files-only");
+    expect(summarize.systems[0]).toContain("把文件名和 ref 原样写进摘要");
+  });
+});
+
 describe("the manual route never answers a bare 500", () => {
   test("an unexpected failure (the lock connection, a write) is a 502 with reason failed", async () => {
     const viewer = await person();
@@ -989,6 +1061,7 @@ describe("auto compaction before a turn", () => {
     stopAfterMs?: number;
     /** 部署开关 `SIDEBAR_AUTO_COMPACTION`；不给时按 `runCompaction` 的默认（开）。 */
     auto?: boolean;
+    admit?: CompactionDeps["admit"];
   }) {
     const recorder = new LLMock();
     const originalBase = process.env.OPENAI_BASE_URL;
@@ -997,7 +1070,10 @@ describe("auto compaction before a turn", () => {
     try {
       process.env.OPENAI_BASE_URL = await recorder.start();
       recorder.onMessage(/.*/, { content: "AUTO001 fixture completed." });
-      const deps = depsWith(input.summarize);
+      const deps = {
+        ...depsWith(input.summarize),
+        ...(input.admit ? { admit: input.admit } : {}),
+      };
       const built = await runAsTenant(input.tenantId, () =>
         buildAgents(
           [reviewer(input.agentId)],
@@ -1324,5 +1400,25 @@ describe("auto compaction before a turn", () => {
     expect(summarize.prompts).toHaveLength(1);
     expect(on.notices[0]).toMatchObject({ name: COMPACTION_DONE_EVENT });
     expect(on.sent).toContain("SUMMARY-SWITCH：开关打开后压的。");
+  });
+
+  test("an auto compaction the enterprise controls refuse is skipped quietly and the turn runs", async () => {
+    const { viewer, agentId, threadId } = await nearlyFull(95_000, 100_000);
+    const summarize = fakeSummarize("不该被调用。");
+    const result = await turn({
+      tenantId: viewer,
+      agentId,
+      threadId,
+      messages: history(21),
+      summarize,
+      admit: async () => ({ reason: "model", model: "openai/gpt-off-list" }),
+    });
+    expect(summarize.prompts).toHaveLength(0);
+    expect(result.notices).toHaveLength(0);
+    expect(result.sent).toContain("用户第 0 句");
+    expect(result.events.map((event) => event.type)).toContain(
+      EventType.RUN_FINISHED,
+    );
+    expect(await compactionRows(viewer, threadId)).toHaveLength(0);
   });
 });

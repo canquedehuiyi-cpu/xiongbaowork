@@ -13,6 +13,7 @@ import {
   guardDeliveryStore,
   guardHostAccess,
   headlessTurnRefusal,
+  summaryCallRefusal,
   installEnterpriseControls,
   modelNamedIn,
   proactiveAdmin,
@@ -3416,6 +3417,9 @@ await startupLifecycle.run(async (startup) => {
       );
     }),
     lock: advisoryThreadLock(config.databaseUrl),
+    // 总结调用和运行一样过企业管控：「使用员工」与总结实际用的模型是否在白名单里。
+    admit: ({ tenantId, threadId, agentId }) =>
+      summaryCallRefusal({ ownerUserId: tenantId, agentId, threadId }),
   };
 
   const actorAgentResolver = createActorAgentResolver({

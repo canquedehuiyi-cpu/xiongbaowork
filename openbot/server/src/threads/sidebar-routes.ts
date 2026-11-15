@@ -21,7 +21,8 @@ export type CompactConversation = (
  * - 压缩会话（给了 `compact` 才挂）：`POST /api/threads/:threadId/compact` 与
  *   `POST /api/channels/:channelId/compact`，body `{agentId?}`（群组按频道压必须给）。成功 200
  *   `{compactionId, tokensBefore, tokensAfter}`；外部员工 409 `{reason:"external"}`；正在压 409
- *   `{reason:"in_progress"}`；没有可压的 409 `{reason:"too_short"}`；总结失败或出错 502 `{reason:"failed"}`。
+ *   `{reason:"in_progress"}`；没有可压的 409 `{reason:"too_short"}`；总结失败或出错 502 `{reason:"failed"}`；
+ *   企业管控不让调用模型 403 `{reason:"refused", error:<中文原因>}`（管控读不到时 503）。
  * - 看摘要：`GET /api/threads/:threadId/compactions/:compactionId` 与
  *   `GET /api/channels/:channelId/compactions/:compactionId`，答 `{summary, summarizedCount, auto, at}`。
  *
@@ -145,13 +146,19 @@ export function createSidebarRoutes(
           });
           result = { status: "skipped", reason: "failed" };
         }
-        return result.status === "compacted"
-          ? context.json({
-              compactionId: result.compactionId,
-              tokensBefore: result.tokensBefore,
-              tokensAfter: result.tokensAfter,
-            })
-          : refuse(context, result.reason);
+        if (result.status === "compacted")
+          return context.json({
+            compactionId: result.compactionId,
+            tokensBefore: result.tokensBefore,
+            tokensAfter: result.tokensAfter,
+          });
+        // 企业管控不让调用这位员工的模型：403（管控读不到时 503），带一句中文原因。
+        if (result.reason === "refused")
+          return context.json(
+            { error: result.message, reason: "refused" },
+            result.unavailable ? 503 : 403,
+          );
+        return refuse(context, result.reason);
       };
     threads.post(
       "/:threadId/compact",
