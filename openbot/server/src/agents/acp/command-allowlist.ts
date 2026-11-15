@@ -10,8 +10,9 @@ import { DEFAULT_SENSITIVE_PATHS, sensitivePath } from "../../approvals/policy";
  * set that can be checked by looking at the characters alone:
  *
  *  - STRICT CHARACTERS (`strictCharacters`): printable ASCII and plain spaces, and none of
- *    `# ' " \` $ \ ^ ; & | < > ( ) { } [ ] * ? ~ !`, no newline, no tab. No shell reads such a line as
- *    more than one program with plain words after it.
+ *    `# ' " \` $ \ ^ ; & | < > ( ) { } [ ] * ? ~ ! % @ =`, no newline, no tab. No shell reads such a
+ *    line as more than one program with plain words after it (`%VAR%` is cmd's variable, `@var`
+ *    PowerShell's splatting, a leading `=` zsh's path lookup).
  *  - STRICTLY SAFE (`strictlySafe`): strict characters; the first word is a program of
  *    `STRICT_COMMANDS`, exactly as written there (no folder, no extension, same case); every word
  *    starting with `-` is, exactly, one of that program's (or subcommand's) options (no
@@ -23,7 +24,7 @@ import { DEFAULT_SENSITIVE_PATHS, sensitivePath } from "../../approvals/policy";
  * agent is hired for.
  */
 
-const BANNED = /[#'"`$\\^;&|<>(){}[\]*?~!]/;
+const BANNED = /[#'"`$\\^;&|<>(){}[\]*?~!%@=]/;
 
 /** Printable ASCII and spaces only, none of the characters a shell gives meaning to. */
 export function strictCharacters(command: string): boolean {
@@ -35,19 +36,21 @@ type Shape = {
   /** Options allowed, each exactly as written. */
   options?: readonly string[];
   /** Plain words allowed after it: paths, none, or at most one of these exact words. */
-  words?: "paths" | "scripts" | "none" | readonly string[];
+  words?: "paths" | "none" | readonly string[];
   /** Subcommands, each with its own shape; a program with subcommands needs one. */
   subcommands?: Readonly<Record<string, Shape>>;
 };
 
 const READ: Shape = { words: "paths" };
 const VERSION: Shape = { options: ["--version"], words: "none" };
-/** `run <script>`: a script's name from the project's manifest, never a file of code. */
-const SCRIPT: Shape = { words: "scripts" };
+/*
+ * No `run <name>`: npm and yarn have built-in names (`run env` prints every variable), and bun runs
+ * a file or any program on the PATH when no script has the name. Which scripts the project has is
+ * not known here, so `run` always asks.
+ */
 const JS_TOOL: Shape = {
   subcommands: {
     test: { words: "none" },
-    run: SCRIPT,
     build: { words: "none" },
     lint: { words: "none" },
     install: { words: "none" },
@@ -69,24 +72,11 @@ export const STRICT_COMMANDS: Readonly<Record<string, Shape>> = {
   head: { options: ["-n"], words: "paths" },
   tail: { options: ["-n"], words: "paths" },
   wc: { options: ["-l", "-w", "-c"], words: "paths" },
+  // Not recursive (it would read `.env` and keys unnamed); `rg` always is. `git grep` is below.
   grep: {
-    options: [
-      "-r",
-      "-n",
-      "-i",
-      "-l",
-      "-w",
-      "-v",
-      "-c",
-      "-rn",
-      "-ri",
-      "-rl",
-      "-E",
-      "-F",
-    ],
+    options: ["-n", "-i", "-l", "-w", "-v", "-c", "-E", "-F"],
     words: "paths",
   },
-  rg: { options: ["-n", "-i", "-l", "-w", "-F", "--files"], words: "paths" },
   find: {
     options: ["-name", "-iname", "-type", "-maxdepth", "-mindepth"],
     words: "paths",
@@ -141,6 +131,10 @@ export const STRICT_COMMANDS: Readonly<Record<string, Shape>> = {
         words: "paths",
       },
       "ls-files": { words: "paths" },
+      grep: {
+        options: ["-n", "-i", "-l", "-w", "-c", "-E", "-F"],
+        words: "paths",
+      },
       blame: { words: "paths" },
       "--version": { words: "none" },
     },
@@ -149,13 +143,7 @@ export const STRICT_COMMANDS: Readonly<Record<string, Shape>> = {
   npm: JS_TOOL,
   pnpm: JS_TOOL,
   yarn: JS_TOOL,
-  bun: {
-    subcommands: {
-      test: { words: "paths" },
-      run: SCRIPT,
-      "--version": { words: "none" },
-    },
-  },
+  bun: { subcommands: { test: { words: "paths" } } },
   make: { words: ["test", "build", "lint"] },
   cargo: {
     subcommands: { build: { words: "none" }, test: { words: "none" } },
@@ -205,12 +193,6 @@ function fits(shape: Shape, words: readonly string[]): boolean {
   const allowed = shape.words ?? "none";
   if (allowed === "none") return plain.length === 0;
   if (allowed === "paths") return plain.every(relativePath);
-  if (allowed === "scripts")
-    return (
-      plain.length === 1 &&
-      /^[A-Za-z0-9_:-]+$/.test(plain[0] as string) &&
-      !/^(ts|js|mjs|cjs|tsx|jsx|sh)$/.test(plain[0] as string)
-    );
   // A fixed word (`make test`, `go test ./...`): at most one, exactly as listed.
   return plain.length <= 1 && plain.every((word) => allowed.includes(word));
 }

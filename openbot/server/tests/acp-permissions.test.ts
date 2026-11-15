@@ -683,24 +683,24 @@ describe("runCommand: dangerous lets through only a clean line of listed command
       "git branch -a",
       "git add src/app.ts",
       "git commit -m wip",
+      "git grep -n TODO",
+      "git ls-files",
       "npm test",
-      "npm run build",
-      "npm run lint",
       "pnpm test",
+      "yarn test",
       "yarn lint",
+      "pnpm lint",
       "bun test",
-      "cargo build",
-      "cargo test",
-      "go test ./...",
       "pytest -q",
       "pytest tests/test_login.py",
       "tsc --noEmit",
+      "tsc",
       "ls -la",
       "ls src",
       "cat README.md",
       "head -n 20 src/app.ts",
-      "grep -rn TODO src",
-      "rg login src",
+      "tail -n 5 log.txt",
+      "grep -n TODO src/app.ts",
       "find src -name app.ts",
       "wc -l src/app.ts",
       "pwd",
@@ -709,6 +709,7 @@ describe("runCommand: dangerous lets through only a clean line of listed command
       "node --version",
       "make",
       "make test",
+      "gofmt -l src",
     ];
     expect(safe.length).toBeGreaterThanOrEqual(32);
     for (const command of safe)
@@ -737,6 +738,14 @@ describe("runCommand: dangerous lets through only a clean line of listed command
       "./ls",
       "git.bat status",
       "Git status",
+      // `run <name>` asks (built-in names, programs on the PATH); builds that download ask by the
+      // network rule; recursive search would read secrets unnamed.
+      "npm run build",
+      "bun run lint",
+      "cargo build",
+      "go test ./...",
+      "grep -rn TODO src",
+      "rg login src",
     ])
       expect({ command, ...(await resolve(run(command, null))) }).toMatchObject(
         {
@@ -998,6 +1007,7 @@ describe("going through unasked is kept to what can be proven", () => {
   const shapes = [
     ...read("acp-command-shapes.txt"),
     ...read("acp-command-shapes-2.txt"),
+    ...read("acp-command-shapes-3.txt"),
   ];
   /** The second attack review's failures: `[command, failed under the defaults, failed under direct]`. */
   const failed = JSON.parse(
@@ -1152,6 +1162,207 @@ describe("going through unasked is kept to what can be proven", () => {
         command,
         ...(await resolve(run(command, null), { employeeRules: direct })),
       }).toMatchObject({ command, kind: "allow" });
+  });
+});
+
+describe("the last review's fixes", () => {
+  const direct = rules({ runCommand: "direct" });
+  const once = async (
+    command: string,
+    employeeRules: Record<AcpRuleKey, string> = rules(),
+  ) =>
+    expect({
+      command,
+      ...(await resolve(run(command, null), { employeeRules })),
+    }).toMatchObject({ command, kind: "ask", offerConversation: false });
+
+  test("cmd's %VAR%, PowerShell's @var and zsh's leading = are not plain characters", async () => {
+    for (const command of [
+      "dir %USERPROFILE%",
+      "type %USERPROFILE%/.config/gh/hosts.yml",
+      "type %USERPROFILE%/.docker/config.json",
+      "cat %USERPROFILE%/.npmrc",
+      "Get-ChildItem @home",
+      "Get-Content @profile",
+      "cat @home",
+      "cat =ls",
+    ]) {
+      expect(strictCharacters(command)).toBe(false);
+      await once(command);
+      await once(command, direct);
+    }
+  });
+
+  test("run <name> always asks, bun runs only its tests", async () => {
+    for (const command of [
+      "bun run printenv",
+      "bun run env",
+      "bun run logoff",
+      "npm run env",
+      "yarn run env",
+      "pnpm run env",
+      "npm run build",
+    ]) {
+      expect(strictlySafe(command)).toBe(false);
+      expect(await resolve(run(command, null))).toMatchObject({ kind: "ask" });
+    }
+    expect(strictlySafe("bun test")).toBe(true);
+  });
+
+  test("a command run in another folder is not relative to the working folder", async () => {
+    const elsewhere = (rawInput: unknown, insideWorkdir: boolean | null) =>
+      resolve(
+        ask({
+          kind: "execute",
+          title: "t",
+          rawInput,
+          facts: { insideWorkdir, paths: [] },
+        }),
+        { employeeRules: rules({ touchOutside: "direct" }) },
+      );
+    // The device could not place it (an older runner), or placed it outside.
+    for (const insideWorkdir of [null, false]) {
+      for (const rawInput of [
+        { command: "cat .config/gh/hosts.yml", cwd: "/home/me" },
+        { command: ["cat", ".config/gh/hosts.yml"], workdir: "/home/me" },
+        { command: "make", cwd: "/tmp/evil" },
+        { command: "git status", directory: ["/tmp/evil"] },
+      ]) {
+        const decided = await elsewhere(rawInput, insideWorkdir);
+        expect({ rawInput, ...decided }).toMatchObject({
+          rawInput,
+          kind: "ask",
+          offerConversation: false,
+        });
+      }
+    }
+    // Run in the working folder itself, or a folder in it, it is.
+    expect(
+      await elsewhere({ command: "git status", workdir: "/work" }, true),
+    ).toMatchObject({ kind: "allow" });
+    expect(
+      await elsewhere({ command: "ls", cwd: "/work/src" }, true),
+    ).toMatchObject({ kind: "allow" });
+  });
+
+  test("grep is not recursive; a secret named by revision is never allowed for the conversation", async () => {
+    for (const command of [
+      "grep -rn AWS_SECRET",
+      "grep -ri token",
+      "grep -rl key",
+      "grep -r BEGIN",
+    ]) {
+      expect(strictlySafe(command)).toBe(false);
+      expect(await resolve(run(command, null))).toMatchObject({ kind: "ask" });
+    }
+    expect(strictlySafe("git grep -n TODO")).toBe(true);
+    for (const command of ["git show HEAD:.env", "git show :.env"])
+      await once(command);
+  });
+
+  test("installing and building that download go by the network rule", async () => {
+    for (const command of [
+      "pipx install x",
+      "deno install x",
+      "pipenv install",
+      "mvn install",
+      "gradle build",
+      "mix deps.get",
+      "uv run pytest",
+      "uv sync",
+      "corepack enable",
+      "cargo build",
+      "cargo test",
+      "go build ./...",
+      "go test ./...",
+      "git ls-remote https://x.example/r.git",
+      "git submodule add https://x.example/r.git",
+    ]) {
+      expect({
+        command,
+        rules: classifyRequest(run(command, null)).rules,
+      }).toMatchObject({
+        command,
+        rules: expect.arrayContaining(["network"]),
+      });
+      expect(
+        await resolve(run(command, null), {
+          employeeRules: rules({ runCommand: "direct", network: "ask" }),
+        }),
+      ).toMatchObject({ kind: "ask" });
+    }
+  });
+
+  test("under direct, the last review's plain floors ask once", async () => {
+    for (const command of [
+      "stripe payouts create --amount 100",
+      "stripe transfers create --amount 1 --destination acct_1",
+      "glab repo delete o/r",
+      "glab release create v1",
+      "glab api -X DELETE projects/1",
+      "gh secret delete TOKEN",
+      "gh secret set TOKEN",
+      "gh variable delete NAME",
+      "gh label delete bug",
+      "gh cache delete --all",
+      "gh issue delete 1 --yes",
+      "gh repo archive o/r",
+      "gh ssh-key add key.pub",
+      "gh auth token",
+      "rclone delete remote:x",
+      "rclone purge remote:x",
+      "aws ec2 terminate-instances --instance-ids i-1",
+      "aws lambda remove-permission --function-name f --statement-id s",
+      "az storage blob delete-batch -s c",
+      "helm uninstall app",
+      "pulumi destroy --yes",
+      "fly apps destroy app",
+      "heroku apps:destroy app",
+      "wrangler delete",
+      "docker rmi img",
+      "docker compose down -v",
+      "dropdb prod",
+      "prisma migrate reset --force",
+      "prisma db push --force-reset",
+      "supabase db reset",
+      "git branch -d feature",
+      "git branch -D feature",
+      "git branch --delete feature",
+      "git tag -d v1",
+      "git update-ref -d refs/heads/x",
+      "git reflog expire --all",
+      "git gc --prune",
+      "git worktree remove -f wt",
+      "git read-tree -u --reset HEAD",
+      "git switch -f main",
+      "git filter-branch",
+      "git push --delete origin v1",
+      "git push origin :main",
+      "vssadmin delete shadows /all",
+      "format D",
+      "diskpart",
+      "cipher /w",
+      "fsutil file setZeroData offset 0 length 1 x",
+      "robocopy empty build /MIR",
+      "robocopy a b /MOV",
+      "cmake -E remove x",
+      "7z a -sdel a.7z important.docx",
+      "zip -m a.zip important.docx",
+      "sed -i d important.docx",
+      "npm token create",
+      "npm owner add bob pkg",
+      "npm access public pkg",
+      "npm unpublish --force",
+      "npm deprecate pkg msg",
+      "npm dist-tag rm pkg beta",
+      "cargo yank --version 1.0.0",
+      "aws iam create-access-key",
+      "git config --global core.hooksPath h",
+    ])
+      await once(command, direct);
+    // Merge requests go by the push rule, as pull requests do.
+    for (const command of ["glab mr create --fill", "glab mr merge 1"])
+      expect(classifyRequest(run(command, null)).rules).toContain("push");
   });
 });
 

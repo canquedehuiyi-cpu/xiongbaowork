@@ -6,6 +6,7 @@ import {
   PUBLISH_POST_REASON,
   SHARE_ACCESS_REASON,
   securityFloor,
+  sensitivePath,
 } from "../../approvals/policy";
 import { DEFAULT_EMPLOYEE_SECURITY } from "../../approvals/types";
 
@@ -76,7 +77,8 @@ export const MAX_ANALYSED_COMMAND = 4000;
 const MAX_DEPTH = 4;
 
 export type CommandFloor = {
-  source:
+  source: /** Paying, credentials, security settings: asked once (the engine would hand them over). */
+    | "safety"
     | "destructive_tool"
     | "outbound_send"
     | "share_access"
@@ -114,12 +116,14 @@ export type CommandAnalysis = {
 };
 
 const FLOOR_ORDER: CommandFloor["source"][] = [
+  "safety",
   "destructive_tool",
   "outbound_send",
   "share_access",
   "publish_post",
 ];
 const FLOOR_REASONS: Record<CommandFloor["source"], string> = {
+  safety: "这条命令会付款、动凭据或改安全设置，每次都先征得你同意。",
   destructive_tool: DESTRUCTIVE_TOOL_REASON,
   outbound_send: OUTBOUND_SEND_REASON,
   share_access: SHARE_ACCESS_REASON,
@@ -710,6 +714,17 @@ const COMMAND_NAMES = new Set([
 
 /** Installing dependencies or downloading: the network rule, read per simple command. */
 const NETWORK_COMMANDS = [
+  // Package managers that install or fetch, and builds that download their dependencies first.
+  /\bpipx\s+(install|upgrade|reinstall|run|inject)\b/i,
+  /\bdeno\s+(install|cache|add|outdated)\b/i,
+  /\bpipenv\s+(install|sync|update|lock|upgrade)\b/i,
+  /^(mvn|mvnw|gradle|gradlew|sbt|lein|bazel|bazelisk)(\s|$)/i,
+  /\bmix\s+(deps\.get|deps\.update|hex\.)/i,
+  /\buv\s+(run|sync|lock)\b/i,
+  /\bcorepack\s+(enable|prepare|install|use|up)\b/i,
+  /\bcargo\s+(build|test|run|check|clippy|doc|b|t|r|c)\b/i,
+  /\bgo\s+(build|test|run|vet|list|generate)\b/i,
+  /\bgit\s+(ls-remote|submodule\s+(add|update|sync))\b/i,
   /\b(npm|pnpm|yarn|bun|cnpm)\s+(install|i|add|ci|update|upgrade|up|dlx|x)\b/i,
   /^(npx|pnpx|bunx|uvx|pipx)\s+\S/i,
   /^yarn$/i,
@@ -755,6 +770,49 @@ const LINE_FLOORS: { source: CommandFloor["source"]; pattern: RegExp }[] = [
     source: "destructive_tool",
     pattern:
       /\.(delete|deletesubkey|deletesubkeytree|removeall)\s*\(|\bshutil\.rmtree\b|\bos\.(remove|unlink|rmdir|removedirs)\b|\b(rmsync|unlinksync|rmdirsync)\b|\bcrontab\s+(-\S*\s+)*-r\b/i,
+  },
+  // Paying, credentials and security settings on the command line.
+  {
+    source: "safety",
+    pattern:
+      /\bstripe\s+(payouts|transfers|charges|refunds|topups|payment_intents\s+(create|confirm)|invoices\s+pay)\b|\bgh\s+(secret\s+set|ssh-key\s+add|gpg-key\s+add|auth\s+token)\b|\bglab\s+(variable\s+set|ssh-key\s+add|auth\s+status\s+-t)\b|\bnpm\s+token\b|\baws\s+iam\s+(create-access-key|create-login-profile|update-login-profile|attach-|put-)|\bgit\b[^;&|\n]*\bconfig\b[^;&|\n]*\bcore\.hookspath\b/i,
+  },
+  // Deleting elsewhere: git history, remotes and clouds, databases, disks.
+  {
+    source: "destructive_tool",
+    pattern:
+      /\bgit\b[^;&|\n]*\b(branch\s+(-[a-z]*[dD]\b|--del)|tag\s+(-[a-z]*d\b|--del)|update-ref\s+-d\b|reflog\s+(expire|delete)|gc\b[^;&|\n]*--prune|worktree\s+(remove|prune)|read-tree\b[^;&|\n]*--reset|switch\b[^;&|\n]*(\s-f\b|--force|--discard-changes)|filter-branch|filter-repo|push\b[^;&|\n]*(\s-d\b|--delete|\s:\S))/i,
+  },
+  {
+    source: "destructive_tool",
+    pattern:
+      /\bglab\s+(repo|release|issue|mr|variable|label)\s+delete\b|\bglab\s+api\b[^;&|\n]*-X\s*delete\b|\bgh\s+(secret|variable|label|cache|issue|run|gist|ssh-key|gpg-key)\s+delete\b|\bgh\s+repo\s+archive\b|\bgh\s+api\b[^;&|\n]*(-X\s*delete|--method\s+delete)\b/i,
+  },
+  {
+    source: "destructive_tool",
+    pattern:
+      /\brclone\s+(delete|deletefile|purge|rmdirs?|cleanup)\b|\baws\b[^;&|\n]*\s(terminate-|remove-|deregister-|delete-|rm\b|rb\b)|\baz\b[^;&|\n]*\sdelete(-batch)?\b|\bhelm\s+(uninstall|delete)\b|\bpulumi\s+(destroy|stack\s+rm)\b|\b(fly|flyctl)\b[^;&|\n]*\s(destroy|delete)\b|\bheroku\s+(apps:destroy|pg:reset|addons:destroy)\b|\bwrangler\b[^;&|\n]*\sdelete\b|\bdocker\b[^;&|\n]*\s(rmi|rm|prune|down\b[^;&|\n]*\s(-v|--volumes))\b|\bdocker\s+volume\s+rm\b|\bdropdb\b|\bdropuser\b|\bprisma\s+(migrate\s+reset|db\s+push\b[^;&|\n]*--force-reset)\b|\bsupabase\s+db\s+reset\b|\bvercel\s+(rm|remove)\b|\bnetlify\s+sites:delete\b/i,
+  },
+  {
+    source: "destructive_tool",
+    pattern:
+      /\bvssadmin\s+delete\b|\bdiskpart\b|\bcipher\s+\/w\b|\bfsutil\b[^;&|\n]*\bsetzerodata\b|\brobocopy\b[^;&|\n]*\s\/(mir|mov|move|purge)\b|(^|[;&|\s])format(\.com)?\s+[a-z]:?(\s|$)|\bclear-disk\b|\bremove-partition\b|\bcmake\s+-e\s+(remove|rm|remove_directory)\b|\b7z\b[^;&|\n]*\s-sdel\b|\bzip\b[^;&|\n]*\s-[a-z]*m[a-z]*\b|\bsed\b[^;&|\n]*\s(-[a-z]*i|--in-place)|\bnpm\s+(unpublish|dist-tag\s+(rm|remove))\b/i,
+  },
+  // Publishing and sharing.
+  {
+    source: "publish_post",
+    pattern:
+      /\bglab\s+release\s+create\b|\bnpm\s+(deprecate|dist-tag\s+add)\b|\bcargo\s+(yank|owner)\b/i,
+  },
+  {
+    source: "share_access",
+    pattern:
+      /\bnpm\s+(owner\s+add|access\s+(public|grant|set))\b|\bglab\s+repo\s+(edit|create)\b[^;&|\n]*public\b/i,
+  },
+  {
+    source: "outbound_send",
+    pattern:
+      /\bglab\s+(issue\s+(create|note)|mr\s+note)\b|\bglab\s+api\b[^;&|\n]*-X\s*(post|put|patch)\b/i,
   },
 ];
 
@@ -1056,6 +1114,8 @@ function simpleCommand(input: Word[], context: Context, facts: Facts): void {
       facts.network = true;
       risky(facts, RISKY_DOWNLOADED);
     }
+    // `pipx install|upgrade|…` fetch packages too.
+    if (name === "pipx") facts.network = true;
     if (name === "pipx" && (words[0] as Word | undefined)?.text === "run") {
       facts.network = true;
       risky(facts, RISKY_DOWNLOADED);
@@ -1384,6 +1444,12 @@ function simpleCommand(input: Word[], context: Context, facts: Facts): void {
     facts.floors.add("outbound_send");
   }
   if (program === "ssh" || program === "plink") facts.network = true;
+  if (program === "glab") {
+    const [area, verb] = lower.filter((arg) => !arg.startsWith("-"));
+    if (area === "mr" && (verb === "create" || verb === "merge"))
+      facts.push = true;
+    facts.network = true;
+  }
   if (program === "gh") {
     const verbs = lower.filter(
       (arg, index) =>
@@ -1611,6 +1677,18 @@ function analyseInto(command: string, context: Context, facts: Facts): void {
   flush(null);
 }
 
+/** A file named after a revision (`git show HEAD:.env`) that may hold secrets. */
+function revisionSecret(parts: CommandPart[]): string | undefined {
+  for (const part of parts)
+    for (const arg of part.args) {
+      if (!arg.includes(":")) continue;
+      const hit = sensitivePath(arg.slice(arg.lastIndexOf(":") + 1));
+      if (hit)
+        return `这条命令读取可能保存密钥的文件（${hit.pattern}），先问你。`;
+    }
+  return undefined;
+}
+
 /** The SEC1 tables over one piece of a command line. */
 function sec1(command: string): string | undefined {
   return securityFloor(
@@ -1664,7 +1742,9 @@ export function analyseCommand(command: string | null): CommandAnalysis {
     facts.risky ??
     [line, ...facts.parts.map((part) => [part.program, ...part.args].join(" "))]
       .map(sec1)
-      .find((reason) => reason !== undefined);
+      .find((reason) => reason !== undefined) ??
+    // A file named after a revision (`git show HEAD:.env`): its path counts too.
+    revisionSecret(facts.parts);
   const source = FLOOR_ORDER.find((entry) => facts.floors.has(entry));
   const unclean = facts.unclean ?? facts.risky;
   return {

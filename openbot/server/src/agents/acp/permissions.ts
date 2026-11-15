@@ -219,7 +219,30 @@ export type AcpClassified = {
   paths: string[];
   /** A kind XiongBao does not know (`other`, a misspelling): asked every time. */
   unrecognised: boolean;
+  /**
+   * An `execute` request names the folder it runs in (`cwd`, `workdir`, `directory`, `dir_path`)
+   * and the device did not place it inside the working folder: its relative paths are relative to
+   * somewhere else.
+   */
+  elsewhere: boolean;
 };
+
+/** The fields a command's own working folder is given in, by one adapter or another. */
+const WORKING_FOLDER_KEYS = ["cwd", "workdir", "directory", "dir_path"];
+
+/** Whether a request's raw input names the folder it runs in (a string, or a list of them). */
+function namesWorkingFolder(rawInput: unknown): boolean {
+  const raw = record(rawInput);
+  if (!raw) return false;
+  return WORKING_FOLDER_KEYS.some((key) => {
+    const value = raw[key];
+    if (typeof value === "string") return value !== "";
+    return (
+      Array.isArray(value) &&
+      value.some((item) => typeof item === "string" && item !== "")
+    );
+  });
+}
 
 const PATH_KINDS = new Set(["read", "edit", "move", "delete", "search"]);
 
@@ -240,6 +263,10 @@ export function classifyRequest(req: AcpPermissionAsk): AcpClassified {
   const command = kind === "execute" ? commandOf(req.rawInput) : null;
   const analysis = kind === "execute" ? analyseCommand(command) : undefined;
   const url = kind === "fetch" ? urlOf(req.rawInput) : null;
+  const elsewhere =
+    kind === "execute" &&
+    namesWorkingFolder(req.rawInput) &&
+    req.facts.insideWorkdir !== true;
   const rules = new Set<AcpRuleKey>();
   if (kind === "edit" || kind === "move" || kind === "delete")
     rules.add(inside ? "editInside" : "touchOutside");
@@ -249,7 +276,8 @@ export function classifyRequest(req: AcpPermissionAsk): AcpClassified {
     rules.add("runCommand");
     if (analysis?.network) rules.add("network");
     if (analysis?.push) rules.add("push");
-    if (req.facts.insideWorkdir === false) rules.add("touchOutside");
+    if (req.facts.insideWorkdir === false || elsewhere)
+      rules.add("touchOutside");
   } else if (kind === "fetch") rules.add("network");
   const unrecognised = !KNOWN_KINDS.has(kind);
   const sorted = [...rules].sort();
@@ -274,6 +302,7 @@ export function classifyRequest(req: AcpPermissionAsk): AcpClassified {
     url,
     paths,
     unrecognised,
+    elsewhere,
     candidate: {
       actorId: req.actorId ?? "",
       botId: req.botId ?? "",
@@ -406,6 +435,7 @@ function runCommandAsks(
   value: string | undefined,
   command: string | null,
   analysis: CommandAnalysis,
+  elsewhere: boolean,
 ): string | undefined {
   const why =
     analysis.danger ??
@@ -419,10 +449,12 @@ function runCommandAsks(
   if (value === "dangerous") {
     if (
       command !== null &&
+      !elsewhere &&
       plainCommand(command, analysis) &&
       strictlySafe(command)
     )
       return undefined;
+    if (elsewhere) return "这条命令在工作文件夹以外的地方运行，先问你。";
     return (
       why ??
       "这条命令不在严格安全的命令名单里（程序、选项和路径都要对得上），先问你。"
@@ -549,7 +581,8 @@ export async function resolvePermission(input: {
    * may hold secrets; a file request only inside the working folder.
    */
   const standing = analysis
-    ? plainCommand(classified.command, analysis)
+    ? plainCommand(classified.command, analysis) &&
+      !classified.rules.includes("touchOutside")
     : !classified.rules.includes("touchOutside");
   const allowed = standing && input.threadAllows.has(acpAllowKey(candidate));
   // Layer 3: a custom rule, or the reviewer, asks. The engine's own "ask before changes" default
@@ -572,7 +605,12 @@ export async function resolvePermission(input: {
   for (const key of classified.rules) {
     const value = input.employeeRules[key];
     if (key === "runCommand" && analysis) {
-      const why = runCommandAsks(value, classified.command, analysis);
+      const why = runCommandAsks(
+        value,
+        classified.command,
+        analysis,
+        classified.elsewhere,
+      );
       if (why) asking.push({ label: ACP_RULE_LABELS.runCommand, reason: why });
       continue;
     }

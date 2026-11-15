@@ -107,3 +107,24 @@ test("a tool call naming no path has insideWorkdir null", () => {
     paths: [],
   });
 });
+
+test("the folder a command runs in counts: cwd, workdir, directory, as a string or a list", () => {
+  const run = (rawInput: Record<string, unknown>) =>
+    permissionFacts(work, { kind: "execute", rawInput }, process.platform);
+  expect(run({ command: "make", cwd: elsewhere }).insideWorkdir).toBe(false);
+  expect(run({ command: ["cat", "x"], workdir: elsewhere }).insideWorkdir).toBe(
+    false,
+  );
+  expect(
+    run({ command: "git status", directory: [join(work, "src"), elsewhere] })
+      .insideWorkdir,
+  ).toBe(false);
+  expect(run({ command: "ls", cwd: join(work, "src") })).toEqual({
+    insideWorkdir: true,
+    paths: ["src"],
+  });
+  expect(run({ command: "ls", workdir: work })).toEqual({
+    insideWorkdir: true,
+    paths: ["."],
+  });
+});
