@@ -59,7 +59,7 @@ beforeAll(() => {
   originalFetch = globalThis.fetch;
   globalThis.fetch = (async (
     input: Parameters<typeof fetch>[0],
-    init?: RequestInit,
+    _init?: RequestInit,
   ) => {
     const url = new URL(
       typeof input === "string"
