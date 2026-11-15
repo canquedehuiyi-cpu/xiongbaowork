@@ -117,6 +117,7 @@ async function task(
   title: string,
   status: "running" | "done",
   updatedAt = new Date(),
+  channelRef?: string,
 ) {
   await runAsTenant(tenant, () =>
     database.insert(tasks).values({
@@ -125,6 +126,7 @@ async function task(
       source: "chat",
       status,
       updatedAt,
+      ...(channelRef ? { channelRef } : {}),
     }),
   );
 }
@@ -437,10 +439,39 @@ describe("GET /api/agents/presence", () => {
     expect(await presenceOf(teammate, [away], reachable)).toEqual([
       { agentId: away, status: "offline", doing: null },
     ]);
-    // Back online: what it is doing, as its hirer's board says.
+    // Back online: busy, as its hirer's board says, but what it does in its hirer's own chat is the
+    // hirer's business: no title.
     online = true;
     expect(await presenceOf(teammate, [away], reachable)).toEqual([
+      { agentId: away, status: "working", doing: null },
+    ]);
+    // The hirer still sees the title of their own work.
+    expect(await presenceOf(hirer, [away], reachable)).toEqual([
       { agentId: away, status: "working", doing: "推送登录页修复" },
+    ]);
+    // Work of this group: the members see what it is.
+    await task(
+      hirer.id,
+      away,
+      "整理群里的发布清单",
+      "running",
+      new Date(Date.now() - 60_000),
+      group.id,
+    );
+    expect(await presenceOf(teammate, [away], reachable)).toEqual([
+      { agentId: away, status: "working", doing: "整理群里的发布清单" },
+    ]);
+    // Work of another group the teammate is not in stays hidden too.
+    await task(
+      hirer.id,
+      away,
+      "别的群里的事",
+      "running",
+      new Date(),
+      "other-group",
+    );
+    expect(await presenceOf(teammate, [away], reachable)).toEqual([
+      { agentId: away, status: "working", doing: "整理群里的发布清单" },
     ]);
     // Nobody outside the group hears of it.
     expect(await presenceOf(outsider, [away], reachable)).toEqual([]);

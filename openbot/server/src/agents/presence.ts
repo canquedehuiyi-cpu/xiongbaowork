@@ -16,10 +16,12 @@
  * 的活，只回给招聘人。
  *
  * 群里的其他成员看不到招聘人的私有员工，但它在他们的群里（招聘人还在那个群，和群名册同一条规则，
- * `channels/group-roster.ts`）时，他们也看得到它的状态和「此刻」：按招聘人读到的算（在招聘人的租户帧里读
- * 招聘人的暂停行和看板），不带排队数。
+ * `channels/group-roster.ts`）时，他们也看得到它的状态：按招聘人读到的算（在招聘人的租户帧里读招聘人的
+ * 暂停行和看板），不带排队数。「此刻」只写他们和招聘人共同所在的群里的那件活（看板卡的 `channelRef` 是
+ * 这个群，或者是这个群里它的群线程）；它在招聘人私聊里做的活是招聘人的私事，状态照样是「在忙」，
+ * 「此刻」为 null。
  */
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { Database } from "../db/client";
 import {
@@ -30,6 +32,7 @@ import {
   channelAgents,
   channelMemberships,
   channels,
+  groupBotThreads,
   tasks,
 } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
@@ -255,6 +258,7 @@ async function readGroupExternalPresence(
   const shared = await database
     .selectDistinct({
       agentId: channelAgents.agentId,
+      channelId: channelAgents.channelId,
       member: hirerMember.userId,
     })
     .from(channelAgents)
@@ -275,24 +279,81 @@ async function readGroupExternalPresence(
         ]),
       ),
     );
-  const byHirer = new Map<string, Set<string>>();
+  // hirer → employee → the groups this person shares with that hirer where the employee is.
+  const byHirer = new Map<string, Map<string, Set<string>>>();
   for (const row of shared) {
     const hirer = hired.get(row.agentId)?.hirer;
     if (hirer !== row.member || hirer === actor.id) continue;
-    byHirer.set(hirer, (byHirer.get(hirer) ?? new Set()).add(row.agentId));
+    const employees = byHirer.get(hirer) ?? new Map<string, Set<string>>();
+    employees.set(
+      row.agentId,
+      (employees.get(row.agentId) ?? new Set()).add(row.channelId),
+    );
+    byHirer.set(hirer, employees);
   }
   const found: AgentPresence[] = [];
-  for (const [hirer, agentIds] of byHirer) {
-    const seen = await runAsTenant(hirer, () =>
-      readVisiblePresence(
+  for (const [hirer, employees] of byHirer) {
+    const seen = await runAsTenant(hirer, async () => {
+      const read = await readVisiblePresence(
         database,
         { id: hirer, role: "user" },
-        [...agentIds],
+        [...employees.keys()],
         options,
         { counted: false },
-      ),
-    );
+      );
+      // 「此刻」 only for the work of a group this person is in: the rest is the hirer's own.
+      return Promise.all(
+        read.map(async (presence) =>
+          presence.doing === null
+            ? presence
+            : {
+                ...presence,
+                doing: await groupDoing(database, presence.agentId, [
+                  ...(employees.get(presence.agentId) ?? []),
+                ]),
+              },
+        ),
+      );
+    });
     found.push(...seen);
   }
   return found;
+}
+
+/**
+ * The title of the employee's latest running card on these groups' boards, read in its hirer's frame:
+ * a card whose `channelRef` is one of the groups (a group turn's card), or one of its group threads
+ * there. Null when what it is doing now is none of theirs.
+ */
+async function groupDoing(
+  database: Database,
+  agentId: string,
+  channelIds: readonly string[],
+): Promise<string | null> {
+  if (channelIds.length === 0) return null;
+  const groupThreads = database
+    .select({ threadId: groupBotThreads.threadId })
+    .from(groupBotThreads)
+    .where(
+      and(
+        eq(groupBotThreads.agentId, agentId),
+        inArray(groupBotThreads.channelId, [...channelIds]),
+      ),
+    );
+  const [row] = await database
+    .select({ title: tasks.title })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.executorAgentId, agentId),
+        eq(tasks.status, "running"),
+        or(
+          inArray(tasks.channelRef, [...channelIds]),
+          inArray(tasks.channelRef, groupThreads),
+        ),
+      ),
+    )
+    .orderBy(desc(tasks.updatedAt))
+    .limit(1);
+  return row?.title ?? null;
 }
