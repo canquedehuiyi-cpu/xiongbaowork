@@ -386,7 +386,8 @@ describe("an external employee's permission requests", () => {
       employee: "小码",
       computer: "何总的 MacBook Pro",
       action: "小码想要运行命令：git push origin main",
-      hit: "提交并推送代码",
+      // Not on the list of everyday commands, and a push.
+      hit: "提交并推送代码、运行命令",
       offerConversation: true,
       requestId: "req-1",
       summary: "这一轮已完成：Fix the login form",

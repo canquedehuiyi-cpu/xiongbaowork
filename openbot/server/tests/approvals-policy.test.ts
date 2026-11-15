@@ -1660,6 +1660,31 @@ describe("SEC1: the dangerous-command classifier (§4.3)", () => {
       id: "too_long",
     });
   });
+  test("a long line is read in linear time: no pattern backtracks over it", () => {
+    for (const command of [
+      "git push ".repeat(2200),
+      "git reset ".repeat(1990),
+      "git clean ".repeat(1990),
+      "chmod -R ".repeat(2200),
+      "chmod 777 ".repeat(1990),
+    ]) {
+      const started = performance.now();
+      dangerousCommand(command);
+      expect(performance.now() - started).toBeLessThan(100);
+    }
+    // Still found, once the step holds them.
+    expect(dangerousCommand("git -C repo push --force origin main")).toEqual({
+      id: "force_push",
+    });
+    expect(dangerousCommand("git reset --hard HEAD~1")).toEqual({
+      id: "hard_reset",
+    });
+    expect(dangerousCommand("git clean -xdf")).toEqual({ id: "git_clean" });
+    expect(dangerousCommand("chmod -R 777 .")).toEqual({
+      id: "world_writable",
+    });
+    expect(dangerousCommand("git push; ls -f")).toBeUndefined();
+  });
 });
 
 describe("SEC1: sensitive paths (§4.4)", () => {
