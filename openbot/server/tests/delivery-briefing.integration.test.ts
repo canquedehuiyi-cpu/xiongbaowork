@@ -860,6 +860,7 @@ test("a briefing that could not be sent is tried again within the hour, and goes
     workHours: { timeZone: "Asia/Shanghai" },
   });
   await phone(kim);
+  await bound(kim, "slack");
   await card(kim, { acceptedAt: at(MONDAY_9, -1 * HOUR) });
   let failures = 1;
   const tries: number[] = [];
@@ -869,7 +870,7 @@ test("a briefing that could not be sent is tried again within the hour, and goes
     agentName: async () => "小财",
     send: async (tenantId, kind, briefing, now) => {
       tries.push(now.getTime());
-      // The first try writes its push and then fails, as a dropped connection would.
+      // The first try writes its push and its Slack message and then fails, as a dropped connection would.
       const offered = await notices.sendBriefing(tenantId, kind, briefing, now);
       if (failures-- > 0) throw new Error("connection lost");
       return offered;
@@ -892,8 +893,66 @@ test("a briefing that could not be sent is tried again within the hour, and goes
   await briefings.runBriefings(at(MONDAY_9, 1 * MINUTE));
   await briefings.runBriefings(at(MONDAY_9, 2 * MINUTE));
   expect(tries.length).toBe(2);
-  expect((await outbox(kim, "briefing")).length).toBe(1);
-  expect((await claims()).map((row) => row.offered)).toEqual([1]);
+  expect(
+    (await outbox(kim, "briefing")).map((row) => row.transport).sort(),
+  ).toEqual(["push", "slack"]);
+  // Both places were reached, by the first try; the retry wrote nothing new and failed at nothing.
+  expect((await claims()).map((row) => row.offered)).toEqual([2]);
+});
+
+test("two people on the same platform each get their own briefing that day", async () => {
+  const nia = await person("slack-one", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  const oto = await person("slack-two", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  for (const who of [nia, oto]) {
+    await bound(who, "slack");
+    await bound(who, "sms");
+    await card(who, { acceptedAt: at(MONDAY_9, -1 * HOUR) });
+  }
+  const pass = briefingsFor([nia, oto]);
+  await pass.runBriefings(MONDAY_9);
+  expect(pass.sent.map((item) => item.tenantId).sort()).toEqual(
+    [nia.id, oto.id].sort(),
+  );
+  for (const who of [nia, oto]) {
+    const rows = await outbox(who, "briefing");
+    expect(rows.map((row) => row.transport).sort()).toEqual(["slack", "sms"]);
+    const claims = await runAsTenant(who.id, () =>
+      database
+        .select()
+        .from(taskBriefings)
+        .where(eq(taskBriefings.tenantId, who.id)),
+    );
+    expect(claims.map((row) => row.offered)).toEqual([2]);
+  }
+  chatSends.length = 0;
+  await sweep(nia, oto);
+  for (const who of [nia, oto])
+    expect(
+      chatSends.filter(
+        (send) =>
+          send.transport === "slack" &&
+          send.address === `slack-address-${who.id}`,
+      ).length,
+    ).toBe(1);
+
+  // Offering the same briefing again (a retry) reaches the same places, writing nothing new.
+  const again = {
+    ownerUserId: nia.id,
+    kind: "briefing" as const,
+    id: "start:2026-11-16",
+    title: "开工清点",
+    body: "还在做 1 件",
+    scopes: [],
+  };
+  expect(await runAsTenant(nia.id, () => router.notifyPerson(again))).toEqual({
+    queued: 0,
+    already: 2,
+  });
+  expect((await outbox(nia, "briefing")).length).toBe(2);
 });
 
 test("a reminder that reached nobody in work hours is held for the next start briefing, uncounted", async () => {

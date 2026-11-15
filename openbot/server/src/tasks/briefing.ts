@@ -402,8 +402,9 @@ export function createBriefings(deps: BriefingDeps) {
       } catch (error) {
         /*
          * Not sent: the claim is let go, so the next minute's pass, inside the same hour, tries again.
-         * Trying again cannot send twice -- each place's row is keyed by the briefing's kind and day
-         * (`notifyPerson`), so what did go out before the failure is not offered a second time.
+         * Trying again cannot send twice -- each place's row is keyed by the person, the briefing's
+         * kind and day, and the place (`notifyPerson`), so what did go out before the failure is not
+         * offered a second time, and still counts as reached.
          */
         await database
           .delete(taskBriefings)
@@ -579,7 +580,7 @@ export function createTaskNotices(deps: {
   ): Promise<NoticeResult> {
     if (!withinWorkHours(await deps.workHours(tenantId), now))
       return "deferred";
-    const offered = await deps.router.notifyPerson({
+    const reached = await deps.router.notifyPerson({
       ownerUserId: tenantId,
       kind: "overdue",
       id: `${notice.taskId}:${now.toISOString()}`,
@@ -591,7 +592,7 @@ export function createTaskNotices(deps: {
       ),
       taskId: notice.taskId,
     });
-    return offered > 0 ? "sent" : "deferred";
+    return reached.queued + reached.already > 0 ? "sent" : "deferred";
   }
 
   /** The briefing pass's `send`: one message, filed under the conversation of the first card it names. */
@@ -608,7 +609,7 @@ export function createTaskNotices(deps: {
       ...briefing.inProgress,
     ].map((item) => item.taskId);
     const { title, body } = briefingText(kind, briefing, hours.timeZone, now);
-    return deps.router.notifyPerson({
+    const reached = await deps.router.notifyPerson({
       ownerUserId: tenantId,
       kind: "briefing",
       id: `${kind}:${localDay(now, hours.timeZone)}`,
@@ -616,6 +617,8 @@ export function createTaskNotices(deps: {
       body,
       scopes: await scopesOf(tenantId, await cardsOf(tenantId, ids)),
     });
+    // Every place it reached, now or by an earlier try of this same briefing that failed part-way.
+    return reached.queued + reached.already;
   }
 
   return { notify, sendBriefing };
