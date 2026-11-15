@@ -48,7 +48,7 @@ export type PickableSkill = {
  * words, not a pick. Lower-case letters, numbers and hyphens, the characters a command is made of.
  */
 export function leadingSkillCommand(text: string): string | undefined {
-  return /^\s*\/([a-z0-9]+(?:-[a-z0-9]+)*)(?=\s|$)/.exec(text)?.[1];
+  return /^\s*\/([a-z0-9]+(?:-+[a-z0-9]+)*)(?=\s|$)/.exec(text)?.[1];
 }
 
 /**
