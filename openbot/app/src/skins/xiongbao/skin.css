@@ -101,6 +101,13 @@
   --wb-amber-soft: rgba(245, 165, 36, 0.15);
   --wb-amber-fg: #9a6400;
   --wb-green-fg: #1f9d63;
+  /* 看板三步收货（交付闭环 Task 8）：验收按钮和等你验收卡的蓝、逾期卡的红框与红字。 */
+  --wb-blue: #3b72d9;
+  --wb-blue-fg: #ffffff;
+  --wb-blue-line: rgba(59, 114, 217, 0.45);
+  --wb-danger-fg: #c43c3c;
+  --wb-danger-soft: rgba(220, 70, 70, 0.1);
+  --wb-danger-line: rgba(220, 70, 70, 0.5);
 }
 
 :root:not([data-skin]).dark {
@@ -193,6 +200,13 @@
   --wb-amber-soft: rgba(245, 165, 36, 0.15);
   --wb-amber-fg: #f5c06a;
   --wb-green-fg: #8fe3bb;
+  /* 看板三步收货（交付闭环 Task 8），同上，数值取自设计稿 1、2。 */
+  --wb-blue: #5b8def;
+  --wb-blue-fg: #0b0b0d;
+  --wb-blue-line: rgba(91, 141, 239, 0.55);
+  --wb-danger-fg: #f2a3a3;
+  --wb-danger-soft: rgba(239, 107, 107, 0.16);
+  --wb-danger-line: rgba(239, 107, 107, 0.55);
 }
 
 /*
