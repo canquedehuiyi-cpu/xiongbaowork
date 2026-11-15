@@ -30,6 +30,12 @@ import {
  * (`session/set_mode`, else the `mode` config option) before it is handed out, a session that
  * cannot be switched being refused with an error, never used; or `null` (an owner's own agent,
  * whose modes are unknown). `adapterLaunch` (manifest.ts) gives the right one for a known agent.
+ * A session handed out stays watched: an agent can leave the mode by itself (claude-agent-acp's
+ * ExitPlanMode can switch to accepting edits), so whenever a `current_mode_update`, or a
+ * `config_option_update` of the mode option, reports another mode, the ask mode is set again. If
+ * that fails the session is given up for good: `session/cancel` is sent, its permission requests
+ * are answered `cancelled`, nothing more it sends is passed on, and its running `prompt` (and any
+ * later one) fails with `AcpAskModeLostError`.
  *
  * Errors are the transport's `McpAppError` (`start`, `connect` once the child has gone, `timeout`,
  * `protocol` when the agent answered an error). `prompt` has no time limit: a turn may wait hours
@@ -91,6 +97,19 @@ export type AcpClient = {
 
 export const ACP_PROTOCOL_VERSION = 1;
 
+/** The session left the ask mode and could not be put back in it: it is not used any more. */
+export class AcpAskModeLostError extends Error {
+  constructor(
+    readonly sessionId: string,
+    readonly mode: string,
+    cause?: unknown,
+  ) {
+    super(
+      `Session ${sessionId} left mode "${mode}" and could not be switched back${cause instanceof Error ? `: ${cause.message}` : "."}`,
+    );
+  }
+}
+
 /**
  * `initMs` is long because the first start of an npm adapter downloads it through `npx`
  * (codex-acp brings the Codex binary with it).
@@ -107,6 +126,28 @@ type Json = Record<string, unknown>;
 
 function isRecord(value: unknown): value is Json {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** The mode a `session/update` reports the session is now in, if it is about the mode. */
+function reportedMode(update: unknown): string | undefined {
+  if (!isRecord(update)) return undefined;
+  if (
+    update.sessionUpdate === "current_mode_update" &&
+    typeof update.currentModeId === "string"
+  )
+    return update.currentModeId;
+  if (
+    update.sessionUpdate === "config_option_update" &&
+    Array.isArray(update.configOptions)
+  ) {
+    const option = update.configOptions.find(
+      (item) =>
+        isRecord(item) && (item.id === "mode" || item.category === "mode"),
+    );
+    if (isRecord(option) && typeof option.currentValue === "string")
+      return option.currentValue;
+  }
+  return undefined;
 }
 
 /** Whether the agent already reports `mode` as current, in its modes or its config options. */
@@ -142,6 +183,15 @@ export function createAcpClient(
   >();
   /** Sessions being loaded: what the agent replays meanwhile is history the server already has. */
   const loading = new Set<string>();
+  /**
+   * Sessions handed out in the ask mode, watched so they stay in it: whether the mode is being set
+   * again right now, and whether another report came in meanwhile.
+   */
+  const guarded = new Map<string, { busy: boolean; again: boolean }>();
+  /** Sessions given up because they left the ask mode for good. */
+  const lost = new Set<string>();
+  /** How to fail each session's running prompt at once. */
+  const running = new Map<string, (error: Error) => void>();
   let loadSupported = false;
 
   const launch: StdioLaunch = {
@@ -172,7 +222,19 @@ export function createAcpClient(
     const params = isRecord(message.params) ? message.params : {};
     if (message.method === "session/update" && message.id === undefined) {
       const { sessionId } = params;
-      if (typeof sessionId !== "string" || loading.has(sessionId)) return;
+      if (
+        typeof sessionId !== "string" ||
+        loading.has(sessionId) ||
+        lost.has(sessionId)
+      )
+        return;
+      const mode = reportedMode(params.update);
+      if (
+        mode !== undefined &&
+        spec.sessionMode !== null &&
+        mode !== spec.sessionMode
+      )
+        restoreMode(sessionId);
       try {
         handlers.onUpdate(sessionId, params.update);
       } catch {
@@ -280,6 +342,52 @@ export function createAcpClient(
     }
   }
 
+  /** A watched session left the ask mode: set it again, or give the session up. */
+  function restoreMode(sessionId: string) {
+    const guard = guarded.get(sessionId);
+    if (!guard) return;
+    if (guard.busy) {
+      guard.again = true;
+      return;
+    }
+    guard.busy = true;
+    void (async () => {
+      try {
+        do {
+          guard.again = false;
+          await applyMode(sessionId, undefined);
+        } while (guard.again && guarded.get(sessionId) === guard);
+      } catch (error) {
+        if (!transport.closed) giveUp(sessionId, error);
+      } finally {
+        guard.busy = false;
+      }
+    })();
+  }
+
+  function giveUp(sessionId: string, cause: unknown) {
+    guarded.delete(sessionId);
+    lost.add(sessionId);
+    const error = new AcpAskModeLostError(
+      sessionId,
+      spec.sessionMode ?? "",
+      cause,
+    );
+    transport.notify("session/cancel", { sessionId }).catch(() => {});
+    for (const pending of [...waiting.values()]) {
+      if (pending.sessionId === sessionId)
+        pending.settle({ outcome: "cancelled" });
+    }
+    running.get(sessionId)?.(error);
+  }
+
+  /** The session, just put in the ask mode, is handed out and watched from now on. */
+  function handOut(sessionId: string) {
+    lost.delete(sessionId);
+    if (spec.sessionMode !== null)
+      guarded.set(sessionId, { busy: false, again: false });
+  }
+
   return {
     get alive() {
       return !transport.closed;
@@ -326,6 +434,7 @@ export function createAcpClient(
         throw new McpAppError("protocol", "session/new answered no sessionId.");
       }
       await applyMode(result.sessionId, result);
+      handOut(result.sessionId);
       return result.sessionId;
     },
 
@@ -348,15 +457,27 @@ export function createAcpClient(
         loading.delete(sessionId);
       }
       await applyMode(sessionId, result);
+      handOut(sessionId);
       return true;
     },
 
     async prompt(sessionId, content) {
-      const result = await transport.request(
-        "session/prompt",
-        { sessionId, prompt: content },
-        Number.POSITIVE_INFINITY,
-      );
+      if (lost.has(sessionId))
+        throw new AcpAskModeLostError(sessionId, spec.sessionMode ?? "");
+      const result = await new Promise<unknown>((resolve, reject) => {
+        const fail = (error: Error) => reject(error);
+        running.set(sessionId, fail);
+        transport
+          .request(
+            "session/prompt",
+            { sessionId, prompt: content },
+            Number.POSITIVE_INFINITY,
+          )
+          .then(resolve, reject)
+          .finally(() => {
+            if (running.get(sessionId) === fail) running.delete(sessionId);
+          });
+      });
       if (!isRecord(result) || typeof result.stopReason !== "string") {
         throw new McpAppError(
           "protocol",

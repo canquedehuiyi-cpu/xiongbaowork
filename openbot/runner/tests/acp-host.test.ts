@@ -1589,3 +1589,64 @@ test("an owner's own agent gets the login shell's PATH too", async () => {
   await waitFor(() => ofType(own.frames, "acp.session").length === 1);
   expect(own.spawns[0]?.env.PATH).toBe("/owner/bin");
 });
+
+test("a session that leaves the ask mode for good ends its turn with ask_mode_lost; the next turn gets a new session", async () => {
+  const t = setup({
+    modes: {
+      currentModeId: "agent",
+      availableModes: [
+        { id: "read-only", name: "Read only" },
+        { id: "agent", name: "Agent" },
+      ],
+    },
+    // Set at creation; refused after the agent left it; set again for the new session.
+    setModeFailOn: [2],
+    turns: [
+      {
+        steps: [
+          {
+            update: {
+              sessionUpdate: "current_mode_update",
+              currentModeId: "agent",
+            },
+          },
+          { waitForCancel: true },
+        ],
+      },
+      { steps: [{ update: chunk("asking again") }] },
+    ],
+  });
+  t.host.attach(t.send);
+  await t.host.handle(open("th_1", { harness: "codex", appRef: undefined }));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1, 15_000);
+  await t.host.handle(prompt("th_1", "turn_1"));
+  await waitFor(() => ended(t.frames, "turn_1"));
+  expect(ofTurn(t.frames, "turn_1").slice(-2)).toEqual([
+    {
+      type: "acp.error",
+      agentId: "agent_1",
+      threadId: "th_1",
+      turnId: "turn_1",
+      code: "ask_mode_lost",
+      message: expect.any(String),
+    },
+    {
+      type: "acp.turn.end",
+      agentId: "agent_1",
+      threadId: "th_1",
+      turnId: "turn_1",
+      stopReason: "error",
+      interrupted: false,
+    },
+  ]);
+  await t.host.handle(prompt("th_1", "turn_2"));
+  await waitFor(() => ended(t.frames, "turn_2"));
+  expect(ofType(ofTurn(t.frames, "turn_2"), "acp.turn.end")[0]).toMatchObject({
+    stopReason: "end_turn",
+  });
+  expect(ofType(t.frames, "acp.session").map((f) => f.sessionId)).toEqual([
+    "sess_1",
+    "sess_1-2",
+  ]);
+  expect(t.spawns).toHaveLength(1);
+}, 20_000);

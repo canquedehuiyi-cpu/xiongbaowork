@@ -10,6 +10,7 @@ import type {
 import { IDLE_MS } from "../app-host";
 import type { AppEntry } from "../apps";
 import {
+  AcpAskModeLostError,
   type AcpClient,
   type AcpHandlers,
   type AcpPermissionAnswer,
@@ -70,6 +71,11 @@ import { permissionFacts } from "./paths";
  * an update or a permission request's tool call are cut shorter and the frame says `truncated`; if
  * that is not enough, the payload becomes a stub of its ids. What is kept for replay is the cut frame.
  * (The adapter's stdout lines are capped too, at 64 MB, in the transport.)
+ *
+ * ASK MODE. A known agent's session that leaves its ask mode and cannot be switched back
+ * (client.ts) ends its turn with `acp.error` `ask_mode_lost` and `stopReason: "error"`, and is
+ * forgotten (its remembered id too), so the next turn makes a session again; whichever session
+ * that is, it is switched to the ask mode before use like every other.
  *
  * TURNS. `acp.turn.ack` goes up as soon as a turn arrives; a `turnId` seen before is acknowledged
  * (and, when over, ended) again but never run twice. A turn ends with the agent's `stopReason`, with
@@ -147,6 +153,8 @@ const MESSAGES: Record<AcpErrorCode, string> = {
   start_failed: "智能体没能在这台电脑上启动，请确认它已安装并登录。",
   turn_failed: "智能体这一轮出错了。",
   bad_option: "这个回答不是智能体给出的选项之一，已按取消处理。",
+  ask_mode_lost:
+    "智能体离开了“先问再做”的模式且无法切回，这一轮已停止；下一轮会开新会话。",
 };
 
 class HostError extends Error {
@@ -818,6 +826,17 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     }
   }
 
+  /** The thread's session, gone for good: neither reused nor loaded again. */
+  function forgetSession(thread: Thread, proc: Proc, sessionId: string) {
+    proc.sessions.delete(sessionId);
+    if (thread.sessionId === sessionId) {
+      thread.proc = null;
+      thread.sessionId = null;
+    }
+    const key = threadKey(thread.agentId, thread.threadId);
+    if (known.get(key) === sessionId) known.delete(key);
+  }
+
   async function runTurn(thread: Thread, turn: Turn) {
     if (turn.state === "ended") return;
     turn.state = "running";
@@ -842,8 +861,12 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       thread.current = turn;
       const { stopReason } = await client.prompt(sessionId, turn.content);
       endTurn(turn, stopReason, false);
-    } catch {
-      if (!client.alive) endTurn(turn, "interrupted", true);
+    } catch (error) {
+      if (error instanceof AcpAskModeLostError) {
+        // Never used again: the next turn makes a new session (in the ask mode).
+        forgetSession(thread, proc, sessionId);
+        failTurn(turn, "ask_mode_lost");
+      } else if (!client.alive) endTurn(turn, "interrupted", true);
       else failTurn(turn, "turn_failed");
     } finally {
       if (thread.current === turn) thread.current = null;

@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AcpAskModeLostError,
   type AcpClient,
   type AcpHandlers,
   createAcpClient,
@@ -557,5 +558,134 @@ test("a response over the stdout limit fails its call at once", async () => {
   const began = Date.now();
   await expect(client.newSession(scratch)).rejects.toThrow(/over the limit/);
   expect(Date.now() - began).toBeLessThan(5_000);
+  expect(client.alive).toBe(true);
+});
+
+const CODEX_MODES = {
+  currentModeId: "agent",
+  availableModes: [
+    { id: "read-only", name: "Read only" },
+    { id: "agent", name: "Agent" },
+  ],
+};
+
+test("a session that leaves the ask mode is switched back", async () => {
+  const { client, seen, log } = start(
+    {
+      modes: CODEX_MODES,
+      turns: [
+        {
+          steps: [
+            // Back in the ask mode (what a switch of ours echoes): nothing to do.
+            {
+              update: {
+                sessionUpdate: "current_mode_update",
+                currentModeId: "read-only",
+              },
+            },
+            // The agent leaves it by itself (as ExitPlanMode can), twice, two ways.
+            {
+              update: {
+                sessionUpdate: "current_mode_update",
+                currentModeId: "agent",
+              },
+            },
+            { sleepMs: 100 },
+            {
+              update: {
+                sessionUpdate: "config_option_update",
+                configOptions: [
+                  {
+                    id: "mode",
+                    name: "Mode",
+                    category: "mode",
+                    type: "select",
+                    currentValue: "agent",
+                    options: [],
+                  },
+                  // Not the mode: ignored.
+                  {
+                    id: "model",
+                    category: "model",
+                    type: "select",
+                    currentValue: "agent",
+                    options: [],
+                  },
+                ],
+              },
+            },
+            { sleepMs: 100 },
+            { update: chunk("still asking") },
+          ],
+        },
+      ],
+    },
+    {},
+    { sessionMode: "read-only" },
+  );
+  await client.initialize();
+  const sessionId = await client.newSession(scratch);
+  expect(await client.prompt(sessionId, [])).toEqual({
+    stopReason: "end_turn",
+  });
+  expect(
+    received(log)
+      .filter((m) => m.method === "session/set_mode")
+      .map((m) => m.params),
+  ).toEqual([
+    { sessionId, modeId: "read-only" },
+    { sessionId, modeId: "read-only" },
+    { sessionId, modeId: "read-only" },
+  ]);
+  expect(
+    seen.updates.some(
+      ({ update }) => (update as Json).sessionUpdate === "agent_message_chunk",
+    ),
+  ).toBe(true);
+});
+
+test("a session that cannot be switched back is given up: its prompt fails and it is cancelled", async () => {
+  const { client, seen, log } = start(
+    {
+      modes: CODEX_MODES,
+      // The switch at creation works; the one after the agent left does not.
+      setModeFailOn: [2],
+      turns: [
+        {
+          steps: [
+            {
+              update: {
+                sessionUpdate: "current_mode_update",
+                currentModeId: "agent",
+              },
+            },
+            { waitForCancel: true },
+          ],
+        },
+      ],
+    },
+    {},
+    { sessionMode: "read-only" },
+  );
+  await client.initialize();
+  const sessionId = await client.newSession(scratch);
+  const prompt = client.prompt(sessionId, []);
+  await expect(prompt).rejects.toBeInstanceOf(AcpAskModeLostError);
+  // The agent is told to stop, and what it says afterwards is not passed on.
+  const deadline = Date.now() + 3000;
+  while (!received(log).some((m) => m.method === "session/cancel")) {
+    if (Date.now() > deadline) throw new Error("no session/cancel");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(
+    seen.updates.some(
+      ({ update }) => (update as Json).sessionUpdate === "fake_cancel_seen",
+    ),
+  ).toBe(false);
+  // The session is never used again.
+  await expect(client.prompt(sessionId, [])).rejects.toBeInstanceOf(
+    AcpAskModeLostError,
+  );
   expect(client.alive).toBe(true);
 });

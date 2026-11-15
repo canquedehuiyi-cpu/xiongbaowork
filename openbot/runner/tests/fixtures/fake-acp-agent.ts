@@ -14,6 +14,7 @@ import { appendFileSync, readFileSync } from "node:fs";
  *   setMode          how `session/set_mode` answers: "ok" | "method_not_found" | "error"
  *                    (default "ok" when `modes` is given, else "method_not_found")
  *   setConfigOption  how `session/set_config_option` answers: "ok" | "method_not_found" (default)
+ *   setModeFailOn    the `session/set_mode` calls (counted from 1) that answer an error anyway
  *   loadReplay       updates sent during `session/load`, before it answers
  *   loadFails        `session/load` answers an error (an unknown session)
  *   turns            one entry per `session/prompt`, the last one repeating: its `steps` run in
@@ -74,6 +75,7 @@ export type FakeAcpScript = {
   };
   setMode?: "ok" | "method_not_found" | "error";
   setConfigOption?: "ok" | "method_not_found";
+  setModeFailOn?: number[];
   loadReplay?: unknown[];
   loadFails?: boolean;
   turns?: FakeTurn[];
@@ -90,6 +92,7 @@ const script: FakeAcpScript = JSON.parse(
 );
 
 let sessions = 0;
+let setModes = 0;
 let prompts = 0;
 let nextRequest = 1;
 const waiting = new Map<string, (response: Json) => void>();
@@ -243,8 +246,11 @@ function onMessage(message: Json) {
       return;
     }
     case "session/set_mode":
+      setModes += 1;
       modeAnswer(
-        script.setMode ?? (script.modes ? "ok" : "method_not_found"),
+        script.setModeFailOn?.includes(setModes)
+          ? "error"
+          : (script.setMode ?? (script.modes ? "ok" : "method_not_found")),
         id,
       );
       return;

@@ -192,7 +192,12 @@ export type AcpErrorCode =
   | "start_failed"
   | "turn_failed"
   /** An `acp.permission.answer` named an option the agent did not offer; answered `cancelled`. */
-  | "bad_option";
+  | "bad_option"
+  /**
+   * The agent left the mode that makes it ask before acting and would not go back: the turn ends
+   * `error` and the session is never used again (the next turn gets a new one).
+   */
+  | "ask_mode_lost";
 
 /** Device → server: `acp.open` or `acp.prompt` failed. `message` is Chinese, for a person. */
 export type AcpErrorFrame = {
