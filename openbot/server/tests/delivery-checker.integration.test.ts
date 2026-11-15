@@ -615,7 +615,7 @@ test("accepted: nudge at due+5, overdue_at and notify at due+35, overdue_at kept
   ).toEqual(["overdue"]);
 });
 
-test("reminders at most every 2 hours and 3 notifications per day", async () => {
+test("nudges and reminders at most every 2 hours, and 3 of each per day", async () => {
   // 01:00-13:00 UTC on one UTC day: every reminder below falls on the same day.
   const due = new Date("2026-11-16T01:00:00Z");
   const { tenantId, taskId } = await acceptedCard("cap", {
@@ -632,18 +632,114 @@ test("reminders at most every 2 hours and 3 notifications per day", async () => 
   }
   const offsets = (times: Date[]) =>
     times.map((time) => (time.getTime() - due.getTime()) / MINUTE);
-  // The first at due+5, then one every two hours.
-  expect(offsets(nudgedAt)).toEqual([5, 125, 245, 365, 485, 605]);
+  // The first at due+5, then one every two hours -- and no fourth in a day (the user's decision).
+  expect(offsets(nudgedAt)).toEqual([5, 125, 245]);
   // The first at due+35, then one every two hours -- and no fourth in a day.
   expect(offsets(notices.map((notice) => notice.at))).toEqual([35, 155, 275]);
   const card = await row(tenantId, taskId);
-  expect(card.nudges).toBe(6);
+  expect(card.nudges).toBe(3);
+  expect(card.nudgedCount).toBe(3);
+  expect(card.nudgedOn).toBe("2026-11-16");
   expect(card.notifiedCount).toBe(3);
   expect(card.notifiedOn).toBe("2026-11-16");
   expect(
     (await kinds(tenantId, taskId)).filter((kind) => kind === "notified")
       .length,
   ).toBe(3);
+  expect(
+    (await kinds(tenantId, taskId)).filter((kind) => kind === "nudged").length,
+  ).toBe(3);
+
+  // A new day on the person's clock: the coworker may be nudged again.
+  await check(new Date("2026-11-17T00:05:00Z"));
+  expect(nudges.length).toBe(4);
+  const nextDay = await row(tenantId, taskId);
+  expect(nextDay.nudgedOn).toBe("2026-11-17");
+  expect(nextDay.nudgedCount).toBe(1);
+});
+
+test("a nudge round opens only inside the person's work hours", async () => {
+  // The default work hours (09:00-18:00, weekdays) on Shanghai's clock; 2026-11-16 is a Monday.
+  const tenantId = await tenant("nudge-hours", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  const late = await acceptedCard("nudge-hours-late", {
+    tenantId,
+    acceptedAt: new Date("2026-11-16T09:00:00Z"), // 17:00
+    dueAt: new Date("2026-11-16T10:00:00Z"), // 18:00
+  });
+  const waiting = await card(tenantId, {
+    executorAgentId: `agent-${suite}-nudge-hours-waiting`,
+    threadRef: `thread-${suite}-nudge-hours-waiting`,
+    channelRef: `thread-${suite}-nudge-hours-waiting`,
+    createdAt: new Date("2026-11-16T12:00:00Z"), // 20:00, waiting to be taken on
+  });
+  const { nudges, check } = checker([tenantId], {
+    workHours: savedWorkHours(database),
+  });
+
+  for (const moment of [
+    "2026-11-16T10:05:00Z", // 18:05: due + 5, but the day is over
+    "2026-11-16T12:10:00Z", // 20:10: the waiting card is ten minutes old
+    "2026-11-16T16:00:00Z", // 00:00
+    "2026-11-17T00:59:00Z", // 08:59 Tuesday
+  ])
+    await check(new Date(moment));
+  expect(nudges).toEqual([]);
+  for (const id of [late.taskId, waiting]) {
+    const held = await row(tenantId, id);
+    expect(held.lastNudgedAt).toBeNull();
+    expect(held.nudges).toBe(0);
+    expect(await kinds(tenantId, id)).not.toContain("nudged");
+  }
+
+  // 09:00: the day starts, and each card's nudge goes out once.
+  await check(new Date("2026-11-17T01:00:00Z"));
+  expect(nudges.map((nudge) => nudge.taskId).sort()).toEqual(
+    [late.taskId, waiting].sort(),
+  );
+  await check(new Date("2026-11-17T01:05:00Z"));
+  expect(nudges.length).toBe(2);
+});
+
+test("an external employee is nudged under the same rules: work hours, and 3 a day", async () => {
+  const tenantId = await tenant("nudge-external", {
+    workHours: { timeZone: "Asia/Shanghai" },
+  });
+  const due = new Date("2026-11-16T10:00:00Z"); // 18:00 Monday in Shanghai
+  const { taskId } = await acceptedCard("nudge-external-card", {
+    tenantId,
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const { nudges, check } = checker([tenantId], {
+    workHours: savedWorkHours(database),
+    isExternal: async () => true,
+  });
+  // Monday evening to Tuesday evening, every ten minutes.
+  for (let step = 0; step <= 24 * 6; step++)
+    await check(at(due, step * 10 * MINUTE));
+  const local = (moment: Date) =>
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Shanghai",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).format(moment);
+  // Nothing on Monday evening or at night; from 09:00 on Tuesday, every two hours, three at most.
+  expect(nudges.length).toBe(3);
+  const [first] = nudges;
+  if (!first) throw new Error("no nudge");
+  expect(first.text).toContain("原定");
+  expect(first.text).not.toMatch(/accept_task|deliver_task|request_extension/);
+  const card = await row(tenantId, taskId);
+  expect(card.nudgedOn).toBe("2026-11-17");
+  expect(card.nudgedCount).toBe(3);
+  const nudgedAt = (await history(tenantId, taskId))
+    .filter((event) => event.kind === "nudged")
+    .map((event) => local(new Date(String(event.detail.at))));
+  expect(nudgedAt).toEqual(["Tue 09:00", "Tue 11:00", "Tue 13:00"]);
 });
 
 test("the daily cap resets at the user's local midnight, not UTC", async () => {
@@ -751,8 +847,8 @@ test("outside work hours: not pushed, kept for the next start briefing", async (
   });
   const { nudges, notices, check } = checker([tenantId], { workHours });
 
-  await check(new Date("2026-11-16T11:30:00Z")); // 19:30: the coworker is nudged all the same
-  expect(nudges.map((nudge) => nudge.taskId)).toEqual([evening.taskId]);
+  await check(new Date("2026-11-16T11:30:00Z")); // 19:30: no nudge either, outside work hours
+  expect(nudges).toEqual([]);
   await check(new Date("2026-11-16T12:00:00Z")); // 20:00: overdue, and not pushed
   await check(new Date("2026-11-16T14:00:00Z")); // 22:00: still one reminder kept, not two
   await check(new Date("2026-11-21T03:00:00Z")); // 11:00 Saturday: not pushed either
@@ -1139,13 +1235,15 @@ test("with no time zone saved, the day and the work hours are the product's defa
   });
   const sent = () => notices.map((notice) => notice.at.toISOString());
 
+  // 08:30 in Shanghai is before work: no nudge yet.
   await check(new Date("2026-11-16T00:30:00Z"));
+  expect(nudges).toEqual([]);
+  // 09:00 in Shanghai is a work hour (01:00 in UTC would not be): nudged, pushed, counted on the 16th.
+  await check(new Date("2026-11-16T01:00:00Z"));
   const [nudge] = nudges;
   expect(nudge).toBeDefined();
   // The due time as the coworker said it, on the person's clock.
   expect(nudge?.text).toContain("预计 08:25 交");
-  // 09:00 in Shanghai is a work hour (01:00 in UTC would not be): pushed, counted on the 16th.
-  await check(new Date("2026-11-16T01:00:00Z"));
   expect(sent()).toEqual(["2026-11-16T01:00:00.000Z"]);
   expect((await row(tenantId, taskId)).notifiedOn).toBe("2026-11-16");
   await check(new Date("2026-11-16T03:00:00Z")); // 11:00
@@ -1623,6 +1721,9 @@ test("再催 nudges the coworker now, as the person, and is refused while a roun
   const nudgedCard = await row(tenantId, taskId);
   expect(nudgedCard.nudges).toBe(1);
   expect(nudgedCard.lastNudgedAt).not.toBeNull();
+  // The person's 再催 counts toward the day's three, so the checker does not add three on top.
+  expect(nudgedCard.nudgedCount).toBe(1);
+  expect(nudgedCard.nudgedOn).not.toBeNull();
 
   // Again within the minute: the coworker was just nudged (and the checker cannot slip one in between).
   const again = await call("POST", `${taskId}/nudge`);

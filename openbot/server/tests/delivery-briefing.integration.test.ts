@@ -34,6 +34,7 @@ import {
 import { createDelivery } from "../src/tasks/delivery";
 import {
   type DeliveryCheckDeps,
+  localDay,
   runDeliveryCheck,
   savedWorkHours,
 } from "../src/tasks/delivery-checker";
@@ -311,6 +312,7 @@ function checkerFor(who: Person[]) {
         actor: "system",
         text,
         at: new Date(),
+        day: localDay(new Date(), "Asia/Shanghai"),
       });
       return "skipped_running";
     },

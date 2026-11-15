@@ -9,7 +9,7 @@ import {
   ThreadBusy,
 } from "./card-turns";
 import { createDelivery, type Delivery } from "./delivery";
-import { nudgeTextOf, waitingSinceOf } from "./delivery-checker";
+import { localDay, nudgeTextOf, waitingSinceOf } from "./delivery-checker";
 import { EXTERNAL_DELIVERY_GUIDE } from "./delivery-tools";
 import { diffTitle } from "./diff-summary";
 import type { TaskEventActor } from "./events";
@@ -301,6 +301,7 @@ export function createNudgeRuns(deps: NudgeRunsDeps): NudgeRuns {
         actor: input.actor,
         text,
         at: input.now,
+        day: localDay(input.now, input.timeZone),
       });
       return { ok: true, nudges: nudged?.nudges ?? 0 };
     },

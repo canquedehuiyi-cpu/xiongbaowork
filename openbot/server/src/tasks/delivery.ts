@@ -398,13 +398,15 @@ export type Delivery = {
   >;
   /**
    * A nudge the coworker was given (the checker's, or the person's 再催): `nudges + 1`,
-   * `last_nudged_at = at`, and one `nudged` line with what it was told. False when the card is not
-   * followed and open.
+   * `last_nudged_at = at`, one more on `day`'s count (`nudged_on` / `nudged_count`: `day` is the
+   * person's local day, and a new day starts the count again), and one `nudged` line with what it was
+   * told. The person's own 再催 counts toward the day's three, so the checker does not add three of its
+   * own on top, but is never refused by it. Null when the card is not followed and open.
    */
   nudged(
     tenantId: string,
     taskId: string,
-    input: { actor: TaskEventActor; text: string; at: Date },
+    input: { actor: TaskEventActor; text: string; at: Date; day: string },
   ): Promise<{ nudges: number } | null>;
 };
 
@@ -1349,6 +1351,8 @@ export function createDelivery(database: Database): Delivery {
             .set({
               nudges: sql`${tasks.nudges} + 1`,
               lastNudgedAt: input.at,
+              nudgedCount: sql`case when ${tasks.nudgedOn} = ${input.day}::date then ${tasks.nudgedCount} + 1 else 1 end`,
+              nudgedOn: input.day,
               updatedAt: new Date(),
             })
             .where(openTracked(tenantId, taskId))

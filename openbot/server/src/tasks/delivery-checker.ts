@@ -28,11 +28,14 @@ import { appendTaskEvent } from "./events";
  * - 已接下: five minutes past the due time (`due_at`, or two hours after acceptance when no time was
  *   reported) the coworker is nudged; thirty-five minutes past it the card is recorded overdue (once:
  *   `overdue_at` is kept for good) and the person is told.
- * - After that, a nudge and a reminder at most every two hours each, and at most three reminders a day
- *   pushed to the person, a "day" being the person's own, on their time zone.
- * - Outside the person's work hours nothing is pushed: the reminder is held (`reminder_held_at`, and a
- *   `notified {result: "deferred"}` line) for the next start briefing, one per card until it is pushed.
- *   The coworker is still nudged: a nudge is not a push.
+ * - After that, a nudge and a reminder at most every two hours each, and at most three of each a day
+ *   about one card -- three nudges to the coworker, three reminders pushed to the person -- a "day"
+ *   being the person's own, on their time zone (`nudged_on` / `nudged_count`, `notified_on` /
+ *   `notified_count`). A nudge opens a round the person pays for, so it keeps to the same rules as a
+ *   push (the user's decision, 2026-11-15): an external employee's included.
+ * - Outside the person's work hours nothing is pushed and nobody is nudged: the reminder is held
+ *   (`reminder_held_at`, and a `notified {result: "deferred"}` line) for the next start briefing, one
+ *   per card until it is pushed, and the nudge waits for the first pass inside their hours.
  * - While a turn is running on the card's thread nothing is done and nothing is written; the next pass
  *   looks again. "Running" is the runner's answer about the thread, never `active_run_ref` alone: a
  *   server that died mid-round leaves the column naming a round nothing runs any more.
@@ -67,6 +70,8 @@ export const REPEAT_MS = 2 * HOUR;
 export const UNREPORTED_DUE_MS = 2 * HOUR;
 /** Reminders pushed to the person about one card in one of their days. */
 export const DAILY_NOTICES = 3;
+/** Nudges the coworker is given about one card in one of the person's days. */
+export const DAILY_NUDGES = 3;
 /** Cards one pass checks, soonest-due first; the rest wait a minute. */
 const CARDS_PER_PASS = 500;
 
@@ -204,6 +209,8 @@ type CheckedCard = {
   notifiedOn: string | null;
   notifiedCount: number;
   reminderHeldAt: Date | null;
+  nudgedOn: string | null;
+  nudgedCount: number;
   createdAt: Date;
 };
 
@@ -221,6 +228,8 @@ const checkedColumns = {
   notifiedOn: tasks.notifiedOn,
   notifiedCount: tasks.notifiedCount,
   reminderHeldAt: tasks.reminderHeldAt,
+  nudgedOn: tasks.nudgedOn,
+  nudgedCount: tasks.nudgedCount,
   createdAt: tasks.createdAt,
 };
 
@@ -303,8 +312,12 @@ function dueOn(
   now: Date,
   clock: { inHours: boolean; today: string },
 ) {
+  // Only in the person's work hours, and not a fourth time in their day.
   const nudge =
-    now >= schedule.nudgeAt && spaced(card.lastNudgedAt, schedule.nudgeAt, now);
+    clock.inHours &&
+    (card.nudgedOn !== clock.today || card.nudgedCount < DAILY_NUDGES) &&
+    now >= schedule.nudgeAt &&
+    spaced(card.lastNudgedAt, schedule.nudgeAt, now);
   const overdue =
     schedule.deadline !== null &&
     now >= schedule.noticeAt &&
@@ -575,7 +588,7 @@ async function checkCard(
         claim.schedule.waitingSince,
         { external },
       ),
-      { now, previous: claim.card.lastNudgedAt },
+      { now, previous: claim.card.lastNudgedAt, today },
     );
 }
 
@@ -629,7 +642,8 @@ async function remind(
 }
 
 /**
- * Nudge the coworker as the claim said. Started: one `nudged` line and `nudges + 1`. The thread busy
+ * Nudge the coworker as the claim said. Started: one `nudged` line, `nudges + 1`, and one more on the
+ * day's count. The thread busy
  * after all: the claim is given back (`last_nudged_at` as it was) and nothing is written, as when the
  * pass saw the turn running. Refused for another reason (the coworker paused, the model refused): one
  * quiet `nudge_skipped` line, and the claim stands, so the next try is two hours on, not every minute.
@@ -640,7 +654,7 @@ async function nudgeCoworker(
   tenantId: string,
   taskId: string,
   text: string,
-  claim: { now: Date; previous: Date | null },
+  claim: { now: Date; previous: Date | null; today: string },
 ): Promise<void> {
   let outcome: "started" | "skipped_running";
   try {
@@ -667,6 +681,7 @@ async function nudgeCoworker(
       actor: "system",
       text,
       at: claim.now,
+      day: claim.today,
     });
     return;
   }

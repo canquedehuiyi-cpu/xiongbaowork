@@ -141,6 +141,10 @@ export const tasks = pgTable(
     notifiedCount: integer("notified_count").notNull().default(0),
     /** A reminder held back outside the person's work hours, for the next start briefing. */
     reminderHeldAt: timestamp("reminder_held_at", { withTimezone: true }),
+    /** The person's local day `nudged_count` counts nudges on (migration 0221). */
+    nudgedOn: date("nudged_on", { mode: "string" }),
+    /** How many nudges went out on `nudged_on`: the checker opens no fourth that day. */
+    nudgedCount: integer("nudged_count").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
