@@ -108,6 +108,18 @@ beforeEach(() => {
         const body =
           typeof init?.body === "string" ? JSON.parse(init.body) : null;
         writes.push({ method, path: url.pathname, body });
+        const decided = url.pathname.match(
+          /^\/api\/approvals\/([^/]+)\/decision$/,
+        );
+        if (method === "POST" && decided) {
+          const id = decodeURIComponent(decided[1] ?? "");
+          inbox = inbox.map((request) =>
+            (request as { id: string }).id === id
+              ? { ...(request as object), status: "approved" }
+              : request,
+          );
+          return Response.json({ ok: true });
+        }
         if (method === "PATCH" && url.pathname.startsWith("/api/models/")) {
           model = { ...model, ...(body as object) };
           library = { ...library, models: [model] };
@@ -843,9 +855,7 @@ test("去确认 ignores a card the phone page has covered and draws it in place"
     const aside = await loaded(view);
     await waitFor(() => {
       if (
-        !view
-          .getByTestId("covered")
-          .querySelector('[data-approval-id="ap1"]')
+        !view.getByTestId("covered").querySelector('[data-approval-id="ap1"]')
       )
         throw new Error("no approval card yet");
     });
@@ -861,6 +871,51 @@ test("去确认 ignores a card the phone page has covered and draws it in place"
   } finally {
     HTMLElement.prototype.scrollIntoView = original;
   }
+});
+
+test("after answering one approval in place, the next one in the conversation is still open", async () => {
+  sidebars.set("t1", sidebar({ goal: null }));
+  const waiting = (id: string, createdAt: string) => ({
+    id,
+    status: "pending",
+    createdAt,
+    action: {
+      botId: "a1",
+      toolRef: "computer_click",
+      effect: "write",
+      scope: "browser",
+      threadId: "t1",
+      toolCallId: `call-${id}`,
+      args: {},
+      target: null,
+      policy: { behaviour: "ask", source: "safety", reason: "先问你。" },
+    },
+  });
+  inbox = [
+    waiting("ap-old", "2026-11-15T08:00:00Z"),
+    waiting("ap-new", "2026-11-15T08:01:00Z"),
+  ];
+  const { view, user } = drawSidebar();
+  const aside = await loaded(view);
+  const goal = aside.querySelector<HTMLElement>(
+    'section[aria-label="目标"]',
+  ) as HTMLElement;
+  await user.click(await within(goal).findByRole("button", { name: "去确认" }));
+  const first = await waitFor(() => {
+    const card = goal.querySelector<HTMLElement>('[data-approval-id="ap-new"]');
+    if (!card) throw new Error("newest card not drawn yet");
+    return card;
+  });
+  await user.click(within(first).getByRole("radio", { name: "允许一次" }));
+  await user.click(within(first).getByRole("button", { name: "允许一次" }));
+  // 批掉最新一条后，侧栏换成剩下那条：它要能批，不能带着上一条的「已允许」。
+  const next = await waitFor(() => {
+    const card = goal.querySelector<HTMLElement>('[data-approval-id="ap-old"]');
+    if (!card) throw new Error("remaining card not drawn yet");
+    return card;
+  });
+  expect(next.textContent).not.toContain("已允许一次");
+  expect(within(next).getByRole("radio", { name: "允许一次" })).toBeTruthy();
 });
 
 test("去确认 shows the waiting card in place when it is not in the transcript", async () => {

@@ -107,7 +107,11 @@ export function GoalBody({
       {pending && inPlace ? (
         <div className="mt-1">
           {/* 按审批 id 取：工具调用 id 在不同对话之间可能重复，不能拿它在整个收件箱里找。 */}
-          <InlineApproval fallback={<ApprovalsLink />} requestId={pending.id} />
+          <InlineApproval
+            fallback={<ApprovalsLink />}
+            key={pending.id}
+            requestId={pending.id}
+          />
         </div>
       ) : null}
     </>
