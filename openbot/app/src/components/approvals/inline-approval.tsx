@@ -132,6 +132,8 @@ export function InlineApproval({
         {pending && request ? (
           <motion.section
             aria-label="等你批准"
+            // 对话侧栏的「去确认」按这个找到卡滚过去。
+            data-approval-id={request.id}
             exit={{ height: 0, opacity: 0 }}
             key="approval"
             style={{ overflow: "hidden" }}

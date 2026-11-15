@@ -86,6 +86,21 @@
   --wb-app-blue: linear-gradient(135deg, #3b82f6, #60a5fa);
   --wb-app-admin: linear-gradient(135deg, #4b4b55, #2c2c33);
   --wb-app-fg: #fff;
+  /*
+   * 对话侧栏（对话侧栏 Task 5）：上下文彩条各类的颜色、条的底色和空余图例的描边；「去确认」的浅橙底和字色、
+   * 「在线」的字色。取自侧栏设计稿。
+   */
+  --wb-ctx-messages: #3b72d9;
+  --wb-ctx-system: #e8603a;
+  --wb-ctx-tools: #1f9e8f;
+  --wb-ctx-skills: #d9a441;
+  --wb-ctx-memory: #8a6cf0;
+  --wb-ctx-reserve: #9a9aa3;
+  --wb-ctx-track: #e6e7ec;
+  --wb-ctx-track-line: rgba(15, 20, 40, 0.18);
+  --wb-amber-soft: rgba(245, 165, 36, 0.15);
+  --wb-amber-fg: #9a6400;
+  --wb-green-fg: #1f9d63;
 }
 
 :root:not([data-skin]).dark {
@@ -166,6 +181,18 @@
   --wb-app-blue: linear-gradient(135deg, #3b82f6, #60a5fa);
   --wb-app-admin: linear-gradient(135deg, #4b4b55, #2c2c33);
   --wb-app-fg: #fff;
+  /* 对话侧栏（Task 5），同上。 */
+  --wb-ctx-messages: #5b8def;
+  --wb-ctx-system: #f2734a;
+  --wb-ctx-tools: #2bb3a3;
+  --wb-ctx-skills: #f2c46d;
+  --wb-ctx-memory: #a98bff;
+  --wb-ctx-reserve: #6b6b74;
+  --wb-ctx-track: #2b2b33;
+  --wb-ctx-track-line: #4a4a52;
+  --wb-amber-soft: rgba(245, 165, 36, 0.15);
+  --wb-amber-fg: #f5c06a;
+  --wb-green-fg: #8fe3bb;
 }
 
 /*

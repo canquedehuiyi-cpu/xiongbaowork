@@ -21,6 +21,7 @@ import { DetailPanel } from "@/components/layout/detail-panel";
 import { SidebarToggle } from "@/components/layout/sidebar-toggle";
 import { BearMascot } from "@/components/layout/workbench-empty";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { usePresence } from "@/lib/agents/presence";
 import {
   type AgentProfile as AgentProfileData,
@@ -30,6 +31,10 @@ import { useMarkOpenChannelRead } from "@/lib/channels/mark-read";
 import { type AgentChannel, channelQueryOptions } from "@/lib/channels/queries";
 import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
 import { useSkinId } from "@/skins/store";
+import {
+  ConversationSidebar,
+  SidebarCollapseButton,
+} from "@/skins/xiongbao/conversation-sidebar/sidebar";
 import { useEmployeeCard } from "@/skins/xiongbao/employee-card";
 
 const chatSearchSchema = z.object({
@@ -70,6 +75,16 @@ function RouteComponent() {
     channel.data?.agentIds.length === 1
       ? agentProfiles?.find((profile) => profile.id === agentId)
       : undefined;
+  /*
+   * 默认皮肤（聊天工作台）：员工资料那一块换成对话侧栏（环境 · 目标 · 上下文 · 输出内容），常驻在对话右边，
+   * 顶栏的齿轮换成「收起侧栏 / 展开侧栏」。手机上这一期不画侧栏。别的皮肤照旧是齿轮打开员工资料。
+   */
+  const phone = useIsMobile();
+  const workbench = useSkinId() === "xiongbao";
+  const sidebarThread =
+    workbench && channel.data?.agentIds.length === 1
+      ? channel.data.threadId
+      : undefined;
 
   useMarkOpenChannelRead(channelId);
 
@@ -109,7 +124,18 @@ function RouteComponent() {
   return (
     <DetailPanel
       onClose={() => show(null)}
-      open={(isSettingsOpen || isWatching) && agentId !== undefined}
+      open={
+        (isWatching || (isSettingsOpen && !workbench)) && agentId !== undefined
+      }
+      aside={
+        sidebarThread ? (
+          <ConversationSidebar
+            agentId={agentId}
+            source={{ threadId: sidebarThread }}
+            variant="panel"
+          />
+        ) : undefined
+      }
       detailWidth={isWatching ? SCREEN_PANEL_WIDTH : undefined}
       title={isWatching ? "电脑" : undefined}
       waiting={
@@ -201,17 +227,23 @@ function RouteComponent() {
             onOpenChange={(open) => show(open ? "watch" : null)}
           />
           {card ? <EmployeeCardButton agentId={card.id} /> : null}
-          <Button
-            aria-label="会话里的员工"
-            aria-pressed={isSettingsOpen}
-            className={isSettingsOpen ? "bg-foreground/5" : undefined}
-            disabled={agentId === undefined}
-            onClick={() => show(isSettingsOpen ? null : "settings")}
-            variant="ghost"
-            size="icon"
-          >
-            <IconSettings className="size-4.5" />
-          </Button>
+          {workbench ? (
+            sidebarThread && !phone ? (
+              <SidebarCollapseButton collapseKey={sidebarThread} />
+            ) : null
+          ) : (
+            <Button
+              aria-label="会话里的员工"
+              aria-pressed={isSettingsOpen}
+              className={isSettingsOpen ? "bg-foreground/5" : undefined}
+              disabled={agentId === undefined}
+              onClick={() => show(isSettingsOpen ? null : "settings")}
+              variant="ghost"
+              size="icon"
+            >
+              <IconSettings className="size-4.5" />
+            </Button>
+          )}
         </div>
       </div>
       {agentId && channel.data?.agentIds.length === 1 ? (

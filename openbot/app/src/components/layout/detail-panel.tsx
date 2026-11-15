@@ -18,11 +18,17 @@ import { EASE_OUT } from "@/lib/motion";
  * card) is drawn at the top of the sheet as well. A Bot's screen opens itself while the Bot works,
  * and on a narrow window that sheet used to hide the approval the Bot then stopped for, until the
  * person thought to close it. Beside the main pane it is already in view, and is not repeated.
+ *
+ * `aside` is a column that stays beside the main pane while no detail is open there (the default
+ * skin's conversation sidebar). It sizes itself, and is left out when the window has no room for even
+ * its narrowest form beside the main pane: a phone gets that content another way.
  */
 
 const ANIMATION_DURATION_SECONDS = 0.3;
 const DEFAULT_DETAIL_WIDTH = 400;
 const MIN_MAIN_WIDTH = 400;
+/** The narrowest an `aside` gets (the sidebar's icon strip); below this plus the main pane, no aside. */
+const MIN_ASIDE_WIDTH = 56;
 
 /**
  * The content overlaps the tail of the pane rather than following it.
@@ -40,6 +46,7 @@ export function DetailPanel({
   detail,
   detailWidth = DEFAULT_DETAIL_WIDTH,
   waiting,
+  aside,
   children,
 }: {
   open: boolean;
@@ -51,28 +58,35 @@ export function DetailPanel({
   detailWidth?: number;
   /** What in the main pane waits on the person: drawn atop the sheet, which would cover it. */
   waiting?: ReactNode;
+  /** A column beside the main pane while no detail is open beside it. */
+  aside?: ReactNode;
   children: ReactNode;
 }) {
   // Reduced motion keeps the fade, which explains the change, and drops the movement.
   const shouldReduceMotion = useReducedMotion();
   const container = useRef<HTMLDivElement>(null);
-  const [overlay, setOverlay] = useState(true);
+  const [width, setWidth] = useState(0);
   useLayoutEffect(() => {
     const element = container.current;
     if (!element) return;
-    const measure = (width: number) =>
-      setOverlay(width < detailWidth + MIN_MAIN_WIDTH);
-    measure(element.getBoundingClientRect().width);
+    setWidth(element.getBoundingClientRect().width);
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) measure(entry.contentRect.width);
+      if (entry) setWidth(entry.contentRect.width);
     });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [detailWidth]);
+  }, []);
+  const overlay = width < detailWidth + MIN_MAIN_WIDTH;
+  const showAside =
+    aside !== undefined &&
+    aside !== null &&
+    !(open && !overlay) &&
+    width >= MIN_ASIDE_WIDTH + MIN_MAIN_WIDTH;
 
   return (
     <div ref={container} className="flex h-full min-h-0">
       <div className="flex flex-1 min-w-0 flex-col">{children}</div>
+      {showAside ? aside : null}
       {overlay ? (
         <Sheet
           open={open}

@@ -95,6 +95,7 @@ import { useConversationModel } from "@/lib/models/run-model";
 import { useSkillCommands } from "@/lib/plugins/skill-commands";
 import { reportIfQuotaError } from "@/lib/quota/guidance";
 import { publishedSandboxedQueryOptions } from "@/lib/sandboxed/queries";
+import { invalidateConversationSidebar } from "@/lib/threads/sidebar";
 import {
   askChannelAgent,
   messageText,
@@ -1234,6 +1235,10 @@ export function ChannelChat({
       onRunErrorEvent: ({ event }) => fail(runErrorReason(event), true),
       onRunFailed: ({ error }) => fail(stoppedReason(error)),
       onRunFinishedEvent: ({ event }) => {
+        // 对话侧栏的用量、目标和输出内容在这一轮里可能变了：马上再读，不等 15 秒的轮询。
+        void invalidateConversationSidebar(queryClient, {
+          threadId: channel.threadId,
+        });
         /*
          * A run the server stopped to ask the person (an app's call OpenBot asks about) draws its
          * card now, not on the inbox's next poll, as a computer step's does.
@@ -1268,7 +1273,7 @@ export function ChannelChat({
       },
     });
     return () => subscription?.unsubscribe();
-  }, [agent, runtimeAgentId]);
+  }, [agent, runtimeAgentId, channel.threadId]);
 
   /** Stable reference for effects and component callbacks. */
   /*
