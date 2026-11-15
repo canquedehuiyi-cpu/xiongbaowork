@@ -73,6 +73,14 @@ import {
 export const GROUP_TURN_KIND = "group.turn";
 
 export type GroupMessage = typeof groupMessages.$inferSelect;
+/**
+ * A row as its own sender's frame reads it: plus what was held back for them (0128). A waiting
+ * line's approval id is in there, and it is the one thing `list` has to hand back -- the page the
+ * line links to needs a row to land on, and only the person who must decide has that row.
+ */
+export type GroupMessageWithHeld = GroupMessage & {
+  held?: Record<string, unknown>;
+};
 export type GroupBot = {
   id: string;
   name: string;
@@ -157,7 +165,7 @@ const CAP_REFUSED = `一个群最多 ${MAX_GROUP_BOTS} 位员工。`;
 const FLOOR_REFUSED = `群里至少要留 ${MIN_GROUP_BOTS} 位员工。`;
 
 export type GroupStore = {
-  list(channelId: string): Promise<GroupMessage[]>;
+  list(channelId: string): Promise<GroupMessageWithHeld[]>;
   thread(
     ownerUserId: string,
     channelId: string,
@@ -438,11 +446,17 @@ export function createGroupStore(
   return {
     async list(channelId) {
       const rows = await database
-        .select({ message: groupMessages, partial: groupMessagePrivate.text })
+        .select({
+          message: groupMessages,
+          partial: groupMessagePrivate.text,
+          held: groupMessagePrivate.details,
+        })
         .from(groupMessages)
         /*
          * A running reply's partial text is its sender's (0128): the reader's own row security
-         * returns it for their own Bots' replies and nothing for anybody else's.
+         * returns it for their own Bots' replies and nothing for anybody else's. The same holds for
+         * the details held back on a waiting row -- for this reader that is the approval id their
+         * own line waits on, and for every other member there is no row here at all.
          */
         .leftJoin(
           groupMessagePrivate,
@@ -454,13 +468,15 @@ export function createGroupStore(
         .where(eq(groupMessages.channelId, channelId))
         .orderBy(desc(groupMessages.createdAt), desc(groupMessages.id))
         .limit(200);
-      return rows
-        .reverse()
-        .map(({ message, partial }) =>
-          message.status === "running" && partial !== null
-            ? { ...message, text: partial }
-            : message,
-        );
+      return rows.reverse().map(({ message, partial, held }) => {
+        const running = message.status === "running" && partial !== null;
+        if (!running && held === null) return message;
+        return {
+          ...message,
+          ...(running && partial !== null ? { text: partial } : {}),
+          ...(held === null ? {} : { held: held as Record<string, unknown> }),
+        };
+      });
     },
     async thread(ownerUserId, channelId, agentId) {
       const scope = and(
@@ -2258,7 +2274,7 @@ export function createGroupConversations(deps: {
           // The first member made the group, and is the one who may take others out of it.
           creator: index === 0,
         })),
-        messages: messages.map(({ details, ...message }) => ({
+        messages: messages.map(({ details, held, ...message }) => ({
           ...message,
           // A reply in progress has not been through the owner's share check yet (that runs once the
           // turn ends), so only the person whose Bot it is reads it as it arrives.
@@ -2286,6 +2302,17 @@ export function createGroupConversations(deps: {
                   typeof details.message === "string"
                     ? details.message
                     : "Waiting for your response.",
+                /*
+                 * 这一行等的是发起人自己那条审批：把它的 id 一并给他，页面上的「去审批」才有唯一
+                 * 落点，而不是落在一张要自己再找一遍的清单上。别人读到的是同一行、同一个原因，
+                 * 但没有这个 id——审批 id 是把一次决定接回它那一轮的钥匙，而那一轮是发起人的。
+                 * `ownerUserId` 再挡一道：这一列本来就只由行主人的连接读得到（0128 的行级策略），
+                 * 越过策略的连接（超级用户、BYPASSRLS）也得靠它才不会漏。
+                 */
+                ...(message.ownerUserId === owner &&
+                typeof held?.approvalId === "string"
+                  ? { approvalId: held.approvalId }
+                  : {}),
               }
             : {}),
         })),

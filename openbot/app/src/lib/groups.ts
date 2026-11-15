@@ -19,6 +19,12 @@ export type GroupMessage = {
   createdAt: string;
   /** Why a waiting Bot is waiting, when it is. */
   reason?: string;
+  /**
+   * The approval this line is stopped on, for the person who must decide it — the id the approvals
+   * page can land on. Absent for a durable wait (a computer still offline, an action handed to the
+   * person), and absent for everyone else reading the same line.
+   */
+  approvalId?: string;
   /** For an answer relayed from another Bot through `message_bot`: which Bot answered. */
   answeredBy?: string;
   /** A Team Bot asking the person whose turn it was to use their own account. */
