@@ -199,7 +199,7 @@ export type Delivery = {
    * The due time an external employee said in its reply (「预计 16:00」, spec §9), the first one only:
    * on an accepted, open followed card that has no reported time yet, `due_reported` becomes true,
    * `original_due_at` takes it when empty, and `due_at` takes it unless the person set one of their
-   * own (an `edited` line naming `dueAt`), as for `accept`. False when nothing was written.
+   * own (an `edited` line naming `dueAt` since the latest hand-over), as for `accept`. False when nothing was written.
    */
   reportDue(
     tenantId: string,
@@ -366,8 +366,12 @@ export type Delivery = {
    * 换人接手 (`POST /api/tasks/:id/reassign`, spec §8): a followed card the coworker has (`running`)
    * goes to `agentId`, on `threadRef` -- the new coworker's thread with
    * the person -- and back to 派出 · 待接下 (`accepted_at` cleared, `running`): the new coworker takes it
-   * on with its own `accept_task`. `original_due_at`, `due_at`, `overdue_at` and what was handed in
-   * stay; `due_reported` is cleared, so the new coworker's own first time counts. The round running on the card is let go (`active_run_ref` cleared) and closed in the history
+   * on with its own `accept_task`, on its own clock: `due_at` (with any time the person set for the
+   * first coworker), `due_reported`, `overdue_at`, `last_nudged_at`, the day's nudges,
+   * `last_notified_at` and `reminder_held_at` are cleared, so the new coworker's first time counts and,
+   * if it names none, the card is checked two hours after it takes the work on. `original_due_at`,
+   * the day's reminder count and what was handed in stay; the `reassigned` line names the due time and
+   * the overdue mark that were cleared. The round running on the card is let go (`active_run_ref` cleared) and closed in the history
    * as `run_failed {reason: "reassigned"}`, so its late end writes nothing; one `reassigned` line.
    * What comes back is the round to stop and what the new coworker is to be told. Refused while the
    * card waits on the person (`needs_action`): deciding that approval or answering that question
@@ -527,13 +531,7 @@ export function createDelivery(database: Database): Delivery {
         const rows = await database
           .update(tasks)
           .set({
-            dueAt: sql`case when exists (
-                select 1 from ${taskEvents}
-                where ${taskEvents.tenantId} = ${tenantId}
-                  and ${taskEvents.taskId} = ${tasks.id}
-                  and ${taskEvents.kind} = 'edited'
-                  and ${taskEvents.detail}->'after'->>'dueAt' is not null
-              ) then ${tasks.dueAt} else ${at}::timestamptz end`,
+            dueAt: sql`case when ${personSetDue(tenantId)} then ${tasks.dueAt} else ${at}::timestamptz end`,
             originalDueAt: sql`coalesce(${tasks.originalDueAt}, ${at}::timestamptz)`,
             dueReported: true,
             updatedAt: new Date(),
@@ -566,16 +564,11 @@ export function createDelivery(database: Database): Delivery {
               acceptedAt: now,
               /*
                * The person's own due time, set while the card waited (`editTask`), stands: 「你改的直接
-               * 生效」. The coworker's still goes into `original_due_at` below.
+               * 生效」. The coworker's still goes into `original_due_at` below. One set before a hand-over
+               * was for the coworker the work was taken from, and does not (`personSetDue`).
                */
               dueAt: input.dueAt
-                ? sql`case when exists (
-                    select 1 from ${taskEvents}
-                    where ${taskEvents.tenantId} = ${tenantId}
-                      and ${taskEvents.taskId} = ${tasks.id}
-                      and ${taskEvents.kind} = 'edited'
-                      and ${taskEvents.detail}->'after'->>'dueAt' is not null
-                  ) then ${tasks.dueAt} else ${input.dueAt.toISOString()}::timestamptz end`
+                ? sql`case when ${personSetDue(tenantId)} then ${tasks.dueAt} else ${input.dueAt.toISOString()}::timestamptz end`
                 : sql`${tasks.dueAt}`,
               originalDueAt: sql`coalesce(${tasks.originalDueAt}, ${input.dueAt?.toISOString() ?? null}::timestamptz)`,
               dueReported: input.dueAt ? true : sql`${tasks.dueReported}`,
@@ -1260,6 +1253,8 @@ export function createDelivery(database: Database): Delivery {
               title: tasks.title,
               criteria: tasks.criteria,
               deliverableRef: tasks.deliverableRef,
+              dueAt: tasks.dueAt,
+              overdueAt: tasks.overdueAt,
             })
             .from(tasks)
             .where(openTracked(tenantId, taskId))
@@ -1293,11 +1288,28 @@ export function createDelivery(database: Database): Delivery {
               // 派出 · 待接下 again: the new coworker answers with its own 接活回执.
               acceptedAt: null,
               /*
-               * The new coworker has not said when yet: its own first time is taken (an external
-               * employee's 「预计」 included, `reportDue`). `due_at` stands until then, and
-               * `original_due_at` keeps the first coworker's for good.
+               * The new coworker is on its own clock (spec §8: it takes the work on afresh). Its own
+               * first time is taken (an external employee's 「预计」 included, `reportDue`); until it
+               * says one, none is in force -- once it takes the work on, two hours after that, as for
+               * any coworker who named none. The first coworker's due time and whatever the person
+               * set for it go: a time promised by somebody the work was taken from is nobody's
+               * deadline now. `original_due_at` keeps the first time ever reported, for good.
                */
+              dueAt: null,
               dueReported: false,
+              /*
+               * And so is everything the checker kept about the first coworker: its overdue mark (the
+               * `overdue` line stays in the history, and the `reassigned` line below names it), when it
+               * was last nudged and the day's nudges (the new coworker has three of its own), when the
+               * person was last told, and a reminder held for a briefing. Only how many times the
+               * person was told today stays: three a day about one piece of work, whoever has it.
+               */
+              overdueAt: null,
+              lastNudgedAt: null,
+              nudgedOn: null,
+              nudgedCount: 0,
+              lastNotifiedAt: null,
+              reminderHeldAt: null,
               status: "running",
               activeRunRef: null,
               lastError: null,
@@ -1324,6 +1336,8 @@ export function createDelivery(database: Database): Delivery {
               to: input.agentId,
               previousThreadRef: card.threadRef,
               threadRef: input.threadRef,
+              previousDueAt: card.dueAt?.toISOString() ?? null,
+              previousOverdueAt: card.overdueAt?.toISOString() ?? null,
             },
           });
           return {
@@ -1441,6 +1455,28 @@ export function mergeDeliverables(
   if (notes.length) merged.notes = notes;
   if (checks.length) merged.checks = checks;
   return merged;
+}
+
+/**
+ * Whether the person set the card's due time themselves (`editTask`: an `edited` line naming `dueAt`)
+ * for the coworker who has the work now -- since the latest hand-over (`reassigned`), if any. A time
+ * set for a coworker the work was then taken from is not the new coworker's, which takes the work on
+ * afresh (spec §8). Read inside an update of `tasks`, for the row being updated.
+ */
+function personSetDue(tenantId: string) {
+  return sql`exists (
+    select 1 from task_events edited
+    where edited.tenant_id = ${tenantId}
+      and edited.task_id = ${tasks.id}
+      and edited.kind = 'edited'
+      and edited.detail->'after'->>'dueAt' is not null
+      and edited.created_at > coalesce((
+        select max(handed.created_at) from task_events handed
+        where handed.tenant_id = ${tenantId}
+          and handed.task_id = ${tasks.id}
+          and handed.kind = 'reassigned'
+      ), '-infinity'::timestamptz)
+  )`;
 }
 
 /** The card, when it is followed and has not ended. */

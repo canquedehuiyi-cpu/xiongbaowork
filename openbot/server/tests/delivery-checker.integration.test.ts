@@ -31,6 +31,7 @@ import {
 } from "../src/db/schema";
 import { withinModelRun } from "../src/models/token-metering";
 import { REFUSAL_MARKER } from "../src/plugins/tools";
+import { createBriefings } from "../src/tasks/briefing";
 import { createQuotaService } from "../src/quota/limits";
 import { createTurnRunner } from "../src/routines/run-turn";
 import {
@@ -1533,6 +1534,189 @@ test("reassign stops the old turn, swaps executor and thread, back to pending_ac
     (await call("POST", `${taskId}/reassign`, { agentId: newAgent })).status,
   ).toBe(409);
   expect(threadAsks).toBe(asked);
+});
+
+test("after a hand-over the new coworker is on its own clock: not nudged or recorded overdue on the old one", async () => {
+  // The first coworker promised 09:00 and missed it; the person moved it to 09:30, and that passed too.
+  const due = new Date(Date.now() - 5 * HOUR);
+  const { tenantId, taskId } = await acceptedCard("handover-clock", {
+    acceptedAt: at(due, -HOUR),
+    dueAt: due,
+  });
+  const edited = await delivery.editTask(tenantId, taskId, {
+    actor: `user:${tenantId}`,
+    dueAt: at(due, 30 * MINUTE),
+  });
+  expect(edited.ok).toBe(true);
+  const { nudges, notices, check } = checker([tenantId]);
+  await check(at(due, 3 * HOUR));
+  const before = await row(tenantId, taskId);
+  expect(before.overdueAt).not.toBeNull();
+  expect(before.lastNudgedAt).not.toBeNull();
+  expect(before.lastNotifiedAt).not.toBeNull();
+  expect(before.nudgedCount).toBe(1);
+  expect(nudges.length).toBe(1);
+  expect(notices.length).toBe(1);
+  // A reminder held for a briefing, as one kept overnight would be.
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ reminderHeldAt: at(due, 3 * HOUR) })
+      .where(eq(tasks.id, taskId)),
+  );
+
+  const newAgent = `agent-${suite}-handover-clock-new`;
+  const newThread = `thread-${suite}-handover-clock-new`;
+  const moved = await delivery.reassign(tenantId, taskId, {
+    agentId: newAgent,
+    threadRef: newThread,
+    actor: `user:${tenantId}`,
+  });
+  expect(moved.ok).toBe(true);
+  const handed = await row(tenantId, taskId);
+  // Back to 待新员工报预计: none of the old coworker's clock is left on the card.
+  expect(handed.dueAt).toBeNull();
+  expect(handed.dueReported).toBe(false);
+  expect(handed.overdueAt).toBeNull();
+  expect(handed.lastNudgedAt).toBeNull();
+  expect(handed.lastNotifiedAt).toBeNull();
+  expect(handed.reminderHeldAt).toBeNull();
+  expect(handed.nudgedOn).toBeNull();
+  expect(handed.nudgedCount).toBe(0);
+  // The first time ever reported stays for good, and the history still says it was overdue.
+  expect(handed.originalDueAt?.toISOString()).toBe(due.toISOString());
+  expect(await kinds(tenantId, taskId)).toContain("overdue");
+  const [handover] = (await history(tenantId, taskId)).filter(
+    (event) => event.kind === "reassigned",
+  );
+  expect(handover?.detail).toMatchObject({
+    previousDueAt: at(due, 30 * MINUTE).toISOString(),
+    previousOverdueAt: before.overdueAt?.toISOString(),
+  });
+
+  // The briefing right after the hand-over: still being done, not overdue.
+  const briefings = createBriefings({
+    database,
+    workHours: async () => always(),
+  });
+  const right = await briefings.buildBriefing(tenantId, "start", new Date());
+  expect(right?.overdue).toEqual([]);
+  expect(right?.inProgress.map((item) => item.taskId)).toEqual([taskId]);
+  expect(right?.deferred).toEqual([]);
+
+  // The new coworker takes it on without saying when: checked two hours from now, as any such card.
+  const accepted = await delivery.accept(tenantId, taskId, {
+    runId: `run-${randomUUID()}`,
+    threadRef: newThread,
+    actor: `agent:${newAgent}`,
+    dueAt: null,
+    criteria: "必需：A家、B家",
+  });
+  expect(accepted?.dueAt).toBeNull();
+  const acceptedAt = (await row(tenantId, taskId)).acceptedAt;
+  if (!acceptedAt) throw new Error("not accepted");
+  nudges.length = 0;
+  notices.length = 0;
+  for (const minutes of [1, 30, 60, 119, 2 * 60 + 4])
+    await check(at(acceptedAt, minutes * MINUTE));
+  expect(nudges).toEqual([]);
+  expect(notices).toEqual([]);
+  expect((await row(tenantId, taskId)).overdueAt).toBeNull();
+  const soon = await briefings.buildBriefing(
+    tenantId,
+    "start",
+    at(acceptedAt, HOUR),
+  );
+  expect(soon?.overdue).toEqual([]);
+  expect(soon?.inProgress.map((item) => item.dueAt)).toEqual([
+    at(acceptedAt, 2 * HOUR).toISOString(),
+  ]);
+
+  // Its own two hours, then the usual five and thirty-five minutes.
+  await check(at(acceptedAt, 2 * HOUR + 5 * MINUTE));
+  expect(nudges.length).toBe(1);
+  const [nudge] = nudges;
+  if (!nudge) throw new Error("no nudge");
+  expect(nudge.text).toContain("没报预计时间");
+  expect(nudge.text).not.toContain("已经过了");
+  await check(at(acceptedAt, 2 * HOUR + 35 * MINUTE));
+  expect(notices.length).toBe(1);
+  expect((await row(tenantId, taskId)).overdueAt?.toISOString()).toBe(
+    at(acceptedAt, 2 * HOUR + 35 * MINUTE).toISOString(),
+  );
+});
+
+test("after a hand-over only the person's later change of the due time stands over the new coworker's", async () => {
+  const due = new Date(Date.now() + HOUR);
+  const { tenantId, taskId } = await acceptedCard("handover-edit", {
+    acceptedAt: new Date(Date.now() - 10 * MINUTE),
+    dueAt: due,
+  });
+  // Set for the first coworker: it does not carry over to the next.
+  await delivery.editTask(tenantId, taskId, {
+    actor: `user:${tenantId}`,
+    dueAt: at(due, HOUR),
+  });
+  const first = `agent-${suite}-handover-edit-a`;
+  await delivery.reassign(tenantId, taskId, {
+    agentId: first,
+    threadRef: `thread-${suite}-handover-edit-a`,
+    actor: `user:${tenantId}`,
+  });
+  const said = at(due, 2 * HOUR);
+  const taken = await delivery.accept(tenantId, taskId, {
+    runId: `run-${randomUUID()}`,
+    threadRef: `thread-${suite}-handover-edit-a`,
+    actor: `agent:${first}`,
+    dueAt: said,
+    criteria: "核对两家",
+  });
+  expect(taken?.dueAt?.toISOString()).toBe(said.toISOString());
+  // An external employee's 「预计」 likewise, read after a second hand-over.
+  const second = `agent-${suite}-handover-edit-b`;
+  await delivery.reassign(tenantId, taskId, {
+    agentId: second,
+    threadRef: `thread-${suite}-handover-edit-b`,
+    actor: `user:${tenantId}`,
+  });
+  await delivery.accept(tenantId, taskId, {
+    runId: `run-${randomUUID()}`,
+    threadRef: `thread-${suite}-handover-edit-b`,
+    actor: `agent:${second}`,
+    dueAt: null,
+  });
+  const reported = at(due, 3 * HOUR);
+  expect(await delivery.reportDue(tenantId, taskId, { dueAt: reported })).toBe(
+    true,
+  );
+  expect((await row(tenantId, taskId)).dueAt?.toISOString()).toBe(
+    reported.toISOString(),
+  );
+
+  // Set after the hand-over, for the coworker who has the work now: 「你改的直接生效」.
+  const third = `agent-${suite}-handover-edit-c`;
+  await delivery.reassign(tenantId, taskId, {
+    agentId: third,
+    threadRef: `thread-${suite}-handover-edit-c`,
+    actor: `user:${tenantId}`,
+  });
+  const mine = at(due, 4 * HOUR);
+  await delivery.editTask(tenantId, taskId, {
+    actor: `user:${tenantId}`,
+    dueAt: mine,
+  });
+  const kept = await delivery.accept(tenantId, taskId, {
+    runId: `run-${randomUUID()}`,
+    threadRef: `thread-${suite}-handover-edit-c`,
+    actor: `agent:${third}`,
+    dueAt: at(due, 5 * HOUR),
+    criteria: "核对两家",
+  });
+  expect(kept?.dueAt?.toISOString()).toBe(mine.toISOString());
+  // The first time ever reported is the first coworker's, through every hand-over.
+  expect((await row(tenantId, taskId)).originalDueAt?.toISOString()).toBe(
+    due.toISOString(),
+  );
 });
 
 test("reassign is refused while the card waits on the person", async () => {
