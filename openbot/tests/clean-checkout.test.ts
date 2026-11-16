@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { parse } from "yaml";
+import { expandPackageDocument } from "../server/src/tenant-package";
 
 /** The example package must load before a fresh checkout has a .env file. */
 
@@ -30,23 +32,28 @@ describe("a clone that has only run bun install", () => {
   test("can read the default tenant package with nothing set", () => {
     // With no `TENANT_PACKAGE_DIR`, `pretest` and the server load `examples/xiongbao`, so a name
     // there with no fallback fails the suite before a single test runs.
-    for (const file of [
+    //
+    // Only the deployment-owned fields are expanded (`expandPackageDocument`): a skill body's
+    // `${...}` is a shell or JavaScript template the skill teaches, and loads as written. So each file
+    // goes through the loader's own expansion with an empty environment rather than a regex over its
+    // text, which would read every such template as a missing name.
+    const directory = join(root, "examples/xiongbao");
+    const sources = [
       "brand.yaml",
       "agents.yaml",
       "channels.yaml",
       "model.yaml",
       "knowledge.yaml",
       "skills.yaml",
-    ]) {
-      const text = readFileSync(join(root, "examples/xiongbao", file), "utf8");
-      for (const [, name, rest] of text.matchAll(
-        /\$\{([A-Za-z_][A-Za-z0-9_]*)([^}]*)\}/g,
-      )) {
-        expect(
-          rest.startsWith(":-"),
-          `\${${name}} in examples/xiongbao/${file} has no fallback, so a clone with no .env cannot read it`,
-        ).toBe(true);
-      }
+      "connectors.yaml",
+      "teams.yaml",
+      ...readdirSync(join(directory, "agents"))
+        .filter((name) => /\.ya?ml$/.test(name))
+        .map((name) => `agents/${name}`),
+    ];
+    for (const source of sources) {
+      const document = parse(readFileSync(join(directory, source), "utf8"));
+      expect(() => expandPackageDocument(document, source, {})).not.toThrow();
     }
   });
 

@@ -355,6 +355,40 @@ describe("createRoutineRunner", () => {
     });
   });
 
+  // Audit #633 M2: the internal endpoint takes a run id and nothing else, so a finished id presented
+  // again must not fire the routine again.
+  test.each(["succeeded", "failed", "skipped", "waiting"] as const)(
+    "never runs again a run row already closed as %p",
+    async (status) => {
+      const { runner, recorded } = harness({
+        context: { ...CONTEXT, status },
+      });
+
+      await runner.run(RUN_ID);
+      await runner.run(RUN_ID);
+
+      expect(recorded).toEqual({
+        finished: [],
+        activity: [],
+        enabled: [],
+        turns: [],
+        board: { opened: [], finished: [] },
+        busy: [],
+      });
+    },
+  );
+
+  test("runs a run row that is still open", async () => {
+    const { runner, recorded } = harness({
+      context: { ...CONTEXT, status: null },
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.turns).toHaveLength(1);
+    expect(recorded.finished).toEqual([{ runId: RUN_ID, status: "succeeded" }]);
+  });
+
   test("keeps a succeeded run recorded when the channel cannot be written to", async () => {
     const { runner, recorded } = harness({
       recordActivity: async () => {

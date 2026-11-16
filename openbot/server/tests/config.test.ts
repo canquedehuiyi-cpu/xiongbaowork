@@ -277,6 +277,70 @@ describe("deployment configuration", () => {
     },
   );
 
+  /*
+   * The worker secret `scripts/start.sh` falls back to locally (audit #633 M2). It is printed in this
+   * repository, so on a deployed server it opens `/internal/routines/run` to anybody; off production
+   * it is the developer's default and only warned about, like the example key above.
+   */
+  const PUBLIC_WORKER_SECRET = "openbot-dev-worker-secret";
+
+  test.each([PUBLIC_WORKER_SECRET, `  ${PUBLIC_WORKER_SECRET} `])(
+    "refuses the public worker secret %p on a production deployment",
+    (secret) => {
+      expect(() =>
+        loadConfig({
+          ...productionEnvironment,
+          WORKER_SHARED_SECRET: secret,
+        }),
+      ).toThrow(
+        "WORKER_SHARED_SECRET is the public development default from scripts/start.sh; refusing to start in production.",
+      );
+    },
+  );
+
+  test.each(["development", "test", undefined])(
+    "warns about the public worker secret and still starts under NODE_ENV=%p",
+    (nodeEnv) => {
+      const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const config = loadConfig({
+          ...baseEnvironment,
+          ...(nodeEnv ? { NODE_ENV: nodeEnv } : {}),
+          WORKER_SHARED_SECRET: PUBLIC_WORKER_SECRET,
+        });
+        expect(config.workerSharedSecret).toBe(PUBLIC_WORKER_SECRET);
+        const warnings = consoleWarn.mock.calls
+          .map(([first]) => String(first))
+          .filter((line) => line.includes("WORKER_SHARED_SECRET"));
+        expect(warnings).toEqual([
+          "WORKER_SHARED_SECRET is the public development default from scripts/start.sh. Fine locally. Set a random one before deploying: openssl rand -hex 32",
+        ]);
+      } finally {
+        consoleWarn.mockRestore();
+      }
+    },
+  );
+
+  test("takes a worker secret of the deployment's own in production, without a word", () => {
+    const consoleWarn = spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const config = loadConfig({
+        ...productionEnvironment,
+        WORKER_SHARED_SECRET: "a-random-worker-secret-0123456789abcdef",
+      });
+      expect(config.workerSharedSecret).toBe(
+        "a-random-worker-secret-0123456789abcdef",
+      );
+      expect(
+        consoleWarn.mock.calls
+          .map(([first]) => String(first))
+          .filter((line) => line.includes("WORKER_SHARED_SECRET")),
+      ).toEqual([]);
+    } finally {
+      consoleWarn.mockRestore();
+    }
+  });
+
   test("enables Google authentication when its complete deployment contract is present", () => {
     const config = loadConfig({
       ...baseEnvironment,

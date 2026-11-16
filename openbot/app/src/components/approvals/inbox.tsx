@@ -1,7 +1,7 @@
 import { ruleTitle } from "@openbot/shared/tool-name";
 import { IconLock } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CARD_FACE, Tag } from "@/components/resources/resource-kit";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -64,8 +64,14 @@ const SETTING_ROW =
  * `TeamApprovalSettings` 画团队设置，所以那里传 `waitingOnly`，这里只画「等你处理」，不重复画一遍。
  */
 export function ApprovalInbox({
+  focus,
   waitingOnly = false,
 }: {
+  /**
+   * An approval's id to land on: a group line that is stopped on it links here with it. Empty is
+   * the ordinary visit, where the page is a list of everything waiting.
+   */
+  focus?: string;
   /** Draw only what waits on the person; the settings and rules are drawn by the page around it. */
   waitingOnly?: boolean;
 } = {}) {
@@ -143,6 +149,19 @@ export function ApprovalInbox({
     inbox.data?.requests.filter((request) => request.status === "pending") ??
     [];
   const rulesEmpty = !inbox.data?.rules.length && !inbox.data?.teamRules.length;
+  /*
+   * A page arrived at from a line that is stopped on one approval: bring that row into view rather
+   * than leave the person at the top of the settings page to scroll and look for it. The row is
+   * drawn a render after the inbox arrives, so the effect runs when it appears, not on mount.
+   */
+  const focused = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    // The row is drawn a render after the inbox arrives, so this waits for the list to have it --
+    // and does nothing on an ordinary visit, where nothing was named.
+    if (!focus || pending.length === 0) return;
+    // Not every DOM has it (happy-dom does not); the row is still marked as the one either way.
+    focused.current?.scrollIntoView?.({ block: "center" });
+  }, [focus, pending.length]);
   return (
     <div className="flex flex-col gap-[28px]">
       {error ? (
@@ -228,8 +247,14 @@ export function ApprovalInbox({
           ) : (
             pending.map((request) => (
               <article
-                className={`${ATTENTION_CARD} flex flex-col gap-3 p-[14px]`}
+                className={`${ATTENTION_CARD} flex flex-col gap-3 p-[14px] ${
+                  request.id === focus ? "ring-2 ring-signal/60" : ""
+                }`}
+                id={`approval-${request.id}`}
                 key={request.id}
+                {...(request.id === focus
+                  ? { ref: focused, "data-focus": "" }
+                  : {})}
               >
                 <div className="flex flex-col gap-[4px]">
                   <div className="flex flex-wrap items-center gap-[8px]">

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import {
   checkDatabaseCredential,
   checkServerReadiness,
@@ -463,4 +464,78 @@ describe("the public default database password", () => {
     });
     expect(diagnostics).toEqual([]);
   });
+});
+
+/*
+ * Audit #633 M1: the compose file gives the role writer the same public word by default, so the
+ * server holds that URL to the same rule, and says which setting it was.
+ */
+describe("the public default role writer password", () => {
+  const writerUrl =
+    "postgres://openbot_role_writer:openbot@postgres:5432/openbot";
+
+  test("production refuses it, naming the role writer's setting", () => {
+    const diagnostics: ReadinessDiagnostic[] = [];
+    expect(() =>
+      checkDatabaseCredential({
+        url: writerUrl,
+        production: true,
+        variable: "ROLE_WRITER_DATABASE_URL",
+        report: (event) => diagnostics.push(event),
+      }),
+    ).toThrow(
+      "ROLE_WRITER_DATABASE_URL uses the public default database password; refusing to start in production.",
+    );
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]).toMatchObject({
+      type: "database-password-public-default",
+      role: "openbot_role_writer",
+    });
+    expect(JSON.stringify(diagnostics)).toContain("ROLE_WRITER_DATABASE_URL");
+    expect(JSON.stringify(diagnostics)).not.toContain("postgres:5432");
+  });
+
+  test("anywhere else it is reported and the server keeps starting", () => {
+    const diagnostics: ReadinessDiagnostic[] = [];
+    checkDatabaseCredential({
+      url: writerUrl,
+      production: false,
+      variable: "ROLE_WRITER_DATABASE_URL",
+      report: (event) => diagnostics.push(event),
+    });
+    expect(diagnostics.map((event) => event.type)).toEqual([
+      "database-password-public-default",
+    ]);
+  });
+});
+
+/*
+ * Audit #633 C1: the CronJob's sweep runs the same gate before it writes. Started as the chart starts
+ * it, against a database that cannot be reached, the role facts are unknown: under `refuse` it stops
+ * there and never sweeps. No database needed.
+ */
+describe("the routines CronJob's preflight", () => {
+  test("stops before the sweep when the role facts are unconfirmed", async () => {
+    const job = Bun.spawn(["bun", "scripts/fire-routines.ts"], {
+      cwd: join(import.meta.dir, ".."),
+      env: {
+        PATH: process.env.PATH ?? "",
+        HOME: process.env.HOME ?? "",
+        NODE_ENV: "production",
+        DATABASE_URL: "postgres://unit:unit@127.0.0.1:1/unreachable",
+        KEY_ENCRYPTION_KEY: "b3BlbmJvdC1wcm9kdWN0aW9uLXRlc3Qta2V5LTMyMzI=",
+        WORKER_SHARED_SECRET: "unit-worker-secret",
+        SERVER_INTERNAL_URL: "http://127.0.0.1:1",
+        XIONGBAO_SINGLE_USER: "true",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const exitCode = await job.exited;
+    const output = `${await new Response(job.stdout).text()}${await new Response(job.stderr).text()}`;
+    expect(exitCode).not.toBe(0);
+    expect(output).toContain('{"type":"rls-role-check-unavailable"');
+    expect(output).toContain("Tenant isolation preflight is unconfirmed.");
+    expect(output).not.toContain("routine-sweep");
+  }, 30_000);
 });

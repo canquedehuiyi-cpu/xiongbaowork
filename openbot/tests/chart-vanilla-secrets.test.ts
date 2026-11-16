@@ -214,6 +214,9 @@ describe.skipIf(!helm)(
         // The fork's role writer (migration 0109) has a URL of its own beside the API's.
         "--set-string",
         "database.roleWriterUrl=postgres://openbot_role_writer:secret@db.example.com:5432/openbot?sslmode=require",
+        // The migrations Job runs as the owner, never as the API's role (validation.yaml refuses the URL alone).
+        "--set-string",
+        "database.migrationUrl=postgres://openbot_owner:secret@db.example.com:5432/openbot?sslmode=require",
       ];
       expect(
         refusal(

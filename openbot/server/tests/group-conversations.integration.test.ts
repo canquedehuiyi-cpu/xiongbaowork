@@ -1809,6 +1809,66 @@ describe("group conversations in PostgreSQL", () => {
       text: "From your notes: the hearing is on Tuesday.",
     });
   });
+  test("a waiting line names the approval it waits on, to the person who must decide it and to nobody else", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({
+      replies: {
+        [ada]: () => {
+          throw new HeadlessToolSuspension("Waiting for your approval.", {
+            kind: "approval",
+            approvalId: `${prefix}-decider-approval`,
+          });
+        },
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    const email = await emailOf(teammate);
+    await as(owner, () =>
+      conversations.addMember(owner.id, channel.id, { email }),
+    );
+    await as(owner, () =>
+      conversations.send(owner.id, channel.id, {
+        id: `${prefix}-decider`,
+        text: "clear out the old drafts",
+        agentId: ada,
+      }),
+    );
+    await runAsTenant("platform", () => drain(conversations));
+
+    // The decider reads the line, and with it the one approval that would resume it: the page the
+    // line links to has a single row to land on instead of a list to search.
+    const mine = await as(owner, () =>
+      conversations.list(owner.id, channel.id),
+    );
+    expect(mine.messages.at(-1)).toMatchObject({
+      agentId: ada,
+      status: "waiting",
+      approvalId: `${prefix}-decider-approval`,
+    });
+    /*
+     * The one id, not the row it came from: a held reply's text and the continuation that would
+     * run it are the decider's too, but they are not what the page asked for, and sending them
+     * across every list call is how a private reply finally leaks.
+     */
+    expect(mine.messages.at(-1)).not.toHaveProperty("held");
+    expect(mine.messages.at(-1)).not.toHaveProperty("details");
+    // A colleague reads the same line without it: an approval id is what ties a decision to the
+    // turn it resumes, and that turn is the decider's own.
+    const theirs = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(theirs.messages.at(-1)).toMatchObject({
+      agentId: ada,
+      status: "waiting",
+    });
+    expect(theirs.messages.at(-1)).not.toHaveProperty("approvalId");
+    expect(JSON.stringify(theirs)).not.toContain(`${prefix}-decider-approval`);
+  });
   test("a held reply and a reply in progress are stamped with their sender, whatever frame writes them", async () => {
     const owner = await person();
     const ada = await as(owner, () => bot(owner, "Ada"));
