@@ -194,7 +194,8 @@ describe("iLink client", () => {
       clientVersion: "2.4.10",
     });
     const err = await c.getUpdates(session, "").catch((e) => e as Error);
-    expect(String(err.message)).not.toContain("t1");
+    if (!(err instanceof Error)) throw new Error("expected getUpdates to reject");
+    expect(err.message).not.toContain("t1");
     expect(err).toMatchObject({ provider: "wechat", code: "unauthorized" });
   });
 
@@ -275,8 +276,9 @@ describe("iLink client", () => {
       const err = await client
         .getUpdates({ baseUrl, botToken: "t1" }, "")
         .catch((e) => e as Error);
+      if (!(err instanceof Error)) throw new Error("expected a rejection");
       expect(err).toMatchObject({ provider: "wechat", code: "bad_base_url" });
-      expect(String(err.message)).not.toContain("t1");
+      expect(err.message).not.toContain("t1");
     }
     expect(calls.length).toBe(0);
     await client.getUpdates(

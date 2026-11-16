@@ -7,6 +7,7 @@ import {
   externalHirerOf,
 } from "../src/agents/acp/external";
 import {
+  type AgentPresence,
   type PresenceDeviceReachable,
   readAgentPresence,
 } from "../src/agents/presence";
@@ -262,12 +263,13 @@ describe("GET /api/agents/presence", () => {
     await task(owner.id, idle, "上个月的报销", "done");
     await pause(owner, idle, false);
 
+    const expected: AgentPresence[] = [
+      { agentId: busy, status: "working", doing: "跑登录页的测试" },
+      { agentId: paused, status: "paused", doing: null },
+      { agentId: idle, status: "resting", doing: null },
+    ];
     expect(await presenceOf(owner, [busy, paused, idle])).toEqual(
-      [
-        { agentId: busy, status: "working", doing: "跑登录页的测试" },
-        { agentId: paused, status: "paused", doing: null },
-        { agentId: idle, status: "resting", doing: null },
-      ].sort((a, b) => a.agentId.localeCompare(b.agentId)),
+      expected.sort((a, b) => a.agentId.localeCompare(b.agentId)),
     );
   });
 

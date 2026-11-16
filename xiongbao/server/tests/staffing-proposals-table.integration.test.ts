@@ -2,7 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
-import { staffingProposals } from "../src/db/schema/staffing";
+import {
+  type StaffingProposalKind,
+  staffingProposals,
+} from "../src/db/schema/staffing";
 import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -16,7 +19,7 @@ const TENANT_A = `sp-${suite}-a`;
 const TENANT_B = `sp-${suite}-b`;
 
 const draft = { name: "小客服" };
-const proposal = (tenant: string, kind = "employee") => ({
+const proposal = (tenant: string, kind: StaffingProposalKind = "employee") => ({
   tenantId: tenant,
   ownerId: tenant,
   proposedByAgentId: `agent-${suite}`,
@@ -73,7 +76,8 @@ describe("staffing_proposals", () => {
       runAsTenant(TENANT_A, async () => {
         await database
           .insert(staffingProposals)
-          .values(proposal(TENANT_A, "x"));
+          // Deliberately outside the list: the column's CHECK is what has to refuse it.
+          .values(proposal(TENANT_A, "x" as StaffingProposalKind));
       }),
     ).rejects.toThrow();
     await expect(

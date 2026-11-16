@@ -460,7 +460,7 @@ describe("staffing proposal routes", () => {
       {
         agentId: `avatar-${owner.id}`,
         userId: owner.id,
-      } as Parameters<typeof mintRunAssertion>[0],
+      } as unknown as Parameters<typeof mintRunAssertion>[0],
       "x".repeat(44),
     );
     const mine = appFor();
@@ -652,7 +652,9 @@ describe("staffing proposal routes", () => {
         canSeeThread: async () => false,
       },
     } as never;
-    const app = createApp(...args);
+    // `args` is built positionally (34 slots) as `never[]`, so the tuple cast has to go through
+    // `unknown`: the array type and the parameter tuple share no members to overlap on.
+    const app = createApp(...(args as unknown as Parameters<typeof createApp>));
     const apply = (session: string | null, as: string) =>
       app.request(`http://test/api/proposals/${as}/apply`, {
         method: "POST",

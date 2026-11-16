@@ -1521,7 +1521,7 @@ describe("deactivation (0207 trigger)", () => {
     const owner = ownerConnection();
     class Rollback extends Error {}
     let before: { creator: unknown; members: unknown[] } | null = null;
-    let after: typeof before = null;
+    let after: { creator: unknown; members: unknown[] } | null = null;
     const read = async (tx: SQL) => ({
       creator: (
         await tx`select created_by from channels where id = ${made.channelId}`
@@ -1577,7 +1577,12 @@ describe("deactivation (0207 trigger)", () => {
     expect(backfill).toContain("openbot_team_person_leaves_groups(uid)");
     const owner = ownerConnection();
     class Rollback extends Error {}
-    const plain = (rows: object[]) => [...rows].map((row) => ({ ...row }));
+    /*
+     * The rows come back untyped (`object[]`), so the copy is what gives them readable fields. Without
+     * it `{ ...row }` widens to `{}` and every `row.id` below is an error.
+     */
+    const plain = (rows: object[]) =>
+      [...rows].map((row) => ({ ...(row as Record<string, unknown>) }));
     // Every row a run could touch, with its physical place: any update, even a no-op one, moves it.
     const read = async (tx: SQL) => ({
       channels: plain(
@@ -1602,7 +1607,7 @@ describe("deactivation (0207 trigger)", () => {
       ),
     });
     let once: Awaited<ReturnType<typeof read>> | null = null;
-    let twice: typeof once = null;
+    let twice: Awaited<ReturnType<typeof read>> | null = null;
     try {
       await owner.begin(async (tx) => {
         await tx`alter table revoked_access disable trigger openbot_team_revoked_leaves`;

@@ -152,7 +152,7 @@ class Recorder extends AbstractAgent {
         runId: input.runId,
       },
     ])
-      await subscriber?.onEvent?.({ event } as Parameters<
+      await subscriber?.onEvent?.({ event } as unknown as Parameters<
         NonNullable<AgentSubscriber["onEvent"]>
       >[0]);
     this.messages = [
@@ -190,7 +190,7 @@ class Working extends AbstractAgent {
         threadId: input.threadId,
         runId: input.runId,
       },
-    } as Parameters<NonNullable<AgentSubscriber["onEvent"]>>[0]);
+    } as unknown as Parameters<NonNullable<AgentSubscriber["onEvent"]>>[0]);
     const stopped = new Promise<void>((resolve) => {
       this.stop = resolve;
     });
@@ -1654,7 +1654,7 @@ test("track is refused when the employee's accept_task is disabled", async () =>
     behaviour: "deny",
     effect: "*",
     scope: "*",
-  } as unknown as Parameters<typeof toolDisabled>[1][number][number];
+  } as unknown as unknown as Parameters<typeof toolDisabled>[1][number][number];
   const call = routesFor(tenantId, {
     acceptTaskDisabled: async (_tenant, botId) =>
       toolDisabled({ botId, toolRef: ACCEPT_TASK_REF }, [[deny]]),

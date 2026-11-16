@@ -192,9 +192,10 @@ describe("acp turn store", () => {
       store.claim(owner, id),
       store.claim(owner, id),
     ]);
-    expect([one?.status, two?.status].sort()).toEqual(
-      ["sent", undefined].sort(),
-    );
+    // Typed, because `["sent", undefined]` on its own widens to `(string | undefined)[]` and then
+    // `toEqual` cannot tell it is the same domain the claim returns.
+    const expected: (AcpTurnRow["status"] | undefined)[] = ["sent", undefined];
+    expect([one?.status, two?.status].sort()).toEqual(expected.sort());
     await store.unclaim(owner, id);
     expect((await store.get(owner, id))?.status).toBe("queued");
     await setStatus(owner, id, "running");

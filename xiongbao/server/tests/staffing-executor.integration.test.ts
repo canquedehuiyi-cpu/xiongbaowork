@@ -744,7 +744,7 @@ describe("applying a staffing proposal as the person", () => {
         .where(eq(appAccessRequests.botId, demotedBot)),
     );
     expect(requested).toEqual([{ serverId: ADMIN_APP }]);
-    const demotedItems = (await stored(fromDemoted.id))?.result as {
+    const demotedItems = (await stored(fromDemoted.id))?.result as unknown as {
       step: string;
       outcome: string;
     }[];
@@ -777,7 +777,7 @@ describe("applying a staffing proposal as the person", () => {
     expect(await grantsOf(bot)).toEqual([
       { kind: "skill", ref: DEPLOYMENT_SKILL, grantedAs: "owner" },
     ]);
-    const items = (await stored(proposal.id))?.result as {
+    const items = (await stored(proposal.id))?.result as unknown as {
       step: string;
       outcome: string;
     }[];
@@ -871,7 +871,7 @@ describe("applying a staffing proposal as the person", () => {
       );
     }
 
-    const items = (await stored(proposal.id))?.result as {
+    const items = (await stored(proposal.id))?.result as unknown as {
       step: string;
       outcome: string;
     }[];
