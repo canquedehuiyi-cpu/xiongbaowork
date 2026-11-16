@@ -9,6 +9,11 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AgentDialog } from "@/components/agents/agent-dialog";
 import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
+import {
+  HireFromCloud,
+  HireFromComputer,
+} from "@/components/agents/external/hire-from-computer";
+import { HireSettings } from "@/components/agents/external/hire-settings";
 import { BotRoster } from "@/components/bots/bot-roster";
 import {
   LabeledSelect,
@@ -38,6 +43,7 @@ import { STATUS_WORD } from "@/components/wakers/coworker-card";
 import { CreateCrewDialog, CrewTab } from "@/components/wakers/crews";
 import { STATUS_ORDER, useRosterFacts } from "@/components/wakers/roster-facts";
 import {
+  type HireSource,
   isNarrowed,
   parseWakersSearch,
   rememberWakersSearch,
@@ -46,6 +52,7 @@ import {
   type WakersSearch,
   wallSearch,
 } from "@/components/wakers/wakers-search";
+import { shortName } from "@/lib/brand";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { useSearchDraft } from "@/lib/use-search-draft";
 
@@ -58,6 +65,8 @@ import { useSearchDraft } from "@/lib/use-search-draft";
  * - 工具栏：搜索、运行状态、角色、环境、排序四个筛选，加上卡片 / 列表两种画法。每一项都在地址里，所以刷新、分享
  *   的链接和员工详情页的返回链接都回到同一个筛好的名单。
  * - `?agent=<id>` 在名单上打开那位员工的编辑框（每张卡上的「编辑」）。
+ * - 最上面「人才市场 / 从我的电脑招 / 云端（下一步）」（`?source=computer|cloud`，外部员工 Task 10）：从我的
+ *   电脑招列出本人电脑上装好的智能体，`?device=` 是哪台电脑，`?hire=` 打开那一家的招聘设置；云端只说明。
  */
 
 /** The card's environment tag in the same words: 本地 = one of this person's machines. */
@@ -94,6 +103,11 @@ export function BotsPage({ search }: { search: WakersSearch }) {
   const personal =
     useQuery(deploymentCapabilitiesQueryOptions()).data?.edition === "personal";
   const tab = search.tab === "groups" ? "groups" : "coworkers";
+  const source: HireSource = search.source ?? "market";
+  const hiring =
+    source === "computer" && search.device && search.hire
+      ? { deviceId: search.device, harness: search.hire }
+      : null;
   const [query, setQuery] = useSearchDraft(search.q ?? "");
   const [creatingCrew, setCreatingCrew] = useState(false);
   const facts = useRosterFacts();
@@ -141,7 +155,7 @@ export function BotsPage({ search }: { search: WakersSearch }) {
   return (
     <PageShell
       action={
-        tab === "coworkers" ? (
+        source !== "market" ? undefined : tab === "coworkers" ? (
           <div
             className="flex flex-wrap gap-[7px]"
             data-testid="wakers-header-actions"
@@ -177,221 +191,285 @@ export function BotsPage({ search }: { search: WakersSearch }) {
         )
       }
       description={
-        personal
-          ? "在这里召唤员工；召唤来的和你自己的员工也在这里管理。"
-          : "在这里召唤员工，管理你的员工、群组，以及别人共享给你的员工。"
+        source !== "market"
+          ? `你电脑上已经在用的智能体，可以直接招进来当员工：它照样用自己的本事干活，${shortName()}给它排班、拉进群、上看板、守底线。`
+          : personal
+            ? "在这里召唤员工；召唤来的和你自己的员工也在这里管理。"
+            : "在这里召唤员工，管理你的员工、群组，以及别人共享给你的员工。"
       }
       eyebrow="04 DIGITAL TEAM"
-      title="人才市场"
+      title={source === "market" ? "人才市场" : "招一位新同事"}
       width="workbench"
     >
-      {/*
-        docs/design/ios-studio `.section-head` + `.controls`: the 员工 | 群组 pill with each side's
-        count and, at the far right, how many are listed; the search, the four filters and the view
-        under it; the roster under those.
-      */}
-      <div className="flex flex-col gap-[10px] pb-8">
-        <div className="flex flex-wrap items-center justify-between gap-[10px]">
-          <SegmentedTabs
-            label="员工与群组"
-            // A click is a step Back can return to; arrowing across the two is not.
-            onValueChange={(next, change) =>
-              void patch(
-                { tab: next === "groups" ? "groups" : undefined },
-                change.keyboard,
-              )
-            }
-            panelId="wakers-wall"
-            tabs={[
-              // A count only once its read answered: 「0」 beside a pending roster would be a guess.
+      {hiring ? null : (
+        <SegmentedTabs
+          className="mb-[14px]"
+          label="从哪里招"
+          onValueChange={(next, change) =>
+            void patch(
               {
-                value: "coworkers",
-                label: "员工",
-                count: agents.data ? roster.length : undefined,
+                source: next === "market" ? undefined : next,
+                device: undefined,
+                hire: undefined,
               },
-              {
-                value: "groups",
-                label: "群组",
-                count: groups.data ? groups.data.length : undefined,
-              },
-            ]}
-            value={tab}
-          />
-          {/* An unread roster has no count: 「0 名员工」 beside a skeleton or an error would be a wrong answer. */}
-          {tab === "coworkers" && agents.data ? (
-            <span className={COUNT_BADGE} data-testid="waker-count">
-              {narrowed
-                ? `${visible} / ${roster.length} 名员工`
-                : `${roster.length} 名员工`}
-            </span>
-          ) : null}
-          {tab === "groups" && groups.data ? (
-            <span className={COUNT_BADGE}>{groups.data.length} 个群组</span>
-          ) : null}
-        </div>
-
+              change.keyboard,
+            )
+          }
+          panelId="hire-source"
+          tabs={[
+            { value: "market", label: "人才市场" },
+            { value: "computer", label: "从我的电脑招" },
+            { value: "cloud", label: "云端（下一步）" },
+          ]}
+          value={source}
+          variant="underline"
+        />
+      )}
+      {source === "computer" ? (
         <div
-          {...tabPanelProps("wakers-wall", tab)}
-          className="flex flex-col gap-[13px]"
+          {...(hiring ? {} : tabPanelProps("hire-source", source))}
+          className="pb-8"
         >
-          {tab === "coworkers" ? (
-            <>
-              <div className="flex flex-wrap items-center gap-[6px]">
-                <SearchBox
-                  className="w-[221px] max-w-full"
-                  label="搜索名称或角色"
-                  onValueChange={(next) => {
-                    setQuery(next);
-                    void patch({ q: next || undefined });
-                  }}
-                  placeholder="搜索名称或角色..."
-                  value={query}
-                />
-                <LabeledSelect
-                  className={FILTER}
-                  label="运行状态"
-                  onValueChange={(next) =>
-                    void patch({ status: next === "all" ? undefined : next })
-                  }
-                  options={[
-                    // The total is the badge above; each state carries its own.
-                    { value: "all", label: "全部" },
-                    ...STATUS_ORDER.map((key) => ({
-                      value: key,
-                      label: `${STATUS_WORD[key]} (${counts[key]})`,
-                    })),
-                  ]}
-                  value={search.status ?? "all"}
-                />
-                <LabeledSelect
-                  className={FILTER}
-                  label="角色"
-                  onValueChange={(next) =>
-                    void patch({ role: next === "\u0000" ? undefined : next })
-                  }
-                  options={[
-                    // A role can be any text, so "all" is a value no title can be.
-                    { value: "\u0000", label: "全部角色" },
-                    ...(search.role && !roles.includes(search.role)
-                      ? [search.role]
-                      : []
-                    )
-                      .concat(roles)
-                      .map((role) => ({ value: role, label: role })),
-                  ]}
-                  value={search.role ?? "\u0000"}
-                />
-                <LabeledSelect
-                  className={FILTER}
-                  label="环境"
-                  onValueChange={(next) =>
-                    void patch({ env: next === "all" ? undefined : next })
-                  }
-                  options={ENV_OPTIONS}
-                  value={search.env ?? "all"}
-                />
-                <LabeledSelect
-                  className={FILTER}
-                  label="排序"
-                  onValueChange={(next) =>
-                    void patch({ sort: next === "default" ? undefined : next })
-                  }
-                  options={SORT_OPTIONS}
-                  value={search.sort ?? "default"}
-                />
-                {narrowed ? (
-                  <Button
-                    className="h-[32px]"
-                    onClick={clearFilters}
-                    variant="ghost"
-                  >
-                    清除筛选
-                  </Button>
-                ) : null}
-                {/* 卡片（熊宝的员工墙）或列表（上游的名单行），同一份名单两种画法。 */}
-                <SegmentedTabs
-                  className="ml-auto"
-                  label="显示方式"
-                  onValueChange={(next, change) =>
-                    void patch(
-                      { view: next === "list" ? "list" : undefined },
-                      change.keyboard,
-                    )
-                  }
-                  size="sm"
-                  tabs={[
-                    { value: "cards", label: "卡片" },
-                    { value: "list", label: "列表" },
-                  ]}
-                  value={search.view === "list" ? "list" : "cards"}
-                />
-              </div>
-
-              {running.isError ? (
-                /*
-                 * Said once, above everything, as well as on each card: without this line the cards
-                 * below would read "nothing running" as fact when the board could not be read at all.
-                 */
-                <p className="text-destructive text-sm" role="alert">
-                  看板读不到，所以下面显示的状态无法确认。
-                </p>
-              ) : null}
-              {attention.isError ? (
-                <p className="text-destructive text-sm" role="alert">
-                  暂停状态读不到，所以下面的员工是否被暂停无法确认。
-                </p>
-              ) : null}
-              {month.isError && !month.data ? (
-                /*
-                 * A side read: the roster is still right without it, so it is a status line with a
-                 * way to ask again rather than an alert, and the cards say "—" instead of a zero never
-                 * seen.
-                 */
-                <p
-                  className="flex items-center gap-2 text-muted-foreground text-sm"
-                  role="status"
-                >
-                  任务数和最近运行读不到（{month.error.message}
-                  ），卡片上暂时显示为 —。
-                  <Button
-                    disabled={month.isFetching}
-                    onClick={() => void month.refetch()}
-                    size="xs"
-                    variant="outline"
-                  >
-                    重新读取
-                  </Button>
-                </p>
-              ) : null}
-
-              <div>
-                <BotRoster
-                  onClearFilters={clearFilters}
-                  query={query}
-                  search={search}
-                />
-                {personal ? <WhatYourBotsKnow /> : null}
-              </div>
-            </>
-          ) : groups.isError && !groups.data ? (
-            <QueryError
-              error={groups.error}
-              label="读不到群组"
-              onRetry={() => void groups.refetch()}
-              retrying={groups.isFetching}
+          {hiring ? (
+            <HireSettings
+              deviceId={hiring.deviceId}
+              harness={hiring.harness}
+              onCancel={() => void patch({ hire: undefined }, false)}
+              onHired={(agentId) =>
+                void navigate({
+                  params: { agentId },
+                  to: "/bots/$agentId",
+                })
+              }
             />
           ) : (
-            <CrewTab
-              crews={groups.data ?? []}
-              loading={groups.isPending}
-              onCreate={() => setCreatingCrew(true)}
-              queryClient={queryClient}
-              roster={(agents.data ?? []).filter((agent) => !agent.hidden)}
-              rosterLoading={agents.isPending}
+            <HireFromComputer
+              deviceId={search.device}
+              onDeviceChange={(device) => void patch({ device })}
+              onHire={(device, harness) =>
+                void patch({ device, hire: harness }, false)
+              }
             />
           )}
         </div>
-      </div>
+      ) : source === "cloud" ? (
+        <div {...tabPanelProps("hire-source", source)} className="pb-8">
+          <HireFromCloud />
+        </div>
+      ) : (
+        /*
+         * docs/design/ios-studio `.section-head` + `.controls`: the 员工 | 群组 pill with each side's
+         * count and, at the far right, how many are listed; the search, the four filters and the view
+         * under it; the roster under those.
+         */
+        <div
+          {...tabPanelProps("hire-source", source)}
+          className="flex flex-col gap-[10px] pb-8"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-[10px]">
+            <SegmentedTabs
+              label="员工与群组"
+              // A click is a step Back can return to; arrowing across the two is not.
+              onValueChange={(next, change) =>
+                void patch(
+                  { tab: next === "groups" ? "groups" : undefined },
+                  change.keyboard,
+                )
+              }
+              panelId="wakers-wall"
+              tabs={[
+                // A count only once its read answered: 「0」 beside a pending roster would be a guess.
+                {
+                  value: "coworkers",
+                  label: "员工",
+                  count: agents.data ? roster.length : undefined,
+                },
+                {
+                  value: "groups",
+                  label: "群组",
+                  count: groups.data ? groups.data.length : undefined,
+                },
+              ]}
+              value={tab}
+            />
+            {/* An unread roster has no count: 「0 名员工」 beside a skeleton or an error would be a wrong answer. */}
+            {tab === "coworkers" && agents.data ? (
+              <span className={COUNT_BADGE} data-testid="waker-count">
+                {narrowed
+                  ? `${visible} / ${roster.length} 名员工`
+                  : `${roster.length} 名员工`}
+              </span>
+            ) : null}
+            {tab === "groups" && groups.data ? (
+              <span className={COUNT_BADGE}>{groups.data.length} 个群组</span>
+            ) : null}
+          </div>
+
+          <div
+            {...tabPanelProps("wakers-wall", tab)}
+            className="flex flex-col gap-[13px]"
+          >
+            {tab === "coworkers" ? (
+              <>
+                <div className="flex flex-wrap items-center gap-[6px]">
+                  <SearchBox
+                    className="w-[221px] max-w-full"
+                    label="搜索名称或角色"
+                    onValueChange={(next) => {
+                      setQuery(next);
+                      void patch({ q: next || undefined });
+                    }}
+                    placeholder="搜索名称或角色..."
+                    value={query}
+                  />
+                  <LabeledSelect
+                    className={FILTER}
+                    label="运行状态"
+                    onValueChange={(next) =>
+                      void patch({ status: next === "all" ? undefined : next })
+                    }
+                    options={[
+                      // The total is the badge above; each state carries its own.
+                      { value: "all", label: "全部" },
+                      ...STATUS_ORDER.map((key) => ({
+                        value: key,
+                        label: `${STATUS_WORD[key]} (${counts[key]})`,
+                      })),
+                    ]}
+                    value={search.status ?? "all"}
+                  />
+                  <LabeledSelect
+                    className={FILTER}
+                    label="角色"
+                    onValueChange={(next) =>
+                      void patch({ role: next === "\u0000" ? undefined : next })
+                    }
+                    options={[
+                      // A role can be any text, so "all" is a value no title can be.
+                      { value: "\u0000", label: "全部角色" },
+                      ...(search.role && !roles.includes(search.role)
+                        ? [search.role]
+                        : []
+                      )
+                        .concat(roles)
+                        .map((role) => ({ value: role, label: role })),
+                    ]}
+                    value={search.role ?? "\u0000"}
+                  />
+                  <LabeledSelect
+                    className={FILTER}
+                    label="环境"
+                    onValueChange={(next) =>
+                      void patch({ env: next === "all" ? undefined : next })
+                    }
+                    options={ENV_OPTIONS}
+                    value={search.env ?? "all"}
+                  />
+                  <LabeledSelect
+                    className={FILTER}
+                    label="排序"
+                    onValueChange={(next) =>
+                      void patch({
+                        sort: next === "default" ? undefined : next,
+                      })
+                    }
+                    options={SORT_OPTIONS}
+                    value={search.sort ?? "default"}
+                  />
+                  {narrowed ? (
+                    <Button
+                      className="h-[32px]"
+                      onClick={clearFilters}
+                      variant="ghost"
+                    >
+                      清除筛选
+                    </Button>
+                  ) : null}
+                  {/* 卡片（熊宝的员工墙）或列表（上游的名单行），同一份名单两种画法。 */}
+                  <SegmentedTabs
+                    className="ml-auto"
+                    label="显示方式"
+                    onValueChange={(next, change) =>
+                      void patch(
+                        { view: next === "list" ? "list" : undefined },
+                        change.keyboard,
+                      )
+                    }
+                    size="sm"
+                    tabs={[
+                      { value: "cards", label: "卡片" },
+                      { value: "list", label: "列表" },
+                    ]}
+                    value={search.view === "list" ? "list" : "cards"}
+                  />
+                </div>
+
+                {running.isError ? (
+                  /*
+                   * Said once, above everything, as well as on each card: without this line the cards
+                   * below would read "nothing running" as fact when the board could not be read at all.
+                   */
+                  <p className="text-destructive text-sm" role="alert">
+                    看板读不到，所以下面显示的状态无法确认。
+                  </p>
+                ) : null}
+                {attention.isError ? (
+                  <p className="text-destructive text-sm" role="alert">
+                    暂停状态读不到，所以下面的员工是否被暂停无法确认。
+                  </p>
+                ) : null}
+                {month.isError && !month.data ? (
+                  /*
+                   * A side read: the roster is still right without it, so it is a status line with a
+                   * way to ask again rather than an alert, and the cards say "—" instead of a zero never
+                   * seen.
+                   */
+                  <p
+                    className="flex items-center gap-2 text-muted-foreground text-sm"
+                    role="status"
+                  >
+                    任务数和最近运行读不到（{month.error.message}
+                    ），卡片上暂时显示为 —。
+                    <Button
+                      disabled={month.isFetching}
+                      onClick={() => void month.refetch()}
+                      size="xs"
+                      variant="outline"
+                    >
+                      重新读取
+                    </Button>
+                  </p>
+                ) : null}
+
+                <div>
+                  <BotRoster
+                    onClearFilters={clearFilters}
+                    query={query}
+                    search={search}
+                  />
+                  {personal ? <WhatYourBotsKnow /> : null}
+                </div>
+              </>
+            ) : groups.isError && !groups.data ? (
+              <QueryError
+                error={groups.error}
+                label="读不到群组"
+                onRetry={() => void groups.refetch()}
+                retrying={groups.isFetching}
+              />
+            ) : (
+              <CrewTab
+                crews={groups.data ?? []}
+                loading={groups.isPending}
+                onCreate={() => setCreatingCrew(true)}
+                queryClient={queryClient}
+                roster={(agents.data ?? []).filter((agent) => !agent.hidden)}
+                rosterLoading={agents.isPending}
+              />
+            )}
+          </div>
+        </div>
+      )}
       <CreateCrewDialog
         onOpenChange={setCreatingCrew}
         open={creatingCrew}

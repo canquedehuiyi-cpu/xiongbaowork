@@ -285,6 +285,39 @@ describe("what a channel is waiting on", () => {
   });
 });
 
+describe("who spoke last in a group", () => {
+  test("the roster names an external employee another member hired, and only then", async () => {
+    const since = new Date("2026-11-15T08:00:00.000Z");
+    const summary = (id: string, name?: string) => ({
+      ...channel({ id, agentIds: ["ext-codex", "a1"] }),
+      summary: null,
+      opening: null,
+      lastMessage: "修好了",
+      lastMessageAgentId: "ext-codex",
+      ...(name ? { lastMessageAgentName: name } : {}),
+      createdAt: since,
+      pinned: false,
+      lastReadAt: null,
+      canRename: false,
+      task: false,
+    });
+    const store = fakeStore({
+      list: async () => ({
+        channels: [summary("named", "代码熊"), summary("own")],
+        nextCursor: null,
+      }),
+      workIn: async () => new Map(),
+    });
+
+    const response = await appFor(store).request("http://openbot.test/");
+    const body = (await response.json()) as {
+      channels: Array<{ id: string; lastMessageAgentName?: string }>;
+    };
+    expect(body.channels[0]?.lastMessageAgentName).toBe("代码熊");
+    expect(body.channels[1]).not.toHaveProperty("lastMessageAgentName");
+  });
+});
+
 describe("channel list limit", () => {
   /**
    * `?limit=` used to be read with `Number.parseInt`, which coerces: `"12abc"` arrived as 12

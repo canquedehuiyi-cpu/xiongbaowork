@@ -3,8 +3,10 @@ import type { ReactNode } from "react";
 import { BotLookProvider } from "../components/agents/bot-look";
 import { QuotaGuidanceDialog } from "../components/quota/quota-guidance-dialog";
 import { currentUserQueryOptions, needsOnboarding } from "../lib/auth/queries";
+import { safeReturnPath } from "../lib/auth/return-to";
 import { CopilotProvider } from "../lib/copilot/provider";
 import { AppHotkeys } from "../lib/hotkeys/app-hotkeys";
+import { BrowserTimeZoneSync } from "../lib/settings/work-hours";
 import { rememberShareImport, takeShareImport } from "../lib/wakerflows";
 import { SkinAccountSync } from "../skins/account-sync";
 import { useActiveSkin } from "../skins/registry";
@@ -17,7 +19,12 @@ export const Route = createFileRoute("/_authed")({
     if (!user) {
       // WF9 (D9): a WakerFlow share link opened signed out is come back to after signing in.
       rememberShareImport(location.pathname);
-      throw redirect({ to: "/sign" });
+      // 登录完回到这一页（一张卡、清点页……），不落到首页；只带本站的相对路径（`safeReturnPath`）。
+      const back = safeReturnPath(location.href);
+      throw redirect({
+        to: "/sign",
+        ...(back ? { search: { redirect: back } } : {}),
+      });
     }
     /*
      * Somebody who has not finished onboarding goes there and nowhere else. Here rather than in
@@ -43,6 +50,8 @@ export const Route = createFileRoute("/_authed")({
       <AppHotkeys />
       {/* The skin saved on the account, drawn over the browser's cached one once it loads. */}
       <SkinAccountSync />
+      {/* 第一次登录时把浏览器的时区记成作息时区（服务器存过的不改），交付闭环的推送和清点按它走。 */}
+      <BrowserTimeZoneSync />
       {/*
        * 上游这里还挂了 TeamFeaturesDialog（个人版「OpenBot for Business」入口打开的销售弹窗），
        * 属于有意不收的销售入口，不挂。

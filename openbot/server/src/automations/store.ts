@@ -34,6 +34,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { z } from "zod";
+import { ExternalEmployeeWorkRefusedError } from "../agents/acp/external";
 import type { Database } from "../db/client";
 import {
   agents,
@@ -413,7 +414,7 @@ export function createAutomationStore(
   async function verifyTarget(target: AutomationTarget, tenant: string) {
     if (target.kind === "waker") {
       const [agent] = await database
-        .select({ id: agents.id, tenantId: agents.tenantId })
+        .select({ id: agents.id, tenantId: agents.tenantId, type: agents.type })
         .from(agents)
         .where(eq(agents.id, target.agentId))
         .limit(1);
@@ -425,6 +426,10 @@ export function createAutomationStore(
       ) {
         throw new AutomationRefusedError(WAKER_NOT_VISIBLE);
       }
+      // An external employee takes no unattended work yet: nobody would be there to answer its
+      // permission requests when the trigger fires (外部员工 spec, 「不做」; agents/acp/external.ts).
+      if (agent.type === "device_acp")
+        throw new ExternalEmployeeWorkRefusedError();
       return;
     }
     const executor = executors.get("wakerflow");

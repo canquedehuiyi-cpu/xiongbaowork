@@ -1,5 +1,6 @@
 import type { LinkProps } from "@tanstack/react-router";
 import { rememberForSession } from "@/lib/session-memory";
+import type { AcpHarness } from "../../../../shared/acp";
 
 /**
  * The address of the 员工 page (`/bots`; 熊宝的员工管理 `/wakers` 重定向到这里，M5b): which tab, and how
@@ -28,7 +29,18 @@ export type WakerSort = "name" | "recent" | "tasks";
 /** 员工怎么画：卡片（默认，熊宝的员工墙）或列表（上游的员工名单行）。 */
 export type WakerView = "list";
 
+/**
+ * 「招一位新同事」从哪里招（外部员工 Task 10）：人才市场（默认，不写进地址）、从我的电脑招、云端（下一步）。
+ */
+export type HireSource = "market" | "computer" | "cloud";
+
 export type WakersSearch = {
+  /** 顶部「人才市场 / 从我的电脑招 / 云端（下一步）」；没有就是人才市场。 */
+  source?: Exclude<HireSource, "market">;
+  /** 从我的电脑招：选的是哪台电脑（`deviceId`）。 */
+  device?: string;
+  /** 从我的电脑招：在招聘设置里招哪一家；配 `device` 一起用。 */
+  hire?: AcpHarness;
   tab?: "groups";
   q?: string;
   status?: WakerStatus;
@@ -54,6 +66,13 @@ const STATUSES: readonly WakerStatus[] = [
 ];
 const ENVS: readonly WakerEnv[] = ["device", "unbound"];
 const SORTS: readonly WakerSort[] = ["name", "recent", "tasks"];
+const SOURCES: readonly Exclude<HireSource, "market">[] = ["computer", "cloud"];
+const HARNESSES: readonly AcpHarness[] = [
+  "codex",
+  "claude-code",
+  "hermes",
+  "custom",
+];
 
 const oneOf = <T extends string>(
   value: unknown,
@@ -71,7 +90,12 @@ const text = (value: unknown): string | undefined => {
 
 /** Only the keys that carry a choice, so the default address stays `/bots` with nothing after it. */
 export function parseWakersSearch(raw: Record<string, unknown>): WakersSearch {
+  const source = oneOf(raw.source, SOURCES);
   const next: WakersSearch = {
+    source,
+    // 电脑和招聘设置只属于「从我的电脑招」。
+    device: source === "computer" ? text(raw.device) : undefined,
+    hire: source === "computer" ? oneOf(raw.hire, HARNESSES) : undefined,
     tab: raw.tab === "groups" ? "groups" : undefined,
     q: text(raw.q),
     status: oneOf(raw.status, STATUSES),
@@ -123,8 +147,13 @@ rememberForSession(() => {
 });
 
 export function rememberWakersSearch(search: WakersSearch): void {
-  // A dialog open at the time is not part of the wall the back link should return to.
-  lastWakersSearch = wallSearch(search);
+  /*
+   * A dialog open at the time is not part of the wall the back link should return to, and neither is
+   * a hire form (外部员工 Task 10): after hiring, deleting or hiding an employee, going back must not
+   * land on 「把 X 招进来」 again, one click from hiring it twice.
+   */
+  const { hire: _hire, ...wall } = wallSearch(search);
+  lastWakersSearch = wall;
 }
 
 export function wakersReturnSearch(): WakersSearch {

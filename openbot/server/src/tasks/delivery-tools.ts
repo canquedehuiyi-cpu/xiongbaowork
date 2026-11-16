@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { z } from "zod";
 import { currentApprovalContext } from "../approvals/types";
@@ -8,6 +9,7 @@ import { type GrantedTool, REFUSAL_MARKER } from "../plugins/tools";
 import { TenantContextError } from "../tenant/context";
 import { emitRunEvent } from "../threads/run-side-events";
 import type { Delivery } from "./delivery";
+import { DELIVERY_EVENTS } from "./delivery-events";
 import { dueRefusalText, readDueTime } from "./due-time";
 import { DELIVERY_ITEM_KINDS, type EvidenceGate } from "./evidence-gate";
 import type { TaskProjector, TriggerSource } from "./projector";
@@ -53,15 +55,8 @@ const PLAIN_QUESTIONS = "问一句答一句的普通对话不要用这三个工�
 export const EXTERNAL_DELIVERY_GUIDE =
   "你没有接活、交付、延期的工具，服务器按你的回复替你走这三步：接下时在回复里写「预计 HH:MM」或「预计 N 分钟」报预计时间（换成真实的钟点或时长）；做完的改动会自动当作交付物，没有改动的就写一句「结论：」开头的交付结论，都用「自查：」开头的一句写你怎么查过的；交不了就写缺什么，并写「延到 HH:MM」说要延到几点。";
 
-/** The card-drawing events the chat renders (Task 9). */
-export const DELIVERY_EVENTS = {
-  accepted: "delivery.accepted",
-  extensionRequested: "delivery.extension_requested",
-  delivered: "delivery.delivered",
-  bounced: "delivery.bounced",
-  /** The person's answer to a 延期申请, so the chat's card can say it was granted or not. */
-  extensionDecided: "delivery.extension_decided",
-} as const;
+/** The card-drawing events the chat renders (Task 9); named in a leaf module both sides read. */
+export { DELIVERY_EVENTS };
 
 /**
  * Said, in its instructions, to a turn that is a round of a card the person asked to follow and the
@@ -286,7 +281,10 @@ export function deliveryTools(options: {
             return `${REFUSAL_MARKER} 没能另开一件活：${error instanceof Error ? error.message : String(error)}`;
           }
         }
+        // The 接下 line's id, named here so the chat's 接活回执 finds that line by it (not by its due time).
+        const acceptedLine = randomUUID();
         const accepted = await delivery.accept(tenantId, taskId, {
+          eventId: acceptedLine,
           runId: run.runId,
           threadRef: run.threadId,
           actor,
@@ -300,6 +298,7 @@ export function deliveryTools(options: {
         roundOnCard(run.runId, tenantId, taskId);
         said(run.runId, DELIVERY_EVENTS.accepted, {
           taskId,
+          eventId: acceptedLine,
           dueAt: accepted.dueAt?.toISOString() ?? null,
           criteria: accepted.criteria,
         });
@@ -348,7 +347,9 @@ export function deliveryTools(options: {
           criteria: card.criteria,
         });
         if (!verdict.ok) {
+          const bouncedLine = randomUUID();
           await delivery.bounced(tenantId, card.id, {
+            eventId: bouncedLine,
             runId: run.runId,
             actor,
             reason: verdict.reason,
@@ -356,6 +357,7 @@ export function deliveryTools(options: {
           });
           said(run.runId, DELIVERY_EVENTS.bounced, {
             taskId: card.id,
+            eventId: bouncedLine,
             reason: verdict.reason,
           });
           return JSON.stringify({
@@ -365,7 +367,10 @@ export function deliveryTools(options: {
             note: "没交上：卡片没动。补齐后再调用 deliver_task。",
           });
         }
+        // Each hand-in its own line id: a second, identical hand-in after a 退回 is its own card.
+        const deliveredLine = randomUUID();
         const merged = await delivery.delivered(tenantId, card.id, {
+          eventId: deliveredLine,
           runId: run.runId,
           agentId,
           actor,
@@ -375,6 +380,7 @@ export function deliveryTools(options: {
           return `${REFUSAL_MARKER} 这件活现在交不了：它已经结束、还在等对方处理，或已经换给别的员工。`;
         said(run.runId, DELIVERY_EVENTS.delivered, {
           taskId: card.id,
+          eventId: deliveredLine,
           deliverable: verdict.ref,
         });
         return JSON.stringify({
@@ -399,7 +405,9 @@ export function deliveryTools(options: {
         if (due.at === null)
           return `${REFUSAL_MARKER} 「${value.due_at}」不能用来申请延期（${dueRefusalText(due.why)}）：换成「1 小时」「17:30」「明早 10 点」这样、30 天以内的时间再申请。`;
         const dueAt = due.at;
+        const askedLine = randomUUID();
         const asked = await delivery.requestExtension(tenantId, card.id, {
+          eventId: askedLine,
           dueAt,
           reason: value.reason,
           runId: run.runId,
@@ -408,6 +416,7 @@ export function deliveryTools(options: {
         if (!asked) return `${REFUSAL_MARKER} 这件活已经结束，不用申请延期。`;
         said(run.runId, DELIVERY_EVENTS.extensionRequested, {
           taskId: card.id,
+          eventId: askedLine,
           dueAt: dueAt.toISOString(),
           reason: value.reason,
         });

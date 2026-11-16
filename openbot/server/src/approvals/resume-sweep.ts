@@ -254,8 +254,12 @@ export function createApprovalResumeTick(deps: {
                   // A group turn's approval also writes the resumed reply into the shared transcript.
                   outcome = await groupConversations.continueWaiting(
                     approvalId,
-                    () =>
+                    // 群聊要接着记这一轮里交付卡的状态标记（`channels/group.ts` `continueWaiting`）。
+                    (hooks) =>
                       approvalContinuationRunner({
+                        ...(hooks?.onCustom
+                          ? { onCustom: hooks.onCustom }
+                          : {}),
                         ownerUserId: input.ownerUserId,
                         routineId: "approval",
                         agentId: request.action.botId,

@@ -41,6 +41,7 @@ import {
 } from "./delivery-checker";
 import { clockOf } from "./due-time";
 import { appendTaskEvent } from "./events";
+import { isOverdueNow } from "./overdue";
 
 /**
  * 开工 / 收工清点 (spec 2026-11-15-delivery-loop §10), and the way out for what the delivery checker
@@ -317,7 +318,8 @@ export function createBriefings(deps: BriefingDeps) {
     const overdue: Briefing["overdue"] = [];
     for (const card of working) {
       const deadline = deadlineOf(card);
-      if (card.overdueAt) {
+      // Overdue now, by the one rule (`overdue.ts`): a card given more time is back in progress.
+      if (isOverdueNow(card, now)) {
         overdue.push({
           taskId: card.id,
           title: card.title,

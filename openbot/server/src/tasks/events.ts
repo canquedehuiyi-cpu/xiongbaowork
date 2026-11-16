@@ -28,9 +28,15 @@ export async function appendTaskEvent(
     kind: TaskEventKind;
     actor: TaskEventActor;
     detail?: Record<string, unknown>;
+    /**
+     * The line's id, when the caller names it beforehand: the chat's card for this line carries the
+     * same id (`delivery.*` events, spec §4), so the card finds its line by it and not by content.
+     */
+    id?: string;
   },
 ): Promise<void> {
   await database.insert(taskEvents).values({
+    ...(input.id ? { id: input.id } : {}),
     tenantId: input.tenantId,
     taskId: input.taskId,
     kind: input.kind,

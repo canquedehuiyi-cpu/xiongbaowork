@@ -37,8 +37,13 @@ function AccessPage() {
           {personal ? (
             <>
               <BotApprovalRules agentId={agent.id} />
-              <BotResponsibilities agentId={agent.id} />
-              <ProactiveResearchSettings agentId={agent.id} />
+              {/* 外部员工这一步不接长期职责和主动巡检（外部员工规格「不做」）。 */}
+              {agent.external ? null : (
+                <>
+                  <BotResponsibilities agentId={agent.id} />
+                  <ProactiveResearchSettings agentId={agent.id} />
+                </>
+              )}
             </>
           ) : null}
         </>

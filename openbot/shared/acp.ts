@@ -30,6 +30,33 @@ export const ACP_RULE_DEFAULTS: Record<AcpRuleKey, AcpRuleValue> = {
   push: "ask",
 };
 
+/**
+ * An employee's saved rules (`agents.configuration.permissions`), as the permission bridge and every
+ * screen read them: the default where a rule is missing, "ask" where a value is one that rule cannot
+ * take. One reading, so what a screen shows is what the bridge applies.
+ */
+export function acpRulesFrom(
+  configuration: unknown,
+): Record<AcpRuleKey, AcpRuleValue> {
+  const object = (value: unknown): Record<string, unknown> | undefined =>
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  const saved = object(object(configuration)?.permissions) ?? {};
+  const rules = { ...ACP_RULE_DEFAULTS };
+  for (const key of Object.keys(ACP_RULE_DEFAULTS) as AcpRuleKey[]) {
+    if (!(key in saved)) continue;
+    const value = saved[key];
+    rules[key] =
+      value === "direct" ||
+      value === "ask" ||
+      (value === "dangerous" && key === "runCommand")
+        ? value
+        : "ask";
+  }
+  return rules;
+}
+
 /*
  * The `acp.*` frames on the runner socket. They belong to the tenant and device the socket was
  * authenticated as, like the live screen's; nothing in a frame can change that. Paths and commands

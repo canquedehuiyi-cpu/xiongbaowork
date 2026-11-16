@@ -56,18 +56,20 @@ import { workItems } from "../db/schema/work";
 import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import { type Delivery, firstSentenceOf } from "../tasks/delivery";
+import { DELIVERY_EVENTS } from "../tasks/delivery-events";
 import type { TaskProjector } from "../tasks/projector";
 import {
   currentTenant,
   runAsClaimedTenant,
   runAsTenant,
 } from "../tenant/context";
-import { roundHungByEntry } from "../threads/unattended-card";
 import {
   COMPACTION_DONE_EVENT,
   COMPACTION_FAILED_EVENT,
 } from "../threads/compaction";
+import { roundHungByEntry } from "../threads/unattended-card";
 import type { WorkQueue } from "../work/queue";
+import type { ChannelActivityEvent } from "./events";
 import {
   GROUP_PERSON_SPEAKER,
   GROUP_TRANSCRIPT_HEADER,
@@ -92,6 +94,8 @@ export type GroupBot = {
    * person's, whoever in the group asked (spec §6).
    */
   hiredBy?: string;
+  /** An external employee's agent (Codex, Claude Code…), for its mark: every member may read it. */
+  harness?: "codex" | "claude-code" | "hermes" | "custom";
 };
 
 /**
@@ -406,10 +410,13 @@ async function writeOrder(
  * (0128), stamped with them.
  */
 const SHARED_DETAILS: ReadonlySet<string> = new Set([
+  "acpPermission",
+  "shareWait",
   "agentIds",
   "answeredBy",
   "compaction",
   "consent",
+  "delivery",
   "message",
   "via",
 ]);
@@ -430,6 +437,176 @@ function compactionNoteOf(name: string): GroupCompactionNote | null {
   if (name === COMPACTION_DONE_EVENT) return { outcome: "done" };
   if (name === COMPACTION_FAILED_EVENT) return { outcome: "failed" };
   return null;
+}
+
+/**
+ * 这一轮里员工走到了三步里的哪一步（交付闭环 Task 9：接下、申请延期、交付、被挡回），在回复行的
+ * `details.delivery` 上记一个**不带内容的状态标记**：哪一步、哪张卡、几点、哪位员工，接下和申请延期再带
+ * 预计时间。验收标准、交付物、结论、自查、延期理由、挡回原因一概不进群回复：卡片按租户隔离（规格第 6 节
+ * 「不做跨租户可见」），完整内容只有派活的人从卡片接口和流水读（`GET /api/tasks/:id`、`/events`）；群里
+ * 其他人只读到一行状态。
+ *
+ * 标记不带内容，所以不受分享检查约束：直接发出、等你放行、放行或不放行、轮次中途等工具审批再恢复，每条
+ * 路径都把标记记在这一行上（回复正文照分享检查显示或隐藏）。外部员工的轮次（`detached`）不记。
+ */
+export type GroupDeliveryMark = {
+  kind: "accepted" | "extension_requested" | "delivered" | "bounced";
+  taskId: string;
+  /** 服务器收到这一步的时刻（ISO）。 */
+  at: string;
+  agentId: string;
+  /** 接下时报的、申请延期要延到的预计时间（ISO）；没有就不带。 */
+  dueAt?: string;
+  /**
+   * 卡片流水里这一步那一行的 id（`delivery.*` 事件带的 `eventId`）：派活人按它把标记对回流水，不按时间、
+   * 不按内容猜。只是一个号码，群里别人拿着它也读不到卡片（流水按租户隔离）。老事件没有就不带。
+   */
+  eventId?: string;
+};
+
+const MARK_KINDS: Readonly<Record<string, GroupDeliveryMark["kind"]>> = {
+  [DELIVERY_EVENTS.accepted]: "accepted",
+  [DELIVERY_EVENTS.extensionRequested]: "extension_requested",
+  [DELIVERY_EVENTS.delivered]: "delivered",
+  [DELIVERY_EVENTS.bounced]: "bounced",
+};
+
+const isTime = (value: unknown): value is string =>
+  typeof value === "string" && !Number.isNaN(Date.parse(value));
+
+/** 流水行的 id：一个 uuid，别的不收。 */
+const isEventId = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+/** 一条员工流里的卡片事件，换成只记状态的标记；不是交付卡事件为 null。 */
+export function deliveryMarkOf(
+  name: string,
+  value: unknown,
+  agentId: string,
+  at: Date,
+): GroupDeliveryMark | null {
+  const kind = MARK_KINDS[name];
+  if (!kind || !value || typeof value !== "object" || Array.isArray(value))
+    return null;
+  const { taskId, dueAt, eventId } = value as {
+    taskId?: unknown;
+    dueAt?: unknown;
+    eventId?: unknown;
+  };
+  if (typeof taskId !== "string" || !taskId) return null;
+  const timed = kind === "accepted" || kind === "extension_requested";
+  return {
+    kind,
+    taskId,
+    at: at.toISOString(),
+    agentId,
+    ...(timed && isTime(dueAt) ? { dueAt } : {}),
+    ...(isEventId(eventId) ? { eventId } : {}),
+  };
+}
+
+const MARK_KEYS: ReadonlySet<string> = new Set([
+  "kind",
+  "taskId",
+  "at",
+  "agentId",
+  "dueAt",
+  "eventId",
+]);
+
+/** 行上记着的标记；只认形状完全对的，多出任何字段的整条不要。 */
+function marksOf(details: Record<string, unknown>): GroupDeliveryMark[] {
+  const value = details.delivery;
+  if (!Array.isArray(value)) return [];
+  return value.filter((mark): mark is GroupDeliveryMark => {
+    if (!mark || typeof mark !== "object") return false;
+    const record = mark as Record<string, unknown>;
+    return (
+      Object.keys(record).every((key) => MARK_KEYS.has(key)) &&
+      Object.values(MARK_KINDS).includes(record.kind as never) &&
+      typeof record.taskId === "string" &&
+      isTime(record.at) &&
+      typeof record.agentId === "string" &&
+      (record.dueAt === undefined || isTime(record.dueAt)) &&
+      (record.eventId === undefined || isEventId(record.eventId))
+    );
+  });
+}
+
+const withMarks = (marks: readonly GroupDeliveryMark[]) =>
+  marks.length > 0 ? { delivery: [...marks] } : {};
+
+/**
+ * 外部员工在群里请求许可时，群转录里那一行（外部员工 Task 12）：只说谁在等谁确认、结果如何。命令、路径、
+ * 改动的文件、命中的规则、审批 id 一律不放：许可只有招聘人批（spec §6），内容在他自己的审批里，群里其他
+ * 人只该知道「在等」。
+ */
+export type GroupAcpPermission = {
+  kind: "acp.permission";
+  agentId: string;
+  hirerUserId: string;
+  hirerName: string;
+  status: "waiting" | "approved" | "denied" | "expired";
+};
+
+const ACP_PERMISSION_STATUSES = new Set<GroupAcpPermission["status"]>([
+  "waiting",
+  "approved",
+  "denied",
+  "expired",
+]);
+
+/** 读回来时只认这几个键，别的（万一写进了什么）一律不交出去。 */
+export function groupAcpPermissionOf(
+  value: unknown,
+): GroupAcpPermission | null {
+  if (!value || typeof value !== "object") return null;
+  const line = value as Record<string, unknown>;
+  if (
+    line.kind !== "acp.permission" ||
+    typeof line.agentId !== "string" ||
+    typeof line.hirerUserId !== "string" ||
+    typeof line.hirerName !== "string" ||
+    !ACP_PERMISSION_STATUSES.has(line.status as GroupAcpPermission["status"])
+  )
+    return null;
+  return {
+    kind: "acp.permission",
+    agentId: line.agentId,
+    hirerUserId: line.hirerUserId,
+    hirerName: line.hirerName,
+    status: line.status as GroupAcpPermission["status"],
+  };
+}
+
+/**
+ * 那一行的 id：由审批 id 派生、但看不出审批 id（行 id 每个成员都读得到，审批 id 是把一次决定接回那一轮的
+ * 钥匙，只属于招聘人）。
+ */
+export function groupAcpPermissionRowId(approvalId: string): string {
+  return `acp-permission:${createHash("sha256")
+    .update(approvalId)
+    .digest("hex")
+    .slice(0, 32)}`;
+}
+
+/**
+ * 「群的转录变了，重读一下」：不带任何内容（没有预览、没有说话人），前端只拿它去重读这个群
+ * （`groupTranscript`，app 的 `use-channel-events.ts`）。
+ */
+export function groupTranscriptEvent(
+  channelId: string,
+  memberIds: string[],
+): ChannelActivityEvent {
+  return {
+    channelId,
+    memberIds,
+    lastMessage: null,
+    lastMessageAt: null,
+    lastMessageAgentId: null,
+    groupTranscript: true,
+  };
 }
 
 function splitDetails(details: Record<string, unknown>) {
@@ -772,7 +949,9 @@ export function createGroupStore(
           })
           .onConflictDoNothing()
           .returning({ id: groupMessages.id });
-        if (created.length > 0 && waiting)
+        // A waiting line's text and details, or a finished line's private part (a status line's
+        // approval id): its sender's alone.
+        if (created.length > 0 && (waiting || Object.keys(held).length > 0))
           await holdBack(tx, {
             messageId: row.id,
             ownerUserId: row.ownerUserId,
@@ -1210,6 +1389,8 @@ export function createGroupConversations(deps: {
     sourceId: string,
   ) => Promise<void>;
   busy?: (turn: GroupTurn, busy: boolean) => Promise<void>;
+  /** Tell the group's members to read the transcript again (a status line changed). Content-free. */
+  announce?: (event: ChannelActivityEvent) => Promise<void>;
   /** Make the channel a group is, as the ordinary channel store does, refusing Bots they cannot see. */
   createChannel?: (
     ownerUserId: string,
@@ -1312,6 +1493,8 @@ export function createGroupConversations(deps: {
       details: {
         ...verdict.suspension.waiting,
         message: verdict.message,
+        // What it waits on, said to every member in their own words (`waitKind`): nothing else of it.
+        shareWait: true,
         // What will be shown once the owner allows it. Never listed while it waits.
         privateShare: { text: input.text, continuation },
       },
@@ -1759,6 +1942,12 @@ export function createGroupConversations(deps: {
         });
     };
     let compacted: GroupCompactionNote | null = null;
+    const marks: GroupDeliveryMark[] = [];
+    /*
+     * 外部员工的轮次（它的招聘人 `hiredBy`，或这一轮回了 `detached`）只回一句「开始了」，它的三步在设备
+     * 那一轮里走（`announceHandoff`），群回复上不记标记。挂起、出错这些拿不到 `detached` 的路径按员工认。
+     */
+    const ownMarks = () => (bot.hiredBy ? [] : marks);
     try {
       // A round hung on a followed card says so, so the runner asks whether that card still waits.
       const hungOn =
@@ -1772,8 +1961,10 @@ export function createGroupConversations(deps: {
             latest = text;
             flush();
           },
-          onCustom: ({ name }) => {
+          onCustom: ({ name, value }) => {
             compacted = compactionNoteOf(name) ?? compacted;
+            const mark = deliveryMarkOf(name, value, agentId, new Date());
+            if (mark) marks.push(mark);
           },
           ownerUserId: turn.ownerUserId,
           telemetry: {
@@ -1831,10 +2022,12 @@ export function createGroupConversations(deps: {
             runId,
             text: result.replyText,
           });
+      const shownMarks = detached ? [] : ownMarks();
       if (gate.status === "pending") {
         await deps.store.finish(id, "", "waiting", {
           ...gate.details,
           ...chainOf(turn),
+          ...withMarks(shownMarks),
         });
         /*
          * The card stays where the gate left it, and it is not this call's business to move it.
@@ -1846,9 +2039,10 @@ export function createGroupConversations(deps: {
          */
         return;
       }
-      const compaction: Record<string, unknown> = compacted
-        ? { compaction: compacted }
-        : {};
+      const compaction: Record<string, unknown> = {
+        ...(compacted ? { compaction: compacted } : {}),
+        ...withMarks(shownMarks),
+      };
       if (gate.status === "denied") {
         await deps.store.finish(id, gate.message, "failed", compaction);
         await closeCard(cardTurn, agentId, runId, true, round(gate.message));
@@ -1922,6 +2116,8 @@ export function createGroupConversations(deps: {
           ...error.waiting,
           message: error.message,
           ...chainOf(turn),
+          // 等工具审批前已经走过的步骤：恢复后接着记（`continueWaiting`）。
+          ...withMarks(ownMarks()),
         });
         /*
          * Two different waits, and the board tells them apart.
@@ -1942,7 +2138,7 @@ export function createGroupConversations(deps: {
           await closeCard(cardTurn, agentId, runId, false, round());
       } else {
         const message = error instanceof Error ? error.message : String(error);
-        await deps.store.finish(id, message, "failed");
+        await deps.store.finish(id, message, "failed", withMarks(ownMarks()));
         await closeCard(cardTurn, agentId, runId, true, round(message));
       }
     }
@@ -2232,11 +2428,16 @@ export function createGroupConversations(deps: {
      */
     async continueWaiting(
       approvalId: string,
-      run: () => Promise<{ replyText: string }>,
+      run: (hooks?: {
+        /** 恢复后这一轮流里的自定义事件：交付卡的标记从这里接着记。 */
+        onCustom?: (event: { name: string; value: unknown }) => void;
+      }) => Promise<{ replyText: string }>,
     ): Promise<{ replyText: string }> {
       const row = await deps.store.waitingFor(approvalId);
       if (!row?.agentId) return run();
       const agentId = row.agentId;
+      // 等待前已经记下的标记；这一行之后每次重写都带上（标记不带内容，放行与否都显示）。
+      const earlier = marksOf(row.details);
       const held = row.details.privateShare as
         | { text?: unknown; continuation?: ApprovalContinuation }
         | undefined;
@@ -2254,7 +2455,12 @@ export function createGroupConversations(deps: {
         });
         if (gate.status === "pending") return { replyText: "" };
         if (gate.status === "denied") {
-          await deps.store.finish(row.id, gate.message, "failed");
+          await deps.store.finish(
+            row.id,
+            gate.message,
+            "failed",
+            withMarks(earlier),
+          );
           await closeCard(
             { ownerUserId: row.ownerUserId, channelId: row.channelId },
             agentId,
@@ -2288,8 +2494,15 @@ export function createGroupConversations(deps: {
           await relay(shown, bot, row.id, held.text, bots, runIdFor(row.id));
         return { replyText: held.text };
       }
+      const resumedMarks: GroupDeliveryMark[] = [];
+      const allMarks = () => withMarks([...earlier, ...resumedMarks]);
       try {
-        const outcome = await run();
+        const outcome = await run({
+          onCustom: ({ name, value }) => {
+            const mark = deliveryMarkOf(name, value, agentId, new Date());
+            if (mark) resumedMarks.push(mark);
+          },
+        });
         /*
          * The resumed reply is a reply like any other: with other people in the group, it waits on
          * the owner's permission before they read it, exactly as `runBot` holds one. Its words come
@@ -2309,11 +2522,12 @@ export function createGroupConversations(deps: {
           await deps.store.finish(row.id, "", "waiting", {
             ...gate.details,
             ...chainFrom(row.details),
+            ...allMarks(),
           });
           return { replyText: "" };
         }
         if (gate.status === "denied") {
-          await deps.store.finish(row.id, gate.message, "failed");
+          await deps.store.finish(row.id, gate.message, "failed", allMarks());
           await closeCard(
             { ownerUserId: row.ownerUserId, channelId: row.channelId },
             agentId,
@@ -2322,7 +2536,12 @@ export function createGroupConversations(deps: {
           );
           return { replyText: "" };
         }
-        await deps.store.finish(row.id, outcome.replyText, "completed");
+        await deps.store.finish(
+          row.id,
+          outcome.replyText,
+          "completed",
+          allMarks(),
+        );
         await closeCard(
           { ownerUserId: row.ownerUserId, channelId: row.channelId },
           agentId,
@@ -2361,6 +2580,7 @@ export function createGroupConversations(deps: {
             ...error.waiting,
             message: error.message,
             ...chainFrom(row.details),
+            ...allMarks(),
           });
         // Suspended again: the new ask parked the card, and it stays there until that is answered.
         else {
@@ -2368,6 +2588,7 @@ export function createGroupConversations(deps: {
             row.id,
             error instanceof Error ? error.message : String(error),
             "failed",
+            allMarks(),
           );
           await closeCard(
             { ownerUserId: row.ownerUserId, channelId: row.channelId },
@@ -2402,6 +2623,94 @@ export function createGroupConversations(deps: {
         }),
       );
     },
+    /**
+     * 外部员工在群里请求许可（外部员工 Task 12）：许可桥给群线程里的一轮开审批时写一行「在等 <招聘人> 确认」，
+     * 审批有了结果时改成 approved / denied / expired。只有状态，没有内容，所以和分享检查无关（同交付闭环
+     * 第 9 项的做法）；写在招聘人的租户里、记成招聘人的行，和它在群里的回答一样（`announceHandoff`）。
+     * 不是群线程、或线程不是这位员工的：什么都不写，答 false。
+     */
+    async acpPermission(input: {
+      threadId: string;
+      agentId: string;
+      hirerUserId: string;
+      approvalId: string;
+      status: GroupAcpPermission["status"];
+    }): Promise<boolean> {
+      const thread = await deps.store.threadRow(input.threadId);
+      if (!thread || thread.agentId !== input.agentId) return false;
+      const { channelId } = thread;
+      return runAsTenant(input.hirerUserId, async () => {
+        // 群里别处怎么称呼人，这里就怎么称呼：名字，没有名字时邮箱（group-chat 的 `people`）。
+        const hirer = (await deps.store.people(channelId)).find(
+          (person) => person.userId === input.hirerUserId,
+        );
+        const id = groupAcpPermissionRowId(input.approvalId);
+        const row = (status: GroupAcpPermission["status"], name: string) => ({
+          id,
+          ownerUserId: input.hirerUserId,
+          channelId,
+          agentId: input.agentId,
+          threadId: input.threadId,
+          text: "",
+          status: "completed" as const,
+          details: {
+            acpPermission: {
+              kind: "acp.permission",
+              agentId: input.agentId,
+              hirerUserId: input.hirerUserId,
+              hirerName: name,
+              status,
+            } satisfies GroupAcpPermission,
+          } as Record<string, unknown>,
+        });
+        let written: boolean;
+        if (input.status === "waiting") {
+          // 招聘人不在这个群里了：没人能在这里确认，不写。
+          if (!hirer) return false;
+          const waiting = row("waiting", hirer.name ?? hirer.email);
+          written = await deps.store.append({
+            ...waiting,
+            /*
+             * 审批 id 只给招聘人本人：放在这一行的私有部分（`group_message_private`，只有行主人读得到），
+             * 「去确认」和他群里的卡靠它落到那一条。成员读到的这一行里没有它。
+             */
+            details: { ...waiting.details, acpApprovalId: input.approvalId },
+          });
+        } else {
+          // 招聘人后来离开了群：结果照样写，名字沿用这一行原来的。
+          const name =
+            (hirer ? (hirer.name ?? hirer.email) : null) ??
+            groupAcpPermissionOf(
+              (await deps.store.list(channelId)).find(
+                (message) => message.id === id,
+              )?.details.acpPermission,
+            )?.hirerName ??
+            "招聘人";
+          const ended = row(input.status, name);
+          try {
+            // 结束了：私有部分（审批 id）随之删掉。
+            await deps.store.finish(id, "", "completed", ended.details);
+            written = true;
+          } catch (error) {
+            if (!(error instanceof GroupNotFoundError)) throw error;
+            /*
+             * 「在等」那一行还没写成（结果比开头先到）：直接写结束的这一行。之后迟到的「在等」撞上同一个
+             * id，什么都不写。
+             */
+            written = await deps.store.append(ended);
+          }
+        }
+        // 告诉群里每个人「重读一下」：不带内容，不改会话列表的预览。
+        if (written && deps.announce)
+          await deps.announce(
+            groupTranscriptEvent(
+              channelId,
+              await deps.store.members(channelId),
+            ),
+          );
+        return written;
+      });
+    },
     async list(owner: string, channel: string) {
       const bots = await roster(owner, channel);
       const messages = await deps.store.list(channel);
@@ -2429,6 +2738,20 @@ export function createGroupConversations(deps: {
           ...(details.consent && typeof details.consent === "object"
             ? { consent: details.consent }
             : {}),
+          ...withMarks(marksOf(details)),
+          // 外部员工在等招聘人确认：每个成员读到的都只有谁在等谁、结果如何。
+          ...(groupAcpPermissionOf(details.acpPermission)
+            ? {
+                acpPermission: groupAcpPermissionOf(details.acpPermission),
+                // 还在等时，招聘人本人拿到他那条审批的 id（私有部分，只有行主人读得到）。
+                ...(message.ownerUserId === owner &&
+                groupAcpPermissionOf(details.acpPermission)?.status ===
+                  "waiting" &&
+                typeof held?.acpApprovalId === "string"
+                  ? { approvalId: held.acpApprovalId }
+                  : {}),
+              }
+            : {}),
           // 压的是发起人和这位员工的线程：只告诉他自己。
           ...(message.ownerUserId === owner &&
           message.agentId &&
@@ -2437,6 +2760,10 @@ export function createGroupConversations(deps: {
             : {}),
           ...(message.status === "waiting"
             ? {
+                // A reply held until its owner says it may reach this group (`shareGate`).
+                ...(details.shareWait === true
+                  ? { waitKind: "share" as const }
+                  : {}),
                 reason:
                   typeof details.message === "string"
                     ? details.message

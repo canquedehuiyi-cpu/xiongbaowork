@@ -8,6 +8,7 @@ import {
 import { CheckInsSection } from "@/components/settings/check-ins";
 import { NativeDevices, RecentDeliveries } from "@/components/settings/devices";
 import { UpdateRoutingSection } from "@/components/settings/update-routing";
+import { WorkHoursSection } from "@/components/settings/work-hours";
 import {
   Item,
   ItemContent,
@@ -21,16 +22,18 @@ export const Route = createFileRoute("/_authed/settings/notifications")({
 });
 
 /**
- * Whether your employees check in for you, and where their updates reach you, for all of them at
- * once (upstream main's three sections). Each employee's own page says how much. The @Waker overview
+ * Your work hours (delivery loop spec §10: when the start and end briefings go out, and outside them
+ * nothing is pushed), whether your employees check in for you, and where their updates reach you, for
+ * all of them at once (upstream main's three sections). Each employee's own page says how much. The @Waker overview
  * across every chat app and device stays in the main navigation; this page links to it.
  */
 function NotificationsPage() {
   return (
     <PageShell
-      description="选择你不在时在哪里收到员工的更新，以及员工要不要替你主动巡检。每位员工的更新频率在它自己的页面上设置。"
+      description="你的作息、你不在时在哪里收到员工的更新，以及员工要不要替你主动巡检。每位员工的更新频率在它自己的页面上设置。"
       title="通知"
     >
+      <WorkHoursSection />
       <CheckInsSection />
       <UpdateRoutingSection />
       <NativeDevices />

@@ -13,6 +13,7 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { BotOrb } from "@/components/agents/bot-orb";
 import { ConversationAllowances } from "@/components/approvals/conversation-allowances";
@@ -24,6 +25,7 @@ import {
   shownAnswer,
   useConversationQuestion,
 } from "@/components/approvals/question-notice";
+import { acpNotes } from "@/components/channels/acp-cards";
 import { ChannelWorkRows } from "@/components/channels/channel-work";
 import { attachmentModality } from "@/components/channels/chat-messages";
 import {
@@ -46,12 +48,17 @@ import { VoiceCallWidget } from "@/components/channels/voice-call-widget";
 import { HandoffResumeNotice } from "@/components/computer/handoff-resume-notice";
 import { ProjectPicker } from "@/components/projects/project-picker";
 import { StarterSuggestions } from "@/components/starter-tour/starter-suggestions";
-import { agentListQueryOptions } from "@/lib/agents/queries";
+import { takesUnattendedWork } from "@/lib/agents/external";
+import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
 import {
   answerPersonQuestionMutationOptions,
   approvalInboxOptions,
   carryingOnAfterApproval,
 } from "@/lib/approvals";
+import {
+  type AcpCardTracker,
+  createAcpCardTracker,
+} from "@/lib/channels/acp-events";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import {
   dispatchedNotice,
@@ -101,6 +108,7 @@ import { useConversationModel } from "@/lib/models/run-model";
 import { useSkillCommands } from "@/lib/plugins/skill-commands";
 import { reportIfQuotaError } from "@/lib/quota/guidance";
 import { publishedSandboxedQueryOptions } from "@/lib/sandboxed/queries";
+import { useDeliveryChatEvents } from "@/lib/tasks/use-delivery-chat-events";
 import {
   compactionOutcomeOf,
   invalidateConversationSidebar,
@@ -124,6 +132,7 @@ import { useVoiceCall } from "@/lib/voice/use-voice-call";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { queryClient } from "@/query-client";
 import { useSkinId } from "@/skins/store";
+import { deliveryNotes } from "@/skins/xiongbao/delivery-chat";
 import type { SidebarContext } from "../../../../shared/conversation-sidebar";
 import { newId } from "../../lib/new-id";
 
@@ -582,6 +591,36 @@ export function ChannelChat({
   useEffect(() => {
     if (isReady) openReadyGate.current();
   }, [isReady]);
+
+  /*
+   * 交付闭环的卡（接活回执、延期申请、交付卡、被挡回）：这一轮和回放的历史里服务器放的 `delivery.*` 事件。
+   * 在下面连上对话的 effect 之前订阅，回放才交得到它。
+   */
+  const deliveryEvents = useDeliveryChatEvents(agent, channel.threadId);
+  /*
+   * 外部员工一轮里的进度、改动和中断卡（Task 12）：从代理的事件流里记下 `acp.*` 的 CUSTOM 事件。一个代理一份，
+   * 换了对话就重新记。订阅写在加入线程的那个 effect 前面：`connect` 只把它开始时已有的订阅者交给重放。
+   */
+  const acpTrackerRef = useRef<{
+    agent: unknown;
+    tracker: AcpCardTracker;
+  } | null>(null);
+  if (acpTrackerRef.current?.agent !== agent)
+    acpTrackerRef.current = { agent, tracker: createAcpCardTracker() };
+  const acpTracker = acpTrackerRef.current.tracker;
+  useEffect(() => {
+    const subscription = agent.subscribe?.(acpTracker.subscriber);
+    return () => subscription?.unsubscribe();
+  }, [agent, acpTracker]);
+  const acpCards = useSyncExternalStore(
+    acpTracker.listen,
+    acpTracker.cards,
+    acpTracker.cards,
+  );
+  /** 已经按过「重新派」的中断卡（按卡的 `key`）。 */
+  const [acpResent, setAcpResent] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
 
   // Join the gateway socket, restore durable history, then release the first-message gate.
   useEffect(() => {
@@ -1490,12 +1529,44 @@ export function ChannelChat({
             // Remounted per conversation, so opening one puts the caret in its composer once.
             autoFocus
             threadId={channel.threadId}
+            acpApprovals
             compaction={compaction}
+            /*
+             * 跟在消息下面的卡走同一套附注：外部员工的进度、改动、中断卡在前，交付闭环的接活回执、延期申请、
+             * 交付卡、被挡回在后。
+             */
+            notes={[
+              ...acpNotes({
+                cards: acpCards,
+                resent: acpResent,
+                /*
+                 * 「重新派」：把这一轮派的原话作为新的一轮发出去（规格第 3 节）。按下就记成已派，没发出去
+                 * （它还在忙）时退回，卡上写原因。
+                 */
+                ...(channel.active
+                  ? {
+                      onResend: (card: { key: string; prompt: string }) => {
+                        setAcpResent((shown) => new Set(shown).add(card.key));
+                        return say(card.prompt).catch((error: unknown) => {
+                          setAcpResent((shown) => {
+                            const next = new Set(shown);
+                            next.delete(card.key);
+                            return next;
+                          });
+                          throw error;
+                        });
+                      },
+                    }
+                  : {}),
+              }),
+              ...deliveryNotes(deliveryEvents, botName),
+            ]}
             // The clock beside `+`: a routine for the Bot this conversation talks to, posting here.
+            // Only once the profile is read: until then nobody knows it is not an external employee.
             routine={
-              channel.active
-                ? { agentId: runtimeAgentId, channelId: channel.id }
-                : undefined
+              agentProfiles === undefined
+                ? undefined
+                : routineTarget(channel, runtimeAgentId, botProfile)
             }
             voiceCall={
               call.available
@@ -1631,7 +1702,15 @@ export function ChannelChat({
                 <HandoffResumeNotice
                   botId={runtimeAgentId}
                   agent={agent}
-                  ready={isReady && !restoring && channel.active}
+                  // An external employee hands nothing over on a computer of ours: no polling it
+                  // (on a cloud deployment that would locate, and wake, a cloud computer for it).
+                  ready={
+                    isReady &&
+                    !restoring &&
+                    channel.active &&
+                    agentProfiles !== undefined &&
+                    !botProfile?.external
+                  }
                   run={async () => {
                     setRunsInFlight((count) => count + 1);
                     try {
@@ -1843,4 +1922,19 @@ export function ChannelChat({
       </ConversationProvider>
     </CopilotChatConfigurationProvider>
   );
+}
+
+/**
+ * Where the composer's clock (「设一条定时任务」) points: a routine for the Bot this conversation talks
+ * to, posting here. None in an ended conversation, and none for an external employee, which takes no
+ * routines yet (外部员工规格「不做」: nobody would be there to answer its permission requests).
+ */
+export function routineTarget(
+  channel: Pick<AgentChannel, "id" | "active">,
+  agentId: string,
+  profile: Pick<AgentProfile, "external"> | undefined,
+): { agentId: string; channelId: string } | undefined {
+  return channel.active && takesUnattendedWork(profile ?? {})
+    ? { agentId, channelId: channel.id }
+    : undefined;
 }

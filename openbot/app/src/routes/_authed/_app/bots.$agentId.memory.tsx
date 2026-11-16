@@ -42,7 +42,10 @@ function MemoryPage() {
             里。
           </p>
           <MemorySources agentId={agent.id} />
-          <ProactiveResearchSettings agentId={agent.id} />
+          {/* 外部员工这一步不接主动巡检（外部员工规格「不做」）。 */}
+          {agent.external ? null : (
+            <ProactiveResearchSettings agentId={agent.id} />
+          )}
         </>
       )}
     </BotSubpage>

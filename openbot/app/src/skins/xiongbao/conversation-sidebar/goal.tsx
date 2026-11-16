@@ -2,10 +2,20 @@ import { IconTarget } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { InlineApproval } from "@/components/approvals/inline-approval";
-import type { SidebarGoal } from "../../../../../shared/conversation-sidebar";
+import { useScheduleZone } from "@/lib/settings/work-hours";
+import { dueText } from "@/lib/tasks/delivery";
+import { cn } from "@/lib/utils";
+import { TrackButton } from "@/skins/xiongbao/delivery-actions";
+import type {
+  SidebarGoal,
+  SidebarGoalStage,
+} from "../../../../../shared/conversation-sidebar";
 
 /**
  * 「目标」：这个对话正在做的事（最近一张任务卡）、「第 N 轮 · 上次检查：…」，有待确认时一个「去确认」。
+ * 在跟的活（交付闭环）多一条四段进度：派出 · 已接下 · 已交成果 · 你验收，按服务器给的 `stage` 着色
+ * （设计稿 6），下面一句预计几点交、退回过几次、是否逾期。不在跟、还没结束的卡给「当作一件活来跟」（规格第 1
+ * 节，你手动跟）。
  *
  * 「去确认」把对话滚到那张许可卡（`InlineApproval` 上的 `data-approval-id`）。卡不在对话里（往上翻才有、
  * 或是任务卡指着的审批没画在这段对话里）时，就按审批 id 把同一条审批的卡画在这里，在侧栏里也能直接批（原来详情
@@ -47,6 +57,118 @@ function scrollToApproval(id: string): boolean {
   return true;
 }
 
+/** 四段进度的四步，从左到右；`stage` 走到哪一段。 */
+const STAGES: { key: SidebarGoalStage; label: string; state: string }[] = [
+  { key: "pending_accept", label: "派出", state: "派出，等员工接下" },
+  { key: "accepted", label: "已接下", state: "已接下，在做" },
+  { key: "delivered", label: "已交成果", state: "已交成果，等你验收" },
+  { key: "reviewed", label: "你验收", state: "你已验收" },
+];
+
+/** 一段的样子：做过的、正走到的、还没到的；取消的整条灰掉。 */
+type Segment = "done" | "current" | "overdue" | "todo" | "cancelled";
+
+const SEGMENT_CLASS: Record<Segment, string> = {
+  done: "bg-(--wb-green)",
+  current: "bg-(--wb-blue)",
+  overdue: "bg-(--wb-danger-fg)",
+  todo: "bg-(--wb-ctx-track)",
+  cancelled: "bg-(--wb-ctx-track)",
+};
+
+/** 在跟的活四段各是什么样子；不在跟（`stage` 为 null）时为 null。 */
+export function goalSegments(goal: NonNullable<SidebarGoal>): Segment[] | null {
+  if (!goal.stage) return null;
+  if (goal.status === "cancelled") return STAGES.map(() => "cancelled");
+  const at = STAGES.findIndex((stage) => stage.key === goal.stage);
+  // 验收了就是四段都做完；别的时候走到的那一段是蓝的，逾期时是红的。
+  if (goal.stage === "reviewed") return STAGES.map(() => "done");
+  return STAGES.map((_, index) =>
+    index < at
+      ? "done"
+      : index === at
+        ? goal.overdue
+          ? "overdue"
+          : "current"
+        : "todo",
+  );
+}
+
+function GoalStages({ goal }: { goal: NonNullable<SidebarGoal> }) {
+  // 预计时间按作息时区念，「今天 16:00」「明早 10:00」。
+  const zone = useScheduleZone();
+  const segments = goalSegments(goal);
+  if (!segments) return null;
+  const cancelled = goal.status === "cancelled";
+  const at = STAGES.findIndex((stage) => stage.key === goal.stage);
+  const here = STAGES[at];
+  const state = cancelled
+    ? "这件活已取消"
+    : `${here?.state ?? ""}${goal.overdue ? "，已逾期" : ""}`;
+  const notes = [
+    !cancelled &&
+    goal.dueAt &&
+    (goal.stage === "pending_accept" || goal.stage === "accepted")
+      ? `预计 ${dueText(goal.dueAt, new Date(), zone)} 交`
+      : null,
+    goal.overdue && !cancelled ? "已逾期" : null,
+    goal.returns > 0 ? `退回过 ${goal.returns} 次` : null,
+  ].filter(Boolean);
+  return (
+    <>
+      <div
+        aria-label={`进度：${state}`}
+        className="flex gap-1"
+        data-goal-stages
+        role="img"
+      >
+        {segments.map((segment, index) => (
+          <span
+            className={cn("h-1 flex-1 rounded-full", SEGMENT_CLASS[segment])}
+            data-segment={segment}
+            key={STAGES[index]?.key}
+          />
+        ))}
+      </div>
+      <span className="text-(--wb-muted) text-[12px]">
+        {cancelled
+          ? "已取消"
+          : STAGES.map((stage, index) => (
+              <span key={stage.key}>
+                {index > 0 ? " · " : ""}
+                {index === at && stage.key !== "reviewed" ? (
+                  <b
+                    className={cn(
+                      "font-semibold",
+                      goal.overdue
+                        ? "text-(--wb-danger-fg)"
+                        : "text-(--wb-blue-text)",
+                    )}
+                  >
+                    {stage.label}
+                  </b>
+                ) : (
+                  stage.label
+                )}
+              </span>
+            ))}
+      </span>
+      {notes.length > 0 ? (
+        <span
+          className={cn(
+            "text-[12.5px] leading-relaxed",
+            goal.overdue && !cancelled
+              ? "text-(--wb-danger-fg)"
+              : "text-(--wb-fg2)",
+          )}
+        >
+          {notes.join(" · ")}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 export function GoalBody({
   goal,
   pending,
@@ -67,6 +189,14 @@ export function GoalBody({
           <b className="font-semibold text-(--wb-fg) text-[14px] leading-normal">
             {goal.title}
           </b>
+          <GoalStages goal={goal} />
+          {goal.stage === null &&
+          goal.taskId &&
+          ["running", "needs_action", "awaiting_review"].includes(
+            goal.status,
+          ) ? (
+            <TrackButton className="mt-0.5" size="sm" taskId={goal.taskId} />
+          ) : null}
           <span
             className={`text-(--wb-fg2) text-[12.5px] leading-relaxed ${
               long && !more ? "line-clamp-2" : ""

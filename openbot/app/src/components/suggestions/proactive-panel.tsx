@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { takesUnattendedWork } from "@/lib/agents/external";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { conversationLabel } from "@/lib/channels/label";
 import { channelListQueryOptions } from "@/lib/channels/queries";
@@ -280,8 +281,11 @@ function TurnOnResearchDialog({
   const settings = useQuery(proactiveSettingsQueryOptions());
   const allBots = useQuery(agentListQueryOptions());
   const bots = {
+    // 外部员工这一步不接主动巡检（外部员工规格「不做」），不列它。
     data: allBots.data?.filter(
-      (bot) => !settings.data?.some((setting) => setting.agentId === bot.id),
+      (bot) =>
+        takesUnattendedWork(bot) &&
+        !settings.data?.some((setting) => setting.agentId === bot.id),
     ),
   };
   const channels = useInfiniteQuery(channelListQueryOptions());

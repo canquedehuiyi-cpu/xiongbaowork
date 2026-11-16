@@ -228,6 +228,13 @@ export function carryingOnAfterApproval(
   return (inbox?.requests ?? []).some(
     (request) =>
       request.action.threadId === threadId &&
+      /*
+       * Not an external employee's permission (`acp/…`, 外部员工 Task 12): its answer goes to the
+       * agent on the hirer's computer, whose turn goes on in the run this conversation already
+       * follows, and the request is never marked `completed`. Counted, it held every message typed
+       * for ten minutes after each approval.
+       */
+      !request.action.toolRef.startsWith("acp/") &&
       CARRYING_ON.has(request.status) &&
       now - Date.parse(request.decidedAt ?? request.createdAt) < CARRY_ON_MS,
   );

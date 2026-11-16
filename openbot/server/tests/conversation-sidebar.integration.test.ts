@@ -515,6 +515,7 @@ describe("conversation sidebar", () => {
       rounds: 3,
       lastCheck: "等你确认 · 我已经整理好了三张发票。",
       pendingApprovalId: approvalId,
+      taskId: expect.any(String),
       stage: null,
       dueAt: null,
       overdue: false,
@@ -687,6 +688,62 @@ describe("conversation sidebar", () => {
     expect(writerMember.harness).toBeUndefined();
   });
 
+  test("group: a member sees the external employee another member hired, by name and agent only", async () => {
+    const hirer = await person();
+    const member = await person();
+    const writer = await employee(member, "写手");
+    const coder = await employee(hirer, "代码熊", {
+      type: "device_acp",
+      configuration: {
+        deviceId: "laptop-1",
+        harness: "codex",
+        workdirRef: "fld_secretsecretsecret12",
+        permissions: { push: "ask" },
+      },
+    });
+    const channelId = `${suite}-group-${randomUUID()}`;
+    channelIds.push(channelId);
+    await runAsTenant(member, async () => {
+      await database.insert(channels).values({
+        id: channelId,
+        tenantId: TEAM_TENANT,
+        name: "群组",
+        description: "",
+      });
+      for (const userId of [member, hirer])
+        await database
+          .insert(channelMemberships)
+          .values({ channelId, userId, tenantId: TEAM_TENANT });
+      await database
+        .insert(channelAgents)
+        .values({ channelId, agentId: writer, tenantId: TEAM_TENANT });
+      await database.insert(intelligenceChannelMappings).values({
+        userId: member,
+        channelId,
+        threadId: randomUUID(),
+      });
+    });
+    // Its hirer puts it in the group (only the hirer may).
+    await runAsTenant(hirer, () =>
+      database
+        .insert(channelAgents)
+        .values({ channelId, agentId: coder, tenantId: TEAM_TENANT }),
+    );
+    const { status, body } = await routesFor(member).channel(channelId);
+    expect(status).toBe(200);
+    const members = body.environment.members ?? [];
+    // Counted with the member's own employee: two employees here, not one.
+    expect(members.map((row) => row.agentId).sort()).toEqual(
+      [writer, coder].sort(),
+    );
+    const row = members.find((entry) => entry.agentId === coder);
+    expect(row).toMatchObject({ name: "代码熊", harness: "Codex", where: "" });
+    // Nothing of where it runs or what it may do.
+    const read = JSON.stringify(body);
+    for (const hidden of ["laptop-1", "fld_secretsecretsecret12", "push"])
+      expect(read).not.toContain(hidden);
+  });
+
   test("group: members list, per-agent usage is the viewer's own thread per employee", async () => {
     const viewer = await person();
     const other = await person();
@@ -836,6 +893,7 @@ describe("conversation sidebar", () => {
       rounds: 1,
       lastCheck: "进行中 · 初稿写好了！",
       pendingApprovalId: null,
+      taskId: expect.any(String),
       stage: null,
       dueAt: null,
       overdue: false,
@@ -1037,7 +1095,8 @@ describe("conversation sidebar", () => {
     const viewer = await person();
     const agentId = await employee(viewer, "对账员工");
     const { threadId } = await directChat(viewer, agentId);
-    const due = new Date(Date.now() + 3600_000);
+    // Due forty minutes ago (past the checker's 35-minute grace) and recorded overdue: overdue now.
+    const due = new Date(Date.now() - 40 * 60_000);
     const [followed] = await runAsTenant(viewer, () =>
       database
         .insert(tasks)
@@ -1086,6 +1145,8 @@ describe("conversation sidebar", () => {
     const first = await routesFor(viewer).thread(threadId);
     expect(first.status).toBe(200);
     expect(first.body.goal).toMatchObject({
+      // 侧栏「当作一件活来跟」和「打开这张卡」按它找卡：是本线程那张在跟的卡，不是后来那张。
+      taskId,
       title: "核对三家发票",
       status: "running",
       stage: "accepted",
@@ -1095,6 +1156,28 @@ describe("conversation sidebar", () => {
       // The newest line that says something; a round's bare end does not.
       lastCheck: "退回：缺 C 家",
     });
+
+    // Given more time (due moved an hour ahead): not overdue now, though `overdue_at` stays.
+    const later = new Date(Date.now() + 3600_000);
+    await runAsTenant(viewer, () =>
+      database
+        .update(tasks)
+        .set({ dueAt: later })
+        .where(inArray(tasks.id, [taskId])),
+    );
+    const extended = await routesFor(viewer).thread(threadId);
+    expect(extended.body.goal).toMatchObject({
+      title: "核对三家发票",
+      dueAt: later.toISOString(),
+      overdue: false,
+    });
+    const [kept] = await runAsTenant(viewer, () =>
+      database
+        .select({ overdueAt: tasks.overdueAt })
+        .from(tasks)
+        .where(inArray(tasks.id, [taskId])),
+    );
+    expect(kept?.overdueAt).toBeInstanceOf(Date);
 
     // Handed in: the stage moves, and so does the line.
     await runAsTenant(viewer, () =>

@@ -101,6 +101,16 @@
   --wb-amber-soft: rgba(245, 165, 36, 0.15);
   --wb-amber-fg: #9a6400;
   --wb-green-fg: #1f9d63;
+  /* 看板三步收货（交付闭环 Task 8）：验收按钮和等你验收卡的蓝、逾期卡的红框与红字。 */
+  --wb-blue: #3b72d9;
+  --wb-blue-fg: #ffffff;
+  --wb-blue-line: rgba(59, 114, 217, 0.45);
+  --wb-danger-fg: #c43c3c;
+  --wb-danger-soft: rgba(220, 70, 70, 0.1);
+  --wb-danger-line: rgba(220, 70, 70, 0.5);
+  /* 清点页与侧栏目标（交付闭环 Task 10）：「已交成果」标签的浅蓝底和蓝字。 */
+  --wb-blue-soft: rgba(59, 114, 217, 0.12);
+  --wb-blue-text: #2f5fb8;
 }
 
 :root:not([data-skin]).dark {
@@ -193,6 +203,16 @@
   --wb-amber-soft: rgba(245, 165, 36, 0.15);
   --wb-amber-fg: #f5c06a;
   --wb-green-fg: #8fe3bb;
+  /* 看板三步收货（交付闭环 Task 8），同上，数值取自设计稿 1、2。 */
+  --wb-blue: #5b8def;
+  --wb-blue-fg: #0b0b0d;
+  --wb-blue-line: rgba(91, 141, 239, 0.55);
+  --wb-danger-fg: #f2a3a3;
+  --wb-danger-soft: rgba(239, 107, 107, 0.16);
+  --wb-danger-line: rgba(239, 107, 107, 0.55);
+  /* 清点页与侧栏目标（交付闭环 Task 10），数值取自设计稿 4、6。 */
+  --wb-blue-soft: rgba(91, 141, 239, 0.18);
+  --wb-blue-text: #8fb0f5;
 }
 
 /*
@@ -325,4 +345,112 @@
 :root:not([data-skin]) [data-workbench-frame] [data-check="todo"] {
   border-color: var(--wb-line2);
   border-radius: var(--wb-radius-pill);
+}
+
+/*
+ * 从我的电脑招、招聘设置（外部员工 Task 10），照设计稿第 1、2 屏：卡片底、细描边、14px 圆角；状态标签
+ * 绿的是好消息、琥珀的是要留意；「招进来」是熊宝红到暖橙的渐变；底线块是浅红底、红字标题。组件自己只用
+ * 通用的主题色，这里只在默认皮肤的工作台外壳里换成令牌。
+ */
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-card"],
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-section"] {
+  background: var(--wb-card);
+  color: var(--wb-fg);
+  border-color: var(--wb-line);
+  border-radius: var(--wb-radius-bubble);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-device"],
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-notice"] {
+  background: var(--wb-card);
+  border-color: var(--wb-line);
+  border-radius: var(--wb-radius);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-select"] {
+  background: var(--wb-card2);
+  color: var(--wb-fg);
+  border-color: var(--wb-line2);
+  border-radius: var(--wb-radius-sm);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-rule"] {
+  border-color: var(--wb-line);
+}
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="hire-tag"][data-tone="good"] {
+  background: var(--wb-done-soft);
+  color: var(--wb-green-fg);
+}
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="hire-tag"][data-tone="warn"] {
+  background: var(--wb-amber-soft);
+  color: var(--wb-amber-fg);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-warning"] {
+  color: var(--wb-amber-fg);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-presence"] {
+  color: var(--wb-muted);
+}
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="hire-presence"][data-online] {
+  color: var(--wb-green-fg);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-chip"] {
+  border-color: var(--wb-line2);
+  color: var(--wb-fg2);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-chip"]:hover {
+  color: var(--wb-fg);
+  background: var(--wb-hover);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-bottom-line"] {
+  background: var(--wb-accent-soft);
+}
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-slot="hire-bottom-line"]
+  > b {
+  color: var(--wb-accent2);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-confirm"] {
+  background: var(--wb-amber-soft);
+  border-color: transparent;
+  border-radius: var(--wb-radius);
+}
+:root:not([data-skin]) [data-workbench-frame] [data-hire-primary] {
+  background: var(--wb-me);
+  color: var(--wb-me-fg);
+  border: 0;
+  border-radius: 10px;
+}
+:root:not([data-skin])
+  [data-workbench-frame]
+  [data-hire-primary]:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+/* 「去配对一台电脑」：工作台的链接色（设计稿 `a`），带下划线，一眼看得出能点。 */
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-link"] {
+  color: var(--wb-accent2);
+  text-decoration-line: underline;
+  text-decoration-color: currentColor;
+}
+:root:not([data-skin]) [data-workbench-frame] [data-slot="hire-link"]:hover {
+  color: var(--wb-accent);
+}
+
+/* 手机上工作台页头已经有「返回」，招聘设置自己的那个收起来，只留一个。 */
+:root:not([data-skin])
+  [data-workbench-frame][data-workbench-phone]
+  [data-slot="hire-back"] {
+  display: none;
+}
+
+/* 审批详情（外部员工 Task 12）：手机上工作台页头已经有「返回」，详情页自己的那个收起来。 */
+:root:not([data-skin])
+  [data-workbench-frame][data-workbench-phone]
+  [data-slot="approval-back"] {
+  display: none;
 }

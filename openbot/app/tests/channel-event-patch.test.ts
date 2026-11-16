@@ -8,6 +8,7 @@ import {
   applyChannelEvent,
   applyChannelWork,
   type ChannelActivityEvent,
+  speakerNameStale,
 } from "../src/lib/channels/use-channel-events";
 
 /** A minimal but fully-typed channel summary, so tests build real objects rather than casts. */
@@ -442,5 +443,68 @@ describe("an opening", () => {
       ...(data.pages[0]?.channels[1] as ChannelSummary),
       opening: "Find the latest released version of kubectl",
     });
+  });
+});
+
+describe("a reply from a different speaker", () => {
+  // 服务器替不在自己名单里的外部员工查的名字只属于那一位：换了人说话，旧名字不能留给新的人。
+  const group = (name: string | undefined) =>
+    channel("g", {
+      agentIds: ["ext-a", "ext-b"],
+      lastMessage: "A 说的",
+      lastMessageAt: "2024-03-01T00:00:00.000Z",
+      lastMessageAgentId: "ext-a",
+      ...(name === undefined ? {} : { lastMessageAgentName: name }),
+    });
+
+  test("drops the name the server looked up for the previous speaker", () => {
+    const patched = applyChannelEvent(
+      cache([group("员工 A")]),
+      event({
+        channelId: "g",
+        lastMessage: "B 说的",
+        lastMessageAt: "2024-03-02T00:00:00.000Z",
+        lastMessageAgentId: "ext-b",
+      }),
+    );
+    if (patched === "unknown") throw new Error("row should be known");
+    const row = patched.pages[0]?.channels[0];
+    expect(row?.lastMessageAgentId).toBe("ext-b");
+    expect(row && "lastMessageAgentName" in row).toBe(false);
+    expect(
+      speakerNameStale(
+        cache([group("员工 A")]),
+        event({ channelId: "g", lastMessageAgentId: "ext-b" }),
+      ),
+    ).toBe(true);
+  });
+
+  test("keeps the name when the same speaker talks again", () => {
+    const patched = applyChannelEvent(
+      cache([group("员工 A")]),
+      event({
+        channelId: "g",
+        lastMessage: "A 又说",
+        lastMessageAt: "2024-03-02T00:00:00.000Z",
+        lastMessageAgentId: "ext-a",
+      }),
+    );
+    if (patched === "unknown") throw new Error("row should be known");
+    expect(patched.pages[0]?.channels[0]?.lastMessageAgentName).toBe("员工 A");
+    expect(
+      speakerNameStale(
+        cache([group("员工 A")]),
+        event({ channelId: "g", lastMessageAgentId: "ext-a" }),
+      ),
+    ).toBe(false);
+  });
+
+  test("has nothing to refetch when no name was held", () => {
+    expect(
+      speakerNameStale(
+        cache([group(undefined)]),
+        event({ channelId: "g", lastMessageAgentId: "ext-b" }),
+      ),
+    ).toBe(false);
   });
 });

@@ -180,6 +180,8 @@ export type Delivery = {
       title?: string;
       dueAt: Date | null;
       criteria?: string;
+      /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
+      eventId?: string;
     },
   ): Promise<{ taskId: string; dueAt: Date | null; criteria: string } | null>;
   /**
@@ -225,6 +227,8 @@ export type Delivery = {
       agentId: string;
       actor: TaskEventActor;
       deliverable: DeliverableRef;
+      /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
+      eventId?: string;
     },
   ): Promise<DeliverableRef | null>;
   /** The evidence gate refused a hand-in: one `bounced` line, and the card is not touched. */
@@ -236,6 +240,8 @@ export type Delivery = {
       actor: TaskEventActor;
       reason: string;
       missing?: string[];
+      /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
+      eventId?: string;
     },
   ): Promise<void>;
   /**
@@ -250,6 +256,8 @@ export type Delivery = {
       reason: string;
       runId?: string;
       actor?: TaskEventActor;
+      /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
+      eventId?: string;
     },
   ): Promise<boolean>;
   /**
@@ -337,6 +345,16 @@ export type Delivery = {
       actor: TaskEventActor;
       decision: "grant" | "deny";
       dueAt?: string;
+      /**
+       * 答复的是要延到几点的那条申请（对话里延期卡上的时间）。给了就要和最新那条申请的时间一致，否则
+       * 拒绝（`stale_request`）：员工后来又申请了一次，不能拿旧卡上的答复去答新申请。
+       */
+      requestedDueAt?: string;
+      /**
+       * 答复的是流水里哪一行申请（那一行的 id，弹层打开时记下的）。给了就要是最新那条申请，否则拒绝
+       * （`stale_request`）：两次申请延到同一个时间时，只比时间分不出新旧。旧客户端不带，照旧比时间。
+       */
+      requestEventId?: string;
       now: Date;
       timeZone: string;
     },
@@ -348,7 +366,15 @@ export type Delivery = {
         agentId: string | null;
         runId: string | null;
       }
-    | { ok: false; why: "not_open" | "handed_in" | "no_request" | DueRefusal }
+    | {
+        ok: false;
+        why:
+          | "not_open"
+          | "handed_in"
+          | "no_request"
+          | "stale_request"
+          | DueRefusal;
+      }
   >;
   /**
    * The person changes the card (`PATCH /api/tasks/:id`): `due_at` and/or `criteria`, while the work
@@ -646,6 +672,7 @@ export function createDelivery(database: Database): Delivery {
               ),
             );
           await appendTaskEvent(transaction, {
+            id: input.eventId,
             tenantId,
             taskId,
             kind: "accepted",
@@ -700,6 +727,7 @@ export function createDelivery(database: Database): Delivery {
             })
             .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
           await appendTaskEvent(transaction, {
+            id: input.eventId,
             tenantId,
             taskId,
             kind: "delivered",
@@ -719,6 +747,7 @@ export function createDelivery(database: Database): Delivery {
           .limit(1);
         if (!card) return;
         await appendTaskEvent(database, {
+          id: input.eventId,
           tenantId,
           taskId,
           kind: "bounced",
@@ -740,6 +769,7 @@ export function createDelivery(database: Database): Delivery {
           .limit(1);
         if (!card) return false;
         await appendTaskEvent(database, {
+          id: input.eventId,
           tenantId,
           taskId,
           kind: "extension_requested",
@@ -1156,7 +1186,11 @@ export function createDelivery(database: Database): Delivery {
           if (card.status === "awaiting_review")
             return { ok: false, why: "handed_in" } as const;
           const [latest] = await transaction
-            .select({ kind: taskEvents.kind, detail: taskEvents.detail })
+            .select({
+              id: taskEvents.id,
+              kind: taskEvents.kind,
+              detail: taskEvents.detail,
+            })
             .from(taskEvents)
             .where(
               and(
@@ -1183,6 +1217,17 @@ export function createDelivery(database: Database): Delivery {
           const requested = (latest.detail as { dueAt?: unknown }).dueAt;
           const requestedDueAt =
             typeof requested === "string" ? requested : null;
+          if (
+            input.requestEventId !== undefined &&
+            input.requestEventId !== latest.id
+          )
+            return { ok: false, why: "stale_request" } as const;
+          if (
+            input.requestedDueAt !== undefined &&
+            (requestedDueAt === null ||
+              Date.parse(requestedDueAt) !== Date.parse(input.requestedDueAt))
+          )
+            return { ok: false, why: "stale_request" } as const;
           const previousDueAt = card.dueAt?.toISOString() ?? null;
           const where = { tenantId, taskId, actor: input.actor };
           if (input.decision === "deny") {
