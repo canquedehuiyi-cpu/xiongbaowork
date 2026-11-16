@@ -267,12 +267,13 @@ test("a safety hand-off is stored, cannot be allowed, and is marked done by the 
       source: "safety",
     });
     await expect(
-      service.decide(owner, request?.id as string, "allow_always"),
+      service.decide(owner, request?.id as string, "allow_always", "web"),
     ).rejects.toThrow("handed to you");
     const decided = await service.decide(
       owner,
       request?.id as string,
       "handled",
+      "web",
     );
     expect(decided.decision).toBe("handled");
     await expect(service.gate(paying)).resolves.toMatchObject({
@@ -290,7 +291,7 @@ test("'Always allow here' saves a personal allow rule that the gate then honours
       (row) => row.action.toolCallId === first.continuation?.toolCallId,
     );
     expect(request?.action.policy?.behaviour).toBe("ask");
-    await service.decide(owner, request?.id as string, "allow_always");
+    await service.decide(owner, request?.id as string, "allow_always", "web");
     const rules = await store.rules(owner);
     expect(rules).toContainEqual(
       expect.objectContaining({
@@ -447,7 +448,7 @@ test("declining one connector call does not decline a different call to the same
     const [request] = (await store.list(owner)).filter(
       (row) => row.action.toolCallId === first.continuation?.toolCallId,
     );
-    await service.decide(owner, request?.id as string, "deny");
+    await service.decide(owner, request?.id as string, "deny", "web");
     // The same call again, in the same conversation, is still declined.
     await expect(service.gate(email("a@example.test"))).rejects.toThrow(
       "declined",

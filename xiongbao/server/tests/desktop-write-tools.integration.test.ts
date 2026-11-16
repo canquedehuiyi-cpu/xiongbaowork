@@ -474,7 +474,7 @@ async function pairedDevice(
     );
     if (!request) throw new Error(`No request for ${toolCallId}.`);
     await runAsTenant(tenant, () =>
-      service.decide(tenant, request.id, decision),
+      service.decide(tenant, request.id, decision, "web"),
     );
     return request;
   }

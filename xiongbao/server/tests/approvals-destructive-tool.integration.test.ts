@@ -259,7 +259,7 @@ test("一次 MCP 调用：应用标为破坏性的工具在「总是允许」规
   );
   await expect(
     runAsTenant(person, () =>
-      approvals.decide(person, request?.id as string, "allow_always"),
+      approvals.decide(person, request?.id as string, "allow_always", "web"),
     ),
   ).rejects.toThrow("只能「允许一次」或拒绝");
   // 拒掉的「总是允许」什么都没存，请求还在等。
@@ -267,7 +267,7 @@ test("一次 MCP 调用：应用标为破坏性的工具在「总是允许」规
     rulesBefore,
   );
   const once = await runAsTenant(person, () =>
-    approvals.decide(person, request?.id as string, "allow_once"),
+    approvals.decide(person, request?.id as string, "allow_once", "web"),
   );
   expect(once).toMatchObject({ decision: "allow_once", status: "approved" });
 });
@@ -321,7 +321,7 @@ test("一次 MCP 调用：把内容发给别人的工具在「总是允许」规
   );
   await expect(
     runAsTenant(person, () =>
-      approvals.decide(person, request?.id as string, "allow_always"),
+      approvals.decide(person, request?.id as string, "allow_always", "web"),
     ),
   ).rejects.toThrow("这个操作可能会把内容发给别人，每次都要你确认");
   expect(await runAsTenant(person, () => approvalStore.rules(person))).toEqual(
@@ -329,7 +329,7 @@ test("一次 MCP 调用：把内容发给别人的工具在「总是允许」规
   );
   expect(
     await runAsTenant(person, () =>
-      approvals.decide(person, request?.id as string, "allow_once"),
+      approvals.decide(person, request?.id as string, "allow_once", "web"),
     ),
   ).toMatchObject({ decision: "allow_once", status: "approved" });
 });
@@ -374,12 +374,12 @@ test("一次 MCP 调用：给别人加访问权限的工具在「总是允许」
   expect(offersStandingRule(request?.action ?? {})).toBeFalse();
   await expect(
     runAsTenant(person, () =>
-      approvals.decide(person, request?.id as string, "allow_always"),
+      approvals.decide(person, request?.id as string, "allow_always", "web"),
     ),
   ).rejects.toThrow("这个操作会分享内容或改变谁能访问，每次都要你确认");
   expect(
     await runAsTenant(person, () =>
-      approvals.decide(person, request?.id as string, "allow_once"),
+      approvals.decide(person, request?.id as string, "allow_once", "web"),
     ),
   ).toMatchObject({ decision: "allow_once", status: "approved" });
 });

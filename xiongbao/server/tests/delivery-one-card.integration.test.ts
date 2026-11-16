@@ -621,7 +621,7 @@ describe("one tracked piece of work, one card", () => {
     expect(row?.pendingApprovalId).toBe(allowed.approvalId);
     expect(row?.activeRunRef).toBeNull();
     await runAsTenant(tenantId, () =>
-      approvals.decide(tenantId, allowed.approvalId, "allow_once"),
+      approvals.decide(tenantId, allowed.approvalId, "allow_once", "web"),
     );
     row = (
       await until(
@@ -635,7 +635,7 @@ describe("one tracked piece of work, one card", () => {
     // A denial ends that round's action, not the work: a followed card never becomes `failed`.
     const denied = await askingRound("deny");
     await runAsTenant(tenantId, () =>
-      approvals.decide(tenantId, denied.approvalId, "deny"),
+      approvals.decide(tenantId, denied.approvalId, "deny", "web"),
     );
     row = (
       await until(
@@ -692,7 +692,7 @@ describe("one tracked piece of work, one card", () => {
     expect(row?.pendingApprovalId).toBeNull();
     expect(row?.activeRunRef).toBeNull();
     await runAsTenant(tenantId, () =>
-      approvals.decide(tenantId, approvalId, "allow_once"),
+      approvals.decide(tenantId, approvalId, "allow_once", "web"),
     );
     await settle(100);
     row = await cardRow(tenantId, cardId);
@@ -815,7 +815,7 @@ describe("one tracked piece of work, one card", () => {
     await roundLogged(tenantId, cardId, parkedRound);
     expect((await cardRow(tenantId, cardId))?.status).toBe("needs_action");
     await runAsTenant(tenantId, () =>
-      approvals.decide(tenantId, firstApproval, "allow_once"),
+      approvals.decide(tenantId, firstApproval, "allow_once", "web"),
     );
     await until(
       () => cardRow(tenantId, cardId),

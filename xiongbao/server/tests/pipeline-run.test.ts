@@ -912,7 +912,7 @@ test("a step parked on an approval is answerable from the board, and one answer 
   expect(parent?.pendingApprovalId).toBe(asked);
 
   await runAsTenant(tenant, () =>
-    approvals.decide(tenant, asked, "allow_once"),
+    approvals.decide(tenant, asked, "allow_once", "web"),
   );
   // One decision moves both cards, because `resumed` matches on the approval row they were parked against.
   const freed = await boardShows((rows) =>
@@ -1009,7 +1009,7 @@ test("a denied approval stops the run and takes the ask off the board", async ()
   expect(parked.status).toBe("awaiting_action");
   const stepRunRef = parked.steps[1]?.runRef;
 
-  await runAsTenant(tenant, () => approvals.decide(tenant, asked, "deny"));
+  await runAsTenant(tenant, () => approvals.decide(tenant, asked, "deny", "web"));
 
   /*
    * The refusal reaches the run through the same door an approval does: the replayed turn's own

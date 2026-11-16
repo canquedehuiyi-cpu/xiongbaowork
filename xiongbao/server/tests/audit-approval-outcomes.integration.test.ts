@@ -187,7 +187,7 @@ test("an app write the person denies is on the trail as a refused call, written 
     );
   expect(await calls()).toEqual([]);
 
-  await asOwner(() => service.decide(owner, request.id, "deny"));
+  await asOwner(() => service.decide(owner, request.id, "deny", "web"));
   expect((await calls()).map((row) => row.eventType)).toEqual([
     "mcp.call_rejected",
   ]);
@@ -231,7 +231,7 @@ test("an app write the person allows is carried out and recorded as it was, with
     (row) => row.action.threadId === threadId,
   );
   if (!allowed) throw new Error("the second app write was not asked about");
-  await asOwner(() => service.decide(owner, allowed.id, "allow_once"));
+  await asOwner(() => service.decide(owner, allowed.id, "allow_once", "web"));
   // The same call comes back once the person has said yes, and is carried out.
   expect(await callApp(continuation)).toBeUndefined();
   expect(vendorCalls).toEqual(["create_note"]);

@@ -209,7 +209,7 @@ test("approve runs the held command exactly once, through the gateway, and the c
   expect(commands).toEqual([]);
   expect((await row(id)).action.policy?.source).toBe("dangerous_command");
 
-  await asOwner(() => currentService.decide(owner, id, "allow_once"));
+  await asOwner(() => currentService.decide(owner, id, "allow_once", "web"));
   const continued: Continued[] = [];
   await asOwner(() => currentService.resume(owner, id, worker(continued)));
 
@@ -236,7 +236,7 @@ test("approve runs the held command exactly once, through the gateway, and the c
 test("reject never runs the command and tells the conversation it was the person's decision", async () => {
   commands.length = 0;
   const id = await ask();
-  await asOwner(() => currentService.decide(owner, id, "deny"));
+  await asOwner(() => currentService.decide(owner, id, "deny", "web"));
   const continued: Continued[] = [];
   await asOwner(() => currentService.resume(owner, id, worker(continued)));
   await asOwner(() => currentService.resume(owner, id, worker(continued)));
@@ -250,7 +250,7 @@ test("reject never runs the command and tells the conversation it was the person
 test("two workers resuming at once claim the run in the database once: one command, one continuation", async () => {
   commands.length = 0;
   const id = await ask();
-  await asOwner(() => currentService.decide(owner, id, "allow_once"));
+  await asOwner(() => currentService.decide(owner, id, "allow_once", "web"));
   // Both workers reach the claim before either takes it, so the row lock decides between them.
   let arrived = 0;
   let open: () => void = () => undefined;
@@ -290,7 +290,7 @@ test("two workers resuming at once claim the run in the database once: one comma
 test("a run that was claimed but never saved (the worker crashed) is not run again and ends as outcome unknown", async () => {
   commands.length = 0;
   const id = await ask();
-  await asOwner(() => currentService.decide(owner, id, "allow_once"));
+  await asOwner(() => currentService.decide(owner, id, "allow_once", "web"));
   // The crashed worker's claim: approved → consumed, and nothing saved after it.
   const request = await row(id);
   expect(
@@ -312,7 +312,7 @@ test("a run that was claimed but never saved (the worker crashed) is not run aga
 test("a worker that finds the run still in flight never starts it again, and the late result is not published", async () => {
   commands.length = 0;
   const id = await ask();
-  await asOwner(() => currentService.decide(owner, id, "allow_once"));
+  await asOwner(() => currentService.decide(owner, id, "allow_once", "web"));
   let release: () => void = () => undefined;
   holdMachine = new Promise<void>((resolve) => {
     release = resolve;
@@ -345,7 +345,7 @@ test("a worker that finds the run still in flight never starts it again, and the
 test("the result is saved before it is published: a failed continuation is retried with that result and the command is not repeated", async () => {
   commands.length = 0;
   const id = await ask();
-  await asOwner(() => currentService.decide(owner, id, "allow_once"));
+  await asOwner(() => currentService.decide(owner, id, "allow_once", "web"));
   const continued: Continued[] = [];
   await expect(
     asOwner(() =>
@@ -376,7 +376,7 @@ test("the result is saved before it is published: a failed continuation is retri
 test("the queue's last try abandons without running: the Bot is told it could not be carried out", async () => {
   commands.length = 0;
   const id = await ask();
-  await asOwner(() => currentService.decide(owner, id, "allow_once"));
+  await asOwner(() => currentService.decide(owner, id, "allow_once", "web"));
   const continued: Continued[] = [];
   await asOwner(() =>
     currentService.abandon(owner, id, "network down", worker(continued)),
@@ -391,7 +391,7 @@ test("the queue's last try abandons without running: the Bot is told it could no
 test("a refusal (the Bot may no longer run) ends the request without running or continuing", async () => {
   commands.length = 0;
   const id = await ask();
-  await asOwner(() => currentService.decide(owner, id, "allow_once"));
+  await asOwner(() => currentService.decide(owner, id, "allow_once", "web"));
   const continued: Continued[] = [];
   const refusal = "Use Bots is switched off for you.";
   await asOwner(() =>
@@ -411,7 +411,7 @@ test("a refusal (the Bot may no longer run) ends the request without running or 
 test("only the owner's own frame can resume it, and a row whose binding was altered is never run", async () => {
   commands.length = 0;
   const id = await ask();
-  await asOwner(() => currentService.decide(owner, id, "allow_once"));
+  await asOwner(() => currentService.decide(owner, id, "allow_once", "web"));
   const continued: Continued[] = [];
   // Another person's frame does not see the row at all (G01), whoever the call names.
   await expect(

@@ -639,7 +639,7 @@ test("computer_app_call write_note waits for approval, runs once after approve, 
     args: JSON.stringify(args.args),
   });
   await runAsTenant(device.tenant, () =>
-    device.service.decide(device.tenant, request?.id as string, "allow_once"),
+    device.service.decide(device.tenant, request?.id as string, "allow_once", "web"),
   );
   await expect(
     device.call("computer_app_call", args, "approve-me"),
@@ -659,7 +659,7 @@ test("computer_app_call write_note waits for approval, runs once after approve, 
   );
   expect(rejected?.action.policy?.source).toBe("app_tool");
   await runAsTenant(device.tenant, () =>
-    device.service.decide(device.tenant, rejected?.id as string, "deny"),
+    device.service.decide(device.tenant, rejected?.id as string, "deny", "web"),
   );
   await expect(device.call("computer_app_call", wipe, "reject-me")).rejects.toThrow();
   await expect(device.call("computer_app_call", wipe)).rejects.toThrow();
@@ -1003,7 +1003,7 @@ async function approve(
 ) {
   const request = await requestFor(device, toolCallId);
   await runAsTenant(device.tenant, () =>
-    device.service.decide(device.tenant, request.id, "allow_once"),
+    device.service.decide(device.tenant, request.id, "allow_once", "web"),
   );
   return request.id;
 }
@@ -1210,7 +1210,7 @@ test("rejected: nothing is written on the device", async () => {
   ).rejects.toBeInstanceOf(HeadlessToolSuspension);
   const request = await requestFor(device, "deny-me");
   await runAsTenant(device.tenant, () =>
-    device.service.decide(device.tenant, request.id, "deny"),
+    device.service.decide(device.tenant, request.id, "deny", "web"),
   );
   await expect(
     device.call("computer_app_enable", { candidate: fixture.candidate }, "deny-me"),

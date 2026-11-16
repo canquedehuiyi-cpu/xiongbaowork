@@ -1892,7 +1892,7 @@ describe("after the hand-in", () => {
     expect(waiting?.pendingApprovalId).toBe(approvalId);
 
     await runAsTenant(card.tenantId, () =>
-      approvals.decide(card.tenantId, approvalId, "allow_once"),
+      approvals.decide(card.tenantId, approvalId, "allow_once", "web"),
     );
     // The decision moves the board after it is saved, not before it answers.
     const decided = await until(

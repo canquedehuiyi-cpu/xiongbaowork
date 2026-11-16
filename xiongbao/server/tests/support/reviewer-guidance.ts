@@ -249,7 +249,7 @@ export async function seedDecided(
             }
           : ASKED,
     });
-    await service.decide(owner, request.id, decision);
+    await service.decide(owner, request.id, decision, "web");
     ids.push(request.id);
   }
   // Not decided yet, so not something a person's answer can be set against.

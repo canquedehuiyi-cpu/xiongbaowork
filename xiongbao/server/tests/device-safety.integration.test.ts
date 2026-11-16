@@ -760,6 +760,7 @@ test("SEC1: a dangerous runner command waits for approval with no frame sent, th
         runner.target.tenantId,
         request?.id as string,
         "allow_once",
+        "web",
       ),
     );
     await expect(runner.run("rm -rf scratch")).resolves.toMatchObject({
@@ -822,6 +823,7 @@ test("RES2: a dangerous command in the coworker's project folder waits for appro
         runner.target.tenantId,
         request?.id as string,
         "allow_once",
+        "web",
       ),
     );
     await expect(runner.run("rm -rf build")).resolves.toMatchObject({

@@ -622,7 +622,7 @@ describe("审批：回数字拍板", () => {
     const request = await approval(f, coder);
     await asPerson(f, () => decisions.openApprovalPrompt(f.userId, request.id));
     await asPerson(f, () =>
-      approvalService.decide(f.userId, request.id, "deny"),
+      approvalService.decide(f.userId, request.id, "deny", "wechat"),
     );
     await deliver(f, "1");
     expect(lastSent(f)).toBe("这条已由 小熊 在 网页 处理");
@@ -637,7 +637,7 @@ describe("审批：回数字拍板", () => {
     const request = await approval(f, coder);
     await asPerson(f, () => decisions.openApprovalPrompt(f.userId, request.id));
     await asPerson(f, () =>
-      approvalService.decide(f.userId, request.id, "allow_once"),
+      approvalService.decide(f.userId, request.id, "allow_once", "wechat"),
     );
     const before = sentTo(f).length;
     await deliver(f, "1");
@@ -660,7 +660,7 @@ describe("审批：回数字拍板", () => {
       decisions.openApprovalPrompt(f.userId, request.id),
     );
     await asPerson(f, () =>
-      approvalService.decide(f.userId, request.id, "deny"),
+      approvalService.decide(f.userId, request.id, "deny", "wechat"),
     );
     await deliver(f, `${opened?.code} 1`);
     expect(lastSent(f)).toBe("这条已由 小熊 在 网页 处理");
@@ -695,7 +695,7 @@ describe("审批：回数字拍板", () => {
     await asPerson(f, () =>
       decisions.openApprovalPrompts(f.userId, [one.id, two.id]),
     );
-    await asPerson(f, () => approvalService.decide(f.userId, one.id, "deny"));
+    await asPerson(f, () => approvalService.decide(f.userId, one.id, "deny", "wechat"));
     await deliver(f, "1");
     expect((await approvalOf(f, two.id)).decision).toBe("allow_once");
     expect(lastSent(f)).toBe("已批准这一次，【代码熊】会继续。");
@@ -726,7 +726,7 @@ describe("审批：回数字拍板", () => {
     const coder = await bot(f, "代码熊");
     const one = await approval(f, coder);
     await asPerson(f, () => decisions.openApprovalPrompt(f.userId, one.id));
-    await asPerson(f, () => approvalService.decide(f.userId, one.id, "deny"));
+    await asPerson(f, () => approvalService.decide(f.userId, one.id, "deny", "wechat"));
     const two = await approval(f, coder);
     const opened = await asPerson(f, () =>
       decisions.openApprovalPrompt(f.userId, two.id),

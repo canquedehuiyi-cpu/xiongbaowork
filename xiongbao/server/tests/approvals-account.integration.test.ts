@@ -111,7 +111,7 @@ test("two otherwise identical calls to different accounts are different requests
 test("Always allow here for one account is saved for that account, and does not allow another", async () => {
   const first = await asOwner(() => store.open(approvalAction(send(WORK))));
   keys.push(first.id);
-  await asOwner(() => store.decide(owner, first.id, "allow_always"));
+  await asOwner(() => store.decide(owner, first.id, "allow_always", "web"));
 
   const [saved] = await asOwner(() => store.rules(owner));
   expect(saved?.account).toBe(WORK);
