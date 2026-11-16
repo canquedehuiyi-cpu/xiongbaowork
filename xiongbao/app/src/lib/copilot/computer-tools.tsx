@@ -36,7 +36,6 @@ import {
   LOCAL_TOOL_DESCRIPTIONS,
 } from "../../../../shared/local-tools";
 import {
-  declaredBotId,
   type ToolCallContext,
   useActiveBotHolder,
   useBotOfCall,
