@@ -28,6 +28,7 @@ export function ToolLine({
   label,
   attempted,
   detail,
+  link,
   running,
   refused,
   declined,
@@ -48,6 +49,15 @@ export function ToolLine({
   attempted?: string;
   /** What it was done to. Muted, and truncated rather than wrapped. */
   detail?: string;
+  /**
+   * A download address for `detail`, when what it was done to is a file the person can have.
+   *
+   * Without it the detail stays the plain muted span it always was. With it the same words are drawn
+   * by an anchor — same classes, so the line is as wide and truncates the same way — carrying the
+   * address, `download`, and `rel="noopener"`. The safety decision behind `download` is A4: what comes
+   * back is an attachment, never a page rendered on this origin.
+   */
+  link?: string;
   running?: boolean;
   /** A policy or a boundary said no. Final: nothing the Bot does differently will help. */
   refused?: boolean;
@@ -105,6 +115,28 @@ export function ToolLine({
     ))
   );
 
+  /*
+   * 有地址时，detail 这几个字就是那个文件本身：一样缩略、一样占位，只是点得动（`download` 背后是
+   * 安全决策 A4——回来的是附件，不是这个源上的一页）。没有地址时，这行和以前一个字都不差。
+   */
+  const detailNode = detail ? (
+    link === undefined ? (
+      <span className="min-w-0 shrink-[100] truncate opacity-70">{detail}</span>
+    ) : (
+      <a
+        className="min-w-0 shrink-[100] truncate opacity-70 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+        data-tool-download=""
+        // 空值是「就按服务器给的名字存」：这个属性带的值会被当成文件名，写成 `download` 在 JSX 里等于
+        // `true`，存下来就成了一个叫 true 的文件。名字归路由的 Content-Disposition 定（安全决策 A4）。
+        download=""
+        href={link}
+        rel="noopener"
+      >
+        {detail}
+      </a>
+    )
+  ) : null;
+
   const text = (
     <span
       className={`inline-flex min-w-0 max-w-full items-baseline gap-1.5 text-sm ${tone} ${
@@ -135,11 +167,7 @@ export function ToolLine({
                 ? `${label}，由你完成`
                 : label}
       </span>
-      {detail ? (
-        <span className="min-w-0 shrink-[100] truncate opacity-70">
-          {detail}
-        </span>
-      ) : null}
+      {detailNode}
       {running ? <span className="sr-only">进行中</span> : null}
     </span>
   );
