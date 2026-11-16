@@ -1,8 +1,15 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import {
+  AbstractAgent,
+  type BaseEvent,
+  EventType,
+  type RunAgentInput,
+} from "@ag-ui/client";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
+import { Observable } from "rxjs";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import type { AuditEventInput } from "../src/audit";
@@ -33,9 +40,15 @@ import {
   workItems,
 } from "../src/db/schema";
 import { createPrivateShareCheck } from "../src/proactive/private-share";
+import { createTurnRunner } from "../src/routines/run-turn";
 import { createTaskProjector } from "../src/tasks/projector";
 import { createTeamBots } from "../src/team-bots/team-bots";
 import { runAsTenant } from "../src/tenant/context";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import {
+  emitRunEvent,
+  withRunSideEvents,
+} from "../src/threads/run-side-events";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -111,6 +124,59 @@ async function bot(
   return profile.id;
 }
 
+/** 交付卡的内容（规格第 6 节：卡片按租户隔离），没有一个字可以出现在群回复里。 */
+const TASK_ID = "11111111-1111-4111-8111-111111111111";
+const ACCEPTED = {
+  taskId: TASK_ID,
+  dueAt: "2026-11-15T08:00:00.000Z",
+  criteria: "保密的验收标准。必需：A、B、C",
+};
+const BOUNCED = { taskId: TASK_ID, reason: "保密的挡回原因：缺 C。" };
+const DELIVERED = {
+  taskId: TASK_ID,
+  deliverable: {
+    kind: "deliverable",
+    links: [{ url: "https://secret.example.test/sheet", title: "保密的表格" }],
+    notes: ["保密的结论"],
+    checks: ["保密的自查"],
+  },
+};
+const EXTENSION = {
+  taskId: TASK_ID,
+  dueAt: "2026-11-15T09:00:00.000Z",
+  reason: "保密的延期理由",
+};
+const DELIVERY_CONTENT = [
+  "保密的验收标准",
+  "保密的挡回原因",
+  "secret.example.test",
+  "保密的表格",
+  "保密的结论",
+  "保密的自查",
+  "保密的延期理由",
+];
+
+function expectNoDeliveryContent(seen: unknown) {
+  const text = JSON.stringify(seen);
+  for (const secret of DELIVERY_CONTENT) expect(text).not.toContain(secret);
+}
+
+/** 标记去掉时刻（时刻另查是不是时间），便于整体比较；没有标记为 null。 */
+function marksWithoutTime(marks: unknown): unknown {
+  if (marks === undefined) return null;
+  expect(Array.isArray(marks)).toBe(true);
+  return (marks as Record<string, unknown>[]).map(({ at, ...rest }) => {
+    expect(typeof at === "string" && !Number.isNaN(Date.parse(at))).toBe(true);
+    // 只有这几个字段，不带内容（`eventId` 是流水那一行的号码，不是内容）。
+    expect(
+      Object.keys(rest).every((key) =>
+        ["kind", "taskId", "agentId", "dueAt", "eventId"].includes(key),
+      ),
+    ).toBe(true);
+    return rest;
+  });
+}
+
 function service(options: {
   replies: Record<
     string,
@@ -126,6 +192,10 @@ function service(options: {
   activity?: Parameters<typeof createGroupConversations>[0]["activity"];
   /** The board, attached only by the cases that are about the cards it holds. */
   board?: Parameters<typeof createGroupConversations>[0]["board"];
+  /** A real turn runner in place of the scripted replies, for the cases about what a run carries. */
+  runTurn?: TurnRunner;
+  /** Bots that are someone's external employees (`hiredBy`), as the production roster marks them. */
+  hiredBy?: Record<string, string>;
 }) {
   const calls: Parameters<TurnRunner>[0][] = [];
   const audit: AuditEventInput[] = [];
@@ -141,12 +211,20 @@ function service(options: {
       const bots = [];
       for (const agentId of channel.agentIds) {
         const profile = await profileStore.get(actor, agentId);
-        if (profile) bots.push({ id: agentId, name: profile.name });
+        if (profile)
+          bots.push({
+            id: agentId,
+            name: profile.name,
+            ...(options.hiredBy?.[agentId]
+              ? { hiredBy: options.hiredBy[agentId] }
+              : {}),
+          });
       }
       return bots;
     },
     runTurn: async (input) => {
       calls.push(input);
+      if (options.runTurn) return options.runTurn(input);
       const reply = options.replies[input.agentId];
       if (!reply) throw new Error(`unexpected Bot ${input.agentId}`);
       return { replyText: await reply(input) };
@@ -744,6 +822,525 @@ describe("group conversations in PostgreSQL", () => {
       conversations.list(teammate.id, channel.id),
     );
     expect(theirs.messages.some((row) => "compaction" in row)).toBe(false);
+  });
+
+  test("交付卡在群回复上只记不带内容的状态标记，群里每个人读到的一样", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    // 群组至少两位员工；Grace 这一轮什么卡也没发，它的回复不带 `delivery`。
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({ name: "delivery.accepted", value: ACCEPTED });
+          // 别的事件、答复延期的事件、缺卡片 id 的都不记。
+          input.onCustom?.({
+            name: "xiongbao.compaction.done",
+            value: { auto: true },
+          });
+          input.onCustom?.({
+            name: "delivery.extension_decided",
+            value: { taskId: TASK_ID, decision: "grant" },
+          });
+          input.onCustom?.({ name: "delivery.delivered", value: {} });
+          input.onCustom?.({ name: "delivery.bounced", value: BOUNCED });
+          return "已接下";
+        },
+        [grace]: () => "g",
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-delivery`,
+        text: "把竞品价格整理成表",
+      });
+      await drain(conversations);
+    });
+    const marks = [
+      {
+        kind: "accepted",
+        taskId: TASK_ID,
+        agentId: ada,
+        dueAt: ACCEPTED.dueAt,
+      },
+      { kind: "bounced", taskId: TASK_ID, agentId: ada },
+    ];
+    for (const reader of [owner, teammate]) {
+      const seen = await as(reader, () =>
+        conversations.list(reader.id, channel.id),
+      );
+      expect(
+        seen.messages.map((row) => [
+          row.agentId,
+          row.ownerUserId,
+          marksWithoutTime(row.delivery),
+        ]),
+      ).toEqual([
+        [null, owner.id, null],
+        [ada, owner.id, marks],
+        [grace, owner.id, null],
+      ]);
+      expectNoDeliveryContent(seen);
+    }
+  });
+
+  test("员工这一轮里服务器放的交付卡，经真实的轮次跑到群回复的 details.delivery 上", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const card = {
+      taskId: randomUUID(),
+      // 这一步那一行流水的 id：标记带着它走到群回复上，派活人按它对回流水。
+      eventId: randomUUID(),
+      dueAt: "2026-11-15T02:30:00.000Z",
+      criteria: "三家全部在售款",
+    };
+    /*
+     * 一位员工的一轮：说一句、调接活，工具执行时服务器用 `emitRunEvent` 放回执卡（内置员工的流由
+     * `withRunSideEvents` 包着，`copilot.ts`），工具答复。Grace 什么卡也不放。
+     */
+    class Coworker extends AbstractAgent {
+      constructor(private readonly drawsCard: boolean) {
+        super({ agentId: "coworker" });
+      }
+      run(input: RunAgentInput): Observable<BaseEvent> {
+        const said = `said-${input.runId}`;
+        const call = `call-${input.runId}`;
+        const draws = this.drawsCard;
+        const source = new Observable<BaseEvent>((stream) => {
+          void (async () => {
+            const next = (event: Record<string, unknown>) =>
+              stream.next(event as unknown as BaseEvent);
+            next({
+              type: EventType.RUN_STARTED,
+              threadId: input.threadId,
+              runId: input.runId,
+            });
+            next({
+              type: EventType.TEXT_MESSAGE_START,
+              messageId: said,
+              role: "assistant",
+            });
+            next({
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              messageId: said,
+              delta: draws ? "好的，我接下了。" : "g",
+            });
+            next({ type: EventType.TEXT_MESSAGE_END, messageId: said });
+            if (draws) {
+              next({
+                type: EventType.TOOL_CALL_START,
+                toolCallId: call,
+                toolCallName: "accept_task",
+                parentMessageId: said,
+              });
+              next({ type: EventType.TOOL_CALL_END, toolCallId: call });
+              await Promise.resolve();
+              emitRunEvent(input.runId, {
+                type: EventType.CUSTOM,
+                name: "delivery.accepted",
+                value: card,
+              } as BaseEvent);
+              next({
+                type: EventType.TOOL_CALL_RESULT,
+                toolCallId: call,
+                messageId: `result-${input.runId}`,
+                content: "{}",
+              });
+            }
+            next({
+              type: EventType.RUN_FINISHED,
+              threadId: input.threadId,
+              runId: input.runId,
+            });
+            stream.complete();
+          })().catch((error) => stream.error(error));
+        });
+        return withRunSideEvents(input.runId, source);
+      }
+    }
+    const runTurn = createTurnRunner({
+      admission: async ({ signal }) => signal ?? new AbortController().signal,
+      // The platform client, inert: a headless turn needs a thread and a lock, neither under test here.
+      intelligence: {
+        getOrCreateThread: async (params: { threadId: string }) => ({
+          thread: { id: params.threadId },
+          created: false,
+        }),
+        getThreadMessages: async () => ({ messages: [] }),
+        ɵacquireThreadLock: async (params: {
+          threadId: string;
+          runId: string;
+        }) => ({
+          threadId: params.threadId,
+          runId: params.runId,
+          joinToken: "test",
+        }),
+        ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
+        ɵcleanupThreadLock: async () => undefined,
+      } as never,
+      runner: new PostgresAgentRunner(database) as never,
+      buildAgentFor: async ({ agentId }) => new Coworker(agentId === ada),
+    });
+    const { conversations } = service({ replies: {}, runTurn });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-delivery-real`,
+        text: "把竞品价格整理成表",
+      });
+      await drain(conversations);
+    });
+    const theirs = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(
+      theirs.messages.map((row) => [
+        row.agentId,
+        row.status,
+        row.ownerUserId,
+        marksWithoutTime(row.delivery),
+      ]),
+    ).toEqual([
+      [null, "completed", owner.id, null],
+      [
+        ada,
+        "completed",
+        owner.id,
+        [
+          {
+            kind: "accepted",
+            taskId: card.taskId,
+            agentId: ada,
+            dueAt: card.dueAt,
+            eventId: card.eventId,
+          },
+        ],
+      ],
+      [grace, "completed", owner.id, null],
+    ]);
+  });
+
+  /** 打开分享检查（每次回复都问派活人，按 `decision` 答）。 */
+  function askingShare(id: string) {
+    const state = {
+      decision: "pending" as "pending" | "approved" | "denied",
+      asked: 0,
+    };
+    const privateShare = createPrivateShareCheck({
+      approvals: {
+        open: async () => {
+          state.asked += 1;
+          return { id, status: state.decision } as never;
+        },
+        list: async () => [],
+        rules: async () => [],
+      },
+    });
+    return { state, privateShare };
+  }
+
+  /** 同事读到 Ada 那一行：状态、正文、标记（去掉时刻）。 */
+  async function adaRowFor(
+    reader: AgentActor,
+    conversations: ReturnType<typeof service>["conversations"],
+    channelId: string,
+    ada: string,
+  ) {
+    const seen = await as(reader, () =>
+      conversations.list(reader.id, channelId),
+    );
+    expectNoDeliveryContent(seen);
+    const row = seen.messages.find((message) => message.agentId === ada);
+    return {
+      status: row?.status,
+      text: row?.text,
+      marks: marksWithoutTime(row?.delivery),
+    };
+  }
+
+  test("空正文、只调了交付工具的回复：分享检查打开，群里非派活人读到的只有状态标记", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { state, privateShare } = askingShare(`${prefix}-quiet-share`);
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({ name: "delivery.bounced", value: BOUNCED });
+          input.onCustom?.({ name: "delivery.delivered", value: DELIVERED });
+          return "";
+        },
+      },
+      privateShare,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-quiet`,
+        text: "交一下",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    // 正文为空，没有可问的：直接发出，只带标记。
+    expect(state.asked).toBe(0);
+    expect(await adaRowFor(teammate, conversations, channel.id, ada)).toEqual({
+      status: "completed",
+      text: "",
+      marks: [
+        { kind: "bounced", taskId: TASK_ID, agentId: ada },
+        { kind: "delivered", taskId: TASK_ID, agentId: ada },
+      ],
+    });
+    const raw = await rawTranscript(teammate, channel.id);
+    for (const secret of DELIVERY_CONTENT) expect(raw).not.toContain(secret);
+  });
+
+  for (const decided of ["approved", "denied"] as const)
+    test(`等派活人放行时标记照样在；${decided === "approved" ? "放行后正文和标记都在" : "不放行时正文照旧隐藏，标记照样显示"}`, async () => {
+      const owner = await person();
+      const teammate = await person();
+      const ada = await as(owner, () => bot(owner, "Ada"));
+      const grace = await as(owner, () => bot(owner, "Grace"));
+      const approvalId = `${prefix}-held-${decided}`;
+      const { state, privateShare } = askingShare(approvalId);
+      const { conversations } = service({
+        replies: {
+          [ada]: (input) => {
+            input.onCustom?.({ name: "delivery.accepted", value: ACCEPTED });
+            input.onCustom?.({
+              name: "delivery.extension_requested",
+              value: EXTENSION,
+            });
+            return "接下了，另外想延一延。";
+          },
+        },
+        privateShare,
+      });
+      const channel = await as(owner, () =>
+        conversations.create(owner.id, { agentIds: [ada, grace] }),
+      );
+      await as(owner, async () => {
+        await conversations.addMember(owner.id, channel.id, {
+          email: await emailOf(teammate),
+        });
+        await conversations.send(owner.id, channel.id, {
+          id: `${prefix}-held-${decided}-ask`,
+          text: "整理一下",
+          agentId: ada,
+        });
+        await drain(conversations);
+      });
+      const marks = [
+        {
+          kind: "accepted",
+          taskId: TASK_ID,
+          agentId: ada,
+          dueAt: ACCEPTED.dueAt,
+        },
+        {
+          kind: "extension_requested",
+          taskId: TASK_ID,
+          agentId: ada,
+          dueAt: EXTENSION.dueAt,
+        },
+      ];
+      expect(state.asked).toBe(1);
+      expect(await adaRowFor(teammate, conversations, channel.id, ada)).toEqual(
+        { status: "waiting", text: "", marks },
+      );
+
+      state.decision = decided;
+      await as(owner, () =>
+        conversations.continueWaiting(approvalId, async () => {
+          throw new Error("a held reply is shown, not re-run");
+        }),
+      );
+      const after = await adaRowFor(teammate, conversations, channel.id, ada);
+      expect(after.marks).toEqual(marks);
+      if (decided === "approved") {
+        expect(after).toMatchObject({
+          status: "completed",
+          text: "接下了，另外想延一延。",
+        });
+      } else {
+        expect(after.status).toBe("failed");
+        expect(after.text).not.toContain("接下了，另外想延一延");
+      }
+      const raw = await rawTranscript(teammate, channel.id);
+      for (const secret of DELIVERY_CONTENT) expect(raw).not.toContain(secret);
+    });
+
+  test("轮次中途等工具审批：等之前和恢复后走的步骤都记在这一行上，分享检查照常", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const shareId = `${prefix}-tool-share`;
+    const { state, privateShare } = askingShare(shareId);
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({ name: "delivery.accepted", value: ACCEPTED });
+          throw new HeadlessToolSuspension("Waiting for your approval.", {
+            kind: "approval",
+            approvalId: `${prefix}-tool-wait`,
+          });
+        },
+      },
+      privateShare,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-tool-ask`,
+        text: "整理一下",
+        agentId: ada,
+      });
+    });
+    await runAsTenant("platform", () => drain(conversations));
+    const acceptedMark = {
+      kind: "accepted",
+      taskId: TASK_ID,
+      agentId: ada,
+      dueAt: ACCEPTED.dueAt,
+    };
+    expect(await adaRowFor(teammate, conversations, channel.id, ada)).toEqual({
+      status: "waiting",
+      text: "",
+      marks: [acceptedMark],
+    });
+
+    // 派活人准了工具：恢复的这一轮交了成果，回复还要过分享检查。
+    const resumed = await as(owner, () =>
+      conversations.continueWaiting(`${prefix}-tool-wait`, async (hooks) => {
+        hooks?.onCustom?.({ name: "delivery.delivered", value: DELIVERED });
+        return { replyText: "交了，请验收。" };
+      }),
+    );
+    expect(resumed).toEqual({ replyText: "" });
+    expect(state.asked).toBe(1);
+    const deliveredMark = { kind: "delivered", taskId: TASK_ID, agentId: ada };
+    expect(await adaRowFor(teammate, conversations, channel.id, ada)).toEqual({
+      status: "waiting",
+      text: "",
+      marks: [acceptedMark, deliveredMark],
+    });
+
+    state.decision = "approved";
+    await as(owner, () =>
+      conversations.continueWaiting(shareId, async () => {
+        throw new Error("a held reply is shown, not re-run");
+      }),
+    );
+    expect(await adaRowFor(teammate, conversations, channel.id, ada)).toEqual({
+      status: "completed",
+      text: "交了，请验收。",
+      marks: [acceptedMark, deliveredMark],
+    });
+    // 派活人自己读到的也一样：内容从卡片接口读，不在群回复里。
+    expect(
+      (await adaRowFor(owner, conversations, channel.id, ada)).marks,
+    ).toEqual([acceptedMark, deliveredMark]);
+  });
+
+  test("外部员工的轮次（detached）不记交付卡标记", async () => {
+    const owner = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({
+      replies: {},
+      // 外部员工在群里的轮次只回一句「开始了」，它的三步在设备那一轮里走。
+      runTurn: (async (input) => {
+        input.onCustom?.({ name: "delivery.accepted", value: ACCEPTED });
+        return { replyText: "已开始。", detached: true };
+      }) as TurnRunner,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-detached`,
+        text: "整理一下",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    expect(await adaRowFor(owner, conversations, channel.id, ada)).toEqual({
+      status: "completed",
+      text: "已开始。",
+      marks: null,
+    });
+  });
+
+  test("外部员工的轮次挂起或出错时也不记交付卡标记", async () => {
+    const owner = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({ name: "delivery.accepted", value: ACCEPTED });
+          throw new HeadlessToolSuspension("Waiting for your approval.", {
+            kind: "approval",
+            approvalId: `${prefix}-external-wait`,
+          });
+        },
+        [grace]: (input) => {
+          input.onCustom?.({ name: "delivery.delivered", value: DELIVERED });
+          throw new Error("the device went away");
+        },
+      },
+      // 两位都是这位派活人自己招的外部员工。
+      hiredBy: { [ada]: owner.id, [grace]: owner.id },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, () =>
+      conversations.send(owner.id, channel.id, {
+        id: `${prefix}-external`,
+        text: "整理一下",
+      }),
+    );
+    await runAsTenant("platform", () => drain(conversations));
+    const seen = await as(owner, () =>
+      conversations.list(owner.id, channel.id),
+    );
+    expect(
+      seen.messages
+        .filter((row) => row.agentId)
+        .map((row) => [row.agentId, row.status, row.delivery ?? null]),
+    ).toEqual([
+      [ada, "waiting", null],
+      [grace, "failed", null],
+    ]);
   });
 
   test("a member can add another signed-in person, who then reads the shared transcript", async () => {

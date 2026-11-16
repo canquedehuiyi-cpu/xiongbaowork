@@ -94,6 +94,8 @@ export type SidebarGoalStage =
 
 /** 目标：这个对话里未结束的在跟卡，没有时取最近一张任务卡；没有卡时为 null。 */
 export type SidebarGoal = {
+  /** 这张卡的 id：侧栏上「当作一件活来跟」按它找卡。老服务端不带。 */
+  taskId?: string;
   title: string;
   status: SidebarGoalStatus;
   /** 在跟的活走到哪一步；不在跟为 null。 */

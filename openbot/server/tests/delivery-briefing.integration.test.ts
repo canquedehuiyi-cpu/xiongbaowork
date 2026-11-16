@@ -432,7 +432,10 @@ test("briefing numbers match the board", async () => {
   if (!briefing) throw new Error("no briefing");
 
   // The board, as the person reads it.
-  const board = createTaskRoutes(database, asUser(bea.id), projector);
+  // Read at the briefing's own instant: what counts as overdue now depends on the clock.
+  const board = createTaskRoutes(database, asUser(bea.id), projector, {
+    now: () => MONDAY_9,
+  });
   const list = async (query = "") => {
     const response = await runAsTenant(bea.id, () =>
       board.request(`http://openbot.test/${query}`),
@@ -501,6 +504,36 @@ test("briefing numbers match the board", async () => {
   );
   const response = await page.request("/api/me/briefing?kind=start");
   expect(await response.json()).toEqual({ kind: "start", briefing });
+});
+
+test("a card given more time is in progress again, not overdue; its overdue_at stays", async () => {
+  const yan = await person("extended");
+  const recorded = at(MONDAY_9, -30 * MINUTE);
+  const extended = await card(yan, {
+    title: "延到下午",
+    acceptedAt: at(MONDAY_9, -5 * HOUR),
+    dueAt: at(MONDAY_9, 2 * HOUR),
+    dueReported: true,
+    overdueAt: recorded,
+    nudges: 1,
+  });
+  const late = await card(yan, {
+    title: "还逾期着",
+    acceptedAt: at(MONDAY_9, -5 * HOUR),
+    dueAt: at(MONDAY_9, -1 * HOUR),
+    overdueAt: recorded,
+  });
+  const briefing = await briefingsFor([yan]).buildBriefing(
+    yan.id,
+    "start",
+    MONDAY_9,
+  );
+  if (!briefing) throw new Error("no briefing");
+  expect(briefing.overdue.map((item) => item.taskId)).toEqual([late]);
+  expect(briefing.inProgress.map((item) => item.taskId)).toEqual([extended]);
+  expect((await cardRow(yan, extended)).overdueAt?.getTime()).toBe(
+    recorded.getTime(),
+  );
 });
 
 test("start briefing carries reminders deferred overnight", async () => {

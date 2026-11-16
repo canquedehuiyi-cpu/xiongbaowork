@@ -37,7 +37,12 @@ import {
 import { newId } from "@/lib/new-id";
 import { startRunMutationOptions } from "@/lib/pipelines/mutations";
 import { pipelineTemplatesQueryOptions } from "@/lib/pipelines/queries";
+import { type DeliveryMark, readDeliveryMark } from "@/lib/tasks/delivery-chat";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
+import {
+  DeliveryChatCards,
+  GroupDeliveryMark,
+} from "@/skins/xiongbao/delivery-chat";
 import { ChannelAvatar } from "./avatar";
 import {
   Composer,
@@ -135,6 +140,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
     ]),
   );
   const messages = group.data?.messages ?? [];
+  const deliveryOf = groupDeliveryCards(messages);
   const working = messages.some(
     (message) => message.status === "running" || message.status === "queued",
   );
@@ -234,7 +240,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
               message={message}
               name={
                 message.agentId
-                  ? (names.get(message.agentId) ?? "一位已不在本群的员工")
+                  ? (names.get(message.agentId) ?? "一位员工")
                   : message.ownerUserId === me?.id
                     ? "你"
                     : (people.get(message.ownerUserId) ?? "一位同事")
@@ -245,6 +251,8 @@ export function GroupChat({ channelId }: { channelId: string }) {
                   : undefined
               }
               mine={message.ownerUserId === me?.id}
+              delivery={deliveryOf.get(message.id)}
+              ownerName={people.get(message.ownerUserId) ?? "派活的人"}
             />
           ))}
         </div>
@@ -388,17 +396,37 @@ export function groupQuestion(
   return inbox?.questions.find((question) => question.channelId === channelId);
 }
 
+/** 每行回复带的交付卡状态标记；形状不对的不画。 */
+export function groupDeliveryCards(
+  messages: readonly GroupMessage[],
+): Map<string, DeliveryMark[]> {
+  const cards = new Map<string, DeliveryMark[]>();
+  for (const message of messages) {
+    const marks = (message.delivery ?? []).flatMap(
+      (entry) => readDeliveryMark(entry) ?? [],
+    );
+    if (marks.length > 0) cards.set(message.id, marks);
+  }
+  return cards;
+}
+
 /** One attributed line: a person's bubble, and a Bot's named reply on the left. */
 function GroupLine({
   message,
   name,
   answeredBy,
   mine,
+  delivery,
+  ownerName,
 }: {
   message: GroupMessage;
   name: string;
   answeredBy?: string;
   mine: boolean;
+  /** 这一轮里员工走到哪一步的标记；完整的卡和按钮只给发起这一轮的人（`ownerUserId`）。 */
+  delivery?: readonly DeliveryMark[];
+  /** 发起这一轮的人怎么称呼（状态行里「等<他>验收」）。 */
+  ownerName: string;
 }) {
   if (message.agentId === null)
     return (
@@ -511,6 +539,19 @@ function GroupLine({
             </BubbleContent>
           </Bubble>
         )}
+        {delivery && delivery.length > 0 ? (
+          <DeliveryChatCards>
+            {delivery.map((mark) => (
+              <GroupDeliveryMark
+                agentName={name}
+                key={`${mark.kind}:${mark.taskId}:${mark.at}`}
+                mark={mark}
+                ownerId={message.ownerUserId}
+                ownerName={ownerName}
+              />
+            ))}
+          </DeliveryChatCards>
+        ) : null}
       </MessageContent>
     </MessageRow>
   );

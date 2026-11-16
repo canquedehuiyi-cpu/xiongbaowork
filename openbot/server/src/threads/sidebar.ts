@@ -63,6 +63,7 @@ import type { MachineTarget } from "../projects/context";
 import { stageOf } from "../tasks/delivery";
 import { DEFAULT_TIME_ZONE } from "../tasks/delivery-tools";
 import { QUIET_TASK_EVENT_KINDS, taskEventSentence } from "../tasks/events";
+import { isOverdueNow } from "../tasks/overdue";
 import { isDeliverableRef } from "../tasks/projector";
 import { isPersonTenant, runAsTenant } from "../tenant/context";
 import { compactionEstimate, latestCompaction } from "./compaction";
@@ -854,11 +855,13 @@ export function createConversationSidebar(
             .where(inArray(threadRuns.threadId, [...threadIds]))
         : [{ value: 0 }];
     return {
+      taskId: card.id,
       title: card.title,
       status: card.status,
       stage: stageOf(card),
       dueAt: card.dueAt?.toISOString() ?? null,
-      overdue: card.overdueAt !== null,
+      // 此刻算不算逾期，和看板、清点同一条口径（`tasks/overdue.ts`）：延期到将来以后不算。
+      overdue: isOverdueNow(card, new Date()),
       returns: card.returns,
       rounds: Number(runs?.value ?? 0),
       lastCheck: card.tracked

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import type { Delivery } from "../../tasks/delivery";
 import {
@@ -276,7 +277,9 @@ export function createAcpDelivery(options: {
       DEFAULT_TIME_ZONE;
     const reading = readDueTime(asked.due, now(), timeZone);
     if (reading.at === null) return false;
+    const askedLine = randomUUID();
     const filed = await delivery.requestExtension(turn.tenantId, taskId, {
+      eventId: askedLine,
       dueAt: reading.at,
       reason: asked.reason,
       runId: turn.runId,
@@ -285,6 +288,7 @@ export function createAcpDelivery(options: {
     if (filed)
       said(turn.runId, DELIVERY_EVENTS.extensionRequested, {
         taskId,
+        eventId: askedLine,
         dueAt: reading.at.toISOString(),
         reason: asked.reason,
       });
@@ -328,7 +332,9 @@ export function createAcpDelivery(options: {
       const card = await cardOf(turn);
       if (!card?.tracked) return;
       if (card.acceptedAt === null) {
+        const acceptedLine = randomUUID();
         const accepted = await delivery.accept(turn.tenantId, card.id, {
+          eventId: acceptedLine,
           runId: turn.runId,
           threadRef: turn.threadId,
           actor: actor(turn),
@@ -337,6 +343,7 @@ export function createAcpDelivery(options: {
         if (accepted)
           said(turn.runId, DELIVERY_EVENTS.accepted, {
             taskId: card.id,
+            eventId: acceptedLine,
             dueAt: accepted.dueAt?.toISOString() ?? null,
             criteria: accepted.criteria,
           });
@@ -409,7 +416,9 @@ export function createAcpDelivery(options: {
           externalRun: turn.runId,
         });
         if (!verdict.ok) {
+          const bouncedLine = randomUUID();
           await delivery.bounced(turn.tenantId, card.id, {
+            eventId: bouncedLine,
             runId: turn.runId,
             actor: actor(turn),
             reason: verdict.reason,
@@ -417,11 +426,14 @@ export function createAcpDelivery(options: {
           });
           said(turn.runId, DELIVERY_EVENTS.bounced, {
             taskId: card.id,
+            eventId: bouncedLine,
             reason: verdict.reason,
           });
           return undefined;
         }
+        const deliveredLine = randomUUID();
         const merged = await delivery.delivered(turn.tenantId, card.id, {
+          eventId: deliveredLine,
           runId: turn.runId,
           agentId: turn.agentId,
           actor: actor(turn),
@@ -430,6 +442,7 @@ export function createAcpDelivery(options: {
         if (merged)
           said(turn.runId, DELIVERY_EVENTS.delivered, {
             taskId: card.id,
+            eventId: deliveredLine,
             deliverable: verdict.ref,
           });
         return undefined;

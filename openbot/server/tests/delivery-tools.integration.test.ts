@@ -61,13 +61,13 @@ import {
 } from "../src/tasks/projector";
 import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
+import { PostgresAgentRunner } from "../src/threads/postgres-runner";
+import { withRunSideEvents } from "../src/threads/run-side-events";
+import { suppressRunnerCard } from "../src/threads/unattended-card";
 import {
   createUserPreferencesStore,
   readWorkHours,
 } from "../src/user-preferences";
-import { PostgresAgentRunner } from "../src/threads/postgres-runner";
-import { withRunSideEvents } from "../src/threads/run-side-events";
-import { suppressRunnerCard } from "../src/threads/unattended-card";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -565,8 +565,11 @@ describe("accept_task", () => {
     // The 接活回执 is in the run's own stored events, so a reload draws it.
     const custom = await storedCustom(tenantId, round.runId);
     expect(custom.map((event) => event.name)).toEqual(["delivery.accepted"]);
+    // The card names its 接下 line by id: the chat finds that line by it, not by the due time.
+    expect(typeof history[0]?.id).toBe("string");
     expect(custom[0]?.value).toEqual({
       taskId: card.id,
+      eventId: history[0]?.id,
       dueAt: row?.dueAt?.toISOString() ?? null,
       criteria: "三家都核对完。必需：A家、B家、C家",
     });
@@ -1035,9 +1038,11 @@ describe("deliver_task and the evidence gate", () => {
       ],
       checks: ["对过三家的原始数字"],
     });
-    const kinds = (await eventsOf(tenantId, card.id)).map((line) => line.kind);
+    const lines = await eventsOf(tenantId, card.id);
     expect(
-      kinds.filter((kind) => kind !== "progress" && kind !== "run_ended"),
+      lines
+        .map((line) => line.kind)
+        .filter((kind) => kind !== "progress" && kind !== "run_ended"),
     ).toEqual(["accepted", "delivered"]);
     expect(parsed(round.results[1] ?? "{}").delivered).toBe(true);
     const custom = await storedCustom(tenantId, round.runId);
@@ -1045,9 +1050,16 @@ describe("deliver_task and the evidence gate", () => {
       "delivery.accepted",
       "delivery.delivered",
     ]);
+    expect(typeof lines.find((line) => line.kind === "delivered")?.id).toBe(
+      "string",
+    );
     expect(custom[1]?.value).toEqual({
       taskId: card.id,
+      eventId: lines.find((line) => line.kind === "delivered")?.id,
       deliverable: row?.deliverableRef,
+    });
+    expect(custom[0]?.value).toMatchObject({
+      eventId: lines.find((line) => line.kind === "accepted")?.id,
     });
   });
 
@@ -1068,8 +1080,10 @@ describe("deliver_task and the evidence gate", () => {
     expect(bounced[0]?.detail.runId).toBe(runId);
     const custom = await storedCustom(card.tenantId, runId);
     expect(custom.map((event) => event.name)).toEqual(["delivery.bounced"]);
+    expect(typeof bounced[0]?.id).toBe("string");
     expect(custom[0]?.value).toEqual({
       taskId: card.cardId,
+      eventId: bounced[0]?.id,
       reason: answer.reason,
     });
   });
@@ -1414,8 +1428,10 @@ describe("request_extension", () => {
     expect(custom.map((event) => event.name)).toEqual([
       "delivery.extension_requested",
     ]);
+    expect(typeof asked[0]?.id).toBe("string");
     expect(custom[0]?.value).toEqual({
       taskId: card.cardId,
+      eventId: asked[0]?.id,
       dueAt: asked[0]?.detail.dueAt,
       reason: "C 家发票还没寄到",
     });

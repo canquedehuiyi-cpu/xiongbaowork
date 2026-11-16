@@ -12,6 +12,7 @@ import {
   ChatTranscript,
   skillLabels,
   type TranscriptCompaction,
+  type TranscriptNote,
   type Typist,
 } from "@/components/channels/chat-transcript";
 import {
@@ -33,6 +34,7 @@ export function ConversationView({
   messages,
   threadId,
   compaction,
+  notes,
   busy = false,
   notice,
   attached,
@@ -64,6 +66,8 @@ export function ConversationView({
   threadId?: string;
   /** 压缩会话的分隔线（默认皮肤）；见 `ChatTranscript`。 */
   compaction?: TranscriptCompaction | null;
+  /** 跟在某条消息下面的交付卡；见 `ChatTranscript`。 */
+  notes?: readonly TranscriptNote[];
   busy?: boolean;
   /** Shown above the composer. An error, or why this conversation is read-only. */
   notice?: ReactNode;
@@ -478,6 +482,7 @@ export function ConversationView({
          */}
         <ChatTranscript
           compaction={compaction}
+          {...(notes ? { notes } : {})}
           threadId={threadId}
           busy={busy}
           commandLabels={skillLabels(commands ?? [])}

@@ -20,6 +20,11 @@ import { diffTitle } from "./diff-summary";
 import { clockOf } from "./due-time";
 import { appendTaskEvent } from "./events";
 import type { DeliverableRef } from "./projector";
+import {
+  NOTIFY_AFTER_NUDGE_MS,
+  NUDGE_AFTER_MS,
+  OVERDUE_AFTER_DUE_MS,
+} from "../../../shared/delivery-timing";
 
 /**
  * The delivery checker (spec 2026-11-15-delivery-loop §8): the server's own clock over every followed
@@ -78,10 +83,11 @@ import type { DeliverableRef } from "./projector";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
-/** How long after a card starts waiting, or after its due time, the coworker is nudged. */
-export const NUDGE_AFTER_MS = 5 * MINUTE;
-/** How long after the first nudge's moment the person is told (and an accepted card is overdue). */
-export const NOTIFY_AFTER_NUDGE_MS = 30 * MINUTE;
+/*
+ * The nudge after a due time, the reminder after the nudge, and the overdue grace they add up to live in
+ * `shared/delivery-timing.ts`: `tasks/overdue.ts` and the app's board read the same grace.
+ */
+export { NOTIFY_AFTER_NUDGE_MS, NUDGE_AFTER_MS, OVERDUE_AFTER_DUE_MS };
 /** The least time between two nudges, and between two reminders, about one card. */
 export const REPEAT_MS = 2 * HOUR;
 /** The due time of a card whose coworker named none: this long after it was taken on. */

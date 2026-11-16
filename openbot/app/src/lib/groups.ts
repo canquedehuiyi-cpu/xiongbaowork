@@ -33,6 +33,17 @@ export type GroupMessage = {
    * 这一轮开始前，这位员工在你和它那条线程上的上下文自动压缩了（`done`）或没压成（`failed`）。只给发起的人。
    */
   compaction?: { outcome: "done" | "failed" };
+  /**
+   * 这一轮里员工走到了三步里的哪一步（接下、申请延期、交付、被挡回）：不带内容的状态标记
+   * （`server/src/channels/group.ts` `GroupDeliveryMark`），按出现的先后。完整内容只有派活的人从卡片接口读。
+   */
+  delivery?: {
+    kind: string;
+    taskId: string;
+    at: string;
+    agentId: string;
+    dueAt?: string;
+  }[];
 };
 export type GroupPerson = {
   userId: string;
