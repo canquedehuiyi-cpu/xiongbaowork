@@ -23,7 +23,7 @@
 # (device-clean-{linux,windows}-evidence.txt) go up with the release, outside SHA256SUMS.
 #
 # Every run script reads its inputs from env, never from ${{ }}: the steps are exercised as written
-# by openbot/scripts/ci/device-release-workflow.test.mjs.
+# by xiongbao/scripts/ci/device-release-workflow.test.mjs.
 name: 熊宝设备端发布
 
 on:
@@ -97,7 +97,7 @@ jobs:
           fi
       - id: tag
         name: Tag format and the version the app is built with
-        working-directory: openbot
+        working-directory: xiongbao
         env:
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -140,7 +140,7 @@ jobs:
       contents: read
     defaults:
       run:
-        working-directory: openbot
+        working-directory: xiongbao
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -159,7 +159,7 @@ jobs:
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
@@ -169,7 +169,7 @@ jobs:
       - name: Write the third-party notices the bundle ships
         run: bun scripts/brand/third-party-notices.ts
       - name: Bundle the deb
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         run: ../desktop/node_modules/.bin/tauri build --ci --bundles deb --config src-tauri/tauri.bundle.conf.json
       - name: Check the package and stage it under its release name
         env:
@@ -214,7 +214,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: openbot
+        working-directory: xiongbao
     env:
       SIGNING_SOURCE_SHA: ${{ github.sha }}
       DEVICE_WINDOWS_SIGNING: ${{ vars.DEVICE_WINDOWS_SIGNING }}
@@ -308,7 +308,7 @@ jobs:
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
@@ -319,7 +319,7 @@ jobs:
         run: bun scripts/brand/third-party-notices.ts
       # Signed: Tauri runs sign-windows.ps1 on the app, the runner sidecar and the installer.
       - name: Bundle the NSIS installer
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           MODE: ${{ steps.mode.outputs.mode }}
         run: |
@@ -328,7 +328,7 @@ jobs:
           if [ "$MODE" != none ]; then configs+=(--config src-tauri/tauri.windows-signing.conf.json); fi
           ../desktop/node_modules/.bin/tauri build --ci --bundles nsis "${configs[@]}"
       - name: Verify the installer (verify-windows-signatures.ps1)
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         shell: pwsh
         env:
           MODE: ${{ steps.mode.outputs.mode }}
@@ -394,7 +394,7 @@ jobs:
       team: ${{ steps.done.outputs.team }}
     defaults:
       run:
-        working-directory: openbot
+        working-directory: xiongbao
     env:
       DEVICE_MACOS_SIGNING: ${{ vars.DEVICE_MACOS_SIGNING }}
       DEVICE_APPLE_SIGNING_IDENTITY: ${{ vars.DEVICE_APPLE_SIGNING_IDENTITY }}
@@ -481,7 +481,7 @@ jobs:
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
@@ -494,7 +494,7 @@ jobs:
       # notarizes the app with the App Store Connect API key and staples it, then builds the dmg.
       - name: Bundle the app and dmg (Developer ID, notarized)
         if: ${{ steps.mode.outputs.mode == 'developer-id' }}
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           APPLE_SIGNING_IDENTITY: ${{ vars.DEVICE_APPLE_SIGNING_IDENTITY }}
           APPLE_API_KEY: ${{ vars.DEVICE_APPLE_API_KEY_ID }}
@@ -503,7 +503,7 @@ jobs:
         run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
       - name: Bundle the app and dmg (ad-hoc signature only)
         if: ${{ steps.mode.outputs.mode == 'none' }}
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           APPLE_SIGNING_IDENTITY: "-"
         run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
@@ -526,7 +526,7 @@ jobs:
           fi
           xcrun stapler staple "$dmg"
       - name: Verify the bundle (codesign, stapler validate, spctl --assess)
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           MODE: ${{ steps.mode.outputs.mode }}
           VERSION: ${{ needs.tag-check.outputs.version }}
@@ -765,7 +765,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: source/openbot
+        working-directory: source/xiongbao
     env:
       VERSION: ${{ needs.tag-check.outputs.version }}
       DIST: ${{ github.workspace }}/release/dist
@@ -858,7 +858,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: source/openbot
+        working-directory: source/xiongbao
     env:
       VERSION: ${{ needs.tag-check.outputs.version }}
       PRODUCT: 熊宝数字员工 设备端

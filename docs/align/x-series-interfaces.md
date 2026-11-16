@@ -1014,7 +1014,7 @@ CI：-4（dabcaa88）通过；-1、-2、-3 的 head 未变，CI 均为通过。
 ## X6 报告：Entra 代表用户调用（上游 #931，Microsoft OBO）
 
 - PR：#426（草稿，base `main`），分支 `feat/align-x6-entra-obo-1`，只有一个 PR，没有拆分。
-- 迁移：**0186_entra_scope**（overlay `openbot/server/recovery/recovery-20261018-v1/sql/`）。动手前 main 上 overlay 的最大编号是 0174；M5a 占 0175–0178，X1 占 0180–0185，没有冲突。journal 里 `when` 用的是写入时的毫秒数（1794320400721），大于 overlay 现有的最大值。只加一列，不建新表，所以不需要新的 RLS 或 GRANT（这一列跟着 `mcp_servers` 现有的 tenant_id 和策略走）。
+- 迁移：**0186_entra_scope**（overlay `xiongbao/server/recovery/recovery-20261018-v1/sql/`）。动手前 main 上 overlay 的最大编号是 0174；M5a 占 0175–0178，X1 占 0180–0185，没有冲突。journal 里 `when` 用的是写入时的毫秒数（1794320400721），大于 overlay 现有的最大值。只加一列，不建新表，所以不需要新的 RLS 或 GRANT（这一列跟着 `mcp_servers` 现有的 tenant_id 和策略走）。
 - 本地 worktree 在 `.../scratchpad/wt-x6`（node_modules 软链到 wt-p9），库是 `openbot_x6`（用 main 的迁移新建）。
 
 ## 现状对比：fork 原本已经有什么
