@@ -121,7 +121,7 @@ test("发出去了的那一行附带的说明不画成红字；失败的才是",
     delivery(
       "broken",
       "wechat",
-      "overdue",
+      "attention",
       "failed",
       "WeChat delivery failed (window_closed).",
     ),
