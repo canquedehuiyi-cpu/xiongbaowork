@@ -182,6 +182,11 @@ export type Delivery = {
       criteria?: string;
       /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
       eventId?: string;
+      /**
+       * When it was taken on, on the caller's clock: the same clock its 「预计」 was read on. A card with no
+       * time reported is checked two hours after this, so it must not come from a different clock.
+       */
+      at?: Date;
     },
   ): Promise<{ taskId: string; dueAt: Date | null; criteria: string } | null>;
   /**
@@ -602,7 +607,7 @@ export function createDelivery(database: Database): Delivery {
     accept: (tenantId, taskId, input) =>
       runAsTenant(tenantId, () =>
         database.transaction(async (transaction) => {
-          const now = new Date();
+          const now = input.at ?? new Date();
           const [card] = await transaction
             .update(tasks)
             .set({
@@ -1060,6 +1065,8 @@ export function createDelivery(database: Database): Delivery {
             });
           if (!card?.threadRef || !card.agentId) return null;
           await appendTaskEvent(transaction, {
+            // Claimed before its reason started a round: dated then, ahead of that round's lines.
+            ...(input.claimedAt ? { at: input.claimedAt } : {}),
             tenantId,
             taskId,
             kind: "returned",
