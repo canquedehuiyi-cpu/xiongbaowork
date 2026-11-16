@@ -57,7 +57,7 @@ jobs:
           bun-version: 1.4.4
       - id: tag
         name: Tag format, version, CHANGELOG and origin/main ancestry
-        working-directory: openbot
+        working-directory: xiongbao
         env:
           REF_NAME: ${{ github.ref_name }}
           REF_TYPE: ${{ github.ref_type }}
@@ -167,7 +167,7 @@ jobs:
           bun-version: 1.4.4
       - id: brand
         name: Read the product and company name from the brand package
-        working-directory: openbot
+        working-directory: xiongbao
         run: |
           set -euo pipefail
           bun -e '
@@ -190,7 +190,7 @@ jobs:
         if: ${{ !inputs.dry_run }}
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: openbot
+          context: xiongbao
           platforms: linux/amd64
           outputs: type=image,name=${{ steps.name.outputs.repository }},push-by-digest=true,name-canonical=true,push=${{ !inputs.dry_run }}
           labels: |
@@ -224,7 +224,7 @@ jobs:
         if: ${{ inputs.dry_run }}
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: openbot
+          context: xiongbao
           platforms: linux/amd64
           load: true
           tags: openbot-release:dry-run
@@ -238,14 +238,14 @@ jobs:
           cache-from: type=gha,scope=release
       - name: G1 smoke on the dry-run image (no provider credentials)
         if: ${{ inputs.dry_run }}
-        working-directory: openbot
+        working-directory: xiongbao
         run: |
           set -euo pipefail
           docker image inspect openbot-release:dry-run --format '{{.Id}}'
           EVIDENCE_DIR="$RUNNER_TEMP/release-evidence" bash scripts/ci/image-smoke.sh openbot-release:dry-run
       - name: Print container logs (credentials masked)
         if: ${{ failure() && inputs.dry_run }}
-        working-directory: openbot
+        working-directory: xiongbao
         run: |
           for f in startup owner auth recreated; do
             bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/release-evidence/$f.log" || true
@@ -268,7 +268,7 @@ jobs:
       packages: read
     defaults:
       run:
-        working-directory: openbot
+        working-directory: xiongbao
     env:
       REFERENCE: ${{ needs.image.outputs.repository }}@${{ needs.image.outputs.digest }}
       DIGEST: ${{ needs.image.outputs.digest }}
@@ -514,7 +514,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
           path: source
-          sparse-checkout: openbot/docker
+          sparse-checkout: xiongbao/docker
       - id: record
         name: Write container-images.json
         env:
@@ -589,7 +589,7 @@ jobs:
             exit 1
           fi
           aws --version
-          for file in container-images.json source/openbot/docker/delivery.env.example source/openbot/docker/compose.delivery.yml; do
+          for file in container-images.json source/xiongbao/docker/delivery.env.example source/xiongbao/docker/compose.delivery.yml; do
             aws s3 cp --endpoint-url "$XB_DOWNLOAD_ENDPOINT" --only-show-errors \
               "$file" "s3://$XB_DOWNLOAD_BUCKET/$TAG/${file##*/}"
           done

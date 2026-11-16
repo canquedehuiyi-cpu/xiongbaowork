@@ -72,8 +72,13 @@ docker pull "$OPENBOT_IMAGE"
 if [ -e .env.delivery ]; then
   echo '保留已有 .env.delivery 及其中的 KEY_ENCRYPTION_KEY'
 else
-  curl --fail --silent --show-error --location -o .env.delivery \
-    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker/delivery.env.example"
+  if ! curl --fail --silent --show-error --location -o .env.delivery \
+    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${OPENBOT_TAG}/xiongbao/docker/delivery.env.example"; then
+    # 产品目录改名前打的标签（v0.2.11 及更早）里模板在旧目录下。下个版本发布后删掉这段回退。
+    legacy=openbot
+    curl --fail --silent --show-error --location -o .env.delivery \
+      "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${OPENBOT_TAG}/${legacy}/docker/delivery.env.example"
+  fi
   chmod 600 .env.delivery
   printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
 fi
@@ -97,7 +102,7 @@ echo
 重复执行前先 `docker rm -f xiongbao-local`（命名卷保留）。
 
 能打开页面不等于能对话：还要接入模型。在 `.env.delivery` 里填上 `BOT_MODEL`、`OPENAI_BASE_URL` 和密钥，
-重建容器即可，详见[部署手册](openbot/docs/deployment-xiongbao.md)第 5 节。
+重建容器即可，详见[部署手册](xiongbao/docs/deployment-xiongbao.md)第 5 节。
 按 digest 固定版本、校验镜像来源、对外部署和登录配置也在部署手册里。
 
 ## 快速上手（Windows Docker Desktop）
@@ -115,8 +120,15 @@ if ($LASTEXITCODE -ne 0) { throw '拉取镜像失败' }
 if (Test-Path .env.delivery) {
   Write-Output '保留已有 .env.delivery 及其中的 KEY_ENCRYPTION_KEY'
 } else {
-  Invoke-WebRequest -UseBasicParsing -OutFile .env.delivery `
-    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OpenbotTag/openbot/docker/delivery.env.example"
+  try {
+    Invoke-WebRequest -UseBasicParsing -OutFile .env.delivery `
+      "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$($OpenbotTag)/xiongbao/docker/delivery.env.example"
+  } catch {
+    # 产品目录改名前打的标签（v0.2.11 及更早）里模板在旧目录下。下个版本发布后删掉这段回退。
+    $legacy = 'openbot'
+    Invoke-WebRequest -UseBasicParsing -OutFile .env.delivery `
+      "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$($OpenbotTag)/$($legacy)/docker/delivery.env.example"
+  }
   $keyBytes = New-Object byte[] 32
   $keyGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
   $keyGenerator.GetBytes($keyBytes)
@@ -172,7 +184,7 @@ Git Bash 若使用 `docker -v/-w` 的绝对路径，先设置 `MSYS_NO_PATHCONV=
 | `COMPOSIO_API_KEY` / `ARCADE_API_KEY` | 接入应用目录的连接器提供商（可选） |
 | `TENANT_PACKAGE_DIR` | 品牌包目录，构建期写进网页；运行期更换不改变已构建的网页 |
 
-完整配置见[部署手册](openbot/docs/deployment-xiongbao.md)。最常见的三个坑：
+完整配置见[部署手册](xiongbao/docs/deployment-xiongbao.md)。最常见的三个坑：
 模型名用 **`BOT_MODEL`**（没有 `OPENAI_MODEL` 这个配置）；运行期数据库串必须是**非超级用户、无 BYPASSRLS**；
 Windows 上不能直接用 `bun` 跑服务端，用镜像或 Linux/WSL。
 
@@ -195,16 +207,16 @@ Windows 上不能直接用 `bun` 跑服务端，用镜像或 Linux/WSL。
 
 | 文档 | 内容 |
 | --- | --- |
-| [部署手册](openbot/docs/deployment-xiongbao.md) | 单容器、Compose、外接数据库、登录、模型、备份升级、版本校验 |
-| [CHANGELOG](openbot/CHANGELOG.md) | 每个版本改了什么、升级要不要做额外的事 |
+| [部署手册](xiongbao/docs/deployment-xiongbao.md) | 单容器、Compose、外接数据库、登录、模型、备份升级、版本校验 |
+| [CHANGELOG](xiongbao/CHANGELOG.md) | 每个版本改了什么、升级要不要做额外的事 |
 | [人工步骤](docs/acceptance/HUMAN-STEPS.md) | 发版、签名、真机验收等需要人来做的步骤和记录 |
 | [功能验收清单](docs/acceptance/STORIES.md) | 每项功能的验收状态 |
-| [对话招员工](openbot/docs/staffing.md) | 小管家起草、本人确认的流程和接口 |
+| [对话招员工](xiongbao/docs/staffing.md) | 小管家起草、本人确认的流程和接口 |
 | [设计稿](docs/specs/) 与 [实施计划](docs/plans/) | 各功能的设计和实施记录 |
 
 ## 开发者说明
 
-源码在 `openbot/`，保持与上游开源项目相同的目录结构，以便持续同步上游更新（同步记录见 `openbot/UPSTREAM.md`）。
+源码在 `xiongbao/`，目录内部保持与上游开源项目相同的结构，以便持续同步上游更新（同步记录见 `xiongbao/UPSTREAM.md`）。
 本仓库实际执行的 CI 是根目录的 `.github/workflows/`。服务端开发和测试请在 Linux/WSL 或容器里进行：
 Windows 原生 Bun 在服务端依赖导入链上会挂死。
 
@@ -215,7 +227,7 @@ Windows 原生 Bun 在服务端依赖导入链上会挂死。
 
 ```bash
 git clone https://github.com/canquedehuiyi-cpu/xiongbaowork.git
-cd xiongbaowork/openbot
+cd xiongbaowork/xiongbao
 docker build -f Dockerfile -t xiongbao-digital-employee:local .
 ```
 
@@ -225,4 +237,4 @@ docker build -f Dockerfile -t xiongbao-digital-employee:local .
 ## 开源许可
 
 本产品包含以 MIT 许可发布的开源代码，版权声明 `Copyright (c) 2026 CopilotKit` 与许可全文见
-[openbot/LICENSE](openbot/LICENSE)。第三方依赖、品牌素材和模型服务的许可或服务条款各自适用。
+[xiongbao/LICENSE](xiongbao/LICENSE)。第三方依赖、品牌素材和模型服务的许可或服务条款各自适用。

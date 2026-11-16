@@ -68,14 +68,30 @@ jobs:
           ref: refs/tags/${{ inputs.tag }}
           path: source
           persist-credentials: false
+      # The product directory was renamed from openbot/ to xiongbao/. A manual run from main against a
+      # tag cut before that has only openbot/: move it to the new name for the steps below, and keep the
+      # tag's own name in PRODUCT_DIR for the raw download URL (that tree is addressed by its real path).
+      - id: product-dir
+        name: Product directory of the tagged tree
+        run: |
+          set -euo pipefail
+          if [ -d source/xiongbao ]; then
+            echo "PRODUCT_DIR=xiongbao" >> "$GITHUB_ENV"
+          elif [ -d source/openbot ]; then
+            mv source/openbot source/xiongbao
+            echo "PRODUCT_DIR=openbot" >> "$GITHUB_ENV"
+          else
+            echo "::error::$TAG has neither xiongbao/ nor openbot/"
+            exit 1
+          fi
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
       - name: Manual block checks (tagged README and deployment manual)
-        working-directory: source/openbot/scripts/ci
+        working-directory: source/xiongbao/scripts/ci
         run: bun test manual-blocks.test.mjs
       - name: Extract the manual blocks
-        working-directory: source/openbot
+        working-directory: source/xiongbao
         run: |
           set -euo pipefail
           bun scripts/ci/manual-blocks.mjs ../README.md g7:linux > "$EVIDENCE/g7-linux.sh"
@@ -229,7 +245,7 @@ jobs:
           cd "$CUSTOMER"
           if [ ! -e .env.delivery ]; then
             curl --fail --silent --show-error --location -o .env.delivery \
-              "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$TAG/openbot/docker/delivery.env.example"
+              "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$TAG/${PRODUCT_DIR:-xiongbao}/docker/delivery.env.example"
           fi
           grep -qx 'EMBEDDED_POSTGRES=on' .env.delivery
           sed -i 's/^EMBEDDED_POSTGRES=on$/EMBEDDED_POSTGRES=off/' .env.delivery
@@ -289,7 +305,7 @@ jobs:
             exit 1
           fi
       - name: Gate 1 assertions against the customer install
-        working-directory: source/openbot
+        working-directory: source/xiongbao
         run: |
           set -euo pipefail
           bun scripts/ci/assert-image.mjs http://127.0.0.1:3772 "$EVIDENCE"
@@ -325,9 +341,9 @@ jobs:
       - name: Print container logs (credentials masked)
         if: failure()
         run: |
-          bash source/openbot/scripts/ci/print-diagnostics.sh "$EVIDENCE/container.log" || true
+          bash source/xiongbao/scripts/ci/print-diagnostics.sh "$EVIDENCE/container.log" || true
           if [ -f "$EVIDENCE/external-pg.log" ]; then
-            bash source/openbot/scripts/ci/print-diagnostics.sh "$EVIDENCE/external-pg.log" || true
+            bash source/xiongbao/scripts/ci/print-diagnostics.sh "$EVIDENCE/external-pg.log" || true
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
