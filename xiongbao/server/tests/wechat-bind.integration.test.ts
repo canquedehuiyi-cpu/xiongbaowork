@@ -460,6 +460,11 @@ test("已断开的账号：总览返回 disconnected，不占着这个微信，�
   expect(body.wechat?.status).toBe("disconnected");
   expect(body.wechat?.pausedUntil).toBeNull();
   expect(body.wechat?.lastInboundAt).toBeNull();
+  // 已断开时，即使最近有入站，时间窗也不算开着。
+  await runAsTenant(bob, () =>
+    wechatStore.markInbound(mine?.id ?? "", { at: new Date() }),
+  );
+  expect((await overview(bob)).body.wechat?.windowOpen).toBe(false);
 
   const theirs = await start(carol);
   ilink.answer(

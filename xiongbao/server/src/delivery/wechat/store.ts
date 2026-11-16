@@ -176,11 +176,21 @@ export function createWechatStore(database: Database) {
         );
     },
 
-    /** 轮询完一次就还租约，下一轮马上能认领；只还自己的。在调用方的帧里（账号所属租户）。 */
-    async releaseLease(accountId: string, owner: string): Promise<void> {
+    /**
+     * 轮询完一次就还租约，下一轮马上能认领；只还自己的。在调用方的帧里（账号所属租户）。
+     *
+     * `lease_until` 设成 `now() + backoffMs`（默认就是现在）而不是清空：认领按 `lease_until` 从小到大、
+     * 空的最先，刚拉过的账号排到队尾，账号多过一批时每个都轮得到；新绑定的（空）仍排最前。
+     * `backoffMs` 大于 0 时这个账号要等这么久才会再被认领（出错退避）。
+     */
+    async releaseLease(
+      accountId: string,
+      owner: string,
+      backoffMs = 0,
+    ): Promise<void> {
       await database
         .update(wechatAccounts)
-        .set({ leaseOwner: null, leaseUntil: null })
+        .set({ leaseOwner: null, leaseUntil: leaseFromNow(backoffMs) })
         .where(
           and(
             eq(wechatAccounts.id, accountId),

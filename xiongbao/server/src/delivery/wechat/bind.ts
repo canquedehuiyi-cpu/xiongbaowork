@@ -273,7 +273,8 @@ export function createWechatBind(deps: WechatBindDeps) {
         lastInboundAt: row.lastInboundAt,
         pausedUntil: paused ? row.pausedUntil : null,
         windowOpen: Boolean(
-          row.lastInboundAt &&
+          row.status !== "disconnected" &&
+            row.lastInboundAt &&
             now.getTime() - row.lastInboundAt.getTime() <
               WECHAT_PROACTIVE_WINDOW_MS,
         ),

@@ -1,17 +1,21 @@
 import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createCredentialStore, sealCredential } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import { credentials, users } from "../src/db/schema/core";
 import { wechatAccounts } from "../src/db/schema/wechat";
+import { DeliveryProviderError } from "../src/delivery/types";
 import {
   type IlinkClient,
   type IlinkMessage,
   IlinkPausedError,
   IlinkUnauthorizedError,
 } from "../src/delivery/wechat/ilink";
-import { createWechatPoller } from "../src/delivery/wechat/poller";
+import {
+  createWechatPoller,
+  WECHAT_CLAIM_LIMIT,
+} from "../src/delivery/wechat/poller";
 import { createWechatStore } from "../src/delivery/wechat/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -150,6 +154,7 @@ test("收到两条消息：inbound 调两次、在本人的帧里，时间、上
     { now: () => at },
   );
   await poller.tick();
+  await poller.drain();
   expect(seen).toEqual([
     { id: "101", tenant: a.userId },
     { id: "102", tenant: a.userId },
@@ -163,6 +168,7 @@ test("收到两条消息：inbound 调两次、在本人的帧里，时间、上
 
   // 租约已还：下一轮立刻再拉，带着存下的游标；返回空游标不覆盖。
   await poller.tick();
+  await poller.drain();
   expect(ilink.calls[1]).toEqual({ token: a.token, cursor: "cur-1" });
   expect((await accountOf(a.userId))?.cursor).toBe("cur-1");
   await runAsTenant(a.userId, () => store.unbind(a.userId));
@@ -181,7 +187,9 @@ test("同一个消息 ID 再次返回：inbound 不再调用", async () => {
     seen.push(m.id);
   });
   await poller.tick();
+  await poller.drain();
   await poller.tick();
+  await poller.drain();
   expect(seen).toEqual(["201", "202"]);
   await runAsTenant(b.userId, () => store.unbind(b.userId));
 });
@@ -205,9 +213,11 @@ test("inbound 抛错：不存游标，下一轮重来，已处理的不重复", 
     seen.push(m.id);
   });
   await poller.tick();
+  await poller.drain();
   expect((await accountOf(c.userId))?.cursor).toBeNull();
   expect((await accountOf(c.userId))?.leaseOwner).toBeNull();
   await poller.tick();
+  await poller.drain();
   expect(seen).toEqual(["301", "302"]);
   expect((await accountOf(c.userId))?.cursor).toBe("c1");
   await runAsTenant(c.userId, () => store.unbind(c.userId));
@@ -220,11 +230,13 @@ test("IlinkPausedError：账号暂停一小时，期间不再拉", async () => {
   const at = new Date("2026-11-16T08:00:00Z");
   const poller = pollerWith(ilink, async () => {}, { now: () => at });
   await poller.tick();
+  await poller.drain();
   const row = await accountOf(d.userId);
   expect(row?.status).toBe("paused");
   expect(row?.pausedUntil?.toISOString()).toBe("2026-11-16T09:00:00.000Z");
   expect(row?.leaseOwner).toBeNull();
   await poller.tick();
+  await poller.drain();
   expect(ilink.pulls(d.token)).toBe(1);
   await runAsTenant(d.userId, () => store.unbind(d.userId));
 });
@@ -235,10 +247,12 @@ test("IlinkUnauthorizedError：账号标成已断开，不再拉，这个微信�
   ilink.script(e.token, new IlinkUnauthorizedError());
   const poller = pollerWith(ilink, async () => {});
   await poller.tick();
+  await poller.drain();
   const row = await accountOf(e.userId);
   expect(row?.status).toBe("disconnected");
   expect(row?.leaseOwner).toBeNull();
   await poller.tick();
+  await poller.drain();
   expect(ilink.pulls(e.token)).toBe(1);
   expect(await store.accountByIlinkUser(row?.ilinkUserId ?? "")).toBeNull();
   // 已断开的行续不了租；重新绑定（覆盖这一行）后回到 bound。
@@ -267,6 +281,7 @@ test("两个轮询器同时 tick：同一个账号只被拉一次", async () => 
   const one = pollerWith(ilink, inbound);
   const two = pollerWith(ilink, inbound);
   await Promise.all([one.tick(), two.tick()]);
+  await Promise.all([one.drain(), two.drain()]);
   expect(ilink.pulls(f.token)).toBe(1);
   expect(seen).toEqual(["401"]);
   await runAsTenant(f.userId, () => store.unbind(f.userId));
@@ -282,7 +297,9 @@ test("令牌不进日志：别的错误只记名字，账号释放租约、不�
     logged.push(args.map(String).join(" "));
   };
   try {
-    await pollerWith(ilink, async () => {}).tick();
+    const quiet = pollerWith(ilink, async () => {});
+    await quiet.tick();
+    await quiet.drain();
   } finally {
     console.error = original;
   }
@@ -306,4 +323,110 @@ test("续租只对 bound 账号生效", async () => {
   await asPlatform(() =>
     database.delete(wechatAccounts).where(eq(wechatAccounts.id, h.id)),
   );
+});
+
+test("账号多过一批：连续两次 tick，每个账号都至少被拉过一次", async () => {
+  const ilink = fakeIlink();
+  const crowd = [];
+  for (let i = 0; i <= WECHAT_CLAIM_LIMIT; i += 1)
+    crowd.push(await bindPerson(`crowd${i}`));
+  const poller = pollerWith(ilink, async () => {});
+  await poller.tick();
+  await poller.drain();
+  await poller.tick();
+  await poller.drain();
+  for (const person of crowd)
+    expect(ilink.pulls(person.token)).toBeGreaterThan(0);
+  for (const person of crowd)
+    await runAsTenant(person.userId, () => store.unbind(person.userId));
+});
+
+test("同一条消息让 inbound 连续失败三次：跳过它，只记消息 ID 和错误类名，游标照样前进", async () => {
+  const p = await bindPerson("poison");
+  const ilink = fakeIlink();
+  const batch = [message("501"), message("502")];
+  ilink.script(
+    p.token,
+    { messages: batch, cursor: "c1" },
+    { messages: batch, cursor: "c1" },
+    { messages: batch, cursor: "c1" },
+  );
+  const seen: string[] = [];
+  const logged: string[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    logged.push(args.map(String).join(" "));
+  };
+  try {
+    const poller = pollerWith(ilink, async (_a, m) => {
+      if (m.id === "501") throw new Error(`secret ${p.token}`);
+      seen.push(m.id);
+    });
+    for (let i = 0; i < 2; i += 1) {
+      await poller.tick();
+      await poller.drain();
+      expect((await accountOf(p.userId))?.cursor).toBeNull();
+    }
+    expect(seen).toEqual([]);
+    await poller.tick();
+    await poller.drain();
+  } finally {
+    console.error = original;
+  }
+  expect(seen).toEqual(["502"]);
+  expect((await accountOf(p.userId))?.cursor).toBe("c1");
+  const skipped = logged.filter((line) =>
+    line.includes("wechat-inbound-skipped"),
+  );
+  expect(skipped).toHaveLength(1);
+  expect(JSON.parse(skipped[0] ?? "{}")).toMatchObject({
+    messageId: "501",
+    error: "Error",
+  });
+  expect(logged.join("\n")).not.toContain(p.token);
+  await runAsTenant(p.userId, () => store.unbind(p.userId));
+});
+
+test("网络错误之后这个账号 30 秒内不再被认领", async () => {
+  const q = await bindPerson("backoff");
+  const ilink = fakeIlink();
+  ilink.script(
+    q.token,
+    new DeliveryProviderError("wechat", "network_error", true),
+  );
+  const original = console.error;
+  console.error = () => {};
+  try {
+    const poller = pollerWith(ilink, async () => {});
+    await poller.tick();
+    await poller.drain();
+    await poller.tick();
+    await poller.drain();
+    expect(ilink.pulls(q.token)).toBe(1);
+    // 退避到期后恢复。
+    await asPlatform(() =>
+      database
+        .update(wechatAccounts)
+        .set({ leaseUntil: sql`now() - interval '1 second'` })
+        .where(eq(wechatAccounts.id, q.id)),
+    );
+    await poller.tick();
+    await poller.drain();
+    expect(ilink.pulls(q.token)).toBe(2);
+  } finally {
+    console.error = original;
+  }
+  await runAsTenant(q.userId, () => store.unbind(q.userId));
+});
+
+test("tick 不等长轮询结束；drain 等", async () => {
+  const r = await bindPerson("slow");
+  const ilink = fakeIlink(300);
+  const poller = pollerWith(ilink, async () => {});
+  const started = Date.now();
+  await poller.tick();
+  expect(Date.now() - started).toBeLessThan(250);
+  await poller.drain();
+  expect(ilink.pulls(r.token)).toBe(1);
+  await runAsTenant(r.userId, () => store.unbind(r.userId));
 });
