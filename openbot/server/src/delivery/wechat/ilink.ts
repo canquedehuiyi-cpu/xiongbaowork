@@ -84,21 +84,26 @@ type Json = Record<string, unknown>;
 /** Internal: the client-side deadline passed; a long poll treats it as an empty round. */
 class RequestTimeout extends Error {}
 
-/** The base URL comes from the bind response; only WeChat's own https hosts may get the bearer token. */
-function assertTrustedBase(baseUrl: string): void {
+/**
+ * The base URL comes from the bind response; only WeChat's own https hosts may get the bearer token.
+ * Binding checks it before saving; authed calls check it again before sending.
+ */
+export function isTrustedIlinkBase(baseUrl: string): boolean {
   let url: URL;
   try {
     url = new URL(baseUrl);
   } catch {
-    throw new DeliveryProviderError(PROVIDER, "bad_base_url");
+    return false;
   }
   const host = url.hostname.toLowerCase();
-  if (
-    url.protocol !== "https:" ||
-    !(host === "weixin.qq.com" || host.endsWith(".weixin.qq.com"))
-  ) {
+  return (
+    url.protocol === "https:" &&
+    (host === "weixin.qq.com" || host.endsWith(".weixin.qq.com"))
+  );
+}
+function assertTrustedBase(baseUrl: string): void {
+  if (!isTrustedIlinkBase(baseUrl))
     throw new DeliveryProviderError(PROVIDER, "bad_base_url");
-  }
 }
 const str = (v: unknown): string | null =>
   typeof v === "string" && v ? v : typeof v === "number" ? String(v) : null;

@@ -14,7 +14,7 @@ import { agents, credentials, users } from "./core";
 import { tenantId } from "./tenant";
 
 /**
- * 微信 ClawBot 通道的三张表（迁移 0223、0224），每行都带这个人的 `tenant_id`，行级安全同其他租户表。
+ * 微信 ClawBot 通道的三张表（迁移 0223、0224、0225），每行都带这个人的 `tenant_id`，行级安全同其他租户表。
  */
 
 /** `bound` 在轮询；`paused` 暂停到 `paused_until`（iLink 返回 -14 时一小时）；`unbound` 已解绑、保留行。 */
@@ -27,6 +27,15 @@ export type WechatPromptKind =
   | "overdue"
   | "pick_agent";
 export type WechatPromptState = "open" | "done";
+/**
+ * 一次扫码绑定走到哪了：没结束时记 iLink 原样的状态；结束时是 `bound`（绑好了）、`taken`（这个微信已绑在
+ * 别人身上）、`failed`（没绑上）或 `expired`。没有 CHECK 约束，只是类型。
+ */
+export type WechatBindAttemptStatus =
+  | IlinkQrcodeStatus
+  | "bound"
+  | "taken"
+  | "failed";
 
 const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
@@ -67,6 +76,8 @@ export const wechatAccounts = pgTable(
       .notNull()
       .default("bound"),
     pausedUntil: timestamp("paused_until", { withTimezone: true }),
+    /** 最近一次绑定（含重新绑定）的时间（迁移 0225）。 */
+    boundAt: timestamp("bound_at", { withTimezone: true }),
     /** 轮询器的租约，按数据库时钟比较。 */
     leaseOwner: text("lease_owner"),
     leaseUntil: timestamp("lease_until", { withTimezone: true }),
@@ -98,7 +109,10 @@ export const wechatBindAttempts = pgTable(
     userId: userId(),
     qrcode: text("qrcode").notNull(),
     imageContent: text("image_content"),
-    status: text("status").$type<IlinkQrcodeStatus>().notNull().default("wait"),
+    status: text("status")
+      .$type<WechatBindAttemptStatus>()
+      .notNull()
+      .default("wait"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: createdAt(),
   },
@@ -135,3 +149,4 @@ export const wechatPrompts = pgTable(
 
 export type WechatAccount = typeof wechatAccounts.$inferSelect;
 export type WechatPrompt = typeof wechatPrompts.$inferSelect;
+export type WechatBindAttempt = typeof wechatBindAttempts.$inferSelect;

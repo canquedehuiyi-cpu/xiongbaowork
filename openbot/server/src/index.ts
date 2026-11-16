@@ -274,6 +274,11 @@ import { createDeliveryScopes } from "./delivery/scope";
 import { createDeliveryStore } from "./delivery/store";
 import type { DeliveryScope } from "./delivery/types";
 import { DeliveryRefusedError } from "./delivery/types";
+import {
+  createIlinkClient,
+  ILINK_DEFAULT_CLIENT_VERSION,
+} from "./delivery/wechat/ilink";
+import { createWechatStore } from "./delivery/wechat/store";
 import { createDeviceChannel, type DispatchTarget } from "./devices/channel";
 import { createDeviceQueue } from "./devices/queue";
 import {
@@ -4004,6 +4009,16 @@ await startupLifecycle.run(async (startup) => {
     (resource) => resource.stop(),
   );
   const deliveryStore = createDeliveryStore(database);
+  /*
+   * 微信 ClawBot：iLink 是固定主机，扫码绑定不需要部署方的密钥，所以总是接上；每个人自己扫码，
+   * `bot_token` 封进本人的凭据。客户端版本号可用 WECHAT_ILINK_CLIENT_VERSION 覆盖。
+   */
+  const wechatIlink = createIlinkClient({
+    clientVersion:
+      process.env.WECHAT_ILINK_CLIENT_VERSION?.trim() ||
+      ILINK_DEFAULT_CLIENT_VERSION,
+  });
+  const wechatStore = createWechatStore(database);
   const deliveryProviders = configuredDeliveryProviders(
     config.publicUrl ??
       config.auth?.baseUrl ??
@@ -5416,6 +5431,13 @@ await startupLifecycle.run(async (startup) => {
           slack: deliveryProviders.slack,
           twilio: deliveryProviders.sms,
           pushProjectId: deliveryProviders.pushProjectId,
+          wechat: {
+            database,
+            ilink: wechatIlink,
+            store: wechatStore,
+            credentials: credentialStore,
+            encryptionKey: config.keyEncryptionKey,
+          },
         },
         webhooks: {
           store: deliveryStore,

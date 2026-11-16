@@ -898,6 +898,7 @@ tests/wakerflow-versions.integration.test.ts
 tests/wakerflows-store.integration.test.ts
 tests/web-bot-auth.test.ts
 tests/web-research.test.ts
+tests/wechat-bind.integration.test.ts
 tests/wechat-ilink.test.ts
 tests/wechat-store.integration.test.ts
 tests/what-if-boundary-words.test.ts

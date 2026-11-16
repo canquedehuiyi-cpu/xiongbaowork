@@ -1,5 +1,5 @@
 /*
- * 微信 ClawBot 通道的账号、提示存取（迁移 0223、0224）。
+ * 微信 ClawBot 通道的账号、绑定尝试、提示存取（迁移 0223、0224、0225）。
  *
  * 帧：本人的事（绑定、解绑、提示）在调用方的帧里做，调用方应在这个人自己的帧里；行级安全保证别人的帧
  * 里读不到、改不到。跨人的问题由这里自己开 platform 帧，调用方在谁的帧里都一样：
@@ -13,9 +13,12 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import type { Database } from "../../db/client";
 import {
   type WechatAccount,
+  type WechatBindAttempt,
+  type WechatBindAttemptStatus,
   type WechatPrompt,
   type WechatPromptKind,
   wechatAccounts,
+  wechatBindAttempts,
   wechatPrompts,
 } from "../../db/schema/wechat";
 import { runAsTenant } from "../../tenant/context";
@@ -29,6 +32,13 @@ export type WechatAccountInput = {
 };
 
 export type WechatStore = ReturnType<typeof createWechatStore>;
+
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+/** 账号写入可以加入调用方的事务（绑定时和凭据一起提交，撞上唯一索引时一起回滚）。 */
+export type WechatExecutor = Database | Transaction;
+
+/** 一次扫码绑定的有效期。 */
+export const WECHAT_BIND_ATTEMPT_MINUTES = 10;
 
 const leaseFromNow = (ms: number) =>
   sql`now() + make_interval(secs => ${ms / 1000})`;
@@ -76,7 +86,10 @@ export function createWechatStore(database: Database) {
      * 绑定或重新绑定：一人一行，重新绑定改写原行，旧游标、上下文、暂停、租约和漏发计数一并清掉。
      * 同一个 iLink 用户已绑在别人身上时，部分唯一索引让这里抛错。
      */
-    async saveAccount(input: WechatAccountInput): Promise<WechatAccount> {
+    async saveAccount(
+      input: WechatAccountInput,
+      executor: WechatExecutor = database,
+    ): Promise<WechatAccount> {
       const fresh = {
         ilinkBotId: input.ilinkBotId,
         ilinkUserId: input.ilinkUserId,
@@ -90,8 +103,9 @@ export function createWechatStore(database: Database) {
         leaseOwner: null,
         leaseUntil: null,
         missedCount: 0,
+        boundAt: sql`now()`,
       };
-      const [row] = await database
+      const [row] = await executor
         .insert(wechatAccounts)
         .values({ id: randomUUID(), userId: input.userId, ...fresh })
         .onConflictDoUpdate({
@@ -144,8 +158,11 @@ export function createWechatStore(database: Database) {
      * 解绑：保留行、标成 `unbound`，清掉游标、上下文和租约，这个微信从此可以再绑给别人。
      * 返回改后的行（`credentialId` 供调用方吊销凭据），没有账号为 null。
      */
-    async unbind(userId: string): Promise<WechatAccount | null> {
-      const [row] = await database
+    async unbind(
+      userId: string,
+      executor: WechatExecutor = database,
+    ): Promise<WechatAccount | null> {
+      const [row] = await executor
         .update(wechatAccounts)
         .set({
           status: "unbound",
@@ -159,6 +176,65 @@ export function createWechatStore(database: Database) {
         .where(eq(wechatAccounts.userId, userId))
         .returning();
       return row ?? null;
+    },
+
+    /** 开一次扫码绑定，`expires_at` 按数据库时钟定在 10 分钟后。 */
+    async createAttempt(
+      userId: string,
+      input: { qrcode: string; imageContent: string | null },
+    ): Promise<WechatBindAttempt> {
+      const [row] = await database
+        .insert(wechatBindAttempts)
+        .values({
+          id: randomUUID(),
+          userId,
+          qrcode: input.qrcode,
+          imageContent: input.imageContent,
+          status: "wait",
+          expiresAt: sql`now() + make_interval(mins => ${WECHAT_BIND_ATTEMPT_MINUTES})`,
+        })
+        .returning();
+      if (!row) throw new Error("wechat bind attempt was not saved");
+      return row;
+    },
+
+    /**
+     * 这个人的一次绑定，别人的或不存在的为 null（行级安全之外再按 `user_id` 过滤）。
+     * `expired` 按数据库时钟算。
+     */
+    async attempt(
+      userId: string,
+      id: string,
+    ): Promise<(WechatBindAttempt & { expired: boolean }) | null> {
+      const [row] = await database
+        .select({
+          attempt: wechatBindAttempts,
+          expired: sql<boolean>`${wechatBindAttempts.expiresAt} <= now()`,
+        })
+        .from(wechatBindAttempts)
+        .where(
+          and(
+            eq(wechatBindAttempts.id, id),
+            eq(wechatBindAttempts.userId, userId),
+          ),
+        );
+      return row ? { ...row.attempt, expired: Boolean(row.expired) } : null;
+    },
+
+    async setAttemptStatus(
+      userId: string,
+      id: string,
+      status: WechatBindAttemptStatus,
+    ): Promise<void> {
+      await database
+        .update(wechatBindAttempts)
+        .set({ status })
+        .where(
+          and(
+            eq(wechatBindAttempts.id, id),
+            eq(wechatBindAttempts.userId, userId),
+          ),
+        );
     },
 
     /**

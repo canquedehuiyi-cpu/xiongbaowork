@@ -23,6 +23,7 @@ import {
   DeliveryRefusedError,
   type DeliveryScope,
 } from "./types";
+import { createWechatBind, type WechatBindDeps } from "./wechat/bind";
 export type DeliveryScopeResolver = (
   owner: string,
   channelId: string,
@@ -87,10 +88,17 @@ export function createDeliveryRoutes(deps: {
   slack?: OpenTagTransport;
   twilio?: TwilioTransport;
   pushProjectId?: string;
+  /** 微信 ClawBot 扫码绑定。不在时这个部署没开通微信。 */
+  wechat?: WechatBindDeps;
 }) {
   const routes = new Hono<{ Variables: AppVariables }>();
   routes.use("*", deps.requireUser, bodyLimit({ maxSize: 64 * 1024 }));
   errorRoutes(routes);
+  const wechat = deps.wechat ? createWechatBind(deps.wechat) : undefined;
+  const requireWechat = () => {
+    if (!wechat) throw new DeliveryRefusedError("这个部署没有开通微信。");
+    return wechat;
+  };
   routes.get("/", async (c) =>
     c.json({
       bindings: await deps.store.listBindings(c.var.actor.id),
@@ -103,9 +111,22 @@ export function createDeliveryRoutes(deps: {
         teams: Boolean(deps.slack),
         sms: Boolean(deps.twilio),
         push: Boolean(deps.pushProjectId),
+        wechat: Boolean(wechat),
       },
+      wechat: wechat ? await wechat.summary(c.var.actor.id) : null,
     }),
   );
+  /** 微信扫码绑定：只操作本人的尝试和账号。 */
+  routes.post("/wechat/start", async (c) =>
+    c.json(await requireWechat().start(c.var.actor.id)),
+  );
+  routes.get("/wechat/attempts/:id", async (c) =>
+    c.json(await requireWechat().check(c.var.actor.id, c.req.param("id"))),
+  );
+  routes.delete("/wechat", async (c) => {
+    await requireWechat().unbind(c.var.actor.id);
+    return c.body(null, 204);
+  });
   routes.delete("/bindings/:id", async (c) => {
     await deps.store.removeBinding(c.var.actor.id, c.req.param("id"));
     return c.body(null, 204);
