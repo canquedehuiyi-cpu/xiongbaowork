@@ -484,9 +484,10 @@ test("在途上限：到了上限就不再认领", async () => {
   await poller.tick();
   const mine = [one.token, two.token];
   const polled = () => ilink.calls.filter((c) => mine.includes(c.token)).length;
-  // 上限 1：库里只有一个在途的，后面两次 tick 没认领任何账号。
+  // 上限 1：库里只有一个在途的，后面两次 tick 没认领任何账号。只数本测试自建的两个账号（同库并跑的别的
+  // 测试文件的账号也可能被这个轮询器认领到）。
   await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(ilink.calls.length).toBe(1);
+  expect(polled()).toBe(1);
   release();
   await poller.drain();
   await poller.tick();
@@ -505,17 +506,18 @@ test("inbound 比租约慢：同一条消息只处理一次，游标不回退，
     { messages: [message("601")], cursor: "c0-old" },
   );
   let calls = 0;
+  // 时序放宽（满载下不抖）：租约 1.5 秒、心跳每 0.5 秒，inbound 跑 4 秒，期间租约本该过期两次多。
   const poller = pollerWith(
     ilink,
     async () => {
       calls += 1;
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await new Promise((resolve) => setTimeout(resolve, 4000));
     },
-    { leaseMs: 300 },
+    { leaseMs: 1500 },
   );
   await poller.tick();
-  for (let i = 0; i < 6; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 150));
+  for (let i = 0; i < 8; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 400));
     await poller.tick(); // 租约本该过期了，但心跳续着、账号也在处理集合里
   }
   await poller.drain();
@@ -523,7 +525,7 @@ test("inbound 比租约慢：同一条消息只处理一次，游标不回退，
   expect(ilink.pulls(w.token)).toBe(1);
   expect((await accountOf(w.userId))?.cursor).toBe("c1");
   await runAsTenant(w.userId, () => store.unbind(w.userId));
-});
+}, 15_000);
 
 test("租约被别人拿走：停手，不写游标，不还别人的租约", async () => {
   const y = await bindPerson("stolen");
