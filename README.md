@@ -72,13 +72,8 @@ docker pull "$OPENBOT_IMAGE"
 if [ -e .env.delivery ]; then
   echo '保留已有 .env.delivery 及其中的 KEY_ENCRYPTION_KEY'
 else
-  if ! curl --fail --silent --show-error --location -o .env.delivery \
-    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${OPENBOT_TAG}/xiongbao/docker/delivery.env.example"; then
-    # 产品目录改名前打的标签（v0.2.11 及更早）里模板在旧目录下。下个版本发布后删掉这段回退。
-    legacy=openbot
-    curl --fail --silent --show-error --location -o .env.delivery \
-      "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${OPENBOT_TAG}/${legacy}/docker/delivery.env.example"
-  fi
+  curl --fail --silent --show-error --location -o .env.delivery \
+    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${OPENBOT_TAG}/xiongbao/docker/delivery.env.example"
   chmod 600 .env.delivery
   printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
 fi
@@ -120,15 +115,8 @@ if ($LASTEXITCODE -ne 0) { throw '拉取镜像失败' }
 if (Test-Path .env.delivery) {
   Write-Output '保留已有 .env.delivery 及其中的 KEY_ENCRYPTION_KEY'
 } else {
-  try {
-    Invoke-WebRequest -UseBasicParsing -OutFile .env.delivery `
-      "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$($OpenbotTag)/xiongbao/docker/delivery.env.example"
-  } catch {
-    # 产品目录改名前打的标签（v0.2.11 及更早）里模板在旧目录下。下个版本发布后删掉这段回退。
-    $legacy = 'openbot'
-    Invoke-WebRequest -UseBasicParsing -OutFile .env.delivery `
-      "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$($OpenbotTag)/$($legacy)/docker/delivery.env.example"
-  }
+  Invoke-WebRequest -UseBasicParsing -OutFile .env.delivery `
+    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$($OpenbotTag)/xiongbao/docker/delivery.env.example"
   $keyBytes = New-Object byte[] 32
   $keyGenerator = [System.Security.Cryptography.RandomNumberGenerator]::Create()
   $keyGenerator.GetBytes($keyBytes)
