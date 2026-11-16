@@ -18,6 +18,7 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, render } from "@testing-library/react";
 import { ThemeProvider } from "@/components/theme-provider";
+import { CopilotProvider } from "@/lib/copilot/provider";
 import { Route as Approvals } from "@/routes/_authed/_app/approvals";
 import { Route as Autonomous } from "@/routes/_authed/_app/autonomous";
 import { Route as Bot } from "@/routes/_authed/_app/bot";
@@ -77,12 +78,42 @@ import { Route as SettingsNotifications } from "@/routes/_authed/settings/notifi
 import { Route as SettingsPasswords } from "@/routes/_authed/settings/passwords";
 import { Route as SettingsPlans } from "@/routes/_authed/settings/plans";
 import { Route as SettingsThisComputer } from "@/routes/_authed/settings/this-computer";
+/*
+ * 第四轮加进来的：地址带参数的那 33 个文件。它们与上面那批没有区别，都是从 `routes/` 里 import 的
+ * 真文件路由；区别只在挂载——`update({ path })` 传的是**带 `$` 的模板**（`/bots/$agentId`），
+ * 而 `initialEntries` 传替换后的具体地址，于是 `useParams()` 有真值。见 `fillParams`。
+ */
+import { Route as BotAccess } from "@/routes/_authed/_app/bots.$agentId.access";
+import { Route as BotActivity } from "@/routes/_authed/_app/bots.$agentId.activity";
+import { Route as BotApprovals } from "@/routes/_authed/_app/bots.$agentId.approvals";
+import { Route as BotDetail } from "@/routes/_authed/_app/bots.$agentId.index";
+import { Route as BotMemory } from "@/routes/_authed/_app/bots.$agentId.memory";
+import { Route as BotReach } from "@/routes/_authed/_app/bots.$agentId.reach";
+import { Route as BotResponsibilities } from "@/routes/_authed/_app/bots.$agentId.responsibilities";
+import { Route as BotRoutines } from "@/routes/_authed/_app/bots.$agentId.routines";
+import { Route as BotSetup } from "@/routes/_authed/_app/bots.$agentId.setup";
+import { Route as BotSharing } from "@/routes/_authed/_app/bots.$agentId.sharing";
+import { Route as ChannelDetail } from "@/routes/_authed/_app/channel/$channelId";
+import { Route as ConnectionDetail } from "@/routes/_authed/_app/connections.$key";
+import { Route as GroupDetail } from "@/routes/_authed/_app/group/$channelId";
+import { Route as TaskDetail } from "@/routes/_authed/_app/tasks.$taskId";
+import { Route as WakerflowDetail } from "@/routes/_authed/_app/wakerflows.$flowId";
+import { Route as WakerflowImport } from "@/routes/_authed/_app/wakerflows.import.$token";
+import { Route as AdminBoundaryDetail } from "@/routes/_authed/admin/boundaries_.$index";
+import { Route as AdminComponentDetail } from "@/routes/_authed/admin/components/$name";
+import { Route as AdminPluginDetail } from "@/routes/_authed/admin/plugins/$key";
+import { Route as AdminPluginBots } from "@/routes/_authed/admin/plugins/$key_.bots.$agentId";
+import { Route as AdminPluginTools } from "@/routes/_authed/admin/plugins/$key_.tools.$tool";
+import { Route as AdminSkillDetail } from "@/routes/_authed/admin/skills_.$slug";
+import { Route as SettingsSkillDetail } from "@/routes/_authed/settings/_personal/skills_.$slug";
+import { Route as GalleryDetail } from "@/routes/_authed/settings/components-gallery/$name";
+import { Route as SignInDetail } from "@/routes/_authed/sign-in/$requestId";
 import {
   type RouteReport,
   report,
   scanRoute,
 } from "../../scripts/acceptance/i18n-scan";
-import { SCANNED } from "./i18n-route-table";
+import { addressOf, SCANNED } from "./i18n-route-table";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -192,11 +223,42 @@ const ROUTES = new Map<string, unknown>([
   ["/wakerflows", WakerflowsIndex],
   ["/wakerflows/new", WakerflowsNew],
   ["/workbench", Workbench],
+  /*
+   * 参数路由：key 是**地址模板**，与 `SCANNED.at` 同一串。挂载时 `path` 就传它，
+   * 所以 TanStack 拿 `/bots/$agentId` 去配 `/bots/agt-scan`，`useParams()` 拿到 `{ agentId }`。
+   */
+  ["/bots/$agentId", BotDetail],
+  ["/bots/$agentId/access", BotAccess],
+  ["/bots/$agentId/activity", BotActivity],
+  ["/bots/$agentId/approvals", BotApprovals],
+  ["/bots/$agentId/memory", BotMemory],
+  ["/bots/$agentId/reach", BotReach],
+  ["/bots/$agentId/responsibilities", BotResponsibilities],
+  ["/bots/$agentId/routines", BotRoutines],
+  ["/bots/$agentId/setup", BotSetup],
+  ["/bots/$agentId/sharing", BotSharing],
+  ["/channel/$channelId", ChannelDetail],
+  ["/connections/$key", ConnectionDetail],
+  ["/group/$channelId", GroupDetail],
+  ["/tasks/$taskId", TaskDetail],
+  ["/wakerflows/$flowId", WakerflowDetail],
+  ["/wakerflows/import/$token", WakerflowImport],
+  ["/admin/boundaries/$index", AdminBoundaryDetail],
+  ["/admin/components/$name", AdminComponentDetail],
+  ["/admin/plugins/$key", AdminPluginDetail],
+  ["/admin/plugins/$key/bots/$agentId", AdminPluginBots],
+  ["/admin/plugins/$key/tools/$tool", AdminPluginTools],
+  ["/admin/skills/$slug", AdminSkillDetail],
+  ["/settings/skills/$slug", SettingsSkillDetail],
+  ["/settings/components-gallery/$name", GalleryDetail],
+  ["/sign-in/$requestId", SignInDetail],
 ]);
 
 /* 扫表说扫哪些，这里就必须挂着哪些：挂少了下面画不出来，挂多了会扫一台不存在的页面。 */
 const MAIN_PATH = SCANNED.map((one) => ({
   at: one.at,
+  file: one.file,
+  params: one.params,
   states: one.states,
   minLines: one.minLines,
 }));
@@ -274,7 +336,15 @@ const EMPTY_ANSWER: readonly (readonly [string, string])[] = [
   // `accessRequestInboxQueryOptions`：body 直接就是 `AppAccessRequest[]`。
   ["/api/plugins/access-requests", "[]"],
   // `pluginsPageQueryOptions`：整页 `PluginsPage`，`marketCards` 直接 `.map` 它的 `catalogue`。
-  ["/api/plugins", '{"catalogue":[],"servers":[],"plugins":[],"total":0}'],
+  //
+  // `skills` 是第四轮补的：`/settings/skills/$slug` 与 `/admin/skills/$slug` 都用这一条查询，
+  // 而且读的是 `plugins.data.skills.find(…)`——可选链挂在 `data` 上，`skills` 缺了就在 `undefined`
+  // 上取 `.find`，整页崩成路由错误组件。`botsMayCallBack` / `redirectUri` 同理，都是 `PluginsPage`
+  // 的必填字段。
+  [
+    "/api/plugins",
+    '{"catalogue":[],"servers":[],"plugins":[],"skills":[],"total":0,"botsMayCallBack":false,"redirectUri":null,"teams":[]}',
+  ],
   // 设备列表：`client("/api/devices", "devices")`，不解信封页面上就会写「设备加载失败：…」。
   ["/api/devices", '{"devices":[]}'],
   /*
@@ -320,6 +390,106 @@ const EMPTY_ANSWER: readonly (readonly [string, string])[] = [
     "/api/computers/policy",
     '{"policy":{"mode":"dry-run","deny":[],"allow":[]}}',
   ],
+  /*
+   * 第四轮（参数路由造假夹具）补的答案。共同点是路径里带夹具值，所以键写成带 `*` 的形状。
+   *
+   * `/sign-in/$requestId`：私有登录表单自己解的 body 就是 `SignInRequest`。`savedLogins` 是数组、
+   * `outcome` 是 `string | null`——缺了任一个，表单在 `data.savedLogins.length` 上崩，画出来的是
+   * 路由错误组件，不是这一页。`passwordManager: true` 让「使用已保存的登录」那一段有机会出现。
+   */
+  [
+    "/api/sign-in-requests/*",
+    '{"id":"req-scan","botId":"agt-scan","origin":"github.com","reason":"要拉取私有仓库的代码","status":"pending","method":null,"outcome":null,"toolCallId":null,"controlRequestId":null,"createdAt":"2026-11-16T00:00:00.000Z","expiresAt":"2026-11-17T00:00:00.000Z","resolvedAt":null,"passwordManager":true,"savedLogins":[]}',
+  ],
+  /*
+   * `/api/channels` 是**无限查询**，而且 `select` 写的是 `data.pages.flatMap((page) => page.channels)`。
+   * 空对象答下来 `page.channels` 是 `undefined`，`flatMap` 于是交出一个 `[undefined]`，下游
+   * `roster.data.find((row) => row.id === channelId)` 就在 `row.id` 上崩（`lib/channels/mark-read.ts`）。
+   * 必须给真的分页信封：一个空列表。
+   */
+  ["/api/channels", '{"channels":[],"nextCursor":null}'],
+  // 单个会话：`client("/api/channels/:id", "channel")`，解信封后整页都用它。
+  [
+    "/api/channels/*",
+    '{"channel":{"id":"chn-scan","name":"审计夹具会话","agentIds":["agt-scan"],"threadId":"thr-scan","active":true,"lastMessageAt":null}}',
+  ],
+  // 群组会话：`GroupConversation` 就是 body 本身，三个数组都会被 `.length` 摸一遍。
+  ["/api/groups/*", '{"bots":[],"people":[],"messages":[]}'],
+  /*
+   * 会话页右侧的侧栏（`sidebarQueryOptions` 读 `${conversationPath(source)}/sidebar`，body 原样当
+   * `ConversationSidebar`）。`environment` 必须交给它：侧栏第一行写的是
+   * `data?.environment.members`——可选链只挂在 `data` 上，`environment` 缺了整页崩成错误组件。
+   * `goal` 与 `context` 都按「没有」给：页面读它们的地方都是 `data?.goal?.…` 这种逐层可选链。
+   */
+  /*
+   * 会话页的侧栏其实挂在**线程**上（`conversationPath` 对有 `threadId` 的来源返回 `/api/threads/<id>`），
+   * 不是频道地址。频道那条通配加 `/sidebar` 的写法也留着：群组之外还有一种只给频道的来源，两条都写
+   * 不冲突（见 `answerBody` 的「取最长」）。
+   */
+  [
+    "/api/threads/*/sidebar",
+    '{"environment":{"kind":"cloud","model":null,"members":[]},"goal":null,"context":{"lastCompaction":null},"outputs":{"items":[],"total":0}}',
+  ],
+  /*
+   * 群组页的侧栏走的是**频道**地址（`conversationPath` 对 group 来源返回 `/api/channels/<id>`），
+   * 所以这一条与线程那条都要留着：两种来源，同一个 body 形状。
+   */
+  [
+    "/api/channels/*/sidebar",
+    '{"environment":{"kind":"cloud","model":null,"members":[]},"goal":null,"context":{"lastCompaction":null},"outputs":{"items":[],"total":0}}',
+  ],
+  /*
+   * `/api/me`：解信封 `{ user, version }`，`currentUser()` 把 `user` 摊平后交给 `AuthenticatedUser`。
+   * `email` 是必填——会话页的语音通话组件写的是 `user?.email.slice(…)`，可选链只到 `user`，
+   * `email` 缺了就在 `undefined.slice` 上崩。
+   */
+  /*
+   * 这位员工的权限（`employeePermissionsOptions`，body 即 `EmployeePermissions`）。
+   * `disabledToolRefs` 直接 `for (const mode of permissions.modes)`——`modes` 缺了不是空列表，是崩。
+   * 会话页拿它决定浏览器自己的工具要不要藏起来，所以每条会话路由都会读。
+   */
+  /*
+   * 这两条是 `/api/me` 给了真 user 之后才被请求的：偏好设置那条 `enabled: Boolean(userId)`，
+   * 以前 `/api/me` 答空对象、`userId` 是 `undefined`，查询根本没发，所以从没暴露过「解信封拿到
+   * `undefined`」这件事——React Query 会把它自己的诊断行（`["settings","preferences",…] data is
+   * undefined`）画到屏幕上，然后被记成一行纯英文。
+   */
+  ["/api/settings/preferences", '{"preferences":{}}'],
+  ["/api/settings/instructions", '{"instructions":""}'],
+  /*
+   * 任务卡详情（`followedCardQueryOptions`）：解信封 `task` 与 `events`。答空对象时解出 `undefined`，
+   * React Query 把自己的诊断画上屏（`["tasks","card","tsk-scan"] data is undefined`），那行英文不是
+   * 产品文案，但会被一字不差地记进账。
+   */
+  /*
+   * `task` 给 `null` 而不是空对象：解信封时 `undefined` 会让 React Query 把诊断画上屏，`null` 则是
+   * 一个合法的「没有这张卡」，页面走它自己的「打不开这张任务卡」分支——那是产品文案，中文，能扫。
+   */
+  ["/api/tasks/*", '{"task":null}'],
+  ["/api/tasks/*/events", '{"events":[]}'],
+  /*
+   * 一条 WakerFlow（`client(at(id), "flow")`）与它的分享预览（`client(shareAt(token), "share")`）。
+   * 都走「解信封给 null、让页面自己走空分支」这条路：`null` 是合法答案，页面画它自己那句中文；
+   * `undefined` 不是，React Query 会把自己的诊断写上屏，而诊断是英文。
+   */
+  ["/api/wakerflows/*", '{"flow":null}'],
+  ["/api/wakerflow-shares/*", '{"share":null}'],
+  // GitHub 事件来源（`githubBindingsQueryOptions`）：连接页要按它列出已绑定的仓库。
+  ["/api/responsibilities/sources/github", '{"bindings":[]}'],
+  // 团队 Bot 列表：员工页的「发布到团队」那一行读 `teamBots.data.teamBots.find(…)`。
+  ["/api/team-bots", '{"teamBots":[]}'],
+  [
+    "/api/approvals/employees/*",
+    '{"botId":"agt-scan","editable":false,"ownedByAnother":false,"modes":[],"teamRules":[],"security":{"dangerousCommands":"ask","sensitivePaths":"ask","extraSensitivePaths":[],"disabledDefaultPaths":[]},"defaultSensitivePaths":[],"enforceDangerousCommands":false,"customRulesEnabled":false}',
+  ],
+  [
+    "/api/me",
+    '{"user":{"id":"usr-scan","email":"scan@example.com","name":"审计夹具","role":"user","onboarding":null},"version":null}',
+  ],
+  [
+    "/api/groups/*/sidebar",
+    '{"environment":{"kind":"cloud","model":null,"members":[]},"goal":null,"context":{"lastCompaction":null},"outputs":{"items":[],"total":0}}',
+  ],
 ];
 
 /** 一个永远不回答的 API。页面停在「加载中」。 */
@@ -336,7 +506,7 @@ function answerEmpty(): void {
       const path = new URL(String(input), "http://localhost/").pathname;
       // 补 `EMPTY_ANSWER` 时用得着：`I18N_SCAN_LOG=1` 打出每条路由读了哪些端点。
       if (process.env.I18N_SCAN_LOG === "1") console.error(`[fetch] ${path}`);
-      const body = EMPTY_ANSWER.find(([key]) => key === path)?.[1] ?? "{}";
+      const body = answerBody(path);
       return new Response(body, {
         headers: { "content-type": "application/json" },
         status: 200,
@@ -344,6 +514,38 @@ function answerEmpty(): void {
     },
     { preconnect: originalFetch.preconnect },
   ) as typeof fetch;
+}
+
+/**
+ * 按路径取一条假答案。先精确匹配，再按 `*` 通配；**通配取最长的那条**。
+ *
+ * 通配是参数路由带进来的：`/api/sign-in-requests/req-scan` 里的 `req-scan` 是夹具值，而形状与
+ * `/api/sign-in-requests/<任何 id>` 一样。一种形状写一行，不在答案表里给每个夹具值各抄一份——
+ * 抄两份就会有一份先过期。
+ *
+ * 为什么是「最长」而不是「表里靠前的第一条」：群组那条通配（`/api/groups/` 加星号）与它下面
+ * 更长的「……加星号再加 `/sidebar`」都命中同一个地址，而后者才是这个地址的真形状。靠顺序决定，
+ * 等于让答案表的行序变成一条隐含规则——加一行就可能悄悄改变另一条路由的答案，且失败信息完全
+ * 看不出来。
+ */
+function answerBody(path: string): string {
+  let bestKey = "";
+  let bestBody: string | null = null;
+  for (const [key, body] of EMPTY_ANSWER) {
+    if (key === path) return body;
+    const star = key.indexOf("*");
+    if (star < 0) continue;
+    // 假的答案表里的通配只有「开头*结尾」一种形状，所以前后缀比对就够，不必动用正则。
+    const head = key.slice(0, star);
+    const tail = key.slice(star + 1);
+    if (!path.startsWith(head) || !path.endsWith(tail)) continue;
+    if (path.length < head.length + tail.length) continue;
+    if (bestBody === null || key.length > bestKey.length) {
+      bestKey = key;
+      bestBody = body;
+    }
+  }
+  return bestBody ?? "{}";
 }
 
 /**
@@ -368,8 +570,57 @@ function answerFailing(): void {
   ) as typeof fetch;
 }
 
+/**
+ * 把 `at` 里的 `$` 占位符换成夹具值。`/bots/$agentId` + `{ agentId: "agt-scan" }` → `/bots/agt-scan`。
+ *
+ * 两件事值得说明：
+ *
+ * 1. **配置的地址是模板，进 history 的是具体地址。** 挂路由时传模板（`path: at`），因为 TanStack 要
+ *    靠它认参数名；进 history 时传具体值，因为要「真的访问这一页」。两边用同一份 `at`，只有替换与
+ *    不替换的差别，所以不会出现「扫的其实是另一页」。
+ * 2. **缺一个键就报错，不静默补空。** 少写一个 `params` 会得到 `/bots/`——有的路由会把它当成
+ *    「列表页」，于是量具安静地扫了另一页并且全绿。那种绿比红更坏，所以这里直接抛。
+ *
+ * splat 路由（`/settings/plugins/$`）的占位符没有名字，约定键名 `_splat`。
+ */
+function fillParams(
+  at: string,
+  params?: Readonly<Record<string, string>>,
+): string {
+  const splat = at.endsWith("/$") ? params?._splat : undefined;
+  const head = splat === undefined ? at : `${at.slice(0, -1)}${splat}`;
+  const filled = head.replace(/\$(\w+)/g, (_, name: string) => {
+    const value = params?.[name];
+    if (!value) throw new Error(`${at} 的 ${name} 没有夹具值`);
+    return value;
+  });
+  if (filled.includes("$"))
+    throw new Error(`${at} 的 splat 没有夹具值`);
+  return filled;
+}
+
+/**
+ * 一条路由在**真树**里的 id，从文件名机械推出来：`_authed/_app/bots.$agentId.index.tsx` →
+ * `/_authed/_app/bots/$agentId/`（尾部斜杠是 TanStack 的 index 写法）。
+ *
+ * 为什么要单独推 id，而不是拿地址当 id：`routeTree.gen.ts` 里 id 与 path 是两件事，
+ * `_authed/settings/_personal/skills_.$slug.tsx` 的 id 是 `…/skills_/$slug`、地址是
+ * `/settings/skills/$slug`——多一个 `_`，因为 `skills_` 逃出了 `_personal` 布局。页面里那句
+ * `useParams({ from: "/_authed/_app/connections/$key" })` 写死的是 **id**，id 错了就
+ * `Invariant failed: Could not find an active match`。生成器怎么拼，这里就怎么拼。
+ */
+function routeIdOf(file: string): string {
+  const path = `/${file.replace(/\.tsx$/, "").replace(/\./g, "/")}`;
+  return path.endsWith("/index") ? path.slice(0, -"index".length) : path;
+}
+
 /** 一条路画一遍，返回它渲染出来的文字行。 */
-async function linesOf(at: string, state: State): Promise<string[]> {
+async function linesOf(
+  at: string,
+  state: State,
+  params?: Readonly<Record<string, string>>,
+  file?: string,
+): Promise<string[]> {
   if (state === "pending") answerNothing();
   else if (state === "failed") answerFailing();
   else answerEmpty();
@@ -378,15 +629,38 @@ async function linesOf(at: string, state: State): Promise<string[]> {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
   });
-  const root = createRootRoute({ component: () => <Outlet /> });
+  /*
+   * 伪装根 = `_authed` 那一层：真树里 `routes/_authed.tsx` 把 `<Outlet/>` 包在 `CopilotProvider` 里，
+   * 会话页读 CopilotKit 的上下文（`useCopilotKit must be used within CopilotKitProvider`）。不包这一层，
+   * 频道/群组两页在「读完了」态崩成路由错误组件——那不是产品的问题，是伪装根比真根浅了一层。
+   */
+  const root = createRootRoute({
+    component: () => (
+      <CopilotProvider>
+        <Outlet />
+      </CopilotProvider>
+    ),
+  });
   const router = createRouter({
     context: { queryClient: client },
-    history: createMemoryHistory({ initialEntries: [at] }),
+    history: createMemoryHistory({ initialEntries: [fillParams(at, params)] }),
     routeTree: root.addChildren([
+      /*
+       * 参数路由要**分别**给 id 与 path，非参数路由沿用地址当两者。
+       *
+       * 之前的写法是 `id: at, path: at`，对不调 `useParams()` 的页面没有影响，所以五十九页一直是
+       * 对的。参数路由进来才炸：页面里 `useParams({ from: "/_authed/_app/connections/$key" })`
+       * 写死的是**路由 id**，而 `id: at` 给的是地址（`/connections/$key`），少了 `_authed/_app`
+       * 两层布局——`Invariant failed: Could not find an active match`，三态全崩。
+       *
+       * `routeTree.gen.ts` 里这两件事本来就是分开的（见 `routeIdOf`），这里照抄它的做法，仍然只
+       * 换父路由、不建布局链：伪装根 + 绝对 id + 干净 path 足够让页面画出内容。
+       */
       (route as { update: (options: unknown) => never }).update({
         getParentRoute: () => root,
-        id: at,
-        path: at,
+        ...(params && file
+          ? { id: routeIdOf(file), path: addressOf(file) }
+          : { id: at, path: at }),
       } as never),
     ]),
   });
@@ -480,9 +754,14 @@ const ROUTER_FALLBACK = "Something went wrong!";
 const NOT_FOUND = "Not Found";
 
 /** 一条路由的一种状态扫一遍。 */
-async function scanOne(at: string, state: State): Promise<RouteReport> {
+async function scanOne(
+  at: string,
+  state: State,
+  params?: Readonly<Record<string, string>>,
+  file?: string,
+): Promise<RouteReport> {
   cleanup();
-  const lines = await linesOf(at, state);
+  const lines = await linesOf(at, state, params, file);
   if (lines.includes(ROUTER_FALLBACK))
     throw new Error(
       `${at} · ${LABEL[state]} 渲染崩了（错误组件顶上来），这一条没扫到`,
@@ -494,7 +773,11 @@ async function scanOne(at: string, state: State): Promise<RouteReport> {
   // `I18N_SCAN_LINES=1` 打出每条路由的每一行：量具自己抖的时候，得先看清抖的是哪几行。
   if (process.env.I18N_SCAN_LINES === "1")
     console.error(`[lines] ${at} · ${LABEL[state]}\n${lines.join("\n")}`);
-  return scanRoute({ at: `${at} · ${LABEL[state]}`, lines });
+  return scanRoute({
+    at: `${at} · ${LABEL[state]}`,
+    lines,
+    identifiers: params ? Object.values(params) : undefined,
+  });
 }
 
 const WAS = new Map(BUDGET.map((row) => [row.at, row.english]));
@@ -538,10 +821,10 @@ describe("主路径没有纯英文文字行", () => {
     expect(problems).toEqual([]);
   });
 
-  for (const { at, states, minLines } of MAIN_PATH) {
+  for (const { at, file, params, states, minLines } of MAIN_PATH) {
     for (const state of states ?? STATES) {
       test(`${at} · ${LABEL[state]}`, async () => {
-        const one = await scanOne(at, state);
+        const one = await scanOne(at, state, params, file);
         scans.push(one);
         // 逐路由可下调（`Scanned.minLines`），理由写在台账那一条上。可以按状态各配一个。
         const floor =

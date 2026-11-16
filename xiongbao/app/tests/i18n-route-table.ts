@@ -41,6 +41,15 @@ export type Scanned = {
    * 只扫「读完了」，并在报告里如实记成一条，而不是假装两种状态都量过了。
    */
   readonly states?: readonly ("pending" | "loaded" | "failed")[];
+  /**
+   * `at` 里 `$` 占位符的取值（夹具）。地址含参数的路由必须有这一项，否则量具只能挂一条字面路径，
+   * `useParams()` 拿到空对象，页面读的是 `/api/…/undefined`——那既不是真页面，也量不出任何东西。
+   *
+   * 取值是**编的**，但必须让页面画出真东西：形如 `agt-scan` 这样一段看起来像 id 的字符串，配套的
+   * 假答案按同一段字符串返回一个形状合法的对象。不写成 `abc`/`1` 是为了让失败信息自解释——
+   * 看到 `agt-scan` 就知道这是量具造的夹具，不是某个人真删了数据。
+   */
+  readonly params?: Readonly<Record<string, string>>;
 };
 
 /**
@@ -288,6 +297,195 @@ export const SCANNED: readonly Scanned[] = [
     file: "_authed/desktop-return.tsx",
     minLines: { pending: 6, loaded: 6, failed: 6 },
   },
+
+  /*
+   * 2026-11-16 第四轮：地址带参数的那 33 个文件。
+   *
+   * 这一批原先一直挂在「参数」桶里，理由写的是「要真实 id 才画得出来，凭空造一个只会得到找不到这条
+   * 对话」。理由对了一半：随手编个 `abc` 确实只会画出「找不到」。但那是**夹具没造**，不是不能扫。
+   *
+   * 造法：`at` 保留文件路由自己的 `$` 模板（`/bots/$agentId`），量具拿它去挂路由，`useParams()`
+   * 就拿到 `params` 里的夹具值；`initialEntries` 用替换后的具体地址，页面收到的是
+   * `/api/agents/agt-scan`，假答案按同一段字符串返回一个形状合法的对象。两边对上，页面就画出来了。
+   *
+   * 三条命名约定，读到这里的下一个人不必再猜：
+   * - 夹具 id 带 `-scan` 后缀（`agt-scan`、`tsk-scan`…）。测试红了看到它，就知道是量具造的，
+   *   不是某个人的真数据丢了。
+   * - 同一类资源在多个页面复用同一个夹具值（11 个 `/bots/*` 都用 `agt-scan`）。换一个值不会更真，
+   *   只会让假答案多一份。
+   * - 参数值取自**地址里已有的词**（`connections.$key` 用 `github`、`admin/components/$name` 用
+   *   `button`）。这类参数本来就是可枚举的标识符，用真值比用 `x-scan` 更容易看出页面在讲什么。
+   *
+   * 关于这一批的 `minLines`：它们普遍只有 1–7 行，比其余页面低得多，别读成「页面就这么小」。
+   * 这 24 条都是**详情页**，要一份真的资源才画得满：`/bots/$agentId` 得有一份完整员工档案，
+   * `/tasks/$taskId` 得有一张真任务卡。试过把员工档案造全，页面随即要团队 Bot、`plugins.skills`、
+   * 授权、电脑……一棵越挖越深的数据依赖，逐个补齐属于「造一套完整假数据」，是另一件事。
+   * 所以这里记的是**空壳的量**：它钉住「这一页能画出来、没崩、空状态那句是中文」，不声称整页
+   * 文案都过了镜头。要往后推进，动作是给夹具补真数据，不是把下限调高。
+   *
+   * 另有两条用 `states` 排掉「加载中」：`/admin/components/$name` 与
+   * `/settings/components-gallery/$name` 在请求没回来时一个字都不画（0 行），`/bots/$agentId/memory`
+   * 也是。把 0 记进 `minLines` 等于把「没量到」写成「量到了」。
+   */
+  // 员工的十一个分页。地址里的 `$agentId` 全部用同一个夹具。
+  {
+    at: "/bots/$agentId",
+    file: "_authed/_app/bots.$agentId.index.tsx",
+    params: { agentId: "agt-scan" },
+    minLines: { pending: 2, loaded: 3, failed: 3 },
+  },
+  {
+    at: "/bots/$agentId/access",
+    file: "_authed/_app/bots.$agentId.access.tsx",
+    params: { agentId: "agt-scan" },
+    minLines: { pending: 3, loaded: 4, failed: 4 },
+  },
+  {
+    at: "/bots/$agentId/activity",
+    file: "_authed/_app/bots.$agentId.activity.tsx",
+    params: { agentId: "agt-scan" },
+    minLines: { pending: 3, loaded: 4, failed: 4 },
+  },
+  {
+    at: "/bots/$agentId/approvals",
+    file: "_authed/_app/bots.$agentId.approvals.tsx",
+    params: { agentId: "agt-scan" },
+    minLines: { pending: 3, loaded: 4, failed: 4 },
+  },
+  {
+    at: "/bots/$agentId/memory",
+    file: "_authed/_app/bots.$agentId.memory.tsx",
+    params: { agentId: "agt-scan" },
+    states: ["loaded", "failed"],
+    minLines: { loaded: 4, failed: 4 },
+  },
+  {
+    at: "/bots/$agentId/reach",
+    file: "_authed/_app/bots.$agentId.reach.tsx",
+    params: { agentId: "agt-scan" },
+    minLines: { pending: 3, loaded: 4, failed: 4 },
+  },
+  {
+    at: "/bots/$agentId/responsibilities",
+    file: "_authed/_app/bots.$agentId.responsibilities.tsx",
+    params: { agentId: "agt-scan" },
+    minLines: { pending: 3, loaded: 4, failed: 4 },
+  },
+  {
+    at: "/bots/$agentId/routines",
+    file: "_authed/_app/bots.$agentId.routines.tsx",
+    params: { agentId: "agt-scan" },
+    minLines: { pending: 3, loaded: 4, failed: 4 },
+  },
+  {
+    at: "/bots/$agentId/setup",
+    file: "_authed/_app/bots.$agentId.setup.tsx",
+    params: { agentId: "agt-scan" },
+    minLines: { pending: 3, loaded: 4, failed: 4 },
+  },
+  {
+    at: "/bots/$agentId/sharing",
+    file: "_authed/_app/bots.$agentId.sharing.tsx",
+    params: { agentId: "agt-scan" },
+    minLines: { pending: 3, loaded: 4, failed: 4 },
+  },
+  // 频道详情。`new` 是固定地址，已在扫表里；这条是看一个真频道。
+  {
+    at: "/channel/$channelId",
+    file: "_authed/_app/channel/$channelId.tsx",
+    params: { channelId: "chn-scan" },
+    minLines: { pending: 1, failed: 3 },
+  },
+  // 连接：一个连接、它下面挂的员工与工具。`$key` 用 `github`，那是连接目录里真有的一个键。
+  {
+    at: "/connections/$key",
+    file: "_authed/_app/connections.$key.tsx",
+    params: { key: "github" },
+    minLines: { pending: 1, failed: 3 },
+  },
+  {
+    at: "/group/$channelId",
+    file: "_authed/_app/group/$channelId.tsx",
+    params: { channelId: "chn-scan" },
+    minLines: { pending: 1, loaded: 5, failed: 2 },
+  },
+  // 屏幕：`/s/$screen` 是电脑那一路的单个屏幕。
+  {
+    at: "/tasks/$taskId",
+    file: "_authed/_app/tasks.$taskId.tsx",
+    params: { taskId: "tsk-scan" },
+    minLines: { pending: 2, loaded: 2, failed: 3 },
+  },
+  {
+    at: "/wakerflows/$flowId",
+    file: "_authed/_app/wakerflows.$flowId.tsx",
+    params: { flowId: "wfr-scan" },
+    minLines: { pending: 3, loaded: 3, failed: 4 },
+  },
+  {
+    at: "/wakerflows/import/$token",
+    file: "_authed/_app/wakerflows.import.$token.tsx",
+    params: { token: "tok-scan" },
+    minLines: { pending: 3, loaded: 3, failed: 4 },
+  },
+  // 管理端详情页。
+  {
+    at: "/admin/boundaries/$index",
+    file: "_authed/admin/boundaries_.$index.tsx",
+    params: { index: "0" },
+    minLines: { pending: 2, loaded: 3, failed: 3 },
+  },
+  {
+    at: "/admin/components/$name",
+    file: "_authed/admin/components/$name.tsx",
+    params: { name: "button" },
+    states: ["loaded", "failed"],
+    minLines: { loaded: 6, failed: 3 },
+  },
+  {
+    at: "/admin/plugins/$key",
+    file: "_authed/admin/plugins/$key.tsx",
+    params: { key: "github" },
+    minLines: { pending: 1, loaded: 5, failed: 3 },
+  },
+  {
+    at: "/admin/plugins/$key/bots/$agentId",
+    file: "_authed/admin/plugins/$key_.bots.$agentId.tsx",
+    params: { agentId: "agt-scan", key: "github" },
+    minLines: { pending: 1, loaded: 5, failed: 3 },
+  },
+  {
+    at: "/admin/plugins/$key/tools/$tool",
+    file: "_authed/admin/plugins/$key_.tools.$tool.tsx",
+    params: { key: "github", tool: "issues" },
+    minLines: { pending: 1, loaded: 4, failed: 3 },
+  },
+  {
+    at: "/admin/skills/$slug",
+    file: "_authed/admin/skills_.$slug.tsx",
+    params: { slug: "summarise" },
+    minLines: { pending: 2, loaded: 4, failed: 3 },
+  },
+  {
+    at: "/settings/skills/$slug",
+    file: "_authed/settings/_personal/skills_.$slug.tsx",
+    params: { slug: "summarise" },
+    minLines: { pending: 2, loaded: 4, failed: 3 },
+  },
+  {
+    at: "/settings/components-gallery/$name",
+    file: "_authed/settings/components-gallery/$name.tsx",
+    params: { name: "button" },
+    states: ["loaded", "failed"],
+    minLines: { loaded: 7, failed: 4 },
+  },
+  // 私密登录表单：链接发到 Slack / 短信 / 手机上，落到的就是这一页。
+  {
+    at: "/sign-in/$requestId",
+    file: "_authed/sign-in/$requestId.tsx",
+    params: { requestId: "req-scan" },
+    minLines: { pending: 2, failed: 3 },
+  },
 ];
 
 /**
@@ -298,8 +496,11 @@ export const SCANNED: readonly Scanned[] = [
  *   遇到「页面天生太小」，配下限，不要往台账里塞。
  * - 「待翻」：`/admin/playground` 与 `/desktop-return` 已翻完并进扫表（2026-11-16 第三轮）。
  *   遇到「有英文」，翻它；翻不动就写在这儿并说明为什么翻不动，别只写「以后补」。
+ * - 「参数」：33 个带 `$id` 的文件已进扫表（2026-11-16 第四轮）。理由原本是「要真实 id」，实际是
+ *   「夹具没造」——量具保留路由自己的 `$` 模板、`initialEntries` 用夹具值替换，参数就有真值了。
+ *   遇到「要参数」，给 `Scanned.params` 造夹具，不要往台账里塞。
  */
-export type UncoveredWhy = "布局" | "参数" | "旧地址" | "缺夹具" | "非界面文案";
+export type UncoveredWhy = "布局" | "旧地址" | "缺夹具" | "非界面文案";
 
 export type Uncovered = {
   readonly why: UncoveredWhy;
@@ -313,8 +514,6 @@ export type Uncovered = {
  *
  * - `布局`：没有自己的地址（`__root`、`_authed`、`_app`、`route.tsx`）。它们只在别的路由里画 `<Outlet/>`，
  *   没有自己的 DOM，扫到的是子路由的内容，重复计算。
- * - `参数`：地址里有 `$id`。要一段真实 id 才画得出来，凭空造一个 id 进去只会得到「找不到这条对话」。
- *   下一轮的做法是造夹具（真的建一个对话/员工），不是编 id。
  * - `旧地址`：老链接，`beforeLoad` 里就 `throw redirect`，自己不画东西。探针里它们只画出一行
  *   TanStack 默认的 `Not Found`（真应用里 `notFoundComponent` 是跳回首页），这一行不是产品文案。
  * - `缺夹具`：有固定地址，但要先造出某种状态才画得出来——管理员身份、一个已有数据的工作台、
@@ -339,45 +538,6 @@ export const UNCOVERED: readonly Uncovered[] = [
     ],
   },
   {
-    why: "参数",
-    note: "地址里有 $id，要真实 id 才画得出来",
-    files: [
-      "_authed/_app/assemble.$agentId.tsx",
-      "_authed/_app/bots.$agentId.access.tsx",
-      "_authed/_app/bots.$agentId.activity.tsx",
-      "_authed/_app/bots.$agentId.approvals.tsx",
-      "_authed/_app/bots.$agentId.index.tsx",
-      "_authed/_app/bots.$agentId.memory.tsx",
-      "_authed/_app/bots.$agentId.reach.tsx",
-      "_authed/_app/bots.$agentId.responsibilities.tsx",
-      "_authed/_app/bots.$agentId.routines.tsx",
-      "_authed/_app/bots.$agentId.setup.tsx",
-      "_authed/_app/bots.$agentId.sharing.tsx",
-      "_authed/_app/channel/$channelId.tsx",
-      "_authed/_app/connections.$key.tsx",
-      "_authed/_app/connections.$key_.bots.$agentId.tsx",
-      "_authed/_app/connections.$key_.tools.$tool.tsx",
-      "_authed/_app/group/$channelId.tsx",
-      "_authed/_app/s/$screen.tsx",
-      "_authed/_app/start.$startId.tsx",
-      "_authed/_app/tasks.$taskId.tsx",
-      "_authed/_app/wakerflows.$flowId.tsx",
-      "_authed/_app/wakerflows.import.$token.tsx",
-      "_authed/_app/wakers_.$agentId.tsx",
-      "_authed/admin/boundaries_.$index.tsx",
-      "_authed/admin/components/$name.tsx",
-      "_authed/admin/plugins/$key.tsx",
-      "_authed/admin/plugins/$key_.bots.$agentId.tsx",
-      "_authed/admin/plugins/$key_.tools.$tool.tsx",
-      "_authed/admin/skills_.$slug.tsx",
-      "_authed/settings/_personal/plugins.$.tsx",
-      "_authed/settings/_personal/skills_.$slug.tsx",
-      "_authed/settings/components-gallery/$name.tsx",
-      "_authed/settings/connected-accounts/$key.tsx",
-      "_authed/sign-in/$requestId.tsx",
-    ],
-  },
-  {
     why: "旧地址",
     note: "beforeLoad 里就 throw redirect，自己不画东西",
     files: [
@@ -397,6 +557,17 @@ export const UNCOVERED: readonly Uncovered[] = [
       "_authed/settings/memory.tsx",
       "_authed/settings/setup.tsx",
       "sign.tsx",
+      /*
+       * 第四轮从「参数」桶搬进来的：它们地址里有 `$id`，但 `beforeLoad` 就 `throw redirect`，
+       * 自己不画一个 DOM 节点——带参数与否和「扫不扫得到」无关，跳走才是原因。
+       * `bots.$agentId.memory` 不在此列：它是**条件**跳转（部署不支持记忆时才跳），留在扫表里。
+       */
+      "_authed/_app/assemble.$agentId.tsx",
+      "_authed/_app/connections.$key_.bots.$agentId.tsx",
+      "_authed/_app/connections.$key_.tools.$tool.tsx",
+      "_authed/_app/wakers_.$agentId.tsx",
+      "_authed/settings/_personal/plugins.$.tsx",
+      "_authed/settings/connected-accounts/$key.tsx",
     ],
   },
   {
@@ -421,6 +592,17 @@ export const UNCOVERED: readonly Uncovered[] = [
       "_authed/settings/browsers.tsx",
       "_authed/settings/learning.tsx",
       "_authed/_app/reachability.tsx",
+      /*
+       * 第四轮从「参数」桶搬进来的两条。地址里有参数，但参数不是扫不到的原因：
+       * - `/s/$screen` 的内容由**当前皮肤**决定（`useActiveSkin().screens?.[screen]`）。默认皮肤
+       *   没有这个屏幕，组件自己 `<Navigate to="/" />` 回首页——真用户拿着旧链接进来看到的也是
+       *   首页。要扫它得先切换皮肤，那属于「造状态」。
+       * - `/start/$startId` 读的是**这一次点击**留在内存里的待发消息（`readPendingStart`），刷新即失。
+       *   量具造不出来，除非先模拟一次从首页发消息的全过程。
+       * 两条都不是文案问题，也不是参数问题。
+       */
+      "_authed/_app/s/$screen.tsx",
+      "_authed/_app/start.$startId.tsx",
     ],
   },
   {
