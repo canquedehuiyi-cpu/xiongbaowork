@@ -277,6 +277,7 @@ export function createWechatPoller(deps: WechatPollerDeps) {
         deps.leaseMs ?? DEFAULT_POLL_MS + LEASE_MARGIN_MS,
         room,
         [...active],
+        now(),
       );
       // 认领时已排除本副本还在处理的账号，所以这里每个都是新的。
       for (const account of accounts) {

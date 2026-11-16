@@ -352,6 +352,11 @@ export function createWechatStore(database: Database) {
       limit: number,
       /** 本副本还在处理的账号：不认领，也就不动它们的租约。 */
       exclude: readonly string[] = [],
+      /**
+       * 判断「暂停是否到期」用的时刻。`paused_until` 是应用时钟写的（`pause` 收到的 `until`），所以要用同一个
+       * 钟比；不传就用数据库时钟。租约不一样：写和比都在数据库里，始终用数据库的 `now()`，多副本不受时钟差影响。
+       */
+      now?: Date,
     ): Promise<WechatAccount[]> {
       return runAsTenant("platform", () =>
         database.transaction(async (transaction) => {
@@ -360,7 +365,7 @@ export function createWechatStore(database: Database) {
               select "id"
               from "wechat_accounts"
               where ("status" = 'bound'
-                  or ("status" = 'paused' and "paused_until" <= now()))
+                  or ("status" = 'paused' and "paused_until" <= ${now ? sql`${now.toISOString()}::timestamptz` : sql`now()`}))
                 and ("lease_until" is null or "lease_until" <= now())
                 ${
                   exclude.length
