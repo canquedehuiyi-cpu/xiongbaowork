@@ -118,6 +118,21 @@ export function createRoutineRunner(options: {
      */
     if (!context) return;
     /*
+     * A run is run once. One that already has an outcome is a replay of a finished id, not a firing:
+     * nothing is run, nothing is recorded on the row, and nobody is told anything but the log.
+     */
+    if (context.status != null) {
+      console.warn(
+        JSON.stringify({
+          type: "routine-run-already-finished",
+          routineId: context.routineId,
+          routineRunId,
+          status: context.status,
+        }),
+      );
+      return;
+    }
+    /*
      * THE OWNER'S TENANT, from here to the end of the firing.
      *
      * This request arrived over a worker secret with no session behind it, so the connection has no

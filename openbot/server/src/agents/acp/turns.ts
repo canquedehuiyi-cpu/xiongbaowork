@@ -124,6 +124,15 @@ export type AcpTurnStore = {
   unclaim(tenantId: string, turnId: string): Promise<void>;
   /** Raises `lastSeq` (never lowers it), whatever the status. */
   recordSeq(tenantId: string, turnId: string, lastSeq: number): Promise<void>;
+  /**
+   * The thread's turns that are not over (queued, on a device, waiting for an answer), oldest first:
+   * of one employee when `agentId` is given, else of every employee in it, whatever the device.
+   */
+  openInThread(
+    tenantId: string,
+    threadId: string,
+    agentId?: string,
+  ): Promise<AcpTurnRow[]>;
 };
 
 export function createAcpTurnStore(database: Database): AcpTurnStore {
@@ -320,6 +329,23 @@ export function createAcpTurnStore(database: Database): AcpTurnStore {
               eq(acpTurns.status, "sent"),
             ),
           ),
+      );
+    },
+
+    async openInThread(tenantId, threadId, agentId) {
+      return runAsTenant(tenantId, () =>
+        database
+          .select()
+          .from(acpTurns)
+          .where(
+            and(
+              eq(acpTurns.tenantId, tenantId),
+              eq(acpTurns.threadId, threadId),
+              ...(agentId ? [eq(acpTurns.agentId, agentId)] : []),
+              notInArray(acpTurns.status, [...FINAL_ACP_TURN_STATUSES]),
+            ),
+          )
+          .orderBy(...oldestFirst),
       );
     },
 

@@ -87,3 +87,21 @@ export function turnForCard<T>(taskId: string, body: () => T): T {
 export function targetedCard(): string | undefined {
   return targeted.getStore();
 }
+
+const idleOnly = new AsyncLocalStorage<true>();
+
+/**
+ * Run `body` -- a turn the server starts on a conversation by itself (a nudge, a hand-over, a 退回
+ * said for the person) -- as one that may only start while the thread is idle. The runner otherwise
+ * supersedes whatever is running there; such a turn is refused instead (`ThreadBusyError`), and the
+ * question "is anything running or on its way in?" is answered in the same step that admits the turn,
+ * so a person's turn that started a moment ago is never stopped by it. Server code only.
+ */
+export function onlyOnIdleThread<T>(body: () => T): T {
+  return idleOnly.run(true, body);
+}
+
+/** Whether the turn now being accepted may only start on an idle thread. */
+export function onlyOnIdleThreadRequested(): boolean {
+  return idleOnly.getStore() === true;
+}

@@ -5,11 +5,7 @@ import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createChannelStore } from "../src/channels/routes";
 import { createThreadIdentity } from "../src/channels/thread-identity";
 import { createDatabase } from "../src/db/client";
-import {
-  channelMemberships,
-  channels,
-  users,
-} from "../src/db/schema";
+import { channelMemberships, channels, users } from "../src/db/schema";
 import { runAsTenant } from "../src/tenant/context";
 import { createUserPreferencesStore } from "../src/user-preferences";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -22,6 +18,13 @@ const channelStore = createChannelStore(
   createThreadIdentity("tour-test"),
 );
 const ids: string[] = [];
+/** Work hours nobody saved: 09:00 to 18:00 on weekdays, on the product's zone (spec 2026-11-15-delivery-loop §10). */
+const DEFAULT_HOURS = {
+  start: "09:00",
+  end: "18:00",
+  timeZone: "Asia/Shanghai",
+  weekends: false,
+};
 async function person() {
   const id = `preferences-${randomUUID()}`;
   await runAsTenant(id, () =>
@@ -52,6 +55,7 @@ test("database defaults and writes survive a new store and remain scoped to the 
       narration: null,
       skin: "xiongbao",
       proactive: "on",
+      workHours: DEFAULT_HOURS,
     });
     expect(await store.patch(alice, { messageListEmphasis: "agent" })).toEqual({
       messageListEmphasis: "agent",
@@ -59,6 +63,7 @@ test("database defaults and writes survive a new store and remain scoped to the 
       narration: null,
       skin: "xiongbao",
       proactive: "on",
+      workHours: DEFAULT_HOURS,
     });
     expect(await createUserPreferencesStore(database).read(alice)).toEqual({
       messageListEmphasis: "agent",
@@ -66,6 +71,7 @@ test("database defaults and writes survive a new store and remain scoped to the 
       narration: null,
       skin: "xiongbao",
       proactive: "on",
+      workHours: DEFAULT_HOURS,
     });
   });
   await runAsTenant(bob, async () => {
@@ -75,6 +81,7 @@ test("database defaults and writes survive a new store and remain scoped to the 
       narration: null,
       skin: "xiongbao",
       proactive: "on",
+      workHours: DEFAULT_HOURS,
     });
   });
 });
@@ -121,6 +128,7 @@ test("the narration choice is kept in the database beside the others", async () 
       narration: "on",
       skin: "xiongbao",
       proactive: "on",
+      workHours: DEFAULT_HOURS,
     });
   });
 });
@@ -135,6 +143,7 @@ test("the skin is saved on the account and survives a new store", async () => {
       narration: null,
       skin: "openmuse",
       proactive: "on",
+      workHours: DEFAULT_HOURS,
     });
     expect((await createUserPreferencesStore(database).read(id)).skin).toBe(
       "openmuse",
@@ -171,6 +180,7 @@ test("check-ins are on for a person who never chose, and their off is kept in th
       narration: null,
       skin: "openduet",
       proactive: "off",
+      workHours: DEFAULT_HOURS,
     });
     // The jsonb key the check-in claim filters on, as Postgres holds it.
     const [row] = await database

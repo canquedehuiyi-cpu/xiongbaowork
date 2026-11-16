@@ -1,5 +1,6 @@
 tests/account-argument.test.ts
 tests/acp-agent.test.ts
+tests/acp-delivery.integration.test.ts
 tests/acp-e2e.integration.test.ts
 tests/acp-group.integration.test.ts
 tests/acp-hire.integration.test.ts
@@ -322,6 +323,8 @@ tests/db-client-address.test.ts
 tests/decision-waits.integration.test.ts
 tests/deepseek-thinking.test.ts
 tests/delivery-attention.integration.test.ts
+tests/delivery-briefing.integration.test.ts
+tests/delivery-checker.integration.test.ts
 tests/delivery-link-audit.test.ts
 tests/delivery-one-card.integration.test.ts
 tests/delivery-providers.test.ts
@@ -701,6 +704,7 @@ tests/role-generation.integration.test.ts
 tests/role-profile-markdown.test.ts
 tests/role-templates.integration.test.ts
 tests/role-writer-lifecycle.test.ts
+tests/role-writer-password.test.ts
 tests/roles.test.ts
 tests/route-ids-validation.test.ts
 tests/routine-conversation.integration.test.ts

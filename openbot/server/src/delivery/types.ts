@@ -48,8 +48,26 @@ export type DeliveryInbox = DeliveryScope & {
 /**
  * What a delivery is about. `attention` is a ping: one message to a person that something their
  * Bots' check-ins found needs them, every Bot's items folded into it (proactive/ping.ts).
+ *
+ * `briefing` and `overdue` are the delivery loop's (spec 2026-11-15-delivery-loop §10): the start or
+ * end briefing, folding every followed card into one message, and a reminder about one card that is
+ * late (or not yet taken on). Like a ping, neither is about one conversation: each row is filed under
+ * one the person can reach, and a tap opens the briefing page or the card, not a conversation.
  */
-export type DeliveryKind = "reply" | "question" | "approval" | "attention";
+export type DeliveryKind =
+  | "reply"
+  | "question"
+  | "approval"
+  | "attention"
+  | "briefing"
+  | "overdue";
+/** The kinds a person is told about outside any one conversation; each row carries its own heading. */
+export const PERSON_DELIVERY_KINDS = [
+  "attention",
+  "briefing",
+  "overdue",
+] as const;
+export type PersonDeliveryKind = (typeof PERSON_DELIVERY_KINDS)[number];
 export type DeliveryOutbox = DeliveryScope & {
   id: string;
   bindingId: string | null;

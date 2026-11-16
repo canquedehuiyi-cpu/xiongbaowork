@@ -626,7 +626,12 @@ test("enables pgvector before creating vector columns", () => {
 
 test("runs the server migrator after PostgreSQL becomes healthy", () => {
   const services = composeServices();
-  expect(services.migrate.command).toEqual(["bun", "scripts/migrate.ts"]);
+  // The migrator, then the role writer's password, as the chart's Job and migrate.sh order them.
+  expect(services.migrate.command).toEqual([
+    "sh",
+    "-ec",
+    "bun scripts/migrate.ts && bun scripts/role-writer-password.ts",
+  ]);
   expect(services.migrate.depends_on?.postgres).toEqual({
     condition: "service_healthy",
   });
@@ -650,7 +655,13 @@ test("builds the deployment image with Playwright's Chromium payload only", () =
         "{PLAYWRIGHT_VERSION}" +
         '" install --with-deps --no-shell chromium',
     );
-    expect(dockerfile).not.toMatch(/\bnodejs\b|\bnpm\b/);
+    // Node and npm arrive with the node-toolchain stage; no instruction installs a distribution's
+    // nodejs or npm. Comments may name npm (an employee runs `npm install` in its own workspace).
+    const instructions = dockerfile
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
+      .join("\n");
+    expect(instructions).not.toMatch(/\bnodejs\b|\bnpm\b/);
     expect(dockerfile).not.toMatch(
       /\binstall(?:\s+--with-deps)?\s+(firefox|webkit)\b/,
     );
@@ -862,7 +873,7 @@ test("gives the server container addresses, not the host's loopback", () => {
   expect(environment).toMatchObject({
     PORT: "3001",
     SERVER_PORT: "3001",
-    DATABASE_URL: "postgres://openbot:openbot@postgres:5432/openbot",
+    DATABASE_URL: "postgres://openbot_app:openbot@postgres:5432/openbot",
     AGENT_COMPUTER_URL: "http://agent-computer:4100",
   });
   for (const [name, value] of Object.entries(environment)) {
@@ -901,6 +912,90 @@ test("puts the server beside the database and the Bots, and the worker beside th
   expect(services.worker.environment?.SERVER_INTERNAL_URL).toBe(
     "http://server:3001",
   );
+});
+
+/**
+ * The whole start-up chain, as the server checks it (audit #633 M1, C1).
+ *
+ * Only `migrate` holds the owner: it creates the roles and sets the role writer's password, which a
+ * data privilege cannot. The server and the worker connect as `openbot_app`, which row-level security
+ * binds, so the server's tenant isolation preflight (and the worker's, the same gate) passes; the
+ * owner is a superuser and would be refused. The server is also given the role writer, which it
+ * refuses to start without, with the password `migrate` installs, whatever that is set to.
+ */
+test("connects the server and the worker as the application role, and only migrate as the owner", () => {
+  const services = runComposeConfig({}).services;
+  const owner = "postgres://openbot:openbot@postgres:5432/openbot";
+  const application = "postgres://openbot_app:openbot@postgres:5432/openbot";
+
+  expect(services.migrate.environment.DATABASE_URL).toBe(owner);
+  expect(services.server.environment.DATABASE_URL).toBe(application);
+  expect(services.worker.environment.DATABASE_URL).toBe(application);
+  const holders = Object.entries(services)
+    .filter(([, service]) =>
+      Object.values(service.environment ?? {}).some((value) =>
+        String(value).includes("openbot:openbot@"),
+      ),
+    )
+    .map(([name]) => name);
+  expect(holders).toEqual(["migrate"]);
+});
+
+test("gives the server the role writer, with the password migrate installs", () => {
+  const unset = runComposeConfig({}).services;
+  expect(unset.migrate.environment.ROLE_WRITER_PASSWORD).toBe("openbot");
+  expect(unset.server.environment.ROLE_WRITER_DATABASE_URL).toBe(
+    "postgres://openbot_role_writer:openbot@postgres:5432/openbot",
+  );
+  const chosen = runComposeConfig({
+    ROLE_WRITER_PASSWORD: "f00dCafe1234",
+  }).services;
+  expect(chosen.migrate.environment.ROLE_WRITER_PASSWORD).toBe("f00dCafe1234");
+  expect(chosen.server.environment.ROLE_WRITER_DATABASE_URL).toBe(
+    "postgres://openbot_role_writer:f00dCafe1234@postgres:5432/openbot",
+  );
+  // The worker writes no identity role and is not given the writer.
+  expect(Object.keys(chosen.worker.environment).sort()).toEqual([
+    "DATABASE_URL",
+    "SERVER_INTERNAL_URL",
+    "WORKER_SHARED_SECRET",
+  ]);
+});
+
+/**
+ * What decides the tenant isolation mode, as this file sets it: no `RLS_ENFORCE` for either service,
+ * an empty NODE_ENV for the server (the image's `production` would refuse private hosts) and the
+ * image's `production` for the worker. Both are therefore `refuse`, so the application role above is
+ * what lets them start. (A `.env` beside this file reaches the server through `env_file`, and the
+ * desktop writes `warn` there; that is the deployment's own choice, not this file's default.)
+ */
+test("leaves neither the server nor the worker an RLS opt-out", () => {
+  const services = runComposeConfig({}).services;
+  for (const name of ["server", "worker"]) {
+    const environment = services[name].environment;
+    expect(
+      Object.keys(environment).filter((key) => key.endsWith("RLS_ENFORCE")),
+    ).toEqual([]);
+  }
+  expect(services.server.environment.NODE_ENV).toBe("");
+  expect(Object.keys(services.worker.environment)).not.toContain("NODE_ENV");
+});
+
+/**
+ * The worker secret has no default (audit #633 M2): the development value is public and opens the
+ * endpoint that fires routines. Unset, Compose still reads the file, so every other command keeps
+ * working, and the worker is handed an empty value it refuses to start on (`worker/src/env.ts`).
+ */
+test("gives the worker secret no default, and still reads the file without one", () => {
+  expect(composeFile()).not.toContain("dev-worker-secret");
+  const unset = runComposeConfig({}).services;
+  expect(unset.server.environment.WORKER_SHARED_SECRET).toBe("");
+  expect(unset.worker.environment.WORKER_SHARED_SECRET).toBe("");
+  const given = runComposeConfig({
+    WORKER_SHARED_SECRET: "s3cret-from-env",
+  }).services;
+  expect(given.server.environment.WORKER_SHARED_SECRET).toBe("s3cret-from-env");
+  expect(given.worker.environment.WORKER_SHARED_SECRET).toBe("s3cret-from-env");
 });
 
 test("hands the desktop's host-access token to the server and nothing else", () => {
