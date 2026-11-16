@@ -298,6 +298,7 @@ export function libpqEnvironment(
       "DATABASE_URL is not a single-host postgres:// URL this backup can read; configure a reviewed backup path before upgrading",
     );
   requireUniqueOptions(url.searchParams);
+  requirePlainRouting(url.searchParams);
   const result: NodeJS.ProcessEnv = { ...env };
   for (const variable of Object.values(LIBPQ_QUERY_VARIABLES))
     if (variable !== "PGPASSFILE") delete result[variable];
@@ -425,11 +426,30 @@ function requireUniqueOptions(query: URLSearchParams) {
     seen.add(key);
   }
 }
+/** Query options that pick where, as whom or which database a URL connects. libpq (the backup)
+ * reads them, but postgres.js, which `server/scripts/migrate.ts` and the server connect with, reads
+ * only the URL's authority and path: `postgres://owner@db-a/openbot?host=db-b` is backed up from
+ * db-b and migrated on db-a. Refused, so every reader takes the target from the same place. */
+const ROUTING_OPTIONS = [
+  "host",
+  "hostaddr",
+  "port",
+  "dbname",
+  "user",
+  "service",
+];
+function requirePlainRouting(query: URLSearchParams) {
+  for (const key of ROUTING_OPTIONS)
+    if (query.has(key))
+      throw new Error(
+        `数据库连接串用查询参数「${key}」指定了连接目标，迁移和服务用的连接库不认这种写法，会连到别处：请把用户名、主机、端口和库名写进连接串本身（postgres://用户名:密码@主机:端口/库名），去掉这个参数后重新更新。`,
+      );
+}
 /** Where a postgres:// URL connects and which database it opens, not who logs in: since the app
  * role split (`0054_app_role.sql`, 0109) the server and the worker log in as `openbot_app`, the
  * server's role writer as `openbot_role_writer`, and migration as the owner, all in one database.
- * libpq lets the query override host, port and dbname, and falls back to the user name for an
- * absent dbname, so both are read the way libpq reads them. Undefined when the URL is not one. */
+ * libpq falls back to the user name for an absent dbname, and so does this. A repeated option or one
+ * that reroutes the connection throws. Undefined when the URL is not a postgres:// one. */
 export function databaseIdentity(databaseUrl: string | undefined) {
   if (!databaseUrl || databaseUrl.includes("${")) return undefined;
   let url: URL;
@@ -440,8 +460,8 @@ export function databaseIdentity(databaseUrl: string | undefined) {
   }
   if (url.protocol !== "postgres:" && url.protocol !== "postgresql:")
     return undefined;
-  const query = url.searchParams;
-  requireUniqueOptions(query);
+  requireUniqueOptions(url.searchParams);
+  requirePlainRouting(url.searchParams);
   const decode = (value: string) => {
     try {
       return decodeURIComponent(value);
@@ -449,19 +469,10 @@ export function databaseIdentity(databaseUrl: string | undefined) {
       return value;
     }
   };
-  const host = (
-    query.get("host") ?? decode(url.hostname.replace(/^\[(.*)\]$/, "$1"))
-  ).toLowerCase();
-  const user = query.get("user") ?? decode(url.username);
-  const database =
-    query.get("dbname") ?? (decode(url.pathname.replace(/^\//, "")) || user);
-  return JSON.stringify({
-    host,
-    hostaddr: query.get("hostaddr") ?? "",
-    port: query.get("port") ?? (url.port || "5432"),
-    database,
-    service: query.get("service") ?? "",
-  });
+  const host = decode(url.hostname.replace(/^\[(.*)\]$/, "$1")).toLowerCase();
+  const user = decode(url.username);
+  const database = decode(url.pathname.replace(/^\//, "")) || user;
+  return JSON.stringify({ host, port: url.port || "5432", database });
 }
 /** The database URLs Compose hands the services that touch the database. */
 function databaseUrls(configuration: ComposeConfiguration) {
@@ -505,10 +516,8 @@ function hostOwnerDatabaseUrl(env: NodeJS.ProcessEnv) {
     throw new Error(
       "本机（host）更新要用数据库 owner 账号来备份和迁移，但没有找到它：请设置 MIGRATION_DATABASE_URL，填 owner 账号的连接串（例如 postgres://openbot:openbot@localhost:5432/openbot），写进 .env 或在执行更新时作为环境变量传入，然后重新更新。现在还没有停止任何服务。",
     );
-  if (
-    env.DATABASE_URL &&
-    databaseIdentity(env.DATABASE_URL) !== databaseIdentity(owner)
-  )
+  const ownerIdentity = databaseIdentity(owner);
+  if (env.DATABASE_URL && databaseIdentity(env.DATABASE_URL) !== ownerIdentity)
     throw new Error(
       "MIGRATION_DATABASE_URL 和 DATABASE_URL 必须指向同一个数据库（主机、端口、库名一致，只有账号可以不同），请改正后重新更新。现在还没有停止任何服务。",
     );
@@ -1007,10 +1016,12 @@ export async function applyLocalUpdate(
   );
   const operation = randomUUID();
   candidateEnv.OPENBOT_UPDATE_OPERATION = operation;
-  // What a host install's own processes run with: the owner URL is handed only to its backup and
-  // migration, never to `bun install` or the app `start.sh` starts. Image topology keeps it in
-  // candidateEnv, because a Compose override may interpolate it into `migrate` and preflight
-  // resolved and checked that very value; dropping it would migrate with an empty URL.
+  // What a host install's own processes run with: the owner URL is handed only to its backup, its
+  // migration and `start.sh`, which takes it out of its environment at once and passes it to its
+  // Compose migration alone (an override may interpolate it into `migrate`), never to `bun install`
+  // or the server and worker it starts. Image topology keeps it in candidateEnv for the same
+  // reason: preflight resolved and checked that very value, and dropping it would migrate with an
+  // empty URL.
   const hostAppEnv: NodeJS.ProcessEnv = { ...candidateEnv };
   delete hostAppEnv.MIGRATION_DATABASE_URL;
   const backupDirectory = resolve(options.backupDirectory, operation);
@@ -1216,7 +1227,13 @@ export async function applyLocalUpdate(
       );
     phase("starting");
     if (options.topology === "host")
-      await run(["bash", "scripts/start.sh"], { cwd: root, env: hostAppEnv });
+      await run(["bash", "scripts/start.sh"], {
+        cwd: root,
+        env: {
+          ...hostAppEnv,
+          MIGRATION_DATABASE_URL: hostOwnerDatabaseUrl(env),
+        },
+      });
     else
       await run(
         compose(

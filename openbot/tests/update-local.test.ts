@@ -266,7 +266,7 @@ test("host apply installs source, runs existing guarded migration and restarts t
   ).toBe(false);
 });
 
-test("host apply backs up and migrates as the owner and hands it to nothing it starts", async () => {
+test("host apply backs up and migrates as the owner and hands it to start.sh, not to install", async () => {
   const f = fixture("host");
   const seen: { command: string; env?: NodeJS.ProcessEnv }[] = [];
   const run: CommandRunner = async (command, options) => {
@@ -287,7 +287,11 @@ test("host apply backs up and migrates as the owner and hands it to nothing it s
     command.includes("scripts/start.sh"),
   );
   expect(start?.env?.DATABASE_URL).toBe(HOST_APP_URL);
-  expect(start?.env?.MIGRATION_DATABASE_URL).toBeUndefined();
+  // start.sh takes it out of its environment and hands it to its Compose migration alone.
+  expect(start?.env?.MIGRATION_DATABASE_URL).toBe(HOST_OWNER_URL);
+  const install = seen.find(({ command }) => command.startsWith("bun install"));
+  expect(install).toBeDefined();
+  expect(install?.env?.MIGRATION_DATABASE_URL).toBeUndefined();
 });
 
 test.each([
@@ -475,9 +479,6 @@ test("database identity is where libpq connects and which database it opens, not
     "postgres://openbot_app:openbot@db.example.test:5432/openbot",
     "postgres://openbot_app:openbot@postgres:5433/openbot",
     "postgres://openbot_app:openbot@postgres:5432/customer_db",
-    "postgres://openbot_app:openbot@postgres:5432/openbot?host=elsewhere",
-    "postgres://openbot_app:openbot@postgres:5432/openbot?port=6543",
-    "postgres://openbot_app:openbot@postgres:5432/openbot?dbname=customer_db",
     // No database in the URL: libpq opens the one named after the user.
     "postgres://openbot_app:openbot@postgres:5432",
   ])
@@ -532,6 +533,66 @@ test.each(["image", "host"] as const)(
     expect(plan.reasons.join(" ")).toContain("「dbname」出现了不止一次");
     await expect(applyLocalUpdate({ ...f.options, run })).rejects.toThrow(
       "出现了不止一次",
+    );
+    expect(
+      f.calls.some(
+        (command) =>
+          command.includes(" stop ") ||
+          command.includes("pg_dump") ||
+          command.includes("--ff-only"),
+      ),
+    ).toBe(false);
+    expect(f.git("rev-parse", "HEAD")).toBe(f.old);
+  },
+);
+
+test.each(["host", "hostaddr", "port", "dbname", "user", "service"])(
+  "a query option that reroutes the connection is refused: %s",
+  (key) => {
+    // libpq would follow it; postgres.js, which migrates, reads only the authority and the path.
+    const url = `postgres://openbot:openbot@db-a.example.test:5432/openbot?${key}=elsewhere`;
+    expect(() => databaseIdentity(url)).toThrow(`查询参数「${key}」`);
+    expect(() => libpqEnvironment(url, {})).toThrow(`查询参数「${key}」`);
+    expect(
+      databaseIdentity(
+        "postgres://openbot:openbot@db-a.example.test:5432/openbot?sslmode=require",
+      ),
+    ).toBeDefined();
+  },
+);
+
+test.each([
+  ["image server URL", "image", "server"],
+  ["host owner URL", "host", "MIGRATION_DATABASE_URL"],
+  ["host app URL", "host", "DATABASE_URL"],
+] as const)(
+  "a rerouted %s refuses before stopping anything",
+  async (_, topology, which) => {
+    const f = fixture(topology);
+    const reroute = (url: string) => `${url}?host=db-b.example.test`;
+    let run = f.run;
+    if (topology === "host") {
+      const app =
+        which === "DATABASE_URL" ? reroute(HOST_APP_URL) : HOST_APP_URL;
+      const owner =
+        which === "MIGRATION_DATABASE_URL"
+          ? reroute(HOST_OWNER_URL)
+          : HOST_OWNER_URL;
+      writeFileSync(
+        join(f.root, ".env"),
+        `DATABASE_URL=${app}\nMIGRATION_DATABASE_URL=${owner}\nTENANT_PACKAGE_DIR=../customer\n`,
+      );
+    } else
+      run = rewriteDatabaseUrls(
+        f,
+        (url) => (url === APP_URL ? reroute(url) : url),
+        "after",
+      );
+    const plan = await planLocalUpdate({ ...f.options, run });
+    expect(plan.allowed).toBe(false);
+    expect(plan.reasons.join(" ")).toContain("查询参数「host」");
+    await expect(applyLocalUpdate({ ...f.options, run })).rejects.toThrow(
+      "查询参数「host」",
     );
     expect(
       f.calls.some(
@@ -647,11 +708,6 @@ test.each([
     (url: string) =>
       url === OWNER_URL ? url.replace("5432/openbot", "5432/other") : url,
   ],
-  [
-    "a query option redirects the database",
-    "after",
-    (url: string) => (url === APP_URL ? `${url}?dbname=customer_db` : url),
-  ],
 ] as const)(
   "a different database refuses before stopping services: %s",
   async (_, which, rewrite) => {
@@ -675,7 +731,7 @@ test.each([
 test.each([
   "postgres://openbot:openbot@postgres:5432/customer_db",
   "postgres://customer_user:openbot@postgres:5432/openbot",
-  "postgres://openbot:openbot@postgres:5432/openbot?dbname=customer_db",
+  "postgres://openbot:openbot@postgres:5432/openbot?sslmode=disable",
 ])(
   "bundled backup target mismatch refuses before stopping services: %s",
   async (databaseUrl) => {
