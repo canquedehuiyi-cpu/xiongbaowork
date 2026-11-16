@@ -565,6 +565,16 @@ jobs:
       - name: Print repository test diagnostics (credentials masked)
         if: failure()
         run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/repo-tests.log"
+      # xiongbao/scripts 下的脚本测试（建学习容器、发版、变异登记等）原先不在任何 job 里，红了也没人看见。
+      - name: Script tests
+        if: always()
+        run: bun test ./scripts/ > "$RUNNER_TEMP/script-tests.log" 2>&1
+      - name: Zero-fail gate for script tests (head only)
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/script-tests.log" 'script tests (head only)'
+      - name: Print script test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/script-tests.log"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
@@ -572,9 +582,10 @@ jobs:
           path: ${{ runner.temp }}/repo-tests.log
 
   # The Expo app in xiongbao/mobile: its own npm project with its own package-lock.json, outside the
-  # bun workspaces, so neither static's typecheck nor any test job reaches it. It has no test runner
-  # yet; this is its typecheck. npm ci installs exactly the lockfile, without lifecycle scripts like
-  # every bun install here, on the runner's preinstalled Node.
+  # bun workspaces, so neither static's typecheck nor any test job reaches it. npm ci installs exactly
+  # the lockfile, without lifecycle scripts like every bun install here, on the runner's preinstalled
+  # Node. Its unit tests (tests/, pure modules such as the push deep links) run under bun after the
+  # typecheck; the job name stays the same so required-check settings keep matching.
   mobile-typecheck:
     name: mobile typecheck (Expo, npm)
     runs-on: ubuntu-latest
@@ -592,6 +603,11 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - name: Unit tests
+        run: bun test ./tests/
 
   # The computer's real-browser tests, which prove a secret typed into a page never reaches the Bot:
   # the aria snapshot hides a password's value and the screenshot paints the marked fields over under

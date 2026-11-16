@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseEnv } from "node:util";
+import { englishName } from "../server/src/brand";
 import type { ContainerProbe } from "../server/src/learning/auto-assign";
 import { setupLearning } from "./setup-learning";
 
@@ -20,7 +21,7 @@ const container = (action: string, projectId = "12") => ({
   command: `learning containers ${action}`,
   status: "success",
   projectId,
-  container: { id: "openbot", projectId: Number(projectId), name: "OpenBot" },
+  container: { id: "openbot", projectId: Number(projectId), name: englishName() },
 });
 const missing = {
   schemaVersion: 1,
@@ -125,7 +126,7 @@ test("fresh managed setup creates and verifies the selected project's container 
       "--id",
       "openbot",
       "--name",
-      "OpenBot",
+      englishName(),
       "--json",
     ],
   ]);
@@ -259,7 +260,7 @@ test("an existing key without openbot gets it created in the key's own project, 
       "--id",
       "openbot",
       "--name",
-      "OpenBot",
+      englishName(),
       "--json",
     ],
   ]);
@@ -327,7 +328,7 @@ test("a CLI login with no project selected creates the container in the key's pr
       "--id",
       "openbot",
       "--name",
-      "OpenBot",
+      englishName(),
       "--json",
     ],
   ]);
