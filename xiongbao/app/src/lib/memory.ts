@@ -44,14 +44,14 @@ export const memoriesQueryOptions = () =>
   queryOptions({
     queryKey: memoryKeys.all,
     queryFn: (): Promise<MemoryRecord[]> =>
-      client("/api/memory", "memories", { fallback: "Could not load memory" }),
+      client("/api/memory", "memories", { fallback: "读不到记忆" }),
   });
 export const memorySourcesQueryOptions = () =>
   queryOptions({
     queryKey: memoryKeys.sources,
     queryFn: (): Promise<MemorySource[]> =>
       client("/api/memory/sources", "sources", {
-        fallback: "Could not load memory sources",
+        fallback: "读不到记忆来源",
       }),
     refetchInterval: 15_000,
   });
@@ -63,14 +63,14 @@ export const availableMemorySourcesQueryOptions = (id: string) =>
       client(
         `/api/memory/sources/available/${encodeURIComponent(id)}`,
         "tools",
-        { fallback: "Could not load connected app actions" },
+        { fallback: "读不到已接入应用的动作" },
       ),
   });
 export const createMemory = (content: string) =>
   client("/api/memory", {
     method: "POST",
     body: { content },
-    fallback: "Could not remember this fact",
+    fallback: "没能记住这件事",
   });
 export const updateMemory = (
   id: string,
@@ -79,12 +79,12 @@ export const updateMemory = (
   client(`/api/memory/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: input,
-    fallback: "Could not update memory",
+    fallback: "没能更新这条记忆",
   });
 export const deleteMemory = (id: string) =>
   client(`/api/memory/${encodeURIComponent(id)}`, {
     method: "DELETE",
-    fallback: "Could not forget this memory",
+    fallback: "没能忘掉这条记忆",
   });
 export const addMemorySource = (input: {
   agentId: string;
@@ -95,7 +95,7 @@ export const addMemorySource = (input: {
   client("/api/memory/sources", {
     method: "POST",
     body: input,
-    fallback: "Could not add this source",
+    fallback: "没能加上这个来源",
   });
 export const memorySourceAction = (
   id: string,
@@ -109,7 +109,7 @@ export const memorySourceAction = (
       ...(action === "enable" || action === "disable"
         ? { body: { enabled: action === "enable" } }
         : {}),
-      fallback: "Could not change this source",
+      fallback: "没能改动这个来源",
     },
   );
 

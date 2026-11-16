@@ -16,7 +16,7 @@ export function createCredentialMutationOptions(queryClient: QueryClient) {
       client("/api/admin/credentials", {
         method: "POST",
         body: input,
-        fallback: "Credential operation failed",
+        fallback: "凭据操作没成功",
       }),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: credentialKeys.all }),
@@ -28,7 +28,7 @@ export function revokeCredentialMutationOptions(queryClient: QueryClient) {
     mutationFn: (credentialId: string) =>
       client(`/api/admin/credentials/${credentialId}/revoke`, {
         method: "POST",
-        fallback: "Credential operation failed",
+        fallback: "凭据操作没成功",
       }),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: credentialKeys.all }),
@@ -62,7 +62,7 @@ export async function storeMcpToken(
         plaintext: token.trim(),
         metadata: { server: serverId },
       },
-      fallback: "The token could not be stored.",
+      fallback: "这个令牌没能存下来。",
     },
   );
   return credential?.id;

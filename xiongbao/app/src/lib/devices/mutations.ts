@@ -13,7 +13,7 @@ export function mintPairCodeMutationOptions() {
     mutationFn: (): Promise<PairingCode> =>
       client("/api/devices/pair", {
         method: "POST",
-        fallback: "A pairing code could not be made.",
+        fallback: "没能生成配对码。",
       }).then(async (response) => {
         const body = (await response.json()) as {
           code: string;
@@ -29,7 +29,7 @@ export function removeDeviceMutationOptions(queryClient: QueryClient) {
     mutationFn: async (id: string): Promise<void> => {
       await client(`/api/devices/${encodeURIComponent(id)}`, {
         method: "DELETE",
-        fallback: "That device could not be removed.",
+        fallback: "这台设备没能移除。",
       });
     },
     onSuccess: () =>

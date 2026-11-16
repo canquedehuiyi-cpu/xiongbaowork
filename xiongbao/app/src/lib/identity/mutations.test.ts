@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { githubAuthorizationUrl } from "./mutations";
 
-const FRIENDLY = "Could not start connecting GitHub. Try again.";
+const FRIENDLY = "没能开始关联 GitHub。再试一次。";
 const VALID =
   "https://github.com/login/oauth/authorize?client_id=abc&state=xyz";
 

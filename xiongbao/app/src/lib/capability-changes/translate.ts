@@ -53,8 +53,7 @@ export async function translateCapabilityChanges(
     {
       method: "POST",
       body: { text },
-      fallback:
-        "Couldn't write the changes. Try again, or set the switches by hand.",
+      fallback: "没能写下这些改动。再试一次，或者自己拨这些开关。",
     },
   );
   return (await response.json()) as CapabilityTranslation;

@@ -31,7 +31,7 @@ describe("providersFromResponse", () => {
   });
 
   test("throws when providers is missing or not boolean-shaped", async () => {
-    const message = "Could not load the account types you can link";
+    const message = "读不到可以关联的账号类型";
     await expect(providersFromResponse(Response.json({}))).rejects.toThrow(
       message,
     );

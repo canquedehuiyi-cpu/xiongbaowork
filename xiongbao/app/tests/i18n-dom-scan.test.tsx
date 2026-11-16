@@ -61,15 +61,18 @@ import { settleReactWork } from "./settle-react-work";
 /**
  * DoD-7：主路径路由的 DOM 扫描，纯英文文字行 = 0。
  *
- * 判据在 `scripts/acceptance/i18n-scan.ts`，这里只负责把路由画出来。画的时候有四件事值得写下来：
+ * 判据在 `scripts/acceptance/i18n-scan.ts`，这里只负责把路由画出来。画的时候有五件事值得写下来：
  *
  * 1. **每条路由是真的**。挂的是 `routes/` 下的真文件路由，用 `.update()` 重新挂到本文件的根上（和
  *    `capabilities-router.tsx` 一个办法），不是替身组件。所以扫到的是应用真会画出来的那棵树。
  * 2. **地址是应用真的会落到的那一个**。`/capabilities` 自己会 `redirect` 到 `/capabilities/plugins`，
  *    `/routines` 到 `/autonomous`；扫的是落地页，不是那个只负责跳转的壳。
- * 3. **两种状态各扫一遍**。「还在读」画的是页头、页签、按钮和骨架；「读完了」在此基础上多出空状态，以及
- *    只有拿到数据才写出来的句子（`/settings/plans` 的「N 位同事 · 每月 N 个任务」就是后者）。只扫一种，
- *    另一种里的英文就看不见。
+ * 3. **三种状态各扫一遍**。「还在读」画的是页头、页签、按钮和骨架；「读完了」在此基础上多出空状态，以及
+ *    只有拿到数据才写出来的句子（`/settings/plans` 的「N 位同事 · 每月 N 个任务」就是后者）；「请求
+ *    失败」画的是 `lib/` 里那些 `fallback:` 兜底句。第三种是 2026-11-16 补的：前两种的空答案全是
+ *    200，「请求失败」那一屏从来没被量过，而用户最可能截图来问的恰恰是那一屏——一轮补它，扫出六行
+ *    纯英文，都出自 `lib/`（`Could not load reachability` 之类），随之把 `app/src` 里 68 条英文兜底
+ *    一起翻了，并在 `chinese-ui-copy.test.ts` 立了守卫。
  * 4. **画不出来就说画不出来**。一条路渲染出的文字行少于它的下限（默认 `FLOOR`）时，这条记为「没扫到」
  *    并让测试红，而不是在零违规里安静地过。同理，渲染崩到路由错误边界、或者跳到一个没挂进这棵树的地址
  *    （屏幕上只剩库的 `Not Found`），也一律记为「没扫到」——那两种情形下的英文都不是产品文案。
@@ -77,9 +80,9 @@ import { settleReactWork } from "./settle-react-work";
  *    拿它跟 `routes/` 下的文件对账。所以「主路径」不会因为某个页面没人记得加而悄悄缩小——
  *    `server-tests.list.txt` 那种「文件存在但从不运行」的坑，在 DOM 扫描这一侧有了对应的守卫。
  *
- * 数出来的账记在 `i18n-dom-budget.json`，本文件只允许它**变小**。它现在是空数组：63 条断言、0 行纯英文，
- * 剩下的英文只在口径豁免里（品牌名 `WakerFlow` / `Waker`、缩写 `API`、键名 `Shift`、装饰字形 `N` 与 `z`），
- * 逐条列在报告末尾，可查。
+ * 数出来的账记在 `i18n-dom-budget.json`，本文件只允许它**变小**。它现在是空数组：94 条断言、0 行纯英文，
+ * 外加一条量具自检（失败态必须真的画出兜底句）。剩下的英文只在口径豁免里（品牌名 `WakerFlow` / `Waker`、
+ * 缩写 `API`、键名 `Shift`、装饰字形 `N` 与 `z`），逐条列在报告末尾，可查。
  */
 
 /** 一条路由渲染出的、少于这么多文字行，就认为它没画出来。 */
@@ -146,12 +149,24 @@ for (const one of SCANNED)
   if (!ROUTES.has(one.at)) throw new Error(`扫表里的 ${one.at} 没有挂路由文件`);
 
 /**
- * 页面读数据时的两种状态。`pending` 是永远不回答，`loaded` 是回答一个空壳。
+ * 页面读数据时的三种状态。
+ *
+ * `pending` 是永远不回答（页面停在加载中），`loaded` 是回答一个空壳（页面画出空状态），`failed` 是
+ * 服务器说「我坏了，而且一句话都没说」——屏幕上这时画的是 `lib/` 里那个 `fallback:` 句子。
+ *
+ * 第三种是 2026-11-16 补的，理由是前两种量不到它：空答案一律 200，于是「请求失败」那一屏从来没被
+ * 扫过。而用户最可能截图来问的恰恰是那一屏。`client()` 的取值顺序是「服务端的话 → `options.fallback`
+ * → 库里的 "That request failed."」，所以要量产品自己的兜底，就得让服务端**什么都不说**：500 且
+ * body 不是 JSON。服务端一旦带上 `{"error":"…"}`，量到的就是服务端那句，产品兜底整个被跳过。
  */
-const STATES = ["pending", "loaded"] as const;
+const STATES = ["pending", "loaded", "failed"] as const;
 type State = (typeof STATES)[number];
 
-const LABEL: Record<State, string> = { pending: "加载中", loaded: "读完了" };
+const LABEL: Record<State, string> = {
+  pending: "加载中",
+  loaded: "读完了",
+  failed: "请求失败",
+};
 
 /** `i18n-dom-budget.json` 的一行：一个路由的一种状态，还剩几行纯英文。 */
 type BudgetRow = { readonly at: string; readonly english: number };
@@ -251,9 +266,32 @@ function answerEmpty(): void {
   ) as typeof fetch;
 }
 
+/**
+ * 一个「服务器坏了、而且什么都没说」的 API。
+ *
+ * 500 + 空 body（`text/plain`，不是 JSON），于是 `client()` 里 `response.json()` 解不出东西、
+ * `record?.error` 是 `undefined`，屏幕上落到的就是调用点自己写的 `fallback:`。换成 `{"error":"…"}`
+ * 就没有这一层可量了——那正是这第三种状态要避开的东西。
+ */
+function answerFailing(): void {
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const path = new URL(String(input), "http://localhost/").pathname;
+      if (process.env.I18N_SCAN_LOG === "1")
+        console.error(`[fetch:500] ${path}`);
+      return new Response("", {
+        headers: { "content-type": "text/plain" },
+        status: 500,
+      });
+    },
+    { preconnect: originalFetch.preconnect },
+  ) as typeof fetch;
+}
+
 /** 一条路画一遍，返回它渲染出来的文字行。 */
 async function linesOf(at: string, state: State): Promise<string[]> {
   if (state === "pending") answerNothing();
+  else if (state === "failed") answerFailing();
   else answerEmpty();
   const route = ROUTES.get(at);
   if (!route) throw new Error(`${at} 没有登记路由文件`);
@@ -428,4 +466,18 @@ describe("主路径没有纯英文文字行", () => {
       });
     }
   }
+
+  /**
+   * 量具自检：`failed` 那一路真的画出了兜底句，而不是又画了一遍空状态。
+   *
+   * 上面 94 条断言的绿，只有在「请求失败」确实被量到时才算数。而这条最容易被掏空：`answerFailing()`
+   * 改成返回 200、或者服务端改成带 `{"error":"…"}` 的 500，页面就照常画空状态或画服务端那句，兜底句
+   * 永远不出现——94 条全绿，第三种状态名存实亡。所以钉一条：`/settings/plans` 失败时屏幕上必须有它
+   * 自己的兜底句。钉的是「兜底句能不能被看见」，不是这句话的措辞好坏。
+   */
+  test("量具自检：失败态画的是兜底句，不是空状态", async () => {
+    cleanup();
+    const lines = await linesOf("/settings/plans", "failed");
+    expect(lines).toContain("读不到你的套餐与用量。");
+  });
 });

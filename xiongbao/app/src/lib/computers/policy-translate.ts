@@ -30,7 +30,7 @@ export async function translatePolicyRule(
   const response = await client("/api/computers/policy-translate", {
     method: "POST",
     body: { text },
-    fallback: "Couldn't write the rule. Try again, or write it in CEL.",
+    fallback: "没能写下这条规则。再试一次，或者直接用 CEL 写。",
   });
   return (await response.json()) as PolicyTranslation;
 }

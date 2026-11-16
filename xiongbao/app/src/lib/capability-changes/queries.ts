@@ -87,7 +87,7 @@ export function capabilityChangesPreviewQueryOptions(
         await client("/api/admin/enterprise/capabilities/preview", {
           method: "POST",
           body: { changes },
-          fallback: "Couldn't work out who these changes affect.",
+          fallback: "没能算清这些改动会影响谁。",
         })
       ).json(),
     retry: false,

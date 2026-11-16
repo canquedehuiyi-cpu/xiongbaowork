@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { browserStepDetails } from "../src/components/channels/browser-activity";
 import { PLACEHOLDER_COMMANDS } from "../src/components/channels/composer/sources";
 import {
@@ -14,6 +14,7 @@ import { GALLERY as DECISIONS } from "../src/components/gallery/decisions";
 import { GALLERY as FORMS } from "../src/components/gallery/form";
 import { GALLERY as QUOTES } from "../src/components/gallery/quote";
 import { GALLERY as TABLES } from "../src/components/gallery/table";
+import { client } from "../src/lib/client";
 import { componentDisplayTitle } from "../src/lib/components/display-title";
 
 /**
@@ -239,4 +240,82 @@ describe("curated person-facing files carry no English copy", () => {
       }
     });
   }
+});
+
+/** Every `.ts`/`.tsx` under `SRC`, tests excluded: a test asserting an English string is not copy. */
+function sourceFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...sourceFiles(path));
+    else if (/\.tsx?$/.test(entry.name) && !entry.name.includes(".test."))
+      out.push(path);
+  }
+  return out;
+}
+
+/**
+ * The sentence a screen shows when a request fails — everywhere, not just in the curated list.
+ *
+ * WHY THIS IS BROADER THAN THE BLOCK ABOVE. That one reads nineteen files whose copy G1 translated, and
+ * after the fact: a phrase that shipped there once may not come back. But the sentence a person reads
+ * when the server breaks is not concentrated in nineteen files — it is written at every call site
+ * (`fallback:`), plus the shared `FALLBACK`-style constants those call sites name. Measured on
+ * 2026-11-16, `app/src` held **68 of them in English**, and the DOM scan could not see any of it: its
+ * empty answers are all 200, so the failure screen had never been rendered once. A person's most likely
+ * screenshot ("it just says Could not load reachability") came from a layer nothing was measuring.
+ *
+ * So the rule is stated once, over the whole tree: a failure sentence must contain Chinese. The scan
+ * measures the same layer from the outside (an all-500 state in `i18n-dom-scan.test.tsx`); this one
+ * stops a new English fallback from being written in the first place, including on screens the scan
+ * does not walk.
+ */
+describe("every failure sentence says something in Chinese", () => {
+  /** Inline `fallback:` at a call site, and the shared constants those call sites name. */
+  const CALL_SITE = /fallback:\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g;
+  const NAMED_CONST =
+    /const\s+(?:[A-Z0-9]+_)*FALLBACK(?:_[A-Z0-9]+)*\s*(?::\s*string\s*)?=\s*(?:"([^"]*)"|'([^']*)'|`([^`]*)`)/g;
+
+  test("no fallback under app/src is written in English", () => {
+    const offenders: string[] = [];
+    for (const path of sourceFiles(SRC)) {
+      const rel = relative(SRC, path);
+      const source = code(rel);
+      for (const pattern of [CALL_SITE, NAMED_CONST]) {
+        for (const match of source.matchAll(pattern)) {
+          const value = match.slice(1).find((one) => one !== undefined) ?? "";
+          if (!HAN.test(value)) offenders.push(`${rel}: ${value}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  /*
+   * The two defaults inside the transport itself. They are not `fallback:` literals at a call site, so
+   * the sweep above cannot see them — and they are what a person reads when a screen forgets to name
+   * one, which is exactly the case nobody reviews.
+   */
+  test("a refusal with no sentence of its own still reads in Chinese", async () => {
+    const original = globalThis.fetch;
+    const answer = (init: ResponseInit, body = "") =>
+      (async () => new Response(body, init)) as unknown as typeof fetch;
+    try {
+      // 500 and no JSON body: the server said nothing, so the transport's own default reaches the screen.
+      globalThis.fetch = answer({ status: 500 });
+      const refused = await client("/api/anything").catch((error) => error);
+      expect(refused).toBeInstanceOf(Error);
+      expect((refused as Error).message).toMatch(HAN);
+
+      // 200 whose body is not an object: a malformed success is a failed request too.
+      globalThis.fetch = answer({ status: 200 }, "null");
+      const malformed = await client("/api/anything", "items").catch(
+        (error) => error,
+      );
+      expect(malformed).toBeInstanceOf(Error);
+      expect((malformed as Error).message).toMatch(HAN);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
 });

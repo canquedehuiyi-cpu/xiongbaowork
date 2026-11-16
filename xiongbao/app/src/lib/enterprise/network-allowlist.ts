@@ -35,7 +35,7 @@ export async function translateNetworkAllowlist(
   const response = await client("/api/admin/enterprise/network/translate", {
     method: "POST",
     body: { text },
-    fallback: "Couldn't write the list. Try again, or type it yourself.",
+    fallback: "没能写下这份名单。再试一次，或者自己敲进来。",
   });
   return (await response.json()) as NetworkAllowlistTranslation;
 }

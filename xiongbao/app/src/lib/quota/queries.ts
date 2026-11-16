@@ -88,7 +88,7 @@ const readQuota = async (): Promise<Quota> => {
   // The answer is three fields at the top level rather than one wrapped payload, so the
   // envelope-unwrapping form of `client` is not the one that fits here.
   const response = await client("/api/quota", {
-    fallback: "Your plan and usage could not be loaded.",
+    fallback: "读不到你的套餐与用量。",
   });
   return (await response.json()) as Quota;
 };
@@ -148,7 +148,7 @@ export function tiersQueryOptions() {
     queryKey: quotaKeys.tiers(),
     queryFn: async () => {
       const response = await client("/api/quota/plans", {
-        fallback: "The plans could not be loaded.",
+        fallback: "读不到可选套餐。",
       });
       return (await response.json()) as { plans: Tier[] };
     },
