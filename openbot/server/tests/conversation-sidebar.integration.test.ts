@@ -40,13 +40,20 @@ import {
   type MeteredBinding,
   sha256Hex,
 } from "../src/models/token-metering";
+import { clockOf } from "../src/tasks/due-time";
 import { appendTaskEvent, type TaskEventKind } from "../src/tasks/events";
+import { createTaskProjector } from "../src/tasks/projector";
+import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
 import {
   createConversationSidebar,
   type SidebarDeps,
 } from "../src/threads/sidebar";
 import { createSidebarRoutes } from "../src/threads/sidebar-routes";
+import {
+  createUserPreferencesStore,
+  readWorkHours,
+} from "../src/user-preferences";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /*
@@ -508,6 +515,7 @@ describe("conversation sidebar", () => {
       rounds: 3,
       lastCheck: "等你确认 · 我已经整理好了三张发票。",
       pendingApprovalId: approvalId,
+      taskId: expect.any(String),
       stage: null,
       dueAt: null,
       overdue: false,
@@ -885,6 +893,7 @@ describe("conversation sidebar", () => {
       rounds: 1,
       lastCheck: "进行中 · 初稿写好了！",
       pendingApprovalId: null,
+      taskId: expect.any(String),
       stage: null,
       dueAt: null,
       overdue: false,
@@ -1086,7 +1095,8 @@ describe("conversation sidebar", () => {
     const viewer = await person();
     const agentId = await employee(viewer, "对账员工");
     const { threadId } = await directChat(viewer, agentId);
-    const due = new Date(Date.now() + 3600_000);
+    // Due forty minutes ago (past the checker's 35-minute grace) and recorded overdue: overdue now.
+    const due = new Date(Date.now() - 40 * 60_000);
     const [followed] = await runAsTenant(viewer, () =>
       database
         .insert(tasks)
@@ -1135,6 +1145,8 @@ describe("conversation sidebar", () => {
     const first = await routesFor(viewer).thread(threadId);
     expect(first.status).toBe(200);
     expect(first.body.goal).toMatchObject({
+      // 侧栏「当作一件活来跟」和「打开这张卡」按它找卡：是本线程那张在跟的卡，不是后来那张。
+      taskId,
       title: "核对三家发票",
       status: "running",
       stage: "accepted",
@@ -1144,6 +1156,28 @@ describe("conversation sidebar", () => {
       // The newest line that says something; a round's bare end does not.
       lastCheck: "退回：缺 C 家",
     });
+
+    // Given more time (due moved an hour ahead): not overdue now, though `overdue_at` stays.
+    const later = new Date(Date.now() + 3600_000);
+    await runAsTenant(viewer, () =>
+      database
+        .update(tasks)
+        .set({ dueAt: later })
+        .where(inArray(tasks.id, [taskId])),
+    );
+    const extended = await routesFor(viewer).thread(threadId);
+    expect(extended.body.goal).toMatchObject({
+      title: "核对三家发票",
+      dueAt: later.toISOString(),
+      overdue: false,
+    });
+    const [kept] = await runAsTenant(viewer, () =>
+      database
+        .select({ overdueAt: tasks.overdueAt })
+        .from(tasks)
+        .where(inArray(tasks.id, [taskId])),
+    );
+    expect(kept?.overdueAt).toBeInstanceOf(Date);
 
     // Handed in: the stage moves, and so does the line.
     await runAsTenant(viewer, () =>
@@ -1319,6 +1353,90 @@ describe("conversation sidebar", () => {
       expect(body.context.usage?.used).toBe(10_000);
     });
     expect(detailCount).toBeLessThanOrEqual(largeCount + 1);
+  });
+
+  test("a person in New York: the due time they type is kept on their clock, and the sidebar says it on it", async () => {
+    // Their browser wrote New York on the first save (`readWorkHours` reads it back).
+    const viewer = await person();
+    await runAsTenant(viewer, () =>
+      createUserPreferencesStore(database).patch(viewer, {
+        browserTimeZone: "America/New_York",
+      }),
+    );
+    const zoneOf = async (tenantId: string) =>
+      (await readWorkHours(database, tenantId)).timeZone;
+    const agentId = await employee(viewer, "对账员工");
+    const { threadId } = await directChat(viewer, agentId);
+    const [followed] = await runAsTenant(viewer, () =>
+      database
+        .insert(tasks)
+        .values({
+          title: "核对三家发票",
+          source: "chat",
+          status: "running",
+          channelRef: threadId,
+          executorAgentId: agentId,
+          tracked: true,
+          threadRef: threadId,
+          acceptedAt: new Date("2026-11-16T13:00:00.000Z"),
+          updatedAt: tick(),
+        })
+        .returning({ id: tasks.id }),
+    );
+    const taskId = followed?.id as string;
+
+    // 09:00 on Monday in New York, the person moves the due time to 「15:00」: 15:00 in New York.
+    const guard: MiddlewareHandler<{ Variables: AppVariables }> = async (
+      context,
+      next,
+    ) => {
+      context.set("actor", {
+        id: viewer,
+        email: `${viewer}@example.test`,
+        role: "user",
+      });
+      await runAsTenant(viewer, () => next());
+    };
+    const board = createTaskRoutes(
+      database,
+      guard,
+      createTaskProjector(database),
+      {
+        now: () => new Date("2026-11-16T14:00:00.000Z"),
+        timeZone: zoneOf,
+      },
+    );
+    const edited = await board.request(`http://openbot.test/${taskId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dueAt: "15:00" }),
+    });
+    expect(edited.status).toBe(200);
+    expect(await edited.json()).toMatchObject({
+      dueAt: "2026-11-16T20:00:00.000Z",
+    });
+    const [stored] = await runAsTenant(viewer, () =>
+      database
+        .select({ dueAt: tasks.dueAt })
+        .from(tasks)
+        .where(inArray(tasks.id, [taskId])),
+    );
+    expect(stored?.dueAt?.toISOString()).toBe("2026-11-16T20:00:00.000Z");
+
+    // The sidebar's 「上次检查」 says the new time on their clock: 15:00, not Shanghai's 04:00.
+    const { body } = await routesFor(viewer, { timeZone: zoneOf }).thread(
+      threadId,
+    );
+    const said = clockOf(
+      new Date("2026-11-16T20:00:00.000Z"),
+      new Date(),
+      "America/New_York",
+    );
+    expect(said).toContain("15:00");
+    expect(body.goal).toMatchObject({
+      dueAt: "2026-11-16T20:00:00.000Z",
+      lastCheck: `你把预计时间改到 ${said}`,
+    });
   });
 
   test("meteringTenantFor answers what the model resolver meters under", async () => {

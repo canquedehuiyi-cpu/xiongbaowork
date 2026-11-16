@@ -7,7 +7,6 @@ import { type AgentChannel, channelKeys } from "@/lib/channels/queries";
 import { client } from "@/lib/client";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 
-/** One line of a group conversation: a person's message (`agentId` null) or one Bot's reply. */
 /**
  * 外部员工在群里请求许可时群转录里的那一行（外部员工 Task 12）：只有谁在等谁确认、结果如何，没有内容。
  */
@@ -18,6 +17,7 @@ export type GroupAcpPermission = {
   hirerName: string;
   status: "waiting" | "approved" | "denied" | "expired";
 };
+/** One line of a group conversation: a person's message (`agentId` null) or one Bot's reply. */
 export type GroupMessage = {
   id: string;
   channelId: string;
@@ -47,6 +47,17 @@ export type GroupMessage = {
    * 这一轮开始前，这位员工在你和它那条线程上的上下文自动压缩了（`done`）或没压成（`failed`）。只给发起的人。
    */
   compaction?: { outcome: "done" | "failed" };
+  /**
+   * 这一轮里员工走到了三步里的哪一步（接下、申请延期、交付、被挡回）：不带内容的状态标记
+   * （`server/src/channels/group.ts` `GroupDeliveryMark`），按出现的先后。完整内容只有派活的人从卡片接口读。
+   */
+  delivery?: {
+    kind: string;
+    taskId: string;
+    at: string;
+    agentId: string;
+    dueAt?: string;
+  }[];
   /** 外部员工在等它的招聘人确认一个操作（见 {@link GroupAcpPermission}）。 */
   acpPermission?: GroupAcpPermission;
 };

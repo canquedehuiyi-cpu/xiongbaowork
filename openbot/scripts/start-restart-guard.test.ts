@@ -62,6 +62,8 @@ async function runStartWithStaleServerProbe(
   const dockerLogPath = join(directory, "docker.log");
   const curlLogPath = join(directory, "curl.log");
   const brokerEnvironmentPath = join(directory, "broker-environment.log");
+  // Every docker and bun this run starts, with the owner URL each one was handed.
+  const ownerUrlLogPath = join(directory, "owner-url.log");
   await mkdir(fakeBin, { recursive: true });
   await mkdir(scripts, { recursive: true });
   const environment = [
@@ -186,6 +188,7 @@ exit 0
     `#!/usr/bin/env bash
 args="$*"
 printf '%s\\n' "$args" >> "$DOCKER_LOG"
+printf 'docker %s|%s\\n' "$args" "\${MIGRATION_DATABASE_URL-<unset>}" >> "$OWNER_URL_LOG"
 if [[ "$args" == *"to_regclass('public.agent_profiles')"* ]]; then echo agent_profiles; fi
 if [[ "$args" == *"to_regclass('public.agent_preferences')"* ]]; then echo agent_preferences; fi
 exit 0
@@ -208,7 +211,8 @@ exit 0
   // The Learning container check answers with one line, which start.sh relays.
   await writeExecutable(
     join(fakeBin, "bun"),
-    '#!/usr/bin/env bash\nif [ "$1" = run ] && [ "$2" = - ]; then\n  if [ -n "$BROKER_ENVIRONMENT_PROBE" ]; then "$REAL_BUN" --env-file=.env scripts/probe-broker-environment.ts; fi\n  exec "$REAL_BUN" "$@"\nfi\nif [ "$1" = scripts/setup-learning.ts ]; then echo "noise"; echo "LEARNING-CHECK $*"; fi\nif [ "$1" = scripts/setup-composio.ts ]; then\n  if [ "$TEST_COMPOSIO_SETUP" = real-helper ] || [ "$TEST_COMPOSIO_SETUP" = real-cli ]; then exec "$REAL_BUN" "$@"; fi\n  if [ "$TEST_COMPOSIO_SETUP" = failed ]; then echo "Composio setup failed. Sign in and retry." >&2; exit 1; fi\n  if [ "$TEST_COMPOSIO_SETUP" = configured ]; then printf "COMPOSIO_API_KEY=synthetic-project-key\\n" >> .env; echo "COMPOSIO-CONFIGURED"; fi\nfi\nexit 0\n',
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: a bash parameter expansion, written to the fake as is.
+    '#!/usr/bin/env bash\nprintf "bun %s|%s\\n" "$*" "${MIGRATION_DATABASE_URL-<unset>}" >> "$OWNER_URL_LOG"\nif [ "$1" = run ] && [ "$2" = - ]; then\n  if [ -n "$BROKER_ENVIRONMENT_PROBE" ]; then "$REAL_BUN" --env-file=.env scripts/probe-broker-environment.ts; fi\n  exec "$REAL_BUN" "$@"\nfi\nif [ "$1" = scripts/setup-learning.ts ]; then echo "noise"; echo "LEARNING-CHECK $*"; fi\nif [ "$1" = scripts/setup-composio.ts ]; then\n  if [ "$TEST_COMPOSIO_SETUP" = real-helper ] || [ "$TEST_COMPOSIO_SETUP" = real-cli ]; then exec "$REAL_BUN" "$@"; fi\n  if [ "$TEST_COMPOSIO_SETUP" = failed ]; then echo "Composio setup failed. Sign in and retry." >&2; exit 1; fi\n  if [ "$TEST_COMPOSIO_SETUP" = configured ]; then printf "COMPOSIO_API_KEY=synthetic-project-key\\n" >> .env; echo "COMPOSIO-CONFIGURED"; fi\nfi\nexit 0\n',
   );
   // What `python3` is on a stock Windows machine: the Microsoft Store alias, which runs nothing. A
   // script that still needed it would stop at the health check in every test in this file.
@@ -227,6 +231,7 @@ exit 0
         PKILL_LOG: logPath,
         DOCKER_LOG: dockerLogPath,
         CURL_LOG: curlLogPath,
+        OWNER_URL_LOG: ownerUrlLogPath,
         TEST_COMPOSIO_SETUP: composioSetup ?? "preserved",
         ...(probeBrokerEnvironment
           ? {
@@ -256,6 +261,9 @@ exit 0
     const brokerEnvironment = await Bun.file(brokerEnvironmentPath)
       .text()
       .catch(() => "");
+    const ownerUrlLog = await Bun.file(ownerUrlLogPath)
+      .text()
+      .catch(() => "");
     const envFile = await Bun.file(join(directory, ".env")).text();
     return {
       exitCode,
@@ -265,6 +273,7 @@ exit 0
       dockerLog,
       curlLog,
       brokerEnvironment,
+      ownerUrlLog,
       envFile,
     };
   } finally {
@@ -648,6 +657,46 @@ describe("start.sh selected provider services", () => {
     expect(result.curlLog).toContain("http://localhost:4201/health");
     expect(result.stdout).toContain("agent-langgraph never became ready");
     expect(result.stdout).not.toContain("Ready. http://localhost:3010");
+  });
+});
+
+describe("start.sh owner URL", () => {
+  /**
+   * THE LOCAL UPDATER HANDS `MIGRATION_DATABASE_URL` TO `start.sh`, and a Compose override may give
+   * `migrate` its `DATABASE_URL` as `${MIGRATION_DATABASE_URL}`. The Compose migration must still
+   * see it, or it migrates with an empty URL; the server, the worker and every other process this
+   * script starts run as the app role and must not inherit the owner.
+   */
+  test("only the Compose migration is handed the owner URL", async () => {
+    const owner = "postgres://openbot:owner-secret@localhost:5432/openbot";
+    const result = await runStartWithStaleServerProbe(401, {
+      processEnvironment: { MIGRATION_DATABASE_URL: owner },
+    });
+
+    expect(result.exitCode).toBe(0);
+    const lines = result.ownerUrlLog.trim().split("\n");
+    const migrate = lines.filter((line) =>
+      line.startsWith("docker compose run --rm --build migrate|"),
+    );
+    expect(migrate).toEqual([
+      `docker compose run --rm --build migrate|${owner}`,
+    ]);
+    const others = lines.filter((line) => !migrate.includes(line));
+    // The worker is among them, started through the faked bun from the same shell as the server.
+    expect(others.some((line) => line.includes("worker/src/index.ts"))).toBe(
+      true,
+    );
+    for (const line of others) expect(line).toEndWith("|<unset>");
+  });
+
+  test("without one, the migration gets nothing that would hide a line in .env", async () => {
+    const result = await runStartWithStaleServerProbe(401);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.ownerUrlLog).toContain(
+      "docker compose run --rm --build migrate|<unset>",
+    );
+    expect(result.ownerUrlLog).not.toContain("owner-secret");
   });
 });
 

@@ -14,7 +14,12 @@ import {
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useNavigate,
+} from "@tanstack/react-router";
 import { type ReactNode, useRef, useState } from "react";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
 import { LabeledSelect } from "@/components/layout/labeled-select";
@@ -42,8 +47,16 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import { client, RequestError } from "@/lib/client";
 import { componentDisplayTitle } from "@/lib/components/display-title";
 import { taskAction } from "@/lib/tasks/actions";
+import {
+  canTrack,
+  type FollowedFields,
+  isFollowed,
+} from "@/lib/tasks/delivery";
 import { cn } from "@/lib/utils";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
+import { useSkinId } from "@/skins/store";
+import { TrackButton } from "@/skins/xiongbao/delivery-actions";
+import { DeliveryBoard } from "@/skins/xiongbao/delivery-board";
 
 /**
  * The board address, in full: which machine, which crew, which status, which words, how far back,
@@ -175,10 +188,12 @@ export const Route = createFileRoute("/_authed/_app/tasks")({
    */
   validateSearch: (
     search: Record<string, unknown>,
-  ): Partial<BoardSearch> & { attention?: "review" } => ({
+  ): Partial<BoardSearch> & { attention?: "review"; overdue?: 1 } => ({
     ...boardSearch(search),
     // The attention area's tab rides along only when it is not the default, so a bare /tasks stays bare.
     ...(attentionOf(search) === "review" ? { attention: "review" } : {}),
+    // 「只看逾期」（交付闭环 Task 8），同样只在打开时出现在地址里。
+    ...(onlyOverdueOf(search) ? { overdue: 1 as const } : {}),
   }),
 });
 
@@ -191,6 +206,14 @@ export type AttentionTab = "needsYou" | "review";
 
 export const attentionOf = (search: Record<string, unknown>): AttentionTab =>
   search.attention === "review" ? "review" : "needsYou";
+
+/**
+ * 三步收货的「只看逾期」，地址里是 `overdue=1`（和服务器列表的筛选同名）。和 `attention` 一样是自己的键，
+ * 不进 `BoardSearch`：它只决定四列里画哪些卡，不改读什么。存成数字 1，地址里才是 `overdue=1`（存成字符串
+ * 会被路由器加上引号）；手写的 `"1"` 也认。
+ */
+export const onlyOverdueOf = (search: Record<string, unknown>): boolean =>
+  search.overdue === "1" || search.overdue === 1;
 
 /**
  * The 工作记录 banner's line, counted over the stat bar's read: how many tasks, how many distinct
@@ -235,7 +258,11 @@ export type OpenTarget = {
   id: string;
 };
 
-type Task = {
+/*
+ * A followed card (交付闭环, `lib/tasks/delivery.ts`) carries its three-step fields beside these; an
+ * older server sends none of them, which reads as not followed.
+ */
+type Task = FollowedFields & {
   id: string;
   title: string;
   executorAgentId: string | null;
@@ -976,6 +1003,7 @@ function TaskCard({
   pendingIds: ReadonlySet<string>;
 } & ApprovalWiring) {
   const busy = pendingIds.has(task.id);
+  const workbench = useSkinId() === "xiongbao";
   /*
    * A3 asks the board to show which coworker did the work — its name and avatar, the same identity
    * every other screen uses. What was printed here was the first eight characters of its primary
@@ -1166,6 +1194,13 @@ function TaskCard({
               pending={decidingIds ?? NOTHING_DECIDING}
               task={task}
             />
+          ) : null}
+          {/*
+           * 交付闭环（规格第 1 节，你手动跟）：默认皮肤里，不在跟、还没结束的卡可以「当作一件活来跟」，跟了
+           * 以后它从这里移到上面「三步收货」的「派出 · 待接下」。
+           */}
+          {workbench && canTrack(task) ? (
+            <TrackButton size="sm" taskId={task.id} />
           ) : null}
         </div>
         <span
@@ -1367,6 +1402,7 @@ function TasksPage() {
   const rawSearch = Route.useSearch();
   const address = boardSearch(rawSearch);
   const attention = attentionOf(rawSearch);
+  const onlyOverdue = onlyOverdueOf(rawSearch);
   const {
     machineId,
     crew,
@@ -1395,12 +1431,15 @@ function TasksPage() {
    * How far back this list reaches, now carried in the address: a month is the horizon a person
    * checks a coworker over, a week is did it run today, everything is the audit question.
    */
-  const patch = (over: Partial<BoardSearch> & { attention?: "review" }) =>
+  const patch = (
+    over: Partial<BoardSearch> & { attention?: "review"; overdue?: 1 },
+  ) =>
     navigate({
       replace: true,
       search: {
         ...address,
         ...(attention === "review" ? { attention } : {}),
+        ...(onlyOverdue ? { overdue: 1 as const } : {}),
         ...over,
       },
       to: "/tasks",
@@ -1514,6 +1553,13 @@ function TasksPage() {
   const approval = useApprovalDecision();
   const list = shownForStatus(tasks.data ?? [], status);
   /*
+   * 交付闭环 Task 8：默认皮肤里，在跟的卡在「三步收货」四列里（`DeliveryBoard`），不在跟的卡照原来的
+   * 列和「待关注」走，同一张卡不画两遍。别的皮肤不画四列，在跟的卡也照原来的列走。
+   */
+  const workbench = useSkinId() === "xiongbao";
+  const followed = workbench ? list.filter(isFollowed) : [];
+  const board = workbench ? list.filter((task) => !isFollowed(task)) : list;
+  /*
    * 51665048 froze three states that may not overlap: a read that failed says 失败, a first read
    * says 加载中, and only a read that answered with something gets to say the nothing-here
    * sentence. Cached data rides through a refetch on purpose, so what has to be asked here is the
@@ -1622,6 +1668,12 @@ function TasksPage() {
       title="暂无任务"
     />
   );
+  // Every card in this read is followed: they are all in the four columns above, none is missing.
+  const followedOnly = (
+    <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">
+      在跟的活都在上面「三步收货」里，这里暂时没有别的任务。
+    </p>
+  );
   return (
     <PageShell
       width="workbench"
@@ -1668,6 +1720,17 @@ function TasksPage() {
             知道了
           </Button>
         </div>
+      ) : null}
+      {tasks.data !== undefined && followed.length > 0 ? (
+        <DeliveryBoard
+          cards={followed}
+          decidingIds={approval.pending}
+          onDecide={approval.decide}
+          onlyOverdue={onlyOverdue}
+          onOnlyOverdueChange={(next) =>
+            patch({ overdue: next ? 1 : undefined })
+          }
+        />
       ) : null}
       {/*
        * The parity plan's 工作记录横幅, drawn as the reference draws it: the panel HOLDS the window's
@@ -1761,7 +1824,7 @@ function TasksPage() {
           onTabChange={setAttention}
           pendingIds={pendingIds}
           tab={attention}
-          tasks={list}
+          tasks={board}
         />
       ) : null}
       <section aria-label="全部任务" className="mt-[22px]">
@@ -1893,9 +1956,9 @@ function TasksPage() {
               </p>
             ) : view === "list" ? (
               <>
-                {list.length > 0 ? (
+                {board.length > 0 ? (
                   <ul className="list-none divide-y divide-border px-[11px] py-[2px]">
-                    {list.map((task) => (
+                    {board.map((task) => (
                       <TaskCard
                         key={task.id}
                         task={task}
@@ -1914,13 +1977,14 @@ function TasksPage() {
                  * idle" are different facts, and the second one is the reason the filter exists.
                  */}
                 {list.length === 0 && !readFailed ? emptyList : null}
+                {list.length > 0 && board.length === 0 ? followedOnly : null}
               </>
             ) : (
               <>
                 {/* The lanes are always drawn: each is a drop target even while it holds nothing. */}
                 <div className="grid grid-cols-1 gap-[11px] md:grid-cols-3">
                   {LANES.map((lane) => {
-                    const inLane = list.filter((task) =>
+                    const inLane = board.filter((task) =>
                       laneOfTask(task).includes(lane.key),
                     );
                     return (
@@ -1973,7 +2037,7 @@ function TasksPage() {
                               />
                             ))}
                           </ul>
-                        ) : list.length > 0 ? (
+                        ) : board.length > 0 ? (
                           <p className="py-[18px] text-center text-[12px] text-faint">
                             这一列暂时是空的
                           </p>
@@ -1982,7 +2046,7 @@ function TasksPage() {
                     );
                   })}
                 </div>
-                {!readFailed && lanesUnmappable(list) ? (
+                {!readFailed && lanesUnmappable(board) ? (
                   <p className="mt-[11px] rounded-[16px] border border-border bg-card py-10 text-center text-[13px] text-muted-foreground">
                     当前任务暂无可归入泳道的状态，可切换列表查看。
                   </p>
@@ -1990,12 +2054,18 @@ function TasksPage() {
                   <div className="mt-[11px] rounded-[16px] border border-border bg-card">
                     {emptyList}
                   </div>
+                ) : !readFailed && board.length === 0 ? (
+                  <div className="mt-[11px] rounded-[16px] border border-border bg-card">
+                    {followedOnly}
+                  </div>
                 ) : null}
               </>
             )}
           </div>
         )}
       </section>
+      {/* A card's own page (`tasks.$taskId.tsx`) opens over the board as a side sheet. */}
+      <Outlet />
     </PageShell>
   );
 }

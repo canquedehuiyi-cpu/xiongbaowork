@@ -29,11 +29,14 @@ import {
 } from "@tanstack/react-router";
 import { act, cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ACP_PHONE_NOTE } from "@/components/channels/acp-cards";
+import {
+  ACP_PHONE_NOTE,
+  acpNotes,
+  type TranscriptAcpCards,
+} from "@/components/channels/acp-cards";
 import {
   ChatTranscript,
   ServerToolLine,
-  type TranscriptAcpCards,
 } from "@/components/channels/chat-transcript";
 import { GroupChat } from "@/components/channels/group-chat";
 import { GONE_BOT } from "@/lib/agents/bot-names";
@@ -44,6 +47,7 @@ import {
   createAcpCardTracker,
 } from "@/lib/channels/acp-events";
 import { type GroupMessage, groupRefetchInterval } from "@/lib/groups";
+import { placeDeliveryEvent } from "@/lib/tasks/delivery-chat";
 import { queryClient } from "@/query-client";
 import { Route as ApprovalsRoute } from "@/routes/_authed/_app/approvals";
 import { speakerOf } from "@/skins/xiongbao/message-list";
@@ -181,7 +185,7 @@ function drawTranscript(acp?: TranscriptAcpCards, messages = conversation) {
     <QueryClientProvider client={queryClient}>
       <CopilotKitProvider>
         <ChatTranscript
-          acp={acp}
+          {...(acp ? { acpApprovals: true, notes: acpNotes(acp) } : {})}
           busy={false}
           messages={messages}
           restoring={false}
@@ -198,6 +202,55 @@ const PLAN = [
   { content: "推送到 fix/login，等你确认", status: "in_progress" },
   { content: "在群里汇报", status: "pending" },
 ];
+
+describe("和交付卡同一套附注", () => {
+  test("cards under one row follow the order they first came in", async () => {
+    // 事件流里先是接活（交付卡），再是计划（外部员工的卡），两样都跟在同一条消息下面。
+    const placed = placeDeliveryEvent([], "run-1-message-1", {
+      kind: "accepted",
+      taskId: "task-1",
+      dueAt: null,
+      criteria: null,
+    });
+    const tracker = createAcpCardTracker();
+    feed(tracker, "run-1", [{ name: "acp.plan", value: PLAN, upto: 2 }]);
+    const [plan] = tracker.cards();
+    expect(plan?.anchor).toBe("run-1-message-1");
+    expect((placed[0]?.order ?? 0) < (plan?.order ?? 0)).toBe(true);
+
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <CopilotKitProvider>
+          <ChatTranscript
+            busy={false}
+            messages={conversation}
+            // 给的先后故意反过来：外部员工的卡在前（对话页就是这样拼的）。
+            notes={[
+              ...acpNotes({ cards: tracker.cards() }),
+              {
+                key: placed[0]?.key ?? "",
+                anchor: placed[0]?.anchor ?? null,
+                order: placed[0]?.order,
+                node: <p data-delivery-note="">已接下</p>,
+              },
+            ]}
+            restoring={false}
+            threadId="t-1"
+          />
+        </CopilotKitProvider>
+      </QueryClientProvider>,
+    );
+    const card = await view.findByRole("region", { name: "正在做" });
+    const notes = card.closest("[data-transcript-notes]");
+    expect(notes).toBeTruthy();
+    const drawn = [...(notes?.children ?? [])].map((child) =>
+      child.hasAttribute("data-delivery-note")
+        ? "delivery"
+        : child.getAttribute("data-acp-card"),
+    );
+    expect(drawn).toEqual(["delivery", "plan"]);
+  });
+});
 
 describe("进度卡与改动卡", () => {
   test("plan card ticks done steps and dots the running one", async () => {

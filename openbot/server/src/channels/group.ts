@@ -53,6 +53,7 @@ import { workItems } from "../db/schema/work";
 import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import { type Delivery, firstSentenceOf } from "../tasks/delivery";
+import { DELIVERY_EVENTS } from "../tasks/delivery-events";
 import type { TaskProjector } from "../tasks/projector";
 import {
   currentTenant,
@@ -394,6 +395,7 @@ const SHARED_DETAILS: ReadonlySet<string> = new Set([
   "answeredBy",
   "compaction",
   "consent",
+  "delivery",
   "message",
   "via",
 ]);
@@ -415,6 +417,104 @@ function compactionNoteOf(name: string): GroupCompactionNote | null {
   if (name === COMPACTION_FAILED_EVENT) return { outcome: "failed" };
   return null;
 }
+
+/**
+ * 这一轮里员工走到了三步里的哪一步（交付闭环 Task 9：接下、申请延期、交付、被挡回），在回复行的
+ * `details.delivery` 上记一个**不带内容的状态标记**：哪一步、哪张卡、几点、哪位员工，接下和申请延期再带
+ * 预计时间。验收标准、交付物、结论、自查、延期理由、挡回原因一概不进群回复：卡片按租户隔离（规格第 6 节
+ * 「不做跨租户可见」），完整内容只有派活的人从卡片接口和流水读（`GET /api/tasks/:id`、`/events`）；群里
+ * 其他人只读到一行状态。
+ *
+ * 标记不带内容，所以不受分享检查约束：直接发出、等你放行、放行或不放行、轮次中途等工具审批再恢复，每条
+ * 路径都把标记记在这一行上（回复正文照分享检查显示或隐藏）。外部员工的轮次（`detached`）不记。
+ */
+export type GroupDeliveryMark = {
+  kind: "accepted" | "extension_requested" | "delivered" | "bounced";
+  taskId: string;
+  /** 服务器收到这一步的时刻（ISO）。 */
+  at: string;
+  agentId: string;
+  /** 接下时报的、申请延期要延到的预计时间（ISO）；没有就不带。 */
+  dueAt?: string;
+  /**
+   * 卡片流水里这一步那一行的 id（`delivery.*` 事件带的 `eventId`）：派活人按它把标记对回流水，不按时间、
+   * 不按内容猜。只是一个号码，群里别人拿着它也读不到卡片（流水按租户隔离）。老事件没有就不带。
+   */
+  eventId?: string;
+};
+
+const MARK_KINDS: Readonly<Record<string, GroupDeliveryMark["kind"]>> = {
+  [DELIVERY_EVENTS.accepted]: "accepted",
+  [DELIVERY_EVENTS.extensionRequested]: "extension_requested",
+  [DELIVERY_EVENTS.delivered]: "delivered",
+  [DELIVERY_EVENTS.bounced]: "bounced",
+};
+
+const isTime = (value: unknown): value is string =>
+  typeof value === "string" && !Number.isNaN(Date.parse(value));
+
+/** 流水行的 id：一个 uuid，别的不收。 */
+const isEventId = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
+/** 一条员工流里的卡片事件，换成只记状态的标记；不是交付卡事件为 null。 */
+export function deliveryMarkOf(
+  name: string,
+  value: unknown,
+  agentId: string,
+  at: Date,
+): GroupDeliveryMark | null {
+  const kind = MARK_KINDS[name];
+  if (!kind || !value || typeof value !== "object" || Array.isArray(value))
+    return null;
+  const { taskId, dueAt, eventId } = value as {
+    taskId?: unknown;
+    dueAt?: unknown;
+    eventId?: unknown;
+  };
+  if (typeof taskId !== "string" || !taskId) return null;
+  const timed = kind === "accepted" || kind === "extension_requested";
+  return {
+    kind,
+    taskId,
+    at: at.toISOString(),
+    agentId,
+    ...(timed && isTime(dueAt) ? { dueAt } : {}),
+    ...(isEventId(eventId) ? { eventId } : {}),
+  };
+}
+
+const MARK_KEYS: ReadonlySet<string> = new Set([
+  "kind",
+  "taskId",
+  "at",
+  "agentId",
+  "dueAt",
+  "eventId",
+]);
+
+/** 行上记着的标记；只认形状完全对的，多出任何字段的整条不要。 */
+function marksOf(details: Record<string, unknown>): GroupDeliveryMark[] {
+  const value = details.delivery;
+  if (!Array.isArray(value)) return [];
+  return value.filter((mark): mark is GroupDeliveryMark => {
+    if (!mark || typeof mark !== "object") return false;
+    const record = mark as Record<string, unknown>;
+    return (
+      Object.keys(record).every((key) => MARK_KEYS.has(key)) &&
+      Object.values(MARK_KINDS).includes(record.kind as never) &&
+      typeof record.taskId === "string" &&
+      isTime(record.at) &&
+      typeof record.agentId === "string" &&
+      (record.dueAt === undefined || isTime(record.dueAt)) &&
+      (record.eventId === undefined || isEventId(record.eventId))
+    );
+  });
+}
+
+const withMarks = (marks: readonly GroupDeliveryMark[]) =>
+  marks.length > 0 ? { delivery: [...marks] } : {};
 
 /**
  * 外部员工在群里请求许可时，群转录里那一行（外部员工 Task 12）：只说谁在等谁确认、结果如何。命令、路径、
@@ -1651,19 +1751,54 @@ export function createGroupConversations(deps: {
      * that holds an open followed card on this person's thread with it hangs on that card, opens none
      * and charges nothing (the runner is told the card is taken, as for any card the caller owns). A
      * peer's hop is the hand-off it is, with a card of its own, as the runner treats a hop. An external
-     * employee's card is its hirer's (`cardTurn` above) and not followed this way yet: its delivery
-     * terms come with the delivery loop's own part for external employees (spec 2026-11-15-delivery-loop §9).
+     * employee's card is its hirer's (`cardTurn` above), and so is the followed card it works on: its
+     * work was followed the moment it was queued (spec 2026-11-15-delivery-loop §9). Its turn is not
+     * hung here -- the group never runs it, and the run that does the work hangs itself on the card
+     * when it starts -- so the message only finds the card, and opens and charges nothing.
      */
-    const followed =
-      deps.board && deps.delivery && !turn.fromAgentId && !bot.hiredBy
+    /*
+     * A lookup or a hang that fails is said, and the round is then an ordinary one with its card
+     * (`openCard` below). Not hung is not hung: claiming the followed card without `active_run_ref`
+     * naming this run would leave an approval the round raises parking nothing and a `deliver_task`
+     * finding no card, silently. A card of its own keeps the round on the board and answerable; the
+     * person's message is still answered, which failing the round would not do for a fault of ours.
+     */
+    const trackedCardFault = (type: string, error: unknown) =>
+      console.error(
+        JSON.stringify({
+          type,
+          error: error instanceof Error ? error.message : String(error),
+          context: { channelId: turn.channelId, agentId, runId },
+          timestamp: new Date().toISOString(),
+        }),
+      );
+    let followed =
+      deps.board && deps.delivery && !turn.fromAgentId
         ? await deps.delivery
-            .openTrackedCard(turn.ownerUserId, threadId, agentId, turn.taskId)
-            .catch(() => null)
+            .openTrackedCard(
+              cardTurn.ownerUserId,
+              threadId,
+              agentId,
+              turn.taskId,
+            )
+            .catch((error: unknown) => {
+              trackedCardFault("group-turn-tracked-card-lookup-failed", error);
+              return null;
+            })
         : null;
-    if (followed)
-      await deps.delivery
-        ?.attachRun(turn.ownerUserId, followed.id, runId)
-        .catch(() => undefined);
+    if (followed && deps.delivery && !bot.hiredBy) {
+      const hung = await deps.delivery
+        .attachRun(turn.ownerUserId, followed.id, runId)
+        .then(
+          // False: the card ended between the lookup and the hang -- not hung either.
+          (attached) => attached,
+          (error: unknown) => {
+            trackedCardFault("group-turn-attach-failed", error);
+            return false;
+          },
+        );
+      if (!hung) followed = null;
+    }
     const cardId = followed
       ? followed.id
       : await openCard(cardTurn, agentId, runId);
@@ -1704,11 +1839,18 @@ export function createGroupConversations(deps: {
         });
     };
     let compacted: GroupCompactionNote | null = null;
+    const marks: GroupDeliveryMark[] = [];
+    /*
+     * 外部员工的轮次（它的招聘人 `hiredBy`，或这一轮回了 `detached`）只回一句「开始了」，它的三步在设备
+     * 那一轮里走（`announceHandoff`），群回复上不记标记。挂起、出错这些拿不到 `detached` 的路径按员工认。
+     */
+    const ownMarks = () => (bot.hiredBy ? [] : marks);
     try {
       // A round hung on a followed card says so, so the runner asks whether that card still waits.
-      const hungOn = followed
-        ? roundHungByEntry
-        : <T>(body: () => T): T => body();
+      const hungOn =
+        followed && !bot.hiredBy
+          ? roundHungByEntry
+          : <T>(body: () => T): T => body();
       const result = await hungOn(async () =>
         deps.runTurn({
           ...(turn.depth ? { depth: turn.depth } : {}),
@@ -1716,8 +1858,10 @@ export function createGroupConversations(deps: {
             latest = text;
             flush();
           },
-          onCustom: ({ name }) => {
+          onCustom: ({ name, value }) => {
             compacted = compactionNoteOf(name) ?? compacted;
+            const mark = deliveryMarkOf(name, value, agentId, new Date());
+            if (mark) marks.push(mark);
           },
           ownerUserId: turn.ownerUserId,
           telemetry: {
@@ -1775,10 +1919,12 @@ export function createGroupConversations(deps: {
             runId,
             text: result.replyText,
           });
+      const shownMarks = detached ? [] : ownMarks();
       if (gate.status === "pending") {
         await deps.store.finish(id, "", "waiting", {
           ...gate.details,
           ...chainOf(turn),
+          ...withMarks(shownMarks),
         });
         /*
          * The card stays where the gate left it, and it is not this call's business to move it.
@@ -1790,9 +1936,10 @@ export function createGroupConversations(deps: {
          */
         return;
       }
-      const compaction: Record<string, unknown> = compacted
-        ? { compaction: compacted }
-        : {};
+      const compaction: Record<string, unknown> = {
+        ...(compacted ? { compaction: compacted } : {}),
+        ...withMarks(shownMarks),
+      };
       if (gate.status === "denied") {
         await deps.store.finish(id, gate.message, "failed", compaction);
         await closeCard(cardTurn, agentId, runId, true, round(gate.message));
@@ -1866,6 +2013,8 @@ export function createGroupConversations(deps: {
           ...error.waiting,
           message: error.message,
           ...chainOf(turn),
+          // 等工具审批前已经走过的步骤：恢复后接着记（`continueWaiting`）。
+          ...withMarks(ownMarks()),
         });
         /*
          * Two different waits, and the board tells them apart.
@@ -1886,7 +2035,7 @@ export function createGroupConversations(deps: {
           await closeCard(cardTurn, agentId, runId, false, round());
       } else {
         const message = error instanceof Error ? error.message : String(error);
-        await deps.store.finish(id, message, "failed");
+        await deps.store.finish(id, message, "failed", withMarks(ownMarks()));
         await closeCard(cardTurn, agentId, runId, true, round(message));
       }
     }
@@ -2176,11 +2325,16 @@ export function createGroupConversations(deps: {
      */
     async continueWaiting(
       approvalId: string,
-      run: () => Promise<{ replyText: string }>,
+      run: (hooks?: {
+        /** 恢复后这一轮流里的自定义事件：交付卡的标记从这里接着记。 */
+        onCustom?: (event: { name: string; value: unknown }) => void;
+      }) => Promise<{ replyText: string }>,
     ): Promise<{ replyText: string }> {
       const row = await deps.store.waitingFor(approvalId);
       if (!row?.agentId) return run();
       const agentId = row.agentId;
+      // 等待前已经记下的标记；这一行之后每次重写都带上（标记不带内容，放行与否都显示）。
+      const earlier = marksOf(row.details);
       const held = row.details.privateShare as
         | { text?: unknown; continuation?: ApprovalContinuation }
         | undefined;
@@ -2198,7 +2352,12 @@ export function createGroupConversations(deps: {
         });
         if (gate.status === "pending") return { replyText: "" };
         if (gate.status === "denied") {
-          await deps.store.finish(row.id, gate.message, "failed");
+          await deps.store.finish(
+            row.id,
+            gate.message,
+            "failed",
+            withMarks(earlier),
+          );
           await closeCard(
             { ownerUserId: row.ownerUserId, channelId: row.channelId },
             agentId,
@@ -2232,8 +2391,15 @@ export function createGroupConversations(deps: {
           await relay(shown, bot, row.id, held.text, bots, runIdFor(row.id));
         return { replyText: held.text };
       }
+      const resumedMarks: GroupDeliveryMark[] = [];
+      const allMarks = () => withMarks([...earlier, ...resumedMarks]);
       try {
-        const outcome = await run();
+        const outcome = await run({
+          onCustom: ({ name, value }) => {
+            const mark = deliveryMarkOf(name, value, agentId, new Date());
+            if (mark) resumedMarks.push(mark);
+          },
+        });
         /*
          * The resumed reply is a reply like any other: with other people in the group, it waits on
          * the owner's permission before they read it, exactly as `runBot` holds one. Its words come
@@ -2253,11 +2419,12 @@ export function createGroupConversations(deps: {
           await deps.store.finish(row.id, "", "waiting", {
             ...gate.details,
             ...chainFrom(row.details),
+            ...allMarks(),
           });
           return { replyText: "" };
         }
         if (gate.status === "denied") {
-          await deps.store.finish(row.id, gate.message, "failed");
+          await deps.store.finish(row.id, gate.message, "failed", allMarks());
           await closeCard(
             { ownerUserId: row.ownerUserId, channelId: row.channelId },
             agentId,
@@ -2266,7 +2433,12 @@ export function createGroupConversations(deps: {
           );
           return { replyText: "" };
         }
-        await deps.store.finish(row.id, outcome.replyText, "completed");
+        await deps.store.finish(
+          row.id,
+          outcome.replyText,
+          "completed",
+          allMarks(),
+        );
         await closeCard(
           { ownerUserId: row.ownerUserId, channelId: row.channelId },
           agentId,
@@ -2305,6 +2477,7 @@ export function createGroupConversations(deps: {
             ...error.waiting,
             message: error.message,
             ...chainFrom(row.details),
+            ...allMarks(),
           });
         // Suspended again: the new ask parked the card, and it stays there until that is answered.
         else {
@@ -2312,6 +2485,7 @@ export function createGroupConversations(deps: {
             row.id,
             error instanceof Error ? error.message : String(error),
             "failed",
+            allMarks(),
           );
           await closeCard(
             { ownerUserId: row.ownerUserId, channelId: row.channelId },
@@ -2461,6 +2635,7 @@ export function createGroupConversations(deps: {
           ...(details.consent && typeof details.consent === "object"
             ? { consent: details.consent }
             : {}),
+          ...withMarks(marksOf(details)),
           // 外部员工在等招聘人确认：每个成员读到的都只有谁在等谁、结果如何。
           ...(groupAcpPermissionOf(details.acpPermission)
             ? {

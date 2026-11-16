@@ -230,6 +230,13 @@ export type RoutineRunContext = {
    * Run now that raced a pause) is closed as skipped instead of run. Paused never runs.
    */
   enabled?: boolean;
+  /**
+   * The run row's own outcome, null while it is open. A run that already has one has been run (or
+   * closed without running) and is never run again: the id is all the internal endpoint takes, so
+   * without this a caller holding the worker secret could fire the same routine as often as it
+   * liked by presenting one finished id.
+   */
+  status?: RoutineRunOutcome | null;
 };
 
 /** One row of a routine's run history. `status: null` is a run still in flight. */
@@ -1280,6 +1287,7 @@ export function createRoutineStore(database: Database): RoutineStore {
             channelId: routines.channelId,
             instruction: routines.instruction,
             enabled: routines.enabled,
+            status: routineRuns.status,
           })
           .from(routineRuns)
           .innerJoin(routines, eq(routines.id, routineRuns.routineId))

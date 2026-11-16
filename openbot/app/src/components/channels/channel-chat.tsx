@@ -25,6 +25,7 @@ import {
   shownAnswer,
   useConversationQuestion,
 } from "@/components/approvals/question-notice";
+import { acpNotes } from "@/components/channels/acp-cards";
 import { ChannelWorkRows } from "@/components/channels/channel-work";
 import { attachmentModality } from "@/components/channels/chat-messages";
 import {
@@ -107,6 +108,7 @@ import { useConversationModel } from "@/lib/models/run-model";
 import { useSkillCommands } from "@/lib/plugins/skill-commands";
 import { reportIfQuotaError } from "@/lib/quota/guidance";
 import { publishedSandboxedQueryOptions } from "@/lib/sandboxed/queries";
+import { useDeliveryChatEvents } from "@/lib/tasks/use-delivery-chat-events";
 import {
   compactionOutcomeOf,
   invalidateConversationSidebar,
@@ -130,6 +132,7 @@ import { useVoiceCall } from "@/lib/voice/use-voice-call";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
 import { queryClient } from "@/query-client";
 import { useSkinId } from "@/skins/store";
+import { deliveryNotes } from "@/skins/xiongbao/delivery-chat";
 import type { SidebarContext } from "../../../../shared/conversation-sidebar";
 import { newId } from "../../lib/new-id";
 
@@ -589,6 +592,11 @@ export function ChannelChat({
     if (isReady) openReadyGate.current();
   }, [isReady]);
 
+  /*
+   * 交付闭环的卡（接活回执、延期申请、交付卡、被挡回）：这一轮和回放的历史里服务器放的 `delivery.*` 事件。
+   * 在下面连上对话的 effect 之前订阅，回放才交得到它。
+   */
+  const deliveryEvents = useDeliveryChatEvents(agent, channel.threadId);
   /*
    * 外部员工一轮里的进度、改动和中断卡（Task 12）：从代理的事件流里记下 `acp.*` 的 CUSTOM 事件。一个代理一份，
    * 换了对话就重新记。订阅写在加入线程的那个 effect 前面：`connect` 只把它开始时已有的订阅者交给重放。
@@ -1521,30 +1529,38 @@ export function ChannelChat({
             // Remounted per conversation, so opening one puts the caret in its composer once.
             autoFocus
             threadId={channel.threadId}
-            acp={{
-              cards: acpCards,
-              resent: acpResent,
-              /*
-               * 「重新派」：把这一轮派的原话作为新的一轮发出去（规格第 3 节）。按下就记成已派，没发出去
-               * （它还在忙）时退回，卡上写原因。
-               */
-              ...(channel.active
-                ? {
-                    onResend: (card: { key: string; prompt: string }) => {
-                      setAcpResent((shown) => new Set(shown).add(card.key));
-                      return say(card.prompt).catch((error: unknown) => {
-                        setAcpResent((shown) => {
-                          const next = new Set(shown);
-                          next.delete(card.key);
-                          return next;
-                        });
-                        throw error;
-                      });
-                    },
-                  }
-                : {}),
-            }}
+            acpApprovals
             compaction={compaction}
+            /*
+             * 跟在消息下面的卡走同一套附注：外部员工的进度、改动、中断卡在前，交付闭环的接活回执、延期申请、
+             * 交付卡、被挡回在后。
+             */
+            notes={[
+              ...acpNotes({
+                cards: acpCards,
+                resent: acpResent,
+                /*
+                 * 「重新派」：把这一轮派的原话作为新的一轮发出去（规格第 3 节）。按下就记成已派，没发出去
+                 * （它还在忙）时退回，卡上写原因。
+                 */
+                ...(channel.active
+                  ? {
+                      onResend: (card: { key: string; prompt: string }) => {
+                        setAcpResent((shown) => new Set(shown).add(card.key));
+                        return say(card.prompt).catch((error: unknown) => {
+                          setAcpResent((shown) => {
+                            const next = new Set(shown);
+                            next.delete(card.key);
+                            return next;
+                          });
+                          throw error;
+                        });
+                      },
+                    }
+                  : {}),
+              }),
+              ...deliveryNotes(deliveryEvents, botName),
+            ]}
             // The clock beside `+`: a routine for the Bot this conversation talks to, posting here.
             // Only once the profile is read: until then nobody knows it is not an external employee.
             routine={

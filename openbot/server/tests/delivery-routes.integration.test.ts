@@ -230,7 +230,14 @@ function unattendedTurn(
         threadId: string;
         runId: string;
       }) => {
-        if (options.lockRefused) throw new Error("Thread lock denied");
+        // The platform's answer while another runner holds the thread (`isLockConflict`).
+        if (options.lockRefused)
+          throw Object.assign(
+            new Error(
+              'Intelligence platform error 409: {"error":{"code":"THREAD_LOCK_FAILED","retryable":true}}',
+            ),
+            { name: "PlatformRequestError", status: 409, retryable: true },
+          );
         if (options.lockHangs) await new Promise(() => {});
         return {
           threadId: params.threadId,
@@ -1078,6 +1085,130 @@ test("cancel stops a running turn and marks cancelled", async () => {
   expect((await call("POST", `${taskId}/cancel`)).status).toBe(409);
 });
 
+test("answering by the request's line id: a newer request for the very same time is still refused (409), nothing written", async () => {
+  const { tenantId, agentId, taskId, due } =
+    await acceptedCard("same-time-ext");
+  const call = routesFor(tenantId, { turns: cardTurns(new Recorder(agentId)) });
+  const asked = new Date(Date.now() + 3 * 60 * 60_000);
+  const first = randomUUID();
+  const second = randomUUID();
+  await delivery.requestExtension(tenantId, taskId, {
+    eventId: first,
+    dueAt: asked,
+    reason: "C 家还没回",
+  });
+  // Answered elsewhere (another device), then asked again for exactly the same time.
+  expect(
+    (
+      await call("POST", `${taskId}/extension`, {
+        decision: "deny",
+        requestEventId: first,
+      })
+    ).status,
+  ).toBe(200);
+  await delivery.requestExtension(tenantId, taskId, {
+    eventId: second,
+    dueAt: asked,
+    reason: "C 家还没回",
+  });
+  const before = await history(tenantId, taskId);
+
+  // The dialog opened on the first request: same time, other line -- refused, for 准许 and 不批 alike.
+  for (const decision of ["grant", "deny"] as const) {
+    const stale = await call("POST", `${taskId}/extension`, {
+      decision,
+      ...(decision === "grant" ? { dueAt: asked.toISOString() } : {}),
+      requestedDueAt: asked.toISOString(),
+      requestEventId: first,
+    });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toContain("不是最新");
+    expect(stale.body.code).toBe("stale_request");
+  }
+  expect((await row(tenantId, taskId))?.dueAt?.toISOString()).toBe(
+    due.toISOString(),
+  );
+  expect((await history(tenantId, taskId)).length).toBe(before.length);
+
+  // Naming the latest request's line goes through.
+  const granted = await call("POST", `${taskId}/extension`, {
+    decision: "grant",
+    dueAt: asked.toISOString(),
+    requestedDueAt: asked.toISOString(),
+    requestEventId: second,
+  });
+  expect(granted.status).toBe(200);
+  expect((await row(tenantId, taskId))?.dueAt?.toISOString()).toBe(
+    asked.toISOString(),
+  );
+});
+
+test("answering an extension the chat's card names: a request that is no longer the latest is refused (409), nothing written", async () => {
+  const { tenantId, agentId, taskId, due } = await acceptedCard("stale-ext");
+  const call = routesFor(tenantId, { turns: cardTurns(new Recorder(agentId)) });
+  const first = new Date(Date.now() + 2 * 60 * 60_000);
+  const second = new Date(Date.now() + 5 * 60 * 60_000);
+  await delivery.requestExtension(tenantId, taskId, {
+    dueAt: first,
+    reason: "C 家还没回",
+  });
+  await delivery.requestExtension(tenantId, taskId, {
+    dueAt: second,
+    reason: "B 家也要等",
+  });
+  const before = await history(tenantId, taskId);
+
+  // The older card's 「准许」: its own time, naming its own request.
+  const stale = await call("POST", `${taskId}/extension`, {
+    decision: "grant",
+    dueAt: first.toISOString(),
+    requestedDueAt: first.toISOString(),
+  });
+  expect(stale.status).toBe(409);
+  expect(stale.body.error).toContain("不是最新");
+  // 「不准」 on the older card is refused the same way.
+  expect(
+    (
+      await call("POST", `${taskId}/extension`, {
+        decision: "deny",
+        requestedDueAt: first.toISOString(),
+      })
+    ).status,
+  ).toBe(409);
+  // A request time that names no moment at all is a malformed answer (400), not a stale one (409).
+  for (const decision of ["grant", "deny"] as const) {
+    const garbled = await call("POST", `${taskId}/extension`, {
+      decision,
+      ...(decision === "grant" ? { dueAt: second.toISOString() } : {}),
+      requestedDueAt: "11月16日 10:30",
+    });
+    expect(garbled.status).toBe(400);
+    expect(garbled.body.error).toBe("没认出这条申请要延到几点，刷新后再答复。");
+    expect(garbled.body.code).toBeUndefined();
+  }
+  // Nothing written: the due time stands, and no answer is on the record.
+  expect((await row(tenantId, taskId))?.dueAt?.toISOString()).toBe(
+    due.toISOString(),
+  );
+  expect((await history(tenantId, taskId)).length).toBe(before.length);
+
+  // The latest card's 「准许」 goes through, at its own time.
+  const granted = await call("POST", `${taskId}/extension`, {
+    decision: "grant",
+    dueAt: second.toISOString(),
+    requestedDueAt: second.toISOString(),
+  });
+  expect(granted.status).toBe(200);
+  expect(granted.body.dueAt).toBe(second.toISOString());
+  expect((await history(tenantId, taskId)).at(-1)).toMatchObject({
+    kind: "extension_granted",
+    detail: {
+      requestedDueAt: second.toISOString(),
+      dueAt: second.toISOString(),
+    },
+  });
+});
+
 test("extension grant changes due_at, keeps original_due_at; deny keeps both", async () => {
   const { tenantId, agentId, threadId, taskId, due } =
     await acceptedCard("extension");
@@ -1664,6 +1795,74 @@ test("overdue=1 lists only cards with overdue_at", async () => {
     ].sort(),
   );
   expect(all.find((task) => task.tracked === false)?.stage).toBeNull();
+});
+
+test("overdue=1 after a later due time keeps the checker's grace: 10 minutes past it is not overdue, 36 is", async () => {
+  const tenantId = await tenant("overdue-grace");
+  const agentId = `agent-${suite}-grace`;
+  const recorded = new Date(Date.now() - 2 * 60 * 60_000);
+  const taken = new Date(Date.now() - 4 * 60 * 60_000);
+  const justPast = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-grace-10`,
+    acceptedAt: taken,
+    dueAt: new Date(Date.now() - 10 * 60_000),
+    overdueAt: recorded,
+  });
+  const pastGrace = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-grace-36`,
+    acceptedAt: taken,
+    dueAt: new Date(Date.now() - 36 * 60_000),
+    overdueAt: recorded,
+  });
+  const listed = (await routesFor(tenantId)("GET", "?overdue=1")).body
+    .tasks as Record<string, unknown>[];
+  expect(listed.map((task) => task.id)).toEqual([pastGrace]);
+  expect(listed.map((task) => task.id)).not.toContain(justPast);
+});
+
+test("overdue=1 leaves out a card given more time (due moved later) and one handed in; overdue_at stays", async () => {
+  const tenantId = await tenant("overdue-extended");
+  const agentId = `agent-${suite}-extended`;
+  const recorded = new Date(Date.now() - 60_000);
+  const taken = new Date(Date.now() - 3 * 60 * 60_000);
+  const late = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-still-late`,
+    acceptedAt: taken,
+    dueAt: new Date(Date.now() - 40 * 60_000),
+    overdueAt: recorded,
+  });
+  const extended = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-extended`,
+    acceptedAt: taken,
+    dueAt: new Date(Date.now() + 60 * 60_000),
+    overdueAt: recorded,
+  });
+  const handedIn = await card(tenantId, {
+    agentId,
+    tracked: true,
+    threadRef: `thread-${suite}-handed-in`,
+    status: "awaiting_review",
+    acceptedAt: taken,
+    dueAt: new Date(Date.now() - 40 * 60_000),
+    overdueAt: recorded,
+  });
+
+  const listed = (await routesFor(tenantId)("GET", "?overdue=1")).body
+    .tasks as Record<string, unknown>[];
+  expect(listed.map((task) => task.id)).toEqual([late]);
+  // Not overdue now, but the record that it once was is kept.
+  for (const id of [extended, handedIn])
+    expect((await row(tenantId, id))?.overdueAt?.getTime()).toBe(
+      recorded.getTime(),
+    );
 });
 
 afterAll(async () => {

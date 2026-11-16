@@ -26,13 +26,18 @@ const WORD = /\bIntelligence\b/;
 const NOT_SHOWN: { file: string; text: string; why: string }[] = [
   {
     file: "server/src/config.ts",
-    text: "CopilotKit Intelligence is required and is not configured",
-    why: "a boot refusal, printed to the operator's terminal before the server listens",
+    text: "is optional, and is half configured",
+    why: "a boot refusal, printed to the operator's terminal before the server listens (Intelligence is optional in this tree, so the two refusals of a missing one are gone)",
   },
   {
-    file: "server/src/config.ts",
-    text: "both say where the browser reaches the Intelligence gateway",
-    why: "a boot refusal, printed before the server listens",
+    file: "server/src/index.ts",
+    text: "Intelligence is not connected.",
+    why: "the rejection the setup checklist reads as unreachable (intelligenceFact keeps no message) and the banner only logs",
+  },
+  {
+    file: "server/src/recorder/trajectory-connect.ts",
+    text: "Could not connect to Intelligence",
+    why: "the runtime's own reply, matched for the Recorder; it reads only the code and status (extension/src/offscreen/grant.ts)",
   },
   {
     file: "server/src/config.ts",
@@ -63,6 +68,26 @@ const NOT_SHOWN: { file: string; text: string; why: string }[] = [
     file: "server/src/intelligence-entitlement-check.ts",
     text: "Intelligence did not confirm this deployment's entitlement",
     why: "the boot log's advice",
+  },
+];
+
+/**
+ * Text that names Intelligence and is shown only to an administrator. Upstream counts every screen
+ * in; this tree's copy rule lets an admin read exact names (.claude/skills/openbot-copy, "Admin is
+ * allowed exact names"), and its brand allowlist keeps the third-party service an admin has to sign
+ * up for (app/tests/brand-leak-allowlist.json, category third-party-name). Each entry must still
+ * match, so one that goes stale is removed rather than kept as a hole.
+ */
+const ADMIN_ONLY: { file: string; text: string; why: string }[] = [
+  {
+    file: "app/src/routes/_authed/admin/learning.tsx",
+    text: "Intelligence",
+    why: "the admin Learning page (the admin route refuses anyone whose role is not admin), which configures the Intelligence project Learning runs in",
+  },
+  {
+    file: "server/src/app.ts",
+    text: "Intelligence，自动学习不可用",
+    why: "/api/admin/learning/* when Intelligence is not connected, behind requireAdmin",
   },
 ];
 
@@ -183,7 +208,7 @@ function shown(): string[] {
 }
 
 const isNotShown = (hit: string) =>
-  NOT_SHOWN.some(
+  [...NOT_SHOWN, ...ADMIN_ONLY].some(
     (entry) => hit.startsWith(`${entry.file}:`) && hit.includes(entry.text),
   );
 
@@ -193,7 +218,7 @@ test("no text a person reads in the desktop app, the app, the server or the Reco
 
 test("every exception for text that is never shown still matches", () => {
   const found = shown();
-  const stale = NOT_SHOWN.filter(
+  const stale = [...NOT_SHOWN, ...ADMIN_ONLY].filter(
     (entry) =>
       !found.some(
         (hit) => hit.startsWith(`${entry.file}:`) && hit.includes(entry.text),

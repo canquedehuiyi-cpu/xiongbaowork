@@ -39,7 +39,12 @@ import {
 import { newId } from "@/lib/new-id";
 import { startRunMutationOptions } from "@/lib/pipelines/mutations";
 import { pipelineTemplatesQueryOptions } from "@/lib/pipelines/queries";
+import { type DeliveryMark, readDeliveryMark } from "@/lib/tasks/delivery-chat";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
+import {
+  DeliveryChatCards,
+  GroupDeliveryMark,
+} from "@/skins/xiongbao/delivery-chat";
 import { AcpGroupPermissionLine } from "./acp-group-line";
 import { ChannelAvatar } from "./avatar";
 import {
@@ -138,6 +143,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
     ]),
   );
   const messages = group.data?.messages ?? [];
+  const deliveryOf = groupDeliveryCards(messages);
   const working = messages.some(
     (message) => message.status === "running" || message.status === "queued",
   );
@@ -237,7 +243,7 @@ export function GroupChat({ channelId }: { channelId: string }) {
               message={message}
               name={
                 message.agentId
-                  ? (names.get(message.agentId) ?? "一位已不在本群的员工")
+                  ? (names.get(message.agentId) ?? "一位员工")
                   : message.ownerUserId === me?.id
                     ? "你"
                     : (people.get(message.ownerUserId) ?? "一位同事")
@@ -253,8 +259,9 @@ export function GroupChat({ channelId }: { channelId: string }) {
                   ? bots.find((bot) => bot.id === message.agentId)?.harness
                   : undefined
               }
-              ownerName={people.get(message.ownerUserId) ?? "它的主人"}
+              ownerName={people.get(message.ownerUserId)}
               mine={message.ownerUserId === me?.id}
+              delivery={deliveryOf.get(message.id)}
               meId={me?.id}
             />
           ))}
@@ -399,6 +406,20 @@ export function groupQuestion(
   return inbox?.questions.find((question) => question.channelId === channelId);
 }
 
+/** 每行回复带的交付卡状态标记；形状不对的不画。 */
+export function groupDeliveryCards(
+  messages: readonly GroupMessage[],
+): Map<string, DeliveryMark[]> {
+  const cards = new Map<string, DeliveryMark[]>();
+  for (const message of messages) {
+    const marks = (message.delivery ?? []).flatMap(
+      (entry) => readDeliveryMark(entry) ?? [],
+    );
+    if (marks.length > 0) cards.set(message.id, marks);
+  }
+  return cards;
+}
+
 /** One attributed line: a person's bubble, and a Bot's named reply on the left. */
 function GroupLine({
   message,
@@ -407,6 +428,7 @@ function GroupLine({
   harness,
   ownerName,
   mine,
+  delivery,
   meId,
 }: {
   message: GroupMessage;
@@ -414,9 +436,14 @@ function GroupLine({
   answeredBy?: string;
   /** 外部员工是哪个智能体，名字旁画「外部员工 · Codex」。 */
   harness?: AcpHarness;
-  /** 这一行的主人（员工行就是替谁跑的那个人），等他处理时对别人这样称呼他。 */
-  ownerName: string;
+  /**
+   * 这一行的主人（员工行就是替谁跑的那个人）怎么称呼：等他处理时对别人这样称呼他，交付状态行里「等<他>验收」。
+   * 不知道名字时不带，各处用自己的兜底说法。
+   */
+  ownerName?: string;
   mine: boolean;
+  /** 这一轮里员工走到哪一步的标记；完整的卡和按钮只给发起这一轮的人（`ownerUserId`）。 */
+  delivery?: readonly DeliveryMark[];
   /** 读这一页的人，外部员工的许可状态行要知道他是不是招聘人。 */
   meId?: string;
 }) {
@@ -511,8 +538,8 @@ function GroupLine({
               className="inline-block size-2 shrink-0 rounded-full bg-[color:var(--wb-amber,var(--signal))]"
             />
             {message.waitKind === "share"
-              ? `${name}的回答要等 ${ownerName} 确认能不能发到群里`
-              : `${name}在等 ${ownerName} 处理一件事`}
+              ? `${name}的回答要等 ${ownerName ?? "它的主人"} 确认能不能发到群里`
+              : `${name}在等 ${ownerName ?? "它的主人"} 处理一件事`}
           </p>
         ) : message.status === "waiting" ? (
           // Waiting on a person: the attention treatment, with the way to act on it beside the reason.
@@ -577,6 +604,19 @@ function GroupLine({
             </BubbleContent>
           </Bubble>
         )}
+        {delivery && delivery.length > 0 ? (
+          <DeliveryChatCards>
+            {delivery.map((mark) => (
+              <GroupDeliveryMark
+                agentName={name}
+                key={`${mark.kind}:${mark.taskId}:${mark.at}`}
+                mark={mark}
+                ownerId={message.ownerUserId}
+                ownerName={ownerName ?? "派活的人"}
+              />
+            ))}
+          </DeliveryChatCards>
+        ) : null}
       </MessageContent>
     </MessageRow>
   );

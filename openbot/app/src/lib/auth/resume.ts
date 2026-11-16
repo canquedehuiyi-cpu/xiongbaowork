@@ -9,7 +9,9 @@
  * else's input. It is encoded into a path this code builds, on an origin this code was given. It is
  * never used as a redirect target, never concatenated into one, and there is no `next=`: a return
  * address somebody else gets a say in is an open redirect, and a handle that can only ever be a
- * query value on this deployment's own verifier cannot be pointed anywhere else.
+ * query value on this deployment's own verifier cannot be pointed anywhere else. (Coming back to the
+ * page one was on before signing in is `?redirect=`, which `return-to.ts` only ever reads as a path
+ * on this site.)
  */
 
 /** The route that resumes a flow. This deployment's own, on its own origin. */

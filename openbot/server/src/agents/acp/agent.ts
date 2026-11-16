@@ -12,9 +12,12 @@ import type { AcpHarness } from "../../../../shared/acp";
 import type { Database } from "../../db/client";
 import { threads } from "../../db/schema";
 import type { DeviceChannel } from "../../devices/channel";
+import { dueSaidIn } from "../../tasks/due-time";
 import { runAsTenant } from "../../tenant/context";
 import { adoptRunnerCard } from "../../threads/postgres-runner";
+import { withRunSideEvents } from "../../threads/run-side-events";
 import { type AcpContextLoader, messageText } from "./context";
+import type { AcpDelivery, AcpDeliveryTurn } from "./delivery";
 import type { AcpRelay } from "./relay";
 import { createAcpTranslator } from "./translate";
 import {
@@ -80,6 +83,37 @@ export const ACP_WAITING_MS = 8_000;
 export const BUN_IDLE_TIMEOUT_MS = 10_000;
 
 /**
+ * How long a run that ended waits for the delivery loop's hand-in before it ends anyway: a write that
+ * hangs (a pool with no connection left) must not leave the thread busy for good.
+ */
+export const ACP_DELIVERY_SETTLE_MS = 15_000;
+
+/** Said when the hand-in was not settled within {@link ACP_DELIVERY_SETTLE_MS}. */
+export const ACP_DELIVERY_LATE_NOTE =
+  "这一轮的交付还在核对，结果以看板上这件活的状态为准。";
+/** What `within` answers when the hand-in ran out of time. */
+const LATE = Symbol("late");
+
+/** `work`, or `fallback` once `ms` have passed without it. */
+async function within<T>(
+  work: Promise<T> | undefined,
+  ms: number,
+  fallback: T,
+): Promise<T> {
+  if (!work) return fallback;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<T>((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+    (timer as { unref?: () => void }).unref?.();
+  });
+  try {
+    return await Promise.race([work.catch(() => fallback), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * A group's turn runner: an external employee's turns go to `external` (`createAcpGroupTurn`, which
  * never holds the group's sweep), every other Bot's to `normal`.
  */
@@ -118,12 +152,16 @@ export function createAcpGroupTurn(options: {
   }) => Promise<boolean>;
   newTurnId?: () => string;
   log?: (message: string) => void;
+  /** The delivery loop's part for external employees (delivery.ts): work asked of it here is followed at once. */
+  delivery?: Pick<AcpDelivery, "queued">;
 }): (input: {
   agentId: string;
   threadId: string;
   instruction: string;
   userMessage?: Message;
   runId?: string;
+  /** Who started the turn: a peer's hop (`handoff`) is a 转交, which the delivery loop does not follow. */
+  initiator?: { kind: string };
 }) => Promise<{ replyText: string; detached: true }> {
   const log = options.log ?? ((message: string) => console.warn(message));
   return async (input) => {
@@ -148,6 +186,20 @@ export function createAcpGroupTurn(options: {
         ...(input.runId ? { runRef: input.runId } : {}),
       },
     });
+    /*
+     * 派出 · 待接下 from the moment it is queued: the group's card for it (filed under its run id). Not a
+     * peer's hop: 员工互相 @ 的转交 is not followed by itself (spec 2026-11-15-delivery-loop §1).
+     */
+    if (input.runId && input.initiator?.kind !== "handoff")
+      await options.delivery?.queued(
+        {
+          tenantId,
+          agentId: employee.id,
+          threadId: input.threadId,
+          runId: input.runId,
+        },
+        "group",
+      );
     let replyText: string;
     if (options.channel.isReachable(target)) {
       replyText = `${employee.name}开始干这件活了，做完会在群里回复。`;
@@ -289,6 +341,14 @@ export type DeviceAcpAgentConfig = {
   every?: (ms: number, tick: () => void) => () => void;
   newTurnId?: () => string;
   log?: (message: string) => void;
+  /**
+   * The delivery loop's three steps, walked by the server for this employee (delivery.ts): the queued
+   * turn's card followed when it is work handed to the employee (派活), the card's first prompt told the rules and taken on when it starts, the first
+   * 「预计」 its due time, and what the turn changed handed in when it ends. Absent: none of it.
+   */
+  delivery?: AcpDelivery;
+  /** How long the end waits for the hand-in ({@link ACP_DELIVERY_SETTLE_MS}). Injected for a test. */
+  deliverySettleMs?: number;
 };
 
 const defaultEvery = (ms: number, tick: () => void) => {
@@ -366,6 +426,16 @@ class AcpRun {
   private readonly done: string[] = [];
   private readonly doneIds = new Set<string>();
   private readonly changed = new Set<string>();
+  /** What the agent said in this turn (its own messages, not the sentences the run adds), for 「预计」 and 「自查」. */
+  private reply = "";
+  /** What the translator emitted, for the hand-in at the end (its `acp.diff`s). */
+  private readonly produced: BaseEvent[] = [];
+  /** The delivery loop's writes in flight, which the turn's end waits for. */
+  private startedWrite: Promise<void> | undefined;
+  private dueWrite: Promise<void> | undefined;
+  private dueSeen = false;
+  /** The turn ended and the run is settling its hand-in before it finishes. */
+  private ending = false;
 
   constructor(
     private readonly config: DeviceAcpAgentConfig,
@@ -417,8 +487,8 @@ class AcpRun {
   /** Ends the run: whatever the translator holds open, then `events`, then the stream. */
   private finish(events: BaseEvent[]) {
     if (this.phase === "over") return;
-    const closing = [...this.translator.close(), ...events];
-    for (const event of closing) this.emit(event);
+    for (const event of this.translator.close()) this.out(event);
+    for (const event of events) this.emit(event);
     this.release();
     this.phase = "over";
     if (!this.subscriber.closed) this.subscriber.complete();
@@ -449,6 +519,50 @@ class AcpRun {
 
   private get name() {
     return this.config.name?.trim() || "这位外部员工";
+  }
+
+  /** This run as the delivery loop's hooks know it. */
+  private get deliveryTurn(): AcpDeliveryTurn {
+    return {
+      tenantId: this.config.tenantId,
+      agentId: this.config.agentId,
+      threadId: this.input.threadId,
+      runId: this.input.runId,
+      ...(this.cardRef !== this.input.runId ? { cardRef: this.cardRef } : {}),
+    };
+  }
+
+  /** The turn is on the computer: the delivery loop takes the work on (once per card) and hangs this round on it. */
+  private startedOnCard() {
+    const { delivery } = this.config;
+    if (delivery) this.startedWrite = delivery.started(this.deliveryTurn);
+  }
+
+  /**
+   * An event the agent's own words produced (the translator's), on its way out: its text is kept for
+   * the delivery loop, and a message that closes with a 「预计」 in it reports the turn's due time.
+   */
+  private out(event: BaseEvent) {
+    this.produced.push(event);
+    const { delta } = event as { delta?: unknown };
+    if (
+      event.type === EventType.TEXT_MESSAGE_CONTENT &&
+      typeof delta === "string"
+    )
+      this.reply += delta;
+    else if (event.type === EventType.TEXT_MESSAGE_END) {
+      this.reply += "\n";
+      const { delivery } = this.config;
+      const due = delivery && !this.dueSeen ? dueSaidIn(this.reply) : undefined;
+      if (delivery && due) {
+        this.dueSeen = true;
+        const turn = this.deliveryTurn;
+        this.dueWrite = Promise.resolve(this.startedWrite).then(() =>
+          delivery.reported(turn, due),
+        );
+      }
+    }
+    this.emit(event);
   }
 
   start() {
@@ -500,6 +614,7 @@ class AcpRun {
       };
       if (!config.reachable()) {
         await turns.enqueue(turn);
+        await config.delivery?.queued(this.deliveryTurn, "conversation");
         if (this.aborted) {
           await turns.setStatus(config.tenantId, turnId, "cancelled");
           return;
@@ -513,6 +628,11 @@ class AcpRun {
         return;
       }
       await turns.enqueue(turn);
+      /*
+       * Work handed to it (派活) is 派出 · 待接下 from the moment it is queued, whether it starts now or
+       * waits; a question asked in its own conversation is not followed (`AcpDelivery.queued`).
+       */
+      await config.delivery?.queued(this.deliveryTurn, "conversation");
       const next = await turns.nextForThread(
         config.tenantId,
         input.threadId,
@@ -546,6 +666,7 @@ class AcpRun {
       // Already on the device: what it does from here on comes to this run.
       this.phase = "running";
       this.handle.resolve();
+      this.startedOnCard();
       return;
     }
     this.phase = "opening";
@@ -578,6 +699,9 @@ class AcpRun {
         );
       }
     }
+    // The card's first round is told the rules first (once per card, whatever the session).
+    const rules = await config.delivery?.opening(this.deliveryTurn);
+    if (rules) content = [{ type: "text", text: rules }, ...content];
     if (this.phase !== "opening") return;
     const sent = relay.send(this.target, {
       type: "acp.prompt",
@@ -589,6 +713,7 @@ class AcpRun {
     if (!sent) return this.backToQueue();
     this.phase = "running";
     this.handle.resolve();
+    this.startedOnCard();
   }
 
   /**
@@ -639,7 +764,7 @@ class AcpRun {
   }
 
   private onFrame(frame: Record<string, unknown>) {
-    if (this.phase === "over") return;
+    if (this.phase === "over" || this.ending) return;
     switch (frame.type) {
       case "acp.session": {
         const sessionId = str(frame.sessionId);
@@ -677,7 +802,7 @@ class AcpRun {
         this.track(frame.update);
         for (const event of this.translator.update(frame.update)) {
           this.trackDiff(event);
-          this.emit(event);
+          this.out(event);
         }
         return;
       case "acp.permission.request": {
@@ -755,8 +880,8 @@ class AcpRun {
   /** One sentence in the conversation while the run is open. */
   private say(text: string) {
     if (this.phase === "over") return;
-    for (const event of [...this.translator.pause(), ...this.note(text)])
-      this.emit(event);
+    for (const event of this.translator.pause()) this.out(event);
+    for (const event of this.note(text)) this.emit(event);
   }
 
   private end(frame: Record<string, unknown>) {
@@ -788,7 +913,39 @@ class AcpRun {
       this.finish([...this.note("这件活已取消。"), this.finished()]);
       return;
     }
-    this.finish([this.finished()]);
+    const { delivery } = this.config;
+    if (!delivery) {
+      this.finish([this.finished()]);
+      return;
+    }
+    // The hand-in is settled before the run ends: the round is still the card's until then.
+    this.ending = true;
+    for (const event of this.translator.close()) this.out(event);
+    const turn = this.deliveryTurn;
+    const cap = this.config.deliverySettleMs ?? ACP_DELIVERY_SETTLE_MS;
+    void (async () => {
+      const sentence = await within<string | undefined | typeof LATE>(
+        (async () => {
+          await this.startedWrite;
+          await this.dueWrite;
+          return delivery.ended(turn, {
+            events: this.produced,
+            reply: this.reply,
+            name: this.name,
+          });
+        })(),
+        cap,
+        LATE,
+      );
+      if (this.isOver()) return;
+      if (sentence === LATE)
+        this.log(
+          `turn ${this.turnId}: the hand-in took over ${cap}ms; the run ended without waiting for it`,
+        );
+      // Too slow to wait for: said, so a card that moves later (or does not) is not a surprise.
+      const said = sentence === LATE ? ACP_DELIVERY_LATE_NOTE : sentence;
+      this.finish([...(said ? this.note(said) : []), this.finished()]);
+    })();
   }
 
   /**
@@ -798,7 +955,11 @@ class AcpRun {
    */
   private async checkEnded() {
     const { turnId } = this;
-    if (!turnId || (this.phase !== "opening" && this.phase !== "running"))
+    if (
+      !turnId ||
+      this.ending ||
+      (this.phase !== "opening" && this.phase !== "running")
+    )
       return;
     let status: string | undefined;
     try {
@@ -892,15 +1053,22 @@ export class DeviceAcpAgent extends AbstractAgent {
   }
 
   run(input: RunAgentInput): Observable<BaseEvent> {
-    return new Observable<BaseEvent>((subscriber) => {
-      const run = new AcpRun(this.config, input, subscriber, this.handle);
-      this.current = run;
-      run.start();
-      return () => {
-        run.dispose();
-        if (this.current === run) this.current = undefined;
-      };
-    });
+    /*
+     * With room for the server's own events (the delivery loop's cards, `emitRunEvent`), and what the
+     * run carried so far readable by the evidence gate (`runEventsSoFar`), as for a built-in coworker.
+     */
+    return withRunSideEvents(
+      input.runId,
+      new Observable<BaseEvent>((subscriber) => {
+        const run = new AcpRun(this.config, input, subscriber, this.handle);
+        this.current = run;
+        run.start();
+        return () => {
+          run.dispose();
+          if (this.current === run) this.current = undefined;
+        };
+      }),
+    );
   }
 
   override abortRun(): void {
@@ -945,6 +1113,8 @@ export type DeviceAcpRuntime = {
   }) => Promise<boolean>;
   /** Set by the permission bridge; read on every request, so it can be attached after boot. */
   onPermission?: AcpPermissionHook;
+  /** The delivery loop's part (delivery.ts), attached once the loop exists; read when an agent is built. */
+  delivery?: AcpDelivery;
 };
 
 let installed: DeviceAcpRuntime | null = null;
@@ -1010,6 +1180,7 @@ export function deviceAcpAgentFor(
       }),
     sessions: runtime.sessions,
     onPermission: (request) => runtime.onPermission?.(request),
+    ...(runtime.delivery ? { delivery: runtime.delivery } : {}),
     ...(options.claimed ? { claimed: options.claimed } : {}),
     ...(options.claimed && options.adopted ? { adopted: true } : {}),
   });

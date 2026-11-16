@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  date,
   index,
   integer,
   pgEnum,
@@ -126,6 +127,30 @@ export const tasks = pgTable(
      * taken again.
      */
     returnPendingAt: timestamp("return_pending_at", { withTimezone: true }),
+    /*
+     * The delivery checker's own record (spec §8, migration 0219), written under the card's row lock so
+     * two replicas checking the same card at once nudge and notify once (`tasks/delivery-checker.ts`).
+     */
+    /** When the coworker was last nudged about this card (by the checker, or the person's 再催). */
+    lastNudgedAt: timestamp("last_nudged_at", { withTimezone: true }),
+    /** When the person was last reminded about it: pushed, or held outside their work hours. */
+    lastNotifiedAt: timestamp("last_notified_at", { withTimezone: true }),
+    /** The person's local day (on their time zone) `notified_count` counts pushes on. */
+    notifiedOn: date("notified_on", { mode: "string" }),
+    /** How many reminders were pushed on `notified_on`: at most three a day. */
+    notifiedCount: integer("notified_count").notNull().default(0),
+    /** A reminder held back outside the person's work hours, for the next start briefing. */
+    reminderHeldAt: timestamp("reminder_held_at", { withTimezone: true }),
+    /** The person's local day `nudged_count` counts nudges on (migration 0221). */
+    nudgedOn: date("nudged_on", { mode: "string" }),
+    /** How many nudges went out on `nudged_on`: the checker opens no fourth that day. */
+    nudgedCount: integer("nudged_count").notNull().default(0),
+    /**
+     * A hand-over (换人接手) whose message has not reached the new coworker yet (migration 0222): set
+     * with the hand-over, cleared once its round starts or the new coworker takes the work on. The
+     * checker hands the work over, not a plain nudge, while it is set.
+     */
+    handoverPendingAt: timestamp("handover_pending_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

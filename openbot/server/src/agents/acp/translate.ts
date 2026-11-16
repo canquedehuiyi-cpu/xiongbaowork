@@ -16,7 +16,11 @@ import { type BaseEvent, EventType } from "@ag-ui/client";
  * - `plan` → `CUSTOM acp.plan` with the plan's entries.
  * Tool call ids are the agent's, prefixed with the run's (`<runId>:<id>`), like the message ids.
  * - a diff in a tool call's content (`edit`, mostly) → `CUSTOM acp.diff` `{toolCallId, files: {path,
- *   added, removed}[]}`, which the board's deliverable sums per file (`deliverableFromEvents`).
+ *   added, removed}[], status?}`, `status` being the call's status in the update that carried it. A
+ *   call whose diff came before it ended gets one more, `{toolCallId, files: [], status}`, when it
+ *   ends (`completed`, `failed`) with a status other than its last diff's. Only the diffs of a call
+ *   that `completed` are a change (`tasks/diff-summary.ts` `editedFiles`): the board's deliverable
+ *   sums those per file (`deliverableFromEvents`), and an external employee hands in those.
  *
  * Everything else (thoughts, mode and command updates, a stub cut down to its ids) says nothing.
  * Raw agent content may carry the paths the agent itself printed; nothing here adds any.
@@ -193,6 +197,8 @@ export function createAcpTranslator(
   let open: string | null = null;
   /** toolCallId → whether its RESULT went out. */
   const calls = new Map<string, boolean>();
+  /** toolCallId → the status its latest `acp.diff` said, for a call that reported a diff. */
+  const diffed = new Map<string, string | null>();
 
   const endMessage = (): BaseEvent[] => {
     if (!open) return [];
@@ -236,19 +242,31 @@ export function createAcpTranslator(
         { type: EventType.TOOL_CALL_END, toolCallId } as BaseEvent,
       );
     }
+    const status = str(update.status);
     const files = diffsIn(update.content);
-    if (files.length > 0)
+    if (files.length > 0) {
+      diffed.set(toolCallId, status);
       events.push({
         type: EventType.CUSTOM,
         name: "acp.diff",
-        value: { toolCallId, files },
+        value: { toolCallId, files, ...(status ? { status } : {}) },
       } as BaseEvent);
-    const status = update.status;
+    }
     if (
       (status === "completed" || status === "failed") &&
       !calls.get(toolCallId)
-    )
+    ) {
+      // Its diff came while it ran: how the call ended decides whether that diff is a change.
+      if (diffed.has(toolCallId) && diffed.get(toolCallId) !== status) {
+        diffed.set(toolCallId, status);
+        events.push({
+          type: EventType.CUSTOM,
+          name: "acp.diff",
+          value: { toolCallId, files: [], status },
+        } as BaseEvent);
+      }
       events.push(result(toolCallId, resultText(update, status === "failed")));
+    }
     return events;
   }
 

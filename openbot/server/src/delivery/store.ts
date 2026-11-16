@@ -511,6 +511,17 @@ export function createDeliveryStore(database: Database) {
         )[0] ?? null
       );
     },
+    /** The outbox row a dedupe key names, as far as the caller's frame sees one. */
+    async outboxByKey(dedupeKey: string) {
+      return (
+        (
+          await database
+            .select()
+            .from(deliveryOutbox)
+            .where(eq(deliveryOutbox.dedupeKey, dedupeKey))
+        )[0] ?? null
+      );
+    },
     async offerOutbox(
       input: DeliveryScope & {
         dedupeKey: string;

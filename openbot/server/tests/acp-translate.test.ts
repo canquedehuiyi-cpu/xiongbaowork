@@ -5,6 +5,8 @@ import {
   diffCounts,
   translateUpdate,
 } from "../src/agents/acp/translate";
+import { editedFiles } from "../src/tasks/diff-summary";
+import { deliverableFromEvents } from "../src/tasks/projector";
 
 /*
  * 外部员工的 `session/update` → 线程事件（translate.ts）。
@@ -218,6 +220,7 @@ describe("translateUpdate", () => {
         { path: "src/new.ts", added: 3, removed: 0 },
         { path: "src/gone.ts", added: 0, removed: 2 },
       ],
+      status: "completed",
     });
     // The result names the files too.
     const result = events.find(
@@ -227,6 +230,68 @@ describe("translateUpdate", () => {
 
     expect(diffCounts("same\n", "same\n")).toEqual({ added: 0, removed: 0 });
     expect(diffCounts("a\nb\nc", "c\nb\na")).toEqual({ added: 2, removed: 2 });
+  });
+
+  test("only an edit that completed counts as changed: a failed or unfinished call's diff is not", () => {
+    const edit = (id: string, path: string, status?: string) => ({
+      sessionUpdate: "tool_call",
+      toolCallId: id,
+      title: `Edit ${path}`,
+      kind: "edit",
+      ...(status ? { status } : {}),
+      content: [{ type: "diff", path, oldText: "a\n", newText: "a\nb\n" }],
+    });
+    const translator = createAcpTranslator({ idPrefix: "run-3" });
+    const events = [
+      // Failed in the same update that carried its diff.
+      ...translator.update(edit("failed-at-once", "src/a.ts", "failed")),
+      // Its diff while in progress, then failed with no content.
+      ...translator.update(edit("failed-later", "src/b.ts", "in_progress")),
+      ...translator.update({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "failed-later",
+        status: "failed",
+      }),
+      // Its diff while in progress, then completed with no content: a real change.
+      ...translator.update(edit("done-later", "src/c.ts", "in_progress")),
+      ...translator.update({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "done-later",
+        status: "completed",
+      }),
+      // Completed in the update that carried its diff.
+      ...translator.update(edit("done-at-once", "src/d.ts", "completed")),
+      // Never finished: the turn closes on it.
+      ...translator.update(edit("unfinished", "src/e.ts", "in_progress")),
+      ...translator.close(),
+    ] as Loose[];
+    // The failed calls still say they failed, in the transcript.
+    const failed = events.filter(
+      (event) =>
+        event.type === EventType.TOOL_CALL_RESULT &&
+        String(event.content).startsWith("失败"),
+    );
+    expect(failed.map((event) => event.toolCallId)).toEqual([
+      "run-3:failed-at-once",
+      "run-3:failed-later",
+    ]);
+    const changed = [
+      { path: "src/c.ts", added: 1, removed: 0 },
+      { path: "src/d.ts", added: 1, removed: 0 },
+    ];
+    expect(editedFiles(events)).toEqual(changed);
+    // The board's 改动汇总 reads the same way.
+    expect(deliverableFromEvents(events)?.components).toEqual([
+      { name: "acp.diff", args: { files: changed } },
+    ]);
+    // A turn whose only edit failed changed nothing at all.
+    const lone = createAcpTranslator({ idPrefix: "run-4" });
+    const nothing = [
+      ...lone.update(edit("only", "src/a.ts", "failed")),
+      ...lone.close(),
+    ];
+    expect(editedFiles(nothing)).toEqual([]);
+    expect(deliverableFromEvents(nothing)).toBeUndefined();
   });
 
   test("a plan becomes an acp.plan custom event", () => {

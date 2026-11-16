@@ -19,6 +19,7 @@
  */
 // Must stay the first import: it copies XIONGBAO_* settings onto OPENBOT_* before any module reads config.
 import "../../shared/apply-env-aliases";
+import { checkRlsReadiness } from "../../server/src/auth/role-writer-lifecycle";
 import { createDatabase } from "../../server/src/db/client";
 import { createRoutineStore } from "../../server/src/routines/store";
 import {
@@ -55,6 +56,18 @@ const { workerSharedSecret, serverInternalUrl, databaseUrl, owner } =
   loadWorkerEnv();
 
 const database = createDatabase(databaseUrl);
+
+/*
+ * The server's tenant-isolation preflight, before the first tick writes anything (audit #633 C1).
+ *
+ * Every phase below writes through this pool — run rows, the work queue, the routines' clocks — so a
+ * `DATABASE_URL` naming the owner or a `BYPASSRLS` role takes row-level security away from this
+ * process as surely as from the server, and nothing else would say so. Same facts, same mode rule
+ * (`resolveRlsEnforcementMode`: the RLS_ENFORCE setting, else NODE_ENV), same refusal: under `refuse`
+ * the worker exits here, before the loop, and the reason is the line above the exit.
+ */
+await checkRlsReadiness({ database, environment: process.env });
+
 const queue = createWorkQueue(database);
 const routineStore = createRoutineStore(database);
 

@@ -1,3 +1,5 @@
+import { nextNoteOrder } from "./note-order";
+
 /*
  * 外部员工一轮里的进度、改动和中断（外部员工 Task 12）。
  *
@@ -22,6 +24,8 @@ export type AcpDiffFile = { path: string; added: number; removed: number };
 type CardBase = {
   /** 轮次 + 种类，同一轮的同一种卡只有一张。 */
   key: string;
+  /** 第一次出现的先后（`note-order.ts`），和交付卡画在同一行下面时按它排。 */
+  order: number;
   runId: string;
   /** 第一次出现时对话里最后那条消息的 id；那时还一条消息都没有时为 null。 */
   anchor: string | null;
@@ -40,6 +44,9 @@ export type AcpCard =
        */
       superseded: boolean;
     });
+
+/** 还没取号的卡：`put` 第一次见到它时取号。 */
+type Unordered<T> = T extends unknown ? Omit<T, "order"> : never;
 
 type Loose = Record<string, unknown>;
 
@@ -130,13 +137,18 @@ export function createAcpCardTracker(): AcpCardTracker {
   /** 轮次 → 「工具调用 + 文件」→ 最新一份改动。 */
   const edits = new Map<string, Map<string, AcpDiffFile>>();
   const listeners = new Set<() => void>();
+  /** 每张卡（按 `key`）第一次出现时取的号。 */
+  const orders = new Map<string, number>();
 
-  const put = (card: AcpCard) => {
+  const put = (unordered: Unordered<AcpCard>) => {
+    const order = orders.get(unordered.key) ?? nextNoteOrder();
+    orders.set(unordered.key, order);
+    const card = { ...unordered, order } as AcpCard;
     const at = cards.findIndex((existing) => existing.key === card.key);
     if (at < 0) cards = [...cards, card];
     else {
       const next = [...cards];
-      // 位置跟着第一次出现，内容换成最新的。
+      // 位置和先后跟着第一次出现，内容换成最新的。
       next[at] = { ...card, anchor: cards[at]?.anchor ?? card.anchor };
       cards = next;
     }

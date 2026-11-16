@@ -26,6 +26,8 @@ import {
   DeliveryProviderError,
   DeliveryRefusedError,
   type DeliveryScope,
+  PERSON_DELIVERY_KINDS,
+  type PersonDeliveryKind,
   type TextTransport,
 } from "./types";
 /** What a paired chat turn produced besides its reply, surfaced in that same turn. */
@@ -78,6 +80,7 @@ type RouterStore = Pick<
   | "setInbox"
   | "offerOutbox"
   | "outbox"
+  | "outboxByKey"
   | "startOutbox"
   | "setOutbox"
   | "offerReceipt"
@@ -176,7 +179,7 @@ export function createDeliveryRouter(deps: {
     input: {
       id: string;
       text: string;
-      kind: Exclude<DeliveryKind, "attention">;
+      kind: Exclude<DeliveryKind, PersonDeliveryKind>;
       requestId?: string | null;
     },
     includeBindings = true,
@@ -324,6 +327,161 @@ export function createDeliveryRouter(deps: {
         kind: "attention",
         requestId: null,
       });
+  }
+  /**
+   * Tell the person something about their followed work (spec 2026-11-15-delivery-loop §10): a start
+   * or end briefing, or a reminder about one late card. Offered once to each of their push devices and
+   * once on each chat platform they connected (Slack, Teams, SMS), as a ping is. Returns how many
+   * places it was newly queued for (`queued`) and how many already held this same message for this
+   * same person from an earlier try (`already`): a caller that reached nobody (both 0) keeps it for the
+   * workbench. A number that replied STOP, and a platform with no provider here, are passed over and
+   * not counted.
+   *
+   * WHERE. A chat platform's account in one of `scopes` (the card's conversation, best first) is
+   * preferred, else the account the person used last on that platform; the push is filed under the
+   * first of `scopes` the person can still reach, and is not sent when they can reach none. Whether
+   * an account or a device may carry it is the person's routing for "Something needs you"
+   * (`attention`), asked as that conversation's Bot, as a ping is.
+   *
+   * WHEN is the caller's to decide: work hours and the three-a-day cap are kept by the delivery
+   * checker and the briefing pass before anything comes here. The rows are keyed by the person, `id`
+   * and the place (`delivery_outbox.dedupe_key` is unique across the whole deployment, so a key
+   * without the person would let the first person's briefing of the day shut out everybody else's);
+   * offering the same message again sends nothing new.
+   *
+   * Queued only from the person's own frame, as `notify` is; anything else is reported and dropped.
+   */
+  async function notifyPerson(input: {
+    ownerUserId: string;
+    kind: Exclude<PersonDeliveryKind, "attention">;
+    id: string;
+    title: string;
+    body: string;
+    scopes: DeliveryScope[];
+    /** The card a reminder is about, carried to the push so a tap opens it. */
+    taskId?: string | null;
+  }): Promise<{ queued: number; already: number }> {
+    const reached = { queued: 0, already: 0 };
+    if (
+      !trustedTenant(
+        isTenantFramed() ? requireTenant() : undefined,
+        input.ownerUserId,
+      )
+    ) {
+      console.error(
+        JSON.stringify({
+          type: "delivery-notify-untrusted-tenant",
+          kind: input.kind,
+          id: input.id,
+          framed: isTenantFramed(),
+        }),
+      );
+      return reached;
+    }
+    const routeFor = deps.routeFor ?? resolveUpdateRoute;
+    const text = input.body ? `${input.title}\n${input.body}` : input.title;
+    const requestId = input.taskId ?? null;
+    const key = (place: string) =>
+      `${input.kind}:${input.ownerUserId}:${input.id}:${place}`;
+    /*
+     * One row: queued, or found there already. A key taken by a row that is not this person's
+     * same message (which the person in the key rules out, short of a bug) is reported and counted
+     * as nothing -- neither reached nor failed.
+     */
+    const offer = async (
+      row: Parameters<RouterStore["offerOutbox"]>[0],
+    ): Promise<void> => {
+      if (await deps.store.offerOutbox(row)) {
+        reached.queued += 1;
+        return;
+      }
+      const held = await deps.store.outboxByKey(row.dedupeKey);
+      if (
+        held &&
+        held.ownerUserId === input.ownerUserId &&
+        held.kind === input.kind &&
+        held.transport === row.transport
+      ) {
+        reached.already += 1;
+        return;
+      }
+      console.error(
+        JSON.stringify({
+          type: "delivery-notify-key-taken",
+          kind: input.kind,
+          id: input.id,
+          transport: row.transport,
+        }),
+      );
+    };
+    const candidates: DeliveryBinding[] = [];
+    for (const scope of input.scopes)
+      candidates.push(...(await deps.store.bindingsFor(scope)));
+    candidates.push(...(await deps.store.bindingsByUse(input.ownerUserId)));
+    const chosen = new Map<BindingTransport, DeliveryBinding>();
+    for (const binding of candidates) {
+      if (chosen.has(binding.transport)) continue;
+      if (binding.ownerUserId !== input.ownerUserId) continue;
+      /*
+       * Only a place that can carry it counts as reached: a number that replied STOP is never texted
+       * (its row would only be marked opted out), and a platform this deployment has no provider for
+       * would only fail. Counted, either one would tell the checker the person was told when nobody
+       * was, and the reminder would miss the start briefing.
+       */
+      if (binding.optedOutAt) continue;
+      if (!deps.providers[binding.transport]) continue;
+      const carrier = await routeFor({
+        ownerUserId: input.ownerUserId,
+        agentId: binding.agentId,
+        kind: "attention",
+      });
+      if (!carrier.allows(binding.transport)) continue;
+      if (!(await deps.authoriseScope(binding))) continue;
+      chosen.set(binding.transport, binding);
+    }
+    for (const [transport, binding] of chosen)
+      await offer({
+        ownerUserId: binding.ownerUserId,
+        channelId: binding.channelId,
+        agentId: binding.agentId,
+        threadId: binding.threadId,
+        dedupeKey: key(transport),
+        bindingId: binding.id,
+        deviceId: null,
+        transport,
+        text,
+        kind: input.kind,
+        requestId,
+      });
+    const route = await routeFor({
+      ownerUserId: input.ownerUserId,
+      kind: "attention",
+    });
+    if (!deps.providers.push || !route.allows("push")) return reached;
+    const devices = await deps.store.devices(input.ownerUserId);
+    if (devices.length === 0) return reached;
+    let scope: DeliveryScope | null = null;
+    for (const candidate of input.scopes)
+      if (
+        candidate.ownerUserId === input.ownerUserId &&
+        (await deps.authoriseScope(candidate))
+      ) {
+        scope = candidate;
+        break;
+      }
+    if (!scope) return reached;
+    for (const device of devices)
+      await offer({
+        ...scope,
+        dedupeKey: key(`device:${device.id}`),
+        bindingId: null,
+        deviceId: device.id,
+        transport: "push",
+        text,
+        kind: input.kind,
+        requestId,
+      });
+    return reached;
   }
   /**
    * The conversation a ping's push is filed under: the check-in conversation of its newest item the
@@ -682,10 +840,11 @@ export function createDeliveryRouter(deps: {
           !deps.providers.push
         )
           throw new DeliveryRefusedError("Push device unavailable.");
-        const [title, body] =
-          row.kind === "attention"
-            ? headedText(row.text)
-            : [defaultPushTitle(), row.text];
+        const [title, body] = (
+          PERSON_DELIVERY_KINDS as readonly DeliveryKind[]
+        ).includes(row.kind)
+          ? headedText(row.text)
+          : [defaultPushTitle(), row.text];
         result = await deps.providers.push.send({
           token: device.token,
           title,
@@ -829,6 +988,7 @@ export function createDeliveryRouter(deps: {
     converse,
     notify,
     notifyAttention,
+    notifyPerson,
     smsOptOut,
     async receiveNative(
       scope: DeliveryScope,

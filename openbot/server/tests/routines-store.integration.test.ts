@@ -1463,6 +1463,24 @@ describe("opening and closing a run", () => {
     });
   });
 
+  test("the runner's read carries the run's own outcome, so a finished id is not run again", async () => {
+    await asNewPerson(async (ownerId) => {
+      const { routine } = await makeRoutine(undefined, ownerId);
+      const { runId } = await store.insertRun(routine.id);
+
+      const open = await store.runContext(runId);
+      if (!open) throw new Error("the open run was not found");
+      expect(open.status).toBeNull();
+      expect(open.routineId).toBe(routine.id);
+
+      await store.finishRun(runId, "succeeded");
+
+      const finished = await store.runContext(runId);
+      if (!finished) throw new Error("the finished run was not found");
+      expect(finished.status).toBe("succeeded");
+    });
+  });
+
   test("caps a long error rather than storing whatever a failure produced", async () => {
     await asNewPerson(async (ownerId) => {
       const { routine } = await makeRoutine(undefined, ownerId);
@@ -1708,6 +1726,8 @@ describe("the runner's read of one firing", () => {
         // Read at dispatch so a routine paused after it was queued still does not run.
         enabled: true,
         instruction: "Post the standup summary.",
+        // Still open: a run with an outcome is never run again.
+        status: null,
       };
       expect(await store.runContext(runId)).toEqual(expected);
 

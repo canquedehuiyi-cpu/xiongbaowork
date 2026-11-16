@@ -222,6 +222,7 @@ const RAIL_PREFIXES: readonly (readonly [string, Rail])[] = [
   ["/contacts", "contacts"],
   ["/assemble", "contacts"],
   ["/tasks", "work"],
+  ["/briefing", "work"],
   ["/autonomous", "work"],
   ["/reachability", "work"],
   ["/capabilities", "work"],

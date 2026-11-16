@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { TranscriptNote } from "@/components/channels/chat-transcript";
 import type {
   AcpCard,
   AcpDiffFile,
@@ -268,6 +269,42 @@ export function AcpCardView({
       resent={resent}
     />
   );
+}
+
+/**
+ * 外部员工一轮里的进度、改动和中断卡（`lib/channels/acp-events.ts`），各画在它第一次出现时对话里最后那条
+ * 消息所在的那一行下面。
+ */
+export type TranscriptAcpCards = {
+  cards: readonly AcpCard[];
+  /** 已经重新派过的中断卡（按 `key`）。 */
+  resent?: ReadonlySet<string>;
+  /** 中断卡上的「重新派」：把原话作为新的一轮发出去。不给时不画按钮。 */
+  onResend?: (card: Extract<AcpCard, { kind: "interrupted" }>) => unknown;
+};
+
+/**
+ * 外部员工的卡交给转录，和交付卡走同一套附注（`ChatTranscript` 的 `notes`）。它跟着的那条消息这段对话里
+ * 找不到时不画（`orphan: "drop"`）。
+ */
+export function acpNotes({
+  cards,
+  resent,
+  onResend,
+}: TranscriptAcpCards): TranscriptNote[] {
+  return cards.map((card) => ({
+    key: `acp:${card.key}`,
+    anchor: card.anchor,
+    order: card.order,
+    orphan: "drop",
+    node: (
+      <AcpCardView
+        card={card}
+        onResend={onResend}
+        resent={resent?.has(card.key)}
+      />
+    ),
+  }));
 }
 
 // ---------------------------------------------------------------------------------------------

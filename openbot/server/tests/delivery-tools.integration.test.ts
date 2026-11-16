@@ -64,6 +64,10 @@ import { runAsTenant } from "../src/tenant/context";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { withRunSideEvents } from "../src/threads/run-side-events";
 import { suppressRunnerCard } from "../src/threads/unattended-card";
+import {
+  createUserPreferencesStore,
+  readWorkHours,
+} from "../src/user-preferences";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -230,6 +234,8 @@ async function turn(input: {
   runId?: string;
   /** The board the runner writes through; the plain projector by default. */
   board?: TaskProjector;
+  /** The coworker's tools; `toolsFor` (on {@link ZONE}) by default. */
+  tools?: GrantedTool[];
 }): Promise<{ runId: string; results: string[] }> {
   const runId = input.runId ?? `run-${suite}-${randomUUID().slice(0, 8)}`;
   const runner = new PostgresAgentRunner(
@@ -238,7 +244,7 @@ async function turn(input: {
     quota,
   );
   const agent = new ScriptedCoworker(
-    toolsFor(input.tenantId, input.agentId),
+    input.tools ?? toolsFor(input.tenantId, input.agentId),
     input.work ?? (async () => {}),
     input.reply ?? "好的。",
     input.agentId,
@@ -559,8 +565,11 @@ describe("accept_task", () => {
     // The 接活回执 is in the run's own stored events, so a reload draws it.
     const custom = await storedCustom(tenantId, round.runId);
     expect(custom.map((event) => event.name)).toEqual(["delivery.accepted"]);
+    // The card names its 接下 line by id: the chat finds that line by it, not by the due time.
+    expect(typeof history[0]?.id).toBe("string");
     expect(custom[0]?.value).toEqual({
       taskId: card.id,
+      eventId: history[0]?.id,
       dueAt: row?.dueAt?.toISOString() ?? null,
       criteria: "三家都核对完。必需：A家、B家、C家",
     });
@@ -1029,9 +1038,11 @@ describe("deliver_task and the evidence gate", () => {
       ],
       checks: ["对过三家的原始数字"],
     });
-    const kinds = (await eventsOf(tenantId, card.id)).map((line) => line.kind);
+    const lines = await eventsOf(tenantId, card.id);
     expect(
-      kinds.filter((kind) => kind !== "progress" && kind !== "run_ended"),
+      lines
+        .map((line) => line.kind)
+        .filter((kind) => kind !== "progress" && kind !== "run_ended"),
     ).toEqual(["accepted", "delivered"]);
     expect(parsed(round.results[1] ?? "{}").delivered).toBe(true);
     const custom = await storedCustom(tenantId, round.runId);
@@ -1039,9 +1050,16 @@ describe("deliver_task and the evidence gate", () => {
       "delivery.accepted",
       "delivery.delivered",
     ]);
+    expect(typeof lines.find((line) => line.kind === "delivered")?.id).toBe(
+      "string",
+    );
     expect(custom[1]?.value).toEqual({
       taskId: card.id,
+      eventId: lines.find((line) => line.kind === "delivered")?.id,
       deliverable: row?.deliverableRef,
+    });
+    expect(custom[0]?.value).toMatchObject({
+      eventId: lines.find((line) => line.kind === "accepted")?.id,
     });
   });
 
@@ -1062,8 +1080,10 @@ describe("deliver_task and the evidence gate", () => {
     expect(bounced[0]?.detail.runId).toBe(runId);
     const custom = await storedCustom(card.tenantId, runId);
     expect(custom.map((event) => event.name)).toEqual(["delivery.bounced"]);
+    expect(typeof bounced[0]?.id).toBe("string");
     expect(custom[0]?.value).toEqual({
       taskId: card.cardId,
+      eventId: bounced[0]?.id,
       reason: answer.reason,
     });
   });
@@ -1408,11 +1428,87 @@ describe("request_extension", () => {
     expect(custom.map((event) => event.name)).toEqual([
       "delivery.extension_requested",
     ]);
+    expect(typeof asked[0]?.id).toBe("string");
     expect(custom[0]?.value).toEqual({
       taskId: card.cardId,
+      eventId: asked[0]?.id,
       dueAt: asked[0]?.detail.dueAt,
       reason: "C 家发票还没寄到",
     });
+  });
+});
+
+describe("the person's own clock", () => {
+  test("a round with no browser zone reads the coworker's times on the person's saved zone", async () => {
+    // A person in New York; their browser wrote the zone once. Monday 09:00 there.
+    const tenantId = await tenant("new-york");
+    await runAsTenant(tenantId, () =>
+      createUserPreferencesStore(database).patch(tenantId, {
+        browserTimeZone: "America/New_York",
+      }),
+    );
+    const agentId = `agent-${suite}-new-york`;
+    const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+    const monday9 = new Date("2026-11-16T14:00:00.000Z");
+    // As production builds them: no zone of the call's own, the saved one to fall back on.
+    const tools = deliveryTools({
+      delivery,
+      gate,
+      board: projector,
+      ownerUserId: tenantId,
+      agentId,
+      now: () => monday9,
+      savedTimeZone: async () =>
+        (await readWorkHours(database, tenantId)).timeZone,
+    });
+
+    // The rounds carry no browser zone (`forwardedProps: {}`), as a nudge or a hand-over does.
+    const taken = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "核对三家供应商的发票",
+      reply: "已接下。",
+      tools,
+      work: (run) =>
+        run
+          .call("accept_task", {
+            due_at: "明早 10 点",
+            criteria: "核对三家供应商的发票。",
+          })
+          .then(() => {}),
+    });
+    const [card] = await cardsOf(tenantId, agentId);
+    if (!card) throw new Error("no card");
+    await roundLogged(tenantId, card.id, taken.runId);
+    // 10:00 on Tuesday in New York, not 10:00 in Shanghai (02:00Z).
+    expect(card.dueAt?.toISOString()).toBe("2026-11-17T15:00:00.000Z");
+    expect(parsed(taken.results[0] ?? "{}").note).toContain("10:00");
+
+    const asked = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "【系统催办】进展如何？",
+      reply: "申请延期。",
+      tools,
+      work: (run) =>
+        run
+          .call("request_extension", {
+            due_at: "明天下午3点",
+            reason: "C 家发票还没寄到",
+          })
+          .then(() => {}),
+    });
+    await roundLogged(tenantId, card.id, asked.runId);
+    const extension = (await eventsOf(tenantId, card.id)).find(
+      (line) => line.kind === "extension_requested",
+    );
+    // 15:00 on Tuesday in New York (20:00Z); Shanghai's would be 07:00Z.
+    expect(extension?.detail).toMatchObject({
+      dueAt: "2026-11-17T20:00:00.000Z",
+    });
+    expect(parsed(asked.results[0] ?? "{}").note).toContain("15:00");
   });
 });
 
@@ -1881,6 +1977,14 @@ afterAll(async () => {
       await database.delete(tasks).where(eq(tasks.tenantId, id));
     });
   }
+  /*
+   * The queue items these people's turns left behind -- above all an approval's `approval.resume`,
+   * which outlives the approval it names. Left in a shared database they are claimed ahead of a later
+   * suite's own, run by run (`tests/tasks.integration.test.ts` gives its resume ten tries).
+   */
+  await runAsTenant("platform", () =>
+    database.delete(workItems).where(inArray(workItems.tenantId, tenants)),
+  );
   // `task_events` is append-only for the application role; its rows stay, under tenants nobody has.
   await runAsTenant("platform", () =>
     database.delete(users).where(inArray(users.id, tenants)),

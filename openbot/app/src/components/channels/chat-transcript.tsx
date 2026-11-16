@@ -31,6 +31,7 @@ import { useQuery } from "@tanstack/react-query";
 import { motion, useReducedMotion } from "motion/react";
 import {
   createContext,
+  Fragment,
   memo,
   useCallback,
   useContext,
@@ -77,7 +78,6 @@ import {
 } from "@/components/ui/message-scroller";
 import { Skeleton } from "@/components/ui/skeleton";
 import { agentListQueryOptions } from "@/lib/agents/queries";
-import type { AcpCard } from "@/lib/channels/acp-events";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import { readResponsibilityTurn } from "@/lib/channels/responsibility-turn";
 import { readFiring } from "@/lib/channels/routine-firing";
@@ -116,7 +116,6 @@ import { readTeamBotConsent } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
 import { VOICE_CHAT_ACTIVITY, type VoiceChatEntry } from "@/lib/voice/archive";
 import { useSkinId } from "@/skins/store";
-import { AcpCardView } from "./acp-cards";
 import {
   AppAccessCard,
   AppAccessRequestCard,
@@ -203,15 +202,20 @@ export function compactionRowId(
 }
 
 /**
- * 外部员工一轮里的进度、改动和中断卡（`lib/channels/acp-events.ts`），各画在它第一次出现时对话里最后那条
- * 消息所在的那一行下面。
+ * 画在某条消息那一行下面的东西：交付闭环的接活回执、延期申请、交付卡、被挡回（`skins/xiongbao/delivery-chat.tsx`
+ * 的 `deliveryNotes`），外部员工一轮里的进度、改动和中断卡（`components/channels/acp-cards.tsx` 的
+ * `acpNotes`）。两样走同一套：各自换成附注交进来，转录只管按 `anchor` 找行。
+ *
+ * `anchor` 是消息 id，为 null 时画在最后一行下面。同一行下面的按 `order`（第一次出现的先后，
+ * `lib/channels/note-order.ts`）排，没有 `order` 的按给的先后排在有的后面。这段对话里找不到那条消息时，默认也画在最后一行下面
+ * （`orphan: "last"`）；`orphan: "drop"` 的不画（外部员工的卡跟着的那条消息不在这里，就不该挪到别处）。
  */
-export type TranscriptAcpCards = {
-  cards: readonly AcpCard[];
-  /** 已经重新派过的中断卡（按 `key`）。 */
-  resent?: ReadonlySet<string>;
-  /** 中断卡上的「重新派」：把原话作为新的一轮发出去。不给时不画按钮。 */
-  onResend?: (card: Extract<AcpCard, { kind: "interrupted" }>) => unknown;
+export type TranscriptNote = {
+  key: string;
+  anchor: string | null;
+  node: React.ReactNode;
+  orphan?: "last" | "drop";
+  order?: number;
 };
 
 /** 对话里画出来的工具调用 id。 */
@@ -225,33 +229,49 @@ function drawnToolCallIds(
   return ids;
 }
 
-/** 每张卡画在哪一行后面（行的 id → 卡）；它跟着的那条消息这里找不到时不画。 */
-export function acpCardRows(
+/** 每条附注画在哪一行下面（行的 id），同一行的按 `order`，再按给的先后。 */
+export function noteRows(
   messages: ReadonlyArray<Readonly<Message>>,
   items: readonly TranscriptItem[],
-  cards: readonly AcpCard[],
-): Map<string, AcpCard[]> {
-  const rows = new Map<string, AcpCard[]>();
-  const lastRow = items.at(-1)?.id ?? null;
-  for (const card of cards) {
-    const row =
-      card.anchor === null
-        ? lastRow
-        : compactionRowId(messages, items, {
-            uptoMessageId: card.anchor,
-            summarizedCount: null,
-          });
-    if (row === null) continue;
-    rows.set(row, [...(rows.get(row) ?? []), card]);
+  notes: readonly TranscriptNote[],
+): Map<string, TranscriptNote[]> {
+  const rows = new Map<string, TranscriptNote[]>();
+  const last = items.at(-1)?.id ?? null;
+  for (const note of notes) {
+    const found = note.anchor
+      ? compactionRowId(messages, items, {
+          uptoMessageId: note.anchor,
+          summarizedCount: null,
+        })
+      : last;
+    const row = found ?? (note.orphan === "drop" ? null : last);
+    if (!row) continue;
+    rows.set(row, [...(rows.get(row) ?? []), note]);
   }
+  for (const [row, placed] of rows)
+    rows.set(
+      row,
+      placed.toSorted(
+        (a, b) =>
+          (a.order ?? Number.POSITIVE_INFINITY) -
+          (b.order ?? Number.POSITIVE_INFINITY),
+      ),
+    );
   return rows;
 }
+
+const NO_NOTES: readonly TranscriptNote[] = [];
 
 type ChatTranscriptProps = {
   /** Server-owned thread identity, used only to correlate rendered result messages. */
   threadId?: string;
-  /** 外部员工的进度、改动和中断卡；见 {@link TranscriptAcpCards}。 */
-  acp?: TranscriptAcpCards;
+  /** 跟在某条消息下面的附注（交付卡、外部员工的卡）；见 {@link TranscriptNote}。 */
+  notes?: readonly TranscriptNote[];
+  /**
+   * 这段对话可能有外部员工在请求许可：读审批收件箱，步骤没画在这里的请求许可卡画在末尾（对话页总是给）。
+   * 别处画转录的不给，不读收件箱。
+   */
+  acpApprovals?: boolean;
   /** 压缩会话的分隔线；见 {@link TranscriptCompaction}。 */
   compaction?: TranscriptCompaction | null;
   busy?: boolean;
@@ -2279,7 +2299,8 @@ function TranscriptRenderersWatch({
 
 export function ChatTranscript({
   threadId,
-  acp,
+  notes = NO_NOTES,
+  acpApprovals = false,
   compaction = null,
   busy = false,
   commandLabels = "",
@@ -2419,25 +2440,21 @@ export function ChatTranscript({
   const dividerRow = compaction
     ? compactionRowId(messages, items, compaction)
     : null;
-  const acpRows =
-    acp && acp.cards.length > 0
-      ? acpCardRows(messages, items, acp.cards)
-      : null;
+  // 交付卡这类附注也放进那一行自己的格子里，理由同上。
+  const notesAt = notes.length > 0 ? noteRows(messages, items, notes) : null;
   const after = (id: string) => {
     const divider = id === dividerRow ? (compaction?.divider ?? null) : null;
-    const cards = acpRows?.get(id);
-    if (!cards) return divider;
+    const attached = notesAt?.get(id);
+    if (!attached) return divider;
     return (
       <>
         {divider}
-        <div className="mt-3 flex flex-col gap-3" data-acp-cards="">
-          {cards.map((card) => (
-            <AcpCardView
-              card={card}
-              key={card.key}
-              onResend={acp?.onResend}
-              resent={acp?.resent?.has(card.key)}
-            />
+        <div
+          className="mt-2.5 flex flex-col items-start gap-2.5"
+          data-transcript-notes=""
+        >
+          {attached.map((note) => (
+            <Fragment key={note.key}>{note.node}</Fragment>
           ))}
         </div>
       </>
@@ -2872,8 +2889,8 @@ export function ChatTranscript({
                       <Thinking typist={typist} />
                     ) : null}
                     {working}
-                    {/* 只在给了外部员工卡片的对话里（`acp`，对话页总是给）：别处画转录的不读审批收件箱。 */}
-                    {acp && threadId ? (
+                    {/* 只在说了可能有外部员工的对话里（`acpApprovals`，对话页总是给）：别处画转录的不读审批收件箱。 */}
+                    {acpApprovals && threadId ? (
                       <UnplacedAcpApprovals
                         threadId={threadId}
                         toolCallIds={drawnToolCallIds(messages)}
