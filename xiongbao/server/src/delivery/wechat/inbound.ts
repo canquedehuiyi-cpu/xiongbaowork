@@ -9,6 +9,7 @@
  *  0. 不是本人发的、群里的：不理。然后持久去重（`claimMessage`），见过的直接返回，不回话、不开提示。
  *  1. 没有文字 → 「目前只认文字……」。
  *  2. 在回一条开着的提示（`prompts.ts` 认，按 `kind` 分派；Task 6 只有 `pick_agent`，Task 7 加别的）。
+ *     选人提示开过 10 分钟就作废；消息一旦交给某位员工（或只写「@名字」换人），开着的选人提示也都关掉。
  *  3. 「@名字」开头 → 在这个人看得到的员工里按显示名找：一位 → 交给它；几位同名 → 开选人提示；没有 → 「没找到」。
  *  4. 否则交给上次的员工；没有 → 开选人提示，列最近 5 位「回复数字选员工」。
  *  5. 交给员工：默认单聊 → `scopeFor` → 确保有一条 `wechat` 绑定 → `converse` 开一轮 → 回复加「【员工名】」切段发回。
@@ -47,6 +48,8 @@ import type { WechatStore } from "./store";
 export const WECHAT_TEXT_LIMIT = 2000;
 /** 选人名单最多列几位。 */
 const PICK_LIMIT = 5;
+/** 选人提示开着多久还算数：过了就不再截走数字回复（当普通消息）。 */
+export const WECHAT_PICK_TTL_MS = 10 * 60 * 1000;
 
 /**
  * 把一段文字切成每段不超过 `limit` 个字（码点）的几段，拼起来和原文一样。段内有换行、且换行不太靠前时
@@ -158,6 +161,8 @@ export type WechatInboundDeps = {
   actorFor(userId: string): Promise<AgentActor>;
   scopeFor: DeliveryScopeResolver;
   send: WechatSend;
+  /** 测试用：判断选人提示是否过期的时钟。 */
+  now?: () => Date;
   /** 别的提示类型（Task 7）。`pick_agent` 由这里自己处理。 */
   prompts?: Partial<Record<WechatPromptKind, WechatPromptHandler>>;
 };
@@ -178,6 +183,16 @@ function readPick(prompt: WechatPrompt): PickRef | null {
   }
 }
 
+/**
+ * 名字以拉丁字母或数字结尾时，后面必须是空白、标点或结尾：「@Bobby hi」不是「Bob」。中文名不要求
+ * （「@代码熊看下」照样认得）。`text` 是 @ 之后的原文。
+ */
+function endsAtBoundary(name: string, text: string): boolean {
+  if (!/[A-Za-z0-9]$/.test(name)) return true;
+  const next = Array.from(text.slice(name.length))[0];
+  return next === undefined || /[\s\p{P}\p{S}]/u.test(next);
+}
+
 /** 名字之后可以跟的分隔：空白和常见标点。 */
 const AFTER_NAME = /^[\s,，:：、]+/u;
 
@@ -192,6 +207,7 @@ function logFailure(type: string, error: unknown) {
 }
 
 export function createWechatInbound(deps: WechatInboundDeps) {
+  const now = deps.now ?? (() => new Date());
   /** 这个人看得到的员工，最近聊过的在前（侧栏的顺序：置顶、再按最近），其余随后。 */
   async function roster(actor: AgentActor): Promise<Roster> {
     const [profiles, page] = await Promise.all([
@@ -255,8 +271,9 @@ export function createWechatInbound(deps: WechatInboundDeps) {
         );
         return;
       }
-      // 先开一轮再关提示：中途出错时提示还开着，轮询器重试这条「数字」时照样选中；
-      // 已经开过的一轮由 `delivery_inbox` 按这条消息的 ID 挡住，不会再开。
+      // `turn` 绑定、记下这位员工之后会关掉所有选人提示（含这一条），再开一轮。在那之前出错，提示还开着，
+      // 轮询器重试这条「数字」时照样选中；之后出错，重试时「数字」交给刚记下的员工，`delivery_inbox`
+      // 按这条消息的 ID 挡住，不会再开一轮。没走到那一步（员工不在了等）也关掉这一条。
       await context.turn(agent.id, ref.text);
       await deps.wechat.closePrompt(context.account.userId, prompt.code);
     },
@@ -270,7 +287,11 @@ export function createWechatInbound(deps: WechatInboundDeps) {
     Object.entries(handlers).map(([kind, handler]) => [kind, handler.accepts]),
   ) as Partial<Record<WechatPromptKind, PromptAccepts>>;
 
-  async function handle(account: WechatAccount, message: IlinkMessage) {
+  async function handle(
+    account: WechatAccount,
+    message: IlinkMessage,
+    signal: AbortSignal,
+  ) {
     const reply = async (text: string) => {
       for (const part of splitWechatText(text)) {
         try {
@@ -290,6 +311,12 @@ export function createWechatInbound(deps: WechatInboundDeps) {
     }
     const text = message.text.trim();
     const actor = await deps.actorFor(account.userId);
+    /** 消息交给了某位员工（或换了人）：这个人还开着的选人提示都作废，免得后面回给员工的数字被截走。 */
+    const closePicks = async () => {
+      for (const open of await deps.wechat.openPrompts(account.userId))
+        if (open.kind === "pick_agent")
+          await deps.wechat.closePrompt(account.userId, open.code);
+    };
 
     /** 开选人提示：先关掉这个人还开着的旧选人提示，同一时间只留一条。 */
     const pick = async (
@@ -297,9 +324,7 @@ export function createWechatInbound(deps: WechatInboundDeps) {
       held: string | null,
       intro: string,
     ) => {
-      for (const open of await deps.wechat.openPrompts(account.userId))
-        if (open.kind === "pick_agent")
-          await deps.wechat.closePrompt(account.userId, open.code);
+      await closePicks();
       const ref: PickRef = { agents: candidates.map((a) => a.id), text: held };
       await deps.wechat.openPrompt(
         account.userId,
@@ -343,13 +368,14 @@ export function createWechatInbound(deps: WechatInboundDeps) {
         return;
       }
       await deps.wechat.setLastAgent(account.id, agent.id);
+      await closePicks();
       const result = await deps.router.converse({
         transport: "wechat",
         realm: account.ilinkBotId,
         identity,
         externalId: message.id,
         text: body,
-        signal: new AbortController().signal,
+        signal,
       });
       const signed = (line: string) => `【${agent.name}】${line}`;
       switch (result.kind) {
@@ -378,7 +404,17 @@ export function createWechatInbound(deps: WechatInboundDeps) {
     };
 
     // 2. 在回一条开着的提示。
-    const open = await deps.wechat.openPrompts(account.userId);
+    const open: WechatPrompt[] = [];
+    const expiredBefore = now().getTime() - WECHAT_PICK_TTL_MS;
+    for (const prompt of await deps.wechat.openPrompts(account.userId)) {
+      // 过期的选人提示顺手关掉，不再截走数字回复。
+      if (
+        prompt.kind === "pick_agent" &&
+        prompt.createdAt.getTime() < expiredBefore
+      )
+        await deps.wechat.closePrompt(account.userId, prompt.code);
+      else open.push(prompt);
+    }
     const matched = matchPromptReply(text, open, accepts);
     if (matched?.kind === "ambiguous") {
       await reply(
@@ -411,7 +447,10 @@ export function createWechatInbound(deps: WechatInboundDeps) {
       // 最长的名字先配：「代码熊2」和「代码熊」都在时，「@代码熊2 …」是前者。
       const lowered = after.toLowerCase();
       const fits = all.filter(
-        (agent) => agent.name && lowered.startsWith(agent.name.toLowerCase()),
+        (agent) =>
+          agent.name &&
+          lowered.startsWith(agent.name.toLowerCase()) &&
+          endsAtBoundary(agent.name, after),
       );
       const longest = Math.max(0, ...fits.map((agent) => agent.name.length));
       const hits = fits.filter((agent) => agent.name.length === longest);
@@ -432,6 +471,7 @@ export function createWechatInbound(deps: WechatInboundDeps) {
       }
       if (!rest) {
         await deps.wechat.setLastAgent(account.id, hit.id);
+        await closePicks();
         await reply(`好的，接下来交给【${hit.name}】，直接说事就行。`);
         return;
       }
@@ -456,6 +496,7 @@ export function createWechatInbound(deps: WechatInboundDeps) {
   return async function inbound(
     claimed: WechatAccount,
     message: IlinkMessage,
+    signal?: AbortSignal,
   ): Promise<void> {
     // 只认本人私聊 ClawBot 的消息：别人的、群里的，交不到这个人的员工手上。
     if (message.groupId || message.fromUserId !== claimed.ilinkUserId) return;
@@ -464,9 +505,14 @@ export function createWechatInbound(deps: WechatInboundDeps) {
       // 轮询器给的是认领时的行；同一批前面的消息可能已经换了员工，所以重读。
       const account = (await deps.wechat.account(claimed.userId)) ?? claimed;
       if (account.id !== claimed.id) return;
-      await handle(account, message);
+      await handle(account, message, signal ?? new AbortController().signal);
     } catch (error) {
-      await deps.wechat.releaseMessage(claimed.id, message.id);
+      // 拿掉去重记录自己也失败时只记日志：抛出去的必须是原来的错误。
+      try {
+        await deps.wechat.releaseMessage(claimed.id, message.id);
+      } catch (releaseError) {
+        logFailure("wechat-release-failed", releaseError);
+      }
       throw error;
     }
   };

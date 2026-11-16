@@ -73,6 +73,10 @@ const scopes = createDeliveryScopes({
 
 type Turn = DeliveryScope & { text: string; source: string; tenantId: string };
 const turns: Turn[] = [];
+/** 每一轮拿到的中止信号（和 `turns` 同序）。 */
+const signals: AbortSignal[] = [];
+/** `inbound` 的时钟；过期测试把它往后拨。 */
+let clock = () => new Date();
 /** 员工的回复；测试可以换成很长的一段。 */
 let answer = (text: string) => `收到：${text}`;
 const router = createDeliveryRouter({
@@ -92,6 +96,7 @@ const router = createDeliveryRouter({
       source: input.source,
       tenantId: input.tenantId,
     });
+    signals.push(input.signal);
     return { replyText: answer(input.text) };
   },
 });
@@ -111,6 +116,7 @@ const inbound = createWechatInbound({
     if (sendFails) throw sendFails;
     sent.push({ userId: account.userId, ...input });
   },
+  now: () => clock(),
 });
 
 type Person = { userId: string; account: WechatAccount; ilinkUserId: string };
@@ -283,6 +289,26 @@ describe("matchPromptReply", () => {
     });
     // 编号不在开着的提示里：不算回提示。
     expect(matchPromptReply("A9 1", [a1, a2], digits)).toBeNull();
+  });
+
+  test("带编号前缀、但那一条不认这个回答：不算回提示，当普通话往后走", () => {
+    const a1 = prompt("A1", "pick_agent");
+    expect(matchPromptReply("a1 是什么型号", [a1], digits)).toBeNull();
+  });
+
+  test("全角数字和全角编号先规范化：「１」就是「1」", () => {
+    const a1 = prompt("A1", "pick_agent");
+    const a2 = prompt("A2", "pick_agent");
+    expect(matchPromptReply("１", [a1], digits)).toEqual({
+      kind: "answer",
+      prompt: a1,
+      answer: "1",
+    });
+    expect(matchPromptReply("Ａ２　２", [a1, a2], digits)).toEqual({
+      kind: "answer",
+      prompt: a2,
+      answer: "2",
+    });
   });
 });
 
@@ -682,5 +708,145 @@ describe("真的发送器", () => {
     expect(refused).toBeInstanceOf(WechatReplyUnavailableError);
     expect(String(refused?.message)).not.toContain(token);
     expect(calls).toHaveLength(1);
+  });
+});
+
+describe("修复轮 1：选人提示不截走后面的数字", () => {
+  test("开了选人提示后改用「@员工名」开一轮：提示关掉，再回「1」当普通消息交给这位员工", async () => {
+    const a = await person("fix-a");
+    const coder = await bot(a, "甲熊");
+    await bot(a, "乙熊");
+    await deliver(a, message(a, "开个会"));
+    expect((await openPrompts(a)).length).toBe(1);
+    await deliver(a, message(a, "@甲熊 看下报错"));
+    expect(await openPrompts(a)).toEqual([]);
+    await deliver(a, message(a, "1"));
+    expect(turnsOf(a).map((t) => [t.agentId, t.text])).toEqual([
+      [coder, "看下报错"],
+      [coder, "1"],
+    ]);
+    expect((await accountOf(a))?.lastAgentId).toBe(coder);
+  });
+
+  test("只写「@员工名」换人、或交给上次的员工：也关掉开着的选人提示", async () => {
+    const b = await person("fix-b");
+    const one = await bot(b, "同名熊", "工程师");
+    await bot(b, "同名熊", "研究员");
+    const writer = await bot(b, "写作熊");
+    await deliver(b, message(b, "@同名熊 你好"));
+    expect((await openPrompts(b)).length).toBe(1);
+    await deliver(b, message(b, "@写作熊"));
+    expect(await openPrompts(b)).toEqual([]);
+
+    await deliver(b, message(b, "@同名熊 再来"));
+    expect((await openPrompts(b)).length).toBe(1);
+    await deliver(b, message(b, "写个周报"));
+    expect(await openPrompts(b)).toEqual([]);
+    expect(turnsOf(b).map((t) => [t.agentId, t.text])).toEqual([
+      [writer, "写个周报"],
+    ]);
+    expect(turnsOf(b).some((t) => t.agentId === one)).toBe(false);
+  });
+
+  test("选人提示超过 10 分钟：不再算待处理，回「1」当普通消息交给上次的员工", async () => {
+    const c = await person("fix-c");
+    const coder = await bot(c, "代码熊");
+    await bot(c, "同名熊", "工程师");
+    await bot(c, "同名熊", "研究员");
+    await deliver(c, message(c, "@代码熊 你好"));
+    await deliver(c, message(c, "@同名熊 帮个忙"));
+    expect((await openPrompts(c)).length).toBe(1);
+    clock = () => new Date(Date.now() + 11 * 60 * 1000);
+    try {
+      await deliver(c, message(c, "1"));
+    } finally {
+      clock = () => new Date();
+    }
+    expect(turnsOf(c).map((t) => [t.agentId, t.text])).toEqual([
+      [coder, "你好"],
+      [coder, "1"],
+    ]);
+    expect(await openPrompts(c)).toEqual([]);
+  });
+
+  test("10 分钟内照常：全角「１」也选得中", async () => {
+    const d = await person("fix-d");
+    await bot(d, "甲熊");
+    await bot(d, "乙熊");
+    await deliver(d, message(d, "订会议室"));
+    await deliver(d, message(d, "１"));
+    expect(turnsOf(d).map((t) => t.text)).toEqual(["订会议室"]);
+    expect(await openPrompts(d)).toEqual([]);
+  });
+
+  test("拉丁字母结尾的名字要有边界：「@Bobby hi」不命中 Bob；中文名照旧不要空格", async () => {
+    const e = await person("fix-e");
+    const bob = await bot(e, "Bob");
+    await deliver(e, message(e, "@Bobby hi"));
+    expect(turnsOf(e)).toHaveLength(0);
+    expect(sentTo(e).at(-1)?.text).toBe("没找到叫 Bobby 的员工");
+    await deliver(e, message(e, "@bob, hi"));
+    expect(turnsOf(e).map((t) => [t.agentId, t.text])).toEqual([[bob, "hi"]]);
+    const bobby = await bot(e, "Bobby");
+    await deliver(e, message(e, "@Bobby hi again"));
+    expect(turnsOf(e).at(-1)).toMatchObject({
+      agentId: bobby,
+      text: "hi again",
+    });
+    const r2 = await bot(e, "R2");
+    await deliver(e, message(e, "@R2D2 hi"));
+    expect(turnsOf(e).at(-1)?.agentId).not.toBe(r2);
+    expect(sentTo(e).at(-1)?.text).toBe("没找到叫 R2D2 的员工");
+  });
+
+  test("拿掉去重记录自己也失败：只记日志，抛出的仍是原来的错误", async () => {
+    const f = await person("fix-f");
+    await bot(f, "代码熊");
+    const logged: string[] = [];
+    const original = console.error;
+    console.error = (...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
+    };
+    const failing = createWechatInbound({
+      wechat: {
+        ...wechatStore,
+        releaseMessage: async () => {
+          throw new Error("release failed too");
+        },
+      },
+      deliveries: deliveryStore,
+      router,
+      channels: {
+        ...channelStore,
+        direct: async () => {
+          throw new Error("database blinked");
+        },
+      },
+      bots: profileStore,
+      actorFor,
+      scopeFor: scopes.scopeFor,
+      send: async () => {},
+    });
+    try {
+      await expect(
+        runAsTenant(f.userId, () =>
+          failing(f.account, message(f, "@代码熊 试试")),
+        ),
+      ).rejects.toThrow("database blinked");
+    } finally {
+      console.error = original;
+    }
+    expect(logged.join("\n")).toContain("wechat-release-failed");
+  });
+
+  test("轮询器给的中止信号一路传到员工那一轮", async () => {
+    const g = await person("fix-g");
+    await bot(g, "代码熊");
+    const controller = new AbortController();
+    await runAsTenant(g.userId, () =>
+      inbound(g.account, message(g, "@代码熊 带信号"), controller.signal),
+    );
+    expect(turnsOf(g)).toHaveLength(1);
+    expect(signals.at(-1)).toBe(controller.signal);
   });
 });
