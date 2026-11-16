@@ -63,6 +63,12 @@ const KIND_LABEL: Record<UpdateKind, { title: string; description: string }> = {
   },
 };
 
+/**
+ * 要本人亲手打开才发的渠道：路由是 "all"（没设过）时它的开关是关的，其余照旧开着。
+ * 和服务器 `agents/lifecycle.ts` 的 `OPT_IN_TRANSPORTS` 同一条规则（用户 2026-11-16 决定：绑定微信不自动发通知）。
+ */
+const OPT_IN_TRANSPORTS: UpdateTransport[] = ["wechat"];
+
 const TRANSPORTS: { id: UpdateTransport; label: string }[] = [
   { id: "push", label: "推送" },
   { id: "slack", label: "Slack" },
@@ -166,7 +172,9 @@ export function UpdateRoutingSection() {
           {(Object.keys(KIND_LABEL) as UpdateKind[]).map((kind, index) => {
             const current = routing.data[kind];
             const allowed = (transport: UpdateTransport) =>
-              current === "all" || current.includes(transport);
+              current === "all"
+                ? !OPT_IN_TRANSPORTS.includes(transport)
+                : current.includes(transport);
             return (
               <Fragment key={kind}>
                 {index > 0 ? <Separator /> : null}
@@ -197,12 +205,16 @@ export function UpdateRoutingSection() {
                               (id) =>
                                 id === transport.id ? checked : allowed(id),
                             );
+                            // 只有恰好等于 "all" 现在的意思（除微信外全部）才折回 "all"；开着微信时永远是显式列表。
+                            const meansAll =
+                              next.length ===
+                                TRANSPORTS.length - OPT_IN_TRANSPORTS.length &&
+                              !next.some((id) =>
+                                OPT_IN_TRANSPORTS.includes(id),
+                              );
                             save.mutate({
                               kind,
-                              transports:
-                                next.length === TRANSPORTS.length
-                                  ? "all"
-                                  : next,
+                              transports: meansAll ? "all" : next,
                             });
                           }}
                           size="sm"

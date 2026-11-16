@@ -25,7 +25,8 @@ export function splitChatOrigin(
 
 /**
  * 微信来的用户消息：服务器把投递进来的那条消息 ID 记成 `delivery:wechat:<runId>`
- * （`server/src/delivery/message-id.ts`），对话里据此在消息下方标「来自微信」。网页上发的、别的渠道来的都不是。
+ * （`server/src/delivery/message-id.ts` 的 `WECHAT_MESSAGE_ID_PREFIX`），对话里据此在消息下方标「来自微信」。
+ * 网页上发的、别的渠道来的都不是。下面的字面量要和服务器那个前缀保持一致，改一边必须改另一边。
  */
 export function isFromWechat(messageId: string): boolean {
   return messageId.startsWith("delivery:wechat:");

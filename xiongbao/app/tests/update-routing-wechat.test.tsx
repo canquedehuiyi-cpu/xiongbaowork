@@ -84,7 +84,13 @@ test("开通了微信且本人已绑定：每类消息都有「微信」开关",
   serving({ wechatAvailable: true, wechat: { status: "bound" } });
   const view = draw();
   const wechat = await view.findByRole("switch", { name: "进展：微信" });
-  expect(wechat.getAttribute("aria-checked")).toBe("true");
+  // 用户 2026-11-16 决定：路由是 "all" 时微信默认关，其它渠道照旧开着。
+  expect(wechat.getAttribute("aria-checked")).toBe("false");
+  expect(
+    (await view.findByRole("switch", { name: "进展：推送" })).getAttribute(
+      "aria-checked",
+    ),
+  ).toBe("true");
   // 推送和微信，每类一个。
   expect(view.getAllByRole("switch")).toHaveLength(8);
 });
@@ -110,11 +116,48 @@ test("这个部署没开通微信：没有「微信」开关", async () => {
   expect(view.queryByRole("switch", { name: "进展：微信" })).toBeNull();
 });
 
-test("关掉微信：只保留推送，请求里带的是 push", async () => {
+test("路由是 all 时打开微信：请求里是含 wechat 的显式列表，另外的渠道也都在", async () => {
   serving({ wechatAvailable: true, wechat: { status: "bound" } });
   const view = draw();
   fireEvent.click(await view.findByRole("switch", { name: "进展：微信" }));
   await waitFor(() => expect(saved.length).toBe(1));
-  expect(JSON.stringify(saved[0])).toContain('"push"');
-  expect(JSON.stringify(saved[0])).not.toContain("wechat");
+  const sent = saved[0] as { transports: string[] };
+  // 现在允许的（"all" 的意思：除微信外全部）加上微信。
+  expect(sent.transports).toEqual(["push", "slack", "teams", "sms", "wechat"]);
+});
+
+test("显式列表里有微信时关掉微信：只保留推送，请求里带的是 push", async () => {
+  serving({
+    wechatAvailable: true,
+    wechat: { status: "bound" },
+    routing: {
+      progress: ["push", "wechat"],
+      decision: "all",
+      question: "all",
+      attention: "all",
+    },
+  });
+  const view = draw();
+  const wechat = await view.findByRole("switch", { name: "进展：微信" });
+  expect(wechat.getAttribute("aria-checked")).toBe("true");
+  fireEvent.click(wechat);
+  await waitFor(() => expect(saved.length).toBe(1));
+  expect(saved[0]).toEqual({ transports: ["push"] });
+});
+
+test("开着微信、其它渠道全开时关掉微信：折回 all", async () => {
+  serving({
+    wechatAvailable: true,
+    wechat: { status: "bound" },
+    routing: {
+      progress: ["push", "slack", "teams", "sms", "wechat"],
+      decision: "all",
+      question: "all",
+      attention: "all",
+    },
+  });
+  const view = draw();
+  fireEvent.click(await view.findByRole("switch", { name: "进展：微信" }));
+  await waitFor(() => expect(saved.length).toBe(1));
+  expect(saved[0]).toEqual({ transports: "all" });
 });

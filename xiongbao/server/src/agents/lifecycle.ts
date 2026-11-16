@@ -350,7 +350,7 @@ export function createBotLifecycleStore(database: Database) {
       await upsert(ownerUserId, agentId, { notify });
     },
 
-    /** Where each kind of update goes. A kind with no row goes everywhere the person is reachable. */
+    /** Where each kind of update goes. A kind with no row goes everywhere the person is reachable, except the opt-in transports (wechat). */
     async routing(
       ownerUserId: string,
     ): Promise<Record<UpdateKind, UpdateTransport[] | "all">> {
@@ -393,6 +393,20 @@ export function createBotLifecycleStore(database: Database) {
         });
     },
   };
+}
+
+/**
+ * 要本人亲手打开才发的渠道。"all"（没有路由行的默认）不含它们，只有显式列出才算。
+ * 微信：绑定不等于同意收通知（用户 2026-11-16 决定）。App 的 `update-routing.tsx` 里按同一规则显示开关。
+ */
+export const OPT_IN_TRANSPORTS: readonly UpdateTransport[] = ["wechat"];
+
+export function routeAllows(
+  transports: UpdateTransport[] | "all",
+  transport: UpdateTransport,
+): boolean {
+  if (transports === "all") return !OPT_IN_TRANSPORTS.includes(transport);
+  return transports.includes(transport);
 }
 
 /** What the delivery router calls its kinds, as the update kinds a person routes. */
@@ -446,7 +460,11 @@ export async function resolveUpdateRoute(
   input: UpdateRouteInput,
 ): Promise<UpdateRoute> {
   const kind = KIND_OF_DELIVERY[input.kind];
-  const everything: UpdateRoute = { kind, notify: true, allows: () => true };
+  const everything: UpdateRoute = {
+    kind,
+    notify: true,
+    allows: (transport) => routeAllows("all", transport),
+  };
   const database = state.database;
   if (!database) return everything;
   try {
@@ -463,8 +481,7 @@ export async function resolveUpdateRoute(
     return {
       kind,
       notify,
-      allows: (transport) =>
-        notify && (transports === "all" || transports.includes(transport)),
+      allows: (transport) => notify && routeAllows(transports, transport),
     };
   } catch (error) {
     console.error(

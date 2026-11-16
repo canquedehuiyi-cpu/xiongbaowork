@@ -872,6 +872,35 @@ describe("update routing", () => {
   });
 });
 
+describe("update routing: wechat is opt-in", () => {
+  const lifecycle = createBotLifecycleStore(database);
+
+  test("no routing row: wechat is not allowed, slack and push are; an explicit list with wechat allows it", async () => {
+    await as(owner, async () => {
+      await lifecycle.setRouting(owner, "progress", "all");
+      let route = await resolveUpdateRoute({
+        ownerUserId: owner,
+        agentId: bot,
+        kind: "reply",
+      });
+      expect(route.allows("wechat")).toBe(false);
+      expect(route.allows("slack")).toBe(true);
+      expect(route.allows("push")).toBe(true);
+
+      await lifecycle.setRouting(owner, "progress", ["push", "wechat"]);
+      route = await resolveUpdateRoute({
+        ownerUserId: owner,
+        agentId: bot,
+        kind: "reply",
+      });
+      expect(route.allows("wechat")).toBe(true);
+      expect(route.allows("push")).toBe(true);
+      expect(route.allows("slack")).toBe(false);
+      await lifecycle.setRouting(owner, "progress", "all");
+    });
+  });
+});
+
 describe("reset", () => {
   const softDeleted: string[] = [];
   const reset = createBotReset({
