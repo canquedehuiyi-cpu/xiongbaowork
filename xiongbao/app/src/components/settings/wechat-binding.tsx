@@ -37,7 +37,9 @@ import { queryClient } from "@/query-client";
 
 /**
  * 我 › 通知 › 微信（计划 2026-11-16-im-channels-wechat Task 9）：用手机微信扫码绑定「微信 ClawBot」，
- * 绑好后员工的消息和要你拍板的事发到微信里。一个人一个绑定，所以这一节只有一行。
+ * 绑好后在微信里就能直接给员工派活。提醒默认不发到微信：本人在同一页「消息发到哪里」里打开微信才发，
+ * 而且微信只让在对方最近来过信的一段时间里主动发（时间窗），所以收提醒前要先在「微信 ClawBot」里发一句话。
+ * 一个人一个绑定，所以这一节只有一行。
  *
  * 这里没开通微信时（总览 `available.wechat` 为 false）整节不画：没有能做的事，也没有要等的人。
  *
@@ -46,6 +48,14 @@ import { queryClient } from "@/query-client";
 
 /** 提示句（时间窗已关、暂停、断开）的颜色：琥珀色是「要留意」，不是出错。 */
 const NOTICE = "text-[color:var(--wb-amber-fg,var(--foreground))]";
+
+/** 服务器的话不是中文时（别的渠道共用的英文报错、网络层的报错），对话框里说这一句。 */
+const UNAVAILABLE = "暂时连不上微信，请稍后再试";
+/** 服务器给的报错：带中文就照说，否则用中文兜底，不把英文原样摆给用户。 */
+function wechatError(message: string | undefined): string | undefined {
+  if (message === undefined) return undefined;
+  return /[\u4e00-\u9fff]/.test(message) ? message : UNAVAILABLE;
+}
 
 const STEPS = [
   "打开微信 › 我 › 设置 › 插件 › 微信 ClawBot",
@@ -62,7 +72,7 @@ export function WechatBindingSection() {
     return (
       <PageSection title="微信">
         <p className="mt-4 text-destructive text-sm" role="alert">
-          {reach.error.message}
+          {wechatError(reach.error.message)}
         </p>
       </PageSection>
     );
@@ -71,7 +81,7 @@ export function WechatBindingSection() {
   const connected = wechat !== null && wechat.status !== "disconnected";
   return (
     <PageSection
-      description="绑定后，员工的消息和要你拍板的事会发到微信里的「微信 ClawBot」，你也能在那里直接给员工派活。"
+      description="绑定后，在微信里的「微信 ClawBot」就能直接给员工派活。要在微信里收提醒，请在本页「消息发到哪里」里打开微信。"
       title="微信"
     >
       <PageRows>
@@ -144,7 +154,9 @@ function WechatState({ wechat }: { wechat: WechatSummary | null }) {
       : wechat.paused
         ? `微信让我们歇一会儿，${resumeIn(wechat.pausedUntil)}`
         : !wechat.windowOpen
-          ? "超过 10 小时没在微信里说话，提醒会先发到手机，回一句就恢复"
+          ? wechat.lastInboundAt
+            ? "超过 10 小时没在微信里说话，提醒会先发到手机；在「微信 ClawBot」里发一句话就恢复"
+            : "收提醒前，先在「微信 ClawBot」里发一句话"
           : null;
   return (
     <ItemDescription className="line-clamp-none">
@@ -218,7 +230,7 @@ function BindDialog({ onClose }: { onClose: () => void }) {
             />
             <AttemptLine
               attempt={attempt.data}
-              error={error?.message}
+              error={wechatError(error?.message)}
               onRetry={() => start.mutate()}
               retrying={start.isPending}
             />
@@ -381,13 +393,13 @@ function UnbindDialog({ onClose }: { onClose: () => void }) {
         <DialogHeader>
           <DialogTitle>解绑微信</DialogTitle>
           <DialogDescription>
-            解绑后微信里不会再收到员工的消息，确定吗？
+            解绑后不能再在微信里给员工派活，微信里也不会再收到提醒，确定吗？
           </DialogDescription>
         </DialogHeader>
         {unbind.error ? (
           <DialogBody className="mt-4">
             <p className="text-destructive text-sm" role="alert">
-              {unbind.error.message}
+              {wechatError(unbind.error.message)}
             </p>
           </DialogBody>
         ) : null}

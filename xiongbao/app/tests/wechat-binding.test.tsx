@@ -176,7 +176,9 @@ test("解绑要二次确认，确认后回到没绑", async () => {
   fireEvent.click(await view.findByRole("button", { name: "解绑" }));
   const dialog = await view.findByRole("dialog");
   expect(
-    within(dialog).getByText("解绑后微信里不会再收到员工的消息，确定吗？"),
+    within(dialog).getByText(
+      "解绑后不能再在微信里给员工派活，微信里也不会再收到提醒，确定吗？",
+    ),
   ).toBeTruthy();
   fireEvent.click(within(dialog).getByRole("button", { name: "解绑" }));
   await waitFor(() =>
@@ -185,13 +187,92 @@ test("解绑要二次确认，确认后回到没绑", async () => {
   expect(await view.findByRole("button", { name: "绑定微信" })).toBeTruthy();
 });
 
-test("超过 10 小时没在微信里说话：说明提醒先发到手机", async () => {
-  serving({ wechat: { ...BOUND, windowOpen: false } as Summary });
+test("超过 10 小时没在微信里说话：说明提醒先发到手机，发一句就恢复", async () => {
+  serving({
+    wechat: {
+      ...BOUND,
+      windowOpen: false,
+      lastInboundAt: new Date(Date.now() - 11 * 60 * 60_000).toISOString(),
+    } as Summary,
+  });
   const view = draw();
   expect(
     await view.findByText(
-      "超过 10 小时没在微信里说话，提醒会先发到手机，回一句就恢复",
+      "超过 10 小时没在微信里说话，提醒会先发到手机；在「微信 ClawBot」里发一句话就恢复",
     ),
+  ).toBeTruthy();
+});
+
+test("绑好了还没在微信里说过话：先发一句话才能收提醒", async () => {
+  serving({ wechat: { ...BOUND, windowOpen: false } as Summary });
+  const view = draw();
+  expect(
+    await view.findByText("收提醒前，先在「微信 ClawBot」里发一句话"),
+  ).toBeTruthy();
+});
+
+test("这一节说清楚：绑定后能派活，收提醒要在「消息发到哪里」里打开微信", async () => {
+  serving({ wechat: null });
+  const view = draw();
+  expect(
+    await view.findByText(
+      "绑定后，在微信里的「微信 ClawBot」就能直接给员工派活。要在微信里收提醒，请在本页「消息发到哪里」里打开微信。",
+    ),
+  ).toBeTruthy();
+  expect(view.queryByText(/员工的消息和要你拍板的事会发到微信/)).toBeNull();
+});
+
+test("服务器回英文时对话框用中文兜底；回中文就照说", async () => {
+  serving({ wechat: null });
+  global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const method = init?.method ?? "GET";
+    const path = String(input);
+    requests.push(`${method} ${path}`);
+    if (method === "POST" && path === "/api/delivery/wechat/start")
+      return Response.json(
+        { error: "Delivery is unavailable. Try again." },
+        { status: 503 },
+      );
+    return Response.json({
+      bindings: [],
+      devices: [],
+      deliveries: [],
+      available: {
+        slack: false,
+        teams: false,
+        sms: false,
+        push: false,
+        wechat: true,
+      },
+      wechat: null,
+    });
+  }) as unknown as typeof fetch;
+  const view = draw();
+  fireEvent.click(await view.findByRole("button", { name: "绑定微信" }));
+  const dialog = await view.findByRole("dialog");
+  expect(
+    await within(dialog).findByText("暂时连不上微信，请稍后再试"),
+  ).toBeTruthy();
+  expect(within(dialog).queryByText(/Delivery is unavailable/)).toBeNull();
+});
+
+test("解绑失败时服务器的中文照说", async () => {
+  serving({ wechat: BOUND });
+  const served = global.fetch;
+  global.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if ((init?.method ?? "GET") === "DELETE")
+      return Response.json(
+        { error: "暂时连不上微信，请稍后再试" },
+        { status: 503 },
+      );
+    return served(input, init);
+  }) as unknown as typeof fetch;
+  const view = draw();
+  fireEvent.click(await view.findByRole("button", { name: "解绑" }));
+  const dialog = await view.findByRole("dialog");
+  fireEvent.click(within(dialog).getByRole("button", { name: "解绑" }));
+  expect(
+    await within(dialog).findByText("暂时连不上微信，请稍后再试"),
   ).toBeTruthy();
 });
 
