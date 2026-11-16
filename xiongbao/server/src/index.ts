@@ -274,10 +274,15 @@ import { createDeliveryScopes } from "./delivery/scope";
 import { createDeliveryStore } from "./delivery/store";
 import type { DeliveryScope } from "./delivery/types";
 import { DeliveryRefusedError } from "./delivery/types";
+import type { WechatBindDeps } from "./delivery/wechat/bind";
 import {
   createIlinkClient,
   ILINK_DEFAULT_CLIENT_VERSION,
 } from "./delivery/wechat/ilink";
+import {
+  createWechatInbound,
+  createWechatSender,
+} from "./delivery/wechat/inbound";
 import { createWechatPoller } from "./delivery/wechat/poller";
 import { createWechatStore } from "./delivery/wechat/store";
 import { createDeviceChannel, type DispatchTarget } from "./devices/channel";
@@ -4020,41 +4025,17 @@ await startupLifecycle.run(async (startup) => {
       ILINK_DEFAULT_CLIENT_VERSION,
   });
   const wechatStore = createWechatStore(database);
-  /*
-   * 微信长轮询（delivery/wechat/poller.ts）：每 2 秒认领一批账号各拉一次。真正的 `inbound`（把消息交给
-   * 智能体）由下一项任务接上；在那之前这里的 `inbound` 一律抛错，轮询器就不会存游标、不丢消息，所以默认
-   * 不启动，设 WECHAT_POLLER=on 才跑（接上 `inbound` 的那次提交把它改成默认开）。
+  /**
+   * 「我 › 通知 › 微信」扫码绑定用的东西，也是这个部署开没开微信的唯一开关：没有它时设置页不提供微信
+   * （`available.wechat` 为 false），长轮询也不启动（见下面 deliveryRouter 之后）。
    */
-  if (process.env.WECHAT_POLLER?.trim() === "on") {
-    const wechatPoller = createWechatPoller({
-      database,
-      wechat: wechatStore,
-      ilink: wechatIlink,
-      credentials: credentialStore,
-      keyEncryptionKey: config.keyEncryptionKey,
-      inbound: async () => {
-        throw new Error("wechat inbound handler is not connected");
-      },
-      owner: workOwner("wechat"),
-    });
-    startup.acquireSync(
-      () =>
-        repeatAfterEach(async () => {
-          try {
-            await wechatPoller.tick();
-          } catch (error) {
-            console.error(
-              JSON.stringify({
-                type: "wechat-poller-error",
-                error: error instanceof Error ? error.name : "UnknownError",
-                timestamp: new Date().toISOString(),
-              }),
-            );
-          }
-        }, 2_000),
-      (resource) => resource.stop(),
-    );
-  }
+  const wechatBind: WechatBindDeps | undefined = {
+    database,
+    ilink: wechatIlink,
+    store: wechatStore,
+    credentials: credentialStore,
+    encryptionKey: config.keyEncryptionKey,
+  };
   const deliveryProviders = configuredDeliveryProviders(
     config.publicUrl ??
       config.auth?.baseUrl ??
@@ -4148,6 +4129,55 @@ await startupLifecycle.run(async (startup) => {
       }),
   });
   deliveryNotifications = (scope, input) => deliveryRouter.notify(scope, input);
+  /*
+   * 微信长轮询（delivery/wechat/poller.ts）：每 2 秒认领一批账号各拉一次，每条消息在本人的帧里交给入站分流
+   * （delivery/wechat/inbound.ts）：选员工、在默认单聊里开一轮、回复加「【员工名】」发回微信。
+   * 关停时先停循环，再等在途的轮询和 `inbound` 跑完（`drain`），之后才关数据库连接（finalizers 在资源之后）。
+   */
+  if (wechatBind) {
+    const wechatPoller = createWechatPoller({
+      database,
+      wechat: wechatStore,
+      ilink: wechatIlink,
+      credentials: credentialStore,
+      keyEncryptionKey: config.keyEncryptionKey,
+      inbound: createWechatInbound({
+        wechat: wechatStore,
+        deliveries: deliveryStore,
+        router: deliveryRouter,
+        channels: channelStore,
+        bots: agentProfileStore,
+        actorFor,
+        scopeFor: deliveryScopeFor,
+        send: createWechatSender({
+          ilink: wechatIlink,
+          credentials: credentialStore,
+          keyEncryptionKey: config.keyEncryptionKey,
+        }),
+      }),
+      owner: workOwner("wechat"),
+    });
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          try {
+            await wechatPoller.tick();
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                type: "wechat-poller-error",
+                error: error instanceof Error ? error.name : "UnknownError",
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }, 2_000),
+      async (resource) => {
+        resource.stop();
+        await wechatPoller.drain();
+      },
+    );
+  }
 
   /*
    * Started work: an item a check-in raised, started by the person, runs as a task in a conversation
@@ -5467,13 +5497,7 @@ await startupLifecycle.run(async (startup) => {
           slack: deliveryProviders.slack,
           twilio: deliveryProviders.sms,
           pushProjectId: deliveryProviders.pushProjectId,
-          wechat: {
-            database,
-            ilink: wechatIlink,
-            store: wechatStore,
-            credentials: credentialStore,
-            encryptionKey: config.keyEncryptionKey,
-          },
+          ...(wechatBind ? { wechat: wechatBind } : {}),
         },
         webhooks: {
           store: deliveryStore,
