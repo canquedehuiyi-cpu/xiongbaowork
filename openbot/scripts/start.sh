@@ -11,6 +11,13 @@
 
 set -euo pipefail
 
+# The database owner's URL, when the caller hands it over in the environment (the local updater does,
+# and a Compose override may give `migrate` its `DATABASE_URL` as `${MIGRATION_DATABASE_URL}`). Taken
+# out of the environment here, before anything is started, and handed back to the one Compose
+# migration below alone: the server and the worker run as the app role and inherit nothing of it.
+MIGRATION_OWNER_URL="${MIGRATION_DATABASE_URL-}"
+unset MIGRATION_DATABASE_URL
+
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 if [ -f "$ROOT/.openbot-update-journal.json" ]; then
@@ -308,7 +315,15 @@ export COMPUTER_PORT BOT_PORT LANGGRAPH_PORT SUPERVISOR_PORT
 # variable rather than `--progress`, because a Compose too old to know the flag refuses it, and one
 # too old to know the variable ignores it.
 COMPOSE_PROGRESS=quiet docker compose up -d --build "${SERVICES[@]}" >/dev/null
-if ! docker compose run --rm --build migrate >"$LOGS/migrate.log" 2>&1; then
+# Only a value the caller actually gave: an empty one would hide a line `.env` may carry for Compose.
+migrate_with_owner() {
+  if [ -n "$MIGRATION_OWNER_URL" ]; then
+    MIGRATION_DATABASE_URL="$MIGRATION_OWNER_URL" "$@"
+  else
+    "$@"
+  fi
+}
+if ! migrate_with_owner docker compose run --rm --build migrate >"$LOGS/migrate.log" 2>&1; then
   red "  Migrations did not apply. The database is not the schema this server expects."
   red "  Log: $LOGS/migrate.log"
   exit 1
