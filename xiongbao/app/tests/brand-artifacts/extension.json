@@ -238,12 +238,6 @@
     "note": "Recorder 与网页的协议值；Task 14 双认后改名"
   },
   {
-    "word": "openbot/",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "内置工具引用，已存进数据库"
-  },
-  {
     "word": "openbotLauncher",
     "category": "peer-protocol",
     "plan": "keep",
