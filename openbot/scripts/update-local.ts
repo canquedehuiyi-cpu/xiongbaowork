@@ -297,6 +297,7 @@ export function libpqEnvironment(
     throw new Error(
       "DATABASE_URL is not a single-host postgres:// URL this backup can read; configure a reviewed backup path before upgrading",
     );
+  requireUniqueOptions(url.searchParams);
   const result: NodeJS.ProcessEnv = { ...env };
   for (const variable of Object.values(LIBPQ_QUERY_VARIABLES))
     if (variable !== "PGPASSFILE") delete result[variable];
@@ -411,6 +412,19 @@ function preservedState(
   }
   return true;
 }
+/** A connection option given twice is refused: `get()` reads the first value and a loop over the
+ * query, as `libpqEnvironment`'s, keeps the last, so a check and the backup it guards could read
+ * two different databases out of one URL. */
+function requireUniqueOptions(query: URLSearchParams) {
+  const seen = new Set<string>();
+  for (const key of query.keys()) {
+    if (seen.has(key))
+      throw new Error(
+        `数据库连接串里的参数「${key}」出现了不止一次，无法确定连的是哪个库：请只保留一个，然后重新更新。`,
+      );
+    seen.add(key);
+  }
+}
 /** Where a postgres:// URL connects and which database it opens, not who logs in: since the app
  * role split (`0054_app_role.sql`, 0109) the server and the worker log in as `openbot_app`, the
  * server's role writer as `openbot_role_writer`, and migration as the owner, all in one database.
@@ -427,6 +441,7 @@ export function databaseIdentity(databaseUrl: string | undefined) {
   if (url.protocol !== "postgres:" && url.protocol !== "postgresql:")
     return undefined;
   const query = url.searchParams;
+  requireUniqueOptions(query);
   const decode = (value: string) => {
     try {
       return decodeURIComponent(value);
@@ -990,11 +1005,14 @@ export async function applyLocalUpdate(
     options.candidate,
     env,
   );
-  // Only the backup and the migration are handed the owner URL; nothing this update starts
-  // inherits it from this process.
-  delete candidateEnv.MIGRATION_DATABASE_URL;
   const operation = randomUUID();
   candidateEnv.OPENBOT_UPDATE_OPERATION = operation;
+  // What a host install's own processes run with: the owner URL is handed only to its backup and
+  // migration, never to `bun install` or the app `start.sh` starts. Image topology keeps it in
+  // candidateEnv, because a Compose override may interpolate it into `migrate` and preflight
+  // resolved and checked that very value; dropping it would migrate with an empty URL.
+  const hostAppEnv: NodeJS.ProcessEnv = { ...candidateEnv };
+  delete hostAppEnv.MIGRATION_DATABASE_URL;
   const backupDirectory = resolve(options.backupDirectory, operation);
   let installed = false;
   const journal: UpdateJournal = {
@@ -1170,7 +1188,7 @@ export async function applyLocalUpdate(
     if (options.topology === "host")
       await run(["bun", "install", "--frozen-lockfile"], {
         cwd: root,
-        env: candidateEnv,
+        env: hostAppEnv,
       });
     journal.databaseMayHaveChanged = true;
     phase("migrating");
@@ -1178,7 +1196,7 @@ export async function applyLocalUpdate(
     if (options.topology === "host")
       await run(["bun", "--env-file=../.env", "scripts/migrate.ts"], {
         cwd: join(root, "server"),
-        env: { ...candidateEnv, DATABASE_URL: hostOwnerDatabaseUrl(env) },
+        env: { ...hostAppEnv, DATABASE_URL: hostOwnerDatabaseUrl(env) },
       });
     else
       await run(
@@ -1198,7 +1216,7 @@ export async function applyLocalUpdate(
       );
     phase("starting");
     if (options.topology === "host")
-      await run(["bash", "scripts/start.sh"], { cwd: root, env: candidateEnv });
+      await run(["bash", "scripts/start.sh"], { cwd: root, env: hostAppEnv });
     else
       await run(
         compose(
