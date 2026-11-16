@@ -50,6 +50,7 @@
   - **一个微信号只能绑一个后端**：已经绑给别的 OpenClaw 的，要先解绑。
   - 有「返回成功但手机没收到」的报告，送达无法完全确认。
   - 联系人显示为「微信 ClawBot」，没查到能改名字和头像的办法。
+  - **服务器要能连到腾讯**（实测 2026-11-16）：京东云服务器连不上 `ilinkai.weixin.qq.com:443`，这种部署设 `WECHAT_ENABLED=false` 关掉微信；探针在 Windows 上要先 `bun build` 成 `p.js` 再运行（直接 `bun wechat-probe.ts` 会卡住）。
 
 ### 对熊宝的意义
 

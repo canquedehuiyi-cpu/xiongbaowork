@@ -134,23 +134,27 @@ bun wechat-probe.ts push --after 1440
 
 填完下面的表，连同终端里出现的 `ret` / `errcode` 原样文字发给我。**不要贴 `~/.wechat-probe.json` 的内容。**
 
+2026-11-16 第一轮实测（用户的 Windows 电脑，Bun 1.4.3，VPN 关闭）的已知结论填在下表；主动推送那几行还在测。
+
 | 项目 | 结果 |
 | --- | --- |
-| 绑定是否成功，终端看到的最后状态 |  |
-| 第一条消息是否被收到，消息ID 显示的是哪个字段（message_id / seq / client_id） |  |
-| 入站是否带 context_token |  |
-| 回复「收到：…」手机是否收到 |  |
-| 最后一条消息的时间 |  |
-| 主动推送：1 小时 | 接口 ret/errcode：　　手机是否收到： |
-| 主动推送：6 小时 | 接口 ret/errcode：　　手机是否收到： |
-| 主动推送：11 小时 | 接口 ret/errcode：　　手机是否收到： |
-| 主动推送：15 小时 | 接口 ret/errcode：　　手机是否收到： |
-| 主动推送：24 小时 | 接口 ret/errcode：　　手机是否收到： |
-| 看到过哪些 ret / errcode 值（含 -2、-14） |  |
-| 时间窗关闭后，发送返回的是不是 -2 |  |
-| 重新绑定后 ilink_user_id 是否相同 |  |
-| 同一个微信再次扫码返回的状态（是否 binded_redirect） |  |
-| 其他异常（二维码打不开、要输入数字、手机收不到等） |  |
+| 绑定是否成功，终端看到的最后状态 | 成功，直接到 `confirmed`（没见到 `scaned`、`need_verifycode`）；返回里有 `bot_token`、`ilink_bot_id`（…@im.bot）、`ilink_user_id`（…@im.wechat）、`baseurl`（`https://ilinkai.weixin.qq.com`）。客户端版本号 2.4.10 能用 |
+| 二维码内容 | `qrcode_img_content` 是网页地址 `https://liteapp.weixin.qq.com/q/…`（不是图片），要自己编码成二维码 |
+| 第一条消息是否被收到，消息ID 显示的是哪个字段（message_id / seq / client_id） | 收到。`message_id` 是 19 位整数（当 JS 数字读会丢精度，要按字符串读）；`seq` 按账号递增（1、2、3）；`client_id` 是唯一字符串；`from_user_id` 就是绑定时的 `ilink_user_id` |
+| 入站是否带 context_token | 每条都带 |
+| 没在拉取时发的消息 | 会积压，下次 `getupdates` 补发 |
+| 回复「收到：…」手机是否收到 | 收到（带 `context_token` 回复，手机收到「收到：你好」×3）；`sendmessage` 成功时返回 `{}`（没有 ret / errcode） |
+| 最后一条消息的时间 | 实测进行中 |
+| 主动推送：1 小时 | 实测进行中 |
+| 主动推送：6 小时 | 实测进行中 |
+| 主动推送：11 小时 | 实测进行中 |
+| 主动推送：15 小时 | 实测进行中 |
+| 主动推送：24 小时 | 实测进行中 |
+| 看到过哪些 ret / errcode 值（含 -2、-14） | 实测进行中 |
+| 时间窗关闭后，发送返回的是不是 -2 | 实测进行中 |
+| 重新绑定后 ilink_user_id 是否相同 | 还没测 |
+| 同一个微信再次扫码返回的状态（是否 binded_redirect） | 还没测 |
+| 其他异常（二维码打不开、要输入数字、手机收不到等） | Windows 上 `bun wechat-probe.ts`（任何子命令）静默卡住，先 `bun build` 成 `p.js` 再 `bun p.js …` 就正常；京东云服务器连不上腾讯的 443（`ilinkai.weixin.qq.com`），探针和熊宝的微信都只能在能连通的机器上跑；VPN 开全局模式时会挡住，要关掉或改规则模式 |
 
 ## 做完以后
 
