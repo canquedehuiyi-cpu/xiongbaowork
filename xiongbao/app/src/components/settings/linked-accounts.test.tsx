@@ -90,7 +90,7 @@ test("any other 503 is an outage and throws its message", async () => {
 test("a 503 with no JSON body throws the fallback", async () => {
   const response = new Response("upstream down", { status: 503 });
   await expect(linksFromResponse(response)).rejects.toThrow(
-    "Could not load your linked accounts",
+    "读不到你已关联的账号",
   );
 });
 
@@ -107,10 +107,10 @@ test("a success unwraps the links", async () => {
 test("a 200 whose body has no links array throws the fallback", async () => {
   await expect(
     linksFromResponse(Response.json({ accounts: [] })),
-  ).rejects.toThrow("Could not load your linked accounts");
+  ).rejects.toThrow("读不到你已关联的账号");
   await expect(
     linksFromResponse(new Response("<!doctype html>", { status: 200 })),
-  ).rejects.toThrow("Could not load your linked accounts");
+  ).rejects.toThrow("读不到你已关联的账号");
 });
 
 const row = { ...base, handle: "dana", status: "active" as const };
@@ -297,7 +297,7 @@ test("an HTML 404 from a proxy or SPA fallback throws the fallback", async () =>
         headers: { "content-type": "text/html" },
       }),
     ),
-  ).rejects.toThrow("The account could not be disconnected");
+  ).rejects.toThrow("这个账号没能断开");
 });
 
 test("any other disconnect failure throws the server message", async () => {
@@ -309,7 +309,7 @@ test("any other disconnect failure throws the server message", async () => {
 test("a disconnect failure without a message throws the fallback", async () => {
   await expect(
     unlinkOutcome(new Response("nope", { status: 502 })),
-  ).rejects.toThrow("The account could not be disconnected");
+  ).rejects.toThrow("这个账号没能断开");
 });
 
 test("copying succeeds when the clipboard accepts the text", async () => {

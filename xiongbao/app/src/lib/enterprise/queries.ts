@@ -261,7 +261,7 @@ export function networkReplayQueryOptions(candidate: NetworkCandidate) {
       client("/api/admin/enterprise/network/replay", "report", {
         method: "POST",
         body: candidate,
-        fallback: "Couldn't check this list against recent page visits.",
+        fallback: "没能拿最近的页面访问对照这份名单。",
       }),
   });
 }

@@ -81,7 +81,7 @@ export function routineRunsQueryOptions(id: string) {
     queryKey: routineKeys.runs(id),
     queryFn: (): Promise<RoutineRunRecord[]> =>
       client(`/api/routines/${encodeURIComponent(id)}/runs`, "runs", {
-        fallback: "This routine's runs could not be loaded.",
+        fallback: "读不到这条例行的运行记录。",
       }),
     // A run in flight settles within minutes; poll so Running turns into its outcome.
     refetchInterval: 5_000,
@@ -99,7 +99,7 @@ export function routinesQueryOptions() {
     queryKey: routineKeys.list(),
     queryFn: async (): Promise<RoutinesPage> => {
       const response = await client("/api/routines", {
-        fallback: "Your routines could not be loaded.",
+        fallback: "读不到你的例行。",
       });
       const body = (await response.json()) as Partial<RoutinesPage>;
       return {

@@ -14,7 +14,7 @@ export function switchPlanMutationOptions(queryClient: QueryClient) {
       await client("/api/quota/plan", {
         method: "POST",
         body: { planId },
-        fallback: "That plan could not be selected.",
+        fallback: "这个套餐没能选上。",
       });
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: quotaKeys.all }),

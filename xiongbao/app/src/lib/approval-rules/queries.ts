@@ -82,7 +82,7 @@ export function approvalRulesBacktestQueryOptions(
         await client("/api/approvals/team/rules/backtest", {
           method: "POST",
           body: { rules },
-          fallback: "The rules could not be tested against history.",
+          fallback: "没能拿历史记录试这套规则。",
         })
       ).json(),
     retry: false,

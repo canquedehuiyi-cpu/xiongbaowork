@@ -5,7 +5,7 @@ import { enterpriseKeys } from "@/lib/enterprise/queries";
 import { capabilityChangeKeys } from "./queries";
 import type { CapabilityChange } from "./translate";
 
-const FALLBACK = "Couldn't save the changes. Try again.";
+const FALLBACK = "没能存下这些改动。再试一次。";
 
 /** Where saved changes came from: the sentence the model wrote them from. */
 export type CapabilityChangeAuthoring = { source: "english"; text: string };

@@ -2,7 +2,7 @@ import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { client, tryClient } from "@/lib/client";
 import { identityKeys } from "./queries";
 
-const UNLINK_FALLBACK = "The account could not be disconnected";
+const UNLINK_FALLBACK = "这个账号没能断开";
 
 /** The machine-readable code on the server's own "no such link" 404. */
 export const IDENTITY_LINK_NOT_FOUND = "identity_link_not_found";
@@ -53,12 +53,12 @@ export function issueSlackCodeMutationOptions() {
       client<SlackLinkCode>("/api/identity/challenges", "challenge", {
         method: "POST",
         body: { provider: "slack" },
-        fallback: "Could not create a Slack link code",
+        fallback: "没能生成 Slack 关联码",
       }),
   });
 }
 
-const CONNECT_GITHUB_FAILED = "Could not start connecting GitHub. Try again.";
+const CONNECT_GITHUB_FAILED = "没能开始关联 GitHub。再试一次。";
 
 /**
  * The only address the browser will follow after asking to connect GitHub: the OAuth authorize page

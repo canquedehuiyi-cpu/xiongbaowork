@@ -80,7 +80,7 @@ export function pendingSignInRequestsQueryOptions() {
       (
         (await (
           await client("/api/sign-in-requests", {
-            fallback: "Could not load your sign-in requests",
+            fallback: "读不到你的登录申请",
           })
         ).json()) as { requests: SignInRequest[] }
       ).requests,

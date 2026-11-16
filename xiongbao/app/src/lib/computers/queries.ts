@@ -169,7 +169,7 @@ export async function dryRunActionPolicy(
   return client("/api/computers/policy-dry-run", "report", {
     method: "POST",
     body: { policy: candidate },
-    fallback: "The rule could not be tested against history.",
+    fallback: "没能拿历史记录试这条规则。",
   });
 }
 

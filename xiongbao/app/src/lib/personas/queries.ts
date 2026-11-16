@@ -30,7 +30,7 @@ export function personaTemplatesQueryOptions() {
     queryKey: personaKeys.list(),
     queryFn: async (): Promise<PersonaTemplate[]> => {
       const response = await client("/api/personas", {
-        fallback: "Your saved personas could not be loaded.",
+        fallback: "读不到你存下的角色。",
       });
       const body = (await response.json().catch(() => null)) as {
         templates?: PersonaTemplate[];
@@ -53,7 +53,7 @@ export function savePersonaTemplateMutationOptions(queryClient: QueryClient) {
       return client<PersonaTemplate>("/api/personas", "template", {
         method: "POST",
         body: input,
-        fallback: "That persona could not be saved.",
+        fallback: "这个角色没能存下来。",
       });
     },
     onSuccess: () => refresh(queryClient),
@@ -65,7 +65,7 @@ export function deletePersonaTemplateMutationOptions(queryClient: QueryClient) {
     mutationFn: async (id: string): Promise<void> => {
       await client(`/api/personas/${id}`, {
         method: "DELETE",
-        fallback: "That persona could not be removed.",
+        fallback: "这个角色没能删掉。",
       });
     },
     onSuccess: () => refresh(queryClient),

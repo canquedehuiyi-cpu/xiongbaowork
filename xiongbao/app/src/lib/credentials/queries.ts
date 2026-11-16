@@ -20,7 +20,7 @@ export function credentialListQueryOptions() {
     queryKey: credentialKeys.list(),
     queryFn: async (): Promise<CredentialStatus[]> => {
       return client("/api/admin/credentials", "credentials", {
-        fallback: "Could not load credentials",
+        fallback: "读不到凭据",
       });
     },
   });

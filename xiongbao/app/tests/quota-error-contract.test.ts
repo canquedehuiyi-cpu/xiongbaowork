@@ -133,7 +133,7 @@ test("null, arrays, primitives, malformed JSON and non-string errors use the fal
   });
   await withFetch(new Response("not JSON", { status: 502 }), async () => {
     const error = await refusal();
-    expect(error.message).toBe("That request failed.");
+    expect(error.message).toBe("这次请求没成功。");
     expect(error.status).toBe(502);
     expect(error.quota).toBeUndefined();
   });

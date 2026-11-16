@@ -72,7 +72,7 @@ export function devicesQueryOptions() {
     queryKey: deviceKeys.list(),
     queryFn: () =>
       client("/api/devices", "devices", {
-        fallback: "Your devices could not be loaded.",
+        fallback: "读不到你的设备。",
       }) as Promise<RegisteredDevice[]>,
     // Presence is a fact about a machine that is not here, so the only way to learn it is to ask
     // again. Ten seconds is well inside the window that decides online or offline.

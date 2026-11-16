@@ -12,9 +12,9 @@ import { type ActionPolicy, computerKeys } from "./queries";
 export type ComputerAction = "stop" | "reset" | "update";
 
 const PAST: Record<ComputerAction, string> = {
-  stop: "stopped",
-  reset: "reset",
-  update: "updated",
+  stop: "停下",
+  reset: "重置",
+  update: "更新",
 };
 
 function invalidateComputers(queryClient: QueryClient) {
@@ -84,7 +84,7 @@ export function setComputerStateMutationOptions(queryClient: QueryClient) {
           computer: variables.computer,
           ...(variables.botId ? { botId: variables.botId } : {}),
         },
-        fallback: `The computer could not be ${PAST[variables.action]}.`,
+        fallback: `这台电脑没能${PAST[variables.action]}。`,
       });
     },
     /** A reset deletes the profile those commands ran on; a stop keeps it, so only reset forgets. */

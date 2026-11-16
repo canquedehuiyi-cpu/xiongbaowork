@@ -3,7 +3,7 @@ import { type ApprovalRuleInput, approvalsKey } from "@/lib/approvals";
 import { client } from "@/lib/client";
 import { approvalRuleKeys } from "./queries";
 
-const FALLBACK = "The team rules could not be saved.";
+const FALLBACK = "这套团队规则没能存下来。";
 
 /** Where saved rules came from: the sentence the model wrote them from. */
 export type ApprovalRuleAuthoring = { source: "english"; text: string };

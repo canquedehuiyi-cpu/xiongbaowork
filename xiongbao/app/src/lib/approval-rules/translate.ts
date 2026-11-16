@@ -41,7 +41,7 @@ export async function translateApprovalRules(
   const response = await client("/api/approvals/team/rules/translate", {
     method: "POST",
     body: { text },
-    fallback: "Couldn't write the rules. Try again, or add the rule by hand.",
+    fallback: "没能写下这套规则。再试一次，或者手写这条规则。",
   });
   return (await response.json()) as ApprovalRuleTranslation;
 }

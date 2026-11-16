@@ -51,7 +51,7 @@ export function autonomousQueryOptions(agentId: string | null) {
       client<AutonomousSummary>(
         `/api/agents/${encodeURIComponent(agentId ?? "")}/autonomous`,
         "autonomous",
-        { fallback: "Could not load what this coworker does on its own." },
+        { fallback: "读不到这位员工自己会做的事。" },
       ),
     // A firing changes the answer, and nothing else pushes; five minutes is short enough that a
     // person returning to the tab sees today rather than this morning.

@@ -37,7 +37,7 @@ export function componentListQueryOptions() {
     queryFn: async (): Promise<ComponentRecord[]> => {
       return (
         (await client("/api/components", "components", {
-          fallback: "The components could not be loaded.",
+          fallback: "读不到组件。",
         })) ?? []
       );
     },
@@ -63,7 +63,7 @@ export function agentComponentsQueryOptions(agentId: string | undefined) {
         (await client(
           `/api/components/for-agent/${encodeURIComponent(agentId ?? "")}`,
           "components",
-          { fallback: "This Bot's components could not be loaded." },
+          { fallback: "读不到这个 Bot 的组件。" },
         )) ?? []
       );
     },
@@ -104,7 +104,7 @@ export function dataFunctionsQueryOptions() {
     queryFn: async (): Promise<DataFunctionSummary[]> => {
       return (
         (await client("/api/components/functions", "functions", {
-          fallback: "The data functions could not be loaded.",
+          fallback: "读不到数据函数。",
         })) ?? []
       );
     },

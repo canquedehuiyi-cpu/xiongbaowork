@@ -38,8 +38,7 @@ export async function askWhatIf(question: string): Promise<WhatIfReading> {
   const response = await client("/api/admin/what-if/ask", {
     method: "POST",
     body: { question },
-    fallback:
-      "Couldn't read that question. Try again, or set the action yourself.",
+    fallback: "没读懂这个问题。再试一次，或者自己指定动作。",
   });
   return (await response.json()) as WhatIfReading;
 }
@@ -52,7 +51,7 @@ export async function checkWhatIf(
   const response = await client("/api/admin/what-if/check", {
     method: "POST",
     body: { action, ...(question ? { question } : {}) },
-    fallback: "Couldn't check that action. Try again.",
+    fallback: "没能核对这个动作。再试一次。",
   });
   return (await response.json()) as WhatIfChecked;
 }
@@ -63,7 +62,7 @@ export async function explainAuditEvent(
 ): Promise<WhatIfExplained> {
   const response = await client(
     `/api/admin/what-if/explain/${encodeURIComponent(eventId)}`,
-    { fallback: "Couldn't explain this event. Try again." },
+    { fallback: "没能解释这次事件。再试一次。" },
   );
   return (await response.json()) as WhatIfExplained;
 }
