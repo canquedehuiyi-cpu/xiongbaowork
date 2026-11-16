@@ -285,6 +285,8 @@ export function createDeliveryRouter(deps: {
           });
           continue;
         }
+        // 部署关了微信（`WECHAT_ENABLED`）：之前留下的微信绑定不再写行。
+        if (binding.transport === "wechat" && !deps.providers.wechat) continue;
         let roundToClose: string | null = null;
         if (binding.transport === "wechat" && input.kind === "reply") {
           /*
@@ -392,6 +394,7 @@ export function createDeliveryRouter(deps: {
     const noted = { done: false };
     for (const binding of await deps.store.bindingsByUse(ping.ownerUserId)) {
       if (chosen.has(binding.transport)) continue;
+      if (binding.transport === "wechat" && !deps.providers.wechat) continue;
       const carrier = await routeFor({
         ownerUserId: ping.ownerUserId,
         agentId: binding.agentId,

@@ -27,6 +27,18 @@ import { WECHAT_BIND_ATTEMPT_MINUTES, type WechatStore } from "./store";
 /** 最后一次入站超过这么久，就不往微信发主动内容。 */
 export const WECHAT_PROACTIVE_WINDOW_MS = 10 * 60 * 60 * 1000;
 
+/**
+ * 部署开关 `WECHAT_ENABLED`：默认开；`false` / `0` / `off`（不分大小写）关。关了的部署不提供微信绑定
+ * （`available.wechat` 为 false，设置页整节不显示）、不启动长轮询、不注册微信的发件箱出口。用在连不上腾讯的
+ * 服务器上（例如京东云连不通 ilinkai.weixin.qq.com:443）。
+ */
+export function wechatEnabled(value: string | undefined): boolean {
+  return !["false", "0", "off"].includes((value ?? "").trim().toLowerCase());
+}
+
+/** 绑好后在微信里试着说的那一句。 */
+export const WECHAT_WELCOME_TEXT = "已绑定，直接在这里给员工派活";
+
 export type WechatBindDeps = {
   database: Database;
   ilink: Pick<IlinkClient, "getBotQrcode" | "getQrcodeStatus">;
@@ -36,6 +48,11 @@ export type WechatBindDeps = {
     "create" | "rotate" | "revoke" | "findLiveByKey"
   >;
   encryptionKey: string;
+  /**
+   * 绑好后试着在微信里说一句 {@link WECHAT_WELCOME_TEXT}。iLink 要 `context_token` 才肯发，刚绑好的账号通常
+   * 还没有，所以多半发不出；发不出就算了（界面会引导先在「微信 ClawBot」里发一句话），不影响绑定。
+   */
+  welcome?: (userId: string) => Promise<void>;
 };
 
 export type WechatBindStatus =
@@ -236,7 +253,19 @@ export function createWechatBind(deps: WechatBindDeps) {
           return finish(userId, attempt.id, "taken");
         throw error;
       }
-      return finish(userId, attempt.id, "bound");
+      const done = await finish(userId, attempt.id, "bound");
+      if (deps.welcome)
+        try {
+          await deps.welcome(userId);
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "wechat-welcome-not-sent",
+              error: error instanceof Error ? error.name : "UnknownError",
+            }),
+          );
+        }
+      return done;
     },
 
     /** 解绑：账号标成 `unbound`（store 同时清掉 `context_token`、游标、租约），微信投递绑定删掉，凭据作废。 */

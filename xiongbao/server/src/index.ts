@@ -275,7 +275,11 @@ import { createDeliveryScopes } from "./delivery/scope";
 import { createDeliveryStore } from "./delivery/store";
 import type { DeliveryScope } from "./delivery/types";
 import { DeliveryRefusedError } from "./delivery/types";
-import type { WechatBindDeps } from "./delivery/wechat/bind";
+import {
+  WECHAT_WELCOME_TEXT,
+  type WechatBindDeps,
+  wechatEnabled,
+} from "./delivery/wechat/bind";
 import {
   createWechatDecisions,
   type WechatDecisions,
@@ -287,6 +291,7 @@ import {
 import {
   createWechatInbound,
   createWechatSender,
+  createWechatWelcome,
 } from "./delivery/wechat/inbound";
 import { createWechatPoller } from "./delivery/wechat/poller";
 import { createWechatStore } from "./delivery/wechat/store";
@@ -4051,15 +4056,27 @@ await startupLifecycle.run(async (startup) => {
   const wechatStore = createWechatStore(database);
   /**
    * 「我 › 通知 › 微信」扫码绑定用的东西，也是这个部署开没开微信的唯一开关：没有它时设置页不提供微信
-   * （`available.wechat` 为 false），长轮询也不启动（见下面 deliveryRouter 之后）。
+   * （`available.wechat` 为 false），长轮询不启动（见下面 deliveryRouter 之后），微信的发件箱出口也不注册。
+   * 部署开关 `WECHAT_ENABLED=false|0|off` 时没有它（例如服务器连不通腾讯，`bind.ts` `wechatEnabled`）。
    */
-  const wechatBind: WechatBindDeps | undefined = {
-    database,
-    ilink: wechatIlink,
-    store: wechatStore,
-    credentials: credentialStore,
-    encryptionKey: config.keyEncryptionKey,
-  };
+  const wechatBind: WechatBindDeps | undefined = wechatEnabled(
+    process.env.WECHAT_ENABLED,
+  )
+    ? {
+        database,
+        ilink: wechatIlink,
+        store: wechatStore,
+        credentials: credentialStore,
+        encryptionKey: config.keyEncryptionKey,
+        welcome: createWechatWelcome({
+          ilink: wechatIlink,
+          credentials: credentialStore,
+          keyEncryptionKey: config.keyEncryptionKey,
+          wechat: wechatStore,
+          text: WECHAT_WELCOME_TEXT,
+        }),
+      }
+    : undefined;
   /*
    * 微信的发件箱出口（delivery/wechat/transport.ts）：编号提示的文字来自下面才建好的 wechatDecisions，所以按取值
    * 函数晚绑定。时间窗和漏发计数用同一个账号行。
@@ -4076,11 +4093,15 @@ await startupLifecycle.run(async (startup) => {
         config.auth?.baseUrl ??
         `http://localhost:${config.port}`,
     ),
-    wechat: createWechatTransport({
-      wechat: wechatStore,
-      send: wechatSend,
-      prompts: () => wechatPromptOpeners,
-    }),
+    ...(wechatBind
+      ? {
+          wechat: createWechatTransport({
+            wechat: wechatStore,
+            send: wechatSend,
+            prompts: () => wechatPromptOpeners,
+          }),
+        }
+      : {}),
   };
   // Slack channel membership for triggers is answered by OpenTag, which holds the workspace token.
   useSlackChannelMembership((input) =>
@@ -4106,7 +4127,9 @@ await startupLifecycle.run(async (startup) => {
     queue: createWorkQueue(database),
     owner: workOwner("delivery"),
     providers: deliveryProviders,
-    wechatWindow: createWechatWindow({ wechat: wechatStore }),
+    ...(wechatBind
+      ? { wechatWindow: createWechatWindow({ wechat: wechatStore }) }
+      : {}),
     authoriseScope: authoriseDeliveryScope,
     scopeFor: deliveryScopeFor,
     notifyEvent: (event) => responsibilityEngine.ingest(event),

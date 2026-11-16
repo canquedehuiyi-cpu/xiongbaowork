@@ -121,6 +121,36 @@ export function createWechatSender(deps: {
   };
 }
 
+/**
+ * 绑好后在微信里试着说一句（`bind.ts` 的 `welcome`）。有 `context_token` 就带上；刚绑好的账号通常还没有，就空着
+ * 发——iLink 多半不收，抛的错由调用方吞掉，界面照样引导先在「微信 ClawBot」里发一句话。
+ */
+export function createWechatWelcome(deps: {
+  ilink: Pick<IlinkClient, "sendText">;
+  credentials: CredentialSecretReader;
+  keyEncryptionKey: string;
+  wechat: Pick<WechatStore, "account">;
+  text: string;
+}) {
+  return async (userId: string): Promise<void> => {
+    const account = await deps.wechat.account(userId);
+    if (!account?.credentialId || account.status !== "bound") return;
+    const botToken = await decryptCredentialForUse(
+      deps.keyEncryptionKey,
+      deps.credentials,
+      account.credentialId,
+    );
+    await deps.ilink.sendText(
+      { baseUrl: account.baseUrl, botToken },
+      {
+        toUserId: account.ilinkUserId,
+        contextToken: account.contextToken ?? "",
+        text: deps.text,
+      },
+    );
+  };
+}
+
 type Roster = Pick<AgentProfile, "id" | "name" | "title">[];
 
 /** 处理一条提示回复时能用的东西。 */

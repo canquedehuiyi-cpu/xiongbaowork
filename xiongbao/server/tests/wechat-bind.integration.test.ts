@@ -10,10 +10,16 @@ import { credentials, users } from "../src/db/schema/core";
 import { wechatAccounts, wechatBindAttempts } from "../src/db/schema/wechat";
 import { createDeliveryRoutes } from "../src/delivery/routes";
 import { createDeliveryStore } from "../src/delivery/store";
+import { DeliveryProviderError } from "../src/delivery/types";
 import type {
   IlinkClient,
   IlinkQrcodeStatus,
 } from "../src/delivery/wechat/ilink";
+import {
+  WECHAT_WELCOME_TEXT,
+  wechatEnabled,
+} from "../src/delivery/wechat/bind";
+import { createWechatWelcome } from "../src/delivery/wechat/inbound";
 import { createWechatStore } from "../src/delivery/wechat/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -29,7 +35,9 @@ const alice = `${prefix}-alice`;
 const bob = `${prefix}-bob`;
 const carol = `${prefix}-carol`;
 const dave = `${prefix}-dave`;
-const people = [alice, bob, carol, dave];
+const erin = `${prefix}-erin`;
+const frank = `${prefix}-frank`;
+const people = [alice, bob, carol, dave, erin, frank];
 const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
 const wechatStore = createWechatStore(database);
 const credentialStore = createCredentialStore(database);
@@ -481,4 +489,154 @@ test("已断开的账号：总览返回 disconnected，不占着这个微信，�
   );
   expect((await poll(bob, again.attemptId)).body.status).toBe("bound");
   expect((await overview(bob)).body.wechat?.status).toBe("bound");
+});
+
+test("部署开关 WECHAT_ENABLED：默认开，false / 0 / off 关", () => {
+  expect(wechatEnabled(undefined)).toBe(true);
+  expect(wechatEnabled("")).toBe(true);
+  expect(wechatEnabled("true")).toBe(true);
+  expect(wechatEnabled("1")).toBe(true);
+  for (const off of ["false", "0", "off", " OFF ", "False"])
+    expect(wechatEnabled(off)).toBe(false);
+});
+
+test("连不上微信：开始绑定、查进度、解绑失败都回中文，不露服务器英文", async () => {
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    const down = appWith({
+      database,
+      ilink: {
+        async getBotQrcode() {
+          throw new DeliveryProviderError("WeChat", "network_error", true);
+        },
+        async getQrcodeStatus() {
+          throw new Error("socket hang up");
+        },
+      },
+      store: {
+        ...wechatStore,
+        async unbind() {
+          throw new Error("connection terminated");
+        },
+      },
+      credentials: credentialStore,
+      encryptionKey: KEY,
+    });
+    const started = await call(down, erin, "POST", "/wechat/start");
+    expect(started.status).toBe(503);
+    expect(await started.json()).toEqual({
+      error: "暂时连不上微信，请稍后再试",
+    });
+
+    // 查进度：二维码是好的部署发的，问微信时出了意外。
+    const attempt = await start(erin);
+    const checked = await call(
+      down,
+      erin,
+      "GET",
+      `/wechat/attempts/${attempt.attemptId}`,
+    );
+    expect(checked.status).toBe(503);
+    expect(await checked.json()).toEqual({
+      error: "暂时连不上微信，请稍后再试",
+    });
+
+    const removed = await call(down, erin, "DELETE", "/wechat");
+    expect(removed.status).toBe(503);
+    expect(await removed.json()).toEqual({
+      error: "暂时连不上微信，请稍后再试",
+    });
+
+    // 别的渠道不变：仍是原来的英文。
+    const other = await call(down, erin, "DELETE", "/bindings/nope");
+    expect(other.status).not.toBe(200);
+    const body = (await other.json()) as { error?: string };
+    expect(body.error ?? "").not.toBe("暂时连不上微信，请稍后再试");
+  } finally {
+    console.error = quiet;
+  }
+});
+
+test("绑好后试着在微信里发一句「已绑定」；发不出也不影响绑定", async () => {
+  const welcomed: string[] = [];
+  const greeter = appWith({
+    database,
+    ilink: ilink.client,
+    store: wechatStore,
+    credentials: credentialStore,
+    encryptionKey: KEY,
+    welcome: async (userId) => {
+      welcomed.push(userId);
+    },
+  });
+  const mine = await start(frank, greeter);
+  ilink.answer(
+    mine.qrcode,
+    confirmed(`${prefix}-ilink-frank`, `${prefix}-FRANK-TOKEN-1`),
+  );
+  expect((await poll(frank, mine.attemptId, greeter)).body.status).toBe(
+    "bound",
+  );
+  expect(welcomed).toEqual([frank]);
+  // 真的那一句：用这个人刚封好的令牌，发给他自己的微信；还没有 context_token 就空着发。
+  const said: { token: string; to: string; context: string; text: string }[] =
+    [];
+  await runAsTenant(frank, () =>
+    createWechatWelcome({
+      ilink: {
+        async sendText(session, input) {
+          said.push({
+            token: session.botToken,
+            to: input.toUserId,
+            context: input.contextToken,
+            text: input.text,
+          });
+        },
+      },
+      credentials: credentialStore,
+      keyEncryptionKey: KEY,
+      wechat: wechatStore,
+      text: WECHAT_WELCOME_TEXT,
+    })(frank),
+  );
+  expect(said).toEqual([
+    {
+      token: `${prefix}-FRANK-TOKEN-1`,
+      to: `${prefix}-ilink-frank`,
+      context: "",
+      text: "已绑定，直接在这里给员工派活",
+    },
+  ]);
+  // 再问一次（已经绑好）：不再发。
+  expect((await poll(frank, mine.attemptId, greeter)).body.status).toBe(
+    "bound",
+  );
+  expect(welcomed).toEqual([frank]);
+
+  const quiet = console.error;
+  console.error = () => {};
+  try {
+    const failing = appWith({
+      database,
+      ilink: ilink.client,
+      store: wechatStore,
+      credentials: credentialStore,
+      encryptionKey: KEY,
+      welcome: async () => {
+        throw new Error("ret=-2");
+      },
+    });
+    const again = await start(frank, failing);
+    ilink.answer(
+      again.qrcode,
+      confirmed(`${prefix}-ilink-frank`, `${prefix}-FRANK-TOKEN-2`),
+    );
+    expect((await poll(frank, again.attemptId, failing)).body.status).toBe(
+      "bound",
+    );
+    expect((await overview(frank, failing)).body.wechat?.status).toBe("bound");
+  } finally {
+    console.error = quiet;
+  }
 });
