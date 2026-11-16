@@ -461,6 +461,16 @@ jobs:
           - pkg: runner
             own-lockfile: false
             root-install: true
+          # Root workspace (typechecked by static, its tests included by its tsconfig). Run from its
+          # own directory like the others, so extension/bunfig.toml repeats the root preload: without
+          # it Base UI's dialogs never mount and every test that opens one fails.
+          - pkg: extension
+            own-lockfile: false
+            root-install: true
+          # Root workspace. static's typecheck reads its src only (tsconfig include), not its tests.
+          - pkg: toolkit
+            own-lockfile: false
+            root-install: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -498,6 +508,89 @@ jobs:
         with:
           name: workspace-${{ matrix.pkg }}-logs
           path: ${{ runner.temp }}/head.log
+
+  # The repository-level tests in openbot/tests: the chart, compose and Dockerfiles, the release and
+  # upgrade scripts, the default tenant package and the copy guards. None has a counterpart in the
+  # frozen baseline run, so the gate is head only, as for the workspaces above. `./tests/` and not
+  # `tests/`: Bun reads a bare argument as a path filter and would run every tests/ directory in the
+  # tree. Helm is pinned as in the chart job, so the chart suites run rather than skip; the hosted
+  # runner's Docker serves the real-tool update suite; chart-database-wait creates and drops scratch
+  # databases on this job's own PostgreSQL, so it is given the owner. Left to the guards they already
+  # have: the kind-cluster suites (OPENBOT_KIND_KUBECONFIG) and the smoke journey (OPENBOT_SMOKE),
+  # which need a running cluster or a deployed instance.
+  repo-tests:
+    name: repository tests (openbot/tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: repo_tests
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d repo_tests"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      TEST_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/repo_tests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.19.0
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      # agent-bot.test.ts starts the agent-bot Bot, which keeps its own lockfile.
+      - name: Install agent-bot from its own frozen lockfile (no lifecycle scripts)
+        working-directory: openbot/agent-bot
+        run: bun install --frozen-lockfile --ignore-scripts
+      # The chart suites render charts/openbot, which needs its subcharts on disk, as chart-check.sh does.
+      - name: Fetch the chart's dependencies
+        run: helm dependency build charts/openbot
+      - name: Repository tests
+        run: bun test ./tests/ > "$RUNNER_TEMP/repo-tests.log" 2>&1
+      - name: Zero-fail gate (head only, no baseline counterpart)
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/repo-tests.log" 'repository tests (head only)'
+      - name: Print repository test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/repo-tests.log"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: repo-tests-logs
+          path: ${{ runner.temp }}/repo-tests.log
+
+  # The Expo app in openbot/mobile: its own npm project with its own package-lock.json, outside the
+  # bun workspaces, so neither static's typecheck nor any test job reaches it. It has no test runner
+  # yet; this is its typecheck. npm ci installs exactly the lockfile, without lifecycle scripts like
+  # every bun install here, on the runner's preinstalled Node.
+  mobile-typecheck:
+    name: mobile typecheck (Expo, npm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: openbot/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: node --version && npm --version
+      - name: Install from package-lock.json (no lifecycle scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
 
   # The computer's real-browser tests, which prove a secret typed into a page never reaches the Bot:
   # the aria snapshot hides a password's value and the screenshot paints the marked fields over under

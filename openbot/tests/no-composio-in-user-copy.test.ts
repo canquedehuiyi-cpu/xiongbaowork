@@ -18,7 +18,7 @@ import ts from "typescript";
  * is for the capitalised word), type-level strings, comments, tests, log calls, and docs/ and
  * charts/, which operators read to configure Composio by name. The broker client's own sentences
  * (server/src/plugins/composio*) are written for the operator; the routes a person calls pass them
- * through `forPerson` (server/src/plugins/route-groups/context.ts), and
+ * through `forPerson` (server/src/plugins/routes.ts), and
  * server/tests/plugin-routes.test.ts pins that a person never reads one.
  */
 const REPO = join(import.meta.dir, "..");
@@ -26,6 +26,72 @@ const WORD = /\bComposio\b/;
 /** An interpolation of the broker's display name. */
 const VENDOR_NAME =
   /^(BROKERED_PROFILE\[[^\]]+\]\.vendor|activeVendor|profile\.vendor|vendor)$/;
+
+/**
+ * Text that names Composio and is answered only to an administrator. Upstream counts the admin's
+ * screens in (the header above); this tree's copy rule lets an admin read exact names (.claude/skills/openbot-copy, "Admin is allowed exact names"), and its brand
+ * allowlist keeps third-party names an admin has to act on (app/tests/brand-leak-allowlist.json,
+ * category third-party-name). Each entry is a route behind `requireAdmin` in
+ * server/src/plugins/routes.ts, and must still match, so one that goes stale is removed rather than
+ * kept as a hole. A person's own routes (connect, the access requests they file) get no entry.
+ */
+const ADMIN_ONLY: { file: string; text: string; why: string }[] = [
+  {
+    file: "server/src/plugins/routes.ts",
+    text: "Composio would not answer with its app directory",
+    why: "GET and POST /composio/apps, the admin's app directory (requireAdmin)",
+  },
+  {
+    file: "server/src/plugins/routes.ts",
+    text: "Removing this app did not finish, and neither this deployment nor Composio said why",
+    why: "DELETE /servers/:id (requireAdmin)",
+  },
+  {
+    file: "server/src/plugins/routes.ts",
+    text: "部署自己的 OAuth 客户端只适用于 Composio",
+    why: "PUT /composio/clients/:slug (requireAdmin)",
+  },
+  {
+    file: "server/src/plugins/routes.ts",
+    text: "is not an app Composio lists for this deployment",
+    why: "POST /composio/apps (requireAdmin)",
+  },
+  {
+    file: "server/src/plugins/routes.ts",
+    text: "could not be enabled, and Composio said nothing about why",
+    why: "POST /composio/apps (requireAdmin)",
+  },
+  {
+    file: "server/src/plugins/store.ts",
+    text: "resolves to a brokered credential with no Composio app in its url",
+    why: "an invariant the routes show only on DELETE /servers/:id (requireAdmin); elsewhere it is a bodyless 500",
+  },
+  {
+    file: "server/src/plugins/store.ts",
+    text: "is a Composio app this deployment has enabled",
+    why: "a refusal of adding or re-keying a server, done by an admin (the server routes and access-request approval)",
+  },
+  {
+    file: "server/src/plugins/store.ts",
+    text: "is the name of this deployment's own Composio screen",
+    why: "a refusal of a server an admin adds by URL",
+  },
+  {
+    file: "server/src/plugins/store.ts",
+    text: "belong to the Composio apps this deployment enables",
+    why: "a refusal of a server an admin adds by URL",
+  },
+  {
+    file: "server/src/plugins/store.ts",
+    text: "is not a name a Composio app can have",
+    why: "POST /composio/apps, the admin enabling an app (requireAdmin)",
+  },
+];
+
+const isAdminOnly = (hit: string) =>
+  ADMIN_ONLY.some(
+    (entry) => hit.startsWith(`${entry.file}:`) && hit.includes(entry.text),
+  );
 
 /** Calls whose arguments are written to a log, never shown. */
 const LOGGING =
@@ -139,14 +205,13 @@ function nativeText(path: string): string[] {
 
 function shown(): string[] {
   const found = [
-    ...[
-      "desktop/src",
-      "app/src",
-      "extension/src",
-      "shared",
-      "server/src/plugins/route-groups",
-      "server/src/plugins/plugin-store",
-    ].flatMap((root) => [...files(join(REPO, root), /\.tsx?$/)]),
+    ...["desktop/src", "app/src", "extension/src", "shared"].flatMap((root) => [
+      ...files(join(REPO, root), /\.tsx?$/),
+    ]),
+    // This tree keeps the plugin routes and the plugin store as one file each, where upstream split
+    // them into route-groups/ and plugin-store/.
+    join(REPO, "server/src/plugins/routes.ts"),
+    join(REPO, "server/src/plugins/store.ts"),
   ].flatMap(scriptText);
   found.push(
     ...[...files(join(REPO, "desktop/src-tauri/src"), /\.rs$/)].flatMap(
@@ -157,7 +222,18 @@ function shown(): string[] {
 }
 
 test("no text a person reads in the desktop app, the app or the plugin routes says Composio", () => {
-  expect(shown()).toEqual([]);
+  expect(shown().filter((hit) => !isAdminOnly(hit))).toEqual([]);
+});
+
+test("every exception for text only an admin reads still matches", () => {
+  const found = shown();
+  const stale = ADMIN_ONLY.filter(
+    (entry) =>
+      !found.some(
+        (hit) => hit.startsWith(`${entry.file}:`) && hit.includes(entry.text),
+      ),
+  );
+  expect(stale).toEqual([]);
 });
 
 test("the scan finds what it is for", () => {

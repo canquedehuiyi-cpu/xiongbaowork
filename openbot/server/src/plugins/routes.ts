@@ -2185,7 +2185,7 @@ export function createPluginRoutes(
              */
             return context.json(
               {
-                error: `That is not the form ${row.title} publishes, so nothing was sent to Composio. Press Connect again to draw it from what the app asks for now, and fill in the boxes it shows; each one holds text.`,
+                error: `That is not the form ${row.title} publishes, so nothing was sent to the connection service. Press Connect again to draw it from what the app asks for now, and fill in the boxes it shows; each one holds text.`,
               },
               400,
             );
@@ -2233,7 +2233,7 @@ export function createPluginRoutes(
         if (missing.length > 0) {
           return context.json(
             {
-              error: `${row.title} cannot be connected without ${missing.join(", ")}, so nothing was sent to Composio. Fill in every box the form marks required — a box holding only spaces is an empty one — and press Connect again.`,
+              error: `${row.title} cannot be connected without ${missing.join(", ")}, so nothing was sent to the connection service. Fill in every box the form marks required — a box holding only spaces is an empty one — and press Connect again.`,
             },
             400,
           );
@@ -2345,8 +2345,7 @@ export function createPluginRoutes(
       if (!connect?.appUrl) {
         return context.json(
           {
-            error:
-              `This deployment has no app URL configured, so Composio would have nowhere to send you back to. Set ${envName("APP_URL")}.`,
+            error: `This deployment has no app URL configured, so the connection service would have nowhere to send you back to. Set ${envName("APP_URL")}.`,
           },
           503,
         );

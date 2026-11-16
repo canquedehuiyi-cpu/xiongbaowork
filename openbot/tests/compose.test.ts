@@ -655,7 +655,13 @@ test("builds the deployment image with Playwright's Chromium payload only", () =
         "{PLAYWRIGHT_VERSION}" +
         '" install --with-deps --no-shell chromium',
     );
-    expect(dockerfile).not.toMatch(/\bnodejs\b|\bnpm\b/);
+    // Node and npm arrive with the node-toolchain stage; no instruction installs a distribution's
+    // nodejs or npm. Comments may name npm (an employee runs `npm install` in its own workspace).
+    const instructions = dockerfile
+      .split("\n")
+      .filter((line) => !line.trimStart().startsWith("#"))
+      .join("\n");
+    expect(instructions).not.toMatch(/\bnodejs\b|\bnpm\b/);
     expect(dockerfile).not.toMatch(
       /\binstall(?:\s+--with-deps)?\s+(firefox|webkit)\b/,
     );
