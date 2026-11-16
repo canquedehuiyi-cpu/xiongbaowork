@@ -69,6 +69,14 @@ export type IlinkClient = {
   ): Promise<void>;
 };
 
+/** 本人私聊 ClawBot 发来的（不是别人发的、不是群里的）：只有这种才交给员工、才算本人来过信。 */
+export function isOwnDirectMessage(
+  account: { ilinkUserId: string },
+  message: Pick<IlinkMessage, "fromUserId" | "groupId">,
+): boolean {
+  return !message.groupId && message.fromUserId === account.ilinkUserId;
+}
+
 /** 0x00MMNNPP 编成十进制字符串。 */
 export function encodeClientVersion(v: string): string {
   const m = /^[vV]?(\d+)\.(\d+)\.(\d+)/.exec(v);

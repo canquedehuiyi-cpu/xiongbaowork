@@ -37,6 +37,7 @@ import {
   type IlinkMessage,
   IlinkPausedError,
   IlinkUnauthorizedError,
+  isOwnDirectMessage,
 } from "./ilink";
 import type { WechatStore } from "./store";
 
@@ -190,10 +191,12 @@ export function createWechatPoller(deps: WechatPollerDeps) {
       // 处理一条可能很久：租约不再是自己的就停手，不存游标，让拿到租约的那个重来。
       if (!(await deps.wechat.renewLease(account.id, claimOwner, leaseMs)))
         return;
-      await deps.wechat.markInbound(account.id, {
-        at: now(),
-        contextToken: message.contextToken,
-      });
+      // 只有本人私聊来的才算来过信：别人发的、群里的不改 `context_token` 和最近一次入站时间（时间窗）。
+      if (isOwnDirectMessage(account, message))
+        await deps.wechat.markInbound(account.id, {
+          at: now(),
+          contextToken: message.contextToken,
+        });
       // 心跳：`inbound` 可能比租约还久；续不上说明租约被别人拿走了，跑完也不写游标。
       let lost = false;
       const heartbeat = setInterval(

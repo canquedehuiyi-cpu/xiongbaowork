@@ -41,7 +41,11 @@ import type { DeliveryRouter } from "../router";
 import type { DeliveryScopeResolver } from "../routes";
 import type { DeliveryStore } from "../store";
 import { DeliveryRefusedError } from "../types";
-import type { IlinkClient, IlinkMessage } from "./ilink";
+import {
+  type IlinkClient,
+  type IlinkMessage,
+  isOwnDirectMessage,
+} from "./ilink";
 import { matchPromptReply, type PromptAccepts, promptCodeOf } from "./prompts";
 import type { WechatStore } from "./store";
 
@@ -684,7 +688,7 @@ export function createWechatInbound(deps: WechatInboundDeps) {
     signal?: AbortSignal,
   ): Promise<void> {
     // 只认本人私聊 ClawBot 的消息：别人的、群里的，交不到这个人的员工手上。
-    if (message.groupId || message.fromUserId !== claimed.ilinkUserId) return;
+    if (!isOwnDirectMessage(claimed, message)) return;
     if (!(await deps.wechat.claimMessage(claimed.id, message.id))) return;
     try {
       // 轮询器给的是认领时的行；同一批前面的消息可能已经换了员工，所以重读。

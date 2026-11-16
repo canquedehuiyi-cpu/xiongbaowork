@@ -95,6 +95,12 @@ const message = (id: string, text = "hi", contextToken = `ctx-${id}`) =>
     groupId: null,
   }) satisfies IlinkMessage;
 
+/** 本人私聊 ClawBot 发来的一条（`bindPerson(name)` 的那个微信号）。 */
+const ownMessage = (name: string, id: string) => ({
+  ...message(id),
+  fromUserId: `${prefix}-wx-${name}@im.wechat`,
+});
+
 /** 一个新用户、一份封好令牌的凭据、一个已绑定的账号。 */
 async function bindPerson(name: string) {
   const userId = `${prefix}-${name}`;
@@ -165,7 +171,10 @@ test("收到两条消息：inbound 调两次、在本人的帧里，时间、上
   const ilink = fakeIlink();
   ilink.script(
     a.token,
-    { messages: [message("101"), message("102")], cursor: "cur-1" },
+    {
+      messages: [ownMessage("a", "101"), ownMessage("a", "102")],
+      cursor: "cur-1",
+    },
     { messages: [], cursor: "" },
   );
   const seen: { id: string; tenant: string | undefined }[] = [];
@@ -729,4 +738,45 @@ test("shutdown：宽限期到了 inbound 还在跑，就中止它再等它收尾
   expect(WECHAT_SHUTDOWN_GRACE_MS).toBe(7_000);
   expect((await accountOf(s.userId))?.cursor).toBeNull();
   await runAsTenant(s.userId, () => store.unbind(s.userId));
+});
+
+test("别人发的、群里的消息：不改 context_token 和最近一次入站时间", async () => {
+  const g = await bindPerson("foreign");
+  const ilink = fakeIlink();
+  ilink.script(
+    g.token,
+    { messages: [ownMessage("foreign", "931")], cursor: "c1" },
+    {
+      messages: [
+        message("932"),
+        { ...ownMessage("foreign", "933"), groupId: "room@chatroom" },
+      ],
+      cursor: "c2",
+    },
+  );
+  let clock = new Date("2026-11-16T08:00:00Z");
+  const seen: string[] = [];
+  const poller = pollerWith(
+    ilink,
+    async (_account, m) => {
+      seen.push(m.id);
+    },
+    { now: () => clock },
+  );
+  await poller.tick();
+  await poller.drain();
+  const first = await accountOf(g.userId);
+  expect(first?.contextToken).toBe("ctx-931");
+  expect(first?.lastInboundAt?.toISOString()).toBe(clock.toISOString());
+
+  clock = new Date("2026-11-16T09:00:00Z");
+  await poller.tick();
+  await poller.drain();
+  const after = await accountOf(g.userId);
+  expect(after?.contextToken).toBe("ctx-931");
+  expect(after?.lastInboundAt?.toISOString()).toBe("2026-11-16T08:00:00.000Z");
+  // 照样交给入站分流（它自己再挡一次）、游标照样前进。
+  expect(seen).toEqual(["931", "932", "933"]);
+  expect(after?.cursor).toBe("c2");
+  await runAsTenant(g.userId, () => store.unbind(g.userId));
 });
