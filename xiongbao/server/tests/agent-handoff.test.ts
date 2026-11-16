@@ -493,7 +493,10 @@ describe("handing work to another Bot", () => {
 
     await tool?.execute({ bot: "Researcher", task: "Check the changelog." });
 
-    expect(asked[0]?.unattended).toBeUndefined();
+    // `not.toHaveProperty` rather than `toBeUndefined`: the latter passes when `asked[0]` is
+    // missing, which is the one case this test exists to rule out.
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).not.toHaveProperty("unattended");
   });
 
   test("a Bot cannot hand work to itself", async () => {
