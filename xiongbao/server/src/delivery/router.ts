@@ -29,6 +29,7 @@ import {
   PERSON_DELIVERY_KINDS,
   type PersonDeliveryKind,
   type TextTransport,
+  type WechatPromptRefKind,
   wechatPromptRef,
 } from "./types";
 /** What a paired chat turn produced besides its reply, surfaced in that same turn. */
@@ -257,7 +258,7 @@ export function createDeliveryRouter(deps: {
     });
     const noted = { done: false };
     if (includeBindings) {
-      const bindings = await deps.store.bindingsFor(scope);
+      const bindings: DeliveryBinding[] = await deps.store.bindingsFor(scope);
       /*
        * 「等你确认」在这段对话没有对口的微信绑定时（任务卡片那段对话、没在微信里找过的员工），回落到本人最近用过
        * 的那个微信绑定，和逾期、清点一样（`notifyPerson`）。文字由微信出口按审批本身写（员工名、对话名、编号），
@@ -476,7 +477,7 @@ export function createDeliveryRouter(deps: {
     /** 微信那一行末尾多带的一句（开工清点：「回复任意内容，今天的提醒就能继续发到这里」）。 */
     wechatFooter?: string;
     /** 微信那一行换成带编号的提示（传给微信出口的结构化标记，不看标题文字）。 */
-    wechatPrompt?: "overdue";
+    wechatPrompt?: WechatPromptRefKind;
   }): Promise<{ queued: number; already: number }> {
     const reached = { queued: 0, already: 0 };
     if (

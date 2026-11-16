@@ -44,6 +44,7 @@ import { createDeliveryStore } from "../src/delivery/store";
 import {
   approvalText,
   createWechatDecisions,
+  handinText,
   overdueText,
 } from "../src/delivery/wechat/decisions";
 import type { IlinkMessage } from "../src/delivery/wechat/ilink";
@@ -59,6 +60,7 @@ import type { PeopleStore } from "../src/people/store";
 import {
   createBriefings,
   createTaskNotices,
+  notifyOnHandIn,
   WECHAT_KEEP_OPEN_HINT,
 } from "../src/tasks/briefing";
 import type { CardTurns } from "../src/tasks/card-turns";
@@ -211,6 +213,8 @@ const notices = createTaskNotices({
   router,
   scopeFor: scopes.scopeFor,
   workHours: savedWorkHours(database),
+  agentName: async (tenantId, agentId) =>
+    (await profileStore.get(await actorFor(tenantId), agentId))?.name ?? null,
 });
 
 const inbound = createWechatInbound({
@@ -1262,5 +1266,174 @@ describe("「等你确认」没有对口的微信绑定时回落到最近用过�
     );
     await sweep(who);
     expect(await wechatRows(who)).toEqual([]);
+  });
+});
+
+describe("交付待验收：推送和微信两路", () => {
+  /** 一件员工刚交上来、等验收的活。 */
+  const handedIn = (
+    who: Person,
+    input: Partial<typeof tasks.$inferInsert> = {},
+  ) => card(who, { status: "awaiting_review", ...input });
+
+  test("时间窗开着：微信收到「回复 验收，或 退回 原因」，手机也收到并点开那张卡；回「验收」生效", async () => {
+    setup();
+    const who = await person("r1");
+    const taskId = await handedIn(who);
+    const result = await asPerson(who, () =>
+      notices.handin(who.userId, taskId, clock),
+    );
+    expect(result).toBe("sent");
+    await sweep(who);
+    const prompts = await openPrompts(who);
+    expect(prompts.map((p) => [p.kind, p.refId])).toEqual([["handin", taskId]]);
+    const [text] = sentTo(who);
+    expect(text).toBe(
+      handinText(
+        { code: prompts[0]?.code ?? "" },
+        { id: taskId, title: "核对本周发票", dueAt: null },
+        who.botName,
+        { link: `${APP}/tasks/${taskId}` },
+      ),
+    );
+    expect(text).toContain("回复 验收，或 退回 原因");
+    expect((await wechatRows(who))[0]?.requestId).toBe(
+      `wechat-prompt:handin:${taskId}`,
+    );
+    const [pushed] = pushedTo(who) as unknown as {
+      title: string;
+      body: string;
+      data: { taskId?: string };
+    }[];
+    expect(pushed?.title).toBe("交付待验收");
+    expect(pushed?.body).toContain("核对本周发票");
+    expect(pushed?.data.taskId).toBe(taskId);
+    // 这件活今天的三次算上一次。
+    const [row] = await asPerson(who, () =>
+      database
+        .select({ count: tasks.notifiedCount })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    );
+    expect(row?.count).toBe(1);
+
+    await deliverText(who, "验收");
+    const [after] = await asPerson(who, () =>
+      database
+        .select({ status: tasks.status })
+        .from(tasks)
+        .where(eq(tasks.id, taskId)),
+    );
+    expect(after?.status).toBe("done");
+  });
+
+  test("同一件活今天已经提醒过三次：不再发", async () => {
+    setup();
+    const who = await person("r2");
+    const taskId = await handedIn(who, {
+      notifiedOn: "2026-11-16",
+      notifiedCount: 3,
+    });
+    const result = await asPerson(who, () =>
+      notices.handin(who.userId, taskId, clock),
+    );
+    expect(result).toBe("capped");
+    expect(await outbox(who)).toEqual([]);
+  });
+
+  test("作息外：不发，留给开工清点（它列着等验收的活）", async () => {
+    setup();
+    const who = await person("r3");
+    clock = SATURDAY_23;
+    const taskId = await handedIn(who);
+    const result = await asPerson(who, () =>
+      notices.handin(who.userId, taskId, clock),
+    );
+    expect(result).toBe("deferred");
+    expect(await outbox(who)).toEqual([]);
+  });
+
+  test("时间窗关了：不发微信、漏发加一，手机照发", async () => {
+    setup();
+    const who = await person("r4", 11 * HOUR);
+    const taskId = await handedIn(who);
+    const result = await asPerson(who, () =>
+      notices.handin(who.userId, taskId, clock),
+    );
+    expect(result).toBe("sent");
+    await sweep(who);
+    expect(await wechatRows(who)).toEqual([]);
+    expect(pushedTo(who).length).toBe(1);
+    expect((await accountOf(who))?.missedCount).toBe(1);
+    expect(await openPrompts(who)).toEqual([]);
+  });
+
+  test("微信发送失败：本次新开的提示关掉", async () => {
+    setup();
+    const who = await person("r5");
+    const taskId = await handedIn(who);
+    failWith = new IlinkWindowClosedError();
+    await asPerson(who, () => notices.handin(who.userId, taskId, clock));
+    await sweep(who);
+    expect((await wechatRows(who))[0]?.state).toBe("failed");
+    expect(await openPrompts(who)).toEqual([]);
+    expect((await accountOf(who))?.missedCount).toBe(1);
+  });
+
+  test("本人没打开微信：只推手机", async () => {
+    setup();
+    defaultRoute = true;
+    const who = await person("r6");
+    const taskId = await handedIn(who);
+    await asPerson(who, () => notices.handin(who.userId, taskId, clock));
+    await sweep(who);
+    expect(await wechatRows(who)).toEqual([]);
+    expect(pushedTo(who).length).toBe(1);
+  });
+
+  test("员工交付（delivered）时自动发「交付待验收」", async () => {
+    setup();
+    const who = await person("r7");
+    const runId = `run-${randomUUID()}`;
+    const taskId = await card(who, { activeRunRef: runId });
+    const told: string[] = [];
+    const wrapped = notifyOnHandIn(delivery, async (tenantId, id) => {
+      told.push(`${tenantId}:${id}`);
+      return notices.handin(tenantId, id, clock);
+    });
+    const merged = await wrapped.delivered(who.userId, taskId, {
+      runId,
+      agentId: who.botId,
+      actor: `agent:${who.botId}`,
+      deliverable: { kind: "deliverable", notes: ["对完了"] },
+    });
+    expect(merged).not.toBeNull();
+    expect(told).toEqual([`${who.userId}:${taskId}`]);
+    await sweep(who);
+    expect(sentTo(who).some((t) => t.includes("等你验收"))).toBe(true);
+    expect(pushedTo(who).length).toBe(1);
+
+    // 没交成（不是这一轮）：不通知。
+    told.length = 0;
+    const refused = await wrapped.delivered(who.userId, taskId, {
+      runId: "another-run",
+      agentId: who.botId,
+      actor: `agent:${who.botId}`,
+      deliverable: { kind: "deliverable", notes: ["又一版"] },
+    });
+    expect(refused).toBeNull();
+    expect(told).toEqual([]);
+
+    // 通知出错不影响交付本身。
+    const failing = notifyOnHandIn(delivery, async () => {
+      throw new Error("boom");
+    });
+    const again = await failing.delivered(who.userId, taskId, {
+      runId,
+      agentId: who.botId,
+      actor: `agent:${who.botId}`,
+      deliverable: { kind: "deliverable", notes: ["补一版"] },
+    });
+    expect(again).not.toBeNull();
   });
 });

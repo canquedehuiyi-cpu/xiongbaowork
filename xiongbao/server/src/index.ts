@@ -540,6 +540,7 @@ import {
   createBriefingRoutes,
   createBriefings,
   createTaskNotices,
+  notifyOnHandIn,
 } from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
 import { createDelivery } from "./tasks/delivery";
@@ -2816,8 +2817,22 @@ await startupLifecycle.run(async (startup) => {
       // 关掉 `accept_task` 就是这位员工不走三步：交付和延期跟着不给。
       return offeredDeliveryTools(tools.filter((tool) => !disabled(tool.ref)));
     };
-  /** The delivery loop's followed cards and the gate a hand-in passes (spec 2026-11-15-delivery-loop). */
-  const deliveryLoop = createDelivery(database);
+  /**
+   * 交付待验收的通知（`tasks/briefing.ts` `createTaskNotices().handin`）：通知出口要等投递路由建好才有，所以
+   * 在下面 `taskNotices` 建好时接上。
+   */
+  let handInNotice:
+    | ((tenantId: string, taskId: string) => Promise<unknown>)
+    | undefined;
+  /**
+   * The delivery loop's followed cards and the gate a hand-in passes (spec 2026-11-15-delivery-loop). A
+   * hand-in that moves a card to 等验收 tells the person (`notifyOnHandIn`), the coworker's own and an
+   * external employee's alike.
+   */
+  const deliveryLoop = notifyOnHandIn(
+    createDelivery(database),
+    async (tenantId, taskId) => handInNotice?.(tenantId, taskId),
+  );
   const evidenceGate = createEvidenceGate(database);
   /*
    * External employees walk the same three steps, the server walking them for them (spec §9,
@@ -4686,7 +4701,11 @@ await startupLifecycle.run(async (startup) => {
     router: deliveryRouter,
     scopeFor: deliveryScopeFor,
     workHours: savedWorkHours(database),
+    agentName: async (tenantId, agentId) =>
+      (await agentProfileStore.get(await actorFor(tenantId), agentId))?.name ??
+      null,
   });
+  handInNotice = (tenantId, taskId) => taskNotices.handin(tenantId, taskId);
   /*
    * 微信长轮询（delivery/wechat/poller.ts）：每 2 秒认领一批账号各拉一次，每条消息在本人的帧里交给入站分流
    * （delivery/wechat/inbound.ts）：选员工、在默认单聊里开一轮、回复加「【员工名】」发回微信。

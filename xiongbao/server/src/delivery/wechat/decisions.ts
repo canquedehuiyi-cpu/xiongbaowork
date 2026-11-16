@@ -393,9 +393,10 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
     };
   }
 
+  /** 交付待验收的提示；卡片已经不在等验收（别处验收过、退回了）时是 null。 */
   async function openHandinPrompt(userId: string, taskId: string) {
     const card = await cardOf(userId, taskId);
-    if (!card) return null;
+    if (!card?.tracked || !HANDIN_OPEN.has(card.status)) return null;
     const { code, count, created } = await open(userId, "handin", taskId);
     return {
       code,

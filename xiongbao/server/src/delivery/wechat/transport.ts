@@ -9,7 +9,7 @@
  *  - 路由发件箱行之前先问窗口（`createWechatWindow`）：关着就不写微信那一行，漏发加一。
  *  - 发的时候 iLink 还是拒绝（`ret=-2` 等）或缺 `context_token`：当作窗口已关，行记 `failed`、漏发加一、不重试。
  *
- * 文字：审批和逾期提醒（行上带结构化标记 `wechatPromptRef`）用 Task 7 的 `decisions.ts` 开编号提示并取文字，文字自带
+ * 文字：审批、逾期提醒和交付待验收（后两种行上带结构化标记 `wechatPromptRef`）用 Task 7 的 `decisions.ts` 开编号提示并取文字，文字自带
  * 「【员工名】」；别的种类原样发，回复和提问前面加「【员工名】」。谁开出的提示谁发（`created`）：审批提示已经开着
  * （微信里那一轮随回复发过）就不再发第二次，行记 sent 并在 error 里说明；发送失败时本次新开的提示关掉。
  *
@@ -72,6 +72,10 @@ type Prompts = {
     approvalId: string,
   ): Promise<{ code: string; text: string; created: boolean } | null>;
   openOverduePrompt(
+    userId: string,
+    taskId: string,
+  ): Promise<{ code: string; text: string; created: boolean } | null>;
+  openHandinPrompt(
     userId: string,
     taskId: string,
   ): Promise<{ code: string; text: string; created: boolean } | null>;
@@ -138,11 +142,21 @@ export function createWechatTransport(
         } else {
           const ref = readWechatPromptRef(context.requestId);
           if (context.kind === "overdue" && ref) {
-            // 逾期提醒会按每天上限重复发，同一张卡的提示还开着时照发（编号不变）。
-            const prompt = await prompts.openOverduePrompt(
-              context.ownerUserId,
-              ref.ref,
-            );
+            /*
+             * 逾期提醒和交付待验收都会按每天上限重复发（再交一版也会再提醒），同一张卡的提示还开着时照发（编号
+             * 不变）。
+             */
+            const prompt =
+              ref.kind === "handin"
+                ? await prompts.openHandinPrompt(context.ownerUserId, ref.ref)
+                : await prompts.openOverduePrompt(context.ownerUserId, ref.ref);
+            // 交上来的活已经不在等验收（别处验收过、退回了）：没有什么可问的。
+            if (!prompt && ref.kind === "handin")
+              return {
+                id: `wechat-${input.id}-settled`,
+                status: "sent",
+                note: "这件活已在别处处理，没有发到微信。",
+              };
             if (prompt) {
               text = prompt.text;
               if (prompt.created) opened = prompt.code;

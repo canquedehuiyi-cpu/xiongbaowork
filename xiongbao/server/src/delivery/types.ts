@@ -52,7 +52,7 @@ export type DeliveryInbox = DeliveryScope & {
  *
  * `briefing` and `overdue` are the delivery loop's (spec 2026-11-15-delivery-loop §10): the start or
  * end briefing, folding every followed card into one message, and a reminder about one card that is
- * late (or not yet taken on). Like a ping, neither is about one conversation: each row is filed under
+ * late (or not yet taken on, or handed in and waiting for the person's 验收). Like a ping, neither is about one conversation: each row is filed under
  * one the person can reach, and a tap opens the briefing page or the card, not a conversation.
  */
 export type DeliveryKind =
@@ -152,15 +152,25 @@ export async function providerJson(
  * 微信行不走手机推送的深链，所以不占别的用途。
  */
 export const WECHAT_PROMPT_REF = "wechat-prompt:";
-export function wechatPromptRef(kind: "overdue", ref: string): string {
+/** 带编号提示的种类：逾期（回「再催 / 延期 / 换人 / 取消」）、交付待验收（回「验收 / 退回 原因」）。 */
+export type WechatPromptRefKind = "overdue" | "handin";
+const WECHAT_PROMPT_REF_KINDS: readonly WechatPromptRefKind[] = [
+  "overdue",
+  "handin",
+];
+export function wechatPromptRef(
+  kind: WechatPromptRefKind,
+  ref: string,
+): string {
   return `${WECHAT_PROMPT_REF}${kind}:${ref}`;
 }
 export function readWechatPromptRef(
   requestId: string | null,
-): { kind: "overdue"; ref: string } | null {
-  if (!requestId?.startsWith(`${WECHAT_PROMPT_REF}overdue:`)) return null;
-  return {
-    kind: "overdue",
-    ref: requestId.slice(`${WECHAT_PROMPT_REF}overdue:`.length),
-  };
+): { kind: WechatPromptRefKind; ref: string } | null {
+  for (const kind of WECHAT_PROMPT_REF_KINDS) {
+    const head = `${WECHAT_PROMPT_REF}${kind}:`;
+    if (requestId?.startsWith(head))
+      return { kind, ref: requestId.slice(head.length) };
+  }
+  return null;
 }
