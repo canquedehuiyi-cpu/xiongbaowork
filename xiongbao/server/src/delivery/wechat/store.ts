@@ -424,7 +424,8 @@ export function createWechatStore(database: Database) {
      * 开一条提示，给它这个人下一个编号：`A1`、`A2`……每人自增、不复用、按天不重置。
      *
      * 同一个人的编号分配用事务级咨询锁串行，取已有最大号加一，所以并发开提示也不撞号；(`user_id`, `code`)
-     * 唯一索引兜底。
+     * 唯一索引兜底。同一件事（同一 `kind`、同一 `ref_id`）还开着时不再开，返回原来那条的编号：锁里先查，
+     * 部分唯一索引（迁移 0228）在库里兜底，冲突时同样返回已有的那条。
      */
     async openPrompt(
       userId: string,
@@ -442,11 +443,33 @@ export function createWechatStore(database: Database) {
             where "user_id" = ${userId}
           `),
         );
+        const existing = async () => {
+          const [row] = await transaction
+            .select({ code: wechatPrompts.code })
+            .from(wechatPrompts)
+            .where(
+              and(
+                eq(wechatPrompts.userId, userId),
+                eq(wechatPrompts.kind, kind),
+                eq(wechatPrompts.refId, refId),
+                eq(wechatPrompts.state, "open"),
+              ),
+            )
+            .limit(1);
+          return row ?? null;
+        };
+        const open = await existing();
+        if (open) return { code: open.code };
         const code = `A${Number(top?.n ?? 0) + 1}`;
-        await transaction
+        const [inserted] = await transaction
           .insert(wechatPrompts)
-          .values({ id: randomUUID(), userId, code, kind, refId });
-        return { code };
+          .values({ id: randomUUID(), userId, code, kind, refId })
+          .onConflictDoNothing()
+          .returning({ code: wechatPrompts.code });
+        if (inserted) return { code: inserted.code };
+        const raced = await existing();
+        if (!raced) throw new Error("wechat prompt could not be opened");
+        return { code: raced.code };
       });
     },
 

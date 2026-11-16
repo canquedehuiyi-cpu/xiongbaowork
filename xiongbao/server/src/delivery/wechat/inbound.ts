@@ -42,7 +42,7 @@ import type { DeliveryScopeResolver } from "../routes";
 import type { DeliveryStore } from "../store";
 import { DeliveryRefusedError } from "../types";
 import type { IlinkClient, IlinkMessage } from "./ilink";
-import { matchPromptReply, type PromptAccepts } from "./prompts";
+import { matchPromptReply, type PromptAccepts, promptCodeOf } from "./prompts";
 import type { WechatStore } from "./store";
 
 /** 单条微信文本最多多少字（按码点数）。 */
@@ -139,6 +139,15 @@ export type WechatPromptContext = {
 export type WechatPromptHandler = {
   accepts: PromptAccepts;
   label(prompt: WechatPrompt): string | Promise<string>;
+  /**
+   * 这条提示背后的事还在不在等这个人：`settled` 是在别处处理过了（网页上批了、看板上验收了），`expired` 是
+   * 开得太久不再算数。匹配之前对账：两者都静默关掉、不参与匹配；只有这条回复带着它的编号、而它是在别处处理过的，
+   * 才照样交给处理器，回「这条已由 某某 在 网页 处理」。没有这个方法的类型不对账。
+   */
+  stale?(
+    prompt: WechatPrompt,
+    now: Date,
+  ): Promise<"open" | "settled" | "expired">;
   handle(
     context: WechatPromptContext,
     prompt: WechatPrompt,
@@ -442,17 +451,25 @@ export function createWechatInbound(deps: WechatInboundDeps) {
       }
     };
 
-    // 2. 在回一条开着的提示。
+    // 2. 在回一条开着的提示。先对账：过期的、在别处处理过的静默关掉，不再截走回复。
     const open: WechatPrompt[] = [];
-    const expiredBefore = now().getTime() - WECHAT_PICK_TTL_MS;
+    const at = now();
+    const expiredBefore = at.getTime() - WECHAT_PICK_TTL_MS;
+    const coded = promptCodeOf(text);
     for (const prompt of await deps.wechat.openPrompts(account.userId)) {
-      // 过期的选人提示顺手关掉，不再截走数字回复。
+      const state =
+        prompt.kind === "pick_agent"
+          ? prompt.createdAt.getTime() < expiredBefore
+            ? "expired"
+            : "open"
+          : ((await handlers[prompt.kind]?.stale?.(prompt, at)) ?? "open");
+      // 带着编号回一条在别处处理过的：留给处理器说「这条已由 某某 在 网页 处理」。
       if (
-        prompt.kind === "pick_agent" &&
-        prompt.createdAt.getTime() < expiredBefore
+        state === "open" ||
+        (state === "settled" && coded === prompt.code.toUpperCase())
       )
-        await deps.wechat.closePrompt(account.userId, prompt.code);
-      else open.push(prompt);
+        open.push(prompt);
+      else await deps.wechat.closePrompt(account.userId, prompt.code);
     }
     const matched = matchPromptReply(text, open, accepts);
     if (matched?.kind === "ambiguous") {

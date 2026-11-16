@@ -37,6 +37,7 @@ import {
   afterChinese,
   offersStandingRule,
 } from "../../approvals/types";
+import { shortName } from "../../brand";
 import type { Database } from "../../db/client";
 import {
   channels,
@@ -181,8 +182,19 @@ export type WechatDecisionDeps = {
   timeZone?: (tenantId: string) => string | Promise<string>;
   /** 详情链接的前缀（网页的地址）。没有时文字里不带链接。 */
   appUrl?: string | null;
+  /**
+   * 这个人作息里的收工时间（"HH:MM"）：「延期 周五」没说几点时按它。没有、读不到时按 18:00。
+   */
+  endOfDay?: (tenantId: string) => Promise<string | null> | string | null;
   now?: () => Date;
 };
+
+/** 审批提示开着超过这么久就不再算数：匹配时跳过并关掉（审批本身不动，网页上照样能批）。 */
+export const WECHAT_APPROVAL_PROMPT_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** 交付待验收、逾期两类提示还算数时，卡片该在的状态。 */
+const HANDIN_OPEN = new Set(["awaiting_review"]);
+const OVERDUE_OPEN = new Set(["running", "needs_action"]);
 
 export function createWechatDecisions(deps: WechatDecisionDeps) {
   const now = deps.now ?? (() => new Date());
@@ -228,6 +240,8 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
         title: tasks.title,
         dueAt: tasks.dueAt,
         agentId: tasks.executorAgentId,
+        status: tasks.status,
+        tracked: tasks.tracked,
       })
       .from(tasks)
       .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)))
@@ -253,8 +267,44 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
     }
   }
 
+  /**
+   * 这条提示背后的事还在不在等这个人（见 `WechatPromptHandler.stale`）：审批不在 pending、卡片不在等验收 /
+   * 不在员工手上、或者已经不存在 → `settled`；审批提示开过 24 小时 → `expired`。
+   */
+  async function staleOf(
+    prompt: WechatPrompt,
+    at: Date,
+  ): Promise<"open" | "settled" | "expired"> {
+    if (prompt.kind === "approval") {
+      const record = await getApproval(prompt.userId, prompt.refId);
+      if (record?.status !== "pending") return "settled";
+      return prompt.createdAt.getTime() <
+        at.getTime() - WECHAT_APPROVAL_PROMPT_TTL_MS
+        ? "expired"
+        : "open";
+    }
+    if (prompt.kind === "handin" || prompt.kind === "overdue") {
+      const card = await cardOf(prompt.userId, prompt.refId);
+      const live = prompt.kind === "handin" ? HANDIN_OPEN : OVERDUE_OPEN;
+      return card?.tracked && live.has(card.status) ? "open" : "settled";
+    }
+    return "open";
+  }
+
+  /**
+   * 对账：这个人开着的审批 / 交付 / 逾期提示里，在别处处理过的、过期的，静默关掉（不发任何消息）。
+   * 开新提示前调，免得已经处理过的那几条让新请求也带上编号。
+   */
+  async function reconcile(userId: string) {
+    const at = now();
+    for (const prompt of await deps.wechat.openPrompts(userId))
+      if ((await staleOf(prompt, at)) !== "open")
+        await deps.wechat.closePrompt(userId, prompt.code);
+  }
+
   /** 开一条提示；同一件事还开着就用原来那条。返回编号和开完之后开着几条。 */
   async function open(userId: string, kind: WechatPromptKind, refId: string) {
+    await reconcile(userId);
     const before = await deps.wechat.openPrompts(userId);
     const existing = before.find((p) => p.kind === kind && p.refId === refId);
     const code =
@@ -345,6 +395,7 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
 
   const approval: WechatPromptHandler = {
     accepts: (answer) => /^[123]$/.test(answer),
+    stale: staleOf,
     async label(prompt) {
       const record = await getApproval(prompt.userId, prompt.refId);
       return record
@@ -404,7 +455,12 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
           await handled();
           return;
         }
-        await context.reply(`没有办成：${error.message}`);
+        // 审批服务的原因有的是英文：没有中文时不照搬，给一句中文兜底。
+        await context.reply(
+          /[\u4e00-\u9fff]/u.test(error.message)
+            ? `没有办成：${error.message}`
+            : `没有办成，请到${shortName()}里看看`,
+        );
         return;
       }
       await close(context, prompt);
@@ -425,6 +481,7 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
 
   const handin: WechatPromptHandler = {
     accepts: (answer) => answer === "验收" || RETURN.test(answer),
+    stale: staleOf,
     async label(prompt) {
       const card = await cardOf(prompt.userId, prompt.refId);
       return card ? `验收：「${card.title}」` : "验收";
@@ -509,7 +566,9 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
       await context.reply(`延期到什么时候？${example}`);
       return;
     }
-    const reading = readLaterTime(said, at, timeZone);
+    const reading = readLaterTime(said, at, timeZone, {
+      endOfDay: (await deps.endOfDay?.(tenantId)) ?? null,
+    });
     if (!reading.at) {
       await context.reply(
         reading.why === "unreadable"
@@ -671,6 +730,7 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
   }
 
   const overdue: WechatPromptHandler = {
+    stale: staleOf,
     accepts: (answer) =>
       answer === "再催" ||
       answer === "取消" ||

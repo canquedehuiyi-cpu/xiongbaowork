@@ -145,6 +145,10 @@ export const wechatPrompts = pgTable(
   },
   (table) => [
     uniqueIndex("wechat_prompts_user_code_idx").on(table.userId, table.code),
+    /** 同一件事（同类、同一条引用）同一时间只开一条（迁移 0228）。 */
+    uniqueIndex("wechat_prompts_open_ref_idx")
+      .on(table.userId, table.kind, table.refId)
+      .where(sql`${table.state} = 'open'`),
     check(
       "wechat_prompts_kind_check",
       sql`${table.kind} IN ('approval', 'extension', 'handin', 'overdue', 'pick_agent')`,

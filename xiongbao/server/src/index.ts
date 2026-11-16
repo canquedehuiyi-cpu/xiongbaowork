@@ -4690,6 +4690,9 @@ await startupLifecycle.run(async (startup) => {
         ),
       timeZone: async (tenantId) =>
         (await readWorkHours(database, tenantId)).timeZone,
+      // 「延期 周五」没说几点：按这个人作息的收工时间。
+      endOfDay: async (tenantId) =>
+        (await readWorkHours(database, tenantId)).end,
       appUrl: config.appUrl ?? config.publicUrl ?? null,
     });
     const wechatPoller = createWechatPoller({

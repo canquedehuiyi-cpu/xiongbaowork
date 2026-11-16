@@ -1457,6 +1457,13 @@
       "when": 1794572550913,
       "tag": "0227_wechat_recent_message_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 228,
+      "version": "7",
+      "when": 1794572550914,
+      "tag": "0228_wechat_prompts_open_ref",
+      "breakpoints": true
     }
   ]
 }

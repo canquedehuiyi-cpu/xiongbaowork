@@ -21,6 +21,12 @@ export type PromptMatch =
 
 const WITH_CODE = /^([Aa]\d+)[\s:：,，、.]*(.*)$/su;
 
+/** 这条回复带的提示编号（大写，如 `A2`）；不带编号、或编号后面没有回答时为 null。 */
+export function promptCodeOf(text: string): string | null {
+  const coded = WITH_CODE.exec(text.normalize("NFKC").trim());
+  return coded?.[1] && coded[2]?.trim() ? coded[1].toUpperCase() : null;
+}
+
 export function matchPromptReply(
   text: string,
   open: readonly WechatPrompt[],
