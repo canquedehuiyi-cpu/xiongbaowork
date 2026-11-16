@@ -362,5 +362,11 @@ async function main() {
   }
 }
 
-// 不用 import.meta.main 判断：Windows 上的 Bun 直接运行本文件时它可能为 false，导致什么都不输出。
-await main();
+// 不用 import.meta.main 判断，也不用顶层 await：两者在 Windows 上的 Bun 里都出现过「不输出就退出 / 卡住」。
+main().then(
+  () => process.exit(0),
+  (e) => {
+    console.error(e instanceof Error ? e.message : e);
+    process.exit(1);
+  },
+);
