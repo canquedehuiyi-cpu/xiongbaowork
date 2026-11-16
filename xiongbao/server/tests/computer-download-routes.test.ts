@@ -181,7 +181,7 @@ describe("the public computer file download route", () => {
     // 路由不做路径判断：归一化、拒绝、以哪个根为准，都是那台电脑的工作区决定的。这里先把 `..` 抹平或
     // 折掉，工作区的那道墙就再也收不到它，而这一条链接正是把它送过去的唯一一条路。
     "把%s的 `..` 原样交给电脑：%i",
-    async ([_name, path, wire]) => {
+    async (_name, path, wire) => {
       const { gateway, calls } = gatewayThatReturns(
         "x",
         Uint8Array.from([1]),
@@ -220,7 +220,7 @@ describe("the public computer file download route", () => {
     // 「恒为不透明附件」说的是成功那一条；挡下来的是 JSON，一个附件头也不带，否则一个 413 就能把 HTML
     // 当成文件在这一页上渲染出来。
     "%s（%i）不带附件头",
-    async ([_name, error, status]) => {
+    async (_name, error, status) => {
       const gateway = {
         seatFor: async (botId: string, personId: string) =>
           personSeat(personId, botId),
