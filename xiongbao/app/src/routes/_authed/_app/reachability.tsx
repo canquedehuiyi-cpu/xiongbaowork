@@ -187,7 +187,7 @@ function ReachabilityPage() {
       art={<ChatStage />}
       className={HERO_FRAME}
       description="在聊天里 @员工，让员工接手工作。"
-      eyebrow="02 @WAKER / IM WORKSPACE"
+      eyebrow="02 @Waker / 即时通讯"
       crumb="@Waker"
       title={HEADLINE}
       width="workbench"

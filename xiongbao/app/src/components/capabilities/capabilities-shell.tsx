@@ -46,7 +46,7 @@ export function CapabilitiesShell({ children }: { children: React.ReactNode }) {
     <PageShell
       className="@container"
       description="释放你的员工潜能，解锁更多可能"
-      eyebrow="05 RESOURCE CENTER"
+      eyebrow="05 资源中心"
       title="能力"
       width="workbench"
     >

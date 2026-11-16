@@ -31,7 +31,7 @@ import { settleReactWork } from "./settle-react-work";
 
 /**
  * 员工管理 against docs/design/ios-studio/04-员工管理.png (numbers from its theme.css): the
- * `04 DIGITAL TEAM` eyebrow and the subtitle under the title, 角色模板 beside the primary 新建员工,
+ * `04 数字团队` eyebrow and the subtitle under the title, 角色模板 beside the primary 新建员工,
  * the 员工 N | 群组 N pill with the 「N 名员工」 badge at the far right of its row, a toolbar of a
  * search box and four labelled filters, and a three-column grid of 「角色档案」 cards — a mono
  * `PROFILE / 01` index, a status badge (「● 在线 · 本地」), a 44px face beside the name and one line
@@ -204,7 +204,7 @@ test("the header carries the eyebrow and subtitle, 角色模板 beside the prima
   ).toBeTruthy();
   expect(
     screen.container.querySelector("[data-slot=eyebrow]")?.textContent,
-  ).toBe("04DIGITAL TEAM");
+  ).toBe("04数字团队");
   const header = screen.getByTestId("wakers-header-actions");
   // Real anchors (the shared Button draws them with role="button").
   const links = [...header.querySelectorAll("a")];

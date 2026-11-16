@@ -1677,7 +1677,7 @@ function TasksPage() {
   return (
     <PageShell
       width="workbench"
-      eyebrow="01 WORK RECORD"
+      eyebrow="01 工作记录"
       /* Spec I2: hand a crew's flow a task from the board itself. */
       action={<DispatchToGroup />}
       title="任务看板"

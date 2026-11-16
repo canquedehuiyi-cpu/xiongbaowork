@@ -20,11 +20,12 @@ import { approvalConversationGrants } from "../db/schema/approval-conversation-g
 import { approvalRules, approvalTeamRules } from "../db/schema/approvals";
 import { TEAM_TENANT } from "../db/schema/tenant";
 import { ruleMatches } from "./policy";
+import { DELEGATE_EFFECT } from "./types";
 
 /** The tool one Bot hands work with, as a rule names it (`rule-vocabulary.ts`). */
 export const HANDOFF_REF = "bot/message_bot";
-/** Its scope is the Bot asked. */
-export const DELEGATE_EFFECT = "delegate";
+/** Its scope is the Bot asked. Declared in ./types, which ./policy reads it from. */
+export { DELEGATE_EFFECT };
 
 /** The peers among `input.peers` this conversation already lets this Bot hand work to. */
 export async function delegationFreed(

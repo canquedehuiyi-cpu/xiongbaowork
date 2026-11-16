@@ -20,6 +20,7 @@ import {
   type ApprovalRule,
   type ApprovalTeamRule,
   DEFAULT_EMPLOYEE_SECURITY,
+  DELEGATE_EFFECT,
   type EmployeeSecuritySettings,
   type HostCommandPolicy,
   isAcpAction,
@@ -2393,6 +2394,31 @@ async function decideByRules(
       behaviour: "ask",
       source: "default",
       reason: "You asked to review changes before they happen.",
+      ...(review ? { review } : {}),
+    };
+  /*
+   * ONE DEFAULT THAT DIFFERS: HANDING WORK ON WITH NOBODY WATCHING.
+   *
+   * A delegation costs a computer waking up, a model turn and an answer appearing in somebody's
+   * conversation. A person who asked for the work is watching it arrive, which is why the default has
+   * always been to let the Bot get on with it. A run nobody asked for — a routine, a scheduled wake,
+   * another Bot's hop — has nobody watching, and a Bot deciding at 3am that three colleagues should
+   * be involved is exactly the fan-out this default exists to stop.
+   *
+   * ONLY delegations. Every other effect keeps the default it has, so this cannot quietly put a card
+   * in front of a scheduled report that writes a file. A rule still answers it: somebody who wrote
+   * "always allow delegating to the Researcher" said so about exactly this, and the rule layers run
+   * above this line.
+   *
+   * What waiting means is not new machinery: with a conversation to ask in it is a card like any
+   * other, and with none `approvalAction` refuses it and says nothing was done.
+   */
+  if (candidate.unattended && candidate.effect === DELEGATE_EFFECT)
+    return {
+      behaviour: "ask",
+      source: "default",
+      reason:
+        "Nobody asked for this run, so handing work to another Bot waits for you.",
       ...(review ? { review } : {}),
     };
   return {

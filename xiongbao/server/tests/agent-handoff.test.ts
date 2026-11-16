@@ -8,7 +8,10 @@ import {
 import { handoffTool, HANDED_OVER } from "../src/agents/handoff-tool";
 import type { AgentProfileStore } from "../src/agents/profile-store";
 import type { AgentProfile } from "../src/agents/profile-types";
-import { ApprovalRefusedError } from "../src/approvals/types";
+import {
+  type ApprovalCandidate,
+  ApprovalRefusedError,
+} from "../src/approvals/types";
 import type { AuditStore } from "../src/audit";
 import type { WorkQueue } from "../src/work/queue";
 
@@ -447,6 +450,53 @@ describe("handing work to another Bot", () => {
 
     expect(answer).toBe("Already handled, and the person was told so.");
     expect(rows).toEqual([]);
+  });
+
+  /*
+   * Which run this is decides whether anybody is watching. The gate is told that on the candidate,
+   * rather than left to infer it from the tool's name or from the model's own say-so.
+   */
+  test("a hand-off in a run a routine started carries that nobody asked for it", async () => {
+    const { desk: handoff } = desk();
+    const asked: ApprovalCandidate[] = [];
+    const tool = handoffTool({
+      desk: handoff,
+      from: { ...FROM, initiator: { kind: "routine", id: "morning-digest" } },
+      hasSomebodyToAsk: true,
+      maxDepth: 2,
+      maxPerRun: 3,
+      approvalGate: async (candidate) => {
+        asked.push(candidate);
+        return undefined;
+      },
+    });
+
+    await tool?.execute({ bot: "Researcher", task: "Check the changelog." });
+
+    expect(asked[0]).toMatchObject({ effect: "delegate", unattended: true });
+  });
+
+  test("a hand-off the person asked for does not claim nobody asked", async () => {
+    const { desk: handoff } = desk();
+    const asked: ApprovalCandidate[] = [];
+    const tool = handoffTool({
+      desk: handoff,
+      from: FROM,
+      hasSomebodyToAsk: true,
+      maxDepth: 2,
+      maxPerRun: 3,
+      approvalGate: async (candidate) => {
+        asked.push(candidate);
+        return undefined;
+      },
+    });
+
+    await tool?.execute({ bot: "Researcher", task: "Check the changelog." });
+
+    // `not.toHaveProperty` rather than `toBeUndefined`: the latter passes when `asked[0]` is
+    // missing, which is the one case this test exists to rule out.
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).not.toHaveProperty("unattended");
   });
 
   test("a Bot cannot hand work to itself", async () => {
