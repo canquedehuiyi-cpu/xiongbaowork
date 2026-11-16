@@ -360,6 +360,73 @@ jobs:
           name: e2e-staffing-evidence
           path: ${{ runner.temp }}/g6/
 
+  # G7: a file the Bot saved is reachable from the conversation — the download address the line hands
+  # out, the turn's artifact list, and the browser saving what that address answers. The computer's own
+  # answers (the write, the folder listing, the bytes) are fixed in the script, because a runner has no
+  # computer to reach; the scope answer that decides whether a link is drawn at all is the server's.
+  # Screenshots are the deliverable, so the evidence is uploaded on a green run too (dark, 2x).
+  e2e-artifact:
+    name: G7 artifact reachability (browser, mocked model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: openbot_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGPASSWORD: ci-owner
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
+      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_e2e
+      # The fresh-database check only (see the harness header).
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
+      - name: Build the app the server serves (APP_DIST_DIR)
+        run: bun run --cwd app build
+      - name: The runner's preinstalled Chrome
+        run: |
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)"
+          "$chrome" --version
+          echo "E2E_CHROME_PATH=$chrome" >> "$GITHUB_ENV"
+      - name: G7 artifact reachability
+        env:
+          E2E_APP_DIST_DIR: app/dist
+          E2E_ARTIFACTS_DIR: ${{ runner.temp }}/g7
+        run: bun scripts/e2e/artifact-reachability.ts
+      - name: Print server log (credentials masked)
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/g7/server-*.log; do
+            bash scripts/ci/print-diagnostics.sh "$f"
+          done
+      # Screenshots of the four states (dark, 2x), the Playwright trace on failure, the server log and
+      # the record of every answer the script fixed for the computer.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: e2e-artifact-evidence
+          path: ${{ runner.temp }}/g7/
+
   image:
     if: ${{ !inputs.skip_image }}
     runs-on: ubuntu-latest
