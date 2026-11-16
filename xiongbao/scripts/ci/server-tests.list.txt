@@ -329,6 +329,7 @@ tests/delivery-chat-replay.integration.test.ts
 tests/delivery-checker.integration.test.ts
 tests/delivery-events.test.ts
 tests/delivery-link-audit.test.ts
+tests/delivery-message-id.test.ts
 tests/delivery-one-card.integration.test.ts
 tests/delivery-overdue.test.ts
 tests/delivery-providers.test.ts
@@ -862,6 +863,7 @@ tests/unattended-platform-frame.integration.test.ts
 tests/unattended-single-card.integration.test.ts
 tests/unreachable-bot.test.ts
 tests/untrusted-content.test.ts
+tests/update-route-wechat-opt-in.test.ts
 tests/user-instructions.integration.test.ts
 tests/user-preferences-routes.test.ts
 tests/user-preferences.integration.test.ts
@@ -904,6 +906,7 @@ tests/wechat-ilink.test.ts
 tests/wechat-inbound.integration.test.ts
 tests/wechat-poller.integration.test.ts
 tests/wechat-store.integration.test.ts
+tests/wechat-unbind-bindings.integration.test.ts
 tests/what-if-boundary-words.test.ts
 tests/what-if.integration.test.ts
 tests/who-can-check.test.ts
