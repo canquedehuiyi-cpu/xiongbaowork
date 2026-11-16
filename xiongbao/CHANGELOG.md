@@ -12,6 +12,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 **从 v0.2.11 升级先看这几条**（逐条说明在下面各项的「升级须知」里）：
 
+- **桌面操控里识别 `openbot-desktop`、`openbot-runner` 进程的兼容延到 0.2.13 再删**：电脑客户端的可执行文件现在仍叫
+  `openbot-desktop`，设备端也还按 `openbot-runner` 清理旧进程，提前删会让桌面操控点进客户端自己的窗口。等客户端可执行文件改名后再删。
 - **新迁移 17 个（`0213`–`0229`），都在恢复叠加目录 `recovery-20261018-v1` 里，启动时自动执行**：
   - `0213`：`agent_profiles.summoned_from`、`preset_portrait`（召唤员工记来源与预设形象）。
   - `0214`：`agent_profiles.department`（员工部门，通讯录分组用）。
