@@ -75,6 +75,8 @@ export const WECHAT_PAUSE_MS = 60 * 60 * 1000;
 const ERROR_BACKOFF_MS = 30_000;
 const SEEN_PER_ACCOUNT = 500;
 const POISON_AFTER = 3;
+/** 关停时先等在途的轮询和 `inbound` 自己跑完这么久，到时还有在途的再中止。 */
+export const WECHAT_SHUTDOWN_GRACE_MS = 15_000;
 /** 账号超过这么久没被碰过，就清掉它的内存状态（解绑的账号不会再被认领）。 */
 const STATE_IDLE_MS = 2 * 60 * 60 * 1000;
 
@@ -256,6 +258,10 @@ export function createWechatPoller(deps: WechatPollerDeps) {
     });
   }
 
+  async function drain(): Promise<void> {
+    while (inFlight.size) await Promise.allSettled([...inFlight]);
+  }
+
   return {
     /** 认领一批账号，各自起一次轮询，不等它们结束；在途数到上限就少认领。 */
     async tick(): Promise<void> {
@@ -290,10 +296,26 @@ export function createWechatPoller(deps: WechatPollerDeps) {
       stopping.abort();
     },
 
-    /** 等在途的轮询都结束（测试用；关停时在 `stop` 之后调）。 */
-    async drain(): Promise<void> {
-      while (inFlight.size) await Promise.allSettled([...inFlight]);
+    /**
+     * 关停：先等在途的轮询和 `inbound`（含员工那一轮）最多 `graceMs`；到时还有在途的，`stop` 中止它们，
+     * 再等它们收尾。调用方应先停掉调 `tick` 的循环。
+     */
+    async shutdown(graceMs = WECHAT_SHUTDOWN_GRACE_MS): Promise<void> {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const finished = await Promise.race([
+        drain().then(() => true),
+        new Promise<false>((resolve) => {
+          timer = setTimeout(() => resolve(false), graceMs);
+        }),
+      ]);
+      if (timer) clearTimeout(timer);
+      if (finished) return;
+      stopping.abort();
+      await drain();
     },
+
+    /** 等在途的轮询都结束（测试用；关停时在 `stop` 之后调）。 */
+    drain,
 
     /** 账号被解绑时丢掉它的内存状态。 */
     forget(accountId: string): void {

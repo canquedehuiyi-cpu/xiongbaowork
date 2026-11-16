@@ -850,3 +850,110 @@ describe("修复轮 1：选人提示不截走后面的数字", () => {
     expect(signals.at(-1)).toBe(controller.signal);
   });
 });
+
+describe("修复轮 2：选人顺序、中止", () => {
+  /** 和全局 `inbound` 一样，只是换掉路由（或其中的 `converse`）。 */
+  const inboundWith = (converse: typeof router.converse) =>
+    createWechatInbound({
+      wechat: wechatStore,
+      deliveries: deliveryStore,
+      router: { converse },
+      channels: channelStore,
+      bots: profileStore,
+      actorFor,
+      scopeFor: scopes.scopeFor,
+      send: async (account, input) => {
+        sent.push({ userId: account.userId, ...input });
+      },
+    });
+  const inboxOf = (who: Person, externalId: string) =>
+    runAsTenant(who.userId, () =>
+      database
+        .select()
+        .from(deliveryInbox)
+        .where(
+          and(
+            eq(deliveryInbox.source, "wechat"),
+            eq(deliveryInbox.externalId, externalId),
+          ),
+        ),
+    );
+
+  test("选人回复时 converse 在记收件箱前抛错：提示还开着，重试仍按搁置的原文开一轮，之后提示关闭", async () => {
+    const a = await person("r2-a");
+    await bot(a, "甲熊");
+    await bot(a, "乙熊");
+    await deliver(a, message(a, "订个会议室"));
+    expect((await openPrompts(a)).length).toBe(1);
+    let blink = true;
+    const flaky = inboundWith(async (input) => {
+      if (blink) {
+        blink = false;
+        throw new Error("database blinked");
+      }
+      return router.converse(input);
+    });
+    const pick = message(a, "1");
+    await expect(
+      runAsTenant(a.userId, () => flaky(a.account, pick)),
+    ).rejects.toThrow("database blinked");
+    expect((await openPrompts(a)).length).toBe(1);
+    expect(turnsOf(a)).toHaveLength(0);
+
+    await runAsTenant(a.userId, () => flaky(a.account, pick));
+    expect(turnsOf(a).map((t) => t.text)).toEqual(["订个会议室"]);
+    expect(await openPrompts(a)).toEqual([]);
+  });
+
+  test("还没进 converse 信号就已中止：inbound 抛错、去重记录拿掉、没写收件箱、没回话", async () => {
+    const b = await person("r2-b");
+    await bot(b, "代码熊");
+    const controller = new AbortController();
+    controller.abort();
+    const m = message(b, "@代码熊 关停中");
+    await expect(
+      runAsTenant(b.userId, () => inbound(b.account, m, controller.signal)),
+    ).rejects.toThrow();
+    expect(turnsOf(b)).toHaveLength(0);
+    expect(sentTo(b)).toHaveLength(0);
+    expect(await inboxOf(b, m.id)).toEqual([]);
+    expect((await accountOf(b))?.recentMessageIds).not.toContain(m.id);
+  });
+
+  test("员工那一轮被中止：收件箱 failed、回「服务正在更新」、inbound 不抛错、同一 ID 重投被挡住", async () => {
+    const c = await person("r2-c");
+    await bot(c, "代码熊");
+    const controller = new AbortController();
+    let runs = 0;
+    const aborting = createDeliveryRouter({
+      store: deliveryStore,
+      queue: createWorkQueue(database),
+      owner: `${prefix}-router-abort`,
+      authoriseScope: scopes.authorise,
+      scopeFor: scopes.scopeFor,
+      providers: {},
+      runTurn: async (input) => {
+        runs += 1;
+        controller.abort();
+        input.signal.throwIfAborted();
+        return { replyText: "不该到这里" };
+      },
+    });
+    const viaAborting = inboundWith(aborting.converse);
+    const m = message(c, "@代码熊 长活");
+    await runAsTenant(c.userId, () =>
+      viaAborting(c.account, m, controller.signal),
+    );
+    expect(runs).toBe(1);
+    const [row] = await inboxOf(c, m.id);
+    expect(row?.state).toBe("failed");
+    expect(sentTo(c).map((s) => s.text)).toEqual([
+      "【代码熊】服务正在更新，这一轮被打断了，请稍后再发一次，或到熊宝里查看。",
+    ]);
+    await runAsTenant(c.userId, () =>
+      viaAborting(c.account, m, new AbortController().signal),
+    );
+    expect(runs).toBe(1);
+    expect(sentTo(c)).toHaveLength(1);
+  });
+});

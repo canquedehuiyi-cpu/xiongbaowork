@@ -271,9 +271,9 @@ export function createWechatInbound(deps: WechatInboundDeps) {
         );
         return;
       }
-      // `turn` 绑定、记下这位员工之后会关掉所有选人提示（含这一条），再开一轮。在那之前出错，提示还开着，
-      // 轮询器重试这条「数字」时照样选中；之后出错，重试时「数字」交给刚记下的员工，`delivery_inbox`
-      // 按这条消息的 ID 挡住，不会再开一轮。没走到那一步（员工不在了等）也关掉这一条。
+      // `turn` 在 `converse` 返回后关掉所有选人提示（含这一条）。在那之前出错，提示还开着，轮询器重试这条
+      // 「数字」时照样选中；`converse` 记过收件箱的，重试时由 `delivery_inbox` 按这条消息的 ID 挡住。
+      // 没走到那一步（员工不在了等）也关掉这一条。
       await context.turn(agent.id, ref.text);
       await deps.wechat.closePrompt(context.account.userId, prompt.code);
     },
@@ -368,7 +368,8 @@ export function createWechatInbound(deps: WechatInboundDeps) {
         return;
       }
       await deps.wechat.setLastAgent(account.id, agent.id);
-      await closePicks();
+      // 关停已经开始、这一轮还没开：抛出去，去重记录拿掉、游标不存，重启后这条完整重来。
+      signal.throwIfAborted();
       const result = await deps.router.converse({
         transport: "wechat",
         realm: account.ilinkBotId,
@@ -377,6 +378,9 @@ export function createWechatInbound(deps: WechatInboundDeps) {
         text: body,
         signal,
       });
+      // `converse` 返回了（不论结果）才关选人提示：它在记收件箱前抛错时提示还开着，重试这条「数字」
+      // 照样按搁置的原文开一轮。之后再重试，「数字」交给刚记下的员工，`delivery_inbox` 按这条消息的 ID 挡住。
+      await closePicks();
       const signed = (line: string) => `【${agent.name}】${line}`;
       switch (result.kind) {
         case "duplicate":
@@ -385,7 +389,13 @@ export function createWechatInbound(deps: WechatInboundDeps) {
           await reply(signed(`暂时联系不上，请到${shortName()}里看看。`));
           return;
         case "failed":
-          await reply(signed(`这一轮没有完成，请到${shortName()}里看看。`));
+          await reply(
+            signed(
+              signal.aborted
+                ? `服务正在更新，这一轮被打断了，请稍后再发一次，或到${shortName()}里查看。`
+                : `这一轮没有完成，请到${shortName()}里看看。`,
+            ),
+          );
           return;
         default: {
           const parts = [

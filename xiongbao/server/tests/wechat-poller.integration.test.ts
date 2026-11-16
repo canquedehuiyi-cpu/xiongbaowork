@@ -15,6 +15,7 @@ import {
 import {
   createWechatPoller,
   WECHAT_CLAIM_LIMIT,
+  WECHAT_SHUTDOWN_GRACE_MS,
 } from "../src/delivery/wechat/poller";
 import { createWechatStore } from "../src/delivery/wechat/store";
 import { runAsTenant } from "../src/tenant/context";
@@ -640,4 +641,38 @@ test("inbound 拿到轮询器的中止信号；stop 后同一批剩下的消息�
   expect(got[0]?.signal?.aborted).toBe(true);
   expect((await accountOf(t.userId))?.cursor).toBeNull();
   await runAsTenant(t.userId, () => store.unbind(t.userId));
+});
+
+test("shutdown：宽限期内跑完就不中止", async () => {
+  const s = await bindPerson("grace-ok");
+  const ilink = fakeIlink();
+  ilink.script(s.token, { messages: [], cursor: "" });
+  const open = ilink.hold();
+  const poller = pollerWith(ilink, async () => {});
+  await poller.tick();
+  await untilPulled(ilink, s.token);
+  const signal = ilink.signals.at(-1);
+  setTimeout(open, 50);
+  await poller.shutdown(2_000);
+  expect(signal?.aborted).toBe(false);
+  await runAsTenant(s.userId, () => store.unbind(s.userId));
+});
+
+test("shutdown：宽限期到了还有在途的，就中止再等它收尾", async () => {
+  const s = await bindPerson("grace-late");
+  const ilink = fakeIlink();
+  ilink.script(s.token, { messages: [], cursor: "" });
+  const open = ilink.hold();
+  const poller = pollerWith(ilink, async () => {});
+  await poller.tick();
+  await untilPulled(ilink, s.token);
+  const signal = ilink.signals.at(-1);
+  // 假 iLink 不看信号：中止后由测试放行，模拟被中止的请求返回。
+  signal?.addEventListener("abort", () => open());
+  const started = Date.now();
+  await poller.shutdown(100);
+  expect(signal?.aborted).toBe(true);
+  expect(Date.now() - started).toBeGreaterThanOrEqual(90);
+  expect(WECHAT_SHUTDOWN_GRACE_MS).toBe(15_000);
+  await runAsTenant(s.userId, () => store.unbind(s.userId));
 });

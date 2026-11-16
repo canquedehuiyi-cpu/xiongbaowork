@@ -4132,8 +4132,9 @@ await startupLifecycle.run(async (startup) => {
   /*
    * 微信长轮询（delivery/wechat/poller.ts）：每 2 秒认领一批账号各拉一次，每条消息在本人的帧里交给入站分流
    * （delivery/wechat/inbound.ts）：选员工、在默认单聊里开一轮、回复加「【员工名】」发回微信。
-   * 关停时先停循环，再 `stop` 中止在途的长轮询和员工那一轮，然后等它们收尾（`drain`），之后才关数据库连接
-   * （finalizers 在资源之后）。被中止的那一轮记为失败、微信里回「这一轮没有完成」，这条消息不会再处理（至多一次）。
+   * 关停时先停循环，再给在途的轮询和员工那一轮最多 15 秒（WECHAT_SHUTDOWN_GRACE_MS）自己跑完；到时还有在途的
+   * 就中止，再等它们收尾，之后才关数据库连接（finalizers 在资源之后）。还没开的一轮抛错、重启后整条重来；
+   * 已经开了被中止的记为失败，微信里回「服务正在更新……」，这条消息不会再处理（至多一次）。
    */
   if (wechatBind) {
     const wechatPoller = createWechatPoller({
@@ -4175,8 +4176,7 @@ await startupLifecycle.run(async (startup) => {
         }, 2_000),
       async (resource) => {
         resource.stop();
-        wechatPoller.stop();
-        await wechatPoller.drain();
+        await wechatPoller.shutdown();
       },
     );
   }
