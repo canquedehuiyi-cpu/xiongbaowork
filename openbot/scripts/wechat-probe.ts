@@ -177,9 +177,9 @@ async function bind(flags: Map<string, string | true>) {
         qr = await fetchQr();
         show();
       } else if (status === "confirmed") {
-        if (!st.bot_token || !st.ilink_user_id) {
+        if (!st.bot_token || !st.ilink_bot_id || !st.ilink_user_id) {
           console.error(
-            `confirmed 但响应缺少字段：bot_token=${st.bot_token ? "有" : "无"} ilink_user_id=${st.ilink_user_id ? "有" : "无"}（响应字段：${Object.keys(st).join(",")}）。没有写凭证文件。`,
+            `confirmed 但响应缺少字段：bot_token=${st.bot_token ? "有" : "无"} ilink_bot_id=${st.ilink_bot_id ? "有" : "无"} ilink_user_id=${st.ilink_user_id ? "有" : "无"}（响应字段：${Object.keys(st).join(",")}）。没有写凭证文件。`,
           );
           process.exit(1);
         }
