@@ -245,6 +245,9 @@ PowerShell 通过管道重定向二进制可能改变内容；使用 `docker exe
 单容器重建时使用原命名卷和原 env-file，镜像写成 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:<新 digest>`。
 Compose 把 `.env.delivery` 中的 `OPENBOT_IMAGE` 改为同样的 digest 引用，再 `pull` 和 `up -d`；
 内嵌库每次启动自动迁移；外接库先用新 digest 执行第 4 节的迁移命令，再重建 API 容器。标签可以被移动，digest 不能；回滚就是换回上一个版本的 digest。
+停旧容器用 `docker stop`（单容器加 `--time 30`；Compose 的开发文件已给 server 设 `stop_grace_period: 30s`），
+不要用 `docker rm -f`：它直接 SIGKILL，服务端来不及收尾。微信 ClawBot 的消息按「至多一次」处理：
+关停时在跑的那一轮最多再等 7 秒，被强杀或被中止的那一轮不会重来，用户要在微信里再发一次。
 一旦有 schema 迁移，回滚镜像不一定足够，必要时恢复备份；不要把只回滚代码当成数据库回滚。
 
 ### 6.1 群组合一升级须知

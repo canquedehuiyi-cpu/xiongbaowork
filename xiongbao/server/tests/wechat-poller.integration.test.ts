@@ -643,36 +643,90 @@ test("inbound 拿到轮询器的中止信号；stop 后同一批剩下的消息�
   await runAsTenant(t.userId, () => store.unbind(t.userId));
 });
 
-test("shutdown：宽限期内跑完就不中止", async () => {
-  const s = await bindPerson("grace-ok");
+test("shutdown：一开始就中止正在 long-poll 的请求；关停后拉到的批次不处理、游标不存", async () => {
+  const s = await bindPerson("grace-poll");
   const ilink = fakeIlink();
-  ilink.script(s.token, { messages: [], cursor: "" });
+  ilink.script(s.token, {
+    messages: [message("901"), message("902")],
+    cursor: "c-after-stop",
+  });
   const open = ilink.hold();
-  const poller = pollerWith(ilink, async () => {});
+  const got: string[] = [];
+  const poller = pollerWith(ilink, async (_account, m) => {
+    got.push(m.id);
+  });
   await poller.tick();
   await untilPulled(ilink, s.token);
   const signal = ilink.signals.at(-1);
-  setTimeout(open, 50);
-  await poller.shutdown(2_000);
   expect(signal?.aborted).toBe(false);
+  const done = poller.shutdown(5_000);
+  // 不等宽限期：关停一开始长轮询就被中止。
+  expect(signal?.aborted).toBe(true);
+  // 假 iLink 不看信号：被中止的请求这时才返回，还带着一批消息。
+  open();
+  const started = Date.now();
+  await done;
+  expect(Date.now() - started).toBeLessThan(1_000);
+  expect(got).toEqual([]);
+  expect((await accountOf(s.userId))?.cursor).toBeNull();
+  // 关停后不再认领。
+  await poller.tick();
+  await poller.drain();
+  expect(ilink.pulls(s.token)).toBe(1);
   await runAsTenant(s.userId, () => store.unbind(s.userId));
 });
 
-test("shutdown：宽限期到了还有在途的，就中止再等它收尾", async () => {
+test("shutdown：在跑的 inbound 宽限期内跑完就不中止它；同一批剩下的不处理", async () => {
+  const s = await bindPerson("grace-ok");
+  const ilink = fakeIlink();
+  ilink.script(s.token, {
+    messages: [message("911"), message("912")],
+    cursor: "c-grace",
+  });
+  let release: () => void = () => {};
+  const running = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered = false;
+  const got: { id: string; signal: AbortSignal | undefined }[] = [];
+  const poller = pollerWith(ilink, async (_account, m, signal) => {
+    got.push({ id: m.id, signal });
+    entered = true;
+    await running;
+  });
+  await poller.tick();
+  for (let i = 0; i < 200 && !entered; i += 1)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  setTimeout(release, 50);
+  await poller.shutdown(2_000);
+  expect(got.map((g) => g.id)).toEqual(["911"]);
+  expect(got[0]?.signal?.aborted).toBe(false);
+  expect((await accountOf(s.userId))?.cursor).toBeNull();
+  await runAsTenant(s.userId, () => store.unbind(s.userId));
+});
+
+test("shutdown：宽限期到了 inbound 还在跑，就中止它再等它收尾", async () => {
   const s = await bindPerson("grace-late");
   const ilink = fakeIlink();
-  ilink.script(s.token, { messages: [], cursor: "" });
-  const open = ilink.hold();
-  const poller = pollerWith(ilink, async () => {});
+  ilink.script(s.token, { messages: [message("921")], cursor: "c-late" });
+  let entered = false;
+  let inboundSignal: AbortSignal | undefined;
+  const poller = pollerWith(ilink, async (_account, _m, signal) => {
+    entered = true;
+    inboundSignal = signal;
+    // 员工那一轮：被中止才收尾。
+    await new Promise<void>((resolve) =>
+      signal?.addEventListener("abort", () => resolve()),
+    );
+  });
   await poller.tick();
-  await untilPulled(ilink, s.token);
-  const signal = ilink.signals.at(-1);
-  // 假 iLink 不看信号：中止后由测试放行，模拟被中止的请求返回。
-  signal?.addEventListener("abort", () => open());
+  for (let i = 0; i < 200 && !entered; i += 1)
+    await new Promise((resolve) => setTimeout(resolve, 10));
   const started = Date.now();
   await poller.shutdown(100);
-  expect(signal?.aborted).toBe(true);
+  expect(inboundSignal?.aborted).toBe(true);
   expect(Date.now() - started).toBeGreaterThanOrEqual(90);
-  expect(WECHAT_SHUTDOWN_GRACE_MS).toBe(15_000);
+  expect(WECHAT_SHUTDOWN_GRACE_MS).toBe(7_000);
+  expect((await accountOf(s.userId))?.cursor).toBeNull();
   await runAsTenant(s.userId, () => store.unbind(s.userId));
 });

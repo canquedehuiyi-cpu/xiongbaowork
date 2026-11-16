@@ -75,8 +75,11 @@ export const WECHAT_PAUSE_MS = 60 * 60 * 1000;
 const ERROR_BACKOFF_MS = 30_000;
 const SEEN_PER_ACCOUNT = 500;
 const POISON_AFTER = 3;
-/** 关停时先等在途的轮询和 `inbound` 自己跑完这么久，到时还有在途的再中止。 */
-export const WECHAT_SHUTDOWN_GRACE_MS = 15_000;
+/**
+ * 关停时等在途的 `inbound`（员工那一轮）自己跑完这么久，到时还有在途的再中止。在途的长轮询不等，关停一开始就
+ * 中止。docker 默认 10 秒后 SIGKILL（compose 里 server 设了 `stop_grace_period: 30s`），7 秒留出关别的资源的余量。
+ */
+export const WECHAT_SHUTDOWN_GRACE_MS = 7_000;
 /** 账号超过这么久没被碰过，就清掉它的内存状态（解绑的账号不会再被认领）。 */
 const STATE_IDLE_MS = 2 * 60 * 60 * 1000;
 
@@ -105,7 +108,12 @@ export function createWechatPoller(deps: WechatPollerDeps) {
   /** 正在处理的账号 ID（含 `inbound` 跑得比租约还久的）。 */
   const active = new Set<string>();
   const maxInFlight = deps.maxInFlight ?? WECHAT_MAX_IN_FLIGHT;
-  /** 整个轮询器的中止信号：`stop` 时中止在途的长轮询和 `inbound`，之后不再认领。 */
+  /**
+   * 只管长轮询的中止信号：关停一开始（`shutdown` / `stop`）就中止在途的 `getUpdates`，之后不再认领，也不处理
+   * 关停后才拉到的批次（不存游标，下次启动从旧游标重来）。
+   */
+  const polling = new AbortController();
+  /** 交给 `inbound`（员工那一轮）的中止信号：宽限期到了（或 `stop`）才中止。 */
   const stopping = new AbortController();
 
   const stateOf = (accountId: string): AccountState => {
@@ -169,12 +177,15 @@ export function createWechatPoller(deps: WechatPollerDeps) {
       { baseUrl: account.baseUrl, botToken: token },
       account.cursor ?? "",
       state.timeoutMs,
-      stopping.signal,
+      polling.signal,
     );
     state.timeoutMs = reply.timeoutMs;
     for (const message of reply.messages) {
-      // 关停了：剩下的不处理、不存游标，下次启动从旧游标重来。
-      if (stopping.signal.aborted) return;
+      /*
+       * 关停了：这一批（含关停后才拉到的）剩下的不处理、不存游标，下次启动从旧游标重来；已经在跑的 `inbound`
+       * 照常跑完。
+       */
+      if (polling.signal.aborted) return;
       if (state.seen.has(message.id)) continue;
       // 处理一条可能很久：租约不再是自己的就停手，不存游标，让拿到租约的那个重来。
       if (!(await deps.wechat.renewLease(account.id, claimOwner, leaseMs)))
@@ -217,8 +228,10 @@ export function createWechatPoller(deps: WechatPollerDeps) {
       state.failures.delete(message.id);
       remember(state, message.id);
       // 这条在关停中途跑完（员工那一轮可能被中止了）：算处理过，但不存游标，剩下的留给下次。
-      if (stopping.signal.aborted) return;
+      if (polling.signal.aborted) return;
     }
+    // 关停后才返回的一轮（被中止的长轮询、或关停时刚好拉到的空批次）：不存游标。
+    if (polling.signal.aborted) return;
     // 只在租约还在本次认领手里时写：拉取期间被别人认领了，就让拿到的那个去写。
     if (reply.cursor)
       await deps.wechat.setCursor(account.id, reply.cursor, claimOwner);
@@ -265,7 +278,7 @@ export function createWechatPoller(deps: WechatPollerDeps) {
   return {
     /** 认领一批账号，各自起一次轮询，不等它们结束；在途数到上限就少认领。 */
     async tick(): Promise<void> {
-      if (stopping.signal.aborted) return;
+      if (polling.signal.aborted) return;
       const cutoff = Date.now() - STATE_IDLE_MS;
       for (const [id, state] of states)
         if (state.touched < cutoff) states.delete(id);
@@ -292,16 +305,18 @@ export function createWechatPoller(deps: WechatPollerDeps) {
       }
     },
 
-    /** 关停第一步：中止在途的长轮询和 `inbound`，之后 `tick` 不再认领。再 `drain` 等它们收尾。 */
+    /** 立刻停：中止在途的长轮询和 `inbound`，之后 `tick` 不再认领。再 `drain` 等它们收尾。 */
     stop(): void {
+      polling.abort();
       stopping.abort();
     },
 
     /**
-     * 关停：先等在途的轮询和 `inbound`（含员工那一轮）最多 `graceMs`；到时还有在途的，`stop` 中止它们，
-     * 再等它们收尾。调用方应先停掉调 `tick` 的循环。
+     * 关停：一开始就中止在途的长轮询、不再认领、不处理新拉到的批次；在途的 `inbound`（含员工那一轮）最多再等
+     * `graceMs`，到时还有在途的就中止它们，再等它们收尾。调用方应先停掉调 `tick` 的循环。
      */
     async shutdown(graceMs = WECHAT_SHUTDOWN_GRACE_MS): Promise<void> {
+      polling.abort();
       let timer: ReturnType<typeof setTimeout> | undefined;
       const finished = await Promise.race([
         drain().then(() => true),
