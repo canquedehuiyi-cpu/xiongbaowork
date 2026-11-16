@@ -55,6 +55,7 @@ export type IlinkClient = {
   getUpdates(
     session: IlinkSession,
     cursor: string,
+    timeoutMs?: number,
   ): Promise<{
     messages: IlinkMessage[];
     cursor: string | null;
@@ -80,6 +81,25 @@ function uin(): string {
 }
 
 type Json = Record<string, unknown>;
+/** Internal: the client-side deadline passed; a long poll treats it as an empty round. */
+class RequestTimeout extends Error {}
+
+/** The base URL comes from the bind response; only WeChat's own https hosts may get the bearer token. */
+function assertTrustedBase(baseUrl: string): void {
+  let url: URL;
+  try {
+    url = new URL(baseUrl);
+  } catch {
+    throw new DeliveryProviderError(PROVIDER, "bad_base_url");
+  }
+  const host = url.hostname.toLowerCase();
+  if (
+    url.protocol !== "https:" ||
+    !(host === "weixin.qq.com" || host.endsWith(".weixin.qq.com"))
+  ) {
+    throw new DeliveryProviderError(PROVIDER, "bad_base_url");
+  }
+}
 const str = (v: unknown): string | null =>
   typeof v === "string" && v ? v : typeof v === "number" ? String(v) : null;
 
@@ -101,6 +121,7 @@ export function createIlinkClient(options: {
       headers: Record<string, string>;
       body?: unknown;
       timeoutMs: number;
+      longPoll?: boolean;
     },
   ): Promise<Json> {
     let response: Response;
@@ -111,7 +132,14 @@ export function createIlinkClient(options: {
         headers: init.headers,
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
       });
-    } catch {
+    } catch (error) {
+      if (
+        init.longPoll &&
+        error instanceof Error &&
+        (error.name === "TimeoutError" || error.name === "AbortError")
+      ) {
+        throw new RequestTimeout();
+      }
       throw new DeliveryProviderError(PROVIDER, "network_error", true);
     }
     if (response.status === 401 || response.status === 403)
@@ -142,12 +170,15 @@ export function createIlinkClient(options: {
     path: string,
     body: Json,
     timeoutMs: number,
+    longPoll = false,
   ): Promise<Json> {
+    assertTrustedBase(session.baseUrl);
     return call(
       "POST",
       `${session.baseUrl.replace(/\/$/, "")}/ilink/bot/${path}`,
       {
         timeoutMs,
+        longPoll,
         headers: {
           "Content-Type": "application/json",
           AuthorizationType: "ilink_bot_token",
@@ -220,14 +251,22 @@ export function createIlinkClient(options: {
       };
     },
 
-    async getUpdates(session, cursor) {
-      const timeoutHint = DEFAULT_POLL_TIMEOUT_MS;
-      const body = await authed(
-        session,
-        "getupdates",
-        { get_updates_buf: cursor },
-        timeoutHint + 10_000,
-      );
+    async getUpdates(session, cursor, previousTimeoutMs) {
+      const pollMs = previousTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS;
+      let body: Json;
+      try {
+        body = await authed(
+          session,
+          "getupdates",
+          { get_updates_buf: cursor },
+          pollMs + 10_000,
+          true,
+        );
+      } catch (error) {
+        if (error instanceof RequestTimeout)
+          return { messages: [], cursor: null, timeoutMs: pollMs };
+        throw error;
+      }
       const code = codes(body);
       if (code === -14) throw new IlinkPausedError();
       if (code !== 0) throw new DeliveryProviderError(PROVIDER, "poll_failed");

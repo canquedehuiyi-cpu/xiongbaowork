@@ -26,7 +26,7 @@ const json = (body: unknown, status = 200) =>
     status,
     headers: { "content-type": "application/json" },
   });
-const session = { baseUrl: "https://ilink.example", botToken: "t1" };
+const session = { baseUrl: "https://ilinkai.weixin.qq.com", botToken: "t1" };
 
 describe("iLink client", () => {
   test("getUpdates sends protocol headers and the cursor, maps messages", async () => {
@@ -56,7 +56,9 @@ describe("iLink client", () => {
     });
     const out = await client.getUpdates(session, "cur-1");
     const headers = calls[0]?.init.headers as Record<string, string>;
-    expect(calls[0]?.url).toBe("https://ilink.example/ilink/bot/getupdates");
+    expect(calls[0]?.url).toBe(
+      "https://ilinkai.weixin.qq.com/ilink/bot/getupdates",
+    );
     expect(headers.Authorization).toBe("Bearer t1");
     expect(headers.AuthorizationType).toBe("ilink_bot_token");
     expect(headers["iLink-App-Id"]).toBe("bot");
@@ -106,7 +108,7 @@ describe("iLink client", () => {
         bot_token: "t1",
         ilink_bot_id: "b1",
         ilink_user_id: "u1",
-        baseurl: "https://x.example",
+        baseurl: "https://x.weixin.qq.com",
       }),
     );
     const client = createIlinkClient({
@@ -121,7 +123,7 @@ describe("iLink client", () => {
     expect(out).toEqual({
       status: "confirmed",
       session: {
-        baseUrl: "https://x.example",
+        baseUrl: "https://x.weixin.qq.com",
         botToken: "t1",
         botId: "b1",
         userId: "u1",
@@ -176,5 +178,80 @@ describe("iLink client", () => {
     const err = await c.getUpdates(session, "").catch((e) => e as Error);
     expect(String(err.message)).not.toContain("t1");
     expect(err).toMatchObject({ provider: "wechat", code: "unauthorized" });
+  });
+
+  test("getUpdates uses the previous long-poll timeout plus slack", async () => {
+    const seen: number[] = [];
+    const original = AbortSignal.timeout;
+    AbortSignal.timeout = ((ms: number) => {
+      seen.push(ms);
+      return original.call(AbortSignal, ms);
+    }) as typeof AbortSignal.timeout;
+    try {
+      const { fetchImpl } = fake(() => json({ ret: 0, msgs: [] }));
+      const client = createIlinkClient({
+        fetch: fetchImpl,
+        clientVersion: "2.4.10",
+      });
+      await client.getUpdates(session, "");
+      await client.getUpdates(session, "", 60000);
+      expect(seen).toEqual([45000, 70000]);
+    } finally {
+      AbortSignal.timeout = original;
+    }
+  });
+
+  test("a client-side long-poll timeout is an empty round, not an error", async () => {
+    const fetchImpl = (async () => {
+      throw new DOMException("timed out", "TimeoutError");
+    }) as unknown as typeof fetch;
+    const client = createIlinkClient({
+      fetch: fetchImpl,
+      clientVersion: "2.4.10",
+    });
+    expect(await client.getUpdates(session, "c", 60000)).toEqual({
+      messages: [],
+      cursor: null,
+      timeoutMs: 60000,
+    });
+    await expect(
+      client.sendText(session, { toUserId: "u", contextToken: "c", text: "x" }),
+    ).rejects.toMatchObject({ code: "network_error" });
+  });
+
+  test("untrusted base URLs are refused before any request", async () => {
+    const { calls, fetchImpl } = fake(() => json({ ret: 0 }));
+    const client = createIlinkClient({
+      fetch: fetchImpl,
+      clientVersion: "2.4.10",
+    });
+    for (const baseUrl of [
+      "http://ilinkai.weixin.qq.com",
+      "https://evil.example",
+      "https://weixin.qq.com.evil.example",
+      "not a url",
+    ]) {
+      const err = await client
+        .getUpdates({ baseUrl, botToken: "t1" }, "")
+        .catch((e) => e as Error);
+      expect(err).toMatchObject({ provider: "wechat", code: "bad_base_url" });
+      expect(String(err.message)).not.toContain("t1");
+    }
+    expect(calls.length).toBe(0);
+    await client.getUpdates(
+      { baseUrl: "https://ilinkai.weixin.qq.com", botToken: "t1" },
+      "",
+    );
+    expect(calls.length).toBe(1);
+  });
+
+  test("sendText ret -14 pauses", async () => {
+    const client = createIlinkClient({
+      fetch: fake(() => json({ ret: -14 })).fetchImpl,
+      clientVersion: "2.4.10",
+    });
+    await expect(
+      client.sendText(session, { toUserId: "u", contextToken: "c", text: "x" }),
+    ).rejects.toBeInstanceOf(IlinkPausedError);
   });
 });
