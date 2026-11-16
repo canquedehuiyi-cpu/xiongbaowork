@@ -564,6 +564,16 @@ jobs:
       - name: Print repository test diagnostics (credentials masked)
         if: failure()
         run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/repo-tests.log"
+      # openbot/scripts 下的脚本测试（建学习容器、发版、变异登记等）原先不在任何 job 里，红了也没人看见。
+      - name: Script tests
+        if: always()
+        run: bun test ./scripts/ > "$RUNNER_TEMP/script-tests.log" 2>&1
+      - name: Zero-fail gate for script tests (head only)
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/script-tests.log" 'script tests (head only)'
+      - name: Print script test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/script-tests.log"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
