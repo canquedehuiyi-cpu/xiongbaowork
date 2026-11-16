@@ -411,6 +411,74 @@ function preservedState(
   }
   return true;
 }
+/** Where a postgres:// URL connects and which database it opens, not who logs in: since the app
+ * role split (`0054_app_role.sql`, 0109) the server and the worker log in as `openbot_app`, the
+ * server's role writer as `openbot_role_writer`, and migration as the owner, all in one database.
+ * libpq lets the query override host, port and dbname, and falls back to the user name for an
+ * absent dbname, so both are read the way libpq reads them. Undefined when the URL is not one. */
+export function databaseIdentity(databaseUrl: string | undefined) {
+  if (!databaseUrl || databaseUrl.includes("${")) return undefined;
+  let url: URL;
+  try {
+    url = new URL(databaseUrl);
+  } catch {
+    return undefined;
+  }
+  if (url.protocol !== "postgres:" && url.protocol !== "postgresql:")
+    return undefined;
+  const query = url.searchParams;
+  const decode = (value: string) => {
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value;
+    }
+  };
+  const host = (
+    query.get("host") ?? decode(url.hostname.replace(/^\[(.*)\]$/, "$1"))
+  ).toLowerCase();
+  const user = query.get("user") ?? decode(url.username);
+  const database =
+    query.get("dbname") ?? (decode(url.pathname.replace(/^\//, "")) || user);
+  return JSON.stringify({
+    host,
+    hostaddr: query.get("hostaddr") ?? "",
+    port: query.get("port") ?? (url.port || "5432"),
+    database,
+    service: query.get("service") ?? "",
+  });
+}
+/** The database URLs Compose hands the services that touch the database. */
+function databaseUrls(configuration: ComposeConfiguration) {
+  const services = configuration.services;
+  const urls = [
+    services.server?.environment?.DATABASE_URL,
+    services.worker?.environment?.DATABASE_URL,
+    services.migrate?.environment?.DATABASE_URL,
+  ];
+  // Optional: only a configuration that has one carries it, and then it must not point elsewhere.
+  const roleWriter = services.server?.environment?.ROLE_WRITER_DATABASE_URL;
+  if (roleWriter !== undefined) urls.push(roleWriter);
+  return urls;
+}
+/** Every database URL, before and after, opens the same database. Accounts may differ. */
+function sameDatabase(
+  before: ComposeConfiguration,
+  after: ComposeConfiguration,
+) {
+  const identities = [...databaseUrls(before), ...databaseUrls(after)].map(
+    databaseIdentity,
+  );
+  const first = identities[0];
+  return (
+    first !== undefined && identities.every((identity) => identity === first)
+  );
+}
+/** The URL a backup reads with: migration's, which logs in as the owner. The server's app role is
+ * bound by row-level security, so a dump through it would silently miss other tenants' rows. */
+function backupDatabaseUrl(configuration: ComposeConfiguration) {
+  return configuration.services.migrate?.environment?.DATABASE_URL;
+}
 /** The bundled backup command selects POSTGRES_DB/POSTGRES_USER over its local socket.
  * Refuse a URL that identifies another target before stopping any service. URI query options
  * may override host/user/dbname, so they require an explicit external backup integration. */
@@ -786,15 +854,9 @@ async function inspect(
         "Compose overrides do not resolve server, worker and migrate to the accepted candidate image",
       );
     if (options.topology === "image") {
-      const database = before.services.server?.environment?.DATABASE_URL;
-      if (
-        !database ||
-        before.services.migrate?.environment?.DATABASE_URL !== database ||
-        before.services.worker?.environment?.DATABASE_URL !== database ||
-        after.services.server?.environment?.DATABASE_URL !== database ||
-        after.services.migrate?.environment?.DATABASE_URL !== database ||
-        after.services.worker?.environment?.DATABASE_URL !== database
-      )
+      // The owner URL: what migrates is what is backed up, and the app role cannot read every row.
+      const database = backupDatabaseUrl(before);
+      if (!database || !sameDatabase(before, after))
         throw new Error(
           "Candidate must preserve the same database identity for server, worker and migration",
         );
@@ -1011,12 +1073,11 @@ export async function applyLocalUpdate(
     phase("backing-up");
     const dump = join(backupDirectory, "database.dump");
     writeFileSync(dump, "", { flag: "wx", mode: 0o600 });
-    // Image Compose's migrate/server share its resolved URL. Host uses its existing .env URL.
+    // Image Compose backs up through migration's owner URL. Host uses its existing .env URL.
     if (
       options.topology === "image" &&
-      new URL(
-        originalConfiguration.services.server?.environment?.DATABASE_URL ?? "",
-      ).hostname === "postgres"
+      new URL(backupDatabaseUrl(originalConfiguration) ?? "").hostname ===
+        "postgres"
     ) {
       await run(
         compose(
@@ -1037,7 +1098,7 @@ export async function applyLocalUpdate(
       const databaseUrl =
         options.topology === "host"
           ? env.DATABASE_URL
-          : originalConfiguration.services.server?.environment?.DATABASE_URL;
+          : backupDatabaseUrl(originalConfiguration);
       await run(["pg_dump", "--format=custom"], {
         cwd: root,
         env: libpqEnvironment(databaseUrl, env),
@@ -1048,9 +1109,8 @@ export async function applyLocalUpdate(
       throw new Error("Database backup is empty; source was not changed");
     if (
       options.topology === "image" &&
-      new URL(
-        originalConfiguration.services.server?.environment?.DATABASE_URL ?? "",
-      ).hostname === "postgres"
+      new URL(backupDatabaseUrl(originalConfiguration) ?? "").hostname ===
+        "postgres"
     ) {
       await run(
         compose(
