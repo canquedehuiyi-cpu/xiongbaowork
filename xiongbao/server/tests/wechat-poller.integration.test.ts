@@ -37,6 +37,7 @@ type Step = { messages?: IlinkMessage[]; cursor?: string | null } | Error;
 function fakeIlink(delayMs = 0) {
   const scripts = new Map<string, Step[]>();
   const calls: { token: string; cursor: string }[] = [];
+  let gate: Promise<void> | null = null;
   const client: IlinkClient = {
     async getBotQrcode() {
       throw new Error("not used");
@@ -50,6 +51,7 @@ function fakeIlink(delayMs = 0) {
     async getUpdates(session, cursor) {
       calls.push({ token: session.botToken, cursor });
       if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
+      if (gate) await gate;
       const step = scripts.get(session.botToken)?.shift();
       if (step instanceof Error) throw step;
       return {
@@ -62,6 +64,17 @@ function fakeIlink(delayMs = 0) {
   return {
     client,
     calls,
+    /** 之后的 getUpdates 都挂住，直到调用返回的函数。 */
+    hold() {
+      let open: () => void = () => {};
+      gate = new Promise<void>((resolve) => {
+        open = resolve;
+      });
+      return () => {
+        gate = null;
+        open();
+      };
+    },
     script(token: string, ...steps: Step[]) {
       scripts.set(token, steps);
     },
@@ -112,7 +125,12 @@ const accountOf = (userId: string) =>
 function pollerWith(
   ilink: ReturnType<typeof fakeIlink>,
   inbound: Parameters<typeof createWechatPoller>[0]["inbound"],
-  options: { owner?: string; now?: () => Date } = {},
+  options: {
+    owner?: string;
+    now?: () => Date;
+    leaseMs?: number;
+    maxInFlight?: number;
+  } = {},
 ) {
   return createWechatPoller({
     database,
@@ -123,6 +141,8 @@ function pollerWith(
     inbound,
     owner: options.owner ?? `${prefix}-poller-${randomUUID().slice(0, 4)}`,
     ...(options.now ? { now: options.now } : {}),
+    ...(options.leaseMs ? { leaseMs: options.leaseMs } : {}),
+    ...(options.maxInFlight ? { maxInFlight: options.maxInFlight } : {}),
   });
 }
 
@@ -325,16 +345,18 @@ test("续租只对 bound 账号生效", async () => {
   );
 });
 
-test("账号多过一批：连续两次 tick，每个账号都至少被拉过一次", async () => {
+test("账号多过一批：连续 tick，本测试的每个账号都被拉到过", async () => {
   const ilink = fakeIlink();
   const crowd = [];
   for (let i = 0; i <= WECHAT_CLAIM_LIMIT; i += 1)
     crowd.push(await bindPerson(`crowd${i}`));
   const poller = pollerWith(ilink, async () => {});
-  await poller.tick();
-  await poller.drain();
-  await poller.tick();
-  await poller.drain();
+  // 库里若有别的 bound 账号会占名额；多 tick 几轮，设上限次数，不依赖库是空的。
+  for (let round = 0; round < 10; round += 1) {
+    await poller.tick();
+    await poller.drain();
+    if (crowd.every((person) => ilink.pulls(person.token) > 0)) break;
+  }
   for (const person of crowd)
     expect(ilink.pulls(person.token)).toBeGreaterThan(0);
   for (const person of crowd)
@@ -421,12 +443,99 @@ test("网络错误之后这个账号 30 秒内不再被认领", async () => {
 
 test("tick 不等长轮询结束；drain 等", async () => {
   const r = await bindPerson("slow");
-  const ilink = fakeIlink(300);
+  const ilink = fakeIlink();
+  const release = ilink.hold();
   const poller = pollerWith(ilink, async () => {});
-  const started = Date.now();
   await poller.tick();
-  expect(Date.now() - started).toBeLessThan(250);
-  await poller.drain();
+  // 假 getUpdates 还挂在手动控制的 promise 上，tick 已经返回。
+  let finished = false;
+  const waiting = poller.drain().then(() => {
+    finished = true;
+  });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(finished).toBe(false);
+  release();
+  await waiting;
   expect(ilink.pulls(r.token)).toBe(1);
   await runAsTenant(r.userId, () => store.unbind(r.userId));
+});
+
+test("在途上限：到了上限就不再认领", async () => {
+  const one = await bindPerson("cap1");
+  const two = await bindPerson("cap2");
+  const ilink = fakeIlink();
+  const release = ilink.hold();
+  const poller = pollerWith(ilink, async () => {}, { maxInFlight: 1 });
+  await poller.tick();
+  await poller.tick();
+  await poller.tick();
+  const mine = [one.token, two.token];
+  const polled = () => ilink.calls.filter((c) => mine.includes(c.token)).length;
+  // 上限 1：库里只有一个在途的，后面两次 tick 没认领任何账号。
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(ilink.calls.length).toBe(1);
+  release();
+  await poller.drain();
+  await poller.tick();
+  await poller.drain();
+  expect(polled()).toBe(2);
+  await runAsTenant(one.userId, () => store.unbind(one.userId));
+  await runAsTenant(two.userId, () => store.unbind(two.userId));
+});
+
+test("inbound 比租约慢：同一条消息只处理一次，游标不回退，不会被再认领", async () => {
+  const w = await bindPerson("wslow");
+  const ilink = fakeIlink();
+  ilink.script(
+    w.token,
+    { messages: [message("601")], cursor: "c1" },
+    { messages: [message("601")], cursor: "c0-old" },
+  );
+  let calls = 0;
+  const poller = pollerWith(
+    ilink,
+    async () => {
+      calls += 1;
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+    },
+    { leaseMs: 300 },
+  );
+  await poller.tick();
+  for (let i = 0; i < 6; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    await poller.tick(); // 租约本该过期了，但心跳续着、账号也在处理集合里
+  }
+  await poller.drain();
+  expect(calls).toBe(1);
+  expect(ilink.pulls(w.token)).toBe(1);
+  expect((await accountOf(w.userId))?.cursor).toBe("c1");
+  await runAsTenant(w.userId, () => store.unbind(w.userId));
+});
+
+test("租约被别人拿走：停手，不写游标，不还别人的租约", async () => {
+  const y = await bindPerson("stolen");
+  const ilink = fakeIlink();
+  ilink.script(y.token, { messages: [message("701")], cursor: "c1" });
+  const poller = pollerWith(
+    ilink,
+    async () => {
+      await asPlatform(() =>
+        database
+          .update(wechatAccounts)
+          .set({
+            leaseOwner: "thief",
+            leaseUntil: sql`now() + interval '60 seconds'`,
+          })
+          .where(eq(wechatAccounts.id, y.id)),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    },
+    { leaseMs: 300 },
+  );
+  await poller.tick();
+  await poller.drain();
+  const row = await accountOf(y.userId);
+  expect(row?.cursor).toBeNull();
+  expect(row?.leaseOwner).toBe("thief");
+  await runAsTenant(y.userId, () => store.unbind(y.userId));
 });

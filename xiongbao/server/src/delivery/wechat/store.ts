@@ -292,6 +292,8 @@ export function createWechatStore(database: Database) {
       owner: string,
       leaseMs: number,
       limit: number,
+      /** 本副本还在处理的账号：不认领，也就不动它们的租约。 */
+      exclude: readonly string[] = [],
     ): Promise<WechatAccount[]> {
       return runAsTenant("platform", () =>
         database.transaction(async (transaction) => {
@@ -302,6 +304,14 @@ export function createWechatStore(database: Database) {
               where ("status" = 'bound'
                   or ("status" = 'paused' and "paused_until" <= now()))
                 and ("lease_until" is null or "lease_until" <= now())
+                ${
+                  exclude.length
+                    ? sql`and "id" not in (${sql.join(
+                        exclude.map((id) => sql`${id}`),
+                        sql`, `,
+                      )})`
+                    : sql``
+                }
               order by "lease_until" asc nulls first, "id" asc
               limit ${limit}
               for update skip locked

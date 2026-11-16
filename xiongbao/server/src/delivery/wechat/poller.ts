@@ -6,6 +6,9 @@
  * 还租约的时刻，刚拉过的排到队尾，账号多于一批时每个都轮得到。副本级在途上限 `MAX_IN_FLIGHT`，到了就少认领。
  * 测试用 `drain()` 等在途轮询结束。
  *
+ * 同一个账号不会被本副本重复处理：进程内记着正在处理的账号，认领时排除；每次认领用专属 owner
+ * （`owner#随机`），续租、还租约都带它，续租失败就停手、不写游标；`inbound` 执行期间按租约的三分之一心跳续租。
+ *
  * 帧：认领在 store 的 platform 帧里；之后每个账号的一切（取令牌、记入站、`inbound`、存游标、还租约、
  * 暂停、断开）都在 `runAsTenant(account.tenantId, …)` 里，这里不新开 platform 帧。
  *
@@ -53,6 +56,10 @@ export type WechatPollerDeps = {
   /** 这个轮询器（副本）的名字，写进租约。 */
   owner: string;
   now?: () => Date;
+  /** 测试用：固定租约时长（毫秒）；默认按账号的长轮询时长加 30 秒。 */
+  leaseMs?: number;
+  /** 测试用：本副本同时在轮询的账号上限，默认 `WECHAT_MAX_IN_FLIGHT`。 */
+  maxInFlight?: number;
 };
 
 /** 长轮询默认 35 秒；租约 = 这个账号的长轮询时长 + 30 秒。 */
@@ -91,6 +98,9 @@ export function createWechatPoller(deps: WechatPollerDeps) {
   const now = deps.now ?? (() => new Date());
   const states = new Map<string, AccountState>();
   const inFlight = new Set<Promise<void>>();
+  /** 正在处理的账号 ID（含 `inbound` 跑得比租约还久的）。 */
+  const active = new Set<string>();
+  const maxInFlight = deps.maxInFlight ?? WECHAT_MAX_IN_FLIGHT;
 
   const stateOf = (accountId: string): AccountState => {
     let state = states.get(accountId);
@@ -135,15 +145,19 @@ export function createWechatPoller(deps: WechatPollerDeps) {
     states.delete(account.id);
   }
 
-  async function pollOne(account: WechatAccount): Promise<void> {
+  async function pollOne(
+    account: WechatAccount,
+    claimOwner: string,
+  ): Promise<void> {
     const state = stateOf(account.id);
     const token = await botToken(account);
     if (!token) {
       await disconnect(account);
       return;
     }
-    const leaseMs = (state.timeoutMs ?? DEFAULT_POLL_MS) + LEASE_MARGIN_MS;
-    if (!(await deps.wechat.renewLease(account.id, deps.owner, leaseMs)))
+    const leaseMs =
+      deps.leaseMs ?? (state.timeoutMs ?? DEFAULT_POLL_MS) + LEASE_MARGIN_MS;
+    if (!(await deps.wechat.renewLease(account.id, claimOwner, leaseMs)))
       return;
     const reply = await deps.ilink.getUpdates(
       { baseUrl: account.baseUrl, botToken: token },
@@ -154,15 +168,31 @@ export function createWechatPoller(deps: WechatPollerDeps) {
     for (const message of reply.messages) {
       if (state.seen.has(message.id)) continue;
       // 处理一条可能很久：租约不再是自己的就停手，不存游标，让拿到租约的那个重来。
-      if (!(await deps.wechat.renewLease(account.id, deps.owner, leaseMs)))
+      if (!(await deps.wechat.renewLease(account.id, claimOwner, leaseMs)))
         return;
       await deps.wechat.markInbound(account.id, {
         at: now(),
         contextToken: message.contextToken,
       });
+      // 心跳：`inbound` 可能比租约还久；续不上说明租约被别人拿走了，跑完也不写游标。
+      let lost = false;
+      const heartbeat = setInterval(
+        () => {
+          deps.wechat
+            .renewLease(account.id, claimOwner, leaseMs)
+            .then((ok) => {
+              if (!ok) lost = true;
+            })
+            .catch(() => {
+              lost = true;
+            });
+        },
+        Math.max(10, Math.floor(leaseMs / 3)),
+      );
       try {
         await deps.inbound(account, message);
       } catch (error) {
+        if (lost) return;
         const failures = (state.failures.get(message.id) ?? 0) + 1;
         if (failures < POISON_AFTER) {
           state.failures.set(message.id, failures);
@@ -171,18 +201,24 @@ export function createWechatPoller(deps: WechatPollerDeps) {
         // 连续失败到上限：跳过这条，别让整个账号卡死。
         state.failures.delete(message.id);
         logFailure("wechat-inbound-skipped", error, { messageId: message.id });
+      } finally {
+        clearInterval(heartbeat);
       }
+      if (lost) return;
       state.failures.delete(message.id);
       remember(state, message.id);
     }
     if (reply.cursor) await deps.wechat.setCursor(account.id, reply.cursor);
   }
 
-  async function pollInTenant(account: WechatAccount): Promise<void> {
+  async function pollInTenant(
+    account: WechatAccount,
+    claimOwner: string,
+  ): Promise<void> {
     await runAsTenant(account.tenantId, async () => {
       let backoffMs = 0;
       try {
-        await pollOne(account);
+        await pollOne(account, claimOwner);
       } catch (error) {
         if (error instanceof IlinkPausedError) {
           await deps.wechat.pause(
@@ -201,7 +237,7 @@ export function createWechatPoller(deps: WechatPollerDeps) {
         }
       } finally {
         try {
-          await deps.wechat.releaseLease(account.id, deps.owner, backoffMs);
+          await deps.wechat.releaseLease(account.id, claimOwner, backoffMs);
         } catch (error) {
           logFailure("wechat-lease-release-error", error);
         }
@@ -215,20 +251,24 @@ export function createWechatPoller(deps: WechatPollerDeps) {
       const cutoff = Date.now() - STATE_IDLE_MS;
       for (const [id, state] of states)
         if (state.touched < cutoff) states.delete(id);
-      const room = Math.min(
-        WECHAT_CLAIM_LIMIT,
-        WECHAT_MAX_IN_FLIGHT - inFlight.size,
-      );
+      const room = Math.min(WECHAT_CLAIM_LIMIT, maxInFlight - inFlight.size);
       if (room <= 0) return;
+      const claimOwner = `${deps.owner}#${crypto.randomUUID()}`;
       const accounts = await deps.wechat.claimForPolling(
-        deps.owner,
-        DEFAULT_POLL_MS + LEASE_MARGIN_MS,
+        claimOwner,
+        deps.leaseMs ?? DEFAULT_POLL_MS + LEASE_MARGIN_MS,
         room,
+        [...active],
       );
       for (const account of accounts) {
-        const run: Promise<void> = pollInTenant(account)
+        if (active.has(account.id)) continue;
+        active.add(account.id);
+        const run: Promise<void> = pollInTenant(account, claimOwner)
           .catch((error) => logFailure("wechat-poll-error", error))
-          .finally(() => inFlight.delete(run));
+          .finally(() => {
+            active.delete(account.id);
+            inFlight.delete(run);
+          });
         inFlight.add(run);
       }
     },
