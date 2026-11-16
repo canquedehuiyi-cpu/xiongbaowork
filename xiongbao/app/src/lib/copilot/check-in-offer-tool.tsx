@@ -178,7 +178,7 @@ export function CheckInOfferCard({
           }}
           value={minutes}
         >
-          <SelectTrigger aria-label="How often" className="w-36" size="sm">
+          <SelectTrigger aria-label="多久一次" className="w-36" size="sm">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
