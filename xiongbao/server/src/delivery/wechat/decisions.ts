@@ -23,8 +23,8 @@
  * 一切都在这个人的帧里（轮询器的帧），不开 platform 帧。
  */
 import { type BaseEvent, EventType } from "@ag-ui/client";
-import { approvalPhrase } from "@openbot/shared/tool-name";
 import { and, eq } from "drizzle-orm";
+import { approvalPhrase } from "../../../../shared/tool-name";
 import { acpCardOf } from "../../agents/acp/permissions";
 import type { AgentProfileStore } from "../../agents/profile-store";
 import type { AgentActor } from "../../agents/profile-types";
