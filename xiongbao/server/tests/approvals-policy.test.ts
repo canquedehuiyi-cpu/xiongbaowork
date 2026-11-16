@@ -1001,9 +1001,9 @@ describe("the approval gate", () => {
       expect((suspended as HeadlessToolSuspension).waiting.handoff).toBeTrue();
       const [request] = [...requests.values()];
       await expect(
-        service.decide("owner", request?.id as string, "allow_once"),
+        service.decide("owner", request?.id as string, "allow_once", "web"),
       ).rejects.toThrow("handed to you");
-      await service.decide("owner", request?.id as string, "handled");
+      await service.decide("owner", request?.id as string, "handled", "web");
       const permit = await withApprovalContext(context, () =>
         service.gate(paying),
       );
@@ -1104,7 +1104,7 @@ describe("delegation is gated", () => {
       expect(asked).toBeInstanceOf(HeadlessToolSuspension);
       expect(desk.sent).toBe(0);
       const [request] = await store.list("owner");
-      await service.decide("owner", request?.id as string, "allow_once");
+      await service.decide("owner", request?.id as string, "allow_once", "web");
       const execute = createApprovedActionExecutor({
         sourceFor: async () => ({ channelId: "channel" }),
         gate: service.gate,
@@ -2559,7 +2559,7 @@ describe("SEC1: every gate site leaves a refused or waiting action undone", () =
       const waiting = [...requests.values()].find(
         (row) => row.action.toolCallId === "c1",
       );
-      await service.decide("owner", waiting?.id as string, "allow_once");
+      await service.decide("owner", waiting?.id as string, "allow_once", "web");
       await remove();
       expect(sent).toEqual(["/exec"]);
       await remove().catch(() => undefined);

@@ -669,7 +669,7 @@ describe("where a task stands", () => {
     });
 
     await asOwner(owner, () =>
-      approvalService.decide(owner.id, request.id, "allow_once"),
+      approvalService.decide(owner.id, request.id, "allow_once", "web"),
     );
     // Decided, and being carried out: nothing waits on the person now.
     expect((await taskStore.get(owner.id, task.id)).status).toBe("working");
@@ -740,7 +740,7 @@ describe("where a task stands", () => {
     // A standing rule would be ignored by the next task, so none is saved from one: once, or no.
     await expect(
       asOwner(owner, () =>
-        approvalService.decide(owner.id, waiting[0]?.id ?? "", "allow_always"),
+        approvalService.decide(owner.id, waiting[0]?.id ?? "", "allow_always", "web"),
       ),
     ).rejects.toThrow(
       "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
@@ -812,7 +812,7 @@ describe("where a task stands", () => {
     const id = waiting[0]?.id ?? "";
     await expect(
       asOwner(owner, () =>
-        approvalService.decide(owner.id, id, "allow_always"),
+        approvalService.decide(owner.id, id, "allow_always", "web"),
       ),
     ).rejects.toThrow(
       "Tasks started from a check-in ask before every change. Allow this once, or deny it.",
@@ -1176,7 +1176,7 @@ describe("carried on after the person decides", () => {
     const before = sent.length;
 
     await asOwner(owner, () =>
-      approvalService.decide(owner.id, request.id, "allow_once"),
+      approvalService.decide(owner.id, request.id, "allow_once", "web"),
     );
     await resumeApproval();
 
@@ -1264,7 +1264,7 @@ describe("carried on after the person decides", () => {
     });
 
     await asOwner(owner, () =>
-      approvalService.decide(owner.id, request.id, "allow_once"),
+      approvalService.decide(owner.id, request.id, "allow_once", "web"),
     );
     for (let tick = 0; tick < 10; tick += 1) {
       await resume();

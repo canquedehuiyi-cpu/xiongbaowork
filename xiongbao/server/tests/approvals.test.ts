@@ -298,7 +298,7 @@ async function subagentApprovalFixture(turnTimeoutMs?: number) {
       const pending = (await store.list(owner)).filter(
         (row) => row.status === "pending" && row.action.runId === runId,
       );
-      for (const row of pending) await store.decide(owner, row.id, "deny");
+      for (const row of pending) await store.decide(owner, row.id, "deny", "web");
     },
   });
   return {
@@ -402,9 +402,9 @@ test("personal approval forwards the exact side effect once and continues its or
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
     await expect(
-      service.decide("intruder", row.id, "allow_once"),
+      service.decide("intruder", row.id, "allow_once", "web"),
     ).rejects.toThrow();
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     const restarted = createApprovalFixtureService(store);
     let effects = 0;
     const continued: unknown[] = [];
@@ -435,7 +435,7 @@ test("current authority and a changed resolved target defeat an earlier approval
     await expect(service.gate(candidate)).rejects.toThrow();
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     let effects = 0;
     await expect(
       service.resume("owner", row.id, {
@@ -474,7 +474,7 @@ test("always is scoped and revocable, while deny stays durable", () =>
     await expect(service.gate(candidate)).rejects.toThrow();
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_always");
+    await service.decide("owner", row.id, "allow_always", "web");
     await service.gate({
       ...candidate,
       continuation: { ...context, runId: "new-run", toolCallId: "new-call" },
@@ -492,7 +492,7 @@ test("always is scoped and revocable, while deny stays durable", () =>
       (request) => request.status === "pending",
     );
     if (!pending) throw new Error("missing pending");
-    await service.decide("owner", pending.id, "deny");
+    await service.decide("owner", pending.id, "deny", "web");
     await expect(
       service.gate({
         ...candidate,
@@ -557,7 +557,7 @@ test("computer policy runs before personal approval and simultaneous once reques
     expect(forwards).toBe(0);
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing approval");
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     const outcomes = await Promise.allSettled([invoke(), invoke()]);
     expect(
       outcomes.filter((outcome) => outcome.status === "fulfilled"),
@@ -610,7 +610,7 @@ test("native host approval queues one operation, replays its saved result, and r
     expect(broker.statusFor("owner").pending).toHaveLength(0);
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     const running = invoke();
     for (
       let attempt = 0;
@@ -689,7 +689,7 @@ test("an approved action whose re-check refuses tells the Bot and continues the 
     await expect(service.gate(candidate)).rejects.toThrow();
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     let effects = 0;
     const continued: { result: { content: string; error?: string } }[] = [];
     await service.resume("owner", row.id, {
@@ -720,7 +720,7 @@ test("an approved action whose target changed tells the Bot and continues the co
     await expect(service.gate(candidate)).rejects.toThrow();
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     let effects = 0;
     const continued: { result: { content: string; error?: string } }[] = [];
     await service.resume("owner", row.id, {
@@ -748,7 +748,7 @@ test("an always-allowed action whose rule was revoked before it ran tells the Bo
     await expect(service.gate(candidate)).rejects.toThrow();
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_always");
+    await service.decide("owner", row.id, "allow_always", "web");
     const [rule] = await store.rules("owner");
     if (!rule) throw new Error("missing rule");
     await service.revoke("owner", rule.id);
@@ -830,7 +830,7 @@ test("an approved action interrupted before its result was saved continues the c
     await expect(service.gate(candidate)).rejects.toThrow();
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     // The process that took it started the action and stopped before saving what happened.
     expect(await store.consume("owner", row.id, row.action.actionDigest)).toBe(
       true,
@@ -866,7 +866,7 @@ test("an approved action the deployment no longer allows is not carried out, and
     await expect(service.gate(candidate)).rejects.toThrow();
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     let effects = 0;
     const continued: unknown[] = [];
     await service.resume("owner", row.id, {
@@ -894,7 +894,7 @@ test("a permanent failure during the re-check is an answer for the Bot, not a re
     await expect(service.gate(candidate)).rejects.toThrow();
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     const continued: { result: { error?: string } }[] = [];
     await service.resume("owner", row.id, {
       // A saved argument that no longer parses: the same on every try.
@@ -918,7 +918,7 @@ test("an approved action that ran out of tries tells the Bot once, across replic
     await expect(service.gate(candidate)).rejects.toThrow();
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     const continued: { result: { error?: string } }[] = [];
     const dependencies = {
       validate: async (action: ApprovalAction) => action,
@@ -966,7 +966,7 @@ test.each([
     await expect(service.gate(candidate)).rejects.toThrow();
     const [row] = await store.list("owner");
     if (!row) throw new Error("missing request");
-    await service.decide("owner", row.id, "allow_once");
+    await service.decide("owner", row.id, "allow_once", "web");
     const continued: { result: { error?: string } }[] = [];
     await service.resume("owner", row.id, {
       validate: async () => {

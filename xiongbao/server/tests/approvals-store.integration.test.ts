@@ -120,11 +120,11 @@ test("PostgreSQL stores one immutable owned request, one decision queue item and
       asStranger(() => store.get(stranger, request.id)),
     ).rejects.toBeInstanceOf(ApprovalNotFoundError);
     await expect(
-      asStranger(() => store.decide(stranger, request.id, "allow_once")),
+      asStranger(() => store.decide(stranger, request.id, "allow_once", "web")),
     ).rejects.toBeInstanceOf(ApprovalNotFoundError);
     const choices = await Promise.allSettled([
-      store.decide(owner, request.id, "allow_once"),
-      store.decide(owner, request.id, "allow_once"),
+      store.decide(owner, request.id, "allow_once", "web"),
+      store.decide(owner, request.id, "allow_once", "web"),
     ]);
     expect(
       choices.filter((choice) => choice.status === "fulfilled"),
@@ -161,7 +161,7 @@ test("PostgreSQL persistent permissions are exact, revocable and denied choices 
   asOwner(async () => {
     const first = await store.open(approvalAction(candidate("persistent")));
     keys.push(first.id);
-    await store.decide(owner, first.id, "allow_always");
+    await store.decide(owner, first.id, "allow_always", "web");
     const subsequent = await store.open(
       approvalAction(candidate("persistent")),
     );
@@ -183,7 +183,7 @@ test("PostgreSQL persistent permissions are exact, revocable and denied choices 
     ).toBe(false);
     const denied = await store.open(approvalAction(candidate("deny")));
     keys.push(denied.id);
-    await store.decide(owner, denied.id, "deny");
+    await store.decide(owner, denied.id, "deny", "web");
     const restarted = createApprovalService(createApprovalStore(database));
     await expect(restarted.gate(denied.action)).rejects.toThrow("declined");
   }));

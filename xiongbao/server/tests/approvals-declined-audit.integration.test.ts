@@ -144,7 +144,7 @@ const declinedRows = (tool: string) =>
 
 test("a denial writes the action's refused row once, in the person's tenant, beside the decision", async () => {
   const id = await open(candidate("deny_me", refusedRow("deny_me")));
-  await asOwner(() => store.decide(owner, id, "deny"));
+  await asOwner(() => store.decide(owner, id, "deny", "web"));
 
   const rows = await declinedRows("deny_me");
   expect(rows).toHaveLength(1);
@@ -170,16 +170,16 @@ test("a denial writes the action's refused row once, in the person's tenant, bes
   );
   expect(decisions).toEqual([{ tenantId: owner }]);
   await expect(
-    asOwner(() => store.decide(owner, id, "deny")),
+    asOwner(() => store.decide(owner, id, "deny", "web")),
   ).rejects.toBeInstanceOf(ApprovalRefusedError);
   expect(await declinedRows("deny_me")).toHaveLength(1);
 });
 
 test("an allowed action, and a denial with nothing handed in, write no refused row", async () => {
   const allowed = await open(candidate("allow_me", refusedRow("allow_me")));
-  await asOwner(() => store.decide(owner, allowed, "allow_once"));
+  await asOwner(() => store.decide(owner, allowed, "allow_once", "web"));
   const bare = await open(candidate("bare"));
-  await asOwner(() => store.decide(owner, bare, "deny"));
+  await asOwner(() => store.decide(owner, bare, "deny", "web"));
 
   expect(await declinedRows("allow_me")).toEqual([]);
   expect(await declinedRows("bare")).toEqual([]);
@@ -195,7 +195,7 @@ test("the handed-in row goes through redaction, and is no part of what the perso
     refusedRow("redact_me", { token: "secret-token-value-9921" }),
   );
   const id = await open(withRow);
-  await asOwner(() => store.decide(owner, id, "deny"));
+  await asOwner(() => store.decide(owner, id, "deny", "web"));
   const rows = await declinedRows("redact_me");
   expect(rows).toHaveLength(1);
   expect(JSON.stringify(rows)).not.toContain("secret-token-value-9921");

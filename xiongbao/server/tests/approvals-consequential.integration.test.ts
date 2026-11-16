@@ -398,7 +398,7 @@ describe.each(EDITIONS)("the %s edition", (edition) => {
         }).toMatchObject({ behaviour, once: true });
         expect(offersStandingRule(request?.action ?? {})).toBeFalse();
         await expect(
-          service.decide(owner, request?.id ?? "", "allow_always"),
+          service.decide(owner, request?.id ?? "", "allow_always", "web"),
         ).rejects.toThrow();
       }
     });
@@ -416,10 +416,10 @@ describe.each(EDITIONS)("the %s edition", (edition) => {
       reason: DESTRUCTIVE_TOOL_REASON,
     });
     expect(
-      (await service.decide(owner, allowed?.id ?? "", "allow_once")).status,
+      (await service.decide(owner, allowed?.id ?? "", "allow_once", "web")).status,
     ).toBe("approved");
     const denied = await gate(owner, archive);
-    expect((await service.decide(owner, denied?.id ?? "", "deny")).status).toBe(
+    expect((await service.decide(owner, denied?.id ?? "", "deny", "web")).status).toBe(
       "denied",
     );
   });
@@ -431,6 +431,7 @@ describe.each(EDITIONS)("the %s edition", (edition) => {
       owner,
       request?.id ?? "",
       "allow_once",
+      "web",
     );
     expect(decided.status).toBe("approved");
   });

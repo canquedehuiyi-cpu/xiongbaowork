@@ -962,7 +962,7 @@ describe("an external employee in a group", () => {
 
     // The hirer allows it: the line says so, for everyone, and the group is told again.
     await runAsTenant(owner.id, () =>
-      service.decide(owner.id, approval.id, "allow_once"),
+      service.decide(owner.id, approval.id, "allow_once", "web"),
     );
     for (const reader of [teammate, owner])
       await until(

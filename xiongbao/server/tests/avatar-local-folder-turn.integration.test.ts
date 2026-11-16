@@ -472,7 +472,7 @@ describe("register a folder, add it as a source, and the 分身 reads it", () =>
     expect(request?.action.toolRef).toBe("computer_read_file");
 
     await runAsTenant(personA, () =>
-      gate.decide(personA, request?.id as string, "allow_once"),
+      gate.decide(personA, request?.id as string, "allow_once", "web"),
     );
     // Asked again with the same call, as the resumed turn does: now it reads, once.
     const continuation = parseApprovalContinuation(

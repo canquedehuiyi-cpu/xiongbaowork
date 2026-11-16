@@ -520,7 +520,7 @@ test("a window titled 招商银行 waits for approval; approve reads it once, re
   });
   expect(request?.action.policy?.reason).toContain("招商银行");
   await runAsTenant(device.tenant, () =>
-    device.service.decide(device.tenant, request?.id as string, "allow_once"),
+    device.service.decide(device.tenant, request?.id as string, "allow_once", "web"),
   );
   const read = (await device.call(
     "computer_desktop_snapshot",
@@ -541,7 +541,7 @@ test("a window titled 招商银行 waits for approval; approve reads it once, re
   );
   expect(rejected?.action.policy?.source).toBe("desktop_window");
   await runAsTenant(device.tenant, () =>
-    device.service.decide(device.tenant, rejected?.id as string, "deny"),
+    device.service.decide(device.tenant, rejected?.id as string, "deny", "web"),
   );
   const denied = await device
     .call("computer_desktop_snapshot", { windowId: BANK }, "reject-bank")

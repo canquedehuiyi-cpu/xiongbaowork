@@ -122,7 +122,7 @@ test("Always allow here saves the account's binding and the card's kind in one w
     ),
   );
   keys.push(first.id);
-  await asOwner(() => store.decide(owner, first.id, "allow_always"));
+  await asOwner(() => store.decide(owner, first.id, "allow_always", "web"));
 
   const rules = await asOwner(() => store.rules(owner));
   expect(rules.map((rule) => rule.account)).toEqual([binding]);
@@ -179,7 +179,7 @@ test("Allow for this conversation is saved for the account the card named", asyn
     ),
   );
   keys.push(request.id);
-  await asOwner(() => store.decide(owner, request.id, "allow_conversation"));
+  await asOwner(() => store.decide(owner, request.id, "allow_conversation", "web"));
 
   const [grant] = await asOwner(() =>
     database

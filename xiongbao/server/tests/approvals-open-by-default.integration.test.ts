@@ -229,13 +229,13 @@ describe("发送只能允许一次（上游：Allow for this conversation）", (
     expect(offersStandingRule(first?.action ?? {})).toBeFalse();
     await expect(
       as(owner, () =>
-        service.decide(owner, first?.id ?? "", "allow_conversation"),
+        service.decide(owner, first?.id ?? "", "allow_conversation", "web"),
       ),
     ).rejects.toThrow(SEND_ONCE_ONLY);
     expect(
       (
         await as(owner, () =>
-          service.decide(owner, first?.id ?? "", "allow_once"),
+          service.decide(owner, first?.id ?? "", "allow_once", "web"),
         )
       ).status,
     ).toBe("approved");
@@ -288,7 +288,7 @@ describe("发送不能「总是允许」（上游：Always allow here, on a send
     const owner = await person();
     const first = await gate(owner, thread(), slackSend("Draft is up."));
     await expect(
-      as(owner, () => service.decide(owner, first?.id ?? "", "allow_always")),
+      as(owner, () => service.decide(owner, first?.id ?? "", "allow_always", "web")),
     ).rejects.toThrow(SEND_ONCE_ONLY);
     expect(await as(owner, () => store.rules(owner))).toEqual([]);
     expect(await gate(owner, thread(), slackSend("Merged."))).toMatchObject({
@@ -341,7 +341,7 @@ describe("管理员只能把一种动作设得更严（上游：an admin closes 
     expect(
       (
         await as(owner, () =>
-          service.decide(owner, closed?.id ?? "", "allow_once"),
+          service.decide(owner, closed?.id ?? "", "allow_once", "web"),
         )
       ).status,
     ).toBe("approved");
@@ -413,7 +413,7 @@ test("payments and a password typed on a website are the person's, with no answe
   expect(offersStandingRule(typed?.action ?? {})).toBeFalse();
   for (const id of [paying?.id, typed?.id])
     await expect(
-      as(owner, () => service.decide(owner, id ?? "", "allow_conversation")),
+      as(owner, () => service.decide(owner, id ?? "", "allow_conversation", "web")),
     ).rejects.toThrow(HANDED_TO_YOU);
   expect(
     await database

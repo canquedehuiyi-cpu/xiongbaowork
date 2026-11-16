@@ -182,7 +182,7 @@ async function asked(
   );
   expect(suspended).toBeTrue();
   const [request] = await asOwner(() => store.list(owner));
-  await asOwner(() => service.decide(owner, request?.id as string, decision));
+  await asOwner(() => service.decide(owner, request?.id as string, decision, "web"));
 }
 
 function appFor() {

@@ -426,7 +426,7 @@ test("an action that needs approval parks with the approval's id; approved, the 
   expect(f.vendor).toHaveLength(0);
 
   await runAsTenant(f.tenantId, () =>
-    f.approvals.decide(f.tenantId, approvalId, "allow_once"),
+    f.approvals.decide(f.tenantId, approvalId, "allow_once", "web"),
   );
   // What the approval queue does for a crew's action step (`index.ts`).
   const holder = await f.pipeline.actionHoldingApproval({ approvalId });
@@ -464,7 +464,7 @@ test("an action whose approval is declined fails, and the tool never runs", asyn
   )?.approvalId;
   if (!approvalId) throw new Error("No approval id.");
   await runAsTenant(f.tenantId, () =>
-    f.approvals.decide(f.tenantId, approvalId, "deny"),
+    f.approvals.decide(f.tenantId, approvalId, "deny", "web"),
   );
   await runAsTenant(f.tenantId, () =>
     f.pipeline.resumeAction({ tenantId: f.tenantId, runId, approvalId }),
