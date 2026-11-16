@@ -131,6 +131,8 @@ export function createDeliveryRouter(deps: {
     slack?: TextTransport;
     teams?: TextTransport;
     sms?: TextTransport;
+    /** 微信 ClawBot 的发件箱出口（Task 8）；没有时发往微信的行记为失败。 */
+    wechat?: TextTransport;
     push?: ExpoPushTransport;
   };
   /** The person's routing by kind; defaults to the lifecycle lane's `resolveUpdateRoute`. */
@@ -555,7 +557,8 @@ export function createDeliveryRouter(deps: {
    * inbox for dedupe and visibility but not queued, since the caller is waiting for the answer.
    */
   async function converse(input: {
-    transport: ChatTransport;
+    /** Slack/Teams 经 OpenTag 配对；`wechat` 由微信入站分流（delivery/wechat/inbound.ts）调用。 */
+    transport: ChatTransport | "wechat";
     realm: string;
     identity: string;
     externalId: string;
@@ -574,7 +577,7 @@ export function createDeliveryRouter(deps: {
   async function converseAs(
     binding: NonNullable<Awaited<ReturnType<RouterStore["findBinding"]>>>,
     input: {
-      transport: ChatTransport;
+      transport: ChatTransport | "wechat";
       realm: string;
       externalId: string;
       text: string;

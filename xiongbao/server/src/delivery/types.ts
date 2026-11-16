@@ -6,7 +6,8 @@ export type DeliveryScope = {
 };
 /** Chat platforms reached through the OpenTag pairing (Channels SDK front for Slack and Teams). */
 export type ChatTransport = "slack" | "teams";
-export type BindingTransport = ChatTransport | "sms";
+/** `wechat` 是微信 ClawBot：每个人自己扫码绑定，入站由长轮询器交给 `delivery/wechat/inbound.ts`。 */
+export type BindingTransport = ChatTransport | "sms" | "wechat";
 export type DeliveryBinding = DeliveryScope & {
   id: string;
   transport: BindingTransport;

@@ -35,7 +35,7 @@ export type BotNotify = "all" | "needs_input" | "none";
  * needs them, at most once an hour, every Bot in one message ("Something needs you").
  */
 export type UpdateKind = "progress" | "decision" | "question" | "attention";
-export type UpdateTransport = "slack" | "teams" | "sms" | "push";
+export type UpdateTransport = "slack" | "teams" | "sms" | "push" | "wechat";
 export const UPDATE_KINDS: readonly UpdateKind[] = [
   "progress",
   "decision",
@@ -47,6 +47,7 @@ export const UPDATE_TRANSPORTS: readonly UpdateTransport[] = [
   "teams",
   "sms",
   "push",
+  "wechat",
 ];
 
 /**
