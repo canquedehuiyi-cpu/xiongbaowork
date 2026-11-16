@@ -134,6 +134,7 @@ const catalogue = (slugs: string[]): LoadedTenantPackage => ({
     summary: "Shipped by the package.",
     instructions: "The catalogue's instructions.",
     tools: [refB],
+    runnable: "full",
   })),
   themeCss: "",
   sourcePath: `tests/fixtures/skill-slug-${suite}`,

@@ -3,7 +3,7 @@ import { type AcpRelayDeps, createAcpRelay } from "../src/agents/acp/relay";
 import type { AcpTurnRow } from "../src/agents/acp/turns";
 import { createDeviceChannel } from "../src/devices/channel";
 import { runnerClose, runnerMessage, runnerOpen } from "../src/devices/socket";
-import type { DeviceStore } from "../src/devices/store";
+import type { DeviceOwner, DeviceStore } from "../src/devices/store";
 import { createMemoryAcpTurnStore } from "./support/acp-turns-memory";
 
 /*
@@ -587,7 +587,18 @@ describe("acp relay", () => {
 });
 
 describe("runner socket and acp frames", () => {
-  const owner = { tenantId: "tenant-a", deviceId: "laptop", id: "dev-1" };
+  /*
+   * Annotated rather than inferred, so the fixture fails to compile the moment `DeviceOwner` grows a
+   * field. It was unannotated and this suite was not type-checked, which is how the socket stubs below
+   * shipped without `credentialVersion` — a field `runnerOpen` reads and hands to the channel on every
+   * open.
+   */
+  const owner: DeviceOwner = {
+    tenantId: "tenant-a",
+    deviceId: "laptop",
+    id: "dev-1",
+    credentialVersion: "v1",
+  };
   const store = {
     isCurrent: async () => true,
     heartbeat: async () => undefined,
