@@ -66,13 +66,13 @@ export function DesktopReturn({
   return (
     <main className="grid min-h-svh place-items-center bg-background p-6 text-foreground">
       <div className="flex max-w-sm flex-col items-center gap-4 text-center">
-        <h1 className="text-xl font-semibold">Back to {PRODUCT}</h1>
+        <h1 className="text-xl font-semibold">回到 {PRODUCT}</h1>
         <p className="text-sm text-muted-foreground">
-          {PRODUCT} opens on its own. You can close this tab.
+          {PRODUCT} 会自己打开。你可以关掉这个标签页。
         </p>
         {/* An anchor rather than Button: Base UI gives a rendered anchor role="button", and this is a link. */}
         <a className={buttonVariants()} href={DESKTOP_LINK}>
-          Open {PRODUCT}
+          打开 {PRODUCT}
         </a>
       </div>
     </main>
