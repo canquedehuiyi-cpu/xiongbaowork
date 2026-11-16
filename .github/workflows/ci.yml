@@ -581,9 +581,10 @@ jobs:
           path: ${{ runner.temp }}/repo-tests.log
 
   # The Expo app in openbot/mobile: its own npm project with its own package-lock.json, outside the
-  # bun workspaces, so neither static's typecheck nor any test job reaches it. It has no test runner
-  # yet; this is its typecheck. npm ci installs exactly the lockfile, without lifecycle scripts like
-  # every bun install here, on the runner's preinstalled Node.
+  # bun workspaces, so neither static's typecheck nor any test job reaches it. npm ci installs exactly
+  # the lockfile, without lifecycle scripts like every bun install here, on the runner's preinstalled
+  # Node. Its unit tests (tests/, pure modules such as the push deep links) run under bun after the
+  # typecheck; the job name stays the same so required-check settings keep matching.
   mobile-typecheck:
     name: mobile typecheck (Expo, npm)
     runs-on: ubuntu-latest
@@ -601,6 +602,11 @@ jobs:
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Typecheck
         run: npm run typecheck
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - name: Unit tests
+        run: bun test ./tests/
 
   # The computer's real-browser tests, which prove a secret typed into a page never reaches the Bot:
   # the aria snapshot hides a password's value and the screenshot paints the marked fields over under
