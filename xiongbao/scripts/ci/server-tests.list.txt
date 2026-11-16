@@ -411,6 +411,7 @@ tests/guards.test.ts
 tests/handoff-availability-prompt.test.ts
 tests/handoff-caps-defaults.test.ts
 tests/handoff-child-card.test.ts
+tests/handoff-fanout-cap.integration.test.ts
 tests/handoff-origin.test.ts
 tests/headless-components.integration.test.ts
 tests/headless-components.test.ts
