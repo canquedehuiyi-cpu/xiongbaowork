@@ -1,10 +1,10 @@
-import { productName } from "../brand";
 import type { DrawnComponent } from "@openbot/toolkit/run-turn";
 import {
   resolveUpdateRoute,
   type UpdateRoute,
   type UpdateRouteInput,
 } from "../agents/lifecycle";
+import { productName } from "../brand";
 import type { AttentionPing } from "../proactive/contracts";
 import { pingHeadline } from "../proactive/ping";
 import {
@@ -29,6 +29,8 @@ import {
   PERSON_DELIVERY_KINDS,
   type PersonDeliveryKind,
   type TextTransport,
+  type WechatPromptRefKind,
+  wechatPromptRef,
 } from "./types";
 /** What a paired chat turn produced besides its reply, surfaced in that same turn. */
 export type InlineTurnExtras = {
@@ -76,6 +78,7 @@ type RouterStore = Pick<
   | "device"
   | "removeDevice"
   | "offerInbox"
+  | "latestInbox"
   | "inbox"
   | "setInbox"
   | "offerOutbox"
@@ -131,7 +134,17 @@ export function createDeliveryRouter(deps: {
     slack?: TextTransport;
     teams?: TextTransport;
     sms?: TextTransport;
+    /** 微信 ClawBot 的发件箱出口（Task 8）；没有时发往微信的行记为失败。 */
+    wechat?: TextTransport;
     push?: ExpoPushTransport;
+  };
+  /**
+   * 微信的主动推送时间窗（wechat/transport.ts `createWechatWindow`）：窗口关着时不写微信那一行，并记一笔
+   * 漏发，下次入站时补一句。没有时不看窗口。
+   */
+  wechatWindow?: {
+    open(ownerUserId: string): Promise<boolean>;
+    missed(ownerUserId: string): Promise<void>;
   };
   /** The person's routing by kind; defaults to the lifecycle lane's `resolveUpdateRoute`. */
   routeFor?(input: UpdateRouteInput): Promise<UpdateRoute>;
@@ -174,6 +187,34 @@ export function createDeliveryRouter(deps: {
    * than also sent as a second, proactive message to the same person.
    */
   const inline = new Map<string, InlineTurnExtras>();
+  /**
+   * 微信那一行能不能写：时间窗开着。关着时（只有提醒类才算漏发，回复不算）记一笔漏发，`noted` 保证同一次
+   * 通知只记一笔。
+   */
+  async function wechatOpen(
+    ownerUserId: string,
+    noted: { done: boolean },
+    countsAsMissed = true,
+  ): Promise<boolean> {
+    if (!deps.wechatWindow) return true;
+    if (await deps.wechatWindow.open(ownerUserId)) return true;
+    if (countsAsMissed && !noted.done) {
+      noted.done = true;
+      await deps.wechatWindow.missed(ownerUserId);
+    }
+    return false;
+  }
+  /** 本人最近用过、还能进的那个微信绑定（「等你确认」没有对口绑定时回落用），没有就是 null。 */
+  async function wechatFallback(
+    ownerUserId: string,
+  ): Promise<DeliveryBinding | null> {
+    for (const binding of await deps.store.bindingsByUse(ownerUserId)) {
+      if (binding.transport !== "wechat") continue;
+      if (binding.ownerUserId !== ownerUserId) continue;
+      if (await deps.authoriseScope(binding)) return binding;
+    }
+    return null;
+  }
   async function notify(
     scope: DeliveryScope,
     input: {
@@ -215,8 +256,23 @@ export function createDeliveryRouter(deps: {
       agentId: scope.agentId,
       kind: input.kind,
     });
-    if (includeBindings)
-      for (const binding of await deps.store.bindingsFor(scope)) {
+    const noted = { done: false };
+    if (includeBindings) {
+      const bindings: DeliveryBinding[] = await deps.store.bindingsFor(scope);
+      /*
+       * 「等你确认」在这段对话没有对口的微信绑定时（任务卡片那段对话、没在微信里找过的员工），回落到本人最近用过
+       * 的那个微信绑定，和逾期、清点一样（`notifyPerson`）。文字由微信出口按审批本身写（员工名、对话名、编号），
+       * 所以这一行记在那个绑定的对话下。本人没打开微信、时间窗关着时照常不发。Slack / Teams 不回落。
+       */
+      if (
+        input.kind === "approval" &&
+        deps.providers.wechat &&
+        !bindings.some((binding) => binding.transport === "wechat")
+      ) {
+        const fallback = await wechatFallback(scope.ownerUserId);
+        if (fallback) bindings.push(fallback);
+      }
+      for (const binding of bindings) {
         const open = inline.get(binding.id);
         if (open && input.kind === "approval" && input.requestId) {
           open.approvals.push(input.requestId);
@@ -229,16 +285,64 @@ export function createDeliveryRouter(deps: {
           });
           continue;
         }
-        // Teams is a chat surface like Slack; routing names chat transports as `slack` until the
-        // lifecycle lane lists `teams` separately.
-        if (
+        // 部署关了微信（`WECHAT_ENABLED`）：之前留下的微信绑定不再写行。
+        if (binding.transport === "wechat" && !deps.providers.wechat) continue;
+        let roundToClose: string | null = null;
+        if (binding.transport === "wechat" && input.kind === "reply") {
+          /*
+           * 网页里发起的普通回复不推到微信：回复只发给入站来源为微信、还停在等人处理的那一轮（它在微信里停下等
+           * 审批，别处批了，后续的回复回到微信）。这一轮本来就是从微信发起的，回复属于那段对话，所以不看本人在
+           * 「消息发到哪里」开没开微信；员工的通知级别（「什么都别通知」）照样算。
+           */
+          const last = await deps.store.latestInbox(binding.id);
+          if (last?.source !== "wechat" || last.state !== "accepted") continue;
+          roundToClose = last.id;
+          if (!route.notify) {
+            await deps.store.setInbox(
+              roundToClose,
+              "failed",
+              "员工设成了不通知，回复没有发到微信。",
+            );
+            continue;
+          }
+        } else if (
+          // Teams is a chat surface like Slack; routing names chat transports as `slack` until the
+          // lifecycle lane lists `teams` separately.
           !route.allows(
             binding.transport === "teams" ? "slack" : binding.transport,
           )
         )
           continue;
+        // 微信只在时间窗里发；提醒类没发出去算一笔漏发，回复不算。
+        if (
+          binding.transport === "wechat" &&
+          !(await wechatOpen(scope.ownerUserId, noted, input.kind !== "reply"))
+        ) {
+          /*
+           * 那一轮的回复发不出去也收尾：不置终态的话它一直是「最新一条」，之后网页里发起的回复会被当成它的推到
+           * 微信。
+           */
+          if (roundToClose)
+            await deps.store.setInbox(
+              roundToClose,
+              "failed",
+              "微信的时间窗已关，回复没有发到微信。",
+            );
+          continue;
+        }
+        const filed =
+          binding.channelId === scope.channelId &&
+          binding.agentId === scope.agentId &&
+          binding.threadId === scope.threadId
+            ? scope
+            : {
+                ownerUserId: binding.ownerUserId,
+                channelId: binding.channelId,
+                agentId: binding.agentId,
+                threadId: binding.threadId,
+              };
         await deps.store.offerOutbox({
-          ...scope,
+          ...filed,
           dedupeKey: `${input.kind}:${input.id}:binding:${binding.id}`,
           bindingId: binding.id,
           deviceId: null,
@@ -247,7 +351,13 @@ export function createDeliveryRouter(deps: {
           kind: input.kind,
           requestId: input.requestId ?? null,
         });
+        /*
+         * 这一轮的回复交出去了：把那一轮的入站行置为终态。它停下等审批时被记成 `accepted`，网页聊天不会产生新的
+         * 入站行，不置终态的话它会一直是「最新一条」，之后网页里发起的回复也会被当成它的而推到微信。
+         */
+        if (roundToClose) await deps.store.setInbox(roundToClose, "sent");
       }
+    }
     if (route.allows("push"))
       for (const device of await deps.store.devices(scope.ownerUserId))
         await deps.store.offerOutbox({
@@ -281,8 +391,10 @@ export function createDeliveryRouter(deps: {
     if (ping.items.length === 0) return;
     const routeFor = deps.routeFor ?? resolveUpdateRoute;
     const chosen = new Map<BindingTransport, DeliveryBinding>();
+    const noted = { done: false };
     for (const binding of await deps.store.bindingsByUse(ping.ownerUserId)) {
       if (chosen.has(binding.transport)) continue;
+      if (binding.transport === "wechat" && !deps.providers.wechat) continue;
       const carrier = await routeFor({
         ownerUserId: ping.ownerUserId,
         agentId: binding.agentId,
@@ -291,6 +403,11 @@ export function createDeliveryRouter(deps: {
       if (!carrier.allows(binding.transport)) continue;
       // An account whose conversation the person lost is passed over for the next one they used.
       if (!(await deps.authoriseScope(binding))) continue;
+      if (
+        binding.transport === "wechat" &&
+        !(await wechatOpen(ping.ownerUserId, noted))
+      )
+        continue;
       chosen.set(binding.transport, binding);
     }
     for (const [transport, binding] of chosen)
@@ -360,6 +477,10 @@ export function createDeliveryRouter(deps: {
     scopes: DeliveryScope[];
     /** The card a reminder is about, carried to the push so a tap opens it. */
     taskId?: string | null;
+    /** 微信那一行末尾多带的一句（开工清点：「回复任意内容，今天的提醒就能继续发到这里」）。 */
+    wechatFooter?: string;
+    /** 微信那一行换成带编号的提示（传给微信出口的结构化标记，不看标题文字）。 */
+    wechatPrompt?: WechatPromptRefKind;
   }): Promise<{ queued: number; already: number }> {
     const reached = { queued: 0, already: 0 };
     if (
@@ -419,6 +540,7 @@ export function createDeliveryRouter(deps: {
       candidates.push(...(await deps.store.bindingsFor(scope)));
     candidates.push(...(await deps.store.bindingsByUse(input.ownerUserId)));
     const chosen = new Map<BindingTransport, DeliveryBinding>();
+    const noted = { done: false };
     for (const binding of candidates) {
       if (chosen.has(binding.transport)) continue;
       if (binding.ownerUserId !== input.ownerUserId) continue;
@@ -437,6 +559,11 @@ export function createDeliveryRouter(deps: {
       });
       if (!carrier.allows(binding.transport)) continue;
       if (!(await deps.authoriseScope(binding))) continue;
+      if (
+        binding.transport === "wechat" &&
+        !(await wechatOpen(input.ownerUserId, noted))
+      )
+        continue;
       chosen.set(binding.transport, binding);
     }
     for (const [transport, binding] of chosen)
@@ -449,9 +576,15 @@ export function createDeliveryRouter(deps: {
         bindingId: binding.id,
         deviceId: null,
         transport,
-        text,
+        text:
+          transport === "wechat" && input.wechatFooter
+            ? `${text}\n${input.wechatFooter}`
+            : text,
         kind: input.kind,
-        requestId,
+        requestId:
+          transport === "wechat" && input.wechatPrompt && requestId
+            ? wechatPromptRef(input.wechatPrompt, requestId)
+            : requestId,
       });
     const route = await routeFor({
       ownerUserId: input.ownerUserId,
@@ -555,7 +688,8 @@ export function createDeliveryRouter(deps: {
    * inbox for dedupe and visibility but not queued, since the caller is waiting for the answer.
    */
   async function converse(input: {
-    transport: ChatTransport;
+    /** Slack/Teams 经 OpenTag 配对；`wechat` 由微信入站分流（delivery/wechat/inbound.ts）调用。 */
+    transport: ChatTransport | "wechat";
     realm: string;
     identity: string;
     externalId: string;
@@ -574,7 +708,7 @@ export function createDeliveryRouter(deps: {
   async function converseAs(
     binding: NonNullable<Awaited<ReturnType<RouterStore["findBinding"]>>>,
     input: {
-      transport: ChatTransport;
+      transport: ChatTransport | "wechat";
       realm: string;
       externalId: string;
       text: string;
@@ -829,7 +963,11 @@ export function createDeliveryRouter(deps: {
     const row = await deps.store.startOutbox(current.id);
     if (!row || !(await owns())) return;
     try {
-      let result: { id: string; status: "queued" | "sent" | "accepted" };
+      let result: {
+        id: string;
+        status: "queued" | "sent" | "accepted";
+        note?: string;
+      };
       if (row.transport === "push") {
         const device = row.deviceId
           ? await deps.store.device(row.deviceId)
@@ -888,13 +1026,22 @@ export function createDeliveryRouter(deps: {
           text: row.text,
           transport: row.transport,
           ...(sender ? { sender } : {}),
+          ...(row.transport === "wechat"
+            ? {
+                context: {
+                  ownerUserId: row.ownerUserId,
+                  kind: row.kind,
+                  requestId: row.requestId,
+                },
+              }
+            : {}),
         });
       }
       if (!(await owns())) return;
       await deps.store.setOutbox(
         row.id,
         result.status === "queued" ? "accepted" : result.status,
-        null,
+        result.note ?? null,
         result.id,
       );
       if (row.transport === "push") await deps.store.offerReceipt(row.id);

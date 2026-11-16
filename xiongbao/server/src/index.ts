@@ -268,12 +268,37 @@ import {
   recorderConnections,
   users,
 } from "./db/schema";
+import { deliveryMessageId } from "./delivery/message-id";
 import { createDeliveryRouter, DELIVERY_WORK_KINDS } from "./delivery/router";
 import { configuredDeliveryProviders } from "./delivery/routes";
 import { createDeliveryScopes } from "./delivery/scope";
 import { createDeliveryStore } from "./delivery/store";
 import type { DeliveryScope } from "./delivery/types";
 import { DeliveryRefusedError } from "./delivery/types";
+import {
+  WECHAT_WELCOME_TEXT,
+  type WechatBindDeps,
+  wechatEnabled,
+} from "./delivery/wechat/bind";
+import {
+  createWechatDecisions,
+  type WechatDecisions,
+} from "./delivery/wechat/decisions";
+import {
+  createIlinkClient,
+  ILINK_DEFAULT_CLIENT_VERSION,
+} from "./delivery/wechat/ilink";
+import {
+  createWechatInbound,
+  createWechatSender,
+  createWechatWelcome,
+} from "./delivery/wechat/inbound";
+import { createWechatPoller } from "./delivery/wechat/poller";
+import { createWechatStore } from "./delivery/wechat/store";
+import {
+  createWechatTransport,
+  createWechatWindow,
+} from "./delivery/wechat/transport";
 import { createDeviceChannel, type DispatchTarget } from "./devices/channel";
 import { createDeviceQueue } from "./devices/queue";
 import {
@@ -520,6 +545,7 @@ import {
   createBriefingRoutes,
   createBriefings,
   createTaskNotices,
+  notifyOnHandIn,
 } from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
 import { createDelivery } from "./tasks/delivery";
@@ -2796,8 +2822,22 @@ await startupLifecycle.run(async (startup) => {
       // 关掉 `accept_task` 就是这位员工不走三步：交付和延期跟着不给。
       return offeredDeliveryTools(tools.filter((tool) => !disabled(tool.ref)));
     };
-  /** The delivery loop's followed cards and the gate a hand-in passes (spec 2026-11-15-delivery-loop). */
-  const deliveryLoop = createDelivery(database);
+  /**
+   * 交付待验收的通知（`tasks/briefing.ts` `createTaskNotices().handin`）：通知出口要等投递路由建好才有，所以
+   * 在下面 `taskNotices` 建好时接上。
+   */
+  let handInNotice:
+    | ((tenantId: string, taskId: string) => Promise<unknown>)
+    | undefined;
+  /**
+   * The delivery loop's followed cards and the gate a hand-in passes (spec 2026-11-15-delivery-loop). A
+   * hand-in that moves a card to 等验收 tells the person (`notifyOnHandIn`), the coworker's own and an
+   * external employee's alike.
+   */
+  const deliveryLoop = notifyOnHandIn(
+    createDelivery(database),
+    async (tenantId, taskId) => handInNotice?.(tenantId, taskId),
+  );
   const evidenceGate = createEvidenceGate(database);
   /*
    * External employees walk the same three steps, the server walking them for them (spec §9,
@@ -4004,11 +4044,65 @@ await startupLifecycle.run(async (startup) => {
     (resource) => resource.stop(),
   );
   const deliveryStore = createDeliveryStore(database);
-  const deliveryProviders = configuredDeliveryProviders(
-    config.publicUrl ??
-      config.auth?.baseUrl ??
-      `http://localhost:${config.port}`,
-  );
+  /*
+   * 微信 ClawBot：iLink 是固定主机，扫码绑定不需要部署方的密钥，所以总是接上；每个人自己扫码，
+   * `bot_token` 封进本人的凭据。客户端版本号可用 WECHAT_ILINK_CLIENT_VERSION 覆盖。
+   */
+  const wechatIlink = createIlinkClient({
+    clientVersion:
+      process.env.WECHAT_ILINK_CLIENT_VERSION?.trim() ||
+      ILINK_DEFAULT_CLIENT_VERSION,
+  });
+  const wechatStore = createWechatStore(database);
+  /**
+   * 「我 › 通知 › 微信」扫码绑定用的东西，也是这个部署开没开微信的唯一开关：没有它时设置页不提供微信
+   * （`available.wechat` 为 false），长轮询不启动（见下面 deliveryRouter 之后），微信的发件箱出口也不注册。
+   * 部署开关 `WECHAT_ENABLED=false|0|off` 时没有它（例如服务器连不通腾讯，`bind.ts` `wechatEnabled`）。
+   */
+  const wechatBind: WechatBindDeps | undefined = wechatEnabled(
+    process.env.WECHAT_ENABLED,
+  )
+    ? {
+        database,
+        ilink: wechatIlink,
+        store: wechatStore,
+        credentials: credentialStore,
+        encryptionKey: config.keyEncryptionKey,
+        welcome: createWechatWelcome({
+          ilink: wechatIlink,
+          credentials: credentialStore,
+          keyEncryptionKey: config.keyEncryptionKey,
+          wechat: wechatStore,
+          text: WECHAT_WELCOME_TEXT,
+        }),
+      }
+    : undefined;
+  /*
+   * 微信的发件箱出口（delivery/wechat/transport.ts）：编号提示的文字来自下面才建好的 wechatDecisions，所以按取值
+   * 函数晚绑定。时间窗和漏发计数用同一个账号行。
+   */
+  let wechatPromptOpeners: WechatDecisions | undefined;
+  const wechatSend = createWechatSender({
+    ilink: wechatIlink,
+    credentials: credentialStore,
+    keyEncryptionKey: config.keyEncryptionKey,
+  });
+  const deliveryProviders = {
+    ...configuredDeliveryProviders(
+      config.publicUrl ??
+        config.auth?.baseUrl ??
+        `http://localhost:${config.port}`,
+    ),
+    ...(wechatBind
+      ? {
+          wechat: createWechatTransport({
+            wechat: wechatStore,
+            send: wechatSend,
+            prompts: () => wechatPromptOpeners,
+          }),
+        }
+      : {}),
+  };
   // Slack channel membership for triggers is answered by OpenTag, which holds the workspace token.
   useSlackChannelMembership((input) =>
     deliveryProviders.slack
@@ -4033,6 +4127,9 @@ await startupLifecycle.run(async (startup) => {
     queue: createWorkQueue(database),
     owner: workOwner("delivery"),
     providers: deliveryProviders,
+    ...(wechatBind
+      ? { wechatWindow: createWechatWindow({ wechat: wechatStore }) }
+      : {}),
     authoriseScope: authoriseDeliveryScope,
     scopeFor: deliveryScopeFor,
     notifyEvent: (event) => responsibilityEngine.ingest(event),
@@ -4059,7 +4156,7 @@ await startupLifecycle.run(async (startup) => {
           threadId: input.threadId,
           instruction: input.text,
           userMessage: {
-            id: `delivery:${input.runId}`,
+            id: deliveryMessageId(input.source, input.runId),
             role: "user",
             content: input.text,
           },
@@ -4627,7 +4724,91 @@ await startupLifecycle.run(async (startup) => {
     router: deliveryRouter,
     scopeFor: deliveryScopeFor,
     workHours: savedWorkHours(database),
+    agentName: async (tenantId, agentId) =>
+      (await agentProfileStore.get(await actorFor(tenantId), agentId))?.name ??
+      null,
   });
+  handInNotice = (tenantId, taskId) => taskNotices.handin(tenantId, taskId);
+  /*
+   * 微信长轮询（delivery/wechat/poller.ts）：每 2 秒认领一批账号各拉一次，每条消息在本人的帧里交给入站分流
+   * （delivery/wechat/inbound.ts）：选员工、在默认单聊里开一轮、回复加「【员工名】」发回微信。
+   * 关停时先停循环，同时中止在途的长轮询（之后拉到的批次不处理、不存游标），再给在跑的员工那一轮最多 7 秒
+   * （WECHAT_SHUTDOWN_GRACE_MS）自己跑完；到时还有在途的就中止，再等它们收尾，之后才关数据库连接（finalizers
+   * 在资源之后；所有资源在关停一开始并行收尾）。还没开的一轮抛错、重启后整条重来；已经开了被中止的记为失败，
+   * 微信里回「服务正在更新……」，这条消息不会再处理（至多一次）。`docker rm -f` 直接 SIGKILL，什么都不等。
+   */
+  if (wechatBind) {
+    /*
+     * 在微信里拍板（delivery/wechat/decisions.ts）：审批回数字、交付闭环回「验收 / 退回 原因 / 再催 / 延期 时间 /
+     * 换人 / 取消」，走审批服务和 tasks 路由同一套服务函数（所以接在 cardTurns、nudgeRuns 之后）。
+     */
+    const wechatDecisions = createWechatDecisions({
+      database,
+      wechat: wechatStore,
+      approvals: approvalService,
+      deliveries: deliveryStore,
+      delivery: deliveryLoop,
+      turns: cardTurns,
+      rounds: nudgeRuns,
+      bots: agentProfileStore,
+      actorFor,
+      acceptTaskDisabled: async (tenantId, agentId) =>
+        (await approvalService.disabledTools(tenantId, agentId))(
+          ACCEPT_TASK_REF,
+        ),
+      timeZone: async (tenantId) =>
+        (await readWorkHours(database, tenantId)).timeZone,
+      // 「延期 周五」没说几点：按这个人作息的收工时间。
+      endOfDay: async (tenantId) =>
+        (await readWorkHours(database, tenantId)).end,
+      appUrl: config.appUrl ?? config.publicUrl ?? null,
+    });
+    wechatPromptOpeners = wechatDecisions;
+    const wechatPoller = createWechatPoller({
+      database,
+      wechat: wechatStore,
+      ilink: wechatIlink,
+      credentials: credentialStore,
+      keyEncryptionKey: config.keyEncryptionKey,
+      inbound: createWechatInbound({
+        wechat: wechatStore,
+        deliveries: deliveryStore,
+        router: deliveryRouter,
+        channels: channelStore,
+        bots: agentProfileStore,
+        actorFor,
+        scopeFor: deliveryScopeFor,
+        send: wechatSend,
+        appUrl: config.appUrl ?? config.publicUrl ?? null,
+        prompts: wechatDecisions.handlers,
+        approvalPrompts: (userId, approvalIds) =>
+          wechatDecisions.openApprovalPrompts(userId, approvalIds, {
+            onlyCreated: true,
+          }),
+      }),
+      owner: workOwner("wechat"),
+    });
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          try {
+            await wechatPoller.tick();
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                type: "wechat-poller-error",
+                error: error instanceof Error ? error.name : "UnknownError",
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }, 2_000),
+      async (resource) => {
+        resource.stop();
+        await wechatPoller.shutdown();
+      },
+    );
+  }
   const coworkerName = async (tenantId: string, agentId: string) =>
     (await agentProfileStore.get(await actorFor(tenantId), agentId))?.name ??
     null;
@@ -5416,6 +5597,7 @@ await startupLifecycle.run(async (startup) => {
           slack: deliveryProviders.slack,
           twilio: deliveryProviders.sms,
           pushProjectId: deliveryProviders.pushProjectId,
+          ...(wechatBind ? { wechat: wechatBind } : {}),
         },
         webhooks: {
           store: deliveryStore,

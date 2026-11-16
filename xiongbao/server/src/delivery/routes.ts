@@ -23,6 +23,9 @@ import {
   DeliveryRefusedError,
   type DeliveryScope,
 } from "./types";
+import { createWechatBind, type WechatBindDeps } from "./wechat/bind";
+/** 微信绑定的路由出了意外时回给界面的话。 */
+export const WECHAT_UNAVAILABLE = "暂时连不上微信，请稍后再试";
 export type DeliveryScopeResolver = (
   owner: string,
   channelId: string,
@@ -87,10 +90,41 @@ export function createDeliveryRoutes(deps: {
   slack?: OpenTagTransport;
   twilio?: TwilioTransport;
   pushProjectId?: string;
+  /** 微信 ClawBot 扫码绑定。不在时这个部署没开通微信。 */
+  wechat?: WechatBindDeps;
 }) {
   const routes = new Hono<{ Variables: AppVariables }>();
   routes.use("*", deps.requireUser, bodyLimit({ maxSize: 64 * 1024 }));
   errorRoutes(routes);
+  const wechat = deps.wechat ? createWechatBind(deps.wechat) : undefined;
+  const requireWechat = () => {
+    if (!wechat) throw new DeliveryRefusedError("这个部署没有开通微信。");
+    return wechat;
+  };
+  /**
+   * 微信绑定的路由出了意外（连不上 iLink、库出错）：回中文，不回别的渠道共用的英文
+   * 「Delivery is unavailable. Try again.」。说清楚的拒绝（`DeliveryRefusedError` / 404）照常交给 `onError`。
+   */
+  const wechatRoute =
+    (handler: (c: Context<{ Variables: AppVariables }>) => Promise<Response>) =>
+    async (c: Context<{ Variables: AppVariables }>) => {
+      try {
+        return await handler(c);
+      } catch (error) {
+        if (
+          error instanceof DeliveryRefusedError ||
+          error instanceof DeliveryNotFoundError
+        )
+          throw error;
+        console.error(
+          JSON.stringify({
+            type: "delivery-route-error",
+            errorType: error instanceof Error ? error.name : "UnknownError",
+          }),
+        );
+        return c.json({ error: WECHAT_UNAVAILABLE }, 503);
+      }
+    };
   routes.get("/", async (c) =>
     c.json({
       bindings: await deps.store.listBindings(c.var.actor.id),
@@ -103,7 +137,31 @@ export function createDeliveryRoutes(deps: {
         teams: Boolean(deps.slack),
         sms: Boolean(deps.twilio),
         push: Boolean(deps.pushProjectId),
+        wechat: Boolean(wechat),
       },
+      wechat: wechat ? await wechat.summary(c.var.actor.id) : null,
+    }),
+  );
+  /** 微信扫码绑定：只操作本人的尝试和账号。 */
+  routes.post(
+    "/wechat/start",
+    wechatRoute(async (c) =>
+      c.json(await requireWechat().start(c.var.actor.id)),
+    ),
+  );
+  routes.get(
+    "/wechat/attempts/:id",
+    wechatRoute(async (c) =>
+      c.json(
+        await requireWechat().check(c.var.actor.id, c.req.param("id") ?? ""),
+      ),
+    ),
+  );
+  routes.delete(
+    "/wechat",
+    wechatRoute(async (c) => {
+      await requireWechat().unbind(c.var.actor.id);
+      return c.body(null, 204);
     }),
   );
   routes.delete("/bindings/:id", async (c) => {

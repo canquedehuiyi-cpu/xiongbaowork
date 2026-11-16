@@ -60,6 +60,7 @@ import {
   type ApprovalRuleInput,
   type ApprovalStore,
   type ApprovalTeamSettings,
+  type ApprovalVia,
   approvalAction,
   approvalArgsPreview,
   approvalPreview,
@@ -751,7 +752,16 @@ export function createApprovalService(
         },
       );
     },
-    async decide(ownerUserId: string, id: string, decision: ApprovalDecision) {
+    /**
+     * `via`：本人在哪里决定的（网页 `web`、微信 `wechat`、Slack / Teams 卡片），记进审批的 `decided_via`，
+     * 网页上据此显示「已由 某某 在 微信 批准」。必填：新的决定入口不说渠道就编译不过。
+     */
+    async decide(
+      ownerUserId: string,
+      id: string,
+      decision: ApprovalDecision,
+      via: ApprovalVia,
+    ) {
       if (!(APPROVAL_DECISIONS as readonly string[]).includes(decision))
         throw new ApprovalRefusedError(
           "Choose allow once, allow for this conversation, always allow, deny, or done.",
@@ -769,7 +779,7 @@ export function createApprovalService(
             "外部员工的许可只能「批准这一次」「这次对话里都允许」或「拒绝」。",
           );
       }
-      const decided = await store.decide(ownerUserId, id, decision);
+      const decided = await store.decide(ownerUserId, id, decision, via);
       for (const listener of [...decisionListeners]) {
         try {
           listener(decided, decision);

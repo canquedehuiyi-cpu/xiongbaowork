@@ -3,7 +3,7 @@ import {
   IconAlertTriangle,
   IconMessageCircle,
 } from "@tabler/icons-react";
-import type { Reachability } from "@/lib/delivery";
+import { delivered, type Reachability } from "@/lib/delivery";
 import { cn } from "@/lib/utils";
 import {
   DELIVERY_KIND_LABELS,
@@ -92,7 +92,15 @@ export function RecentDeliveries({
                     </span>
                   </p>
                   {delivery.error && (
-                    <p className="break-words text-signal-ink">
+                    <p
+                      className={cn(
+                        "break-words",
+                        // 发出去了的行上的是说明（例如微信里已经发过这条审批），不是错误。
+                        delivered(delivery.state)
+                          ? "text-muted-foreground"
+                          : "text-signal-ink",
+                      )}
+                    >
                       {delivery.error}
                     </p>
                   )}

@@ -48,6 +48,7 @@ export * from "./threads";
 export * from "./voice";
 export * from "./waker-groups";
 export * from "./wakerflows";
+export * from "./wechat";
 export * from "./work";
 export * from "./flow-official-bindings";
 export * from "./group-pipeline-start-receipts";

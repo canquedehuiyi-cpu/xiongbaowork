@@ -63,11 +63,18 @@ const KIND_LABEL: Record<UpdateKind, { title: string; description: string }> = {
   },
 };
 
+/**
+ * 要本人亲手打开才发的渠道：路由是 "all"（没设过）时它的开关是关的，其余照旧开着。
+ * 和服务器 `agents/lifecycle.ts` 的 `OPT_IN_TRANSPORTS` 同一条规则（用户 2026-11-16 决定：绑定微信不自动发通知）。
+ */
+const OPT_IN_TRANSPORTS: UpdateTransport[] = ["wechat"];
+
 const TRANSPORTS: { id: UpdateTransport; label: string }[] = [
   { id: "push", label: "推送" },
   { id: "slack", label: "Slack" },
   { id: "teams", label: "Microsoft Teams" },
   { id: "sms", label: "短信" },
+  { id: "wechat", label: "微信" },
 ];
 
 /**
@@ -92,8 +99,17 @@ export function UpdateRoutingSection() {
    * person last set it. When the deployment's channels could not be read, the preference is shown
    * as it is rather than every channel claimed unavailable.
    */
-  const configured = (transport: UpdateTransport) =>
-    reach.data ? reach.data.available[transport] : true;
+  const configured = (transport: UpdateTransport) => {
+    if (!reach.data) return true;
+    // 微信是一人一个绑定：这个部署开通了、本人也绑好了（没断开）才能选。
+    if (transport === "wechat")
+      return Boolean(
+        reach.data.available.wechat &&
+          reach.data.wechat &&
+          reach.data.wechat.status !== "disconnected",
+      );
+    return reach.data.available[transport];
+  };
   /*
    * Only the channels that can carry something get a switch. A channel that is not set up has nothing to choose, and
    * four rows of switches nobody can turn on said less than one sentence does. Its stored preference is kept as it is
@@ -156,7 +172,9 @@ export function UpdateRoutingSection() {
           {(Object.keys(KIND_LABEL) as UpdateKind[]).map((kind, index) => {
             const current = routing.data[kind];
             const allowed = (transport: UpdateTransport) =>
-              current === "all" || current.includes(transport);
+              current === "all"
+                ? !OPT_IN_TRANSPORTS.includes(transport)
+                : current.includes(transport);
             return (
               <Fragment key={kind}>
                 {index > 0 ? <Separator /> : null}
@@ -187,12 +205,16 @@ export function UpdateRoutingSection() {
                               (id) =>
                                 id === transport.id ? checked : allowed(id),
                             );
+                            // 只有恰好等于 "all" 现在的意思（除微信外全部）才折回 "all"；开着微信时永远是显式列表。
+                            const meansAll =
+                              next.length ===
+                                TRANSPORTS.length - OPT_IN_TRANSPORTS.length &&
+                              !next.some((id) =>
+                                OPT_IN_TRANSPORTS.includes(id),
+                              );
                             save.mutate({
                               kind,
-                              transports:
-                                next.length === TRANSPORTS.length
-                                  ? "all"
-                                  : next,
+                              transports: meansAll ? "all" : next,
                             });
                           }}
                           size="sm"
