@@ -98,12 +98,19 @@ const FILL_IN_INTERVAL_MS = 10 * 60 * 1000;
 /** 节流记录的上限：超过时先丢掉过期的，仍超过就整个清空（最坏只是多问一次厂商）。 */
 const FILL_IN_MEMORY = 1000;
 
-/** 两次同步撞上唯一索引，后一次可以忽略。 */
-const isUniqueViolation = (error: unknown): boolean => {
-  const code =
-    (error as { code?: unknown })?.code ??
-    (error as { cause?: { code?: unknown } })?.cause?.code;
-  return code === "23505";
+/**
+ * 两次同步撞上唯一索引，后一次可以忽略。
+ *
+ * SQLSTATE 在 `errno` 里，不在 `code` 里：Bun 驱动的 `code` 是 `ERR_POSTGRES_SERVER_ERROR`，drizzle
+ * 再把驱动错误包成 `cause`。写法与 `identity/store.ts` 的 `uniqueViolationConstraint` 相同。
+ */
+export const isUniqueViolation = (error: unknown): boolean => {
+  type Driver = { errno?: unknown };
+  const candidates = [
+    error as Driver | null | undefined,
+    (error as { cause?: Driver } | null | undefined)?.cause,
+  ];
+  return candidates.some((candidate) => candidate?.errno === "23505");
 };
 
 export function createAccountBook(context: {

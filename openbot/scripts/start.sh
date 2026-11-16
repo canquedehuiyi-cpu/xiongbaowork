@@ -492,9 +492,16 @@ else
   if [ "$ownership_status" -ne 1 ]; then exit "$ownership_status"; fi
 fi
 if [ "$worker_running" = false ]; then
-  WORKER_DATABASE_URL="$(setting DATABASE_URL postgres://openbot:openbot@localhost:5432/openbot)"
+  # The application role, as `.env.example` gives the server: the worker runs the server's tenant
+  # isolation preflight before its first tick and refuses the owner, a superuser. It decides with the
+  # mode the server reads from .env (either spelling) and the same NODE_ENV, so the two agree.
+  WORKER_DATABASE_URL="$(setting DATABASE_URL postgres://openbot_app:openbot@localhost:5432/openbot)"
+  WORKER_RLS_ENFORCE="$(setting XIONGBAO_RLS_ENFORCE "$(setting OPENBOT_RLS_ENFORCE "")")"
+  WORKER_NODE_ENV="$(setting NODE_ENV "")"
   (cd "$ROOT" && \
     DATABASE_URL="$WORKER_DATABASE_URL" \
+    XIONGBAO_RLS_ENFORCE="$WORKER_RLS_ENFORCE" \
+    NODE_ENV="$WORKER_NODE_ENV" \
     SERVER_INTERNAL_URL="http://localhost:$SERVER_PORT" \
     WORKER_SHARED_SECRET="$WORKER_SHARED_SECRET" \
     bun worker/src/index.ts) >"$LOGS/worker.log" 2>&1 &

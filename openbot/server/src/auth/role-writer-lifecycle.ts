@@ -1,5 +1,6 @@
+import { type SQL, sql } from "drizzle-orm";
 import { envName } from "../../../shared/env-aliases";
-import { judgeRlsEnforcement } from "../db/rls-role";
+import { judgeRlsEnforcement, ROLE_FACTS_SQL } from "../db/rls-role";
 import { runAsTenant } from "../tenant/context";
 
 export type ReadinessDiagnostic =
@@ -33,7 +34,10 @@ export function resolveRlsEnforcementMode(
     : "refuse";
 }
 
-/** The password `0054_app_role.sql` gives `openbot_app`, and the compose owner's; both are public. */
+/**
+ * The password `0054_app_role.sql` gives `openbot_app`, and the compose owner's; both are public. The
+ * compose file's default for the role writer is the same word, so the same check covers it.
+ */
 const PUBLIC_DEFAULT_DATABASE_PASSWORD = "openbot";
 
 /** The role name when `url` authenticates with the public default password, else undefined. */
@@ -68,17 +72,20 @@ export function checkDatabaseCredential(options: {
   url: string | undefined;
   production: boolean;
   report: (event: ReadinessDiagnostic) => void;
+  /** Which setting the URL came from, for the sentences. The application's unless said otherwise. */
+  variable?: "DATABASE_URL" | "ROLE_WRITER_DATABASE_URL";
 }): void {
   const role = publicDefaultCredentialRole(options.url);
   if (role === undefined) return;
+  const variable = options.variable ?? "DATABASE_URL";
   options.report({
     type: "database-password-public-default",
     role,
-    fix: `set a new password (ALTER ROLE ${role} PASSWORD '<random>') and put it in DATABASE_URL; the default from 0054_app_role.sql is public.`,
+    fix: `set a new password (ALTER ROLE ${role} PASSWORD '<random>') and put it in ${variable}; the default is public.`,
   });
   if (options.production)
     throw new Error(
-      "DATABASE_URL uses the public default database password; refusing to start in production.",
+      `${variable} uses the public default database password; refusing to start in production.`,
     );
 }
 
@@ -143,6 +150,35 @@ export async function checkServerReadiness(options: {
     reason: "Tenant isolation role facts are unknown or unavailable.",
   });
   if (strict) throw new Error("Tenant isolation preflight is unconfirmed.");
+}
+
+/** Where the server writes what the readiness gate reports: an unconfirmed check warns, the rest are errors. */
+export function reportReadiness(event: ReadinessDiagnostic): void {
+  if (event.type === "rls-role-check-unavailable")
+    console.warn(JSON.stringify(event));
+  else console.error(JSON.stringify(event));
+}
+
+/**
+ * The server's tenant-isolation preflight, for a process that opens the application's pool and
+ * serves nothing: the routines worker's loop and the CronJob's sweep (audit #633 C1).
+ *
+ * Both write through that pool (run rows, the work queue, the routines' clocks), so a URL naming the
+ * owner or a `BYPASSRLS` role takes the database's layer away from them exactly as it would from the
+ * server. Same facts, same mode (`resolveRlsEnforcementMode` over the same environment), same
+ * refusal; called before the first query that writes.
+ */
+export async function checkRlsReadiness(options: {
+  database: { execute(query: SQL): PromiseLike<unknown> };
+  environment: Record<string, string | undefined>;
+  report?: (event: ReadinessDiagnostic) => void;
+}): Promise<void> {
+  const mode = resolveRlsEnforcementMode(options.environment);
+  await checkServerReadiness({
+    read: async () => options.database.execute(sql.raw(ROLE_FACTS_SQL)),
+    mode,
+    report: options.report ?? reportReadiness,
+  });
 }
 
 /** Own the restricted pool without exposing its URL or driver errors to process logs. */
