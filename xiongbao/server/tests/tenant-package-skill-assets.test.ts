@@ -76,6 +76,7 @@ const packageWith = (
       summary: "证明附件会落库并在说明里列出来。",
       instructions: "按步执行。",
       tools: [],
+      runnable: "full",
       assets: Object.keys(assets[skillSlug] ?? {}),
     },
   ],

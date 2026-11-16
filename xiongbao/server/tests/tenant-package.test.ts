@@ -1763,14 +1763,22 @@ describe("seeding the skills a package ships", () => {
     return { ...loaded, skills };
   }
 
-  const skill = (
-    overrides: Partial<LoadedTenantPackage["skills"][number]> = {},
-  ) => ({
+  /*
+   * `runnable` is required on the loaded skill even though the manifest may omit it: the loader
+   * defaults an absent grade to `full` (`tenant-package.ts:1211`), so by the time a skill reaches this
+   * shape it always has one. Destructured with a default rather than spread over, because
+   * `...overrides` would re-widen it to `Partial`'s `| undefined`.
+   */
+  const skill = ({
+    runnable = "full",
+    ...overrides
+  }: Partial<LoadedTenantPackage["skills"][number]> = {}): LoadedTenantPackage["skills"][number] => ({
     slug: `pkg-${randomUUID().slice(0, 8)}`,
     title: "Find a document",
     summary: "Search the sources and read what comes back.",
     instructions: "Search first, then read the file you found.",
     tools: ["google-drive/search_files", "google-drive/read_file_content"],
+    runnable,
     ...overrides,
   });
 
@@ -1929,12 +1937,13 @@ describe("pairing a package's coworkers with its skills", () => {
   function packageGiving(slugs: string[]) {
     const agent = packageAgent({ skills: slugs });
     const loaded = loadedPackage(agent);
-    const skills = slugs.map((slug) => ({
+    const skills: LoadedTenantPackage["skills"] = slugs.map((slug) => ({
       slug,
       title: "Find a document",
       summary: "Search the sources and read what comes back.",
       instructions: "Search first, then read the file you found.",
       tools: ["google-drive/search_files"],
+      runnable: "full",
     }));
     for (const slug of slugs) createdSkillIds.push(slug);
     createdAgentIds.push(agent.id);
