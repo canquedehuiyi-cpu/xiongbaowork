@@ -20,7 +20,9 @@ import { cleanup, render } from "@testing-library/react";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Route as Approvals } from "@/routes/_authed/_app/approvals";
 import { Route as Autonomous } from "@/routes/_authed/_app/autonomous";
+import { Route as Bot } from "@/routes/_authed/_app/bot";
 import { Route as Bots } from "@/routes/_authed/_app/bots.index";
+import { Route as Briefing } from "@/routes/_authed/_app/briefing";
 import { Route as CapabilitiesComponents } from "@/routes/_authed/_app/capabilities.components";
 import { Route as CapabilitiesKnowledge } from "@/routes/_authed/_app/capabilities.knowledge";
 import { Route as CapabilitiesMemory } from "@/routes/_authed/_app/capabilities.memory";
@@ -31,25 +33,48 @@ import { Route as CapabilitiesProjects } from "@/routes/_authed/_app/capabilitie
 import { Route as CapabilitiesRoles } from "@/routes/_authed/_app/capabilities.roles";
 import { Route as CapabilitiesSkills } from "@/routes/_authed/_app/capabilities.skills";
 import { Route as CapabilitiesWakerflows } from "@/routes/_authed/_app/capabilities.wakerflows";
+import { Route as ChannelNew } from "@/routes/_authed/_app/channel/new";
 import { Route as Connections } from "@/routes/_authed/_app/connections.index";
+import { Route as Contacts } from "@/routes/_authed/_app/contacts";
+import { Route as GroupNew } from "@/routes/_authed/_app/group/new";
 import { Route as Pipelines } from "@/routes/_authed/_app/pipelines";
 import { Route as Tasks } from "@/routes/_authed/_app/tasks";
 import { Route as TeamBots } from "@/routes/_authed/_app/team-bots";
+import { Route as WakerflowsIndex } from "@/routes/_authed/_app/wakerflows.index";
 import { Route as WakerflowsNew } from "@/routes/_authed/_app/wakerflows.new";
 import { Route as Workbench } from "@/routes/_authed/_app/workbench";
+import { Route as AdminApprovals } from "@/routes/_authed/admin/approvals";
+import { Route as AdminApprovalsDescribe } from "@/routes/_authed/admin/approvals_.describe";
+import { Route as AdminApprovalsGuidance } from "@/routes/_authed/admin/approvals_.guidance";
+import { Route as AdminBoundaries } from "@/routes/_authed/admin/boundaries";
 import { Route as AdminBoundariesNew } from "@/routes/_authed/admin/boundaries_.new";
+import { Route as AdminComponents } from "@/routes/_authed/admin/components/index";
 import { Route as AdminComputers } from "@/routes/_authed/admin/computers";
+import { Route as AdminCredentials } from "@/routes/_authed/admin/credentials";
 import { Route as AdminCredentialsNew } from "@/routes/_authed/admin/credentials_.new";
+import { Route as AdminIdentityProviders } from "@/routes/_authed/admin/identity-providers";
 import { Route as Admin } from "@/routes/_authed/admin/index";
+import { Route as AdminPermissions } from "@/routes/_authed/admin/permissions";
+import { Route as AdminPermissionsDescribe } from "@/routes/_authed/admin/permissions_.describe";
+import { Route as AdminPlatform } from "@/routes/_authed/admin/platform";
+import { Route as AdminPluginsComposio } from "@/routes/_authed/admin/plugins/composio";
 import { Route as AdminPlugins } from "@/routes/_authed/admin/plugins/index";
+import { Route as AdminProviders } from "@/routes/_authed/admin/providers";
+import { Route as AdminSkills } from "@/routes/_authed/admin/skills";
 import { Route as AdminSkillsNew } from "@/routes/_authed/admin/skills_.new";
 import { Route as SettingsComputer } from "@/routes/_authed/settings/_personal/computer";
+import { Route as SettingsCredentials } from "@/routes/_authed/settings/_personal/credentials";
 import { Route as SettingsCredentialsNew } from "@/routes/_authed/settings/_personal/credentials_.new";
+import { Route as SettingsSkills } from "@/routes/_authed/settings/_personal/skills";
 import { Route as SettingsSkillsNew } from "@/routes/_authed/settings/_personal/skills_.new";
 import { Route as SettingsApprovals } from "@/routes/_authed/settings/approvals";
+import { Route as SettingsComponentsGallery } from "@/routes/_authed/settings/components-gallery/index";
+import { Route as SettingsDevices } from "@/routes/_authed/settings/devices";
 import { Route as Settings } from "@/routes/_authed/settings/index";
 import { Route as SettingsNotifications } from "@/routes/_authed/settings/notifications";
+import { Route as SettingsPasswords } from "@/routes/_authed/settings/passwords";
 import { Route as SettingsPlans } from "@/routes/_authed/settings/plans";
+import { Route as SettingsThisComputer } from "@/routes/_authed/settings/this-computer";
 import {
   type RouteReport,
   report,
@@ -65,24 +90,28 @@ import { settleReactWork } from "./settle-react-work";
  *
  * 1. **每条路由是真的**。挂的是 `routes/` 下的真文件路由，用 `.update()` 重新挂到本文件的根上（和
  *    `capabilities-router.tsx` 一个办法），不是替身组件。所以扫到的是应用真会画出来的那棵树。
- * 2. **地址是应用真的会落到的那一个**。`/capabilities` 自己会 `redirect` 到 `/capabilities/plugins`，
- *    `/routines` 到 `/autonomous`；扫的是落地页，不是那个只负责跳转的壳。
+ * 2. **地址是应用真的会落到的那一个**。`/capabilities` 的 index 子路由 `redirect` 到
+ *    `/capabilities/plugins`（`capabilities.tsx` 自己只是个 `Outlet` 布局），`/routines` 到 `/autonomous`；
+ *    扫的是落地页，不是那个只负责跳转的壳。
  * 3. **三种状态各扫一遍**。「还在读」画的是页头、页签、按钮和骨架；「读完了」在此基础上多出空状态，以及
  *    只有拿到数据才写出来的句子（`/settings/plans` 的「N 位同事 · 每月 N 个任务」就是后者）；「请求
  *    失败」画的是 `lib/` 里那些 `fallback:` 兜底句。第三种是 2026-11-16 补的：前两种的空答案全是
  *    200，「请求失败」那一屏从来没被量过，而用户最可能截图来问的恰恰是那一屏——一轮补它，扫出六行
  *    纯英文，都出自 `lib/`（`Could not load reachability` 之类），随之把 `app/src` 里 68 条英文兜底
- *    一起翻了，并在 `chinese-ui-copy.test.ts` 立了守卫。
+ *    一起翻了，并在 `chinese-ui-copy.test.ts` 立了守卫。少数页面在某一态一个字都不画（`/bot`、
+ *    `/channel/new` 的「还在读」连骨架都没有），台账用 `states` 排掉那一态，而不是把 0 行记成通过。
  * 4. **画不出来就说画不出来**。一条路渲染出的文字行少于它的下限（默认 `FLOOR`）时，这条记为「没扫到」
  *    并让测试红，而不是在零违规里安静地过。同理，渲染崩到路由错误边界、或者跳到一个没挂进这棵树的地址
  *    （屏幕上只剩库的 `Not Found`），也一律记为「没扫到」——那两种情形下的英文都不是产品文案。
+ *    下限可以是单个数字，也可以**按状态各配一个**：后者是这一轮把 25 个天生很小的页面收进扫表的办法。
+ *    共用下限只能取三态里最小的那个数，那等于「读完了」退化成两行也算过。
  * 5. **扫哪些，由台账说了算**。`i18n-route-table.ts` 的 `SCANNED` 是唯一的名单，`i18n-route-coverage.test.ts`
  *    拿它跟 `routes/` 下的文件对账。所以「主路径」不会因为某个页面没人记得加而悄悄缩小——
  *    `server-tests.list.txt` 那种「文件存在但从不运行」的坑，在 DOM 扫描这一侧有了对应的守卫。
  *
- * 数出来的账记在 `i18n-dom-budget.json`，本文件只允许它**变小**。它现在是空数组：94 条断言、0 行纯英文，
- * 外加一条量具自检（失败态必须真的画出兜底句）。剩下的英文只在口径豁免里（品牌名 `WakerFlow` / `Waker`、
- * 缩写 `API`、键名 `Shift`、装饰字形 `N` 与 `z`），逐条列在报告末尾，可查。
+ * 数出来的账记在 `i18n-dom-budget.json`，本文件只允许它**变小**。它现在是空数组：57 条路由、167 次
+ * 取样、0 行纯英文，外加一条量具自检（失败态必须真的画出兜底句）。剩下的英文只在口径豁免里（品牌名
+ * `WakerFlow` / `Waker`、缩写 `API`、键名 `Shift`、装饰字形 `N` 与 `z`），逐条列在报告末尾，可查。
  */
 
 /** 一条路由渲染出的、少于这么多文字行，就认为它没画出来。 */
@@ -97,14 +126,29 @@ const REVEAL_MS = 400;
  */
 const ROUTES = new Map<string, unknown>([
   ["/admin", Admin],
+  ["/admin/approvals", AdminApprovals],
+  ["/admin/approvals/describe", AdminApprovalsDescribe],
+  ["/admin/approvals/guidance", AdminApprovalsGuidance],
+  ["/admin/boundaries", AdminBoundaries],
   ["/admin/boundaries/new", AdminBoundariesNew],
+  ["/admin/components", AdminComponents],
   ["/admin/computers", AdminComputers],
+  ["/admin/credentials", AdminCredentials],
   ["/admin/credentials/new", AdminCredentialsNew],
+  ["/admin/identity-providers", AdminIdentityProviders],
+  ["/admin/permissions", AdminPermissions],
+  ["/admin/permissions/describe", AdminPermissionsDescribe],
+  ["/admin/platform", AdminPlatform],
   ["/admin/plugins", AdminPlugins],
+  ["/admin/plugins/composio", AdminPluginsComposio],
+  ["/admin/providers", AdminProviders],
+  ["/admin/skills", AdminSkills],
   ["/admin/skills/new", AdminSkillsNew],
   ["/approvals", Approvals],
   ["/autonomous", Autonomous],
+  ["/bot", Bot],
   ["/bots", Bots],
+  ["/briefing", Briefing],
   ["/capabilities/components", CapabilitiesComponents],
   ["/capabilities/knowledge", CapabilitiesKnowledge],
   ["/capabilities/memory", CapabilitiesMemory],
@@ -115,17 +159,27 @@ const ROUTES = new Map<string, unknown>([
   ["/capabilities/roles", CapabilitiesRoles],
   ["/capabilities/skills", CapabilitiesSkills],
   ["/capabilities/wakerflows", CapabilitiesWakerflows],
+  ["/channel/new", ChannelNew],
   ["/connections", Connections],
+  ["/contacts", Contacts],
+  ["/group/new", GroupNew],
   ["/pipelines", Pipelines],
   ["/settings", Settings],
   ["/settings/approvals", SettingsApprovals],
+  ["/settings/components-gallery", SettingsComponentsGallery],
   ["/settings/computer", SettingsComputer],
+  ["/settings/credentials", SettingsCredentials],
   ["/settings/credentials/new", SettingsCredentialsNew],
+  ["/settings/devices", SettingsDevices],
   ["/settings/notifications", SettingsNotifications],
+  ["/settings/passwords", SettingsPasswords],
   ["/settings/plans", SettingsPlans],
+  ["/settings/skills", SettingsSkills],
   ["/settings/skills/new", SettingsSkillsNew],
+  ["/settings/this-computer", SettingsThisComputer],
   ["/tasks", Tasks],
   ["/team-bots", TeamBots],
+  ["/wakerflows", WakerflowsIndex],
   ["/wakerflows/new", WakerflowsNew],
   ["/workbench", Workbench],
 ]);
@@ -239,6 +293,22 @@ const EMPTY_ANSWER: readonly (readonly [string, string])[] = [
   [
     "/api/delivery",
     '{"bindings":[],"devices":[],"deliveries":[],"available":{"slack":false,"teams":false,"sms":false,"push":false}}',
+  ],
+  /*
+   * 第二轮扩表（26 条「不足下限」进扫表）又暴露两条同类的，都只在「读完了」那一态画出来：
+   * `["reviewer-guidance","saved"] data is undefined` 与 `["computers","policy"] data is undefined`。
+   * 两条都是解信封拿到 `undefined`——不是因为兜底句没翻，是因为空答案的形状不对。
+   *
+   * 注意这两条都不能答 `{}`：`guidance` 的合法值是 `string | null`，页面上「还没有指引」是要靠
+   * **明确的 null** 画出来的；`policy` 是 `{mode, deny, allow}`，`mode` 缺了页面就没法选当前模式。
+   * 所以给出各自最小的真形状，而不是空对象。
+   */
+  // `reviewerGuidanceQueryOptions`：`client("/api/approvals/team/guidance", "guidance")`。
+  ["/api/approvals/team/guidance", '{"guidance":null}'],
+  // `actionPolicyQueryOptions`：`client("/api/computers/policy", "policy")`。
+  [
+    "/api/computers/policy",
+    '{"policy":{"mode":"dry-run","deny":[],"allow":[]}}',
   ],
 ];
 
@@ -450,8 +520,11 @@ describe("主路径没有纯英文文字行", () => {
       test(`${at} · ${LABEL[state]}`, async () => {
         const one = await scanOne(at, state);
         scans.push(one);
-        // 逐路由可下调（`Scanned.minLines`），理由写在台账那一条上。
-        const floor = minLines ?? FLOOR;
+        // 逐路由可下调（`Scanned.minLines`），理由写在台账那一条上。可以按状态各配一个。
+        const floor =
+          typeof minLines === "number"
+            ? minLines
+            : (minLines?.[state] ?? FLOOR);
         if (one.lines < floor)
           throw new Error(
             `${one.at} 只画出了 ${one.lines} 行文字，少于 ${floor}，这条没扫到`,
