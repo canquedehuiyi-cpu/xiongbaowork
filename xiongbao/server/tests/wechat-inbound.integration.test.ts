@@ -17,7 +17,11 @@ import {
   users,
 } from "../src/db/schema";
 import { deliveryBindings, deliveryInbox } from "../src/db/schema/delivery";
-import type { WechatAccount, WechatPrompt } from "../src/db/schema/wechat";
+import {
+  type WechatAccount,
+  type WechatPrompt,
+  wechatAccounts,
+} from "../src/db/schema/wechat";
 import { createDeliveryRouter } from "../src/delivery/router";
 import { createDeliveryScopes } from "../src/delivery/scope";
 import { createDeliveryStore } from "../src/delivery/store";
@@ -955,5 +959,82 @@ describe("修复轮 2：选人顺序、中止", () => {
     );
     expect(runs).toBe(1);
     expect(sentTo(c)).toHaveLength(1);
+  });
+});
+
+describe("CI 修复：选人名单的顺序", () => {
+  test("库里另有团队共享的员工：名单里先出现本人的员工", async () => {
+    const admin = await person("ci-admin");
+    const shared: string[] = [];
+    for (let n = 1; n <= 6; n += 1) {
+      const profile = await runAsTenant(admin.userId, () =>
+        profileStore.create(
+          { id: admin.userId, role: "admin" },
+          {
+            name: `阿团队熊${n}`,
+            title: "共享",
+            roleDescription: "简短回答。",
+            visibility: "public",
+          },
+        ),
+      );
+      madeAgents.push(profile.id);
+      shared.push(profile.id);
+    }
+    const h = await person("ci-h");
+    const visible = await runAsTenant(h.userId, () =>
+      profileStore.list({ id: h.userId, role: "user" }),
+    );
+    // 前提：这个人看得到团队共享的员工。
+    expect(visible.filter((p) => shared.includes(p.id))).toHaveLength(6);
+    await bot(h, "自己的甲熊");
+    await bot(h, "自己的乙熊");
+    await deliver(h, message(h, "帮我订个会议室"));
+    const lines = (sentTo(h).at(-1)?.text ?? "")
+      .split("\n")
+      .filter((line) => /^\d+\. /.test(line));
+    expect(lines).toHaveLength(5);
+    expect(
+      lines
+        .slice(0, 2)
+        .map((l) => l.replace(/^\d+\. /, ""))
+        .sort(),
+    ).toEqual(["自己的乙熊", "自己的甲熊"].sort());
+  });
+
+  test("最近单聊过的员工排最前，按最近一次对话时间", async () => {
+    const k = await person("ci-k");
+    const first = await bot(k, "先聊熊");
+    const second = await bot(k, "后聊熊");
+    await bot(k, "没聊熊");
+    await deliver(k, message(k, "@先聊熊 早"));
+    await deliver(k, message(k, "@后聊熊 午"));
+    // 假的那一轮不写对话动态；照真的那样记下：先聊熊早一些，后聊熊晚一些（插入顺序反过来，排序只看时间）。
+    const said = async (agentId: string, at: Date) => {
+      const direct = await directOf(k, agentId);
+      await runAsTenant(k.userId, () =>
+        channelStore.recordActivity({ id: k.userId, role: "user" }, direct.id, {
+          text: "聊过",
+          agentId: null,
+          at,
+        }),
+      );
+    };
+    await said(second, new Date(Date.now() - 60_000));
+    await said(first, new Date(Date.now() - 120_000));
+    // 回到没有上次员工的状态，看名单的顺序。
+    await runAsTenant(k.userId, () =>
+      database
+        .update(wechatAccounts)
+        .set({ lastAgentId: null })
+        .where(eq(wechatAccounts.id, k.account.id)),
+    );
+    await deliver(k, message(k, "再说一件事"));
+    const lines = (sentTo(k).at(-1)?.text ?? "")
+      .split("\n")
+      .filter((line) => /^\d+\. /.test(line))
+      .map((l) => l.replace(/^\d+\. /, ""));
+    expect(lines.slice(0, 2)).toEqual(["后聊熊", "先聊熊"]);
+    expect(lines[2]).toBe("没聊熊");
   });
 });

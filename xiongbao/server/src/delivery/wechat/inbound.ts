@@ -237,25 +237,42 @@ function logFailure(type: string, error: unknown) {
 
 export function createWechatInbound(deps: WechatInboundDeps) {
   const now = deps.now ?? (() => new Date());
-  /** 这个人看得到的员工，最近聊过的在前（侧栏的顺序：置顶、再按最近），其余随后。 */
+  /**
+   * 这个人看得到的员工，选人名单按这个顺序取前几位：
+   *  1. 最近单聊过的（这个人自己起的、只有这一位员工、不是任务的对话，真说过话的），按最近一次对话时间；
+   *  2. 这个人自己的员工；
+   *  3. 团队共享的员工。
+   * 第一次用、没有任何对话时，自己的排在共享的前面：部署的租户包会给每个人看一批团队员工，不能把自己的挤出名单。
+   */
   async function roster(actor: AgentActor): Promise<Roster> {
     const [profiles, page] = await Promise.all([
       deps.bots.list(actor),
       deps.channels.list(actor, { limit: 50 }),
     ]);
     const byId = new Map(profiles.map((p) => [p.id, p]));
+    const chatted = page.channels
+      .filter(
+        (channel) =>
+          channel.agentIds.length === 1 &&
+          !channel.task &&
+          channel.canRename &&
+          channel.lastMessageAt !== null,
+      )
+      .sort(
+        (a, b) =>
+          (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0),
+      );
     const ordered: Roster = [];
     const seen = new Set<string>();
-    for (const channel of page.channels) {
-      const [only] = channel.agentIds;
-      if (channel.agentIds.length !== 1 || !only || seen.has(only)) continue;
-      const profile = byId.get(only);
-      if (!profile) continue;
-      seen.add(only);
+    const add = (profile: AgentProfile | undefined) => {
+      if (!profile || seen.has(profile.id)) return;
+      seen.add(profile.id);
       ordered.push(profile);
-    }
+    };
+    for (const channel of chatted) add(byId.get(channel.agentIds[0] ?? ""));
     for (const profile of profiles)
-      if (!seen.has(profile.id)) ordered.push(profile);
+      if (profile.ownerUserId === actor.id) add(profile);
+    for (const profile of profiles) add(profile);
     return ordered;
   }
 
