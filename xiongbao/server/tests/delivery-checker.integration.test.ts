@@ -251,7 +251,7 @@ class Recorder extends AbstractAgent {
         runId: input.runId,
       },
     ])
-      await subscriber?.onEvent?.({ event } as Parameters<
+      await subscriber?.onEvent?.({ event } as unknown as Parameters<
         NonNullable<AgentSubscriber["onEvent"]>
       >[0]);
     this.messages = [
@@ -289,7 +289,7 @@ class Working extends AbstractAgent {
         threadId: input.threadId,
         runId: input.runId,
       },
-    } as Parameters<NonNullable<AgentSubscriber["onEvent"]>>[0]);
+    } as unknown as Parameters<NonNullable<AgentSubscriber["onEvent"]>>[0]);
     const stopped = new Promise<void>((resolve) => {
       this.stop = resolve;
     });

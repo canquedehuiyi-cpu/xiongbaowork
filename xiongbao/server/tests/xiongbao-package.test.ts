@@ -179,13 +179,21 @@ test("the default conversation is the person's own 分身, and the shared Bot do
 });
 
 test("the ported capability block lands whole: three teams, three connectors, seeded leads, avatar seeds", () => {
+  /*
+   * `teams` and `connectors` are optional on `TenantPackage` — a deployment need not ship either —
+   * so the assertions below have to say they are here before reading them. Throwing is the point:
+   * a package that quietly lost its teams should fail this test, not skip its checks.
+   */
+  const { teams, connectors } = loaded;
+  if (!teams) throw new Error("the package ships no teams");
+  if (!connectors) throw new Error("the package ships no connectors");
   // Teams: ids, and each materialises as a channel under its own id (4b-B1).
-  expect(loaded.teams.map((team) => team.id).sort()).toEqual([
+  expect(teams.map((team) => team.id).sort()).toEqual([
     "gstack",
     "humanize-ppt-team",
     "software-company",
   ]);
-  for (const team of loaded.teams) {
+  for (const team of teams) {
     const channel = loaded.channels.find((entry) => entry.id === team.id);
     expect(channel).toBeDefined();
     expect(channel?.permittedAgents).toContain(team.lead);
@@ -197,21 +205,21 @@ test("the ported capability block lands whole: three teams, three connectors, se
   // Connectors: the three authorised ones, with the auth the build can actually serve. tencent-docs
   // has no catalogue entry, so `user-oauth` there would be refused at sync (ad5b738c) — the
   // assembler downgrades it to `deployment-bearer`, stated in connectors.yaml itself.
-  expect(loaded.connectors.map((entry) => entry.id).sort()).toEqual([
+  expect(connectors.map((entry) => entry.id).sort()).toEqual([
     "github",
     "tapd",
     "tencent-docs",
   ]);
-  expect(loaded.connectors.find((entry) => entry.id === "github")?.auth).toBe(
+  expect(connectors.find((entry) => entry.id === "github")?.auth).toBe(
     "user-oauth",
   );
-  expect(loaded.connectors.find((entry) => entry.id === "tapd")?.auth).toBe(
+  expect(connectors.find((entry) => entry.id === "tapd")?.auth).toBe(
     "deployment-bearer",
   );
   expect(
-    loaded.connectors.find((entry) => entry.id === "tencent-docs")?.auth,
+    connectors.find((entry) => entry.id === "tencent-docs")?.auth,
   ).toBe("deployment-bearer");
-  for (const connector of loaded.connectors) {
+  for (const connector of connectors) {
     expect(connector.credentialEnv).toMatch(/^[A-Z_][A-Z0-9_]*$/);
   }
 

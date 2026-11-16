@@ -724,7 +724,7 @@ export function withWakerGroupLink<T extends LinkedGroupWrites>(
   groups: T,
   link: WakerGroupLink,
   log: Log = logToStderr,
-): T & {
+): Omit<T, "create"> & {
   create(
     owner: string,
     input: unknown,
