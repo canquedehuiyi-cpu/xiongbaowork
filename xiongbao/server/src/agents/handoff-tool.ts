@@ -185,6 +185,14 @@ export function handoffTool(options: {
             scope: parsed.data.bot,
             args: parsed.data,
             target: { bot: parsed.data.bot },
+            /*
+             * Whether anybody is watching. A routine, a scheduled wake or another Bot's hop started
+             * this run; a person did not, so the fan-out it decides on has nobody to notice it.
+             * Read from the signed assertion, which a Bot cannot relabel as a person's own run.
+             */
+            ...(from.initiator && from.initiator.kind !== "person"
+              ? { unattended: true as const }
+              : {}),
             continuation: currentApprovalContext(),
           });
           // A decided hand-off or a replayed result: the work was dealt with, so it is not sent again.
