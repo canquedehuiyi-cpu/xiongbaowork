@@ -7,13 +7,16 @@ import { nextNoteOrder } from "./note-order";
  * 消息，而是 `CUSTOM` 事件，消息列表里没有它们：
  *
  * - `acp.plan`：智能体这一轮的计划，值是 ACP 的 `entries`（`{content, status, priority}[]`），每次都是整份；
- * - `acp.diff`：一个工具调用改了哪些文件，`{toolCallId, files: {path, added, removed}[]}`，同一个调用往前走
- *   时会再报一次；
+ * - `acp.diff`：一个工具调用改了哪些文件，`{toolCallId, files: {path, added, removed}[], status?}`，同一个调用
+ *   往前走时会再报一次；`status` 是带着它的那次更新里调用的状态。先报了改动、后来才结束的调用，结束时
+ *   （`completed`、`failed`）再补一条 `{toolCallId, files: [], status}`；
  * - `acp.interrupted`：电脑关机、这一轮中断了，`{turnId, prompt}`，`prompt` 是这一轮派的原话。
  *
  * 这里听代理的事件流（实时的一轮，和进入对话时 `connect` 重放的历史都走这条），按轮次记下这三样，每样记在
  * 它第一次出现时对话里最后那条消息后面（`anchor`），对话里就画在那一行下面。同一轮再来的计划换掉旧的，
- * 改动按「工具调用 + 文件」只留最新的一份再按文件加总（和任务看板 `tasks/projector.ts` 的口径一样）。
+ * 改动按「工具调用 + 文件」只留最新的一份再按文件加总，并且只算最后一次报的状态是 `completed` 的调用：
+ * 失败了的、没做完这一轮就收了的，报的是它想写的改动，其实什么也没写（和任务看板、交付证据的口径一样，
+ * 服务器 `server/src/tasks/diff-summary.ts` 的 `editedFiles`）。
  * 重放同一段历史得到的还是同样几张卡。
  */
 
@@ -90,10 +93,17 @@ function diffFilesOf(value: unknown): AcpDiffFile[] {
   });
 }
 
-/** 按文件加总：每个「工具调用 + 文件」只算最新那份。 */
-function summed(edits: ReadonlyMap<string, AcpDiffFile>): AcpDiffFile[] {
+/** 一轮里的改动：「工具调用 + 文件」→ 最新一份，工具调用 → 它最后一次报的状态。 */
+type RunEdits = {
+  files: Map<string, AcpDiffFile & { call: string }>;
+  status: Map<string, unknown>;
+};
+
+/** 按文件加总：每个「工具调用 + 文件」只算最新那份，只算做完了（`completed`）的调用。 */
+function summed({ files: edits, status }: RunEdits): AcpDiffFile[] {
   const files = new Map<string, AcpDiffFile>();
-  for (const { path, added, removed } of edits.values()) {
+  for (const { call, path, added, removed } of edits.values()) {
+    if (status.get(call) !== "completed") continue;
     const file = files.get(path) ?? { path, added: 0, removed: 0 };
     file.added += added;
     file.removed += removed;
@@ -134,8 +144,10 @@ export type AcpCardTracker = {
 export function createAcpCardTracker(): AcpCardTracker {
   let runId = "";
   let cards: readonly AcpCard[] = [];
-  /** 轮次 → 「工具调用 + 文件」→ 最新一份改动。 */
-  const edits = new Map<string, Map<string, AcpDiffFile>>();
+  /** 轮次 → 它的改动和各调用的状态。 */
+  const edits = new Map<string, RunEdits>();
+  /** 改动卡第一次出现的位置：卡撤掉（改动都没做成）又回来时，还画在原来那里。 */
+  const diffAnchors = new Map<string, string | null>();
   const listeners = new Set<() => void>();
   /** 每张卡（按 `key`）第一次出现时取的号。 */
   const orders = new Map<string, number>();
@@ -152,6 +164,12 @@ export function createAcpCardTracker(): AcpCardTracker {
       next[at] = { ...card, anchor: cards[at]?.anchor ?? card.anchor };
       cards = next;
     }
+    for (const listener of listeners) listener();
+  };
+
+  const drop = (key: string) => {
+    if (!cards.some((card) => card.key === key)) return;
+    cards = cards.filter((card) => card.key !== key);
     for (const listener of listeners) listener();
   };
 
@@ -186,19 +204,31 @@ export function createAcpCardTracker(): AcpCardTracker {
       return;
     }
     if (name === "acp.diff") {
-      const files = diffFilesOf(value);
-      if (files.length === 0) return;
-      const toolCallId = String(record(value)?.toolCallId ?? "");
-      const ofRun = edits.get(run) ?? new Map<string, AcpDiffFile>();
+      const body = record(value);
+      if (!body) return;
+      const toolCallId = String(body.toolCallId ?? "");
+      const ofRun = edits.get(run) ?? { files: new Map(), status: new Map() };
       edits.set(run, ofRun);
-      for (const file of files)
-        ofRun.set(JSON.stringify([toolCallId, file.path]), file);
+      // 文件列表为空的那条（调用结束时补的）只改状态：`failed` 就撤掉它先前报的改动。
+      ofRun.status.set(toolCallId, body.status);
+      for (const file of diffFilesOf(value))
+        ofRun.files.set(JSON.stringify([toolCallId, file.path]), {
+          ...file,
+          call: toolCallId,
+        });
+      const key = `${run}:diff`;
+      const files = summed(ofRun);
+      if (files.length === 0) {
+        drop(key);
+        return;
+      }
+      if (!diffAnchors.has(key)) diffAnchors.set(key, anchor);
       put({
         kind: "diff",
-        key: `${run}:diff`,
+        key,
         runId: run,
-        anchor,
-        files: summed(ofRun),
+        anchor: diffAnchors.get(key) ?? anchor,
+        files,
       });
       return;
     }

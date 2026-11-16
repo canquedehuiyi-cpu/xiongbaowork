@@ -316,6 +316,7 @@ describe("进度卡与改动卡", () => {
         value: {
           toolCallId: "run-1:edit-1",
           files: [{ path: "server/auth.ts", added: 2, removed: 1 }],
+          status: "in_progress",
         },
         upto: 2,
       },
@@ -324,10 +325,11 @@ describe("进度卡与改动卡", () => {
         value: {
           toolCallId: "run-1:edit-1",
           files: [{ path: "server/auth.ts", added: 6, removed: 2 }],
+          status: "completed",
         },
         upto: 2,
       },
-      // 另一个调用又改了同一个文件、加了一个新文件：按文件加总。
+      // 另一个调用又改了同一个文件、加了一个新文件：按文件加总。它先报改动、结束时再补一条只带状态的。
       {
         name: "acp.diff",
         value: {
@@ -336,7 +338,13 @@ describe("进度卡与改动卡", () => {
             { path: "server/auth.ts", added: 3, removed: 1 },
             { path: "server/auth.test.ts", added: 3, removed: 0 },
           ],
+          status: "in_progress",
         },
+        upto: 3,
+      },
+      {
+        name: "acp.diff",
+        value: { toolCallId: "run-1:edit-2", files: [], status: "completed" },
         upto: 3,
       },
     ]);
@@ -373,6 +381,75 @@ describe("进度卡与改动卡", () => {
         .getByRole("button", { name: "收起" })
         .getAttribute("aria-expanded"),
     ).toBe("true");
+  });
+
+  test("a failed edit is not counted on the diff card", async () => {
+    const tracker = createAcpCardTracker();
+    feed(tracker, "run-1", [
+      {
+        name: "acp.diff",
+        value: {
+          toolCallId: "run-1:edit-1",
+          files: [{ path: "server/auth.ts", added: 6, removed: 2 }],
+          status: "completed",
+        },
+        upto: 2,
+      },
+      // 这个调用报了它想写的改动，最后失败了（服务器补一条文件为空、`failed` 的）：什么也没写。
+      {
+        name: "acp.diff",
+        value: {
+          toolCallId: "run-1:edit-2",
+          files: [
+            { path: "server/auth.ts", added: 40, removed: 10 },
+            { path: "server/session.ts", added: 5, removed: 0 },
+          ],
+          status: "in_progress",
+        },
+        upto: 3,
+      },
+      {
+        name: "acp.diff",
+        value: { toolCallId: "run-1:edit-2", files: [], status: "failed" },
+        upto: 3,
+      },
+    ]);
+    const cards = tracker.cards();
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).toMatchObject({
+      kind: "diff",
+      anchor: "run-1-message-1",
+      files: [{ path: "server/auth.ts", added: 6, removed: 2 }],
+    });
+    const view = drawTranscript({ cards });
+    const card = await view.findByRole("region", { name: "改动" });
+    expect(card.textContent).toContain("改了 1 个文件");
+    expect(card.textContent).toContain("+6");
+    expect(card.textContent).not.toContain("+46");
+  });
+
+  test("a turn whose only edit failed has no diff card", () => {
+    const tracker = createAcpCardTracker();
+    feed(tracker, "run-1", [
+      {
+        name: "acp.diff",
+        value: {
+          toolCallId: "run-1:edit-1",
+          files: [{ path: "server/auth.ts", added: 6, removed: 2 }],
+          status: "pending",
+        },
+        upto: 2,
+      },
+    ]);
+    // 还没做完的调用不算改动：和看板一样，等它 `completed` 才算。
+    expect(tracker.cards()).toEqual([]);
+    tracker.take({
+      runId: "run-1",
+      name: "acp.diff",
+      value: { toolCallId: "run-1:edit-1", files: [], status: "failed" },
+      anchor: "run-1-message-2",
+    });
+    expect(tracker.cards()).toEqual([]);
   });
 });
 
