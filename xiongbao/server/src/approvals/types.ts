@@ -268,6 +268,13 @@ export type DesktopWriteAction =
   | "clipboard_read"
   | "clipboard_write";
 // --- end desktop control ---
+/**
+ * One Bot handing work to another, as a rule names it (`rule-vocabulary.ts`).
+ *
+ * HERE RATHER THAN IN THE TWO PLACES THAT READ IT, because ./policy decides the default for it and
+ * must not import the code that reads the rows (§ delegation-freed), which imports ./policy.
+ */
+export const DELEGATE_EFFECT = "delegate";
 export type ApprovalCandidate = {
   actorId: string;
   botId: string;
@@ -305,6 +312,16 @@ export type ApprovalCandidate = {
    * the person approves, so not in the action's digest.
    */
   declined?: AuditEventInput;
+  /**
+   * Nobody in this conversation asked for this action: it arrived from a routine, a scheduled wake,
+   * or another Bot's hop, rather than from a person in the conversation looking at what comes back.
+   *
+   * A fact about the run, not about the action — the same delegation is the same delegation whoever
+   * started it — so it is not part of the digest, exactly as `destructive` and `ownConnectionRead`
+   * are not. What it changes is only the default: handing work on with nobody watching waits, see
+   * `decideAction` in ./policy.
+   */
+  unattended?: true;
   /**
    * 调用进的是这个人在该应用上的哪一个账号（按本人认得的地址），只在他有不止一个账号时才有（上游
    * #1298）。它是「两个动作是不是同一个动作」的一部分：对一个邮箱的调用，永远不会被关于另一个邮箱的

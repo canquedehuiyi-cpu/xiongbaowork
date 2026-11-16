@@ -99,6 +99,13 @@ With Always ask before making changes off, a Bot reads and makes ordinary change
 an email, editing your documents, creating a calendar event for yourself, labelling mail, saving a
 page, writing a file on its own computer.
 
+**One thing asks only when nobody is watching: handing work to another Bot.** When you asked for the
+work, the Bot hands it on without a card — you are there to see the answer arrive. A run you did not
+start, whether a routine, a scheduled wake or another Bot passing work on, has nobody watching, so its
+first hand-off waits for you. A rule that allows delegating answers it as any rule does, and a run with
+no conversation to ask you in is refused rather than left waiting, saying nothing was done. Without
+this, one routine could wake four computers at 3am and nobody would know until the morning.
+
 A Bot's own computer is its scratch space. Writing, reading and deleting files there, and the
 commands it runs there, are not account actions and don't ask unless Always ask before making changes,
 Auto-review or a rule says so. A folder on your own computer is different: the OpenBot desktop app

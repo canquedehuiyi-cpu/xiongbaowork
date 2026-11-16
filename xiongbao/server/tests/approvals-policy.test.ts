@@ -26,6 +26,7 @@ import {
   TOOL_DISABLED,
   toolDisabled,
 } from "../src/approvals/policy";
+import { DELEGATE_EFFECT } from "../src/approvals/delegation-freed";
 import { HANDLED_BY_PERSON } from "../src/approvals/service";
 import {
   type ApprovalAction,
@@ -4586,5 +4587,64 @@ describe("M5: upstream's conversation answers and kinds, under this deployment's
         conversation: [grant()],
       })?.layer,
     ).toBe("owner_rule");
+  });
+});
+
+/*
+ * WHERE THE DEFAULT HAS TO DIFFER.
+ *
+ * Handing work to another Bot is cheap to type and expensive to be on the receiving end of: it wakes
+ * a computer, spends a model turn and puts an answer into somebody's conversation. A person who asked
+ * for the work is watching the answer arrive, so the default has always been to let the Bot get on
+ * with it. A run nobody asked for — a routine, a scheduled wake, another Bot's hop — has nobody
+ * watching, and that is exactly the fan-out that should wait.
+ *
+ * What "wait" means is not a new mechanism. With a conversation to ask in it is a card like any
+ * other; with none, `approvalAction` refuses it outright and says nothing was done.
+ */
+describe("a delegation nobody asked for", () => {
+  const delegate = (over: Partial<ApprovalCandidate> = {}) =>
+    candidate({
+      toolRef: "bot/message_bot",
+      effect: DELEGATE_EFFECT,
+      scope: "researcher",
+      args: { bot: "researcher", task: "check the changelog" },
+      ...over,
+    });
+  const decide = (
+    over: Partial<ApprovalCandidate> = {},
+    extra: { personal?: ApprovalRule[] } = {},
+  ) => decideAction({ ...base, candidate: delegate(over), ...extra });
+
+  test("a run a routine started asks before handing work on", async () => {
+    const outcome = await decide({ unattended: true });
+    expect(outcome.behaviour).toBe("ask");
+    expect(outcome.reason).toContain("Nobody asked for this run");
+  });
+
+  test("a hand-off the person asked for still runs without a card", async () => {
+    expect((await decide()).behaviour).toBe("allow");
+  });
+
+  test("only delegations move: an ordinary change a routine started still runs", async () => {
+    const outcome = await decide({
+      unattended: true,
+      toolRef: "mcp/gmail/create_label",
+      effect: "write",
+      scope: "gmail",
+    });
+    expect(outcome.behaviour).toBe("allow");
+  });
+
+  test("a rule that allows delegating answers it, unattended or not", async () => {
+    const outcome = await decide(
+      { unattended: true },
+      {
+        personal: [
+          rule("allow", { toolRef: "bot/*", effect: DELEGATE_EFFECT }),
+        ],
+      },
+    );
+    expect(outcome.behaviour).toBe("allow");
   });
 });
