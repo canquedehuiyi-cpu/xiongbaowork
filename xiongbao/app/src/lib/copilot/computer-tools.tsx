@@ -10,6 +10,11 @@ import {
 } from "@/components/computer/terminal-block";
 import { client, tryClient } from "@/lib/client";
 import { noteBrowsed, outputOf, readOutcome } from "@/lib/computers/activity";
+import {
+  artifactDownloadHref,
+  artifactPathOf,
+  isWorkspaceScope,
+} from "@/lib/computers/artifact";
 import { callComputer, type ToolOutcome } from "@/lib/computers/call";
 import { type ControlState, readControl } from "@/lib/computers/control";
 import {
@@ -31,6 +36,7 @@ import {
   LOCAL_TOOL_DESCRIPTIONS,
 } from "../../../../shared/local-tools";
 import {
+  declaredBotId,
   type ToolCallContext,
   useActiveBotHolder,
   useBotOfCall,
@@ -145,6 +151,7 @@ function ActionLine({
   label,
   attempted,
   detail,
+  link,
   running,
   refused,
   failed,
@@ -156,6 +163,8 @@ function ActionLine({
   /** 被拦截时的未完成说法，见 `ToolLine` 的同名属性。 */
   attempted?: string;
   detail?: string;
+  /** `detail` 那个文件可以下载时给它的地址，见 `ToolLine` 的同名属性。 */
+  link?: string;
   running?: boolean;
   /** A policy or a boundary said no. Final: nothing the Bot does differently will help. */
   refused?: boolean;
@@ -176,6 +185,7 @@ function ActionLine({
       detail={notYet ? STILL_STARTING_DETAIL : detail}
       failed={failed}
       label={label}
+      link={link}
       notYet={notYet}
       refused={refused}
       running={running}
@@ -922,33 +932,17 @@ export function ComputerTools() {
         method: "POST",
         body: input,
       }),
-    render: ({ args, result, status }) => {
-      const outcome = outcomeOf(result);
-      return (
-        <ActionLine
-          running={status !== "complete"}
-          // The words the approval card and Activity use for the same action.
-          label={args?.append === true ? "追加到文件" : "保存了文件"}
-          attempted={args?.append === true ? "追加到文件" : "保存文件"}
-          // Show the path, never file contents.
-          detail={
-            outcome.refused === true
-              ? refusedDetail(
-                  typeof args?.path === "string" ? args.path : undefined,
-                  outcome,
-                )
-              : typeof args?.path === "string"
-                ? args.path
-                : undefined
-          }
-          declined={outcome.declined === true}
-          refused={outcome.refused === true}
-          failed={didNotWork(outcome)}
-          notYet={stillStarting(outcome)}
-          byYou={byPerson(outcome)}
-        />
-      );
-    },
+    render: ({ args, result, status }) => (
+      // 作用域是在这个组件里问的，不是在这里的闭包里读的：`useFrontendTool` 把注册时抓到的 render
+      // 一直留着（见 approval-tools.tsx），所以闭包里的 `onDevice` 是注册那一刻的快照。配对电脑项目
+      // 模式里那会还是「工作区」，就会给出一条点不开的链接——这条红线不能靠时序。
+      <FileSavedLine
+        args={args}
+        botId={declaredBotId(bot.current)}
+        result={result}
+        status={status}
+      />
+    ),
   });
 
   useFrontendTool({
@@ -992,6 +986,68 @@ export function ComputerTools() {
 }
 
 /**
+ * 存文件那一行：路径，外加一条能点开的下载地址。
+ *
+ * 地址只在两件事同时成立时给：这一次写真成功了，且这台电脑的工作区就是部署自己那份。后半个问题是
+ * 在这里问的（`useLocalTools` 每次渲染重读），不是在注册工具的那个箭头函数里读快照——注册时抓到的
+ * `machine` 会跟着 render 一起被 SDK 长期留着，配对电脑的项目模式在注册之后才答出来，那条链接就留在
+ * 页面上了，而它点开是 404。宁可不给：这一行仍然写着路径，人可以换个方式要这个文件。
+ *
+ * 路径以电脑回来的为准，它没报才退回要求的（`args.path` 是模型写的，回来的才是工作区认的）。为什么
+ * 配对电脑项目模式的地址点不开，见 `lib/computers/artifact.ts` 的开头（根透传另立 WP-0.5）。
+ */
+function FileSavedLine({
+  args,
+  botId,
+  result,
+  status,
+}: {
+  args: { append?: boolean; path?: unknown } | undefined;
+  botId: string | undefined;
+  result: string | undefined;
+  status: string;
+}) {
+  const { onWorkspace } = useLocalTools();
+  const outcome = outcomeOf(result);
+  const savedFile =
+    status === "complete" &&
+    outcome.ok === true &&
+    outcome.refused !== true &&
+    outcome.doneByPerson !== true &&
+    onWorkspace
+      ? artifactDownloadHref(
+          botId,
+          artifactPathOf((outcome as { path?: unknown }).path, args?.path),
+        )
+      : undefined;
+  return (
+    <ActionLine
+      running={status !== "complete"}
+      // The words the approval card and Activity use for the same action.
+      label={args?.append === true ? "追加到文件" : "保存了文件"}
+      attempted={args?.append === true ? "追加到文件" : "保存文件"}
+      // Show the path, never file contents.
+      detail={
+        outcome.refused === true
+          ? refusedDetail(
+              typeof args?.path === "string" ? args.path : undefined,
+              outcome,
+            )
+          : typeof args?.path === "string"
+            ? args.path
+            : undefined
+      }
+      link={savedFile}
+      declined={outcome.declined === true}
+      refused={outcome.refused === true}
+      failed={didNotWork(outcome)}
+      notYet={stillStarting(outcome)}
+      byYou={byPerson(outcome)}
+    />
+  );
+}
+
+/**
  * Whether this person is offered the Bot owner's local apps and desktop, as the server answers it:
  * device mode, and the Bot's owner asking, which is the rule the unattended run's tools follow. Also
  * where the shell and file tools act (`machine`), which is the server's and true for every viewer.
@@ -999,7 +1055,11 @@ export function ComputerTools() {
  * No until the server says yes, unlike the computer tools above: these act on the owner's own
  * machine, so nobody else is shown them even for a moment. The gateway refuses everyone else anyway.
  */
-function useLocalTools(): { allowed: boolean; machine: ComputerMachine } {
+function useLocalTools(): {
+  allowed: boolean;
+  machine: ComputerMachine;
+  onWorkspace: boolean;
+} {
   const declared = useDeclaredBotId();
   const { data } = useQuery({
     queryKey: ["computers", "local-tools", declared ?? ""],
@@ -1020,6 +1080,13 @@ function useLocalTools(): { allowed: boolean; machine: ComputerMachine } {
     allowed: data?.allowed === true,
     // The cloud words stand until the server says this is a paired machine: they are the old ones.
     machine: data?.machine === "device" ? "device" : "workspace",
+    /*
+     * Whether the server has ANSWERED `workspace`, which is not the same as `machine` above: that one
+     * stands in for the old words while no answer has arrived, and here a wrong yes is a link that
+     * 404s. No answer, a refused read (a person's own browser answers only its three reads) and a
+     * paired machine are all the same thing to a download: nothing to promise.
+     */
+    onWorkspace: isWorkspaceScope(data?.machine),
   };
 }
 
