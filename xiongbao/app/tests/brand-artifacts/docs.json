@@ -54,18 +54,6 @@
     "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
   },
   {
-    "word": "/openbot",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "/xiongbaoshuziyuangong/openbot",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
     "word": "@copilotkit/",
     "category": "third-party-name",
     "plan": "keep",
@@ -210,24 +198,6 @@
     "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
   },
   {
-    "word": "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker/delivery.env.example",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
-    "word": "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OpenbotTag/openbot/docker/delivery.env.example",
-    "category": "operator-visible",
-    "plan": "rewrite",
-    "note": "部署文档里的旧变量名或仓库地址；Task 18 改成新名与自有渠道（附录 A 第 12 行）"
-  },
-  {
     "word": "oci://$OPENBOT_IMAGE",
     "category": "operator-visible",
     "plan": "rewrite",
@@ -274,84 +244,6 @@
     "category": "developer-only",
     "plan": "keep",
     "note": "开发环境文档里的本地容器名"
-  },
-  {
-    "word": "openbot/",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/:",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/CHANGELOG.md",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/LICENSE",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/README.md",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/UPSTREAM.md",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/docker-compose.yml",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/docs/deployment-xiongbao.md",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/docs/deployment.md",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/docs/staffing.md",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/runner/src/index.ts",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/server",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
-  },
-  {
-    "word": "openbot/tools/bun/bun.exe",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
   },
   {
     "word": "openbot_app",
@@ -424,11 +316,5 @@
     "category": "operator-visible",
     "plan": "rewrite",
     "note": "开发环境文档里的上游项目名；Task 18（L1-15）改掉"
-  },
-  {
-    "word": "xiongbaowork/openbot",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "仓库目录名 openbot/ 不改（Global Constraints）"
   }
 ]

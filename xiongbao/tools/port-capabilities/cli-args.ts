@@ -75,7 +75,7 @@ export const USAGE = `用法：
   --connectors=<档>   l0 = 仅已授权连接器（默认，P0 行为）；all = 市场索引里的全部连接器（L1 全量普查用）
   --verify            写完后回读输出目录，按同一套规则再校验一遍
   --verify-only       只回读 --out 里已有的产出，不重新生成（用于复核已生成的包）
-  --census[=<路径>]   只做连接器市场普查，默认写到 openbot/capability-census.yaml（只读、不联网、不产出包）
+  --census[=<路径>]   只做连接器市场普查，默认写到 xiongbao/capability-census.yaml（只读、不联网、不产出包）
   --help              打印本说明`;
 
 /** Expand a leading `~` and make the path absolute. */

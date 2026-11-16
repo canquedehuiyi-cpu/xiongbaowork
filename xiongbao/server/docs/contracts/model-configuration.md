@@ -42,7 +42,7 @@ DeepSeek 在 2026-10-09 实测回的句子是"支持的模型名是 …，但你
 1. **`examples/xiongbao/model.yaml` 的 `default_model` 改成占位**，不再预设具体厂商（方案 D-5）。
    按 D-5 的原话："不预设具体厂商：`model.yaml` 保留占位，首次启动若未配置模型则在界面引导'接入模型'"。
    写死厂商名是 §1 那条必然失败的源头；占位之后，`modelConfigured=false` 才有意义。
-2. **`openbot/.env.example` 删掉一切 `OPENAI_MODEL` 字样**，并在 `OPENAI_BASE_URL` 旁边写明"模型名用 `BOT_MODEL`"，
+2. **`xiongbao/.env.example` 删掉一切 `OPENAI_MODEL` 字样**，并在 `OPENAI_BASE_URL` 旁边写明"模型名用 `BOT_MODEL`"，
    给 DeepSeek / 通义 / 智谱各一行示例（例如 DeepSeek 2026-10-09 实测可用的名字是 `deepseek-flash`、`deepseek-v4-pro`，
    `deepseek-chat` 不在其支持列表里）。
    另外 `docs/deployment-xiongbao.md` 与根 README 需要把"Windows 宿主不能直接起 server"之外的这条也写清：
@@ -60,11 +60,11 @@ DeepSeek 在 2026-10-09 实测回的句子是"支持的模型名是 …，但你
 2026-10-09 用户授权后手工跑过一遍（命令与 SSE 事件计数在
 `.scratch/qoderwake-replica/acceptance-v0.1/wp13-smoke-2026-10-09.md`）：真实 DeepSeek 回了一句话、
 看板恰好一张卡、卡的 `open` 落进那段对话。**没跑成自动化的是因为它不在 A 线路径里**——
-现有 `bun run test:smoke` 跑的是 `openbot/tests/smoke`（上游 `journey.test.ts` 在那儿，默认员工是 fintech 的
-`risk-analyst`，不动它），而 A 线只有 `openbot/server/**` 与 `openbot/server/docs/contracts`。
+现有 `bun run test:smoke` 跑的是 `xiongbao/tests/smoke`（上游 `journey.test.ts` 在那儿，默认员工是 fintech 的
+`risk-analyst`，不动它），而 A 线只有 `xiongbao/server/**` 与 `xiongbao/server/docs/contracts`。
 
 要谁认领都行，形状就是上面那三条断言：
-- 落到 `openbot/server/tests/smoke/qoderwake-chat.test.ts`（`OPENBOT_SMOKE=1` 才跑，默认跳过）→ 需要同时给
-  `openbot/package.json` 加一条 `test:smoke:qoderwake`（B 名下）；
-- 或直接放 `openbot/tests/smoke/` 复用现有脚本（该目录归属见分工表）。
+- 落到 `xiongbao/server/tests/smoke/qoderwake-chat.test.ts`（`OPENBOT_SMOKE=1` 才跑，默认跳过）→ 需要同时给
+  `xiongbao/package.json` 加一条 `test:smoke:qoderwake`（B 名下）；
+- 或直接放 `xiongbao/tests/smoke/` 复用现有脚本（该目录归属见分工表）。
 凭据：只用 `.env` 里那把 key，且**每次跑之前问用户**（会产生真实外部调用）。

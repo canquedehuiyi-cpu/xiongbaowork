@@ -45,7 +45,7 @@
  *   E2E_ARTIFACTS_DIR             screenshots, trace (on failure) and server logs (default: ./e2e-artifacts)
  *   E2E_SERVER_PORT               default: a free port
  *
- * Usage (from openbot/): bun scripts/e2e/wakerflow-lifecycle.ts
+ * Usage (from xiongbao/): bun scripts/e2e/wakerflow-lifecycle.ts
  */
 
 import { randomBytes, randomUUID } from "node:crypto";

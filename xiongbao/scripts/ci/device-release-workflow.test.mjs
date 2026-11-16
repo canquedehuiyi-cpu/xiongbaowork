@@ -607,15 +607,15 @@ test("the release carries exactly the installers and their SHA256SUMS", () => {
 });
 
 const CLEAN = ["clean-linux", "clean-windows"];
-const openbotDir = join(root, "openbot");
+const productDir = join(root, "xiongbao");
 const linuxScriptPath = join(
-  openbotDir,
+  productDir,
   "scripts",
   "ci",
   "device-clean-linux.sh",
 );
 const windowsScriptPath = join(
-  openbotDir,
+  productDir,
   "scripts",
   "ci",
   "device-clean-windows.ps1",
@@ -722,7 +722,7 @@ test("nothing is published until a fresh Ubuntu and a fresh Windows machine chec
       "persist-credentials": false,
       path: "source",
     });
-    expect(job.defaults.run["working-directory"]).toBe("source/openbot");
+    expect(job.defaults.run["working-directory"]).toBe("source/xiongbao");
     const upload = job.steps.find(
       (s) =>
         s.uses?.startsWith("actions/upload-artifact@") &&
@@ -812,7 +812,7 @@ function publishNeeds() {
   return workflow.jobs.publish.needs;
 }
 
-/** The release's sums step as written, from openbot/ (its working directory), on a scratch dist. */
+/** The release's sums step as written, from xiongbao/ (its working directory), on a scratch dist. */
 function cleanSums(files, sums, env = { TAG: "device-v0.1.0" }) {
   const cwd = scratch();
   const temp = scratch();
@@ -830,7 +830,7 @@ function cleanSums(files, sums, env = { TAG: "device-v0.1.0" }) {
     "clean-linux",
     "sums",
     { VERSION: "0.1.0", COMMIT: "abc", DIST: dist, EVIDENCE: file, ...env },
-    openbotDir,
+    productDir,
   );
   return {
     ...result,
@@ -875,7 +875,7 @@ test("RESULT: PASS is written only when no check wrote FAIL", () => {
   const verdict = (content) => {
     const file = join(scratch(), "evidence.txt");
     if (content !== null) writeFileSync(file, content);
-    const result = run("clean-linux", "result", { EVIDENCE: file }, openbotDir);
+    const result = run("clean-linux", "result", { EVIDENCE: file }, productDir);
     return {
       status: result.status,
       evidence: existsSync(file) ? readFileSync(file, "utf8") : "",
@@ -953,9 +953,9 @@ test("every pull request runs the same clean-machine phases on the unsigned CI i
       job.steps.indexOf(unconditional.at(-1)) + 1,
     ))
       expect(["always()", "failure()"]).toContain(s.if);
-    // The file's conventions: inputs through env only, bash with openbot/ as the working directory,
+    // The file's conventions: inputs through env only, bash with xiongbao/ as the working directory,
     // and every PowerShell step says so itself.
-    expect(job.defaults.run["working-directory"]).toBe("openbot");
+    expect(job.defaults.run["working-directory"]).toBe("xiongbao");
     for (const s of job.steps) {
       if (s.run === undefined) continue;
       expect(s.run).not.toContain(expression("").slice(0, 3));
@@ -1029,7 +1029,7 @@ test("the CI deb is staged under its release name with a SHA256SUMS the sums pha
     "device-clean-linux",
     "sums",
     { VERSION: "0.1.0", COMMIT: "abc", DIST: ok.dist, EVIDENCE: evidence },
-    openbotDir,
+    productDir,
     process.env.PATH,
     ci,
   );
@@ -1216,7 +1216,7 @@ test("release notes name macOS 13+ as the floor", () => {
 });
 
 // Task 5: the image and the deb are scanned for the upstream's names, before anything else in the job
-// can pass them through (ci.yml; the word lists live in openbot/app/tests/brand-artifacts).
+// can pass them through (ci.yml; the word lists live in xiongbao/app/tests/brand-artifacts).
 test("image and deb are brand-scanned", () => {
   const ci = Bun.YAML.parse(readFileSync(join(workflows, "ci.yml"), "utf8"));
   const steps = (job) => ci.jobs[job].steps;
@@ -1639,9 +1639,9 @@ test("the record and the samples go up to our download page before the GitHub Re
   );
   const cwd = scratch();
   writeFileSync(join(cwd, "container-images.json"), "{}");
-  mkdirSync(join(cwd, "source", "openbot", "docker"), { recursive: true });
+  mkdirSync(join(cwd, "source", "xiongbao", "docker"), { recursive: true });
   for (const f of ["delivery.env.example", "compose.delivery.yml"])
-    writeFileSync(join(cwd, "source", "openbot", "docker", f), f);
+    writeFileSync(join(cwd, "source", "xiongbao", "docker", f), f);
   const aws = stubs({ aws: "" });
   const ok = run(
     "github-release",
@@ -1656,8 +1656,8 @@ test("the record and the samples go up to our download page before the GitHub Re
   const flags = "--endpoint-url https://s3.example.com --only-show-errors";
   expect(aws.calls().filter((c) => c.startsWith("aws s3"))).toEqual([
     `aws s3 cp ${flags} container-images.json ${s3}/container-images.json`,
-    `aws s3 cp ${flags} source/openbot/docker/delivery.env.example ${s3}/delivery.env.example`,
-    `aws s3 cp ${flags} source/openbot/docker/compose.delivery.yml ${s3}/compose.delivery.yml`,
+    `aws s3 cp ${flags} source/xiongbao/docker/delivery.env.example ${s3}/delivery.env.example`,
+    `aws s3 cp ${flags} source/xiongbao/docker/compose.delivery.yml ${s3}/compose.delivery.yml`,
   ]);
   // Half-configured (the region included: it signs every request, there is no default), or a
   // plain-http endpoint: it names what is wrong and uploads nothing.
@@ -1702,7 +1702,7 @@ test("the record and the samples go up to our download page before the GitHub Re
     ref: expression("github.sha"),
     "persist-credentials": false,
     path: "source",
-    "sparse-checkout": "openbot/docker",
+    "sparse-checkout": "xiongbao/docker",
   });
 });
 
@@ -2087,9 +2087,9 @@ test("credentials never appear on a command line", () => {
   // The upload hands its keys to aws through the environment only.
   const cwd = scratch();
   writeFileSync(join(cwd, "container-images.json"), "{}");
-  mkdirSync(join(cwd, "source", "openbot", "docker"), { recursive: true });
+  mkdirSync(join(cwd, "source", "xiongbao", "docker"), { recursive: true });
   for (const f of ["delivery.env.example", "compose.delivery.yml"])
-    writeFileSync(join(cwd, "source", "openbot", "docker", f), f);
+    writeFileSync(join(cwd, "source", "xiongbao", "docker", f), f);
   const aws = stubs({
     aws: `[ "$1" != s3 ] || printf '%s|%s\\n' "$AWS_ACCESS_KEY_ID" "$AWS_SECRET_ACCESS_KEY" >> ${JSON.stringify(join(cwd, "keys"))}`,
   });
@@ -2285,9 +2285,15 @@ test("clean-deploy fetches from our download page when configured", () => {
   expect(rolesBefore.status).toBe(0);
   expect(rolesBefore.curl.length).toBe(1);
   expect(rolesBefore.curl[0]).toEndWith(
-    " https://raw.githubusercontent.com/o/r/v0.2.0/openbot/docker/delivery.env.example",
+    " https://raw.githubusercontent.com/o/r/v0.2.0/xiongbao/docker/delivery.env.example",
   );
   expect(rolesBefore.env).toContain("EMBEDDED_POSTGRES=off");
+  // A tag cut before the directory rename is fetched by its own path (product-dir, below).
+  const rolesOldTag = roles({ PRODUCT_DIR: "openbot" });
+  expect(rolesOldTag.status).toBe(0);
+  expect(rolesOldTag.curl[0]).toEndWith(
+    " https://raw.githubusercontent.com/o/r/v0.2.0/openbot/docker/delivery.env.example",
+  );
   // Already fetched from our download page: roles fetches nothing and switches that file over.
   const rolesAfter = roles({}, "FROM_OUR_PAGE=1\nEMBEDDED_POSTGRES=on\n");
   expect(rolesAfter.status).toBe(0);
@@ -2388,4 +2394,47 @@ test("clean-deploy fetches from our download page when configured", () => {
   );
   const check = step("linux", "digest", cleanDeploy);
   expect(check.run).toContain(`"\${expected%@*}:$TAG"`);
+});
+
+test("clean-deploy finds the product directory of the tag under either name", () => {
+  const linuxSteps = cleanDeploy.jobs.linux.steps;
+  const product = step("linux", "product-dir", cleanDeploy);
+  const checkout = linuxSteps.findIndex((s) =>
+    s.uses?.startsWith("actions/checkout@"),
+  );
+  // Right after the tagged checkout, before anything reads source/xiongbao.
+  expect(linuxSteps.indexOf(product)).toBe(checkout + 1);
+  const tagged = (name) => {
+    const cwd = scratch();
+    if (name)
+      mkdirSync(join(cwd, "source", name, "scripts"), { recursive: true });
+    const env = join(scratch(), "github-env");
+    writeFileSync(env, "");
+    const result = run(
+      "linux",
+      "product-dir",
+      { TAG: "v0.2.0", GITHUB_ENV: env },
+      cwd,
+      process.env.PATH,
+      cleanDeploy,
+    );
+    return {
+      ...result,
+      env: readFileSync(env, "utf8"),
+      moved: existsSync(join(cwd, "source", "xiongbao", "scripts")),
+      left: existsSync(join(cwd, "source", "openbot")),
+    };
+  };
+  const current = tagged("xiongbao");
+  expect(current.status).toBe(0);
+  expect(current.env).toBe("PRODUCT_DIR=xiongbao\n");
+  expect(current.moved).toBe(true);
+  const old = tagged("openbot");
+  expect(old.status).toBe(0);
+  expect(old.env).toBe("PRODUCT_DIR=openbot\n");
+  expect(old.moved).toBe(true);
+  expect(old.left).toBe(false);
+  const neither = tagged(null);
+  expect(neither.status).not.toBe(0);
+  expect(neither.log).toContain("neither xiongbao/ nor openbot/");
 });

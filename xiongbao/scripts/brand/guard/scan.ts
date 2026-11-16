@@ -12,8 +12,14 @@ import { CRYPTO_NAMES, isKnownEnvName } from "./env-names";
  * brand-leak-allowlist.json. An entry that stops matching fails too, so the list only shrinks.
  */
 
-// openbot/ (this file lives in openbot/scripts/brand/guard/).
+// xiongbao/ (this file lives in xiongbao/scripts/brand/guard/).
 export const REPO = new URL("../../..", import.meta.url).pathname;
+/**
+ * The name of that directory under the repository root, newest first, for reading it at a git ref. It
+ * was renamed from openbot/ to xiongbao/: a ref from before that (the base of the rename's own pull
+ * request, an older branch) still has it under the former name.
+ */
+export const PRODUCT_DIRS = ["xiongbao", "openbot"] as const;
 export const BRAND = /OpenBot|CopilotKit|copilotkit\.ai|qoder/i;
 export const TEXT_FILE = /\.(ts|tsx|js|mjs|cjs|jsx|rs|json|html|css|svg|cs)$/;
 

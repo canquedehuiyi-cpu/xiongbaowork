@@ -6,7 +6,7 @@ verify, B3 baseline, B4 report) on branch `codex/workbuddy-cloud-validation-2026
 
 ## Usage
 
-    python3 openbot/scripts/cloud-dev/doctor.py --repo-root <repo> --format json|markdown
+    python3 xiongbao/scripts/cloud-dev/doctor.py --repo-root <repo> --format json|markdown
 
 Exit codes (task book 51660868; one policy shared with `reporting.py`):
 
@@ -25,14 +25,14 @@ otherwise "pass" -> 0 (optional blocked/skipped/unverified never block).
 
 | check | required | what it verifies |
 | --- | --- | --- |
-| `repo_layout_openbot_package_json` | yes | `openbot/package.json` (workspace root) exists |
+| `repo_layout_openbot_package_json` | yes | `xiongbao/package.json` (workspace root) exists |
 | `repo_layout_root_package_json_absent` | yes | no `package.json` at repo root |
-| `package_manager_declaration` | yes | `packageManager == bun@1.3.14` in `openbot/package.json` |
-| `bun_lock_identity` | yes | `openbot/bun.lock` size 453991B and pinned SHA256 |
+| `package_manager_declaration` | yes | `packageManager == bun@1.3.14` in `xiongbao/package.json` |
+| `bun_lock_identity` | yes | `xiongbao/bun.lock` size 453991B and pinned SHA256 |
 | `runtime_python` | yes | the running interpreter reports its version |
 | `runtime_git` / `bun` / `node` / `npm` / `cargo` / `docker` | bun required, others optional | fixed argv `--version` probes |
 | `git_identity` | no | guarded pure-file read of `.git` HEAD (branch + 40/64-hex commit) |
-| `typescript_dependency` | no | locked TypeScript version `5.9.3` in `openbot/node_modules/typescript/package.json` |
+| `typescript_dependency` | no | locked TypeScript version `5.9.3` in `xiongbao/node_modules/typescript/package.json` |
 | `env_var_names` | no | informational PATH/HOME presence and relevant variable NAMES only (values never reported) |
 
 ## Safety design
@@ -45,9 +45,9 @@ otherwise "pass" -> 0 (optional blocked/skipped/unverified never block).
 
 ## Tests
 
-    python3 -m unittest discover -s openbot/scripts/cloud-dev/tests
+    python3 -m unittest discover -s xiongbao/scripts/cloud-dev/tests
 
-(from the repository root; or `-s tests` from `openbot/scripts/cloud-dev`).
+(from the repository root; or `-s tests` from `xiongbao/scripts/cloud-dev`).
 All tests are stdlib-only and deterministic: probes are injected (`FakeProber`),
 CLI paths are driven through `main(argv, prober=...)`, and the subprocess
 boundary is verified by capturing the real `subprocess.run` kwargs (resolved

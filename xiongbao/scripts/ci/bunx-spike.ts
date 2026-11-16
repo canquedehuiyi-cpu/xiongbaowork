@@ -2,8 +2,8 @@
 /**
  * Can the compiled runner stand in for `bun x`? (device app discovery, sub-project 3, PR-0)
  *
- *   cd openbot && bun scripts/ci/bunx-spike.ts            # Bun's own cache
- *   cd openbot && BUNX_SPIKE_COLD=1 bun scripts/ci/bunx-spike.ts   # an empty cache: a real download
+ *   cd xiongbao && bun scripts/ci/bunx-spike.ts            # Bun's own cache
+ *   cd xiongbao && BUNX_SPIKE_COLD=1 bun scripts/ci/bunx-spike.ts   # an empty cache: a real download
  *
  * Discovery rewrites the `npx` / `bunx` apps it finds to run on the Bun the device app already
  * carries: the runner is a `bun build --compile` binary, and a compiled Bun binary started with

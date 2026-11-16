@@ -67,7 +67,7 @@ test("compile args do not define __dirname or __filename", () => {
   expect(args).toContain("--minify");
 });
 
-test("the compile runs in the openbot directory, so module paths in the binary are relative", () => {
+test("the compile runs in the xiongbao directory, so module paths in the binary are relative", () => {
   expect(existsSync(join(BUILD_CWD, "runner", "src", "index.ts"))).toBe(true);
 });
 

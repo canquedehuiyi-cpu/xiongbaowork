@@ -246,7 +246,7 @@ const choiceClass = (pressed: boolean) =>
   }`;
 
 /**
- * Where a card opens, as the server resolved it (`openbot/docs/contracts/tasks-open-field.md`).
+ * Where a card opens, as the server resolved it (`xiongbao/docs/contracts/tasks-open-field.md`).
  *
  * `channelRef` alone cannot answer this: a conversation's card stores its THREAD id there, while the
  * screen that shows it is keyed by the CHANNEL, and a crew's step has no channel at all. Linking the

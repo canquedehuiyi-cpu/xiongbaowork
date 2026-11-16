@@ -18,4 +18,4 @@
 
 在 GitHub 云端会话中选用 `codex/ui-design-studio-reference`，从 [完整实施任务书](IMPLEMENTATION.zh-CN.md) 开始，依照现有业务路由和组件实施全站改版。
 
-`index.html`、`theme.css`、`preview.js` 和熊宝图片共同组成离线设计预览。检出本目录后可在浏览器打开 `index.html` 并切换五个页面。实际应用实现位于 `openbot/app`。
+`index.html`、`theme.css`、`preview.js` 和熊宝图片共同组成离线设计预览。检出本目录后可在浏览器打开 `index.html` 并切换五个页面。实际应用实现位于 `xiongbao/app`。

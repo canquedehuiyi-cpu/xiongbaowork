@@ -37,7 +37,7 @@ set -euo pipefail
 
 : "${EVIDENCE:?EVIDENCE is the evidence file}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-openbot="$(cd "$here/../.." && pwd)"
+product="$(cd "$here/../.." && pwd)"
 RUNNER_BIN=${RUNNER_BIN:-/usr/bin/xiongbao-runner}
 APP_BIN=${APP_BIN:-/usr/bin/xiongbao-device}
 GIT_PROBE_URL=${GIT_PROBE_URL:-https://github.com/octocat/Hello-World.git}
@@ -140,7 +140,7 @@ phase_server() {
   : "${LOG_DIR:?LOG_DIR is where the server log goes}"
   : "${OWNER_DATABASE_URL:?}" "${APP_DATABASE_URL:?}" "${ROLE_WRITER_URL:?}"
   mkdir -p "$LOG_DIR"
-  (cd "$openbot" && DATABASE_URL="$OWNER_DATABASE_URL" bun run --cwd server scripts/migrate.ts)
+  (cd "$product" && DATABASE_URL="$OWNER_DATABASE_URL" bun run --cwd server scripts/migrate.ts)
   psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
   psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
   local pidfile="$LOG_DIR/server.pid" key secret
@@ -149,7 +149,7 @@ phase_server() {
   echo "::add-mask::$key"
   echo "::add-mask::$secret"
   (
-    cd "$openbot/server"
+    cd "$product/server"
     export KEY_ENCRYPTION_KEY="$key" BETTER_AUTH_SECRET="$secret"
     export DATABASE_URL="$APP_DATABASE_URL" ROLE_WRITER_DATABASE_URL="$ROLE_WRITER_URL"
     export BETTER_AUTH_URL="$ORIGIN" OPENBOT_PUBLIC_URL="$ORIGIN" PORT="${ORIGIN##*:}"

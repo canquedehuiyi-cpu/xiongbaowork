@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { type AllowEntry, CATEGORIES } from "./guard/allowlist";
 import type { ArtifactEntry } from "./guard/artifact-words";
 import type { BudgetRow } from "./guard/budget";
-import { REPO } from "./guard/scan";
+import { PRODUCT_DIRS, REPO } from "./guard/scan";
 import { scanExtension, scanRunner, scanWeb } from "./scan-artifact";
 
 export type Inputs = {
@@ -210,11 +210,14 @@ if (import.meta.main) {
   try {
     const point = git(["merge-base", "HEAD", baseRef]).trim();
     base = load((p) => {
-      try {
-        return git(["show", `${point}:openbot/${p}`]);
-      } catch {
-        return undefined;
+      for (const dir of PRODUCT_DIRS) {
+        try {
+          return git(["show", `${point}:${dir}/${p}`]);
+        } catch {
+          // not under this name at the base
+        }
       }
+      return undefined;
     });
   } catch {
     console.error(

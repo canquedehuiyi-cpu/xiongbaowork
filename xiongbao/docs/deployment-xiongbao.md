@@ -1,7 +1,7 @@
 # 熊宝数字员工部署手册
 
 本手册面向交付部署。客户部署拉取发布镜像 `ghcr.io/canquedehuiyi-cpu/xiongbaowork`，
-不需要源码、Git 或本机构建；只有[附录：从源码构建](#附录从源码构建)需要进入 `openbot/`。
+不需要源码、Git 或本机构建；只有[附录：从源码构建](#附录从源码构建)需要进入 `xiongbao/`。
 本机历史端口、迁移研发与测试经验在[开发环境笔记](development-environment-xiongbao.md)。
 对外发布仍需 DoD-1/2/3/8 的证据，当前记录见[B 线交付验证](track-b-delivery-evidence.md)。
 全新 WSL、Windows PowerShell 与独立 Compose 的实际命令和耗时见
@@ -32,7 +32,7 @@ Release 附件 `container-images.json`，生成密钥，并把 `OPENBOT_IMAGE` �
 
 ```bash
 OPENBOT_TAG=v0.2.11
-raw="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker"
+raw="https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/${OPENBOT_TAG}/xiongbao/docker"
 mkdir -p docker
 curl --fail --silent --show-error --location -o docker/compose.delivery.yml "$raw/compose.delivery.yml"
 curl --fail --silent --show-error --location -o .env.delivery "$raw/delivery.env.example"
@@ -58,7 +58,7 @@ docker compose --project-name xiongbao-local --env-file .env.delivery \
 PowerShell 可把命令写在一行，或用反引号续行。修改宿主端口时，
 在 `.env.delivery` 设 `OPENBOT_PORT=新端口` 并同步 `OPENBOT_PUBLIC_URL`。
 停服用同一 `--project-name` 的 `stop`；`down` 会删容器而保留卷，禁止在升级时加 `-v`。
-开发用 `openbot/docker-compose.yml` 不作为交付起法，它还包含上游开发服务和宿主进程假设。
+开发用 `xiongbao/docker-compose.yml` 不作为交付起法，它还包含上游开发服务和宿主进程假设。
 
 ## 3. 对外部署与账号
 
@@ -418,13 +418,13 @@ runner 上、不登录 GHCR，原样执行 README 的 Linux 命令块，核对�
 ## 附录：从源码构建
 
 只有修改源码或更换构建期品牌包时才在本机构建；这样得到的镜像没有发布 digest 和来源证明，
-不能作为交付验收证据。从仓库根进入 `openbot/`：
+不能作为交付验收证据。从仓库根进入 `xiongbao/`：
 
 ```bash
 docker build --build-arg TENANT_PACKAGE_DIR=../examples/xiongbao \
   -f Dockerfile -t xiongbao-digital-employee:local .
 ```
 
-品牌包必须在 build context 内（这里是 `openbot/`）；相对路径以 server 为基准。
+品牌包必须在 build context 内（这里是 `xiongbao/`）；相对路径以 server 为基准。
 自定义包要同时配置构建参数和运行期 TENANT_PACKAGE_DIR。之后把上文命令中的镜像换成
 `xiongbao-digital-employee:local`（单容器跳过 `docker pull`）；Compose 未设置 `OPENBOT_IMAGE` 时默认使用这个本机标签。

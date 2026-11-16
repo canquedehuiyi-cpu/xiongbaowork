@@ -680,11 +680,13 @@ def run(executable, args, cwd, timeout, env=None):
 
 def check_repository(repo, lock):
     repo = Path(repo).resolve(strict=True)
-    builder = repo / "openbot/desktop/scripts/build-device-runtime.ts"
+    # The product directory was renamed from openbot/ to xiongbao/; the pinned sourceSHA may predate that.
+    product = repo / "xiongbao" if (repo / "xiongbao").is_dir() else repo / "openbot"
+    builder = product / "desktop/scripts/build-device-runtime.ts"
     raw = builder.read_bytes()
     gitblob = hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
     need(gitblob == lock["builderBlob"], "BUILDER_SOURCE_CHANGED")
-    cargo = repo / "openbot/desktop/src-tauri/Cargo.lock"
+    cargo = product / "desktop/src-tauri/Cargo.lock"
     raw = cargo.read_bytes()
     need(hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() ==
          lock["cargoLockBlob"], "CARGO_LOCK_CHANGED")

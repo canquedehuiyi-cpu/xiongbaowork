@@ -5,16 +5,16 @@
 # 这里只创建自己的容器，一律 `openbot-g2-*` / `openbot-echo-bot` 前缀，绝不碰别人的栈。
 #
 # 用法：
-#   openbot/scripts/g2-stack.sh up       # 起 server + app + computer(+ echo)
-#   openbot/scripts/g2-stack.sh status    # 谁活着，以及命名空间有没有错位（诊断见 check）
-#   openbot/scripts/g2-stack.sh down      # 只收自己的容器
+#   xiongbao/scripts/g2-stack.sh up       # 起 server + app + computer(+ echo)
+#   xiongbao/scripts/g2-stack.sh status    # 谁活着，以及命名空间有没有错位（诊断见 check）
+#   xiongbao/scripts/g2-stack.sh down      # 只收自己的容器
 #
 # 密钥：一次性开发值，**运行时生成、只作为容器环境变量传入**，不落任何文件、不进 git。
 set -euo pipefail
 
 command="${1:-up}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-B="$repo_root/openbot"
+B="$repo_root/xiongbao"
 IMAGE=openbot-dev
 COMPUTER_IMAGE=openbot-agent-computer:latest
 DB_URL="postgres://openbot_app:openbot@host.docker.internal:5433/openbot"

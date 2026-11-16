@@ -15,7 +15,7 @@ import {
   upstreamReader,
   verifySyncPoint,
 } from "./new-lines";
-import { REPO } from "./scan";
+import { PRODUCT_DIRS, REPO } from "./scan";
 
 export type ArtifactEntryKey = string; // `word` or `prefix:<prefix>`
 
@@ -178,12 +178,26 @@ const git = (args: string[], cwd: string): string =>
   });
 
 const show = (ref: string, path: string): string | undefined => {
-  try {
-    return git(["show", `${ref}:openbot/${path}`], REPO);
-  } catch {
-    return undefined;
+  for (const dir of PRODUCT_DIRS) {
+    try {
+      return git(["show", `${ref}:${dir}/${path}`], REPO);
+    } catch {
+      // not under this name at that ref
+    }
   }
+  return undefined;
 };
+
+/** Whether `ref` has `path` (relative to the product directory) under either name of that directory. */
+const hasAt = (ref: string, path: string, top: string): boolean =>
+  PRODUCT_DIRS.some((dir) => {
+    try {
+      git(["cat-file", "-e", `${ref}:${dir}/${path}`], top);
+      return true;
+    } catch {
+      return false;
+    }
+  });
 
 /**
  * The ratchet binds from the commit that introduces it: before that commit the baseline files were being
@@ -192,16 +206,19 @@ const show = (ref: string, path: string): string | undefined => {
  * introducing commit itself is the baseline; later commits are still held to it.
  */
 export function ratchetBase(base: string, head: string, repo = REPO): string {
-  const path = "openbot/scripts/brand/guard/ratchet.ts";
+  const path = "scripts/brand/guard/ratchet.ts";
   const top = git(["rev-parse", "--show-toplevel"], repo).trim();
-  try {
-    git(["cat-file", "-e", `${base}:${path}`], top);
-    return base;
-  } catch {
-    // introduced by this PR
-  }
+  if (hasAt(base, path, top)) return base;
+  // introduced by this PR
   const added = git(
-    ["log", "--diff-filter=A", "--format=%H", `${base}..${head}`, "--", path],
+    [
+      "log",
+      "--diff-filter=A",
+      "--format=%H",
+      `${base}..${head}`,
+      "--",
+      ...PRODUCT_DIRS.map((dir) => `${dir}/${path}`),
+    ],
     top,
   )
     .trim()
@@ -212,15 +229,9 @@ export function ratchetBase(base: string, head: string, repo = REPO): string {
     throw new Error(
       `cannot find the commit that introduces ${path} between ${base} and ${head}; the ratchet has no baseline to compare with`,
     );
-  try {
-    git(
-      ["cat-file", "-e", `${added}^:openbot/app/tests/brand-budget.json`],
-      top,
-    );
-    return `${added}^`;
-  } catch {
-    return added;
-  }
+  return hasAt(`${added}^`, "app/tests/brand-budget.json", top)
+    ? `${added}^`
+    : added;
 }
 
 const APPROVALS = join(REPO, "scripts/brand/guard/ratchet-approvals.json");
@@ -230,7 +241,7 @@ const wordKeys = (text: string): ArtifactEntryKey[] =>
     e.word !== undefined ? versionless(e.word) : `prefix:${e.prefix}`,
   );
 
-/** The work-tree files against `base`, read with `git show <base>:openbot/<path>`. */
+/** The work-tree files against `base`, read with `git show <base>:xiongbao/<path>` (or `openbot/<path>` at a base from before the rename). */
 export function loadRatchetInput(base: string): RatchetInput {
   const json = <T>(text: string | undefined, none: T): T =>
     text === undefined ? none : (JSON.parse(text) as T);

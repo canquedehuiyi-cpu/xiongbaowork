@@ -34,7 +34,7 @@
  *                                 (default: ./e2e-artifacts)
  *   E2E_SERVER_PORT               default: a free port
  *
- * Usage (from openbot/): bun scripts/e2e/staffing-lifecycle.ts
+ * Usage (from xiongbao/): bun scripts/e2e/staffing-lifecycle.ts
  */
 
 import { randomBytes, randomUUID } from "node:crypto";

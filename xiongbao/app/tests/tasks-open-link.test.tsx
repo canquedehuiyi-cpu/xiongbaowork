@@ -16,7 +16,7 @@ import { settleReactWork } from "./settle-react-work";
 /**
  * Spec A6 on the card: 查看详情 lands on the screen that holds the work (audit N1).
  *
- * The server says where with `open` (`openbot/docs/contracts/tasks-open-field.md`); the screen only
+ * The server says where with `open` (`xiongbao/docs/contracts/tasks-open-field.md`); the screen only
  * has to draw it. Before this, every conversation's card linked its THREAD id as a channel id and
  * opened "Could not load this channel.", and no test noticed because none asked where a link goes.
  */

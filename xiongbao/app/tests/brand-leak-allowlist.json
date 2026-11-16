@@ -781,13 +781,6 @@
     "device": true
   },
   {
-    "file": "desktop-device/src-tauri/src/main.rs",
-    "text": "\"would collide with openbot/desktop\"",
-    "reason": "developer-only: assertion message in a Rust unit test",
-    "category": "developer-only",
-    "plan": "keep"
-  },
-  {
     "file": "desktop-device/src-tauri/src/sidecar.rs",
     "text": "LEGACY_SIDECAR: &str = \"openbot-runner\"",
     "reason": "persisted-identifier: old sidecar name the cleanup looks for on upgraded machines",

@@ -14,10 +14,10 @@
 
 ## 1. 启动 Vite 开发服务器
 
-在 `openbot/app` 目录下执行（必须带 `--host 127.0.0.1`，此环境下 IPv6 `::` 监听会失败）：
+在 `xiongbao/app` 目录下执行（必须带 `--host 127.0.0.1`，此环境下 IPv6 `::` 监听会失败）：
 
 ```sh
-cd openbot/app
+cd xiongbao/app
 APP_PORT=3910 SERVER_PORT=3911 bun --bun node_modules/vite/bin/vite.js --host 127.0.0.1
 ```
 
@@ -26,7 +26,7 @@ APP_PORT=3910 SERVER_PORT=3911 bun --bun node_modules/vite/bin/vite.js --host 12
 ## 2. 截图
 
 ```sh
-cd openbot/app
+cd xiongbao/app
 bun tests/parity/capture.ts \
   [--base http://127.0.0.1:3910] \
   [--out <目录>] \
@@ -84,7 +84,7 @@ bun tests/parity/capture.ts \
 ## 4. 对比
 
 ```sh
-cd openbot/app
+cd xiongbao/app
 bun tests/parity/diff.ts [--out <目录>] [--scenario data] [--theme dark] [--threshold 8]
 ```
 
@@ -98,7 +98,7 @@ bun tests/parity/diff.ts [--out <目录>] [--scenario data] [--theme dark] [--th
 ## 5. 校验
 
 ```sh
-cd openbot
+cd xiongbao
 bun run --cwd app typecheck          # fixtures 的形状与应用类型一致
 bunx biome lint app/tests/parity
 bunx biome format app/tests/parity

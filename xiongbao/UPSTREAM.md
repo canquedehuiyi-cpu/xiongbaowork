@@ -1,6 +1,6 @@
 # 上游同步点
 
-本目录（`openbot/`）是 [CopilotKit/openbot](https://github.com/CopilotKit/openbot) 的二次开发版本，
+本目录（`xiongbao/`）是 [CopilotKit/openbot](https://github.com/CopilotKit/openbot) 的二次开发版本，
 在保留上游全部功能的基础上叠加熊宝的多租户、计费、员工/群组、设备端等能力。
 
 | 项 | 值 |
@@ -13,8 +13,11 @@
 不导入上游历史。每一阶段用三方合并，以「上次同步点」为共同祖先：
 
 ```bash
-git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 openbot 子树提交> <上游目标提交>
+git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 xiongbao 子树提交> <上游目标提交>
 ```
+
+本目录在 2026-11-16 由 `openbot/` 改名为 `xiongbao/`，内部结构不变。目录名和上游不同不影响三方合并：
+合并的是目录内容的树（`xiongbao` 子树对应上游仓库根），不看这个目录在本仓库里叫什么。
 
 解决冲突后作为普通提交进 PR，并更新上表。冲突的取舍原则：
 

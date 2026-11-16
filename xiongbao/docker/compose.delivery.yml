@@ -1,4 +1,4 @@
-# Run from openbot/: docker compose --project-name xiongbao-local
+# Run from xiongbao/: docker compose --project-name xiongbao-local
 # --env-file .env.delivery -f docker/compose.delivery.yml up -d
 services:
   app:

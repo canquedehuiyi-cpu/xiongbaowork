@@ -53,12 +53,12 @@ LOCK_BYTES = b"# cloud-dev fixture lock\n"
 def make_fixture(package_manager="bun@1.3.14", root_package_json=False,
                  ts_version=None, git_branch=None, git_commit=None):
     root = tempfile.mkdtemp(prefix="cloud-dev-doctor-fixture-")
-    openbot = os.path.join(root, "openbot")
-    os.makedirs(openbot)
-    with open(os.path.join(openbot, "package.json"), "w", encoding="utf-8") as handle:
-        json.dump({"name": "openbot", "private": True,
+    product = os.path.join(root, "xiongbao")
+    os.makedirs(product)
+    with open(os.path.join(product, "package.json"), "w", encoding="utf-8") as handle:
+        json.dump({"name": "xiongbao", "private": True,
                    "packageManager": package_manager}, handle)
-    with open(os.path.join(openbot, "bun.lock"), "wb") as handle:
+    with open(os.path.join(product, "bun.lock"), "wb") as handle:
         handle.write(LOCK_BYTES)
     doctor.PINNED["bun_lock_size"] = len(LOCK_BYTES)
     doctor.PINNED["bun_lock_sha256"] = hashlib.sha256(LOCK_BYTES).hexdigest()
@@ -66,7 +66,7 @@ def make_fixture(package_manager="bun@1.3.14", root_package_json=False,
         with open(os.path.join(root, "package.json"), "w", encoding="utf-8") as handle:
             handle.write("{}")
     if ts_version is not None:
-        ts_dir = os.path.join(openbot, "node_modules", "typescript")
+        ts_dir = os.path.join(product, "node_modules", "typescript")
         os.makedirs(ts_dir)
         with open(os.path.join(ts_dir, "package.json"), "w", encoding="utf-8") as handle:
             json.dump({"name": "typescript", "version": ts_version}, handle)
@@ -235,7 +235,7 @@ class DoctorReportTests(PinGuard):
         with self.assertRaises(doctor.PathNotAllowed):
             doctor.resolve_read(root, "../../etc/passwd")
         with self.assertRaises(doctor.PathNotAllowed):
-            doctor.resolve_read(root, "openbot/../server/secrets.json")
+            doctor.resolve_read(root, "xiongbao/../server/secrets.json")
 
     def test_allowlist_symlink_escape_is_refused(self):
         root = make_fixture()
@@ -245,14 +245,14 @@ class DoctorReportTests(PinGuard):
         outside = os.path.join(outside_dir, "outside.lock")
         with open(outside, "wb") as handle:
             handle.write(b"outside-bytes")
-        lock = os.path.join(root, "openbot", "bun.lock")
+        lock = os.path.join(root, "xiongbao", "bun.lock")
         os.remove(lock)
         try:
             os.symlink(outside, lock)
         except (OSError, NotImplementedError):
             self.skipTest("symlink not available on this platform/account")
         with self.assertRaises(doctor.PathNotAllowed):
-            doctor.resolve_read(root, "openbot/bun.lock")
+            doctor.resolve_read(root, "xiongbao/bun.lock")
         report = doctor.build_report(root, prober=FakeProber({"bun": ("ok", "1.3.14")}))
         bun_lock = self.by_id(report)["bun_lock_identity"]
         self.assertEqual(bun_lock["status"], "failed")
@@ -469,8 +469,8 @@ class CodexBoundaryRegressionTests(PinGuard):
     def test_json_object_shapes_do_not_crash(self):
         for value in (None, [], "text", 7, True):
             root = self.fixture()
-            for rel, call in (("openbot/package.json", doctor.check_package_manager),
-                              ("openbot/node_modules/typescript/package.json", doctor.check_typescript_dependency)):
+            for rel, call in (("xiongbao/package.json", doctor.check_package_manager),
+                              ("xiongbao/node_modules/typescript/package.json", doctor.check_typescript_dependency)):
                 path = os.path.join(root, rel)
                 os.makedirs(os.path.dirname(path), exist_ok=True)
                 with open(path, "w", encoding="utf-8") as handle:
@@ -496,7 +496,7 @@ class CodexBoundaryRegressionTests(PinGuard):
         secret = os.path.join(root, ".env")
         with open(secret, "w", encoding="utf-8") as handle:
             handle.write("fixture sentinel only")
-        for rel in ("openbot/package.json", "openbot/bun.lock"):
+        for rel in ("xiongbao/package.json", "xiongbao/bun.lock"):
             path = os.path.join(root, rel)
             os.remove(path)
             os.symlink(secret, path)

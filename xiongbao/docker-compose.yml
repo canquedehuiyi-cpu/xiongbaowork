@@ -1,3 +1,7 @@
+# The project name was the directory's name, `openbot`, until that directory became xiongbao/. Pinned
+# here so containers, volumes and SPIRE_AGENT_SOCKET_VOLUME's default below keep the same names (-p or
+# COMPOSE_PROJECT_NAME still override it).
+name: openbot
 services:
   postgres:
     image: pgvector/pgvector:pg17

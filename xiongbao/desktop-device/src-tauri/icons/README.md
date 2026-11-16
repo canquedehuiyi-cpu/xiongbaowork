@@ -1,10 +1,10 @@
 # Device app icons
 
-Generated from `openbot/app/src/assets/brand/xiongbao-logo-256.png` (256x256 RGBA). The source is only
+Generated from `xiongbao/app/src/assets/brand/xiongbao-logo-256.png` (256x256 RGBA). The source is only
 256px, so the larger sizes (`128x128@2x.png`, and the 512/1024 entries Pillow writes into `icon.icns`)
 are upscaled and a little soft. Once a 1024px source exists, point `src` at it and rerun the same command.
 
-Run from `openbot/desktop-device/src-tauri`:
+Run from `xiongbao/desktop-device/src-tauri`:
 
 ```sh
 python3 - <<'PY'

@@ -1,5 +1,5 @@
 /*
- * The new-lines check: every line a PR adds under openbot/ is scanned like the rest of the source, comments
+ * The new-lines check: every line a PR adds under xiongbao/ is scanned like the rest of the source, comments
  * included, unless the upstream already has the same line at the same path (a sync brings those in).
  */
 import { execFileSync } from "node:child_process";
@@ -11,11 +11,12 @@ import {
   EXEMPT_PATHS,
   type Finding,
   masked,
+  PRODUCT_DIRS,
   REPO,
   TEXT_FILE,
 } from "./scan";
 
-export type AddedLine = { file: string; number: number; line: string }; // file relative to openbot/
+export type AddedLine = { file: string; number: number; line: string }; // file relative to xiongbao/
 export type SyncPoint = { commit: string; repository: string };
 
 const PROXY_VARS = [
@@ -69,7 +70,7 @@ const git = (args: string[], cwd = REPO): string => {
   }
 };
 
-/** Parses the output of `git diff -U0 <base>...<head> -- openbot/`. */
+/** Parses the output of `git diff -U0 <base>...<head> -- xiongbao/ openbot/` (see diffAddedLines). */
 export function addedLines(diff: string): AddedLine[] {
   const out: AddedLine[] = [];
   let file: string | undefined;
@@ -85,9 +86,8 @@ export function addedLines(diff: string): AddedLine[] {
     if (header) {
       if (raw.startsWith("+++ ")) {
         const path = raw.slice(4).split("\t")[0].replace(/^b\//, "");
-        file = path.startsWith("openbot/")
-          ? path.slice("openbot/".length)
-          : undefined;
+        const dir = PRODUCT_DIRS.find((d) => path.startsWith(`${d}/`));
+        file = dir === undefined ? undefined : path.slice(dir.length + 1);
         continue;
       }
       if (!raw.startsWith("@@")) continue;
@@ -120,6 +120,8 @@ export function baseRef(env: Record<string, string | undefined>): {
   }
 }
 
+// Both names of the product directory, with rename detection: a base from before the rename has it as
+// openbot/, and a file that only moved adds no line (only what changed in it does).
 export function diffAddedLines(base: string, head: string): AddedLine[] {
   const top = git(["rev-parse", "--show-toplevel"]).trim();
   return addedLines(
@@ -131,10 +133,11 @@ export function diffAddedLines(base: string, head: string): AddedLine[] {
         "--no-color",
         "--src-prefix=a/",
         "--dst-prefix=b/",
+        "-M",
         "-U0",
         `${base}...${head}`,
         "--",
-        "openbot/",
+        ...PRODUCT_DIRS.map((d) => `${d}/`),
       ],
       top,
     ),
@@ -273,7 +276,7 @@ export function verifySyncPoint(
 }
 
 /**
- * Reads files of the sync-point commit (`openbot/<p>` here is `<p>` there). The commit is always fetched from
+ * Reads files of the sync-point commit (`xiongbao/<p>` here is `<p>` there). The commit is always fetched from
  * `repository`, whatever this repository already holds; if that fails this throws: a check that cannot
  * compare must not pass.
  */

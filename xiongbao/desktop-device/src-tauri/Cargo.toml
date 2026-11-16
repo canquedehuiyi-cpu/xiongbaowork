@@ -5,7 +5,7 @@ description = "熊宝数字员工 设备端"
 edition = "2021"
 rust-version = "1.77"
 
-# Its own Cargo.lock, started from openbot/desktop/src-tauri/Cargo.lock so every crate both apps use
+# Its own Cargo.lock, started from xiongbao/desktop/src-tauri/Cargo.lock so every crate both apps use
 # resolves to the same version. Nothing here is new to the repository: tauri, single-instance, serde,
 # libc and windows-sys are all already locked there. Autostart is written by hand (src/autostart.rs)
 # rather than through tauri-plugin-autostart, which needs auto-launch (not in that lock) and, in its

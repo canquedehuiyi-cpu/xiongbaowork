@@ -17,7 +17,7 @@
 | 7 准备首个发布 | 已完成 | canquedehuiyi-cpu/xiongbaowork#246：`package.json` 0.2.0，CHANGELOG `## 0.2.0` |
 | 8 打 tag | **已完成（正式版）** | `v0.2.0` → 「熊宝发布」运行 41989346546 全绿，正式 Release `v0.2.0` 已发，镜像 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:b76702a4…6686b1`。此前预发布 `v0.2.0-rc.1`（运行 41952108367） |
 | 9 GHCR 公开 | 已完成 | 发布的 digest 能匿名取到 manifest（HTTP 200） |
-| 10 G7 | Linux 已完成（CI 与真实服务器），Windows 待做 | `v0.2.0` 发布运行 41989346546 里 `g7-linux` 内置库、外部库两个 job 都通过。2026-11-06 在京东云 Ubuntu 22.04 上用正式镜像 `v0.2.0` 单容器部署：健康检查 200，注册并用 `grant-admin.ts` 设首位管理员（命令已在 #274 修正），部署级模型接 DeepSeek 后「我的分身」正常回答。踩到的坑写进 `openbot/docs/deployment-qoderwake.md` §5.1（#277）。Windows 需要一台 Win10/11 真机：手头的 Windows Server 2025 云主机不支持 WSL2/Docker |
+| 10 G7 | Linux 已完成（CI 与真实服务器），Windows 待做 | `v0.2.0` 发布运行 41989346546 里 `g7-linux` 内置库、外部库两个 job 都通过。2026-11-06 在京东云 Ubuntu 22.04 上用正式镜像 `v0.2.0` 单容器部署：健康检查 200，注册并用 `grant-admin.ts` 设首位管理员（命令已在 #274 修正），部署级模型接 DeepSeek 后「我的分身」正常回答。踩到的坑写进 `xiongbao/docs/deployment-qoderwake.md` §5.1（#277）。Windows 需要一台 Win10/11 真机：手头的 Windows Server 2025 云主机不支持 WSL2/Docker |
 | 11 G5 真机 | 通过（6 项全部通过，含 v0.2.1 上的批准执行；中文输出随设备端 `device-v0.2.1-rc.1` 修复并复测通过） | 设备端 `device-v0.2.0-rc.2` 装在 Windows 11 25H2（「峰哥工作站」）上，先配对到京东云 v0.2.0，2026-11-07 升级到 v0.2.1 复测；逐项记录见第 11 节「2026-11-06 实测」与「2026-11-07 v0.2.1 复测」 |
 | 12 F2 设备端 | 未签名内测版已发；全新机器安装检查已在 CI 自动通过；签名：已决定暂不购买（D3，见 12.7）；真人电脑证据待人工 | `device-v0.2.0-rc.1` 的 Windows job 失败，已由 canquedehuiyi-cpu/xiongbaowork#250 修复；`device-v0.2.0-rc.2` → 「熊宝设备端发布」运行 41963394570 全绿，预发布「熊宝数字员工 设备端 0.2.0（未签名内测版）」含 Windows 安装包、Linux deb 和 `SHA256SUMS`（下载复核通过）。签名身份（D3，12.2/12.4）和两台干净机器证据（12.6）待人工。全新托管机器（Ubuntu、Windows）上的安装、配对、启动退出、卸载检查已在 #266 的 CI 上首次实跑通过，此后每个 PR 和每次设备端发布都会跑。2026-11-07 `device-v0.2.1-rc.1`（含 #295 中文输出修复）→ 运行 42369464470 全绿，已在「峰哥工作站」覆盖安装并复测通过 |
 | 13 百度网盘来源 | 本人通过；第二人隔离待测 | 2026-11-07 在京东云部署（v0.2.1）实测：百度网盘开放平台应用「xiongbao」（软件 · 个人使用，已上线）已建，回调地址已填；AppKey/SecretKey 已登记；本人百度账号已授权；员工「我的分身」依次调用 `list_files`、`search_files`、`read_file_content`，读出只有本人网盘里才有的测试文件暗号。登记和授权当时因 `team:<key>` 编号缺陷走的是浏览器控制台，修复见 #315、#316。还差换另一个人验证读不到，见第 13 节「验收记录」。Google Drive 已决定暂不启用（2026-11-06） |
@@ -78,8 +78,8 @@ Actions → 「模型 E2E 计量对账」→ Run workflow，分支选 `main`，�
 ## 7. 准备首个发布
 
 1. 定版本号，例如 `0.2.0-rc.1`。
-2. 改 `openbot/package.json` 的 `version`，填**不带** `-rc` 的基础版本（如 `0.2.0`）。
-3. 在 `openbot/CHANGELOG.md` 里把 `## Unreleased` 改名为 `## 0.2.0`（与基础版本一致），内容不能为空。需要写进去的升级提醒：
+2. 改 `xiongbao/package.json` 的 `version`，填**不带** `-rc` 的基础版本（如 `0.2.0`）。
+3. 在 `xiongbao/CHANGELOG.md` 里把 `## Unreleased` 改名为 `## 0.2.0`（与基础版本一致），内容不能为空。需要写进去的升级提醒：
    - **`TENANT_RUNTIME` 生产默认改为 `device`（F6）。** Helm 升级后会切到 `device`；要保留原行为，设 `config.tenantRuntime=cloud`。
    - **新增迁移 0130（`avatar_sources`）和 0131（`agent_security_settings`，规则多了 `deny`）。**
    - **员工所有者设的收紧类规则现在对其他使用者也生效（SEC1 D9）。**
@@ -176,7 +176,7 @@ CI 里一直有三个未签名包可以下载试装：`device app unsigned deb`�
 | D6 | 自动更新 | **已决定（2026-11-04）：首版不做。** 没接 `tauri-plugin-updater`。发布说明会写"没有自动更新，新版需重新下载安装"，不需要 updater 密钥 |
 | D8 | 产品名和 identifier | **已决定（2026-11-04）：定为 `com.xiongbao.device`，不再是占位。** macOS 的签名和公证都绑在 identifier 上，首个签名版之后不要再改 |
 
-**不能用** `openbot/desktop/signing/azure-federation.json`：它指向上游仓库的签名身份。
+**不能用** `xiongbao/desktop/signing/azure-federation.json`：它指向上游仓库的签名身份。
 
 ### 12.2 申请 Windows 代码签名身份（A、B 二选一）
 
@@ -262,7 +262,7 @@ Settings → Environments → New environment，名称填 `device-release`：
 
 ### 12.5 打首个设备端标签 `device-v0.1.0`
 
-设备端的版本号取自 `openbot/package.json` 的 `version`，现在是 `0.1.0`，和服务端共用。标签的版本必须和打标签那个提交里的 `package.json` 一致。如果第 7 步已经把它改成了 `0.2.0`，标签就要打 `device-v0.2.0`。
+设备端的版本号取自 `xiongbao/package.json` 的 `version`，现在是 `0.1.0`，和服务端共用。标签的版本必须和打标签那个提交里的 `package.json` 一致。如果第 7 步已经把它改成了 `0.2.0`，标签就要打 `device-v0.2.0`。
 
 1. 先演练（建议）：推一个 `device-v0.1.0-rc.1`，它总是发成预发布。或者在 Actions → 「熊宝设备端发布」→ Run workflow 里，对一个已存在的设备端标签手动运行，`dry_run` 保持勾选。这样会把构建、签名、校验、SHA256SUMS 全跑一遍，只是不发布，产物在运行页的 `device-release-dist` 里。
 2. 正式打标签：

@@ -72,10 +72,10 @@ def make_tool_dir(root, approved_roots=None):
 
 
 def make_repo(root):
-    """Minimal repo fixture: openbot/server cwd + typescript 5.9.3 prereq."""
+    """Minimal repo fixture: xiongbao/server cwd + typescript 5.9.3 prereq."""
     repo = os.path.join(root, "repo")
-    os.makedirs(os.path.join(repo, "openbot", "server"))
-    ts_dir = os.path.join(repo, "openbot", "node_modules", "typescript")
+    os.makedirs(os.path.join(repo, "xiongbao", "server"))
+    ts_dir = os.path.join(repo, "xiongbao", "node_modules", "typescript")
     os.makedirs(os.path.join(ts_dir, "bin"))
     with open(os.path.join(ts_dir, "package.json"), "w", encoding="utf-8") as fh:
         json.dump({"name": "typescript", "version": "5.9.3"}, fh)
@@ -391,7 +391,7 @@ class ExecutePlanTests(unittest.TestCase):
 
     def test_prereq_missing_is_blocked(self):
         plan = one_step_plan("only",
-                             prereq=["openbot/node_modules/typescript/bin/missing"])
+                             prereq=["xiongbao/node_modules/typescript/bin/missing"])
         with mock.patch.object(verify, "resolve_executable",
                                return_value=(sys.executable, "root-mapping")):
             checks = verify.execute_plan("fixture", plan, self.repo, executor=None,
@@ -405,7 +405,7 @@ class ExecutePlanTests(unittest.TestCase):
         outside = os.path.join(outside_dir, "tsc")
         with open(outside, "w", encoding="utf-8") as fh:
             fh.write("#!/bin/sh\nexit 0\n")
-        link = os.path.join(self.repo, "openbot", "node_modules", "typescript",
+        link = os.path.join(self.repo, "xiongbao", "node_modules", "typescript",
                             "bin", "tsc")
         os.remove(link)
         try:
@@ -413,7 +413,7 @@ class ExecutePlanTests(unittest.TestCase):
         except (OSError, NotImplementedError):
             self.skipTest("symlink not available")
         plan = one_step_plan(
-            "only", prereq=["openbot/node_modules/typescript/bin/tsc"])
+            "only", prereq=["xiongbao/node_modules/typescript/bin/tsc"])
         with mock.patch.object(verify, "resolve_executable",
                                return_value=(sys.executable, "root-mapping")):
             checks = verify.execute_plan("fixture", plan, self.repo, executor=None,
@@ -422,12 +422,12 @@ class ExecutePlanTests(unittest.TestCase):
         self.assertIn("symlink alias", checks[0]["details"])
 
     def test_prereq_in_repo_secret_alias_is_blocked(self):
-        # In-repo alias (r2 item 5): tsc-like file planted under openbot/.env
-        env_bin = os.path.join(self.repo, "openbot", ".env", "bin")
+        # In-repo alias (r2 item 5): tsc-like file planted under xiongbao/.env
+        env_bin = os.path.join(self.repo, "xiongbao", ".env", "bin")
         os.makedirs(env_bin)
         with open(os.path.join(env_bin, "tsc"), "w", encoding="utf-8") as fh:
             fh.write("fake")
-        plan = one_step_plan("only", prereq=["openbot/.env/bin/tsc"])
+        plan = one_step_plan("only", prereq=["xiongbao/.env/bin/tsc"])
         with mock.patch.object(verify, "resolve_executable",
                                return_value=(sys.executable, "root-mapping")):
             checks = verify.execute_plan("fixture", plan, self.repo, executor=None,
@@ -436,12 +436,12 @@ class ExecutePlanTests(unittest.TestCase):
         self.assertIn("layout", checks[0]["details"])
 
     def test_prereq_symlink_to_in_repo_secret_is_blocked(self):
-        creds_dir = os.path.join(self.repo, "openbot", ".env")
+        creds_dir = os.path.join(self.repo, "xiongbao", ".env")
         os.makedirs(creds_dir)
         creds = os.path.join(creds_dir, "creds")
         with open(creds, "w", encoding="utf-8") as fh:
             fh.write("SECRET")
-        link = os.path.join(self.repo, "openbot", "node_modules", "typescript",
+        link = os.path.join(self.repo, "xiongbao", "node_modules", "typescript",
                             "bin", "tsc")
         os.remove(link)
         try:
@@ -449,7 +449,7 @@ class ExecutePlanTests(unittest.TestCase):
         except (OSError, NotImplementedError):
             self.skipTest("symlink not available")
         plan = one_step_plan(
-            "only", prereq=["openbot/node_modules/typescript/bin/tsc"])
+            "only", prereq=["xiongbao/node_modules/typescript/bin/tsc"])
         with mock.patch.object(verify, "resolve_executable",
                                return_value=(sys.executable, "root-mapping")):
             checks = verify.execute_plan("fixture", plan, self.repo, executor=None,
@@ -458,16 +458,16 @@ class ExecutePlanTests(unittest.TestCase):
         self.assertIn("layout", checks[0]["details"])
 
     def test_cwd_alias_into_secret_dir_is_blocked(self):
-        server = os.path.join(self.repo, "openbot", "server")
+        server = os.path.join(self.repo, "xiongbao", "server")
         os.rmdir(server)
-        env_dir = os.path.join(self.repo, "openbot", ".env")
+        env_dir = os.path.join(self.repo, "xiongbao", ".env")
         os.makedirs(env_dir)
         try:
             os.symlink(env_dir, server)
         except (OSError, NotImplementedError):
             self.skipTest("symlink not available")
         plan = one_step_plan("only")
-        plan["steps"][0]["cwd"] = "openbot/server"
+        plan["steps"][0]["cwd"] = "xiongbao/server"
         with mock.patch.object(verify, "resolve_executable",
                                return_value=(sys.executable, "root-mapping")):
             checks = verify.execute_plan("fixture", plan, self.repo, executor=None,
@@ -896,22 +896,22 @@ class TsGuardOpenSpyTests(unittest.TestCase):
             self.skipTest("symlink silently unavailable")
 
     def test_package_json_symlink_to_in_repo_env_never_opened(self):
-        env_file = os.path.join(self.repo, "openbot", ".env")
+        env_file = os.path.join(self.repo, "xiongbao", ".env")
         with open(env_file, "w", encoding="utf-8") as fh:
             fh.write('{"name": "typescript", "version": "5.9.3"}')
-        pkg = os.path.join(self.repo, "openbot", "node_modules", "typescript",
+        pkg = os.path.join(self.repo, "xiongbao", "node_modules", "typescript",
                            "package.json")
         os.remove(pkg)
         self._symlink(env_file, pkg)
         opens, patcher = self.spy_open({os.path.realpath(env_file)})
         with patcher:
             problems = self.run_check(
-                ["openbot/node_modules/typescript/bin/tsc"])
+                ["xiongbao/node_modules/typescript/bin/tsc"])
         self.assertEqual(opens, [])  # .env never opened
         self.assertTrue(any("package.json" in p for p in problems))
 
     def test_parent_directory_alias_never_opened(self):
-        ts_real = os.path.join(self.repo, "openbot", ".env", "typescript")
+        ts_real = os.path.join(self.repo, "xiongbao", ".env", "typescript")
         os.makedirs(os.path.join(ts_real, "bin"))
         with open(os.path.join(ts_real, "package.json"), "w",
                   encoding="utf-8") as fh:
@@ -919,7 +919,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         with open(os.path.join(ts_real, "bin", "tsc"), "w",
                   encoding="utf-8") as fh:
             fh.write("#!/bin/sh\nexit 0\n")
-        ts_link = os.path.join(self.repo, "openbot", "node_modules", "typescript")
+        ts_link = os.path.join(self.repo, "xiongbao", "node_modules", "typescript")
         shutil.rmtree(ts_link)
         self._symlink(ts_real, ts_link)
         forbidden = {
@@ -929,7 +929,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         opens, patcher = self.spy_open(forbidden)
         with patcher:
             problems = self.run_check(
-                ["openbot/node_modules/typescript/bin/tsc"])
+                ["xiongbao/node_modules/typescript/bin/tsc"])
         self.assertEqual(opens, [])
         self.assertTrue(any("layout" in p or "protected" in p for p in problems))
 
@@ -938,19 +938,19 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         # name/version behind a package.json symlink used to be opened and
         # accepted (realpath dissolved the link before islink could see it).
         # Now refused with ZERO opens.
-        plain_dir = os.path.join(self.repo, "openbot", "fixtures")
+        plain_dir = os.path.join(self.repo, "xiongbao", "fixtures")
         os.makedirs(plain_dir)
         meta = os.path.join(plain_dir, "metadata.json")
         with open(meta, "w", encoding="utf-8") as fh:
             fh.write('{"name": "typescript", "version": "5.9.3"}')
-        pkg = os.path.join(self.repo, "openbot", "node_modules", "typescript",
+        pkg = os.path.join(self.repo, "xiongbao", "node_modules", "typescript",
                            "package.json")
         os.remove(pkg)
         self._symlink(meta, pkg)
         opens, patcher = self.spy_open({os.path.realpath(meta)})
         with patcher:
             problems = self.run_check(
-                ["openbot/node_modules/typescript/bin/tsc"])
+                ["xiongbao/node_modules/typescript/bin/tsc"])
         self.assertEqual(opens, [])
         self.assertTrue(any("unapproved symlink" in p for p in problems))
 
@@ -958,7 +958,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         # r3-fix item 1: node_modules/typescript -> an UNAPPROVED plain
         # in-repo directory (valid package.json + tsc inside) is not the
         # approved Bun-store shape: refused, ZERO opens.
-        real_dir = os.path.join(self.repo, "openbot", "tools", "typescript-copy")
+        real_dir = os.path.join(self.repo, "xiongbao", "tools", "typescript-copy")
         os.makedirs(os.path.join(real_dir, "bin"))
         with open(os.path.join(real_dir, "package.json"), "w",
                   encoding="utf-8") as fh:
@@ -966,7 +966,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         with open(os.path.join(real_dir, "bin", "tsc"), "w",
                   encoding="utf-8") as fh:
             fh.write("#!/bin/sh\nexit 0\n")
-        ts_link = os.path.join(self.repo, "openbot", "node_modules", "typescript")
+        ts_link = os.path.join(self.repo, "xiongbao", "node_modules", "typescript")
         shutil.rmtree(ts_link)
         self._symlink(real_dir, ts_link)
         forbidden = {
@@ -976,7 +976,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         opens, patcher = self.spy_open(forbidden)
         with patcher:
             problems = self.run_check(
-                ["openbot/node_modules/typescript/bin/tsc"])
+                ["xiongbao/node_modules/typescript/bin/tsc"])
         self.assertEqual(opens, [])
         self.assertTrue(problems)
 
@@ -986,7 +986,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         # node_modules/.bun/typescript@5.9.3/node_modules/typescript, with
         # plain bin/tsc + package.json inside the package root. Passes with
         # exactly one package.json read.
-        store = os.path.join(self.repo, "openbot", "node_modules", ".bun",
+        store = os.path.join(self.repo, "xiongbao", "node_modules", ".bun",
                              "typescript@5.9.3", "node_modules", "typescript")
         os.makedirs(os.path.join(store, "bin"))
         with open(os.path.join(store, "package.json"), "w",
@@ -995,7 +995,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         with open(os.path.join(store, "bin", "tsc"), "w",
                   encoding="utf-8") as fh:
             fh.write("#!/bin/sh\nexit 0\n")
-        ts_link = os.path.join(self.repo, "openbot", "node_modules", "typescript")
+        ts_link = os.path.join(self.repo, "xiongbao", "node_modules", "typescript")
         shutil.rmtree(ts_link)
         self._symlink(os.path.relpath(store, os.path.dirname(ts_link)), ts_link)
         opens_count = []
@@ -1008,7 +1008,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
 
         with mock.patch("builtins.open", spy):
             problems = self.run_check(
-                ["openbot/node_modules/typescript/bin/tsc"])
+                ["xiongbao/node_modules/typescript/bin/tsc"])
         self.assertEqual(problems, [])
         self.assertEqual(len(opens_count), 1)
 
@@ -1019,7 +1019,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         # point directly at the canonical root. Both hops point at
         # legitimate content (valid name/version), yet the chain is refused
         # with ZERO opens.
-        store = os.path.join(self.repo, "openbot", "node_modules", ".bun",
+        store = os.path.join(self.repo, "xiongbao", "node_modules", ".bun",
                              "typescript@5.9.3", "node_modules", "typescript")
         os.makedirs(os.path.join(store, "bin"))
         with open(os.path.join(store, "package.json"), "w",
@@ -1028,10 +1028,10 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         with open(os.path.join(store, "bin", "tsc"), "w",
                   encoding="utf-8") as fh:
             fh.write("#!/bin/sh\nexit 0\n")
-        hop = os.path.join(self.repo, "openbot", "tools", "hop")
+        hop = os.path.join(self.repo, "xiongbao", "tools", "hop")
         os.makedirs(os.path.dirname(hop))
         self._symlink(store, hop)
-        ts_link = os.path.join(self.repo, "openbot", "node_modules", "typescript")
+        ts_link = os.path.join(self.repo, "xiongbao", "node_modules", "typescript")
         shutil.rmtree(ts_link)
         self._symlink(os.path.relpath(hop, os.path.dirname(ts_link)), ts_link)
         # Sanity: the two-hop chain really does land on the canonical root
@@ -1044,7 +1044,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         opens, patcher = self.spy_open(forbidden)
         with patcher:
             problems = self.run_check(
-                ["openbot/node_modules/typescript/bin/tsc"])
+                ["xiongbao/node_modules/typescript/bin/tsc"])
         self.assertEqual(opens, [])
         self.assertTrue(any("not point directly" in p for p in problems))
 
@@ -1052,19 +1052,19 @@ class TsGuardOpenSpyTests(unittest.TestCase):
         # tsc missing -> problem recorded, and the plan-level package.json
         # read is SKIPPED entirely (zero opens, r3 item 2).
         canonical = os.path.realpath(os.path.join(
-            self.repo, "openbot", "node_modules", "typescript", "package.json"))
+            self.repo, "xiongbao", "node_modules", "typescript", "package.json"))
         opens, patcher = self.spy_open({canonical})
         with patcher:
             problems = self.run_check(
-                ["openbot/node_modules/typescript/bin/missing"])
+                ["xiongbao/node_modules/typescript/bin/missing"])
         self.assertTrue(any("missing" in p for p in problems))
         self.assertEqual(opens, [])
 
     def test_canonical_version_check_refuses_symlinked_package_json(self):
-        env_file = os.path.join(self.repo, "openbot", ".env")
+        env_file = os.path.join(self.repo, "xiongbao", ".env")
         with open(env_file, "w", encoding="utf-8") as fh:
             fh.write('{"name": "typescript", "version": "5.9.3"}')
-        pkg = os.path.join(self.repo, "openbot", "node_modules", "typescript",
+        pkg = os.path.join(self.repo, "xiongbao", "node_modules", "typescript",
                            "package.json")
         os.remove(pkg)
         self._symlink(env_file, pkg)
@@ -1086,7 +1086,7 @@ class TsGuardOpenSpyTests(unittest.TestCase):
 
         with mock.patch("builtins.open", spy):
             problems = self.run_check(
-                ["openbot/node_modules/typescript/bin/tsc"])
+                ["xiongbao/node_modules/typescript/bin/tsc"])
         self.assertEqual(problems, [])
         self.assertEqual(len(opens_count), 1)  # same-package pin, one read
 

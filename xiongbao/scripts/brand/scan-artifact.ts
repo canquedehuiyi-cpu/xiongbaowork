@@ -29,6 +29,7 @@ import {
   segmentWords,
   wordsIn,
 } from "./guard/artifact-words";
+import { PRODUCT_DIRS } from "./guard/scan";
 
 export const KINDS = [
   "web",
@@ -61,9 +62,11 @@ export function dirText(dir: string): string {
     .join("\n");
 }
 
-/** The repository root as the build sees it: `openbot/` is one level under it. */
+/** The repository root as the build sees it: `xiongbao/` (formerly `openbot/`) is one level under it. */
 export function repoRoot(cwd = process.cwd()): string {
-  return basename(cwd) === "openbot" ? dirname(cwd) : cwd;
+  return (PRODUCT_DIRS as readonly string[]).includes(basename(cwd))
+    ? dirname(cwd)
+    : cwd;
 }
 
 export type Scan = {

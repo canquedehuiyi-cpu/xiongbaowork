@@ -8,7 +8,7 @@ import type { CopilotRuntimeOptions } from "@copilotkit/runtime/v2";
  *
  * DECISION (product owner): what this fork ships sends no usage data to any third party, so the
  * capture scope is replaced UNCONDITIONALLY. That deliberately also overrides the desktop app's
- * "Share usage data" opt-in as far as the runtime's own reports go; `openbot/desktop/` is not part of
+ * "Share usage data" opt-in as far as the runtime's own reports go; `xiongbao/desktop/` is not part of
  * what ships. Do not make this conditional on a user setting without that decision being revisited.
  */
 export const silentRuntimeTelemetry: NonNullable<

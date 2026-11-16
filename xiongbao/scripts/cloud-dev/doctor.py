@@ -62,9 +62,9 @@ PROBE_TIMEOUT_S = 15
 
 # Path-escape guard: only these relative paths may ever be opened.
 READ_ALLOWLIST = (
-    "openbot/package.json",
-    "openbot/bun.lock",
-    "openbot/node_modules/typescript/package.json",
+    "xiongbao/package.json",
+    "xiongbao/bun.lock",
+    "xiongbao/node_modules/typescript/package.json",
 )
 
 # Names only (values never read).
@@ -129,14 +129,14 @@ def resolve_read(repo_root, rel):
     if rel not in READ_ALLOWLIST:
         raise PathNotAllowed("literal path not in read allowlist")
     root = os.path.realpath(repo_root)
-    if rel != "openbot/node_modules/typescript/package.json":
+    if rel != "xiongbao/node_modules/typescript/package.json":
         return _plain_path(root, rel.split("/"))
     # Only the exact pinned Bun package layout, or a plain unpacked package.
-    parent = _plain_path(root, ["openbot", "node_modules"])
+    parent = _plain_path(root, ["xiongbao", "node_modules"])
     package = os.path.join(parent, "typescript")
     if not os.path.islink(package):
         return _plain_path(root, rel.split("/"))
-    expected_parts = ["openbot", "node_modules", ".bun",
+    expected_parts = ["xiongbao", "node_modules", ".bun",
                       "typescript@" + PINNED["typescript_version"],
                       "node_modules", "typescript", "package.json"]
     expected = _plain_path(root, expected_parts)
@@ -266,19 +266,19 @@ def check_python():
 
 
 def check_layout(repo_root):
-    openbot_pkg = os.path.join(repo_root, "openbot", "package.json")
-    has_openbot_pkg = os.path.isfile(openbot_pkg)
+    xiongbao_pkg = os.path.join(repo_root, "xiongbao", "package.json")
+    has_xiongbao_pkg = os.path.isfile(xiongbao_pkg)
     checks = [reporting.make_check(
-        "repo_layout_openbot_package_json", "openbot/package.json (workspace root)",
-        "layout", "passed" if has_openbot_pkg else "failed", True,
-        expected="file exists", observed="exists" if has_openbot_pkg else "missing")]
+        "repo_layout_xiongbao_package_json", "xiongbao/package.json (workspace root)",
+        "layout", "passed" if has_xiongbao_pkg else "failed", True,
+        expected="file exists", observed="exists" if has_xiongbao_pkg else "missing")]
     root_pkg = os.path.join(repo_root, "package.json")
     has_root_pkg = os.path.exists(root_pkg)
     checks.append(reporting.make_check(
         "repo_layout_root_package_json_absent", "no package.json at repo root",
         "layout", "failed" if has_root_pkg else "passed", True,
         expected="absent", observed="present" if has_root_pkg else "absent",
-        details="task book: repo root has no package.json; workspace root is openbot/package.json"))
+        details="task book: repo root has no package.json; workspace root is xiongbao/package.json"))
     return checks
 
 
@@ -286,29 +286,29 @@ def check_package_manager(repo_root):
     check_id = "package_manager_declaration"
     expected_pm = "bun@" + PINNED["bun_version"]
     try:
-        path = resolve_read(repo_root, "openbot/package.json")
+        path = resolve_read(repo_root, "xiongbao/package.json")
     except PathNotAllowed as err:
-        return reporting.make_check(check_id, "packageManager in openbot/package.json",
+        return reporting.make_check(check_id, "packageManager in xiongbao/package.json",
                                     "config", "failed", True, expected=expected_pm,
                                     observed="path-not-allowed", details=str(err)[:200])
     if not os.path.isfile(path):
-        return reporting.make_check(check_id, "packageManager in openbot/package.json",
+        return reporting.make_check(check_id, "packageManager in xiongbao/package.json",
                                     "config", "blocked", True, expected=expected_pm,
                                     observed="file missing")
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)
     except (OSError, ValueError) as err:
-        return reporting.make_check(check_id, "packageManager in openbot/package.json",
+        return reporting.make_check(check_id, "packageManager in xiongbao/package.json",
                                     "config", "failed", True, expected=expected_pm,
                                     observed="unreadable", details=str(err)[:200])
     if not isinstance(data, dict):
-        return reporting.make_check(check_id, "packageManager in openbot/package.json",
+        return reporting.make_check(check_id, "packageManager in xiongbao/package.json",
                                     "config", "failed", True, expected=expected_pm,
                                     observed="invalid JSON object shape")
     observed = data.get("packageManager")
     status = "passed" if observed == expected_pm else "failed"
-    return reporting.make_check(check_id, "packageManager in openbot/package.json",
+    return reporting.make_check(check_id, "packageManager in xiongbao/package.json",
                                 "config", status, True, expected=expected_pm,
                                 observed=observed)
 
@@ -317,25 +317,25 @@ def check_bun_lock(repo_root):
     check_id = "bun_lock_identity"
     expected = "size=%d sha256=%s" % (PINNED["bun_lock_size"], PINNED["bun_lock_sha256"])
     try:
-        path = resolve_read(repo_root, "openbot/bun.lock")
+        path = resolve_read(repo_root, "xiongbao/bun.lock")
     except PathNotAllowed as err:
-        return reporting.make_check(check_id, "openbot/bun.lock size+sha256", "config",
+        return reporting.make_check(check_id, "xiongbao/bun.lock size+sha256", "config",
                                     "failed", True, expected=expected,
                                     observed="path-not-allowed", details=str(err)[:200])
     if not os.path.isfile(path):
-        return reporting.make_check(check_id, "openbot/bun.lock size+sha256", "config",
+        return reporting.make_check(check_id, "xiongbao/bun.lock size+sha256", "config",
                                     "failed", True, expected=expected, observed="missing")
     try:
         size = os.path.getsize(path)
         digest = sha256_file(path)
     except OSError as err:
-        return reporting.make_check(check_id, "openbot/bun.lock size+sha256", "config",
+        return reporting.make_check(check_id, "xiongbao/bun.lock size+sha256", "config",
                                     "failed", True, expected=expected,
                                     observed="read error: %s" % err)
     observed = "size=%d sha256=%s" % (size, digest)
     ok = (size == PINNED["bun_lock_size"] and digest == PINNED["bun_lock_sha256"])
     status = "passed" if ok else "failed"
-    return reporting.make_check(check_id, "openbot/bun.lock size+sha256", "config",
+    return reporting.make_check(check_id, "xiongbao/bun.lock size+sha256", "config",
                                 status, True, expected=expected, observed=observed)
 
 
@@ -343,7 +343,7 @@ def check_typescript_dependency(repo_root):
     check_id = "typescript_dependency"
     expected = PINNED["typescript_version"]
     try:
-        path = resolve_read(repo_root, "openbot/node_modules/typescript/package.json")
+        path = resolve_read(repo_root, "xiongbao/node_modules/typescript/package.json")
     except PathNotAllowed as err:
         return reporting.make_check(check_id, "locked TypeScript version", "dependency",
                                     "failed", False, expected=expected,
@@ -351,7 +351,7 @@ def check_typescript_dependency(repo_root):
     if not os.path.isfile(path):
         return reporting.make_check(check_id, "locked TypeScript version", "dependency",
                                     "blocked", False, expected=expected, observed="missing",
-                                    details="openbot/node_modules absent (dependencies not installed): missing-dependency state; doctor does not install")
+                                    details="xiongbao/node_modules absent (dependencies not installed): missing-dependency state; doctor does not install")
     try:
         with open(path, "r", encoding="utf-8") as handle:
             data = json.load(handle)

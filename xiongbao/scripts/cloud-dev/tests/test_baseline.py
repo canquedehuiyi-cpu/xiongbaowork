@@ -162,7 +162,7 @@ class EvidenceTests(TempCase):
         "log_path": "diags/b.log",
         "log_sha256": hashlib.sha256(SEVEN_LOG.encode("utf-8")).hexdigest(),
         "argv": ["bun", "x", "tsc", "--noEmit"],
-        "cwd": "/srv/openbot",
+        "cwd": "/srv/xiongbao",
         "dep_tree": {"bun": "1.3.14", "typescript": "5.1.6"},
         "started_at": "2026-10-19T01:00:00+00:00",
         "ended_at": "2026-10-19T01:00:03+00:00",

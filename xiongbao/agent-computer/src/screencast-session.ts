@@ -2,7 +2,7 @@
  * The screencast itself, with no browser library attached: CDP in, frames out, input back in.
  *
  * Split out of `screencast.ts` so a process without the `playwright` package can use it. The runner
- * (`openbot/runner`) drives the owner's own Chrome through `playwright-core`, and a type-only import of
+ * (`xiongbao/runner`) drives the owner's own Chrome through `playwright-core`, and a type-only import of
  * `playwright` does not resolve there, so a file that names it cannot be imported at all. Everything
  * here talks to a structural CDP session instead, and `screencast.ts` adapts Playwright's to it. One
  * copy of the key translation below, then, rather than a second one on the device that would drift

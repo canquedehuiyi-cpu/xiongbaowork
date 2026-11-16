@@ -2,7 +2,7 @@
 //
 //   bun scripts/ci/release-tag.mjs <ref_name> [--check-ancestry] [--notes-file <path>]
 //
-// Run from openbot/. Accepts vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N (no leading zeros),
+// Run from xiongbao/. Accepts vMAJOR.MINOR.PATCH or vMAJOR.MINOR.PATCH-rc.N (no leading zeros),
 // requires package.json's version to equal the base version and CHANGELOG.md to carry a non-empty
 // "## <base>" section, and writes tag, version, base and prerelease to $GITHUB_OUTPUT. With
 // --check-ancestry the tagged commit (HEAD) must already be on origin/main. This script never

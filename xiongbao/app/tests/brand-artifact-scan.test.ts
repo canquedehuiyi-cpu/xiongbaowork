@@ -79,9 +79,9 @@ describe("scan-artifact", () => {
     const file = join(root, "bin");
     writeFileSync(
       file,
-      Buffer.from(`\0/home/runner/work/x/x/openbot/node_modules/a\0`),
+      Buffer.from(`\0/home/runner/work/x/x/xiongbao/node_modules/a\0`),
     );
-    const scan = scanRunner(file, "/home/runner/work/x/x/openbot");
+    const scan = scanRunner(file, "/home/runner/work/x/x/xiongbao");
     expect(scan.found.get(BUILD_PATH)).toBe(1);
     expect(verdict("runner", scan, [])).toContain(
       `runner: ${BUILD_PATH} （多出来的）`,
@@ -240,7 +240,7 @@ describe("image and deb scans (Task 5)", () => {
     writeFileSync(
       join(tree, "usr", "bin", "xiongbao-runner"),
       Buffer.from(
-        "\0/home/runner/work/x/x/openbot/node_modules/a\0copilotkit-inside\0/usr/bin/chromiumopenbot-runner/proc.configautostart\0@copilotkit/core@1.85.0\0",
+        "\0/home/runner/work/x/x/xiongbao/node_modules/a\0copilotkit-inside\0/usr/bin/chromiumopenbot-runner/proc.configautostart\0@copilotkit/core@1.85.0\0",
       ),
     );
     writeFileSync(join(tree, "usr", "share", "doc", "openbot-doc.txt"), "hi\n");
@@ -248,7 +248,7 @@ describe("image and deb scans (Task 5)", () => {
     execFileSync("dpkg-deb", ["--build", "-Znone", tree, deb], {
       stdio: "ignore",
     });
-    const scan = scanDeb(deb, "/home/runner/work/x/x/openbot");
+    const scan = scanDeb(deb, "/home/runner/work/x/x/xiongbao");
     expect(scan.found.has("openbot-device")).toBe(true);
     expect(scan.found.has("openbot-desc")).toBe(true);
     expect(scan.found.has("copilotkit-inside")).toBe(true);

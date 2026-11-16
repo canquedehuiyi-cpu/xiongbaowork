@@ -8,7 +8,7 @@
 
 # 部署与本地起服（QoderWake 复刻，全部落 D 盘）
 
-面向"在这台 Windows 机器上把它跑起来并测一遍"的人。上游 `openbot/README.md` 与 `openbot/docs/deployment.md` 讲的是通用自托管；这一份只讲本仓库改完之后的实际形状，命令都是本会话真跑过的。
+面向"在这台 Windows 机器上把它跑起来并测一遍"的人。上游 `xiongbao/README.md` 与 `xiongbao/docs/deployment.md` 讲的是通用自托管；这一份只讲本仓库改完之后的实际形状，命令都是本会话真跑过的。
 
 ## 0. 一条硬约束
 
@@ -36,7 +36,7 @@ docker start openbot-postgres-1        # 已存在则直接起；别新建
 ## 2. 迁移
 
 ```bash
-cd openbot/server
+cd xiongbao/server
 # 生成（非交互：真正挡住交互提示的是 `< /dev/null`；`--name` 只是给文件起名）
 DATABASE_URL="postgres://openbot:openbot@127.0.0.1:5433/openbot" \
   ../../tools/bun/bun.exe x drizzle-kit generate --name <slug> < /dev/null
@@ -54,7 +54,7 @@ done
 ## 3. 服务端
 
 ```bash
-cd openbot
+cd xiongbao
 cp .env.example .env            # 然后按下表改
 docker compose up -d postgres   # 或复用已存在的 openbot-postgres-1
 ```
@@ -75,18 +75,18 @@ docker compose up -d postgres   # 或复用已存在的 openbot-postgres-1
 打包形态：**Bun CLI runner 现在做，Tauri 托盘外壳后做，协议不变**（出站 WSS + 动作 RPC + 心跳）。
 
 ```bash
-openbot/tools/bun/bun.exe openbot/runner/src/index.ts \
+xiongbao/tools/bun/bun.exe xiongbao/runner/src/index.ts \
   --server wss://<host>:<port> --name "工作室台式机" --pair <一次性配对码>
 ```
 
-（bun 在**仓库根**的 `tools/bun/bun.exe`——上面这条从仓库根目录执行，所以路径带着 `openbot/` 前缀是给脚本的，不是给 bun 的。）
+（bun 在**仓库根**的 `tools/bun/bun.exe`——上面这条从仓库根目录执行，所以路径带着 `xiongbao/` 前缀是给脚本的，不是给 bun 的。）
 
 要点：配对码一次一用（原子 `UPDATE … WHERE used_at IS NULL AND expires_at > now()`）；设备令牌只存 sha256；离线时配额不足返回 402 **且不吃掉配对码**；状态不存列，由 `last_seen_at` 与 60 秒阈值派生；离线动作进 `work_items` 队列，按 `runner.action/<tenant>/<device>` 一条通道排队。
 
 ## 5. 测试与检查（都在容器里）
 
 ```bash
-B=<repo>/openbot
+B=<repo>/xiongbao
 MSYS_NO_PATHCONV=1 docker run --rm \
   -e DATABASE_URL="postgres://openbot_app:openbot@host.docker.internal:5433/openbot_test" \
   -e TEST_DATABASE_URL="postgres://openbot_app:openbot@host.docker.internal:5433/openbot_test" \
@@ -158,7 +158,7 @@ done
   3. **挂进来的 `app/src` 会让 TanStack 路由树生成器 EXDEV 失败**（`.tanstack/tmp/… -> /app/app/src/routeTree.gen.ts` 跨设备 rename）。本次**没有损坏工作区**（`git status` 空、文件 1206 行完好），Vite 也照样起来了，但 `routeTree.gen.ts` 从此**不会被 dev server 更新**——这正好对上本项目"新路由手工登记 routeTree"的既有约定。
 - 起法（`docker compose up --build` 那条路**我没走**，因为它会重建你机器上正在用的 `openbot-postgres-1`）：
   ```bash
-  B="D:/AI编程库/项目库/进行中的项目/xiongbaoshuziyuangong/openbot"
+  B="D:/AI编程库/项目库/进行中的项目/xiongbaoshuziyuangong/xiongbao"
   MSYS_NO_PATHCONV=1 docker run -d --name openbot-g2-server \
     -e DATABASE_URL="postgres://openbot_app:openbot@host.docker.internal:5433/openbot" \
     -e BETTER_AUTH_SECRET=<openssl rand -base64 32> -e BETTER_AUTH_URL=http://localhost:3001 \

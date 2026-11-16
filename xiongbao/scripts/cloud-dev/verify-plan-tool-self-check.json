@@ -6,7 +6,7 @@
   "steps": [
     {
       "id": "cloud-dev-unittest",
-      "argv": ["python3", "-B", "-m", "unittest", "discover", "-s", "openbot/scripts/cloud-dev/tests", "-p", "test_*.py"],
+      "argv": ["python3", "-B", "-m", "unittest", "discover", "-s", "xiongbao/scripts/cloud-dev/tests", "-p", "test_*.py"],
       "cwd": ".",
       "timeout_s": 180,
       "required": true,

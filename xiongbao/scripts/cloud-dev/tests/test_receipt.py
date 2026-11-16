@@ -78,7 +78,7 @@ def base_document(mode="single"):
         "mode": mode,
         "ticket": None,
         "gate": None,
-        "task": {"batch": "B5", "step": 1, "package": "receipt", "cwd": "openbot"},
+        "task": {"batch": "B5", "step": 1, "package": "receipt", "cwd": "xiongbao"},
         "stages": [idle_stage()],
         "expected": [],
         "observed": [],
@@ -105,11 +105,11 @@ def passed_document():
     document["blocked_by"] = []
     document["stages"] = [started_stage("command")]
     document["expected"] = [
-        {"path": "openbot/x.py", "bytes": 10, "sha256": GOOD_SHA, "blob": GOOD_BLOB}
+        {"path": "xiongbao/x.py", "bytes": 10, "sha256": GOOD_SHA, "blob": GOOD_BLOB}
     ]
     document["observed"] = [
         {
-            "path": "openbot/x.py",
+            "path": "xiongbao/x.py",
             "bytes": 10,
             "sha256": GOOD_SHA,
             "source": "measured",

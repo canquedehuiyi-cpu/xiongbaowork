@@ -10,7 +10,7 @@ over the r3 baseline 51663441/43/44/51; plans and reporting stay frozen).
 
 ## Usage
 
-    python3 openbot/scripts/cloud-dev/verify.py --plan <name> \
+    python3 xiongbao/scripts/cloud-dev/verify.py --plan <name> \
         --repo-root <approved-repo> [--format json|markdown] \
         [--expect-plan-sha256 <hex>]
 
@@ -74,9 +74,9 @@ Exit codes (one policy shared with `reporting.py` schema 1.1):
   BEFORE any symlink resolution (realpath-first would dissolve links and
   blind islink), every symlink component is refused, and exactly ONE alias
   shape is permitted by the Root-frozen contract: the dependency directory
-  `openbot/node_modules/typescript` MAY be a (relative or absolute) link
+  `xiongbao/node_modules/typescript` MAY be a (relative or absolute) link
   whose RAW target, resolved against the link's own directory, is EXACTLY
-  `openbot/node_modules/.bun/typescript@5.9.3/node_modules/typescript`
+  `xiongbao/node_modules/.bun/typescript@5.9.3/node_modules/typescript`
   inside the SAME repo (r4 direct-target check, Root 51663785: a two-hop
   chain typescript -> in-repo hop -> canonical root is REFUSED even though
   its realpath lands on the canonical root); after approving it the walk
@@ -130,7 +130,7 @@ Exit codes (one policy shared with `reporting.py` schema 1.1):
 
 ## Tests
 
-    python3 -m unittest discover -s openbot/scripts/cloud-dev/tests
+    python3 -m unittest discover -s xiongbao/scripts/cloud-dev/tests
 
 (from a Root-approved repository root). All tests are stdlib-only and
 hermetic: plan integrity (unknown name, missing/symlinked registry, hash/

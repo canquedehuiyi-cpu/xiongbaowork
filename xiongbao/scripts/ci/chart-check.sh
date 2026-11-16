@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Renders charts/openbot the way an install would and checks what the API is handed.
 #
-# Run from openbot/ with helm on PATH (the root CI `chart` job). Small on purpose: a lint, and a
+# Run from xiongbao/ with helm on PATH (the root CI `chart` job). Small on purpose: a lint, and a
 # handful of `helm template` renders read with grep, no cluster. Each check names the install it
 # stands for, because every one of these is an install that would otherwise crash-loop.
 set -euo pipefail

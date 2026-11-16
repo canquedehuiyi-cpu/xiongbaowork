@@ -13,11 +13,11 @@ import { join } from "node:path";
 import { extractBlock } from "./manual-blocks.mjs";
 
 const script = join(import.meta.dir, "manual-blocks.mjs");
-const openbot = join(import.meta.dir, "..", "..");
-const root = join(openbot, "..");
+const product = join(import.meta.dir, "..", "..");
+const root = join(product, "..");
 const readme = readFileSync(join(root, "README.md"), "utf8");
 const manual = readFileSync(
-  join(openbot, "docs", "deployment-xiongbao.md"),
+  join(product, "docs", "deployment-xiongbao.md"),
   "utf8",
 );
 const IMAGE = "ghcr.io/canquedehuiyi-cpu/xiongbaowork";
@@ -246,7 +246,7 @@ test("README g7:linux pulls the published image instead of building from source"
   );
   expect(body).toContain('docker pull "$OPENBOT_IMAGE"');
   expect(body).toContain(
-    "https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/$OPENBOT_TAG/openbot/docker/delivery.env.example",
+    `https://raw.githubusercontent.com/canquedehuiyi-cpu/xiongbaowork/\${OPENBOT_TAG}/xiongbao/docker/delivery.env.example`,
   );
   expect(body).toContain("openssl rand -base64 32");
   for (const forbidden of [
@@ -360,7 +360,7 @@ test("manual section 4 names every database URL an external-database API needs",
   // The API refuses to start without the role writer (server/src/index.ts), and the embedded
   // database is the only mode that generates it, so an external database must be told.
   const index = readFileSync(
-    join(openbot, "server", "src", "index.ts"),
+    join(product, "server", "src", "index.ts"),
     "utf8",
   );
   expect(index).toContain("ROLE_WRITER_DATABASE_URL is required");
@@ -437,7 +437,7 @@ test("deployment manual pins digests and explains how to verify them", () => {
 
 test("delivery.env.example documents the image override without setting it", () => {
   const example = readFileSync(
-    join(openbot, "docker", "delivery.env.example"),
+    join(product, "docker", "delivery.env.example"),
     "utf8",
   );
   expect(example).toMatch(/^# OPENBOT_TAG=v\d+\.\d+\.\d+/m);
@@ -446,7 +446,7 @@ test("delivery.env.example documents the image override without setting it", () 
   expect(example).not.toMatch(/^OPENBOT_IMAGE=/m);
   expect(example).not.toMatch(/^KEY_ENCRYPTION_KEY=/m);
   const compose = readFileSync(
-    join(openbot, "docker", "compose.delivery.yml"),
+    join(product, "docker", "compose.delivery.yml"),
     "utf8",
   );
   expect(compose).toContain("image: ${OPENBOT_IMAGE:-");
@@ -460,13 +460,13 @@ function filesUnder(dir) {
 }
 
 test("no gitee.com in the README, deployment manuals or docker files", () => {
-  const docs = join(openbot, "docs");
+  const docs = join(product, "docs");
   const files = [
     join(root, "README.md"),
     ...readdirSync(docs)
       .filter((name) => /^deployment.*\.md$/.test(name))
       .map((name) => join(docs, name)),
-    ...filesUnder(join(openbot, "docker")),
+    ...filesUnder(join(product, "docker")),
   ];
   expect(files.length).toBeGreaterThan(3);
   for (const file of files) {

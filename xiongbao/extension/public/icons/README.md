@@ -1,6 +1,6 @@
 # Toolbar icons
 
-Generated from `app/src/assets/brand/xiongbao-logo-256.png` (the upstream icons were replaced). Regenerate from `openbot/`:
+Generated from `app/src/assets/brand/xiongbao-logo-256.png` (the upstream icons were replaced). Regenerate from `xiongbao/`:
 
 ```sh
 python3 -c "

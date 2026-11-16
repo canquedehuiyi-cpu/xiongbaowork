@@ -102,7 +102,7 @@ FROZEN_PLANS = {
         "step": {
             "id": "cloud-dev-unittest",
             "argv": ["python3", "-B", "-m", "unittest", "discover",
-                     "-s", "openbot/scripts/cloud-dev/tests", "-p", "test_*.py"],
+                     "-s", "xiongbao/scripts/cloud-dev/tests", "-p", "test_*.py"],
             "cwd": ".",
             "timeout_s": 180,
             "required": True,
@@ -120,12 +120,12 @@ FROZEN_PLANS = {
             "id": "server-tsc-noemit",
             "argv": ["bun", "../node_modules/typescript/bin/tsc",
                      "--noEmit", "-p", "tsconfig.json"],
-            "cwd": "openbot/server",
+            "cwd": "xiongbao/server",
             "timeout_s": 300,
             "required": True,
             "capture": True,
             "depends_on": [],
-            "prereq_paths": ["openbot/node_modules/typescript/bin/tsc"],
+            "prereq_paths": ["xiongbao/node_modules/typescript/bin/tsc"],
         },
         "typescript_version_check": True,
     },
@@ -385,16 +385,16 @@ def resolve_executable(name, registry):
     return path, "root-mapping"
 
 
-BUN_LINK_REL = os.path.join("openbot", "node_modules", "typescript")
-BUN_LINK_TARGET_REL = os.path.join("openbot", "node_modules", ".bun",
+BUN_LINK_REL = os.path.join("xiongbao", "node_modules", "typescript")
+BUN_LINK_TARGET_REL = os.path.join("xiongbao", "node_modules", ".bun",
                                    "typescript@5.9.3", "node_modules",
                                    "typescript")
 
 
 def _approved_bun_link(repo_root):
     """Root-frozen contract (r3-fix item 1): the ONLY permitted alias is the
-    dependency directory openbot/node_modules/typescript, and its normalized
-    target must be EXACTLY openbot/node_modules/.bun/typescript@5.9.3/
+    dependency directory xiongbao/node_modules/typescript, and its normalized
+    target must be EXACTLY xiongbao/node_modules/.bun/typescript@5.9.3/
     node_modules/typescript inside the SAME repo. Any other link position or
     target is refused. Relative links are acceptable but must normalize to
     this canonical target. This is the allowed shape, not a claim that the
@@ -563,7 +563,7 @@ def check_prereqs(plan_name, repo_root, step, exec_abs):
         # still only through the component-verified composed path (r3 item 2:
         # skipped entirely when problems were already found -- zero opens).
         pkg_json_abs = os.path.normpath(os.path.join(
-            repo_root, "openbot", "node_modules", "typescript", "package.json"))
+            repo_root, "xiongbao", "node_modules", "typescript", "package.json"))
         pkg_problems = _open_component_problems(repo_root, pkg_json_abs,
                                                 allow_bun_link=True)
         if pkg_problems:

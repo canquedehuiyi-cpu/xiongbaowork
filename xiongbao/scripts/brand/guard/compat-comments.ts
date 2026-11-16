@@ -75,7 +75,7 @@ const SKIPPED = (path: string) =>
   /\.md$/.test(path);
 
 /**
- * The files to look in: every file under `openbot/` that git tracks or would track, so
+ * The files to look in: every file under `xiongbao/` that git tracks or would track, so
  * `node_modules`, `dist` and other build output stay out by the same `.gitignore` that keeps them
  * out of a commit.
  */

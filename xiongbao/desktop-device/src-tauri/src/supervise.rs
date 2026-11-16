@@ -1,6 +1,6 @@
 //! Keeping the runner alive, and knowing when to stop trying.
 //!
-//! The same three rules `openbot/desktop/src-tauri/src/supervise.rs` keeps for the self-hosted
+//! The same three rules `xiongbao/desktop/src-tauri/src/supervise.rs` keeps for the self-hosted
 //! stack, applied to one process:
 //!
 //! - **Restart, with backoff.** A runner that dies once, because a laptop slept through a network

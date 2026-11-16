@@ -3,5 +3,5 @@ set -euo pipefail
 : "${RUNNER_TEMP:?set RUNNER_TEMP to an isolated temporary directory}"
 : "${DELIVERY_BASELINE_SHA:?set a frozen baseline SHA}"
 git worktree add --detach "$RUNNER_TEMP/delivery-baseline" "$DELIVERY_BASELINE_SHA"
-cd "$RUNNER_TEMP/delivery-baseline/openbot"
+cd "$(bash "$(dirname "${BASH_SOURCE[0]}")/baseline-dir.sh")"
 bun install --frozen-lockfile

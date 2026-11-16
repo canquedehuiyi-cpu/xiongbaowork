@@ -21,7 +21,7 @@ const ENTRY = join(import.meta.dir, "..", "..", "runner", "src", "index.ts");
 /**
  * Where the compile runs, whatever directory the script is called from: Bun writes each bundled
  * module's path into the binary as a comment, relative to this directory. Run from elsewhere those
- * become `../home/<user>/<checkout>/openbot/...`, the build machine's layout.
+ * become `../home/<user>/<checkout>/xiongbao/...`, the build machine's layout.
  */
 export const BUILD_CWD = join(import.meta.dir, "..", "..");
 const BINARIES = join(import.meta.dir, "..", "src-tauri", "binaries");

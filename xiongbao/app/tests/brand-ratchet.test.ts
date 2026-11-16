@@ -299,8 +299,8 @@ function scratchHistory(commits: string[][]): { dir: string; shas: string[] } {
   return { dir, shas };
 }
 
-const RATCHET = "openbot/scripts/brand/guard/ratchet.ts";
-const BUDGET = "openbot/app/tests/brand-budget.json";
+const RATCHET = "xiongbao/scripts/brand/guard/ratchet.ts";
+const BUDGET = "xiongbao/app/tests/brand-budget.json";
 
 test("ratchetBase: setup in separate commits binds from the parent of the ratchet commit", () => {
   const { dir, shas } = scratchHistory([[], [BUDGET], [RATCHET]]);
@@ -460,4 +460,19 @@ describe("approved exceptions (ratchet-approvals.json)", () => {
       ratchetProblems(input({ approvals: [], baseApprovals: [approval()] })),
     ).toEqual([]);
   });
+});
+
+test("ratchetBase: a base from before the directory rename (openbot/) already has the ratchet", () => {
+  const { dir, shas } = scratchHistory([
+    [
+      "openbot/scripts/brand/guard/ratchet.ts",
+      "openbot/app/tests/brand-budget.json",
+    ],
+    [BUDGET, RATCHET],
+  ]);
+  try {
+    expect(ratchetBase(shas[0], shas[1], dir)).toBe(shas[0]);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

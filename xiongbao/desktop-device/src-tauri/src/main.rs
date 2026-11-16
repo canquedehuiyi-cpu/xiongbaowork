@@ -1,11 +1,11 @@
 // No console window behind the app on Windows, in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-//! 熊宝数字员工 设备端: a tray app that keeps the runner (`openbot/runner`, compiled into the
+//! 熊宝数字员工 设备端: a tray app that keeps the runner (`xiongbao/runner`, compiled into the
 //! `xiongbao-runner` sidecar) connected to a deployment, so a tenant's coworkers can use this
 //! computer (F2 stage 1, option A of docs/specs/2026-11-02-f2-runner-desktop-client.md).
 //!
-//! It is deliberately not `openbot/desktop`, which installs and runs a whole self-hosted stack.
+//! It is deliberately not `xiongbao/desktop`, which installs and runs a whole self-hosted stack.
 //! This app pairs, supervises one process, and shows whether it is online. The runner dials out;
 //! nothing here listens on a port.
 //!
@@ -1018,7 +1018,7 @@ mod tests {
         assert!(!identifier.starts_with("ai.copilotkit"), "{identifier}");
         assert_ne!(
             identifier, "com.xiongbao.desktop",
-            "would collide with openbot/desktop"
+            "would collide with xiongbao/desktop"
         );
         assert_eq!(config["productName"], super::PRODUCT);
         assert_eq!(config["mainBinaryName"], "xiongbao-device");

@@ -12,14 +12,14 @@ import {
 
 const diffOf = (file: string, ...added: string[]) =>
   [
-    `diff --git a/openbot/${file} b/openbot/${file}`,
-    `--- a/openbot/${file}`,
-    `+++ b/openbot/${file}`,
+    `diff --git a/xiongbao/${file} b/xiongbao/${file}`,
+    `--- a/xiongbao/${file}`,
+    `+++ b/xiongbao/${file}`,
     `@@ -10,0 +11,${added.length} @@`,
     ...added.map((l) => `+${l}`),
   ].join("\n");
 
-test("added lines carry the file relative to openbot/ and their line numbers", () => {
+test("added lines carry the file relative to xiongbao/ and their line numbers", () => {
   const diff = `${diffOf("server/src/x.ts", "a", "b")}\n${diffOf("app/src/y.ts", "c")}`;
   expect(addedLines(diff)).toEqual([
     { file: "server/src/x.ts", number: 11, line: "a" },
@@ -27,8 +27,8 @@ test("added lines carry the file relative to openbot/ and their line numbers", (
     { file: "app/src/y.ts", number: 11, line: "c" },
   ]);
   const deleted = [
-    "diff --git a/openbot/server/src/gone.ts b/openbot/server/src/gone.ts",
-    "--- a/openbot/server/src/gone.ts",
+    "diff --git a/xiongbao/server/src/gone.ts b/xiongbao/server/src/gone.ts",
+    "--- a/xiongbao/server/src/gone.ts",
     "+++ /dev/null",
     "@@ -1,2 +0,0 @@",
     "-x",
@@ -37,18 +37,48 @@ test("added lines carry the file relative to openbot/ and their line numbers", (
   expect(addedLines(deleted)).toEqual([]);
 });
 
+test("a file under the directory's former name openbot/ is read the same, and a pure move adds nothing", () => {
+  const old = [
+    "diff --git a/openbot/server/src/x.ts b/openbot/server/src/x.ts",
+    "--- a/openbot/server/src/x.ts",
+    "+++ b/openbot/server/src/x.ts",
+    "@@ -1,0 +2,1 @@",
+    "+a",
+  ].join("\n");
+  expect(addedLines(old)).toEqual([
+    { file: "server/src/x.ts", number: 2, line: "a" },
+  ]);
+  const moved = [
+    "diff --git a/openbot/server/src/x.ts b/xiongbao/server/src/x.ts",
+    "similarity index 100%",
+    "rename from openbot/server/src/x.ts",
+    "rename to xiongbao/server/src/x.ts",
+    "diff --git a/openbot/app/src/y.ts b/xiongbao/app/src/y.ts",
+    "similarity index 90%",
+    "rename from openbot/app/src/y.ts",
+    "rename to xiongbao/app/src/y.ts",
+    "--- a/openbot/app/src/y.ts",
+    "+++ b/xiongbao/app/src/y.ts",
+    "@@ -3,0 +4,1 @@",
+    "+b",
+  ].join("\n");
+  expect(addedLines(moved)).toEqual([
+    { file: "app/src/y.ts", number: 4, line: "b" },
+  ]);
+});
+
 test("a content line starting with ++ is not taken for a file header", () => {
   const diff = [
     diffOf("server/src/x.ts", "++ OpenBot", "b"),
-    "diff --git a/openbot/app/src/y.ts b/openbot/app/src/y.ts",
-    "+++ b/openbot/app/src/y.ts",
+    "diff --git a/xiongbao/app/src/y.ts b/xiongbao/app/src/y.ts",
+    "+++ b/xiongbao/app/src/y.ts",
     "@@ -1,0 +2,1 @@",
-    "+++ b/openbot/server/src/z.ts",
+    "+++ b/xiongbao/server/src/z.ts",
   ].join("\n");
   expect(addedLines(diff)).toEqual([
     { file: "server/src/x.ts", number: 11, line: "++ OpenBot" },
     { file: "server/src/x.ts", number: 12, line: "b" },
-    { file: "app/src/y.ts", number: 2, line: "++ b/openbot/server/src/z.ts" },
+    { file: "app/src/y.ts", number: 2, line: "++ b/xiongbao/server/src/z.ts" },
   ]);
 });
 
@@ -115,7 +145,7 @@ test("a missing sync commit fails with the file and the commit named", () => {
   expect(message).toContain(commit);
 });
 
-test("the sync point maps openbot/<p> to <p> in the upstream commit", () => {
+test("the sync point maps xiongbao/<p> to <p> in the upstream commit", () => {
   const sync = readSyncPoint();
   const upstream = upstreamReader(sync);
   expect(upstream("package.json")).toBeDefined();
