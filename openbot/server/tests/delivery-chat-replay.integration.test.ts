@@ -38,6 +38,7 @@ afterAll(async () => {
     await runAsTenant("platform", () =>
       database.delete(users).where(eq(users.id, id)),
     );
+  await database.$client.close();
 });
 
 type Loose = BaseEvent & Record<string, unknown>;

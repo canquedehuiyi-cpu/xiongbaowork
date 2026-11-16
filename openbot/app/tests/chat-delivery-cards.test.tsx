@@ -806,7 +806,6 @@ test("交付卡：交付物和自查，「验收」发验收，「退回」要�
     expect(writes(calls).at(-1)).toEqual({
       method: "POST",
       path: `/api/tasks/${TASK}/review`,
-      body: undefined,
     }),
   );
 });
