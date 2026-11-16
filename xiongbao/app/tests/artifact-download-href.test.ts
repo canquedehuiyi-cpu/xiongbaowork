@@ -37,14 +37,16 @@ describe("a path the download route can be asked for", () => {
     expect(artifactDownloadHref(BOT, path)).toBe(HREF(asked));
   });
 
-  test("a slash is left alone and everything else that could extend the query is encoded", () => {
-    // `encodeURIComponent` keeps `/`, so the workspace's own folders stay readable in the address,
-    // while a `?`, `&` or `#` inside a file name cannot open a second query on the way back.
+  test("the whole path is one query value, separators included", () => {
+    // `encodeURIComponent` escapes everything that could extend the query or open a fragment, and the
+    // workspace separator with them: `reports/…` arrives as `reports%2F…`. The route reads the query
+    // value decoded, so the folders still resolve on the computer — that round trip is pinned by
+    // `server/tests/computer-download-routes.test.ts` (WP-0.4, the escaped `..` case).
     expect(artifactDownloadHref(BOT, "a?b=1&c=2.txt")).toBe(
       "/api/computers/bot-7/files/download?path=a%3Fb%3D1%26c%3D2.txt",
     );
     expect(artifactDownloadHref(BOT, "reports/季度#2.pdf")).toBe(
-      "/api/computers/bot-7/files/download?path=reports/%E5%AD%A3%E5%BA%A6%232.pdf",
+      "/api/computers/bot-7/files/download?path=reports%2F%E5%AD%A3%E5%BA%A6%232.pdf",
     );
   });
 
