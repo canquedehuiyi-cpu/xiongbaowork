@@ -186,7 +186,7 @@ const router = createDeliveryRouter({
   owner: `${prefix}-router`,
   authoriseScope: scopes.authorise,
   scopeFor: scopes.scopeFor,
-  routeFor: async (input) => ({
+  routeFor: async () => ({
     kind: "progress",
     notify: true,
     allows: (transport) =>
