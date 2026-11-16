@@ -2198,3 +2198,40 @@ test("接下 is stamped on the caller's clock, so its two-hour check is too", as
     at.toISOString(),
   );
 });
+
+test("the 退回 line is dated when the 退回 was claimed, ahead of the round its reason starts", async () => {
+  // The route says the reason (starting a round) before it writes the 退回: a fast round's lines must
+  // not land ahead of the 退回 that caused them.
+  const { tenantId, agentId, taskId } = await acceptedCard("return-order", {
+    acceptedAt: new Date(Date.now() - 10 * MINUTE),
+    dueAt: null,
+  });
+  await runAsTenant(tenantId, () =>
+    database
+      .update(tasks)
+      .set({ status: "awaiting_review" })
+      .where(eq(tasks.id, taskId)),
+  );
+  const claim = await delivery.claimReturn(tenantId, taskId);
+  if (!claim.ok) throw new Error(`not claimed: ${claim.why}`);
+  // The round the reason started has already said something.
+  await settle(5);
+  await runAsTenant(tenantId, () =>
+    appendTaskEvent(database, {
+      tenantId,
+      taskId,
+      kind: "progress",
+      actor: `agent:${agentId}`,
+      detail: { text: "在补 C 家的发票" },
+    }),
+  );
+  await settle(5);
+  const returned = await delivery.returnTask(tenantId, taskId, {
+    actor: `user:${tenantId}`,
+    reason: "缺 C 家的发票",
+    claimedAt: claim.claimedAt,
+  });
+  expect(returned?.returns).toBe(1);
+  const kinds = (await history(tenantId, taskId)).map((line) => line.kind);
+  expect(kinds.indexOf("returned")).toBeLessThan(kinds.indexOf("progress"));
+});

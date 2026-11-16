@@ -1065,6 +1065,8 @@ export function createDelivery(database: Database): Delivery {
             });
           if (!card?.threadRef || !card.agentId) return null;
           await appendTaskEvent(transaction, {
+            // Claimed before its reason started a round: dated then, ahead of that round's lines.
+            ...(input.claimedAt ? { at: input.claimedAt } : {}),
             tenantId,
             taskId,
             kind: "returned",

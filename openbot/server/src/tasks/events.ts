@@ -33,6 +33,11 @@ export async function appendTaskEvent(
      * same id (`delivery.*` events, spec §4), so the card finds its line by it and not by content.
      */
     id?: string;
+    /**
+     * When it happened, when that is earlier than the write: a 退回 is written after the round its
+     * reason starts, and is dated when it was claimed so that round's lines do not land ahead of it.
+     */
+    at?: Date;
   },
 ): Promise<void> {
   await database.insert(taskEvents).values({
@@ -46,7 +51,7 @@ export async function appendTaskEvent(
      * The wall clock, not the transaction's start: two lines written in one transaction (a round's
      * progress, then its end) keep the order they were written in.
      */
-    createdAt: sql`clock_timestamp()`,
+    createdAt: input.at ?? sql`clock_timestamp()`,
   });
 }
 
