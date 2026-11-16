@@ -285,6 +285,7 @@ export function deliveryTools(options: {
         const acceptedLine = randomUUID();
         const accepted = await delivery.accept(tenantId, taskId, {
           eventId: acceptedLine,
+          at: now(),
           runId: run.runId,
           threadRef: run.threadId,
           actor,
