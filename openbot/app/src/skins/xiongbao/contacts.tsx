@@ -2,6 +2,7 @@ import { IconSparkles } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
+import { ExternalMark } from "@/components/agents/external/external-marks";
 import { StatusDot } from "@/components/agents/status-dot";
 import {
   employeeGroups,
@@ -14,12 +15,18 @@ import {
   useSidebarToggleVisible,
 } from "@/components/layout/sidebar-toggle";
 import {
+  externalMark,
+  hiredRun,
+  useExternalDevices,
+} from "@/lib/agents/external";
+import {
   knownPresence,
   type Presence,
   presenceDoing,
   usePresence,
 } from "@/lib/agents/presence";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
+import type { RegisteredDevice } from "@/lib/devices/queries";
 import { cn } from "@/lib/utils";
 import {
   EmployeeCard,
@@ -83,15 +90,24 @@ const cardClassName = cn(
 function EmployeeTile({
   agent,
   presence,
+  device,
   onOpen,
 }: {
   agent: AgentProfile;
   /** 此刻的状态；读不到时没有，卡上就不画状态点和「此刻」。 */
   presence?: Presence;
+  /** 外部员工所在的电脑（本机智能体的名字从这里读）；别的员工没有。 */
+  device?: RegisteredDevice;
   onOpen: (agentId: string) => void;
 }) {
   const known = knownPresence(presence);
   const doing = presenceDoing(known);
+  const external = agent.external;
+  // 招进来时职务就是「外部员工 · Codex」，有了标记就不再写一遍。
+  const title =
+    external && agent.title === externalMark(external, device)
+      ? ""
+      : agent.title;
   return (
     <li className="flex">
       <button
@@ -116,10 +132,17 @@ function EmployeeTile({
             <span className="truncate font-semibold text-[14px]">
               {agent.name}
             </span>
-            {agent.title ? (
+            {title ? (
               <span className={cn("mt-0.5 truncate text-[12px]", TONE.muted)}>
-                {agent.title}
+                {title}
               </span>
+            ) : null}
+            {external ? (
+              <ExternalMark
+                className="mt-1"
+                device={device}
+                external={external}
+              />
             ) : null}
           </span>
         </span>
@@ -130,7 +153,7 @@ function EmployeeTile({
 }
 
 /**
- * 「招一位新同事 → 人才市场」，第三行是人才市场里还没召唤的几位预设员工的名字（有才写）。写名字不写职务：
+ * 「招一位新同事 → 人才市场 · 从我的电脑招」（都在 `/bots` 顶部的页签里），第三行是人才市场里还没召唤的几位预设员工的名字（有才写）。写名字不写职务：
  * 人才市场的卡片上认的是名字（通用助手、运营助手），职务只是名字下面那一行。本人的分身不算「新同事」。
  */
 function RecruitTile({ pending }: { pending: readonly AgentProfile[] }) {
@@ -167,8 +190,8 @@ function RecruitTile({ pending }: { pending: readonly AgentProfile[] }) {
             <span className="truncate font-semibold text-[14px]">
               招一位新同事
             </span>
-            <span className={cn("mt-0.5 truncate text-[12px]", TONE.muted)}>
-              去人才市场召唤
+            <span className={cn("mt-0.5 text-[12px] leading-snug", TONE.muted)}>
+              人才市场 · 从我的电脑招
             </span>
           </span>
         </span>
@@ -198,6 +221,7 @@ function OrgChart({ onOpen }: { onOpen: (agentId: string) => void }) {
   const employees = employeeGroups(listedEmployees(agents.data)).summoned;
   // 整张组织架构一次读出所有员工此刻的状态，不是每张卡一个。
   const presence = usePresence(employees.map((agent) => agent.id));
+  const devices = useExternalDevices(employees);
   const pending = (agents.data ?? []).filter(isPendingSummon);
   const groups = departmentGroups(employees);
   const research = groups.findIndex((group) => group.name === RECRUIT_AFTER);
@@ -261,6 +285,7 @@ function OrgChart({ onOpen }: { onOpen: (agentId: string) => void }) {
                   {group.members.map((agent) => (
                     <EmployeeTile
                       agent={agent}
+                      device={devices.get(hiredRun(agent)?.deviceId ?? "")}
                       key={agent.id}
                       onOpen={onOpen}
                       presence={presence.get(agent.id)}

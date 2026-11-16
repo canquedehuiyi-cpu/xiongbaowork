@@ -1,6 +1,13 @@
 import { declaredHarness } from "@openbot/shared/harnesses";
 import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  type AcpHarness,
+  type AcpRuleKey,
+  type AcpRuleValue,
+  acpRulesFrom,
+} from "../../../shared/acp";
 import { capabilityRefusal } from "../admin/capabilities";
+import { englishName } from "../brand";
 import type { CredentialStore } from "../credentials";
 import type { Database } from "../db/client";
 import {
@@ -16,13 +23,13 @@ import {
 import { roleTemplates } from "../db/schema/roles";
 import { teamBotPublications } from "../db/schema/team-bots";
 import { TEAM_TENANT } from "../db/schema/tenant";
-import { asPlatform, currentTenant, isPersonTenant } from "../tenant/context";
-import { avatarAgentId } from "../tenant/provisioning";
 import {
   assignedCondition,
   assignedToActor,
   teamBotAccess,
 } from "../team-bots/access";
+import { asPlatform, currentTenant, isPersonTenant } from "../tenant/context";
+import { avatarAgentId } from "../tenant/provisioning";
 import {
   authFromConfiguration,
   retireReplacedKey,
@@ -39,13 +46,12 @@ import { mayIsolate } from "./isolation";
 import { canManageAgent } from "./profile-policy";
 import type {
   AgentActor,
+  AgentExternalRun,
   AgentProfile,
   AgentRoleContent,
   CreateAgentInput,
   Persona,
 } from "./profile-types";
-import { englishName } from "../brand";
-import type { AcpHarness, AcpRuleKey, AcpRuleValue } from "../../../shared/acp";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type DatabaseExecutor = Pick<Database, "select"> | Pick<Transaction, "select">;
@@ -506,7 +512,54 @@ function mapProfile(
     // wipe one by saving an unrelated edit; showing the value would put a secret in a screenshot.
     hasAuth: authFromConfiguration(row.configuration) !== null,
     instructions: starterInstructionsOf(row),
+    type: row.type,
     ...frameworkField(row),
+    ...externalField(row),
+  };
+}
+
+const EXTERNAL_HARNESSES: readonly AcpHarness[] = [
+  "codex",
+  "claude-code",
+  "hermes",
+  "custom",
+];
+
+/**
+ * An external employee's computer, agent, folder and rules, read back out of its configuration. See
+ * `AgentProfile.externalRun`. Its rules are read exactly as the permission bridge reads them
+ * (`acpRulesFrom`); a configuration missing its computer or folder publishes none.
+ */
+export function externalField(row: {
+  type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
+  configuration: unknown;
+}): { externalRun?: AgentExternalRun } {
+  if (row.type !== "device_acp") return {};
+  const saved =
+    row.configuration && typeof row.configuration === "object"
+      ? (row.configuration as Record<string, unknown>)
+      : {};
+  const harness = saved.harness as AcpHarness;
+  if (
+    typeof saved.deviceId !== "string" ||
+    typeof saved.workdirRef !== "string" ||
+    !EXTERNAL_HARNESSES.includes(harness)
+  )
+    return {};
+  const rules = acpRulesFrom(saved);
+  return {
+    externalRun: {
+      harness,
+      deviceId: saved.deviceId,
+      workdirRef: saved.workdirRef,
+      ...(harness === "custom" && typeof saved.appRef === "string"
+        ? { appRef: saved.appRef }
+        : {}),
+      rules,
+      ...(harness === "custom" && saved.noPermissionAcknowledged === true
+        ? { noPermissionAcknowledged: true as const }
+        : {}),
+    },
   };
 }
 

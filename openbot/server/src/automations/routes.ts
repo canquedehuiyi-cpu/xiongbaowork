@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { ExternalEmployeeWorkRefusedError } from "../agents/acp/external";
 import type { AppVariables } from "../auth/guards";
 import {
   AUTOMATION_HOOK_BODY_LIMIT,
@@ -60,6 +61,10 @@ export function createAutomationRoutes(
     }
     if (error instanceof AutomationRefusedError) {
       return context.json({ error: error.message }, 422);
+    }
+    // An external employee as the target: refused as routines and duties are (409).
+    if (error instanceof ExternalEmployeeWorkRefusedError) {
+      return context.json({ error: error.message }, 409);
     }
     throw error;
   };

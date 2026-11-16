@@ -1,13 +1,14 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { randomBytes, randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAppRegistry } from "../../runner/src/apps";
-import { createDiscoverActions } from "../../runner/src/discover-actions";
-import { randomBytes, randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
+import { createAppRegistry } from "../../runner/src/apps";
+import { createDiscoverActions } from "../../runner/src/discover-actions";
 import {
+  EXTERNAL_UNATTENDED_REFUSAL,
   externalEmployeesAmong,
   externalHirerOf,
 } from "../src/agents/acp/external";
@@ -19,6 +20,8 @@ import { createAgentRoutes } from "../src/agents/routes";
 import { createWakeUpStore, WakeUpRefusedError } from "../src/agents/wake-up";
 import type { AuditStore } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";
+import { createAutomationRoutes } from "../src/automations/routes";
+import { createAutomationStore } from "../src/automations/store";
 import {
   createGroupConversations,
   createGroupStore,
@@ -31,6 +34,7 @@ import {
   acpTurns,
   agentProfiles,
   agents,
+  automations,
   channels,
   intelligenceChannelMappings,
   proactiveSettings,
@@ -217,6 +221,10 @@ function server(
   routes.route(
     "/routines",
     createRoutineRoutes(createRoutineStore(database), guard),
+  );
+  routes.route(
+    "/automations",
+    createAutomationRoutes(createAutomationStore(database), guard),
   );
   routes.route(
     "/responsibilities",
@@ -506,6 +514,21 @@ describe("an external employee's configuration", () => {
         })
       ).status,
     ).toBe(400);
+    // Its hirer reads how it runs through the generic routes too (its badge, card and settings),
+    // and it never gets the model picker: its agent picks its own model.
+    const read = await call(owner, "GET", `/agents/${agent.id}`);
+    expect(read.status).toBe(200);
+    expect(await read.json()).toMatchObject({
+      agent: {
+        runsOnOpenBotModel: false,
+        external: {
+          harness: "codex",
+          deviceId: device.deviceId,
+          workdirRef: other,
+          rules: { ...RULES, push: "direct" },
+        },
+      },
+    });
     // Somebody else: refused, and the generic routes do not even show it to them.
     expect(
       (
@@ -785,6 +808,42 @@ describe("work nobody asks for", () => {
         .where(eq(routines.agentId, agent.id)),
     );
     expect(rows).toHaveLength(0);
+  });
+
+  test("automations cannot target a device_acp employee", async () => {
+    const owner = await person();
+    const device = await computer(owner);
+    const { agent } = await hired(owner, device);
+    const response = await call(owner, "POST", "/automations", {
+      name: "每天跑一遍构建",
+      target: { kind: "waker", agentId: agent.id },
+    });
+    // The same refusal, status and sentence as a routine or a duty.
+    expect(response.status).toBe(409);
+    expect(((await response.json()) as { error: string }).error).toBe(
+      EXTERNAL_UNATTENDED_REFUSAL,
+    );
+    const rows = await runAsTenant(owner.id, () =>
+      database
+        .select({ id: automations.id })
+        .from(automations)
+        .where(eq(automations.tenantId, owner.id)),
+    );
+    expect(rows).toHaveLength(0);
+    // Any other employee of theirs is still a target.
+    const other = await runAsTenant(owner.id, () =>
+      profiles.create(owner, {
+        name: "日报员",
+        title: "Tester",
+        roleDescription: "Answer briefly.",
+        visibility: "private",
+      }),
+    );
+    const allowed = await call(owner, "POST", "/automations", {
+      name: "日报",
+      target: { kind: "waker", agentId: other.id },
+    });
+    expect(allowed.status).toBe(201);
   });
 
   test("duties, proactive work and wake-ups cannot be set up for a device_acp employee", async () => {

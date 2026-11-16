@@ -1,17 +1,20 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
+import { Hono, type MiddlewareHandler } from "hono";
 import { computerAccessCheck } from "../src/agents/computer-access";
 import { createAgentProfileStore } from "../src/agents/profile-store";
+import type { AppVariables } from "../src/auth/guards";
 import type { OpenBotRole } from "../src/auth/roles";
+import { createComputerRoutes } from "../src/computer/routes";
 import {
   type ComputerStreamSocketData,
   handleComputerStreamUpgrade,
 } from "../src/computer/stream-upgrade";
 import { createDatabase } from "../src/db/client";
-import { runnerAddress } from "../src/devices/channel";
 import { agents, users } from "../src/db/schema/core";
 import { agentProfiles } from "../src/db/schema/coworker";
+import { runnerAddress } from "../src/devices/channel";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -26,6 +29,8 @@ const prefix = `stream-upgrade-${randomUUID()}`;
 const owner = `${prefix}-owner`;
 const stranger = `${prefix}-stranger`;
 const bot = `${prefix}-bot`;
+/** An external employee (`device_acp`) of the same owner: it has no computer of ours. */
+const external = `${prefix}-external`;
 const profiles = createAgentProfileStore(database, undefined);
 
 const roles: Record<string, OpenBotRole> = {
@@ -61,9 +66,9 @@ function fakeServer() {
   };
 }
 
-function streamRequest(user: string): Request {
+function streamRequest(user: string, botId = bot): Request {
   return new Request(
-    `http://openbot.example.test/api/computers/${encodeURIComponent(bot)}/stream`,
+    `http://openbot.example.test/api/computers/${encodeURIComponent(botId)}/stream`,
     { headers: { upgrade: "websocket", "x-test-user": user } },
   );
 }
@@ -92,12 +97,31 @@ beforeAll(async () => {
       avatarSeed: bot,
       visibility: "private",
     });
+    await database.insert(agents).values({
+      id: external,
+      name: "代码熊",
+      type: "device_acp",
+      configuration: {
+        deviceId: "laptop-1",
+        harness: "codex",
+        workdirRef: "fld_shop",
+        permissions: {},
+      },
+    });
+    await database.insert(agentProfiles).values({
+      agentId: external,
+      ownerUserId: owner,
+      title: "外部员工 · Codex",
+      roleDescription: "在你的电脑上干活的 Codex。",
+      avatarSeed: external,
+      visibility: "private",
+    });
   });
 });
 
 afterAll(async () => {
   await runAsTenant(owner, async () => {
-    await database.delete(agents).where(eq(agents.id, bot));
+    await database.delete(agents).where(inArray(agents.id, [bot, external]));
     await database.delete(users).where(inArray(users.id, [owner]));
   });
   await runAsTenant(stranger, () =>
@@ -201,4 +225,85 @@ test("a visible Bot located on another tenant's device is refused, not relayed",
   expect(answer?.status).toBe(404);
   expect(await answer?.text()).toBe("There is no such Bot.");
   expect(server.upgraded).toEqual([]);
+});
+
+/*
+ * 外部员工 Task 11: an external employee works in its own agent on its hirer's computer and has no
+ * computer of ours. Every route under it would locate one by its id (and on a cloud deployment start
+ * it), so the access check refuses it for everybody, its hirer included, on the socket and the HTTP
+ * routes alike; any other Bot of the same owner is unaffected.
+ */
+test("an external employee's live screen is refused, even to its hirer, and nothing is located", async () => {
+  const server = fakeServer();
+  const located: string[] = [];
+  const answer = await handleComputerStreamUpgrade(
+    {
+      ...deps(),
+      locate: async (botId: string) => {
+        located.push(botId);
+        return `http://computer.example.test/${botId}`;
+      },
+    },
+    streamRequest(owner, external),
+    server,
+  );
+  expect(answer?.status).toBe(404);
+  expect(server.upgraded).toEqual([]);
+  expect(located).toEqual([]);
+});
+
+test("an external employee's control and exec are refused before the gateway; another Bot's are not", async () => {
+  const reached: string[] = [];
+  const gateway = {
+    seatFor: async (botId: string, personId: string) => ({
+      botId,
+      personId,
+      key: { kind: "person", personId },
+    }),
+    control: async (seat: { botId: string }) => {
+      reached.push(`control:${seat.botId}`);
+      return { holder: "bot", transitioning: false };
+    },
+    exec: async (seat: { botId: string }) => {
+      reached.push(`exec:${seat.botId}`);
+      return { exitCode: 0, stdout: "", stderr: "" };
+    },
+  } as never;
+  const signedIn: MiddlewareHandler<{ Variables: AppVariables }> = async (
+    context,
+    next,
+  ) => {
+    context.set("actor", {
+      id: owner,
+      email: `${owner}@example.test`,
+      role: "user",
+    });
+    await runAsTenant(owner, next);
+  };
+  const hono = new Hono().route(
+    "/api/computers",
+    createComputerRoutes(
+      gateway,
+      { get: () => ({ mode: "enforce", deny: [], allow: [] }) } as never,
+      signedIn,
+      computerAccessCheck(profiles),
+    ),
+  );
+  const ask = (botId: string, path: string, init?: RequestInit) =>
+    hono.request(
+      `http://t/api/computers/${encodeURIComponent(botId)}/${path}`,
+      init,
+    );
+  const exec = {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ command: "ls" }),
+  };
+
+  expect((await ask(external, "control")).status).toBe(404);
+  expect((await ask(external, "exec", exec)).status).toBe(404);
+  expect(reached).toEqual([]);
+
+  expect((await ask(bot, "control")).status).toBe(200);
+  expect(reached).toEqual([`control:${bot}`]);
 });

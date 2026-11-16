@@ -41,7 +41,10 @@ export const PRESENCE_POLL_MS = 10_000;
 
 const EMPTY: ReadonlyMap<string, Presence> = new Map();
 
-/** 去重、排序、截到上限：同一批员工不管先后，用的是同一条缓存。 */
+/**
+ * 去重、截到上限、排序：同一批员工不管先后，用的是同一条缓存。超过上限时先给的留下，所以要紧的放前面
+ * （消息列表把外部员工放在最前，离线提示条靠它们）。
+ */
 export function presenceIds(ids: readonly string[]): string[] {
   return [...new Set(ids.filter((id) => id.length > 0))]
     .slice(0, PRESENCE_MAX_IDS)

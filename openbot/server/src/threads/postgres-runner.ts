@@ -19,6 +19,7 @@ import {
   finalize,
   from,
   Observable,
+  ReplaySubject,
   type Subscription,
   switchMap,
   tap,
@@ -263,7 +264,7 @@ export function adoptRunnerCard<T>(runRef: string, body: () => T): T {
 
 /**
  * Events of an external employee's run that are kept out of the thread's stored history:
- * `acp.waiting` says every 20 seconds that a run is still open, which means nothing once it is over,
+ * `acp.waiting` says every few seconds that a run is still open, which means nothing once it is over,
  * and a turn waiting days for a permission answer would otherwise store one row per beat.
  */
 function transient(event: BaseEvent): boolean {
@@ -974,9 +975,27 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       );
     };
     const before: Promise<unknown> | undefined = card ?? attached;
-    return before
+    const turn = before
       ? from(before).pipe(switchMap((value) => stream(value !== false)))
       : stream();
+    /*
+     * THE SERVER FOLLOWS ITS OWN TURN TO THE END, WHOEVER IS WATCHING.
+     *
+     * The parent runs the agent on its own whatever the caller does, but everything above that
+     * closes the turn — the thread's history written to PostgreSQL, the board card finished, the
+     * delivery rounds ended — hangs on this stream completing. When the browser that started the
+     * turn went away (closed, reloaded, a laptop lid), its subscription went with it, the stream was
+     * torn down mid-turn, and none of that ran: the answer never reached the thread's stored history
+     * (gone after a restart) and the card stayed `running` (the coworker "busy") for good. An external
+     * employee waits on its hirer's permission for hours, so for it that was the ordinary case.
+     *
+     * So the turn is subscribed here, and the caller is handed a replay of it: leaving stops the
+     * caller hearing it, never the turn ending. A turn is stopped through `stop` (`abortRun`), as
+     * before, never by unsubscribing.
+     */
+    const kept = new ReplaySubject<BaseEvent>();
+    turn.subscribe(kept);
+    return kept.asObservable();
   }
 
   private async persist(

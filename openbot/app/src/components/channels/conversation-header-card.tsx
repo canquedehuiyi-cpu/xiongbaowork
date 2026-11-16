@@ -1,8 +1,14 @@
 import { BotOrb } from "@/components/agents/bot-orb";
+import { ExternalMark } from "@/components/agents/external/external-marks";
 import { StatusDot } from "@/components/agents/status-dot";
 import { ChosenPortrait } from "@/components/channels/avatar";
 import { VisibilityTag } from "@/components/channels/visibility-tag";
 import type { AvatarMotionState } from "@/components/portraits/preset-animations";
+import {
+  externalMark,
+  externalSubtitle,
+  useExternalDevice,
+} from "@/lib/agents/external";
 import {
   knownPresence,
   type Presence,
@@ -27,6 +33,10 @@ export const CONVERSATION_HEADER_CLASS =
  * now — the status dot and 「忙碌 · 任务标题」, 「空闲」 or 「已暂停」, as the mock's header draws it —
  * and the title moves up beside the name. A presence that is missing or `unknown` changes nothing:
  * the card is drawn exactly as without it, never with placeholder words.
+ *
+ * An external employee (外部员工 Task 11) carries its 「外部员工 · Codex」 badge beside its name, and
+ * the presence line says which computer it works on: 「忙碌 · 修登录接口的 401 · 在 何总的 MacBook Pro
+ * 上」, 「离线 · 2 件排队中 · 在 … 上」. A part that is missing is left out with its 「·」.
  */
 export function ConversationHeaderCard({
   agent,
@@ -38,7 +48,18 @@ export function ConversationHeaderCard({
   presence?: Presence;
 }) {
   const known = knownPresence(presence);
-  const now = presenceSummary(known);
+  const external = agent.external;
+  const device = useExternalDevice(agent);
+  const now = external
+    ? externalSubtitle(presenceSummary(known), device?.name)
+    : presenceSummary(known);
+  // 招进来时职务就是「外部员工 · Codex」，有了标记就不再写一遍。
+  const title =
+    external && agent.title === externalMark(external, device)
+      ? ""
+      : agent.title;
+  // 状态读不到时第二行照旧写职务；外部员工没有职务可写时写它在哪台电脑上。
+  const fallback = title || (external ? now : "");
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <span className="block size-10 shrink-0">
@@ -55,16 +76,20 @@ export function ConversationHeaderCard({
           <span className="min-w-0 truncate font-medium text-[14px] tracking-tight">
             {agent.name}
           </span>
-          <VisibilityTag
-            className="h-5 shrink-0 px-1.5 font-semibold text-[11px]"
-            visibility={agent.visibility}
-          />
-          {known && agent.title ? (
+          {external ? (
+            <ExternalMark device={device} external={external} />
+          ) : (
+            <VisibilityTag
+              className="h-5 shrink-0 px-1.5 font-semibold text-[11px]"
+              visibility={agent.visibility}
+            />
+          )}
+          {known && title ? (
             <span
               className="min-w-0 truncate text-[12px] text-muted-foreground"
-              title={agent.title}
+              title={title}
             >
-              {agent.title}
+              {title}
             </span>
           ) : null}
         </div>
@@ -78,12 +103,12 @@ export function ConversationHeaderCard({
               {now}
             </span>
           </p>
-        ) : agent.title ? (
+        ) : fallback ? (
           <p
             className="truncate text-[12px] text-muted-foreground"
-            title={agent.title}
+            title={fallback}
           >
-            {agent.title}
+            {fallback}
           </p>
         ) : null}
       </div>

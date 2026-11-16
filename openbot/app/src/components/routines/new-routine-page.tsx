@@ -2,6 +2,7 @@ import { useForm } from "@tanstack/react-form";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";
+import { ExternalUnattendedNote } from "@/components/agents/external/external-marks";
 import { PageCard, PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { takesUnattendedWork } from "@/lib/agents/external";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { shortName } from "@/lib/brand";
 import { untitledLine } from "@/lib/channels/label";
@@ -133,6 +135,21 @@ export function NewRoutinePage({
     (agents.data ?? []).map((agent) => [agent.id, agent.name]),
   ) as Record<string, string>;
 
+  // 从外部员工的地方带进来的（旧链接、书签）：它这一步不接定时任务，不给表单，只说明。
+  if (
+    presetAgentId &&
+    agents.data?.some((agent) => agent.id === presetAgentId && agent.external)
+  )
+    return (
+      <PageShell
+        backButton={{ label: "定时任务", linkProps: ROUTINES_LIST }}
+        description="选一位员工，说说要做什么，再定好时间。它每次做完都会在和你的对话里说一声。"
+        title="新建定时任务"
+      >
+        <ExternalUnattendedNote />
+      </PageShell>
+    );
+
   return (
     <PageShell
       backButton={{ label: "定时任务", linkProps: ROUTINES_LIST }}
@@ -209,20 +226,26 @@ export function NewRoutinePage({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectGroup>
-                          {(agents.data ?? []).map((agent) => (
-                            <SelectItem key={agent.id} value={agent.id}>
-                              {/* Hidden: the name beside it already says who. */}
-                              <span aria-hidden="true" className="contents">
-                                <AbstractAvatar
-                                  name={agent.name}
-                                  seed={agent.avatarSeed}
-                                  portrait={{ kind: "coworker", id: agent.id }}
-                                  size={18}
-                                />
-                              </span>
-                              {agent.name}
-                            </SelectItem>
-                          ))}
+                          {/* 外部员工这一步不接定时任务（外部员工规格「不做」），不列它。 */}
+                          {(agents.data ?? [])
+                            .filter(takesUnattendedWork)
+                            .map((agent) => (
+                              <SelectItem key={agent.id} value={agent.id}>
+                                {/* Hidden: the name beside it already says who. */}
+                                <span aria-hidden="true" className="contents">
+                                  <AbstractAvatar
+                                    name={agent.name}
+                                    seed={agent.avatarSeed}
+                                    portrait={{
+                                      kind: "coworker",
+                                      id: agent.id,
+                                    }}
+                                    size={18}
+                                  />
+                                </span>
+                                {agent.name}
+                              </SelectItem>
+                            ))}
                         </SelectGroup>
                       </SelectContent>
                     </Select>

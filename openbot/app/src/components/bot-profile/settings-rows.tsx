@@ -30,6 +30,7 @@ import {
   setupSummary,
   sharingSummary,
 } from "@/lib/agents/bot-summaries";
+import { takesUnattendedWork } from "@/lib/agents/external";
 import type { AgentProfile } from "@/lib/agents/queries";
 import { approvalInboxOptions, ruleCoversBot } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
@@ -203,8 +204,19 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
    * you is Slack, Teams and text, and Memory is what its local Intelligence isn't licensed for: the
    * personal edition has neither.
    */
+  /*
+   * 外部员工这一步不接长期职责和定时任务（外部员工规格「不做」：没有人在场批它的许可请求，服务器对它
+   * 一律 409），这两行对它不画。
+   */
+  const offered = takesUnattendedWork(agent)
+    ? allRows
+    : allRows.filter(
+        (row) =>
+          row.to !== "/bots/$agentId/responsibilities" &&
+          row.to !== "/bots/$agentId/routines",
+      );
   const rows = personal
-    ? allRows.flatMap((row): Row[] =>
+    ? offered.flatMap((row): Row[] =>
         row.to === "/bots/$agentId/access"
           ? [{ ...row, title: "它能做什么" }]
           : row.to === "/bots/$agentId/responsibilities" ||
@@ -213,7 +225,7 @@ export function BotSettingsRows({ agent }: { agent: AgentProfile }) {
             ? []
             : [row],
       )
-    : allRows;
+    : offered;
 
   return (
     <PageSection title="这位员工的设置">
