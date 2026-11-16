@@ -108,6 +108,14 @@ function assertTrustedBase(baseUrl: string): void {
 const str = (v: unknown): string | null =>
   typeof v === "string" && v ? v : typeof v === "number" ? String(v) : null;
 
+/**
+ * `message_id` 是 19 位整数，超过 2^53，`JSON.parse` 会丢掉末几位。解析前把键后面的纯整数原样改成字符串。
+ * 只匹配未转义的键名：消息正文里写着 `"message_id": 1` 时引号是转义的（`\"`），不会被误改。
+ */
+function keepMessageIds(text: string): string {
+  return text.replace(/("message_id"\s*:\s*)(-?\d+)(?=\s*[,}\]])/g, '$1"$2"');
+}
+
 export function createIlinkClient(options: {
   fetch?: ProviderFetch;
   clientVersion: string;
@@ -158,7 +166,7 @@ export function createIlinkClient(options: {
     }
     try {
       const text = await response.text();
-      return text ? (JSON.parse(text) as Json) : {};
+      return text ? (JSON.parse(keepMessageIds(text)) as Json) : {};
     } catch {
       throw new DeliveryProviderError(PROVIDER, "bad_response", true);
     }

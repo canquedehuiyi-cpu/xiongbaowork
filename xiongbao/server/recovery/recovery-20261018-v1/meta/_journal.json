@@ -1443,6 +1443,13 @@
       "when": 1794572550911,
       "tag": "0225_wechat_bound_at",
       "breakpoints": true
+    },
+    {
+      "idx": 226,
+      "version": "7",
+      "when": 1794572550912,
+      "tag": "0226_wechat_disconnected",
+      "breakpoints": true
     }
   ]
 }

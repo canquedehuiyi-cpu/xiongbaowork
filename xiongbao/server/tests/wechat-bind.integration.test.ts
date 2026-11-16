@@ -174,6 +174,8 @@ async function overview(who: string, target = app) {
         boundAt: string;
         paused: boolean;
         windowOpen: boolean;
+        lastInboundAt: string | null;
+        pausedUntil: string | null;
       } | null;
     },
   };
@@ -282,6 +284,8 @@ test("扫码绑定：wait、scaned 照实回答，确认后存凭据、写账号
     boundAt: account?.boundAt?.toISOString() ?? "",
     paused: false,
     windowOpen: true,
+    lastInboundAt: expect.any(String),
+    pausedUntil: null,
   });
   for (const secret of [
     botToken,
@@ -447,4 +451,29 @@ test("没接微信的部署：available.wechat 为 false，总览为 null，开�
   expect(body.available.wechat).toBe(false);
   expect(body.wechat).toBeNull();
   expect((await call(bare, alice, "POST", "/wechat/start")).status).toBe(400);
+});
+
+test("已断开的账号：总览返回 disconnected，不占着这个微信，别人可以绑；本人重新扫码回到 bound", async () => {
+  const mine = await runAsTenant(bob, () => wechatStore.account(bob));
+  await runAsTenant(bob, () => wechatStore.disconnect(mine?.id ?? ""));
+  const { body } = await overview(bob);
+  expect(body.wechat?.status).toBe("disconnected");
+  expect(body.wechat?.pausedUntil).toBeNull();
+  expect(body.wechat?.lastInboundAt).toBeNull();
+
+  const theirs = await start(carol);
+  ilink.answer(
+    theirs.qrcode,
+    confirmed(`${prefix}-ilink-bob-new`, `${prefix}-CAROL-TOKEN-1`),
+  );
+  expect((await poll(carol, theirs.attemptId)).body.status).toBe("bound");
+  expect((await overview(carol)).body.wechat?.status).toBe("bound");
+
+  const again = await start(bob);
+  ilink.answer(
+    again.qrcode,
+    confirmed(`${prefix}-ilink-bob-again`, `${prefix}-BOB-TOKEN-4`),
+  );
+  expect((await poll(bob, again.attemptId)).body.status).toBe("bound");
+  expect((await overview(bob)).body.wechat?.status).toBe("bound");
 });

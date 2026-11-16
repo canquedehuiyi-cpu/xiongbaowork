@@ -17,8 +17,12 @@ import { tenantId } from "./tenant";
  * 微信 ClawBot 通道的三张表（迁移 0223、0224、0225），每行都带这个人的 `tenant_id`，行级安全同其他租户表。
  */
 
-/** `bound` 在轮询；`paused` 暂停到 `paused_until`（iLink 返回 -14 时一小时）；`unbound` 已解绑、保留行。 */
-export type WechatAccountStatus = "bound" | "paused" | "unbound";
+/** `bound` 在轮询；`paused` 暂停到 `paused_until`（iLink 返回 -14 时一小时）；`unbound` 已解绑、保留行；`disconnected` 是 iLink 拒绝了令牌（迁移 0226），等本人重新扫码。 */
+export type WechatAccountStatus =
+  | "bound"
+  | "paused"
+  | "unbound"
+  | "disconnected";
 /** 发到微信、等人回编号的提示是为了什么。 */
 export type WechatPromptKind =
   | "approval"
@@ -92,10 +96,10 @@ export const wechatAccounts = pgTable(
     uniqueIndex("wechat_accounts_user_idx").on(table.userId),
     uniqueIndex("wechat_accounts_ilink_user_idx")
       .on(table.ilinkUserId)
-      .where(sql`${table.status} <> 'unbound'`),
+      .where(sql`${table.status} IN ('bound', 'paused')`),
     check(
       "wechat_accounts_status_check",
-      sql`${table.status} IN ('bound', 'paused', 'unbound')`,
+      sql`${table.status} IN ('bound', 'paused', 'unbound', 'disconnected')`,
     ),
   ],
 );

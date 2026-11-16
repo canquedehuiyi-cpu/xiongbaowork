@@ -86,6 +86,24 @@ describe("iLink client", () => {
     expect(out.messages[1]?.id).toBe("9");
   });
 
+  test("getUpdates keeps a 19-digit message_id exactly as the server sent it", async () => {
+    const { fetchImpl } = fake(
+      () =>
+        new Response(
+          '{"ret":0,"get_updates_buf":"c","msgs":[{"seq":1,"message_id": 7527968756814112345,"from_user_id":"u1","item_list":[{"type":1,"text_item":{"text":"\\"message_id\\": 123"}}]}]}',
+          { status: 200 },
+        ),
+    );
+    const client = createIlinkClient({
+      fetch: fetchImpl,
+      clientVersion: "2.4.10",
+    });
+    const out = await client.getUpdates(session, "");
+    expect(out.messages[0]?.id).toBe("7527968756814112345");
+    // 消息正文里恰好写着 "message_id": 123 也不会被改写。
+    expect(out.messages[0]?.text).toBe('"message_id": 123');
+  });
+
   test("getUpdates returns a non-empty cursor and defaults the timeout", async () => {
     const { fetchImpl } = fake(() =>
       json({ ret: 0, get_updates_buf: "next", msgs: [] }),

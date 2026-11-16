@@ -48,10 +48,14 @@ export type WechatBindAnswer = { status: WechatBindStatus; message?: string };
 
 /** 总览里关于微信的全部内容：没有任何令牌和 id。 */
 export type WechatSummary = {
-  status: "bound" | "paused";
+  status: "bound" | "paused" | "disconnected";
   boundAt: Date;
   paused: boolean;
   windowOpen: boolean;
+  /** 最后一次入站（JSON 里是 ISO 字符串），没收到过为 null。 */
+  lastInboundAt: Date | null;
+  /** 暂停到几点（JSON 里是 ISO 字符串），没在暂停为 null。 */
+  pausedUntil: Date | null;
 };
 
 const MESSAGES: Partial<Record<WechatBindStatus, string>> = {
@@ -247,7 +251,7 @@ export function createWechatBind(deps: WechatBindDeps) {
       });
     },
 
-    /** 设置页看的那一点：只挑这四个字段，绝不展开账号行。 */
+    /** 设置页看的那一点：只挑这几个字段，绝不展开账号行。 */
     async summary(
       userId: string,
       now: Date = new Date(),
@@ -258,9 +262,16 @@ export function createWechatBind(deps: WechatBindDeps) {
         row.status === "paused" &&
         (!row.pausedUntil || row.pausedUntil.getTime() > now.getTime());
       return {
-        status: paused ? "paused" : "bound",
+        status:
+          row.status === "disconnected"
+            ? "disconnected"
+            : paused
+              ? "paused"
+              : "bound",
         boundAt: row.boundAt ?? row.createdAt,
         paused,
+        lastInboundAt: row.lastInboundAt,
+        pausedUntil: paused ? row.pausedUntil : null,
         windowOpen: Boolean(
           row.lastInboundAt &&
             now.getTime() - row.lastInboundAt.getTime() <

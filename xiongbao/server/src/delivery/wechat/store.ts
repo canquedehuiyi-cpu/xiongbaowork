@@ -9,7 +9,7 @@
  * 租约按数据库时钟（`now()`）算，理由同 `work/queue.ts`：副本的时钟和数据库的时钟不是一个钟。
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../../db/client";
 import {
   type WechatAccount,
@@ -60,7 +60,7 @@ export function createWechatStore(database: Database) {
     },
 
     /**
-     * 这个微信用户当前绑在谁身上（不算已解绑的行）。
+     * 这个微信用户当前绑在谁身上（只算 `bound` 和 `paused`；已解绑、已断开的行不占着这个微信）。
      *
      * 在 platform 帧里查：第二个人绑定时在自己的帧里看不见第一个人的行，`ilink_user_id` 的部分唯一索引
      * 会在插入时拒绝，但拒绝前先问这里，才能给出「这个微信已经绑了别人」而不是一个唯一冲突。
@@ -75,7 +75,7 @@ export function createWechatStore(database: Database) {
           .where(
             and(
               eq(wechatAccounts.ilinkUserId, ilinkUserId),
-              ne(wechatAccounts.status, "unbound"),
+              inArray(wechatAccounts.status, ["bound", "paused"]),
             ),
           ),
       );
@@ -149,7 +149,42 @@ export function createWechatStore(database: Database) {
         .where(
           and(
             eq(wechatAccounts.id, accountId),
-            ne(wechatAccounts.status, "unbound"),
+            inArray(wechatAccounts.status, ["bound", "paused"]),
+          ),
+        );
+    },
+
+    /**
+     * iLink 拒绝了令牌（401/403）：标成 `disconnected`，不再认领，行和凭据保留；清掉租约。
+     * 这个微信号随之不再占着唯一索引。本人重新扫码时 `saveAccount` 覆盖这一行、回到 `bound`。
+     */
+    async disconnect(accountId: string): Promise<void> {
+      await database
+        .update(wechatAccounts)
+        .set({
+          status: "disconnected",
+          pausedUntil: null,
+          leaseOwner: null,
+          leaseUntil: null,
+          updatedAt: sql`now()`,
+        })
+        .where(
+          and(
+            eq(wechatAccounts.id, accountId),
+            inArray(wechatAccounts.status, ["bound", "paused"]),
+          ),
+        );
+    },
+
+    /** 轮询完一次就还租约，下一轮马上能认领；只还自己的。在调用方的帧里（账号所属租户）。 */
+    async releaseLease(accountId: string, owner: string): Promise<void> {
+      await database
+        .update(wechatAccounts)
+        .set({ leaseOwner: null, leaseUntil: null })
+        .where(
+          and(
+            eq(wechatAccounts.id, accountId),
+            eq(wechatAccounts.leaseOwner, owner),
           ),
         );
     },
@@ -283,7 +318,7 @@ export function createWechatStore(database: Database) {
     },
 
     /**
-     * 续租，只在租约仍是自己的、且没过期时成功：过期后可能已被别人认领，不能从别人手里续回来。
+     * 续租，只在账号是 `bound`、租约仍是自己的、且没过期时成功：过期后可能已被别人认领，不能从别人手里续回来。
      */
     async renewLease(
       accountId: string,
@@ -299,7 +334,7 @@ export function createWechatStore(database: Database) {
               eq(wechatAccounts.id, accountId),
               eq(wechatAccounts.leaseOwner, owner),
               sql`${wechatAccounts.leaseUntil} > now()`,
-              ne(wechatAccounts.status, "unbound"),
+              eq(wechatAccounts.status, "bound"),
             ),
           )
           .returning({ id: wechatAccounts.id }),

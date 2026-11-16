@@ -278,6 +278,7 @@ import {
   createIlinkClient,
   ILINK_DEFAULT_CLIENT_VERSION,
 } from "./delivery/wechat/ilink";
+import { createWechatPoller } from "./delivery/wechat/poller";
 import { createWechatStore } from "./delivery/wechat/store";
 import { createDeviceChannel, type DispatchTarget } from "./devices/channel";
 import { createDeviceQueue } from "./devices/queue";
@@ -4019,6 +4020,41 @@ await startupLifecycle.run(async (startup) => {
       ILINK_DEFAULT_CLIENT_VERSION,
   });
   const wechatStore = createWechatStore(database);
+  /*
+   * 微信长轮询（delivery/wechat/poller.ts）：每 2 秒认领一批账号各拉一次。真正的 `inbound`（把消息交给
+   * 智能体）由下一项任务接上；在那之前这里的 `inbound` 一律抛错，轮询器就不会存游标、不丢消息，所以默认
+   * 不启动，设 WECHAT_POLLER=on 才跑（接上 `inbound` 的那次提交把它改成默认开）。
+   */
+  if (process.env.WECHAT_POLLER?.trim() === "on") {
+    const wechatPoller = createWechatPoller({
+      database,
+      wechat: wechatStore,
+      ilink: wechatIlink,
+      credentials: credentialStore,
+      keyEncryptionKey: config.keyEncryptionKey,
+      inbound: async () => {
+        throw new Error("wechat inbound handler is not connected");
+      },
+      owner: workOwner("wechat"),
+    });
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          try {
+            await wechatPoller.tick();
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                type: "wechat-poller-error",
+                error: error instanceof Error ? error.name : "UnknownError",
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }, 2_000),
+      (resource) => resource.stop(),
+    );
+  }
   const deliveryProviders = configuredDeliveryProviders(
     config.publicUrl ??
       config.auth?.baseUrl ??
