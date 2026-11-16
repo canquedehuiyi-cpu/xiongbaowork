@@ -16,6 +16,7 @@ import { randomUUID } from "node:crypto";
 import { approvalPhrase } from "@openbot/shared/tool-name";
 import type { DrawnComponent } from "@openbot/toolkit/run-turn";
 import { z } from "zod";
+import { acpCardOf } from "../agents/acp/permissions";
 import {
   type ApprovalDecision,
   type ApprovalPolicyOutcome,
@@ -339,8 +340,7 @@ async function answer(
     return { text: "" };
   }
   const message = latestUserMessage(input);
-  if (!message?.text)
-    return { text: "给我发消息，我会转给你的员工。" };
+  if (!message?.text) return { text: "给我发消息，我会转给你的员工。" };
 
   const code = LINK.exec(message.text)?.[1];
   if (code) return link(deps, sender, code.toLowerCase());
@@ -620,8 +620,30 @@ async function approvalCard(
     effect: record.action.effect,
     // The approvals preview already redacts secrets and private content.
     fields: approvalFields(approvalArgsPreview(record.action)),
-    allowAlways: offersStandingRule(record.action),
+    allowAlways: offersStandingAnswer(record.action),
   });
+}
+
+/**
+ * Whether a card's "Always allow" means anything for this approval, and what it answers.
+ *
+ * An external employee's permission (`acp/…`, 外部员工 Task 12) has the web's three choices: allow
+ * once, allow for this conversation, deny. Its card's second yes is "for this conversation" (the
+ * agent is answered `allow_always`, in its session only), offered only where the approval offers it:
+ * never for a floor or what the admin refused. Every other approval keeps its standing rule.
+ */
+function offersStandingAnswer(
+  action: Parameters<typeof offersStandingRule>[0] &
+    Parameters<typeof acpCardOf>[0],
+): boolean {
+  const acp = acpCardOf(action);
+  return acp ? acp.offerConversation === true : offersStandingRule(action);
+}
+
+function standingAnswer(
+  action: Parameters<typeof acpCardOf>[0],
+): Extract<ApprovalDecision, "allow_always" | "allow_conversation"> {
+  return acpCardOf(action) ? "allow_conversation" : "allow_always";
 }
 
 async function decideFromCard(
@@ -687,10 +709,11 @@ async function decideAsBinding(
     };
   // An older card may still offer "Always allow" on a check-in task's approval: that is once.
   // 删除类底线问的动作没有「总是允许」：旧卡片上按的 always 只当作这一次。
+  // An external employee's "always" is "for this conversation", and only where it is offered.
   const decision: ApprovalDecision = !resume.confirmed
     ? "deny"
-    : resume.always && offersStandingRule(record.action)
-      ? "allow_always"
+    : resume.always && offersStandingAnswer(record.action)
+      ? standingAnswer(record.action)
       : "allow_once";
   await deps.approvals.decide(binding.ownerUserId, resume.approvalId, decision);
   const bot = await deps.store.botIdentity(record.action.botId);
@@ -699,7 +722,13 @@ async function decideAsBinding(
     text:
       decision === "deny"
         ? `已拒绝。${name} 不会${afterChinese(approvalPhrase(record.action))}。`
-        : `${decision === "allow_always" ? "已设为总是允许" : "已允许这一次"}。${name} 会继续，并把结果发到这里。`,
+        : `${
+            decision === "allow_always"
+              ? "已设为总是允许"
+              : decision === "allow_conversation"
+                ? "已在这次对话里都允许"
+                : "已允许这一次"
+          }。${name} 会继续，并把结果发到这里。`,
   };
 }
 

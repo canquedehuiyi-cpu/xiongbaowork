@@ -33,6 +33,12 @@ export type RegisteredDevice = {
    * owner gave each on the machine. Never a command, url or key. Absent from an older server.
    */
   apps?: { ref: string; name: string }[];
+  /**
+   * Who paired this machine (外部员工 spec §1): only a machine the signed-in person paired can take an
+   * external employee. Null for a machine paired before this was recorded (「还没认主人」); absent from
+   * an older server.
+   */
+  pairedByUserId?: string | null;
 };
 
 export const deviceKeys = {

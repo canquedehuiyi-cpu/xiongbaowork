@@ -78,6 +78,10 @@ export type ChannelSummary = AgentChannel & {
   opening?: string | null;
   lastMessage: string | null;
   lastMessageAgentId: string | null;
+  /**
+   * 最后说话的员工的名字，读者自己的员工名单里查不到它时才有：别人招进这个群的外部员工（外部员工 Task 12）。
+   */
+  lastMessageAgentName?: string;
   /** ISO-8601. Ordering falls back to this, so a channel just created sorts to the top. */
   createdAt: string;
   /** Whether this member pinned the channel. Pinned channels sort first in the roster. */

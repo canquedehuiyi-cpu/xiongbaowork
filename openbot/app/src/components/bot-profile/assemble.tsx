@@ -74,6 +74,12 @@ import { cn } from "@/lib/utils";
 
 export function AssembleSections({ profile }: { profile: AgentProfile }) {
   const { save } = useProfileSave(profile.id, profile);
+  /*
+   * 外部员工（外部员工 Task 11）用它自己的模型；它的一轮只带人设、对话最近的消息和任务卡（服务器
+   * `agents/acp/context.ts`），不给工具（`tools: []`），ACP 会话也不接 MCP（runner `acp/client.ts`
+   * `mcpServers: []`）。所以模型、技能、工具、连接器、知识库这几节对它不起作用，不画；人设照旧。
+   */
+  const external = Boolean(profile.external);
   return (
     <>
       {!profile.canManage ? (
@@ -81,21 +87,23 @@ export function AssembleSections({ profile }: { profile: AgentProfile }) {
           这位员工归别人所有，所以这里只能看，要改请到它主人那里。
         </p>
       ) : null}
-      <ProfileSection
-        className="mt-12"
-        description="这位员工说话时由哪个模型回答。"
-        title="模型"
-      >
-        <div className={cn(PANEL_FACE, "mt-[10px] overflow-hidden")}>
-          <ModelItem
-            builtIn={profile.builtIn}
-            canManage={profile.canManage}
-            modelRef={profile.modelRef}
-            onSave={(binding) => save(binding)}
-            platformModelRef={profile.platformModelRef ?? null}
-          />
-        </div>
-      </ProfileSection>
+      {external ? null : (
+        <ProfileSection
+          className="mt-12"
+          description="这位员工说话时由哪个模型回答。"
+          title="模型"
+        >
+          <div className={cn(PANEL_FACE, "mt-[10px] overflow-hidden")}>
+            <ModelItem
+              builtIn={profile.builtIn}
+              canManage={profile.canManage}
+              modelRef={profile.modelRef}
+              onSave={(binding) => save(binding)}
+              platformModelRef={profile.platformModelRef ?? null}
+            />
+          </div>
+        </ProfileSection>
+      )}
 
       <ProfileSection
         className="mt-12"
@@ -107,17 +115,21 @@ export function AssembleSections({ profile }: { profile: AgentProfile }) {
         </div>
       </ProfileSection>
 
-      <SkillsZone agentId={profile.id} canManage={profile.canManage} />
-      <SelfInstallToolsZone
-        agentId={profile.id}
-        canManage={profile.canManage}
-      />
-      <ConnectorZone agentId={profile.id} />
-      <KnowledgeZone
-        agentId={profile.id}
-        canManage={profile.canManage}
-        mine={profile.mine}
-      />
+      {external ? null : (
+        <>
+          <SkillsZone agentId={profile.id} canManage={profile.canManage} />
+          <SelfInstallToolsZone
+            agentId={profile.id}
+            canManage={profile.canManage}
+          />
+          <ConnectorZone agentId={profile.id} />
+          <KnowledgeZone
+            agentId={profile.id}
+            canManage={profile.canManage}
+            mine={profile.mine}
+          />
+        </>
+      )}
     </>
   );
 }

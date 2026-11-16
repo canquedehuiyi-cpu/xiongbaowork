@@ -653,6 +653,7 @@ export function deliveryNotes(
   return placed.map((entry) => ({
     key: entry.key,
     anchor: entry.anchor,
+    order: entry.order,
     node: <DeliveryChatCard agentName={agentName} event={entry.event} />,
   }));
 }

@@ -74,7 +74,6 @@ function RouteComponent() {
   // 默认皮肤没有员工资料抽屉了：旧链接、浏览器历史里残留的 `?settings` 不读，不再压住自动看屏幕。
   const isSettingsOpen = settings === true && !workbench;
   const prefersReducedMotion = useReducedMotion();
-  const isWatching = watch === true;
   /** Channel routing currently supports one coworker. */
   const agentId = channel.data?.agentIds[0];
   // The compact employee card, for a 1:1 conversation whose profile is loaded; else the plain name.
@@ -83,6 +82,16 @@ function RouteComponent() {
     channel.data?.agentIds.length === 1
       ? agentProfiles?.find((profile) => profile.id === agentId)
       : undefined;
+  /*
+   * An external employee (外部员工 Task 11) works in its own agent on its hirer's computer, not on a
+   * computer of ours. The live screen viewer asks for a computer by the Bot's id, and on a cloud
+   * deployment that means locating (and so starting) a cloud computer for it: a cost for nothing to
+   * see. So it has no screen to open until the device can relay one: no button, and neither a stale
+   * `?watch`, a command clicked in the chat nor browser activity opens the pane for it.
+   */
+  const external = Boolean(card?.external);
+  // Nor before the profile says whether it is one.
+  const isWatching = watch === true && agentProfiles !== undefined && !external;
   /*
    * 默认皮肤（聊天工作台）：员工资料那一块换成对话侧栏（环境 · 目标 · 上下文 · 输出内容），常驻在对话右边，
    * 顶栏的齿轮换成「收起侧栏 / 展开侧栏」。手机上顶栏换成一个按钮，打开全屏的侧栏（`usePhoneSidebarPage`）。
@@ -100,7 +109,7 @@ function RouteComponent() {
 
   // Browser activity may auto-open the screen once per run unless this run was dismissed.
   const autoWatch = useAutoWatchScreen({
-    botId: agentId,
+    botId: external ? undefined : agentId,
     watching: isWatching,
     busy: isSettingsOpen,
     open: () =>
@@ -116,7 +125,7 @@ function RouteComponent() {
   });
 
   // A command in the chat clicked opens the Computer on its terminal.
-  useOpenComputerOnRequest(agentId, () => show("watch"));
+  useOpenComputerOnRequest(external ? undefined : agentId, () => show("watch"));
 
   // Settings and watch share one pane; opening either clears the other URL flag.
   const show = (next: "settings" | "watch" | null) => {
@@ -230,11 +239,14 @@ function RouteComponent() {
           </>
         )}
         <div className="flex flex-row gap-1.5">
-          <ComputerChatControls
-            computerId={agentId}
-            open={isWatching}
-            onOpenChange={(open) => show(open ? "watch" : null)}
-          />
+          {/* Only once it is known not to be an external employee: these poll its computer. */}
+          {external || agentProfiles === undefined ? null : (
+            <ComputerChatControls
+              computerId={agentId}
+              open={isWatching}
+              onOpenChange={(open) => show(open ? "watch" : null)}
+            />
+          )}
           {card ? <EmployeeCardButton agentId={card.id} /> : null}
           {workbench ? (
             sidebarThread ? (

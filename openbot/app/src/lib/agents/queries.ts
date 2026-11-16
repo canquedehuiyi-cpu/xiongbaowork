@@ -6,6 +6,11 @@ import {
 import { channelKeys } from "@/lib/channels/queries";
 import { client, tryClient } from "@/lib/client";
 import type { PortraitPreset } from "@/lib/portraits/queries";
+import type {
+  AcpHarness,
+  AcpRuleKey,
+  AcpRuleValue,
+} from "../../../../shared/acp";
 import type { Persona } from "../../../../shared/persona";
 
 export type AgentVisibility = "public" | "private";
@@ -139,6 +144,29 @@ export type AgentProfile = {
    * OpenBot doesn't know, such as an agent connected by address with no framework named.
    */
   framework?: string;
+  /**
+   * 外部员工（`device_acp`）在哪台电脑上、是哪个智能体、在哪个工作文件夹、五项规则，都只是引用（外部员工
+   * 规格第 1 节）。别的员工没有这一项。招聘人读到全部；别人（能读到它的只有管理员）只读到是哪一家
+   * （{@link ExternalHarness}），够画标记，读不到电脑、文件夹和规则。要全部的用 `hiredRun`。
+   */
+  external?: ExternalRun | ExternalHarness;
+};
+
+/** 非招聘人读到的外部员工：只有是哪一家。 */
+export type ExternalHarness = { harness: AcpHarness };
+
+/** {@link AgentProfile.external}：外部员工怎么跑。 */
+export type ExternalRun = {
+  harness: AcpHarness;
+  /** 在哪台电脑上（`RegisteredDevice.deviceId`）。 */
+  deviceId: string;
+  /** 工作文件夹（电脑上报的 `fld_…` 引用）。 */
+  workdirRef: string;
+  /** 只有 `custom`：电脑上登记的本机智能体（`app_…` 引用）。 */
+  appRef?: string;
+  rules: Record<AcpRuleKey, AcpRuleValue>;
+  /** 只有 `custom`：招聘时确认过它可能从不请求许可。 */
+  noPermissionAcknowledged?: true;
 };
 
 /**

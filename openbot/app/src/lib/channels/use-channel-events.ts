@@ -111,6 +111,11 @@ export type ChannelActivityEvent = {
   /** The tenant's task board changed somewhere; the tasks cache refetches. */
   taskUpdated?: true;
   /**
+   * A group's shared transcript changed with nothing said (an external employee's permission line,
+   * 外部员工 Task 12): the open group re-reads. Carries nothing else, and patches no roster row.
+   */
+  groupTranscript?: true;
+  /**
    * Everything the channel is waiting on now, replacing what the row held. Absent on an ordinary
    * activity event. Rides on every busy event, and alone on the one the server sends when a hop
    * settles without a turn starting or ending.
@@ -239,7 +244,9 @@ export function applyChannelEvent(
 
   // Preserve object identity for unchanged rows so memoized rows do not re-render.
   const next = page.channels.slice();
-  next[index] = { ...previous, ...activity };
+  next[index] = speakerChanged(previous, activity)
+    ? withoutSpeakerName({ ...previous, ...activity })
+    : { ...previous, ...activity };
   next.sort(byRecency);
 
   // An event that changes nothing visible, a duplicate, or a report the server ignored as stale,
@@ -249,6 +256,46 @@ export function applyChannelEvent(
   const pages = data.pages.slice();
   pages[holdingPage] = { ...page, channels: next };
   return { ...data, pages };
+}
+
+/*
+ * 服务器替「不在自己员工名单里的外部员工」查好的名字（`lastMessageAgentName`）只属于查它时的那位
+ * 发言人。实时事件只带新的发言人 id、不带名字，所以换了人说话时，旧名字不能留给新的人：补丁里丢掉它，
+ * 由调用方重新取名单拿到新名字。同一个人再说话，名字照留。
+ */
+function speakerChanged(
+  previous: ChannelSummary,
+  activity: ChannelActivityEvent,
+): boolean {
+  return (
+    previous.lastMessageAgentName !== undefined &&
+    activity.lastMessageAgentId !== previous.lastMessageAgentId
+  );
+}
+
+function withoutSpeakerName(row: ChannelSummary): ChannelSummary {
+  const { lastMessageAgentName: _stale, ...rest } = row;
+  return rest;
+}
+
+/** 这条普通活动事件会丢掉一行里服务器查好的发言人名字：是就要重新取名单。 */
+export function speakerNameStale(
+  data: ChannelCache,
+  activity: ChannelActivityEvent,
+): boolean {
+  if (
+    activity.deleted ||
+    activity.summary !== undefined ||
+    activity.opening !== undefined ||
+    activity.pinned !== undefined ||
+    activity.busy !== undefined ||
+    activity.work !== undefined
+  )
+    return false;
+  for (const page of data.pages)
+    for (const row of page.channels)
+      if (row.id === activity.channelId) return speakerChanged(row, activity);
+  return false;
 }
 
 /**
@@ -361,6 +408,8 @@ export function useChannelEvents() {
         void queryClient.invalidateQueries({
           queryKey: ["groups", activity.channelId],
         });
+        // Nothing else to it: no preview, no order, no notice.
+        if (activity.groupTranscript) return;
 
         /*
          * The list is paged, so the cache holds pages rather than one array.
@@ -375,6 +424,11 @@ export function useChannelEvents() {
           (data: ChannelCache | undefined) => {
             if (!data) return data;
             const patched = applyChannelEvent(data, activity);
+            // 换了发言人，旧名字已丢掉：重新取名单，拿到新发言人的名字。
+            if (patched !== "unknown" && speakerNameStale(data, activity))
+              void queryClient.invalidateQueries({
+                queryKey: channelKeys.list(),
+              });
             if (patched !== "unknown") return patched;
             // An unknown channel id means the roster is stale; refetch rather than patch.
             void queryClient.invalidateQueries({

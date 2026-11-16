@@ -7,10 +7,22 @@ import { type AgentChannel, channelKeys } from "@/lib/channels/queries";
 import { client } from "@/lib/client";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
 
+/**
+ * 外部员工在群里请求许可时群转录里的那一行（外部员工 Task 12）：只有谁在等谁确认、结果如何，没有内容。
+ */
+export type GroupAcpPermission = {
+  kind: "acp.permission";
+  agentId: string;
+  hirerUserId: string;
+  hirerName: string;
+  status: "waiting" | "approved" | "denied" | "expired";
+};
 /** One line of a group conversation: a person's message (`agentId` null) or one Bot's reply. */
 export type GroupMessage = {
   id: string;
   channelId: string;
+  /** 员工这一行所在的线程（它在这个群里的那条）。人的话没有。 */
+  threadId?: string | null;
   /** Who sent it, for a person's line; whose run it was, for a Bot's. */
   ownerUserId: string;
   agentId: string | null;
@@ -19,6 +31,8 @@ export type GroupMessage = {
   createdAt: string;
   /** Why a waiting Bot is waiting, when it is. */
   reason?: string;
+  /** 等的是什么：`share` 是员工的回答要等它的主人确认能不能发到群里。 */
+  waitKind?: "share";
   /**
    * The approval this line is stopped on, for the person who must decide it — the id the approvals
    * page can land on. Absent for a durable wait (a computer still offline, an action handed to the
@@ -44,6 +58,8 @@ export type GroupMessage = {
     agentId: string;
     dueAt?: string;
   }[];
+  /** 外部员工在等它的招聘人确认一个操作（见 {@link GroupAcpPermission}）。 */
+  acpPermission?: GroupAcpPermission;
 };
 export type GroupPerson = {
   userId: string;
@@ -52,7 +68,14 @@ export type GroupPerson = {
   /** Made the group; the one who may take others out of it. */
   creator: boolean;
 };
-export type GroupBot = { id: string; name: string };
+export type GroupBot = {
+  id: string;
+  name: string;
+  /** 外部员工招它的人（服务器名单带的）。 */
+  hiredBy?: string;
+  /** 外部员工是哪个智能体：每个成员都看得到，用来画「外部员工 · Codex」。 */
+  harness?: "codex" | "claude-code" | "hermes" | "custom";
+};
 export type GroupConversation = {
   bots: GroupBot[];
   people: GroupPerson[];
@@ -79,14 +102,39 @@ export function groupQueryOptions(channelId: string) {
       );
       return (await response.json()) as GroupConversation;
     },
-    refetchInterval: (query) =>
-      query.state.data?.messages.some(
-        (message) =>
-          message.status === "running" || message.status === "queued",
-      ) || awaitingFirstReply(query.state.data)
-        ? 1_500
-        : false,
+    refetchInterval: (query) => groupRefetchInterval(query.state.data),
   });
+}
+
+/**
+ * How often the open group re-reads its transcript: while a turn is still owed an answer, and while
+ * the last line is a person's that no Bot has started on, every 1.5 s. While an external employee
+ * waits on its hirer's permission (外部员工 Task 12: decided somewhere else, and the server's "read
+ * again" signal may not reach this tab), backing off with the newest waiting line's age: every 1.5 s
+ * for its first 30 s, every 5 s to 5 min, every 10 s to an hour, then not at all, so a line a crash
+ * left waiting does not keep the page polling. Otherwise not at all.
+ */
+export function groupRefetchInterval(
+  data: GroupConversation | undefined,
+  now: number = Date.now(),
+): number | false {
+  if (
+    data?.messages.some(
+      (message) => message.status === "running" || message.status === "queued",
+    ) ||
+    awaitingFirstReply(data)
+  )
+    return 1_500;
+  const waitingSince = (data?.messages ?? [])
+    .filter((message) => message.acpPermission?.status === "waiting")
+    .map((message) => Date.parse(message.createdAt))
+    .filter((at) => Number.isFinite(at));
+  if (waitingSince.length === 0) return false;
+  const age = now - Math.max(...waitingSince);
+  if (age < 30_000) return 1_500;
+  if (age < 5 * 60_000) return 5_000;
+  if (age < 60 * 60_000) return 10_000;
+  return false;
 }
 
 /**
