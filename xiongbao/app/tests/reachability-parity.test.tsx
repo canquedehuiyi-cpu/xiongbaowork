@@ -198,7 +198,14 @@ const REACH: Reachability = {
       bindingId: "b1",
     },
   ],
-  available: { slack: true, teams: true, sms: true, push: false },
+  available: {
+    slack: true,
+    teams: true,
+    sms: true,
+    push: false,
+    wechat: false,
+  },
+  wechat: null,
 };
 
 function draw(path = "/reachability", reach: Reachability = REACH) {

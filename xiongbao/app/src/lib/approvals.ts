@@ -6,6 +6,10 @@ import {
 } from "@tanstack/react-query";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { client } from "@/lib/client";
+import {
+  type ApprovalVia,
+  approvalViaName,
+} from "../../../shared/approval-via";
 export type ApprovalDecision =
   | "allow_once"
   | "allow_conversation"
@@ -108,6 +112,10 @@ export type ApprovalInboxData = {
     createdAt: string;
     /** When the person (or a rule) decided it; null while it waits. */
     decidedAt?: string | null;
+    /** 怎么决定的；还在等时为 null。 */
+    decision?: ApprovalDecision | null;
+    /** 本人在哪里决定的（网页 / 微信 / Slack / Teams）；还在等、规则放行、旧数据为 null。 */
+    decidedVia?: ApprovalVia | null;
     action: {
       botId: string;
       toolRef: string;
@@ -180,6 +188,25 @@ export const approvalInboxOptions = () =>
 
 /** One request as the inbox lists it. */
 export type ApprovalRequestData = ApprovalInboxData["requests"][number];
+
+/**
+ * 在别的渠道决定的审批怎么说：「已由 小熊 在 微信 批准」。网页上决定的（`web`）、没记渠道的旧数据、还在等的
+ * 返回 null，各处保持原来的文案，不为它们硬加「在 网页」。渠道的中文名在 shared/approval-via.ts。
+ */
+export function decidedElsewhereWords(
+  request: Pick<ApprovalRequestData, "status" | "decision" | "decidedVia">,
+  who: string,
+): string | null {
+  const via = request.decidedVia;
+  if (!via || via === "web" || request.status === "pending") return null;
+  const verb =
+    request.decision === "deny" || request.status === "denied"
+      ? "拒绝"
+      : request.decision === "handled"
+        ? "处理"
+        : "批准";
+  return `已由 ${who} 在 ${approvalViaName(via)} ${verb}`;
+}
 
 /**
  * One of this person's requests by id (`GET /api/approvals/:id`). The inbox lists only the newest

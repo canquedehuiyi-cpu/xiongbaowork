@@ -74,6 +74,7 @@ describe("OpenBot database schema", () => {
       "mcp",
       "mcp_oauth_client",
       "mcp_user_token",
+      "chat",
     ]);
   });
 

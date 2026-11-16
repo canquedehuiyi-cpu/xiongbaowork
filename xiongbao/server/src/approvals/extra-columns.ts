@@ -1,8 +1,12 @@
 import { getTableColumns, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import { approvalRules, approvalTeamSettings } from "../db/schema/approvals";
+import {
+  approvalRequests,
+  approvalRules,
+  approvalTeamSettings,
+} from "../db/schema/approvals";
 import { TEAM_TENANT } from "../db/schema/tenant";
-import type { ActionKind, ActionKindPolicy } from "./types";
+import type { ActionKind, ActionKindPolicy, ApprovalVia } from "./types";
 
 /*
  * 已有审批表上、合并上游后才有的列，用 drizzle 的 `sql` 片段读写，类型在这里声明。
@@ -16,6 +20,7 @@ import type { ActionKind, ActionKindPolicy } from "./types";
  *   approval_team_settings.action_kinds       jsonb，非空，默认 {}  0177（上游 #1394）
  *   approval_team_settings.reviewer_guidance  text，可空            0178（上游 #1397）
  *   approval_team_settings.desktop_action_words  text[]，可空        0202（桌面逐次审批的词）
+ *   approval_requests.decided_via             text，可空            0229（审批在哪里决定的，微信 Task 11）
  *
  * 新表 approval_conversation_grants 不受冻结限制，在 db/schema/approval-conversation-grants.ts。
  * approval_requests 的 decision 约束由 0177 改成含 'allow_conversation'；schema 里的 check 保持 fork
@@ -30,8 +35,8 @@ import type { ActionKind, ActionKindPolicy } from "./types";
  * 但任何对照真实数据库同步 schema 的做法（例如 `drizzle-kit push`）会把它们当成多余的列删掉，连同审批的
  * 种类、团队设置和规则针对的账号。不要对部署的库那样做。
  *
- * 这些片段只在单表查询里用（`from(approvalRules)` / `from(approvalTeamSettings)`、对应表的
- * returning）；表名限定列名，所以不会和别的表的同名列混。
+ * 这些片段只在单表查询里用（`from(approvalRules)` / `from(approvalTeamSettings)` / `from(approvalRequests)`、
+ * 对应表的 returning）；表名限定列名，所以不会和别的表的同名列混。
  */
 
 /** Anything that can run one statement: the tenant-bound database or a transaction on it. */
@@ -104,6 +109,32 @@ export async function saveRuleExtras(
   if (sets.length === 0) return;
   await executor.execute(
     sql`update ${approvalRules} set ${sql.join(sets, sql`, `)} where ${approvalRules.id} = ${ruleId}`,
+  );
+}
+
+/* ---- approval_requests ---- */
+
+/**
+ * `approval_requests.decided_via`：本人在哪里决定的（`web` / `wechat` / `slack` / `teams`，
+ * shared/approval-via.ts）。还在等、规则放行、0229 之前决定的为 null，说的时候退回「网页」。
+ */
+export const requestDecidedVia: SQL<ApprovalVia | null> =
+  columnOf<ApprovalVia | null>(approvalRequests, "decided_via");
+
+/** `approval_requests` 的列加上 `decidedVia`，给读一条、列表这些交给本人看的读法。 */
+export const requestColumns = {
+  ...getTableColumns(approvalRequests),
+  decidedVia: requestDecidedVia,
+};
+
+/** 记下这条审批在哪里决定的，与决定同一个事务、同一个帧。`where` 选中那一行（本人 + 审批 id）。 */
+export async function saveDecidedVia(
+  executor: Executor,
+  where: SQL,
+  via: ApprovalVia | null,
+): Promise<void> {
+  await executor.execute(
+    sql`update ${approvalRequests} set ${sql.identifier("decided_via")} = ${via} where ${where}`,
   );
 }
 

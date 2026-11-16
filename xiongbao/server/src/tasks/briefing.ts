@@ -31,8 +31,10 @@ import {
   TenantContextError,
 } from "../tenant/context";
 import { minuteOfClock, type WorkHours } from "../user-preferences";
+import type { Delivery } from "./delivery";
 import {
   BRIEFING_WINDOW_MS,
+  DAILY_NOTICES,
   type DeliveryNotice,
   localDay,
   type NoticeResult,
@@ -70,6 +72,7 @@ import { isOverdueNow } from "./overdue";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
+
 /** How long after the start or end time a briefing may still go out (a restart across the moment). */
 export { BRIEFING_WINDOW_MS };
 /** How long a briefing's claim may stay unsent before another pass may take it back. */
@@ -573,6 +576,9 @@ export function createBriefings(deps: BriefingDeps) {
 
 export type Briefings = ReturnType<typeof createBriefings>;
 
+/** 开工清点发到微信时末尾多带的一句：回一句，时间窗就续上。 */
+export const WECHAT_KEEP_OPEN_HINT = "回复任意内容，今天的提醒就能继续发到这里";
+
 /**
  * Where the checker's reminders and the briefings leave the server (spec §10): the person's push
  * devices and their connected Slack, Teams and SMS (`DeliveryRouter.notifyPerson`), filed under the
@@ -588,6 +594,8 @@ export function createTaskNotices(deps: {
     agentId: string,
   ) => Promise<DeliveryScope | null>;
   workHours: (userId: string) => Promise<WorkHours>;
+  /** The coworker's name as the person sees it, for 「交付待验收」. Absent or unknown: 「员工」. */
+  agentName?: (tenantId: string, agentId: string) => Promise<string | null>;
 }) {
   const database = deps.database;
 
@@ -704,6 +712,10 @@ export function createTaskNotices(deps: {
         await cardsOf(tenantId, [notice.taskId]),
       ),
       taskId: notice.taskId,
+      // 只有真的逾期的提醒在微信里带编号提示；「还没接下」按原文。
+      ...(notice.kind === "overdue"
+        ? { wechatPrompt: "overdue" as const }
+        : {}),
     });
     return reached.queued + reached.already > 0 ? "sent" : "deferred";
   }
@@ -755,12 +767,116 @@ export function createTaskNotices(deps: {
         tenantId,
         await cardsOf(tenantId, [...ids, ...closed]),
       ),
+      ...(kind === "start" ? { wechatFooter: WECHAT_KEEP_OPEN_HINT } : {}),
     });
     // Every place it reached, now or by an earlier try of this same briefing that failed part-way.
     return reached.queued + reached.already;
   }
 
-  return { notify, sendBriefing };
+  /**
+   * 交付待验收（员工交付、卡片进入等验收时）：推送和已连接的聊天渠道各一条，微信那一行换成带编号的
+   * 「回复 验收，或 退回 原因」（`wechatPrompt: "handin"`）。和逾期提醒同一套节流：作息外不发（`deferred`，
+   * 开工清点会列出等验收的活）；同一件活每天最多三次（`notified_on` / `notified_count`，和逾期提醒共用这三次，
+   * 不动 `last_notified_at`，免得退回后逾期提醒的间隔被它推后），用完了是 `capped`。谁也没送到时把这一次还回去。
+   * 卡片已经不在等验收（别处验收过、退回了）时什么也不做（`capped`）。
+   */
+  async function handin(
+    tenantId: string,
+    taskId: string,
+    now: Date = new Date(),
+  ): Promise<NoticeResult> {
+    const hours = await deps.workHours(tenantId);
+    if (!withinWorkHours(hours, now)) return "deferred";
+    const day = localDay(now, hours.timeZone);
+    const today = sql`${day}::date`;
+    const [card] = await database
+      .update(tasks)
+      .set({
+        notifiedCount: sql`case when ${tasks.notifiedOn} = ${today} then ${tasks.notifiedCount} + 1 else 1 end`,
+        notifiedOn: day,
+      })
+      .where(
+        and(
+          eq(tasks.tenantId, tenantId),
+          eq(tasks.id, taskId),
+          eq(tasks.tracked, true),
+          eq(tasks.status, "awaiting_review"),
+          or(
+            isNull(tasks.notifiedOn),
+            sql`${tasks.notifiedOn} <> ${today}`,
+            lt(tasks.notifiedCount, DAILY_NOTICES),
+          ),
+        ),
+      )
+      .returning({
+        id: tasks.id,
+        title: tasks.title,
+        channelRef: tasks.channelRef,
+        threadRef: tasks.threadRef,
+        executorAgentId: tasks.executorAgentId,
+      });
+    if (!card) return "capped";
+    const name =
+      (card.executorAgentId &&
+        (await deps
+          .agentName?.(tenantId, card.executorAgentId)
+          .catch(() => null))) ||
+      "员工";
+    let reached = { queued: 0, already: 0 };
+    try {
+      reached = await deps.router.notifyPerson({
+        ownerUserId: tenantId,
+        kind: "overdue",
+        id: `handin:${taskId}:${now.toISOString()}`,
+        title: "交付待验收",
+        body: `${name} 交了「${card.title}」，等你验收`,
+        scopes: await scopesOf(tenantId, [card]),
+        taskId,
+        wechatPrompt: "handin",
+      });
+    } finally {
+      if (reached.queued + reached.already === 0)
+        await database
+          .update(tasks)
+          .set({ notifiedCount: sql`greatest(${tasks.notifiedCount} - 1, 0)` })
+          .where(
+            and(
+              eq(tasks.tenantId, tenantId),
+              eq(tasks.id, taskId),
+              eq(tasks.notifiedOn, day),
+            ),
+          );
+    }
+    return reached.queued + reached.already > 0 ? "sent" : "deferred";
+  }
+
+  return { notify, sendBriefing, handin };
+}
+
+/**
+ * 员工交付（`delivered` 把卡片挪进等验收）之后告诉本人：`notify` 是 `createTaskNotices().handin`。在本人的帧里
+ * 调；出错只记日志，交付本身照常算数。
+ */
+export function notifyOnHandIn(
+  delivery: Delivery,
+  notify: (tenantId: string, taskId: string) => Promise<unknown>,
+): Delivery {
+  return {
+    ...delivery,
+    async delivered(tenantId, taskId, input) {
+      const merged = await delivery.delivered(tenantId, taskId, input);
+      if (merged)
+        try {
+          await runAsTenant(tenantId, () => notify(tenantId, taskId));
+        } catch (error) {
+          log("task-handin-notice-failed", {
+            taskId,
+            reason: reasonOf(error),
+          });
+        }
+      return merged;
+    },
+  };
 }
 
 /** `GET /api/me/briefing?kind=start|end`: the briefing as it stands now (null: no followed work). */

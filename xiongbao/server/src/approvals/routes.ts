@@ -343,6 +343,7 @@ export function createApprovalRoutes(
       context.var.actor.id,
       context.req.param("id"),
       input.decision,
+      "web",
     );
     return context.json({ id: request.id, status: request.status });
   });

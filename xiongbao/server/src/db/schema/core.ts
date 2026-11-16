@@ -63,6 +63,11 @@ export const credentialKind = pgEnum("credential_kind", [
    * that speaks for the deployment, and one row per person that speaks for them.
    */
   "mcp_user_token",
+  /*
+   * One person's own chat-channel token: the WeChat ClawBot `bot_token` (provider `wechat`) is the
+   * first. It belongs to that person's tenant, never to `team`. See migration 0223.
+   */
+  "chat",
 ]);
 
 export const users = pgTable("users", {

@@ -18,10 +18,12 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { shortName } from "@/lib/brand";
 import {
+  delivered,
   deliveryQueryOptions,
   type Reachability,
   removePushDeviceMutationOptions,
 } from "@/lib/delivery";
+import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
 
 const PLATFORM: Record<"ios" | "android", string> = {
@@ -37,6 +39,7 @@ const CHANNEL: Record<Delivery["transport"], string> = {
   slack: "Slack",
   teams: "Microsoft Teams",
   sms: "短信",
+  wechat: "微信",
 };
 
 /**
@@ -148,7 +151,15 @@ export function RecentDeliveries() {
                     {new Date(delivery.createdAt).toLocaleString()}
                   </ItemDescription>
                   {delivery.error ? (
-                    <ItemDescription className="line-clamp-none text-destructive">
+                    <ItemDescription
+                      className={cn(
+                        "line-clamp-none",
+                        // 发出去了的行上的是说明（例如微信里已经发过这条审批），不是错误。
+                        delivered(delivery.state)
+                          ? "text-muted-foreground"
+                          : "text-destructive",
+                      )}
+                    >
                       {delivery.error}
                     </ItemDescription>
                   ) : null}

@@ -68,3 +68,35 @@ test("recent deliveries are listed, each by its kind and channel", async () => {
   expect(await view.findByText("提问")).toBeTruthy();
   expect(view.getByText(/^推送 · 已发出 · /)).toBeTruthy();
 });
+
+test("发出去了的那一行附带的说明不画成红字；失败的才是", async () => {
+  global.fetch = (async () =>
+    Response.json({
+      bindings: [],
+      devices: [],
+      deliveries: [
+        {
+          id: "noted",
+          transport: "wechat",
+          kind: "approval",
+          state: "sent",
+          error: "已在微信里发过这条审批，没有重复发送。",
+          createdAt: "2026-10-09T10:00:00Z",
+        },
+        {
+          id: "broken",
+          transport: "wechat",
+          kind: "overdue",
+          state: "failed",
+          error: "WeChat delivery failed (window_closed).",
+          createdAt: "2026-10-09T09:00:00Z",
+        },
+      ],
+      available: { slack: false, teams: false, sms: false, push: true },
+    })) as unknown as typeof fetch;
+  const view = draw(<RecentDeliveries />);
+  const note = await view.findByText("已在微信里发过这条审批，没有重复发送。");
+  expect(note.className).not.toContain("text-destructive");
+  const failure = view.getByText("WeChat delivery failed (window_closed).");
+  expect(failure.className).toContain("text-destructive");
+});

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { englishName } from "../brand";
 import type { Database } from "../db/client";
 import { agents } from "../db/schema/core";
 import { agentProfiles } from "../db/schema/coworker";
@@ -27,7 +28,6 @@ import {
   type DeliveryState,
   type PushDevice,
 } from "./types";
-import { englishName } from "../brand";
 export function createDeliveryStore(database: Database) {
   async function enqueue(
     db: Pick<Database, "insert" | "execute">,
@@ -468,6 +468,22 @@ export function createDeliveryStore(database: Database) {
             .select()
             .from(deliveryInbox)
             .where(eq(deliveryInbox.id, id))
+        )[0] ?? null
+      );
+    },
+    /**
+     * The newest message that came in through this binding, or null. 微信的回复只发给「入站来源为微信、
+     * 还停在等人处理」的那一轮，路由用它判断（router.ts `notify`）。
+     */
+    async latestInbox(bindingId: string) {
+      return (
+        (
+          await database
+            .select()
+            .from(deliveryInbox)
+            .where(eq(deliveryInbox.bindingId, bindingId))
+            .orderBy(desc(deliveryInbox.createdAt), desc(deliveryInbox.id))
+            .limit(1)
         )[0] ?? null
       );
     },

@@ -88,10 +88,12 @@ export type PairedApprovals = {
       };
     }>;
   };
+  /** `via`：点卡片的平台（`slack` / `teams`），记进审批的 `decided_via`，网页上显示「已由 某某 在 Slack 批准」。 */
   decide(
     ownerUserId: string,
     id: string,
     decision: ApprovalDecision,
+    via: ChatTransport,
   ): Promise<unknown>;
   answerQuestion(
     ownerUserId: string,
@@ -672,7 +674,7 @@ async function decideFromCard(
     };
   // Decided as the binding's own tenant, so the approval's resume is stamped as that person (G01).
   return runAsTenant(owned.tenant, () =>
-    decideAsBinding(deps, resume, owned.binding),
+    decideAsBinding(deps, resume, owned.binding, person.transport),
   );
 }
 
@@ -683,6 +685,8 @@ async function decideAsBinding(
     { invalid: false }
   >,
   binding: DeliveryBinding,
+  /** 点卡片的平台：OpenTag 说的点击者（`slack:` / `teams:`）。 */
+  via: ChatTransport,
 ): Promise<{ text: string }> {
   if (!deps.approvals)
     return {
@@ -715,7 +719,12 @@ async function decideAsBinding(
     : resume.always && offersStandingAnswer(record.action)
       ? standingAnswer(record.action)
       : "allow_once";
-  await deps.approvals.decide(binding.ownerUserId, resume.approvalId, decision);
+  await deps.approvals.decide(
+    binding.ownerUserId,
+    resume.approvalId,
+    decision,
+    via,
+  );
   const bot = await deps.store.botIdentity(record.action.botId);
   const name = bot?.name ?? YOUR_BOT;
   return {

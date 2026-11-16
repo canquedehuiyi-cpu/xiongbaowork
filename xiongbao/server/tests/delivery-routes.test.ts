@@ -53,6 +53,8 @@ function fixture(
     challengeError?: Error;
     /** The transport the Reachability code was issued for. */
     challengeTransport?: "slack" | "teams";
+    /** The platform the bound person's card answers come from (Task 11). Slack by default. */
+    cardTransport?: "slack" | "teams";
     /**
      * Why the gate asked, as the stored request carries it; "task" for a check-in task's,
      * 删除类底线 `destructive_tool`、对外发送底线 `outbound_send` 等。
@@ -145,7 +147,7 @@ function fixture(
       findBinding: async (transport, realm, identity) =>
         frame("findBinding") &&
         options.bound !== false &&
-        transport === "slack" &&
+        transport === (options.cardTransport ?? "slack") &&
         realm === "T1" &&
         identity === "U1"
           ? stamped
@@ -689,7 +691,7 @@ test("a check-in task's approval becomes a card without Always allow, and an old
     },
   });
   expect(said(resumed.events)).toContain("已允许这一次");
-  expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once"]]);
+  expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once", "slack"]]);
 });
 test("in a conversation others may read, the answer goes to the owner privately", async () => {
   const f = fixture({
@@ -801,7 +803,7 @@ test("card resume decides through the approvals service as the binding owner onl
         .events,
     ),
   ).toContain("已设为总是允许");
-  expect(f.decisions).toEqual([["owner", APPROVAL, "allow_always"]]);
+  expect(f.decisions).toEqual([["owner", APPROVAL, "allow_always", "slack"]]);
   expect(
     said((await resume({ confirmed: true, by: "slack:T1:U2" })).events),
   ).toContain("没有关联到这个审批的主人");
@@ -810,7 +812,24 @@ test("card resume decides through the approvals service as the binding owner onl
   );
   expect(f.decisions).toHaveLength(1);
   await resume({ confirmed: false, by: "slack:T1:U1" });
-  expect(f.decisions[1]).toEqual(["owner", APPROVAL, "deny"]);
+  expect(f.decisions[1]).toEqual(["owner", APPROVAL, "deny", "slack"]);
+});
+test("a Teams card's decision is recorded as made in Teams (Task 11)", async () => {
+  const f = fixture({ cardTransport: "teams" });
+  const answered = await run(f, {
+    forwardedProps: {
+      command: {
+        resume: {
+          "0f8fad5bd9cb469fa16570867728950e": {
+            confirmed: true,
+            by: "teams:T1:U1",
+          },
+        },
+      },
+    },
+  });
+  expect(said(answered.events)).toContain("已允许这一次");
+  expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once", "teams"]]);
 });
 /*
  * FOUND IN THE 1.0 RC1 MAC PASS: a click waiting in Slack read "Research Bot: computer_click" over
@@ -904,7 +923,7 @@ test("a deleting action's card offers no Always allow, and an always answer from
     },
   });
   expect(said(answered.events)).toContain("已允许这一次");
-  expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once"]]);
+  expect(f.decisions).toEqual([["owner", APPROVAL, "allow_once", "slack"]]);
 });
 for (const offerConversation of [true, false])
   test(`an external employee's card answers 这次对话里都允许 as the web does${offerConversation ? "" : ", and a floor offers no second yes"}`, async () => {
@@ -969,6 +988,7 @@ for (const offerConversation of [true, false])
         "owner",
         APPROVAL,
         offerConversation ? "allow_conversation" : "allow_once",
+        "slack",
       ],
     ]);
     expect(said(answered.events)).toContain(

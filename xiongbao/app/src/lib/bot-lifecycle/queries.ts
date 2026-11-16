@@ -5,7 +5,7 @@ import { client } from "@/lib/client";
 export type BotNotify = "all" | "needs_input" | "none";
 /** `attention` is a ping: what the person's Bots found in their check-ins that needs them. */
 export type UpdateKind = "progress" | "decision" | "question" | "attention";
-export type UpdateTransport = "slack" | "teams" | "sms" | "push";
+export type UpdateTransport = "slack" | "teams" | "sms" | "push" | "wechat";
 
 /** The signed-in person's relationship with one Bot. Never anybody else's. */
 export type BotLifecycle = {
