@@ -11,6 +11,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../../db/client";
+import { deliveryBindings } from "../../db/schema/delivery";
 import {
   type WechatAccount,
   type WechatBindAttempt,
@@ -238,23 +239,39 @@ export function createWechatStore(database: Database) {
     /**
      * iLink 拒绝了令牌（401/403）：标成 `disconnected`，不再认领，行和凭据保留；清掉租约。
      * 这个微信号随之不再占着唯一索引。本人重新扫码时 `saveAccount` 覆盖这一行、回到 `bound`。
+     *
+     * 同时删掉这个人的微信投递绑定（和解绑一样，`bind.ts` `unbind`）：这个微信号之后可能被别人绑走，旧绑定的
+     * 地址还是它，留着会让发给这个人的提醒写进那一行，也会让别人找同一位员工时被「已连在别人账号上」挡住。
+     * 在这个人自己的帧里调（轮询器的帧），所以只删得到本人的行。本人重新扫码、再在微信里找员工时会重建。
      */
     async disconnect(accountId: string): Promise<void> {
-      await database
-        .update(wechatAccounts)
-        .set({
-          status: "disconnected",
-          pausedUntil: null,
-          leaseOwner: null,
-          leaseUntil: null,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          and(
-            eq(wechatAccounts.id, accountId),
-            inArray(wechatAccounts.status, ["bound", "paused"]),
-          ),
-        );
+      await database.transaction(async (transaction) => {
+        const [row] = await transaction
+          .update(wechatAccounts)
+          .set({
+            status: "disconnected",
+            pausedUntil: null,
+            leaseOwner: null,
+            leaseUntil: null,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              eq(wechatAccounts.id, accountId),
+              inArray(wechatAccounts.status, ["bound", "paused"]),
+            ),
+          )
+          .returning({ userId: wechatAccounts.userId });
+        if (!row) return;
+        await transaction
+          .delete(deliveryBindings)
+          .where(
+            and(
+              eq(deliveryBindings.ownerUserId, row.userId),
+              eq(deliveryBindings.transport, "wechat"),
+            ),
+          );
+      });
     },
 
     /**

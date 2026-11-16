@@ -1437,3 +1437,84 @@ describe("交付待验收：推送和微信两路", () => {
     expect(again).not.toBeNull();
   });
 });
+
+describe("账号断开、被别人重新绑走", () => {
+  const wechatBindingsOf = (who: Person) =>
+    asPerson(who, () =>
+      database
+        .select({ id: deliveryBindings.id })
+        .from(deliveryBindings)
+        .where(
+          and(
+            eq(deliveryBindings.ownerUserId, who.userId),
+            eq(deliveryBindings.transport, "wechat"),
+          ),
+        ),
+    );
+
+  test("账号断开：这个人的微信投递绑定一并删掉，之后不再往微信写行", async () => {
+    setup();
+    const who = await person("s1");
+    expect((await wechatBindingsOf(who)).length).toBe(1);
+    await asPerson(who, () => wechatStore.disconnect(who.account.id));
+    expect(await wechatBindingsOf(who)).toEqual([]);
+    const record = await approval(who);
+    await asPerson(who, () =>
+      router.notify(who.scope, {
+        id: `approval:${record.id}`,
+        kind: "approval",
+        requestId: record.id,
+        text: "请求",
+      }),
+    );
+    await sweep(who);
+    expect(await wechatRows(who)).toEqual([]);
+    expect(pushedTo(who).length).toBe(1);
+  });
+
+  test("A 断开、B 绑同一个微信、A 的旧行还在：出口按属主拒绝，不发给 B", async () => {
+    setup();
+    const a = await person("s2");
+    await asPerson(a, () => wechatStore.disconnect(a.account.id));
+    const bId = `${prefix}-s2b`;
+    people.push(bId);
+    await runAsTenant(bId, () =>
+      database.insert(users).values({ id: bId, email: `${bId}@example.test` }),
+    );
+    const b = await runAsTenant(bId, () =>
+      wechatStore.saveAccount({
+        userId: bId,
+        ilinkBotId: `${prefix}-bot-s2b@im.bot`,
+        ilinkUserId: a.ilinkUserId,
+        baseUrl: "https://ilinkai.weixin.qq.com",
+        credentialId: null,
+      }),
+    );
+    await runAsTenant(bId, () =>
+      wechatStore.markInbound(b.id, { at: clock, contextToken: "ctx-s2b" }),
+    );
+    const transport = createWechatTransport({
+      wechat: wechatStore,
+      send,
+      prompts: () => decisions,
+    });
+    // A 的旧行（断开前排进发件箱的）：地址还是这个微信号，属主是 A。
+    await expect(
+      asPerson(a, () =>
+        transport.send({
+          id: `${prefix}-old-row`,
+          address: a.ilinkUserId,
+          text: "A 的提醒",
+          transport: "wechat",
+          context: {
+            ownerUserId: a.userId,
+            kind: "attention",
+            requestId: null,
+          },
+        }),
+      ),
+    ).rejects.toThrow("微信账号已解绑或不属于这个人。");
+    expect(sent.filter((s) => s.userId === bId)).toEqual([]);
+    expect(sentTo(a)).toEqual([]);
+  });
+});
