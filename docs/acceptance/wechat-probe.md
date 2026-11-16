@@ -16,6 +16,14 @@
 
 脚本只用 Bun 自带的功能，不依赖任何其他文件。
 
+**Windows 注意（2026-11-16 实测）**：Windows 上的 Bun 直接运行 `wechat-probe.ts` 会卡住、没有任何输出。先编译成普通 JS 再运行，下文所有 `bun wechat-probe.ts …` 都换成 `bun p.js …`：
+
+```powershell
+bun build wechat-probe.ts --target=bun --outfile=p.js
+```
+
+开着 VPN（全局模式）时连不上微信接口，请关掉或改成规则模式。
+
 安装 Bun。macOS 或 Linux（含京东云服务器），在终端运行：
 
 ```bash
