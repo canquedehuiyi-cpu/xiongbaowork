@@ -203,6 +203,12 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // holder's tenant and so invisible to the caller's frame; it is read as `platform`, a holder who
   // is not the caller is refused there, and the write stays in the caller's own frame.
   "src/delivery/store.ts": { 'runAsTenant("platform"': 4 },
+  // 微信 ClawBot（规格 2026-11-16-im-channels、计划 Task 3；用户 2026-11-16 已批准的补登）：三处只读写
+  // `wechat_accounts` 一张表。`accountByIlinkUser` 查这个微信号是否已绑在别人的账号上——那一行在别人的
+  // 帧里，调用者的帧看不到，读到后只用来拒绝绑定，接口不回别人的任何字段；`claimForPolling` 是后台轮询器
+  // 跨租户认领到期的已绑定账号（加租约），`renewLease` 只续自己持有的租约。处理每条消息都在
+  // `runAsTenant(account.tenantId, …)` 里，不在 `platform` 帧写别的表。
+  "src/delivery/wechat/store.ts": { 'runAsTenant("platform"': 3 },
   "src/devices/store.ts": { 'runAsTenant("platform"': 4 },
   // The third is the background translator (migration 0145): it reads and writes only
   // `text_translations`, a deployment-wide cache with no tenant column and no row security, and
