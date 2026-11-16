@@ -982,7 +982,14 @@ test("延期弹层：申请是明天 10:30 时，输入框写「明早 10:30」�
     await waitFor(() =>
       expect(
         calls.filter((call) => call.method === "POST").map((call) => call.body),
-      ).toEqual([{ decision: "grant", dueAt: asked, requestedDueAt: asked }]),
+      ).toEqual([
+        {
+          decision: "grant",
+          dueAt: asked,
+          requestedDueAt: asked,
+          requestEventId: "x1",
+        },
+      ]),
     );
     expect(Number.isNaN(Date.parse(asked))).toBe(false);
     cleanup();
@@ -1006,7 +1013,12 @@ test("延期弹层：申请是明天 10:30 时，输入框写「明早 10:30」�
     expect(
       calls.filter((call) => call.method === "POST").map((call) => call.body),
     ).toEqual([
-      { decision: "grant", dueAt: "明天下午三点", requestedDueAt: asked },
+      {
+        decision: "grant",
+        dueAt: "明天下午三点",
+        requestedDueAt: asked,
+        requestEventId: "x1",
+      },
     ]),
   );
   cleanup();
@@ -1026,7 +1038,9 @@ test("延期弹层：申请是明天 10:30 时，输入框写「明早 10:30」�
       denyCalls
         .filter((call) => call.method === "POST")
         .map((call) => call.body),
-    ).toEqual([{ decision: "deny", requestedDueAt: asked }]),
+    ).toEqual([
+      { decision: "deny", requestedDueAt: asked, requestEventId: "x1" },
+    ]),
   );
 });
 
@@ -1090,6 +1104,74 @@ test("延期弹层开着时那条申请在别处答复了：不再让提交，�
   fireEvent.submit(field.closest("form") as HTMLFormElement);
   await settleReactWork();
   expect(quiet.filter((call) => call.method !== "GET")).toEqual([]);
+});
+
+test("员工又申请了一次、延到同一个时间：旧弹层点名旧的那一行，服务器拒（409），说不是最新的了", async () => {
+  const asked = shanghaiTomorrowAt(10, 30);
+  const calls: Call[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = String(input);
+    const method = init?.method ?? "GET";
+    calls.push({
+      method,
+      path,
+      body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
+    });
+    if (method === "POST")
+      // 服务器那边最新的是另一行申请（同样延到 asked）。
+      return json(
+        {
+          error:
+            "员工后来又申请了一次延期，这条申请已经不是最新的了，刷新看看。",
+          code: "stale_request",
+        },
+        409,
+      );
+    if (path === `/api/tasks/${OVERDUE_CARD.id}/events`)
+      return json({
+        events: [
+          {
+            id: "req-old",
+            kind: "extension_requested",
+            actor: `agent:${XIAOZHOU.id}`,
+            detail: { dueAt: asked, reason: "C 家明早才回" },
+            createdAt: ago(3),
+          },
+        ],
+      });
+    if (path === "/api/settings/preferences")
+      return json({ preferences: preferences(workHours()) });
+    return json({ agents: [] });
+  }) as typeof fetch;
+  const view = render(
+    <QueryClientProvider
+      client={preferencesClient("user-extend-same-time", workHours())}
+    >
+      <ExtendDialog card={OVERDUE_CARD} onClose={() => {}} />
+    </QueryClientProvider>,
+  );
+  const input = (await view.findByRole("textbox", {
+    name: "延到几点",
+  })) as HTMLInputElement;
+  await waitFor(() => expect(input.value).toBe("明早 10:30"));
+  await userEvent.click(view.getByRole("button", { name: "准许延期" }));
+  // 点名的是弹层打开时那一行（不只是时间），所以同样时间的新申请分得出来。
+  await waitFor(() =>
+    expect(
+      calls.filter((call) => call.method === "POST").map((call) => call.body),
+    ).toEqual([
+      {
+        decision: "grant",
+        dueAt: asked,
+        requestedDueAt: asked,
+        requestEventId: "req-old",
+      },
+    ]),
+  );
+  expect((await view.findByRole("alert")).textContent).toContain(
+    "这条延期申请已经不是最新的了",
+  );
+  expect(calls.some((call) => call.method === "PATCH")).toBe(false);
 });
 
 // ---------------------------------------------------------------- 当作一件活来跟

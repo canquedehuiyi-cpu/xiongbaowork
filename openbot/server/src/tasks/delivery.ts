@@ -350,6 +350,11 @@ export type Delivery = {
        * 拒绝（`stale_request`）：员工后来又申请了一次，不能拿旧卡上的答复去答新申请。
        */
       requestedDueAt?: string;
+      /**
+       * 答复的是流水里哪一行申请（那一行的 id，弹层打开时记下的）。给了就要是最新那条申请，否则拒绝
+       * （`stale_request`）：两次申请延到同一个时间时，只比时间分不出新旧。旧客户端不带，照旧比时间。
+       */
+      requestEventId?: string;
       now: Date;
       timeZone: string;
     },
@@ -1181,7 +1186,11 @@ export function createDelivery(database: Database): Delivery {
           if (card.status === "awaiting_review")
             return { ok: false, why: "handed_in" } as const;
           const [latest] = await transaction
-            .select({ kind: taskEvents.kind, detail: taskEvents.detail })
+            .select({
+              id: taskEvents.id,
+              kind: taskEvents.kind,
+              detail: taskEvents.detail,
+            })
             .from(taskEvents)
             .where(
               and(
@@ -1208,6 +1217,11 @@ export function createDelivery(database: Database): Delivery {
           const requested = (latest.detail as { dueAt?: unknown }).dueAt;
           const requestedDueAt =
             typeof requested === "string" ? requested : null;
+          if (
+            input.requestEventId !== undefined &&
+            input.requestEventId !== latest.id
+          )
+            return { ok: false, why: "stale_request" } as const;
           if (
             input.requestedDueAt !== undefined &&
             (requestedDueAt === null ||

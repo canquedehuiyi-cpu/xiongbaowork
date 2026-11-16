@@ -501,7 +501,9 @@ export function ExtendDialog({
       extendTask(
         card.id,
         dueAt,
-        pending ? { requestedDueAt: pending.dueAt } : null,
+        pending
+          ? { requestedDueAt: pending.dueAt, requestEventId: pending.eventId }
+          : null,
       ),
     retry: false,
     onSuccess: () => onClose(),
@@ -509,7 +511,13 @@ export function ExtendDialog({
   });
   const deny = useMutation({
     // 不批的也是弹层里这一条：员工后来又申请了一次时服务器拒，不替你否掉一条你没看到的申请。
-    mutationFn: () => denyExtension(card.id, pending?.dueAt ?? undefined),
+    mutationFn: () =>
+      denyExtension(
+        card.id,
+        pending
+          ? { requestedDueAt: pending.dueAt, requestEventId: pending.eventId }
+          : undefined,
+      ),
     retry: false,
     onSuccess: () => onClose(),
     onSettled: settled,

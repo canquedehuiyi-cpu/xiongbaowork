@@ -798,7 +798,12 @@ test("准许延期：员工申请过就答复那条申请（照准 grant，或�
   const extension = `/api/tasks/${ACCEPTED.id}/extension`;
   await waitFor(() =>
     expect(posted(calls, "POST", extension).map((call) => call.body)).toEqual([
-      { decision: "grant", dueAt: asked, requestedDueAt: asked },
+      {
+        decision: "grant",
+        dueAt: asked,
+        requestedDueAt: asked,
+        requestEventId: "a2",
+      },
     ]),
   );
   expect(posted(calls, "PATCH", `/api/tasks/${ACCEPTED.id}`)).toEqual([]);
@@ -819,7 +824,9 @@ test("准许延期：员工申请过就答复那条申请（照准 grant，或�
       posted(calls, "POST", extension)
         .slice(1)
         .map((call) => call.body),
-    ).toEqual([{ decision: "deny", requestedDueAt: asked }]),
+    ).toEqual([
+      { decision: "deny", requestedDueAt: asked, requestEventId: "a2" },
+    ]),
   );
 });
 

@@ -339,6 +339,8 @@ const extensionBody = z.object({
   dueAt: z.string().trim().min(1).max(100).optional(),
   /** 答复的是哪一条申请（它要延到的时间）；和最新那条不一致时 409。 */
   requestedDueAt: z.string().trim().min(1).max(100).optional(),
+  /** 答复的是流水里哪一行申请（那一行的 id）；和最新那条不是同一行时 409。 */
+  requestEventId: z.string().trim().min(1).max(100).optional(),
 });
 const editBody = z
   .object({
@@ -825,6 +827,9 @@ export function createTaskRoutes(
       ...(body.data.dueAt ? { dueAt: body.data.dueAt } : {}),
       ...(body.data.requestedDueAt
         ? { requestedDueAt: body.data.requestedDueAt }
+        : {}),
+      ...(body.data.requestEventId
+        ? { requestEventId: body.data.requestEventId }
         : {}),
       now: now(),
       timeZone: await zoneOf(tenantId),

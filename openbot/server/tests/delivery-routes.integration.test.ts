@@ -1085,6 +1085,64 @@ test("cancel stops a running turn and marks cancelled", async () => {
   expect((await call("POST", `${taskId}/cancel`)).status).toBe(409);
 });
 
+test("answering by the request's line id: a newer request for the very same time is still refused (409), nothing written", async () => {
+  const { tenantId, agentId, taskId, due } =
+    await acceptedCard("same-time-ext");
+  const call = routesFor(tenantId, { turns: cardTurns(new Recorder(agentId)) });
+  const asked = new Date(Date.now() + 3 * 60 * 60_000);
+  const first = randomUUID();
+  const second = randomUUID();
+  await delivery.requestExtension(tenantId, taskId, {
+    eventId: first,
+    dueAt: asked,
+    reason: "C 家还没回",
+  });
+  // Answered elsewhere (another device), then asked again for exactly the same time.
+  expect(
+    (
+      await call("POST", `${taskId}/extension`, {
+        decision: "deny",
+        requestEventId: first,
+      })
+    ).status,
+  ).toBe(200);
+  await delivery.requestExtension(tenantId, taskId, {
+    eventId: second,
+    dueAt: asked,
+    reason: "C 家还没回",
+  });
+  const before = await history(tenantId, taskId);
+
+  // The dialog opened on the first request: same time, other line -- refused, for 准许 and 不批 alike.
+  for (const decision of ["grant", "deny"] as const) {
+    const stale = await call("POST", `${taskId}/extension`, {
+      decision,
+      ...(decision === "grant" ? { dueAt: asked.toISOString() } : {}),
+      requestedDueAt: asked.toISOString(),
+      requestEventId: first,
+    });
+    expect(stale.status).toBe(409);
+    expect(stale.body.error).toContain("不是最新");
+    expect(stale.body.code).toBe("stale_request");
+  }
+  expect((await row(tenantId, taskId))?.dueAt?.toISOString()).toBe(
+    due.toISOString(),
+  );
+  expect((await history(tenantId, taskId)).length).toBe(before.length);
+
+  // Naming the latest request's line goes through.
+  const granted = await call("POST", `${taskId}/extension`, {
+    decision: "grant",
+    dueAt: asked.toISOString(),
+    requestedDueAt: asked.toISOString(),
+    requestEventId: second,
+  });
+  expect(granted.status).toBe(200);
+  expect((await row(tenantId, taskId))?.dueAt?.toISOString()).toBe(
+    asked.toISOString(),
+  );
+});
+
 test("answering an extension the chat's card names: a request that is no longer the latest is refused (409), nothing written", async () => {
   const { tenantId, agentId, taskId, due } = await acceptedCard("stale-ext");
   const call = routesFor(tenantId, { turns: cardTurns(new Recorder(agentId)) });

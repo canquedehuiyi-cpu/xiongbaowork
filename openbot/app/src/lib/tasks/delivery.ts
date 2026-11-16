@@ -769,29 +769,38 @@ export const nudgeTask = (id: string) =>
   });
 
 /**
- * 准许延期到某个时间。员工申请过、还没答复，就答复那条申请；没申请过就直接改预计时间（你改的直接生效）。
- * `dueAt` 是你写的字（「16:00」「40 分钟」），由服务器按你的时区认。
+ * 答复的是哪一条申请：它要延到的时间（`requestedDueAt`）和它在流水里那一行的 id（`requestEventId`）。服务器
+ * 拿它们和最新那条待答复的申请比，不是同一条就拒（409）：员工后来又申请了一次——哪怕延到的是同一个时间——
+ * 旧弹层、旧卡上的答复不会落到新申请上。
  */
+export type AnsweredRequest = {
+  requestedDueAt?: string | null;
+  requestEventId?: string | null;
+};
+
+const answeredFields = (request: AnsweredRequest | null | undefined) => ({
+  ...(request?.requestedDueAt
+    ? { requestedDueAt: request.requestedDueAt }
+    : {}),
+  ...(request?.requestEventId
+    ? { requestEventId: request.requestEventId }
+    : {}),
+});
+
 /**
  * 准许延期 / 改预计时间（看板、详情、接活回执上的弹层）。`answering` 是在答复员工那条待答复的申请：走
- * `POST /extension grant`，带上那条申请要的时间（`requestedDueAt`），员工后来又申请了一次时服务器拒（409），
- * 不拿旧弹层去答新申请；没有待答复的申请时就是你直接改预计时间（`PATCH dueAt`）。
+ * `POST /extension grant`，点名答复的是哪一条（`AnsweredRequest`）；没有待答复的申请时就是你直接改预计时间
+ * （`PATCH dueAt`）。`dueAt` 是那条申请的原时间，或你写的字（「16:00」），由服务器按你的时区认。
  */
 export const extendTask = (
   id: string,
   dueAt: string,
-  answering: { requestedDueAt: string | null } | null,
+  answering: AnsweredRequest | null,
 ) =>
   answering
     ? client(`${cardPath(id)}/extension`, {
         method: "POST",
-        body: {
-          decision: "grant",
-          dueAt,
-          ...(answering.requestedDueAt
-            ? { requestedDueAt: answering.requestedDueAt }
-            : {}),
-        },
+        body: { decision: "grant", dueAt, ...answeredFields(answering) },
         fallback: "延期没改成，请稍后再试。",
       })
     : client(cardPath(id), {
@@ -801,14 +810,21 @@ export const extendTask = (
       });
 
 /**
- * 照员工申请的时间准许延期（对话里延期卡上的「准许」）。显式带上卡上写的时间：服务器准许的就是你在卡上
- * 看到的那个时间，不会是后来另一条申请要的。
+ * 照员工申请的时间准许延期（对话里延期卡上的「准许」）。显式带上卡上写的时间和卡对应的那一行申请：服务器
+ * 准许的就是你在卡上看到的那一条，不会是后来另一条申请。
  */
-export const grantExtension = (id: string, dueAt: string) =>
+export const grantExtension = (
+  id: string,
+  dueAt: string,
+  requestEventId?: string,
+) =>
   client(`${cardPath(id)}/extension`, {
     method: "POST",
-    // 答复的就是卡上这条申请：员工后来又申请了一次时，服务器拒绝（409），不拿旧卡去答新申请。
-    body: { decision: "grant", dueAt, requestedDueAt: dueAt },
+    body: {
+      decision: "grant",
+      dueAt,
+      ...answeredFields({ requestedDueAt: dueAt, requestEventId }),
+    },
     fallback: "延期没准成，请稍后再试。",
   });
 
@@ -821,16 +837,13 @@ export const editCriteria = (id: string, criteria: string) =>
   });
 
 /**
- * 不批延期：维持原来的预计时间（规格第 4 节）。对话里延期卡上的「不准」带上卡上申请的时间
- * （`requestedDueAt`），和「准许」一样只答复这一条。
+ * 不批延期：维持原来的预计时间（规格第 4 节）。和「准许」一样点名答复的是哪一条申请（`AnsweredRequest`），
+ * 只答复这一条。
  */
-export const denyExtension = (id: string, requestedDueAt?: string) =>
+export const denyExtension = (id: string, request?: AnsweredRequest) =>
   client(`${cardPath(id)}/extension`, {
     method: "POST",
-    body: {
-      decision: "deny",
-      ...(requestedDueAt ? { requestedDueAt } : {}),
-    },
+    body: { decision: "deny", ...answeredFields(request) },
     fallback: "没答复成，请稍后再试。",
   });
 

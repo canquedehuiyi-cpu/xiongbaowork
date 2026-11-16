@@ -302,13 +302,17 @@ function ExtensionCard({
     void queryClient.invalidateQueries({ queryKey: ["tasks"] });
   const grant = useMutation({
     // 显式带上卡上写的时间：准许的就是你在这张卡上看到的时间。
-    mutationFn: (id: string) => grantExtension(id, event.dueAt),
+    mutationFn: (id: string) => grantExtension(id, event.dueAt, event.eventId),
     retry: false,
     onSuccess: () => setAnswered(true),
     onSettled: settled,
   });
   const deny = useMutation({
-    mutationFn: (id: string) => denyExtension(id, event.dueAt),
+    mutationFn: (id: string) =>
+      denyExtension(id, {
+        requestedDueAt: event.dueAt,
+        requestEventId: event.eventId,
+      }),
     retry: false,
     onSuccess: () => setAnswered(true),
     onSettled: settled,
