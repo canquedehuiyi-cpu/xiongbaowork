@@ -616,23 +616,21 @@ describe("审批：回数字拍板", () => {
     expect((await approvalOf(e, request.id)).decision).toBe("allow_once");
   });
 
-  test("网页上先拒绝了，再带编号回「A? 1」：答已由某某在网页处理，不改状态", async () => {
+  test("网页上先拒绝了，再回「1」：答已由某某在网页处理，不改状态", async () => {
     const f = await person("f1", "小熊");
     const coder = await bot(f, "代码熊");
     const request = await approval(f, coder);
-    const opened = await asPerson(f, () =>
-      decisions.openApprovalPrompt(f.userId, request.id),
-    );
+    await asPerson(f, () => decisions.openApprovalPrompt(f.userId, request.id));
     await asPerson(f, () =>
       approvalService.decide(f.userId, request.id, "deny"),
     );
-    await deliver(f, `${opened?.code} 1`);
+    await deliver(f, "1");
     expect(lastSent(f)).toBe("这条已由 小熊 在 网页 处理");
     expect((await approvalOf(f, request.id)).status).toBe("denied");
     expect(await openPrompts(f)).toEqual([]);
   });
 
-  test("网页先批了、提示还开着，回「1」：交给员工，提示静默关掉", async () => {
+  test("网页先批了、提示还开着，只有这一条时回「1」：答已处理，提示关掉，不交给员工", async () => {
     const f = await person("f2");
     const coder = await bot(f, "代码熊");
     await asPerson(f, () => wechatStore.setLastAgent(f.account.id, coder));
@@ -643,10 +641,49 @@ describe("审批：回数字拍板", () => {
     );
     const before = sentTo(f).length;
     await deliver(f, "1");
+    expect(turnLog.filter((t) => t.ownerUserId === f.userId)).toEqual([]);
+    expect(sentTo(f).slice(before)).toEqual(["这条已由 你 在 网页 处理"]);
+    expect((await approvalOf(f, request.id)).decision).toBe("allow_once");
+    expect(await openPrompts(f)).toEqual([]);
+    // 提示关了以后再回「1」：交给员工。
+    await deliver(f, "1");
     expect(turnLog.filter((t) => t.ownerUserId === f.userId)).toEqual([
       { ownerUserId: f.userId, agentId: coder, text: "1" },
     ]);
-    expect(sentTo(f).slice(before)).toEqual(["【代码熊】收到：1"]);
+  });
+
+  test("网页先批了、带编号回「A? 1」：同样答已处理", async () => {
+    const f = await person("f2b", "小熊");
+    const coder = await bot(f, "代码熊");
+    const request = await approval(f, coder);
+    const opened = await asPerson(f, () =>
+      decisions.openApprovalPrompt(f.userId, request.id),
+    );
+    await asPerson(f, () =>
+      approvalService.decide(f.userId, request.id, "deny"),
+    );
+    await deliver(f, `${opened?.code} 1`);
+    expect(lastSent(f)).toBe("这条已由 小熊 在 网页 处理");
+    expect(await openPrompts(f)).toEqual([]);
+  });
+
+  test("带编号回一条开过 24 小时、审批仍在等的：答已过期，提示关掉，不交给员工", async () => {
+    const f = await person("f2c");
+    const coder = await bot(f, "代码熊");
+    await asPerson(f, () => wechatStore.setLastAgent(f.account.id, coder));
+    const request = await approval(f, coder);
+    const opened = await asPerson(f, () =>
+      decisions.openApprovalPrompt(f.userId, request.id),
+    );
+    clock = () => new Date(Date.now() + 25 * 60 * 60_000);
+    try {
+      await deliver(f, `${opened?.code} 1`);
+    } finally {
+      clock = () => new Date();
+    }
+    expect(lastSent(f)).toBe("这条已过期，请到熊宝里处理");
+    expect(turnLog.filter((t) => t.ownerUserId === f.userId)).toEqual([]);
+    expect((await approvalOf(f, request.id)).status).toBe("pending");
     expect(await openPrompts(f)).toEqual([]);
   });
 
@@ -887,6 +924,23 @@ describe("交付闭环：验收、退回、再催、延期、换人、取消", (
     expect(notices.filter((n) => n.threadId === threadRef)).toEqual([
       { threadId: threadRef, text: "准许延期到 11月17日 10:00" },
     ]);
+    expect(await openPrompts(q)).toEqual([]);
+  });
+
+  test("逾期卡的预计时间已在网页上改到以后：回「再催」答已处理，不催", async () => {
+    const q = await person("q4");
+    const coder = await bot(q, "代码熊");
+    const { taskId } = await card(q, coder);
+    await asPerson(q, () => decisions.openOverduePrompt(q.userId, taskId));
+    await asPerson(q, () =>
+      database
+        .update(tasks)
+        .set({ dueAt: new Date(Date.now() + 24 * 60 * 60_000) })
+        .where(eq(tasks.id, taskId)),
+    );
+    await deliver(q, "再催");
+    expect(lastSent(q)).toBe("这条已由 你 在 网页 处理");
+    expect(nudges.filter((n) => n.tenantId === q.userId)).toEqual([]);
     expect(await openPrompts(q)).toEqual([]);
   });
 

@@ -276,17 +276,27 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
     at: Date,
   ): Promise<"open" | "settled" | "expired"> {
     if (prompt.kind === "approval") {
-      const record = await getApproval(prompt.userId, prompt.refId);
-      if (record?.status !== "pending") return "settled";
-      return prompt.createdAt.getTime() <
+      // 开过 24 小时的先算过期（不论审批批没批）：过期的一律静默关掉。
+      if (
+        prompt.createdAt.getTime() <
         at.getTime() - WECHAT_APPROVAL_PROMPT_TTL_MS
-        ? "expired"
-        : "open";
+      )
+        return "expired";
+      const record = await getApproval(prompt.userId, prompt.refId);
+      return record?.status === "pending" ? "open" : "settled";
     }
     if (prompt.kind === "handin" || prompt.kind === "overdue") {
       const card = await cardOf(prompt.userId, prompt.refId);
       const live = prompt.kind === "handin" ? HANDIN_OPEN : OVERDUE_OPEN;
-      return card?.tracked && live.has(card.status) ? "open" : "settled";
+      if (!card?.tracked || !live.has(card.status)) return "settled";
+      // 逾期卡的预计时间已经改到以后（网页上准许了延期、改了时间）：这条逾期提醒已经处理过了。
+      if (
+        prompt.kind === "overdue" &&
+        card.dueAt &&
+        card.dueAt.getTime() > at.getTime()
+      )
+        return "settled";
+      return "open";
     }
     return "open";
   }
@@ -393,9 +403,29 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
   const close = (context: WechatPromptContext, prompt: WechatPrompt) =>
     deps.wechat.closePrompt(context.account.userId, prompt.code);
 
+  /** 这条在别处处理过了，而这条回复只可能是在回它：照规格说一声，关掉提示。 */
+  async function answerSettled(
+    context: WechatPromptContext,
+    prompt: WechatPrompt,
+  ) {
+    await close(context, prompt);
+    await context.reply(
+      `这条已由 ${await personName(context.account.userId)} 在 网页 处理`,
+    );
+  }
+
   const approval: WechatPromptHandler = {
     accepts: (answer) => /^[123]$/.test(answer),
     stale: staleOf,
+    settled: answerSettled,
+    /** 带编号回了一条开过 24 小时的：审批还在等就说过期了、请到熊宝里处理；已经处理过的不说话。 */
+    async expired(context, prompt) {
+      await close(context, prompt);
+      const record = await getApproval(context.account.userId, prompt.refId);
+      if (record?.status !== "pending") return false;
+      await context.reply(`这条已过期，请到${shortName()}里处理`);
+      return true;
+    },
     async label(prompt) {
       const record = await getApproval(prompt.userId, prompt.refId);
       return record
@@ -482,6 +512,7 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
   const handin: WechatPromptHandler = {
     accepts: (answer) => answer === "验收" || RETURN.test(answer),
     stale: staleOf,
+    settled: answerSettled,
     async label(prompt) {
       const card = await cardOf(prompt.userId, prompt.refId);
       return card ? `验收：「${card.title}」` : "验收";
@@ -731,6 +762,7 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
 
   const overdue: WechatPromptHandler = {
     stale: staleOf,
+    settled: answerSettled,
     accepts: (answer) =>
       answer === "再催" ||
       answer === "取消" ||

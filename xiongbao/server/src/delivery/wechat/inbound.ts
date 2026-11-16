@@ -141,13 +141,22 @@ export type WechatPromptHandler = {
   label(prompt: WechatPrompt): string | Promise<string>;
   /**
    * 这条提示背后的事还在不在等这个人：`settled` 是在别处处理过了（网页上批了、看板上验收了），`expired` 是
-   * 开得太久不再算数。匹配之前对账：两者都静默关掉、不参与匹配；只有这条回复带着它的编号、而它是在别处处理过的，
-   * 才照样交给处理器，回「这条已由 某某 在 网页 处理」。没有这个方法的类型不对账。
+   * 开得太久不再算数。匹配之前对账，规则见下面「2. 在回一条开着的提示」。没有这个方法的类型不对账。
    */
   stale?(
     prompt: WechatPrompt,
     now: Date,
   ): Promise<"open" | "settled" | "expired">;
+  /** 这条回复只可能是在回一条在别处处理过的提示时，怎么回（关掉它）。没有时交给 `handle`。 */
+  settled?(context: WechatPromptContext, prompt: WechatPrompt): Promise<void>;
+  /**
+   * 带着编号回了一条过期的提示：关掉它；回了话（这条消息到此为止）返回 true，返回 false 就当没回提示往下走。
+   * 没有这个方法的类型静默关掉。
+   */
+  expired?(
+    context: WechatPromptContext,
+    prompt: WechatPrompt,
+  ): Promise<boolean>;
   handle(
     context: WechatPromptContext,
     prompt: WechatPrompt,
@@ -451,30 +460,63 @@ export function createWechatInbound(deps: WechatInboundDeps) {
       }
     };
 
-    // 2. 在回一条开着的提示。先对账：过期的、在别处处理过的静默关掉，不再截走回复。
-    const open: WechatPrompt[] = [];
+    // 2. 在回一条开着的提示。先对账：开着的提示背后的事还在不在等这个人。
+    //  - 过期的（选人提示 10 分钟、审批提示 24 小时）一律静默关掉；只有带着编号回一条过期而仍在等批的审批，
+    //    由那一类说「这条已过期，请到熊宝里处理」，这条消息不再往下走。
+    //  - 在别处处理过的（网页上批了、看板上验收了）：这条回复只可能是在回它（带着它的编号，或者不带编号、
+    //    而认这个回答的只有它）时，交给那一类说「这条已由 某某 在 网页 处理」并关掉；否则静默关掉，按剩下的判断。
     const at = now();
     const expiredBefore = at.getTime() - WECHAT_PICK_TTL_MS;
     const coded = promptCodeOf(text);
+    const contextOf = (open: WechatPrompt[]): WechatPromptContext => ({
+      account,
+      message,
+      actor,
+      open,
+      reply,
+      turn,
+    });
+    const open: WechatPrompt[] = [];
+    const settled: WechatPrompt[] = [];
     for (const prompt of await deps.wechat.openPrompts(account.userId)) {
+      const handler = handlers[prompt.kind];
       const state =
         prompt.kind === "pick_agent"
           ? prompt.createdAt.getTime() < expiredBefore
             ? "expired"
             : "open"
-          : ((await handlers[prompt.kind]?.stale?.(prompt, at)) ?? "open");
-      // 带着编号回一条在别处处理过的：留给处理器说「这条已由 某某 在 网页 处理」。
-      if (
-        state === "open" ||
-        (state === "settled" && coded === prompt.code.toUpperCase())
-      )
-        open.push(prompt);
-      else await deps.wechat.closePrompt(account.userId, prompt.code);
+          : ((await handler?.stale?.(prompt, at)) ?? "open");
+      if (state === "open") open.push(prompt);
+      else if (state === "settled") settled.push(prompt);
+      else if (coded === prompt.code.toUpperCase() && handler?.expired) {
+        if (await handler.expired(contextOf([prompt]), prompt)) return;
+      } else await deps.wechat.closePrompt(account.userId, prompt.code);
+    }
+    const answer = text.normalize("NFKC").trim();
+    let only: WechatPrompt | undefined;
+    if (coded) {
+      const target = settled.find((p) => p.code.toUpperCase() === coded);
+      if (target && matchPromptReply(text, [target], accepts)) only = target;
+    } else {
+      const takers = [...open, ...settled].filter((p) =>
+        accepts[p.kind]?.(answer, p),
+      );
+      const [taker] = takers;
+      if (takers.length === 1 && taker && settled.includes(taker)) only = taker;
+    }
+    for (const prompt of settled)
+      if (prompt !== only)
+        await deps.wechat.closePrompt(account.userId, prompt.code);
+    const onlyHandler = only && handlers[only.kind];
+    if (only && onlyHandler) {
+      const context = contextOf([...open, only]);
+      if (onlyHandler.settled) await onlyHandler.settled(context, only);
+      else await onlyHandler.handle(context, only, answer);
+      return;
     }
     const matched = matchPromptReply(text, open, accepts);
     if (matched?.kind === "ambiguous") {
       // 例子用真的编号和这条回复：认这个回答的最后一条（通常是最新的那条）。
-      const answer = text.normalize("NFKC").trim();
       const example =
         matched.open.findLast((p) => accepts[p.kind]?.(answer, p)) ??
         matched.open.at(-1);
@@ -494,11 +536,7 @@ export function createWechatInbound(deps: WechatInboundDeps) {
     if (matched) {
       const handler = handlers[matched.prompt.kind];
       if (handler) {
-        await handler.handle(
-          { account, message, actor, open, reply, turn },
-          matched.prompt,
-          matched.answer,
-        );
+        await handler.handle(contextOf(open), matched.prompt, matched.answer);
         return;
       }
     }
