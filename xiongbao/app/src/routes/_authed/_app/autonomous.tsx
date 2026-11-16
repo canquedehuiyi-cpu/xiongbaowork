@@ -146,7 +146,7 @@ function RouteComponent() {
       }
       art={<SignalArt />}
       description="通过定时、事件或 API 自动开工，并由员工或 WakerFlow 响应。"
-      eyebrow="03 AUTOMATION"
+      eyebrow="03 自动化"
       title="自主工作"
       width="workbench"
     >

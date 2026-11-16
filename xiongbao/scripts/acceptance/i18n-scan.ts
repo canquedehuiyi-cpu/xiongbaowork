@@ -90,6 +90,18 @@ export type Verdict =
 export function verdictOf(line: string): Verdict {
   if (HAN.test(line)) return { kind: "chinese" };
   if (!LATIN.test(line)) return { kind: "no-letters" };
+  /*
+   * 一两个字母的纯拉丁行是**画上去的字形**，不是文案。
+   *
+   * 唯一的实例：「员工们正在休息」后面那个 `z`（`work-record-banner.tsx:190`，`aria-hidden="true"` 的
+   * 小字号上标），画的是一声睡觉的 z。它旁边的说明行也是 `aria-hidden`，却由 `aria-describedby` 指着、
+   * 屏幕上真看得见——所以按 `aria-hidden` 整棵跳过是错的，那会连工作台九个应用格子的说明行一起跳掉。
+   * 按长度判才对：一到两个字母写不成一句话。
+   *
+   * 这类行在报告里单列成「装饰字形」，逐条可查。`OK`、`AI` 这类两字母缩写也会落进来，无害。
+   */
+  if (line.length <= 2 && /^[A-Za-z]+$/.test(line))
+    return { kind: "allowed", why: ["装饰字形"] };
   let rest = line;
   const why: string[] = [];
   for (const { why: name, pattern } of ALLOWED) {

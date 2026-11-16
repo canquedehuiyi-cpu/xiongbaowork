@@ -58,7 +58,7 @@ test("a workbench page is full width under an open heading with an eyebrow, a la
     <SidebarProvider>
       <PageShell
         description="说明"
-        eyebrow="01 WORK RECORD"
+        eyebrow="01 工作记录"
         title="任务看板"
         width="workbench"
       >
@@ -70,7 +70,7 @@ test("a workbench page is full width under an open heading with an eyebrow, a la
   expect(heading.className).toContain("text-[clamp(35px,4.5vw,55px)]");
   expect(view.getByText("说明").className).toContain("text-[13px]");
   const eyebrow = view.container.querySelector("[data-slot=eyebrow]");
-  expect(eyebrow?.textContent).toBe("01WORK RECORD");
+  expect(eyebrow?.textContent).toBe("01工作记录");
 });
 
 test("the breadcrumb bar names the page after 工作台, and a Back link takes 工作台's place", () => {
