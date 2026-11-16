@@ -119,11 +119,20 @@ async function bind(flags: Map<string, string | true>) {
   encodeClientVersion(clientVersion);
 
   const fetchQr = async (): Promise<Json> => {
-    const res = await fetch(`${base}/ilink/bot/get_bot_qrcode?bot_type=3`, {
-      method: "POST",
-      headers: postHeaders(clientVersion),
-      body: JSON.stringify({ local_token_list: [] }),
-    });
+    console.log(`[${stamp()}] 正在向 ${base} 申请二维码……`);
+    let res: Response;
+    try {
+      res = await fetch(`${base}/ilink/bot/get_bot_qrcode?bot_type=3`, {
+        method: "POST",
+        headers: postHeaders(clientVersion),
+        body: JSON.stringify({ local_token_list: [] }),
+        signal: AbortSignal.timeout(20_000),
+      });
+    } catch (e) {
+      throw new Error(
+        `连不上微信接口（${e instanceof Error ? e.message : e}）。如果开着 VPN 或代理，请关掉或改成规则模式后重试。`,
+      );
+    }
     if (!res.ok) throw new Error(`get_bot_qrcode HTTP ${res.status}`);
     return res.json();
   };
@@ -353,4 +362,5 @@ async function main() {
   }
 }
 
-if (import.meta.main) await main();
+// 不用 import.meta.main 判断：Windows 上的 Bun 直接运行本文件时它可能为 false，导致什么都不输出。
+await main();
