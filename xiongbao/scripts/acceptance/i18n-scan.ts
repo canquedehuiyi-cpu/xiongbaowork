@@ -50,11 +50,15 @@ const ALLOWED: readonly { readonly why: string; readonly pattern: RegExp }[] = [
    *
    * `waker` / `wakerflow` 是本产品自己的功能名，界面上一向按原样写（侧栏的「@Waker」、能力的「WakerFlow」
    * 页签），和上游品牌同一类，不算没翻的文案。
+   *
+   * `xiongbao(?:\s+work)?` 是**两词写法**：产品英文名是 `XiongBao Work`（`appConfig.brand.englishName`），
+   * `/desktop-return` 三处都画着它。只列 `xiongbao` 的话，抠掉前半截还剩一个 `Work`，整行会被判成
+   * 没翻的英文——那是判据的错，不是页面的。
    */
   {
     why: "品牌名",
     pattern:
-      /\b(?:openai|anthropic|google|microsoft|apple|amazon|meta|github|gitlab|gmail|slack|notion|linear|jira|figma|asana|trello|discord|telegram|wechat|wecom|zoom|dropbox|salesforce|hubspot|stripe|vercel|cloudflare|sentry|datadog|postgresql|postgres|docker|kubernetes|playwright|browserbase|composio|arcade|copilotkit|copilot|mcp|wakerflow|waker|openbot|xiongbao)\b/gi,
+      /\b(?:openai|anthropic|google|microsoft|apple|amazon|meta|github|gitlab|gmail|slack|notion|linear|jira|figma|asana|trello|discord|telegram|wechat|wecom|zoom|dropbox|salesforce|hubspot|stripe|vercel|cloudflare|sentry|datadog|postgresql|postgres|docker|kubernetes|playwright|browserbase|composio|arcade|copilotkit|copilot|mcp|wakerflow|waker|openbot|xiongbao(?:\s+work)?)\b/gi,
   },
   /*
    * 格式、单位、协议缩写：`PDF`、`CSV`、`JSON`、`MB`、`CPU`。**白名单，不是「全大写就算」**：后者会把
@@ -74,6 +78,17 @@ const ALLOWED: readonly { readonly why: string; readonly pattern: RegExp }[] = [
     why: "键名",
     pattern:
       /\b(?:Shift|Ctrl|Control|Cmd|Command|Alt|Option|Enter|Return|Tab|Esc|Escape|Space|Backspace|Delete|Home|End|PageUp|PageDown)\b/g,
+  },
+  /*
+   * 语言与格式的名字：`JavaScript`、`Markdown`。写在这些字段的标签上（`/admin/playground` 的
+   * 代码框就叫 `HTML` / `CSS` / `JavaScript`），中文界面里一向照抄，翻成「爪哇脚本」才是错。
+   *
+   * 和「缩写」分开列，因为判断依据不同：那一桶是「这个写法在中文里就是它」，这一桶是
+   * 「这个技术本身只有这一个名字」。同样是白名单，不是「首字母大写就算」。
+   */
+  {
+    why: "技术名词",
+    pattern: /\b(?:JavaScript|TypeScript|Markdown|YAML|GraphQL|WebSocket)\b/g,
   },
   // 形态像 id 的串：`agent_7f3a`、`8f3a2b1c`、`sk-live-…`。必须含数字，免得把普通单词当 id 放过。
   { why: "标识符", pattern: /\b(?=[\w-]*\d)[\w-]{6,}\b/g },

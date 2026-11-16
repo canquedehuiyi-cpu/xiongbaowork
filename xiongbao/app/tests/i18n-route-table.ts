@@ -265,18 +265,41 @@ export const SCANNED: readonly Scanned[] = [
     file: "_authed/_app/wakerflows.index.tsx",
     minLines: { pending: 4, loaded: 7, failed: 5 },
   },
+
+  /*
+   * 2026-11-16 第三轮：「待翻」桶里最后两页，但它们不是同一种问题。
+   *
+   * - `/admin/playground` 一个字都不用翻。它页面本身全是中文（试验台、保存草稿、预览…），那十七行
+   *   英文全在四个代码编辑框里：HTML / CSS / JS / JSON 的模板。`<div class="card">`、
+   *   `.card { font: 14px }`、`"type": "object"` —— 翻成中文模板就不能用了。所以改的是量具：
+   *   跳过 `spellCheck={false}` 的 textarea（写这个属性就是在声明「别当自然语言看」）。
+   *   跳过之后它 16 行、0 行英文。
+   * - `/desktop-return` 是真没翻：`Back to …`、`… opens on its own. You can close this tab.`、
+   *   `Open …` 三句，翻成中文后 6 行。它同时在验一件判据的事——产品英文名是两词
+   *   `XiongBao Work`，品牌名白名单只列 `xiongbao` 会剩下一个 `Work` 被判成英文。
+   */
+  {
+    at: "/admin/playground",
+    file: "_authed/admin/playground.tsx",
+    minLines: { pending: 16, loaded: 16, failed: 16 },
+  },
+  {
+    at: "/desktop-return",
+    file: "_authed/desktop-return.tsx",
+    minLines: { pending: 6, loaded: 6, failed: 6 },
+  },
 ];
 
-/** 未覆盖的理由。固定几个码，不允许临时发明词汇。 */
-export type UncoveredWhy =
-  | "布局"
-  | "参数"
-  | "旧地址"
-  | "缺夹具"
-  | "非界面文案"
-  /* 「不足下限」这一档 2026-11-16 取消了：下限改成逐路由配（`Scanned.minLines`），
-     那一桶的 26 个文件现在都在扫表里。往后再遇到「页面天生太小」，配下限，不要往这里塞。 */
-  | "待翻";
+/**
+ * 未覆盖的理由。固定几个码，不允许临时发明词汇。
+ *
+ * 取消掉的两档，都记在这里，别再发明回来：
+ * - 「不足下限」：下限改成逐路由配（`Scanned.minLines`），那 26 个文件已在扫表里。
+ *   遇到「页面天生太小」，配下限，不要往台账里塞。
+ * - 「待翻」：`/admin/playground` 与 `/desktop-return` 已翻完并进扫表（2026-11-16 第三轮）。
+ *   遇到「有英文」，翻它；翻不动就写在这儿并说明为什么翻不动，别只写「以后补」。
+ */
+export type UncoveredWhy = "布局" | "参数" | "旧地址" | "缺夹具" | "非界面文案";
 
 export type Uncovered = {
   readonly why: UncoveredWhy;
@@ -298,8 +321,6 @@ export type Uncovered = {
  *   一个能跑浏览器的部署。现在进去会崩，崩在数据形状上，不是文案上。
  * - `非界面文案`：`/settings/about` 的正文是**第三方许可证原文**，三千多行英文，按许可协议不能翻译，
  *   也不该记进「界面没翻」的账。这一条不是「以后补」，是**口径上就不该扫**。
- * - `待翻`：能画出来，但里面有真英文，得先翻译。`/admin/playground` 三十七行里十七行英文，
- *   `/desktop-return` 六行全是英文。
  */
 export const UNCOVERED: readonly Uncovered[] = [
   {
@@ -406,11 +427,6 @@ export const UNCOVERED: readonly Uncovered[] = [
     why: "非界面文案",
     note: "正文是第三方许可证原文，按协议不能翻译，口径上就不该扫",
     files: ["_authed/settings/about.tsx"],
-  },
-  {
-    why: "待翻",
-    note: "能画出来，但里面有真英文，得先翻译",
-    files: ["_authed/desktop-return.tsx", "_authed/admin/playground.tsx"],
   },
 ];
 
