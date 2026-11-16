@@ -40,7 +40,15 @@ const DONE_WORDS: Record<AcpChoice, string> = {
   allow_conversation: "已允许，这次对话里同样的事不再问你。",
 };
 
+/**
+ * 按审批 id 换一份：从 `?id=A` 直接切到 `?id=B` 时路由不卸载这个组件，A 的「已决定」和请求状态
+ * 会留到 B 上，B 明明还在等却没有按钮。
+ */
 export function ApprovalDetail({ id }: { id: string }) {
+  return <OneApproval id={id} key={id} />;
+}
+
+function OneApproval({ id }: { id: string }) {
   const cache = useQueryClient();
   const request = useQuery({ ...approvalRequestOptions(id), retry: false });
   const agents = useQuery(agentListQueryOptions());

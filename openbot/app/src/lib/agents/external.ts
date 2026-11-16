@@ -127,6 +127,12 @@ export const externalKeys = {
     ["external-agents", "discovery", deviceId] as const,
 };
 
+/**
+ * 问到「电脑离线」后，隔这么久自动再问一次（只一次）：电脑短暂断开时，设备列表按心跳还说在线，
+ * 发现结果却停在离线；它不轮询、聚焦也不重查，不再问就一直卡着。
+ */
+export const DISCOVERY_RETRY_MS = 10_000;
+
 export function discoveryQueryOptions(deviceId: string) {
   return queryOptions({
     queryKey: externalKeys.discovery(deviceId),

@@ -8,7 +8,7 @@ import {
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { HarnessMark } from "@/components/agents/harness-mark";
 import { QueryError } from "@/components/layout/query-error";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
   type AgentTag,
   agentTags,
   DISCOVERED_HARNESSES,
+  DISCOVERY_RETRY_MS,
   type DiscoveredAgent,
   type DiscoveredHarness,
   deviceStanding,
@@ -300,6 +301,25 @@ function DeviceBar({
     enabled: standing === "mine" && device.online,
   });
   const online = device.online && discovery.data?.online !== false;
+  /*
+   * 问到离线、心跳却说在线（电脑短暂断开）：隔一会儿自动再问一次，只一次；再离线就等人点「重新查找」。
+   * 问到在线、或人自己点了重新查找，下一次离线又能自动重试一次。
+   */
+  const retried = useRef(false);
+  const offlineAnswer = discovery.data?.online === false;
+  const { refetch } = discovery;
+  useEffect(() => {
+    if (!offlineAnswer) {
+      retried.current = false;
+      return;
+    }
+    if (retried.current || standing !== "mine" || !device.online) return;
+    const timer = setTimeout(() => {
+      retried.current = true;
+      void refetch();
+    }, DISCOVERY_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [offlineAnswer, standing, device.online, refetch]);
   // 只数现在就能招的：装了但还接不上的不算。
   const found = discovery.data?.online
     ? discovery.data.agents.filter((agent) => agent.installed && agent.acpReady)
@@ -343,10 +363,14 @@ function DeviceBar({
         </span>
       ) : null}
       <span className="grow" />
-      {standing === "mine" && online ? (
+      {/* 不看缓存里的发现结果：问到过离线也要能再问。 */}
+      {standing === "mine" ? (
         <Button
           disabled={discovery.isFetching}
-          onClick={() => void discovery.refetch()}
+          onClick={() => {
+            retried.current = false;
+            void discovery.refetch();
+          }}
           size="sm"
           variant="ghost"
         >

@@ -27,7 +27,7 @@ import {
   Outlet,
   RouterProvider,
 } from "@tanstack/react-router";
-import { cleanup, render, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ACP_PHONE_NOTE } from "@/components/channels/acp-cards";
 import {
@@ -593,14 +593,37 @@ function openApproval(id: string) {
       initialEntries: [id ? `/approvals?id=${id}` : "/approvals"],
     }),
   });
-  return render(
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router as never} />
-    </QueryClientProvider>,
+  return Object.assign(
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router as never} />
+      </QueryClientProvider>,
+    ),
+    { router },
   );
 }
 
 describe("手机审批页", () => {
+  test("going straight from one approval to another shows the second as it is", async () => {
+    asPhone();
+    single.set("/api/approvals/ap-a", acpApproval("ap-a"));
+    single.set("/api/approvals/ap-b", acpApproval("ap-b"));
+    const view = openApproval("ap-a");
+    const user = userEvent.setup({ document });
+    await user.click(await view.findByRole("button", { name: "批准" }));
+    expect(await view.findByText("已批准，只执行这一次。")).toBeTruthy();
+
+    // 同一个页面，换一个 id：B 还在等，按钮要回来，不能带着 A 的「已批准」。
+    await act(async () => {
+      await view.router.navigate({
+        to: "/approvals",
+        search: { id: "ap-b" },
+      } as never);
+    });
+    expect(await view.findByRole("button", { name: "批准" })).toBeTruthy();
+    expect(view.queryByText("已批准，只执行这一次。")).toBeNull();
+  });
+
   // happy-dom 不排版：这里断言的是贴底的那一栏和按钮的样式类，内容会不会被挡住靠 390 宽的截图验证。
   test("phone approval page has a fixed bottom 批准 button at 390px", async () => {
     asPhone();

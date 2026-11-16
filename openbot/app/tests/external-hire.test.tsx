@@ -11,6 +11,7 @@ import {
   beforeAll,
   beforeEach,
   expect,
+  jest,
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
@@ -24,6 +25,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -35,6 +37,7 @@ import {
   wakersBackLink,
   wakersReturnSearch,
 } from "@/components/wakers/wakers-search";
+import { DISCOVERY_RETRY_MS } from "@/lib/agents/external";
 import { agentKeys } from "@/lib/agents/queries";
 import { authKeys } from "@/lib/auth/queries";
 import { wakerGroupKeys } from "@/lib/waker-groups/queries";
@@ -339,6 +342,53 @@ test("a device the server finds unreachable is offline too", async () => {
     expect(screen.getAllByText("电脑离线").length).toBeGreaterThan(0),
   );
   expect(screen.queryAllByRole("button", { name: /招进来/ })).toEqual([]);
+});
+
+test("a computer found offline while its heartbeat says online can be looked up again by hand", async () => {
+  // 电脑刚短暂断开：设备列表按心跳还说在线，发现结果却是离线。
+  const answer = { online: false, agents: [] as unknown[] };
+  serve({ discovery: answer });
+  const { screen } = draw("/bots?source=computer");
+  await waitFor(() =>
+    expect(screen.getAllByText("电脑离线").length).toBeGreaterThan(0),
+  );
+  // 它回来了：「重新查找」不看缓存里的离线结果，始终在。
+  answer.online = true;
+  answer.agents = ALL_INSTALLED;
+  fireEvent.click(await screen.findByRole("button", { name: "重新查找" }));
+  expect(
+    await screen.findByRole("button", { name: /把 Codex 招进来/ }),
+  ).toBeTruthy();
+  expect(screen.queryByText("电脑离线")).toBeNull();
+});
+
+test("a computer found offline is asked again once after a while, not over and over", async () => {
+  // 假时钟从一开始就装上，自动重试的那个计时器才归它管；页面靠一小步一小步推着走。
+  jest.useFakeTimers();
+  const step = async (ms: number) => {
+    for (let left = ms; left > 0; left -= 100)
+      await act(async () => {
+        jest.advanceTimersByTime(Math.min(100, left));
+        await Promise.resolve();
+      });
+  };
+  try {
+    serve({ discovery: { online: false, agents: [] } });
+    const { screen } = draw("/bots?source=computer");
+    await step(1_000);
+    expect(screen.getAllByText("电脑离线").length).toBeGreaterThan(0);
+    const before = discoveries().length;
+    expect(before).toBe(1);
+    await step(DISCOVERY_RETRY_MS - 2_000);
+    expect(discoveries().length).toBe(before);
+    await step(2_000);
+    expect(discoveries().length).toBe(before + 1);
+    // 还是离线：不再自己问。
+    await step(DISCOVERY_RETRY_MS * 4);
+    expect(discoveries().length).toBe(before + 1);
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 test("device not paired by me shows 这台电脑还没认主人…", async () => {
