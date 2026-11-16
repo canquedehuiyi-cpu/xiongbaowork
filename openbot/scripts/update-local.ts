@@ -479,6 +479,26 @@ function sameDatabase(
 function backupDatabaseUrl(configuration: ComposeConfiguration) {
   return configuration.services.migrate?.environment?.DATABASE_URL;
 }
+/** Host topology's owner URL, the one its backup and migration log in with. `.env`'s DATABASE_URL is
+ * the app role since the role split, which cannot run a migration that creates roles and reads only
+ * the rows row-level security lets it see. `MIGRATION_DATABASE_URL` is the name the image and the
+ * chart already give the owner URL. Refused, before anything is stopped, when it is missing or
+ * names another database than DATABASE_URL. */
+function hostOwnerDatabaseUrl(env: NodeJS.ProcessEnv) {
+  const owner = env.MIGRATION_DATABASE_URL;
+  if (!owner)
+    throw new Error(
+      "本机（host）更新要用数据库 owner 账号来备份和迁移，但没有找到它：请设置 MIGRATION_DATABASE_URL，填 owner 账号的连接串（例如 postgres://openbot:openbot@localhost:5432/openbot），写进 .env 或在执行更新时作为环境变量传入，然后重新更新。现在还没有停止任何服务。",
+    );
+  if (
+    env.DATABASE_URL &&
+    databaseIdentity(env.DATABASE_URL) !== databaseIdentity(owner)
+  )
+    throw new Error(
+      "MIGRATION_DATABASE_URL 和 DATABASE_URL 必须指向同一个数据库（主机、端口、库名一致，只有账号可以不同），请改正后重新更新。现在还没有停止任何服务。",
+    );
+  return owner;
+}
 /** The bundled backup command selects POSTGRES_DB/POSTGRES_USER over its local socket.
  * Refuse a URL that identifies another target before stopping any service. URI query options
  * may override host/user/dbname, so they require an explicit external backup integration. */
@@ -864,7 +884,7 @@ async function inspect(
       requireBundledBackupTarget(after, database);
       if (new URL(database).hostname !== "postgres")
         libpqEnvironment(database, env);
-    } else libpqEnvironment(env.DATABASE_URL, env);
+    } else libpqEnvironment(hostOwnerDatabaseUrl(env), env);
     plan.composeProject = before.name;
     for (const [name, service] of Object.entries(after.services))
       if (service.image) plan.candidateImages[name] = service.image;
@@ -970,6 +990,9 @@ export async function applyLocalUpdate(
     options.candidate,
     env,
   );
+  // Only the backup and the migration are handed the owner URL; nothing this update starts
+  // inherits it from this process.
+  delete candidateEnv.MIGRATION_DATABASE_URL;
   const operation = randomUUID();
   candidateEnv.OPENBOT_UPDATE_OPERATION = operation;
   const backupDirectory = resolve(options.backupDirectory, operation);
@@ -1073,7 +1096,8 @@ export async function applyLocalUpdate(
     phase("backing-up");
     const dump = join(backupDirectory, "database.dump");
     writeFileSync(dump, "", { flag: "wx", mode: 0o600 });
-    // Image Compose backs up through migration's owner URL. Host uses its existing .env URL.
+    // Both topologies back up through the owner URL: image Compose's migration one, host's
+    // MIGRATION_DATABASE_URL.
     if (
       options.topology === "image" &&
       new URL(backupDatabaseUrl(originalConfiguration) ?? "").hostname ===
@@ -1097,7 +1121,7 @@ export async function applyLocalUpdate(
     } else {
       const databaseUrl =
         options.topology === "host"
-          ? env.DATABASE_URL
+          ? hostOwnerDatabaseUrl(env)
           : backupDatabaseUrl(originalConfiguration);
       await run(["pg_dump", "--format=custom"], {
         cwd: root,
@@ -1150,10 +1174,11 @@ export async function applyLocalUpdate(
       });
     journal.databaseMayHaveChanged = true;
     phase("migrating");
+    // The process environment outranks `--env-file`, so the owner URL replaces .env's app role here.
     if (options.topology === "host")
       await run(["bun", "--env-file=../.env", "scripts/migrate.ts"], {
         cwd: join(root, "server"),
-        env: candidateEnv,
+        env: { ...candidateEnv, DATABASE_URL: hostOwnerDatabaseUrl(env) },
       });
     else
       await run(

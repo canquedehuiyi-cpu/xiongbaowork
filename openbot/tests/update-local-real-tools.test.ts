@@ -28,7 +28,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { reservePort } from "./support/reserved-port";
 import {
   applyLocalUpdate,
   type CommandRunner,
@@ -38,6 +37,7 @@ import {
 import targetFixture from "../shared/fixtures/releases/candidate.json";
 import currentFixture from "../shared/fixtures/releases/installed.json";
 import { parseReleaseManifest } from "../shared/release-manifest";
+import { reservePort } from "./support/reserved-port";
 
 setDefaultTimeout(180_000);
 const id = randomUUID().slice(0, 8);
@@ -274,7 +274,7 @@ describe.skipIf(!docker)(
   () => {
     test("start.sh's build gets the source's own image names, never the release's digests", async () => {
       const f = installation(
-        "DATABASE_URL=postgres://openbot:openbot@127.0.0.1:5432/openbot\n",
+        "DATABASE_URL=postgres://openbot_app:openbot@127.0.0.1:5432/openbot\nMIGRATION_DATABASE_URL=postgres://openbot:openbot@127.0.0.1:5432/openbot\n",
       );
       // start.sh runs `up --build` and `run --build migrate` on the real Compose file. Each service is
       // pointed at a one-file Dockerfile, and its default tag is made unique so no real local
@@ -344,7 +344,7 @@ const pgMajor = pgDump
   ? (sh(["pg_dump", "--version"]).match(/(\d+)\.\d+/)?.[1] ?? "")
   : "";
 describe.skipIf(!docker || !pgDump)("host backups with real pg_dump", () => {
-  test("a DATABASE_URL with an encoded password and query option backs up the named database", async () => {
+  test("an owner URL with an encoded password and query option backs up the named database", async () => {
     // The server's major version matches the host pg_dump, which refuses a newer server.
     const name = `fix979-pg-${id}`;
     const password = "p@ss:w/rd%#?";
@@ -405,7 +405,11 @@ describe.skipIf(!docker || !pgDump)("host backups with real pg_dump", () => {
       "create table customer_records (id int); insert into customer_records values (1);",
     ]);
     const databaseUrl = `postgres://update_owner:${encodeURIComponent(password)}@127.0.0.1:${port}/customer_data?sslmode=disable`;
-    const f = installation(`DATABASE_URL=${databaseUrl}\n`);
+    // The app role the server would log in as: the same database, never what the backup reads with.
+    const appUrl = `postgres://openbot_app:openbot@127.0.0.1:${port}/customer_data?sslmode=disable`;
+    const f = installation(
+      `DATABASE_URL=${appUrl}\nMIGRATION_DATABASE_URL=${databaseUrl}\n`,
+    );
     const calls: { command: string[]; env?: NodeJS.ProcessEnv }[] = [];
     const run: CommandRunner = async (command, commandOptions) => {
       calls.push({ command: [...command], env: commandOptions.env });
@@ -418,9 +422,13 @@ describe.skipIf(!docker || !pgDump)("host backups with real pg_dump", () => {
         return runCommand(command, commandOptions);
       return "";
     };
-    // The process environment outranks .env for the updater, and the test job sets its own.
-    const inherited = process.env.DATABASE_URL;
-    process.env.DATABASE_URL = databaseUrl;
+    // The process environment outranks .env for the updater, and the test job may set its own.
+    const inherited = {
+      DATABASE_URL: process.env.DATABASE_URL,
+      MIGRATION_DATABASE_URL: process.env.MIGRATION_DATABASE_URL,
+    };
+    process.env.DATABASE_URL = appUrl;
+    process.env.MIGRATION_DATABASE_URL = databaseUrl;
     try {
       const result = await applyLocalUpdate(options(f, "host", run));
       expect(result.phase).toBe("accepted");
@@ -431,9 +439,11 @@ describe.skipIf(!docker || !pgDump)("host backups with real pg_dump", () => {
         expect(call.command.join(" ")).not.toContain(password);
       const backup = calls.find((call) => call.command[0] === "pg_dump");
       expect(backup?.env?.PGDATABASE).toBe("customer_data");
+      expect(backup?.env?.PGUSER).toBe("update_owner");
     } finally {
-      if (inherited === undefined) delete process.env.DATABASE_URL;
-      else process.env.DATABASE_URL = inherited;
+      for (const [name, value] of Object.entries(inherited))
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
     }
   });
 });

@@ -1,6 +1,15 @@
-import { afterEach, expect, setDefaultTimeout, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  expect,
+  setDefaultTimeout,
+  spyOn,
+  test,
+} from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -37,6 +46,22 @@ const OWNER_URL = "postgres://openbot:openbot@postgres:5432/openbot";
 const APP_URL = "postgres://openbot_app:openbot@postgres:5432/openbot";
 const ROLE_WRITER_URL =
   "postgres://openbot_role_writer:openbot@postgres:5432/openbot";
+// A host install's .env since the role split: the app role for the server, the owner for the update.
+const HOST_APP_URL = "postgres://openbot_app:openbot@localhost:5432/openbot";
+const HOST_OWNER_URL = "postgres://openbot:openbot@localhost:5432/openbot";
+// The updater lets the process environment outrank .env; these fixtures speak through .env alone.
+const inheritedDatabaseUrls = {
+  DATABASE_URL: process.env.DATABASE_URL,
+  MIGRATION_DATABASE_URL: process.env.MIGRATION_DATABASE_URL,
+};
+beforeAll(() => {
+  delete process.env.DATABASE_URL;
+  delete process.env.MIGRATION_DATABASE_URL;
+});
+afterAll(() => {
+  for (const [name, value] of Object.entries(inheritedDatabaseUrls))
+    if (value !== undefined) process.env[name] = value;
+});
 function fixture(topology: "host" | "image" = "image") {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "openbot-update-")));
   roots.push(root);
@@ -64,7 +89,7 @@ function fixture(topology: "host" | "image" = "image") {
   writeFileSync(join(root, ".openbot-release.json"), JSON.stringify(current));
   writeFileSync(
     join(root, ".env"),
-    "ENCRYPTION_KEY=keep-this\nDATABASE_URL=postgres://openbot:openbot@localhost:5432/openbot\nTENANT_PACKAGE_DIR=../customer\n",
+    `ENCRYPTION_KEY=keep-this\nDATABASE_URL=${HOST_APP_URL}\nMIGRATION_DATABASE_URL=${HOST_OWNER_URL}\nTENANT_PACKAGE_DIR=../customer\n`,
   );
   mkdirSync(join(root, "customer"));
   writeFileSync(join(root, "customer", "branding.json"), '{"name":"Customer"}');
@@ -239,6 +264,74 @@ test("host apply installs source, runs existing guarded migration and restarts t
     f.calls.some((c) => c.includes("up") && c.includes("server worker")),
   ).toBe(false);
 });
+
+test("host apply backs up and migrates as the owner and hands it to nothing it starts", async () => {
+  const f = fixture("host");
+  const seen: { command: string; env?: NodeJS.ProcessEnv }[] = [];
+  const run: CommandRunner = async (command, options) => {
+    seen.push({ command: command.join(" "), env: options.env });
+    return f.run(command, options);
+  };
+  expect((await applyLocalUpdate({ ...f.options, run })).phase).toBe(
+    "accepted",
+  );
+  const dump = seen.find(({ command }) => command.startsWith("pg_dump"));
+  expect(dump?.env?.PGUSER).toBe("openbot");
+  expect(dump?.env?.PGDATABASE).toBe("openbot");
+  const migrate = seen.find(({ command }) =>
+    command.includes("scripts/migrate.ts"),
+  );
+  expect(migrate?.env?.DATABASE_URL).toBe(HOST_OWNER_URL);
+  const start = seen.find(({ command }) =>
+    command.includes("scripts/start.sh"),
+  );
+  expect(start?.env?.DATABASE_URL).toBe(HOST_APP_URL);
+  expect(start?.env?.MIGRATION_DATABASE_URL).toBeUndefined();
+});
+
+test.each([
+  ["no owner URL", "", "MIGRATION_DATABASE_URL"],
+  [
+    "an owner URL for another database",
+    "MIGRATION_DATABASE_URL=postgres://openbot:openbot@localhost:5432/elsewhere\n",
+    "同一个数据库",
+  ],
+  [
+    "an owner URL on another host",
+    "MIGRATION_DATABASE_URL=postgres://openbot:openbot@db.example.test:5432/openbot\n",
+    "同一个数据库",
+  ],
+])(
+  "host update with %s refuses before stopping or changing anything",
+  async (_, ownerLine, reason) => {
+    const f = fixture("host");
+    writeFileSync(
+      join(f.root, ".env"),
+      `ENCRYPTION_KEY=keep-this\nDATABASE_URL=${HOST_APP_URL}\n${ownerLine}TENANT_PACKAGE_DIR=../customer\n`,
+    );
+    const plan = await planLocalUpdate(f.options);
+    expect(plan.allowed).toBe(false);
+    expect(plan.reasons.join(" ")).toContain(reason);
+    expect(plan.reasons.join(" ")).toContain("还没有停止任何服务");
+    await expect(applyLocalUpdate(f.options)).rejects.toThrow(reason);
+    expect(
+      f.calls.some(
+        (command) =>
+          command.includes(" stop ") ||
+          command.includes("pkill") ||
+          command.includes("pg_dump") ||
+          command.includes("--ff-only") ||
+          command.includes("scripts/migrate.ts") ||
+          command.includes("scripts/start.sh"),
+      ),
+    ).toBe(false);
+    expect(f.git("rev-parse", "HEAD")).toBe(f.old);
+    expect(existsSync(join(f.root, ".openbot-update.lock"))).toBe(false);
+    expect(existsSync(join(f.root, ".openbot-update-journal.json"))).toBe(
+      false,
+    );
+  },
+);
 
 test("running host services cause an actionable refusal before mutation", async () => {
   const f = fixture("host");
