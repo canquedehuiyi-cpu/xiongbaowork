@@ -938,7 +938,7 @@ export function ComputerTools() {
       // 模式里那会还是「工作区」，就会给出一条点不开的链接——这条红线不能靠时序。
       <FileSavedLine
         args={args}
-        botId={declaredBotId(bot.current)}
+        botId={useDeclaredBotId()}
         result={result}
         status={status}
       />
@@ -1009,8 +1009,14 @@ function FileSavedLine({
 }) {
   const { onWorkspace } = useLocalTools();
   const outcome = outcomeOf(result);
+  /*
+   * 「有了结果这一轮就算过完了」是本文件既有的口径（见打开了网页那一行的 `finished`）：状态单独不可信。
+   * 翻旧账的那一面带着结果、状态却不是 complete，只认状态会让每一条形同虚设——而这一行的链接要的从来是
+   * 「这一次真写成了」，不是「SDK 说它现在正在跑」。
+   */
+  const finished = status === "complete" || result !== undefined;
   const savedFile =
-    status === "complete" &&
+    finished &&
     outcome.ok === true &&
     outcome.refused !== true &&
     outcome.doneByPerson !== true &&
