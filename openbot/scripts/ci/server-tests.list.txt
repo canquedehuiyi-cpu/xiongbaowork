@@ -406,6 +406,7 @@ tests/group-ask-person.integration.test.ts
 tests/group-bots-change.integration.test.ts
 tests/group-conversations.integration.test.ts
 tests/group-conversations.test.ts
+tests/group-delegation-freed.integration.test.ts
 tests/guards.test.ts
 tests/handoff-availability-prompt.test.ts
 tests/handoff-caps-defaults.test.ts

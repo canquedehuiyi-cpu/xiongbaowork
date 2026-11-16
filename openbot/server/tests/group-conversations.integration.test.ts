@@ -12,6 +12,10 @@ import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
+import {
+  DELEGATE_EFFECT,
+  HANDOFF_REF,
+} from "../src/approvals/delegation-freed";
 import type { AuditEventInput } from "../src/audit";
 import {
   createGroupConversations,
@@ -31,6 +35,7 @@ import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
   agents,
+  approvalRules,
   channelMemberships,
   channels,
   groupMessages,
@@ -2552,6 +2557,50 @@ describe("group conversations in PostgreSQL", () => {
         (event) => event.eventType === "agent.handoff_offered",
       );
       expect(offered?.payload.task).toBe(asked);
+    });
+  });
+
+  test("the handoff warning follows what this conversation has already allowed, per peer", async () => {
+    const owner = await person();
+    await as(owner, async () => {
+      const ada = await bot(owner, "Ada");
+      const grace = await bot(owner, "Grace");
+      const channel = await channelStore.create(owner, [ada, grace]);
+      createdChannels.push(channel.id);
+      /*
+       * Ada may already hand work to Grace here: the person said "Always allow" for that action on
+       * this Bot. Grace may not hand work to Ada. The old wording told both of them the tool never
+       * reaches anybody, and a real hop arrived anyway (2026-11-16, L4-3).
+       */
+      await database.insert(approvalRules).values({
+        id: `${prefix}-delegation-rule`,
+        ownerUserId: owner.id,
+        botId: "*",
+        toolRef: HANDOFF_REF,
+        effect: DELEGATE_EFFECT,
+        scope: "Grace",
+        behaviour: "allow",
+      });
+      const { conversations, calls } = service({
+        replies: { [ada]: () => "Ada here.", [grace]: () => "Grace here." },
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-m-delegation-freed`,
+        text: "Say hello",
+      });
+      await drain(conversations);
+
+      const toAda = String(
+        calls.find((call) => call.agentId === ada)?.userMessage?.content ?? "",
+      );
+      const toGrace = String(
+        calls.find((call) => call.agentId === grace)?.userMessage?.content ??
+          "",
+      );
+      expect(toAda).toContain("message_bot reaches them");
+      expect(toAda).not.toContain("never shows anybody");
+      // The other direction was never allowed, so that turn is still warned off the tool.
+      expect(toGrace).toContain("never shows anybody");
     });
   });
 
