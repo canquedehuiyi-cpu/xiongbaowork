@@ -31,6 +31,7 @@ import {
   wechatAttemptFinished,
   wechatAttemptQueryOptions,
 } from "@/lib/delivery";
+import { relativeTime } from "@/lib/relative-time";
 import { cn } from "@/lib/utils";
 import { queryClient } from "@/query-client";
 
@@ -113,11 +114,22 @@ function boundDay(boundAt: string) {
   });
 }
 
+/** 暂停还剩多久：「约 5 分钟后恢复」，超过一小时按小时说；不知道什么时候恢复就说「稍后自动恢复」。 */
+function resumeIn(pausedUntil: string | null | undefined) {
+  const until = pausedUntil ? new Date(pausedUntil).getTime() : Number.NaN;
+  if (!Number.isFinite(until)) return "稍后自动恢复";
+  const minutes = Math.max(1, Math.ceil((until - Date.now()) / 60_000));
+  return minutes < 60
+    ? `约 ${minutes} 分钟后恢复`
+    : `约 ${Math.ceil(minutes / 60)} 小时后恢复`;
+}
+
 /**
  * 这一行的第二行：绑没绑、什么时候绑的，再加一句要留意的事。断开优先于暂停，暂停优先于时间窗：
  * 断开了暂停和时间窗都无从谈起，暂停时时间窗开着也发不出去。
  *
- * 服务器还不给最近一次在微信里说话的时间，所以说的是绑定的日子。
+ * 有最近一次在微信里说话的时间就说「最近一次消息 X 前」，还没有就说绑定的日子；暂停时有恢复时间就说
+ * 「约 X 分钟后恢复」，没有就说「稍后自动恢复」。
  */
 function WechatState({ wechat }: { wechat: WechatSummary | null }) {
   if (!wechat)
@@ -130,14 +142,19 @@ function WechatState({ wechat }: { wechat: WechatSummary | null }) {
     wechat.status === "disconnected"
       ? "微信已断开，请重新绑定"
       : wechat.paused
-        ? "微信让我们歇一会儿，稍后自动恢复"
+        ? `微信让我们歇一会儿，${resumeIn(wechat.pausedUntil)}`
         : !wechat.windowOpen
           ? "超过 10 小时没在微信里说话，提醒会先发到手机，回一句就恢复"
           : null;
   return (
     <ItemDescription className="line-clamp-none">
       {wechat.status === "disconnected" ? null : (
-        <span className="block">已绑定 · {boundDay(wechat.boundAt)}绑定</span>
+        <span className="block">
+          已绑定 ·{" "}
+          {wechat.lastInboundAt
+            ? `最近一次消息 ${relativeTime(wechat.lastInboundAt)}`
+            : `${boundDay(wechat.boundAt)}绑定`}
+        </span>
       )}
       {notice ? <span className={cn("block", NOTICE)}>{notice}</span> : null}
     </ItemDescription>

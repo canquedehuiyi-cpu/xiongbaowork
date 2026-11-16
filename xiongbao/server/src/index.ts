@@ -268,6 +268,7 @@ import {
   recorderConnections,
   users,
 } from "./db/schema";
+import { deliveryMessageId } from "./delivery/message-id";
 import { createDeliveryRouter, DELIVERY_WORK_KINDS } from "./delivery/router";
 import { configuredDeliveryProviders } from "./delivery/routes";
 import { createDeliveryScopes } from "./delivery/scope";
@@ -4091,7 +4092,7 @@ await startupLifecycle.run(async (startup) => {
           threadId: input.threadId,
           instruction: input.text,
           userMessage: {
-            id: `delivery:${input.runId}`,
+            id: deliveryMessageId(input.source, input.runId),
             role: "user",
             content: input.text,
           },

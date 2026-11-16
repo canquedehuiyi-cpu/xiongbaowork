@@ -37,6 +37,8 @@ type Summary = {
   boundAt: string;
   paused: boolean;
   windowOpen: boolean;
+  lastInboundAt?: string | null;
+  pausedUntil?: string | null;
 } | null;
 
 const BOUND: Summary = {
@@ -261,4 +263,31 @@ test("二维码内容是空的：说画不出来，请换一张", async () => {
     await within(dialog).findByText("二维码显示不出来，请换一张"),
   ).toBeTruthy();
   expect(within(dialog).queryByRole("img")).toBeNull();
+});
+
+test("有最近一次消息的时间：已绑定那一行说「最近一次消息 X 前」", async () => {
+  serving({
+    wechat: {
+      ...BOUND,
+      lastInboundAt: new Date(Date.now() - 5 * 60_000).toISOString(),
+    } as Summary,
+  });
+  const view = draw();
+  expect(await view.findByText(/已绑定 · 最近一次消息 5分钟前/)).toBeTruthy();
+  expect(view.queryByText(/绑定$/)).toBeNull();
+});
+
+test("暂停有恢复时间：说「约 X 分钟后恢复」", async () => {
+  serving({
+    wechat: {
+      ...BOUND,
+      status: "paused",
+      paused: true,
+      pausedUntil: new Date(Date.now() + 12 * 60_000 - 5_000).toISOString(),
+    } as Summary,
+  });
+  const view = draw();
+  expect(
+    await view.findByText("微信让我们歇一会儿，约 12 分钟后恢复"),
+  ).toBeTruthy();
 });

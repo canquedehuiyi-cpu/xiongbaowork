@@ -68,6 +68,7 @@ const TRANSPORTS: { id: UpdateTransport; label: string }[] = [
   { id: "slack", label: "Slack" },
   { id: "teams", label: "Microsoft Teams" },
   { id: "sms", label: "短信" },
+  { id: "wechat", label: "微信" },
 ];
 
 /**
@@ -92,8 +93,17 @@ export function UpdateRoutingSection() {
    * person last set it. When the deployment's channels could not be read, the preference is shown
    * as it is rather than every channel claimed unavailable.
    */
-  const configured = (transport: UpdateTransport) =>
-    reach.data ? reach.data.available[transport] : true;
+  const configured = (transport: UpdateTransport) => {
+    if (!reach.data) return true;
+    // 微信是一人一个绑定：这个部署开通了、本人也绑好了（没断开）才能选。
+    if (transport === "wechat")
+      return Boolean(
+        reach.data.available.wechat &&
+          reach.data.wechat &&
+          reach.data.wechat.status !== "disconnected",
+      );
+    return reach.data.available[transport];
+  };
   /*
    * Only the channels that can carry something get a switch. A channel that is not set up has nothing to choose, and
    * four rows of switches nobody can turn on said less than one sentence does. Its stored preference is kept as it is

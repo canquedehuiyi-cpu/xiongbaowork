@@ -22,3 +22,11 @@ export function splitChatOrigin(
     text: text.slice(match[0].length),
   };
 }
+
+/**
+ * 微信来的用户消息：服务器把投递进来的那条消息 ID 记成 `delivery:wechat:<runId>`
+ * （`server/src/delivery/message-id.ts`），对话里据此在消息下方标「来自微信」。网页上发的、别的渠道来的都不是。
+ */
+export function isFromWechat(messageId: string): boolean {
+  return messageId.startsWith("delivery:wechat:");
+}

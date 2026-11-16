@@ -55,9 +55,7 @@ export type Reachability = {
 /**
  * 设置页能看到的微信绑定状态，没有任何令牌和 id。
  *
- * `disconnected`：微信那边让绑定失效了（用户删了 ClawBot、接口报鉴权失败），要重新扫码。服务器的
- * `summary` 目前只回 `bound` / `paused`，失效的账号会标成 `unbound`、总览给 null；这个值是给计划
- * Review Focus 5 留的，服务器开始回它之前这一支不会走到。
+ * `disconnected`：微信那边让绑定失效了（用户删了 ClawBot、接口报鉴权失败），要重新扫码。
  */
 export type WechatSummary = {
   status: "bound" | "paused" | "disconnected";
@@ -66,6 +64,10 @@ export type WechatSummary = {
   paused: boolean;
   /** 最近 10 小时里在微信里说过话：主动提醒还能发到微信。 */
   windowOpen: boolean;
+  /** 最近一次在微信里收到的消息；还没有时为 null。 */
+  lastInboundAt?: string | null;
+  /** 暂停到什么时候（暂停时才有）。 */
+  pausedUntil?: string | null;
 };
 export const deliveryKey = ["delivery"] as const;
 export function deliveryQueryOptions() {

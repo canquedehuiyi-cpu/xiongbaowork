@@ -7,12 +7,14 @@
  * 机密：`bot_token` 只进 `sealCredential`（v2 信封，AAD 绑凭据行的租户、id、种类）；账号行的
  * `context_token`、凭据 id、iLink 的 id 都不出接口：总览只挑 `status`、`boundAt`、`paused`、`windowOpen`。
  */
+import { and, eq } from "drizzle-orm";
 import {
   CredentialRefusedError,
   type CredentialStore,
   sealCredential,
 } from "../../credentials";
 import type { Database } from "../../db/client";
+import { deliveryBindings } from "../../db/schema/delivery";
 import type { WechatBindAttemptStatus } from "../../db/schema/wechat";
 import { DeliveryNotFoundError, DeliveryProviderError } from "../types";
 import {
@@ -237,10 +239,22 @@ export function createWechatBind(deps: WechatBindDeps) {
       return finish(userId, attempt.id, "bound");
     },
 
-    /** 解绑：账号标成 `unbound`（store 同时清掉 `context_token`、游标、租约），凭据作废。 */
+    /** 解绑：账号标成 `unbound`（store 同时清掉 `context_token`、游标、租约），微信投递绑定删掉，凭据作废。 */
     async unbind(userId: string): Promise<void> {
       await deps.database.transaction(async (transaction) => {
         const row = await store.unbind(userId, transaction);
+        /*
+         * 删掉（不是禁用）这个人的微信投递绑定：`bind` 的持有者检查不看 `enabled`，只禁用的话，
+         * 别人再绑同一个微信、找同一位员工会一直被「已连在别人账号上」挡住。本人帧里只看得见本人的行。
+         */
+        await transaction
+          .delete(deliveryBindings)
+          .where(
+            and(
+              eq(deliveryBindings.ownerUserId, userId),
+              eq(deliveryBindings.transport, "wechat"),
+            ),
+          );
         if (!row?.credentialId) return;
         try {
           await deps.credentials.revoke(row.credentialId, transaction);

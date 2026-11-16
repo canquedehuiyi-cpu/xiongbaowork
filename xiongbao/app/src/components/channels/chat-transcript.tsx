@@ -128,7 +128,7 @@ import {
   type SentAttachment,
   toVisibleChatItems,
 } from "./chat-messages";
-import { splitChatOrigin } from "./chat-origin";
+import { isFromWechat, splitChatOrigin } from "./chat-origin";
 import type { QueuedMessage } from "./composer";
 import { useIntroScrolledAway } from "./conversation-intro";
 import { FollowScroll, RESUME_PX, useFollowIntent } from "./follow-intent";
@@ -1121,6 +1121,12 @@ const TranscriptMessage = memo(function TranscriptMessage({
               )}
             </BubbleContent>
           </Bubble>
+          {/* 微信里发来的：气泡下方一行小字，网页上发的不画。 */}
+          {isUser && isFromWechat(messageId) ? (
+            <span className="mt-1 self-end text-muted-foreground text-xs">
+              来自微信
+            </span>
+          ) : null}
         </Arriving>
       </MessageContent>
     </MessageRow>
