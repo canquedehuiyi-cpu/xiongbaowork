@@ -446,7 +446,10 @@ const listRequests: string[] = [];
 const downloadRequests: string[] = [];
 /** Every read of `…/local-tools` the page made, in order: the scope question, asked where? */
 const scopeReads: string[] = [];
-/** Whether the scope answer is the server's (workspace) or the one this run fixes for state 4. */
+/**
+ * The deployment's answer, handed to the page: `workspace` (a cloud container, the default here) or
+ * `device` (a paired computer). States 4 and 5 are the same conversation with this one value moved.
+ */
 let scopeOverride: "workspace" | "device" | undefined;
 
 const COMPUTER_PATH = /^\/api\/computers\/[^/]+\/(files\/(list|download))$/;
