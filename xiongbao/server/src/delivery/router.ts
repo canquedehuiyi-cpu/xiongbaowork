@@ -29,6 +29,7 @@ import {
   PERSON_DELIVERY_KINDS,
   type PersonDeliveryKind,
   type TextTransport,
+  wechatPromptRef,
 } from "./types";
 /** What a paired chat turn produced besides its reply, surfaced in that same turn. */
 export type InlineTurnExtras = {
@@ -266,6 +267,7 @@ export function createDeliveryRouter(deps: {
           )
         )
           continue;
+        let roundToClose: string | null = null;
         if (binding.transport === "wechat") {
           /*
            * 网页里发起的普通回复不推到微信：回复只发给入站来源为微信、还停在等人处理的那一轮（它在微信里
@@ -275,6 +277,7 @@ export function createDeliveryRouter(deps: {
             const last = await deps.store.latestInbox(binding.id);
             if (last?.source !== "wechat" || last.state !== "accepted")
               continue;
+            roundToClose = last.id;
           }
           if (
             !(await wechatOpen(
@@ -295,6 +298,11 @@ export function createDeliveryRouter(deps: {
           kind: input.kind,
           requestId: input.requestId ?? null,
         });
+        /*
+         * 这一轮的回复交出去了：把那一轮的入站行置为终态。它停下等审批时被记成 `accepted`，网页聊天不会产生新的
+         * 入站行，不置终态的话它会一直是「最新一条」，之后网页里发起的回复也会被当成它的而推到微信。
+         */
+        if (roundToClose) await deps.store.setInbox(roundToClose, "sent");
       }
     if (route.allows("push"))
       for (const device of await deps.store.devices(scope.ownerUserId))
@@ -416,6 +424,8 @@ export function createDeliveryRouter(deps: {
     taskId?: string | null;
     /** 微信那一行末尾多带的一句（开工清点：「回复任意内容，今天的提醒就能继续发到这里」）。 */
     wechatFooter?: string;
+    /** 微信那一行换成带编号的提示（传给微信出口的结构化标记，不看标题文字）。 */
+    wechatPrompt?: "overdue";
   }): Promise<{ queued: number; already: number }> {
     const reached = { queued: 0, already: 0 };
     if (
@@ -516,7 +526,10 @@ export function createDeliveryRouter(deps: {
             ? `${text}\n${input.wechatFooter}`
             : text,
         kind: input.kind,
-        requestId,
+        requestId:
+          transport === "wechat" && input.wechatPrompt && requestId
+            ? wechatPromptRef(input.wechatPrompt, requestId)
+            : requestId,
       });
     const route = await routeFor({
       ownerUserId: input.ownerUserId,
@@ -895,7 +908,11 @@ export function createDeliveryRouter(deps: {
     const row = await deps.store.startOutbox(current.id);
     if (!row || !(await owns())) return;
     try {
-      let result: { id: string; status: "queued" | "sent" | "accepted" };
+      let result: {
+        id: string;
+        status: "queued" | "sent" | "accepted";
+        note?: string;
+      };
       if (row.transport === "push") {
         const device = row.deviceId
           ? await deps.store.device(row.deviceId)
@@ -969,7 +986,7 @@ export function createDeliveryRouter(deps: {
       await deps.store.setOutbox(
         row.id,
         result.status === "queued" ? "accepted" : result.status,
-        null,
+        result.note ?? null,
         result.id,
       );
       if (row.transport === "push") await deps.store.offerReceipt(row.id);

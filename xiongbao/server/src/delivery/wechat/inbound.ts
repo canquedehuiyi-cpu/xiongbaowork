@@ -196,7 +196,7 @@ export type WechatInboundDeps = {
   approvalPrompts?: (
     userId: string,
     approvalIds: string[],
-  ) => Promise<string[]>;
+  ) => Promise<(string | null)[]>;
 };
 
 /** 选人提示存的东西：候选员工（编号就是下标加一）和被搁置的那条消息（只写了「@名字」时为 null）。 */
@@ -458,22 +458,35 @@ export function createWechatInbound(deps: WechatInboundDeps) {
           ].filter((part) => part.trim());
           // 这一轮停下来等的审批：开编号提示，请求随回复之后各发一条，回数字就能批（Task 7）。开不了（出错）
           // 就照旧说「有 N 个审批在等你」：这一轮已经记过收件箱，这里抛错的话重试也不会再回话。
+          // `null`：这条审批的提示发件箱已先开出来（它负责发），这里不再发第二次，也不说「有 N 个审批在等你」。
           let asks: string[] = [];
+          let handledElsewhere = false;
           if (result.extras.approvals.length && deps.approvalPrompts)
             try {
-              asks = await deps.approvalPrompts(account.userId, [
+              const opened = await deps.approvalPrompts(account.userId, [
                 ...result.extras.approvals,
               ]);
+              asks = opened.filter((ask): ask is string => ask !== null);
+              handledElsewhere = opened.some((ask) => ask === null);
             } catch (error) {
               logFailure("wechat-approval-prompt-failed", error);
             }
-          if (result.extras.approvals.length && !asks.length)
+          if (
+            result.extras.approvals.length &&
+            !asks.length &&
+            !handledElsewhere
+          )
             parts.push(
               `有 ${result.extras.approvals.length} 个审批在等你，请到${shortName()}里处理。`,
             );
-          else if (result.kind === "waiting" && !parts.length && !asks.length)
+          else if (
+            result.kind === "waiting" &&
+            !parts.length &&
+            !asks.length &&
+            !handledElsewhere
+          )
             parts.push(`在等人处理，请打开${shortName()}继续。`);
-          if (parts.length || !asks.length)
+          if (parts.length || (!asks.length && !handledElsewhere))
             await reply(signed(parts.join("\n\n") || "完成了。"));
           for (const ask of asks) await reply(ask);
         }

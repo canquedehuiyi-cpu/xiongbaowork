@@ -146,3 +146,21 @@ export async function providerJson(
     throw new DeliveryProviderError(provider, "invalid_response", true);
   return body as Record<string, unknown>;
 }
+
+/**
+ * 微信那一行的 `request_id` 可以带「这一行要换成带编号的提示」的结构化标记：`wechat-prompt:<种类>:<引用>`。
+ * 微信行不走手机推送的深链，所以不占别的用途。
+ */
+export const WECHAT_PROMPT_REF = "wechat-prompt:";
+export function wechatPromptRef(kind: "overdue", ref: string): string {
+  return `${WECHAT_PROMPT_REF}${kind}:${ref}`;
+}
+export function readWechatPromptRef(
+  requestId: string | null,
+): { kind: "overdue"; ref: string } | null {
+  if (!requestId?.startsWith(`${WECHAT_PROMPT_REF}overdue:`)) return null;
+  return {
+    kind: "overdue",
+    ref: requestId.slice(`${WECHAT_PROMPT_REF}overdue:`.length),
+  };
+}

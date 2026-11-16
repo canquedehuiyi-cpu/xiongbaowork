@@ -9,8 +9,9 @@
  *  - 路由发件箱行之前先问窗口（`createWechatWindow`）：关着就不写微信那一行，漏发加一。
  *  - 发的时候 iLink 还是拒绝（`ret=-2` 等）或缺 `context_token`：当作窗口已关，行记 `failed`、漏发加一、不重试。
  *
- * 文字：审批和逾期提醒用 Task 7 的 `decisions.ts` 开编号提示并取文字（回数字就能处理）；别的种类原样发，回复和提问
- * 前面加「【员工名】」。同一审批在这个人这里已有开着的提示（微信里那一轮已经随回复发过带编号的请求）时不再发第二次。
+ * 文字：审批和逾期提醒（行上带结构化标记 `wechatPromptRef`）用 Task 7 的 `decisions.ts` 开编号提示并取文字，文字自带
+ * 「【员工名】」；别的种类原样发，回复和提问前面加「【员工名】」。谁开出的提示谁发（`created`）：审批提示已经开着
+ * （微信里那一轮随回复发过）就不再发第二次，行记 sent 并在 error 里说明；发送失败时本次新开的提示关掉。
  *
  * 在发件箱投递的帧里调用（这个人自己的租户帧）。令牌只交给 iLink，不进日志和错误。
  */
@@ -19,6 +20,7 @@ import type { WechatAccount } from "../../db/schema/wechat";
 import {
   DeliveryProviderError,
   DeliveryRefusedError,
+  readWechatPromptRef,
   type TextTransport,
 } from "../types";
 import { IlinkWindowClosedError } from "./ilink";
@@ -63,28 +65,26 @@ export function createWechatWindow(deps: {
   };
 }
 
-/** 带编号的提示文字（Task 7 `decisions.ts` 的开提示函数）。 */
+/** 带编号的提示文字（Task 7 `decisions.ts` 的开提示函数）。`created`：这条提示是本次调用新开的。 */
 type Prompts = {
   openApprovalPrompt(
     userId: string,
     approvalId: string,
-  ): Promise<{ code: string; text: string } | null>;
+  ): Promise<{ code: string; text: string; created: boolean } | null>;
   openOverduePrompt(
     userId: string,
     taskId: string,
-  ): Promise<{ code: string; text: string } | null>;
+  ): Promise<{ code: string; text: string; created: boolean } | null>;
 };
 
 export type WechatTransportDeps = {
   wechat: Pick<
     WechatStore,
-    "accountByIlinkUser" | "openPrompts" | "bumpMissed"
+    "accountByIlinkUser" | "bumpMissed" | "closePrompt"
   >;
   send: WechatSend;
   /** 开提示的函数；装配时才有（它依赖更晚建好的服务），所以是取值函数。没有时审批、逾期按原文发。 */
   prompts?: () => Prompts | undefined;
-  /** 逾期提醒的标题行：只有这一类才换成带编号的提示文字（「还没接下」按原文发）。 */
-  overdueTitle: string;
 };
 
 export function createWechatTransport(
@@ -94,49 +94,60 @@ export function createWechatTransport(
     async send(input) {
       const account = await deps.wechat.accountByIlinkUser(input.address);
       const context = input.context;
+      // 漏发只算提醒类，回复不算（和路由一致）。
+      const countsAsMissed = context?.kind !== "reply";
       if (!account || (context && account.userId !== context.ownerUserId))
         throw new DeliveryRefusedError("微信账号已解绑或不属于这个人。");
+      const missed = async () => {
+        if (countsAsMissed) await deps.wechat.bumpMissed(account.id);
+      };
       if (account.status === "paused")
         throw new DeliveryProviderError("wechat", "paused");
       // 缺 context_token 就是没来过信（或已解绑重绑）：和窗口已关一样处理。
       if (!account.contextToken) {
-        await deps.wechat.bumpMissed(account.id);
+        await missed();
         throw new IlinkWindowClosedError();
       }
 
       let text = input.text;
+      /** 本次新开的提示：发送失败要关掉，免得留下用户从没见过的编号。 */
+      let opened: string | null = null;
       const prompts = deps.prompts?.();
       if (context && prompts) {
         if (context.kind === "approval" && context.requestId) {
-          // 微信里那一轮停下来等的审批，入站已经随回复发过带编号的请求：同一审批开着提示就不再发第二次。
-          const open = await deps.wechat.openPrompts(context.ownerUserId);
-          if (
-            open.some(
-              (p) => p.kind === "approval" && p.refId === context.requestId,
-            )
-          )
-            return {
-              id: `wechat-${input.id}-already-prompted`,
-              status: "sent",
-            };
           const prompt = await prompts.openApprovalPrompt(
             context.ownerUserId,
             context.requestId,
           );
           // 审批已经不在等批了（别处处理过）：没有什么可问的。
           if (!prompt)
-            return { id: `wechat-${input.id}-settled`, status: "sent" };
+            return {
+              id: `wechat-${input.id}-settled`,
+              status: "sent",
+              note: "审批已在别处处理，没有发到微信。",
+            };
+          // 提示已经开着：微信里那一轮已随回复发过带编号的请求（或另一路刚开）。谁开的谁发，这里不重复。
+          if (!prompt.created)
+            return {
+              id: `wechat-${input.id}-already-prompted`,
+              status: "sent",
+              note: "已在微信里发过这条审批，没有重复发送。",
+            };
+          opened = prompt.code;
           text = prompt.text;
-        } else if (
-          context.kind === "overdue" &&
-          context.requestId &&
-          input.text.startsWith(`${deps.overdueTitle}\n`)
-        ) {
-          const prompt = await prompts.openOverduePrompt(
-            context.ownerUserId,
-            context.requestId,
-          );
-          if (prompt) text = prompt.text;
+        } else {
+          const ref = readWechatPromptRef(context.requestId);
+          if (context.kind === "overdue" && ref) {
+            // 逾期提醒会按每天上限重复发，同一张卡的提示还开着时照发（编号不变）。
+            const prompt = await prompts.openOverduePrompt(
+              context.ownerUserId,
+              ref.ref,
+            );
+            if (prompt) {
+              text = prompt.text;
+              if (prompt.created) opened = prompt.code;
+            }
+          }
         }
       }
       if (
@@ -153,8 +164,8 @@ export function createWechatTransport(
             contextToken: account.contextToken,
           });
       } catch (error) {
-        if (error instanceof IlinkWindowClosedError)
-          await deps.wechat.bumpMissed(account.id);
+        if (opened) await deps.wechat.closePrompt(account.userId, opened);
+        if (error instanceof IlinkWindowClosedError) await missed();
         if (error instanceof WechatReplyUnavailableError)
           throw new DeliveryProviderError("wechat", "unavailable");
         throw error;

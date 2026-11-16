@@ -540,7 +540,6 @@ import {
   createBriefingRoutes,
   createBriefings,
   createTaskNotices,
-  OVERDUE_NOTICE_TITLE,
 } from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
 import { createDelivery } from "./tasks/delivery";
@@ -4066,7 +4065,6 @@ await startupLifecycle.run(async (startup) => {
       wechat: wechatStore,
       send: wechatSend,
       prompts: () => wechatPromptOpeners,
-      overdueTitle: OVERDUE_NOTICE_TITLE,
     }),
   };
   // Slack channel membership for triggers is answered by OpenTag, which holds the workspace token.
@@ -4740,7 +4738,10 @@ await startupLifecycle.run(async (startup) => {
         send: wechatSend,
         appUrl: config.appUrl ?? config.publicUrl ?? null,
         prompts: wechatDecisions.handlers,
-        approvalPrompts: wechatDecisions.openApprovalPrompts,
+        approvalPrompts: (userId, approvalIds) =>
+          wechatDecisions.openApprovalPrompts(userId, approvalIds, {
+            onlyCreated: true,
+          }),
       }),
       owner: workOwner("wechat"),
     });

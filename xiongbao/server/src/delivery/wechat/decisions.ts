@@ -320,10 +320,14 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
     await reconcile(userId);
     const before = await deps.wechat.openPrompts(userId);
     const existing = before.find((p) => p.kind === kind && p.refId === refId);
-    const code =
-      existing?.code ??
-      (await deps.wechat.openPrompt(userId, kind, refId)).code;
-    return { code, count: before.length + (existing ? 0 : 1) };
+    const opened = existing
+      ? { code: existing.code, created: false }
+      : await deps.wechat.openPrompt(userId, kind, refId);
+    return {
+      code: opened.code,
+      created: opened.created,
+      count: before.length + (existing ? 0 : 1),
+    };
   }
 
   async function renderApproval(
@@ -346,28 +350,45 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
   async function openApprovalPrompts(
     userId: string,
     approvalIds: readonly string[],
-  ): Promise<string[]> {
-    const opened: { record: ApprovalRecord; code: string }[] = [];
+    options: { onlyCreated: true },
+  ): Promise<(string | null)[]>;
+  async function openApprovalPrompts(
+    userId: string,
+    approvalIds: readonly string[],
+  ): Promise<string[]>;
+  async function openApprovalPrompts(
+    userId: string,
+    approvalIds: readonly string[],
+    options?: { onlyCreated: true },
+  ): Promise<(string | null)[]> {
+    const opened: { record: ApprovalRecord; code: string; created: boolean }[] =
+      [];
     let count = 0;
     for (const id of approvalIds) {
       const record = await getApproval(userId, id);
       if (record?.status !== "pending") continue;
       const prompt = await open(userId, "approval", id);
       count = prompt.count;
-      opened.push({ record, code: prompt.code });
+      opened.push({ record, code: prompt.code, created: prompt.created });
     }
-    const texts: string[] = [];
-    for (const { record, code } of opened)
-      texts.push(await renderApproval(userId, record, code, count > 1));
+    const texts: (string | null)[] = [];
+    // `onlyCreated`：只给本次新开的写文字，别处（发件箱）先开出来的那条已经由它发了，这里是 null。
+    for (const { record, code, created } of opened)
+      texts.push(
+        options?.onlyCreated && !created
+          ? null
+          : await renderApproval(userId, record, code, count > 1),
+      );
     return texts;
   }
 
   async function openApprovalPrompt(userId: string, approvalId: string) {
     const record = await getApproval(userId, approvalId);
     if (record?.status !== "pending") return null;
-    const { code, count } = await open(userId, "approval", approvalId);
+    const { code, count, created } = await open(userId, "approval", approvalId);
     return {
       code,
+      created,
       text: await renderApproval(userId, record, code, count > 1),
     };
   }
@@ -375,9 +396,10 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
   async function openHandinPrompt(userId: string, taskId: string) {
     const card = await cardOf(userId, taskId);
     if (!card) return null;
-    const { code, count } = await open(userId, "handin", taskId);
+    const { code, count, created } = await open(userId, "handin", taskId);
     return {
       code,
+      created,
       text: handinText({ code }, card, await botName(card.agentId), {
         numbered: count > 1,
         link: cardLink(taskId),
@@ -388,9 +410,10 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
   async function openOverduePrompt(userId: string, taskId: string) {
     const card = await cardOf(userId, taskId);
     if (!card) return null;
-    const { code, count } = await open(userId, "overdue", taskId);
+    const { code, count, created } = await open(userId, "overdue", taskId);
     return {
       code,
+      created,
       text: overdueText({ code }, card, await botName(card.agentId), {
         numbered: count > 1,
         link: cardLink(taskId),

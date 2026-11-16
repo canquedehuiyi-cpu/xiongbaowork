@@ -59,7 +59,6 @@ import type { PeopleStore } from "../src/people/store";
 import {
   createBriefings,
   createTaskNotices,
-  OVERDUE_NOTICE_TITLE,
   WECHAT_KEEP_OPEN_HINT,
 } from "../src/tasks/briefing";
 import type { CardTurns } from "../src/tasks/card-turns";
@@ -199,7 +198,6 @@ const router = createDeliveryRouter({
       wechat: wechatStore,
       send,
       prompts: () => decisions,
-      overdueTitle: OVERDUE_NOTICE_TITLE,
     }),
   },
   wechatWindow: createWechatWindow({ wechat: wechatStore, now: () => clock }),
@@ -224,7 +222,8 @@ const inbound = createWechatInbound({
   send,
   appUrl: APP,
   prompts: decisions.handlers,
-  approvalPrompts: decisions.openApprovalPrompts,
+  approvalPrompts: (userId, ids) =>
+    decisions.openApprovalPrompts(userId, ids, { onlyCreated: true }),
   now: () => clock,
 });
 
@@ -531,6 +530,7 @@ describe("时间窗开着：微信收到带编号的文字，手机推送照常"
       }),
     );
     expect(text).toContain("回复 1 批准一次");
+    expect(text).toContain(`【${who.botName}】`);
     expect(sent[0]?.contextToken).toBe("ctx-a");
     expect(pushedTo(who).length).toBe(1);
     const row = (await wechatRows(who))[0];
@@ -556,6 +556,10 @@ describe("时间窗开着：微信收到带编号的文字，手机推送照常"
       ["overdue", taskId],
     ]);
     expect(text).toContain("回复 再催 / 延期 明早10点 / 换人 / 取消");
+    // 结构化标记（不是看标题文字）；微信行不走手机深链，所以 request_id 可以带它。
+    expect((await wechatRows(who))[0]?.requestId).toBe(
+      `wechat-prompt:overdue:${taskId}`,
+    );
     expect(text).toContain(`【${who.botName}】的「核对本周发票」逾期了`);
     expect(text).toBe(
       overdueText(
@@ -593,6 +597,7 @@ describe("时间窗开着：微信收到带编号的文字，手机推送照常"
     );
     await sweep(who);
     expect(sentTo(who)).toEqual(["还没接下\n代码熊c还没接下『核对本周发票』"]);
+    expect((await wechatRows(who))[0]?.requestId).toBe(taskId);
     expect(await openPrompts(who)).toEqual([]);
   });
 
@@ -737,6 +742,8 @@ describe("发送失败", () => {
     expect(row?.state).toBe("failed");
     expect(row?.error).toContain("window_closed");
     expect((await accountOf(who))?.missedCount).toBe(1);
+    // 用户从没见过的编号不留下。
+    expect(await openPrompts(who)).toEqual([]);
     failWith = null;
     await router.sweep("delivery.outbound");
     await router.sweep("delivery.outbound");
@@ -757,6 +764,33 @@ describe("发送失败", () => {
         { kind: "overdue", taskId, text: "逾期" },
         clock,
       ),
+    );
+    await sweep(who);
+    expect((await wechatRows(who))[0]?.state).toBe("failed");
+    expect((await accountOf(who))?.missedCount).toBe(0);
+    expect(await openPrompts(who)).toEqual([]);
+  });
+
+  test("回复发不出去（时间窗关了）不算漏发的提醒", async () => {
+    setup();
+    const who = await person("m");
+    const record = await approval(who);
+    runTurn = async () => {
+      const error = new Error("suspended");
+      error.name = "HeadlessToolSuspension";
+      Object.assign(error, {
+        waiting: { kind: "approval", approvalId: record.id },
+      });
+      throw error;
+    };
+    await deliverText(who, `@${who.botName} 删掉 build`);
+    failWith = new IlinkWindowClosedError();
+    await asPerson(who, () =>
+      router.notify(who.scope, {
+        id: "resume-reply-m",
+        kind: "reply",
+        text: "好了",
+      }),
     );
     await sweep(who);
     expect((await wechatRows(who))[0]?.state).toBe("failed");
@@ -820,6 +854,24 @@ describe("路由门和回复", () => {
     );
     await sweep(who);
     expect(sentTo(who)).toEqual([`【${who.botName}】已经删好了`]);
+    // 那一轮的回复交出去后它就结束了：之后网页里发起的回复不再进微信。
+    await asPerson(who, () =>
+      router.notify(who.scope, {
+        id: "web-reply-2",
+        kind: "reply",
+        text: "网页上又一条",
+      }),
+    );
+    await sweep(who);
+    expect(sentTo(who)).toEqual([`【${who.botName}】已经删好了`]);
+    expect((await wechatRows(who)).length).toBe(1);
+    const rounds = await asPerson(who, () =>
+      database
+        .select({ state: deliveryInbox.state })
+        .from(deliveryInbox)
+        .where(eq(deliveryInbox.ownerUserId, who.userId)),
+    );
+    expect(rounds.map((r) => r.state)).toEqual(["sent"]);
   });
 });
 
@@ -852,9 +904,63 @@ describe("按 (kind, ref) 去重", () => {
     expect(sentTo(who).length).toBe(before);
     const [row] = await wechatRows(who);
     expect(row?.state).toBe("sent");
+    // 没发就不能让人以为发了：error 里说明。
+    expect(row?.error).toBe("已在微信里发过这条审批，没有重复发送。");
     // 只有一条开着的提示。
     expect((await openPrompts(who)).length).toBe(1);
     // 手机照常推。
     expect(pushedTo(who).length).toBe(1);
+  });
+});
+
+describe("谁开出提示谁发", () => {
+  test("同一审批开两次：先开的 created，后开的不是；onlyCreated 给后开的 null", async () => {
+    setup();
+    const who = await person("n");
+    const record = await approval(who);
+    const first = await asPerson(who, () =>
+      decisions.openApprovalPrompt(who.userId, record.id),
+    );
+    const second = await asPerson(who, () =>
+      decisions.openApprovalPrompt(who.userId, record.id),
+    );
+    expect([first?.created, second?.created]).toEqual([true, false]);
+    expect(second?.code).toBe(first?.code as string);
+    expect(
+      await asPerson(who, () =>
+        decisions.openApprovalPrompts(who.userId, [record.id], {
+          onlyCreated: true,
+        }),
+      ),
+    ).toEqual([null]);
+  });
+
+  test("发件箱先开出提示并发出去：入站随后不再发第二次，也不说「有 N 个审批在等你」", async () => {
+    setup();
+    const who = await person("o");
+    const record = await approval(who);
+    await asPerson(who, () =>
+      router.notify(who.scope, {
+        id: `approval:${record.id}`,
+        kind: "approval",
+        requestId: record.id,
+        text: "请求",
+      }),
+    );
+    await sweep(who);
+    expect(sentTo(who).length).toBe(1);
+    runTurn = async () => {
+      const error = new Error("suspended");
+      error.name = "HeadlessToolSuspension";
+      Object.assign(error, {
+        waiting: { kind: "approval", approvalId: record.id },
+      });
+      throw error;
+    };
+    sent.length = 0;
+    await deliverText(who, `@${who.botName} 删掉 build`);
+    expect(sentTo(who).filter((t) => t.includes("批准一次"))).toEqual([]);
+    expect(sentTo(who).some((t) => t.includes("个审批在等你"))).toBe(false);
+    expect((await openPrompts(who)).length).toBe(1);
   });
 });
