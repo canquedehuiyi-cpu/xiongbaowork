@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Streamdown } from "streamdown";
+import { ExternalMark } from "@/components/agents/external/external-marks";
 import {
   QuestionNotice,
   type WaitingQuestion,
@@ -16,6 +17,7 @@ import {
   MessageHeader,
   Message as MessageRow,
 } from "@/components/ui/message";
+import type { AcpHarness } from "@/lib/agents/external";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import {
   type ApprovalInboxData,
@@ -43,6 +45,7 @@ import {
   DeliveryChatCards,
   GroupDeliveryMark,
 } from "@/skins/xiongbao/delivery-chat";
+import { AcpGroupPermissionLine } from "./acp-group-line";
 import { ChannelAvatar } from "./avatar";
 import {
   Composer,
@@ -246,13 +249,20 @@ export function GroupChat({ channelId }: { channelId: string }) {
                     : (people.get(message.ownerUserId) ?? "一位同事")
               }
               answeredBy={
-                message.answeredBy
+                // 外部员工自己的回答记在它自己的行里，不是谁「代答」的。
+                message.answeredBy && message.answeredBy !== message.agentId
                   ? (names.get(message.answeredBy) ?? "另一位员工")
                   : undefined
               }
+              harness={
+                message.agentId
+                  ? bots.find((bot) => bot.id === message.agentId)?.harness
+                  : undefined
+              }
+              ownerName={people.get(message.ownerUserId)}
               mine={message.ownerUserId === me?.id}
               delivery={deliveryOf.get(message.id)}
-              ownerName={people.get(message.ownerUserId) ?? "派活的人"}
+              meId={me?.id}
             />
           ))}
         </div>
@@ -415,19 +425,52 @@ function GroupLine({
   message,
   name,
   answeredBy,
+  harness,
+  ownerName,
   mine,
   delivery,
-  ownerName,
+  meId,
 }: {
   message: GroupMessage;
   name: string;
   answeredBy?: string;
+  /** 外部员工是哪个智能体，名字旁画「外部员工 · Codex」。 */
+  harness?: AcpHarness;
+  /**
+   * 这一行的主人（员工行就是替谁跑的那个人）怎么称呼：等他处理时对别人这样称呼他，交付状态行里「等<他>验收」。
+   * 不知道名字时不带，各处用自己的兜底说法。
+   */
+  ownerName?: string;
   mine: boolean;
   /** 这一轮里员工走到哪一步的标记；完整的卡和按钮只给发起这一轮的人（`ownerUserId`）。 */
   delivery?: readonly DeliveryMark[];
-  /** 发起这一轮的人怎么称呼（状态行里「等<他>验收」）。 */
-  ownerName: string;
+  /** 读这一页的人，外部员工的许可状态行要知道他是不是招聘人。 */
+  meId?: string;
 }) {
+  const mark = harness ? (
+    <ExternalMark className="ml-1.5" external={{ harness }} />
+  ) : null;
+  // 外部员工在等它的招聘人确认一个操作（Task 12）：只有状态，没有内容。
+  if (message.acpPermission && message.agentId)
+    return (
+      <MessageRow align="start" data-speaker={message.agentId}>
+        <div className="shrink-0 pt-0.5">
+          <ChannelAvatar participantIds={[message.agentId]} size={24} />
+        </div>
+        <MessageContent className="w-full">
+          <MessageHeader className="px-0 font-medium text-[12px] text-muted-foreground">
+            {name}
+            {mark}
+          </MessageHeader>
+          <AcpGroupPermissionLine
+            approvalId={message.approvalId}
+            employee={name}
+            line={message.acpPermission}
+            meId={meId}
+          />
+        </MessageContent>
+      </MessageRow>
+    );
   if (message.agentId === null)
     return (
       <MessageRow align={mine ? "end" : "start"}>
@@ -470,6 +513,7 @@ function GroupLine({
       <MessageContent>
         <MessageHeader className="px-0 font-medium text-[12px] text-muted-foreground">
           {name}
+          {mark}
           {answeredBy ? ` · 由${answeredBy}代答` : null}
         </MessageHeader>
         {(message.status === "running" || message.status === "queued") &&
@@ -480,11 +524,32 @@ function GroupLine({
           >
             思考中
           </p>
+        ) : message.status === "waiting" && !mine ? (
+          /*
+           * 等的是别人（这一行的主人）：同事什么也不用做，只说在等谁、等什么，不写「需要你处理」，不给链接。
+           */
+          <p
+            className="m-0 flex items-center gap-2 text-[13px] text-muted-foreground"
+            data-waiting-other=""
+            role="status"
+          >
+            <span
+              aria-hidden="true"
+              className="inline-block size-2 shrink-0 rounded-full bg-[color:var(--wb-amber,var(--signal))]"
+            />
+            {message.waitKind === "share"
+              ? `${name}的回答要等 ${ownerName ?? "它的主人"} 确认能不能发到群里`
+              : `${name}在等 ${ownerName ?? "它的主人"} 处理一件事`}
+          </p>
         ) : message.status === "waiting" ? (
           // Waiting on a person: the attention treatment, with the way to act on it beside the reason.
           <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-[12px] border border-signal/30 bg-signal-soft px-3 py-2 text-[13px] leading-relaxed">
             <span className="font-medium text-signal-ink">需要你处理</span>
-            <span className="min-w-0">{message.reason ?? "等你回应。"}</span>{" "}
+            <span className="min-w-0">
+              {message.waitKind === "share"
+                ? `${name}的回答要等你确认能不能发到群里，确认前群里看不到。`
+                : (message.reason ?? "等你回应。")}
+            </span>{" "}
             <Link
               className="font-medium underline underline-offset-2"
               to="/settings/approvals"
@@ -547,7 +612,7 @@ function GroupLine({
                 key={`${mark.kind}:${mark.taskId}:${mark.at}`}
                 mark={mark}
                 ownerId={message.ownerUserId}
-                ownerName={ownerName}
+                ownerName={ownerName ?? "派活的人"}
               />
             ))}
           </DeliveryChatCards>

@@ -7,7 +7,8 @@ import type { GroupBot } from "./group";
  * Every Bot the member can see, as the profile store answers in their own frame; and, besides, an
  * external employee (`device_acp`) its hirer put in this group while the hirer is still in it (spec
  * §1, §6): every member can see it there and `@` it, and it works in its hirer's queue. Its profile
- * stays its hirer's alone everywhere else; only its id, name and hirer reach this roster.
+ * stays its hirer's alone everywhere else; only its id, name, hirer and which agent it is (`harness`)
+ * reach this roster.
  */
 export function createGroupRoster(deps: {
   actorFor: (userId: string) => Promise<AgentActor>;
@@ -21,9 +22,16 @@ export function createGroupRoster(deps: {
     agentId: string,
   ) => Promise<{ name: string } | null>;
   /** Which of these Bots are external employees, with their hirer and name. */
-  externalEmployees: (
-    agentIds: readonly string[],
-  ) => Promise<Map<string, { hirer: string; name: string }>>;
+  externalEmployees: (agentIds: readonly string[]) => Promise<
+    Map<
+      string,
+      {
+        hirer: string;
+        name: string;
+        harness?: "codex" | "claude-code" | "hermes" | "custom";
+      }
+    >
+  >;
   /** The people in the group. */
   members: (channelId: string) => Promise<string[]>;
 }): (ownerUserId: string, channelId: string) => Promise<GroupBot[] | null> {
@@ -40,7 +48,13 @@ export function createGroupRoster(deps: {
       const hired = external.get(agentId);
       if (hired) {
         if (hired.hirer === ownerUserId || people.has(hired.hirer))
-          bots.push({ id: agentId, name: hired.name, hiredBy: hired.hirer });
+          bots.push({
+            id: agentId,
+            name: hired.name,
+            hiredBy: hired.hirer,
+            // Which agent it is, for its 「外部员工 · Codex」 mark: never its computer or rules.
+            ...(hired.harness ? { harness: hired.harness } : {}),
+          });
         continue;
       }
       const profile = await deps.profile(actor, agentId);

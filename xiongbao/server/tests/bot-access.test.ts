@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
-import { computerAccessCheck } from "../src/agents/computer-access";
+import {
+  canUseComputer,
+  computerAccessCheck,
+} from "../src/agents/computer-access";
 import type { AppVariables } from "../src/auth/guards";
 import { createComponentRoutes } from "../src/components/routes";
 import {
@@ -551,5 +554,23 @@ describe("two people on one public Bot", () => {
       expect(response.status).toBe(200);
     }
     expect(reached).toEqual(["person:ada/pub-bot", "person:bo/pub-bot"]);
+  });
+});
+
+describe("an external employee's computer", () => {
+  test("nobody reaches it, not its hirer and not an administrator; other Bots as before", () => {
+    const external = {
+      visibility: "private",
+      ownerUserId: "hirer",
+      type: "device_acp",
+    };
+    expect(canUseComputer(external, { id: "hirer", role: "user" })).toBe(false);
+    expect(canUseComputer(external, { id: "admin", role: "admin" })).toBe(
+      false,
+    );
+    const own = { ...external, type: "built_in" };
+    expect(canUseComputer(own, { id: "hirer", role: "user" })).toBe(true);
+    expect(canUseComputer(own, { id: "admin", role: "admin" })).toBe(true);
+    expect(canUseComputer(own, { id: "someone", role: "user" })).toBe(false);
   });
 });

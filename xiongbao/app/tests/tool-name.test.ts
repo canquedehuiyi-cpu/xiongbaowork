@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { approvalWords, readToolName } from "@openbot/shared/tool-name";
+import {
+  approvalPhrase,
+  approvalWords,
+  readToolName,
+} from "@openbot/shared/tool-name";
 
 /**
  * What the person watching is told a Bot just did.
@@ -221,5 +225,65 @@ describe("naming what an approval asks to do", () => {
     expect(
       approvalWords({ toolRef: "host/run_command", scope: "grant-1" }),
     ).toEqual({ action: "执行命令", place: "grant-1" });
+  });
+});
+
+describe("an approval's phrase never shows an internal name", () => {
+  // The check's own name, as the server stores it.
+  const shareRef = ["openbot", "share_private_information"].join("/");
+  const internal = /openbot|acp\//i;
+
+  test("an external employee's request says its kind in Chinese", () => {
+    const cases: [string, string][] = [
+      ["execute", "运行命令"],
+      ["edit", "改文件"],
+      ["delete", "删除文件"],
+      ["fetch", "联网下载"],
+      ["read", "读文件"],
+      ["switch_mode", "切换工作模式"],
+      ["other", "执行一个操作"],
+      ["reticulate_splines", "执行一个操作"],
+    ];
+    for (const [kind, phrase] of cases) {
+      const said = approvalPhrase({
+        toolRef: `acp/${kind}`,
+        scope: "push+runCommand:git push origin main",
+      });
+      expect(said).toBe(phrase);
+      expect(said).not.toMatch(internal);
+    }
+  });
+
+  test("the share check says where the answer would go, in plain words", () => {
+    const cases: [unknown, string][] = [
+      [{ kind: "group", id: "g-1" }, "把回答发到群里（可能含私人信息）"],
+      [{ kind: "channel", id: "c-1" }, "把回答发到频道里（可能含私人信息）"],
+      [
+        { kind: "slack_channel", id: "C1" },
+        "把回答发到频道里（可能含私人信息）",
+      ],
+      [{ kind: "handoff", id: "h-1" }, "把回答转给别人（可能含私人信息）"],
+      [{ kind: "external", id: "x" }, "把回答发给别人（可能含私人信息）"],
+      [undefined, "把回答发给别人（可能含私人信息）"],
+    ];
+    for (const [target, phrase] of cases) {
+      const said = approvalPhrase({
+        toolRef: shareRef,
+        scope: "group:g-1:members:abc",
+        target,
+      });
+      expect(said).toBe(phrase);
+      expect(said).not.toMatch(internal);
+      expect(said).not.toContain("group:g-1");
+    }
+    // Known by its effect too, whatever its name.
+    expect(
+      approvalPhrase({
+        toolRef: "share",
+        scope: "group:g-1",
+        effect: "share_private",
+        target: { kind: "group" },
+      }),
+    ).toBe("把回答发到群里（可能含私人信息）");
   });
 });

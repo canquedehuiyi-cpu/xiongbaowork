@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { nextNoteOrder } from "../channels/note-order";
 import {
   lastMessageIdAfter,
   type PlacedDeliveryEvent,
@@ -47,9 +48,11 @@ export function useDeliveryChatEvents(
         const found = readDeliveryEvent(record.name, record.value);
         if (!found) return;
         const anchor = lastMessage.current;
+        // 取号要在收到事件的这一刻：外部员工的卡同步取号，更新函数要等到渲染时才跑。
+        const order = nextNoteOrder();
         setPlaced((current) => {
           const base = current.threadId === threadId ? current.events : NONE;
-          const next = placeDeliveryEvent(base, anchor, found);
+          const next = placeDeliveryEvent(base, anchor, found, order);
           return next === base && current.threadId === threadId
             ? current
             : { threadId, events: next };

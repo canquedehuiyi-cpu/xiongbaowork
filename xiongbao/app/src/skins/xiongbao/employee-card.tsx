@@ -9,13 +9,25 @@ import {
   useRef,
   useState,
 } from "react";
+import {
+  ExternalMark,
+  NoPermissionWarning,
+} from "@/components/agents/external/external-marks";
 import { StatusDot } from "@/components/agents/status-dot";
 import { latestDirectChannel } from "@/components/app-sidebar/roster";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { employeeNumber } from "@/components/summon/summon-card-flip";
 import {
+  externalMark,
+  externalWorkdirName,
+  hiredRun,
+  mayNeverAsk,
+  useExternalDevice,
+} from "@/lib/agents/external";
+import {
   knownPresence,
   presenceDoing,
+  presenceSummary,
   usePresence,
 } from "@/lib/agents/presence";
 import { type AgentProfile, agentListQueryOptions } from "@/lib/agents/queries";
@@ -204,11 +216,21 @@ function CardBody({
   const talk: LinkProps = direct
     ? { to: "/channel/$channelId", params: { channelId: direct.id } }
     : { to: "/channel/new", search: { agent: agent.id } };
+  const external = agent.external;
+  const device = useExternalDevice(agent);
+  const mark = external ? externalMark(external, device) : null;
+  const run = hiredRun(agent);
+  const workdir = run ? externalWorkdirName(run, device) : null;
+  // 电脑离线时写「离线 · 2 件排队中」（规格第 44 行）；在忙照旧是「此刻」。
+  const offline =
+    presence?.status === "offline" ? presenceSummary(presence) : "";
   const tone = firstSentence(agent.persona?.tone ?? "");
-  const model = modelLabel(agent, library);
+  // 外部员工用的是它自己的模型和订阅，熊宝不替它选模型。
+  const model = external ? "用它自己的模型和订阅" : modelLabel(agent, library);
   const day = agent.createdAt ? joinedDay(agent.createdAt) : null;
   const facts = [
-    agent.title,
+    // 招进来时职务就是「外部员工 · Codex」，有了标记就不再写一遍。
+    agent.title === mark ? "" : agent.title,
     agent.department || NO_DEPARTMENT,
     `工号 ${employeeNumber(agent.id)}`,
     day === null ? "" : `入职第 ${day} 天`,
@@ -233,6 +255,7 @@ function CardBody({
       <h2 className="m-0 font-semibold text-[18px] leading-tight">
         {agent.name}
       </h2>
+      {external ? <ExternalMark device={device} external={external} /> : null}
       <p
         className={cn(
           "m-0 flex flex-wrap gap-x-1 text-[12.5px] leading-relaxed",
@@ -253,12 +276,39 @@ function CardBody({
         ))}
       </p>
       {doing ? <NowDoing className="text-[12.5px]" doing={doing} /> : null}
-      {tone || model ? (
+      {offline ? (
+        <span
+          className={cn(
+            "block truncate rounded-[8px] px-2 py-1.5 text-[12.5px]",
+            TONE.card2,
+            TONE.fg2,
+          )}
+          data-presence-summary=""
+        >
+          {offline}
+        </span>
+      ) : null}
+      {external && mayNeverAsk(external) ? <NoPermissionWarning /> : null}
+      {tone || model || external ? (
         <dl className="m-0 grid grid-cols-[70px_minmax(0,1fr)] gap-x-2.5 gap-y-2 text-[12.5px]">
           {tone ? (
             <>
               <dt className={TONE.muted}>性格</dt>
               <dd className={cn("m-0", TONE.fg2)}>{tone}</dd>
+            </>
+          ) : null}
+          {external ? (
+            <>
+              <dt className={TONE.muted}>在哪台电脑</dt>
+              <dd className={cn("m-0", TONE.fg2)} data-external-device="">
+                {device?.name ?? "读不到这台电脑"}
+              </dd>
+              {workdir ? (
+                <>
+                  <dt className={TONE.muted}>工作文件夹</dt>
+                  <dd className={cn("m-0", TONE.fg2)}>{workdir}</dd>
+                </>
+              ) : null}
             </>
           ) : null}
           {model ? (
@@ -269,7 +319,8 @@ function CardBody({
           ) : null}
         </dl>
       ) : null}
-      {skills && skills.length > 0 ? (
+      {/* 外部员工用它自己的工具，熊宝的技能到不了它那里（它的一轮不带工具）。 */}
+      {!external && skills && skills.length > 0 ? (
         <div>
           <p
             className={cn("m-0 mb-1.5 text-[12.5px]", TONE.muted)}
@@ -303,6 +354,8 @@ function CardBody({
         <Action
           onClick={onLeave}
           params={{ agentId: agent.id }}
+          // 外部员工的「配置」是招聘设置的编辑态：电脑、工作文件夹和五项规则（只有招它的人能改）。
+          search={run && agent.mine ? { edit: "run" } : undefined}
           to="/bots/$agentId/setup"
         >
           配置
@@ -327,6 +380,9 @@ function CardBody({
  * 员工名片（设计稿右侧的抽屉）：封面，头像，名字，职务 · 部门 · 工号 · 入职第几天；性格（人设「怎么说话」的
  * 第一句）、模型、擅长的技能（已装技能的名字）；按钮「发消息 / 配置 / 交给他一个任务 / 拉进群」。读不到的
  * 那一项不写。
+ *
+ * 外部员工（外部员工 Task 11）多一块「外部员工 · Codex」标记、在哪台电脑和工作文件夹；电脑离线时写「离线 ·
+ * N 件排队中」；本机智能体写明它不会请求许可；「配置」打开招聘设置的编辑态。
  *
  * 它不是模态框：页面还能点，抽屉盖在右边。打开时焦点落在「关闭」上，Esc 或「关闭」收起，焦点回到打开它的
  * 地方。挂在哪里由调用的人决定（工作台外壳；没有外壳时是通讯录页自己），它只要一个相对定位的祖先。

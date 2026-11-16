@@ -580,18 +580,23 @@ async function deployment(
     agent.setMessages(input.messages);
     const events: BaseEvent[] = [];
     const state = { done: false };
+    let subscription: { unsubscribe(): void } | undefined;
     await runAsTenant(hirer.id, async () => {
-      runner.run({ threadId, agent: agent as never, input }).subscribe({
-        next: (event) => events.push(event),
-        complete: () => {
-          state.done = true;
-        },
-        error: () => {
-          state.done = true;
-        },
-      });
+      subscription = runner
+        .run({ threadId, agent: agent as never, input })
+        .subscribe({
+          next: (event) => events.push(event),
+          complete: () => {
+            state.done = true;
+          },
+          error: () => {
+            state.done = true;
+          },
+        });
     });
-    return { runId: input.runId, events, state };
+    /** The browser that sent it goes away: closed, reloaded, a laptop lid shut. */
+    const leave = () => subscription?.unsubscribe();
+    return { runId: input.runId, events, state, leave };
   };
 
   const presence = (agentId: string): Promise<AgentPresence[]> =>
@@ -880,6 +885,59 @@ describe("an external employee, end to end", () => {
     expect(await d.presence(agentId)).toEqual([
       { agentId, status: "resting", doing: null },
     ]);
+  }, 60_000);
+
+  test("the person who asked leaves while it waits for permission: the server still ends the turn, writes the history, closes the card", async () => {
+    const hirer = await person();
+    const device = await computer(hirer);
+    const d = await deployment(hirer, device);
+    const agentId = await hire(d, device);
+    await d.connect();
+    await d.beat();
+
+    const threadId = `${prefix}-thread-${randomUUID().slice(0, 8)}`;
+    const first = await d.say(agentId, threadId, "修好登录页再推送");
+    await until(
+      async () => (await d.approvalRows()).length === 1,
+      "the approval",
+    );
+    // The browser that asked is gone before anybody answers.
+    first.leave();
+    const [approval] = await d.approvalRows();
+    if (!approval) throw new Error("no approval");
+    const decided = await d.call("POST", `/approvals/${approval.id}/decision`, {
+      decision: "allow_once",
+    });
+    expect(decided.status).toBe(200);
+
+    // Nobody is listening, and still: the card closes for review, the coworker is resting again...
+    await until(
+      async () => (await d.card(first.runId))[0]?.status === "awaiting_review",
+      "the card to close with nobody watching",
+    );
+    await d.beat();
+    expect(await d.presence(agentId)).toEqual([
+      { agentId, status: "resting", doing: null },
+    ]);
+    // ...and the answer is in the thread's stored history and snapshot, which is what a restarted
+    // server reads back (`PostgresAgentRunner.hydrate`).
+    await until(
+      async () =>
+        eventTexts(await d.threadEvents(threadId)).includes("已推送。"),
+      "the answer in the stored history",
+    );
+    const stored = eventTexts(await d.threadEvents(threadId));
+    expect(stored).toContain("我先修登录页。");
+    expect(stored).toContain("RUN_FINISHED");
+    const [row] = await runAsTenant(hirer.id, () =>
+      database
+        .select({ snapshot: threads.messagesSnapshot })
+        .from(threads)
+        .where(eq(threads.id, threadId)),
+    );
+    expect(JSON.stringify(row?.snapshot)).toContain("已推送。");
+    // The browser heard none of the end, and did not need to.
+    expect(texts(first.events)).not.toContain("已推送。");
   }, 60_000);
 
   /** Hires Codex on the computer, the way the hire page does. */

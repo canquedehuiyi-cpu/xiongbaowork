@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { takesUnattendedWork } from "@/lib/agents/external";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { conversationLabel } from "@/lib/channels/label";
 import { channelListQueryOptions } from "@/lib/channels/queries";
@@ -71,9 +72,12 @@ export function NewResponsibilityDialog({
   const selectedChannel = channels.data?.find(
     (channel) => channel.id === channelId,
   );
+  // 外部员工这一步不接长期职责（外部员工规格「不做」），不列它。
   const availableBots =
-    bots.data?.filter((bot) => selectedChannel?.agentIds.includes(bot.id)) ??
-    [];
+    bots.data?.filter(
+      (bot) =>
+        selectedChannel?.agentIds.includes(bot.id) && takesUnattendedWork(bot),
+    ) ?? [];
   const offered =
     channels.data?.filter(
       (channel) =>

@@ -6,9 +6,9 @@ import {
   type Message,
   type RunAgentInput,
 } from "@ag-ui/client";
-import type { AcpHarness } from "../../../../shared/acp";
 import { eq } from "drizzle-orm";
 import { Observable, type Subscriber } from "rxjs";
+import type { AcpHarness } from "../../../../shared/acp";
 import type { Database } from "../../db/client";
 import { threads } from "../../db/schema";
 import type { DeviceChannel } from "../../devices/channel";
@@ -65,15 +65,22 @@ export { acpPromptOf };
  * turn starts a fresh one.
  *
  * WAITING. An ACP turn can run for long stretches without a word (a long command, a permission
- * request waiting hours for the owner), so the run says `CUSTOM acp.waiting` every 20 seconds
+ * request waiting hours for the owner), so the run says `CUSTOM acp.waiting` every 8 seconds
  * while it is open: anything that watches a stream for silence sees it alive. A permission request
  * is handed to `onPermission` (the permission bridge, Task 7) with the run it belongs to.
  *
  * STOP. `abortRun` sends the device `acp.cancel` and ends the run here at once.
  */
 
-/** How often an open run says it is still waiting. */
-export const ACP_WAITING_MS = 20_000;
+/**
+ * How often an open run says it is still waiting. Under the 10 s after which `Bun.serve` closes a
+ * request that has sent nothing (its default `idleTimeout`, http-server.ts sets no other): at 20 s
+ * the person watching a turn that waited for their permission lost the stream after 10 s and their
+ * page said "network error" while the turn itself went on.
+ */
+export const ACP_WAITING_MS = 8_000;
+/** `Bun.serve`'s default `idleTimeout`, which the beat above must stay under. */
+export const BUN_IDLE_TIMEOUT_MS = 10_000;
 
 /**
  * How long a run that ended waits for the delivery loop's hand-in before it ends anyway: a write that

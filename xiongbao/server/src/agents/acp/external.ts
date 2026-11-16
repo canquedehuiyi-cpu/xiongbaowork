@@ -54,6 +54,15 @@ export async function refuseExternalEmployeeWork(
     throw new ExternalEmployeeWorkRefusedError();
 }
 
+/** Which agent it is, as a group's other members may be told (`harness`, never its computer or rules). */
+export type ExternalHarness = "codex" | "claude-code" | "hermes" | "custom";
+const HARNESSES = new Set<ExternalHarness>([
+  "codex",
+  "claude-code",
+  "hermes",
+  "custom",
+]);
+
 /**
  * Which of these Bots are external employees, with their hirer and name. Read as `platform`, like
  * `ownerTenantsOfBots`: a group member's frame cannot see another member's private employee, and
@@ -62,7 +71,9 @@ export async function refuseExternalEmployeeWork(
 export async function externalEmployeesAmong(
   database: Database,
   agentIds: readonly string[],
-): Promise<Map<string, { hirer: string; name: string }>> {
+): Promise<
+  Map<string, { hirer: string; name: string; harness: ExternalHarness }>
+> {
   if (agentIds.length === 0) return new Map();
   const rows = await asPlatform(() =>
     database
@@ -71,6 +82,7 @@ export async function externalEmployeesAmong(
         name: agents.name,
         tenantId: agents.tenantId,
         ownerUserId: agentProfiles.ownerUserId,
+        configuration: agents.configuration,
       })
       .from(agents)
       .innerJoin(agentProfiles, eq(agentProfiles.agentId, agents.id))
@@ -82,11 +94,23 @@ export async function externalEmployeesAmong(
         ),
       ),
   );
-  const found = new Map<string, { hirer: string; name: string }>();
+  const found = new Map<
+    string,
+    { hirer: string; name: string; harness: ExternalHarness }
+  >();
   // Always private: its row carries its hirer's tenant, and the profile names the same person.
   for (const row of rows)
-    if (isPersonTenant(row.tenantId) && row.ownerUserId === row.tenantId)
-      found.set(row.id, { hirer: row.tenantId, name: row.name });
+    if (isPersonTenant(row.tenantId) && row.ownerUserId === row.tenantId) {
+      const harness = (row.configuration as { harness?: unknown } | null)
+        ?.harness;
+      found.set(row.id, {
+        hirer: row.tenantId,
+        name: row.name,
+        harness: HARNESSES.has(harness as ExternalHarness)
+          ? (harness as ExternalHarness)
+          : "custom",
+      });
+    }
   return found;
 }
 

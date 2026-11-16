@@ -1,4 +1,5 @@
 import { lastMessageIdAfter } from "../../../../shared/delivery-anchor";
+import { nextNoteOrder } from "../channels/note-order";
 import type { TaskEvent } from "./delivery";
 
 /*
@@ -107,6 +108,8 @@ export { lastMessageIdAfter };
 export type PlacedDeliveryEvent = {
   key: string;
   anchor: string | null;
+  /** 第一次见到的先后（`lib/channels/note-order.ts`），和外部员工的卡画在同一行下面时按它排。 */
+  order: number;
   event: ChatDeliveryEvent;
 };
 
@@ -119,12 +122,14 @@ export function placeDeliveryEvent(
   placed: readonly PlacedDeliveryEvent[],
   anchor: string | null,
   event: ChatDeliveryEvent,
+  /** 收到事件那一刻取的号；不给时这里取。 */
+  order?: number,
 ): readonly PlacedDeliveryEvent[] {
   const key = event.eventId
     ? `line:${event.eventId}`
     : `content:${JSON.stringify(event)}`;
   if (placed.some((entry) => entry.key === key)) return placed;
-  return [...placed, { key, anchor, event }];
+  return [...placed, { key, anchor, event, order: order ?? nextNoteOrder() }];
 }
 
 /** 一张卡后来怎么样了：谁在几点做了什么。 */

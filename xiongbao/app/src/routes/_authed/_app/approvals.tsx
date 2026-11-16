@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 import { AccessRequestInbox } from "@/components/approvals/access-requests";
+import { ApprovalDetail } from "@/components/approvals/approval-detail";
 import { ApprovalInbox } from "@/components/approvals/inbox";
 import { PageShell } from "@/components/layout/page-shell";
 
@@ -10,12 +12,22 @@ import { PageShell } from "@/components/layout/page-shell";
  *
  * #452 曾把它改成跳到 设置 › 审批；用户要回这个入口，所以页面恢复了。设置 › 审批 和 管理 › 审批 照旧都在，
  * 画的是同一批数据。
+ *
+ * 带 `?id=<审批 id>` 时画那一条的详情（外部员工 Task 12，设计稿第 5 屏）：手机网页上批，按钮大、贴在底部。
  */
 export const Route = createFileRoute("/_authed/_app/approvals")({
+  validateSearch: z.object({ id: z.string().optional() }),
   component: ApprovalsPage,
 });
 
 function ApprovalsPage() {
+  const { id } = Route.useSearch();
+  if (id)
+    return (
+      <div className="h-full min-h-0 overflow-y-auto">
+        <ApprovalDetail id={id} />
+      </div>
+    );
   return (
     <PageShell
       title="审批"

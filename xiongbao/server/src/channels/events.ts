@@ -68,6 +68,12 @@ export type ChannelActivityEvent = {
    */
   taskUpdated?: true;
   /**
+   * A group's shared transcript changed without anybody saying anything (an external employee's
+   * permission line, 外部员工 Task 12): its members read it again. Carries nothing else, and patches
+   * no roster row.
+   */
+  groupTranscript?: true;
+  /**
    * Everything this channel is waiting on right now: a Bot it asked, a routine firing into it.
    * Absent on an ordinary activity event.
    *
@@ -141,6 +147,42 @@ export function announceTaskUpdate(
   } catch (error) {
     // Opening the frame or building the statement threw before there was a query to run.
     failed(error);
+    return Promise.resolve();
+  }
+}
+
+/**
+ * Announce one event as it is, in the caller's frame (`pg_notify` reads no table; the recipients are
+ * its `memberIds`). Never rejects: a lost announcement only leaves a screen stale until its next read.
+ */
+export function notifyChannelActivity(
+  database: Pick<Database, "execute">,
+  event: ChannelActivityEvent,
+): Promise<void> {
+  try {
+    return database
+      .execute(
+        sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${JSON.stringify(event)})`,
+      )
+      .then(
+        () => undefined,
+        (error: unknown) =>
+          console.error(
+            JSON.stringify({
+              type: "channel-activity-announce-failed",
+              channelId: event.channelId,
+              error: error instanceof Error ? error.name : typeof error,
+            }),
+          ),
+      );
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        type: "channel-activity-announce-failed",
+        channelId: event.channelId,
+        error: error instanceof Error ? error.name : typeof error,
+      }),
+    );
     return Promise.resolve();
   }
 }

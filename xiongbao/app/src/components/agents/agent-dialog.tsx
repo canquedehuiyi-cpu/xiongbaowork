@@ -66,6 +66,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { wakersReturnSearch } from "@/components/wakers/wakers-search";
+import { takesUnattendedWork } from "@/lib/agents/external";
 import {
   type AgentFormValues,
   agentFormSchema,
@@ -183,7 +184,11 @@ function AgentDialogBody({ agentId }: { agentId: string }) {
     );
   }
   const profile = agent.data;
-  const active = SECTIONS.find((candidate) => candidate.id === section);
+  // 外部员工这一步不接定时任务（外部员工规格「不做」），没有这一页。
+  const sections = takesUnattendedWork(profile)
+    ? SECTIONS
+    : SECTIONS.filter((item) => item.id !== "routines");
+  const active = sections.find((candidate) => candidate.id === section);
 
   return (
     <>
@@ -212,7 +217,7 @@ function AgentDialogBody({ agentId }: { agentId: string }) {
             <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu className="gap-px">
-                  {SECTIONS.map((item) => (
+                  {sections.map((item) => (
                     <SidebarMenuItem key={item.id}>
                       <SidebarMenuButton
                         isActive={item.id === section}
@@ -248,7 +253,7 @@ function AgentDialogBody({ agentId }: { agentId: string }) {
               </span>
             </div>
             <div className="flex gap-1 overflow-x-auto">
-              {SECTIONS.map((item) => (
+              {sections.map((item) => (
                 <Button
                   className="shrink-0"
                   key={item.id}
