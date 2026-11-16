@@ -8,6 +8,10 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **仓库里的产品目录从 `openbot/` 改名为 `xiongbao/`。** 只改了外层目录名，代码里的包名、环境变量、数据库角色、
+  请求头一律没动；镜像、安装包、线上部署的行为不变。部署文档里从仓库下载样例配置的链接改走 `/xiongbao/`，
+  本版及以后的标签用新路径，更早的标签仍是 `/openbot/`。同步上游照旧用三方合并，取的是目录内容，见 `UPSTREAM.md`。
+  升级须知：不需要迁移，不需要改配置。
 - **内部请求头改发新名：服务器发给 agent-computer 的请求头只用 `x-xiongbao-*`（bot-id、person-id、computer-token），
   不再带 `x-openbot-*`。** agent-computer 从 0.2.11 起新旧两种都收，所以 0.2.11 及以后的 agent-computer 与本版服务器照常
   能通；0.2.10 及更早的 agent-computer 只认旧名，收到本版服务器的请求会当作没带令牌，一律拒绝（401）。agent-computer
