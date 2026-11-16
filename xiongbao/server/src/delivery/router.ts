@@ -203,6 +203,17 @@ export function createDeliveryRouter(deps: {
     }
     return false;
   }
+  /** 本人最近用过、还能进的那个微信绑定（「等你确认」没有对口绑定时回落用），没有就是 null。 */
+  async function wechatFallback(
+    ownerUserId: string,
+  ): Promise<DeliveryBinding | null> {
+    for (const binding of await deps.store.bindingsByUse(ownerUserId)) {
+      if (binding.transport !== "wechat") continue;
+      if (binding.ownerUserId !== ownerUserId) continue;
+      if (await deps.authoriseScope(binding)) return binding;
+    }
+    return null;
+  }
   async function notify(
     scope: DeliveryScope,
     input: {
@@ -245,8 +256,22 @@ export function createDeliveryRouter(deps: {
       kind: input.kind,
     });
     const noted = { done: false };
-    if (includeBindings)
-      for (const binding of await deps.store.bindingsFor(scope)) {
+    if (includeBindings) {
+      const bindings = await deps.store.bindingsFor(scope);
+      /*
+       * 「等你确认」在这段对话没有对口的微信绑定时（任务卡片那段对话、没在微信里找过的员工），回落到本人最近用过
+       * 的那个微信绑定，和逾期、清点一样（`notifyPerson`）。文字由微信出口按审批本身写（员工名、对话名、编号），
+       * 所以这一行记在那个绑定的对话下。本人没打开微信、时间窗关着时照常不发。Slack / Teams 不回落。
+       */
+      if (
+        input.kind === "approval" &&
+        deps.providers.wechat &&
+        !bindings.some((binding) => binding.transport === "wechat")
+      ) {
+        const fallback = await wechatFallback(scope.ownerUserId);
+        if (fallback) bindings.push(fallback);
+      }
+      for (const binding of bindings) {
         const open = inline.get(binding.id);
         if (open && input.kind === "approval" && input.requestId) {
           open.approvals.push(input.requestId);
@@ -259,37 +284,62 @@ export function createDeliveryRouter(deps: {
           });
           continue;
         }
-        // Teams is a chat surface like Slack; routing names chat transports as `slack` until the
-        // lifecycle lane lists `teams` separately.
-        if (
+        let roundToClose: string | null = null;
+        if (binding.transport === "wechat" && input.kind === "reply") {
+          /*
+           * 网页里发起的普通回复不推到微信：回复只发给入站来源为微信、还停在等人处理的那一轮（它在微信里停下等
+           * 审批，别处批了，后续的回复回到微信）。这一轮本来就是从微信发起的，回复属于那段对话，所以不看本人在
+           * 「消息发到哪里」开没开微信；员工的通知级别（「什么都别通知」）照样算。
+           */
+          const last = await deps.store.latestInbox(binding.id);
+          if (last?.source !== "wechat" || last.state !== "accepted") continue;
+          roundToClose = last.id;
+          if (!route.notify) {
+            await deps.store.setInbox(
+              roundToClose,
+              "failed",
+              "员工设成了不通知，回复没有发到微信。",
+            );
+            continue;
+          }
+        } else if (
+          // Teams is a chat surface like Slack; routing names chat transports as `slack` until the
+          // lifecycle lane lists `teams` separately.
           !route.allows(
             binding.transport === "teams" ? "slack" : binding.transport,
           )
         )
           continue;
-        let roundToClose: string | null = null;
-        if (binding.transport === "wechat") {
+        // 微信只在时间窗里发；提醒类没发出去算一笔漏发，回复不算。
+        if (
+          binding.transport === "wechat" &&
+          !(await wechatOpen(scope.ownerUserId, noted, input.kind !== "reply"))
+        ) {
           /*
-           * 网页里发起的普通回复不推到微信：回复只发给入站来源为微信、还停在等人处理的那一轮（它在微信里
-           * 停下等审批，别处批了，后续的回复回到微信）。其余种类是提醒，要在时间窗里才发。
+           * 那一轮的回复发不出去也收尾：不置终态的话它一直是「最新一条」，之后网页里发起的回复会被当成它的推到
+           * 微信。
            */
-          if (input.kind === "reply") {
-            const last = await deps.store.latestInbox(binding.id);
-            if (last?.source !== "wechat" || last.state !== "accepted")
-              continue;
-            roundToClose = last.id;
-          }
-          if (
-            !(await wechatOpen(
-              scope.ownerUserId,
-              noted,
-              input.kind !== "reply",
-            ))
-          )
-            continue;
+          if (roundToClose)
+            await deps.store.setInbox(
+              roundToClose,
+              "failed",
+              "微信的时间窗已关，回复没有发到微信。",
+            );
+          continue;
         }
+        const filed =
+          binding.channelId === scope.channelId &&
+          binding.agentId === scope.agentId &&
+          binding.threadId === scope.threadId
+            ? scope
+            : {
+                ownerUserId: binding.ownerUserId,
+                channelId: binding.channelId,
+                agentId: binding.agentId,
+                threadId: binding.threadId,
+              };
         await deps.store.offerOutbox({
-          ...scope,
+          ...filed,
           dedupeKey: `${input.kind}:${input.id}:binding:${binding.id}`,
           bindingId: binding.id,
           deviceId: null,
@@ -304,6 +354,7 @@ export function createDeliveryRouter(deps: {
          */
         if (roundToClose) await deps.store.setInbox(roundToClose, "sent");
       }
+    }
     if (route.allows("push"))
       for (const device of await deps.store.devices(scope.ownerUserId))
         await deps.store.offerOutbox({

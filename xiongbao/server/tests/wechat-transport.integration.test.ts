@@ -176,6 +176,8 @@ decisions = createWechatDecisions({
 
 /** true：默认路由（微信不在「全部」里）；false：本人打开了微信。 */
 let defaultRoute = false;
+/** 员工的通知级别：false 是「什么都别通知」。 */
+let botNotify = true;
 /** 员工那一轮：默认回「收到」；测试可以换成停下来等审批。 */
 let runTurn: () => Promise<{ replyText: string }> = async () => ({
   replyText: "收到",
@@ -188,9 +190,9 @@ const router = createDeliveryRouter({
   scopeFor: scopes.scopeFor,
   routeFor: async () => ({
     kind: "progress",
-    notify: true,
+    notify: botNotify,
     allows: (transport) =>
-      defaultRoute ? routeAllows("all", transport) : true,
+      botNotify && (defaultRoute ? routeAllows("all", transport) : true),
   }),
   providers: {
     push,
@@ -324,19 +326,25 @@ const ASK: ApprovalPolicyOutcome = {
   behaviour: "ask",
   source: "default",
 } as ApprovalPolicyOutcome;
-/** 一条等这个人批的请求：员工想删 ~/build。 */
-async function approval(who: Person): Promise<ApprovalRecord> {
+/** 一条等这个人批的请求：员工想删 ~/build。`at` 是发起它的对话（默认和员工的单聊）。 */
+async function approval(
+  who: Person,
+  at: { botId: string; threadId: string } = {
+    botId: who.botId,
+    threadId: who.scope.threadId,
+  },
+): Promise<ApprovalRecord> {
   const args = { path: "~/build" };
   const candidate: ApprovalCandidate = {
     actorId: who.userId,
-    botId: who.botId,
+    botId: at.botId,
     toolRef: "files/delete",
     effect: "write",
     scope: "~/build",
     args,
     continuation: {
       runId: randomUUID(),
-      threadId: who.scope.threadId,
+      threadId: at.threadId,
       toolCallId: randomUUID(),
       toolName: "files__delete",
       args,
@@ -502,6 +510,7 @@ const setup = () => {
   clock = MONDAY_14;
   failWith = null;
   defaultRoute = false;
+  botNotify = true;
   runTurn = async () => ({ replyText: "收到" });
 };
 
@@ -962,5 +971,296 @@ describe("谁开出提示谁发", () => {
     expect(sentTo(who).filter((t) => t.includes("批准一次"))).toEqual([]);
     expect(sentTo(who).some((t) => t.includes("个审批在等你"))).toBe(false);
     expect((await openPrompts(who)).length).toBe(1);
+  });
+});
+
+/** 员工那一轮停下来等这条审批（抛出 headless 挂起）。 */
+const suspendOn = (record: ApprovalRecord) => async () => {
+  const error = new Error("suspended");
+  error.name = "HeadlessToolSuspension";
+  Object.assign(error, {
+    waiting: { kind: "approval", approvalId: record.id },
+  });
+  throw error;
+};
+const inboxStates = (who: Person) =>
+  asPerson(who, async () =>
+    (
+      await database
+        .select({ state: deliveryInbox.state })
+        .from(deliveryInbox)
+        .where(eq(deliveryInbox.ownerUserId, who.userId))
+    ).map((r) => r.state),
+  );
+
+describe("默认路由（本人没打开微信）下，微信里发起的那一轮的回复回到微信", () => {
+  test("微信里停下等审批 → 微信里批准 → 恢复后的回复回到微信；之后网页发起的回复不进微信", async () => {
+    setup();
+    defaultRoute = true;
+    const who = await person("p1");
+    const record = await approval(who);
+    runTurn = suspendOn(record);
+    await deliverText(who, `@${who.botName} 删掉 build`);
+    expect(sentTo(who).some((t) => t.includes("批准一次"))).toBe(true);
+    runTurn = async () => ({ replyText: "收到" });
+    await deliverText(who, "1");
+    expect(
+      (await asPerson(who, () => approvalStore.get(who.userId, record.id)))
+        ?.status,
+    ).not.toBe("pending");
+    sent.length = 0;
+    await asPerson(who, () =>
+      router.notify(who.scope, {
+        id: "resume-reply-p1",
+        kind: "reply",
+        text: "已经删好了",
+      }),
+    );
+    await sweep(who);
+    expect(sentTo(who)).toEqual([`【${who.botName}】已经删好了`]);
+    await asPerson(who, () =>
+      router.notify(who.scope, {
+        id: "web-reply-p1",
+        kind: "reply",
+        text: "网页上的回复",
+      }),
+    );
+    await sweep(who);
+    expect(sentTo(who)).toEqual([`【${who.botName}】已经删好了`]);
+    expect((await wechatRows(who)).length).toBe(1);
+  });
+
+  test("网页里批准，恢复后的回复同样回到微信", async () => {
+    setup();
+    defaultRoute = true;
+    const who = await person("p2");
+    const record = await approval(who);
+    runTurn = suspendOn(record);
+    await deliverText(who, `@${who.botName} 删掉 build`);
+    await asPerson(who, () =>
+      approvalService.decide(who.userId, record.id, "allow_once", "web"),
+    );
+    sent.length = 0;
+    await asPerson(who, () =>
+      router.notify(who.scope, {
+        id: "resume-reply-p2",
+        kind: "reply",
+        text: "删好了",
+      }),
+    );
+    await sweep(who);
+    expect(sentTo(who)).toEqual([`【${who.botName}】删好了`]);
+    expect(await inboxStates(who)).toEqual(["sent"]);
+  });
+
+  test("员工设成「什么都别通知」：回复不进微信，那一轮也收尾", async () => {
+    setup();
+    defaultRoute = true;
+    const who = await person("p3");
+    const record = await approval(who);
+    runTurn = suspendOn(record);
+    await deliverText(who, `@${who.botName} 删掉 build`);
+    botNotify = false;
+    sent.length = 0;
+    await asPerson(who, () =>
+      router.notify(who.scope, {
+        id: "resume-reply-p3",
+        kind: "reply",
+        text: "删好了",
+      }),
+    );
+    await sweep(who);
+    expect(sentTo(who)).toEqual([]);
+    expect(await wechatRows(who)).toEqual([]);
+    expect(await inboxStates(who)).not.toContain("accepted");
+  });
+
+  test("时间窗关了：回复发不出去，那一轮也置终态，之后网页回复不会被推到微信", async () => {
+    setup();
+    defaultRoute = true;
+    const who = await person("p4");
+    const record = await approval(who);
+    runTurn = suspendOn(record);
+    await deliverText(who, `@${who.botName} 删掉 build`);
+    // 过了 11 个小时才恢复。
+    clock = new Date(clock.getTime() + 11 * HOUR);
+    sent.length = 0;
+    await asPerson(who, () =>
+      router.notify(who.scope, {
+        id: "resume-reply-p4",
+        kind: "reply",
+        text: "删好了",
+      }),
+    );
+    await sweep(who);
+    expect(sentTo(who)).toEqual([]);
+    expect(await inboxStates(who)).not.toContain("accepted");
+    // 回复不算漏发的提醒。
+    expect((await accountOf(who))?.missedCount).toBe(0);
+    // 窗口又开了（来过一句别的），网页上的回复也不会被当成那一轮的。
+    await asPerson(who, () =>
+      wechatStore.markInbound(who.account.id, {
+        at: clock,
+        contextToken: "ctx-p4-2",
+      }),
+    );
+    await asPerson(who, () =>
+      router.notify(who.scope, {
+        id: "web-reply-p4",
+        kind: "reply",
+        text: "网页上的回复",
+      }),
+    );
+    await sweep(who);
+    expect(sentTo(who)).toEqual([]);
+  });
+});
+
+describe("「等你确认」没有对口的微信绑定时回落到最近用过的那个", () => {
+  /** 这个人的另一位员工（没在微信里找过它），和它的单聊。 */
+  async function otherBot(who: Person, name: string) {
+    const actor = await actorFor(who.userId);
+    const profile = await asPerson(who, () =>
+      profileStore.create(actor, {
+        name,
+        title: "会计",
+        roleDescription: "简短回答。",
+        visibility: "private",
+      }),
+    );
+    madeAgents.push(profile.id);
+    const channel = await asPerson(who, () =>
+      channelStore.direct(actor, profile.id),
+    );
+    const scope = await asPerson(who, () =>
+      scopes.scopeFor(who.userId, channel.id, profile.id),
+    );
+    if (!scope) throw new Error("no scope");
+    return { botId: profile.id, scope };
+  }
+
+  test("没在微信里聊过的员工发起的审批：发到最近用过的微信绑定，文字带它的名字", async () => {
+    setup();
+    const who = await person("q1");
+    const other = await otherBot(who, "账房熊q1");
+    const record = await approval(who, {
+      botId: other.botId,
+      threadId: other.scope.threadId,
+    });
+    await asPerson(who, () =>
+      router.notify(other.scope, {
+        id: `approval:${record.id}`,
+        kind: "approval",
+        requestId: record.id,
+        text: "请求",
+      }),
+    );
+    await sweep(who);
+    const [text] = sentTo(who);
+    expect(text).toContain("【账房熊q1】");
+    expect(text).toContain("回复 1 批准一次");
+    expect((await wechatRows(who))[0]?.state).toBe("sent");
+    expect((await openPrompts(who)).map((p) => [p.kind, p.refId])).toEqual([
+      ["approval", record.id],
+    ]);
+    // 回数字照常生效。
+    await deliverText(who, "1");
+    expect(
+      (await asPerson(who, () => approvalStore.get(who.userId, record.id)))
+        ?.status,
+    ).not.toBe("pending");
+    expect(pushedTo(who).length).toBe(1);
+  });
+
+  test("任务卡片那段对话里的审批：同样发到微信，带对话名", async () => {
+    setup();
+    const who = await person("q2");
+    const actor = await actorFor(who.userId);
+    const channel = await asPerson(who, () =>
+      channelStore.create(actor, [who.botId]),
+    );
+    await asPerson(who, () =>
+      channelStore.rename(actor, channel.id, "核对本周发票"),
+    );
+    const cardScope = await asPerson(who, () =>
+      scopes.scopeFor(who.userId, channel.id, who.botId),
+    );
+    if (!cardScope) throw new Error("no scope");
+    const record = await approval(who, {
+      botId: who.botId,
+      threadId: cardScope.threadId,
+    });
+    await asPerson(who, () =>
+      router.notify(cardScope, {
+        id: `approval:${record.id}`,
+        kind: "approval",
+        requestId: record.id,
+        text: "请求",
+      }),
+    );
+    await sweep(who);
+    const [text] = sentTo(who);
+    expect(text).toContain(`【${who.botName}】`);
+    expect(text).toContain("核对本周发票");
+    expect(text).toContain("回复 1 批准一次");
+  });
+
+  test("本人没打开微信：不回落，什么都不发微信", async () => {
+    setup();
+    defaultRoute = true;
+    const who = await person("q3");
+    const other = await otherBot(who, "账房熊q3");
+    const record = await approval(who, {
+      botId: other.botId,
+      threadId: other.scope.threadId,
+    });
+    await asPerson(who, () =>
+      router.notify(other.scope, {
+        id: `approval:${record.id}`,
+        kind: "approval",
+        requestId: record.id,
+        text: "请求",
+      }),
+    );
+    await sweep(who);
+    expect(await wechatRows(who)).toEqual([]);
+    expect(pushedTo(who).length).toBe(1);
+    expect((await accountOf(who))?.missedCount).toBe(0);
+  });
+
+  test("时间窗关了：不回落发微信，漏发加一", async () => {
+    setup();
+    const who = await person("q4", 11 * HOUR);
+    const other = await otherBot(who, "账房熊q4");
+    const record = await approval(who, {
+      botId: other.botId,
+      threadId: other.scope.threadId,
+    });
+    await asPerson(who, () =>
+      router.notify(other.scope, {
+        id: `approval:${record.id}`,
+        kind: "approval",
+        requestId: record.id,
+        text: "请求",
+      }),
+    );
+    await sweep(who);
+    expect(await wechatRows(who)).toEqual([]);
+    expect((await accountOf(who))?.missedCount).toBe(1);
+  });
+
+  test("进度回复不回落：没在微信里聊过的员工的回复不进微信", async () => {
+    setup();
+    const who = await person("q5");
+    const other = await otherBot(who, "账房熊q5");
+    await asPerson(who, () =>
+      router.notify(other.scope, {
+        id: "reply-q5",
+        kind: "reply",
+        text: "好了",
+      }),
+    );
+    await sweep(who);
+    expect(await wechatRows(who)).toEqual([]);
   });
 });
