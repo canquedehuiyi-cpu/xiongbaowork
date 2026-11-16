@@ -246,9 +246,9 @@ function BindDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** 地址（http、https）或 data 图片就先当图片画；别的当二维码内容。 */
+/** 只有 data 图片当图片画；别的（含 http、https 地址）都是二维码要编码的内容。 */
 function isImageSource(source: string) {
-  return /^(https?:\/\/|data:image\/)/i.test(source);
+  return /^data:image\//i.test(source);
 }
 
 /**
@@ -274,8 +274,8 @@ function qrModules(content: string) {
 /**
  * 二维码。白底深色码，暗色主题下也一样：扫码要的是深色码配浅色底。扫过了或结束了就压暗，状态句在下面说为什么。
  *
- * 服务器给的 `imageContent` 可能是图片地址，也可能是二维码本身的内容（还没在真机上确认）。像图片的先当图片
- * 画；不像图片的、或图片加载失败的（链接本身也可能就是要编码的内容），在浏览器里把同一段内容编码成二维码。
+ * 服务器给的 `imageContent` 是 iLink 的二维码内容：真机实测是一个网页地址（`https://liteapp.weixin.qq.com/q/…`，
+ * 不是图片），所以 http、https 地址直接在浏览器里编码成二维码，不先当 `<img>` 加载。只有 `data:image/…` 照图片画。
  * 内容为空或编码不了，才说画不出来，请换一张。
  */
 function QrFrame({
@@ -285,8 +285,7 @@ function QrFrame({
   source: string | undefined;
   dimmed: boolean;
 }) {
-  const [broken, setBroken] = useState<string | null>(null);
-  const asImage = source && isImageSource(source) && broken !== source;
+  const asImage = source && isImageSource(source);
   const modules = source === undefined || asImage ? null : qrModules(source);
   return (
     <div
@@ -300,7 +299,6 @@ function QrFrame({
           alt="绑定微信的二维码"
           className="h-full w-full object-contain"
           height={184}
-          onError={() => setBroken(source)}
           src={source}
           width={184}
         />

@@ -55,7 +55,7 @@ function serving(options: {
   wechat: Summary;
   attempt?: { status: string; message?: string };
   available?: boolean;
-  /** 服务器给的 `imageContent`，缺省是一张图片的地址。 */
+  /** 服务器给的 `imageContent`，缺省是一个网页地址（iLink 实测给的就是网页地址）。 */
   image?: string;
 }) {
   requests.length = 0;
@@ -111,7 +111,8 @@ test("没绑时有「绑定微信」，点了显示二维码和三步说明", as
   const qr = await within(dialog).findByRole("img", {
     name: "绑定微信的二维码",
   });
-  expect(qr.getAttribute("src")).toBe("https://example.com/qr.png");
+  // iLink 给的是网页地址：直接编码成二维码，不当图片加载。
+  expect(qr.tagName.toLowerCase()).toBe("svg");
   expect(
     within(dialog).getByText("打开微信 › 我 › 设置 › 插件 › 微信 ClawBot"),
   ).toBeTruthy();
@@ -316,23 +317,30 @@ test("二维码内容不是图片地址时，在页面上自己画成二维码",
   expect(qr.querySelector("path")?.getAttribute("d")).toBeTruthy();
 });
 
-test("图片加载失败时，把同一段内容画成二维码", async () => {
-  serving({ wechat: null, image: "https://liteapp.example.com/q/abc" });
+test("iLink 给的网页地址（https）直接编码成二维码，不先当图片加载", async () => {
+  serving({ wechat: null, image: "https://liteapp.weixin.qq.com/q/abc" });
   const view = draw();
   fireEvent.click(await view.findByRole("button", { name: "绑定微信" }));
   const dialog = await view.findByRole("dialog");
-  const image = await within(dialog).findByRole("img", {
+  const qr = await within(dialog).findByRole("img", {
     name: "绑定微信的二维码",
   });
-  expect(image.tagName.toLowerCase()).toBe("img");
-  fireEvent.error(image);
-  await waitFor(() =>
-    expect(
-      within(dialog)
-        .getByRole("img", { name: "绑定微信的二维码" })
-        .tagName.toLowerCase(),
-    ).toBe("svg"),
-  );
+  expect(qr.tagName.toLowerCase()).toBe("svg");
+  expect(qr.querySelector("path")?.getAttribute("d")).toBeTruthy();
+  expect(dialog.querySelector("img")).toBeNull();
+});
+
+test("data:image 图片照图片画", async () => {
+  const png = "data:image/png;base64,iVBORw0KGgo=";
+  serving({ wechat: null, image: png });
+  const view = draw();
+  fireEvent.click(await view.findByRole("button", { name: "绑定微信" }));
+  const dialog = await view.findByRole("dialog");
+  const qr = await within(dialog).findByRole("img", {
+    name: "绑定微信的二维码",
+  });
+  expect(qr.tagName.toLowerCase()).toBe("img");
+  expect(qr.getAttribute("src")).toBe(png);
 });
 
 test("二维码内容是空的：说画不出来，请换一张", async () => {
