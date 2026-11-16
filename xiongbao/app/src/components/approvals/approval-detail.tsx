@@ -15,7 +15,12 @@ import {
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { externalMark } from "@/lib/agents/external";
 import { agentListQueryOptions } from "@/lib/agents/queries";
-import { approvalRequestOptions, decideApproval } from "@/lib/approvals";
+import {
+  approvalRequestOptions,
+  decideApproval,
+  decidedElsewhereWords,
+} from "@/lib/approvals";
+import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { cn } from "@/lib/utils";
 
 /*
@@ -52,6 +57,7 @@ function OneApproval({ id }: { id: string }) {
   const cache = useQueryClient();
   const request = useQuery({ ...approvalRequestOptions(id), retry: false });
   const agents = useQuery(agentListQueryOptions());
+  const me = useQuery(currentUserQueryOptions());
   const [answered, setAnswered] = useState<AcpChoice | null>(null);
   const decision = useMutation({
     mutationFn: (choice: AcpChoice) => decideApproval(id, choice),
@@ -70,6 +76,14 @@ function OneApproval({ id }: { id: string }) {
   );
   const raw = data ? acpRawText(data.action.args) : null;
   const waiting = data?.status === "pending" && answered === null;
+  /*
+   * 在微信、Slack、Teams 上决定的：「已由 小熊 在 微信 批准。」（规格验收第 203、213 行）。审批只有本人能决定、
+   * 也只有本人读得到，所以「某某」是本人的名字，没有名字时说「你」，与微信里的回话一致。网页上决定的、旧数据
+   * 照旧（null）。
+   */
+  const elsewhere = data
+    ? decidedElsewhereWords(data, me.data?.name?.trim() || "你")
+    : null;
   const choices: AcpChoice[] = card ? acpChoicesFor(card) : [];
   const who = card?.employee || agent?.name || "这位员工";
   const headline =
@@ -111,6 +125,15 @@ function OneApproval({ id }: { id: string }) {
           role="status"
         >
           这条请求不在你这里，或者已经没有了。
+        </p>
+      ) : !card && elsewhere ? (
+        // 外部员工以外的请求在别的渠道（微信等）已经决定了：说一声在哪、谁决定的，不再指去审批列表。
+        <p
+          className="px-4 py-6 text-[color:var(--wb-fg2,var(--muted-foreground))]"
+          data-slot="approval-decided-via"
+          role="status"
+        >
+          {elsewhere}。
         </p>
       ) : !card ? (
         // 外部员工以外的请求（交给你做的、参数要看全的）在审批列表里处理，这一页只画外部员工的。
@@ -228,7 +251,11 @@ function OneApproval({ id }: { id: string }) {
               </>
             ) : (
               <p className="m-0 py-2 text-center" role="status">
-                {answered ? DONE_WORDS[answered] : "这条请求已经处理过了。"}
+                {answered
+                  ? DONE_WORDS[answered]
+                  : elsewhere
+                    ? `${elsewhere}。`
+                    : "这条请求已经处理过了。"}
               </p>
             )}
           </div>

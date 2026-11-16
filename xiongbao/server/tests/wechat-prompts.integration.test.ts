@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { approvalPhrase } from "@openbot/shared/tool-name";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createApprovalService } from "../src/approvals/service";
@@ -1033,5 +1033,101 @@ describe("选人提示带编号", () => {
     const [pick] = await openPrompts(v);
     expect(pick?.kind).toBe("pick_agent");
     expect(lastSent(v)).toContain(`${pick?.code}：回复数字选员工`);
+  });
+});
+
+describe("审批记下在哪决定的（Task 11）", () => {
+  test("在微信里回「1」批准：审批记 decided_via = wechat", async () => {
+    const w = await person("w11a");
+    const coder = await bot(w, "代码熊");
+    const request = await approval(w, coder);
+    await asPerson(w, () => decisions.openApprovalPrompt(w.userId, request.id));
+    await deliver(w, "1");
+    expect(await approvalOf(w, request.id)).toMatchObject({
+      decision: "allow_once",
+      decidedVia: "wechat",
+    });
+  });
+
+  test("在 Slack 上先批了，再在微信回「1」：答「这条已由 某某 在 Slack 处理」", async () => {
+    const w = await person("w11b", "小熊");
+    const coder = await bot(w, "代码熊");
+    const request = await approval(w, coder);
+    await asPerson(w, () => decisions.openApprovalPrompt(w.userId, request.id));
+    await asPerson(w, () =>
+      approvalService.decide(w.userId, request.id, "allow_once", "slack"),
+    );
+    await deliver(w, "1");
+    expect(lastSent(w)).toBe("这条已由 小熊 在 Slack 处理");
+    expect((await approvalOf(w, request.id)).decidedVia).toBe("slack");
+    expect(await openPrompts(w)).toEqual([]);
+  });
+
+  test("带编号回一条在 Teams 上拒绝了的：答「在 Teams 处理」", async () => {
+    const w = await person("w11c", "小熊");
+    const coder = await bot(w, "代码熊");
+    const request = await approval(w, coder);
+    const opened = await asPerson(w, () =>
+      decisions.openApprovalPrompt(w.userId, request.id),
+    );
+    await asPerson(w, () =>
+      approvalService.decide(w.userId, request.id, "deny", "teams"),
+    );
+    await deliver(w, `${opened?.code} 1`);
+    expect(lastSent(w)).toBe("这条已由 小熊 在 Teams 处理");
+  });
+
+  test("审批服务刚好在同一时刻被别处决定（处理器里读到已不在等）：照实说那个渠道", async () => {
+    const w = await person("w11d", "小熊");
+    const coder = await bot(w, "代码熊");
+    const request = await approval(w, coder);
+    const opened = await asPerson(w, () =>
+      decisions.openApprovalPrompt(w.userId, request.id),
+    );
+    const prompt = (await openPrompts(w))[0];
+    if (!opened || !prompt) throw new Error("no prompt");
+    await asPerson(w, () =>
+      approvalService.decide(w.userId, request.id, "deny", "wechat"),
+    );
+    const replies: string[] = [];
+    await asPerson(w, () =>
+      decisions.handlers.approval.handle(
+        {
+          account: w.account,
+          open: [prompt],
+          reply: async (text: string) => {
+            replies.push(text);
+          },
+        } as never,
+        prompt,
+        "1",
+      ),
+    );
+    expect(replies).toEqual(["这条已由 小熊 在 微信 处理"]);
+  });
+
+  test("旧数据没记渠道（null）、网页上决定的：都答「在 网页 处理」", async () => {
+    const w = await person("w11e", "小熊");
+    const coder = await bot(w, "代码熊");
+    const old = await approval(w, coder);
+    await asPerson(w, () => decisions.openApprovalPrompt(w.userId, old.id));
+    await asPerson(w, () =>
+      approvalService.decide(w.userId, old.id, "deny", "slack"),
+    );
+    await asPerson(w, async () => {
+      await database.execute(
+        sql`update ${approvalRequests} set "decided_via" = null where ${approvalRequests.id} = ${old.id}`,
+      );
+    });
+    await deliver(w, "1");
+    expect(lastSent(w)).toBe("这条已由 小熊 在 网页 处理");
+
+    const web = await approval(w, coder);
+    await asPerson(w, () => decisions.openApprovalPrompt(w.userId, web.id));
+    await asPerson(w, () =>
+      approvalService.decide(w.userId, web.id, "deny", "web"),
+    );
+    await deliver(w, "1");
+    expect(lastSent(w)).toBe("这条已由 小熊 在 网页 处理");
   });
 });

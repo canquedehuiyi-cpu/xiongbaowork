@@ -23,8 +23,10 @@ import { currentEdition } from "../edition";
 import type { TaskProjector } from "../tasks/projector";
 import { currentTenant, runAsTenant } from "../tenant/context";
 import {
+  requestColumns,
   ruleAccount,
   ruleColumns,
+  saveDecidedVia,
   saveRuleExtras,
   saveTeamActionKinds,
   saveTeamDesktopActionWords,
@@ -227,7 +229,7 @@ export function createApprovalStore(
     );
   async function get(owner: string, id: string): Promise<ApprovalRecord> {
     const [row] = await database
-      .select()
+      .select(requestColumns)
       .from(approvalRequests)
       .where(owned(owner, id))
       .limit(1);
@@ -277,7 +279,7 @@ export function createApprovalStore(
     get,
     async list(owner) {
       return database
-        .select()
+        .select(requestColumns)
         .from(approvalRequests)
         .where(eq(approvalRequests.ownerUserId, owner))
         .orderBy(desc(approvalRequests.createdAt))
@@ -299,7 +301,7 @@ export function createApprovalStore(
         return row;
       });
     },
-    async decide(owner, id, decision) {
+    async decide(owner, id, decision, via) {
       return database.transaction(async (tx) => {
         const [request] = await tx
           .select()
@@ -374,6 +376,9 @@ export function createApprovalStore(
           .where(owned(owner, id))
           .returning();
         if (!updated) throw new ApprovalNotFoundError();
+        // 没说渠道的（`null`，或未做类型检查的旧调用）记 null，读的时候退回「网页」。
+        const decidedVia = via ?? null;
+        await saveDecidedVia(tx, owned(owner, id), decidedVia);
         const trail = createAuditStore(tx as unknown as Database);
         await recordAuditEvent(trail, {
           eventType: "approval.person_decided",
@@ -426,7 +431,7 @@ export function createApprovalStore(
             })
             .catch((error) => console.error("task projection failed", error));
         }
-        return updated;
+        return { ...updated, decidedVia };
       });
     },
     async consume(owner, id, digest) {

@@ -6,8 +6,8 @@
  *    3 这次对话里都允许；详情：<链接>」。1 → `allow_once`，2 → `deny`，3 → `allow_conversation`。底线类（只给
  *    「允许一次」的，`offersStandingRule` / 外部员工的 `acpCardOf(...).offerConversation`）不出现 3，回 3 就说
  *    「这条只能批准一次或拒绝」，不放行。交给本人做的（hand_off）：1 = 做完了（`handled`），2 = 不做。
- *    决定只经审批服务（`approvals.decide`）：底线、并发、谁先批谁算数都在那里判。网页上已经处理过的，再回数字
- *    答「这条已由 某某 在 网页 处理」，不改状态。
+ *    决定只经审批服务（`approvals.decide`，记下渠道 `wechat`）：底线、并发、谁先批谁算数都在那里判。别处已经
+ *    处理过的，再回数字答「这条已由 某某 在 <渠道> 处理」（按审批记下的 `decided_via`，旧数据说「网页」），不改状态。
  *  - `handin`（ref = 卡片 id）：交付待验收，回「验收」或「退回 原因」（`tasks/return-task.ts`，和看板同一条路）。
  *  - `overdue`（ref = 卡片 id）：逾期，回「再催」「延期 时间」「换人 员工名」「取消」，走 tasks 路由同一套服务函数
  *    （`NudgeRuns.nudgeNow` / `reassignTask`、`Delivery.decideExtension` / `editTask` / `cancelTask`）。
@@ -24,6 +24,7 @@
  */
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { and, eq } from "drizzle-orm";
+import { approvalViaName } from "../../../../shared/approval-via";
 import { approvalPhrase } from "../../../../shared/tool-name";
 import { acpCardOf } from "../../agents/acp/permissions";
 import type { AgentProfileStore } from "../../agents/profile-store";
@@ -34,6 +35,7 @@ import {
   ApprovalNotFoundError,
   type ApprovalRecord,
   ApprovalRefusedError,
+  type ApprovalVia,
   afterChinese,
   offersStandingRule,
 } from "../../approvals/types";
@@ -156,6 +158,7 @@ export type WechatDecisionDeps = {
       ownerUserId: string,
       id: string,
       decision: ApprovalDecision,
+      via: ApprovalVia,
     ): Promise<unknown>;
   };
   deliveries: Pick<DeliveryStore, "botIdentity">;
@@ -403,21 +406,39 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
   const close = (context: WechatPromptContext, prompt: WechatPrompt) =>
     deps.wechat.closePrompt(context.account.userId, prompt.code);
 
+  /**
+   * 「这条已由 某某 在 <渠道> 处理」。审批按它记下的 `decided_via` 说真实渠道（网页 / 微信 / Slack / Teams，
+   * 中文名在 `shared/approval-via.ts`）；没记渠道的旧审批、交付卡和逾期卡（看板上处理的）说「网页」。
+   */
+  async function handledText(userId: string, via?: string | null) {
+    return `这条已由 ${await personName(userId)} 在 ${approvalViaName(via)} 处理`;
+  }
+
   /** 这条在别处处理过了，而这条回复只可能是在回它：照规格说一声，关掉提示。 */
   async function answerSettled(
     context: WechatPromptContext,
     prompt: WechatPrompt,
   ) {
     await close(context, prompt);
+    await context.reply(await handledText(context.account.userId));
+  }
+
+  /** 审批的那一版：按这条审批记下的渠道说。 */
+  async function answerApprovalSettled(
+    context: WechatPromptContext,
+    prompt: WechatPrompt,
+  ) {
+    const record = await getApproval(context.account.userId, prompt.refId);
+    await close(context, prompt);
     await context.reply(
-      `这条已由 ${await personName(context.account.userId)} 在 网页 处理`,
+      await handledText(context.account.userId, record?.decidedVia),
     );
   }
 
   const approval: WechatPromptHandler = {
     accepts: (answer) => /^[123]$/.test(answer),
     stale: staleOf,
-    settled: answerSettled,
+    settled: answerApprovalSettled,
     /** 带编号回了一条开过 24 小时的：审批还在等就说过期了、请到熊宝里处理；已经处理过的不说话。 */
     async expired(context, prompt) {
       await close(context, prompt);
@@ -441,14 +462,12 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
         await context.reply("这条审批已经不在了。");
         return;
       }
-      const handled = async () => {
+      const handled = async (via?: string | null) => {
         await close(context, prompt);
-        await context.reply(
-          `这条已由 ${await personName(userId)} 在 网页 处理`,
-        );
+        await context.reply(await handledText(userId, via));
       };
       if (record.status !== "pending") {
-        await handled();
+        await handled(record.decidedVia);
         return;
       }
       const handOff = handedOff(record.action);
@@ -469,7 +488,7 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
               ? "handled"
               : "allow_once";
       try {
-        await deps.approvals.decide(userId, record.id, decision);
+        await deps.approvals.decide(userId, record.id, decision, "wechat");
       } catch (error) {
         if (
           !(
@@ -482,7 +501,7 @@ export function createWechatDecisions(deps: WechatDecisionDeps) {
         // 同一时刻在别处处理了：照实说。否则是审批服务不让（只说原因，提示还开着）。
         const latest = await getApproval(userId, record.id);
         if (latest?.status !== "pending") {
-          await handled();
+          await handled(latest?.decidedVia);
           return;
         }
         // 审批服务的原因有的是英文：没有中文时不照搬，给一句中文兜底。

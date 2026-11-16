@@ -6,6 +6,7 @@ import {
   currentApprovalContext,
   withApprovalContext,
 } from "@openbot/toolkit/continuation";
+import type { ApprovalVia } from "../../../shared/approval-via";
 import type { AuditEventInput, AuditInitiator } from "../audit";
 import { cutAtCodeUnits } from "../channels/text";
 import type { ContinuationReceipt } from "./continuation-protocol";
@@ -28,6 +29,8 @@ export const APPROVAL_DECISIONS = [
   "deny",
   "handled",
 ] as const satisfies readonly ApprovalDecision[];
+/** 本人在哪里决定的：`web` / `wechat` / `slack` / `teams`（`shared/approval-via.ts`，审批表 `decided_via`）。 */
+export type { ApprovalVia };
 /**
  * The kinds of action OpenBot recognises by name and asks about whatever the person's own switch
  * says (`safetyRequirement` in ./policy). An admin can close each kind further
@@ -368,6 +371,11 @@ export type ApprovalRecord = {
   result: { content: string; error?: string } | null;
   createdAt: Date;
   decidedAt: Date | null;
+  /**
+   * 本人在哪里决定的（迁移 0229）。还在等、规则放行、0229 之前决定的为 null；没读这一列的旧代码、测试里的
+   * 假记录没有它。
+   */
+  decidedVia?: ApprovalVia | null;
   consumedAt: Date | null;
   completedAt: Date | null;
 };
@@ -648,10 +656,12 @@ export type ApprovalStore = {
   open(action: ApprovalAction): Promise<ApprovalRecord>;
   get(ownerUserId: string, id: string): Promise<ApprovalRecord>;
   list(ownerUserId: string): Promise<ApprovalRecord[]>;
+  /** `via`：本人在哪里决定的，记进 `decided_via`；`null` 是说不出来源。 */
   decide(
     ownerUserId: string,
     id: string,
     decision: ApprovalDecision,
+    via: ApprovalVia | null,
   ): Promise<ApprovalRecord>;
   /** Atomically claim only approved rows whose result is SQL NULL; settled results revoke execution eligibility. */
   consume(ownerUserId: string, id: string, digest: string): Promise<boolean>;
