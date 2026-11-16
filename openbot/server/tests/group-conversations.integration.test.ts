@@ -1911,6 +1911,53 @@ describe("group conversations in PostgreSQL", () => {
     });
   });
 
+  test("a peer is handed the paragraph that names it, and the rest of the reply only as context", async () => {
+    const owner = await person();
+    await as(owner, async () => {
+      const named = new Map([
+        [await bot(owner, "Ada"), "Ada"],
+        [await bot(owner, "Grace"), "Grace"],
+      ]);
+      const [ada = "", grace = ""] = [...named.keys()].sort();
+      const A = named.get(ada) ?? "";
+      const G = named.get(grace) ?? "";
+      const channel = await channelStore.create(owner, [ada, grace]);
+      createdChannels.push(channel.id);
+      // Ada answers the person at length, and names Grace in a paragraph of its own.
+      const answer =
+        "The plan has three steps, and the second one turns on the numbers.";
+      const asked = `@${G} add up the rows in step two and tell me the total.`;
+      const { conversations, calls, audit } = service({
+        replies: {
+          [ada]: () => `${answer}\n\n${asked}`,
+          [grace]: () => "42.",
+        },
+      });
+
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-m-handoff-part`,
+        text: "Plan the launch",
+      });
+      await drain(conversations);
+
+      const hop = calls.find((call) => call.initiator?.kind === "handoff");
+      const told = String(hop?.userMessage?.content ?? "");
+      // What Grace is asked to do is marked as hers; the answer to the person rides along as context.
+      expect(told).toContain(`What ${A} asks of you:`);
+      expect(told).toContain(asked);
+      expect(told).toContain("for context");
+      expect(told).toContain(answer);
+      // Once each: the hop hands over a split, not the same text twice under two headings.
+      expect(told.split(asked)).toHaveLength(2);
+      expect(told.split(answer)).toHaveLength(2);
+      // And the turn carries the ask: what was handed over is what the audit says it was.
+      const [offered] = audit.filter(
+        (event) => event.eventType === "agent.handoff_offered",
+      );
+      expect(offered?.payload.task).toBe(asked);
+    });
+  });
+
   test("a Bot's place in a turn held by somebody else's row fails that Bot loudly, and the turn and the queue go on", async () => {
     const owner = await person();
     const teammate = await person();
