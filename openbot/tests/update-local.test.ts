@@ -1,6 +1,15 @@
-import { afterEach, expect, setDefaultTimeout, spyOn, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  expect,
+  setDefaultTimeout,
+  spyOn,
+  test,
+} from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -14,7 +23,9 @@ import {
   applyLocalUpdate,
   assertLocalStartAllowed,
   type CommandRunner,
+  databaseIdentity,
   type LocalUpdateOptions,
+  libpqEnvironment,
   planLocalUpdate,
   runCommand,
 } from "../scripts/update-local";
@@ -29,6 +40,28 @@ setDefaultTimeout(20_000);
 afterEach(() => {
   for (const root of roots.splice(0))
     rmSync(root, { recursive: true, force: true });
+});
+// As docker-compose.yml resolves them: the server and the worker log in as the app role, the server
+// also holds the role writer, and only migration logs in as the owner. One database throughout.
+const OWNER_URL = "postgres://openbot:openbot@postgres:5432/openbot";
+const APP_URL = "postgres://openbot_app:openbot@postgres:5432/openbot";
+const ROLE_WRITER_URL =
+  "postgres://openbot_role_writer:openbot@postgres:5432/openbot";
+// A host install's .env since the role split: the app role for the server, the owner for the update.
+const HOST_APP_URL = "postgres://openbot_app:openbot@localhost:5432/openbot";
+const HOST_OWNER_URL = "postgres://openbot:openbot@localhost:5432/openbot";
+// The updater lets the process environment outrank .env; these fixtures speak through .env alone.
+const inheritedDatabaseUrls = {
+  DATABASE_URL: process.env.DATABASE_URL,
+  MIGRATION_DATABASE_URL: process.env.MIGRATION_DATABASE_URL,
+};
+beforeAll(() => {
+  delete process.env.DATABASE_URL;
+  delete process.env.MIGRATION_DATABASE_URL;
+});
+afterAll(() => {
+  for (const [name, value] of Object.entries(inheritedDatabaseUrls))
+    if (value !== undefined) process.env[name] = value;
 });
 function fixture(topology: "host" | "image" = "image") {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "openbot-update-")));
@@ -57,7 +90,7 @@ function fixture(topology: "host" | "image" = "image") {
   writeFileSync(join(root, ".openbot-release.json"), JSON.stringify(current));
   writeFileSync(
     join(root, ".env"),
-    "ENCRYPTION_KEY=keep-this\nDATABASE_URL=postgres://openbot:openbot@localhost:5432/openbot\nTENANT_PACKAGE_DIR=../customer\n",
+    `ENCRYPTION_KEY=keep-this\nDATABASE_URL=${HOST_APP_URL}\nMIGRATION_DATABASE_URL=${HOST_OWNER_URL}\nTENANT_PACKAGE_DIR=../customer\n`,
   );
   mkdirSync(join(root, "customer"));
   writeFileSync(join(root, "customer", "branding.json"), '{"name":"Customer"}');
@@ -89,24 +122,21 @@ function fixture(topology: "host" | "image" = "image") {
               options.env?.SERVER_IMAGE ??
               current.artifacts.images.server?.reference,
             environment: {
-              DATABASE_URL: "postgres://openbot:openbot@postgres:5432/openbot",
+              DATABASE_URL: APP_URL,
+              ROLE_WRITER_DATABASE_URL: ROLE_WRITER_URL,
             },
           },
           worker: {
             image:
               options.env?.SERVER_IMAGE ??
               current.artifacts.images.server?.reference,
-            environment: {
-              DATABASE_URL: "postgres://openbot:openbot@postgres:5432/openbot",
-            },
+            environment: { DATABASE_URL: APP_URL },
           },
           migrate: {
             image:
               options.env?.SERVER_IMAGE ??
               current.artifacts.images.server?.reference,
-            environment: {
-              DATABASE_URL: "postgres://openbot:openbot@postgres:5432/openbot",
-            },
+            environment: { DATABASE_URL: OWNER_URL },
           },
         },
         volumes: {
@@ -236,6 +266,78 @@ test("host apply installs source, runs existing guarded migration and restarts t
   ).toBe(false);
 });
 
+test("host apply backs up and migrates as the owner and hands it to start.sh, not to install", async () => {
+  const f = fixture("host");
+  const seen: { command: string; env?: NodeJS.ProcessEnv }[] = [];
+  const run: CommandRunner = async (command, options) => {
+    seen.push({ command: command.join(" "), env: options.env });
+    return f.run(command, options);
+  };
+  expect((await applyLocalUpdate({ ...f.options, run })).phase).toBe(
+    "accepted",
+  );
+  const dump = seen.find(({ command }) => command.startsWith("pg_dump"));
+  expect(dump?.env?.PGUSER).toBe("openbot");
+  expect(dump?.env?.PGDATABASE).toBe("openbot");
+  const migrate = seen.find(({ command }) =>
+    command.includes("scripts/migrate.ts"),
+  );
+  expect(migrate?.env?.DATABASE_URL).toBe(HOST_OWNER_URL);
+  const start = seen.find(({ command }) =>
+    command.includes("scripts/start.sh"),
+  );
+  expect(start?.env?.DATABASE_URL).toBe(HOST_APP_URL);
+  // start.sh takes it out of its environment and hands it to its Compose migration alone.
+  expect(start?.env?.MIGRATION_DATABASE_URL).toBe(HOST_OWNER_URL);
+  const install = seen.find(({ command }) => command.startsWith("bun install"));
+  expect(install).toBeDefined();
+  expect(install?.env?.MIGRATION_DATABASE_URL).toBeUndefined();
+});
+
+test.each([
+  ["no owner URL", "", "MIGRATION_DATABASE_URL"],
+  [
+    "an owner URL for another database",
+    "MIGRATION_DATABASE_URL=postgres://openbot:openbot@localhost:5432/elsewhere\n",
+    "同一个数据库",
+  ],
+  [
+    "an owner URL on another host",
+    "MIGRATION_DATABASE_URL=postgres://openbot:openbot@db.example.test:5432/openbot\n",
+    "同一个数据库",
+  ],
+])(
+  "host update with %s refuses before stopping or changing anything",
+  async (_, ownerLine, reason) => {
+    const f = fixture("host");
+    writeFileSync(
+      join(f.root, ".env"),
+      `ENCRYPTION_KEY=keep-this\nDATABASE_URL=${HOST_APP_URL}\n${ownerLine}TENANT_PACKAGE_DIR=../customer\n`,
+    );
+    const plan = await planLocalUpdate(f.options);
+    expect(plan.allowed).toBe(false);
+    expect(plan.reasons.join(" ")).toContain(reason);
+    expect(plan.reasons.join(" ")).toContain("还没有停止任何服务");
+    await expect(applyLocalUpdate(f.options)).rejects.toThrow(reason);
+    expect(
+      f.calls.some(
+        (command) =>
+          command.includes(" stop ") ||
+          command.includes("pkill") ||
+          command.includes("pg_dump") ||
+          command.includes("--ff-only") ||
+          command.includes("scripts/migrate.ts") ||
+          command.includes("scripts/start.sh"),
+      ),
+    ).toBe(false);
+    expect(f.git("rev-parse", "HEAD")).toBe(f.old);
+    expect(existsSync(join(f.root, ".openbot-update.lock"))).toBe(false);
+    expect(existsSync(join(f.root, ".openbot-update-journal.json"))).toBe(
+      false,
+    );
+  },
+);
+
 test("running host services cause an actionable refusal before mutation", async () => {
   const f = fixture("host");
   const run: CommandRunner = async (command, options) =>
@@ -347,23 +449,295 @@ test("an absent worker cannot be accepted just because the server is ready", asy
   ).toBe("v0.2.0");
 });
 
+/** Rewrites every database URL in the Compose configuration: the original one (`before`), the
+ * candidate's (`after`, the one read with `--file`), or both. */
+function rewriteDatabaseUrls(
+  f: ReturnType<typeof fixture>,
+  rewrite: (url: string) => string,
+  which: "before" | "after" | "both" = "both",
+): CommandRunner {
+  return async (command, options) => {
+    const output = await f.run(command, options);
+    if (!command.includes("config")) return output;
+    const candidate = command.includes("--file");
+    if (which !== "both" && candidate !== (which === "after")) return output;
+    return output.replace(/postgres:\/\/[^"]*/g, rewrite);
+  };
+}
+
+test("database identity is where libpq connects and which database it opens, not who logs in", () => {
+  const owner = databaseIdentity(OWNER_URL);
+  expect(owner).toBeDefined();
+  for (const same of [
+    APP_URL,
+    ROLE_WRITER_URL,
+    "postgresql://other:secret@POSTGRES/openbot",
+    "postgres://openbot_app@postgres:5432/openbot?sslmode=disable",
+  ])
+    expect([same, databaseIdentity(same)]).toEqual([same, owner]);
+  for (const different of [
+    "postgres://openbot_app:openbot@db.example.test:5432/openbot",
+    "postgres://openbot_app:openbot@postgres:5433/openbot",
+    "postgres://openbot_app:openbot@postgres:5432/customer_db",
+    // No database in the URL: libpq opens the one named after the user.
+    "postgres://openbot_app:openbot@postgres:5432",
+  ])
+    expect([different, databaseIdentity(different)]).not.toEqual([
+      different,
+      owner,
+    ]);
+  expect(databaseIdentity("postgres://openbot:openbot@postgres:5432")).toBe(
+    owner,
+  );
+  for (const unusable of [
+    undefined,
+    "",
+    "not a url",
+    "mysql://openbot:openbot@postgres:5432/openbot",
+    // Compose left a variable unresolved.
+    `postgres://openbot:${"$"}{PASSWORD}@postgres:5432/openbot`,
+  ])
+    expect(databaseIdentity(unusable)).toBeUndefined();
+});
+
+test("a connection option given twice is refused rather than read two ways", () => {
+  for (const url of [
+    "postgres://openbot:openbot@postgres:5432/openbot?dbname=openbot&dbname=other",
+    "postgres://openbot:openbot@db.example.test:5432/openbot?host=db.example.test&host=elsewhere",
+    "postgres://openbot:openbot@db.example.test:5432/openbot?port=5432&port=6543",
+    "postgres://openbot:openbot@db.example.test:5432/openbot?user=a&user=b",
+    "postgres://openbot:openbot@db.example.test:5432/openbot?sslmode=disable&sslmode=require",
+  ]) {
+    expect(() => databaseIdentity(url)).toThrow("出现了不止一次");
+    expect(() => libpqEnvironment(url, {})).toThrow("出现了不止一次");
+  }
+});
+
+test.each(["image", "host"] as const)(
+  "%s update with a repeated dbname refuses before stopping anything",
+  async (topology) => {
+    const f = fixture(topology);
+    const repeated = (url: string) => `${url}?dbname=openbot&dbname=other`;
+    let run = f.run;
+    if (topology === "host")
+      writeFileSync(
+        join(f.root, ".env"),
+        `DATABASE_URL=${HOST_APP_URL}\nMIGRATION_DATABASE_URL=${repeated(HOST_OWNER_URL)}\nTENANT_PACKAGE_DIR=../customer\n`,
+      );
+    else
+      run = rewriteDatabaseUrls(f, (url) =>
+        url === APP_URL ? repeated(url) : url,
+      );
+    const plan = await planLocalUpdate({ ...f.options, run });
+    expect(plan.allowed).toBe(false);
+    expect(plan.reasons.join(" ")).toContain("「dbname」出现了不止一次");
+    await expect(applyLocalUpdate({ ...f.options, run })).rejects.toThrow(
+      "出现了不止一次",
+    );
+    expect(
+      f.calls.some(
+        (command) =>
+          command.includes(" stop ") ||
+          command.includes("pg_dump") ||
+          command.includes("--ff-only"),
+      ),
+    ).toBe(false);
+    expect(f.git("rev-parse", "HEAD")).toBe(f.old);
+  },
+);
+
+test.each(["host", "hostaddr", "port", "dbname", "user", "service"])(
+  "a query option that reroutes the connection is refused: %s",
+  (key) => {
+    // libpq would follow it; postgres.js, which migrates, reads only the authority and the path.
+    const url = `postgres://openbot:openbot@db-a.example.test:5432/openbot?${key}=elsewhere`;
+    expect(() => databaseIdentity(url)).toThrow(`查询参数「${key}」`);
+    expect(() => libpqEnvironment(url, {})).toThrow(`查询参数「${key}」`);
+    expect(
+      databaseIdentity(
+        "postgres://openbot:openbot@db-a.example.test:5432/openbot?sslmode=require",
+      ),
+    ).toBeDefined();
+  },
+);
+
+test.each([
+  ["image server URL", "image", "server"],
+  ["host owner URL", "host", "MIGRATION_DATABASE_URL"],
+  ["host app URL", "host", "DATABASE_URL"],
+] as const)(
+  "a rerouted %s refuses before stopping anything",
+  async (_, topology, which) => {
+    const f = fixture(topology);
+    const reroute = (url: string) => `${url}?host=db-b.example.test`;
+    let run = f.run;
+    if (topology === "host") {
+      const app =
+        which === "DATABASE_URL" ? reroute(HOST_APP_URL) : HOST_APP_URL;
+      const owner =
+        which === "MIGRATION_DATABASE_URL"
+          ? reroute(HOST_OWNER_URL)
+          : HOST_OWNER_URL;
+      writeFileSync(
+        join(f.root, ".env"),
+        `DATABASE_URL=${app}\nMIGRATION_DATABASE_URL=${owner}\nTENANT_PACKAGE_DIR=../customer\n`,
+      );
+    } else
+      run = rewriteDatabaseUrls(
+        f,
+        (url) => (url === APP_URL ? reroute(url) : url),
+        "after",
+      );
+    const plan = await planLocalUpdate({ ...f.options, run });
+    expect(plan.allowed).toBe(false);
+    expect(plan.reasons.join(" ")).toContain("查询参数「host」");
+    await expect(applyLocalUpdate({ ...f.options, run })).rejects.toThrow(
+      "查询参数「host」",
+    );
+    expect(
+      f.calls.some(
+        (command) =>
+          command.includes(" stop ") ||
+          command.includes("pg_dump") ||
+          command.includes("--ff-only"),
+      ),
+    ).toBe(false);
+    expect(f.git("rev-parse", "HEAD")).toBe(f.old);
+  },
+);
+
+test("image migration keeps an owner URL handed to the update and referenced by an override", async () => {
+  const f = fixture();
+  // As `migrate: { environment: { DATABASE_URL: ${MIGRATION_DATABASE_URL} } }` in an override
+  // resolves: Compose interpolates it from the environment of the command it runs.
+  const owner = "postgres://openbot:override-owner@postgres:5432/openbot";
+  const migrations: (string | undefined)[] = [];
+  const run: CommandRunner = async (command, options) => {
+    const output = await f.run(command, options);
+    if (command.includes("--exit-code-from") && command.includes("migrate")) {
+      migrations.push(options.env?.MIGRATION_DATABASE_URL);
+      if (!options.env?.MIGRATION_DATABASE_URL)
+        throw new Error("migrate: DATABASE_URL is empty");
+    }
+    if (!command.includes("config")) return output;
+    const configuration = JSON.parse(output);
+    configuration.services.migrate.environment.DATABASE_URL =
+      options.env?.MIGRATION_DATABASE_URL ?? "";
+    return JSON.stringify(configuration);
+  };
+  process.env.MIGRATION_DATABASE_URL = owner;
+  try {
+    expect((await applyLocalUpdate({ ...f.options, run })).phase).toBe(
+      "accepted",
+    );
+  } finally {
+    delete process.env.MIGRATION_DATABASE_URL;
+  }
+  expect(migrations).toEqual([owner]);
+});
+
+test("server and worker on the app role, migration on the owner and a role writer apply as one database", async () => {
+  const f = fixture();
+  expect((await applyLocalUpdate(f.options)).phase).toBe("accepted");
+  // The backup reads as the owner, the one login row-level security does not narrow.
+  expect(
+    f.calls.some(
+      (c) => c.includes("pg_dump") && c.includes('-U "$POSTGRES_USER"'),
+    ),
+  ).toBe(true);
+});
+
+test("an external database is backed up through migration's owner URL, not the app role", async () => {
+  const f = fixture();
+  const env: NodeJS.ProcessEnv[] = [];
+  const external = rewriteDatabaseUrls(f, (url) =>
+    url.replace("@postgres:5432/", "@db.example.test:6543/"),
+  );
+  const run: CommandRunner = async (command, options) => {
+    if (command[0] === "pg_dump" && options.env) env.push(options.env);
+    return external(command, options);
+  };
+  expect((await applyLocalUpdate({ ...f.options, run })).phase).toBe(
+    "accepted",
+  );
+  expect(env).toHaveLength(1);
+  expect(env[0]?.PGUSER).toBe("openbot");
+  expect(env[0]?.PGHOST).toBe("db.example.test");
+  expect(env[0]?.PGPORT).toBe("6543");
+  expect(env[0]?.PGDATABASE).toBe("openbot");
+});
+
+test("a candidate that changes only the accounts keeps the same database and is allowed", async () => {
+  const f = fixture();
+  const run = rewriteDatabaseUrls(
+    f,
+    (url) => url.replace("openbot_app:openbot@", "customer_app:secret@"),
+    "after",
+  );
+  const plan = await planLocalUpdate({ ...f.options, run });
+  expect(plan.reasons).toEqual([]);
+  expect(plan.allowed).toBe(true);
+});
+
+test.each([
+  [
+    "the candidate moves the server and the worker to another host",
+    "after",
+    (url: string) =>
+      url === APP_URL ? url.replace("@postgres:", "@elsewhere:") : url,
+  ],
+  [
+    "the candidate moves every service to another database",
+    "after",
+    (url: string) => url.replace("5432/openbot", "5432/customer_db"),
+  ],
+  [
+    "the candidate moves the app role to another port",
+    "after",
+    (url: string) => (url === APP_URL ? url.replace(":5432/", ":5433/") : url),
+  ],
+  [
+    "the candidate points the role writer at another database",
+    "after",
+    (url: string) =>
+      url === ROLE_WRITER_URL ? url.replace("5432/openbot", "5432/other") : url,
+  ],
+  [
+    "migration already reads another database than the server",
+    "before",
+    (url: string) =>
+      url === OWNER_URL ? url.replace("5432/openbot", "5432/other") : url,
+  ],
+] as const)(
+  "a different database refuses before stopping services: %s",
+  async (_, which, rewrite) => {
+    const f = fixture();
+    const run = rewriteDatabaseUrls(f, rewrite, which);
+    const plan = await planLocalUpdate({ ...f.options, run });
+    expect(plan.allowed).toBe(false);
+    expect(plan.reasons.join(" ")).toContain("same database identity");
+    await expect(applyLocalUpdate({ ...f.options, run })).rejects.toThrow(
+      "same database identity",
+    );
+    expect(
+      f.calls.some(
+        (command) => command.includes(" stop ") || command.includes("pg_dump"),
+      ),
+    ).toBe(false);
+    expect(f.git("rev-parse", "HEAD")).toBe(f.old);
+  },
+);
+
 test.each([
   "postgres://openbot:openbot@postgres:5432/customer_db",
   "postgres://customer_user:openbot@postgres:5432/openbot",
-  "postgres://openbot:openbot@postgres:5432/openbot?dbname=customer_db",
+  "postgres://openbot:openbot@postgres:5432/openbot?sslmode=disable",
 ])(
   "bundled backup target mismatch refuses before stopping services: %s",
   async (databaseUrl) => {
     const f = fixture();
-    const run: CommandRunner = async (command, options) => {
-      const output = await f.run(command, options);
-      return command.includes("config")
-        ? output.replaceAll(
-            "postgres://openbot:openbot@postgres:5432/openbot",
-            databaseUrl,
-          )
-        : output;
-    };
+    // Every service on the URL under test, so only the backup target can refuse it.
+    const run = rewriteDatabaseUrls(f, () => databaseUrl);
     await expect(applyLocalUpdate({ ...f.options, run })).rejects.toThrow(
       "backup",
     );
