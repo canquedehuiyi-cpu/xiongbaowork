@@ -7,7 +7,7 @@
  * 测试用 `drain()` 等在途轮询结束。
  *
  * 同一个账号不会被本副本重复处理：进程内记着正在处理的账号，认领时排除；每次认领用专属 owner
- * （`owner#随机`），续租、还租约都带它，续租失败就停手、不写游标；`inbound` 执行期间按租约的三分之一心跳续租。
+ * （`owner#随机`），续租、存游标、还租约都带它，续租失败就停手、不写游标；`inbound` 执行期间按租约的三分之一心跳续租。
  *
  * 帧：认领在 store 的 platform 帧里；之后每个账号的一切（取令牌、记入站、`inbound`、存游标、还租约、
  * 暂停、断开）都在 `runAsTenant(account.tenantId, …)` 里，这里不新开 platform 帧。
@@ -15,9 +15,9 @@
  * 机密：`bot_token` 只在这里解封、只交给 `ilink.getUpdates`，不进日志和错误；日志只写错误类名。
  * `context_token` 随消息交给 `inbound`，不记录。
  *
- * 去重：消息 ID（`message_id`，19 位整数，ilink.ts 保精度）是去重键。持久去重由 `inbound` 负责：
- * `deliveryStore.recordInbox({ source: "wechat", realm: ilink_bot_id, externalId: message.id })`
- * 撞唯一索引时返回 null。这里再按账号留最近处理过的 ID，挡住「游标没存成功、服务器重发」时同一进程内的重复。
+ * 去重：消息 ID（`message_id`，19 位整数，ilink.ts 保精度）是去重键。持久去重由 `inbound` 负责
+ * （inbound.ts：先在账号行上记这条的 ID，开一轮时 `delivery_inbox` 再按同一个 ID 去重一次）。
+ * 这里再按账号留最近处理过的 ID，挡住「游标没存成功、服务器重发」时同一进程内的重复。
  *
  * 失败：`inbound` 抛错时本批停在这条，不存游标，下一轮服务器会从旧游标重发，已处理的靠去重跳过。
  * 同一条消息连续失败 3 次就跳过（只记消息 ID 和错误类名），推进游标，不让账号卡死。
@@ -208,7 +208,9 @@ export function createWechatPoller(deps: WechatPollerDeps) {
       state.failures.delete(message.id);
       remember(state, message.id);
     }
-    if (reply.cursor) await deps.wechat.setCursor(account.id, reply.cursor);
+    // 只在租约还在本次认领手里时写：拉取期间被别人认领了，就让拿到的那个去写。
+    if (reply.cursor)
+      await deps.wechat.setCursor(account.id, reply.cursor, claimOwner);
   }
 
   async function pollInTenant(
@@ -260,8 +262,8 @@ export function createWechatPoller(deps: WechatPollerDeps) {
         room,
         [...active],
       );
+      // 认领时已排除本副本还在处理的账号，所以这里每个都是新的。
       for (const account of accounts) {
-        if (active.has(account.id)) continue;
         active.add(account.id);
         const run: Promise<void> = pollInTenant(account, claimOwner)
           .catch((error) => logFailure("wechat-poll-error", error))

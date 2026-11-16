@@ -539,3 +539,57 @@ test("租约被别人拿走：停手，不写游标，不还别人的租约", as
   expect(row?.leaseOwner).toBe("thief");
   await runAsTenant(y.userId, () => store.unbind(y.userId));
 });
+
+/** 等到假 iLink 被这个令牌拉过（`getUpdates` 已经进去了）。 */
+async function untilPulled(ilink: ReturnType<typeof fakeIlink>, token: string) {
+  for (let i = 0; i < 200 && ilink.pulls(token) === 0; i += 1)
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(ilink.pulls(token)).toBeGreaterThan(0);
+}
+
+test("默认租约 = 这个账号的长轮询时长 + 30 秒", async () => {
+  const z = await bindPerson("lease");
+  const ilink = fakeIlink();
+  ilink.script(z.token, { messages: [], cursor: "" });
+  const open = ilink.hold();
+  const poller = pollerWith(ilink, async () => {});
+  await poller.tick();
+  await untilPulled(ilink, z.token);
+  const [row] = await asPlatform(() =>
+    database.execute<{ seconds: number | string }>(
+      sql`select extract(epoch from ("lease_until" - now())) as "seconds" from "wechat_accounts" where "id" = ${z.id}`,
+    ),
+  );
+  open();
+  await poller.drain();
+  // 第一次拉还不知道服务器给的时长，用默认 35 秒：35 + 30 = 65 秒。
+  const seconds = Number(row?.seconds);
+  expect(seconds).toBeGreaterThan(60);
+  expect(seconds).toBeLessThanOrEqual(65);
+  await runAsTenant(z.userId, () => store.unbind(z.userId));
+});
+
+test("拉取期间租约被别人拿走：不写游标", async () => {
+  const x = await bindPerson("cursor-stolen");
+  const ilink = fakeIlink();
+  ilink.script(x.token, { messages: [], cursor: "c-late" });
+  const open = ilink.hold();
+  const poller = pollerWith(ilink, async () => {});
+  await poller.tick();
+  await untilPulled(ilink, x.token);
+  await asPlatform(() =>
+    database
+      .update(wechatAccounts)
+      .set({
+        leaseOwner: "thief",
+        leaseUntil: sql`now() + interval '60 seconds'`,
+      })
+      .where(eq(wechatAccounts.id, x.id)),
+  );
+  open();
+  await poller.drain();
+  const row = await accountOf(x.userId);
+  expect(row?.cursor).toBeNull();
+  expect(row?.leaseOwner).toBe("thief");
+  await runAsTenant(x.userId, () => store.unbind(x.userId));
+});

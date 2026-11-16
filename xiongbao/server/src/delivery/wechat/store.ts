@@ -37,6 +37,9 @@ type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 /** 账号写入可以加入调用方的事务（绑定时和凭据一起提交，撞上唯一索引时一起回滚）。 */
 export type WechatExecutor = Database | Transaction;
 
+/** 账号行上留多少个最近处理过的入站消息 ID（持久去重）。 */
+export const WECHAT_SEEN_MESSAGES = 500;
+
 /** 一次扫码绑定的有效期。 */
 export const WECHAT_BIND_ATTEMPT_MINUTES = 10;
 
@@ -132,12 +135,67 @@ export function createWechatStore(database: Database) {
         .where(eq(wechatAccounts.id, accountId));
     },
 
-    /** 保存 `get_updates_buf`；空串不保存，保留上一次的游标。 */
-    async setCursor(accountId: string, cursor: string): Promise<void> {
+    /**
+     * 保存 `get_updates_buf`；空串不保存，保留上一次的游标。
+     *
+     * 给了 `owner`（轮询器总是给本次认领的 owner）时，只在租约还在它手里时写：租约过期、被别的副本认领后，
+     * 慢下来的这一个不能把游标写回旧的位置。
+     */
+    async setCursor(
+      accountId: string,
+      cursor: string,
+      owner?: string,
+    ): Promise<void> {
       if (!cursor) return;
       await database
         .update(wechatAccounts)
         .set({ cursor, updatedAt: sql`now()` })
+        .where(
+          and(
+            eq(wechatAccounts.id, accountId),
+            ...(owner === undefined
+              ? []
+              : [eq(wechatAccounts.leaseOwner, owner)]),
+          ),
+        );
+    },
+
+    /**
+     * 入站的持久去重：把这条消息的 ID 记到账号行上（最多留最近 `WECHAT_SEEN_MESSAGES` 个），
+     * 返回 true 表示第一次见；已经记过返回 false。一条 UPDATE，两个并发的同一条只有一个拿到 true
+     * （第二个等第一个提交后重新判断条件）。在本人的帧里。
+     */
+    async claimMessage(accountId: string, messageId: string): Promise<boolean> {
+      const [row] = await database
+        .update(wechatAccounts)
+        .set({
+          recentMessageIds: sql`(array_append(${wechatAccounts.recentMessageIds}, ${messageId}::text))[greatest(1, cardinality(${wechatAccounts.recentMessageIds}) + 2 - ${WECHAT_SEEN_MESSAGES}::integer):]`,
+        })
+        .where(
+          and(
+            eq(wechatAccounts.id, accountId),
+            sql`not (${messageId}::text = any(${wechatAccounts.recentMessageIds}))`,
+          ),
+        )
+        .returning({ id: wechatAccounts.id });
+      return Boolean(row);
+    },
+
+    /** 处理中途出错：拿掉这条的记录，轮询器重试时照常处理。 */
+    async releaseMessage(accountId: string, messageId: string): Promise<void> {
+      await database
+        .update(wechatAccounts)
+        .set({
+          recentMessageIds: sql`array_remove(${wechatAccounts.recentMessageIds}, ${messageId}::text)`,
+        })
+        .where(eq(wechatAccounts.id, accountId));
+    },
+
+    /** 记下这个人在微信里最后交给的员工（不带 @ 的消息交给它）。 */
+    async setLastAgent(accountId: string, agentId: string): Promise<void> {
+      await database
+        .update(wechatAccounts)
+        .set({ lastAgentId: agentId, updatedAt: sql`now()` })
         .where(eq(wechatAccounts.id, accountId));
     },
 

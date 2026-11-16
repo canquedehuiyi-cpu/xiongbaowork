@@ -85,6 +85,11 @@ export const wechatAccounts = pgTable(
     /** 轮询器的租约，按数据库时钟比较。 */
     leaseOwner: text("lease_owner"),
     leaseUntil: timestamp("lease_until", { withTimezone: true }),
+    /**
+     * 最近处理过的入站消息 ID（最多 500 个，迁移 0227）：`inbound` 的持久去重，覆盖还没选出员工、
+     * 写不进 `delivery_inbox` 的消息（图片、没找到、选人）。
+     */
+    recentMessageIds: text("recent_message_ids").array().notNull().default([]),
     /** 时间窗关闭时没发出去的条数。 */
     missedCount: integer("missed_count").notNull().default(0),
     createdAt: createdAt(),
