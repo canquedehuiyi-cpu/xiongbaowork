@@ -82,7 +82,7 @@ export function PageShell({
   crumb?: string;
   description?: React.ReactNode;
   /**
-   * The small line above a workbench title, e.g. `01 WORK RECORD`: a red dash, the index in white and
+   * The small line above a workbench title, e.g. `01 工作记录`: a red dash, the index in white and
    * the rest in grey mono capitals. Decorative wayfinding; the title is the page's name.
    */
   eyebrow?: string;
@@ -218,7 +218,7 @@ export function PageShell({
   );
 }
 
-/** `01 WORK RECORD` → a red dash, `01` in the text colour, the rest in spaced grey mono. */
+/** `01 工作记录` → a red dash, `01` in the text colour, the rest in spaced grey mono. */
 export function Eyebrow({ text }: { text: string }) {
   const [index, ...rest] = text.split(" ");
   return (

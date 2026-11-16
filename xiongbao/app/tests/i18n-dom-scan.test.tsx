@@ -53,6 +53,9 @@ import { settleReactWork } from "./settle-react-work";
 /** 一条路由渲染出的、少于这么多文字行，就认为它没画出来。 */
 const FLOOR = 10;
 
+/** 等多久让按计时器揭示的内容出现。见 `linesOf` 末尾的说明。 */
+const REVEAL_MS = 400;
+
 /**
  * 主路径：应用外壳自己能带你去的那些页面。地址取自 `lib/navigation.ts` 的 `NAVIGATION` 与 `RAIL_PREFIXES`，
  * 取的是落地页。
@@ -126,6 +129,8 @@ const EMPTY_ANSWER: readonly (readonly [string, string])[] = [
   ["/api/plugins/access-requests", "[]"],
   // `pluginsPageQueryOptions`：整页 `PluginsPage`，`marketCards` 直接 `.map` 它的 `catalogue`。
   ["/api/plugins", '{"catalogue":[],"servers":[],"plugins":[],"total":0}'],
+  // 设备列表：`client("/api/devices", "devices")`，不解信封页面上就会写「设备加载失败：…」。
+  ["/api/devices", '{"devices":[]}'],
 ];
 
 /** 一个永远不回答的 API。页面停在「加载中」。 */
@@ -178,12 +183,30 @@ async function linesOf(at: string, state: State): Promise<string[]> {
       <RouterProvider router={router as never} />
     </QueryClientProvider>,
   );
-  // 读到答案之后 React 还要把结果画完；`act` 每转一圈就把这一圈新排上的活干完。转够就停，所以
-  // 「永远不回答」那种也确实会停。
-  for (let turn = 0; turn < 20; turn += 1) {
+  /*
+   * 等页面真的停下来，而不是「这一圈刚好没在取」。
+   *
+   * 看过一眼 `isFetching() === 0` 就返回是不够的：`/capabilities/plugins` 的某几块要等另一条查询
+   * 解析完才挂上、才去取自己的东西，于是「安静」会先出现一次再被打断。那一版的账在这页上是
+   * 25 到 29 行之间抖的——抖的是**扫没扫到**，不是文案，而一个偶尔少扫四行的量具给出的 0 不能算数。
+   *
+   * 所以要求连续 `QUIET_TURNS` 圈都安静才收工。`act` 每转一圈就把这一圈新排上的活干完，所以圈数是
+   * 「还有没有活」的判据；上限只是兜底，`pending` 那种永远不回答的路由靠它停下。
+   */
+  const QUIET_TURNS = 4;
+  let quiet = 0;
+  for (let turn = 0; turn < 60 && quiet < QUIET_TURNS; turn += 1) {
     await settleReactWork();
-    if (client.isFetching() === 0) break;
+    quiet =
+      client.isFetching() === 0 && client.isMutating() === 0 ? quiet + 1 : 0;
   }
+  /*
+   * 再让真实时间走一段。`/capabilities/plugins` 有一块内容是**按计时器**揭示的（不是按查询），
+   * `act` 转圈不会推进计时器，于是那一块有时在、有时不在：同一页的总行数在 25 与 29 之间抖。
+   * 抖的是「扫没扫到」，不是文案——一个偶尔少扫四行的量具报出的 0 不能算数。所以给它一段固定
+   * 可以盖住这个揭示的等待，再做最后一次 settle。
+   */
+  await new Promise((resolve) => setTimeout(resolve, REVEAL_MS));
   await settleReactWork();
   return textLines(document.body);
 }
@@ -193,7 +216,9 @@ function textLines(root: Element): string[] {
   const lines: string[] = [];
   const walker = document.createTreeWalker(root, 4);
   for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-    if (node.parentElement?.closest("script,style")) continue;
+    const owner = node.parentElement;
+    if (!owner) continue;
+    if (owner.closest("script,style")) continue;
     for (const raw of (node.textContent ?? "").split("\n")) {
       const line = raw.trim();
       if (line) lines.push(line);
@@ -217,6 +242,9 @@ async function scanOne(at: string, state: State): Promise<RouteReport> {
     throw new Error(
       `${at} · ${LABEL[state]} 渲染崩了（错误组件顶上来），这一条没扫到`,
     );
+  // `I18N_SCAN_LINES=1` 打出每条路由的每一行：量具自己抖的时候，得先看清抖的是哪几行。
+  if (process.env.I18N_SCAN_LINES === "1")
+    console.error(`[lines] ${at} · ${LABEL[state]}\n${lines.join("\n")}`);
   return scanRoute({ at: `${at} · ${LABEL[state]}`, lines });
 }
 
@@ -227,6 +255,33 @@ describe("主路径没有纯英文文字行", () => {
 
   afterAll(() => {
     console.log(`\n${report(scans)}\n`);
+    /*
+     * 棘轮，拿**这一遍真扫出来的账**比，不重新渲染一遍。
+     *
+     * 双向比的，和 `brand-budget.test.ts` 一样：涨了是新增英文（失败），少了则要求把这个文件改小
+     * （也失败），免得账本慢慢和现实脱钩、变成一句没人再读的数字。不重渲染还有个实际原因：两次渲染
+     * 同一页会有细微差别（见 `linesOf` 末尾），比的对象必须是同一个。
+     */
+    if (scans.length !== MAIN_PATH.length * STATES.length) return;
+    const actual: BudgetRow[] = scans
+      .filter((one) => one.violations.length > 0)
+      .map((one) => ({ at: one.at, english: one.violations.length }))
+      .sort((a, b) => a.at.localeCompare(b.at));
+    const was: BudgetRow[] = [...BUDGET].sort((a, b) =>
+      a.at.localeCompare(b.at),
+    );
+    const problems: string[] = [];
+    for (const row of actual) {
+      const before = was.find((one) => one.at === row.at)?.english ?? 0;
+      if (row.english > before)
+        problems.push(`${row.at}：${before} -> ${row.english}，比账本多`);
+    }
+    for (const row of was) {
+      const now = actual.find((one) => one.at === row.at)?.english ?? 0;
+      if (now < row.english)
+        problems.push(`把 i18n-dom-budget.json 里 ${row.at} 改成 ${now}`);
+    }
+    expect(problems).toEqual([]);
   });
 
   for (const { at } of MAIN_PATH) {
@@ -248,35 +303,4 @@ describe("主路径没有纯英文文字行", () => {
       });
     }
   }
-});
-
-/*
- * 棘轮：DoD-7 要的是 0，清文案是 WP-2.5 的活。在那之前，这里记的是「还剩几行、在哪一页」，只许变小。
- *
- * 双向比的，和 `brand-budget.test.ts` 一样：涨了是新增英文（失败），少了则要求把这个文件改小（也失败），
- * 免得账本慢慢和现实脱钩、变成一句没人再读的数字。
- */
-test("纯英文行的账本和扫描结果一致", async () => {
-  const scans: RouteReport[] = [];
-  for (const { at } of MAIN_PATH)
-    for (const state of STATES) scans.push(await scanOne(at, state));
-
-  const actual: BudgetRow[] = scans
-    .filter((one) => one.violations.length > 0)
-    .map((one) => ({ at: one.at, english: one.violations.length }))
-    .sort((a, b) => a.at.localeCompare(b.at));
-  const was: BudgetRow[] = [...BUDGET].sort((a, b) => a.at.localeCompare(b.at));
-
-  const problems: string[] = [];
-  for (const row of actual) {
-    const before = was.find((one) => one.at === row.at)?.english ?? 0;
-    if (row.english > before)
-      problems.push(`${row.at}：${before} -> ${row.english}，比账本多`);
-  }
-  for (const row of was) {
-    const now = actual.find((one) => one.at === row.at)?.english ?? 0;
-    if (now < row.english)
-      problems.push(`把 i18n-dom-budget.json 里 ${row.at} 改成 ${now}`);
-  }
-  expect(problems).toEqual([]);
 });

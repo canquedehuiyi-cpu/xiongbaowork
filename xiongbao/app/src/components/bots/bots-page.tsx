@@ -197,7 +197,7 @@ export function BotsPage({ search }: { search: WakersSearch }) {
             ? "在这里召唤员工；召唤来的和你自己的员工也在这里管理。"
             : "在这里召唤员工，管理你的员工、群组，以及别人共享给你的员工。"
       }
-      eyebrow="04 DIGITAL TEAM"
+      eyebrow="04 数字团队"
       title={source === "market" ? "人才市场" : "招一位新同事"}
       width="workbench"
     >
