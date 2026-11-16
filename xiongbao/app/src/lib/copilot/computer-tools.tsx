@@ -932,17 +932,20 @@ export function ComputerTools() {
         method: "POST",
         body: input,
       }),
-    render: ({ args, result, status }) => (
+    render: ({ args, result, status }) => {
       // 作用域是在这个组件里问的，不是在这里的闭包里读的：`useFrontendTool` 把注册时抓到的 render
       // 一直留着（见 approval-tools.tsx），所以闭包里的 `onDevice` 是注册那一刻的快照。配对电脑项目
       // 模式里那会还是「工作区」，就会给出一条点不开的链接——这条红线不能靠时序。
-      <FileSavedLine
-        args={args}
-        botId={useDeclaredBotId()}
-        result={result}
-        status={status}
-      />
-    ),
+      const declaredBot = useDeclaredBotId();
+      return (
+        <FileSavedLine
+          args={args}
+          botId={declaredBot}
+          result={result}
+          status={status}
+        />
+      );
+    },
   });
 
   useFrontendTool({
