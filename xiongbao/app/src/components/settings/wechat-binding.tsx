@@ -1,6 +1,7 @@
 import { IconBrandWechat } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
+import { encode } from "uqr";
 import { PageRows, PageSection } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";
 import {
@@ -216,16 +217,37 @@ function BindDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** 地址（http、https）或 data 图片就当图片画；别的当二维码内容。 */
+/** 地址（http、https）或 data 图片就先当图片画；别的当二维码内容。 */
 function isImageSource(source: string) {
   return /^(https?:\/\/|data:image\/)/i.test(source);
 }
 
 /**
- * 二维码。白底，暗色下也一样：扫码要的是深色码配浅色底。扫过了或结束了就压暗，状态句在下面说为什么。
+ * 把内容编码成二维码的深色模块，一条路径画完。空内容或编码不了（太长）时是 null。
+ * `border: 2` 再加外框的内边距，四周留出约四个模块宽的白边，手机才认得出。
+ */
+function qrModules(content: string) {
+  if (!content) return null;
+  try {
+    const { data, size } = encode(content, { ecc: "M", border: 2 });
+    let path = "";
+    data.forEach((row, y) => {
+      row.forEach((dark, x) => {
+        if (dark) path += `M${x} ${y}h1v1h-1z`;
+      });
+    });
+    return { path, size };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 二维码。白底深色码，暗色主题下也一样：扫码要的是深色码配浅色底。扫过了或结束了就压暗，状态句在下面说为什么。
  *
- * 服务器给的 `imageContent` 可能是图片地址，也可能是二维码本身的内容（还没在真机上确认）。后一种要在
- * 浏览器里把内容画成二维码，这里还没有能画的库，先说画不出来，请换一张。
+ * 服务器给的 `imageContent` 可能是图片地址，也可能是二维码本身的内容（还没在真机上确认）。像图片的先当图片
+ * 画；不像图片的、或图片加载失败的（链接本身也可能就是要编码的内容），在浏览器里把同一段内容编码成二维码。
+ * 内容为空或编码不了，才说画不出来，请换一张。
  */
 function QrFrame({
   source,
@@ -235,7 +257,8 @@ function QrFrame({
   dimmed: boolean;
 }) {
   const [broken, setBroken] = useState<string | null>(null);
-  const drawable = source && isImageSource(source) && broken !== source;
+  const asImage = source && isImageSource(source) && broken !== source;
+  const modules = source === undefined || asImage ? null : qrModules(source);
   return (
     <div
       className={cn(
@@ -243,7 +266,7 @@ function QrFrame({
         dimmed && "opacity-25",
       )}
     >
-      {source === undefined ? null : drawable ? (
+      {source === undefined ? null : asImage ? (
         <img
           alt="绑定微信的二维码"
           className="h-full w-full object-contain"
@@ -252,6 +275,17 @@ function QrFrame({
           src={source}
           width={184}
         />
+      ) : modules ? (
+        <svg
+          aria-label="绑定微信的二维码"
+          className="h-full w-full"
+          role="img"
+          shapeRendering="crispEdges"
+          viewBox={`0 0 ${modules.size} ${modules.size}`}
+        >
+          <rect fill="#fff" height={modules.size} width={modules.size} />
+          <path d={modules.path} fill="#000" />
+        </svg>
       ) : (
         <p className="px-2 text-center text-neutral-600 text-sm">
           二维码显示不出来，请换一张
