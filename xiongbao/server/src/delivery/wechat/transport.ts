@@ -16,7 +16,6 @@
  * 在发件箱投递的帧里调用（这个人自己的租户帧）。令牌只交给 iLink，不进日志和错误。
  */
 
-import type { WechatAccount } from "../../db/schema/wechat";
 import {
   DeliveryProviderError,
   DeliveryRefusedError,
@@ -30,22 +29,9 @@ import {
   type WechatSend,
 } from "./inbound";
 import type { WechatStore } from "./store";
+import { wechatWindowOpen } from "./window";
 
-/** 主动推送能到微信的时间窗：最近一次入站之后多久。实测结果回来后只改这里。 */
-export const WECHAT_PUSH_WINDOW_MS = 10 * 60 * 60 * 1000;
-
-/** 这个账号现在能不能主动推：绑定着、有 `context_token`、最近一次入站还在时间窗内。 */
-export function wechatWindowOpen(
-  account: Pick<WechatAccount, "status" | "contextToken" | "lastInboundAt">,
-  now: Date,
-): boolean {
-  return (
-    account.status === "bound" &&
-    Boolean(account.contextToken) &&
-    account.lastInboundAt !== null &&
-    now.getTime() - account.lastInboundAt.getTime() < WECHAT_PUSH_WINDOW_MS
-  );
-}
+export { WECHAT_PUSH_WINDOW_MS, wechatWindowOpen } from "./window";
 
 /** 路由在写微信那一行之前用：窗口开没开；没开时记一笔漏发。 */
 export function createWechatWindow(deps: {

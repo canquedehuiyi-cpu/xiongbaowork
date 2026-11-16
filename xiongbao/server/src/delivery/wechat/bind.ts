@@ -23,9 +23,7 @@ import {
   isTrustedIlinkBase,
 } from "./ilink";
 import { WECHAT_BIND_ATTEMPT_MINUTES, type WechatStore } from "./store";
-
-/** 最后一次入站超过这么久，就不往微信发主动内容。 */
-export const WECHAT_PROACTIVE_WINDOW_MS = 10 * 60 * 60 * 1000;
+import { wechatWindowOpen } from "./window";
 
 /**
  * 部署开关 `WECHAT_ENABLED`：默认开；`false` / `0` / `off`（不分大小写）关。关了的部署不提供微信绑定
@@ -315,12 +313,8 @@ export function createWechatBind(deps: WechatBindDeps) {
         paused,
         lastInboundAt: row.lastInboundAt,
         pausedUntil: paused ? row.pausedUntil : null,
-        windowOpen: Boolean(
-          row.status !== "disconnected" &&
-            row.lastInboundAt &&
-            now.getTime() - row.lastInboundAt.getTime() <
-              WECHAT_PROACTIVE_WINDOW_MS,
-        ),
+        // 和出站同一个判断（`window.ts`）：暂停着、断开了、没有 context_token 都不算开着。
+        windowOpen: wechatWindowOpen(row, now),
       };
     },
   };

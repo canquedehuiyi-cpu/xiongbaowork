@@ -37,7 +37,8 @@ const carol = `${prefix}-carol`;
 const dave = `${prefix}-dave`;
 const erin = `${prefix}-erin`;
 const frank = `${prefix}-frank`;
-const people = [alice, bob, carol, dave, erin, frank];
+const gina = `${prefix}-gina`;
+const people = [alice, bob, carol, dave, erin, frank, gina];
 const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
 const wechatStore = createWechatStore(database);
 const credentialStore = createCredentialStore(database);
@@ -639,4 +640,32 @@ test("绑好后试着在微信里发一句「已绑定」；发不出也不影�
   } finally {
     console.error = quiet;
   }
+});
+
+test("总览的时间窗和出站用同一个判断：没有 context_token、暂停着都不算开着", async () => {
+  const mine = await start(gina);
+  ilink.answer(
+    mine.qrcode,
+    confirmed(`${prefix}-ilink-gina`, `${prefix}-GINA-TOKEN-1`),
+  );
+  expect((await poll(gina, mine.attemptId)).body.status).toBe("bound");
+  const account = await runAsTenant(gina, () => wechatStore.account(gina));
+  // 刚来过信但没带 context_token：发不出去，所以不算开着。
+  await runAsTenant(gina, () =>
+    wechatStore.markInbound(account?.id ?? "", { at: new Date() }),
+  );
+  expect((await overview(gina)).body.wechat?.windowOpen).toBe(false);
+  await runAsTenant(gina, () =>
+    wechatStore.markInbound(account?.id ?? "", {
+      at: new Date(),
+      contextToken: `${prefix}-ctx-gina`,
+    }),
+  );
+  expect((await overview(gina)).body.wechat?.windowOpen).toBe(true);
+  await runAsTenant(gina, () =>
+    wechatStore.pause(account?.id ?? "", new Date(Date.now() + 60 * 60_000)),
+  );
+  const paused = (await overview(gina)).body.wechat;
+  expect(paused?.paused).toBe(true);
+  expect(paused?.windowOpen).toBe(false);
 });
