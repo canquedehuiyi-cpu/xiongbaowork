@@ -276,6 +276,7 @@ import { createDeliveryStore } from "./delivery/store";
 import type { DeliveryScope } from "./delivery/types";
 import { DeliveryRefusedError } from "./delivery/types";
 import type { WechatBindDeps } from "./delivery/wechat/bind";
+import { createWechatDecisions } from "./delivery/wechat/decisions";
 import {
   createIlinkClient,
   ILINK_DEFAULT_CLIENT_VERSION,
@@ -4130,57 +4131,6 @@ await startupLifecycle.run(async (startup) => {
       }),
   });
   deliveryNotifications = (scope, input) => deliveryRouter.notify(scope, input);
-  /*
-   * 微信长轮询（delivery/wechat/poller.ts）：每 2 秒认领一批账号各拉一次，每条消息在本人的帧里交给入站分流
-   * （delivery/wechat/inbound.ts）：选员工、在默认单聊里开一轮、回复加「【员工名】」发回微信。
-   * 关停时先停循环，再给在途的轮询和员工那一轮最多 15 秒（WECHAT_SHUTDOWN_GRACE_MS）自己跑完；到时还有在途的
-   * 就中止，再等它们收尾，之后才关数据库连接（finalizers 在资源之后）。还没开的一轮抛错、重启后整条重来；
-   * 已经开了被中止的记为失败，微信里回「服务正在更新……」，这条消息不会再处理（至多一次）。
-   */
-  if (wechatBind) {
-    const wechatPoller = createWechatPoller({
-      database,
-      wechat: wechatStore,
-      ilink: wechatIlink,
-      credentials: credentialStore,
-      keyEncryptionKey: config.keyEncryptionKey,
-      inbound: createWechatInbound({
-        wechat: wechatStore,
-        deliveries: deliveryStore,
-        router: deliveryRouter,
-        channels: channelStore,
-        bots: agentProfileStore,
-        actorFor,
-        scopeFor: deliveryScopeFor,
-        send: createWechatSender({
-          ilink: wechatIlink,
-          credentials: credentialStore,
-          keyEncryptionKey: config.keyEncryptionKey,
-        }),
-      }),
-      owner: workOwner("wechat"),
-    });
-    startup.acquireSync(
-      () =>
-        repeatAfterEach(async () => {
-          try {
-            await wechatPoller.tick();
-          } catch (error) {
-            console.error(
-              JSON.stringify({
-                type: "wechat-poller-error",
-                error: error instanceof Error ? error.name : "UnknownError",
-                timestamp: new Date().toISOString(),
-              }),
-            );
-          }
-        }, 2_000),
-      async (resource) => {
-        resource.stop();
-        await wechatPoller.shutdown();
-      },
-    );
-  }
 
   /*
    * Started work: an item a check-in raised, started by the person, runs as a task in a conversation
@@ -4712,6 +4662,81 @@ await startupLifecycle.run(async (startup) => {
     scopeFor: deliveryScopeFor,
     workHours: savedWorkHours(database),
   });
+  /*
+   * 微信长轮询（delivery/wechat/poller.ts）：每 2 秒认领一批账号各拉一次，每条消息在本人的帧里交给入站分流
+   * （delivery/wechat/inbound.ts）：选员工、在默认单聊里开一轮、回复加「【员工名】」发回微信。
+   * 关停时先停循环，再给在途的轮询和员工那一轮最多 15 秒（WECHAT_SHUTDOWN_GRACE_MS）自己跑完；到时还有在途的
+   * 就中止，再等它们收尾，之后才关数据库连接（finalizers 在资源之后）。还没开的一轮抛错、重启后整条重来；
+   * 已经开了被中止的记为失败，微信里回「服务正在更新……」，这条消息不会再处理（至多一次）。
+   */
+  if (wechatBind) {
+    /*
+     * 在微信里拍板（delivery/wechat/decisions.ts）：审批回数字、交付闭环回「验收 / 退回 原因 / 再催 / 延期 时间 /
+     * 换人 / 取消」，走审批服务和 tasks 路由同一套服务函数（所以接在 cardTurns、nudgeRuns 之后）。
+     */
+    const wechatDecisions = createWechatDecisions({
+      database,
+      wechat: wechatStore,
+      approvals: approvalService,
+      deliveries: deliveryStore,
+      delivery: deliveryLoop,
+      turns: cardTurns,
+      rounds: nudgeRuns,
+      bots: agentProfileStore,
+      actorFor,
+      acceptTaskDisabled: async (tenantId, agentId) =>
+        (await approvalService.disabledTools(tenantId, agentId))(
+          ACCEPT_TASK_REF,
+        ),
+      timeZone: async (tenantId) =>
+        (await readWorkHours(database, tenantId)).timeZone,
+      appUrl: config.appUrl ?? config.publicUrl ?? null,
+    });
+    const wechatPoller = createWechatPoller({
+      database,
+      wechat: wechatStore,
+      ilink: wechatIlink,
+      credentials: credentialStore,
+      keyEncryptionKey: config.keyEncryptionKey,
+      inbound: createWechatInbound({
+        wechat: wechatStore,
+        deliveries: deliveryStore,
+        router: deliveryRouter,
+        channels: channelStore,
+        bots: agentProfileStore,
+        actorFor,
+        scopeFor: deliveryScopeFor,
+        send: createWechatSender({
+          ilink: wechatIlink,
+          credentials: credentialStore,
+          keyEncryptionKey: config.keyEncryptionKey,
+        }),
+        prompts: wechatDecisions.handlers,
+        approvalPrompts: wechatDecisions.openApprovalPrompts,
+      }),
+      owner: workOwner("wechat"),
+    });
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          try {
+            await wechatPoller.tick();
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                type: "wechat-poller-error",
+                error: error instanceof Error ? error.name : "UnknownError",
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }, 2_000),
+      async (resource) => {
+        resource.stop();
+        await wechatPoller.shutdown();
+      },
+    );
+  }
   const coworkerName = async (tenantId: string, agentId: string) =>
     (await agentProfileStore.get(await actorFor(tenantId), agentId))?.name ??
     null;

@@ -53,7 +53,7 @@ const UNITS: [RegExp, number][] = [
 ];
 
 /** The local calendar day and time of an instant in a zone. */
-function localParts(instant: Date, timeZone: string) {
+export function localParts(instant: Date, timeZone: string) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone,
     hourCycle: "h23",
@@ -97,7 +97,7 @@ const DAY = 24 * 60 * MINUTE;
  * them). A time the clocks skipped -- inside a daylight-saving jump -- is the first moment after the
  * jump; a time they passed twice is the first of the two.
  */
-function wallClock(
+export function wallClock(
   timeZone: string,
   date: { year: number; month: number; day: number },
   hour: number,

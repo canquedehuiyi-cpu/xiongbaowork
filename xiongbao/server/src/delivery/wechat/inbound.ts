@@ -8,7 +8,8 @@
  * 顺序：
  *  0. 不是本人发的、群里的：不理。然后持久去重（`claimMessage`），见过的直接返回，不回话、不开提示。
  *  1. 没有文字 → 「目前只认文字……」。
- *  2. 在回一条开着的提示（`prompts.ts` 认，按 `kind` 分派；Task 6 只有 `pick_agent`，Task 7 加别的）。
+ *  2. 在回一条开着的提示（`prompts.ts` 认，按 `kind` 分派）：`pick_agent` 在这里；审批、交付待验收、逾期在
+ *     `decisions.ts`（Task 7），经 `deps.prompts` 挂进来。
  *     选人提示开过 10 分钟就作废；消息一旦交给某位员工（或只写「@名字」换人），开着的选人提示也都关掉。
  *  3. 「@名字」开头 → 在这个人看得到的员工里按显示名找：一位 → 交给它；几位同名 → 开选人提示；没有 → 「没找到」。
  *  4. 否则交给上次的员工；没有 → 开选人提示，列最近 5 位「回复数字选员工」。
@@ -127,6 +128,8 @@ export type WechatPromptContext = {
   account: WechatAccount;
   message: IlinkMessage;
   actor: AgentActor;
+  /** 这个人此刻开着的提示（含这一条）：不止一条时，回话里提到这条要带编号。 */
+  open: WechatPrompt[];
   reply(text: string): Promise<void>;
   /** 交给这位员工开一轮（规则 5）。 */
   turn(agentId: string, text: string): Promise<void>;
@@ -135,7 +138,7 @@ export type WechatPromptContext = {
 /** 一类提示：认哪些回答、在「请带编号」的清单里怎么称呼、怎么处理。Task 7 加审批、交付闭环几类。 */
 export type WechatPromptHandler = {
   accepts: PromptAccepts;
-  label(prompt: WechatPrompt): string;
+  label(prompt: WechatPrompt): string | Promise<string>;
   handle(
     context: WechatPromptContext,
     prompt: WechatPrompt,
@@ -165,6 +168,14 @@ export type WechatInboundDeps = {
   now?: () => Date;
   /** 别的提示类型（Task 7）。`pick_agent` 由这里自己处理。 */
   prompts?: Partial<Record<WechatPromptKind, WechatPromptHandler>>;
+  /**
+   * 微信里开的那一轮停下来等审批时，给这些审批开编号提示，返回要发的文字（Task 7 `decisions.ts`）。
+   * 没有时照旧只说「有 N 个审批在等你」。
+   */
+  approvalPrompts?: (
+    userId: string,
+    approvalIds: string[],
+  ) => Promise<string[]>;
 };
 
 /** 选人提示存的东西：候选员工（编号就是下标加一）和被搁置的那条消息（只写了「@名字」时为 null）。 */
@@ -326,14 +337,19 @@ export function createWechatInbound(deps: WechatInboundDeps) {
     ) => {
       await closePicks();
       const ref: PickRef = { agents: candidates.map((a) => a.id), text: held };
-      await deps.wechat.openPrompt(
+      const { code } = await deps.wechat.openPrompt(
         account.userId,
         "pick_agent",
         JSON.stringify(ref),
       );
       const names = labels(candidates);
+      // 带上提示编号：别的提示（审批、交付）同时开着时，直接回「A3 1」。
       await reply(
-        [intro, ...names.map((name, i) => `${i + 1}. ${name}`)].join("\n"),
+        [
+          intro,
+          `${code}：回复数字选员工`,
+          ...names.map((name, i) => `${i + 1}. ${name}`),
+        ].join("\n"),
       );
     };
 
@@ -402,13 +418,26 @@ export function createWechatInbound(deps: WechatInboundDeps) {
             result.replyText,
             ...result.extras.questions.map((q) => q.text),
           ].filter((part) => part.trim());
-          if (result.extras.approvals.length)
+          // 这一轮停下来等的审批：开编号提示，请求随回复之后各发一条，回数字就能批（Task 7）。开不了（出错）
+          // 就照旧说「有 N 个审批在等你」：这一轮已经记过收件箱，这里抛错的话重试也不会再回话。
+          let asks: string[] = [];
+          if (result.extras.approvals.length && deps.approvalPrompts)
+            try {
+              asks = await deps.approvalPrompts(account.userId, [
+                ...result.extras.approvals,
+              ]);
+            } catch (error) {
+              logFailure("wechat-approval-prompt-failed", error);
+            }
+          if (result.extras.approvals.length && !asks.length)
             parts.push(
               `有 ${result.extras.approvals.length} 个审批在等你，请到${shortName()}里处理。`,
             );
-          else if (result.kind === "waiting" && !parts.length)
+          else if (result.kind === "waiting" && !parts.length && !asks.length)
             parts.push(`在等人处理，请打开${shortName()}继续。`);
-          await reply(signed(parts.join("\n\n") || "完成了。"));
+          if (parts.length || !asks.length)
+            await reply(signed(parts.join("\n\n") || "完成了。"));
+          for (const ask of asks) await reply(ask);
         }
       }
     };
@@ -427,12 +456,20 @@ export function createWechatInbound(deps: WechatInboundDeps) {
     }
     const matched = matchPromptReply(text, open, accepts);
     if (matched?.kind === "ambiguous") {
+      // 例子用真的编号和这条回复：认这个回答的最后一条（通常是最新的那条）。
+      const answer = text.normalize("NFKC").trim();
+      const example =
+        matched.open.findLast((p) => accepts[p.kind]?.(answer, p)) ??
+        matched.open.at(-1);
+      const lines = await Promise.all(
+        matched.open.map(async (p) =>
+          `${p.code} ${(await handlers[p.kind]?.label(p)) ?? ""}`.trim(),
+        ),
+      );
       await reply(
         [
-          "有几条待处理，请带编号回复，例如 A2 1：",
-          ...matched.open.map((p) =>
-            `${p.code} ${handlers[p.kind]?.label(p) ?? ""}`.trim(),
-          ),
+          `有几条待处理，请带编号回复，例如 ${example?.code ?? "A2"} ${answer}：`,
+          ...lines,
         ].join("\n"),
       );
       return;
@@ -441,7 +478,7 @@ export function createWechatInbound(deps: WechatInboundDeps) {
       const handler = handlers[matched.prompt.kind];
       if (handler) {
         await handler.handle(
-          { account, message, actor, reply, turn },
+          { account, message, actor, open, reply, turn },
           matched.prompt,
           matched.answer,
         );
@@ -475,7 +512,7 @@ export function createWechatInbound(deps: WechatInboundDeps) {
         await pick(
           hits,
           rest || null,
-          `有 ${hits.length} 位员工叫 ${hit.name}，回复数字选员工：`,
+          `有 ${hits.length} 位员工叫 ${hit.name}。`,
         );
         return;
       }
@@ -500,7 +537,7 @@ export function createWechatInbound(deps: WechatInboundDeps) {
       await reply(`你还没有员工，先到${shortName()}里招一位吧。`);
       return;
     }
-    await pick(recent, text, "想找哪位员工？回复数字选员工：");
+    await pick(recent, text, "想找哪位员工？");
   }
 
   return async function inbound(

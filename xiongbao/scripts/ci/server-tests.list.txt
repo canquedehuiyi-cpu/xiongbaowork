@@ -905,6 +905,7 @@ tests/wechat-bind.integration.test.ts
 tests/wechat-ilink.test.ts
 tests/wechat-inbound.integration.test.ts
 tests/wechat-poller.integration.test.ts
+tests/wechat-prompts.integration.test.ts
 tests/wechat-store.integration.test.ts
 tests/wechat-unbind-bindings.integration.test.ts
 tests/what-if-boundary-words.test.ts
