@@ -37,6 +37,7 @@ const CHANNEL: Record<Delivery["transport"], string> = {
   slack: "Slack",
   teams: "Microsoft Teams",
   sms: "短信",
+  wechat: "微信",
 };
 
 /**

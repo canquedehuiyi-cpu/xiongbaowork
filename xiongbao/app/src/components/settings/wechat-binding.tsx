@@ -1,0 +1,359 @@
+import { IconBrandWechat } from "@tabler/icons-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { PageRows, PageSection } from "@/components/layout/page-shell";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemMedia,
+  ItemTitle,
+} from "@/components/ui/item";
+import {
+  deliveryKey,
+  deliveryQueryOptions,
+  startWechatBindMutationOptions,
+  unbindWechatMutationOptions,
+  type WechatBindAttempt,
+  type WechatSummary,
+  wechatAttemptFinished,
+  wechatAttemptQueryOptions,
+} from "@/lib/delivery";
+import { cn } from "@/lib/utils";
+import { queryClient } from "@/query-client";
+
+/**
+ * 我 › 通知 › 微信（计划 2026-11-16-im-channels-wechat Task 9）：用手机微信扫码绑定「微信 ClawBot」，
+ * 绑好后员工的消息和要你拍板的事发到微信里。一个人一个绑定，所以这一节只有一行。
+ *
+ * 这里没开通微信时（总览 `available.wechat` 为 false）整节不画：没有能做的事，也没有要等的人。
+ *
+ * 颜色先取默认皮肤的 `--wb-*` 令牌，别的皮肤没有这些令牌时取应用自己的主题令牌。
+ */
+
+/** 提示句（时间窗已关、暂停、断开）的颜色：琥珀色是「要留意」，不是出错。 */
+const NOTICE = "text-[color:var(--wb-amber-fg,var(--foreground))]";
+
+const STEPS = [
+  "打开微信 › 我 › 设置 › 插件 › 微信 ClawBot",
+  "扫描下面的二维码",
+  "在手机上确认",
+];
+
+export function WechatBindingSection() {
+  const reach = useQuery(deliveryQueryOptions());
+  const [binding, setBinding] = useState(false);
+  const [unbinding, setUnbinding] = useState(false);
+  if (reach.isPending) return null;
+  if (reach.error)
+    return (
+      <PageSection title="微信">
+        <p className="mt-4 text-destructive text-sm" role="alert">
+          {reach.error.message}
+        </p>
+      </PageSection>
+    );
+  if (!reach.data.available.wechat) return null;
+  const wechat = reach.data.wechat;
+  const connected = wechat !== null && wechat.status !== "disconnected";
+  return (
+    <PageSection
+      description="绑定后，员工的消息和要你拍板的事会发到微信里的「微信 ClawBot」，你也能在那里直接给员工派活。"
+      title="微信"
+    >
+      <PageRows>
+        <Item size="sm">
+          <ItemMedia variant="icon">
+            <IconBrandWechat />
+          </ItemMedia>
+          <ItemContent>
+            <ItemTitle>微信 ClawBot</ItemTitle>
+            <WechatState wechat={wechat} />
+          </ItemContent>
+          <ItemActions>
+            {connected ? (
+              <Button
+                onClick={() => setUnbinding(true)}
+                size="sm"
+                variant="outline"
+              >
+                解绑
+              </Button>
+            ) : (
+              <Button onClick={() => setBinding(true)} size="sm">
+                绑定微信
+              </Button>
+            )}
+          </ItemActions>
+        </Item>
+      </PageRows>
+      {binding ? <BindDialog onClose={() => setBinding(false)} /> : null}
+      {unbinding ? <UnbindDialog onClose={() => setUnbinding(false)} /> : null}
+    </PageSection>
+  );
+}
+
+/** 绑定的日子，按本地日期说：「11月16日」。 */
+function boundDay(boundAt: string) {
+  return new Date(boundAt).toLocaleDateString("zh-CN", {
+    month: "long",
+    day: "numeric",
+  });
+}
+
+/**
+ * 这一行的第二行：绑没绑、什么时候绑的，再加一句要留意的事。断开优先于暂停，暂停优先于时间窗：
+ * 断开了暂停和时间窗都无从谈起，暂停时时间窗开着也发不出去。
+ *
+ * 服务器还不给最近一次在微信里说话的时间，所以说的是绑定的日子。
+ */
+function WechatState({ wechat }: { wechat: WechatSummary | null }) {
+  if (!wechat)
+    return (
+      <ItemDescription className="line-clamp-none">
+        还没绑定。用手机微信扫一次码就能绑好。
+      </ItemDescription>
+    );
+  const notice =
+    wechat.status === "disconnected"
+      ? "微信已断开，请重新绑定"
+      : wechat.paused
+        ? "微信让我们歇一会儿，稍后自动恢复"
+        : !wechat.windowOpen
+          ? "超过 10 小时没在微信里说话，提醒会先发到手机，回一句就恢复"
+          : null;
+  return (
+    <ItemDescription className="line-clamp-none">
+      {wechat.status === "disconnected" ? null : (
+        <span className="block">已绑定 · {boundDay(wechat.boundAt)}绑定</span>
+      )}
+      {notice ? <span className={cn("block", NOTICE)}>{notice}</span> : null}
+    </ItemDescription>
+  );
+}
+
+/**
+ * 扫码对话框：一打开就要一张二维码，每 2 秒问一次走到哪了。绑好了就关掉，这一行会改说「已绑定」；
+ * 过期、被别的账号绑了、没绑上时停在原地，可以「换一张」。
+ */
+function BindDialog({ onClose }: { onClose: () => void }) {
+  const start = useMutation(startWechatBindMutationOptions());
+  const attemptId = start.data?.attemptId;
+  const attempt = useQuery({
+    ...wechatAttemptQueryOptions(attemptId ?? ""),
+    enabled: Boolean(attemptId),
+  });
+  const status = attempt.data?.status;
+  const { mutate: requestCode } = start;
+
+  // 打开就要一张码，只要一次（严格模式会把挂载跑两遍）：「换一张」走按钮，不靠这里。
+  const requested = useRef(false);
+  useEffect(() => {
+    if (requested.current) return;
+    requested.current = true;
+    requestCode();
+  }, [requestCode]);
+
+  useEffect(() => {
+    if (status !== "bound") return;
+    void queryClient.invalidateQueries({ queryKey: deliveryKey });
+    onClose();
+  }, [status, onClose]);
+
+  const finished = status !== undefined && wechatAttemptFinished(status);
+  const error = start.error ?? attempt.error;
+  return (
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>绑定微信</DialogTitle>
+          <DialogDescription>
+            二维码 {start.data?.expiresInMinutes ?? 10} 分钟内有效。
+          </DialogDescription>
+        </DialogHeader>
+        <DialogBody className="mt-4 overflow-y-auto">
+          <ol className="flex flex-col gap-2">
+            {STEPS.map((step, index) => (
+              <li className="flex items-baseline gap-2.5" key={step}>
+                <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-[color:var(--wb-card2,var(--muted))] text-[color:var(--wb-fg2,var(--muted-foreground))] text-xs tabular-nums">
+                  {index + 1}
+                </span>
+                <span>{step}</span>
+              </li>
+            ))}
+          </ol>
+          <div className="flex flex-col items-center gap-3 py-2">
+            <QrFrame
+              dimmed={status === "scaned" || finished}
+              source={start.isPending ? undefined : start.data?.imageContent}
+            />
+            <AttemptLine
+              attempt={attempt.data}
+              error={error?.message}
+              onRetry={() => start.mutate()}
+              retrying={start.isPending}
+            />
+          </div>
+        </DialogBody>
+        <DialogFooter className="mt-4">
+          <Button onClick={onClose} size="sm" variant="outline">
+            取消
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** 地址（http、https）或 data 图片就当图片画；别的当二维码内容。 */
+function isImageSource(source: string) {
+  return /^(https?:\/\/|data:image\/)/i.test(source);
+}
+
+/**
+ * 二维码。白底，暗色下也一样：扫码要的是深色码配浅色底。扫过了或结束了就压暗，状态句在下面说为什么。
+ *
+ * 服务器给的 `imageContent` 可能是图片地址，也可能是二维码本身的内容（还没在真机上确认）。后一种要在
+ * 浏览器里把内容画成二维码，这里还没有能画的库，先说画不出来，请换一张。
+ */
+function QrFrame({
+  source,
+  dimmed,
+}: {
+  source: string | undefined;
+  dimmed: boolean;
+}) {
+  const [broken, setBroken] = useState<string | null>(null);
+  const drawable = source && isImageSource(source) && broken !== source;
+  return (
+    <div
+      className={cn(
+        "flex size-52 items-center justify-center overflow-hidden rounded-xl border border-[color:var(--wb-line,var(--border))] bg-white p-3 transition-opacity",
+        dimmed && "opacity-25",
+      )}
+    >
+      {source === undefined ? null : drawable ? (
+        <img
+          alt="绑定微信的二维码"
+          className="h-full w-full object-contain"
+          height={184}
+          onError={() => setBroken(source)}
+          src={source}
+          width={184}
+        />
+      ) : (
+        <p className="px-2 text-center text-neutral-600 text-sm">
+          二维码显示不出来，请换一张
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** 二维码下面的一句话，随轮询变：等扫、已扫码、过期（可换一张）、被别的账号绑了、没绑上。 */
+function AttemptLine({
+  attempt,
+  error,
+  onRetry,
+  retrying,
+}: {
+  attempt: WechatBindAttempt | undefined;
+  error: string | undefined;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
+  const retry = (
+    <Button disabled={retrying} onClick={onRetry} size="sm" variant="outline">
+      换一张
+    </Button>
+  );
+  if (error)
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <p className="text-center text-destructive text-sm" role="alert">
+          {error}
+        </p>
+        {retry}
+      </div>
+    );
+  const status = attempt?.status;
+  if (status === "scaned")
+    return (
+      <p className="font-medium text-sm" role="status">
+        已扫码，请在手机上确认
+      </p>
+    );
+  if (status === "bound")
+    return (
+      <p className="font-medium text-sm" role="status">
+        已绑定
+      </p>
+    );
+  if (status === "expired" || status === "taken" || status === "failed")
+    return (
+      <div className="flex flex-col items-center gap-2">
+        <p className={cn("text-center text-sm", NOTICE)} role="status">
+          {status === "expired"
+            ? "二维码已过期"
+            : (attempt?.message ?? "没绑上，请换一张二维码再试")}
+        </p>
+        {retry}
+      </div>
+    );
+  return (
+    <p
+      className="text-[color:var(--wb-muted,var(--muted-foreground))] text-sm"
+      role="status"
+    >
+      等你扫码
+    </p>
+  );
+}
+
+/** 解绑的二次确认。 */
+function UnbindDialog({ onClose }: { onClose: () => void }) {
+  const unbind = useMutation(unbindWechatMutationOptions(queryClient));
+  return (
+    <Dialog onOpenChange={(next) => !next && onClose()} open>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>解绑微信</DialogTitle>
+          <DialogDescription>
+            解绑后微信里不会再收到员工的消息，确定吗？
+          </DialogDescription>
+        </DialogHeader>
+        {unbind.error ? (
+          <DialogBody className="mt-4">
+            <p className="text-destructive text-sm" role="alert">
+              {unbind.error.message}
+            </p>
+          </DialogBody>
+        ) : null}
+        <DialogFooter className="mt-4">
+          <Button onClick={onClose} size="sm" variant="outline">
+            取消
+          </Button>
+          <Button
+            disabled={unbind.isPending}
+            onClick={() => unbind.mutate(undefined, { onSuccess: onClose })}
+            size="sm"
+            variant="destructive"
+          >
+            解绑
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

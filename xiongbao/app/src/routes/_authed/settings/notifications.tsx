@@ -8,6 +8,7 @@ import {
 import { CheckInsSection } from "@/components/settings/check-ins";
 import { NativeDevices, RecentDeliveries } from "@/components/settings/devices";
 import { UpdateRoutingSection } from "@/components/settings/update-routing";
+import { WechatBindingSection } from "@/components/settings/wechat-binding";
 import { WorkHoursSection } from "@/components/settings/work-hours";
 import {
   Item,
@@ -36,6 +37,7 @@ function NotificationsPage() {
       <WorkHoursSection />
       <CheckInsSection />
       <UpdateRoutingSection />
+      <WechatBindingSection />
       <NativeDevices />
       <RecentDeliveries />
       <PageSection title="@Waker 触达">

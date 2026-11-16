@@ -1404,7 +1404,14 @@ const reachability = (scenario: Scenario): Reachability => ({
           },
         ]
       : [],
-  available: { slack: true, teams: false, sms: true, push: true },
+  available: {
+    slack: true,
+    teams: false,
+    sms: true,
+    push: true,
+    wechat: false,
+  },
+  wechat: null,
 });
 
 /* ------------------------------------------------------------------------------------------------ */
