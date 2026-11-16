@@ -57,11 +57,13 @@ import { Route as Admin } from "@/routes/_authed/admin/index";
 import { Route as AdminPermissions } from "@/routes/_authed/admin/permissions";
 import { Route as AdminPermissionsDescribe } from "@/routes/_authed/admin/permissions_.describe";
 import { Route as AdminPlatform } from "@/routes/_authed/admin/platform";
+import { Route as AdminPlayground } from "@/routes/_authed/admin/playground";
 import { Route as AdminPluginsComposio } from "@/routes/_authed/admin/plugins/composio";
 import { Route as AdminPlugins } from "@/routes/_authed/admin/plugins/index";
 import { Route as AdminProviders } from "@/routes/_authed/admin/providers";
 import { Route as AdminSkills } from "@/routes/_authed/admin/skills";
 import { Route as AdminSkillsNew } from "@/routes/_authed/admin/skills_.new";
+import { Route as DesktopReturn } from "@/routes/_authed/desktop-return";
 import { Route as SettingsComputer } from "@/routes/_authed/settings/_personal/computer";
 import { Route as SettingsCredentials } from "@/routes/_authed/settings/_personal/credentials";
 import { Route as SettingsCredentialsNew } from "@/routes/_authed/settings/_personal/credentials_.new";
@@ -109,9 +111,15 @@ import { settleReactWork } from "./settle-react-work";
  *    拿它跟 `routes/` 下的文件对账。所以「主路径」不会因为某个页面没人记得加而悄悄缩小——
  *    `server-tests.list.txt` 那种「文件存在但从不运行」的坑，在 DOM 扫描这一侧有了对应的守卫。
  *
- * 数出来的账记在 `i18n-dom-budget.json`，本文件只允许它**变小**。它现在是空数组：57 条路由、167 次
+ * 数出来的账记在 `i18n-dom-budget.json`，本文件只允许它**变小**。它现在是空数组：59 条路由、173 次
  * 取样、0 行纯英文，外加一条量具自检（失败态必须真的画出兜底句）。剩下的英文只在口径豁免里（品牌名
- * `WakerFlow` / `Waker`、缩写 `API`、键名 `Shift`、装饰字形 `N` 与 `z`），逐条列在报告末尾，可查。
+ * `WakerFlow` / `Waker` / `XiongBao Work`、缩写 `API`、技术名词 `JavaScript`、键名 `Shift`、装饰字形
+ * `N` 与 `z`），逐条列在报告末尾，可查。
+ *
+ * 一处取样口径：**代码编辑框里预填的源码不算文字行**（`spellCheck={false}` 的 `textarea`）。
+ * `/admin/playground` 的 HTML / CSS / JS / JSON 四个模板就是这一类——十七行 `<div class="card">`、
+ * `.card { font: 14px }`、`"type": "object"`，翻成中文模板就废了。这是「不该翻」，不是「还没翻」。
+ * 普通备注、回答框没有这个属性，仍照常量。
  */
 
 /** 一条路由渲染出的、少于这么多文字行，就认为它没画出来。 */
@@ -138,6 +146,7 @@ const ROUTES = new Map<string, unknown>([
   ["/admin/identity-providers", AdminIdentityProviders],
   ["/admin/permissions", AdminPermissions],
   ["/admin/permissions/describe", AdminPermissionsDescribe],
+  ["/admin/playground", AdminPlayground],
   ["/admin/platform", AdminPlatform],
   ["/admin/plugins", AdminPlugins],
   ["/admin/plugins/composio", AdminPluginsComposio],
@@ -162,6 +171,7 @@ const ROUTES = new Map<string, unknown>([
   ["/channel/new", ChannelNew],
   ["/connections", Connections],
   ["/contacts", Contacts],
+  ["/desktop-return", DesktopReturn],
   ["/group/new", GroupNew],
   ["/pipelines", Pipelines],
   ["/settings", Settings],
@@ -429,6 +439,19 @@ function textLines(root: Element): string[] {
     const owner = node.parentElement;
     if (!owner) continue;
     if (owner.closest("script,style")) continue;
+    /*
+     * 代码/命令编辑框里预填的是**用户要编辑的源码**，不是页面文案。
+     *
+     * `/admin/playground` 就是这一类：HTML / CSS / JS / JSON 四个模板原样画在编辑框里，
+     * `<div class="card">`、`.card { font: 14px }`、`"type": "object"` 十七行全被判成纯英文。
+     * 把它们翻成中文，模板就没法用了——这是一个「不该翻」的口径，不是「还没翻」的欠账。
+     *
+     * 判据用 `spellcheck="false"`：拼写检查对代码没有意义，写下这个属性的输入框本身就在声明
+     * 「别当自然语言看」。普通备注、回答框没有这个属性，仍照常量——所以不能一刀切跳过所有
+     * `textarea`，那会把真文案一起放过。
+     */
+    const box = owner.closest("textarea");
+    if (box?.getAttribute("spellcheck") === "false") continue;
     for (const raw of (node.textContent ?? "").split("\n")) {
       const line = raw.trim();
       if (line) lines.push(line);
