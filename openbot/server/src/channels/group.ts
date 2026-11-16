@@ -110,6 +110,12 @@ export type GroupTurn = {
   depth?: number;
   fromAgentId?: string;
   /**
+   * The rest of a peer's reply when a hop carries only the part addressed to it (`relay`,
+   * `addressedPart`): the peer's task is `text`, and this is what it was written next to -- context
+   * for the task, not the task.
+   */
+  context?: string;
+  /**
    * The question this message answers, when it is the person's answer to one a Bot here asked. The
    * transcript shows what they wrote; the Bot is told what it is an answer to, as a one-Bot
    * conversation tells it (`questionResponseMessage`).
@@ -130,6 +136,7 @@ const turnSchema = z.object({
   text: z.string().min(1).max(16000),
   depth: z.number().int().nonnegative().optional(),
   fromAgentId: z.string().min(1).optional(),
+  context: z.string().min(1).max(16000).optional(),
   inResponseTo: z.string().min(1).max(6000).optional(),
   taskId: z.string().uuid().optional(),
 });
@@ -1227,6 +1234,45 @@ export function groupFraming(
 }
 
 /**
+ * How a reply addresses one Bot, as a `RegExp` source: `@` and the whole name, case-insensitive.
+ *
+ * Not followed by more of a word, so a Bot called "Ops" is not addressed by "@Opsgenie"; not preceded
+ * by one either, so "jo@sam.com" does not address "Sam". Shared by the two readers of a reply -- who
+ * it names, and which of its paragraphs belong to whom -- so the two cannot drift apart.
+ */
+function mentionSource(name: string): string {
+  const whole = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return `(?<![\\p{L}\\p{N}_])@${whole}(?![\\p{L}\\p{N}_])`;
+}
+
+/**
+ * The part of a reply that addresses one peer, and the rest of it.
+ *
+ * A reply is written to the group: an answer to the person, then -- often -- a paragraph naming a
+ * peer. Handing the whole reply over as that peer's task reads to the peer as material to answer,
+ * and its answer came back repeating what the person had already read (2026-11-16, L4-3). So the
+ * paragraphs that name the peer are the ask, and the other paragraphs are context.
+ *
+ * A reply with no blank-line break offers nothing to split: it is all ask, and the peer gets what it
+ * always got. A name no paragraph carries (which cannot happen for a peer `mentionedPeers` returned)
+ * falls back the same way rather than handing over an empty task.
+ */
+export function addressedPart(
+  reply: string,
+  name: string,
+): { ask: string; rest: string } {
+  // Not global: `test` on a global pattern carries its last match into the next paragraph.
+  const paragraph = new RegExp(mentionSource(name), "iu");
+  const asked: string[] = [];
+  const rest: string[] = [];
+  for (const part of reply.split(/\n{2,}/))
+    (paragraph.test(part) ? asked : rest).push(part);
+  return asked.length
+    ? { ask: asked.join("\n\n"), rest: rest.join("\n\n") }
+    : { ask: reply, rest: "" };
+}
+
+/**
  * The peers a reply addresses, in the order the reply names them.
  *
  * `@Name` with the whole name, case-insensitive, and not followed by more of a word, so a Bot called
@@ -1242,11 +1288,7 @@ export function mentionedPeers(
   // The speaker is matched too, so that its own longer name still hides a shorter peer's.
   const hits = roster.flatMap((bot) => {
     if (!bot.name.trim()) return [];
-    const name = bot.name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const pattern = new RegExp(
-      `(?<![\\p{L}\\p{N}_])@${name}(?![\\p{L}\\p{N}_])`,
-      "giu",
-    );
+    const pattern = new RegExp(mentionSource(bot.name), "giu");
     return Array.from(reply.matchAll(pattern), (match) => ({
       bot,
       at: match.index,
@@ -1491,12 +1533,16 @@ export function createGroupConversations(deps: {
         });
         continue;
       }
+      const { ask, rest } = addressedPart(reply, peer.name);
       const next: GroupTurn = {
         ownerUserId: turn.ownerUserId,
         channelId: turn.channelId,
         messageId: `${replyId}>${peer.id}`,
         agentIds: [peer.id],
-        text: reply,
+        // The peer is handed what the reply says to it, not the answer to the person it was written
+        // beside; the rest rides along as context so nothing it was written against is lost.
+        text: ask,
+        ...(rest ? { context: rest } : {}),
         depth: depth + 1,
         fromAgentId: speaker.id,
       };
@@ -1517,7 +1563,7 @@ export function createGroupConversations(deps: {
           to: peer.id,
           run: runId,
           depth: depth + 1,
-          task: reply.slice(0, 500),
+          task: ask.slice(0, 500),
           group: turn.channelId,
         },
       });
@@ -1722,8 +1768,21 @@ export function createGroupConversations(deps: {
     const said = turn.inResponseTo
       ? `In response to your question: ${turn.inResponseTo}\n\n${turn.text}`
       : turn.text;
+    /*
+     * A peer's hop carries the paragraph that named it and the rest of the reply as context
+     * (`addressedPart`). Both are said plainly, and in that order: the peer is doing a part of what
+     * was written, not reviewing the whole answer the person has already read -- which is what it
+     * answered with when the whole reply arrived under one heading (2026-11-16, L4-3).
+     */
     const instruction = from
-      ? `${role}\n\n${from} addressed you in this group conversation:\n${said}`
+      ? [
+          role,
+          `${from} addressed you in this group conversation: do the part it asks of you, and answer that in your own words. The person has already read its reply, so do not repeat it back.`,
+          `What ${from} asks of you:\n${said}`,
+          ...(turn.context
+            ? [`The rest of ${from}'s reply, for context:\n${turn.context}`]
+            : []),
+        ].join("\n\n")
       : `${role}\n\n${said}`;
     // A peer turn's prompt is the peer's reply, so that row is left out of the transcript under it.
     const exclude = new Set(

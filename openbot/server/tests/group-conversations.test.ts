@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  addressedPart,
   groupFraming,
   groupTurnMessage,
   mentionedPeers,
@@ -87,6 +88,41 @@ test("a reply addresses peers by their whole @name, never itself", () => {
   expect(mentionedPeers("Ops should look (no at-sign)", roster, "ada")).toEqual(
     [],
   );
+});
+
+test("a reply hands a peer its own paragraphs, and the rest of it over as context", () => {
+  const reply = [
+    "The plan has three steps, and the second one turns on the numbers.",
+    "@Ops please add up step two.",
+    "@Finance Bot then price it.",
+    "Signed off by me either way.",
+  ].join("\n\n");
+  // Each peer gets the paragraph that names it, and only that, as its task.
+  expect(addressedPart(reply, "Ops")).toEqual({
+    ask: "@Ops please add up step two.",
+    rest: "The plan has three steps, and the second one turns on the numbers.\n\n@Finance Bot then price it.\n\nSigned off by me either way.",
+  });
+  expect(addressedPart(reply, "Finance Bot").ask).toBe(
+    "@Finance Bot then price it.",
+  );
+  // One paragraph, nothing to split: it is all ask, and the peer gets what it always got.
+  expect(addressedPart("Just @Ops, look at the numbers.", "Ops")).toEqual({
+    ask: "Just @Ops, look at the numbers.",
+    rest: "",
+  });
+  // The boundaries are the ones `mentionedPeers` matched on: an email is not a paragraph addressed
+  // to Sam, and a name with regex characters is still a name.
+  expect(addressedPart("mail jo@sam.com\n\nand nothing else", "Sam").ask).toBe(
+    "mail jo@sam.com\n\nand nothing else",
+  );
+  expect(addressedPart("@Ops (Lead) take this", "Ops (Lead)").ask).toBe(
+    "@Ops (Lead) take this",
+  );
+  // A name in no paragraph at all still leaves a task, not an empty one.
+  expect(addressedPart("nothing for anybody", "Ops")).toEqual({
+    ask: "nothing for anybody",
+    rest: "",
+  });
 });
 
 test("a longer name at the same @ is the one addressed, and an email address is not a mention", () => {
