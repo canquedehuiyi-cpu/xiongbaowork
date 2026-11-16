@@ -26,6 +26,9 @@ import { and, asc, desc, eq, inArray, isNull, min, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import type { HandoffCaps } from "../agents/handoff";
+import {
+  delegationFreed as readDelegationFreed,
+} from "../approvals/delegation-freed";
 import type { ApprovalContinuation } from "../approvals/types";
 import {
   type AuditInitiator,
@@ -235,6 +238,17 @@ export type GroupStore = {
   ): Promise<void>;
   /** The waiting row a paused approval belongs to, if it is a group turn's. */
   waitingFor(approvalId: string): Promise<GroupMessage | null>;
+  /**
+   * The peers among `peers` this conversation already lets this Bot hand work to without a new
+   * approval: the framing says how to reach a peer, and a handoff the person has already allowed is
+   * a way that works (`delegationFreed`).
+   */
+  delegationFreed(input: {
+    ownerUserId: string;
+    threadId: string;
+    botId: string;
+    peers: readonly string[];
+  }): Promise<ReadonlySet<string>>;
   /** Which group thread a thread id is, for relaying an answer into the shared transcript. */
   threadRow(threadId: string): Promise<{
     ownerUserId: string;
@@ -726,6 +740,9 @@ export function createGroupStore(
           }
         : null;
     },
+    async delegationFreed(input) {
+      return readDelegationFreed(database, input);
+    },
     async threadRow(threadId) {
       const [row] = await database
         .select({
@@ -1038,11 +1055,18 @@ export function groupTurnMessage(
  * The example name is a real peer, and the rule is left out when there is none: a room of one has
  * nobody to address, and an invented example is a name the Bot would write into a group that does
  * not have that member.
+ *
+ * AND WHERE IT IS NOT. The approval the warning describes is the person's, and a person can answer
+ * it for the rest of a conversation ("Allow for this conversation"): the gate then hands the call a
+ * permit and the work is sent, so on 2026-11-16 (L4-3) a real `message_bot` hop arrived under a
+ * sentence promising it never would. `freed` is the peers this conversation has already allowed the
+ * tool to reach, read from the same tables the gate reads, and the warning is said only for the
+ * peers outside it -- which is per target, so one allowed peer and one not is the ordinary case.
  */
 export function groupFraming(
   self: string,
   others: readonly string[],
-  options: { handoffTool?: boolean } = {},
+  options: { handoffTool?: boolean; freed?: ReadonlySet<string> } = {},
 ): string {
   const peers = others.length ? ` with ${others.join(", ")}` : "";
   const base = `You are ${self}, one of several Bots in this group conversation${peers}. Answer only your own part. The other Bots answer in their own turns, so do not write replies for them.`;
@@ -1051,7 +1075,14 @@ export function groupFraming(
   const reaching = `To have a peer take something on, name them in your reply as @ plus their whole name (for example @${example}): that is the only way a request reaches them, and telling the person a peer has been asked without naming them that way is not true.`;
   // Nothing to warn off when this deployment offers no handoff tool at all.
   if (!options.handoffTool) return `${base} ${reaching}`;
-  return `${base} ${reaching} Do not use message_bot to ask a peer here: this turn waits for an approval this conversation never shows anybody, so the work is never sent.`;
+  const freed = others.filter((name) => options.freed?.has(name));
+  const blocked = others.filter((name) => !options.freed?.has(name));
+  if (blocked.length === 0)
+    return `${base} ${reaching} message_bot reaches them too: this conversation already allows it to take your work, so either way sends it.`;
+  const allowed = freed.length
+    ? ` message_bot reaches ${freed.join(", ")}: this conversation already allows it to take your work.`
+    : "";
+  return `${base} ${reaching}${allowed} Do not use message_bot for ${freed.length ? blocked.join(", ") : "a peer here"}: that call waits for an approval this conversation never shows anybody, so the work would never be sent.`;
 }
 
 /**
@@ -1578,9 +1609,22 @@ export function createGroupConversations(deps: {
       .filter((candidate) => candidate.id !== agentId)
       .map((candidate) => candidate.name);
     // Each Bot speaks for itself: left unsaid, the first to answer writes everybody's part.
-    const role = groupFraming(self, others, {
-      handoffTool: deps.caps.maxDepth > 0 && deps.caps.maxPerRun > 0,
-    });
+    const handoffTool = deps.caps.maxDepth > 0 && deps.caps.maxPerRun > 0;
+    /*
+     * A handoff the person already allowed for this conversation does arrive, so the warning is
+     * owed only for the peers outside that set. Read once per turn: the framing is the same for
+     * every Bot of the group, but each Bot's own answers are its own.
+     */
+    const freed =
+      handoffTool && others.length > 0
+        ? await deps.store.delegationFreed({
+            ownerUserId: turn.ownerUserId,
+            threadId,
+            botId: agentId,
+            peers: others,
+          })
+        : new Set<string>();
+    const role = groupFraming(self, others, { handoffTool, freed });
     // An answer is told as one, with the question it answers, as a one-Bot conversation tells it.
     const said = turn.inResponseTo
       ? `In response to your question: ${turn.inResponseTo}\n\n${turn.text}`

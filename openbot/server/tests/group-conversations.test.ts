@@ -162,6 +162,36 @@ test("a group turn is told that naming a peer is what reaches them, and that the
   expect(framing).toContain("message_bot");
 });
 
+/*
+ * A conversation where somebody has already allowed the handoff is the one case the warning above
+ * is false in: the approval it describes was granted, `conversationGrant` hands the call a permit,
+ * and the work is sent (2026-11-16, L4-3: a real `message_bot` hop arrived under the old wording,
+ * which promised it never would). The Bot is told the tool reaches the peers this conversation has
+ * allowed, and told which peers it still does not — that set is per target, so a group where one
+ * peer was allowed and another was not is the ordinary case, not an edge one.
+ */
+test("a peer this conversation already allows the tool to reach is not warned off it", () => {
+  const framing = groupFraming("Ada", ["Grace"], {
+    handoffTool: true,
+    freed: new Set(["Grace"]),
+  });
+  expect(framing).toContain("@Grace");
+  expect(framing).toContain("message_bot reaches them");
+  expect(framing).not.toContain("never shows anybody");
+});
+
+test("the warning names the peer this conversation has not allowed, and only that one", () => {
+  const framing = groupFraming("Ada", ["Grace", "Ops"], {
+    handoffTool: true,
+    freed: new Set(["Grace"]),
+  });
+  expect(framing).toContain("message_bot reaches Grace");
+  expect(framing).toContain("Do not use message_bot for Ops");
+  // The allowed peer is not in the refusal, and the example stays the first peer.
+  expect(framing).not.toContain("Do not use message_bot for Grace");
+  expect(framing).toContain("@Grace");
+});
+
 test("a deployment with no handoff tool is not warned about one it cannot call", () => {
   const framing = groupFraming("Ada", ["Grace"], { handoffTool: false });
   expect(framing).toContain("@Grace");
