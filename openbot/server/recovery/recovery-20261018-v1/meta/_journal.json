@@ -1422,6 +1422,20 @@
       "when": 1794572550908,
       "tag": "0222_task_handover_pending",
       "breakpoints": true
+    },
+    {
+      "idx": 223,
+      "version": "7",
+      "when": 1794572550909,
+      "tag": "0223_credential_kind_chat",
+      "breakpoints": true
+    },
+    {
+      "idx": 224,
+      "version": "7",
+      "when": 1794572550910,
+      "tag": "0224_wechat_accounts",
+      "breakpoints": true
     }
   ]
 }
