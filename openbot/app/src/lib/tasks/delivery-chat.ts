@@ -6,7 +6,7 @@ import type { TaskEvent } from "./delivery";
  * （`server/src/tasks/delivery-tools.ts` `DELIVERY_EVENTS`），这里认出它们、找出它们在对话里的位置，
  * 再把卡片此刻的状态（`GET /api/tasks/:id` 和它的流水）对回每一张卡。
  *
- * 事件只带服务器放进去的字段：
+ * 事件只带服务器放进去的字段（每种都另有 `eventId`，那一步在流水里那一行的 id）：
  * - `delivery.accepted {taskId, dueAt, criteria}`
  * - `delivery.extension_requested {taskId, dueAt, reason}`
  * - `delivery.delivered {taskId, deliverable}`
@@ -15,7 +15,12 @@ import type { TaskEvent } from "./delivery";
  * 群聊是那一行回复的发起人）。
  */
 
-export type ChatDeliveryEvent =
+/**
+ * 每种卡都可以带 `eventId`：服务器写流水那一行时用的 id（`server/src/tasks/delivery-tools.ts`）。卡靠它认出
+ * 自己是流水里的哪一行、靠它去重——不按内容、不按预计时间：你在员工接活前改过预计时间时，回执上的时间和
+ * 流水「接下」那一行记的不一样；退回后员工原样再交一次，两次交付的内容一模一样。老服务端的事件没有它。
+ */
+export type ChatDeliveryEvent = { eventId?: string } & (
   | {
       kind: "accepted";
       taskId: string;
@@ -29,7 +34,8 @@ export type ChatDeliveryEvent =
       reason: string;
     }
   | { kind: "delivered"; taskId: string; deliverable: unknown }
-  | { kind: "bounced"; taskId: string; reason: string };
+  | { kind: "bounced"; taskId: string; reason: string }
+);
 
 const NAMES: Record<string, ChatDeliveryEvent["kind"]> = {
   "delivery.accepted": "accepted",
@@ -60,23 +66,37 @@ export function readDeliveryEvent(
   const record = value as Record<string, unknown>;
   const taskId = textOr(record.taskId, null);
   if (!taskId) return null;
+  const eventId = textOr(record.eventId, null);
+  const line = eventId ? { eventId } : {};
   switch (kind) {
     case "accepted":
       return {
         kind,
         taskId,
+        ...line,
         dueAt: validTime(record.dueAt),
         criteria: textOr(record.criteria, null),
       };
     case "extension_requested": {
       const dueAt = validTime(record.dueAt);
       if (!dueAt) return null;
-      return { kind, taskId, dueAt, reason: textOr(record.reason, "") ?? "" };
+      return {
+        kind,
+        taskId,
+        ...line,
+        dueAt,
+        reason: textOr(record.reason, "") ?? "",
+      };
     }
     case "delivered":
-      return { kind, taskId, deliverable: record.deliverable ?? null };
+      return {
+        kind,
+        taskId,
+        ...line,
+        deliverable: record.deliverable ?? null,
+      };
     case "bounced":
-      return { kind, taskId, reason: textOr(record.reason, "") ?? "" };
+      return { kind, taskId, ...line, reason: textOr(record.reason, "") ?? "" };
   }
 }
 
@@ -91,15 +111,18 @@ export type PlacedDeliveryEvent = {
 };
 
 /**
- * 记下一张新卡；同一张卡（重连、换上正式的 agent 时回放）不重复记，位置保留第一次见到时的。按卡的内容认：
- * 回放时卡前面的消息可能比当时多一条（一轮开始时带的你的话），位置不能当作卡的一部分。
+ * 记下一张新卡；同一张卡（重连、换上正式的 agent 时回放）不重复记，位置保留第一次见到时的。按这一步在流水
+ * 里那一行的 id 认（`eventId`）：退回后原样再交的一次是另一行、另一张卡。回放时卡前面的消息可能比当时多一条
+ * （一轮开始时带的你的话），所以位置不能当作卡的一部分。老服务端的事件没有 id，只好按内容认。
  */
 export function placeDeliveryEvent(
   placed: readonly PlacedDeliveryEvent[],
   anchor: string | null,
   event: ChatDeliveryEvent,
 ): readonly PlacedDeliveryEvent[] {
-  const key = JSON.stringify(event);
+  const key = event.eventId
+    ? `line:${event.eventId}`
+    : `content:${JSON.stringify(event)}`;
   if (placed.some((entry) => entry.key === key)) return placed;
   return [...placed, { key, anchor, event }];
 }
@@ -126,6 +149,8 @@ export type DeliveryMark = {
   at: string;
   agentId: string;
   dueAt?: string;
+  /** 这一步在流水里那一行的 id；老标记没有。 */
+  eventId?: string;
 };
 
 /** 一条群回复上的标记，形状不对的不要。 */
@@ -138,7 +163,15 @@ export function readDeliveryMark(value: unknown): DeliveryMark | null {
   const agentId = textOr(record.agentId, null);
   if (!kind || !taskId || !at || !agentId) return null;
   const dueAt = validTime(record.dueAt);
-  return { kind, taskId, at, agentId, ...(dueAt ? { dueAt } : {}) };
+  const eventId = textOr(record.eventId, null);
+  return {
+    kind,
+    taskId,
+    at,
+    agentId,
+    ...(dueAt ? { dueAt } : {}),
+    ...(eventId ? { eventId } : {}),
+  };
 }
 
 /** 两段 JSON 是不是同一个值：jsonb 存进库会重排对象的键，所以按排好序的键比。 */
@@ -167,14 +200,21 @@ const sameInstant = (a: unknown, b: unknown) =>
       Date.parse(a) === Date.parse(b);
 
 /**
- * 对话里的这张卡，对的是流水（按时间正序）里的哪一行：按内容认，不按位置。交付卡比交付物，延期卡比要延到
- * 的时间（和理由），接活回执比报的预计时间，挡回比原因。同样内容的有几行时取最后一行。对不上为 -1，这时
- * 卡上不给按钮。
+ * 对话里的这张卡，对的是流水（按时间正序）里的哪一行。带着 `eventId` 的（现在的服务器都带）就找那一行，
+ * 别的什么都不比：接活回执上的预计时间可能是你接活前改过的、和流水「接下」那一行记的不同；两次交付的内容
+ * 可能一模一样。流水还没读到那一行时为 -1（卡上先不给按钮）。
+ *
+ * 老服务端的事件没有 id，只好按内容认，同样内容的取最后一行：交付卡比交付物，延期卡比要延到的时间（和理由），
+ * 挡回比原因；接活回执不比预计时间（理由同上），取最后一行「接下」。对不上为 -1。
  */
-export function matchByContent(
+export function matchToFlow(
   history: readonly TaskEvent[],
   event: ChatDeliveryEvent,
 ): number {
+  if (event.eventId)
+    return history.findIndex(
+      (line) => line.id === event.eventId && line.kind === event.kind,
+    );
   const same = (line: TaskEvent): boolean => {
     const detail = line.detail ?? {};
     switch (event.kind) {
@@ -188,7 +228,7 @@ export function matchByContent(
             detail.reason.trim() === event.reason)
         );
       case "accepted":
-        return sameInstant(detail.dueAt, event.dueAt);
+        return true;
       case "bounced":
         return (
           typeof detail.reason !== "string" ||
@@ -201,23 +241,26 @@ export function matchByContent(
   );
 }
 
-/** 群回复上的标记和流水里的那一行差多久还算同一件事。 */
+/** 群回复上的标记和流水里的那一行差多久还算同一件事（只给没有 id 的老标记用）。 */
 const MARK_SLACK_MS = 2 * 60_000;
 
 /**
- * 群回复上的标记对的是流水里的哪一行：同一种、预计时间相同（标记带了的话）、时刻最接近、相差不超过两分钟。
- * 对不上为 -1。
+ * 群回复上的标记对的是流水里的哪一行。带着 `eventId` 的就找那一行。老标记没有 id：同一种、时刻最接近、相差
+ * 不超过两分钟的那一行（不比预计时间：接活回执上的可能是你改过的）。对不上为 -1。
  */
 export function matchByMark(
   history: readonly TaskEvent[],
   mark: DeliveryMark,
 ): number {
+  if (mark.eventId)
+    return history.findIndex(
+      (line) => line.id === mark.eventId && line.kind === mark.kind,
+    );
   const at = Date.parse(mark.at);
   let best = -1;
   let gap = Number.POSITIVE_INFINITY;
   history.forEach((line, index) => {
     if (line.kind !== mark.kind) return;
-    if (mark.dueAt && !sameInstant(line.detail?.dueAt, mark.dueAt)) return;
     const distance = Math.abs(Date.parse(line.createdAt) - at);
     if (distance <= MARK_SLACK_MS && distance < gap) {
       best = index;
@@ -233,11 +276,13 @@ export function eventFromFlow(
   taskId: string,
 ): ChatDeliveryEvent | null {
   const detail = line.detail ?? {};
+  const eventId = line.id;
   switch (line.kind) {
     case "accepted":
       return {
         kind: "accepted",
         taskId,
+        eventId,
         dueAt: validTime(detail.dueAt),
         criteria: textOr(detail.criteria, null),
       };
@@ -247,6 +292,7 @@ export function eventFromFlow(
         ? {
             kind: "extension_requested",
             taskId,
+            eventId,
             dueAt,
             reason: textOr(detail.reason, "") ?? "",
           }
@@ -256,12 +302,14 @@ export function eventFromFlow(
       return {
         kind: "delivered",
         taskId,
+        eventId,
         deliverable: detail.deliverable ?? null,
       };
     case "bounced":
       return {
         kind: "bounced",
         taskId,
+        eventId,
         reason: textOr(detail.reason, "") ?? "",
       };
     default:

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { z } from "zod";
 import { currentApprovalContext } from "../approvals/types";
@@ -280,7 +281,10 @@ export function deliveryTools(options: {
             return `${REFUSAL_MARKER} 没能另开一件活：${error instanceof Error ? error.message : String(error)}`;
           }
         }
+        // The 接下 line's id, named here so the chat's 接活回执 finds that line by it (not by its due time).
+        const acceptedLine = randomUUID();
         const accepted = await delivery.accept(tenantId, taskId, {
+          eventId: acceptedLine,
           runId: run.runId,
           threadRef: run.threadId,
           actor,
@@ -294,6 +298,7 @@ export function deliveryTools(options: {
         roundOnCard(run.runId, tenantId, taskId);
         said(run.runId, DELIVERY_EVENTS.accepted, {
           taskId,
+          eventId: acceptedLine,
           dueAt: accepted.dueAt?.toISOString() ?? null,
           criteria: accepted.criteria,
         });
@@ -342,7 +347,9 @@ export function deliveryTools(options: {
           criteria: card.criteria,
         });
         if (!verdict.ok) {
+          const bouncedLine = randomUUID();
           await delivery.bounced(tenantId, card.id, {
+            eventId: bouncedLine,
             runId: run.runId,
             actor,
             reason: verdict.reason,
@@ -350,6 +357,7 @@ export function deliveryTools(options: {
           });
           said(run.runId, DELIVERY_EVENTS.bounced, {
             taskId: card.id,
+            eventId: bouncedLine,
             reason: verdict.reason,
           });
           return JSON.stringify({
@@ -359,7 +367,10 @@ export function deliveryTools(options: {
             note: "没交上：卡片没动。补齐后再调用 deliver_task。",
           });
         }
+        // Each hand-in its own line id: a second, identical hand-in after a 退回 is its own card.
+        const deliveredLine = randomUUID();
         const merged = await delivery.delivered(tenantId, card.id, {
+          eventId: deliveredLine,
           runId: run.runId,
           agentId,
           actor,
@@ -369,6 +380,7 @@ export function deliveryTools(options: {
           return `${REFUSAL_MARKER} 这件活现在交不了：它已经结束、还在等对方处理，或已经换给别的员工。`;
         said(run.runId, DELIVERY_EVENTS.delivered, {
           taskId: card.id,
+          eventId: deliveredLine,
           deliverable: verdict.ref,
         });
         return JSON.stringify({
@@ -393,7 +405,9 @@ export function deliveryTools(options: {
         if (due.at === null)
           return `${REFUSAL_MARKER} 「${value.due_at}」不能用来申请延期（${dueRefusalText(due.why)}）：换成「1 小时」「17:30」「明早 10 点」这样、30 天以内的时间再申请。`;
         const dueAt = due.at;
+        const askedLine = randomUUID();
         const asked = await delivery.requestExtension(tenantId, card.id, {
+          eventId: askedLine,
           dueAt,
           reason: value.reason,
           runId: run.runId,
@@ -402,6 +416,7 @@ export function deliveryTools(options: {
         if (!asked) return `${REFUSAL_MARKER} 这件活已经结束，不用申请延期。`;
         said(run.runId, DELIVERY_EVENTS.extensionRequested, {
           taskId: card.id,
+          eventId: askedLine,
           dueAt: dueAt.toISOString(),
           reason: value.reason,
         });

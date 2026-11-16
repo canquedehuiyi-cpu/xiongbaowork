@@ -41,3 +41,40 @@ test("员工工具放的卡和群聊记标记认的是同一组事件名；答�
   ]);
   expect(deliveryMarkOf(cards.delivered, {}, "a1", at)).toBeNull();
 });
+
+/**
+ * 标记带上流水那一行的 id（Codex 审查 P2）：派活人按它对回流水，不按预计时间、不按时刻猜。不是 uuid 的
+ * 不收（一个号码，不夹带内容）。
+ */
+test("群聊标记带上流水行的 id，只收 uuid", () => {
+  const at = new Date("2026-11-15T03:00:00.000Z");
+  const eventId = "2022fc62-01f0-4b1d-a661-8af8776bc2a4";
+  expect(
+    deliveryMarkOf(
+      DELIVERY_EVENTS.accepted,
+      { taskId: "t1", eventId, dueAt: "2026-11-15T08:00:00.000Z" },
+      "a1",
+      at,
+    ),
+  ).toEqual({
+    kind: "accepted",
+    taskId: "t1",
+    at: at.toISOString(),
+    agentId: "a1",
+    dueAt: "2026-11-15T08:00:00.000Z",
+    eventId,
+  });
+  expect(
+    deliveryMarkOf(
+      DELIVERY_EVENTS.delivered,
+      { taskId: "t1", eventId: "交付物：保密的结论" },
+      "a1",
+      at,
+    ),
+  ).toEqual({
+    kind: "delivered",
+    taskId: "t1",
+    at: at.toISOString(),
+    agentId: "a1",
+  });
+});

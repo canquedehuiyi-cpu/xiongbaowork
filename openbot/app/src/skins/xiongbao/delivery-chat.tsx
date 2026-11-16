@@ -29,8 +29,8 @@ import {
   extensionOutcome,
   isLatestOfKind,
   markLine,
-  matchByContent,
   matchByMark,
+  matchToFlow,
   type PlacedDeliveryEvent,
 } from "@/lib/tasks/delivery-chat";
 import { cn } from "@/lib/utils";
@@ -53,7 +53,7 @@ import {
  * - 群聊的回复上只有不带内容的状态标记（`server/src/channels/group.ts`）。派活的人（回复行的发起人）按
  *   标记读卡片接口和流水，画出完整的卡和按钮；其他人只看到一行状态，不读卡、不试探接口。
  *
- * 卡对回流水（`GET /api/tasks/:id/events`）按内容认，不按位置（`matchByContent`、`matchByMark`）。对上、
+ * 卡对回流水（`GET /api/tasks/:id/events`）按流水那一行的 id 认（老事件按内容），不按位置（`matchToFlow`、`matchByMark`）。对上、
  * 是流水里最新的同类行、卡片此刻的状态允许，才给按钮；已经验收、退回、答复过的只写结果，转录里的旧卡
  * 不会对已经结束的活发请求。
  */
@@ -589,7 +589,7 @@ export function DeliveryChatCard({
     event.taskId,
     event.kind !== "bounced",
   );
-  const index = history ? matchByContent(history, event) : -1;
+  const index = history ? matchToFlow(history, event) : -1;
   const zone = useScheduleZone();
   return (
     <CardBody

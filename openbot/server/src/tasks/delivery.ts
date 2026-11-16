@@ -180,6 +180,8 @@ export type Delivery = {
       title?: string;
       dueAt: Date | null;
       criteria?: string;
+      /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
+      eventId?: string;
     },
   ): Promise<{ taskId: string; dueAt: Date | null; criteria: string } | null>;
   /**
@@ -225,6 +227,8 @@ export type Delivery = {
       agentId: string;
       actor: TaskEventActor;
       deliverable: DeliverableRef;
+      /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
+      eventId?: string;
     },
   ): Promise<DeliverableRef | null>;
   /** The evidence gate refused a hand-in: one `bounced` line, and the card is not touched. */
@@ -236,6 +240,8 @@ export type Delivery = {
       actor: TaskEventActor;
       reason: string;
       missing?: string[];
+      /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
+      eventId?: string;
     },
   ): Promise<void>;
   /**
@@ -250,6 +256,8 @@ export type Delivery = {
       reason: string;
       runId?: string;
       actor?: TaskEventActor;
+      /** The id its line is written under (`appendTaskEvent`), which the chat's card names too. */
+      eventId?: string;
     },
   ): Promise<boolean>;
   /**
@@ -659,6 +667,7 @@ export function createDelivery(database: Database): Delivery {
               ),
             );
           await appendTaskEvent(transaction, {
+            id: input.eventId,
             tenantId,
             taskId,
             kind: "accepted",
@@ -713,6 +722,7 @@ export function createDelivery(database: Database): Delivery {
             })
             .where(and(eq(tasks.tenantId, tenantId), eq(tasks.id, taskId)));
           await appendTaskEvent(transaction, {
+            id: input.eventId,
             tenantId,
             taskId,
             kind: "delivered",
@@ -732,6 +742,7 @@ export function createDelivery(database: Database): Delivery {
           .limit(1);
         if (!card) return;
         await appendTaskEvent(database, {
+          id: input.eventId,
           tenantId,
           taskId,
           kind: "bounced",
@@ -753,6 +764,7 @@ export function createDelivery(database: Database): Delivery {
           .limit(1);
         if (!card) return false;
         await appendTaskEvent(database, {
+          id: input.eventId,
           tenantId,
           taskId,
           kind: "extension_requested",

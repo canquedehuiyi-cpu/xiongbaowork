@@ -431,6 +431,11 @@ export type GroupDeliveryMark = {
   agentId: string;
   /** 接下时报的、申请延期要延到的预计时间（ISO）；没有就不带。 */
   dueAt?: string;
+  /**
+   * 卡片流水里这一步那一行的 id（`delivery.*` 事件带的 `eventId`）：派活人按它把标记对回流水，不按时间、
+   * 不按内容猜。只是一个号码，群里别人拿着它也读不到卡片（流水按租户隔离）。老事件没有就不带。
+   */
+  eventId?: string;
 };
 
 const MARK_KINDS: Readonly<Record<string, GroupDeliveryMark["kind"]>> = {
@@ -443,6 +448,11 @@ const MARK_KINDS: Readonly<Record<string, GroupDeliveryMark["kind"]>> = {
 const isTime = (value: unknown): value is string =>
   typeof value === "string" && !Number.isNaN(Date.parse(value));
 
+/** 流水行的 id：一个 uuid，别的不收。 */
+const isEventId = (value: unknown): value is string =>
+  typeof value === "string" &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
 /** 一条员工流里的卡片事件，换成只记状态的标记；不是交付卡事件为 null。 */
 export function deliveryMarkOf(
   name: string,
@@ -453,7 +463,11 @@ export function deliveryMarkOf(
   const kind = MARK_KINDS[name];
   if (!kind || !value || typeof value !== "object" || Array.isArray(value))
     return null;
-  const { taskId, dueAt } = value as { taskId?: unknown; dueAt?: unknown };
+  const { taskId, dueAt, eventId } = value as {
+    taskId?: unknown;
+    dueAt?: unknown;
+    eventId?: unknown;
+  };
   if (typeof taskId !== "string" || !taskId) return null;
   const timed = kind === "accepted" || kind === "extension_requested";
   return {
@@ -462,6 +476,7 @@ export function deliveryMarkOf(
     at: at.toISOString(),
     agentId,
     ...(timed && isTime(dueAt) ? { dueAt } : {}),
+    ...(isEventId(eventId) ? { eventId } : {}),
   };
 }
 
@@ -471,6 +486,7 @@ const MARK_KEYS: ReadonlySet<string> = new Set([
   "at",
   "agentId",
   "dueAt",
+  "eventId",
 ]);
 
 /** 行上记着的标记；只认形状完全对的，多出任何字段的整条不要。 */
@@ -486,7 +502,8 @@ function marksOf(details: Record<string, unknown>): GroupDeliveryMark[] {
       typeof record.taskId === "string" &&
       isTime(record.at) &&
       typeof record.agentId === "string" &&
-      (record.dueAt === undefined || isTime(record.dueAt))
+      (record.dueAt === undefined || isTime(record.dueAt)) &&
+      (record.eventId === undefined || isEventId(record.eventId))
     );
   });
 }

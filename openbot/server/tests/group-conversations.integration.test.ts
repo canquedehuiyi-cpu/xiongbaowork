@@ -167,10 +167,10 @@ function marksWithoutTime(marks: unknown): unknown {
   expect(Array.isArray(marks)).toBe(true);
   return (marks as Record<string, unknown>[]).map(({ at, ...rest }) => {
     expect(typeof at === "string" && !Number.isNaN(Date.parse(at))).toBe(true);
-    // 只有这几个字段，不带内容。
+    // 只有这几个字段，不带内容（`eventId` 是流水那一行的号码，不是内容）。
     expect(
       Object.keys(rest).every((key) =>
-        ["kind", "taskId", "agentId", "dueAt"].includes(key),
+        ["kind", "taskId", "agentId", "dueAt", "eventId"].includes(key),
       ),
     ).toBe(true);
     return rest;
@@ -898,6 +898,8 @@ describe("group conversations in PostgreSQL", () => {
     const grace = await as(owner, () => bot(owner, "Grace"));
     const card = {
       taskId: randomUUID(),
+      // 这一步那一行流水的 id：标记带着它走到群回复上，派活人按它对回流水。
+      eventId: randomUUID(),
       dueAt: "2026-11-15T02:30:00.000Z",
       criteria: "三家全部在售款",
     };
@@ -1024,6 +1026,7 @@ describe("group conversations in PostgreSQL", () => {
             taskId: card.taskId,
             agentId: ada,
             dueAt: card.dueAt,
+            eventId: card.eventId,
           },
         ],
       ],

@@ -31,8 +31,8 @@ import {
   bounceText,
   type ChatDeliveryEvent,
   lastMessageIdAfter,
-  matchByContent,
   matchByMark,
+  matchToFlow,
   placeDeliveryEvent,
   readDeliveryEvent,
   sameJson,
@@ -111,7 +111,7 @@ type Call = { method: string; path: string; body: unknown };
 function serve(routes: {
   me?: typeof ME;
   card?: Record<string, unknown> | null;
-  events?: { kind: string; createdAt: string; detail?: unknown }[];
+  events?: { id?: string; kind: string; createdAt: string; detail?: unknown }[];
   group?: unknown;
 }): Call[] {
   const calls: Call[] = [];
@@ -258,17 +258,17 @@ test("卡按内容对回流水：交付物（不管键的顺序）、延期时�
     }),
   ];
   expect(sameJson(stored(delivery(delivered)), delivery(delivered))).toBe(true);
-  expect(matchByContent(history, delivered)).toBe(3);
+  expect(matchToFlow(history, delivered)).toBe(3);
   expect(
-    matchByContent(history, {
+    matchToFlow(history, {
       kind: "delivered",
       taskId: TASK,
       deliverable: other,
     }),
   ).toBe(1);
-  expect(matchByContent(history, accepted)).toBe(0);
+  expect(matchToFlow(history, accepted)).toBe(0);
   // 流水里没有这条申请（比如是别的活的）：对不上，不给按钮。
-  expect(matchByContent(history, extension)).toBe(-1);
+  expect(matchToFlow(history, extension)).toBe(-1);
   // 群回复上的标记按种类、预计时间和时刻对。
   expect(
     matchByMark(history, {
@@ -286,6 +286,123 @@ test("卡按内容对回流水：交付物（不管键的顺序）、延期时�
       agentId: XIAOZHOU.id,
     }),
   ).toBe(-1);
+});
+
+/*
+ * Codex 审查（#641）P2：卡认流水那一行靠服务器带来的 `eventId`，不按内容、不按预计时间。
+ */
+test("接活前你改过预计时间：回执上的时间和流水「接下」记的不同，按 eventId 照样对上，给按钮", async () => {
+  // 员工报 10:30（流水里记的），你接活前改成 11:00（回执事件带的是卡上生效的 11:00）。
+  serve({
+    card: card({ dueAt: todayAt(11, 0) }),
+    events: [
+      {
+        id: "line-accepted",
+        kind: "accepted",
+        createdAt: todayAt(9, 40),
+        detail: { dueAt: todayAt(10, 30) },
+      },
+    ],
+  });
+  const view = withQueries(
+    <DeliveryChatCard
+      agentName="小周"
+      event={{ ...accepted, dueAt: todayAt(11, 0), eventId: "line-accepted" }}
+    />,
+  );
+  const receipt = await view.findByRole("group", { name: "接活回执" });
+  expect(
+    await within(receipt).findByRole("button", { name: "改预计时间" }),
+  ).toBeTruthy();
+  // 没有 id 的老事件：也不再比预计时间，取最后一行「接下」。
+  expect(
+    matchToFlow(
+      [flow("accepted", todayAt(9, 40), { dueAt: todayAt(10, 30) })],
+      { ...accepted, dueAt: todayAt(11, 0) },
+    ),
+  ).toBe(0);
+});
+
+test("群里的标记带 eventId：派活人按它对回流水，不比预计时间", () => {
+  const history = [
+    flow("accepted", todayAt(9, 40), { dueAt: todayAt(10, 30) }),
+    flow("delivered", todayAt(10, 40), { deliverable: {} }),
+  ];
+  const line = history[0]?.id as string;
+  expect(
+    matchByMark(history, {
+      kind: "accepted",
+      taskId: TASK,
+      // 标记记的是卡上生效的（你改过的）时间，记录时刻也差了好几分钟。
+      dueAt: todayAt(11, 0),
+      at: todayAt(9, 50),
+      agentId: XIAOZHOU.id,
+      eventId: line,
+    }),
+  ).toBe(0);
+  // 老标记没有 id：只按种类和时刻，同样不比预计时间。
+  expect(
+    matchByMark(history, {
+      kind: "accepted",
+      taskId: TASK,
+      dueAt: todayAt(11, 0),
+      at: todayAt(9, 41),
+      agentId: XIAOZHOU.id,
+    }),
+  ).toBe(0);
+});
+
+test("退回后原样再交一次：两张卡各对各的流水行，只有新的一张给按钮", async () => {
+  const same = { ...delivered };
+  const first = { ...same, eventId: "line-first" };
+  const second = { ...same, eventId: "line-second" };
+  // 回放时同一张卡来两次只记一次；内容相同、id 不同的两次交付是两张卡。
+  const placed = placeDeliveryEvent(
+    placeDeliveryEvent(placeDeliveryEvent([], "a1", first), "a1", first),
+    "a2",
+    second,
+  );
+  expect(placed.map((entry) => entry.event)).toEqual([first, second]);
+
+  const events = [
+    {
+      id: "line-first",
+      kind: "delivered",
+      createdAt: todayAt(10, 40),
+      detail: { deliverable: stored(delivery(delivered)) },
+    },
+    {
+      id: "line-returned",
+      kind: "returned",
+      createdAt: todayAt(10, 45),
+      detail: { reason: "缺 B 家" },
+    },
+    {
+      id: "line-second",
+      kind: "delivered",
+      createdAt: todayAt(11, 10),
+      detail: { deliverable: stored(delivery(delivered)) },
+    },
+  ];
+  serve({
+    card: card({ status: "awaiting_review", stage: "delivered" }),
+    events,
+  });
+  const view = withQueries(
+    <>
+      <DeliveryChatCard agentName="小周" event={first} />
+      <DeliveryChatCard agentName="小周" event={second} />
+    </>,
+  );
+  await waitFor(() =>
+    expect(view.getAllByRole("group", { name: "交付卡" })).toHaveLength(2),
+  );
+  const [old, latest] = view.getAllByRole("group", { name: "交付卡" });
+  if (!old || !latest) throw new Error("两张交付卡没画出来");
+  await within(latest).findByRole("button", { name: "验收" });
+  // 旧的那张是被退回的那次：写结果，不给按钮。
+  await within(old).findByText(/退回了/);
+  expect(within(old).queryAllByRole("button")).toHaveLength(0);
 });
 
 test("卡画在它出现时最后那条消息下面；回放重复的只记一次", () => {
@@ -803,7 +920,7 @@ test("交付卡：交付物和自查，「验收」发验收，「退回」要�
 
   await userEvent.click(within(handIn).getByRole("button", { name: "验收" }));
   await waitFor(() =>
-    expect(writes(calls).at(-1)).toEqual({
+    expect(writes(calls).at(-1)).toMatchObject({
       method: "POST",
       path: `/api/tasks/${TASK}/review`,
     }),
