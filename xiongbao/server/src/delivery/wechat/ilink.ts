@@ -52,10 +52,12 @@ export type IlinkClient = {
     status: IlinkQrcodeStatus;
     session?: IlinkSession & { botId: string; userId: string };
   }>;
+  /** `signal` 中止时（关停）这一轮当作空轮返回，不改游标。 */
   getUpdates(
     session: IlinkSession,
     cursor: string,
     timeoutMs?: number,
+    signal?: AbortSignal,
   ): Promise<{
     messages: IlinkMessage[];
     cursor: string | null;
@@ -135,13 +137,15 @@ export function createIlinkClient(options: {
       body?: unknown;
       timeoutMs: number;
       longPoll?: boolean;
+      signal?: AbortSignal;
     },
   ): Promise<Json> {
     let response: Response;
     try {
+      const timeout = AbortSignal.timeout(init.timeoutMs);
       response = await wire(url, {
         method,
-        signal: AbortSignal.timeout(init.timeoutMs),
+        signal: init.signal ? AbortSignal.any([timeout, init.signal]) : timeout,
         headers: init.headers,
         ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
       });
@@ -184,6 +188,7 @@ export function createIlinkClient(options: {
     body: Json,
     timeoutMs: number,
     longPoll = false,
+    signal?: AbortSignal,
   ): Promise<Json> {
     assertTrustedBase(session.baseUrl);
     return call(
@@ -192,6 +197,7 @@ export function createIlinkClient(options: {
       {
         timeoutMs,
         longPoll,
+        ...(signal ? { signal } : {}),
         headers: {
           "Content-Type": "application/json",
           AuthorizationType: "ilink_bot_token",
@@ -264,7 +270,7 @@ export function createIlinkClient(options: {
       };
     },
 
-    async getUpdates(session, cursor, previousTimeoutMs) {
+    async getUpdates(session, cursor, previousTimeoutMs, signal) {
       const pollMs = previousTimeoutMs ?? DEFAULT_POLL_TIMEOUT_MS;
       let body: Json;
       try {
@@ -274,6 +280,7 @@ export function createIlinkClient(options: {
           { get_updates_buf: cursor },
           pollMs + 10_000,
           true,
+          signal,
         );
       } catch (error) {
         if (error instanceof RequestTimeout)

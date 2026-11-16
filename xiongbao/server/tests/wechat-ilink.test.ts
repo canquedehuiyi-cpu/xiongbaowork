@@ -219,6 +219,29 @@ describe("iLink client", () => {
     }
   });
 
+  test("getUpdates aborted by the caller's signal is an empty round, cursor unchanged", async () => {
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      await new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () =>
+          reject(new DOMException("aborted", "AbortError")),
+        );
+      });
+      return json({});
+    }) as unknown as typeof fetch;
+    const client = createIlinkClient({
+      fetch: fetchImpl,
+      clientVersion: "2.4.10",
+    });
+    const controller = new AbortController();
+    const pending = client.getUpdates(session, "c", 60000, controller.signal);
+    controller.abort();
+    expect(await pending).toEqual({
+      messages: [],
+      cursor: null,
+      timeoutMs: 60000,
+    });
+  });
+
   test("a client-side long-poll timeout is an empty round, not an error", async () => {
     const fetchImpl = (async () => {
       throw new DOMException("timed out", "TimeoutError");

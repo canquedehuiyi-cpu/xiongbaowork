@@ -37,6 +37,7 @@ type Step = { messages?: IlinkMessage[]; cursor?: string | null } | Error;
 function fakeIlink(delayMs = 0) {
   const scripts = new Map<string, Step[]>();
   const calls: { token: string; cursor: string }[] = [];
+  const signals: (AbortSignal | undefined)[] = [];
   let gate: Promise<void> | null = null;
   const client: IlinkClient = {
     async getBotQrcode() {
@@ -48,8 +49,9 @@ function fakeIlink(delayMs = 0) {
     async sendText() {
       throw new Error("not used");
     },
-    async getUpdates(session, cursor) {
+    async getUpdates(session, cursor, _timeoutMs, signal) {
       calls.push({ token: session.botToken, cursor });
+      signals.push(signal);
       if (delayMs) await new Promise((r) => setTimeout(r, delayMs));
       if (gate) await gate;
       const step = scripts.get(session.botToken)?.shift();
@@ -64,6 +66,7 @@ function fakeIlink(delayMs = 0) {
   return {
     client,
     calls,
+    signals,
     /** 之后的 getUpdates 都挂住，直到调用返回的函数。 */
     hold() {
       let open: () => void = () => {};
@@ -592,4 +595,49 @@ test("拉取期间租约被别人拿走：不写游标", async () => {
   expect(row?.cursor).toBeNull();
   expect(row?.leaseOwner).toBe("thief");
   await runAsTenant(x.userId, () => store.unbind(x.userId));
+});
+
+test("stop：先中止在途的长轮询，之后不再认领；drain 等它收尾", async () => {
+  const s = await bindPerson("stop");
+  const ilink = fakeIlink();
+  ilink.script(
+    s.token,
+    { messages: [], cursor: "" },
+    { messages: [], cursor: "" },
+  );
+  const open = ilink.hold();
+  const poller = pollerWith(ilink, async () => {});
+  await poller.tick();
+  await untilPulled(ilink, s.token);
+  const signal = ilink.signals.at(-1);
+  expect(signal?.aborted).toBe(false);
+  poller.stop();
+  expect(signal?.aborted).toBe(true);
+  open();
+  await poller.drain();
+  await poller.tick();
+  await poller.drain();
+  expect(ilink.pulls(s.token)).toBe(1);
+  await runAsTenant(s.userId, () => store.unbind(s.userId));
+});
+
+test("inbound 拿到轮询器的中止信号；stop 后同一批剩下的消息不再处理、不存游标", async () => {
+  const t = await bindPerson("stop-batch");
+  const ilink = fakeIlink();
+  ilink.script(t.token, {
+    messages: [message("801"), message("802")],
+    cursor: "c-batch",
+  });
+  const got: { id: string; signal: AbortSignal | undefined }[] = [];
+  let poller: ReturnType<typeof pollerWith> | undefined;
+  poller = pollerWith(ilink, async (_account, m, signal) => {
+    got.push({ id: m.id, signal });
+    poller?.stop();
+  });
+  await poller.tick();
+  await poller.drain();
+  expect(got.map((g) => g.id)).toEqual(["801"]);
+  expect(got[0]?.signal?.aborted).toBe(true);
+  expect((await accountOf(t.userId))?.cursor).toBeNull();
+  await runAsTenant(t.userId, () => store.unbind(t.userId));
 });

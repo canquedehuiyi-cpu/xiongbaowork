@@ -43,6 +43,8 @@ import type { WechatStore } from "./store";
 export type WechatInbound = (
   account: WechatAccount,
   message: IlinkMessage,
+  /** 轮询器关停时中止（`stop`）；交给员工那一轮，让它尽快收尾。 */
+  signal?: AbortSignal,
 ) => Promise<void>;
 
 export type WechatPollerDeps = {
@@ -101,6 +103,8 @@ export function createWechatPoller(deps: WechatPollerDeps) {
   /** 正在处理的账号 ID（含 `inbound` 跑得比租约还久的）。 */
   const active = new Set<string>();
   const maxInFlight = deps.maxInFlight ?? WECHAT_MAX_IN_FLIGHT;
+  /** 整个轮询器的中止信号：`stop` 时中止在途的长轮询和 `inbound`，之后不再认领。 */
+  const stopping = new AbortController();
 
   const stateOf = (accountId: string): AccountState => {
     let state = states.get(accountId);
@@ -163,9 +167,12 @@ export function createWechatPoller(deps: WechatPollerDeps) {
       { baseUrl: account.baseUrl, botToken: token },
       account.cursor ?? "",
       state.timeoutMs,
+      stopping.signal,
     );
     state.timeoutMs = reply.timeoutMs;
     for (const message of reply.messages) {
+      // 关停了：剩下的不处理、不存游标，下次启动从旧游标重来。
+      if (stopping.signal.aborted) return;
       if (state.seen.has(message.id)) continue;
       // 处理一条可能很久：租约不再是自己的就停手，不存游标，让拿到租约的那个重来。
       if (!(await deps.wechat.renewLease(account.id, claimOwner, leaseMs)))
@@ -190,7 +197,7 @@ export function createWechatPoller(deps: WechatPollerDeps) {
         Math.max(10, Math.floor(leaseMs / 3)),
       );
       try {
-        await deps.inbound(account, message);
+        await deps.inbound(account, message, stopping.signal);
       } catch (error) {
         if (lost) return;
         const failures = (state.failures.get(message.id) ?? 0) + 1;
@@ -207,6 +214,8 @@ export function createWechatPoller(deps: WechatPollerDeps) {
       if (lost) return;
       state.failures.delete(message.id);
       remember(state, message.id);
+      // 这条在关停中途跑完（员工那一轮可能被中止了）：算处理过，但不存游标，剩下的留给下次。
+      if (stopping.signal.aborted) return;
     }
     // 只在租约还在本次认领手里时写：拉取期间被别人认领了，就让拿到的那个去写。
     if (reply.cursor)
@@ -250,6 +259,7 @@ export function createWechatPoller(deps: WechatPollerDeps) {
   return {
     /** 认领一批账号，各自起一次轮询，不等它们结束；在途数到上限就少认领。 */
     async tick(): Promise<void> {
+      if (stopping.signal.aborted) return;
       const cutoff = Date.now() - STATE_IDLE_MS;
       for (const [id, state] of states)
         if (state.touched < cutoff) states.delete(id);
@@ -275,7 +285,12 @@ export function createWechatPoller(deps: WechatPollerDeps) {
       }
     },
 
-    /** 等在途的轮询都结束（测试用；关停时也可以用）。 */
+    /** 关停第一步：中止在途的长轮询和 `inbound`，之后 `tick` 不再认领。再 `drain` 等它们收尾。 */
+    stop(): void {
+      stopping.abort();
+    },
+
+    /** 等在途的轮询都结束（测试用；关停时在 `stop` 之后调）。 */
     async drain(): Promise<void> {
       while (inFlight.size) await Promise.allSettled([...inFlight]);
     },
