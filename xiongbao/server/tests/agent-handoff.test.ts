@@ -5,9 +5,10 @@ import {
   type HandoffCaps,
   resolveAddressedBot,
 } from "../src/agents/handoff";
-import { handoffTool } from "../src/agents/handoff-tool";
+import { handoffTool, HANDED_OVER } from "../src/agents/handoff-tool";
 import type { AgentProfileStore } from "../src/agents/profile-store";
 import type { AgentProfile } from "../src/agents/profile-types";
+import { ApprovalRefusedError } from "../src/approvals/types";
 import type { AuditStore } from "../src/audit";
 import type { WorkQueue } from "../src/work/queue";
 
@@ -362,6 +363,90 @@ describe("handing work to another Bot", () => {
         payload: expect.objectContaining({ reason: "self" }),
       }),
     ]);
+  });
+
+  /*
+   * The gate is the only thing standing between one Bot deciding to fan out and the person whose
+   * attention, computers and money the fan-out spends. What it is asked, and what happens to the work
+   * when it says no, is therefore pinned here rather than left to the wiring being read correctly.
+   */
+  test("the person's gate is asked before anything is sent, and asked as a delegation", async () => {
+    const { desk: handoff, rows } = desk();
+    const asked: unknown[] = [];
+    const tool = handoffTool({
+      desk: handoff,
+      from: FROM,
+      hasSomebodyToAsk: true,
+      maxDepth: 2,
+      maxPerRun: 3,
+      approvalGate: async (candidate) => {
+        asked.push(candidate);
+        return undefined;
+      },
+    });
+
+    const answer = await tool?.execute({
+      bot: "Researcher",
+      task: "Check the changelog.",
+    });
+
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({
+      actorId: "user-1",
+      botId: "assistant",
+      toolRef: "bot/message_bot",
+      effect: "delegate",
+      scope: "Researcher",
+      target: { bot: "Researcher" },
+    });
+    expect(answer?.startsWith(HANDED_OVER)).toBe(true);
+    expect(rows).toHaveLength(1);
+  });
+
+  test("a refused delegation sends nothing and tells the Bot that asked", async () => {
+    const { desk: handoff, rows } = desk();
+    const tool = handoffTool({
+      desk: handoff,
+      from: FROM,
+      hasSomebodyToAsk: true,
+      maxDepth: 2,
+      maxPerRun: 3,
+      approvalGate: async () => {
+        throw new ApprovalRefusedError("The person said no.");
+      },
+    });
+
+    const answer = await tool?.execute({
+      bot: "Researcher",
+      task: "Check the changelog.",
+    });
+
+    // Said as a sentence, not thrown: the asking Bot is mid-run with a person waiting.
+    expect(answer).toBe("That handoff was not sent: The person said no.");
+    expect(rows).toEqual([]);
+  });
+
+  test("a replayed decision answers what was decided instead of sending again", async () => {
+    const { desk: handoff, rows } = desk();
+    const tool = handoffTool({
+      desk: handoff,
+      from: FROM,
+      hasSomebodyToAsk: true,
+      maxDepth: 2,
+      maxPerRun: 3,
+      approvalGate: async () => ({
+        replay: "Already handled, and the person was told so.",
+        complete: async () => {},
+      }),
+    });
+
+    const answer = await tool?.execute({
+      bot: "Researcher",
+      task: "Check the changelog.",
+    });
+
+    expect(answer).toBe("Already handled, and the person was told so.");
+    expect(rows).toEqual([]);
   });
 
   test("a Bot cannot hand work to itself", async () => {
