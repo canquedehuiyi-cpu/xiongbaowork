@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { approvalPhrase } from "@openbot/shared/tool-name";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { approvalPhrase } from "../../shared/tool-name";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createApprovalService } from "../src/approvals/service";

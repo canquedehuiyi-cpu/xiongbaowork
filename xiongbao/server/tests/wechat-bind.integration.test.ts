@@ -11,14 +11,14 @@ import { wechatAccounts, wechatBindAttempts } from "../src/db/schema/wechat";
 import { createDeliveryRoutes } from "../src/delivery/routes";
 import { createDeliveryStore } from "../src/delivery/store";
 import { DeliveryProviderError } from "../src/delivery/types";
-import type {
-  IlinkClient,
-  IlinkQrcodeStatus,
-} from "../src/delivery/wechat/ilink";
 import {
   WECHAT_WELCOME_TEXT,
   wechatEnabled,
 } from "../src/delivery/wechat/bind";
+import type {
+  IlinkClient,
+  IlinkQrcodeStatus,
+} from "../src/delivery/wechat/ilink";
 import { createWechatWelcome } from "../src/delivery/wechat/inbound";
 import { createWechatStore } from "../src/delivery/wechat/store";
 import { runAsTenant } from "../src/tenant/context";
