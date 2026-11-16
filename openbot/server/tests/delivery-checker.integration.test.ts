@@ -2170,3 +2170,31 @@ afterAll(async () => {
   );
   await database.$client.close();
 });
+
+test("接下 is stamped on the caller's clock, so its two-hour check is too", async () => {
+  // The tools read 「预计」 on their own clock; the card's 接下 time must come from the same clock, or a
+  // card taken on with no time reported is checked against the wall clock instead (a test that pins
+  // its clock then passes or fails by the hour it runs).
+  const tenantId = await tenant("caller-clock");
+  const agentId = `agent-${suite}-caller-clock`;
+  const threadId = `thread-${suite}-caller-clock`;
+  const taskId = await card(tenantId, {
+    executorAgentId: agentId,
+    channelRef: threadId,
+    tracked: false,
+  });
+  await delivery.markTracked(tenantId, taskId, `user:${tenantId}`, {
+    threadRef: threadId,
+  });
+  const at = new Date("2030-01-02T03:04:05.000Z");
+  await delivery.accept(tenantId, taskId, {
+    runId: `run-${randomUUID()}`,
+    threadRef: threadId,
+    actor: `agent:${agentId}`,
+    dueAt: null,
+    at,
+  });
+  expect((await row(tenantId, taskId)).acceptedAt?.toISOString()).toBe(
+    at.toISOString(),
+  );
+});

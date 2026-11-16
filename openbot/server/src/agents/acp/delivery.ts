@@ -335,6 +335,7 @@ export function createAcpDelivery(options: {
         const acceptedLine = randomUUID();
         const accepted = await delivery.accept(turn.tenantId, card.id, {
           eventId: acceptedLine,
+          at: now(),
           runId: turn.runId,
           threadRef: turn.threadId,
           actor: actor(turn),
