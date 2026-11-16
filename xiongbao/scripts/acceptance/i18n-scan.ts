@@ -32,6 +32,25 @@ const LATIN = /[A-Za-z]/;
  * 一行是因为什么被放过的。
  */
 const ALLOWED: readonly { readonly why: string; readonly pattern: RegExp }[] = [
+  /*
+   * 时区：`GMT+01:00（Africa/Casablanca）`。
+   *
+   * 这不是应用的文案，是浏览器 `Intl` 的时区列表：多数时区有中文名（「中国标准时间」），少数没有，
+   * 于是 ICU 退回 `GMT+01:00` 加括号里的 IANA 标识符。`/settings/notifications` 的时区下拉把它
+   * 整个画出来，三十七行都是这个形状——把 `Africa/Casablanca` 翻成中文反而对不上任何时区。
+   *
+   * 只认这个精确形态（`GMT` + 偏移 + 全角括号里的区域/城市），不认「括号里有斜杠」，免得把
+   * 真正的句子放过。
+   */
+  {
+    why: "时区名",
+    pattern: /GMT[+-]\d{2}:\d{2}（[A-Za-z0-9_+/-]+）/g,
+  },
+  // 单独的年月日时间：`2026-11-14`、`14:20`。分割之后还会有残片，所以再单列一条。
+  {
+    why: "时间",
+    pattern: /\b\d{1,4}[-/:.]\d{1,2}(?:[-/:.]\d{1,4})?(?::\d{2})?\b/g,
+  },
   // 邮箱示例：DoD-7 点名豁免。
   { why: "邮箱示例", pattern: /[\w.+-]+@[\w-]+\.[\w.-]+/g },
   // 地址：协议头或 `www.`，跟着一串不含空白的字符。
@@ -92,11 +111,6 @@ const ALLOWED: readonly { readonly why: string; readonly pattern: RegExp }[] = [
   },
   // 形态像 id 的串：`agent_7f3a`、`8f3a2b1c`、`sk-live-…`。必须含数字，免得把普通单词当 id 放过。
   { why: "标识符", pattern: /\b(?=[\w-]*\d)[\w-]{6,}\b/g },
-  // 单独的年月日时间：`2026-11-14`、`14:20`。分割之后还会有残片，所以再单列一条。
-  {
-    why: "时间",
-    pattern: /\b\d{1,4}[-/:.]\d{1,2}(?:[-/:.]\d{1,4})?(?::\d{2})?\b/g,
-  },
 ];
 
 /** 一行文字行的判决。 */
@@ -149,6 +163,14 @@ export type RouteScan = {
   readonly at: string;
   /** 渲染出来的、非空的文字行。 */
   readonly lines: readonly string[];
+  /**
+   * 地址里的参数值（`/admin/components/$name` 的 `button`）。
+   *
+   * 它们会原样显示在页面上——标题、回显、面包屑——而它们**不是这个应用的文案**：组件就叫
+   * `button`，工具就叫 `issues`，把标题翻成「按钮」反而对不上任何东西。这类行只做整行相等比较，
+   * 不做子串：一句「找不到 button」里有汉字，仍然按中文行算，不会被这条豁免放过。
+   */
+  readonly identifiers?: readonly string[];
 };
 
 /** 一个路由扫出来的结果：违规行逐条，豁免行按理由归类计数。 */
@@ -172,6 +194,14 @@ export function scanRoute(route: RouteScan): RouteReport {
     const verdict = verdictOf(line);
     if (verdict.kind === "chinese") {
       chinese += 1;
+    } else if (route.identifiers?.includes(line)) {
+      /*
+       * 整行等于地址参数值：这是标识符，不是文案。放在 `verdictOf` 之后判，是为了让中文行先落进
+       * 中文那一栏——参数值碰巧含汉字（`slug: "总结"`）时它仍算中文。
+       */
+      const bucket = allowed.get("地址参数") ?? [];
+      bucket.push(line);
+      allowed.set("地址参数", bucket);
     } else if (verdict.kind === "english") {
       violations.push({ line, rest: verdict.rest });
     } else if (verdict.kind === "allowed") {
