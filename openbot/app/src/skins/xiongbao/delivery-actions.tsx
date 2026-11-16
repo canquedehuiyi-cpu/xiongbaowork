@@ -472,7 +472,20 @@ export function ExtendDialog({
 }) {
   const editing = mode === "edit";
   const events = useQuery(taskEventsQueryOptions(card.id));
-  const pending = events.data ? pendingExtension(events.data) : null;
+  const latest = events.data ? pendingExtension(events.data) : null;
+  /*
+   * 弹层打开时（流水第一次读到时）要答复的是哪一条申请，记下来，之后就答复这一条（`pending`）。流水每 5 秒
+   * 重读一次：那条申请在别处（另一台设备、对话里的延期卡）被答复了，或员工又申请了一次，此刻的就和记下的
+   * 不一样了（`moved`）——这时不让提交：不能悄悄从「答复申请」变成直接改预计时间，盖掉别处刚定的时间。
+   */
+  const [opened, setOpened] = useState<{
+    pending: ReturnType<typeof pendingExtension>;
+  } | null>(null);
+  if (opened === null && events.data) setOpened({ pending: latest });
+  const pending = opened ? opened.pending : latest;
+  const moved =
+    opened !== null &&
+    (opened.pending?.eventId ?? null) !== (latest?.eventId ?? null);
   /*
    * 员工要的时间按作息时区写进输入框（「明早 10:30」），只给人看。没改输入框就提交时，送的是那条申请里的
    * 原时间（ISO），不是这段文字：服务器不用再认一遍字，作息时区还没读到时也不会差几个小时。改了输入框的，
@@ -506,7 +519,7 @@ export function ExtendDialog({
    * 读不到流水就不知道员工有没有待答复的延期申请：这时提交会绕过那条申请直接改时间，申请一直悬着。
    * 所以读失败时不让提交，请人稍后再试。
    */
-  const unknown = events.isError;
+  const unknown = events.isError || moved;
   return (
     <ActionDialog
       busy={busy}
@@ -542,7 +555,13 @@ export function ExtendDialog({
           placeholder="例如 16:00、40 分钟、明天上午十点"
           value={value}
         />
-        {unknown ? (
+        {moved ? (
+          <p className="m-0 text-(--wb-danger-fg) text-[13px]" role="alert">
+            {opened?.pending
+              ? "这条延期申请已经在别处处理了，关掉弹层看看现在的预计时间。"
+              : "员工刚申请了延期，关掉弹层再打开，答复那条申请。"}
+          </p>
+        ) : unknown ? (
           <p className="m-0 text-(--wb-danger-fg) text-[13px]" role="alert">
             读不到这件活的延期申请，先别改，稍后再试。
           </p>
@@ -552,7 +571,7 @@ export function ExtendDialog({
         {pending ? (
           <button
             className={cn(deliveryButton(false, "md"), "self-start")}
-            disabled={busy}
+            disabled={busy || unknown}
             onClick={() => deny.mutate()}
             type="button"
           >

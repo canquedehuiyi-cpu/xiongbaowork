@@ -570,15 +570,19 @@ export function eventLine(
   }
 }
 
-/** 最近一条延期申请还没答复时，它要延到的时间；没有待答复的申请为 null。 */
+/** 最近一条延期申请还没答复时，它要延到的时间和它是哪一条；没有待答复的申请为 null。 */
 export function pendingExtension(
   events: TaskEvent[],
-): { dueAt: string | null } | null {
-  let pending: { dueAt: string | null } | null = null;
+): { dueAt: string | null; eventId: string } | null {
+  let pending: { dueAt: string | null; eventId: string } | null = null;
   for (const event of eventsInOrder(events)) {
     if (event.kind === "extension_requested") {
       const due = event.detail?.dueAt;
-      pending = { dueAt: typeof due === "string" ? due : null };
+      // `eventId`：是哪一条申请（流水那一行的 id），弹层开着时拿它看申请有没有在别处变了。
+      pending = {
+        dueAt: typeof due === "string" ? due : null,
+        eventId: event.id,
+      };
     } else if (
       event.kind === "extension_granted" ||
       event.kind === "extension_denied" ||

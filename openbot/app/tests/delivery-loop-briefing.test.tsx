@@ -912,8 +912,11 @@ function shanghaiTomorrowAt(hour: number, minute: number): string {
   ).toISOString();
 }
 
-/** 员工申请延到上海明天 10:30、还没答复的一张卡，弹层用到的接口。 */
-function extensionFetch(asked: string) {
+/** 员工申请延到上海明天 10:30、还没答复的一张卡，弹层用到的接口。`answered` 为真时那条申请已在别处准了。 */
+function extensionFetch(
+  asked: string,
+  state: { answered?: boolean; none?: boolean } = {},
+) {
   const calls: Call[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = String(input);
@@ -926,15 +929,28 @@ function extensionFetch(asked: string) {
     if (method !== "GET") return json({ ok: true });
     if (path === `/api/tasks/${OVERDUE_CARD.id}/events`)
       return json({
-        events: [
-          {
-            id: "x1",
-            kind: "extension_requested",
-            actor: `agent:${XIAOZHOU.id}`,
-            detail: { dueAt: asked, reason: "C 家明早才回" },
-            createdAt: ago(3),
-          },
-        ],
+        events: state.none
+          ? []
+          : [
+              {
+                id: "x1",
+                kind: "extension_requested",
+                actor: `agent:${XIAOZHOU.id}`,
+                detail: { dueAt: asked, reason: "C 家明早才回" },
+                createdAt: ago(3),
+              },
+              ...(state.answered
+                ? [
+                    {
+                      id: "x2",
+                      kind: "extension_granted",
+                      actor: "user:me",
+                      detail: { dueAt: asked },
+                      createdAt: ago(1),
+                    },
+                  ]
+                : []),
+            ],
       });
     if (path === "/api/settings/preferences")
       return json({ preferences: preferences(workHours()) });
@@ -1012,6 +1028,68 @@ test("延期弹层：申请是明天 10:30 时，输入框写「明早 10:30」�
         .map((call) => call.body),
     ).toEqual([{ decision: "deny", requestedDueAt: asked }]),
   );
+});
+
+test("延期弹层开着时那条申请在别处答复了：不再让提交，也不悄悄改成直接改预计时间", async () => {
+  const asked = shanghaiTomorrowAt(10, 30);
+  const state: { answered?: boolean; none?: boolean } = {};
+  const calls = extensionFetch(asked, state);
+  const queryClient = preferencesClient("user-extend-moved", workHours());
+  const view = render(
+    <QueryClientProvider client={queryClient}>
+      <ExtendDialog card={OVERDUE_CARD} onClose={() => {}} />
+    </QueryClientProvider>,
+  );
+  const input = (await view.findByRole("textbox", {
+    name: "延到几点",
+  })) as HTMLInputElement;
+  await waitFor(() => expect(input.value).toBe("明早 10:30"));
+  fireEvent.change(input, { target: { value: "明天下午三点" } });
+
+  // 另一台设备上准了这条申请；流水重读回来，这条申请已经结了。
+  state.answered = true;
+  await queryClient.invalidateQueries({ queryKey: ["tasks"] });
+  expect((await view.findByRole("alert")).textContent).toBe(
+    "这条延期申请已经在别处处理了，关掉弹层看看现在的预计时间。",
+  );
+  const submit = view.getByRole("button", { name: "准许延期" });
+  expect(submit.hasAttribute("disabled")).toBe(true);
+  expect(
+    view
+      .getByRole("button", { name: "不批，按原时间交" })
+      .hasAttribute("disabled"),
+  ).toBe(true);
+  fireEvent.submit(input.closest("form") as HTMLFormElement);
+  await settleReactWork();
+  expect(calls.filter((call) => call.method !== "GET")).toEqual([]);
+  cleanup();
+
+  // 反过来：打开时没有申请（直接改预计时间），开着时员工申请了，也先停下，让人重新打开去答复它。
+  const later: { answered?: boolean; none?: boolean } = { none: true };
+  const quiet = extensionFetch(asked, later);
+  const client2 = preferencesClient("user-extend-appeared", workHours());
+  const again = render(
+    <QueryClientProvider client={client2}>
+      <ExtendDialog card={OVERDUE_CARD} onClose={() => {}} />
+    </QueryClientProvider>,
+  );
+  const field = (await again.findByRole("textbox", {
+    name: "延到几点",
+  })) as HTMLInputElement;
+  await waitFor(() =>
+    expect(
+      again.getByRole("button", { name: "准许延期" }).hasAttribute("disabled"),
+    ).toBe(true),
+  );
+  fireEvent.change(field, { target: { value: "16:00" } });
+  later.none = false;
+  await client2.invalidateQueries({ queryKey: ["tasks"] });
+  expect((await again.findByRole("alert")).textContent).toBe(
+    "员工刚申请了延期，关掉弹层再打开，答复那条申请。",
+  );
+  fireEvent.submit(field.closest("form") as HTMLFormElement);
+  await settleReactWork();
+  expect(quiet.filter((call) => call.method !== "GET")).toEqual([]);
 });
 
 // ---------------------------------------------------------------- 当作一件活来跟
