@@ -30,7 +30,7 @@ import {
   wakerGroupMembers,
 } from "../db/schema";
 import { taskArchives } from "../db/schema/task-archives";
-import { CardTurnRefused, type CardTurns } from "./card-turns";
+import type { CardTurns } from "./card-turns";
 import { createDelivery, type Delivery, stageOf } from "./delivery";
 import { DEFAULT_TIME_ZONE, DELIVERY_EVENTS } from "./delivery-tools";
 import { clockOf, dueRefusalText, readDueTime } from "./due-time";
@@ -38,6 +38,7 @@ import { listTaskEvents } from "./events";
 import type { NudgeRuns } from "./nudge-run";
 import { overdueNowCondition } from "./overdue";
 import type { TaskProjector } from "./projector";
+import { returnTaskWithReason } from "./return-task";
 
 type Ctx = { Variables: AppVariables };
 
@@ -685,95 +686,33 @@ export function createTaskRoutes(
         { error: `退回要写原因，${RETURN_REASON_CHARS} 字以内。` },
         400,
       );
-    const reason = body.data.reason;
-    /*
-     * The reason is said first, and the card moves only once it is in: a 退回 the coworker never
-     * hears -- the thread busy, the coworker paused, the group gone -- would leave the card with the
-     * coworker and the reason only in the history. So a reason that cannot be said refuses the whole
-     * 退回, and the card stays where it was, with nothing written.
-     */
-    if (!options.turns)
-      return context.json({ error: "现在退回不了，稍后再试。" }, 503);
-    const turns = options.turns;
-    /*
-     * The card is taken for this 退回 first (`return_pending_at`): two at once -- a double click --
-     * would otherwise both say the reason and both start a turn. The one that does not get it is told
-     * a 退回 is under way. The claim is let go on every way out below that does not return the card.
-     */
-    const claim = await delivery.claimReturn(tenantId, taskId);
-    if (!claim.ok)
+    // Claim, say the reason, return (`tasks/return-task.ts`, shared with WeChat's 「退回 原因」).
+    const returned = await returnTaskWithReason(
+      { delivery, turns: options.turns },
+      tenantId,
+      taskId,
+      { actor: `user:${tenantId}`, reason: body.data.reason },
+    );
+    if (!returned.ok) {
+      if (returned.why === "unavailable")
+        return context.json({ error: "现在退回不了，稍后再试。" }, 503);
       return context.json(
         {
           error:
-            claim.why === "pending"
+            returned.why === "pending"
               ? "正在退回，稍等一下。"
-              : "这件活不在等你验收，不能退回。",
+              : returned.why === "refused"
+                ? (returned.message ?? "现在退回不了，稍后再试。")
+                : "这件活不在等你验收，不能退回。",
         },
         409,
       );
-    const card = { threadRef: claim.threadRef, agentId: claim.agentId };
-    const release = () =>
-      delivery.releaseReturn(tenantId, taskId, claim.claimedAt).catch((error) =>
-        log("task-return-release-failed", {
-          taskId,
-          reason: error instanceof Error ? error.message : String(error),
-        }),
-      );
-    let said: { runId: string | null; groupMessageId: string | null };
-    try {
-      said = await turns.sendAsUser(
-        tenantId,
-        { threadId: card.threadRef, agentId: card.agentId },
-        `退回：${reason}`,
-        { source: `task-return:${taskId}`, taskId },
-      );
-    } catch (error) {
-      await release();
-      if (error instanceof CardTurnRefused)
-        return context.json({ error: error.message }, 409);
-      log("task-return-turn-failed", {
-        taskId,
-        reason: error instanceof Error ? error.message : String(error),
-      });
-      return context.json({ error: "现在退回不了，稍后再试。" }, 503);
-    }
-    /** The reason was said but the card did not move: let the claim go and stop the turn just started. */
-    const undo = async () => {
-      await release();
-      if (said.runId)
-        await turns.stopRound(tenantId, {
-          threadId: card.threadRef,
-          agentId: card.agentId,
-          runId: said.runId,
-        });
-    };
-    let returned: Awaited<ReturnType<typeof delivery.returnTask>>;
-    try {
-      returned = await delivery.returnTask(tenantId, taskId, {
-        actor: `user:${tenantId}`,
-        reason,
-        claimedAt: claim.claimedAt,
-      });
-    } catch (error) {
-      // The card could not be written (a database fault): undone as if the reason was never said.
-      log("task-return-write-failed", {
-        taskId,
-        reason: error instanceof Error ? error.message : String(error),
-      });
-      await undo();
-      return context.json({ error: "现在退回不了，稍后再试。" }, 503);
-    }
-    if (!returned) {
-      // Reviewed or cancelled in the moment between (or the claim ran out and another 退回 took it):
-      // the turn just started is stopped (a group's message, already in the transcript, stays).
-      await undo();
-      return context.json({ error: "这件活不在等你验收，不能退回。" }, 409);
     }
     return context.json({
       ok: true,
       returns: returned.returns,
-      runId: said.runId,
-      groupMessageId: said.groupMessageId,
+      runId: returned.runId,
+      groupMessageId: returned.groupMessageId,
     });
   });
 
