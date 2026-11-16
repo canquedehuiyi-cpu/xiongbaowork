@@ -4,13 +4,20 @@
  * (`staffing-lifecycle.ts`) and as G4 (`wakerflow-lifecycle.ts`); it adds nothing to them.
  *
  * What is REAL here: the person's session, the conversation, the run, the mocked model's tool call, the
- * app's own scope read (`GET /api/computers/:botId/local-tools`, which decides whether a link may be
- * drawn at all), `lib/computers/artifact.ts`, the anchor the transcript draws, the browser's own
- * download of the answer, and the dark theme the screenshots are taken in.
+ * app's own scope rule applied to the answer it reads (`isWorkspaceScope` in
+ * `lib/computers/artifact.ts`, which decides whether a link may be drawn at all), the anchor the
+ * transcript draws, the browser's own download of the answer, and the dark theme the screenshots are
+ * taken in.
  *
  * What is FIXED, because a CI runner has no computer to reach (this is the whole fixture boundary, and
  * nothing else is answered by hand):
  *
+ *   GET  /api/computers/:botId/local-tools  the deployment's answer to "where are this Bot's files".
+ *                                        A cloud runtime without a container provider mounts no
+ *                                        `/api/computers` route at all (`devices/selection.ts`), so the
+ *                                        runner has no computer to ask; `workspace` is what a cloud
+ *                                        container deployment answers and `device` what a
+ *                                        paired-computer one does (states 4 and 5 below)
  *   POST /api/approvals/computer/:botId  the gate that executes a write — answers the computer's result
  *                                        (`{result: {ok, path, bytes}}`, or a refusal)
  *   POST /api/computers/:botId/files/list  the folders this turn wrote into — answers their entries,
@@ -328,8 +335,9 @@ const serverEnv: Record<string, string> = {
   INTELLIGENCE_MODE: "local",
   TENANT_PACKAGE_DIR: "../examples/xiongbao",
   APP_DIST_DIR,
-  // With no paired computer the deployment's machine is its own workspace: exactly the scope that
-  // may hand out a download, and the answer this run reads from the server rather than fixes.
+  // A cloud runtime with no container provider: `devices/selection.ts` gives it no computer provider,
+  // so `/api/computers/*` is not mounted and the scope answer the page reads is handed by
+  // `fixedComputer` — `workspace`, which is what a cloud container deployment answers for itself.
   OPENAI_BASE_URL: MODEL_BASE_URL,
   OPENAI_API_KEY: "g7-mock-key-not-a-secret",
   AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
@@ -436,6 +444,8 @@ async function send(p: Page, text: string) {
 const gateBodies: string[] = [];
 const listRequests: string[] = [];
 const downloadRequests: string[] = [];
+/** Every read of `…/local-tools` the page made, in order: the scope question, asked where? */
+const scopeReads: string[] = [];
 /** Whether the scope answer is the server's (workspace) or the one this run fixes for state 4. */
 let scopeOverride: "workspace" | "device" | undefined;
 
@@ -462,8 +472,9 @@ function attachmentHeaders(name: string): Record<string, string> {
 }
 
 /**
- * The computer, answered by hand: the gate that runs a write, the folders the list asks about, and the
- * download the anchor points at. Nothing else is intercepted — `/local-tools` among it.
+ * The computer, answered by hand: the scope the page reads before drawing a link, the gate that runs a
+ * write, the folders the list asks about, and the download the anchor points at. Nothing else is
+ * intercepted, and nothing here is intercepted that the page could answer for itself.
  */
 async function fixedComputer(route: Route): Promise<void> {
   const request = route.request();
@@ -508,13 +519,20 @@ async function fixedComputer(route: Route): Promise<void> {
     });
   }
   if (/^\/api\/computers\/[^/]+\/local-tools$/.test(path)) {
-    // State 4 only: the same conversation with a paired computer. The server's own answer is what the
-    // first three states are drawn from, and it is the answer the assertion below reads back.
-    if (scopeOverride === undefined) return route.fallback();
+    // The one answer both the line and the list read before drawing anything. A runner has no
+    // computer to seat this Bot on — `devices/selection.ts` mounts no `/api/computers` routes at all
+    // for a cloud runtime without a container provider — so the deployment's answer is handed here:
+    // `workspace` is what a cloud container deployment answers, `device` what a paired-computer one
+    // does (`gateway.ts` reads the runtime, never the conversation). States 4 and 5 flip this value;
+    // nothing else about the page changes, which is what makes them a control for each other.
+    scopeReads.push(path);
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ allowed: false, machine: scopeOverride }),
+      body: JSON.stringify({
+        allowed: false,
+        machine: scopeOverride ?? "workspace",
+      }),
     });
   }
   return route.fallback();
@@ -575,18 +593,19 @@ try {
       listed.body.agents.some((agent) => agent.id === bot),
       `the 小管家 (${bot}) is among their employees`,
     );
-    // The scope decision is the server's, read here before anything is drawn: no computer is paired
-    // with this deployment, so its files are in the workspace the download route answers for.
-    const scope = await api<{ machine?: string }>(
+    /*
+     * Checked rather than assumed: this deployment has no computer of its own to ask.
+     *
+     * `devices/selection.ts` gives a cloud runtime without a container provider no provider at all, so
+     * `/api/computers/*` is not mounted and the read answers 404. The scope answer the page then builds
+     * on is the one `fixedComputer` hands it — which is only honest if the page really asked instead of
+     * assuming, so the reads are counted there and read back in the next step.
+     */
+    const scope = await api<Record<string, unknown>>(
       "GET",
       `/api/computers/${encodeURIComponent(bot)}/local-tools`,
     );
-    equal(scope.status, 200, "GET /local-tools answers this Bot");
-    equal(
-      scope.body.machine,
-      "workspace",
-      "the deployment's machine is its own workspace (the only scope a link may name)",
-    );
+    equal(scope.status, 404, "this deployment has no computer to answer for the Bot");
   });
 
   let channelPath = "";
@@ -628,6 +647,11 @@ try {
       await p.locator("[data-tool-download]").count(),
       2,
       "the refused write drew no link: a link is a promise the file is there",
+    );
+    equal(
+      new Set(scopeReads).size,
+      1,
+      "the saved-file line and the turn's list asked one scope question about one Bot, and asked the server",
     );
     await screenshot("artifact-line");
   });
@@ -726,9 +750,9 @@ try {
   });
 
   await step("同一个问题答回 workspace -> 同一份历史又把链接画回来了", async () => {
-    // The control for the step above: the same messages, reloaded with the server's own answer, must
-    // draw the links again. Without it, "no link" would prove nothing about the scope — it could just
-    // be a conversation read back from history drawing no links at all.
+    // The control for the step above: the same messages, reloaded with the workspace answer back in
+    // place, must draw the links again. Without it, "no link" would prove nothing about the scope — it
+    // could just be a conversation read back from history drawing no links at all.
     scopeOverride = undefined;
     await p.reload({ waitUntil: "load" });
     await until(
@@ -774,7 +798,11 @@ try {
 } finally {
   writeFileSync(
     resolve(ARTIFACTS, "model-calls.json"),
-    `${JSON.stringify({ calls, gateBodies, listRequests, downloadRequests }, null, 2)}\n`,
+    `${JSON.stringify(
+      { calls, gateBodies, listRequests, downloadRequests, scopeReads },
+      null,
+      2,
+    )}\n`,
   );
   if (context && !failed) await context.tracing.stop().catch(() => undefined);
   await browser?.close().catch(() => undefined);
@@ -785,7 +813,9 @@ try {
 
 const total = (Date.now() - started) / 1000;
 console.log("\nRequests the computer answered by hand:");
-console.log(`  gate ${gateBodies.length}, list ${listRequests.length}, download ${downloadRequests.length}`);
+console.log(
+  `  gate ${gateBodies.length}, list ${listRequests.length}, download ${downloadRequests.length}, scope ${scopeReads.length}`,
+);
 console.log("\nTimings:");
 for (const timing of timings)
   console.log(`  ${timing.seconds.toFixed(1).padStart(6)} s  ${timing.name}`);
