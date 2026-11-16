@@ -2,7 +2,7 @@
  * 自主工作's header art (docs/design/ios-studio `.signal-stage`, 03-自主工作.png): a tilted graphite
  * chip with a bolt and a red underline, faint circuit traces either side, one red signal running
  * through it to a red node, a few light points and two dashed reticles, and the mono caption
- * 「● TRIGGER → EXECUTE」 under it.
+ * 「● 触发 → 执行」 under it.
  *
  * The drawing is the reference's own SVG, served as one image rather than as live nodes: it is pure
  * decoration, and a few dozen svg elements in the page's tree tripled the time every role query on
@@ -56,7 +56,7 @@ export function SignalArt() {
       />
       <span className="absolute right-[19%] bottom-[12px] flex items-center gap-[5px] font-mono text-[9px] text-faint uppercase tracking-[0.1em]">
         <span className="size-[4px] rounded-full bg-signal" />
-        TRIGGER → EXECUTE
+        触发 → 执行
       </span>
     </div>
   );
