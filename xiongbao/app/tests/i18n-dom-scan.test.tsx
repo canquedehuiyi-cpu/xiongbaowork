@@ -17,17 +17,45 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render } from "@testing-library/react";
+import { ThemeProvider } from "@/components/theme-provider";
+import { Route as Approvals } from "@/routes/_authed/_app/approvals";
+import { Route as Autonomous } from "@/routes/_authed/_app/autonomous";
+import { Route as Bots } from "@/routes/_authed/_app/bots.index";
+import { Route as CapabilitiesComponents } from "@/routes/_authed/_app/capabilities.components";
+import { Route as CapabilitiesKnowledge } from "@/routes/_authed/_app/capabilities.knowledge";
+import { Route as CapabilitiesMemory } from "@/routes/_authed/_app/capabilities.memory";
+import { Route as CapabilitiesMine } from "@/routes/_authed/_app/capabilities.mine";
+import { Route as CapabilitiesModels } from "@/routes/_authed/_app/capabilities.models";
+import { Route as CapabilitiesPlugins } from "@/routes/_authed/_app/capabilities.plugins";
+import { Route as CapabilitiesProjects } from "@/routes/_authed/_app/capabilities.projects";
+import { Route as CapabilitiesRoles } from "@/routes/_authed/_app/capabilities.roles";
+import { Route as CapabilitiesSkills } from "@/routes/_authed/_app/capabilities.skills";
+import { Route as CapabilitiesWakerflows } from "@/routes/_authed/_app/capabilities.wakerflows";
+import { Route as Connections } from "@/routes/_authed/_app/connections.index";
+import { Route as Pipelines } from "@/routes/_authed/_app/pipelines";
+import { Route as Tasks } from "@/routes/_authed/_app/tasks";
+import { Route as TeamBots } from "@/routes/_authed/_app/team-bots";
+import { Route as WakerflowsNew } from "@/routes/_authed/_app/wakerflows.new";
+import { Route as Workbench } from "@/routes/_authed/_app/workbench";
+import { Route as AdminBoundariesNew } from "@/routes/_authed/admin/boundaries_.new";
+import { Route as AdminComputers } from "@/routes/_authed/admin/computers";
+import { Route as AdminCredentialsNew } from "@/routes/_authed/admin/credentials_.new";
+import { Route as Admin } from "@/routes/_authed/admin/index";
+import { Route as AdminPlugins } from "@/routes/_authed/admin/plugins/index";
+import { Route as AdminSkillsNew } from "@/routes/_authed/admin/skills_.new";
+import { Route as SettingsComputer } from "@/routes/_authed/settings/_personal/computer";
+import { Route as SettingsCredentialsNew } from "@/routes/_authed/settings/_personal/credentials_.new";
+import { Route as SettingsSkillsNew } from "@/routes/_authed/settings/_personal/skills_.new";
+import { Route as SettingsApprovals } from "@/routes/_authed/settings/approvals";
+import { Route as Settings } from "@/routes/_authed/settings/index";
+import { Route as SettingsNotifications } from "@/routes/_authed/settings/notifications";
+import { Route as SettingsPlans } from "@/routes/_authed/settings/plans";
 import {
   type RouteReport,
   report,
   scanRoute,
 } from "../../scripts/acceptance/i18n-scan";
-import { Route as Approvals } from "@/routes/_authed/_app/approvals";
-import { Route as CapabilitiesPlugins } from "@/routes/_authed/_app/capabilities.plugins";
-import { Route as Plans } from "@/routes/_authed/settings/plans";
-import { Route as Tasks } from "@/routes/_authed/_app/tasks";
-import { Route as TeamBots } from "@/routes/_authed/_app/team-bots";
-import { Route as Workbench } from "@/routes/_authed/_app/workbench";
+import { SCANNED } from "./i18n-route-table";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -42,12 +70,16 @@ import { settleReactWork } from "./settle-react-work";
  * 3. **两种状态各扫一遍**。「还在读」画的是页头、页签、按钮和骨架；「读完了」在此基础上多出空状态，以及
  *    只有拿到数据才写出来的句子（`/settings/plans` 的「N 位同事 · 每月 N 个任务」就是后者）。只扫一种，
  *    另一种里的英文就看不见。
- * 4. **画不出来就说画不出来**。一条路渲染出的文字行少于 `FLOOR` 行时，这条记为「没扫到」并让测试红，而不
- *    是在零违规里安静地过——`server-tests.list.txt` 那种「文件存在但从不运行」的坑，这里同样会有。
+ * 4. **画不出来就说画不出来**。一条路渲染出的文字行少于它的下限（默认 `FLOOR`）时，这条记为「没扫到」
+ *    并让测试红，而不是在零违规里安静地过。同理，渲染崩到路由错误边界、或者跳到一个没挂进这棵树的地址
+ *    （屏幕上只剩库的 `Not Found`），也一律记为「没扫到」——那两种情形下的英文都不是产品文案。
+ * 5. **扫哪些，由台账说了算**。`i18n-route-table.ts` 的 `SCANNED` 是唯一的名单，`i18n-route-coverage.test.ts`
+ *    拿它跟 `routes/` 下的文件对账。所以「主路径」不会因为某个页面没人记得加而悄悄缩小——
+ *    `server-tests.list.txt` 那种「文件存在但从不运行」的坑，在 DOM 扫描这一侧有了对应的守卫。
  *
- * 数出来的账记在 `i18n-dom-budget.json`，本文件只允许它**变小**。这正是 DoD-7 现在的状态：口径要的是 0，
- * 而清文案是 WP-2.5 的活；在那之前，这份账是「还剩几行、分别在哪一页」的可复现证据，也是一道不许回头的
- * 棘轮。
+ * 数出来的账记在 `i18n-dom-budget.json`，本文件只允许它**变小**。它现在是空数组：63 条断言、0 行纯英文，
+ * 剩下的英文只在口径豁免里（品牌名 `WakerFlow` / `Waker`、缩写 `API`、键名 `Shift`、装饰字形 `N` 与 `z`），
+ * 逐条列在报告末尾，可查。
  */
 
 /** 一条路由渲染出的、少于这么多文字行，就认为它没画出来。 */
@@ -57,26 +89,61 @@ const FLOOR = 10;
 const REVEAL_MS = 400;
 
 /**
- * 主路径：应用外壳自己能带你去的那些页面。地址取自 `lib/navigation.ts` 的 `NAVIGATION` 与 `RAIL_PREFIXES`，
- * 取的是落地页。
+ * 主路径：外壳能带你到的页面。名单在 `i18n-route-table.ts` 的 `SCANNED` 里，那里同时记着「哪个文件」，
+ * 「盖到没有」由 `i18n-route-coverage.test.ts` 算账；这里只负责把它们画出来。
  */
-const MAIN_PATH: readonly { readonly at: string }[] = [
-  { at: "/workbench" },
-  { at: "/tasks" },
-  { at: "/capabilities/plugins" },
-  { at: "/approvals" },
-  { at: "/team-bots" },
-  { at: "/settings/plans" },
-];
-
 const ROUTES = new Map<string, unknown>([
-  ["/workbench", Workbench],
-  ["/tasks", Tasks],
-  ["/capabilities/plugins", CapabilitiesPlugins],
+  ["/admin", Admin],
+  ["/admin/boundaries/new", AdminBoundariesNew],
+  ["/admin/computers", AdminComputers],
+  ["/admin/credentials/new", AdminCredentialsNew],
+  ["/admin/plugins", AdminPlugins],
+  ["/admin/skills/new", AdminSkillsNew],
   ["/approvals", Approvals],
+  ["/autonomous", Autonomous],
+  ["/bots", Bots],
+  ["/capabilities/components", CapabilitiesComponents],
+  ["/capabilities/knowledge", CapabilitiesKnowledge],
+  ["/capabilities/memory", CapabilitiesMemory],
+  ["/capabilities/mine", CapabilitiesMine],
+  ["/capabilities/models", CapabilitiesModels],
+  ["/capabilities/plugins", CapabilitiesPlugins],
+  ["/capabilities/projects", CapabilitiesProjects],
+  ["/capabilities/roles", CapabilitiesRoles],
+  ["/capabilities/skills", CapabilitiesSkills],
+  ["/capabilities/wakerflows", CapabilitiesWakerflows],
+  ["/connections", Connections],
+  ["/pipelines", Pipelines],
+  ["/settings", Settings],
+  ["/settings/approvals", SettingsApprovals],
+  ["/settings/computer", SettingsComputer],
+  ["/settings/credentials/new", SettingsCredentialsNew],
+  ["/settings/notifications", SettingsNotifications],
+  ["/settings/plans", SettingsPlans],
+  ["/settings/skills/new", SettingsSkillsNew],
+  ["/tasks", Tasks],
   ["/team-bots", TeamBots],
-  ["/settings/plans", Plans],
+  ["/wakerflows/new", WakerflowsNew],
+  ["/workbench", Workbench],
 ]);
+
+/* 扫表说扫哪些，这里就必须挂着哪些：挂少了下面画不出来，挂多了会扫一台不存在的页面。 */
+const MAIN_PATH = SCANNED.map((one) => ({
+  at: one.at,
+  states: one.states,
+  minLines: one.minLines,
+}));
+
+/*
+ * 两个方向都要钉住。少挂一条，`linesOf` 会抛「没有登记路由文件」，能看见；反过来多挂一条却没人管——
+ * 那是一条登记了路由、扫表里却没有的地址，永远扫不到，而且不报错。这里一次说清。
+ */
+if (ROUTES.size !== SCANNED.length)
+  throw new Error(
+    `ROUTES 有 ${ROUTES.size} 条，扫表有 ${SCANNED.length} 条，两边对不上`,
+  );
+for (const one of SCANNED)
+  if (!ROUTES.has(one.at)) throw new Error(`扫表里的 ${one.at} 没有挂路由文件`);
 
 /**
  * 页面读数据时的两种状态。`pending` 是永远不回答，`loaded` 是回答一个空壳。
@@ -131,6 +198,33 @@ const EMPTY_ANSWER: readonly (readonly [string, string])[] = [
   ["/api/plugins", '{"catalogue":[],"servers":[],"plugins":[],"total":0}'],
   // 设备列表：`client("/api/devices", "devices")`，不解信封页面上就会写「设备加载失败：…」。
   ["/api/devices", '{"devices":[]}'],
+  /*
+   * 下面这一批是扩表时补的。共同点是同一个毛病：查询函数解信封、拿到 `undefined`，React Query 就把
+   * 它自己的英文诊断画到屏幕上（`["agents","list",…] data is undefined`）。那不是产品文案，是量具
+   * 在说话——但它会一字不差地被记进「纯英文行」，所以每一条都得给出真形状的空答案。
+   */
+  // `agentListQueryOptions`：`client("/api/agents", "agents")`，`?hidden=true` 走同一个 pathname。
+  ["/api/agents", '{"agents":[]}'],
+  // `autonomousOverviewQueryOptions`：`client<AutonomousSummary[]>("/api/agents/autonomous/all", "autonomous")`。
+  ["/api/agents/autonomous/all", '{"autonomous":[]}'],
+  // `wakerGroupsQueryOptions`：`client<WakerGroup[]>("/api/waker-groups", "groups")`。
+  ["/api/waker-groups", '{"groups":[]}'],
+  // `memoriesQueryOptions` / `memorySourcesQueryOptions`：各自解 `memories`、`sources`。
+  ["/api/memory", '{"memories":[]}'],
+  ["/api/memory/sources", '{"sources":[]}'],
+  // `proactiveSuggestionsQueryOptions`：解 `suggestions`。
+  ["/api/proactive/suggestions", '{"suggestions":[]}'],
+  // `wakerflowsQueryOptions`：`client<unknown>("/api/wakerflows", "flows")`。
+  ["/api/wakerflows", '{"flows":[]}'],
+  /*
+   * `/api/delivery` 是唯一一个「空对象会崩」的：`reaching-you.tsx` 写的是 `reach.data?.bindings.filter(…)`
+   * ——可选链只挂在 `data` 上，`bindings` 缺了就在 `undefined` 上取 `.filter`，页面直接崩到路由错误边界。
+   * 所以这里必须把四个键都交出来，`available` 还要是对象（有人写 `available[transport]`）。
+   */
+  [
+    "/api/delivery",
+    '{"bindings":[],"devices":[],"deliveries":[],"available":{"slack":false,"teams":false,"sms":false,"push":false}}',
+  ],
 ];
 
 /** 一个永远不回答的 API。页面停在「加载中」。 */
@@ -178,9 +272,17 @@ async function linesOf(at: string, state: State): Promise<string[]> {
       } as never),
     ]),
   });
+  /*
+   * `ThemeProvider` 是从真实根里搬来的：`routes/__root.tsx` 的 `RootComponent` 把 `<Outlet/>` 包在
+   * `ThemeProvider` → `TooltipProvider` 里，而这里另起了一个根，那一层就没了。扩表加进 `/settings`
+   * 之后才暴露出来——设置页读 `useTheme()`，没有 provider 直接抛，整页崩成路由错误边界。
+   * 伪装根离真根越近，扫到的就越真的是应用会画的东西。
+   */
   render(
     <QueryClientProvider client={client}>
-      <RouterProvider router={router as never} />
+      <ThemeProvider>
+        <RouterProvider router={router as never} />
+      </ThemeProvider>
     </QueryClientProvider>,
   );
   /*
@@ -234,6 +336,18 @@ function textLines(root: Element): string[] {
  */
 const ROUTER_FALLBACK = "Something went wrong!";
 
+/**
+ * 路由跳走了、但跳去的地址不在这个伪装树里时，TanStack 画它自己的 `Not Found`。
+ *
+ * 这一行特别容易被当成「一处没翻的英文」记进账里，实际它连应用的 DOM 都不是：真应用里
+ * `routes/__root.tsx` 把 `notFoundComponent` 设成了 `<Navigate to="/" />`，用户根本看不到这个词。
+ * 所以它和 `ROUTER_FALLBACK` 一个待遇——看到就说这一条没扫到。
+ *
+ * 旧地址那批路由（`/wakers`、`/resources`…）就是这样：`beforeLoad` 里 `throw redirect`，跳去的地址
+ * 没挂在这棵伪装树里，于是只剩这两行。
+ */
+const NOT_FOUND = "Not Found";
+
 /** 一条路由的一种状态扫一遍。 */
 async function scanOne(at: string, state: State): Promise<RouteReport> {
   cleanup();
@@ -241,6 +355,10 @@ async function scanOne(at: string, state: State): Promise<RouteReport> {
   if (lines.includes(ROUTER_FALLBACK))
     throw new Error(
       `${at} · ${LABEL[state]} 渲染崩了（错误组件顶上来），这一条没扫到`,
+    );
+  if (lines.includes(NOT_FOUND))
+    throw new Error(
+      `${at} · ${LABEL[state]} 跳到了没挂进这棵树里的地址（只剩 Not Found），这一条没扫到`,
     );
   // `I18N_SCAN_LINES=1` 打出每条路由的每一行：量具自己抖的时候，得先看清抖的是哪几行。
   if (process.env.I18N_SCAN_LINES === "1")
@@ -262,7 +380,12 @@ describe("主路径没有纯英文文字行", () => {
      * （也失败），免得账本慢慢和现实脱钩、变成一句没人再读的数字。不重渲染还有个实际原因：两次渲染
      * 同一页会有细微差别（见 `linesOf` 末尾），比的对象必须是同一个。
      */
-    if (scans.length !== MAIN_PATH.length * STATES.length) return;
+    // 一条路由可能只扫一种状态（见 `Scanned.states`），所以「全扫完了没有」要按每条自己的账算。
+    const expected = MAIN_PATH.reduce(
+      (sum, one) => sum + (one.states ?? STATES).length,
+      0,
+    );
+    if (scans.length !== expected) return;
     const actual: BudgetRow[] = scans
       .filter((one) => one.violations.length > 0)
       .map((one) => ({ at: one.at, english: one.violations.length }))
@@ -284,14 +407,16 @@ describe("主路径没有纯英文文字行", () => {
     expect(problems).toEqual([]);
   });
 
-  for (const { at } of MAIN_PATH) {
-    for (const state of STATES) {
+  for (const { at, states, minLines } of MAIN_PATH) {
+    for (const state of states ?? STATES) {
       test(`${at} · ${LABEL[state]}`, async () => {
         const one = await scanOne(at, state);
         scans.push(one);
-        if (one.lines < FLOOR)
+        // 逐路由可下调（`Scanned.minLines`），理由写在台账那一条上。
+        const floor = minLines ?? FLOOR;
+        if (one.lines < floor)
           throw new Error(
-            `${one.at} 只画出了 ${one.lines} 行文字，少于 ${FLOOR}，这条没扫到`,
+            `${one.at} 只画出了 ${one.lines} 行文字，少于 ${floor}，这条没扫到`,
           );
         // 不许比账本多一行。账本是 0 的那一页，就是一行都不许有。
         const before = WAS.get(one.at) ?? 0;

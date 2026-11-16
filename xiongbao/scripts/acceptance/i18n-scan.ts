@@ -65,6 +65,16 @@ const ALLOWED: readonly { readonly why: string; readonly pattern: RegExp }[] = [
     pattern:
       /\b(?:PDF|CSV|JSON|XML|HTML|CSS|SVG|PNG|JPG|JPEG|GIF|WEBP|MP3|MP4|WAV|ZIP|API|URL|URI|HTTP|HTTPS|SQL|UUID|CPU|GPU|RAM|KB|MB|GB|TB|MS|ID|AI|LLM|MCP|SDK|CLI|UI|UX|OK)\b/g,
   },
+  /*
+   * 键名：`Shift`、`Enter`、`Cmd`。键盘上印的那个字，中文界面里一向照抄，`⇧` 和 `Shift` 是同一个东西
+   * 的两种画法。**白名单而不是「首字母大写的单词」**：后者会把 `Settings`、`Cancel` 一起放过，那正是
+   * 要抓的没翻的文案。
+   */
+  {
+    why: "键名",
+    pattern:
+      /\b(?:Shift|Ctrl|Control|Cmd|Command|Alt|Option|Enter|Return|Tab|Esc|Escape|Space|Backspace|Delete|Home|End|PageUp|PageDown)\b/g,
+  },
   // 形态像 id 的串：`agent_7f3a`、`8f3a2b1c`、`sk-live-…`。必须含数字，免得把普通单词当 id 放过。
   { why: "标识符", pattern: /\b(?=[\w-]*\d)[\w-]{6,}\b/g },
   // 单独的年月日时间：`2026-11-14`、`14:20`。分割之后还会有残片，所以再单列一条。
