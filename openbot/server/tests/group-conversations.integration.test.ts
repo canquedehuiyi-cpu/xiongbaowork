@@ -12,11 +12,11 @@ import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
-import type { AuditEventInput } from "../src/audit";
 import {
   DELEGATE_EFFECT,
   HANDOFF_REF,
 } from "../src/approvals/delegation-freed";
+import type { AuditEventInput } from "../src/audit";
 import {
   createGroupConversations,
   createGroupRoutes,
@@ -2594,7 +2594,8 @@ describe("group conversations in PostgreSQL", () => {
         calls.find((call) => call.agentId === ada)?.userMessage?.content ?? "",
       );
       const toGrace = String(
-        calls.find((call) => call.agentId === grace)?.userMessage?.content ?? "",
+        calls.find((call) => call.agentId === grace)?.userMessage?.content ??
+          "",
       );
       expect(toAda).toContain("message_bot reaches them");
       expect(toAda).not.toContain("never shows anybody");

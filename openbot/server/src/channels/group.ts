@@ -26,9 +26,7 @@ import { and, asc, desc, eq, inArray, isNull, min, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import type { HandoffCaps } from "../agents/handoff";
-import {
-  delegationFreed as readDelegationFreed,
-} from "../approvals/delegation-freed";
+import { delegationFreed as readDelegationFreed } from "../approvals/delegation-freed";
 import type { ApprovalContinuation } from "../approvals/types";
 import {
   type AuditInitiator,

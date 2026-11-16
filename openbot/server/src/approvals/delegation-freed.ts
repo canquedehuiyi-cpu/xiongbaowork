@@ -101,7 +101,11 @@ export async function delegationFreed(
       };
       return (
         personal.some((rule) =>
-          ruleMatches({ ...rule, behaviour: "allow" }, candidate, "personal_rule"),
+          ruleMatches(
+            { ...rule, behaviour: "allow" },
+            candidate,
+            "personal_rule",
+          ),
         ) ||
         team.some((rule) =>
           ruleMatches({ ...rule, behaviour: "allow" }, candidate, "team_rule"),
