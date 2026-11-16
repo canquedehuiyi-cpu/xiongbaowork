@@ -5533,15 +5533,7 @@ await startupLifecycle.run(async (startup) => {
         webhooks: {
           store: deliveryStore,
           router: deliveryRouter,
-          /*
-           * Slack / Teams 审批卡片（opentag-agent.ts）还没把点卡片的平台传进来（计划 2026-11-16-im-channels-wechat
-           * Task 11 待定），这里先明写不记来源（null，读作「网页」）。
-           */
-          approvals: {
-            ...approvalService,
-            decide: (ownerUserId, id, decision) =>
-              approvalService.decide(ownerUserId, id, decision, null),
-          },
+          approvals: approvalService,
           scopeFor: deliveryScopeFor,
           slack: deliveryProviders.slack,
           twilio: deliveryProviders.sms,

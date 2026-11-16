@@ -195,6 +195,47 @@ test("网页上决定的（web）：外部员工的卡片照旧说「这条请�
   expect(text).not.toContain("已由");
 });
 
+test("标题：已经决定的是「已处理」，还在等的仍是「等你确认」", async () => {
+  request = {
+    id: "a-title-done",
+    status: "approved",
+    decision: "allow_once",
+    decidedVia: "wechat",
+  };
+  const done = page(request.id);
+  const heading = await done.findByRole("heading", { level: 1 });
+  await waitFor(() => {
+    expect(heading.textContent).toBe("已处理");
+  });
+  cleanup();
+
+  request = {
+    id: "a-title-old",
+    status: "denied",
+    decision: "deny",
+    decidedVia: null,
+  };
+  const old = page(request.id);
+  await waitFor(() => {
+    expect(old.container.textContent).toContain("这条请求请到审批列表里处理");
+  });
+  expect(old.getByRole("heading", { level: 1 }).textContent).toBe("已处理");
+  cleanup();
+
+  request = {
+    id: "a-title-pending",
+    status: "pending",
+    decision: null,
+    decidedVia: null,
+    acp: true,
+  };
+  const waiting = page(request.id);
+  await waiting.findByRole("button", { name: "批准" });
+  expect(waiting.getByRole("heading", { level: 1 }).textContent).toBe(
+    "等你确认",
+  );
+});
+
 test("decidedElsewhereWords：只有别的渠道、已经决定的才有话说", () => {
   const words = (
     status: string,

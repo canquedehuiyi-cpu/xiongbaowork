@@ -656,12 +656,12 @@ export type ApprovalStore = {
   open(action: ApprovalAction): Promise<ApprovalRecord>;
   get(ownerUserId: string, id: string): Promise<ApprovalRecord>;
   list(ownerUserId: string): Promise<ApprovalRecord[]>;
-  /** `via`：本人在哪里决定的，记进 `decided_via`；`null` 是说不出来源。 */
+  /** `via`：本人在哪里决定的，记进 `decided_via`。 */
   decide(
     ownerUserId: string,
     id: string,
     decision: ApprovalDecision,
-    via: ApprovalVia | null,
+    via: ApprovalVia,
   ): Promise<ApprovalRecord>;
   /** Atomically claim only approved rows whose result is SQL NULL; settled results revoke execution eligibility. */
   consume(ownerUserId: string, id: string, digest: string): Promise<boolean>;

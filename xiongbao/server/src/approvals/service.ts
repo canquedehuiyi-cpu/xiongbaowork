@@ -754,14 +754,13 @@ export function createApprovalService(
     },
     /**
      * `via`：本人在哪里决定的（网页 `web`、微信 `wechat`、Slack / Teams 卡片），记进审批的 `decided_via`，
-     * 网页上据此显示「已由 某某 在 微信 批准」。必填：新的决定入口不说渠道就编译不过；说不出来源的入口只能
-     * 明写 `null`（读作「网页」）。
+     * 网页上据此显示「已由 某某 在 微信 批准」。必填：新的决定入口不说渠道就编译不过。
      */
     async decide(
       ownerUserId: string,
       id: string,
       decision: ApprovalDecision,
-      via: ApprovalVia | null,
+      via: ApprovalVia,
     ) {
       if (!(APPROVAL_DECISIONS as readonly string[]).includes(decision))
         throw new ApprovalRefusedError(

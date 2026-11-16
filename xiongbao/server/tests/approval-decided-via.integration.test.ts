@@ -164,13 +164,18 @@ describe("决定记下来源", () => {
 
   test("库里只收已知的渠道", async () => {
     const request = await pending("bad");
-    await expect(
-      runAsTenant(owner, async () => {
-        await database.execute(
-          sql`update ${approvalRequests} set "decided_via" = 'fax' where ${approvalRequests.id} = ${request.id}`,
-        );
-      }),
-    ).rejects.toThrow();
+    const failure = await runAsTenant(owner, async () => {
+      await database.execute(
+        sql`update ${approvalRequests} set "decided_via" = 'fax' where ${approvalRequests.id} = ${request.id}`,
+      );
+    }).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    // drizzle 把数据库的原话放在 `cause` 里：被拒是因为 0229 的取值约束，不是别的原因。
+    expect(String((failure as { cause?: unknown } | null)?.cause)).toMatch(
+      /approval_decided_via_check/,
+    );
   });
 });
 

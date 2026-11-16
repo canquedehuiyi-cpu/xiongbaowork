@@ -376,9 +376,13 @@ export function createApprovalStore(
           .where(owned(owner, id))
           .returning();
         if (!updated) throw new ApprovalNotFoundError();
-        // 没说渠道的（`null`，或未做类型检查的旧调用）记 null，读的时候退回「网页」。
+        // 未做类型检查的旧调用（测试里）不传渠道时记 null，读的时候退回「网页」。
         const decidedVia = via ?? null;
-        await saveDecidedVia(tx, owned(owner, id), decidedVia);
+        await saveDecidedVia(
+          tx,
+          sql`${eq(approvalRequests.ownerUserId, owner)} and ${eq(approvalRequests.id, id)}`,
+          decidedVia,
+        );
         const trail = createAuditStore(tx as unknown as Database);
         await recordAuditEvent(trail, {
           eventType: "approval.person_decided",

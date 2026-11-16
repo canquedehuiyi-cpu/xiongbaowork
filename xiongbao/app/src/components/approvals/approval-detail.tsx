@@ -76,6 +76,9 @@ function OneApproval({ id }: { id: string }) {
   );
   const raw = data ? acpRawText(data.action.args) : null;
   const waiting = data?.status === "pending" && answered === null;
+  // 已经决定了（在这里刚答的，或别处、别的渠道决定的）：标题说「已处理」；还在等、还没读到时说「等你确认」。
+  const settled =
+    answered !== null || (data !== undefined && data.status !== "pending");
   /*
    * 在微信、Slack、Teams 上决定的：「已由 小熊 在 微信 批准。」（规格验收第 203、213 行）。审批只有本人能决定、
    * 也只有本人读得到，所以「某某」是本人的名字，没有名字时说「你」，与微信里的回话一致。网页上决定的、旧数据
@@ -109,7 +112,9 @@ function OneApproval({ id }: { id: string }) {
         >
           返回
         </Link>
-        <h1 className="m-0 font-semibold text-[16px]">等你确认</h1>
+        <h1 className="m-0 font-semibold text-[16px]">
+          {settled ? "已处理" : "等你确认"}
+        </h1>
       </header>
 
       {request.isLoading ? (

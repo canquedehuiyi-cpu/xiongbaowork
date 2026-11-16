@@ -127,10 +127,10 @@ export const requestColumns = {
   decidedVia: requestDecidedVia,
 };
 
-/** 记下这条审批在哪里决定的，与决定同一个事务、同一个帧。`where` 是那一行（`owned(owner, id)`）。 */
+/** 记下这条审批在哪里决定的，与决定同一个事务、同一个帧。`where` 选中那一行（本人 + 审批 id）。 */
 export async function saveDecidedVia(
   executor: Executor,
-  where: SQL | undefined,
+  where: SQL,
   via: ApprovalVia | null,
 ): Promise<void> {
   await executor.execute(
