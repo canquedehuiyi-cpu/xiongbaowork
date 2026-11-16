@@ -93,35 +93,47 @@ export interface MutationEntry {
   survivesUntil?: string;
 }
 
+/** 撤、查第二个账号的测试：两条变异各自能让其中至少一个测试失败（实跑 6 个、2 个失败）。 */
+const TESTS_FURTHER = [
+  "server/tests/arcade-multiple-accounts.integration.test.ts",
+  "server/tests/arcade-account-sweeps.integration.test.ts",
+  "server/tests/brokered-multiple-accounts.integration.test.ts",
+];
+
 export const REGISTER: MutationEntry[] = [
+  /*
+   * 上游这三条守在 server/src/plugins/composio-client/ 上，本仓库没有那个目录：Composio 的账号都在同一个
+   * id 下（composio-adapter.ts 收的就是厂商 id），「本地 id 还是厂商 id」这个区别在本仓库落在 store.ts
+   * 撤第二个账号、查第二个账号的两处调用上。所以前两条改指这两处，第三条改指 composio-adapter.ts。
+   */
   {
-    id: "composio-revoke-asks-under-local-id",
+    id: "further-account-revoke-asks-under-local-id",
     kind: "identity",
-    path: "server/src/plugins/composio-client/consent.ts",
-    anchor: "async revoke({ account, toolkit }): Promise<boolean> {",
-    find: "const userId = account.vendorUserId;",
-    replace: "const userId = account.userId;",
-    tests: ["server/tests/composio-adapter.test.ts"],
-    why: "A8a: withdrawal must ask Composio under the vendor id. Passed 245/245 before A8a; 18 fail after.",
+    path: "server/src/plugins/store.ts",
+    anchor: "async function revokeFurtherAccounts(",
+    find: "broker.revoke({ userId: vendorUserId, toolkit })",
+    replace: "broker.revoke({ userId, toolkit })",
+    tests: TESTS_FURTHER,
+    why: "第二个账号记在这个人的另一个厂商 id 下：撤销必须按那个 id 去问，按本地 id 问会把名字下的那个再撤一遍，第二个账号留在厂商那边继续有效。",
   },
   {
-    id: "composio-is-connected-asks-under-local-id",
+    id: "further-account-is-connected-asks-under-local-id",
     kind: "identity",
-    path: "server/src/plugins/composio-client/consent.ts",
-    anchor: "async isConnected({ account, toolkit }): Promise<boolean> {",
-    find: "const userId = account.vendorUserId;",
-    replace: "const userId = account.userId;",
-    tests: ["server/tests/composio-adapter.test.ts"],
-    why: "A8a: the gate ./access asks before running an action must ask under the vendor id. 0 fail before A8a; 3 after.",
+    path: "server/src/plugins/store.ts",
+    anchor: "async function keepForOtherAccount(",
+    find: "broker.isConnected({ userId: vendorUserId, toolkit })",
+    replace: "broker.isConnected({ userId, toolkit })",
+    tests: TESTS_FURTHER,
+    why: "名字下的连接没了时，要按第二个账号的厂商 id 问它是否还活着；按本地 id 问答的是已断开的那个，会把还能用的连接行忘掉。",
   },
   {
     id: "composio-account-listing-unscoped-by-person",
     kind: "query-scope",
-    path: "server/src/plugins/composio-client/context.ts",
+    path: "server/src/plugins/composio-adapter.ts",
     find: "userIds: [userId],",
     replace: "",
     tests: ["server/tests/composio-adapter.test.ts"],
-    why: "A8a: an account listing without its userIds filter reads everybody's accounts as this person's. 5 fail before A8a's honest fakes; 23 after.",
+    why: "A8a: an account listing without its userIds filter reads everybody's accounts as this person's.",
   },
 ];
 

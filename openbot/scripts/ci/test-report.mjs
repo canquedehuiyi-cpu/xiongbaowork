@@ -34,6 +34,31 @@ export function parseLog(raw) {
   return { fail, failures };
 }
 
+/**
+ * 每个失败用例前面 Bun 打出的那段报错（从上一个用例的结果行之后到它自己的 `(fail)` 行）。
+ * 任务日志里只列名字时，偶发失败（只在 CI 的负载下出现）就看不到原因；附件又不一定下得到。
+ * 太长的只留最靠近失败的 `lines` 行，最多 `limit` 个失败。
+ */
+export function failureExcerpts(raw, { limit = 5, lines = 40 } = {}) {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: Bun logs contain ANSI colour escapes.
+  const text = raw.replace(/\x1b\[[0-9;]*m/g, "");
+  const excerpts = [];
+  let since = [];
+  for (const line of text.split("\n")) {
+    const fail = line.match(/^\(fail\) (.+)$/);
+    if (fail) {
+      if (excerpts.length < limit)
+        excerpts.push({
+          name: fail[1].replace(/\s+\[[\d.]+m?s\]\s*$/, ""),
+          lines: since.filter((kept) => kept.trim() !== "").slice(-lines),
+        });
+      since = [];
+    } else if (/^\((pass|skip|todo)\) /.test(line)) since = [];
+    else since.push(line);
+  }
+  return excerpts;
+}
+
 export function difference(left, right) {
   return [...left]
     .map(([name, count]) => [name, count - (right.get(name) ?? 0)])
@@ -74,6 +99,13 @@ if (
     process.exitCode = 1;
   }
   console.log(summary);
+  // 报错片段只进任务日志，不进步骤摘要：摘要保持短，日志里能看到失败的原因。
+  try {
+    for (const { name, lines } of failureExcerpts(
+      readFileSync(headPath, "utf8"),
+    ))
+      console.log(`### 失败片段：${name}\n\n${lines.join("\n")}\n`);
+  } catch {}
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, summary);
   }
