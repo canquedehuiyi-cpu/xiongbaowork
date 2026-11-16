@@ -12,24 +12,38 @@
 - 在哪台机器跑：一台装了 Bun 的电脑，或京东云服务器。要能一直开着，最长要连续开 24 小时以上。服务器上建议用 `tmux` 或 `screen`，这样断开 SSH 也不会停。
 - 凭证文件 `~/.wechat-probe.json` 是机密，里面的令牌能代替这个微信机器人收发消息。不要发给任何人、不要提交到代码库、不要截图。做完实测后把它删掉。
 
-## 第 1 步：取得代码
+## 准备：安装 Bun、放好脚本
 
-在仓库根目录下进入产品目录：
+脚本只用 Bun 自带的功能，不依赖任何其他文件。
+
+安装 Bun。macOS 或 Linux（含京东云服务器），在终端运行：
 
 ```bash
-cd openbot
+curl -fsSL https://bun.sh/install | bash
 ```
 
-确认能运行，应该看到子命令说明：
+Windows，在 PowerShell 运行：
 
-```bash
-bun scripts/wechat-probe.ts --help
+```powershell
+powershell -c "irm bun.sh/install.ps1 | iex"
 ```
 
-## 第 2 步：绑定
+装完后关掉终端再打开，确认版本号能显示：
 
 ```bash
-bun scripts/wechat-probe.ts bind
+bun --version
+```
+
+把收到的 `wechat-probe.ts` 放到任意文件夹，之后所有命令都在这个文件夹里运行。进入文件夹后确认能运行，应该看到子命令说明：
+
+```bash
+bun wechat-probe.ts --help
+```
+
+## 第 1 步：绑定
+
+```bash
+bun wechat-probe.ts bind
 ```
 
 你应该看到：一行二维码地址。用浏览器打开它能看到二维码；如果打开后不是图片，把这段内容用任意二维码工具转成二维码。
@@ -43,12 +57,12 @@ bun scripts/wechat-probe.ts bind
 
 中途如果手机上出现一串数字要你输入，就把它填回终端。如果终端显示 `binded_redirect`，说明这个微信已经绑过，没有签发新凭证，请直接记入结果表，并告诉我。
 
-把 `ilink_user_id` 记下来，第 6 步要对比。
+把 `ilink_user_id` 记下来，第 5 步要对比。
 
-## 第 3 步：收消息并回复
+## 第 2 步：收消息并回复
 
 ```bash
-bun scripts/wechat-probe.ts listen
+bun wechat-probe.ts listen
 ```
 
 保持这个窗口开着。在手机微信里找到聊天列表中的「微信 ClawBot」，给它发一句「你好」。
@@ -58,48 +72,54 @@ bun scripts/wechat-probe.ts listen
 如果终端里消息ID 显示不对或文本为空，把 `--debug` 加上重来，它会多打印每条消息的字段名（不含令牌值）：
 
 ```bash
-bun scripts/wechat-probe.ts listen --debug
+bun wechat-probe.ts listen --debug
 ```
 
 测完后按 Ctrl+C 退出。**记下这一刻的时间，这是「最后一条消息」的时间**，发消息后几小时的计时都从它算起。每次再给 ClawBot 发消息，计时就重新开始。
 
-## 第 4 步：主动推送时间窗
+## 第 3 步：主动推送时间窗
 
-在同一台机器上，另开几个窗口，每个窗口跑一条。每次测之前都要先让 `listen` 收一条新消息（第 3 步），否则计时起点不对。更简单的做法是：发一条消息后，**一次性开 5 个窗口**，分别运行下面 5 条命令（命令里的数字是分钟，对应 1 小时、6 小时、11 小时、15 小时、24 小时）：
+1. 先做完第 2 步：在微信里给 ClawBot 发最后一条消息，**记下这个时间**。
+2. 在终端按 Ctrl+C 退出 `listen`。
+3. 立刻开 5 个终端窗口（都在放脚本的文件夹里），分别运行下面 5 条命令。命令里的数字是分钟，对应 1 小时、6 小时、11 小时、15 小时、24 小时：
 
 ```bash
-bun scripts/wechat-probe.ts push --after 60
+bun wechat-probe.ts push --after 60
 ```
 
 ```bash
-bun scripts/wechat-probe.ts push --after 360
+bun wechat-probe.ts push --after 360
 ```
 
 ```bash
-bun scripts/wechat-probe.ts push --after 660
+bun wechat-probe.ts push --after 660
 ```
 
 ```bash
-bun scripts/wechat-probe.ts push --after 900
+bun wechat-probe.ts push --after 900
 ```
 
 ```bash
-bun scripts/wechat-probe.ts push --after 1440
+bun wechat-probe.ts push --after 1440
 ```
+
+注意：**计时从运行这条命令开始**，所以一定要在发完最后一条消息后马上启动，晚几分钟，结果就会偏几分钟。
 
 这期间不要再给 ClawBot 发任何消息，也不要运行 `listen`，否则时间窗会被刷新。
+
+同时发 5 条主动推送，可能互相影响（比如较早的一条发出去后改变了后面的结果）。如果结果有疑问，可以分天重测单个时间点：每次都从「发最后一条消息」重新开始，只开一个窗口。
 
 每条命令到点后会打印：`发送结果 ret=… errcode=… errmsg=…`。同时请看手机，是否真的收到了「主动推送测试 N 分钟」。接口说成功但手机没收到也要记下来。
 
 如果有一条返回 `-14`，说明账号被暂停了约一小时，请记下来，一小时后重新做那一档。
 
-## 第 5 步：时间窗关闭后再发一条
+## 第 4 步：时间窗关闭后再发一条
 
 等所有推送测完后，给 ClawBot 发一条消息，再运行 `listen` 看一眼是否恢复收发。这能证明「等用户再发一条才恢复」。
 
-## 第 6 步：稳定性和重复扫码
+## 第 5 步：稳定性和重复扫码
 
-1. 解除绑定（微信里「我 › 设置 › 插件 › 微信 ClawBot」里停用或删除），再重新运行第 2 步，对比终端显示的 `ilink_user_id` 与上次是否相同，只回答「相同 / 不同」。
+1. 解除绑定（微信里「我 › 设置 › 插件 › 微信 ClawBot」里停用或删除），再重新运行第 1 步，对比终端显示的 `ilink_user_id` 与上次是否相同，只回答「相同 / 不同」。
 2. 不解除绑定，直接再运行一次 `bind`，用同一个微信再扫一次，记下终端最终显示的状态（比如 `binded_redirect`，或者又拿到了新凭证）。
 
 ## 把结果填给我

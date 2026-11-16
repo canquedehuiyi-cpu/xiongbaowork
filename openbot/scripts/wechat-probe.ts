@@ -27,7 +27,7 @@ type State = {
 
 const HELP = `微信 ClawBot 实测探针
 
-用法：bun scripts/wechat-probe.ts <子命令> [选项]
+用法：bun wechat-probe.ts <子命令> [选项]
 
 子命令：
   bind                     取二维码、等你扫码确认，把凭证写进 ${STATE_PATH}（权限 600，不打印 token）
@@ -139,6 +139,7 @@ async function bind(flags: Map<string, string | true>) {
   let pollBase = base;
   let refreshes = 1;
   let pendingCode: string | undefined;
+  let statusWarned = false;
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     for (;;) {
@@ -150,7 +151,12 @@ async function bind(flags: Map<string, string | true>) {
           headers: appHeaders(clientVersion),
           signal: AbortSignal.timeout(40_000),
         });
-        st = res.ok ? await res.json() : { status: "wait" };
+        if (res.ok) st = await res.json();
+        else {
+          if (!statusWarned) console.log(`[${stamp()}] get_qrcode_status 返回 HTTP ${res.status}，继续等待（只提示一次）`);
+          statusWarned = true;
+          st = { status: "wait" };
+        }
       } catch {
         st = { status: "wait" };
       }
@@ -171,6 +177,12 @@ async function bind(flags: Map<string, string | true>) {
         qr = await fetchQr();
         show();
       } else if (status === "confirmed") {
+        if (!st.bot_token || !st.ilink_user_id) {
+          console.error(
+            `confirmed 但响应缺少字段：bot_token=${st.bot_token ? "有" : "无"} ilink_user_id=${st.ilink_user_id ? "有" : "无"}（响应字段：${Object.keys(st).join(",")}）。没有写凭证文件。`,
+          );
+          process.exit(1);
+        }
         const state: State = {
           bot_token: String(st.bot_token),
           ilink_bot_id: String(st.ilink_bot_id),
@@ -267,8 +279,11 @@ async function listen(flags: Map<string, string | true>) {
     if (ret !== 0 || errcode !== 0) {
       console.log(`[${stamp()}] getupdates ret=${ret} errcode=${errcode} errmsg=${r.errmsg ?? ""}`);
       if (ret === -14 || errcode === -14) {
-        console.log("账号会话被暂停约 1 小时（-14），60 秒后再试。");
-        await sleep(60_000);
+        console.log("微信要求暂停，1 小时后自动继续");
+        for (let left = 60; left > 0; left -= 10) {
+          console.log(`[${stamp()}] 还剩约 ${left} 分钟`);
+          await sleep(10 * 60_000);
+        }
       } else await sleep(5000);
       continue;
     }
@@ -320,18 +335,22 @@ async function push(flags: Map<string, string | true>) {
   }
 }
 
-const { flags, positional } = parseArgs(process.argv.slice(2));
-const cmd = positional[0];
-if (flags.has("help") || !cmd) {
-  console.log(HELP);
-} else if (cmd === "bind") {
-  await bind(flags);
-} else if (cmd === "listen") {
-  await listen(flags);
-} else if (cmd === "push") {
-  await push(flags);
-} else {
-  console.error(`不认识的子命令：${cmd}\n`);
-  console.log(HELP);
-  process.exit(1);
+async function main() {
+  const { flags, positional } = parseArgs(process.argv.slice(2));
+  const cmd = positional[0];
+  if (flags.has("help") || !cmd) {
+    console.log(HELP);
+  } else if (cmd === "bind") {
+    await bind(flags);
+  } else if (cmd === "listen") {
+    await listen(flags);
+  } else if (cmd === "push") {
+    await push(flags);
+  } else {
+    console.error(`不认识的子命令：${cmd}\n`);
+    console.log(HELP);
+    process.exit(1);
+  }
 }
+
+if (import.meta.main) await main();
