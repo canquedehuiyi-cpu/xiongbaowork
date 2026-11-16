@@ -22,6 +22,13 @@
 // sits. The comparison is a MULTISET, so position-free keys lose nothing: two identical errors in
 // one file need two entries, and a third one fails.
 //
+// THE PREFIX STRIP IS THE MACHINE-INDEPENDENCE GUARANTEE, and it has to survive Windows. `REPO_ROOT`
+// comes from `path.resolve()`, which on Windows hands back `C:\Users\…`; tsc prints resolved paths
+// with forward slashes (`C:/Users/…`). Stripping only the backslash spelling matched nothing on
+// Windows, so the absolute path stayed in the key and the same error read as NEW there and as
+// pre-existing on CI. `stripRepoRoot` now handles both spellings, and `typecheck-tests.test.ts`
+// pins it — the strip, not the tsc run.
+//
 // Usage:
 //   bun scripts/typecheck-tests.ts            # check against the baseline; exit 1 on a new error
 //   bun scripts/typecheck-tests.ts --update   # rewrite the baseline from the current output
@@ -30,10 +37,10 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+export const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const project = join("server", "tsconfig.tests.json");
 const baselinePath = join(
-  repoRoot,
+  REPO_ROOT,
   "server",
   "tests",
   "typecheck-baseline.txt",
@@ -61,36 +68,39 @@ const header = [
 // indented, so anchoring on a non-space first character drops them.
 const DIAGNOSTIC = /^(\S[^(]*)\((\d+),\d+\): error (TS\d+): (.*)$/;
 
-function runTsc(): string {
-  const result = Bun.spawnSync({
-    cmd: ["bunx", "tsc", "--noEmit", "--pretty", "false", "-p", project],
-    cwd: repoRoot,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  return `${result.stdout.toString()}${result.stderr.toString()}`;
+/**
+ * Strip the checkout prefix so a key means the same thing on a laptop, in a worktree and on CI.
+ *
+ * Both spellings on purpose: `root` arrives with backslashes from `path.resolve()` on Windows, while
+ * tsc writes the resolved file with forward slashes inside TS6142's message. Handling one spelling
+ * leaves the absolute path in the key, and then the same error is "new" on Windows and "already
+ * baselined" on Linux — a difference that shows up as debt appearing and disappearing at once.
+ */
+export function stripRepoRoot(text: string, root: string): string {
+  const posix = root.replaceAll("\\", "/");
+  return text
+    .replaceAll(`${posix}/`, "")
+    .replaceAll(`${root}\\`, "")
+    .replaceAll(`${root}/`, "");
 }
 
 // One diagnostic: `key` is what the baseline compares on (file, code, message — no position);
 // `line` is kept only to point at a new error in the failure report.
-interface Diagnostic {
+export interface Diagnostic {
   key: string;
   line: number;
 }
 
-function parse(output: string): Diagnostic[] {
+export function parseDiagnostics(
+  output: string,
+  repoRoot: string,
+): Diagnostic[] {
   const errors: Diagnostic[] = [];
   for (const raw of output.split("\n")) {
     const match = DIAGNOSTIC.exec(raw.trimEnd());
     if (!match) continue;
     const [, file, line, code, message] = match;
-    // tsc prints the project-relative path in the location, but absolute paths inside some
-    // messages (TS6142 names the resolved file). Strip the checkout prefix so the baseline is
-    // the same on a laptop, in a worktree and on CI.
-    const key = `${file}: error ${code}: ${message}`.replaceAll(
-      `${repoRoot}/`,
-      "",
-    );
+    const key = stripRepoRoot(`${file}: error ${code}: ${message}`, repoRoot);
     errors.push({ key, line: Number(line) });
   }
   return errors.sort((a, b) =>
@@ -98,9 +108,9 @@ function parse(output: string): Diagnostic[] {
   );
 }
 
-function readBaseline(): string[] {
-  if (!existsSync(baselinePath)) return [];
-  return readFileSync(baselinePath, "utf8")
+export function readBaseline(path: string = baselinePath): string[] {
+  if (!existsSync(path)) return [];
+  return readFileSync(path, "utf8")
     .split("\n")
     .filter((line) => line.trim() !== "" && !line.startsWith("#"))
     .sort();
@@ -109,7 +119,7 @@ function readBaseline(): string[] {
 // Multiset difference: three identical errors in the baseline and four in the output is ONE new
 // error, not zero. A set would swallow it. This is what makes a position-free key safe: a second
 // copy of an already-baselined error in the same file still fails.
-function subtract(from: string[], remove: string[]): string[] {
+export function subtract(from: string[], remove: string[]): string[] {
   const counts = new Map<string, number>();
   for (const line of remove) counts.set(line, (counts.get(line) ?? 0) + 1);
   const left: string[] = [];
@@ -121,70 +131,85 @@ function subtract(from: string[], remove: string[]): string[] {
   return left;
 }
 
-const output = runTsc();
-const diagnostics = parse(output);
-const actual = diagnostics.map((d) => d.key);
-
-// A tsc crash, a bad config or a missing dependency produces output with no parseable diagnostic
-// and a non-empty body. Treat that as a failure rather than as "zero errors, all good" — a gate
-// that goes green when its checker did not run is the defect this whole exercise exists to kill.
-if (actual.length === 0 && output.trim() !== "") {
-  console.error("tsc produced output but no parseable diagnostics:\n");
-  console.error(output);
-  process.exit(1);
+function runTsc(): string {
+  const result = Bun.spawnSync({
+    cmd: ["bunx", "tsc", "--noEmit", "--pretty", "false", "-p", project],
+    cwd: REPO_ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return `${result.stdout.toString()}${result.stderr.toString()}`;
 }
 
-if (process.argv.includes("--update")) {
-  writeFileSync(baselinePath, `${[...header, ...actual].join("\n")}\n`);
-  console.log(`Wrote ${actual.length} baseline entries to ${baselinePath}`);
-  process.exit(0);
-}
+function main(argv: string[]): number {
+  const output = runTsc();
+  const diagnostics = parseDiagnostics(output, REPO_ROOT);
+  const actual = diagnostics.map((d) => d.key);
 
-// A missing baseline is not "no known debt" — it is a checkout or merge that lost the file, and
-// reporting every frozen error as NEW would bury that. Say what actually happened.
-if (!existsSync(baselinePath) && actual.length > 0) {
-  console.error(
-    `No baseline at ${baselinePath}, and tsc reports ${actual.length} error(s) in server/tests.` +
-      "\nRestore the file; do not regenerate it with --update to get past this.",
-  );
-  process.exit(1);
-}
-
-const baseline = readBaseline();
-const added = subtract(actual, baseline);
-const fixed = subtract(baseline, actual);
-
-if (fixed.length > 0) {
-  // Not a failure. Fixing an error must never break the build; it only makes the baseline stale.
-  console.log(
-    `${fixed.length} baselined error(s) no longer occur. Drop them from the baseline:`,
-  );
-  for (const line of fixed) console.log(`  - ${line}`);
-  console.log("");
-}
-
-if (added.length > 0) {
-  console.error(
-    `${added.length} NEW type error(s) in server/tests, not in the baseline:\n`,
-  );
-  // The key carries no position, and when a key occurs more often than the baseline allows there
-  // is no telling WHICH occurrence is the new one. So print every line it occurs on.
-  for (const key of new Set(added)) {
-    const lines = diagnostics.filter((d) => d.key === key).map((d) => d.line);
-    const extra = added.filter((k) => k === key).length;
-    const where =
-      lines.length === extra
-        ? `line ${lines.join(", ")}`
-        : `${extra} new among lines ${lines.join(", ")}`;
-    console.error(`  ${key}\n    (${where})`);
+  // A tsc crash, a bad config or a missing dependency produces output with no parseable diagnostic
+  // and a non-empty body. Treat that as a failure rather than as "zero errors, all good" — a gate
+  // that goes green when its checker did not run is the defect this whole exercise exists to kill.
+  if (actual.length === 0 && output.trim() !== "") {
+    console.error("tsc produced output but no parseable diagnostics:\n");
+    console.error(output);
+    return 1;
   }
-  console.error(
-    "\nFix them. Do not run --update to silence them: the baseline records debt that predates" +
-      "\nthe gate, and an error reported here was introduced after it.",
+
+  if (argv.includes("--update")) {
+    writeFileSync(baselinePath, `${[...header, ...actual].join("\n")}\n`);
+    console.log(`Wrote ${actual.length} baseline entries to ${baselinePath}`);
+    return 0;
+  }
+
+  // A missing baseline is not "no known debt" — it is a checkout or merge that lost the file, and
+  // reporting every frozen error as NEW would bury that. Say what actually happened.
+  if (!existsSync(baselinePath) && actual.length > 0) {
+    console.error(
+      `No baseline at ${baselinePath}, and tsc reports ${actual.length} error(s) in server/tests.` +
+        "\nRestore the file; do not regenerate it with --update to get past this.",
+    );
+    return 1;
+  }
+
+  const baseline = readBaseline();
+  const added = subtract(actual, baseline);
+  const fixed = subtract(baseline, actual);
+
+  if (fixed.length > 0) {
+    // Not a failure. Fixing an error must never break the build; it only makes the baseline stale.
+    console.log(
+      `${fixed.length} baselined error(s) no longer occur. Drop them from the baseline:`,
+    );
+    for (const line of fixed) console.log(`  - ${line}`);
+    console.log("");
+  }
+
+  if (added.length > 0) {
+    console.error(
+      `${added.length} NEW type error(s) in server/tests, not in the baseline:\n`,
+    );
+    // The key carries no position, and when a key occurs more often than the baseline allows there
+    // is no telling WHICH occurrence is the new one. So print every line it occurs on.
+    for (const key of new Set(added)) {
+      const lines = diagnostics.filter((d) => d.key === key).map((d) => d.line);
+      const extra = added.filter((k) => k === key).length;
+      const where =
+        lines.length === extra
+          ? `line ${lines.join(", ")}`
+          : `${extra} new among lines ${lines.join(", ")}`;
+      console.error(`  ${key}\n    (${where})`);
+    }
+    console.error(
+      "\nFix them. Do not run --update to silence them: the baseline records debt that predates" +
+        "\nthe gate, and an error reported here was introduced after it.",
+    );
+    return 1;
+  }
+
+  console.log(
+    `server/tests type-check clean against the baseline (${actual.length} known error(s)).`,
   );
-  process.exit(1);
+  return 0;
 }
 
-console.log(
-  `server/tests type-check clean against the baseline (${actual.length} known error(s)).`,
-);
+if (import.meta.main) process.exit(main(process.argv.slice(2)));
