@@ -70,6 +70,7 @@ import { isOverdueNow } from "./overdue";
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
+
 /** How long after the start or end time a briefing may still go out (a restart across the moment). */
 export { BRIEFING_WINDOW_MS };
 /** How long a briefing's claim may stay unsent before another pass may take it back. */
@@ -573,6 +574,11 @@ export function createBriefings(deps: BriefingDeps) {
 
 export type Briefings = ReturnType<typeof createBriefings>;
 
+/** 逾期提醒的标题行；微信出口认它，把这一类换成带编号的提示文字（delivery/wechat/transport.ts）。 */
+export const OVERDUE_NOTICE_TITLE = "逾期提醒";
+/** 开工清点发到微信时末尾多带的一句：回一句，时间窗就续上。 */
+export const WECHAT_KEEP_OPEN_HINT = "回复任意内容，今天的提醒就能继续发到这里";
+
 /**
  * Where the checker's reminders and the briefings leave the server (spec §10): the person's push
  * devices and their connected Slack, Teams and SMS (`DeliveryRouter.notifyPerson`), filed under the
@@ -697,7 +703,7 @@ export function createTaskNotices(deps: {
       ownerUserId: tenantId,
       kind: "overdue",
       id: `${notice.taskId}:${now.toISOString()}`,
-      title: notice.kind === "overdue" ? "逾期提醒" : "还没接下",
+      title: notice.kind === "overdue" ? OVERDUE_NOTICE_TITLE : "还没接下",
       body: notice.text,
       scopes: await scopesOf(
         tenantId,
@@ -755,6 +761,7 @@ export function createTaskNotices(deps: {
         tenantId,
         await cardsOf(tenantId, [...ids, ...closed]),
       ),
+      ...(kind === "start" ? { wechatFooter: WECHAT_KEEP_OPEN_HINT } : {}),
     });
     // Every place it reached, now or by an earlier try of this same briefing that failed part-way.
     return reached.queued + reached.already;

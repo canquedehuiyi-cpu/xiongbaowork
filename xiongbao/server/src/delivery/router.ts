@@ -1,10 +1,10 @@
-import { productName } from "../brand";
 import type { DrawnComponent } from "@openbot/toolkit/run-turn";
 import {
   resolveUpdateRoute,
   type UpdateRoute,
   type UpdateRouteInput,
 } from "../agents/lifecycle";
+import { productName } from "../brand";
 import type { AttentionPing } from "../proactive/contracts";
 import { pingHeadline } from "../proactive/ping";
 import {
@@ -76,6 +76,7 @@ type RouterStore = Pick<
   | "device"
   | "removeDevice"
   | "offerInbox"
+  | "latestInbox"
   | "inbox"
   | "setInbox"
   | "offerOutbox"
@@ -135,6 +136,14 @@ export function createDeliveryRouter(deps: {
     wechat?: TextTransport;
     push?: ExpoPushTransport;
   };
+  /**
+   * 微信的主动推送时间窗（wechat/transport.ts `createWechatWindow`）：窗口关着时不写微信那一行，并记一笔
+   * 漏发，下次入站时补一句。没有时不看窗口。
+   */
+  wechatWindow?: {
+    open(ownerUserId: string): Promise<boolean>;
+    missed(ownerUserId: string): Promise<void>;
+  };
   /** The person's routing by kind; defaults to the lifecycle lane's `resolveUpdateRoute`. */
   routeFor?(input: UpdateRouteInput): Promise<UpdateRoute>;
   /** Unused since Slack events feed `ingestSlackEvent` from the pairing route; kept for assembly. */
@@ -176,6 +185,23 @@ export function createDeliveryRouter(deps: {
    * than also sent as a second, proactive message to the same person.
    */
   const inline = new Map<string, InlineTurnExtras>();
+  /**
+   * 微信那一行能不能写：时间窗开着。关着时（只有提醒类才算漏发，回复不算）记一笔漏发，`noted` 保证同一次
+   * 通知只记一笔。
+   */
+  async function wechatOpen(
+    ownerUserId: string,
+    noted: { done: boolean },
+    countsAsMissed = true,
+  ): Promise<boolean> {
+    if (!deps.wechatWindow) return true;
+    if (await deps.wechatWindow.open(ownerUserId)) return true;
+    if (countsAsMissed && !noted.done) {
+      noted.done = true;
+      await deps.wechatWindow.missed(ownerUserId);
+    }
+    return false;
+  }
   async function notify(
     scope: DeliveryScope,
     input: {
@@ -217,6 +243,7 @@ export function createDeliveryRouter(deps: {
       agentId: scope.agentId,
       kind: input.kind,
     });
+    const noted = { done: false };
     if (includeBindings)
       for (const binding of await deps.store.bindingsFor(scope)) {
         const open = inline.get(binding.id);
@@ -239,6 +266,25 @@ export function createDeliveryRouter(deps: {
           )
         )
           continue;
+        if (binding.transport === "wechat") {
+          /*
+           * 网页里发起的普通回复不推到微信：回复只发给入站来源为微信、还停在等人处理的那一轮（它在微信里
+           * 停下等审批，别处批了，后续的回复回到微信）。其余种类是提醒，要在时间窗里才发。
+           */
+          if (input.kind === "reply") {
+            const last = await deps.store.latestInbox(binding.id);
+            if (last?.source !== "wechat" || last.state !== "accepted")
+              continue;
+          }
+          if (
+            !(await wechatOpen(
+              scope.ownerUserId,
+              noted,
+              input.kind !== "reply",
+            ))
+          )
+            continue;
+        }
         await deps.store.offerOutbox({
           ...scope,
           dedupeKey: `${input.kind}:${input.id}:binding:${binding.id}`,
@@ -283,6 +329,7 @@ export function createDeliveryRouter(deps: {
     if (ping.items.length === 0) return;
     const routeFor = deps.routeFor ?? resolveUpdateRoute;
     const chosen = new Map<BindingTransport, DeliveryBinding>();
+    const noted = { done: false };
     for (const binding of await deps.store.bindingsByUse(ping.ownerUserId)) {
       if (chosen.has(binding.transport)) continue;
       const carrier = await routeFor({
@@ -293,6 +340,11 @@ export function createDeliveryRouter(deps: {
       if (!carrier.allows(binding.transport)) continue;
       // An account whose conversation the person lost is passed over for the next one they used.
       if (!(await deps.authoriseScope(binding))) continue;
+      if (
+        binding.transport === "wechat" &&
+        !(await wechatOpen(ping.ownerUserId, noted))
+      )
+        continue;
       chosen.set(binding.transport, binding);
     }
     for (const [transport, binding] of chosen)
@@ -362,6 +414,8 @@ export function createDeliveryRouter(deps: {
     scopes: DeliveryScope[];
     /** The card a reminder is about, carried to the push so a tap opens it. */
     taskId?: string | null;
+    /** 微信那一行末尾多带的一句（开工清点：「回复任意内容，今天的提醒就能继续发到这里」）。 */
+    wechatFooter?: string;
   }): Promise<{ queued: number; already: number }> {
     const reached = { queued: 0, already: 0 };
     if (
@@ -421,6 +475,7 @@ export function createDeliveryRouter(deps: {
       candidates.push(...(await deps.store.bindingsFor(scope)));
     candidates.push(...(await deps.store.bindingsByUse(input.ownerUserId)));
     const chosen = new Map<BindingTransport, DeliveryBinding>();
+    const noted = { done: false };
     for (const binding of candidates) {
       if (chosen.has(binding.transport)) continue;
       if (binding.ownerUserId !== input.ownerUserId) continue;
@@ -439,6 +494,11 @@ export function createDeliveryRouter(deps: {
       });
       if (!carrier.allows(binding.transport)) continue;
       if (!(await deps.authoriseScope(binding))) continue;
+      if (
+        binding.transport === "wechat" &&
+        !(await wechatOpen(input.ownerUserId, noted))
+      )
+        continue;
       chosen.set(binding.transport, binding);
     }
     for (const [transport, binding] of chosen)
@@ -451,7 +511,10 @@ export function createDeliveryRouter(deps: {
         bindingId: binding.id,
         deviceId: null,
         transport,
-        text,
+        text:
+          transport === "wechat" && input.wechatFooter
+            ? `${text}\n${input.wechatFooter}`
+            : text,
         kind: input.kind,
         requestId,
       });
@@ -891,6 +954,15 @@ export function createDeliveryRouter(deps: {
           text: row.text,
           transport: row.transport,
           ...(sender ? { sender } : {}),
+          ...(row.transport === "wechat"
+            ? {
+                context: {
+                  ownerUserId: row.ownerUserId,
+                  kind: row.kind,
+                  requestId: row.requestId,
+                },
+              }
+            : {}),
         });
       }
       if (!(await owns())) return;

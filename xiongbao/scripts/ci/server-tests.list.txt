@@ -909,6 +909,7 @@ tests/wechat-poller.integration.test.ts
 tests/wechat-prompts-migration.integration.test.ts
 tests/wechat-prompts.integration.test.ts
 tests/wechat-store.integration.test.ts
+tests/wechat-transport.integration.test.ts
 tests/wechat-unbind-bindings.integration.test.ts
 tests/what-if-boundary-words.test.ts
 tests/what-if.integration.test.ts

@@ -276,7 +276,10 @@ import { createDeliveryStore } from "./delivery/store";
 import type { DeliveryScope } from "./delivery/types";
 import { DeliveryRefusedError } from "./delivery/types";
 import type { WechatBindDeps } from "./delivery/wechat/bind";
-import { createWechatDecisions } from "./delivery/wechat/decisions";
+import {
+  createWechatDecisions,
+  type WechatDecisions,
+} from "./delivery/wechat/decisions";
 import {
   createIlinkClient,
   ILINK_DEFAULT_CLIENT_VERSION,
@@ -287,6 +290,10 @@ import {
 } from "./delivery/wechat/inbound";
 import { createWechatPoller } from "./delivery/wechat/poller";
 import { createWechatStore } from "./delivery/wechat/store";
+import {
+  createWechatTransport,
+  createWechatWindow,
+} from "./delivery/wechat/transport";
 import { createDeviceChannel, type DispatchTarget } from "./devices/channel";
 import { createDeviceQueue } from "./devices/queue";
 import {
@@ -533,6 +540,7 @@ import {
   createBriefingRoutes,
   createBriefings,
   createTaskNotices,
+  OVERDUE_NOTICE_TITLE,
 } from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
 import { createDelivery } from "./tasks/delivery";
@@ -4038,11 +4046,29 @@ await startupLifecycle.run(async (startup) => {
     credentials: credentialStore,
     encryptionKey: config.keyEncryptionKey,
   };
-  const deliveryProviders = configuredDeliveryProviders(
-    config.publicUrl ??
-      config.auth?.baseUrl ??
-      `http://localhost:${config.port}`,
-  );
+  /*
+   * 微信的发件箱出口（delivery/wechat/transport.ts）：编号提示的文字来自下面才建好的 wechatDecisions，所以按取值
+   * 函数晚绑定。时间窗和漏发计数用同一个账号行。
+   */
+  let wechatPromptOpeners: WechatDecisions | undefined;
+  const wechatSend = createWechatSender({
+    ilink: wechatIlink,
+    credentials: credentialStore,
+    keyEncryptionKey: config.keyEncryptionKey,
+  });
+  const deliveryProviders = {
+    ...configuredDeliveryProviders(
+      config.publicUrl ??
+        config.auth?.baseUrl ??
+        `http://localhost:${config.port}`,
+    ),
+    wechat: createWechatTransport({
+      wechat: wechatStore,
+      send: wechatSend,
+      prompts: () => wechatPromptOpeners,
+      overdueTitle: OVERDUE_NOTICE_TITLE,
+    }),
+  };
   // Slack channel membership for triggers is answered by OpenTag, which holds the workspace token.
   useSlackChannelMembership((input) =>
     deliveryProviders.slack
@@ -4067,6 +4093,7 @@ await startupLifecycle.run(async (startup) => {
     queue: createWorkQueue(database),
     owner: workOwner("delivery"),
     providers: deliveryProviders,
+    wechatWindow: createWechatWindow({ wechat: wechatStore }),
     authoriseScope: authoriseDeliveryScope,
     scopeFor: deliveryScopeFor,
     notifyEvent: (event) => responsibilityEngine.ingest(event),
@@ -4695,6 +4722,7 @@ await startupLifecycle.run(async (startup) => {
         (await readWorkHours(database, tenantId)).end,
       appUrl: config.appUrl ?? config.publicUrl ?? null,
     });
+    wechatPromptOpeners = wechatDecisions;
     const wechatPoller = createWechatPoller({
       database,
       wechat: wechatStore,
@@ -4709,11 +4737,8 @@ await startupLifecycle.run(async (startup) => {
         bots: agentProfileStore,
         actorFor,
         scopeFor: deliveryScopeFor,
-        send: createWechatSender({
-          ilink: wechatIlink,
-          credentials: credentialStore,
-          keyEncryptionKey: config.keyEncryptionKey,
-        }),
+        send: wechatSend,
+        appUrl: config.appUrl ?? config.publicUrl ?? null,
         prompts: wechatDecisions.handlers,
         approvalPrompts: wechatDecisions.openApprovalPrompts,
       }),

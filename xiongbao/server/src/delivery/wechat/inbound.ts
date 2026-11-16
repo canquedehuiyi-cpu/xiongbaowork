@@ -170,6 +170,7 @@ export type WechatInboundDeps = {
     | "account"
     | "claimMessage"
     | "releaseMessage"
+    | "takeMissed"
     | "setLastAgent"
     | "openPrompt"
     | "openPrompts"
@@ -184,6 +185,8 @@ export type WechatInboundDeps = {
   send: WechatSend;
   /** 测试用：判断选人提示是否过期的时钟。 */
   now?: () => Date;
+  /** 网页的地址：补发漏掉的提醒时带上「有 N 条提醒在熊宝里：<链接>」。没有时不带链接。 */
+  appUrl?: string | null;
   /** 别的提示类型（Task 7）。`pick_agent` 由这里自己处理。 */
   prompts?: Partial<Record<WechatPromptKind, WechatPromptHandler>>;
   /**
@@ -612,6 +615,26 @@ export function createWechatInbound(deps: WechatInboundDeps) {
     await pick(recent, text, "想找哪位员工？");
   }
 
+  /**
+   * 时间窗关着时漏发的提醒（`missed_count`）：这个人来信了，先补一句「有 N 条提醒在熊宝里：<链接>」并清零，
+   * 这条消息再照常处理。补不出去（发送失败）只记日志，不影响这条消息。
+   */
+  async function catchUp(account: WechatAccount, message: IlinkMessage) {
+    const missed = await deps.wechat.takeMissed(account.id);
+    if (missed <= 0) return;
+    const base = deps.appUrl?.replace(/\/+$/, "");
+    try {
+      await deps.send(account, {
+        text: base
+          ? `有 ${missed} 条提醒在${shortName()}里：${base}/briefing`
+          : `有 ${missed} 条提醒在${shortName()}里，请打开${shortName()}看看。`,
+        contextToken: message.contextToken ?? account.contextToken,
+      });
+    } catch (error) {
+      logFailure("wechat-missed-summary-failed", error);
+    }
+  }
+
   return async function inbound(
     claimed: WechatAccount,
     message: IlinkMessage,
@@ -624,6 +647,7 @@ export function createWechatInbound(deps: WechatInboundDeps) {
       // 轮询器给的是认领时的行；同一批前面的消息可能已经换了员工，所以重读。
       const account = (await deps.wechat.account(claimed.userId)) ?? claimed;
       if (account.id !== claimed.id) return;
+      await catchUp(account, message);
       await handle(account, message, signal ?? new AbortController().signal);
     } catch (error) {
       // 拿掉去重记录自己也失败时只记日志：抛出去的必须是原来的错误。

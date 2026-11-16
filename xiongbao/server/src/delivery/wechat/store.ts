@@ -191,6 +191,29 @@ export function createWechatStore(database: Database) {
         .where(eq(wechatAccounts.id, accountId));
     },
 
+    /** 一条提醒因时间窗关了没能发到微信：漏发计数加一（下次入站时补一句）。 */
+    async bumpMissed(accountId: string): Promise<void> {
+      await database
+        .update(wechatAccounts)
+        .set({ missedCount: sql`${wechatAccounts.missedCount} + 1` })
+        .where(eq(wechatAccounts.id, accountId));
+    },
+
+    /** 取走漏发计数并清零，返回取走的数；一条 UPDATE，两个并发的入站只有一个拿到非零。 */
+    async takeMissed(accountId: string): Promise<number> {
+      const rows = rowsOf<{ n: number | string }>(
+        await database.execute(sql`
+          update "wechat_accounts" as a
+          set "missed_count" = 0
+          from (select "id", "missed_count" from "wechat_accounts"
+                where "id" = ${accountId} and "missed_count" > 0 for update) as old
+          where a."id" = old."id"
+          returning old."missed_count" as "n"
+        `),
+      );
+      return Number(rows[0]?.n ?? 0);
+    },
+
     /** 记下这个人在微信里最后交给的员工（不带 @ 的消息交给它）。 */
     async setLastAgent(accountId: string, agentId: string): Promise<void> {
       await database

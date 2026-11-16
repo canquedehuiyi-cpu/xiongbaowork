@@ -102,6 +102,12 @@ export type TextTransport = {
     text: string;
     transport?: BindingTransport;
     sender?: DeliverySender;
+    /** 只有微信的发件箱出口要：这一行是谁的、什么种类、关于哪件事（审批或卡片），好开编号提示。 */
+    context?: {
+      ownerUserId: string;
+      kind: DeliveryKind;
+      requestId: string | null;
+    };
   }): Promise<{ id: string; status: "queued" | "sent" }>;
 };
 export class DeliveryRefusedError extends Error {
