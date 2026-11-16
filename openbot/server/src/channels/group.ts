@@ -1568,19 +1568,54 @@ export function createGroupConversations(deps: {
      * that holds an open followed card on this person's thread with it hangs on that card, opens none
      * and charges nothing (the runner is told the card is taken, as for any card the caller owns). A
      * peer's hop is the hand-off it is, with a card of its own, as the runner treats a hop. An external
-     * employee's card is its hirer's (`cardTurn` above) and not followed this way yet: its delivery
-     * terms come with the delivery loop's own part for external employees (spec 2026-11-15-delivery-loop §9).
+     * employee's card is its hirer's (`cardTurn` above), and so is the followed card it works on: its
+     * work was followed the moment it was queued (spec 2026-11-15-delivery-loop §9). Its turn is not
+     * hung here -- the group never runs it, and the run that does the work hangs itself on the card
+     * when it starts -- so the message only finds the card, and opens and charges nothing.
      */
-    const followed =
-      deps.board && deps.delivery && !turn.fromAgentId && !bot.hiredBy
+    /*
+     * A lookup or a hang that fails is said, and the round is then an ordinary one with its card
+     * (`openCard` below). Not hung is not hung: claiming the followed card without `active_run_ref`
+     * naming this run would leave an approval the round raises parking nothing and a `deliver_task`
+     * finding no card, silently. A card of its own keeps the round on the board and answerable; the
+     * person's message is still answered, which failing the round would not do for a fault of ours.
+     */
+    const trackedCardFault = (type: string, error: unknown) =>
+      console.error(
+        JSON.stringify({
+          type,
+          error: error instanceof Error ? error.message : String(error),
+          context: { channelId: turn.channelId, agentId, runId },
+          timestamp: new Date().toISOString(),
+        }),
+      );
+    let followed =
+      deps.board && deps.delivery && !turn.fromAgentId
         ? await deps.delivery
-            .openTrackedCard(turn.ownerUserId, threadId, agentId, turn.taskId)
-            .catch(() => null)
+            .openTrackedCard(
+              cardTurn.ownerUserId,
+              threadId,
+              agentId,
+              turn.taskId,
+            )
+            .catch((error: unknown) => {
+              trackedCardFault("group-turn-tracked-card-lookup-failed", error);
+              return null;
+            })
         : null;
-    if (followed)
-      await deps.delivery
-        ?.attachRun(turn.ownerUserId, followed.id, runId)
-        .catch(() => undefined);
+    if (followed && deps.delivery && !bot.hiredBy) {
+      const hung = await deps.delivery
+        .attachRun(turn.ownerUserId, followed.id, runId)
+        .then(
+          // False: the card ended between the lookup and the hang -- not hung either.
+          (attached) => attached,
+          (error: unknown) => {
+            trackedCardFault("group-turn-attach-failed", error);
+            return false;
+          },
+        );
+      if (!hung) followed = null;
+    }
     const cardId = followed
       ? followed.id
       : await openCard(cardTurn, agentId, runId);
@@ -1623,9 +1658,10 @@ export function createGroupConversations(deps: {
     let compacted: GroupCompactionNote | null = null;
     try {
       // A round hung on a followed card says so, so the runner asks whether that card still waits.
-      const hungOn = followed
-        ? roundHungByEntry
-        : <T>(body: () => T): T => body();
+      const hungOn =
+        followed && !bot.hiredBy
+          ? roundHungByEntry
+          : <T>(body: () => T): T => body();
       const result = await hungOn(async () =>
         deps.runTurn({
           ...(turn.depth ? { depth: turn.depth } : {}),

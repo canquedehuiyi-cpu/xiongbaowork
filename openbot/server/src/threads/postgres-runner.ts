@@ -52,6 +52,7 @@ import {
 } from "../tenant/context";
 import {
   entryHungRound,
+  onlyOnIdleThreadRequested,
   runnerCardSuppressed,
   suppressedCardRef,
   targetedCard,
@@ -132,6 +133,68 @@ export class ThreadUnavailableError extends Error {
   constructor() {
     super("This conversation is not available.");
   }
+}
+
+/**
+ * Why a turn that may only start on an idle thread (`onlyOnIdleThread`) did not: a turn is running on
+ * it, or has been accepted and is on its way in. Nothing of the refused turn ran or was written.
+ */
+export class ThreadBusyError extends Error {
+  override readonly name = "ThreadBusyError";
+  constructor() {
+    super("A turn is already running in this conversation.");
+  }
+}
+
+/**
+ * Per thread, the turns accepted here that have not reached the runtime's own `run` yet: they are
+ * still asking the board, the month and the thread's row (`run`'s preface below), and the store does
+ * not count them as running until they get there. Module-level for the reason the indexes above are.
+ *
+ * This is what makes "only if the thread is idle" one step: the question and the entry are taken in
+ * the same synchronous moment a turn is subscribed, so a turn that asks while another is on its way in
+ * sees it, and a turn on its way in cannot be overtaken by one that asked a moment before.
+ */
+const enteringRuns = new Map<string, Set<string>>();
+
+function entering(threadId: string): boolean {
+  return (enteringRuns.get(threadId)?.size ?? 0) > 0;
+}
+
+/** Whether a turn other than `runId` is on its way in on the thread. */
+function enteringOthers(threadId: string, runId: string): boolean {
+  const runs = enteringRuns.get(threadId);
+  if (!runs) return false;
+  for (const other of runs) if (other !== runId) return true;
+  return false;
+}
+
+/** The runtime store's view of a thread: whether a turn runs or stops there, and which. */
+function storeOf(threadId: string) {
+  return (
+    ɵGLOBAL_STORE as unknown as {
+      peek?: (threadId: string) =>
+        | {
+            isRunning?: boolean;
+            stopRequested?: boolean;
+            currentRunId?: string;
+          }
+        | undefined;
+    }
+  ).peek?.(threadId);
+}
+
+/** Whether the turn `runId` is running on the thread here, or on its way in. */
+function runIsLive(threadId: string, runId: string): boolean {
+  if (enteringRuns.get(threadId)?.has(runId)) return true;
+  const store = storeOf(threadId);
+  return Boolean(store?.isRunning && store.currentRunId === runId);
+}
+
+/** Whether the runtime's store has a turn running, or stopping, on the thread right now. */
+function storeRunning(threadId: string): boolean {
+  const store = storeOf(threadId);
+  return Boolean(store?.isRunning || store?.stopRequested);
 }
 
 /**
@@ -459,6 +522,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const forCard = targetedCard();
     // Read in the same breath and for the same reason: unset for every turn a person sends.
     const lane = runnerLane.getStore();
+    // A server-started turn (a nudge, a hand-over, a 退回) that stands back rather than supersede.
+    const idleOnly = onlyOnIdleThreadRequested();
     const adopted = adoptedCard.getStore();
     /*
      * A thread id another tenant holds here is refused before anything else is asked: the parent's
@@ -487,6 +552,28 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      * something if the fifty-first conversation does not happen at all. Then the thread: see `claim`.
      */
     return new Observable<BaseEvent>((subscriber) => {
+      /*
+       * The admission, in one synchronous step (see `enteringRuns`): a turn that may only start on an
+       * idle thread is refused while one runs there or is on its way in, and every turn is on its way
+       * in from here until the runtime's own `run` takes it (or it fails first).
+       */
+      const threadId = request.threadId;
+      const runId = request.input.runId;
+      if (idleOnly && (storeRunning(threadId) || entering(threadId))) {
+        subscriber.error(new ThreadBusyError());
+        return;
+      }
+      const runs = enteringRuns.get(threadId) ?? new Set<string>();
+      runs.add(runId);
+      enteringRuns.set(threadId, runs);
+      let entered = false;
+      const enter = () => {
+        if (entered) return;
+        entered = true;
+        runs.delete(runId);
+        if (runs.size === 0 && enteringRuns.get(threadId) === runs)
+          enteringRuns.delete(threadId);
+      };
       let inner: Subscription | undefined;
       let closed = false;
       void (async () => {
@@ -528,23 +615,38 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         return { followed, receiptAsked };
       })().then(
         ({ followed, receiptAsked }) => {
-          if (closed) return;
-          inner = this.stream(
-            receiptAsked
-              ? { ...request, input: withReceiptAsked(request.input) }
-              : request,
-            tenant,
-            cardIsTaken || followed !== null,
-            lane,
-            followed ?? undefined,
-            entryCardRef,
-            adopted,
-          ).subscribe(subscriber);
+          if (closed) {
+            enter();
+            return;
+          }
+          // A turn that throws on its way in leaves the way in, and says so to its caller.
+          try {
+            inner = this.stream(
+              receiptAsked
+                ? { ...request, input: withReceiptAsked(request.input) }
+                : request,
+              tenant,
+              cardIsTaken || followed !== null,
+              lane,
+              followed ?? undefined,
+              entryCardRef,
+              adopted,
+              enter,
+              idleOnly,
+            ).subscribe(subscriber);
+          } catch (thrown) {
+            enter();
+            subscriber.error(thrown);
+          }
         },
-        (thrown: unknown) => subscriber.error(thrown),
+        (thrown: unknown) => {
+          enter();
+          subscriber.error(thrown);
+        },
       );
       return () => {
         closed = true;
+        enter();
         inner?.unsubscribe();
       };
     });
@@ -610,10 +712,26 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     entryCardRef?: string,
     /** The card this turn finishes instead of filing its own (`adoptRunnerCard`). */
     adopted?: string,
+    /** Called the moment the runtime's own `run` takes the turn: it is no longer on its way in. */
+    entered: () => void = () => {},
+    /** A turn that may only start on an idle thread (`onlyOnIdleThread`). */
+    idleOnly = false,
   ): Observable<BaseEvent> {
     const { threadId } = request;
     const runId = request.input.runId;
     const cardRef = adopted ?? runId;
+    /*
+     * An idle-only turn asks again whether the thread is free -- here, before it writes anything, and
+     * once more in the same synchronous step that hands it to the runtime (`stream` below), because the
+     * runtime supersedes whatever runs there. A person's turn that arrived after this one's admission
+     * and got in first is never stopped by it.
+     */
+    const busyHere = () =>
+      storeRunning(threadId) || enteringOthers(threadId, runId);
+    if (idleOnly && busyHere())
+      return new Observable<BaseEvent>((subscriber) =>
+        subscriber.error(new ThreadBusyError()),
+      );
     // `RunAgentInput` carries no agent id, so the agent instance is the only place it lives; the
     // fallback is honest about a caller that ran an anonymous agent rather than inventing one.
     const agentId = request.agent.agentId ?? "unknown";
@@ -666,8 +784,19 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      */
     const attached = followed
       ? this.delivery
-          .attachRun(tenant, followed.id, runId)
-          .catch((error) => console.error("task projection failed", error))
+          .attachRun(
+            tenant,
+            followed.id,
+            runId,
+            // An idle-only round does not take the card from a round running here (a person's).
+            idleOnly
+              ? { keepIfRunning: (other) => runIsLive(threadId, other) }
+              : undefined,
+          )
+          .catch((error) => {
+            console.error("task projection failed", error);
+            return true;
+          })
       : undefined;
     /*
      * A round of a followed card ends here, for the card this turn hangs on or for the card it opened
@@ -769,10 +898,47 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         })
         .catch((error) => console.error("task projection failed", error));
     };
-    const stream = () => {
-      // Open for the delivery tools from here to the turn's end (`finish`, or a stop: `finalize`).
-      beginTurn(runId, entryCardRef);
-      return super.run(asStoreOwner(request, tenant)).pipe(
+    const stream = (hung = true) => {
+      /*
+       * The last word for an idle-only turn, in the same synchronous step as the runtime's `run`: a turn
+       * that got in while this one hung itself on the card (or opened one) wins, and this one stands
+       * back -- its hang taken back, its card closed -- instead of superseding it.
+       */
+      if (idleOnly && (!hung || busyHere())) {
+        if (followed && hung)
+          void this.delivery
+            .detachRun(tenant, followed.id, runId)
+            .catch((error) => console.error("task projection failed", error));
+        // A card this turn opened is closed; one it adopted (a queued run's) stays for that run.
+        if (card && !adopted)
+          void card
+            .then(() =>
+              // biome-ignore lint/style/noNonNullAssertion: a card is only opened with a board
+              this.board!.finished({
+                tenantId: tenant,
+                runRef: runId,
+                failed: true,
+              }),
+            )
+            .catch((error) => console.error("task projection failed", error));
+        return new Observable<BaseEvent>((subscriber) =>
+          subscriber.error(new ThreadBusyError()),
+        );
+      }
+      /*
+       * Open for the delivery tools from here to the turn's end (`finish`, or a stop: `finalize`), with
+       * the key of the card it works for when that is not its own run id: an entry's, or the card a
+       * queued external employee's run left open (`adoptRunnerCard`).
+       */
+      beginTurn(runId, entryCardRef ?? adopted);
+      // Running from here, as the store counts it; `finally` covers a `run` that throws instead.
+      let started: Observable<BaseEvent>;
+      try {
+        started = super.run(asStoreOwner(request, tenant));
+      } finally {
+        entered();
+      }
+      return started.pipe(
         tap({
           // What the thread keeps; a heartbeat is passed on and not kept (`transient`).
           next: (event) => {
@@ -807,8 +973,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         finalize(() => endTurn(runId)),
       );
     };
-    const before = card ?? attached;
-    return before ? from(before).pipe(switchMap(stream)) : stream();
+    const before: Promise<unknown> | undefined = card ?? attached;
+    return before
+      ? from(before).pipe(switchMap((value) => stream(value !== false)))
+      : stream();
   }
 
   private async persist(
@@ -1084,10 +1252,14 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       .pipe(filter((event) => !transient(event)));
   }
 
-  /** Whether somebody else's thread is mid-turn is not this caller's to learn. */
+  /**
+   * Whether somebody else's thread is mid-turn is not this caller's to learn. A turn accepted here and
+   * still on its way into the runtime (`enteringRuns`) counts as running: it is about to be.
+   */
   override isRunning(request: AgentRunnerIsRunningRequest): Promise<boolean> {
     if (!ownedBy(request.threadId, currentTenant()))
       return Promise.resolve(false);
+    if (entering(request.threadId)) return Promise.resolve(true);
     return super.isRunning({ ...request, ...storeScope(request.threadId) });
   }
 

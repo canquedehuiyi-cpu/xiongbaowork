@@ -117,6 +117,8 @@ export type SidebarDeps = {
   loadMessages?: (threadId: string) => Promise<Message[]>;
   /** 平台池钥匙从哪读（判断池行能不能用）；不给时是进程环境，和运行时一样。 */
   environment?: PoolKeyEnvironment;
+  /** 查看者的时区（作息里存的，`readWorkHours`），「上次检查」里的时间按它读；不给时用产品默认时区。 */
+  timeZone?: (tenantId: string) => Promise<string>;
 };
 
 export type ConversationSidebarService = {
@@ -878,7 +880,7 @@ export function createConversationSidebar(
 
   /**
    * 在跟的卡的「上次检查」：最近一条说得出话的流水（本轮结束、没发出的催办不算），转成一句话；
-   * 时间按产品默认时区读（作息时区接上前）。一条都没有时退回状态一句话。
+   * 时间按查看者作息里的时区读（没有时用产品默认时区）。一条都没有时退回状态一句话。
    */
   async function lastLineOf(
     viewer: AgentActor,
@@ -901,7 +903,7 @@ export function createConversationSidebar(
       (line &&
         taskEventSentence(line, {
           now: new Date(),
-          timeZone: DEFAULT_TIME_ZONE,
+          timeZone: (await deps.timeZone?.(viewer.id)) ?? DEFAULT_TIME_ZONE,
         })) ||
       STATUS_WORDS[status]
     );

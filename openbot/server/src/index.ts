@@ -32,7 +32,16 @@ import {
   useDeviceAcp,
 } from "./agents/acp/agent";
 import { createAcpContextLoader } from "./agents/acp/context";
-import { externalEmployeesAmong, externalHirerOf } from "./agents/acp/external";
+import {
+  cancelExternalTurns,
+  createAcpDelivery,
+  externalTurnWaiting,
+} from "./agents/acp/delivery";
+import {
+  externalEmployeesAmong,
+  externalHirerOf,
+  isExternalEmployee,
+} from "./agents/acp/external";
 import {
   type AcpPermissionBridge,
   createAcpApprovalHirer,
@@ -181,6 +190,7 @@ import {
   markAttachmentsSent,
 } from "./channels/attachments";
 import {
+  channelDispatched,
   createChannelDispatch,
   createChannelDispatchRoutes,
 } from "./channels/dispatch";
@@ -504,13 +514,24 @@ import {
 } from "./staffing/routes";
 import { createStaffingProposalStore } from "./staffing/store";
 import { createDelivery } from "./tasks/delivery";
+import {
+  createBriefingRoutes,
+  createBriefings,
+  createTaskNotices,
+} from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
+import {
+  runDeliveryCheck,
+  savedWorkHours,
+  threadRunning,
+} from "./tasks/delivery-checker";
 import {
   ACCEPT_TASK_REF,
   deliveryTools,
   offeredDeliveryTools,
 } from "./tasks/delivery-tools";
 import { createEvidenceGate } from "./tasks/evidence-gate";
+import { createNudgeRuns } from "./tasks/nudge-run";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
 import { createTaskRunner } from "./tasks/runner";
@@ -556,7 +577,7 @@ import { createTranslationRoutes } from "./translations/routes";
 import { createTranslationStore, translatePending } from "./translations/store";
 import { createTranslator } from "./translations/translator";
 import { createUserInstructionsStore } from "./user-instructions";
-import { createUserPreferencesStore } from "./user-preferences";
+import { createUserPreferencesStore, readWorkHours } from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
 import {
@@ -2763,6 +2784,20 @@ await startupLifecycle.run(async (startup) => {
   /** The delivery loop's followed cards and the gate a hand-in passes (spec 2026-11-15-delivery-loop). */
   const deliveryLoop = createDelivery(database);
   const evidenceGate = createEvidenceGate(database);
+  /*
+   * External employees walk the same three steps, the server walking them for them (spec §9,
+   * `agents/acp/delivery.ts`): their 「预计 16:00」 is read on the person's saved zone.
+   */
+  const acpDelivery = createAcpDelivery({
+    delivery: deliveryLoop,
+    gate: evidenceGate,
+    // Work handed to an external employee with `@` (派活) is followed; a question in its own chat is not.
+    dispatched: channelDispatched(database),
+    timeZone: async (tenantId) =>
+      (await readWorkHours(database, tenantId)).timeZone,
+  });
+  const acpRuntimeForDelivery = deviceAcpRuntime();
+  if (acpRuntimeForDelivery) acpRuntimeForDelivery.delivery = acpDelivery;
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -2790,6 +2825,9 @@ await startupLifecycle.run(async (startup) => {
       board: taskProjector,
       ownerUserId: actorId,
       agentId: botId,
+      // A round with no browser behind it (a nudge, a hand-over) reads times on the person's saved zone.
+      savedTimeZone: async () =>
+        (await readWorkHours(database, actorId)).timeZone,
     }),
     // 上游在这里给每位员工 `show_app_access`；fork 放在下面 `request_app_access` 旁边（X2）。
     /*
@@ -4450,6 +4488,7 @@ await startupLifecycle.run(async (startup) => {
       channel: deviceChannel,
       employeeFor: externalEmployee,
       onlineElsewhere: deviceOnlineElsewhere,
+      delivery: acpDelivery,
     }),
   });
   const groupStore = createGroupStore(database, () => threadIdentity.mint());
@@ -4518,6 +4557,139 @@ await startupLifecycle.run(async (startup) => {
   const groupConversations = withWakerGroupLink(
     baseGroupConversations,
     wakerGroupLink,
+  );
+  /*
+   * A followed card's conversation (spec 2026-11-15-delivery-loop §6): a 退回 is said in its thread as
+   * the person and answered there, on the same unattended runner a dispatched `@` runs on (a group
+   * card's, in the group); a 取消 or a hand-over stops the round through the runner's stop, and an
+   * external coworker's queued or running turns on the card's thread through the relay's own stop.
+   */
+  const cardTurns = createCardTurns({
+    database,
+    runTurn: unattendedTurnRunner,
+    runner: localThreadRunner,
+    // A group card's words go to the group, through the group's own send, as the person.
+    groupSend: (ownerUserId, channelId, input, options) =>
+      groupConversations.send(ownerUserId, channelId, input, options),
+    botName: async (tenantId, agentId) =>
+      (await agentProfileStore.get(await actorFor(tenantId), agentId))?.name ??
+      null,
+    cancelExternalTurn: cancelExternalTurns({
+      turns: acpTurnStore,
+      relay: acpRelay,
+    }),
+  });
+  /*
+   * The server's own rounds on a followed card (spec §8, `tasks/nudge-run.ts`): the checker's nudge,
+   * the person's 再催, and the hand-over to a new coworker -- one turn on the card's thread in the
+   * server's voice, on the same unattended runner, hung on the card: no card of its own, no push, no
+   * wake-up allowance, no month's quota.
+   */
+  const nudgeRuns = createNudgeRuns({
+    database,
+    runTurn: unattendedTurnRunner,
+    runner: localThreadRunner,
+    turns: cardTurns,
+    // A hand-over goes to a coworker this person can use, on their one-to-one conversation with it.
+    coworkerThread: async (tenantId, agentId) => {
+      const actor = await actorFor(tenantId);
+      if (!(await agentProfileStore.get(actor, agentId))) return null;
+      return (await channelStore.direct(actor, agentId)).threadId;
+    },
+    // An external employee's 再催 and hand-over name no tool it does not hold.
+    isExternal: (tenantId, agentId) =>
+      isExternalEmployee(database, tenantId, agentId),
+  });
+  /*
+   * Where the delivery loop speaks to the person outside a conversation (spec §10,
+   * `tasks/briefing.ts`): the checker's reminders and the start and end briefings, to their push
+   * devices and their connected Slack, Teams and SMS, filed under the card's conversation.
+   */
+  const taskNotices = createTaskNotices({
+    database,
+    router: deliveryRouter,
+    scopeFor: deliveryScopeFor,
+    workHours: savedWorkHours(database),
+  });
+  const coworkerName = async (tenantId: string, agentId: string) =>
+    (await agentProfileStore.get(await actorFor(tenantId), agentId))?.name ??
+    null;
+  /*
+   * The delivery checker (spec §8, `tasks/delivery-checker.ts`): once a minute, every followed card
+   * that has not ended -- the coworker nudged, the card recorded overdue, the person told. Each card is
+   * claimed under its row lock, so replicas checking at once nudge and notify once, and is checked in
+   * the tenant stamped on its row. Work hours are the person's own (`readWorkHours`); outside them a
+   * reminder is held for the start briefing.
+   */
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          await runDeliveryCheck(
+            {
+              database,
+              workHours: savedWorkHours(database),
+              notify: (tenantId, notice, now) =>
+                taskNotices.notify(tenantId, notice, now),
+              nudge: (tenantId, taskId, text) =>
+                nudgeRuns.startNudgeRun(tenantId, taskId, text),
+              turnRunning: threadRunning(localThreadRunner),
+              /*
+               * An external employee's turn still queued (its computer away, or its lane busy): the card
+               * is checked and the person told, saying so, but the employee is not nudged into a second
+               * turn behind it (spec §8, §9). Told in words for an external employee when it is one.
+               */
+              turnQueued: externalTurnWaiting({
+                turns: acpTurnStore,
+                reachable: deviceReachableAnywhere,
+              }),
+              isExternal: (tenantId, agentId) =>
+                isExternalEmployee(database, tenantId, agentId),
+              agentName: coworkerName,
+            },
+            new Date(),
+          );
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "delivery-check-error",
+              error: error instanceof Error ? error.name : "UnknownError",
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 60_000),
+    (resource) => resource.stop(),
+  );
+  /*
+   * 开工 / 收工清点 (spec §10, `tasks/briefing.ts`): once a minute, everybody with followed work whose
+   * work day starts or ends now gets that briefing, once per their local day -- claimed in
+   * `task_briefings` before it is built, so a restart or a second replica sends nothing again. Each
+   * person is briefed in the tenant stamped on their own cards.
+   */
+  const briefings = createBriefings({
+    database,
+    workHours: savedWorkHours(database),
+    agentName: coworkerName,
+    send: (tenantId, kind, briefing, now) =>
+      taskNotices.sendBriefing(tenantId, kind, briefing, now),
+  });
+  startup.acquireSync(
+    () =>
+      repeatAfterEach(async () => {
+        try {
+          await briefings.runBriefings(new Date());
+        } catch (error) {
+          console.error(
+            JSON.stringify({
+              type: "task-briefing-error",
+              error: error instanceof Error ? error.name : "UnknownError",
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+      }, 60_000),
+    (resource) => resource.stop(),
   );
   startup.acquireSync(
     () =>
@@ -5432,6 +5604,9 @@ await startupLifecycle.run(async (startup) => {
       contextWindowFor: (provider, modelName, baseUrl) =>
         modelCatalogue.contextWindowFor(provider, modelName, baseUrl),
       meteringTenants: (agentIds) => meteringTenantsFor(database, agentIds),
+      // 「上次检查」里的时间按查看者作息里的时区读。
+      timeZone: async (tenantId) =>
+        (await readWorkHours(database, tenantId)).timeZone,
       // 「压缩会话」的预估数字数，读的和压缩同一个线程存储。
       loadMessages: async (threadId) => {
         await localThreadRunner.hydrate();
@@ -5494,23 +5669,13 @@ await startupLifecycle.run(async (startup) => {
         : createRequireUser(auth as AuthService, roleRepository),
       taskProjector,
       {
-        /*
-         * A followed card's 退回 is said in its thread as the person and answered there, on the same
-         * unattended runner a dispatched `@` runs on (a group card's, in the group); a 取消 stops the
-         * round through the runner's stop.
-         * External coworkers' turns (`cancelExternalTurn`) wait for their ACP runtime.
-         */
-        turns: createCardTurns({
-          database,
-          runTurn: unattendedTurnRunner,
-          runner: localThreadRunner,
-          // A group card's words go to the group, through the group's own send, as the person.
-          groupSend: (ownerUserId, channelId, input, options) =>
-            groupConversations.send(ownerUserId, channelId, input, options),
-          botName: async (tenantId, agentId) =>
-            (await agentProfileStore.get(await actorFor(tenantId), agentId))
-              ?.name ?? null,
-        }),
+        // A followed card's conversation: 退回 and 取消 (see `cardTurns` above).
+        turns: cardTurns,
+        // 再催 and 换人接手: the server's own rounds on a card, as the checker's nudges run.
+        rounds: nudgeRuns,
+        // A due time typed without a zone, and the times said back, on the person's own clock.
+        timeZone: async (tenantId) =>
+          (await readWorkHours(database, tenantId)).timeZone,
         acceptTaskDisabled: async (tenantId, agentId) =>
           (await approvalService.disabledTools(tenantId, agentId))(
             ACCEPT_TASK_REF,
@@ -5631,6 +5796,17 @@ await startupLifecycle.run(async (startup) => {
         dispatch: (target, action, payload, timeoutMs) =>
           deviceChannel.dispatch(target, action, payload, timeoutMs),
       },
+    ),
+  );
+
+  // 开工 / 收工清点 as it stands now (spec §10), for the workbench and the phone's briefing page.
+  app.route(
+    "/api/me/briefing",
+    createBriefingRoutes(
+      config.singleUser
+        ? createDevRequireUser(config.singleUserAccess)
+        : createRequireUser(auth as AuthService, roleRepository),
+      briefings,
     ),
   );
 

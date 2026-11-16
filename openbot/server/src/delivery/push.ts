@@ -10,6 +10,8 @@ import {
  * What a tap on a notification opens in the mobile app, and the data it carries there. A reply opens
  * its conversation and a question or an approval the inbox, both by conversation. A ping opens the
  * person's Needs you list: it folds several Bots' items, so no one conversation is where it leads.
+ * A briefing opens the briefing page, and a reminder about a late card opens that card (its id rides
+ * as the row's `requestId`): the same pages the web workbench draws (spec 2026-11-15-delivery-loop §10).
  */
 function pushData(input: {
   channelId: string;
@@ -18,6 +20,16 @@ function pushData(input: {
 }): Record<string, string> {
   if (input.kind === "attention")
     return { kind: input.kind, url: "xiongbao://needs-you" };
+  if (input.kind === "briefing")
+    return { kind: input.kind, url: "xiongbao://briefing" };
+  if (input.kind === "overdue")
+    return input.requestId
+      ? {
+          kind: input.kind,
+          taskId: input.requestId,
+          url: `xiongbao://tasks/${encodeURIComponent(input.requestId)}`,
+        }
+      : { kind: input.kind, url: "xiongbao://briefing" };
   const path = input.kind === "reply" ? "conversation" : "approvals";
   const query = new URLSearchParams({
     channelId: input.channelId,

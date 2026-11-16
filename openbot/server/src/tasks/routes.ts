@@ -36,6 +36,7 @@ import { createDelivery, type Delivery, stageOf } from "./delivery";
 import { DEFAULT_TIME_ZONE, DELIVERY_EVENTS } from "./delivery-tools";
 import { clockOf, dueRefusalText, readDueTime } from "./due-time";
 import { listTaskEvents } from "./events";
+import type { NudgeRuns } from "./nudge-run";
 import type { TaskProjector } from "./projector";
 
 type Ctx = { Variables: AppVariables };
@@ -343,6 +344,7 @@ const editBody = z
     criteria: z.string().trim().min(1).max(CRITERIA_CHARS).optional(),
   })
   .refine((body) => body.dueAt !== undefined || body.criteria !== undefined);
+const reassignBody = z.object({ agentId: z.string().trim().min(1).max(200) });
 
 export { clockOf };
 
@@ -356,11 +358,16 @@ export type TaskRouteOptions = {
    * cannot be followed.
    */
   acceptTaskDisabled?: (tenantId: string, agentId: string) => Promise<boolean>;
-  /** The person's time zone, for a due time written without one. */
-  timeZone?: (tenantId: string) => string;
+  /**
+   * The person's time zone (their saved work hours' zone, `readWorkHours`), for a due time written
+   * without one and for the times said back to them. Absent: the product's own zone.
+   */
+  timeZone?: (tenantId: string) => string | Promise<string>;
   now?: () => Date;
   /** The followed cards' writes; a test may stand in for them. Absent: `createDelivery(database)`. */
   delivery?: Delivery;
+  /** The server's own rounds on a followed card: 再催 and 换人接手 (`tasks/nudge-run.ts`). */
+  rounds?: NudgeRuns;
 };
 
 /**
@@ -379,7 +386,8 @@ export function createTaskRoutes(
   const routes = new Hono<Ctx>();
   const delivery = options.delivery ?? createDelivery(database);
   const now = options.now ?? (() => new Date());
-  const zoneOf = options.timeZone ?? (() => DEFAULT_TIME_ZONE);
+  const zoneOf = async (tenantId: string): Promise<string> =>
+    (await options.timeZone?.(tenantId)) ?? DEFAULT_TIME_ZONE;
   const log = (type: string, detail: Record<string, unknown>) =>
     console.error(JSON.stringify({ type, ...detail }));
 
@@ -799,7 +807,7 @@ export function createTaskRoutes(
       decision: body.data.decision,
       ...(body.data.dueAt ? { dueAt: body.data.dueAt } : {}),
       now: now(),
-      timeZone: zoneOf(tenantId),
+      timeZone: await zoneOf(tenantId),
     });
     if (!decided.ok) {
       if (decided.why === "not_open")
@@ -811,6 +819,7 @@ export function createTaskRoutes(
       return context.json({ error: `${dueRefusalText(decided.why)}。` }, 400);
     }
     const dueAt = decided.dueAt?.toISOString() ?? null;
+    const zone = await zoneOf(tenantId);
     if (decided.threadRef && decided.agentId)
       await options.turns
         ?.say(
@@ -827,7 +836,7 @@ export function createTaskRoutes(
           } as BaseEvent,
           // In a group, said in the group: the transcript is where the person and the coworker read it.
           body.data.decision === "grant" && decided.dueAt
-            ? `准许延期到 ${clockOf(decided.dueAt, now(), zoneOf(tenantId))}`
+            ? `准许延期到 ${clockOf(decided.dueAt, now(), zone)}`
             : "延期不批，按原时间交",
         )
         .catch((error) =>
@@ -857,7 +866,11 @@ export function createTaskRoutes(
       );
     let dueAt: Date | undefined;
     if (body.data.dueAt !== undefined) {
-      const reading = readDueTime(body.data.dueAt, now(), zoneOf(tenantId));
+      const reading = readDueTime(
+        body.data.dueAt,
+        now(),
+        await zoneOf(tenantId),
+      );
       if (!reading.at)
         return context.json({ error: `${dueRefusalText(reading.why)}。` }, 400);
       dueAt = reading.at;
@@ -884,6 +897,88 @@ export function createTaskRoutes(
       dueAt: edited.dueAt?.toISOString() ?? null,
       criteria: edited.criteria,
     });
+  });
+
+  /*
+   * 换人接手 (spec §8): the work goes to another of the person's coworkers, on its own thread with the
+   * person, and waits for that coworker's 接活回执; the old coworker's round is stopped, and its late
+   * hand-in moves nothing. A coworker whose `accept_task` is switched off cannot take a followed card.
+   */
+  routes.post("/:id/reassign", requireUser, async (context) => {
+    const tenantId = context.var.actor.id;
+    const taskId = context.req.param("id");
+    if (!(await cardIsHere(tenantId, taskId))) return notHere(context);
+    const body = reassignBody.safeParse(await bodyOf(context));
+    if (!body.success)
+      return context.json({ error: "要写换给哪位员工（agentId）。" }, 400);
+    if (!options.rounds)
+      return context.json({ error: "现在换不了人，稍后再试。" }, 503);
+    const agentId = body.data.agentId;
+    if (await options.acceptTaskDisabled?.(tenantId, agentId))
+      return context.json(
+        {
+          error: "这位员工的接活工具（accept_task）已关闭，不能接手这件活。",
+        },
+        409,
+      );
+    const moved = await options.rounds.reassignTask(
+      tenantId,
+      taskId,
+      agentId,
+      `user:${tenantId}`,
+    );
+    if (!moved.ok) {
+      if (moved.why === "no_coworker")
+        return context.json({ error: "没有这位员工，或你用不了它。" }, 404);
+      return context.json(
+        {
+          error:
+            moved.why === "same_coworker"
+              ? "这件活已经是这位员工在做。"
+              : moved.why === "handed_in"
+                ? "成果已交，验收或退回之后才能换人。"
+                : moved.why === "waiting_on_you"
+                  ? "这件活在等你处理（审批或提问），处理完再换人。"
+                  : "这件活不在跟或已经结束。",
+        },
+        409,
+      );
+    }
+    return context.json({
+      ok: true,
+      stage: "pending_accept",
+      threadRef: moved.threadRef,
+      started: moved.started,
+    });
+  });
+
+  /** 再催 (spec §8): the coworker is nudged now, in the server's voice, as the person asked. */
+  routes.post("/:id/nudge", requireUser, async (context) => {
+    const tenantId = context.var.actor.id;
+    const taskId = context.req.param("id");
+    if (!(await cardIsHere(tenantId, taskId))) return notHere(context);
+    if (!options.rounds)
+      return context.json({ error: "现在催不了，稍后再试。" }, 503);
+    const nudged = await options.rounds.nudgeNow(tenantId, taskId, {
+      actor: `user:${tenantId}`,
+      now: now(),
+      timeZone: await zoneOf(tenantId),
+    });
+    if (!nudged.ok)
+      return context.json(
+        {
+          error:
+            nudged.why === "running"
+              ? "员工正在做这件活的一轮，稍后再催。"
+              : nudged.why === "just_nudged"
+                ? "刚催过，过一会儿再催。"
+                : nudged.why === "refused"
+                  ? nudged.message
+                  : "这件活不在员工手上（未在跟、已交成果、在等你处理或已结束），不用催。",
+        },
+        409,
+      );
+    return context.json({ ok: true, nudges: nudged.nudges });
   });
 
   /*

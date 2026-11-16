@@ -7,14 +7,18 @@ import {
 } from "@ag-ui/client";
 import { and, eq } from "drizzle-orm";
 import { Observable } from "rxjs";
-import { PERSON_INITIATOR } from "../audit";
+import { type AuditInitiator, PERSON_INITIATOR } from "../audit";
 import type { Database } from "../db/client";
 import { groupBotThreads } from "../db/schema";
 import type { NoticeRunner } from "../devices/queued-results";
 import type { TurnRunner } from "../routines/run-turn";
 import { runAsTenant } from "../tenant/context";
 import { emitRunEvent } from "../threads/run-side-events";
-import { suppressRunnerCard, turnForCard } from "../threads/unattended-card";
+import {
+  onlyOnIdleThread,
+  suppressRunnerCard,
+  turnForCard,
+} from "../threads/unattended-card";
 
 /**
  * What the person's decisions on a followed card do in its conversation (spec 2026-11-15-delivery-loop
@@ -84,6 +88,30 @@ export class CardTurnRefused extends Error {
   }
 }
 
+/**
+ * Refused because the thread is taken: a turn is already running on it, another runner holds its lock
+ * (`isLockConflict`), or the new one could not get hold of it in time. Somebody is working; nothing is
+ * wrong, and later may do.
+ */
+export class ThreadBusy extends CardTurnRefused {
+  constructor() {
+    super(BUSY);
+    this.name = "ThreadBusy";
+  }
+}
+
+/**
+ * Refused for a reason that is neither a busy thread nor one the person can be told in their own words
+ * (the coworker gone, the gateway down, a fault): trying again in a minute would only fail the same
+ * way. `detail` keeps what the turn said, for the logs and a card's history.
+ */
+export class TurnNotStarted extends CardTurnRefused {
+  constructor(readonly detail?: string) {
+    super(NOT_STARTED);
+    this.name = "TurnNotStarted";
+  }
+}
+
 /** The group's own send (`createGroupConversations(...).send`): a person's message and its queued turn. */
 export type GroupSend = (
   ownerUserId: string,
@@ -122,6 +150,7 @@ export type CardTurnsDeps = {
 };
 
 const BUSY = "员工这会儿正忙，稍后再试。";
+const NOT_STARTED = "没能让员工开始这一轮，稍后再试。";
 /** How long a 退回's turn may take to start (admission, the thread's lock) before it is given up. */
 export const START_TIMEOUT_MS = 30_000;
 const PAUSED = "这位员工已暂停，恢复后再试。";
@@ -133,6 +162,18 @@ const log = (type: string, detail: Record<string, unknown>) =>
 const reasonOf = (error: unknown) =>
   error instanceof Error ? error.message : String(error);
 
+/**
+ * Whether the platform refused the thread's lock because another runner holds it: its 409, matched on
+ * the shape as the toolkit's lease does (`PlatformRequestError` is not exported by the runtime).
+ */
+function isLockConflict(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    error.name === "PlatformRequestError" &&
+    (error as { status?: unknown }).status === 409
+  );
+}
+
 /** Why a turn did not start, as the person is told it. */
 function refusalOf(error: unknown): CardTurnRefused {
   if (error instanceof CardTurnRefused) return error;
@@ -141,8 +182,116 @@ function refusalOf(error: unknown): CardTurnRefused {
   // "Use Bots" switched off, or the model is not on the allowlist: the gate's own sentence.
   if (name === "CapabilityRefusedError" && error instanceof Error)
     return new CardTurnRefused(error.message);
-  // The thread is held (somebody's turn), or the turn could not take it: try again later.
-  return new CardTurnRefused(BUSY);
+  // Another runner holds the thread (the platform's 409 on its lock), or a turn here does
+  // (`ThreadBusyError`, the runner's own idle-only admission): somebody's turn, try again later.
+  if (isLockConflict(error) || name === "ThreadBusyError")
+    return new ThreadBusy();
+  // Anything else did not start the turn and will not by waiting a minute: said as such, not as busy.
+  log("task-card-turn-not-started", { reason: reasonOf(error) });
+  return new TurnNotStarted(reasonOf(error));
+}
+
+/** How a server-started turn on a card's thread is said and filed. */
+export type ThreadTurnOrigin = {
+  /** What the trail names as having started the turn (`TurnRunner`'s `routineId`). */
+  source: string;
+  /** The followed card the turn is a round of (`turnForCard`). */
+  taskId?: string;
+  initiator: AuditInitiator;
+  telemetry: Parameters<TurnRunner>[0]["telemetry"];
+  /** The message id's prefix, so the stored message says who put it there. */
+  messagePrefix: string;
+};
+
+/**
+ * Start a turn on a one-to-one thread with `text` as its message, and resolve once it has started
+ * (past its admission, holding the thread) with its run id. A thread with a turn already running is
+ * refused ({@link ThreadBusy}), never superseded: the runner would stop that turn for this one. A turn
+ * not started within the timeout is stopped and refused the same way; any other refusal comes back as
+ * a {@link CardTurnRefused} in words for the person. Nothing was said when it throws.
+ *
+ * Shared by the person's 退回 ({@link CardTurns.sendAsUser}) and the server's own rounds on a card
+ * (`tasks/nudge-run.ts`): the same start, timeout and refusals, with a different voice.
+ */
+export async function startThreadTurn(
+  deps: Pick<CardTurnsDeps, "runTurn" | "runner" | "startTimeoutMs">,
+  tenantId: string,
+  to: { threadId: string; agentId: string },
+  text: string,
+  origin: ThreadTurnOrigin,
+): Promise<string> {
+  // A turn already in flight on the thread would be superseded by this one: refused, not replaced.
+  const busy = await runAsTenant(tenantId, async () => {
+    await deps.runner.hydrate();
+    return deps.runner.isRunning({ threadId: to.threadId });
+  });
+  if (busy) throw new ThreadBusy();
+
+  // A uuid, because the thread lock wants one.
+  const runId = randomUUID();
+  const userMessage: Message = {
+    id: `${origin.messagePrefix}:${runId}`,
+    role: "user",
+    content: text,
+  };
+  let began = false;
+  // A turn that has not started in time (a lock that never comes) is given up, and stopped.
+  const giveUp = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await new Promise<void>((started, refused) => {
+    timer = setTimeout(() => {
+      if (began) return;
+      refused(new ThreadBusy());
+      giveUp.abort();
+      void runAsTenant(tenantId, () =>
+        deps.runner.stop({ threadId: to.threadId, runId }),
+      ).catch(() => undefined);
+    }, deps.startTimeoutMs ?? START_TIMEOUT_MS);
+    // A round of the card named, not of whichever card the thread's coworker took on last.
+    const taskId = origin.taskId;
+    const forCard = <T>(body: () => T): T =>
+      taskId ? turnForCard(taskId, body) : body();
+    runAsTenant(tenantId, () =>
+      forCard(() =>
+        // Never over somebody's turn: refused if one runs, or starts, before this one is admitted.
+        onlyOnIdleThread(() =>
+          deps.runTurn({
+            signal: giveUp.signal,
+            ownerUserId: tenantId,
+            routineId: origin.source,
+            agentId: to.agentId,
+            threadId: to.threadId,
+            instruction: text,
+            userMessage,
+            runId,
+            tenantId,
+            initiator: origin.initiator,
+            telemetry: origin.telemetry,
+            onStarted: () => {
+              began = true;
+              started();
+            },
+          }),
+        ),
+      ),
+    ).then(
+      () => started(),
+      (error) => {
+        // Before the start, the caller hears why and says so; after it, the card records the round.
+        if (!began) return refused(error);
+        log("task-card-turn-ended-early", {
+          runId,
+          threadId: to.threadId,
+          reason: reasonOf(error),
+        });
+      },
+    );
+  })
+    .catch((error) => {
+      throw refusalOf(error);
+    })
+    .finally(() => clearTimeout(timer));
+  return runId;
 }
 
 /** A run that carries one server event and nothing else. */
@@ -239,74 +388,13 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
           ),
         };
 
-      // A turn already in flight on the thread would be superseded by this one: refused, not replaced.
-      const busy = await runAsTenant(tenantId, async () => {
-        await deps.runner.hydrate();
-        return deps.runner.isRunning({ threadId: to.threadId });
+      const runId = await startThreadTurn(deps, tenantId, to, text, {
+        source: options?.source ?? "task-card",
+        ...(options?.taskId ? { taskId: options.taskId } : {}),
+        initiator: PERSON_INITIATOR,
+        telemetry: { trigger: "human" },
+        messagePrefix: "card-user",
       });
-      if (busy) throw new CardTurnRefused(BUSY);
-
-      // A uuid, because the thread lock wants one.
-      const runId = randomUUID();
-      const userMessage: Message = {
-        id: `card-user:${runId}`,
-        role: "user",
-        content: text,
-      };
-      let began = false;
-      // A turn that has not started in time (a lock that never comes) is given up, and stopped.
-      const giveUp = new AbortController();
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      await new Promise<void>((started, refused) => {
-        timer = setTimeout(() => {
-          if (began) return;
-          refused(new CardTurnRefused(BUSY));
-          giveUp.abort();
-          void runAsTenant(tenantId, () =>
-            deps.runner.stop({ threadId: to.threadId, runId }),
-          ).catch(() => undefined);
-        }, deps.startTimeoutMs ?? START_TIMEOUT_MS);
-        // A round of the card named, not of whichever card the thread's coworker took on last.
-        const taskId = options?.taskId;
-        const forCard = <T>(body: () => T): T =>
-          taskId ? turnForCard(taskId, body) : body();
-        runAsTenant(tenantId, () =>
-          forCard(() =>
-            deps.runTurn({
-              signal: giveUp.signal,
-              ownerUserId: tenantId,
-              routineId: options?.source ?? "task-card",
-              agentId: to.agentId,
-              threadId: to.threadId,
-              instruction: text,
-              userMessage,
-              runId,
-              tenantId,
-              initiator: PERSON_INITIATOR,
-              telemetry: { trigger: "human" },
-              onStarted: () => {
-                began = true;
-                started();
-              },
-            }),
-          ),
-        ).then(
-          () => started(),
-          (error) => {
-            // Before the start, the caller hears why and says so; after it, the card records the round.
-            if (!began) return refused(error);
-            log("task-card-turn-ended-early", {
-              runId,
-              threadId: to.threadId,
-              reason: reasonOf(error),
-            });
-          },
-        );
-      })
-        .catch((error) => {
-          throw refusalOf(error);
-        })
-        .finally(() => clearTimeout(timer));
       return { runId, groupMessageId: null };
     },
 
@@ -356,25 +444,28 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
         const agent = new ServerNotice(where.agentId, event);
         agent.threadId = where.threadId;
         agent.setMessages(history);
-        await suppressRunnerCard(
-          () =>
-            new Promise<void>((resolve, reject) => {
-              deps.runner
-                .run({
-                  threadId: where.threadId,
-                  agent,
-                  input: {
+        // A turn that started since the check above is not superseded by a notice: it stands back.
+        await suppressRunnerCard(() =>
+          onlyOnIdleThread(
+            () =>
+              new Promise<void>((resolve, reject) => {
+                deps.runner
+                  .run({
                     threadId: where.threadId,
-                    runId: randomUUID(),
-                    messages: history,
-                    tools: [],
-                    context: [],
-                    state: {},
-                    forwardedProps: {},
-                  },
-                })
-                .subscribe({ error: reject, complete: resolve });
-            }),
+                    agent,
+                    input: {
+                      threadId: where.threadId,
+                      runId: randomUUID(),
+                      messages: history,
+                      tools: [],
+                      context: [],
+                      state: {},
+                      forwardedProps: {},
+                    },
+                  })
+                  .subscribe({ error: reject, complete: resolve });
+              }),
+          ),
         );
       });
     },

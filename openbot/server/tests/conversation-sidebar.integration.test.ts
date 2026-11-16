@@ -40,13 +40,20 @@ import {
   type MeteredBinding,
   sha256Hex,
 } from "../src/models/token-metering";
+import { clockOf } from "../src/tasks/due-time";
 import { appendTaskEvent, type TaskEventKind } from "../src/tasks/events";
+import { createTaskProjector } from "../src/tasks/projector";
+import { createTaskRoutes } from "../src/tasks/routes";
 import { runAsTenant } from "../src/tenant/context";
 import {
   createConversationSidebar,
   type SidebarDeps,
 } from "../src/threads/sidebar";
 import { createSidebarRoutes } from "../src/threads/sidebar-routes";
+import {
+  createUserPreferencesStore,
+  readWorkHours,
+} from "../src/user-preferences";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /*
@@ -1263,6 +1270,90 @@ describe("conversation sidebar", () => {
       expect(body.context.usage?.used).toBe(10_000);
     });
     expect(detailCount).toBeLessThanOrEqual(largeCount + 1);
+  });
+
+  test("a person in New York: the due time they type is kept on their clock, and the sidebar says it on it", async () => {
+    // Their browser wrote New York on the first save (`readWorkHours` reads it back).
+    const viewer = await person();
+    await runAsTenant(viewer, () =>
+      createUserPreferencesStore(database).patch(viewer, {
+        browserTimeZone: "America/New_York",
+      }),
+    );
+    const zoneOf = async (tenantId: string) =>
+      (await readWorkHours(database, tenantId)).timeZone;
+    const agentId = await employee(viewer, "对账员工");
+    const { threadId } = await directChat(viewer, agentId);
+    const [followed] = await runAsTenant(viewer, () =>
+      database
+        .insert(tasks)
+        .values({
+          title: "核对三家发票",
+          source: "chat",
+          status: "running",
+          channelRef: threadId,
+          executorAgentId: agentId,
+          tracked: true,
+          threadRef: threadId,
+          acceptedAt: new Date("2026-11-16T13:00:00.000Z"),
+          updatedAt: tick(),
+        })
+        .returning({ id: tasks.id }),
+    );
+    const taskId = followed?.id as string;
+
+    // 09:00 on Monday in New York, the person moves the due time to 「15:00」: 15:00 in New York.
+    const guard: MiddlewareHandler<{ Variables: AppVariables }> = async (
+      context,
+      next,
+    ) => {
+      context.set("actor", {
+        id: viewer,
+        email: `${viewer}@example.test`,
+        role: "user",
+      });
+      await runAsTenant(viewer, () => next());
+    };
+    const board = createTaskRoutes(
+      database,
+      guard,
+      createTaskProjector(database),
+      {
+        now: () => new Date("2026-11-16T14:00:00.000Z"),
+        timeZone: zoneOf,
+      },
+    );
+    const edited = await board.request(`http://openbot.test/${taskId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dueAt: "15:00" }),
+    });
+    expect(edited.status).toBe(200);
+    expect(await edited.json()).toMatchObject({
+      dueAt: "2026-11-16T20:00:00.000Z",
+    });
+    const [stored] = await runAsTenant(viewer, () =>
+      database
+        .select({ dueAt: tasks.dueAt })
+        .from(tasks)
+        .where(inArray(tasks.id, [taskId])),
+    );
+    expect(stored?.dueAt?.toISOString()).toBe("2026-11-16T20:00:00.000Z");
+
+    // The sidebar's 「上次检查」 says the new time on their clock: 15:00, not Shanghai's 04:00.
+    const { body } = await routesFor(viewer, { timeZone: zoneOf }).thread(
+      threadId,
+    );
+    const said = clockOf(
+      new Date("2026-11-16T20:00:00.000Z"),
+      new Date(),
+      "America/New_York",
+    );
+    expect(said).toContain("15:00");
+    expect(body.goal).toMatchObject({
+      dueAt: "2026-11-16T20:00:00.000Z",
+      lastCheck: `你把预计时间改到 ${said}`,
+    });
   });
 
   test("meteringTenantFor answers what the model resolver meters under", async () => {

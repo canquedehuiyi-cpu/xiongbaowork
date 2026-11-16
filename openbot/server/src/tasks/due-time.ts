@@ -366,3 +366,28 @@ export function clockOf(at: Date, now: Date, timeZone: string): string {
     parts.find((piece) => piece.type === type)?.value ?? "";
   return `${part("month")}月${part("day")}日 ${time}`;
 }
+
+/**
+ * The first due time a reply states, as an external employee states it (spec 2026-11-15-delivery-loop
+ * §9, which cannot call `accept_task`): 「预计 HH:MM」 or 「预计 N 分钟 / 小时」, the words after 「预计」
+ * ready for {@link readDueTime}; a time it only quotes (「原定预计 16:00」) is not one it gives. Undefined
+ * when the reply states none in that form.
+ */
+/** What, right before a 「预计」, makes the time after it one quoted rather than given ({@link dueSaidIn}). */
+const QUOTED_BEFORE =
+  /(?:原定|原来|原先|此前|(?:^|[^\u4e00-\u9fff]|[我你他她它们])(?:原|之前))\s*$/;
+
+export function dueSaidIn(text: string): string | undefined {
+  const stated =
+    /预计\s*(?:在\s*)?(\d{1,2}\s*[:：]\s*\d{2}|\d+(?:\.\d+)?\s*(?:个)?\s*(?:分钟|小时|钟头))/g;
+  for (const said of text.matchAll(stated)) {
+    /*
+     * A time it quotes rather than gives: 「原定预计 16:00」「之前预计 16:00」「原预计 16:00」. The bare
+     * 「原」 and 「之前」 only where they start what is said (after a mark, or a 我 / 你 / 它 …): a time
+     * given right after a word ending in them -- 「数据还原预计 20 分钟」「上线之前预计 30 分钟」 -- is its own.
+     */
+    if (QUOTED_BEFORE.test(text.slice(0, said.index))) continue;
+    return said[1]?.replace(/\s*[:：]\s*/, ":").replace(/\s+/g, " ");
+  }
+  return undefined;
+}
