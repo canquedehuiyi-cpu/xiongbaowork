@@ -108,3 +108,26 @@ test("a state with no plain word of its own is never shown as the server's name 
   expect(page).toContain("对方已退订");
   expect(page).toContain("发送中");
 });
+
+test("发出去了的那一行附带的说明不画成红字；失败的才是", async () => {
+  const view = draw([
+    delivery(
+      "noted",
+      "wechat",
+      "approval",
+      "sent",
+      "已在微信里发过这条审批，没有重复发送。",
+    ),
+    delivery(
+      "broken",
+      "wechat",
+      "overdue",
+      "failed",
+      "WeChat delivery failed (window_closed).",
+    ),
+  ]);
+  const note = await view.findByText("已在微信里发过这条审批，没有重复发送。");
+  expect(note.className).not.toContain("text-signal-ink");
+  const failure = view.getByText("WeChat delivery failed (window_closed).");
+  expect(failure.className).toContain("text-signal-ink");
+});

@@ -70,6 +70,16 @@ export type WechatSummary = {
   pausedUntil?: string | null;
 };
 export const deliveryKey = ["delivery"] as const;
+/**
+ * 这一行发出去了（`sent` / `delivered`）：它的 `error` 列是说明（例如「已在微信里发过这条审批，没有重复发送。」），
+ * 不是错误，界面不画成红字。
+ */
+export function delivered(
+  state: Reachability["deliveries"][number]["state"],
+): boolean {
+  return state === "sent" || state === "delivered";
+}
+
 export function deliveryQueryOptions() {
   return queryOptions({
     queryKey: deliveryKey,
