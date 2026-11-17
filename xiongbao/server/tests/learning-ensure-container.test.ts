@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ContainerProbe } from "../src/learning/auto-assign";
@@ -32,6 +32,38 @@ afterEach(async () => {
     directories.splice(0).map((path) => rm(path, { recursive: true })),
   );
 });
+
+/**
+ * The pid the command under the shell wrote for itself. Polled rather than slept on: the shell has
+ * to start before the command can run, and a fixed wait would be a guess in both directions.
+ */
+async function pidFrom(marker: string): Promise<number> {
+  const deadline = Date.now() + 20_000;
+  for (;;) {
+    const text = await readFile(marker, "utf8").catch(() => "");
+    if (text.trim() !== "") return Number(text.trim());
+    if (Date.now() > deadline)
+      throw new Error(`the command under the shell never wrote ${marker}`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+/**
+ * Whether `pid` stopped existing within `budget`. `process.kill(pid, 0)` delivers no signal; it only
+ * asks the operating system whether the process is there, so this is a liveness question.
+ */
+async function goneWithin(pid: number, budget: number): Promise<boolean> {
+  const deadline = Date.now() + budget;
+  for (;;) {
+    try {
+      process.kill(pid, 0);
+    } catch {
+      return true;
+    }
+    if (Date.now() > deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
 
 function key(answers: ContainerProbe[]): KeyIntelligence & {
   probes: number;
@@ -289,6 +321,12 @@ describe("the CopilotKit CLI", () => {
   });
 
   // Since CVE-2024-27980, spawning a .cmd without a shell throws EINVAL before anything runs.
+  //
+  // The explicit timeout is the point: `runNpx` allows its child two minutes (see
+  // `src/learning/ensure-container.ts`), and bun's default per-test ceiling is five seconds, so the
+  // case was measuring whether `cmd.exe` starts within a budget nobody chose rather than whether the
+  // spawn throws EINVAL. It passed alone and timed out inside the full file, which reads as a broken
+  // spawn helper and is not one.
   test.if(process.platform === "win32")(
     "starts on this Windows machine instead of throwing EINVAL",
     async () => {
@@ -296,6 +334,7 @@ describe("the CopilotKit CLI", () => {
       expect(result.exitCode).toBe(0);
       expect(result.stdout.trim()).toMatch(/^\d+\.\d+\.\d+$/);
     },
+    30_000,
   );
 
   test.if(process.platform === "win32")(
@@ -306,24 +345,54 @@ describe("the CopilotKit CLI", () => {
     },
   );
 
-  // Killing cmd.exe alone leaves the command under it holding the pipes, so `close` waits for it.
+  // Killing cmd.exe alone leaves the command under it running with the pipes, so the shell's
+  // `close` event waits for that command: it did, for 28 seconds, which is `ping -n 30` running its
+  // natural course after the tree kill had already returned.
+  //
+  // WHAT CHANGED, AND WHY. The case used to wait for `close` within four seconds and read a later
+  // one as "the tree was left behind". That conflated three different things — the kill happening,
+  // the descendant dying, and bun emitting an event — and named the wrong one when it failed. It now
+  // runs a command that writes its own pid and asks the operating system whether that pid still
+  // exists, which is the claim itself.
+  //
+  // WHAT IT MEASURES ON A WINDOWS MACHINE, 2026-11-18. Called directly, awaited, with piped stdio,
+  // `taskkill /pid <shell> /T /F` exits 0 and its output names both pids as terminated. Called the
+  // way `stopProcessTree` calls it — fire and forget, `stdio: "ignore"` — the descendant survived in
+  // every run (4/4) and only the shell went. So this case stays red here for a product-level reason,
+  // not a fixture one: "stop the tree" is a request nobody checks the result of. The fix is on the
+  // product side (verify, or hold the tree in a job object as `desktop-device` already does for its
+  // daemon); narrowing this assertion again would only hide it.
   test.if(process.platform === "win32")(
     "a stopped command takes the processes under its shell with it",
     async () => {
-      const child = spawn("ping", ["-n", "30", "127.0.0.1"], {
+      const directory = await mkdtemp(join(tmpdir(), "openbot-tree-"));
+      directories.push(directory);
+      const marker = join(directory, "pid");
+      const script = join(directory, "sleep.mjs");
+      await writeFile(
+        script,
+        [
+          `import { writeFileSync } from "node:fs";`,
+          `writeFileSync(${JSON.stringify(marker)}, String(process.pid));`,
+          `setTimeout(() => {}, 30_000);`,
+          ``,
+        ].join("\n"),
+      );
+
+      // Through a shell, because that is the shape `runCli` has: cmd.exe holds the process, and the
+      // command it started is what a bare `child.kill()` would leave running.
+      const child = spawn(process.execPath, [script], {
         shell: true,
         stdio: ["ignore", "pipe", "pipe"],
       });
       child.stdout.resume();
       child.stderr.resume();
-      const closed = new Promise((resolve) => child.on("close", resolve));
-      // Stopped at once, cmd.exe goes before it has started ping, and there is no tree to leave.
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
-      const started = Date.now();
+      const grandchild = await pidFrom(marker);
+
       stopProcessTree(child, true);
-      await closed;
-      expect(Date.now() - started).toBeLessThan(4_000);
+      expect(await goneWithin(grandchild, 4_000)).toBe(true);
     },
+    30_000,
   );
 });
 

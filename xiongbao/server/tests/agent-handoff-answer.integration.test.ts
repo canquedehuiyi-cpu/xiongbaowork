@@ -1,5 +1,6 @@
 import { describe, expect, spyOn } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import type { AbstractAgent, BaseEvent } from "@ag-ui/client";
 import { answeredBy, answerMessageId } from "@openbot/shared/handoff-markers";
 import { IntelligenceKnowingANewThread } from "@openbot/toolkit/copilotkit/agents";
@@ -380,9 +381,11 @@ async function botsAgainst(baseUrl: string) {
   for (const name of VARIABLES) delete process.env[name];
   process.env.OPENAI_BASE_URL = baseUrl;
   normalizeModelBaseUrls();
+  // `fileURLToPath`, not `.pathname`: `pathname` stays percent-encoded, so a checkout under a path
+  // with non-ASCII characters hands `loadTenantPackage` a directory that does not exist.
   const packageModel = (
     await loadTenantPackage(
-      new URL("../../examples/fintech", import.meta.url).pathname,
+      fileURLToPath(new URL("../../examples/fintech", import.meta.url)),
     )
   ).model;
   const model = runtimeModelForEnvironment(packageModel);

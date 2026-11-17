@@ -3298,8 +3298,14 @@ test("blank package endpoint disables only its owned agent and restores it when 
     try {
       process.env.MANAGED_AGENT_AG_UI_URL = "http://127.0.0.1:4201/ag-ui";
       process.env.PICKED_HARNESS_URL = "http://127.0.0.1:4206/ag-ui";
-      const source = new URL("../../examples/fintech", import.meta.url)
-        .pathname;
+      // `fileURLToPath`, not `.pathname`: `pathname` stays percent-encoded, so a checkout under a
+      // path with non-ASCII characters — this repository lives under one — hands
+      // `loadTenantPackage` a directory name that does not exist, and the case dies of ENOENT
+      // instead of testing the behaviour it is here for. The other three package loads in this file
+      // already do this; this was the one that did not.
+      const source = fileURLToPath(
+        new URL("../../examples/fintech", import.meta.url),
+      );
       const configured = await loadTenantPackage(source);
       const rename = (id: string) => `${id}-${suffix}`;
       const isolate = (loaded: LoadedTenantPackage): LoadedTenantPackage => ({
