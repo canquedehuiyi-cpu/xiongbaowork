@@ -255,7 +255,16 @@ test("an answer cannot be pointed at another person's responsibility or another 
       return { ...responsibility, ownerUserId };
     },
     listRuns: async () => [],
-  } as unknown as Pick<ResponsibilityStore, "get" | "listRuns">;
+    // Never reached: both cases below are refused on their own grounds, before any continuation.
+    // Present because the continuation path asks for it, and loud so that a refusal which stopped
+    // refusing shows up as this sentence rather than as a quietly resumed run.
+    resumeWaiting: async () => {
+      throw new Error("an answer this test rejects was resumed anyway");
+    },
+  } as unknown as Pick<
+    ResponsibilityStore,
+    "get" | "listRuns" | "resumeWaiting"
+  >;
   const never = () => {
     throw new Error("must not run");
   };

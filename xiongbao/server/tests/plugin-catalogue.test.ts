@@ -94,7 +94,9 @@ describe("which servers this deployment will talk to", () => {
   test("the path is the catalogue's, never the caller's", () => {
     // An instance host offered for a vendor with a pinned host is ignored, not honoured: the host and
     // the path both come from the entry, so nothing a caller sends can reach another endpoint.
-    expect(resolveServerUrl("google-drive", "https://evil.test").url).toBe(
+    // Optional, because the function answers null for a vendor it does not know: a null here
+    // fails this assertion on the diff rather than on the dereference.
+    expect(resolveServerUrl("google-drive", "https://evil.test")?.url).toBe(
       "https://www.googleapis.com/drive/v3",
     );
   });
@@ -111,7 +113,11 @@ describe("which servers this deployment will talk to", () => {
         // https requirement below does not apply. Asserted positively instead, so this branch
         // cannot quietly become a loophole for a future entry that DOES dial a real host.
         // An explicit allow-list (user-approved change, 2026-11-12): each in-process builtin is named here.
-        expect(["builtin://routines", "builtin://staffing", "builtin://skills"]).toContain(entry.host);
+        expect([
+          "builtin://routines",
+          "builtin://staffing",
+          "builtin://skills",
+        ]).toContain(entry.host);
       } else {
         expect(entry.host.startsWith("https://")).toBe(true);
       }

@@ -32,8 +32,12 @@ function fakeAdapter() {
       stored.push(data.update as Record<string, unknown>);
       return data.update;
     },
-    findOne: async () => nextRead,
-    findMany: async () => (nextRead ? [nextRead] : []),
+    // One row, so the query is ignored — but it is accepted, because the wrapper passes the one it
+    // was given and every real adapter declares a parameter here. Omitting it made `findOne` take
+    // no arguments, and the calls below were checking a signature no adapter has.
+    findOne: async (_query: Record<string, unknown>) => nextRead,
+    findMany: async (_query: Record<string, unknown>) =>
+      nextRead ? [nextRead] : [],
   };
 
   return {

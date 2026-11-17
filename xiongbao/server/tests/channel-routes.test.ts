@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   AgentNotFoundError,
   createAgentProfileStore,
@@ -18,6 +19,7 @@ import type { AgentActor } from "../src/agents/profile-types";
 import { createApp } from "../src/app";
 import type { AuditEventInput, AuditStore } from "../src/audit";
 import { DEV_ACTOR } from "../src/auth/dev-actor";
+import type { AuthenticatedActor } from "../src/auth/guards";
 import type { AppVariables } from "../src/auth/guards";
 import {
   type AgentChannel,
@@ -559,8 +561,14 @@ describe("channel routes", () => {
       },
     });
     const app = appFor(store);
+    /*
+     * 599 on purpose, and the one cast here is what it costs. Hono's `ContentfulStatusCode` is the
+     * set of statuses a response may carry, and 599 is not in it — this number exists only so the
+     * assertion below can tell "the outer handler answered" from "the route answered", and no
+     * client ever sees it.
+     */
     app.onError((error, context) =>
-      context.json({ sentinel: error.message }, 599),
+      context.json({ sentinel: error.message }, 599 as ContentfulStatusCode),
     );
 
     const response = await app.request("http://openbot.test/", {
@@ -979,17 +987,26 @@ function persistentId(kind: string) {
   return `${testPrefix}-${kind}-${randomUUID()}`;
 }
 
-async function createPersistentUser(): Promise<AgentActor> {
+/**
+ * The person as a request carries them, not only as the agent store needs them.
+ *
+ * `AgentActor` is `{ id, role }`; a middleware's `context.set("actor", …)` wants the
+ * `AuthenticatedActor` the guard would have produced, which also has the email. The row below
+ * already inserts one, so returning it here is reading back what was written rather than
+ * inventing a value.
+ */
+async function createPersistentUser(): Promise<AuthenticatedActor> {
   const userId = persistentId("user");
+  const email = `${userId}@example.test`;
   await runAsTenant(userId, () =>
     database.insert(users).values({
       id: userId,
-      email: `${userId}@example.test`,
+      email,
       name: "Channel Store Test User",
     }),
   );
   createdUserIds.push(userId);
-  return { id: userId, role: "user" };
+  return { id: userId, email, role: "user" };
 }
 
 async function createPersistentAgent(options: {

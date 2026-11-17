@@ -431,6 +431,10 @@ describe("naming a claimed conversation", () => {
     expect([...left.written, ...right.written]).toEqual([channel.id]);
     expect(left.considered + right.considered).toBe(1);
     const written = (await summaryOf(channel.id))?.summary;
+    // Named first: `toContain` cannot say anything useful about `null`, and "no summary at all" is
+    // a different failure from "the wrong title".
+    if (typeof written !== "string")
+      throw new Error("the winning summary was not written");
     expect(["Left title", "Right title"]).toContain(written);
   });
 
@@ -658,13 +662,11 @@ describe("naming a claimed conversation", () => {
       // review), and `addMember` now adds people only to a shared `team` group. The rows, and the
       // member list the payload carries, are what they were.
       await runAsTenant("platform", () =>
-        database
-          .insert(channelMemberships)
-          .values({
-            channelId: channel.id,
-            userId: member.id,
-            tenantId: owner.id,
-          }),
+        database.insert(channelMemberships).values({
+          channelId: channel.id,
+          userId: member.id,
+          tenantId: owner.id,
+        }),
       );
     }
 

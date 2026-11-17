@@ -42,7 +42,14 @@ function key(answers: ContainerProbe[]): KeyIntelligence & {
       view.probes++;
       return answers.shift() ?? "absent";
     },
-    project: async () => ({ organizationSlug: "team", projectSlug: "chosen" }),
+    // `KeyIdentity` is the slugs *and* the display names — the CLI login it is compared against
+    // reports names, never slugs — so a fixture with only two of the four describes no project.
+    project: async () => ({
+      organizationSlug: "team",
+      projectSlug: "chosen",
+      organizationName: "Team",
+      projectName: "Chosen",
+    }),
   };
   return view;
 }

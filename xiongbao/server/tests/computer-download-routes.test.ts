@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { MiddlewareHandler } from "hono";
+import type { AgentActor } from "../src/agents/profile-types";
 import type { AppVariables, AuthenticatedActor } from "../src/auth/guards";
 import { personSeat } from "../src/computer/computer-key";
 import type { ComputerGateway } from "../src/computer/gateway";
@@ -29,8 +30,11 @@ function asActor(): MiddlewareHandler<{ Variables: AppVariables }> {
 
 function appFor(
   gateway: ComputerGateway,
+  // `BotAccessCheck` answers for `AgentActor`, which is `{ id, role }` — narrower than the
+  // `AuthenticatedActor` a request carries. Declaring the wider type here would promise the
+  // callback an email the route never passes.
   canUseBot: (
-    actor: AuthenticatedActor,
+    actor: AgentActor,
     botId: string,
   ) => Promise<boolean> = async () => true,
 ) {
@@ -182,10 +186,7 @@ describe("the public computer file download route", () => {
     // 折掉，工作区的那道墙就再也收不到它，而这一条链接正是把它送过去的唯一一条路。
     "把%s的 `..` 原样交给电脑：%i",
     async (_name, path, wire) => {
-      const { gateway, calls } = gatewayThatReturns(
-        "x",
-        Uint8Array.from([1]),
-      );
+      const { gateway, calls } = gatewayThatReturns("x", Uint8Array.from([1]));
       const response = await appFor(gateway).request(
         `http://openbot.test/bot-17/files/download?path=${wire}`,
       );

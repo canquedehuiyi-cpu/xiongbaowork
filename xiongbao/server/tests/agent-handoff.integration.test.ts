@@ -32,7 +32,7 @@ const ASKER = `handoff-asker-${suite}`;
 const TARGET = `handoff-target-${suite}`;
 const ACTOR = `handoff-actor-${suite}`;
 
-const profiles = createAgentProfileStore(database);
+const profiles = createAgentProfileStore(database, undefined);
 const queue = createWorkQueue(database);
 const desk = createHandoffDesk({
   queue,
@@ -84,9 +84,10 @@ beforeEach(async () => {
         .onConflictDoNothing();
       await database
         .insert(agentProfiles)
+        // No `name`: the profile has none, and the display name went in with the `agents` row
+        // above. Passing it here is what a column that moved looks like from the outside.
         .values({
           agentId: id,
-          name,
           title: "",
           roleDescription: "",
           avatarSeed: id,

@@ -48,6 +48,8 @@ const CHANNEL: AgentChannel = {
   agentIds: ["bot_helper"],
   threadId: "thread_owner_channel_1",
   active: true,
+  // Nobody has said anything here yet: the runner is about to.
+  lastMessageAt: null,
 };
 
 const RUN_ID = "routine_run_1";

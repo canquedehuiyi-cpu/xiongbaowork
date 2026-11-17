@@ -23,7 +23,14 @@ function event(
 ): AuditEvent {
   return {
     id: overrides.id ?? "evt-1",
-    actorUserId: null,
+    actorUserId: overrides.actorUserId ?? null,
+    /*
+     * A person, which is what every row written before these columns existed is judged as — the
+     * case the first describe below pins. A test that needs the columns to say something else
+     * passes them outright rather than through this builder.
+     */
+    initiatorKind: overrides.initiatorKind ?? "person",
+    initiatorId: overrides.initiatorId ?? null,
     eventType: overrides.eventType ?? "computer.action_allowed",
     targetType: "computer",
     targetId: "general-assistant",

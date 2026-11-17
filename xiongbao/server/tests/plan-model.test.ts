@@ -81,7 +81,9 @@ test("a plan-only built-in keeps its identity and instructions", async () => {
 });
 
 test("frontend continuation keeps its SDK thread; Stop cancels only that Bot's query", async () => {
-  const requests: Record<string, unknown>[] = [];
+  // Only the thread each request named is read here, so that is what the recording says it holds.
+  // As `Record<string, unknown>` the comparison below was against `unknown`.
+  const requests: { threadId?: string }[] = [];
   const cancelled = Promise.withResolvers<string>();
   const server = Bun.serve({
     port: 0,

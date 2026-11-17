@@ -1,8 +1,6 @@
 import { expect, test } from "bun:test";
 import { AbstractAgent, type Message, type RunAgentInput } from "@ag-ui/client";
-import {
-  EMPTY,
-} from "rxjs";
+import { EMPTY } from "rxjs";
 import { createTurnRunner } from "../src/routines/run-turn";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { runAsTenant } from "../src/tenant/context";
@@ -58,11 +56,13 @@ test("verified inbound person message keeps canonical run ID and persists exact 
       return agent;
     },
   });
-  const userMessage: Message = {
+  // `satisfies` rather than an annotation: `Message.content` is `string | ContentPart[]`, and the
+  // turn's `instruction` is a string. A literal keeps the string a string and still checks the shape.
+  const userMessage = {
     id: "delivery:inbox-id",
     role: "user",
     content: "My actual Slack message",
-  };
+  } as const satisfies Message;
   expect(
     // A delivered turn runs as the person it was delivered for, as its caller frames it.
     await runAsTenant("owner", () =>

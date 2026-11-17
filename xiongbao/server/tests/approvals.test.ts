@@ -18,6 +18,7 @@ import {
   ApprovalRefusedError,
   type ApprovalStore,
   approvalAction,
+  type RuleBehaviour,
   withApprovalContext,
 } from "../src/approvals/types";
 import { botSeat } from "../src/computer/computer-key";
@@ -63,6 +64,9 @@ function storeFixture() {
     toolRef: string;
     effect: string;
     scope: string;
+    // The column defaults to `allow`, which is what "Always allow here" has always saved, so a
+    // fixture that omits it is not describing a rule the database can hold.
+    behaviour: RuleBehaviour;
     revokedAt: Date | null;
     createdAt: Date;
   }[] = [];
@@ -133,6 +137,7 @@ function storeFixture() {
           toolRef: row.action.toolRef,
           effect: row.action.effect,
           scope: row.action.scope,
+          behaviour: "allow",
           revokedAt: null,
           createdAt: new Date(),
         });

@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { AbstractAgent } from "@ag-ui/client";
 import { and, eq, inArray, like } from "drizzle-orm";
-import { Hono } from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { EMPTY } from "rxjs";
 import {
   decideFromSnapshot,
@@ -194,9 +194,17 @@ afterAll(async () => {
 
 function appFor(actor: { id: string; email: string; role: "admin" | "user" }) {
   const app = new Hono<{ Variables: AppVariables }>();
-  const requireUser = async (
-    context: Parameters<Parameters<typeof app.use>[1]>[0],
-    next: () => Promise<void>,
+  /*
+   * Annotated, not inferred from `Parameters<typeof app.use>`.
+   *
+   * `app.use` is overloaded, so `Parameters<>` lands on one arbitrary overload whose `Env` is
+   * unconstrained — `context.set("actor", …)` then resolves against `never`, and the value is not
+   * assignable to the `MiddlewareHandler<{ Variables: AppVariables }>` the gate asks for. Naming
+   * the type the gate names is what the middleware actually is.
+   */
+  const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
+    context,
+    next,
   ) => {
     context.set("actor", actor);
     // As the real `requireUser` does: the request runs as the person it names, and only inside

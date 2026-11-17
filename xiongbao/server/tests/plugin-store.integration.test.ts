@@ -7825,7 +7825,11 @@ describe("a query of this deployment's own that failed", () => {
         value: (...args: never[]) => {
           selects += 1;
           if (selects === 2) throw queryFailure();
-          return database.select(...args);
+          // The same call, forwarded verbatim. `select` is overloaded, so its parameters are not
+          // expressible as one rest tuple; what matters here is that the spy passes through.
+          return (database.select as (...forwarded: never[]) => unknown)(
+            ...args,
+          );
         },
       });
       const failing = createPluginStore({

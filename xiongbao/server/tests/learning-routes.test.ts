@@ -80,10 +80,13 @@ test("administrators see learning enabled before selecting a container", async (
 test("rejects cross-origin and non-JSON writes before changing settings", async () => {
   const { app, store } = routes();
   const before = await store.read();
-  for (const headers of [
+  // `HeadersInit`, because the second case has no `origin` at all: as a union of two literals the
+  // missing key was `undefined`, which a `Record<string, string>` cannot hold.
+  const attempts: HeadersInit[] = [
     { "content-type": "application/json", origin: "https://evil.example" },
     { "content-type": "text/plain" },
-  ]) {
+  ];
+  for (const headers of attempts) {
     expect(
       (
         await app.request("https://openbot.example.com/settings", {

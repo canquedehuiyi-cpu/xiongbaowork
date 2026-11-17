@@ -39,7 +39,13 @@ const anthropicModel = {
 
 describe("deployment API-key provider selection", () => {
   test("normalizes optional SDK base URLs and native selector URLs", () => {
-    const environment = { OPENAI_BASE_URL: "", ANTHROPIC_BASE_URL: "  " };
+    // Typed as the parameter `normalizeModelBaseUrls` takes, because it DELETES the keys: the
+    // point of the assertion is that an object which no longer has them is what comes out, and a
+    // literal type that still declares them cannot say that.
+    const environment: Record<string, string | undefined> = {
+      OPENAI_BASE_URL: "",
+      ANTHROPIC_BASE_URL: "  ",
+    };
     normalizeModelBaseUrls(environment);
     expect(environment).toEqual({});
     const custom = {

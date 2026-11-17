@@ -26,8 +26,10 @@ import {
   pluginGrants,
 } from "../src/db/schema";
 import {
+  type BrokerConnection,
   BrokerRefusalError,
   type ComposioBroker,
+  type FieldScheme,
   SCHEME_KINDS,
   type SchemeKind,
   schemeKind,
@@ -310,7 +312,10 @@ for (const shape of UNREADABLE_SHAPES) {
  * pairs below are ADJACENT in the order, so a comparator running the other way fails every one of
  * them rather than only the one that happens to straddle the middle.
  */
-const SCHEME_PAIRS: { offered: string[]; preferred: string }[] = [
+// Typed as the vocabulary rather than as `string`: the assertion below compares against
+// `BrokerConnection`, and a fixture that widened these to `string` was asserting a shape the
+// product cannot return.
+const SCHEME_PAIRS: { offered: FieldScheme[]; preferred: FieldScheme }[] = [
   { offered: ["BEARER_TOKEN", "API_KEY"], preferred: "API_KEY" },
   { offered: ["BASIC", "BEARER_TOKEN"], preferred: "BEARER_TOKEN" },
   { offered: ["BASIC_WITH_JWT", "BASIC"], preferred: "BASIC" },
@@ -453,7 +458,7 @@ test("the reason for an unsupported app names what only the managed list publish
 const PADDED_SCHEMES: {
   what: string;
   row: Record<string, unknown>;
-  connection: unknown;
+  connection: BrokerConnection;
 }[] = [
   {
     what: "a key",
@@ -1761,7 +1766,7 @@ function declaredCellsOf(consumers: Consumer<string>[]): string[] {
   );
 }
 
-describe.each(SCHEME_KINDS)(
+describe.each([...SCHEME_KINDS])(
   "a %s scheme",
   (kind: (typeof SCHEME_KINDS)[number]) => {
     for (const consumer of SCHEME_CONSUMERS) {
@@ -1780,7 +1785,7 @@ describe.each(SCHEME_KINDS)(
   },
 );
 
-describe.each(BROKERED_PROBE_OUTCOMES)(
+describe.each([...BROKERED_PROBE_OUTCOMES])(
   "a probe that %s",
   (outcome: (typeof BROKERED_PROBE_OUTCOMES)[number]) => {
     for (const consumer of PROBE_CONSUMERS) {

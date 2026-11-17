@@ -167,9 +167,10 @@ describe("a consent that came back the way it left", () => {
      */
     const verifier = asked[0]?.params.get("code_verifier") ?? "";
     expect(verifier.length).toBeGreaterThanOrEqual(43);
-    expect(challengeFor(verifier)).toBe(
-      authorization.searchParams.get("code_challenge"),
-    );
+    const challenge = authorization.searchParams.get("code_challenge");
+    if (challenge === null)
+      throw new Error("the authorization URL carried no code challenge");
+    expect(challengeFor(verifier)).toBe(challenge);
     // And it was never on the callback URL in a form anybody reading that URL could use.
     expect(state).not.toContain(verifier);
   });

@@ -4393,7 +4393,9 @@ test("a re-check that answers records the connection verified, with the action i
         ),
       );
     expect(row.verified).toBe(true);
-    expect(row.verifiedAt?.toISOString()).toBe(answer.verifiedAt);
+    // `?? null` on the row's side, because the answer may carry no stamp at all and a missing one
+    // and a null one are the same fact: nothing recorded when this was verified.
+    expect(row.verifiedAt?.toISOString() ?? null).toBe(answer.verifiedAt);
     // And the action this press spent, written down beside the flag it earned. A re-check is the
     // second of the two writers that can put a name here, and a row must not be able to tell which of
     // them wrote it apart from by its date.

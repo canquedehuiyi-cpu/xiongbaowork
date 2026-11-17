@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   AgentNotFoundError,
   AgentNotManageableError,
@@ -93,6 +94,20 @@ function fakeStore(
     },
     async softDelete(receivedActor, id) {
       calls.push(["softDelete", receivedActor, id]);
+    },
+    /*
+     * Covered by agent-callback-frame.integration.test.ts, which has the schema and the frame these
+     * three need. Loud rather than absent: a missing method is a `TypeError` raised by the product
+     * at run time, pointing at the routes instead of at the fixture that never had it.
+     */
+    async issueCallbackToken() {
+      throw new Error("agent-routes does not issue callback tokens");
+    },
+    async revokeCallbackToken() {
+      throw new Error("agent-routes does not revoke callback tokens");
+    },
+    async agentForCallbackToken() {
+      throw new Error("agent-routes does not resolve callback tokens");
     },
   };
 
@@ -652,8 +667,14 @@ describe("agent lifecycle routes", () => {
       },
     });
     const app = appFor(store);
+    /*
+     * 599 on purpose, and the one cast here is what it costs. Hono's `ContentfulStatusCode` is the
+     * set of statuses a response may carry, and 599 is not in it — this number exists only so the
+     * assertion below can tell "the outer handler answered" from "the route answered", and no
+     * client ever sees it.
+     */
     app.onError((error, context) =>
-      context.json({ sentinel: error.message }, 599),
+      context.json({ sentinel: error.message }, 599 as ContentfulStatusCode),
     );
 
     const response = await app.request(
@@ -785,7 +806,14 @@ describe("which Bots a Bot may hand work to", () => {
     const body = (await json(
       await app.request("/general-assistant/handoff"),
     )) as {
-      handoff: { enabled: boolean; canGrant: boolean; reachable: string[] };
+      handoff: {
+        enabled: boolean;
+        canGrant: boolean;
+        reachable: string[];
+        // On the route's answer, and asserted below: whether the Bot can hold a grant at all, which
+        // the screen needs before offering switches that could only bounce.
+        grantable: boolean;
+      };
     };
 
     expect(body.handoff).toEqual({

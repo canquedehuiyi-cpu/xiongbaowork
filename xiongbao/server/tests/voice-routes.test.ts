@@ -81,7 +81,7 @@ test("authentication, CSRF header, membership, and active single-agent channel p
     },
   };
   const unauthorized = createVoiceRoutes(
-    (context) => context.json({ error: "Unauthorized" }, 401),
+    async (context) => context.json({ error: "Unauthorized" }, 401),
     provider,
     channels,
   );
@@ -163,7 +163,7 @@ test("transport configuration is authenticated and Grok connects without an SDP 
     },
   };
   const unauthorized = createVoiceRoutes(
-    (context) => context.json({ error: "Unauthorized" }, 401),
+    async (context) => context.json({ error: "Unauthorized" }, 401),
     provider,
     channels,
   );

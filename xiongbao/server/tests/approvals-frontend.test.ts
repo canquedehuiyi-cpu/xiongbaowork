@@ -52,7 +52,9 @@ test("the real frontend AG-UI agent supplies canonical call identity, original c
   });
   // M3: the app is on @ag-ui/client 1.0.1 (react-core 1.77) and the server on 1.0.2, so the one agent
   // has two declarations of its class; the app's functions are handed it as theirs.
-  const appAgent = agent as unknown as Parameters<typeof observeApprovalAgent>[0];
+  const appAgent = agent as unknown as Parameters<
+    typeof observeApprovalAgent
+  >[0];
   const cleanup = observeApprovalAgent(appAgent);
   await agent.runAgent({
     runId: "canonical-run",
@@ -66,7 +68,10 @@ test("the real frontend AG-UI agent supplies canonical call identity, original c
   if (message?.role !== "assistant" || !message.toolCalls?.[0])
     throw new Error("missing tool call");
   const snapshot = parseApprovalContinuation(
-    frontendApprovalSnapshot({ agent: appAgent, toolCall: message.toolCalls[0] }),
+    frontendApprovalSnapshot({
+      agent: appAgent,
+      toolCall: message.toolCalls[0],
+    }),
   );
   expect(snapshot).toMatchObject({
     runId: "canonical-run",
@@ -80,9 +85,14 @@ test("the real frontend AG-UI agent supplies canonical call identity, original c
   });
   expect(snapshot.messages).toEqual(agent.messages);
   cleanup();
-  expect(() =>
-    frontendApprovalSnapshot({ agent: appAgent, toolCall: message.toolCalls[0] }),
-  ).toThrow("active conversation");
+  // Named rather than indexed inline: `toolCalls` is optional on a message, so the fixture has to
+  // say it carries one before this can ask what the snapshot makes of it.
+  const toolCall = message.toolCalls?.[0];
+  if (!toolCall)
+    throw new Error("the fixture message should carry a tool call");
+  expect(() => frontendApprovalSnapshot({ agent: appAgent, toolCall })).toThrow(
+    "active conversation",
+  );
 });
 
 /*

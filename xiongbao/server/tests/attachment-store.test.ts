@@ -274,7 +274,10 @@ function appSignedInAs(userId: string) {
  * claim the bytes do not corroborate comes back 415 on the file, which would pass a status
  * assertion about a size limit for entirely the wrong reason.
  */
-function pngOfSize(size: number): Uint8Array {
+// `Uint8Array<ArrayBuffer>`, not the bare `Uint8Array` those bytes widen to: a `File` takes
+// `BlobPart`, which wants a view over a plain `ArrayBuffer`, and this one is allocated here so it
+// never is a `SharedArrayBuffer`. Saying so is more accurate than casting at three call sites.
+function pngOfSize(size: number): Uint8Array<ArrayBuffer> {
   const bytes = new Uint8Array(size);
   bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   return bytes;

@@ -86,6 +86,7 @@ test("run history maps an open run to running and serializes times", async () =>
             startedAt: new Date("2026-09-29T10:00:00Z"),
             finishedAt: null,
             error: null,
+            source: "schedule",
           },
           {
             id: "r1",
@@ -93,6 +94,7 @@ test("run history maps an open run to running and serializes times", async () =>
             startedAt: new Date("2026-09-29T09:00:00Z"),
             finishedAt: new Date("2026-09-29T09:01:00Z"),
             error: "boom",
+            source: "schedule",
           },
         ];
       },
@@ -107,6 +109,7 @@ test("run history maps an open run to running and serializes times", async () =>
         startedAt: "2026-09-29T10:00:00.000Z",
         finishedAt: null,
         error: null,
+        source: "schedule",
       },
       {
         id: "r1",
@@ -114,6 +117,7 @@ test("run history maps an open run to running and serializes times", async () =>
         startedAt: "2026-09-29T09:00:00.000Z",
         finishedAt: "2026-09-29T09:01:00.000Z",
         error: "boom",
+        source: "schedule",
       },
     ],
   });

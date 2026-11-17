@@ -161,7 +161,7 @@ test("authentication, membership, malformed data, and CSRF checks prevent summar
   ).toBe(404);
   expect(f.calls).toEqual([]);
   const denied = createVoiceRoutes(
-    (context) => context.json({ error: "Unauthorized" }, 401),
+    async (context) => context.json({ error: "Unauthorized" }, 401),
     undefined,
     undefined,
   );

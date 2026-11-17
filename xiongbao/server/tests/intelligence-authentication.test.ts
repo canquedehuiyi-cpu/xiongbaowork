@@ -20,7 +20,14 @@ function platform() {
     fetch: () =>
       Response.json(
         status === 200
-          ? { threads: [], nextCursor: null }
+          ? // `joinCode` is required by `ListThreadsResponse` and the platform always sends one: it
+            // is what the realtime subscription for these threads is opened with. A fixture that
+            // omitted it was answering an envelope no platform produces.
+            {
+              threads: [],
+              nextCursor: null,
+              joinCode: "fixture-join-code",
+            }
           : { error: "fixture rejection" },
         { status },
       ),
@@ -96,7 +103,11 @@ describe("Intelligence authentication recovery", () => {
     respondWith(200);
     expect(
       await client.listThreads({ userId: "employee", agentId: "bot" }),
-    ).toEqual({ threads: [], nextCursor: null });
+    ).toEqual({
+      threads: [],
+      nextCursor: null,
+      joinCode: "fixture-join-code",
+    });
     expect(await failure()).toEqual({
       connection: "model",
       code: "provider_authentication_failed",
@@ -115,6 +126,7 @@ describe("Intelligence authentication recovery", () => {
     expect(await read({ userId: "employee", agentId: "bot" })).toEqual({
       threads: [],
       nextCursor: null,
+      joinCode: "fixture-join-code",
     });
   });
 });

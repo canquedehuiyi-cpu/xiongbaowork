@@ -105,9 +105,14 @@ function fakeComputer(options?: {
         });
       case "/screenshot":
         calls.push("screenshot");
+        // The current protocol: `ScreenshotResult` is the picture plus its size and when it was
+        // taken. The busier shape this used to answer (`image`, `mimeType`) is what an older
+        // agent-computer sent, and nothing reads it any more.
         return Response.json({
-          image: "aGVsbG8=",
-          mimeType: "image/png",
+          base64: "aGVsbG8=",
+          width: 1280,
+          height: 800,
+          capturedAt: "2026-08-20T12:00:00.000Z",
         });
       case "/files/download":
         calls.push("downloadFile");
@@ -529,7 +534,7 @@ describe("the computer gateway", () => {
         run: (gateway: Awaited<ReturnType<typeof gatewayWith>>["gateway"]) =>
           gateway.writeFile(botSeat("bot-1"), ACTOR, {
             path: "notes.md",
-            text: "kept",
+            contents: "kept",
           }),
       },
     ]) {
@@ -896,9 +901,12 @@ describe("the computer gateway", () => {
 
     const result = await gateway.screenshot(botSeat("bot-1"));
 
+    // Forwarded verbatim, so this is the stub's body: the gateway does not reshape a screenshot.
     expect(result).toEqual({
-      image: "aGVsbG8=",
-      mimeType: "image/png",
+      base64: "aGVsbG8=",
+      width: 1280,
+      height: 800,
+      capturedAt: "2026-08-20T12:00:00.000Z",
     });
     const screenshotReq = requests.find((r) => r.url.endsWith("/screenshot"));
     expect(screenshotReq).toBeDefined();
