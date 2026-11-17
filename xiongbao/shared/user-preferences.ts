@@ -26,17 +26,19 @@ export function isSkinId(value: unknown): value is SkinId {
   return SKIN_IDS.some((id) => id === value);
 }
 
-/** What the default skin was called before the rename; still found in saved accounts and browser caches. */
-const LEGACY_DEFAULT_SKIN = "openbot";
-
-/** A skin id this build shipped now or before the rename, as opposed to any string at all. */
+/**
+ * The input this build accepts: the ids it ships. The name the default went by before the rename is not
+ * one of them any more, and its window has closed, so it is refused rather than carried along.
+ */
 export function isKnownSkinInput(value: unknown): value is string {
-  return isSkinId(value) || value === LEGACY_DEFAULT_SKIN;
+  return isSkinId(value);
 }
 
-/** The id this build draws for a saved one: the old default name reads as the new, anything unknown as the default. */
+/**
+ * The id this build draws for a saved one: anything unknown, the old name of the default included,
+ * reads as the default.
+ */
 export function normalizeSkinId(id: string): SkinId {
-  if (id === LEGACY_DEFAULT_SKIN) return DEFAULT_SKIN;
   return isSkinId(id) ? id : DEFAULT_SKIN;
 }
 

@@ -8,7 +8,7 @@ import {
 } from "@openbot/shared/approval-outcomes";
 import type { DecisionToolName } from "@openbot/shared/decision-tools";
 import { useEffect } from "react";
-import { reconcileCompat, writeCompat } from "@/lib/storage-compat";
+import { readCompat, writeCompat } from "@/lib/storage-compat";
 import type { ToolOutcome } from "./call";
 import { followView, latestView } from "./panel-view";
 
@@ -115,7 +115,6 @@ type Wipe = {
   after: Set<string>;
 };
 const wipes = new Map<string, Wipe | null>();
-const LEGACY_WIPED = "openbot:computer-activity-wiped:";
 const WIPED = "xiongbao:computer-activity-wiped:";
 /** How many calls a wipe keeps of each kind. Only the latest before it and the first after it in each conversation are needed. */
 const WIPED_KEPT = 1000;
@@ -188,35 +187,14 @@ function wipeText(wipe: Wipe): string {
 }
 
 /*
- * A tab still on the previous release keeps writing wipes under the legacy prefix, also after the
- * new key holds a copy, so the new key alone can hold the older of two wipes. The later one (by
- * `at`) stands; the same wipe noted under both keys keeps what each learnt.
+ * The window of the old prefix has closed: a tab that still writes under it is a tab on a release two
+ * versions behind, and what it keeps there is no longer read. `WIPED` alone holds the wipe.
  */
-function laterWipe(current: string, legacy: string): string {
-  const now = wipeIn(current);
-  const old = wipeIn(legacy);
-  if (!old) return current;
-  if (!now) return legacy;
-  const nowAt = now.at ?? Number.NEGATIVE_INFINITY;
-  const oldAt = old.at ?? Number.NEGATIVE_INFINITY;
-  if (oldAt !== nowAt) return oldAt > nowAt ? legacy : current;
-  const learnt =
-    [...old.before].some((id) => !now.before.has(id)) ||
-    [...old.after].some((id) => !now.after.has(id));
-  if (!learnt) return current;
-  for (const id of old.before) now.before.add(id);
-  for (const id of old.after) now.after.add(id);
-  return wipeText(now);
-}
 
-/** The wipe stored for this computer, the later of the new and the legacy key, kept under the new key. */
+/** The wipe stored for this computer. */
 function storedWipe(computerId: string): string | null {
   // A browser that refuses storage (a private window, a policy) reads none and still keeps the wipe for this page.
-  return reconcileCompat(
-    WIPED + computerId,
-    LEGACY_WIPED + computerId,
-    laterWipe,
-  );
+  return readCompat(WIPED + computerId);
 }
 
 /** This computer's last wipe, read from `localStorage` the first time it is asked for. */
@@ -242,13 +220,9 @@ function keepWipe(computerId: string, wipe: Wipe): void {
 if (typeof window !== "undefined")
   window.addEventListener("storage", (event) => {
     const key = event.key ?? "";
-    const prefix = [WIPED, LEGACY_WIPED].find((known) => key.startsWith(known));
-    if (!prefix) return;
-    const computerId = key.slice(prefix.length);
-    // A wipe from a tab still on the previous release: the later one is kept under the new key too, so a reload here reads it.
-    const wipe = wipeIn(
-      prefix === WIPED ? event.newValue : storedWipe(computerId),
-    );
+    if (!key.startsWith(WIPED)) return;
+    const computerId = key.slice(WIPED.length);
+    const wipe = wipeIn(event.newValue);
     if (!wipe) return;
     // What this page knew, not what storage holds now: that is already the new value.
     const previous = wipes.get(computerId);

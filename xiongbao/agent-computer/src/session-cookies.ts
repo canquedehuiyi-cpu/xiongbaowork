@@ -17,10 +17,17 @@
  * that deletes the profile deletes it too. It is written 0600, the same protection the profile's
  * own Cookies database has on that volume.
  *
+ * THIS FILE HAD AN EARLIER NAME, AND THAT WINDOW HAS CLOSED. Computers that ran a version before
+ * the rename still hold what that name wrote. Nothing of it is read — it is data no launch of this
+ * version asks for — so `restore` takes the file away on the way past
+ * (`removeOlderSessionCookieFiles`), which is what the reason for the rename asked for: leaving it on
+ * the volume would leave a credential-shaped file no code owns. A volume that cannot be written keeps
+ * it, said through `report`, and the browser starts anyway.
+ *
  * Imports Playwright's types only, so the rules here are testable without a browser installed.
  */
 
-import { renameSync, statSync } from "node:fs";
+import { readdirSync, rmSync } from "node:fs";
 import { chmod, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { BrowserContext, Cookie } from "playwright";
@@ -29,52 +36,52 @@ import type { BrowserContext, Cookie } from "playwright";
 export const SESSION_COOKIES_FILE = "xiongbao-session-cookies.json";
 
 /**
- * The name the file had before L1-16, still on the volumes of computers that ran an earlier version,
- * and written again by an earlier version a computer is rolled back to. Renamed to
- * `SESSION_COOKIES_FILE` before the first read (`migrateSessionCookiesFile`), and read in place where
- * it cannot be renamed. Goes when the rename does (legacy-compat in the brand allowlist).
+ * What the name of this file ends with, after the part that has changed over the versions. The current name
+ * ends with it, and so did the earlier one (`SESSION_COOKIES_FILE` is this ending with the part this version
+ * uses in front). Cleanup of the dead file matches the ending rather than spelling the earlier name: nothing
+ * this version ships, runs or logs has to say that name to take the file away, and a shipped word that is no
+ * longer read has nowhere left to be allowed.
  */
-export const LEGACY_SESSION_COOKIES_FILE = "openbot-session-cookies.json";
-
-function modifiedAt(path: string): number | undefined {
-  try {
-    return statSync(path).mtimeMs;
-  } catch {
-    return undefined;
-  }
-}
+const COOKIE_FILE_ENDING = "-session-cookies.json";
 
 /**
- * Which of a profile's two names holds the cookies to restore: the one written last. Usually that is
- * the current name. It is the earlier name when only that file is there (written before the upgrade),
- * or when it was written after the current one: a computer upgraded, rolled back to a version that
- * writes only the earlier name, and upgraded again, whose sessions saved while rolled back are in it.
- * The current name wins a tie.
+ * Take away the session-cookie files of a profile whose name this version does not read: what the earlier
+ * name left on a computer that has run an older version. None of it is read first — its window closed, so
+ * its contents are data no launch asks for, and a value is not restored from it.
+ *
+ * Never throws: a Bot's browser starts whether the volume gave the file up or not. A profile directory that
+ * is not there yet has nothing to take, and is not an error here. What a failure was goes to `report` as its
+ * code (`EROFS`, `EACCES`), never as its message, which would carry the path — and a path into a log is a
+ * name into a log.
  */
-function sessionCookiesSource(dir: string): string {
-  const file = join(dir, SESSION_COOKIES_FILE);
-  const legacy = join(dir, LEGACY_SESSION_COOKIES_FILE);
-  const legacyAt = modifiedAt(legacy);
-  if (legacyAt === undefined) return file;
-  const fileAt = modifiedAt(file);
-  return fileAt === undefined || legacyAt > fileAt ? legacy : file;
-}
-
-/**
- * Give a profile's session-cookie file its current name, once: when the file under the earlier name is
- * the one written last (`sessionCookiesSource`), it is renamed over the current name; otherwise both
- * are left as they are. A rename keeps the file's 0600. A volume that cannot be written keeps the
- * earlier name, and `restore` reads it there; nothing is thrown, because a Bot's browser must still start.
- */
-export function migrateSessionCookiesFile(dir: string): void {
-  const file = join(dir, SESSION_COOKIES_FILE);
-  const source = sessionCookiesSource(dir);
-  if (source === file) return;
+export function removeOlderSessionCookieFiles(
+  profileDir: string,
+  botId: string,
+): void {
+  let names: string[];
   try {
-    renameSync(source, file);
+    names = readdirSync(profileDir);
   } catch {
-    // Read-only, or gone in between: `restore` reads whichever name holds the newer file.
+    return;
   }
+  const older = names.filter(
+    (name) =>
+      name !== SESSION_COOKIES_FILE && name.endsWith(COOKIE_FILE_ENDING),
+  );
+  const codes = new Set<string>();
+  let removed = 0;
+  for (const name of older) {
+    try {
+      rmSync(join(profileDir, name), { force: true });
+      removed += 1;
+    } catch (error) {
+      codes.add(String((error as NodeJS.ErrnoException).code ?? "unknown"));
+    }
+  }
+  if (removed > 0)
+    report("computer-session-cookies-old-file-removed", botId, { removed });
+  for (const code of codes)
+    report("computer-session-cookies-old-file-not-removed", botId, { code });
 }
 
 /** How often a running browser's session cookies are checked and, when they changed, written. */
@@ -192,13 +199,12 @@ export function sessionCookieKeeper(
      * a site sees from this launch already carries them.
      */
     async restore(): Promise<number> {
-      migrateSessionCookiesFile(profileDir);
+      // The earlier name's file goes before anything is read: its window closed, so it holds nothing
+      // this launch asks for, and leaving it would leave a credential-shaped file no code owns.
+      removeOlderSessionCookieFiles(profileDir, botId);
       let saved: Cookie[];
       try {
-        // The current name, or the earlier one where it is newer and could not be renamed.
-        saved = parseSaved(
-          await readFile(sessionCookiesSource(profileDir), "utf8"),
-        );
+        saved = parseSaved(await readFile(file, "utf8"));
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
           report("computer-session-cookies-not-restored", botId, {

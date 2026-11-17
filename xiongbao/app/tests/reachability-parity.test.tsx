@@ -372,7 +372,7 @@ test("接入 IM 聊天 opens the existing link flow with every field it had", as
 });
 
 test("a phone waiting for its code keeps the code box across a reload", async () => {
-  sessionStorage.setItem("openbot.reachability.pendingSms", "challenge-1");
+  sessionStorage.setItem("xiongbao.reachability.pendingSms", "challenge-1");
   const view = draw();
   // The entry says so, because the dialog is closed when the person comes back.
   expect(

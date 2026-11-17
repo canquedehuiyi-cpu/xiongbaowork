@@ -15,13 +15,12 @@ const active = new Map<string, number>();
  * nowhere, and that there is nothing to resume.
  */
 const answered = new Set<string>();
-const legacyKey = (botId: string) => `openbot:pending-handoff:${botId}`;
 const key = (botId: string) => `xiongbao:pending-handoff:${botId}`;
 
 /** Bookkeeping only. Never persist page text, credentials, or the human's input. */
 export function pendingHandoff(botId: string): PendingHandoff | null {
   if (typeof sessionStorage === "undefined") return null;
-  const text = readCompat(key(botId), legacyKey(botId), sessionStorage);
+  const text = readCompat(key(botId), sessionStorage);
   if (!text) return null;
   try {
     const value: unknown = JSON.parse(text);
@@ -51,7 +50,7 @@ export function rememberHandoff(
 }
 export function forgetHandoff(botId: string, requestId: string) {
   if (pendingHandoff(botId)?.requestId === requestId)
-    removeCompat(key(botId), legacyKey(botId), sessionStorage);
+    removeCompat(key(botId), sessionStorage);
 }
 export function hasActiveHandoff(botId: string, requestId: string) {
   return (active.get(`${botId}:${requestId}`) ?? 0) > 0;

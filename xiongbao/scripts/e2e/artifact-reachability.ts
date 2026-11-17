@@ -895,6 +895,191 @@ try {
     await screenshot("workspace-again");
   });
 
+  /*
+   * What a browser that cached the skin under the earlier name is handed, now that the window in which
+   * both names were accepted has closed (PR4b; the ruling being checked is 「真删」). The pre-paint
+   * script in `index.html` knows only the current key: it puts whatever that key holds on `<html>`,
+   * because it is not told which names this build ships. The registry is what does know, and on load it
+   * reads the cached name as the default and takes the attribute back off — then the account, which
+   * always wins, writes the default into the cache. So the old name is on the page for less than a
+   * frame, and the frame it is on is painted with the default tokens: no rule of any shipped skin
+   * matches it. The record below is the evidence for all three of those, and the screenshot is the
+   * page a person who never chose a skin sees.
+   *
+   * `app/src/skins/store.ts` is where the second and third halves live, so this is the only place the
+   * pair is seen together: the unit test has no pre-paint script, and the script has no registry.
+   */
+  await step("the skin cached under the earlier name: first frame and settled", async () => {
+    type Frame = { at: string; skin: string | null; background: string };
+    const ctx = context as BrowserContext;
+    const visit = await ctx.newPage();
+    try {
+      await visit.addInitScript(() => {
+        // The cache a browser left behind before the rename: this key, that value.
+        window.localStorage.setItem("xiongbao-skin", "openbot");
+        const frames: Frame[] = [];
+        const read = (at: string) => {
+          const root = document.documentElement;
+          if (!root) return;
+          frames.push({
+            at,
+            skin: root.getAttribute("data-skin"),
+            background: getComputedStyle(root)
+              .getPropertyValue("--background")
+              .trim(),
+          });
+        };
+        /*
+         * Every change of the attribute, in the order it happened, with the value it went out of as
+         * well: a MutationObserver callback can be flushed once for two changes, and reading the page
+         * inside the callback would then miss the first of them. `oldValue` is what keeps the earlier
+         * frame in the record even when the app has already moved on.
+         */
+        new MutationObserver((records) => {
+          for (const record of records) {
+            const root = record.target as HTMLElement;
+            frames.push({
+              at: `${record.oldValue ?? "none"} -> ${root.getAttribute("data-skin") ?? "none"}`,
+              skin: root.getAttribute("data-skin"),
+              background: getComputedStyle(root)
+                .getPropertyValue("--background")
+                .trim(),
+            });
+          }
+        }).observe(document, {
+          attributeFilter: ["data-skin"],
+          attributeOldValue: true,
+          subtree: true,
+        });
+        read("start");
+        document.addEventListener("DOMContentLoaded", () => read("parsed"));
+        (
+          window as unknown as { __xbSkinFrames?: Frame[] }
+        ).__xbSkinFrames = frames;
+      });
+      // The same page the conversation is on, opened again: signed in, and no new
+      // turn, so the model-call accounting in the step after this one is untouched.
+      await visit.goto(p.url(), { waitUntil: "load" });
+
+      // The registry settles the attribute on load, before the account is read.
+      await until(
+        "the application to take the cached name off <html>",
+        async () =>
+          await visit.evaluate(() =>
+            document.documentElement.getAttribute("data-skin") === null
+              ? "settled"
+              : undefined,
+          ),
+      );
+      equal(
+        await visit.evaluate(
+          () => document.documentElement.getAttribute("data-skin"),
+        ),
+        null,
+        "the application settles <html> back to no skin attribute of its own",
+      );
+      // ...and the account, which always wins, leaves the cache holding what this
+      // build ships.
+      const cached = await until(
+        "the account's skin to be written back over the pre-paint cache",
+        async () => {
+          const value = await visit.evaluate(() =>
+            window.localStorage.getItem("xiongbao-skin"),
+          );
+          // Whatever this build writes back is an answer; the cached name is not,
+          // because that is what was in the key before the page ran.
+          return value === "openbot" ? undefined : { value };
+        },
+      );
+      equal(
+        cached.value,
+        "xiongbao",
+        "the cache ends up holding the id this build ships",
+      );
+
+      const frames = await visit.evaluate(
+        () =>
+          (
+            window as unknown as {
+              __xbSkinFrames?: {
+                at: string;
+                skin: string | null;
+                background: string;
+              }[];
+            }
+          ).__xbSkinFrames ?? [],
+      );
+      check(
+        frames.length > 0,
+        `the page recorded its own frames (${frames.length} of them)`,
+      );
+      check(
+        frames.some((frame) => frame.skin === "openbot"),
+        "the pre-paint script does put the cached old name on <html>: the half-sentence that used to hold it back is gone, and nothing else stands between the two",
+      );
+      check(
+        frames.some((frame) => frame.skin === null),
+        "and the application takes it back off again: the registry reads the old name as the default skin",
+      );
+
+      /*
+       * The appearance question, answered in the only way this can be answered after the fact: the
+       * attribute is put back by hand, the page is measured with it on, and it is compared with the
+       * same page measured with it off. Same tokens means no rule of any shipped skin matched it,
+       * which is what "an unknown name draws the default" has to mean on a real page.
+       */
+      const forced = await visit.evaluate(() => {
+        const root = document.documentElement;
+        const background = () =>
+          getComputedStyle(root).getPropertyValue("--background").trim();
+        const withoutName = background();
+        root.dataset.skin = "openbot";
+        const withOldName = background();
+        delete root.dataset.skin;
+        let named = 0;
+        let oldName = 0;
+        for (const sheet of Array.from(document.styleSheets)) {
+          // A sheet this page may not read is not a sheet this build wrote.
+          let rules: string[] = [];
+          try {
+            rules = Array.from(sheet.cssRules).map((rule) => rule.cssText);
+          } catch {
+            continue;
+          }
+          for (const text of rules) {
+            if (!text.includes("data-skin")) continue;
+            named += 1;
+            if (text.includes('data-skin="openbot"')) oldName += 1;
+          }
+        }
+        return { withoutName, withOldName, named, oldName };
+      });
+      check(
+        forced.named > 0,
+        `the sheets do carry skin rules (${forced.named} name the attribute at all), so the count below is a reading, not an empty hand`,
+      );
+      equal(
+        forced.oldName,
+        0,
+        "not one of them matches the old name, so nothing could paint for it",
+      );
+      equal(
+        forced.withOldName,
+        forced.withoutName,
+        "and the page with the old name on <html> takes the same --background as the page without it",
+      );
+
+      writeFileSync(
+        resolve(ARTIFACTS, "skin-first-frame.json"),
+        `${JSON.stringify({ frames, cached, forced }, null, 2)}\n`,
+      );
+      await screenshot("skin-cached-before-the-rename", visit);
+      check(true, "the settled page is screenshotted and its frames written out");
+    } finally {
+      await visit.close().catch(() => undefined);
+    }
+  });
+
   await step("the mocked model, and nothing else", async () => {
     /*
      * The turn's calls, counted the way G6 counts them (`staffing-lifecycle.ts`, same step): a running

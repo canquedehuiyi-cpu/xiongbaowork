@@ -48,14 +48,11 @@ const INTERVAL_ITEMS = INTERVALS.map((interval) => ({
   label: interval.label,
 }));
 
-const LEGACY_DECLINED = "openbot:check-in-declined:";
 const DECLINED = "xiongbao:check-in-declined:";
 
 function declinedBefore(toolCallId: string): boolean {
   try {
-    return (
-      readCompat(DECLINED + toolCallId, LEGACY_DECLINED + toolCallId) !== null
-    );
+    return readCompat(DECLINED + toolCallId) !== null;
   } catch {
     return false;
   }

@@ -39,10 +39,8 @@
  */
 import { declarations, NOTICE_TOKENS, RADIUS, removeTagged } from "./notice";
 
-/** Drawn under INDICATOR_TAG; the older name is still looked for and taken away, as the notice does (notice.ts). */
+/** What a mark is drawn under; the name an older version drew under has passed its window and is not looked for (notice.ts). */
 export const INDICATOR_TAG = "xb-recorder-mark";
-export const LEGACY_INDICATOR_TAG = "openbot-recorder-mark";
-export const INDICATOR_TAGS = [INDICATOR_TAG, LEGACY_INDICATOR_TAG] as const;
 
 export type IndicatorView = {
   /** The site the tab shows. */
@@ -398,7 +396,7 @@ export function showIndicator(options: {
 
   root.append(style, mark);
   // A mark the version before drew is dead (its buttons speak to an extension that is gone): this one takes its place.
-  removeTagged(INDICATOR_TAGS);
+  removeTagged(INDICATOR_TAG);
   document.documentElement.append(host);
 
   /*
@@ -504,7 +502,7 @@ export function showIndicator(options: {
       timers.clear(looking);
       window.removeEventListener("resize", place);
       host.remove();
-      removeTagged(INDICATOR_TAGS);
+      removeTagged(INDICATOR_TAG);
     },
   };
 }

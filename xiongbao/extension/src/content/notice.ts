@@ -7,20 +7,17 @@
  */
 
 /*
- * The extension updates while pages stay open, and the content script of the version before keeps running in them
- * with what it drew (L1-22). So every name a version has drawn under is looked for: drawing takes away what is already
- * there under either, and so does removing.
+ * The extension updates while pages stay open, and the content script of the version before keeps running in them with
+ * what it drew. Its window has closed: only the name this version draws under is looked for, so what an older content
+ * script left under another name stays in that page until the page reloads.
  */
 export const XB_NOTICE_TAG = "xb-recorder-notice";
-export const LEGACY_NOTICE_TAG = "openbot-recorder-notice";
-/** What a notice is drawn under now; the earlier name is only looked for, to take away what an older version drew. */
+/** What a notice is drawn under. */
 export const NOTICE_TAG = XB_NOTICE_TAG;
-export const NOTICE_TAGS = [XB_NOTICE_TAG, LEGACY_NOTICE_TAG] as const;
 
-/** Takes every element under these tags out of the page. */
-export function removeTagged(tags: readonly string[]): void {
-  for (const element of document.querySelectorAll(tags.join(",")))
-    element.remove();
+/** Takes every element under this tag out of the page. */
+export function removeTagged(tag: string): void {
+  for (const element of document.querySelectorAll(tag)) element.remove();
 }
 
 export const NOTICE_TOKENS = {
@@ -164,14 +161,14 @@ export function showNotice(options: {
 
   card.append(title, body, actions);
   root.append(style, card);
-  removeTagged(NOTICE_TAGS);
+  removeTagged(NOTICE_TAG);
   document.documentElement.append(host);
 
   return {
     host,
     remove: () => {
       host.remove();
-      removeTagged(NOTICE_TAGS);
+      removeTagged(NOTICE_TAG);
     },
   };
 }

@@ -51,7 +51,7 @@ test("the configure function calls the hook's configure symbol with the extensio
   await createPageFallback().start([7]);
   const configure = fake.scripting.executed[1]?.func as (id: string) => void;
   const seen: string[] = [];
-  const symbol = Symbol.for("openbot.recorder.configure");
+  const symbol = Symbol.for("xb.recorder.configure");
   const holder = globalThis as unknown as Record<symbol, unknown>;
   holder[symbol] = (id: string) => seen.push(id);
   try {
@@ -109,7 +109,7 @@ test("stop calls the stop symbol in every frame of the recorded tabs", async () 
   ]);
   const stopFn = fake.scripting.executed[0]?.func as () => void;
   let stopped = 0;
-  const symbol = Symbol.for("openbot.recorder.stop");
+  const symbol = Symbol.for("xb.recorder.stop");
   const holder = globalThis as unknown as Record<symbol, unknown>;
   holder[symbol] = () => stopped++;
   try {

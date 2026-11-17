@@ -58,9 +58,9 @@ test("the captured call owner allows recovery when signing out clears authentica
 test("malformed stored entries do not hide a valid recoverable call", () => {
   signIn("alice");
   rememberVoiceCall(call);
-  localStorage.setItem("openbot:voice-outbox:alice:channel:broken", "{");
+  localStorage.setItem("xiongbao:voice-outbox:alice:channel:broken", "{");
   localStorage.setItem(
-    "openbot:voice-outbox:alice:channel:invalid",
+    "xiongbao:voice-outbox:alice:channel:invalid",
     JSON.stringify({ ...call, transcript: [{}] }),
   );
   expect(recoverVoiceCalls("channel")).toEqual([call]);

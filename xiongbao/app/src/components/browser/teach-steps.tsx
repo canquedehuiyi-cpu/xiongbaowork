@@ -29,7 +29,6 @@ import {
 } from "./recording";
 
 /** Kept once the person has saved a recording: from then on the page opens on naming the task, past the introduction. */
-const LEGACY_INTRODUCED_KEY = "openbot.teach-a-bot.introduced";
 export const INTRODUCED_KEY = "xiongbao.teach-a-bot.introduced";
 
 export const OPEN_AND_RECORD = "打开浏览器并录制";
@@ -38,7 +37,7 @@ type Step = 1 | 2 | 3;
 
 function introduced(): boolean {
   try {
-    return readCompat(INTRODUCED_KEY, LEGACY_INTRODUCED_KEY) === "1";
+    return readCompat(INTRODUCED_KEY) === "1";
   } catch {
     return false;
   }

@@ -17,8 +17,8 @@
         document.documentElement.classList.toggle("dark", dark);
         document.documentElement.style.colorScheme = dark ? "dark" : "light";
         const skin = read("xiongbao-skin");
-        // The default skin sets no attribute, under its new name and under the one the cache may still hold.
-        if (skin && skin !== "xiongbao" && skin !== "openbot") document.documentElement.dataset.skin = skin;
+        // The default skin sets no attribute.
+        if (skin && skin !== "xiongbao") document.documentElement.dataset.skin = skin;
       } catch {}
     </script>
   </head>

@@ -38,7 +38,6 @@ export type CardPlace = {
   latest: boolean;
 };
 
-const LEGACY_MARK = "openbot:carried-on:";
 const MARK = "xiongbao:carried-on:";
 
 /** Marks kept here as well, for a browser that refuses `localStorage` (a private window, a policy). */
@@ -47,7 +46,7 @@ const carriedHere = new Set<string>();
 function hasCarriedOn(toolCallId: string): boolean {
   if (carriedHere.has(toolCallId)) return true;
   try {
-    return readCompat(MARK + toolCallId, LEGACY_MARK + toolCallId) !== null;
+    return readCompat(MARK + toolCallId) !== null;
   } catch {
     return false;
   }

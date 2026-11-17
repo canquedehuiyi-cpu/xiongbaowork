@@ -23,7 +23,6 @@ import { newId } from "../new-id";
  * says it is.
  */
 
-const LEGACY_KEY = "openbot.bot-thread";
 const KEY = "xiongbao.bot-thread";
 
 /** The one place the storage key is built, so the getter and the setter can never drift apart. */
@@ -33,7 +32,7 @@ export function botThreadKey(agentId: string): string {
 
 function remembered(agentId: string): string | null {
   try {
-    return readCompat(botThreadKey(agentId), `${LEGACY_KEY}.${agentId}`);
+    return readCompat(botThreadKey(agentId));
   } catch {
     // Storage can be unavailable or full. A thread for this visit is better than no chat at all.
     return null;

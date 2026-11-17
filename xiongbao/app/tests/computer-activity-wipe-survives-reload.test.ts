@@ -153,7 +153,7 @@ test("a tab already open drops what another tab wiped", async () => {
 
   wiping.clearActivity(BOT);
   // The browser tells every other page on the origin that storage changed, as this event.
-  const key = "openbot:computer-activity-wiped:wiped-bot";
+  const key = "xiongbao:computer-activity-wiped:wiped-bot";
   window.dispatchEvent(
     new StorageEvent("storage", {
       key,
@@ -202,7 +202,7 @@ for (const [row, target] of [
 
     // Admin had nothing in memory to wipe. It kept nothing, and a reload brought every command back.
     await resetFromAdmin(target());
-    const key = `openbot:computer-activity-wiped:${ADMIN_BOT}`;
+    const key = `xiongbao:computer-activity-wiped:${ADMIN_BOT}`;
     window.dispatchEvent(
       new StorageEvent("storage", {
         key,

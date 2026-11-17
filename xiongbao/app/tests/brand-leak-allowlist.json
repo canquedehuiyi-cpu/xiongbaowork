@@ -21,33 +21,6 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/components/delivery/reaching-you.tsx",
-    "text": "\"openbot.reachability.pendingSms\"",
-    "reason": "persisted-identifier: 旧键；新键 xiongbao.reachability.pendingSms 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
-    "file": "app/src/components/reachability/link-conversation-dialog.tsx",
-    "text": "\"openbot.reachability.pendingSms\"",
-    "reason": "persisted-identifier: 旧键；新键 xiongbao.reachability.pendingSms 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
-    "file": "app/src/components/browser/teach-steps.tsx",
-    "text": "\"openbot.teach-a-bot.introduced\"",
-    "reason": "persisted-identifier: 旧键；新键 xiongbao.teach-a-bot.introduced 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
     "file": "app/src/components/approvals/describe-rules.tsx",
     "text": "startsWith(\"openbot/\")",
     "reason": "persisted-identifier: prefix of built-in tool refs stored in rules",
@@ -76,33 +49,6 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/lib/wakerflows.ts",
-    "text": "\"openbot.wakerflow-share-return\"",
-    "reason": "persisted-identifier: 旧键；新键 xiongbao.wakerflow-share-return 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
-    "file": "app/src/lib/computers/handoff.ts",
-    "text": "`openbot:pending-handoff:",
-    "reason": "persisted-identifier: 旧键；新键 xiongbao:pending-handoff:<botId> 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
-    "file": "app/src/lib/computers/activity.ts",
-    "text": "\"openbot:computer-activity-wiped:\"",
-    "reason": "persisted-identifier: 旧前缀；新键 xiongbao:computer-activity-wiped:<id> 与旧键都在时取较晚的清除记录写回新键，storage 事件监听新旧两个前缀（L1-1，Task 7）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
     "file": "app/src/lib/desktop/speech.ts",
     "text": "\"plugin:openbot-desktop\"",
     "reason": "persisted-identifier: Tauri plugin name the upstream desktop registers",
@@ -129,15 +75,6 @@
     "reason": "persisted-identifier: event name the upstream desktop emits",
     "category": "persisted-data",
     "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/voice/outbox.ts",
-    "text": "\"openbot:voice-outbox:\"",
-    "reason": "persisted-identifier: 旧键；新键 xiongbao:voice-outbox:<…> 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
   },
   {
     "file": "app/src/lib/voice/transcript.ts",
@@ -189,33 +126,6 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/lib/copilot/carry-on.ts",
-    "text": "\"openbot:carried-on:\"",
-    "reason": "persisted-identifier: 旧键；新键 xiongbao:carried-on:<id> 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
-    "file": "app/src/lib/copilot/check-in-offer-tool.tsx",
-    "text": "\"openbot:check-in-declined:\"",
-    "reason": "persisted-identifier: 旧键；新键 xiongbao:check-in-declined:<id> 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
-    "file": "app/src/lib/copilot/bot-thread.ts",
-    "text": "\"openbot.bot-thread\"",
-    "reason": "persisted-identifier: 旧键；新键 xiongbao.bot-thread.<agentId> 没有值时经 readCompat 读取并复制过去，不删旧键；清除时新旧都删（L1-1，Task 7）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
     "file": "app/src/routes/_authed/admin/learning.tsx",
     "text": "需要接入 CopilotKit Intelligence",
     "reason": "external-name: names the third-party service an admin must sign up for",
@@ -235,15 +145,6 @@
     "reason": "external-name: MIT attribution on the open-source notices page, required by the licence",
     "category": "third-party-name",
     "plan": "keep"
-  },
-  {
-    "file": "app/index.html",
-    "text": "skin !== \"openbot\"",
-    "reason": "persisted-identifier: 默认皮肤改名前的 id，预绘脚本把缓存里的旧值也当默认、不设 data-skin（L1-2，附录 A 第 13 行；index.html 不能 import，所以不删这一行）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
   },
   {
     "file": "server/src/components/routes.ts",
@@ -773,11 +674,12 @@
   {
     "file": "runner/src/browser.ts",
     "text": "\"openbot-snapshots.sqlite\"",
-    "reason": "persisted-identifier: 旧快照计数文件名；启动时先 checkpoint 再改名为 xiongbao-snapshots.sqlite，改名失败仍读旧名（L1-18，附录 A 第 10 行）",
+    "reason": "persisted-identifier: 旧快照计数文件名；启动时先 checkpoint 再改名为 xiongbao-snapshots.sqlite，改名失败仍读旧名（L1-18，附录 A 第 10 行）。用户 2026-11-17 批准：延期到 0.2.14（推荐）",
     "category": "legacy-compat",
     "plan": "remove",
     "introducedIn": "0.2.11",
-    "removeIn": "0.2.13",
+    "removeIn": "0.2.14",
+    "notBefore": "0.2.14",
     "device": true
   },
   {
@@ -879,15 +781,6 @@
     "plan": "keep"
   },
   {
-    "file": "shared/user-preferences.ts",
-    "text": "\"openbot\"",
-    "reason": "persisted-identifier: 默认皮肤改名前的 id，只在 normalizeSkinId 的映射里认，把已存的账号偏好和浏览器缓存里的旧值读成 xiongbao（L1-2，附录 A 第 13 行）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
     "file": "shared/openbot-actor.ts",
     "text": "actor.startsWith(\"openbot:\")",
     "reason": "persisted-identifier: stored actor id prefix",
@@ -944,24 +837,6 @@
     "plan": "keep"
   },
   {
-    "file": "extension/src/main-world/network-hook.ts",
-    "text": "\"openbot.recorder.configure\"",
-    "reason": "persisted-identifier: 旧 Symbol.for 键；页面钩子在新 Symbol 之外也用旧 Symbol 注册同一函数，回退到旧 service worker 时仍能调到（L1-22，Task 14）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
-    "file": "extension/src/main-world/network-hook.ts",
-    "text": "\"openbot.recorder.stop\"",
-    "reason": "persisted-identifier: 旧 Symbol.for 键；页面钩子在新 Symbol 之外也用旧 Symbol 注册同一函数，回退到旧 service worker 时仍能调到（L1-22，Task 14）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
     "file": "extension/src/protocol/messages.ts",
     "text": "\"openbot.ping\"",
     "reason": "persisted-identifier: message type the connected web app sends to the extension (externally_connectable protocol)",
@@ -984,15 +859,6 @@
   },
   {
     "file": "extension/src/content/notice.ts",
-    "text": "\"openbot-recorder-notice\"",
-    "reason": "persisted-identifier: 旧标签名；新版本画 xb-recorder-notice，查找、移除时仍认旧名，扩展更新期间老内容脚本画的提示不重复、不残留（L1-22，Task 14，附录 A 第 11 行）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
-    "file": "extension/src/content/notice.ts",
     "text": "\"data-copilotkit-ignore\"",
     "reason": "persisted-identifier: attribute the upstream agent client reads to skip the extension's own elements",
     "category": "peer-protocol",
@@ -1004,15 +870,6 @@
     "reason": "persisted-identifier: upstream agent client's action attribute, matched as a selector",
     "category": "peer-protocol",
     "plan": "keep"
-  },
-  {
-    "file": "extension/src/content/indicator.ts",
-    "text": "\"openbot-recorder-mark\"",
-    "reason": "persisted-identifier: 旧标签名；新版本画 xb-recorder-mark，查找、移除时仍认旧名，扩展更新期间老内容脚本画的标记不重复、不残留（L1-22，Task 14）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
   },
   {
     "file": "extension/src/content/indicator.ts",
@@ -1062,24 +919,6 @@
     "reason": "persisted-identifier: local variable holding the connected origin",
     "category": "persisted-data",
     "plan": "keep"
-  },
-  {
-    "file": "extension/src/background/network/fallback.ts",
-    "text": "\"openbot.recorder.configure\"",
-    "reason": "persisted-identifier: 旧 Symbol.for 键；fallback 先调 xb.recorder.* Symbol，没有再调旧 Symbol，更新前注入、还留在已打开页面里的老钩子仍能配置和停止（L1-22，Task 14）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
-    "file": "extension/src/background/network/fallback.ts",
-    "text": "\"openbot.recorder.stop\"",
-    "reason": "persisted-identifier: 旧 Symbol.for 键；fallback 先调 xb.recorder.* Symbol，没有再调旧 Symbol，更新前注入、还留在已打开页面里的老钩子仍能配置和停止（L1-22，Task 14）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
   },
   {
     "file": "extension/src/background/connection.ts",
@@ -1264,15 +1103,6 @@
     "plan": "keep"
   },
   {
-    "file": "agent-computer/src/session-cookies.ts",
-    "text": "openbot-session-cookies.json",
-    "reason": "persisted-identifier: 旧文件名（LEGACY_SESSION_COOKIES_FILE），已写在客户电脑的 Bot 配置目录里；第一次读之前一次性改名为 xiongbao-session-cookies.json，两个都在时取修改时间较新的那个，改不了名（只读卷）时就地读旧文件；到期清理时同时删除磁盘上的旧名文件，不能只删改名代码（L1-16，Task 12）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
-  },
-  {
     "file": "supervisor/src/docker.ts",
     "text": ".openbot-carried-over",
     "reason": "persisted-identifier: marker, label, namespace or image name already on customers' hosts",
@@ -1320,15 +1150,6 @@
     "reason": "persisted-identifier: SPIFFE trust domain and join token name already issued",
     "category": "persisted-data",
     "plan": "keep"
-  },
-  {
-    "file": "Dockerfile",
-    "text": "openbot-apt",
-    "reason": "internal-log: legacy path of the apt helper, kept as a link to xiongbao-apt with its own sudoers rule for Bots that learned the old name, L1-9 (Task 11)",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13"
   },
   {
     "file": "docker/compose.delivery.yml",
