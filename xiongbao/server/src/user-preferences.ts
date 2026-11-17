@@ -1,7 +1,9 @@
 import {
   DEFAULT_USER_PREFERENCES,
   normalizeSkinId,
+  type StoredPreferences,
   type UserPreferences,
+  type WorkHours,
 } from "@openbot/shared/user-preferences";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "./db/client";
@@ -9,23 +11,11 @@ import { users } from "./db/schema";
 import { DEFAULT_TIME_ZONE } from "./tasks/delivery-tools";
 import { runAsTenant } from "./tenant/context";
 
-/**
- * When the person works, on their own clock (spec 2026-11-15-delivery-loop §10): the delivery checker
- * pushes nothing outside it, and the start and end briefings go out at its two ends.
+/*
+ * 作息的定义在 shared，因为它同时存在于 `users.preferences` 那一列的类型里和设置页的读取里。这里转出去，
+ * 让 `from "./user-preferences"` 的既有引用不用改。
  */
-export type WorkHours = {
-  /** "HH:MM". */
-  start: string;
-  /**
-   * "HH:MM", later than `start`. A saved one is at most "23:59"; "24:00" (the end of the day) is
-   * understood by the work-hours check for a value built in code, never stored.
-   */
-  end: string;
-  /** An IANA zone, e.g. "Asia/Shanghai". */
-  timeZone: string;
-  /** Whether Saturdays and Sundays are work days. */
-  weekends: boolean;
-};
+export type { WorkHours };
 
 /**
  * The default work hours: 09:00 to 18:00, weekdays. The zone is the one the person's browser writes the
@@ -94,7 +84,7 @@ export function isWorkStretch(start: string, end: string): boolean {
 }
 
 /** The work hours a stored row says, over the defaults; anything malformed reads as the default. */
-function workHoursOf(stored: Record<string, unknown>): WorkHours {
+function workHoursOf(stored: StoredPreferences): WorkHours {
   const hours =
     stored.workHours && typeof stored.workHours === "object"
       ? (stored.workHours as Record<string, unknown>)
@@ -125,9 +115,7 @@ function workHoursOf(stored: Record<string, unknown>): WorkHours {
  * What is stored, over the defaults. A skin a later build no longer ships stays in the row, so going
  * back to a build that has it brings it back, but this build answers with its default.
  */
-function withDefaults(
-  stored: Partial<UserPreferences> & Record<string, unknown>,
-): StoredUserPreferences {
+function withDefaults(stored: StoredPreferences): StoredUserPreferences {
   const preferences = { ...DEFAULT_USER_PREFERENCES, ...stored };
   // A row saved before the rename holds the old default's name; it reads as the new one.
   return {
@@ -152,7 +140,7 @@ export async function readWorkHours(
       .where(eq(users.id, userId))
       .limit(1),
   );
-  return workHoursOf((user?.preferences ?? {}) as Record<string, unknown>);
+  return workHoursOf(user?.preferences ?? {});
 }
 
 export type UserPreferencesStore = {

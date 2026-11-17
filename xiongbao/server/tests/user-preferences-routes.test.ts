@@ -4,16 +4,46 @@ import {
   type UserPreferences,
 } from "@openbot/shared/user-preferences";
 import { Hono } from "hono";
-import type { UserPreferencesStore } from "../src/user-preferences";
+import { DEFAULT_TIME_ZONE } from "../src/tasks/delivery-tools";
+import {
+  DEFAULT_WORK_HOURS,
+  type StoredUserPreferences,
+  type UserPreferencesStore,
+} from "../src/user-preferences";
 import { userPreferencesRoutes } from "../src/user-preferences-routes";
 
+/** 一个人的作息默认值：`DEFAULT_WORK_HOURS` 加上产品自己的时区，与 `readWorkHours` 的兜底一致。 */
+const WORK_HOURS = { ...DEFAULT_WORK_HOURS, timeZone: DEFAULT_TIME_ZONE };
+
+/** 一个人一开始的那一行：共享偏好 + 默认作息（真实 store 的 `read` 一定带 `workHours`）。 */
+const DEFAULT_ROW: StoredUserPreferences = {
+  ...DEFAULT_USER_PREFERENCES,
+  workHours: WORK_HOURS,
+};
+
 function fixture() {
-  const state = new Map<string, UserPreferences>();
+  const state = new Map<string, StoredUserPreferences>();
+  const row = (id: string) => state.get(id) ?? DEFAULT_ROW;
   const store: UserPreferencesStore = {
     claimStarterTour: async () => {},
-    read: async (id) => state.get(id) ?? DEFAULT_USER_PREFERENCES,
+    read: async (id) => row(id),
     patch: async (id, patch) => {
-      const saved = { ...DEFAULT_USER_PREFERENCES, ...state.get(id), ...patch };
+      const { workHours, browserTimeZone, ...preferences } = patch;
+      const current = row(id);
+      /*
+       * The merge the store does in Postgres, kept in the same order: the browser's zone goes under
+       * what is saved, and this save's own hours over it. A row here always carries a zone, so the
+       * browser's one never wins — which is the store's rule too ("fills a gap, never over one").
+       */
+      const saved: StoredUserPreferences = {
+        ...current,
+        ...preferences,
+        workHours: {
+          ...(browserTimeZone === undefined ? {} : { timeZone: browserTimeZone }),
+          ...current.workHours,
+          ...workHours,
+        },
+      };
       state.set(id, saved);
       return saved;
     },
@@ -57,6 +87,7 @@ test("preferences default to thread and persist separately for each authenticate
       narration: null,
       skin: "xiongbao",
       proactive: "on",
+      workHours: WORK_HOURS,
     },
   });
   const saved = await alice.request(
@@ -71,6 +102,7 @@ test("preferences default to thread and persist separately for each authenticate
       narration: null,
       skin: "xiongbao",
       proactive: "on",
+      workHours: WORK_HOURS,
     },
   });
   expect(await (await appFor("bob").request(path)).json()).toEqual({
@@ -80,6 +112,7 @@ test("preferences default to thread and persist separately for each authenticate
       narration: null,
       skin: "xiongbao",
       proactive: "on",
+      workHours: WORK_HOURS,
     },
   });
 });
@@ -139,6 +172,7 @@ test("saves the self-host banner dismissal without touching message list emphasi
       narration: null,
       skin: "xiongbao",
       proactive: "on",
+      workHours: WORK_HOURS,
     },
   });
   expect(await (await appFor("bob").request(path)).json()).toEqual({
@@ -148,6 +182,7 @@ test("saves the self-host banner dismissal without touching message list emphasi
       narration: null,
       skin: "xiongbao",
       proactive: "on",
+      workHours: WORK_HOURS,
     },
   });
 });
@@ -169,6 +204,7 @@ test("keeps the person's narration choice without touching the others, and start
       narration: "on",
       skin: "xiongbao",
       proactive: "on",
+      workHours: WORK_HOURS,
     },
   });
   await alice.request(path, patch({ narration: "off" }));
@@ -193,6 +229,7 @@ test("saves the skin on the account without touching the other preferences", asy
       narration: null,
       skin: "opendots",
       proactive: "on",
+      workHours: WORK_HOURS,
     },
   });
   // Another browser signed in as Alice reads the same skin; Bob keeps the default.
@@ -203,6 +240,7 @@ test("saves the skin on the account without touching the other preferences", asy
       narration: null,
       skin: "opendots",
       proactive: "on",
+      workHours: WORK_HOURS,
     },
   });
   expect(
@@ -243,6 +281,7 @@ test("check-ins start on, and a person's off is kept without touching the others
       narration: null,
       skin: "openduet",
       proactive: "off",
+      workHours: WORK_HOURS,
     },
   });
   expect(

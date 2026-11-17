@@ -1,4 +1,4 @@
-import type { UserPreferences } from "@openbot/shared/user-preferences";
+import type { StoredPreferences } from "@openbot/shared/user-preferences";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -76,8 +76,13 @@ export const users = pgTable("users", {
   name: text("name"),
   image: text("image"),
   emailVerified: boolean("email_verified").notNull().default(false),
+  /**
+   * The person's preferences as one JSON object: the shared ones, and their work hours as a nested
+   * `workHours` (`StoredPreferences`). A save merges into it, so a row may carry any subset, and a
+   * row written by a build that predates the nested object may carry the zone at the top level.
+   */
   preferences: jsonb("preferences")
-    .$type<Partial<UserPreferences>>()
+    .$type<StoredPreferences>()
     .notNull()
     .default({}),
   /**
