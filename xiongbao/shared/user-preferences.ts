@@ -71,3 +71,39 @@ export const DEFAULT_USER_PREFERENCES: UserPreferences = {
   skin: DEFAULT_SKIN,
   proactive: "on",
 };
+
+/**
+ * When a person works, on their own clock (spec 2026-11-15-delivery-loop §10): the delivery checker
+ * pushes nothing outside it, and the start and end briefings go out at its two ends.
+ *
+ * Here rather than in the server because it is stored on the person's account: the settings page
+ * writes it and the server reads it, so both need the one shape.
+ */
+export type WorkHours = {
+  /** "HH:MM". */
+  start: string;
+  /**
+   * "HH:MM", later than `start`. A saved one is at most "23:59"; "24:00" (the end of the day) is
+   * understood by the work-hours check for a value built in code, never stored.
+   */
+  end: string;
+  /** An IANA zone, e.g. "Asia/Shanghai". */
+  timeZone: string;
+  /** Whether Saturdays and Sundays are work days. */
+  weekends: boolean;
+};
+
+/**
+ * What a `users.preferences` row holds: the preferences above, this person's work hours, and — from
+ * builds that predate work hours having an object of their own — the zone at the top level.
+ *
+ * Every field is optional because a row is a merge target: a save writes the keys it names and leaves
+ * the rest (`createUserPreferencesStore().patch`), and a read fills the gaps with the defaults. The
+ * column said `Partial<UserPreferences>` until this type existed, which was a row that could not hold
+ * the work hours it was being written with.
+ */
+export type StoredPreferences = Partial<UserPreferences> & {
+  workHours?: Partial<WorkHours>;
+  /** An older row's zone: read when `workHours` carries none. */
+  timeZone?: string;
+};

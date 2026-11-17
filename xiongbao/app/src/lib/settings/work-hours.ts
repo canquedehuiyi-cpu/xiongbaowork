@@ -4,7 +4,10 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useEffect } from "react";
-import type { UserPreferences } from "../../../../shared/user-preferences";
+import type {
+  UserPreferences,
+  WorkHours,
+} from "../../../../shared/user-preferences";
 import { client } from "../client";
 import { browserTimeZone } from "../routines/form";
 import {
@@ -18,17 +21,12 @@ import {
  * 服务器按它推清点、决定作息外不推送、不催员工。
  */
 
-/** 服务器回的作息；老服务端不带时没有。 */
-export type WorkHours = {
-  /** "HH:MM"。 */
-  start: string;
-  /** "HH:MM"，晚于开工。 */
-  end: string;
-  /** IANA 时区，如 "Asia/Shanghai"。 */
-  timeZone: string;
-  /** 周六、周日发不发。 */
-  weekends: boolean;
-};
+/**
+ * 服务器回的作息；老服务端不带时没有。
+ *
+ * 形状定义在 `shared/user-preferences`：`users.preferences` 那一列也按它声明，两边共用一个，免得一处加了字段另一处不知情。
+ */
+export type { WorkHours };
 
 /** 偏好接口回的全部：共享的那几项，加上作息。 */
 export type PreferencesWithWorkHours = UserPreferences & {
