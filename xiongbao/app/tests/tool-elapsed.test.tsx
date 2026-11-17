@@ -1,7 +1,7 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, within } from "@testing-library/react";
 import type { VisibleChatItem } from "../src/components/channels/chat-messages";
 import {
   StepRow,
@@ -178,7 +178,8 @@ test("a duration and an exit code are said together, and a success says neither"
   expect(view.getByText("退出码 2")).toBeTruthy();
 
   // 结果带着 `exitCode: 0` 但这一步是成功的：退出码是失败那一步的事，成功行上一个字不改。
+  // 两次画的是同一行的两种结果，第二次的查询只认自己那个容器：上一个容器的「退出码 2」还在文档里。
   const succeeded = row({ ...spent(2400), exitCode: 0 });
-  expect(succeeded.queryByText(/退出码/)).toBeNull();
-  expect(succeeded.getByText("2.4s")).toBeTruthy();
+  expect(within(succeeded.container).queryByText(/退出码/)).toBeNull();
+  expect(within(succeeded.container).getByText("2.4s")).toBeTruthy();
 });

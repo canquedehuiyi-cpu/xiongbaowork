@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { cleanup, render } from "@testing-library/react";
+import { cleanup, render, within } from "@testing-library/react";
 import {
   type StepDetails,
   StepRow,
@@ -99,17 +99,18 @@ test("a step that worked keeps the line it had", () => {
 });
 
 test("a step's own row carries the same two facts", () => {
+  // 同一个行的三种事实，一个一个画：查询只认自己那个容器，不然上一个容器的「退出码 2」会被当成这一行说的。
   const coded = row(stepOf({ exitCode: 2, failed: true }));
-  expect(coded.getByText("没成功")).toBeTruthy();
-  expect(coded.getByText("退出码 2")).toBeTruthy();
+  expect(within(coded.container).getByText("没成功")).toBeTruthy();
+  expect(within(coded.container).getByText("退出码 2")).toBeTruthy();
 
   const told = row(stepOf({ failed: true, failure: "端口被占用了" }));
-  expect(told.getByText("端口被占用了")).toBeTruthy();
-  expect(told.queryByText(/退出码/)).toBeNull();
+  expect(within(told.container).getByText("端口被占用了")).toBeTruthy();
+  expect(within(told.container).queryByText(/退出码/)).toBeNull();
 
   const bare = row(stepOf({ failed: true }));
-  expect(bare.getByText("没成功")).toBeTruthy();
-  expect(bare.queryByText(/退出码/)).toBeNull();
+  expect(within(bare.container).getByText("没成功")).toBeTruthy();
+  expect(within(bare.container).queryByText(/退出码/)).toBeNull();
 });
 
 test("a browser step says why under its line, not beside it", () => {
