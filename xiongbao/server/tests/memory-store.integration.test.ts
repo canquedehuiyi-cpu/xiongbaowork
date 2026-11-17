@@ -209,6 +209,9 @@ test("changed connector content updates the same row without duplicates", () =>
     const before = (await store.list(owner)).find(
       (row) => row.sourceId === value.id,
     );
+    // The first sync has to have written a row, or "the same row" below is `undefined === undefined`
+    // and the assertion passes on a store that wrote nothing at all.
+    if (!before) throw new Error("the first sync wrote no row for this source");
     vendorText =
       '[{"id":"doc1","text":"Project launch moved to Friday","title":"Roadmap"}]';
     await ingestion.sync(owner, value.id);
@@ -216,7 +219,7 @@ test("changed connector content updates the same row without duplicates", () =>
       (row) => row.sourceId === value.id,
     );
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.id).toBe(before?.id);
+    expect(rows[0]?.id).toBe(before.id);
     const content = rows[0]?.content;
     if (typeof content !== "string")
       throw new Error("the re-synced row carried no content");

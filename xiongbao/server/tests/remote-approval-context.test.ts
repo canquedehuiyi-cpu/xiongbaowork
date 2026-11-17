@@ -1,5 +1,10 @@
 import { expect, spyOn, test } from "bun:test";
-import { HttpAgent, type RunAgentInput } from "@ag-ui/client";
+import {
+  type BaseEvent,
+  EventType,
+  HttpAgent,
+  type RunAgentInput,
+} from "@ag-ui/client";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { of } from "rxjs";
 import { z } from "zod";
@@ -14,25 +19,33 @@ async function fixture(
   const requests: RunAgentInput[] = [];
   const run = spyOn(HttpAgent.prototype, "run").mockImplementation((input) => {
     requests.push(input);
-    return of(
-      { type: "RUN_STARTED", threadId: input.threadId, runId: input.runId },
-      { type: "STATE_SNAPSHOT", snapshot: { real: "provider-state" } },
+    // Annotated `BaseEvent[]`, then spread. Untyped, every literal widened `type` to `string` and
+    // the observable no longer matched the `Observable<BaseEvent>` the method promises. As an
+    // element of a typed array each literal is checked against the event union it is meant to be —
+    // which is the point of writing them out — and `of(...events)` keeps the element type.
+    const events: BaseEvent[] = [
       {
-        type: "TOOL_CALL_START",
+        type: EventType.RUN_STARTED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+      { type: EventType.STATE_SNAPSHOT, snapshot: { real: "provider-state" } },
+      {
+        type: EventType.TOOL_CALL_START,
         toolCallId: "provider-call",
         toolCallName: toolName,
         parentMessageId: "provider-message",
       },
       {
-        type: "TOOL_CALL_ARGS",
+        type: EventType.TOOL_CALL_ARGS,
         toolCallId: "provider-call",
         delta: '{"value":"actual"}',
       },
-      { type: "TOOL_CALL_END", toolCallId: "provider-call" },
+      { type: EventType.TOOL_CALL_END, toolCallId: "provider-call" },
       ...(answered
         ? [
             {
-              type: "TOOL_CALL_RESULT" as const,
+              type: EventType.TOOL_CALL_RESULT,
               messageId: "backend-result",
               toolCallId: "provider-call",
               content: "backend already executed",
@@ -40,8 +53,13 @@ async function fixture(
             },
           ]
         : []),
-      { type: "RUN_FINISHED", threadId: input.threadId, runId: input.runId },
-    );
+      {
+        type: EventType.RUN_FINISHED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+    ];
+    return of(...events);
   });
   let context: ReturnType<typeof currentApprovalContext>;
   let calls = 0;

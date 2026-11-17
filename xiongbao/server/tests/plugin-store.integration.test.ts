@@ -6413,7 +6413,15 @@ test("a Composio call is recorded as reaching the vendor as the person, not as t
  * three outcomes share.
  */
 function callEventsFor(
-  auditStore: { recorded: () => { eventType: string; targetId?: string }[] },
+  // `payload` is here because it is the part most of these cases read: what a refusal says is in
+  // the payload, and a narrower parameter made the reader's own event unreadable.
+  auditStore: {
+    recorded: () => {
+      eventType: string;
+      targetId?: string;
+      payload?: unknown;
+    }[];
+  },
   targetId: string,
 ) {
   return auditStore
@@ -8299,6 +8307,9 @@ test("enabling an app with no broker says which setting is missing", () =>
         slug: "linear",
         title: "Linear",
         by: "admin@example.com",
+        // Required of every app, and every other call site in this file names one. The refusal
+        // below happens before a scheme is used: there is no broker to ask.
+        connection: { kind: "consent" },
       }),
     ).rejects.toThrow("COMPOSIO_API_KEY");
   }));
@@ -8325,12 +8336,17 @@ test("enabling an app with no broker says which setting is missing", () =>
  * `userId` is appended where there is one, and calls that are about the deployment rather than a
  * person (`deleteAuthConfig`) stay bare.
  */
+// Every answer is spelled as the broker's own signature rather than copied by hand. The copy had
+// drifted twice: `ensureAuthConfig` answered `Promise<void>` where the interface promises the
+// outcome ("created" | "standing" | "not-needed"), and took no `connection`, so a spy written
+// against it was answering a method this repository does not have.
 function brokerSpy(answers: {
-  ensureAuthConfig?: (config: {
-    toolkit: string;
-    name: string;
-  }) => Promise<void>;
-  deleteAuthConfig?: (toolkit: string) => Promise<void>;
+  ensureAuthConfig?: (
+    config: Parameters<ComposioBroker["ensureAuthConfig"]>[0],
+  ) => ReturnType<ComposioBroker["ensureAuthConfig"]>;
+  deleteAuthConfig?: (
+    toolkit: string,
+  ) => ReturnType<ComposioBroker["deleteAuthConfig"]>;
   isConnected?: (request: {
     userId: string;
     toolkit: string;
@@ -8382,6 +8398,15 @@ function brokerSpy(answers: {
         "check somebody's connection",
       ),
       revoke: asked("revoke", answers.revoke, "withdraw somebody's grant"),
+      /*
+       * On the interface because a broker is one shape, and never reached by a connection path in
+       * this file: no app here is connected from a typed credential form and nothing undoes a
+       * single account. They name themselves rather than answering a plausible nothing — the same
+       * discipline as `unasked` above, which is why they are written with it.
+       */
+      connectionFields: unasked("read an app's credential form"),
+      connectWithFields: unasked("connect from field values"),
+      revokeAccount: unasked("undo one person's account"),
     },
   };
 }

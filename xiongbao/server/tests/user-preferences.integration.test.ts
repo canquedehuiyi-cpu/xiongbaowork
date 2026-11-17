@@ -98,7 +98,11 @@ test("patching one preference preserves other JSON fields", async () => {
       .select({ preferences: users.preferences })
       .from(users)
       .where(eq(users.id, id));
-    expect(user?.preferences).toEqual({
+    // `futurePreference` is deliberately a key `UserPreferences` does not declare: the column is
+    // jsonb, and a key a later version wrote has to survive a patch from this one. Comparing as a
+    // plain record says that without claiming the key is part of the type — and dropping it from
+    // the expectation would delete the only thing this test is about.
+    expect(user?.preferences as Record<string, unknown> | undefined).toEqual({
       messageListEmphasis: "agent",
       futurePreference: true,
     });

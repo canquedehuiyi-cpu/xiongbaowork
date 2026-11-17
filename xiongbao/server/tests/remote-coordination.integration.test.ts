@@ -19,7 +19,9 @@ const work = {
   runId: "original-run",
   depth: 1,
   task: "Investigate the incident",
-  initiator: { kind: "routine", id: "routine-1" },
+  // `as const` on the tag: widened to `string`, this object stops being an `AuditInitiator` and the
+  // row it is stored as can no longer be compared with what the reader is typed to return.
+  initiator: { kind: "routine" as const, id: "routine-1" },
 };
 const mine = and(eq(workItems.kind, HANDOFF_KIND), eq(workItems.key, key));
 /**
