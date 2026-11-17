@@ -11,6 +11,7 @@ import {
   StepOutput,
   StepRow,
   stepDetails,
+  subtaskWordsFor,
 } from "./tool-activity";
 
 type ToolItem = Extract<VisibleChatItem, { kind: "tool" }>;
@@ -100,6 +101,7 @@ export function SubtaskStep({
             <SubtaskStatus
               count={count}
               handedBack={handedBack !== null}
+              ms={result?.ms}
               running={running}
               step={step}
             />
@@ -126,19 +128,32 @@ export function SubtaskStep({
   );
 }
 
-/** How the subtask ended, beside its line. A finished one says only how many steps it took. */
+/**
+ * How the subtask ended, beside its line. A finished one says how many steps it took, and once the
+ * server timed its run, how long that run took. While it works neither is known, so nothing about
+ * time is said: the line shimmers and that is the whole of it.
+ */
 function SubtaskStatus({
   step,
   running,
   handedBack,
   count,
+  ms,
 }: {
   step: StepDetails;
   running: boolean;
   handedBack: boolean;
   count: number;
+  /** What the run took, from the server's clock. Absent on a result written before it was timed. */
+  ms?: number;
 }) {
   const steps = count > 0 ? `${count} 个步骤` : "";
+  const spent =
+    ms === undefined || !Number.isFinite(ms) || ms < 0
+      ? ""
+      : `耗时 ${spentOf(ms)}`;
+  const withSpent = (how: string) =>
+    [how, spent].filter((part) => part !== "").join(" · ");
   if (running)
     return (
       <span className="shrink-0 text-muted-foreground">
@@ -150,23 +165,51 @@ function SubtaskStatus({
   if (step.refused)
     return <span className="shrink-0 text-destructive">已拦下</span>;
   if (handedBack)
-    return <span className="shrink-0 text-muted-foreground">已交还</span>;
+    return (
+      <span className="shrink-0 text-muted-foreground">
+        {withSpent("已交还")}
+      </span>
+    );
   if (step.failed)
     return (
       <span className="shrink-0 text-amber-600 dark:text-amber-500">
-        没能完成
+        {withSpent("没能完成")}
       </span>
     );
-  return steps ? (
-    <span className="shrink-0 text-muted-foreground">{steps}</span>
+  return steps || spent ? (
+    <span className="shrink-0 text-muted-foreground">{withSpent(steps)}</span>
   ) : null;
+}
+
+/** 一次运行跑了多久：不足一秒给到毫秒，不足一分钟给到 0.1 秒，再长按分和秒说。 */
+function spentOf(ms: number): string {
+  if (ms < 1_000) return `${ms} 毫秒`;
+  if (ms < 60_000) return `${(ms / 1_000).toFixed(1)} 秒`;
+  const minutes = Math.floor(ms / 60_000);
+  const seconds = Math.round((ms % 60_000) / 1_000);
+  return seconds ? `${minutes} 分 ${seconds} 秒` : `${minutes} 分钟`;
 }
 
 /**
  * The action the subagent stopped before, said plainly. Nothing was done and nobody was asked. The
  * Bot does it itself if it still needs doing, and the person is asked then, on the Bot's own card.
+ *
+ * WHY it stopped is the gate's own sentence, and what it had said before stopping is its own account;
+ * both are written for the Bot, so the first is read here in the words a person uses (see
+ * {@link subtaskWordsFor}) and the second is drawn as it was written. Both are absent on a result
+ * from before they were carried, and on one that never stopped here.
  */
-function HandedBack({ tool, args }: { tool: string; args: unknown }) {
+function HandedBack({
+  tool,
+  args,
+  reason,
+  said,
+}: {
+  tool: string;
+  args: unknown;
+  reason?: string;
+  said?: string;
+}) {
   const { label, detail } = tool.startsWith("mcp__")
     ? readToolName(tool)
     : { label: humanise(tool.replace(/^computer_/, "")), detail: undefined };
@@ -179,6 +222,11 @@ function HandedBack({ tool, args }: { tool: string; args: unknown }) {
       <p>
         它在一个需要你批准的步骤前停了下来。如果这一步仍然需要做，员工会在这段对话里问你。
       </p>
+      {reason ? (
+        <p className="text-muted-foreground">
+          它停下来的原因：{subtaskWordsFor(reason)}
+        </p>
+      ) : null}
       <p className="font-medium">
         {label}
         {detail ? `（${detail}）` : ""}
@@ -194,6 +242,12 @@ function HandedBack({ tool, args }: { tool: string; args: unknown }) {
             </div>
           ))}
         </dl>
+      ) : null}
+      {said ? (
+        <div className="space-y-1">
+          <p className="text-muted-foreground">它停下来时说的：</p>
+          <StepOutput output={said} />
+        </div>
       ) : null}
     </section>
   );

@@ -13,10 +13,17 @@ export const SUBAGENT_TOOL = "run_subagent";
 /** How many subagents one answer may start. The next one is refused with a sentence. */
 export const SUBAGENTS_PER_ANSWER = 5;
 
-/** What a subagent hands back to the Bot that started it, and what its card is drawn from. */
+/**
+ * What a subagent hands back to the Bot that started it, and what its card is drawn from.
+ *
+ * `ms` is how long its run took, measured by the server around the run itself and never on the page:
+ * a card opened later, or a run that was already over when the person arrived, has no clock of its
+ * own to read. It is absent on a result written before it was counted, and on a call that was refused
+ * before any run started, which is why every reader treats it as optional.
+ */
 export type SubagentResult =
   /** It finished: its answer, and where its steps are. */
-  | { answer: string; threadId: string; steps: number }
+  | { answer: string; threadId: string; steps: number; ms?: number }
   /**
    * It stopped before an action that needs the person's yes. Nothing was done and nobody was asked;
    * `next` tells the Bot to do it itself, in the conversation, where the person is asked as usual.
@@ -34,9 +41,10 @@ export type SubagentResult =
       next: string;
       threadId: string;
       steps: number;
+      ms?: number;
     }
   /** It ran and did not finish. */
-  | { error: string; threadId: string; steps: number };
+  | { error: string; threadId: string; steps: number; ms?: number };
 
 /** The result, read back from the text a tool call carries, or null when it is not one. */
 export function readSubagentResult(text: string): SubagentResult | null {
@@ -52,6 +60,14 @@ export function readSubagentResult(text: string): SubagentResult | null {
     return null;
   const result = parsed as Record<string, unknown>;
   if (typeof result.threadId !== "string" || typeof result.steps !== "number")
+    return null;
+  // Absent is a result written before the run was timed; anything else is not this contract.
+  if (
+    result.ms !== undefined &&
+    (typeof result.ms !== "number" ||
+      !Number.isFinite(result.ms) ||
+      result.ms < 0)
+  )
     return null;
   if (typeof result.answer === "string") return result as SubagentResult;
   if (typeof result.error === "string") return result as SubagentResult;

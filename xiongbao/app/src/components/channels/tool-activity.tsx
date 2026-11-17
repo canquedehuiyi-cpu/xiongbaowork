@@ -524,6 +524,82 @@ function detailsOf(step: ToolItem, folders: FolderNames): StepDetails {
   };
 }
 
+/*
+ * The sentences a subtask's server writes for the BOT, as the words the PERSON reads.
+ *
+ * They are written for the Bot because they are its instructions: the cap sentence tells it to do
+ * the part itself, the stopped ones tell it what ended the run. The server cannot answer with two
+ * texts, and those sentences are pinned by the server's own tests, so they stay as they are and this
+ * table translates the copy on screen — the same way `shared/approval-outcomes.ts` translates the
+ * approval sentences a step is answered with, for the steps that are not subtasks.
+ *
+ * MATCHED AT THE START, NEVER IN FULL: every number in these sentences is the deployment's (how many
+ * subagents one run may start, how long a turn may take), and the reason after a stopped run is the
+ * provider's own text. Pinning a whole sentence would break the day somebody changes the limit, and
+ * would say "5" where the server said something else. What no row recognises is returned as it came:
+ * a person reading one sentence in English is worse than a person reading a wrong number.
+ */
+const SUBTASK_SENTENCES: [RegExp, (matched: RegExpExecArray) => string][] = [
+  [
+    /^No subagent was started: one answer can start up to (\d+) subagents/,
+    (matched) =>
+      `一次运行最多启动 ${matched[1]} 个子任务，这一次已经用完了，所以这一个没有开始。`,
+  ],
+  [
+    /^No subagent was started: in a task from a check-in/,
+    () => "这个任务里每一步都要在这段对话里问你，所以这一个没有开始。",
+  ],
+  [
+    /^No subagent was started: say what the task is/,
+    () => "没有说清任务和要回来的答案，所以这一个没有开始。",
+  ],
+  [
+    /^The subagent did not finish: The routine's turn was stopped after (\d+)s/,
+    (matched) => `它运行了 ${matched[1]} 秒后被停下来，没能给出答案。`,
+  ],
+  [
+    /^The subagent did not finish: The headless tool continuation limit/,
+    () => "它连续调用工具的轮数到了上限，被停下来，没能给出答案。",
+  ],
+  [
+    /^The subagent did not finish: The headless turn was cancelled/,
+    () => "这次运行被取消了，没能给出答案。",
+  ],
+  [
+    /^The subagent did not finish: The Bot stopped before it finished/,
+    () => "它在给出答案之前停了下来。",
+  ],
+  [
+    /^The subagent did not finish: The turn finished without saying anything/,
+    () => "它跑完了，但没有给出答案。",
+  ],
+  [
+    /^The subagent did not finish: The turn stopped to ask a question/,
+    () => "它停下来想问一个问题，可子任务里没有人在，它没有得到回答。",
+  ],
+  [
+    /^The subagent did not finish: ([\s\S]+)$/,
+    (matched) => `它没能完成：${matched[1]}`,
+  ],
+  [/^This action is waiting for your approval\.$/, () => "这一步在等你批准。"],
+  [
+    /^This needs you: ([\s\S]*?)(?: Do it yourself,[\s\S]*)?$/,
+    (matched) => `这一步需要你亲自去做：${matched[1]}`,
+  ],
+];
+
+/** 子任务卡上的一句话：认得出的换成中文，认不出的原样给出。 */
+export function subtaskWordsFor(
+  text: string | undefined,
+): string | undefined {
+  if (text === undefined) return undefined;
+  for (const [sentence, words] of SUBTASK_SENTENCES) {
+    const matched = sentence.exec(text);
+    if (matched) return words(matched);
+  }
+  return text;
+}
+
 /**
  * A subtask as a step: what it was asked to do, and how it ended.
  *
@@ -545,11 +621,11 @@ function subtaskDetails(
   const result =
     answer === undefined || refused ? null : readSubagentResult(answer);
   const output = refused
-    ? answer?.slice(REFUSAL_MARKER.length).trim()
+    ? subtaskWordsFor(answer?.slice(REFUSAL_MARKER.length).trim())
     : result && "answer" in result
       ? result.answer
       : result && "error" in result
-        ? result.error
+        ? subtaskWordsFor(result.error)
         : undefined;
   return {
     id: step.id,

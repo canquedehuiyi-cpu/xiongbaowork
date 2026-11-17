@@ -31,3 +31,28 @@ test("a result is read back from the tool message as the store holds it", () => 
   });
   expect(readSubagentResult("Refused. No subagent was started.")).toBeNull();
 });
+
+/*
+ * How long the run took is counted by the server around the run, so the card can say it for a turn
+ * that ended before the person arrived. It is absent on a result written before it was counted, which
+ * still has to read; a result carrying something that is not a duration is not this contract at all,
+ * and is dropped whole rather than drawn with a clock nobody measured.
+ */
+test("a result carries its run's duration and still reads without one", () => {
+  expect(
+    readSubagentResult(
+      JSON.stringify({
+        answer: "Healthy.",
+        threadId: "t",
+        steps: 2,
+        ms: 1300,
+      }),
+    ),
+  ).toEqual({ answer: "Healthy.", threadId: "t", steps: 2, ms: 1300 });
+  for (const ms of ["1300", -1, Number.NaN])
+    expect(
+      readSubagentResult(
+        JSON.stringify({ answer: "Healthy.", threadId: "t", steps: 2, ms }),
+      ),
+    ).toBeNull();
+});
