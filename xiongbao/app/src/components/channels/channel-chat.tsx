@@ -77,6 +77,10 @@ import {
 } from "@/lib/channels/queries";
 import { runReply } from "@/lib/channels/run-reply";
 import {
+  type RunStageTracker,
+  createRunStageTracker,
+} from "@/lib/channels/run-stage";
+import {
   onTurnFinishedAway,
   turnFinishedAway,
 } from "@/lib/channels/turns-finished-away";
@@ -617,6 +621,30 @@ export function ChannelChat({
     acpTracker.listen,
     acpTracker.cards,
     acpTracker.cards,
+  );
+  /*
+   * 内置员工这一轮走到哪一段（阶段进度）：服务器在事件流里标一条 `CUSTOM run.stage`，这里只记现在这一段。
+   * 一个代理一份，换了对话就重新记。和上面的外部员工一样，订阅写在加入线程的 effect 前面，`connect`
+   * 只把它开始时已有的订阅者交给重放。
+   *
+   * 听不到这条事件的轮次——早于本改动的存档、没走这条流的通道——一直是 null，对话照旧画「思考中」/
+   * 「<员工名> 正在输入」：回落，不空出一格。
+   */
+  const stageTrackerRef = useRef<{
+    agent: unknown;
+    tracker: RunStageTracker;
+  } | null>(null);
+  if (stageTrackerRef.current?.agent !== agent)
+    stageTrackerRef.current = { agent, tracker: createRunStageTracker() };
+  const stageTracker = stageTrackerRef.current.tracker;
+  useEffect(() => {
+    const subscription = agent.subscribe?.(stageTracker.subscriber);
+    return () => subscription?.unsubscribe();
+  }, [agent, stageTracker]);
+  const runStage = useSyncExternalStore(
+    stageTracker.listen,
+    stageTracker.stage,
+    stageTracker.stage,
   );
   /** 已经按过「重新派」的中断卡（按卡的 `key`）。 */
   const [acpResent, setAcpResent] = useState<ReadonlySet<string>>(
@@ -1532,6 +1560,8 @@ export function ChannelChat({
             threadId={channel.threadId}
             acpApprovals
             compaction={compaction}
+            // 这一轮走到哪一段：工具段画在活跃那一步的上面，回答段顶掉「思考中」那一格的话。
+            stage={runStage}
             /*
              * 跟在消息下面的卡走同一套附注：外部员工的进度、改动、中断卡在前，交付闭环的接活回执、延期申请、
              * 交付卡、被挡回在后。

@@ -181,6 +181,140 @@ describe("translateUpdate", () => {
     expect(closed[0]?.toolCallId).toBe("run-1:call-9");
   });
 
+  test("a finished call carries the duration its device reported, and only that", () => {
+    const translator = createAcpTranslator({ idPrefix: "run-6" });
+    translator.update({
+      sessionUpdate: "tool_call",
+      toolCallId: "call-1",
+      title: "Run bun test",
+      kind: "execute",
+      rawInput: { command: "bun test" },
+    });
+    const done = translator.update({
+      sessionUpdate: "tool_call_update",
+      toolCallId: "call-1",
+      status: "completed",
+      rawOutput: { exitCode: 0, elapsedMs: 2400 },
+    }) as Loose[];
+    expect(types(done)).toEqual([
+      EventType.CUSTOM,
+      EventType.TOOL_CALL_RESULT,
+    ]);
+    expect(done[0]?.name).toBe("acp.elapsed");
+    expect(done[0]?.value).toEqual({
+      toolCallId: "run-6:call-1",
+      elapsedMs: 2400,
+    });
+
+    // 没成功的那一步更要写它跑了多久：800 毫秒就报 800 毫秒。
+    translator.update({
+      sessionUpdate: "tool_call",
+      toolCallId: "call-2",
+      kind: "execute",
+    });
+    expect(
+      translator.update({
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call-2",
+        status: "failed",
+        rawOutput: { exitCode: 1, elapsedMs: 800 },
+      }),
+    ).toMatchObject([
+      {
+        type: EventType.CUSTOM,
+        name: "acp.elapsed",
+        value: { toolCallId: "run-6:call-2", elapsedMs: 800 },
+      },
+      { type: EventType.TOOL_CALL_RESULT },
+    ]);
+
+    /*
+     * 结果里没有读数就没有这一条：一段文字的 rawOutput、负数、字符串的数字、`NaN`、`Infinity`、
+     * 干脆没有 rawOutput——翻译器自己不掐表，前端宁可什么都不显示。
+     */
+    const unreadable: unknown[] = [
+      "跑了 2 秒",
+      { elapsedMs: -1 },
+      { elapsedMs: "2400" },
+      { elapsedMs: Number.NaN },
+      { elapsedMs: Number.POSITIVE_INFINITY },
+      undefined,
+    ];
+    for (let index = 0; index < unreadable.length; index++) {
+      const toolCallId = `call-plain-${index}`;
+      translator.update({
+        sessionUpdate: "tool_call",
+        toolCallId,
+        kind: "read",
+      });
+      const rawOutput = unreadable[index];
+      expect(
+        types(
+          translator.update({
+            sessionUpdate: "tool_call_update",
+            toolCallId,
+            status: "completed",
+            ...(rawOutput === undefined ? {} : { rawOutput }),
+          }),
+        ),
+      ).toEqual([EventType.TOOL_CALL_RESULT]);
+    }
+
+    // 还在跑、没有结束的那一步也不发：耗时是结束才有的事实。
+    translator.update({
+      sessionUpdate: "tool_call",
+      toolCallId: "call-3",
+      kind: "execute",
+    });
+    expect(
+      types(
+        translator.update({
+          sessionUpdate: "tool_call_update",
+          toolCallId: "call-3",
+          status: "in_progress",
+          rawOutput: { elapsedMs: 500 },
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a raw input too long to send is marked, with the length it had", () => {
+    const translator = createAcpTranslator({ idPrefix: "run-7" });
+    const big = { contents: "x".repeat(9000) };
+    const started = translator.update({
+      sessionUpdate: "tool_call",
+      toolCallId: "call-big",
+      title: "Write a file",
+      kind: "edit",
+      locations: [{ path: "notes/todo.txt" }],
+      rawInput: big,
+    }) as Loose[];
+    const args = JSON.parse(String(started[1]?.delta)) as Record<
+      string,
+      unknown
+    >;
+    expect(args.rawInput).toBeUndefined();
+    expect(args.rawInputTruncated).toBe(true);
+    expect(args.rawInputLength).toBe(JSON.stringify(big).length);
+    expect(args.locations).toEqual([{ path: "notes/todo.txt" }]);
+
+    // 装得下的原样给出，不带截断标记，也不带长度：前端没有需要解释的事。
+    const small = JSON.parse(
+      String(
+        (translator.update({
+          sessionUpdate: "tool_call",
+          toolCallId: "call-small",
+          title: "Read a file",
+          kind: "read",
+          rawInput: { path: "notes/todo.txt" },
+        }) as Loose[])[1]?.delta,
+      ),
+    ) as Record<string, unknown>;
+    expect(small.rawInput).toEqual({ path: "notes/todo.txt" });
+    expect(small.rawInputTruncated).toBeUndefined();
+    expect(small.rawInputLength).toBeUndefined();
+  });
+
   test("edit diffs are summarised per file with added/removed counts", () => {
     const translator = createAcpTranslator({ idPrefix: "run-2" });
     const events = translator.update({
