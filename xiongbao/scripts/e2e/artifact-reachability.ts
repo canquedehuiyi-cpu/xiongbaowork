@@ -475,6 +475,26 @@ function attachmentHeaders(name: string): Record<string, string> {
 }
 
 /**
+ * The path the gated write names for ITSELF: `args.path` of the approval payload.
+ *
+ * Read out of the parsed body, never out of the body's text. The gate's payload carries the
+ * conversation as well (`messages`), and the assistant message in it repeats every tool call of this
+ * turn — so a whole-body search matches the FIRST scripted file on all three calls and answers each of
+ * them with that one result: three links to the same address, one row in the list, and the refused
+ * write drawn as a saved one. The call's own argument is the only thing that says which file is gated.
+ */
+function gatedWritePath(body: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return undefined;
+  }
+  const path = (parsed as { args?: { path?: unknown } } | null)?.args?.path;
+  return typeof path === "string" ? path : undefined;
+}
+
+/**
  * The computer, answered by hand: the scope the page reads before drawing a link, the gate that runs a
  * write, the folders the list asks about, and the download the anchor points at. Nothing else is
  * intercepted, and nothing here is intercepted that the page could answer for itself.
@@ -486,7 +506,9 @@ async function fixedComputer(route: Route): Promise<void> {
   if (GATE_PATH.test(path) && request.method() === "POST") {
     const body = request.postData() ?? "";
     gateBodies.push(body);
-    const file = WRITTEN.find((candidate) => body.includes(candidate.asked));
+    const file = WRITTEN.find(
+      (candidate) => candidate.asked === gatedWritePath(body),
+    );
     if (!file)
       throw new Error(
         `the approval gate was asked to save a file this run did not script: ${body.slice(0, 400)}`,
@@ -771,10 +793,25 @@ try {
   });
 
   await step("the mocked model, and nothing else", async () => {
+    /*
+     * The turn's calls, counted the way G6 counts them (`staffing-lifecycle.ts`, same step): a running
+     * deployment asks its model for more than this conversation — the summariser titles the channel,
+     * the translation loop asks for the skill words — and every one of those reaches the mock as a
+     * request with no file tool in it, which `answer` scripts as `plain` and which runs nothing. So
+     * `plain` is what says nothing was scripted into it, not a call to drop from the record:
+     * `model-calls.json` still holds all of them, and the gate count above is what proves only the
+     * three scripted writes ever reached a computer.
+     */
     equal(
-      calls.map((call) => call.kind),
+      calls.filter((call) => call.kind !== "plain").map((call) => call.kind),
       ["write_files", "answered"],
       "the turn made exactly these scripted model calls",
+    );
+    check(
+      calls
+        .filter((call) => call.kind === "plain")
+        .every((call) => !call.offeredWrite),
+      "every other request the mock saw was offered no file tool: no second turn wrote a file",
     );
     check(
       calls[0]?.offeredWrite,
