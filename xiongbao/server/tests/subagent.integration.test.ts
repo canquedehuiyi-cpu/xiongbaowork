@@ -1,6 +1,12 @@
 import { test as bunTest, describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
-import type { Message } from "@ag-ui/client";
+import {
+  AbstractAgent,
+  type BaseEvent,
+  EventType,
+  type Message,
+  type RunAgentInput,
+} from "@ag-ui/client";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
@@ -10,6 +16,7 @@ import {
   type SubagentResult,
   subagentThreadId,
 } from "@openbot/shared/subagent";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { RunnerLike } from "@openbot/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
 import { Observable } from "rxjs";
@@ -895,5 +902,292 @@ describe("a Bot gives part of its work to a subagent", () => {
       "Remote answer: Part A",
       "Remote answer: Part B",
     ]);
+  }, 30_000);
+
+  /* --------------------------------------------------------------------------------------------
+   * What a stopped subagent leaves behind, and what a refusal costs.
+   *
+   * A subagent that reaches an action needing the person opens a request in their own approvals
+   * table. Whatever way its run then ends, that request has to be closed: a person shown a card for
+   * a run that is over is asked about something that will never happen, and a run of theirs waits on
+   * an answer nobody will route. These three cases are the ways out the ordinary hand-back does not
+   * cover — the person stopped the turn, the clock stopped it, and nothing was started at all.
+   * ------------------------------------------------------------------------------------------ */
+
+  /** The request a parking run opened, so a case can name the run it is talking about. */
+  type Opened = { runId: string; approvalId: string };
+  let parked: Opened | undefined;
+
+  /**
+   * The request this run parked, and nothing parked before it: read here, so a case cannot answer for
+   * another run's row, and cleared here, so the next case starts with nothing waiting.
+   */
+  const takeParked = (): Opened | undefined => {
+    const opened = parked;
+    parked = undefined;
+    return opened;
+  };
+
+  /** The withdrawal a deployment wires for a subagent's run, for an instance built by a case. */
+  const withdrawParked = async (ownerUserId: string, runId: string) =>
+    approvalStore.policy?.withdrawPending(
+      ownerUserId,
+      SUBAGENT_HANDED_BACK,
+      (action) => action.runId === runId,
+      { resume: false },
+    );
+
+  /** The person's approval requests opened by one run, which is one per action it reached. */
+  const requestsOf = async (runId: string) =>
+    (
+      await database
+        .select()
+        .from(approvalRequests)
+        .where(eq(approvalRequests.ownerUserId, person))
+    ).filter((row) => row.action.runId === runId);
+
+  /** Of those, the ones still asking a person who will not be asked again. */
+  const waitingOf = async (runId: string) =>
+    (await requestsOf(runId)).filter((row) => row.status === "pending");
+
+  /** Whether anything was queued to carry on a run that has ended. */
+  const resumesOf = async (approvalId: string) =>
+    await database
+      .select()
+      .from(workItems)
+      .where(
+        and(
+          eq(workItems.kind, "approval.resume"),
+          eq(workItems.key, approvalId),
+        ),
+      );
+
+  /**
+   * The approval gate as a tool that reaches it calls it: with the run's own id and thread, so the
+   * request belongs to the subagent rather than to the conversation it was started from. Same store,
+   * same policy, same request as the MCP tool in the case above.
+   */
+  async function park(
+    run: { threadId: string; runId: string },
+    text: string,
+  ): Promise<void> {
+    const args = { text };
+    try {
+      await approvalService.gate({
+        actorId: person,
+        botId,
+        toolRef: `${SERVER}/${POST}`,
+        effect: "write",
+        scope: SERVER,
+        args,
+        target: args,
+        subject: { connector: true },
+        continuation: {
+          runId: run.runId,
+          threadId: run.threadId,
+          toolCallId: `call_park_${run.runId.slice(0, 8)}`,
+          toolName: modelName(POST),
+          args,
+          messages: [],
+          state: {},
+          context: [],
+          forwardedProps: {},
+          initiator: PERSON_INITIATOR,
+        },
+      });
+      throw new Error(
+        "The action was allowed, so the subagent opened nothing to be asked about.",
+      );
+    } catch (error) {
+      if (!(error instanceof HeadlessToolSuspension)) throw error;
+      parked = {
+        runId: run.runId,
+        approvalId: String(error.waiting.requestId ?? ""),
+      };
+    }
+  }
+
+  /**
+   * A subagent's run that reaches an action needing the person: it opens that request for real, with
+   * its own run's id, and then holds, because the case is about how the run ends and not about what
+   * the model said.
+   *
+   * `late` is the ordering that made this a bug worth a case: a run waiting on a slow provider
+   * announces that it is waiting only after its own clock has stopped it, so the turn is judged by
+   * the clock and not by the request it stopped for. Here the announcement waits for the clock
+   * itself, which is what makes the case say the same thing on a loaded machine and an idle one.
+   * A run that is not `late` simply never answers, which is what a cancelled turn meets.
+   */
+  class ParkingAgent extends AbstractAgent {
+    /** Called by the turn's own clock, through the stop it makes. */
+    private clockStopped: (() => void) | undefined;
+    constructor(private readonly late: boolean) {
+      super();
+    }
+    run(input: RunAgentInput): Observable<BaseEvent> {
+      const run = { threadId: input.threadId, runId: input.runId };
+      const clock = new Promise<void>((resolve) => {
+        this.clockStopped = () => resolve();
+      });
+      return new Observable<BaseEvent>((subscriber) => {
+        subscriber.next({
+          type: EventType.RUN_STARTED,
+          ...run,
+        } as BaseEvent);
+        const note = this.late
+          ? "The note for the stopped run."
+          : "The note for the cancelled run.";
+        void park(run, note)
+          .then(async () => {
+            if (this.late) await clock;
+            subscriber.next({
+              type: EventType.CUSTOM,
+              name: "openbot.headless.waiting",
+              value: {
+                kind: "approval",
+                requestId: parked?.approvalId,
+                message: "This action is waiting for your approval.",
+              },
+            } as BaseEvent);
+            if (!this.late)
+              /*
+               * Held open on purpose: the person's stop has to find a run that is still running, and be
+               * the only thing that ends it. A run that announced its wait and then finished would be
+               * answered by the hand-back, and the stop would prove nothing.
+               */
+              return;
+            subscriber.next({
+              type: EventType.RUN_FINISHED,
+              ...run,
+            } as BaseEvent);
+            subscriber.complete();
+          })
+          .catch((error: unknown) => subscriber.error(error));
+      });
+    }
+    override abortRun(): void {
+      /*
+       * Not `super.abortRun()`, and nothing is completed from here: a stop is answered by the stop, and
+       * for a `late` run by the clock that stops it. What each run then says about itself is the point
+       * of the case, not something the agent decides.
+       */
+      this.clockStopped?.();
+    }
+  }
+
+  test("a subagent whose turn the person stops leaves no request waiting, and asks nothing to resume", async () => {
+    await approvalStore.setEnabled(person, true);
+    const caller = new AbortController();
+    const stopping = createSubagents({
+      turn: { admission: serverTurnAdmission, intelligence, runner },
+      buildAgentFor: async () => new ParkingAgent(false),
+      withdrawApprovals: withdrawParked,
+    });
+    const tool = stopping.toolForRun({
+      actorId: person,
+      botId,
+      threadId: parentThread,
+      initiator: PERSON_INITIATOR,
+    });
+    // A stop is the person's own word: the tool lets it go on as it came, and closes what it opened.
+    const ran = tool
+      .execute(
+        { task: "Post a note about the change.", answer: "Say when." },
+        { toolCallId: `call_cancelled_${suite}`, signal: caller.signal },
+      )
+      .then(
+        (answered) => {
+          throw new Error(`The stopped run answered instead: ${answered}`);
+        },
+        (error: unknown) =>
+          error instanceof Error ? error.message : String(error),
+      );
+    await waitFor(() => parked !== undefined);
+    // This case's own request, read and cleared so no other run's row can answer for it.
+    const opened = takeParked();
+    if (!opened)
+      throw new Error(
+        "The subagent opened no request, so this case would prove nothing.",
+      );
+    caller.abort();
+    expect(await ran).toContain("The headless turn was cancelled.");
+    // It was asked, and it is not asked any more — once, and not left for the sweep to find.
+    expect(await requestsOf(opened.runId)).toHaveLength(1);
+    expect(await waitingOf(opened.runId)).toEqual([]);
+    expect(await resumesOf(opened.approvalId)).toEqual([]);
+  }, 30_000);
+
+  test("a subagent stopped by its own clock leaves the request it opened answered by nobody", async () => {
+    await approvalStore.setEnabled(person, true);
+    const timed = createSubagents({
+      turn: {
+        admission: serverTurnAdmission,
+        intelligence,
+        runner,
+        turnTimeoutMs: 1_000,
+      },
+      buildAgentFor: async () => new ParkingAgent(true),
+      withdrawApprovals: withdrawParked,
+    });
+    const tool = timed.toolForRun({
+      actorId: person,
+      botId,
+      threadId: parentThread,
+      initiator: PERSON_INITIATOR,
+    });
+    const answered = await tool.execute(
+      { task: "Post a note about the change.", answer: "Say when." },
+      { toolCallId: `call_stopped_${suite}` },
+    );
+    // This case's own request, read and cleared so no other run's row can answer for it.
+    const opened = takeParked();
+    if (!opened)
+      throw new Error(
+        "The subagent opened no request, so this case would prove nothing.",
+      );
+    // The clock, and not the waiting it stopped for: the route that used to leave the card behind.
+    expect(answered).toMatch(/stopped after \d+s/);
+    expect(await requestsOf(opened.runId)).toHaveLength(1);
+    expect(await waitingOf(opened.runId)).toEqual([]);
+    expect(await resumesOf(opened.approvalId)).toEqual([]);
+  }, 30_000);
+
+  test("a subagent refused in a check-in task spends none of the answer's allowance", async () => {
+    const asking = createSubagents({
+      turn: { admission: serverTurnAdmission, intelligence, runner },
+      buildAgentFor: async () => {
+        throw new Error(
+          "A refused subagent never starts, so nothing is asked for its agent.",
+        );
+      },
+      withdrawApprovals: withdrawParked,
+      asksEveryStep: async () => true,
+    });
+    const tool = asking.toolForRun({
+      actorId: person,
+      botId,
+      threadId: parentThread,
+      initiator: PERSON_INITIATOR,
+    });
+    // One call more than an answer is given, as the model emits them: all of them in one step.
+    const refusals = await Promise.all(
+      [1, 2, 3, 4, 5, 6].map((part) =>
+        tool.execute(
+          { task: `Part ${part}.`, answer: "Say when." },
+          { toolCallId: `call_checkin_${part}_${suite}` },
+        ),
+      ),
+    );
+    expect(
+      refusals.filter((refusal) => refusal.includes(REFUSAL_MARKER)),
+    ).toHaveLength(6);
+    // The reason that is true, six times: nothing started there, so none of them was a subagent this
+    // answer used, and the sixth is not told it had already started five.
+    expect(
+      refusals.map((refusal) =>
+        refusal.includes("in a task from a check-in"),
+      ),
+    ).toEqual([true, true, true, true, true, true]);
+    expect(refusals.join(" ")).not.toContain("one answer can start up to");
   }, 30_000);
 });

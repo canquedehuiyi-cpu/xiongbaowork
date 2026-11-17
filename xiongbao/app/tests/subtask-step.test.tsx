@@ -10,6 +10,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { ChatTranscript } from "@/components/channels/chat-transcript";
+import { REFUSAL_MARKER } from "@/lib/plugins/tool-result";
 import { queryClient } from "@/query-client";
 import { settleReactWork } from "./settle-react-work";
 import { answered, handedBack, type RecordedSubtask } from "./subagent.fixture";
@@ -182,6 +183,11 @@ test("an action it handed back is said plainly, and nothing asks for an approval
   expect(notice.getByText(/员工会在这段对话里问你/)).toBeTruthy();
   expect(notice.getByText("List open tickets（accounts）")).toBeTruthy();
   expect(notice.getByText("Acme Robotics")).toBeTruthy();
+  // Why it stopped is on the card too, in the person's words and not the sentence meant for the Bot.
+  expect(
+    notice.getByText(/它停下来的原因：这一步在等你批准。/),
+  ).toBeTruthy();
+  expect(notice.queryByText(/This action is waiting/)).toBeNull();
 });
 
 test("a subtask its turn left behind says it never finished, and one the server refused says so", async () => {
@@ -200,6 +206,8 @@ test("a subtask its turn left behind says it never finished, and one the server 
     { settled: true, busy: false },
   );
   expect(await refused.findByText("已拦下")).toBeTruthy();
+  // Nothing ran to be timed, so the line claims no time for it.
+  expect(refused.queryByText(/耗时/)).toBeNull();
 });
 
 test("subtasks started together share one line that counts them while their turn runs", async () => {
@@ -240,4 +248,191 @@ test("subtasks started together share one line that counts them while their turn
   expect(view.getAllByText("子任务")).toHaveLength(2);
   expect(view.getAllByText("工作中")).toHaveLength(2);
   expect(view.queryByText("未完成")).toBeNull();
+});
+
+/* --------------------------------------------------------------------------------------------
+ * What the row says when the subtask ends.
+ *
+ * The server's account of a run — why it stopped, what it had said, how long it took — is written
+ * for the Bot that asked for the work. On this page it belongs to the person, so it is read here in
+ * the words a person uses, and a result written before any of it was carried says no more about the
+ * run than it used to.
+ * ------------------------------------------------------------------------------------------ */
+
+/**
+ * The same subtask, with its result carrying what the server now writes on it.
+ *
+ * The change is made to the decoded object, because `said` rides inside `handedBack` and `ms` beside
+ * it: a flat merge would put what belongs to the stop next to the stop's own outcome.
+ */
+function withResult(
+  subtask: RecordedSubtask,
+  change: (result: Record<string, unknown>) => Record<string, unknown>,
+): RecordedSubtask {
+  const result = JSON.parse(
+    JSON.parse(subtask.result) as string,
+  ) as Record<string, unknown>;
+  // Stored the way the server sends it: its JSON, encoded once more as the tool message's text.
+  const text = JSON.stringify(JSON.stringify(change(result)));
+  return { ...subtask, result: text };
+}
+
+/** What it had said before it stopped, which is a line of its own on the card. */
+const hadSaid =
+  "The account is on the Team plan. I need your yes before listing its tickets.";
+
+/** A call the server refused before a run started, which is a sentence rather than a result. */
+function refusedFor(say: string): RecordedSubtask {
+  return { ...answered, result: JSON.stringify(`${REFUSAL_MARKER} ${say}`) };
+}
+
+/** The subtask's line in the work line, as it stands without anyone opening it. */
+async function subtaskLine(view: Awaited<ReturnType<typeof draw>>) {
+  return within(
+    (await view.findByText("子任务")).closest("summary") as HTMLElement,
+  );
+}
+
+test("a subtask says how long its run took, and one written before it was timed says nothing about time", async () => {
+  const spent = await draw(
+    withResult(answered, (result) => ({ ...result, ms: 12_345 })),
+    { settled: true, busy: false },
+  );
+  expect(
+    await (await subtaskLine(spent)).findByText("2 个步骤 · 耗时 12.3 秒"),
+  ).toBeTruthy();
+  cleanup();
+
+  // The result as it was written before the server timed a run: the steps, and no claim about time.
+  const untimed = await draw(answered, { settled: true, busy: false });
+  expect((await subtaskLine(untimed)).getByText("2 个步骤")).toBeTruthy();
+  expect(untimed.queryByText(/耗时/)).toBeNull();
+  cleanup();
+
+  // While it works there is nothing to measure yet, whatever the turn is doing around it.
+  const working = await draw(
+    withResult(answered, (result) => ({ ...result, ms: 12_345 })),
+    { settled: false, busy: true },
+  );
+  expect((await subtaskLine(working)).getByText("工作中")).toBeTruthy();
+  expect(working.queryByText(/耗时/)).toBeNull();
+});
+
+test("a handed-back subtask says why it stopped and what it had said before stopping", async () => {
+  const view = await draw(
+    withResult(handedBack, (result) => ({
+      ...result,
+      handedBack: {
+        ...(result.handedBack as Record<string, unknown>),
+        said: hadSaid,
+      },
+    })),
+    { settled: true, busy: false },
+  );
+  const row = await subtaskRow(view);
+  const notice = within(row.getByRole("region", { name: "已交还" }));
+  // The gate's sentence is an instruction to the Bot, so the card gives it as the reason it stopped.
+  expect(notice.getByText(/它停下来的原因：这一步在等你批准。/)).toBeTruthy();
+  expect(notice.queryByText(/This action is waiting/)).toBeNull();
+  // What it had said is its own account, and is given as it wrote it.
+  expect(notice.getByText(/它停下来时说的/)).toBeTruthy();
+  expect(
+    await notice.findByText(/I need your yes before listing its tickets/),
+  ).toBeTruthy();
+  cleanup();
+
+  // `reason` is part of the hand-back's contract — a result without it is not read as a hand-back at
+  // all — so the shape from before this was carried is the reason without an account of its own.
+  const untold = await draw(handedBack, { settled: true, busy: false });
+  const untoldNotice = within(
+    (await subtaskRow(untold)).getByRole("region", { name: "已交还" }),
+  );
+  expect(untoldNotice.getByText(/它停下来的原因/)).toBeTruthy();
+  expect(untoldNotice.queryByText(/它停下来时说的/)).toBeNull();
+  expect(untold.queryByText(/耗时/)).toBeNull();
+});
+
+test("a subtask that did not finish is said in the person's words, whatever the server's reason was", async () => {
+  const stopped = await draw(
+    withResult(
+      answered,
+      (result) => ({
+        ...result,
+        answer: undefined,
+        error:
+          "The subagent did not finish: The routine's turn was stopped after 300s.",
+        ms: 301_000,
+      }),
+    ),
+    { settled: true, busy: false },
+  );
+  const line = await subtaskLine(stopped);
+  expect(line.getByText(/没能完成 · 耗时 5 分 1 秒/)).toBeTruthy();
+  const row = await subtaskRow(stopped);
+  expect(
+    await row.findByText(/它运行了 300 秒后被停下来，没能给出答案。/),
+  ).toBeTruthy();
+  expect(row.queryByText(/did not finish/)).toBeNull();
+  cleanup();
+
+  // A reason nobody has words for yet is still shown, rather than quietly left off the page.
+  const other = await draw(
+    withResult(
+      answered,
+      (result) => ({
+        ...result,
+        answer: undefined,
+        error: "The subagent did not finish: The provider is unavailable.",
+      }),
+    ),
+    { settled: true, busy: false },
+  );
+  expect((await subtaskLine(other)).getByText(/没能完成/)).toBeTruthy();
+  expect(
+    await (
+      await subtaskRow(other)
+    ).findByText(/它没能完成：The provider is unavailable\./),
+  ).toBeTruthy();
+});
+
+test("a call refused before any run started says what it was refused for", async () => {
+  // One more call than an answer is given: the reason the Bot is told is the reason shown.
+  const capped = await draw(
+    refusedFor(
+      "No subagent was started: one answer can start up to 5 subagents, and this one has. Do this part yourself.",
+    ),
+    { settled: true, busy: false },
+  );
+  expect((await subtaskLine(capped)).getByText("已拦下")).toBeTruthy();
+  // Nothing ran, so there is no time to claim for it.
+  expect(capped.queryByText(/耗时/)).toBeNull();
+  const row = await subtaskRow(capped);
+  expect(
+    await row.findByText(/一次运行最多启动 5 个子任务，这一次已经用完了/),
+  ).toBeTruthy();
+  expect(row.queryByText(/one answer can start up to/)).toBeNull();
+  cleanup();
+
+  const checkin = await draw(
+    refusedFor(
+      "No subagent was started: in a task from a check-in, every step is checked with the person in this conversation. Do this part yourself.",
+    ),
+    { settled: true, busy: false },
+  );
+  expect(
+    await (
+      await subtaskRow(checkin)
+    ).findByText(/这个任务里每一步都要在这段对话里问你/),
+  ).toBeTruthy();
+  cleanup();
+
+  const unclear = await draw(
+    refusedFor(
+      "No subagent was started: say what the task is and what answer you want back.",
+    ),
+    { settled: true, busy: false },
+  );
+  expect(
+    await (await subtaskRow(unclear)).findByText(/没有说清任务和要回来的答案/),
+  ).toBeTruthy();
 });
