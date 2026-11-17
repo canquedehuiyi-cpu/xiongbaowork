@@ -1,12 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   type AllowEntry,
   entryProblems,
 } from "../../scripts/brand/guard/allowlist";
 
-const REPO = new URL("../..", import.meta.url).pathname;
+const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const ALLOWLIST: AllowEntry[] = JSON.parse(
   readFileSync(new URL("./brand-leak-allowlist.json", import.meta.url), "utf8"),
 );

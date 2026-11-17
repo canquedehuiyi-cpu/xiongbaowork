@@ -1,5 +1,6 @@
-import { describe, expect, test as bunTest } from "bun:test";
+import { test as bunTest, describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import type { AuditInitiator } from "../src/audit";
@@ -23,8 +24,8 @@ import { createPluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import { withoutGoalCopiesInGoalRun } from "../src/responsibilities/chat-tools";
 import { responsibilityTools } from "../src/responsibilities/tools";
-import { loadTenantPackage } from "../src/tenant-package";
 import { runAsTenant } from "../src/tenant/context";
+import { loadTenantPackage } from "../src/tenant-package";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import {
   type OpenAICompatibleEndpoint,
@@ -126,7 +127,7 @@ async function toolsSentFor(initiator: AuditInitiator, runTools: unknown[]) {
   normalizeModelBaseUrls();
   const packageModel = (
     await loadTenantPackage(
-      new URL("../../examples/personal", import.meta.url).pathname,
+      fileURLToPath(new URL("../../examples/personal", import.meta.url)),
     )
   ).model;
   const model = runtimeModelForEnvironment(packageModel);

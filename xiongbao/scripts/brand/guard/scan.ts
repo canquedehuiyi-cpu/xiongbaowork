@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { CRYPTO_NAMES, isKnownEnvName } from "./env-names";
 
@@ -13,7 +14,7 @@ import { CRYPTO_NAMES, isKnownEnvName } from "./env-names";
  */
 
 // xiongbao/ (this file lives in xiongbao/scripts/brand/guard/).
-export const REPO = new URL("../../..", import.meta.url).pathname;
+export const REPO = fileURLToPath(new URL("../../..", import.meta.url));
 /**
  * The name of that directory under the repository root, newest first, for reading it at a git ref. It
  * was renamed from openbot/ to xiongbao/: a ref from before that (the base of the rename's own pull

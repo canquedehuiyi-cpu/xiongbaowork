@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import {
   chooseOpenAIApi,
   normalizeModelBaseUrls,
@@ -45,7 +46,7 @@ let packageModel: RuntimeModel;
 beforeAll(async () => {
   packageModel = (
     await loadTenantPackage(
-      new URL("../../examples/fintech", import.meta.url).pathname,
+      fileURLToPath(new URL("../../examples/fintech", import.meta.url)),
     )
   ).model;
 });
