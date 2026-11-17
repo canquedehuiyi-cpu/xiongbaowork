@@ -259,20 +259,27 @@ test("subtasks started together share one line that counts them while their turn
  * run than it used to.
  * ------------------------------------------------------------------------------------------ */
 
-/** The same subtask, with its result carrying what the server now writes on it. */
+/**
+ * The same subtask, with its result carrying what the server now writes on it.
+ *
+ * The change is made to the decoded object, because `said` rides inside `handedBack` and `ms` beside
+ * it: a flat merge would put what belongs to the stop next to the stop's own outcome.
+ */
 function withResult(
   subtask: RecordedSubtask,
-  extra: Record<string, unknown>,
+  change: (result: Record<string, unknown>) => Record<string, unknown>,
 ): RecordedSubtask {
   const result = JSON.parse(
     JSON.parse(subtask.result) as string,
   ) as Record<string, unknown>;
   // Stored the way the server sends it: its JSON, encoded once more as the tool message's text.
-  return {
-    ...subtask,
-    result: JSON.stringify(JSON.stringify({ ...result, ...extra })),
-  };
+  const text = JSON.stringify(JSON.stringify(change(result)));
+  return { ...subtask, result: text };
 }
+
+/** What it had said before it stopped, which is a line of its own on the card. */
+const hadSaid =
+  "The account is on the Team plan. I need your yes before listing its tickets.";
 
 /** A call the server refused before a run started, which is a sentence rather than a result. */
 function refusedFor(say: string): RecordedSubtask {
@@ -287,10 +294,10 @@ async function subtaskLine(view: Awaited<ReturnType<typeof draw>>) {
 }
 
 test("a subtask says how long its run took, and one written before it was timed says nothing about time", async () => {
-  const spent = await draw(withResult(answered, { ms: 12_345 }), {
-    settled: true,
-    busy: false,
-  });
+  const spent = await draw(
+    withResult(answered, (result) => ({ ...result, ms: 12_345 })),
+    { settled: true, busy: false },
+  );
   expect(
     await (await subtaskLine(spent)).findByText("2 个步骤 · 耗时 12.3 秒"),
   ).toBeTruthy();
@@ -303,20 +310,23 @@ test("a subtask says how long its run took, and one written before it was timed 
   cleanup();
 
   // While it works there is nothing to measure yet, whatever the turn is doing around it.
-  const working = await draw(withResult(answered, { ms: 12_345 }), {
-    settled: false,
-    busy: true,
-  });
+  const working = await draw(
+    withResult(answered, (result) => ({ ...result, ms: 12_345 })),
+    { settled: false, busy: true },
+  );
   expect((await subtaskLine(working)).getByText("工作中")).toBeTruthy();
   expect(working.queryByText(/耗时/)).toBeNull();
 });
 
 test("a handed-back subtask says why it stopped and what it had said before stopping", async () => {
   const view = await draw(
-    withResult(handedBack, {
-      said:
-        "The account is on the Team plan. I need your yes before listing its tickets.",
-    }),
+    withResult(handedBack, (result) => ({
+      ...result,
+      handedBack: {
+        ...(result.handedBack as Record<string, unknown>),
+        said: hadSaid,
+      },
+    })),
     { settled: true, busy: false },
   );
   const row = await subtaskRow(view);
@@ -343,12 +353,16 @@ test("a handed-back subtask says why it stopped and what it had said before stop
 
 test("a subtask that did not finish is said in the person's words, whatever the server's reason was", async () => {
   const stopped = await draw(
-    withResult(answered, {
-      answer: undefined,
-      error:
-        "The subagent did not finish: The routine's turn was stopped after 300s.",
-      ms: 301_000,
-    }),
+    withResult(
+      answered,
+      (result) => ({
+        ...result,
+        answer: undefined,
+        error:
+          "The subagent did not finish: The routine's turn was stopped after 300s.",
+        ms: 301_000,
+      }),
+    ),
     { settled: true, busy: false },
   );
   const line = await subtaskLine(stopped);
@@ -362,10 +376,14 @@ test("a subtask that did not finish is said in the person's words, whatever the 
 
   // A reason nobody has words for yet is still shown, rather than quietly left off the page.
   const other = await draw(
-    withResult(answered, {
-      answer: undefined,
-      error: "The subagent did not finish: The provider is unavailable.",
-    }),
+    withResult(
+      answered,
+      (result) => ({
+        ...result,
+        answer: undefined,
+        error: "The subagent did not finish: The provider is unavailable.",
+      }),
+    ),
     { settled: true, busy: false },
   );
   expect((await subtaskLine(other)).getByText(/没能完成/)).toBeTruthy();
