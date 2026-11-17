@@ -918,6 +918,16 @@ describe("a Bot gives part of its work to a subagent", () => {
   type Opened = { runId: string; approvalId: string };
   let parked: Opened | undefined;
 
+  /**
+   * The request this run parked, and nothing parked before it: read here, so a case cannot answer for
+   * another run's row, and cleared here, so the next case starts with nothing waiting.
+   */
+  const takeParked = (): Opened | undefined => {
+    const opened = parked;
+    parked = undefined;
+    return opened;
+  };
+
   /** The withdrawal a deployment wires for a subagent's run, for an instance built by a case. */
   const withdrawParked = async (ownerUserId: string, runId: string) =>
     approvalStore.policy?.withdrawPending(
@@ -1009,7 +1019,6 @@ describe("a Bot gives part of its work to a subagent", () => {
    * A run that is not `late` simply never answers, which is what a cancelled turn meets.
    */
   class ParkingAgent extends AbstractAgent {
-    private working: { complete(): void } | undefined;
     /** Called by the turn's own clock, through the stop it makes. */
     private clockStopped: (() => void) | undefined;
     constructor(private readonly late: boolean) {
@@ -1021,7 +1030,6 @@ describe("a Bot gives part of its work to a subagent", () => {
         this.clockStopped = () => resolve();
       });
       return new Observable<BaseEvent>((subscriber) => {
-        this.working = subscriber;
         subscriber.next({
           type: EventType.RUN_STARTED,
           ...run,
@@ -1041,6 +1049,13 @@ describe("a Bot gives part of its work to a subagent", () => {
                 message: "This action is waiting for your approval.",
               },
             } as BaseEvent);
+            if (!this.late)
+              /*
+               * Held open on purpose: the person's stop has to find a run that is still running, and be
+               * the only thing that ends it. A run that announced its wait and then finished would be
+               * answered by the hand-back, and the stop would prove nothing.
+               */
+              return;
             subscriber.next({
               type: EventType.RUN_FINISHED,
               ...run,
@@ -1052,19 +1067,16 @@ describe("a Bot gives part of its work to a subagent", () => {
     }
     override abortRun(): void {
       /*
-       * Not `super.abortRun()`: what the case needs is the run ending in this order, and an agent
-       * that fails its own stream on a stop would turn the stop into a failure and answer for
-       * neither route.
+       * Not `super.abortRun()`, and nothing is completed from here: a stop is answered by the stop, and
+       * for a `late` run by the clock that stops it. What each run then says about itself is the point
+       * of the case, not something the agent decides.
        */
       this.clockStopped?.();
-      if (!this.late) this.working?.complete();
     }
   }
 
   test("a subagent whose turn the person stops leaves no request waiting, and asks nothing to resume", async () => {
     await approvalStore.setEnabled(person, true);
-    // This case's own request: what another run opened here belongs to no assertion below.
-    parked = undefined;
     const caller = new AbortController();
     const stopping = createSubagents({
       turn: { admission: serverTurnAdmission, intelligence, runner },
@@ -1091,8 +1103,8 @@ describe("a Bot gives part of its work to a subagent", () => {
           error instanceof Error ? error.message : String(error),
       );
     await waitFor(() => parked !== undefined);
-    // Read as this case's own: another run's request in this suite belongs to no assertion below.
-    const opened: Opened | undefined = parked;
+    // This case's own request, read and cleared so no other run's row can answer for it.
+    const opened = takeParked();
     if (!opened)
       throw new Error(
         "The subagent opened no request, so this case would prove nothing.",
@@ -1107,8 +1119,6 @@ describe("a Bot gives part of its work to a subagent", () => {
 
   test("a subagent stopped by its own clock leaves the request it opened answered by nobody", async () => {
     await approvalStore.setEnabled(person, true);
-    // This case's own request, and not the one the case above opened.
-    parked = undefined;
     const timed = createSubagents({
       turn: {
         admission: serverTurnAdmission,
@@ -1129,14 +1139,14 @@ describe("a Bot gives part of its work to a subagent", () => {
       { task: "Post a note about the change.", answer: "Say when." },
       { toolCallId: `call_stopped_${suite}` },
     );
-    // The clock, and not the waiting it stopped for: the route that used to leave the card behind.
-    expect(answered).toMatch(/stopped after \d+s/);
-    // Read as this case's own: another run's request in this suite belongs to no assertion below.
-    const opened: Opened | undefined = parked;
+    // This case's own request, read and cleared so no other run's row can answer for it.
+    const opened = takeParked();
     if (!opened)
       throw new Error(
         "The subagent opened no request, so this case would prove nothing.",
       );
+    // The clock, and not the waiting it stopped for: the route that used to leave the card behind.
+    expect(answered).toMatch(/stopped after \d+s/);
     expect(await requestsOf(opened.runId)).toHaveLength(1);
     expect(await waitingOf(opened.runId)).toEqual([]);
     expect(await resumesOf(opened.approvalId)).toEqual([]);
