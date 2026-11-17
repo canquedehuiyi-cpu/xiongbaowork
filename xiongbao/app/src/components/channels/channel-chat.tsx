@@ -44,6 +44,7 @@ import {
   takeFirstMessage,
   transcriptMessages,
 } from "@/components/channels/transcript-messages";
+import { turnArtifactNotes } from "@/components/channels/turn-artifacts";
 import { VoiceCallWidget } from "@/components/channels/voice-call-widget";
 import { HandoffResumeNotice } from "@/components/computer/handoff-resume-notice";
 import { ProjectPicker } from "@/components/projects/project-picker";
@@ -1560,6 +1561,11 @@ export function ChannelChat({
                   : {}),
               }),
               ...deliveryNotes(deliveryEvents, botName),
+              // 本轮存下的文件收在对话末尾成一页清单，不跟着某一条消息走。
+              ...turnArtifactNotes({
+                botId: runtimeAgentId,
+                messages: agent.messages,
+              }),
             ]}
             // The clock beside `+`: a routine for the Bot this conversation talks to, posting here.
             // Only once the profile is read: until then nobody knows it is not an external employee.
