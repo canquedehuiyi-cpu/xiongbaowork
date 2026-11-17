@@ -7,6 +7,7 @@ import {
   EndpointNotAllowedError,
 } from "../src/agents/endpoint";
 import { parseAgentInput } from "../src/agents/routes";
+import type { CredentialStoreValue } from "../src/credentials";
 import { fetchDouble } from "./support/fetch-double";
 import { filledLater } from "./support/filled-later";
 
@@ -281,7 +282,9 @@ describe("the key a customer's agent sits behind", () => {
     const stored = filledLater<{ kind: string; keyId: string } | null>();
     const auth = await storeAgentAuth({
       store: {
-        create: async (value) => {
+        // `as never` below erases the contextual type, so the parameter is named here rather than
+        // left implicit — otherwise the fixture reads as `any` and the fields it spells go unchecked.
+        create: async (value: CredentialStoreValue) => {
           stored.set({ kind: value.kind, keyId: value.keyId });
           return vaultRow;
         },
@@ -310,7 +313,7 @@ describe("the key a customer's agent sits behind", () => {
     let written = "";
     const auth = await storeAgentAuth({
       store: {
-        create: async (value) => {
+        create: async (value: CredentialStoreValue) => {
           if (!value.seal)
             throw new Error("expected a bound seal, not a v1 envelope");
           written = await value.seal(binding);

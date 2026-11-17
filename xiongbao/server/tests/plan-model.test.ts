@@ -159,7 +159,12 @@ test("frontend continuation keeps its SDK thread; Stop cancels only that Bot's q
     expect(requests[0]?.threadId).toBe(requests[1]?.threadId);
     expect(requests[2]?.threadId).not.toBe(requests[0]?.threadId);
     nextSignal.abort();
-    expect(await cancelled.promise).toBe(requests[1]?.threadId);
+    // Narrowed first: `requests[1]?.threadId` is `string | undefined`, and `toBe` on a possibly
+    // missing request would compare against `undefined` rather than say the request never happened.
+    const cancelledThread = requests[1]?.threadId;
+    if (!cancelledThread)
+      throw new Error("the cancelled run never reached the model");
+    expect(await cancelled.promise).toBe(cancelledThread);
   } finally {
     // Let the in-flight cancellation response finish before closing its socket.
     server.stop();
@@ -279,7 +284,10 @@ test("the original built-in executes its granted tool and sends the actual match
           name: "knowledge_search",
           description: "Search granted knowledge",
           parameters: z.object({ query: z.string() }),
-          ref: { kind: "mcp", serverId: "knowledge", toolName: "search" },
+          // `GrantedTool.ref` is the `<serverId>/<toolName>` string a grant is written in, which is
+          // why a model tool name may not contain a slash. This fixture spelled it as an object, so
+          // it was describing a field the toolkit does not have.
+          ref: "knowledge/search",
           execute: async (args) => {
             executions.push(id);
             return JSON.stringify({

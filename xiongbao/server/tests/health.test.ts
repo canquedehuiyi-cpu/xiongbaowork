@@ -269,6 +269,11 @@ describe("authentication availability", () => {
       }),
       {
         handler: () => new Response("mounted", { status: 204 }),
+        // `AuthService` has two halves; the callback route reaches only the handler, and nobody is
+        // signed in here. Left out, this was a fixture the type called half an auth service.
+        api: {
+          getSession: async () => null,
+        },
       },
     );
 

@@ -431,6 +431,24 @@ function isCompactionNote(value: unknown): value is GroupCompactionNote {
   return outcome === "done" || outcome === "failed";
 }
 
+/**
+ * 团队机器人弹的授权卡片，`details.consent` 里记的就是这两个 id（见 `postConsents`）。
+ *
+ * `details` 是 JSON 列，读回来能证明的只有「是个对象」，于是 `list()` 一直把 `consent` 说成 `object`——
+ * 调用方明知道里面有 `serverId` 也取不到。这里把写入方写的东西命名出来，读的时候仍按结构判一次，两个字段
+ * 缺失或不是字符串就不认（旧行、别处写进来的东西都不算卡片）。
+ */
+type GroupConsentCard = { botId?: string; serverId?: string };
+
+function isConsentCard(value: unknown): value is GroupConsentCard {
+  if (!value || typeof value !== "object") return false;
+  const { botId, serverId } = value as { botId?: unknown; serverId?: unknown };
+  return (
+    (botId === undefined || typeof botId === "string") &&
+    (serverId === undefined || typeof serverId === "string")
+  );
+}
+
 function compactionNoteOf(name: string): GroupCompactionNote | null {
   if (name === COMPACTION_DONE_EVENT) return { outcome: "done" };
   if (name === COMPACTION_FAILED_EVENT) return { outcome: "failed" };
@@ -2733,7 +2751,7 @@ export function createGroupConversations(deps: {
           ...(typeof details.answeredBy === "string"
             ? { answeredBy: details.answeredBy }
             : {}),
-          ...(details.consent && typeof details.consent === "object"
+          ...(isConsentCard(details.consent)
             ? { consent: details.consent }
             : {}),
           ...withMarks(marksOf(details)),

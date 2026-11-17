@@ -558,6 +558,10 @@ describe("building the sandbox provider", () => {
         namespace: "openbot",
         idleAfterMs: 60_000,
         templateFile: "/nowhere/sandbox-template.json",
+        // `allowPrivateHosts` is not optional in a sandbox config, and its absence here was the
+        // fixture describing a deployment that cannot exist. False is the shape this case is about:
+        // nothing reaches the cluster either way, because the service host is unset.
+        allowPrivateHosts: false,
       });
 
       const first = await provider

@@ -307,7 +307,15 @@ describe("an unattended routine turn answering with a governed chart", () => {
           event.type === EventType.TOOL_CALL_ARGS &&
           (event as { toolCallId?: string }).toolCallId === "chart-call",
       )
-      .map((event) => (event as { delta: string }).delta)
+      // `delta` is on the args event but not on `BaseEvent`, and `filter` narrows neither. Read it
+      // as the unknown it is and insist on the string the event carries, rather than asserting a
+      // shape the type system has no reason to believe.
+      .map((event) => {
+        const delta = (event as { delta?: unknown }).delta;
+        if (typeof delta !== "string")
+          throw new Error("a tool-call args event carries no delta");
+        return delta;
+      })
       .join("");
     expect(JSON.parse(args)).toEqual(chartArgs);
     const result = resultFor(turn.persisted, "chart-call");

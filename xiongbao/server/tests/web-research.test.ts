@@ -140,10 +140,13 @@ describe("the header a deployment token is sent in", () => {
   });
   afterAll(() => server.stop(true));
 
+  // The return type is spelled out because `seen = undefined` a line below narrows the variable for
+  // the rest of the body, so an inferred return would be `undefined` and every assertion on the
+  // headers it captured would be reading `never`.
   const listed = async (connection: {
     token: string;
     tokenHeader?: string;
-  }) => {
+  }): Promise<Headers | undefined> => {
     seen = undefined;
     await listTools({
       url: `http://127.0.0.1:${server.port}/mcp`,
