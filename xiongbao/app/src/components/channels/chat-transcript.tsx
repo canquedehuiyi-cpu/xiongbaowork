@@ -78,9 +78,11 @@ import {
 } from "@/components/ui/message-scroller";
 import { Skeleton } from "@/components/ui/skeleton";
 import { agentListQueryOptions } from "@/lib/agents/queries";
+import { acpStepDetail } from "@/lib/channels/acp-args";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import { readResponsibilityTurn } from "@/lib/channels/responsibility-turn";
 import { readFiring } from "@/lib/channels/routine-firing";
+import { type RunStage, stageWords } from "@/lib/channels/run-stage";
 import type { CardPlace } from "@/lib/copilot/carry-on";
 import { foreignCodingCall } from "@/lib/copilot/coding-calls";
 import { ToolPlaceContext } from "@/lib/copilot/tool-place";
@@ -326,6 +328,12 @@ type ChatTranscriptProps = {
    * Task 9). Other skins keep 「思考中」 whether or not it is given.
    */
   typist?: Typist;
+  /**
+   * 正在跑的这一轮走到哪一段（段由这一轮自己的事件推出来，见
+   * `lib/channels/run-stage.ts`）。只有对话页给，因为只有它听着那条流；别处画转录的不给，一切照旧——
+   * 工具行不多说一行，「思考中」那一格也不变，不会因为这里推不出段而空出一格。
+   */
+  stage?: RunStage | null;
 };
 
 /** The employee whose reply is on its way: the name it is known by, and the id its face is drawn from. */
@@ -430,10 +438,17 @@ function RestoringTranscript() {
  *
  * It borrows the shimmer a running tool line uses, so "working on it" reads the same whether the
  * work is a tool call or a model that has not spoken yet.
+ *
+ * `stage` is what this turn's own events say it is doing right now (derived in
+ * `lib/channels/run-stage.ts`, and the tool stage is said by the tool row, not here). Given, it says
+ * that instead of these words; absent — an archive whose turn ended before those events were kept, a
+ * channel whose stream does not carry them — the line is exactly the one this app has always shown.
+ * That is the fallback, and it is why the words are a parameter rather than a second component:
+ * nothing may be blank where 思考中 used to be.
  */
-function Thinking({ typist }: { typist?: Typist }) {
+function Thinking({ stage, typist }: { stage?: string; typist?: Typist }) {
   const workbench = useSkinId() === "xiongbao";
-  if (workbench && typist) return <Typing typist={typist} />;
+  if (workbench && typist) return <Typing stage={stage} typist={typist} />;
   return (
     <p
       className="tool-line-running text-muted-foreground text-sm"
@@ -441,7 +456,7 @@ function Thinking({ typist }: { typist?: Typist }) {
       // is doing. The text says it, so a screen reader is told the same thing the shimmer implies.
       role="status"
     >
-      思考中
+      {stage ?? "思考中"}
     </p>
   );
 }
@@ -451,8 +466,11 @@ function Thinking({ typist }: { typist?: Typist }) {
  * three dots blinking in turn, as the mock draws it. The same slot, the same moment and the same
  * `status` role; only the words and the look are the workbench's. Colours come from the `--wb-*`
  * tokens, which only the default skin defines.
+ *
+ * `stage` changes only the words after the name, and only while the run's stream says a stage this
+ * slot has not said before (见上)。没有它，这一行和 Task 9 交付时一个字都不差。
  */
-function Typing({ typist }: { typist: Typist }) {
+function Typing({ stage, typist }: { stage?: string; typist: Typist }) {
   // A `<div>`, not a `<p>`: the avatar inside is a `<div>`, which a paragraph may not hold.
   return (
     <div
@@ -463,7 +481,7 @@ function Typing({ typist }: { typist: Typist }) {
       <span aria-hidden="true" className="shrink-0">
         <ChannelAvatar participantIds={[typist.agentId]} size={20} />
       </span>
-      <span>{`${typist.name} 正在输入`}</span>
+      <span>{`${typist.name} ${stage ?? "正在输入"}`}</span>
       <span aria-hidden="true" className="flex items-center gap-[3px]">
         {TYPING_DOTS.map((delay) => (
           <i
@@ -1845,6 +1863,8 @@ type ToolRowProps = {
   latest: boolean;
   /** The Bot said something after this row in its turn. See `ToolPlace`. */
   spokeAfter: boolean;
+  /** 这一轮走到哪一段，只有正在跑的那一行会说；见 `ChatTranscriptProps.stage`。 */
+  stage?: RunStage | null;
 };
 
 /**
@@ -1861,6 +1881,8 @@ export function sameToolRow(a: ToolRowProps, b: ToolRowProps): boolean {
     a.inFlight === b.inFlight &&
     a.latest === b.latest &&
     a.spokeAfter === b.spokeAfter &&
+    // 阶段换了，正在跑的那一行要多说的那一行字也就换了：不参与比较就永远停在第一次说的那句。
+    a.stage === b.stage &&
     a.steps.length === b.steps.length &&
     a.steps.every((step, index) => {
       const other = b.steps[index];
@@ -1882,6 +1904,7 @@ const ToolRow = memo(function ToolRow({
   inFlight,
   latest,
   spokeAfter,
+  stage,
 }: ToolRowProps) {
   const [only] = steps;
   return (
@@ -1903,7 +1926,11 @@ const ToolRow = memo(function ToolRow({
             />
           </ArgumentsArrivingContext.Provider>
         ) : (
-          <ToolActivity active={active} group={{ kind: "tools", id, steps }} />
+          <ToolActivity
+            active={active}
+            group={{ kind: "tools", id, steps }}
+            stage={stage}
+          />
         )}
       </Arriving>
     </TurnInFlightContext.Provider>
@@ -1949,8 +1976,8 @@ export function ServerToolLine({
     ownToolSubject(name, args) ??
     // 文件夹里的命令：上面两处只认文件，命令本身也要写出来（「wc -c notes.txt · 你拒绝了这一步。」）。
     (name.startsWith("host_") ? hostStepSubject(args) : undefined) ??
-    // 外部员工的一步：它自己给这一步起的标题（「git push origin fix/login」）。
-    (name.startsWith("acp/") ? acpStepSubject(args) : undefined);
+    // 外部员工的一步：它自己给这一步起的标题、它报的文件、参数没往下发的事（「git push origin fix/login」）。
+    (name.startsWith("acp/") ? acpStepDetail(args) : undefined);
   /*
    * A refusal is not a result, and must not read like one.
    *
@@ -2062,18 +2089,6 @@ export function ServerToolLine({
 }
 
 /** 文件夹步骤针对的文件或命令，从调用参数里读；读不到就不写。授权 id 永远不上屏。 */
-/** 外部员工那一步的标题（服务器放在参数的 `title` 里），太长的截短。 */
-function acpStepSubject(args: string | undefined): string | undefined {
-  try {
-    const title = (JSON.parse(args ?? "") as { title?: unknown }).title;
-    if (typeof title !== "string" || !title.trim()) return undefined;
-    const text = title.trim();
-    return text.length > 80 ? `${text.slice(0, 79)}…` : text;
-  } catch {
-    return undefined;
-  }
-}
-
 function hostStepSubject(args: string | undefined): string | undefined {
   if (!args) return undefined;
   try {
@@ -2320,6 +2335,7 @@ export function ChatTranscript({
   stopped,
   working,
   typist,
+  stage,
 }: ChatTranscriptProps) {
   const isDrawn = useDrawnTool();
   /**
@@ -2391,6 +2407,13 @@ export function ChatTranscript({
        * the Thinking indicator.
        */
       lastItem?.kind === "attachments");
+
+  /*
+   * 阶段带（WP-2.3）。「正在执行工具」是正在跑的那一行自己的事（`ToolActivity` 说它），这一格只说得出整轮
+   * 的一句：回答开始写了，这里就从「在等模型」改成说它在往回写。推不出段时这里没有话可说，那一格
+   * 还是它一直说的那句，不会空着。
+   */
+  const stageLine = busy && stage !== "tool" ? stageWords(stage) : undefined;
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const newestUserMessageId =
@@ -2729,6 +2752,7 @@ export function ChatTranscript({
           inFlight={busy && index >= turnStart}
           latest={index >= latestIndex}
           spokeAfter={lastBotWords > index}
+          stage={stage}
           steps={item.kind === "tools" ? item.steps : [item]}
         />
         {after(item.id)}
@@ -2891,8 +2915,8 @@ export function ChatTranscript({
                   <div className="contents [&>*]:order-1">
                     {stopped ? (
                       <Stopped reason={stopped} />
-                    ) : waitingOnTheModel ? (
-                      <Thinking typist={typist} />
+                    ) : waitingOnTheModel || stageLine ? (
+                      <Thinking stage={stageLine} typist={typist} />
                     ) : null}
                     {working}
                     {/* 只在说了可能有外部员工的对话里（`acpApprovals`，对话页总是给）：别处画转录的不读审批收件箱。 */}

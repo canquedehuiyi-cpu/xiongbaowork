@@ -34,6 +34,9 @@ import {
 } from "react";
 import { Streamdown } from "streamdown";
 import { PendingApprovals } from "@/components/approvals/inline-approval";
+import { acpStepDetail } from "@/lib/channels/acp-args";
+import { type RunStage, stageWords } from "@/lib/channels/run-stage";
+import { readOutcome } from "@/lib/computers/activity";
 import { codingLook, foreignCodingCall } from "@/lib/copilot/coding-calls";
 import {
   type FolderNames,
@@ -67,7 +70,7 @@ import type { VisibleChatItem } from "./chat-messages";
 import { codingOutcome, lookStep } from "./coding-tool-cards";
 import { ResearchResults } from "./research-results";
 import { SubtaskStep } from "./subtask-step";
-import { ToolLine } from "./tool-line";
+import { elapsedWords, failureWords, ToolLine } from "./tool-line";
 
 type ToolItem = Extract<VisibleChatItem, { kind: "tool" }>;
 
@@ -311,6 +314,22 @@ export type StepDetails = {
    * session id) and its output was the provider's JSON.
    */
   sources?: ResearchSource[];
+  /**
+   * 这一步跑了多久，毫秒。结果自己带了才填，行上才写；没带就没有这个字段，也就一个字不多。
+   * 见 `ToolLine` 的 `elapsed` 和 `elapsedWords`。
+   */
+  elapsedMs?: number;
+  /**
+   * 失败那一步的退出码，结果自己带了才有。命令类工具给的是进程的退出状态，别的工具没有这个
+   * 字段，也就不会凭空出现「退出码 0」。
+   */
+  exitCode?: number;
+  /**
+   * 失败那一步的原因，来自结果里 `error` 那一句（没有它时是 stderr 的第一行），不是这里编的。
+   * 没有退出码可报时行上用它，说得长时截到行放得下的宽度（`failureWords`）；两个都没有，行上就只有
+   * 原来那句「没成功」。
+   */
+  failure?: string;
   /** A subtask's own facts, which its row reads to find and draw the steps it took. */
   subtask?: {
     toolCallId: string;
@@ -342,6 +361,46 @@ function firstString(...values: unknown[]): string | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * 结果里带了耗时才写这一件，带了失败的原因才写那一件：两个都不是这里编出来的。命令没写 `error`
+ * 时它的原因就是 stderr 的第一行（`error` 优先，因为那是工具自己总结的一句）。
+ */
+function failureLine(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const line = value.split("\n").find((entry) => entry.trim());
+  return line?.trim();
+}
+
+/**
+ * 结果里那两个事实：这一步跑了多久，失败那一步的退出码或原因。
+ *
+ * 命令、浏览器动作和读文件都以一个 JSON 对象回答，`elapsedMs` 是 shell 那边量的
+ * （`agent-computer/src/shell.ts`），`exitCode` 是进程给的；一个用文字回答的工具两个都没有。读法走
+ * Activity 面板那一份 `readOutcome`——两处读同一个结果，就不要各写一套解析，以前正是各写一套让同一
+ * 步在行上和面板上说了两样。这里只搬结果自己写了的字段：读不出对象的、值不是有限非负数的、退出码
+ * 不是整数的，一律什么都不返回。行上宁可少说一件事，也不要造一个 `0.0s` 或 `退出码 0`。
+ */
+function resultFacts(result: string | undefined): {
+  elapsedMs?: number;
+  exitCode?: number;
+  failure?: string;
+} {
+  const outcome = (readOutcome(result) ?? {}) as Record<string, unknown>;
+  const { elapsedMs, exitCode, error, stderr } = outcome;
+  const facts: { elapsedMs?: number; exitCode?: number; failure?: string } = {};
+  if (
+    typeof elapsedMs === "number" &&
+    Number.isFinite(elapsedMs) &&
+    elapsedMs >= 0
+  )
+    facts.elapsedMs = elapsedMs;
+  if (typeof exitCode === "number" && Number.isInteger(exitCode))
+    facts.exitCode = exitCode;
+  const reason = failureLine(error) ?? failureLine(stderr);
+  if (reason) facts.failure = reason;
+  return facts;
 }
 
 function urlsOf(args: Record<string, unknown>): string[] {
@@ -395,9 +454,12 @@ export function stepDetailsIn(
 function detailsOf(step: ToolItem, folders: FolderNames): StepDetails {
   const args = objectOf(step.toolCall.function.arguments);
   const inputs = readableInputs(step.toolCall.function.name, args);
+  // 耗时和退出码都在结果里，谁回答谁带；没有带的分支下面也就一个字段都不多。
+  const facts = resultFacts(step.result);
   if (isBrowserStep(step)) {
     const browser = browserStepDetails(step);
     return {
+      ...facts,
       id: step.id,
       kind: "browser",
       label: browser.label ?? "用了浏览器",
@@ -421,6 +483,7 @@ function detailsOf(step: ToolItem, folders: FolderNames): StepDetails {
     const { label, detail } = lookStep(name, args, look, outcome);
     const output = outcome.text.replace(/\s+$/, "");
     return {
+      ...facts,
       id: step.id,
       kind: look,
       label,
@@ -444,6 +507,7 @@ function detailsOf(step: ToolItem, folders: FolderNames): StepDetails {
   // A tool the Bot was never offered: the runtime's answer lists every tool it has, for the model.
   const unoffered = unofferedTool(step.result);
   const outcome = {
+    ...facts,
     id: step.id,
     pending: step.result === undefined,
     failed: !refused && (unoffered || toolResultFailed(step.result)),
@@ -461,6 +525,13 @@ function detailsOf(step: ToolItem, folders: FolderNames): StepDetails {
   };
   // A folder step names its file and folder ("todo.txt in share"), never a grant id.
   const folderSubject = folderStepSubject(name, args, folders);
+  /*
+   * 外部员工报的一步：它自己给这一步起的标题、它说要动哪些文件、参数有没有长到没往下发——同一句话在
+   * 对话里单独成行的那一支也是这么说的（`chat-transcript` 走同一个 `acpStepDetail`），两处不会说岔。
+   */
+  const subject = name.startsWith("acp/")
+    ? (folderSubject ?? acpStepDetail(args))
+    : folderSubject;
   // Not a connector: one of this deployment's own tools, or one an external agent runs itself.
   // Named in words, never as an identifier.
   if (!name.startsWith("mcp__"))
@@ -471,7 +542,7 @@ function detailsOf(step: ToolItem, folders: FolderNames): StepDetails {
       label:
         (refused ? ownToolAttempt(name) : null) ??
         readToolName(name, outcome.pending).label,
-      ...(folderSubject ? { detail: folderSubject } : {}),
+      ...(subject ? { detail: subject } : {}),
       pages: 0,
     };
 
@@ -805,6 +876,15 @@ export function StepRow({
    * row: a person watching four "Fetch emails" lines and a fifth with no result took the Bot for dead.
    */
   const running = active && step.pending;
+  /*
+   * 结果里带了耗时才写这一件，带了失败的原因才写那一件：两个都不是这里编出来的，也没有值时行上
+   * 和以前一个字都不差。浏览器这一步的失败原因说在行下面那句话里（见 `reason`），行上不再说第二遍。
+   */
+  const spent = elapsedWords(step.elapsedMs);
+  const why =
+    step.kind === "browser"
+      ? ""
+      : failureWords(step.failed, step.exitCode, step.failure);
   const line = (
     <span className="flex min-w-0 items-center gap-2">
       <StepIcon kind={step.kind} />
@@ -823,7 +903,17 @@ export function StepRow({
       ) : step.detail ? (
         <span className="truncate text-muted-foreground">{step.detail}</span>
       ) : null}
+      {spent ? (
+        <span className="shrink-0 tabular-nums text-muted-foreground">
+          {spent}
+        </span>
+      ) : null}
       <StepStatus step={step} active={active} />
+      {why ? (
+        <span className="min-w-0 shrink truncate text-muted-foreground">
+          {why}
+        </span>
+      ) : null}
     </span>
   );
   const reason =
@@ -942,10 +1032,20 @@ export function StepOutput({
 export function ToolActivity({
   group,
   active,
+  stage,
 }: {
   group: ToolGroup;
   /** This is the newest row of a turn still in flight, so a step without a result is running. */
   active: boolean;
+  /**
+   * 这一轮走到哪一段（段由这一轮自己的事件推出来，见 `lib/channels/run-stage.ts`）。
+   *
+   * 只有正在跑的这一行、只有「执行工具」这一段说在这儿：那是一段活儿真的在做、折起来的那行只说得出一个
+   * 名字的时候。等模型那一段对话底下那一格一直有话说（「思考中」/「<员工名> 正在输入」），开始写回答则
+   * 是眼睛正在看着的事，两处都再说一遍是吵。推不出段（这一轮之前的存档、没有这条流的通道）时这里
+   * 少一行，那一格照旧，不会出现空着的一格。
+   */
+  stage?: RunStage | null;
 }) {
   const folders = useContext(FolderNamesContext);
   const steps = group.steps.map(stepDetailsIn(folders));
@@ -956,9 +1056,20 @@ export function ToolActivity({
   ).length;
   const issues = steps.filter((step) => step.failed || step.refused).length;
   const kinds = [...new Set(steps.map((step) => step.kind))];
+  const stageLine = active && stage === "tool" ? stageWords(stage) : undefined;
   // The folded line draws its own steps, so a waiting approval gets its card beside it, not inside.
   return (
     <>
+      {stageLine ? (
+        <p
+          className="tool-line-running text-muted-foreground text-xs"
+          data-run-stage="tool"
+          // 是进度，不是打断：读屏的人跟着听见这一行，和「思考中」那一格一样。
+          role="status"
+        >
+          {stageLine}
+        </p>
+      ) : null}
       <ToolLine
         bare
         icon={<IconStack kinds={kinds} />}

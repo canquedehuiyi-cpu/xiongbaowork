@@ -19,9 +19,54 @@ import { cn } from "@/lib/utils";
  * an icon AND a word, never in colour alone): a spinner (and 「进行中」 for a screen reader) while it
  * runs — the text still shimmers, which is the signal that the Bot is working on something with nothing to show yet — a
  * check once it has finished, a stop sign for a refusal, a warning for a failure.
+ *
+ * Two facts the result carries sit on the line beside it, when the result carried them: how long the
+ * step took, and why a failed one failed (its exit code, or the one sentence it came back with). Both
+ * are words, both give way to the label before the label wraps, and neither is invented for a step
+ * that reports nothing.
  */
 /** A label this short stays on one line: "Asked you", "Searched the web", "Fetch". */
 const SHORT_LABEL = 32;
+
+/** 失败的原因抄到行上时给它的宽度：字符数，省略号算在内。 */
+const FAILURE_LIMIT = 40;
+
+/**
+ * 失败那一步在行上怎么说：有退出码就报退出码，因为它是有数字的事实；没有数字才用结果给的那句话，
+ * 报的是结果里写的那一句，不是这里编的。两个都没有就什么都没说，行上只剩原来那句「…，没有成功」。
+ *
+ * 那一句话说得长时截到 `FAILURE_LIMIT`：整段 stderr 铺在行上会把这一行挤没，要读全文的人本来就点得开
+ * 这一步。截的是抄给行上的那一份，结果本身没动。
+ *
+ * 成功、进行中、被拦下的步骤不走这里：还没结束的调用没有退出码，说一个就是编。
+ */
+export function failureWords(
+  failed: boolean,
+  exitCode: number | undefined,
+  failure: string | undefined,
+): string {
+  if (!failed) return "";
+  if (exitCode !== undefined) return `退出码 ${exitCode}`;
+  const reason = failure?.trim();
+  if (!reason) return "";
+  return reason.length > FAILURE_LIMIT
+    ? `${reason.slice(0, FAILURE_LIMIT - 1)}…`
+    : reason;
+}
+
+/**
+ * How long a step took, said the way a person reads a duration on a line: seconds with one decimal.
+ *
+ * Only what the measurement says, never a rounded-up minute: a step timed in milliseconds has no
+ * minutes in it unless it really ran a minute or more, and past that the decimal is noise. Nothing is
+ * said for a value that never arrived, a negative one or a non-finite one — `0.0s` is drawn only for
+ * a measurement of zero, which is a step the clock could not separate from its own start.
+ */
+export function elapsedWords(ms: number | undefined): string {
+  if (ms === undefined || !Number.isFinite(ms) || ms < 0) return "";
+  if (ms >= 60_000) return `${Math.round(ms / 1000)}s`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
 
 export function ToolLine({
   icon,
@@ -29,6 +74,9 @@ export function ToolLine({
   attempted,
   detail,
   link,
+  elapsed,
+  exitCode,
+  failure,
   running,
   refused,
   declined,
@@ -58,6 +106,21 @@ export function ToolLine({
    * back is an attachment, never a page rendered on this origin.
    */
   link?: string;
+  /**
+   * 这一步跑了多久，毫秒。结果里带了才写（`elapsedWords`），没带就一个字也不写——写一个没量出来的
+   * `0.0s` 比不写更糟：读的人以为这是个真的读数。
+   */
+  elapsed?: number;
+  /**
+   * 失败那一步的退出码。有数字就报数字，形状和命令卡片上的同一处一样（`退出码 N`）。
+   * 只在 `failed` 时上屏：还没结束的调用没有退出码，说一个就是编。
+   */
+  exitCode?: number;
+  /**
+   * 失败那一步的原因，来自结果本身（设备或服务器给的一句话）。没有退出码可报时才用它；
+   * 两个都没有，行上就只有原来那句「…，没有成功」。说得长时由 `failureWords` 截到行放得下的宽度。
+   */
+  failure?: string;
   running?: boolean;
   /** A policy or a boundary said no. Final: nothing the Bot does differently will help. */
   refused?: boolean;
@@ -137,6 +200,14 @@ export function ToolLine({
     )
   ) : null;
 
+  /*
+   * 耗时和失败的原因都接在「对什么做的」后面：这一行多的两个事实，不是第三句话。两个都没有，这一行
+   * 和以前一个字都不差。退出码优先，因为它是有数字的事实；原因只在没有数字时报，报的是结果给的那句，
+   * 不是这里编的。
+   */
+  const spent = elapsedWords(elapsed);
+  const why = failureWords(failed ?? false, exitCode, failure);
+
   const text = (
     <span
       className={`inline-flex min-w-0 max-w-full items-baseline gap-1.5 text-sm ${tone} ${
@@ -168,6 +239,12 @@ export function ToolLine({
                 : label}
       </span>
       {detailNode}
+      {spent ? (
+        <span className="shrink-0 tabular-nums opacity-70">{spent}</span>
+      ) : null}
+      {why ? (
+        <span className="min-w-0 shrink-[100] truncate opacity-70">{why}</span>
+      ) : null}
       {running ? <span className="sr-only">进行中</span> : null}
     </span>
   );

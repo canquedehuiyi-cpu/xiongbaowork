@@ -10,9 +10,11 @@ import { type BaseEvent, EventType } from "@ag-ui/client";
  * - `agent_message_chunk` (text) → one assistant text message per run of chunks: START, a CONTENT
  *   per chunk, END once something else comes or the turn closes.
  * - `tool_call` / `tool_call_update` → a tool call named `acp/<kind>` (`read`, `edit`, `execute`, …;
- *   anything unknown is `acp/other`): START, ARGS (its title, kind, locations and raw input as JSON),
- *   END at once, then one RESULT when it is `completed` or `failed`. A call the turn closes on
- *   without one gets a result anyway, so no browser ever takes it for a tool of its own to run.
+ *   anything unknown is `acp/other`): START, ARGS (its title, kind, locations and raw input as JSON; a
+ *   raw input over `RAW_INPUT_LIMIT` is left out whole and marked `rawInputTruncated`, with
+ *   `rawInputLength` for the length it had), END at once, then one RESULT when it is `completed` or
+ *   `failed`. A call the turn closes on without one gets a result anyway, so no browser ever takes it
+ *   for a tool of its own to run.
  * - `plan` → `CUSTOM acp.plan` with the plan's entries.
  * Tool call ids are the agent's, prefixed with the run's (`<runId>:<id>`), like the message ids.
  * - a diff in a tool call's content (`edit`, mostly) → `CUSTOM acp.diff` `{toolCallId, files: {path,
@@ -21,6 +23,10 @@ import { type BaseEvent, EventType } from "@ag-ui/client";
  *   ends (`completed`, `failed`) with a status other than its last diff's. Only the diffs of a call
  *   that `completed` are a change (`tasks/diff-summary.ts` `editedFiles`): the board's deliverable
  *   sums those per file (`deliverableFromEvents`), and an external employee hands in those.
+ * - a call that ends (`completed`, `failed`) with a duration in its raw output (`rawOutput.elapsedMs`,
+ *   a number the device measured) → one `CUSTOM acp.elapsed` `{toolCallId, elapsedMs}`, just before
+ *   its RESULT. What the agent did not report is not sent: nothing here stops a clock, and a call with
+ *   no duration to report has no event of its own — the transcript draws no time for it.
  *
  * Everything else (thoughts, mode and command updates, a stub cut down to its ids) says nothing.
  * Raw agent content may carry the paths the agent itself printed; nothing here adds any.
@@ -174,6 +180,21 @@ function resultText(call: Loose, failed: boolean): string {
   return body || "完成。";
 }
 
+/**
+ * 这一步跑了多久，毫秒——只有设备自己在 `rawOutput.elapsedMs` 里写了才作数。
+ *
+ * 这里不掐表：外部件干了多少时间是它报的，报不出来就是报不出来。字符串的 rawOutput（多数代理给的是
+ * 一段文字）、缺字段、负数、`NaN`、`Infinity` 一律当作没有——前端宁可什么都不显示，也不要看到一个
+ * `0.0s` 以为是读数。
+ */
+function elapsedOf(update: Loose): number | undefined {
+  const raw = record(update.rawOutput);
+  const value = raw?.elapsedMs;
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
 function argsOf(call: Loose): string {
   const args: Loose = {
     title: str(call.title) ?? "",
@@ -184,7 +205,11 @@ function argsOf(call: Loose): string {
     const raw = JSON.stringify(call.rawInput);
     if (raw !== undefined && raw.length <= RAW_INPUT_LIMIT)
       args.rawInput = call.rawInput;
-    else args.rawInputTruncated = true;
+    // 截断时把原来的长度一起给出：前端能说实话（「共 8123 字」），不必编一个。
+    else {
+      args.rawInputTruncated = true;
+      if (raw !== undefined) args.rawInputLength = raw.length;
+    }
   }
   return JSON.stringify(args);
 }
@@ -265,6 +290,14 @@ export function createAcpTranslator(
           value: { toolCallId, files: [], status },
         } as BaseEvent);
       }
+      // 设备报了耗时才带这一条，和它前面的 diff 一样按 `toolCallId` 对上那一步。
+      const elapsedMs = elapsedOf(update);
+      if (elapsedMs !== undefined)
+        events.push({
+          type: EventType.CUSTOM,
+          name: "acp.elapsed",
+          value: { toolCallId, elapsedMs },
+        } as BaseEvent);
       events.push(result(toolCallId, resultText(update, status === "failed")));
     }
     return events;
