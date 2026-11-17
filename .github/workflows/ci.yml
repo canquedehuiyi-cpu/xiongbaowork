@@ -50,6 +50,26 @@ jobs:
       - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs device-release-workflow.test.mjs
         working-directory: xiongbao/scripts/ci
 
+  # The tests sit outside `server/tsconfig.json`, so `bun run typecheck` above says nothing about them:
+  # a change can type-check as a product and still leave the test that exercises it unrepresentable.
+  # `scripts/typecheck-tests.ts` runs tsc over `server/tsconfig.tests.json` and fails on any error the
+  # frozen baseline (`server/tests/typecheck-baseline.txt`) does not already carry. The baseline is debt
+  # that predates the gate: fix what it reports, and never regenerate it with `--update` to go green.
+  # Its own job, so a red run here reads as "the tests project", not as the product failing to compile,
+  # and so it does not lengthen the static gate every pull request waits on.
+  typecheck-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck:tests
+
   # The Helm chart, rendered for real. xiongbao/.github's chart job is the upstream copy and does not
   # run here, so nothing rendered the chart in this fork. Lint plus a few `helm template` renders,
   # no cluster: see scripts/ci/chart-check.sh for what each check stands for.
