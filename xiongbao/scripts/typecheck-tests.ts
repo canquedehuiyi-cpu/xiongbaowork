@@ -10,6 +10,13 @@
 // Freezing the known set lets the check land green and start earning its keep immediately: a NEW
 // error fails the build from today, and the existing ones get fixed on their own schedule.
 //
+// THE DEBT IS PAID, AND THE BASELINE IS STILL HERE ON PURPOSE. It held 197 entries when the check
+// landed and is empty as of 2026-11-18, cleared in three batches by root cause (#673 197→128,
+// #674 128→36, #675 36→0). An empty baseline is not the same as no baseline: keeping the file
+// means the mechanism that let the check land green is still the mechanism that would record a
+// deliberate decision if pre-existing debt were ever surfaced again. `--update` writes it; the next
+// reader reads every line as debt rather than as "fine". Do not delete the file to "simplify".
+//
 // WHY THE PROJECT'S OWN CONFIG. The check runs `tsc -p server/tsconfig.tests.json`, which extends
 // `server/tsconfig.json`. Checking these files with an ad-hoc `tsc file.ts` plus hand-written flags
 // is unsound: it drags `src` in under options the project does not use and emits a flood of errors

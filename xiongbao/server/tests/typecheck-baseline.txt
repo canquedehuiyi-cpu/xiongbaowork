@@ -13,3 +13,9 @@
 #
 # Sorted. Duplicates are significant: a line repeated N times allows exactly N identical errors
 # in that file, and an N+1th is new.
+#
+# EMPTY IS THE TARGET STATE, NOT A MISSING FILE. The debt this file recorded (197 entries when the
+# check landed) was paid off in three batches by root cause, and the last entry went on 2026-11-18
+# (#673 197→128, #674 128→36, #675 36→0). The file stays so the gate's mechanism does: from here
+# every error in `server/tests` is new, with nothing left to hide behind. Deleting it would only
+# make `readBaseline` return [] and look identical while losing the record of why it is empty.

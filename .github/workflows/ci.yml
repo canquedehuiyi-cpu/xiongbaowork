@@ -55,6 +55,8 @@ jobs:
   # `scripts/typecheck-tests.ts` runs tsc over `server/tsconfig.tests.json` and fails on any error the
   # frozen baseline (`server/tests/typecheck-baseline.txt`) does not already carry. The baseline is debt
   # that predates the gate: fix what it reports, and never regenerate it with `--update` to go green.
+  # That debt is now paid off — the file has been empty since 2026-11-18 — so as of today this job is
+  # a clean gate: any error in `server/tests` fails it, with no frozen entries to absorb one.
   # Its own job, so a red run here reads as "the tests project", not as the product failing to compile,
   # and so it does not lengthen the static gate every pull request waits on.
   typecheck-tests:
