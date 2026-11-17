@@ -135,8 +135,11 @@ test("a saved file's evidence line keeps its path, which the download route unde
   ]);
   // The card turns the path into the computer download route; the exact encoding is that helper's
   // own test's job, here only that the line's path is the shape it takes.
+  const saved = rows[0];
   expect(
-    artifactDownloadHref("bot-1", rows[0]?.path),
+    saved && saved.kind === "workspace_file"
+      ? artifactDownloadHref("bot-1", saved.path)
+      : undefined,
   ).toStartWith("/api/computers/bot-1/files/download?path=reports%2F");
 });
 
