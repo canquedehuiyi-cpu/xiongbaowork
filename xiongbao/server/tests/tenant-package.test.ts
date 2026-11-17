@@ -1772,7 +1772,9 @@ describe("seeding the skills a package ships", () => {
   const skill = ({
     runnable = "full",
     ...overrides
-  }: Partial<LoadedTenantPackage["skills"][number]> = {}): LoadedTenantPackage["skills"][number] => ({
+  }: Partial<
+    LoadedTenantPackage["skills"][number]
+  > = {}): LoadedTenantPackage["skills"][number] => ({
     slug: `pkg-${randomUUID().slice(0, 8)}`,
     title: "Find a document",
     summary: "Search the sources and read what comes back.",
@@ -1985,7 +1987,14 @@ describe("pairing a package's coworkers with its skills", () => {
       // Same package, same skill still shipped, but the coworker no longer asks for it.
       const withoutIt = {
         ...loaded,
-        agents: [{ ...(loaded.agents[0] as never), skills: [] }],
+        // The element type, not `never`: spreading `never` is what the error was about, and the row
+        // being spread is a loaded agent with the skill list emptied.
+        agents: [
+          {
+            ...(loaded.agents[0] as LoadedTenantPackage["agents"][number]),
+            skills: [],
+          },
+        ],
       } as typeof loaded;
       createdPackageIds.push(
         (await synchronizeTenantPackage(database, withoutIt)).id,
@@ -2068,7 +2077,14 @@ describe("pairing a package's coworkers with its skills", () => {
 
       const withoutIt = {
         ...loaded,
-        agents: [{ ...(loaded.agents[0] as never), skills: [] }],
+        // The element type, not `never`: spreading `never` is what the error was about, and the row
+        // being spread is a loaded agent with the skill list emptied.
+        agents: [
+          {
+            ...(loaded.agents[0] as LoadedTenantPackage["agents"][number]),
+            skills: [],
+          },
+        ],
       } as typeof loaded;
       createdPackageIds.push(
         (await synchronizeTenantPackage(database, withoutIt)).id,
@@ -3581,12 +3597,10 @@ describe("upgrading a deployment set up under a package's former id", () => {
           description: "A conversation.",
           allowedGroups: [],
         });
-        await database
-          .insert(channelAgents)
-          .values({
-            channelId: conversation.id,
-            agentId: conversation.agentId,
-          });
+        await database.insert(channelAgents).values({
+          channelId: conversation.id,
+          agentId: conversation.agentId,
+        });
         await database
           .insert(channelMemberships)
           .values({ channelId: conversation.id, userId });

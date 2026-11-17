@@ -132,6 +132,9 @@ describe("computer client", () => {
       return ok({
         url: "https://example.com/",
         title: "Example",
+        // A navigation answers what is on the page, not only where it went: the Bot reads this.
+        text: "Example Domain",
+        truncated: false,
         elapsedMs: 12,
       });
     });
@@ -139,6 +142,8 @@ describe("computer client", () => {
     await expect(client.navigate("https://example.com/")).resolves.toEqual({
       url: "https://example.com/",
       title: "Example",
+      text: "Example Domain",
+      truncated: false,
       elapsedMs: 12,
     });
     expect(seen).toEqual(["http://agent-computer:4100/navigate"]);

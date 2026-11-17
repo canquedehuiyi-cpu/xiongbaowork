@@ -544,12 +544,13 @@ describe("Slack triggers", () => {
     ).toBe(false);
     // Which Bot the author linked, if any, does not decide whose trigger fires: the owner's
     // channel membership does, checked in the ingest. A trigger on another Bot still matches.
-    expect(
-      slackTriggerMatches(
-        { ...slack({ mode: "message" }), agentId: "bot-2" },
-        base,
-      ),
-    ).toBe(true);
+    // Named first, and typed as the store's own answer (`listForAgent` adds the Bot the
+    // responsibility names). Inline, the extra field was an excess property on a fresh literal.
+    const onAnotherBot: ResolvedTrigger & { agentId: string } = {
+      ...slack({ mode: "message" }),
+      agentId: "bot-2",
+    };
+    expect(slackTriggerMatches(onAnotherBot, base)).toBe(true);
     expect(
       slackTriggerMatches(slack({ mode: "message" }), { ...base, isBot: true }),
     ).toBe(false);

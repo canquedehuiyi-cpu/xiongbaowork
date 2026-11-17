@@ -91,11 +91,10 @@ function reply(text: string) {
 
 function turnHarness(
   agent: AbstractAgent,
-  toolsForTurn: (context: {
-    ownerUserId: string;
-    agentId: string;
-    initiator: { kind: string; id?: string };
-  }) => Promise<unknown[]>,
+  // The product's own type, taken from the factory that consumes it. Written out by hand it said
+  // `Promise<unknown[]>` and an initiator of `{ kind: string; id?: string }`, neither of which is
+  // what a headless turn is given or must answer.
+  toolsForTurn: Parameters<typeof createTurnRunner>[0]["toolsForTurn"],
 ) {
   const persisted: BaseEvent[] = [];
   const lockCalls: string[] = [];

@@ -167,7 +167,7 @@ async function harness() {
   };
 }
 
-function upload(
+async function upload(
   app: Hono<{ Variables: AppVariables }>,
   channelId: string,
   file: File,
@@ -178,7 +178,10 @@ function upload(
   // Omitted where a test does not care, which is also the shape an older tab still sends: the
   // route counts those together in one legacy bucket rather than in nobody's.
   if (uploadGroup !== undefined) formData.set("uploadGroup", uploadGroup);
-  return app.request(`http://test/${channelId}/attachments`, {
+  // `app.request` is typed `Response | Promise<Response>`, because a handler may answer without
+  // awaiting anything. Every caller here awaits it, so the helper says so once instead of making
+  // each site reconcile the union.
+  return await app.request(`http://test/${channelId}/attachments`, {
     method: "POST",
     body: formData,
   });
@@ -1428,7 +1431,6 @@ describe("POST /:channelId/attachments", () => {
       const { error } = (await response.json()) as { error: string };
       expect(error).toBe("'archive' isn't a file type XiongBao Work can read.");
     });
-
   });
 });
 
@@ -1609,7 +1611,6 @@ describe("GET /:id", () => {
         longestPause < 40 ? "under 40ms" : `${Math.round(longestPause)}ms`,
       ).toBe("under 40ms");
     });
-
   }, 30_000);
 
   /*
@@ -2473,18 +2474,22 @@ describe("DELETE /:id", () => {
           await stampWritten.promise;
           const app = attachmentApp(namedDatabase, member);
           let settled = false;
-          const withdrawal = app
-            .request(`http://test/${id}`, { method: "DELETE" })
-            .then(
-              (value) => {
-                settled = true;
-                return value;
-              },
-              (reason: unknown) => {
-                settled = true;
-                throw reason;
-              },
-            );
+          // Wrapped, not awaited: the point is to observe when it settles while the request is
+          // still blocked on the lock. `app.request` returns the union `Response |
+          // Promise<Response>`, and `Promise.resolve` is where that turns into something with a
+          // `.then`.
+          const withdrawal = Promise.resolve(
+            app.request(`http://test/${id}`, { method: "DELETE" }),
+          ).then(
+            (value) => {
+              settled = true;
+              return value;
+            },
+            (reason: unknown) => {
+              settled = true;
+              throw reason;
+            },
+          );
 
           expect(
             await waitForBlockedSession(applicationName, () => settled),

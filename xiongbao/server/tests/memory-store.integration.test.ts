@@ -1,12 +1,7 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { connectAppRefusal } from "@openbot/shared/connect-prompt";
-import {
-  and,
-  eq,
-  inArray,
-  like,
-} from "drizzle-orm";
+import { and, eq, inArray, like } from "drizzle-orm";
 import { createBotReset } from "../src/agents/lifecycle-reset";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -20,10 +15,7 @@ import { mcpServers, mcpTools } from "../src/db/schema/plugins";
 import { createMemoryIngestion } from "../src/memory/ingestion";
 import { createMemoryStore } from "../src/memory/store";
 import { MemoryNotFoundError, MemoryRefusedError } from "../src/memory/types";
-import {
-  createPluginStore,
-  PluginRefusedError,
-} from "../src/plugins/store";
+import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -132,7 +124,6 @@ beforeAll(async () => {
     await plugins.grant("mcp", ref, bot, owner);
     await plugins.grant("mcp", `${server}/write_document`, bot, owner);
   });
-
 });
 afterAll(async () => {
   await runAsTenant("platform", async () => {
@@ -226,7 +217,10 @@ test("changed connector content updates the same row without duplicates", () =>
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe(before?.id);
-    expect(rows[0]?.content).toContain("Friday");
+    const content = rows[0]?.content;
+    if (typeof content !== "string")
+      throw new Error("the re-synced row carried no content");
+    expect(content).toContain("Friday");
   }));
 test("disabled source is absent even while its imported facts remain stored", () =>
   asOwner(async () => {
@@ -522,7 +516,9 @@ test("migration 0115 restamps routines, sources, their imported facts and respon
           routines: Array.from(routineRows as ArrayLike<unknown>),
           sources: Array.from(sourceRows as ArrayLike<unknown>),
           memories: Array.from(memoryRows as ArrayLike<unknown>),
-          responsibilities: Array.from(responsibilityRows as ArrayLike<unknown>),
+          responsibilities: Array.from(
+            responsibilityRows as ArrayLike<unknown>,
+          ),
           triggers: Array.from(triggerRows as ArrayLike<unknown>),
         };
         throw rollback;
@@ -663,9 +659,16 @@ test("a fact the person forgot from one Bot is not formed again by another", () 
 test("resetting one Bot leaves another Bot's copy of the same fact", () =>
   asOwner(async () => {
     const content = `Reset fact ${randomUUID()}`;
-    const reset = createBotReset({ database, softDeleteChannel: async () => {} });
+    const reset = createBotReset({
+      database,
+      softDeleteChannel: async () => {},
+    });
     try {
-      await store.formMemory(owner, { agentId: bot, content, sourceApp: "Docs" });
+      await store.formMemory(owner, {
+        agentId: bot,
+        content,
+        sourceApp: "Docs",
+      });
       const kept = await store.formMemory(owner, {
         agentId: otherBot,
         content,

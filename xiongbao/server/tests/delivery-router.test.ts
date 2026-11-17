@@ -5,6 +5,7 @@ import {
   type DeliveryInbox,
   type DeliveryOutbox,
   DeliveryProviderError,
+  type PushDevice,
 } from "../src/delivery/types";
 import { currentTenant, runAsTenant } from "../src/tenant/context";
 
@@ -86,7 +87,9 @@ function fixture(
     bindingsFor: async () => [ownedBinding],
     bindingsByUse: async () => [ownedBinding],
     checkInConversations: async () => [],
-    devices: async () => [],
+    // Typed, because the test below replaces it with a real device: inferred from `[]` it was
+    // `Promise<never[]>`, and the replacement was not assignable to it.
+    devices: async () => [] as PushDevice[],
     offerInbox: async (input: unknown) => {
       offered.push(input);
       return { queued: true, id: "in" };

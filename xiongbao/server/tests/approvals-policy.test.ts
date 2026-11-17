@@ -1118,7 +1118,8 @@ describe("delegation is gated", () => {
         answer: (result) => result.text,
         privateShareToolRef: "openbot/private_share",
         refusalMarker: "REFUSED:",
-        personInitiator: { kind: "person", id: "" },
+        // No id: a person the deployment cannot name is `{ kind: "person" }` and nothing more.
+        personInitiator: { kind: "person" },
       });
       const continued: { content: string; error?: string }[] = [];
       await service.resume("owner", request?.id as string, {

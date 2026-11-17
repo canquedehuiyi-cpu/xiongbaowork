@@ -42,13 +42,37 @@ beforeAll(async () => {
 
 const broker: ComposioBroker = {
   listApps: async () => [],
-  ensureAuthConfig: async () => undefined,
+  /*
+   * `standing`, not `created`, for everything but `no-auth`.
+   *
+   * `addBrokeredApp` asks this for every connection kind, so a fixture that answered only for one of
+   * them would have to throw on the others and take the enable with it. It created nothing — there
+   * is no vendor to create it at — and `standing` is the outcome that says exactly that: nothing was
+   * made, so nothing should be recorded as the config's scheme. `no-auth` is the one case with its
+   * own answer.
+   */
+  ensureAuthConfig: async (config) =>
+    config.connection.kind === "no-auth" ? "not-needed" : "standing",
   deleteAuthConfig: async () => undefined,
   authorize: async () => {
     throw new Error("the removal path asked the broker to begin a connection");
   },
   isConnected: async () => true,
   revoke: async () => true,
+  /*
+   * No app here is connected from a typed credential form, and nothing undoes a single account: the
+   * suite re-adds apps and revokes through `revoke`. These three are on the interface regardless
+   * (a broker is one shape), so they name themselves rather than answering a plausible nothing.
+   */
+  connectionFields: async () => {
+    throw new Error("the removal path asked the broker for a credential form");
+  },
+  connectWithFields: async () => {
+    throw new Error("the removal path asked the broker to connect from fields");
+  },
+  revokeAccount: async () => {
+    throw new Error("the removal path asked the broker to undo one account");
+  },
 };
 
 const events: { eventType: string; payload: Record<string, unknown> }[] = [];

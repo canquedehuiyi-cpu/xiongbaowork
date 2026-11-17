@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
 import type { AuditEventInput, AuditStore } from "../src/audit";
+import type { OpenBotRole } from "../src/auth/roles";
 import { loadConfig } from "../src/config";
 import { testEnvironment } from "./support/environment";
 
 const ADMIN = { id: "admin", email: "admin@openbot.test" };
 
-function app(role = "admin") {
+// `OpenBotRole`, not the `string` a default parameter infers: `rolesForUser` answers roles, and
+// widening the parameter moved the failure to the call that hands them over.
+function app(role: OpenBotRole = "admin") {
   const rows: AuditEventInput[] = [];
   const auditStore: AuditStore = {
     insert: async (event) => void rows.push(event),
@@ -92,7 +95,11 @@ describe("the trail says how an identity provider came to exist", () => {
       } as never,
       { rolesForUser: async () => ["admin"] },
       ...(Array.from({ length: 9 }) as never[]),
-      { insert: async (event) => void rows.push(event) } as never,
+      // Annotated: the cast to `never` below takes away the contextual type, so this parameter had
+      // none and was implicitly `any`.
+      {
+        insert: async (event: AuditEventInput) => void rows.push(event),
+      } as never,
     );
     await hono.request("/api/auth/sso/register", {
       method: "POST",

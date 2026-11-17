@@ -249,10 +249,9 @@ if (process.env.SRA009_STOP_FIXTURE_BEFORE_TEARDOWN === "1") {
  */
 function answerWith(chosen: string[]) {
   llm.onMessage(/You choose which capabilities to load/, {
-    type: "text",
     content: JSON.stringify({ skills: chosen }),
   });
-  llm.onMessage(/.*/, { type: "text", content: "Here is what I found." });
+  llm.onMessage(/.*/, { content: "Here is what I found." });
 }
 
 const recorded: Selection<GrantedTool>[] = [];
@@ -470,7 +469,7 @@ describe("a built-in Bot", () => {
   test("a model that cannot answer costs the narrowing and not the tools", async () => {
     // No fixture for the selection prompt: aimock has nothing to serve, so pass one fails the way a
     // real outage does, and the run has to carry on with everything.
-    llm.onMessage(/.*/, { type: "text", content: "Here is what I found." });
+    llm.onMessage(/.*/, { content: "Here is what I found." });
     const agents = await buildAgents(
       [builtIn],
       model,
@@ -692,13 +691,16 @@ describe("a remote Mastra Bot", () => {
         runId: string;
         runAssertion?: string | null;
       }) => {
+        // "No signer" is `undefined`, not a function that answers nothing: `SignRun` returns a
+        // string, and omitting it is what leaves a run unsigned.
+        const assertion = runAssertion ?? undefined;
         const agents = await buildAgents(
           [mastraAgent()],
           model,
           "test-key",
           undefined,
           async () => (withGrants ? granted : []),
-          () => runAssertion ?? undefined,
+          assertion === undefined ? undefined : () => assertion,
           undefined,
           undefined,
           selection(),
@@ -1050,7 +1052,7 @@ describe("a remote Mastra Bot", () => {
 
 describe("when selection cannot help", () => {
   test("a catalogue under the floor is never sent to pass one", async () => {
-    llm.onMessage(/.*/, { type: "text", content: "Here is what I found." });
+    llm.onMessage(/.*/, { content: "Here is what I found." });
     const few = granted.slice(0, 6);
     const agents = await buildAgents(
       [builtIn],
@@ -1081,7 +1083,7 @@ describe("when selection cannot help", () => {
   });
 
   test("a Bot whose skills declare nothing is never sent to pass one", async () => {
-    llm.onMessage(/.*/, { type: "text", content: "Here is what I found." });
+    llm.onMessage(/.*/, { content: "Here is what I found." });
     const agents = await buildAgents(
       [builtIn],
       model,
@@ -1111,7 +1113,7 @@ describe("when selection cannot help", () => {
 
   test("skills that cannot be read are diagnosed and leave the Bot with all of its tools", async () => {
     const diagnostic = spyOn(console, "error").mockImplementation(() => {});
-    llm.onMessage(/.*/, { type: "text", content: "Here is what I found." });
+    llm.onMessage(/.*/, { content: "Here is what I found." });
     try {
       const agents = await buildAgents(
         [builtIn],

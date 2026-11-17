@@ -145,6 +145,10 @@ describe("admin audit API", () => {
                 targetType: "connector",
                 targetId: "drive-1",
                 actorUserId: "admin",
+                // The columns the gateway writes: an `AuditEvent` row without them is one the
+                // table cannot hold, whatever the payload says.
+                initiatorKind: "person",
+                initiatorId: "admin",
                 payload: { itemCount: 3 },
                 createdAt: "2026-08-13T12:00:00.000Z",
               },
@@ -168,6 +172,8 @@ describe("admin audit API", () => {
           targetType: "connector",
           targetId: "drive-1",
           actorUserId: "admin",
+          initiatorKind: "person",
+          initiatorId: "admin",
           payload: { itemCount: 3 },
           createdAt: "2026-08-13T12:00:00.000Z",
         },

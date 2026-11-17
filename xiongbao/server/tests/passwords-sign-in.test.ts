@@ -874,10 +874,11 @@ describe("an unattended turn that needs a sign-in", () => {
     expect(waiting.kind).toBe("computer_sign_in");
     const requestId = String(waiting.signInRequestId);
 
+    // No `code`: a one-time code is only ever asked for AFTER the password is in, and it goes
+    // through `submitCode` — `SignInFillInput` has no field for one.
     await context.service.submit("owner", requestId, actor, {
       username: USERNAME,
       password: PASSWORD,
-      code: CODE,
       save: true,
     });
     const done = context.resolved[0];

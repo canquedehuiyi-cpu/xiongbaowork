@@ -50,7 +50,10 @@ function appWith(opts: {
   args[2] = { rolesForUser: async () => ["admin"] } as never;
   args[4] = credentialService as never;
   args[17] = peopleStore as never;
-  const app = createApp(...args);
+  // `Parameters<typeof createApp>` is the tuple of positional stores this list is built against.
+  // Spreading a plain `never[]` is not allowed and never was: it compiled only because the cast
+  // above said `never`, which is not a tuple.
+  const app = createApp(...(args as unknown as Parameters<typeof createApp>));
   return { app, calls };
 }
 

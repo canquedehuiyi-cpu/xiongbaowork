@@ -62,7 +62,7 @@ const RUN = `e2e-run-${suite}`;
 
 const queue = createWorkQueue(database);
 const auditStore = createAuditStore(database);
-const profiles = createAgentProfileStore(database);
+const profiles = createAgentProfileStore(database, undefined);
 
 const desk = createHandoffDesk({
   queue,
@@ -129,9 +129,9 @@ beforeEach(async () => {
         .onConflictDoNothing();
       await database
         .insert(agentProfiles)
+        // No `name`: the profile table does not carry one; the `agents` row above does.
         .values({
           agentId: id,
-          name,
           title: "",
           roleDescription: "",
           avatarSeed: id,

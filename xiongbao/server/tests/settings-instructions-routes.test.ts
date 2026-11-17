@@ -230,16 +230,18 @@ describe("standing instruction routes", () => {
       },
     );
 
-    await expect(
-      appWith(store, { as: MEMBER })
-        .request("http://openbot.local/api/settings/instructions")
-        .then((response) => response.json()),
-    ).resolves.toEqual({ instructions: "Write in British English." });
-    await expect(
-      appWith(store, { as: OTHER })
-        .request("http://openbot.local/api/settings/instructions")
-        .then((response) => response.json()),
-    ).resolves.toEqual({ instructions: "Answer in one paragraph." });
+    const memberView = await appWith(store, { as: MEMBER }).request(
+      "http://openbot.local/api/settings/instructions",
+    );
+    expect(await memberView.json()).toEqual({
+      instructions: "Write in British English.",
+    });
+    const otherView = await appWith(store, { as: OTHER }).request(
+      "http://openbot.local/api/settings/instructions",
+    );
+    expect(await otherView.json()).toEqual({
+      instructions: "Answer in one paragraph.",
+    });
     expect(state).toEqual({
       [MEMBER.id]: "Write in British English.",
       [OTHER.id]: "Answer in one paragraph.",
@@ -299,19 +301,18 @@ describe("standing instruction routes", () => {
   test("answers 503 rather than pretending when there is no store", async () => {
     const app = appWith(undefined);
 
-    await expect(
-      app
-        .request("http://openbot.local/api/settings/instructions")
-        .then((response) => response.status),
-    ).resolves.toBe(503);
-    await expect(
-      app
-        .request("http://openbot.local/api/settings/instructions", {
-          method: "PUT",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ instructions: "Write in British English." }),
-        })
-        .then((response) => response.status),
-    ).resolves.toBe(503);
+    const read = await app.request(
+      "http://openbot.local/api/settings/instructions",
+    );
+    expect(read.status).toBe(503);
+    const write = await app.request(
+      "http://openbot.local/api/settings/instructions",
+      {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ instructions: "Write in British English." }),
+      },
+    );
+    expect(write.status).toBe(503);
   });
 });

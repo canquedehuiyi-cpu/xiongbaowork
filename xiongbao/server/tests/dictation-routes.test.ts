@@ -27,7 +27,7 @@ function recording(type = "audio/webm", size = 8) {
 
 test("requires authentication before processing audio", async () => {
   const app = createDictationRoutes(
-    (context) => context.json({ error: "Authentication required." }, 401),
+    async (context) => context.json({ error: "Authentication required." }, 401),
     {
       transcribe: async () => {
         throw new Error("Must not run");

@@ -38,13 +38,30 @@ const ALL = [REMOTE, BUILT_IN, OTHER_REMOTE];
 
 const broker: ComposioBroker = {
   listApps: async () => [],
-  ensureAuthConfig: async () => undefined,
+  // Nothing here adds a brokered app, so an auth config being asked for means a path this suite
+  // does not claim to exercise was reached. Named rather than answered with a plausible string.
+  ensureAuthConfig: async () => {
+    throw new Error(
+      "a handoff grant asked the broker to configure an auth config",
+    );
+  },
   deleteAuthConfig: async () => undefined,
   authorize: async () => {
     throw new Error("a handoff grant asked the broker for a connection");
   },
   isConnected: async () => false,
   revoke: async () => true,
+  // No app is connected from a typed credential form here, and nothing undoes one account. On the
+  // interface regardless, so they name themselves rather than answering a plausible nothing.
+  connectionFields: async () => {
+    throw new Error("a handoff grant asked the broker for a credential form");
+  },
+  connectWithFields: async () => {
+    throw new Error("a handoff grant asked the broker to connect from fields");
+  },
+  revokeAccount: async () => {
+    throw new Error("a handoff grant asked the broker to undo one account");
+  },
 };
 
 const auditStore = createAuditStore(database);
@@ -70,7 +87,7 @@ const store = createPluginStore({
 
 const desk = createHandoffDesk({
   queue: createWorkQueue(database),
-  profiles: createAgentProfileStore(database),
+  profiles: createAgentProfileStore(database, undefined),
   actorFor: async (id: string) => ({ id, role: "user" as const }),
   mayAddress: async (fromBotId, toBotId) =>
     (
@@ -128,9 +145,9 @@ beforeEach(async () => {
   await runAsTenant("system", async () => {
     for (const row of rows) {
       await database.insert(agents).values(row);
+      // No `name`: the profile table does not carry one; the `agents` row above does.
       await database.insert(agentProfiles).values({
         agentId: row.id,
-        name: row.name,
         title: "",
         roleDescription: "",
         avatarSeed: row.id,

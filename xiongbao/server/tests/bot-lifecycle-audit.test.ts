@@ -176,7 +176,9 @@ describe("what a Bot is, on the trail", () => {
       "bot.callback_token_revoked",
     ],
     ["/api/agents/bot-1", "DELETE", "bot.deleted"],
-  ])("%s writes %s", async (path, method, eventType) => {
+    // `as const`, so each row's event type stays the literal it is: widened to `string` the
+    // assertion below compared against the audit event union from outside it.
+  ] as const)("%s writes %s", async (path, method, eventType) => {
     const { rows, hono } = app();
 
     await hono.request(`http://t${path}`, { method });

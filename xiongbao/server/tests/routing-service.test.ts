@@ -9,6 +9,7 @@ import type {
 } from "../src/routing/classify";
 import {
   createCoworkerRoutingService,
+  type CoworkerRouteResult,
   normalizeCoworkerName,
 } from "../src/routing/service";
 
@@ -106,6 +107,20 @@ function makeService(
     modelCalls,
     audits,
   };
+}
+
+/**
+ * The names an ambiguous route came back with.
+ *
+ * `CoworkerRouteResult` is a union of three, and only the ambiguous one has `names`. Asserting it
+ * with `expect(...).toEqual({ kind: "ambiguous", … })` says the same thing to a reader but nothing
+ * to the compiler, which left `result.names` reading off the whole union. This narrows and asserts
+ * in one step, so both agree.
+ */
+function ambiguousNames(result: CoworkerRouteResult): string[] {
+  if (result.kind !== "ambiguous")
+    throw new Error(`expected an ambiguous route, got ${result.kind}`);
+  return result.names;
 }
 
 describe("CoworkerRoutingService", () => {
@@ -499,13 +514,14 @@ describe("CoworkerRoutingService", () => {
       actor: ACTOR,
       text: "ask risk analyst to review this",
     });
-    expect(result).toEqual({
-      kind: "ambiguous",
-      names: ["Risk Analyst (id 5269736b)", "Risk Analyst (id 7269736b)"],
-    });
-    expect(new Set(result.names.map(normalizeCoworkerName)).size).toBe(
-      result.names.length,
-    );
+    const names = ambiguousNames(result);
+    expect(names).toEqual([
+      "Risk Analyst (id 5269736b)",
+      "Risk Analyst (id 7269736b)",
+    ]);
+    // Distinguishable once the id is part of the name, which is what makes either of them
+    // addressable in the next half of this test.
+    expect(new Set(names.map(normalizeCoworkerName)).size).toBe(names.length);
     expect(
       await service.route({
         actor: ACTOR,
@@ -593,13 +609,12 @@ describe("CoworkerRoutingService", () => {
       text: "ask risk analyst to review this",
     });
 
-    expect(result).toEqual({
-      kind: "ambiguous",
-      names: ["Risk Analyst (id e0a080)", "Risk Analyst (id e0a09a)"],
-    });
-    expect(new Set(result.names.map(normalizeCoworkerName)).size).toBe(
-      result.names.length,
-    );
+    const names = ambiguousNames(result);
+    expect(names).toEqual([
+      "Risk Analyst (id e0a080)",
+      "Risk Analyst (id e0a09a)",
+    ]);
+    expect(new Set(names.map(normalizeCoworkerName)).size).toBe(names.length);
     expect(
       await service.route({
         actor: ACTOR,

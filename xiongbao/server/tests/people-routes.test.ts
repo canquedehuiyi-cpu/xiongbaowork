@@ -81,7 +81,10 @@ function appWith(
   );
 
   return {
-    request: (path, init) => app.request(`http://openbot.test${path}`, init),
+    // `async`, because the declared return type says `Promise<Response>` and `app.request` is the
+    // union `Response | Promise<Response>` — a handler is allowed to answer without awaiting.
+    request: async (path, init) =>
+      await app.request(`http://openbot.test${path}`, init),
     calls,
   };
 }

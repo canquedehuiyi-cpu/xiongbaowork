@@ -33,7 +33,14 @@ const channelStore = createChannelStore(
   createThreadIdentity("voice-preview-test"),
 );
 const store = createVoiceSessionStore(database, channelStore);
-const owner = { id: `voice-preview-${randomUUID()}`, role: "user" } as const;
+const ownerId = `voice-preview-${randomUUID()}`;
+// The email is here, not only at the insert below, because this object is also what the router
+// sets as the request's actor — and an actor is an `AuthenticatedActor`, which carries one.
+const owner = {
+  id: ownerId,
+  email: `${ownerId}@example.test`,
+  role: "user",
+} as const;
 const channelIds: string[] = [];
 let agentId: string;
 const hub = createChannelEventHub();
@@ -52,7 +59,7 @@ beforeAll(async () => {
   await runAsTenant(owner.id, async () => {
     await database.insert(users).values({
       id: owner.id,
-      email: `${owner.id}@example.test`,
+      email: owner.email,
       name: "Voice preview test",
     });
     const profile = await profiles.create(owner, {

@@ -5,7 +5,7 @@ import {
   EventType,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { lastValueFrom, of, toArray } from "rxjs";
+import { lastValueFrom, type Observable, of, toArray } from "rxjs";
 import {
   mintRunAssertion,
   readRunAssertion,
@@ -14,9 +14,12 @@ import { PersonalMemoryMiddleware } from "../src/memory/tools";
 
 class SelectedAgent extends AbstractAgent {
   readonly requests: RunAgentInput[] = [];
-  run(input: RunAgentInput) {
+  // Annotated rather than `of<BaseEvent>(…)`: rxjs's multi-value `of` takes the tuple as its type
+  // argument, so naming a single event type there is what the error was about. The return type says
+  // the same thing where the override needs it.
+  run(input: RunAgentInput): Observable<BaseEvent> {
     this.requests.push(input);
-    return of<BaseEvent>(
+    return of(
       {
         type: EventType.RUN_STARTED,
         runId: input.runId,
