@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import type { TranscriptNote } from "@/components/channels/chat-transcript";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
-import { artifactDownloadHref } from "@/lib/computers/artifact";
 import { useScheduleZone } from "@/lib/settings/work-hours";
 import {
   canExtend,
@@ -415,22 +414,17 @@ function FileIcon({ kind }: { kind: EvidenceRow["kind"] }) {
 }
 
 function EvidenceItem({
-  botId,
   row,
   linked,
 }: {
-  botId?: string | null;
   row: Exclude<EvidenceRow, { kind: "check" }>;
   /** 附件只有派活的人打得开（在它和员工的线程里）。 */
   linked: boolean;
 }) {
   const link = "text-inherit underline-offset-2 hover:underline";
-  // 工作区文件只在这张卡说得出是哪个员工、路径确实在它工作区里时才给下载入口；
-  // 没有入口时这一行照旧念出文件名，比一个点开是 404 的链接诚实。
-  const fileHref =
-    row.kind === "workspace_file"
-      ? artifactDownloadHref(botId, row.path)
-      : undefined;
+  // 工作区文件这一行只念路径文本：下载入口要的是「这次调用发生在哪个 Bot 上」那个标识，
+  // 交付卡上拿不到它（PR2 裁定 1）。没有入口时这行照旧念出文件名，
+  // 比一个点开是 404 的链接诚实。
   const label =
     row.kind === "attachment" && linked ? (
       <a
@@ -443,10 +437,6 @@ function EvidenceItem({
       </a>
     ) : row.kind === "link" ? (
       <a className={link} href={row.url} rel="noreferrer" target="_blank">
-        {row.label}
-      </a>
-    ) : fileHref ? (
-      <a className={link} href={fileHref} rel="noreferrer" target="_blank">
         {row.label}
       </a>
     ) : row.kind === "diff" ? (
@@ -506,7 +496,6 @@ function DeliveredCard({
       ) : null}
       {items.map((row) => (
         <EvidenceItem
-          botId={card?.executorAgentId}
           key={`${row.kind}:${row.label}`}
           linked={mine}
           row={row}

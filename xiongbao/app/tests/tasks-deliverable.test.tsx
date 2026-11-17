@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
-import { artifactDownloadHref } from "@/lib/computers/artifact";
 import { evidenceOf } from "@/lib/tasks/delivery";
 import {
   AttentionRegion,
@@ -114,7 +113,7 @@ test("workspace files are counted beside the links, in the board's order", () =>
   ).toBe("产出：1 个附件 · 1 个链接 · 2 个工作区文件");
 });
 
-test("a saved file's evidence line keeps its path, which the download route understands", () => {
+test("a saved file's evidence line is its path as text, with no link beside it", () => {
   const rows = evidenceOf({
     kind: "deliverable",
     workspaceFiles: ["reports/对比.xlsx", "notes/说明.md"],
@@ -133,14 +132,13 @@ test("a saved file's evidence line keeps its path, which the download route unde
     },
     { kind: "check", label: "打开确认无乱码" },
   ]);
-  // The card turns the path into the computer download route; the exact encoding is that helper's
-  // own test's job, here only that the line's path is the shape it takes.
+  // 行上只有路径文本：卡拿不到下载入口所需的 Bot 标识（PR2 裁定 1），所以这一行不给链接。
+  // 字段就是 kind/path/label 三个——多一个 href 就是在承诺一个点不开的东西。
   const saved = rows[0];
   expect(
-    saved && saved.kind === "workspace_file"
-      ? artifactDownloadHref("bot-1", saved.path)
-      : undefined,
-  ).toStartWith("/api/computers/bot-1/files/download?path=reports%2F");
+    saved && saved.kind === "workspace_file" ? saved.path : undefined,
+  ).toBe("reports/对比.xlsx");
+  expect(Object.keys(saved ?? {}).sort()).toEqual(["kind", "label", "path"]);
 });
 
 test("nothing that is not a deliverable is summarised as one", () => {

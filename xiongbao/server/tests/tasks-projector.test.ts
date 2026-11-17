@@ -394,8 +394,8 @@ test("a card that fails again after it was archived asks again, and can be archi
 
 /*
  * A hand-in that names files the coworker Bot saved in its own workspace stores them on the card as
- * given: the board draws the download address from the path plus the card's own machine, so the
- * projector's job is only to keep the list whole across `finished`.
+ * given: the board reads each path back as a line of the hand-in, so the projector's job is only
+ * to keep the list whole across `finished`.
  */
 test("workspace files handed in with a finished run stay on the card", async () => {
   const runRef = `run-files-${suite}`;

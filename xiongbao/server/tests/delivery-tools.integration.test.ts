@@ -1955,9 +1955,9 @@ describe("after the hand-in", () => {
 
 /*
  * A coworker Bot may hand in a file it saved in its own workspace by naming its path. The gate
- * cannot open the file -- whether it is still there is what the download route answers at the
- * click -- so it checks the shape that route takes, and refuses anything that could only name a
- * place outside the workspace.
+ * cannot open the file -- whether it is still there is what the person finds on opening the path
+ * the card names -- so it checks the workspace-relative shape, and refuses anything that could
+ * only name a place outside the workspace.
  */
 describe("deliver_task and a workspace file", () => {
   test("a workspace-relative file lands on the card with its path", async () => {

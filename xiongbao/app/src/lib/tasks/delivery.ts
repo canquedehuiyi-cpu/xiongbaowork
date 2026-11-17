@@ -305,7 +305,7 @@ export type EvidenceRow =
   | { kind: "link"; url: string; label: string }
   | {
       kind: "workspace_file";
-      /** 工作区内的相对路径，下载入口按它拼（`/api/computers/:botId/files/download`）。 */
+      /** 工作区内的相对路径。卡上把它当一行产物念出来；下载入口等 Bot 标识来源明确后另票再接。 */
       path: string;
       label: string;
     }

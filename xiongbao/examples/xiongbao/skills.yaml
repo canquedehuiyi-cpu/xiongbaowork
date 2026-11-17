@@ -15987,7 +15987,7 @@ skills:
       - 确认后再编码，减少反复修改与多次重写
     
       ### 3.2 子 Agent 分片上限
-      - 一次答复最多发起 5 个子代理（`run_subagent`，同一步里多次调用即并发执行）；第 6 个会被直接拒绝，不排队
+      - `run_subagent` 每 run 最多 5 次发起（同一步里多次调用即并发执行）；第 6 次直接拒绝，不排队；计数活在本次 run，审批恢复的新 run 重新计
       - 子代理不能再生子代理，它的参数只有 `task` 和 `answer`
       - 优先串行执行轻量子任务
       - 禁止无限制创建大量子代理并行检索、编码、校验
@@ -19613,7 +19613,7 @@ skills:
       ### 协作铁律
 
       1. **建立团队**：任务开始后必须先执行 `TeamCreate` 创建本次团队，团队名建议使用 `humanize-ppt-<任务简称>`，明确本次协作边界与上下文。
-      2. **调度成员**：按阶段在团队频道里 @ 对应成员派活，任务说明必须用成员 **Agent ID** 点名，例如 `outline-director`、`guizang-renderer`、`frontend-slides-renderer`、`video-motion-agent`、`html-ppt-presenter`、`qa`。成员不是子代理：本产品的子代理入口只有 `run_subagent`（参数只有 `task` 和 `answer`，一次答复最多 5 个），没有 `Agent` spawn，也没有 `name`/`subagent_type` 参数。
+      2. **调度成员**：按阶段在团队频道里 @ 对应成员派活，任务说明必须用成员 **Agent ID** 点名，例如 `outline-director`、`guizang-renderer`、`frontend-slides-renderer`、`video-motion-agent`、`html-ppt-presenter`、`qa`。成员不是子代理：本产品的子代理入口只有 `run_subagent`（参数只有 `task` 和 `answer`，每 run 最多 5 次发起，超出直接拒绝不排队），没有 `Agent` spawn，也没有 `name`/`subagent_type` 参数。
       3. **消息中转**：每次调度都必须给成员明确输入、输出文件、验收标准和回传对象；成员完成分析或生成后，必须通过 `SendMessage` 将结构化结果回传给主理人；跨成员信息必须由主理人转交。
       4. **成员结论为准**：任何大纲、渲染、视频、演讲模式、QA 等专业产出必须由对应成员输出后再采信，主理人只做编排、汇总、取舍、验收和面向用户交付。
 

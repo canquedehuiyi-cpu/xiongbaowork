@@ -157,8 +157,8 @@ export type DeliverableRef = {
   checks?: string[];
   /**
    * Files a coworker Bot saved in its own computer's workspace, as workspace-relative paths
-   * (`reports/对比.xlsx`). The board turns each into the computer download route's address, so the
-   * only shape that may be stored here is the one that route can answer.
+   * (`reports/对比.xlsx`). The board names each one as a line of the hand-in, so the only shape
+   * that may be stored here is a path inside that workspace.
    */
   workspaceFiles?: string[];
 };

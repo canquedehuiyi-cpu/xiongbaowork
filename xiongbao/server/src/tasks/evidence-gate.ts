@@ -30,7 +30,7 @@ import {
  *    of one of the card's rounds that an external employee ran (`externalRun`: only the server's own
  *    hand-in for that employee names one, never a coworker's `deliver_task`), or a workspace file
  *    whose ref is a relative path inside the coworker Bot's own workspace (the gate checks the shape;
- *    whether the file is still there is what the download route answers at the click);
+ *    whether the file is still there is what the person finds on opening that path);
  * 2. a words-only hand-in (only `note`s) says how it was checked: at least one `checks` line;
  * 3. when the criteria list required items (「必需：A、B、C」), each one is named by an item's title
  *    or a check line, and the refusal says which are missing.
@@ -53,7 +53,7 @@ export type DeliveryItem = {
    * attachment: its id (or `/api/attachments/<id>`); component: the id of the call that drew it, or
    * its name for the latest one drawn on the card; link: the address; note: the conclusion itself;
    * workspace_file: the file's path inside the coworker Bot's own workspace, relative, such as
-   * `reports/对比.xlsx` -- the board links it through the computer's download route, so only the
+   * `reports/对比.xlsx` -- the board reads it back as a line naming that file, so only the
    * workspace's own shape passes here.
    */
   ref: string;
@@ -107,13 +107,14 @@ function httpAddress(ref: string): string | undefined {
 const nameOf = (item: DeliveryItem) => item.title?.trim() || item.ref.trim();
 
 /**
- * The path a `workspace_file` item names, in the shape the download route answers, or undefined.
+ * The path a `workspace_file` item names, relative to the coworker Bot's own workspace, or
+ * undefined.
  *
- * The board links this item through `/api/computers/:botId/files/download?path=`, which only knows
- * the Bot's own workspace: the same shape the chat checks before it draws a saved-file link. So an
- * absolute path, a home path, a drive letter or any `..` segment is refused here rather than stored
- * and left to 404 at the person's click; empty segments (`//`, a leading `./`) are joined away, and
- * separators are read whichever way the coworker's machine wrote them.
+ * The card reads this row back as a file of that workspace, which is the same shape the chat
+ * checks before it draws a saved-file link. So an absolute path, a home path, a drive letter or
+ * any `..` segment is refused here rather than stored as an output nobody can reach; empty
+ * segments (`//`, a leading `./`) are joined away, and separators are read whichever way the
+ * coworker's machine wrote them.
  */
 function workspaceFilePathOf(ref: string): string | undefined {
   const path = ref.trim();
@@ -388,7 +389,7 @@ export function createEvidenceGate(database: Database): EvidenceGate {
             case "workspace_file": {
               /*
                * The file itself lives on the coworker Bot's computer, which this gate cannot open;
-               * what it can promise is the shape the download route answers in. A path outside the
+               * what it can promise is the shape a workspace-relative path has to keep. A path outside the
                * workspace is refused with the same reasoning the chat refuses to draw a link for it.
                */
               const path = workspaceFilePathOf(item.ref);
