@@ -1379,8 +1379,8 @@
     "category": "legacy-compat",
     "plan": "remove",
     "introducedIn": "0.2.10",
-    "removeIn": "0.2.13",
-    "notBefore": "0.2.13",
+    "removeIn": "0.2.14",
+    "notBefore": "0.2.14",
     "device": true
   },
   {
@@ -1390,8 +1390,8 @@
     "category": "legacy-compat",
     "plan": "remove",
     "introducedIn": "0.2.10",
-    "removeIn": "0.2.13",
-    "notBefore": "0.2.13",
+    "removeIn": "0.2.14",
+    "notBefore": "0.2.14",
     "device": true
   }
 ]
