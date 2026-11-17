@@ -820,14 +820,16 @@ function modelLabel(model: string): string {
  */
 export function deliverableSummary(ref: unknown): string | null {
   if (!ref || typeof ref !== "object") return null;
-  const { kind, components, attachments, links, diffs, notes } = ref as {
-    kind?: unknown;
-    components?: unknown;
-    attachments?: unknown;
-    links?: unknown;
-    diffs?: unknown;
-    notes?: unknown;
-  };
+  const { kind, components, attachments, links, workspaceFiles, diffs, notes } =
+    ref as {
+      kind?: unknown;
+      components?: unknown;
+      attachments?: unknown;
+      links?: unknown;
+      workspaceFiles?: unknown;
+      diffs?: unknown;
+      notes?: unknown;
+    };
   if (kind !== "deliverable") return null;
   const titles = Array.isArray(components)
     ? [
@@ -849,6 +851,9 @@ export function deliverableSummary(ref: unknown): string | null {
     : [];
   const files = Array.isArray(attachments) ? attachments.length : 0;
   const linkCount = Array.isArray(links) ? links.length : 0;
+  const savedCount = Array.isArray(workspaceFiles)
+    ? workspaceFiles.length
+    : 0;
   const changedFiles = Array.isArray(diffs)
     ? diffs.reduce<number>(
         (sum, diff) =>
@@ -864,6 +869,7 @@ export function deliverableSummary(ref: unknown): string | null {
     ...(titles.length > 0 ? [titles.join("、")] : []),
     ...(files > 0 ? [`${files} 个附件`] : []),
     ...(linkCount > 0 ? [`${linkCount} 个链接`] : []),
+    ...(savedCount > 0 ? [`${savedCount} 个工作区文件`] : []),
     ...(changedFiles > 0 ? [`改动 ${changedFiles} 个文件`] : []),
     ...(noteCount > 0 ? [`${noteCount} 条文字结论`] : []),
   ];

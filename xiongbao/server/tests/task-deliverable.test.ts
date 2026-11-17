@@ -207,6 +207,21 @@ describe("what a run produced, read from its stream", () => {
     // A record with none of the arrays says nothing to look at.
     expect(isDeliverableRef({ kind: "deliverable" })).toBe(false);
   });
+
+  test("workspace files are a deliverable too, and only as a list of paths", () => {
+    expect(
+      isDeliverableRef({
+        kind: "deliverable",
+        workspaceFiles: ["reports/对比.xlsx"],
+      }),
+    ).toBe(true);
+    expect(
+      isDeliverableRef({ kind: "deliverable", workspaceFiles: "x" }),
+    ).toBe(false);
+    expect(
+      isDeliverableRef({ kind: "deliverable", workspaceFiles: [1] }),
+    ).toBe(false);
+  });
 });
 
 /**

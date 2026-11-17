@@ -303,6 +303,12 @@ export type EvidenceRow =
   | { kind: "attachment"; id: string; label: string }
   | { kind: "component"; label: string }
   | { kind: "link"; url: string; label: string }
+  | {
+      kind: "workspace_file";
+      /** 工作区内的相对路径，下载入口按它拼（`/api/computers/:botId/files/download`）。 */
+      path: string;
+      label: string;
+    }
   | { kind: "diff"; label: string; detail: string }
   | { kind: "note"; label: string }
   | { kind: "check"; label: string };
@@ -313,7 +319,7 @@ const strings = (value: unknown): string[] =>
     : [];
 
 /**
- * `deliverableRef`（`kind: "deliverable"`）拆成一行行：附件、组件、链接、改动、文字结论在前，自查在后。
+ * `deliverableRef`（`kind: "deliverable"`）拆成一行行：附件、组件、链接、工作区文件、改动、文字结论在前，自查在后。
  * 附件在卡上只存了 id，没有文件名，所以按顺序叫「附件 1」「附件 2」。
  */
 export function evidenceOf(ref: unknown): EvidenceRow[] {
@@ -344,6 +350,8 @@ export function evidenceOf(ref: unknown): EvidenceRow[] {
         label: typeof title === "string" && title ? title : url,
       });
     }
+  for (const path of strings(record.workspaceFiles))
+    rows.push({ kind: "workspace_file", path, label: path });
   if (Array.isArray(record.diffs))
     for (const diff of record.diffs) {
       if (!diff || typeof diff !== "object") continue;

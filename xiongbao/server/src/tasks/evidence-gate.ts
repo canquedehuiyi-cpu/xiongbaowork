@@ -28,7 +28,9 @@ import {
  * 1. at least one item, and every item real and this card's -- an attachment in the card's thread, a
  *    component drawn in one of the card's rounds, a link that is an http(s) address, a change summary
  *    of one of the card's rounds that an external employee ran (`externalRun`: only the server's own
- *    hand-in for that employee names one, never a coworker's `deliver_task`);
+ *    hand-in for that employee names one, never a coworker's `deliver_task`), or a workspace file
+ *    whose ref is a relative path inside the coworker Bot's own workspace (the gate checks the shape;
+ *    whether the file is still there is what the download route answers at the click);
  * 2. a words-only hand-in (only `note`s) says how it was checked: at least one `checks` line;
  * 3. when the criteria list required items (「必需：A、B、C」), each one is named by an item's title
  *    or a check line, and the refusal says which are missing.
@@ -42,13 +44,17 @@ export const DELIVERY_ITEM_KINDS = [
   "link",
   "diff",
   "note",
+  "workspace_file",
 ] as const;
 
 export type DeliveryItem = {
   kind: (typeof DELIVERY_ITEM_KINDS)[number];
   /**
    * attachment: its id (or `/api/attachments/<id>`); component: the id of the call that drew it, or
-   * its name for the latest one drawn on the card; link: the address; note: the conclusion itself.
+   * its name for the latest one drawn on the card; link: the address; note: the conclusion itself;
+   * workspace_file: the file's path inside the coworker Bot's own workspace, relative, such as
+   * `reports/对比.xlsx` -- the board links it through the computer's download route, so only the
+   * workspace's own shape passes here.
    */
   ref: string;
   title?: string;
@@ -99,6 +105,30 @@ function httpAddress(ref: string): string | undefined {
 }
 
 const nameOf = (item: DeliveryItem) => item.title?.trim() || item.ref.trim();
+
+/**
+ * The path a `workspace_file` item names, in the shape the download route answers, or undefined.
+ *
+ * The board links this item through `/api/computers/:botId/files/download?path=`, which only knows
+ * the Bot's own workspace: the same shape the chat checks before it draws a saved-file link. So an
+ * absolute path, a home path, a drive letter or any `..` segment is refused here rather than stored
+ * and left to 404 at the person's click; empty segments (`//`, a leading `./`) are joined away, and
+ * separators are read whichever way the coworker's machine wrote them.
+ */
+function workspaceFilePathOf(ref: string): string | undefined {
+  const path = ref.trim();
+  if (path === "") return undefined;
+  if (path.startsWith("/") || path.startsWith("~")) return undefined;
+  if (/^[A-Za-z]:/.test(path)) return undefined;
+  const segments: string[] = [];
+  for (const segment of path.split(/[/\\]/)) {
+    if (segment === "" || segment === ".") continue;
+    // A segment that IS `..`, not one that merely starts with it: `..notes.md` is an ordinary name.
+    if (segment === "..") return undefined;
+    segments.push(segment);
+  }
+  return segments.length > 0 ? segments.join("/") : undefined;
+}
 
 /**
  * The required items criteria list after 「必需：」 (or 「必需:」), split on punctuation (、，, / and the
@@ -257,6 +287,7 @@ export function createEvidenceGate(database: Database): EvidenceGate {
         const attachmentIds: string[] = [];
         const links: { url: string; title: string }[] = [];
         const notes: string[] = [];
+        const workspaceFiles: string[] = [];
 
         const wantedAttachments = items
           .filter((item) => item.kind === "attachment")
@@ -354,6 +385,22 @@ export function createEvidenceGate(database: Database): EvidenceGate {
               notes.push(text);
               break;
             }
+            case "workspace_file": {
+              /*
+               * The file itself lives on the coworker Bot's computer, which this gate cannot open;
+               * what it can promise is the shape the download route answers in. A path outside the
+               * workspace is refused with the same reasoning the chat refuses to draw a link for it.
+               */
+              const path = workspaceFilePathOf(item.ref);
+              if (!path)
+                return {
+                  ok: false,
+                  reason: `工作区文件「${name}」的路径不是工作区内的相对路径，交不了。要写文件时用的那个路径本身；绝对路径和越出工作区的都不算。`,
+                  missing: [name],
+                };
+              workspaceFiles.push(path);
+              break;
+            }
             default:
               return {
                 ok: false,
@@ -384,6 +431,8 @@ export function createEvidenceGate(database: Database): EvidenceGate {
         if (components.length) ref.components = components;
         if (attachmentIds.length) ref.attachments = [...new Set(attachmentIds)];
         if (links.length) ref.links = links;
+        if (workspaceFiles.length)
+          ref.workspaceFiles = [...new Set(workspaceFiles)];
         if (diffs.length) ref.diffs = diffs;
         if (notes.length) ref.notes = notes;
         if (checks.length) ref.checks = checks;

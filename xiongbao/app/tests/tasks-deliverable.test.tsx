@@ -4,6 +4,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
+import { artifactDownloadHref } from "@/lib/computers/artifact";
+import { evidenceOf } from "@/lib/tasks/delivery";
 import {
   AttentionRegion,
   deliverableSummary,
@@ -92,6 +94,50 @@ test("the summary names what was drawn and how many files were handed over", () 
       attachments: [],
     }),
   ).toBe("产出：playgroundWidget");
+});
+
+test("workspace files are counted beside the links, in the board's order", () => {
+  expect(
+    deliverableSummary({
+      kind: "deliverable",
+      workspaceFiles: ["reports/对比.xlsx"],
+    }),
+  ).toBe("产出：1 个工作区文件");
+  expect(
+    deliverableSummary({
+      kind: "deliverable",
+      attachments: ["att-1"],
+      links: [{ url: "https://example.com/r", title: "报告" }],
+      workspaceFiles: ["reports/对比.xlsx", "reports/说明.md"],
+      checks: ["打开确认无乱码"],
+    }),
+  ).toBe("产出：1 个附件 · 1 个链接 · 2 个工作区文件");
+});
+
+test("a saved file's evidence line keeps its path, which the download route understands", () => {
+  const rows = evidenceOf({
+    kind: "deliverable",
+    workspaceFiles: ["reports/对比.xlsx", "notes/说明.md"],
+    checks: ["打开确认无乱码"],
+  });
+  expect(rows).toEqual([
+    {
+      kind: "workspace_file",
+      path: "reports/对比.xlsx",
+      label: "reports/对比.xlsx",
+    },
+    {
+      kind: "workspace_file",
+      path: "notes/说明.md",
+      label: "notes/说明.md",
+    },
+    { kind: "check", label: "打开确认无乱码" },
+  ]);
+  // The card turns the path into the computer download route; the exact encoding is that helper's
+  // own test's job, here only that the line's path is the shape it takes.
+  expect(
+    artifactDownloadHref("bot-1", rows[0]?.path),
+  ).toStartWith("/api/computers/bot-1/files/download?path=reports%2F");
 });
 
 test("nothing that is not a deliverable is summarised as one", () => {

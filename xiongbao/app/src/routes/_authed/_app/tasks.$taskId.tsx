@@ -8,6 +8,7 @@ import {
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { RequestError } from "@/lib/client";
+import { artifactDownloadHref } from "@/lib/computers/artifact";
 import { useScheduleZone } from "@/lib/settings/work-hours";
 import {
   canExtend,
@@ -181,12 +182,26 @@ const ROW_NOTE: Record<EvidenceRow["kind"], string> = {
   attachment: "附件",
   component: "组件",
   link: "链接",
+  workspace_file: "工作区文件",
   diff: "改动汇总",
   note: "文字结论",
   check: "员工自查",
 };
 
-function EvidenceLine({ row }: { row: EvidenceRow }) {
+function EvidenceLine({
+  botId,
+  row,
+}: {
+  botId?: string | null;
+  row: EvidenceRow;
+}) {
+  // The saved file's address is drawn only when the card names a Bot and the path fits its
+  // workspace. Without one the line still names the file, which is the safer failure the chat
+  // already accepts: a link that 404s promises a file that is not there.
+  const fileHref =
+    row.kind === "workspace_file"
+      ? artifactDownloadHref(botId, row.path)
+      : undefined;
   const label =
     row.kind === "attachment" ? (
       <a
@@ -201,6 +216,15 @@ function EvidenceLine({ row }: { row: EvidenceRow }) {
       <a
         className="text-inherit underline-offset-2 hover:underline"
         href={row.url}
+        rel="noreferrer"
+        target="_blank"
+      >
+        {row.label}
+      </a>
+    ) : fileHref ? (
+      <a
+        className="text-inherit underline-offset-2 hover:underline"
+        href={fileHref}
         rel="noreferrer"
         target="_blank"
       >
@@ -650,7 +674,7 @@ function TaskDetail({ taskId }: { taskId: string }) {
         {evidence.length > 0 ? (
           evidence.map((row, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: 同一份交付物里的行，先后不会变。
-            <EvidenceLine key={index} row={row} />
+            <EvidenceLine botId={task.executorAgentId} key={index} row={row} />
           ))
         ) : (
           <p className="m-0 text-(--wb-muted) text-[13px]">还没交成果。</p>

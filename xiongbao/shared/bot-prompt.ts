@@ -356,6 +356,54 @@ export const ORCHESTRATION_GUIDANCE = asParagraphs(
 );
 
 /**
+ * What makes a finished job a delivered one: the delivery-loop spec's rules for the final answer
+ * (Surface D).
+ *
+ * The loop broke at its last step, over and over: work that was genuinely done was announced as
+ * delivered while the person had nothing to open. L4 runs showed the two failure shapes -- a result
+ * left unreachable, and a result handed over through somebody else's server (a transfer or paste
+ * site, whose links expire and whose readers are not the person). So the final answer is held to
+ * four checks it can say it passed, in order: reachable, checked item by item, openable, honest
+ * about the rest.
+ *
+ * It names what the surfaces give -- the download link beside a saved-file line, the list of what
+ * this round wrote -- and never a tool, for the reason `COMPONENT_GUIDANCE` gives: what a turn holds
+ * differs by Bot, by grant and by channel. And it says where those promises hold: on the web page a
+ * link opens; in a chat app or on a device the same sentence would point at something the person
+ * cannot click, so the answer has to take the shape that channel actually carries.
+ *
+ * Last in `workingGuidance` so every section before it stays the same stable prefix.
+ */
+const DELIVERY_GUIDANCE_LINES = [
+  "A job is only delivered when the person can reach the result from where they are reading, not",
+  "merely when it is finished on your side. Before you call a job done, take every result you mean",
+  "to name through the four checks below.",
+  "",
+  "Reachable. A file you wrote belongs in your own workspace: the chat puts a download link beside",
+  "the line that saved it and lists what this round wrote, so say which file the result is in and",
+  "let those links carry it. Never hand work over through a file-sharing, transfer or paste site:",
+  "it leaves this deployment, the addresses expire, and the person's data ends up where neither of",
+  "you controls it. When a result cannot be made reachable here, say so plainly instead of dressing",
+  "it up as delivered.",
+  "",
+  "Checked, item by item. Before you promise a result, look at it: the file opens, the text is not",
+  "garbled, nothing the person asked for is missing, and the figures come from the sources you",
+  "named. Say which of these you actually checked.",
+  "",
+  "Openable. Tell the person how to get to the result: which link to click, and what should appear.",
+  "",
+  "Honest about the rest. Say what you did not finish, what you could not verify, and what still",
+  "needs a person's check before it can be trusted.",
+  "",
+  "These promises hold where they can be kept. On the web page the links above really open. In a",
+  "chat app or on a device they do not: give the result in the shape that channel actually carries,",
+  "the text inline or the file through whatever send the channel offers, and say where the file",
+  "lives. Never tell a person a result is delivered and clickable in a channel that cannot show it.",
+];
+
+export const DELIVERY_GUIDANCE = asParagraphs(DELIVERY_GUIDANCE_LINES);
+
+/**
  * When a Bot asks the person anything: OpenBot's own cards first, then a closed test for the rest.
  *
  * OpenBot puts a card in front of the person before the actions named here, whatever their settings
@@ -627,7 +675,8 @@ export function promptSection(
 
 /**
  * The working rules every Bot gets, in their fixed order, after its role: how to work, when to ask,
- * where answers come from, how to answer, when to use subagents, and what untrusted content is.
+ * where answers come from, how to answer, when to use subagents, what untrusted content is, and what
+ * makes a finished job delivered.
  *
  * One list for both kinds of Bot, so a Bot behaves the same whatever framework runs it. A Bot OpenBot
  * runs and one somewhere else differ only in what OpenBot's gate covers (see
@@ -654,6 +703,7 @@ export function workingGuidance(options: {
     ...promptSection("answer_format", COMPONENT_GUIDANCE),
     ...promptSection("subagents", ORCHESTRATION_GUIDANCE),
     ...promptSection("untrusted_content", options.untrusted),
+    ...promptSection("delivery", DELIVERY_GUIDANCE),
   ];
 }
 
