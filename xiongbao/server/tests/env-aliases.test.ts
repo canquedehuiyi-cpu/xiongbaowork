@@ -111,7 +111,12 @@ describe("loadConfig reads the XIONGBAO_ names", () => {
       });
       delete process.env.OPENBOT_RLS_ENFORCE;
       loadConfig();
-      expect(process.env.OPENBOT_RLS_ENFORCE).toBe("warn");
+      /*
+       * A fresh copy: `delete` above narrowed the property itself to `undefined`, and TypeScript keeps
+       * that narrowing across the call that put it back.
+       */
+      const aliased = { ...process.env };
+      expect(aliased.OPENBOT_RLS_ENFORCE).toBe("warn");
     } finally {
       for (const name of Object.keys(process.env))
         if (!(name in saved)) delete process.env[name];

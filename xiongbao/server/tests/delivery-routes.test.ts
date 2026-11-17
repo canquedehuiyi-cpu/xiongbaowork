@@ -65,6 +65,8 @@ function fixture(
       toolRef: string;
       scope: string;
       args: Record<string, unknown>;
+      /** Why it is gated, when it is not a write: a private share is why the card says 可能含私人信息. */
+      effect?: string;
       target?: unknown;
     };
   } = {},

@@ -9,6 +9,7 @@ import {
   agents,
   devicePairCodes,
   registeredDevices,
+  type AcpTurnStatus,
   users,
 } from "../src/db/schema";
 import { runAsTenant } from "../src/tenant/context";
@@ -104,7 +105,8 @@ describe("external agents schema (0215)", () => {
             threadId: "thread-1",
             deviceId: "device-1",
             turnId: `turn-${randomUUID()}`,
-            status: "bogus",
+            // Deliberately outside the enum: the column's own constraint is what has to refuse it.
+            status: "bogus" as AcpTurnStatus,
             prompt: [],
           }),
         ))(),

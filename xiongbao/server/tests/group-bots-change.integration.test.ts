@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { eq, inArray, like, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
+import type { AuthenticatedActor } from "../src/auth/guards";
 import {
   createGroupConversations,
   createGroupRoutes,
@@ -61,15 +62,18 @@ afterAll(async () => {
   await database.$client.close();
 });
 
-async function person(): Promise<AgentActor> {
+/**
+ * A person who has signed in. The routes' guard hands one as `AuthenticatedActor`, which carries the
+ * email the `users` row has; an `AgentActor` alone is what a Bot-facing call speaks as.
+ */
+async function person(): Promise<AuthenticatedActor> {
   const id = `${prefix}-user-${randomUUID()}`;
+  const email = `${id}@example.test`;
   await runAsTenant(id, () =>
-    database
-      .insert(users)
-      .values({ id, email: `${id}@example.test`, name: "Bots Test" }),
+    database.insert(users).values({ id, email, name: "Bots Test" }),
   );
   createdUsers.push(id);
-  return { id, role: "user" };
+  return { id, email, name: "Bots Test", role: "user" };
 }
 
 const as = <T>(actor: AgentActor, work: () => T): T =>

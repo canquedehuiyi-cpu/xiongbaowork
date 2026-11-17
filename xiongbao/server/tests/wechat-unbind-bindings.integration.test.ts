@@ -90,7 +90,8 @@ app.route(
     wechat: {
       database,
       ilink: {
-        getBotQrcode: async () => ({ qrcode: "x", imageContent: null }),
+        // The real one answers `qr.imageContent ?? ""`; only the code is read here.
+        getBotQrcode: async () => ({ qrcode: "x", imageContent: "" }),
         getQrcodeStatus: async () => ({ status: "wait" as const }),
       },
       store: wechatStore,
