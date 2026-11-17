@@ -392,6 +392,46 @@ test("a card that fails again after it was archived asks again, and can be archi
   );
 });
 
+/*
+ * A hand-in that names files the coworker Bot saved in its own workspace stores them on the card as
+ * given: the board reads each path back as a line of the hand-in, so the projector's job is only
+ * to keep the list whole across `finished`.
+ */
+test("workspace files handed in with a finished run stay on the card", async () => {
+  const runRef = `run-files-${suite}`;
+  const id = await projector.opened({
+    tenantId: tenant,
+    title: "导出三家对比表",
+    executorAgentId: agent,
+    source: "chat",
+    runRef,
+  });
+  await projector.finished({
+    tenantId: tenant,
+    runRef,
+    deliverableRef: {
+      kind: "deliverable",
+      workspaceFiles: ["reports/对比.xlsx", "reports/说明.md"],
+      checks: ["打开确认无乱码"],
+    },
+  });
+  const [row] = await runAsTenant(tenant, () =>
+    database
+      .select({
+        deliverableRef: tasks.deliverableRef,
+        status: tasks.status,
+      })
+      .from(tasks)
+      .where(eq(tasks.id, id)),
+  );
+  expect(row?.status).toBe("awaiting_review");
+  expect(row?.deliverableRef).toEqual({
+    kind: "deliverable",
+    workspaceFiles: ["reports/对比.xlsx", "reports/说明.md"],
+    checks: ["打开确认无乱码"],
+  });
+});
+
 afterAll(async () => {
   await runAsTenant(tenant, () => database.delete(tasks));
   await database.$client.close();

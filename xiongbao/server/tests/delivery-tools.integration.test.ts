@@ -1953,6 +1953,52 @@ describe("after the hand-in", () => {
   });
 });
 
+/*
+ * A coworker Bot may hand in a file it saved in its own workspace by naming its path. The gate
+ * cannot open the file -- whether it is still there is what the person finds on opening the path
+ * the card names -- so it checks the workspace-relative shape, and refuses anything that could
+ * only name a place outside the workspace.
+ */
+describe("deliver_task and a workspace file", () => {
+  test("a workspace-relative file lands on the card with its path", async () => {
+    const card = await acceptedCard("workspace-file");
+    const { result } = await deliverOnThread(card, {
+      items: [
+        {
+          kind: "workspace_file",
+          ref: "reports/对比.xlsx",
+          title: "三家对比表",
+        },
+      ],
+      checks: ["打开确认无乱码、三家都在"],
+    });
+    expect(parsed(result).delivered).toBe(true);
+    expect((await cardRow(card.tenantId, card.cardId))?.deliverableRef).toEqual(
+      {
+        kind: "deliverable",
+        workspaceFiles: ["reports/对比.xlsx"],
+        checks: ["打开确认无乱码、三家都在"],
+      },
+    );
+  });
+
+  test("a path that leaves the workspace → bounced, and the card keeps nothing", async () => {
+    const card = await acceptedCard("workspace-escape");
+    for (const ref of ["../secrets.env", "/etc/passwd", "C:\\work\\x.md"]) {
+      const { result } = await deliverOnThread(card, {
+        items: [{ kind: "workspace_file", ref, title: "文件" }],
+        checks: ["查过了"],
+      });
+      const answer = parsed(result);
+      expect(answer.bounced).toBe(true);
+      expect(String(answer.reason)).toContain("工作区内的相对路径");
+    }
+    expect(
+      (await cardRow(card.tenantId, card.cardId))?.deliverableRef,
+    ).toBeNull();
+  });
+});
+
 afterAll(async () => {
   for (const { tenantId, id } of createdChannels)
     await runAsTenant(tenantId, async () => {

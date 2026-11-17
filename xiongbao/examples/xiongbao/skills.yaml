@@ -416,7 +416,9 @@ skills:
       （python-docx 等）；先确认库是否可用。改已有文档要先备份，只改用户指定的部分，保留原有样式、页眉页脚和编号。
       新建文档时先和用户确认标题层级、字体字号与页边距等版式要求，没有要求就用简洁常规版式。需要修订痕迹或批注时，
       先说明这类需求用 python-docx 不一定做得到，问用户是否改用手动方式。做完用提取文字或转成 PDF 的方式查看结果，
-      确认没有乱码、缺段，再交付并告知文件路径。
+      确认没有乱码、缺段，再按规约第 2 条交付：写在你自己工作区里的文件用 workspace_file 交付项上报，
+      ref 写工作区内的相对路径（如 reports/对比.xlsx），任务卡会给出它的下载入口；不得用外部网盘、
+      中转站或粘贴站点替代交付。
     tools: []
     _porting:
       source: xiongbao-package
@@ -13945,7 +13947,7 @@ skills:
       ## 关键事实（先记住，别重复试错）
     
       1. **专家不是项目成员。** `project_members` 只返回真人成员；虚拟专家不出现在里面。所以"按人指派事项"时专家无法作为 owner。
-      2. **专家不能用 `Agent` 工具当子代理调用。** 试过 `subagent_type: "游戏设计师"` → 报错 `Task agent 游戏设计师 is not available`。别再试。
+      2. **专家不能当你的子代理调用。** 子代理的唯一入口是 `run_subagent`，参数只有 `task` 和 `answer`——没有 `name`/`subagent_type` 参数，也无法把专家指定成子代理类型。试过就会被拒绝，别再试。
       3. **专家的正式调用入口是「项目自动化」。** `automation_create` 的 `expert_name` 字段说明为 "Expert display name; resolved against automation_list_experts"。
       4. 列出项目可用专家：`mcp__wb-issues__automation_list_experts`（返回 `expert_id` / `display_name_zh` / `profession_zh`）。
     
@@ -15450,7 +15452,9 @@ skills:
       1. **加载生成引擎**：调用 `tencent-pptx` 技能（通过 `Skill` 工具），严格遵循其 `create-from-scratch` 工作流
       2. **启动渲染服务**：
          - 运行 `slidep-start --project "项目目录" --filename "文件名.pptx"` 创建并启动目标.pptx
-         - 立即调用 `present_files` 在预览面板打开，让用户实时看到渲染效果
+         - 本部署没有 `present_files`，也没有实时预览面板，不要承诺一个。成品 .pptx 按规约第 2 条交付：
+           作为附件发到对话里，或用 workspace_file 交付项上报（ref 写工作区内的相对路径），
+           让任务卡上的下载入口成为用户真正打得开的入口
       3. **逐页生成**（严格按顺序从第1页到第N页）：
          - 动笔前必读 STORY.md（叙事逻辑）+ DESIGN.md（设计稿）+ 相关组件规范
          - 每页是一个 `.slide` 文件，写入 `slides/{NN}.slide`
@@ -15983,9 +15987,10 @@ skills:
       - 确认后再编码，减少反复修改与多次重写
     
       ### 3.2 子 Agent 分片上限
-      - 单主任务并行子代理最多 3 个
+      - `run_subagent` 每 run 最多 5 次发起（同一步里多次调用即并发执行）；第 6 次直接拒绝，不排队；计数活在本次 run，审批恢复的新 run 重新计
+      - 子代理不能再生子代理，它的参数只有 `task` 和 `answer`
       - 优先串行执行轻量子任务
-      - 禁止无限制创建大量子 Agent 并行检索、编码、校验
+      - 禁止无限制创建大量子代理并行检索、编码、校验
     
       ### 3.3 单次关键校验
       - 完成单次代码输出后，仅做一次关键逻辑校验
@@ -18124,13 +18129,9 @@ skills:
       ---
 
 
-      ### 子任务命名（critical）
-      调度每位成员时，**必须**在 Agent 工具的 `name` 参数中传入该成员的 **Agent ID**（即团队成员表格/列表中对应成员的标识名），同时 `subagent_type` 参数也传入相同的 Agent ID。**禁止**省略 name 参数（否则系统会自动生成无意义名称），**禁止**在 name 中使用中文名或其他自创名称。完整列表：
-      - `name: "gstack-designer", subagent_type: "gstack-designer"`
-      - `name: "gstack-investigator", subagent_type: "gstack-investigator"`
-      - `name: "gstack-product-reviewer", subagent_type: "gstack-product-reviewer"`
-      - `name: "gstack-qa-lead", subagent_type: "gstack-qa-lead"`
-      - `name: "gstack-security-officer", subagent_type: "gstack-security-officer"`
+      ### 子代理与成员标识（critical）
+      团队成员是独立的数字员工，不是子代理。`run_subagent` 只能在自己的答复里发起短小子任务，参数只有 `task` 和 `answer`——本产品没有 `Agent` 工具，也没有 `name`/`subagent_type` 参数。派活给成员时，在任务说明里用该成员的 **Agent ID**（即团队成员表格/列表中对应成员的标识名）点名，并写清职责与验收标准；**禁止**用中文名或其他自创名称指代成员。完整列表：
+      - `gstack-designer`、`gstack-investigator`、`gstack-product-reviewer`、`gstack-qa-lead`、`gstack-security-officer`
 
       ## 铁律
 
@@ -19612,7 +19613,7 @@ skills:
       ### 协作铁律
 
       1. **建立团队**：任务开始后必须先执行 `TeamCreate` 创建本次团队，团队名建议使用 `humanize-ppt-<任务简称>`，明确本次协作边界与上下文。
-      2. **调度成员**：按阶段使用 Agent spawn 调度成员。调度成员时，`name` 与 `subagent_type` 必须使用成员 Agent ID，例如 `outline-director`、`guizang-renderer`、`frontend-slides-renderer`、`video-motion-agent`、`html-ppt-presenter`、`qa`。
+      2. **调度成员**：按阶段在团队频道里 @ 对应成员派活，任务说明必须用成员 **Agent ID** 点名，例如 `outline-director`、`guizang-renderer`、`frontend-slides-renderer`、`video-motion-agent`、`html-ppt-presenter`、`qa`。成员不是子代理：本产品的子代理入口只有 `run_subagent`（参数只有 `task` 和 `answer`，每 run 最多 5 次发起，超出直接拒绝不排队），没有 `Agent` spawn，也没有 `name`/`subagent_type` 参数。
       3. **消息中转**：每次调度都必须给成员明确输入、输出文件、验收标准和回传对象；成员完成分析或生成后，必须通过 `SendMessage` 将结构化结果回传给主理人；跨成员信息必须由主理人转交。
       4. **成员结论为准**：任何大纲、渲染、视频、演讲模式、QA 等专业产出必须由对应成员输出后再采信，主理人只做编排、汇总、取舍、验收和面向用户交付。
 
@@ -19626,7 +19627,7 @@ skills:
 
       ### 协作规则
 
-      - 所有成员调度必须经过 `TeamCreate → Agent spawn → SendMessage 回传` 正式流程。
+      - 所有成员调度必须经团队建立与频道派单的正式流程完成，不得用子代理替代成员产出：`run_subagent` 的参数只有 `task` 和 `answer`，认不出成员、也不会替成员回话。
       - `outline-director` 先完成 AST 生产契约，后续成员只能基于该契约继续生产。
       - 渲染、视频、演讲模式、QA可以按阶段并行或串行推进，但每个阶段的输入必须由主理人确认。
       - 如果某个 Skill 不可用，成员必须回传失败原因和 adapter brief，不得假装已经加载或完成。
@@ -20632,12 +20633,9 @@ skills:
       - ❌ 禁止让成员互相直连通信，所有跨成员信息流必须经主理人中转
 
 
-      ### 子任务命名（critical）
-      调度每位成员时，**必须**在 Agent 工具的 `name` 参数中传入该成员的 **Agent ID**（即团队成员表格/列表中对应成员的标识名），同时 `subagent_type` 参数也传入相同的 Agent ID。**禁止**省略 name 参数（否则系统会自动生成无意义名称），**禁止**在 name 中使用中文名或其他自创名称。完整列表：
-      - `name: "software-architect", subagent_type: "software-architect"`
-      - `name: "software-engineer", subagent_type: "software-engineer"`
-      - `name: "software-product-manager", subagent_type: "software-product-manager"`
-      - `name: "software-qa-engineer", subagent_type: "software-qa-engineer"`
+      ### 子代理与成员标识（critical）
+      团队成员是独立的数字员工，不是子代理。`run_subagent` 只能在自己的答复里发起短小子任务，参数只有 `task` 和 `answer`——本产品没有 `Agent` 工具，也没有 `name`/`subagent_type` 参数。派活给成员时，在任务说明里用该成员的 **Agent ID**（即团队成员表格/列表中对应成员的标识名）点名，并写清职责与验收标准；**禁止**用中文名或其他自创名称指代成员。完整列表：
+      - `software-architect`、`software-engineer`、`software-product-manager`、`software-qa-engineer`
 
       ## 工作流路由（critical — 收到请求时首先判断）
 

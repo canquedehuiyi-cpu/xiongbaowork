@@ -142,8 +142,9 @@ export type DeliverableComponent = {
  *
  * The delivery loop (spec 2026-11-15-delivery-loop §4) adds four more kinds of thing a hand-in can
  * name: `links`, `diffs` (an external coworker's change summary), `notes` (a words-only conclusion)
- * and `checks` (the coworker's self-check lines). All six arrays are optional; a record written
- * before this existed, with only `components` and `attachments`, is still a deliverable.
+ * and `checks` (the coworker's self-check lines). A file the coworker Bot saved in its own workspace
+ * is named by `workspaceFiles`, relative to that workspace. All seven arrays are optional; a record
+ * written before this existed, with only `components` and `attachments`, is still a deliverable.
  */
 export type DeliverableRef = {
   kind: "deliverable";
@@ -154,6 +155,12 @@ export type DeliverableRef = {
   diffs?: { files: number; added: number; removed: number; ref: string }[];
   notes?: string[];
   checks?: string[];
+  /**
+   * Files a coworker Bot saved in its own computer's workspace, as workspace-relative paths
+   * (`reports/对比.xlsx`). The board names each one as a line of the hand-in, so the only shape
+   * that may be stored here is a path inside that workspace.
+   */
+  workspaceFiles?: string[];
 };
 
 /**
@@ -180,11 +187,12 @@ const DELIVERABLE_ARRAYS = [
   "diffs",
   "notes",
   "checks",
+  "workspaceFiles",
 ] as const;
 
 /**
  * Whether a stored `deliverable_ref` is a run's output rather than some other record: the right
- * `kind`, at least one of the six lists present, and every list that is present really a list.
+ * `kind`, at least one of the seven lists present, and every list that is present really a list.
  * Accepts both the original `{components, attachments}` shape and the delivery loop's.
  */
 export function isDeliverableRef(value: unknown): value is DeliverableRef {
@@ -198,7 +206,7 @@ export function isDeliverableRef(value: unknown): value is DeliverableRef {
   ) {
     return false;
   }
-  return (["attachments", "notes", "checks"] as const).every(
+  return (["attachments", "notes", "checks", "workspaceFiles"] as const).every(
     (key) =>
       ref[key] === undefined ||
       (ref[key] as unknown[]).every((item) => typeof item === "string"),

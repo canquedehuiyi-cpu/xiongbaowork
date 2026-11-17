@@ -75,6 +75,7 @@ const WORKING_SECTIONS = [
   "answer_format",
   "subagents",
   "untrusted_content",
+  "delivery",
 ];
 
 /**

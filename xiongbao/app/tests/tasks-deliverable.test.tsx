@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { agentKeys } from "@/lib/agents/queries";
+import { evidenceOf } from "@/lib/tasks/delivery";
 import {
   AttentionRegion,
   deliverableSummary,
@@ -92,6 +93,52 @@ test("the summary names what was drawn and how many files were handed over", () 
       attachments: [],
     }),
   ).toBe("产出：playgroundWidget");
+});
+
+test("workspace files are counted beside the links, in the board's order", () => {
+  expect(
+    deliverableSummary({
+      kind: "deliverable",
+      workspaceFiles: ["reports/对比.xlsx"],
+    }),
+  ).toBe("产出：1 个工作区文件");
+  expect(
+    deliverableSummary({
+      kind: "deliverable",
+      attachments: ["att-1"],
+      links: [{ url: "https://example.com/r", title: "报告" }],
+      workspaceFiles: ["reports/对比.xlsx", "reports/说明.md"],
+      checks: ["打开确认无乱码"],
+    }),
+  ).toBe("产出：1 个附件 · 1 个链接 · 2 个工作区文件");
+});
+
+test("a saved file's evidence line is its path as text, with no link beside it", () => {
+  const rows = evidenceOf({
+    kind: "deliverable",
+    workspaceFiles: ["reports/对比.xlsx", "notes/说明.md"],
+    checks: ["打开确认无乱码"],
+  });
+  expect(rows).toEqual([
+    {
+      kind: "workspace_file",
+      path: "reports/对比.xlsx",
+      label: "reports/对比.xlsx",
+    },
+    {
+      kind: "workspace_file",
+      path: "notes/说明.md",
+      label: "notes/说明.md",
+    },
+    { kind: "check", label: "打开确认无乱码" },
+  ]);
+  // 行上只有路径文本：卡拿不到下载入口所需的 Bot 标识（PR2 裁定 1），所以这一行不给链接。
+  // 字段就是 kind/path/label 三个——多一个 href 就是在承诺一个点不开的东西。
+  const saved = rows[0];
+  expect(
+    saved && saved.kind === "workspace_file" ? saved.path : undefined,
+  ).toBe("reports/对比.xlsx");
+  expect(Object.keys(saved ?? {}).sort()).toEqual(["kind", "label", "path"]);
 });
 
 test("nothing that is not a deliverable is summarised as one", () => {

@@ -1576,7 +1576,7 @@ export function createDelivery(database: Database): Delivery {
 
 /**
  * One hand-in added to what the card already holds: each list concatenated, the same attachment,
- * link or line not twice.
+ * link, file path or line not twice.
  */
 export function mergeDeliverables(
   held: DeliverableRef | undefined,
@@ -1602,12 +1602,14 @@ export function mergeDeliverables(
   const diffs = unique(both("diffs"), (diff) => diff.ref);
   const notes = unique(both("notes"), (note) => note);
   const checks = unique(both("checks"), (check) => check);
+  const workspaceFiles = unique(both("workspaceFiles"), (path) => path);
   if (components.length) merged.components = components;
   if (attachments.length) merged.attachments = attachments;
   if (links.length) merged.links = links;
   if (diffs.length) merged.diffs = diffs;
   if (notes.length) merged.notes = notes;
   if (checks.length) merged.checks = checks;
+  if (workspaceFiles.length) merged.workspaceFiles = workspaceFiles;
   return merged;
 }
 

@@ -181,12 +181,15 @@ const ROW_NOTE: Record<EvidenceRow["kind"], string> = {
   attachment: "附件",
   component: "组件",
   link: "链接",
+  workspace_file: "工作区文件",
   diff: "改动汇总",
   note: "文字结论",
   check: "员工自查",
 };
 
 function EvidenceLine({ row }: { row: EvidenceRow }) {
+  // 工作区文件这一行只念路径文本：下载入口要的是「这次调用发生在哪个 Bot 上」那个标识，
+  // 任务卡上拿不到它（PR2 裁定 1）。一个点开是 404 的链接比不写链接更不诚实，所以先不给。
   const label =
     row.kind === "attachment" ? (
       <a

@@ -422,6 +422,9 @@ function EvidenceItem({
   linked: boolean;
 }) {
   const link = "text-inherit underline-offset-2 hover:underline";
+  // 工作区文件这一行只念路径文本：下载入口要的是「这次调用发生在哪个 Bot 上」那个标识，
+  // 交付卡上拿不到它（PR2 裁定 1）。没有入口时这行照旧念出文件名，
+  // 比一个点开是 404 的链接诚实。
   const label =
     row.kind === "attachment" && linked ? (
       <a
