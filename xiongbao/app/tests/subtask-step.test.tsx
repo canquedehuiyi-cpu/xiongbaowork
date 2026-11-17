@@ -341,14 +341,15 @@ test("a handed-back subtask says why it stopped and what it had said before stop
   ).toBeTruthy();
   cleanup();
 
-  // A hand-back from before either was carried says no more than it used to.
-  const older = await draw(handedBack, { settled: true, busy: false });
-  const olderNotice = within(
-    (await subtaskRow(older)).getByRole("region", { name: "已交还" }),
+  // `reason` is part of the hand-back's contract — a result without it is not read as a hand-back at
+  // all — so the shape from before this was carried is the reason without an account of its own.
+  const untold = await draw(handedBack, { settled: true, busy: false });
+  const untoldNotice = within(
+    (await subtaskRow(untold)).getByRole("region", { name: "已交还" }),
   );
-  expect(olderNotice.queryByText(/它停下来的原因/)).toBeNull();
-  expect(olderNotice.queryByText(/它停下来时说的/)).toBeNull();
-  expect(older.queryByText(/耗时/)).toBeNull();
+  expect(untoldNotice.getByText(/它停下来的原因/)).toBeTruthy();
+  expect(untoldNotice.queryByText(/它停下来时说的/)).toBeNull();
+  expect(untold.queryByText(/耗时/)).toBeNull();
 });
 
 test("a subtask that did not finish is said in the person's words, whatever the server's reason was", async () => {
