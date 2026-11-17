@@ -92,6 +92,12 @@ function fixture(
       return { queued: true, id: "in" };
     },
     inbox: async () => inbox,
+    /*
+     * Read only for a WeChat round: a reply closes the round it answers when that round came in
+     * through WeChat and is still waiting. This fixture's bindings are Slack, so the router never
+     * asks — but the key set is checked, which is how this was found.
+     */
+    latestInbox: async () => null,
     setInbox: async (_id: string, state: string, error?: string | null) => {
       statuses.push({ state, error });
     },
@@ -100,6 +106,8 @@ function fixture(
       return outbound;
     },
     outbox: async () => outbound,
+    // Asked only when a push lost its dedupe key, which this fixture's offerOutbox never does.
+    outboxByKey: async () => null,
     // A test replaces it with one that finds nothing to start.
     startOutbox: async (): Promise<typeof outbound | null> => outbound,
     setOutbox: async (

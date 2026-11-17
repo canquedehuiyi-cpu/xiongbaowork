@@ -107,6 +107,8 @@ type Library = {
     modelName: string;
     enabled: boolean;
     coworkers: number;
+    /** The window the person set, or null for the provider's own. */
+    contextWindow: number | null;
   }[];
   templates: { id: string; allowsBaseUrl: boolean }[];
 };
@@ -619,9 +621,7 @@ test("admin can edit context_window", async () => {
   );
   expect(cleared.status).toBe(200);
   expect(cleared.body.model.contextWindow).toBeNull();
-  const library = await call<
-    Library & { models: { id: string; contextWindow: number | null }[] }
-  >("GET", "/");
+  const library = await call<Library>("GET", "/");
   expect(
     library.body.models.find((m) => m.id === id)?.contextWindow,
   ).toBeNull();

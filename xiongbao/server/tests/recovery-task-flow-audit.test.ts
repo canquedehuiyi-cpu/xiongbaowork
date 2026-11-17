@@ -19,7 +19,12 @@ type Column = {
   type: string;
   primaryKey: boolean;
   notNull: boolean;
-  default?: string | number;
+  /**
+   * A default as Drizzle holds it: a string is rendered SQL (`'person'`, `now()`), a number or a
+   * boolean is the literal it is (`1`, `false`). Reading it to `string | number` is what left the
+   * boolean columns of a table like `users` unrepresentable.
+   */
+  default?: string | number | boolean;
   typeSchema?: string;
 };
 type Index = {

@@ -49,6 +49,7 @@ import { createWakerGroupRoutes } from "../src/waker-groups/routes";
 import { createWakerGroupStore } from "../src/waker-groups/store";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { filledLater } from "./support/filled-later";
 
 /**
  * A shared group whose creator leaves, or is deactivated, goes to its earliest member (spec
@@ -1520,8 +1521,6 @@ describe("deactivation (0207 trigger)", () => {
     expect(backfill).toContain("openbot_team_person_leaves_groups(uid)");
     const owner = ownerConnection();
     class Rollback extends Error {}
-    let before: { creator: unknown; members: unknown[] } | null = null;
-    let after: { creator: unknown; members: unknown[] } | null = null;
     const read = async (tx: SQL) => ({
       creator: (
         await tx`select created_by from channels where id = ${made.channelId}`
@@ -1530,15 +1529,18 @@ describe("deactivation (0207 trigger)", () => {
         await tx`select user_id from channel_memberships where channel_id = ${made.channelId} order by created_at`
       ).map((row: { user_id: string }) => row.user_id),
     });
+    // 交接前后各读一次；两次都在事务回调里，所以用 `filledLater` 而不是 `= null` 的 `let`。
+    const before = filledLater<Awaited<ReturnType<typeof read>>>();
+    const after = filledLater<Awaited<ReturnType<typeof read>>>();
     try {
       await owner.begin(async (tx) => {
         // As a deployment that deny-listed her before 0207 existed.
         await tx`alter table revoked_access disable trigger openbot_team_revoked_leaves`;
         await tx`insert into revoked_access (email, revoked_by) values (${emailOf(made.alice)}, 'before-0207')`;
         await tx`alter table revoked_access enable trigger openbot_team_revoked_leaves`;
-        before = await read(tx as unknown as SQL);
+        before.set(await read(tx as unknown as SQL));
         await tx.unsafe(backfill);
-        after = await read(tx as unknown as SQL);
+        after.set(await read(tx as unknown as SQL));
         throw new Rollback();
       });
     } catch (error) {
@@ -1547,11 +1549,11 @@ describe("deactivation (0207 trigger)", () => {
       await owner.close();
     }
 
-    expect(before).toEqual({
+    expect(before.get()).toEqual({
       creator: made.alice.id,
       members: [made.alice.id, made.bob.id, made.carol.id],
     });
-    expect(after).toEqual({
+    expect(after.get()).toEqual({
       creator: made.bob.id,
       members: [made.bob.id, made.carol.id],
     });
@@ -1606,17 +1608,18 @@ describe("deactivation (0207 trigger)", () => {
                   where id::text in ${tx(cardIds)} order by id`,
       ),
     });
-    let once: Awaited<ReturnType<typeof read>> | null = null;
-    let twice: Awaited<ReturnType<typeof read>> | null = null;
+    // 第一次跑完读一次、再跑一次读一次；两次都在事务回调里（见 `filledLater`）。
+    const once = filledLater<Awaited<ReturnType<typeof read>>>();
+    const twice = filledLater<Awaited<ReturnType<typeof read>>>();
     try {
       await owner.begin(async (tx) => {
         await tx`alter table revoked_access disable trigger openbot_team_revoked_leaves`;
         await tx`insert into revoked_access (email, revoked_by) values (${emailOf(made.alice)}, 'before-0207')`;
         await tx`alter table revoked_access enable trigger openbot_team_revoked_leaves`;
         await tx.unsafe(backfill);
-        once = await read(tx as unknown as SQL);
+        once.set(await read(tx as unknown as SQL));
         await tx.unsafe(backfill);
-        twice = await read(tx as unknown as SQL);
+        twice.set(await read(tx as unknown as SQL));
         throw new Rollback();
       });
     } catch (error) {
@@ -1625,8 +1628,9 @@ describe("deactivation (0207 trigger)", () => {
       await owner.close();
     }
 
-    if (!once || !twice) throw new Error("the backfill did not run");
-    const first: Awaited<ReturnType<typeof read>> = once;
+    const first = once.get();
+    const second = twice.get();
+    if (!first || !second) throw new Error("the backfill did not run");
     // The first run did its work: one group handed to Bob, the other left to a heal.
     expect(
       first.channels.map((row) => [row.id, row.created_by, row.deleted_at]),
@@ -1639,7 +1643,7 @@ describe("deactivation (0207 trigger)", () => {
     expect(first.members.map((row) => row.user_id)).not.toContain(
       made.alice.id,
     );
-    expect(twice).toEqual(first);
+    expect(second).toEqual(first);
   });
 });
 

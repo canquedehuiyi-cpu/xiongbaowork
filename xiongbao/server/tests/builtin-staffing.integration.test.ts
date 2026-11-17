@@ -51,6 +51,7 @@ import { createStaffingProposalStore } from "../src/staffing/store";
 import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { filledLater } from "./support/filled-later";
 
 /**
  * 员工用「招聘与组群」起草提议：主人、员工、会话都取自这次运行，不取自参数；起草只写提议表，不建任何
@@ -659,7 +660,7 @@ describe("what a draft keeps, and what it hands the executor", () => {
     const owner = await person("routines-owner");
     const teammate = await person("routines-teammate");
     const teamBot = await bot(owner, "团队排程员", "public");
-    let askedFor: string | null = null;
+    const askedFor = filledLater<string>();
     useRoutineTools({
       create: async () => {
         throw new Error("not used");
@@ -669,7 +670,7 @@ describe("what a draft keeps, and what it hands the executor", () => {
       },
       remove: async () => {},
       listFor: async (ownerUserId) => {
-        askedFor = ownerUserId;
+        askedFor.set(ownerUserId);
         return [];
       },
     });
@@ -701,7 +702,7 @@ describe("what a draft keeps, and what it hands the executor", () => {
       );
 
       expect(answer.isError).toBe(false);
-      expect(askedFor).toBe(owner.id);
+      expect(askedFor.get()).toBe(owner.id);
     } finally {
       useRoutineTools(null);
       if (added)

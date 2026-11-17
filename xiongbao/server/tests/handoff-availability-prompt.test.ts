@@ -43,9 +43,11 @@ const model: RuntimeModel = { provider: "openai", defaultModel: "gpt-5.5" };
 /** 一次不派给任何人的 run：`handoff` 缺省，`passing` 为空，和真机上那次一样。 */
 async function promptSent(withHandoff: boolean) {
   const handoff: HandoffForRun | undefined = withHandoff
-    ? async () => [
+      ? async () => [
         {
           name: "message_bot",
+          // The ref spelling a grant is written in, as `handoff-tool.ts` carries it alongside the name.
+          ref: "bot/message_bot",
           description: "Hand a piece of work to another Bot in this workspace.",
           parameters: z.object({ bot: z.string(), task: z.string() }),
           execute: async () => "HANDED-OVER",
