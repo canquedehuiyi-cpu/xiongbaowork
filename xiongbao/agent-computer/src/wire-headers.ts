@@ -18,7 +18,7 @@ import { HEADER, type WireHeader } from "../../shared/wire-headers";
 
 export { HEADER, type WireHeader };
 
-// legacy-compat：introducedIn 0.2.11，removeIn 0.2.13，Task 20/21：botId, personId, computerToken, egress
+// legacy-compat：introducedIn 0.2.11，removeIn 0.2.14，Task 20/21：botId, personId, computerToken, egress
 // That is all four old names below, and every read of them through this module.
 export const LEGACY_HEADER = {
   botId: "x-openbot-bot-id",
