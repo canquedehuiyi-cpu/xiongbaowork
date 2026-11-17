@@ -52,6 +52,7 @@ import {
 import { grantedToolGuidance } from "../src/plugins/tools";
 import { loadTenantPackage } from "../src/tenant-package";
 import { UNTRUSTED_GUIDANCE } from "../src/untrusted-content";
+import { fetchDouble } from "./support/fetch-double";
 import { testEnvironment } from "./support/environment";
 
 /** What every built-in Bot reads first: its name, and that a request for it is for it. */
@@ -202,7 +203,7 @@ describe("deployment model selection", () => {
         content: "DEFAULTMODEL001 fixture completed.",
       });
       const agents = await resolveRuntimeAgents(
-        () => [
+        async () => [
           {
             id: "general-assistant",
             name: "General Assistant",
@@ -468,6 +469,7 @@ describe("registered Copilot agents", () => {
           name: "Risk",
           type: "remote_ag_ui",
           endpoint: "http://risk.internal/ag-ui",
+          standingMessage: standingRoleMessage(riskRow),
         },
       ],
       { provider: "openai", defaultModel: "gpt-5.6-terra" },
@@ -509,6 +511,7 @@ describe("registered Copilot agents", () => {
           name: "Risk",
           type: "remote_ag_ui",
           endpoint: "http://risk.internal/ag-ui",
+          standingMessage: standingRoleMessage(riskRow),
         },
       ],
       { provider: "openai", defaultModel: "gpt-5.6-terra" },
@@ -536,6 +539,7 @@ describe("registered Copilot agents", () => {
         name: "Risk",
         type: "remote_ag_ui" as const,
         endpoint: "http://risk.internal/ag-ui",
+        standingMessage: standingRoleMessage(riskRow),
       },
     ];
     const model = { provider: "openai" as const, defaultModel: "gpt-4.1" };
@@ -600,6 +604,7 @@ describe("registered Copilot agents", () => {
           name: "Risk",
           type: "remote_ag_ui" as const,
           endpoint: "http://risk.internal/ag-ui",
+          standingMessage: standingRoleMessage(riskRow),
         },
       ],
       { provider: "openai" as const, defaultModel: "gpt-4.1" },
@@ -633,6 +638,7 @@ describe("registered Copilot agents", () => {
         name: "Risk",
         type: "remote_ag_ui" as const,
         endpoint: "http://risk.internal/ag-ui",
+        standingMessage: standingRoleMessage(riskRow),
       },
     ];
     const model = {
@@ -699,6 +705,7 @@ describe("registered Copilot agents", () => {
           name: "Risk",
           type: "remote_ag_ui",
           endpoint: "http://risk.internal/ag-ui",
+          standingMessage: standingRoleMessage(riskRow),
         },
       ],
       { provider: "openai", defaultModel: "gpt-5.6-terra" },
@@ -886,9 +893,11 @@ describe("standing agent roles", () => {
     const reason =
       "Expense Manager has been deleted and can no longer run. Its conversations remain readable.";
     let modelKeyRequests = 0;
-    const network = spyOn(globalThis, "fetch").mockImplementation(() => {
-      throw new Error("An unavailable agent must not make network calls");
-    });
+    const network = spyOn(globalThis, "fetch").mockImplementation(
+      fetchDouble(() => {
+        throw new Error("An unavailable agent must not make network calls");
+      }),
+    );
     const builtInRun = spyOn(BuiltInAgent.prototype, "run").mockImplementation(
       () => EMPTY,
     );
@@ -1271,17 +1280,19 @@ describe("what a Bot is told it holds", () => {
   });
 
   test("a built-in Bot is told before it is told about the browser", () => {
-    const prompt = builtInAgentConfiguration(
-      {
-        id: "risk-analyst",
-        name: "Risk Analyst",
-        type: "built_in",
-        systemPrompt: "Investigate policies.",
-      },
-      { provider: "openai", defaultModel: "gpt-5.6-terra" },
-      "openai-secret",
-      drive,
-      () => "BROWSER GUIDANCE HERE",
+    const prompt = (
+      builtInAgentConfiguration(
+        {
+          id: "risk-analyst",
+          name: "Risk Analyst",
+          type: "built_in",
+          systemPrompt: "Investigate policies.",
+        },
+        { provider: "openai", defaultModel: "gpt-5.6-terra" },
+        "openai-secret",
+        drive,
+        () => "BROWSER GUIDANCE HERE",
+      ) as { prompt?: unknown }
     ).prompt as string;
 
     // Order is the fix, not merely presence: the grants have to land before the browser prose.
@@ -1463,15 +1474,17 @@ describe("what a built-in Bot is told about searching", () => {
 describe("where a Bot says its answer came from", () => {
   test("a built-in Bot carries the rule even holding nothing at all", () => {
     // The Bot that needs it most. No tools and no computer means nothing it says was read anywhere.
-    const prompt = builtInAgentConfiguration(
-      {
-        id: "general-assistant",
-        name: "General Assistant",
-        type: "built_in",
-        systemPrompt: "Be helpful.",
-      },
-      { provider: "openai", defaultModel: "gpt-5.6-terra" },
-      "openai-secret",
+    const prompt = (
+      builtInAgentConfiguration(
+        {
+          id: "general-assistant",
+          name: "General Assistant",
+          type: "built_in",
+          systemPrompt: "Be helpful.",
+        },
+        { provider: "openai", defaultModel: "gpt-5.6-terra" },
+        "openai-secret",
+      ) as { prompt?: unknown }
     ).prompt as string;
 
     expect(prompt).toContain(PROVENANCE_GUIDANCE);
@@ -2153,18 +2166,20 @@ describe("a person's standing instructions", () => {
 
   const NOW = new Date("2026-11-05T15:44:00Z");
   const promptWith = (instructions: string | null) =>
-    builtInAgentConfiguration(
-      assistant,
-      model,
-      "openai-secret",
-      [],
-      undefined,
-      [],
-      instructions,
-      undefined,
-      undefined,
-      new Set(),
-      NOW,
+    (
+      builtInAgentConfiguration(
+        assistant,
+        model,
+        "openai-secret",
+        [],
+        undefined,
+        [],
+        instructions,
+        undefined,
+        undefined,
+        new Set(),
+        NOW,
+      ) as { prompt?: unknown }
     ).prompt as string;
 
   test("carries the block, its precedence sentence, and the person's own words", () => {
@@ -2185,14 +2200,16 @@ describe("a person's standing instructions", () => {
   });
 
   test("sits after the role and before everything the deployment adds", () => {
-    const prompt = builtInAgentConfiguration(
-      assistant,
-      model,
-      "openai-secret",
-      [{ name: "mcp__google-drive__search_files" }] as never[],
-      () => "Computer guidance.",
-      [],
-      "Write in British English.",
+    const prompt = (
+      builtInAgentConfiguration(
+        assistant,
+        model,
+        "openai-secret",
+        [{ name: "mcp__google-drive__search_files" }] as never[],
+        () => "Computer guidance.",
+        [],
+        "Write in British English.",
+      ) as { prompt?: unknown }
     ).prompt as string;
 
     // The role, then who it is working for, then what it holds, then its hands. Asserted as
@@ -2269,6 +2286,7 @@ describe("a person's standing instructions", () => {
           name: "Risk",
           type: "remote_ag_ui",
           endpoint: "http://risk.internal/ag-ui",
+          standingMessage: standingRoleMessage(riskRow),
         },
       ],
       model,

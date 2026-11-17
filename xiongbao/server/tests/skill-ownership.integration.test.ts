@@ -9,6 +9,7 @@ import { createPluginRoutes } from "../src/plugins/routes";
 import { createPluginStore } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { credentialDouble } from "./support/credential-double";
 
 /**
  * Whose skill is whose, and which Bots a person may put one on.
@@ -26,7 +27,7 @@ const policy: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 const store = createPluginStore({
   database,
   auditStore: createAuditStore(database),
-  credentials: { readSecret: async () => null },
+  credentials: credentialDouble(),
   encryptionKey: "x".repeat(44),
   policy: () => policy,
 });

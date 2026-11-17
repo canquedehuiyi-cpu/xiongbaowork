@@ -10,6 +10,7 @@ import { createPluginStore } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
 import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { credentialDouble } from "./support/credential-double";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 
@@ -65,7 +66,7 @@ const auditStore = {
 const store = createPluginStore({
   database,
   auditStore,
-  credentials: {
+  credentials: credentialDouble({
     readSecret: async () => null,
     create: async () => {
       throw new Error("the removal path asked the vault to create a secret");
@@ -76,7 +77,7 @@ const store = createPluginStore({
     revoke: async () => {
       throw new Error("the removal path asked the vault to revoke a secret");
     },
-  },
+  }),
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   broker,

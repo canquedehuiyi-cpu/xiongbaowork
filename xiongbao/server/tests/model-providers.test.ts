@@ -14,6 +14,7 @@ import {
   routingModelFor,
 } from "../src/routing/model";
 import { validateTenantPackage } from "../src/tenant-package";
+import { fetchDouble } from "./support/fetch-double";
 
 const encryptionKey = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 const originalEnvironment = {
@@ -357,7 +358,7 @@ test.each([
       normalizeModelBaseUrls();
       // Keep the SDK's request intact while redirecting only its transport to local fake HTTP.
       interception = spyOn(globalThis, "fetch").mockImplementation(
-        (input, init) => {
+        fetchDouble((input, init) => {
           const request = new Request(input, init);
           urls.push(request.url);
           keys.push(
@@ -370,7 +371,7 @@ test.each([
             headers: request.headers,
             body: request.body,
           });
-        },
+        }),
       );
       const agents = await resolveRuntimeAgents(
         async () => [

@@ -24,6 +24,7 @@ import { auditEvents } from "../src/db/schema";
 import { users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
 import { runAsTenant } from "../src/tenant/context";
+import { fetchDouble } from "./support/fetch-double";
 import { createApprovalFixtureService } from "./helpers/approval-producer-model";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -58,7 +59,7 @@ const gateway = createComputerGateway({
   auditStore: { insert: async () => undefined },
   policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
   approvalGate: (candidate) => service.gate(candidate),
-  fetchImpl: async (url, init) => {
+  fetchImpl: fetchDouble(async (url, init) => {
     const path = new URL(String(url)).pathname;
     if (path !== "/click" && path !== "/type")
       throw new Error(`Unexpected ${path}`);
@@ -68,7 +69,7 @@ const gateway = createComputerGateway({
       url: "https://httpbin.org/forms/post",
       elapsedMs: 1,
     });
-  },
+  }),
 });
 const run = (snapshot: ApprovalContinuation, actorId: string, bot = botId) => {
   const tool = createHeadlessComputerTools({
@@ -84,8 +85,10 @@ const run = (snapshot: ApprovalContinuation, actorId: string, bot = botId) => {
 };
 // Resume continues only through a producer + recovery port (fail-closed by
 // default); the CPU fixture model supplies both, as in approvals.test.ts.
-const service = createApprovalFixtureService(store, undefined, (actorId, bot, snap) =>
-  run(snap, actorId, bot),
+const service = createApprovalFixtureService(
+  store,
+  undefined,
+  (actorId, bot, snap) => run(snap, actorId, bot),
 );
 const execute = (action: ApprovalAction) =>
   run(

@@ -29,6 +29,12 @@ describe("storeAgentAuth", () => {
         return { id: "credential-rotated", revokedAt: null };
       },
       revoke: async () => new Date(),
+      // Never reached: this module rotates a row rather than re-encrypting one in place, and the
+      // test that pins which method it reaches for is the one below.
+      updateSecret: async () => {
+        options.calls.push("updateSecret");
+        throw new Error("storeAgentAuth re-encrypts by rotating, not in place");
+      },
       isLive: async (id) => live.has(id),
       findLiveByKey: async () => null,
     };

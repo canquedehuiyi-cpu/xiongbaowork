@@ -3,10 +3,11 @@ import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { z } from "zod";
 import { currentApprovalContext } from "../src/approvals/types";
 import { buildAgents } from "../src/copilot";
+import { fetchDouble } from "./support/fetch-double";
 
 test("a real built-in native tool carries provider call identity and suspends AG-UI without a fake tool result", async () => {
   const transport = spyOn(globalThis, "fetch").mockImplementation(
-    async (_url, init) => {
+    fetchDouble(async (_url, init) => {
       const body = JSON.parse(String(init?.body));
       return new Response(
         [
@@ -29,7 +30,7 @@ test("a real built-in native tool carries provider call identity and suspends AG
           .join(""),
         { headers: { "content-type": "text/event-stream" } },
       );
-    },
+    }),
   );
   const captured: unknown[] = [],
     events: unknown[] = [];

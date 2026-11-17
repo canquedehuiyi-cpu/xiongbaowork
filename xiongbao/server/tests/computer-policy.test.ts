@@ -267,6 +267,7 @@ describe("the second door", () => {
       bot: { id: "sales" },
       actor: { id: "someone" },
       page: { url: "https://example.com/order", host: "example.com" },
+      initiator: { kind: "person", id: "" },
       key: "Enter",
     });
     expect(refused.allowed).toBe(false);
@@ -277,6 +278,7 @@ describe("the second door", () => {
       bot: { id: "sales" },
       actor: { id: "someone" },
       page: { url: "https://example.com/order", host: "example.com" },
+      initiator: { kind: "person", id: "" },
       key: "a",
     });
     expect(allowed.allowed).toBe(true);
@@ -293,6 +295,7 @@ describe("a rule written about what an action does", () => {
     bot: { id: "b" },
     actor: { id: "a" },
     page: { url: "https://example.com/", host: "example.com" },
+    initiator: { kind: "person", id: "" },
     intent: "activate",
     ...extra,
   });
@@ -383,6 +386,7 @@ describe("a rule that names an identifier only some actions carry", () => {
     bot: { id: "b" },
     actor: { id: "a" },
     page: { url: "https://httpbin.org/forms/post", host: "httpbin.org" },
+    initiator: { kind: "person", id: "" },
     intent: "navigate",
   };
 
@@ -441,6 +445,7 @@ describe("describing a refusal", () => {
     bot: { id: "knowledge" },
     actor: { id: "dev-local-user" },
     page: { url: "", host: "" },
+    initiator: { kind: "person", id: "" },
     element: { ref: "", role: "", name: "", type: "" },
     key: "",
     file: { path: "", name: "", extension: "" },
@@ -497,6 +502,7 @@ describe("commands", () => {
     bot: { id: "general-assistant" },
     actor: { id: "dev-local-user" },
     page: { url: "", host: "" },
+    initiator: { kind: "person", id: "" },
     intent: "run_command",
     command,
   });
@@ -571,6 +577,7 @@ describe("a rule about one surface does not refuse another", () => {
     bot: { id: "b" },
     actor: { id: "a" },
     page: { url: "https://example.com", host: "example.com" },
+    initiator: { kind: "person", id: "" },
     intent: "activate",
     element: { ref: "e1", role: "button", name: "Open", type: "" },
     key: "",
@@ -583,6 +590,7 @@ describe("a rule about one surface does not refuse another", () => {
     bot: { id: "b" },
     actor: { id: "a" },
     page: { url: "", host: "" },
+    initiator: { kind: "person", id: "" },
     intent: "read_tool",
     element: { ref: "", role: "", name: "", type: "" },
     key: "",
@@ -672,6 +680,7 @@ describe("refusal wording under the context the gateway actually builds", () => 
         bot: { id: "general-assistant" },
         actor: { id: "user:dev" },
         page: { url: "https://example.com/checkout", host: "example.com" },
+        initiator: { kind: "person", id: "" },
         intent: "activate",
         key: "",
         element: { ref: "e1", role: "button", name: "Submit order", type: "" },
@@ -694,6 +703,7 @@ describe("refusal wording under the context the gateway actually builds", () => 
         bot: { id: "general-assistant" },
         actor: { id: "user:dev" },
         page: { url: "", host: "" },
+        initiator: { kind: "person", id: "" },
         key: "",
         element: { ref: "", role: "", name: "", type: "" },
         file: { path: "", name: "", extension: "" },

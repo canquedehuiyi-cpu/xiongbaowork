@@ -16,6 +16,7 @@ import { createPluginStore } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { credentialDouble } from "./support/credential-double";
 
 /**
  * A tool call that happens with no browser involved.
@@ -52,7 +53,7 @@ let policy: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 const store = createPluginStore({
   database,
   auditStore: createAuditStore(database),
-  credentials: { readSecret: async () => null },
+  credentials: credentialDouble(),
   encryptionKey: "x".repeat(44),
   policy: () => policy,
   // The MCP mock below listens on plain http on loopback; the outbound guard admits it only when told.
