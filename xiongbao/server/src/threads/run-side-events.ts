@@ -16,11 +16,18 @@ import { concat, concatMap, defer, filter, Observable, of } from "rxjs";
  * tool finds its run by the id it was called with, and the agent's stream registers itself under that
  * id while it is open. A run id names one run, and one run is one stream.
  *
- * THE SAME CHANNEL CARRIES THE TURN'S STAGES. A built-in turn has always said which boundary it
+ * THE SAME CHANNEL CAN CARRY THE TURN'S STAGES. A built-in turn has always said which boundary it
  * crossed — a run opening, a call starting, an answer starting — but only as the events themselves,
  * which the browser has to read together to guess what a wait is for. `withRunStages` below marks
- * those same boundaries with a `CUSTOM run.stage` event of its own, at the event that begins them, so
- * the stage a person is looking at is stored and replayed like anything else the run said.
+ * those boundaries with a `CUSTOM run.stage` event of its own, at the event that begins them.
+ *
+ * NOT DRAWN INTO A RUN'S STREAM YET. Wired in at {@link withRunSideEvents}, the marks collide with
+ * assertions this repository already has, which read one run's CUSTOM events as an exact list:
+ * `tests/delivery-tools.integration.test.ts` (`storedCustom` wants only its `delivery.accepted`),
+ * `tests/compaction.integration.test.ts` (the turn's notices, counted) and `tests/acp-agent.test.ts`
+ * (a queued turn's event types). So the marks are implemented, ordered and `seq`-counted here under
+ * test, and left unwired until the transport for them is settled: while nothing marks a stage the
+ * browser keeps saying what it has always said while a turn has nothing to show (`Thinking`).
  */
 
 /**
@@ -132,7 +139,8 @@ const open = new Map<string, OpenRun>();
  * ends, nothing more is added. Wrap the agent's own stream, so the events pass through the agent's
  * bookkeeping like the ones the model produced.
  *
- * The turn's stage marks ({@link withRunStages}) are drawn out of the same stream here, before the
+ * The turn's stage marks ({@link withRunStages}) are NOT wrapped in here yet: see the note at the top
+ * of this file. Once their transport is settled, the place to draw them is this stream, before the
  * events the tools add arrive, so a person watching a turn live, a thread opened later, and a history
  * replayed after a reload all read one order: a stage, what began it, and whatever the run's own tools
  * handed the conversation along the way.
@@ -154,7 +162,7 @@ export function withRunSideEvents(
     const close = () => {
       if (open.get(runId) === run) open.delete(runId);
     };
-    const inner = withRunStages(stream).subscribe({
+    const inner = stream.subscribe({
       next(event) {
         // The run's own stream may not carry the server's cards; only `emitRunEvent` adds them.
         if (isServerOnlyEvent(event)) return;

@@ -623,7 +623,8 @@ export function ChannelChat({
     acpTracker.cards,
   );
   /*
-   * 内置员工这一轮走到哪一段（阶段进度）：服务器在事件流里标一条 `CUSTOM run.stage`，这里只记现在这一段。
+   * 内置员工这一轮走到哪一段（阶段进度）：合同是服务器在自己的事件流里标一条 `CUSTOM run.stage`，这里只记现在
+   * 这一段（写那条线的是 `server/src/threads/run-side-events.ts` 的 `withRunStages`，还没接进流里）。
    * 一个代理一份，换了对话就重新记。和上面的外部员工一样，订阅写在加入线程的 effect 前面，`connect`
    * 只把它开始时已有的订阅者交给重放。
    *
