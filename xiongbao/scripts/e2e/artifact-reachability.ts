@@ -6,8 +6,8 @@
  * What is REAL here: the person's session, the conversation, the run, the mocked model's tool call, the
  * app's own scope rule applied to the answer it reads (`isWorkspaceScope` in
  * `lib/computers/artifact.ts`, which decides whether a link may be drawn at all), the anchor the
- * transcript draws, the browser's own download of the answer, and the dark theme the screenshots are
- * taken in.
+ * transcript draws, the browser's own decision to save that address instead of navigating to it, and the
+ * dark theme the screenshots are taken in.
  *
  * What is FIXED, because a CI runner has no computer to reach (this is the whole fixture boundary, and
  * nothing else is answered by hand):
@@ -25,8 +25,9 @@
  *   GET  /api/computers/:botId/files/download  answers the bytes with the headers
  *                                              `shared/file-download.ts` sends (opaque attachment)
  *
- * So this proves the address the chat hands out, what the chat draws for it, and that clicking it saves
- * the file under the name the attachment promises. It does NOT prove the workspace's own bytes: those
+ * So this proves the address the chat hands out, what the chat draws for it, and that clicking it makes
+ * the browser save that address — with the answer's status, content type and attachment file name read
+ * back through the page's own network stack. It does NOT prove the workspace's own bytes: those
  * are the computer's, and the download route's answer is pinned by `server/tests/computer-download-
  * routes.test.ts` (WP-0.4) with a stubbed gateway.
  *
@@ -36,8 +37,8 @@
  *      refused write that stays plain text;
  *   2. 02-…-artifact-list: the turn's artifact list, one row per saved file with its size, plus the
  *      `truncated` caption that says the folder was not read to the end;
- *   3. 03-…-download-clicked: the click, which reaches the download route at the path the chat named
- *      and saves it under the attachment's own file name;
+ *   3. 03-…-download-clicked: the click, which starts a save of the download route at the path the chat
+ *      named, and the answer that address gives, carrying the attachment's own file name;
  *   4. 04-…-paired-computer: the same conversation with the scope answered `device` (a paired computer,
  *      where a file may sit under a project root the route does not know): no link, no list, and the
  *      line still naming the file. That is the ruling being tested from the other side.
@@ -455,6 +456,17 @@ let scopeOverride: "workspace" | "device" | undefined;
 const COMPUTER_PATH = /^\/api\/computers\/[^/]+\/(files\/(list|download))$/;
 const GATE_PATH = /^\/api\/approvals\/computer\/[^/]+$/;
 
+/** The bytes the fixed computer has for whichever file the download address names. */
+const ANSWERED_BYTES = "E2E bytes for the file the chat named.\n";
+
+/** What an address the page asked came back as. */
+type AnsweredFile = {
+  status: number;
+  type: string | null;
+  disposition: string | null;
+  text: string;
+};
+
 /** The attachment headers `shared/file-download.ts` sends, for the file the path names. */
 function attachmentHeaders(name: string): Record<string, string> {
   const ascii = [...name]
@@ -472,6 +484,60 @@ function attachmentHeaders(name: string): Record<string, string> {
     "x-content-type-options": "nosniff",
     "cache-control": "private, no-store",
   };
+}
+
+/**
+ * The file name an attachment header promises: the UTF-8 form first, the ASCII fallback behind it.
+ *
+ * The inverse of `attachmentHeaders` above, and the same reading a browser makes when it saves the
+ * answer: this is where "the name the chat promised is the name that reaches disk" is decided.
+ */
+function attachmentNameOf(disposition: string | null): string | undefined {
+  const header = disposition ?? "";
+  const utf8 = /filename\*=UTF-8''([^;]+)/i.exec(header)?.[1];
+  const fallback =
+    utf8 === undefined ? /filename="([^"]*)"/i.exec(header)?.[1] : undefined;
+  const value = (utf8 ?? fallback)?.trim();
+  if (value === undefined || value === "") return undefined;
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * What an address says it saves: the route, and the path read back the way the route reads it.
+ *
+ * Both sides of the comparison go through this, so the assertion is about the file being saved and not
+ * about how one percent-encoding happened to be spelled.
+ */
+function savedAddress(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.pathname}?${parsed.searchParams.get("path") ?? ""}`;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Asks an address the way the page asks its own API: through the browser's network stack, where
+ * `route()` does see it.
+ *
+ * Only the download answer needs this (step 5): a save started by `<a download>` runs in the browser
+ * process and bypasses that interception in Chromium, while a request the page makes itself does not.
+ */
+async function askThePage(p: Page, href: string): Promise<AnsweredFile> {
+  return p.evaluate(async (address: string) => {
+    const response = await fetch(address, { credentials: "same-origin" });
+    return {
+      status: response.status,
+      type: response.headers.get("content-type"),
+      disposition: response.headers.get("content-disposition"),
+      text: await response.text(),
+    };
+  }, href);
 }
 
 /**
@@ -540,7 +606,7 @@ async function fixedComputer(route: Route): Promise<void> {
     return route.fulfill({
       status: 200,
       headers: attachmentHeaders(name),
-      body: "E2E bytes for the file the chat named.\n",
+      body: ANSWERED_BYTES,
     });
   }
   if (/^\/api\/computers\/[^/]+\/local-tools$/.test(path)) {
@@ -716,26 +782,63 @@ try {
   });
 
   await step("点它 -> the browser asks the download route for that file", async () => {
-    // The line's own link first: this is the address a person reaches for.
+    /*
+     * Two halves, because Chromium will only let us prove one of them through the click itself. A save
+     * started by `<a download>` runs in the browser process and never passes the interception a page's
+     * own requests go through (microsoft/playwright#38585; this gate's own counters say it too — the
+     * download event fires while `/files/download` is asked zero times). So the click is proved at the
+     * click: the browser starts a SAVE, of the address the line carries. And the answer that address
+     * gives is read back through the page's network stack, which IS intercepted: the same status, the
+     * same opaque content type, the same attachment headers `shared/file-download.ts` sends, the same
+     * promised file name. Both halves are what a person gets when they click.
+     */
     const fromLine = p.locator("[data-tool-download]").first();
+    const lineHref = (await fromLine.getAttribute("href")) ?? "";
     const [lineDownload] = await Promise.all([
       p.waitForEvent("download", { timeout: 20_000 }),
       fromLine.click(),
     ]);
     equal(
-      lineDownload.suggestedFilename(),
+      savedAddress(lineDownload.url()),
+      `/api/computers/${bot}/files/download?reports/季度报告.md`,
+      "the line's click makes the browser save the download route with the path the chat named, not navigate to it",
+    );
+    const lineAnswer = await askThePage(p, lineHref);
+    equal(
+      lineAnswer.status,
+      200,
+      "the address the line hands out answers instead of 404ing on the way to the computer",
+    );
+    equal(
+      lineAnswer.type,
+      "application/octet-stream",
+      "安全决策 A4: the answer is bytes, never a page rendered on this origin",
+    );
+    equal(
+      lineAnswer.text,
+      ANSWERED_BYTES,
+      "the bytes it answers are the ones the computer has for that file",
+    );
+    equal(
+      attachmentNameOf(lineAnswer.disposition),
       "季度报告.md",
-      "the line's click saves the file under the name the attachment promises",
+      "the attachment promises the file under the name the computer saved it",
     );
     // Then the same file's row in the list, and the awkward name that only the link has to survive.
     const row = p.locator('[data-artifact-path="季度 报告(1).md"]');
     await row.focus();
+    const rowHref = (await row.getAttribute("href")) ?? "";
     const [rowDownload] = await Promise.all([
       p.waitForEvent("download", { timeout: 20_000 }),
       row.click(),
     ]);
     equal(
-      rowDownload.suggestedFilename(),
+      savedAddress(rowDownload.url()),
+      `/api/computers/${bot}/files/download?季度 报告(1).md`,
+      "the list's row saves the same route with the awkward path written back",
+    );
+    equal(
+      attachmentNameOf((await askThePage(p, rowHref)).disposition),
       "季度 报告(1).md",
       "a name with a space, parentheses and Chinese characters arrives intact",
     );
@@ -748,7 +851,7 @@ try {
         `/api/computers/${bot}/files/download?reports/季度报告.md`,
         `/api/computers/${bot}/files/download?季度 报告(1).md`,
       ],
-      "both clicks reached /files/download with the bot id and the path, exactly once each",
+      "both addresses were asked of /files/download with the bot id and the path, exactly once each",
     );
     await screenshot("download-clicked");
   });
