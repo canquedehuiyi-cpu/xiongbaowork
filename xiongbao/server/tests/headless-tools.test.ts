@@ -19,6 +19,7 @@ import * as headless from "../src/computer/headless-tools";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { runAsTenant } from "../src/tenant/context";
+import { fetchDouble } from "./support/fetch-double";
 
 const definition = {
   name: "computer_snapshot",
@@ -304,7 +305,7 @@ function computerHarness(deny: string[] = []) {
       },
     },
     policy: () => ({ mode: "enforce", allow: ["true"], deny }),
-    fetchImpl: async (url, init) => {
+    fetchImpl: fetchDouble(async (url, init) => {
       const path = new URL(String(url)).pathname;
       received.push({
         path,
@@ -367,7 +368,7 @@ function computerHarness(deny: string[] = []) {
       if (!outputs[path])
         throw new Error(`Unexpected computer request ${path}`);
       return Response.json(outputs[path]);
-    },
+    }),
   });
   return { gateway, audit, received };
 }

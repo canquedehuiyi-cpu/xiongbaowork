@@ -22,6 +22,7 @@ import { createDatabase } from "../src/db/client";
 import { credentials } from "../src/db/schema";
 import { asPlatform, runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { credentialDouble } from "./support/credential-double";
 import { testEnvironment } from "./support/environment";
 
 const key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
@@ -141,7 +142,7 @@ describe("credential encryption", () => {
     const audited: unknown[] = [];
     const service = {
       encryptionKey: key,
-      store: {
+      store: credentialDouble({
         create: async () => ({ id: "credential-unused", revokedAt: null }),
         updateSecret: async () => {
           throw new Error("administrator credentials are not updated in place");
@@ -154,7 +155,7 @@ describe("credential encryption", () => {
           revoked.push(id);
           return new Date("2026-08-13T12:00:00.000Z");
         },
-      },
+      }),
       auditStore: {
         insert: async (event: unknown) => {
           audited.push(event);
@@ -196,7 +197,7 @@ describe("credential encryption", () => {
     const audited: unknown[] = [];
     const service = {
       encryptionKey: key,
-      store: {
+      store: credentialDouble({
         create: async () => {
           throw new Error("create is not part of a rotation");
         },
@@ -206,7 +207,7 @@ describe("credential encryption", () => {
         revoke: async () => {
           throw new Error("revoke is not part of a failed rotation");
         },
-      },
+      }),
       auditStore: {
         insert: async (event: unknown) => {
           audited.push(event);
@@ -785,6 +786,17 @@ describe("admin credential API", () => {
             revokedAt: null,
           },
         ],
+        // The three writes are on the interface because an administrator can make them, but this
+        // case only reads. Loud rather than absent, so a call that starts writing is named.
+        create: async () => {
+          throw new Error("this case only lists credentials");
+        },
+        rotate: async () => {
+          throw new Error("this case only lists credentials");
+        },
+        revoke: async () => {
+          throw new Error("this case only lists credentials");
+        },
       },
     );
 

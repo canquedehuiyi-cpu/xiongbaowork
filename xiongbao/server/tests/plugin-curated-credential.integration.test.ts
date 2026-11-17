@@ -12,6 +12,7 @@ import {
 } from "../src/plugins/store";
 import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { credentialDouble } from "./support/credential-double";
 
 /**
  * Which credential a curated server is allowed to be pointed at.
@@ -47,7 +48,7 @@ let releaseAdmin: (() => Promise<void>) | undefined;
 const store = createPluginStore({
   database,
   auditStore: createAuditStore(database),
-  credentials: {
+  credentials: credentialDouble({
     readSecret: async () => null,
     create: async () => {
       throw new Error("this suite does not write credentials");
@@ -55,7 +56,7 @@ const store = createPluginStore({
     revoke: async () => {
       throw new Error("this suite does not revoke credentials");
     },
-  },
+  }),
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });

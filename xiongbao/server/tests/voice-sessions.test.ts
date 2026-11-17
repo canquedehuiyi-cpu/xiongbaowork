@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import type { SaveVoiceSessionInput } from "@openbot/shared/voice-session";
 import { parseVoiceSessionInput } from "../src/voice/sessions";
 import { createVoiceSummarizer } from "../src/voice/summary";
+import { fetchDouble } from "./support/fetch-double";
 
 const input: SaveVoiceSessionInput = {
   id: "session-1",
@@ -40,7 +41,7 @@ test("voice summary uses the chat credential and treats transcript as quoted dat
   const summarize = createVoiceSummarizer({
     model: { provider: "openai", defaultModel: "chat-model" },
     resolveApiKey: async () => "chat-key",
-    fetchImpl: async (_url, init) => {
+    fetchImpl: fetchDouble(async (_url, init) => {
       calls++;
       expect(new Headers(init?.headers).get("authorization")).toBe(
         "Bearer chat-key",
@@ -59,7 +60,7 @@ test("voice summary uses the chat credential and treats transcript as quoted dat
           },
         ],
       });
-    },
+    }),
   });
   expect(await summarize(input.transcript)).toBe(
     "Discussed launch planning. Next steps remain open.",
@@ -82,7 +83,7 @@ test("missing keys and provider failures cannot appear as successful summaries",
       createVoiceSummarizer({
         model: { provider: "openai", defaultModel: "chat" },
         resolveApiKey: async () => "key",
-        fetchImpl: async () => response,
+        fetchImpl: fetchDouble(async () => response),
       })(input.transcript),
     ).rejects.toThrow();
   }

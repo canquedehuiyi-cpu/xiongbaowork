@@ -25,6 +25,7 @@ import { createComputerGateway } from "../src/computer/gateway";
 import { createHostAccessBroker } from "../src/host-access/broker";
 import { CatalogueEntryUnknownError } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
+import { fetchDouble } from "./support/fetch-double";
 
 const context = {
   runId: "run",
@@ -298,7 +299,8 @@ async function subagentApprovalFixture(turnTimeoutMs?: number) {
       const pending = (await store.list(owner)).filter(
         (row) => row.status === "pending" && row.action.runId === runId,
       );
-      for (const row of pending) await store.decide(owner, row.id, "deny", "web");
+      for (const row of pending)
+        await store.decide(owner, row.id, "deny", "web");
     },
   });
   return {
@@ -524,7 +526,7 @@ test("computer policy runs before personal approval and simultaneous once reques
       }),
       auditStore: { insert: async () => undefined },
       approvalGate: service.gate,
-      fetchImpl: async () => {
+      fetchImpl: fetchDouble(async () => {
         forwards += 1;
         return Response.json({
           command: "pwd",
@@ -535,7 +537,7 @@ test("computer policy runs before personal approval and simultaneous once reques
           timedOut: false,
           truncated: false,
         });
-      },
+      }),
     });
     const invoke = () =>
       withApprovalContext(

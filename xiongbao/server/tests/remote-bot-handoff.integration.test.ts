@@ -17,6 +17,7 @@ import { createPluginStore } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { credentialDouble } from "./support/credential-double";
 
 /**
  * A Bot at its own endpoint hands work on, through the plugin store's own grant read.
@@ -50,7 +51,7 @@ const auditStore = createAuditStore(database);
 const store = createPluginStore({
   database,
   auditStore,
-  credentials: {
+  credentials: credentialDouble({
     readSecret: async () => null,
     create: async () => {
       throw new Error("a handoff grant asked the vault to create a secret");
@@ -61,7 +62,7 @@ const store = createPluginStore({
     revoke: async () => {
       throw new Error("a handoff grant asked the vault to revoke a secret");
     },
-  },
+  }),
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
   broker,

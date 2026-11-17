@@ -25,6 +25,7 @@ import { createDatabase } from "../src/db/client";
 import { agents, componentExclusions, components } from "../src/db/schema";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
 import { runAsTenant } from "../src/tenant/context";
+import { fetchDouble } from "./support/fetch-double";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -194,7 +195,7 @@ function harness(agent: AbstractAgent, botId: string) {
     },
     auditStore,
     policy: () => ({ mode: "enforce", allow: ["true"], deny: [] }),
-    fetchImpl: async (url, init) => {
+    fetchImpl: fetchDouble(async (url, init) => {
       const path = new URL(String(url)).pathname;
       if (path !== "/navigate")
         throw new Error(`Unexpected computer request ${path}`);
@@ -206,7 +207,7 @@ function harness(agent: AbstractAgent, botId: string) {
         truncated: false,
         elapsedMs: 1,
       });
-    },
+    }),
   });
   const runner: RunnerLike = {
     run: ({ agent: selected, input }) =>

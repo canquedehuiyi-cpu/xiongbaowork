@@ -85,6 +85,7 @@ import { checkInCatalogue, createCheckInScope } from "../src/proactive/scope";
 import { runAsTenant } from "../src/tenant/context";
 import fileActions from "./fixtures/composio-file-actions.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { credentialDouble } from "./support/credential-double";
 
 /**
  * The two questions a tool call has to pass, and the row each answer leaves behind.
@@ -163,7 +164,10 @@ const removalUserIds = new Set<string>();
  * a second copy would be a second place for "no credential is read here" to stop being true, and the
  * refusals below are what make that claim worth anything.
  */
-const credentialsStub = {
+// The three members below are the whole of what this suite uses; `rotate`, `isLive` and
+// `findLiveByKey` come from the double, which throws naming them if a test ever reaches one. They
+// are not stubbed here as well, so this file cannot drift out of step with the vault interface.
+const credentialsStub = credentialDouble({
   // No credential is ever read in these tests, because every call is refused before the vault.
   readSecret: async () => null,
   // Nor written in place. Loud rather than absent: a call reaching either of these would mean
@@ -187,7 +191,7 @@ const credentialsStub = {
     revokedCredentialIds.push(id);
     return revokedAt;
   },
-};
+});
 
 const store = createPluginStore({
   database,

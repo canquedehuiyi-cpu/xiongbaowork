@@ -11,6 +11,7 @@ import { atServerAddress, createPluginStore } from "../src/plugins/store";
 import { createAdminRequest, seedAdministrator } from "./support/admin-request";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
+import { credentialDouble } from "./support/credential-double";
 
 /**
  * The whole path an administrator's request actually takes, with nothing stubbed between the request
@@ -29,7 +30,7 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const store = createPluginStore({
   database,
   auditStore: createAuditStore(database),
-  credentials: {
+  credentials: credentialDouble({
     // Never read: Drive's tool list is in this deployment's own code, so the add path here reaches
     // no vault. Loud rather than absent, so a call that starts reaching one is named.
     readSecret: async () => {
@@ -41,7 +42,7 @@ const store = createPluginStore({
     revoke: async () => {
       throw new Error("this suite does not revoke credentials");
     },
-  },
+  }),
   encryptionKey: "x".repeat(44),
   policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
 });

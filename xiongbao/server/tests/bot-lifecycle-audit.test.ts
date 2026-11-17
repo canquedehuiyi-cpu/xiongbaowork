@@ -290,7 +290,14 @@ describe("retiring the key an edit replaced", () => {
     const revoked: string[] = [];
     return {
       revoked,
-      store: { revoke: async (id: string) => void revoked.push(id) },
+      // `revoke` answers the stamp it wrote, and the caller's `Pick<CredentialStore, "revoke">`
+      // says so. Returning void type-checked against nothing while the suite went unchecked.
+      store: {
+        revoke: async (id: string) => {
+          revoked.push(id);
+          return new Date();
+        },
+      },
     };
   }
 
