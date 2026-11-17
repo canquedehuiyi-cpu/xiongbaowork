@@ -1038,11 +1038,11 @@ export function ToolActivity({
   /** This is the newest row of a turn still in flight, so a step without a result is running. */
   active: boolean;
   /**
-   * 这一轮走到哪一段（服务器标在自己事件流里的 `run.stage`，见 `lib/channels/run-stage.ts`）。
+   * 这一轮走到哪一段（段由这一轮自己的事件推出来，见 `lib/channels/run-stage.ts`）。
    *
    * 只有正在跑的这一行、只有「执行工具」这一段说在这儿：那是一段活儿真的在做、折起来的那行只说得出一个
    * 名字的时候。等模型那一段对话底下那一格一直有话说（「思考中」/「<员工名> 正在输入」），开始写回答则
-   * 是眼睛正在看着的事，两处都再说一遍是吵。没有阶段事件可读（这一轮之前的存档、没有这条流的通道）时这里
+   * 是眼睛正在看着的事，两处都再说一遍是吵。推不出段（这一轮之前的存档、没有这条流的通道）时这里
    * 少一行，那一格照旧，不会出现空着的一格。
    */
   stage?: RunStage | null;

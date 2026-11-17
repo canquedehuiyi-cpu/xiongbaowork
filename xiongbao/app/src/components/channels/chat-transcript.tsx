@@ -329,9 +329,9 @@ type ChatTranscriptProps = {
    */
   typist?: Typist;
   /**
-   * 正在跑的这一轮走到哪一段（`run.stage`：服务器标在自己事件流里的阶段边界，见
+   * 正在跑的这一轮走到哪一段（段由这一轮自己的事件推出来，见
    * `lib/channels/run-stage.ts`）。只有对话页给，因为只有它听着那条流；别处画转录的不给，一切照旧——
-   * 工具行不多说一行，「思考中」那一格也不变，不会因为这里没读到的东西而空出一格。
+   * 工具行不多说一行，「思考中」那一格也不变，不会因为这里推不出段而空出一格。
    */
   stage?: RunStage | null;
 };
@@ -439,11 +439,12 @@ function RestoringTranscript() {
  * It borrows the shimmer a running tool line uses, so "working on it" reads the same whether the
  * work is a tool call or a model that has not spoken yet.
  *
- * `stage` is what the run's own stream says this turn is doing right now (`run.stage`, and the tool
- * stage is said by the tool row, not here). Given, it says that instead of these words; absent — an
- * archive from before the marks, a channel whose stream does not carry them — the line is exactly the
- * one this app has always shown. That is the fallback, and it is why the words are a parameter rather
- * than a second component: nothing may be blank where 思考中 used to be.
+ * `stage` is what this turn's own events say it is doing right now (derived in
+ * `lib/channels/run-stage.ts`, and the tool stage is said by the tool row, not here). Given, it says
+ * that instead of these words; absent — an archive whose turn ended before those events were kept, a
+ * channel whose stream does not carry them — the line is exactly the one this app has always shown.
+ * That is the fallback, and it is why the words are a parameter rather than a second component:
+ * nothing may be blank where 思考中 used to be.
  */
 function Thinking({ stage, typist }: { stage?: string; typist?: Typist }) {
   const workbench = useSkinId() === "xiongbao";
@@ -2409,7 +2410,7 @@ export function ChatTranscript({
 
   /*
    * 阶段带（WP-2.3）。「正在执行工具」是正在跑的那一行自己的事（`ToolActivity` 说它），这一格只说得出整轮
-   * 的一句：回答开始写了，这里就从「在等模型」改成说它在往回写。收不到阶段事件时这里没有话可说，那一格
+   * 的一句：回答开始写了，这里就从「在等模型」改成说它在往回写。推不出段时这里没有话可说，那一格
    * 还是它一直说的那句，不会空着。
    */
   const stageLine = busy && stage !== "tool" ? stageWords(stage) : undefined;

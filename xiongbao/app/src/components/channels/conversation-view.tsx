@@ -73,7 +73,7 @@ export function ConversationView({
   compaction?: TranscriptCompaction | null;
   /** 跟在某条消息下面的卡（交付卡、外部员工的卡）；见 `ChatTranscript`。 */
   notes?: readonly TranscriptNote[];
-  /** 正在跑的这一轮走到哪一段（`run.stage`）；见 `ChatTranscript`。不给就一切照旧。 */
+  /** 正在跑的这一轮走到哪一段（由这一轮的事件推出来）；见 `ChatTranscript`。不给就一切照旧。 */
   stage?: RunStage | null;
   busy?: boolean;
   /** Shown above the composer. An error, or why this conversation is read-only. */
