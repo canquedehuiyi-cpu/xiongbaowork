@@ -10,6 +10,9 @@ import { pluginAssemblyOrigins, pluginAssemblyPublications } from "../src/db/sch
 type Column = {
   name: string;
   type: string;
+  // The schema the type lives in, which the snapshot records for an enum column (`public.role`)
+  // and the case below asserts on. Absent for a builtin, so optional.
+  typeSchema?: string;
   primaryKey: boolean;
   notNull: boolean;
   default?: string | number | boolean;

@@ -13,39 +13,3 @@
 #
 # Sorted. Duplicates are significant: a line repeated N times allows exactly N identical errors
 # in that file, and an N+1th is new.
-server/tests/agent-endpoint.test.ts: error TS7006: Parameter 'value' implicitly has an 'any' type.
-server/tests/agent-endpoint.test.ts: error TS7006: Parameter 'value' implicitly has an 'any' type.
-server/tests/approval-continuation-preparation-transaction.integration.test.ts: error TS2769: No overload matches this call.
-server/tests/approval-continuation-preparation-transaction.integration.test.ts: error TS2769: No overload matches this call.
-server/tests/computer-provider.test.ts: error TS2345: Argument of type '{ provider: "sandbox"; namespace: string; idleAfterMs: number; templateFile: string; }' is not assignable to parameter of type 'ComputerConfig'.
-server/tests/group-conversations.integration.test.ts: error TS2339: Property 'serverId' does not exist on type 'object'.
-server/tests/headless-components.integration.test.ts: error TS2352: Conversion of type 'BaseEvent' to type '{ delta: string; }' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
-server/tests/headless-components.integration.test.ts: error TS6142: Module '../../app/src/components/gallery/charts' was resolved to 'app/src/components/gallery/charts.tsx', but '--jsx' is not set.
-server/tests/headless-components.integration.test.ts: error TS7006: Parameter 'entry' implicitly has an 'any' type.
-server/tests/headless-components.integration.test.ts: error TS7031: Binding element 'description' implicitly has an 'any' type.
-server/tests/headless-components.integration.test.ts: error TS7031: Binding element 'kind' implicitly has an 'any' type.
-server/tests/headless-components.integration.test.ts: error TS7031: Binding element 'name' implicitly has an 'any' type.
-server/tests/headless-components.integration.test.ts: error TS7031: Binding element 'title' implicitly has an 'any' type.
-server/tests/headless-components.test.ts: error TS6142: Module '../../app/src/components/gallery/activity' was resolved to 'app/src/components/gallery/activity.tsx', but '--jsx' is not set.
-server/tests/headless-components.test.ts: error TS6142: Module '../../app/src/components/gallery/cards' was resolved to 'app/src/components/gallery/cards.tsx', but '--jsx' is not set.
-server/tests/headless-components.test.ts: error TS6142: Module '../../app/src/components/gallery/charts' was resolved to 'app/src/components/gallery/charts.tsx', but '--jsx' is not set.
-server/tests/headless-components.test.ts: error TS6142: Module '../../app/src/components/gallery/decisions' was resolved to 'app/src/components/gallery/decisions.tsx', but '--jsx' is not set.
-server/tests/headless-components.test.ts: error TS6142: Module '../../app/src/components/gallery/form' was resolved to 'app/src/components/gallery/form.tsx', but '--jsx' is not set.
-server/tests/headless-components.test.ts: error TS6142: Module '../../app/src/components/gallery/quote' was resolved to 'app/src/components/gallery/quote.tsx', but '--jsx' is not set.
-server/tests/headless-components.test.ts: error TS6142: Module '../../app/src/components/gallery/table' was resolved to 'app/src/components/gallery/table.tsx', but '--jsx' is not set.
-server/tests/headless-components.test.ts: error TS7006: Parameter 'entry' implicitly has an 'any' type.
-server/tests/health.test.ts: error TS2345: Argument of type '{ handler: () => Response; }' is not assignable to parameter of type 'AuthService'.
-server/tests/memory-store.integration.test.ts: error TS2769: No overload matches this call.
-server/tests/plan-model.test.ts: error TS2345: Argument of type '(id: string) => Promise<{ name: string; description: string; parameters: ZodObject<{ query: ZodString; }, $strip>; ref: { kind: string; serverId: string; toolName: string; }; execute: (args: unknown) => Promise<...>; }[]>' is not assignable to parameter of type 'LoadToolsForBot'.
-server/tests/plan-model.test.ts: error TS2769: No overload matches this call.
-server/tests/plugin-store.integration.test.ts: error TS2322: Type '() => Promise<string>' is not assignable to type '(config: { toolkit: string; name: string; }) => Promise<void>'.
-server/tests/plugin-store.integration.test.ts: error TS2322: Type '(request: { toolkit: string; name: string; }) => Promise<void>' is not assignable to type '(config: { toolkit: string; name: string; connection: BrokerConnection; client?: DeploymentClient | undefined; }) => Promise<AuthConfigOutcome>'.
-server/tests/plugin-store.integration.test.ts: error TS2339: Property 'payload' does not exist on type '{ eventType: string; targetId?: string | undefined; }'.
-server/tests/plugin-store.integration.test.ts: error TS2345: Argument of type '{ slug: string; title: string; by: string; }' is not assignable to parameter of type '{ slug: string; title: string; logo?: string | null | undefined; by: string; connection: BrokerConnection; }'.
-server/tests/recovery-knowledge-foundations.test.ts: error TS2769: No overload matches this call.
-server/tests/recovery-plugin-assembly-foundations.test.ts: error TS2769: No overload matches this call.
-server/tests/remote-approval-context.test.ts: error TS2345: Argument of type '(input: RunAgentInput) => Observable<{ type: string; threadId: string; runId: string; } | { type: string; snapshot: { real: string; }; } | { type: string; toolCallId: string; toolCallName: string; parentMessageId: string; } | { ...; } | { ...; } | { ...; } | { ...; }>' is not assignable to parameter of type '(input: RunAgentInput) => Observable<BaseEvent>'.
-server/tests/remote-coordination.integration.test.ts: error TS2769: No overload matches this call.
-server/tests/user-preferences.integration.test.ts: error TS2769: No overload matches this call.
-server/tests/voice-session-store.integration.test.ts: error TS2345: Argument of type '`page-${string}`' is not assignable to parameter of type '`${string}-${string}-${string}-${string}-${string}`'.
-server/tests/web-research.test.ts: error TS2339: Property 'get' does not exist on type 'never'.

@@ -18,8 +18,8 @@ const APPROVED_LINT_TEST_INVERSES: readonly ApprovedLintTestInverse[] = [
   // Its afterAll, which drops the disposable database, has DISPOSABLE_DROP_TIMEOUT_MS (a CI checkpoint).
   {
     "path": "tests/approval-continuation-preparation-transaction.integration.test.ts",
-    "currentBytes": 21480,
-    "currentSha256": "773ffa2e40a2c02d696e6ac87ead43ce7de75b1181d8a546aa063bcbfa62eab9",
+    "currentBytes": 22162,
+    "currentSha256": "7e2e40805e703a3f25aec839d5b17da8bd23f7c3458b96b885e4792e995316a2",
     "beforeBytes": 21306,
     "beforeSha256": "61cfeb0089b748ce9fbf8155cca140802e4cba74f71b8fccdfd6ece7c1c6e8d0",
     "edits": [
@@ -62,6 +62,14 @@ const APPROVED_LINT_TEST_INVERSES: readonly ApprovedLintTestInverse[] = [
         "after": "  }).from(sql`(select 1) as fixture_identity`));\n",
         "before": "  }).from(sql`(select 1) as fixture_identity`);\n",
         "count": 1
+      },
+      {
+        // Both `ensureWithPreparation` callbacks asserted against `observation.active` directly,
+        // which is `PgTransaction | undefined`: compared as-is the line passes when nothing was
+        // open, the case it exists to rule out. Repaired identically at both sites, hence count 2.
+        "after": "    // `observation.active` is set only while a transaction is open, so it is `… | undefined`.\n    // Read once and refuse to go on without it: compared as-is, this line passes for the very\n    // case it is here to rule out.\n    const active = observation.active;\n    if (!active) throw new Error(\"prepare ran with no store-owned transaction open\");\n    expect(tx).toBe(active);\n",
+        "before": "    expect(tx).toBe(observation.active);\n",
+        "count": 2
       }
     ]
   },
@@ -86,8 +94,8 @@ const APPROVED_LINT_TEST_INVERSES: readonly ApprovedLintTestInverse[] = [
   },
   {
     "path": "tests/recovery-plugin-assembly-foundations.test.ts",
-    "currentBytes": 128442,
-    "currentSha256": "795e8365ad2ac62d78f6de4973b382dd95625f3698ab62a840b3ce41ecaabfa3",
+    "currentBytes": 128633,
+    "currentSha256": "d0bad7de252fff3bd788d8f7836cd5e1fcf75b2c082227595cbf4f75e38f4289",
     "beforeBytes": 128110,
     "beforeSha256": "375416fe839aee76dc4b006eede366d54c94d0e944ccedddeb35f745636917e8",
     "edits": [
@@ -109,6 +117,13 @@ const APPROVED_LINT_TEST_INVERSES: readonly ApprovedLintTestInverse[] = [
       {
         "after": "        let onDelete: \"cascade\" | \"no action\";\n        if (c.peek() === \"CASCADE\") {\n          c.take(\"CASCADE\");\n          onDelete = \"cascade\";\n        } else {\n          c.take(\"NO\");\n          c.take(\"ACTION\");\n          onDelete = \"no action\";\n        }",
         "before": "        const onDelete = c.peek() === \"CASCADE\"\n          ? (c.take(\"CASCADE\"), \"cascade\")\n          : (c.take(\"NO\"), c.take(\"ACTION\"), \"no action\");",
+        "count": 1
+      },
+      {
+        // The local snapshot type omitted `typeSchema`, which the JSON carries for an enum column
+        // and the assertion below reads. Same kind of repair as the `onDelete`/`onUpdate` pair above.
+        "after": "  type: string;\n  // The schema the type lives in, which the snapshot records for an enum column (`public.role`)\n  // and the case below asserts on. Absent for a builtin, so optional.\n  typeSchema?: string;\n  primaryKey: boolean;\n",
+        "before": "  type: string;\n  primaryKey: boolean;\n",
         "count": 1
       }
     ]

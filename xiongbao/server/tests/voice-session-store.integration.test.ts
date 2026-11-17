@@ -92,7 +92,10 @@ afterAll(async () => {
   await database.$client.close();
 });
 
-function input(id = randomUUID()): SaveVoiceSessionInput {
+// `string`, not the type of `randomUUID()`. Inferred from the default, the parameter narrowed to
+// `randomUUID`'s template-literal return — five dash-separated groups — and the pagination case
+// below, which numbers its 51 rows `page-000`…`page-050`, could not call it at all.
+function input(id: string = randomUUID()): SaveVoiceSessionInput {
   return {
     id: `${prefix}-${id}`,
     channelId,
