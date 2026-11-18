@@ -1203,9 +1203,16 @@ describe("a Bot gives part of its work to a subagent", () => {
       // every request carries the whole history, so the count is what says which call is next.
       if (toolResults(request).length < 2)
         return { toolCalls: [subagentCall("Post a note about the change.")] };
-      return { content: "I'll ask you here." };
+      // No announcement here: "I'll …" earns a last-step nudge, which adds model requests.
+      return { content: "Waiting for you." };
     };
 
+    // Earlier cases leave their own requests in the table; only this case's rows are counted.
+    const earlier = await database
+      .select({ id: approvalRequests.id })
+      .from(approvalRequests)
+      .where(eq(approvalRequests.ownerUserId, person));
+    const before = new Set(earlier.map((row) => row.id));
     await ask("Tell the team the expense policy changed.");
 
     const [first] = resultsIn(parentRequests()[1]);
@@ -1222,10 +1229,11 @@ describe("a Bot gives part of its work to a subagent", () => {
     expect(secondResults[1]).toContain("已交还过一次");
     expect(secondResults[1]).toContain(modelName(POST));
     expect(vendorCalls).toEqual([]);
-    const opened = await database
+    const rows = await database
       .select()
       .from(approvalRequests)
       .where(eq(approvalRequests.ownerUserId, person));
+    const opened = rows.filter((row) => !before.has(row.id));
     expect(opened).toHaveLength(2);
     expect(opened.every((row) => row.status === "denied")).toBe(true);
   }, 30_000);
@@ -1275,7 +1283,8 @@ describe("a Bot gives part of its work to a subagent", () => {
         };
       if (toolResults(request).length < 2)
         return { toolCalls: [subagentCall("Post a note about the change.")] };
-      return { content: "I'll ask you here." };
+      // No announcement: a last-step nudge would add requests between the two turns.
+      return { content: "Waiting for you." };
     };
 
     await ask("Tell the team the expense policy changed.");
