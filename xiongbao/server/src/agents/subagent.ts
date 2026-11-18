@@ -38,6 +38,29 @@ import type { AuditInitiator } from "../audit";
 import type { ProductSurface } from "../telemetry/product";
 import { REFUSAL_MARKER } from "../plugins/tools";
 
+/**
+ * Stable JSON for a value, so the same action keyed by a different argument order still matches.
+ * Used by the repeated-hand-back circuit breaker: the person is asked once per action per answer,
+ * not once per subagent run that happens to hit it.
+ */
+function canonical(value: unknown): string {
+  if (value === null || typeof value !== "object")
+    return JSON.stringify(value ?? null) ?? "null";
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  return `{${Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`)
+    .join(",")}}`;
+}
+
+function handedBackActionKey(
+  threadId: string,
+  toolName: string,
+  args: unknown,
+): string {
+  return `${threadId} ${toolName} ${canonical(args)}`;
+}
+
 const parameters = z.object({
   task: z
     .string()
@@ -132,6 +155,12 @@ export function createSubagents(options: {
     /** The tool for one run. Its count of subagents is that run's, which is one answer. */
     toolForRun(parent: SubagentParent): GrantedTool {
       let started = 0;
+      /*
+       * Actions this answer has already handed back: the same action again is refused instead of
+       * being handed back a second time, so the Bot is not told to try the subagent path again for
+       * something the person has to approve here. Reset per run: a new user turn gets a new closure.
+       */
+      const handedBackActions = new Set<string>();
       return {
         name: SUBAGENT_TOOL,
         ref: `bot/${SUBAGENT_TOOL}`,
@@ -234,12 +263,21 @@ export function createSubagents(options: {
               | { toolName?: unknown; args?: unknown }
               | undefined;
             const said = saidIn(messages());
+            const tool =
+              typeof waited?.toolName === "string"
+                ? waited.toolName
+                : "unknown";
+            const key = handedBackActionKey(
+              parent.threadId,
+              tool,
+              waited?.args ?? {},
+            );
+            if (handedBackActions.has(key))
+              return `${REFUSAL_MARKER} 该动作已交还过一次，不再重复交还：请在本对话亲自调用 ${tool}（参数同上），以便用户批准。`;
+            handedBackActions.add(key);
             return answer({
               handedBack: {
-                tool:
-                  typeof waited?.toolName === "string"
-                    ? waited.toolName
-                    : "unknown",
+                tool,
                 args: waited?.args ?? {},
                 reason: error.message,
                 ...(said ? { said } : {}),
