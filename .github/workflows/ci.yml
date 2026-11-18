@@ -266,6 +266,11 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
+      # The transcript imports brand.ts, which reads the generated application config. The app
+      # shards get it from run-tests.sh (`bun run --cwd .. generate:app-config`); this job runs
+      # bun test directly, so it generates the same file the same way first.
+      - name: Generate the app configuration the transcript imports
+        run: bun run --cwd .. generate:app-config
       - name: Install Chromium for the root workspace's playwright-core
         run: bunx playwright-core install --with-deps --no-shell chromium
       - name: Status-line scenes, dark at 2x
