@@ -124,7 +124,7 @@ function promises(sentence: string): boolean {
 /** The sentences of a paragraph, each trimmed, with line breaks and list items counted as ends. */
 function sentences(text: string): string[] {
   return text
-    .split(/(?<=[.!?…])\s+|(?<=[。！？；，])|\n+/)
+    .split(/(?<=[.!?…])\s+|(?<=[。！？])|\n+/)
     .map((sentence) => sentence.replace(/^[^\p{L}\p{N}"'‘“]+/u, "").trim())
     .filter((sentence) => sentence.length > 0)
     .map((sentence) =>
