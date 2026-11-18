@@ -30,9 +30,24 @@ export function assertManifestFresh(files, actual, { command, label }) {
   const only = (from, other) =>
     [...from].filter((file) => !other.has(file)).slice(0, 5);
   const show = (items) => (items.length ? items.join(", ") : "无");
-  throw new Error(
-    `${label} manifest is stale: ${files.length} listed, ${actual.length} found; first difference at line ${at + 1} (listed ${JSON.stringify(files[at] ?? null)}, found ${JSON.stringify(actual[at] ?? null)}); only listed: ${show(only(files, found))}; only found: ${show(only(actual, listed))}. Run \`${command}\` and commit the result.`,
-  );
+  const message = `${label} manifest is stale: ${files.length} listed, ${actual.length} found; first difference at line ${at + 1} (listed ${JSON.stringify(files[at] ?? null)}, found ${JSON.stringify(actual[at] ?? null)}); only listed: ${show(only(files, found))}; only found: ${show(only(actual, listed))}. Run \`${command}\` and commit the result.`;
+  throw new Error(message);
+}
+
+// A stale manifest surfaces in whichever shard called readManifest first — one of six `app-test`
+// jobs — and the thrown error is printed with a stack that Bun formats itself. Turned into a
+// workflow-command annotation instead, it lands on the pull request next to the manifest the reader
+// has to edit, so "app-test (4) failed" is enough to know the fix. Written by the CLI entry point,
+// not from here: an exception escaping to the top of a Bun process gets re-formatted and the
+// annotation is lost.
+export function annotationFor(error, { manifest, label }) {
+  if (process.env.GITHUB_ACTIONS !== "true") return null;
+  const encode = (text) =>
+    String(text)
+      .replaceAll("%", "%25")
+      .replaceAll("\r", "%0D")
+      .replaceAll("\n", "%0A");
+  return `::error file=${manifest},line=1,title=${encode(`${label} manifest is stale`)}::${encode(error.message)}`;
 }
 
 // An empty manifest is a deliberate state (a suite with no tests yet), not a parse failure: the

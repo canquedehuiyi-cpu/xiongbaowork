@@ -53,9 +53,12 @@ function submits(node: ts.JsxOpeningLikeElement): boolean {
 
 test("every form with an onSubmit has a control that submits it", async () => {
   const dead: string[] = [];
-  for await (const file of new Glob("src/**/*.tsx").scan(
+  for await (const scanned of new Glob("src/**/*.tsx").scan(
     `${import.meta.dir}/..`,
   )) {
+    // Glob answers with `\` on Windows; every entry in SUBMITTED_ELSEWHERE is written with `/`, so
+    // without this the three forms that name themselves above read as dead there and nowhere else.
+    const file = scanned.replaceAll("\\", "/");
     if (SUBMITTED_ELSEWHERE.has(file)) continue;
     const text = await Bun.file(`${import.meta.dir}/../${file}`).text();
     const source = ts.createSourceFile(

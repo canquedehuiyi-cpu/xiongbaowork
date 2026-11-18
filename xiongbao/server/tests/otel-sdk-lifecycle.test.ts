@@ -32,7 +32,10 @@ function isolated(body: string) {
     cmd: [
       process.execPath,
       "--no-env-file",
-      "--config=/dev/null",
+      // `--no-config` rather than `--config=/dev/null`: `/dev/null` is not a path on Windows and
+      // Bun refuses it with `EINVAL: Invalid argument (open())`, so these three files were red
+      // there for a reason that had nothing to do with what they test.
+      "--no-config",
       "-e",
       `${setup}\n${body}\nassert.equal(networkAttempts, 0); console.log("CPU_ONLY_NO_NETWORK_ATTEMPTS");`,
     ],

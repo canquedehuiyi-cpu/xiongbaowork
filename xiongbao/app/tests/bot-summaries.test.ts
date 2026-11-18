@@ -87,7 +87,8 @@ test("a public Bot nobody published is still open to everyone, not 'Not shared'"
 test("reach names the places a Bot continues the conversation", () => {
   expect(reachSummary([])).toBe("只在熊宝里");
   expect(reachSummary(["slack"])).toBe("Slack");
-  expect(reachSummary(["sms", "slack", "slack"])).toBe("Slack、短信");
+  // Chinese first: the sort is fixed to zh-CN so this does not depend on the machine.
+  expect(reachSummary(["sms", "slack", "slack"])).toBe("短信、Slack");
   expect(reachSummary(["teams"])).toBe("Microsoft Teams");
 });
 

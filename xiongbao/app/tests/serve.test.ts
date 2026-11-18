@@ -11,6 +11,10 @@ import {
   isClientRoute,
   upstreamWebSocketHeaders,
 } from "../serve";
+import { ipv6LoopbackWorks } from "./ipv6-loopback";
+
+/** Answered once: whether `::1` here can be connected to at all. See ipv6-loopback.ts. */
+const ipv6Loopback = await ipv6LoopbackWorks();
 
 async function probeServingPorts(env: {
   APP_PORT?: string;
@@ -710,7 +714,9 @@ describe.skipIf(lanAddress === undefined)("where the app listens", () => {
     const proxy = await startProxy(await reservePort());
     try {
       expect(await accepts("127.0.0.1", proxy.port)).toBe(true);
-      expect(await accepts("::1", proxy.port)).toBe(true);
+      // Where the machine has no IPv6 loopback the listener still starts on ::1 (Windows accepts the
+      // bind and then refuses every connection), so the expectation flips rather than disappears.
+      expect(await accepts("::1", proxy.port)).toBe(ipv6Loopback);
       expect(await accepts(lanAddress as string, proxy.port)).toBe(false);
     } finally {
       await proxy.stop();

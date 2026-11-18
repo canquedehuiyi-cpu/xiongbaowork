@@ -70,9 +70,15 @@ const TRANSPORT_LABEL: Record<string, string> = {
 
 /** Where this Bot's conversations continue outside 熊宝, each place once. */
 export function reachSummary(transports: readonly string[]): string {
+  /*
+   * Sorted under one collation, not the reader's: without it this string reads "Slack、短信" on an
+   * en-US machine and "短信、Slack" on a zh-CN one, so two people looking at the same Bot see its
+   * reach in a different order depending on the language their own system runs in. `zh-CN` is the
+   * language the rest of these labels are written in (`delivery-board.tsx` sorts the same way).
+   */
   const places = [...new Set(transports)]
     .map((transport) => TRANSPORT_LABEL[transport] ?? transport)
-    .sort((a, b) => a.localeCompare(b));
+    .sort((a, b) => a.localeCompare(b, "zh-CN"));
   return places.length ? places.join("、") : `只在${shortName()}里`;
 }
 

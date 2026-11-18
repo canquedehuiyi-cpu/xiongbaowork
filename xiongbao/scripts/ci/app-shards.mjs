@@ -12,7 +12,12 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { assertManifestFresh, sliceShard, splitManifest } from "./sharding.mjs";
+import {
+  annotationFor,
+  assertManifestFresh,
+  sliceShard,
+  splitManifest,
+} from "./sharding.mjs";
 
 // 628 files at the time of writing, i.e. ~105 per shard: below both the 200-file run that was green
 // and the 300-file run that reproduced the hang, with room for the suite to grow.
@@ -51,7 +56,7 @@ export function discoverTests(root) {
 export function readManifest(root) {
   const files = splitManifest(readFileSync(join(root, MANIFEST), "utf8"));
   assertManifestFresh(files, discoverTests(root), {
-    command: "bun scripts/ci/app-shards.mjs --write",
+    command: "bun run test:shards",
     label: "App test",
   });
   return files;
@@ -59,6 +64,33 @@ export function readManifest(root) {
 
 export function shardFiles(files, shard) {
   return sliceShard(files, shard, SHARD_COUNT, "App");
+}
+
+// The listing a shard job runs, and what it prints when the manifest is stale. Returns the lines and
+// the exit code instead of printing and exiting itself, so the stale path can be tested without
+// spawning a second Bun process (which on Windows returns an empty stdout and exit code 0 for
+// `bun.exe script.mjs`).
+export function listShard(action, root = defaultRoot) {
+  if (!new RegExp(`^[1-${SHARD_COUNT}]$`).test(action ?? "")) {
+    throw new Error(
+      `Usage: bun scripts/ci/app-shards.mjs <1..${SHARD_COUNT}|--write> [head product root]`,
+    );
+  }
+  try {
+    return {
+      code: 0,
+      lines: [shardFiles(readManifest(root), Number(action)).join("\n")],
+    };
+  } catch (error) {
+    const annotation = annotationFor(error, {
+      manifest: MANIFEST,
+      label: "App test",
+    });
+    return {
+      code: 1,
+      lines: [...(annotation ? [annotation] : []), error.message],
+    };
+  }
 }
 
 if (
@@ -72,11 +104,8 @@ if (
     writeFileSync(join(root, MANIFEST), `${files.join("\n")}\n`);
     console.log(`Recorded ${files.length} app test files.`);
   } else {
-    if (!new RegExp(`^[1-${SHARD_COUNT}]$`).test(action ?? "")) {
-      throw new Error(
-        `Usage: bun scripts/ci/app-shards.mjs <1..${SHARD_COUNT}|--write> [head product root]`,
-      );
-    }
-    console.log(shardFiles(readManifest(root), Number(action)).join("\n"));
+    const { code, lines } = listShard(action, root);
+    for (const line of lines) console.log(line);
+    process.exit(code);
   }
 }

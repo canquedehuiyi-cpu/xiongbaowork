@@ -102,7 +102,9 @@ describe("the tree", () => {
       expect(line).toContain(name);
   });
 
+  // Reads every source file in the tree: ~1.7 s alone, past Bun's five-second default once the whole
+  // shard has run before it.
   test("no legacy-compat comment is past its window or malformed", () => {
     expect(treeCompatProblems(version)).toEqual([]);
-  });
+  }, 30_000);
 });
