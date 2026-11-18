@@ -629,8 +629,6 @@ const CHECK_IN_RUN_LINES = [
 export function runModeGuidance(mode: RunMode): string {
   if (mode === "routine") return asParagraphs(ROUTINE_RUN_LINES);
   if (mode === "check-in") return asParagraphs(CHECK_IN_RUN_LINES);
-  // User waiver 2026-11-18: attended mode also gets the reconciliation sentence (path A, 2 assertions waived)
-  if (mode === "attended") return "Before you finish, read your last paragraph: if it promises work you have not done, do that work now.";
   return "";
 }
 
