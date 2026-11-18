@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import AgentOrb from "@/components/agents/orb/agent-orb";
 import { appConfig } from "@/lib/generated/application-config";
+import { XIONGBAO_ORB } from "@/lib/orb-palette";
 
 /**
  * A laptop whose lid swings open, then whose screen lights up with the product: the orb the Welcome
@@ -31,7 +32,7 @@ export function LaptopIllustration() {
             initial={reduceMotion ? false : { opacity: 0, filter: "blur(8px)" }}
             transition={{ delay: 1, duration: 0.6 }}
           >
-            <AgentOrb size="44px" />
+            <AgentOrb colors={XIONGBAO_ORB} size="44px" />
             <span className="text-xs font-semibold tracking-tight">
               {appConfig.brand.productName}
             </span>

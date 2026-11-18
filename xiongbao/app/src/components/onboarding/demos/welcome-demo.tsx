@@ -85,7 +85,7 @@ function WelcomeScene({
         still={!playing}
       />
       <div className="w-full max-w-md">
-        <div className="flex min-h-[7.5rem] flex-col justify-between gap-3 rounded-2xl bg-card/80 p-3 shadow-[inset_0_0_0_1px_var(--border)]">
+        <div className="flex min-h-[7.5rem] flex-col justify-between gap-3 rounded-[16px] bg-background p-3 shadow-[inset_0_0_0_1px_var(--border)]">
           <p
             className={cn(
               "text-sm min-h-10 px-1 pt-1 text-left transition-opacity duration-300",
@@ -132,15 +132,12 @@ function WelcomeScene({
             aria-hidden
             className={cn(
               "size-1.5 rounded-full",
-              beat === 2 ? "bg-emerald-500" : "bg-blue-500",
+              // Working is the red signal dot, as on the task board; done is the plain ink.
+              beat === 2 ? "bg-foreground" : "bg-signal",
             )}
           />
           <span
-            className={
-              beat === 2
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-blue-600 dark:text-blue-400"
-            }
+            className={beat === 2 ? "text-foreground" : "text-muted-foreground"}
           >
             {beat === 2 ? "找到了三个地方" : "正在处理"}
           </span>

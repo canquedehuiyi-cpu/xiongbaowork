@@ -32,7 +32,7 @@ export function IllustrationFrame({
   return (
     <div aria-label={label} className="w-full max-w-lg" role="img">
       <div
-        className={`pointer-events-none select-none rounded-2xl border border-border bg-muted/60 saturate-75 ${className}`}
+        className={`pointer-events-none select-none rounded-[18px] border border-border bg-card shadow-[inset_0_1px_0_rgb(255_255_255/0.03)] saturate-75 ${className}`}
         inert
       >
         {children}

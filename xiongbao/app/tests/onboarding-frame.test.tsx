@@ -336,7 +336,7 @@ test("a move handed out on one step does nothing once somebody has left it", asy
   expect(view.getByRole("heading", { name: "One" })).toBeTruthy();
 });
 
-test("a done primary reads green with a check", () => {
+test("a done primary uses a graphite fill and shows a check", () => {
   const view = draw({
     initialStepId: "apps",
     steps: [
@@ -354,7 +354,8 @@ test("a done primary reads green with a check", () => {
   expect(footerButtons(view)).toHaveLength(1);
   expect(done?.textContent).toBe("Notifications on");
   expect(done?.hasAttribute("data-done")).toBe(true);
-  expect(done?.className).toContain("bg-emerald-500/10");
+  expect(done?.className).toContain("bg-foreground/8");
+  expect(done?.querySelector("svg")).not.toBeNull();
 });
 
 test("an optional step keeps Not now's place when it goes, so the primary doesn't move", () => {

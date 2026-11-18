@@ -86,7 +86,7 @@ export function IntroReel({ computer = true }: { computer?: boolean }) {
           <span
             className={`h-1.5 rounded-full transition-all motion-reduce:transition-none ${
               candidate.id === scene.id
-                ? "w-5 bg-foreground"
+                ? "w-5 bg-signal"
                 : "w-1.5 bg-foreground/20"
             }`}
             key={candidate.id}

@@ -8,6 +8,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **新手引导采用熊宝的黑白红样式。** 当前步骤用红色标记，演示使用石墨色面板，并在资料来源步骤加入示意图。
+
 ## 0.2.13
 
 **从 v0.2.12 升级先看这几条**（逐条说明在下面各项的「升级须知」里）：
