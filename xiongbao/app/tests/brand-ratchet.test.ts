@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,6 +9,7 @@ import {
 } from "../../scripts/brand/guard/allowlist";
 import {
   baseRef,
+  cleanupScratchRepositories,
   type Git,
   type SyncPoint,
   verifySyncPoint,
@@ -20,6 +21,8 @@ import {
   ratchetBase,
   ratchetProblems,
 } from "../../scripts/brand/guard/ratchet";
+
+afterAll(cleanupScratchRepositories);
 
 const entry = (over: Partial<AllowEntry> = {}): AllowEntry => ({
   file: "server/src/a.ts",

@@ -3,7 +3,7 @@
  * included, unless the upstream already has the same line at the same path (a sync brings those in).
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -217,17 +217,45 @@ export function readSyncPoint(): SyncPoint {
 }
 
 export type Git = (args: string[]) => string; // throws when git fails
+const scratchRepositories = new Set<string>();
+let cleanupRegistered = false;
+
+function removeScratchRepository(directory: string): void {
+  try {
+    rmSync(directory, { recursive: true, force: true, maxRetries: 3 });
+    scratchRepositories.delete(directory);
+  } catch {
+    // Keep the directory registered so the next cleanup can retry without hiding a Git error.
+  }
+}
+
+export function cleanupScratchRepositories(): void {
+  for (const directory of scratchRepositories)
+    removeScratchRepository(directory);
+}
 
 /**
  * A git that runs in a scratch bare repository, made on first use: fetched upstream commits land there,
- * never in this repository, so a shallow fetch cannot cut its history.
+ * never in this repository, so a shallow fetch cannot cut its history. The process cleans up its own
+ * repositories at exit. Bun test files also call cleanup explicitly because the test runner skips exit hooks.
  */
 export function scratchGit(): Git {
   let dir: string | undefined;
   return (args) => {
     if (dir === undefined) {
-      dir = mkdtempSync(join(tmpdir(), "brand-upstream-"));
-      git(["init", "--bare", "-q"], dir);
+      const directory = mkdtempSync(join(tmpdir(), "brand-upstream-"));
+      scratchRepositories.add(directory);
+      if (!cleanupRegistered) {
+        process.once("exit", cleanupScratchRepositories);
+        cleanupRegistered = true;
+      }
+      try {
+        git(["init", "--bare", "-q"], directory);
+      } catch (error) {
+        removeScratchRepository(directory);
+        throw error;
+      }
+      dir = directory;
     }
     return git(args, dir);
   };
