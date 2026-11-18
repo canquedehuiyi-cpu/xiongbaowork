@@ -30,9 +30,18 @@ defaults:
 
 env:
   TENANT_PACKAGE_DIR: ../examples/xiongbao
-  # Frozen at the commit main was created from (D06 candidate). The previous value
-  # 03df9efa... does not exist in this repository. Never replace with moving main.
-  DELIVERY_BASELINE_SHA: 2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634
+  # The frozen baseline is "the last commit on main whose whole run was green", pinned by commit — never
+  # a branch: a moving baseline turns 「新增失败」into "whatever main was when this job started", and the
+  # comparison then says nothing about the change under test.
+  #
+  # 2026-11-18: moved from 2aacf0f19f (2026-11-04, before the openbot/ → xiongbao/ rename and before
+  # examples/xiongbao existed) to e63acdfb51 (run 44264063700, 46/46). Two things came from that staleness:
+  # the baseline had to be located under its old product directory (baseline-dir.sh still allows that for
+  # old pins), and the app baseline had to be generated with TENANT_PACKAGE_DIR=../examples/qoderwake, a
+  # package this tree no longer carries. Both allowances are gone below; the pin now needs neither.
+  # Also: 03df9efa... (an even earlier value) does not exist in this repository — prepare-baseline.sh now
+  # says so by name instead of failing inside `git worktree add`.
+  DELIVERY_BASELINE_SHA: e63acdfb51a3a5e6624f50b03991ef6e4d423a42
 
 jobs:
   static:
@@ -149,7 +158,7 @@ jobs:
         working-directory: xiongbao/agent-mastra
       - name: Prepare frozen baseline and separate databases
         run: |
-          bash scripts/ci/prepare-baseline.sh
+          bash scripts/ci/prepare-baseline.sh --with-bots
           baseline="$(bash scripts/ci/baseline-dir.sh)"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE openbot_b_base OWNER openbot'
           DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_head bun run --cwd server scripts/migrate.ts
@@ -163,10 +172,17 @@ jobs:
           printf 'DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base\n' > "$baseline/.env"
       - name: Baseline tests (same head shard file list, own database)
         continue-on-error: true
-        run: |
-          DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
-          TEST_DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
-            bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
+        # Every database the baseline tree touches is its own, the writer too. `initializeRoleWriter`
+        # refuses an application and a writer that are not on the same database (it compares database,
+        # oid, server address and port), so leaving TEST_ROLE_WRITER_DATABASE_URL at the job default
+        # pointed the writer at openbot_b_head while the application was on openbot_b_base: every suite
+        # that binds the writer died in its hook — 38 unnamed failures on shard 1 alone — and
+        # test-report.mjs refuses to compare a log with unnamed failures at all.
+        env:
+          DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base
+          TEST_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base
+          TEST_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_b_base
+        run: bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Head tests (openbot_app, one process per shard)
         # No continue-on-error: a failing head test fails this step and the job. The report step
         # below runs anyway (if: always()) for the baseline comparison.
@@ -216,13 +232,12 @@ jobs:
       - run: bash scripts/ci/prepare-baseline.sh
       - name: Baseline app tests (the frozen tree's own tenant package)
         continue-on-error: true
-        # The frozen baseline predates examples/xiongbao, so the job-level TENANT_PACKAGE_DIR points
-        # at nothing there: `generate:app-config` exited 1, `set -e` stopped the script, and base.log
-        # stayed at about 1 KB with no `Ran … tests` line — the comparison section was empty on every
-        # run since. That commit's own CI used ../examples/qoderwake, which the frozen tree still
-        # carries, so the baseline is generated the way it was generated then.
-        env:
-          TENANT_PACKAGE_DIR: ../examples/qoderwake
+        # No TENANT_PACKAGE_DIR override: the baseline is now the last green main commit, so it carries
+        # examples/xiongbao and generates its own app config. The override existed because the previous
+        # baseline (2aacf0f) predated examples/xiongbao: `generate:app-config` exited 1 there, `set -e`
+        # stopped the script, and base.log held no `Ran … tests` line, so the comparison was empty on
+        # every run since the baseline was pinned. That commit's own CI used ../examples/qoderwake; it is
+        # not in this tree any more, which is why the refresh and this removal had to land together.
         run: bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" app "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Generate configuration and run app tests (this shard)
         run: bash scripts/ci/run-tests.sh "$PWD" app "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
