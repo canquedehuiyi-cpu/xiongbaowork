@@ -70,4 +70,6 @@ test("a conversation loads Shiki only once it has code to highlight", async () =
     expect(keyword?.getAttribute("style") ?? "").toContain("--shiki-dark");
   });
   expect(loads).toBe(1);
-});
+  // The first import of the chat tree pulls in Shiki's core and regex engine; on Windows that alone
+  // takes over five seconds cold, so the default limit expired before the first assertion.
+}, 30_000);

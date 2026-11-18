@@ -141,9 +141,7 @@ const wipe = (at: number, before: string[]) =>
 /** What a page does when it wipes: write the key, which tells every other page. */
 function tabWipes(key: string, value: string) {
   window.localStorage.setItem(key, value);
-  window.dispatchEvent(
-    new StorageEvent("storage", { key, newValue: value }),
-  );
+  window.dispatchEvent(new StorageEvent("storage", { key, newValue: value }));
 }
 const atOf = (key: string) =>
   (JSON.parse(window.localStorage.getItem(key) ?? "{}") as { at?: number }).at;
@@ -173,7 +171,12 @@ test("a wipe written under the old prefix changes nothing", async () => {
   reloaded.recordActivity(BOT, calls("c-1", "c-2"));
   expect(reloaded.activityFor(BOT)).toHaveLength(2);
   expect(window.localStorage.getItem(OLD_KEY)).not.toBeNull();
-});
+  /*
+   * Two fresh copies of the module, each with its own `?compat-page=` so it has its own state: on
+   * Windows that is ~6.4 s of the module graph being loaded twice, past Bun's five-second default.
+   * The bound belongs to the import, not to a wait.
+   */
+}, 30_000);
 
 test("a wipe under this prefix empties the pane and survives a reload", async () => {
   const open = await openPage();

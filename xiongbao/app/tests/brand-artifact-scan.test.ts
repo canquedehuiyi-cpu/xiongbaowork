@@ -227,41 +227,49 @@ describe("image and deb scans (Task 5)", () => {
     expect(found.has("/openbot-trackb")).toBe(false);
   });
 
-  test("deb: the listing, every control field and the extracted files are scanned", () => {
-    const root = dir();
-    const tree = join(root, "pkg");
-    mkdirSync(join(tree, "DEBIAN"), { recursive: true });
-    mkdirSync(join(tree, "usr", "bin"), { recursive: true });
-    mkdirSync(join(tree, "usr", "share", "doc"), { recursive: true });
-    writeFileSync(
-      join(tree, "DEBIAN", "control"),
-      "Package: openbot-device\nVersion: 1.0.0\nArchitecture: amd64\nMaintainer: x <x@example.com>\nDescription: openbot-desc\n",
-    );
-    writeFileSync(
-      join(tree, "usr", "bin", "xiongbao-runner"),
-      Buffer.from(
-        "\0/home/runner/work/x/x/xiongbao/node_modules/a\0copilotkit-inside\0/usr/bin/chromiumopenbot-runner/proc.configautostart\0@copilotkit/core@1.85.0\0",
-      ),
-    );
-    writeFileSync(join(tree, "usr", "share", "doc", "openbot-doc.txt"), "hi\n");
-    const deb = join(root, "out.deb");
-    execFileSync("dpkg-deb", ["--build", "-Znone", tree, deb], {
-      stdio: "ignore",
-    });
-    const scan = scanDeb(deb, "/home/runner/work/x/x/xiongbao");
-    expect(scan.found.has("openbot-device")).toBe(true);
-    expect(scan.found.has("openbot-desc")).toBe(true);
-    expect(scan.found.has("copilotkit-inside")).toBe(true);
-    // Rust packs its literals with nothing between them: only the name and its own segment are the word.
-    expect(scan.found.has("openbot-runner")).toBe(true);
-    expect(scan.found.has("@copilotkit")).toBe(true);
-    expect([...scan.found.keys()].filter((w) => w.length > 40)).toEqual([]);
-    expect(
-      [...scan.found.keys()].some((w) => w.endsWith("openbot-doc.txt")),
-    ).toBe(true);
-    expect(scan.found.get(BUILD_PATH)).toBe(1);
-    rmSync(root, { recursive: true, force: true });
-  });
+  // `dpkg-deb` packs the archive this case reads. A machine without it (Windows) cannot build the
+  // fixture at all, so the case is skipped there rather than failing on the missing command.
+  test.if(Bun.which("dpkg-deb") !== null)(
+    "deb: the listing, every control field and the extracted files are scanned",
+    () => {
+      const root = dir();
+      const tree = join(root, "pkg");
+      mkdirSync(join(tree, "DEBIAN"), { recursive: true });
+      mkdirSync(join(tree, "usr", "bin"), { recursive: true });
+      mkdirSync(join(tree, "usr", "share", "doc"), { recursive: true });
+      writeFileSync(
+        join(tree, "DEBIAN", "control"),
+        "Package: openbot-device\nVersion: 1.0.0\nArchitecture: amd64\nMaintainer: x <x@example.com>\nDescription: openbot-desc\n",
+      );
+      writeFileSync(
+        join(tree, "usr", "bin", "xiongbao-runner"),
+        Buffer.from(
+          "\0/home/runner/work/x/x/xiongbao/node_modules/a\0copilotkit-inside\0/usr/bin/chromiumopenbot-runner/proc.configautostart\0@copilotkit/core@1.85.0\0",
+        ),
+      );
+      writeFileSync(
+        join(tree, "usr", "share", "doc", "openbot-doc.txt"),
+        "hi\n",
+      );
+      const deb = join(root, "out.deb");
+      execFileSync("dpkg-deb", ["--build", "-Znone", tree, deb], {
+        stdio: "ignore",
+      });
+      const scan = scanDeb(deb, "/home/runner/work/x/x/xiongbao");
+      expect(scan.found.has("openbot-device")).toBe(true);
+      expect(scan.found.has("openbot-desc")).toBe(true);
+      expect(scan.found.has("copilotkit-inside")).toBe(true);
+      // Rust packs its literals with nothing between them: only the name and its own segment are the word.
+      expect(scan.found.has("openbot-runner")).toBe(true);
+      expect(scan.found.has("@copilotkit")).toBe(true);
+      expect([...scan.found.keys()].filter((w) => w.length > 40)).toEqual([]);
+      expect(
+        [...scan.found.keys()].some((w) => w.endsWith("openbot-doc.txt")),
+      ).toBe(true);
+      expect(scan.found.get(BUILD_PATH)).toBe(1);
+      rmSync(root, { recursive: true, force: true });
+    },
+  );
 
   test("web on a log file: words only, no source map check", () => {
     const root = dir();
