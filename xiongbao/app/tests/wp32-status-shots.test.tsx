@@ -5,8 +5,11 @@ import type { Browser, Page } from "playwright-core";
 import { compile } from "tailwindcss";
 
 /**
- * 状态行实时耗时的截图取证（WP-3.2 S1a，规格 §8.3）：真 Chromium 里画真组件，暗色＋2 倍像素，
- * 五个画面各存一张图，供负责人按既定授权核对界面后才合并。
+ * 状态行实时耗时的截图取证（WP-3.2 S1a，规格 §8.3）＋终态行的截图取证（WP-3.2 S1b，设计稿 §2.8）：
+ * 真 Chromium 里画真组件，暗色＋2 倍像素，每个画面各存一张图，供负责人按既定授权核对界面后才合并。
+ * S1a 五张（model／tool／answer／typing／observed）原样不动；S1b 追加五张
+ * （turn-closed--idle-dark／--cancelled-dark／--awaiting-approval-dark／--stopped-error-dark
+ * 互斥对照／--empty-thread-dark 零噪音对照），各自独立断言，不改 S1a 那条测试的一个字。
  *
  * 打包与样式管线与 transcript-rail-clearance.test.tsx 完全一致：Bun.build 打包旁边的 fixture，
  * Tailwind 按页面上真实出现的类编译应用自己的 styles.css。深色不是手挂 class：页面加载前把
@@ -33,6 +36,46 @@ const SCENES = [
   { hash: "typing", wait: "雄宝 正在输入", stage: "雄宝 正在输入" },
   { hash: "observed", wait: "思考中", stage: "思考中" },
 ] as const;
+
+/**
+ * S1b 终态行的五个画面（设计稿 §2.8）：三个正性版本各断言自己的话与 data-variant；
+ * stopped-error 是互斥对照（Stopped 在、终态行不在）；empty-thread 是零噪音对照（什么都不在）。
+ * wait 为 null 的画面没有一句话可等，open() 等挂载。
+ */
+const CLOSED_SCENES: {
+  hash: string;
+  wait: string | null;
+  variant?: string;
+  says?: string[];
+  amber?: boolean;
+  stopped?: boolean;
+}[] = [
+  {
+    hash: "turn-closed--idle-dark",
+    wait: "本轮已结束",
+    variant: "idle",
+    says: ["本轮已结束", "等待你的下一句"],
+  },
+  {
+    hash: "turn-closed--cancelled-dark",
+    wait: "本轮已由你停止",
+    variant: "cancelled",
+    says: ["本轮已由你停止", "想继续就说一句。"],
+  },
+  {
+    hash: "turn-closed--awaiting-approval-dark",
+    wait: "有一个命令等你批准",
+    variant: "awaiting_approval",
+    says: ["有一个命令等你批准", "批准后我接着做。"],
+    amber: true,
+  },
+  {
+    hash: "turn-closed--stopped-error-dark",
+    wait: "员工停下了，没有说原因。",
+    stopped: true,
+  },
+  { hash: "turn-closed--empty-thread-dark", wait: null },
+];
 
 /** 打包 fixture。`@/lib/marks` 是 Vite 的 `import.meta.glob`，浏览器里没有，置空。 */
 async function bundle(): Promise<string> {
@@ -119,8 +162,8 @@ afterAll(async () => {
   await browser?.close();
 });
 
-/** 一个画面开成一页：暗色＋2 倍像素，样式按画出来的类编译一次。 */
-async function open(hash: string, wait: string): Promise<Page> {
+/** 一个画面开成一页：暗色＋2 倍像素，样式按画出来的类编译一次。wait 为 null＝零噪音画面，等挂载。 */
+async function open(hash: string, wait: string | null): Promise<Page> {
   const page = await browser.newPage({
     viewport: { width: 1280, height: 800 },
     colorScheme: "dark",
@@ -158,7 +201,14 @@ async function open(hash: string, wait: string): Promise<Page> {
     });
   });
   await page.goto(`${ORIGIN}/#${hash}`);
-  await page.getByText(wait).first().waitFor({ timeout: 8000 });
+  if (wait === null) {
+    // 零噪音画面没有一句话可等：等 React 挂上根节点，再靠下面的落定时间拍。
+    await page.waitForFunction(
+      () => (document.getElementById("root")?.childElementCount ?? 0) > 0,
+    );
+  } else {
+    await page.getByText(wait).first().waitFor({ timeout: 8000 });
+  }
   const classes = await page.evaluate(() => [
     ...new Set(
       [...document.querySelectorAll("[class]")].flatMap((element) => [
@@ -189,6 +239,52 @@ describe.skipIf(!asked)("the working line's live elapsed time, in pictures", () 
         const qualifier =
           scene.hash === "observed" ? "已进行 2 分 15 秒" : "已跑 2 分 15 秒";
         expect(await page.getByText(qualifier).count()).toBe(1);
+        await page.screenshot({ path: join(shots, `${scene.hash}.png`) });
+      } finally {
+        await page.close();
+      }
+    }
+  }, 120_000);
+});
+
+describe.skipIf(!asked)("the closed turn's line, in pictures", () => {
+  test("each closed-turn scene says its variant or nothing, and is saved dark at 2x", async () => {
+    mkdirSync(shots, { recursive: true });
+    for (const scene of CLOSED_SCENES) {
+      const page = await open(scene.hash, scene.wait);
+      try {
+        const dark = await page.evaluate(() =>
+          document.documentElement.classList.contains("dark"),
+        );
+        expect(dark).toBe(true);
+        const closed = page.getByTestId("transcript-turn-closed");
+        const stoppedLine = page.getByTestId("transcript-stopped");
+        if (scene.variant) {
+          // 正性版本：这一行在、版本对、话在；失败句/思考中/秒数一个都不在。
+          expect(await closed.count()).toBe(1);
+          expect(await closed.getAttribute("data-variant")).toBe(scene.variant);
+          for (const words of scene.says ?? [])
+            expect(await page.getByText(words).count()).toBeGreaterThan(0);
+          expect(await stoppedLine.count()).toBe(0);
+          expect(await page.getByText("思考中").count()).toBe(0);
+          expect(await page.getByText(ELAPSED).count()).toBe(0);
+          if (scene.amber)
+            expect(
+              await page
+                .locator('[data-variant="awaiting_approval"] .text-amber-600')
+                .count(),
+            ).toBe(1);
+        } else if (scene.stopped) {
+          // 互斥对照：失败句在，终态行永不与它同屏（就算版本被置了位）。
+          expect(await stoppedLine.count()).toBe(1);
+          expect(await closed.count()).toBe(0);
+        } else {
+          // 零噪音对照：空 thread 一个字不说，一行会话也没有。
+          expect(await closed.count()).toBe(0);
+          expect(await stoppedLine.count()).toBe(0);
+          expect(await page.getByText("思考中").count()).toBe(0);
+          expect(await page.locator("[data-message-id]").count()).toBe(0);
+        }
         await page.screenshot({ path: join(shots, `${scene.hash}.png`) });
       } finally {
         await page.close();
