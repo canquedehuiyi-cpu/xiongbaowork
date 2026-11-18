@@ -460,6 +460,8 @@ tests/routines-conversation-title.test.tsx
 tests/routines-discovery.test.tsx
 tests/routines-no-worker.test.ts
 tests/routines-title.test.tsx
+tests/run-elapsed-line.test.tsx
+tests/run-elapsed.test.ts
 tests/running-step-shimmer.test.tsx
 tests/save-bot-retired.test.tsx
 tests/screen-connection.test.ts
@@ -566,6 +568,7 @@ tests/tool-boundary.test.tsx
 tests/tool-elapsed.test.tsx
 tests/tool-failure-reason.test.tsx
 tests/tool-line-reduced-motion.test.tsx
+tests/tool-line-server-wiring.test.tsx
 tests/tool-line-wrap.test.tsx
 tests/tool-name.test.ts
 tests/tool-result.test.ts
@@ -629,5 +632,6 @@ tests/workbench-presence.test.tsx
 tests/workbench-today.test.ts
 tests/workbench-tokens.test.ts
 tests/working-now.test.tsx
+tests/wp32-status-shots.test.tsx
 tests/your-recordings.test.tsx
 vite-listen-port.test.ts

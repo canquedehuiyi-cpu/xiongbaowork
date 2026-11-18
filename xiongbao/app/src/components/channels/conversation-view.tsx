@@ -38,6 +38,8 @@ export function ConversationView({
   compaction,
   notes,
   stage,
+  elapsedMs,
+  elapsedObserved,
   busy = false,
   notice,
   attached,
@@ -75,6 +77,10 @@ export function ConversationView({
   notes?: readonly TranscriptNote[];
   /** 正在跑的这一轮走到哪一段（由这一轮的事件推出来）；见 `ChatTranscript`。不给就一切照旧。 */
   stage?: RunStage | null;
+  /** 这一轮从被看见起跑了多少毫秒；见 `ChatTranscript`。不给就一切照旧。 */
+  elapsedMs?: number;
+  /** 起点是半路看见的，措辞用「已进行」；见 `ChatTranscript`。 */
+  elapsedObserved?: boolean;
   busy?: boolean;
   /** Shown above the composer. An error, or why this conversation is read-only. */
   notice?: ReactNode;
@@ -506,6 +512,8 @@ export function ConversationView({
           {...(stopped ? { stopped } : {})}
           {...(typist ? { typist } : {})}
           {...(stage ? { stage } : {})}
+          {...(elapsedMs !== undefined ? { elapsedMs } : {})}
+          {...(elapsedObserved !== undefined ? { elapsedObserved } : {})}
           working={working}
         />
       </div>

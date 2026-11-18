@@ -59,6 +59,7 @@ import {
   UNOFFERED_TOOL_SENTENCE,
   unofferedTool,
 } from "@/lib/plugins/tool-result";
+import { elapsedSuffix } from "@/lib/spent-of";
 import { readTeamBotConsent } from "@/lib/team-bots";
 import { isStaffingProposalTool } from "../../../../shared/staffing-proposal";
 import {
@@ -376,13 +377,16 @@ function failureLine(value: unknown): string | undefined {
 /**
  * 结果里那两个事实：这一步跑了多久，失败那一步的退出码或原因。
  *
+ * 导出给单工具行（`chat-transcript.tsx` 的 `ServerToolLine`）共用：同一条结果在分组行与单行上
+ * 说的是同一件事，不再各算各的（WP-3.2 S0）。
+ *
  * 命令、浏览器动作和读文件都以一个 JSON 对象回答，`elapsedMs` 是 shell 那边量的
  * （`agent-computer/src/shell.ts`），`exitCode` 是进程给的；一个用文字回答的工具两个都没有。读法走
  * Activity 面板那一份 `readOutcome`——两处读同一个结果，就不要各写一套解析，以前正是各写一套让同一
  * 步在行上和面板上说了两样。这里只搬结果自己写了的字段：读不出对象的、值不是有限非负数的、退出码
  * 不是整数的，一律什么都不返回。行上宁可少说一件事，也不要造一个 `0.0s` 或 `退出码 0`。
  */
-function resultFacts(result: string | undefined): {
+export function resultFacts(result: string | undefined): {
   elapsedMs?: number;
   exitCode?: number;
   failure?: string;
@@ -1033,6 +1037,8 @@ export function ToolActivity({
   group,
   active,
   stage,
+  elapsed,
+  observed,
 }: {
   group: ToolGroup;
   /** This is the newest row of a turn still in flight, so a step without a result is running. */
@@ -1046,6 +1052,13 @@ export function ToolActivity({
    * 少一行，那一格照旧，不会出现空着的一格。
    */
   stage?: RunStage | null;
+  /**
+   * 这一轮从被看见起跑了多少毫秒（WP-3.2 S1a）。只给正在跑的最后一行，历史行不给：
+   * 秒针每秒走一格，不能拖着整段历史一起重画（见 chat-transcript.tsx 的 sameToolRow）。
+   */
+  elapsed?: number;
+  /** 起点是半路看见的（没赶上 RUN_STARTED），措辞用「已进行」而不是「已跑」。 */
+  observed?: boolean;
 }) {
   const folders = useContext(FolderNamesContext);
   const steps = group.steps.map(stepDetailsIn(folders));
@@ -1057,6 +1070,9 @@ export function ToolActivity({
   const issues = steps.filter((step) => step.failed || step.refused).length;
   const kinds = [...new Set(steps.map((step) => step.kind))];
   const stageLine = active && stage === "tool" ? stageWords(stage) : undefined;
+  // 工具一跑就是几十秒，等模型那一格这时不画（见 chat-transcript.tsx 的 waitingOnTheModel），
+  // 秒数挂在这条阶段行上，长工具窗口才不会一片空白。原有文字一个字不动，秒数是旁边的兄弟节点。
+  const suffix = elapsedSuffix(elapsed, observed);
   // The folded line draws its own steps, so a waiting approval gets its card beside it, not inside.
   return (
     <>
@@ -1068,6 +1084,9 @@ export function ToolActivity({
           role="status"
         >
           {stageLine}
+          {suffix ? (
+            <span className="tabular-nums opacity-70">{` · ${suffix}`}</span>
+          ) : null}
         </p>
       ) : null}
       <ToolLine
