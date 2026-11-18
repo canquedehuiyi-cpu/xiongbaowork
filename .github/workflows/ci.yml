@@ -30,9 +30,18 @@ defaults:
 
 env:
   TENANT_PACKAGE_DIR: ../examples/xiongbao
-  # Frozen at the commit main was created from (D06 candidate). The previous value
-  # 03df9efa... does not exist in this repository. Never replace with moving main.
-  DELIVERY_BASELINE_SHA: 2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634
+  # The frozen baseline is "the last commit on main whose whole run was green", pinned by commit — never
+  # a branch: a moving baseline turns 「新增失败」into "whatever main was when this job started", and the
+  # comparison then says nothing about the change under test.
+  #
+  # 2026-11-18: moved from 2aacf0f19f (2026-11-04, before the openbot/ → xiongbao/ rename and before
+  # examples/xiongbao existed) to e63acdfb51 (run 44264063700, 46/46). Two things came from that staleness:
+  # the baseline had to be located under its old product directory (baseline-dir.sh still allows that for
+  # old pins), and the app baseline had to be generated with TENANT_PACKAGE_DIR=../examples/qoderwake, a
+  # package this tree no longer carries. Both allowances are gone below; the pin now needs neither.
+  # Also: 03df9efa... (an even earlier value) does not exist in this repository — prepare-baseline.sh now
+  # says so by name instead of failing inside `git worktree add`.
+  DELIVERY_BASELINE_SHA: e63acdfb51a3a5e6624f50b03991ef6e4d423a42
 
 jobs:
   static:
@@ -216,13 +225,12 @@ jobs:
       - run: bash scripts/ci/prepare-baseline.sh
       - name: Baseline app tests (the frozen tree's own tenant package)
         continue-on-error: true
-        # The frozen baseline predates examples/xiongbao, so the job-level TENANT_PACKAGE_DIR points
-        # at nothing there: `generate:app-config` exited 1, `set -e` stopped the script, and base.log
-        # stayed at about 1 KB with no `Ran … tests` line — the comparison section was empty on every
-        # run since. That commit's own CI used ../examples/qoderwake, which the frozen tree still
-        # carries, so the baseline is generated the way it was generated then.
-        env:
-          TENANT_PACKAGE_DIR: ../examples/qoderwake
+        # No TENANT_PACKAGE_DIR override: the baseline is now the last green main commit, so it carries
+        # examples/xiongbao and generates its own app config. The override existed because the previous
+        # baseline (2aacf0f) predated examples/xiongbao: `generate:app-config` exited 1 there, `set -e`
+        # stopped the script, and base.log held no `Ran … tests` line, so the comparison was empty on
+        # every run since the baseline was pinned. That commit's own CI used ../examples/qoderwake; it is
+        # not in this tree any more, which is why the refresh and this removal had to land together.
         run: bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" app "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Generate configuration and run app tests (this shard)
         run: bash scripts/ci/run-tests.sh "$PWD" app "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
