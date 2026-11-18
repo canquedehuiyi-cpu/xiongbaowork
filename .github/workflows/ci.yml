@@ -252,6 +252,33 @@ jobs:
             ${{ runner.temp }}/*.log
             ${{ runner.temp }}/*.log.files.txt
 
+  # WP-3.2 状态行实时耗时的截图取证（设计规格 §8.3）：真 Chromium 里画真转录，暗色＋2 倍像素，
+  # 五个画面各存一张图，上传成 artifact 供负责人核对界面后才合并。新增的证据 job，不动任何既有门；
+  # 测试本体由 skipIf 门控，app 分片不为它付时间，只有这个 job 带着 OPENBOT_APP_BROWSER 要浏览器。
+  app-status-shots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Install Chromium for the root workspace's playwright-core
+        run: bunx playwright-core install --with-deps --no-shell chromium
+      - name: Status-line scenes, dark at 2x
+        env:
+          OPENBOT_APP_BROWSER: '1'
+          OPENBOT_APP_SHOTS: ${{ runner.temp }}/wp32-shots
+        run: bun test app/tests/wp32-status-shots.test.tsx
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: wp32-status-shots
+          path: ${{ runner.temp }}/wp32-shots
+
   # Scan what the customer is given (spec 5.1): the built web app, the recorder extension and the
   # runner sidecar are checked against the word lists in xiongbao/app/tests/brand-artifacts, and the
   # rewrite gauge goes into the job summary.
