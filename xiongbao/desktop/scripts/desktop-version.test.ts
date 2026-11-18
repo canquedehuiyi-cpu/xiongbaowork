@@ -368,24 +368,26 @@ test(
   "a later internal build orders after an earlier one whatever their hashes",
   () => {
     const f = fixture();
-    const earlier = firstCommit(f.root);
+    git(f.root, "init", "--quiet", "--object-format=sha1");
+    const objectPath = join(f.root, "commit-object");
+    writeFileSync(objectPath, "");
+    const tree = git(f.root, "hash-object", "-w", "-t", "tree", objectPath);
+    const signature = "Version test <version@example.invalid> 1700000000 +0000";
+    const writeCommit = (message: string, parent?: string) => {
+      const parentLine = parent ? `parent ${parent}\n` : "";
+      writeFileSync(
+        objectPath,
+        `tree ${tree}\n${parentLine}author ${signature}\ncommitter ${signature}\n\n${message}\n`,
+      );
+      return git(f.root, "hash-object", "-w", "-t", "commit", objectPath);
+    };
+    // These fixed objects reproduce a later commit whose hash sorts before its parent's.
+    const earlier = writeCommit("fixture 6");
+    git(f.root, "update-ref", "HEAD", earlier);
     expect(f.run("internal").code).toBe(0);
     const first = JSON.parse(f.read("desktop/build-version.json")).version;
-    // The next commit, chosen so its hash sorts before the earlier one's, as 4400ba02 did d298debe.
-    const tree = git(f.root, "rev-parse", "HEAD^{tree}");
-    let later = "";
-    for (let attempt = 0; !later; attempt += 1) {
-      const sha = git(
-        f.root,
-        "commit-tree",
-        tree,
-        "-p",
-        earlier,
-        "-m",
-        `next ${attempt}`,
-      );
-      if (sha.slice(0, 12) < earlier.slice(0, 12)) later = sha;
-    }
+    const later = writeCommit("next 3", earlier);
+    expect(later.slice(0, 12) < earlier.slice(0, 12)).toBe(true);
     git(f.root, "update-ref", "HEAD", later);
     expect(f.run("internal").code).toBe(0);
     const second = JSON.parse(f.read("desktop/build-version.json")).version;
