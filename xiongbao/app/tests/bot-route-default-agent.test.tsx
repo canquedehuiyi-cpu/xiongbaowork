@@ -19,6 +19,7 @@ import {
   within,
 } from "@testing-library/react";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
+import { queryClient as appQueryClient } from "@/query-client";
 import { Route as BotRoute } from "@/routes/_authed/_app/bot";
 
 let originalRect: typeof HTMLElement.prototype.getBoundingClientRect;
@@ -31,6 +32,10 @@ const originalFetch = global.fetch;
 
 afterEach(() => {
   cleanup();
+  // The computer panel reads the signed-in person through the app's own client, not the one drawn
+  // here, and this file's fetch stand-ins answer it with no person. Left there, every later file
+  // that reads the signed-in person got that empty person, cached for a minute.
+  appQueryClient.clear();
   global.fetch = originalFetch;
   HTMLElement.prototype.getBoundingClientRect = originalRect;
 });
