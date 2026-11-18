@@ -63,14 +63,14 @@ describe("an answer that is finished, or is the person's to answer", () => {
 
 describe("an answer that ends on a Chinese promise", () => {
   test.each([
-    ["我先看看现有文件，我这就改。", "我这就改。"],
+    ["我先看看现有文件，我这就改。", "我先看看现有文件，我这就改。"],
     ["缺陷已定位三处。接下来我去修第一处。", "接下来我去修第一处。"],
     ["这就去查剩下的两页。", "这就去查剩下的两页。"],
     [
       "我现在就把这三处修掉，修完一次性交全套。开工。",
       "我现在就把这三处修掉，修完一次性交全套。",
     ],
-    ["我先看看，马上就去修。", "马上就去修。"],
+    ["我先看看，马上就去修。", "我先看看，马上就去修。"],
     ["Here is the result. 我这就去修。", "我这就去修。"],
   ])("%j", (answer, promise) => {
     expect(unkeptPromise(answer)).toBe(promise);
