@@ -60,3 +60,34 @@ describe("an answer that is finished, or is the person's to answer", () => {
     expect(unkeptPromise(answer)).toBeUndefined();
   });
 });
+
+describe("an answer that ends on a Chinese promise", () => {
+  test.each([
+    ["我先看看现有文件，我这就改。", "我先看看现有文件，我这就改。"],
+    ["缺陷已定位三处。接下来我去修第一处。", "接下来我去修第一处。"],
+    ["这就去查剩下的两页。", "这就去查剩下的两页。"],
+    [
+      "我现在就把这三处修掉，修完一次性交全套。开工。",
+      "我现在就把这三处修掉，修完一次性交全套。",
+    ],
+    ["我先看看，马上就去修。", "我先看看，马上就去修。"],
+    ["Here is the result. 我这就去修。", "我这就去修。"],
+  ])("%j", (answer, promise) => {
+    expect(unkeptPromise(answer)).toBe(promise);
+  });
+});
+
+describe("a Chinese answer that is finished, or is deferred, or is a question", () => {
+  test.each([
+    "15 页杂志 HTML 已生成。",
+    "结构自查全部通过，没有断链。",
+    "本轮工作已完成。",
+    "要我现在就发吗？",
+    "等你确认后我这就发。",
+    "我明天再去查。",
+    "已经开工修了三分之一。",
+    "",
+  ])("%j", (answer) => {
+    expect(unkeptPromise(answer)).toBeUndefined();
+  });
+});

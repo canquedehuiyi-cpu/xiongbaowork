@@ -78,6 +78,19 @@ const IMMEDIATE =
   /\b(?:now|next|right away|immediately|in a moment|shortly|straight away)\b/i;
 
 /**
+ * Doing it now, in Chinese: "开工。" "这就去查。" "我马上修。" Same shape as the English
+ * announce: a first-person (or zero-subject) commitment in the answer's last two sentences,
+ * not a question, not waiting on the person and not deferred. A false positive costs one model
+ * call, a miss costs the run; the bias is toward firing.
+ */
+const ZH_ANNOUNCES =
+  /(?<!已经|正在|已)开工|这就去|这就开始|这就动手|这就着手|这就接着|我这就|我马上|我立刻|我即刻|马上就去|立刻就去|即刻就去|接下来我|下一步我|现在我就|我就把|现在就把/;
+
+/** Waiting on the person, or for another day, in Chinese. */
+const ZH_DEFERRED =
+  /(?:等你|等你确认|您确认|你确认后|一旦你|下次|下一轮|下轮|明天|后天|稍后|回头再|以后再|之后再|之后再说|晚点再)/;
+
+/**
  * The sentence in `text` that promises work the run did not do, or undefined.
  *
  * Only for an answer that made no tool call: the caller decides that. An answer ending on a question
@@ -85,7 +98,7 @@ const IMMEDIATE =
  */
 export function unkeptPromise(text: string): string | undefined {
   const trimmed = text.trim();
-  if (!trimmed || trimmed.endsWith("?")) return undefined;
+  if (!trimmed || /[?？]$/.test(trimmed)) return undefined;
   const paragraphs = trimmed.split(/\n\s*\n/);
   // The last two sentences: where a run that stopped short says what it was about to do.
   for (const sentence of sentences(paragraphs.at(-1) ?? "").slice(-2))
@@ -97,8 +110,9 @@ export function unkeptPromise(text: string): string | undefined {
 
 function promises(sentence: string): boolean {
   // A question is the person's to answer; a colon introduces what follows it, which is the work.
-  if (/[?:]$/.test(sentence) || DEFERRED.test(sentence)) return false;
+  if (/[?:？：]$/.test(sentence) || DEFERRED.test(sentence) || ZH_DEFERRED.test(sentence)) return false;
   if (UNDER_WAY.test(sentence)) return true;
+  if (ZH_ANNOUNCES.test(sentence)) return true;
   for (const match of sentence.matchAll(ANNOUNCES)) {
     const after = sentence.slice((match.index ?? 0) + match[0].length);
     const verb = FILLER.exec(after)?.[1]?.toLowerCase();
@@ -110,7 +124,7 @@ function promises(sentence: string): boolean {
 /** The sentences of a paragraph, each trimmed, with line breaks and list items counted as ends. */
 function sentences(text: string): string[] {
   return text
-    .split(/(?<=[.!?…])\s+|\n+/)
+    .split(/(?<=[.!?…])\s+|(?<=[。！？])|\n+/)
     .map((sentence) => sentence.replace(/^[^\p{L}\p{N}"'‘“]+/u, "").trim())
     .filter((sentence) => sentence.length > 0)
     .map((sentence) =>

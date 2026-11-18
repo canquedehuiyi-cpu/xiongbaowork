@@ -1190,4 +1190,151 @@ describe("a Bot gives part of its work to a subagent", () => {
     ).toEqual([true, true, true, true, true, true]);
     expect(refusals.join(" ")).not.toContain("one answer can start up to");
   }, 30_000);
+
+  test("the same action handed back twice in one answer is refused instead of handed back again", async () => {
+    await approvalStore.setEnabled(person, true);
+    const note = { text: "The expense policy changed." };
+    script = (request) => {
+      if (isSubagent(request))
+        return {
+          toolCalls: [{ name: modelName(POST), arguments: JSON.stringify(note) }],
+        };
+      // The raw count, not resultsIn(): a refusal is a plain string that resultsIn() drops, and
+      // every request carries the whole history, so the count is what says which call is next.
+      if (toolResults(request).length < 2)
+        return { toolCalls: [subagentCall("Post a note about the change.")] };
+      // No announcement here: "I'll …" earns a last-step nudge, which adds model requests.
+      return { content: "Waiting for you." };
+    };
+
+    // Earlier cases leave their own requests in the table; only this case's rows are counted.
+    const earlier = await database
+      .select({ id: approvalRequests.id })
+      .from(approvalRequests)
+      .where(eq(approvalRequests.ownerUserId, person));
+    const before = new Set(earlier.map((row) => row.id));
+    await ask("Tell the team the expense policy changed.");
+
+    const [first] = resultsIn(parentRequests()[1]);
+    if (!first || !("handedBack" in first))
+      throw new Error("The first call was not handed back.");
+    expect(first.handedBack).toMatchObject({
+      tool: modelName(POST),
+      args: note,
+    });
+    // The third request carries both results: the hand-back, then the refusal of the same action.
+    const secondResults = toolResults(parentRequests()[2]);
+    expect(secondResults).toHaveLength(2);
+    expect(secondResults[1]).toContain(REFUSAL_MARKER);
+    expect(secondResults[1]).toContain("已交还过一次");
+    expect(secondResults[1]).toContain(modelName(POST));
+    expect(vendorCalls).toEqual([]);
+    const rows = await database
+      .select()
+      .from(approvalRequests)
+      .where(eq(approvalRequests.ownerUserId, person));
+    const opened = rows.filter((row) => !before.has(row.id));
+    expect(opened).toHaveLength(2);
+    expect(opened.every((row) => row.status === "denied")).toBe(true);
+  }, 30_000);
+
+  test("different actions in one answer are not blocked by each other", async () => {
+    await approvalStore.setEnabled(person, true);
+    script = (request) => {
+      if (isSubagent(request))
+        return {
+          toolCalls: [
+            {
+              name: modelName(POST),
+              arguments: JSON.stringify({ text: taskOf(request) }),
+            },
+          ],
+        };
+      const done = toolResults(request).length;
+      if (done === 0)
+        return { toolCalls: [subagentCall("Part one.", "One line.")] };
+      if (done === 1)
+        return { toolCalls: [subagentCall("Part two.", "One line.")] };
+      return { content: "Both handed back." };
+    };
+
+    await ask("Post two notes.");
+
+    // Both hand-backs are in the third request's history, in the order they were called.
+    const both = resultsIn(parentRequests()[2]);
+    expect(both).toHaveLength(2);
+    const [first, second] = both;
+    if (!first || !("handedBack" in first))
+      throw new Error("The first call was not handed back.");
+    if (!second || !("handedBack" in second))
+      throw new Error("The second call was refused instead of handed back.");
+    expect((first.handedBack.args as { text: string }).text).toBe("Part one.");
+    expect((second.handedBack.args as { text: string }).text).toBe("Part two.");
+    expect(vendorCalls).toEqual([]);
+  }, 30_000);
+
+  test("a new user turn resets the circuit breaker", async () => {
+    await approvalStore.setEnabled(person, true);
+    const note = { text: "The expense policy changed." };
+    script = (request) => {
+      if (isSubagent(request))
+        return {
+          toolCalls: [{ name: modelName(POST), arguments: JSON.stringify(note) }],
+        };
+      if (toolResults(request).length < 2)
+        return { toolCalls: [subagentCall("Post a note about the change.")] };
+      // No announcement: a last-step nudge would add requests between the two turns.
+      return { content: "Waiting for you." };
+    };
+
+    await ask("Tell the team the expense policy changed.");
+
+    const [first] = resultsIn(parentRequests()[1]);
+    if (!first || !("handedBack" in first))
+      throw new Error("The first call was not handed back.");
+    // The refusal is the second result in the third request's accumulated history.
+    expect(toolResults(parentRequests()[2])[1]).toContain(REFUSAL_MARKER);
+
+    // A new user turn: the breaker state is reset, so the same action is handed back again.
+    await ask("Try again.", { history: [] });
+
+    // The new turn starts from an empty history: its first request carries no tool results.
+    expect(toolResults(parentRequests()[3])).toHaveLength(0);
+    const [third] = resultsIn(parentRequests()[4]);
+    if (!third || !("handedBack" in third))
+      throw new Error("The new turn's call was refused instead of handed back.");
+    expect(third.handedBack.args).toMatchObject(note);
+    // And the breaker is armed again in the new turn: the same action a second time is refused.
+    expect(toolResults(parentRequests()[5])[1]).toContain(REFUSAL_MARKER);
+  }, 30_000);
+
+  test("the sixth call in one answer is still refused by the quota, not the breaker", async () => {
+    await approvalStore.setEnabled(person, true);
+    const note = { text: "The expense policy changed." };
+    script = (request) => {
+      if (isSubagent(request))
+        return {
+          toolCalls: [{ name: modelName(POST), arguments: JSON.stringify(note) }],
+        };
+      // The raw count: the four breaker refusals are plain strings that resultsIn() would drop,
+      // and counting only parsed results would never reach six.
+      const results = toolResults(request);
+      if (results.length < 6)
+        return { toolCalls: [subagentCall("Post a note about the change.")] };
+      return { content: "Done." };
+    };
+
+    await ask("Post six notes.");
+
+    const finalResults = toolResults(parentRequests().at(-1)!);
+    expect(finalResults).toHaveLength(6);
+    const [first, ...rest] = finalResults;
+    expect(first).not.toContain(REFUSAL_MARKER);
+    expect(first).toContain("handedBack");
+    const breakerRefusals = rest.slice(0, 4);
+    const quotaRefusal = rest[4];
+    expect(breakerRefusals.every((r) => r.includes("已交还过一次"))).toBe(true);
+    expect(quotaRefusal).toContain("up to 5");
+    expect(vendorCalls).toEqual([]);
+  }, 30_000);
 });
