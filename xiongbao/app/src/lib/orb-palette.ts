@@ -29,6 +29,19 @@ export const ORB_PALETTES: readonly OrbColors[] = [
   { bg: BG, c1: "#8dc1f1", c2: "#23d5a2", c3: "#189370", c4: "#85ecce" },
 ];
 
+/**
+ * 熊宝's own orb, where no Bot is named (onboarding's pictures): the logo's red over white and
+ * graphite, so the product's mark reads in the black, white and red it is drawn in elsewhere
+ * (docs/design/ios-studio). Not one of the eight, so it never colours a Bot.
+ */
+export const XIONGBAO_ORB: OrbColors = {
+  bg: BG,
+  c1: "#fb5257",
+  c2: "#c2272f",
+  c3: "#f6f6f6",
+  c4: "#3a3a3d",
+};
+
 const FNV_OFFSET = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;
 

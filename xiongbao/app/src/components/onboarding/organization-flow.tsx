@@ -8,6 +8,7 @@ import {
 } from "@tabler/icons-react";
 import { useReducedMotion } from "motion/react";
 import AgentOrb from "@/components/agents/orb/agent-orb";
+import { XIONGBAO_ORB } from "@/lib/orb-palette";
 
 /*
  * Drawn on one fixed grid so the connectors and the pills always meet: the SVG and the pills share
@@ -23,7 +24,7 @@ const BOTTOM_Y = HEIGHT - 18;
 type Node = {
   label: string;
   icon: typeof IconKey;
-  /** Tailwind classes for the small square behind the icon. */
+  /** Tailwind classes for the small square behind the icon: graphite, as every icon tile in the app. */
   tone: string;
 };
 
@@ -32,17 +33,17 @@ const SIGN_IN: Node[] = [
   {
     label: "Google",
     icon: IconBrandGoogle,
-    tone: "bg-sky-500/15 text-sky-600 dark:text-sky-400",
+    tone: "bg-accent text-foreground",
   },
   {
     label: "Microsoft",
     icon: IconBrandWindows,
-    tone: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+    tone: "bg-accent text-foreground",
   },
   {
     label: "Okta",
     icon: IconKey,
-    tone: "bg-indigo-500/15 text-indigo-600 dark:text-indigo-400",
+    tone: "bg-accent text-foreground",
   },
 ];
 
@@ -51,17 +52,17 @@ const OUTCOMES: Node[] = [
   {
     label: "你的规则",
     icon: IconShieldCheck,
-    tone: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+    tone: "bg-accent text-foreground",
   },
   {
     label: "团队员工",
     icon: IconRobot,
-    tone: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+    tone: "bg-accent text-foreground",
   },
   {
     label: "审计记录",
     icon: IconListCheck,
-    tone: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
+    tone: "bg-accent text-foreground",
   },
 ];
 
@@ -141,7 +142,7 @@ export function OrganizationFlow() {
         className="absolute flex size-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-border bg-card shadow-xs"
         style={{ left: HUB.x, top: HUB.y }}
       >
-        <AgentOrb size="28px" />
+        <AgentOrb colors={XIONGBAO_ORB} size="28px" />
       </div>
 
       {OUTCOMES.map((node, index) => (

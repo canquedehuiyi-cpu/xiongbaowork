@@ -22,6 +22,7 @@ import {
   type OnboardingStep,
   OnboardingWizard,
 } from "@/components/onboarding/onboarding-wizard";
+import { SourcesPicture } from "@/components/onboarding/sources-picture";
 import { currentUserQueryOptions, needsOnboarding } from "@/lib/auth/queries";
 import { appConfig } from "@/lib/generated/application-config";
 import {
@@ -160,6 +161,7 @@ function sourcesStep(nextStep: number, onAdvanced: () => void): OnboardingStep {
     // The step list names a step by its heading, and SourcesStep draws its own.
     title: "告诉你的分身，你的资料在哪里",
     intro: () => <SourcesStep nextStep={nextStep} onAdvanced={onAdvanced} />,
+    demo: () => <SourcesPicture />,
     primaryHidden: true,
   };
 }
