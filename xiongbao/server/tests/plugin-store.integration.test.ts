@@ -4119,10 +4119,20 @@ describe("the memory tools' own id", () => {
       });
       await expect(added).rejects.toBeInstanceOf(CustomServerRefusedError);
       await expect(added).rejects.toThrow("memory tools");
+      // Scoped to the row THIS call would have written, by id and url, not to the id alone:
+      // `openbot_test` is a shared database, so an id-wide count cannot tell "the guard let the
+      // write through" from "a row was already sitting there from before the guard existed". The
+      // second reads as the first, and this case then reports a broken guard on a machine where the
+      // guard is fine.
       const rows = await database
-        .select({ id: mcpServers.id })
+        .select({ id: mcpServers.id, url: mcpServers.url })
         .from(mcpServers)
-        .where(eq(mcpServers.id, "memory"));
+        .where(
+          and(
+            eq(mcpServers.id, "memory"),
+            eq(mcpServers.url, "https://memory.invalid/mcp"),
+          ),
+        );
       expect(rows).toHaveLength(0);
     }));
 });

@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   type ArtifactEntry,
   compareWords,
   wordsIn,
 } from "../../scripts/brand/guard/artifact-words";
 
-const REPO = new URL("../..", import.meta.url).pathname;
+const REPO = fileURLToPath(new URL("../..", import.meta.url));
 const ROOT = join(REPO, "..");
 const DOCS: ArtifactEntry[] = JSON.parse(
   readFileSync(new URL("./brand-artifacts/docs.json", import.meta.url), "utf8"),

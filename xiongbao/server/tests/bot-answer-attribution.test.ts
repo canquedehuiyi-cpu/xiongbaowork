@@ -1,4 +1,5 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import type { Message } from "@ag-ui/client";
 import { answerMessageId } from "@openbot/shared/handoff-markers";
 import {
@@ -56,7 +57,7 @@ let packageModel: RuntimeModel;
 beforeAll(async () => {
   packageModel = (
     await loadTenantPackage(
-      new URL("../../examples/fintech", import.meta.url).pathname,
+      fileURLToPath(new URL("../../examples/fintech", import.meta.url)),
     )
   ).model;
 });
@@ -81,7 +82,7 @@ async function botsAgainstEndpoint() {
   chooseOpenAIApi(model);
   // The package's own two, registered from their rows as the server registers them.
   const pkg = await loadTenantPackage(
-    new URL("../../examples/fintech", import.meta.url).pathname,
+    fileURLToPath(new URL("../../examples/fintech", import.meta.url)),
   );
   const registered = pkg.agents
     .filter((agent) => agent.id === ASKER || agent.id === KNOWLEDGE)

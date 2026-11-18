@@ -13,6 +13,7 @@ import {
   masked,
   NEVER_CHANGE,
   REPO,
+  repoPath,
   SIGNING_DOMAINS,
   tenant,
   WIRE_HEADERS,
@@ -203,7 +204,7 @@ function nameFindings(): Finding[] {
   return nameFindingsIn(
     [...walk(join(REPO, "app/src")), ...walk(join(REPO, "server/src"))].map(
       (file) => ({
-        path: relative(REPO, file),
+        path: repoPath(file),
         source: () => readFileSync(file, "utf8"),
       }),
     ),

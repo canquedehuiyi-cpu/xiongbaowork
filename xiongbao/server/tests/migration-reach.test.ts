@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { MIGRATIONS_JOURNAL } from "../src/db/apply-migrations";
 import {
   type AppliedMigration,
@@ -173,7 +174,7 @@ describe("the row the migrator reads", () => {
 
   test("refuses every applied migration the shipped folder would run a second time", async () => {
     const folder = await readMigrationFolder(
-      new URL("../drizzle/", import.meta.url).pathname,
+      fileURLToPath(new URL("../drizzle/", import.meta.url)),
     );
     const database = [
       ...folder.map((entry) => applied(entry.hash, entry.when)),
@@ -339,7 +340,7 @@ describe("reading a migration folder", () => {
 describe("the migrations this repository ships", () => {
   test("reach a database that has never been migrated", async () => {
     const folder = await readMigrationFolder(
-      new URL("../drizzle/", import.meta.url).pathname,
+      fileURLToPath(new URL("../drizzle/", import.meta.url)),
     );
 
     expect(migrationsOutOfReach(folder, [])).toEqual([]);
@@ -347,7 +348,7 @@ describe("the migrations this repository ships", () => {
 
   test("reach a database that is up to date with them", async () => {
     const folder = await readMigrationFolder(
-      new URL("../drizzle/", import.meta.url).pathname,
+      fileURLToPath(new URL("../drizzle/", import.meta.url)),
     );
 
     expect(

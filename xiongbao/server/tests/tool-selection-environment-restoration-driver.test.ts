@@ -1,12 +1,15 @@
 import { afterAll, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 const mode = process.env.SRA009_MODE;
 const targetTest =
   process.env.SRA009_TOOL_SELECTION_TEST_PATH ??
-  new URL("./tool-selection.integration.test.ts", import.meta.url).pathname;
+  fileURLToPath(
+    new URL("./tool-selection.integration.test.ts", import.meta.url),
+  );
 const modelModulePath =
   process.env.SRA009_MODEL_MODULE_PATH ??
-  new URL("../src/routing/model.ts", import.meta.url).pathname;
+  fileURLToPath(new URL("../src/routing/model.ts", import.meta.url));
 const syntheticKey = "sra009-synthetic-before-key";
 
 declare global {
