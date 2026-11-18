@@ -566,6 +566,7 @@ tests/tool-boundary.test.tsx
 tests/tool-elapsed.test.tsx
 tests/tool-failure-reason.test.tsx
 tests/tool-line-reduced-motion.test.tsx
+tests/tool-line-server-wiring.test.tsx
 tests/tool-line-wrap.test.tsx
 tests/tool-name.test.ts
 tests/tool-result.test.ts

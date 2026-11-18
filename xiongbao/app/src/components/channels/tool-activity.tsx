@@ -376,13 +376,16 @@ function failureLine(value: unknown): string | undefined {
 /**
  * 结果里那两个事实：这一步跑了多久，失败那一步的退出码或原因。
  *
+ * 导出给单工具行（`chat-transcript.tsx` 的 `ServerToolLine`）共用：同一条结果在分组行与单行上
+ * 说的是同一件事，不再各算各的（WP-3.2 S0）。
+ *
  * 命令、浏览器动作和读文件都以一个 JSON 对象回答，`elapsedMs` 是 shell 那边量的
  * （`agent-computer/src/shell.ts`），`exitCode` 是进程给的；一个用文字回答的工具两个都没有。读法走
  * Activity 面板那一份 `readOutcome`——两处读同一个结果，就不要各写一套解析，以前正是各写一套让同一
  * 步在行上和面板上说了两样。这里只搬结果自己写了的字段：读不出对象的、值不是有限非负数的、退出码
  * 不是整数的，一律什么都不返回。行上宁可少说一件事，也不要造一个 `0.0s` 或 `退出码 0`。
  */
-function resultFacts(result: string | undefined): {
+export function resultFacts(result: string | undefined): {
   elapsedMs?: number;
   exitCode?: number;
   failure?: string;

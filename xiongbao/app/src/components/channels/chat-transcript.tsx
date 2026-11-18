@@ -141,6 +141,7 @@ import { TeamBotConsentCard } from "./team-bot-consent";
 import {
   dropRepeatedAppCards,
   groupToolSteps,
+  resultFacts,
   ToolActivity,
   type ToolGroup,
   type TranscriptItem,
@@ -1995,6 +1996,12 @@ export function ServerToolLine({
   const unoffered = unofferedTool(result);
   const failed = !refused && (unoffered || toolResultFailed(result));
   /*
+   * 结果自己带的那两个事实：这一步跑了多久，失败那一步的退出码或原因（WP-3.2 S0）。与分组步骤行
+   * 共用同一份 `resultFacts`——结果没写就一个字也不说，不造 `0.0s` 或 `退出码 0`。退出码与原因
+   * 只在失败那一步上屏，由 `ToolLine` 的 `failureWords` 按 `failed` 把关。
+   */
+  const facts = resultFacts(result);
+  /*
    * The marker is for this component, not for the reader. Left in, a refusal reads "Blocked" in the
    * label and then "Refused." again in the first two words of the body, which is the same fact three
    * times over by the end of the sentence. Stripped here rather than on the server, because the
@@ -2077,6 +2084,9 @@ export function ServerToolLine({
       refused={refused}
       declined={refusal?.declined ?? false}
       failed={failed}
+      elapsed={facts.elapsedMs}
+      exitCode={facts.exitCode}
+      failure={facts.failure}
       running={running}
     >
       {shown ? (
