@@ -1,10 +1,13 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 // Wiring/unit only. Run this file alone in a fresh Bun process, never the whole
 // integration suite. Each case imports production source in its own child with
 // an allowlisted environment, no .env loading, and all SDK modules mocked BEFORE
 // import. No collector, provider, credentials, database or network is required.
-const target = new URL("../src/telemetry/otel.ts", import.meta.url).pathname;
+const target = fileURLToPath(
+  new URL("../src/telemetry/otel.ts", import.meta.url),
+);
 const setup = `
 import { mock } from "bun:test";
 import assert from "node:assert/strict";
@@ -52,16 +55,25 @@ const event = { eventType: "computer.action_failed", targetType: "computer",
 
 function isolated(body: string) {
   const result = Bun.spawnSync({
-    cmd: [process.execPath, "--no-env-file", "--config=/dev/null", "-e", setup + body],
+    cmd: [
+      process.execPath,
+      "--no-env-file",
+      "--config=/dev/null",
+      "-e",
+      setup + body,
+    ],
     cwd: import.meta.dir,
     env: { TZ: "UTC", HOME: "/nonexistent-c2-no-user-config" },
-    stdout: "pipe", stderr: "pipe", timeout: 10_000,
+    stdout: "pipe",
+    stderr: "pipe",
+    timeout: 10_000,
   });
   expect(new TextDecoder().decode(result.stderr)).toBe("");
   expect(result.exitCode).toBe(0);
 }
 
-test("wiring/unit: off and absent/blank endpoints construct no SDK objects", () => isolated(`
+test("wiring/unit: off and absent/blank endpoints construct no SDK objects", () =>
+  isolated(`
 for (const env of [{}, { OTEL_EXPORTER_OTLP_ENDPOINT: "  " },
   { ...endpoint, OPENBOT_OTEL_EXPORT: " OFF " }]) {
   assert.equal(otelConfigured(env), false);
@@ -70,7 +82,8 @@ for (const env of [{}, { OTEL_EXPORTER_OTLP_ENDPOINT: "  " },
 assert.equal(state.exporters.length, 0); assert.equal(state.providers.length, 0);
 `));
 
-test("wiring/unit: enabled configuration connects exporter, batch processor and provider", () => isolated(`
+test("wiring/unit: enabled configuration connects exporter, batch processor and provider", () =>
+  isolated(`
 const api = createOtelEventExporter({ ...endpoint, OTEL_EXPORTER_OTLP_ENDPOINT: "https://unused.invalid",
   OTEL_EXPORTER_OTLP_LOGS_HEADERS: "x-fixture=a%20b", OTEL_SERVICE_NAME: " fixture " });
 assert.ok(api); assert.equal(state.exporters[0].config.url, endpoint.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT);
@@ -82,7 +95,8 @@ assert.equal(state.providers[0].resource.attributes["service.name"], "fixture");
 await api.shutdown(); assert.equal(state.shutdown, 1);
 `));
 
-test("wiring/unit: generic endpoint and headers use documented fallback", () => isolated(`
+test("wiring/unit: generic endpoint and headers use documented fallback", () =>
+  isolated(`
 const api = createOtelEventExporter({ OTEL_EXPORTER_OTLP_ENDPOINT: " https://collector.invalid/ ",
   OTEL_EXPORTER_OTLP_HEADERS: "x-fixture=fallback" });
 assert.equal(state.exporters[0].config.url, "https://collector.invalid/v1/logs");
@@ -91,7 +105,8 @@ assert.equal(state.providers[0].resource.attributes["service.name"], "xiongbao")
 await api.shutdown();
 `));
 
-test("wiring/unit: emit scrubs payload, classifies warnings and contains synchronous failures", () => isolated(`
+test("wiring/unit: emit scrubs payload, classifies warnings and contains synchronous failures", () =>
+  isolated(`
 const api = createOtelEventExporter(endpoint); api.emit(event);
 assert.equal(state.events[0].severityNumber, 13);
 assert.equal(state.events[0].attributes["openbot.surface"], "bot");
@@ -101,7 +116,8 @@ assert.equal(JSON.parse(state.errors[0][0]).type, "otel-export-failed");
 await api.shutdown();
 `));
 
-test("wiring/unit: shutdown delegates and propagates rejection; wrapper exposes no forceFlush", () => isolated(`
+test("wiring/unit: shutdown delegates and propagates rejection; wrapper exposes no forceFlush", () =>
+  isolated(`
 const api = createOtelEventExporter(endpoint);
 assert.equal("forceFlush" in api, false);
 state.rejectShutdown = true;
@@ -109,7 +125,8 @@ await assert.rejects(api.shutdown(), /fixture shutdown failed/);
 assert.equal(state.shutdown, 1); assert.equal(state.flush, 0);
 `));
 
-test("wiring/unit: enabled construction and malformed header failures propagate", () => isolated(`
+test("wiring/unit: enabled construction and malformed header failures propagate", () =>
+  isolated(`
 assert.throws(() => createOtelEventExporter({ ...endpoint,
   OTEL_EXPORTER_OTLP_LOGS_HEADERS: "x-fixture=%ZZ" }), URIError);
 state.failConstruct = true;

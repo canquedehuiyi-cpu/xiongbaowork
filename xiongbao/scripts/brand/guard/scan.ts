@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 import { CRYPTO_NAMES, isKnownEnvName } from "./env-names";
 
@@ -13,7 +14,7 @@ import { CRYPTO_NAMES, isKnownEnvName } from "./env-names";
  */
 
 // xiongbao/ (this file lives in xiongbao/scripts/brand/guard/).
-export const REPO = new URL("../../..", import.meta.url).pathname;
+export const REPO = fileURLToPath(new URL("../../..", import.meta.url));
 /**
  * The name of that directory under the repository root, newest first, for reading it at a git ref. It
  * was renamed from openbot/ to xiongbao/: a ref from before that (the base of the rename's own pull
@@ -270,6 +271,13 @@ export const EXEMPT_PATHS: {
   },
 ];
 
+// Every path this module reports is also a key somewhere else: the allowlist's `file`, EXEMPT_PATHS'
+// and the walkAll skip's literals. Those are all written with "/", so a Windows checkout — where
+// `relative()` returns `app\src\…` — would match none of them: every exempted test/fixture file comes
+// back as a leak, every allowlist entry reads as stale. Spelled once, here.
+export const repoPath = (path: string) =>
+  relative(REPO, path).replaceAll("\\", "/");
+
 export function* walk(dir: string): Generator<string> {
   for (const name of readdirSync(dir)) {
     if (name === "node_modules") continue;
@@ -288,7 +296,7 @@ function* walkAll(
   for (const name of readdirSync(dir)) {
     if (name === "node_modules") continue;
     const path = join(dir, name);
-    if (skip(relative(REPO, path))) continue;
+    if (skip(repoPath(path))) continue;
     if (statSync(path).isDirectory()) yield* walkAll(path, skip);
     else yield path;
   }
@@ -320,7 +328,7 @@ export function scannedFiles(): string[] {
   if (existsSync(join(REPO, "mobile")))
     files.push(...walk(join(REPO, "mobile")));
   return files
-    .map((file) => relative(REPO, file))
+    .map(repoPath)
     .filter((path) => !EXEMPT_PATHS.some((exempt) => exempt.test(path)));
 }
 

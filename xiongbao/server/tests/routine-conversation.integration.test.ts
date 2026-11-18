@@ -2,12 +2,13 @@ import {
   afterAll as bunAfterAll,
   afterEach as bunAfterEach,
   beforeEach as bunBeforeEach,
+  test as bunTest,
   describe,
   expect,
   setSystemTime,
-  test as bunTest,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import type { BaseEvent } from "@ag-ui/client";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
@@ -41,8 +42,8 @@ import {
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools } from "../src/plugins/tools";
 import { createRoutineStore } from "../src/routines/store";
-import { loadTenantPackage } from "../src/tenant-package";
 import { runAsTenant } from "../src/tenant/context";
+import { loadTenantPackage } from "../src/tenant-package";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 import {
@@ -204,7 +205,7 @@ async function generalAssistantAgainst(baseUrl: string) {
   normalizeModelBaseUrls();
   const packageModel = (
     await loadTenantPackage(
-      new URL("../../examples/fintech", import.meta.url).pathname,
+      fileURLToPath(new URL("../../examples/fintech", import.meta.url)),
     )
   ).model;
   const model = runtimeModelForEnvironment(packageModel);

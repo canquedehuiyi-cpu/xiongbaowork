@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /*
  * CONTEXT.md: a named, ordered set of coworkers (`waker_groups`) is called 群组 — on every screen,
@@ -10,8 +11,8 @@ import { join } from "node:path";
  */
 
 const ROOTS = [
-  new URL("../src", import.meta.url).pathname,
-  new URL("../../server/src", import.meta.url).pathname,
+  fileURLToPath(new URL("../src", import.meta.url)),
+  fileURLToPath(new URL("../../server/src", import.meta.url)),
 ];
 
 function* sourceFiles(dir: string): Generator<string> {
@@ -30,10 +31,14 @@ function linesMatching(match: (line: string) => boolean): string[] {
   const offenders: string[] = [];
   for (const root of ROOTS) {
     for (const file of sourceFiles(root)) {
+      // 报告里一律用 `/`：下面的放行名单（`MODEL_PROMPT`、`IM_CHATS`）也是这么写的，
+      // 而 Windows 上 `join` 出来的是 `\`，不归一化就一条都放行不了——那会让这两条守卫
+      // 在 Windows 上从来没能真正判过（路径没归一化时读文件本身就已经先失败了）。
+      const where = file.replaceAll("\\", "/");
       readFileSync(file, "utf8")
         .split("\n")
         .forEach((line, index) => {
-          if (match(line)) offenders.push(`${file}:${index + 1}`);
+          if (match(line)) offenders.push(`${where}:${index + 1}`);
         });
     }
   }

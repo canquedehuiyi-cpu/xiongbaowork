@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 
 // Real SDK integration, isolated from the all-SDK-mock wiring suite. No OTLP
 // records are sent: only the in-process fake exporter receives emitted logs.
-const target = new URL("../src/telemetry/otel.ts", import.meta.url).pathname;
+const target = fileURLToPath(
+  new URL("../src/telemetry/otel.ts", import.meta.url),
+);
 const setup = `
 import assert from "node:assert/strict";
 import http from "node:http";
@@ -33,7 +36,7 @@ function isolated(body: string) {
       "-e",
       `${setup}\n${body}\nassert.equal(networkAttempts, 0); console.log("CPU_ONLY_NO_NETWORK_ATTEMPTS");`,
     ],
-    cwd: new URL("..", import.meta.url).pathname,
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
     env: { HOME: "/nonexistent-c2-sdk-home", TZ: "UTC" },
     stdout: "pipe",
     stderr: "pipe",

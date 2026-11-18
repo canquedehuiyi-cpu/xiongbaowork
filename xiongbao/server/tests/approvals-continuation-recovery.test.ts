@@ -1,12 +1,16 @@
-import { recoveryFixture } from "./approval-recovery-port.test";
 import { expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
+import { recoveryFixture } from "./approval-recovery-port.test";
 
 // RED diagnostic regression: do not merge into the default suite before a
 // persistent recovery design is implemented. Only the real service is under
 // test; fixture callbacks below are NOT a model/runner or external side effect.
-const service = new URL("../src/approvals/service.ts", import.meta.url)
-  .pathname;
-const types = new URL("../src/approvals/types.ts", import.meta.url).pathname;
+const service = fileURLToPath(
+  new URL("../src/approvals/service.ts", import.meta.url),
+);
+const types = fileURLToPath(
+  new URL("../src/approvals/types.ts", import.meta.url),
+);
 const setup = `
 import assert from "node:assert/strict";
 import http from "node:http"; import https from "node:https";
@@ -90,7 +94,7 @@ function isolated(body: string) {
       "-e",
       setup + body,
     ],
-    cwd: new URL("..", import.meta.url).pathname,
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
     env: { HOME: "/nonexistent-c2-ar-home", TZ: "UTC" },
     stdout: "pipe",
     stderr: "pipe",
