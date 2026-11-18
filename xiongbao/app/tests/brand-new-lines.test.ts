@@ -1,14 +1,25 @@
-import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { afterAll, expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
 import {
   addedLines,
   baseRef,
+  cleanupScratchRepositories,
   diffAddedLines,
   forkIntroduced,
   newLineFindings,
   readSyncPoint,
+  scratchGit,
   upstreamReader,
 } from "../../scripts/brand/guard/new-lines";
+
+afterAll(cleanupScratchRepositories);
+
+test("cleanup removes the temporary bare repositories created by the brand check", () => {
+  const directory = scratchGit()(["rev-parse", "--absolute-git-dir"]).trim();
+  expect(existsSync(directory)).toBe(true);
+  cleanupScratchRepositories();
+  expect(existsSync(directory)).toBe(false);
+});
 
 const diffOf = (file: string, ...added: string[]) =>
   [
