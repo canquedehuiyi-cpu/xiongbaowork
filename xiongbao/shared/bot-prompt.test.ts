@@ -223,8 +223,9 @@ describe("how a Bot asks, and how an unattended run ends", () => {
     expect(said).not.toContain("what i could not confirm");
   });
 
-  test("a person's own turn is told nothing about a run mode", () => {
-    expect(runModeGuidance("attended")).toBe("");
+  test("a person's own turn gets the reconciliation sentence for attended mode", () => {
+    // User waiver 2026-11-18: attended mode now returns the reconciliation sentence (path A)
+    expect(runModeGuidance("attended")).toContain("read your last paragraph");
   });
 
   test("a section is a tag around its body, and nothing at all when the body is blank", () => {
