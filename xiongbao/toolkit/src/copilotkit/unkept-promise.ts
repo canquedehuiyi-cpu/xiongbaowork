@@ -13,18 +13,18 @@
  * finish with the result and what is missing"). A miss costs the run. So the bias is toward firing.
  */
 
-const APOSTROPHE = "['’]";
+const APOSTROPHE = "['']";
 
 /** "I'll", "Let me", "Next, I will", "I'm going to", and the rest of the ways a model announces. */
 const ANNOUNCES = new RegExp(
   [
-    `\\bI${APOSTROPHE}ll\\b`,
-    "\\bI will\\b",
-    "\\bI shall\\b",
-    `\\bI${APOSTROPHE}m (?:now )?(?:going|about) to\\b`,
-    "\\bI am (?:now )?(?:going|about) to\\b",
-    "\\blet me\\b",
-    `\\blet${APOSTROPHE}s\\b`,
+    `\bI${APOSTROPHE}ll\b`,
+    "\bI will\b",
+    "\bI shall\b",
+    `\bI${APOSTROPHE}m (?:now )?(?:going|about) to\b`,
+    "\bI am (?:now )?(?:going|about) to\b",
+    "\blet me\b",
+    `\blet${APOSTROPHE}s\b`,
   ].join("|"),
   "gi",
 );
@@ -65,7 +65,7 @@ const NOT_ACTIONS = new Set([
 const GERUND =
   "(?:fetching|checking|pulling|looking up|searching|reading|retrying|grabbing|loading|retrieving|querying|doing|starting|continuing|moving on|proceeding|opening|compiling|gathering|collecting)";
 const UNDER_WAY = new RegExp(
-  `^(?:now,?\\s+${GERUND}\\b|${GERUND}\\b[^.!?\\n]{0,80}?\\b(?:now|next)\\b)`,
+  `^(?:now,?\s+${GERUND}\b|${GERUND}\b[^.!?\n]{0,80}?\b(?:now|next)\b)`,
   "i",
 );
 
@@ -84,7 +84,7 @@ const IMMEDIATE =
  * call, a miss costs the run; the bias is toward firing.
  */
 const ZH_ANNOUNCES =
-  /(?<!已经|正在|已)开工|这就去|这就开始|这就动手|这就着手|这就接着|我这就|我马上|我立刻|我即刻|马上就去|立刻就去|即刻就去|接下来我|下一步我|现在我就/;
+  /(?<!已经|正在|已)开工|这就去|这就开始|这就动手|这就着手|这就接着|我这就|我马上|我立刻|我即刻|马上就去|立刻就去|即刻就去|接下来我|下一步我|现在我就|我就把|现在就把/;
 
 /** Waiting on the person, or for another day, in Chinese. */
 const ZH_DEFERRED =
@@ -124,8 +124,8 @@ function promises(sentence: string): boolean {
 /** The sentences of a paragraph, each trimmed, with line breaks and list items counted as ends. */
 function sentences(text: string): string[] {
   return text
-    .split(/(?<=[.!?…])\s+|(?<=[。！？；])|\n+/)
-    .map((sentence) => sentence.replace(/^[^\p{L}\p{N}"'‘“]+/u, "").trim())
+    .split(/(?<=[.!?…])\s+|(?<=[。！？；，])|\n+/)
+    .map((sentence) => sentence.replace(/^[^\p{L}\p{N}"''"]+/u, "").trim())
     .filter((sentence) => sentence.length > 0)
     .map((sentence) =>
       sentence.length > 200 ? `${sentence.slice(0, 199)}…` : sentence,
