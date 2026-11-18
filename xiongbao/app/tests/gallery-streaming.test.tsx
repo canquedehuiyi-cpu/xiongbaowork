@@ -27,6 +27,16 @@ afterAll(async () => {
   GlobalRegistrator.unregister();
 });
 
+/*
+ * The compact figure is Intl's, not a literal: `notation: "compact"` follows the runtime locale, so
+ * 14808 is "15K" on an en-US machine and "1.5万" on a zh-CN one. Written as the literal "15K" these
+ * two cases only said anything where the CI happens to run.
+ */
+const compactFigure = new Intl.NumberFormat(undefined, {
+  notation: "compact",
+  maximumSignificantDigits: 2,
+}).format(14808);
+
 const bars = (container: HTMLElement) => [
   ...container.querySelectorAll<HTMLElement>(".rounded-t-md"),
 ];
@@ -162,7 +172,7 @@ test("a bar whose figure does not fit writes it compactly, and keeps the exact v
       />,
     );
     const text = view.container.textContent ?? "";
-    expect(text).toContain("15K");
+    expect(text).toContain(compactFigure);
     expect(text).not.toContain("…");
     const exact = view.getByText("14,808", { selector: ".sr-only" });
     expect(exact.parentElement?.getAttribute("title")).toBe("14,808");
@@ -175,6 +185,6 @@ test("a bar whose figure fits writes it exactly", () => {
   const view = render(
     <BarChartCard points={[{ label: "Support", value: 14808 }]} />,
   );
-  expect(view.container.textContent).not.toContain("15K");
+  expect(view.container.textContent).not.toContain(compactFigure);
   expect(view.queryByText("14,808", { selector: ".sr-only" })).toBeNull();
 });

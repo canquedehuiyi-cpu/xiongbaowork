@@ -1,14 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  chmod,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rm,
-  writeFile,
-} from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -649,21 +642,30 @@ describe("helperRunner", () => {
   });
 
   test("an ensure that ran out of time is not remembered: the next call asks again", async () => {
+    const inner = helperRunner([await launcherWithLingeringChild()], 100);
+    /*
+     * Counting calls, not the lines the launcher's own `echo` left in `calls`. Whether that `echo`
+     * wins its race against the 100 ms limit depends on how fast `/bin/sh` starts, and on a loaded
+     * CI box it sometimes does not: the same commit was green once and red once on that assertion.
+     * What this case is about is that a timed-out `ensure` is not cached — a count of helper calls,
+     * with no clock and no file in it.
+     */
+    let calls = 0;
     const perBot = createPerBotComputer({
       workspaceRoot: root,
       defaultBotId: "shared",
       enabled: true,
-      helper: helperRunner([await launcherWithLingeringChild()], 100),
+      helper: (args, options) => {
+        calls += 1;
+        return inner(args, options);
+      },
     });
-    const started = Date.now();
     await expect(perBot.ensure("bot-a")).rejects.toBeInstanceOf(
       PerBotUnavailableError,
     );
     await expect(perBot.ensure("bot-a")).rejects.toBeInstanceOf(
       PerBotUnavailableError,
     );
-    expect(Date.now() - started).toBeLessThan(1_500);
-    const calls = (await readFile(join(root, "calls"), "utf8")).trim();
-    expect(calls.split("\n")).toHaveLength(2);
+    expect(calls).toBe(2);
   });
 });

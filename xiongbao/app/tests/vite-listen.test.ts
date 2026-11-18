@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
+import { ipv6LoopbackWorks } from "./ipv6-loopback";
+
+/** Answered once: whether `::1` here can be connected to at all. See ipv6-loopback.ts. */
+const ipv6Loopback = await ipv6LoopbackWorks();
 
 /** This machine's private address on its network: a connection to it arrives as another machine's would. */
 const lanAddress = Object.values(networkInterfaces())
@@ -115,12 +119,16 @@ async function probe(environment: Record<string, string>) {
 describe.skipIf(lanAddress === undefined)("the app's dev server", () => {
   test("answers this machine and refuses another one, since it passes /api to the server from here", async () => {
     const answers = await probe({ TRUSTED_ORIGINS: "http://localhost:3010" });
-    for (const host of ["127.0.0.1", "::1"]) {
-      expect(answers[`${host} /`]).toEqual({
-        status: 200,
-        thisMachineOnly: false,
-      });
-    }
+    expect(answers["127.0.0.1 /"]).toEqual({
+      status: 200,
+      thisMachineOnly: false,
+    });
+    // Vite listens on `::`, so it is up on ::1 either way; whether a client can reach it is the
+    // machine's IPv6 loopback. Windows binds it and refuses the connection (`EACCES` → status 0).
+    expect(answers["::1 /"]).toEqual({
+      status: ipv6Loopback ? 200 : 0,
+      thisMachineOnly: false,
+    });
     for (const path of ["/", "/api/me"]) {
       expect(answers[`${lanAddress} ${path}`]).toEqual({
         status: 403,

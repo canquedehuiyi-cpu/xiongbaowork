@@ -641,7 +641,10 @@ test("the top bar names the group and falls back to 群组", async () => {
 });
 
 test("the group page finds its own route once the app's router has been loaded too", async () => {
-  // What any earlier test file that imports the router does to the page's route id.
+  // The dynamic import below is the point of the case: it loads the whole app route tree, which is
+  // what any earlier file that imports the router does to this page's route id. That import alone
+  // takes longer than Bun's five-second default on Windows (measured: over 5s cold, ~1s warm), so
+  // the case timed out before reaching an assertion. The bound is the import's, not a wait.
   await import("@/router");
   reset();
   const root = createRootRoute({
@@ -669,7 +672,7 @@ test("the group page finds its own route once the app's router has been loaded t
   });
   expect(header.textContent).toContain("群组");
   expect(header.textContent).not.toContain("群聊");
-});
+}, 30_000);
 
 test("@ lists the current crew's flows first", async () => {
   reset({

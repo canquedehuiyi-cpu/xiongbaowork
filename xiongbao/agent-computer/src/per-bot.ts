@@ -102,9 +102,25 @@ export function helperRunner(
   const [executable = "sudo", ...leading] = command;
   return (args, options = {}) =>
     new Promise((resolve) => {
-      const child = spawn(executable, [...leading, ...args], {
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      let child: ReturnType<typeof spawn>;
+      try {
+        child = spawn(executable, [...leading, ...args], {
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+      } catch (error) {
+        /*
+         * `spawn` throws instead of emitting "error" on some platforms — Windows refuses a
+         * `#!/bin/sh` launcher with `EFTYPE`. Answering keeps the contract this function has
+         * everywhere else: `ensure` caches the promise, and a rejection it did not expect would
+         * surface as a 500 instead of as an unavailable computer.
+         */
+        resolve({
+          code: -1,
+          stdout: "",
+          stderr: error instanceof Error ? error.message : String(error),
+        });
+        return;
+      }
       let stdout = "";
       let stderr = "";
       child.stdout.on("data", (chunk) => {
