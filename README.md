@@ -208,6 +208,12 @@ Windows 上不能直接用 `bun` 跑服务端，用镜像或 Linux/WSL。
 本仓库实际执行的 CI 是根目录的 `.github/workflows/`。服务端开发和测试请在 Linux/WSL 或容器里进行：
 Windows 原生 Bun 在服务端依赖导入链上会挂死。
 
+`app-test` 与 `server-test` 都是分片跑的，分片来自提交进仓库的清单（`xiongbao/scripts/ci/app-tests.list.txt`、
+`server-tests.list.txt`），CI 从不裸跑 `bun test`——清单漏一个文件，那个文件就永远不会在 CI 里跑。
+**新增、删除或改名测试文件之后，在 `xiongbao/` 里跑一次 `bun run test:shards` 并把清单一起提交**，
+否则两个套件会直接报 stale（PR 上会在清单文件那一行留一条注解，命令就在里面）。清单与磁盘一致时，
+`bash scripts/ci/run-tests.sh "$PWD" app /tmp/app-1.log 1 "$PWD"` 就是本机复现某一分片的方式。
+
 ## 附录：从源码构建
 
 只有修改源码或更换构建期品牌包时才需要本机构建；客户部署使用上面的发布镜像。
