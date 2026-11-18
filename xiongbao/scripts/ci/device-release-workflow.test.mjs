@@ -1140,7 +1140,9 @@ test("the desktop probe runs on three platforms, fetches the pinned binary and m
 test("device jobs and the server side both use Bun 1.4.4", () => {
   const bunOf = (doc, name) =>
     doc.jobs[name].steps
-      .filter((step) => String(step.uses ?? "").startsWith("oven-sh/setup-bun@"))
+      .filter((step) =>
+        String(step.uses ?? "").startsWith("oven-sh/setup-bun@"),
+      )
       .map((step) => String(step.with["bun-version"]));
   for (const name of [
     "win1-windows",
@@ -1200,10 +1202,9 @@ test("every device bundle fetches and verifies agent-desktop before tauri build"
     if (job === "device-bundle-linux" || job === "linux") {
       const check = runs.find((r) => r.includes("dpkg-deb -c"));
       expect(check, `${job} lists the deb contents`).toBeDefined();
-      expect(
-        check,
-        `${job} checks the deb carries agent-desktop`,
-      ).toContain("usr/bin/agent-desktop$");
+      expect(check, `${job} checks the deb carries agent-desktop`).toContain(
+        "usr/bin/agent-desktop$",
+      );
     }
   }
 });
@@ -1262,7 +1263,10 @@ test("image and deb are brand-scanned", () => {
 const containerRelease = Bun.YAML.parse(
   readFileSync(join(workflows, "release.yml"), "utf8"),
 );
-const containerReleaseText = readFileSync(join(workflows, "release.yml"), "utf8");
+const containerReleaseText = readFileSync(
+  join(workflows, "release.yml"),
+  "utf8",
+);
 
 test("release labels carry title and vendor, not the repository", () => {
   const labels = containerReleaseText

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   discoverTests,
+  listShard,
   readManifest,
   SHARD_COUNT,
   shardFiles,
@@ -86,5 +87,32 @@ test("new, deleted, duplicate, and reordered paths all require a manifest update
     "tests/a.test.tsx\nsrc/lib/c.test.ts\ntests/support/b.test.ts\n",
   ]) {
     expect(() => readManifest(fixture(manifest))).toThrow(/manifest is stale/);
+  }
+});
+
+// The annotation is the only place a reader of the failing `app-test (n)` check is told which file
+// to edit. It has to be written by the CLI rather than left to the thrown error, because Bun
+// re-formats an uncaught error and the `::error` line stops being the first line of output.
+test("a stale manifest fails the shard CLI and, on Actions, annotates the manifest", () => {
+  const root = fixture("tests/a.test.tsx\n");
+  const before = process.env.GITHUB_ACTIONS;
+  try {
+    process.env.GITHUB_ACTIONS = "true";
+    const ci = listShard("1", root);
+    expect(ci.code).toBe(1);
+    expect(ci.lines[0]).toContain(
+      "::error file=scripts/ci/app-tests.list.txt,line=1,title=",
+    );
+    expect(ci.lines[0]).toContain("bun run test:shards");
+    expect(ci.lines[0]).toContain("3 found");
+
+    process.env.GITHUB_ACTIONS = "";
+    const local = listShard("1", root);
+    expect(local.code).toBe(1);
+    expect(local.lines.join("\n")).not.toContain("::error");
+    expect(local.lines.join("\n")).toContain("manifest is stale");
+  } finally {
+    if (before === undefined) delete process.env.GITHUB_ACTIONS;
+    else process.env.GITHUB_ACTIONS = before;
   }
 });

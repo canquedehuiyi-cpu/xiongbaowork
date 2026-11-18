@@ -25,6 +25,7 @@
     "typecheck:tests": "bun scripts/typecheck-tests.ts",
     "test:ci": "bun scripts/test-ci.ts",
     "test:server:sharded": "bun scripts/test-server-sharded.ts",
+    "test:shards": "bun scripts/ci/app-shards.mjs --write && bun scripts/ci/server-shards.mjs --write",
     "test:mutations": "bun scripts/mutation-register.ts",
     "pretest": "bun run generate:app-config",
     "test:smoke": "OPENBOT_SMOKE=1 bun test tests/smoke",

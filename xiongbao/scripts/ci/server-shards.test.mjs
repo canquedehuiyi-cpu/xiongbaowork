@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   discoverTests,
+  listShard,
   readManifest,
   SHARD_COUNT,
   shardFiles,
@@ -70,5 +71,29 @@ test("new, deleted, duplicate, and reordered paths all require a manifest update
     "tests/support/b.test.ts\ntests/a.test.ts\n",
   ]) {
     expect(() => readManifest(fixture(manifest))).toThrow(/manifest is stale/);
+  }
+});
+
+// Same contract as app-shards.test.mjs: the failing shard job must name the file to edit and the
+// command that fixes it, and only when it is actually running on Actions.
+test("a stale manifest fails the shard CLI and, on Actions, annotates the manifest", () => {
+  const root = fixture("tests/a.test.ts\n");
+  const before = process.env.GITHUB_ACTIONS;
+  try {
+    process.env.GITHUB_ACTIONS = "true";
+    const ci = listShard("1", root);
+    expect(ci.code).toBe(1);
+    expect(ci.lines[0]).toContain(
+      "::error file=scripts/ci/server-tests.list.txt,line=1,title=",
+    );
+    expect(ci.lines[0]).toContain("bun run test:shards");
+
+    process.env.GITHUB_ACTIONS = "";
+    const local = listShard("1", root);
+    expect(local.code).toBe(1);
+    expect(local.lines.join("\n")).not.toContain("::error");
+  } finally {
+    if (before === undefined) delete process.env.GITHUB_ACTIONS;
+    else process.env.GITHUB_ACTIONS = before;
   }
 });
