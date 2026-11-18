@@ -14,26 +14,19 @@ export type PageFallback = {
 
 /**
  * The hook (main-world/network-hook.ts) defines its configure and stop functions on globalThis under the xb.recorder
- * symbols, and under the older names too. A page left open across an update may still hold the hook of the version
- * before, which answers to the older names alone (L1-22), so each call tries the new symbol, then the older one. Chrome
- * sends only a function's source into the page: both names stay inside each function.
+ * symbols. The older names these went by have passed their window, so each call uses the new one alone. Chrome sends
+ * only a function's source into the page: the name stays inside each function.
  */
 
 type Hook = Record<symbol, ((id?: string) => void) | undefined>;
 
 const configureHook = (id: string): void => {
   const hook = globalThis as unknown as Hook;
-  (
-    hook[Symbol.for("xb.recorder.configure")] ??
-    hook[Symbol.for("openbot.recorder.configure")]
-  )?.(id);
+  hook[Symbol.for("xb.recorder.configure")]?.(id);
 };
 const stopHook = (): void => {
   const hook = globalThis as unknown as Hook;
-  (
-    hook[Symbol.for("xb.recorder.stop")] ??
-    hook[Symbol.for("openbot.recorder.stop")]
-  )?.();
+  hook[Symbol.for("xb.recorder.stop")]?.();
 };
 
 /**

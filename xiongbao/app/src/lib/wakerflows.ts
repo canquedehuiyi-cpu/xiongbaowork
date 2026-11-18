@@ -1313,7 +1313,6 @@ export function importWakerFlowShare(
  * survives a provider's redirect and back) and taken once. Only a token of the link's own shape is
  * ever held, so nothing else can be sent back to.
  */
-const LEGACY_RETURN_KEY = "openbot.wakerflow-share-return";
 const RETURN_KEY = "xiongbao.wakerflow-share-return";
 const SHARE_PATH = /^\/wakerflows\/import\/([A-Za-z0-9_-]{43})$/;
 
@@ -1329,8 +1328,8 @@ export function rememberShareImport(pathname: string) {
 
 export function takeShareImport(): string | null {
   try {
-    const token = readCompat(RETURN_KEY, LEGACY_RETURN_KEY, sessionStorage);
-    removeCompat(RETURN_KEY, LEGACY_RETURN_KEY, sessionStorage);
+    const token = readCompat(RETURN_KEY, sessionStorage);
+    removeCompat(RETURN_KEY, sessionStorage);
     return token && /^[A-Za-z0-9_-]{43}$/.test(token) ? token : null;
   } catch {
     return null;

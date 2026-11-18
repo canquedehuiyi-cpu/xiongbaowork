@@ -339,10 +339,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # in a directory that is root's, so the Bot cannot change what sudo runs. `sudo xiongbao-apt install
 # jq` is what a model runs here, as pwuser. `sudo apt-get` is refused.
 #
-# THE OLD NAME STILL WORKS. A Bot's memory and the skills it has learned may say `sudo openbot-apt`,
-# so /usr/local/sbin/openbot-apt is a root-owned link to xiongbao-apt and sudoers names both paths
-# (sudo matches a command by its path, so the link needs a rule of its own). The link and its rule go
-# when the compatibility window ends (legacy-compat in the brand allowlist).
+# THE WINDOW OF THE OLDER NAME HAS CLOSED. A Bot's memory and the skills it learned could say this helper's
+# earlier name, so the image used to carry a root-owned link under that name and name both paths in sudoers (sudo
+# matches a command by its path, so a link needs a rule of its own). Two releases have passed, the link and its rule
+# are gone, and a skill that still says the earlier name fails as "command not found" until it is re-run under this one.
 #
 # The environment stays sudo's to reset (`env_reset` in Ubuntu's /etc/sudoers) and the helper
 # clears it again, so nothing the Bot exports reaches apt-get. DEBIAN_FRONTEND is set by the
@@ -361,9 +361,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
   && rm -rf /var/lib/apt/lists/* \
   && chown root:root /usr/local/sbin /usr/local/sbin/xiongbao-apt \
   && chmod 0755 /usr/local/sbin /usr/local/sbin/xiongbao-apt \
-  && ln -s /usr/local/sbin/xiongbao-apt /usr/local/sbin/openbot-apt \
   && printf '%s\n' \
-    'pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xiongbao-apt, /usr/local/sbin/openbot-apt' \
+    'pwuser ALL=(root) NOPASSWD: /usr/local/sbin/xiongbao-apt' \
     > /etc/sudoers.d/pwuser \
   && chmod 0440 /etc/sudoers.d/pwuser \
   && visudo -cf /etc/sudoers.d/pwuser

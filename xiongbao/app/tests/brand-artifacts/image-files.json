@@ -30,14 +30,6 @@
     "note": "镜像 /app/shared 里的上游源文件名；Task 15（R4b 服务器打包成单文件）后镜像不再带源码，届时从词表删除"
   },
   {
-    "word": "openbot-apt",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.13",
-    "note": "镜像里的 /usr/local/sbin/openbot-apt：指向 xiongbao-apt 的兼容链接（L1-9），sudoers 也单列这条路径；Bot 的记忆、已学技能里可能写着 sudo openbot-apt，窗口期满（0.2.13）与 Dockerfile 里的链接和 sudoers 规则一起删"
-  },
-  {
     "word": "openbot-browser.ts",
     "category": "operator-visible",
     "plan": "rewrite",

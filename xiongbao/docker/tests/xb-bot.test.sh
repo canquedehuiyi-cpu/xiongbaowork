@@ -119,41 +119,42 @@ cat /tmp/a-umask.txt
 pass "B cannot read what A writes to /tmp with its default umask"
 
 # Employees may not install system packages; pwuser (the default employee) still may, through
-# `openbot-apt` only.
+# `xiongbao-apt` only.
 as "$A" 10 '
 sudo -n apt-get --version
 ' && fail "employee A may sudo apt-get"
 pass "an employee may not sudo apt-get"
 as "$A" 10 '
-sudo -n /usr/local/sbin/openbot-apt update
-' && fail "employee A may sudo openbot-apt"
-pass "an employee may not sudo openbot-apt"
+sudo -n /usr/local/sbin/xiongbao-apt update
+' && fail "employee A may sudo xiongbao-apt"
+pass "employee A may not sudo xiongbao-apt"
 # Asked of sudo itself, for every command: whatever else might stop sudo later cannot hide a rule.
 sudo -l -U "xb-$A" >"$T/out" 2>&1
 grep -q 'not allowed to run sudo' "$T/out" || fail "sudo -l -U xb-$A lists something: $(cat "$T/out")"
 pass "sudoers grants an employee nothing"
-runuser -u pwuser -- sudo -n -l /usr/local/sbin/openbot-apt update >/dev/null 2>"$T/err" || fail "pwuser may no longer sudo openbot-apt: $(cat "$T/err")"
-pass "pwuser may still sudo openbot-apt"
-runuser -u pwuser -- sudo -n apt-get --version >"$T/out" 2>&1 && fail "pwuser may sudo apt-get itself: $(cat "$T/out")"
-pass "pwuser may not sudo apt-get itself"
-# The helper's own name is xiongbao-apt; openbot-apt stays as a link to it for Bots that learned the
-# old name (L1-9). The checks above on the old path prove it still works; these are the new one's.
 runuser -u pwuser -- sudo -n -l /usr/local/sbin/xiongbao-apt update >/dev/null 2>"$T/err" || fail "pwuser may not sudo xiongbao-apt: $(cat "$T/err")"
 pass "pwuser may sudo xiongbao-apt"
-as "$A" 10 '
-sudo -n /usr/local/sbin/xiongbao-apt update
-' && fail "employee A may sudo xiongbao-apt"
-pass "employee A may not sudo xiongbao-apt"
-[ -L /usr/local/sbin/openbot-apt ] || fail "openbot-apt is not a link: $(ls -l /usr/local/sbin/openbot-apt 2>&1)"
-[ "$(readlink -f /usr/local/sbin/openbot-apt)" = /usr/local/sbin/xiongbao-apt ] || fail "openbot-apt points at $(readlink -f /usr/local/sbin/openbot-apt 2>&1), not xiongbao-apt"
-pass "openbot-apt is a link to xiongbao-apt"
-# Run through sudo, not only listed: both paths reach the same helper, which refuses a bogus action
+runuser -u pwuser -- sudo -n apt-get --version >"$T/out" 2>&1 && fail "pwuser may sudo apt-get itself: $(cat "$T/out")"
+pass "pwuser may not sudo apt-get itself"
+# The name the helper had before L1-9 went with its window: neither the file nor a sudoers rule naming it
+# is in the image, so a Bot that still says it gets "command not found" rather than root.
+[ ! -L /usr/local/sbin/openbot-apt ] || fail "the older name's link is still in the image: $(ls -l /usr/local/sbin/openbot-apt)"
+[ ! -e /usr/local/sbin/openbot-apt ] || fail "the older name's path is still in the image: $(ls -l /usr/local/sbin/openbot-apt)"
+pass "the older name's path left the image with its window"
+granted="$(sudo -l -U pwuser 2>&1)"
+case "$granted" in
+  *"/usr/local/sbin/xiongbao-apt"*) ;;
+  *) fail "sudoers does not grant pwuser the helper by its current name: $granted" ;;
+esac
+case "$granted" in
+  *"openbot-apt"*) fail "sudoers still names the older name for pwuser: $granted" ;;
+esac
+pass "sudoers grants pwuser the helper by its current name alone"
+# Run through sudo, not only listed: the path reaches the same helper, which refuses a bogus action
 # with 2 before it touches apt (no network needed).
-for path in /usr/local/sbin/xiongbao-apt /usr/local/sbin/openbot-apt; do
-  expect_code 2 "pwuser: sudo $path bogus is refused by the helper" -- runuser -u pwuser -- sudo -n "$path" bogus
-  head -n 1 "$T/err" | grep -q '^xiongbao-apt: ' || fail "sudo $path bogus: stderr does not start with xiongbao-apt: ($(cat "$T/err"))"
-  pass "sudo $path bogus says xiongbao-apt:"
-done
+expect_code 2 "pwuser: sudo /usr/local/sbin/xiongbao-apt bogus is refused by the helper" -- runuser -u pwuser -- sudo -n /usr/local/sbin/xiongbao-apt bogus
+head -n 1 "$T/err" | grep -q '^xiongbao-apt: ' || fail "sudo /usr/local/sbin/xiongbao-apt bogus: stderr does not start with xiongbao-apt: ($(cat "$T/err"))"
+pass "sudo /usr/local/sbin/xiongbao-apt bogus says xiongbao-apt:"
 
 # What the shell tool tells an employee to do instead: install user-level tools in its own
 # directory. The image has no python3, so npm and bun are the installers; an empty `npm install`

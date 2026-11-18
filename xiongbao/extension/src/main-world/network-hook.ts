@@ -41,13 +41,11 @@ type Transport = "fetch" | "xhr";
 type Outcome = "ok" | "error" | "aborted";
 type Request = { url: string; method: string; headers: Record<string, string> };
 
-// The service worker reaches the hook through these symbols (background/network/fallback.ts). The hook answers to the
-// older names as well (L1-22), so a service worker rolled back within the window still reaches it; and loaded over the
-// hook of the version before, which answers to the older names alone, it stops that one first.
+// The service worker reaches the hook through these symbols (background/network/fallback.ts). The older names these
+// went by have passed their window, so nothing is answered under them; a hook of an older release registers under
+// these same names, which is what a re-injection finds and stops before replacing.
 const CONFIGURE = Symbol.for("xb.recorder.configure");
 const STOP = Symbol.for("xb.recorder.stop");
-const LEGACY_CONFIGURE = Symbol.for("openbot.recorder.configure");
-const LEGACY_STOP = Symbol.for("openbot.recorder.stop");
 const registry = globalThis as unknown as Record<symbol, unknown>;
 
 // Pages matching externally_connectable (all URLs) get chrome.runtime.sendMessage; the page's own scripts could replace it
@@ -695,9 +693,8 @@ function wrapWebSocket(
 (() => {
   // Injected again into a document that already has the hook (a second start, a followed tab added later): the older
   // copy restores the originals first, so the wrappers never stack.
-  const older = new Set([registry[STOP], registry[LEGACY_STOP]]);
-  for (const stopOlder of older)
-    if (typeof stopOlder === "function") stopOlder();
+  const stopOlder = registry[STOP];
+  if (typeof stopOlder === "function") stopOlder();
   let restore: (() => void) | null = null;
   let running = false;
 
@@ -721,6 +718,6 @@ function wrapWebSocket(
       restoreSocket();
     };
   };
-  registry[STOP] = registry[LEGACY_STOP] = stop;
-  registry[CONFIGURE] = registry[LEGACY_CONFIGURE] = configure;
+  registry[STOP] = stop;
+  registry[CONFIGURE] = configure;
 })();

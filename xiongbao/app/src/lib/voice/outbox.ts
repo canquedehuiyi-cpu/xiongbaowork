@@ -3,7 +3,6 @@ import { type AuthenticatedUser, authKeys } from "@/lib/auth/queries";
 import { compatSuffixes, readCompat, removeCompat } from "@/lib/storage-compat";
 import { queryClient } from "@/query-client";
 
-const LEGACY_PREFIX = "openbot:voice-outbox:";
 const PREFIX = "xiongbao:voice-outbox:";
 export const voiceCallOwner = () =>
   queryClient.getQueryData<AuthenticatedUser>(authKeys.currentUser())?.id;
@@ -37,7 +36,7 @@ export function forgetVoiceCall(
 ) {
   try {
     if (userId)
-      removeCompat(key(call, userId), LEGACY_PREFIX + suffix(call, userId));
+      removeCompat(key(call, userId));
   } catch {
     /* Storage can be disabled; the database already holds this call. */
   }
@@ -49,9 +48,9 @@ export function recoverVoiceCalls(channelId: string): SaveVoiceSessionInput[] {
     if (!userId) return [];
     const prefix = `${encodeURIComponent(userId)}:${encodeURIComponent(channelId)}:`;
     const recovered: SaveVoiceSessionInput[] = [];
-    for (const name of compatSuffixes(PREFIX, LEGACY_PREFIX)) {
+    for (const name of compatSuffixes(PREFIX)) {
       if (!name.startsWith(prefix)) continue;
-      const raw = readCompat(PREFIX + name, LEGACY_PREFIX + name);
+      const raw = readCompat(PREFIX + name);
       if (!raw || raw.length > 400_000) continue;
       let value: unknown;
       try {

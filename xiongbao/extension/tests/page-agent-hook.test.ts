@@ -113,7 +113,7 @@ afterAll(async () => {
 });
 
 const hookKey = (name: "configure" | "stop") =>
-  Symbol.for(`openbot.recorder.${name}`);
+  Symbol.for(`xb.recorder.${name}`);
 const globals = globalThis as unknown as Record<symbol, unknown>;
 const configure = (id: string) =>
   (globals[hookKey("configure")] as (id: string) => void)(id);

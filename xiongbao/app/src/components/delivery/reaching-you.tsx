@@ -64,11 +64,10 @@ import { queryClient } from "@/query-client";
  * phone a moment after they may have looked away: leaving and coming back used to drop the box to
  * type it into, with no way to confirm the code they had just been sent.
  */
-const LEGACY_PENDING_SMS = "openbot.reachability.pendingSms";
 const PENDING_SMS = "xiongbao.reachability.pendingSms";
 function readPending(): string {
   try {
-    return readCompat(PENDING_SMS, LEGACY_PENDING_SMS, sessionStorage) ?? "";
+    return readCompat(PENDING_SMS, sessionStorage) ?? "";
   } catch {
     return "";
   }
@@ -76,7 +75,7 @@ function readPending(): string {
 function writePending(id: string) {
   try {
     if (id) writeCompat(PENDING_SMS, id, sessionStorage);
-    else removeCompat(PENDING_SMS, LEGACY_PENDING_SMS, sessionStorage);
+    else removeCompat(PENDING_SMS, sessionStorage);
   } catch {
     /* A browser that keeps nothing still confirms within the visit. */
   }

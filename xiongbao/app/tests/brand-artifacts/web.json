@@ -306,12 +306,6 @@
     "note": "浏览器存储键或 DOM 标记；Task 7 双认后改新键"
   },
   {
-    "word": "openbot.bot-thread",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键；Task 7 双认后改新键"
-  },
-  {
     "word": "openbot.connect",
     "category": "peer-protocol",
     "plan": "rewrite",
@@ -328,12 +322,6 @@
     "category": "peer-protocol",
     "plan": "rewrite",
     "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
-    "word": "openbot.reachability.pendingSms",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键；Task 7 双认后改新键"
   },
   {
     "word": "openbot.record",
@@ -358,18 +346,6 @@
     "category": "persisted-data",
     "plan": "keep",
     "note": "K8s 标签（规格 1.2 不改）"
-  },
-  {
-    "word": "openbot.teach-a-bot.introduced",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键；Task 7 双认后改新键"
-  },
-  {
-    "word": "openbot.wakerflow-share-return",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键；Task 7 双认后改新键"
   },
   {
     "word": "openbot/",
@@ -408,46 +384,16 @@
     "note": "授权与提案标记，按原文被对端解析"
   },
   {
-    "word": "openbot:carried-on:",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键前缀；Task 7"
-  },
-  {
-    "word": "openbot:check-in-declined:",
-    "category": "parsed-exact-text",
-    "plan": "keep",
-    "note": "授权与提案标记，按原文被对端解析"
-  },
-  {
-    "word": "openbot:computer-activity-wiped:",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键前缀；Task 7"
-  },
-  {
     "word": "openbot:open",
     "category": "upstream-shell-only",
     "plan": "keep",
     "note": "只在不交付的上游桌面里使用"
   },
   {
-    "word": "openbot:pending-handoff:_",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键前缀；Task 7"
-  },
-  {
     "word": "openbot:staffing-proposal",
     "category": "parsed-exact-text",
     "plan": "keep",
     "note": "授权与提案标记，按原文被对端解析"
-  },
-  {
-    "word": "openbot:voice-outbox:",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "浏览器存储键前缀；Task 7"
   },
   {
     "word": "openbotTimeZone",

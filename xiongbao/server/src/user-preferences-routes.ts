@@ -48,7 +48,6 @@ const preferencesPatch = z
     messageListEmphasis: z.enum(["agent", "thread"]).optional(),
     selfHostBannerDismissed: z.boolean().optional(),
     narration: z.enum(["on", "off"]).optional(),
-    // An older page may still send the old default's name; it is stored under the new one.
     skin: z
       .string()
       .refine(isKnownSkinInput)
