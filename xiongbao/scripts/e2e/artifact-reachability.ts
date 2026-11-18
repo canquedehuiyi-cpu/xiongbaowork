@@ -1101,8 +1101,18 @@ try {
         .every((call) => !call.offeredWrite),
       "every other request the mock saw was offered no file tool: no second turn wrote a file",
     );
+    /*
+     * The first **scripted** call, not `calls[0]`. A running deployment asks its model for other
+     * things besides this conversation (the channel title, the skill words), and which of those
+     * reaches the mock first is a matter of timing — `calls[0]` is legitimately a `plain` request
+     * with no file tool, as it was in run 44261149743, where the turn itself (the next call) did
+     * carry the tool and the three writes did reach a computer. Asserting `calls[0]` therefore read
+     * as "the write tool was never offered" whenever the summariser won that race. What this line
+     * means is "this run reached the real registration", i.e. the conversation turn was equipped
+     * with the write tool, and that is the first non-plain call.
+     */
     check(
-      calls[0]?.offeredWrite,
+      calls.find((call) => call.kind !== "plain")?.offeredWrite,
       "the conversation was offered the file tool: this run reached the real registration",
     );
     await p.getByText(ANSWER.saved).first().waitFor({ timeout: 30_000 });
