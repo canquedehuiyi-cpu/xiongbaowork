@@ -107,8 +107,12 @@ beforeAll(async () => {
   if (!asked) return;
   script = await bundle();
   const { chromium } = await import("playwright-core");
-  // CI job 装的是完整 Chromium，不带 headless shell。
-  browser = await chromium.launch({ channel: "chromium" });
+  // CI job 装的是完整 Chromium，不带 headless shell。托管 Ubuntu runner 的沙箱与 /dev/shm
+  // 限制按仓库既有 CI 浏览器门同款处理（scripts/e2e/wakerflow-lifecycle.ts 的启动参数）。
+  browser = await chromium.launch({
+    channel: "chromium",
+    args: ["--no-sandbox", "--disable-dev-shm-usage"],
+  });
 });
 
 afterAll(async () => {
