@@ -102,25 +102,30 @@ export function helperRunner(
   const [executable = "sudo", ...leading] = command;
   return (args, options = {}) =>
     new Promise((resolve) => {
-      let child: ReturnType<typeof spawn>;
-      try {
-        child = spawn(executable, [...leading, ...args], {
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-      } catch (error) {
-        /*
-         * `spawn` throws instead of emitting "error" on some platforms — Windows refuses a
-         * `#!/bin/sh` launcher with `EFTYPE`. Answering keeps the contract this function has
-         * everywhere else: `ensure` caches the promise, and a rejection it did not expect would
-         * surface as a 500 instead of as an unavailable computer.
-         */
-        resolve({
-          code: -1,
-          stdout: "",
-          stderr: error instanceof Error ? error.message : String(error),
-        });
-        return;
-      }
+      /*
+       * `spawn` throws instead of emitting "error" on some platforms — Windows refuses a
+       * `#!/bin/sh` launcher with `EFTYPE`. Answering keeps the contract this function has
+       * everywhere else: `ensure` caches the promise, and a rejection it did not expect would
+       * surface as a 500 instead of as an unavailable computer.
+       *
+       * Wrapped rather than declared `let child: ReturnType<typeof spawn>`: that annotation widens
+       * `stdout`/`stderr` back to nullable, and this function reads them below.
+       */
+      const child = (() => {
+        try {
+          return spawn(executable, [...leading, ...args], {
+            stdio: ["ignore", "pipe", "pipe"] as const,
+          });
+        } catch (error) {
+          resolve({
+            code: -1,
+            stdout: "",
+            stderr: error instanceof Error ? error.message : String(error),
+          });
+          return null;
+        }
+      })();
+      if (child === null) return;
       let stdout = "";
       let stderr = "";
       child.stdout.on("data", (chunk) => {
