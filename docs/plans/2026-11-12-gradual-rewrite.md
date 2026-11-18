@@ -925,6 +925,7 @@
 Cookies 1 条 — `agent-computer/src/session-cookies.ts` 的 `openbot-session-cookies.json`：旧名双读与迁移函数删除，按窗口口径补上「旧名文件离开卷」的清理（删失败只经日志上报 `code`，不阻塞浏览器启动；删成功不恢复任何旧值）。
 产物词表随条目同步：`brand-artifacts/web.json` 89→80、`extension.json` 47→43、`image-files.json` 7→6。
 快照 `openbot-snapshots.sqlite`（`runner.json`／`deb.json`）是唯一 `device: true` 的条目，按裁定③把 `notBefore` 与 `removeIn` 设成 `0.2.14`，`reason` 追加「用户 2026-11-17 批准：延期到 0.2.14（推荐）」；`runner/src/browser.ts` 的双写与 `runner-browser.test.ts` 零改动。
+**补充豁免（用户 2026-11-18 批准，原话「批准最小补充豁免（推荐）」）**：三处既有断言随窗口关闭一起收紧，都是 CI 实跑暴露后停手上报、经追认再改的——`extension/tests/page-agent-hook.test.ts:115` 与 `extension/tests/page-network-hook.test.ts:128` 的夹具 `hookKey` 从旧 Symbol 键改为只注册存活的那一对（`xb.recorder.configure`／`xb.recorder.stop`）；24 条行为断言逐字保留，未跳、未弱、未删，夹具名 `openbot-chat`／`openbotOf` 与 `recorder-masking` 的 import 不动。`server/tests/user-preferences-routes.test.ts:296` 的「PATCH 旧皮肤名存为新名」按裁定④改写成拒绝用例：400、应答文案列出在售皮肤、且不写入任何偏好。`app/src/lib/storage-compat.ts:62` 的 `useOptionalChain` 是本票新写的行，属自修、零行为变化。
 - [ ] **Step 3**：运行全部测试、护栏、`brand-artifacts`；`brand-expiry.test.ts` 转绿。
 - [ ] **Step 4：提交** `到期清理：删除 <版本> 起双认的旧名（<条目数> 条）`。度量：白名单 `legacy-compat` 减去到期条数；`web` 等词表对应下降。
 

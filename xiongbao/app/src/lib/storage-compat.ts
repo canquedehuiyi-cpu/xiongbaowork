@@ -59,7 +59,7 @@ export function compatSuffixes(
     const suffixes = new Set<string>();
     for (let index = 0; index < store.length; index++) {
       const name = store.key(index);
-      if (name !== null && name.startsWith(prefix))
+      if (name?.startsWith(prefix))
         suffixes.add(name.slice(prefix.length));
     }
     return [...suffixes];

@@ -293,12 +293,14 @@ test("check-ins start on, and a person's off is kept without touching the others
   ).toBe("on");
 });
 
-test("a page that still sends the old default skin name has it stored under the new one", async () => {
+test("a page that still sends the old default skin name is refused with the skins this build ships", async () => {
+  // The window of that name has closed: it is no longer translated into the new one, it is simply an
+  // unknown skin, and an unknown skin is refused without saving anything.
   const { appFor, state } = fixture();
-  const saved = await appFor("alice").request(path, patch({ skin: "openbot" }));
-  expect(saved.status).toBe(200);
-  expect(
-    ((await saved.json()) as { preferences: UserPreferences }).preferences.skin,
-  ).toBe("xiongbao");
-  expect(state.get("alice")?.skin).toBe("xiongbao");
+  const refused = await appFor("alice").request(path, patch({ skin: "openbot" }));
+  expect(refused.status).toBe(400);
+  expect(((await refused.json()) as { error: string }).error).toContain(
+    "xiongbao, classic, openduet, opendots, openmuse",
+  );
+  expect(state.size).toBe(0);
 });
