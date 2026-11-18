@@ -479,6 +479,7 @@ tests/setup-checklist.test.tsx
 tests/shared-app-notice.test.tsx
 tests/shared-connected-accounts.test.tsx
 tests/shared-grant-dialog.test.tsx
+tests/shared-query-client-teardown.test.ts
 tests/shared-use-client.test.ts
 tests/shared-use-requests.test.tsx
 tests/sidebar-preference.test.ts

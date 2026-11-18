@@ -1,4 +1,11 @@
-import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  test,
+} from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
@@ -7,6 +14,7 @@ import { NameOrb, useNameStep } from "@/components/onboarding/name-step";
 import { StepIntro } from "@/components/onboarding/onboarding-frame";
 import { OnboardingWizard } from "@/components/onboarding/onboarding-wizard";
 import { authKeys } from "@/lib/auth/queries";
+import { queryClient } from "@/query-client";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -17,8 +25,17 @@ import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => GlobalRegistrator.register());
 const originalFetch = globalThis.fetch;
+/*
+ * Saving the name invalidates the signed-in person in the app's own client (`@/query-client`), not
+ * the one drawn here, and waits for every copy of it there to refetch before the finish plays. A
+ * copy another file left in that shared client refetched through this file's fetch stand-in,
+ * failed, and waited out its one-second retry, so Get started stayed on Saving… whenever such a
+ * file happened to run first. Each test starts from an empty shared client and leaves it empty.
+ */
+beforeEach(() => queryClient.clear());
 afterEach(() => {
   cleanup();
+  queryClient.clear();
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {

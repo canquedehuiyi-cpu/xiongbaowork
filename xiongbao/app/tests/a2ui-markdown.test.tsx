@@ -236,12 +236,24 @@ test("code in a language Shiki does not know is drawn plain, and still copies", 
   });
   await drawn(view.container, "GOTO 10");
   expect(await copy(view.container)).toBe(`${source}\n`);
-  const body = view.container.querySelector(
-    '.a2ui-surface [data-streamdown="code-block-body"]',
-  );
-  expect(body?.textContent).toContain("GOTO 10");
+  /*
+   * Streamdown draws every block plain first and puts Shiki's result in when it arrives, which
+   * takes the lazy code-block chunk, the code plugin and a highlighter for plain text. Whether
+   * those are already loaded is up to whichever test drew code before this one, so this waits for
+   * Shiki's drawing itself (it gives the block both themes' colours) and judges that.
+   */
+  const body = await waitFor(() => {
+    const found = view.container.querySelector<HTMLElement>(
+      '.a2ui-surface [data-streamdown="code-block-body"]',
+    );
+    expect(found?.querySelector("pre")?.getAttribute("style") ?? "").toContain(
+      "--shiki-dark-bg",
+    );
+    return found as HTMLElement;
+  });
+  expect(body.textContent).toContain("GOTO 10");
   // Drawn in the theme's text colour, with no token coloured as anything.
-  expect(body?.querySelector("code [style*='--sdm-c']")).toBeNull();
+  expect(body.querySelector("code [style*='--sdm-c']")).toBeNull();
 });
 
 test("a Code component draws the same code block as a reply", async () => {
