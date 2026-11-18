@@ -1249,7 +1249,7 @@ describe("a Bot gives part of its work to a subagent", () => {
       if (calls === 1)
         return { toolCalls: [subagentCall("Part one.", "One line.")] };
       const [handed] = resultsIn(request);
-      if (handed && "handedBack" in handed && handed.handedBack.args.text === "Part one.")
+      if (handed && "handedBack" in handed && (handed.handedBack.args as { text: string }).text === "Part one.")
         return { toolCalls: [subagentCall("Part two.", "One line.")] };
       return { content: "Both handed back." };
     };
@@ -1262,8 +1262,8 @@ describe("a Bot gives part of its work to a subagent", () => {
       throw new Error("The first call was not handed back.");
     if (!second || !("handedBack" in second))
       throw new Error("The second call was refused instead of handed back.");
-    expect(first.handedBack.args.text).toBe("Part one.");
-    expect(second.handedBack.args.text).toBe("Part two.");
+    expect((first.handedBack.args as { text: string }).text).toBe("Part one.");
+    expect((second.handedBack.args as { text: string }).text).toBe("Part two.");
     expect(vendorCalls).toEqual([]);
   }, 30_000);
 
@@ -1302,7 +1302,6 @@ describe("a Bot gives part of its work to a subagent", () => {
   test("the sixth call in one answer is still refused by the quota, not the breaker", async () => {
     await approvalStore.setEnabled(person, true);
     const note = { text: "The expense policy changed." };
-    let calls = 0;
     script = (request) => {
       if (isSubagent(request))
         return {
@@ -1316,7 +1315,7 @@ describe("a Bot gives part of its work to a subagent", () => {
 
     await ask("Post six notes.");
 
-    const finalResults = toolResults(parentRequests().at(-1));
+    const finalResults = toolResults(parentRequests().at(-1)!);
     expect(finalResults).toHaveLength(6);
     const [first, ...rest] = finalResults;
     expect(first).not.toContain(REFUSAL_MARKER);
