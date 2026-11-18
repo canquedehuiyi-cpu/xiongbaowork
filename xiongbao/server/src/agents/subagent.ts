@@ -83,8 +83,6 @@ export const SUBAGENT_HANDED_BACK =
 
 /** The run asking, as this deployment knows it. */
 export type SubagentParent = {
-  /** Shared circuit-breaker state across subagent calls in one run; created per run when absent. */
-  handedBackActions?: Set<string>;
   runId?: string;
   /** The asking run's root task, as its analytics context states it; the subagent works for it. */
   rootTaskId?: string;
@@ -162,7 +160,8 @@ export function createSubagents(options: {
        * being handed back a second time, so the Bot is not told to try the subagent path again for
        * something the person has to approve here. Reset per run: a new user turn gets a new closure.
        */
-      const handedBackActions = parent.handedBackActions ?? new Set<string>();
+      const handedBackActions = new Set<string>();
+      let currentRunId = parent.runId;
       return {
         name: SUBAGENT_TOOL,
         ref: `bot/${SUBAGENT_TOOL}`,
@@ -198,6 +197,12 @@ export function createSubagents(options: {
           if (started >= perAnswer)
             return `${REFUSAL_MARKER} No subagent was started: one answer can start up to ${perAnswer} subagents, and this one has. Do this part yourself.`;
           started += 1;
+
+          // Reset circuit breaker if runId changed (new run)
+          if (parent.runId && parent.runId !== currentRunId) {
+            handedBackActions.clear();
+            currentRunId = parent.runId;
+          }
 
           const toolCallId =
             execution?.toolCallId ??
