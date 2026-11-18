@@ -158,7 +158,7 @@ jobs:
         working-directory: xiongbao/agent-mastra
       - name: Prepare frozen baseline and separate databases
         run: |
-          bash scripts/ci/prepare-baseline.sh
+          bash scripts/ci/prepare-baseline.sh --with-bots
           baseline="$(bash scripts/ci/baseline-dir.sh)"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE openbot_b_base OWNER openbot'
           DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_head bun run --cwd server scripts/migrate.ts
@@ -172,10 +172,17 @@ jobs:
           printf 'DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base\n' > "$baseline/.env"
       - name: Baseline tests (same head shard file list, own database)
         continue-on-error: true
-        run: |
-          DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
-          TEST_DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
-            bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
+        # Every database the baseline tree touches is its own, the writer too. `initializeRoleWriter`
+        # refuses an application and a writer that are not on the same database (it compares database,
+        # oid, server address and port), so leaving TEST_ROLE_WRITER_DATABASE_URL at the job default
+        # pointed the writer at openbot_b_head while the application was on openbot_b_base: every suite
+        # that binds the writer died in its hook — 38 unnamed failures on shard 1 alone — and
+        # test-report.mjs refuses to compare a log with unnamed failures at all.
+        env:
+          DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base
+          TEST_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base
+          TEST_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_b_base
+        run: bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Head tests (openbot_app, one process per shard)
         # No continue-on-error: a failing head test fails this step and the job. The report step
         # below runs anyway (if: always()) for the baseline comparison.
