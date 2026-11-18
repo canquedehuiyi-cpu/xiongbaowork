@@ -83,6 +83,8 @@ export const SUBAGENT_HANDED_BACK =
 
 /** The run asking, as this deployment knows it. */
 export type SubagentParent = {
+  /** Shared circuit-breaker state across subagent calls in one run; created per run when absent. */
+  handedBackActions?: Set<string>;
   runId?: string;
   /** The asking run's root task, as its analytics context states it; the subagent works for it. */
   rootTaskId?: string;
@@ -160,19 +162,12 @@ export function createSubagents(options: {
        * being handed back a second time, so the Bot is not told to try the subagent path again for
        * something the person has to approve here. Reset per run: a new user turn gets a new closure.
        */
-      const handedBackActions = new Set<string>();
+      const handedBackActions = parent.handedBackActions ?? new Set<string>();
       return {
         name: SUBAGENT_TOOL,
         ref: `bot/${SUBAGENT_TOOL}`,
-        /*
-         * The rule the prompt's subagents section gives, cost first. This used to say "whenever work
-         * takes more than two or three calls", the threshold the prompt had already dropped after a
-         * Bot split one web search three ways, so the two disagreed on every run. Anthropic found a
-         * subagent tool whose description states its cost first is called about a third less often,
-         * with the same results.
-         */
         description:
-          "Give one self-contained part of your work to a subagent: a fresh copy of you, with your tools, acting for the same person, that sees none of this conversation and returns only its answer. " +
+          "Give one self-contained part of your work to a subagent: a fresh copy of you, with your tools, acting for the same same person, that sees none of this conversation and returns only its answer. " +
           "Each one is slower than doing the work yourself and is more for the person to follow, so use it only when a request falls into several independent parts that each need a lot of reading of their own, such as one account, document or company each. " +
           "A single question, one search, or a lookup that takes a handful of tool calls, do yourself. " +
           "Give it everything it needs to know and say what answer you want back. Call it several times in one step to run independent parts at the same time. " +
@@ -184,15 +179,8 @@ export function createSubagents(options: {
           const parsed = parameters.safeParse(args);
           if (!parsed.success)
             return `${REFUSAL_MARKER} No subagent was started: say what the task is and what answer you want back.`;
-          /*
-           * A task from a check-in is asked first, because starting nothing there is not a subagent
-           * this answer used: counting it would spend the cap on work that never ran, and a Bot on
-           * the sixth call would be told it had already started five.
-           */
           if (await options.asksEveryStep?.(parent.actorId, parent.threadId))
             return `${REFUSAL_MARKER} No subagent was started: in a task from a check-in, every step is checked with the person in this conversation. Do this part yourself.`;
-          // Checked and counted with nothing awaited between them, so calls arriving together
-          // cannot all pass the cap.
           if (started >= perAnswer)
             return `${REFUSAL_MARKER} No subagent was started: one answer can start up to ${perAnswer} subagents, and this one has. Do this part yourself.`;
           started += 1;
@@ -213,12 +201,6 @@ export function createSubagents(options: {
           });
           const messages = () => agent?.messages ?? [];
           const answer = (result: SubagentResult) => JSON.stringify(result);
-          /*
-           * Timed here, around the run, because the page cannot: a subtask's card is drawn again
-           * long after its turn, and while it worked there was nothing on it to measure from. What
-           * the run waited on — the model, its tools, a stop — is inside this span; the withdraw
-           * below is not.
-           */
           const startedAt = Date.now();
           const elapsed = () => Math.max(0, Date.now() - startedAt);
           try {
@@ -243,8 +225,7 @@ export function createSubagents(options: {
               initiator: parent.initiator,
               depth: (parent.depth ?? 0) + 1,
               ...(execution?.signal ? { signal: execution.signal } : {}),
-            });
-            return answer({
+            });eturn answer({
               answer: replyText,
               threadId,
               steps: stepsIn(messages()),
@@ -288,15 +269,6 @@ export function createSubagents(options: {
               ms: elapsed(),
             });
           } finally {
-            /*
-             * Every way this run can end closes the requests it opened, not only the one that says
-             * so by throwing the suspension. A turn stopped by the clock, lost lock or cancelled
-             * after it had opened one leaves that request waiting in a thread nobody reads, and a
-             * person approving it would do the action a second time; an aborted one never answers at
-             * all. Nothing was resumed by any of them, so the Bot is asked for it in the
-             * conversation, as above. Withdrawal only closes what is still pending and does nothing
-             * twice, so on a run that opened nothing this costs one read.
-             */
             await options.withdrawApprovals(parent.actorId, runId);
           }
         },
