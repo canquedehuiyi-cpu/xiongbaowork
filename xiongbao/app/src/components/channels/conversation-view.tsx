@@ -29,6 +29,7 @@ import {
 import { NotifyPrompt } from "@/components/notifications/notify-prompt";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import type { RunStage } from "@/lib/channels/run-stage";
+import type { TurnClosedVariant } from "@/lib/channels/turn-closed";
 import { newId } from "../../lib/new-id";
 
 export function ConversationView({
@@ -40,6 +41,7 @@ export function ConversationView({
   stage,
   elapsedMs,
   elapsedObserved,
+  closed,
   busy = false,
   notice,
   attached,
@@ -81,6 +83,8 @@ export function ConversationView({
   elapsedMs?: number;
   /** 起点是半路看见的，措辞用「已进行」；见 `ChatTranscript`。 */
   elapsedObserved?: boolean;
+  /** 本轮干净收尾的那一句（idle／cancelled／awaiting_approval）；见 `ChatTranscript`。不给就一切照旧。 */
+  closed?: TurnClosedVariant | null;
   busy?: boolean;
   /** Shown above the composer. An error, or why this conversation is read-only. */
   notice?: ReactNode;
@@ -514,6 +518,7 @@ export function ConversationView({
           {...(stage ? { stage } : {})}
           {...(elapsedMs !== undefined ? { elapsedMs } : {})}
           {...(elapsedObserved !== undefined ? { elapsedObserved } : {})}
+          {...(closed ? { closed } : {})}
           working={working}
         />
       </div>

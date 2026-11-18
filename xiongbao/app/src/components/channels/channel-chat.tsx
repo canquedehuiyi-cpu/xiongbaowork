@@ -81,6 +81,10 @@ import {
   createRunStageTracker,
 } from "@/lib/channels/run-stage";
 import {
+  closedVariantOf,
+  type TurnClosedVariant,
+} from "@/lib/channels/turn-closed";
+import {
   onTurnFinishedAway,
   turnFinishedAway,
 } from "@/lib/channels/turns-finished-away";
@@ -592,6 +596,13 @@ export function ChannelChat({
    * the next turn.
    */
   const [runError, setRunError] = useState<string | null>(null);
+  /**
+   * 本轮干净收尾的那一句正性的话（WP-3.2 S1b）。只在本 mount 亲眼看着一轮收尾时置位：
+   * RUN_FINISHED 到达时这一轮还在本屏跑（turnsRef > 0），或服务器接管轮刚结束（carryingOn
+   * true→false）。重放的历史置不了它——回放时 turnsRef 恒为 0——所以刷新后这一格回到无活动态，
+   * 终态行不承诺跨刷新存活（设计稿 §2.4）。新轮开始清零。出错不走这里：runError 的 Stopped 永远抢先。
+   */
+  const [closedTurn, setClosedTurn] = useState<TurnClosedVariant | null>(null);
   // Mount reads and Bot refreshes share one ordering: only the newest read owns the notice.
   const historyReadVersion = useRef(0);
   useEffect(() => {
@@ -1072,7 +1083,12 @@ export function ChannelChat({
    */
   const wasCarryingOn = useRef(false);
   useEffect(() => {
-    if (wasCarryingOn.current && !carryingOn) pullHistoryRef.current?.();
+    if (wasCarryingOn.current && !carryingOn) {
+      pullHistoryRef.current?.();
+      // 接管轮收尾也是本屏亲眼看见的收尾（审批记录 completed 才落下）：说 idle。它没有本屏的
+      // run 可听 RUN_FINISHED，这一落沿就是它的终态信号（WP-3.2 S1b）。
+      setClosedTurn("idle");
+    }
     wasCarryingOn.current = carryingOn;
   }, [carryingOn]);
 
@@ -1168,6 +1184,7 @@ export function ChannelChat({
     );
 
     setRunError(null);
+    setClosedTurn(null);
     turnFailure.current = null;
     reportedReply.current = null;
     assistantMessagesBeforeRun.current = new Set(
@@ -1357,6 +1374,8 @@ export function ChannelChat({
       setRunError(message);
     };
     const subscription = agent.subscribe?.({
+      // 新轮一开始，上一轮的终态行就撤（与 useStoppedTurn 的 onRunInitialized 清零同构）。
+      onRunInitialized: () => setClosedTurn(null),
       // Both surfaces fall back to the same sentence, from the same place, so a person who uses
       // both is not told two different things about the same silence.
       // A quota refusal also opens the guidance dialog (story K4); see `runErrorReason`.
@@ -1393,6 +1412,20 @@ export function ChannelChat({
           askedSinceLastMessage(agent.messages)
         )
           void queryClient.invalidateQueries({ queryKey: ["approvals"] });
+        /*
+         * 正性终态行（WP-3.2 S1b）：只认本屏正在跑的这一轮——RUN_FINISHED 到达时 say 的 finally
+         * 还没落地，turnsRef 仍 > 0；重放的 RUN_FINISHED 那时 turnsRef 恒为 0，置不了位，刷新后
+         * 这一格自然是空的。版本判定在 lib/channels/turn-closed.ts：交还待批 > 用户取消 > idle。
+         */
+        if (turnsRef.current > 0)
+          setClosedTurn(
+            closedVariantOf(
+              agent.messages,
+              (event as { outcome?: { type?: unknown } } | undefined)?.outcome
+                ?.type,
+              askedSinceLastMessage(agent.messages),
+            ),
+          );
         const wasOurs = awaitingReply.current;
         awaitingReply.current = false;
         /*
@@ -1961,6 +1994,7 @@ export function ChannelChat({
              * run before closing it; see server/src/channels/stall-guard.ts.
              */
             stopped={runError ?? undefined}
+            closed={closedTurn}
             /*
              * What the server says this conversation waits on: a Bot its Bot asked, a routine.
              * Hidden while this tab's own turn is going, which already shows itself and would
