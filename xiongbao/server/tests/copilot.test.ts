@@ -2128,12 +2128,9 @@ describe("what day it is", () => {
         expect(sectionOf(role ?? "", "model_and_date")).toStartWith(expected);
         expect(sectionsOf(role ?? "").at(-1)).toBe("model_and_date");
 
-        // A person's own turn (attended mode) now gets the reconciliation sentence in a run_mode section.
-        // User waiver 2026-11-18: attended mode includes run_mode section (path A)
-        expect(sectionsOf(prompt)).toContain("run_mode");
-        expect(sectionOf(prompt, "run_mode")).toContain("read your last paragraph");
-        expect(sectionsOf(role ?? "")).toContain("run_mode");
-        expect(sectionOf(role ?? "", "run_mode")).toContain("read your last paragraph");
+        // A person's own turn is watched, so neither kind of Bot is told it runs unattended.
+        expect(sectionsOf(prompt)).not.toContain("run_mode");
+        expect(sectionsOf(role ?? "")).not.toContain("run_mode");
 
         // And the plan's harness is handed the built-in prompt with it.
         expect(JSON.stringify(plan.requests[0])).toContain(
