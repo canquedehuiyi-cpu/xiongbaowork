@@ -306,15 +306,19 @@ const resolver = createActorAgentResolver({
       actorId,
       ...(initiator ? { initiator } : {}),
     }),
-  handoffForActor: (actorId, initiator, depth) => async (bot, input) => [
-    subagents.toolForRun({
-      actorId,
-      botId: bot,
-      threadId: input.threadId,
-      initiator: initiator ?? PERSON_INITIATOR,
-      ...(depth ? { depth } : {}),
-    }),
-  ],
+  handoffForActor: (actorId, initiator, depth) => {
+    const handedBackActions = new Set<string>();
+    return async (bot, input) => [
+      subagents.toolForRun({
+        actorId,
+        botId: bot,
+        threadId: input.threadId,
+        initiator: initiator ?? PERSON_INITIATOR,
+        ...(depth ? { depth } : {}),
+        handedBackActions,
+      }),
+    ];
+  },
 });
 
 /** The person's own chat turn: their message, in their conversation with the Bot. */
