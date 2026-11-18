@@ -19,14 +19,20 @@ export function sliceShard(files, shard, shardCount, label) {
 }
 
 export function assertManifestFresh(files, actual, { command, label }) {
-  if (
-    files.length !== actual.length ||
-    files.some((file, index) => file !== actual[index])
-  ) {
-    throw new Error(
-      `${label} manifest is stale. Run \`${command}\` and commit the result.`,
-    );
-  }
+  const first = files.findIndex((file, index) => file !== actual[index]);
+  if (files.length === actual.length && first === -1) return;
+  // "The manifest is stale" alone sends the reader to diff 628 lines by hand. Name the first
+  // difference and the set differences: the interesting case is a platform whose tree does not match
+  // the machine that wrote the list (a file that exists on only one of them).
+  const at = first === -1 ? Math.min(files.length, actual.length) : first;
+  const listed = new Set(files);
+  const found = new Set(actual);
+  const only = (from, other) =>
+    [...from].filter((file) => !other.has(file)).slice(0, 5);
+  const show = (items) => (items.length ? items.join(", ") : "无");
+  throw new Error(
+    `${label} manifest is stale: ${files.length} listed, ${actual.length} found; first difference at line ${at + 1} (listed ${JSON.stringify(files[at] ?? null)}, found ${JSON.stringify(actual[at] ?? null)}); only listed: ${show(only(files, found))}; only found: ${show(only(actual, listed))}. Run \`${command}\` and commit the result.`,
+  );
 }
 
 // An empty manifest is a deliberate state (a suite with no tests yet), not a parse failure: the
