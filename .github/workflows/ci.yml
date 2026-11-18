@@ -47,7 +47,9 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx biome lint --error-on-warnings --diagnostic-level=warn .
       - run: bun run typecheck
-      - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs device-release-workflow.test.mjs
+      # app-shards and server-shards are here because app-test/server-test trust their manifests: a
+      # stale list would drop test files from every run, and neither suite would notice.
+      - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs device-release-workflow.test.mjs app-shards.test.mjs server-shards.test.mjs
         working-directory: xiongbao/scripts/ci
 
   # The tests sit outside `server/tsconfig.json`, so `bun run typecheck` above says nothing about them:
@@ -186,9 +188,22 @@ jobs:
             ${{ runner.temp }}/*.log
             ${{ runner.temp }}/*.log.files.txt
 
+  # One Bun process per shard, as server-test already does. Run whole, this suite was 628 files in
+  # one process, and from roughly 300 files in `app/tests/workbench-frame-routes.test.tsx` stopped
+  # mounting the workbench frame: its seven route cases each waited the test's own 25s LOAD and then
+  # failed on a DOM that held only the settings page's own shell. The same file alone is 8/8 green in
+  # about a second, and the 200 files ahead of it in that run order were green too, so the trigger is
+  # how much ran before it in the process, not the file or the code under test. The split is a
+  # committed list (scripts/ci/app-tests.list.txt, rewritten with
+  # `bun scripts/ci/app-shards.mjs --write`): a new test file without a manifest update fails the job
+  # rather than silently never running, and a shard is reproducible from the manifest alone.
   app-test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -199,19 +214,28 @@ jobs:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bash scripts/ci/prepare-baseline.sh
-      - name: Baseline app tests
+      - name: Baseline app tests (the frozen tree's own tenant package)
         continue-on-error: true
-        run: bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" app "$RUNNER_TEMP/base.log"
-      - name: Generate configuration and run app tests
-        run: bash scripts/ci/run-tests.sh "$PWD" app "$RUNNER_TEMP/head.log"
+        # The frozen baseline predates examples/xiongbao, so the job-level TENANT_PACKAGE_DIR points
+        # at nothing there: `generate:app-config` exited 1, `set -e` stopped the script, and base.log
+        # stayed at about 1 KB with no `Ran … tests` line — the comparison section was empty on every
+        # run since. That commit's own CI used ../examples/qoderwake, which the frozen tree still
+        # carries, so the baseline is generated the way it was generated then.
+        env:
+          TENANT_PACKAGE_DIR: ../examples/qoderwake
+        run: bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" app "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
+      - name: Generate configuration and run app tests (this shard)
+        run: bash scripts/ci/run-tests.sh "$PWD" app "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
       - name: Failure name multiset difference and zero-fail gate
         if: always()
-        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log" app
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log" "app shard ${{ matrix.shard }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: app-logs
-          path: ${{ runner.temp }}/*.log
+          name: app-${{ matrix.shard }}-logs
+          path: |
+            ${{ runner.temp }}/*.log
+            ${{ runner.temp }}/*.log.files.txt
 
   # Scan what the customer is given (spec 5.1): the built web app, the recorder extension and the
   # runner sidecar are checked against the word lists in xiongbao/app/tests/brand-artifacts, and the

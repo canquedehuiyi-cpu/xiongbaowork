@@ -1,8 +1,10 @@
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { assertManifestFresh, sliceShard, splitManifest } from "./sharding.mjs";
 
 export const SHARD_COUNT = 6;
+const MANIFEST = "scripts/ci/server-tests.list.txt";
 const defaultRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 export function discoverTests(root) {
@@ -13,33 +15,16 @@ export function discoverTests(root) {
 }
 
 export function readManifest(root) {
-  const manifest = readFileSync(
-    join(root, "scripts/ci/server-tests.list.txt"),
-    "utf8",
-  )
-    .trimEnd()
-    .split(/\r?\n/);
-  const actual = discoverTests(root);
-  if (
-    manifest.length !== actual.length ||
-    manifest.some((file, i) => file !== actual[i])
-  ) {
-    throw new Error(
-      "Server test manifest is stale. Run bun scripts/ci/server-shards.mjs --write and commit server-tests.list.txt.",
-    );
-  }
-  return manifest;
+  const files = splitManifest(readFileSync(join(root, MANIFEST), "utf8"));
+  assertManifestFresh(files, discoverTests(root), {
+    command: "bun scripts/ci/server-shards.mjs --write",
+    label: "Server test",
+  });
+  return files;
 }
 
 export function shardFiles(files, shard) {
-  if (!Number.isInteger(shard) || shard < 1 || shard > SHARD_COUNT) {
-    throw new RangeError("Server shard must be an integer from 1 to 6.");
-  }
-  // Contiguous line ranges, independent of filename byte lengths and split implementations.
-  return files.slice(
-    Math.floor(((shard - 1) * files.length) / SHARD_COUNT),
-    Math.floor((shard * files.length) / SHARD_COUNT),
-  );
+  return sliceShard(files, shard, SHARD_COUNT, "Server");
 }
 
 if (
@@ -50,10 +35,7 @@ if (
   const root = rootArgument ? resolve(rootArgument) : defaultRoot;
   if (action === "--write") {
     const files = discoverTests(root);
-    writeFileSync(
-      join(root, "scripts/ci/server-tests.list.txt"),
-      `${files.join("\n")}\n`,
-    );
+    writeFileSync(join(root, MANIFEST), `${files.join("\n")}\n`);
     console.log(`Recorded ${files.length} server test files.`);
   } else {
     if (!/^[1-6]$/.test(action ?? "")) {
