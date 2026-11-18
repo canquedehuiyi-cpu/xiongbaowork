@@ -3,6 +3,7 @@ import { humanise, readToolName } from "@openbot/shared/tool-name";
 import { useQuery } from "@tanstack/react-query";
 import { useContext, useState } from "react";
 import { TurnInFlightContext } from "@/components/gallery/streaming";
+import { spentOf } from "@/lib/spent-of";
 import { subagentStepsQueryOptions } from "@/lib/subagents/queries";
 import { toVisibleChatItems, type VisibleChatItem } from "./chat-messages";
 import {
@@ -179,15 +180,6 @@ function SubtaskStatus({
   return steps || spent ? (
     <span className="shrink-0 text-muted-foreground">{withSpent(steps)}</span>
   ) : null;
-}
-
-/** 一次运行跑了多久：不足一秒给到毫秒，不足一分钟给到 0.1 秒，再长按分和秒说。 */
-function spentOf(ms: number): string {
-  if (ms < 1_000) return `${ms} 毫秒`;
-  if (ms < 60_000) return `${(ms / 1_000).toFixed(1)} 秒`;
-  const minutes = Math.floor(ms / 60_000);
-  const seconds = Math.round((ms % 60_000) / 1_000);
-  return seconds ? `${minutes} 分 ${seconds} 秒` : `${minutes} 分钟`;
 }
 
 /**

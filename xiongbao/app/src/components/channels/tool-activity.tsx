@@ -59,6 +59,7 @@ import {
   UNOFFERED_TOOL_SENTENCE,
   unofferedTool,
 } from "@/lib/plugins/tool-result";
+import { elapsedSuffix } from "@/lib/spent-of";
 import { readTeamBotConsent } from "@/lib/team-bots";
 import { isStaffingProposalTool } from "../../../../shared/staffing-proposal";
 import {
@@ -1036,6 +1037,8 @@ export function ToolActivity({
   group,
   active,
   stage,
+  elapsed,
+  observed,
 }: {
   group: ToolGroup;
   /** This is the newest row of a turn still in flight, so a step without a result is running. */
@@ -1049,6 +1052,13 @@ export function ToolActivity({
    * 少一行，那一格照旧，不会出现空着的一格。
    */
   stage?: RunStage | null;
+  /**
+   * 这一轮从被看见起跑了多少毫秒（WP-3.2 S1a）。只给正在跑的最后一行，历史行不给：
+   * 秒针每秒走一格，不能拖着整段历史一起重画（见 chat-transcript.tsx 的 sameToolRow）。
+   */
+  elapsed?: number;
+  /** 起点是半路看见的（没赶上 RUN_STARTED），措辞用「已进行」而不是「已跑」。 */
+  observed?: boolean;
 }) {
   const folders = useContext(FolderNamesContext);
   const steps = group.steps.map(stepDetailsIn(folders));
@@ -1060,6 +1070,9 @@ export function ToolActivity({
   const issues = steps.filter((step) => step.failed || step.refused).length;
   const kinds = [...new Set(steps.map((step) => step.kind))];
   const stageLine = active && stage === "tool" ? stageWords(stage) : undefined;
+  // 工具一跑就是几十秒，等模型那一格这时不画（见 chat-transcript.tsx 的 waitingOnTheModel），
+  // 秒数挂在这条阶段行上，长工具窗口才不会一片空白。原有文字一个字不动，秒数是旁边的兄弟节点。
+  const suffix = elapsedSuffix(elapsed, observed);
   // The folded line draws its own steps, so a waiting approval gets its card beside it, not inside.
   return (
     <>
@@ -1071,6 +1084,9 @@ export function ToolActivity({
           role="status"
         >
           {stageLine}
+          {suffix ? (
+            <span className="tabular-nums opacity-70">{` · ${suffix}`}</span>
+          ) : null}
         </p>
       ) : null}
       <ToolLine

@@ -120,6 +120,7 @@ import {
   receiveCompactionOutcome,
   sidebarQueryOptions,
 } from "@/lib/threads/sidebar";
+import { useNow } from "@/lib/use-now";
 import {
   askChannelAgent,
   messageText,
@@ -623,6 +624,11 @@ export function ChannelChat({
     acpTracker.cards,
   );
   /*
+   * 这一轮还有几轮问答没落地（WP-3.2 S1a 的按轮累计）。`say()` 在自增/自减 `turnsRef` 的地方同步这里；
+   * 单独一个 ref 是因为阶段计时器建在 `turnsRef` 声明之前，闭包不能引用后声明的绑定。
+   */
+  const turnsInFlightForStage = useRef(0);
+  /*
    * 内置员工这一轮走到哪一段（阶段进度）：段是从这一轮本来就有的事件里推出来的（`RUN_STARTED`／
    * `TOOL_CALL_START`／`TOOL_CALL_RESULT`／`TEXT_MESSAGE_START`／收尾，推法见
    * `lib/channels/run-stage.ts`），这里只记现在这一段。一个代理一份，换了对话就重新记。和上面的外部员工
@@ -636,7 +642,13 @@ export function ChannelChat({
     tracker: RunStageTracker;
   } | null>(null);
   if (stageTrackerRef.current?.agent !== agent)
-    stageTrackerRef.current = { agent, tracker: createRunStageTracker() };
+    stageTrackerRef.current = {
+      agent,
+      tracker: createRunStageTracker(
+        () => Date.now(),
+        () => turnsInFlightForStage.current,
+      ),
+    };
   const stageTracker = stageTrackerRef.current.tracker;
   useEffect(() => {
     const subscription = agent.subscribe?.(stageTracker.subscriber);
@@ -647,6 +659,23 @@ export function ChannelChat({
     stageTracker.stage,
     stageTracker.stage,
   );
+  /*
+   * 这一轮从被看见起跑了多久（WP-3.2 S1a）：起点由计时器记（RUN_STARTED 或半路看见的第一个事件），
+   * 这里只订阅起点、每秒走一格秒针。没轮在跑时起点是 null，秒针不走，回放的历史一个数都不显。
+   */
+  const runStartedAt = useSyncExternalStore(
+    stageTracker.listen,
+    stageTracker.startedAt,
+    stageTracker.startedAt,
+  );
+  const runObserved = useSyncExternalStore(
+    stageTracker.listen,
+    stageTracker.observedStart,
+    stageTracker.observedStart,
+  );
+  const now = useNow(runStartedAt !== null);
+  const runElapsedMs =
+    runStartedAt === null ? undefined : Math.max(0, now - runStartedAt);
   /** 已经按过「重新派」的中断卡（按卡的 `key`）。 */
   const [acpResent, setAcpResent] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -1273,6 +1302,7 @@ export function ChannelChat({
     }
 
     turnsRef.current += 1;
+    turnsInFlightForStage.current = turnsRef.current;
     setTurnsInFlight(turnsRef.current);
     if (turnsRef.current === 1) {
       void setChannelBusy({ channelId: channel.id, busy: true });
@@ -1296,11 +1326,14 @@ export function ChannelChat({
       return reply;
     } finally {
       turnsRef.current -= 1;
+      turnsInFlightForStage.current = turnsRef.current;
       setTurnsInFlight(turnsRef.current);
       // Sent from here rather than from an effect on `turnsInFlight`: this runs after unmount, that
       // does not, and the last turn out is what takes the roster's working indicator down.
       if (turnsRef.current === 0) {
         void setChannelBusy({ channelId: channel.id, busy: false });
+        // 最后一轮落地：秒表停在这儿而不是最后一个 RUN_FINISHED——那时这轮还没走完（WP-3.2 S1a）。
+        stageTrackerRef.current?.tracker.turnClosed();
       }
       // And the conversation open now, if the person came back, reads what this turn stored.
       if (!onScreen.current) turnFinishedAway(channel.id);
@@ -1563,6 +1596,11 @@ export function ChannelChat({
             compaction={compaction}
             // 这一轮走到哪一段：工具段画在活跃那一步的上面，回答段顶掉「思考中」那一格的话。
             stage={runStage}
+            // 这一轮从被看见起跑了多久（WP-3.2 S1a）：没轮在跑时是 undefined，那一格照旧一个字不多。
+            {...(runElapsedMs !== undefined ? { elapsedMs: runElapsedMs } : {})}
+            {...(runElapsedMs !== undefined
+              ? { elapsedObserved: runObserved }
+              : {})}
             /*
              * 跟在消息下面的卡走同一套附注：外部员工的进度、改动、中断卡在前，交付闭环的接活回执、延期申请、
              * 交付卡、被挡回在后。

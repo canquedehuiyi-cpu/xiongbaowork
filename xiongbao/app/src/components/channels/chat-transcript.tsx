@@ -114,6 +114,7 @@ import {
   unofferedTool,
 } from "@/lib/plugins/tool-result";
 import { useResultVisibility } from "@/lib/product-telemetry";
+import { elapsedSuffix } from "@/lib/spent-of";
 import { readTeamBotConsent } from "@/lib/team-bots";
 import { cn } from "@/lib/utils";
 import { VOICE_CHAT_ACTIVITY, type VoiceChatEntry } from "@/lib/voice/archive";
@@ -335,6 +336,13 @@ type ChatTranscriptProps = {
    * 工具行不多说一行，「思考中」那一格也不变，不会因为这里推不出段而空出一格。
    */
   stage?: RunStage | null;
+  /**
+   * 这一轮从被看见起跑了多少毫秒（WP-3.2 S1a，时钟见 `lib/channels/run-stage.ts`）。只有对话页给，
+   * 且只在有轮在跑时给；不足一秒、回放存档、别的通道不给——那一格照旧一个字不多。
+   */
+  elapsedMs?: number;
+  /** 起点是半路看见的（没赶上 RUN_STARTED），措辞用「已进行」而不是「已跑」。 */
+  elapsedObserved?: boolean;
 };
 
 /** The employee whose reply is on its way: the name it is known by, and the id its face is drawn from. */
@@ -447,9 +455,29 @@ function RestoringTranscript() {
  * That is the fallback, and it is why the words are a parameter rather than a second component:
  * nothing may be blank where 思考中 used to be.
  */
-function Thinking({ stage, typist }: { stage?: string; typist?: Typist }) {
+function Thinking({
+  stage,
+  typist,
+  elapsed,
+  observed,
+}: {
+  stage?: string;
+  typist?: Typist;
+  elapsed?: number;
+  observed?: boolean;
+}) {
   const workbench = useSkinId() === "xiongbao";
-  if (workbench && typist) return <Typing stage={stage} typist={typist} />;
+  if (workbench && typist)
+    return (
+      <Typing
+        elapsed={elapsed}
+        observed={observed}
+        stage={stage}
+        typist={typist}
+      />
+    );
+  // 秒数是旁边一个兄弟节点，原有文字一个字不动：既保住读屏措辞，也保住既有断言的精确匹配。
+  const suffix = elapsedSuffix(elapsed, observed);
   return (
     <p
       className="tool-line-running text-muted-foreground text-sm"
@@ -458,6 +486,9 @@ function Thinking({ stage, typist }: { stage?: string; typist?: Typist }) {
       role="status"
     >
       {stage ?? "思考中"}
+      {suffix ? (
+        <span className="tabular-nums opacity-70">{` · ${suffix}`}</span>
+      ) : null}
     </p>
   );
 }
@@ -471,7 +502,18 @@ function Thinking({ stage, typist }: { stage?: string; typist?: Typist }) {
  * `stage` changes only the words after the name, and only while the run's stream says a stage this
  * slot has not said before (见上)。没有它，这一行和 Task 9 交付时一个字都不差。
  */
-function Typing({ stage, typist }: { stage?: string; typist: Typist }) {
+function Typing({
+  stage,
+  typist,
+  elapsed,
+  observed,
+}: {
+  stage?: string;
+  typist: Typist;
+  elapsed?: number;
+  observed?: boolean;
+}) {
+  const suffix = elapsedSuffix(elapsed, observed);
   // A `<div>`, not a `<p>`: the avatar inside is a `<div>`, which a paragraph may not hold.
   return (
     <div
@@ -483,6 +525,9 @@ function Typing({ stage, typist }: { stage?: string; typist: Typist }) {
         <ChannelAvatar participantIds={[typist.agentId]} size={20} />
       </span>
       <span>{`${typist.name} ${stage ?? "正在输入"}`}</span>
+      {suffix ? (
+        <span className="tabular-nums opacity-70">{` · ${suffix}`}</span>
+      ) : null}
       <span aria-hidden="true" className="flex items-center gap-[3px]">
         {TYPING_DOTS.map((delay) => (
           <i
@@ -1866,6 +1911,10 @@ type ToolRowProps = {
   spokeAfter: boolean;
   /** 这一轮走到哪一段，只有正在跑的那一行会说；见 `ChatTranscriptProps.stage`。 */
   stage?: RunStage | null;
+  /** 这一轮跑了多少毫秒，只给正在跑的最后一行；见 `ChatTranscriptProps.elapsedMs`。 */
+  elapsed?: number;
+  /** 起点是半路看见的，措辞用「已进行」；见 `ChatTranscriptProps.elapsedObserved`。 */
+  observed?: boolean;
 };
 
 /**
@@ -1884,6 +1933,9 @@ export function sameToolRow(a: ToolRowProps, b: ToolRowProps): boolean {
     a.spokeAfter === b.spokeAfter &&
     // 阶段换了，正在跑的那一行要多说的那一行字也就换了：不参与比较就永远停在第一次说的那句。
     a.stage === b.stage &&
+    // 秒数同理：秒针走一格，正在跑的那一行要跟着走；历史行拿不到秒数（undefined === undefined），照旧不重画。
+    a.elapsed === b.elapsed &&
+    a.observed === b.observed &&
     a.steps.length === b.steps.length &&
     a.steps.every((step, index) => {
       const other = b.steps[index];
@@ -1906,6 +1958,8 @@ const ToolRow = memo(function ToolRow({
   latest,
   spokeAfter,
   stage,
+  elapsed,
+  observed,
 }: ToolRowProps) {
   const [only] = steps;
   return (
@@ -1929,7 +1983,9 @@ const ToolRow = memo(function ToolRow({
         ) : (
           <ToolActivity
             active={active}
+            elapsed={elapsed}
             group={{ kind: "tools", id, steps }}
+            observed={observed}
             stage={stage}
           />
         )}
@@ -2346,6 +2402,8 @@ export function ChatTranscript({
   working,
   typist,
   stage,
+  elapsedMs,
+  elapsedObserved,
 }: ChatTranscriptProps) {
   const isDrawn = useDrawnTool();
   /**
@@ -2758,9 +2816,12 @@ export function ChatTranscript({
       >
         <ToolRow
           active={busy && index === items.length - 1}
+          // 秒数只给正在跑的最后一行：秒针每秒走一格，不能拖着整段历史一起重画（见 sameToolRow）。
+          elapsed={busy && index === items.length - 1 ? elapsedMs : undefined}
           id={item.id}
           inFlight={busy && index >= turnStart}
           latest={index >= latestIndex}
+          observed={elapsedObserved}
           spokeAfter={lastBotWords > index}
           stage={stage}
           steps={item.kind === "tools" ? item.steps : [item]}
@@ -2926,7 +2987,12 @@ export function ChatTranscript({
                     {stopped ? (
                       <Stopped reason={stopped} />
                     ) : waitingOnTheModel || stageLine ? (
-                      <Thinking stage={stageLine} typist={typist} />
+                      <Thinking
+                        elapsed={elapsedMs}
+                        observed={elapsedObserved}
+                        stage={stageLine}
+                        typist={typist}
+                      />
                     ) : null}
                     {working}
                     {/* 只在说了可能有外部员工的对话里（`acpApprovals`，对话页总是给）：别处画转录的不读审批收件箱。 */}

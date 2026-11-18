@@ -23,6 +23,12 @@ import { EventType } from "@ag-ui/core";
  *
  * 推不出段的时候——这轮之前的旧存档、没走这条流的通道——`stage()` 一直是 null，对话照旧画「思考中」／
  * 「<员工名> 正在输入」，不会因为这里没东西而空出一格。
+ *
+ * 这一轮跑了多久也记在这儿（WP-3.2 S1a）：起点是**观测到**本轮开始的那一刻（`RUN_STARTED`，或半路
+ * 接上时首个换段事件），不是服务器上的真实开跑时刻——回放不带逐事件时间戳，拿存档时间冒充起点就是
+ * 造假。一轮里多个 run（浏览器工具间隙、接管轮）不重置起点：轮还在飞（调用方给的 `turnsInFlight`）
+ * 就留着，轮归零（收尾时轮已归零，或调用方 `turnClosed()`）才清。半路接上的轮起点只是观测时刻，
+ * `observedStart()` 为 true，说话的人据此加「已进行」限定词。时钟注入，可测。
  */
 
 /** 一轮的哪一段。今天是 app 内部的说法：服务端不再报阶段事件，改这一份不必再去改别处。 */
@@ -74,6 +80,15 @@ export type RunStageTracker = {
    * 屏幕上说话的还是 `stage()`，这一条不驱动任何文案。
    */
   seq(): number;
+  /**
+   * 这一轮从哪一刻开始被观测到（注入时钟的毫秒值）；没有在飞的轮时为 null。
+   * 给 `useSyncExternalStore` 用，是个原始值。
+   */
+  startedAt(): number | null;
+  /** 到 `now` 为止这一轮被观测到跑了多久；没有在飞的轮时为 null。时钟回拨不报负数。 */
+  elapsedAt(now: number): number | null;
+  /** 起点是不是半路接上时观测的（换段事件先于 `RUN_STARTED`）：说话要加「已进行」限定词。 */
+  observedStart(): boolean;
   /** 段变了时通知（`useSyncExternalStore`）。 */
   listen(listener: () => void): () => void;
   /** 喂一个事件：`subscriber` 收到的、测试造的、重放补的都走这里，只有一条推法。 */
@@ -82,6 +97,11 @@ export type RunStageTracker = {
   started(): void;
   /** 一轮收尾（正常或出错）：这一段跟着结束，在飞的工具调用一并忘掉，不带给下一轮。 */
   ended(): void;
+  /**
+   * 调用方的一轮彻底结束（`say` 的 finally，轮计数归零）：没有在飞的 run 就把计时起点清掉。
+   * 收尾事件先于轮计数归零到达（浏览器工具间隙的最后一个 run 也是），所以起点由这里兜底清。
+   */
+  turnClosed(): void;
 };
 
 /** 工具事件上的调用号；读不出就是 null（不计、也不删）。 */
@@ -90,7 +110,10 @@ const callIdOf = (event: StageEvent): string | null =>
     ? event.toolCallId
     : null;
 
-export function createRunStageTracker(): RunStageTracker {
+export function createRunStageTracker(
+  clock: () => number = () => Date.now(),
+  turnsInFlight: () => number = () => 0,
+): RunStageTracker {
   /** 有没有一轮正在跑（`RUN_STARTED` 到收尾之间）。 */
   let open = false;
   /** 正在跑的这一轮在哪一段。 */
@@ -102,6 +125,12 @@ export function createRunStageTracker(): RunStageTracker {
   /** 开了还没答完的工具调用号：空了才算回到模型手上。 */
   const inFlight = new Set<string>();
   const listeners = new Set<() => void>();
+  /** 这一轮被观测到的起点（注入时钟的毫秒值）；轮归零清。 */
+  let since: number | null = null;
+  /** 起点是不是半路接上时观测的（换段事件先于 `RUN_STARTED`）。 */
+  let observed = false;
+  /** 开着几个 run：一轮可能多个 run（浏览器工具间隙），归零且轮已归零才清起点。 */
+  let runsOpen = 0;
 
   const notify = () => {
     for (const listener of listeners) listener();
@@ -109,6 +138,11 @@ export function createRunStageTracker(): RunStageTracker {
 
   /** 换段才说一句：同一段再遇到（哪怕又开了一个工具调用）不加条数、也不重画。 */
   const mark = (stage: RunStage) => {
+    // 半路接上的流：还没听到这一轮的开头就先看到换段事件，起点记观测时刻，说话加限定词。
+    if (since === null) {
+      since = clock();
+      observed = true;
+    }
     if (stage === current || (!open && pending === stage)) return;
     marks = open ? marks + 1 : 1;
     if (open) current = stage;
@@ -117,6 +151,11 @@ export function createRunStageTracker(): RunStageTracker {
   };
 
   const started = () => {
+    runsOpen += 1;
+    if (since === null) {
+      since = clock();
+      observed = false;
+    }
     open = true;
     if (pending !== null) {
       // 半路接上的流：先看到的那一段就是这一轮的第一句，条数按一条算。
@@ -131,12 +170,29 @@ export function createRunStageTracker(): RunStageTracker {
   };
 
   const ended = () => {
-    if (!open && current === null && pending === null) return;
+    runsOpen = Math.max(0, runsOpen - 1);
+    // 轮还在飞（浏览器工具间隙、接管轮）：起点留着，下一个 run 接着累计，不重置。
+    const clockDone = runsOpen === 0 && turnsInFlight() === 0 && since !== null;
+    if (clockDone) {
+      since = null;
+      observed = false;
+    }
+    if (!open && current === null && pending === null) {
+      if (clockDone) notify();
+      return;
+    }
     open = false;
     current = null;
     pending = null;
     marks = 0;
     inFlight.clear();
+    notify();
+  };
+
+  const turnClosed = () => {
+    if (runsOpen > 0 || since === null) return;
+    since = null;
+    observed = false;
     notify();
   };
 
@@ -182,6 +238,9 @@ export function createRunStageTracker(): RunStageTracker {
     },
     stage: () => current,
     seq: () => marks,
+    startedAt: () => since,
+    elapsedAt: (now) => (since === null ? null : Math.max(0, now - since)),
+    observedStart: () => observed,
     listen(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -189,5 +248,6 @@ export function createRunStageTracker(): RunStageTracker {
     feed,
     started,
     ended,
+    turnClosed,
   };
 }

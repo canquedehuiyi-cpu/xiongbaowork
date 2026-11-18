@@ -460,6 +460,8 @@ tests/routines-conversation-title.test.tsx
 tests/routines-discovery.test.tsx
 tests/routines-no-worker.test.ts
 tests/routines-title.test.tsx
+tests/run-elapsed-line.test.tsx
+tests/run-elapsed.test.ts
 tests/running-step-shimmer.test.tsx
 tests/save-bot-retired.test.tsx
 tests/screen-connection.test.ts
