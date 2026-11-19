@@ -67,6 +67,7 @@ afterAll(async () => {
       .delete(generatedMedia)
       .where(sql`${generatedMedia.tenantId} IN (${owner}, ${stranger})`),
   );
+  await database.$client.end();
 });
 
 describe("generated_media", () => {
