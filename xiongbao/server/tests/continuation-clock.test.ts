@@ -15,16 +15,21 @@ type Options = Parameters<typeof createTurnRunner>[0];
 
 function harness(config: { serverComputerTools: boolean; clockMs?: number }) {
   const built: {
-    timeoutMs: number | undefined;
-    segments: number | undefined;
+    /** Absent when the runner was built with the default clock. */
+    timeoutMs?: number;
+    segments?: number;
     name: string;
   }[] = [];
   const ran: string[] = [];
   const make = ((options: Options) => {
     const name = built.length === 0 ? "light" : "long";
     built.push({
-      timeoutMs: options.turnTimeoutMs,
-      segments: options.maxToolSegments,
+      ...(options.turnTimeoutMs === undefined
+        ? {}
+        : { timeoutMs: options.turnTimeoutMs }),
+      ...(options.maxToolSegments === undefined
+        ? {}
+        : { segments: options.maxToolSegments }),
       name,
     });
     const runner: TurnRunner = async () => {
@@ -75,7 +80,7 @@ describe("the clock an approval's continuation runs under", () => {
     await h.continuing({ computerTools: "server" });
     expect(h.built[1]?.timeoutMs).toBe(40);
     // The light runner is untouched by it.
-    expect(h.built[0]?.timeoutMs).toBeUndefined();
+    expect(h.built[0]).not.toHaveProperty("timeoutMs");
   });
 
   test("every other continuation keeps the light clock", async () => {
@@ -91,7 +96,7 @@ describe("the clock an approval's continuation runs under", () => {
       instruction: "go",
     });
     expect(h.ran).toEqual(["light", "light", "light", "light"]);
-    expect(h.built[0]?.timeoutMs).toBeUndefined();
+    expect(h.built[0]).not.toHaveProperty("timeoutMs");
   });
 
   test("with the deployment's switch off, a declaration changes nothing", async () => {

@@ -2,7 +2,7 @@
  * Restart recovery for a conversation's turn: the turn a dead process was running is marked
  * interrupted, and the conversation says so (期九·二).
  *
- * A turn writes its events as it goes (`threads/run-event-writer.ts`), with `thread_runs.status =
+ * A turn writes its events as it goes (`threads/run-event-writer.ts`), with `thread_run_liveness.status =
  * 'running'` and a heartbeat that every write moves forward. A process that stops leaves the row at
  * `running` with a heartbeat that never moves again. This sweep finds such rows, on the database's
  * clock, and for each one:
@@ -32,7 +32,12 @@
 import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
 import { and, asc, eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { threadRunEvents, threadRuns, threads } from "../db/schema";
+import {
+  threadRunEvents,
+  threadRunLiveness,
+  threadRuns,
+  threads,
+} from "../db/schema";
 import { runAsTenant } from "../tenant/context";
 import { openTracker } from "../threads/open-tracker";
 import { FLUSH_EVERY_MS } from "../threads/run-event-writer";
@@ -209,17 +214,18 @@ export function interruptionEvents(
 /** Mark the turns whose process is gone as interrupted. Returns how many were closed. */
 export async function interruptStaleRuns(deps: InterruptDeps): Promise<number> {
   const staleMs = deps.staleMs ?? RUN_STALE_MS;
-  const stale = sql`coalesce(${threadRuns.heartbeatAt}, ${threadRuns.createdAt}) < now() - (${staleMs} * interval '1 millisecond')`;
+  const stale = sql`${threadRunLiveness.heartbeatAt} < now() - (${staleMs} * interval '1 millisecond')`;
   // Found in the platform's frame, which reads every tenant's rows; each is written in its own.
   const found = await runAsTenant("platform", () =>
     deps.database
       .select({
-        id: threadRuns.id,
-        tenantId: threadRuns.tenantId,
+        id: threadRunLiveness.runId,
+        tenantId: threadRunLiveness.tenantId,
         threadId: threadRuns.threadId,
       })
-      .from(threadRuns)
-      .where(and(eq(threadRuns.status, "running"), stale)),
+      .from(threadRunLiveness)
+      .innerJoin(threadRuns, eq(threadRuns.id, threadRunLiveness.runId))
+      .where(and(eq(threadRunLiveness.status, "running"), stale)),
   );
   let closed = 0;
   for (const run of found) {
@@ -231,16 +237,16 @@ export async function interruptStaleRuns(deps: InterruptDeps): Promise<number> {
       const done = await runAsTenant(run.tenantId, () =>
         deps.database.transaction(async (transaction) => {
           const [claimed] = await transaction
-            .update(threadRuns)
+            .update(threadRunLiveness)
             .set({ status: "interrupted" })
             .where(
               and(
-                eq(threadRuns.id, run.id),
-                eq(threadRuns.status, "running"),
+                eq(threadRunLiveness.runId, run.id),
+                eq(threadRunLiveness.status, "running"),
                 stale,
               ),
             )
-            .returning({ id: threadRuns.id });
+            .returning({ id: threadRunLiveness.runId });
           // Another replica closed it first, or its process came back and wrote again.
           if (!claimed) return false;
           const rows = await transaction

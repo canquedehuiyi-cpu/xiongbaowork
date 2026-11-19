@@ -10,7 +10,13 @@ import {
 import { asc, eq, sql } from "drizzle-orm";
 import { type Observable, ReplaySubject } from "rxjs";
 import { createDatabase } from "../src/db/client";
-import { threadRunEvents, threadRuns, threads, users } from "../src/db/schema";
+import {
+  threadRunEvents,
+  threadRunLiveness,
+  threadRuns,
+  threads,
+  users,
+} from "../src/db/schema";
 import {
   INTERRUPTED_CALL,
   INTERRUPTED_NOTICE,
@@ -80,14 +86,15 @@ const headerOf = async (tenant: string, runId: string) => {
   const [row] = await runAsTenant(tenant, () =>
     database
       .select({
-        status: threadRuns.status,
+        status: threadRunLiveness.status,
         eventCount: threadRuns.eventCount,
-        heartbeatAt: threadRuns.heartbeatAt,
       })
       .from(threadRuns)
+      .leftJoin(threadRunLiveness, eq(threadRunLiveness.runId, threadRuns.id))
       .where(eq(threadRuns.id, runId)),
   );
-  return row;
+  // A turn with no row of liveness is a finished one.
+  return row && { ...row, status: row.status ?? "finished" };
 };
 
 /** An agent whose stream is whatever the test pushes into it. */
@@ -583,9 +590,9 @@ describe("a turn the process died in", () => {
     // Ten minutes without a beat, and it is dead.
     await runAsTenant(tenant, () =>
       database
-        .update(threadRuns)
+        .update(threadRunLiveness)
         .set({ heartbeatAt: sql`now() - interval '10 minutes'` })
-        .where(eq(threadRuns.id, runId)),
+        .where(eq(threadRunLiveness.runId, runId)),
     );
     await interruptStaleRuns({ database, staleMs: 60_000 });
     expect((await headerOf(tenant, runId))?.status).toBe("interrupted");

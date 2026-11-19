@@ -32,10 +32,10 @@ lease is claimed again.
 A person's turn in a chat can run for twenty-five minutes, so it is written to the database while it
 runs rather than once at the end.
 
-**While it runs.** `thread_runs.status` is `running`. The thread runner writes the turn's events to
+**While it runs.** The turn has a row in `thread_run_liveness` (migration 0232) with `status = running`. The thread runner writes the turn's events to
 `thread_run_events` every 200 events or every 5 seconds, whichever comes first
 (`FLUSH_EVERY_EVENTS`, `FLUSH_EVERY_MS` in `threads/run-event-writer.ts`), and each write moves
-`thread_runs.heartbeat_at` forward. The end writes only what is left and sets `finished`. The rows
+`heartbeat_at` forward; a turn with no such row is finished. The end writes only what is left and sets `finished`. The rows
 and their `seq` are exactly what one write at the end stored: the joining of consecutive text and
 reasoning deltas is done by one compactor that holds back only the delta still being joined, so that
 last delta of a turn the process dies in is the one thing not on disk.

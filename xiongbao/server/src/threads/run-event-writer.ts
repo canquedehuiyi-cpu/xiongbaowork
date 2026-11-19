@@ -1,7 +1,12 @@
 import type { BaseEvent } from "@ag-ui/client";
 import { and, eq } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { threadRunEvents, threadRuns, threads } from "../db/schema";
+import {
+  threadRunEvents,
+  threadRunLiveness,
+  threadRuns,
+  threads,
+} from "../db/schema";
 import { runAsTenant } from "../tenant/context";
 import { createRunEventCompactor } from "./run-event-compaction";
 
@@ -44,6 +49,8 @@ export class RunEventWriter {
   /** How many rows are in the database, which is the next row's `seq`. */
   private written = 0;
   private headed = false;
+  /** Whether the turn has a row in `thread_run_liveness`: it was written to while it ran. */
+  private live = false;
   private pushed = 0;
   private chain: Promise<unknown> = Promise.resolve();
 
@@ -135,10 +142,16 @@ export class RunEventWriter {
               threadId,
               agentId,
               eventCount: 0,
-              status: final ? "finished" : "running",
-              heartbeatAt: new Date(),
             })
             .onConflictDoNothing();
+          // A turn written in one go is finished the moment it exists, which is what no row says.
+          if (!final) {
+            await this.database
+              .insert(threadRunLiveness)
+              .values({ runId, status: "running" })
+              .onConflictDoNothing();
+            this.live = true;
+          }
           this.headed = true;
         }
         /*
@@ -171,18 +184,22 @@ export class RunEventWriter {
                 .onConflictDoNothing();
             await transaction
               .update(threadRuns)
-              .set({
-                eventCount: first + rows.length,
-                heartbeatAt: new Date(),
-                ...(final ? { status: "finished" } : {}),
-              })
-              .where(
-                and(
-                  eq(threadRuns.id, runId),
-                  // A turn the sweep already called interrupted is not moved back to running.
-                  ...(final ? [] : [eq(threadRuns.status, "running")]),
-                ),
-              );
+              .set({ eventCount: first + rows.length })
+              .where(eq(threadRuns.id, runId));
+            if (this.live)
+              await transaction
+                .update(threadRunLiveness)
+                .set({
+                  heartbeatAt: new Date(),
+                  ...(final ? { status: "finished" } : {}),
+                })
+                .where(
+                  and(
+                    eq(threadRunLiveness.runId, runId),
+                    // A turn the sweep already called interrupted is not moved back to running.
+                    ...(final ? [] : [eq(threadRunLiveness.status, "running")]),
+                  ),
+                );
           });
           this.written = first + rows.length;
         } catch (error) {

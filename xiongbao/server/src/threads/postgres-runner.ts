@@ -32,7 +32,12 @@ import {
   takeLocalRunTicket,
 } from "../approvals/continuation-target-local";
 import type { Database } from "../db/client";
-import { threadRunEvents, threadRuns, threads } from "../db/schema";
+import {
+  threadRunEvents,
+  threadRunLiveness,
+  threadRuns,
+  threads,
+} from "../db/schema";
 import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { QuotaService } from "../quota/limits";
 import {
@@ -1145,10 +1150,12 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
           threadId: threadRuns.threadId,
           agentId: threadRuns.agentId,
           eventCount: threadRuns.eventCount,
-          status: threadRuns.status,
+          // No row in `thread_run_liveness` is a finished turn.
+          status: threadRunLiveness.status,
           createdAt: threadRuns.createdAt,
         })
         .from(threadRuns)
+        .leftJoin(threadRunLiveness, eq(threadRunLiveness.runId, threadRuns.id))
         .where(inArray(threadRuns.threadId, ids))
         .orderBy(asc(threadRuns.createdAt), asc(threadRuns.id));
       const eventRows = await this.database
@@ -1213,9 +1220,10 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
         .select({
           agentId: threadRuns.agentId,
           createdAt: threadRuns.createdAt,
-          status: threadRuns.status,
+          status: threadRunLiveness.status,
         })
         .from(threadRuns)
+        .leftJoin(threadRunLiveness, eq(threadRunLiveness.runId, threadRuns.id))
         .where(eq(threadRuns.id, runId))
         .limit(1);
       if (!thread || !run || run.status === "running") return;
