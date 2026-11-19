@@ -496,6 +496,14 @@ export type DeploymentConfig = {
    */
   selfHostBanner: boolean;
   /**
+   * Whether a chat in the browser may have its computer tools run by the server, from the first step
+   * to the last, so that closing the page does not stop the work. Off unless
+   * XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS is `on`. Even on, only a run that says so itself (a
+   * `computerTools: "server"` in its forwardedProps) is taken over; every other run is left to the
+   * browser, so a tool is never run twice. See `threads/chat-server-tools.ts`.
+   */
+  chatServerComputerTools: boolean;
+  /**
    * Where the built app is, when this process serves it.
    *
    * Set in a container image that carries both. Unset in development, where Vite serves the app and
@@ -1740,6 +1748,19 @@ function generativeUiEnabled(environment: Environment): boolean {
   return value !== "false" && value !== "0";
 }
 
+/**
+ * Whether a browser chat's computer tools may be run by the server: `on` or `off`, off when unset.
+ * Refused rather than coerced, like the other switches that decide who does a thing: a typo that
+ * quietly stayed off would leave an operator believing closed pages no longer stop the work.
+ */
+function chatServerComputerToolsEnabled(environment: Environment): boolean {
+  const name = "XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS";
+  const value = optional(environment, name)?.toLowerCase();
+  if (value === undefined || value === "off") return false;
+  if (value === "on") return true;
+  throw new Error(`${name} must be "on" or "off"`);
+}
+
 /** The opposite rule from generated interfaces: off unless explicitly "true". */
 function selfHostBannerEnabled(environment: Environment): boolean {
   return optional(environment, "OPENBOT_SELF_HOST_BANNER") === "true";
@@ -1931,6 +1952,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     accessibility: accessibilityEnabled(environment),
     generativeUi: generativeUiEnabled(environment),
     selfHostBanner: selfHostBannerEnabled(environment),
+    chatServerComputerTools: chatServerComputerToolsEnabled(environment),
     ...(optional(environment, "APP_DIST_DIR")
       ? { appDistDir: optional(environment, "APP_DIST_DIR") as string }
       : {}),

@@ -245,10 +245,12 @@ import {
 } from "./computer/provider";
 import { createRunnerTransport } from "./computer/runner-transport";
 import { createSnapshotStore } from "./computer/snapshot-store";
+import { createComputerToolsForTurn } from "./computer/turn-tools";
 import { loadConfig } from "./config";
 import {
   chooseOpenAIApi,
   deploymentModel,
+  isAskedRun,
   type LoadCurrentProject,
   mountCopilotRuntime,
   normalizeModelBaseUrls,
@@ -598,6 +600,7 @@ import {
   loadTenantPackage,
   synchronizeTenantPackage,
 } from "./tenant-package";
+import { createChatServerTools } from "./threads/chat-server-tools";
 import {
   advisoryThreadLock,
   type CompactionDeps,
@@ -3480,6 +3483,23 @@ await startupLifecycle.run(async (startup) => {
   const routineAgentRunner: RunnerLike = localThreadRunner;
 
   /*
+   * The computer tools a turn the server runs holds. One function for a group's turn and for a chat the
+   * server carries on for the browser, so the two cannot drift: the tool list, the Bot's and the owner's
+   * rules, the permissions that switch a tool off.
+   */
+  const computerToolsForTurn = createComputerToolsForTurn({
+    gateway: computerGateway,
+    actorFor,
+    profileOf: (actor, agentId) => agentProfileStore.get(actor, agentId),
+    auditStore: bootAuditStore,
+    ...(signInService ? { signIn: signInService } : {}),
+    machine: computerMachine,
+    usesDeviceApps,
+    disabledTools: (actorId, agentId) =>
+      approvalService.disabledTools(actorId, agentId),
+  });
+
+  /*
    * The unattended turn: one coworker, one instruction, no browser.
    *
    * Named rather than inlined because two features ask for exactly this and must not drift — a routine
@@ -3895,6 +3915,15 @@ await startupLifecycle.run(async (startup) => {
       },
       // The thread store, and the runtime's runner: one object, `threads/postgres-runner.ts`.
       localRunner: localThreadRunner,
+      // Off by default: only with the deployment switch on is a chat that asks for it run by the server.
+      ...(config.chatServerComputerTools
+        ? {
+            chatServerTools: createChatServerTools({
+              toolsForTurn: computerToolsForTurn,
+              holds: isAskedRun,
+            }),
+          }
+        : {}),
       // The Recorder's capture pass: only a connected browser gets through (recorder/wiring.ts).
       trajectoryCapture: recorderExtension.trajectoryCapture,
     },
@@ -4647,24 +4676,7 @@ await startupLifecycle.run(async (startup) => {
     runner: routineAgentRunner,
     components: headlessComponents,
     buildAgentFor,
-    toolsForTurn: async ({ ownerUserId, agentId, initiator }) => {
-      if (!computerGateway) return [];
-      const actor = await actorFor(ownerUserId);
-      const profile = await agentProfileStore.get(actor, agentId);
-      if (!profile) throw new Error("That Bot is not available to this owner.");
-      // A Team Bot's teammate uses the Bot, not its owner's signed-in computer.
-      if (!canUseComputer(profile, actor)) return [];
-      return createHeadlessComputerTools({
-        gateway: computerGateway,
-        seat: await computerGateway.seatFor(agentId, actor.id),
-        actor: { id: actor.id, userId: actor.id, initiator },
-        auditStore: bootAuditStore,
-        ...(signInService ? { signIn: signInService } : {}),
-        machine: computerMachine,
-        apps: await usesDeviceApps(agentId, actor.id),
-        disabled: await approvalService.disabledTools(actor.id, agentId),
-      });
-    },
+    toolsForTurn: computerToolsForTurn,
   };
   /*
    * An external employee in a group runs through the same transport as in its own chat, in its own
