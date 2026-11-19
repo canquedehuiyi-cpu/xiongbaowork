@@ -23,7 +23,7 @@ export const TURN_LIMITS = {
    * How many rounds of headless tool calls one light turn may take (`HeadlessToolsMiddleware`). A
    * round is one run of the Bot that ends asking for tools only this host can run (the computer, a
    * component): they are run here and the Bot is run again with their results. Not the model's step
-   * budget (`UNATTENDED_STEPS` in copilotkit/last-step.ts), which caps the steps inside one run.
+   * budget (`UNATTENDED_STEPS`, the last-step module), which caps the steps inside one run.
    */
   toolSegments: 30,
 
