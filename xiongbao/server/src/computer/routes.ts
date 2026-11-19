@@ -1,13 +1,12 @@
-import { isDevActorEmail } from "../auth/dev-actor-email";
+import {
+  DESKTOP_REF,
+  DESKTOP_WINDOW_ID,
+} from "@openbot/shared/desktop-control";
 import { downloadHeaders } from "@openbot/shared/file-download";
 import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
-import {
-  DESKTOP_REF,
-  DESKTOP_WINDOW_ID,
-} from "@openbot/shared/desktop-control";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import {
   ApprovalNeedsConversationError,
@@ -15,16 +14,17 @@ import {
 } from "../approvals/types";
 import { type AuditReader, type AuditStore, recordAuditEvent } from "../audit";
 import type { AdminScope } from "../auth/admin-scope";
+import { isDevActorEmail } from "../auth/dev-actor-email";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
+import type { BotBrowser } from "../browser/bot-browser";
+import { ownsPersonBrowser } from "../browser/person";
+import { stampNarrationArrival } from "../browser/routes";
 import { DeviceActionError, DeviceOfflineError } from "../devices/channel";
 import { DeviceDeliveryError } from "../devices/queue";
 import { capabilityFor } from "../tenant/context";
 import { computerActionIdentity } from "./action-identity";
 import { CANDIDATE_REF } from "./app-discovery";
-import type { BotBrowser } from "../browser/bot-browser";
-import { ownsPersonBrowser } from "../browser/person";
-import { stampNarrationArrival } from "../browser/routes";
 import {
   type ComputerSeat,
   parseComputerKey,
@@ -832,7 +832,77 @@ export function createComputerRoutes(
       if (typeof body?.path !== "string" || !body.path.trim()) {
         return { error: "A file path is required." };
       }
-      return gateway.readFile(seat, actor, { path: body.path.trim() });
+      // A line range (期五): whole numbers from 1, each optional; anything else is a 400.
+      for (const field of ["offset", "limit"] as const)
+        if (
+          body[field] !== undefined &&
+          (typeof body[field] !== "number" ||
+            !Number.isInteger(body[field]) ||
+            (body[field] as number) < 1)
+        )
+          return { error: `${field} must be a whole number from 1.` };
+      return gateway.readFile(seat, actor, {
+        path: body.path.trim(),
+        ...(typeof body.offset === "number" ? { offset: body.offset } : {}),
+        ...(typeof body.limit === "number" ? { limit: body.limit } : {}),
+      });
+    }),
+  );
+
+  /*
+   * The coding tools (期五), for the web chat's own registrations: the same calls the unattended
+   * tools make. An edit is a change, so the chat sends it through the approval route like a write;
+   * this route is what a plain call reaches, and the gateway decides it the same way.
+   */
+  routes.post("/:botId/files/edit", (context) =>
+    act(context, gateway.seatFor, (seat, actor, body) => {
+      if (typeof body?.path !== "string" || !body.path.trim()) {
+        return { error: "A file path is required." };
+      }
+      if (
+        typeof body.old_string !== "string" ||
+        typeof body.new_string !== "string"
+      ) {
+        return { error: "old_string and new_string are required." };
+      }
+      return gateway.editFile(seat, actor, {
+        path: body.path.trim(),
+        old_string: body.old_string,
+        new_string: body.new_string,
+        replace_all: body.replace_all === true,
+      });
+    }),
+  );
+
+  routes.post("/:botId/files/grep", (context) =>
+    act(context, gateway.seatFor, (seat, actor, body) => {
+      if (typeof body?.pattern !== "string" || !body.pattern) {
+        return { error: "A pattern is required." };
+      }
+      return gateway.grep(seat, actor, {
+        pattern: body.pattern,
+        ...(typeof body.path === "string" && body.path.trim()
+          ? { path: body.path.trim() }
+          : {}),
+        ...(typeof body.glob === "string" && body.glob.trim()
+          ? { glob: body.glob.trim() }
+          : {}),
+        ignore_case: body.ignore_case === true,
+      });
+    }),
+  );
+
+  routes.post("/:botId/files/glob", (context) =>
+    act(context, gateway.seatFor, (seat, actor, body) => {
+      if (typeof body?.pattern !== "string" || !body.pattern.trim()) {
+        return { error: "A pattern is required." };
+      }
+      return gateway.glob(seat, actor, {
+        pattern: body.pattern.trim(),
+        ...(typeof body.path === "string" && body.path.trim()
+          ? { path: body.path.trim() }
+          : {}),
+      });
     }),
   );
 

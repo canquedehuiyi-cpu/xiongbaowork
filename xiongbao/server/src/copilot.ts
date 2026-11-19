@@ -55,6 +55,11 @@ import { planGuidance } from "../../shared/plan";
 import { subagentGuidance } from "../../shared/subagent";
 import { thinkingOf } from "../../shared/thinking";
 import {
+  codingToolsGuidance,
+  PROMPT_SECTION_TOOLS,
+  verifyGuidance,
+} from "../../shared/verify";
+import {
   ACP_UNAVAILABLE_REASON,
   type DeviceAcpEmployee,
   deviceAcpAgentFor,
@@ -1163,6 +1168,14 @@ export function builtInAgentConfiguration(
   const holdings = grantedToolGuidance(tools, connectedVendors, {
     browser: browserSearch,
   });
+  /*
+   * 这次运行实际持有的工具名：授予的，加上界面或无人值守那套随运行提供的。电脑工具只从后者来，所以
+   * 「持有 computer_run_command」要在这里看，和浏览器搜索引导一样（期五）。
+   */
+  const heldToolNames = [
+    ...tools.map((tool) => tool.name),
+    ...(Array.isArray(runToolNames) ? runToolNames : []),
+  ];
 
   return {
     model:
@@ -1257,6 +1270,16 @@ export function builtInAgentConfiguration(
         "delegation",
         subagentGuidance(tools.map((tool) => tool.name)),
       ),
+      /*
+       * 改完就验证：跑项目的测试或构建、读结果、失败就修，最多 3 轮，交付时附上命令和退出码。只给
+       * 持有 computer_run_command 的运行：没有命令工具的员工跑不了测试，不教它（期五）。
+       */
+      ...promptSection("verify", verifyGuidance(heldToolNames)),
+      /*
+       * 改文件用 computer_edit_file 按块改、找代码用 computer_grep 和 computer_glob。只给持有这些工具
+       * 的运行，和 <verify> 一样不改共用段落（期五）。
+       */
+      ...promptSection("coding_tools", codingToolsGuidance(heldToolNames)),
       /*
        * Only for a run that holds the computer. A third of the prompt is about the browser, and a
        * Linear-and-Notion routine that never opens one read all of it ahead of its own job.
@@ -2432,12 +2455,23 @@ async function buildAgent(
     const runToolNames = input?.tools.map((tool) => tool.name);
     const configuration = configurationFor(runToolNames);
     /*
-     * 构建时还不知道这次运行带不带浏览器工具（它们随 RunAgentInput.tools 才来），所以备好一份含
-     * 公开网页搜索引导的配置，运行时带了就换用它。已按某次运行构建的（有 input）不需要。
+     * 构建时还不知道这次运行带不带浏览器工具和电脑命令工具（它们随 RunAgentInput.tools 才来），所以
+     * 按运行实际带来的那几样换一份配置：带了浏览器就多公开网页搜索引导，带了 computer_run_command 就
+     * 多验证闭环（期五）。每种组合只建一次。已按某次运行构建的（有 input）不需要。
      */
-    const browserConfiguration = runToolNames
+    const variants = new Map<string, BuiltInAgentConfiguration>();
+    const variantFor = runToolNames
       ? undefined
-      : configurationFor(BROWSER_SEARCH_TOOLS);
+      : (names: readonly string[]) => {
+          const picked = promptVariantTools(names);
+          if (picked.length === 0) return undefined;
+          const key = picked.join(",");
+          const known = variants.get(key);
+          if (known) return known;
+          const built = configurationFor(picked);
+          variants.set(key, built);
+          return built;
+        };
     // What really waits: nothing, when the model could not be wrapped and is sent every tool.
     const held = searchesTools(
       "model" in configuration ? configuration.model : undefined,
@@ -2468,10 +2502,8 @@ async function buildAgent(
          * 记录器自己推迟到下一轮事件循环、从不抛错，运行不等它。
          */
         const ran =
-          browserConfiguration &&
-          holdsBrowserSearchTools(runInput.tools.map((tool) => tool.name))
-            ? browserConfiguration
-            : configuration;
+          variantFor?.(runInput.tools.map((tool) => tool.name)) ??
+          configuration;
         recordContextBreakdown?.({
           runId: runInput.runId,
           threadId: runInput.threadId,
@@ -2519,12 +2551,8 @@ async function buildAgent(
             : messages,
         ),
     };
-    return browserConfiguration
-      ? new BuiltInAgentSearchingWithBrowser(
-          configuration,
-          browserConfiguration,
-          hooks,
-        )
+    return variantFor
+      ? new BuiltInAgentSearchingWithBrowser(configuration, variantFor, hooks)
       : new BuiltInAgentWithSaneHistory(configuration, hooks);
   };
 
@@ -3516,38 +3544,52 @@ function mastraOpenBotContext({
 }
 
 /**
+ * The tools a run brings with it that change what its prompt says: the browser (public-web search
+ * steps), the shell (the verification loop) and the coding tools (how to edit and search, 期五). Empty for a run that brings neither, which
+ * keeps the configuration built before it.
+ */
+function promptVariantTools(names: readonly string[]): string[] {
+  return [
+    ...(holdsBrowserSearchTools(names) ? BROWSER_SEARCH_TOOLS : []),
+    ...PROMPT_SECTION_TOOLS.filter((name) => names.includes(name)),
+  ];
+}
+
+/**
  * A built-in Bot built before its run, which switches to the configuration that carries the
  * public-web search guidance when the run turns out to hold a browser (`computer_navigate` and
- * `computer_read`). Those tools arrive with `RunAgentInput.tools`, after the Bot is built, so the
- * choice is made here, at the run. Everything else is the toolkit's `BuiltInAgentWithSaneHistory`.
+ * `computer_read`), and the verification loop when it holds `computer_run_command`. Those tools
+ * arrive with `RunAgentInput.tools`, after the Bot is built, so the choice is made here, at the run.
+ * Everything else is the toolkit's `BuiltInAgentWithSaneHistory`.
  */
 class BuiltInAgentSearchingWithBrowser extends BuiltInAgentWithSaneHistory {
   /** Held again because the base class keeps its own copies private, and `clone` needs them. */
   private readonly plainConfiguration: BuiltInAgentConfiguration;
-  /** 这次运行带了浏览器工具时换用的配置：提示词里多了公开网页搜索引导。 */
-  private readonly browserConfiguration: BuiltInAgentConfiguration;
+  /** 这次运行带来的工具换用的配置，没有要换的就是 undefined。 */
+  private readonly variantFor: (
+    names: readonly string[],
+  ) => BuiltInAgentConfiguration | undefined;
   private readonly runHooks: BuiltInAgentHooks;
   /** 换用的那一个，留着让 Stop 能停到它。 */
   private browserRun: BuiltInAgentWithSaneHistory | undefined;
 
   constructor(
     configuration: BuiltInAgentConfiguration,
-    browserConfiguration: BuiltInAgentConfiguration,
+    variantFor: (
+      names: readonly string[],
+    ) => BuiltInAgentConfiguration | undefined,
     hooks: BuiltInAgentHooks,
   ) {
     super(configuration, hooks);
     this.plainConfiguration = configuration;
-    this.browserConfiguration = browserConfiguration;
+    this.variantFor = variantFor;
     this.runHooks = hooks;
   }
 
   override run(input: RunAgentInput): Observable<BaseEvent> {
-    if (!holdsBrowserSearchTools(input.tools.map((tool) => tool.name)))
-      return super.run(input);
-    const browserRun = new BuiltInAgentWithSaneHistory(
-      this.browserConfiguration,
-      this.runHooks,
-    );
+    const variant = this.variantFor(input.tools.map((tool) => tool.name));
+    if (!variant) return super.run(input);
+    const browserRun = new BuiltInAgentWithSaneHistory(variant, this.runHooks);
     this.browserRun = browserRun;
     return browserRun.run(input);
   }
@@ -3562,7 +3604,7 @@ class BuiltInAgentSearchingWithBrowser extends BuiltInAgentWithSaneHistory {
   override clone(): BuiltInAgentSearchingWithBrowser {
     const cloned = new BuiltInAgentSearchingWithBrowser(
       this.plainConfiguration,
-      this.browserConfiguration,
+      this.variantFor,
       this.runHooks,
     );
     type WithMiddlewares = { middlewares: unknown[] };

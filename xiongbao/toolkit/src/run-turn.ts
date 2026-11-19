@@ -785,6 +785,8 @@ export function createTurnRunner(options: {
   components?: ComponentCatalog;
   /** How long one headless turn may take before it is stopped. */
   turnTimeoutMs?: number;
+  /** How many rounds of headless tool calls it may take (`TURN_LIMITS.toolSegments` when not said). */
+  maxToolSegments?: number;
   lockTtlSeconds?: number;
   heartbeatMs?: number;
   /** See `TURN_LIMITS.abortGraceMs`; injectable so a test need not wait five real seconds. */
@@ -816,6 +818,7 @@ export function createTurnRunner(options: {
     toolsForTurn,
     components,
     turnTimeoutMs = TURN_LIMITS.turnTimeoutMs,
+    maxToolSegments = TURN_LIMITS.toolSegments,
     lockTtlSeconds = TURN_LIMITS.lockTtlSeconds,
     heartbeatMs = TURN_LIMITS.heartbeatMs,
     abortGraceMs = TURN_LIMITS.abortGraceMs,
@@ -992,7 +995,11 @@ export function createTurnRunner(options: {
       })) ?? []),
     ];
     if (headlessTools.length > 0)
-      agent.use(new HeadlessToolsMiddleware(headlessTools, initiator));
+      agent.use(
+        new HeadlessToolsMiddleware(headlessTools, initiator, {
+          maxSegments: maxToolSegments,
+        }),
+      );
     if (signal?.aborted) throw new Error("The headless turn was cancelled.");
 
     let input = turnInput({

@@ -22,6 +22,10 @@ const OFF_SCREEN = new Set([
   "computer_read_file",
   "computer_write_file",
   "computer_list_files",
+  // The coding tools (期五) work on files, behind the screen.
+  "computer_edit_file",
+  "computer_grep",
+  "computer_glob",
 ]);
 
 /** The view a computer tool works in, or nothing for a tool that is not the computer's or shows neither. */
