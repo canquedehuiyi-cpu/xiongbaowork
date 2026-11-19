@@ -208,6 +208,7 @@ import {
   withoutServerOnlyEvents,
   withRunSideEvents,
 } from "./threads/run-side-events";
+import { keepStreamAlive } from "./threads/stream-keep-alive";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 import { holdsOwnWebSearch, webResearchGuidance } from "./web/guidance";
@@ -4236,6 +4237,13 @@ export function mountCopilotRuntime(
      */
     localRunner?: PostgresAgentRunner;
     /**
+     * How long a run's or reconnect's event stream may say nothing before a comment line is written
+     * into it (`threads/stream-keep-alive.ts`). Left out, the beat the external employees' runs keep,
+     * under the 10 seconds after which `Bun.serve` closes a response that has sent nothing. Tests
+     * shorten it; 0 turns it off.
+     */
+    streamKeepAliveMs?: number;
+    /**
      * Runs a browser chat's computer tools on the server for a run that asks for it, and carries a
      * Stop to the tool in flight. Absent, the switch is off and the browser runs them all.
      */
@@ -4271,6 +4279,7 @@ export function mountCopilotRuntime(
     onRunBusy,
     localRunner,
     trajectoryCapture,
+    streamKeepAliveMs,
   } = options;
   /** The Recorder's pass, answered here when there is an Intelligence to join it to. */
   const trajectoryConnect =
@@ -4566,7 +4575,16 @@ export function mountCopilotRuntime(
       );
     return runAsRuntimeActor(actor, async () => {
       if (!describesItself) await runner.hydrate();
-      return runtimeRoutes.fetch(request);
+      /*
+       * A run or a reconnect can say nothing for longer than `Bun.serve` lets a response (a long
+       * command the server runs, a model thinking, a card waiting for the person), so a stream that
+       * has gone quiet gets a comment line. Applied here, to whatever stream the runtime answers
+       * with, so `/run` and `/connect` are kept the same way.
+       */
+      return keepStreamAlive(
+        await runtimeRoutes.fetch(request),
+        streamKeepAliveMs,
+      );
     });
   });
 
