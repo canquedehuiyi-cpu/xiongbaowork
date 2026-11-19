@@ -23,6 +23,20 @@ import type { ChannelWorkWire } from "./working";
 
 export const CHANNEL_ACTIVITY_TOPIC = "channel_activity";
 
+/**
+ * A system notification for an open page to show: a conversation's turn ended while the person was not
+ * looking at it (`threads/turn-notice.ts`). The page shows it when it is itself out of sight, as it does
+ * for a Bot's reply (`app/src/lib/notifications`), with `tag` and `path` as that notice takes them.
+ */
+export type RunNoticeWire = {
+  /** The conversation it is about. The event's own `channelId` is empty, see {@link announceRunNotice}. */
+  channelId: string;
+  title: string;
+  body: string;
+  tag: string;
+  path: string;
+};
+
 export type ChannelActivityEvent = {
   channelId: string;
   /** Who may receive it. Resolved by the writer, which already had to check membership. */
@@ -67,6 +81,11 @@ export type ChannelActivityEvent = {
    * another within the second, without either window owning the truth.
    */
   taskUpdated?: true;
+  /**
+   * A conversation's turn ended while its person was away: a system notification for a page to show.
+   * Alone on its event, addressed to the person and to no roster row (`announceRunNotice`).
+   */
+  runNotice?: RunNoticeWire;
   /**
    * A group's shared transcript changed without anybody saying anything (an external employee's
    * permission line, 外部员工 Task 12): its members read it again. Carries nothing else, and patches
@@ -149,6 +168,41 @@ export function announceTaskUpdate(
     failed(error);
     return Promise.resolve();
   }
+}
+
+/**
+ * Tell a person's open pages that a conversation's turn ended while they were away, for a system
+ * notification (期九·五).
+ *
+ * Addressed to the person alone (`memberIds`), so nobody else in a shared channel hears it. The event's
+ * own `channelId` is empty and the conversation rides in the notice: a page that does not know this
+ * field reads an event with a real channel id as that row's new preview (a null message wipes it), while
+ * one with none names no row and is dropped at worst with a refetch of the list. The page that knows it
+ * must look at `runNotice` before anything else on the event.
+ *
+ * Unlike the other announcements this rejects when the NOTIFY cannot be sent, because the caller keeps a
+ * count of the places it told. Runs in the person's frame, opened here.
+ */
+export function announceRunNotice(
+  database: Pick<Database, "execute">,
+  ownerUserId: string,
+  notice: RunNoticeWire,
+): Promise<void> {
+  const event = {
+    channelId: "",
+    memberIds: [ownerUserId],
+    lastMessage: null,
+    lastMessageAt: null,
+    lastMessageAgentId: null,
+    runNotice: notice,
+  } satisfies ChannelActivityEvent;
+  return runAsTenant(ownerUserId, () =>
+    database
+      .execute(
+        sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${JSON.stringify(event)})`,
+      )
+      .then(() => undefined),
+  );
 }
 
 /**

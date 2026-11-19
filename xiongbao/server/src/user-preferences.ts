@@ -1,6 +1,9 @@
 import {
+  DEFAULT_RUN_END_NOTICE,
   DEFAULT_USER_PREFERENCES,
   normalizeSkinId,
+  RUN_END_NOTICE_CHANNELS,
+  type RunEndNoticePreferences,
   type StoredPreferences,
   type UserPreferences,
   type WorkHours,
@@ -116,13 +119,52 @@ function workHoursOf(stored: StoredPreferences): WorkHours {
  * back to a build that has it brings it back, but this build answers with its default.
  */
 function withDefaults(stored: StoredPreferences): StoredUserPreferences {
-  const preferences = { ...DEFAULT_USER_PREFERENCES, ...stored };
+  // The run-end switches have their own read; the general one keeps the shape it has always had.
+  const { runEndNotice: _own, ...general } = stored;
+  const preferences = { ...DEFAULT_USER_PREFERENCES, ...general };
   // A row saved before the rename holds the old default's name; it reads as the new one.
   return {
     ...preferences,
     skin: normalizeSkinId(String(preferences.skin)),
-    workHours: workHoursOf(stored),
+    workHours: workHoursOf(general),
   };
+}
+
+/**
+ * The run-end switches a stored row says, over the defaults: on unless the row says `false`. Anything
+ * else in the row (a missing key, a value that is not a boolean) reads as on, so a malformed row never
+ * silences a person.
+ */
+export function runEndNoticeOf(
+  stored: StoredPreferences,
+): RunEndNoticePreferences {
+  const saved =
+    stored.runEndNotice && typeof stored.runEndNotice === "object"
+      ? (stored.runEndNotice as Record<string, unknown>)
+      : {};
+  const notice = { ...DEFAULT_RUN_END_NOTICE };
+  for (const channel of RUN_END_NOTICE_CHANNELS)
+    if (saved[channel] === false) notice[channel] = false;
+  return notice;
+}
+
+/**
+ * Whether a person's own page, phone and chat platforms are told a turn ended while they were away
+ * (`threads/turn-notice.ts`), read fresh from their preferences in their own frame. Nobody found reads
+ * as everything on.
+ */
+export async function readRunEndNotice(
+  database: Database,
+  userId: string,
+): Promise<RunEndNoticePreferences> {
+  const [user] = await runAsTenant(userId, () =>
+    database
+      .select({ preferences: users.preferences })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
+  );
+  return runEndNoticeOf(user?.preferences ?? {});
 }
 
 /**
@@ -143,7 +185,18 @@ export async function readWorkHours(
   return workHoursOf(user?.preferences ?? {});
 }
 
+/** The run-end switches: one read, and a save that names any of them and keeps the rest. */
+export type RunEndNoticeStore = {
+  read: (userId: string) => Promise<RunEndNoticePreferences>;
+  patch: (
+    userId: string,
+    patch: Partial<RunEndNoticePreferences>,
+  ) => Promise<RunEndNoticePreferences>;
+};
+
 export type UserPreferencesStore = {
+  /** Absent in a fake that does not care about the run-end switches. */
+  runEndNotice?: RunEndNoticeStore;
   claimStarterTour: (userId: string, channelId: string) => Promise<void>;
   read: (userId: string) => Promise<StoredUserPreferences>;
   patch: (
@@ -156,6 +209,31 @@ export function createUserPreferencesStore(
   database: Database,
 ): UserPreferencesStore {
   return {
+    runEndNotice: {
+      async read(userId) {
+        const [user] = await database
+          .select({ preferences: users.preferences })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        if (!user) throw new Error("User preferences could not be found.");
+        return runEndNoticeOf(user.preferences);
+      },
+      async patch(userId, patch) {
+        // Merged one level down in Postgres, so saving one switch keeps the others and a save of
+        // another preference at the same moment is not lost.
+        const [user] = await database
+          .update(users)
+          .set({
+            preferences: sql`${users.preferences} || jsonb_build_object('runEndNotice', coalesce(${users.preferences} -> 'runEndNotice', '{}'::jsonb) || ${patch}::jsonb)`,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, userId))
+          .returning({ preferences: users.preferences });
+        if (!user) throw new Error("User preferences could not be saved.");
+        return runEndNoticeOf(user.preferences);
+      },
+    },
     async claimStarterTour(userId, channelId) {
       // PostgreSQL rechecks the condition after a concurrent row update. Only one
       // new conversation can win, even across server processes; merge keeps other preferences.
