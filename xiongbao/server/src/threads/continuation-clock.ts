@@ -23,11 +23,13 @@ export function createContinuationRunner(deps: {
   serverChatTurnTimeoutMs?: number;
   /** Its rounds of tool calls. The working turn's, unless a test says otherwise. */
   serverChatSegments?: number;
+  /** The light runner, when the caller has already built it from the same options. */
+  light?: TurnRunner;
   /** The runner's factory, for a test that wants to see what it was built with. */
   make?: typeof createTurnRunner;
 }): TurnRunner {
   const make = deps.make ?? createTurnRunner;
-  const light = make(deps.options);
+  const light = deps.light ?? make(deps.options);
   const long = make({
     ...deps.options,
     turnTimeoutMs:

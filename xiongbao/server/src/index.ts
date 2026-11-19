@@ -1986,7 +1986,7 @@ await startupLifecycle.run(async (startup) => {
     },
   ) =>
     groupConversations.continueWaiting(input.waitKey, (hooks) =>
-      approvalContinuationRunner({
+      continuationRunner({
         ...(hooks?.onCustom ? { onCustom: hooks.onCustom } : {}),
         ...(hooks?.onToolCall ? { onToolCall: hooks.onToolCall } : {}),
         ...(hooks?.onReasoning ? { onReasoning: hooks.onReasoning } : {}),
@@ -4255,8 +4255,12 @@ await startupLifecycle.run(async (startup) => {
    * chat whose computer tools the server runs, which is a long turn and gets the working turn's clock
    * (`threads/continuation-clock.ts`, 期九·三).
    */
-  const approvalContinuationRunner = createContinuationRunner({
+  const approvalContinuationRunner = createTurnRunner(
+    approvalContinuationOptions,
+  );
+  const continuationRunner = createContinuationRunner({
     options: approvalContinuationOptions,
+    light: approvalContinuationRunner,
     serverComputerTools: config.chatServerComputerTools,
   });
   /** A board task's turn: the same runner, on the working turn's clock (期五). */
@@ -4285,7 +4289,7 @@ await startupLifecycle.run(async (startup) => {
             continueWaiting: (approvalId, run) =>
               groupConversations.continueWaiting(approvalId, run),
           },
-          approvalContinuationRunner,
+          approvalContinuationRunner: continuationRunner,
           channelStore,
           actorFor,
           // Assigned further down, once delivery is wired.
@@ -4410,7 +4414,7 @@ await startupLifecycle.run(async (startup) => {
       );
       await channelStore.signalBusy(input.threadId, true);
       try {
-        const result = await approvalContinuationRunner({
+        const result = await continuationRunner({
           ownerUserId: input.ownerUserId,
           tenantId: input.tenantId,
           routineId: `delivery:${input.runId}`,
@@ -5268,7 +5272,7 @@ await startupLifecycle.run(async (startup) => {
           approvalQueue,
           personResponseOwner,
           authoriseQuestion,
-          approvalContinuationRunner,
+          approvalContinuationRunner: continuationRunner,
           responsibilityStore,
           responsibilityAnswerTurn,
           sourceForCoordinationRun,
