@@ -1429,9 +1429,9 @@ export function createAgentProfileStore(
                   {
                     ...input.external,
                     harness: previous.harness as ExternalAgentRun["harness"],
-                    // Where it runs is chosen when it is made, and an edit of its rules or name
-                    // leaves it there.
-                    runtime: acpRuntimeFrom(previous),
+                    // An edit of its rules or name leaves it where it runs; only the hirer's
+                    // explicit move (8.3) changes that.
+                    runtime: input.external.runtime ?? acpRuntimeFrom(previous),
                   },
                   id,
                 )
@@ -1462,6 +1462,15 @@ export function createAgentProfileStore(
                 }
               : {}),
           };
+
+          // Moved back to the hirer's own computer: the spread above carried the old `cloud` along, and
+          // a device employee's configuration has no `runtime` key at all.
+          if (
+            isExternal &&
+            input.external &&
+            (input.external.runtime ?? acpRuntimeFrom(previous)) !== "cloud"
+          )
+            delete configuration.runtime;
 
           // A connection edited in the profile belongs to the person, not installer setup.
           if (

@@ -186,5 +186,6 @@ Codex / Claude Code  ──令牌──▶  /api/agent-model/v1/…  ──真�
 
 - 租户包里预设 Codex 和 Claude Code 两个固定员工：Claude Code 默认跑在云电脑；Codex 只能在本机跑，需要配对电脑（2026-11-19 拍板，见 8.2）。Claude Code 选中就能直接用，不用招入、不用配置、不用填 key；Codex 要先配对一台自己的电脑。它们的模型取自租户包里指定的平台模型池行（DeepSeek 等兼容模型），经本期的代理。
 - 员工设置里的「云电脑 / 本机」切换：只对 Claude Code 有，默认云电脑；用户配对了自己的电脑、且电脑在线时可以切到本机，直接改本地代码。切到本机时走本期做好的 runner 注入，切回云电脑时走 8.2。Codex 员工没有这个切换，运行位置固定为本机；界面和接口都不得让它选云电脑。
-- 招入外部员工的现有流程（`POST /api/agents/external`）保留，给用户自己招的外部员工用。
+- **模型（用户拍板，2026-11-19）**：用户原话是「直接调用熊宝内员工所使用的模型」。所以外部员工（Claude Code / Codex）**没有绑定模型时，回落到这个租户内置员工默认用的那个模型**，走的是内置员工每轮解析默认模型的同一条路径（`deploymentModel`，部署的 provider、地址、key 和默认模型），不新建配置项。落实在期八·一的两处：`acp.open` 的 `model` 块（`createAcpModelAccess` 的 `boundModel`）有绑定就用绑定、没有就用默认模型的名字；代理的上游解析（`createAgentUpstreamResolver`）在没有绑定、绑定的 key 被收回或读不出来、平台池的行这个套餐够不到时，也给出默认模型，和内置员工回落的条件一致。计量照旧写 `model_token_calls`，记在这个人名下（`deploymentMetering`，和内置员工用默认模型时是同一行的写法）。默认模型也解析不到时（部署没有 key）仍然没有 `model` 块，云端 Claude Code 那一轮以「还没有可用的模型，请在员工设置里为它选一个模型」结束，代理也回同一句。默认模型的提供方不支持这个智能体的格式时，照旧回「不支持 Codex / Claude Code 接入」的那句中文。外部员工的设置里仍然不画「模型」一节。
+- 招入外部员工的现有流程（`POST /api/agents/external`）保留，给用户自己招的外部员工用。招聘和修改多了运行位置 `runtime`（`cloud` 只给 Claude Code，Codex 选云电脑 409 并带「Codex 员工暂时只能在你自己的电脑上跑。」）；「固定员工」页签的 Claude Code 和 Codex 两张卡一键启用走这个接口。
 - 界面部分要截图给用户确认后再推。

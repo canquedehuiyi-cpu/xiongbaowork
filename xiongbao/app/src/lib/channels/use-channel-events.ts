@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { noticeChannelEvent } from "@/lib/notifications/reply-notice";
+import { type RunNotice, showRunNotice } from "@/lib/notifications/run-notice";
 import { socketUrl as buildSocketUrl } from "@/lib/socket-url";
 import {
   type AgentChannel,
@@ -94,6 +95,12 @@ export type ChannelActivityEvent = {
   opening?: string;
   /** The channel is gone from every member's roster. Absent on an ordinary activity event. */
   deleted?: true;
+  /**
+   * A conversation's turn ended while its person was away: the system notice to raise when this page
+   * is itself out of sight. Alone on its event, whose own `channelId` is empty and names no row, so
+   * it is read before anything else on the event (see `showRunNotice`).
+   */
+  runNotice?: RunNotice;
   /**
    * This member's pin, changed. Absent on an ordinary activity event.
    *
@@ -386,6 +393,21 @@ export function useChannelEvents() {
       socket.onmessage = (message) => {
         const parsed = parseChannelSocketMessage(message.data);
         if (!parsed) return;
+
+        /*
+         * A turn that ended while the person was away carries a notice and nothing else, under an
+         * empty channel id. Looked at before everything below: reaching the board or the roster
+         * patch with it would refetch the roster for a row that does not exist.
+         */
+        if (!isResync(parsed) && parsed.runNotice) {
+          void showRunNotice(parsed.runNotice, (channelId) => {
+            void router.navigate({
+              to: "/channel/$channelId",
+              params: { channelId },
+            });
+          });
+          return;
+        }
 
         // Refetch rather than patch: there is no delta to apply. Checked before anything reads
         // `channelId`, because this message has none.

@@ -305,6 +305,7 @@ tests/external-marks.test.tsx
 tests/failed-send-attachments.test.tsx
 tests/first-conversation-greeting.test.ts
 tests/fitted-window.test.ts
+tests/fixed-employees.test.tsx
 tests/folder-step-words.test.tsx
 tests/follow-intent.test.ts
 tests/form-submit-controls.test.ts
@@ -333,6 +334,7 @@ tests/group-write-invalidation.test.tsx
 tests/handoff-answer-attribution.test.tsx
 tests/handoff-resume.test.ts
 tests/handoff-roster.test.ts
+tests/hard-model-item.test.tsx
 tests/harness-mark.test.tsx
 tests/help-handback.test.tsx
 tests/history-loading.test.ts
@@ -465,6 +467,8 @@ tests/routines-no-worker.test.ts
 tests/routines-title.test.tsx
 tests/run-elapsed-line.test.tsx
 tests/run-elapsed.test.ts
+tests/run-notice-event.test.tsx
+tests/run-notice-settings.test.tsx
 tests/running-step-shimmer.test.tsx
 tests/save-bot-retired.test.tsx
 tests/screen-connection.test.ts

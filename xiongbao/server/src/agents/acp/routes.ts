@@ -3,11 +3,14 @@ import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
+  ACP_CODEX_CLOUD_REFUSAL,
   ACP_RULE_DEFAULTS,
   type AcpHarness,
   type AcpRuleKey,
   type AcpRuleValue,
+  type AcpRuntime,
   acpRuntimeFrom,
+  codexCannotRunInCloud,
 } from "../../../../shared/acp";
 import { type AuditStore, recordAuditEvent } from "../../audit";
 import type { AppVariables } from "../../auth/guards";
@@ -54,6 +57,10 @@ type Ctx = { Variables: AppVariables };
  */
 
 const HARNESSES = ["codex", "claude-code", "hermes", "custom"] as const;
+/** Where an employee runs: its hirer's paired computer, or its own XiongBao computer. */
+const RUNTIMES = ["cloud", "device"] as const;
+/** Said when a harness that is not Claude Code is asked to run in the cloud. */
+const CLOUD_CLAUDE_CODE_ONLY = "只有 Claude Code 能在云电脑上干活。";
 const RULE_KEYS = Object.keys(ACP_RULE_DEFAULTS) as AcpRuleKey[];
 const HARNESS_LABEL: Record<Exclude<AcpHarness, "custom">, string> = {
   codex: "Codex",
@@ -104,6 +111,20 @@ const hireSchema = z.strictObject({
   appRef: ref.optional(),
   rules: rulesSchema,
   acknowledgeNoPermission: z.boolean().optional(),
+  /** `device` is what hiring always was; `cloud` is the cloud-hire body below. */
+  runtime: z.literal("device").optional(),
+});
+
+/*
+ * Hired to run on the employee's own XiongBao computer (期八·二, 8.3): no computer of the hirer's and no
+ * folder, so none is taken here; the server makes the employee's cloud device and fixed folder itself.
+ */
+const cloudHireSchema = z.strictObject({
+  runtime: z.literal("cloud"),
+  harness: z.enum(HARNESSES),
+  name,
+  department: department.optional(),
+  rules: rulesSchema,
 });
 
 const editSchema = z.strictObject({
@@ -113,6 +134,8 @@ const editSchema = z.strictObject({
   workdirRef: ref.optional(),
   appRef: ref.optional(),
   rules: rulesSchema.optional(),
+  /** Moves a Claude Code employee between its cloud computer and the hirer's own (8.3). */
+  runtime: z.enum(RUNTIMES).optional(),
 });
 
 /** The saved rules with these on top: defaults (or what was saved) where a rule is not named. */
@@ -213,11 +236,96 @@ export function createExternalAgentRoutes(deps: {
     }).catch(() => undefined);
   };
 
+  /**
+   * 8.3: hire an employee onto its own XiongBao computer. Only Claude Code runs there (Codex is refused
+   * with the same sentence the store gives, 409; Hermes and the person's own agent with 400). The
+   * employee's cloud device and fixed folder are made by the store from its own id, so the body names
+   * neither, and the answer is read back from what was saved rather than from the placeholders.
+   */
+  const hireInCloud = async (
+    context: Context<Ctx>,
+    actor: AgentActor,
+    raw: unknown,
+  ): Promise<Response> => {
+    const parsed = cloudHireSchema.safeParse(raw);
+    if (!parsed.success)
+      return context.json(
+        {
+          error: parsed.error.issues.some(
+            (issue) =>
+              issue.code === "unrecognized_keys" &&
+              (issue.keys.includes("deviceId") ||
+                issue.keys.includes("workdirRef") ||
+                issue.keys.includes("appRef")),
+          )
+            ? "在云电脑上干活的员工没有电脑和工作文件夹可选。"
+            : invalid(parsed.error),
+        },
+        400,
+      );
+    const body = parsed.data;
+    if (codexCannotRunInCloud(body.harness, "cloud"))
+      return context.json({ error: ACP_CODEX_CLOUD_REFUSAL }, 409);
+    if (body.harness !== "claude-code")
+      return context.json({ error: CLOUD_CLAUDE_CODE_ONLY }, 400);
+    if (quota) {
+      try {
+        await quota.assertCapacity(actor.id, "wakers");
+      } catch (thrown) {
+        if (thrown instanceof QuotaExceeded)
+          return context.json(thrown.body, 402);
+        throw thrown;
+      }
+    }
+    // The device and folder here are placeholders: `externalConfiguration` replaces both for `cloud`.
+    const run: ExternalAgentRun = {
+      deviceId: "",
+      harness: body.harness,
+      workdirRef: "",
+      permissions: withRules(ACP_RULE_DEFAULTS, body.rules),
+      runtime: "cloud",
+    };
+    const label = HARNESS_LABEL[body.harness];
+    try {
+      const agent = await profiles.create(
+        actor,
+        {
+          name: body.name,
+          title: `外部员工 · ${label}`,
+          roleDescription: `在你的云电脑上干活的 ${label}。`,
+          visibility: "private",
+          ...(body.department ? { department: body.department } : {}),
+          external: run,
+        },
+        quota
+          ? (transaction) =>
+              quota.assertCapacityWithin(transaction, actor.id, "wakers")
+          : undefined,
+      );
+      const saved = (await savedRun(database, actor.id, agent.id)) ?? run;
+      await record(actor, "bot.created", agent.id, {
+        name: body.name,
+        visibility: "private",
+        harness: body.harness,
+        runtime: "cloud",
+      });
+      return context.json({ agent: externalDto(agent, saved) }, 201);
+    } catch (error) {
+      return refusedBy(context, error);
+    }
+  };
+
   routes.post("/", requireUser, async (context) => {
     const actor = context.var.actor;
-    const parsed = hireSchema.safeParse(
-      await context.req.json().catch(() => null),
-    );
+    const raw: unknown = await context.req.json().catch(() => null);
+    // Hired to run on its own cloud computer: no computer or folder of the hirer's to check (8.3).
+    if (
+      typeof raw === "object" &&
+      raw !== null &&
+      (raw as { runtime?: unknown }).runtime === "cloud"
+    )
+      return hireInCloud(context, actor, raw);
+    const parsed = hireSchema.safeParse(raw);
     if (!parsed.success)
       return context.json({ error: invalid(parsed.error) }, 400);
     const body = parsed.data;
@@ -319,13 +427,29 @@ export function createExternalAgentRoutes(deps: {
     ]);
     if (!profile || !current)
       return context.json({ error: "找不到这位外部员工。" }, 404);
-    // An employee in the cloud has no computer or folder of the hirer's to change.
-    if (
-      current.runtime === "cloud" &&
-      (body.deviceId || body.workdirRef || body.appRef)
-    )
+    /*
+     * Where it runs: its own cloud computer or the hirer's (8.3). Only Claude Code runs in the cloud.
+     * Moving to the cloud takes no computer or folder, and moving back takes both: the person's own
+     * computer and a folder it shares.
+     */
+    const was: AcpRuntime = current.runtime === "cloud" ? "cloud" : "device";
+    const now: AcpRuntime = body.runtime ?? was;
+    if (now === "cloud") {
+      if (codexCannotRunInCloud(current.harness, "cloud"))
+        return context.json({ error: ACP_CODEX_CLOUD_REFUSAL }, 409);
+      if (current.harness !== "claude-code")
+        return context.json({ error: CLOUD_CLAUDE_CODE_ONLY }, 400);
+      // An employee in the cloud has no computer or folder of the hirer's to change.
+      if (body.deviceId || body.workdirRef || body.appRef)
+        return context.json(
+          { error: "在云电脑上干活的员工没有电脑和工作文件夹可改。" },
+          400,
+        );
+    }
+    const movesHome = was === "cloud" && now === "device";
+    if (movesHome && !(body.deviceId && body.workdirRef))
       return context.json(
-        { error: "在云电脑上干活的员工没有电脑和工作文件夹可改。" },
+        { error: "切到你自己的电脑，要选一台电脑和它上面的工作文件夹。" },
         400,
       );
     const run: ExternalAgentRun = {
@@ -336,9 +460,13 @@ export function createExternalAgentRoutes(deps: {
         ? { appRef: body.appRef }
         : {}),
       permissions: withRules(current.permissions, body.rules),
+      runtime: now,
     };
     // Where it runs is checked again only when it moves: a change of rules needs no heartbeat.
-    if (body.deviceId || body.workdirRef || body.appRef) {
+    if (
+      now === "device" &&
+      (movesHome || body.deviceId || body.workdirRef || body.appRef)
+    ) {
       const refused = refusal(actor, await deviceOf(actor, run.deviceId), run);
       if (refused)
         return context.json({ error: refused.error }, refused.status);
@@ -358,8 +486,17 @@ export function createExternalAgentRoutes(deps: {
         name: agent.name,
         visibility: "private",
         deviceId: run.deviceId,
+        ...(was === now ? {} : { runtime: now }),
       });
-      return context.json({ agent: externalDto(agent, run) });
+      // What was saved, since a cloud employee's device and folder are made by the store.
+      return context.json({
+        agent: externalDto(
+          agent,
+          now === "cloud"
+            ? ((await savedRun(database, actor.id, agentId)) ?? run)
+            : run,
+        ),
+      });
     } catch (error) {
       return refusedBy(context, error);
     }

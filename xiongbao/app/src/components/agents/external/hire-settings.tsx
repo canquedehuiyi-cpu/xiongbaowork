@@ -1,5 +1,11 @@
-import { IconAlertTriangle, IconChevronLeft } from "@tabler/icons-react";
+import {
+  IconAlertTriangle,
+  IconChevronLeft,
+  IconCloud,
+  IconDeviceLaptop,
+} from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { type FormEvent, type ReactNode, useId, useState } from "react";
 import { NoPermissionWarning } from "@/components/agents/external/external-marks";
 import {
@@ -14,15 +20,19 @@ import {
   type AcpHarness,
   type AcpRuleKey,
   type AcpRuleValue,
+  type AgentRuntime,
+  canRunInCloud,
   deviceStanding,
   discoveryQueryOptions,
   type ExternalEdit,
   externalHarnessName,
   HARNESS_LABEL,
   hireExternalMutationOptions,
+  LOCAL_ONLY_NOTE,
   RULE_ROWS,
   RULE_VALUE_LABEL,
   ruleChoices,
+  runtimeOf,
   updateExternalMutationOptions,
 } from "@/lib/agents/external";
 import { DEPARTMENT_MAX_CHARACTERS } from "@/lib/agents/form";
@@ -50,6 +60,10 @@ import { cn } from "@/lib/utils";
  * 工作文件夹和五项规则，多一个「电脑」可以换到本人配对的另一台电脑（换了要重新选工作文件夹）；保存走
  * `PATCH /api/agents/external/:id`，换不了是哪一家。改规则不用电脑在线（服务器只在换电脑、换文件夹时对照
  * 电脑上报的文件夹），所以编辑态不去问电脑、电脑离线也能存；本机智能体招聘时确认过，不再要勾。
+ *
+ * 运行位置（8.3，只在编辑态、只有 Claude Code 和 Codex）：「云电脑 / 本机」切换。Claude Code 默认云电脑，
+ * 切到云电脑不用选电脑和文件夹；切到本机要选一台在线的、自己配对的电脑和它共享的文件夹，没有电脑就提示先
+ * 去配对。Codex 固定在本机：云电脑那一项不可选，写明「Codex 员工暂时只能在你自己的电脑上跑」。
  */
 
 /** 名字最长 40 个字，和服务器一样。 */
@@ -93,6 +107,49 @@ function Warning({ children }: { children: ReactNode }) {
       />
       <span>{children}</span>
     </p>
+  );
+}
+
+/** 「运行位置」里的一项：单选，不可选时灰着（原因写在下面那句说明里）。 */
+function RuntimeOption({
+  checked,
+  disabled,
+  group,
+  icon,
+  label,
+  onSelect,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  group: string;
+  icon: ReactNode;
+  label: string;
+  onSelect: () => void;
+}) {
+  return (
+    <label
+      className={cn(
+        "inline-flex h-9 items-center gap-1.5 rounded-[9px] border px-3 text-[14px] has-focus-visible:ring-2 has-focus-visible:ring-ring",
+        checked
+          ? "border-primary bg-primary/10 font-semibold text-foreground"
+          : "border-border text-muted-foreground hover:text-foreground",
+        disabled
+          ? "cursor-not-allowed opacity-50 hover:text-muted-foreground"
+          : "cursor-pointer",
+      )}
+      data-slot="hire-runtime-option"
+    >
+      <input
+        checked={checked}
+        className="sr-only"
+        disabled={disabled}
+        name={group}
+        onChange={onSelect}
+        type="radio"
+      />
+      {icon}
+      {label}
+    </label>
   );
 }
 
@@ -151,6 +208,9 @@ export function HireSettings({
     editing?.external.rules ?? ACP_RULE_DEFAULTS,
   );
   const [acknowledged, setAcknowledged] = useState(false);
+  const [runtime, setRuntime] = useState<AgentRuntime>(
+    runtimeOf(editing?.external),
+  );
 
   // 工作文件夹和本机程序必须本人选；名字没动过就用这家的名字。
   const chosenWorkdir =
@@ -172,6 +232,14 @@ export function HireSettings({
     ...discoveryQueryOptions(deviceId),
     enabled: !editing && mine && !!device?.online && !custom,
   });
+
+  // 运行位置只有编辑态里的 Claude Code 和 Codex 有得选；云上的员工没有电脑和文件夹的事。
+  const choosesRuntime =
+    !!editing && (harness === "claude-code" || harness === "codex");
+  const cloud = choosesRuntime && runtime === "cloud";
+  const wasCloud = runtimeOf(editing?.external) === "cloud";
+  /** 从云电脑搬回本机：要一台在线的、自己配对的电脑。 */
+  const movingHome = !!editing && wasCloud && runtime === "device";
 
   const back = onCancel ? (
     <button
@@ -233,7 +301,15 @@ export function HireSettings({
       ? undefined
       : discovery.data?.agents.find((agent) => agent.harness === harness);
   const blocker: string | null = editing
-    ? null
+    ? movingHome
+      ? ownDevices.length === 0
+        ? "还没有配对的电脑，先去配对一台，再把它切到本机。"
+        : !mine
+          ? "请选一台你自己配对的电脑。"
+          : !device?.online
+            ? `电脑离线：打开这台电脑、让${shortName()}桌面端连上后再切到本机。`
+            : null
+      : null
     : !device?.online
       ? `电脑离线：打开这台电脑、让${shortName()}桌面端连上后再招。`
       : custom
@@ -254,23 +330,43 @@ export function HireSettings({
   const ready =
     !blocker &&
     !checkFailed &&
-    !!device &&
-    mine &&
     trimmedName.length > 0 &&
     [...trimmedName].length <= NAME_MAX &&
     [...trimmedDepartment].length <= DEPARTMENT_MAX_CHARACTERS &&
-    !!chosenWorkdir &&
-    (!custom || (!!chosenApp && (acknowledged || !!editing)));
+    // 在云电脑上干活的员工没有电脑和文件夹要选。
+    (cloud ||
+      (!!device &&
+        mine &&
+        !!chosenWorkdir &&
+        (!custom || (!!chosenApp && (acknowledged || !!editing)))));
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!ready || save.isPending || !device) return;
+    if (!ready || save.isPending || (!device && !cloud)) return;
     if (editing) {
       const before = editing.external;
+      // 云电脑：只送运行位置，不带电脑和文件夹（服务器也不收）。
+      if (cloud) {
+        update.mutate(
+          {
+            agentId: editing.agentId,
+            input: {
+              name: trimmedName,
+              department: trimmedDepartment,
+              ...(wasCloud ? {} : { runtime: "cloud" as const }),
+              rules,
+            },
+          },
+          { onSuccess: (agent) => onHired(agent.id) },
+        );
+        return;
+      }
+      if (!device) return;
       // 只送变了的电脑、文件夹和本机智能体：只改规则时服务器不必再对照电脑上报的文件夹。
       const input: ExternalEdit = {
         name: trimmedName,
         department: trimmedDepartment,
+        ...(wasCloud ? { runtime: "device" as const } : {}),
         ...(device.deviceId !== before.deviceId
           ? { deviceId: device.deviceId }
           : {}),
@@ -286,6 +382,7 @@ export function HireSettings({
       );
       return;
     }
+    if (!device) return;
     hire.mutate(
       {
         deviceId: device.deviceId,
@@ -302,8 +399,9 @@ export function HireSettings({
     );
   };
 
-  const subtitle =
-    harness === "custom"
+  const subtitle = cloud
+    ? `不用填 key，模型走${shortName()}的模型代理`
+    : harness === "custom"
       ? "用它自己的配置干活"
       : harness === "hermes"
         ? "用它自己配置的模型"
@@ -324,7 +422,11 @@ export function HireSettings({
             {editing ? `改 ${editing.name} 的配置` : `把 ${label} 招进来`}
           </h2>
           <span className="text-muted-foreground">
-            {device ? `在 ${device.name} 上干活 · ` : ""}
+            {cloud
+              ? "在云电脑里干活 · "
+              : device
+                ? `在 ${device.name} 上干活 · `
+                : ""}
             {subtitle}
           </span>
         </div>
@@ -344,6 +446,18 @@ export function HireSettings({
           role="status"
         >
           {blocker}
+          {movingHome && ownDevices.length === 0 ? (
+            <>
+              {" "}
+              <Link
+                className="text-primary underline underline-offset-4"
+                data-slot="hire-link"
+                to="/settings/devices"
+              >
+                去配对一台电脑
+              </Link>
+            </>
+          ) : null}
         </p>
       ) : null}
 
@@ -389,7 +503,57 @@ export function HireSettings({
               不填就是未分组；最多 {DEPARTMENT_MAX_CHARACTERS} 个字。
             </span>
           </div>
-          {editing ? (
+          {choosesRuntime ? (
+            <div className="flex flex-col gap-1.5" data-slot="hire-runtime">
+              <span
+                className="text-[13px] text-muted-foreground"
+                id={`${ids}-runtime`}
+              >
+                运行位置
+              </span>
+              <div
+                aria-labelledby={`${ids}-runtime`}
+                className="flex gap-2"
+                role="radiogroup"
+              >
+                <RuntimeOption
+                  checked={runtime === "cloud"}
+                  group={`${ids}-runtime`}
+                  disabled={!canRunInCloud(harness)}
+                  icon={<IconCloud aria-hidden="true" className="size-4" />}
+                  label="云电脑"
+                  onSelect={() => setRuntime("cloud")}
+                />
+                <RuntimeOption
+                  checked={runtime === "device"}
+                  group={`${ids}-runtime`}
+                  icon={
+                    <IconDeviceLaptop aria-hidden="true" className="size-4" />
+                  }
+                  label="本机"
+                  onSelect={() => {
+                    setRuntime("device");
+                    // 从云电脑切回来：默认选一台在线的、自己配对的电脑，文件夹要重新选。
+                    if (!mine) {
+                      const first =
+                        ownDevices.find((row) => row.online) ?? ownDevices[0];
+                      if (first) setDeviceId(first.deviceId);
+                      setWorkdirRef(null);
+                    }
+                  }}
+                />
+              </div>
+              <span
+                className="text-[12px] text-muted-foreground"
+                data-slot="hire-runtime-note"
+              >
+                {canRunInCloud(harness)
+                  ? "云电脑：不用配对电脑，关掉网页照样跑。本机：直接改你电脑上的代码，要一台在线的、自己配对的电脑。"
+                  : LOCAL_ONLY_NOTE}
+              </span>
+            </div>
+          ) : null}
+          {editing && !cloud ? (
             <div className="flex flex-col gap-1.5">
               <label
                 className="text-[13px] text-muted-foreground"
@@ -460,46 +624,50 @@ export function HireSettings({
               </span>
             </div>
           ) : null}
-          <div className="flex flex-col gap-1.5">
-            <label
-              className="text-[13px] text-muted-foreground"
-              htmlFor={`${ids}-workdir`}
-            >
-              工作文件夹（它只在这里面干活）
-            </label>
-            {roots.length > 0 ? (
-              <select
-                className={fieldClass}
-                data-slot="hire-select"
-                id={`${ids}-workdir`}
-                onChange={(event) => setWorkdirRef(event.target.value)}
-                value={chosenWorkdir}
+          {cloud ? null : (
+            <div className="flex flex-col gap-1.5">
+              <label
+                className="text-[13px] text-muted-foreground"
+                htmlFor={`${ids}-workdir`}
               >
-                <option disabled value="">
-                  请选择…
-                </option>
-                {roots.map((root) => (
-                  <option key={root.ref} value={root.ref}>
-                    {root.name}
+                工作文件夹（它只在这里面干活）
+              </label>
+              {roots.length > 0 ? (
+                <select
+                  className={fieldClass}
+                  data-slot="hire-select"
+                  id={`${ids}-workdir`}
+                  onChange={(event) => setWorkdirRef(event.target.value)}
+                  value={chosenWorkdir}
+                >
+                  <option disabled value="">
+                    请选择…
                   </option>
-                ))}
-              </select>
-            ) : (
-              <p className="m-0 text-[13px] text-muted-foreground">
-                这台电脑还没有共享文件夹。请先在桌面端添加一个，再回来招。
-              </p>
-            )}
-            {editing &&
-            device?.deviceId === editing.external.deviceId &&
-            !roots.some((root) => root.ref === editing.external.workdirRef) ? (
-              <Warning>
-                原来的工作文件夹这台电脑不再共享了，请重新选一个再保存。
-              </Warning>
-            ) : null}
-            <span className="text-[12px] text-muted-foreground">
-              只列出这台电脑在桌面端共享的文件夹；要用新文件夹，请先在桌面端添加。
-            </span>
-          </div>
+                  {roots.map((root) => (
+                    <option key={root.ref} value={root.ref}>
+                      {root.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="m-0 text-[13px] text-muted-foreground">
+                  这台电脑还没有共享文件夹。请先在桌面端添加一个，再回来招。
+                </p>
+              )}
+              {editing &&
+              device?.deviceId === editing.external.deviceId &&
+              !roots.some(
+                (root) => root.ref === editing.external.workdirRef,
+              ) ? (
+                <Warning>
+                  原来的工作文件夹这台电脑不再共享了，请重新选一个再保存。
+                </Warning>
+              ) : null}
+              <span className="text-[12px] text-muted-foreground">
+                只列出这台电脑在桌面端共享的文件夹；要用新文件夹，请先在桌面端添加。
+              </span>
+            </div>
+          )}
           <div className="flex flex-col gap-1.5">
             <span className="text-[13px] text-muted-foreground">汇报</span>
             <p className="m-0 text-[14px]">

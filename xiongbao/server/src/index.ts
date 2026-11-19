@@ -72,6 +72,10 @@ import { createAgentFetch } from "./agents/endpoint";
 import { createHandoffDesk } from "./agents/handoff";
 import { createHandoffRunner } from "./agents/handoff-runner";
 import { startHandoffDelivery } from "./agents/handoff-wiring";
+import {
+  createHardModelRoutes,
+  createHardModelStore,
+} from "./agents/hard-model-routes";
 import { runsIsolated } from "./agents/isolation";
 import {
   configureBotLifecycle,
@@ -415,6 +419,7 @@ import {
 import { createModelRoutes, createModelShelf } from "./models/routes";
 import {
   createNamedAgentModelResolver,
+  type DeploymentModel,
   meteringTenantsFor,
   modelOf,
 } from "./models/runtime-resolver";
@@ -1223,6 +1228,10 @@ await startupLifecycle.run(async (startup) => {
     agentModelConfig.baseUrl,
     AGENT_MODEL_ROUTE,
   );
+  // 期八·一：没有自己模型的外部员工用租户内置员工默认的那个模型；它在下面（`runtimeModel` 之后）才建好。
+  let agentModelDeployment:
+    | (() => Promise<DeploymentModel | undefined>)
+    | undefined;
   const agentModel = createAgentModelService({
     database,
     credentials: credentialStore,
@@ -1232,6 +1241,7 @@ await startupLifecycle.run(async (startup) => {
     outbound: modelOutbound,
     config: agentModelConfig,
     computerBaseUrl: agentModelComputerUrl,
+    deployment: async () => agentModelDeployment?.(),
   });
   const acpRuntimeForModel = deviceAcpRuntime();
   if (acpRuntimeForModel) acpRuntimeForModel.model = agentModel.access;
@@ -2610,6 +2620,11 @@ await startupLifecycle.run(async (startup) => {
       keyId: tenantPackage.model.credentialSecretRef,
       environment: process.env,
     });
+  // 外部员工没有自己的模型时用的默认模型（期八·一，规格 §8.3）：和内置员工每轮解析的是同一个。
+  agentModelDeployment = async () => {
+    const key = await resolveRuntimeModelApiKey();
+    return key ? deploymentModel(runtimeModel, key) : undefined;
+  };
 
   /*
    * Kept, with a stamp naming the key it asked about, so the setup checklist can repeat the answer
@@ -6481,6 +6496,24 @@ await startupLifecycle.run(async (startup) => {
         ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),
     ),
+  );
+
+  /*
+   * 期七界面：员工设置里的「难任务模型」。能选的是对话里模型选择器那份目录（管理员的白名单已算在里面）；
+   * 只有能编辑这位员工的人能改。和上面的自主性路由同在 `/api/agents` 下，路径多一段，不会被员工的 `GET /:agentId` 接走。
+   */
+  app.route(
+    "/api/agents",
+    createHardModelRoutes({
+      store: createHardModelStore(database),
+      profiles: agentProfileStore,
+      allowed: async () =>
+        (await modelCatalogue.read()).models.map((model) => model.id),
+      requireUser: config.singleUser
+        ? createDevRequireUser(config.singleUserAccess)
+        : createRequireUser(auth as AuthService, roleRepository),
+      auditStore: bootAuditStore,
+    }),
   );
 
   /*

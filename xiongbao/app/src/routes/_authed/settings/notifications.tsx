@@ -7,6 +7,7 @@ import {
 } from "@/components/layout/page-shell";
 import { CheckInsSection } from "@/components/settings/check-ins";
 import { NativeDevices, RecentDeliveries } from "@/components/settings/devices";
+import { RunNoticeSection } from "@/components/settings/run-notice";
 import { UpdateRoutingSection } from "@/components/settings/update-routing";
 import { WechatBindingSection } from "@/components/settings/wechat-binding";
 import { WorkHoursSection } from "@/components/settings/work-hours";
@@ -36,6 +37,7 @@ function NotificationsPage() {
     >
       <WorkHoursSection />
       <CheckInsSection />
+      <RunNoticeSection />
       <UpdateRoutingSection />
       <WechatBindingSection />
       <NativeDevices />

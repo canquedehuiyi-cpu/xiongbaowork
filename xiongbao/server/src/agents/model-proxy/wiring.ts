@@ -3,6 +3,7 @@ import type { Database } from "../../db/client";
 import {
   boundModelName,
   createAgentUpstreamResolver,
+  type DeploymentModel,
 } from "../../models/runtime-resolver";
 import type { ModelTokenCallSink } from "../../models/token-metering";
 import type { OutboundPolicy } from "../../net/outbound-guard";
@@ -53,6 +54,12 @@ export function createAgentModelService(options: {
   /** The proxy's address as a cloud computer reaches it (`readAgentModelComputerUrl`). */
   computerBaseUrl?: string | undefined;
   environment?: Readonly<Record<string, string | undefined>>;
+  /**
+   * The deployment default model: what a built-in employee answers on each turn, and so what an
+   * external employee with no model of its own is given. Read when needed, since it is built after
+   * this service is. Absent, or answering nothing (no key), such an employee has no model.
+   */
+  deployment?: () => Promise<DeploymentModel | undefined>;
 }): AgentModelService {
   const { database, config } = options;
   const tokens = createAgentModelTokens({
@@ -62,7 +69,10 @@ export function createAgentModelService(options: {
     database,
     options.credentials,
     options.encryptionKey,
-    options.environment ? { environment: options.environment } : {},
+    {
+      ...(options.environment ? { environment: options.environment } : {}),
+      ...(options.deployment ? { deployment: options.deployment } : {}),
+    },
   );
   const quota = options.quota;
   const proxy = createAgentModelProxy({
@@ -92,7 +102,11 @@ export function createAgentModelService(options: {
         boundModelName(database, agentId, options.environment ?? process.env),
       );
       // `provider/model`: the harness is told the model's own name.
-      return name ? name.slice(name.indexOf("/") + 1) : null;
+      if (name) return name.slice(name.indexOf("/") + 1);
+      // Nothing bound: the deployment default, as for a built-in employee. The proxy forwards to the
+      // same one (`resolveUpstream`), so the name told here is the model that answers.
+      const fallback = await options.deployment?.().catch(() => undefined);
+      return fallback?.modelName ?? null;
     },
   });
   return { tokens, proxy, access };

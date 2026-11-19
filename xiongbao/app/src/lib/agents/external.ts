@@ -11,6 +11,7 @@ import {
   type RegisteredDevice,
 } from "@/lib/devices/queries";
 import {
+  ACP_CODEX_CLOUD_REFUSAL,
   ACP_RULE_DEFAULTS,
   type AcpHarness,
   type AcpRuleKey,
@@ -41,6 +42,23 @@ export function hiredRun(
 
 export type { AcpHarness, AcpRuleKey, AcpRuleValue };
 export { ACP_RULE_DEFAULTS };
+
+/** 它在哪里跑：自己的云电脑，还是招聘人配对的电脑（没写就是后者）。 */
+export type AgentRuntime = "cloud" | "device";
+
+export function runtimeOf(
+  external: Pick<ExternalRun, "runtime"> | undefined,
+): AgentRuntime {
+  return external?.runtime === "cloud" ? "cloud" : "device";
+}
+
+/** 哪几家能在云电脑上跑：只有 Claude Code（云电脑里只预装了它）。 */
+export function canRunInCloud(harness: AcpHarness): boolean {
+  return harness === "claude-code";
+}
+
+/** Codex 选云电脑时服务器和界面说的同一句话。 */
+export const LOCAL_ONLY_NOTE = ACP_CODEX_CLOUD_REFUSAL;
 
 /** 发现能认出来的三家；`custom` 是桌面端登记的本机智能体，不在发现结果里。 */
 export type DiscoveredHarness = Exclude<AcpHarness, "custom">;
@@ -153,17 +171,28 @@ export function discoveryQueryOptions(deviceId: string) {
   });
 }
 
-export type HireInput = {
-  deviceId: string;
-  harness: AcpHarness;
-  name: string;
-  department?: string;
-  workdirRef: string;
-  appRef?: string;
-  rules: Record<AcpRuleKey, AcpRuleValue>;
-  /** 只有 `custom`：用户确认知道它可能从不请求许可。 */
-  acknowledgeNoPermission?: boolean;
-};
+export type HireInput =
+  | {
+      deviceId: string;
+      harness: AcpHarness;
+      name: string;
+      department?: string;
+      workdirRef: string;
+      appRef?: string;
+      rules: Record<AcpRuleKey, AcpRuleValue>;
+      /** 只有 `custom`：用户确认知道它可能从不请求许可。 */
+      acknowledgeNoPermission?: boolean;
+      /** 写出来的 `device` 和不写一样：在招聘人配对的电脑上跑。 */
+      runtime?: "device";
+    }
+  | {
+      /** 在它自己的云电脑上跑（只有 Claude Code）：不选电脑和文件夹。 */
+      runtime: "cloud";
+      harness: AcpHarness;
+      name: string;
+      department?: string;
+      rules: Record<AcpRuleKey, AcpRuleValue>;
+    };
 
 export type HiredAgent = {
   id: string;
@@ -292,6 +321,8 @@ export function useExternalDevice(
 export type ExternalEdit = {
   name?: string;
   department?: string;
+  /** 换运行位置（只有 Claude Code）：云电脑 / 本机；换到本机要同时给电脑和工作文件夹。 */
+  runtime?: AgentRuntime;
   deviceId?: string;
   workdirRef?: string;
   appRef?: string;
