@@ -1,0 +1,6 @@
+{
+  "identifier": "desktop-banner",
+  "description": "The desktop-session banner: its page only listens for the desktop-banner event.",
+  "windows": ["desktop-banner"],
+  "permissions": ["core:event:allow-listen", "core:event:allow-unlisten"]
+}

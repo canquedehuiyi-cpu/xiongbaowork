@@ -1,0 +1,187 @@
+import { sql } from "drizzle-orm";
+import {
+  boolean,
+  date,
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { jsonb } from "./json";
+import { tenantId } from "./tenant";
+
+const createdAt = () =>
+  timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
+const updatedAt = () =>
+  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow();
+
+/** What set the task in motion. Mirrors the audit `initiator_kind` vocabulary. */
+export const taskSource = pgEnum("task_source", [
+  "chat",
+  "routine",
+  "responsibility",
+  "handoff",
+  "group_run",
+]);
+
+/**
+ * The board's lanes. `needs_action` is a person's turn (an approval or a
+ * question is waiting); `awaiting_review` is the board's "查收结果" -- the
+ * work finished and its output is unclaimed.
+ */
+export const taskStatus = pgEnum("task_status", [
+  "running",
+  "needs_action",
+  "awaiting_review",
+  "done",
+  "failed",
+  "cancelled",
+]);
+
+/**
+ * A task: the unit QoderWake's board is built from.
+ *
+ * A projection, not a second engine -- every row is written from facts the
+ * run/approval/routine machinery already produces. A card that is not being followed
+ * (`tracked = false`) is never read by the execution path, which is what keeps the board honest and
+ * the risk of drift low. A followed card (`tracked = true`, the delivery loop: 派出 → 已接下 →
+ * 已交成果 → 验收) is read and written by `tasks/delivery.ts`, and by nothing else.
+ */
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    tenantId: tenantId(),
+    title: text("title").notNull(),
+    /**
+     * Which coworker this card is work for. Null says nobody in particular: the ask a person
+     * started is on the board, and the coworker who carries out each part of it is named on the
+     * card for that part. A crew's parent card is the only thing that writes this null today, and
+     * it exists because the alternative was worse — naming the GROUP here put a value from
+     * another table's primary key into a coworker column, so the board drew the group's uuid as
+     * the coworker's name (see `app/src/routes/_authed/_app/tasks.tsx`'s fallback) and no
+     * `executors=` filter could ever find the card.
+     */
+    executorAgentId: text("executor_agent_id"),
+    source: taskSource("source").notNull(),
+    triggerSource: text("trigger_source"),
+    status: taskStatus("status").notNull().default("running"),
+    /** The channel or thread the work happens in, when there is one. */
+    channelRef: text("channel_ref"),
+    /** The run this task mirrors: routine run id, group step id, or AG-UI run id. */
+    runRef: text("run_ref"),
+    parentTaskId: uuid("parent_task_id"),
+    /** One admission may reserve a group's parent plus every planned step. */
+    quotaUnits: integer("quota_units").notNull().default(1),
+    /** Where the output lives: an attachment id, a workspace path, a component. */
+    deliverableRef: jsonb("deliverable_ref").$type<unknown>(),
+    /** The approval that parked the task, so the decision can flip it back. */
+    pendingApprovalId: text("pending_approval_id"),
+    /**
+     * Which of the tenant's machines this work ran on, in device mode (ticket 017).
+     *
+     * Stored rather than derived: the board filters by machine (`?machineId=`), and a task whose work
+     * happened on a laptop that has since been unpaired still has to read as having happened there.
+     */
+    deviceId: text("device_id"),
+    /*
+     * The delivery loop (spec 2026-11-15-delivery-loop §3, migration 0217). Every column below means
+     * something only when `tracked` is true; an untracked card keeps the defaults.
+     */
+    /** Whether the card goes through 派出 → 已接下 → 已交成果 → 验收. */
+    tracked: boolean("tracked").notNull().default(false),
+    /** The thread a followed card hangs on (a group thread for a group, not the channel id). */
+    threadRef: text("thread_ref"),
+    /** When the coworker took the work on. Null: still 待接下. */
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    /** The delivery time in force; only the person (or a granted extension) moves it. */
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    /** The time the coworker first promised. Never rewritten, so an overdue record cannot vanish. */
+    originalDueAt: timestamp("original_due_at", { withTimezone: true }),
+    /** First time the card was recorded overdue; kept after delivery. */
+    overdueAt: timestamp("overdue_at", { withTimezone: true }),
+    /** Whether the coworker named a time (false: checked against a two-hour default). */
+    dueReported: boolean("due_reported").notNull().default(false),
+    /** What counts as done, in the coworker's words; "必需：A、B" lists required items. */
+    criteria: text("criteria"),
+    /** One sentence about the last round's failure, cleared by the next round that succeeds. */
+    lastError: text("last_error"),
+    /** How many times the checker nudged the coworker. */
+    nudges: integer("nudges").notNull().default(0),
+    /** How many times the person sent the work back. */
+    returns: integer("returns").notNull().default(0),
+    /**
+     * The round running on a followed card right now, when it is not the run that opened it: written
+     * when a later turn hangs on the card, cleared when that round ends. An approval raised in that
+     * round names this run, and this is how the board finds the card it parks (one round per thread
+     * at a time, so one column is enough).
+     */
+    activeRunRef: text("active_run_ref"),
+    /**
+     * A 退回 in progress: set when the person's reason starts being said in the card's conversation,
+     * cleared when it is in (the card goes back to `running`) or could not be said. Two returns at
+     * once cannot both say it; a claim older than two minutes is a request that died, and may be
+     * taken again.
+     */
+    returnPendingAt: timestamp("return_pending_at", { withTimezone: true }),
+    /*
+     * The delivery checker's own record (spec §8, migration 0219), written under the card's row lock so
+     * two replicas checking the same card at once nudge and notify once (`tasks/delivery-checker.ts`).
+     */
+    /** When the coworker was last nudged about this card (by the checker, or the person's 再催). */
+    lastNudgedAt: timestamp("last_nudged_at", { withTimezone: true }),
+    /** When the person was last reminded about it: pushed, or held outside their work hours. */
+    lastNotifiedAt: timestamp("last_notified_at", { withTimezone: true }),
+    /** The person's local day (on their time zone) `notified_count` counts pushes on. */
+    notifiedOn: date("notified_on", { mode: "string" }),
+    /** How many reminders were pushed on `notified_on`: at most three a day. */
+    notifiedCount: integer("notified_count").notNull().default(0),
+    /** A reminder held back outside the person's work hours, for the next start briefing. */
+    reminderHeldAt: timestamp("reminder_held_at", { withTimezone: true }),
+    /** The person's local day `nudged_count` counts nudges on (migration 0221). */
+    nudgedOn: date("nudged_on", { mode: "string" }),
+    /** How many nudges went out on `nudged_on`: the checker opens no fourth that day. */
+    nudgedCount: integer("nudged_count").notNull().default(0),
+    /**
+     * A hand-over (换人接手) whose message has not reached the new coworker yet (migration 0222): set
+     * with the hand-over, cleared once its round starts or the new coworker takes the work on. The
+     * checker hands the work over, not a plain nudge, while it is set.
+     */
+    handoverPendingAt: timestamp("handover_pending_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    index("tasks_tenant_status_updated_idx").on(
+      table.tenantId,
+      table.status,
+      table.updatedAt,
+    ),
+    index("tasks_executor_idx").on(table.executorAgentId, table.updatedAt),
+    index("tasks_run_ref_idx").on(table.runRef),
+    index("tasks_channel_ref_idx").on(
+      table.tenantId,
+      table.channelRef,
+      table.updatedAt,
+    ),
+    index("tasks_tracked_due_idx").on(
+      table.tenantId,
+      table.tracked,
+      table.status,
+      table.dueAt,
+    ),
+    index("tasks_tracked_thread_idx")
+      .on(table.tenantId, table.threadRef, table.executorAgentId)
+      .where(sql`${table.tracked}`),
+  ],
+);
+
+/*
+ * Upstream's own "tasks" (#929, a Bot's work on an item a check-in raised) share this module's name
+ * with the board above. They live in ./bot-tasks.ts and are re-exported here, where upstream's code
+ * imports them from.
+ */
+export { type BotTaskOrigin, botTasks } from "./bot-tasks";

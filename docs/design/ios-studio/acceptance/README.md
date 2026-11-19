@@ -1,6 +1,6 @@
 # 黑白红全站改版 · 验收记录
 
-依据：[`../IMPLEMENTATION.zh-CN.md`](../IMPLEMENTATION.zh-CN.md) 与同目录五张效果图。实现位于 `openbot/app`。
+依据：[`../IMPLEMENTATION.zh-CN.md`](../IMPLEMENTATION.zh-CN.md) 与同目录五张效果图。实现位于 `xiongbao/app`。
 
 ## 1. 基线与范围
 
@@ -10,7 +10,7 @@
 | 起点提交 | `12c959df`（main，Merge pull request #360） |
 | 设计材料 | 取自 `origin/codex/ui-design-studio-reference` 的 `docs/design/ios-studio/`（`df1c848e`） |
 | 运行时 | 仓库声明 `bun@1.3.14`；本机执行用 bun 1.4.4（依赖按锁文件 `--frozen-lockfile` 安装，无变更） |
-| 改动范围 | 仅 `openbot/app`（前端呈现与交互组织）与本目录文档。后端协议、数据模型、迁移、设备端、模型调用、计费、凭据与生产配置均未改动。 |
+| 改动范围 | 仅 `xiongbao/app`（前端呈现与交互组织）与本目录文档。后端协议、数据模型、迁移、设备端、模型调用、计费、凭据与生产配置均未改动。 |
 
 改造前基线（同一环境）：`typecheck` 通过；`build` 通过；`bun test`（app）1800 通过 / 7 失败。7 个失败都在 `tests/serve.test.ts`（websocket、语音、听写代理超时与 NUL 路径用例），属于本机网络环境，改造前后同名同数。
 
@@ -29,7 +29,7 @@
 
 ## 2. 构建与测试（改造后，实际命令与结果）
 
-在 `openbot/` 下执行：
+在 `xiongbao/` 下执行：
 
 | 命令 | 结果 |
 | --- | --- |
@@ -43,7 +43,7 @@
 
 ## 3. 截图
 
-生成方式：Vite 开发服务器（隔离端口 3910/3911）+ `openbot/app/tests/parity/capture.ts`，所有 `/api` 读取由示例数据应答（`tests/parity/fixtures.ts` 与 `tests/parity/extra/*.ts`），时钟固定，减少动态效果。**均为示例数据截图**。
+生成方式：Vite 开发服务器（隔离端口 3910/3911）+ `xiongbao/app/tests/parity/capture.ts`，所有 `/api` 读取由示例数据应答（`tests/parity/fixtures.ts` 与 `tests/parity/extra/*.ts`），时钟固定，减少动态效果。**均为示例数据截图**。
 
 - `core/<视图>/`：五个核心页面及其视图（列表/泳道、按员工、群组、资源各页签），每个视图含
   `data-dark-1440x900`、`empty-dark-1440x900`、`data-light-1440x900`、`data-dark-1280x800`、`data-dark-1024x768`、`data-dark-390x844`。
@@ -81,7 +81,7 @@
 
 写入只验证到「页面发出了正确的请求」；示例数据对未定义的写入回 404。**未与真实后端联调**（见第 7 节）。
 
-## 5. 逐路由清单（`openbot/app/src/routes`，62 个文件）
+## 5. 逐路由清单（`xiongbao/app/src/routes`，62 个文件）
 
 壳层：app = 应用侧栏 + 工作台；admin = 管理后台侧栏；settings = 应用侧栏 + 设置导航；— = 无壳层。截图路径相对本目录。
 
@@ -104,7 +104,7 @@
 | `_authed/_app` | app | `AppShell`：226px 侧栏、导航红条、员工/群组分段、名单、账户区；小管家改入面包屑栏 | 全部 app 截图 | 已实现 |
 | `/sign` | — | 品牌 logo、红线英文眉线、登录/注册分段、卡面、错误红色浅底 | `conversations/sign-*.webp`（以 `/api/me` 返回 401 的专用脚本拍摄） | 已实现 |
 | `/sign-in/$requestId` | prose | 复查无需改 | `conversations/sign-in-signin-crm.webp` | 已复查 |
-| `/onboarding` | — | 上游向导框架套黑白红：品牌 logo 与中英文名、`0N ONBOARDING` 眉线、开放式大标题、红色当前步骤标记（步骤菜单、手机进度条、演示圆点）、石墨演示面板、熊宝红白光球；资料来源步骤右侧补熊宝示意图；**重定向**：已完成引导或部署不跟踪引导时回到 `/` | `conversations/onboarding-{welcome,sources,name}-{dark,light}-1440x900.webp`、`…-dark-390x844.webp`（`bun tests/parity/onboarding-shots.ts` 以需引导的用户拍摄） | 已实现 |
+| `/onboarding` | — | 上游向导框架套黑白红：品牌 logo 与中英文名、开放式大标题、红色当前步骤标记（步骤菜单、手机进度条、演示圆点）、石墨演示面板、熊宝红白光球；资料来源步骤右侧补熊宝示意图；**重定向**：已完成引导或部署不跟踪引导时回到 `/` | `conversations/onboarding-{welcome,sources,name}-{dark,light}-1440x900.webp`、`…-dark-390x844.webp`（`bun tests/parity/onboarding-shots.ts` 以需引导的用户拍摄） | 已实现 |
 | `/` | app | 欢迎区熊宝 + 开放式标题、共享员工空态 | `routes/home.webp` | 已实现 |
 | `/bot` | app | 页头员工信息、聊天组件中文化、气泡样式 | `routes/bot.webp` | 已实现 |
 | `/channel/new` | app | 收件人行、空对话欢迎 | `routes/channel-new*.webp` | 已实现 |

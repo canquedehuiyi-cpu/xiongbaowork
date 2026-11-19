@@ -1,0 +1,240 @@
+import type { Message } from "@ag-ui/core";
+import { IconDownload } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
+import type { TranscriptNote } from "@/components/channels/chat-transcript";
+import { client } from "@/lib/client";
+import {
+  artifactDownloadHref,
+  artifactFolderOf,
+  isWorkspaceScope,
+  normalizedArtifactPath,
+  writtenPathsInTurn,
+} from "@/lib/computers/artifact";
+import { callComputer } from "@/lib/computers/call";
+import { formatBytes } from "@/lib/desktop/queries";
+
+/*
+ * 一轮里存下的文件，摆在对话末尾成一页清单。
+ *
+ * 员工保存文件的那一行写的是它存的路径，一轮存三四个就要划好几屏；人要的又往往不是「你存了没」，
+ * 而是「把它给我」。这一页把本轮写成功的文件收在一起，每个都是一条下载链接（为什么有的作用域不给
+ * 链接，见 `lib/computers/artifact.ts`）。
+ *
+ * 清单的来源是本轮的写入事件，不是工作区的目录：一个员工的工作区里有它历史上写过的所有东西，
+ * 把那份列表说成「本轮产物」是假话。`POST /files/list` 只用来核文件还在不在、顺手报个大小——
+ * 写完又被删掉的不列，目录没读完（`truncated`）时不据此说文件不在。
+ */
+
+/** 一轮最多列这么几个：写几十个文件的那是在同步目录，不是交付一件东西。 */
+export const TURN_ARTIFACT_LIMIT = 8;
+
+/** 最多点这么几个目录去核：更多的目录只按写入事件列，不报大小。 */
+const LISTED_FOLDERS = 4;
+
+/** 一个文件在清单上的一行。 */
+type ArtifactRow = {
+  path: string;
+  /** 目录里读到的字节数；没核到（清单没读完、那个目录没去点）时没有。 */
+  bytes?: number;
+};
+
+/** 点目录点出来的结果。 */
+type Listed = {
+  /**
+   * 目录里确实有的文件，按工作区根算的相对路径，带上目录报的大小。
+   *
+   * 「在不在」看 `has`，值只用来写大小：目录有时报不出一个文件的大小，那样的文件也是在的。
+   */
+  present: Map<string, number | undefined>;
+  /** 去过、且读完的目录：文件在这一批里没出现，就是真不在了。 */
+  read: Set<string>;
+  /** 有目录读到自己的上限就停了：这时「没出现」什么也不说明。 */
+  truncated: boolean;
+};
+
+/**
+ * 这台员工的文件工具是不是在它自己的工作区里干活，而且是服务器答过的「是」，不是我们猜的。
+ *
+ * 问的是 `GET /api/computers/:botId/local-tools` 的 `machine`，和存文件那一行（`copilot/computer-tools.tsx`
+ * 的 `useLocalTools`）同一个问题、同一个查询键：一处给链接，另一处不会说这台机器不在工作区上——同一
+ * 份答案在 react-query 的缓存里，不会多打一次。
+ *
+ * 没答、答不上（一个人的浏览器只答它自己那三条读）、答 `device`，都算「不知道」，这一页就不出：清单里
+ * 每一行都是一条下载链接，链接点开 404 比不列这一页更糟——这一页刚说过「文件在这儿」。配对电脑的项目
+ * 模式里文件写进的是项目根，下载路由只认工作区根（根透传另立 WP-0.5，需安全评审）。
+ */
+function useWorkspaceFiles(botId: string | undefined): boolean {
+  const { data } = useQuery({
+    queryKey: ["computers", "local-tools", botId ?? ""],
+    queryFn: async () => {
+      const response = await client(
+        `/api/computers/${encodeURIComponent(botId ?? "")}/local-tools`,
+        { fallback: "读不到这台电脑在哪里。" },
+      );
+      return (await response.json()) as { machine?: string };
+    },
+    enabled: botId !== undefined && botId.trim() !== "",
+    staleTime: 60_000,
+  });
+  return isWorkspaceScope(data?.machine);
+}
+
+/** 去点本轮写过的目录，看那些文件还在不在。 */
+async function listWrittenFolders(
+  botId: string,
+  paths: readonly string[],
+): Promise<Listed> {
+  const folders = [...new Set(paths.map(artifactFolderOf))].slice(
+    0,
+    LISTED_FOLDERS,
+  );
+  const present = new Map<string, number | undefined>();
+  const read = new Set<string>();
+  let truncated = false;
+  for (const folder of folders) {
+    const result = await callComputer(botId, "/files/list", {
+      method: "POST",
+      body: { path: folder },
+    });
+    // 读不到这个目录（没有、太远、被拦）什么也不说明：只算没去过，不据此删掉一行。
+    if (result.ok !== true) continue;
+    read.add(folder);
+    if (result.truncated === true) truncated = true;
+    for (const entry of Array.isArray(result.entries) ? result.entries : []) {
+      const shape = entry as {
+        path?: unknown;
+        kind?: unknown;
+        bytes?: unknown;
+      };
+      if (shape?.kind !== "file" || typeof shape.path !== "string") continue;
+      const path = normalizedArtifactPath(shape.path);
+      if (path === undefined) continue;
+      present.set(
+        path,
+        typeof shape.bytes === "number" && Number.isFinite(shape.bytes)
+          ? shape.bytes
+          : undefined,
+      );
+    }
+  }
+  return { present, read, truncated };
+}
+
+/** 这一轮的清单：写入成功、且没被目录证明确实不在了的文件。 */
+function rowsOf(
+  paths: readonly string[],
+  listed: Listed | undefined,
+): ArtifactRow[] {
+  if (!listed) return [];
+  const rows: ArtifactRow[] = [];
+  for (const path of paths) {
+    const here = listed.present.has(path);
+    // 去过这个目录、读完了、里面没有它：它被删了，或者从来就不在工作区里。
+    if (
+      !here &&
+      listed.read.has(artifactFolderOf(path)) &&
+      !listed.truncated
+    )
+      continue;
+    const bytes = listed.present.get(path);
+    rows.push({ path, ...(here && bytes !== undefined ? { bytes } : {}) });
+  }
+  return rows;
+}
+
+function TurnArtifacts({
+  botId,
+  paths,
+}: {
+  botId: string;
+  paths: readonly string[];
+}) {
+  const workspace = useWorkspaceFiles(botId);
+  const shown = paths.slice(0, TURN_ARTIFACT_LIMIT);
+  const listed = useQuery({
+    queryKey: ["computer-artifacts", botId, shown.join("\n")],
+    queryFn: () => listWrittenFolders(botId, shown),
+    enabled: workspace && shown.length > 0,
+    staleTime: 15_000,
+    retry: 0,
+  });
+  // 配对电脑的项目模式：链接点不开，这一页就不出现（那一行也一样没有链接，两边一个口径）。
+  if (!workspace) return null;
+  const rows = rowsOf(shown, listed.data);
+  if (rows.length === 0) return null;
+  return (
+    <div
+      className="flex min-w-0 max-w-full flex-col gap-1 text-sm text-muted-foreground"
+      data-artifact-list=""
+    >
+      {/* 和它上面那些执行行同一副外壳：一行一件事，图标在前，状态不只写在颜色里。 */}
+      <div className="inline-flex min-w-0 max-w-full items-center gap-[7px] rounded-[10px] border border-border bg-card px-[10px] py-[5px]">
+        <span className="shrink-0 self-center">
+          <IconDownload
+            aria-hidden
+            className="size-[14px] shrink-0 text-faint"
+          />
+        </span>
+        <span className="shrink-0 whitespace-nowrap">本轮产物</span>
+      </div>
+      {rows.map((row) => {
+        const href = artifactDownloadHref(botId, row.path);
+        if (href === undefined) return null;
+        return (
+          <a
+            key={row.path}
+            className="inline-flex min-w-0 max-w-full items-baseline gap-1.5 rounded-[10px] border border-border bg-card px-[10px] py-[5px] underline-offset-4 hover:border-foreground/15 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            data-artifact-path={row.path}
+            // 空值：文件名由路由的 Content-Disposition 定（安全决策 A4——回来的是附件，不是这个源上的
+            // 一页）。写成 `download` 在 JSX 里等于 true，存下来会变成一个叫 true 的文件。
+            download=""
+            href={href}
+            rel="noopener"
+          >
+            <span className="min-w-0 truncate">{row.path}</span>
+            {row.bytes === undefined ? null : (
+              <span className="shrink-0 opacity-70">{formatBytes(row.bytes)}</span>
+            )}
+          </a>
+        );
+      })}
+      {listed.data?.truncated === true ? (
+        // 目录到自己定的上限就停了，本轮写过的文件可能就在没读到的那一段里：说出来，
+        // 别让一份短的清单被当成一份全的。
+        <span className="opacity-70" data-artifact-truncated="">
+          工作区里的文件太多，这份清单可能没列全。
+        </span>
+      ) : null}
+      {paths.length > shown.length ? (
+        <span className="opacity-70">
+          这一轮还存了 {paths.length - shown.length} 个文件，没在这里列出。
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * 本轮产物清单，作为一条附注交进转录（和交付卡、外部员工的卡走同一套 `TranscriptNote`）。
+ *
+ * 挂在最后一行下面（`anchor: null`）：它说的是「刚做出来的东西」，跟着对话的末尾走，不跟着某一条
+ * 消息走。这一轮没有写成功的文件时什么都不交，转录上也就不多空一格。
+ */
+export function turnArtifactNotes({
+  messages,
+  botId,
+}: {
+  messages: ReadonlyArray<Readonly<Message>>;
+  botId: string | undefined;
+}): TranscriptNote[] {
+  if (botId === undefined || botId.trim() === "") return [];
+  const paths = writtenPathsInTurn(messages);
+  if (paths.length === 0) return [];
+  return [
+    {
+      key: "turn-artifacts",
+      anchor: null,
+      node: <TurnArtifacts botId={botId} paths={paths} />,
+    },
+  ];
+}

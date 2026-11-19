@@ -1,0 +1,272 @@
+[
+  {
+    "file": "app/src/components/admin/controls/computer-sections.tsx",
+    "text": "Idle computers",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/computer-sections.tsx",
+    "text": "Network",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/computer-sections.tsx",
+    "text": "Group",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/computer-sections.tsx",
+    "text": "Mode",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/mcp-allowlist-section.tsx",
+    "text": "MCP servers",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/mcp-allowlist-section.tsx",
+    "text": "Only approved MCP servers",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/network-describe.tsx",
+    "text": "Only Salesforce and Google Workspace",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/recording-section.tsx",
+    "text": "Recording and export",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/recording-section.tsx",
+    "text": "Action Recording",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/recording-section.tsx",
+    "text": "No commands recorded yet",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/sign-in-section.tsx",
+    "text": "Sign-in",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/admin/controls/sign-in-section.tsx",
+    "text": "Require SSO",
+    "reason": "unwired: 上游 enterprise 分区，随目录改名原样搬进来，本仓库没有任何引用；哪天接上线，这条豁免会自己失效"
+  },
+  {
+    "file": "app/src/components/agents/create-agent-dialog.tsx",
+    "text": "https://your-agent.example.com/ag-ui",
+    "reason": "example-value: AG-UI 地址示例"
+  },
+  {
+    "file": "app/src/components/agents/create-agent-dialog.tsx",
+    "text": "Bearer …",
+    "reason": "example-value: 令牌填写形态示例"
+  },
+  {
+    "file": "app/src/components/agents/new-bot-sheet.tsx",
+    "text": "https://your-agent.example.com/ag-ui",
+    "reason": "example-value: AG-UI 地址示例"
+  },
+  {
+    "file": "app/src/components/agents/new-bot-sheet.tsx",
+    "text": "Bearer …",
+    "reason": "example-value: 令牌填写形态示例"
+  },
+  {
+    "file": "app/src/components/delivery/reaching-you.tsx",
+    "text": "+15551234567",
+    "reason": "example-value: 手机号示例"
+  },
+  {
+    "file": "app/src/components/manage/new-credential-page.tsx",
+    "text": "OpenAI",
+    "reason": "example-value: 凭据名示例，照抄服务商名"
+  },
+  {
+    "file": "app/src/components/manage/new-credential-page.tsx",
+    "text": "production",
+    "reason": "example-value: 环境名示例"
+  },
+  {
+    "file": "app/src/components/manage/plugin-page.tsx",
+    "text": "https://your-instance.service-now.com",
+    "reason": "example-value: 实例地址示例"
+  },
+  {
+    "file": "app/src/components/plugins/deployment-clients.tsx",
+    "text": "shopify",
+    "reason": "example-value: 应用标识示例"
+  },
+  {
+    "file": "app/src/components/reachability/link-conversation-dialog.tsx",
+    "text": "+15551234567",
+    "reason": "example-value: 手机号示例"
+  },
+  {
+    "file": "app/src/components/responsibilities/triggers.tsx",
+    "text": "T0123ABCD",
+    "reason": "example-value: 工单 ID 形态示例"
+  },
+  {
+    "file": "app/src/components/responsibilities/triggers.tsx",
+    "text": "eyes, rotating_light",
+    "reason": "example-value: 表情短代码示例"
+  },
+  {
+    "file": "app/src/components/responsibilities/triggers.tsx",
+    "text": "C0123ABCD",
+    "reason": "example-value: 渠道 ID 形态示例"
+  },
+  {
+    "file": "app/src/components/responsibilities/triggers.tsx",
+    "text": "data.team.key",
+    "reason": "example-value: 取值路径示例"
+  },
+  {
+    "file": "app/src/components/responsibilities/triggers.tsx",
+    "text": "ENG",
+    "reason": "example-value: 团队键示例"
+  },
+  {
+    "file": "app/src/components/responsibilities/triggers.tsx",
+    "text": "owner/name",
+    "reason": "example-value: 仓库写法示例，翻了就填不对"
+  },
+  {
+    "file": "app/src/components/responsibilities/triggers.tsx",
+    "text": "ops@example.com, example.com",
+    "reason": "example-value: 邮箱与域名示例"
+  },
+  {
+    "file": "app/src/components/settings/github-sources.tsx",
+    "text": "owner/repository",
+    "reason": "example-value: 仓库写法示例，翻了就填不对"
+  },
+  {
+    "file": "app/src/components/skills/skill-fields.tsx",
+    "text": "standup",
+    "reason": "example-value: 技能标识示例"
+  },
+  {
+    "file": "app/src/components/what-if/action-chips.tsx",
+    "text": "www.linkedin.com",
+    "reason": "example-value: 网址示例"
+  },
+  {
+    "file": "app/src/routes/sign.tsx",
+    "text": "you@example.com",
+    "reason": "example-value: 邮箱示例"
+  },
+  {
+    "file": "app/src/routes/sign.tsx",
+    "text": "you@company.com",
+    "reason": "example-value: 邮箱示例"
+  },
+  {
+    "file": "app/src/routes/_authed/admin/boundaries_.new.tsx",
+    "text": "tool.name == \"computer_click\" && contains(element.name, \"delete\")",
+    "reason": "example-value: 边界规则表达式示例"
+  },
+  {
+    "file": "app/src/routes/_authed/admin/credentials.tsx",
+    "text": "OpenAI",
+    "reason": "example-value: 凭据名示例，照抄服务商名"
+  },
+  {
+    "file": "app/src/routes/_authed/admin/credentials.tsx",
+    "text": "production",
+    "reason": "example-value: 环境名示例"
+  },
+  {
+    "file": "app/src/routes/_authed/admin/identity-providers.tsx",
+    "text": "acme-okta",
+    "reason": "example-value: 租户标识示例"
+  },
+  {
+    "file": "app/src/routes/_authed/admin/identity-providers.tsx",
+    "text": "acme.com",
+    "reason": "example-value: 域名示例"
+  },
+  {
+    "file": "app/src/routes/_authed/admin/identity-providers.tsx",
+    "text": "https://acme.okta.com",
+    "reason": "example-value: 提供方地址示例"
+  },
+  {
+    "file": "app/src/routes/_authed/admin/identity-providers.tsx",
+    "text": "https://acme.okta.com/app/.../sso/saml",
+    "reason": "example-value: SAML 地址示例"
+  },
+  {
+    "file": "app/src/routes/_authed/admin/identity-providers.tsx",
+    "text": "<EntityDescriptor …>",
+    "reason": "example-value: 元数据片段示例"
+  },
+  {
+    "file": "app/src/routes/_authed/admin/learning.tsx",
+    "text": "support-learning",
+    "reason": "example-value: 技能标识示例"
+  },
+  {
+    "file": "app/src/routes/_authed/admin/playground.tsx",
+    "text": "refund_card",
+    "reason": "example-value: 工具名示例"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/responsibilities.tsx",
+    "text": "owner/repository",
+    "reason": "example-value: 仓库写法示例，翻了就填不对"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/responsibilities.tsx",
+    "text": "T0123ABCD",
+    "reason": "example-value: 工单 ID 形态示例"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/responsibilities.tsx",
+    "text": "eyes, rotating_light",
+    "reason": "example-value: 表情短代码示例"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/responsibilities.tsx",
+    "text": "C0123ABCD",
+    "reason": "example-value: 渠道 ID 形态示例"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/responsibilities.tsx",
+    "text": "data.team.key",
+    "reason": "example-value: 取值路径示例"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/responsibilities.tsx",
+    "text": "ENG",
+    "reason": "example-value: 团队键示例"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/responsibilities.tsx",
+    "text": "owner/name",
+    "reason": "example-value: 仓库写法示例，翻了就填不对"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/responsibilities.tsx",
+    "text": "ops@example.com, example.com",
+    "reason": "example-value: 邮箱与域名示例"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/wakerflows.$flowId.tsx",
+    "text": "WakerFlow",
+    "reason": "proper-noun: 产品里的流程名，翻了反而认不出"
+  },
+  {
+    "file": "app/src/routes/_authed/_app/wakerflows.index.tsx",
+    "text": "WakerFlow",
+    "reason": "proper-noun: 产品里的流程名，翻了反而认不出"
+  }
+]

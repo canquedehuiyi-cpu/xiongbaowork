@@ -17,11 +17,15 @@
 | 7 准备首个发布 | 已完成 | canquedehuiyi-cpu/xiongbaowork#246：`package.json` 0.2.0，CHANGELOG `## 0.2.0` |
 | 8 打 tag | **已完成（正式版）** | `v0.2.0` → 「熊宝发布」运行 41989346546 全绿，正式 Release `v0.2.0` 已发，镜像 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:b76702a4…6686b1`。此前预发布 `v0.2.0-rc.1`（运行 41952108367） |
 | 9 GHCR 公开 | 已完成 | 发布的 digest 能匿名取到 manifest（HTTP 200） |
-| 10 G7 | Linux 已完成（CI 与真实服务器），Windows 待做 | `v0.2.0` 发布运行 41989346546 里 `g7-linux` 内置库、外部库两个 job 都通过。2026-11-06 在京东云 Ubuntu 22.04 上用正式镜像 `v0.2.0` 单容器部署：健康检查 200，注册并用 `grant-admin.ts` 设首位管理员（命令已在 #274 修正），部署级模型接 DeepSeek 后「我的分身」正常回答。踩到的坑写进 `openbot/docs/deployment-qoderwake.md` §5.1（#277）。Windows 需要一台 Win10/11 真机：手头的 Windows Server 2025 云主机不支持 WSL2/Docker |
+| 10 G7 | Linux 已完成（CI 与真实服务器），Windows 待做 | `v0.2.0` 发布运行 41989346546 里 `g7-linux` 内置库、外部库两个 job 都通过。2026-11-06 在京东云 Ubuntu 22.04 上用正式镜像 `v0.2.0` 单容器部署：健康检查 200，注册并用 `grant-admin.ts` 设首位管理员（命令已在 #274 修正），部署级模型接 DeepSeek 后「我的分身」正常回答。踩到的坑写进 `xiongbao/docs/deployment-qoderwake.md` §5.1（#277）。Windows 需要一台 Win10/11 真机：手头的 Windows Server 2025 云主机不支持 WSL2/Docker |
 | 11 G5 真机 | 通过（6 项全部通过，含 v0.2.1 上的批准执行；中文输出随设备端 `device-v0.2.1-rc.1` 修复并复测通过） | 设备端 `device-v0.2.0-rc.2` 装在 Windows 11 25H2（「峰哥工作站」）上，先配对到京东云 v0.2.0，2026-11-07 升级到 v0.2.1 复测；逐项记录见第 11 节「2026-11-06 实测」与「2026-11-07 v0.2.1 复测」 |
 | 12 F2 设备端 | 未签名内测版已发；全新机器安装检查已在 CI 自动通过；签名：已决定暂不购买（D3，见 12.7）；真人电脑证据待人工 | `device-v0.2.0-rc.1` 的 Windows job 失败，已由 canquedehuiyi-cpu/xiongbaowork#250 修复；`device-v0.2.0-rc.2` → 「熊宝设备端发布」运行 41963394570 全绿，预发布「熊宝数字员工 设备端 0.2.0（未签名内测版）」含 Windows 安装包、Linux deb 和 `SHA256SUMS`（下载复核通过）。签名身份（D3，12.2/12.4）和两台干净机器证据（12.6）待人工。全新托管机器（Ubuntu、Windows）上的安装、配对、启动退出、卸载检查已在 #266 的 CI 上首次实跑通过，此后每个 PR 和每次设备端发布都会跑。2026-11-07 `device-v0.2.1-rc.1`（含 #295 中文输出修复）→ 运行 42369464470 全绿，已在「峰哥工作站」覆盖安装并复测通过 |
 | 13 百度网盘来源 | 本人通过；第二人隔离待测 | 2026-11-07 在京东云部署（v0.2.1）实测：百度网盘开放平台应用「xiongbao」（软件 · 个人使用，已上线）已建，回调地址已填；AppKey/SecretKey 已登记；本人百度账号已授权；员工「我的分身」依次调用 `list_files`、`search_files`、`read_file_content`，读出只有本人网盘里才有的测试文件暗号。登记和授权当时因 `team:<key>` 编号缺陷走的是浏览器控制台，修复见 #315、#316。还差换另一个人验证读不到，见第 13 节「验收记录」。Google Drive 已决定暂不启用（2026-11-06） |
 | 14 本机 MCP 真机 | 待测（v0.2.2 + device-v0.2.2） | 设备端本机 MCP 桥接已合入：设计 `docs/specs/2026-11-07-device-mcp-bridge.md`，计划 `docs/plans/2026-11-07-device-mcp-bridge.md`，PR #300–#311。见第 14 节 |
+| 16 桌面查看（只读）真机 | 待核实 | 见第 16 节；仓库记录里没有留下验收结果 |
+| 17 员工独立电脑（京东云） | 待核实 | 见第 17 节；仓库记录里没有留下验收结果 |
+| 18 桌面操作第 2 期（macOS / Linux / 多显示器） | 待做（macOS 部分暂缓） | 需要服务器 `v0.2.10` 和同版本设备端；2026-11-13 决定苹果系统暂缓，先只做 Linux 和多显示器，macOS 各项与 Apple 证书一起以后再做，见第 18 节 |
+| 19 桌面操作第 2 期：Windows（引擎开关） | 待做 | 需要服务器和设备端都是 `v0.2.10`（含 Task 28）；验收通过并回复「Windows 验收通过」后才把 Windows 默认切到 agent-desktop，见第 19 节 |
 
 ## 1. 把 `main` 设为默认分支
 
@@ -74,8 +78,8 @@ Actions → 「模型 E2E 计量对账」→ Run workflow，分支选 `main`，�
 ## 7. 准备首个发布
 
 1. 定版本号，例如 `0.2.0-rc.1`。
-2. 改 `openbot/package.json` 的 `version`，填**不带** `-rc` 的基础版本（如 `0.2.0`）。
-3. 在 `openbot/CHANGELOG.md` 里把 `## Unreleased` 改名为 `## 0.2.0`（与基础版本一致），内容不能为空。需要写进去的升级提醒：
+2. 改 `xiongbao/package.json` 的 `version`，填**不带** `-rc` 的基础版本（如 `0.2.0`）。
+3. 在 `xiongbao/CHANGELOG.md` 里把 `## Unreleased` 改名为 `## 0.2.0`（与基础版本一致），内容不能为空。需要写进去的升级提醒：
    - **`TENANT_RUNTIME` 生产默认改为 `device`（F6）。** Helm 升级后会切到 `device`；要保留原行为，设 `config.tenantRuntime=cloud`。
    - **新增迁移 0130（`avatar_sources`）和 0131（`agent_security_settings`，规则多了 `deny`）。**
    - **员工所有者设的收紧类规则现在对其他使用者也生效（SEC1 D9）。**
@@ -172,7 +176,7 @@ CI 里一直有三个未签名包可以下载试装：`device app unsigned deb`�
 | D6 | 自动更新 | **已决定（2026-11-04）：首版不做。** 没接 `tauri-plugin-updater`。发布说明会写"没有自动更新，新版需重新下载安装"，不需要 updater 密钥 |
 | D8 | 产品名和 identifier | **已决定（2026-11-04）：定为 `com.xiongbao.device`，不再是占位。** macOS 的签名和公证都绑在 identifier 上，首个签名版之后不要再改 |
 
-**不能用** `openbot/desktop/signing/azure-federation.json`：它指向上游仓库的签名身份。
+**不能用** `xiongbao/desktop/signing/azure-federation.json`：它指向上游仓库的签名身份。
 
 ### 12.2 申请 Windows 代码签名身份（A、B 二选一）
 
@@ -258,7 +262,7 @@ Settings → Environments → New environment，名称填 `device-release`：
 
 ### 12.5 打首个设备端标签 `device-v0.1.0`
 
-设备端的版本号取自 `openbot/package.json` 的 `version`，现在是 `0.1.0`，和服务端共用。标签的版本必须和打标签那个提交里的 `package.json` 一致。如果第 7 步已经把它改成了 `0.2.0`，标签就要打 `device-v0.2.0`。
+设备端的版本号取自 `xiongbao/package.json` 的 `version`，现在是 `0.1.0`，和服务端共用。标签的版本必须和打标签那个提交里的 `package.json` 一致。如果第 7 步已经把它改成了 `0.2.0`，标签就要打 `device-v0.2.0`。
 
 1. 先演练（建议）：推一个 `device-v0.1.0-rc.1`，它总是发成预发布。或者在 Actions → 「熊宝设备端发布」→ Run workflow 里，对一个已存在的设备端标签手动运行，`dry_run` 保持勾选。这样会把构建、签名、校验、SHA256SUMS 全跑一遍，只是不发布，产物在运行页的 `device-release-dist` 里。
 2. 正式打标签：
@@ -293,7 +297,7 @@ Settings → Environments → New environment，名称填 `device-release`：
    - macOS：在终端运行 `spctl --assess -vv "/Applications/熊宝数字员工 设备端.app"`，输出必须是 `accepted` 和 `source=Notarized Developer ID`。
 3. 安装后打开「熊宝数字员工 设备端」，在 Web 端「我的设备」生成配对码并填入，截图页面显示设备在线和设备名。
 4. 让一个员工在这台设备上执行一个普通命令，截图结果。
-5. 从托盘退出应用，确认进程列表里没有 `openbot-runner`：Windows 看任务管理器并截图；Linux 和 macOS 保存 `ps -e | grep openbot-runner` 的空输出。
+5. 从托盘退出应用，确认进程列表里没有 `xiongbao-runner`：Windows 看任务管理器并截图；Linux 和 macOS 保存 `ps -e | grep xiongbao-runner` 的空输出。
 6. 重启电脑，不重新配对，设备自动上线，截图。
 7. 卸载。
 
@@ -303,9 +307,9 @@ Settings → Environments → New environment，名称填 `device-release`：
 
 - 第 1 步校验和：两台都自动做（Linux `sha256sum -c --ignore-missing`，Windows `Get-FileHash` 对照 `SHA256SUMS`）。
 - 第 2 步签名：Windows 自动跑 `Get-AuthenticodeSignature`，已签名的发布必须是 `Valid` 且发布者与 `windows` job 校验过的一致；未签名内测版只记录 `NotSigned`，不因此失败。Linux deb 只核对校验和。
-- 第 3 步安装和配对：Linux 用 `sudo apt-get install -y ./xiongbao-device_*_amd64.deb` 安装（依赖从软件源装），检查 `/usr/bin/xiongbao-device`、`/usr/bin/openbot-runner` 和桌面入口；再在同一台机器上起真实服务端和 PostgreSQL，通过 API 注册、在「我的设备」生成配对码，用**已安装的** `openbot-runner` 配对，确认设备在线、配对码不能用第二次。Windows 用 `/S` 静默安装（Tauri 默认按当前用户装到 `%LOCALAPPDATA%\熊宝数字员工 设备端`，实际的安装方式和目录从卸载项读出并写进记录），检查 `xiongbao-device.exe`、`openbot-runner.exe`、卸载项和版本；Windows 上没有带 pgvector 的 PostgreSQL，所以不配对，只跑 runner 自检（`--help`、`--add-root`/`--list-roots`/`--remove-root`）。
+- 第 3 步安装和配对：Linux 用 `sudo apt-get install -y ./xiongbao-device_*_amd64.deb` 安装（依赖从软件源装），检查 `/usr/bin/xiongbao-device`、`/usr/bin/xiongbao-runner` 和桌面入口；再在同一台机器上起真实服务端和 PostgreSQL，通过 API 注册、在「我的设备」生成配对码，用**已安装的** `xiongbao-runner` 配对，确认设备在线、配对码不能用第二次。Windows 用 `/S` 静默安装（Tauri 默认按当前用户装到 `%LOCALAPPDATA%\熊宝数字员工 设备端`，实际的安装方式和目录从卸载项读出并写进记录），检查 `xiongbao-device.exe`、`xiongbao-runner.exe`、卸载项和版本；Windows 上没有带 pgvector 的 PostgreSQL，所以不配对，只跑 runner 自检（`--help`、`--add-root`/`--list-roots`/`--remove-root`）。
 - 第 4 步执行命令：Linux 由服务器给设备下发一条不经过模型的命令（`projects.branches`，设备上运行 `git ls-remote`），确认返回结果。Windows 不做。
-- 第 5 步退出后无残留：Linux 按 PID 停掉 runner，再两次启动已安装的应用、用 SIGTERM 退出（与托盘「退出」走同一个 `quit()`），每次都确认没有 `openbot-runner` 进程、服务器显示离线。Windows 启动已安装的应用，确认它拉起安装目录里的 `openbot-runner.exe`，再强制结束应用（比托盘退出更粗暴），确认 `Get-Process` 里没有 `openbot-runner`。
+- 第 5 步退出后无残留：Linux 按 PID 停掉 runner，再两次启动已安装的应用、用 SIGTERM 退出（与托盘「退出」走同一个 `quit()`），每次都确认没有 `xiongbao-runner` 进程、服务器显示离线。Windows 启动已安装的应用，确认它拉起安装目录里的 `xiongbao-runner.exe`，再强制结束应用（比托盘退出更粗暴），确认 `Get-Process` 里没有 `xiongbao-runner`。
 - 第 6 步重启后自动上线：Linux 用「不重新配对、重新启动应用、设备重新在线」代替，不是真实重启。
 - 第 7 步卸载：Linux `sudo apt-get remove -y xiongbao-device`，Windows `uninstall.exe /S`，都确认程序文件（和 Windows 卸载项）已删除、没有残留进程。
 
@@ -505,3 +509,75 @@ OneDrive 不在平台目录里，这一步只涉及百度网盘。
 4. 让该员工执行 `ls -l` 确认能看到这些文件，属主是 `xb-$key`。
 
 验收：按「升级后确认已生效」两项各做一次，再让员工 A 写一个文件，让员工 B 去读，B 应读不到。结果记在本节下面。
+
+## 18. 桌面操作第 2 期：macOS / Linux / 多显示器真机验收
+
+员工能在你的 macOS 电脑上点击、输入、按键、切换和启动应用、等待控件、读写剪贴板；Linux 只能查看（试用）；Windows 仍只能查看（设计见 `docs/specs/2026-11-12-desktop-write-agent-desktop.md`）。需要服务器 `v0.2.10` 和同版本的设备端。macOS 安装包目前是未签名内测版（Apple 证书和公证尚未完成），首次打开要在「系统设置 → 隐私与安全性」里放行。
+
+**macOS**
+- [ ] 1. 第一次运行：全新安装后，按引导开启辅助功能；验证「未授权时的提示 → 开启 → 自动变成已允许」，以及更新一个版本后**不用**重新授权。
+- [ ] 2. 备忘录或文本编辑：写一段中文并保存，读回一致。
+- [ ] 3. 微信：读出会话列表；在输入框写一句话；按 Enter 发送时弹出逐次审批，拒绝后确实没发出去。
+- [ ] 4. 一个 Electron 应用（如 VS Code、飞书或钉钉）：能读出主要按钮并点击一次。
+- [ ] 5. 叫停：会话中动一下鼠标、按一次停止键，各自都能立即停下，且必须重新审批。
+
+**多显示器**（任一平台）
+- [ ] 窗口在副屏时能列出、能读、能截图；需要真实鼠标点击的控件在副屏上点得准。
+
+**Linux**（可选）
+- [ ] 在 GNOME 桌面上能列窗口和读取；写动作得到「只能查看」的提示。
+
+**真机待确认项**（实现时留下的疑点，每项记下实际现象）
+- [ ] 删除键 `forwarddelete`：在文本框里用 key 工具按它，确认真的删掉光标后一个字符。
+- [ ] `textarea`、`searchfield`、`combobox` 三种控件角色都能输入。
+- [ ] 长文本在有头模式（headed）下输入：不超时；超时的话记下多长的文本、等了多久。
+- [ ] `--wait-for` 只给名字、或只给类型时的写法：两种各试一次，记下哪种写法被接受。
+- [ ] 等待超时的实际错误码：等一个不会出现的控件，记下返回的错误码和中文提示。
+- [ ] `clipboard-get` 的返回格式：复制一段文字和一个文件，记下各自返回什么。
+- [ ] 名字里带 `:` 的控件：点击或输入，确认能按名字找到。
+- [ ] 两个会话下的停止热键：同时有两个桌面会话时按 Ctrl+Alt+Esc（⌃⌥⎋），确认两个都停。
+- [ ] 退出时不死锁：会话进行中退出设备端，确认能正常退出、不卡住。
+
+**终审补充**（最终整分支评审的修复，每项都必须弹出逐次审批）
+- [ ] 熊宝自己的界面：会话中让员工去点熊宝网页上的「允许一次」，必须被逐次审批拦下；拒绝后那张审批卡片仍未被批准。
+- [ ] 熊宝自己的界面：会话中让员工去改团队敏感词表（输入并点保存），必须被逐次审批拦下；拒绝后词表没有变化。
+- [ ] 熊宝自己的界面：会话中让员工点设备端窗口或熊宝桌面客户端里的按钮，必须被逐次审批拦下。
+- [ ] 终端：会话中让员工在「终端」（Windows 上为 PowerShell / Windows Terminal）里输入一条命令，必须逐次审批；拒绝后命令没有执行。
+- [ ] 中文 macOS 的终端：在中文系统上列出窗口，记下「终端」窗口实际的进程名（`app_name`，预期为「终端」或 `Terminal`），并确认在它里面的写动作逐次审批。
+- [ ] 批准后再问：会话中让员工点一个完整名字很长、「删除」在第 120 个字之后的按钮，批准第一张卡后，按钮绝不能直接被点下去：这次调用失败，员工收到中文提示「设备发现了确认卡上没写的情况：……请再调用一次……」。员工再调用一次时，第一张卡要写明「删除」和完整控件名，批准后才点下去，只点一次；拒绝则不点。
+- [ ] 带换行的输入：在微信输入框用追加方式（`append`）输入带换行的文字，必须弹逐次审批；拒绝后消息没有发出去。
+- [ ] 改名后的部署：换一个租户包（产品名不同）后，网页标签标题含新产品名时同样被逐次审批拦下。
+- [ ] 永久删除快捷键（macOS）：在访达里选中一个测试文件按 `cmd+backspace`，必须逐次审批；拒绝后文件还在。
+- [ ] 永久删除快捷键（Windows（引擎开关打开时））：在资源管理器里选中一个测试文件按 `shift+delete`，必须逐次审批；拒绝后文件还在。
+- [ ] 助记键（Windows（引擎开关打开时））：在带「发送(S)」按钮的窗口里按 `alt+s`，必须逐次审批。
+- [ ] 长控件名（I1）：点一个完整名字很长、「删除」在第 120 个字之后的按钮（网页或 Electron 应用里找），批准会话卡后，设备端必须再弹一张写明完整控件名的审批卡。
+
+每一步截图，结果记在本节下面。任何一项不通过，先查根因，不改验收标准。
+
+## 19. 桌面操作第 2 期：Windows 真机验收（引擎开关）
+
+Windows 默认仍是旧的读取器，只能查看。本节在你自己的 Windows 电脑上，用环境变量把引擎切到 agent-desktop，逐项验收写动作。全部通过并回复「Windows 验收通过」之后，下一版才会把 Windows 默认切过去；有没通过的项，请把编号和现象发回来。
+
+前提：服务器和设备端都升级到 `v0.2.10`（含「Windows 在引擎开关下操作桌面」，PR-9）。
+
+- [ ] 1. 在 PowerShell 里运行 `setx XIONGBAO_DESKTOP_ENGINE agent-desktop`，然后彻底退出设备端（托盘里选退出），再重新打开。
+- [ ] 2. 两个引擎读取对比：
+  - 先运行 `& "<安装目录>\xiongbao-runner.exe" --desktop-compare --desktop-helper "<安装目录>\agent-desktop.exe"`；
+  - 打开记事本、资源管理器、微信和一个 Electron 应用（如 VS Code、飞书或钉钉）后再运行一次；
+  - 把两次输出都贴回来。两边都要能读出关键控件，「agent-desktop 缺少」一栏列出的控件请特别留意。
+- [ ] 3. 记事本写中文（走 set-value）并按 Ctrl+S 保存，再打开文件核对内容一致；计算器算 12×34，结果是 408。
+- [ ] 4. 微信：让员工在输入框写一句话，按发送时弹出逐次审批；拒绝后确实没有发出去。
+- [ ] 5. 打开中文输入法，让员工用真实键盘方式输入一段中文：结果不乱码、不被输入法吞字。**请截图。**
+- [ ] 6. 让员工用真实鼠标点击一次：提示条显示「正在移动鼠标」；点击后你一动鼠标，会话立即停下，之后要重新审批。**请截图。**
+- [ ] 7. 打开一个以管理员身份运行的窗口，让员工去操作：得到明确的「需要管理员权限」提示。
+- [ ] 8. 验收结束后，如果想恢复旧引擎：运行 `setx XIONGBAO_DESKTOP_ENGINE ""`，再彻底退出并重开设备端。
+**终审补充（Windows）**（每项都必须弹出逐次审批；与第 18 节同名项一致）
+- [ ] 熊宝自己的界面：会话中让员工去点浏览器里熊宝网页上的「允许一次」、去改团队敏感词表，都必须被逐次审批拦下。
+- [ ] 终端：会话中让员工在 PowerShell 或 Windows Terminal 里输入一条命令，必须逐次审批；拒绝后命令没有执行。
+- [ ] 永久删除：在资源管理器里选中一个测试文件按 `shift+delete`，必须逐次审批；拒绝后文件还在。
+- [ ] 助记键：在带「发送(S)」按钮的窗口里按 `alt+s`，必须逐次审批。
+- [ ] 带换行的输入：在微信输入框用追加方式输入带换行的文字（Windows 上追加总是用真实键盘），必须逐次审批；拒绝后消息没有发出去。
+
+- [ ] 9. 回复「Windows 验收通过」，或者列出没通过的项。
+
+另请顺带留意：如果 `XIONGBAO_DESKTOP_ENGINE` 写错（例如大小写不对），runner 会按未设置处理（仍是旧引擎、只能查看），并在设备端日志里记一行「桌面引擎「…」不认识」。遇到写动作一直被拒绝时，先看这一行。

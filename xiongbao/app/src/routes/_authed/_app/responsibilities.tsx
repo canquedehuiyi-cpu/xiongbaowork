@@ -1,0 +1,1292 @@
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { useId, useState } from "react";
+import { Streamdown } from "streamdown";
+import { PageShell } from "@/components/layout/page-shell";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
+import { CARD_FACE, Tag } from "@/components/resources/resource-kit";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Textarea } from "@/components/ui/textarea";
+import { legacyResponsibilitiesTarget } from "@/lib/agents/legacy-routes";
+import { agentListQueryOptions } from "@/lib/agents/queries";
+import { conversationLabel } from "@/lib/channels/label";
+import { channelListQueryOptions } from "@/lib/channels/queries";
+import { markdownComponents } from "@/lib/markdown";
+import {
+  createGithubBinding,
+  createResponsibility,
+  createTrigger,
+  githubBindingsQueryOptions,
+  type ResponsibilityRecord,
+  removeGithubBinding,
+  removeTrigger,
+  responsibilitiesQueryOptions,
+  responsibilityAction,
+  responsibilityKeys,
+  responsibilityRunsQueryOptions,
+  revealTriggerSecret,
+  setTriggerEnabled,
+  setTriggerSecret,
+  type TriggerConfig,
+  type TriggerKind,
+  type TriggerRecord,
+  triggersQueryOptions,
+  updateResponsibility,
+} from "@/lib/responsibilities";
+import { queryClient } from "@/query-client";
+
+/**
+ * `agent`: only this employee's responsibilities, as an employee's own page links here. Absent, or
+ * not a string, is everybody's, so every older link to the page keeps its meaning.
+ */
+export function responsibilitiesSearch(search: Record<string, unknown>): {
+  agent?: string;
+} {
+  return typeof search.agent === "string" && search.agent
+    ? { agent: search.agent }
+    : {};
+}
+
+export const Route = createFileRoute("/_authed/_app/responsibilities")({
+  component: ResponsibilitiesPage,
+  validateSearch: responsibilitiesSearch,
+  /*
+   * M5b：一位员工的长期职责现在在那位员工自己的「长期职责」分页里，所以 `?agent=X` 转过去；不带 `agent`
+   * 时仍是这张跨员工的全量页。
+   */
+  beforeLoad: ({ search }) => {
+    const target = legacyResponsibilitiesTarget(search);
+    if (target) throw redirect(target);
+  },
+});
+/*
+ * docs/design/ios-studio, for a working page: graphite cards on a hairline, 13px labels over the
+ * workbench's 32px controls, and red only for what needs the person's attention.
+ */
+const fieldClass = "grid min-w-0 gap-[5px] text-[13px]";
+const selectClass =
+  "h-[32px] min-w-0 w-full rounded-[9px] border border-border bg-muted px-[9px] text-[13px] font-normal outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50 dark:bg-[oklch(0.196_0.002_286.2)]";
+/** A responsibility's state in words, and the badge tone it takes. */
+const GOAL_STATUS: Record<
+  ResponsibilityRecord["status"],
+  { label: string; tone: "positive" | "muted" }
+> = {
+  active: { label: "进行中", tone: "positive" },
+  paused: { label: "已暂停", tone: "muted" },
+  completed: { label: "已完成", tone: "muted" },
+};
+const statusLabel = (status: string) =>
+  GOAL_STATUS[status as ResponsibilityRecord["status"]]?.label ?? status;
+const SECTION_TITLE = "font-bold text-[17px] leading-[26px] tracking-[-0.02em]";
+async function refresh() {
+  await queryClient.invalidateQueries({ queryKey: responsibilityKeys.all });
+}
+
+function ResponsibilitiesPage() {
+  const goals = useQuery(responsibilitiesQueryOptions());
+  const { agent } = responsibilitiesSearch(Route.useSearch());
+  const bots = useQuery(agentListQueryOptions());
+  const shown = (goals.data ?? []).filter(
+    (goal) => agent === undefined || goal.agentId === agent,
+  );
+  return (
+    <PageShell
+      title="长期职责"
+      description="交给员工一个长期目标，跟进它的进展，并决定它什么时候开工。"
+      width="workbench"
+    >
+      {/*
+       * The responsibilities being followed are the page's subject, so they take the wide column;
+       * creating one and the GitHub sources sit beside them on a wide screen and below on a narrow one.
+       */}
+      <div className="grid items-start gap-[22px] xl:grid-cols-[minmax(0,1fr)_400px]">
+        <section
+          aria-labelledby="duties-list"
+          className="grid min-w-0 gap-[9px]"
+        >
+          <div className="flex min-h-[26px] items-center gap-[8px]">
+            <h2 className={SECTION_TITLE} id="duties-list">
+              在跟进的职责
+            </h2>
+            {shown.length ? <Tag>{shown.length} 项</Tag> : null}
+          </div>
+          {agent ? (
+            <p className="text-[13px] text-muted-foreground" role="status">
+              只显示{" "}
+              {bots.data?.find((bot) => bot.id === agent)?.name ?? "这位员工"}{" "}
+              的长期职责 ·{" "}
+              <Link
+                className="text-foreground underline underline-offset-4"
+                search={{}}
+                to="/responsibilities"
+              >
+                看全部
+              </Link>
+            </p>
+          ) : null}
+          {goals.isPending ? (
+            <div
+              aria-label="正在读取长期职责"
+              className="grid gap-[9px]"
+              role="status"
+            >
+              <p className="sr-only">正在读取长期职责…</p>
+              <Skeleton className="h-[180px] rounded-[13px]" />
+              <Skeleton className="h-[180px] rounded-[13px]" />
+            </div>
+          ) : goals.error ? (
+            <p
+              role="alert"
+              className="rounded-[13px] border border-signal/40 bg-signal-soft px-4 py-3 text-[13px] text-signal-ink"
+            >
+              {goals.error.message}
+            </p>
+          ) : shown.length ? (
+            shown.map((goal) => <GoalCard key={goal.id} goal={goal} />)
+          ) : (
+            <WorkbenchEmpty
+              className="border border-border"
+              description="在「新建长期职责」里交给员工一个长期目标。"
+              title={agent ? "这位员工还没有长期职责。" : "你还没有长期职责。"}
+            />
+          )}
+        </section>
+        <div className="grid min-w-0 gap-[22px]">
+          <NewResponsibility />
+          <GithubSources />
+        </div>
+      </div>
+    </PageShell>
+  );
+}
+
+function NewResponsibility() {
+  const formId = useId();
+  const bots = useQuery(agentListQueryOptions());
+  const channels = useInfiniteQuery(channelListQueryOptions());
+  const [channelId, setChannelId] = useState("");
+  const [agentId, setAgentId] = useState("");
+  const [title, setTitle] = useState("");
+  const [instruction, setInstruction] = useState("");
+  const [successCriteria, setSuccessCriteria] = useState("");
+  const [source, setSource] = useState<
+    "none" | ResponsibilityRecord["subscriptions"][number]["source"]
+  >("none");
+  const [eventType, setEventType] = useState("");
+  const selectedChannel = channels.data?.find(
+    (channel) => channel.id === channelId,
+  );
+  const availableBots =
+    bots.data?.filter((bot) => selectedChannel?.agentIds.includes(bot.id)) ??
+    [];
+  const create = useMutation({
+    mutationFn: createResponsibility,
+    onSuccess: async () => {
+      setTitle("");
+      setInstruction("");
+      setSuccessCriteria("");
+      await refresh();
+    },
+  });
+  return (
+    <form
+      className={`${CARD_FACE} grid gap-3 p-[14px]`}
+      onSubmit={(event) => {
+        event.preventDefault();
+        create.mutate({
+          channelId,
+          agentId,
+          title,
+          instruction,
+          successCriteria,
+          subscriptions: source === "none" ? [] : [{ source, eventType }],
+        });
+      }}
+    >
+      <h2 className="font-bold text-[15px] tracking-[-0.01em]">新建长期职责</h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className={fieldClass}>
+          对话
+          <select
+            className={selectClass}
+            required
+            value={channelId}
+            onChange={(event) => {
+              setChannelId(event.target.value);
+              setAgentId("");
+            }}
+          >
+            <option value="">选择一段对话</option>
+            {channels.data
+              ?.filter((channel) => channel.active)
+              .map((channel) => (
+                <option key={channel.id} value={channel.id}>
+                  {conversationLabel(channel)}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className={fieldClass}>
+          员工
+          <select
+            className={selectClass}
+            required
+            value={agentId}
+            onChange={(event) => setAgentId(event.target.value)}
+          >
+            <option value="">选择一位员工</option>
+            {availableBots.map((bot) => (
+              <option key={bot.id} value={bot.id}>
+                {bot.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      {channels.hasNextPage && (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => channels.fetchNextPage()}
+        >
+          加载更多对话
+        </Button>
+      )}
+      {(channels.error || bots.error) && (
+        <p role="alert" className="text-[13px] text-signal-ink">
+          {channels.error?.message ?? bots.error?.message}
+        </p>
+      )}
+      <label className={fieldClass} htmlFor={`${formId}-title`}>
+        标题
+        <Input
+          id={`${formId}-title`}
+          required
+          maxLength={160}
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="让客户报告保持最新"
+        />
+      </label>
+      <label className={fieldClass} htmlFor={`${formId}-instruction`}>
+        指令
+        <Textarea
+          id={`${formId}-instruction`}
+          required
+          maxLength={6000}
+          value={instruction}
+          onChange={(event) => setInstruction(event.target.value)}
+        />
+      </label>
+      <label className={fieldClass} htmlFor={`${formId}-criteria`}>
+        成功标准
+        <Textarea
+          id={`${formId}-criteria`}
+          required
+          maxLength={3000}
+          value={successCriteria}
+          onChange={(event) => setSuccessCriteria(event.target.value)}
+          placeholder="报告里有本季度的图表和来源链接。"
+        />
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className={fieldClass}>
+          事件来源
+          <select
+            className={selectClass}
+            value={source}
+            onChange={(event) => {
+              const value = event.target.value;
+              if (
+                value === "none" ||
+                value === "github" ||
+                value === "slack" ||
+                value === "connector" ||
+                value === "schedule" ||
+                value === "manual"
+              )
+                setSource(value);
+            }}
+          >
+            <option value="none">被要求时运行</option>
+            <option value="github">GitHub</option>
+            <option value="slack">Slack</option>
+            <option value="connector">已连接的应用</option>
+            <option value="schedule">定时</option>
+          </select>
+        </label>
+        {source !== "none" && (
+          <label className={fieldClass} htmlFor={`${formId}-event`}>
+            事件类型
+            <Input
+              id={`${formId}-event`}
+              required
+              maxLength={128}
+              value={eventType}
+              onChange={(event) => setEventType(event.target.value)}
+              placeholder={source === "github" ? "issues.opened" : "事件类型"}
+            />
+          </label>
+        )}
+      </div>
+      {create.error && (
+        <p role="alert" className="text-[13px] text-signal-ink">
+          {create.error.message}
+        </p>
+      )}
+      <Button disabled={create.isPending} type="submit">
+        {create.isPending ? "正在创建…" : "创建长期职责"}
+      </Button>
+    </form>
+  );
+}
+
+function GoalCard({ goal }: { goal: ResponsibilityRecord }) {
+  const [editing, setEditing] = useState(false);
+  const [showRuns, setShowRuns] = useState(false);
+  const [title, setTitle] = useState(goal.title);
+  const [instruction, setInstruction] = useState(goal.instruction);
+  const [successCriteria, setSuccessCriteria] = useState(goal.successCriteria);
+  const action = useMutation({
+    mutationFn: (value: "pause" | "resume" | "complete" | "run") =>
+      responsibilityAction(goal.id, value),
+    onSuccess: refresh,
+  });
+  const edit = useMutation({
+    mutationFn: () =>
+      updateResponsibility(goal.id, { title, instruction, successCriteria }),
+    onSuccess: async () => {
+      setEditing(false);
+      await refresh();
+    },
+  });
+  const runs = useQuery({
+    ...responsibilityRunsQueryOptions(goal.id),
+    enabled: showRuns,
+  });
+  return (
+    <article className={`${CARD_FACE} grid min-w-0 gap-3 p-[14px]`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="min-w-0 font-bold text-[15px] tracking-[-0.01em]">
+          {goal.title}
+        </h3>
+        <Tag tone={GOAL_STATUS[goal.status]?.tone ?? "muted"}>
+          {statusLabel(goal.status)}
+        </Tag>
+      </div>
+      {editing ? (
+        <form
+          className="grid gap-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            edit.mutate();
+          }}
+        >
+          <label className={fieldClass} htmlFor={`${goal.id}-title`}>
+            标题
+            <Input
+              id={`${goal.id}-title`}
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              required
+              maxLength={160}
+            />
+          </label>
+          <label className={fieldClass} htmlFor={`${goal.id}-instruction`}>
+            指令
+            <Textarea
+              id={`${goal.id}-instruction`}
+              value={instruction}
+              onChange={(event) => setInstruction(event.target.value)}
+              required
+              maxLength={6000}
+            />
+          </label>
+          <label className={fieldClass} htmlFor={`${goal.id}-criteria`}>
+            成功标准
+            <Textarea
+              id={`${goal.id}-criteria`}
+              value={successCriteria}
+              onChange={(event) => setSuccessCriteria(event.target.value)}
+              required
+              maxLength={3000}
+            />
+          </label>
+          <div className="flex gap-2">
+            <Button type="submit" disabled={edit.isPending}>
+              保存
+            </Button>
+            <Button
+              variant="outline"
+              type="button"
+              onClick={() => setEditing(false)}
+            >
+              取消
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <p className="whitespace-pre-wrap text-[13px]">{goal.instruction}</p>
+          <p className="text-[13px] text-muted-foreground">
+            成功标准： {goal.successCriteria}
+          </p>
+        </>
+      )}
+      {goal.progress && (
+        <div className="text-[13px]">
+          <span className="font-semibold text-[12px] text-muted-foreground">
+            进展：
+          </span>
+          <RunMarkdown>{goal.progress}</RunMarkdown>
+        </div>
+      )}
+      {goal.lastResult && (
+        <div className="rounded-[11px] border border-border bg-background/60 p-3 text-[13px]">
+          <RunMarkdown>{goal.lastResult}</RunMarkdown>
+        </div>
+      )}
+      {goal.subscriptions.length > 0 && (
+        <p className="font-mono text-[11.5px] text-faint">
+          事件：{" "}
+          {goal.subscriptions
+            .map(
+              (subscription) =>
+                `${subscription.source} · ${subscription.eventType}`,
+            )
+            .join(", ")}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center gap-[7px]">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setEditing(!editing)}
+        >
+          编辑
+        </Button>
+        {goal.status === "active" && (
+          <>
+            <Button
+              size="sm"
+              disabled={action.isPending}
+              onClick={() => {
+                setShowRuns(true);
+                action.mutate("run");
+              }}
+              title="现在就真的运行一次：员工会去做这件事，可能会发消息和执行动作。"
+            >
+              立即运行（真实运行）
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={action.isPending}
+              onClick={() => action.mutate("pause")}
+            >
+              暂停
+            </Button>
+          </>
+        )}
+        {goal.status === "paused" && (
+          <Button
+            size="sm"
+            disabled={action.isPending}
+            onClick={() => action.mutate("resume")}
+          >
+            恢复
+          </Button>
+        )}
+        {goal.status !== "completed" && (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={action.isPending}
+            onClick={() => action.mutate("complete")}
+          >
+            标记完成
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setShowRuns(!showRuns)}
+        >
+          {showRuns ? "收起运行记录" : "查看运行记录"}
+        </Button>
+        <Link
+          to="/channel/$channelId"
+          params={{ channelId: goal.channelId }}
+          className="self-center rounded-[6px] text-[13px] text-muted-foreground underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60"
+        >
+          打开对话
+        </Link>
+      </div>
+      {(action.error || edit.error) && (
+        <p role="alert" className="text-[13px] text-signal-ink">
+          {action.error?.message ?? edit.error?.message}
+        </p>
+      )}
+      <Triggers goal={goal} />
+      {showRuns && (
+        <div className="grid gap-2 border-border border-t pt-3">
+          {runs.isPending ? (
+            <p className="text-[13px] text-muted-foreground" role="status">
+              正在读取运行记录…
+            </p>
+          ) : runs.error ? (
+            <p className="text-[13px] text-signal-ink" role="alert">
+              {runs.error.message}
+            </p>
+          ) : runs.data?.length ? (
+            runs.data.map((run) => (
+              <div
+                key={run.id}
+                className="rounded-[11px] border border-border bg-background/60 p-[10px] text-[13px]"
+              >
+                <p>
+                  <span className={runStatusClass(run.status)}>
+                    {RUN_LABEL[run.status]}
+                  </span>{" "}
+                  · {new Date(run.createdAt).toLocaleString()} ·{" "}
+                  <Link
+                    to="/channel/$channelId"
+                    params={{ channelId: goal.channelId }}
+                    className="underline"
+                  >
+                    打开对话
+                  </Link>
+                </p>
+                {run.waiting && (
+                  <p>等待 {run.waiting.kind}。请在审批或对话里回复。</p>
+                )}
+                {run.error && <p className="text-signal-ink">{run.error}</p>}
+                {run.replyText && <RunMarkdown>{run.replyText}</RunMarkdown>}
+              </div>
+            ))
+          ) : (
+            <p className="text-[13px] text-muted-foreground">
+              还没有运行记录。
+            </p>
+          )}
+        </div>
+      )}
+    </article>
+  );
+}
+
+/**
+ * A Bot's own words, drawn the way the conversation draws them.
+ *
+ * Progress, the last result and each run's reply are the Bot's markdown, and shown as plain text
+ * they read as literal asterisks and backticks. Same renderer and components as the transcript, kept
+ * to the row's size: no heading scale, tight paragraph and list spacing.
+ */
+function RunMarkdown({ children }: { children: string }) {
+  return (
+    <Streamdown
+      className="min-w-0 text-sm [&_h1]:text-sm [&_h2]:text-sm [&_h3]:text-sm [&_li]:my-0 [&_ol]:my-1 [&_p]:my-1 [&_ul]:my-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+      components={markdownComponents}
+      mode="static"
+    >
+      {children}
+    </Streamdown>
+  );
+}
+
+function GithubSources() {
+  const formId = useId();
+  const bindings = useQuery(githubBindingsQueryOptions());
+  const [repository, setRepository] = useState("");
+  const [secret, setSecret] = useState("");
+  const create = useMutation({
+    mutationFn: () => createGithubBinding(repository, secret),
+    onSuccess: async () => {
+      setSecret("");
+      setRepository("");
+      await refresh();
+    },
+  });
+  const remove = useMutation({
+    mutationFn: removeGithubBinding,
+    onSuccess: refresh,
+  });
+  return (
+    <section className={`${CARD_FACE} grid min-w-0 gap-3 p-[14px]`}>
+      <h2 className="font-bold text-[15px] tracking-[-0.01em]">
+        GitHub 事件来源
+      </h2>
+      <p className="text-[13px] text-muted-foreground">
+        先登记一个仓库，再到 GitHub 里用下面的地址和同一个密钥添加
+        webhook。然后让某项长期职责订阅一个事件，例如 issues.opened。
+      </p>
+      <form
+        className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1"
+        onSubmit={(event) => {
+          event.preventDefault();
+          create.mutate();
+        }}
+      >
+        <label className={fieldClass} htmlFor={`${formId}-repository`}>
+          仓库
+          <Input
+            id={`${formId}-repository`}
+            value={repository}
+            onChange={(event) => setRepository(event.target.value)}
+            placeholder="owner/repository"
+            required
+          />
+        </label>
+        <label className={fieldClass} htmlFor={`${formId}-secret`}>
+          Webhook 密钥
+          <Input
+            id={`${formId}-secret`}
+            type="password"
+            autoComplete="new-password"
+            value={secret}
+            onChange={(event) => setSecret(event.target.value)}
+            required
+          />
+        </label>
+        <Button
+          type="submit"
+          className="self-end justify-self-start"
+          disabled={create.isPending}
+        >
+          连接事件
+        </Button>
+      </form>
+      {(bindings.error || create.error || remove.error) && (
+        <p role="alert" className="text-[13px] text-signal-ink">
+          {bindings.error?.message ??
+            create.error?.message ??
+            remove.error?.message}
+        </p>
+      )}
+      {bindings.data?.map((binding) => (
+        <div
+          key={binding.id}
+          className="flex flex-wrap items-center justify-between gap-2 border-border border-t pt-3"
+        >
+          <div className="min-w-0">
+            <p className="font-medium text-[13px]">{binding.repository}</p>
+            <code className="break-all font-mono text-[11.5px] text-muted-foreground">
+              {window.location.origin}/api/events/github/{binding.id}
+            </code>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={remove.isPending}
+            onClick={() => remove.mutate(binding.id)}
+          >
+            断开
+          </Button>
+        </div>
+      ))}
+    </section>
+  );
+}
+
+const RUN_LABEL: Record<string, string> = {
+  queued: "排队中",
+  running: "运行中",
+  waiting: "等你处理",
+  succeeded: "成功",
+  failed: "失败",
+  skipped: "跳过",
+};
+function runStatusClass(status: string) {
+  return status === "failed" || status === "waiting"
+    ? "font-semibold text-signal-ink"
+    : status === "succeeded"
+      ? "font-semibold text-foreground"
+      : "text-muted-foreground";
+}
+
+const KIND_LABEL: Record<TriggerKind, string> = {
+  webhook: "Webhook",
+  github: "GitHub",
+  linear: "Linear",
+  sentry: "Sentry",
+  pagerduty: "PagerDuty",
+  email: "邮件",
+  slack: "Slack",
+};
+const KIND_HELP: Record<TriggerKind, string> = {
+  webhook:
+    "带上授权请求头（或 Standard Webhooks 签名头）向这个地址 POST JSON。返回 200 表示已接收并排队，不代表已经做完。",
+  github:
+    "在仓库的 Settings → Webhooks 里，把 payload URL 设为这个地址，content type 选 application/json，secret 填这个密钥。",
+  linear:
+    "在 Linear 的 Settings → API → Webhooks 里填好地址，再把 Linear 显示的签名密钥粘贴到这里。",
+  sentry:
+    "在 Sentry 的内部集成里填好 webhook 地址，再把集成的 client secret 粘贴到这里。",
+  pagerduty:
+    "在 PagerDuty 的 Integrations → Generic Webhooks (v3) 里填好地址，再把创建时显示的密钥粘贴到这里。",
+  email: "向这个地址发送或转发邮件，就会开始一次运行。",
+  slack:
+    "由这位员工的 Slack 配对送来的 Slack 事件触发。触发方式建立之前的消息会被忽略。",
+};
+const VENDOR_SECRET: ReadonlySet<TriggerKind> = new Set([
+  "linear",
+  "sentry",
+  "pagerduty",
+]);
+const list = (value: string) =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      size="sm"
+      type="button"
+      variant="outline"
+      onClick={async () => {
+        await navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? "已复制" : label}
+    </Button>
+  );
+}
+
+function describeFilter(config: TriggerConfig) {
+  if (config.kind === "slack") {
+    const where = config.channels.length
+      ? `in ${config.channels.join(", ")}`
+      : "in every channel the Bot is in";
+    const what =
+      config.mode === "mention"
+        ? "when the Bot is mentioned"
+        : config.mode === "message"
+          ? "on any message"
+          : config.mode === "phrase"
+            ? `on messages containing ${config.phrases.map((phrase) => `"${phrase}"`).join(" or ")}`
+            : `on reactions${config.reactions.length ? ` :${config.reactions.join(": :")}:` : ""}`;
+    return `${what} ${where} (workspace ${config.teamId})`;
+  }
+  const parts = [
+    config.filter.eventTypes.length
+      ? `events ${config.filter.eventTypes.join(", ")}`
+      : "every event",
+  ];
+  if (config.filter.field)
+    parts.push(
+      `where ${config.filter.field.path} = ${config.filter.field.equals}`,
+    );
+  if (config.kind === "github" && config.repository)
+    parts.push(`from ${config.repository}`);
+  if (config.kind === "email" && config.allowedSenders.length)
+    parts.push(`from ${config.allowedSenders.join(", ")} (authenticated)`);
+  return parts.join(" ");
+}
+
+function Triggers({ goal }: { goal: ResponsibilityRecord }) {
+  const triggers = useQuery(triggersQueryOptions(goal.id));
+  const [adding, setAdding] = useState(false);
+  const [freshSecret, setFreshSecret] = useState<{
+    id: string;
+    secret: string;
+  } | null>(null);
+  const reload = () =>
+    queryClient.invalidateQueries({
+      queryKey: responsibilityKeys.triggers(goal.id),
+    });
+  return (
+    <section className="grid gap-2 border-border border-t pt-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h4 className="font-semibold text-[13px]">触发方式</h4>
+        <Button
+          size="sm"
+          variant="outline"
+          type="button"
+          onClick={() => setAdding(!adding)}
+        >
+          {adding ? "取消" : "添加触发"}
+        </Button>
+      </div>
+      {goal.status !== "active" && (
+        <p className="text-[12px] text-muted-foreground">
+          这项长期职责当前{statusLabel(goal.status)}
+          ，触发会被接收，但不会让它运行。
+        </p>
+      )}
+      {adding && (
+        <NewTrigger
+          goalId={goal.id}
+          onCreated={async (created) => {
+            setAdding(false);
+            if (created.secret)
+              setFreshSecret({
+                id: created.trigger.id,
+                secret: created.secret,
+              });
+            await reload();
+          }}
+        />
+      )}
+      {triggers.error && (
+        <p role="alert" className="text-[13px] text-signal-ink">
+          {triggers.error.message}
+        </p>
+      )}
+      {triggers.data?.length === 0 && !adding && (
+        <p className="text-muted-foreground text-xs">
+          没有触发方式。按“立即运行”时，或上面订阅的事件发生时，它才会运行。
+        </p>
+      )}
+      {triggers.data?.map((trigger) => (
+        <TriggerRow
+          key={trigger.id}
+          trigger={trigger}
+          freshSecret={
+            freshSecret?.id === trigger.id ? freshSecret.secret : null
+          }
+          onChanged={async (secret) => {
+            if (secret) setFreshSecret({ id: trigger.id, secret });
+            await reload();
+          }}
+        />
+      ))}
+    </section>
+  );
+}
+
+function TriggerRow({
+  trigger,
+  freshSecret,
+  onChanged,
+}: {
+  trigger: TriggerRecord;
+  freshSecret: string | null;
+  onChanged: (secret: string | null) => Promise<void>;
+}) {
+  const [secret, setSecret] = useState<string | null>(freshSecret);
+  const [pasted, setPasted] = useState("");
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const shown = freshSecret ?? secret;
+  const reveal = useMutation({
+    mutationFn: () => revealTriggerSecret(trigger.id),
+    onSuccess: setSecret,
+  });
+  const rotate = useMutation({
+    mutationFn: () =>
+      setTriggerSecret(
+        trigger.id,
+        VENDOR_SECRET.has(trigger.kind) ? pasted : undefined,
+      ),
+    onSuccess: async (result) => {
+      setPasted("");
+      setSecret(result.secret);
+      await onChanged(result.secret);
+    },
+  });
+  const remove = useMutation({
+    mutationFn: () => removeTrigger(trigger.id),
+    onSuccess: () => onChanged(null),
+  });
+  const toggle = useMutation({
+    mutationFn: () => setTriggerEnabled(trigger.id, !trigger.enabled),
+    onSuccess: () => onChanged(null),
+  });
+  const url = trigger.path ? `${window.location.origin}${trigger.path}` : null;
+  const generated = trigger.kind === "webhook" || trigger.kind === "github";
+  return (
+    <div className="grid min-w-0 gap-2 rounded-[11px] border border-border bg-background/60 p-[10px] text-[13px]">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p>
+          <span className="font-medium">{KIND_LABEL[trigger.kind]}</span>{" "}
+          <span className="text-muted-foreground">
+            {describeFilter(trigger.config)}
+          </span>
+          {!trigger.enabled && (
+            <span className="ml-2 inline-flex align-middle">
+              <Tag>已暂停</Tag>
+            </span>
+          )}
+        </p>
+        <span className="flex flex-wrap items-center gap-[7px]">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={toggle.isPending}
+            onClick={() => toggle.mutate()}
+          >
+            {trigger.enabled ? "暂停" : "恢复"}
+          </Button>
+          {confirmRemove ? (
+            <span className="flex gap-2">
+              <Button
+                size="sm"
+                variant="destructive"
+                disabled={remove.isPending}
+                onClick={() => remove.mutate()}
+              >
+                永久移除
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setConfirmRemove(false)}
+              >
+                保留
+              </Button>
+            </span>
+          ) : (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setConfirmRemove(true)}
+            >
+              移除
+            </Button>
+          )}
+        </span>
+      </div>
+      <p className="text-[12px] text-muted-foreground">
+        {KIND_HELP[trigger.kind]}
+      </p>
+      {url && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs">POST 到</span>
+          <code className="break-all rounded-[7px] border border-border bg-background px-2 py-1 font-mono text-[11.5px]">
+            {url}
+          </code>
+          <CopyButton value={url} label="复制地址" />
+        </div>
+      )}
+      {trigger.kind === "email" &&
+        (trigger.address ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <code className="break-all rounded-[7px] border border-border bg-background px-2 py-1 font-mono text-[11.5px]">
+              {trigger.address}
+            </code>
+            <CopyButton value={trigger.address} label="复制邮箱地址" />
+          </div>
+        ) : (
+          <p className="text-[12px] text-signal-ink">
+            这个部署没有配置收信（XIONGBAO_INBOUND_EMAIL_DOMAIN 和
+            XIONGBAO_INBOUND_EMAIL_SNS_TOPIC_ARNS），所以这个地址暂时收不到邮件。
+          </p>
+        ))}
+      {generated && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs">密钥</span>
+          {shown ? (
+            <>
+              <code className="break-all rounded-[7px] border border-border bg-background px-2 py-1 font-mono text-[11.5px]">
+                {shown}
+              </code>
+              <CopyButton value={shown} label="复制密钥" />
+              {trigger.kind === "webhook" && (
+                <CopyButton
+                  value={`Authorization: Bearer ${shown}`}
+                  label="复制请求头"
+                />
+              )}
+            </>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={reveal.isPending}
+              onClick={() => reveal.mutate()}
+            >
+              显示密钥
+            </Button>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={rotate.isPending}
+            onClick={() => rotate.mutate()}
+          >
+            轮换密钥
+          </Button>
+        </div>
+      )}
+      {trigger.kind === "webhook" && shown && (
+        <code className="break-all rounded-[7px] border border-border bg-background px-2 py-1 font-mono text-[11.5px]">
+          Authorization: Bearer {shown}
+        </code>
+      )}
+      {VENDOR_SECRET.has(trigger.kind) && (
+        <form
+          className="flex flex-wrap items-center gap-2"
+          onSubmit={(event) => {
+            event.preventDefault();
+            rotate.mutate();
+          }}
+        >
+          <span
+            className={
+              trigger.hasSecret
+                ? "text-xs"
+                : "font-semibold text-[12px] text-signal-ink"
+            }
+          >
+            {trigger.hasSecret ? "签名密钥已保存" : "等待填写签名密钥"}
+          </span>
+          <Input
+            className="h-8 max-w-64"
+            type="password"
+            autoComplete="new-password"
+            placeholder={
+              trigger.hasSecret ? "粘贴新的密钥以轮换" : "粘贴签名密钥"
+            }
+            value={pasted}
+            onChange={(event) => setPasted(event.target.value)}
+            required
+          />
+          <Button size="sm" type="submit" disabled={rotate.isPending}>
+            保存密钥
+          </Button>
+        </form>
+      )}
+      {(reveal.error || rotate.error || remove.error || toggle.error) && (
+        <p role="alert" className="text-[12px] text-signal-ink">
+          {reveal.error?.message ??
+            rotate.error?.message ??
+            remove.error?.message ??
+            toggle.error?.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function NewTrigger({
+  goalId,
+  onCreated,
+}: {
+  goalId: string;
+  onCreated: (created: {
+    trigger: TriggerRecord;
+    secret: string | null;
+  }) => Promise<void>;
+}) {
+  const id = useId();
+  const [kind, setKind] = useState<TriggerKind>("webhook");
+  const [eventTypes, setEventTypes] = useState("");
+  const [fieldPath, setFieldPath] = useState("");
+  const [fieldEquals, setFieldEquals] = useState("");
+  const [repository, setRepository] = useState("");
+  const [senders, setSenders] = useState("");
+  const [secret, setSecret] = useState("");
+  const [teamId, setTeamId] = useState("");
+  const [mode, setMode] = useState<
+    "mention" | "phrase" | "reaction" | "message"
+  >("mention");
+  const [phrases, setPhrases] = useState("");
+  const [reactions, setReactions] = useState("");
+  const [channels, setChannels] = useState("");
+  const config = (): TriggerConfig => {
+    if (kind === "slack")
+      return {
+        kind,
+        teamId: teamId.trim(),
+        mode,
+        phrases: list(phrases),
+        reactions: list(reactions).map((reaction) =>
+          reaction.replace(/:/g, ""),
+        ),
+        channels: list(channels),
+      };
+    const filter = {
+      eventTypes: list(eventTypes),
+      ...(fieldPath.trim() && fieldEquals.trim()
+        ? { field: { path: fieldPath.trim(), equals: fieldEquals.trim() } }
+        : {}),
+    };
+    if (kind === "github")
+      return {
+        kind,
+        filter,
+        ...(repository.trim() ? { repository: repository.trim() } : {}),
+      };
+    if (kind === "email")
+      return { kind, filter, allowedSenders: list(senders) };
+    return { kind, filter };
+  };
+  const create = useMutation({
+    mutationFn: () =>
+      createTrigger(goalId, {
+        config: config(),
+        ...(VENDOR_SECRET.has(kind) && secret ? { secret } : {}),
+      }),
+    onSuccess: onCreated,
+  });
+  const placeholder: Record<TriggerKind, string> = {
+    webhook: "deploy.finished（留空表示任意）",
+    github: "issues.opened, pull_request",
+    linear: "Issue.create, Comment",
+    sentry: "issue.created, event_alert.triggered",
+    pagerduty: "incident.triggered",
+    email: "received",
+    slack: "",
+  };
+  return (
+    <form
+      className="grid gap-3 rounded-[11px] border border-border bg-background/60 p-[10px]"
+      onSubmit={(event) => {
+        event.preventDefault();
+        create.mutate();
+      }}
+    >
+      <label className={fieldClass}>
+        触发方式
+        <select
+          className={selectClass}
+          value={kind}
+          onChange={(event) => setKind(event.target.value as TriggerKind)}
+        >
+          {(Object.keys(KIND_LABEL) as TriggerKind[]).map((value) => (
+            <option key={value} value={value}>
+              {KIND_LABEL[value]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="text-[12px] text-muted-foreground">{KIND_HELP[kind]}</p>
+      {kind === "slack" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className={fieldClass} htmlFor={`${id}-team`}>
+            Slack 团队 ID
+            <Input
+              id={`${id}-team`}
+              required
+              placeholder="T0123ABCD"
+              value={teamId}
+              onChange={(event) => setTeamId(event.target.value)}
+            />
+          </label>
+          <label className={fieldClass}>
+            触发条件
+            <select
+              className={selectClass}
+              value={mode}
+              onChange={(event) => setMode(event.target.value as typeof mode)}
+            >
+              <option value="mention">员工被 @ 到</option>
+              <option value="phrase">消息里包含某个短语</option>
+              <option value="reaction">有人加了表情回应</option>
+              <option value="message">任何消息</option>
+            </select>
+          </label>
+          {mode === "phrase" && (
+            <label className={fieldClass} htmlFor={`${id}-phrases`}>
+              短语（用逗号分隔）
+              <Input
+                id={`${id}-phrases`}
+                required
+                value={phrases}
+                onChange={(event) => setPhrases(event.target.value)}
+              />
+            </label>
+          )}
+          {mode === "reaction" && (
+            <label className={fieldClass} htmlFor={`${id}-reactions`}>
+              表情回应（留空表示任意）
+              <Input
+                id={`${id}-reactions`}
+                placeholder="eyes, rotating_light"
+                value={reactions}
+                onChange={(event) => setReactions(event.target.value)}
+              />
+            </label>
+          )}
+          <label className={fieldClass} htmlFor={`${id}-channels`}>
+            频道 ID（留空表示员工所在的全部频道）
+            <Input
+              id={`${id}-channels`}
+              placeholder="C0123ABCD"
+              value={channels}
+              onChange={(event) => setChannels(event.target.value)}
+            />
+          </label>
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className={fieldClass} htmlFor={`${id}-types`}>
+            事件类型
+            <Input
+              id={`${id}-types`}
+              placeholder={placeholder[kind]}
+              value={eventTypes}
+              onChange={(event) => setEventTypes(event.target.value)}
+            />
+          </label>
+          <label className={fieldClass} htmlFor={`${id}-path`}>
+            仅当字段
+            <Input
+              id={`${id}-path`}
+              placeholder="data.team.key"
+              value={fieldPath}
+              onChange={(event) => setFieldPath(event.target.value)}
+            />
+          </label>
+          <label className={fieldClass} htmlFor={`${id}-equals`}>
+            等于
+            <Input
+              id={`${id}-equals`}
+              placeholder="ENG"
+              value={fieldEquals}
+              onChange={(event) => setFieldEquals(event.target.value)}
+            />
+          </label>
+          {kind === "github" && (
+            <label className={fieldClass} htmlFor={`${id}-repo`}>
+              仓库（可选）
+              <Input
+                id={`${id}-repo`}
+                placeholder="owner/name"
+                value={repository}
+                onChange={(event) => setRepository(event.target.value)}
+              />
+            </label>
+          )}
+          {kind === "email" && (
+            <label className={fieldClass} htmlFor={`${id}-senders`}>
+              允许的发件人（留空表示任何人）
+              <Input
+                id={`${id}-senders`}
+                placeholder="ops@example.com, example.com"
+                value={senders}
+                onChange={(event) => setSenders(event.target.value)}
+              />
+            </label>
+          )}
+          {VENDOR_SECRET.has(kind) && (
+            <label className={fieldClass} htmlFor={`${id}-secret`}>
+              签名密钥（可以之后再填）
+              <Input
+                id={`${id}-secret`}
+                type="password"
+                autoComplete="new-password"
+                value={secret}
+                onChange={(event) => setSecret(event.target.value)}
+              />
+            </label>
+          )}
+        </div>
+      )}
+      {create.error && (
+        <p role="alert" className="text-[13px] text-signal-ink">
+          {create.error.message}
+        </p>
+      )}
+      <Button type="submit" disabled={create.isPending}>
+        {create.isPending ? "正在添加…" : `添加${KIND_LABEL[kind]}触发`}
+      </Button>
+    </form>
+  );
+}

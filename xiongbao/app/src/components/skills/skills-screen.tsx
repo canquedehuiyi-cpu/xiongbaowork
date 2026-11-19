@@ -1,0 +1,304 @@
+import { IconDots, IconPencil } from "@tabler/icons-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { type ReactNode, useState } from "react";
+import { DetailPanel } from "@/components/layout/detail-panel";
+import {
+  ResourceCard,
+  textMatch,
+} from "@/components/resources/capability-tabs";
+import {
+  CardGrid,
+  NoMatch,
+  QueryState,
+  TabHeader,
+  TabSearch,
+} from "@/components/resources/resource-kit";
+import { EditSkill } from "@/components/skills/edit-skill";
+import { NewSkill } from "@/components/skills/new-skill";
+import { SkillView, SkillViewLink } from "@/components/skills/skill-view";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { agentListQueryOptions } from "@/lib/agents/queries";
+import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { removeSkillMutationOptions } from "@/lib/plugins/mutations";
+import {
+  type PluginSkill,
+  pluginsPageQueryOptions,
+} from "@/lib/plugins/queries";
+import { useZh } from "@/lib/translations/queries";
+
+/**
+ * 能力与资源 › 技能: the whole skills screen, the one place a person writes, edits and deletes their
+ * own `/` skills and sees the deployment's.
+ *
+ * It used to be two screens — the standalone `/skills` page with the authoring panel, and a summary
+ * tab here that linked out to it. The page was archived into this tab (`/skills` now redirects
+ * here, `new` and `edit` carried over), so the tab holds both: the page's command, menu and panel,
+ * and the summary's search and install counts.
+ *
+ * Writing and editing are search parameters rather than routes (`?new=true`, `?edit=<slug>`), so
+ * the list stays on screen behind the panel and the form is linkable, reloadable and closed by Back.
+ * 读正文（`?view=<slug>`）用的是同一套机制：`SkillView` 只画，不改——部署的技能不归这个人改，而
+ * 一条只读的正文从前没有任何地址，于是「我的」里那 109 张卡谁也点不开。
+ * The caller owns them; this draws whatever it is given.
+ *
+ * Only the signed-in person's own count as 我的. The server already scopes `/api/plugins` to
+ * `owner_user_id is null or owner_user_id = me`, except for an administrator, who receives everyone's
+ * personal skills; those are governed on the administrator's skill screen and belong in neither
+ * group here. Every deployment skill is the person's to install on their own employees without a
+ * listing (Ruling 10, 召唤员工: a skill is instructions and reaches nothing), so none is tagged.
+ */
+export function SkillsScreen({
+  query,
+  onQuery,
+  creating,
+  editing,
+  viewing,
+  onCompose,
+  onEdit,
+  onClose,
+}: {
+  query: string;
+  onQuery: (value: string) => void;
+  /** `?new=true`: the authoring panel is open. It wins over `editing`, the more recent intent. */
+  creating: boolean;
+  /** `?edit=<slug>`: the slug being edited. */
+  editing: string | undefined;
+  /** `?view=<slug>`: the slug being READ. Ignored while writing or editing. */
+  viewing: string | undefined;
+  onCompose: () => void;
+  onEdit: (slug: string) => void;
+  onClose: () => void;
+}) {
+  const zh = useZh();
+  const queryClient = useQueryClient();
+  const plugins = useQuery(pluginsPageQueryOptions());
+  const me = useQuery(currentUserQueryOptions());
+  const agents = useQuery(agentListQueryOptions());
+  // The default list leaves out the employees the person hid; they are still theirs (Codex review).
+  const hiddenAgents = useQuery(agentListQueryOptions(true));
+  const [error, setError] = useState<string | null>(null);
+  const removeSkill = useMutation({
+    ...removeSkillMutationOptions(queryClient),
+    onError: (thrown: Error) => setError(thrown.message),
+    onSuccess: () => setError(null),
+  });
+
+  const showEdit = !creating && editing !== undefined;
+  /*
+   * 读正文：`new` 与 `edit` 都优先——一次只该有一个人在读、在写。地址里点名的那条不在这份列表里时
+   * 面板照样打开，由 `SkillView` 说「不在了」，因为「不在了」和「不归你看」是它手里的事实。
+   */
+  const showView = !creating && editing === undefined && viewing !== undefined;
+  const skills = plugins.data?.skills ?? [];
+  const meId = me.data?.id;
+  // Only the person's own employees (summoned and hidden ones included) count as having the skill
+  // installed; grants to shared preset employees or other people's employees are not theirs.
+  const myAgentIds = new Set(
+    [...(agents.data ?? []), ...(hiddenAgents.data ?? [])]
+      .filter((agent) => agent.mine)
+      .map((agent) => agent.id),
+  );
+  const rosterKnown = agents.isSuccess && hiddenAgents.isSuccess;
+  const visible = skills.filter((skill) =>
+    textMatch(
+      query,
+      skill.title,
+      skill.summary,
+      skill.slug,
+      zh(skill.title),
+      zh(skill.summary),
+    ),
+  );
+  const isMine = (skill: PluginSkill) =>
+    skill.ownerUserId !== null && skill.ownerUserId === meId;
+  const mine = visible.filter(isMine);
+  const deployment = visible.filter((skill) => skill.ownerUserId === null);
+  const anyOwnOrDeployment = skills.some(
+    (skill) => skill.ownerUserId === null || isMine(skill),
+  );
+
+  const card = (skill: PluginSkill, own: boolean) => (
+    <ResourceCard
+      actions={
+        <>
+          {/*
+           * 正文的入口：只有真写了正文才画。没有正文的技能点开只说「没有正文」，那是空承诺。
+           */}
+          {skill.instructions.trim() ? (
+            <SkillViewLink slug={skill.slug} title={zh(skill.title)} />
+          ) : null}
+          {/*
+           * No sentence until the roster is known, hidden employees included: an employee missing
+           * from the set would read as 「未安装」.
+           */}
+          {rosterKnown ? (
+            <span className="text-[12px] text-muted-foreground">
+              {installedSentence(
+                skill.grantedTo.filter((id) => myAgentIds.has(id)).length,
+              )}
+            </span>
+          ) : null}
+          {/*
+           * Only on the person's own. A deployment skill is not theirs to edit or delete, and the
+           * server refuses either way; an affordance that only ever fails is a promise this screen
+           * cannot keep.
+           */}
+          {own ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                render={
+                  <Button
+                    aria-label={`${skill.title} 的操作`}
+                    size="icon-sm"
+                    variant="ghost"
+                  >
+                    <IconDots />
+                  </Button>
+                }
+              />
+              <DropdownMenuContent>
+                <DropdownMenuGroup>
+                  <DropdownMenuItem onClick={() => onEdit(skill.slug)}>
+                    编辑
+                  </DropdownMenuItem>
+                  {/*
+                   * Immediate, with no undo: behind a menu for that reason, and the slug is named in
+                   * the label so the destructive item says WHICH skill it destroys.
+                   */}
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setError(null);
+                      removeSkill.mutate(skill.slug);
+                    }}
+                    variant="destructive"
+                  >
+                    删除 /{skill.slug}
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+        </>
+      }
+      description={
+        // The command first: the title says what the skill is for, `/slug` is what a person types.
+        <>
+          <code className="font-mono text-foreground/80 text-xs">
+            /{skill.slug}
+          </code>
+          {skill.summary ? ` · ${zh(skill.summary)}` : null}
+        </>
+      }
+      key={skill.id}
+      title={zh(skill.title)}
+    />
+  );
+
+  return (
+    <DetailPanel
+      detail={
+        creating ? (
+          <NewSkill />
+        ) : editing !== undefined ? (
+          <EditSkill slug={editing} />
+        ) : showView ? (
+          <SkillView slug={viewing} />
+        ) : null
+      }
+      onClose={onClose}
+      open={creating || showEdit || showView}
+    >
+      <TabHeader
+        actions={
+          <Button onClick={onCompose} size="sm">
+            <IconPencil />
+            撰写
+          </Button>
+        }
+        description={
+          <>
+            技能是一条具名指令：用 <code>/</code>{" "}
+            加它的名字唤起，由员工照着执行。你写的在“我的”里，只装在你拥有的员工身上；管理员写的在“部署”里，你可以在员工的设置页里自己装到你的员工身上。
+          </>
+        }
+        search={<TabSearch label="搜索技能" onChange={onQuery} value={query} />}
+      />
+      {error ? (
+        <p className="mt-4 text-destructive text-sm" role="alert">
+          {error}
+        </p>
+      ) : null}
+      <QueryState
+        label="读不到技能"
+        query={{ ...plugins, isPending: plugins.isPending || me.isPending }}
+      >
+        {query.trim() &&
+        anyOwnOrDeployment &&
+        mine.length + deployment.length === 0 ? (
+          <NoMatch onClear={() => onQuery("")} title="没有匹配的技能" />
+        ) : (
+          <>
+            <SkillGroup
+              empty={
+                query.trim()
+                  ? "没有匹配的技能。"
+                  : me.error
+                    ? "读不到你自己的技能。"
+                    : "你还没有写过技能。"
+              }
+              rows={mine.map((skill) => card(skill, true))}
+              title="我的"
+            />
+            <SkillGroup
+              empty={
+                query.trim()
+                  ? "没有匹配的技能。"
+                  : "这个部署还没有管理员写的技能。"
+              }
+              rows={deployment.map((skill) => card(skill, false))}
+              title="部署"
+            />
+          </>
+        )}
+      </QueryState>
+    </DetailPanel>
+  );
+}
+
+/** 「已装到你的 N 个员工」, or 「未安装」 when none of the person's own employees holds it. */
+function installedSentence(count: number): string {
+  return count > 0 ? `已装到你的 ${count} 个员工` : "未安装";
+}
+
+function SkillGroup({
+  empty,
+  rows,
+  title,
+}: {
+  empty: string;
+  rows: ReactNode[];
+  title: string;
+}) {
+  return (
+    <div className="mt-5 flex flex-col gap-2">
+      <h3 className="font-medium text-[13px]">
+        {title}
+        <span className="ml-1.5 text-muted-foreground tabular-nums">
+          {rows.length}
+        </span>
+      </h3>
+      {rows.length > 0 ? (
+        <CardGrid label={`${title}的技能`}>{rows}</CardGrid>
+      ) : (
+        <p className="text-[13px] text-muted-foreground">{empty}</p>
+      )}
+    </div>
+  );
+}

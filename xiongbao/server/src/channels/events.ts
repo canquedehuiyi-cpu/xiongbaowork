@@ -1,0 +1,309 @@
+import { sql } from "drizzle-orm";
+import postgres from "postgres";
+import type { Database } from "../db/client";
+import { runAsTenant } from "../tenant/context";
+import type { ChannelWorkWire } from "./working";
+
+/**
+ * Live channel activity, from whoever ran an agent to everybody else in the channel.
+ *
+ * The person who ran it already has the reply and reports it over HTTP; this is the other direction,
+ * telling the channel's other members that something was said. It is an optimisation and never a
+ * source of truth: the roster query stays authoritative, and a client that misses events while
+ * disconnected recovers by refetching on reconnect. Nothing may be knowable only through the socket.
+ *
+ * Delivery goes through Postgres rather than an in-process list, because an in-process list is
+ * silently wrong the moment a second server instance exists: the writer is on one and the listener
+ * on the other, and the message is never delivered.
+ *
+ * A NOTIFY is never replayed, so an announcement made while this subscription is down is gone. The
+ * client's own "refetch on reconnect" does not cover it: the socket that dropped is this server's,
+ * not the browser's. `resyncAll` is the signal that closes that gap.
+ */
+
+export const CHANNEL_ACTIVITY_TOPIC = "channel_activity";
+
+export type ChannelActivityEvent = {
+  channelId: string;
+  /** Who may receive it. Resolved by the writer, which already had to check membership. */
+  memberIds: string[];
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  lastMessageAgentId: string | null;
+  /**
+   * A Bot's reply, its first line as plain text: what a notification says when the reply lands while
+   * OpenBot is out of sight. `lastMessage` runs every line into one. Only on a Bot's message.
+   */
+  firstLine?: string;
+  /**
+   * What the conversation is called now, on its own event: the sweep's summary, written seconds after
+   * the activity it follows, or a rename. Null when a cleared name leaves it with no summary yet.
+   */
+  summary?: string | null;
+  /** A person's first words, newly written, on its own event: the row's name until `summary`. */
+  opening?: string;
+  /** The channel is hidden from every member's roster. Absent on an ordinary activity event. */
+  deleted?: true;
+  /**
+   * One member's pin, changed. Absent on an ordinary activity event.
+   *
+   * A pin lives on one membership row, so the writer names that member alone in `memberIds` and the
+   * hub's delivery rule does the rest: nobody else in the channel hears a pin they did not make.
+   */
+  pinned?: boolean;
+  /**
+   * A turn started or ended in this channel. Absent on an ordinary activity event.
+   *
+   * Transient and message-less: it is never written to a table, only announced, so the roster can
+   * show a working indicator for a headless turn — a handoff hop, a relay — that no browser
+   * streams. A missed one costs at most a stuck-looking dot until the next real event, never data.
+   */
+  busy?: boolean;
+  /**
+   * The tenant's task board changed somewhere; refetch it.
+   *
+   * Same posture as `busy`: transient, never table-backed, cheap to miss. The approvals inbox and
+   * the run machinery announce through it so a decision made in one window moves the board in
+   * another within the second, without either window owning the truth.
+   */
+  taskUpdated?: true;
+  /**
+   * A group's shared transcript changed without anybody saying anything (an external employee's
+   * permission line, 外部员工 Task 12): its members read it again. Carries nothing else, and patches
+   * no roster row.
+   */
+  groupTranscript?: true;
+  /**
+   * Everything this channel is waiting on right now: a Bot it asked, a routine firing into it.
+   * Absent on an ordinary activity event.
+   *
+   * The WHOLE list, never a change to it, so the newest event is the answer and a missed one is
+   * corrected by the next. Read from the queue and the run history at the moment of sending, which
+   * is also what the roster and the channel read return. See `working.ts`.
+   */
+  work?: ChannelWorkWire[];
+  /**
+   * When `work` was read, by the database's clock: ISO-8601 in UTC to the microsecond, fixed width
+   * so two compare as strings. Present whenever `work` is. Events
+   * can arrive out of order across replicas, so a browser keeps the list with the latest stamp.
+   */
+  workAt?: string;
+};
+
+/**
+ * Tell every instance that a tenant's task board changed, so each one's sockets refetch it.
+ *
+ * Executed here, not merely built: drizzle's `execute` answers with a lazy query whose statement
+ * runs only when `then` is called, so `void database.execute(...)` sends nothing at all — the board
+ * moved on the instance that made the change and on no other. The returned promise settles once the
+ * NOTIFY has been sent or has failed, and never rejects: a lost announcement leaves other
+ * instances' boards stale until their next refetch, but loses no data, so the caller can fire and
+ * forget it.
+ *
+ * `pg_notify` reads no table, so its frame grants and withholds nothing; the recipients are named by
+ * `memberIds` alone. It still runs in the board owner's own frame, opened here: the projector
+ * announces after its own frame has closed, from whatever frame its caller had (a background run may
+ * have none), and a statement with no frame is refused before it is sent (G01-E). The failure line
+ * carries the error's name and SQLSTATE, not its message, which can quote the statement and its
+ * payload.
+ */
+export function announceTaskUpdate(
+  database: Pick<Database, "execute">,
+  tenantId: string,
+): Promise<void> {
+  const event = {
+    channelId: "",
+    memberIds: [tenantId],
+    lastMessage: null,
+    lastMessageAt: null,
+    lastMessageAgentId: null,
+    taskUpdated: true,
+  } satisfies ChannelActivityEvent;
+  const failed = (error: unknown) => {
+    const code =
+      typeof error === "object" &&
+      error !== null &&
+      typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code: string }).code
+        : undefined;
+    console.error(
+      JSON.stringify({
+        type: "task-board-announce-failed",
+        tenantId,
+        error: error instanceof Error ? error.name : typeof error,
+        ...(code === undefined ? {} : { code }),
+      }),
+    );
+  };
+  try {
+    // `then` is called inside the frame, so the statement starts while the frame is open.
+    return runAsTenant(tenantId, () =>
+      database
+        .execute(
+          sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${JSON.stringify(event)})`,
+        )
+        .then(() => undefined, failed),
+    );
+  } catch (error) {
+    // Opening the frame or building the statement threw before there was a query to run.
+    failed(error);
+    return Promise.resolve();
+  }
+}
+
+/**
+ * Announce one event as it is, in the caller's frame (`pg_notify` reads no table; the recipients are
+ * its `memberIds`). Never rejects: a lost announcement only leaves a screen stale until its next read.
+ */
+export function notifyChannelActivity(
+  database: Pick<Database, "execute">,
+  event: ChannelActivityEvent,
+): Promise<void> {
+  try {
+    return database
+      .execute(
+        sql`select pg_notify(${CHANNEL_ACTIVITY_TOPIC}, ${JSON.stringify(event)})`,
+      )
+      .then(
+        () => undefined,
+        (error: unknown) =>
+          console.error(
+            JSON.stringify({
+              type: "channel-activity-announce-failed",
+              channelId: event.channelId,
+              error: error instanceof Error ? error.name : typeof error,
+            }),
+          ),
+      );
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        type: "channel-activity-announce-failed",
+        channelId: event.channelId,
+        error: error instanceof Error ? error.name : typeof error,
+      }),
+    );
+    return Promise.resolve();
+  }
+}
+
+/** "The roster you hold may be wrong." Carries no delta, because what was lost is not recoverable. */
+export type ChannelResyncEvent = { resync: true };
+
+const RESYNC_PAYLOAD = JSON.stringify({
+  resync: true,
+} satisfies ChannelResyncEvent);
+
+type Send = (payload: string) => void;
+
+export type ChannelEventHub = {
+  /** Attach a connection for a person. Returns the detach. */
+  register(userId: string, send: Send): () => void;
+  /** Fan one event out to this instance's own connections. */
+  deliver(event: ChannelActivityEvent): void;
+  /** Tell every connection to refetch. Everybody, because the lost events named their own members. */
+  resyncAll(): void;
+  connectionCount(userId: string): number;
+};
+
+export function createChannelEventHub(): ChannelEventHub {
+  const connections = new Map<string, Set<Send>>();
+
+  return {
+    register(userId, send) {
+      const existing = connections.get(userId) ?? new Set<Send>();
+      existing.add(send);
+      connections.set(userId, existing);
+
+      return () => {
+        const remaining = connections.get(userId);
+        if (!remaining) return;
+        remaining.delete(send);
+        // Dropped entirely rather than left empty, so a long-lived process does not accumulate a
+        // set per person who ever connected.
+        if (remaining.size === 0) connections.delete(userId);
+      };
+    },
+
+    deliver(event) {
+      for (const userId of event.memberIds) {
+        for (const send of connections.get(userId) ?? []) {
+          try {
+            send(JSON.stringify(event));
+          } catch {
+            // A connection that cannot be written to is one that is closing. Its own close handler
+            // detaches it; failing here would deny the event to everybody after it in the set.
+          }
+        }
+      }
+    },
+
+    resyncAll() {
+      for (const sends of connections.values()) {
+        for (const send of sends) {
+          try {
+            send(RESYNC_PAYLOAD);
+          } catch {
+            // Closing, and detached by its own close handler. See `deliver`.
+          }
+        }
+      }
+    },
+
+    connectionCount(userId) {
+      return connections.get(userId)?.size ?? 0;
+    },
+  };
+}
+
+export type ChannelActivityListener = { stop: () => Promise<void> };
+
+/**
+ * Listen for activity announced by any instance, including this one.
+ *
+ * On its own connection, because `LISTEN` holds one for the life of the subscription: taken from the
+ * pool, it would be a connection the rest of the server never gets back.
+ */
+export async function startChannelActivityListener(
+  databaseUrl: string,
+  hub: ChannelEventHub,
+): Promise<ChannelActivityListener> {
+  const connection = postgres(databaseUrl, { max: 1 });
+
+  /*
+   * `onlisten` fires on every establish, reconnects included — the same hook `policy-listener.ts`
+   * uses to re-read its row. There is no row to re-read here, so the browsers are told to refetch
+   * instead.
+   *
+   * The first establish is skipped so the message means one thing. It has no earlier subscription
+   * behind it, so nothing can have been missed, and a resync there would say "possibly a gap" — not
+   * something a client can act on differently.
+   */
+  let subscribed = false;
+  const resync = () => {
+    if (!subscribed) {
+      subscribed = true;
+      return;
+    }
+    hub.resyncAll();
+  };
+
+  await connection.listen(
+    CHANNEL_ACTIVITY_TOPIC,
+    (payload) => {
+      try {
+        hub.deliver(JSON.parse(payload) as ChannelActivityEvent);
+      } catch {
+        // A payload we cannot read is not a reason to tear down the subscription: the roster query
+        // is still correct, and the next refetch shows whatever this event would have.
+      }
+    },
+    resync,
+  );
+
+  return {
+    stop: async () => {
+      await connection.end();
+    },
+  };
+}

@@ -1,0 +1,333 @@
+<title>熊宝聊天工作台设计稿</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: header, then one app frame (icon rail | list | main | optional profile drawer), notes. Dark-first, premium enterprise IM. */
+:root {
+  --bg: #0b0b0d; --frame: #121215; --rail: #0e0e11; --list: #151519; --main: #101013; --card: #1c1c21; --card2: #23232a; --hover: #1f1f25; --glass: rgba(255,255,255,.04);
+  --fg: #f4f2ef; --fg2: #c9c5c0; --muted: #8b8680; --line: rgba(255,255,255,.07); --line2: rgba(255,255,255,.11);
+  --accent: #ff5a4a; --accent2: #ff8a5c; --accent-soft: rgba(255,90,74,.13); --gold: #f2c46d; --green: #3ccf8e; --amber: #f5a524; --gray: #6b6b74;
+  --me: linear-gradient(135deg, #ff5a4a, #ff8a5c); --me-fg: #fff;
+  --shadow: 0 24px 60px rgba(0,0,0,.45), 0 2px 0 rgba(255,255,255,.03) inset;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #eef0f4; --frame: #ffffff; --rail: #f4f5f8; --list: #fafbfc; --main: #ffffff; --card: #ffffff; --card2: #f3f4f7; --hover: #f1f2f6; --glass: rgba(0,0,0,.02);
+  --fg: #1a1b1f; --fg2: #3d3f46; --muted: #7b7e88; --line: rgba(15,20,40,.08); --line2: rgba(15,20,40,.12);
+  --accent: #e8402f; --accent2: #f2734a; --accent-soft: rgba(232,64,47,.09); --gold: #b9821c;
+  --shadow: 0 24px 60px rgba(20,30,60,.12); color-scheme: light; } }
+:root[data-theme="light"] { --bg: #eef0f4; --frame: #ffffff; --rail: #f4f5f8; --list: #fafbfc; --main: #ffffff; --card: #ffffff; --card2: #f3f4f7; --hover: #f1f2f6; --glass: rgba(0,0,0,.02); --fg: #1a1b1f; --fg2: #3d3f46; --muted: #7b7e88; --line: rgba(15,20,40,.08); --line2: rgba(15,20,40,.12); --accent: #e8402f; --accent2: #f2734a; --accent-soft: rgba(232,64,47,.09); --gold: #b9821c; --shadow: 0 24px 60px rgba(20,30,60,.12); color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: radial-gradient(1200px 600px at 20% -10%, rgba(255,90,74,.10), transparent 60%), var(--bg); color: var(--fg); font-family: var(--font); padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 56px; -webkit-font-smoothing: antialiased; }
+.page { max-width: 1280px; margin: 0 auto; display: grid; gap: 22px; }
+header h1 { font-size: 1.55rem; font-weight: 700; letter-spacing: -.01em; margin: 0 0 6px; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); line-height: 1.7; max-width: 72ch; font-size: 14px; }
+.app { position: relative; display: grid; grid-template-columns: 68px 300px minmax(0, 1fr); height: 700px; border: 1px solid var(--line2); border-radius: 18px; overflow: hidden; background: var(--frame); box-shadow: var(--shadow); }
+/* rail */
+.rail { background: var(--rail); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 16px 0 14px; border-right: 1px solid var(--line); }
+.rail .logo { width: 40px; height: 40px; border-radius: 12px; margin-bottom: 14px; box-shadow: 0 6px 18px rgba(255,90,74,.25); }
+.rail button { width: 54px; border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; display: grid; justify-items: center; gap: 4px; padding: 8px 0 7px; border-radius: 12px; cursor: pointer; position: relative; transition: color .15s, background .15s; }
+.rail button:hover { color: var(--fg2); }
+.rail button svg { width: 22px; height: 22px; }
+.rail button[aria-pressed="true"] { color: var(--fg); background: var(--glass); }
+.rail button[aria-pressed="true"]::before { content: ""; position: absolute; left: -7px; top: 12px; bottom: 12px; width: 3px; border-radius: 3px; background: var(--me); }
+.rail button[aria-pressed="true"] svg { color: var(--accent); }
+.rail button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rail .dot { position: absolute; top: 3px; right: 9px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: #fff; font-size: 10px; font-weight: 600; line-height: 16px; box-shadow: 0 0 0 2px var(--rail); }
+.rail .spacer { flex: 1; }
+.me-av { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg,#3a3a44,#24242b); display: grid; place-items: center; font-size: 13px; font-weight: 600; color: var(--fg); position: relative; }
+/* avatar with presence */
+.ava { position: relative; flex: none; }
+.ava img { display: block; width: 42px; height: 42px; border-radius: 12px; object-fit: cover; background: var(--card2); }
+.ava i { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--list); }
+.on-line { background: var(--green); } .on-busy { background: var(--amber); } .on-rest { background: var(--gray); }
+/* list column */
+.list { background: var(--list); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-width: 0; }
+.list-head { display: flex; align-items: center; gap: 8px; padding: 16px 16px 10px; }
+.list-head h2 { font-size: 17px; font-weight: 700; margin: 0; flex: 1; letter-spacing: -.01em; }
+.icon-btn { width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line2); background: var(--card); color: var(--fg2); display: grid; place-items: center; font-size: 16px; cursor: pointer; }
+.search { margin: 0 16px 8px; padding: 8px 11px; border-radius: 10px; background: var(--card2); color: var(--muted); font-size: 13px; display: flex; gap: 6px; align-items: center; }
+.chips { display: flex; gap: 6px; padding: 2px 16px 10px; }
+.chips span { font-size: 12px; padding: 4px 10px; border-radius: 99px; background: var(--card2); color: var(--muted); }
+.chips span.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.rows { overflow: auto; min-height: 0; padding: 0 8px 12px; }
+.row { display: flex; gap: 11px; align-items: center; padding: 10px 10px; border-radius: 12px; cursor: pointer; }
+.row:hover { background: var(--hover); }
+.row.on { background: var(--card); box-shadow: 0 1px 0 var(--line2) inset, 0 6px 16px rgba(0,0,0,.12); }
+.row .t { min-width: 0; flex: 1; }
+.row .n { display: flex; gap: 6px; align-items: center; font-size: 14px; }
+.row .n b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row .n time { margin-left: auto; font-size: 11px; color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+.row .p { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 3px; }
+.row .p em { font-style: normal; color: var(--accent); }
+.tag { font-size: 10px; padding: 1px 6px; border-radius: 5px; background: var(--card2); color: var(--muted); flex: none; font-weight: 500; }
+.tag.ai { background: linear-gradient(135deg, rgba(255,90,74,.18), rgba(242,196,109,.18)); color: var(--gold); }
+.count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent); color: #fff; font-size: 10.5px; font-weight: 600; display: grid; place-items: center; flex: none; }
+.group-av { width: 42px; height: 42px; border-radius: 12px; background: var(--card2); display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 3px; flex: none; }
+.group-av img { width: 100%; height: 100%; border-radius: 4px; object-fit: cover; }
+.sec { font-size: 11px; color: var(--muted); padding: 12px 10px 6px; letter-spacing: .06em; font-weight: 600; display: flex; justify-content: space-between; }
+/* main */
+.main { background: var(--main); display: flex; flex-direction: column; min-width: 0; position: relative; }
+.main-head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--glass); backdrop-filter: blur(10px); }
+.main-head .who b { font-size: 15px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.main-head .who span { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.main-head .who span i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.main-head .tools { margin-left: auto; display: flex; gap: 6px; }
+.main-head .tools button { border: 1px solid var(--line2); background: var(--card); color: var(--fg2); font: inherit; font-size: 12px; padding: 6px 10px; border-radius: 9px; cursor: pointer; }
+.chat { flex: 1; overflow: auto; padding: 22px 26px; display: flex; flex-direction: column; gap: 16px; }
+.day { align-self: center; font-size: 11px; color: var(--muted); background: var(--card2); padding: 3px 10px; border-radius: 99px; }
+.msg { display: flex; gap: 10px; max-width: 76%; align-items: flex-start; }
+.msg .ava img { width: 34px; height: 34px; border-radius: 10px; }
+.msg .ava i { border-color: var(--main); width: 10px; height: 10px; }
+.bub { display: grid; gap: 4px; }
+.bub small { font-size: 11px; color: var(--muted); }
+.bub p { margin: 0; background: var(--card); border: 1px solid var(--line); padding: 10px 13px; border-radius: 4px 14px 14px 14px; line-height: 1.65; font-size: 14px; color: var(--fg); }
+.msg.me { align-self: flex-end; flex-direction: row-reverse; }
+.msg.me .bub p { background: var(--me); color: var(--me-fg); border: 0; border-radius: 14px 4px 14px 14px; }
+.msg.me small { text-align: right; }
+.work { border: 1px solid var(--line2); border-radius: 14px; background: var(--card); overflow: hidden; min-width: 300px; }
+.work-h { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); font-size: 13px; font-weight: 600; }
+.work-h span { font-size: 11px; color: var(--green); font-weight: 500; }
+.steps { padding: 10px 14px; display: grid; gap: 8px; font-size: 13px; color: var(--fg2); }
+.steps div { display: flex; gap: 8px; align-items: center; }
+.steps b { width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center; font-size: 10px; background: rgba(60,207,142,.15); color: var(--green); flex: none; }
+.steps .doing b { background: var(--accent-soft); color: var(--accent); }
+.bar { height: 4px; background: var(--card2); border-radius: 4px; margin: 0 14px 12px; overflow: hidden; }
+.bar i { display: block; height: 100%; width: 82%; background: var(--me); }
+.ask { display: flex; gap: 8px; padding: 0 14px 12px; }
+.ask span { font-size: 12px; padding: 6px 12px; border-radius: 8px; background: var(--me); color: #fff; font-weight: 600; }
+.ask span.ghost { background: var(--card2); color: var(--fg2); font-weight: 500; }
+.typing { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); }
+.typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
+.typing i:nth-child(2) { animation-delay: .2s } .typing i:nth-child(3) { animation-delay: .4s }
+@keyframes blink { 0%,100% { opacity: .25 } 50% { opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .typing i { animation: none; } }
+.composer { padding: 12px 20px 16px; }
+.composer .box { border: 1px solid var(--line2); border-radius: 14px; background: var(--card); padding: 10px 12px; }
+.composer .ph { color: var(--muted); font-size: 13.5px; min-height: 36px; }
+.composer .tb { display: flex; gap: 6px; align-items: center; }
+.composer .tb span { font-size: 12px; color: var(--muted); padding: 4px 8px; border-radius: 7px; background: var(--card2); }
+.composer .tb .send { margin-left: auto; width: 30px; height: 30px; border-radius: 10px; background: var(--me); display: grid; place-items: center; color: #fff; font-size: 14px; padding: 0; }
+/* profile drawer (anthropomorphic name card) */
+.drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 320px; background: var(--frame); border-left: 1px solid var(--line2); box-shadow: -20px 0 40px rgba(0,0,0,.25); padding: 0 0 18px; overflow: auto; transform: translateX(100%); transition: transform .25s ease; }
+.drawer.open { transform: none; }
+@media (prefers-reduced-motion: reduce) { .drawer { transition: none; } }
+.cover { height: 96px; background: radial-gradient(120px 80px at 30% 40%, rgba(242,196,109,.35), transparent 70%), linear-gradient(135deg, #3a1714, #1a1012); position: relative; }
+.drawer .x { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; border-radius: 8px; border: 0; background: rgba(0,0,0,.35); color: #fff; cursor: pointer; }
+.pc { padding: 0 18px; margin-top: -36px; display: grid; gap: 10px; }
+.pc .ava img { width: 72px; height: 72px; border-radius: 20px; border: 3px solid var(--frame); }
+.pc .ava i { width: 16px; height: 16px; border-color: var(--frame); right: 0; bottom: 0; }
+.pc h3 { margin: 0; font-size: 18px; display: flex; gap: 8px; align-items: center; }
+.pc .sub { font-size: 12.5px; color: var(--muted); }
+.status { font-size: 12.5px; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; color: var(--fg2); }
+.kv { display: grid; grid-template-columns: 70px 1fr; gap: 8px 10px; font-size: 12.5px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; color: var(--fg2); }
+.skills { display: flex; flex-wrap: wrap; gap: 6px; }
+.skills span { font-size: 11.5px; padding: 3px 8px; border-radius: 6px; background: var(--card2); color: var(--fg2); }
+.pc .acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pc .acts span { text-align: center; font-size: 13px; padding: 9px; border-radius: 10px; background: var(--card2); color: var(--fg); font-weight: 500; }
+.pc .acts span.pri { background: var(--me); color: #fff; }
+/* contacts / workbench / me */
+.org { padding: 22px 26px; overflow: auto; display: grid; gap: 18px; }
+.dept h4 { margin: 0 0 10px; font-size: 13px; color: var(--muted); font-weight: 600; letter-spacing: .04em; display: flex; justify-content: space-between; }
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.pcard { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: grid; gap: 10px; cursor: pointer; transition: transform .15s, border-color .15s; }
+.pcard:hover { transform: translateY(-2px); border-color: var(--line2); }
+.pcard .top { display: flex; gap: 10px; align-items: center; }
+.pcard .top .ava i { border-color: var(--card); }
+.pcard b { font-size: 14px; } .pcard small { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.pcard .st { font-size: 12px; color: var(--fg2); background: var(--card2); border-radius: 8px; padding: 6px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcard.market { background: radial-gradient(160px 100px at 85% 0%, rgba(242,196,109,.18), transparent 70%), var(--card); border-color: rgba(242,196,109,.25); }
+.desk { padding: 22px 26px; overflow: auto; display: grid; gap: 18px; }
+.hello { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.hello h3 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -.01em; }
+.hello p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
+.stat { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+.stat b { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; display: block; }
+.stat span { font-size: 12px; color: var(--muted); }
+.feed { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 6px 14px; }
+.feed div { display: flex; gap: 10px; align-items: center; padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--fg2); }
+.feed div:first-child { border-top: 0; }
+.feed img { width: 26px; height: 26px; border-radius: 8px; }
+.feed time { margin-left: auto; color: var(--muted); font-size: 11.5px; flex: none; }
+.apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.app-t { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 12px; display: grid; gap: 8px; justify-items: start; font-size: 13px; font-weight: 500; }
+.app-t i { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; font-style: normal; font-size: 16px; color: #fff; }
+.app-t small { font-size: 11px; color: var(--muted); font-weight: 400; }
+.adm { opacity: .9; }
+.adm i { background: linear-gradient(135deg,#4b4b55,#2c2c33) !important; }
+.mine { padding: 26px; display: grid; gap: 14px; max-width: 560px; overflow: auto; }
+.mecard { display: flex; gap: 14px; align-items: center; background: radial-gradient(200px 120px at 90% 0%, rgba(255,90,74,.18), transparent 70%), var(--card); border: 1px solid var(--line2); border-radius: 16px; padding: 16px; }
+.mecard .big { width: 58px; height: 58px; border-radius: 50%; background: linear-gradient(135deg,#3a3a44,#24242b); display: grid; place-items: center; font-size: 22px; font-weight: 600; }
+.mecard b { font-size: 17px; } .mecard p { margin: 3px 0 0; color: var(--muted); font-size: 12.5px; }
+.pro { font-size: 10.5px; padding: 2px 7px; border-radius: 6px; background: linear-gradient(135deg,#f2c46d,#d9963b); color: #2a1a06; font-weight: 700; margin-left: 6px; }
+.menu { background: var(--card); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.menu div { display: flex; justify-content: space-between; align-items: center; padding: 13px 16px; border-top: 1px solid var(--line); font-size: 14px; }
+.menu div:first-child { border-top: 0; }
+.menu span { color: var(--muted); font-size: 12px; }
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr)); gap: 14px; }
+.note { background: var(--frame); border: 1px solid var(--line2); border-radius: 14px; padding: 16px 18px; }
+.note h3 { margin: 0 0 8px; font-size: 14px; }
+.note ul { margin: 0; padding-left: 1.1em; color: var(--muted); font-size: 13px; line-height: 1.85; }
+.hint { color: var(--muted); font-size: 12px; margin: 0; }
+@media (max-width: 900px) { .app { grid-template-columns: 60px minmax(0,1fr); height: 640px; } .main { display: none; } .stats { grid-template-columns: repeat(2, minmax(0,1fr)); } .drawer { width: 100%; } }
+</style>
+<div class="page">
+  <header>
+    <h1>熊宝聊天工作台 · 设计稿 v2</h1>
+    <p>方向不变：四个入口，聊天是主场，设置收起。这一版按大厂企业 IM 的质感重做，并把员工「拟人化」：每位员工有在线状态、此刻在做什么、工牌名片、所在部门和入职天数；对话里能看到「正在输入」、任务进度卡和需要你拍板的按钮。点左边图标切换，点聊天顶部的「名片」看员工资料。</p>
+  </header>
+
+  <div class="app" id="app">
+    <nav class="rail" aria-label="主导航">
+      <img class="logo" src="logo.png" alt="熊宝">
+      <button type="button" data-tab="msg" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v7a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4H6.5A2.5 2.5 0 0 1 4 13.5z"/></svg>消息<span class="dot">5</span></button>
+      <button type="button" data-tab="contacts" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19.5c.8-3.6 3.4-5.2 6.5-5.2s5.7 1.6 6.5 5.2"/><path d="M15.5 4.6a3.5 3.5 0 0 1 0 6.8M18 14.6c2 .7 3.1 2.3 3.5 4.9"/></svg>通讯录</button>
+      <button type="button" data-tab="work" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></svg>工作台</button>
+      <div class="spacer"></div>
+      <button type="button" data-tab="me" aria-pressed="false"><span class="me-av">峰</span>我</button>
+    </nav>
+    <section class="list" id="list"></section>
+    <section class="main" id="main"></section>
+    <aside class="drawer" id="drawer" aria-label="员工名片"></aside>
+  </div>
+  <p class="hint">手机宽度下只显示图标栏和列表，点进会话再全屏显示对话，和微信一样。</p>
+
+  <div class="notes">
+    <div class="note"><h3>拟人化：员工像真同事</h3><ul>
+      <li>头像右下角状态点：绿=空闲、橙=忙碌、灰=休息</li>
+      <li>列表里显示他此刻在做什么，例如「正在跑测试 · 还剩约 3 分钟」</li>
+      <li>名片：工牌号、部门、入职第几天、性格、擅长、带的技能</li>
+      <li>对话里有「正在输入」、任务进度卡、需要你拍板的按钮</li>
+      <li>工作台的「今日动态」像团队群公告：谁完成了什么</li>
+    </ul></div>
+    <div class="note"><h3>大厂质感怎么来的</h3><ul>
+      <li>统一的圆角、细描边、柔和阴影，深浅主题都做</li>
+      <li>一种主色（熊宝红到暖橙的渐变）只用在「我」的气泡、选中态和主按钮</li>
+      <li>数字等宽、标题紧凑、留白克制</li>
+      <li>通讯录按部门分组，像企业组织架构</li>
+    </ul></div>
+    <div class="note"><h3>收起来的设置</h3><ul>
+      <li>模型、插件管理、审计、平台设置 → 工作台「管理」区，仅管理员可见</li>
+      <li>员工配置（技能 / 插件 / 模型）→ 从名片的「配置」进入</li>
+      <li>账户、套餐、外观、高级设置 → 「我」</li>
+    </ul></div>
+  </div>
+</div>
+<script>
+const P = (k) => `portrait-${k}.png`;
+const S = { line: ["on-line", "空闲"], busy: ["on-busy", "忙碌"], rest: ["on-rest", "休息"] };
+const people = {
+  bao: { n: "熊宝小管家", t: "我的分身", dept: "总经办", img: "logo.png", st: "line", doing: "已整理明天的 2 场会议", no: "XB-0001", days: 21, traits: "细心、主动提醒、只替你本人做事", skills: ["日程", "邮件", "资料整理"] },
+  dev: { n: "代码熊", t: "全栈工程师", dept: "研发部", img: P("programmer"), st: "busy", doing: "正在跑测试 · 还剩约 3 分钟", no: "XB-2048", days: 3, traits: "说话直接、先给结论、改动最小可验证", skills: ["后端接口", "前端页面", "自动化测试", "代码审查"] },
+  acc: { n: "小熊会计", t: "财务专员", dept: "财务部", img: P("accountant"), st: "line", doing: "本月报销已核对完", no: "XB-1103", days: 12, traits: "严谨、数字敏感、凡事留凭据", skills: ["报销核对", "账目整理", "税务提醒"] },
+  doc: { n: "暖心医生", t: "健康顾问", dept: "行政部", img: P("doctor"), st: "rest", doing: "下班了，明早 9:00 上线", no: "XB-0520", days: 7, traits: "温和、耐心、不夸大", skills: ["健康建议", "作息提醒"] },
+  chef: { n: "熊大厨", t: "行政主厨", dept: "行政部", img: P("chef"), st: "line", doing: "已拟好下周团餐菜单", no: "XB-0888", days: 5, traits: "热情、讲究、爱分享", skills: ["菜单规划", "采购清单"] },
+};
+const ava = (p, cls = "") => `<span class="ava ${cls}"><img src="${p.img}" alt=""><i class="${S[p.st][0]}"></i></span>`;
+const chats = [
+  { id: "dev", who: people.dev, time: "13:15", last: '<em>[待你确认]</em> 发送频率设为 60 秒一次？', n: 2 },
+  { id: "g1", group: true, name: "产品研发群", members: ["dev", "acc", "doc", "chef"], time: "12:40", last: "代码熊：评审意见已汇总到任务看板", n: 3 },
+  { id: "bao", who: people.bao, time: "11:02", last: "明天上午 10 点有两场会，议程已整理" },
+  { id: "acc", who: people.acc, time: "昨天", last: "本月报销单已核对完毕，附明细" },
+  { id: "chef", who: people.chef, time: "周一", last: "下周团餐菜单发你看看" },
+];
+let current = "dev";
+const groupAv = (ms) => `<div class="group-av">${ms.slice(0, 4).map((k) => `<img src="${people[k].img}" alt="">`).join("")}</div>`;
+function msgList() {
+  return `<div class="list-head"><h2>消息</h2><button class="icon-btn" type="button" title="新对话 / 新建群组">＋</button></div>
+  <div class="search">⌕ 搜索消息、员工</div>
+  <div class="chips"><span class="on">全部</span><span>未读 5</span><span>待我确认 1</span><span>群聊</span></div>
+  <div class="rows">${chats.map((c) => `<div class="row ${c.id === current ? "on" : ""}" data-chat="${c.id}">
+    ${c.group ? groupAv(c.members) : ava(c.who)}
+    <div class="t"><div class="n"><b>${c.group ? c.name : c.who.n}</b>${c.group ? "" : '<span class="tag ai">AI 员工</span>'}<time>${c.time}</time></div>
+    <div class="n"><div class="p" style="flex:1">${c.last}</div>${c.n ? `<span class="count">${c.n}</span>` : ""}</div></div></div>`).join("")}</div>`;
+}
+function chatMain() {
+  const c = chats.find((x) => x.id === current);
+  const p = c.group ? { ...people.dev, n: c.name, t: `${c.members.length} 位成员`, img: people.dev.img } : c.who;
+  const sub = c.group ? `${c.members.length} 位成员 · 3 位在线` : `<i class="${S[p.st][0]}"></i>${S[p.st][1]} · ${p.doing}`;
+  return `<div class="main-head">${c.group ? groupAv(c.members) : ava(p)}<div class="who"><b>${c.group ? c.name : p.n}<span class="tag">${c.group ? "群聊" : p.dept}</span></b><span>${sub}</span></div>
+  <div class="tools"><button type="button">电脑</button><button type="button">任务</button>${c.group ? "" : '<button type="button" id="openCard">名片</button>'}</div></div>
+  <div class="chat">
+    <span class="day">今天 13:02</span>
+    <div class="msg me"><div class="bub"><p>把登录页的验证码改成短信验证，今天下班前给我看。</p><small>已读</small></div></div>
+    <div class="msg">${ava(people.dev)}<div class="bub"><small>代码熊 · 全栈工程师</small><p>收到。我先改后端接口，再改前端表单，做完跑一遍测试，有需要你拍板的地方我会问你。</p></div></div>
+    <div class="msg">${ava(people.dev)}<div class="bub"><small>13:15</small><div class="work"><div class="work-h">任务进度 · 短信验证码登录<span>● 进行中</span></div>
+      <div class="steps"><div><b>✓</b>后端发送与校验接口</div><div><b>✓</b>前端表单与倒计时</div><div class="doing"><b>…</b>自动化测试 11 / 12</div></div>
+      <div class="bar"><i></i></div><div class="steps" style="padding-top:0">需要你确认：同一手机号发送频率限制为 <b style="width:auto;height:auto;background:none;color:var(--fg)">60 秒一次</b>？</div>
+      <div class="ask"><span>同意</span><span class="ghost">改成 120 秒</span><span class="ghost">我来说</span></div></div></div></div>
+    <div class="typing">${ava(people.dev)}代码熊 正在输入 <i></i><i></i><i></i></div>
+  </div>
+  <div class="composer"><div class="box"><div class="ph">发消息给 ${c.group ? c.name : p.n}…　@ 提到员工，/ 使用技能</div>
+  <div class="tb"><span>@ 员工</span><span>/ 技能</span><span>附件</span><span>定时</span><span class="send">↑</span></div></div></div>`;
+}
+function drawer(p) {
+  return `<div class="cover"><button class="x" type="button" id="closeCard" aria-label="关闭">✕</button></div>
+  <div class="pc">${ava(p)}<h3>${p.n}<span class="tag ai">AI 员工</span></h3><div class="sub">${p.t} · ${p.dept} · 工号 ${p.no} · 入职第 ${p.days} 天</div>
+  <div class="status"><b style="color:var(--fg)">此刻：</b>${p.doing}</div>
+  <dl class="kv"><dt>性格</dt><dd>${p.traits}</dd><dt>上班</dt><dd>7×24，深夜自动转为安静模式</dd><dt>模型</dt><dd>DeepSeek · 深度思考</dd></dl>
+  <div><div class="sub" style="margin-bottom:6px">擅长的技能</div><div class="skills">${p.skills.map((s) => `<span>${s}</span>`).join("")}</div></div>
+  <div class="acts"><span class="pri">发消息</span><span>配置</span><span>交给他一个任务</span><span>拉进群</span></div></div>`;
+}
+function contactsList() {
+  return `<div class="list-head"><h2>通讯录</h2><button class="icon-btn" type="button" title="去人才市场召唤">＋</button></div>
+  <div class="search">⌕ 搜索员工、部门、群组</div>
+  <div class="rows">
+    <div class="row on"><div class="group-av" style="display:grid;place-items:center;grid-template-columns:1fr;background:linear-gradient(135deg,rgba(242,196,109,.3),rgba(255,90,74,.25));color:var(--gold);font-size:18px">✦</div><div class="t"><div class="n"><b>人才市场</b><span class="tag ai">26 位待召唤</span></div><div class="p">召唤新的熊宝员工入职</div></div></div>
+    <div class="row"><div class="group-av" style="display:grid;place-items:center;grid-template-columns:1fr;font-size:16px;color:var(--fg2)">#</div><div class="t"><div class="n"><b>我的群组</b></div><div class="p">产品研发群 · 行政小组</div></div></div>
+    <div class="sec"><span>组织架构</span><span>5 人</span></div>
+    ${["总经办", "研发部", "财务部", "行政部"].map((d) => `<div class="row"><div class="t"><div class="n"><b>${d}</b><time>${Object.values(people).filter((p) => p.dept === d).length} 人</time></div></div></div>`).join("")}
+  </div>`;
+}
+function contactsMain() {
+  const depts = ["研发部", "财务部", "行政部", "总经办"];
+  return `<div class="org">${depts.map((d) => `<div class="dept"><h4><span>${d}</span><span>${Object.values(people).filter((p) => p.dept === d).length} 人</span></h4><div class="cards">${
+    Object.entries(people).filter(([, p]) => p.dept === d).map(([k, p]) => `<div class="pcard" data-card="${k}"><div class="top">${ava(p)}<div><b>${p.n}</b><small>${p.t}</small></div></div><div class="st">${S[p.st][1]} · ${p.doing}</div></div>`).join("")
+  }${d === "研发部" ? `<div class="pcard market"><div class="top"><div class="group-av" style="display:grid;place-items:center;grid-template-columns:1fr;color:var(--gold);font-size:18px">✦</div><div><b>招一位新同事</b><small>去人才市场召唤</small></div></div><div class="st">产品经理、测试工程师、设计师…</div></div>` : ""}</div></div>`).join("")}</div>`;
+}
+function workList() {
+  return `<div class="list-head"><h2>工作台</h2></div><div class="rows"><div class="sec"><span>常用</span></div>
+  ${[["▦", "任务看板", "3 件待你处理"], ["⚡", "自主工作", "2 个定时任务今晚运行"], ["@", "Waker 自动化", "规则 4 条"]].map(([i, n, s]) => `<div class="row"><div class="group-av" style="display:grid;place-items:center;grid-template-columns:1fr;color:var(--accent);font-size:16px">${i}</div><div class="t"><div class="n"><b>${n}</b></div><div class="p">${s}</div></div></div>`).join("")}</div>`;
+}
+function workMain() {
+  const t = (i, n, s, g, adm) => `<div class="app-t ${adm ? "adm" : ""}"><i style="background:${g}">${i}</i>${n}<small>${s}</small></div>`;
+  return `<div class="desk"><div class="hello"><div><h3>下午好，feng</h3><p>你的 5 位员工今天完成了 14 件事，有 1 件等你拍板。</p></div><button class="icon-btn" type="button" style="width:auto;padding:0 12px">整理今日日报</button></div>
+  <div class="stats"><div class="stat"><b>5</b><span>在岗员工</span></div><div class="stat"><b>14</b><span>今日完成</span></div><div class="stat"><b>1</b><span>等你确认</span></div><div class="stat"><b>2</b><span>今晚定时任务</span></div></div>
+  <div class="feed">
+    <div><img src="${people.dev.img}" alt="">代码熊 完成了「短信验证码登录」的前后端改动<time>13:15</time></div>
+    <div><img src="${people.acc.img}" alt="">小熊会计 核对完本月 23 张报销单<time>11:40</time></div>
+    <div><img src="logo.png" alt="">熊宝小管家 整理了明天 2 场会议的议程<time>11:02</time></div>
+  </div>
+  <div class="apps">
+    ${t("▦", "任务看板", "谁在做什么", "linear-gradient(135deg,#ff5a4a,#ff8a5c)")}${t("⚡", "自主工作", "定时与自动运行", "linear-gradient(135deg,#f5a524,#f2c46d)")}${t("@", "Waker", "规则唤起员工", "linear-gradient(135deg,#7a5cff,#a98bff)")}
+    ${t("✦", "人才市场", "召唤新员工", "linear-gradient(135deg,#d9963b,#f2c46d)")}${t("◆", "能力", "技能与插件", "linear-gradient(135deg,#2bb3a3,#3ccf8e)")}${t("⇄", "连接", "授权你的账号", "linear-gradient(135deg,#3b82f6,#60a5fa)")}
+    ${t("⚙", "模型与套餐", "仅管理员", "", 1)}${t("☰", "审计记录", "仅管理员", "", 1)}${t("⛭", "平台设置", "仅管理员", "", 1)}
+  </div></div>`;
+}
+function meList() { return `<div class="list-head"><h2>我</h2></div>`; }
+function meMain() {
+  return `<div class="mine"><div class="mecard"><div class="big">峰</div><div><b>feng<span class="pro">PRO</span></b><p>熊宝数字员工 · 5 位员工 · 加入 21 天</p></div></div>
+  <div class="menu"><div>个人资料<span>名字、头像、签名</span></div><div>我的电脑<span>已配对 1 台</span></div><div>通知<span>员工需要你时提醒</span></div></div>
+  <div class="menu"><div>套餐与用量<span>Pro · 本月已用 38%</span></div><div>外观<span>深色 · 熊宝红</span></div><div>设置<span>全部高级设置</span></div></div>
+  <div class="menu"><div>帮助与反馈<span></span></div><div>退出登录<span></span></div></div></div>`;
+}
+const views = { msg: [msgList, chatMain], contacts: [contactsList, contactsMain], work: [workList, workMain], me: [meList, meMain] };
+const dr = document.getElementById("drawer");
+function openCard(k) { dr.innerHTML = drawer(people[k]); dr.classList.add("open"); document.getElementById("closeCard").addEventListener("click", () => dr.classList.remove("open")); }
+function show(tab) {
+  dr.classList.remove("open");
+  document.querySelectorAll(".rail button[data-tab]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tab === tab)));
+  const [l, m] = views[tab];
+  document.getElementById("list").innerHTML = l();
+  document.getElementById("main").innerHTML = m();
+  document.querySelectorAll("[data-chat]").forEach((r) => r.addEventListener("click", () => { current = r.dataset.chat; show("msg"); }));
+  document.querySelectorAll("[data-card]").forEach((r) => r.addEventListener("click", () => openCard(r.dataset.card)));
+  document.getElementById("openCard")?.addEventListener("click", () => openCard(current));
+}
+document.querySelectorAll(".rail button[data-tab]").forEach((b) => b.addEventListener("click", () => show(b.dataset.tab)));
+show("msg");
+</script>

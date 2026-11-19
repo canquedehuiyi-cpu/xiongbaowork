@@ -23,7 +23,7 @@
 # (device-clean-{linux,windows}-evidence.txt) go up with the release, outside SHA256SUMS.
 #
 # Every run script reads its inputs from env, never from ${{ }}: the steps are exercised as written
-# by openbot/scripts/ci/device-release-workflow.test.mjs.
+# by xiongbao/scripts/ci/device-release-workflow.test.mjs.
 name: 熊宝设备端发布
 
 on:
@@ -97,7 +97,7 @@ jobs:
           fi
       - id: tag
         name: Tag format and the version the app is built with
-        working-directory: openbot
+        working-directory: xiongbao
         env:
           REF_NAME: ${{ github.ref_name }}
         run: |
@@ -140,7 +140,7 @@ jobs:
       contents: read
     defaults:
       run:
-        working-directory: openbot
+        working-directory: xiongbao
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -159,12 +159,17 @@ jobs:
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Fetch and verify agent-desktop
+        run: bun desktop-device/scripts/fetch-agent-desktop.ts
+      # The bundle ships THIRD-PARTY-NOTICES.md (tauri.bundle.conf.json); it is generated, never committed.
+      - name: Write the third-party notices the bundle ships
+        run: bun scripts/brand/third-party-notices.ts
       - name: Bundle the deb
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         run: ../desktop/node_modules/.bin/tauri build --ci --bundles deb --config src-tauri/tauri.bundle.conf.json
       - name: Check the package and stage it under its release name
         env:
@@ -179,7 +184,8 @@ jobs:
           test "$(dpkg-deb -f "$deb" Version)" = "$VERSION"
           contents=$(dpkg-deb -c "$deb")
           grep -Eq 'usr/bin/xiongbao-device$' <<<"$contents"
-          grep -Eq 'usr/bin/openbot-runner$' <<<"$contents"
+          grep -Eq 'usr/bin/xiongbao-runner$' <<<"$contents"
+          grep -Eq 'usr/bin/agent-desktop$' <<<"$contents"
           sudo dpkg --dry-run -i "$deb"
           mkdir -p "$RUNNER_TEMP/dist"
           cp "$deb" "$RUNNER_TEMP/dist/xiongbao-device_${VERSION}_amd64.deb"
@@ -208,7 +214,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: openbot
+        working-directory: xiongbao
     env:
       SIGNING_SOURCE_SHA: ${{ github.sha }}
       DEVICE_WINDOWS_SIGNING: ${{ vars.DEVICE_WINDOWS_SIGNING }}
@@ -302,13 +308,18 @@ jobs:
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Fetch and verify agent-desktop
+        run: bun desktop-device/scripts/fetch-agent-desktop.ts
+      # The bundle ships THIRD-PARTY-NOTICES.md (tauri.bundle.conf.json); it is generated, never committed.
+      - name: Write the third-party notices the bundle ships
+        run: bun scripts/brand/third-party-notices.ts
       # Signed: Tauri runs sign-windows.ps1 on the app, the runner sidecar and the installer.
       - name: Bundle the NSIS installer
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           MODE: ${{ steps.mode.outputs.mode }}
         run: |
@@ -317,7 +328,7 @@ jobs:
           if [ "$MODE" != none ]; then configs+=(--config src-tauri/tauri.windows-signing.conf.json); fi
           ../desktop/node_modules/.bin/tauri build --ci --bundles nsis "${configs[@]}"
       - name: Verify the installer (verify-windows-signatures.ps1)
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         shell: pwsh
         env:
           MODE: ${{ steps.mode.outputs.mode }}
@@ -383,7 +394,7 @@ jobs:
       team: ${{ steps.done.outputs.team }}
     defaults:
       run:
-        working-directory: openbot
+        working-directory: xiongbao
     env:
       DEVICE_MACOS_SIGNING: ${{ vars.DEVICE_MACOS_SIGNING }}
       DEVICE_APPLE_SIGNING_IDENTITY: ${{ vars.DEVICE_APPLE_SIGNING_IDENTITY }}
@@ -470,27 +481,32 @@ jobs:
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Fetch and verify agent-desktop
+        run: bun desktop-device/scripts/fetch-agent-desktop.ts
+      # The bundle ships THIRD-PARTY-NOTICES.md (tauri.bundle.conf.json); it is generated, never committed.
+      - name: Write the third-party notices the bundle ships
+        run: bun scripts/brand/third-party-notices.ts
       # Signed: Tauri signs the app and the runner with the hardened runtime and Entitlements.plist,
       # notarizes the app with the App Store Connect API key and staples it, then builds the dmg.
       - name: Bundle the app and dmg (Developer ID, notarized)
         if: ${{ steps.mode.outputs.mode == 'developer-id' }}
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           APPLE_SIGNING_IDENTITY: ${{ vars.DEVICE_APPLE_SIGNING_IDENTITY }}
           APPLE_API_KEY: ${{ vars.DEVICE_APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ vars.DEVICE_APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/notary/AuthKey.p8
-        run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json
+        run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
       - name: Bundle the app and dmg (ad-hoc signature only)
         if: ${{ steps.mode.outputs.mode == 'none' }}
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           APPLE_SIGNING_IDENTITY: "-"
-        run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json
+        run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
       - name: Sign, notarize and staple the dmg
         if: ${{ steps.mode.outputs.mode == 'developer-id' }}
         env:
@@ -510,7 +526,7 @@ jobs:
           fi
           xcrun stapler staple "$dmg"
       - name: Verify the bundle (codesign, stapler validate, spctl --assess)
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           MODE: ${{ steps.mode.outputs.mode }}
           VERSION: ${{ needs.tag-check.outputs.version }}
@@ -698,7 +714,7 @@ jobs:
             echo "| --- | --- | --- |"
             echo "| \`${windows}\` | Windows 10/11 x64 | ${windows_state} |"
             if [ "$MACOS_SIGNED" != skipped ]; then
-              echo "| \`${macos}\` | macOS 11+，Apple 芯片 | ${macos_state} |"
+              echo "| \`${macos}\` | macOS 13+，Apple 芯片 | ${macos_state} |"
             fi
             echo "| \`${linux}\` | Ubuntu / Debian x64 | 不做代码签名，只提供 SHA256 校验和 |"
             echo
@@ -722,7 +738,7 @@ jobs:
   # HUMAN-STEPS 12.6 on a fresh GitHub-hosted Ubuntu machine, with the exact files assemble made:
   # SHA256SUMS, apt install (Depends from the archive), the installed files, the installed runner
   # paired with a real server (and PostgreSQL) through the API, one command from the server, quit with
-  # no openbot-runner left, the installed app back online without pairing, apt remove. No secret and
+  # no xiongbao-runner left, the installed app back online without pairing, apt remove. No secret and
   # no Environment; publish waits for it. Not the default success(): macOS may have been skipped.
   # Every check is a phase of scripts/ci/device-clean-linux.sh, which ci.yml's device-clean-linux
   # also runs on each pull request's unsigned deb.
@@ -735,7 +751,7 @@ jobs:
       contents: read
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
@@ -749,7 +765,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: source/openbot
+        working-directory: source/xiongbao
     env:
       VERSION: ${{ needs.tag-check.outputs.version }}
       DIST: ${{ github.workspace }}/release/dist
@@ -799,7 +815,7 @@ jobs:
       - id: lifecycle
         name: Pair the installed runner, one command, quit, back online
         env:
-          RUNNER_BIN: /usr/bin/openbot-runner
+          RUNNER_BIN: /usr/bin/xiongbao-runner
           APP_BIN: /usr/bin/xiongbao-device
         run: bash scripts/ci/device-clean-linux.sh lifecycle
       - name: Stop the server by its PID
@@ -842,7 +858,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: source/openbot
+        working-directory: source/xiongbao
     env:
       VERSION: ${{ needs.tag-check.outputs.version }}
       PRODUCT: 熊宝数字员工 设备端
@@ -883,7 +899,7 @@ jobs:
       # No server on this machine, so the app is given a pairing that cannot connect: the runner it
       # starts keeps retrying, which is enough to see whose child it is and that it dies with the app.
       - id: app
-        name: The installed app starts the installed runner, and no openbot-runner outlives it
+        name: The installed app starts the installed runner, and no xiongbao-runner outlives it
         shell: pwsh
         run: ./scripts/ci/device-clean-windows.ps1 -Phase app
       - id: uninstall
@@ -957,3 +973,61 @@ jobs:
           done
           gh release create "$TAG" release/dist/* "${evidence[@]}" \
             --verify-tag --title "$TITLE" --notes-file release/notes.md "${flags[@]}"
+      - name: Our download page is not configured
+        if: ${{ vars.XB_DOWNLOAD_BUCKET == '' }}
+        run: echo "未配置自有渠道（XB_DOWNLOAD_BUCKET 未设）：安装包只在 GitHub Release 上，不上传自有下载页。" >> "$GITHUB_STEP_SUMMARY"
+
+  # Our download page (Task U3): once the GitHub Release is out, the same installers and their
+  # SHA256SUMS go to s3://<XB_DOWNLOAD_BUCKET>/<tag>/device/. A job of its own, so a failed upload
+  # can be re-run without re-publishing. Until the bucket is set the whole job is skipped, so its
+  # environment asks for no approval; publish's summary says so.
+  download-page:
+    needs: [tag-check, publish]
+    if: ${{ !cancelled() && needs.publish.result == 'success' && vars.XB_DOWNLOAD_BUCKET != '' }}
+    runs-on: ubuntu-latest
+    environment: device-release
+    permissions:
+      contents: read
+    steps:
+      - if: ${{ vars.XB_DOWNLOAD_BUCKET != '' }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: device-release-dist
+          path: release
+      - id: upload
+        name: Upload the installers to our download page
+        if: ${{ vars.XB_DOWNLOAD_BUCKET != '' }}
+        env:
+          TAG: ${{ needs.tag-check.outputs.tag }}
+          XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
+          XB_DOWNLOAD_ENDPOINT: ${{ vars.XB_DOWNLOAD_ENDPOINT }}
+          AWS_DEFAULT_REGION: ${{ vars.XB_DOWNLOAD_REGION }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.XB_DOWNLOAD_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.XB_DOWNLOAD_SECRET_ACCESS_KEY }}
+          AWS_EC2_METADATA_DISABLED: "true"
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+        run: |
+          set -euo pipefail
+          # Each setting by the name it is configured under; the region signs every request, so there
+          # is no default to fall back on.
+          for pair in XB_DOWNLOAD_ENDPOINT:XB_DOWNLOAD_ENDPOINT XB_DOWNLOAD_REGION:AWS_DEFAULT_REGION \
+            XB_DOWNLOAD_ACCESS_KEY_ID:AWS_ACCESS_KEY_ID XB_DOWNLOAD_SECRET_ACCESS_KEY:AWS_SECRET_ACCESS_KEY; do
+            variable="${pair#*:}"
+            if [ -z "${!variable}" ]; then
+              echo "::error::XB_DOWNLOAD_BUCKET is set but ${pair%%:*} is not."
+              exit 1
+            fi
+          done
+          if [[ "$XB_DOWNLOAD_ENDPOINT" != https://* ]]; then
+            echo "::error::XB_DOWNLOAD_ENDPOINT must start with https://: '$XB_DOWNLOAD_ENDPOINT'"
+            exit 1
+          fi
+          # The files the release carries: SHA256SUMS and every installer it names, still matching.
+          (cd release/dist && sha256sum -c SHA256SUMS)
+          aws --version
+          for file in release/dist/*; do
+            aws s3 cp --endpoint-url "$XB_DOWNLOAD_ENDPOINT" --only-show-errors \
+              "$file" "s3://$XB_DOWNLOAD_BUCKET/$TAG/device/${file##*/}"
+          done
+          printf -- '- 自有下载页：`s3://%s/%s/device/`\n' "$XB_DOWNLOAD_BUCKET" "$TAG" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>桌面操作提示</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #b42318;
+        color: #fff;
+        font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+          "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+        cursor: default;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 12px;
+        box-sizing: border-box;
+        white-space: nowrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div role="status" aria-live="polite">
+      <span>熊宝员工正在操作你的电脑 · 按 Ctrl+Alt+Esc（Mac 上 ⌃⌥⎋）或移动鼠标即可停止</span><span id="headed" hidden> · 正在移动鼠标</span>
+    </div>
+    <script>
+      // Only says whether the runner is using the real mouse and keyboard; the words are above.
+      window.__TAURI__.event.listen("desktop-banner", (event) => {
+        const payload = event.payload;
+        document.getElementById("headed").hidden = !(payload && payload.headed === true);
+      });
+    </script>
+  </body>
+</html>

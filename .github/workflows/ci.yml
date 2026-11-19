@@ -1,4 +1,5 @@
-# GitHub only discovers workflows here. openbot/.github/workflows is retained
+# 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+# GitHub only discovers workflows here. xiongbao/.github/workflows is retained
 # for upstream synchronisation and does not execute in this fork.
 name: 熊宝交付 CI
 
@@ -25,13 +26,22 @@ concurrency:
 defaults:
   run:
     shell: bash
-    working-directory: openbot
+    working-directory: xiongbao
 
 env:
-  TENANT_PACKAGE_DIR: ../examples/qoderwake
-  # Frozen at the commit main was created from (D06 candidate). The previous value
-  # 03df9efa... does not exist in this repository. Never replace with moving main.
-  DELIVERY_BASELINE_SHA: 2aacf0f19fdaaeeb4414d4ee4c09cef1f2fc7634
+  TENANT_PACKAGE_DIR: ../examples/xiongbao
+  # The frozen baseline is "the last commit on main whose whole run was green", pinned by commit — never
+  # a branch: a moving baseline turns 「新增失败」into "whatever main was when this job started", and the
+  # comparison then says nothing about the change under test.
+  #
+  # 2026-11-18: moved from 2aacf0f19f (2026-11-04, before the openbot/ → xiongbao/ rename and before
+  # examples/xiongbao existed) to e63acdfb51 (run 44264063700, 46/46). Two things came from that staleness:
+  # the baseline had to be located under its old product directory (baseline-dir.sh still allows that for
+  # old pins), and the app baseline had to be generated with TENANT_PACKAGE_DIR=../examples/qoderwake, a
+  # package this tree no longer carries. Both allowances are gone below; the pin now needs neither.
+  # Also: 03df9efa... (an even earlier value) does not exist in this repository — prepare-baseline.sh now
+  # says so by name instead of failing inside `git worktree add`.
+  DELIVERY_BASELINE_SHA: e63acdfb51a3a5e6624f50b03991ef6e4d423a42
 
 jobs:
   static:
@@ -46,10 +56,34 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bunx biome lint --error-on-warnings --diagnostic-level=warn .
       - run: bun run typecheck
-      - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs device-release-workflow.test.mjs
-        working-directory: openbot/scripts/ci
+      # app-shards and server-shards are here because app-test/server-test trust their manifests: a
+      # stale list would drop test files from every run, and neither suite would notice.
+      - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs device-release-workflow.test.mjs app-shards.test.mjs server-shards.test.mjs
+        working-directory: xiongbao/scripts/ci
 
-  # The Helm chart, rendered for real. openbot/.github's chart job is the upstream copy and does not
+  # The tests sit outside `server/tsconfig.json`, so `bun run typecheck` above says nothing about them:
+  # a change can type-check as a product and still leave the test that exercises it unrepresentable.
+  # `scripts/typecheck-tests.ts` runs tsc over `server/tsconfig.tests.json` and fails on any error the
+  # frozen baseline (`server/tests/typecheck-baseline.txt`) does not already carry. The baseline is debt
+  # that predates the gate: fix what it reports, and never regenerate it with `--update` to go green.
+  # That debt is now paid off — the file has been empty since 2026-11-18 — so as of today this job is
+  # a clean gate: any error in `server/tests` fails it, with no frozen entries to absorb one.
+  # Its own job, so a red run here reads as "the tests project", not as the product failing to compile,
+  # and so it does not lengthen the static gate every pull request waits on.
+  typecheck-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck:tests
+
+  # The Helm chart, rendered for real. xiongbao/.github's chart job is the upstream copy and does not
   # run here, so nothing rendered the chart in this fork. Lint plus a few `helm template` renders,
   # no cluster: see scripts/ci/chart-check.sh for what each check stands for.
   chart:
@@ -73,7 +107,8 @@ jobs:
         shard: [1, 2, 3, 4, 5, 6]
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
@@ -101,6 +136,10 @@ jobs:
         with:
           persist-credentials: false
           fetch-depth: 0
+      - name: Print database version
+        # After checkout: the workflow's default working-directory (xiongbao) exists only then.
+        # Run psql inside the service container: the runner image need not ship a client.
+        run: docker exec ${{ job.services.postgres.id }} psql -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'select version()'
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
@@ -110,37 +149,46 @@ jobs:
       # egress-policy-delivery (upstream v1.0.0) starts the real agent-computer, which runs from its own
       # lockfile (playwright, web-bot-auth, xterm), as the image installs it.
       - run: bun install --frozen-lockfile --ignore-scripts
-        working-directory: openbot/agent-computer
+        working-directory: xiongbao/agent-computer
       - run: bun install --frozen-lockfile
-        working-directory: openbot/agent-bot
+        working-directory: xiongbao/agent-bot
       - run: bun install --frozen-lockfile
-        working-directory: openbot/agent-langgraph
+        working-directory: xiongbao/agent-langgraph
       - run: bun install
-        working-directory: openbot/agent-mastra
+        working-directory: xiongbao/agent-mastra
       - name: Prepare frozen baseline and separate databases
         run: |
-          bash scripts/ci/prepare-baseline.sh
+          bash scripts/ci/prepare-baseline.sh --with-bots
+          baseline="$(bash scripts/ci/baseline-dir.sh)"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE openbot_b_base OWNER openbot'
           DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_head bun run --cwd server scripts/migrate.ts
-          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_base bun run --cwd "$RUNNER_TEMP/delivery-baseline/openbot/server" scripts/migrate.ts
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_b_base bun run --cwd "$baseline/server" scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE openbot_continuation_template OWNER openbot'
           DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_continuation_template bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "CREATE ROLE openbot_fixture LOGIN PASSWORD 'ci-fixture' NOSUPERUSER BYPASSRLS IN ROLE openbot_app"
           printf 'DATABASE_URL=%s\n' "$DATABASE_URL" > .env
-          printf 'DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base\n' > "$RUNNER_TEMP/delivery-baseline/openbot/.env"
+          printf 'DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base\n' > "$baseline/.env"
       - name: Baseline tests (same head shard file list, own database)
         continue-on-error: true
-        run: |
-          DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
-          TEST_DATABASE_URL=postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base \
-            bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
+        # Every database the baseline tree touches is its own, the writer too. `initializeRoleWriter`
+        # refuses an application and a writer that are not on the same database (it compares database,
+        # oid, server address and port), so leaving TEST_ROLE_WRITER_DATABASE_URL at the job default
+        # pointed the writer at openbot_b_head while the application was on openbot_b_base: every suite
+        # that binds the writer died in its hook — 38 unnamed failures on shard 1 alone — and
+        # test-report.mjs refuses to compare a log with unnamed failures at all.
+        env:
+          DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base
+          TEST_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_base
+          TEST_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_b_base
+        run: bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" server "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
       - name: Head tests (openbot_app, one process per shard)
         # No continue-on-error: a failing head test fails this step and the job. The report step
         # below runs anyway (if: always()) for the baseline comparison.
-        # G01-E P15: no OPENBOT_TENANT_FRAME_GUARD here. scripts/test-preload.ts defaults it to
-        # `throw`, so a database read or write with no tenant frame fails the test that made it.
+        # G01-E P15: nothing to set for tenant frames. The frame-guard switch is gone: the database
+        # client throws a TenantContextError (server/src/tenant/context.ts) for every read or write
+        # made outside a tenant frame, unconditionally, so the test that made it fails on its own.
         run: bash scripts/ci/run-tests.sh "$PWD" server "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
       - name: Failure name multiset difference and zero-fail gate
         if: always()
@@ -156,9 +204,22 @@ jobs:
             ${{ runner.temp }}/*.log
             ${{ runner.temp }}/*.log.files.txt
 
+  # One Bun process per shard, as server-test already does. Run whole, this suite was 628 files in
+  # one process, and from roughly 300 files in `app/tests/workbench-frame-routes.test.tsx` stopped
+  # mounting the workbench frame: its seven route cases each waited the test's own 25s LOAD and then
+  # failed on a DOM that held only the settings page's own shell. The same file alone is 8/8 green in
+  # about a second, and the 200 files ahead of it in that run order were green too, so the trigger is
+  # how much ran before it in the process, not the file or the code under test. The split is a
+  # committed list (scripts/ci/app-tests.list.txt, rewritten with
+  # `bun scripts/ci/app-shards.mjs --write`): a new test file without a manifest update fails the job
+  # rather than silently never running, and a shard is reproducible from the manifest alone.
   app-test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -169,19 +230,94 @@ jobs:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bash scripts/ci/prepare-baseline.sh
-      - name: Baseline app tests
+      - name: Baseline app tests (the frozen tree's own tenant package)
         continue-on-error: true
-        run: bash scripts/ci/run-tests.sh "$RUNNER_TEMP/delivery-baseline/openbot" app "$RUNNER_TEMP/base.log"
-      - name: Generate configuration and run app tests
-        run: bash scripts/ci/run-tests.sh "$PWD" app "$RUNNER_TEMP/head.log"
+        # No TENANT_PACKAGE_DIR override: the baseline is now the last green main commit, so it carries
+        # examples/xiongbao and generates its own app config. The override existed because the previous
+        # baseline (2aacf0f) predated examples/xiongbao: `generate:app-config` exited 1 there, `set -e`
+        # stopped the script, and base.log held no `Ran … tests` line, so the comparison was empty on
+        # every run since the baseline was pinned. That commit's own CI used ../examples/qoderwake; it is
+        # not in this tree any more, which is why the refresh and this removal had to land together.
+        run: bash scripts/ci/run-tests.sh "$(bash scripts/ci/baseline-dir.sh)" app "$RUNNER_TEMP/base.log" "${{ matrix.shard }}" "$PWD"
+      - name: Generate configuration and run app tests (this shard)
+        run: bash scripts/ci/run-tests.sh "$PWD" app "$RUNNER_TEMP/head.log" "${{ matrix.shard }}" "$PWD"
       - name: Failure name multiset difference and zero-fail gate
         if: always()
-        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log" app
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/base.log" "$RUNNER_TEMP/head.log" "app shard ${{ matrix.shard }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
-          name: app-logs
-          path: ${{ runner.temp }}/*.log
+          name: app-${{ matrix.shard }}-logs
+          path: |
+            ${{ runner.temp }}/*.log
+            ${{ runner.temp }}/*.log.files.txt
+
+  # WP-3.2 状态行实时耗时的截图取证（设计规格 §8.3）：真 Chromium 里画真转录，暗色＋2 倍像素，
+  # 五个画面各存一张图，上传成 artifact 供负责人核对界面后才合并。新增的证据 job，不动任何既有门；
+  # 测试本体由 skipIf 门控，app 分片不为它付时间，只有这个 job 带着 OPENBOT_APP_BROWSER 要浏览器。
+  app-status-shots:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      # The transcript imports brand.ts, which reads the generated application config. The app
+      # shards get it from run-tests.sh, which cds into app/ first (so its `--cwd ..` is this
+      # directory); this job already runs here, where package.json defines generate:app-config.
+      - name: Generate the app configuration the transcript imports
+        run: bun run generate:app-config
+      - name: Install Chromium for the root workspace's playwright-core
+        run: bunx playwright-core install --with-deps --no-shell chromium
+      - name: Status-line scenes, dark at 2x
+        env:
+          OPENBOT_APP_BROWSER: '1'
+          OPENBOT_APP_SHOTS: ${{ runner.temp }}/wp32-shots
+        run: bun test app/tests/wp32-status-shots.test.tsx
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: wp32-status-shots
+          path: ${{ runner.temp }}/wp32-shots
+
+  # Scan what the customer is given (spec 5.1): the built web app, the recorder extension and the
+  # runner sidecar are checked against the word lists in xiongbao/app/tests/brand-artifacts, and the
+  # rewrite gauge goes into the job summary.
+  brand-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Build the web app
+        run: bun run generate:app-config && bun run --cwd app build
+      - name: Build the extension
+        run: bun run --cwd extension build
+      # Only to have the runner binary to scan below: this is not a package build. It never runs
+      # `tauri build`, so no installer ships from here, no third-party notices are needed, and the
+      # device bundle builds counted in desktop-device/tests/brand-icons.test.ts do not include it.
+      - name: Build the runner sidecar
+        run: |
+          bun desktop-device/scripts/build-sidecar.ts
+      - name: Scan the web app
+        run: bun scripts/brand/scan-artifact.ts --kind web --input app/dist --allowlist app/tests/brand-artifacts/web.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Scan the extension
+        run: bun scripts/brand/scan-artifact.ts --kind extension --input extension/dist --allowlist app/tests/brand-artifacts/extension.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Scan the runner
+        run: bun scripts/brand/scan-artifact.ts --kind runner --input desktop-device/src-tauri/binaries/xiongbao-runner-x86_64-unknown-linux-gnu --allowlist app/tests/brand-artifacts/runner.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Rewrite gauge
+        if: always()
+        run: bun scripts/brand/metrics.ts --base origin/main >> "$GITHUB_STEP_SUMMARY"
 
   # Gate G4: the WakerFlow basic lifecycle in a real browser (the runner's preinstalled Chrome, driven
   # by playwright-core) against the real server on its own PostgreSQL, serving the built app the way
@@ -194,7 +330,8 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
@@ -248,6 +385,141 @@ jobs:
           name: e2e-wakerflow-evidence
           path: ${{ runner.temp }}/g4/
 
+  # Gate G6: 对话招员工 / 组群聊 in a real browser, the same services and environment as G4 (its own
+  # PostgreSQL, the built app served by the real server, the runner's Chrome, aimock as the model: no
+  # secret, no provider call). Ask 小管家 to hire -> the draft card -> edit the name -> confirm -> the
+  # employee exists under the edited name -> 小管家 reads proposal_status and carries on; ask for a
+  # group of two -> another account opens the conversation and has nothing to press -> confirm -> the
+  # group exists with its employees in the drafted order.
+  e2e-staffing:
+    name: G6 staffing lifecycle (browser, mocked model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: openbot_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGPASSWORD: ci-owner
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
+      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_e2e
+      # The fresh-database check only (see the harness header).
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
+      - name: Build the app the server serves (APP_DIST_DIR)
+        run: bun run --cwd app build
+      - name: The runner's preinstalled Chrome
+        run: |
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)"
+          "$chrome" --version
+          echo "E2E_CHROME_PATH=$chrome" >> "$GITHUB_ENV"
+      - name: G6 staffing lifecycle
+        env:
+          E2E_APP_DIST_DIR: app/dist
+          E2E_ARTIFACTS_DIR: ${{ runner.temp }}/g6
+        run: bun scripts/e2e/staffing-lifecycle.ts
+      - name: Print server log (credentials masked)
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/g6/server-*.log; do
+            bash scripts/ci/print-diagnostics.sh "$f"
+          done
+      # Screenshots of every step (the other account's view included), the Playwright trace, the
+      # server log and the model-call record.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: failure()
+        with:
+          name: e2e-staffing-evidence
+          path: ${{ runner.temp }}/g6/
+
+  # G7: a file the Bot saved is reachable from the conversation — the download address the line hands
+  # out, the turn's artifact list, and the browser saving what that address answers. The computer's own
+  # answers (the write, the folder listing, the bytes) are fixed in the script, because a runner has no
+  # computer to reach; the scope answer that decides whether a link is drawn at all is the server's.
+  # Screenshots are the deliverable, so the evidence is uploaded on a green run too (dark, 2x).
+  e2e-artifact:
+    name: G7 artifact reachability (browser, mocked model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: openbot_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGPASSWORD: ci-owner
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
+      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_e2e
+      # The fresh-database check only (see the harness header).
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
+      - name: Build the app the server serves (APP_DIST_DIR)
+        run: bun run --cwd app build
+      - name: The runner's preinstalled Chrome
+        run: |
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser)"
+          "$chrome" --version
+          echo "E2E_CHROME_PATH=$chrome" >> "$GITHUB_ENV"
+      - name: G7 artifact reachability
+        env:
+          E2E_APP_DIST_DIR: app/dist
+          E2E_ARTIFACTS_DIR: ${{ runner.temp }}/g7
+        run: bun scripts/e2e/artifact-reachability.ts
+      - name: Print server log (credentials masked)
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/g7/server-*.log; do
+            bash scripts/ci/print-diagnostics.sh "$f"
+          done
+      # Screenshots of the four states (dark, 2x), the Playwright trace on failure, the server log and
+      # the record of every answer the script fixed for the computer.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: e2e-artifact-evidence
+          path: ${{ runner.temp }}/g7/
+
   image:
     if: ${{ !inputs.skip_image }}
     runs-on: ubuntu-latest
@@ -260,6 +532,20 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: docker build -f Dockerfile -t openbot:trackb .
+      # Each scan runs to the end and the verdict comes after, so one CI round shows every word list.
+      - name: Brand scan - image files, env, labels
+        id: scan_image
+        continue-on-error: true
+        run: |
+          docker run --rm --entrypoint sh openbot:trackb -c 'find / -xdev \( -path /proc -o -path /sys \) -prune -o -print' > "$RUNNER_TEMP/image-files.txt"
+          docker inspect openbot:trackb > "$RUNNER_TEMP/image-config.json"
+          rc=0
+          bun scripts/brand/scan-artifact.ts --kind image-files --input "$RUNNER_TEMP/image-files.txt" --allowlist app/tests/brand-artifacts/image-files.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
+          bun scripts/brand/scan-artifact.ts --kind image-config --input "$RUNNER_TEMP/image-config.json" --allowlist app/tests/brand-artifacts/image-config.json --summary "$GITHUB_STEP_SUMMARY" || rc=1
+          exit "$rc"
+      # The s6 oneshot that copies XIONGBAO_* onto OPENBOT_* runs on the host: it only reads and writes files.
+      - name: env-aliases oneshot
+        run: sh docker/tests/env-aliases.test.sh
       # The per-employee root helper creates users, so it is tested as root inside the image.
       - name: xb-bot helper (per-employee users)
         run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" openbot:trackb /t/xb-bot.test.sh
@@ -272,6 +558,18 @@ jobs:
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/delivery-evidence
         run: bash scripts/ci/image-smoke.sh openbot:trackb
+      - name: Brand scan - startup log (words only)
+        id: scan_logs
+        continue-on-error: true
+        run: bun scripts/brand/scan-artifact.ts --kind web --input "$RUNNER_TEMP/delivery-evidence/startup.log" --allowlist app/tests/brand-artifacts/image-logs.json --summary "$GITHUB_STEP_SUMMARY"
+      - name: Brand scans verdict
+        if: always()
+        env:
+          IMAGE_SCAN: ${{ steps.scan_image.outcome }}
+          LOG_SCAN: ${{ steps.scan_logs.outcome }}
+        run: |
+          echo "image files/env/labels: $IMAGE_SCAN; startup log: $LOG_SCAN"
+          test "$IMAGE_SCAN" != failure && test "$LOG_SCAN" != failure
       - name: Print container logs (credentials masked)
         if: failure()
         run: |
@@ -324,6 +622,16 @@ jobs:
           - pkg: runner
             own-lockfile: false
             root-install: true
+          # Root workspace (typechecked by static, its tests included by its tsconfig). Run from its
+          # own directory like the others, so extension/bunfig.toml repeats the root preload: without
+          # it Base UI's dialogs never mount and every test that opens one fails.
+          - pkg: extension
+            own-lockfile: false
+            root-install: true
+          # Root workspace. static's typecheck reads its src only (tsconfig include), not its tests.
+          - pkg: toolkit
+            own-lockfile: false
+            root-install: true
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -334,13 +642,13 @@ jobs:
       - name: Install from the package's own frozen lockfile (no lifecycle scripts)
         id: install
         if: matrix.own-lockfile
-        working-directory: openbot/${{ matrix.pkg }}
+        working-directory: xiongbao/${{ matrix.pkg }}
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         if: matrix.root-install
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Head tests
-        working-directory: openbot/${{ matrix.pkg }}
+        working-directory: xiongbao/${{ matrix.pkg }}
         run: bun test > "$RUNNER_TEMP/head.log" 2>&1
       - name: Zero-fail gate (head only, no baseline counterpart)
         if: always()
@@ -350,17 +658,179 @@ jobs:
         run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/head.log"
       - name: Root frozen install (tsc resolves @types/bun from the root node_modules)
         if: always() && matrix.own-lockfile && steps.install.outcome == 'success'
-        working-directory: openbot
+        working-directory: xiongbao
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Typecheck (not covered by the root typecheck)
         if: always() && matrix.own-lockfile && steps.install.outcome == 'success'
-        working-directory: openbot/${{ matrix.pkg }}
+        working-directory: xiongbao/${{ matrix.pkg }}
         run: bun run typecheck
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: workspace-${{ matrix.pkg }}-logs
           path: ${{ runner.temp }}/head.log
+
+  # The repository-level tests in xiongbao/tests: the chart, compose and Dockerfiles, the release and
+  # upgrade scripts, the default tenant package and the copy guards. None has a counterpart in the
+  # frozen baseline run, so the gate is head only, as for the workspaces above. `./tests/` and not
+  # `tests/`: Bun reads a bare argument as a path filter and would run every tests/ directory in the
+  # tree. Helm is pinned as in the chart job, so the chart suites run rather than skip; the hosted
+  # runner's Docker serves the real-tool update suite; chart-database-wait creates and drops scratch
+  # databases on this job's own PostgreSQL, so it is given the owner. Left to the guards they already
+  # have: the kind-cluster suites (OPENBOT_KIND_KUBECONFIG) and the smoke journey (OPENBOT_SMOKE),
+  # which need a running cluster or a deployed instance.
+  repo-tests:
+    name: repository tests (xiongbao/tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: repo_tests
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d repo_tests"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      TEST_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/repo_tests
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.19.0
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      # agent-bot.test.ts starts the agent-bot Bot, which keeps its own lockfile.
+      - name: Install agent-bot from its own frozen lockfile (no lifecycle scripts)
+        working-directory: xiongbao/agent-bot
+        run: bun install --frozen-lockfile --ignore-scripts
+      # The chart suites render charts/openbot, which needs its subcharts on disk, as chart-check.sh does.
+      - name: Fetch the chart's dependencies
+        run: helm dependency build charts/openbot
+      - name: Repository tests
+        run: bun test ./tests/ > "$RUNNER_TEMP/repo-tests.log" 2>&1
+      - name: Zero-fail gate (head only, no baseline counterpart)
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/repo-tests.log" 'repository tests (head only)'
+      - name: Print repository test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/repo-tests.log"
+      # xiongbao/scripts 下的脚本测试（建学习容器、发版、变异登记等）原先不在任何 job 里，红了也没人看见。
+      - name: Script tests
+        if: always()
+        run: bun test ./scripts/ > "$RUNNER_TEMP/script-tests.log" 2>&1
+      - name: Zero-fail gate for script tests (head only)
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/script-tests.log" 'script tests (head only)'
+      - name: Print script test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/script-tests.log"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: repo-tests-logs
+          path: ${{ runner.temp }}/repo-tests.log
+
+  # The Expo app in xiongbao/mobile: its own npm project with its own package-lock.json, outside the
+  # bun workspaces, so neither static's typecheck nor any test job reaches it. npm ci installs exactly
+  # the lockfile, without lifecycle scripts like every bun install here, on the runner's preinstalled
+  # Node. Its unit tests (tests/, pure modules such as the push deep links) run under bun after the
+  # typecheck; the job name stays the same so required-check settings keep matching.
+  mobile-typecheck:
+    name: mobile typecheck (Expo, npm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: xiongbao/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Toolchain
+        run: node --version && npm --version
+      - name: Install from package-lock.json (no lifecycle scripts)
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Typecheck
+        run: npm run typecheck
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - name: Unit tests
+        run: bun test ./tests/
+
+  # The computer's real-browser tests, which prove a secret typed into a page never reaches the Bot:
+  # the aria snapshot hides a password's value and the screenshot paints the marked fields over under
+  # the neutral attribute names (L1-17, neutral-page-marks.test.ts), the private sign-in types only on
+  # its own origin and is not read back (sign-in.test.ts), a field a person filled reads as filled
+  # (person-filled.test.ts), and session cookies survive a restart under the renamed file
+  # (session-cookies.test.ts). They are asked for by name and skipped by the plain workspace run above,
+  # so this job also fails on any skip: a misspelt variable would otherwise make the proof a silent pass.
+  computer-browser:
+    name: computer browser tests (real Chromium, headless)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      # agent-computer's source reaches `shared`, and takes `@types/bun` from the root.
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install agent-computer from its own frozen lockfile (no lifecycle scripts)
+        working-directory: xiongbao/agent-computer
+        run: bun install --frozen-lockfile --ignore-scripts
+      # agent-computer's own playwright, so the Chromium is the build that version drives. `--no-shell`
+      # as the image does, so the headless run proves nothing needs the shell.
+      - name: Install Chromium for agent-computer's Playwright
+        working-directory: xiongbao/agent-computer
+        run: bunx playwright install --with-deps --no-shell chromium
+      - name: Browser tests
+        working-directory: xiongbao/agent-computer
+        env:
+          OPENBOT_COMPUTER_BROWSER: '1'
+          COMPUTER_BROWSER_MODE: headless
+        run: >-
+          bun test tests/neutral-page-marks.test.ts tests/sign-in.test.ts
+          tests/person-filled.test.ts tests/session-cookies.test.ts
+          > "$RUNNER_TEMP/computer-browser.log" 2>&1
+      - name: Zero-fail gate (head only, no baseline counterpart)
+        if: always()
+        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/computer-browser.log" 'computer browser tests (head only)'
+      - name: Zero-skip gate (a skipped browser test proves nothing)
+        if: always()
+        run: |
+          set -euo pipefail
+          text=$(sed 's/\x1b\[[0-9;]*m//g' "$RUNNER_TEMP/computer-browser.log")
+          if ! grep -Eq '^Ran [1-9][0-9]* tests? across 4 files' <<<"$text"; then
+            echo "::error::the four browser test files did not all run"
+            exit 1
+          fi
+          if grep -Eq '^[[:space:]]*[1-9][0-9]* skip[[:space:]]*$' <<<"$text"; then
+            echo "::error::browser tests were skipped: OPENBOT_COMPUTER_BROWSER did not reach them"
+            exit 1
+          fi
+      - name: Print browser test diagnostics (credentials masked)
+        if: failure()
+        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/computer-browser.log"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: computer-browser-logs
+          path: ${{ runner.temp }}/computer-browser.log
 
   # WIN1: the native Windows device CLI executes commands, start failures are explicit, and Stop,
   # timeout and protocol cancel kill the whole descendant tree. The probe imports the real runner
@@ -372,7 +842,7 @@ jobs:
     defaults:
       run:
         shell: pwsh
-        working-directory: openbot
+        working-directory: xiongbao
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -430,11 +900,30 @@ jobs:
           bun scripts/ci/runner-browser-probe.ts --run --executable "$chrome" --headless true 2>&1 | tee "$log"
           grep -q '^BROWSER_PROBE_PASS$' "$log"
           if grep -q '"passed":false' "$log"; then echo "::error::a probe check failed"; exit 1; fi
+      # The step above runs the runner from the checkout, where every path `bun build --compile` writes
+      # into the sidecar still exists. This one is the sidecar as a user gets it: compiled with the
+      # release flags, copied out, started from an empty directory, and the checkout covered by an
+      # empty tmpfs in a private mount namespace (sudo for the mount only; the sidecar runs as this
+      # user). playwright-core reading its own package.json from the build tree passed above and
+      # fails here.
+      - name: Compiled sidecar starts a browser in an isolated directory (checkout hidden)
+        run: |
+          set -euo pipefail
+          chrome=$(command -v google-chrome-stable || command -v google-chrome)
+          bun desktop-device/scripts/build-sidecar.ts
+          log="$RUNNER_TEMP/sidecar-browser.log"
+          bun scripts/ci/sidecar-browser-probe.ts \
+            --binary desktop-device/src-tauri/binaries/xiongbao-runner-x86_64-unknown-linux-gnu \
+            --executable "$chrome" --hide "$GITHUB_WORKSPACE" 2>&1 | tee "$log"
+          grep -q '^SIDECAR_BROWSER_PROBE_PASS$' "$log"
+          if grep -q '"passed":false' "$log"; then echo "::error::a sidecar probe check failed"; exit 1; fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: g5-browser-probe-log
-          path: ${{ runner.temp }}/g5-browser.log
+          path: |
+            ${{ runner.temp }}/g5-browser.log
+            ${{ runner.temp }}/sidecar-browser.log
 
   # The same G5 probe on a Windows machine, with Chrome headed (no --headless): the hosted
   # windows-latest image runs an interactive desktop session. Not a user's device; the real-hardware
@@ -446,7 +935,7 @@ jobs:
     defaults:
       run:
         shell: pwsh
-        working-directory: openbot
+        working-directory: xiongbao
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -475,6 +964,88 @@ jobs:
           name: g5-browser-probe-windows-log
           path: ${{ runner.temp }}/g5-browser-windows.log
 
+  # Desktop control phase 2 (plan docs/plans/2026-11-12-desktop-write.md, Task 10): the runner's own
+  # desktop.windows and desktop.snapshot through the pinned agent-desktop binary, against a real
+  # editor on each hosted runner (Notepad, TextEdit, gedit under Xvfb with an AT-SPI bus). Read only.
+  # A runner without accessibility permission or a session bus fails the probe; it is never skipped.
+  desktop-probe:
+    name: desktop probe, agent-desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            triple: x86_64-pc-windows-msvc
+          - os: macos-latest
+            triple: aarch64-apple-darwin
+          - os: ubuntu-latest
+            triple: x86_64-unknown-linux-gnu
+    env:
+      TRIPLE: ${{ matrix.triple }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      # runner/src imports agent-computer and shared code that need the root workspaces.
+      - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install Xvfb, gedit, openbox and the AT-SPI bus
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb gedit openbox at-spi2-core dbus-x11 libatspi2.0-0 gsettings-desktop-schemas
+      - name: Fetch and verify agent-desktop
+        run: bun desktop-device/scripts/fetch-agent-desktop.ts --triple "$TRIPLE" --out "$RUNNER_TEMP/agent-desktop"
+      - name: Desktop probe (gedit under Xvfb, with a session bus and the AT-SPI bus)
+        if: runner.os == 'Linux'
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/desktop-probe.log"
+          xvfb-run -a -s "-screen 0 1280x800x24" dbus-run-session -- bash -c '
+            set -euo pipefail
+            export GTK_MODULES=gail:atk-bridge NO_AT_BRIDGE=0 GNOME_ACCESSIBILITY=1
+            gsettings set org.gnome.desktop.interface toolkit-accessibility true || echo "gsettings could not set toolkit-accessibility"
+            /usr/libexec/at-spi-bus-launcher --launch-immediately >"$RUNNER_TEMP/at-spi-bus.log" 2>&1 &
+            openbox >"$RUNNER_TEMP/openbox.log" 2>&1 &
+            sleep 3
+            bun scripts/ci/desktop-probe.ts "$RUNNER_TEMP/desktop-probe" --helper "$RUNNER_TEMP/agent-desktop/agent-desktop-$TRIPLE"
+          ' 2>&1 | tee "$log"
+          grep -q '^DESKTOP_PROBE_PASS$' "$log"
+          if grep -q '"passed":false' "$log"; then echo "::error::a probe check failed"; exit 1; fi
+      - name: Desktop probe (TextEdit)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/desktop-probe.log"
+          bun scripts/ci/desktop-probe.ts "$RUNNER_TEMP/desktop-probe" --helper "$RUNNER_TEMP/agent-desktop/agent-desktop-$TRIPLE" 2>&1 | tee "$log"
+          grep -q '^DESKTOP_PROBE_PASS$' "$log"
+          if grep -q '"passed":false' "$log"; then echo "::error::a probe check failed"; exit 1; fi
+      - name: Desktop probe (Notepad, the agent-desktop engine)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          OPENBOT_DESKTOP_ENGINE: agent-desktop
+        run: |
+          [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+          $dir = Join-Path $env:RUNNER_TEMP 'desktop-probe'
+          $helper = Join-Path $env:RUNNER_TEMP "agent-desktop\agent-desktop-$env:TRIPLE.exe"
+          $log = Join-Path $env:RUNNER_TEMP 'desktop-probe.log'
+          bun scripts/ci/desktop-probe.ts $dir --helper $helper *>&1 | Tee-Object -FilePath $log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) { throw "desktop-probe exited $code" }
+          if (-not (Select-String -LiteralPath $log -Quiet -Pattern '^DESKTOP_PROBE_PASS$')) { throw 'DESKTOP_PROBE_PASS missing.' }
+          if (Select-String -LiteralPath $log -SimpleMatch -Quiet -Pattern '"passed":false') { throw 'a probe check failed ("passed":false).' }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: desktop-probe-${{ matrix.os }}-log
+          path: ${{ runner.temp }}/desktop-probe.log
+
   # Desktop shell on Windows: frontend typecheck, Bun tests and build (Tauri embeds ../dist at
   # compile time), then the Rust regression tests. Ignored live tests stay off; no secrets used.
   desktop-windows:
@@ -484,7 +1055,7 @@ jobs:
     defaults:
       run:
         shell: pwsh
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -497,7 +1068,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: openbot/desktop/src-tauri
+          workspaces: xiongbao/desktop/src-tauri
           key: windows
       - name: Install desktop from its own frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
@@ -521,17 +1092,17 @@ jobs:
       - name: Zero-fail gate (head only, no baseline counterpart)
         if: always()
         shell: bash
-        working-directory: openbot
+        working-directory: xiongbao
         run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/desktop-bun.log" 'desktop Bun tests on Windows (head only)'
       - name: Print desktop Bun test diagnostics (credentials masked)
         if: failure()
         shell: bash
-        working-directory: openbot
+        working-directory: xiongbao
         run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/desktop-bun.log"
       - name: Frontend build (frontendDist for the Tauri compile)
         run: bun run build
       - name: Rust regression tests (lib and bins, --locked)
-        working-directory: openbot/desktop/src-tauri
+        working-directory: xiongbao/desktop/src-tauri
         shell: bash
         run: |
           cargo test --locked --lib --bins 2>&1 | tee "$RUNNER_TEMP/desktop-cargo.log"
@@ -551,7 +1122,7 @@ jobs:
     timeout-minutes: 20
     defaults:
       run:
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -569,7 +1140,7 @@ jobs:
           > "$RUNNER_TEMP/desktop-scripts.log" 2>&1
       - name: Zero-fail gate (head only, no baseline counterpart)
         if: always()
-        working-directory: openbot
+        working-directory: xiongbao
         run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/desktop-scripts.log" 'desktop release scripts (head only)'
 
   # F2 stage 1: the device tray app (desktop-device/, 熊宝数字员工 设备端). The Rust supervisor,
@@ -586,7 +1157,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -599,7 +1170,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: openbot/desktop-device/src-tauri
+          workspaces: xiongbao/desktop-device/src-tauri
           key: device-${{ matrix.os }}
       - name: Linux libraries Tauri builds against
         if: runner.os == 'Linux'
@@ -612,14 +1183,14 @@ jobs:
         run: bun test > "$RUNNER_TEMP/device-bun.log" 2>&1
       - name: Zero-fail gate (head only, no baseline counterpart)
         if: always()
-        working-directory: openbot
+        working-directory: xiongbao
         run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/device-bun.log" 'device shell Bun tests (${{ matrix.os }}, head only)'
       - name: Print Bun test diagnostics (credentials masked)
         if: failure()
-        working-directory: openbot
+        working-directory: xiongbao
         run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/device-bun.log"
       - name: Rust tests (--locked)
-        working-directory: openbot/desktop-device/src-tauri
+        working-directory: xiongbao/desktop-device/src-tauri
         run: |
           cargo test --locked 2>&1 | tee "$RUNNER_TEMP/device-cargo.log"
           # cargo exits 0 when a target has no tests; require that something actually passed.
@@ -644,7 +1215,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: openbot
+        working-directory: xiongbao
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -657,7 +1228,7 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: openbot/desktop-device/src-tauri
+          workspaces: xiongbao/desktop-device/src-tauri
           key: device-bundle
       - name: Linux libraries Tauri builds against
         run: |
@@ -667,15 +1238,20 @@ jobs:
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Fetch and verify agent-desktop
+        run: bun desktop-device/scripts/fetch-agent-desktop.ts
+      # The bundle ships THIRD-PARTY-NOTICES.md (tauri.bundle.conf.json); it is generated, never committed.
+      - name: Write the third-party notices the bundle ships
+        run: bun scripts/brand/third-party-notices.ts
       - name: Bundle the unsigned deb
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         run: ../desktop/node_modules/.bin/tauri build --ci --bundles deb --config src-tauri/tauri.bundle.conf.json
       - name: Check the package installs and carries the runner
-        working-directory: openbot/desktop-device/src-tauri/target/release/bundle/deb
+        working-directory: xiongbao/desktop-device/src-tauri/target/release/bundle/deb
         run: |
           deb=$(ls *.deb)
           dpkg-deb -f "$deb" Package Version Depends
@@ -683,12 +1259,15 @@ jobs:
           # Listed once: grep -q on a live pipe kills dpkg-deb with SIGPIPE, and pipefail fails the step.
           contents=$(dpkg-deb -c "$deb")
           grep -Eq 'usr/bin/xiongbao-device$' <<<"$contents"
-          grep -Eq 'usr/bin/openbot-runner$' <<<"$contents"
+          grep -Eq 'usr/bin/xiongbao-runner$' <<<"$contents"
+          grep -Eq 'usr/bin/agent-desktop$' <<<"$contents"
           sudo dpkg --dry-run -i "$deb"
+      - name: Brand scan - deb listing, fields and contents
+        run: bun scripts/brand/scan-artifact.ts --kind deb --input desktop-device/src-tauri/target/release/bundle/deb/*.deb --allowlist app/tests/brand-artifacts/deb.json --summary "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: xiongbao-device-unsigned-deb
-          path: openbot/desktop-device/src-tauri/target/release/bundle/deb/*.deb
+          path: xiongbao/desktop-device/src-tauri/target/release/bundle/deb/*.deb
           if-no-files-found: error
           retention-days: 14
 
@@ -707,7 +1286,7 @@ jobs:
     defaults:
       run:
         shell: pwsh
-        working-directory: openbot
+        working-directory: xiongbao
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -720,16 +1299,21 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: openbot/desktop-device/src-tauri
+          workspaces: xiongbao/desktop-device/src-tauri
           key: device-bundle-windows
       # The runner's own dependencies (playwright-core, agent-computer's yaml) for the compile.
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Fetch and verify agent-desktop
+        run: bun desktop-device/scripts/fetch-agent-desktop.ts
+      # The bundle ships THIRD-PARTY-NOTICES.md (tauri.bundle.conf.json); it is generated, never committed.
+      - name: Write the third-party notices the bundle ships
+        run: bun scripts/brand/third-party-notices.ts
       # The bundler downloads NSIS and nsis_tauri_utils.dll itself, once per attempt, and GitHub's release
       # downloads answered 504 for minutes at a time, outlasting the retry below. Seed the exact cache it
       # checks first (%LOCALAPPDATA%\tauri\NSIS, the files and SHA-1s pinned by tauri-bundler 2.11.4)
@@ -758,7 +1342,7 @@ jobs:
           New-Item -ItemType Directory -Force (Split-Path $dll) | Out-Null
           Fetch 'https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll' $dll '75197FEE3C6A814FE035788D1C34EAD39349B860'
       - name: Bundle the unsigned NSIS installer
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         # The bundler downloads NSIS from GitHub releases, which answered 504 intermittently and failed
         # this job on PRs that touched nothing here. Retry only that failure; any other error throws.
         run: |
@@ -773,7 +1357,7 @@ jobs:
             throw "tauri build exited $LASTEXITCODE"
           }
       - name: Check the installer's payload, product name and version, and that it is unsigned
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         run: |
           $version = (Get-Content ../package.json -Raw | ConvertFrom-Json).version
           ./scripts/verify-windows-signatures.ps1 -Unsigned -ExpectedVersion $version -EvidenceDirectory "$env:RUNNER_TEMP/device-unsigned-evidence"
@@ -781,7 +1365,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: xiongbao-device-unsigned-nsis
-          path: openbot/desktop-device/src-tauri/target/release/bundle/nsis/*-setup.exe
+          path: xiongbao/desktop-device/src-tauri/target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
           retention-days: 14
       - name: Signing rehearsal - throwaway certificate trusted on this runner only
@@ -797,7 +1381,7 @@ jobs:
           "thumbprint=$($cert.Thumbprint)" >> $env:GITHUB_OUTPUT
           "publisher=$subject" >> $env:GITHUB_OUTPUT
       - name: Signing rehearsal - bundle again through the signing overlay
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           DEVICE_WINDOWS_SIGNING: test-certificate
           DEVICE_TEST_SIGNING_THUMBPRINT: ${{ steps.rehearsal-cert.outputs.thumbprint }}
@@ -806,7 +1390,7 @@ jobs:
           ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.windows-signing.conf.json
           if ($LASTEXITCODE -ne 0) { throw "tauri build exited $LASTEXITCODE" }
       - name: Signing rehearsal - verify, and refuse the wrong publisher and the unsigned label
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           PUBLISHER: ${{ steps.rehearsal-cert.outputs.publisher }}
         run: |
@@ -850,7 +1434,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: openbot
+        working-directory: xiongbao
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -863,29 +1447,34 @@ jobs:
           toolchain: stable
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: openbot/desktop-device/src-tauri
+          workspaces: xiongbao/desktop-device/src-tauri
           key: device-bundle-macos
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: openbot/desktop
+        working-directory: xiongbao/desktop
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
+      - name: Fetch and verify agent-desktop
+        run: bun desktop-device/scripts/fetch-agent-desktop.ts
+      # The bundle ships THIRD-PARTY-NOTICES.md (tauri.bundle.conf.json); it is generated, never committed.
+      - name: Write the third-party notices the bundle ships
+        run: bun scripts/brand/third-party-notices.ts
       - name: Bundle the unsigned app and dmg
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         env:
           APPLE_SIGNING_IDENTITY: "-"
-        run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json
+        run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
       - name: Check the bundle, the runner inside it, and that it is unsigned
-        working-directory: openbot/desktop-device
+        working-directory: xiongbao/desktop-device
         run: |
           version="$(jq -r .version ../package.json)"
           bash scripts/verify-macos.sh --unsigned --expected-version "$version" --evidence-dir "$RUNNER_TEMP/device-macos-evidence"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: xiongbao-device-unsigned-dmg
-          path: openbot/desktop-device/src-tauri/target/release/bundle/dmg/*.dmg
+          path: xiongbao/desktop-device/src-tauri/target/release/bundle/dmg/*.dmg
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -911,7 +1500,8 @@ jobs:
       contents: read
     services:
       postgres:
-        image: pgvector/pgvector:pg17
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
         env:
           POSTGRES_USER: openbot
           POSTGRES_PASSWORD: ci-owner
@@ -924,7 +1514,7 @@ jobs:
     defaults:
       run:
         shell: bash
-        working-directory: openbot
+        working-directory: xiongbao
     env:
       DIST: ${{ github.workspace }}/device-dist
       EVIDENCE: ${{ github.workspace }}/device-clean-linux/device-clean-linux-evidence.txt
@@ -984,7 +1574,7 @@ jobs:
       - id: lifecycle
         name: Pair the installed runner, one command, quit, back online
         env:
-          RUNNER_BIN: /usr/bin/openbot-runner
+          RUNNER_BIN: /usr/bin/xiongbao-runner
           APP_BIN: /usr/bin/xiongbao-device
         run: bash scripts/ci/device-clean-linux.sh lifecycle
       - name: Stop the server by its PID
@@ -1026,7 +1616,7 @@ jobs:
     defaults:
       run:
         shell: pwsh
-        working-directory: openbot
+        working-directory: xiongbao
     env:
       DIST: ${{ github.workspace }}/device-dist
       EVIDENCE: ${{ github.workspace }}/device-clean-windows/device-clean-windows-evidence.txt
@@ -1073,7 +1663,7 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/device-clean-windows.ps1 -Phase selfcheck
       - id: app
-        name: The installed app starts the installed runner, and no openbot-runner outlives it
+        name: The installed app starts the installed runner, and no xiongbao-runner outlives it
         shell: pwsh
         run: ./scripts/ci/device-clean-windows.ps1 -Phase app
       - id: uninstall
@@ -1092,3 +1682,39 @@ jobs:
           path: ${{ github.workspace }}/device-clean-windows/
           if-no-files-found: error
           retention-days: 14
+
+  # Third-party notices of the bundled agent-desktop binary. The notice is regenerated from the
+  # upstream commit pinned in desktop-device/agent-desktop.lock.json and must match the committed
+  # THIRD-PARTY.md byte for byte; cargo-about itself fails on any licence outside about.toml's
+  # accepted list (no copyleft). Regenerate locally with the same command when the lock changes.
+  agent-desktop-licenses:
+    name: agent-desktop licence notices
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: vercel-labs/agent-desktop
+          ref: 2b0a7334fc111730454b726e6800aa41cdafc093
+          path: upstream
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
+        with:
+          toolchain: stable
+      - name: Install cargo-about
+        run: cargo install cargo-about --locked --version 0.9.3 --features cli
+      - name: Generate the notice from the upstream lockfile
+        working-directory: upstream
+        env:
+          RUSTUP_TOOLCHAIN: stable
+          NOTICES: ${{ github.workspace }}/xiongbao/desktop-device/licenses/agent-desktop
+        run: >-
+          cargo about generate --workspace --locked -c "$NOTICES/about.toml"
+          -o "$RUNNER_TEMP/THIRD-PARTY.md" "$NOTICES/about.hbs"
+      # Some crates ship licence files with CRLF line ends; the repository stores text as LF
+      # (.gitattributes eol=lf), so only that line-ending difference is normalised before comparing.
+      - name: The committed notice matches the generated one
+        run: tr -d '\r' < "$RUNNER_TEMP/THIRD-PARTY.md" | diff -u desktop-device/licenses/agent-desktop/THIRD-PARTY.md -

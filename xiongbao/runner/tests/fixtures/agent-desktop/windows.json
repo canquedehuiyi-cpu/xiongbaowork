@@ -1,0 +1,526 @@
+{
+  "list-windows": {
+    "version": "2.6",
+    "ok": true,
+    "command": "list-windows",
+    "data": [
+      {
+        "accessible": true,
+        "app_name": "powershell.exe",
+        "bounds": {
+          "height": 360.0,
+          "width": 520.0,
+          "x": 78.0,
+          "y": 78.0
+        },
+        "id": "w-66058",
+        "is_focused": true,
+        "minimized": false,
+        "pid": 7888,
+        "process_instance": "windows-proc-v1:13438945204:5440313",
+        "title": "XB Sample Form",
+        "visible": true
+      },
+      {
+        "accessible": true,
+        "app_name": "WindowsTerminal.exe",
+        "bounds": {
+          "height": 635.0,
+          "width": 1044.0,
+          "x": 44.0,
+          "y": 52.0
+        },
+        "id": "w-524752",
+        "is_focused": false,
+        "minimized": false,
+        "pid": 10192,
+        "process_instance": "windows-proc-v1:13438945172:3369636",
+        "title": "Administrator: Windows PowerShell",
+        "visible": true
+      },
+      {
+        "accessible": true,
+        "app_name": "WindowsTerminal.exe",
+        "bounds": {
+          "height": 635.0,
+          "width": 1044.0,
+          "x": 18.0,
+          "y": 26.0
+        },
+        "id": "w-459220",
+        "is_focused": false,
+        "minimized": false,
+        "pid": 10192,
+        "process_instance": "windows-proc-v1:13438945172:3369636",
+        "title": "C:\\ProgramData\\GitHub\\HostedComputeAgent\\hosted-compute-agent",
+        "visible": true
+      }
+    ]
+  },
+  "snapshot": {
+    "version": "2.6",
+    "ok": true,
+    "command": "snapshot",
+    "data": {
+      "app": "powershell.exe",
+      "complete": true,
+      "ref_count": 10,
+      "snapshot_id": "s3qsw3exakk3zr",
+      "tree": {
+        "available_actions": [
+          "SetFocus"
+        ],
+        "children": [
+          {
+            "available_actions": [
+              "SetValue",
+              "SetFocus"
+            ],
+            "name": "Single line",
+            "native_id": {
+              "kind": "automation_id",
+              "value": "single"
+            },
+            "ref_id": "@s3qsw3exakk3zr:e1",
+            "role": "textfield",
+            "role_description": "edit",
+            "states": [
+              "focused"
+            ]
+          },
+          {
+            "available_actions": [
+              "SetValue",
+              "SetFocus"
+            ],
+            "native_id": {
+              "kind": "automation_id",
+              "value": "pw"
+            },
+            "ref_id": "@s3qsw3exakk3zr:e2",
+            "role": "textfield",
+            "role_description": "edit",
+            "states": [
+              "secure"
+            ]
+          },
+          {
+            "available_actions": [
+              "SetValue",
+              "SetFocus"
+            ],
+            "name": "Multi line",
+            "native_id": {
+              "kind": "automation_id",
+              "value": "multi"
+            },
+            "ref_id": "@s3qsw3exakk3zr:e3",
+            "role": "textfield",
+            "role_description": "edit"
+          },
+          {
+            "available_actions": [
+              "Click",
+              "SetFocus"
+            ],
+            "name": "Disabled button",
+            "native_id": {
+              "kind": "automation_id",
+              "value": "66066"
+            },
+            "ref_id": "@s3qsw3exakk3zr:e4",
+            "role": "button",
+            "role_description": "button",
+            "states": [
+              "disabled"
+            ]
+          },
+          {
+            "available_actions": [
+              "Click",
+              "SetFocus"
+            ],
+            "name": "Send",
+            "native_id": {
+              "kind": "automation_id",
+              "value": "66068"
+            },
+            "ref_id": "@s3qsw3exakk3zr:e5",
+            "role": "button",
+            "role_description": "button"
+          },
+          {
+            "available_actions": [
+              "SetValue",
+              "SetFocus"
+            ],
+            "children": [
+              {
+                "available_actions": [
+                  "SetFocus"
+                ],
+                "children": [
+                  {
+                    "available_actions": [
+                      "Click",
+                      "Expand",
+                      "Collapse",
+                      "SetFocus"
+                    ],
+                    "name": "System",
+                    "ref_id": "@s3qsw3exakk3zr:e7",
+                    "role": "menuitem",
+                    "role_description": "menu item",
+                    "states": [
+                      "haspopup"
+                    ]
+                  }
+                ],
+                "name": "System",
+                "native_id": {
+                  "kind": "automation_id",
+                  "value": "SystemMenuBar"
+                },
+                "role": "menu",
+                "role_description": "menu bar"
+              },
+              {
+                "available_actions": [
+                  "Click"
+                ],
+                "name": "Minimize",
+                "native_id": {
+                  "kind": "automation_id",
+                  "value": "Minimize-Restore"
+                },
+                "ref_id": "@s3qsw3exakk3zr:e8",
+                "role": "button",
+                "role_description": "button"
+              },
+              {
+                "available_actions": [
+                  "Click"
+                ],
+                "name": "Maximize",
+                "native_id": {
+                  "kind": "automation_id",
+                  "value": "Maximize-Restore"
+                },
+                "ref_id": "@s3qsw3exakk3zr:e9",
+                "role": "button",
+                "role_description": "button"
+              },
+              {
+                "available_actions": [
+                  "Click"
+                ],
+                "name": "Close",
+                "native_id": {
+                  "kind": "automation_id",
+                  "value": "Close"
+                },
+                "ref_id": "@s3qsw3exakk3zr:e10",
+                "role": "button",
+                "role_description": "button"
+              }
+            ],
+            "native_id": {
+              "kind": "automation_id",
+              "value": "TitleBar"
+            },
+            "ref_id": "@s3qsw3exakk3zr:e6",
+            "role": "group",
+            "role_description": "title bar",
+            "value": "XB Sample Form"
+          }
+        ],
+        "name": "XB Sample Form",
+        "role": "window",
+        "role_description": "window"
+      },
+      "window": {
+        "id": "w-66058",
+        "title": "XB Sample Form"
+      }
+    }
+  },
+  "snapshot-password": {
+    "version": "2.6",
+    "ok": true,
+    "command": "snapshot",
+    "data": {
+      "app": "powershell.exe",
+      "complete": true,
+      "ref_count": 10,
+      "snapshot_id": "snuvkeejknool",
+      "tree": {
+        "available_actions": [
+          "SetFocus"
+        ],
+        "children": [
+          {
+            "available_actions": [
+              "SetValue",
+              "SetFocus"
+            ],
+            "name": "Single line",
+            "native_id": {
+              "kind": "automation_id",
+              "value": "single"
+            },
+            "ref_id": "@snuvkeejknool:e1",
+            "role": "textfield",
+            "role_description": "edit",
+            "states": [
+              "focused"
+            ]
+          },
+          {
+            "available_actions": [
+              "SetValue",
+              "SetFocus"
+            ],
+            "native_id": {
+              "kind": "automation_id",
+              "value": "pw"
+            },
+            "ref_id": "@snuvkeejknool:e2",
+            "role": "textfield",
+            "role_description": "edit",
+            "states": [
+              "secure"
+            ]
+          },
+          {
+            "available_actions": [
+              "SetValue",
+              "SetFocus"
+            ],
+            "name": "Multi line",
+            "native_id": {
+              "kind": "automation_id",
+              "value": "multi"
+            },
+            "ref_id": "@snuvkeejknool:e3",
+            "role": "textfield",
+            "role_description": "edit"
+          },
+          {
+            "available_actions": [
+              "Click",
+              "SetFocus"
+            ],
+            "name": "Disabled button",
+            "native_id": {
+              "kind": "automation_id",
+              "value": "66066"
+            },
+            "ref_id": "@snuvkeejknool:e4",
+            "role": "button",
+            "role_description": "button",
+            "states": [
+              "disabled"
+            ]
+          },
+          {
+            "available_actions": [
+              "Click",
+              "SetFocus"
+            ],
+            "name": "Send",
+            "native_id": {
+              "kind": "automation_id",
+              "value": "66068"
+            },
+            "ref_id": "@snuvkeejknool:e5",
+            "role": "button",
+            "role_description": "button"
+          },
+          {
+            "available_actions": [
+              "SetValue",
+              "SetFocus"
+            ],
+            "children": [
+              {
+                "available_actions": [
+                  "SetFocus"
+                ],
+                "children": [
+                  {
+                    "available_actions": [
+                      "Click",
+                      "Expand",
+                      "Collapse",
+                      "SetFocus"
+                    ],
+                    "name": "System",
+                    "ref_id": "@snuvkeejknool:e7",
+                    "role": "menuitem",
+                    "role_description": "menu item",
+                    "states": [
+                      "haspopup"
+                    ]
+                  }
+                ],
+                "name": "System",
+                "native_id": {
+                  "kind": "automation_id",
+                  "value": "SystemMenuBar"
+                },
+                "role": "menu",
+                "role_description": "menu bar"
+              },
+              {
+                "available_actions": [
+                  "Click"
+                ],
+                "name": "Minimize",
+                "native_id": {
+                  "kind": "automation_id",
+                  "value": "Minimize-Restore"
+                },
+                "ref_id": "@snuvkeejknool:e8",
+                "role": "button",
+                "role_description": "button"
+              },
+              {
+                "available_actions": [
+                  "Click"
+                ],
+                "name": "Maximize",
+                "native_id": {
+                  "kind": "automation_id",
+                  "value": "Maximize-Restore"
+                },
+                "ref_id": "@snuvkeejknool:e9",
+                "role": "button",
+                "role_description": "button"
+              },
+              {
+                "available_actions": [
+                  "Click"
+                ],
+                "name": "Close",
+                "native_id": {
+                  "kind": "automation_id",
+                  "value": "Close"
+                },
+                "ref_id": "@snuvkeejknool:e10",
+                "role": "button",
+                "role_description": "button"
+              }
+            ],
+            "native_id": {
+              "kind": "automation_id",
+              "value": "TitleBar"
+            },
+            "ref_id": "@snuvkeejknool:e6",
+            "role": "group",
+            "role_description": "title bar",
+            "value": "XB Sample Form"
+          }
+        ],
+        "name": "XB Sample Form",
+        "role": "window",
+        "role_description": "window"
+      },
+      "window": {
+        "id": "w-66058",
+        "title": "XB Sample Form"
+      }
+    }
+  },
+  "list-displays": {
+    "version": "2.6",
+    "ok": true,
+    "command": "list-displays",
+    "data": [
+      {
+        "bounds": {
+          "height": 768.0,
+          "width": 1024.0,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "id": "monitor-65537",
+        "is_primary": true,
+        "scale": 1.0
+      }
+    ]
+  },
+  "screenshot": {
+    "version": "2.6",
+    "ok": true,
+    "command": "screenshot",
+    "data": {
+      "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+      "format": "png",
+      "height": 353,
+      "scale_factor": 1.0,
+      "width": 506
+    }
+  },
+  "version": {
+    "version": "2.6",
+    "ok": true,
+    "command": "version",
+    "data": {
+      "os": "windows",
+      "target": "x86_64",
+      "version": "1.2.0"
+    }
+  },
+  "permissions": {
+    "version": "2.6",
+    "ok": true,
+    "command": "permissions",
+    "data": {
+      "accessibility": {
+        "state": "granted"
+      },
+      "automation": {
+        "state": "not_required"
+      },
+      "screen_recording": {
+        "state": "not_required"
+      }
+    }
+  },
+  "status": {
+    "version": "2.6",
+    "ok": true,
+    "command": "status",
+    "data": {
+      "permissions": {
+        "accessibility": {
+          "state": "granted"
+        },
+        "automation": {
+          "state": "not_required"
+        },
+        "screen_recording": {
+          "state": "not_required"
+        }
+      },
+      "platform": "windows",
+      "ref_count": null,
+      "session_id": null,
+      "snapshot_id": null,
+      "state_root": "C:/Users/user/ad-home",
+      "supported_surfaces": [
+        "window",
+        "focused",
+        "sheet",
+        "menu",
+        "start-menu",
+        "taskbar",
+        "system-tray",
+        "system-tray-overflow",
+        "action-center"
+      ],
+      "tracing": false,
+      "version": "1.2.0"
+    }
+  }
+}

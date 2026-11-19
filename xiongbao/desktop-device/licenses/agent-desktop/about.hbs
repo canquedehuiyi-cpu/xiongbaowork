@@ -1,0 +1,17 @@
+# Third-party licences of agent-desktop
+
+The agent-desktop binary bundled with this app statically links the Rust crates below.
+Each section lists the crates under one licence, then that licence's text.
+{{#each licenses}}
+
+## {{id}}
+
+Used by:
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}
+{{/each}}
+
+~~~text
+{{{text}}}
+~~~
+{{/each}}

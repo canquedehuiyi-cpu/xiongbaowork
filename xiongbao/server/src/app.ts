@@ -1,0 +1,2852 @@
+import { MAX_IMAGE_BYTES } from "@openbot/shared/attachments";
+import type { WhatIfVocabulary } from "@openbot/shared/what-if";
+import type { Context, Hono as HonoApp, MiddlewareHandler } from "hono";
+import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
+import { serveStatic } from "hono/bun";
+import { createCapabilityChangeRoutes } from "./admin/capability-translate";
+import { enterpriseControls } from "./admin/controls";
+import { createEnterpriseGate } from "./admin/gate";
+import { createNetworkAllowlistRoutes } from "./admin/network-routes";
+import {
+  createEnterpriseAdminRoutes,
+  createProactiveAdminRoutes,
+} from "./admin/routes";
+import {
+  authoriseAgentCall,
+  callbackFrameFor,
+  parseAgentToolCallInput,
+  type RunAssertion,
+  sameToken,
+} from "./agents/callback-token";
+import { computerAccessCheck } from "./agents/computer-access";
+import { deploymentCanIsolate } from "./agents/isolation";
+import {
+  type BotLifecycleServices,
+  createBotLifecycleRoutes,
+} from "./agents/lifecycle-routes";
+import type { AgentPresenceReader } from "./agents/presence";
+import type { BotAccessCheck } from "./agents/profile-policy";
+import type { AgentProfileStore } from "./agents/profile-store";
+import { createAgentRoutes } from "./agents/routes";
+import type { SummonServices } from "./agents/summon";
+import { createReviewerGuidanceRoutes } from "./approvals/reviewer-guidance";
+import { createApprovalRoutes } from "./approvals/routes";
+import { createApprovalRuleDraftRoutes } from "./approvals/rule-translate";
+import type { RuleVocabulary } from "./approvals/rule-vocabulary";
+import type { ApprovalService } from "./approvals/service";
+import {
+  type AuditEvent,
+  type AuditEventType,
+  type AuditInitiator,
+  AuditQueryError,
+  type AuditReader,
+  type AuditStore,
+  auditEventsToCsv,
+  auditQueryFromUrl,
+  DEPLOYMENT_INITIATOR,
+  readAuditExportRows,
+  recordAuditEvent,
+  recordPersonAuditEvent,
+  recordPlatformAuditEvent,
+} from "./audit";
+import { type AuditVocabulary, createAuditAskRoutes } from "./audit-ask";
+import { createAdminScope } from "./auth/admin-scope";
+import { createDevRequireUser } from "./auth/dev-actor";
+import {
+  type AppVariables,
+  type AuthService,
+  createRequireUser,
+  type RoleRepository,
+  requireAdmin,
+} from "./auth/guards";
+import type { IdentityProviderStore } from "./auth/identity-provider-store";
+import { desktopAuthPage } from "./auth/native-browser";
+import {
+  type BotBrowserRouteDeps,
+  createBotBrowser,
+} from "./browser/bot-browser";
+import {
+  type BrowserRouteDeps,
+  browserConnectionRevoked,
+  createBrowserRoutes,
+} from "./browser/routes";
+import {
+  createAttachmentRoutes,
+  createChannelAttachmentRoutes,
+} from "./channels/attachments";
+import type { ChannelEventHub } from "./channels/events";
+import { createGroupRoutes, type GroupConversations } from "./channels/group";
+import {
+  createModelChoiceRoutes,
+  type ModelChoices,
+} from "./channels/model-choice";
+import { type ChannelStore, createChannelRoutes } from "./channels/routes";
+import type { ThreadIdentity } from "./channels/thread-identity";
+import {
+  createThreadRoutes,
+  type ThreadReader,
+} from "./channels/thread-routes";
+import { createComponentRoutes } from "./components/routes";
+import type { SandboxedStore } from "./components/sandboxed";
+import { createSandboxedRoutes } from "./components/sandboxed-routes";
+import type { ComponentStore } from "./components/store";
+import type { ComputerGateway } from "./computer/gateway";
+import type { PageFrameStore } from "./computer/page-frames";
+import type { PolicyStore } from "./computer/policy-store";
+import { createPolicyTranslateRoutes } from "./computer/policy-translate";
+import { createComputerRoutes } from "./computer/routes";
+import {
+  configuredAuthProviders,
+  type DeploymentConfig,
+  emailPasswordAvailable,
+} from "./config";
+import {
+  type CredentialAdminService,
+  type CredentialInput,
+  CredentialRefusedError,
+} from "./credentials";
+import type { Database } from "./db/client";
+import { withoutStatement } from "./db/query-failure";
+import {
+  createDeliveryRoutes,
+  createDeliveryWebhookRoutes,
+} from "./delivery/routes";
+import { mountDesktopConnectionFailure } from "./desktop-connection-failure";
+import { createTranscriptionProvider } from "./dictation/provider";
+import { createDictationRoutes } from "./dictation/routes";
+import { createEditionGate } from "./edition-routes";
+import type { HostAccessBroker } from "./host-access/broker";
+import { createHostAccessRoutes } from "./host-access/routes";
+import { identityRoutes } from "./identity/routes";
+import type { IdentityStore } from "./identity/store";
+import { createCapturePassOrigin } from "./intelligence-gateway-proxy";
+import {
+  type LearningModelEndpoint,
+  mountLearningModelEndpoint,
+} from "./learning/model-endpoint";
+import {
+  createLearningRoutes,
+  type LearningAdminDependencies,
+} from "./learning/routes";
+import {
+  createPersonalLearningRoutes,
+  type PersonalLearningRouteDeps,
+} from "./learning/sharing-routes";
+import type { LocalLearningEngine } from "./local-learning/engine";
+import { createLocalLearningRoutes } from "./local-learning/routes";
+import type { MemoryIngestion } from "./memory/ingestion";
+import { createMemoryRoutes } from "./memory/routes";
+import type { MemoryStore } from "./memory/store";
+import {
+  createModelRoutes,
+  type ModelCatalogueReader,
+} from "./model-catalogue";
+import { parsePageLimit } from "./paging";
+import { createPasswordRoutes, createSignInRoutes } from "./passwords/routes";
+import type { SignInService } from "./passwords/service";
+import type { OnboardingStore } from "./people/onboarding";
+import { createProfileRoutes, type ProfileStore } from "./people/profile";
+import { MAX_PAGE, type PeopleStore } from "./people/store";
+import type { BrokerProvider } from "./plugins/access";
+import type { AccountModeSwitch } from "./plugins/account-mode";
+import {
+  COMPONENT_ADMIN_PATHS,
+  COMPUTER_ADMIN_PATHS,
+  createStaleAdminGate,
+  ENTERPRISE_ADMIN_PATHS,
+  LEARNING_ADMIN_PATHS,
+  QUOTA_ADMIN_PATHS,
+  STALE_ADMIN_REFUSAL,
+} from "./plugins/admin-session-gate";
+import type {
+  ArcadeBroker,
+  ComposioBroker,
+  KeyGuideSource,
+} from "./plugins/broker";
+import { createAppGrantDraftRoutes } from "./plugins/grant-translate";
+import type {
+  SharedAudience,
+  SharedUseStore,
+} from "./plugins/shared-use-store";
+import { createPluginRoutes } from "./plugins/routes";
+import {
+  isDeploymentFault,
+  PluginRefusedError,
+  type PluginStore,
+} from "./plugins/store";
+import { REFUSAL_MARKER, vendorAnswer } from "./plugins/tools";
+import type { ProactiveEngine } from "./proactive/engine";
+import { createProactiveRoutes } from "./proactive/routes";
+import type { ProactiveStore } from "./proactive/store";
+import {
+  type ModelProviderProxy,
+  mountProviderOAuthProxy,
+} from "./provider-oauth";
+import type { QuotaService } from "./quota/limits";
+import {
+  createRequireRecorder,
+  RECORDER_BEARER_PREFIX,
+} from "./recorder/guard";
+import { createRecorderRoutes } from "./recorder/routes";
+import type { RecorderExtensionDeps } from "./recorder/wiring";
+import { createReleaseStatusRoutes } from "./release-status";
+import { createOriginGuard, createSingleUserGate } from "./request-trust";
+import type { ResponsibilityBindingStore } from "./responsibilities/bindings";
+import type { ResponsibilityEngine } from "./responsibilities/engine";
+import { createGithubResponsibilityRoutes } from "./responsibilities/github";
+import { createResponsibilityRoutes } from "./responsibilities/routes";
+import type { TriggerStore } from "./responsibilities/triggers";
+import type { ResponsibilityStore } from "./responsibilities/types";
+import { createRoutineRoutes, type RoutineStore } from "./routines/routes";
+import type { RoutineRunner } from "./routines/runner";
+import type { IntentRouter } from "./routing/classify";
+import type { ModelCompleter } from "./routing/model";
+import { createRoutingRoutes } from "./routing/routes";
+import { createCoworkerRoutingService } from "./routing/service";
+import type { SelfHostBanner } from "./self-host-banner";
+import { createSetupRoutes, type SetupSources } from "./setup/checklist";
+import type { StaffingExecutor } from "./staffing/executor";
+import {
+  createProposalRoutes,
+  type ProposalRouteOptions,
+} from "./staffing/routes";
+import type { StaffingProposalStore } from "./staffing/store";
+import { createBotTaskRoutes } from "./tasks/bot-task-routes";
+import type { TaskRunner } from "./tasks/runner";
+import type { TaskStore } from "./tasks/store";
+import { createTeamBotRoutes } from "./team-bots/routes";
+import type { TeamBots } from "./team-bots/team-bots";
+import type { ProductTelemetry } from "./telemetry/product";
+import { createProductTelemetryRoutes } from "./telemetry/product-routes";
+import { capabilityFor, currentTenant, runAsTenant } from "./tenant/context";
+import type { PackageStatusReader } from "./tenant-package";
+import {
+  INSTRUCTIONS_LIMIT,
+  InstructionsTooLongError,
+  type UserInstructionsStore,
+} from "./user-instructions";
+import type { UserPreferencesStore } from "./user-preferences";
+import { userPreferencesRoutes } from "./user-preferences-routes";
+import { createVoiceProvider } from "./voice/provider";
+import { createVoiceRoutes } from "./voice/routes";
+import type { VoiceSessionServices } from "./voice/session-routes";
+import {
+  DIRECTORY_PATH as WEB_BOT_AUTH_DIRECTORY_PATH,
+  directoryResponse as webBotAuthDirectory,
+} from "./web-bot-auth";
+import { createWhatIfRoutes } from "./what-if";
+import type { GovernanceReaders } from "./what-if-check";
+
+/**
+ * How much of a multipart body is boundary, headers and other fields rather than file.
+ *
+ * Generous on purpose. Measured against what the composer actually sends — one `file` part and one
+ * `uploadGroup` field — the framing is 360 bytes for a short filename and 614 for a 255-character
+ * one; a filename full of non-ASCII percent-encodes to a few times that and is still nowhere near
+ * this. 64 KiB is therefore an allowance no honest request can exhaust, and it raises the amount of
+ * memory a hostile request can pin by 0.8%, which was never the number that mattered.
+ */
+const MULTIPART_FRAMING_ALLOWANCE = 64 * 1024;
+
+/**
+ * The ceiling on the whole POST body of a channel attachment upload.
+ *
+ * THIS IS NOT `MAX_IMAGE_BYTES`, AND THE DIFFERENCE IS THE POINT. Every other gate on this path —
+ * the composer's pre-check, `attachmentsConfigFor`'s `maxSize`, the handler's own 413 — measures
+ * THE FILE. This one measures THE ENVELOPE: `bodyLimit` runs before anything has parsed the
+ * multipart body, so all it can count is bytes on the wire, file and framing together.
+ *
+ * Set to `MAX_IMAGE_BYTES` exactly, those two units were silently treated as one, and the ~360
+ * bytes of boundary and headers wrapped around a file at the documented ceiling were enough to push
+ * the body over it: an 8,388,608-byte image — the exact number the composer publishes as the limit —
+ * was refused 413, while 8,388,308 bytes went through. A limit nobody can reach is a limit that is
+ * wrong, so the envelope's ceiling is the file's ceiling plus room for the envelope.
+ *
+ * The slack costs nothing it was protecting against. A body between the two numbers is still read
+ * into memory, and then still refused by the handler once `file.size` is a thing anybody can look
+ * at — which is where a text upload, whose real limit is `MAX_FILE_BYTES`, is refused too. What the
+ * door exists to stop is the 2GB body, and it still does.
+ */
+export const UPLOAD_BODY_LIMIT_BYTES =
+  MAX_IMAGE_BYTES + MULTIPART_FRAMING_ALLOWANCE;
+
+/**
+ * One row for something an administrator did to somebody's access.
+ *
+ * The address is on the row rather than only the user id, because the id means nothing to a person
+ * reading the trail a year later and the user row may be gone by then.
+ */
+export type DeploymentToolCallInput = {
+  name: string;
+  args: Record<string, unknown>;
+  botId: string;
+  actorId: string;
+  initiator?: AuditInitiator;
+  /** Full verified scope. A caller cannot choose a different source thread, depth or lease. */
+  run: RunAssertion;
+};
+export type DeploymentToolCaller = (
+  input: DeploymentToolCallInput,
+) => Promise<{ text: string; isError: boolean } | null>;
+
+async function recordPersonEvent(
+  auditStore: AuditStore | undefined,
+  context: { var: AppVariables },
+  eventType:
+    | "person.role_changed"
+    | "person.access_revoked"
+    | "person.access_restored",
+  person: { id: string; email: string },
+  payload: Record<string, unknown>,
+) {
+  if (!auditStore) return;
+  await recordAuditEvent(auditStore, {
+    eventType,
+    targetType: "person",
+    targetId: person.id,
+    actorUserId: context.var.actor.id,
+    payload: { email: person.email, ...payload },
+  });
+}
+
+export function createApp(
+  config: DeploymentConfig,
+  auth?: AuthService,
+  roleRepository?: RoleRepository,
+  auditReader?: AuditReader,
+  credentialService?: CredentialAdminService,
+  packageStatusReader?: PackageStatusReader,
+  /**
+   * The CopilotKit endpoint, already built by the caller.
+   *
+   * Passed in rather than constructed here so this module never imports the runtime. The runtime
+   * pulls in `eventsource`, which Bun cannot `require()` from a test, so importing it at module
+   * scope broke every server test that touches createApp even though none of them use CopilotKit.
+   */
+  copilotHandler?: HonoApp,
+  /** The single governed computer module: policy, audit trail, transport, and provider lifecycle. */
+  computerGateway?: ComputerGateway,
+  /** What the gateway enforces, and what an administrator can change while running. */
+  computerPolicy?: PolicyStore,
+  /** Bots as durable objects: profile, roster, visibility. */
+  agentProfileStore?: AgentProfileStore,
+  /** The durable channels a Bot runs in. */
+  channelStore?: ChannelStore,
+  /** Live channel activity. Absent leaves the routes working, just without the socket. */
+  channelEvents?: ChannelEventHub,
+  /**
+   * Where a Bot's own refusal is written.
+   *
+   * Separate from `auditReader`, which only reads: this writes, and it is the one thing in the trail
+   * that is not decided by the gateway, a model declining before it calls anything.
+   */
+  auditStore?: AuditStore,
+  /**
+   * Which components each Bot may answer with.
+   *
+   * Absent leaves the app working and every Bot answering in prose, which is the correct degraded
+   * behaviour: a deployment that cannot reach its grant table must not fall back to granting
+   * everything.
+   */
+  componentStore?: ComponentStore,
+  /**
+   * The MCP servers and packaged skills this deployment has, and which Bots hold them.
+   *
+   * Absent leaves every Bot with the tools it was born with, which is the correct degraded
+   * behaviour: a deployment that cannot reach its grant table must offer nothing extra rather than
+   * fall back to offering everything.
+   */
+  pluginStore?: PluginStore,
+  /**
+   * Components authored in the browser rather than compiled into the build.
+   *
+   * Absent leaves the compiled gallery working exactly as before, which is the correct degraded
+   * behaviour: the React path is the primary one and does not depend on this.
+   */
+  sandboxedStore?: SandboxedStore,
+  /**
+   * How this deployment names the threads it mints.
+   *
+   * Absent leaves the direct Bot chat generating its own id in the browser, which works and simply
+   * says nothing about which deployment the conversation belongs to.
+   */
+  threadIdentity?: ThreadIdentity,
+  /**
+   * Who has signed in, and what an administrator may do about them.
+   *
+   * Absent leaves the people screen answering 503 rather than an empty list, which is the honest
+   * degraded behaviour: "nobody has signed in" and "this deployment cannot tell you" are different
+   * answers and an administrator deciding who has access needs to know which one they are reading.
+   */
+  peopleStore?: PeopleStore,
+  /**
+   * The enterprise identity providers this deployment has registered.
+   *
+   * Read here rather than through Better Auth's own listing route, which scopes to the person asking:
+   * a company's Okta tenant belongs to the deployment, not to whichever administrator pasted the
+   * metadata in. See identity-provider-store.ts.
+   */
+  identityProviders?: IdentityProviderStore,
+  /**
+   * Chooses which coworker an untagged message is for, before a channel is pinned to one.
+   *
+   * Passed in already built, like the copilot handler, so this module never imports the model
+   * client. Absent leaves the composer's existing behaviour untouched: an untagged message goes to
+   * the default coworker, which is exactly the failsafe the router itself falls back to.
+   */
+  intentRouter?: IntentRouter,
+  /**
+   * Where the frame a browsing turn ended on is kept.
+   *
+   * Appended last on purpose: these are positional, so inserting one anywhere else silently
+   * shifts every existing call site's arguments by one.
+   *
+   * Absent leaves the transcript working and past turns without a picture, which is the correct
+   * degraded behaviour: a conversation that cannot show what it saw is better than one that shows
+   * the wrong thing.
+   */
+  pageFrames?: PageFrameStore,
+  /**
+   * Fires one routine run with nobody's browser open, when the worker hands one back.
+   *
+   * Appended last, like `pageFrames`: these are positional, so inserting one anywhere else silently
+   * shifts every existing call site's arguments by one.
+   *
+   * Absent leaves the internal `/internal/routines/run` route unmounted rather than mounted and
+   * refusing every call: a deployment that never built a worker has no door for it, not a locked one.
+   */
+  routineRunner?: RoutineRunner,
+  /**
+   * A person's own standing instructions: the list, and a switch to stop one.
+   *
+   * Appended last, like `routineRunner` beside it: these are positional, so inserting one anywhere
+   * else silently shifts every existing call site's arguments by one.
+   *
+   * Absent leaves the routes unmounted rather than mounted and refusing every call, the same
+   * degraded shape every other optional store here takes: a deployment that never built the store
+   * has no door for this at all, not a locked one.
+   */
+  routineStore?: RoutineStore,
+  /**
+   * Where each person is in first-run onboarding.
+   *
+   * Appended last, like everything above it: these are positional, so inserting one anywhere else
+   * silently shifts every existing call site's arguments by one.
+   *
+   * Absent leaves /api/me reporting no onboarding to track, which is the correct degraded
+   * behaviour: a deployment that cannot read the status must not lock everybody behind a gate
+   * nothing can finish.
+   */
+  onboardingStore?: OnboardingStore,
+  /**
+   * One person's standing instructions, which every built-in coworker they run is told.
+   *
+   * Appended last, like everything above it: these are positional, so inserting one anywhere else
+   * silently shifts every existing call site's arguments by one.
+   *
+   * Absent leaves the routes answering 503 rather than "you have written none". The difference
+   * matters on exactly this screen: a person who cannot be told what they saved would otherwise be
+   * shown an empty box, and the obvious thing to do with an empty box is fill it in again.
+   */
+  userInstructions?: UserInstructionsStore,
+  /**
+   * The database behind a channel's staged and sent files: upload, fetch, delete.
+   *
+   * Appended last, like everything above it: these are positional, so inserting one anywhere else
+   * silently shifts every existing call site's arguments by one.
+   *
+   * Absent leaves the routes unmounted rather than mounted and refusing every call, the same
+   * degraded shape every other optional store here takes: a deployment that never built the
+   * database has no door for this at all, not a locked one.
+   */
+  attachmentDatabase?: Database,
+  /** Session-only broker for native owner-approved host folder access. */
+  hostAccessBroker?: HostAccessBroker,
+  /** Fresh desktop-only bearer token for the native host worker poll/result channel. */
+  desktopHostToken?: string,
+  /** Server-owned tools that are not MCP but use the same signed agent callback route. */
+  deploymentToolCaller?: DeploymentToolCaller,
+  /**
+   * The broker behind apps a person connects through Composio rather than an administrator
+   * registering an MCP server.
+   *
+   * Appended last, like everything above it: these are positional, so inserting one anywhere else
+   * silently shifts every existing call site's arguments by one.
+   *
+   * Passed in already built, like the copilot handler and the intent router, so this module never
+   * imports the vendor's package. Absent leaves the plugin surface reporting that no broker is
+   * configured, which is the correct degraded behaviour: a deployment with no Composio API key has
+   * no app directory to offer, rather than one that lists apps nobody can connect.
+   */
+  // X5：Arcade 时还带活动提供商与 Arcade 的 broker（回程验证、授权尝试），见 `plugins/arcade-routes.ts`。
+  composio?: {
+    broker: ComposioBroker;
+    guides?: KeyGuideSource;
+    /** 应用账号模式的切换（X1，`plugins/account-mode.ts`）。 */
+    accountModes?: AccountModeSwitch;
+    provider?: BrokerProvider;
+    arcade?: ArcadeBroker;
+    /** 共享使用批准（X3，`plugins/shared-use-store.ts`）。 */
+    sharedUse?: { store: SharedUseStore; audience: SharedAudience };
+  },
+  /** Native model OAuth stays server-side; callers hold only a separate local bearer. */
+  modelProviderProxy?: ModelProviderProxy,
+  userPreferences?: UserPreferencesStore,
+  voiceSessions?: VoiceSessionServices,
+  coworker?: {
+    /** AUT3: whether an automation may target a WakerFlow (its executor is registered). */
+    wakerflowAutomations?: boolean;
+    approvals?: ApprovalService;
+    productTelemetry?: ProductTelemetry;
+    /** The Recorder extension's routes and guards (recorder/wiring.ts). Absent, nothing about it is mounted. */
+    recorder?: RecorderExtensionDeps;
+    /** A person's own OpenBot browser, with the Recorder in it already connected (browser/routes.ts). Absent, nothing
+     * about it is mounted and the app shows no Browser button. */
+    browser?: Omit<BrowserRouteDeps, "requireUser" | "auditStore">;
+    /** A Bot's browser worked by a person: its bar and Record (browser/bot-browser.ts), under the computer routes. Absent,
+     * or with no computer, nothing about it is mounted. */
+    botBrowser?: Omit<
+      BotBrowserRouteDeps,
+      "gateway" | "auditStore" | "botName"
+    >;
+    /** Settings, Learning: who else's Bots use a person's own learned Skills. Absent, the screen has nothing to read. */
+    personalLearning?: PersonalLearningRouteDeps;
+    /** The private sign-in form and the Passwords vault. See passwords/service.ts. */
+    passwords?: SignInService;
+    delivery?: {
+      authenticated: Omit<
+        Parameters<typeof createDeliveryRoutes>[0],
+        "requireUser"
+      >;
+      webhooks: Parameters<typeof createDeliveryWebhookRoutes>[0];
+    };
+    memory?: { store: MemoryStore; ingestion: MemoryIngestion };
+    proactive?: { store: ProactiveStore; engine: ProactiveEngine };
+    /**
+     * 本地学习（L1）的本人路由。`engine` 不在时（`OPENBOT_LOCAL_LEARNING=off`）路由照样回答设置页，
+     * 说明这个部署没有开启。
+     */
+    localLearning?: {
+      database: Database;
+      engine: LocalLearningEngine | undefined;
+    };
+    /** Started items, each run as a task in a conversation of its own. See tasks/runner.ts. */
+    tasks?: { store: TaskStore; runner: TaskRunner };
+    responsibilities?: {
+      store: ResponsibilityStore;
+      engine: ResponsibilityEngine;
+      bindings: ResponsibilityBindingStore;
+      /** Event triggers: owner management, public signed ingress and optional SES/SNS email. */
+      triggers?: {
+        store: TriggerStore;
+        emailDomain: string | null;
+        ingressRoutes: Hono;
+        emailRoutes: Hono | null;
+      };
+    };
+    groups?: GroupConversations;
+    /**
+     * Confirming, editing, discarding and retrying what a Bot drafted in conversation
+     * (`/api/proposals`, staffing/routes.ts). Absent, the routes are not mounted.
+     */
+    staffing?: {
+      store: StaffingProposalStore;
+      executor: StaffingExecutor;
+      canSeeThread: Parameters<typeof createProposalRoutes>[3];
+      ownerName?: ProposalRouteOptions["ownerName"];
+    };
+    teamBots?: TeamBots;
+    /**
+     * 召唤员工: the database and the person's 1:1 conversation, for `POST /api/agents/:agentId/summon`
+     * (agents/summon.ts). Absent, that route is not mounted.
+     */
+    summon?: SummonServices;
+    /**
+     * 员工此刻: a batch of Bots' busy / idle / paused and what each is doing, for
+     * `GET /api/agents/presence` (agents/presence.ts). Absent, that route answers 404.
+     */
+    presence?: AgentPresenceReader;
+    /** Pause, reset, Activity and attention for a person's own Bots. See agents/lifecycle.ts. */
+    lifecycle?: BotLifecycleServices;
+    /**
+     * The setup checklist Settings → Setup draws, read from this server's own
+     * configuration and state. See setup/checklist.ts. Absent, `/api/setup` is not mounted.
+     */
+    setup?: SetupSources;
+    /** The models a person may pick for a built-in Bot's run. Absent, `/api/models` is not mounted. */
+    models?: ModelCatalogueReader;
+    /** Each person's pick per conversation. Absent, `/api/channels/:id/model` is not mounted. */
+    modelChoices?: ModelChoices;
+    /**
+     * The model local Intelligence's Learning agent is pointed at on a Claude or ChatGPT plan. See
+     * learning/model-endpoint.ts. Absent, nothing is mounted.
+     */
+    learningModel?: LearningModelEndpoint;
+    /**
+     * The deployment's own model, for writing a boundary from an admin's description
+     * (computer/policy-translate.ts), team approval rules from one (approvals/rule-translate.ts), a
+     * Bot's actions in one app from one (plugins/grant-translate.ts), the network allowlist from
+     * one (admin/network-translate.ts), and for reading an admin's guidance for auto-review
+     * (approvals/reviewer-guidance.ts). Absent, `/api/computers/policy-translate` is not mounted,
+     * and approval rules, app actions, the network allowlist and guidance
+     * say a model is needed.
+     */
+    boundaryWriter?: ModelCompleter;
+    /**
+     * What a team approval rule can name: this OpenBot's apps, their tools and its Bots
+     * (approvals/rule-vocabulary.ts). Absent, `/api/approvals/team/rules/{translate,backtest,batch}`
+     * are not mounted.
+     */
+    approvalRules?: { vocabulary: () => Promise<RuleVocabulary> };
+    /**
+     * Questions about the audit trail in plain English (audit-ask.ts): the deployment's own model,
+     * and what a filter may name. Absent, `/api/admin/audit-events/ask` is not mounted.
+     */
+    auditQuestions?: {
+      complete: ModelCompleter;
+      vocabulary: () => Promise<AuditVocabulary>;
+      /** The clock a question's "yesterday" is read against. A test fixes it; absent is now. */
+      now?: () => Date;
+    };
+    /**
+     * "What would happen if…" (what-if.ts): the deployment's own model to read a question as one
+     * action, what an action may name, the stores the real deciders read, and one audit row by id
+     * for "Why did this happen?". Absent, `/api/admin/what-if` is not mounted.
+     */
+    whatIf?: {
+      complete: ModelCompleter;
+      vocabulary: () => Promise<WhatIfVocabulary>;
+      readers: GovernanceReaders;
+      event: (id: string) => Promise<AuditEvent | null>;
+    };
+  },
+  /**
+   * Whether a conversation this deployment keeps is still there, for `GET /api/threads/:threadId`.
+   *
+   * Appended last, like everything above it: these are positional.
+   *
+   * LOCAL MODE ONLY. Managed mode builds its own reader from the platform contract, which is what
+   * this route has always asked; local mode has no platform to ask, so the caller — the one file that
+   * holds the database — hands over the reader that consults this deployment's `threads` table.
+   * Neither present leaves the route unmounted rather than mounted and answering 502, which is the
+   * shape every other unreadable resource here takes.
+   */
+  threadReader?: ThreadReader,
+  /**
+   * What each tenant's plan allows, so creating a coworker can be refused with the plan's arithmetic
+   * rather than by a screen that greyed itself out (ticket 022).
+   *
+   * Absent leaves no ceiling: a deployment that cannot reach the subscription table must not refuse
+   * work it cannot price, which is the same degraded direction every other optional here takes.
+   */
+  quota?: QuotaService,
+  /**
+   * Automatic Learning's admin seams (R0). Present only with a connected CopilotKit Intelligence:
+   * absent, `/api/admin/learning` answers that Intelligence is not connected, and voice treats no Bot
+   * as learning-enabled. Appended last, like everything above it.
+   */
+  learning?: LearningAdminDependencies,
+  /**
+   * Whether to offer help self-hosting, which also hides it from a deployment that pays for
+   * Intelligence. Absent falls back to the operator's switch alone (`OPENBOT_SELF_HOST_BANNER`).
+   */
+  selfHostBanner?: SelfHostBanner,
+  /** A person's own linked accounts. Absent answers 503 on /api/identity. */
+  identity?: IdentityStore,
+  /** The GitHub sign-in callback, built by the caller; mounted behind requireUser ahead of /api/identity. */
+  identityGithubCallback?: Hono<{ Variables: AppVariables }>,
+  profileStore?: ProfileStore,
+) {
+  const app = new Hono<{ Variables: AppVariables }>();
+  // First, in every auth mode: a page from another website changes nothing here and opens no socket.
+  // See request-trust.ts for what passes and why.
+  app.use("/api/*", createOriginGuard(config));
+  mountDesktopConnectionFailure(app, desktopHostToken);
+  mountProviderOAuthProxy(app, modelProviderProxy);
+  mountLearningModelEndpoint(app, coworker?.learningModel);
+
+  app.get("/health", (context) => context.json({ status: "ok" }));
+  app.route("/", createReleaseStatusRoutes());
+  // The public key Bots' browsers sign their requests with, where Cloudflare and any other verifier
+  // look for it. Public by design, and absent when Web Bot Auth is off. See web-bot-auth.ts.
+  const webBotAuth = config.webBotAuth;
+  if (webBotAuth) {
+    app.get(WEB_BOT_AUTH_DIRECTORY_PATH, (context) =>
+      webBotAuthDirectory(context.req.raw, webBotAuth),
+    );
+  }
+  // Projected, never the raw runtime. config.runtime carries the Intelligence contract, including
+  // INTELLIGENCE_API_KEY and the licence token, and this endpoint is reachable by anyone. Returning
+  // the object wholesale would serve deployment secrets to the browser. Add fields here explicitly.
+  app.get("/api/capabilities", async (context) =>
+    context.json({
+      mode: config.runtime.mode,
+      durableHistory: config.runtime.durableHistory,
+      /*
+       * Whether a Bot may answer with an interface it wrote itself.
+       *
+       * Projected because the browser holds half of this capability. The runtime middleware turns a
+       * generated interface into the events that paint it, and the SDK's provider registers the tool
+       * that produces one; a deployment that switched the runtime half off while the browser went on
+       * offering the tool would have Bots writing interfaces nothing ever draws. One flag, read by
+       * both halves, so off means off.
+       */
+      generativeUi: config.generativeUi,
+      /*
+       * AUT3: whether an automation may target a WakerFlow. True only where the server registered
+       * the WakerFlow target, so the form never offers a target the store would refuse.
+       */
+      wakerflowAutomations: coworker?.wakerflowAutomations === true,
+      // Whether to offer help self-hosting OpenBot. A fork running it for its own people turns it off,
+      // and a deployment that pays for Intelligence never sees it. See self-host-banner.ts.
+      // Never in the personal edition: one person running it for themselves is not the audience.
+      selfHostBanner:
+        config.edition === "personal"
+          ? false
+          : selfHostBanner
+            ? await selfHostBanner.shown()
+            : config.selfHostBanner,
+      /*
+       * Whether this is somebody trying OpenBot on their own machine, not an organization's
+       * deployment. Onboarding reads it to explain where OpenBot can run, which only the person
+       * evaluating it needs and an organization's employees should never be pitched.
+       *
+       * Single-user mode, not a new switch: it is already true only with no identity provider and
+       * no address anybody else can reach (see `singleUserAllowed` in config.ts), which is exactly
+       * a local trial, and an operator cannot forget to set it.
+       */
+      localEvaluation: config.singleUser,
+      // Which product this is: the app shows the personal edition's screens instead of Admin.
+      edition: config.edition,
+      transcription: Boolean(config.transcription),
+      voice: Boolean(config.voice),
+      /*
+       * Which identity providers this deployment can sign somebody in with.
+       *
+       * Ids only, never the credentials: `configuredAuthProviders` returns names, and the clients
+       * and secrets behind them stay in `config.auth`, which is not projected here.
+       *
+       * Answered at runtime rather than baked into the build, because the container image is built
+       * once and knows nothing about the deployment that will run it. A sign-in screen compiled on a
+       * build machine cannot offer a provider that machine had never heard of.
+       */
+      authProviders: configuredAuthProviders(config.auth),
+      /*
+       * Whether any enterprise identity provider has been registered.
+       *
+       * A count, not a list. The sign-in screen only needs to know whether to offer the email box
+       * that routes by domain; naming the providers would tell anybody who loads the page which
+       * companies use this deployment, which is not theirs to have before they sign in.
+       *
+       * Read as `platform` (G01-E): the providers are deployment rows, and this route runs before
+       * anybody has signed in, so there is no person's frame to read them in, the same reason the
+       * identity layer below runs as `platform`. With no frame it used to read as the legacy
+       * `system` fallback, and once that was removed it answered this whole route with a 500.
+       * Only the count leaves.
+       */
+      ssoConfigured:
+        (identityProviders === undefined
+          ? []
+          : await runAsTenant("platform", () => identityProviders.list())
+        ).length > 0,
+      /*
+       * Whether an administrator requires SSO. The screen then leads with SSO and keeps social
+       * sign-in only as the administrators' audited break-glass; the server refuses everybody else.
+       */
+      ssoRequired:
+        enterpriseControls()?.snapshot()?.settings.ssoRequired === true,
+      /*
+       * Whether this deployment answers the password form at all.
+       *
+       * The screen draws the email-and-password card from this, so it never offers a way in the
+       * process behind it refuses: an external authority, or a deployment with no session secret,
+       * has no `/sign-up/email` to post to. From `config` rather than from the auth object, because
+       * that is the same condition `index.ts` builds Better Auth under — see `emailPasswordAvailable`.
+       */
+      emailPassword: emailPasswordAvailable(config),
+    }),
+  );
+  // Ahead of every route it closes, the auth handler's SSO and SCIM routes included.
+  app.use("/api/*", createEditionGate(config.edition));
+  /*
+   * Registering an identity provider is an administrator's decision, not a signed-in one.
+   *
+   * Better Auth's SSO plugin guards these with `sessionMiddleware`, which asks only that somebody is
+   * signed in. That is the wrong bar here: registering an IdP for a domain means anybody it vouches
+   * for can sign in, so a plain user reaching this could mint themselves colleagues. The routes are
+   * mounted through this handler, so the check goes in front of it.
+   */
+  const ADMIN_ONLY_AUTH_ROUTES = new Set([
+    "/api/auth/sso/register",
+    "/api/auth/sso/update-provider",
+    "/api/auth/sso/delete-provider",
+  ]);
+
+  const AUTH_ROUTE_EVENTS: Record<string, AuditEventType | undefined> = {
+    "/api/auth/sso/register": "identity_provider.registered",
+    "/api/auth/sso/delete-provider": "identity_provider.removed",
+  };
+
+  /*
+   * The identity layer is the deployment's, not any one person's, and these routes are reached before
+   * anybody is signed in. Its tables (users, sessions, accounts, SSO, SCIM) carry no tenant, so the
+   * handler and every hook it calls run as `platform` (G01) rather than in no frame at all; each hook
+   * that writes a person's own rows or trail names that person itself (`provisionTenant`, the audit
+   * rows in `auth/index.ts` and `auth/scim.ts`).
+   */
+  const asIdentityLayer = <T>(work: () => T): T =>
+    runAsTenant("platform", work);
+
+  app.on(["GET", "POST"], "/api/auth/*", async (context) => {
+    if (
+      context.req.method === "GET" &&
+      new URL(context.req.url).pathname === "/api/auth/desktop" &&
+      !config.organizationAuthUrl
+    ) {
+      return desktopAuthPage(
+        context.req.raw,
+        configuredAuthProviders(config.auth),
+      );
+    }
+    if (!auth) {
+      /*
+       * One person and no sign-in (OpenBot Desktop): there is no session for Sign out to end, so
+       * ending it has already happened. The app no longer offers Sign out here; a page loaded
+       * before that change still could, and a 503 left the person staring at "No identity provider
+       * is configured." for a button that cannot fail.
+       */
+      if (
+        config.singleUser &&
+        context.req.method === "POST" &&
+        new URL(context.req.url).pathname === "/api/auth/sign-out"
+      )
+        return context.json({ success: true });
+      return context.json(
+        { error: "No identity provider is configured." },
+        503,
+      );
+    }
+
+    if (ADMIN_ONLY_AUTH_ROUTES.has(new URL(context.req.url).pathname)) {
+      const session = await asIdentityLayer(() =>
+        auth.api.getSession({
+          headers: context.req.raw.headers,
+          // Fresh, not the cookie cache: a role changed a moment ago has to apply to this request.
+          query: { disableCookieCache: true },
+        }),
+      );
+      const roles = session?.user
+        ? ((await asIdentityLayer(() =>
+            roleRepository?.rolesForUser(session.user.id),
+          )) ?? [])
+        : [];
+      if (!roles.includes("admin")) {
+        return context.json({ error: "只有管理员可以更改身份提供方。" }, 403);
+      }
+    }
+
+    const eventType =
+      AUTH_ROUTE_EVENTS[new URL(context.req.url).pathname] ?? undefined;
+
+    // Read before the handler runs, because it consumes the stream: a clone taken afterwards is of
+    // a request whose body is already gone, and the row would name no provider.
+    const named =
+      auditStore && eventType
+        ? ((await context.req.raw
+            .clone()
+            .json()
+            .catch(() => null)) as { providerId?: unknown } | null)
+        : null;
+
+    const answer = await asIdentityLayer(() => auth.handler(context.req.raw));
+
+    if (auditStore && eventType && answer.ok) {
+      const session = await asIdentityLayer(() =>
+        auth.api.getSession({
+          headers: context.req.raw.headers,
+          query: { disableCookieCache: true },
+        }),
+      );
+      // The administrator's own act, filed in their trail like every other admin route's rows.
+      const identityProviderEvent = {
+        eventType,
+        targetType: "identity_provider",
+        ...(typeof named?.providerId === "string"
+          ? { targetId: named.providerId }
+          : {}),
+        ...(session?.user ? { actorUserId: session.user.id } : {}),
+        payload: {
+          ...(typeof named?.providerId === "string"
+            ? { providerId: named.providerId }
+            : {}),
+          ...(session?.user?.email ? { by: session.user.email } : {}),
+        },
+      };
+      await (session?.user
+        ? recordPersonAuditEvent(
+            auditStore,
+            session.user.id,
+            identityProviderEvent,
+          )
+        : recordPlatformAuditEvent(auditStore, identityProviderEvent));
+    }
+
+    return answer;
+  });
+
+  const authenticationUnavailable: MiddlewareHandler<{
+    Variables: AppVariables;
+  }> = async (context) =>
+    context.json({ error: "No identity provider is configured." }, 503);
+  // One administrator, when nothing is configured to sign anybody in. Checked first, and only ever
+  // true when there is no provider, so a configured deployment cannot fall back to it. Admitted only
+  // from where that one person can be: see `singleUserRefusal`.
+  const requireUser = config.singleUser
+    ? createDevRequireUser(config.singleUserAccess)
+    : auth && roleRepository
+      ? createRequireUser(auth, roleRepository)
+      : authenticationUnavailable;
+  // The admin capability (G01-E I10), switched on per route for the writes that need it.
+  const adminScope = roleRepository
+    ? createAdminScope({ roleRepository })
+    : undefined;
+  // Mounted on the admin routes below that read across people (G01-E P7). Without a role repository
+  // nobody can be shown to be an administrator, so it passes through and those routes refuse.
+  const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> =
+    adminScope?.adminCapability ?? ((_context, next) => next());
+  // The session's role is decided at sign-in; the capability is decided per request from the role
+  // repository. A role removed since then fails here as a 403, not as a refused platform read.
+  const capabilityMissing = (context: Context<{ Variables: AppVariables }>) =>
+    capabilityFor(context.var.actor.id) === "admin"
+      ? undefined
+      : context.json({ error: "Administrator access required." }, 403);
+  /*
+   * The same question, asked after `requireAdmin` has let the session's admin through (signed in
+   * through `requireAdminUser`, below), on routes whose write the database does not refuse on its
+   * own (the role writer, `sso_providers`) and on reads of the whole deployment. A session that still
+   * says admin after the role was withdrawn holds no capability and is refused before anything is
+   * read or written; members never get this far and keep the route's own answer. Without a role
+   * repository nobody holds the capability, which is the closed direction.
+   */
+  const staleAdminRefusal = (context: Context<{ Variables: AppVariables }>) =>
+    capabilityFor(context.var.actor.id) === "admin"
+      ? undefined
+      : context.json({ error: STALE_ADMIN_REFUSAL }, 403);
+  // Enterprise controls: capability switches and the model allowlist in front of the routes they
+  // govern, the admin screen's API, and the SCIM verbs the GET/POST auth handler above does not take.
+  app.use("/api/*", createEnterpriseGate(requireUser));
+  if (coworker?.productTelemetry)
+    app.route(
+      "/api/telemetry",
+      createProductTelemetryRoutes(requireUser, coworker.productTelemetry),
+    );
+  /*
+   * M5: upstream's admin routes that replay a draft over the trail (#1381, #1398, #1399) read it with
+   * the reader they are handed. Signed in through `requireAdminUser`, an administrator holds the
+   * admin capability (`adminCapability`, G01-E P7) for the request, and `adminAuditReader` then reads
+   * the whole deployment's trail as `platform`, as the list below does (`asAdminPlatform`). Anyone
+   * else reads in their own frame, which shows them only their own rows; each route still answers a
+   * non-admin with its own `requireAdmin`.
+   */
+  const requireAdminUser: MiddlewareHandler<{ Variables: AppVariables }> = (
+    context,
+    next,
+  ) =>
+    requireUser(context, async () => {
+      await adminCapability(context, next);
+    });
+  const adminAuditReader: AuditReader | undefined = auditReader
+    ? {
+        list: (query) => {
+          const frame = currentTenant();
+          return adminScope && capabilityFor(frame) === "admin"
+            ? adminScope.asAdminPlatform({ id: frame }, () =>
+                auditReader.list(query),
+              )
+            : auditReader.list(query);
+        },
+      }
+    : undefined;
+  /*
+   * M5: the same for the approval requests the team-rule and auto-review drafts are replayed over
+   * (`recentRequests`): every person's requests are their own rows, so an administrator holding the
+   * capability reads them as `platform`, and anybody else reads only their own.
+   */
+  const adminApprovals = (() => {
+    const service = coworker?.approvals;
+    const policy = service?.store?.policy;
+    const recent = policy?.recentRequests;
+    if (!service || !policy || !recent || !adminScope) return service;
+    return {
+      ...service,
+      store: {
+        ...service.store,
+        policy: {
+          ...policy,
+          recentRequests: (limit: number) => {
+            const frame = currentTenant();
+            return capabilityFor(frame) === "admin"
+              ? adminScope.asAdminPlatform({ id: frame }, () => recent(limit))
+              : recent(limit);
+          },
+        },
+      },
+    };
+  })();
+  /*
+   * Everything under `/api/admin/enterprise` but a person's own `/me`, refused to a session that still
+   * says admin after its role was withdrawn (`ENTERPRISE_ADMIN_PATHS`): the switches, settings and
+   * network policies it writes have no row-level security. Ahead of the three routers below, which
+   * unit assemblies build without a role repository.
+   */
+  app.use(
+    "/api/admin/enterprise/*",
+    createStaleAdminGate(requireAdminUser, ENTERPRISE_ADMIN_PATHS),
+  );
+  // Before the enterprise routes it shares a prefix with: describing a network allowlist and
+  // replaying one over page visits. The list itself is still saved by `PUT /network` below.
+  app.route(
+    "/api/admin/enterprise/network",
+    createNetworkAllowlistRoutes({
+      requireUser: requireAdminUser,
+      ...(coworker?.boundaryWriter
+        ? { complete: coworker.boundaryWriter }
+        : {}),
+      ...(auditStore ? { auditStore } : {}),
+      ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
+    }),
+  );
+  // Before `/api/admin/enterprise`, which shares the prefix: describing, previewing and saving
+  // permission changes together.
+  app.route(
+    "/api/admin/enterprise/capabilities",
+    createCapabilityChangeRoutes({
+      requireUser: requireAdminUser,
+      ...(coworker?.boundaryWriter
+        ? { complete: coworker.boundaryWriter }
+        : {}),
+      ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
+    }),
+  );
+  app.route(
+    "/api/admin/enterprise",
+    createEnterpriseAdminRoutes(requireUser, adminScope),
+  );
+  app.route("/api/admin/proactive", createProactiveAdminRoutes(requireUser));
+  app.on(["PUT", "PATCH", "DELETE"], "/api/auth/scim/*", (context) =>
+    auth
+      ? asIdentityLayer(() => auth.handler(context.req.raw))
+      : context.json({ error: "No identity provider is configured." }, 503),
+  );
+
+  app.route(
+    "/api/audio",
+    createDictationRoutes(
+      requireUser,
+      config.transcription
+        ? createTranscriptionProvider(config.transcription)
+        : undefined,
+    ),
+  );
+  app.route(
+    "/api/voice",
+    createVoiceRoutes(
+      requireUser,
+      config.voice ? createVoiceProvider(config.voice) : undefined,
+      channelStore,
+      agentProfileStore,
+      voiceSessions,
+      learning?.status
+        ? async (agentId) =>
+            (await learning.status?.(agentId))?.configured ?? false
+        : undefined,
+    ),
+  );
+
+  app.get("/api/me", requireUser, async (context) =>
+    context.json({
+      user: {
+        ...context.var.actor,
+        ...(profileStore ? await profileStore.read(context.var.actor.id) : {}),
+        /*
+         * Read here rather than in the guard, so only this route pays the extra query. Null means
+         * this deployment does not track onboarding, which the app reads as nothing to finish;
+         * a not-yet-completed status is what sends it to /onboarding.
+         */
+        onboarding: onboardingStore
+          ? await onboardingStore.status(context.var.actor.id)
+          : null,
+      },
+      /*
+       * The OpenBot release this server runs, drawn small under the person's name. Here rather than
+       * on /api/capabilities, which anybody can read: as with /release, the exact version is not
+       * handed to whoever can reach the port. Null when the build has none, such as in development.
+       */
+      version: config.version ?? null,
+    }),
+  );
+  app.route("/api/me/profile", createProfileRoutes(requireUser, profileStore));
+  app.post("/api/me/onboarding", requireUser, async (context) => {
+    if (!onboardingStore) {
+      return context.json({ error: "新手引导暂不可用。" }, 503);
+    }
+
+    const body = (await context.req.json().catch(() => undefined)) as
+      | { step?: unknown; completed?: unknown }
+      | undefined;
+
+    if (body?.completed === true) {
+      await onboardingStore.complete(context.var.actor.id);
+    } else if (
+      typeof body?.step === "number" &&
+      Number.isInteger(body.step) &&
+      body.step >= 0 &&
+      // The column's range — the only bound the server knows, since the wizard's length is the
+      // app's fact rather than the deployment's.
+      body.step <= 2_147_483_647
+    ) {
+      await onboardingStore.setStep(context.var.actor.id, body.step);
+    } else {
+      return context.json(
+        { error: "请提供要前往的步骤，或发送 completed: true。" },
+        400,
+      );
+    }
+
+    return context.json({
+      onboarding: await onboardingStore.status(context.var.actor.id),
+    });
+  });
+  /*
+   * A person's own standing instructions, read and written by the person they belong to.
+   *
+   * `requireUser` and never `requireAdmin`, and scoped to `context.var.actor.id` rather than to
+   * anything in the path or the body. There is deliberately no route here for reading somebody
+   * else's or writing on their behalf: these instructions go into a prompt that then speaks as that
+   * person's coworker, so a way to set them for another account would be a way to put words in
+   * somebody's mouth in every channel they work in. An administrator has no business here either,
+   * for the same reason.
+   */
+  app.route(
+    "/api/settings/preferences",
+    userPreferencesRoutes(requireUser, userPreferences),
+  );
+
+  /*
+   * The session must match the sealed state's person, otherwise a link started by one person could
+   * attach another person's GitHub account (login CSRF), so the callback requires the same session
+   * as the rest of /api/identity; a missing session answers 401 rather than a redirect. Mounted
+   * before the identity router so that router never sees a GET to this path; other methods fall
+   * through to it and get its own 401/404.
+   */
+  if (identityGithubCallback) {
+    app.use("/api/identity/github/callback", requireUser);
+    app.route("/api/identity/github/callback", identityGithubCallback);
+  }
+  /*
+   * A person's own linked accounts at outside providers (Slack, GitHub). Theirs alone: there is no
+   * administrator view and no linking on somebody else's behalf. A provider is offered only when
+   * its return path is wired: Slack needs the identity redeemer for the codes it issues, and GitHub
+   * needs the callback mounted above, otherwise people would be sent away and back to nothing.
+   */
+  app.route(
+    "/api/identity",
+    identityRoutes(requireUser, identity, auditStore, {
+      slackLinking: Boolean(
+        coworker?.delivery?.webhooks.slack &&
+          coworker.delivery.webhooks.identity,
+      ),
+      github:
+        identityGithubCallback && config.githubApp && config.publicUrl
+          ? {
+              clientId: config.githubApp.clientId,
+              publicUrl: config.publicUrl,
+              encryptionKey: config.keyEncryptionKey,
+            }
+          : undefined,
+    }),
+  );
+
+  app.get("/api/settings/instructions", requireUser, async (context) => {
+    if (!userInstructions) {
+      return context.json({ error: "常驻指令暂不可用。" }, 503);
+    }
+
+    return context.json({
+      // "" is what having written none looks like to a text box, and the store's null is what it
+      // looks like to a database. The translation happens once, here.
+      instructions: (await userInstructions.read(context.var.actor.id)) ?? "",
+    });
+  });
+  app.put("/api/settings/instructions", requireUser, async (context) => {
+    if (!userInstructions) {
+      return context.json({ error: "常驻指令暂不可用。" }, 503);
+    }
+
+    const body = (await context.req.json().catch(() => undefined)) as
+      | { instructions?: unknown }
+      | undefined;
+
+    if (typeof body?.instructions !== "string") {
+      return context.json({ error: "请提供要保存的指令内容。" }, 400);
+    }
+
+    /*
+     * The cap is the store's rule, so the store is what enforces it and this catches the refusal
+     * rather than checking the length again. A second copy of `> 4000` here is a second place for
+     * the number to be changed in only one of them.
+     */
+    let saved: string;
+    try {
+      saved = await userInstructions.write(
+        context.var.actor.id,
+        body.instructions,
+      );
+    } catch (error) {
+      if (error instanceof InstructionsTooLongError) {
+        return context.json({ error: error.message }, 400);
+      }
+      throw error;
+    }
+
+    /*
+     * The trail records that they changed and how long they now are, NEVER what they say.
+     *
+     * The audit table is append-only and read by administrators, and this is a person's own note
+     * about how they want to be spoken to. Recording the text would put it somewhere they cannot
+     * edit it and somebody else can read it, which is not what a preferences screen promises. The
+     * length is enough to answer the question a trail is for: when did this change, and to what
+     * extent.
+     */
+    if (auditStore) {
+      await recordAuditEvent(auditStore, {
+        eventType: "configuration.changed",
+        targetType: "user_instructions",
+        targetId: context.var.actor.id,
+        actorUserId: context.var.actor.id,
+        payload: {
+          change: saved === "" ? "instructions_cleared" : "instructions_saved",
+          characters: saved.length,
+          limit: INSTRUCTIONS_LIMIT,
+        },
+      });
+    }
+
+    return context.json({ instructions: saved });
+  });
+  /*
+   * Automatic Learning's admin page (R0). With a connected Intelligence, the settings and the
+   * read-only inspection upstream serves; without one, a plain answer the page can say in words
+   * rather than a 404 that reads like a broken deployment.
+   */
+  if (learning) {
+    // `learning_settings` has no row-level security: see `LEARNING_ADMIN_PATHS`.
+    app.use(
+      "/api/admin/learning/*",
+      createStaleAdminGate(requireAdminUser, LEARNING_ADMIN_PATHS),
+    );
+    app.route(
+      "/api/admin/learning",
+      createLearningRoutes(
+        learning,
+        requireUser,
+        [
+          ...(config.auth?.trustedOrigins ?? []),
+          ...(config.appUrl ? [config.appUrl] : []),
+        ],
+        auditStore,
+      ),
+    );
+  } else {
+    app.all("/api/admin/learning/*", requireUser, (context) => {
+      const denied = requireAdmin(context);
+      if (denied) return denied;
+      return context.json(
+        {
+          error:
+            "这个部署没有接入 CopilotKit Intelligence，自动学习不可用。设置 INTELLIGENCE_API_KEY 后重启即可启用。",
+          intelligence: false,
+        },
+        503,
+      );
+    });
+  }
+  app.get("/api/admin/status", requireAdminUser, (context) => {
+    const denied = requireAdmin(context) ?? staleAdminRefusal(context);
+    return denied ?? context.json({ status: "ok" });
+  });
+  app.get(
+    "/api/admin/audit-events",
+    requireUser,
+    adminCapability,
+    async (context) => {
+      const denied = requireAdmin(context);
+      if (denied) {
+        return denied;
+      }
+      if (!auditReader) {
+        return context.json({ error: "审计日志尚未配置。" }, 503);
+      }
+      if (!adminScope) {
+        return context.json(
+          { error: "Administrator access is not configured." },
+          503,
+        );
+      }
+      const withoutCapability = capabilityMissing(context);
+      if (withoutCapability) return withoutCapability;
+
+      try {
+        const url = new URL(context.req.url);
+        const format = url.searchParams.get("format");
+        if (
+          format !== null &&
+          format !== "" &&
+          format !== "json" &&
+          format !== "csv"
+        ) {
+          return context.json(
+            { error: 'Query parameter "format" must be "json" or "csv".' },
+            400,
+          );
+        }
+        const query = auditQueryFromUrl(url);
+        /*
+         * The export answers the same filtered query as the list — `eventType`, `actorUserId`,
+         * `initiatorKind`, `targetType`, `targetId`, `bot`, `app`, `tool`, `effect`, `intent`,
+         * `rule`, `from`, `to` — so the downloaded file and the table agree. Paging (`cursor`, `limit`) belongs to the JSON list and is ignored here; the
+         * export walks every matching page up to the cap in `readAuditExportRows` and names the file
+         * after the day it was pulled. Read as `platform`, as the list is (below).
+         */
+        if (format === "csv") {
+          const { events, truncated } = await adminScope.asAdminPlatform(
+            context.var.actor,
+            () => readAuditExportRows(auditReader, query),
+          );
+          if (auditStore) {
+            const { cursor: _cursor, limit: _limit, ...filters } = query;
+            await recordAuditEvent(auditStore, {
+              eventType: "audit.exported",
+              targetType: "audit_trail",
+              actorUserId: context.var.actor.id,
+              payload: {
+                format: "csv",
+                rows: events.length,
+                truncated,
+                filters,
+              },
+            });
+          }
+          const day = new Date().toISOString().slice(0, 10);
+          context.header("Content-Type", "text/csv; charset=utf-8");
+          context.header(
+            "Content-Disposition",
+            `attachment; filename="audit-events-${day}.csv"`,
+          );
+          // The row count it stopped at, so the page can say how much the file holds.
+          if (truncated) {
+            context.header("X-Audit-Export-Truncated", String(events.length));
+          }
+          return context.body(auditEventsToCsv(events));
+        }
+        /*
+         * The whole deployment's trail, as `platform` (G01-E P7). Every row is stamped with the person
+         * it is about, so in the administrator's own frame this read answered with their rows only and
+         * the screen looked like a quiet deployment. Only an administrator holding the capability, which
+         * `adminCapability` grants after re-reading their role, gets past `asAdminPlatform`.
+         */
+        return context.json(
+          await adminScope.asAdminPlatform(context.var.actor, () =>
+            auditReader.list(query),
+          ),
+        );
+      } catch (error) {
+        if (error instanceof AuditQueryError) {
+          return context.json({ error: error.message }, 400);
+        }
+        throw error;
+      }
+    },
+  );
+  if (coworker?.auditQuestions)
+    app.route(
+      "/api/admin/audit-events",
+      createAuditAskRoutes({
+        requireUser: requireAdminUser,
+        complete: coworker.auditQuestions.complete,
+        vocabulary: coworker.auditQuestions.vocabulary,
+        ...(coworker.auditQuestions.now
+          ? { now: coworker.auditQuestions.now }
+          : {}),
+        ...(auditStore ? { auditStore } : {}),
+      }),
+    );
+  if (coworker?.whatIf)
+    app.route(
+      "/api/admin/what-if",
+      createWhatIfRoutes({
+        requireUser: requireAdminUser,
+        ...coworker.whatIf,
+        ...(auditStore ? { auditStore } : {}),
+      }),
+    );
+  /*
+   * Who is here, and what they may do.
+   *
+   * Administrator-only, like every other route in this group. A plain user reading the list would
+   * learn every colleague's address and when they last signed in, which is not theirs to have.
+   */
+  app.get("/api/admin/people", requireAdminUser, async (context) => {
+    const denied = requireAdmin(context) ?? staleAdminRefusal(context);
+    if (denied) {
+      return denied;
+    }
+    if (!peopleStore) {
+      return context.json({ error: "成员管理暂不可用。" }, 503);
+    }
+
+    /*
+     * A page, not the deployment.
+     *
+     * `limit` is parsed strictly and clamped into range at the edge, against the same ceiling the
+     * store enforces, so a caller cannot ask for everybody by naming a large number and a typo
+     * like `12abc` is a 400 rather than a silently coerced page. `search` is what makes paging
+     * usable: an administrator looking for one colleague should not have to walk pages to reach
+     * them.
+     */
+    const url = new URL(context.req.url);
+    const parsed = parsePageLimit(url.searchParams.get("limit"), MAX_PAGE);
+    if (!parsed.ok) {
+      return context.json({ error: parsed.error }, 400);
+    }
+    // An unbounded `search` becomes a `%...% ILIKE` full scan. Cap it so a multi-megabyte
+    // query cannot be used as a cheap denial of service against the people table.
+    const search = url.searchParams.get("search");
+    if (search !== null && search.length > 200) {
+      return context.json(
+        { error: "A search of at most 200 characters is required." },
+        400,
+      );
+    }
+
+    return context.json(
+      await peopleStore.list({
+        ...(url.searchParams.get("search")
+          ? { search: url.searchParams.get("search") as string }
+          : {}),
+        ...(url.searchParams.get("cursor")
+          ? { cursor: url.searchParams.get("cursor") as string }
+          : {}),
+        ...(parsed.limit !== undefined ? { limit: parsed.limit } : {}),
+      }),
+    );
+  });
+
+  /*
+   * The role writer has no row-level security to fall back on, so the capability is checked here: a
+   * session that still says admin after its role was withdrawn would otherwise write itself back as
+   * an administrator in one request, and from then on be one.
+   */
+  app.post(
+    "/api/admin/people/:userId/role",
+    requireAdminUser,
+    async (context) => {
+      const denied = requireAdmin(context) ?? staleAdminRefusal(context);
+      if (denied) {
+        return denied;
+      }
+      if (!peopleStore) {
+        return context.json({ error: "成员管理暂不可用。" }, 503);
+      }
+
+      const body = await context.req.json().catch(() => null);
+      const role = (body as { role?: unknown } | null)?.role;
+      if (role !== "admin" && role !== "user") {
+        return context.json({ error: "角色必须是 admin 或 user。" }, 400);
+      }
+
+      const userId = context.req.param("userId");
+      const person = await peopleStore.find(userId);
+      if (!person) {
+        return context.json({ error: "找不到该成员。" }, 404);
+      }
+
+      /*
+       * The configured floor wins over the screen.
+       *
+       * Somebody named in INITIAL_ADMIN_EMAILS is promoted again at their next sign-in whatever this
+       * route writes, so allowing the demotion would produce a screen that lies until they come back.
+       * Refusing says the real thing: change the deployment's configuration.
+       */
+      if (person.configuredAdmin && role !== "admin") {
+        return context.json(
+          {
+            error:
+              "This deployment names that address in INITIAL_ADMIN_EMAILS, so they stay an administrator. Change the configuration instead.",
+          },
+          409,
+        );
+      }
+
+      /*
+       * Nobody demotes themselves.
+       *
+       * An administrator who does has just locked themselves out of the screen that would undo it,
+       * and on a deployment with one administrator that is the whole deployment. Somebody else with
+       * the role can do it, which is the check that makes handover possible without making lockout
+       * a slip of the finger.
+       */
+      if (context.var.actor.id === userId && role !== "admin") {
+        return context.json({ error: "不能移除你自己的管理员角色。" }, 409);
+      }
+
+      if (person.role !== role) {
+        await peopleStore.setRole(userId, role);
+        await recordPersonEvent(
+          auditStore,
+          context,
+          "person.role_changed",
+          person,
+          {
+            from: person.role,
+            to: role,
+          },
+        );
+      }
+
+      return context.json({ person: await peopleStore.find(userId) });
+    },
+  );
+
+  app.post(
+    "/api/admin/people/:userId/access",
+    requireUser,
+    adminCapability,
+    async (context) => {
+      const denied = requireAdmin(context);
+      if (denied) {
+        return denied;
+      }
+      if (!peopleStore) {
+        return context.json({ error: "成员管理暂不可用。" }, 503);
+      }
+      // Checked before anything is written: removing somebody without retiring what they own is the
+      // half-done removal the retirement below exists to prevent.
+      if (!adminScope) {
+        return context.json(
+          { error: "Administrator access is not configured." },
+          503,
+        );
+      }
+      const withoutCapability = capabilityMissing(context);
+      if (withoutCapability) return withoutCapability;
+
+      const body = await context.req.json().catch(() => null);
+      const revoked = (body as { revoked?: unknown } | null)?.revoked;
+      if (typeof revoked !== "boolean") {
+        return context.json({ error: "revoked 必须是 true 或 false。" }, 400);
+      }
+
+      const userId = context.req.param("userId");
+      const person = await peopleStore.find(userId);
+      if (!person) {
+        return context.json({ error: "找不到该成员。" }, 404);
+      }
+
+      // The same floor, for the same reason: removing somebody the configuration names would last
+      // until their next sign-in and no longer.
+      if (person.configuredAdmin && revoked) {
+        return context.json(
+          {
+            error:
+              "This deployment names that address in INITIAL_ADMIN_EMAILS, so they cannot be removed here. Change the configuration instead.",
+          },
+          409,
+        );
+      }
+
+      // Nobody can remove themselves. An administrator who does has locked themselves out of the
+      // screen that would undo it.
+      if (revoked && context.var.actor.id === userId) {
+        return context.json({ error: "不能移除你自己的访问权限。" }, 409);
+      }
+
+      if (person.revoked !== revoked) {
+        if (revoked) {
+          await peopleStore.revoke(userId, context.var.actor.id);
+        } else {
+          await peopleStore.restore(userId);
+        }
+        await recordPersonEvent(
+          auditStore,
+          context,
+          revoked ? "person.access_revoked" : "person.access_restored",
+          person,
+          {},
+        );
+      }
+
+      if (revoked && adminScope) {
+        /*
+         * In the removed person's own frame (G01-E I6). Their credentials and brokered connections are
+         * stamped with them, so from the administrator's frame the sweep found none, retired nothing
+         * and reported that as done. `adminActAsOwner` refuses without the capability, and the trail
+         * rows the retirement writes are the person's.
+         */
+        const actorId = context.var.actor.id;
+        await adminScope.adminActAsOwner(context.var.actor, userId, () =>
+          peopleStore.retireOwned(userId, actorId),
+        );
+      }
+
+      return context.json({ person: await peopleStore.find(userId) });
+    },
+  );
+
+  /*
+   * The identity providers this deployment has registered.
+   *
+   * Not Better Auth's own `GET /sso/providers`, which answers with the ones the person asking
+   * registered themselves. Two administrators therefore saw two different deployments: the second
+   * one to open this screen found it empty and registered a provider that was already there. What is
+   * registered is a fact about the deployment, so every administrator sees the same list.
+   */
+  app.get(
+    "/api/admin/identity-providers",
+    requireAdminUser,
+    async (context) => {
+      const denied = requireAdmin(context) ?? staleAdminRefusal(context);
+      if (denied) {
+        return denied;
+      }
+      if (!identityProviders) {
+        return context.json({ error: "身份提供方暂不可用。" }, 503);
+      }
+
+      return context.json({ providers: await identityProviders.list() });
+    },
+  );
+
+  /*
+   * Remove one.
+   *
+   * Ours rather than Better Auth's `delete-provider`, which refuses unless the person asking is the
+   * one who registered it. That leaves a provider nobody can remove as soon as the administrator who
+   * set it up has left, which is the same moment somebody most needs to.
+   *
+   * `sso_providers` has no row-level security, so the capability is checked before the row goes: a
+   * session that still says admin after its role was withdrawn must not take the company's sign-in
+   * away.
+   */
+  app.delete(
+    "/api/admin/identity-providers/:providerId",
+    requireAdminUser,
+    async (context) => {
+      const denied = requireAdmin(context) ?? staleAdminRefusal(context);
+      if (denied) {
+        return denied;
+      }
+      if (!identityProviders) {
+        return context.json({ error: "身份提供方暂不可用。" }, 503);
+      }
+
+      const providerId = context.req.param("providerId");
+      const removed = await identityProviders.remove(providerId);
+      if (!removed) {
+        // A screen somebody left open, or two administrators removing the same one. Saying so beats
+        // reporting success for something that was not there.
+        return context.json({ error: "找不到该身份提供方。" }, 404);
+      }
+
+      if (auditStore) {
+        await recordAuditEvent(auditStore, {
+          eventType: "identity_provider.removed",
+          targetType: "identity_provider",
+          targetId: providerId,
+          actorUserId: context.var.actor.id,
+          payload: { removedBy: context.var.actor.email },
+        });
+      }
+
+      return context.json({ removed: true });
+    },
+  );
+
+  /*
+   * The credentials screen holds the admin capability (G01-E P10): an MCP server's own token is sealed
+   * to `team` (Q3), which only an administrator holding it may write, rotate, revoke or list. Model
+   * and connector keys stay in the administrator's own frame, as they were.
+   */
+  const CREDENTIALS = "/api/admin/credentials";
+  app.get(CREDENTIALS, requireUser, adminCapability, async (context) => {
+    const denied = requireAdmin(context);
+    if (denied) {
+      return denied;
+    }
+    if (!credentialService) {
+      return context.json({ error: "凭据存储尚未配置。" }, 503);
+    }
+
+    return context.json({ credentials: await credentialService.list() });
+  });
+  app.post(CREDENTIALS, requireUser, adminCapability, async (context) => {
+    const denied = requireAdmin(context);
+    if (denied) {
+      return denied;
+    }
+    if (!credentialService) {
+      return context.json({ error: "凭据存储尚未配置。" }, 503);
+    }
+
+    const body = await context.req.json().catch(() => null);
+    const input = credentialInput(body, context.var.actor.id);
+    if (!input) {
+      return context.json({ error: "凭据输入无效。" }, 400);
+    }
+
+    try {
+      return context.json(
+        { credential: await credentialService.create(input) },
+        201,
+      );
+    } catch (error) {
+      // A team server token without the capability (a role removed since sign-in).
+      if (error instanceof CredentialRefusedError) {
+        return context.json({ error: error.message }, error.status);
+      }
+      throw error;
+    }
+  });
+  app.post(
+    "/api/admin/credentials/:credentialId/rotate",
+    requireUser,
+    adminCapability,
+    async (context) => {
+      const denied = requireAdmin(context);
+      if (denied) {
+        return denied;
+      }
+      if (!credentialService) {
+        return context.json({ error: "凭据存储尚未配置。" }, 503);
+      }
+
+      const body = await context.req.json().catch(() => null);
+      const input = credentialInput(body, context.var.actor.id);
+      if (!input) {
+        return context.json({ error: "凭据输入无效。" }, 400);
+      }
+
+      try {
+        return context.json({
+          credential: await credentialService.rotate({
+            ...input,
+            previousCredentialId: context.req.param("credentialId"),
+          }),
+        });
+      } catch (error) {
+        if (error instanceof CredentialRefusedError) {
+          return context.json({ error: error.message }, error.status);
+        }
+        throw error;
+      }
+    },
+  );
+  app.post(
+    "/api/admin/credentials/:credentialId/revoke",
+    requireUser,
+    adminCapability,
+    async (context) => {
+      const denied = requireAdmin(context);
+      if (denied) {
+        return denied;
+      }
+      if (!credentialService) {
+        return context.json({ error: "凭据存储尚未配置。" }, 503);
+      }
+
+      try {
+        return context.json({
+          credential: await credentialService.revoke(
+            context.req.param("credentialId"),
+            context.var.actor.id,
+          ),
+        });
+      } catch (error) {
+        // Not found or already revoked: the second click on Revoke, answered as what it is.
+        if (error instanceof CredentialRefusedError) {
+          return context.json({ error: error.message }, error.status);
+        }
+        throw error;
+      }
+    },
+  );
+  app.get("/api/admin/package", requireAdminUser, async (context) => {
+    const denied = requireAdmin(context) ?? staleAdminRefusal(context);
+    if (denied) return denied;
+    if (!packageStatusReader) {
+      return context.json({ error: "租户配置包尚未配置。" }, 503);
+    }
+    return context.json({ package: await packageStatusReader.active() });
+  });
+  /*
+   * Where the worker hands a routine run back. Not under /api and not behind requireUser: the
+   * worker is not a person with a session, it is another process on this deployment's own network,
+   * and the shared secret below is its whole credential.
+   *
+   * Mounted only when a runner was built, so a deployment that never stood up a worker has no door
+   * for this at all, rather than one that is mounted and permanently refuses.
+   */
+  if (routineRunner) {
+    app.post("/internal/routines/run", async (context) => {
+      const offered = context.req.header("authorization");
+      const expected = config.workerSharedSecret
+        ? `Bearer ${config.workerSharedSecret}`
+        : null;
+      /*
+       * The no-secret-configured case is refused here, before any comparison, and with the exact
+       * same response as a wrong secret. A deployment with no worker must not answer a guess any
+       * differently than a deployment with a worker and a wrong key would.
+       */
+      if (!expected || !offered || !sameToken(offered, expected)) {
+        /*
+         * Recorded, because this is a boundary being held and every other one here leaves a row. A
+         * worker with a stale or missing secret used to fail here in total silence: every routine
+         * stopped firing and nothing anywhere said why, the same false negative `mcp.callback_refused`
+         * exists to catch on the sibling unauthenticated boundary above.
+         *
+         * The reason is short and lives only in the row, never on the wire: the response below stays
+         * byte-identical across all three causes on purpose (see the comment above), so this is the
+         * one place the distinction is allowed to exist. The offered credential itself is never
+         * recorded, not even a fragment of it.
+         */
+        if (auditStore) {
+          try {
+            // Nobody's row, so written as `platform` like `mcp.callback_refused`: unframed it was
+            // `system`, which every tenant's trail shows (G01-C).
+            await runAsTenant("platform", () =>
+              recordAuditEvent(auditStore, {
+                eventType: "routines.dispatch_refused",
+                targetType: "worker",
+                initiator: DEPLOYMENT_INITIATOR,
+                payload: {
+                  reason: !expected
+                    ? "unconfigured"
+                    : !offered
+                      ? "missing-header"
+                      : "mismatch",
+                  note: "A worker's bearer secret did not check out, so no routine run was dispatched.",
+                },
+              }),
+            );
+          } catch (error) {
+            // Never fatal: the 401 above is already decided and sent. A trail that is briefly
+            // unavailable is not a reason to turn a refusal into a 500.
+            console.error(
+              JSON.stringify({
+                type: "routine-dispatch-audit-write-failed",
+                error: String(error),
+              }),
+            );
+          }
+        }
+        return context.json({ error: "This endpoint is the worker's." }, 401);
+      }
+      const body = await context.req.json().catch(() => null);
+      const routineRunId = (body as { routineRunId?: unknown } | null)
+        ?.routineRunId;
+      // An empty id is a string and used to answer 202 Accepted while the worker swallows the
+      // failure. Only a non-empty id is accepted for dispatch.
+      if (typeof routineRunId !== "string" || !routineRunId.trim()) {
+        return context.json({ error: "A routineRunId is required." }, 400);
+      }
+      /*
+       * Fire and answer: the consumer needs "accepted", not the outcome. The run row in
+       * `routine_runs` carries the outcome, and the consumer finishes the work item on this 202.
+       * Queue retries exist for DISPATCH failures only — a failed turn is final for this firing, and
+       * the fatigue rule owns it. `run()` never throws by contract; this swallow only guards against
+       * that contract being wrong without turning a bug there into an unhandled rejection here.
+       */
+      void routineRunner.run(routineRunId).catch(() => {});
+      return context.json({ accepted: true }, 202);
+    });
+  }
+  // The CopilotKit runtime, behind the same session guard as every other API route. Mounted last so
+  // its own routing under /api/copilotkit cannot shadow an OpenBot route declared above.
+  if (copilotHandler) {
+    /*
+     * The runtime admits the single-user administrator by itself (`resolveRequestActor`), from a
+     * request its hooks may already have copied, so the connection it came on is checked here, in
+     * front of it. A Recorder bearer is not the administrator: it resolves to its own connection and
+     * is refused everywhere but the capture pass.
+     */
+    if (config.singleUser)
+      app.use(
+        "/api/copilotkit/*",
+        createSingleUserGate(config.singleUserAccess, (request) =>
+          Boolean(
+            request.headers
+              .get("authorization")
+              ?.startsWith(RECORDER_BEARER_PREFIX),
+          ),
+        ),
+      );
+    /*
+     * The Recorder's capture pass names the Intelligence gateway's socket, and where this server
+     * carries that socket with no public URL to write before it, as over a `kubectl port-forward`, the
+     * address is a path. The page resolves a path against itself; the Recorder is not on the page, so
+     * its pass is answered knowing this server's own origin as the Recorder reached it.
+     */
+    app.use("/api/copilotkit/*", createCapturePassOrigin(config));
+    // Mounted at the ROOT with the handler carrying its own basePath. Mounting it at
+    // "/api/copilotkit" as well double-prefixes it: Hono strips the prefix before the handler sees
+    // the path, so every route lands at /api/copilotkit/api/copilotkit/* and /info 404s. The browser
+    // reports that as "Runtime info request failed with status 404" and every run fails before it
+    // starts, with nothing at all in the server log.
+    app.route("/", copilotHandler);
+  }
+
+  /**
+   * May this person act as this Bot?
+   *
+   * The store's own read path already applies `canAccessAgent`, so asking it for the Bot is the same
+   * question the roster and the runtime ask, rather than a second copy of the rule.
+   *
+   * A deployment with no profile store has no agents table and therefore no private Bot to protect:
+   * its Bots come from the tenant package and are public to everybody who can sign in. Answering yes
+   * there keeps that deployment working without weakening one that has owners.
+   */
+  const canUseBot: BotAccessCheck = agentProfileStore
+    ? async (actor, botId) =>
+        (await agentProfileStore.get(actor, botId)) !== null
+    : async () => true;
+
+  // The Bot computer. Acting on a page needs the gateway and the policy it enforces, so both arrive
+  // together or the routes are not mounted. An ungoverned computer is not a reduced feature. It is
+  // the one shape of this feature that must not exist.
+  if (computerGateway && computerPolicy) {
+    /*
+     * Changing the deployment's boundary and acting on anybody's computer from the fleet, refused to
+     * a session that still says admin after its role was withdrawn (`COMPUTER_ADMIN_PATHS`). At the
+     * mount rather than in the router, which unit assemblies build without a role repository.
+     */
+    app.use(
+      "/api/computers/*",
+      createStaleAdminGate(requireAdminUser, COMPUTER_ADMIN_PATHS),
+    );
+    app.route(
+      "/api/computers",
+      createComputerRoutes(
+        computerGateway,
+        computerPolicy,
+        requireUser,
+        // Not `canUseBot`: a Team Bot's teammates use the Bot, not its owner's signed-in computer.
+        agentProfileStore ? computerAccessCheck(agentProfileStore) : canUseBot,
+        pageFrames,
+        auditReader,
+        adminScope,
+        coworker?.botBrowser
+          ? createBotBrowser({
+              ...coworker.botBrowser,
+              gateway: computerGateway,
+              ...(auditStore ? { auditStore } : {}),
+              ...(agentProfileStore
+                ? {
+                    botName: async (actor, botId) =>
+                      (await agentProfileStore.get(actor, botId))?.name ?? null,
+                  }
+                : {}),
+            })
+          : undefined,
+        auditStore,
+      ),
+    );
+    // Beside `/policy` and named in DEPLOYMENT_ROUTES with it: the computer router's Bot guard
+    // steps aside for the name, and this answers it.
+    if (coworker?.boundaryWriter)
+      app.route(
+        "/api/computers",
+        createPolicyTranslateRoutes({
+          requireUser,
+          complete: coworker.boundaryWriter,
+          ...(auditStore ? { auditStore } : {}),
+        }),
+      );
+  }
+
+  if (hostAccessBroker) {
+    app.route(
+      "/api/host-access",
+      createHostAccessRoutes({
+        broker: hostAccessBroker,
+        desktopToken: desktopHostToken,
+        requireUser,
+        canUseBot,
+        auditStore,
+        botName: agentProfileStore
+          ? async (botId, actor) =>
+              (await agentProfileStore.get(actor, botId))?.name ?? null
+          : undefined,
+      }),
+    );
+  }
+
+  if (agentProfileStore) {
+    app.route(
+      "/api/agents",
+      createAgentRoutes(
+        agentProfileStore,
+        requireUser,
+        // The same stance the computer uses: a laptop legitimately talks to its own services, a hosted
+        // deployment must not. Passed from configuration rather than defaulted here, so "hosted and
+        // permissive" cannot happen by forgetting something.
+        config.computer?.allowPrivateHosts ?? false,
+        // A Bot's own refusal goes in the same trail as everything else it does.
+        auditStore,
+        // Addresses this deployment named, which is how a hosted one reaches an agent on its own
+        // network without dropping the floor for everything else.
+        config.agentEndpointAllowedHosts,
+        /*
+         * What the Bot's own screen needs to show, and change, which Bots it may hand work to.
+         *
+         * Read per request rather than captured, for the reason the desk reads it per hop: a grant
+         * made a minute ago counts and one revoked a minute ago stops counting. Absent with no
+         * plugin store, which is a deployment where no Bot may address any other.
+         */
+        pluginStore
+          ? {
+              enabled:
+                config.handoff.maxDepth > 0 && config.handoff.maxPerRun > 0,
+              reachableFrom: (agentId) =>
+                pluginStore.botsReachableFrom(agentId),
+              // The same answer the write path checks, read up front so the screen can say it once.
+              canHandOn: (agentId) => pluginStore.agentCanHandOn(agentId),
+            }
+          : undefined,
+        // Whether a Bot made with no address can run here. Always: with a managed Bot it runs there,
+        // and without one `create` makes a `built_in` Bot that runs in this server on the person's
+        // instructions, as the personal edition's Personal Assistant does. Answering "is there a
+        // managed Bot" told OpenBot Desktop, which has none, that nobody could make a Bot at all.
+        true,
+        // The managed Bot's address, so a coworker created without an endpoint — which creation
+        // stores as running at this address — can be told apart from one a person hosts.
+        config.managedAgent?.endpoint?.toString(),
+        quota,
+        // An administrator reaches another person's Bot here as `platform`, and changes it in the
+        // owner's frame (G01-E P8b).
+        adminScope,
+        // So testing one of our own addresses knocks with the token the run will use, rather than
+        // reporting a refusal for a Bot this deployment started itself.
+        config.managedAgent
+          ? {
+              token: config.managedAgent.token,
+              endpoints: [
+                config.managedAgent.endpoint,
+                config.managedAgent.alsoRun,
+              ].filter((url): url is URL => url !== undefined),
+            }
+          : undefined,
+        // Whether a Bot can have a computer of its own here: only where the provider makes computers.
+        { available: deploymentCanIsolate(config.computer) },
+        // An agent on the person's own loopback, dialled from this server's container.
+        config.thisMachineHost
+          ? { thisMachineHost: config.thisMachineHost }
+          : undefined,
+        // Summoning a preset copies it as the person's own and opens the 1:1 conversation.
+        coworker?.summon,
+        // 员工此刻: the status dots and 「此刻」 lines on the workbench, read for a batch at once.
+        coworker?.presence,
+      ),
+    );
+    // Choosing a coworker for an untagged message needs the same permission-filtered roster the
+    // agents routes read, so it is mounted here where that store is in scope. Only when a router was
+    // configured; without one the composer keeps sending untagged messages to the default.
+    if (intentRouter) {
+      app.route(
+        "/api/route",
+        createRoutingRoutes(
+          createCoworkerRoutingService({
+            store: agentProfileStore,
+            router: intentRouter,
+            auditStore,
+            skillsFor: pluginStore
+              ? async (agentId) =>
+                  (await pluginStore.listForAgent(agentId)).skills.map(
+                    (skill) => skill.slug,
+                  )
+              : undefined,
+            /*
+             * Which vendors each coworker holds tools for, so the router weighs what a coworker can
+             * reach and not only what somebody wrote it was for. Only when there is a plugin store to
+             * ask: a deployment with no connectors routes exactly as it did.
+             */
+            reachableSystems: pluginStore
+              ? async (agentId) => {
+                  const granted = await pluginStore.listForAgent(agentId);
+                  return [
+                    ...new Set(
+                      granted.tools.map(
+                        (tool) =>
+                          tool.toolName.replace(/^mcp__/, "").split("__")[0] ??
+                          tool.toolName,
+                      ),
+                    ),
+                  ];
+                }
+              : undefined,
+          }),
+          requireUser,
+        ),
+      );
+    }
+  }
+
+  if (channelStore) {
+    app.route(
+      "/api/channels",
+      createChannelRoutes(
+        channelStore,
+        requireUser,
+        channelEvents,
+        auditStore,
+        userPreferences,
+      ),
+    );
+  }
+
+  if (attachmentDatabase) {
+    /*
+     * `bodyLimit` sits in front of the upload route itself, not beside the mount below: the handler
+     * in channels/attachments.ts calls `file.arrayBuffer()` before it has looked at a single byte of
+     * size, so an unbounded body is read into memory in full before anything gets the chance to
+     * refuse it. A person (or an attacker) posting a 2GB body would have it buffered in RAM before
+     * the 413 the handler already knows how to return. `MAX_IMAGE_BYTES` is the largest thing this
+     * route could ever legitimately accept — a text upload is refused smaller, inside the handler,
+     * once the sniffed type is known — so refusing anything larger at the door costs nothing a real
+     * upload was ever going to use.
+     *
+     * The ceiling is `UPLOAD_BODY_LIMIT_BYTES` and not `MAX_IMAGE_BYTES` itself because THIS GATE
+     * MEASURES A DIFFERENT THING FROM EVERY OTHER ONE. See that constant.
+     */
+    const channelAttachments = new Hono<{ Variables: AppVariables }>();
+    channelAttachments.use(
+      "*",
+      bodyLimit({
+        maxSize: UPLOAD_BODY_LIMIT_BYTES,
+        /*
+         * THE REFUSAL AT THE DOOR HAS TO LOOK LIKE THE HANDLER'S OWN.
+         *
+         * hono's default `onError` answers with the plain string "Payload Too Large". The composer
+         * (app/src/components/channels/composer/attachments.ts) reads `{ error }` off every failed
+         * upload and falls back to a generic `Could not upload "<name>"` when the body will not
+         * parse as JSON — so the default body cost the person the one sentence that would have told
+         * them what went wrong, on the single refusal where the reason is both knowable and
+         * actionable. This is the same `{ error }` shape and the same number the handler's own 413
+         * names, so the two paths are indistinguishable from the outside.
+         *
+         * THE FILENAME AND THE KIND ARE BOTH DELIBERATELY ABSENT, and for the same reason: nothing
+         * has parsed the multipart body at this point, which is the entire reason this middleware
+         * runs ahead of the handler. The handler's sentences can say `'notes.txt' is larger than the
+         * 1MB limit for files` because by then it has sniffed the bytes. This one cannot, and must
+         * not guess — a 9MB text file refused here as being over "the 8MB limit for images" would
+         * send somebody off to shrink it to 7MB, whereupon the handler would refuse it a second time
+         * with a different number. So the sentence names the only thing that is true of every body
+         * this gate rejects: none of them can be under the largest ceiling the route has.
+         */
+        onError: (context) =>
+          context.json(
+            {
+              // The same rounding as `megabytes` in channels/attachments.ts, so the door and the
+              // handler name one limit in one voice.
+              error: `That upload is larger than the ${(MAX_IMAGE_BYTES / (1024 * 1024)).toFixed(0)}MB limit.`,
+            },
+            413,
+          ),
+      }),
+    );
+    channelAttachments.route(
+      "/",
+      createChannelAttachmentRoutes(attachmentDatabase, requireUser),
+    );
+    app.route("/api/channels", channelAttachments);
+
+    app.route(
+      "/api/attachments",
+      createAttachmentRoutes(attachmentDatabase, requireUser),
+    );
+  }
+
+  if (routineStore) {
+    app.route(
+      "/api/routines",
+      createRoutineRoutes(routineStore, requireUser, {
+        runner: routineRunner,
+        auditStore,
+        // The page names a coworker, so the page's create asks the same question the roster and the
+        // runtime ask — a foreign coworker id answers 404 rather than the store's channel sentence.
+        canUseBot,
+      }),
+    );
+  }
+
+  if (coworker?.delivery) {
+    app.route(
+      "/api/delivery/webhooks",
+      createDeliveryWebhookRoutes(coworker.delivery.webhooks),
+    );
+    app.route(
+      "/api/delivery",
+      createDeliveryRoutes({ ...coworker.delivery.authenticated, requireUser }),
+    );
+  }
+  if (coworker?.recorder) {
+    app.route(
+      "/api/recorder",
+      createRecorderRoutes({
+        ...coworker.recorder,
+        // A Disconnect in Settings, Browsers reaches the person's own OpenBot browser at once.
+        ...(coworker.browser
+          ? { onRevoked: browserConnectionRevoked(coworker.browser) }
+          : {}),
+        requireUser,
+        requireRecorder: createRequireRecorder(
+          coworker.recorder.resolve,
+          coworker.recorder.onRefused,
+        ),
+        auditStore,
+      }),
+    );
+  }
+  if (coworker?.browser)
+    app.route(
+      "/api/browser",
+      createBrowserRoutes({ ...coworker.browser, requireUser, auditStore }),
+    );
+  if (coworker?.personalLearning)
+    app.route(
+      "/api/settings/learning",
+      createPersonalLearningRoutes(
+        { ...coworker.personalLearning, auditStore },
+        requireUser,
+      ),
+    );
+  if (coworker?.lifecycle)
+    app.route(
+      "/api/bots",
+      createBotLifecycleRoutes(coworker.lifecycle, requireUser, adminScope),
+    );
+  /*
+   * Signed in, unlike `/api/capabilities`, which anybody can read. The checklist names what this
+   * deployment has and lacks, and for an admin which variables would close a gap, which is not a
+   * visitor's to have before they sign in.
+   */
+  if (coworker?.setup)
+    app.route("/api/setup", createSetupRoutes(coworker.setup, requireUser));
+  /*
+   * Upstream's model catalogue (what a person may pick for a built-in Bot's run) at
+   * `/api/model-catalogue`: `/api/models` is the fork's tenant model library (models/routes.ts),
+   * mounted by index.ts, and both answer `GET /`.
+   */
+  if (coworker?.models)
+    app.route(
+      "/api/model-catalogue",
+      createModelRoutes(coworker.models, requireUser),
+    );
+  if (coworker?.modelChoices)
+    app.route(
+      "/api/channels",
+      createModelChoiceRoutes(coworker.modelChoices, requireUser),
+    );
+  if (coworker?.groups)
+    app.route("/api/groups", createGroupRoutes(coworker.groups, requireUser));
+  if (coworker?.staffing) {
+    /*
+     * Signed in, and for an administrator the request-scoped capability: the executor decides what it may
+     * grant by `capabilityFor(actor.id)`, which is only "admin" inside `adminCapability`'s frame. Without
+     * it a real administrator would be treated as a member here (`requireAdminUser`: `requireUser`, then the
+     * capability). A run's machine credential is no session, so it gets 401.
+     */
+    app.route(
+      "/api/proposals",
+      createProposalRoutes(
+        coworker.staffing.store,
+        coworker.staffing.executor,
+        requireAdminUser,
+        coworker.staffing.canSeeThread,
+        { auditStore, ownerName: coworker.staffing.ownerName },
+      ),
+    );
+  }
+  if (coworker?.teamBots)
+    app.route(
+      "/api/team-bots",
+      createTeamBotRoutes(coworker.teamBots, requireUser, adminScope),
+    );
+  // Before `/api/approvals` for the same reason: describing, replaying and saving team rules together.
+  if (coworker?.approvals && coworker.approvalRules)
+    app.route(
+      "/api/approvals/team/rules",
+      createApprovalRuleDraftRoutes({
+        // M5: with the admin capability, as `createApprovalRoutes` is mounted, and replayed over the
+        // whole deployment's trail (`adminAuditReader`).
+        requireUser: requireAdminUser,
+        service: adminApprovals ?? coworker.approvals,
+        vocabulary: coworker.approvalRules.vocabulary,
+        ...(coworker.boundaryWriter
+          ? { complete: coworker.boundaryWriter }
+          : {}),
+        ...(auditStore ? { auditStore } : {}),
+        ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
+      }),
+    );
+  // Before `/api/approvals` too: the admin's guidance for auto-review, checked, replayed and saved.
+  if (coworker?.approvals)
+    app.route(
+      "/api/approvals/team/guidance",
+      createReviewerGuidanceRoutes({
+        // M5: with the admin capability, as `createApprovalRoutes` is mounted, and replayed over the
+        // admin's OWN requests only (`approvals/store.ts` `recentRequests`). Not `adminApprovals`: this
+        // replay hands each request's conversation and arguments to a model and returns the model's
+        // reason, so over everybody's requests it would read other people's conversations back to the
+        // admin. The team-rule replay may read everybody's: it returns only what the audit trail shows.
+        requireUser: requireAdminUser,
+        service: coworker.approvals,
+        ...(coworker.boundaryWriter
+          ? { complete: coworker.boundaryWriter }
+          : {}),
+      }),
+    );
+  if (coworker?.approvals)
+    app.route(
+      "/api/approvals",
+      createApprovalRoutes(
+        coworker.approvals,
+        requireUser,
+        adminScope?.adminCapability,
+      ),
+    );
+  if (coworker?.passwords) {
+    app.route(
+      "/api/sign-in-requests",
+      createSignInRoutes(
+        coworker.passwords,
+        requireUser,
+        // A sign-in is typed into the Bot's computer, so it answers to the same rule.
+        agentProfileStore ? computerAccessCheck(agentProfileStore) : canUseBot,
+      ),
+    );
+    app.route(
+      "/api/passwords",
+      createPasswordRoutes(coworker.passwords, requireUser),
+    );
+  }
+  if (coworker?.localLearning)
+    app.route(
+      "/api/local-learning",
+      createLocalLearningRoutes({
+        ...coworker.localLearning,
+        requireUser,
+        auditStore,
+      }),
+    );
+  if (coworker?.proactive)
+    app.route(
+      "/api/proactive",
+      createProactiveRoutes(
+        coworker.proactive.store,
+        coworker.proactive.engine,
+        requireUser,
+      ),
+    );
+  /*
+   * Upstream's started work (a check-in item a person started runs as a task in a conversation of
+   * its own) at `/api/bot-tasks`: `/api/tasks` is the fork's task board (tasks/routes.ts), mounted
+   * by index.ts.
+   */
+  if (coworker?.tasks)
+    app.route(
+      "/api/bot-tasks",
+      createBotTaskRoutes(
+        coworker.tasks.store,
+        coworker.tasks.runner,
+        requireUser,
+      ),
+    );
+  if (coworker?.memory)
+    app.route(
+      "/api/memory",
+      createMemoryRoutes(
+        coworker.memory.store,
+        coworker.memory.ingestion,
+        requireUser,
+      ),
+    );
+  if (coworker?.responsibilities) {
+    const { store, engine, bindings } = coworker.responsibilities;
+    app.route(
+      "/api/responsibilities",
+      createResponsibilityRoutes(
+        store,
+        engine,
+        requireUser,
+        bindings,
+        coworker.responsibilities.triggers,
+      ),
+    );
+    if (coworker.responsibilities.triggers) {
+      app.route(
+        "/api/events/triggers",
+        coworker.responsibilities.triggers.ingressRoutes,
+      );
+      if (coworker.responsibilities.triggers.emailRoutes)
+        app.route(
+          "/api/events/email",
+          coworker.responsibilities.triggers.emailRoutes,
+        );
+    }
+    app.route(
+      "/api/events/github",
+      createGithubResponsibilityRoutes({
+        bindingFor: bindings.githubBindingFor,
+        ingest: (event) => engine.ingest(event),
+      }),
+    );
+  }
+
+  if (componentStore) {
+    // The component tables have no row-level security: see `COMPONENT_ADMIN_PATHS`.
+    app.use(
+      "/api/components/*",
+      createStaleAdminGate(requireAdminUser, COMPONENT_ADMIN_PATHS),
+    );
+    app.route(
+      "/api/components",
+      createComponentRoutes(
+        componentStore,
+        requireUser,
+        auditStore,
+        canUseBot,
+        sandboxedStore,
+        adminScope?.adminCapability,
+      ),
+    );
+  }
+
+  /*
+   * The manual plan switch is mounted by `src/index.ts` on this same app, after this returns, so a
+   * gate registered here runs ahead of it. `subscriptions` lets a person write their own workspace's
+   * row, so without it a session that still says admin could move itself onto a paid plan for free.
+   */
+  app.use(
+    "/api/quota/*",
+    createStaleAdminGate(requireAdminUser, QUOTA_ADMIN_PATHS),
+  );
+
+  if (pluginStore) {
+    /*
+     * 会话里还写着管理员、角色已被收回的人，在插件的管理员写路径上先被这道门拒绝（见
+     * `plugins/admin-session-gate.ts`）。挂在路由前面，成员和不在那张表里的请求原样通过。
+     */
+    app.use("/api/plugins/*", createStaleAdminGate(requireAdminUser));
+    // Describing what one Bot may do in one app, and replaying it. The save is the grants route's own.
+    app.route(
+      "/api/plugins",
+      createAppGrantDraftRoutes({
+        // M5: replayed over the whole deployment's trail, as an administrator reads it.
+        requireUser: requireAdminUser,
+        store: pluginStore,
+        ...(coworker?.boundaryWriter
+          ? { complete: coworker.boundaryWriter }
+          : {}),
+        ...(auditStore ? { auditStore } : {}),
+        ...(adminAuditReader ? { auditReader: adminAuditReader } : {}),
+      }),
+    );
+    app.route(
+      "/api/plugins",
+      createPluginRoutes(
+        pluginStore,
+        requireUser,
+        canUseBot,
+        {
+          encryptionKey: config.keyEncryptionKey,
+          /*
+           * Whether the person a consent was started for still has access, asked when the callback
+           * lands rather than when the flow began.
+           *
+           * The callback carries no session — identity comes from the state — so this is where the
+           * question gets asked at all. `find` answers both halves of it: no row means a user id that
+           * names nobody, and `revoked` means an administrator removed them while they were away at
+           * the vendor. Either way there is no live person for a fresh refresh token to belong to.
+           *
+           * No people store means this deployment cannot answer the question, so it refuses rather
+           * than assuming yes. It also cannot remove anybody, which is exactly why guessing here
+           * would be a hole nothing else closes.
+           */
+          personHasAccess: async (userId) => {
+            if (!peopleStore) return false;
+            const person = await peopleStore.find(userId);
+            return person !== undefined && !person.revoked;
+          },
+          // The deployment-wide fallback a Bot may present, as a yes or no. The secret itself stays
+          // in config and is checked in `/api/agent-tools/call`; the surface only needs to know
+          // whether a Bot without its own credential has any way to call back.
+          botsMayCallBack: Boolean(config.agentToolToken),
+          publicUrl: config.publicUrl,
+          appUrl: config.appUrl,
+        },
+        composio,
+        /*
+         * A team Bot's grants are `team`, and an MCP server, its tools and its secret are `team` too:
+         * an administrator writes them with the capability, and acts on somebody else's Bot in its
+         * owner's frame (G01-E P8b, P10).
+         */
+        adminScope,
+        composio?.accountModes,
+      ),
+    );
+  }
+
+  /*
+   * Where a framework Bot runs a tool.
+   *
+   * A Bot that runs its own loop, in its own process, is the honest shape: the run does not need a
+   * browser and does not stop when one closes. What it must not have is a route to a vendor that
+   * goes around this deployment, so it calls here and this calls the plugin store, which asks the
+   * same two questions it asks of everything else and writes the same audit row.
+   *
+   * Authenticated by a shared secret rather than a session, because the caller is a service and has
+   * no person behind it. Absent secret means the route does not exist: a deployment that has not
+   * configured this refuses rather than accepting anybody who can reach the port.
+   */
+  if (pluginStore || deploymentToolCaller) {
+    const legacyToken = config.agentToolToken ?? "";
+    app.post("/api/agent-tools/call", async (context) => {
+      /*
+       * Who is calling, and on whose behalf. Two questions, two credentials.
+       *
+       * The header says which agent: its own token, issued to it, stored here only as a hash. The
+       * body's `run` says which Bot and which person, signed by this deployment for this run.
+       *
+       * Both are required, and they are checked against each other. This used to be one
+       * deployment-wide token with the Bot and the actor read straight out of the body, which meant
+       * anything holding that token could spend any Bot's grants and write any name into the audit
+       * trail. A forgeable trail is worse than no trail, because it is believed.
+       */
+      const body = (await context.req.json().catch(() => null)) as {
+        name?: string;
+        args?: Record<string, unknown>;
+        run?: unknown;
+      } | null;
+
+      const verdict = await authoriseAgentCall({
+        presented: context.req.header("x-openbot-agent-token") ?? "",
+        run: body?.run,
+        encryptionKey: config.keyEncryptionKey,
+        legacyToken,
+        lookup: async (hash) =>
+          (await agentProfileStore?.agentForCallbackToken(hash)) ?? null,
+      });
+      if (!verdict.ok) {
+        /*
+         * Recorded, because this is a boundary being held and every other one here leaves a row.
+         *
+         * The three outcomes inside `callTool` are all written after the caller has proved which Bot
+         * it is. A caller that fails to prove it never reaches them, so this refusal used to leave
+         * nothing at all — and it is the refusal behind the product's most confusing failure: a Bot
+         * whose token no longer matches the deployment's has every call rejected here, returns
+         * nothing to its own model, and the model tells the person there were no results. A false
+         * negative delivered as an answer, with the trail agreeing nothing had happened.
+         *
+         * No Bot id and no actor. Both live in the credential that just failed to verify, so writing
+         * them down would put an unproven claim in the record. The tool name comes from the body and
+         * is capped for the same reason: it is untrusted input, kept because "which tool was being
+         * reached for" is the useful half of the question.
+         */
+        if (auditStore) {
+          // Nobody's: the caller proved no person, so the row is the platform's, not `system`'s.
+          await runAsTenant("platform", () =>
+            recordAuditEvent(auditStore, {
+              eventType: "mcp.callback_refused",
+              targetType: "mcp_tool",
+              initiator: DEPLOYMENT_INITIATOR,
+              targetId:
+                typeof body?.name === "string"
+                  ? body.name.slice(0, 120)
+                  : "unknown",
+              payload: {
+                refusal: verdict.reason,
+                status: verdict.status,
+                note: "A caller could not prove which Bot it was, so no grant was consulted.",
+              },
+            }),
+          );
+        }
+        return context.json({ error: verdict.reason }, verdict.status);
+      }
+
+      const parsedCall = parseAgentToolCallInput(body);
+      if (!parsedCall.ok) {
+        return context.json({ error: parsedCall.error }, 400);
+      }
+
+      /*
+       * EVERYTHING AFTER THE VERDICT RUNS AS THE PERSON THE SIGNED RUN NAMES (G01).
+       *
+       * This route has a shared secret instead of a session, so no guard ever framed it, and every
+       * row the call wrote — the follow-up a Bot schedules for itself, the hop it offers another Bot,
+       * the memory it keeps, the audit row of the tool it ran — was stamped `system`, which every
+       * tenant can read. The actor comes from the assertion this deployment signed for the run, never
+       * from the body, so it is the one trusted answer to "whose work is this". An assertion that
+       * names nobody's tenant is refused rather than run as the platform or as `system`.
+       */
+      /*
+       * AND IN THE BOT'S RIGHT FRAME (G01-E PCB). The token lookup above is a narrow `platform` read,
+       * so it now finds a person's private Bot and a `team` Bot; which frame the call then runs in
+       * is decided by `callbackFrameFor` from the Bot's stamp and the signed person. A private Bot
+       * runs in its owner's tenant and only for its owner; a `team` Bot (a stamp, never a frame) and
+       * a catalogue Bot run in the asking person's own frame, exactly as their in-process turn does.
+       */
+      const frame = callbackFrameFor(verdict);
+      if (frame === null)
+        return context.json({ error: "Not authorised." }, 403);
+      return runAsTenant(frame, async () => {
+        try {
+          const deploymentResult = await deploymentToolCaller?.({
+            name: parsedCall.value.ref,
+            args: parsedCall.value.args,
+            botId: verdict.botId,
+            actorId: verdict.actorId,
+            initiator: verdict.initiator,
+            run: verdict.run,
+          });
+          if (deploymentResult) return context.json(deploymentResult);
+
+          if (!pluginStore) {
+            return context.json({
+              text: `${REFUSAL_MARKER} That tool is not registered in this deployment.`,
+              isError: true,
+            });
+          }
+
+          /*
+           * AND ON THE ACCOUNT ITS IN-PROCESS TURN WOULD USE (G01-E PCB2).
+           *
+           * A Team Bot reaches its owner's connected account, and a teammate's own only with their
+           * consent: `teamBots.credentialActorFor`, the function `loadToolsForActor` hands the
+           * in-process door, asked here for the same Bot, person and tool. Without it a teammate's
+           * external-agent call went out on the teammate's own account with no consent asked. A
+           * missing consent throws the card's `PluginRefusedError`, answered below as a refusal
+           * before anything is sent, exactly as in process.
+           *
+           * Only for a Bot's own token. The deployment-wide token proves no Bot of its own, so it
+           * never borrows an owner's account. And only for a tool this Bot holds (the same grant
+           * question `callTool` asks first): the in-process door only ever offers a granted tool, so
+           * an ungranted one is still refused and recorded by `callTool`, with no one-time consent
+           * spent on a call that was never going to go out.
+           */
+          const teamBots = coworker?.teamBots;
+          const credentialActorId =
+            teamBots &&
+            verdict.botTenant !== undefined &&
+            (
+              await pluginStore.decide(
+                "mcp",
+                parsedCall.value.ref,
+                verdict.botId,
+              )
+            ).allowed
+              ? await teamBots.credentialActorFor(
+                  verdict.actorId,
+                  verdict.botId,
+                )(parsedCall.value.ref)
+              : verdict.actorId;
+
+          const result = await pluginStore.callTool({
+            ref: parsedCall.value.ref,
+            args: parsedCall.value.args,
+            botId: verdict.botId,
+            // From the assertion, never the body: this is the name the audit row will carry.
+            actorId: verdict.actorId,
+            ...(verdict.initiator ? { initiator: verdict.initiator } : {}),
+            ...(credentialActorId === verdict.actorId
+              ? {}
+              : { credentialActorId }),
+            // The conversation the signed run is in, so a routine asked for there posts there.
+            ...(verdict.run.threadId ? { threadId: verdict.run.threadId } : {}),
+          });
+          // Worded by the helper the in-process door uses, so a framework Bot's model reads a vendor's
+          // error as the vendor's and not as a result. Neither Bot words it on its way through.
+          return context.json({
+            text: vendorAnswer(result),
+            isError: result.isError,
+          });
+        } catch (error) {
+          /*
+           * A refusal is an answer, not a failure: the Bot says what was blocked and carries on. The
+           * marker leads it so a transcript can draw a refusal without reading the wording.
+           *
+           * AND THE SAME QUESTION THE IN-PROCESS DOOR ASKS, which this one asked of nothing at all.
+           *
+           * CRITERION. Nothing on the `isDeploymentFault` shelf has its message relayed from here,
+           * and nothing leaving here carries a statement or a value bound to one.
+           *
+           * WHAT THIS SURFACE IS. The answer goes into the calling Bot's model as the tool result, so
+           * it is the widest audience an error message in this deployment reaches: a model repeats
+           * what it is handed — to the person asking, into whatever it writes next, and to the next
+           * tool it calls. `plugins/tools.ts` wraps the identical `callTool` for a Bot running in
+           * this process and has refused that shelf for exactly this reason since the
+           * `ServerRowAmbiguousError` finding; the two doors to one store disagreeing meant a query
+           * failure came back as `Failed query: … params: linear, usr_…` through one of them and as a
+           * fixed sentence through the other. Which door a Bot arrives at is a deployment topology
+           * decision and was never a disclosure decision.
+           *
+           * AND THROUGH {@link withoutStatement} AS WELL, because the two answer different questions
+           * and `isDeploymentFault` says so itself: it "settles who may be told, not what". The shelf
+           * decides whether this audience may hear a sentence at all; the door decides what any
+           * sentence is allowed to contain. Today the two overlap on a query failure and this arm can
+           * only be reached by something neither recognises — which is exactly the state the last two
+           * findings in this area were found in, one predicate apart from a leak.
+           *
+           * AND ONLY A REFUSAL CARRIES THE MARKER, which is the in-process door's third question. The
+           * transcript draws an answer that starts with it as a boundary holding, and the model reads
+           * "Refused." as "not allowed". `callTool` throws `PluginRefusedError` for that, and rethrows
+           * a vendor that broke after recording `mcp.call_failed`; marking every throw drew a vendor
+           * outage, or a fault of this deployment's own, as a policy refusing.
+           */
+          if (error instanceof PluginRefusedError) {
+            return context.json({
+              text: `${REFUSAL_MARKER} ${withoutStatement(error)}`,
+              isError: true,
+            });
+          }
+          return context.json({
+            text:
+              error instanceof Error && !isDeploymentFault(error)
+                ? `That tool could not be called: ${withoutStatement(error)}`
+                : "That tool could not be called.",
+            isError: true,
+          });
+        }
+      });
+    });
+  }
+
+  if (sandboxedStore) {
+    app.route(
+      "/api/sandboxed",
+      createSandboxedRoutes(
+        sandboxedStore,
+        requireUser,
+        adminScope?.adminCapability,
+      ),
+    );
+  }
+
+  if (threadIdentity) {
+    app.route(
+      "/api/threads",
+      createThreadRoutes(
+        threadIdentity,
+        requireUser,
+        // Whether a conversation this deployment keeps is still there, read from its own
+        // `threads` table — the caller builds the reader, the same object the runtime runs turns on.
+        threadReader,
+      ),
+    );
+  }
+
+  /*
+   * The built app, served by the API that serves it.
+   *
+   * WHY THE SAME PROCESS. The app's API calls get no CORS from this server, deliberately, so the app
+   * has to reach `/api` on its own origin. (The runtime answers CORS for this deployment's own origins
+   * and the Recorder only; see `cors` in copilot.ts.) Two containers behind one ingress does that too, and costs a
+   * path rule on every deployment plus a way for the two to disagree about which host they are on.
+   * One process cannot disagree with itself.
+   *
+   * API routes may also be appended by index.ts after this factory returns. Static serving must
+   * pass API requests through, so the later route's own authentication and tenant guards run.
+   *
+   * Absent in development: Vite serves the app and proxies `/api` here, so `APP_DIST_DIR` is unset
+   * and none of this mounts.
+   */
+  if (config.appDistDir) {
+    const root = config.appDistDir;
+    const isApiPath = (path: string) =>
+      path === "/api" || path.startsWith("/api/");
+    const staticFiles = serveStatic({ root });
+    app.use("/*", (context, next) =>
+      isApiPath(context.req.path) ? next() : staticFiles(context, next),
+    );
+    /*
+     * A single-page app owns its routing, so a path with no file behind it is not missing: it is a
+     * route the browser resolves once index.html has loaded. Without this, every deep link and every
+     * refresh away from `/` is a 404, which is the classic way this deployment shape breaks.
+     *
+     * Written out rather than a second `serveStatic`, whose `path` option is resolved relative to the
+     * working directory and silently matches nothing when handed the absolute root used above.
+     *
+     * `/api` is excluded so an unmatched API route still answers as one. Returning the app's HTML to
+     * a fetch that expected JSON is the failure that gets read as "the API returned HTML".
+     */
+    app.get("*", async (context, next) => {
+      // A missing API falls through to Hono's 404 after all appended business routes have had a turn.
+      if (isApiPath(context.req.path)) return next();
+      const index = Bun.file(`${root}/index.html`);
+      if (!(await index.exists())) return context.notFound();
+      return new Response(index, {
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    });
+  }
+
+  return app;
+}
+
+function credentialInput(
+  value: unknown,
+  actorUserId: string,
+): CredentialInput | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const body = value as Record<string, unknown>;
+  /*
+   * An allowlist, and deliberately narrower than `CredentialKind`.
+   *
+   * `CredentialKind` is derived from the schema enum, so it now includes `mcp_oauth_client` and
+   * `mcp_user_token`. Neither belongs here. A user token is somebody's own grant and exists only as
+   * the outcome of a consent they gave; a client is registered when a connector is added. Both are
+   * written by the code that owns those flows, and an administrator hand-posting either would be
+   * creating a credential attributed to a person who never agreed to it.
+   *
+   * So this list is not out of date with the enum — do not widen it to match.
+   */
+  if (
+    (body.kind !== "model" &&
+      body.kind !== "connector" &&
+      body.kind !== "mcp") ||
+    typeof body.provider !== "string" ||
+    !body.provider.trim() ||
+    typeof body.keyId !== "string" ||
+    !body.keyId.trim() ||
+    typeof body.plaintext !== "string" ||
+    !body.plaintext ||
+    !body.metadata ||
+    typeof body.metadata !== "object" ||
+    Array.isArray(body.metadata) ||
+    Object.getPrototypeOf(body.metadata) !== Object.prototype
+  ) {
+    return null;
+  }
+
+  return {
+    kind: body.kind,
+    provider: body.provider.trim(),
+    keyId: body.keyId.trim(),
+    metadata: body.metadata as Record<string, unknown>,
+    plaintext: body.plaintext,
+    actorUserId,
+  };
+}

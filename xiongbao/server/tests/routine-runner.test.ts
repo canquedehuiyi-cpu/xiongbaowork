@@ -1,0 +1,750 @@
+import { describe, expect, test } from "bun:test";
+import type { AgentActor } from "../src/agents/profile-types";
+import type {
+  AgentChannel,
+  ChannelActivity,
+  ChannelStore,
+} from "../src/channels/routes";
+import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import { QuotaExceeded } from "../src/quota/limits";
+import { createRoutineRunner } from "../src/routines/runner";
+import type {
+  RoutineRunContext,
+  RoutineRunOutcome,
+  RoutineStore,
+} from "../src/routines/store";
+import type { TaskProjector } from "../src/tasks/projector";
+
+/**
+ * A routine's turn with nobody's browser open, asserted without a database and without a model.
+ *
+ * The runner is the one place a headless firing does what a browser normally does — record the
+ * reply as channel activity — so what is under test is the sequence and the counts: exactly one
+ * activity per successful turn, exactly one run row closed, and the fatigue rule speaking once and
+ * then shutting up. `runTurn` is injected, which is why nothing here dials a model, and the store
+ * halves are recording stubs, which is why nothing here needs Postgres.
+ *
+ * The person-facing half of RoutineStore throws on contact: the runner acts as the owner but is not
+ * the owner asking a question, and reaching for `create` or `listFor` from here would be a bug that
+ * a test asserting only outcomes would not see.
+ */
+
+const OWNER: AgentActor = { id: "user_owner", role: "user" };
+
+const CONTEXT: RoutineRunContext = {
+  routineId: "routine_1",
+  ownerUserId: "user_owner",
+  // The routine's own stamp: its owner's, which is the only one the runner will act as (G01-C).
+  tenantId: "user_owner",
+  agentId: "bot_helper",
+  channelId: "channel_1",
+  instruction: "Post the standup summary.",
+};
+
+const CHANNEL: AgentChannel = {
+  id: "channel_1",
+  name: "Standup",
+  agentIds: ["bot_helper"],
+  threadId: "thread_owner_channel_1",
+  active: true,
+  // Nobody has said anything here yet: the runner is about to.
+  lastMessageAt: null,
+};
+
+const RUN_ID = "routine_run_1";
+
+type Recorded = {
+  finished: { runId: string; status: RoutineRunOutcome; error?: string }[];
+  activity: {
+    actor: AgentActor;
+    channelId: string;
+    activity: ChannelActivity;
+  }[];
+  enabled: { ownerUserId: string; id: string; enabled: boolean }[];
+  turns: Parameters<TurnRunner>[0][];
+  /** What the firing told the task board (ticket 020), in the order it said it. */
+  board: { opened: Record<string, unknown>[]; finished: string[] };
+  /** Each busy signal, with how many run rows had been closed when it was sent. */
+  busy: { threadId: string; busy: boolean; finishedBefore: number }[];
+};
+
+/**
+ * Every `finished` call in full, and how many switch-offs had happened when it was made (spec C3).
+ *
+ * Kept beside `Recorded` rather than inside it, so the assertions that compare `recorded` whole keep
+ * meaning exactly what they meant before the breaker reached the card.
+ */
+type Close = {
+  input: Parameters<TaskProjector["finished"]>[0];
+  switchedOffBefore: number;
+};
+
+function recordingBoard(
+  recorded: Recorded,
+  closes: Close[] = [],
+): Pick<TaskProjector, "opened" | "finished"> {
+  return {
+    async opened(input) {
+      recorded.board.opened.push(input as unknown as Record<string, unknown>);
+      return "task_from_routine";
+    },
+    async finished(input) {
+      recorded.board.finished.push(input.failed ? "failed" : "review");
+      closes.push({ input, switchedOffBefore: recorded.enabled.length });
+    },
+  };
+}
+
+function unreachable(method: string): never {
+  throw new Error(`the runner must not call ${method}`);
+}
+
+function harness(options: {
+  context?: RoutineRunContext | null;
+  channel?: AgentChannel | null;
+  failures?: number;
+  runTurn?: TurnRunner;
+  recordActivity?: () => Promise<void>;
+  /** The month's ceiling already spent (ticket 022): the firing must not dial the model at all. */
+  overQuota?: boolean;
+  /** The fatigue count cannot be read (spec C3: the card must still close). */
+  failuresError?: Error;
+  /** The switch-off cannot be written (spec C3: the card must not claim it happened). */
+  setEnabledError?: Error;
+  signalBusy?: () => Promise<void>;
+}) {
+  const closes: Close[] = [];
+  const recorded: Recorded = {
+    finished: [],
+    activity: [],
+    enabled: [],
+    turns: [],
+    board: { opened: [], finished: [] },
+    busy: [],
+  };
+
+  const routineStore: RoutineStore = {
+    create: () => unreachable("create"),
+    conversationFor: () => unreachable("conversationFor"),
+    linkGoal: () => unreachable("linkGoal"),
+    startManualRun: () => unreachable("startManualRun"),
+    listRuns: () => unreachable("listRuns"),
+    routineForFiring: () => unreachable("routineForFiring"),
+    reapAbandonedRuns: () => unreachable("reapAbandonedRuns"),
+    recordSweep: () => unreachable("recordSweep"),
+    lastSweptAt: () => unreachable("lastSweptAt"),
+    markUnschedulable: () => unreachable("markUnschedulable"),
+    listFor: () => unreachable("listFor"),
+    update: () => unreachable("update"),
+    remove: () => unreachable("remove"),
+    dueRoutines: () => unreachable("dueRoutines"),
+    advanceNextRun: () => unreachable("advanceNextRun"),
+    insertRun: () => unreachable("insertRun"),
+
+    async runContext(runId) {
+      expect(runId).toBe(RUN_ID);
+      return options.context === undefined ? CONTEXT : options.context;
+    },
+    async finishRun(runId, status, error) {
+      recorded.finished.push({ runId, status, error });
+    },
+    async consecutiveFailures(routineId) {
+      expect(routineId).toBe(CONTEXT.routineId);
+      // Read AFTER the failure is on the row, or the tenth failure reads as the ninth: hoisting
+      // this read above `finishRun` in the runner would keep every other assertion here green.
+      expect(recorded.finished).toHaveLength(1);
+      expect(recorded.finished[0]).toMatchObject({
+        runId: RUN_ID,
+        status: "failed",
+      });
+      if (options.failuresError) throw options.failuresError;
+      return options.failures ?? 0;
+    },
+    async setEnabled(ownerUserId, id, enabled) {
+      if (options.setEnabledError) throw options.setEnabledError;
+      recorded.enabled.push({ ownerUserId, id, enabled });
+    },
+  };
+
+  const channelStore: ChannelStore = {
+    create: () => unreachable("channels.create"),
+    list: () => unreachable("channels.list"),
+    setPinned: () => unreachable("channels.setPinned"),
+    markRead: () => unreachable("channels.markRead"),
+    rename: () => unreachable("channels.rename"),
+    softDelete: () => unreachable("channels.softDelete"),
+    direct: () => unreachable("channels.direct"),
+    signalChannelBusy: () => unreachable("channels.signalChannelBusy"),
+    signalWork: () => unreachable("channels.signalWork"),
+    workIn: () => unreachable("channels.workIn"),
+
+    async get(actor, channelId) {
+      expect(actor).toEqual(OWNER);
+      expect(channelId).toBe(CONTEXT.channelId);
+      return options.channel === undefined ? CHANNEL : options.channel;
+    },
+    async recordActivity(actor, channelId, activity) {
+      recorded.activity.push({ actor, channelId, activity });
+      if (options.recordActivity) await options.recordActivity();
+    },
+    async signalBusy(threadId, busy) {
+      recorded.busy.push({
+        threadId,
+        busy,
+        finishedBefore: recorded.finished.length,
+      });
+      if (options.signalBusy) await options.signalBusy();
+    },
+  };
+
+  const runTurn: TurnRunner = async (input) => {
+    recorded.turns.push(input);
+    if (options.runTurn) return await options.runTurn(input);
+    return { replyText: "Three people are blocked." };
+  };
+
+  return {
+    recorded,
+    closes,
+    runner: createRoutineRunner({
+      routineStore,
+      channelStore,
+      runTurn,
+      board: recordingBoard(recorded, closes),
+      quota: {
+        async assertCapacity() {
+          if (options.overQuota) {
+            throw new QuotaExceeded("tasksPerMonth", 50, 50, "Free");
+          }
+        },
+      } as unknown as Parameters<typeof createRoutineRunner>[0]["quota"],
+    }),
+  };
+}
+
+const throwingTurn: TurnRunner = async () => {
+  throw new Error("the model refused");
+};
+
+describe("createRoutineRunner", () => {
+  test("runs the owner's thread and records the reply exactly once", async () => {
+    const { runner, recorded } = harness({});
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.turns).toEqual([
+      {
+        ownerUserId: CONTEXT.ownerUserId,
+        // Carried so the turn's audit rows say a routine ran this, not that the owner did.
+        routineId: CONTEXT.routineId,
+        telemetry: {
+          trigger: "routine",
+          surface: "unknown",
+          rootTaskId: RUN_ID,
+        },
+        agentId: CONTEXT.agentId,
+        threadId: CHANNEL.threadId,
+        instruction: CONTEXT.instruction,
+        // The card's own key, so the model this turn ran on is read back onto that card (story H4).
+        runRef: RUN_ID,
+        // The firing opened this run's card above, so it tells the runner not to file a second one
+        // (and not to charge the month twice) — audit N10, ticket WP-1.2.
+        cardOwnedByCaller: true,
+      },
+    ]);
+    // The count, not merely that one happened: a second record would ring a second unread dot.
+    expect(recorded.activity).toHaveLength(1);
+    expect(recorded.activity[0]?.actor).toEqual(OWNER);
+    expect(recorded.activity[0]?.channelId).toBe(CONTEXT.channelId);
+    expect(recorded.activity[0]?.activity.text).toBe(
+      "Three people are blocked.",
+    );
+    expect(recorded.activity[0]?.activity.agentId).toBe(CONTEXT.agentId);
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "succeeded", error: undefined },
+    ]);
+    expect(recorded.enabled).toEqual([]);
+  });
+
+  test("records a thrown turn as a failure carrying its message", async () => {
+    const { runner, recorded } = harness({
+      runTurn: throwingTurn,
+      failures: 1,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "failed", error: "the model refused" },
+    ]);
+  });
+
+  test("says so once on the first failure after a success", async () => {
+    const { runner, recorded } = harness({
+      runTurn: throwingTurn,
+      failures: 1,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.activity).toHaveLength(1);
+    expect(recorded.activity[0]?.activity.text).toBe(
+      "This routine failed: the model refused",
+    );
+    expect(recorded.activity[0]?.activity.agentId).toBe(CONTEXT.agentId);
+    expect(recorded.enabled).toEqual([]);
+  });
+
+  test("says nothing on the second consecutive failure", async () => {
+    const { runner, recorded } = harness({
+      runTurn: throwingTurn,
+      failures: 2,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.activity).toEqual([]);
+    expect(recorded.enabled).toEqual([]);
+    expect(recorded.finished).toHaveLength(1);
+  });
+
+  test("switches the routine off after ten consecutive failures", async () => {
+    const { runner, recorded } = harness({
+      runTurn: throwingTurn,
+      failures: 10,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.enabled).toEqual([
+      {
+        ownerUserId: CONTEXT.ownerUserId,
+        id: CONTEXT.routineId,
+        enabled: false,
+      },
+    ]);
+    expect(recorded.activity).toHaveLength(1);
+    expect(recorded.activity[0]?.activity.text).toBe(
+      "This routine has failed ten times in a row, so I have switched it off. Ask me to turn it back on when whatever it needs is working.",
+    );
+  });
+
+  test("skips a firing whose channel is gone without running a turn", async () => {
+    const { runner, recorded } = harness({ channel: null });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.turns).toEqual([]);
+    expect(recorded.activity).toEqual([]);
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "skipped", error: "the channel is gone" },
+    ]);
+  });
+
+  test("does nothing at all for a run row that is gone", async () => {
+    const { runner, recorded } = harness({ context: null });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded).toEqual({
+      finished: [],
+      activity: [],
+      enabled: [],
+      turns: [],
+      board: { opened: [], finished: [] },
+      busy: [],
+    });
+  });
+
+  // Audit #633 M2: the internal endpoint takes a run id and nothing else, so a finished id presented
+  // again must not fire the routine again.
+  test.each(["succeeded", "failed", "skipped", "waiting"] as const)(
+    "never runs again a run row already closed as %p",
+    async (status) => {
+      const { runner, recorded } = harness({
+        context: { ...CONTEXT, status },
+      });
+
+      await runner.run(RUN_ID);
+      await runner.run(RUN_ID);
+
+      expect(recorded).toEqual({
+        finished: [],
+        activity: [],
+        enabled: [],
+        turns: [],
+        board: { opened: [], finished: [] },
+        busy: [],
+      });
+    },
+  );
+
+  test("runs a run row that is still open", async () => {
+    const { runner, recorded } = harness({
+      context: { ...CONTEXT, status: null },
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.turns).toHaveLength(1);
+    expect(recorded.finished).toEqual([{ runId: RUN_ID, status: "succeeded" }]);
+  });
+
+  test("keeps a succeeded run recorded when the channel cannot be written to", async () => {
+    const { runner, recorded } = harness({
+      recordActivity: async () => {
+        throw new Error("that channel is gone");
+      },
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "succeeded", error: undefined },
+    ]);
+  });
+
+  test("keeps a failed run recorded when the notification cannot be posted", async () => {
+    const { runner, recorded } = harness({
+      runTurn: throwingTurn,
+      failures: 1,
+      recordActivity: async () => {
+        throw new Error("that channel is gone");
+      },
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "failed", error: "the model refused" },
+    ]);
+  });
+
+  test("truncates a failure reason at the code-point cap without splitting an emoji", async () => {
+    // 170 code points: an ASCII run long enough to push the cut (at code point 159) into the
+    // middle of the run of astral emoji that follows, so the cut has to land between code points,
+    // never inside one of their surrogate pairs.
+    const longReason = `${"a".repeat(150)}${"\u{1F600}".repeat(20)}`;
+    const { runner, recorded } = harness({
+      runTurn: async () => {
+        throw new Error(longReason);
+      },
+      failures: 1,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.activity).toHaveLength(1);
+    const posted = recorded.activity[0]?.activity.text ?? "";
+    expect(posted.startsWith("This routine failed: ")).toBe(true);
+    const reasonPart = posted.slice("This routine failed: ".length);
+
+    // Capped at MAX_NOTIFIED_REASON (160) code points: 159 kept, plus the implementation's own
+    // ellipsis character — read runner.ts's `shorten` rather than assume a format here.
+    expect(Array.from(reasonPart)).toHaveLength(160);
+    expect(reasonPart).toBe(`${"a".repeat(150)}${"\u{1F600}".repeat(9)}…`);
+
+    // The cut is measured in code points, not UTF-16 units, so no emoji is split into a lone
+    // surrogate: the string stays well-formed and a code-point split round-trips cleanly.
+    expect(reasonPart.isWellFormed()).toBe(true);
+    expect(Array.from(reasonPart).join("")).toBe(reasonPart);
+  });
+
+  test("posts a thrown non-Error value with String(error)", async () => {
+    const { runner, recorded } = harness({
+      runTurn: async () => {
+        throw "not an Error object";
+      },
+      failures: 1,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "failed", error: "not an Error object" },
+    ]);
+    expect(recorded.activity).toHaveLength(1);
+    expect(recorded.activity[0]?.activity.text).toBe(
+      "This routine failed: not an Error object",
+    );
+  });
+  /*
+   * The conversation reads "a routine is running" from the open run row, so the signal that says
+   * it is over has to come after the row is closed. Sent before, the event would still list the
+   * routine and the row would stay on screen until something else happened in the conversation.
+   */
+  test("shows the conversation working while it fires, and clears it after the run is closed", async () => {
+    const { runner, recorded } = harness({});
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.busy).toEqual([
+      { threadId: CHANNEL.threadId, busy: true, finishedBefore: 0 },
+      { threadId: CHANNEL.threadId, busy: false, finishedBefore: 1 },
+    ]);
+  });
+
+  test("clears the working signal when the turn fails", async () => {
+    const { runner, recorded } = harness({
+      runTurn: throwingTurn,
+      failures: 2,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.busy.map((signal) => signal.busy)).toEqual([true, false]);
+    expect(recorded.busy.at(-1)?.finishedBefore).toBe(1);
+  });
+
+  test("still runs and records the firing when the working signal cannot be sent", async () => {
+    const { runner, recorded } = harness({
+      signalBusy: async () => {
+        throw new Error("the socket is down");
+      },
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.turns).toHaveLength(1);
+    expect(recorded.finished).toEqual([{ runId: RUN_ID, status: "succeeded" }]);
+  });
+
+  test("signals nothing for a firing that never runs", async () => {
+    const { runner, recorded } = harness({ channel: null });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.busy).toEqual([]);
+  });
+});
+
+/**
+ * Ticket 020 (spec C2/C3): a firing nobody watched still leaves a card.
+ *
+ * Before this, the board only ever saw a person's turn — `postgres-runner` was the projector's sole
+ * caller — so the work a coworker did at 03:00 existed only in a run row nobody opens. What is under
+ * test here is the pairing: exactly one card per firing, closed by the same run ref it was opened
+ * with, and no card at all when the ceiling meant the firing never happened.
+ */
+describe("the board a headless firing leaves", () => {
+  test("opens one card for the coworker and files it back under the same run", async () => {
+    const { runner, recorded } = harness({});
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.board.opened).toEqual([
+      {
+        tenantId: CONTEXT.tenantId,
+        title: "Post the standup summary.",
+        executorAgentId: "bot_helper",
+        source: "routine",
+        // Story C2: the 自主工作 lane's sub-label (例行) reads this, not the lane.
+        triggerSource: "routine",
+        channelRef: "channel_1",
+        runRef: RUN_ID,
+        deviceId: null,
+      },
+    ]);
+    // The review lane, because a reply is something to look at rather than a done deal.
+    expect(recorded.board.finished).toEqual(["review"]);
+  });
+
+  test("a firing that failed closes its card as failed", async () => {
+    const { runner, recorded } = harness({ runTurn: throwingTurn });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.board.opened).toHaveLength(1);
+    expect(recorded.board.finished).toEqual(["failed"]);
+  });
+
+  test("over the month's ceiling there is no card, no turn, and no failure", async () => {
+    const { runner, recorded } = harness({ overQuota: true });
+
+    await runner.run(RUN_ID);
+
+    expect(recorded.board.opened).toEqual([]);
+    expect(recorded.turns).toEqual([]);
+    /*
+     * `skipped`, not `failed`: the fatigue rule switches a routine off after ten consecutive
+     * failures, and a workspace that simply used its month would otherwise lose the routine for
+     * being full. The reason is still said out loud, in the run row and in the channel.
+     */
+    expect(recorded.finished).toEqual([
+      {
+        runId: RUN_ID,
+        status: "skipped",
+        error:
+          "The Free plan allows 50 tasks per month; this workspace is using 50.",
+      },
+    ]);
+    expect(recorded.activity).toHaveLength(1);
+  });
+
+  test("a firing waiting on a person reviews, rather than pretending to be approved", async () => {
+    const { runner, recorded } = harness({
+      runTurn: async () => {
+        throw new HeadlessToolSuspension("A tool is waiting for you.", {
+          kind: "native_approval",
+          requestId: "request-1",
+        });
+      },
+    });
+
+    await runner.run(RUN_ID);
+
+    // No approval row exists for a headless suspension, so the card is not filed against one.
+    expect(recorded.board.finished).toEqual(["review"]);
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "waiting", error: "A tool is waiting for you." },
+    ]);
+  });
+});
+
+/**
+ * Spec C3: the circuit breaker is visible on the card, not only in the channel.
+ *
+ * The tenth consecutive failure switches the routine off (threshold, switch-off and message are the
+ * fatigue rule's, unchanged), and the card that firing opened closes `failed` exactly once, carrying a
+ * `circuit_breaker` reference the board draws as 已熔断·已自动停用. Any other failure closes as a plain
+ * failure, and a switch-off that did not happen is never drawn as one.
+ */
+describe("the circuit breaker on the card", () => {
+  test("the tenth failure closes its card failed once, carrying the breaker, after the switch-off", async () => {
+    const { runner, recorded, closes } = harness({
+      runTurn: throwingTurn,
+      failures: 10,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input).toEqual({
+      tenantId: CONTEXT.tenantId,
+      runRef: RUN_ID,
+      failed: true,
+      deliverableRef: {
+        kind: "circuit_breaker",
+        failures: 10,
+        routineId: CONTEXT.routineId,
+      },
+    });
+    // The badge says 已自动停用, so the routine is off before the card says so.
+    expect(closes[0]?.switchedOffBefore).toBe(1);
+    expect(recorded.board.finished).toEqual(["failed"]);
+    expect(recorded.enabled).toEqual([
+      {
+        ownerUserId: CONTEXT.ownerUserId,
+        id: CONTEXT.routineId,
+        enabled: false,
+      },
+    ]);
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "failed", error: "the model refused" },
+    ]);
+    expect(recorded.activity.map((entry) => entry.activity.text)).toEqual([
+      "This routine has failed ten times in a row, so I have switched it off. Ask me to turn it back on when whatever it needs is working.",
+    ]);
+  });
+
+  test("a failure count past the limit still carries the count it was read at", async () => {
+    const { runner, closes } = harness({ runTurn: throwingTurn, failures: 12 });
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input.deliverableRef).toEqual({
+      kind: "circuit_breaker",
+      failures: 12,
+      routineId: CONTEXT.routineId,
+    });
+  });
+
+  test("the ninth failure closes as a plain failure, with no breaker and no switch-off", async () => {
+    const { runner, recorded, closes } = harness({
+      runTurn: throwingTurn,
+      failures: 9,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input).toEqual({
+      tenantId: CONTEXT.tenantId,
+      runRef: RUN_ID,
+      failed: true,
+    });
+    expect(closes[0]?.input.deliverableRef).toBeUndefined();
+    expect(recorded.enabled).toEqual([]);
+    expect(recorded.activity).toEqual([]);
+  });
+
+  test("the first failure says so in the channel and carries no breaker", async () => {
+    const { runner, recorded, closes } = harness({
+      runTurn: throwingTurn,
+      failures: 1,
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(closes.map((close) => close.input.deliverableRef)).toEqual([
+      undefined,
+    ]);
+    expect(recorded.activity.map((entry) => entry.activity.text)).toEqual([
+      "This routine failed: the model refused",
+    ]);
+  });
+
+  test("a switch-off that could not be written is not drawn as one, and the card still closes failed", async () => {
+    const { runner, recorded, closes } = harness({
+      runTurn: throwingTurn,
+      failures: 10,
+      setEnabledError: new Error("routines table unavailable"),
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input).toEqual({
+      tenantId: CONTEXT.tenantId,
+      runRef: RUN_ID,
+      failed: true,
+    });
+    // Nor is the switch-off announced: the routine is still on.
+    expect(recorded.activity).toEqual([]);
+    expect(recorded.finished).toEqual([
+      { runId: RUN_ID, status: "failed", error: "the model refused" },
+    ]);
+  });
+
+  test("an unreadable fatigue count still closes the card failed, once", async () => {
+    const { runner, recorded, closes } = harness({
+      runTurn: throwingTurn,
+      failuresError: new Error("routine_runs unavailable"),
+    });
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input).toEqual({
+      tenantId: CONTEXT.tenantId,
+      runRef: RUN_ID,
+      failed: true,
+    });
+    expect(recorded.enabled).toEqual([]);
+    expect(recorded.activity).toEqual([]);
+  });
+
+  test("a succeeded firing never carries a breaker", async () => {
+    const { runner, closes } = harness({});
+
+    await runner.run(RUN_ID);
+
+    expect(closes).toHaveLength(1);
+    expect(closes[0]?.input).toEqual({
+      tenantId: CONTEXT.tenantId,
+      runRef: RUN_ID,
+    });
+  });
+});

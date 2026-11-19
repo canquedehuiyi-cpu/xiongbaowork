@@ -10,8 +10,8 @@
 | 浏览器 | 仓库自带 `playwright-core 1.62.1` 驱动的 Chromium（`/opt/pw-browsers/chromium`），DPR 1 |
 | 视口 | 1696×783（参考观察窗口）、1440×900、1280×800、1024×768（折叠/溢出规则） |
 | 主题 | 深色（参考站所见）；浅色仅做我方回归，参考浅色未实测 |
-| 数据 | `openbot/app/tests/parity/fixtures.ts` 的合成数据：`data`（有数据）与 `empty`（空态）两套，固定时间与 id；不含真实账号、机器名、聊天或令牌 |
-| 我方截图 | `bun tests/parity/capture.ts`（见 `openbot/app/tests/parity/README.md`），每张图配同名 `.json` 测量（盒模型、字号、颜色、横向溢出、控制台错误、未覆盖接口） |
+| 数据 | `xiongbao/app/tests/parity/fixtures.ts` 的合成数据：`data`（有数据）与 `empty`（空态）两套，固定时间与 id；不含真实账号、机器名、聊天或令牌 |
+| 我方截图 | `bun tests/parity/capture.ts`（见 `xiongbao/app/tests/parity/README.md`），每张图配同名 `.json` 测量（盒模型、字号、颜色、横向溢出、控制台错误、未覆盖接口） |
 | 参考截图 | **全部待补证**。参考实例在用户本机 `http://127.0.0.1:19830/management`，云端会话无法访问。补证方法见文末 |
 
 状态取值：
@@ -54,7 +54,7 @@
 
 ## 五个一级入口
 
-计划条目逐字取自计划的页面对照表。"我方证据"列的测试文件均在 `openbot/app/tests/`；截图为 `data`/`empty` × 四视口 × 深色。
+计划条目逐字取自计划的页面对照表。"我方证据"列的测试文件均在 `xiongbao/app/tests/`；截图为 `data`/`empty` × 四视口 × 深色。
 
 | 参考页 | 我方路径与深链 | 已实现（计划条目） | 部分/缺口 | 我方证据 | 状态 |
 | --- | --- | --- | --- | --- | --- |
@@ -68,15 +68,15 @@
 
 | 入口 | 缺失契约 | 证据 | 剩余工作 |
 | --- | --- | --- | --- |
-| @Waker · 自动接入 | 无自动绑定新会话的接口 | `openbot/server/src/delivery/routes.ts` 只有逐段对话的一次性挑战 | 策略存储、开关、匹配规则的服务端契约 |
+| @Waker · 自动接入 | 无自动绑定新会话的接口 | `xiongbao/server/src/delivery/routes.ts` 只有逐段对话的一次性挑战 | 策略存储、开关、匹配规则的服务端契约 |
 | @Waker · 接入申请 | 无申请记录与审批接口 | 同上；server 无 join/access request | 申请列表、批准、拒绝接口 |
 | @Waker · 待确认状态 | 挑战已存储但无读取接口 | 同上 | 读取待确认挑战的 GET |
-| 自主工作 · 事件触发自动任务 | 自动任务触发只支持 `schedule \| once \| webhook` | `openbot/server/src/automations/types.ts` | 内部事件源（消息、任务状态）触发 |
+| 自主工作 · 事件触发自动任务 | 自动任务触发只支持 `schedule \| once \| webhook` | `xiongbao/server/src/automations/types.ts` | 内部事件源（消息、任务状态）触发 |
 | 自主工作 · Flow 执行者 | 定时任务、职责、巡检只能由员工执行 | `routines`、`responsibilities` 契约 | 视需要扩展 |
-| 自主工作 · 自动任务运行记录 | 列表与详情不返回触发记录 | `openbot/server/src/automations/routes.ts` | firings 读取接口 |
+| 自主工作 · 自动任务运行记录 | 列表与详情不返回触发记录 | `xiongbao/server/src/automations/routes.ts` | firings 读取接口 |
 | 自主工作 · 定时任务编辑 | 无 PATCH | `routes/_authed/_app/routines.tsx` 注释 | 编辑接口 |
 | 员工管理 · 群组详情、群组进对话 | 无单个 `waker_group` 详情；无小组到会话的转换 | `src/lib/waker-groups/queries.ts`；`/group/new` 无预选参数 | 详情读取、`/group/new?groupId=` |
-| 员工管理 · 精确任务数 | `/api/tasks` 上限 200 行，无按执行者计数 | `openbot/server/src/tasks/routes.ts` | 按执行者聚合计数接口 |
+| 员工管理 · 精确任务数 | `/api/tasks` 上限 200 行，无按执行者计数 | `xiongbao/server/src/tasks/routes.ts` | 按执行者聚合计数接口 |
 | 员工管理 · 云端/设备环境 | `AgentProfile` 无运行环境字段 | `src/lib/agents/queries.ts` | 员工运行环境字段 |
 | 能力与资源 · 市场一键安装/卡片授权 | 安装需令牌、授权配置或 Composio 启用；授权流程在账户设置 | `src/lib/plugins/mutations.ts`、`routes/_authed/admin/plugins/*` | 维持跳转，或新增一步安装契约 |
 | 能力与资源 · 插件分类 | `CatalogueItem`/`PluginServer` 无分类字段 | `src/lib/plugins/queries.ts` | 目录分类字段 |
@@ -110,4 +110,4 @@
 
 ## 如何补参考证据
 
-在打开参考实例的浏览器中，按同一视口（开发者工具设备模式设为 1696×783、1440×900、1280×800、1024×768，DPR 1，深色）逐页截图，并在控制台运行 `openbot/app/tests/parity/reference-measure.js` 的内容，它输出与我方测量 `.json` 同结构的盒模型、字号与颜色。截图前去除账号名、机器名、真实聊天、令牌和本机标识。文件放在 `<out>/reference/<theme>/<宽>x<高>/<路由 slug>.png|.json` 后，`bun tests/parity/diff.ts` 按每通道 8/255 阈值给出差异像素比例和差异图。只有同条件复测差异不超过计划门槛（约定区域内差异像素 ≤1%，关键锚点偏差 ≤2 CSS px），对应行才从"待补证"改为 1:1。
+在打开参考实例的浏览器中，按同一视口（开发者工具设备模式设为 1696×783、1440×900、1280×800、1024×768，DPR 1，深色）逐页截图，并在控制台运行 `xiongbao/app/tests/parity/reference-measure.js` 的内容，它输出与我方测量 `.json` 同结构的盒模型、字号与颜色。截图前去除账号名、机器名、真实聊天、令牌和本机标识。文件放在 `<out>/reference/<theme>/<宽>x<高>/<路由 slug>.png|.json` 后，`bun tests/parity/diff.ts` 按每通道 8/255 阈值给出差异像素比例和差异图。只有同条件复测差异不超过计划门槛（约定区域内差异像素 ≤1%，关键锚点偏差 ≤2 CSS px），对应行才从"待补证"改为 1:1。

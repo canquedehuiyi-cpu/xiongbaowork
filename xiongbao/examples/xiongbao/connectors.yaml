@@ -1,0 +1,29 @@
+# 由 bun run port:assemble 从管道产出落位。auth 的取值以本构建的目录为准：
+# 声明 user-oauth 的连接器必须在 server/src/plugins/catalogue.ts 有条目（ad5b738c 的拒绝逻辑），
+# 否则平台无法提供逐用户 OAuth，会在包加载时拒绝。降级一律写明原因。
+connectors:
+  - id: github
+    title: GitHub
+    vendor: GitHub
+    url: https://api.githubcopilot.com/mcp/
+    host: api.githubcopilot.com
+    auth: user-oauth
+    credential_env: GITHUB_MCP_CREDENTIAL_ID
+    source_url: ~/.workbuddy/connectors-marketplace/connectors/github/mcp.json
+  - id: tapd
+    title: TAPD
+    vendor: 腾讯
+    url: https://websocket.tapd.cn/mcp/mcp
+    host: websocket.tapd.cn
+    auth: deployment-bearer
+    credential_env: TAPD_MCP_CREDENTIAL_ID
+    source_url: ~/.workbuddy/connectors-marketplace/connectors/tapd/mcp.json
+  # tencent-docs 不在本构建目录（无逐用户 OAuth），按 server 拒绝信息指明的发布路径降级为 deployment-bearer（明确共享凭据）。
+  - id: tencent-docs
+    title: 腾讯文档
+    vendor: 腾讯
+    url: https://docs.qq.com/openapi/mcp
+    host: docs.qq.com
+    auth: deployment-bearer
+    credential_env: TENCENT_DOCS_MCP_CREDENTIAL_ID
+    source_url: ~/.workbuddy/connectors-marketplace/connectors/tencent-docs/mcp.json

@@ -1,0 +1,832 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import type { ReactNode, Ref } from "react";
+import { useEffect, useRef, useState } from "react";
+import { PageShell } from "@/components/layout/page-shell";
+import { QueryError } from "@/components/layout/query-error";
+import { WorkbenchEmpty } from "@/components/layout/workbench-empty";
+import { CARD_FACE } from "@/components/resources/resource-kit";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@/components/ui/item";
+import { agentListQueryOptions } from "@/lib/agents/queries";
+import {
+  abortRunMutationOptions,
+  createTemplateMutationOptions,
+  deleteTemplateMutationOptions,
+  PipelineDispatchRefused,
+  type RefusedStep,
+  resumeRunMutationOptions,
+  skipStepMutationOptions,
+  startRunMutationOptions,
+  updateTemplateMutationOptions,
+} from "@/lib/pipelines/mutations";
+import {
+  type PipelineRunStep,
+  type PipelineTemplate,
+  pipelineRunQueryOptions,
+  pipelineTemplatesQueryOptions,
+  type StepDraft,
+} from "@/lib/pipelines/queries";
+import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
+
+export const Route = createFileRoute("/_authed/_app/pipelines")({
+  component: RouteComponent,
+  /*
+   * `?run=` is the run this page is showing, kept in the address so the board's 打开 on a crew's card
+   * and the group chat's "查看这次运行" can land on it (audit N1). Absent means no run is open, which
+   * is the same as the page before a person presses 运行.
+   */
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { run?: string; group?: string } => ({
+    ...(typeof search.run === "string" && search.run
+      ? { run: search.run }
+      : {}),
+    // `?group=` is the group whose section opens first: 员工页卡片的「组团流程」带它来。
+    ...(typeof search.group === "string" && search.group
+      ? { group: search.group }
+      : {}),
+  }),
+});
+
+/** What a step's state reads as on the page. Every state the store can leave a step in is named. */
+const STATE_WORDS: Record<PipelineRunStep["state"], string> = {
+  pending: "还没轮到",
+  running: "正在做",
+  awaiting_action: "等你处理",
+  done: "做完了",
+  failed: "失败了",
+  skipped: "跳过了",
+  aborted: "已结束",
+};
+
+/*
+ * docs/design/ios-studio, for a working page: a 17px section heading, graphite cards on a hairline,
+ * the workbench's 32px controls, and red only for the step that waits on the person or failed.
+ */
+const SELECT_CLASS =
+  "h-[32px] min-w-0 max-w-full rounded-[9px] border border-border bg-muted px-[9px] text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50 dark:bg-[oklch(0.196_0.002_286.2)]";
+
+function Section({
+  title,
+  children,
+  sectionRef,
+  groupId,
+}: {
+  title: string;
+  children: ReactNode;
+  sectionRef?: Ref<HTMLElement>;
+  groupId?: string;
+}) {
+  return (
+    <section
+      className="mt-[28px] first:mt-0"
+      data-group={groupId}
+      ref={sectionRef}
+    >
+      <h2 className="mb-[9px] font-bold text-[17px] leading-[26px] tracking-[-0.02em]">
+        {title}
+      </h2>
+      {children}
+    </section>
+  );
+}
+
+/** Rows divided by hairlines inside one card; an `Item`'s own rounding is squared off inside it. */
+function Rows({ children }: { children: ReactNode }) {
+  return (
+    <div
+      className={`${CARD_FACE} overflow-hidden [&_[data-slot=item]]:rounded-none [&>*+*]:border-t-border dark:[&>*+*]:border-t-border`}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** A blank step, so the editor's rows have ids the run can be matched against later. */
+function blankStep(agentId: string): StepDraft {
+  return {
+    id: `step-${Math.random().toString(36).slice(2, 8)}`,
+    agentId,
+    instruction: "",
+  };
+}
+
+/**
+ * A crew's pipelines: the plan, and the run it produced (spec D10 / I1-I4).
+ *
+ * The editor writes an *ordered* list because the order is the feature — a review that runs before the
+ * code exists reviews nothing — and the run below it is polled rather than pushed, since a crew advances
+ * inside the server and the only honest answer about where it got to is to ask again.
+ */
+function RouteComponent() {
+  const queryClient = useQueryClient();
+  const crews = useQuery(wakerGroupsQueryOptions());
+  const coworkers = useQuery(agentListQueryOptions());
+  const [crewId, setCrewId] = useState<string | null>(null);
+  /*
+   * The saved template the editor is rewriting, or null for "new". Held here rather than in the editor
+   * because the row's 编辑 is what opens it, and switching crew has to close it: a plan is edited only
+   * inside the crew it was written for.
+   */
+  const [editing, setEditing] = useState<PipelineTemplate | null>(null);
+  const { run: runId, group: groupParam } = Route.useSearch();
+  /*
+   * A `?group=` that arrives later (a link from the staff page while this page is open) beats a
+   * group picked by hand: the hand-picked one is dropped when the parameter changes.
+   */
+  const [seenGroupParam, setSeenGroupParam] = useState(groupParam);
+  if (seenGroupParam !== groupParam) {
+    setSeenGroupParam(groupParam);
+    setCrewId(null);
+  }
+  const navigate = useNavigate();
+  const setRunId = (id: string | null) =>
+    // Only `run` changes: `group` stays, so the address still says which group the page is on.
+    navigate({
+      to: "/pipelines",
+      search: (prev) => {
+        const { run: _dropped, ...rest } = prev;
+        return id ? { ...rest, run: id } : rest;
+      },
+    });
+
+  /*
+   * The group named in the address wins over the first one, but only when it exists: a stale or
+   * mistyped id falls back to the first group instead of leaving the page on nothing.
+   */
+  const fromAddress = crews.data?.find((crew) => crew.id === groupParam)?.id;
+  const selected = crewId ?? fromAddress ?? crews.data?.[0]?.id ?? null;
+  const templates = useQuery(
+    pipelineTemplatesQueryOptions(selected ?? undefined),
+  );
+  const sectionRef = useRef<HTMLElement>(null);
+  const sectionShown = templates.data !== undefined;
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    // Only the arrival from a link scrolls, once per group named; picking groups by hand is already
+    // where the eyes are. The section exists once the group's templates have loaded.
+    if (
+      scrolledTo.current === fromAddress ||
+      !sectionShown ||
+      !fromAddress ||
+      selected !== fromAddress
+    )
+      return;
+    scrolledTo.current = fromAddress;
+    sectionRef.current?.scrollIntoView?.({ block: "start" });
+  }, [sectionShown, fromAddress, selected]);
+  const names = new Map(
+    (coworkers.data ?? []).map((agent) => [agent.id, agent.name]),
+  );
+  const editingHere = editing && editing.groupId === selected ? editing : null;
+
+  return (
+    <PageShell
+      description="把群组的工作写成一条流程：谁先做、做什么、然后交给谁。流程跑起来时每一步都会在看板上留下自己的任务卡。"
+      title="组团流程"
+      width="workbench"
+    >
+      {crews.isError ? (
+        <QueryError
+          label="群组加载失败"
+          error={crews.error}
+          retrying={crews.isFetching}
+          onRetry={() => void crews.refetch()}
+        />
+      ) : null}
+      {coworkers.isError ? (
+        <QueryError
+          label="员工加载失败"
+          error={coworkers.error}
+          retrying={coworkers.isFetching}
+          onRetry={() => void coworkers.refetch()}
+        />
+      ) : null}
+      {crews.isPending ? (
+        <p className="text-[13px] text-muted-foreground" role="status">
+          正在加载群组…
+        </p>
+      ) : null}
+      {crews.data === undefined ? null : crews.data.length === 0 ? (
+        <WorkbenchEmpty
+          className="border border-border"
+          description="流程的步骤只能交给群组里的员工。先到「员工 › 群组」建一个群组，再来这里排流程。"
+          title="还没有群组"
+        />
+      ) : (
+        <>
+          <Section title="选一个群组">
+            <div className="flex flex-wrap gap-[7px]">
+              {(crews.data ?? []).map((crew) => (
+                <Button
+                  key={crew.id}
+                  aria-pressed={crew.id === selected}
+                  variant={crew.id === selected ? "default" : "outline"}
+                  onClick={() => {
+                    setCrewId(crew.id);
+                    setEditing(null);
+                    setRunId(null);
+                  }}
+                >
+                  {crew.name}
+                </Button>
+              ))}
+            </div>
+          </Section>
+
+          {selected ? (
+            <TemplateEditor
+              /*
+               * Keyed by what it is editing, so opening another template (or going back to "new") starts
+               * the rows from that template rather than from whatever was typed before.
+               */
+              key={editingHere?.id ?? "new"}
+              editing={editingHere}
+              onDone={() => setEditing(null)}
+              crewId={selected}
+              /*
+               * The crew's own roster, in the order the person put it, not the whole workspace. The step
+               * picker is where the screen's promise lives — "流程的步骤只能交给组里的员工" — and offering
+               * outsiders is offering a plan the server will refuse.
+               */
+              coworkers={(
+                crews.data?.find((crew) => crew.id === selected)?.members ?? []
+              )
+                .slice()
+                .sort((a, b) => Number(a.position) - Number(b.position))
+                .map((member) => ({
+                  id: member.agentId,
+                  name: names.get(member.agentId) ?? "已不在花名册里",
+                }))}
+              problem={
+                coworkers.isError
+                  ? "员工名单读不出来，流程里就没法点名谁做。"
+                  : null
+              }
+            />
+          ) : null}
+
+          {selected && templates.isError ? (
+            <QueryError
+              label="流程加载失败"
+              error={templates.error}
+              retrying={templates.isFetching}
+              onRetry={() => void templates.refetch()}
+            />
+          ) : null}
+          {templates.data === undefined || !selected ? null : (
+            <Section
+              groupId={selected}
+              sectionRef={sectionRef}
+              title={`${templates.data?.length ?? 0} 条流程`}
+            >
+              {templates.data.length === 0 ? (
+                <p className="rounded-[13px] border border-border border-dashed px-4 py-6 text-center text-[13px] text-muted-foreground">
+                  这个群组还没有流程。在上面写下第一条。
+                </p>
+              ) : (
+                <Rows>
+                  {(templates.data ?? []).map((template) => (
+                    <TemplateRow
+                      key={template.id}
+                      template={template}
+                      names={names}
+                      onEdit={() => setEditing(template)}
+                      onDeleted={() => {
+                        if (editing?.id === template.id) setEditing(null);
+                      }}
+                      onStarted={setRunId}
+                      queryClient={queryClient}
+                    />
+                  ))}
+                </Rows>
+              )}
+            </Section>
+          )}
+
+          {runId ? (
+            <RunPanel
+              runId={runId}
+              names={names}
+              queryClient={queryClient}
+              onOpened={() => setRunId(null)}
+            />
+          ) : null}
+        </>
+      )}
+    </PageShell>
+  );
+}
+
+/**
+ * The step rows, and the one write that saves them.
+ *
+ * Steps are edited as a whole list and saved in one request, the same way a crew's roster is: a
+ * half-applied plan is a plan where step 2 is someone else's job, and nothing downstream can say so.
+ */
+function TemplateEditor(props: {
+  crewId: string;
+  coworkers: { id: string; name: string }[];
+  problem: string | null;
+  /** The saved template being rewritten, or null when the editor writes a new one. */
+  editing: PipelineTemplate | null;
+  onDone: () => void;
+}) {
+  const queryClient = useQueryClient();
+  const create = useMutation(createTemplateMutationOptions(queryClient));
+  const update = useMutation(updateTemplateMutationOptions(queryClient));
+  const [name, setName] = useState(props.editing?.name ?? "");
+  const [steps, setSteps] = useState<StepDraft[]>(
+    (props.editing?.steps ?? []).map((step) => ({
+      id: step.id,
+      agentId: step.agentId,
+      instruction: step.instruction,
+    })),
+  );
+  const [problem, setProblem] = useState<string | null>(props.problem);
+
+  if (props.problem && !problem) setProblem(props.problem);
+
+  const first = props.coworkers[0]?.id;
+  const saving = create.isPending || update.isPending;
+  const settled = {
+    onError: (thrown: Error) => setProblem(thrown.message),
+    onSuccess: () => {
+      setName("");
+      setSteps([]);
+      setProblem(null);
+      props.onDone();
+    },
+  };
+
+  function move(index: number, by: -1 | 1) {
+    const target = index + by;
+    if (target < 0 || target >= steps.length) return;
+    const next = [...steps];
+    // biome-ignore lint/style/noNonNullAssertion: the bound check above is this array's own
+    const row = next[index]!;
+    // biome-ignore lint/style/noNonNullAssertion: the bound check above covers both indexes
+    next[index] = next[target]!;
+    next[target] = row;
+    setSteps(next);
+  }
+
+  return (
+    <Section
+      title={props.editing ? `编辑流程：${props.editing.name}` : "新建一条流程"}
+    >
+      <div className={`${CARD_FACE} flex flex-col gap-3 p-[14px]`}>
+        {props.editing ? (
+          <p className="text-[13px] text-muted-foreground">
+            改动只影响之后的运行；已经开跑的会按开跑时的步骤跑完。
+          </p>
+        ) : null}
+        <Input
+          aria-label="流程名称"
+          placeholder="例如：编程任务"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+        {props.coworkers.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">
+            这个群组里还没有员工。先到「员工 › 群组」把人加进来 ——
+            流程的步骤只能交给组里的员工。
+          </p>
+        ) : steps.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">
+            还没有步骤。第一步通常是「谁先做」。
+          </p>
+        ) : null}
+        {steps.map((step, index) => (
+          <div
+            className="flex flex-col gap-2 rounded-[11px] border border-border bg-background/60 p-[10px]"
+            key={step.id}
+          >
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-mono text-[11px] text-faint tracking-[0.06em]">
+                第 {index + 1} 步
+              </span>
+              <select
+                aria-label={`第 ${index + 1} 步的员工`}
+                className={SELECT_CLASS}
+                value={step.agentId}
+                onChange={(event) =>
+                  setSteps(
+                    steps.map((row) =>
+                      row.id === step.id
+                        ? { ...row, agentId: event.target.value }
+                        : row,
+                    ),
+                  )
+                }
+              >
+                {props.coworkers.some(
+                  (agent) => agent.id === step.agentId,
+                ) ? null : (
+                  /*
+                   * A saved step whose coworker has since left the crew. Shown as itself rather than
+                   * silently re-pointed at the first member: saving it is refused by the server, and the
+                   * person should see why and pick somebody.
+                   */
+                  <option value={step.agentId}>已不在组里的员工</option>
+                )}
+                {props.coworkers.map((agent) => (
+                  <option key={agent.id} value={agent.id}>
+                    {agent.name}
+                  </option>
+                ))}
+              </select>
+              {steps.length > 1 ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => move(index, -1)}
+                  >
+                    上移
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => move(index, 1)}
+                  >
+                    下移
+                  </Button>
+                </>
+              ) : null}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setSteps(steps.filter((row) => row.id !== step.id))
+                }
+              >
+                去掉这步
+              </Button>
+            </div>
+            <Input
+              aria-label={`第 ${index + 1} 步要做什么`}
+              placeholder="它要做的事，例如：按需求写出实现并自测"
+              value={step.instruction}
+              onChange={(event) =>
+                setSteps(
+                  steps.map((row) =>
+                    row.id === step.id
+                      ? { ...row, instruction: event.target.value }
+                      : row,
+                  ),
+                )
+              }
+            />
+          </div>
+        ))}
+        <div className="flex flex-wrap gap-[7px]">
+          <Button
+            variant="outline"
+            disabled={!first}
+            // biome-ignore lint/style/noNonNullAssertion: the button is disabled while it is absent
+            onClick={() => setSteps([...steps, blankStep(first!)])}
+          >
+            加一步
+          </Button>
+          <Button
+            disabled={
+              !name.trim() ||
+              steps.length === 0 ||
+              steps.some((step) => !step.instruction.trim()) ||
+              saving
+            }
+            onClick={() =>
+              props.editing
+                ? update.mutate(
+                    {
+                      templateId: props.editing.id,
+                      name: name.trim(),
+                      steps,
+                    },
+                    settled,
+                  )
+                : create.mutate(
+                    { groupId: props.crewId, name: name.trim(), steps },
+                    settled,
+                  )
+            }
+          >
+            {props.editing ? "保存修改" : "保存流程"}
+          </Button>
+          {props.editing ? (
+            <Button variant="outline" disabled={saving} onClick={props.onDone}>
+              取消编辑
+            </Button>
+          ) : null}
+        </div>
+        {problem ? (
+          <p className="text-[13px] text-signal-ink" role="alert">
+            {problem}
+          </p>
+        ) : null}
+      </div>
+    </Section>
+  );
+}
+
+/**
+ * One template, and the task it is handed.
+ *
+ * The task is asked for here rather than stored on the template: a plan is a habit, and the work each
+ * press is for is different every time.
+ */
+function TemplateRow(props: {
+  template: PipelineTemplate;
+  names: Map<string, string>;
+  onStarted: (runId: string) => void;
+  onEdit: () => void;
+  onDeleted: () => void;
+  queryClient: ReturnType<typeof useQueryClient>;
+}) {
+  const start = useMutation(startRunMutationOptions(props.queryClient));
+  const remove = useMutation(deleteTemplateMutationOptions(props.queryClient));
+  /*
+   * Delete asks once more before it goes: the plan is gone for good, and the row says what is NOT lost
+   * (runs already started finish from their own copy), which is the question a person hesitates on.
+   */
+  const [confirming, setConfirming] = useState(false);
+  const [task, setTask] = useState("");
+  const [problem, setProblem] = useState<string | null>(null);
+  /*
+   * The steps the server refused to dispatch because their coworkers are not this person's to use
+   * (spec I6). Listed by step number and name rather than left in a sentence, because the next move is
+   * per step: grant that coworker, or give the step to somebody else.
+   */
+  const [refused, setRefused] = useState<RefusedStep[] | null>(null);
+
+  return (
+    <Item>
+      <ItemContent>
+        <ItemTitle>{props.template.name}</ItemTitle>
+        <ItemDescription>
+          {props.template.steps
+            .map(
+              (step) =>
+                `${props.names.get(step.agentId) ?? step.agentId}：${step.instruction}`,
+            )
+            .join(" → ")}
+        </ItemDescription>
+        {refused ? (
+          <div
+            className="mt-[6px] rounded-[9px] border border-signal/40 bg-signal-soft p-[9px] text-[13px] text-signal-ink"
+            role="alert"
+          >
+            <p>
+              这次没有派出去：下面这些步骤的员工你还没有使用权。先给他们开通使用权，或把这几步换成你能用的员工，再运行。
+            </p>
+            <ul aria-label="没有派出去的步骤" className="list-disc pl-5">
+              {refused.map((step) => (
+                <li key={`${step.index}-${step.stepId}`}>
+                  {`第 ${step.index + 1} 步：${props.names.get(step.agentId) ?? step.agentId}`}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : problem ? (
+          <p className="mt-[6px] text-[13px] text-signal-ink" role="alert">
+            {problem}
+          </p>
+        ) : null}
+        {confirming ? (
+          <div className="mt-[6px] flex flex-wrap items-center gap-2 rounded-[9px] border border-signal/40 bg-signal-soft p-[9px] text-[13px]">
+            <span>
+              {`确定删除「${props.template.name}」？已经开跑的运行会照常跑完，记录也会留着。`}
+            </span>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={remove.isPending}
+              onClick={() =>
+                remove.mutate(props.template.id, {
+                  onError: (thrown: Error) => {
+                    setConfirming(false);
+                    setRefused(null);
+                    setProblem(thrown.message);
+                  },
+                  onSuccess: () => {
+                    setConfirming(false);
+                    props.onDeleted();
+                  },
+                })
+              }
+            >
+              确定删除
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={remove.isPending}
+              onClick={() => setConfirming(false)}
+            >
+              取消
+            </Button>
+          </div>
+        ) : null}
+      </ItemContent>
+      <ItemActions className="flex flex-wrap items-center gap-[7px]">
+        <Button variant="outline" size="sm" onClick={props.onEdit}>
+          编辑
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={confirming}
+          onClick={() => setConfirming(true)}
+        >
+          删除
+        </Button>
+        <Input
+          aria-label={`交给${props.template.name}的任务`}
+          className="w-full min-w-0 sm:w-48"
+          placeholder="这次要做什么"
+          value={task}
+          onChange={(event) => setTask(event.target.value)}
+        />
+        <Button
+          disabled={!task.trim() || start.isPending}
+          onClick={() =>
+            start.mutate(
+              { templateId: props.template.id, task: task.trim() },
+              {
+                onError: (thrown: Error) => {
+                  setProblem(thrown.message);
+                  setRefused(
+                    thrown instanceof PipelineDispatchRefused
+                      ? thrown.refused
+                      : null,
+                  );
+                },
+                onSuccess: (run) => {
+                  setTask("");
+                  setProblem(null);
+                  setRefused(null);
+                  props.onStarted(run.runId);
+                },
+              },
+            )
+          }
+        >
+          运行
+        </Button>
+      </ItemActions>
+    </Item>
+  );
+}
+
+/**
+ * Where the crew got to.
+ *
+ * Skip and abort are per the spec's I4: the person may stop one step without stopping the plan, or
+ * stop the plan outright. A step waiting on an approval is the one thing the screen does not offer to
+ * decide here -- the answer belongs to the approvals screen, which holds the row it was asked about.
+ */
+function RunPanel(props: {
+  runId: string;
+  names: Map<string, string>;
+  queryClient: ReturnType<typeof useQueryClient>;
+  onOpened: () => void;
+}) {
+  const run = useQuery(pipelineRunQueryOptions(props.runId));
+  const skip = useMutation(skipStepMutationOptions(props.queryClient));
+  const abort = useMutation(abortRunMutationOptions(props.queryClient));
+  const resume = useMutation(resumeRunMutationOptions(props.queryClient));
+  const [problem, setProblem] = useState<string | null>(null);
+  const data = run.data;
+
+  return (
+    <Section title="这次运行">
+      {run.isError ? (
+        <QueryError
+          label="运行记录加载失败"
+          error={run.error}
+          retrying={run.isFetching}
+          onRetry={() => void run.refetch()}
+        />
+      ) : null}
+      {run.isPending ? (
+        <p className="text-[13px] text-muted-foreground" role="status">
+          正在问群组跑到哪了…
+        </p>
+      ) : null}
+      {data ? (
+        <div className="flex flex-col gap-3">
+          <Rows>
+            {data.steps.map((step, index) => (
+              <Item
+                className={
+                  step.state === "awaiting_action" || step.state === "failed"
+                    ? "bg-signal-soft shadow-[inset_2px_0_0_var(--signal)]"
+                    : undefined
+                }
+                data-state={step.state}
+                key={step.id}
+              >
+                <ItemContent>
+                  <ItemTitle>
+                    第 {index + 1} 步 ·{" "}
+                    {props.names.get(step.agentId) ?? step.agentId}
+                  </ItemTitle>
+                  <ItemDescription>
+                    {STATE_WORDS[step.state] ?? step.state}
+                    {step.output ? ` · ${step.output}` : ""}
+                    {step.error ? ` · ${step.error}` : ""}
+                  </ItemDescription>
+                </ItemContent>
+                <ItemActions>
+                  {step.state === "awaiting_action" ? (
+                    /*
+                     * The bridge the approval screen cannot cross on its own.
+                     *
+                     * The person answers the approval there; this button is for the shape where they
+                     * answered it elsewhere (Slack, the phone) and want this run to pick up. What it
+                     * sends is the answer they were given, not a new request to the coworker -- see
+                     * `pipeline/store.ts`'s `resume`.
+                     */
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={resume.isPending}
+                      onClick={() =>
+                        resume.mutate(
+                          {
+                            runId: props.runId,
+                            output: "已经处理完了，按这个往下跑。",
+                          },
+                          {
+                            onError: (thrown: Error) =>
+                              setProblem(thrown.message),
+                          },
+                        )
+                      }
+                    >
+                      我处理完了
+                    </Button>
+                  ) : step.state === "pending" || step.state === "running" ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={skip.isPending}
+                      onClick={() =>
+                        skip.mutate(
+                          { runId: props.runId, stepId: step.id },
+                          {
+                            onError: (thrown: Error) =>
+                              setProblem(thrown.message),
+                          },
+                        )
+                      }
+                    >
+                      跳过这步
+                    </Button>
+                  ) : null}
+                </ItemActions>
+              </Item>
+            ))}
+          </Rows>
+          {data.status === "running" || data.status === "awaiting_action" ? (
+            <Button
+              className="self-start"
+              variant="outline"
+              disabled={abort.isPending}
+              onClick={() =>
+                abort.mutate(props.runId, {
+                  onError: (thrown: Error) => setProblem(thrown.message),
+                  onSuccess: props.onOpened,
+                })
+              }
+            >
+              中止这次运行
+            </Button>
+          ) : (
+            <p className="text-[13px] text-muted-foreground">
+              {data.status === "done"
+                ? "跑完了。每一步的卡在任务看板上。"
+                : data.status === "aborted"
+                  ? "已经中止，没做的步骤记为已结束。"
+                  : "停在失败的那一步，后面的步骤没有跑。"}
+            </p>
+          )}
+          {problem ? (
+            <p className="text-[13px] text-signal-ink" role="alert">
+              {problem}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+    </Section>
+  );
+}

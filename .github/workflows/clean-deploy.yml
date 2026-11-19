@@ -68,36 +68,86 @@ jobs:
           ref: refs/tags/${{ inputs.tag }}
           path: source
           persist-credentials: false
+      # The product directory was renamed from openbot/ to xiongbao/. A manual run from main against a
+      # tag cut before that has only openbot/: move it to the new name for the steps below, and keep the
+      # tag's own name in PRODUCT_DIR for the raw download URL (that tree is addressed by its real path).
+      - id: product-dir
+        name: Product directory of the tagged tree
+        run: |
+          set -euo pipefail
+          if [ -d source/xiongbao ]; then
+            echo "PRODUCT_DIR=xiongbao" >> "$GITHUB_ENV"
+          elif [ -d source/openbot ]; then
+            mv source/openbot source/xiongbao
+            echo "PRODUCT_DIR=openbot" >> "$GITHUB_ENV"
+          else
+            echo "::error::$TAG has neither xiongbao/ nor openbot/"
+            exit 1
+          fi
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.4
       - name: Manual block checks (tagged README and deployment manual)
-        working-directory: source/openbot/scripts/ci
+        working-directory: source/xiongbao/scripts/ci
         run: bun test manual-blocks.test.mjs
       - name: Extract the manual blocks
-        working-directory: source/openbot
+        working-directory: source/xiongbao
         run: |
           set -euo pipefail
           bun scripts/ci/manual-blocks.mjs ../README.md g7:linux > "$EVIDENCE/g7-linux.sh"
           cat "$EVIDENCE/g7-linux.sh"
           if [ "$DATABASE_SHAPE" = external ]; then
-            bun scripts/ci/manual-blocks.mjs docs/deployment-qoderwake.md g7:external-migrate \
+            bun scripts/ci/manual-blocks.mjs docs/deployment-xiongbao.md g7:external-migrate \
               > "$EVIDENCE/g7-external-migrate.sh"
-            bun scripts/ci/manual-blocks.mjs docs/deployment-qoderwake.md g7:external-roles \
+            bun scripts/ci/manual-blocks.mjs docs/deployment-xiongbao.md g7:external-roles \
               > "$EVIDENCE/g7-external-roles.sql"
             cat "$EVIDENCE/g7-external-migrate.sh" "$EVIDENCE/g7-external-roles.sql"
           fi
-      - name: The release record (container-images.json)
+      # Our own channel (Task U3), once configured, is where a customer gets the record and the image:
+      # release.yml uploads the record to the download page (XB_DOWNLOAD_BUCKET) and copies the image
+      # to our registry (XB_REGISTRY). Each half is read from there when set, as before when not.
+      - id: record
+        name: The release record (container-images.json)
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
+          XB_IMAGE_REPOSITORY: ${{ vars.XB_IMAGE_REPOSITORY }}
+          XB_DOWNLOAD_BUCKET: ${{ vars.XB_DOWNLOAD_BUCKET }}
+          XB_DOWNLOAD_BASE_URL: ${{ vars.XB_DOWNLOAD_BASE_URL }}
         run: |
           set -euo pipefail
-          gh release download "$TAG" --pattern container-images.json --dir "$EVIDENCE"
-          expected="$(jq -r .images.openbot.reference "$EVIDENCE/container-images.json")"
-          if [[ ! "$expected" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
-            echo "::error::container-images.json has no usable reference: '$expected'"
-            exit 1
+          if [ -n "$XB_DOWNLOAD_BUCKET" ]; then
+            if [ -z "$XB_DOWNLOAD_BASE_URL" ]; then
+              echo "::error::XB_DOWNLOAD_BUCKET is set but XB_DOWNLOAD_BASE_URL is not."
+              exit 1
+            fi
+            if [[ "$XB_DOWNLOAD_BASE_URL" != https://* ]]; then
+              echo "::error::XB_DOWNLOAD_BASE_URL must start with https://: '$XB_DOWNLOAD_BASE_URL'"
+              exit 1
+            fi
+            curl --fail --silent --show-error --location -o "$EVIDENCE/container-images.json" \
+              "${XB_DOWNLOAD_BASE_URL%/}/$TAG/container-images.json"
+          else
+            gh release download "$TAG" --pattern container-images.json --dir "$EVIDENCE"
+          fi
+          if [ -n "$XB_REGISTRY" ]; then
+            # Our registry's copy, by digest: images.xiongbao, in exactly XB_REGISTRY/XB_IMAGE_REPOSITORY.
+            own="$XB_REGISTRY/$XB_IMAGE_REPOSITORY"
+            expected="$(jq -r .images.xiongbao.reference "$EVIDENCE/container-images.json")"
+            if [ -z "$XB_IMAGE_REPOSITORY" ] || [ "${expected%@*}" != "$own" ] ||
+              [[ ! "${expected##*@}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::container-images.json images.xiongbao is '$expected', expected $own@sha256:<digest>"
+              exit 1
+            fi
+            # The README's command takes the image from OPENBOT_IMAGE; the customer run sets it to this.
+            echo "CUSTOMER_IMAGE=$own:$TAG" >> "$GITHUB_ENV"
+          else
+            expected="$(jq -r .images.openbot.reference "$EVIDENCE/container-images.json")"
+            if [[ ! "$expected" =~ ^ghcr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$ ]]; then
+              echo "::error::container-images.json has no usable reference: '$expected'"
+              exit 1
+            fi
           fi
           echo "EXPECTED_REFERENCE=$expected" >> "$GITHUB_ENV"
 
@@ -110,7 +160,7 @@ jobs:
           echo "::add-mask::$owner_pw"
           docker run -d --name xiongbao-external-pg \
             -e POSTGRES_USER=openbot -e POSTGRES_PASSWORD="$owner_pw" -e POSTGRES_DB=openbot_b \
-            pgvector/pgvector:pg17 >/dev/null
+            pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd >/dev/null
           # TCP, not the socket: the image's init-time server listens on the socket only.
           deadline=$((SECONDS+60))
           until docker exec xiongbao-external-pg pg_isready -h 127.0.0.1 -U openbot -d openbot_b >/dev/null 2>&1; do
@@ -140,7 +190,33 @@ jobs:
             -c 'SELECT count(*) FROM drizzle.__drizzle_migrations')"
           printf 'applied_migrations=%s\n' "$migrations" | tee -a "$EVIDENCE/external-db.txt"
           [ "$migrations" -gt 0 ]
-      - name: Set the runtime role passwords (deployment manual, section 4, verbatim)
+
+      # --- both database shapes, once our download page is configured ---
+      # .env.delivery comes from there, as a customer gets it. The README block then finds the file and
+      # keeps it (as on a customer's second run), so it fetches nothing from GitHub; for the embedded
+      # database this step adds the KEY_ENCRYPTION_KEY that block would have added, and roles adds the
+      # external database's settings.
+      - id: delivery-env
+        name: .env.delivery from our download page
+        if: ${{ vars.XB_DOWNLOAD_BUCKET != '' }}
+        env:
+          XB_DOWNLOAD_BASE_URL: ${{ vars.XB_DOWNLOAD_BASE_URL }}
+        run: |
+          set -euo pipefail
+          if [[ "$XB_DOWNLOAD_BASE_URL" != https://* ]]; then
+            echo "::error::XB_DOWNLOAD_BASE_URL must start with https://: '$XB_DOWNLOAD_BASE_URL'"
+            exit 1
+          fi
+          cd "$CUSTOMER"
+          curl --fail --silent --show-error --location -o .env.delivery \
+            "${XB_DOWNLOAD_BASE_URL%/}/$TAG/delivery.env.example"
+          chmod 600 .env.delivery
+          if [ "$DATABASE_SHAPE" = embedded ]; then
+            printf '\nKEY_ENCRYPTION_KEY=%s\n' "$(openssl rand -base64 32)" >> .env.delivery
+          fi
+
+      - id: roles
+        name: Set the runtime role passwords (deployment manual, section 4, verbatim)
         if: ${{ matrix.database == 'external' }}
         run: |
           set -euo pipefail
@@ -164,10 +240,13 @@ jobs:
             echo "::error::expected openbot_app|f|f and openbot_role_writer|f|f"
             exit 1
           fi
-          # .env.delivery as the README fetches it, switched to the external database (section 4).
+          # .env.delivery as the README fetches it (already fetched from our download page when that is
+          # configured), switched to the external database (section 4).
           cd "$CUSTOMER"
-          curl --fail --silent --show-error --location -o .env.delivery \
-            "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$TAG/openbot/docker/delivery.env.example"
+          if [ ! -e .env.delivery ]; then
+            curl --fail --silent --show-error --location -o .env.delivery \
+              "https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/$TAG/${PRODUCT_DIR:-xiongbao}/docker/delivery.env.example"
+          fi
           grep -qx 'EMBEDDED_POSTGRES=on' .env.delivery
           sed -i 's/^EMBEDDED_POSTGRES=on$/EMBEDDED_POSTGRES=off/' .env.delivery
           {
@@ -176,7 +255,8 @@ jobs:
             printf 'ROLE_WRITER_DATABASE_URL=postgres://openbot_role_writer:%s@%s:5432/openbot_b\n' "$writer_pw" "$EXTERNAL_DB_HOST"
           } >> .env.delivery
 
-      - name: Run it as a customer (empty directory, no registry login)
+      - id: customer
+        name: Run it as a customer (empty directory, no registry login)
         env:
           OPENBOT_TAG: ${{ inputs.tag }}
         run: |
@@ -185,13 +265,17 @@ jobs:
           mkdir -p "$RUNNER_TEMP/docker-config"
           printf '{}\n' > "$RUNNER_TEMP/docker-config/config.json"
           cd "$CUSTOMER"
+          # Our registry, when configured: the README command runs the image OPENBOT_IMAGE names.
+          image=()
+          if [ -n "${CUSTOMER_IMAGE:-}" ]; then image=("OPENBOT_IMAGE=$CUSTOMER_IMAGE"); fi
           start=$SECONDS
-          env -u GITHUB_TOKEN -u GH_TOKEN DOCKER_CONFIG="$RUNNER_TEMP/docker-config" \
+          env -u GITHUB_TOKEN -u GH_TOKEN DOCKER_CONFIG="$RUNNER_TEMP/docker-config" "${image[@]}" \
             bash -euo pipefail "$EVIDENCE/g7-linux.sh"
           echo "G7 install and health in $((SECONDS-start))s" | tee "$EVIDENCE/timing.txt"
           # The customer directory holds the generated key: record only which names it set.
           sed -E 's/=.*$/=<set>/' .env.delivery > "$EVIDENCE/env-names.txt"
-      - name: The running image is the released digest
+      - id: digest
+        name: The running image is the released digest
         run: |
           set -euo pipefail
           expected="$EXPECTED_REFERENCE"
@@ -221,7 +305,7 @@ jobs:
             exit 1
           fi
       - name: Gate 1 assertions against the customer install
-        working-directory: source/openbot
+        working-directory: source/xiongbao
         run: |
           set -euo pipefail
           bun scripts/ci/assert-image.mjs http://127.0.0.1:3772 "$EVIDENCE"
@@ -257,9 +341,9 @@ jobs:
       - name: Print container logs (credentials masked)
         if: failure()
         run: |
-          bash source/openbot/scripts/ci/print-diagnostics.sh "$EVIDENCE/container.log" || true
+          bash source/xiongbao/scripts/ci/print-diagnostics.sh "$EVIDENCE/container.log" || true
           if [ -f "$EVIDENCE/external-pg.log" ]; then
-            bash source/openbot/scripts/ci/print-diagnostics.sh "$EVIDENCE/external-pg.log" || true
+            bash source/xiongbao/scripts/ci/print-diagnostics.sh "$EVIDENCE/external-pg.log" || true
           fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()

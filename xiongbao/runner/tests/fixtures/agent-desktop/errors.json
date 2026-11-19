@@ -1,0 +1,114 @@
+{
+  "STALE_REF": {
+    "version": "2.6",
+    "ok": false,
+    "command": "click",
+    "error": {
+      "code": "STALE_REF",
+      "message": "Saved target belongs to a process instance that is no longer running",
+      "suggestion": "The target process exited. Run 'list-apps' to see whether the application runs again, launch it if it does not, then take a new snapshot",
+      "recovery": {
+        "strategy": "inspect_state_then_retry_original",
+        "retryable": true,
+        "requires_fresh_snapshot": true
+      },
+      "details": {
+        "process_state": "exited"
+      },
+      "disposition": {
+        "delivery": "not_delivered",
+        "retry": "safe"
+      }
+    }
+  },
+  "WINDOW_NOT_FOUND": {
+    "version": "2.6",
+    "ok": false,
+    "command": "click",
+    "error": {
+      "code": "WINDOW_NOT_FOUND",
+      "message": "No window with id w-66058",
+      "suggestion": "Run 'list-windows' to see available window IDs.",
+      "disposition": {
+        "delivery": "not_delivered",
+        "retry": "safe"
+      }
+    }
+  },
+  "SNAPSHOT_NOT_FOUND": {
+    "version": "2.6",
+    "ok": false,
+    "command": "click",
+    "error": {
+      "code": "SNAPSHOT_NOT_FOUND",
+      "message": "Snapshot 's0000000000zz' not found",
+      "suggestion": "Re-run a snapshot and retry with a ref from the returned snapshot (CLI: snapshot, then use the printed @<snapshot_id>:eN ref; FFI: ad_snapshot then pass the printed qualified ref to ad_execute_by_ref). Snapshots are scoped to the session that took them, so take the snapshot under the same --session or AGENT_DESKTOP_SESSION you act with: one taken outside a session is not visible to a session-scoped action, and re-running it outside the session will fail the same way",
+      "recovery": {
+        "strategy": "refresh_snapshot_then_retry_original",
+        "retryable": true,
+        "requires_fresh_snapshot": true
+      },
+      "disposition": {
+        "delivery": "not_delivered",
+        "retry": "safe"
+      }
+    }
+  },
+  "POLICY_DENIED": {
+    "version": "2.6",
+    "ok": false,
+    "command": "press",
+    "error": {
+      "code": "POLICY_DENIED",
+      "message": "Key combo 'alt+f4' is blocked for safety; pass --force to override",
+      "suggestion": "Use an explicit mouse/focus command if physical interaction is intended",
+      "recovery": {
+        "strategy": "request_explicit_policy_then_retry_original",
+        "retryable": true,
+        "requires_fresh_snapshot": false
+      },
+      "disposition": {
+        "delivery": "not_delivered",
+        "retry": "safe"
+      }
+    }
+  },
+  "AMBIGUOUS_TARGET": {
+    "version": "2.6",
+    "ok": false,
+    "command": "click",
+    "error": {
+      "code": "AMBIGUOUS_TARGET",
+      "message": "Saved ref was not proven unique when it was captured, so it cannot be re-identified safely",
+      "suggestion": "Either another element in the window matched it, or the window could not be read whole within the snapshot timeout. For a large window, retake the snapshot with a larger --timeout-ms. Identical twins are refused again by every snapshot; where headed pointer input is available, an explicit --headed coordinate click can pick one.",
+      "details": {
+        "kind": "identity_not_unique",
+        "retryable": false,
+        "role": "textfield"
+      },
+      "disposition": {
+        "delivery": "not_delivered",
+        "retry": "safe"
+      }
+    }
+  },
+  "PERM_DENIED": {
+    "version": "2.6",
+    "ok": false,
+    "command": "click",
+    "error": {
+      "code": "PERM_DENIED",
+      "message": "Access is denied: the target window runs at a higher integrity level than the caller",
+      "suggestion": "Run the terminal that launches agent-desktop elevated to the target's level, or act on an element that does not cross the boundary.",
+      "platform_detail": "COM HRESULT 0x80070005 (E_ACCESSDENIED: Access is denied)",
+      "details": {
+        "hresult": "0x80070005",
+        "name": "E_ACCESSDENIED"
+      },
+      "disposition": {
+        "delivery": "not_delivered",
+        "retry": "safe"
+      }
+    }
+  }
+}

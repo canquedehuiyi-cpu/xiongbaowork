@@ -1,0 +1,60 @@
+{
+  // The test tree, type-checked. `server/tsconfig.json` deliberately leaves `tests` out — see the
+  // comment there — so `bun run typecheck` reports CLEAN while real type errors sit in the suite:
+  // broken `import type` paths that silently degrade a value to `any`, stubs missing methods the
+  // interface requires, `number | undefined` passed where `number` is required. bun erases types
+  // rather than checking them, so running the suite never catches any of it.
+  //
+  // This config EXTENDS the project's own, so the test tree is checked under exactly the options
+  // `src` is checked under. Checking these files with an ad-hoc `tsc` invocation and hand-written
+  // flags is unsound: it drags `src` in under the wrong options and emits a flood of errors that
+  // are artefacts of the flags rather than defects.
+  //
+  // `include` is not merged by `extends`, it is replaced, so the inherited entries are repeated
+  // here with `tests` added. The errors that already exist are frozen in
+  // `server/tests/typecheck-baseline.txt`, and the gate fails only on an error that is not in it —
+  // see `scripts/typecheck-tests.ts`.
+  //
+  // JSX AND THE APP'S OWN RESOLUTION, for the two `headless-components` suites. They render the
+  // gallery components to prove what a headless turn can draw, so they import `app/src/**/*.tsx`
+  // directly, and without `jsx` TypeScript refused each import with TS6142 — "resolved … but
+  // `--jsx` is not set" — which meant the components were never checked at all and the fixtures
+  // beside them degraded to `any` (four TS7031s and a TS7006 that were really the same hole).
+  //
+  // `jsx` alone is not enough: the gallery uses the app's `@/` alias and Vite's `import.meta.glob`,
+  // and under this project neither resolves. So `paths` names the alias, the way `app/tsconfig.json`
+  // does, and `vite-env.d.ts` is included for its `/// <reference types="vite/client" />`, the same
+  // one line the app relies on. Together those are what make the components reachable; they do not
+  // put `app/src` under this project wholesale — only what those two suites actually import.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["../app/src/*"]
+    }
+  },
+  "include": [
+    "src",
+    "scripts",
+    "../scripts/composio-smoke.ts",
+    "tests",
+    "../app/src/vite-env.d.ts"
+  ],
+  // ONE FILE IS EXCLUDED, deliberately, and it is the only one.
+  //
+  // `tests/recovery-knowledge-foundations.test.ts` is recovered evidence rather than a test this
+  // repository writes: `recovery-plugin-assembly-foundations.test.ts` pins its bytes (95182, sha256
+  // 8246be12…) and fails if they move. Unlike its siblings it has no entry in either inverse ledger
+  // — `helpers/recovery-lint-source.ts` and `APPROVED_K106_PRIOR_TEST_INVERSES` — so there is no
+  // sanctioned way to record a repair, and one is not something to invent while clearing type debt:
+  // the ledger's whole point is that someone decided the change was allowed.
+  //
+  // Its single error was a `readonly` tuple compared with `toEqual`, which wants `string[]`. The
+  // repair is a one-word edit, and that one word is what the byte pin exists to catch. Excluded
+  // instead: checking a file that cannot be edited buys nothing, and its integrity is guarded one
+  // file over, harder than this gate could.
+  //
+  // `node_modules` stays: setting `exclude` replaces the default rather than adding to it.
+  "exclude": ["node_modules", "tests/recovery-knowledge-foundations.test.ts"]
+}
