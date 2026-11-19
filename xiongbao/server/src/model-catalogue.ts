@@ -120,6 +120,11 @@ export type RunChoice = {
   effort?: string;
   /** Whether the model came from a listing that was read, rather than the configured fallback. */
   listed: boolean;
+  /**
+   * 期七：服务器为这一次运行定的（子代理的 `model` 参数），排在员工绑定的模型前面。`choose` 从不说；只有
+   * 服务器自己写的那条路（`index.ts` 的子代理模型）才带。见 `RuntimeModel.forced`。
+   */
+  forced?: boolean;
 };
 
 /** One model as the listing and the capability data together describe it. */

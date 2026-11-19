@@ -22,6 +22,11 @@ import { currentApprovalContext } from "../approvals/types";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import { isFinalSignIn, signInToolResult } from "../passwords/service";
 import type { SignInRequestRecord } from "../passwords/types";
+import {
+  offloadCommandResult,
+  shrinkFileRead,
+  workspaceOutputSink,
+} from "../tool-output";
 import type { ComputerSeat } from "./computer-key";
 
 /** The turn engine's headless-tool types live in the toolkit now; re-exported for this server's callers. */
@@ -412,7 +417,11 @@ function headlessComputerTools(options: {
       }),
       async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.readFile(seat, actor, input, signal)),
+        // 期七：没指定行段、又很长的读，只给头尾（`tool-output.ts`）。
+        ...(await shrinkFileRead(
+          await gateway.readFile(seat, actor, input, signal),
+          input,
+        )),
       }),
     ),
     tool(
@@ -486,13 +495,20 @@ function headlessComputerTools(options: {
           .describe(COMMAND_TIMEOUT_DESCRIPTION),
       }),
       // Always sent with a time: the default when none was asked, cut to ten minutes when more was.
-      async ({ command, timeoutMs }, { signal }) => ({
+      async ({ command, timeoutMs }, { toolCallId, signal }) => ({
         ok: true,
-        ...(await gateway.runCommand(
-          seat,
-          actor,
-          { command, timeoutMs: commandTimeoutMs(timeoutMs) },
-          signal,
+        // 期七：输出很长时，完整内容存进工作区，回传头尾加路径（`tool-output.ts`）。
+        ...(await offloadCommandResult(
+          await gateway.runCommand(
+            seat,
+            actor,
+            { command, timeoutMs: commandTimeoutMs(timeoutMs) },
+            signal,
+          ),
+          {
+            id: toolCallId,
+            sink: workspaceOutputSink({ gateway, seat, actor, signal }),
+          },
         )),
       }),
     ),

@@ -1,0 +1,287 @@
+import type { Prompt } from "./last-step";
+
+/**
+ * 一轮之内的压缩（期七）：对话越过模型窗口的 70% 时，把较早的工具结果折成一句摘要，只改发给模型的那一份。
+ *
+ * 为什么：历史里的工具结果占一轮 token 的七成左右（评测 #713），一轮里每多一步，前面所有的结果都要再发一遍。
+ * 「轮次开始前压缩」（`server/src/threads/compaction.ts`）管的是下一轮，这一轮里越滚越大的结果它够不着。
+ *
+ * 做法，都是确定性的规则，不另外调用模型：
+ *  - 一步里的估算 = 这一步发出去的全部文字估成 token，再加一份固定的工具定义开销；
+ *  - 估算超过窗口的 {@link FOLD_AT} 时，把「最近 {@link FOLD_KEEP_STEPS} 步」之外、足够长的工具结果换成
+ *    「[已折叠：xx 工具输出 N 字，要点：…]」，要点是头尾的几句话；最近几步的结果原样不动；
+ *  - 存起来的对话一个字不改，只有这一步发给模型的提示变短。
+ *
+ * 缓存稳定：提供方按前缀命中缓存，一步一步把已经发出去的历史改写，缓存就全废了。所以折叠不是「每步看一眼
+ * 再改」，而是**从头重放**：沿着提示里每一次模型调用（每条 assistant 消息）的位置，用当时看到的前缀算估算，
+ * 越线就折叠一批，折完要再涨 {@link FOLD_REGROW} 的窗口才会折下一批。这个重放只看前缀，所以
+ *  - 没越线时一个字节不动（返回同一个数组）；
+ *  - 越线折叠之后，下一步重放到同一个位置，得到同样的折叠结果，已折叠的部分逐字节不变，新的一步只在末尾添加；
+ *  - 不靠任何实例里的状态：一轮被服务器分成几次运行、或者下一轮从存起来的完整历史重新开始，重放出的折叠
+ *    仍然是同一份，缓存跨轮也接得上。
+ * 只在越线的那一步，前缀变一次（折叠本来就要改写它）。
+ */
+
+/** 超过窗口的这个比例就折叠。 */
+export const FOLD_AT = 0.7;
+/** 最近这么多步（带工具调用的模型回合）的结果原样保留。 */
+export const FOLD_KEEP_STEPS = 4;
+/** 折完之后要再涨这么多窗口，才折下一批：把「每步折一条」合成一批一批。 */
+export const FOLD_REGROW = 0.15;
+/** 短于这么多字的结果不折：折了省不了几个 token，摘要还会比它长。 */
+export const FOLD_MIN_CHARS = 1_500;
+/** 读不到模型窗口时按这个算：目前常见模型里偏小的一档（128k），宁可早折也不撑爆。 */
+export const DEFAULT_CONTEXT_WINDOW = 128_000;
+/** 工具定义和提示头的固定开销（token）。不取这一步实际带的工具：工具搜索会让它逐步变化，重放就不稳了。 */
+export const FIXED_PROMPT_TOKENS = 6_000;
+/** 一张图或一个文件算多少 token，不按它的 base64 长度算。 */
+const MEDIA_TOKENS = 1_500;
+
+/** 折叠摘要的开头；已经是摘要的结果不再折。 */
+export const FOLDED_PREFIX = "[已折叠：";
+
+type Message = Prompt[number];
+type Part = Exclude<Message["content"], string>[number];
+
+/**
+ * 一段文字估成多少 token：ASCII 约每 3.5 个字符一个，其它字符（中日韩）约一个字符一个。偏高一点没关系，
+ * 估高只会让折叠早一点；估得太低才会撑爆窗口。
+ */
+export function estimateTokens(text: string): number {
+  let ascii = 0;
+  let other = 0;
+  for (let index = 0; index < text.length; index += 1)
+    if (text.charCodeAt(index) < 128) ascii += 1;
+    else other += 1;
+  return Math.ceil(ascii / 3.5 + other);
+}
+
+type Output = { type: string; value?: unknown; reason?: string };
+
+/** 一个工具结果在模型眼里的文字，以及里面带了几个图片或文件。 */
+function viewOf(output: Output): { text: string; media: number } {
+  switch (output.type) {
+    case "text":
+    case "error-text":
+      return { text: String(output.value ?? ""), media: 0 };
+    case "json":
+    case "error-json":
+      return { text: JSON.stringify(output.value ?? null), media: 0 };
+    case "execution-denied":
+      return { text: output.reason ?? "", media: 0 };
+    case "content": {
+      const parts = Array.isArray(output.value)
+        ? (output.value as { type: string; text?: string }[])
+        : [];
+      const text = parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text ?? "")
+        .join("\n");
+      return {
+        text,
+        media: parts.filter((part) => part.type !== "text").length,
+      };
+    }
+    default:
+      return { text: "", media: 0 };
+  }
+}
+
+function tokensOfMessage(message: Message): number {
+  if (typeof message.content === "string")
+    return estimateTokens(message.content);
+  let tokens = 0;
+  for (const part of message.content as Part[]) {
+    const kind = (part as { type: string }).type;
+    if (kind === "text" || kind === "reasoning")
+      tokens += estimateTokens((part as { text: string }).text ?? "");
+    else if (kind === "tool-call") {
+      const call = part as { toolName: string; input: unknown };
+      tokens += estimateTokens(
+        `${call.toolName}${typeof call.input === "string" ? call.input : JSON.stringify(call.input ?? {})}`,
+      );
+    } else if (kind === "tool-result") {
+      const view = viewOf((part as { output: Output }).output);
+      tokens += estimateTokens(view.text) + view.media * MEDIA_TOKENS;
+    } else if (kind === "file") tokens += MEDIA_TOKENS;
+  }
+  return tokens;
+}
+
+function squeeze(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length <= max ? flat : `${flat.slice(0, max)}…`;
+}
+
+function tailOf(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length <= max ? flat : `…${flat.slice(-max)}`;
+}
+
+/** 一个结果的要点：JSON 取几个短字段和最长那个字段的头尾，别的文字取头尾。 */
+function gistOf(text: string): string {
+  let parsed: unknown;
+  if (text.startsWith("{")) {
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      parsed = undefined;
+    }
+  }
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const scalars: string[] = [];
+    let bigKey: string | undefined;
+    let big = "";
+    for (const [key, value] of Object.entries(parsed)) {
+      if (key === "untrusted") continue;
+      if (typeof value === "string" && value.length > 200) {
+        if (value.length > big.length) {
+          bigKey = key;
+          big = value;
+        }
+      } else if (
+        (typeof value === "string" && value.length <= 80) ||
+        typeof value === "number" ||
+        typeof value === "boolean"
+      ) {
+        if (scalars.length < 6)
+          scalars.push(`${key}=${squeeze(`${value}`, 80)}`);
+      }
+    }
+    const body = bigKey
+      ? `${bigKey}：${squeeze(big, 200)}${big.length > 320 ? ` … ${tailOf(big, 100)}` : ""}`
+      : "";
+    const joined = [scalars.join("，"), body].filter(Boolean).join("；");
+    if (joined) return joined;
+  }
+  return `${squeeze(text, 200)}${text.length > 320 ? ` … ${tailOf(text, 100)}` : ""}`;
+}
+
+/** 折叠后的摘要：确定性的，同一个结果永远折成同一句。 */
+export function foldedSummary(toolName: string, text: string): string {
+  const saved = /tool-outputs\/[\w.-]+\.txt/.exec(text)?.[0];
+  return `${FOLDED_PREFIX}${toolName} 工具输出 ${text.length} 字，要点：${gistOf(text)}。${
+    saved ? `完整内容存在 ${saved}，` : ""
+  }原文不在上下文里了，需要时重新调用工具，或按行段读取。]`;
+}
+
+type Result = {
+  message: number;
+  part: number;
+  round: number;
+  toolName: string;
+  text: string;
+  tokens: number;
+  summary: string;
+  summaryTokens: number;
+};
+
+export type FoldOptions = {
+  /** 模型窗口（token）。 */
+  window: number;
+  threshold?: number;
+  keepSteps?: number;
+};
+
+/**
+ * 越过窗口的 70% 时折叠较早的工具结果；没有要折的时候原样返回同一个数组。见文件头的说明：从头重放，只看前缀。
+ */
+export function foldEarlyResults(
+  prompt: Prompt,
+  { window, threshold = FOLD_AT, keepSteps = FOLD_KEEP_STEPS }: FoldOptions,
+): Prompt {
+  // 每个工具调用属于第几个带工具调用的回合。
+  const roundOfCall = new Map<string, number>();
+  const roundAt: number[] = [];
+  let rounds = 0;
+  const results: Result[] = [];
+  const tokens = prompt.map((message, index) => {
+    if (message.role === "assistant") {
+      const calls = (message.content as Part[]).flatMap((part) =>
+        (part as { type: string }).type === "tool-call"
+          ? [(part as { toolCallId: string }).toolCallId]
+          : [],
+      );
+      if (calls.length > 0) {
+        for (const id of calls) roundOfCall.set(id, rounds);
+        rounds += 1;
+      }
+    }
+    roundAt[index] = rounds;
+    if (message.role === "tool")
+      (message.content as Part[]).forEach((part, partIndex) => {
+        const result = part as {
+          type: string;
+          toolCallId: string;
+          toolName: string;
+          output: Output;
+        };
+        if (result.type !== "tool-result") return;
+        const view = viewOf(result.output);
+        if (
+          view.media > 0 ||
+          view.text.length < FOLD_MIN_CHARS ||
+          view.text.startsWith(FOLDED_PREFIX)
+        )
+          return;
+        const summary = foldedSummary(result.toolName, view.text);
+        results.push({
+          message: index,
+          part: partIndex,
+          round: roundOfCall.get(result.toolCallId) ?? -1,
+          toolName: result.toolName,
+          text: view.text,
+          tokens: estimateTokens(view.text),
+          summary,
+          summaryTokens: estimateTokens(summary),
+        });
+      });
+    return tokensOfMessage(message);
+  });
+
+  const limit = threshold * window;
+  const regrow = FOLD_REGROW * window;
+  const folded = new Set<Result>();
+  let running = FIXED_PROMPT_TOKENS;
+  let lastAfter = Number.NEGATIVE_INFINITY;
+  for (let index = 0; index <= prompt.length; index += 1) {
+    // 一次模型调用：看到的是 [0, index) 这段前缀。
+    if (
+      (index === prompt.length || prompt[index]?.role === "assistant") &&
+      running > limit &&
+      running >= lastAfter + regrow
+    ) {
+      const kept = (index === 0 ? 0 : (roundAt[index - 1] ?? 0)) - keepSteps;
+      for (const result of results) {
+        if (result.message >= index) break;
+        if (folded.has(result) || result.round >= kept) continue;
+        folded.add(result);
+        running -= result.tokens - result.summaryTokens;
+      }
+      // 折完（或没有可折的）也记下，要再涨一截才轮到下一批。
+      lastAfter = running;
+    }
+    if (index < prompt.length) running += tokens[index] ?? 0;
+  }
+  if (folded.size === 0) return prompt;
+
+  const replaced = new Map<number, Map<number, Result>>();
+  for (const result of folded) {
+    const parts = replaced.get(result.message) ?? new Map<number, Result>();
+    parts.set(result.part, result);
+    replaced.set(result.message, parts);
+  }
+  return prompt.map((message, index) => {
+    const parts = replaced.get(index);
+    if (!parts) return message;
+    return {
+      ...message,
+      content: (message.content as Part[]).map((part, partIndex) => {
+        const result = parts.get(partIndex);
+        return result
+          ? { ...part, output: { type: "text", value: result.summary } }
+          : part;
+      }),
+    } as Message;
+  });
+}

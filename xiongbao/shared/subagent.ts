@@ -53,6 +53,39 @@ export function subagentGuidance(
 }
 
 /**
+ * 期七：子代理可以指定模型。`model` 只认两个别名，或者本租户可用模型里的名字：
+ *  - `"hard"`：这位员工设置里的「难任务模型」（`agents.configuration.hardModel`），没设置就用默认模型并说明；
+ *  - `"default"`：不指定，和不写一样，用员工平时的模型。
+ */
+export const SUBAGENT_MODEL_HARD = "hard";
+export const SUBAGENT_MODEL_DEFAULT = "default";
+
+/** `model` 参数给模型看的说明。 */
+export const SUBAGENT_MODEL_DESCRIPTION = `可选。子任务特别难（需要更强的推理、复杂的代码或很长的判断链）时写 "${SUBAGENT_MODEL_HARD}"，用这位员工设置里的难任务模型；不写或写 "${SUBAGENT_MODEL_DEFAULT}" 用平时的模型。也可以写本租户可用的模型名。`;
+
+/**
+ * 持有 `run_subagent` 的员工在子代理段里多听到的一句。单独一句、单独导出，不并进 {@link SUBAGENT_GUIDANCE}：那一段
+ * 的文字是提示词夹具逐字钉住的。持有的才说，和 {@link subagentGuidance} 一样。
+ */
+export const SUBAGENT_MODEL_GUIDANCE = `难的子任务可指定 model: "${SUBAGENT_MODEL_HARD}"，让子代理用这位员工设置里的难任务模型；一般的子任务不用写。`;
+
+export function subagentModelGuidance(
+  toolNames: readonly string[],
+): string | undefined {
+  return toolNames.includes(SUBAGENT_TOOL)
+    ? SUBAGENT_MODEL_GUIDANCE
+    : undefined;
+}
+
+/** 期七：指定了模型的子代理，结果里带上它实际用的模型，和没用上难任务模型时的一句说明。 */
+export type SubagentModelFacts = {
+  /** The model it ran on, when one was asked for and used. */
+  model?: string;
+  /** Said in words when what was asked for was not used (no 难任务模型 set, or no longer offered). */
+  modelNote?: string;
+};
+
+/**
  * What a subagent hands back to the Bot that started it, and what its card is drawn from.
  *
  * `ms` is how long its run took, measured by the server around the run itself and never on the page:
@@ -62,12 +95,17 @@ export function subagentGuidance(
  */
 export type SubagentResult =
   /** It finished: its answer, and where its steps are. */
-  | { answer: string; threadId: string; steps: number; ms?: number }
+  | ({
+      answer: string;
+      threadId: string;
+      steps: number;
+      ms?: number;
+    } & SubagentModelFacts)
   /**
    * It stopped before an action that needs the person's yes. Nothing was done and nobody was asked;
    * `next` tells the Bot to do it itself, in the conversation, where the person is asked as usual.
    */
-  | {
+  | ({
       handedBack: {
         /** The tool it called, by the name the model is offered. */
         tool: string;
@@ -81,9 +119,14 @@ export type SubagentResult =
       threadId: string;
       steps: number;
       ms?: number;
-    }
+    } & SubagentModelFacts)
   /** It ran and did not finish. */
-  | { error: string; threadId: string; steps: number; ms?: number };
+  | ({
+      error: string;
+      threadId: string;
+      steps: number;
+      ms?: number;
+    } & SubagentModelFacts);
 
 /** The result, read back from the text a tool call carries, or null when it is not one. */
 export function readSubagentResult(text: string): SubagentResult | null {

@@ -22,6 +22,7 @@ import {
   OutboundRefusedError,
 } from "../net/outbound-guard";
 import type { GrantedTool } from "../plugins/tools";
+import { type OutputSink, spill } from "../tool-output";
 import { withUntrustedNotice } from "../untrusted-content";
 import {
   type CrawlArchive,
@@ -71,6 +72,11 @@ export type WebToolOptions = {
   scope: string;
   crawlTimeoutMs?: number;
   crawlMaxBytes?: number;
+  /**
+   * 期七：把超长的网页正文存进这位员工的工作区，回传里只给头尾和路径（`tool-output.ts`）。没给，或者员工没有电脑
+   * （回答空），就截断到阈值并说明已截断。
+   */
+  saveOutput?: OutputSink;
 };
 
 const searchParameters = z.object({
@@ -276,7 +282,12 @@ export function webTools(options: WebToolOptions): GrantedTool[] {
         const page = archive.get(options.scope, url);
         if (!page)
           return `没有读到 ${url}：这份爬取结果已经过期，或者不在这台服务器上。请用 web_fetch 直接读原网址，或者重新爬取。`;
-        const { text, truncated } = cut(page.markdown, maxChars);
+        const body = await shapeBody(
+          page.markdown,
+          maxChars,
+          execution?.toolCallId ?? crypto.randomUUID(),
+          options.saveOutput,
+        );
         return JSON.stringify(
           withUntrustedNotice(
             {
@@ -284,12 +295,9 @@ export function webTools(options: WebToolOptions): GrantedTool[] {
               ref: url,
               url: page.url,
               title: page.title,
-              content: text,
-              ...(truncated
-                ? {
-                    truncated: `正文超过 ${maxChars} 字，只返回了前 ${maxChars} 字。`,
-                  }
-                : {}),
+              content: body.content,
+              ...(body.truncated ? { truncated: body.truncated } : {}),
+              ...(body.savedTo ? { saved_to: body.savedTo } : {}),
             },
             "web page",
             ["title", "content"],
@@ -325,7 +333,13 @@ export function webTools(options: WebToolOptions): GrantedTool[] {
             );
           fetched = await fetchPublicPage(url, policy, execution?.signal);
         }
-        return describePage(fetched, maxChars, notes);
+        return await describePage(
+          fetched,
+          maxChars,
+          notes,
+          execution?.toolCallId ?? crypto.randomUUID(),
+          options.saveOutput,
+        );
       } catch (error) {
         rethrowIfStopped(execution);
         if (error instanceof WebFetchRefusedError)
@@ -475,12 +489,55 @@ async function renderWithService(
   return rendered;
 }
 
+/** 没有电脑时的存盘：什么也不存，交给截断。 */
+const noOutputSink: OutputSink = async () => undefined;
+
+/**
+ * 正文交给模型的样子：不超过阈值（`tool-output.ts`）就按 `max_chars` 截；超过就存进工作区，回传头尾和路径，
+ * 存不了（这位员工没有电脑、写不进去）就截断到阈值并说明。存的是全文，不是按 `max_chars` 截过的那份。
+ */
+async function shapeBody(
+  markdown: string,
+  maxChars: number,
+  callId: string,
+  save: OutputSink | undefined,
+): Promise<{ content: string; truncated?: string; savedTo?: string }> {
+  const { text, truncated } = cut(markdown, maxChars);
+  /*
+   * 存不了盘（部署里没有电脑，或这位员工用不了电脑）时一律走下面的截断：超过 16KB 就截到 16KB 并说明
+   * （用户 2026-11-19 同意没有电脑的部署也降到 16KB）。
+   */
+  const spilled = await spill({
+    tool: WEB_FETCH_TOOL,
+    id: callId,
+    full: markdown,
+    measured: text,
+    keep: "head",
+    sink: save ?? noOutputSink,
+  });
+  if (!spilled)
+    return {
+      content: text,
+      ...(truncated
+        ? { truncated: `正文超过 ${maxChars} 字，只返回了前 ${maxChars} 字。` }
+        : {}),
+    };
+  return {
+    // 存了盘：头尾取自全文；没存成：取按 max_chars 截过的前面一段。
+    content: spilled.show(spilled.savedTo ? markdown : text),
+    truncated: spilled.note,
+    ...(spilled.savedTo ? { savedTo: spilled.savedTo } : {}),
+  };
+}
+
 /** 读到的东西交给模型：HTML 转 Markdown，文本照给，二进制只说明。 */
-function describePage(
+async function describePage(
   page: FetchedPage | { url: string; html: string; status?: number },
   maxChars: number,
   notes: string[],
-): string {
+  callId: string,
+  save: OutputSink | undefined,
+): Promise<string> {
   const rendered = "html" in page;
   const status = page.status ?? 200;
   if (status >= 400)
@@ -509,11 +566,9 @@ function describePage(
     kind === "html"
       ? extractReadable(text, page.url)
       : { title: "", markdown: text };
-  const { text: content, truncated } = cut(markdown, maxChars);
+  const body = await shapeBody(markdown, maxChars, callId, save);
   const truncation = [
-    ...(truncated
-      ? [`正文超过 ${maxChars} 字，只返回了前 ${maxChars} 字。`]
-      : []),
+    ...(body.truncated ? [body.truncated] : []),
     ...(bodyTruncated ? ["网页太大，只读了开头的一部分。"] : []),
   ];
   return JSON.stringify(
@@ -522,8 +577,9 @@ function describePage(
         url: page.url,
         title,
         content_type: contentType,
-        content,
+        content: body.content,
         ...(truncation.length > 0 ? { truncated: truncation.join("") } : {}),
+        ...(body.savedTo ? { saved_to: body.savedTo } : {}),
         ...(rendered ? { rendered: "经爬虫服务渲染后读取" } : {}),
         ...(notes.length > 0 ? { notes } : {}),
       },
