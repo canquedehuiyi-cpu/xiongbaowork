@@ -251,18 +251,14 @@ describe("where an action runs", () => {
     const project = await bound(study, botX);
     const { gateway, frames } = gatewayFor(study, [study, office]);
     await asPerson(async () => {
-      await gateway.writeFile(
-        personSeat(person, botX),
-        { id: person, userId: person },
-        {
-          path: "src/order.ts",
-          contents: "export const order = 1;\n",
-          // What a model might send to steer the write elsewhere: none of it reaches the machine.
-          root: study.readable.ref,
-          writable: true,
-          cwd: study.readable.ref,
-        } as never,
-      );
+      await gateway.writeFile(personSeat(person, botX), { id: person, userId: person }, {
+        path: "src/order.ts",
+        contents: "export const order = 1;\n",
+        // What a model might send to steer the write elsewhere: none of it reaches the machine.
+        root: study.readable.ref,
+        writable: true,
+        cwd: study.readable.ref,
+      } as never);
       const listed = await gateway.listFiles(
         personSeat(person, botX),
         { id: person, userId: person },
@@ -337,15 +333,8 @@ describe("where an action runs", () => {
     await asPerson(async () => {
       await gateway.listFiles(personSeat(person, botX), actor, {});
       for (const attempt of [
-        () =>
-          gateway.writeFile(personSeat(person, botX), actor, {
-            path: "x.md",
-            contents: "x",
-          }),
-        () =>
-          gateway.runCommand(personSeat(person, botX), actor, {
-            command: "touch x",
-          }),
+        () => gateway.writeFile(personSeat(person, botX), actor, { path: "x.md", contents: "x" }),
+        () => gateway.runCommand(personSeat(person, botX), actor, { command: "touch x" }),
       ]) {
         const refused = await attempt().catch((error: unknown) => error);
         expect(refused).toBeInstanceOf(ActionRefusedError);
@@ -458,30 +447,30 @@ describe("acceptance 4: the prompt", () => {
 
     const prompt = (
       builtInAgentConfiguration(
-        {
-          id: botX,
-          name: "后端工程师",
-          type: "built_in",
-          systemPrompt: "写代码。",
-          currentProject: told,
-        },
-        { provider: "openai", defaultModel: "gpt-5.6-terra" },
-        "synthetic-model-key",
-      ) as { prompt?: unknown }
+      {
+        id: botX,
+        name: "后端工程师",
+        type: "built_in",
+        systemPrompt: "写代码。",
+        currentProject: told,
+      },
+      { provider: "openai", defaultModel: "gpt-5.6-terra" },
+      "synthetic-model-key",
+    ) as { prompt?: unknown }
     ).prompt as string;
     expect(prompt).toContain(section as string);
     // No project, no section: the prompt it was before.
     const without = (
       builtInAgentConfiguration(
-        {
-          id: botX,
-          name: "后端工程师",
-          type: "built_in",
-          systemPrompt: "写代码。",
-        },
-        { provider: "openai", defaultModel: "gpt-5.6-terra" },
-        "synthetic-model-key",
-      ) as { prompt?: unknown }
+      {
+        id: botX,
+        name: "后端工程师",
+        type: "built_in",
+        systemPrompt: "写代码。",
+      },
+      { provider: "openai", defaultModel: "gpt-5.6-terra" },
+      "synthetic-model-key",
+    ) as { prompt?: unknown }
     ).prompt as string;
     expect(without).not.toContain("current project");
     expect(projectGuidance(null)).toBeNull();
