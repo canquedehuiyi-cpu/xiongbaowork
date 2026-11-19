@@ -56,6 +56,7 @@ import {
   toGroupOptions,
   withGroupMembers,
 } from "./composer";
+import { GroupPlans } from "./pinned-plans";
 import { StepLimitNote } from "./step-limit-note";
 import { TeamBotConsentCard } from "./team-bot-consent";
 
@@ -240,6 +241,8 @@ export function GroupChat({ channelId }: { channelId: string }) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* 每位员工各自的计划，钉在对话区顶部（期二）。 */}
+      <GroupPlans bots={bots} meId={me?.id} messages={messages} />
       <div
         className="min-h-0 flex-1 overflow-y-auto"
         onScroll={(event) => {

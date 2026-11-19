@@ -15,6 +15,7 @@ import {
   type StepLimitPayload,
   UPDATE_PLAN_TOOL,
 } from "@openbot/shared/run-notices";
+import { withReplayedReasoning } from "./replayed-reasoning";
 import { unkeptPromise } from "./unkept-promise";
 
 export { STEP_LIMIT_EVENT, type StepLimitPayload };
@@ -25,7 +26,8 @@ type Model = Extract<
   { specificationVersion: "v3" }
 >;
 type CallOptions = Parameters<Model["doStream"]>[0];
-type Prompt = CallOptions["prompt"];
+/** What a model is sent on one step: the conversation, in the runtime's own model contract. */
+export type Prompt = CallOptions["prompt"];
 type StreamResult = Awaited<ReturnType<Model["doStream"]>>;
 type Part = StreamResult["stream"] extends ReadableStream<infer P> ? P : never;
 type GenerateResult = Awaited<ReturnType<Model["doGenerate"]>>;
@@ -59,10 +61,21 @@ export type RunSteps = {
    * `shared/run-notices.ts`).
    */
   limited?: number;
+  /**
+   * What the model thought before each tool call the conversation already holds, by tool call id,
+   * for a provider that wants that thinking back on every later request (期三, DeepSeek's thinking
+   * mode). Each step's prompt has it put back (`withReplayedReasoning`). Empty for any other run.
+   */
+  reasoning?: ReadonlyMap<string, string>;
 };
 
 /** A new run's state: counted from where it starts, never from where an earlier run stopped. */
-export function startRun(steps: RunSteps, parts: readonly string[] = []) {
+export function startRun(
+  steps: RunSteps,
+  parts: readonly string[] = [],
+  reasoning: ReadonlyMap<string, string> = new Map(),
+) {
+  steps.reasoning = reasoning;
   steps.before = undefined;
   steps.nudges = 0;
   steps.parts = parts;
@@ -198,7 +211,14 @@ export function answersOnLastStep(
       : 0;
 
   /** The call for this step, and whether it is the run's last. */
-  const forStep = (options: CallOptions) => {
+  const forStep = (asked: CallOptions) => {
+    // Earlier turns' thinking, put back before anything reads the prompt. See `RunSteps.reasoning`.
+    const options = steps.reasoning?.size
+      ? {
+          ...asked,
+          prompt: withReplayedReasoning(asked.prompt, steps.reasoning),
+        }
+      : asked;
     const turns = turnsIn(options.prompt);
     steps.before ??= turns;
     const step = turns - steps.before + 1;

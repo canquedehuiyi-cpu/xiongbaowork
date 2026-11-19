@@ -378,7 +378,10 @@ import { createMemoryStore } from "./memory/store";
 import { offeredMemoryTools } from "./memory/tools";
 import { reportModelAvailability } from "./model-availability-check";
 import { createModelCatalogue } from "./model-catalogue";
-import { installDeepSeekThinkingOff } from "./models/deepseek-thinking";
+import {
+  deepSeekThinkingOff,
+  installDeepSeekThinkingOff,
+} from "./models/deepseek-thinking";
 import { createModelRoutes, createModelShelf } from "./models/routes";
 import {
   createNamedAgentModelResolver,
@@ -2406,13 +2409,17 @@ await startupLifecycle.run(async (startup) => {
 
   // Before anything reads the model environment: blank base URLs removed, Anthropic given its `/v1`.
   normalizeModelBaseUrls();
-  // DeepSeek 的思考模式要求传回每一轮的思考内容，员工的历史里没有，所以对它的对话请求关闭思考。
-  // 见 models/deepseek-thinking.ts；`DEEPSEEK_THINKING=enabled` 保留 DeepSeek 自己的默认。
-  if (installDeepSeekThinkingOff()) {
-    console.info(
-      JSON.stringify({ type: "deepseek-thinking", thinking: "disabled" }),
-    );
-  }
+  // DeepSeek 的思考模式（期三）：员工对话默认开着，`DEEPSEEK_THINKING=disabled` 关掉，由员工的模型自己写明；
+  // 这里装的只管没写 `thinking` 的辅助请求（路由、起标题），`DEEPSEEK_THINKING=enabled` 时不装。
+  // 见 models/deepseek-thinking.ts。
+  const auxiliaryThinkingOff = installDeepSeekThinkingOff();
+  console.info(
+    JSON.stringify({
+      type: "deepseek-thinking",
+      thinking: deepSeekThinkingOff() ? "disabled" : "enabled",
+      auxiliary: auxiliaryThinkingOff ? "disabled" : "enabled",
+    }),
+  );
   const runtimeModel = runtimeModelForEnvironment(tenantPackage.model);
   /**
    * Where local Intelligence's Learning thinks on the person's plan, with a record of what became of

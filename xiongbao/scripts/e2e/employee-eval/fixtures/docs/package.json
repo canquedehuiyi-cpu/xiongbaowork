@@ -1,0 +1,9 @@
+{
+  "name": "tiny-text",
+  "version": "0.3.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

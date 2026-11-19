@@ -1,0 +1,37 @@
+import { expect, test } from "bun:test";
+import { formatDuration, parseDuration } from "../src/duration";
+
+test("milliseconds are not read as minutes", () => {
+  expect(parseDuration("250ms")).toBe(250);
+  expect(parseDuration("1m500ms")).toBe(60_500);
+  expect(parseDuration("1h30m15s")).toBe(5_415_000);
+});
+
+test("surrounding whitespace is ignored", () => {
+  expect(parseDuration("  2m ")).toBe(120_000);
+});
+
+test("anything that is not number+unit is refused", () => {
+  for (const bad of ["", "abc", "5x", "1h30", "h", "1.5h"]) {
+    expect(() => parseDuration(bad)).toThrow();
+  }
+});
+
+test("formatDuration writes the non-zero parts in order", () => {
+  expect(formatDuration(5_400_000)).toBe("1h30m");
+  expect(formatDuration(61_000)).toBe("1m1s");
+  expect(formatDuration(250)).toBe("250ms");
+  expect(formatDuration(3_600_500)).toBe("1h500ms");
+  expect(formatDuration(0)).toBe("0ms");
+});
+
+test("formatDuration refuses negative and fractional input", () => {
+  expect(() => formatDuration(-1)).toThrow();
+  expect(() => formatDuration(1.5)).toThrow();
+});
+
+test("parse(format(x)) round-trips", () => {
+  for (const value of [1, 999, 1_000, 59_999, 3_600_000, 90_061_001]) {
+    expect(parseDuration(formatDuration(value))).toBe(value);
+  }
+});

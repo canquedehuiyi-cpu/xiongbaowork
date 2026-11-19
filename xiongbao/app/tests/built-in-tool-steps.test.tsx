@@ -164,24 +164,24 @@ test("a call to a name with no label reads in words from its first frame", async
           {
             id: "call-1",
             type: "function",
-            function: { name: "web_search", arguments: "" },
+            function: { name: "lookup_weather", arguments: "" },
           },
         ],
       },
     ],
     true,
   );
-  expect(await view.findByText("Web search")).toBeTruthy();
-  expect(view.queryByText("web_search")).toBeNull();
+  expect(await view.findByText("Lookup weather")).toBeTruthy();
+  expect(view.queryByText("lookup_weather")).toBeNull();
 });
 
 test("once a call to a name with no label is answered, it still reads in words", async () => {
   const view = draw([
     { id: "u1", role: "user", content: "Search the web for OpenBot." },
-    ...step("web_search", "Error: no tool by that name."),
+    ...step("lookup_weather", "Error: no tool by that name."),
   ]);
-  expect(await view.findByText("Web search")).toBeTruthy();
-  expect(view.queryByText("web_search")).toBeNull();
+  expect(await view.findByText("Lookup weather")).toBeTruthy();
+  expect(view.queryByText("lookup_weather")).toBeNull();
 });
 
 test("while the interface is still being drawn, its line says so in words", async () => {
