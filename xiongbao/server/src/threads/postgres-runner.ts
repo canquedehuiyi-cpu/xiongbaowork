@@ -87,6 +87,11 @@ const tenantLoads = new Map<string, Promise<void>>();
 const LOAD_LIMIT = 500;
 /** Threads read per round trip while loading, so one tenant's history is never one huge result. */
 const LOAD_CHUNK = 50;
+/**
+ * A run's event rows written per INSERT. Each row binds 4 parameters and the driver caps one
+ * statement at 65534, so a single INSERT holds at most 16383 rows; 2000 stays well clear of that.
+ */
+const EVENT_INSERT_CHUNK = 2000;
 
 function ownedBy(threadId: string, tenant: string): boolean {
   const owner = threadOwners.get(threadId);
@@ -1032,12 +1037,26 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
           .values({ id: runId, threadId, agentId, eventCount: events.length })
           .onConflictDoNothing();
         if (events.length > 0) {
-          await this.database
-            .insert(threadRunEvents)
-            .values(
-              events.map((event, seq) => ({ threadId, runId, seq, event })),
-            )
-            .onConflictDoNothing();
+          // In chunks, in one transaction. One INSERT binds 4 parameters a row and a statement may
+          // bind at most 65534, so a run of 16384 events or more — a DeepSeek thinking turn streams
+          // every reasoning token as its own event — failed the whole INSERT and lost every event.
+          await this.database.transaction(async (transaction) => {
+            for (let at = 0; at < events.length; at += EVENT_INSERT_CHUNK) {
+              await transaction
+                .insert(threadRunEvents)
+                .values(
+                  events
+                    .slice(at, at + EVENT_INSERT_CHUNK)
+                    .map((event, index) => ({
+                      threadId,
+                      runId,
+                      seq: at + index,
+                      event,
+                    })),
+                )
+                .onConflictDoNothing();
+            }
+          });
         }
       } catch (error) {
         console.error("thread persistence failed", threadId, error);
