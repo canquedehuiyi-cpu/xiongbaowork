@@ -1,13 +1,17 @@
 import { afterAll, afterEach, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import {
   type AcpClient,
   type AcpSpawnSpec,
@@ -72,6 +76,8 @@ function setup(
     processEnv?: () => Promise<Record<string, string | undefined>>;
     cancelGraceMs?: number;
     frameLimit?: number;
+    tempRoot?: string;
+    now?: () => number;
   } = {},
 ): Setup {
   const frames: Frame[] = [];
@@ -88,6 +94,8 @@ function setup(
       ? {}
       : { cancelGraceMs: opts.cancelGraceMs }),
     ...(opts.frameLimit === undefined ? {} : { frameLimit: opts.frameLimit }),
+    ...(opts.tempRoot === undefined ? {} : { tempRoot: opts.tempRoot }),
+    ...(opts.now === undefined ? {} : { now: opts.now }),
     spawn: (spec, handlers, clientOpts) => {
       spawns.push(spec);
       const log = join(scratch, `log-${++logs}.jsonl`);
@@ -1888,3 +1896,216 @@ test("a session forgotten for leaving the ask mode is never loaded again, not ev
   );
   expect(loads).toHaveLength(1);
 }, 20_000);
+
+/*
+ * 员工自己的模型（`acp.open.model`）：Codex 用只给这个进程的临时 CODEX_HOME 指向服务器的模型代理，
+ * Claude Code 用环境变量；帧里没有 `model`（或格式不对）时和以前一样，用户自己的配置。
+ */
+
+const ASK_MODES = {
+  currentModeId: "agent",
+  availableModes: [
+    { id: "read-only", name: "Read only" },
+    { id: "default", name: "Default" },
+    { id: "agent", name: "Agent" },
+  ],
+};
+
+const MODEL = {
+  baseUrl: "https://xiongbao.test/api/agent-model/",
+  token: "xbm_pass-one",
+  model: "deepseek-chat",
+};
+const codexModel = (extra: Frame = {}) => ({
+  ...MODEL,
+  wire: "responses",
+  ...extra,
+});
+const claudeModel = (extra: Frame = {}) => ({
+  ...MODEL,
+  wire: "messages",
+  ...extra,
+});
+
+/** A temporary folder of this test's own to make Codex's homes in, so nothing else is looked at. */
+function tempRootFor(name: string): string {
+  const dir = join(scratch, name);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+const codexOpen = (threadId: string, model?: Frame) =>
+  open(threadId, {
+    harness: "codex",
+    appRef: undefined,
+    ...(model ? { model } : {}),
+  });
+
+test("Codex with a model block gets a CODEX_HOME of its own with the proxy as its provider, removed when its process goes", async () => {
+  const tempRoot = tempRootFor("codex-home-1");
+  const ownHome = join(homedir(), ".codex");
+  const ownBefore = existsSync(ownHome) ? statSync(ownHome).mtimeMs : null;
+  const t = setup({ modes: ASK_MODES }, { tempRoot });
+  t.host.attach(t.send);
+  await t.host.handle(codexOpen("th_1", codexModel()));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1, 15_000);
+  const env = t.spawns[0]?.env ?? {};
+  const home = env.CODEX_HOME ?? "";
+  // Ours, in the temporary folder: never the owner's own `~/.codex`.
+  expect(dirname(home)).toBe(tempRoot);
+  expect(home).not.toBe(ownHome);
+  expect(readdirSync(home)).toEqual(["config.toml"]);
+  expect(readFileSync(join(home, "config.toml"), "utf8")).toBe(
+    [
+      'model_provider = "xiongbao"',
+      'model = "deepseek-chat"',
+      "",
+      "[model_providers.xiongbao]",
+      'name = "xiongbao"',
+      'base_url = "https://xiongbao.test/api/agent-model/v1"',
+      'env_key = "XIONGBAO_AGENT_MODEL_TOKEN"',
+      'wire_api = "responses"',
+      "requires_openai_auth = false",
+      "",
+    ].join("\n"),
+  );
+  // The pass is in the environment the config names, not in the file.
+  expect(env.XIONGBAO_AGENT_MODEL_TOKEN).toBe("xbm_pass-one");
+  expect(readFileSync(join(home, "config.toml"), "utf8")).not.toContain(
+    "xbm_pass-one",
+  );
+  // The ask mode still holds.
+  expect(env.INITIAL_AGENT_MODE).toBe("read-only");
+  expect(t.spawns[0]?.sessionMode).toBe("read-only");
+  await t.host.closeAll();
+  expect(existsSync(home)).toBe(false);
+  expect(readdirSync(tempRoot)).toEqual([]);
+  expect(existsSync(ownHome) ? statSync(ownHome).mtimeMs : null).toBe(
+    ownBefore,
+  );
+}, 20_000);
+
+test("an idle Codex process is stopped and its home removed when it times out", async () => {
+  const tempRoot = tempRootFor("codex-home-2");
+  const t = setup({ modes: ASK_MODES }, { tempRoot, idleMs: 100 });
+  t.host.attach(t.send);
+  await t.host.handle(codexOpen("th_1", codexModel()));
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1, 15_000);
+  expect(readdirSync(tempRoot)).toHaveLength(1);
+  await waitFor(() => readdirSync(tempRoot).length === 0, 5_000);
+  expect(t.clients[0]?.alive).toBe(false);
+}, 20_000);
+
+test("Claude Code with a model block is started with the proxy's address and the pass in its environment", async () => {
+  const tempRoot = tempRootFor("claude-env");
+  const t = setup({ modes: ASK_MODES }, { tempRoot });
+  t.host.attach(t.send);
+  await t.host.handle(
+    open("th_1", {
+      harness: "claude-code",
+      appRef: undefined,
+      model: claudeModel(),
+    }),
+  );
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1, 15_000);
+  const spec = t.spawns[0];
+  expect(spec).toMatchObject({
+    command: "npx",
+    args: ["-y", "@agentclientprotocol/claude-agent-acp@0.107.0"],
+    sessionMode: "default",
+  });
+  expect(spec?.env).toMatchObject({
+    ANTHROPIC_BASE_URL: "https://xiongbao.test/api/agent-model",
+    ANTHROPIC_AUTH_TOKEN: "xbm_pass-one",
+    ANTHROPIC_MODEL: "deepseek-chat",
+    ANTHROPIC_DEFAULT_OPUS_MODEL: "deepseek-chat",
+    ANTHROPIC_DEFAULT_SONNET_MODEL: "deepseek-chat",
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: "deepseek-chat",
+    ANTHROPIC_SMALL_FAST_MODEL: "deepseek-chat",
+  });
+  // A key of the owner's, or a switch to another cloud, must not send the request elsewhere.
+  expect(spec?.unsetEnv).toEqual(
+    expect.arrayContaining(["ANTHROPIC_API_KEY", "CLAUDE_CODE_USE_BEDROCK"]),
+  );
+  // Nothing of Codex's, and nothing made in the temporary folder.
+  expect(spec?.env).not.toHaveProperty("CODEX_HOME");
+  expect(spec?.env).not.toHaveProperty("XIONGBAO_AGENT_MODEL_TOKEN");
+  expect(readdirSync(tempRoot)).toEqual([]);
+}, 20_000);
+
+test.each([
+  ["codex", undefined],
+  ["claude-code", undefined],
+  // Not well formed, or in the wrong format for that agent: as if there were no block.
+  ["codex", claudeModel()],
+  ["claude-code", codexModel()],
+  ["codex", codexModel({ token: "" })],
+  ["codex", codexModel({ baseUrl: "file:///etc/passwd" })],
+  ["codex", codexModel({ model: undefined })],
+  ["codex", "xbm_just-a-string"],
+] as const)(
+  "%s with %p runs on the owner's own settings, as before",
+  async (harness, model) => {
+    const tempRoot = tempRootFor(`none-${harness}-${randomUUID().slice(0, 6)}`);
+    const t = setup({ modes: ASK_MODES }, { tempRoot });
+    t.host.attach(t.send);
+    await t.host.handle(
+      open("th_1", {
+        harness,
+        appRef: undefined,
+        ...(model === undefined ? {} : { model }),
+      }),
+    );
+    await waitFor(() => ofType(t.frames, "acp.session").length === 1, 15_000);
+    const env = t.spawns[0]?.env ?? {};
+    for (const name of [
+      "CODEX_HOME",
+      "XIONGBAO_AGENT_MODEL_TOKEN",
+      "ANTHROPIC_BASE_URL",
+      "ANTHROPIC_AUTH_TOKEN",
+      "ANTHROPIC_MODEL",
+    ])
+      expect(env).not.toHaveProperty(name);
+    expect(t.spawns[0]?.unsetEnv ?? []).not.toContain("ANTHROPIC_API_KEY");
+    expect(readdirSync(tempRoot)).toEqual([]);
+  },
+  20_000,
+);
+
+test("a process whose pass is nearly spent is replaced by the next open that brings a new one; a fresh one is kept", async () => {
+  const clock = { at: 1_800_000_000_000 };
+  const tempRoot = tempRootFor("codex-home-refresh");
+  const t = setup(
+    { modes: ASK_MODES },
+    { tempRoot, now: () => clock.at, idleMs: 60_000 },
+  );
+  t.host.attach(t.send);
+  const hour = 60 * 60 * 1000;
+  await t.host.handle(
+    codexOpen("th_1", codexModel({ expiresAt: clock.at + 12 * hour })),
+  );
+  await waitFor(() => ofType(t.frames, "acp.session").length === 1, 15_000);
+  const firstHome = t.spawns[0]?.env.CODEX_HOME ?? "";
+  // A new pass for the same employee while the first has hours left: the process stays.
+  await t.host.handle(
+    codexOpen(
+      "th_2",
+      codexModel({ token: "xbm_pass-two", expiresAt: clock.at + 12 * hour }),
+    ),
+  );
+  await waitFor(() => ofType(t.frames, "acp.session").length === 2, 15_000);
+  expect(t.spawns).toHaveLength(1);
+  expect(existsSync(firstHome)).toBe(true);
+  // Eleven and a half hours on, the first pass has half an hour left: the next open replaces it.
+  clock.at += 11.5 * hour;
+  await t.host.handle(
+    codexOpen(
+      "th_3",
+      codexModel({ token: "xbm_pass-three", expiresAt: clock.at + 12 * hour }),
+    ),
+  );
+  await waitFor(() => t.spawns.length === 2, 15_000);
+  expect(t.spawns[1]?.env.XIONGBAO_AGENT_MODEL_TOKEN).toBe("xbm_pass-three");
+  await waitFor(() => !existsSync(firstHome), 5_000);
+  expect(readdirSync(tempRoot)).toHaveLength(1);
+}, 30_000);

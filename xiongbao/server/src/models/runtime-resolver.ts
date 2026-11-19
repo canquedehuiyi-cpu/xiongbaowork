@@ -27,6 +27,7 @@ import {
 import { deepSeekLanguageModel, isDeepSeekEndpoint } from "./deepseek-thinking";
 import {
   databaseTokenCallSink,
+  type MeteredBinding,
   type ModelTokenCallSink,
   meteredLanguageModel,
   sha256Hex,
@@ -617,7 +618,7 @@ export function createNamedAgentModelResolver(
     if (!secret || secret.revokedAt) return null;
     try {
       const apiKey = await openCredential(encryptionKey, secret);
-      const originalText = `${binding.provider}/${binding.modelName}`;
+      const metered = libraryMetering(binding, agentId, secret.encryptedValue);
       const model = meteredLanguageModel(
         libraryModel(
           binding.provider,
@@ -625,31 +626,116 @@ export function createNamedAgentModelResolver(
           binding.modelName,
           apiKey,
         ),
-        {
-          tenantId: binding.tenantId,
-          agentId,
-          modelRef: binding.modelRef,
-          provider: binding.provider,
-          modelName: binding.modelName,
-          credentialId: binding.credentialId,
-          // Of the stored ciphertext, so it moves when the key is rotated and never sees the key.
-          credentialDigest: sha256Hex(
-            `${binding.credentialId}:${secret.encryptedValue}`,
-          ),
-          originalModelFingerprint: sha256Hex(
-            JSON.stringify([
-              binding.provider,
-              binding.baseUrl,
-              binding.modelName,
-            ]),
-          ),
-          originalText,
-        },
+        metered,
         sink,
       );
-      return { model, name: originalText };
+      return { model, name: metered.originalText };
     } catch {
       // A bad key costs the binding, not the conversation.
+      return null;
+    }
+  };
+}
+
+/** What a library binding's calls are recorded as. Of the stored ciphertext, so it never sees the key. */
+function libraryMetering(
+  binding: LibraryBinding,
+  agentId: string,
+  encryptedValue: string,
+): MeteredBinding {
+  return {
+    tenantId: binding.tenantId,
+    agentId,
+    modelRef: binding.modelRef,
+    provider: binding.provider,
+    modelName: binding.modelName,
+    credentialId: binding.credentialId,
+    // Of the stored ciphertext, so it moves when the key is rotated and never sees the key.
+    credentialDigest: sha256Hex(`${binding.credentialId}:${encryptedValue}`),
+    originalModelFingerprint: sha256Hex(
+      JSON.stringify([binding.provider, binding.baseUrl, binding.modelName]),
+    ),
+    originalText: `${binding.provider}/${binding.modelName}`,
+  };
+}
+
+/** What a pool binding's calls are recorded as: the profile tenant's row, the platform's key. */
+function poolMetering(binding: PoolBinding, agentId: string): MeteredBinding {
+  return {
+    tenantId: binding.tenantId,
+    agentId,
+    modelRef: binding.poolId,
+    provider: binding.provider,
+    modelName: binding.modelName,
+    credentialId: binding.poolId,
+    // Moves when the operator rotates the key or renames its variable; never carries the key.
+    credentialDigest: sha256Hex(
+      `pool:${binding.poolId}:${binding.apiKeyEnv}:${sha256Hex(binding.apiKey)}`,
+    ),
+    originalModelFingerprint: sha256Hex(
+      JSON.stringify([binding.provider, binding.baseUrl, binding.modelName]),
+    ),
+    originalText: `${binding.provider}/${binding.modelName}`,
+  };
+}
+
+/**
+ * The model a coworker is bound to, as a request to its provider needs it: the provider, address, model
+ * and the real key, with the record its calls are metered under. For the one caller that forwards a
+ * request itself instead of building a language model (the external employees' model proxy); the key
+ * stays on the server and is never given to anything else.
+ */
+export type AgentUpstream = {
+  provider: string;
+  /** The address the binding names; null when the provider's own default applies. */
+  baseUrl: string | null;
+  modelName: string;
+  apiKey: string;
+  metering: MeteredBinding;
+};
+
+/**
+ * {@link createNamedAgentModelResolver}'s decision, handed over as the upstream itself. Null for every
+ * reason that resolver falls back to the deployment's model: no binding, a revoked or unreadable key, a
+ * pool row the tenant's plan does not reach.
+ */
+export function createAgentUpstreamResolver(
+  database: Database,
+  credentials: CredentialSecretReader,
+  encryptionKey: string,
+  options: Pick<AgentModelResolverOptions, "environment"> = {},
+): (agentId: string) => Promise<AgentUpstream | null> {
+  const environment = options.environment ?? process.env;
+  return async (agentId) => {
+    const binding = await bindingFor(database, agentId, environment).catch(
+      (error) => {
+        if (error instanceof TenantContextError) throw error;
+        return null;
+      },
+    );
+    if (!binding) return null;
+    if (binding.kind === "pool") {
+      return {
+        provider: binding.provider,
+        baseUrl: binding.baseUrl,
+        modelName: binding.modelName,
+        apiKey: binding.apiKey,
+        metering: poolMetering(binding, agentId),
+      };
+    }
+    const secret = await credentials
+      .readSecret(binding.credentialId)
+      .catch(() => null);
+    if (!secret || secret.revokedAt) return null;
+    try {
+      return {
+        provider: binding.provider,
+        baseUrl: binding.baseUrl,
+        modelName: binding.modelName,
+        apiKey: await openCredential(encryptionKey, secret),
+        metering: libraryMetering(binding, agentId, secret.encryptedValue),
+      };
+    } catch {
       return null;
     }
   };
@@ -663,7 +749,7 @@ function poolModel(
   sink: ModelTokenCallSink,
 ): ResolvedAgentModel | null {
   try {
-    const name = `${binding.provider}/${binding.modelName}`;
+    const metered = poolMetering(binding, agentId);
     const model = meteredLanguageModel(
       languageModel(
         binding.provider,
@@ -671,29 +757,10 @@ function poolModel(
         binding.modelName,
         binding.apiKey,
       ),
-      {
-        tenantId: binding.tenantId,
-        agentId,
-        modelRef: binding.poolId,
-        provider: binding.provider,
-        modelName: binding.modelName,
-        credentialId: binding.poolId,
-        // Moves when the operator rotates the key or renames its variable; never carries the key.
-        credentialDigest: sha256Hex(
-          `pool:${binding.poolId}:${binding.apiKeyEnv}:${sha256Hex(binding.apiKey)}`,
-        ),
-        originalModelFingerprint: sha256Hex(
-          JSON.stringify([
-            binding.provider,
-            binding.baseUrl,
-            binding.modelName,
-          ]),
-        ),
-        originalText: name,
-      },
+      metered,
       sink,
     );
-    return { model, name };
+    return { model, name: metered.originalText };
   } catch {
     // A provider client that cannot be built costs the binding, not the conversation.
     return null;

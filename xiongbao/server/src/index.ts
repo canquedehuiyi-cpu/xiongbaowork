@@ -77,6 +77,9 @@ import {
   guardBotTurn,
 } from "./agents/lifecycle";
 import { createBotReset } from "./agents/lifecycle-reset";
+import { readAgentModelProxyConfig } from "./agents/model-proxy/access";
+import { AGENT_MODEL_ROUTE } from "./agents/model-proxy/proxy";
+import { createAgentModelService } from "./agents/model-proxy/wiring";
 import { readAgentPresence } from "./agents/presence";
 import { createAgentProfileStore } from "./agents/profile-store";
 import type { AgentActor } from "./agents/profile-types";
@@ -1162,6 +1165,25 @@ await startupLifecycle.run(async (startup) => {
     { outbound: modelOutbound },
   );
   const resolveAgentModel = modelOf(resolveNamedAgentModel, tokenCallSink);
+  /*
+   * 外部员工（Codex、Claude Code）的模型请求走这里：服务器用这位员工在熊宝配的模型和凭据转发，计量写进
+   * `model_token_calls`，设备只拿一个短期令牌，拿不到真实的 key。`acp.open` 带上令牌和代理地址。
+   */
+  const agentModel = createAgentModelService({
+    database,
+    credentials: credentialStore,
+    encryptionKey: config.keyEncryptionKey,
+    sink: tokenCallSink,
+    quota,
+    outbound: modelOutbound,
+    config: readAgentModelProxyConfig(
+      process.env,
+      config.publicUrl,
+      AGENT_MODEL_ROUTE,
+    ),
+  });
+  const acpRuntimeForModel = deviceAcpRuntime();
+  if (acpRuntimeForModel) acpRuntimeForModel.model = agentModel.access;
   const agentProfileStore = createAgentProfileStore(
     database,
     config.managedAgent?.endpoint,
@@ -5785,6 +5807,7 @@ await startupLifecycle.run(async (startup) => {
       ...(learningModelEndpoint
         ? { learningModel: learningModelEndpoint }
         : {}),
+      agentModel: agentModel.proxy,
       // Upstream #1372/#1381/#1396/#1397/#1398/#1399: drafts written from an admin's description.
       boundaryWriter: writeBoundaries,
       approvalRules: {
