@@ -38,6 +38,8 @@ import {
   ConversationIntroBar,
 } from "@/components/channels/conversation-intro";
 import { ConversationView } from "@/components/channels/conversation-view";
+import { PinnedPlans } from "@/components/channels/pinned-plans";
+import { PlanCard } from "@/components/channels/plan-card";
 import { ProgressRow } from "@/components/channels/progress-row";
 import { stepLimitNotes } from "@/components/channels/step-limit-note";
 import {
@@ -71,6 +73,7 @@ import {
   recordChannelActivityMutationOptions,
   setChannelBusy,
 } from "@/lib/channels/mutations";
+import { latestPlan } from "@/lib/channels/plan";
 import {
   type AgentChannel,
   type ChannelSummary,
@@ -1504,6 +1507,7 @@ export function ChannelChat({
       .slice(answeredAt + 1)
       .some((message) => message.role === "assistant");
   const botName = botProfile?.name ?? channel.name;
+  const plan = latestPlan(agent.messages);
   const botSeed = botProfile?.avatarSeed || runtimeAgentId;
 
   /*
@@ -1614,6 +1618,12 @@ export function ChannelChat({
             agentId={runtimeAgentId}
             taskRunning={agent.isRunning || runsInFlight > 0}
           />
+          {/* 员工最后一次写下的计划，钉在对话区顶部（期二）：流式里新的一份一到就换上。 */}
+          {plan ? (
+            <PinnedPlans>
+              <PlanCard items={plan} />
+            </PinnedPlans>
+          ) : null}
           <ConversationView
             // Remounted per conversation, so opening one puts the caret in its composer once.
             autoFocus

@@ -172,9 +172,11 @@ function foldable(item: ToolItem, isDrawn: (name: string) => boolean): boolean {
   const args = item.toolCall.function.arguments;
   if (codingLook(name, args) !== null) return true;
   /*
-   * A subtask is work, like a search, so it folds into the same line. It used to be drawn as a card
-   * of its own, task and answer and steps, and a Bot that started three of them beside a search put
-   * five boxes between a question and its answer. Its row opens to all of that instead.
+   * A subtask is a card of its own again (期四): the Bots now share work out on purpose, several parts
+   * at once, and a person wants to see each part, how far it got and what it handed back, without
+   * opening a line. It still gathers with the work beside it, so the row keeps its shape, but the
+   * group draws it apart from that work: one card per subtask, side by side (`SubtaskCards`), and the
+   * folded line counts only the searches and pages, so nothing is drawn twice.
    */
   if (name === SUBAGENT_TOOL) return true;
   // Another harness's tool under one of Claude Code's names is not drawn as Claude Code's.
@@ -664,9 +666,7 @@ const SUBTASK_SENTENCES: [RegExp, (matched: RegExpExecArray) => string][] = [
 ];
 
 /** 子任务卡上的一句话：认得出的换成中文，认不出的原样给出。 */
-export function subtaskWordsFor(
-  text: string | undefined,
-): string | undefined {
+export function subtaskWordsFor(text: string | undefined): string | undefined {
   if (text === undefined) return undefined;
   for (const [sentence, words] of SUBTASK_SENTENCES) {
     const matched = sentence.exec(text);
@@ -862,6 +862,41 @@ export function StepStatus({
       </span>
     );
   return null;
+}
+
+/**
+ * 同一步派出的子任务（期四）：上面一行说一共几个、还有几个在做（和折起的工具行同一套说法），下面一个子任务一张卡，
+ * 排在一起，一眼看得出是并行的。卡本身是 `SubtaskStep`。
+ */
+function SubtaskCards({
+  steps,
+  active,
+  running,
+  label,
+}: {
+  steps: StepDetails[];
+  active: boolean;
+  running: boolean;
+  label: string;
+}) {
+  return (
+    <section aria-label={label} className="flex min-w-0 flex-col gap-2">
+      <p className="m-0 flex items-center gap-2 text-muted-foreground text-sm">
+        <IconStack kinds={["subtask"]} />
+        <span className={running ? "tool-line-running" : undefined}>
+          {label}
+        </span>
+      </p>
+      <ol
+        className="m-0 flex min-w-0 list-none flex-col gap-2 p-0"
+        data-subagent-cards=""
+      >
+        {steps.map((step) => (
+          <SubtaskStep active={active} key={step.id} step={step} />
+        ))}
+      </ol>
+    </section>
+  );
 }
 
 /** One step, as a folded line opens to it. Also how a subtask's card lists the steps it took. */
@@ -1061,12 +1096,14 @@ export function ToolActivity({
   observed?: boolean;
 }) {
   const folders = useContext(FolderNamesContext);
-  const steps = group.steps.map(stepDetailsIn(folders));
+  const all = group.steps.map(stepDetailsIn(folders));
+  // 子任务各画一张卡（`SubtaskCards`），折起的这一行只数其余的，不画两遍。
+  const subtasks = all.filter((step) => step.kind === "subtask");
+  const steps = all.filter((step) => step.kind !== "subtask");
+  const subtasksRunning = active && subtasks.some((step) => step.pending);
+  const working = subtasks.filter((step) => step.pending).length;
   const running = active && steps.some((step) => step.pending);
   const current = steps.find((step) => step.pending);
-  const working = steps.filter(
-    (step) => step.pending && step.kind === "subtask",
-  ).length;
   const issues = steps.filter((step) => step.failed || step.refused).length;
   const kinds = [...new Set(steps.map((step) => step.kind))];
   const stageLine = active && stage === "tool" ? stageWords(stage) : undefined;
@@ -1089,27 +1126,35 @@ export function ToolActivity({
           ) : null}
         </p>
       ) : null}
-      <ToolLine
-        bare
-        icon={<IconStack kinds={kinds} />}
-        label={
-          running && working
-            ? working === 1
-              ? "正在处理一个子任务…"
-              : `正在处理 ${working} 个子任务…`
-            : running && current
-              ? `${current.label}…`
-              : summarise(steps)
-        }
-        detail={issues ? `${issues} 个问题` : undefined}
-        running={running}
-      >
-        <ol className="space-y-2 py-1">
-          {steps.map((step) => (
-            <StepRow key={step.id} step={step} active={active} />
-          ))}
-        </ol>
-      </ToolLine>
+      {steps.length > 0 ? (
+        <ToolLine
+          bare
+          icon={<IconStack kinds={kinds} />}
+          label={running && current ? `${current.label}…` : summarise(steps)}
+          detail={issues ? `${issues} 个问题` : undefined}
+          running={running}
+        >
+          <ol className="space-y-2 py-1">
+            {steps.map((step) => (
+              <StepRow key={step.id} step={step} active={active} />
+            ))}
+          </ol>
+        </ToolLine>
+      ) : null}
+      {subtasks.length > 0 ? (
+        <SubtaskCards
+          active={active}
+          label={
+            subtasksRunning && working
+              ? working === 1
+                ? "正在处理一个子任务…"
+                : `正在处理 ${working} 个子任务…`
+              : summarise(subtasks)
+          }
+          running={subtasksRunning}
+          steps={subtasks}
+        />
+      ) : null}
       <PendingApprovals
         toolCallIds={group.steps.map((step) => step.toolCall.id)}
       />

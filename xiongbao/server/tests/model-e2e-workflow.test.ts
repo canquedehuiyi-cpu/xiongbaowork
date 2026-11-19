@@ -41,6 +41,22 @@ type Workflow = {
 
 const workflow = parse(text) as Workflow;
 
+/**
+ * 期六的对标评测作业（employee-eval-*、employee-capability-smoke）：手动触发时选了对应的 suite 才跑，
+ * 超时按作业给，其余规矩与上面两个作业相同。不在这张表里的作业（计量对账、WakerFlow）仍是 10 分钟。
+ */
+const EVAL_CEILINGS: Record<string, number> = {
+  "employee-eval-xiongbao": 120,
+  "employee-eval-codex": 120,
+  "employee-eval-report": 10,
+  "employee-capability-smoke": 60,
+};
+const EVAL_SCRIPTS: Record<string, string> = {
+  "employee-eval-xiongbao": "scripts/e2e/employee-eval/run-xiongbao.ts",
+  "employee-eval-codex": "scripts/e2e/employee-eval/run-codex.ts",
+  "employee-capability-smoke": "scripts/e2e/employee-eval/run-xiongbao.ts",
+};
+
 /** A GitHub expression as the YAML spells it, e.g. `${{ vars.X }}`. */
 const expression = (inner: string) => `\${{ ${inner} }}`;
 const jobs = Object.values(workflow.jobs);
@@ -66,7 +82,7 @@ test("the only trigger is a manual dispatch", () => {
 
 test("every job runs only from main, by dispatch, inside the model-e2e Environment", () => {
   expect(jobs.length).toBeGreaterThan(0);
-  for (const job of jobs) {
+  for (const [name, job] of Object.entries(workflow.jobs)) {
     const condition = (job.if ?? "").replace(/\s+/g, " ").trim();
     expect(condition).toContain("github.event_name == 'workflow_dispatch'");
     expect(condition).toContain("github.ref == 'refs/heads/main'");
@@ -76,9 +92,43 @@ test("every job runs only from main, by dispatch, inside the model-e2e Environme
         ? job.environment
         : job.environment?.name;
     expect(environment).toBe("model-e2e");
-    expect(job["timeout-minutes"]).toBeLessThanOrEqual(10);
+    expect(job["timeout-minutes"]).toBeLessThanOrEqual(
+      EVAL_CEILINGS[name] ?? 10,
+    );
     expect(job.permissions).toBeUndefined();
+    // 评测作业只在选了自己的 suite 时跑；计量对账和 WakerFlow 照旧每次手动触发都跑。
+    if (name in EVAL_CEILINGS) expect(condition).toContain("inputs.suite");
+    else expect(condition).not.toContain("inputs.suite");
   }
+  expect(Object.keys(workflow.jobs).sort()).toEqual(
+    ["model-e2e", "wakerflow-real-model", ...Object.keys(EVAL_CEILINGS)].sort(),
+  );
+});
+
+test("the evaluation is parameterised by dispatch inputs, which never reach a shell line", () => {
+  const inputs = (
+    workflow.on as {
+      workflow_dispatch: {
+        inputs: Record<string, { default?: string; options?: string[] }>;
+      };
+    }
+  ).workflow_dispatch.inputs;
+  expect(inputs.suite?.default).toBe("metering-only");
+  expect(inputs.suite?.options).toEqual([
+    "metering-only",
+    "employee-eval",
+    "capability-smoke",
+    "all",
+  ]);
+  expect(inputs.tasks?.default).toBe("all");
+  expect(inputs.scenarios?.default).toBe("all");
+  expect(inputs.provider?.default).toBe("deepseek");
+  expect(inputs.model?.default).toBe("deepseek-v4-flash");
+  expect(inputs.base_url?.default).toBe("");
+  // An input is the dispatcher's text: it reaches a step as an environment variable, never spliced
+  // into the script, so nothing typed into the form runs as shell.
+  for (const step of jobs.flatMap((job) => job.steps))
+    expect(step.run ?? "").not.toContain("inputs.");
 });
 
 test("permissions are read-only contents and runs never overlap", () => {
@@ -103,25 +153,32 @@ test("actions are pinned to full commit SHAs, Bun is 1.4.4, the lockfile is froz
     expect(step.run).toContain("bun install --frozen-lockfile");
     expect(step.run).toContain("--ignore-scripts");
   }
-  for (const job of jobs) {
+  // Every job that starts the server has its own PostgreSQL 17; the Codex side and the report start
+  // none (they read and judge files only).
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (name === "employee-eval-codex" || name === "employee-eval-report") {
+      expect(job.services).toBeUndefined();
+      continue;
+    }
     const images = Object.values(job.services ?? {}).map((s) => s.image ?? "");
     expect(images.some((image) => /(:|pg)17$/.test(image))).toBe(true);
   }
 });
 
 test("the key reaches the job only as the model-e2e Environment's secrets.DEEPSEEK_API_KEY, through env", () => {
-  const references = text.match(/secrets\.[A-Za-z0-9_]+/g) ?? [];
+  const references: string[] = [
+    ...(text.match(/secrets\.[A-Za-z0-9_]+/g) ?? []),
+  ];
   // One reference per carrier job (below), and no other secret named anywhere.
-  expect(references).toEqual([
-    "secrets.DEEPSEEK_API_KEY",
-    "secrets.DEEPSEEK_API_KEY",
-  ]);
+  expect(references).toEqual(
+    Array.from({ length: 5 }, () => "secrets.DEEPSEEK_API_KEY"),
+  );
   expect(text).not.toMatch(/secrets\[/);
   expect(text).not.toContain("toJSON(secrets");
 
   // Environment secrets reach only jobs that name the Environment; every job here does (above).
-  // Exactly two jobs carry the key — G6's reconciliation and G4's real-model WakerFlow run — each in
-  // exactly one step, and each of them is one of those jobs.
+  // Exactly five jobs carry the key — G6's reconciliation, G4's real-model WakerFlow run and the three
+  // evaluation jobs that call a model — each in exactly one step. The report job carries none.
   const carrierOf = (job: Job) =>
     job.steps.filter((step) =>
       Object.values(step.env ?? {}).some((value) =>
@@ -131,10 +188,9 @@ test("the key reaches the job only as the model-e2e Environment's secrets.DEEPSE
   const carrierJobs = Object.entries(workflow.jobs).filter(
     ([, job]) => carrierOf(job).length > 0,
   );
-  expect(carrierJobs.map(([name]) => name).sort()).toEqual([
-    "model-e2e",
-    "wakerflow-real-model",
-  ]);
+  expect(carrierJobs.map(([name]) => name).sort()).toEqual(
+    ["model-e2e", "wakerflow-real-model", ...Object.keys(EVAL_SCRIPTS)].sort(),
+  );
   for (const [, job] of carrierJobs) {
     expect(carrierOf(job)).toHaveLength(1);
     const carrierEnvironment =
@@ -150,12 +206,30 @@ test("the key reaches the job only as the model-e2e Environment's secrets.DEEPSE
       String(value).includes("secrets."),
     ),
   );
-  expect(carriers).toHaveLength(2);
+  expect(carriers).toHaveLength(5);
   for (const step of steps) {
     expect(step.run ?? "").not.toContain("secrets.");
     expect(JSON.stringify(step.with ?? {})).not.toContain("secrets.");
   }
-  for (const carrier of carriers) {
+  const evalCarriers = Object.keys(EVAL_SCRIPTS).flatMap((name) =>
+    carrierOf(workflow.jobs[name] as Job),
+  );
+  for (const [index, carrier] of evalCarriers.entries()) {
+    // The evaluation reads its model from the dispatch inputs (provider, model, base_url), so the
+    // same jobs run any model; the key is the same Environment secret, through the same variable.
+    expect(carrier.env?.MODEL_E2E_API_KEY).toBe(
+      expression("secrets.DEEPSEEK_API_KEY"),
+    );
+    expect(carrier.env?.MODEL_E2E).toBe("1");
+    expect(carrier.env?.EVAL_PROVIDER).toBe(expression("inputs.provider"));
+    expect(carrier.env?.EVAL_MODEL).toBe(expression("inputs.model"));
+    expect(carrier.env?.EVAL_BASE_URL).toBe(expression("inputs.base_url"));
+    expect(Object.keys(carrier.env ?? {})).not.toContain("EVAL_LOCAL_MOCK");
+    expect(carrier.run).toContain(Object.values(EVAL_SCRIPTS)[index]);
+  }
+  for (const carrier of carriers.filter(
+    (step) => !evalCarriers.includes(step),
+  )) {
     expect(carrier.env?.MODEL_E2E_API_KEY).toBe(
       expression("secrets.DEEPSEEK_API_KEY"),
     );

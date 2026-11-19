@@ -25,6 +25,11 @@ import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, asc, desc, eq, inArray, isNull, min, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
+import {
+  type PlanItem,
+  readPlan,
+  UPDATE_PLAN_TOOL,
+} from "../../../shared/plan";
 import { STEP_LIMIT_EVENT } from "../../../shared/step-limit";
 import type { HandoffCaps } from "../agents/handoff";
 import { delegationFreed as readDelegationFreed } from "../approvals/delegation-freed";
@@ -417,6 +422,7 @@ const SHARED_DETAILS: ReadonlySet<string> = new Set([
   "consent",
   "delivery",
   "message",
+  "plan",
   "stepLimit",
   "via",
 ]);
@@ -470,6 +476,18 @@ function stepLimitOf(name: string, value: unknown): GroupStepLimit | null {
 
 const withStepLimit = (limit: GroupStepLimit | null) =>
   limit ? { stepLimit: limit } : {};
+
+/**
+ * 这位员工这一轮最后一份计划（期二）：它最后一次 `update_plan` 调用里能读成计划的参数（`shared/plan.ts`），记在
+ * 回复行的 `details.plan` 上。只有清单，群里每个人读到的一样，群聊顶部据此给每位员工钉一张计划卡
+ * （`app/src/components/channels/pinned-plans.tsx`）。读不成计划的调用不算，留着上一份。
+ */
+function planOf(name: string, args: unknown): PlanItem[] | null {
+  return name === UPDATE_PLAN_TOOL ? (readPlan(args) ?? null) : null;
+}
+
+const withPlan = (plan: readonly PlanItem[] | null) =>
+  plan ? { plan: [...plan] } : {};
 
 function compactionNoteOf(name: string): GroupCompactionNote | null {
   if (name === COMPACTION_DONE_EVENT) return { outcome: "done" };
@@ -1981,6 +1999,9 @@ export function createGroupConversations(deps: {
     };
     let compacted: GroupCompactionNote | null = null;
     let limited: GroupStepLimit | null = null;
+    let planned: PlanItem[] | null = null;
+    // 外部员工的轮次在它自己那台电脑上跑，计划不记在这一行上。
+    const ownPlan = () => (bot.hiredBy ? null : planned);
     const marks: GroupDeliveryMark[] = [];
     /*
      * 外部员工的轮次（它的招聘人 `hiredBy`，或这一轮回了 `detached`）只回一句「开始了」，它的三步在设备
@@ -1999,6 +2020,9 @@ export function createGroupConversations(deps: {
           onText: (text) => {
             latest = text;
             flush();
+          },
+          onToolCall: ({ name, args }) => {
+            planned = planOf(name, args) ?? planned;
           },
           onCustom: ({ name, value }) => {
             compacted = compactionNoteOf(name) ?? compacted;
@@ -2065,12 +2089,14 @@ export function createGroupConversations(deps: {
       const shownMarks = detached ? [] : ownMarks();
       // 外部员工的轮次不走这里的步数（它在自己那台电脑上跑），不记。
       const shownLimit = detached || bot.hiredBy ? null : limited;
+      const shownPlan = detached ? null : ownPlan();
       if (gate.status === "pending") {
         await deps.store.finish(id, "", "waiting", {
           ...gate.details,
           ...chainOf(turn),
           ...withMarks(shownMarks),
           ...withStepLimit(shownLimit),
+          ...withPlan(shownPlan),
         });
         /*
          * The card stays where the gate left it, and it is not this call's business to move it.
@@ -2086,6 +2112,7 @@ export function createGroupConversations(deps: {
         ...(compacted ? { compaction: compacted } : {}),
         ...withMarks(shownMarks),
         ...withStepLimit(shownLimit),
+        ...withPlan(shownPlan),
       };
       if (gate.status === "denied") {
         await deps.store.finish(id, gate.message, "failed", compaction);
@@ -2162,6 +2189,7 @@ export function createGroupConversations(deps: {
           ...chainOf(turn),
           // 等工具审批前已经走过的步骤：恢复后接着记（`continueWaiting`）。
           ...withMarks(ownMarks()),
+          ...withPlan(ownPlan()),
         });
         /*
          * Two different waits, and the board tells them apart.
@@ -2182,7 +2210,10 @@ export function createGroupConversations(deps: {
           await closeCard(cardTurn, agentId, runId, false, round());
       } else {
         const message = error instanceof Error ? error.message : String(error);
-        await deps.store.finish(id, message, "failed", withMarks(ownMarks()));
+        await deps.store.finish(id, message, "failed", {
+          ...withMarks(ownMarks()),
+          ...withPlan(ownPlan()),
+        });
         await closeCard(cardTurn, agentId, runId, true, round(message));
       }
     }
@@ -2475,6 +2506,8 @@ export function createGroupConversations(deps: {
       run: (hooks?: {
         /** 恢复后这一轮流里的自定义事件：交付卡的标记从这里接着记。 */
         onCustom?: (event: { name: string; value: unknown }) => void;
+        /** 恢复后这一轮的工具调用：计划从这里接着记。 */
+        onToolCall?: (call: { name: string; args: unknown }) => void;
       }) => Promise<{ replyText: string }>,
     ): Promise<{ replyText: string }> {
       const row = await deps.store.waitingFor(approvalId);
@@ -2541,12 +2574,19 @@ export function createGroupConversations(deps: {
       const resumedMarks: GroupDeliveryMark[] = [];
       // 恢复后这一段又跑满了步数：和标记一样记在这一行上。
       let resumedLimit: GroupStepLimit | null = null;
+      // 等待前记下的计划；恢复后又更新了就换上新的。
+      let resumedPlan: PlanItem[] | null =
+        readPlan({ items: row.details.plan }) ?? null;
       const allMarks = () => ({
         ...withMarks([...earlier, ...resumedMarks]),
         ...withStepLimit(resumedLimit),
+        ...withPlan(resumedPlan),
       });
       try {
         const outcome = await run({
+          onToolCall: ({ name, args }) => {
+            resumedPlan = planOf(name, args) ?? resumedPlan;
+          },
           onCustom: ({ name, value }) => {
             resumedLimit = stepLimitOf(name, value) ?? resumedLimit;
             const mark = deliveryMarkOf(name, value, agentId, new Date());
@@ -2792,6 +2832,7 @@ export function createGroupConversations(deps: {
           ...(isStepLimit(details.stepLimit)
             ? { stepLimit: { steps: details.stepLimit.steps } }
             : {}),
+          ...withPlan(readPlan({ items: details.plan }) ?? null),
           // 外部员工在等招聘人确认：每个成员读到的都只有谁在等谁、结果如何。
           ...(groupAcpPermissionOf(details.acpPermission)
             ? {

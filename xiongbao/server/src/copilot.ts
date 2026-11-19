@@ -54,6 +54,7 @@ import { z } from "zod";
 import { mediaGuidance } from "../../shared/media";
 import { planGuidance } from "../../shared/plan";
 import { subagentGuidance } from "../../shared/subagent";
+import { thinkingOf } from "../../shared/thinking";
 import {
   ACP_UNAVAILABLE_REASON,
   type DeviceAcpEmployee,
@@ -128,6 +129,12 @@ import {
 } from "./memory/tools";
 import { providerName } from "./model-billing";
 import { modelSourceFor, type RunChoice } from "./model-catalogue";
+import {
+  deepSeekLanguageModel,
+  isDeepSeekEndpoint,
+  speaksDeepSeek,
+  THINKING_OFF_PROVIDER_OPTIONS,
+} from "./models/deepseek-thinking";
 import type {
   AgentModelResolver,
   DeploymentModel,
@@ -225,6 +232,11 @@ type RegisteredBuiltInAgent = {
   persona?: Persona | null;
   /** Its 工作手册 (story ROLE1), sent whole after the persona. Absent or blank sends no section. */
   bible?: string | null;
+  /**
+   * 思考模式被它的主人关掉了（期三，`shared/thinking.ts`）：发往 DeepSeek 的请求写明 `thinking: disabled`。
+   * 没有这个字段就是开着。别的模型不看它。
+   */
+  thinking?: false;
   /**
    * What the person asking declared about where their material lives, when this Bot is their own
    * 分身 (story F1). Set per build by {@link buildAgents} from {@link LoadAvatarSources}, never from
@@ -693,6 +705,8 @@ export function registeredAgentFromRow(
           persona: row.persona ?? null,
           // Only when one was written (ROLE1): a coworker without a handbook reads as before.
           ...(row.bible ? { bible: row.bible } : {}),
+          // 期三：只记关掉的；没写就是开着。
+          ...(thinkingOf(configuration) ? {} : { thinking: false as const }),
         }
       : null;
   }
@@ -1115,6 +1129,7 @@ export function builtInAgentConfiguration(
     waiting.size > 0
       ? (planModel ??
         agentModel ??
+        deepSeekDeploymentModel(model, apiKey) ??
         resolveModel(
           `${model.provider}/${model.defaultModel}`,
           apiKey ?? undefined,
@@ -1155,6 +1170,8 @@ export function builtInAgentConfiguration(
       wrapped ??
       planModel ??
       agentModel ??
+      // DeepSeek is built here rather than by the runtime from its name, so its thinking streams.
+      deepSeekDeploymentModel(model, apiKey) ??
       `${model.provider}/${model.defaultModel}`,
     /*
      * Tagged sections in a fixed order: who it is, its role, the person's own instructions, the
@@ -1312,10 +1329,12 @@ export function builtInAgentConfiguration(
     ].join("\n\n"),
     ...(planModel || agentModel ? {} : { apiKey: apiKey ?? undefined }),
     // The run's thinking effort, when the person picked one the model takes. A plan's harness is
-    // told through its own run instead (`planChoice`).
-    ...(!planModel && effortProviderOptions(model)
-      ? { providerOptions: effortProviderOptions(model) }
-      : {}),
+    // told through its own run instead (`planChoice`). And 期三: a coworker whose owner switched
+    // thinking off says so to DeepSeek; no other provider reads that key.
+    ...runProviderOptions(
+      planModel ? undefined : effortProviderOptions(model),
+      agent,
+    ),
     /*
      * A run stops after one step unless told otherwise, which for a Bot with tools means it calls
      * one and never speaks: the tool executes, the result arrives, and the run ends before the model
@@ -1376,6 +1395,43 @@ function holdsWebSearch(tools: readonly GrantedTool[]): boolean {
 }
 
 /**
+ * The deployment default model when `OPENAI_BASE_URL` is DeepSeek's own API (期三), or `undefined`
+ * for every other deployment, which the runtime keeps building from `provider/model` as before.
+ *
+ * The runtime would build `@ai-sdk/openai`'s chat model, which neither reads DeepSeek's
+ * `reasoning_content` nor sends it back, so thinking could not stream and a tool loop in thinking
+ * mode would be refused. The key is the one the runtime would have used. See
+ * `models/deepseek-thinking.ts`.
+ */
+export function deepSeekDeploymentModel(
+  model: RuntimeModel,
+  apiKey: string | null | undefined,
+): LanguageModel | undefined {
+  const baseURL = process.env.OPENAI_BASE_URL?.trim();
+  const key = apiKey || process.env.OPENAI_API_KEY;
+  if (model.provider !== "openai" || !key || !isDeepSeekEndpoint(baseURL))
+    return undefined;
+  return deepSeekLanguageModel({
+    baseURL: baseURL as string,
+    apiKey: key,
+    modelName: model.defaultModel,
+  });
+}
+
+/**
+ * A run's provider options: the person's effort, and, for a coworker whose owner switched thinking
+ * off, `thinking: disabled` under DeepSeek's key (期三). Nothing when there is neither.
+ */
+function runProviderOptions(
+  effort: Record<string, Record<string, string>> | undefined,
+  agent: Pick<RegisteredBuiltInAgent, "thinking">,
+): { providerOptions?: Record<string, Record<string, unknown>> } {
+  const off = agent.thinking === false ? THINKING_OFF_PROVIDER_OPTIONS : {};
+  const providerOptions = { ...effort, ...off };
+  return Object.keys(providerOptions).length > 0 ? { providerOptions } : {};
+}
+
+/**
  * The deployment default model, built the way the runtime builds it from `provider/model` and the
  * deployment key — the same function, so the endpoint (`OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL`) and
  * the key are exactly the ones a string would have reached.
@@ -1390,7 +1446,9 @@ export function deploymentModel(
 ): DeploymentModel | undefined {
   try {
     return {
-      model: resolveModel(`${model.provider}/${model.defaultModel}`, apiKey),
+      model:
+        deepSeekDeploymentModel(model, apiKey) ??
+        resolveModel(`${model.provider}/${model.defaultModel}`, apiKey),
       provider: model.provider,
       modelName: model.defaultModel,
       baseUrl:
@@ -2402,6 +2460,13 @@ async function buildAgent(
     const hooks: BuiltInAgentHooks = {
       // Somebody is watching: a run still at work on its last step gets one more budget of steps.
       ...(unattended ? { unattended } : { extension: TOOL_STEPS }),
+      /*
+       * 期三：DeepSeek 要求调过工具的 assistant 消息跨轮带回它的思考，历史里存着的就按工具调用 id 放回。
+       * 只对 DeepSeek：别的提供方拿到没有签名的 reasoning 部分会拒绝或丢掉。见 `models/deepseek-thinking.ts`。
+       */
+      ...("model" in configuration && speaksDeepSeek(configuration.model)
+        ? { replayReasoning: true }
+        : {}),
       /*
        * A provider's refusal is told in words, naming the provider, rather than as the SDK's text, a
        * "Forbidden" or a retry count. Out of credit keeps its own sentence, from `model-billing.ts`.

@@ -6,6 +6,7 @@ import {
   type AcpRuleValue,
   acpRulesFrom,
 } from "../../../shared/acp";
+import { thinkingOf } from "../../../shared/thinking";
 import { capabilityRefusal } from "../admin/capabilities";
 import { englishName } from "../brand";
 import type { CredentialStore } from "../credentials";
@@ -501,6 +502,7 @@ function mapProfile(
     endpoint: endpointOf(row.configuration),
     modelRef: row.modelRef,
     platformModelRef: row.platformModelRef,
+    thinking: thinkingOf(row.configuration),
     persona: (row.persona as Persona | null) ?? null,
     bible: row.bible ?? null,
     roleTemplate:
@@ -1435,6 +1437,21 @@ export function createAgentProfileStore(
 
           if (!starter && row?.type !== "built_in" && described) {
             delete configuration.standingInstructions;
+          }
+
+          /*
+           * 期三：思考模式。只记关掉的，打开就把键拿掉，于是没动过的员工和打开的员工存的一样。远端员工的
+           * 模型由它自己的服务器决定，关它的思考和给它绑模型一样被拒。
+           */
+          if (input.thinking !== undefined) {
+            if (row?.type !== "built_in") {
+              if (input.thinking === false)
+                throw new ModelBindingNotApplicableError(id);
+            } else if (input.thinking) {
+              delete configuration.thinking;
+            } else {
+              configuration.thinking = false;
+            }
           }
 
           /*

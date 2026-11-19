@@ -24,6 +24,7 @@ import {
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
+import { deepSeekLanguageModel, isDeepSeekEndpoint } from "./deepseek-thinking";
 import {
   databaseTokenCallSink,
   type ModelTokenCallSink,
@@ -155,6 +156,15 @@ export function languageModelFor(
     baseUrl ||
     OPENAI_COMPATIBLE_DEFAULTS[provider] ||
     "https://api.openai.com/v1";
+  // DeepSeek 官方地址：思考内容流出、按规则回传（期三，见 ./deepseek-thinking）。
+  if (isDeepSeekEndpoint(baseURL)) {
+    return deepSeekLanguageModel({
+      baseURL,
+      apiKey,
+      modelName,
+      ...(baseUrl ? { fetch: createGuardedFetch(outbound) } : {}),
+    });
+  }
   return createOpenAICompatible({
     name: provider,
     baseURL,

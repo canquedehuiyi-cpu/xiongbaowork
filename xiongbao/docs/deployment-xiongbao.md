@@ -161,6 +161,19 @@ BOT_MODEL=<供应商当前支持的准确模型名>
 不能承诺“设置 BOT_MODEL 后所有员工立即使用它”。修改环境配置后重新创建容器，`docker restart`
 不会读取已改的 env-file。B 线验证不发送对话，不使用任何真实 provider。
 
+**DeepSeek 的思考模式默认开着（期三）。** `OPENAI_BASE_URL` 指向 `https://api.deepseek.com`（或员工在模型库、
+平台体验模型里绑定 DeepSeek 官方地址）时，员工先想再做：思考内容随对话流出、存进这一轮的记录，带工具的多步
+对话按 DeepSeek 的规则把思考传回去，不会再被拒（400）。代价是 token 用量和等待时间上升。
+
+```dotenv
+# 全部员工关闭思考模式（路由、起标题这类辅助请求本来就不思考）
+DEEPSEEK_THINKING=disabled
+```
+
+单个员工可以单独关掉「思考模式」：`PATCH /api/agents/<id>`，随员工资料一起提交 `"thinking": false`（界面开关在下一版）。
+`DEEPSEEK_THINKING=enabled` 只多一件事：辅助请求也按 DeepSeek 自己的默认思考。别的模型供应商不受这个开关影响。
+改完同样要重新创建容器。
+
 ### 5.1 首次真实部署实测要点（2026-11-06，京东云 Ubuntu 22.04，v0.2.0）
 
 以下各条都已在真实部署上遇到，并对照代码核实：
