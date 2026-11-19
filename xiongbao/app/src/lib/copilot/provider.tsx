@@ -18,6 +18,10 @@ import { GalleryTools } from "./gallery-tools";
 import { GENERATIVE_UI_DESIGN_SKILL } from "./generative-ui";
 import { HandoffTool } from "./handoff-tool";
 import { SandboxedTools } from "./sandboxed-tools";
+import {
+  ServerComputerToolsProvider,
+  serverComputerRunProperties,
+} from "./server-computer-tools";
 import { SignInTool } from "./sign-in-tool";
 import { SkillTools } from "./skill-tools";
 
@@ -37,7 +41,16 @@ import { SkillTools } from "./skill-tools";
  */
 export function CopilotProvider({ children }: { children: ReactNode }) {
   const { data: capabilities } = useQuery(deploymentCapabilitiesQueryOptions());
-  const properties = useMemo(() => runProperties(deviceTimeZone()), []);
+  /*
+   * Who runs a chat's computer tools, said once for both halves: in every run's `forwardedProps`, and in
+   * how the tools below are registered (see `useFrontendTool`). Off until the deployment says it is on,
+   * so a page that has not heard yet, or a server that never says, runs its own tools as it always did.
+   */
+  const serverRuns = capabilities?.chatServerComputerTools === true;
+  const properties = useMemo(
+    () => runProperties(deviceTimeZone(), serverRuns),
+    [serverRuns],
+  );
 
   return (
     <CopilotKitProvider
@@ -68,9 +81,11 @@ export function CopilotProvider({ children }: { children: ReactNode }) {
       <ActiveBotProvider>
         {/* Each run is offered its own Bot's tools, never the screen's; see bot-offer.ts. */}
         <BotOffers />
-        <ComputerTools />
-        {/* The private sign-in request: a card whose form posts to the server, never to the Bot. */}
-        <SignInTool />
+        <ServerComputerToolsProvider value={serverRuns}>
+          <ComputerTools />
+          {/* The private sign-in request: a card whose form posts to the server, never to the Bot. */}
+          <SignInTool />
+        </ServerComputerToolsProvider>
         {/*
           Draws a Bot bringing in another Bot. Registers no tool: `message_bot` runs on the server,
           where the grant and the caps are. A hop that happens off-screen is the thing to avoid.
@@ -101,8 +116,16 @@ export function CopilotProvider({ children }: { children: ReactNode }) {
 /**
  * What every run this browser starts carries for the server, as its `forwardedProps`: the person's
  * IANA time zone, so a Bot's "today" and "9am" are theirs and not UTC. Nothing when the device cannot
- * say, and the server then gives the date in UTC. See `person-time-zone.ts`.
+ * say, and the server then gives the date in UTC. See `person-time-zone.ts`. And, where the deployment
+ * runs a chat's computer tools on the server, that choice.
  */
-function runProperties(timeZone: string | undefined): Record<string, unknown> {
-  return timeZone ? { [PERSON_TIME_ZONE_PROP]: timeZone } : {};
+function runProperties(
+  timeZone: string | undefined,
+  serverRuns: boolean,
+): Record<string, unknown> {
+  return {
+    ...(timeZone ? { [PERSON_TIME_ZONE_PROP]: timeZone } : {}),
+    // Only when the deployment runs a chat's computer tools; see `server-computer-tools.ts`.
+    ...serverComputerRunProperties(serverRuns),
+  };
 }

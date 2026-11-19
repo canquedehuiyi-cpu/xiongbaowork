@@ -416,6 +416,8 @@ export function createChannelStore(
   database: Database,
   profileStore: AgentProfileStore,
   threadIdentity: ThreadIdentity,
+  /** `turns`: see `workIn` in working.ts. Off, a person's running turn is not counted as work. */
+  options: { turns?: boolean } = {},
 ): ChannelStore {
   /**
    * Making a channel, on a transaction the caller already holds.
@@ -617,9 +619,11 @@ export function createChannelStore(
       );
       const work =
         (
-          await workIn(database, [
-            { id: channelId, threadId: owner.threadId, userId: owner.userId },
-          ])
+          await workIn(
+            database,
+            [{ id: channelId, threadId: owner.threadId, userId: owner.userId }],
+            options,
+          )
         ).get(channelId) ?? [];
       await notify({
         ...base,
@@ -1418,6 +1422,7 @@ export function createChannelStore(
       workIn(
         database,
         list.map((channel) => ({ ...channel, userId: actor.id })),
+        options,
       ),
   };
   return store;

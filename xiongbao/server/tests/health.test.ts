@@ -128,6 +128,8 @@ describe("runtime capabilities", () => {
       ssoRequired: false,
       // Whether the password form has an endpoint behind it. On whenever Better Auth is built here.
       emailPassword: true,
+      // 期九·四: off unless the operator switched on server-run computer tools for a person's chat.
+      chatServerComputerTools: false,
     });
   });
 
@@ -155,6 +157,7 @@ describe("runtime capabilities", () => {
       "ssoConfigured",
       "ssoRequired",
       "emailPassword",
+      "chatServerComputerTools",
     ]);
     // The provider list is names, never the clients and secrets behind them.
     expect(body).not.toContain("google-client-secret");
@@ -193,6 +196,22 @@ describe("runtime capabilities", () => {
 
     expect(response.status).toBe(200);
     expect((await response.json()).selfHostBanner).toBe(true);
+  });
+
+  // 期九·四: the browser declares server-run computer tools only where the deployment allows them.
+  test("reports server-run computer tools as on when the deployment switches them on", async () => {
+    const enabled = createApp(
+      loadConfig(
+        testEnvironment({ XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS: "on" }),
+      ),
+    );
+
+    const response = await enabled.request(
+      "http://openbot.local/api/capabilities",
+    );
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).chatServerComputerTools).toBe(true);
   });
 
   // One person running it for themselves is not somebody to offer help running it for a company.

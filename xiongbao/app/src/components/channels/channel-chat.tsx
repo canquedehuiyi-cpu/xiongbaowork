@@ -26,6 +26,7 @@ import {
   useConversationQuestion,
 } from "@/components/approvals/question-notice";
 import { acpNotes } from "@/components/channels/acp-cards";
+import { backgroundHintNotes } from "@/components/channels/background-hint";
 import { ChannelWorkRows } from "@/components/channels/channel-work";
 import { attachmentModality } from "@/components/channels/chat-messages";
 import {
@@ -49,6 +50,7 @@ import {
   transcriptMessages,
 } from "@/components/channels/transcript-messages";
 import { turnArtifactNotes } from "@/components/channels/turn-artifacts";
+import { turnStopNotes } from "@/components/channels/turn-stop-note";
 import { VoiceCallWidget } from "@/components/channels/voice-call-widget";
 import { HandoffResumeNotice } from "@/components/computer/handoff-resume-notice";
 import { ProjectPicker } from "@/components/projects/project-picker";
@@ -66,6 +68,14 @@ import {
 } from "@/lib/channels/acp-events";
 import { attachmentUrl } from "@/lib/channels/attachments";
 import {
+  beginTurn,
+  endTurn,
+  observeRun,
+  useBackgroundHint,
+  useBackgroundRun,
+  useServerRuns,
+} from "@/lib/channels/background-run";
+import {
   dispatchedNotice,
   mentionRoster,
   sendChannelDraft,
@@ -82,8 +92,8 @@ import {
 } from "@/lib/channels/queries";
 import { runReply } from "@/lib/channels/run-reply";
 import {
-  type RunStageTracker,
   createRunStageTracker,
+  type RunStageTracker,
 } from "@/lib/channels/run-stage";
 import {
   continueAfterStepLimit,
@@ -91,16 +101,28 @@ import {
   type StepLimitTracker,
 } from "@/lib/channels/step-limit";
 import {
+  createTurnStopTracker,
+  type TurnStopTracker,
+} from "@/lib/channels/turn-notice";
+import {
   onTurnFinishedAway,
   turnFinishedAway,
 } from "@/lib/channels/turns-finished-away";
 import { useConversationActivity } from "@/lib/computers/activity";
+import {
+  createStreamActivity,
+  type StreamActivity,
+} from "@/lib/computers/stream-activity";
 import { channelAgentId, useActiveBot } from "@/lib/copilot/active-bot";
 import {
   observeApprovalAgent,
   whileObserved,
 } from "@/lib/copilot/approval-context";
 import { offerItsOwnTools } from "@/lib/copilot/bot-offer";
+import {
+  reportComputerActivity,
+  withdrawComputerActivity,
+} from "@/lib/copilot/computer-activity";
 import { ConversationProvider } from "@/lib/copilot/conversation";
 import { afterMs, joinWithin } from "@/lib/copilot/join-thread";
 import {
@@ -714,6 +736,78 @@ export function ChannelChat({
     stepLimitTracker.steps,
     stepLimitTracker.steps,
   );
+  /*
+   * 服务器在跑这一轮的电脑工具（期九·四）：部署开了就给下面三样新的界面——到点或被打断时的「继续」、实时画面
+   * 按事件弹出、「后台进行中」。没开时一样都不给，对话和以前完全一样。
+   */
+  const serverRuns = useServerRuns();
+  const serverRunsRef = useRef(serverRuns);
+  serverRunsRef.current = serverRuns;
+  /*
+   * 到点、工具轮数用完、进程中途没了（`turn-limit`、`turn-interrupted`）：最后一轮停在哪，回答末尾给「继续」。
+   * 和上面的步数一样，订阅写在加入线程的 effect 前面；事件没重放时，最后一条回答就是那句说明，也认。
+   */
+  const turnStopRef = useRef<{
+    agent: unknown;
+    tracker: TurnStopTracker;
+  } | null>(null);
+  if (turnStopRef.current?.agent !== agent)
+    turnStopRef.current = { agent, tracker: createTurnStopTracker() };
+  const turnStopTracker = turnStopRef.current.tracker;
+  useEffect(() => {
+    const subscription = agent.subscribe?.(turnStopTracker.subscriber);
+    return () => subscription?.unsubscribe();
+  }, [agent, turnStopTracker]);
+  useEffect(() => {
+    turnStopTracker.sync(agent.messages);
+  }, [agent.messages, turnStopTracker]);
+  const turnStop = useSyncExternalStore(
+    turnStopTracker.listen,
+    turnStopTracker.stop,
+    turnStopTracker.stop,
+  );
+  /*
+   * 实时画面按事件弹出（期九·四）：服务器执行电脑工具，页面不再转发，也就没有「转发前报一声」。改听事件流里
+   * `computer_*` 工具开始。回放不报：`live()` 在加入线程回放完（或这一轮留给加入线程接着带）之后才调。
+   * 部署没开时这一声不发，页面照旧在转发前报。
+   */
+  const streamActivityRef = useRef<{
+    agent: unknown;
+    activity: StreamActivity;
+  } | null>(null);
+  if (streamActivityRef.current?.agent !== agent)
+    streamActivityRef.current = {
+      agent,
+      activity: createStreamActivity(runtimeAgentId, {
+        announce: (botId) =>
+          serverRunsRef.current ? reportComputerActivity(botId) : 0,
+        withdraw: (botId, announcement) => {
+          if (announcement > 0) withdrawComputerActivity(botId, announcement);
+        },
+      }),
+    };
+  const streamActivity = streamActivityRef.current.activity;
+  useEffect(() => {
+    const subscription = agent.subscribe?.(streamActivity.subscriber);
+    return () => subscription?.unsubscribe();
+  }, [agent, streamActivity]);
+  /*
+   * 「后台进行中 · 已跑 X 分钟」（期九·四）。起点以服务器说的为准，这个页面自己发出这一轮的时刻次之，半路接上时
+   * 看见的起点最后；见 `lib/channels/background-run.ts`。半路接上的起点记在那里，侧栏和顶部才读得到。
+   */
+  useEffect(() => {
+    if (!serverRuns) return;
+    observeRun(channel.id, runStartedAt);
+    return () => observeRun(channel.id, null);
+  }, [serverRuns, channel.id, runStartedAt]);
+  const background = useBackgroundRun(channel);
+  /*
+   * 第一次在后台跑时回答下方的一行提示，只出现一次，本机记着。只在这个页面自己看见这一轮在跑的时候画：服务器说的
+   * 那一条是读来的，这一轮刚收尾时它还没刷新，不能拿它撑着一句「跑完会通知你」。
+   */
+  const backgroundHint = useBackgroundHint(
+    background !== null && (runStartedAt !== null || agent.isRunning),
+  );
   /** 已经按过「重新派」的中断卡（按卡的 `key`）。 */
   const [acpResent, setAcpResent] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -749,6 +843,8 @@ export function ChannelChat({
           answering: () => lastRun.running() || rosterSaysWorking(channel.id),
           onAnswering: () => {
             if (current) setRestoring(false);
+            // 这一轮还在跑，加入线程接着把后面的事件带来：从这里起的工具调用是正在发生的。
+            streamActivity.live();
           },
         });
       } catch {
@@ -759,6 +855,8 @@ export function ChannelChat({
          */
       } finally {
         lastRun.stop();
+        // 回放完了：之后自己发的、服务器接着跑的调用都是正在发生的，可以弹出画面了。
+        streamActivity.live();
         openJoined.current();
       }
       /*
@@ -819,6 +917,7 @@ export function ChannelChat({
     channel.id,
     channel.threadId,
     runtimeAgentId,
+    streamActivity,
   ]);
 
   /*
@@ -1344,6 +1443,8 @@ export function ChannelChat({
     setTurnsInFlight(turnsRef.current);
     if (turnsRef.current === 1) {
       void setChannelBusy({ channelId: channel.id, busy: true });
+      // The clock 「后台进行中」 counts from, until the server's own row says when the turn began.
+      beginTurn(channel.id);
     }
     try {
       const reply = await deliver(trimmed, attachments, sent);
@@ -1370,6 +1471,7 @@ export function ChannelChat({
       // does not, and the last turn out is what takes the roster's working indicator down.
       if (turnsRef.current === 0) {
         void setChannelBusy({ channelId: channel.id, busy: false });
+        endTurn(channel.id);
         // 最后一轮落地：秒表停在这儿而不是最后一个 RUN_FINISHED——那时这轮还没走完（WP-3.2 S1a）。
         stageTrackerRef.current?.tracker.turnClosed();
       }
@@ -1421,6 +1523,16 @@ export function ChannelChat({
           threadId: channel.threadId,
         });
         /*
+         * 服务器说这一轮在后台跑（名册里的 `turn`），跑完了就再读一次：名册里的那一条是读来的，不会自己消失，
+         * 不重读，「后台进行中」要挂到下一次轮询。
+         */
+        if (serverRunsRef.current) {
+          void queryClient.invalidateQueries({
+            queryKey: channelKeys.detail(channel.id),
+          });
+          void queryClient.invalidateQueries({ queryKey: channelKeys.list() });
+        }
+        /*
          * A run the server stopped to ask the person (an app's call OpenBot asks about) draws its
          * card now, not on the inbox's next poll, as a computer step's does.
          */
@@ -1454,7 +1566,7 @@ export function ChannelChat({
       },
     });
     return () => subscription?.unsubscribe();
-  }, [agent, runtimeAgentId, channel.threadId]);
+  }, [agent, runtimeAgentId, channel.threadId, channel.id]);
 
   /** Stable reference for effects and component callbacks. */
   /*
@@ -1680,6 +1792,28 @@ export function ChannelChat({
                 botId: runtimeAgentId,
                 messages: agent.messages,
               }),
+              /*
+               * 到点、工具轮数用完、被打断的一轮，回答末尾的「到 25 分钟了 · 继续」等：和下面步数用完的
+               * 是同一个按钮，按下以你的身份发「继续」。只在服务器跑电脑工具的部署里给。
+               */
+              ...turnStopNotes({
+                stop: serverRuns ? turnStop : null,
+                busy: agent.isRunning || turnsInFlight > 0 || carryingOn,
+                ...(channel.active
+                  ? {
+                      onContinue: () =>
+                        continueAfterStepLimit(
+                          turnStopTracker,
+                          async (text) => {
+                            await runModel.beforeSend();
+                            return sayRef.current(text);
+                          },
+                        ),
+                    }
+                  : {}),
+              }),
+              // 第一次在后台跑时回答下方的一行提示：只出现一次，这一轮跑着时在。
+              ...backgroundHintNotes(backgroundHint),
               // 跑满步数被收尾的一轮，回答末尾的「已用完 N 步 · 继续」：按下以你的身份发「继续」。
               ...stepLimitNotes({
                 steps: stepLimit,
@@ -2037,7 +2171,10 @@ export function ChannelChat({
                */
               agent.isRunning ||
               turnsInFlight > 0 ||
-              (!readingAnswer && !channel.work?.length) ? null : (
+              (!readingAnswer &&
+                !channel.work?.some(
+                  (entry) => entry.kind !== "turn",
+                )) ? null : (
                 <>
                   {readingAnswer ? (
                     <ProgressRow

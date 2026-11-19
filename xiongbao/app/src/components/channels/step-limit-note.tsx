@@ -19,11 +19,33 @@ export function StepLimitNote({
   onContinue: () => unknown;
 }) {
   return (
+    <ContinueLine
+      dataAttribute="data-step-limit"
+      onContinue={onContinue}
+      said={`已用完 ${steps} 步`}
+    />
+  );
+}
+
+/**
+ * 一行「<说了什么> · 继续」：期一的步数用完和期九·四的到点、被打断共用，三处是同一个按钮、同一个样子。
+ * `dataAttribute` 是各自的标记，测试和脚本按它找到这一行。
+ */
+export function ContinueLine({
+  said,
+  onContinue,
+  dataAttribute,
+}: {
+  said: string;
+  onContinue: () => unknown;
+  dataAttribute: string;
+}) {
+  return (
     <p
       className="m-0 flex items-center text-[12px] text-[color:var(--wb-muted,var(--muted-foreground))]"
-      data-step-limit=""
+      {...{ [dataAttribute]: "" }}
     >
-      <span>{`已用完 ${steps} 步 · `}</span>
+      <span>{`${said} · `}</span>
       <button
         className="ml-1 underline underline-offset-2 hover:text-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         onClick={() => void onContinue()}

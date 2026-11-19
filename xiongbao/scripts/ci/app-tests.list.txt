@@ -110,6 +110,8 @@ tests/avatar-local-folder-ui.test.tsx
 tests/avatar-notebook-connector-ui.test.tsx
 tests/avatar-skin.test.tsx
 tests/avatar-sources-screens.test.tsx
+tests/background-run-list.test.tsx
+tests/background-run.test.tsx
 tests/bar-chart-long-labels.test.tsx
 tests/bot-access-apps.test.tsx
 tests/bot-access-skills.test.tsx
@@ -476,6 +478,8 @@ tests/search-text.test.ts
 tests/self-host-banner.test.tsx
 tests/send-glide.test.ts
 tests/serve.test.ts
+tests/server-computer-tools.test.tsx
+tests/server-run-chat.test.tsx
 tests/session-memory.test.ts
 tests/settings-about.test.tsx
 tests/settings-ai-model.test.tsx
@@ -537,6 +541,7 @@ tests/step-limit-continue.test.tsx
 tests/stopped-turn.test.ts
 tests/storage-compat.test.ts
 tests/storage-migrate.test.ts
+tests/stream-activity.test.ts
 tests/subagent-cards.test.tsx
 tests/subtask-step.test.tsx
 tests/summon-card-flip.test.tsx
@@ -601,6 +606,8 @@ tests/transcript-skill-badge.test.tsx
 tests/transcript-stream.test.tsx
 tests/transcript-turns.test.ts
 tests/translations.test.tsx
+tests/turn-notice.test.ts
+tests/turn-stop-chat.test.tsx
 tests/typed-reveal.test.ts
 tests/unoffered-tool-step.test.tsx
 tests/update-banner.test.tsx

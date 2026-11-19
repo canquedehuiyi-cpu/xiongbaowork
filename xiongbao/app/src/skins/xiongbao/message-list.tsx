@@ -41,6 +41,7 @@ import {
 } from "@/lib/agents/presence";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { approvalInboxOptions } from "@/lib/approvals";
+import { useBackgroundRun } from "@/lib/channels/background-run";
 import { untitledLine } from "@/lib/channels/label";
 import {
   type ChannelSummary,
@@ -499,8 +500,15 @@ const MessageRow = memo(function MessageRow({
   // A turn running, or work the conversation waits on between turns: a hop, a routine.
   const busy = (channel.busy ?? false) || (channel.work?.length ?? 0) > 0;
   const known = group ? undefined : knownPresence(presence);
+  /*
+   * 一轮在服务器上跑着（期九·四）：第二行写「后台进行中 · 已跑 X 分钟」，盖过最后一条消息；起点以服务器说的为准，
+   * 关掉再打开也接得上。部署没开这项时一直是 null，这一行和以前一样。
+   */
+  const background = useBackgroundRun(group ? undefined : channel);
   // 外部员工的电脑离线时，第二行写「离线 · 2 件排队中」（设计稿第 6 屏），不写最后一条消息。
-  const shown = known?.status === "offline" ? presenceSummary(known) : second;
+  const shown =
+    background?.words ??
+    (known?.status === "offline" ? presenceSummary(known) : second);
   return (
     <ChannelMenu
       canRename={channel.canRename ?? false}
@@ -563,7 +571,8 @@ const MessageRow = memo(function MessageRow({
           {shown || waitsOnMe || unread ? (
             <span className="mt-[3px] flex min-w-0 items-center gap-1.5">
               <span
-                className="min-w-0 flex-1 truncate text-(--wb-muted) text-[12.5px]"
+                className={`min-w-0 flex-1 truncate text-[12.5px] ${background ? "text-(--wb-accent)" : "text-(--wb-muted)"}`}
+                data-background-run={background ? "" : undefined}
                 data-message-second=""
                 title={shown || undefined}
               >

@@ -31,6 +31,10 @@
  */
 import { type BaseEvent, EventType, type Message } from "@ag-ui/client";
 import { and, asc, eq, sql } from "drizzle-orm";
+import {
+  INTERRUPTED_NOTICE,
+  TURN_INTERRUPTED_EVENT,
+} from "../../../shared/turn-notices";
 import type { Database } from "../db/client";
 import {
   threadRunEvents,
@@ -48,11 +52,7 @@ export const RUN_STALE_MS = FLUSH_EVERY_MS * 6;
 export const INTERRUPT_SWEEP_MS = 15_000;
 
 /** The event the closing leaves in the turn, for whatever tells a person a turn was cut off. */
-export const TURN_INTERRUPTED_EVENT = "turn-interrupted";
-
-/** The sentence in the conversation. 「继续」 is the reply that carries on, as after a step limit. */
-export const INTERRUPTED_NOTICE =
-  "服务重启了，这一轮在中途被打断。已经做完的步骤都保留着；正在做的那一步可能已经执行了一部分，系统没有重新执行它，请先确认结果。要接着做，请回复「继续」。";
+export { INTERRUPTED_NOTICE, TURN_INTERRUPTED_EVENT };
 
 /** What a tool call that was running when the process stopped is answered with. */
 export const INTERRUPTED_CALL =

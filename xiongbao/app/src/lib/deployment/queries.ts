@@ -41,6 +41,12 @@ export type DeploymentCapabilities = {
   edition: "team" | "personal";
   transcription?: boolean;
   voice?: boolean;
+  /**
+   * Whether a person's chat has its computer tools run by the server (期九): the page then only draws
+   * them, and the turn goes on with the page closed. The browser declares the choice in each run, so
+   * a server that does not say reads as off, and the page runs its own tools as it always did.
+   */
+  chatServerComputerTools?: boolean;
 };
 
 export const deploymentKeys = {
@@ -81,6 +87,7 @@ export function deploymentCapabilitiesQueryOptions() {
         edition?: string;
         transcription?: boolean;
         voice?: boolean;
+        chatServerComputerTools?: boolean;
       };
 
       return {
@@ -90,6 +97,7 @@ export function deploymentCapabilitiesQueryOptions() {
         edition: body.edition === "personal" ? "personal" : "team",
         transcription: body.transcription === true,
         voice: body.voice === true,
+        chatServerComputerTools: body.chatServerComputerTools === true,
       };
     },
   });

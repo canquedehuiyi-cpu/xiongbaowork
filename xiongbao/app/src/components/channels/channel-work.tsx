@@ -24,10 +24,15 @@ export function ChannelWorkRows({
   /** The Bot this person knows by that id, when they know it at all. */
   botOf?: (botId: string) => KnownBot | undefined;
 }) {
-  if (!work || work.length === 0) return null;
+  /*
+   * Not the Bot's own turn: that one is the conversation itself going on, drawn by its own turn and by
+   * the 「后台进行中」 line, and a row for it here would say "a routine is running" of a turn that is not.
+   */
+  const waiting = (work ?? []).filter((entry) => entry.kind !== "turn");
+  if (waiting.length === 0) return null;
   return (
     <div className="flex flex-col gap-1" data-testid="channel-work">
-      {work.map((entry) => {
+      {waiting.map((entry) => {
         const known = botOf?.(entry.botId);
         const name = known?.name ?? entry.botName;
         return (

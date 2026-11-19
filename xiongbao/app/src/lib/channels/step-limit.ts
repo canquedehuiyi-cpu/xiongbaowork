@@ -101,8 +101,12 @@ export function createStepLimitTracker(): StepLimitTracker {
  * 按下「继续」：这一行马上收起，以你的身份发出 {@link CONTINUE_TEXT}（`send` 是对话里发消息的那一个函数）。
  * 没发出去时把那一行放回来；发出去以后这一轮自己失败了，对话底下有它自己的那一行，不再放回。
  */
-export async function continueAfterStepLimit(
-  tracker: StepLimitTracker,
+export async function continueAfterStepLimit<Token>(
+  // 只用收起和放回两样，期九·四的到点、被打断那一行也走这里。
+  tracker: {
+    dismiss(): Token | null;
+    undismiss(token: Token | null): void;
+  },
   send: (text: string) => Promise<unknown>,
 ): Promise<void> {
   const token = tracker.dismiss();

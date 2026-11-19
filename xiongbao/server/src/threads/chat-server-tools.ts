@@ -7,6 +7,14 @@ import {
 } from "@ag-ui/client";
 import { Observable, type Subscription } from "rxjs";
 import {
+  COMPUTER_TOOLS_PROP,
+  SEGMENTS_NOTICE,
+  SERVER_COMPUTER_TOOLS,
+  TURN_LIMIT_EVENT,
+  type TurnLimitReason,
+  timeUpNotice,
+} from "../../../shared/turn-notices";
+import {
   HeadlessToolsMiddleware,
   SEGMENT_LIMIT_MESSAGE,
 } from "../../../toolkit/src/headless-tools";
@@ -31,15 +39,15 @@ import type { TurnEnd } from "./turn-notice";
  */
 
 /** Where a run says the server runs its computer tools. */
-export const COMPUTER_TOOLS_PROP = "computerTools";
-const SERVER = "server";
+export { COMPUTER_TOOLS_PROP };
 
 /** Whether a run's `forwardedProps` hand its computer tools to the server. */
 export function declaresServerComputerTools(forwardedProps: unknown): boolean {
   return (
     typeof forwardedProps === "object" &&
     forwardedProps !== null &&
-    (forwardedProps as Record<string, unknown>)[COMPUTER_TOOLS_PROP] === SERVER
+    (forwardedProps as Record<string, unknown>)[COMPUTER_TOOLS_PROP] ===
+      SERVER_COMPUTER_TOOLS
   );
 }
 
@@ -47,19 +55,14 @@ export function declaresServerComputerTools(forwardedProps: unknown): boolean {
 const isComputerToolName = (name: string) =>
   name.startsWith("computer_") || name === "report_refusal";
 
-/** What a person reads when the turn's clock ran out; the minutes are the limit it ran under. */
-const timeUpNotice = (minutes: number) =>
-  `这一轮已经跑满 ${minutes} 分钟，我先停在这里。已经做完的步骤都保留着，没做完的那一步没有执行；要接着做，请回复「继续」。`;
-const SEGMENTS_NOTICE =
-  "这一轮我连续调用工具的次数已经到了上限，先停在这里。已经做完的步骤都保留着，没做完的那一步没有执行；要接着做，请回复「继续」。";
 const NOT_RUN_TIME = "本轮时间已到，这一步没有执行。";
 const NOT_RUN_SEGMENTS = "本轮调用工具的次数已到上限，这一步没有执行。";
 const NOT_RUN_STOPPED = "已停止，这一步没有执行完。";
 
 /** The event a limit leaves in the conversation, for whatever tells the person a turn stopped. */
-export const TURN_LIMIT_EVENT = "turn-limit";
+export { TURN_LIMIT_EVENT };
 
-type Why = "time" | "segments";
+type Why = TurnLimitReason;
 
 export type ChatServerTools = {
   /** Put the server's computer on each Bot a person's chat runs, for the person asking. */
