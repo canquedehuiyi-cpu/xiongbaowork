@@ -115,7 +115,10 @@ import { waitForReplyInTranscript } from "./approvals/reply-in-transcript";
 import { createApprovalResumeTick } from "./approvals/resume-sweep";
 import { loadRuleVocabulary } from "./approvals/rule-vocabulary";
 import { createApprovalStore } from "./approvals/store";
-import { ApprovalRefusedError } from "./approvals/types";
+import {
+  type ApprovalContinuation,
+  ApprovalRefusedError,
+} from "./approvals/types";
 import { createServerApprovalService } from "./approvals/wiring";
 import {
   type AuditInitiator,
@@ -256,6 +259,14 @@ import {
 import { createRunnerTransport } from "./computer/runner-transport";
 import { createSnapshotStore } from "./computer/snapshot-store";
 import { createComputerToolsForTurn } from "./computer/turn-tools";
+import {
+  configureComputerWaits,
+  createComputerWaitStore,
+  createComputerWaitSweep,
+  HANDOFF_WAIT_MS,
+  WAIT_POLL_MS,
+  WAIT_SWEEP_MS,
+} from "./computer/waits";
 import { loadConfig } from "./config";
 import {
   chooseOpenAIApi,
@@ -407,7 +418,11 @@ import {
   modelOf,
 } from "./models/runtime-resolver";
 import { databaseTokenCallSink } from "./models/token-metering";
-import { createSignInNotifier, createSignInResumer } from "./passwords/resume";
+import {
+  createSignInNotifier,
+  createSignInResumer,
+  createWaitResumer,
+} from "./passwords/resume";
 import { createSignInService } from "./passwords/service";
 import { createPasswordStore } from "./passwords/store";
 import { createOnboardingStore } from "./people/onboarding";
@@ -509,6 +524,10 @@ import {
   RECOVERY_SWEEP_KIND,
   sweepAbandonedWork,
 } from "./recovery/abandoned-work";
+import {
+  INTERRUPT_SWEEP_MS,
+  interruptStaleRuns,
+} from "./recovery/interrupted-runs";
 import { createRequestActor } from "./request-actor";
 import { createResponsibilityBindingStore } from "./responsibilities/bindings";
 import {
@@ -620,6 +639,7 @@ import {
   runCompaction,
 } from "./threads/compaction";
 import { contextBreakdownRecorder } from "./threads/context-usage";
+import { createContinuationRunner } from "./threads/continuation-clock";
 import {
   createLocalThreadPlatform,
   createLocalThreadReader,
@@ -655,6 +675,9 @@ import {
   createWakerFlowShareRoutes,
 } from "./wakerflows/routes";
 import { createWakerFlowStore, flowRunEventWriter } from "./wakerflows/store";
+import { resolveCrawlService } from "./web/crawl4ai";
+import { resolveSearchProvider } from "./web/search";
+import { webTools } from "./web/tools";
 import { readAuditEvent, readWhatIfVocabulary } from "./what-if";
 import { repeatAfterEach } from "./work/loop";
 import { createWorkQueue, startWorkOfferedListener } from "./work/queue";
@@ -2014,6 +2037,61 @@ await startupLifecycle.run(async (startup) => {
    * The private sign-in form and the Passwords vault. A Bot asks to be signed in; the person answers
    * in a form outside the conversation; the computer types the login. See passwords/service.ts.
    */
+  /**
+   * A turn that waited on a person's answer at the computer, carried on once it came: the same
+   * continuation an approval's is, through the group when the turn was a group's so the reply lands on
+   * the row that was waiting (期九·三). Read when it runs, long after the runners below are made.
+   */
+  const continueWaitingTurn = (
+    routineId: string,
+    input: {
+      ownerUserId: string;
+      botId: string;
+      snapshot: ApprovalContinuation;
+      result: { content: string };
+      messageId: string;
+      waitKey: string;
+    },
+  ) =>
+    groupConversations.continueWaiting(input.waitKey, (hooks) =>
+      continuationRunner({
+        ...(hooks?.onCustom ? { onCustom: hooks.onCustom } : {}),
+        ...(hooks?.onToolCall ? { onToolCall: hooks.onToolCall } : {}),
+        ...(hooks?.onReasoning ? { onReasoning: hooks.onReasoning } : {}),
+        ownerUserId: input.ownerUserId,
+        routineId,
+        agentId: input.botId,
+        threadId: input.snapshot.threadId,
+        instruction: "",
+        initiator: input.snapshot.initiator ?? PERSON_INITIATOR,
+        continuation: {
+          snapshot: input.snapshot,
+          result: input.result,
+          messageId: input.messageId,
+        },
+      }),
+    );
+  /** What a carried-on turn said, written into the conversation it belongs to. */
+  const recordWaitReply = async ({
+    ownerUserId,
+    channelId,
+    botId,
+    text,
+    messageId,
+  }: {
+    ownerUserId: string;
+    channelId: string;
+    botId: string;
+    text: string;
+    messageId: string;
+  }) => {
+    await channelStore.recordActivity(
+      await actorFor(ownerUserId),
+      channelId,
+      { text, agentId: botId, at: new Date() },
+      { id: messageId },
+    );
+  };
   const signInService = computerGateway
     ? createSignInService({
         store: createPasswordStore(database),
@@ -2036,36 +2114,8 @@ await startupLifecycle.run(async (startup) => {
             database,
             resumeResponsibility: (owner, runId, result) =>
               responsibilityStore.resumeWaiting(owner, runId, result),
-            continueTurn: ({
-              ownerUserId,
-              botId,
-              snapshot,
-              result,
-              messageId,
-            }) =>
-              approvalContinuationRunner({
-                ownerUserId,
-                routineId: "sign-in",
-                agentId: botId,
-                threadId: snapshot.threadId,
-                instruction: "",
-                initiator: snapshot.initiator ?? PERSON_INITIATOR,
-                continuation: { snapshot, result, messageId },
-              }),
-            recordReply: async ({
-              ownerUserId,
-              channelId,
-              botId,
-              text,
-              messageId,
-            }) => {
-              await channelStore.recordActivity(
-                await actorFor(ownerUserId),
-                channelId,
-                { text, agentId: botId, at: new Date() },
-                { id: messageId },
-              );
-            },
+            continueTurn: (input) => continueWaitingTurn("sign-in", input),
+            recordReply: recordWaitReply,
           })(request),
       })
     : undefined;
@@ -2953,6 +3003,17 @@ await startupLifecycle.run(async (startup) => {
   });
   const acpRuntimeForDelivery = deviceAcpRuntime();
   if (acpRuntimeForDelivery) acpRuntimeForDelivery.delivery = acpDelivery;
+  /*
+   * 联网搜索与爬虫服务（期五 B）：开机读一次 `XIONGBAO_SEARCH_*`、`XIONGBAO_CRAWL_*`。没配也照样给员工工具，
+   * 工具调用时用中文说明没配置（单镜像部署默认就是这样）。
+   */
+  const webSearchSetup = resolveSearchProvider();
+  const webCrawlSetup = resolveCrawlService();
+  if (webSearchSetup.problem) console.info(`[web] ${webSearchSetup.problem}`);
+  if (webCrawlSetup.problem)
+    console.info(
+      `[web] ${webCrawlSetup.problem}web_crawl 使用进程内的简易爬取。`,
+    );
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -2960,6 +3021,15 @@ await startupLifecycle.run(async (startup) => {
   ) => [
     // 计划清单（`update_plan`）：每位员工默认都有，工具权限里关掉 `bot/update_plan` 即不给。
     ...updatePlanTools(),
+    /*
+     * 联网搜索、读网页、爬网站（`web_search`、`web_fetch`、`web_crawl`）：每位员工默认都有，工具权限里关掉
+     * `bot/web_search`、`bot/web_fetch`、`bot/web_crawl` 即不给。爬下的全文按这个人和这位员工隔开存。
+     */
+    ...webTools({
+      search: webSearchSetup,
+      crawl: webCrawlSetup,
+      scope: `${actorId}:${botId}`,
+    }),
     /*
      * 生成图片和视频（期五 C）：每位员工默认都有，工具权限里关掉 `bot/generate_image`、`bot/generate_video`
      * 即不给。生成服务按环境变量配置（`media/config.ts`），没配时工具照实说缺哪几项。文件存给这一轮的人。
@@ -3797,6 +3867,99 @@ await startupLifecycle.run(async (startup) => {
       }, 60_000),
     (resource) => resource.stop(),
   );
+  /*
+   * A conversation's turn whose process died (期九·二): marked interrupted, with a sentence in the
+   * conversation and a 「继续」 to reply. Not replayed. Asked again every 15 seconds on every replica,
+   * because a heartbeat that stopped moving is the only evidence and the claim is one conditional
+   * UPDATE; see `recovery/interrupted-runs.ts`.
+   */
+  const interruptStaleChatRuns = async () => {
+    try {
+      const closed = await interruptStaleRuns({
+        database,
+        closeCard: ({ tenantId, runId }) =>
+          taskProjector.finished({ tenantId, runRef: runId, failed: true }),
+        closed: ({ tenantId, threadId, runId }) =>
+          localThreadRunner.adoptClosedRun(tenantId, threadId, runId),
+      });
+      if (closed > 0)
+        console.warn(
+          JSON.stringify({ type: "interrupted-turns-closed", closed }),
+        );
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "interrupted-turns-error",
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        }),
+      );
+    }
+  };
+  startup.acquireSync(
+    () => {
+      // Once at boot, so a turn that died while the server was down is closed as soon as it is up.
+      void interruptStaleChatRuns();
+      return repeatAfterEach(interruptStaleChatRuns, INTERRUPT_SWEEP_MS);
+    },
+    (resource) => resource.stop(),
+  );
+  /*
+   * A turn that asks a person at the computer (take the browser, type a value into a field, sign in)
+   * waits for them in the tool, up to ten minutes, on every path that runs the computer on the server
+   * (期九·三). One that outlasts that stops as 「需要你」; its wait is on record, and this sweep carries
+   * the turn on once the person has handed control back, entered the value, or cancelled. A sign-in's
+   * own request carries its turn on when it is answered (`createSignInResumer`); this is the same
+   * continuation for the other two, and for a group's turn it goes through the group.
+   */
+  if (computerGateway) {
+    const computerWaitStore = createComputerWaitStore(database);
+    configureComputerWaits({
+      store: computerWaitStore,
+      maxMs: HANDOFF_WAIT_MS,
+      pollMs: WAIT_POLL_MS,
+    });
+    const resumeWait = createWaitResumer({
+      database,
+      resumeResponsibility: (owner, runId, result) =>
+        responsibilityStore.resumeWaiting(owner, runId, result),
+      continueTurn: (input) => continueWaitingTurn("computer-wait", input),
+      recordReply: recordWaitReply,
+    });
+    const computerWaitSweep = createComputerWaitSweep({
+      store: computerWaitStore,
+      gateway: computerGateway,
+      resume: (wait, content) =>
+        resumeWait({
+          key: "waitId",
+          id: wait.id,
+          ownerUserId: wait.ownerUserId,
+          botId: wait.botId,
+          continuation: wait.continuation as Record<string, unknown>,
+          content,
+          messageId: (snapshot) =>
+            `computer-wait-result:${wait.id}:${snapshot.toolCallId}`,
+        }),
+    });
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          try {
+            // The resumed turns run on their own; the tick has only taken the waits that are due.
+            await computerWaitSweep.tick();
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                type: "computer-wait-sweep-error",
+                error: error instanceof Error ? error.message : String(error),
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }, WAIT_SWEEP_MS),
+      (resource) => resource.stop(),
+    );
+  }
   startup.acquireSync(
     () =>
       repeatAfterEach(
@@ -4176,11 +4339,18 @@ await startupLifecycle.run(async (startup) => {
   };
   /*
    * The work an approval resumes keeps the light clock: the chat counts a conversation as carried on
-   * for twice that after the decision (`CARRY_ON_MS` in app/src/lib/approvals.ts).
+   * for twice that after the decision (`CARRY_ON_MS` in app/src/lib/approvals.ts). Except the rest of a
+   * chat whose computer tools the server runs, which is a long turn and gets the working turn's clock
+   * (`threads/continuation-clock.ts`, 期九·三).
    */
   const approvalContinuationRunner = createTurnRunner(
     approvalContinuationOptions,
   );
+  const continuationRunner = createContinuationRunner({
+    options: approvalContinuationOptions,
+    light: approvalContinuationRunner,
+    serverComputerTools: config.chatServerComputerTools,
+  });
   /** A board task's turn: the same runner, on the working turn's clock (期五). */
   const boardTaskTurnRunner = createTurnRunner({
     ...approvalContinuationOptions,
@@ -4207,7 +4377,7 @@ await startupLifecycle.run(async (startup) => {
             continueWaiting: (approvalId, run) =>
               groupConversations.continueWaiting(approvalId, run),
           },
-          approvalContinuationRunner,
+          approvalContinuationRunner: continuationRunner,
           channelStore,
           actorFor,
           // Assigned further down, once delivery is wired.
@@ -4332,7 +4502,7 @@ await startupLifecycle.run(async (startup) => {
       );
       await channelStore.signalBusy(input.threadId, true);
       try {
-        const result = await approvalContinuationRunner({
+        const result = await continuationRunner({
           ownerUserId: input.ownerUserId,
           tenantId: input.tenantId,
           routineId: `delivery:${input.runId}`,
@@ -5190,7 +5360,7 @@ await startupLifecycle.run(async (startup) => {
           approvalQueue,
           personResponseOwner,
           authoriseQuestion,
-          approvalContinuationRunner,
+          approvalContinuationRunner: continuationRunner,
           responsibilityStore,
           responsibilityAnswerTurn,
           sourceForCoordinationRun,

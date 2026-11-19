@@ -27,6 +27,83 @@ The sweep leaves these alone:
 `work_items` leases (responsibility, delivery, approval queues) already recover themselves: an expired
 lease is claimed again.
 
+## A conversation's turn (期九·二)
+
+A person's turn in a chat can run for twenty-five minutes, so it is written to the database while it
+runs rather than once at the end.
+
+**While it runs.** The turn has a row in `thread_run_liveness` (migration 0232) with `status = running`. The thread runner writes the turn's events to
+`thread_run_events` every 200 events or every 5 seconds, whichever comes first
+(`FLUSH_EVERY_EVENTS`, `FLUSH_EVERY_MS` in `threads/run-event-writer.ts`), and each write moves
+`heartbeat_at` forward; a turn with no such row is finished. The end writes only what is left and sets `finished`. The rows
+and their `seq` are exactly what one write at the end stored: the joining of consecutive text and
+reasoning deltas is done by one compactor that holds back only the delta still being joined, so that
+last delta of a turn the process dies in is the one thing not on disk.
+
+**When the process dies.** Nothing moves the heartbeat again. Every replica checks every 15 seconds
+(and once at boot, `recovery/interrupted-runs.ts`) for a `running` turn whose heartbeat is older than
+30 seconds on the database's clock, and in one transaction, in that turn's own tenant:
+
+- claims it (`running` to `interrupted`; a second replica finds nothing to claim);
+- closes what its events left open and answers a tool call nobody answered with 「服务重启时这一步正在
+  执行，可能已经做了一部分，系统没有重新执行它」;
+- adds one sentence to the conversation ending 「要接着做，请回复「继续」」, the same reply a step limit
+  asks for, and a `turn-interrupted` event for a surface that wants to draw it;
+- writes the thread's messages as of the turn's end, and closes the turn's board card as failed.
+
+**Nothing is replayed**, and no tool call is run again, for the reason above: the step that was running
+may have spent money or touched the computer. 「继续」 starts a new turn that sees what was done.
+
+So a restarted conversation hears within about 45 seconds of the server being back. A `running` turn
+is not history until it is closed: loading a tenant's threads skips it, and the sweep hands the closed
+turn to a process that already holds the conversation.
+
+**Several replicas.** A turn's live stream (the events a page that is watching receives) is held in the
+memory of the process running it. Another replica can read what has been written, but not follow the
+turn live, and it cannot take a request that belongs to a turn running elsewhere. A deployment with
+more than one replica must therefore keep a thread on one replica (session affinity by thread id).
+A single replica (docker-compose, the desktop app) is unaffected. Following a turn across replicas
+is not implemented.
+
+## A turn that waits on a person at the computer (期九·三)
+
+Three tools ask a person for something at the computer: `computer_request_help` (take the browser),
+`computer_request_secret` (type one value into a field) and `computer_request_sign_in`. On every path
+that runs the computer on the server (a chat, a group, a board card, a routine, a goal) they no longer
+stop the turn on the spot. The tool **waits for up to ten minutes** (`HANDOFF_WAIT_MS` in
+`computer/waits.ts`), polling the computer the way the browser's own tool did, and returns when the
+person hands control back, enters the value, signs in, or cancels; the turn then goes on. Stop ends the
+wait at once, and withdraws a takeover request nobody has taken yet.
+
+If ten minutes pass and the request is still open, the turn ends as 「需要你」 (the same suspension as
+before) and **the server carries it on when the person answers**:
+
+- a takeover or a secret is written to `computer_waits` (migration 0233) with the turn's snapshot; a
+  sweep (`WAIT_SWEEP_MS`, 3 s, every replica, `for update skip locked`) reads the computer's state for
+  each open row and, once the request is over, continues the turn from the snapshot with the outcome as
+  the tool's result;
+- a sign-in is the request in `sign_in_requests`. While the tool waits the request has no turn on it, so
+  answering it resumes nothing twice; when the wait ends, the turn is hung on the request (kept open for a
+  day instead of a quarter hour), and answering it resumes the turn (`passwords/resume.ts`). An answer
+  that lands between the last look and the hanging is taken by the tool itself.
+
+A group's turn is continued through the group (its waiting row is found by the wait's id) so the reply
+lands in the shared transcript; a responsibility run and a routine run waiting on the id are resumed
+the way an approval resumes them. A turn that stops again on another wait ends where it should and is
+not tried again; a continuation that fails is tried up to five times.
+
+What does not change: the Bot never sees a secret (the tool returns only whether a value was entered),
+and while a person holds the wheel the Bot's own actions are still refused.
+
+Not covered: a crew's pipeline step that is parked on one of these waits is not carried on by this
+(it is parked by approval id only). The computer drops a takeover request nobody took after ten minutes
+and clears a secret request after ten minutes, the same as the wait, so past the wait only a takeover
+somebody did take, and a sign-in, can still be answered.
+
+Also (九·三): the rest of a chat whose computer tools the server runs, carried on after an approval
+(`approvalContinuationRunner`), runs under the working turn's 25 minutes and 80 rounds, not the light
+turn's 5 minutes (`threads/continuation-clock.ts`).
+
 ## Nothing is replayed
 
 A stopped step or firing may already have spent quota or written to the world. Re-running it is the

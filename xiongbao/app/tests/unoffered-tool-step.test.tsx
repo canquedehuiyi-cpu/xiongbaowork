@@ -95,7 +95,7 @@ function lone(result: string): Message[] {
       id: "a1",
       role: "assistant",
       content: "",
-      toolCalls: [call("c1", "web_search", '{"query":"OpenBot"}')],
+      toolCalls: [call("c1", "lookup_weather", '{"query":"OpenBot"}')],
     },
     { id: "t1", role: "tool", toolCallId: "c1", content: result },
     { id: "a2", role: "assistant", content: "Here is what I found." },
@@ -104,7 +104,7 @@ function lone(result: string): Message[] {
 
 test("a lone call to a tool it was never offered opens to one sentence, and didn't work", async () => {
   const view = draw(lone(AI_SDK));
-  expect(await view.findByText("Web search，没有成功")).toBeTruthy();
+  expect(await view.findByText("Lookup weather，没有成功")).toBeTruthy();
   expectOneSentence(view.container);
 });
 
@@ -115,7 +115,7 @@ test("LangGraph's wording, and the runtime's when the Bot has no tools at all, r
     "Error: Model tried to call unavailable tool 'web_search'. No tools are available.",
   ]) {
     const view = draw(lone(result));
-    expect(await view.findByText("Web search，没有成功")).toBeTruthy();
+    expect(await view.findByText("Lookup weather，没有成功")).toBeTruthy();
     expectOneSentence(view.container);
     cleanup();
   }

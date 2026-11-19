@@ -554,6 +554,8 @@ export function createSignInService(deps: SignInServiceDependencies) {
       continuation?: Record<string, unknown>;
       /** Send it to the owner's delivery channels. Unattended turns do; the open chat need not. */
       notify?: boolean;
+      /** How long the request stays open; the service's own when not said. */
+      ttlMs?: number;
     }): Promise<SignInRequestRecord> {
       const origin = originOf(input.site);
       const request = await store.createRequest({
@@ -565,7 +567,7 @@ export function createSignInService(deps: SignInServiceDependencies) {
         threadId: input.threadId ?? null,
         toolCallId: input.toolCallId ?? null,
         continuation: input.continuation ?? null,
-        expiresAt: new Date(Date.now() + ttlMs),
+        expiresAt: new Date(Date.now() + (input.ttlMs ?? ttlMs)),
       });
       await audit(
         "computer.sign_in_requested",
@@ -601,6 +603,9 @@ export function createSignInService(deps: SignInServiceDependencies) {
 
     /** The raw record, for the resume path. Never returned by a route. */
     record: load,
+
+    /** See `PasswordStore.attachContinuation`: for a turn that waited and now stops waiting. */
+    attachContinuation: store.attachContinuation,
 
     async pending(owner: string) {
       return Promise.all((await store.pendingRequests(owner)).map(view));

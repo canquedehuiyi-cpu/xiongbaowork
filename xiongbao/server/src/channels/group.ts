@@ -970,7 +970,13 @@ export function createGroupStore(
         .where(
           and(
             eq(groupMessages.status, "waiting"),
-            sql`${groupMessagePrivate.details}->>'approvalId' = ${approvalId}`,
+            /*
+             * Whatever the turn waits on: an approval, or (期九·三) a sign-in request or a wait at the
+             * computer, each named by its own id in the suspension the row was written from.
+             */
+            sql`(${groupMessagePrivate.details}->>'approvalId' = ${approvalId}
+              or ${groupMessagePrivate.details}->>'signInRequestId' = ${approvalId}
+              or ${groupMessagePrivate.details}->>'waitId' = ${approvalId})`,
             /*
              * The decider's own row only. In a shared group every member reads every row, and an
              * approval id is the one thing that ties a decision to the turn it resumes: another

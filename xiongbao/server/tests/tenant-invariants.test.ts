@@ -192,6 +192,8 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/channels/summary.ts": { 'runAsTenant("platform"': 2 },
   "src/computer/policy-store.ts": { 'runAsTenant("platform"': 1 },
   "src/computer/routes.ts": { "asAdminPlatform(": 1 },
+  // The computer-wait sweep claims every tenant's due waits in one pass; each is carried on in its own frame (期九·三).
+  "src/computer/waits.ts": { 'runAsTenant("platform"': 1 },
   // A signed-out runtime `/info` reads the deployment's catalogue roster, as `system` (P16f).
   "src/copilot.ts": { 'runAsTenant("system"': 1 },
   "src/credentials-reseal.ts": { 'runAsTenant("platform"': 2 },
@@ -283,6 +285,8 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/recorder/routes.ts": { "asPlatform(": 1 },
   "src/recorder/wiring.ts": { "asPlatform(": 3 },
   "src/recovery/abandoned-work.ts": { 'runAsTenant("platform"': 1 },
+  // The interrupted-turn sweep finds every tenant's stale running turns; each is closed in its own frame (期九·二).
+  "src/recovery/interrupted-runs.ts": { 'runAsTenant("platform"': 1 },
   "src/responsibilities/email.ts": { 'runAsTenant("platform"': 1 },
   "src/responsibilities/github.ts": { 'runAsTenant("platform"': 1 },
   "src/responsibilities/slack.ts": { 'runAsTenant("platform"': 1 },

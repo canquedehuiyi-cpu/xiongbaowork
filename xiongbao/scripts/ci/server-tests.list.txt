@@ -306,6 +306,7 @@ tests/computer-stream-upgrade.test.ts
 tests/computer-supervisor.test.ts
 tests/computer-target.test.ts
 tests/computer-terminal.test.ts
+tests/computer-waits.integration.test.ts
 tests/computer-wire-headers.test.ts
 tests/config-github-app.test.ts
 tests/config.test.ts
@@ -315,6 +316,7 @@ tests/connector-tokens-never-reach-computer.test.ts
 tests/content-governance.test.ts
 tests/context-usage.integration.test.ts
 tests/context-usage.test.ts
+tests/continuation-clock.test.ts
 tests/continuation-target-local.test.ts
 tests/continuation-target-store.integration.test.ts
 tests/control-refusal-end-to-end.test.ts
@@ -385,6 +387,7 @@ tests/dockerfile-coding-tools.test.ts
 tests/dockerfile-runtime-tree.test.ts
 tests/due-time.test.ts
 tests/duplicate-run.test.ts
+tests/durable-runs.integration.test.ts
 tests/edition-routes.test.ts
 tests/egress-policy-delivery.integration.test.ts
 tests/egress-policy-on-wake.test.ts
@@ -464,6 +467,7 @@ tests/intelligence-entitlement-check.test.ts
 tests/intelligence-entitlements-quiet.test.ts
 tests/intelligence-expected-answers.test.ts
 tests/intelligence-memory.test.ts
+tests/interrupted-run-messages.test.ts
 tests/isolated-bots.integration.test.ts
 tests/jsonb-encoding.integration.test.ts
 tests/key-guide-link.test.ts
@@ -754,6 +758,7 @@ tests/routing-routes.test.ts
 tests/routing-service.test.ts
 tests/run-built-agent-cancellation.test.ts
 tests/run-event-compaction.test.ts
+tests/run-event-compactor.test.ts
 tests/run-events-persist.integration.test.ts
 tests/run-mode.test.ts
 tests/run-model-built-in.test.ts
@@ -924,6 +929,8 @@ tests/wakerflow-versions.integration.test.ts
 tests/wakerflows-store.integration.test.ts
 tests/web-bot-auth.test.ts
 tests/web-research.test.ts
+tests/web-tools-run.test.ts
+tests/web-tools.test.ts
 tests/wechat-bind.integration.test.ts
 tests/wechat-ilink.test.ts
 tests/wechat-inbound.integration.test.ts

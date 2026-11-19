@@ -9,6 +9,7 @@ import {
 import {
   type HeadlessTool,
   HeadlessToolSuspension,
+  type HeadlessWaiting,
 } from "@openbot/toolkit/headless-tools";
 import { z } from "zod";
 import {
@@ -19,6 +20,8 @@ import {
 } from "../approvals/desktop-policy";
 import { currentApprovalContext } from "../approvals/types";
 import { type AuditStore, recordAuditEvent } from "../audit";
+import { isFinalSignIn, signInToolResult } from "../passwords/service";
+import type { SignInRequestRecord } from "../passwords/types";
 import type { ComputerSeat } from "./computer-key";
 
 /** The turn engine's headless-tool types live in the toolkit now; re-exported for this server's callers. */
@@ -38,6 +41,14 @@ import {
   HumanHasControlError,
 } from "./gateway";
 import { CODING_TOOL_GOVERNED_LIKE, type ControlState } from "./schema";
+import {
+  type ComputerWaiting,
+  computerWaiting,
+  type Reading,
+  readHandoff,
+  readSecret,
+  waitForPerson,
+} from "./waits";
 
 /** What the headless sign-in tool needs from the passwords module. See passwords/service.ts. */
 export type HeadlessSignInRequester = {
@@ -51,8 +62,29 @@ export type HeadlessSignInRequester = {
     toolCallId?: string;
     continuation?: Record<string, unknown>;
     notify?: boolean;
+    /** How long the request stays open; the service's own when not said. */
+    ttlMs?: number;
   }): Promise<{ id: string; origin: string }>;
+  /**
+   * What a turn that waits on the person's answer needs besides asking: the request as it stands now,
+   * and a way to hang the turn on it once the turn stops waiting (期九·三). Without them the tool stops
+   * the turn at once, with the turn on the request from the start, as it did before.
+   */
+  record?(ownerUserId: string, id: string): Promise<SignInRequestRecord>;
+  attachContinuation?(
+    ownerUserId: string,
+    id: string,
+    continuation: Record<string, unknown>,
+    keepOpenMs?: number,
+  ): Promise<boolean>;
 };
+
+/**
+ * How long a sign-in request stays open once its turn has stopped waiting and is left to be carried on
+ * when the person comes back: a day, not the quarter hour a request is open for when the person is in
+ * the conversation.
+ */
+const BACKGROUND_SIGN_IN_OPEN_MS = 24 * 60 * 60_000;
 
 /** Shared by the headless tool and the browser's registration, so both promise the same thing. */
 export const SIGN_IN_TOOL_DESCRIPTION =
@@ -86,6 +118,12 @@ export function createHeadlessComputerTools(options: {
    * refused to run `hostname`, saying the result would come from its own container.
    */
   machine?: "workspace" | "device";
+  /**
+   * Whether the tools that ask a person at the computer wait for them here (期九·三). Not said, it is
+   * the deployment's own (`configureComputerWaits`), and a deployment that has not turned it on stops
+   * the turn at once, as these tools always did.
+   */
+  waits?: ComputerWaiting | false;
   /**
    * This run may use the local apps on the Bot owner's paired machine (device MCP bridge §4.1): the
    * run is the owner's own (`localAppsAllowed`). Adds `computer_apps` and `computer_app_call` on a
@@ -122,6 +160,7 @@ function headlessComputerTools(options: {
   signIn?: HeadlessSignInRequester;
   machine?: "workspace" | "device";
   apps?: boolean;
+  waits?: ComputerWaiting | false;
 }): HeadlessTool[] {
   const { gateway, seat, actor, auditStore, signIn } = options;
   const botId = seat.botId;
@@ -199,6 +238,51 @@ function headlessComputerTools(options: {
       ...(state.request
         ? { requestId: state.request.id, handoff: state.request }
         : {}),
+    });
+  }
+  /*
+   * Waiting on a person, here (期九·三). Off, every tool below that asks a person stops the turn on the
+   * spot, as it always did.
+   */
+  const waits =
+    options.waits === false ? undefined : (options.waits ?? computerWaiting());
+  /**
+   * A wait that used its time with the person still not done. The turn ends as 「需要你」, and the wait is
+   * written down so the server carries the turn on when they answer. One last look is taken once it is
+   * on record: an answer that came in between is returned as the tool's result, unless the sweep has
+   * already taken it, and then the sweep carries the turn on and this one only stops.
+   */
+  async function park(input: {
+    kind: "help" | "secret";
+    requestId?: string;
+    label: string;
+    toolCallId: string;
+    message: string;
+    suspension: HeadlessWaiting;
+    read: () => Promise<Reading>;
+  }): Promise<Record<string, unknown>> {
+    const continuation = currentApprovalContext();
+    // Nothing to carry the turn on from: it stops, with the request open, as before.
+    if (!waits || !continuation?.threadId)
+      throw new HeadlessToolSuspension(input.message, input.suspension);
+    const wait = await waits.store.open({
+      ownerUserId: actor.userId ?? actor.id,
+      botId,
+      kind: input.kind,
+      ...(input.requestId ? { requestId: input.requestId } : {}),
+      label: input.label,
+      toolCallId: input.toolCallId,
+      threadId: continuation.threadId,
+      continuation,
+    });
+    const again = await input.read().catch((): Reading => ({ open: true }));
+    if (!again.open && (await waits.store.claim(wait.id))) {
+      await waits.store.finish(wait.id);
+      return again.result;
+    }
+    throw new HeadlessToolSuspension(input.message, {
+      ...input.suspension,
+      waitId: wait.id,
     });
   }
   const tools = [
@@ -414,24 +498,98 @@ function headlessComputerTools(options: {
     ),
     tool(
       "computer_request_help",
-      "Create a durable request for the person to take the browser and sign in or clear a challenge. This unattended turn pauses until a person helps; never ask them to send you a password.",
+      waits
+        ? "Create a durable request for the person to take the browser and sign in or clear a challenge. This call waits for them, up to ten minutes, and returns when they hand the browser back; if they have not by then this turn stops and is carried on once they do. Never ask them to send you a password."
+        : "Create a durable request for the person to take the browser and sign in or clear a challenge. This unattended turn pauses until a person helps; never ask them to send you a password.",
       z.strictObject({ reason: text }),
-      async ({ reason }, { toolCallId }) =>
-        waiting(
-          await gateway.requestHelp(seat, actor, reason, toolCallId),
+      async ({ reason }, { toolCallId, signal }) => {
+        const state = await gateway.requestHelp(
+          seat,
+          actor,
           reason,
-        ),
+          toolCallId,
+        );
+        const request = state.request;
+        if (!waits || !request) return waiting(state, reason);
+        const read = () =>
+          readHandoff(gateway, seat, { id: request.id, reason }, signal);
+        const waited = await waitForPerson({
+          maxMs: waits.maxMs,
+          pollMs: waits.pollMs,
+          signal,
+          read,
+        });
+        if (waited.kind === "answered") return waited.result;
+        if (waited.kind === "stopped") {
+          // Stop detaches nobody who already has the wheel: only a request still waiting is withdrawn.
+          const current = await gateway
+            .control(seat, request.id)
+            .catch(() => null);
+          if (
+            current?.request?.id === request.id &&
+            current.request.status === "waiting"
+          )
+            await gateway
+              .cancelControl(seat, actor, request.id)
+              .catch(() => null);
+          return {
+            ok: false,
+            stopped: true,
+            requestId: request.id,
+            reason:
+              "Stopped waiting. A person who has control keeps it until they hand back.",
+          };
+        }
+        return park({
+          kind: "help",
+          requestId: request.id,
+          label: reason,
+          toolCallId,
+          message: reason,
+          suspension: {
+            kind: "computer_handoff",
+            botId,
+            requestId: request.id,
+            handoff: request,
+          },
+          // Read late: the computer is asked once more, for a request that may have ended just now.
+          read: () => readHandoff(gateway, seat, { id: request.id, reason }),
+        });
+      },
     ),
     tool(
       "computer_request_secret",
-      "Ask the person to enter one secret directly into the focused field. Click the field first. You must never receive the secret; this unattended turn pauses for the person.",
+      waits
+        ? "Ask the person to enter one secret directly into the focused field. Click the field first. You must never receive the secret. This call waits for them, up to ten minutes, and returns when it is entered; if it is not by then this turn stops and is carried on once it is."
+        : "Ask the person to enter one secret directly into the focused field. Click the field first. You must never receive the secret; this unattended turn pauses for the person.",
       z.strictObject({ label: text, ref, snapshotId }),
-      async (input) =>
-        waiting(
-          await gateway.requestSecret(seat, actor, input),
-          `The person must enter ${input.label} directly into the page.`,
-          "computer_secret",
-        ),
+      async (input, { toolCallId, signal }) => {
+        const state = await gateway.requestSecret(seat, actor, input);
+        if (!waits)
+          return waiting(
+            state,
+            `The person must enter ${input.label} directly into the page.`,
+            "computer_secret",
+          );
+        // Completion is the computer clearing its request; the value never comes back to the model.
+        const waited = await waitForPerson({
+          maxMs: waits.maxMs,
+          pollMs: waits.pollMs,
+          signal,
+          read: () => readSecret(gateway, seat, input.label),
+        });
+        if (waited.kind === "answered") return waited.result;
+        if (waited.kind === "stopped")
+          return { ok: true, result: "The request was cancelled." };
+        return park({
+          kind: "secret",
+          label: input.label,
+          toolCallId,
+          message: `The person must enter ${input.label} directly into the page.`,
+          suspension: { kind: "computer_secret", botId },
+          read: () => readSecret(gateway, seat, input.label, true),
+        });
+      },
     ),
   ];
   if (onDevice && options.apps)
@@ -487,10 +645,24 @@ function headlessComputerTools(options: {
         "computer_request_sign_in",
         SIGN_IN_TOOL_DESCRIPTION,
         z.strictObject({ site: text, reason: z.string().optional() }),
-        async ({ site, reason }, { toolCallId }) => {
+        async ({ site, reason }, { toolCallId, signal }) => {
           const continuation = currentApprovalContext();
+          const owner = actor.userId ?? actor.id;
+          /*
+           * Waiting here needs the request as it stands and a way to hang the turn on it once the turn
+           * stops waiting. Until then the request has no turn on it (the open chat that asked it is
+           * polling and needs nothing), so answering it in the meantime resumes nothing twice.
+           */
+          const here =
+            waits && continuation && signIn.record && signIn.attachContinuation
+              ? {
+                  waits,
+                  record: signIn.record,
+                  attach: signIn.attachContinuation,
+                }
+              : undefined;
           const request = await signIn.request({
-            ownerUserId: actor.userId ?? actor.id,
+            ownerUserId: owner,
             botId,
             site,
             ...(reason ? { reason } : {}),
@@ -499,26 +671,65 @@ function headlessComputerTools(options: {
               ? { threadId: continuation.threadId }
               : {}),
             toolCallId,
-            ...(continuation
-              ? {
-                  continuation: continuation as unknown as Record<
-                    string,
-                    unknown
-                  >,
-                }
-              : {}),
+            ...(here
+              ? // Open for the wait and a little over; kept open longer once the turn stops waiting.
+                { ttlMs: here.waits.maxMs + 5 * 60_000 }
+              : continuation
+                ? {
+                    continuation: continuation as unknown as Record<
+                      string,
+                      unknown
+                    >,
+                  }
+                : {}),
             notify: true,
           });
-          throw new HeadlessToolSuspension(
-            `Waiting for the person to sign in to ${request.origin} in a private form.`,
-            {
-              kind: "computer_sign_in",
-              botId,
-              requestId: request.id,
-              signInRequestId: request.id,
+          const message = `Waiting for the person to sign in to ${request.origin} in a private form.`;
+          const suspension = {
+            kind: "computer_sign_in",
+            botId,
+            requestId: request.id,
+            signInRequestId: request.id,
+            site: request.origin,
+          };
+          if (!here || !continuation)
+            throw new HeadlessToolSuspension(message, suspension);
+          const read = async (): Promise<Reading> => {
+            const current = await here.record(owner, request.id);
+            return isFinalSignIn(current.status)
+              ? {
+                  open: false,
+                  result: signInToolResult(current) as Record<string, unknown>,
+                }
+              : { open: true };
+          };
+          const waited = await waitForPerson({
+            maxMs: here.waits.maxMs,
+            pollMs: here.waits.pollMs,
+            signal,
+            read,
+          });
+          if (waited.kind === "answered") return waited.result;
+          if (waited.kind === "stopped")
+            return {
+              ok: false,
+              stopped: true,
               site: request.origin,
-            },
+              result: `Stopped waiting for the sign-in to ${request.origin}.`,
+            };
+          const hung = await here.attach(
+            owner,
+            request.id,
+            continuation as unknown as Record<string, unknown>,
+            BACKGROUND_SIGN_IN_OPEN_MS,
           );
+          // Answered between the last look and now: nothing is left to carry the turn on, so the answer
+          // is this call's. (An answer after this point finds the turn on the request and resumes it.)
+          if (!hung) {
+            const reading = await read();
+            if (!reading.open) return reading.result;
+          }
+          throw new HeadlessToolSuspension(message, suspension);
         },
       ),
     );

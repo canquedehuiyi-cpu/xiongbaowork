@@ -216,6 +216,13 @@ services:
       # ChatGPT plan for a step (server/src/learning/model-endpoint.ts). OpenBot Desktop mints it
       # once per installation and gives it to this service and that agent alone.
       OPENBOT_LEARNING_MODEL_TOKEN: ${LEARNING_MODEL_TOKEN:-}
+      # 员工的联网搜索（web_search）：默认用下面自带的 `searxng` 服务。
+      XIONGBAO_SEARCH_PROVIDER: ${XIONGBAO_SEARCH_PROVIDER:-searxng}
+      XIONGBAO_SEARCH_URL: ${XIONGBAO_SEARCH_CONTAINER_URL:-http://searxng:8080}
+      # 渲染 JS 和深度爬取（web_fetch 的 render_js、web_crawl）：默认指向下面的 `crawl4ai` 服务（`crawl`
+      # profile，按需打开）。它没起或没设令牌时，员工退回进程内的抓取，照样能用。
+      XIONGBAO_CRAWL_URL: ${XIONGBAO_CRAWL_CONTAINER_URL:-http://crawl4ai:11235}
+      XIONGBAO_CRAWL_TOKEN: ${XIONGBAO_CRAWL_TOKEN:-}
     # Who the server runs as. The image's own user by default. On Linux the desktop names the host's,
     # because the sign-in file below is the host user's and readable by nobody else, and a bind mount
     # there keeps the host's numbers; Docker Desktop's file sharing on macOS and Windows does not.
@@ -305,6 +312,55 @@ services:
     # can reach can reach this.
     networks:
       - data
+
+  # 员工联网搜索（web_search）用的元搜索：SearXNG，自建、免费、不要 key（AGPL-3.0，作为独立服务运行，不链接
+  # 进本仓库的代码）。镜像钉精确版本；设置在 docker/searxng/settings.yml（打开 json 格式、选国内外都可能
+  # 可用的引擎、超时和引擎出错后的退避）。
+  #
+  # 没有 profile：它很轻，`docker compose up -d searxng` 或者起 `server` 时一并点名即可。只发布到本机回环，
+  # 给在宿主机上跑的开发服务器用（XIONGBAO_SEARCH_URL=http://127.0.0.1:8888）；容器里的服务器按服务名找它。
+  #
+  # 密钥：SEARXNG_SECRET 没给就在每次启动时随机生成。它只用来签偏好 cookie，服务器调用 JSON 接口用不到，
+  # 所以每次不同也无妨；settings.yml 里留着 SearXNG 认作「没改过」的占位值，万一生成失败它会拒绝启动。
+  searxng:
+    image: searxng/searxng:2026.11.2-cccbc9e15
+    restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -c
+      - export SEARXNG_SECRET="$${SEARXNG_SECRET:-$$(head -c 24 /dev/urandom | base64 | tr -dc a-zA-Z0-9)}"; exec /usr/local/searxng/entrypoint.sh
+    environment:
+      SEARXNG_SECRET: ${XIONGBAO_SEARXNG_SECRET:-}
+      # 设置文件是只读挂进去的，不让入口脚本去改它的属主。
+      FORCE_OWNERSHIP: "false"
+    volumes:
+      - ./docker/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    ports:
+      - "127.0.0.1:${SEARXNG_PORT:-8888}:8080"
+      - "[::1]:${SEARXNG_PORT:-8888}:8080"
+
+  # 渲染 JS、深度爬取（web_fetch 的 render_js、web_crawl）用的爬虫服务：Crawl4AI（Apache-2.0）。镜像钉精确版本。
+  #
+  # 在 `crawl` profile 后面：镜像有几个 GB，还要一个无头 Chromium，不是每个部署都要。打开：设好
+  # XIONGBAO_CRAWL_TOKEN（`openssl rand -hex 32`），再 `docker compose --profile crawl up -d crawl4ai`。
+  # 没有令牌时 Crawl4AI 只绑容器自己的回环、服务器连不上，员工退回进程内的简易抓取。
+  #
+  # 不让它被用来打内网：服务器只把校验过的公网地址交给它（server/src/web/），它交回的页面再按地址校验一遍；
+  # 爬取中途发现的链接由它自己请求，它自带出站校验（经本容器内的固定解析代理，非公网地址一律拦，含重定向
+  # 的每一跳），这里显式关掉放行内网的开关。它和 searxng 一样在 `default` 网络上，不在数据库所在的 `data` 上。
+  crawl4ai:
+    profiles: ["crawl"]
+    image: unclecode/crawl4ai:0.9.5
+    restart: unless-stopped
+    shm_size: "1g"
+    environment:
+      CRAWL4AI_API_TOKEN: ${XIONGBAO_CRAWL_TOKEN:-}
+      # web_crawl 要用深度爬取；页数、深度、总时长它自己还按 config.yml 的 limits 再夹一次。
+      CRAWL4AI_ALLOW_DEEP_CRAWL: "true"
+      CRAWL4AI_ALLOW_INTERNAL_URLS: "false"
+    ports:
+      - "127.0.0.1:${CRAWL4AI_PORT:-11235}:11235"
+      - "[::1]:${CRAWL4AI_PORT:-11235}:11235"
 
   # The Bot's computer is long-lived so browser sessions remain signed in across turns.
   #
