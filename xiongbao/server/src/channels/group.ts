@@ -25,6 +25,7 @@ import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, asc, desc, eq, inArray, isNull, min, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
+import { STEP_LIMIT_EVENT } from "../../../shared/step-limit";
 import type { HandoffCaps } from "../agents/handoff";
 import { delegationFreed as readDelegationFreed } from "../approvals/delegation-freed";
 import type { ApprovalContinuation } from "../approvals/types";
@@ -416,6 +417,7 @@ const SHARED_DETAILS: ReadonlySet<string> = new Set([
   "consent",
   "delivery",
   "message",
+  "stepLimit",
   "via",
 ]);
 
@@ -448,6 +450,26 @@ function isConsentCard(value: unknown): value is GroupConsentCard {
     (serverId === undefined || typeof serverId === "string")
   );
 }
+
+/**
+ * 这一轮员工跑满了步数、被收尾（期一）：运行流里 `RUN_FINISHED` 前那条 `step-limit {steps}`
+ * （`shared/run-notices.ts`），记在回复行的 `details.stepLimit` 上。只有步数，不带内容，群里每个人读到的一样；
+ * 群聊末尾据此给「已用完 N 步 · 继续」（`app/src/components/channels/group-chat.tsx` `groupStepLimit`）。
+ */
+type GroupStepLimit = { steps: number };
+
+function isStepLimit(value: unknown): value is GroupStepLimit {
+  const steps = (value as { steps?: unknown } | null | undefined)?.steps;
+  return typeof steps === "number" && Number.isInteger(steps) && steps > 0;
+}
+
+function stepLimitOf(name: string, value: unknown): GroupStepLimit | null {
+  if (name !== STEP_LIMIT_EVENT || !isStepLimit(value)) return null;
+  return { steps: value.steps };
+}
+
+const withStepLimit = (limit: GroupStepLimit | null) =>
+  limit ? { stepLimit: limit } : {};
 
 function compactionNoteOf(name: string): GroupCompactionNote | null {
   if (name === COMPACTION_DONE_EVENT) return { outcome: "done" };
@@ -1958,6 +1980,7 @@ export function createGroupConversations(deps: {
         });
     };
     let compacted: GroupCompactionNote | null = null;
+    let limited: GroupStepLimit | null = null;
     const marks: GroupDeliveryMark[] = [];
     /*
      * 外部员工的轮次（它的招聘人 `hiredBy`，或这一轮回了 `detached`）只回一句「开始了」，它的三步在设备
@@ -1979,6 +2002,7 @@ export function createGroupConversations(deps: {
           },
           onCustom: ({ name, value }) => {
             compacted = compactionNoteOf(name) ?? compacted;
+            limited = stepLimitOf(name, value) ?? limited;
             const mark = deliveryMarkOf(name, value, agentId, new Date());
             if (mark) marks.push(mark);
           },
@@ -2039,11 +2063,14 @@ export function createGroupConversations(deps: {
             text: result.replyText,
           });
       const shownMarks = detached ? [] : ownMarks();
+      // 外部员工的轮次不走这里的步数（它在自己那台电脑上跑），不记。
+      const shownLimit = detached || bot.hiredBy ? null : limited;
       if (gate.status === "pending") {
         await deps.store.finish(id, "", "waiting", {
           ...gate.details,
           ...chainOf(turn),
           ...withMarks(shownMarks),
+          ...withStepLimit(shownLimit),
         });
         /*
          * The card stays where the gate left it, and it is not this call's business to move it.
@@ -2058,6 +2085,7 @@ export function createGroupConversations(deps: {
       const compaction: Record<string, unknown> = {
         ...(compacted ? { compaction: compacted } : {}),
         ...withMarks(shownMarks),
+        ...withStepLimit(shownLimit),
       };
       if (gate.status === "denied") {
         await deps.store.finish(id, gate.message, "failed", compaction);
@@ -2511,10 +2539,16 @@ export function createGroupConversations(deps: {
         return { replyText: held.text };
       }
       const resumedMarks: GroupDeliveryMark[] = [];
-      const allMarks = () => withMarks([...earlier, ...resumedMarks]);
+      // 恢复后这一段又跑满了步数：和标记一样记在这一行上。
+      let resumedLimit: GroupStepLimit | null = null;
+      const allMarks = () => ({
+        ...withMarks([...earlier, ...resumedMarks]),
+        ...withStepLimit(resumedLimit),
+      });
       try {
         const outcome = await run({
           onCustom: ({ name, value }) => {
+            resumedLimit = stepLimitOf(name, value) ?? resumedLimit;
             const mark = deliveryMarkOf(name, value, agentId, new Date());
             if (mark) resumedMarks.push(mark);
           },
@@ -2755,6 +2789,9 @@ export function createGroupConversations(deps: {
             ? { consent: details.consent }
             : {}),
           ...withMarks(marksOf(details)),
+          ...(isStepLimit(details.stepLimit)
+            ? { stepLimit: { steps: details.stepLimit.steps } }
+            : {}),
           // 外部员工在等招聘人确认：每个成员读到的都只有谁在等谁、结果如何。
           ...(groupAcpPermissionOf(details.acpPermission)
             ? {
