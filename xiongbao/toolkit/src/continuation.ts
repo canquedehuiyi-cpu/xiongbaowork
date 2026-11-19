@@ -28,3 +28,11 @@ export const withApprovalContext = <T>(
 ): Promise<T> => actionContext.run(context, run);
 
 export const currentApprovalContext = () => actionContext.getStore();
+
+/**
+ * Run work that is not part of the tool call it sits inside, with no continuation in scope: a call
+ * the work makes to the computer then has no conversation to be asked in, so it is refused rather
+ * than parking this call's turn on an approval about something else.
+ */
+export const outsideApprovalContext = <T>(run: () => T): T =>
+  actionContext.exit(run);

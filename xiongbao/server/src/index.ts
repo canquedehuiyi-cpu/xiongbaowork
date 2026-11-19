@@ -386,8 +386,9 @@ import {
 import { createLocalLearningEngine } from "./local-learning/engine";
 import { readMediaConfig } from "./media/config";
 import { createMediaRoutes } from "./media/routes";
-import { createMediaStore } from "./media/store";
+import { createMediaStore, mediaChannelOf } from "./media/store";
 import { mediaTools, offeredMediaTools } from "./media/tools";
+import { workspaceMedia } from "./media/workspace";
 import { createMemoryDefaults } from "./memory/defaults";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createIntelligenceMemory } from "./memory/intelligence";
@@ -2953,6 +2954,31 @@ await startupLifecycle.run(async (startup) => {
       outbound: modelOutbound,
       auditStore: bootAuditStore,
       initiator,
+      // A group chat's media is read by the group (migration 0231).
+      channelOf: mediaChannelOf(database),
+      /*
+       * A picture is also written into the coworker's own computer, where its scripts can open it. Looked
+       * up at the call, like the computer tools are: a coworker this person may not drive has none, and
+       * the answer is then the link alone.
+       */
+      ...(computerGateway
+        ? {
+            workspace: workspaceMedia({
+              gateway: computerGateway,
+              resolve: () =>
+                runAsTenant(actorId, async () => {
+                  const actor = await actorFor(actorId);
+                  const profile = await agentProfileStore.get(actor, botId);
+                  if (!profile || !canUseComputer(profile, actor))
+                    return undefined;
+                  return {
+                    seat: await computerGateway.seatFor(botId, actor.id),
+                    actor: { id: actor.id, userId: actor.id, initiator },
+                  };
+                }),
+            }),
+          }
+        : {}),
     }),
     ...wakeUpTools({
       store: wakeUpStore,

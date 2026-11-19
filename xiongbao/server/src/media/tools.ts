@@ -15,6 +15,15 @@
  * answered as `/api/media/<id>`, which the chat draws when the reply writes `![…](…)` and which opens
  * in a tab for that person. The provider's own link is never handed on: it is temporary.
  *
+ * IN A GROUP CHAT the file is saved with the group's channel (`channelOf`, from the run's own thread),
+ * so everyone in the group now can open it and nobody else (migration 0231).
+ *
+ * A PICTURE IS ALSO PUT IN THE COWORKER'S COMPUTER (`workspace`, `workspace.ts`) as `generated/<id>.png`
+ * and the path is in the answer: the coworker's scripts cannot reach `/api/media`, which is behind a
+ * session, and a picture is mostly wanted inside a Word or PowerPoint file. No computer, or a write
+ * that could not be done, leaves the link alone and is never an error. A video is not written (it can
+ * be tens of megabytes); it stays a link.
+ *
  * A VIDEO TAKES MINUTES. `generate_video` submits the job and waits a while (`waitMs`, polling every
  * `pollMs` as the providers ask); if the video is not done by then it answers a task number, and
  * `check_video` waits a while again. The task number carries when the job was submitted, so a job
@@ -37,11 +46,13 @@ import {
   mediaIdOf,
   mediaUrl,
 } from "../../../shared/media";
+import { currentApprovalContext } from "../approvals/types";
 import {
   type AuditInitiator,
   type AuditStore,
   recordPersonAuditEvent,
 } from "../audit";
+import { currentModelRun, UNSCOPED } from "../models/token-metering";
 import type { OutboundPolicy } from "../net/outbound-guard";
 import type { GrantedTool } from "../plugins/tools";
 import { runAsTenant } from "../tenant/context";
@@ -54,6 +65,7 @@ import {
   MediaProviderError,
 } from "./providers";
 import type { MediaKind, MediaStore } from "./store";
+import type { WorkspaceMedia } from "./workspace";
 
 export const GENERATE_IMAGE_REF = `bot/${GENERATE_IMAGE_TOOL}`;
 export const GENERATE_VIDEO_REF = `bot/${GENERATE_VIDEO_TOOL}`;
@@ -77,6 +89,20 @@ export type MediaToolOptions = {
   outbound: OutboundPolicy;
   auditStore?: AuditStore;
   initiator?: AuditInitiator;
+  /**
+   * The shared group a thread is the conversation of, for this person and coworker, or null when it is
+   * not one (`mediaChannelOf`). Absent: nothing is ever filed under a group.
+   */
+  channelOf?: (
+    ownerUserId: string,
+    agentId: string,
+    threadId: string,
+  ) => Promise<string | null>;
+  /**
+   * Puts a picture in the coworker's computer and answers its path, or undefined when it has no
+   * computer here. Absent: pictures are only saved in the deployment.
+   */
+  workspace?: WorkspaceMedia;
   /** Injected by tests. */
   now?: () => number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
@@ -136,6 +162,13 @@ function parse<T>(schema: z.ZodType<T>, args: unknown): T | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
+/** The thread of the run a call is part of, found at call time as the delivery tools find it. */
+function currentThread(): string | undefined {
+  const scope = currentModelRun();
+  if (scope && scope.threadId !== UNSCOPED) return scope.threadId;
+  return currentApprovalContext()?.threadId || undefined;
+}
+
 const defaultSleep = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason);
@@ -185,11 +218,28 @@ export function mediaTools(options: MediaToolOptions): GrantedTool[] {
   const asOwner = <T>(work: () => Promise<T>) =>
     runAsTenant(options.ownerUserId, work);
 
+  /** The shared group this call is in, if it is in one; a failed lookup is a chat of one. */
+  async function groupOfCall(): Promise<string | undefined> {
+    const threadId = currentThread();
+    const channelOf = options.channelOf;
+    if (!channelOf || !threadId) return undefined;
+    try {
+      return (
+        (await asOwner(() =>
+          channelOf(options.ownerUserId, options.agentId, threadId),
+        )) ?? undefined
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
   async function save(
     kind: MediaKind,
     file: GeneratedFile,
     prompt: string,
     provider: { id: string; model: string },
+    channelId?: string,
   ) {
     return asOwner(() =>
       options.store.save({
@@ -200,8 +250,27 @@ export function mediaTools(options: MediaToolOptions): GrantedTool[] {
         prompt,
         provider: provider.id,
         model: provider.model,
+        ...(channelId ? { channelId } : {}),
       }),
     );
+  }
+
+  /** The picture's path in the coworker's computer: absent without a computer, a note if it failed. */
+  async function inWorkspace(
+    id: string,
+    file: GeneratedFile,
+  ): Promise<{ path?: string; failed?: true }> {
+    if (!options.workspace) return {};
+    try {
+      const path = await options.workspace({
+        id,
+        mimeType: file.mimeType,
+        bytes: file.bytes,
+      });
+      return path ? { path } : {};
+    } catch {
+      return { failed: true };
+    }
   }
 
   async function counted(
@@ -278,7 +347,13 @@ export function mediaTools(options: MediaToolOptions): GrantedTool[] {
       if (status.state === "failed")
         return `视频没有生成出来：${status.reason}。可以换个描述再试。`;
       if (status.state === "done") {
-        const id = await save("video", status.file, prompt, provider);
+        const id = await save(
+          "video",
+          status.file,
+          prompt,
+          provider,
+          await groupOfCall(),
+        );
         await counted("video", provider, 1);
         const url = mediaUrl(id);
         return `视频已生成：[视频](${url})\n在回复里原样放上这个链接，对方点开就能看（登录后可以打开）。`;
@@ -323,14 +398,33 @@ export function mediaTools(options: MediaToolOptions): GrantedTool[] {
             { prompt, n, ...(size ? { size } : {}) },
             execution?.signal,
           );
-          const urls: string[] = [];
-          for (const file of files)
-            urls.push(mediaUrl(await save("image", file, prompt, provider)));
-          await counted("image", provider, urls.length);
-          const lines = urls.map(
-            (url, index) => `${index + 1}. ![图片 ${index + 1}](${url})`,
-          );
-          return `已生成 ${urls.length} 张图片：\n${lines.join("\n")}\n在回复里原样放上面的 markdown 图片，对方就能直接看到（地址登录后可以打开）。要做进 PPT 或文档时，告诉对方图片的地址。`;
+          const channelId = await groupOfCall();
+          const lines: string[] = [];
+          let written = 0;
+          let missed = 0;
+          for (const file of files) {
+            const id = await save("image", file, prompt, provider, channelId);
+            const placed = await inWorkspace(id, file);
+            written += placed.path ? 1 : 0;
+            missed += placed.failed ? 1 : 0;
+            lines.push(
+              `${lines.length + 1}. ![图片 ${lines.length + 1}](${mediaUrl(id)})${
+                placed.path ? `\n   电脑工作区里的文件：${placed.path}` : ""
+              }`,
+            );
+          }
+          await counted("image", provider, lines.length);
+          const showing =
+            "在回复里原样放上面的 markdown 图片，对方就能直接看到（地址登录后可以打开）。";
+          const forDocuments =
+            written > 0
+              ? "要把图片放进 Word、PPT 等文档，用上面「电脑工作区里的文件」的路径，在电脑上直接读这个文件（python-docx、python-pptx 的 add_picture 都可以）；不要在电脑上去取 /api/media 地址，电脑访问不到它。"
+              : "要做进 PPT 或文档时，告诉对方图片的地址。";
+          const note =
+            missed > 0
+              ? "有图片没能写进电脑工作区，那几张只有上面的站内地址，文档里要用时请对方另行提供。"
+              : "";
+          return `已生成 ${lines.length} 张图片：\n${lines.join("\n")}\n${showing}${forDocuments}${note}`;
         } catch (error) {
           return `图片没有生成出来：${sentence(error, "保存图片时出错了。")}`;
         }

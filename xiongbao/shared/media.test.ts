@@ -75,3 +75,21 @@ test("the transcript names each call in words", () => {
   expect(readToolName(GENERATE_VIDEO_TOOL, true).label).toBe("正在生成视频");
   expect(readToolName(CHECK_VIDEO_TOOL, true).label).toBe("正在取视频");
 });
+
+test("a Bot holding the image tool is told where the picture lands on its computer, and to use that path in documents", () => {
+  for (const computer of [false, true]) {
+    const said = mediaGuidance([GENERATE_IMAGE_TOOL], { computer }) ?? "";
+    expect(said).toContain("generated/");
+    expect(said).toContain(`${GENERATE_IMAGE_TOOL} 的结果里`);
+    expect(said).toContain("python-pptx");
+    expect(said).toContain("不要去下载它");
+  }
+});
+
+test("a video alone is never written to the computer, and the words say so; without the tools nothing changes", () => {
+  const video = mediaGuidance([GENERATE_VIDEO_TOOL], { computer: true }) ?? "";
+  expect(video).not.toContain("generated/");
+  expect(video).toContain("不会放进电脑工作区");
+  expect(mediaGuidance([], { computer: false })).toBeUndefined();
+  expect(mediaGuidance([], { computer: true })).toBe(DOCUMENTS_GUIDANCE);
+});
