@@ -50,7 +50,7 @@ export function checklistNotice(parts: readonly string[]): string {
  * model was made to answer with its tools off.
  *
  * A run a person started that is still calling tools on its last step is given one more budget of
- * steps (`answersOnLastStep` in `toolkit/src/copilotkit/last-step.ts`). If it reaches the end of that
+ * steps (`answersOnLastStep` in the toolkit's `last-step.ts`). If it reaches the end of that
  * too, its last step answers without tools, and this event goes out in the run's own stream, just
  * before `RUN_FINISHED`, so the chat can offer to carry on (「已用完 N 步 · 继续」). Because it rides in
  * the run's stream, the runner stores it with the run's other events, and a reload replays it.

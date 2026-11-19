@@ -25,7 +25,7 @@ import { STEP_LIMIT_EVENT } from "../../../shared/step-limit";
  * it likes -- is a forgery, and is dropped before anything stores or shows it. The real cards enter
  * through {@link emitRunEvent}, after the agent's stream has been cleaned; the real `step-limit` is
  * added by a built-in coworker's run outside the server's watch of it (`sayingStepLimit` in
- * `toolkit/src/copilotkit/agents.ts`), so it is never in the stream this cleans.
+ * the toolkit's `agents.ts`), so it is never in the stream this cleans.
  */
 export function isServerOnlyEvent(event: BaseEvent): boolean {
   if (event.type !== EventType.CUSTOM) return false;
