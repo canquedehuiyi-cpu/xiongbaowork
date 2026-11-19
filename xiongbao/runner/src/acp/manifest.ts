@@ -302,3 +302,60 @@ export async function adapterLaunch(
     sessionMode: entry.askSessionMode,
   };
 }
+
+/*
+ * THE EMPLOYEE'S OWN COMPUTER (the agent computer container). Only Claude Code runs there (ruled
+ * 2026-11-19: the image carries Claude Code and its adapter alone; Codex runs only on the hirer's own
+ * paired computer, runtime `device`). The adapter is started from the copy the image installed at build
+ * time (never `npx`, nothing is downloaded when an employee starts), with the same model block turned
+ * into the same launch (`claudeModelLaunch`). What differs from a device is who guards what:
+ *
+ *   Claude Code  Nothing changes: the session is switched to `default`, Claude Code's own "ask before
+ *                editing or running" mode, and every request reaches the bridge as on a device. Its
+ *                own sandbox is off by default and stays off. The container runs as root, where Claude
+ *                Code refuses only `--dangerously-skip-permissions`, which is never used.
+ *
+ * The adapter gets an environment built from an allow list (`cloudAdapterLaunch`): nothing of the
+ * computer's own (its token, proxies with passwords) is inherited, and Claude Code's own update checks
+ * and telemetry are switched off, so the only traffic is the model proxy and what the employee's
+ * work asks for.
+ */
+
+/** The adapter's bin name inside the image's install folder. */
+const CLOUD_ADAPTER_BIN = "claude-agent-acp";
+
+/**
+ * The spec that starts Claude Code's adapter on the employee's cloud computer: the copy installed in
+ * the image (`binDir/<adapter>`, run by `node`), with `env` (already an allow list) plus the model's
+ * environment and the harness's own settings, and EVERY OTHER VARIABLE OF THIS PROCESS UNSET (the
+ * computer's token and the like): `childEnv` hands a child the parent's environment unless told not to.
+ */
+export function cloudAdapterLaunch(
+  place: { adapterDir: string },
+  opts: {
+    binDir: string;
+    env: Record<string, string>;
+    model: ModelLaunch;
+    /** The environment `childEnv` would inherit from; this process's own unless a test passes one. */
+    parentEnv?: Record<string, string | undefined>;
+  },
+): AcpSpawnSpec {
+  const harnessEnv: Record<string, string> = {
+    DISABLE_AUTOUPDATER: "1",
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+  };
+  const env = { ...opts.env, ...opts.model.env, ...harnessEnv };
+  return {
+    command: "node",
+    args: [join(opts.binDir, CLOUD_ADAPTER_BIN)],
+    env,
+    unsetEnv: [
+      ...new Set([
+        ...Object.keys(opts.parentEnv ?? process.env),
+        ...opts.model.unsetEnv,
+      ]),
+    ],
+    cwd: place.adapterDir,
+    sessionMode: "default",
+  };
+}

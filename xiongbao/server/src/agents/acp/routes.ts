@@ -7,6 +7,7 @@ import {
   type AcpHarness,
   type AcpRuleKey,
   type AcpRuleValue,
+  acpRuntimeFrom,
 } from "../../../../shared/acp";
 import { type AuditStore, recordAuditEvent } from "../../audit";
 import type { AppVariables } from "../../auth/guards";
@@ -318,6 +319,15 @@ export function createExternalAgentRoutes(deps: {
     ]);
     if (!profile || !current)
       return context.json({ error: "找不到这位外部员工。" }, 404);
+    // An employee in the cloud has no computer or folder of the hirer's to change.
+    if (
+      current.runtime === "cloud" &&
+      (body.deviceId || body.workdirRef || body.appRef)
+    )
+      return context.json(
+        { error: "在云电脑上干活的员工没有电脑和工作文件夹可改。" },
+        400,
+      );
     const run: ExternalAgentRun = {
       ...current,
       ...(body.deviceId ? { deviceId: body.deviceId } : {}),
@@ -400,6 +410,7 @@ function externalDto(agent: AgentProfile, run: ExternalAgentRun) {
       workdirRef: run.workdirRef,
       ...(run.appRef ? { appRef: run.appRef } : {}),
       rules: run.permissions,
+      ...(run.runtime === "cloud" ? { runtime: "cloud" as const } : {}),
       ...(run.noPermissionAcknowledged
         ? { noPermissionAcknowledged: true }
         : {}),
@@ -435,6 +446,8 @@ async function savedRun(
     workdirRef: saved.workdirRef,
     ...(typeof saved.appRef === "string" ? { appRef: saved.appRef } : {}),
     permissions: acpRulesOf(saved),
+    // Only a cloud employee says where it runs; the rest are exactly what they were.
+    ...(acpRuntimeFrom(saved) === "cloud" ? { runtime: "cloud" as const } : {}),
     ...(saved.noPermissionAcknowledged === true
       ? { noPermissionAcknowledged: true as const }
       : {}),

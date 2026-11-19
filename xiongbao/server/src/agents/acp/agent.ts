@@ -8,7 +8,11 @@ import {
 } from "@ag-ui/client";
 import { eq } from "drizzle-orm";
 import { Observable, type Subscriber } from "rxjs";
-import type { AcpHarness, AcpOpenModel } from "../../../../shared/acp";
+import type {
+  AcpHarness,
+  AcpOpenModel,
+  AcpRuntime,
+} from "../../../../shared/acp";
 import type { Database } from "../../db/client";
 import { threads } from "../../db/schema";
 import type { DeviceChannel } from "../../devices/channel";
@@ -312,6 +316,19 @@ export type DeviceAcpAgentConfig = {
   harness: AcpHarness;
   workdirRef: string;
   appRef?: string;
+  /**
+   * Where it runs: `cloud` is its own XiongBao computer, whose agent needs the model proxy (nothing of
+   * an owner's own settings exists there), `device` the owner's machine. Absent is `device`.
+   */
+  runtime?: AcpRuntime;
+  /**
+   * Called when a turn waits behind an older one of its lane that is still marked running: a cloud
+   * employee's computer is asked what it has (its stream opened), which settles an older turn that
+   * this server lost track of (it restarted) or that the computer lost (it restarted).
+   */
+  resume?: () => void;
+  /** Called before a new turn is queued: a cloud employee's stream is opened (cloud-link.ts `open`). */
+  prepare?: () => Promise<void>;
   relay: AcpRelay;
   turns: AcpTurnStore;
   reachable: () => boolean;
@@ -609,6 +626,9 @@ class AcpRun {
     } else {
       turnId = (config.newTurnId ?? randomUUID)();
       this.prompt = promptOf(input.messages);
+      // A cloud employee's stream is opened and its inventory taken in before the turn is claimed:
+      // an inventory that came after the claim would not list a turn it had never been told of.
+      await config.prepare?.().catch(() => undefined);
       const turn = {
         tenantId: config.tenantId,
         agentId: config.agentId,
@@ -648,6 +668,8 @@ class AcpRun {
         next?.turnId !== turnId ||
         !(await turns.claim(config.tenantId, turnId))
       ) {
+        // A cloud employee's older turn may be one nobody here follows any more: ask its computer.
+        config.resume?.();
         this.queued(
           `${this.name}在这个对话里还有一件活没做完，这件活已排队，前面的做完后自动继续。`,
           turnId,
@@ -668,6 +690,25 @@ class AcpRun {
       if (this.aborted)
         await turns.setStatus(config.tenantId, turnId, "cancelled");
       else await turns.unclaim(config.tenantId, turnId);
+      return;
+    }
+    /*
+     * A cloud employee runs only on the model XiongBao gives it: its computer has no login and never
+     * reads an owner's settings, so an open without one could only fail there. Said here, in words a
+     * person can act on, before anything is sent; the turn never ran, so it is cancelled and its lane
+     * goes on.
+     */
+    if (config.runtime === "cloud" && !model && !config.adopted) {
+      await turns
+        .setStatus(config.tenantId, turnId, "cancelled")
+        .catch(() => undefined);
+      this.handle.reject(new Error("a cloud employee has no model"));
+      this.finish([
+        {
+          type: EventType.RUN_ERROR,
+          message: `${this.name}还没有可用的模型，请在员工设置里为它选一个模型。`,
+        } as BaseEvent,
+      ]);
       return;
     }
     this.turnId = turnId;
@@ -1108,6 +1149,8 @@ export type DeviceAcpEmployee = {
   harness: AcpHarness;
   workdirRef: string;
   appRef?: string;
+  /** Where it runs; absent is the owner's paired computer. */
+  runtime?: AcpRuntime;
   /** Who it is in the team, for a new session's context (`acpPersonaText`). */
   persona: string;
 };
@@ -1134,6 +1177,14 @@ export type DeviceAcpRuntime = {
    * on the owner's own settings.
    */
   model?: AcpModelAccess;
+  /**
+   * The link to cloud employees' computers (cloud-link.ts). Absent: a cloud employee's turns have no
+   * road, and its computer is not reachable.
+   */
+  cloud?: {
+    ensure: (target: { tenantId: string; deviceId: string }) => void;
+    open: (target: { tenantId: string; deviceId: string }) => Promise<void>;
+  };
 };
 
 let installed: DeviceAcpRuntime | null = null;
@@ -1175,6 +1226,13 @@ export function deviceAcpAgentFor(
     harness: employee.harness,
     workdirRef: employee.workdirRef,
     ...(employee.appRef ? { appRef: employee.appRef } : {}),
+    ...(employee.runtime === "cloud"
+      ? {
+          runtime: "cloud" as const,
+          resume: () => runtime.cloud?.ensure(target),
+          prepare: async () => runtime.cloud?.open(target),
+        }
+      : {}),
     name: employee.name,
     relay: runtime.relay,
     turns: runtime.turns,
@@ -1204,6 +1262,7 @@ export function deviceAcpAgentFor(
         agentId: employee.id,
         threadId,
         harness: employee.harness,
+        ...(employee.runtime === "cloud" ? { runtime: "cloud" as const } : {}),
       })) ?? null,
     onPermission: (request) => runtime.onPermission?.(request),
     ...(runtime.delivery ? { delivery: runtime.delivery } : {}),

@@ -1,4 +1,8 @@
-import type { AcpHarness, AcpOpenModel } from "../../../../shared/acp";
+import type {
+  AcpHarness,
+  AcpOpenModel,
+  AcpRuntime,
+} from "../../../../shared/acp";
 import type { AgentModelTokens } from "./token";
 import type { ModelWire } from "./upstream";
 
@@ -24,6 +28,8 @@ export type AcpModelAccess = {
     agentId: string;
     threadId: string;
     harness: AcpHarness;
+    /** Where the agent runs: a cloud computer reaches this server at its own address. Absent: a device. */
+    runtime?: AcpRuntime;
   }): Promise<AcpOpenModel | null>;
 };
 
@@ -31,13 +37,22 @@ export function createAcpModelAccess(options: {
   tokens: AgentModelTokens;
   /** The proxy's address without a version segment, or undefined where devices cannot reach one. */
   baseUrl: string | undefined;
+  /**
+   * The proxy's address as a cloud computer reaches it (`readAgentModelComputerUrl`), which can differ
+   * from a device's: a computer sits in the deployment's own network. Absent: the one above.
+   */
+  computerBaseUrl?: string | undefined;
   /** The model this employee is bound to (its name alone), null when it has none of its own. */
   boundModel: (tenantId: string, agentId: string) => Promise<string | null>;
 }): AcpModelAccess {
   return {
-    async issue({ tenantId, agentId, threadId, harness }) {
+    async issue({ tenantId, agentId, threadId, harness, runtime }) {
       const wire = WIRE_OF[harness];
-      if (!wire || !options.baseUrl) return null;
+      const baseUrl =
+        runtime === "cloud"
+          ? (options.computerBaseUrl ?? options.baseUrl)
+          : options.baseUrl;
+      if (!wire || !baseUrl) return null;
       try {
         const model = await options.boundModel(tenantId, agentId);
         if (!model) return null;
@@ -46,7 +61,7 @@ export function createAcpModelAccess(options: {
           agentId,
           threadId,
         });
-        return { baseUrl: options.baseUrl, token, model, wire, expiresAt };
+        return { baseUrl, token, model, wire, expiresAt };
       } catch {
         return null;
       }
@@ -93,4 +108,27 @@ export function readAgentModelProxyConfig(
     baseUrl: off ? undefined : baseUrl,
     perMinute: Number.isSafeInteger(rate) && rate > 0 ? rate : undefined,
   };
+}
+
+/**
+ * The address a cloud computer reaches the model proxy at: `XIONGBAO_AGENT_MODEL_COMPUTER_URL` (the
+ * address of this server as seen from inside the deployment's network, e.g. `http://server:3001`, set
+ * only when it is not the address devices use), else the one devices use. Undefined where there is
+ * neither, and then a cloud employee cannot be given a model.
+ */
+export function readAgentModelComputerUrl(
+  environment: Readonly<Record<string, string | undefined>>,
+  deviceBaseUrl: string | undefined,
+  route: string,
+): string | undefined {
+  const raw = environment.XIONGBAO_AGENT_MODEL_COMPUTER_URL?.trim();
+  if (!raw) return deviceBaseUrl;
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" || url.protocol === "http:"
+      ? `${url.origin}${route}`
+      : deviceBaseUrl;
+  } catch {
+    return deviceBaseUrl;
+  }
 }

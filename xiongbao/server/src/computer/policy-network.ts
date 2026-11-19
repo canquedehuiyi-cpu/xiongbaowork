@@ -66,6 +66,39 @@ export function effectiveNetworkPolicy(
   return { ...NO_NETWORK_POLICY, from: "none" };
 }
 
+/**
+ * `policy` with these destinations always allowed: where the deployment's own services are that a
+ * Bot's own work needs, which an administrator's list of outside sites cannot be expected to name. An
+ * external employee on its computer reaches the model proxy (agents/model-proxy) there, and without
+ * this an allowlist policy would cut the agent off from its model.
+ *
+ * Only the two modes that list destinations take them. `allow_all` already reaches them. `deny_all`
+ * is the organization (or a capability) saying nothing leaves the computer, and stays that: the
+ * employee then has no model, and says so.
+ */
+export function withDestinations(
+  policy: EgressPolicy,
+  rules: readonly EgressRule[],
+): EgressPolicy {
+  if (
+    rules.length === 0 ||
+    (policy.mode !== "allowlist_only" &&
+      policy.mode !== "defaults_plus_allowlist")
+  )
+    return policy;
+  const has = (rule: EgressRule) =>
+    policy.rules.some(
+      (kept) =>
+        kept.type === rule.type &&
+        kept.value === rule.value &&
+        (kept.ports ?? "") === (rule.ports ?? ""),
+    );
+  return {
+    mode: policy.mode,
+    rules: [...policy.rules, ...rules.filter((rule) => !has(rule))],
+  };
+}
+
 function toPolicy(row: NetworkPolicyRow): EgressPolicy {
   const parsed = parseEgressRules(row.rules);
   // A stored row that no longer parses is refused wholesale rather than half-applied.

@@ -1,4 +1,9 @@
-import type { AcpHarness, AcpRuleKey, AcpRuleValue } from "../../../shared/acp";
+import type {
+  AcpHarness,
+  AcpRuleKey,
+  AcpRuleValue,
+  AcpRuntime,
+} from "../../../shared/acp";
 import type { Persona } from "../../../shared/persona";
 import type { PortraitPreset } from "../portraits/store";
 
@@ -145,6 +150,12 @@ export type AgentExternalRun = {
   rules: Record<AcpRuleKey, AcpRuleValue>;
   /** `custom` only: hired knowing it may never ask before it acts. */
   noPermissionAcknowledged?: true;
+  /**
+   * Where it runs. Present only for `cloud` (its own XiongBao computer): an employee that runs on its
+   * hirer's paired computer, every one made before there was a choice, carries none, so what it
+   * publishes is unchanged.
+   */
+  runtime?: AcpRuntime;
 };
 
 export type CreateAgentInput = Pick<
