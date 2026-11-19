@@ -8,6 +8,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **一轮之内的折叠加了绝对预算：窗口再大，估算超过 64K token 也折。** 原来只按模型窗口的 70% 折较早的工具结果，DeepSeek 这类 1M 窗口的模型一道调研题每步发 13 万 token 也没越线；现在越线条件是 `min(窗口 × 70%, 预算)`，折叠仍是一批一批地折、最近 4 步原样、存下来的对话不动。新环境变量 `XIONGBAO_TURN_FOLD_BUDGET_TOKENS`（默认 64000，`0` 关掉绝对预算，`XIONGBAO_TURN_FOLD=off` 整个关掉折叠）。整轮估算不到 64K 的任务不受影响。
 - **员工能联网了：搜索、读网页、爬网站（`web_search`、`web_fetch`、`web_crawl`）。** 每位员工默认都有，员工权限里可以逐个关掉
   （`bot/web_search`、`bot/web_fetch`、`bot/web_crawl`）。持有搜索工具时员工先搜、再读原文、回答附出处，浏览器搜百度只在搜索工具
   出错时作为退路。
