@@ -589,6 +589,7 @@ tests/transcript-skill-badge.test.tsx
 tests/transcript-stream.test.tsx
 tests/transcript-turns.test.ts
 tests/translations.test.tsx
+tests/turn-closed.test.tsx
 tests/typed-reveal.test.ts
 tests/unoffered-tool-step.test.tsx
 tests/update-banner.test.tsx

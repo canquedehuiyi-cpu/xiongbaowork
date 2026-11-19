@@ -1,9 +1,21 @@
-import { subagentThreadId } from "@openbot/shared/subagent";
+import {
+  readSubagentResult,
+  SUBAGENT_TOOL,
+  subagentThreadId,
+} from "@openbot/shared/subagent";
 import { queryOptions } from "@tanstack/react-query";
 import {
   readThreadMessages,
   type StoredThread,
 } from "@/lib/copilot/thread-messages";
+
+/**
+ * The subagent result contract, handed on so a second reader needs no new package-name line
+ * (WP-3.2 S1b). The brand budget ratchet only lets the count of legacy package-name lines in
+ * app/src shrink; `lib/channels/turn-closed.ts` reads handed-back results through this existing
+ * import instead of adding one of its own.
+ */
+export { readSubagentResult, SUBAGENT_TOOL };
 
 /**
  * A subagent's steps, read from its own thread through the same route a conversation's history is.

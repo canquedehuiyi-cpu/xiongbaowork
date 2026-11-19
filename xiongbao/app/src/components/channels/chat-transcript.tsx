@@ -83,6 +83,7 @@ import { attachmentUrl } from "@/lib/channels/attachments";
 import { readResponsibilityTurn } from "@/lib/channels/responsibility-turn";
 import { readFiring } from "@/lib/channels/routine-firing";
 import { type RunStage, stageWords } from "@/lib/channels/run-stage";
+import type { TurnClosedVariant } from "@/lib/channels/turn-closed";
 import type { CardPlace } from "@/lib/copilot/carry-on";
 import { foreignCodingCall } from "@/lib/copilot/coding-calls";
 import { ToolPlaceContext } from "@/lib/copilot/tool-place";
@@ -343,6 +344,12 @@ type ChatTranscriptProps = {
   elapsedMs?: number;
   /** 起点是半路看见的（没赶上 RUN_STARTED），措辞用「已进行」而不是「已跑」。 */
   elapsedObserved?: boolean;
+  /**
+   * 本轮干净收尾时那一句正性的话（WP-3.2 S1b）：idle／cancelled／awaiting_approval，版本由对话页
+   * 按 `lib/channels/turn-closed.ts` 判。只有对话页给，且只在本 mount 亲眼看着一轮收尾时给——
+   * 回放的历史不给，刷新后这一格回到无活动态（终态行不承诺跨刷新存活）。出错不归这里，走 `stopped`。
+   */
+  closed?: TurnClosedVariant | null;
 };
 
 /** The employee whose reply is on its way: the name it is known by, and the id its face is drawn from. */
@@ -574,6 +581,52 @@ function Stopped({ reason }: { reason: string }) {
     </p>
   );
 }
+
+/**
+ * 本轮收尾了，一切正常（WP-3.2 S1b）。与 `Stopped`/`Thinking` 同一格、同生命周期：干净结束的一轮
+ * 以前什么都不说，人分不清它是做完了还是停住了；这一格把「结束了、在等你」说出来。
+ *
+ * NOT A MESSAGE, deliberately——与 `Stopped` 同一条设计律：无 id、不锚定、下一轮开始即撤。落成
+ * 会话行就是把没人说过的话塞进回传给模型的对话里，员工会把自己这句收尾词当成自己写过的内容。
+ *
+ * 语气是陈述不是警报：淡前景色、role="status"；只有「等你批准」那个版本带一个琥珀色的点
+ * （与子任务行「没能完成」同一个色），提示有动作待人手。失败句永远归 `Stopped`，不与这里同屏。
+ */
+function TurnClosed({ variant }: { variant: TurnClosedVariant }) {
+  const words = CLOSED_WORDS[variant];
+  return (
+    <p
+      className="flex items-center gap-2 text-[13px] text-muted-foreground"
+      data-testid="transcript-turn-closed"
+      data-variant={variant}
+      role="status"
+    >
+      <span
+        aria-hidden
+        className={
+          variant === "awaiting_approval"
+            ? "shrink-0 text-amber-600 text-xs dark:text-amber-500"
+            : "shrink-0 text-xs opacity-60"
+        }
+      >
+        ●
+      </span>
+      <span className="min-w-0">
+        {words.hint ? `${words.main} · ${words.hint}` : words.main}
+      </span>
+    </p>
+  );
+}
+
+/** 终态行各版本的话（设计稿 §2.3）：主句＋附句，附句用「 · 」接在主句后。 */
+const CLOSED_WORDS: Record<
+  TurnClosedVariant,
+  { main: string; hint?: string }
+> = {
+  idle: { main: "本轮已结束 · 等待你的下一句" },
+  cancelled: { main: "本轮已由你停止", hint: "想继续就说一句。" },
+  awaiting_approval: { main: "有一个命令等你批准", hint: "批准后我接着做。" },
+};
 
 /**
  * A file staged on the composer, described the way a sent one is.
@@ -2404,6 +2457,7 @@ export function ChatTranscript({
   stage,
   elapsedMs,
   elapsedObserved,
+  closed,
 }: ChatTranscriptProps) {
   const isDrawn = useDrawnTool();
   /**
@@ -2482,6 +2536,20 @@ export function ChatTranscript({
    * 还是它一直说的那句，不会空着。
    */
   const stageLine = busy && stage !== "tool" ? stageWords(stage) : undefined;
+
+  /*
+   * 终态行的显示谓词（设计稿 §2.2，全部 AND）：不在忙（busy 三源由对话页合成一个数）、没有失败句
+   * （stopped 永远抢先）、没有排队的后续句（队列句优先）、转录最后一条不是人刚发的话（用户刚发话
+   * 还没起 run 时不得说「本轮已结束」）。closed 本身只在对话页亲眼看着一轮收尾时置位，所以「至少
+   * 收到过一个终态事件」这一条由它非空直接承载；空 thread、回放存档都到不了这里。
+   */
+  const personSpokeLast =
+    (lastItem?.kind === "text" && lastItem.role === "user") ||
+    lastItem?.kind === "attachments";
+  const closedLine =
+    closed && !busy && !stopped && queued.length === 0 && lastItem && !personSpokeLast
+      ? closed
+      : null;
 
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const newestUserMessageId =
@@ -2993,6 +3061,8 @@ export function ChatTranscript({
                         stage={stageLine}
                         typist={typist}
                       />
+                    ) : closedLine ? (
+                      <TurnClosed variant={closedLine} />
                     ) : null}
                     {working}
                     {/* 只在说了可能有外部员工的对话里（`acpApprovals`，对话页总是给）：别处画转录的不读审批收件箱。 */}
