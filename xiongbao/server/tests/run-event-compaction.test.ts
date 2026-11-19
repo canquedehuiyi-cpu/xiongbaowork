@@ -45,7 +45,7 @@ describe("compacting a run's events before they are stored", () => {
       marker("RUN_FINISHED", 10),
     ];
     const kept = compactRunEvents(events);
-    expect(kept.map((event) => event.type)).toEqual([
+    expect(kept.map((event) => String(event.type))).toEqual([
       "RUN_STARTED",
       "REASONING_START",
       "REASONING_MESSAGE_START",
