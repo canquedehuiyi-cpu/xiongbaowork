@@ -429,6 +429,7 @@ tests/google-drive-rest.test.ts
 tests/google-oauth-transport.test.ts
 tests/granted-tools-destructive.test.ts
 tests/group-ask-person.integration.test.ts
+tests/group-auto-delivery.integration.test.ts
 tests/group-bots-change.integration.test.ts
 tests/group-conversations.integration.test.ts
 tests/group-conversations.test.ts
@@ -767,6 +768,7 @@ tests/run-built-agent-cancellation.test.ts
 tests/run-event-compaction.test.ts
 tests/run-event-compactor.test.ts
 tests/run-events-persist.integration.test.ts
+tests/run-events-persisted.integration.test.ts
 tests/run-mode.test.ts
 tests/run-model-built-in.test.ts
 tests/run-model.test.ts

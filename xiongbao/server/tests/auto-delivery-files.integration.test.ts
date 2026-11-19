@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { and, eq, inArray } from "drizzle-orm";
@@ -75,6 +75,15 @@ const service = createChannelDispatch({
 });
 
 async function storeEvents(runId: string, events: BaseEvent[]) {
+  await storeEventsAfter(runId, events, 0);
+}
+
+/** Append events to a run's stored ones, after the `after` rows it already has. */
+async function storeEventsAfter(
+  runId: string,
+  events: BaseEvent[],
+  after: number,
+) {
   if (events.length === 0) return;
   await runAsTenant(owner.id, async () => {
     await database
@@ -84,7 +93,7 @@ async function storeEvents(runId: string, events: BaseEvent[]) {
           tenantId: owner.id,
           threadId,
           runId,
-          seq,
+          seq: after + seq,
           event: event as unknown as Record<string, unknown>,
         })),
       )
@@ -407,5 +416,106 @@ describe("漏交付时自动进等验收，带上这一轮写过的工作区文�
     const [card] = await cardOf(runId);
     expect(card?.status).toBe("awaiting_review");
     expect(card?.deliverableRef).toBeNull();
+  });
+
+  /*
+   * 一轮的流结束后，最后一批事件才写进库。收尾读事件之前要等它写完，否则最后一个写文件的调用就漏了。
+   */
+  describe("最后一批事件在流结束后才写入", () => {
+    /** A dispatch whose turn ends with its last write call still on its way to the database. */
+    async function late(
+      label: string,
+      reader: {
+        eventsPersisted?: (runId: string) => Promise<boolean>;
+      },
+      landsAfterMs = 150,
+    ) {
+      let landed: Promise<void> = Promise.resolve();
+      const lateService = createChannelDispatch({
+        queue,
+        owner: `adf-late-${label}-${suite}`,
+        board: projector,
+        channel: async () => ({
+          id: channelId,
+          threadId,
+          agentIds: ["pinned"],
+        }),
+        bot: async (_actor, id) => ({ id, name: "小熊" }),
+        actorFor: async (id) => ({ id, role: "user" }),
+        runTurn: (async (input) => {
+          const runId = input.runId ?? "";
+          await storeEvents(runId, write("early.md"));
+          // The stream has ended when this returns; the last call is written a moment later.
+          landed = new Promise<void>((resolve) =>
+            setTimeout(() => {
+              void storeEventsAfter(runId, write("last.md"), 1000).then(
+                resolve,
+              );
+            }, landsAfterMs),
+          );
+          return { replyText: "做完了。" };
+        }) as TurnRunner,
+        workspaceFilesOf: (tenantId, runRef) =>
+          gate.workspaceFilesOf({ tenantId, runRef }),
+        ...(reader.eventsPersisted
+          ? {
+              eventsPersisted: async (runId: string) => {
+                const given = reader.eventsPersisted;
+                if (!given) return true;
+                const settled = await given(runId);
+                await landed;
+                return settled;
+              },
+            }
+          : {}),
+      });
+      const id = `late-${label}-${suite}`;
+      const runId = dispatchRunId(owner.id, channelId, id);
+      seededKeys.push(runId);
+      await runAsTenant(owner.id, () =>
+        lateService.submit(owner, channelId, { id, agentId, text: "最后才写" }),
+      );
+      await runAsTenant("platform", () => lateService.sweep());
+      await landed;
+      const [card] = await cardOf(runId);
+      return card;
+    }
+
+    test("没有等的话最后一个写文件的调用会漏（对照）", async () => {
+      const card = await late("control", {});
+      expect(card?.deliverableRef).toEqual({
+        kind: "deliverable",
+        workspaceFiles: ["early.md"],
+      });
+    });
+
+    test("收尾先等这一轮的事件写完，拿得到最后一个写文件的调用", async () => {
+      const card = await late("wait", { eventsPersisted: async () => true });
+      expect(card?.status).toBe("awaiting_review");
+      expect(card?.deliverableRef).toEqual({
+        kind: "deliverable",
+        workspaceFiles: ["early.md", "last.md"],
+      });
+    });
+
+    test("等不到（超时）：照现在的做法读已有的，并记日志", async () => {
+      const logged: string[] = [];
+      const quiet = spyOn(console, "error").mockImplementation(
+        (line: unknown) => {
+          logged.push(String(line));
+        },
+      );
+      let card: Awaited<ReturnType<typeof late>>;
+      try {
+        card = await late("timeout", { eventsPersisted: async () => false });
+      } finally {
+        quiet.mockRestore();
+      }
+      expect(card?.status).toBe("awaiting_review");
+      expect(card?.deliverableRef).toMatchObject({ kind: "deliverable" });
+      expect(
+        logged.some((line) => line.includes("auto-delivery-events-late")),
+      ).toBe(true);
+    });
   });
 });

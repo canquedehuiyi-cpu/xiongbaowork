@@ -40,6 +40,10 @@ import type { Database } from "../db/client";
 import { workItems } from "../db/schema";
 import { QuotaExceeded } from "../quota/limits";
 import type { TurnRunner } from "../routines/runner";
+import {
+  type AutoDeliveryReader,
+  autoDeliverable,
+} from "../tasks/auto-delivery";
 import type { TaskProjector } from "../tasks/projector";
 import { DISPATCH_LEDGER_KIND } from "../tasks/reclaim";
 import { runAsTenant } from "../tenant/context";
@@ -162,12 +166,14 @@ export type ChannelDispatchDeps = {
   }): Promise<void>;
   busy?(threadId: string, busy: boolean): Promise<void>;
   /**
-   * The workspace files the card's coworker wrote in this card's rounds (`tasks/evidence-gate.ts`
-   * `workspaceFilesOf`). A turn that ends without a hand-in moves its card to 等验收 by itself; these
-   * are what that card then carries as `deliverableRef.workspaceFiles`, so the person reviewing it can
-   * see the work. Absent, or nothing written: the card carries nothing, as it always did.
+   * The workspace files the card's coworker wrote in this card's rounds, and the wait for the run's last
+   * events to be written first (`tasks/auto-delivery.ts`). A turn that ends without a hand-in moves its
+   * card to 等验收 by itself; these are what that card then carries as `deliverableRef.workspaceFiles`,
+   * so the person reviewing it can see the work. Absent, or nothing written: the card carries nothing,
+   * as it always did.
    */
-  workspaceFilesOf?(tenantId: string, runRef: string): Promise<string[]>;
+  workspaceFilesOf?: AutoDeliveryReader["workspaceFilesOf"];
+  eventsPersisted?: AutoDeliveryReader["eventsPersisted"];
   deviceIdOf?(agentId: string): Promise<string | null>;
 };
 
@@ -199,27 +205,6 @@ export function createChannelDispatch(deps: ChannelDispatchDeps) {
     });
 
   /**
-   * What a turn that ended without a hand-in leaves on its card: the workspace files its coworker
-   * wrote. Nothing when it wrote none, when the turn failed, or when they cannot be read -- the card
-   * moves on either way, as it did before it carried any.
-   */
-  const writtenFiles = async (tenantId: string, runId: string) => {
-    if (!deps.workspaceFilesOf) return undefined;
-    try {
-      const files = await deps.workspaceFilesOf(tenantId, runId);
-      return files.length > 0
-        ? { kind: "deliverable", workspaceFiles: files }
-        : undefined;
-    } catch (error) {
-      log("channel-dispatch-files-unreadable", {
-        runId,
-        reason: reasonOf(error),
-      });
-      return undefined;
-    }
-  };
-
-  /**
    * Close the card; a card that was never opened matches nothing, which is not an error.
    *
    * Moving a card nobody follows to 等验收 is this close, not a hand-in: a card the coworker took on
@@ -234,7 +219,7 @@ export function createChannelDispatch(deps: ChannelDispatchDeps) {
     try {
       const deliverableRef = failed
         ? undefined
-        : await writtenFiles(tenantId, runId);
+        : await autoDeliverable(deps, tenantId, runId, log);
       await deps.board.finished({
         tenantId,
         runRef: runId,

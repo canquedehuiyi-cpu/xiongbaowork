@@ -651,7 +651,10 @@ import {
   createLocalThreadReader,
   type ThreadPlatform,
 } from "./threads/local-platform";
-import { PostgresAgentRunner } from "./threads/postgres-runner";
+import {
+  PostgresAgentRunner,
+  whenRunPersisted,
+} from "./threads/postgres-runner";
 import { createConversationSidebar } from "./threads/sidebar";
 import { createSidebarRoutes } from "./threads/sidebar-routes";
 import { threadViewers } from "./threads/thread-viewers";
@@ -5106,6 +5109,10 @@ await startupLifecycle.run(async (startup) => {
     board: taskProjector,
     // A person's message on a thread with an open followed card is a round of that card (一件活一张卡).
     delivery: deliveryLoop,
+    // A turn that ends without a hand-in moves its card to 等验收 carrying the files it wrote.
+    workspaceFilesOf: (tenantId, runRef) =>
+      evidenceGate.workspaceFilesOf({ tenantId, runRef }),
+    eventsPersisted: (runId) => whenRunPersisted(runId),
     activity: async (turn, agentId, text, sourceId) =>
       channelStore.recordActivity(
         await actorFor(turn.ownerUserId),
@@ -5456,6 +5463,7 @@ await startupLifecycle.run(async (startup) => {
     // A turn that ends without a hand-in carries the files it wrote to 等验收 (tasks/evidence-gate.ts).
     workspaceFilesOf: (tenantId, runRef) =>
       evidenceGate.workspaceFilesOf({ tenantId, runRef }),
+    eventsPersisted: (runId) => whenRunPersisted(runId),
     deviceIdOf: deviceIdForBot,
   });
   startup.acquireSync(
