@@ -1232,8 +1232,9 @@ export function builtInAgentConfiguration(
       ...promptSection("plan", planGuidance(tools.map((tool) => tool.name))),
       /*
        * How to share a job of several parts out to subagents, for a run that holds `run_subagent`
-       * and only then: a subagent and a check-in hold none. Added beside the shared `<subagents>`
-       * section rather than in it, which a Bot run elsewhere reads byte for byte (期四).
+       * and only then: a subagent and a check-in hold none. Beside the shared `<subagents>` section,
+       * which says the same in English to every kind of Bot; this one is in the person's language,
+       * with the word on plans (期四).
        */
       ...promptSection(
         "delegation",

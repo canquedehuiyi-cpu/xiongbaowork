@@ -175,7 +175,9 @@ describe("how a Bot asks, and how an unattended run ends", () => {
 
   test("a brought Bot is told the system asks only for what the system gives it", () => {
     const said = flat(BROUGHT_BOT_ASKING_GUIDANCE);
-    expect(said).toContain("when you use the apps and tools the system gives you");
+    expect(said).toContain(
+      "when you use the apps and tools the system gives you",
+    );
     expect(said).toContain(
       "tools of your own that the system did not give you are not covered",
     );
@@ -233,6 +235,35 @@ describe("how a Bot asks, and how an unattended run ends", () => {
     ]);
     for (const blank of ["", "  \n ", null, undefined])
       expect(promptSection("role", blank)).toEqual([]);
+  });
+
+  /*
+   * 期四：<subagents> 段讲多部分任务各派一个子代理，不再先讲成本、不再「only when」。
+   * 硬约束照写，和 <delegation> 段、工具描述口径一致。
+   */
+  test("the subagents rule gives each independent part its own subagent, and keeps the hard limits", () => {
+    const guidance = ORCHESTRATION_GUIDANCE.replace(/\s+/g, " ");
+    expect(guidance).toContain(
+      "When a job falls into two or more independent parts, such as one company, document or account each, or a draft and a separate check of it, give each part its own subagent and start them together by calling run_subagent several times in one step.",
+    );
+    expect(guidance).toContain(
+      "A single question, one search, or a lookup that takes a handful of tool calls, do yourself.",
+    );
+    expect(guidance).toContain(
+      "the goal, the scope, and what answer you want back, in what form.",
+    );
+    expect(guidance).toContain("One answer can start up to 5 subagents");
+    expect(guidance).toContain("a subagent cannot start subagents of its own.");
+    expect(guidance).toContain(
+      "The members of your team are separate coworkers, not subagents.",
+    );
+    for (const discouraging of [
+      "only when",
+      "slower",
+      "a lot of reading",
+      "large job",
+    ])
+      expect(guidance).not.toContain(discouraging);
   });
 
   test("no working rule shouts", () => {

@@ -324,12 +324,18 @@ export const COMPONENT_GUIDANCE = asParagraphs(COMPONENT_GUIDANCE_LINES);
  * agent of Anthropic's research system, and the split is Cognition's: subagents read and work, while
  * decisions and anything with a side effect stay with one agent.
  *
- * NOT FOR A SINGLE QUESTION. This used to say to hand off anything over two or three tool calls, and
+ * NOT FOR A SINGLE QUESTION. This once said to hand off anything over two or three tool calls, and
  * a Bot asked for five companies from one web search started three subagents, searched the web
- * itself at the same time, and drew two tables. Each subagent is work the person watches, and one
- * search split three ways is slower and harder to follow than one search. So subagents are for a
- * request that falls into independent parts, each needing a lot of reading of its own, and never a
- * second pair of hands on the work the Bot is already doing.
+ * itself at the same time, and drew two tables. So a step or two stays with the Bot, and a subagent
+ * is never a second pair of hands on the work the Bot is already doing.
+ *
+ * BUT FOR EVERY JOB OF INDEPENDENT PARTS (期四). The fix for that went too far: the section then led
+ * with the cost and allowed subagents "only when" each part needed a lot of reading of its own, and
+ * the Bots stopped calling the tool even for three companies side by side. So it now says to give each
+ * independent part its own subagent, and how to brief one, with the hard limits as the facts they
+ * are: the cap per answer, no nesting, and a team member is not a subagent. It agrees with the tool's
+ * description and with the `<delegation>` section a Bot run here that holds the tool also gets
+ * (`SUBAGENT_GUIDANCE` in `subagent.ts`, in the person's language and with the word on plans).
  *
  * Conditional on holding the tool, because a subagent reads this prompt too and holds no such tool,
  * and a check-in is offered none.
@@ -340,16 +346,18 @@ export const COMPONENT_GUIDANCE = asParagraphs(COMPONENT_GUIDANCE_LINES);
  * run elsewhere reads it byte for byte.
  */
 const ORCHESTRATION_GUIDANCE_LINES = [
-  `When you hold ${SUBAGENT_TOOL}, you can give parts of a large job to subagents. A subagent is a`,
-  "fresh copy of you, with your tools, acting for the same person, that sees none of this conversation.",
-  "Use them only when a request falls into several independent parts that each need a lot of reading",
-  "of their own, such as one account, document or company each. A single question, one search, or a",
-  "lookup that takes a handful of tool calls, do yourself. Do not work on the same thing yourself while",
-  "a subagent works on it, or start a second subagent for work the first is already doing.",
+  `When you hold ${SUBAGENT_TOOL}, you can give parts of your work to subagents. A subagent is a`,
+  "fresh copy of you, with your tools, acting for the same person, that sees none of this conversation",
+  "and hands back only its answer. When a job falls into two or more independent parts, such as one",
+  "company, document or account each, or a draft and a separate check of it, give each part its own",
+  `subagent and start them together by calling ${SUBAGENT_TOOL} several times in one step. A single`,
+  "question, one search, or a lookup that takes a handful of tool calls, do yourself. Do not work on",
+  "the same thing yourself while a subagent works on it, or start a second subagent for work the first",
+  "is already doing.",
   "",
-  "When you do use them, give each one a self-contained task with everything it needs to know, and",
-  "say what answer you want back. Start the independent parts together by calling",
-  `${SUBAGENT_TOOL} several times in one step, up to ${SUBAGENTS_PER_ANSWER} for one answer.`,
+  "Give each one a self-contained task with everything it needs to know: the goal, the scope, and what",
+  `answer you want back, in what form. One answer can start up to ${SUBAGENTS_PER_ANSWER} subagents, and a subagent cannot`,
+  "start subagents of its own. The members of your team are separate coworkers, not subagents.",
   "",
   "Keep the planning, the decisions, anything that needs the person's approval, and the final answer",
   "yourself. A subagent that reaches an action needing approval stops and hands it back to you: if it",
