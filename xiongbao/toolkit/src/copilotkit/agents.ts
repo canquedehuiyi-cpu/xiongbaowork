@@ -32,6 +32,7 @@ import {
   type StepLimitPayload,
   startRun,
 } from "./last-step";
+import { reasoningByToolCall } from "./replayed-reasoning";
 import {
   type NativeRunScope,
   nativeApprovalRun,
@@ -108,6 +109,13 @@ export type BuiltInAgentHooks = {
    * its last step as configured, and says nothing about it.
    */
   extension?: number;
+  /**
+   * Put back, on every step, what the model thought before each tool call the conversation already
+   * holds (期三). The runtime drops `reasoning` messages on the way to the model; a provider that
+   * wants them back (DeepSeek's thinking mode) gets them from here. Only for such a provider: another
+   * may refuse a reasoning part it did not sign. See `replayed-reasoning.ts`.
+   */
+  replayReasoning?: boolean;
 };
 
 /**
@@ -308,7 +316,11 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
     // A routine's firing carries the checklist it has to close. See `firingChecklist`.
     const checklist = firingChecklist(history);
     // A new run counts its steps from where it starts, never from where an earlier run stopped.
-    startRun(this.steps, checklist.parts);
+    startRun(
+      this.steps,
+      checklist.parts,
+      this.hooks.replayReasoning ? reasoningByToolCall(history) : undefined,
+    );
     const { inline, observe, attribute } = this.hooks;
     /*
      * Last, after both passes that read roles, and only on the way to the model. The approval
