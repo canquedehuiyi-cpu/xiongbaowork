@@ -40,6 +40,10 @@ import type { Database } from "../db/client";
 import { workItems } from "../db/schema";
 import { QuotaExceeded } from "../quota/limits";
 import type { TurnRunner } from "../routines/runner";
+import {
+  type AutoDeliveryReader,
+  autoDeliverable,
+} from "../tasks/auto-delivery";
 import type { TaskProjector } from "../tasks/projector";
 import { DISPATCH_LEDGER_KIND } from "../tasks/reclaim";
 import { runAsTenant } from "../tenant/context";
@@ -161,6 +165,15 @@ export type ChannelDispatchDeps = {
     sourceId: string;
   }): Promise<void>;
   busy?(threadId: string, busy: boolean): Promise<void>;
+  /**
+   * The workspace files the card's coworker wrote in this card's rounds, and the wait for the run's last
+   * events to be written first (`tasks/auto-delivery.ts`). A turn that ends without a hand-in moves its
+   * card to 等验收 by itself; these are what that card then carries as `deliverableRef.workspaceFiles`,
+   * so the person reviewing it can see the work. Absent, or nothing written: the card carries nothing,
+   * as it always did.
+   */
+  workspaceFilesOf?: AutoDeliveryReader["workspaceFilesOf"];
+  eventsPersisted?: AutoDeliveryReader["eventsPersisted"];
   deviceIdOf?(agentId: string): Promise<string | null>;
 };
 
@@ -191,18 +204,28 @@ export function createChannelDispatch(deps: ChannelDispatchDeps) {
       deviceId: input.deviceId,
     });
 
-  /** Close the card; a card that was never opened matches nothing, which is not an error. */
+  /**
+   * Close the card; a card that was never opened matches nothing, which is not an error.
+   *
+   * Moving a card nobody follows to 等验收 is this close, not a hand-in: a card the coworker took on
+   * and handed in (`deliver_task`) is followed, and `finished` leaves it and its hand-in alone
+   * (spec 2026-11-15-delivery-loop §3).
+   */
   const closeCard = async (
     tenantId: string,
     runId: string,
     failed: boolean,
   ) => {
     try {
+      const deliverableRef = failed
+        ? undefined
+        : await autoDeliverable(deps, tenantId, runId, log);
       await deps.board.finished({
         tenantId,
         runRef: runId,
         failed,
         onlyUnsettled: true,
+        ...(deliverableRef ? { deliverableRef } : {}),
       });
     } catch (error) {
       log("channel-dispatch-board-close-failed", {

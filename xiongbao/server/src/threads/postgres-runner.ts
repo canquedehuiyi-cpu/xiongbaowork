@@ -169,6 +169,39 @@ export class ThreadBusyError extends Error {
  */
 const enteringRuns = new Map<string, Set<string>>();
 
+/**
+ * The runs whose last write of events is still on its way, by run id: noted when the turn's stream ends
+ * and dropped once the write has landed or failed. See {@link whenRunPersisted}.
+ */
+const persisting = new Map<string, Promise<void>>();
+
+/** How long {@link whenRunPersisted} waits for a run's last write before it gives up. */
+export const RUN_PERSIST_WAIT_MS = 5_000;
+
+/**
+ * Resolves once every event of the run `runId` is in the database: the turn's stream ends first, and
+ * what the stream last carried is written a moment after (the rows settle through a compactor and a
+ * macrotask), so a reader of a just-ended turn's events must wait for this or it misses the last of
+ * them. Immediately when no write of that run is pending here (it has landed, or the run did not go
+ * through this runner). False when `waitMs` passed first: the caller reads what is there.
+ */
+export async function whenRunPersisted(
+  runId: string,
+  waitMs = RUN_PERSIST_WAIT_MS,
+): Promise<boolean> {
+  const pending = persisting.get(runId);
+  if (!pending) return true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<false>((resolve) => {
+    timer = setTimeout(() => resolve(false), waitMs);
+  });
+  try {
+    return await Promise.race([pending.then(() => true as const), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function entering(threadId: string): boolean {
   return (enteringRuns.get(threadId)?.size ?? 0) > 0;
 }
@@ -990,8 +1023,22 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
             finish(carriedFailure(events));
             // The parent commits the run during teardown; one macrotask later
             // the snapshot is readable and goes to PostgreSQL.
-            setTimeout(() => {
-              void this.persist(
+            this.persistLater(
+              tenant,
+              threadId,
+              runId,
+              agentId,
+              events,
+              startedAt,
+              writer,
+            );
+          },
+          error: (thrown: unknown) => {
+            stopHeartbeat();
+            finish(true, thrown);
+            // What was already written is closed off; a turn that wrote nothing still writes nothing.
+            if (writer.started)
+              this.persistLater(
                 tenant,
                 threadId,
                 runId,
@@ -1000,24 +1047,6 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
                 startedAt,
                 writer,
               );
-            }, 0);
-          },
-          error: (thrown: unknown) => {
-            stopHeartbeat();
-            finish(true, thrown);
-            // What was already written is closed off; a turn that wrote nothing still writes nothing.
-            if (writer.started)
-              setTimeout(() => {
-                void this.persist(
-                  tenant,
-                  threadId,
-                  runId,
-                  agentId,
-                  events,
-                  startedAt,
-                  writer,
-                );
-              }, 0);
           },
         }),
         finalize(() => {
@@ -1049,6 +1078,41 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     turn.subscribe(kept);
     // Whoever holds the stream is looking at the thread for as long as they hold it (`thread-viewers.ts`).
     return watched(tenant, threadId, kept.asObservable());
+  }
+
+  /**
+   * {@link persist}, one macrotask from now, and noted for {@link whenRunPersisted} from this moment: a
+   * caller that follows the turn's end asks for the run's events before that macrotask has even begun.
+   */
+  private persistLater(
+    tenant: string,
+    threadId: string,
+    runId: string,
+    agentId: string,
+    events: BaseEvent[],
+    startedAt: number,
+    writer: RunEventWriter,
+  ): void {
+    let settled!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      settled = resolve;
+    });
+    persisting.set(runId, pending);
+    setTimeout(() => {
+      void this.persist(
+        tenant,
+        threadId,
+        runId,
+        agentId,
+        events,
+        startedAt,
+        writer,
+      ).finally(() => {
+        // Written or failed: either way nobody is left waiting for it.
+        settled();
+        if (persisting.get(runId) === pending) persisting.delete(runId);
+      });
+    }, 0);
   }
 
   private async persist(

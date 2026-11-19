@@ -66,6 +66,10 @@ import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
 import { type Delivery, firstSentenceOf } from "../tasks/delivery";
 import { DELIVERY_EVENTS } from "../tasks/delivery-events";
+import {
+  type AutoDeliveryReader,
+  autoDeliverable,
+} from "../tasks/auto-delivery";
 import type { TaskProjector } from "../tasks/projector";
 import {
   currentTenant,
@@ -1516,6 +1520,12 @@ export function createGroupConversations(deps: {
    * that work: it hangs on the card rather than opening one. Optional with the board.
    */
   delivery?: Delivery;
+  /**
+   * What a turn that ends without a hand-in leaves on its card: the workspace files its coworker wrote
+   * (`tasks/auto-delivery.ts`). Optional with the board; absent, the card carries nothing, as it always did.
+   */
+  workspaceFilesOf?: AutoDeliveryReader["workspaceFilesOf"];
+  eventsPersisted?: AutoDeliveryReader["eventsPersisted"];
 }) {
   /**
    * Whether a Bot's line may be shown to this group now. `allowed`, or held behind the owner's
@@ -1789,10 +1799,24 @@ export function createGroupConversations(deps: {
      * logged and the round still ends.
      */
     try {
+      // A card nobody follows moves to 等验收 here, carrying the files this turn wrote; a followed one is left.
+      const deliverableRef = failed
+        ? undefined
+        : await autoDeliverable(deps, turn.ownerUserId, runId, (type, detail) =>
+            console.error(
+              JSON.stringify({
+                type,
+                channelId: turn.channelId,
+                agentId,
+                ...detail,
+              }),
+            ),
+          );
       await deps.board.finished({
         tenantId: turn.ownerUserId,
         runRef: runId,
         failed,
+        ...(deliverableRef ? { deliverableRef } : {}),
       });
     } catch (error) {
       logged(error);

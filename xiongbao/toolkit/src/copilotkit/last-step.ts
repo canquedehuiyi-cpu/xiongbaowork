@@ -505,6 +505,8 @@ export type FoldingOptions = {
     provider: string,
     modelId: string,
   ) => number | undefined | Promise<number | undefined>;
+  /** 绝对预算（token）：估算超过它就折叠，不管窗口多大。不写用 `FOLD_BUDGET_TOKENS`，0 关掉。 */
+  budget?: number;
 };
 
 /**
@@ -538,7 +540,10 @@ export function foldingEarlyResults(
     return window;
   };
   const folded = async (asked: CallOptions): Promise<CallOptions> => {
-    const prompt = foldEarlyResults(asked.prompt, { window: await windowOf() });
+    const prompt = foldEarlyResults(asked.prompt, {
+      window: await windowOf(),
+      ...(options.budget === undefined ? {} : { budget: options.budget }),
+    });
     return prompt === asked.prompt ? asked : { ...asked, prompt };
   };
   const wrapped: Model = {

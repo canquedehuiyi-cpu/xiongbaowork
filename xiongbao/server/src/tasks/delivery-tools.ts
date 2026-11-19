@@ -44,6 +44,14 @@ export function deliveryProtocol(): string {
   return `【${shortName()}交付规约】1 接活先回：已接下 + 预计几点交　2 做完再交：交付物 + 你怎么查过的　3 交不了就说：缺什么、要延到几点　4 没被验收前，不要说「做完了」`;
 }
 const PLAIN_QUESTIONS = "问一句答一句的普通对话不要用这三个工具";
+/**
+ * Appended after the rules, for a built-in coworker only (the rules themselves are shared with the external
+ * coworkers' first prompt, which holds no tools): which tool hands the work in, and how the files it wrote
+ * in its workspace go on the hand-in. Without it a coworker that wrote its files and said so in words left
+ * a card nobody had handed in.
+ */
+const HAND_IN_WITH_FILES =
+  "有文件产出的活，先用 accept_task 接下；做完用 deliver_task 交付，把你写在工作区里的文件用 workspace_file 逐个列上（ref 写工作区内的相对路径，如 reports/对比.xlsx）。";
 
 /**
  * How an external employee (`device_acp`, which holds none of the three tools) walks the same steps:
@@ -87,7 +95,7 @@ export function deliveryProtocolGuidance(
   toolNames: readonly string[],
 ): string | undefined {
   return toolNames.includes(ACCEPT_TASK)
-    ? `${deliveryProtocol()}\n${PLAIN_QUESTIONS}`
+    ? `${deliveryProtocol()}\n${PLAIN_QUESTIONS}\n${HAND_IN_WITH_FILES}`
     : undefined;
 }
 
