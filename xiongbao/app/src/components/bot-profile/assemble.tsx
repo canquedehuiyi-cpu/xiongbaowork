@@ -11,6 +11,7 @@ import {
   PersonaSection,
   useProfileSave,
 } from "@/components/agents/agent-dialog";
+import { ThinkingItem } from "@/components/agents/thinking-item";
 import {
   PANEL_FACE,
   ProfileAlert,
@@ -100,6 +101,11 @@ export function AssembleSections({ profile }: { profile: AgentProfile }) {
               modelRef={profile.modelRef}
               onSave={(binding) => save(binding)}
               platformModelRef={profile.platformModelRef ?? null}
+            />
+            {/* 期三：用不用先想再答，和模型放在一起。远端员工的开关拨不动，行上说为什么。 */}
+            <ThinkingItem
+              agent={profile}
+              onSave={(thinking) => save({ thinking })}
             />
           </div>
         </ProfileSection>
