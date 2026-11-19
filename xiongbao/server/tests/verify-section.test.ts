@@ -223,7 +223,12 @@ describe("the project's own instructions", () => {
   const project: ProjectForPrompt = {
     name: "订单服务",
     description: "后端",
-    source: { kind: "local", rootRef: "fld_A", writable: true },
+    source: {
+      kind: "local",
+      rootRef: "fld_A",
+      label: "订单服务",
+      writable: true,
+    },
     writable: true,
   };
 
