@@ -24,5 +24,5 @@ export const TURN_POLL_MS = 15_000;
 export function hasServerTurn(
   channels: readonly { work?: readonly ChannelWork[] }[],
 ): boolean {
-  return channels.some((channel) => serverTurnSince(channel.work) !== null);
+  return channels.some((channel) => serverTurnSince(channel?.work) !== null);
 }

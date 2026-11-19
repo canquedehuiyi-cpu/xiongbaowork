@@ -169,7 +169,7 @@ export function channelListQueryOptions() {
      */
     refetchInterval: (query) =>
       hasServerTurn(
-        query.state.data?.pages.flatMap((page) => page.channels) ?? [],
+        query.state.data?.pages?.flatMap((page) => page?.channels ?? []) ?? [],
       )
         ? TURN_POLL_MS
         : false,
