@@ -314,17 +314,17 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
      * resumes. See `BuiltInAgentHooks.attribute`.
      */
     const toModel = (messages: Message[]) =>
-      observe(
-        sayingStepLimit(
+      sayingStepLimit(
+        observe(
           super.run({
             ...input,
             messages: checklist.toModel(
               attribute ? attribute(messages) : messages,
             ),
           }),
-          this.steps,
+          input,
         ),
-        input,
+        this.steps,
       );
     /*
      * ALONGSIDE THE GUARD ABOVE, NOT INSTEAD OF IT. One drops a conversation the model provider is
@@ -395,8 +395,13 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
 /**
  * The run's stream, with {@link STEP_LIMIT_EVENT} just before its `RUN_FINISHED` when the run used
  * up its steps and was made to answer with its tools off (`RunSteps.limited`). Inside the run, not
- * after it, so everything downstream (the server's observers, the runner that stores a run's
- * events) handles it as one of the run's own: it is in the live conversation and in the stored one.
+ * after it, so the runner that stores a run's events keeps it with the run's own: it is in the live
+ * conversation and in the stored one.
+ *
+ * Outside the host's `observe`, not under it: the server drops a `step-limit` from any agent's own
+ * stream as a forgery (`isServerOnlyEvent` in the server's `threads/run-side-events.ts`), since an
+ * endpoint or an external employee can send any event it likes. Added here, after that filter, the
+ * only one that reaches the person is the one this run's own step count said.
  */
 function sayingStepLimit(
   run: Observable<BaseEvent>,
