@@ -24,6 +24,7 @@
 
 import type { AbstractAgent, Message } from "@ag-ui/client";
 import {
+  SUBAGENT_MODEL_DESCRIPTION,
   SUBAGENT_TOOL,
   SUBAGENTS_PER_ANSWER,
   type SubagentResult,
@@ -38,6 +39,7 @@ import { currentApprovalContext } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import type { ProductSurface } from "../telemetry/product";
+import { resolveSubagentModel } from "./subagent-model";
 
 /**
  * Stable JSON for a value, so the same action keyed by a different argument order still matches.
@@ -73,6 +75,8 @@ const parameters = z.object({
     .describe(
       "要交回什么、用什么格式：例如一张写明列名的表、一个数字、带来源的简短总结、是或否加理由",
     ),
+  // 期七：可选，不写就和以前一样。
+  model: z.string().optional().describe(SUBAGENT_MODEL_DESCRIPTION),
 });
 
 /**
@@ -137,6 +141,19 @@ function saidIn(messages: readonly Message[]): string | undefined {
   return said || undefined;
 }
 
+/** 子代理指定模型要问服务器的三件事。 */
+export type SubagentModels = {
+  /** 本租户可用的模型名（对话里模型选择器的那份目录）。 */
+  allowed: (ownerUserId: string) => Promise<readonly string[]>;
+  /** 这位员工设置里的难任务模型（`agents.configuration.hardModel`），没设置就是空。 */
+  hardModelOf: (
+    ownerUserId: string,
+    botId: string,
+  ) => Promise<string | undefined>;
+  /** 让这条线程的这一次运行用这个模型；返回的函数撤销它（运行结束时调用）。 */
+  pin: (threadId: string, model: string) => () => void;
+};
+
 export function createSubagents(options: {
   /** The headless turn a subagent runs, as every background turn is built. No components. */
   turn: Omit<TurnOptions, "buildAgentFor" | "components">;
@@ -149,6 +166,10 @@ export function createSubagents(options: {
    * kept in the conversation: a subagent's own thread is not one the gate knows to ask in that way.
    */
   asksEveryStep?: (ownerUserId: string, threadId: string) => Promise<boolean>;
+  /**
+   * 期七：`model` 参数要用的三样。不给，`model` 不起作用（子代理照旧用员工平时的模型），也不拒绝。
+   */
+  models?: SubagentModels;
   perAnswer?: number;
 }) {
   const perAnswer = options.perAnswer ?? SUBAGENTS_PER_ANSWER;
@@ -188,6 +209,25 @@ export function createSubagents(options: {
           if (!parsed.success)
             return `${REFUSAL_MARKER} No subagent was started: say what the task is and what answer you want back.`;
           /*
+           * 期七：先定模型。被拒的（不在可用的模型里）不启动，也不占这一轮的名额；没有难任务模型的
+           * "hard" 退回平时的模型，在结果里说明。
+           */
+          let pinned: string | undefined;
+          let modelNote: string | undefined;
+          if (options.models && parsed.data.model?.trim()) {
+            const chosen = resolveSubagentModel({
+              requested: parsed.data.model,
+              hardModel: await options.models.hardModelOf(
+                parent.actorId,
+                parent.botId,
+              ),
+              allowed: await options.models.allowed(parent.actorId),
+            });
+            if (chosen.refusal) return `${REFUSAL_MARKER} ${chosen.refusal}`;
+            pinned = chosen.use;
+            modelNote = chosen.note;
+          }
+          /*
            * A task from a check-in is asked first, because starting nothing there is not a subagent
            * this answer used: counting it would spend the cap on work that never ran, and a Bot on
            * the sixth call would be told it had already started five.
@@ -224,7 +264,12 @@ export function createSubagents(options: {
             },
           });
           const messages = () => agent?.messages ?? [];
-          const answer = (result: SubagentResult) => JSON.stringify(result);
+          const answer = (result: SubagentResult) =>
+            JSON.stringify({
+              ...result,
+              ...(pinned ? { model: pinned } : {}),
+              ...(modelNote ? { modelNote } : {}),
+            });
           /*
            * Timed here, around the run, because the page cannot: a subtask's card is drawn again
            * long after its turn, and while it worked there was nothing on it to measure from. What
@@ -233,6 +278,11 @@ export function createSubagents(options: {
            */
           const startedAt = Date.now();
           const elapsed = () => Math.max(0, Date.now() - startedAt);
+          // 这条线程的这一次运行用选定的模型；运行怎么结束都撤销（见下面的 finally）。
+          const unpin =
+            pinned && options.models
+              ? options.models.pin(threadId, pinned)
+              : undefined;
           try {
             const { replyText } = await runTurn({
               ownerUserId: parent.actorId,
@@ -309,6 +359,7 @@ export function createSubagents(options: {
              * conversation, as above. Withdrawal only closes what is still pending and does nothing
              * twice, so on a run that opened nothing this costs one read.
              */
+            unpin?.();
             await options.withdrawApprovals(parent.actorId, runId);
           }
         },

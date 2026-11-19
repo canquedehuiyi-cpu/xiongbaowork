@@ -16,6 +16,7 @@ import {
   UPDATE_PLAN_TOOL,
 } from "@openbot/shared/run-notices";
 import { withReplayedReasoning } from "./replayed-reasoning";
+import { DEFAULT_CONTEXT_WINDOW, foldEarlyResults } from "./turn-folding";
 import { unkeptPromise } from "./unkept-promise";
 
 export { STEP_LIMIT_EVENT, type StepLimitPayload };
@@ -494,4 +495,59 @@ function isModel(model: unknown): model is Model {
     model !== null &&
     (model as { specificationVersion?: unknown }).specificationVersion === "v3"
   );
+}
+
+export type FoldingOptions = {
+  /**
+   * 这个模型的窗口（token）。读不到（返回空，或者抛错）就用 {@link DEFAULT_CONTEXT_WINDOW}。每个模型只问一次。
+   */
+  windowFor?: (
+    provider: string,
+    modelId: string,
+  ) => number | undefined | Promise<number | undefined>;
+};
+
+/**
+ * 每一步发给模型之前，先按 {@link foldEarlyResults} 折叠较早的工具结果。包在模型外面，是因为运行时只给
+ * `maxSteps`，两步之间没有别的位置可以改这一步的提示，`answersOnLastStep` 也是这样做的；放在它外面，让它看到的
+ * 已经是折叠后的提示（折叠不改回合数，它按回合数数步）。工厂式配置、解析不了的模型原样返回。
+ */
+export function foldingEarlyResults(
+  configuration: BuiltInAgentConfiguration,
+  options: FoldingOptions = {},
+): BuiltInAgentConfiguration {
+  if ("factory" in configuration) return configuration;
+  let model: unknown;
+  try {
+    model = resolveModel(configuration.model, configuration.apiKey);
+  } catch {
+    return configuration;
+  }
+  if (!isModel(model)) return configuration;
+  const inner = model;
+  let window: Promise<number> | undefined;
+  const windowOf = () => {
+    window ??= (async () => {
+      try {
+        const known = await options.windowFor?.(inner.provider, inner.modelId);
+        return known && known > 0 ? known : DEFAULT_CONTEXT_WINDOW;
+      } catch {
+        return DEFAULT_CONTEXT_WINDOW;
+      }
+    })();
+    return window;
+  };
+  const folded = async (asked: CallOptions): Promise<CallOptions> => {
+    const prompt = foldEarlyResults(asked.prompt, { window: await windowOf() });
+    return prompt === asked.prompt ? asked : { ...asked, prompt };
+  };
+  const wrapped: Model = {
+    specificationVersion: "v3",
+    provider: inner.provider,
+    modelId: inner.modelId,
+    supportedUrls: inner.supportedUrls,
+    doGenerate: async (asked) => inner.doGenerate(await folded(asked)),
+    doStream: async (asked) => inner.doStream(await folded(asked)),
+  };
+  return { ...configuration, model: wrapped };
 }

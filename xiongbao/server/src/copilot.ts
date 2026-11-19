@@ -53,7 +53,7 @@ import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
 import { mediaGuidance } from "../../shared/media";
 import { planGuidance } from "../../shared/plan";
-import { subagentGuidance } from "../../shared/subagent";
+import { subagentGuidance, subagentModelGuidance } from "../../shared/subagent";
 import { thinkingOf } from "../../shared/thinking";
 import {
   codingToolsGuidance,
@@ -134,6 +134,7 @@ import {
 } from "./memory/tools";
 import { providerName } from "./model-billing";
 import { modelSourceFor, type RunChoice } from "./model-catalogue";
+import { contextWindowOf } from "./models/context-window";
 import {
   deepSeekLanguageModel,
   isDeepSeekEndpoint,
@@ -582,6 +583,11 @@ export type RuntimeModel = {
    * the default while the credential lists it; otherwise the middle of the provider's line is.
    */
   pinned?: boolean;
+  /**
+   * 期七：这个模型是服务器为这一次运行定的（子代理的 `model` 参数），不是对话里的选择。它排在员工自己绑定的
+   * 模型前面：派活的人要的就是这一个。对话里的选择从不带它。见 {@link modelForRun}、`bindingFor`。
+   */
+  forced?: boolean;
 };
 
 /** Optional desktop environment values may be present but blank; SDKs treat them as URLs. */
@@ -1290,7 +1296,16 @@ export function builtInAgentConfiguration(
        */
       ...promptSection(
         "delegation",
-        subagentGuidance(tools.map((tool) => tool.name)),
+        /*
+         * 期七：再多一句「难的子任务可指定 model: "hard"」，同样只给持有 `run_subagent` 的运行。另写在
+         * `subagentModelGuidance` 里，不并进上面那段（那段的文字被提示词夹具逐字钉住）。
+         */
+        [
+          subagentGuidance(tools.map((tool) => tool.name)),
+          subagentModelGuidance(tools.map((tool) => tool.name)),
+        ]
+          .filter((part) => part !== undefined)
+          .join("\n\n") || undefined,
       ),
       /*
        * 改完就验证：跑项目的测试或构建、读结果、失败就修，最多 3 轮，交付时附上命令和退出码。只给
@@ -2343,6 +2358,31 @@ async function buildAgent(
   ): Promise<{ runModel: RuntimeModel; runAgentModel?: LanguageModel }> => {
     if (picked === model || !resolveAgentModel || model.plan)
       return { runModel: picked, runAgentModel: agentModel };
+    /*
+     * 期七：服务器为这一次运行定的模型（子代理的 `model`）排在绑定前面：员工绑了模型库里的模型，
+     * 派活的人要的还是这一个。仍然是部署的模型名，按这个人计量，只是不取员工的绑定。
+     */
+    if (picked.forced) {
+      try {
+        const metered = apiKey ? deploymentModel(picked, apiKey) : undefined;
+        return {
+          runModel: picked,
+          runAgentModel: metered
+            ? ((await resolveAgentModel(agent.id, metered, {
+                ignoreBinding: true,
+              })) ?? undefined)
+            : undefined,
+        };
+      } catch {
+        // Never log the thrown value: database errors can contain connection details or row contents.
+        console.error({
+          error: "agent_model_binding_read_failed",
+          context: { operation: "resolveAgentModel", agentId: agent.id },
+          timestamp: new Date().toISOString(),
+        });
+        return { runModel: picked };
+      }
+    }
     try {
       const bound = await resolveAgentModel(agent.id);
       if (bound) return { runModel: model, runAgentModel: bound };
@@ -2518,6 +2558,15 @@ async function buildAgent(
       // A chat the server carries on spends its step budget once over all its rounds, not once each.
       wholeTurn: (runInput) =>
         declaresServerComputerTools(runInput.forwardedProps),
+      /*
+       * 期七：一轮里越过窗口的 70% 就折叠较早的工具结果（`toolkit/.../turn-folding.ts`）。窗口读模型目录，
+       * 读不到就用保守的默认值。部署开关 `XIONGBAO_TURN_FOLD=off` 关掉。
+       */
+      contextWindowFor: (provider, modelId) =>
+        contextWindowOf(provider.split(".")[0] ?? provider, modelId),
+      ...(process.env.XIONGBAO_TURN_FOLD === "off"
+        ? { foldResults: false }
+        : {}),
       /*
        * 期三：DeepSeek 要求调过工具的 assistant 消息跨轮带回它的思考，历史里存着的就按工具调用 id 放回。
        * 只对 DeepSeek：别的提供方拿到没有签名的 reasoning 部分会拒绝或丢掉。见 `models/deepseek-thinking.ts`。
@@ -3802,13 +3851,15 @@ export async function modelForRun(
   if (model.plan && !choice.listed) return model;
   // The deployment's own model still gets its name, so the Bot can say what it runs on.
   const label = choice.label ? { label: choice.label } : {};
+  const forced = choice.forced ? { forced: true } : {};
   if (choice.model === model.defaultModel && !choice.effort && !model.plan)
-    return { ...model, ...label };
+    return { ...model, ...label, ...forced };
   return {
     ...model,
     defaultModel: choice.model,
     listed: choice.listed,
     ...label,
+    ...forced,
     ...(choice.effort ? { effort: choice.effort } : {}),
   };
 }
