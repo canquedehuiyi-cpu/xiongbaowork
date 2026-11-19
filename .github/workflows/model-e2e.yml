@@ -38,7 +38,7 @@ on:
           - capability-smoke
           - all
       tasks:
-        description: "对标题目：all，或逗号分隔的 research,docs,code,data,office"
+        description: "对标题目：all（五道对标题）、hard（加难题 compare），或逗号分隔的 research,docs,code,data,office,compare"
         type: string
         default: all
       scenarios:

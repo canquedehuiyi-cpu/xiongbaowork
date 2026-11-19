@@ -11,7 +11,7 @@
  *
  * 环境变量（除 config.ts 里的模型参数外）：
  *   CODEX_BIN          codex 可执行文件；作业里用 npm 装好的精确版本（见 CODEX_VERSION）
- *   EVAL_TASKS         all 或逗号分隔的题名，默认 all
+ *   EVAL_TASKS         all（五道对标题）、hard（加难题）或逗号分隔的题名，默认 all
  *   EVAL_TASK_MINUTES  每题墙钟上限，默认 20
  *   EVAL_OUT           结果目录，默认 ./employee-eval-out；写 codex.json、每题的 JSONL 记录和产物
  *   EVAL_CODEX_SANDBOX Codex 跑命令的沙箱：workspace-write（默认，联网打开）或 danger-full-access
@@ -183,6 +183,7 @@ async function runOne(
     wallMs,
     timedOut,
     steps: summary.steps,
+    toolCalls: summary.steps,
     modelCalls: null,
     tokens: summary.tokens,
     silentStop: null,
