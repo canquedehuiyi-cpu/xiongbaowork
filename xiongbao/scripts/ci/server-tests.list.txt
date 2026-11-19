@@ -234,6 +234,8 @@ tests/channel-routes.test.ts
 tests/channel-summary.integration.test.ts
 tests/channel-titler.test.ts
 tests/channel-work.integration.test.ts
+tests/chat-server-computer-tools-config.test.ts
+tests/chat-server-tools.integration.test.ts
 tests/check-in-offer.test.ts
 tests/coding-tools.test.ts
 tests/command-timeout.test.ts
@@ -270,6 +272,7 @@ tests/computer-culler.integration.test.ts
 tests/computer-download-routes.test.ts
 tests/computer-exec-timeout.test.ts
 tests/computer-fleet-route.test.ts
+tests/computer-gateway-turn.test.ts
 tests/computer-gateway.test.ts
 tests/computer-handoff-contract.test.ts
 tests/computer-human-input.test.ts

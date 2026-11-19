@@ -206,8 +206,14 @@ function headlessComputerTools(options: {
       "computer_navigate",
       "Open a web page and return its title and readable text. Use the returned content to answer.",
       z.strictObject({ url: text }),
-      async ({ url }, { toolCallId }) => {
-        const result = await gateway.navigate(seat, actor, url, toolCallId);
+      async ({ url }, { toolCallId, signal }) => {
+        const result = await gateway.navigate(
+          seat,
+          actor,
+          url,
+          toolCallId,
+          signal,
+        );
         if (result.challenge)
           throw new HeadlessToolSuspension(result.challenge.reason, {
             kind: "computer_handoff",
@@ -222,19 +228,28 @@ function headlessComputerTools(options: {
       "computer_read",
       "Read the currently open browser page without navigating.",
       noArgs,
-      async () => ({ ok: true, ...(await gateway.read(seat)) }),
+      async (_input, { signal }) => ({
+        ok: true,
+        ...(await gateway.read(seat, signal)),
+      }),
     ),
     tool(
       "computer_snapshot",
       "List fields, buttons and links with refs. Call before clicking or typing and pass the returned snapshotId with every ref. If refs are stale take a fresh snapshot.",
       noArgs,
-      async () => ({ ok: true, ...(await gateway.snapshot(seat)) }),
+      async (_input, { signal }) => ({
+        ok: true,
+        ...(await gateway.snapshot(seat, signal)),
+      }),
     ),
     tool(
       "computer_screenshot",
       "Return an image of the browser currently open on your computer.",
       noArgs,
-      async () => ({ ok: true, ...(await gateway.screenshot(seat)) }),
+      async (_input, { signal }) => ({
+        ok: true,
+        ...(await gateway.screenshot(seat, signal)),
+      }),
     ),
     tool(
       "computer_click",
@@ -288,18 +303,18 @@ function headlessComputerTools(options: {
       "computer_scroll",
       "Scroll down by pixels, or up with a negative deltaY. Defaults to 600.",
       z.strictObject({ deltaY: z.number().optional() }),
-      async (input) => ({
+      async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.scroll(seat, actor, input)),
+        ...(await gateway.scroll(seat, actor, input, signal)),
       }),
     ),
     tool(
       "computer_list_files",
       `List files and folders in ${where}. Call first before reading an uncertain filename. To list one of the person's shared read-only folders instead, pass its root.`,
       z.strictObject({ path: z.string().optional(), root: folderRoot }),
-      async (input) => ({
+      async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.listFiles(seat, actor, input)),
+        ...(await gateway.listFiles(seat, actor, input, signal)),
       }),
     ),
     tool(
@@ -311,9 +326,9 @@ function headlessComputerTools(options: {
         offset: lineNumber.optional(),
         limit: lineNumber.optional(),
       }),
-      async (input) => ({
+      async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.readFile(seat, actor, input)),
+        ...(await gateway.readFile(seat, actor, input, signal)),
       }),
     ),
     tool(
@@ -325,8 +340,8 @@ function headlessComputerTools(options: {
         new_string: z.string(),
         replace_all: z.boolean().optional(),
       }),
-      async (input) => {
-        const result = await gateway.editFile(seat, actor, input);
+      async (input, { signal }) => {
+        const result = await gateway.editFile(seat, actor, input, signal);
         // Not found or ambiguous: answered in words for the model to retry, never thrown.
         return result.edited
           ? { ok: true, ...result }
@@ -342,8 +357,8 @@ function headlessComputerTools(options: {
         glob: z.string().optional(),
         ignore_case: z.boolean().optional(),
       }),
-      async (input) => {
-        const result = await gateway.grep(seat, actor, input);
+      async (input, { signal }) => {
+        const result = await gateway.grep(seat, actor, input, signal);
         return "error" in result
           ? { ok: false, ...result }
           : { ok: true, ...result };
@@ -353,8 +368,8 @@ function headlessComputerTools(options: {
       "computer_glob",
       `Find files in ${where} whose path matches a glob pattern, such as src/**/*.ts, relative to path when one is given. Returns up to 500 paths, the most recently changed first.`,
       z.strictObject({ pattern: text, path: z.string().optional() }),
-      async (input) => {
-        const result = await gateway.glob(seat, actor, input);
+      async (input, { signal }) => {
+        const result = await gateway.glob(seat, actor, input, signal);
         return "error" in result
           ? { ok: false, ...result }
           : { ok: true, ...result };
@@ -368,9 +383,9 @@ function headlessComputerTools(options: {
         contents: z.string(),
         append: z.boolean().optional(),
       }),
-      async (input) => ({
+      async (input, { signal }) => ({
         ok: true,
-        ...(await gateway.writeFile(seat, actor, input)),
+        ...(await gateway.writeFile(seat, actor, input, signal)),
       }),
     ),
     tool(

@@ -118,6 +118,13 @@ export type BuiltInAgentHooks = {
    * may refuse a reasoning part it did not sign. See `replayed-reasoning.ts`.
    */
   replayReasoning?: boolean;
+  /**
+   * Whether this run is one round of a turn the host carries on between runs (it runs the tool
+   * calls itself and starts the Bot again with their results). Then the step budget is the turn's:
+   * counted from the person's message, so it is not spent afresh by every round. Absent, a run
+   * counts from where it starts.
+   */
+  wholeTurn?: (input: RunAgentInput) => boolean;
 };
 
 /**
@@ -325,6 +332,7 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
       this.steps,
       checklist.parts,
       this.hooks.replayReasoning ? reasoningByToolCall(history) : undefined,
+      this.hooks.wholeTurn?.(input) === true,
     );
     const { inline, observe, attribute } = this.hooks;
     /*

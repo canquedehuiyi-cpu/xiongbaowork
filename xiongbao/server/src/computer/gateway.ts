@@ -148,6 +148,7 @@ export {
   WorkspaceTooLargeError,
 } from "./client";
 
+import { createFrameKeeper } from "./page-frame-capture";
 import type { PageFrameStore } from "./page-frames";
 import {
   type ActionPolicy,
@@ -459,14 +460,27 @@ export interface ComputerGateway {
   tokenFor(seat: ComputerSeat): string | undefined;
   locate(seat: ComputerSeat): Promise<string>;
   status(seat: ComputerSeat): Promise<ComputerStatus>;
-  screenshot(seat: ComputerSeat): Promise<ScreenshotResult>;
-  snapshot(seat: ComputerSeat): Promise<SnapshotResult>;
-  read(seat: ComputerSeat): Promise<ReadResult>;
+  /**
+   * Whether this gateway keeps a frame of every page its `navigate` opens for a tool call, so the
+   * caller (the route) must not keep a second one. Absent: it does not.
+   */
+  readonly keepsFrames?: boolean;
+  /*
+   * Every call below takes the caller's own stop as its last argument. A call stopped while it waits
+   * (for its computer, for a person's approval, for the page) ends there and carries nothing out.
+   */
+  screenshot(
+    seat: ComputerSeat,
+    signal?: AbortSignal,
+  ): Promise<ScreenshotResult>;
+  snapshot(seat: ComputerSeat, signal?: AbortSignal): Promise<SnapshotResult>;
+  read(seat: ComputerSeat, signal?: AbortSignal): Promise<ReadResult>;
   navigate(
     seat: ComputerSeat,
     actor: ActionActor,
     url: string,
     toolCallId?: string,
+    signal?: AbortSignal,
   ): Promise<NavigateResult>;
   click(
     seat: ComputerSeat,
@@ -490,11 +504,13 @@ export interface ComputerGateway {
     seat: ComputerSeat,
     actor: ActionActor,
     input: ScrollInput,
+    signal?: AbortSignal,
   ): Promise<ActionResult>;
   readFile(
     seat: ComputerSeat,
     actor: ActionActor,
     input: ReadFileInput,
+    signal?: AbortSignal,
   ): Promise<ReadFileResult>;
   downloadFile(
     seat: ComputerSeat,
@@ -510,6 +526,7 @@ export interface ComputerGateway {
     seat: ComputerSeat,
     actor: ActionActor,
     input: ListFilesInput,
+    signal?: AbortSignal,
   ): Promise<ListFilesResult>;
   runCommand(
     seat: ComputerSeat,
@@ -521,24 +538,28 @@ export interface ComputerGateway {
     seat: ComputerSeat,
     actor: ActionActor,
     input: WriteFileInput,
+    signal?: AbortSignal,
   ): Promise<WriteFileResult>;
   /** One passage of a file replaced (期五), on the write's terms: governed, asked, refused read-only. */
   editFile(
     seat: ComputerSeat,
     actor: ActionActor,
     input: EditFileInput,
+    signal?: AbortSignal,
   ): Promise<EditFileResult>;
   /** A content search (期五), on the read's terms. */
   grep(
     seat: ComputerSeat,
     actor: ActionActor,
     input: GrepInput,
+    signal?: AbortSignal,
   ): Promise<GrepResult>;
   /** A search by name (期五), on the listing's terms. */
   glob(
     seat: ComputerSeat,
     actor: ActionActor,
     input: GlobInput,
+    signal?: AbortSignal,
   ): Promise<GlobResult>;
   /*
    * The local apps and the desktop below are a per-Bot option on top of seats: they exist only on the
@@ -780,6 +801,15 @@ export function createComputerGateway(
    */
   const snapshots = options.snapshots ?? createInMemorySnapshotStore();
   const pageFrames = options.pageFrames;
+  // Photographs the page a navigation opened, by this gateway's own screen. See `page-frame-capture.ts`.
+  const keepFrameOf = createFrameKeeper(
+    {
+      provider,
+      status: (seat) => provider.status(seat),
+      screenshot: (seat) => screenshot(seat),
+    },
+    pageFrames,
+  );
   const seats: ComputerSeatResolver = options.seats ?? {
     seatFor: async (botId, personId) => personSeat(personId, botId),
   };
@@ -985,8 +1015,11 @@ export function createComputerGateway(
   const DOWNLOAD_BACKSTOP_MS = 300_000;
 
   /** Read-only, so it passes straight through. Nothing has changed and there is nothing to decide. */
-  async function screenshot(seat: ComputerSeat): Promise<ScreenshotResult> {
-    return get<ScreenshotResult>(seat, "/screenshot");
+  async function screenshot(
+    seat: ComputerSeat,
+    signal?: AbortSignal,
+  ): Promise<ScreenshotResult> {
+    return get<ScreenshotResult>(seat, "/screenshot", signal);
   }
 
   /**
@@ -999,7 +1032,10 @@ export function createComputerGateway(
    * the refs are returned, so the snapshot cannot be resolved against on one server before it exists
    * on the store.
    */
-  async function snapshot(seat: ComputerSeat): Promise<SnapshotResult> {
+  async function snapshot(
+    seat: ComputerSeat,
+    signal?: AbortSignal,
+  ): Promise<SnapshotResult> {
     const base = await locate(seat);
     /*
      * Which run this is, asked before the page is drawn rather than after it.
@@ -1019,6 +1055,7 @@ export function createComputerGateway(
       ...route(seat, base),
       "/snapshot",
       { method: "POST" },
+      signal,
     );
     await snapshots.save(seatText(seat), {
       snapshotId: result.snapshotId,
@@ -1049,11 +1086,14 @@ export function createComputerGateway(
     }
   }
 
-  async function read(seat: ComputerSeat): Promise<ReadResult> {
+  async function read(
+    seat: ComputerSeat,
+    signal?: AbortSignal,
+  ): Promise<ReadResult> {
     // Page text is outside content: marked here, once, so the headless tools and the browser's
     // routes hand the model the same envelope. See untrusted-content.ts.
     return withUntrustedNotice(
-      await get<ReadResult>(seat, "/read"),
+      await get<ReadResult>(seat, "/read", signal),
       "web page",
       PAGE_FIELDS,
     );
@@ -1905,6 +1945,7 @@ export function createComputerGateway(
     root: string,
     path: string | undefined,
     route: "/files/read" | "/files/list",
+    signal?: AbortSignal,
   ): Promise<T> {
     const machine =
       typeof root === "string" && options.folders
@@ -1921,14 +1962,18 @@ export function createComputerGateway(
       toolName,
       seat,
       actor,
-      { filePath: `${root}/${relative}`, device: machine },
+      {
+        filePath: `${root}/${relative}`,
+        device: machine,
+        ...(signal ? { signal } : {}),
+      },
       () =>
         transport.post<T>(
           runnerAddress(machine),
           seat.botId,
           route,
           { root, ...(path === undefined ? {} : { path }) },
-          undefined,
+          signal,
           undefined,
           computerActionIdentity.getStore()
             ? JSON.stringify([
@@ -2390,6 +2435,8 @@ export function createComputerGateway(
       return provider.status(seat);
     },
 
+    keepsFrames: pageFrames !== undefined,
+
     /**
      * Handovers, recorded but not policy-gated.
      *
@@ -2801,24 +2848,34 @@ export function createComputerGateway(
      * The transport applies its target guard before it sends a request. This is
      * the minimum rule that applies even when the action policy permits the URL.
      */
-    navigate(
+    async navigate(
       seat: ComputerSeat,
       actor: ActionActor,
       url: string,
       toolCallId?: string,
+      signal?: AbortSignal,
     ) {
-      return govern(
+      const result = await govern(
         "computer_navigate",
         seat,
         actor,
-        { targetUrl: url },
+        { targetUrl: url, ...(signal ? { signal } : {}) },
         async () =>
           transport.navigate(
             ...route(seat, await locate(seat)),
             url,
             toolCallId ?? computerActionIdentity.getStore(),
+            signal ? { signal } : undefined,
           ),
-      ).then((result) => withUntrustedNotice(result, "web page", PAGE_FIELDS));
+      );
+      /*
+       * The page's picture is kept here, where every navigation passes, so a turn the server runs
+       * itself has a frame in its conversation as a browser's does. Once per navigation: the route
+       * asks `keepsFrames` before keeping one of its own.
+       */
+      if (pageFrames && toolCallId)
+        await keepFrameOf(seat, toolCallId, result.url, result.title);
+      return withUntrustedNotice(result, "web page", PAGE_FIELDS);
     },
 
     async click(
@@ -2945,9 +3002,18 @@ export function createComputerGateway(
       );
     },
 
-    scroll(seat: ComputerSeat, actor: ActionActor, input: ScrollInput) {
-      return govern("computer_scroll", seat, actor, {}, () =>
-        post<ActionResult>(seat, "/scroll", input),
+    scroll(
+      seat: ComputerSeat,
+      actor: ActionActor,
+      input: ScrollInput,
+      signal?: AbortSignal,
+    ) {
+      return govern(
+        "computer_scroll",
+        seat,
+        actor,
+        { ...(signal ? { signal } : {}) },
+        () => post<ActionResult>(seat, "/scroll", input, signal),
       );
     },
 
@@ -2962,6 +3028,7 @@ export function createComputerGateway(
       seat: ComputerSeat,
       actor: ActionActor,
       input: ReadFileInput,
+      signal?: AbortSignal,
     ) {
       if (input.root !== undefined) {
         return inFolder<ReadFileResult>(
@@ -2971,6 +3038,7 @@ export function createComputerGateway(
           input.root,
           input.path,
           "/files/read",
+          signal,
         ).then((result) =>
           // The person's own files, but files all the same: what is in them is not an instruction.
           withUntrustedNotice(result, "local folder file", ["text"]),
@@ -2985,7 +3053,7 @@ export function createComputerGateway(
           project,
           "/files/read",
           input,
-          { filePath: input.path },
+          { filePath: input.path, ...(signal ? { signal } : {}) },
           false,
         ).then((result) =>
           withUntrustedNotice(result, "project file", ["text"]),
@@ -2995,8 +3063,8 @@ export function createComputerGateway(
         "computer_read_file",
         seat,
         actor,
-        { filePath: input.path },
-        () => post<ReadFileResult>(seat, "/files/read", input),
+        { filePath: input.path, ...(signal ? { signal } : {}) },
+        () => post<ReadFileResult>(seat, "/files/read", input, signal),
       ).then((result) =>
         // A workspace file is whatever the Bot downloaded or was sent, so it is outside content.
         withUntrustedNotice(result, "workspace file", ["text"]),
@@ -3045,6 +3113,7 @@ export function createComputerGateway(
       seat: ComputerSeat,
       actor: ActionActor,
       input: ListFilesInput,
+      signal?: AbortSignal,
     ) {
       if (input.root !== undefined) {
         return inFolder<ListFilesResult>(
@@ -3054,6 +3123,7 @@ export function createComputerGateway(
           input.root,
           input.path,
           "/files/list",
+          signal,
         );
       }
       const project = await projectOf(seat);
@@ -3065,7 +3135,7 @@ export function createComputerGateway(
           project,
           "/files/list",
           input,
-          { filePath: input.path ?? "." },
+          { filePath: input.path ?? ".", ...(signal ? { signal } : {}) },
           false,
         );
       }
@@ -3073,8 +3143,8 @@ export function createComputerGateway(
         "computer_list_files",
         seat,
         actor,
-        { filePath: input.path ?? "." },
-        () => post<ListFilesResult>(seat, "/files/list", input),
+        { filePath: input.path ?? ".", ...(signal ? { signal } : {}) },
+        () => post<ListFilesResult>(seat, "/files/list", input, signal),
       );
     },
 
@@ -3130,6 +3200,7 @@ export function createComputerGateway(
       seat: ComputerSeat,
       actor: ActionActor,
       input: WriteFileInput,
+      signal?: AbortSignal,
     ) {
       const project = await projectOf(seat);
       if (project) {
@@ -3140,7 +3211,7 @@ export function createComputerGateway(
           project,
           "/files/write",
           input,
-          { filePath: input.path },
+          { filePath: input.path, ...(signal ? { signal } : {}) },
           true,
         );
       }
@@ -3148,8 +3219,8 @@ export function createComputerGateway(
         "computer_write_file",
         seat,
         actor,
-        { filePath: input.path },
-        () => post<WriteFileResult>(seat, "/files/write", input),
+        { filePath: input.path, ...(signal ? { signal } : {}) },
+        () => post<WriteFileResult>(seat, "/files/write", input, signal),
       );
     },
 
@@ -3163,6 +3234,7 @@ export function createComputerGateway(
       seat: ComputerSeat,
       actor: ActionActor,
       input: EditFileInput,
+      signal?: AbortSignal,
     ) {
       const project = await projectOf(seat);
       if (project) {
@@ -3173,7 +3245,7 @@ export function createComputerGateway(
           project,
           "/files/edit",
           input,
-          { filePath: input.path },
+          { filePath: input.path, ...(signal ? { signal } : {}) },
           true,
         );
       }
@@ -3181,8 +3253,8 @@ export function createComputerGateway(
         "computer_edit_file",
         seat,
         actor,
-        { filePath: input.path },
-        () => post<EditFileResult>(seat, "/files/edit", input),
+        { filePath: input.path, ...(signal ? { signal } : {}) },
+        () => post<EditFileResult>(seat, "/files/edit", input, signal),
       );
     },
 
@@ -3190,7 +3262,12 @@ export function createComputerGateway(
      * A content search (期五): the read's rules (`read_file`). What it finds is file contents, so it
      * comes back marked as outside content. A read-only project may be searched.
      */
-    async grep(seat: ComputerSeat, actor: ActionActor, input: GrepInput) {
+    async grep(
+      seat: ComputerSeat,
+      actor: ActionActor,
+      input: GrepInput,
+      signal?: AbortSignal,
+    ) {
       const project = await projectOf(seat);
       if (project) {
         return inProject<GrepResult>(
@@ -3200,7 +3277,7 @@ export function createComputerGateway(
           project,
           "/files/grep",
           input,
-          { filePath: input.path ?? "." },
+          { filePath: input.path ?? ".", ...(signal ? { signal } : {}) },
           false,
         ).then((result) => markedSearch(result, "project file"));
       }
@@ -3208,13 +3285,18 @@ export function createComputerGateway(
         "computer_grep",
         seat,
         actor,
-        { filePath: input.path ?? "." },
-        () => post<GrepResult>(seat, "/files/grep", input),
+        { filePath: input.path ?? ".", ...(signal ? { signal } : {}) },
+        () => post<GrepResult>(seat, "/files/grep", input, signal),
       ).then((result) => markedSearch(result, "workspace file"));
     },
 
     /** A search by name (期五): the listing's rules (`list_files`). A read-only project may be searched. */
-    async glob(seat: ComputerSeat, actor: ActionActor, input: GlobInput) {
+    async glob(
+      seat: ComputerSeat,
+      actor: ActionActor,
+      input: GlobInput,
+      signal?: AbortSignal,
+    ) {
       const project = await projectOf(seat);
       if (project) {
         return inProject<GlobResult>(
@@ -3224,7 +3306,7 @@ export function createComputerGateway(
           project,
           "/files/glob",
           input,
-          { filePath: input.path ?? "." },
+          { filePath: input.path ?? ".", ...(signal ? { signal } : {}) },
           false,
         );
       }
@@ -3232,8 +3314,8 @@ export function createComputerGateway(
         "computer_glob",
         seat,
         actor,
-        { filePath: input.path ?? "." },
-        () => post<GlobResult>(seat, "/files/glob", input),
+        { filePath: input.path ?? ".", ...(signal ? { signal } : {}) },
+        () => post<GlobResult>(seat, "/files/glob", input, signal),
       );
     },
 
