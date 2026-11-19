@@ -17,7 +17,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   - **升级须知：有一条新迁移** `0230_generated_media`（新表，存生成的图片和视频，单个最大 50 MB），升级时照常先迁移。
   - 两个镜像新增文档环境：python-docx、openpyxl、python-pptx、reportlab、weasyprint、pypdf、pdfplumber、pandas、
     markitdown（MIT，0.1.9）、pandoc、中文字体 fonts-noto-cjk 与 fonts-wqy-microhei；单镜像另装 LibreOffice 无界面版。
-    镜像因此变大（单镜像约 1 GB，agent-computer 约 650 MB），构建时会跑一遍生成并读回带中文文件的自检。
+    镜像因此变大（按 ubuntu:24.04 上实测的安装体积估算，单镜像约增加 1.1 GB，其中 LibreOffice 约 480 MB；agent-computer 约增加 0.7 GB），构建时会跑一遍生成并读回带中文文件的自检。
 - **新手引导采用熊宝的黑白红样式。** 当前步骤用红色标记，演示使用石墨色面板，并在资料来源步骤加入示意图。
 
 ## 0.2.13
