@@ -11,6 +11,7 @@ import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { STEP_LIMIT_EVENT } from "../../shared/step-limit";
+import { REASONING_TEXT_LIMIT } from "../../shared/thinking";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import {
@@ -939,6 +940,56 @@ describe("group conversations in PostgreSQL", () => {
         ],
         [grace, null],
       ]);
+    }
+  });
+
+  test("员工这一轮的思考和时长记在回复上（期三），群里每个人读到的一样，太长就截断", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    // Grace 这一轮没想，回复不带 `reasoning`。
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onReasoning?.({ text: "先查甲家。", ms: 4_000 });
+          input.onReasoning?.({ text: "再查乙家。", ms: 8_000 });
+          return "甲、乙两家查完了。";
+        },
+        [grace]: (input) => {
+          input.onReasoning?.({ text: "想".repeat(REASONING_TEXT_LIMIT + 5) });
+          return "g";
+        },
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-reasoning`,
+        text: "调研三家竞品",
+      });
+      await drain(conversations);
+    });
+    for (const reader of [owner, teammate]) {
+      const seen = await as(reader, () =>
+        conversations.list(reader.id, channel.id),
+      );
+      const [, adaRow, graceRow] = seen.messages;
+      expect(seen.messages[0]?.reasoning).toBeUndefined();
+      expect(adaRow?.reasoning).toEqual({
+        text: "先查甲家。\n\n再查乙家。",
+        ms: 12_000,
+      });
+      expect(graceRow?.reasoning?.truncated).toBe(true);
+      expect(graceRow?.reasoning?.ms).toBeUndefined();
+      expect([...(graceRow?.reasoning?.text ?? "")]).toHaveLength(
+        REASONING_TEXT_LIMIT,
+      );
     }
   });
 

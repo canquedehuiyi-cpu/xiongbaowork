@@ -18,6 +18,7 @@ import {
   finalize,
   from,
   fromEvent,
+  map,
   type Observable,
   of,
   switchMap,
@@ -328,17 +329,19 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
      * resumes. See `BuiltInAgentHooks.attribute`.
      */
     const toModel = (messages: Message[]) =>
-      sayingStepLimit(
-        observe(
-          super.run({
-            ...input,
-            messages: checklist.toModel(
-              attribute ? attribute(messages) : messages,
-            ),
-          }),
-          input,
+      stampingReasoning(
+        sayingStepLimit(
+          observe(
+            super.run({
+              ...input,
+              messages: checklist.toModel(
+                attribute ? attribute(messages) : messages,
+              ),
+            }),
+            input,
+          ),
+          this.steps,
         ),
-        this.steps,
       );
     /*
      * ALONGSIDE THE GUARD ABOVE, NOT INSTEAD OF IT. One drops a conversation the model provider is
@@ -431,6 +434,33 @@ function sayingStepLimit(
         event,
       );
     }),
+  );
+}
+
+/** The reasoning events a run's thinking is told in, which carry the moment they went out. */
+const STAMPED_REASONING: ReadonlySet<string> = new Set([
+  EventType.REASONING_START,
+  EventType.REASONING_MESSAGE_START,
+  EventType.REASONING_MESSAGE_END,
+  EventType.REASONING_END,
+]);
+
+/**
+ * The run's stream, with the moment each piece of thinking started and ended on its reasoning
+ * events (the event's own `timestamp`, milliseconds since the epoch) (期三).
+ *
+ * The runtime sends them bare, so a conversation opened later had the thinking and not how long it
+ * took: the replay arrives all at once. Stamped here, in the run's own stream, the runner stores the
+ * moments with the run's other events, and the chat says 「思考了 N 秒」 on a reload as it did live.
+ * An event that already carries a moment keeps it.
+ */
+function stampingReasoning(run: Observable<BaseEvent>): Observable<BaseEvent> {
+  return run.pipe(
+    map((event) =>
+      STAMPED_REASONING.has(event.type) && event.timestamp === undefined
+        ? ({ ...event, timestamp: Date.now() } as BaseEvent)
+        : event,
+    ),
   );
 }
 

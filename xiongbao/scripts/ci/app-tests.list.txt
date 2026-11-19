@@ -563,6 +563,7 @@ tests/terminal-block.test.tsx
 tests/test-printing.test.tsx
 tests/theme-preference.test.ts
 tests/thinking-block.test.tsx
+tests/thinking-replay.test.tsx
 tests/thinking-toggle.test.tsx
 tests/this-computer-back-end.test.tsx
 tests/this-computer-check-for-updates.test.tsx

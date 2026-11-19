@@ -164,6 +164,12 @@ export type TurnRunner = (input: {
    */
   onToolCall?: (call: { name: string; args: unknown }) => void;
   /**
+   * Each piece of the run's thinking once it ends: its text, and how long it took when its reasoning
+   * events carry the moments they went out (`timestamp`). For a host that keeps the thinking where
+   * the run's own events are not read (a group's reply row, so everyone in the group sees it).
+   */
+  onReasoning?: (reasoning: { text: string; ms?: number }) => void;
+  /**
    * The skill the person picked for this turn, by its command, when the host resolved one: a group
    * turn's message starts with the group's framing, so the `/<command>` the person began with is not
    * where the server looks for it. Only a slug; the server reads the skill's instructions from its
@@ -840,6 +846,7 @@ export function createTurnRunner(options: {
       onStarted,
       onCustom,
       onToolCall,
+      onReasoning,
       skill,
     } = hostTurn;
     const { runRef, tenantId } = hostTurn;
@@ -1059,6 +1066,7 @@ export function createTurnRunner(options: {
             },
           }
         : {}),
+      ...(onReasoning ? { onEvent: thinkingOf(onReasoning) } : {}),
       ...(onToolCall
         ? {
             onToolCallEndEvent: ({
@@ -1311,4 +1319,56 @@ export function createTurnRunner(options: {
    * when it is built.
    */
   return scope ? (input) => scope(input, () => startTurn(input)) : startTurn;
+}
+
+/**
+ * The run's thinking, a piece at a time: the text of each reasoning message and, when both its start
+ * and its end carry a moment, how long it took. Given to `agent.subscribe` as `onEvent`.
+ */
+function thinkingOf(
+  onReasoning: (reasoning: { text: string; ms?: number }) => void,
+): (params: { event: unknown }) => void {
+  const open = new Map<string, { text: string; start?: number }>();
+  return ({ event }) => {
+    const record = event as {
+      type?: unknown;
+      messageId?: unknown;
+      delta?: unknown;
+      timestamp?: unknown;
+    };
+    if (typeof record.messageId !== "string") return;
+    const moment =
+      typeof record.timestamp === "number" && Number.isFinite(record.timestamp)
+        ? record.timestamp
+        : undefined;
+    switch (record.type) {
+      case "REASONING_MESSAGE_START":
+        open.set(record.messageId, {
+          text: "",
+          ...(moment === undefined ? {} : { start: moment }),
+        });
+        return;
+      case "REASONING_MESSAGE_CONTENT": {
+        const piece = open.get(record.messageId);
+        if (piece && typeof record.delta === "string")
+          piece.text += record.delta;
+        return;
+      }
+      case "REASONING_MESSAGE_END": {
+        const piece = open.get(record.messageId);
+        open.delete(record.messageId);
+        if (!piece?.text.trim()) return;
+        const ms =
+          piece.start !== undefined &&
+          moment !== undefined &&
+          moment >= piece.start
+            ? moment - piece.start
+            : undefined;
+        onReasoning({ text: piece.text, ...(ms === undefined ? {} : { ms }) });
+        return;
+      }
+      default:
+        return;
+    }
+  };
 }

@@ -124,6 +124,8 @@ function harness(options: {
   learningContainerId?: string;
   /** What the turn reports for each tool call it finishes. */
   onToolCall?: (call: { name: string; args: unknown }) => void;
+  /** What the turn reports for each piece of thinking it finishes. */
+  onReasoning?: (reasoning: { text: string; ms?: number }) => void;
   /** Defaults to the server's own, which admits everything while nothing is configured. */
   admission?: TurnAdmission;
   /** A turn picked up again at the step it stopped on, as an approval's resume runs one. */
@@ -254,6 +256,7 @@ function harness(options: {
         instruction: INSTRUCTION,
         ...(options.continuation ? { continuation: options.continuation } : {}),
         ...(options.onToolCall ? { onToolCall: options.onToolCall } : {}),
+        ...(options.onReasoning ? { onReasoning: options.onReasoning } : {}),
       }),
     );
 
@@ -933,6 +936,76 @@ describe("recovering what was said", () => {
         name: "update_plan",
         args: { items: [{ text: "查甲家", status: "done" }] },
       },
+    ]);
+  });
+
+  test("hands each piece of thinking to onReasoning, with how long it took when the events say", async () => {
+    // 群聊把员工这一轮的思考记在回复上（期三），读的就是这里交出的每一段。
+    const seen: { text: string; ms?: number }[] = [];
+    const { run } = harness({
+      onReasoning: (reasoning) => seen.push(reasoning),
+      drive: ({ agent, observer }) => {
+        const events = [
+          {
+            type: EventType.REASONING_MESSAGE_START,
+            messageId: "t1",
+            role: "reasoning",
+            timestamp: 1_000,
+          },
+          {
+            type: EventType.REASONING_MESSAGE_CONTENT,
+            messageId: "t1",
+            delta: "先查 ",
+          },
+          {
+            type: EventType.REASONING_MESSAGE_CONTENT,
+            messageId: "t1",
+            delta: "ENG-1。",
+          },
+          {
+            type: EventType.REASONING_MESSAGE_END,
+            messageId: "t1",
+            timestamp: 13_000,
+          },
+          // 没带时刻的一段：只有文字，不编一个时长。
+          {
+            type: EventType.REASONING_MESSAGE_START,
+            messageId: "t2",
+            role: "reasoning",
+          },
+          {
+            type: EventType.REASONING_MESSAGE_CONTENT,
+            messageId: "t2",
+            delta: "可以作答。",
+          },
+          { type: EventType.REASONING_MESSAGE_END, messageId: "t2" },
+        ];
+        for (const subscriber of agent.subscribers) {
+          for (const event of events)
+            void subscriber.onEvent?.({
+              event,
+              messages: agent.messages,
+              state: agent.state,
+              agent,
+              // biome-ignore lint/suspicious/noExplicitAny: the subscriber params are not the subject.
+            } as any);
+          void subscriber.onTextMessageEndEvent?.({
+            event: { type: EventType.TEXT_MESSAGE_END, messageId: "said_1" },
+            textMessageBuffer: "Done.",
+            messages: agent.messages,
+            state: agent.state,
+            agent,
+            // biome-ignore lint/suspicious/noExplicitAny: the subscriber params are not the subject.
+          } as any);
+        }
+        observer.complete();
+      },
+    });
+
+    expect(await run()).toEqual({ replyText: "Done." });
+    expect(seen).toEqual([
+      { text: "先查 ENG-1。", ms: 12_000 },
+      { text: "可以作答。" },
     ]);
   });
 
