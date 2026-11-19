@@ -410,6 +410,7 @@ tests/pipelines-dispatch-refusal.test.tsx
 tests/pipelines-group-param.test.tsx
 tests/pipelines-screen.test.tsx
 tests/pipelines-template-edit.test.tsx
+tests/plan-card.test.tsx
 tests/platform-model-pool.test.tsx
 tests/platform-tenant-usage.test.tsx
 tests/playground-json.test.ts
