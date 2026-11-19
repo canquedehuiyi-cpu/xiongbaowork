@@ -33,6 +33,8 @@ export * from "./plans";
 export * from "./plugins";
 export * from "./portraits";
 export * from "./portrait-media";
+export * from "./computer-waits";
+export * from "./thread-run-liveness";
 export * from "./generated-media";
 export * from "./proactive";
 export * from "./recorder";

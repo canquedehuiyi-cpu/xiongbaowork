@@ -2102,6 +2102,49 @@ describe("group conversations in PostgreSQL", () => {
         ?.id,
     ).toBe(`${turn.messageId}:${grace}`);
   });
+  test("a group turn that waits on a computer wait or a sign-in request is found by that id, as one waiting on an approval is (期九·三)", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({ replies: {} });
+    const { store } = conversations;
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    const turn = {
+      ownerUserId: owner.id,
+      channelId: channel.id,
+      messageId: `${prefix}-waits`,
+      agentIds: [ada, grace],
+      text: "hello",
+    };
+    await as(owner, async () => {
+      await store.submit(turn);
+      await store.start(turn, ada, null);
+      await store.start(turn, grace, null);
+      // What a turn suspended on a person at the computer leaves on its row: the id of what it waits on.
+      await store.finish(`${turn.messageId}:${ada}`, "", "waiting", {
+        waitId: `${prefix}-computer-wait`,
+      });
+      await store.finish(`${turn.messageId}:${grace}`, "", "waiting", {
+        signInRequestId: `${prefix}-sign-in`,
+      });
+    });
+    expect(
+      (await as(owner, () => store.waitingFor(`${prefix}-computer-wait`)))?.id,
+    ).toBe(`${turn.messageId}:${ada}`);
+    expect(
+      (await as(owner, () => store.waitingFor(`${prefix}-sign-in`)))?.id,
+    ).toBe(`${turn.messageId}:${grace}`);
+    // Only the sender's own frame finds the row, whichever kind of id it is asked for.
+    expect(
+      await as(teammate, () => store.waitingFor(`${prefix}-computer-wait`)),
+    ).toBeNull();
+    expect(
+      await as(owner, () => store.waitingFor(`${prefix}-no-such-wait`)),
+    ).toBeNull();
+  });
   test("a Team Bot's consent card in a group turn is a line in the shared transcript", async () => {
     const owner = await person();
     const teammate = await person();

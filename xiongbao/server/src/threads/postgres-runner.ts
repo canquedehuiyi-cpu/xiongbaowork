@@ -32,7 +32,12 @@ import {
   takeLocalRunTicket,
 } from "../approvals/continuation-target-local";
 import type { Database } from "../db/client";
-import { threadRunEvents, threadRuns, threads } from "../db/schema";
+import {
+  threadRunEvents,
+  threadRunLiveness,
+  threadRuns,
+  threads,
+} from "../db/schema";
 import { SYSTEM_TENANT } from "../db/schema/tenant";
 import type { QuotaService } from "../quota/limits";
 import {
@@ -51,7 +56,11 @@ import {
   isTenantFramed,
   runAsTenant,
 } from "../tenant/context";
-import { compactRunEvents } from "./run-event-compaction";
+import {
+  FLUSH_EVERY_EVENTS,
+  FLUSH_EVERY_MS,
+  RunEventWriter,
+} from "./run-event-writer";
 import {
   entryHungRound,
   onlyOnIdleThreadRequested,
@@ -88,9 +97,6 @@ const tenantLoads = new Map<string, Promise<void>>();
 const LOAD_LIMIT = 500;
 /** Threads read per round trip while loading, so one tenant's history is never one huge result. */
 const LOAD_CHUNK = 50;
-
-/** Rows of one run's events per INSERT: four parameters each, well inside the driver's 65534. */
-const EVENT_INSERT_BATCH = 2000;
 
 function ownedBy(threadId: string, tenant: string): boolean {
   const owner = threadOwners.get(threadId);
@@ -742,6 +748,23 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const agentId = request.agent.agentId ?? "unknown";
     const startedAt = Date.now();
     const events: BaseEvent[] = [];
+    /*
+     * The turn's events go to the database while it runs (期九·二), a batch every `FLUSH_EVERY_EVENTS`
+     * events or `FLUSH_EVERY_MS`, whichever comes first, and the end writes the rest. Without this a
+     * process that stopped in the middle of a long turn left none of it behind.
+     */
+    const writer = new RunEventWriter(this.database, {
+      tenant,
+      threadId,
+      runId,
+      agentId,
+      startedAt,
+    });
+    let heartbeat: ReturnType<typeof setInterval> | undefined;
+    const stopHeartbeat = () => {
+      if (heartbeat) clearInterval(heartbeat);
+      heartbeat = undefined;
+    };
     // The board's chat lane: one task per turn, titled by what the person asked -- unless the turn is a
     // round of a followed card, which spans turns (`followed` above).
     const lastUser = [...request.input.messages]
@@ -943,11 +966,16 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       } finally {
         entered();
       }
+      heartbeat = setInterval(() => writer.flushSoon(), FLUSH_EVERY_MS);
+      heartbeat.unref?.();
       return started.pipe(
         tap({
           // What the thread keeps; a heartbeat is passed on and not kept (`transient`).
           next: (event) => {
-            if (!transient(event)) events.push(event);
+            if (transient(event)) return;
+            events.push(event);
+            writer.push(event);
+            if (writer.pending >= FLUSH_EVERY_EVENTS) writer.flushSoon();
           },
           complete: () => {
             /*
@@ -957,6 +985,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
              * event is what has to be read. Reporting that as a success asks the person to review a
              * deliverable that was never produced.
              */
+            stopHeartbeat();
             finish(carriedFailure(events));
             // The parent commits the run during teardown; one macrotask later
             // the snapshot is readable and goes to PostgreSQL.
@@ -968,14 +997,32 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
                 agentId,
                 events,
                 startedAt,
+                writer,
               );
             }, 0);
           },
           error: (thrown: unknown) => {
+            stopHeartbeat();
             finish(true, thrown);
+            // What was already written is closed off; a turn that wrote nothing still writes nothing.
+            if (writer.started)
+              setTimeout(() => {
+                void this.persist(
+                  tenant,
+                  threadId,
+                  runId,
+                  agentId,
+                  events,
+                  startedAt,
+                  writer,
+                );
+              }, 0);
           },
         }),
-        finalize(() => endTurn(runId)),
+        finalize(() => {
+          stopHeartbeat();
+          endTurn(runId);
+        }),
       );
     };
     const before: Promise<unknown> | undefined = card ?? attached;
@@ -1009,60 +1056,27 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     agentId: string,
     events: BaseEvent[],
     startedAt: number,
+    /** The turn's writer, which already holds `events`; without one all of them are written here. */
+    writer?: RunEventWriter,
   ): Promise<void> {
-    // The macrotask that lands this write has no async-local-storage frame of the request that
-    // produced it, so the tenant captured at run() time is re-entered here by hand. Without it the
-    // connection runs as `system`, RLS filters the row out of its own UPDATE, and the snapshot is
-    // silently never written — a run that persists its header and loses its messages.
-    await runAsTenant(tenant, async () => {
-      try {
-        threadOwners.set(threadId, tenant);
-        const snapshot = this.peekMessages(threadId);
-        const kept = compactRunEvents(events);
-        await this.database
-          .insert(threads)
-          .values({
-            id: threadId,
-            tenantId: tenant,
-            agentId,
-            createdAt: new Date(startedAt),
-          })
-          .onConflictDoNothing();
-        await this.database
-          .update(threads)
-          .set({ messagesSnapshot: snapshot, updatedAt: new Date() })
-          .where(eq(threads.id, threadId));
-        await this.database
-          .insert(threadRuns)
-          .values({ id: runId, threadId, agentId, eventCount: kept.length })
-          .onConflictDoNothing();
-        if (kept.length > 0) {
-          /*
-           * One INSERT binds four parameters a row and the driver takes 65534, so a run past 16383
-           * events lost every one of them at once, and a thinking run is made of one event per token.
-           * Written in batches, inside one transaction: the run's events still all land or none do.
-           */
-          await this.database.transaction(async (transaction) => {
-            for (let at = 0; at < kept.length; at += EVENT_INSERT_BATCH)
-              await transaction
-                .insert(threadRunEvents)
-                .values(
-                  kept
-                    .slice(at, at + EVENT_INSERT_BATCH)
-                    .map((event, offset) => ({
-                      threadId,
-                      runId,
-                      seq: at + offset,
-                      event,
-                    })),
-                )
-                .onConflictDoNothing();
-          });
-        }
-      } catch (error) {
-        console.error("thread persistence failed", threadId, error);
-      }
-    });
+    threadOwners.set(threadId, tenant);
+    let snapshot: Message[] | undefined;
+    try {
+      snapshot = this.peekMessages(threadId);
+    } catch (error) {
+      console.error("thread persistence failed", threadId, error);
+    }
+    const out =
+      writer ??
+      new RunEventWriter(this.database, {
+        tenant,
+        threadId,
+        runId,
+        agentId,
+        startedAt,
+      });
+    if (!writer) for (const event of events) out.push(event);
+    await out.finish(snapshot);
   }
 
   /**
@@ -1136,9 +1150,12 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
           threadId: threadRuns.threadId,
           agentId: threadRuns.agentId,
           eventCount: threadRuns.eventCount,
+          // No row in `thread_run_liveness` is a finished turn.
+          status: threadRunLiveness.status,
           createdAt: threadRuns.createdAt,
         })
         .from(threadRuns)
+        .leftJoin(threadRunLiveness, eq(threadRunLiveness.runId, threadRuns.id))
         .where(inArray(threadRuns.threadId, ids))
         .orderBy(asc(threadRuns.createdAt), asc(threadRuns.id));
       const eventRows = await this.database
@@ -1159,6 +1176,12 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       const runsOf = new Map<string, typeof runs>();
       for (const run of runs) {
         if (continuationInFlight(run)) continue;
+        /*
+         * A turn still being written is not history yet: it is live in the process running it, or its
+         * process is gone and the restart sweep has not closed it (`recovery/interrupted-runs.ts`),
+         * which hands it to `adoptClosedRun` once it has.
+         */
+        if (run.status === "running") continue;
         const list = runsOf.get(run.threadId) ?? [];
         list.push(run);
         runsOf.set(run.threadId, list);
@@ -1167,6 +1190,70 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       for (const thread of chunk)
         this.replay(thread, runsOf.get(thread.id) ?? [], eventsOf);
     }
+  }
+
+  /**
+   * A turn the restart sweep has just closed, put into the conversation this process holds.
+   *
+   * Loading skips a turn that is still `running`, so one the sweep closes after its tenant was loaded
+   * would not be in memory until the next restart. A tenant this process has not loaded needs
+   * nothing: its first load reads the closed turn from the rows with the rest.
+   */
+  async adoptClosedRun(
+    tenant: string,
+    threadId: string,
+    runId: string,
+  ): Promise<void> {
+    const loading = tenantLoads.get(tenant);
+    if (!loading) return;
+    await loading;
+    await runAsTenant(tenant, async () => {
+      const [thread] = await this.database
+        .select({
+          tenantId: threads.tenantId,
+          messages: threads.messagesSnapshot,
+        })
+        .from(threads)
+        .where(eq(threads.id, threadId))
+        .limit(1);
+      const [run] = await this.database
+        .select({
+          agentId: threadRuns.agentId,
+          createdAt: threadRuns.createdAt,
+          status: threadRunLiveness.status,
+        })
+        .from(threadRuns)
+        .leftJoin(threadRunLiveness, eq(threadRunLiveness.runId, threadRuns.id))
+        .where(eq(threadRuns.id, runId))
+        .limit(1);
+      if (!thread || !run || run.status === "running") return;
+      const owner = threadOwners.get(threadId);
+      if (owner !== undefined && owner !== thread.tenantId) return;
+      threadOwners.set(threadId, thread.tenantId);
+      const rows = await this.database
+        .select({ event: threadRunEvents.event })
+        .from(threadRunEvents)
+        .where(eq(threadRunEvents.runId, runId))
+        .orderBy(asc(threadRunEvents.seq));
+      const writer = ɵGLOBAL_STORE.getOrCreate(
+        threadId,
+        thread.tenantId === SYSTEM_TENANT
+          ? ɵSERVER_THREAD_OWNER
+          : thread.tenantId,
+      );
+      if (writer.historicRuns.some((held) => held.runId === runId)) return;
+      ɵGLOBAL_STORE.appendRun(threadId, writer, {
+        threadId,
+        runId,
+        agentId: run.agentId,
+        parentRunId: writer.historicRuns.at(-1)?.runId ?? null,
+        events: rows
+          .map((row) => row.event as BaseEvent)
+          .filter((event) => !transient(event)),
+        messages: thread.messages as Message[],
+        createdAt: run.createdAt.getTime(),
+      });
+    });
   }
 
   /**
