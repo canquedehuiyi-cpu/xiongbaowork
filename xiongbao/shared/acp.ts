@@ -88,6 +88,32 @@ export type AcpOpenFrame = {
   /** Only for `custom`. */
   appRef?: string;
   sessionHint?: string;
+  /**
+   * Only for `codex` and `claude-code`, and only when the employee has a model of its own in
+   * XiongBao: the agent's model requests then go to the server's model proxy instead of the owner's
+   * own settings. Absent, the agent runs on what the owner configured on the computer, as before.
+   */
+  model?: AcpOpenModel;
+};
+
+/** The request format a harness speaks to its model: Codex `responses`, Claude Code `messages`. */
+export type AcpModelWire = "responses" | "messages";
+
+/**
+ * Where an external employee's model requests go (`acp.open.model`). NO REAL KEY EVER TRAVELS: `token`
+ * is a short-lived pass the server signed for this one employee in this one thread, good only at the
+ * model proxy, which swaps in the real credential on the server and counts the usage. A device that
+ * keeps it past `expiresAt`, or after the employee is gone, holds nothing that works.
+ */
+export type AcpOpenModel = {
+  /** The proxy's address without a version segment (`https://host/api/agent-model`). */
+  baseUrl: string;
+  token: string;
+  /** The employee's model, as the harness may show it; the server uses its own regardless. */
+  model: string;
+  wire: AcpModelWire;
+  /** When `token` stops working, milliseconds since the epoch. */
+  expiresAt?: number;
 };
 
 /** Server → device: one turn. A `turnId` already seen is acknowledged again, never run twice. */

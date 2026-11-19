@@ -1,9 +1,14 @@
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
   AcpErrorCode,
   AcpHarness,
   AcpInventoryFrame,
+  AcpModelWire,
   AcpOpenFrame,
+  AcpOpenModel,
   AcpPermissionRequestFrame,
   AcpTurnEndFrame,
 } from "../../../shared/acp";
@@ -18,7 +23,15 @@ import {
   createAcpClient,
 } from "./client";
 import { acpProcessEnv } from "./login-path";
-import { adapterLaunch, prepareAdapterDir, withProcessPath } from "./manifest";
+import {
+  adapterLaunch,
+  claudeModelLaunch,
+  codexModelLaunch,
+  type ModelLaunch,
+  prepareAdapterDir,
+  withProcessPath,
+  writeCodexHome,
+} from "./manifest";
 import { permissionFacts } from "./paths";
 
 /**
@@ -84,6 +97,15 @@ import { permissionFacts } from "./paths";
  * the running one sends `session/cancel`, and the agent ends it; one that has not ended it after
  * `cancelGraceMs` (30 s) has its process stopped, which ends the turn `interrupted: true`.
  *
+ * THE EMPLOYEE'S OWN MODEL. An `acp.open` for Codex or Claude Code may carry `model` (a short-lived
+ * pass to the server's model proxy, never a key): the adapter is then started with the environment
+ * that points the agent at the proxy (manifest.ts), Codex with a `CODEX_HOME` of its own in a
+ * temporary folder that is deleted when its process goes away, never the owner's `~/.codex`. The
+ * pass lives in the process's environment, so a process is kept only while it is still good: one that
+ * has run to within `MODEL_REFRESH_MS` of its pass's expiry, and is idle, is replaced by the next open
+ * that brings a new one. An open with no `model` (an older server, an employee with no model of its
+ * own) starts the agent on the owner's own settings, as before.
+ *
  * SESSIONS. Each employee's session id for a thread is remembered for the life of the runner. When a new process
  * starts for a thread and the agent can load sessions, the remembered id (else the server's
  * `sessionHint`) is loaded; otherwise a new session is made. `acp.session.loaded` says whether the
@@ -146,7 +168,14 @@ export type AcpHostDeps = {
   frameLimit?: number;
   /** `ACP_CANCEL_GRACE_MS`. */
   cancelGraceMs?: number;
+  /** Where Codex's own temporary `CODEX_HOME` is made; the system's temporary folder unless set. */
+  tempRoot?: string;
+  /** The clock a pass's expiry is read against (tests). */
+  now?: () => number;
 };
+
+/** An idle process whose pass has less than this left is replaced by the next open with a new one. */
+export const MODEL_REFRESH_MS = 60 * 60 * 1000;
 
 const HARNESSES: readonly AcpHarness[] = [
   "codex",
@@ -188,8 +217,13 @@ type Turn = {
 
 type Proc = {
   agentId: string;
-  /** What was started: a different harness, folder or app means a different process. */
+  /** What was started: a different harness, folder, app or model means a different process. */
   key: string;
+  /** The pass the process was started with, and when it stops working (its environment is fixed). */
+  modelToken?: string;
+  modelExpiresAt?: number;
+  /** Removes what was made for the process alone (Codex's temporary home). */
+  cleanup?: () => void;
   workdir: string;
   client: AcpClient | null;
   ready: Promise<{ loadSession: boolean }>;
@@ -240,6 +274,41 @@ function isRecord(value: unknown): value is Frame {
 
 const str = (value: unknown): string | null =>
   typeof value === "string" && value !== "" ? value : null;
+
+const WIRE_OF: Partial<Record<AcpHarness, AcpModelWire>> = {
+  codex: "responses",
+  "claude-code": "messages",
+};
+
+/**
+ * The model block of an open, when it is well formed and for a harness that takes one (and in the
+ * format that harness speaks); anything else is ignored, which starts the agent on the owner's own
+ * settings.
+ */
+function modelOf(harness: AcpHarness, value: unknown): AcpOpenModel | null {
+  if (!isRecord(value)) return null;
+  const baseUrl = str(value.baseUrl);
+  const token = str(value.token);
+  const model = str(value.model);
+  if (!baseUrl || !token || !model) return null;
+  if (!/^https?:\/\//i.test(baseUrl)) return null;
+  if (value.wire !== WIRE_OF[harness]) return null;
+  const expiresAt =
+    typeof value.expiresAt === "number" && Number.isFinite(value.expiresAt)
+      ? value.expiresAt
+      : undefined;
+  return {
+    baseUrl,
+    token,
+    model,
+    wire: value.wire as AcpModelWire,
+    ...(expiresAt === undefined ? {} : { expiresAt }),
+  };
+}
+
+/** What makes two opens' models the same process: everything but the pass itself. */
+const modelKeyOf = (model: AcpOpenModel | undefined) =>
+  model ? [model.baseUrl, model.model, model.wire] : null;
 
 /** Host state is per employee and thread: two employees can share one group thread. */
 const threadKey = (agentId: string, threadId: string): string =>
@@ -690,8 +759,20 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     }
     proc.sessions.clear();
     const stop = () => proc.client?.close() ?? Promise.resolve();
+    // What was made for the process alone goes once it is stopped (or failed to start).
+    const clean = () => {
+      try {
+        proc.cleanup?.();
+      } catch {
+        // A folder that cannot be removed now is only a leftover in the temporary folder.
+      }
+      proc.cleanup = undefined;
+    };
     // A process still being looked up is stopped as soon as it exists.
-    return proc.client ? stop() : proc.ready.then(stop, stop);
+    return (proc.client ? stop() : proc.ready.then(stop, stop)).then(
+      clean,
+      clean,
+    );
   }
 
   function handlersFor(proc: Proc): AcpHandlers {
@@ -766,7 +847,24 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       sessions: new Map(),
     };
     const harness = open.harness;
+    const { model } = open;
+    if (model) {
+      proc.modelToken = model.token;
+      if (model.expiresAt !== undefined) proc.modelExpiresAt = model.expiresAt;
+    }
     proc.ready = (async () => {
+      // Made inside the process's own start, so a process that is retired meanwhile still removes it.
+      let launch: ModelLaunch | undefined;
+      if (model && harness === "codex") {
+        const home = mkdtempSync(
+          join(deps.tempRoot ?? tmpdir(), "xiongbao-codex-"),
+        );
+        proc.cleanup = () => rmSync(home, { recursive: true, force: true });
+        writeCodexHome(home, model);
+        launch = codexModelLaunch(model, home);
+      } else if (model && harness === "claude-code") {
+        launch = claudeModelLaunch(model);
+      }
       const spec: AcpSpawnSpec =
         harness === "custom" && app?.kind === "stdio"
           ? {
@@ -782,7 +880,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
           : await adapterLaunch(
               harness as Exclude<AcpHarness, "custom">,
               { adapterDir: deps.adapterDir, workdir },
-              { processEnv },
+              { processEnv, ...(launch ? { model: launch } : {}) },
             );
       if (closed) throw new HostError("start_failed");
       proc.client = spawn(spec, handlersFor(proc));
@@ -806,9 +904,23 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       thread.open.harness,
       workdir,
       app?.kind === "stdio" ? [app.command, app.args, app.env, app.cwd] : null,
+      modelKeyOf(thread.open.model),
     ]);
     let proc = procs.get(thread.open.agentId);
-    if (proc && (proc.key !== key || (proc.client && !proc.client.alive))) {
+    // The pass is in the process's environment and cannot be renewed there: an idle process whose pass
+    // is nearly spent is replaced when the open brings a new one.
+    const model = thread.open.model;
+    const spent =
+      proc !== undefined &&
+      proc.busy === 0 &&
+      model !== undefined &&
+      proc.modelToken !== model.token &&
+      proc.modelExpiresAt !== undefined &&
+      (deps.now ?? Date.now)() > proc.modelExpiresAt - MODEL_REFRESH_MS;
+    if (
+      proc &&
+      (proc.key !== key || spent || (proc.client && !proc.client.alive))
+    ) {
       void retire(proc);
       proc = undefined;
     }
@@ -981,6 +1093,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     }
     const appRef = str(frame.appRef);
     const sessionHint = str(frame.sessionHint);
+    const model = modelOf(harness, frame.model);
     const open: AcpOpenFrame = {
       type: "acp.open",
       agentId,
@@ -989,6 +1102,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
       workdirRef,
       ...(appRef ? { appRef } : {}),
       ...(sessionHint ? { sessionHint } : {}),
+      ...(model ? { model } : {}),
     };
     try {
       target(open);

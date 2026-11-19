@@ -77,6 +77,9 @@ import {
   guardBotTurn,
 } from "./agents/lifecycle";
 import { createBotReset } from "./agents/lifecycle-reset";
+import { readAgentModelProxyConfig } from "./agents/model-proxy/access";
+import { AGENT_MODEL_ROUTE } from "./agents/model-proxy/proxy";
+import { createAgentModelService } from "./agents/model-proxy/wiring";
 import { readAgentPresence } from "./agents/presence";
 import { createAgentProfileStore } from "./agents/profile-store";
 import type { AgentActor } from "./agents/profile-types";
@@ -665,6 +668,9 @@ import {
   createWakerFlowShareRoutes,
 } from "./wakerflows/routes";
 import { createWakerFlowStore, flowRunEventWriter } from "./wakerflows/store";
+import { resolveCrawlService } from "./web/crawl4ai";
+import { resolveSearchProvider } from "./web/search";
+import { webTools } from "./web/tools";
 import { readAuditEvent, readWhatIfVocabulary } from "./what-if";
 import { repeatAfterEach } from "./work/loop";
 import { createWorkQueue, startWorkOfferedListener } from "./work/queue";
@@ -1159,6 +1165,25 @@ await startupLifecycle.run(async (startup) => {
     { outbound: modelOutbound },
   );
   const resolveAgentModel = modelOf(resolveNamedAgentModel, tokenCallSink);
+  /*
+   * 外部员工（Codex、Claude Code）的模型请求走这里：服务器用这位员工在熊宝配的模型和凭据转发，计量写进
+   * `model_token_calls`，设备只拿一个短期令牌，拿不到真实的 key。`acp.open` 带上令牌和代理地址。
+   */
+  const agentModel = createAgentModelService({
+    database,
+    credentials: credentialStore,
+    encryptionKey: config.keyEncryptionKey,
+    sink: tokenCallSink,
+    quota,
+    outbound: modelOutbound,
+    config: readAgentModelProxyConfig(
+      process.env,
+      config.publicUrl,
+      AGENT_MODEL_ROUTE,
+    ),
+  });
+  const acpRuntimeForModel = deviceAcpRuntime();
+  if (acpRuntimeForModel) acpRuntimeForModel.model = agentModel.access;
   const agentProfileStore = createAgentProfileStore(
     database,
     config.managedAgent?.endpoint,
@@ -2937,6 +2962,17 @@ await startupLifecycle.run(async (startup) => {
   });
   const acpRuntimeForDelivery = deviceAcpRuntime();
   if (acpRuntimeForDelivery) acpRuntimeForDelivery.delivery = acpDelivery;
+  /*
+   * 联网搜索与爬虫服务（期五 B）：开机读一次 `XIONGBAO_SEARCH_*`、`XIONGBAO_CRAWL_*`。没配也照样给员工工具，
+   * 工具调用时用中文说明没配置（单镜像部署默认就是这样）。
+   */
+  const webSearchSetup = resolveSearchProvider();
+  const webCrawlSetup = resolveCrawlService();
+  if (webSearchSetup.problem) console.info(`[web] ${webSearchSetup.problem}`);
+  if (webCrawlSetup.problem)
+    console.info(
+      `[web] ${webCrawlSetup.problem}web_crawl 使用进程内的简易爬取。`,
+    );
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -2944,6 +2980,15 @@ await startupLifecycle.run(async (startup) => {
   ) => [
     // 计划清单（`update_plan`）：每位员工默认都有，工具权限里关掉 `bot/update_plan` 即不给。
     ...updatePlanTools(),
+    /*
+     * 联网搜索、读网页、爬网站（`web_search`、`web_fetch`、`web_crawl`）：每位员工默认都有，工具权限里关掉
+     * `bot/web_search`、`bot/web_fetch`、`bot/web_crawl` 即不给。爬下的全文按这个人和这位员工隔开存。
+     */
+    ...webTools({
+      search: webSearchSetup,
+      crawl: webCrawlSetup,
+      scope: `${actorId}:${botId}`,
+    }),
     /*
      * 生成图片和视频（期五 C）：每位员工默认都有，工具权限里关掉 `bot/generate_image`、`bot/generate_video`
      * 即不给。生成服务按环境变量配置（`media/config.ts`），没配时工具照实说缺哪几项。文件存给这一轮的人。
@@ -5764,6 +5809,7 @@ await startupLifecycle.run(async (startup) => {
       ...(learningModelEndpoint
         ? { learningModel: learningModelEndpoint }
         : {}),
+      agentModel: agentModel.proxy,
       // Upstream #1372/#1381/#1396/#1397/#1398/#1399: drafts written from an admin's description.
       boundaryWriter: writeBoundaries,
       approvalRules: {

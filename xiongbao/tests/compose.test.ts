@@ -1087,3 +1087,94 @@ test("the computer is given NET_RAW, so ping works on Podman as on Docker", () =
   expect(computer?.cap_add ?? []).toContain("NET_RAW");
   expect(computer?.cap_drop ?? []).not.toContain("NET_RAW");
 });
+
+/*
+ * 期五 B：员工的联网搜索默认走部署自带的 SearXNG，渲染 JS 和深度爬取走 Crawl4AI（`crawl` profile）。
+ * 两个镜像都钉精确版本；服务器按服务名找它们；服务器不依赖它们启动（桌面端以
+ * `--pull never` 点名起服务器，一个没下载的依赖会让它起不来）。
+ */
+type WebService = {
+  profiles?: string[];
+  image?: string;
+  volumes?: string[];
+  ports?: string[];
+  environment?: Record<string, string>;
+  entrypoint?: string[];
+  shm_size?: string;
+};
+
+function webServices(file: string) {
+  return (
+    parse(readFileSync(join(import.meta.dir, "..", file), "utf8")) as {
+      services: Record<string, WebService & { depends_on?: object }>;
+    }
+  ).services;
+}
+
+test("ships SearXNG for web_search, pinned, its settings read-only, on loopback only", () => {
+  for (const [file, settings] of [
+    ["docker-compose.yml", "./docker/searxng/settings.yml"],
+    ["docker/compose.delivery.yml", "./searxng/settings.yml"],
+  ] as const) {
+    const searxng = webServices(file).searxng;
+    expect(searxng?.image).toMatch(
+      /^searxng\/searxng:\d{4}\.\d{1,2}\.\d{1,2}-[0-9a-f]{7,}$/,
+    );
+    expect(searxng?.volumes).toEqual([
+      `${settings}:/etc/searxng/settings.yml:ro`,
+    ]);
+    // A secret is generated at start when none is given.
+    expect(searxng?.entrypoint?.join(" ")).toContain("SEARXNG_SECRET");
+    for (const port of searxng?.ports ?? [])
+      expect(
+        ["127.0.0.1:", "[::1]:"].some((host) => port.startsWith(host)),
+      ).toBe(true);
+  }
+  const settings = parse(
+    readFileSync(
+      join(import.meta.dir, "..", "docker", "searxng", "settings.yml"),
+      "utf8",
+    ),
+  ) as {
+    search: { formats: string[] };
+    server: { limiter: boolean; secret_key: string };
+    use_default_settings: { engines: { keep_only: string[] } };
+  };
+  expect(settings.search.formats).toContain("json");
+  expect(settings.use_default_settings.engines.keep_only).toEqual(
+    expect.arrayContaining(["bing", "baidu", "duckduckgo", "wikipedia"]),
+  );
+});
+
+test("ships Crawl4AI behind the crawl profile, pinned, with internal addresses refused", () => {
+  for (const file of ["docker-compose.yml", "docker/compose.delivery.yml"]) {
+    const crawl = webServices(file).crawl4ai;
+    expect(crawl?.profiles).toEqual(["crawl"]);
+    expect(crawl?.image).toMatch(/^unclecode\/crawl4ai:\d+\.\d+\.\d+$/);
+    expect(crawl?.environment).toMatchObject({
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
+      CRAWL4AI_API_TOKEN: "${XIONGBAO_CRAWL_TOKEN:-}",
+      CRAWL4AI_ALLOW_DEEP_CRAWL: "true",
+      CRAWL4AI_ALLOW_INTERNAL_URLS: "false",
+    });
+  }
+});
+
+test("points the server at the bundled search and crawl services, without depending on them", () => {
+  const server = runComposeConfig({}).services.server;
+  expect(server?.environment).toMatchObject({
+    XIONGBAO_SEARCH_PROVIDER: "searxng",
+    XIONGBAO_SEARCH_URL: "http://searxng:8080",
+    XIONGBAO_CRAWL_URL: "http://crawl4ai:11235",
+  });
+  const depends = Object.keys(
+    webServices("docker-compose.yml").server?.depends_on ?? {},
+  );
+  expect(depends).not.toContain("searxng");
+  expect(depends).not.toContain("crawl4ai");
+  const app = webServices("docker/compose.delivery.yml").app;
+  expect(app?.environment).toMatchObject({
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the unexpanded placeholder is what is asserted.
+    XIONGBAO_SEARCH_URL: "${XIONGBAO_SEARCH_URL:-http://searxng:8080}",
+  });
+});

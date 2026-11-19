@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import type { AcpHarness } from "../../../shared/acp";
+import type { AcpHarness, AcpOpenModel } from "../../../shared/acp";
 import type { AcpSpawnSpec } from "./client";
 import { acpProcessEnv } from "./login-path";
 
@@ -109,6 +109,96 @@ export const ACP_MANIFEST: Record<
   },
 };
 
+/**
+ * THE EMPLOYEE'S OWN MODEL (`acp.open.model`). When the server hands an agent a model block, the agent's
+ * requests go to the server's model proxy with the short-lived pass in the block, and the owner's own
+ * settings and keys are not read for it. Only the adapter's child process is changed; nothing of the
+ * owner's is written or edited.
+ *
+ *   Codex        a `CODEX_HOME` of its own for this process: a `config.toml` naming a provider whose
+ *                address is the proxy (`wire_api = "responses"`) and whose key is read from an
+ *                environment variable, which carries the pass. The owner's `~/.codex` is not touched.
+ *                (codex-acp 2.6.0 bundles Codex 0.166.0, which reads `model_provider` and
+ *                `[model_providers.*]` with `base_url`, `env_key` and `wire_api` from `config.toml`.)
+ *   Claude Code  `ANTHROPIC_BASE_URL` and `ANTHROPIC_AUTH_TOKEN` in the adapter's environment (the
+ *                adapter hands its own environment to the Claude Code process), `ANTHROPIC_MODEL`
+ *                and the model variables of the other tiers, and the variables that would send the
+ *                request elsewhere unset.
+ */
+
+/** The variable Codex reads the pass from (`env_key` in the generated `config.toml`). */
+export const MODEL_TOKEN_ENV = "XIONGBAO_AGENT_MODEL_TOKEN";
+
+/** The provider id the generated `config.toml` defines. */
+export const MODEL_PROVIDER_ID = "xiongbao";
+
+/** What a model block adds to an adapter's launch. */
+export type ModelLaunch = {
+  env: Record<string, string>;
+  /** Inherited variables that would send the agent's requests somewhere else. */
+  unsetEnv: string[];
+};
+
+/** A TOML basic string: JSON's escapes are TOML's. */
+const toml = (value: string): string => JSON.stringify(value);
+
+const withoutTrailingSlash = (url: string): string => url.replace(/\/+$/, "");
+
+/** Codex's `config.toml` for a model block: the proxy as its only provider. */
+export function codexConfigToml(model: AcpOpenModel): string {
+  return [
+    `model_provider = ${toml(MODEL_PROVIDER_ID)}`,
+    `model = ${toml(model.model)}`,
+    "",
+    `[model_providers.${MODEL_PROVIDER_ID}]`,
+    `name = ${toml(MODEL_PROVIDER_ID)}`,
+    `base_url = ${toml(`${withoutTrailingSlash(model.baseUrl)}/v1`)}`,
+    `env_key = ${toml(MODEL_TOKEN_ENV)}`,
+    'wire_api = "responses"',
+    "requires_openai_auth = false",
+    "",
+  ].join("\n");
+}
+
+/** `codexHome` made ready for Codex: an empty folder of ours holding only the generated config. */
+export function writeCodexHome(codexHome: string, model: AcpOpenModel): void {
+  mkdirSync(codexHome, { recursive: true, mode: 0o700 });
+  writeFileSync(join(codexHome, "config.toml"), codexConfigToml(model), {
+    mode: 0o600,
+  });
+}
+
+export function codexModelLaunch(
+  model: AcpOpenModel,
+  codexHome: string,
+): ModelLaunch {
+  return {
+    env: { CODEX_HOME: codexHome, [MODEL_TOKEN_ENV]: model.token },
+    unsetEnv: [],
+  };
+}
+
+export function claudeModelLaunch(model: AcpOpenModel): ModelLaunch {
+  return {
+    env: {
+      ANTHROPIC_BASE_URL: withoutTrailingSlash(model.baseUrl),
+      ANTHROPIC_AUTH_TOKEN: model.token,
+      ANTHROPIC_MODEL: model.model,
+      ANTHROPIC_DEFAULT_OPUS_MODEL: model.model,
+      ANTHROPIC_DEFAULT_SONNET_MODEL: model.model,
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: model.model,
+      ANTHROPIC_SMALL_FAST_MODEL: model.model,
+    },
+    // A key of the owner's would win over the pass, and a cloud-provider switch would skip the proxy.
+    unsetEnv: [
+      "ANTHROPIC_API_KEY",
+      "CLAUDE_CODE_USE_BEDROCK",
+      "CLAUDE_CODE_USE_VERTEX",
+      "CLAUDE_CODE_USE_FOUNDRY",
+    ],
+  };
+}
+
 /** Where an adapter is started and which working folder its sessions are for. */
 export type AdapterPlace = {
   /** The runner's own folder for adapters (`<data dir>/acp-adapters`); created when missing. */
@@ -172,6 +262,8 @@ export async function adapterLaunch(
     env?: Record<string, string>;
     /** The environment whose PATH the adapter is looked up in; this process's with the login PATH. */
     processEnv?: () => Promise<Record<string, string | undefined>>;
+    /** The employee's own model (see above): its environment is laid over `env`. */
+    model?: ModelLaunch;
   } = {},
 ): Promise<AcpSpawnSpec> {
   const entry = ACP_MANIFEST[harness];
@@ -181,22 +273,26 @@ export async function adapterLaunch(
     processEnv.XIONGBAO_NPM_REGISTRY?.trim() || DEFAULT_NPM_REGISTRY;
   const env: Record<string, string> = {
     ...withProcessPath({ ...opts.env }, processEnv),
+    ...opts.model?.env,
     ...entry.askEnv,
     npm_config_registry: registry,
   };
   // npm reads `npm_config_*` in any case: another spelling of the registry must not win, and
   // nothing inherited may point npm into the working folder.
-  const unsetEnv = Object.entries(processEnv)
-    .filter(
-      ([key, value]) =>
-        /^npm_config_/i.test(key) &&
-        key !== "npm_config_registry" &&
-        (key.toLowerCase() === "npm_config_registry" ||
-          (value !== undefined &&
-            isAbsolute(value) &&
-            inside(place.workdir, value))),
-    )
-    .map(([key]) => key);
+  const unsetEnv = [
+    ...Object.entries(processEnv)
+      .filter(
+        ([key, value]) =>
+          /^npm_config_/i.test(key) &&
+          key !== "npm_config_registry" &&
+          (key.toLowerCase() === "npm_config_registry" ||
+            (value !== undefined &&
+              isAbsolute(value) &&
+              inside(place.workdir, value))),
+      )
+      .map(([key]) => key),
+    ...(opts.model?.unsetEnv ?? []),
+  ];
   return {
     command: entry.adapter.command,
     args: [...entry.adapter.args, ...entry.askMode],

@@ -141,10 +141,10 @@ test("an ordinary result reads as done", () => {
 
 test("a tool the Bot doesn't have reads as one sentence, not the runtime's list", () => {
   const text = line(
-    "web_search",
-    "Error: Model tried to call unavailable tool 'web_search'. Available tools: computer_navigate, computer_read.",
+    "lookup_weather",
+    "Error: Model tried to call unavailable tool 'lookup_weather'. Available tools: computer_navigate, computer_read.",
   );
-  expect(text).toContain("Web search，没有成功");
+  expect(text).toContain("Lookup weather，没有成功");
   expect(text).toContain(UNOFFERED_TOOL_SENTENCE);
   expect(text).not.toContain("computer_navigate");
 });
