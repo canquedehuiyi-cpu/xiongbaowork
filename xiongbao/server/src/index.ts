@@ -472,7 +472,10 @@ import {
   createCheckInScope,
 } from "./proactive/scope";
 import { createProactiveStore } from "./proactive/store";
-import { createProjectContext } from "./projects/context";
+import {
+  createProjectContext,
+  runnerProjectFileReader,
+} from "./projects/context";
 import { createProjectRoutes } from "./projects/routes";
 import { createProjectStore } from "./projects/store";
 import { createProviderOAuthProxy } from "./provider-oauth";
@@ -1598,7 +1601,14 @@ await startupLifecycle.run(async (startup) => {
    * D9), and per run what its prompt says about it. Device mode only (D7): cloud mode has no machine.
    */
   const projectStore = createProjectStore(database);
-  const projectContext = createProjectContext(database);
+  const projectContext = createProjectContext(database, {
+    /*
+     * The project's AGENTS.md (or CLAUDE.md) for its prompt (期五): the same `files.read` the file
+     * tools send with the project's root, to the connected machine only and never queued, and given a
+     * few seconds. A machine that is offline or slow means no instructions this run, not a late one.
+     */
+    readFile: runnerProjectFileReader(deviceChannel),
+  });
   const loadCurrentProjectForActor =
     (_actorId: string): LoadCurrentProject =>
     async (agentId) =>

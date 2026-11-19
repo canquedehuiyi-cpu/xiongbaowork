@@ -869,6 +869,7 @@ tests/update-route-wechat-opt-in.test.ts
 tests/user-instructions.integration.test.ts
 tests/user-preferences-routes.test.ts
 tests/user-preferences.integration.test.ts
+tests/verify-section.test.ts
 tests/voice-provider.test.ts
 tests/voice-routes.test.ts
 tests/voice-session-preview.integration.test.ts
