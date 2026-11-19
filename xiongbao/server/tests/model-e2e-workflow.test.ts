@@ -143,7 +143,12 @@ test("the Xiongbao evaluation runs each chosen execution path, one after the oth
       workflow_dispatch: {
         inputs: Record<
           string,
-          { default?: string; options?: string[]; type?: string }
+          {
+            default?: string;
+            description?: string;
+            options?: string[];
+            type?: string;
+          }
         >;
       };
     }
