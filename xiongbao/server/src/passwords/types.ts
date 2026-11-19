@@ -103,6 +103,18 @@ export type PasswordStore = {
       >
     >,
   ): Promise<SignInRequestRecord | null>;
+  /**
+   * Hang the conversation on a request that is not answered yet, so answering it carries the turn on,
+   * and keep the request open `keepOpenMs` from now when that is said. Only while it is unanswered: one
+   * that has already been answered had its chance to resume a turn and found none, which is how the
+   * caller knows to take the answer itself. True when it was attached.
+   */
+  attachContinuation(
+    ownerUserId: string,
+    id: string,
+    continuation: Record<string, unknown>,
+    keepOpenMs?: number,
+  ): Promise<boolean>;
   logins(ownerUserId: string, origin?: string): Promise<SavedLoginRecord[]>;
   login(ownerUserId: string, id: string): Promise<SavedLoginRecord | null>;
   saveLogin(input: {

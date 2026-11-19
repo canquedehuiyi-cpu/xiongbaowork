@@ -1485,6 +1485,13 @@
       "when": 1795069500000,
       "tag": "0232_thread_run_liveness",
       "breakpoints": true
+    },
+    {
+      "idx": 233,
+      "version": "7",
+      "when": 1795070975302,
+      "tag": "0233_computer_waits",
+      "breakpoints": true
     }
   ]
 }

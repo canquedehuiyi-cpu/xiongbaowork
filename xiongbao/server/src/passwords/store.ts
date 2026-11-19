@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { savedLogins, signInRequests } from "../db/schema/passwords";
 import type {
@@ -63,6 +63,34 @@ export function createPasswordStore(database: Database): PasswordStore {
         .orderBy(desc(signInRequests.createdAt))
         .limit(50);
       return rows.map(requestRow);
+    },
+    async attachContinuation(ownerUserId, id, continuation, keepOpenMs) {
+      const rows = await database
+        .update(signInRequests)
+        .set({
+          continuation,
+          ...(keepOpenMs === undefined
+            ? {}
+            : {
+                expiresAt: sql`now() + (${keepOpenMs} * interval '1 millisecond')`,
+              }),
+        })
+        .where(
+          and(
+            eq(signInRequests.ownerUserId, ownerUserId),
+            eq(signInRequests.id, id),
+            // Any request not yet answered, one being filled in this moment included: the answer that
+            // ends it hands the turn this snapshot.
+            notInArray(signInRequests.status, [
+              "signed_in",
+              "failed",
+              "cancelled",
+              "expired",
+            ]),
+          ),
+        )
+        .returning({ id: signInRequests.id });
+      return rows.length > 0;
     },
     async transition(ownerUserId, id, from, to) {
       const [row] = await database
@@ -172,6 +200,19 @@ export function createMemoryPasswordStore(): PasswordStore & {
           ["pending", "code_required", "taken_over"].includes(row.status) &&
           row.expiresAt > new Date(),
       );
+    },
+    async attachContinuation(ownerUserId, id, continuation, keepOpenMs) {
+      const row = requests.get(id);
+      if (
+        !row ||
+        row.ownerUserId !== ownerUserId ||
+        ["signed_in", "failed", "cancelled", "expired"].includes(row.status)
+      )
+        return false;
+      row.continuation = continuation;
+      if (keepOpenMs !== undefined)
+        row.expiresAt = new Date(Date.now() + keepOpenMs);
+      return true;
     },
     async transition(ownerUserId, id, from, to) {
       const row = requests.get(id);

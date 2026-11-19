@@ -301,6 +301,7 @@ tests/computer-stream-upgrade.test.ts
 tests/computer-supervisor.test.ts
 tests/computer-target.test.ts
 tests/computer-terminal.test.ts
+tests/computer-waits.integration.test.ts
 tests/computer-wire-headers.test.ts
 tests/config-github-app.test.ts
 tests/config.test.ts
@@ -310,6 +311,7 @@ tests/connector-tokens-never-reach-computer.test.ts
 tests/content-governance.test.ts
 tests/context-usage.integration.test.ts
 tests/context-usage.test.ts
+tests/continuation-clock.test.ts
 tests/continuation-target-local.test.ts
 tests/continuation-target-store.integration.test.ts
 tests/control-refusal-end-to-end.test.ts

@@ -108,7 +108,10 @@ import { waitForReplyInTranscript } from "./approvals/reply-in-transcript";
 import { createApprovalResumeTick } from "./approvals/resume-sweep";
 import { loadRuleVocabulary } from "./approvals/rule-vocabulary";
 import { createApprovalStore } from "./approvals/store";
-import { ApprovalRefusedError } from "./approvals/types";
+import {
+  type ApprovalContinuation,
+  ApprovalRefusedError,
+} from "./approvals/types";
 import { createServerApprovalService } from "./approvals/wiring";
 import {
   type AuditInitiator,
@@ -246,6 +249,14 @@ import {
 import { createRunnerTransport } from "./computer/runner-transport";
 import { createSnapshotStore } from "./computer/snapshot-store";
 import { createComputerToolsForTurn } from "./computer/turn-tools";
+import {
+  configureComputerWaits,
+  createComputerWaitStore,
+  createComputerWaitSweep,
+  HANDOFF_WAIT_MS,
+  WAIT_POLL_MS,
+  WAIT_SWEEP_MS,
+} from "./computer/waits";
 import { loadConfig } from "./config";
 import {
   chooseOpenAIApi,
@@ -396,7 +407,11 @@ import {
   modelOf,
 } from "./models/runtime-resolver";
 import { databaseTokenCallSink } from "./models/token-metering";
-import { createSignInNotifier, createSignInResumer } from "./passwords/resume";
+import {
+  createSignInNotifier,
+  createSignInResumer,
+  createWaitResumer,
+} from "./passwords/resume";
 import { createSignInService } from "./passwords/service";
 import { createPasswordStore } from "./passwords/store";
 import { createOnboardingStore } from "./people/onboarding";
@@ -613,6 +628,7 @@ import {
   runCompaction,
 } from "./threads/compaction";
 import { contextBreakdownRecorder } from "./threads/context-usage";
+import { createContinuationRunner } from "./threads/continuation-clock";
 import {
   createLocalThreadPlatform,
   createLocalThreadReader,
@@ -1952,6 +1968,61 @@ await startupLifecycle.run(async (startup) => {
    * The private sign-in form and the Passwords vault. A Bot asks to be signed in; the person answers
    * in a form outside the conversation; the computer types the login. See passwords/service.ts.
    */
+  /**
+   * A turn that waited on a person's answer at the computer, carried on once it came: the same
+   * continuation an approval's is, through the group when the turn was a group's so the reply lands on
+   * the row that was waiting (期九·三). Read when it runs, long after the runners below are made.
+   */
+  const continueWaitingTurn = (
+    routineId: string,
+    input: {
+      ownerUserId: string;
+      botId: string;
+      snapshot: ApprovalContinuation;
+      result: { content: string };
+      messageId: string;
+      waitKey: string;
+    },
+  ) =>
+    groupConversations.continueWaiting(input.waitKey, (hooks) =>
+      approvalContinuationRunner({
+        ...(hooks?.onCustom ? { onCustom: hooks.onCustom } : {}),
+        ...(hooks?.onToolCall ? { onToolCall: hooks.onToolCall } : {}),
+        ...(hooks?.onReasoning ? { onReasoning: hooks.onReasoning } : {}),
+        ownerUserId: input.ownerUserId,
+        routineId,
+        agentId: input.botId,
+        threadId: input.snapshot.threadId,
+        instruction: "",
+        initiator: input.snapshot.initiator ?? PERSON_INITIATOR,
+        continuation: {
+          snapshot: input.snapshot,
+          result: input.result,
+          messageId: input.messageId,
+        },
+      }),
+    );
+  /** What a carried-on turn said, written into the conversation it belongs to. */
+  const recordWaitReply = async ({
+    ownerUserId,
+    channelId,
+    botId,
+    text,
+    messageId,
+  }: {
+    ownerUserId: string;
+    channelId: string;
+    botId: string;
+    text: string;
+    messageId: string;
+  }) => {
+    await channelStore.recordActivity(
+      await actorFor(ownerUserId),
+      channelId,
+      { text, agentId: botId, at: new Date() },
+      { id: messageId },
+    );
+  };
   const signInService = computerGateway
     ? createSignInService({
         store: createPasswordStore(database),
@@ -1974,36 +2045,8 @@ await startupLifecycle.run(async (startup) => {
             database,
             resumeResponsibility: (owner, runId, result) =>
               responsibilityStore.resumeWaiting(owner, runId, result),
-            continueTurn: ({
-              ownerUserId,
-              botId,
-              snapshot,
-              result,
-              messageId,
-            }) =>
-              approvalContinuationRunner({
-                ownerUserId,
-                routineId: "sign-in",
-                agentId: botId,
-                threadId: snapshot.threadId,
-                instruction: "",
-                initiator: snapshot.initiator ?? PERSON_INITIATOR,
-                continuation: { snapshot, result, messageId },
-              }),
-            recordReply: async ({
-              ownerUserId,
-              channelId,
-              botId,
-              text,
-              messageId,
-            }) => {
-              await channelStore.recordActivity(
-                await actorFor(ownerUserId),
-                channelId,
-                { text, agentId: botId, at: new Date() },
-                { id: messageId },
-              );
-            },
+            continueTurn: (input) => continueWaitingTurn("sign-in", input),
+            recordReply: recordWaitReply,
           })(request),
       })
     : undefined;
@@ -3747,6 +3790,62 @@ await startupLifecycle.run(async (startup) => {
     },
     (resource) => resource.stop(),
   );
+  /*
+   * A turn that asks a person at the computer (take the browser, type a value into a field, sign in)
+   * waits for them in the tool, up to ten minutes, on every path that runs the computer on the server
+   * (期九·三). One that outlasts that stops as 「需要你」; its wait is on record, and this sweep carries
+   * the turn on once the person has handed control back, entered the value, or cancelled. A sign-in's
+   * own request carries its turn on when it is answered (`createSignInResumer`); this is the same
+   * continuation for the other two, and for a group's turn it goes through the group.
+   */
+  if (computerGateway) {
+    const computerWaitStore = createComputerWaitStore(database);
+    configureComputerWaits({
+      store: computerWaitStore,
+      maxMs: HANDOFF_WAIT_MS,
+      pollMs: WAIT_POLL_MS,
+    });
+    const resumeWait = createWaitResumer({
+      database,
+      resumeResponsibility: (owner, runId, result) =>
+        responsibilityStore.resumeWaiting(owner, runId, result),
+      continueTurn: (input) => continueWaitingTurn("computer-wait", input),
+      recordReply: recordWaitReply,
+    });
+    const computerWaitSweep = createComputerWaitSweep({
+      store: computerWaitStore,
+      gateway: computerGateway,
+      resume: (wait, content) =>
+        resumeWait({
+          key: "waitId",
+          id: wait.id,
+          ownerUserId: wait.ownerUserId,
+          botId: wait.botId,
+          continuation: wait.continuation as Record<string, unknown>,
+          content,
+          messageId: (snapshot) =>
+            `computer-wait-result:${wait.id}:${snapshot.toolCallId}`,
+        }),
+    });
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          try {
+            // The resumed turns run on their own; the tick has only taken the waits that are due.
+            await computerWaitSweep.tick();
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                type: "computer-wait-sweep-error",
+                error: error instanceof Error ? error.message : String(error),
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }, WAIT_SWEEP_MS),
+      (resource) => resource.stop(),
+    );
+  }
   startup.acquireSync(
     () =>
       repeatAfterEach(
@@ -4126,11 +4225,14 @@ await startupLifecycle.run(async (startup) => {
   };
   /*
    * The work an approval resumes keeps the light clock: the chat counts a conversation as carried on
-   * for twice that after the decision (`CARRY_ON_MS` in app/src/lib/approvals.ts).
+   * for twice that after the decision (`CARRY_ON_MS` in app/src/lib/approvals.ts). Except the rest of a
+   * chat whose computer tools the server runs, which is a long turn and gets the working turn's clock
+   * (`threads/continuation-clock.ts`, 期九·三).
    */
-  const approvalContinuationRunner = createTurnRunner(
-    approvalContinuationOptions,
-  );
+  const approvalContinuationRunner = createContinuationRunner({
+    options: approvalContinuationOptions,
+    serverComputerTools: config.chatServerComputerTools,
+  });
   /** A board task's turn: the same runner, on the working turn's clock (期五). */
   const boardTaskTurnRunner = createTurnRunner({
     ...approvalContinuationOptions,

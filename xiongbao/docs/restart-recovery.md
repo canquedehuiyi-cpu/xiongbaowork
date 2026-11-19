@@ -65,6 +65,45 @@ more than one replica must therefore keep a thread on one replica (session affin
 A single replica (docker-compose, the desktop app) is unaffected. Following a turn across replicas
 is not implemented.
 
+## A turn that waits on a person at the computer (期九·三)
+
+Three tools ask a person for something at the computer: `computer_request_help` (take the browser),
+`computer_request_secret` (type one value into a field) and `computer_request_sign_in`. On every path
+that runs the computer on the server (a chat, a group, a board card, a routine, a goal) they no longer
+stop the turn on the spot. The tool **waits for up to ten minutes** (`HANDOFF_WAIT_MS` in
+`computer/waits.ts`), polling the computer the way the browser's own tool did, and returns when the
+person hands control back, enters the value, signs in, or cancels; the turn then goes on. Stop ends the
+wait at once, and withdraws a takeover request nobody has taken yet.
+
+If ten minutes pass and the request is still open, the turn ends as 「需要你」 (the same suspension as
+before) and **the server carries it on when the person answers**:
+
+- a takeover or a secret is written to `computer_waits` (migration 0233) with the turn's snapshot; a
+  sweep (`WAIT_SWEEP_MS`, 3 s, every replica, `for update skip locked`) reads the computer's state for
+  each open row and, once the request is over, continues the turn from the snapshot with the outcome as
+  the tool's result;
+- a sign-in is the request in `sign_in_requests`. While the tool waits the request has no turn on it, so
+  answering it resumes nothing twice; when the wait ends, the turn is hung on the request (kept open for a
+  day instead of a quarter hour), and answering it resumes the turn (`passwords/resume.ts`). An answer
+  that lands between the last look and the hanging is taken by the tool itself.
+
+A group's turn is continued through the group (its waiting row is found by the wait's id) so the reply
+lands in the shared transcript; a responsibility run and a routine run waiting on the id are resumed
+the way an approval resumes them. A turn that stops again on another wait ends where it should and is
+not tried again; a continuation that fails is tried up to five times.
+
+What does not change: the Bot never sees a secret (the tool returns only whether a value was entered),
+and while a person holds the wheel the Bot's own actions are still refused.
+
+Not covered: a crew's pipeline step that is parked on one of these waits is not carried on by this
+(it is parked by approval id only). The computer drops a takeover request nobody took after ten minutes
+and clears a secret request after ten minutes, the same as the wait, so past the wait only a takeover
+somebody did take, and a sign-in, can still be answered.
+
+Also (九·三): the rest of a chat whose computer tools the server runs, carried on after an approval
+(`approvalContinuationRunner`), runs under the working turn's 25 minutes and 80 rounds, not the light
+turn's 5 minutes (`threads/continuation-clock.ts`).
+
 ## Nothing is replayed
 
 A stopped step or firing may already have spent quota or written to the world. Re-running it is the
