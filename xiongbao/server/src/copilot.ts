@@ -2604,7 +2604,8 @@ async function buildAgent(
         declaresServerComputerTools(runInput.forwardedProps),
       /*
        * 期七：一轮里越过窗口的 70% 就折叠较早的工具结果（`toolkit/.../turn-folding.ts`）。窗口读模型目录，
-       * 读不到就用保守的默认值。部署开关 `XIONGBAO_TURN_FOLD=off` 关掉。
+       * 读不到就用保守的默认值。部署开关 `XIONGBAO_TURN_FOLD=off` 关掉。窗口很大时按绝对预算折，
+       * `XIONGBAO_TURN_FOLD_BUDGET_TOKENS` 覆盖预算（toolkit 里读），0 关掉预算。
        */
       contextWindowFor: (provider, modelId) =>
         contextWindowOf(provider.split(".")[0] ?? provider, modelId),

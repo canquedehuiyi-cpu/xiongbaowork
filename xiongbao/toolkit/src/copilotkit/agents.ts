@@ -49,6 +49,7 @@ import {
   startRun,
 } from "./last-step";
 import { reasoningByToolCall } from "./replayed-reasoning";
+import { FOLD_BUDGET_ENV, foldBudgetFrom } from "./turn-folding";
 
 /**
  * The CopilotKit agents OpenBot runs its Bots as: a built-in Bot that will not send a broken
@@ -136,6 +137,11 @@ export type BuiltInAgentHooks = {
   ) => number | undefined | Promise<number | undefined>;
   /** `false` 关掉一轮内的压缩。不写就是开。 */
   foldResults?: boolean;
+  /**
+   * 一轮内压缩的绝对预算（估算 token）：估算超过它就折叠，不管窗口多大（`turn-folding.ts` 的 `FOLD_BUDGET_TOKENS`）。
+   * 不写就读环境变量 `XIONGBAO_TURN_FOLD_BUDGET_TOKENS`，再没有用默认值；0 关掉。
+   */
+  foldBudgetTokens?: number;
 };
 
 /**
@@ -289,20 +295,23 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
       unattended: hooks.unattended === true,
       ...(hooks.extension ? { extension: hooks.extension } : {}),
     });
+    // 绝对预算：这一次运行的设置优先，其次是部署的环境变量，都没有就用默认值。
+    const foldBudget =
+      hooks.foldBudgetTokens ?? foldBudgetFrom(process.env[FOLD_BUDGET_ENV]);
     super(
       toolsWithin(
         /*
-         * 期七：一轮里越过窗口的 70% 就折叠较早的工具结果，包在最外面，让里面的包装看到折叠后的提示。
+         * 期七：一轮里越过窗口的 70%（或绝对预算）就折叠较早的工具结果，包在最外面，让里面的包装看到折叠后的提示。
          * `foldResults: false` 关掉（部署开关 `XIONGBAO_TURN_FOLD=off`）。
          */
         hooks.foldResults === false
           ? answering
-          : foldingEarlyResults(
-              answering,
-              hooks.contextWindowFor
+          : foldingEarlyResults(answering, {
+              ...(hooks.contextWindowFor
                 ? { windowFor: hooks.contextWindowFor }
-                : {},
-            ),
+                : {}),
+              ...(foldBudget === undefined ? {} : { budget: foldBudget }),
+            }),
         scope,
       ),
     );
