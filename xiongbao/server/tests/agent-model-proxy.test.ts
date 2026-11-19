@@ -761,7 +761,7 @@ describe("what acp.open carries", () => {
   test("the proxy's address and switches come from the environment", () => {
     const route = "/api/agent-model";
     const plain = readAgentModelProxyConfig({}, "https://a.test/", route);
-    expect(plain).toEqual({
+    expect(plain as unknown).toEqual({
       enabled: true,
       baseUrl: "https://a.test/api/agent-model",
     });
