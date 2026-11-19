@@ -124,8 +124,8 @@ describe("generated_media", () => {
       save(owner, "image", "text/html", Buffer.from("<script>1</script>")),
     ).rejects.toThrow();
     await expect(
-      runAsTenant(owner, () =>
-        database.insert(generatedMedia).values({
+      runAsTenant(owner, async () => {
+        await database.insert(generatedMedia).values({
           agentId: `bot-${suite}`,
           kind: "image",
           mimeType: "image/png",
@@ -134,8 +134,8 @@ describe("generated_media", () => {
           prompt: "x",
           provider: "p",
           model: "m",
-        }),
-      ),
+        });
+      }),
     ).rejects.toThrow();
   });
 
