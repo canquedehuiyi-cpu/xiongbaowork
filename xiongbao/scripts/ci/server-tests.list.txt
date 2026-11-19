@@ -400,6 +400,7 @@ tests/env-aliases.test.ts
 tests/env-name.test.ts
 tests/evidence-gate-required.test.ts
 tests/external-agents-schema.integration.test.ts
+tests/generated-media.integration.test.ts
 tests/github-oauth-signup.test.ts
 tests/goal-conversation.integration.test.ts
 tests/goal-run-busy-conversation.integration.test.ts
@@ -498,6 +499,7 @@ tests/mcp-outbound.test.ts
 tests/mcp-protocol.test.ts
 tests/mcp-result.test.ts
 tests/mcp-server-removal-every-person.integration.test.ts
+tests/media-tools.test.ts
 tests/memory-default-source-tool.test.ts
 tests/memory-defaults.integration.test.ts
 tests/memory-intelligence.integration.test.ts

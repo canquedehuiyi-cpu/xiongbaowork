@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
-import { TASK_TITLES, TASKS } from "./lib";
+import { HARD_TASKS, TASK_TITLES, TASKS } from "./lib";
 import type { Capabilities, Tri } from "./metrics";
 import type { EvalRecord, EvalResults } from "./records";
 
@@ -33,6 +33,16 @@ const verdict = (record: EvalRecord | undefined) =>
       : record.passed
         ? "✅ 通过"
         : "❌ 未过";
+/** 输入里命中上下文缓存的比例；提供方没报缓存时「—」。 */
+export const cacheShare = (record: EvalRecord | undefined) => {
+  const input = record?.tokens?.input;
+  const cached = record?.tokens?.cachedInput;
+  return input && cached != null
+    ? `${Math.round((cached / input) * 100)}%`
+    : DASH;
+};
+const count = (value: number | null | undefined) =>
+  value == null ? DASH : String(value);
 const cell = (text: string) => text.replace(/\|/g, "\\|").replace(/\n/g, " ");
 
 function table(header: string[], rows: string[][]): string {
@@ -43,10 +53,15 @@ function table(header: string[], rows: string[][]): string {
   ].join("\n");
 }
 
-function passCount(results: EvalResults | undefined): string {
+function passCount(
+  results: EvalResults | undefined,
+  only?: readonly string[],
+): string {
   if (!results) return DASH;
   const scored = results.records.filter(
-    (record) => !record.error?.startsWith("不适用"),
+    (record) =>
+      !record.error?.startsWith("不适用") &&
+      (!only || only.includes(record.task)),
   );
   return `${scored.filter((record) => record.passed).length}/${scored.length}`;
 }
@@ -123,7 +138,7 @@ export function renderReport(results: EvalResults[]): string {
       (task) => find(xiongbao, task) || find(codex, task),
     );
     out.push(
-      `## 五道题（熊宝 ${passCount(xiongbao)}，Codex ${passCount(codex)}）`,
+      `## 五道题（熊宝 ${passCount(xiongbao, TASKS)}，Codex ${passCount(codex, TASKS)}）`,
       "",
     );
     out.push(
@@ -150,13 +165,46 @@ export function renderReport(results: EvalResults[]): string {
             theirs ? seconds(theirs.wallMs) : DASH,
             tokens(mine),
             tokens(theirs),
-            mine?.steps == null ? DASH : String(mine.steps),
-            theirs?.steps == null ? DASH : String(theirs.steps),
+            count(mine?.steps),
+            count(theirs?.steps),
           ];
         }),
       ),
       "",
-      "⏱ = 撞上墙钟上限。步数：熊宝是工具调用次数，Codex 是命令、改文件等动作数。",
+      "⏱ = 撞上墙钟上限。步数：熊宝 = 模型调用次数（`model_token_calls` 的行数，一步一次调用，不受运行事件存没存下影响）；Codex = 命令、改文件等动作数（`codex exec --json` 不报每一步的模型调用）。",
+      "",
+      "### token 与步数细分",
+      "",
+      table(
+        [
+          "题目",
+          "熊宝模型调用",
+          "熊宝工具调用",
+          "Codex 动作",
+          "熊宝输入",
+          "熊宝缓存命中",
+          "熊宝推理输出",
+          "Codex 输入",
+          "Codex 缓存命中",
+        ],
+        tasks.map((task) => {
+          const mine = find(xiongbao, task);
+          const theirs = find(codex, task);
+          return [
+            TASK_TITLES[task],
+            count(mine?.modelCalls),
+            count(mine?.toolCalls),
+            count(theirs?.toolCalls ?? theirs?.steps),
+            count(mine?.tokens?.input),
+            cacheShare(mine),
+            count(mine?.tokens?.reasoning),
+            count(theirs?.tokens?.input),
+            cacheShare(theirs),
+          ];
+        }),
+      ),
+      "",
+      "熊宝工具调用 = 运行事件里的工具调用数（事件没存下时读对话快照）。缓存命中 = 输入 token 里命中提供方上下文缓存的比例（DeepSeek 按前缀命中，命中部分按低价计费）；提供方没报时「—」。推理输出 = 输出 token 里思考的部分。",
       "",
     );
     if (xiongbao?.records.length) {
@@ -189,6 +237,54 @@ export function renderReport(results: EvalResults[]): string {
         "",
       );
     }
+  }
+
+  const hard = HARD_TASKS.filter((task) =>
+    [xiongbao, codex].some((side) =>
+      side?.records.some((record) => record.task === task),
+    ),
+  );
+  if (hard.length) {
+    const find = (side: EvalResults | undefined, task: string) =>
+      side?.records.find((record) => record.task === task);
+    out.push(
+      "## 加难题（多个独立部分 + 汇总：看会不会列计划、派子代理）",
+      "",
+      table(
+        [
+          "题目",
+          "熊宝",
+          "Codex",
+          "熊宝 token",
+          "Codex token",
+          "熊宝步数",
+          "熊宝计划",
+          "熊宝子代理",
+          "Codex 计划",
+          "Codex 子代理",
+        ],
+        hard.map((task) => {
+          const mine = find(xiongbao, task);
+          const theirs = find(codex, task);
+          const tri = (value: Tri | undefined) => (value ? TRI[value] : DASH);
+          return [
+            TASK_TITLES[task],
+            verdict(mine) + (mine?.timedOut ? " ⏱" : ""),
+            verdict(theirs) + (theirs?.timedOut ? " ⏱" : ""),
+            tokens(mine),
+            tokens(theirs),
+            count(mine?.steps),
+            tri(mine?.capabilities.plan),
+            mine?.capabilities.subagent === "yes"
+              ? `是（${mine.capabilities.subagentCount}）`
+              : tri(mine?.capabilities.subagent),
+            tri(theirs?.capabilities.plan),
+            tri(theirs?.capabilities.subagent),
+          ];
+        }),
+      ),
+      "",
+    );
   }
 
   if (smoke?.records.length) {
