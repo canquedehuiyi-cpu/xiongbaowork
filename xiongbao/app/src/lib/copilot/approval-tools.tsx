@@ -41,6 +41,8 @@ const writes = new Set([
   "computer_key",
   "computer_run_command",
   "computer_write_file",
+  // Replacing a passage of a file is a change, asked about as a write is (期五).
+  "computer_edit_file",
   /*
    * The owner's local apps and desktop: a tool the app does not mark read-only, every enable, and a
    * window whose title is sensitive are asked about, and only this route has a conversation to ask in.

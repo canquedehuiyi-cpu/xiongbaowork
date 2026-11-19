@@ -25,6 +25,12 @@ export type VisibleChatItem =
    */
   | { kind: "activity"; id: string; message: ActivityMessage }
   /**
+   * What the Bot thought before this step (期三): the runtime keeps a step's reasoning as a message of
+   * its own, ahead of what the step said or called, live and on a replay alike. Drawn as a block that
+   * folds (`ThinkingBlock`), above the answer it led to.
+   */
+  | { kind: "reasoning"; id: string; text: string }
+  /**
    * EVERY file a person attached to one turn, pulled out of the array form of its content.
    *
    * One item for the whole turn rather than one per file, because they are drawn as one row of
@@ -363,6 +369,12 @@ function isToolResult(
 
 export function toVisibleChatItems(
   messages: ReadonlyArray<Readonly<Message>>,
+  /**
+   * Whether a step's reasoning is drawn (期三). Only the conversation's own transcript asks for it; a
+   * subtask's list of steps and every other reader of this projection keep dropping the role, as they
+   * always have.
+   */
+  { reasoning = false }: { reasoning?: boolean } = {},
 ): VisibleChatItem[] {
   // Gather results first so calls render with their current completion state in the same pass.
   const results = new Map<string, string | undefined>();
@@ -442,6 +454,14 @@ export function toVisibleChatItems(
      */
     if (message.role === "activity") {
       return [{ kind: "activity", id: message.id, message }];
+    }
+
+    // 推理：只认一段文字，空的不画（还没流进第一个字的那一刻也是空的）。
+    if (reasoning && (message.role as string) === "reasoning") {
+      const { content } = message as { content?: unknown };
+      return typeof content === "string" && content.trim()
+        ? [{ kind: "reasoning", id: message.id, text: content }]
+        : [];
     }
 
     if (message.role !== "user") return [];

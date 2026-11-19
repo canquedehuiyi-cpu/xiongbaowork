@@ -33,6 +33,7 @@ import type { GrantedTool, ToolExecution } from "@openbot/toolkit/granted-tool";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { createTurnRunner } from "@openbot/toolkit/run-turn";
 import { z } from "zod";
+import { toolSegmentsFor, turnTimeoutFor } from "../../../toolkit/src/limits";
 import { currentApprovalContext } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { REFUSAL_MARKER } from "../plugins/tools";
@@ -213,6 +214,9 @@ export function createSubagents(options: {
           const runId = crypto.randomUUID();
           let agent: AbstractAgent | undefined;
           const runTurn = createTurnRunner({
+            // A subagent does a part of the work, on the working turn's clock unless told (期五).
+            turnTimeoutMs: turnTimeoutFor("subagent"),
+            maxToolSegments: toolSegmentsFor("subagent"),
             ...options.turn,
             buildAgentFor: async (input) => {
               agent = await options.buildAgentFor(input);

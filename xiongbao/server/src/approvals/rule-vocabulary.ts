@@ -21,12 +21,12 @@
  * from, so the writer is never told about a tool or an effect the gate would not see.
  */
 import { and, asc, eq, isNull } from "drizzle-orm";
+import { englishName } from "../brand";
 import type { Database } from "../db/client";
 import { agents } from "../db/schema/core";
 import { agentProfiles } from "../db/schema/coworker";
 import { mcpServers, mcpTools } from "../db/schema/plugins";
 import { catalogueEntry, classifyTool } from "../plugins/catalogue";
-import { englishName } from "../brand";
 
 export type RuleVocabulary = {
   /** The apps set up in OpenBot, with every tool they list and the effect the gate sees for it. */
@@ -91,6 +91,22 @@ export const COMPUTER_APPROVAL_TOOLS: readonly {
     ref: "computer_run_command",
     effects: ["write"],
     about: "run a shell command in the Bot's workspace",
+  },
+  // The coding tools (期五), each asked about as the tool it stands beside.
+  {
+    ref: "computer_edit_file",
+    effects: ["write"],
+    about: "replace a passage of a file in the Bot's workspace",
+  },
+  {
+    ref: "computer_grep",
+    effects: ["read"],
+    about: "search the contents of files in the Bot's workspace",
+  },
+  {
+    ref: "computer_glob",
+    effects: ["read"],
+    about: "find files by name in the Bot's workspace",
   },
 ];
 

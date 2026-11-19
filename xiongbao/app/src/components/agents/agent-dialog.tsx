@@ -307,6 +307,7 @@ export function useProfileSave(agentId: string, profile: AgentProfile) {
   const save = ({
     platformModelRef,
     bible,
+    thinking,
     ...patch
   }: Partial<AgentFormValues> & {
     persona?: Persona;
@@ -317,6 +318,8 @@ export function useProfileSave(agentId: string, profile: AgentProfile) {
      * null clears it. Not a form field, so it rides beside the form's input rather than through it.
      */
     platformModelRef?: string | null;
+    /** 思考模式（期三）：absent leaves it. Not a form field either. */
+    thinking?: boolean;
   }) =>
     updateAgent.mutateAsync({
       agentId,
@@ -337,6 +340,7 @@ export function useProfileSave(agentId: string, profile: AgentProfile) {
         }),
         ...(platformModelRef === undefined ? {} : { platformModelRef }),
         ...(bible === undefined ? {} : { bible }),
+        ...(thinking === undefined ? {} : { thinking }),
       },
     });
   return { save, saving: updateAgent.isPending };
