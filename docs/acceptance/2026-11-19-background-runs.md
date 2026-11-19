@@ -10,10 +10,10 @@
 
 | 标准 | 怎么验 | 结果 |
 |---|---|---|
-| 能力冒烟 `disconnect`「中途断开网页仍完成」：HTTP 客户端发起单聊轮，收到第一个工具调用后断开，之后只轮询线程和产物；产物齐全且正确，线程里有完整的工具调用和结果，没有「没有执行」，这一轮以完成结束 | 模拟模型版：CI 作业 G8 的场景 A（`xiongbao/scripts/e2e/background-chat.ts`）。真实模型版：`EVAL_SUITE=smoke` 新增 `disconnect` 场景（交代 8 次以上工具调用、3～5 分钟的任务，校验脚本退出码 0），尚未加入评测脚本 | 模拟模型版见 §2；真实模型版待跑 |
-| 九·五之后，`disconnect` 还要求记录了一条完成通知 | 九·五合并后，在 `disconnect` 的判分里加一条：线程所属人有一条完成通知记录 | 待跑（依赖九·五） |
-| 能力冒烟 `reconnect`「断开后重连续上流」：同一任务，断开 30 秒后重新连接，收到后续事件直到运行结束，且和落库的事件一致 | 模拟模型版：G8 场景 B（断开后等 3 秒重连，对比重连拿到的流和结束后回放的流）。真实模型版：`EVAL_SUITE=smoke` 新增 `reconnect` 场景，断开 30 秒 | 模拟模型版见 §2；真实模型版待跑 |
-| 对标评测：`run-xiongbao.ts` 加执行路径选项（如 `EVAL_PATH=chat`），五道题走单聊接口再跑一遍；完成率不低于看板路径那一遍，墙钟、步数、token 同量级；两遍结果并排写进本目录 | 见 §3 | 待跑 |
+| 能力冒烟 `disconnect`「中途断开网页仍完成」：HTTP 客户端发起单聊轮，收到第一个工具调用后断开，之后只轮询线程和产物；产物齐全且正确，线程里有完整的工具调用和结果，没有「没有执行」，这一轮以完成结束 | 模拟模型版：CI 作业 G8 的场景 A（`xiongbao/scripts/e2e/background-chat.ts`）。真实模型版：场景 `disconnect`（`xiongbao/scripts/e2e/employee-eval/smoke.ts`，题面、夹具和校验脚本在 `smoke-background.ts`：写词频统计小程序、加测试并跑通、生成报告文件，要 8 次以上工具调用，预计 3～5 分钟；校验脚本退出码 0 才算产物对）。触发：手动运行 `model-e2e.yml`，`suite` 选 `capability-smoke`（或 `all`），`scenarios` 填 `background`（也可填 `disconnect`）。判分：校验脚本退出 0；线程里每个工具调用都有结果、没有一条写着「没有执行」、断开之后又有工具调用；这一轮以完成结束（`thread_run_liveness` 为 `finished`、事件里有 `RUN_FINISHED`、没出错没触顶）。断开后只轮询线程，上限 12 分钟 | 模拟模型版见 §2；真实模型版待跑 |
+| 九·五之后，`disconnect` 还要求记录了一条完成通知 | 已在 `disconnect` 的判分里：线程所属人有一条完成通知记录，即 `delivery_outbox` 里去重键为 `reply:turn-end:<运行号>:…` 的 `reply` 行（只有本人有推送设备或绑定的聊天平台时才会记；评测账号什么都没有，所以脚本先给本人记一个假令牌的推送设备，只写这一行，不配推送服务、不往外发） | 待跑 |
+| 能力冒烟 `reconnect`「断开后重连续上流」：同一任务，断开 30 秒后重新连接，收到后续事件直到运行结束，且和落库的事件一致 | 模拟模型版：G8 场景 B（断开后等 3 秒重连，对比重连拿到的流和结束后回放的流）。真实模型版：场景 `reconnect`（同一份题面和校验脚本），收到第一个工具调用后断开，等 30 秒，用 `/agent/:id/connect` 重连。触发同 `disconnect`（`scenarios` 填 `background` 或 `reconnect`）。判分：重连时这一轮还在跑；重连后收到后续事件（调用数比断开时见过的多）直到运行结束；重连拿到的流里的调用、结果、回答，和这一轮结束后再回放一次的结果一致；校验脚本退出 0 | 模拟模型版见 §2；真实模型版待跑 |
+| 对标评测：`run-xiongbao.ts` 加执行路径选项（如 `EVAL_PATH=chat`），五道题走单聊接口再跑一遍；完成率不低于看板路径那一遍，墙钟、步数、token 同量级；两遍结果并排写进本目录 | 脚本：`xiongbao/scripts/e2e/employee-eval/run-xiongbao.ts`，`EVAL_PATH=board\|chat`（默认 `board`，行为不变）。触发：手动运行 `model-e2e.yml`，`suite` 选 `employee-eval`，`paths` 选 `board,chat`（依次跑两遍）。见 §3 | 待跑 |
 | 底线回归：现有审批、权限、SEC1、只读目录、设备模式的测试全绿 | CI 的 `server-test`（全量） | 待跑 |
 | 底线回归：服务器执行时，写操作出审批卡，批准后服务器执行并续跑，拒绝后员工收到拒绝 | 服务器测试（期九·一、九·三已有用例），CI 全绿 | 待跑 |
 | 底线回归：关掉的工具不提供给模型 | 服务器测试（`chat-server-tools.integration.test.ts`），CI 全绿 | 待跑 |
@@ -43,7 +43,11 @@
 
 状态：待跑。评测跑完后在本节填表。
 
-做法：`scripts/e2e/employee-eval/run-xiongbao.ts` 加执行路径选项（如 `EVAL_PATH=chat`），同样的五道题走单聊接口再跑一遍，模型用 DeepSeek，和看板路径那一遍并排。基线是首轮 run `44461106077`（Codex，DeepSeek，`wire_api="responses"`）。
+做法：`xiongbao/scripts/e2e/employee-eval/run-xiongbao.ts` 用 `EVAL_PATH=chat` 让同样的五道题走单聊接口，和 `EVAL_PATH=board`（默认，原来的看板派活）那一遍并排，模型用 DeepSeek。基线是首轮 run `44461106077`（Codex，DeepSeek，`wire_api="responses"`）。
+
+单聊路径怎么跑：服务器带 `XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS=on` 起；每道题给同一个新员工开一段单聊（`POST /api/channels`），客户端用 HTTP 发运行请求（运行接口 `POST …/agent/:id/run`，`forwardedProps.computerTools="server"`，和页面发的一样），把事件流读到这一轮结束，不开浏览器，电脑工具由服务器执行。没做完时以本人身份在同一段对话里发「继续」，规则和看板路径一样，最多 3 次，记在 `nudges`。每题墙钟上限不变（`EVAL_TASK_MINUTES`，默认 20 分钟）。拷产物、判分、算指标和看板路径是同一套代码；办公题里「任务卡进入等验收」只在看板路径查，单聊路径没有这张卡，标为不适用，不算失败。
+
+怎么触发：GitHub 上手动运行 `model-e2e.yml`（只能在 main 上），`suite` 选 `employee-eval`，`paths` 选 `board,chat`（只跑单聊选 `chat`），`tasks` 默认 `all`（五道题）。两遍的结果在同一个结果目录：看板 `xiongbao.json`、单聊 `xiongbao-chat.json`（产物分别在 `xiongbao/`、`xiongbao-chat/`），记录里有 `path` 字段；`employee-eval-report` 作业出并排表（`report.md`），表里有「单聊路径 vs 看板路径」一节，列出下面这张表要的数字，Codex 基线列照旧。本机命令（假模型，只验流程）：`EVAL_LOCAL_MOCK=1 MODEL_E2E=1 EVAL_PATH=chat E2E_DATABASE_URL=… E2E_ROLE_WRITER_DATABASE_URL=… bun scripts/e2e/employee-eval/run-xiongbao.ts`。
 
 每道题、每条路径各填以下数字：
 

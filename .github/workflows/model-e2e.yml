@@ -16,10 +16,13 @@
 #
 # 期六「熊宝员工对标 Codex」另加四个作业，只有手动触发时选了对应的 suite 才跑（默认 metering-only 只跑上面两个）：
 #
-#   employee-eval-xiongbao     五道真实题交给熊宝员工（看板派活，服务器执行电脑工具），自动判分并记录每期能力指标。
+#   employee-eval-xiongbao     五道真实题交给熊宝员工，自动判分并记录每期能力指标。执行路径由输入 paths 选：board（看板派活，
+#                              服务器执行电脑工具）、chat（单聊接口，期九·六，HTTP 读事件流、服务器执行电脑工具）、board,chat
+#                              （依次两条都跑，同一个结果目录里各写各的文件）。
 #   employee-eval-codex        同样五道题交给 Codex CLI（codex exec），同一个模型、同一套判分。
-#   employee-eval-report       把两边结果合成一张对比表（步骤摘要 + artifact）。
-#   employee-capability-smoke  每期能力一个最小场景（计划、子代理、改完跑测试、长任务续跑、思考、编辑/检索工具），日常回归。
+#   employee-eval-report       把两边结果合成一张对比表（步骤摘要 + artifact）；有单聊路径的结果时，看板和单聊并排。
+#   employee-capability-smoke  每期能力一个最小场景（计划、子代理、改完跑测试、长任务续跑、思考、编辑/检索工具），日常回归；
+#                              另有后台长跑两个场景 disconnect / reconnect（scenarios 填 background，真模型走单聊路径）。
 #
 # 模型和提供方都是输入（provider / model / base_url），两边脚本从同一组输入读，不写死 DeepSeek；key 仍是
 # 上面那个 Environment secret。脚本在 xiongbao/scripts/e2e/employee-eval/，用法见各文件开头。
@@ -41,8 +44,16 @@ on:
         description: "对标题目：all（五道对标题）、hard（加难题 compare），或逗号分隔的 research,docs,code,data,office,compare"
         type: string
         default: all
+      paths:
+        description: "熊宝员工对标走哪条执行路径：board（看板派活）、chat（单聊接口，期九·六）、board,chat（依次两条都跑，出并排表）"
+        type: choice
+        default: board
+        options:
+          - board
+          - chat
+          - board,chat
       scenarios:
-        description: "冒烟场景：all，或逗号分隔的 plan,subagent,code,long,reasoning,edit-grep"
+        description: "冒烟场景：all（plan,subagent,code,long,reasoning,edit-grep 六个），background（后台长跑 disconnect,reconnect，真模型走单聊路径，各约 3～5 分钟、上限 15 分钟），或逗号分隔的场景名，可混写如 all,background"
         type: string
         default: all
       provider:
@@ -170,8 +181,8 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["employee-eval","all"]'), inputs.suite)
     runs-on: ubuntu-latest
     environment: model-e2e
-    # 五道题、每题墙钟上限 20 分钟，再加起服务、装浏览器的时间。
-    timeout-minutes: 120
+    # 五道题、每题墙钟上限 20 分钟；paths 选两条路径时是两遍，再加起服务、装浏览器的时间（GitHub 单个作业上限 6 小时，这里按 3 小时）。
+    timeout-minutes: 180
     services:
       # PostgreSQL 17 with pgvector: migration 0000 creates the `vector` extension.
       postgres:
@@ -205,7 +216,9 @@ jobs:
           DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/openbot_employee_eval bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'e2e-role-writer'"
-      - name: Five tasks for a Xiongbao employee
+      # 每条路径一遍：board 写 xiongbao.json，chat 写 xiongbao-chat.json，同一个结果目录。一条路径失败不拦下一条，
+      # 最后作业按有没有失败收尾。路径名只认 board 和 chat（输入是 choice，这里再核一遍）。
+      - name: Five tasks for a Xiongbao employee, over each chosen path
         env:
           MODEL_E2E: "1"
           MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -214,10 +227,21 @@ jobs:
           EVAL_BASE_URL: ${{ inputs.base_url }}
           EVAL_SUITE: tasks
           EVAL_TASKS: ${{ inputs.tasks }}
+          EVAL_PATHS: ${{ inputs.paths }}
           EVAL_OUT: ${{ runner.temp }}/employee-eval
           E2E_DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/openbot_employee_eval
           E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:e2e-role-writer@127.0.0.1:5432/openbot_employee_eval
-        run: bun scripts/e2e/employee-eval/run-xiongbao.ts
+        run: |
+          status=0
+          for path in ${EVAL_PATHS//,/ }; do
+            case "$path" in
+              board | chat) ;;
+              *) echo "unknown execution path in the paths input"; exit 2 ;;
+            esac
+            echo "== execution path: $path"
+            EVAL_PATH="$path" bun scripts/e2e/employee-eval/run-xiongbao.ts || status=$?
+          done
+          exit "$status"
       - name: Step summary
         if: always()
         run: bun scripts/e2e/employee-eval/report.ts "$RUNNER_TEMP/employee-eval"
@@ -304,8 +328,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["capability-smoke","all"]'), inputs.suite)
     runs-on: ubuntu-latest
     environment: model-e2e
-    # 六个最小场景，各自 5 到 12 分钟的上限。
-    timeout-minutes: 60
+    # 六个最小场景各自 5 到 12 分钟的上限（共 42 分钟），再加后台长跑两个场景各 15 分钟的上限（scenarios 填 background），
+    # 再加起服务的时间。
+    timeout-minutes: 100
     services:
       # PostgreSQL 17 with pgvector: migration 0000 creates the `vector` extension.
       postgres:

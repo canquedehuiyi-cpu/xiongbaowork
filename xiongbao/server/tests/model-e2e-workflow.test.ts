@@ -46,10 +46,12 @@ const workflow = parse(text) as Workflow;
  * 超时按作业给，其余规矩与上面两个作业相同。不在这张表里的作业（计量对账、WakerFlow）仍是 10 分钟。
  */
 const EVAL_CEILINGS: Record<string, number> = {
-  "employee-eval-xiongbao": 120,
+  // 期九·六：paths 选两条路径时五道题跑两遍，上限 180 分钟（GitHub 托管机器单个作业最长 6 小时）。
+  "employee-eval-xiongbao": 180,
   "employee-eval-codex": 120,
   "employee-eval-report": 10,
-  "employee-capability-smoke": 60,
+  // 加了后台长跑两个场景（各 15 分钟上限）。
+  "employee-capability-smoke": 100,
 };
 const EVAL_SCRIPTS: Record<string, string> = {
   "employee-eval-xiongbao": "scripts/e2e/employee-eval/run-xiongbao.ts",
@@ -129,6 +131,87 @@ test("the evaluation is parameterised by dispatch inputs, which never reach a sh
   // into the script, so nothing typed into the form runs as shell.
   for (const step of jobs.flatMap((job) => job.steps))
     expect(step.run ?? "").not.toContain("inputs.");
+});
+
+/**
+ * 期九·六：熊宝员工对标可以走两条执行路径。输入 `paths` 是个选项（board、chat、board,chat），在作业里以环境变量
+ * 交给一个步骤，由这个步骤依次对每条路径跑一遍评测脚本；输入不拼进脚本。
+ */
+test("the Xiongbao evaluation runs each chosen execution path, one after the other, inside one key-carrying step", () => {
+  const inputs = (
+    workflow.on as {
+      workflow_dispatch: {
+        inputs: Record<
+          string,
+          {
+            default?: string;
+            description?: string;
+            options?: string[];
+            type?: string;
+          }
+        >;
+      };
+    }
+  ).workflow_dispatch.inputs;
+  expect(inputs.paths).toMatchObject({
+    type: "choice",
+    default: "board",
+    options: ["board", "chat", "board,chat"],
+  });
+  // The scenarios input names the background group.
+  expect(inputs.scenarios).toMatchObject({ default: "all" });
+  expect(inputs.scenarios?.description).toContain("background");
+  expect(inputs.scenarios?.description).toContain("disconnect");
+  expect(inputs.scenarios?.description).toContain("reconnect");
+
+  const job = workflow.jobs["employee-eval-xiongbao"] as Job;
+  const [carrier] = job.steps.filter((step) =>
+    Object.values(step.env ?? {}).some((value) =>
+      String(value).includes("secrets."),
+    ),
+  );
+  expect(carrier?.env).toMatchObject({
+    EVAL_PATHS: expression("inputs.paths"),
+    EVAL_SUITE: "tasks",
+    EVAL_TASKS: expression("inputs.tasks"),
+  });
+  // The path reaches the script as EVAL_PATH, one value per pass, after the name was checked.
+  const run = carrier?.run ?? "";
+  expect(run).toMatch(/\$\{EVAL_PATHS\/\/,\/ \}/);
+  expect(run).toContain("board | chat");
+  expect(run).toContain('EVAL_PATH="$path"');
+  expect(run).toContain("scripts/e2e/employee-eval/run-xiongbao.ts");
+  expect(run).toContain('exit "$status"');
+  // A failed pass does not skip the next one: the loop keeps the status and the job exits with it.
+  expect(run).toContain("|| status=$?");
+  // The step carries no EVAL_PATH of its own: only the loop sets it.
+  expect(Object.keys(carrier?.env ?? {})).not.toContain("EVAL_PATH");
+  // The report step still reads the one directory both passes wrote to.
+  const outDir = carrier?.env?.EVAL_OUT;
+  expect(outDir).toBe(`${expression("runner.temp")}/employee-eval`);
+  expect(
+    job.steps.some((step) =>
+      (step.run ?? "").includes('report.ts "$RUNNER_TEMP/employee-eval"'),
+    ),
+  ).toBe(true);
+  // Two passes of five tasks, each task held to the same wall clock as before, fit the ceiling.
+  expect(job["timeout-minutes"]).toBeGreaterThanOrEqual(120);
+  expect(job["timeout-minutes"]).toBeLessThanOrEqual(180);
+});
+
+test("the capability smoke can reach the background scenarios and has the time for them", () => {
+  const job = workflow.jobs["employee-capability-smoke"] as Job;
+  const [carrier] = job.steps.filter((step) =>
+    Object.values(step.env ?? {}).some((value) =>
+      String(value).includes("secrets."),
+    ),
+  );
+  expect(carrier?.env).toMatchObject({
+    EVAL_SUITE: "smoke",
+    EVAL_TASKS: expression("inputs.scenarios"),
+  });
+  // Six scenarios up to 42 minutes, plus two background ones of 15 minutes each, plus the start-up.
+  expect(job["timeout-minutes"]).toBeGreaterThanOrEqual(42 + 2 * 15);
 });
 
 test("permissions are read-only contents and runs never overlap", () => {
