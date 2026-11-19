@@ -549,6 +549,9 @@ jobs:
       # The per-employee root helper creates users, so it is tested as root inside the image.
       - name: xb-bot helper (per-employee users)
         run: docker run --rm --user root --entrypoint /bin/sh -v "$PWD/docker/tests:/t:ro" openbot:trackb /t/xb-bot.test.sh
+      # The documents toolchain, as the default employee: docx, xlsx, pptx and PDF with Chinese, read back.
+      - name: documents toolchain self-check (as pwuser)
+        run: docker run --rm --user pwuser --entrypoint python3 openbot:trackb /opt/docs-toolchain/selfcheck.py --require-pandoc --require-soffice
       # Two employees cannot read each other's files, and a stopped command ends within 10 seconds.
       - name: per-employee users smoke
         env:

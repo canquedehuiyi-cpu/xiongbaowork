@@ -55,6 +55,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && bunx --bun "playwright@${PLAYWRIGHT_VERSION}" install --with-deps --no-shell chromium \
   && rm -rf /root/.cache /root/.bun /usr/local/install/cache /tmp/* /var/lib/apt/lists/*
 
+# 生成与读取文档的环境：员工在这台电脑上用 Python 写 Word、Excel、PPT、PDF，用 markitdown 把收到的
+# PDF、Office 文件转成文字来读，用 pandoc 做 markdown 与 Word 互转。中文字体必须有：没有它，PDF 和
+# PPT 里的中文是方块。Noto CJK 给排版和浏览器用；文泉驿微米黑是 TrueType 轮廓，reportlab 只能嵌这种。
+# Python 库装在 /opt/xiongbao-docs，系统 python3 直接 import 得到（见 docker/docs-toolchain/install.sh）。
+# 装完当场生成一遍各类文件再读回来（selfcheck.py），出不了中文就构建失败。LibreOffice 太大，只在单镜像里装。
+COPY docker/docs-toolchain /opt/docs-toolchain
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-venv fontconfig fonts-noto-cjk fonts-wqy-microhei pandoc \
+      libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+  && rm -rf /var/lib/apt/lists/* \
+  && sh /opt/docs-toolchain/install.sh /opt/docs-toolchain/requirements.txt \
+  && python3 /opt/docs-toolchain/selfcheck.py --require-pandoc \
+  && rm -rf /root/.cache /tmp/*
+
 WORKDIR /app
 # The lockfile as well as the manifest: `--frozen-lockfile` with no lockfile present resolves afresh
 # and exits 0, so the file has to be here for the flag to mean anything.
