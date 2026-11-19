@@ -140,6 +140,7 @@ import { LateRenderersContext, LateRenderersWatch } from "./late-renderers";
 import { usePacedReveal } from "./paced-reveal";
 import { ResearchResults } from "./research-results";
 import { TeamBotConsentCard } from "./team-bot-consent";
+import { ThinkingBlock } from "./thinking-block";
 import {
   dropRepeatedAppCards,
   groupToolSteps,
@@ -2441,7 +2442,10 @@ export function ChatTranscript({
    */
   /* Which row each tool step was drawn in, so a row keeps its key; see `groupToolSteps`. */
   const rowIdsRef = useRef(new Map<string, string>());
-  const visible = dropRepeatedAppCards(toVisibleChatItems(messages));
+  // 这里画员工的思考块（期三），所以要推理那一项；别处读这份投影的照旧不要。
+  const visible = dropRepeatedAppCards(
+    toVisibleChatItems(messages, { reasoning: true }),
+  );
   const items = groupToolSteps(visible, isDrawn, rowIdsRef.current);
   /*
    * The folders this conversation's "Check your folders" steps named, for its other folder steps.
@@ -2883,6 +2887,20 @@ export function ChatTranscript({
         {...openingProps(item.id)}
       >
         <TranscriptAttachments attachments={item.attachments} />
+        {after(item.id)}
+      </MessageScrollerItem>
+    ) : item.kind === "reasoning" ? (
+      <MessageScrollerItem
+        key={item.id}
+        messageId={item.id}
+        {...openingProps(item.id)}
+      >
+        {/* 还在想：这一轮还在跑，它又是最后一项（后面还没有回答或工具调用）。 */}
+        <ThinkingBlock
+          id={item.id}
+          text={item.text}
+          thinking={busy && index === items.length - 1}
+        />
         {after(item.id)}
       </MessageScrollerItem>
     ) : (
