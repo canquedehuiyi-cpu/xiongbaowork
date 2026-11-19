@@ -77,6 +77,21 @@ export function acpRuntimeFrom(configuration: unknown): AcpRuntime {
 }
 
 /**
+ * 2026-11-19 ruling: the employee's cloud computer carries Claude Code only. A Codex employee runs
+ * only on the hirer's own paired computer (runtime `device`); `codex` with `cloud` is refused when
+ * written and, if it is found already saved, when it would run.
+ */
+export const ACP_CODEX_CLOUD_REFUSAL = "Codex 员工暂时只能在你自己的电脑上跑。";
+
+/** Whether this harness may not run on the employee's cloud computer. */
+export function codexCannotRunInCloud(
+  harness: string,
+  runtime: AcpRuntime | undefined,
+): boolean {
+  return harness === "codex" && runtime === "cloud";
+}
+
+/**
  * The working folder reference of a cloud employee's `acp.open`. There is one working folder on a
  * cloud computer, the employee's own folder in its workspace, so the reference is fixed and the
  * computer resolves it itself; no path ever travels.

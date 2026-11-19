@@ -53,8 +53,10 @@ import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
 import {
   ACP_CLOUD_WORKDIR_REF,
+  ACP_CODEX_CLOUD_REFUSAL,
   acpCloudDeviceId,
   acpRuntimeFrom,
+  codexCannotRunInCloud,
 } from "../../shared/acp";
 import { mediaGuidance } from "../../shared/media";
 import { planGuidance } from "../../shared/plan";
@@ -2018,6 +2020,15 @@ function refusingProvider(model: RuntimeModel): RefusingProvider {
   };
 }
 
+/** Why an external employee is not run at all, or null: Codex saved as `cloud` (its computer has none). */
+export function externalRefusalReason(
+  agent: Pick<DeviceAcpEmployee, "harness" | "runtime">,
+): string | null {
+  return codexCannotRunInCloud(agent.harness, agent.runtime)
+    ? ACP_CODEX_CLOUD_REFUSAL
+    : null;
+}
+
 async function buildAgent(
   agent: RegisteredAgent,
   model: RuntimeModel,
@@ -2062,6 +2073,15 @@ async function buildAgent(
      * A run the runtime makes for itself (a title) is answered on the deployment's built-in runner
      * instead (`answersOwnRunsHere`), holding nothing, so it never reaches the computer.
      */
+    // A Codex employee saved as `cloud` (the cloud computer has none) is not run, not moved to a
+    // computer of the owner's: it says why instead.
+    const refusedBecause = externalRefusalReason(agent);
+    if (refusedBecause)
+      return new UnavailableAgent({
+        id: agent.id,
+        name: agent.name,
+        reason: refusedBecause,
+      });
     const device =
       deviceAcpAgentFor(agent, { tenantId: currentTenant() }) ??
       new UnavailableAgent({

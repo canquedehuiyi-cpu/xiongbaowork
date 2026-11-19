@@ -4,10 +4,11 @@ import { join, posix } from "node:path";
 import { ACP_MANIFEST } from "../runner/src/acp/manifest";
 
 /*
- * 期八·二: Codex and Claude Code run on the employee's own computer, so the computer's image carries
- * them. Three things have to hold and nothing runs inside that image in a unit test, so they are held
- * here: the two adapters (and with them Codex and Claude Code) are installed when the image is built, at
- * the exact versions the launch manifest names, from a lockfile; and every module the computer's ACP host
+ * 期八·二: Claude Code runs on the employee's own computer, so the computer's image carries it (and only it:
+ * 2026-11-19, Codex employees run only on their owner's own paired computer). Three things have to hold and
+ * nothing runs inside that image in a unit test, so they are held here: the adapter (and with it Claude
+ * Code) is installed when the image is built, at the exact version the launch manifest names, from a
+ * lockfile; and every module the computer's ACP host
  * imports at run time is copied into the image, because one that is missed dies on the computer's first
  * start, which no other test would see.
  */
@@ -23,29 +24,24 @@ describe("the adapters are installed when the image is built", () => {
     dependencies: Record<string, string>;
   };
 
-  test("both adapters are pinned to one exact version, the ones the launch manifest names", () => {
+  test("only Claude Code's adapter is pinned, to the exact version the launch manifest names", () => {
     expect(manifest.dependencies).toEqual({
       "@agentclientprotocol/claude-agent-acp": "0.107.0",
-      "@agentclientprotocol/codex-acp": "2.6.0",
     });
     for (const version of Object.values(manifest.dependencies))
       expect(version).toMatch(/^\d+\.\d+\.\d+$/);
     // What a device runs through `npx` and what the image installs are one version.
-    expect(ACP_MANIFEST.codex.adapter.args).toContain(
-      "@agentclientprotocol/codex-acp@2.6.0",
-    );
     expect(ACP_MANIFEST["claude-code"].adapter.args).toContain(
       "@agentclientprotocol/claude-agent-acp@0.107.0",
     );
   });
 
-  test("the lockfile resolves them, and the CLIs they bring, to those versions", () => {
+  test("the lockfile resolves the adapter, and the Claude Code it brings, to that version, with no Codex in it", () => {
     const lock = read("docker", "acp-adapters", "bun.lock");
-    expect(lock).toContain('"@agentclientprotocol/codex-acp@2.6.0"');
     expect(lock).toContain('"@agentclientprotocol/claude-agent-acp@0.107.0"');
-    // Codex 0.166.0 comes with codex-acp 2.6.0; Claude Code comes with the adapter's SDK.
-    expect(lock).toContain("@openai/codex@0.166.0");
+    // Claude Code comes with the adapter's SDK.
     expect(lock).toContain('"@anthropic-ai/claude-agent-sdk@');
+    expect(lock.toLowerCase()).not.toContain("codex");
   });
 
   test("a step of its own installs them from the lockfile, ahead of the source copies, and checks what it installed", () => {
@@ -72,9 +68,10 @@ describe("the adapters are installed when the image is built", () => {
       if (!(lines[at] ?? "").endsWith("\\")) break;
     }
     const text = run.join("\n");
-    expect(text).toContain('"codex-cli 0.166.0"');
     expect(text).toContain('"0.107.0"');
-    expect(text).toContain("codex-acp");
+    expect(text).toContain("claude-agent-acp");
+    // No Codex in the computer's image, in the step or anywhere in the Dockerfile's commands.
+    expect(dockerfile).not.toMatch(/^(?!#).*codex/im);
     // Nothing is downloaded when an employee starts: the launch is the installed copy, never `npx`.
     expect(dockerfile).not.toMatch(/\bnpx\b.*codex-acp/);
     // Before the sources that change: editing the computer's source does not install it all again.
@@ -191,5 +188,21 @@ describe("the computer's ACP host has everything it imports in the image", () =>
     // And the walk reached the host, so the check above looked at something.
     expect(seen.has("runner/src/acp/host.ts")).toBe(true);
     expect(seen.has("runner/src/mcp-client.ts")).toBe(true);
+  });
+});
+
+describe("the server image, which runs the computer too, has the host's files", () => {
+  const root_ = read("Dockerfile");
+  test("runner/src/acp and the three runner modules it needs are copied to /app/runner/src", () => {
+    // The computer resolves `../../runner/src/...` from /app/agent-computer/src; without them it dies at start.
+    expect(root_).toContain("COPY runner/src/acp /out/runner/src/acp");
+    expect(root_).toContain(
+      "COPY runner/src/idle.ts runner/src/mcp-client.ts runner/src/bundled-runtime.ts /out/runner/src/",
+    );
+    expect(root_).toContain(
+      "COPY --from=runtime-src /out/runner/src runner/src",
+    );
+    // shared/ is copied whole there, which carries shared/acp.ts.
+    expect(root_).toContain("COPY shared /out/shared");
   });
 });

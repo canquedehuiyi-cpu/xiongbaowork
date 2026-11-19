@@ -71,18 +71,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && python3 /opt/docs-toolchain/selfcheck.py --require-pandoc \
   && rm -rf /root/.cache /tmp/*
 
-# 外部编码员工（Codex、Claude Code）：员工在自己的这台电脑里跑它们。两个 ACP 适配器和它们带的 CLI 在构建时就装好，
-# 员工启动时不再 `npx -y` 下载任何东西。版本在 docker/acp-adapters/package.json 里钉到精确版本、锁在 bun.lock：
-# @agentclientprotocol/codex-acp@2.6.0（自带 Codex 0.166.0）、@agentclientprotocol/claude-agent-acp@0.107.0（自带
-# Claude Code）。要换版本，改 package.json、重生成 bun.lock，并同步 runner/src/acp/manifest.ts 的 ACP_MANIFEST。
-# 装完当场跑一遍，装不全或版本不对就构建失败。体积约 0.9 GB（Codex 约 440 MB，Claude Code 约 350 MB，其余是依赖）。
+# 外部编码员工（云电脑里只有 Claude Code，2026-11-19 拍板）：员工在自己的这台电脑里跑 Claude Code。ACP 适配器和它带的
+# Claude Code 在构建时就装好，员工启动时不再 `npx -y` 下载任何东西。版本在 docker/acp-adapters/package.json 里钉到精确版本、
+# 锁在 bun.lock：@agentclientprotocol/claude-agent-acp@0.107.0（自带 Claude Code）。Codex 不预装：Codex 员工只能在用户自己
+# 配对的电脑上跑（runtime 为 device）。Claude Code 是专有许可，用户已知晓并决定预装（规格 §8.2）。
+# 要换版本，改 package.json、重生成 bun.lock，并同步 runner/src/acp/manifest.ts 的 ACP_MANIFEST。
+# 装完当场跑一遍，装不全或版本不对就构建失败。体积约 0.43 GB（Claude Code 约 350 MB，其余是依赖）。
 # 独立成一步，放在会常变的源码拷贝之前，改源码不会重装这一层。装进 /opt/xiongbao-acp，不碰系统的 node 和 bun。
 WORKDIR /opt/xiongbao-acp
 COPY docker/acp-adapters/package.json docker/acp-adapters/bun.lock ./
 RUN bun install --frozen-lockfile --production \
-  && test "$(node node_modules/@openai/codex/bin/codex.js --version)" = "codex-cli 0.166.0" \
   && test "$(node node_modules/.bin/claude-agent-acp --version)" = "0.107.0" \
-  && node node_modules/.bin/codex-acp cli --version \
   && rm -rf /root/.cache /root/.bun /usr/local/install/cache /tmp/*
 ENV XIONGBAO_ACP_ADAPTERS_DIR=/opt/xiongbao-acp
 # Where the agents' own state and the adapters' start folder live (acp-cloud.ts). Not the workspace: that is the

@@ -8,9 +8,11 @@ import { createCloudAcp } from "../../agent-computer/src/acp-cloud";
 import type { AcpClient } from "../../runner/src/acp/client";
 import {
   ACP_CLOUD_WORKDIR_REF,
+  ACP_CODEX_CLOUD_REFUSAL,
   acpCloudAgentOf,
   acpCloudDeviceId,
   acpRuntimeFrom,
+  codexCannotRunInCloud,
 } from "../../shared/acp";
 import { HEADER } from "../../shared/wire-headers";
 import {
@@ -35,7 +37,7 @@ import {
   externalConfiguration,
   externalField,
 } from "../src/agents/profile-store";
-import { registeredAgentFromRow } from "../src/copilot";
+import { externalRefusalReason, registeredAgentFromRow } from "../src/copilot";
 import type { DeviceChannel } from "../src/devices/channel";
 import { createMemoryAcpTurnStore } from "./support/acp-turns-memory";
 
@@ -225,7 +227,7 @@ const MODEL = {
   baseUrl: "http://server.internal:3001/api/agent-model",
   token: "xbm_pass",
   model: "deepseek-chat",
-  wire: "responses" as const,
+  wire: "messages" as const,
 };
 
 function agentConfig(w: World, overrides: Partial<DeviceAcpAgentConfig> = {}) {
@@ -234,7 +236,7 @@ function agentConfig(w: World, overrides: Partial<DeviceAcpAgentConfig> = {}) {
     ownerUserId: TENANT,
     tenantId: TENANT,
     deviceId: CLOUD,
-    harness: "codex",
+    harness: "claude-code",
     workdirRef: ACP_CLOUD_WORKDIR_REF,
     runtime: "cloud",
     name: "小码",
@@ -359,6 +361,27 @@ describe("a cloud employee's identity", () => {
       harness: "claude-code",
     });
   });
+
+  test("a Codex employee already saved as cloud is not run, and not moved to a computer of the owner's: it says why", async () => {
+    const saved = registeredAgentFromRow(
+      row({
+        deviceId: CLOUD,
+        harness: "codex",
+        workdirRef: ACP_CLOUD_WORKDIR_REF,
+        runtime: "cloud",
+      }),
+    );
+    expect(saved).toMatchObject({ harness: "codex", runtime: "cloud" });
+    expect(
+      externalRefusalReason(saved as { harness: "codex"; runtime: "cloud" }),
+    ).toBe(ACP_CODEX_CLOUD_REFUSAL);
+    expect(
+      externalRefusalReason({ harness: "codex", runtime: undefined }),
+    ).toBeNull();
+    expect(
+      externalRefusalReason({ harness: "claude-code", runtime: "cloud" }),
+    ).toBeNull();
+  });
 });
 
 describe("how the runtime is saved", () => {
@@ -423,6 +446,27 @@ describe("how the runtime is saved", () => {
     });
   });
 
+  test("Codex with cloud is refused when it is written, in words a person can act on", () => {
+    expect(() =>
+      externalConfiguration(
+        {
+          deviceId: "",
+          harness: "codex",
+          workdirRef: "",
+          permissions,
+          runtime: "cloud",
+        },
+        AGENT,
+      ),
+    ).toThrow(ACP_CODEX_CLOUD_REFUSAL);
+    expect(ACP_CODEX_CLOUD_REFUSAL).toBe(
+      "Codex 员工暂时只能在你自己的电脑上跑。",
+    );
+    expect(codexCannotRunInCloud("codex", "cloud")).toBe(true);
+    expect(codexCannotRunInCloud("codex", "device")).toBe(false);
+    expect(codexCannotRunInCloud("claude-code", "cloud")).toBe(false);
+  });
+
   test("a screen reads `runtime` only off a cloud employee", () => {
     const saved = (configuration: Record<string, unknown>) =>
       externalField({ type: "device_acp", configuration }).externalRun;
@@ -436,7 +480,7 @@ describe("how the runtime is saved", () => {
     expect(
       saved({
         deviceId: CLOUD,
-        harness: "codex",
+        harness: "claude-code",
         workdirRef: ACP_CLOUD_WORKDIR_REF,
         runtime: "cloud",
       }),
@@ -477,7 +521,7 @@ describe("the model address a cloud computer is given", () => {
       tenantId: TENANT,
       agentId: AGENT,
       threadId: "t",
-      harness: "codex" as const,
+      harness: "claude-code" as const,
     };
     const cloud = await access.issue({ ...asked, runtime: "cloud" });
     const device = await access.issue(asked);
@@ -521,13 +565,13 @@ describe("a cloud employee's turn goes through the computer gateway", () => {
     expect(open).toMatchObject({
       agentId: AGENT,
       threadId: "thread-1",
-      harness: "codex",
+      harness: "claude-code",
       workdirRef: ACP_CLOUD_WORKDIR_REF,
       model: MODEL,
     });
     // The agent really started on the computer, on the model's pass.
     expect(w.spawned).toHaveLength(1);
-    expect(w.spawned[0]?.env.XIONGBAO_AGENT_MODEL_TOKEN).toBe(MODEL.token);
+    expect(w.spawned[0]?.env.ANTHROPIC_AUTH_TOKEN).toBe(MODEL.token);
     // And the answer reached the run.
     expect(
       events.some(
@@ -599,6 +643,7 @@ describe("a cloud employee's turn goes through the computer gateway", () => {
     new DeviceAcpAgent(
       agentConfig(w, {
         deviceId: "laptop",
+        harness: "codex",
         runtime: undefined,
         resume: undefined,
         prepare: undefined,
@@ -845,7 +890,7 @@ describe("the factory for a cloud employee", () => {
         name: "小码",
         ownerUserId: TENANT,
         deviceId: CLOUD,
-        harness: "codex",
+        harness: "claude-code",
         workdirRef: ACP_CLOUD_WORKDIR_REF,
         runtime: "cloud",
         persona: "后端工程师",
@@ -857,7 +902,7 @@ describe("the factory for a cloud employee", () => {
           tenantId: TENANT,
           agentId: AGENT,
           threadId: "thread-1",
-          harness: "codex",
+          harness: "claude-code",
           runtime: "cloud",
         },
       ]);

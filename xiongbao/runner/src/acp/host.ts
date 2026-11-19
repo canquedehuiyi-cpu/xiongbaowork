@@ -31,7 +31,6 @@ import {
   type ModelLaunch,
   prepareAdapterDir,
   withProcessPath,
-  writeCloudCodexHome,
   writeCodexHome,
 } from "./manifest";
 import { permissionFacts } from "./paths";
@@ -179,7 +178,7 @@ export type AcpHostDeps = {
    * (manifest.ts, THE EMPLOYEE'S OWN COMPUTER): the adapters are the copies the image installed in
    * `binDir`, a cloud employee has no login of its own so an open WITHOUT a `model` cannot start (an
    * owner's settings are never read there), and the adapter gets `env` and nothing else from this
-   * process's environment. Codex runs with no sandbox of its own (the container is the sandbox).
+   * process's environment. Only Claude Code runs there; a Codex open is refused.
    * Absent: an owner's machine, exactly as before.
    */
   cloud?: {
@@ -872,25 +871,23 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     proc.ready = (async () => {
       // Made inside the process's own start, so a process that is retired meanwhile still removes it.
       let launch: ModelLaunch | undefined;
-      if (model && harness === "codex") {
+      if (model && harness === "codex" && !deps.cloud) {
         const home = mkdtempSync(
           join(deps.tempRoot ?? tmpdir(), "xiongbao-codex-"),
         );
         proc.cleanup = () => rmSync(home, { recursive: true, force: true });
-        if (deps.cloud) writeCloudCodexHome(home, model);
-        else writeCodexHome(home, model);
+        writeCodexHome(home, model);
         launch = codexModelLaunch(model, home);
       } else if (model && harness === "claude-code") {
         launch = claudeModelLaunch(model);
       }
       if (deps.cloud) {
-        // A cloud computer starts only the two agents it carries, and only on the employee's model.
-        if (!launch || (harness !== "codex" && harness !== "claude-code"))
+        // A cloud computer starts only Claude Code (it has no Codex), and only on the employee's model.
+        if (!launch || harness !== "claude-code")
           throw new HostError("start_failed");
         const cloud = deps.cloud;
         prepareAdapterDir(deps.adapterDir);
         const spec = cloudAdapterLaunch(
-          harness,
           { adapterDir: deps.adapterDir },
           {
             binDir: cloud.binDir,

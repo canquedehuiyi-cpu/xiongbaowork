@@ -181,7 +181,7 @@ describe("through the real server", () => {
         type: "acp.open",
         agentId: BOT,
         threadId: "th_1",
-        harness: "codex",
+        harness: "claude-code",
         workdirRef: "cloud:workspace",
       }),
     });

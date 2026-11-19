@@ -59,8 +59,6 @@ afterAll(() => rmSync(scratch, { recursive: true, force: true }));
 type Setup = {
   cloud: CloudAcp;
   spawns: AcpSpawnSpec[];
-  /** The Codex home as it was when the adapter was started (it is removed with the process). */
-  homes: { config: string; rules: string; mode: number }[];
   call: (path: string, init?: RequestInit, seat?: string) => Promise<Response>;
   post: (frame: Frame, seat?: string) => Promise<Response>;
   /** Frames read off the streams so far. */
@@ -81,7 +79,6 @@ function setup(
 ): Setup {
   mkdirSync(work, { recursive: true });
   const spawns: AcpSpawnSpec[] = [];
-  const homes: Setup["homes"] = [];
   const tempRoot = join(scratch, `tmp-${Math.random().toString(36).slice(2)}`);
   mkdirSync(tempRoot, { recursive: true });
   let started = 0;
@@ -105,16 +102,6 @@ function setup(
     ...(options.idleMs ? { idleMs: options.idleMs } : {}),
     spawn: (spec, handlers, clientOptions) => {
       spawns.push(spec);
-      const codexHome = spec.env.CODEX_HOME;
-      if (codexHome)
-        homes.push({
-          config: readFileSync(join(codexHome, "config.toml"), "utf8"),
-          rules: readFileSync(
-            join(codexHome, "rules", "xiongbao.rules"),
-            "utf8",
-          ),
-          mode: Number((statSync(codexHome).mode & 0o777).toString(8)),
-        });
       started += 1;
       const scriptFile = join(scratch, `script-${started}-${Date.now()}.json`);
       writeFileSync(
@@ -204,7 +191,6 @@ function setup(
   return {
     cloud,
     spawns,
-    homes,
     call,
     post,
     frames,
@@ -227,7 +213,7 @@ const open = (harness: string, extra: Frame = {}): Frame => ({
   workdirRef: ACP_CLOUD_WORKDIR_REF,
   model: {
     ...MODEL,
-    wire: harness === "codex" ? "responses" : "messages",
+    wire: "messages",
   },
   ...extra,
 });
@@ -273,7 +259,7 @@ describe("a frame from the server", () => {
     });
     expect(list.status).toBe(400);
     // The seat is the employee: another employee's frame on this seat's route is refused.
-    const other = await t.post({ ...open("codex"), agentId: "agent_2" });
+    const other = await t.post({ ...open("claude-code"), agentId: "agent_2" });
     expect(other.status).toBe(400);
     expect(t.cloud.hosts()).toBe(0);
     expect(t.spawns).toHaveLength(0);
@@ -291,7 +277,7 @@ describe("a frame from the server", () => {
 
   test("a seat that cannot run an employee here is told why, and no process starts", async () => {
     const t = setup({ workdirFor: async () => null });
-    const response = await t.post(open("codex"));
+    const response = await t.post(open("claude-code"));
     expect(response.status).toBe(409);
     expect(((await response.json()) as { error: string }).error).toContain(
       "独立的 Linux 用户",
@@ -307,51 +293,25 @@ describe("a frame from the server", () => {
   });
 });
 
-describe("starting Codex", () => {
-  test("starts the image's adapter with its own CODEX_HOME, no sandbox of its own, and the proxy as the only model", async () => {
+describe("the computer carries Claude Code only", () => {
+  test("a Codex open is refused with start_failed, with or without a model, and nothing starts", async () => {
     const t = setup();
     await t.streamOpen();
-    expect(await (await t.post(open("codex"))).json()).toEqual({
-      handled: true,
-    });
-    await t.waitFor(() => ofType(t.frames, "acp.session").length === 1);
-
-    expect(t.spawns).toHaveLength(1);
-    const spec = t.spawns[0] as AcpSpawnSpec;
-    expect(spec.command).toBe("node");
-    expect(spec.args).toEqual([join(BIN, "codex-acp")]);
-    // Never the working folder, never `npx`.
-    expect(spec.cwd).toBe(join(scratch, "state", "adapters"));
-    expect(spec.sessionMode).toBe("permission-profile:xiongbao-cloud");
-    expect(spec.env.INITIAL_AGENT_MODE).toBe(
-      "permission-profile:xiongbao-cloud",
-    );
-    expect(spec.env.NO_BROWSER).toBe("1");
-    // The pass travels in the environment, never in a file.
-    expect(spec.env.XIONGBAO_AGENT_MODEL_TOKEN).toBe(MODEL.token);
-    expect(spec.env.CODEX_HOME).toContain("xiongbao-codex-");
-    expect(spec.env.HOME).toBe(join(scratch, "state", "homes", "agent_1"));
-    expect(spec.env.HTTPS_PROXY).toBe("http://127.0.0.1:3128");
-
-    const home = t.homes[0];
-    expect(home?.config).toContain('model_provider = "xiongbao"');
-    expect(home?.config).toContain(
-      'base_url = "https://xiongbao.test/api/agent-model/v1"',
-    );
-    expect(home?.config).toContain('env_key = "XIONGBAO_AGENT_MODEL_TOKEN"');
-    expect(home?.config).toContain('wire_api = "responses"');
-    expect(home?.config).toContain('default_permissions = "xiongbao-cloud"');
-    expect(home?.config).toContain('":root" = "write"');
-    expect(home?.config).not.toContain(MODEL.token);
-    expect(home?.rules).toContain('decision = "prompt"');
-    expect(home?.rules).toContain('"push"');
-    expect(home?.mode).toBe(700);
+    await t.post(open("codex"));
+    const { model: _model, ...bare } = open("codex");
+    await t.post({ ...bare, threadId: "th_2" });
+    await t.waitFor(() => ofType(t.frames, "acp.error").length === 2);
+    expect(ofType(t.frames, "acp.error").map((frame) => frame.code)).toEqual([
+      "start_failed",
+      "start_failed",
+    ]);
+    expect(t.spawns).toHaveLength(0);
   });
 
   test("the computer's own secrets are unset for the adapter, not inherited", async () => {
     const t = setup();
     await t.streamOpen();
-    await t.post(open("codex"));
+    await t.post(open("claude-code"));
     await t.waitFor(() => t.spawns.length === 1);
     const spec = t.spawns[0] as AcpSpawnSpec;
     expect(spec.unsetEnv).toContain("COMPUTER_TOKEN");
@@ -360,12 +320,18 @@ describe("starting Codex", () => {
     expect(Object.keys(spec.env)).not.toContain("COMPUTER_TOKEN");
     expect(JSON.stringify(spec.env)).not.toContain("computer-secret");
     expect(JSON.stringify(spec.env)).not.toContain("user:pass");
+    // The pass travels in the environment, never in a file; the home is the seat's own.
+    expect(spec.env.HOME).toBe(join(scratch, "state", "homes", "agent_1"));
+    expect(spec.env.HTTPS_PROXY).toBe("http://127.0.0.1:3128");
+    // Never the working folder, never `npx`.
+    expect(spec.command).toBe("node");
+    expect(spec.cwd).toBe(join(scratch, "state", "adapters"));
   });
 
   test("without a model it does not start: a cloud employee has no login of its own", async () => {
     const t = setup();
     await t.streamOpen();
-    const { model: _model, ...bare } = open("codex");
+    const { model: _model, ...bare } = open("claude-code");
     await t.post(bare);
     await t.waitFor(() => ofType(t.frames, "acp.error").length === 1);
     expect(t.spawns).toHaveLength(0);
@@ -380,39 +346,13 @@ describe("starting Codex", () => {
     const t = setup();
     await t.streamOpen();
     await t.post(open("hermes", { model: undefined }));
-    await t.post(open("codex", { workdirRef: "fld_elsewhere" }));
+    await t.post(open("claude-code", { workdirRef: "fld_elsewhere" }));
     await t.waitFor(() => ofType(t.frames, "acp.error").length === 2);
     expect(ofType(t.frames, "acp.error").map((frame) => frame.code)).toEqual([
       "start_failed",
       "unknown_workdir",
     ]);
     expect(t.spawns).toHaveLength(0);
-  });
-
-  test("the temporary CODEX_HOME is removed once the process has gone", async () => {
-    const t = setup({ idleMs: 60 });
-    await t.streamOpen();
-    await t.post(open("codex"));
-    await t.waitFor(() => t.spawns.length === 1);
-    const home = (t.spawns[0] as AcpSpawnSpec).env.CODEX_HOME as string;
-    expect(existsSync(home)).toBe(true);
-    // Idle: the host retires the process, and takes what it made with it.
-    await t.waitFor(() => !existsSync(home));
-    expect(
-      readdirSync(join(home, "..")).filter((name) =>
-        name.startsWith("xiongbao-codex-"),
-      ),
-    ).toEqual([]);
-  });
-
-  test("closing the computer's channel removes it too", async () => {
-    const t = setup();
-    await t.streamOpen();
-    await t.post(open("codex"));
-    await t.waitFor(() => ofType(t.frames, "acp.session").length === 1);
-    const home = (t.spawns[0] as AcpSpawnSpec).env.CODEX_HOME as string;
-    await t.cloud.closeAll();
-    expect(existsSync(home)).toBe(false);
   });
 });
 
@@ -432,9 +372,6 @@ describe("starting Claude Code", () => {
     expect(spec.env.INITIAL_AGENT_MODE).toBeUndefined();
     expect(spec.unsetEnv).toContain("ANTHROPIC_API_KEY");
     expect(spec.unsetEnv).toContain("COMPUTER_TOKEN");
-    // No Codex home for it.
-    expect(spec.env.CODEX_HOME).toBeUndefined();
-    expect(t.homes).toHaveLength(0);
   });
 });
 
@@ -442,7 +379,7 @@ describe("the stream and the turns", () => {
   test("a turn's frames come up the stream, in order, after the stream's own first line", async () => {
     const t = setup();
     await t.streamOpen();
-    await t.post(open("codex"));
+    await t.post(open("claude-code"));
     await t.post(prompt());
     await t.waitFor(() =>
       t.frames.some((frame) => frame.type === "acp.turn.end"),
@@ -480,7 +417,7 @@ describe("the stream and the turns", () => {
   test("a frame the server did not acknowledge is sent again on the next stream, and a newer stream replaces the older one", async () => {
     const t = setup();
     await t.streamOpen();
-    await t.post(open("codex"));
+    await t.post(open("claude-code"));
     await t.post(prompt());
     await t.waitFor(() =>
       t.frames.some((frame) => frame.type === "acp.turn.end"),

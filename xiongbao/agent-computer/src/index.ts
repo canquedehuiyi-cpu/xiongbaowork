@@ -612,7 +612,7 @@ async function commandsFor(seat: string): Promise<CommandRunner> {
 }
 
 /*
- * The employees that run on this computer through the ACP host (acp-cloud.ts): Codex and Claude Code
+ * The employees that run on this computer through the ACP host (acp-cloud.ts): Claude Code (Codex runs only on its owner's own computer)
  * for a hirer whose employee is set to run in the cloud. Their adapters are installed in the image
  * (`XIONGBAO_ACP_ADAPTERS_DIR`), their own state lives under `XIONGBAO_ACP_STATE_DIR`, and their
  * working folder is the folder this seat's file tools and shell already use.

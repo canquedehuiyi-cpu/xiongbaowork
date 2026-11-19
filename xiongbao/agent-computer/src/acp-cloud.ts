@@ -1,5 +1,5 @@
 /**
- * External employees (Codex, Claude Code) on THIS computer: the receiving end of the server's `acp.*`
+ * External employees (Claude Code) on THIS computer: the receiving end of the server's `acp.*`
  * frames for an employee whose runtime is `cloud`.
  *
  * WHAT IT IS. The runner's ACP host (`runner/src/acp/host.ts`) is the same code an owner's machine

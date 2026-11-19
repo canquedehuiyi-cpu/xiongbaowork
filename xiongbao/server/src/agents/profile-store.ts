@@ -2,6 +2,7 @@ import { declaredHarness } from "@openbot/shared/harnesses";
 import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import {
   ACP_CLOUD_WORKDIR_REF,
+  ACP_CODEX_CLOUD_REFUSAL,
   type AcpHarness,
   type AcpRuleKey,
   type AcpRuleValue,
@@ -9,6 +10,7 @@ import {
   acpCloudDeviceId,
   acpRulesFrom,
   acpRuntimeFrom,
+  codexCannotRunInCloud,
 } from "../../../shared/acp";
 import { thinkingOf } from "../../../shared/thinking";
 import { capabilityRefusal } from "../admin/capabilities";
@@ -692,6 +694,9 @@ export function externalConfiguration(
   agentId?: string,
 ): Record<string, unknown> {
   const cloud = run.runtime === "cloud";
+  // Refused where it is written, whoever asks: the cloud computer has no Codex.
+  if (codexCannotRunInCloud(run.harness, run.runtime))
+    throw new ExternalAgentRefusedError(ACP_CODEX_CLOUD_REFUSAL);
   return {
     // A cloud employee is its own "device" in the relay's lanes and queues, named by its id; its
     // folder is the one fixed reference the computer resolves. Neither is the hirer's to choose.

@@ -304,195 +304,33 @@ export async function adapterLaunch(
 }
 
 /*
- * THE EMPLOYEE'S OWN COMPUTER (the agent computer container). The same adapters run there, started
- * from the copies the image installed at build time (never `npx`, nothing is downloaded when an
- * employee starts), with the same model block turned into the same launch (`codexModelLaunch`,
- * `claudeModelLaunch`). What differs is who guards what, and it is decided here, once:
+ * THE EMPLOYEE'S OWN COMPUTER (the agent computer container). Only Claude Code runs there (ruled
+ * 2026-11-19: the image carries Claude Code and its adapter alone; Codex runs only on the hirer's own
+ * paired computer, runtime `device`). The adapter is started from the copy the image installed at build
+ * time (never `npx`, nothing is downloaded when an employee starts), with the same model block turned
+ * into the same launch (`claudeModelLaunch`). What differs from a device is who guards what:
  *
- *   Codex        CODEX'S OWN SANDBOX IS OFF; THE CONTAINER IS THE SANDBOX. Codex sandboxes commands with
- *                bubblewrap (user namespaces) plus seccomp, which a container started with every
- *                capability dropped and `no-new-privileges` cannot give it, so under any of its
- *                sandboxed modes every command would fail. The generated `config.toml` defines a
- *                permission profile that grants the whole file system and the network
- *                (`:root = "write"`, `network.enabled`), selected as the session's mode
- *                (`permission-profile:xiongbao-cloud`, which the adapter lists as a mode of its own).
- *                Measured with codex-acp 2.6.0 / Codex 0.166.0: a command under that profile runs
- *                with `Seccomp: 0`, `NoNewPrivs: 0`; under `workspace-write`, `Seccomp: 2`.
- *                An unsandboxed Codex asks for nothing by itself, so what XiongBao's approval gate
- *                is asked about is made explicit in `$CODEX_HOME/rules/xiongbao.rules`: execution policy
- *                rules with `decision = "prompt"` for the programs the gate cares about (deleting,
- *                privileges, the network, installing, pushing; `CLOUD_ASK_PREFIXES`) and for a shell
- *                command Codex cannot split into plain commands (redirections, subshells, here
- *                documents). A matching command arrives as `session/request_permission`, and the
- *                permission bridge decides it with the employee's rules, as for a device. Measured: the
- *                rules fire for a command inside `a && b` and under the unsandboxed profile too.
- *                NOT COVERED: a plain command that matches no rule, and file edits (`apply_patch`, also
- *                outside the working folder), run without a question. Only the container bounds them.
  *   Claude Code  Nothing changes: the session is switched to `default`, Claude Code's own "ask before
  *                editing or running" mode, and every request reaches the bridge as on a device. Its
  *                own sandbox is off by default and stays off. The container runs as root, where Claude
  *                Code refuses only `--dangerously-skip-permissions`, which is never used.
  *
- * Both adapters get an environment built from an allow list (`cloudAdapterLaunch`): nothing of the
- * computer's own (its token, proxies with passwords) is inherited, and the harness's own update checks
+ * The adapter gets an environment built from an allow list (`cloudAdapterLaunch`): nothing of the
+ * computer's own (its token, proxies with passwords) is inherited, and Claude Code's own update checks
  * and telemetry are switched off, so the only traffic is the model proxy and what the employee's
  * work asks for.
  */
 
-/** The permission profile of a cloud Codex, and the session mode that selects it. */
-export const CLOUD_CODEX_PROFILE = "xiongbao-cloud";
-export const CLOUD_CODEX_MODE = `permission-profile:${CLOUD_CODEX_PROFILE}`;
+/** The adapter's bin name inside the image's install folder. */
+const CLOUD_ADAPTER_BIN = "claude-agent-acp";
 
 /**
- * The programs a cloud Codex asks the approval gate about, one first word (any of `first`) or a first
- * word and a subcommand (`first` with `second`). The gate's own rules decide each one: asking is not
- * refusing.
- */
-export const CLOUD_ASK_PREFIXES: readonly {
-  first: readonly string[];
-  second?: readonly string[];
-}[] = [
-  // Deleting, changing who may do what, taking the machine down.
-  {
-    first: [
-      "rm",
-      "rmdir",
-      "shred",
-      "unlink",
-      "chmod",
-      "chown",
-      "chgrp",
-      "sudo",
-      "su",
-      "dd",
-      "mkfs",
-      "mount",
-      "umount",
-      "kill",
-      "pkill",
-      "killall",
-      "shutdown",
-      "reboot",
-    ],
-  },
-  // The network.
-  {
-    first: [
-      "curl",
-      "wget",
-      "ssh",
-      "scp",
-      "sftp",
-      "rsync",
-      "nc",
-      "ncat",
-      "telnet",
-      "ftp",
-    ],
-  },
-  { first: ["git"], second: ["push", "clone", "fetch", "pull", "remote"] },
-  // Installing and publishing.
-  {
-    first: ["npm", "pnpm", "yarn", "bun"],
-    second: ["install", "i", "add", "publish", "exec", "dlx", "x"],
-  },
-  { first: ["npx", "bunx", "pnpx"] },
-  { first: ["pip", "pip3", "uv", "pipx"], second: ["install", "add", "run"] },
-  { first: ["apt", "apt-get", "dpkg"] },
-  { first: ["cargo", "go"], second: ["install", "get", "publish"] },
-  { first: ["docker", "podman"] },
-];
-
-/** Shells a command is wrapped in. A wrapped command Codex cannot split asks as a whole. */
-const SHELL_WRAPPERS = ["bash", "sh", "zsh"].flatMap((name) => [
-  name,
-  `/bin/${name}`,
-  `/usr/bin/${name}`,
-]);
-
-const starlark = (values: readonly string[]): string =>
-  `[${values.map((value) => JSON.stringify(value)).join(", ")}]`;
-
-/** `$CODEX_HOME/rules/xiongbao.rules`: the questions a cloud Codex puts to the approval gate. */
-export function cloudCodexRules(): string {
-  const justification = JSON.stringify(
-    "Asked of the approval gate, which applies this employee's own rules.",
-  );
-  const rule = (pattern: string) =>
-    `prefix_rule(\n    pattern = ${pattern},\n    decision = "prompt",\n    justification = ${justification},\n)\n`;
-  return [
-    // A shell command Codex could not split into plain commands is asked about whole.
-    rule(`[${starlark(SHELL_WRAPPERS)}, ${starlark(["-c", "-lc"])}]`),
-    ...CLOUD_ASK_PREFIXES.map(({ first, second }) =>
-      rule(
-        second
-          ? `[${starlark(first)}, ${starlark(second)}]`
-          : `[${starlark(first)}]`,
-      ),
-    ),
-  ].join("\n");
-}
-
-/** A cloud Codex's `config.toml`: the proxy as its only provider, and no sandbox of its own. */
-export function cloudCodexConfigToml(model: AcpOpenModel): string {
-  return [
-    `model_provider = ${toml(MODEL_PROVIDER_ID)}`,
-    `model = ${toml(model.model)}`,
-    'approval_policy = "on-request"',
-    `default_permissions = ${toml(CLOUD_CODEX_PROFILE)}`,
-    "check_for_update_on_startup = false",
-    "",
-    `[model_providers.${MODEL_PROVIDER_ID}]`,
-    `name = ${toml(MODEL_PROVIDER_ID)}`,
-    `base_url = ${toml(`${withoutTrailingSlash(model.baseUrl)}/v1`)}`,
-    `env_key = ${toml(MODEL_TOKEN_ENV)}`,
-    'wire_api = "responses"',
-    "requires_openai_auth = false",
-    "",
-    "# The container is the sandbox: the whole file system and the network, as the container allows.",
-    `[permissions.${CLOUD_CODEX_PROFILE}.filesystem]`,
-    '":root" = "write"',
-    "",
-    `[permissions.${CLOUD_CODEX_PROFILE}.network]`,
-    "enabled = true",
-    "",
-    "[analytics]",
-    "enabled = false",
-    "",
-    "[feedback]",
-    "enabled = false",
-    "",
-  ].join("\n");
-}
-
-/** `codexHome` made ready for a cloud Codex: its config and its rules, nothing else. */
-export function writeCloudCodexHome(
-  codexHome: string,
-  model: AcpOpenModel,
-): void {
-  mkdirSync(join(codexHome, "rules"), { recursive: true, mode: 0o700 });
-  writeFileSync(join(codexHome, "config.toml"), cloudCodexConfigToml(model), {
-    mode: 0o600,
-  });
-  writeFileSync(join(codexHome, "rules", "xiongbao.rules"), cloudCodexRules(), {
-    mode: 0o600,
-  });
-}
-
-/** The adapters' bin names inside the image's install folder. */
-const CLOUD_ADAPTER_BIN = {
-  codex: "codex-acp",
-  "claude-code": "claude-agent-acp",
-} as const;
-
-/**
- * The spec that starts `harness`'s adapter on the employee's cloud computer: the copy installed in
+ * The spec that starts Claude Code's adapter on the employee's cloud computer: the copy installed in
  * the image (`binDir/<adapter>`, run by `node`), with `env` (already an allow list) plus the model's
  * environment and the harness's own settings, and EVERY OTHER VARIABLE OF THIS PROCESS UNSET (the
  * computer's token and the like): `childEnv` hands a child the parent's environment unless told not to.
  */
 export function cloudAdapterLaunch(
-  harness: "codex" | "claude-code",
   place: { adapterDir: string },
   opts: {
     binDir: string;
@@ -502,17 +340,14 @@ export function cloudAdapterLaunch(
     parentEnv?: Record<string, string | undefined>;
   },
 ): AcpSpawnSpec {
-  const harnessEnv: Record<string, string> =
-    harness === "codex"
-      ? { INITIAL_AGENT_MODE: CLOUD_CODEX_MODE, NO_BROWSER: "1" }
-      : {
-          DISABLE_AUTOUPDATER: "1",
-          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
-        };
+  const harnessEnv: Record<string, string> = {
+    DISABLE_AUTOUPDATER: "1",
+    CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1",
+  };
   const env = { ...opts.env, ...opts.model.env, ...harnessEnv };
   return {
     command: "node",
-    args: [join(opts.binDir, CLOUD_ADAPTER_BIN[harness])],
+    args: [join(opts.binDir, CLOUD_ADAPTER_BIN)],
     env,
     unsetEnv: [
       ...new Set([
@@ -521,6 +356,6 @@ export function cloudAdapterLaunch(
       ]),
     ],
     cwd: place.adapterDir,
-    sessionMode: harness === "codex" ? CLOUD_CODEX_MODE : "default",
+    sessionMode: "default",
   };
 }

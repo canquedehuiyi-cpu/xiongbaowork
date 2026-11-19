@@ -1,9 +1,8 @@
 {
   "name": "xiongbao-acp-adapters",
   "private": true,
-  "description": "The ACP adapters of the external coding employees (Codex, Claude Code), installed into the employee's computer image at build time.",
+  "description": "The ACP adapter of the external coding employee that runs on the employee's cloud computer (Claude Code), installed into the computer's image at build time.",
   "dependencies": {
-    "@agentclientprotocol/claude-agent-acp": "0.107.0",
-    "@agentclientprotocol/codex-acp": "2.6.0"
+    "@agentclientprotocol/claude-agent-acp": "0.107.0"
   }
 }
