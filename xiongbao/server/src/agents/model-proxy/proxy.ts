@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Env, Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { productName } from "../../brand";
 import type { AgentUpstream } from "../../models/runtime-resolver";
 import {
   buildModelTokenCallRow,
@@ -185,7 +186,7 @@ export function createAgentModelProxy(
         refused: failure(wire, {
           status: 401,
           kind: "authentication_error",
-          message: "这个令牌无效或已过期，请回到熊宝重新打开这位员工的对话。",
+          message: `这个令牌无效或已过期，请回到${productName()}重新打开这位员工的对话。`,
         }),
       };
     let active = false;
@@ -198,7 +199,7 @@ export function createAgentModelProxy(
         refused: failure(wire, {
           status: 502,
           kind: "api_error",
-          message: "熊宝暂时没能确认这位员工的身份，请稍后再试。",
+          message: `${productName()}暂时没能确认这位员工的身份，请稍后再试。`,
         }),
       };
     }
@@ -293,7 +294,7 @@ export function createAgentModelProxy(
         return failure(wire, {
           status: 502,
           kind: "api_error",
-          message: "熊宝暂时没能读取这位员工的模型配置，请稍后再试。",
+          message: `${productName()}暂时没能读取这位员工的模型配置，请稍后再试。`,
         });
       }
       if (!upstream)
