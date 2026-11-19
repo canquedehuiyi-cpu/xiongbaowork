@@ -161,6 +161,13 @@ export type ChannelDispatchDeps = {
     sourceId: string;
   }): Promise<void>;
   busy?(threadId: string, busy: boolean): Promise<void>;
+  /**
+   * The workspace files the card's coworker wrote in this card's rounds (`tasks/evidence-gate.ts`
+   * `workspaceFilesOf`). A turn that ends without a hand-in moves its card to 等验收 by itself; these
+   * are what that card then carries as `deliverableRef.workspaceFiles`, so the person reviewing it can
+   * see the work. Absent, or nothing written: the card carries nothing, as it always did.
+   */
+  workspaceFilesOf?(tenantId: string, runRef: string): Promise<string[]>;
   deviceIdOf?(agentId: string): Promise<string | null>;
 };
 
@@ -191,18 +198,49 @@ export function createChannelDispatch(deps: ChannelDispatchDeps) {
       deviceId: input.deviceId,
     });
 
-  /** Close the card; a card that was never opened matches nothing, which is not an error. */
+  /**
+   * What a turn that ended without a hand-in leaves on its card: the workspace files its coworker
+   * wrote. Nothing when it wrote none, when the turn failed, or when they cannot be read -- the card
+   * moves on either way, as it did before it carried any.
+   */
+  const writtenFiles = async (tenantId: string, runId: string) => {
+    if (!deps.workspaceFilesOf) return undefined;
+    try {
+      const files = await deps.workspaceFilesOf(tenantId, runId);
+      return files.length > 0
+        ? { kind: "deliverable", workspaceFiles: files }
+        : undefined;
+    } catch (error) {
+      log("channel-dispatch-files-unreadable", {
+        runId,
+        reason: reasonOf(error),
+      });
+      return undefined;
+    }
+  };
+
+  /**
+   * Close the card; a card that was never opened matches nothing, which is not an error.
+   *
+   * Moving a card nobody follows to 等验收 is this close, not a hand-in: a card the coworker took on
+   * and handed in (`deliver_task`) is followed, and `finished` leaves it and its hand-in alone
+   * (spec 2026-11-15-delivery-loop §3).
+   */
   const closeCard = async (
     tenantId: string,
     runId: string,
     failed: boolean,
   ) => {
     try {
+      const deliverableRef = failed
+        ? undefined
+        : await writtenFiles(tenantId, runId);
       await deps.board.finished({
         tenantId,
         runRef: runId,
         failed,
         onlyUnsettled: true,
+        ...(deliverableRef ? { deliverableRef } : {}),
       });
     } catch (error) {
       log("channel-dispatch-board-close-failed", {

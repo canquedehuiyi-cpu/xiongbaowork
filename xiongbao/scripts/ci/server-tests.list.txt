@@ -183,6 +183,7 @@ tests/audit-words.test.ts
 tests/audit.test.ts
 tests/auth-audit-tenant.integration.test.ts
 tests/auth-mobile-scheme.integration.test.ts
+tests/auto-delivery-files.integration.test.ts
 tests/automation-ingress.integration.test.ts
 tests/automation-ingress.test.ts
 tests/automation-routes.test.ts
@@ -961,4 +962,5 @@ tests/who-can.integration.test.ts
 tests/wire-codes.test.ts
 tests/work-loop.test.ts
 tests/work-queue.integration.test.ts
+tests/workspace-files-written.test.ts
 tests/xiongbao-package.test.ts

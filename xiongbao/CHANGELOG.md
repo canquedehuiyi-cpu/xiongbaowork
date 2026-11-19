@@ -8,6 +8,10 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **看板派活的活漏了交付，进「等验收」时带上员工写过的文件。** 员工做完没调用 `deliver_task` 时，这一轮结束卡会自动进等验收，
+  以前交付物是空的，验收的人看不到产物；现在卡上带着这件活各轮里员工成功写过、改过的工作区文件（`computer_write_file`、
+  `computer_edit_file`，只收工作区内的相对路径，去重，最多 20 个）。调用过 `deliver_task` 的、没写过文件的，行为不变。员工的交付规约
+  后面多了一句，说明有文件产出的活要先 `accept_task`、做完用 `deliver_task` 并把文件以 `workspace_file` 列上。本项不带迁移。
 - **员工能联网了：搜索、读网页、爬网站（`web_search`、`web_fetch`、`web_crawl`）。** 每位员工默认都有，员工权限里可以逐个关掉
   （`bot/web_search`、`bot/web_fetch`、`bot/web_crawl`）。持有搜索工具时员工先搜、再读原文、回答附出处，浏览器搜百度只在搜索工具
   出错时作为退路。

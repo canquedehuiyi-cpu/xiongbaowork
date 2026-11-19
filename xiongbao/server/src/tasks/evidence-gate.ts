@@ -82,6 +82,18 @@ export type EvidenceGate = {
   }): Promise<EvidenceVerdict>;
 };
 
+/**
+ * What the server reads off a run for a card that ends without a hand-in (`channels/dispatch.ts`): the
+ * workspace files its coworker wrote. Apart from {@link EvidenceGate}, which judges a hand-in.
+ */
+export type RunFiles = {
+  workspaceFilesOf(input: {
+    tenantId: string;
+    /** The run the card was opened under (`tasks.run_ref`). */
+    runRef: string;
+  }): Promise<string[]>;
+};
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The attachment id an item names: the id itself, or the path the chat links it by. */
@@ -131,6 +143,93 @@ function workspaceFilePathOf(ref: string): string | undefined {
   return segments.length > 0 ? segments.join("/") : undefined;
 }
 
+/** The tools whose successful call leaves a file in the coworker's workspace: a whole file, or one passage of it. */
+const FILE_WRITING_TOOLS = new Set([
+  "computer_write_file",
+  "computer_edit_file",
+]);
+
+/** How many written files a card that ends without a hand-in carries as its evidence. */
+export const AUTO_DELIVERY_FILE_LIMIT = 20;
+
+/** Whether a tool's answer says the call did what it was asked: the computer tools answer `{ok: true, ...}`. */
+function answeredOk(content: string | undefined): boolean {
+  if (content === undefined) return false;
+  try {
+    const answer: unknown = JSON.parse(content);
+    return (
+      typeof answer === "object" &&
+      answer !== null &&
+      (answer as { ok?: unknown }).ok === true
+    );
+  } catch {
+    // Not JSON: a refusal in words, or nothing a computer tool says when it worked.
+    return false;
+  }
+}
+
+/**
+ * The workspace files a run wrote or changed, from its events: the calls of `computer_write_file` and
+ * `computer_edit_file` that were answered `ok`, in the order they began, each file once.
+ *
+ * A call that failed, was refused, or is still waiting on a person wrote nothing, and a path is kept
+ * only when it is a workspace-relative one by the same reading the evidence gate gives a
+ * `workspace_file` item ({@link workspaceFilePathOf}): an absolute path, a home path or one that leaves
+ * the workspace is not something the card can name. At most `limit` files: the first ones written.
+ */
+export function workspaceFilesWritten(
+  events: readonly BaseEvent[],
+  limit = AUTO_DELIVERY_FILE_LIMIT,
+): string[] {
+  const calls = new Map<string, { name: string; args: string }>();
+  const answers = new Map<string, string>();
+  for (const event of events) {
+    const value = event as BaseEvent & {
+      toolCallId?: string;
+      toolCallName?: string;
+      delta?: string;
+      content?: unknown;
+    };
+    if (!value.toolCallId) continue;
+    switch (event.type) {
+      case EventType.TOOL_CALL_START:
+      case EventType.TOOL_CALL_CHUNK: {
+        const call = calls.get(value.toolCallId) ?? { name: "", args: "" };
+        if (value.toolCallName) call.name = value.toolCallName;
+        if (event.type === EventType.TOOL_CALL_CHUNK && value.delta)
+          call.args += value.delta;
+        calls.set(value.toolCallId, call);
+        break;
+      }
+      case EventType.TOOL_CALL_ARGS: {
+        const call = calls.get(value.toolCallId);
+        if (call && value.delta) call.args += value.delta;
+        break;
+      }
+      case EventType.TOOL_CALL_RESULT:
+        if (typeof value.content === "string")
+          answers.set(value.toolCallId, value.content);
+        break;
+    }
+  }
+  const files = new Set<string>();
+  for (const [toolCallId, call] of calls) {
+    if (files.size >= limit) break;
+    if (!FILE_WRITING_TOOLS.has(call.name)) continue;
+    if (!answeredOk(answers.get(toolCallId))) continue;
+    let path: unknown;
+    try {
+      path = (JSON.parse(call.args || "{}") as { path?: unknown } | null)?.path;
+    } catch {
+      continue;
+    }
+    const file =
+      typeof path === "string" ? workspaceFilePathOf(path) : undefined;
+    if (file) files.add(file);
+  }
+  return [...files];
+}
+
 /**
  * The required items criteria list after 「必需：」 (or 「必需:」), split on punctuation (、，, / and the
  * like), and on 「和」「及」 only when they stand apart, spaces on both sides: inside a word they are
@@ -177,7 +276,9 @@ export function attachmentsProduced(events: readonly BaseEvent[]): string[] {
 
 const comparable = (text: string) => text.toLowerCase().replace(/\s+/g, "");
 
-export function createEvidenceGate(database: Database): EvidenceGate {
+export function createEvidenceGate(
+  database: Database,
+): EvidenceGate & RunFiles {
   /** Every run the card has had: the one that opened it, the one on it now, and each in its history. */
   async function runsOf(tenantId: string, taskId: string): Promise<string[]> {
     const [card] = await database
@@ -270,6 +371,23 @@ export function createEvidenceGate(database: Database): EvidenceGate {
   }
 
   return {
+    workspaceFilesOf: ({ tenantId, runRef }) =>
+      runAsTenant(tenantId, async () => {
+        // The card this run opened; the files are those of the card's own rounds, never another card's.
+        const [card] = await database
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(and(eq(tasks.tenantId, tenantId), eq(tasks.runRef, runRef)))
+          .limit(1);
+        if (!card) return [];
+        const rounds = await roundsOf(tenantId, card.id);
+        // Round by round: a tool call id is only unique within its own run.
+        const files = new Set<string>();
+        for (const { events } of rounds)
+          for (const file of workspaceFilesWritten(events)) files.add(file);
+        return [...files].slice(0, AUTO_DELIVERY_FILE_LIMIT);
+      }),
+
     checkEvidence: (input) =>
       runAsTenant(input.tenantId, async (): Promise<EvidenceVerdict> => {
         const items = input.items;

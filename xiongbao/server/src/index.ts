@@ -5453,6 +5453,9 @@ await startupLifecycle.run(async (startup) => {
         { id: sourceId },
       ),
     busy: (threadId, busy) => channelStore.signalBusy(threadId, busy),
+    // A turn that ends without a hand-in carries the files it wrote to 等验收 (tasks/evidence-gate.ts).
+    workspaceFilesOf: (tenantId, runRef) =>
+      evidenceGate.workspaceFilesOf({ tenantId, runRef }),
     deviceIdOf: deviceIdForBot,
   });
   startup.acquireSync(
