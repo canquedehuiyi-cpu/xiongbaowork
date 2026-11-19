@@ -25,7 +25,11 @@ import { settleReactWork } from "./settle-react-work";
  */
 
 let threads = new Map<string, unknown[]>();
+/** 读过哪些员工线程：回复行上带着计划时，一条也不该读。 */
+let threadReads: string[] = [];
 let groupMessages: GroupMessage[] = [];
+/** 读这个群的人能用的员工；同事读到的可能一个也没有（员工是别人私有的）。 */
+let groupBots: { id: string; name: string }[] | null = null;
 let originalFetch: typeof fetch;
 
 const CHANNEL = "group-1";
@@ -46,6 +50,7 @@ beforeAll(() => {
     );
     const thread = /\/threads\/([^/]+)\/messages$/.exec(url.pathname)?.[1];
     if (thread) {
+      threadReads.push(decodeURIComponent(thread));
       const messages = threads.get(decodeURIComponent(thread));
       return messages
         ? Response.json({ messages })
@@ -64,7 +69,7 @@ beforeAll(() => {
       });
     if (url.pathname === `/api/groups/${CHANNEL}`)
       return Response.json({
-        bots: [
+        bots: groupBots ?? [
           { id: YAN, name: "小研" },
           { id: XIE, name: "小写" },
         ],
@@ -87,7 +92,9 @@ beforeAll(() => {
 afterEach(() => {
   cleanup();
   threads = new Map();
+  threadReads = [];
   groupMessages = [];
+  groupBots = null;
 });
 afterAll(async () => {
   await settleReactWork();
@@ -305,4 +312,57 @@ test("a group employee without a plan gets no card", async () => {
   await view.findByText("好的");
   await settleReactWork();
   expect(view.container.querySelector("[data-plan-card]")).toBeNull();
+});
+
+test("everyone in a group sees each employee's plan from its reply row, without reading its thread", async () => {
+  // 发起这一轮的是另一位同事：他的线程你读不到，计划从回复行上来（服务器记的 `plan`）。
+  groupMessages = [
+    line("p1", null, { ownerUserId: "colleague" }),
+    line("r1", YAN, {
+      ownerUserId: "colleague",
+      threadId: "t-yan",
+      status: "running",
+      plan: [
+        { text: "查甲家定价", status: "done" },
+        { text: "查乙家定价", status: "in_progress" },
+      ],
+    }),
+    line("r2", XIE, {
+      ownerUserId: "colleague",
+      threadId: "t-xie",
+      plan: [{ text: "写表头", status: "done" }],
+    }),
+  ];
+  const view = group();
+  await waitFor(() => {
+    expect(view.container.querySelectorAll("[data-plan-card]")).toHaveLength(2);
+  });
+  const cards = [...view.container.querySelectorAll("[data-plan-card]")];
+  expect(
+    cards.find((one) => one.textContent?.includes("小研"))?.textContent,
+  ).toContain("计划 · 完成 1/2");
+  expect(
+    cards.find((one) => one.textContent?.includes("小写"))?.textContent,
+  ).toContain("计划 · 已全部完成 1 项");
+  await settleReactWork();
+  expect(threadReads).toEqual([]);
+});
+
+test("a member who cannot use those employees still sees their plans", async () => {
+  // 员工是发起人私有的：读这个群的同事拿到的员工名单是空的，计划卡照样有，名字用群里一贯的说法。
+  groupBots = [];
+  groupMessages = [
+    line("p1", null, { ownerUserId: "colleague" }),
+    line("r1", YAN, {
+      ownerUserId: "colleague",
+      plan: [{ text: "查甲家定价", status: "in_progress" }],
+    }),
+  ];
+  const view = group();
+  await waitFor(() => {
+    expect(view.container.querySelectorAll("[data-plan-card]")).toHaveLength(1);
+  });
+  expect(
+    view.container.querySelector("[data-plan-card]")?.textContent,
+  ).toContain("一位员工");
 });

@@ -12,6 +12,7 @@ import {
  */
 
 export type { PlanItem };
+export { readPlan };
 
 /**
  * 这段对话里最后一份像样的计划；没有为 null。参数还没传完、或不是一份计划的调用跳过，留着上一份：流式里不清空、

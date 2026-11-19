@@ -874,6 +874,74 @@ describe("group conversations in PostgreSQL", () => {
     }
   });
 
+  test("员工这一轮最后一份计划记在回复上（期二），群里每个人读到的一样", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    // Grace 这一轮没列计划，它的回复不带 `plan`。
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const items = (statuses: string[]) => ({
+      items: ["查甲家", "查乙家", "写报告"].map((text, index) => ({
+        text,
+        status: statuses[index],
+      })),
+    });
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onToolCall?.({
+            name: "update_plan",
+            args: items(["in_progress", "pending", "pending"]),
+          });
+          input.onToolCall?.({
+            name: "update_plan",
+            args: items(["done", "in_progress", "pending"]),
+          });
+          // 不是一份计划（两项同时进行中）、别的工具：都不算，留着上一份。
+          input.onToolCall?.({
+            name: "update_plan",
+            args: items(["in_progress", "in_progress", "pending"]),
+          });
+          input.onToolCall?.({ name: "web_search", args: { query: "甲" } });
+          return "甲家查完了，正在查乙家。";
+        },
+        [grace]: () => "g",
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-plan`,
+        text: "调研三家竞品",
+      });
+      await drain(conversations);
+    });
+    for (const reader of [owner, teammate]) {
+      const seen = await as(reader, () =>
+        conversations.list(reader.id, channel.id),
+      );
+      expect(
+        seen.messages.map((row) => [row.agentId, row.plan ?? null]),
+      ).toEqual([
+        [null, null],
+        [
+          ada,
+          [
+            { text: "查甲家", status: "done" },
+            { text: "查乙家", status: "in_progress" },
+            { text: "写报告", status: "pending" },
+          ],
+        ],
+        [grace, null],
+      ]);
+    }
+  });
+
   test("交付卡在群回复上只记不带内容的状态标记，群里每个人读到的一样", async () => {
     const owner = await person();
     const teammate = await person();

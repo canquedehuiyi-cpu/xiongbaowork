@@ -532,6 +532,7 @@ tests/step-limit-continue.test.tsx
 tests/stopped-turn.test.ts
 tests/storage-compat.test.ts
 tests/storage-migrate.test.ts
+tests/subagent-cards.test.tsx
 tests/subtask-step.test.tsx
 tests/summon-card-flip.test.tsx
 tests/take-the-wheel.test.ts

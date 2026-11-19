@@ -122,6 +122,8 @@ function harness(options: {
   heartbeatMs?: number;
   lockTtlSeconds?: number;
   learningContainerId?: string;
+  /** What the turn reports for each tool call it finishes. */
+  onToolCall?: (call: { name: string; args: unknown }) => void;
   /** Defaults to the server's own, which admits everything while nothing is configured. */
   admission?: TurnAdmission;
   /** A turn picked up again at the step it stopped on, as an approval's resume runs one. */
@@ -251,6 +253,7 @@ function harness(options: {
         threadId: THREAD_ID,
         instruction: INSTRUCTION,
         ...(options.continuation ? { continuation: options.continuation } : {}),
+        ...(options.onToolCall ? { onToolCall: options.onToolCall } : {}),
       }),
     );
 
@@ -893,6 +896,44 @@ describe("recovering what was said", () => {
     expect(await run()).toEqual({
       replyText: "Said out loud but never persisted.",
     });
+  });
+
+  test("hands each tool call the run finishes to onToolCall, with its arguments", async () => {
+    // 群聊把员工这一轮最后一份计划记在回复上（期二），读的就是这里交出的调用。
+    const seen: { name: string; args: unknown }[] = [];
+    const { run } = harness({
+      onToolCall: (call) => seen.push(call),
+      drive: ({ agent, observer }) => {
+        for (const subscriber of agent.subscribers) {
+          void subscriber.onToolCallEndEvent?.({
+            event: { type: EventType.TOOL_CALL_END, toolCallId: "plan_1" },
+            toolCallName: "update_plan",
+            toolCallArgs: { items: [{ text: "查甲家", status: "done" }] },
+            messages: agent.messages,
+            state: agent.state,
+            agent,
+            // biome-ignore lint/suspicious/noExplicitAny: the subscriber params are not the subject.
+          } as any);
+          void subscriber.onTextMessageEndEvent?.({
+            event: { type: EventType.TEXT_MESSAGE_END, messageId: "said_1" },
+            textMessageBuffer: "Done.",
+            messages: agent.messages,
+            state: agent.state,
+            agent,
+            // biome-ignore lint/suspicious/noExplicitAny: the subscriber params are not the subject.
+          } as any);
+        }
+        observer.complete();
+      },
+    });
+
+    expect(await run()).toEqual({ replyText: "Done." });
+    expect(seen).toEqual([
+      {
+        name: "update_plan",
+        args: { items: [{ text: "查甲家", status: "done" }] },
+      },
+    ]);
   });
 
   test("throws when the turn finished without saying anything", async () => {
