@@ -91,3 +91,60 @@ describe("a Chinese answer that is finished, or is deferred, or is a question", 
     expect(unkeptPromise(answer)).toBeUndefined();
   });
 });
+
+/**
+ * How DeepSeek opens the step it then never takes: 「让我先查看一下项目结构。」 and no call after it.
+ * One case for each opening it was seen to use, and the endings around them that are finished work.
+ */
+describe("an answer that ends on a DeepSeek-style Chinese opening", () => {
+  test.each([
+    ["让我先查看一下项目结构。", "让我先查看一下项目结构。"],
+    [
+      "好的。让我看看 config.ts 里是怎么配的。",
+      "让我看看 config.ts 里是怎么配的。",
+    ],
+    ["我将读取三个配置文件并逐一比对。", "我将读取三个配置文件并逐一比对。"],
+    ["收到。我先跑一遍测试，看看哪些失败。", "我先跑一遍测试，看看哪些失败。"],
+    ["我来修复这个空指针问题。", "我来修复这个空指针问题。"],
+    ["我来把它修了。", "我来把它修了。"],
+    ["首先，我需要确认数据库的表结构。", "首先，我需要确认数据库的表结构。"],
+    ["首先查看一下日志目录。", "首先查看一下日志目录。"],
+    ["下面开始逐个检查接口。", "下面开始逐个检查接口。"],
+    ["第一处已经修好。接下来我检查第二处。", "接下来我检查第二处。"],
+    [
+      "先读完文档，然后我会更新测试用例。",
+      "先读完文档，然后我会更新测试用例。",
+    ],
+    [
+      "明白了。我会先备份数据库，再执行迁移。",
+      "我会先备份数据库，再执行迁移。",
+    ],
+    ["马上开始生成报告。", "马上开始生成报告。"],
+    ["好的，马上处理。", "好的，马上处理。"],
+    [
+      "第一处的原因是缓存过期，我已经修好了。我先修好了第二处。让我再看看第三处。",
+      "让我再看看第三处。",
+    ],
+  ])("%j", (answer, promise) => {
+    expect(unkeptPromise(answer)).toBe(promise);
+  });
+});
+
+describe("a Chinese answer that is finished work, said in the same words", () => {
+  test.each([
+    "我已经完成了全部三处修复，测试全部通过。",
+    "我已经完成了报告，保存在 report.md。",
+    "让我总结一下：三处缺陷都已修复，测试全部通过。",
+    "三处都改好了。让我总结一下：\n1. 缓存过期已修复\n2. 空指针已修复\n3. 测试已补齐",
+    "全部完成。\n\n让我总结一下：\n\n- 登录模块已修复\n- 报表已生成",
+    "我将结果保存到了 report.md。",
+    "我先修复了登录模块，然后补了两条测试。",
+    "首先，我修复了缓存过期的问题；其次，补了回归测试。",
+    "我来总结一下这次的改动。",
+    "对我来说，这个方案最稳妥。",
+    "需要我继续处理剩下的部分吗？",
+    "让我知道你想先做哪一个。",
+  ])("%j", (answer) => {
+    expect(unkeptPromise(answer)).toBeUndefined();
+  });
+});
