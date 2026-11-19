@@ -52,6 +52,7 @@ import { Hono } from "hono";
 import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
 import { planGuidance } from "../../shared/plan";
+import { subagentGuidance } from "../../shared/subagent";
 import {
   ACP_UNAVAILABLE_REASON,
   type DeviceAcpEmployee,
@@ -1229,6 +1230,15 @@ export function builtInAgentConfiguration(
        * then: one whose plan tool is switched off for it is not taught to use it (期二).
        */
       ...promptSection("plan", planGuidance(tools.map((tool) => tool.name))),
+      /*
+       * How to share a job of several parts out to subagents, for a run that holds `run_subagent`
+       * and only then: a subagent and a check-in hold none. Added beside the shared `<subagents>`
+       * section rather than in it, which a Bot run elsewhere reads byte for byte (期四).
+       */
+      ...promptSection(
+        "delegation",
+        subagentGuidance(tools.map((tool) => tool.name)),
+      ),
       /*
        * Only for a run that holds the computer. A third of the prompt is about the browser, and a
        * Linear-and-Notion routine that never opens one read all of it ahead of its own job.
