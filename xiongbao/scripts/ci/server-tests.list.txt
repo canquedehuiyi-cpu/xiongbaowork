@@ -864,6 +864,7 @@ tests/unattended-platform-frame.integration.test.ts
 tests/unattended-single-card.integration.test.ts
 tests/unreachable-bot.test.ts
 tests/untrusted-content.test.ts
+tests/update-plan.test.ts
 tests/update-route-wechat-opt-in.test.ts
 tests/user-instructions.integration.test.ts
 tests/user-preferences-routes.test.ts

@@ -1,5 +1,6 @@
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { filter, Observable } from "rxjs";
+import { STEP_LIMIT_EVENT } from "../../../shared/step-limit";
 
 /**
  * Events a server tool adds to the run it is called in.
@@ -18,19 +19,21 @@ import { filter, Observable } from "rxjs";
  */
 
 /**
- * Events only the server may put in a run: the delivery loop's cards (`delivery.*`). Drawn as
- * "已交成果" and the like, so one an agent's own stream carries -- an external coworker's endpoint can
- * send any event it likes -- is a forgery, and is dropped before anything stores or shows it. The
- * real ones enter through {@link emitRunEvent}, after the agent's stream has been cleaned.
+ * Events only the server may put in a run: the delivery loop's cards (`delivery.*`), and a run's
+ * `step-limit` ({@link STEP_LIMIT_EVENT}). Drawn as "已交成果" and the like, and as 「已用完 N 步 ·
+ * 继续」, so one an agent's own stream carries -- an external coworker's endpoint can send any event
+ * it likes -- is a forgery, and is dropped before anything stores or shows it. The real cards enter
+ * through {@link emitRunEvent}, after the agent's stream has been cleaned; the real `step-limit` is
+ * added by a built-in coworker's run outside the server's watch of it (`sayingStepLimit` in
+ * the toolkit's `agents.ts`), so it is never in the stream this cleans.
  */
 export function isServerOnlyEvent(event: BaseEvent): boolean {
   if (event.type !== EventType.CUSTOM) return false;
   const name = (event as BaseEvent & { name?: unknown }).name;
+  if (typeof name !== "string") return false;
   // However it is cased or padded: the chat would draw " Delivery.delivered" as the same card.
-  return (
-    typeof name === "string" &&
-    name.trim().toLowerCase().startsWith("delivery.")
-  );
+  const said = name.trim().toLowerCase();
+  return said.startsWith("delivery.") || said === STEP_LIMIT_EVENT;
 }
 
 /** An agent's own stream without the events only the server may send. */

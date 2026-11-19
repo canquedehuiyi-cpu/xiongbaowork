@@ -7,9 +7,17 @@ import { openParts } from "@openbot/shared/routine-checklist";
 import {
   LAST_STEP_NOTICE,
   openPartsNudge,
+  type PlanItem,
+  planNudge,
   promiseNudge,
+  readPlan,
+  STEP_LIMIT_EVENT,
+  type StepLimitPayload,
+  UPDATE_PLAN_TOOL,
 } from "@openbot/shared/run-notices";
 import { unkeptPromise } from "./unkept-promise";
+
+export { STEP_LIMIT_EVENT, type StepLimitPayload };
 
 // Use the model contract of the runtime we actually ship, without a second AI SDK version.
 type Model = Extract<
@@ -40,6 +48,17 @@ export type RunSteps = {
   parts?: readonly string[];
   /** Everything the model has said in this run, which is what closes a part. */
   said?: string;
+  /**
+   * The run went on past its first budget of steps, because it was still calling tools on what
+   * would have been its last. See {@link answersOnLastStep}'s `extension`. A run is extended once.
+   */
+  extended?: boolean;
+  /**
+   * The step an extended run was made to answer on with its tools off, or unset while it has not
+   * been. Set, the run ran out of steps, and says so (`STEP_LIMIT_EVENT` in
+   * `shared/run-notices.ts`).
+   */
+  limited?: number;
 };
 
 /** A new run's state: counted from where it starts, never from where an earlier run stopped. */
@@ -48,25 +67,29 @@ export function startRun(steps: RunSteps, parts: readonly string[] = []) {
   steps.nudges = 0;
   steps.parts = parts;
   steps.said = "";
+  steps.extended = false;
+  steps.limited = undefined;
 }
 
 /**
  * How many times in a row a run is sent back to work before it is let go.
  *
- * Two, and counted again from nothing whenever the run calls a tool: the shape of Claude Code's Stop
- * hook cap (consecutive continuations, reset on a tool call). A model that ends on a promise twice
- * in a row after being told is not going to keep it on the third, and the run should end with what
- * it has rather than spend more.
+ * Counted again from nothing whenever the run calls a tool: the shape of Claude Code's Stop hook cap
+ * (consecutive continuations, reset on a tool call). It was two; DeepSeek, told once, often opens
+ * the next answer with another announcement (「好的，让我先…」) and only then calls the tool, so two
+ * let go runs that were about to work. Four, decided with the person who runs it (2026-11-19). A
+ * model still ending on a promise after four is not going to keep it, and the run should end with
+ * what it has rather than spend more.
  */
-export const MOST_NUDGES = 2;
+export const MOST_NUDGES = 4;
 
 /**
  * The step budget of a run nobody is watching: a routine's firing, or a check-in.
  *
- * Interactive chat keeps its eight (`TOOL_STEPS` in the server's copilot.ts): a person is there to
- * say "carry on", and every extra step is their wait. A routine has nobody to say it. The routine
- * that showed this needed about twenty lookups, and seven tool-enabled steps made one twenty-call
- * burst the only plan that fitted.
+ * Interactive chat has its own (`TOOL_STEPS` in the server's copilot.ts, extended once by as many
+ * again when a run is still at work on its last): a person is there to say "carry on". A routine
+ * has nobody to say it. The routine that showed this needed about twenty lookups, and seven
+ * tool-enabled steps made one twenty-call burst the only plan that fitted.
  *
  * `base` covers that routine even read one lookup per step, with room to answer; a model reading a
  * few at a time, as it is asked to, uses well under half. Each part of a multi-part routine is its
@@ -88,6 +111,27 @@ function turnsIn(prompt: Prompt): number {
   return prompt.filter((message) => message.role === "assistant").length;
 }
 
+/**
+ * The items of this run's own plan that are not done, as its latest `update_plan` call left them.
+ *
+ * Read from the prompt, where each step's calls are, and only from the turns this run added: a plan
+ * an earlier run left open is history the model can read, not a list this run promised to finish. A
+ * call the tool turned down is no plan, so the one before it stands.
+ */
+function openPlanItems(prompt: Prompt, before: number): PlanItem[] {
+  let turns = 0;
+  let plan: PlanItem[] | undefined;
+  for (const message of prompt) {
+    if (message.role !== "assistant") continue;
+    turns += 1;
+    if (turns <= before) continue;
+    for (const part of message.content)
+      if (part.type === "tool-call" && part.toolName === UPDATE_PLAN_TOOL)
+        plan = readPlan(part.input) ?? plan;
+  }
+  return (plan ?? []).filter((item) => item.status !== "done");
+}
+
 /** A one-turn message: in this call's prompt only, never in the conversation. */
 function told(prompt: Prompt, text: string): Prompt {
   return [...prompt, { role: "user", content: [{ type: "text", text }] }];
@@ -104,8 +148,9 @@ function told(prompt: Prompt, text: string): Prompt {
  * and why ({@link LAST_STEP_NOTICE}). Every step before it is untouched.
  *
  * AN UNKEPT PROMISE. A step that ends the run (it called no tool and the model stopped) is held back
- * before the runtime sees it. If its words promise work it did not do ({@link unkeptPromise}), or a
- * routine's part is still open ({@link openParts}), the model is asked again in the same step with
+ * before the runtime sees it. If its words promise work it did not do ({@link unkeptPromise}), a
+ * routine's part is still open ({@link openParts}), or an item of the plan this run wrote with
+ * `update_plan` is not done ({@link openPlanItems}), the model is asked again in the same step with
  * the answer it gave and a one-turn nudge after it, and what it does then is streamed on as the
  * rest of that step: a tool call carries the run on as usual. At most {@link MOST_NUDGES} in a row,
  * counted again from nothing after any tool call, and never on the last step, where it has no tools
@@ -117,6 +162,15 @@ function told(prompt: Prompt, text: string): Prompt {
  * to the prompt, so the step a call is for is how many the prompt holds past where the run began. A
  * nudged step is still one assistant turn, so a nudge never uses a step up.
  *
+ * ONE MORE BUDGET, ONCE, FOR A PERSON'S RUN STILL AT WORK. With `extension`, a run somebody is
+ * watching is not made to answer on step `maxSteps`: that step is sent with its tools like any other.
+ * A model that answers on it ends the run there, as before. One that calls a tool is still working,
+ * and the run carries on for `extension` more steps, the last of which is sent without tools as
+ * above. That is the only extension a run gets ({@link RunSteps.extended}). A run that reaches it
+ * is marked ({@link RunSteps.limited}), and the agent says so in its stream (`STEP_LIMIT_EVENT`)
+ * so the person can carry on themselves. The configuration handed back holds `maxSteps + extension`,
+ * so the runtime allows the steps. A run nobody is watching is never extended: its budget is its own.
+ *
  * A wrapper around the model because the runtime takes only `maxSteps` and offers no hook between
  * steps, the same reason `withToolSearch` is one. A configuration with no step limit, or a model the
  * runtime cannot resolve here, is returned as it is.
@@ -124,7 +178,7 @@ function told(prompt: Prompt, text: string): Prompt {
 export function answersOnLastStep(
   configuration: BuiltInAgentConfiguration,
   steps: RunSteps,
-  run: { unattended?: boolean } = {},
+  run: { unattended?: boolean; extension?: number } = {},
 ): BuiltInAgentConfiguration {
   if ("factory" in configuration) return configuration;
   const { maxSteps } = configuration;
@@ -138,15 +192,23 @@ export function answersOnLastStep(
   }
   if (!isModel(model)) return configuration;
   const inner = model;
+  const extension =
+    !run.unattended && run.extension && run.extension > 0
+      ? Math.floor(run.extension)
+      : 0;
 
   /** The call for this step, and whether it is the run's last. */
   const forStep = (options: CallOptions) => {
     const turns = turnsIn(options.prompt);
     steps.before ??= turns;
     const step = turns - steps.before + 1;
-    const lastStep = run.unattended
+    const budget = run.unattended
       ? unattendedLastStep(steps.parts?.length ?? 0, maxSteps)
       : maxSteps;
+    // Past its first budget only because it was still calling tools on that budget's last step.
+    if (extension > 0 && step > budget) steps.extended = true;
+    const lastStep = budget + extension;
+    if (step >= lastStep && steps.extended) steps.limited = step;
     return step >= lastStep
       ? {
           last: true,
@@ -161,15 +223,18 @@ export function answersOnLastStep(
 
   /**
    * The nudge an answer that would end the run has earned, or undefined when it may end. `text` is
-   * already in `steps.said`, so a part this answer closes counts as closed.
+   * already in `steps.said`, so a part this answer closes counts as closed. `prompt` is the step's
+   * own, which holds every call the run made before it, its plan's among them.
    */
-  const nudgeFor = (text: string): string | undefined => {
+  const nudgeFor = (text: string, prompt: Prompt): string | undefined => {
     if ((steps.nudges ?? 0) >= MOST_NUDGES) return undefined;
     const open = openParts(steps.parts ?? [], steps.said ?? "");
     const promise = unkeptPromise(text);
+    const planned = openPlanItems(prompt, steps.before ?? 0);
     const nudge = [
       ...(promise ? [promiseNudge(promise)] : []),
       ...(open.length > 0 ? [openPartsNudge(open)] : []),
+      ...(planned.length > 0 ? [planNudge(planned)] : []),
     ].join(" ");
     if (!nudge) return undefined;
     steps.nudges = (steps.nudges ?? 0) + 1;
@@ -273,7 +338,7 @@ ${part.delta.trimStart()}`;
           if (called) steps.nudges = 0;
           const nudge =
             !called && part.finishReason.unified === "stop"
-              ? nudgeFor(text)
+              ? nudgeFor(text, call.prompt)
               : undefined;
           if (!nudge) {
             controller.enqueue({ ...part, usage });
@@ -325,7 +390,7 @@ ${part.delta.trimStart()}`;
         return result;
       }
       if (result.finishReason.unified !== "stop") return result;
-      const nudge = nudgeFor(text);
+      const nudge = nudgeFor(text, call.prompt);
       if (!nudge) return result;
       current = again(current, text, nudge);
       let next: GenerateResult;
@@ -350,7 +415,11 @@ ${part.delta.trimStart()}`;
     doGenerate,
     doStream,
   };
-  return { ...configuration, model: wrapped };
+  return {
+    ...configuration,
+    model: wrapped,
+    ...(extension > 0 ? { maxSteps: maxSteps + extension } : {}),
+  };
 }
 
 /** The parts whose `id` names a block of text or reasoning, which a second ask in one step reuses. */

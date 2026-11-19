@@ -51,6 +51,7 @@ import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
+import { planGuidance } from "../../shared/plan";
 import {
   ACP_UNAVAILABLE_REASON,
   type DeviceAcpEmployee,
@@ -1224,6 +1225,11 @@ export function builtInAgentConfiguration(
         deliveryProtocolGuidance(tools.map((tool) => tool.name)),
       ),
       /*
+       * How to carry a job of several steps with `update_plan`, for a Bot that holds it and only
+       * then: one whose plan tool is switched off for it is not taught to use it (期二).
+       */
+      ...promptSection("plan", planGuidance(tools.map((tool) => tool.name))),
+      /*
        * Only for a run that holds the computer. A third of the prompt is about the browser, and a
        * Linear-and-Notion routine that never opens one read all of it ahead of its own job.
        */
@@ -1378,14 +1384,24 @@ export function deploymentModel(
 }
 
 /**
- * How many turns of the tool loop one run may take.
+ * How many turns of the tool loop a run a person is watching may take, before it is extended.
  *
- * Enough for a Bot to search, read what came back, search again on a better term, and answer.
- * Beyond that a model is not making progress, and every extra step is somebody's money. That holds
- * for chat, where a person is there to say "carry on"; a run nobody is watching gets
- * `UNATTENDED_STEPS` instead, and either is told when it reaches its last (`answersOnLastStep`).
+ * It was eight: enough to search, read, search again and answer, and nowhere near enough for work.
+ * A coworker asked to fix three files or survey three competitors spent its eight on reading and
+ * was made to answer with nothing done, which to the person looked like it simply stopped. Forty,
+ * the order of a routine's budget (`UNATTENDED_STEPS.most`), decided with the person who runs it
+ * (2026-11-19, spec 2026-11-19-codex-grade-employee). A run still calling tools on its fortieth is
+ * given as many again, once (`BuiltInAgentHooks.extension`); only then is it made to answer without
+ * tools, and it says it ran out (`step-limit`) so the person can carry on. A run nobody is watching
+ * gets `UNATTENDED_STEPS` instead and no extension, and either is told when it reaches its last
+ * (`answersOnLastStep`).
+ *
+ * Nothing else bounds a chat run's length: it has no wall clock of its own (the headless turn
+ * runner's `TURN_LIMITS.turnTimeoutMs` covers routines and subagents, not the browser's run, and the
+ * stall watchdog is off unless `AGENT_STALL_TIMEOUT_MS` is set and only watches remote agents) and
+ * no per-run token budget. These steps are the bound.
  */
-const TOOL_STEPS = 8;
+const TOOL_STEPS = 40;
 
 /** The steps a run that holds tools behind search gets on top, one per search it may need. */
 const SEARCH_STEPS = 2;
@@ -2361,7 +2377,8 @@ async function buildAgent(
       : new Set<string>();
     const admit = admitTools(held, runModel);
     const hooks: BuiltInAgentHooks = {
-      ...(unattended ? { unattended } : {}),
+      // Somebody is watching: a run still at work on its last step gets one more budget of steps.
+      ...(unattended ? { unattended } : { extension: TOOL_STEPS }),
       /*
        * A provider's refusal is told in words, naming the provider, rather than as the SDK's text, a
        * "Forbidden" or a retry count. Out of credit keeps its own sentence, from `model-billing.ts`.

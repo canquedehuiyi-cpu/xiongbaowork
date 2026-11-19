@@ -8,6 +8,8 @@
  * it and the next run never inherits it.
  */
 
+import { type PlanItem, UPDATE_PLAN_TOOL } from "./plan";
+
 /**
  * Sent with a run's last step, which goes to the model with its tools switched off.
  *
@@ -23,6 +25,25 @@ export const LAST_STEP_NOTICE =
  */
 export function promiseNudge(promise: string): string {
   return `You said "${promise}" but made no tool call. Do it now, or finish with the result and what is missing.`;
+}
+
+/**
+ * The plan a Bot writes with `update_plan` (`plan.ts`), passed on from here so the run harness reads
+ * it through the module it already reads its notices from.
+ */
+export {
+  type PlanItem,
+  readPlan,
+  UPDATE_PLAN_TOOL,
+} from "./plan";
+
+/**
+ * Sent when a run would end with items of its own plan not done: the plan it wrote with
+ * `update_plan` in this run, as its latest call left it. In the person's language, as the plan is.
+ */
+export function planNudge(open: readonly PlanItem[]): string {
+  const listed = open.map((item) => item.text).join("；");
+  return `计划里还有 ${open.length} 项没做完：${listed}，继续做，或者用 ${UPDATE_PLAN_TOOL} 说明为什么不做。`;
 }
 
 /** One part of a routine's checklist, by its number, as a nudge lists it. */
@@ -44,3 +65,24 @@ export function checklistNotice(parts: readonly string[]): string {
     ...parts.map((part, index) => `${index + 1}. ${part}`),
   ].join("\n");
 }
+
+/**
+ * The AG-UI `CUSTOM` event a person's run sends when it used up every step it was allowed, and its
+ * model was made to answer with its tools off.
+ *
+ * A run a person started that is still calling tools on its last step is given one more budget of
+ * steps (`answersOnLastStep` in the toolkit's `last-step.ts`). If it reaches the end of that
+ * too, its last step answers without tools, and this event goes out in the run's own stream, just
+ * before `RUN_FINISHED`, so the chat can offer to carry on (「已用完 N 步 · 继续」). Because it rides in
+ * the run's stream, the runner stores it with the run's other events, and a reload replays it.
+ *
+ * Never sent for a run nobody is watching: a routine or a check-in has its own budget and nobody to
+ * press "carry on".
+ */
+export const STEP_LIMIT_EVENT = "step-limit";
+
+/** What {@link STEP_LIMIT_EVENT} carries. */
+export type StepLimitPayload = {
+  /** How many model steps the run took, its last (the one without tools) included. */
+  steps: number;
+};

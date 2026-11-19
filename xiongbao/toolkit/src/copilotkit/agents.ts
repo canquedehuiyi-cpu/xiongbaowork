@@ -13,6 +13,7 @@ import {
   CopilotKitIntelligence,
 } from "@copilotkit/runtime/v2";
 import {
+  concatMap,
   defer,
   finalize,
   from,
@@ -24,7 +25,13 @@ import {
 } from "rxjs";
 import { sanitizeSeededHistory } from "../history-sanitize";
 import { firingChecklist } from "./firing-checklist";
-import { answersOnLastStep, type RunSteps, startRun } from "./last-step";
+import {
+  answersOnLastStep,
+  type RunSteps,
+  STEP_LIMIT_EVENT,
+  type StepLimitPayload,
+  startRun,
+} from "./last-step";
 import {
   type NativeRunScope,
   nativeApprovalRun,
@@ -95,6 +102,12 @@ export type BuiltInAgentHooks = {
    * that has to finish on its own (`UNATTENDED_STEPS`) rather than chat's. Absent, a person is.
    */
   unattended?: boolean;
+  /**
+   * How many more steps a run a person is watching gets, once, when it is still calling tools on
+   * its last (`answersOnLastStep`). Ignored for an unattended run. Absent, none: the run answers on
+   * its last step as configured, and says nothing about it.
+   */
+  extension?: number;
 };
 
 /**
@@ -248,6 +261,7 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
       toolsWithin(
         answersOnLastStep(configuration, steps, {
           unattended: hooks.unattended === true,
+          ...(hooks.extension ? { extension: hooks.extension } : {}),
         }),
         scope,
       ),
@@ -302,14 +316,17 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
      * resumes. See `BuiltInAgentHooks.attribute`.
      */
     const toModel = (messages: Message[]) =>
-      observe(
-        super.run({
-          ...input,
-          messages: checklist.toModel(
-            attribute ? attribute(messages) : messages,
-          ),
-        }),
-        input,
+      sayingStepLimit(
+        observe(
+          super.run({
+            ...input,
+            messages: checklist.toModel(
+              attribute ? attribute(messages) : messages,
+            ),
+          }),
+          input,
+        ),
+        this.steps,
       );
     /*
      * ALONGSIDE THE GUARD ABOVE, NOT INSTEAD OF IT. One drops a conversation the model provider is
@@ -375,6 +392,34 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
     ];
     return cloned;
   }
+}
+
+/**
+ * The run's stream, with {@link STEP_LIMIT_EVENT} just before its `RUN_FINISHED` when the run used
+ * up its steps and was made to answer with its tools off (`RunSteps.limited`). Inside the run, not
+ * after it, so the runner that stores a run's events keeps it with the run's own: it is in the live
+ * conversation and in the stored one.
+ *
+ * Outside the host's `observe`, not under it: the server drops a `step-limit` from any agent's own
+ * stream as a forgery (`isServerOnlyEvent` in the server's `threads/run-side-events.ts`), since an
+ * endpoint or an external employee can send any event it likes. Added here, after that filter, the
+ * only one that reaches the person is the one this run's own step count said.
+ */
+function sayingStepLimit(
+  run: Observable<BaseEvent>,
+  steps: RunSteps,
+): Observable<BaseEvent> {
+  return run.pipe(
+    concatMap((event) => {
+      if (event.type !== EventType.RUN_FINISHED || steps.limited === undefined)
+        return of(event);
+      const value: StepLimitPayload = { steps: steps.limited };
+      return of(
+        { type: EventType.CUSTOM, name: STEP_LIMIT_EVENT, value } as BaseEvent,
+        event,
+      );
+    }),
+  );
 }
 
 /**

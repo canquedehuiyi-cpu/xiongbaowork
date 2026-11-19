@@ -1,5 +1,6 @@
 import { OFFER_CHECK_IN_TOOL } from "./check-in-offer";
 import { SHOW_APP_ACCESS_TOOL } from "./connect-prompt";
+import { UPDATE_PLAN_TOOL } from "./plan";
 import { RESEARCH_ROLE_LABELS, researchRoleOfTool } from "./research";
 import { SUBAGENT_TOOL } from "./subagent";
 import { lowerFirst, nameInWords } from "./tool-name-words";
@@ -610,6 +611,8 @@ const OWN_TOOLS: Record<string, OwnTool> = {
   ask_person: { running: "正在问你", done: "问了你" },
   message_bot: { running: "正在问另一位员工", done: "问了另一位员工" },
   [SUBAGENT_TOOL]: { running: "正在处理子任务", done: "处理了子任务" },
+  // Its own plan for the work, written before it starts and ticked off as it goes.
+  [UPDATE_PLAN_TOOL]: { running: "正在更新计划", done: "更新了计划" },
   // A voice conversation handing what was said to the Bot behind it.
   ask_agent: { running: "正在问员工", done: "问了员工" },
   // Carrying a tracked piece of work: taking it on, handing it in, asking for more time.
