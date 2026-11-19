@@ -310,6 +310,8 @@ export type GrepResult =
       text: string;
       truncated: boolean;
       timedOut?: boolean;
+      /** Said when the search fell back to grep's extended regular expressions, which may not know `\d`. */
+      note?: string;
     }
   | { pattern: string; path: string; error: string };
 

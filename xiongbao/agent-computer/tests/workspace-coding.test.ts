@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
+  chmod,
   mkdir,
   mkdtemp,
   readFile,
@@ -13,6 +14,7 @@ import { join } from "node:path";
 import {
   createWorkspace,
   DEFAULT_WORKSPACE_LIMITS,
+  EXTENDED_REGEX_NOTE,
   GLOB_LIMITS,
   SEARCH_LIMITS,
   WorkspacePathError,
@@ -24,6 +26,9 @@ import {
  * the workspace like every other file call, in the shared workspace and in confined (per-employee)
  * mode alike.
  */
+
+/** Whether this machine has rg: the CI runner does not. */
+const HAS_RG = Bun.which("rg") !== null;
 
 let base: string;
 let root: string;
@@ -210,31 +215,36 @@ for (const confineOpened of [false, true]) {
       grep: { searchTools: { rg: join(tmpdir(), "no-such-rg-for-this-test") } },
     };
     for (const [engine, options] of Object.entries(engines)) {
-      test(`${engine}: finds the lines as path:line:text, skipping hidden files, node_modules and links out`, async () => {
-        const found = await workspace(options).grep({ pattern: "needle" });
-        expect(found).toMatchObject({ engine, matches: 1, truncated: false });
-        expect("text" in found && found.text).toBe(
-          "src/lib/b.md:1:a needle here",
-        );
-        const any = await workspace(options).grep({
-          pattern: "needle",
-          ignoreCase: true,
-        });
-        expect("text" in any && any.text.split("\n").sort()).toEqual([
-          "src/a.ts:1:export const Needle = 1;",
-          "src/lib/b.md:1:a needle here",
-        ]);
-        const typed = await workspace(options).grep({
-          pattern: "needle",
-          ignoreCase: true,
-          glob: "*.ts",
-        });
-        expect("text" in typed && typed.text).toBe(
-          "src/a.ts:1:export const Needle = 1;",
-        );
-      });
+      // The rg cases only where this machine has rg: without it there is no rg to check.
+      const when = test.if(engine === "grep" || HAS_RG);
+      when(
+        `${engine}: finds the lines as path:line:text, skipping hidden files, node_modules and links out`,
+        async () => {
+          const found = await workspace(options).grep({ pattern: "needle" });
+          expect(found).toMatchObject({ engine, matches: 1, truncated: false });
+          expect("text" in found && found.text).toBe(
+            "src/lib/b.md:1:a needle here",
+          );
+          const any = await workspace(options).grep({
+            pattern: "needle",
+            ignoreCase: true,
+          });
+          expect("text" in any && any.text.split("\n").sort()).toEqual([
+            "src/a.ts:1:export const Needle = 1;",
+            "src/lib/b.md:1:a needle here",
+          ]);
+          const typed = await workspace(options).grep({
+            pattern: "needle",
+            ignoreCase: true,
+            glob: "*.ts",
+          });
+          expect("text" in typed && typed.text).toBe(
+            "src/a.ts:1:export const Needle = 1;",
+          );
+        },
+      );
 
-      test(`${engine}: a folder or a single file can be searched`, async () => {
+      when(`${engine}: a folder or a single file can be searched`, async () => {
         const folder = await workspace(options).grep({
           pattern: "needle",
           path: "src/lib",
@@ -254,25 +264,72 @@ for (const confineOpened of [false, true]) {
         ).rejects.toBeInstanceOf(WorkspacePathError);
       });
 
-      test(`${engine}: more than ${SEARCH_LIMITS.matches} matches stop there and say so`, async () => {
-        await writeFile(join(root, "many.txt"), "hit\n".repeat(300));
-        const found = await workspace(options).grep({ pattern: "hit" });
-        expect(found).toMatchObject({
-          matches: SEARCH_LIMITS.matches,
-          truncated: true,
-        });
-      });
+      when(
+        `${engine}: more than ${SEARCH_LIMITS.matches} matches stop there and say so`,
+        async () => {
+          await writeFile(join(root, "many.txt"), "hit\n".repeat(300));
+          const found = await workspace(options).grep({ pattern: "hit" });
+          expect(found).toMatchObject({
+            matches: SEARCH_LIMITS.matches,
+            truncated: true,
+          });
+        },
+      );
 
-      test(`${engine}: no match is an empty answer, a bad pattern is answered in words`, async () => {
-        expect(
-          await workspace(options).grep({ pattern: "absent-word" }),
-        ).toMatchObject({ matches: 0, text: "", truncated: false });
-        const bad = await workspace(options).grep({ pattern: "(" });
-        expect(bad).toMatchObject({
-          error: expect.stringContaining("搜索没有完成"),
-        });
-      });
+      when(
+        `${engine}: no match is an empty answer, a bad pattern is answered in words`,
+        async () => {
+          expect(
+            await workspace(options).grep({ pattern: "absent-word" }),
+          ).toMatchObject({ matches: 0, text: "", truncated: false });
+          const bad = await workspace(options).grep({ pattern: "(" });
+          expect(bad).toMatchObject({
+            error: expect.stringContaining("搜索没有完成"),
+          });
+        },
+      );
     }
+
+    test("grep: Perl-style classes such as \\d match, as they do in rg", async () => {
+      await writeFile(
+        join(root, "src", "nums.ts"),
+        "const b = 20;\nconst c = x;\n",
+      );
+      const found = await workspace(engines.grep).grep({
+        pattern: "b = 2\\d",
+        path: "src",
+      });
+      expect(found).toMatchObject({
+        engine: "grep",
+        matches: 1,
+        text: "src/nums.ts:1:const b = 20;",
+      });
+      expect(found).not.toHaveProperty("note");
+    });
+
+    test("a grep without -P falls back to extended regular expressions and says so", async () => {
+      // A grep that refuses -P, as BSD grep and a GNU grep built without PCRE do.
+      const bsd = join(base, "bsd-grep");
+      await writeFile(
+        bsd,
+        '#!/bin/sh\nfor a in "$@"; do [ "$a" = "-P" ] && { echo "grep: invalid option -- P" >&2; exit 2; }; done\nexec grep "$@"\n',
+      );
+      await chmod(bsd, 0o755);
+      const tools = {
+        searchTools: {
+          rg: join(tmpdir(), "no-such-rg-for-this-test"),
+          grep: bsd,
+        },
+      };
+      const found = await workspace(tools).grep({ pattern: "needle" });
+      expect(found).toMatchObject({
+        engine: "grep",
+        matches: 1,
+        text: "src/lib/b.md:1:a needle here",
+        note: EXTENDED_REGEX_NOTE,
+      });
+      expect(EXTENDED_REGEX_NOTE).toContain("\\d");
+    });
 
     test("output beyond 64 KB stops there and says so", async () => {
       await writeFile(

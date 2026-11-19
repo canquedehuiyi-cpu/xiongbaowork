@@ -149,8 +149,18 @@ export type GrepResult =
       text: string;
       truncated: boolean;
       timedOut?: boolean;
+      /** Said when the search fell back to grep's extended regular expressions. */
+      note?: string;
     }
   | { pattern: string; path: string; error: string };
+
+/** What a grep without `-P` says when asked for it (GNU without PCRE, BSD). */
+const PERL_REFUSED =
+  /-P|perl|pcre|invalid option|unrecognized option|illegal option|not supported/i;
+
+/** The word on a search that ran as grep's extended regular expressions. */
+export const EXTENDED_REGEX_NOTE =
+  "当前用 grep 扩展正则（ERE）搜索，\\d、\\w 等写法可能不支持，可改用 [0-9]、[A-Za-z0-9_]。";
 
 /** How much a search may return, and how long it may take. */
 export const SEARCH_LIMITS = {
@@ -1169,18 +1179,37 @@ export function createWorkspace(
           "--exclude=.[!.]*",
           ...(modules ? ["--exclude-dir=node_modules"] : []),
           ...(input.ignoreCase ? ["-i"] : []),
-          "-E",
-          "-e",
-          input.pattern,
-          "--",
-          start.target,
         ];
+        const tail = ["-e", input.pattern, "--", start.target];
         const tools = options.searchTools ?? {};
         let engine: "rg" | "grep" = "rg";
+        let extended = false;
         let run = await runSearch(tools.rg ?? "rg", rg, start.cwd);
         if (run.missing) {
           engine = "grep";
-          run = await runSearch(tools.grep ?? "grep", grep, start.cwd);
+          /*
+           * Perl-compatible first (`-P`, GNU grep), so `\d`, `\w` and `\s` mean what they mean to
+           * rg. A grep without it (BSD, or GNU built without PCRE) refuses the option itself; then
+           * extended regular expressions, and the answer says `\d` and the like may not work.
+           */
+          run = await runSearch(
+            tools.grep ?? "grep",
+            [...grep, "-P", ...tail],
+            start.cwd,
+          );
+          if (
+            !run.missing &&
+            run.code === 2 &&
+            run.lines.length === 0 &&
+            PERL_REFUSED.test(run.stderr)
+          ) {
+            extended = true;
+            run = await runSearch(
+              tools.grep ?? "grep",
+              [...grep, "-E", ...tail],
+              start.cwd,
+            );
+          }
         }
         if (run.missing)
           return {
@@ -1215,6 +1244,7 @@ export function createWorkspace(
           text: lines.join("\n"),
           truncated: run.truncated,
           ...(run.timedOut ? { timedOut: true } : {}),
+          ...(extended ? { note: EXTENDED_REGEX_NOTE } : {}),
         };
       } finally {
         await start.close();
