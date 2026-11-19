@@ -55,6 +55,7 @@ type AgentInputObject = {
   auth?: unknown;
   modelRef?: unknown;
   platformModelRef?: unknown;
+  thinking?: unknown;
   persona?: unknown;
   bible?: unknown;
   department?: unknown;
@@ -228,6 +229,12 @@ export function parseAgentInput(
   }
   const isolated = input.isolated;
 
+  // 期三：思考模式。同上，只查带了的值；字符串 "false" 不当成关。
+  if (input.thinking !== undefined && typeof input.thinking !== "boolean") {
+    return { ok: false, error: "思考模式只能是 true 或 false。" };
+  }
+  const thinking = input.thinking;
+
   /*
    * The framework a person named for an agent they run themselves, by its id in the harness list.
    * Kept only with an address: a Bot with none runs here, on OpenBot. See `frameworkOf`.
@@ -276,6 +283,7 @@ export function parseAgentInput(
       ...(department === undefined ? {} : { department }),
       ...(avatarSeed === undefined ? {} : { avatarSeed }),
       ...(isolated === undefined ? {} : { isolated }),
+      ...(thinking === undefined ? {} : { thinking }),
       ...(instructions === undefined ? {} : { instructions }),
       ...(harness === undefined ? {} : { harness }),
     },
@@ -1475,6 +1483,8 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     modelRef: agent.modelRef,
     // Which platform pool model it answers on instead, if any. Never both.
     platformModelRef: agent.platformModelRef,
+    // 期三：思考模式，没关过就是开着（`shared/thinking.ts`）。存储总会给出；手写的资料没有就不发。
+    ...(agent.thinking === undefined ? {} : { thinking: agent.thinking }),
     persona: agent.persona,
     // ROLE1: the handbook, the template it came from, and whether a template may be applied at all.
     // The store always sets all three; a profile without them publishes none.
