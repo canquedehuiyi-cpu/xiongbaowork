@@ -234,6 +234,52 @@ DEEPSEEK_THINKING=disabled
 升级换包时，同步只回收本包声明集合内的行（技能、频道、团队、连接器服务行），管理员手工添加的
 连接器与授予不受影响。
 
+### 5.3 生成图片、视频和文档
+
+员工有三件新工具：`generate_image` 出图，`generate_video` 出视频（视频要几分钟，没等到会给任务号，
+员工再用 `check_video` 取）。每位员工默认都有，员工的工具权限里拒绝 `bot/generate_image`、
+`bot/generate_video` 即可关掉（关掉视频，`check_video` 一起不给）。
+
+**生成服务走通用接口，按环境变量配置，不写死哪一家**：
+
+| 变量 | 说明 |
+| --- | --- |
+| `XIONGBAO_IMAGE_BASE_URL`、`XIONGBAO_IMAGE_API_KEY`、`XIONGBAO_IMAGE_MODEL` | OpenAI 兼容的 `POST {BASE_URL}/images/generations`。 |
+| `XIONGBAO_VIDEO_BASE_URL`、`XIONGBAO_VIDEO_API_KEY`、`XIONGBAO_VIDEO_MODEL` | 视频服务的地址、密钥、模型。 |
+| `XIONGBAO_VIDEO_PROVIDER` | 视频接口形状：`openai-compatible`（默认，OpenAI 的 `/videos` 建任务、`/videos/{id}` 查、`/videos/{id}/content` 取）或 `zhipu`（智谱的 `/videos/generations` 与 `/async-result/{id}`）。 |
+
+三项缺一项，工具不报错，只告诉员工还没有配置、缺哪几项。出站请求和模型库的自定义地址同一道校验
+（不连内网地址、不跟随重定向）。服务器要能连到所填的地址，和服务回答里的图片、视频下载地址。
+
+智谱开放平台的免费模型可以作为起步：在 open.bigmodel.cn 注册，控制台「API Keys」新建密钥，然后
+
+```dotenv
+XIONGBAO_IMAGE_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+XIONGBAO_IMAGE_API_KEY=<智谱密钥>
+XIONGBAO_IMAGE_MODEL=cogview-3-flash
+XIONGBAO_VIDEO_PROVIDER=zhipu
+XIONGBAO_VIDEO_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+XIONGBAO_VIDEO_API_KEY=<智谱密钥>
+XIONGBAO_VIDEO_MODEL=cogvideox-flash
+```
+
+免费型号和额度以智谱当前的定价页为准。其它兼容 OpenAI 图片接口的服务（硅基流动、通义的兼容模式、
+各类网关）同样只填地址、密钥和模型名。
+
+**生成的文件存在本部署的数据库里**（表 `generated_media`，迁移 0230，单个最大 50 MB），地址是
+`/api/media/<id>`，只有生成时那一轮的那个人登录后能打开；对话里员工用 markdown 图片写法把图片放出来。
+每次生成在审计里记一条「生成图片或视频」（`media.generated`），带员工、种类、服务、模型和张数。
+
+**文档类文件（Word、Excel、PPT、PDF）在员工的电脑工作区里生成。** 两个镜像都装了 python-docx、openpyxl、
+python-pptx、reportlab、weasyprint、pypdf、pdfplumber、pandas、markitdown（把 PDF、Office、HTML 转成 markdown）、
+pandoc 和中文字体（Noto CJK、文泉驿微米黑）；单镜像另装 LibreOffice 无界面版，用来把 Word、Excel、PPT
+转成 PDF。镜像构建时和 CI 都会跑 `/opt/docs-toolchain/selfcheck.py`，生成带中文的各类文件再读回来。
+自己排查时可以在容器里以 pwuser 运行：
+
+```bash
+docker exec -u pwuser <容器> python3 /opt/docs-toolchain/selfcheck.py --require-pandoc --require-soffice
+```
+
 ## 6. 备份、恢复与升级
 
 至少备份数据库、两个同卷口令文件、workspace、profiles，以及原有 KEY_ENCRYPTION_KEY 和登录 secret。

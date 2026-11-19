@@ -1,0 +1,60 @@
+# 员工电脑里生成与读取文档用的 Python 库（docker/docs-toolchain/install.sh 装进 /opt/xiongbao-docs）。
+#
+# 每一行都钉精确版本，含传递依赖：同一份清单在两个镜像里装出同样的东西。升级时改这里，
+# 再在 ubuntu:24.04（Python 3.12）里装一遍跑 selfcheck.py。只选发布满两周的版本。
+#
+# 直接依赖与许可证：
+#   python-docx 1.2.0 (MIT)、openpyxl 3.1.5 (MIT)、python-pptx 1.0.2 (MIT)、
+#   reportlab 5.1.0 (BSD)、weasyprint 70.0 (BSD-3-Clause)、pypdf 6.21.4 (BSD-3-Clause)、
+#   pdfplumber 0.11.10 (MIT)、pillow 13.0.0 (MIT-CMU)、pandas 3.1.1 (BSD-3-Clause)、
+#   markitdown 0.1.9 (MIT，microsoft/markitdown：PDF、Word、Excel、PPT、HTML 转 markdown)。
+# 传递依赖（含 Python 3.12 上 python-dateutil 要的 six）的许可证都是 MIT / BSD / Apache-2.0 / MPL-2.0 / PSF 一类；pyphen 是 GPL-2.0+、LGPL-2.1+、MPL-1.1 三选一。
+beautifulsoup4==4.15.0
+brotli==1.2.1
+certifi==2026.10.23
+cffi==2.1.1
+charset-normalizer==3.5.2
+click==8.5.0
+cobble==0.1.4
+cryptography==50.0.2
+cssselect2==0.10.1
+defusedxml==0.7.1
+et_xmlfile==2.0.0
+flatbuffers==25.12.19
+fonttools==4.68.0
+idna==3.20
+lxml==6.1.3
+magika==1.0.3
+mammoth==1.13.0
+markdownify==1.2.3
+markitdown[docx,pdf,pptx,xlsx]==0.1.9
+numpy==2.5.4
+onnxruntime==1.31.1
+openpyxl==3.1.5
+packaging==26.3
+pandas==3.1.1
+pdfminer.six==20260107
+pdfplumber==0.11.10
+pillow==13.0.0
+protobuf==7.36.2
+pycparser==3.12
+pydyf==0.13.0
+pypdf==6.21.4
+pypdfium2==5.14.0
+pyphen==0.18.1
+python-dateutil==4.0.0
+python-docx==1.2.0
+python-pptx==1.0.2
+reportlab==5.1.0
+requests==2.34.2
+six==1.17.0
+soupsieve==4.0.1
+tinycss2==1.5.1
+tinyhtml5==2.1.0
+typing_extensions==4.16.0
+tzdata==2026.6
+urllib3==2.8.0
+weasyprint==70.0
+webencodings==0.6.1
+xlsxwriter==3.3.1
+zopfli==0.4.3

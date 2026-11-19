@@ -371,6 +371,10 @@ import {
   createOpenSkillIndex,
 } from "./learning/sharing";
 import { createLocalLearningEngine } from "./local-learning/engine";
+import { readMediaConfig } from "./media/config";
+import { createMediaRoutes } from "./media/routes";
+import { createMediaStore } from "./media/store";
+import { mediaTools, offeredMediaTools } from "./media/tools";
 import { createMemoryDefaults } from "./memory/defaults";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createIntelligenceMemory } from "./memory/intelligence";
@@ -1116,6 +1120,12 @@ await startupLifecycle.run(async (startup) => {
     // Read on its own, not through `config.computer`: a local model needs no Bot computer.
     allowPrivateHosts: config.modelEndpointsAllowPrivateHosts,
   };
+  /*
+   * 生成图片和视频的服务（期五 C）：通用接口，按 `XIONGBAO_IMAGE_*`、`XIONGBAO_VIDEO_*` 配置，出站和租户
+   * 的模型地址同一道校验。生成的文件存在 `generated_media`，在 `/api/media/:id` 给生成时那一轮的人看。
+   */
+  const mediaConfig = readMediaConfig(process.env, modelOutbound);
+  const mediaStore = createMediaStore(database);
   const tokenCallSink = databaseTokenCallSink(database);
   const resolveNamedAgentModel = createNamedAgentModelResolver(
     database,
@@ -2838,8 +2848,10 @@ await startupLifecycle.run(async (startup) => {
         loadGrantedToolsForActor(actorId, initiator, botId),
         approvalService.disabledTools(actorId, botId),
       ]);
-      // 关掉 `accept_task` 就是这位员工不走三步：交付和延期跟着不给。
-      return offeredDeliveryTools(tools.filter((tool) => !disabled(tool.ref)));
+      // 关掉 `accept_task` 就是这位员工不走三步：交付和延期跟着不给。关掉 `generate_video` 也不给 `check_video`。
+      return offeredMediaTools(
+        offeredDeliveryTools(tools.filter((tool) => !disabled(tool.ref))),
+      );
     };
   /**
    * 交付待验收的通知（`tasks/briefing.ts` `createTaskNotices().handin`）：通知出口要等投递路由建好才有，所以
@@ -2879,6 +2891,19 @@ await startupLifecycle.run(async (startup) => {
   ) => [
     // 计划清单（`update_plan`）：每位员工默认都有，工具权限里关掉 `bot/update_plan` 即不给。
     ...updatePlanTools(),
+    /*
+     * 生成图片和视频（期五 C）：每位员工默认都有，工具权限里关掉 `bot/generate_image`、`bot/generate_video`
+     * 即不给。生成服务按环境变量配置（`media/config.ts`），没配时工具照实说缺哪几项。文件存给这一轮的人。
+     */
+    ...mediaTools({
+      config: mediaConfig,
+      store: mediaStore,
+      ownerUserId: actorId,
+      agentId: botId,
+      outbound: modelOutbound,
+      auditStore: bootAuditStore,
+      initiator,
+    }),
     ...wakeUpTools({
       store: wakeUpStore,
       ownerUserId: actorId,
@@ -6127,6 +6152,17 @@ await startupLifecycle.run(async (startup) => {
         // Dissolving hides the chat: the same `channel.deleted` row as DELETE /api/channels/:id.
         auditStore: bootAuditStore,
       }),
+    ),
+  );
+
+  // 员工生成的图片和视频（迁移 0230）：只给生成时那一轮的人看，行级安全按本人的帧。
+  app.route(
+    "/api/media",
+    createMediaRoutes(
+      mediaStore,
+      config.singleUser
+        ? createDevRequireUser(config.singleUserAccess)
+        : createRequireUser(auth as AuthService, roleRepository),
     ),
   );
 

@@ -2222,6 +2222,8 @@ describe("a person's standing instructions", () => {
       ...WORKING_SECTIONS,
       "apps",
       "computer",
+      // 期五 C: a run with the computer is told how to make and check documents (shared/media.ts).
+      "media",
       // These tools reach no other Bot, so it is told it cannot hand work on.
       "handing_over",
       "model_and_date",
