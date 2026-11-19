@@ -4,6 +4,7 @@ tests/acp-delivery.integration.test.ts
 tests/acp-e2e.integration.test.ts
 tests/acp-group.integration.test.ts
 tests/acp-hire.integration.test.ts
+tests/acp-open-model.test.ts
 tests/acp-permissions.integration.test.ts
 tests/acp-permissions.test.ts
 tests/acp-relay.test.ts
@@ -35,6 +36,8 @@ tests/agent-handoff.integration.test.ts
 tests/agent-handoff.test.ts
 tests/agent-key-rotation.integration.test.ts
 tests/agent-model-binding.test.ts
+tests/agent-model-proxy.integration.test.ts
+tests/agent-model-proxy.test.ts
 tests/agent-on-this-machine.test.ts
 tests/agent-presence.integration.test.ts
 tests/agent-profile-policy.test.ts

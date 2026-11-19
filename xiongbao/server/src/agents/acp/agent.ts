@@ -8,7 +8,7 @@ import {
 } from "@ag-ui/client";
 import { eq } from "drizzle-orm";
 import { Observable, type Subscriber } from "rxjs";
-import type { AcpHarness } from "../../../../shared/acp";
+import type { AcpHarness, AcpOpenModel } from "../../../../shared/acp";
 import type { Database } from "../../db/client";
 import { threads } from "../../db/schema";
 import type { DeviceChannel } from "../../devices/channel";
@@ -16,6 +16,7 @@ import { dueSaidIn } from "../../tasks/due-time";
 import { runAsTenant } from "../../tenant/context";
 import { adoptRunnerCard } from "../../threads/postgres-runner";
 import { withRunSideEvents } from "../../threads/run-side-events";
+import type { AcpModelAccess } from "../model-proxy/access";
 import { type AcpContextLoader, messageText } from "./context";
 import type { AcpDelivery, AcpDeliveryTurn } from "./delivery";
 import type { AcpRelay } from "./relay";
@@ -316,6 +317,11 @@ export type DeviceAcpAgentConfig = {
   reachable: () => boolean;
   /** The context blocks a new session's first turn starts with (context.ts). */
   context: (threadId: string, runId?: string) => Promise<unknown[]>;
+  /**
+   * The `model` block of this employee's `acp.open` (a short-lived pass to the model proxy, never a
+   * key), or null for none: then the agent runs on the owner's own settings. Absent: none.
+   */
+  model?: (threadId: string) => Promise<AcpOpenModel | null>;
   /** For the sentences the run answers itself. */
   name?: string;
   sessions?: AcpSessionHints;
@@ -649,6 +655,12 @@ class AcpRun {
         return;
       }
     }
+    // Asked before the check below, so a stop that arrives meanwhile is seen by it.
+    const model = config.adopted
+      ? null
+      : await (config.model?.(input.threadId) ?? Promise.resolve(null)).catch(
+          () => null,
+        );
     if (this.isOver()) {
       // An adopted turn is the device's: nothing to put back, and a stop already told the device.
       if (config.adopted) return;
@@ -682,6 +694,7 @@ class AcpRun {
       workdirRef: config.workdirRef,
       ...(config.appRef ? { appRef: config.appRef } : {}),
       ...(sessionHint ? { sessionHint } : {}),
+      ...(model ? { model } : {}),
     };
     if (!relay.send(this.target, open)) return this.backToQueue();
     const outcome = await opened;
@@ -1115,6 +1128,12 @@ export type DeviceAcpRuntime = {
   onPermission?: AcpPermissionHook;
   /** The delivery loop's part (delivery.ts), attached once the loop exists; read when an agent is built. */
   delivery?: AcpDelivery;
+  /**
+   * Hands an employee's agent the way to the model proxy on `acp.open` (model-proxy/access.ts), set
+   * once the proxy exists; read on every open, so it can be attached after boot. Absent: agents run
+   * on the owner's own settings.
+   */
+  model?: AcpModelAccess;
 };
 
 let installed: DeviceAcpRuntime | null = null;
@@ -1179,6 +1198,13 @@ export function deviceAcpAgentFor(
         persona: employee.persona,
       }),
     sessions: runtime.sessions,
+    model: async (threadId) =>
+      (await runtime.model?.issue({
+        tenantId,
+        agentId: employee.id,
+        threadId,
+        harness: employee.harness,
+      })) ?? null,
     onPermission: (request) => runtime.onPermission?.(request),
     ...(runtime.delivery ? { delivery: runtime.delivery } : {}),
     ...(options.claimed ? { claimed: options.claimed } : {}),

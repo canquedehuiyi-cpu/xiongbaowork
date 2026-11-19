@@ -25,6 +25,10 @@ import {
   type BotLifecycleServices,
   createBotLifecycleRoutes,
 } from "./agents/lifecycle-routes";
+import {
+  type AgentModelProxy,
+  mountAgentModelProxy,
+} from "./agents/model-proxy/proxy";
 import type { AgentPresenceReader } from "./agents/presence";
 import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
@@ -165,11 +169,11 @@ import type {
   KeyGuideSource,
 } from "./plugins/broker";
 import { createAppGrantDraftRoutes } from "./plugins/grant-translate";
+import { createPluginRoutes } from "./plugins/routes";
 import type {
   SharedAudience,
   SharedUseStore,
 } from "./plugins/shared-use-store";
-import { createPluginRoutes } from "./plugins/routes";
 import {
   isDeploymentFault,
   PluginRefusedError,
@@ -584,6 +588,11 @@ export function createApp(
      */
     learningModel?: LearningModelEndpoint;
     /**
+     * The model proxy external employees' agents send their model requests to (agents/model-proxy).
+     * Absent, nothing is mounted.
+     */
+    agentModel?: AgentModelProxy;
+    /**
      * The deployment's own model, for writing a boundary from an admin's description
      * (computer/policy-translate.ts), team approval rules from one (approvals/rule-translate.ts), a
      * Bot's actions in one app from one (plugins/grant-translate.ts), the network allowlist from
@@ -665,6 +674,7 @@ export function createApp(
   mountDesktopConnectionFailure(app, desktopHostToken);
   mountProviderOAuthProxy(app, modelProviderProxy);
   mountLearningModelEndpoint(app, coworker?.learningModel);
+  mountAgentModelProxy(app, coworker?.agentModel);
 
   app.get("/health", (context) => context.json({ status: "ok" }));
   app.route("/", createReleaseStatusRoutes());
