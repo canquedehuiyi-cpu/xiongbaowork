@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { EventType, HttpAgent, type RunAgentInput } from "@ag-ui/client";
+import { Observable } from "rxjs";
 import {
   COMMAND_TIMEOUT_MS,
   commandTimeoutMs,
 } from "../../shared/computer-tool-words";
-import { TURN_LIMITS } from "../../toolkit/src/limits";
+import { TURN_LIMITS, toolSegmentsFor } from "../../toolkit/src/limits";
+import { createTurnRunner } from "../../toolkit/src/run-turn";
 import { ABANDONED_FIRING_MS } from "../src/automations/sweep";
 import { botSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
@@ -186,5 +189,160 @@ describe("how long a headless turn may run", () => {
     expect(source("channels", "working.ts")).toContain(
       "const ROUTINE_IN_FLIGHT_MS = 2 * TURN_LIMITS.workTurnTimeoutMs;",
     );
+  });
+});
+
+describe("how many rounds of headless tools a turn may take", () => {
+  const source = (...path: string[]) =>
+    readFileSync(join(import.meta.dir, "..", "src", ...path), "utf8");
+  const optionsOf = (text: string, declaration: string) => {
+    const start = text.indexOf(declaration);
+    expect(start).toBeGreaterThan(-1);
+    return text.slice(start, text.indexOf("\n  });", start));
+  };
+
+  /** A remote Bot asking for one more computer read every time it runs, `asks` times. */
+  function botAsking(asks: number) {
+    let requests = 0;
+    const agent = new HttpAgent({
+      agentId: "bot",
+      url: "https://agent.example/ag-ui",
+      fetch: async (_url, init) => {
+        const input = JSON.parse(String(init?.body)) as RunAgentInput;
+        requests += 1;
+        const id = `read-${requests}`;
+        const events = [
+          {
+            type: EventType.RUN_STARTED,
+            threadId: input.threadId,
+            runId: input.runId,
+          },
+          ...(requests <= asks
+            ? [
+                {
+                  type: EventType.TOOL_CALL_START,
+                  toolCallId: id,
+                  toolCallName: "probe",
+                  parentMessageId: `m-${id}`,
+                },
+                { type: EventType.TOOL_CALL_ARGS, toolCallId: id, delta: "{}" },
+                { type: EventType.TOOL_CALL_END, toolCallId: id },
+              ]
+            : [
+                {
+                  type: EventType.TEXT_MESSAGE_START,
+                  messageId: "reply",
+                  role: "assistant",
+                },
+                {
+                  type: EventType.TEXT_MESSAGE_CONTENT,
+                  messageId: "reply",
+                  delta: "全部看完了。",
+                },
+                { type: EventType.TEXT_MESSAGE_END, messageId: "reply" },
+              ]),
+          {
+            type: EventType.RUN_FINISHED,
+            threadId: input.threadId,
+            runId: input.runId,
+          },
+        ];
+        return new Response(
+          events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
+          { headers: { "content-type": "text/event-stream" } },
+        );
+      },
+    });
+    return agent;
+  }
+
+  async function turn(asks: number, maxToolSegments?: number) {
+    let executed = 0;
+    const runTurn = createTurnRunner({
+      admission: async () => new AbortController().signal,
+      intelligence: {
+        getOrCreateThread: async () => undefined,
+        getThreadMessages: async () => ({ messages: [] }),
+        ɵacquireThreadLock: async () => undefined,
+        ɵrenewThreadLock: async () => undefined,
+        ɵcleanupThreadLock: async () => undefined,
+      },
+      runner: {
+        run: ({ agent, input }) =>
+          new Observable((subscriber) => {
+            agent
+              .runAgent(input, {
+                onEvent: ({ event }) => subscriber.next(event),
+              })
+              .then(
+                () => subscriber.complete(),
+                (error) => subscriber.error(error),
+              );
+          }),
+        stop: async () => true,
+      },
+      buildAgentFor: async () => botAsking(asks),
+      toolsForTurn: async () => [
+        {
+          definition: {
+            name: "probe",
+            description: "Look once more.",
+            parameters: { type: "object", properties: {} },
+          },
+          execute: async () => {
+            executed += 1;
+            return { ok: true };
+          },
+        },
+      ],
+      ...(maxToolSegments === undefined ? {} : { maxToolSegments }),
+    });
+    const outcome = await runTurn({
+      ownerUserId: "owner",
+      routineId: "routine",
+      agentId: "bot",
+      threadId: `thread-${asks}-${maxToolSegments}`,
+      instruction: "一项项看。",
+      initiator: { kind: "routine", id: "routine" },
+    }).then(
+      ({ replyText }) => replyText,
+      (error: Error) => error.message,
+    );
+    return { outcome, executed };
+  }
+
+  test("a working turn goes on past its 31st round; a light one stops at 30, as before", async () => {
+    expect(await turn(31, toolSegmentsFor("unattended"))).toEqual({
+      outcome: "全部看完了。",
+      executed: 31,
+    });
+    const light = await turn(31);
+    expect(light.executed).toBe(30);
+    expect(light.outcome).toContain("continuation limit");
+  }, 20_000);
+
+  test("the working turns are given 80 rounds, the light ones keep 30", () => {
+    expect(TURN_LIMITS.workToolSegments).toBe(80);
+    expect(TURN_LIMITS.toolSegments).toBe(30);
+    const index = source("index.ts");
+    expect(
+      optionsOf(index, "const unattendedTurnRunner = createTurnRunner({"),
+    ).toContain('maxToolSegments: toolSegmentsFor("unattended")');
+    expect(
+      optionsOf(index, "const boardTaskTurnRunner = createTurnRunner({"),
+    ).toContain('maxToolSegments: toolSegmentsFor("board")');
+    expect(
+      optionsOf(index, "const wakeUpRunner = createWakeUpRunner({"),
+    ).toContain('maxToolSegments: toolSegmentsFor("unattended")');
+    expect(source("agents", "subagent.ts")).toContain(
+      'maxToolSegments: toolSegmentsFor("subagent")',
+    );
+    expect(source("responsibilities", "wiring.ts")).toContain(
+      'maxToolSegments: toolSegmentsFor("patrol")',
+    );
+    // A check-in is not given more: it keeps the default.
+    expect(
+      optionsOf(index, "const proactiveEngine = createProactiveEngine({"),
+    ).not.toContain("maxToolSegments");
   });
 });

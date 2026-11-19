@@ -20,6 +20,20 @@ export const TURN_LIMITS = {
   workTurnTimeoutMs: 25 * 60_000,
 
   /**
+   * How many rounds of headless tool calls one light turn may take (`HeadlessToolsMiddleware`). A
+   * round is one run of the Bot that ends asking for tools only this host can run (the computer, a
+   * component): they are run here and the Bot is run again with their results. Not the model's step
+   * budget (`UNATTENDED_STEPS` in copilotkit/last-step.ts), which caps the steps inside one run.
+   */
+  toolSegments: 30,
+
+  /**
+   * The same for a working turn (期五): 80, the order of a person's chat (40 steps, extended once by
+   * as many again). Thirty ended a board card's work half way through "search, read, edit, test".
+   */
+  workToolSegments: 80,
+
+  /**
    * The gap between stopping a turn and giving up on it.
    *
    * `abortRun` on `RunSelectedAgent` reaches the agent the run turned into, and that agent does not
@@ -68,4 +82,11 @@ export function turnTimeoutFor(kind: TurnKind): number {
   return kind === "board" || kind === "unattended" || kind === "subagent"
     ? TURN_LIMITS.workTurnTimeoutMs
     : TURN_LIMITS.turnTimeoutMs;
+}
+
+/** How many rounds of headless tool calls a turn of this kind may take; see `TURN_LIMITS.toolSegments`. */
+export function toolSegmentsFor(kind: TurnKind): number {
+  return turnTimeoutFor(kind) === TURN_LIMITS.workTurnTimeoutMs
+    ? TURN_LIMITS.workToolSegments
+    : TURN_LIMITS.toolSegments;
 }

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { computerGuidance } from "../../shared/bot-prompt";
 import { isPersonBrowserId } from "../../shared/openbot-browser";
 import { workOwner } from "../../shared/work-owner";
-import { turnTimeoutFor } from "../../toolkit/src/limits";
+import { toolSegmentsFor, turnTimeoutFor } from "../../toolkit/src/limits";
 import { createActivityStore } from "./activity/activity";
 import {
   auditRoutineStore,
@@ -3436,6 +3436,7 @@ await startupLifecycle.run(async (startup) => {
   const unattendedTurnRunner = createTurnRunner({
     // A routine, a card's round, an automation: real work, given the working turn's clock (期五).
     turnTimeoutMs: turnTimeoutFor("unattended"),
+    maxToolSegments: toolSegmentsFor("unattended"),
     prepareRunInput: prepareProductRunInput,
     onKnownStop: productTelemetry.stopKnown,
     intelligence: routineIntelligence,
@@ -3903,6 +3904,7 @@ await startupLifecycle.run(async (startup) => {
     return createTurnRunner({
       // A responsibility's patrol is a light turn and keeps the light clock (期五).
       turnTimeoutMs: turnTimeoutFor("patrol"),
+      maxToolSegments: toolSegmentsFor("patrol"),
       prepareRunInput: prepareProductRunInput,
       onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
@@ -4031,6 +4033,7 @@ await startupLifecycle.run(async (startup) => {
   const boardTaskTurnRunner = createTurnRunner({
     ...approvalContinuationOptions,
     turnTimeoutMs: turnTimeoutFor("board"),
+    maxToolSegments: toolSegmentsFor("board"),
   });
   /*
    * The approval resume loop (approvals/resume-sweep.ts): claim a decided approval, carry it out in
@@ -4497,6 +4500,7 @@ await startupLifecycle.run(async (startup) => {
     runTurn: createTurnRunner({
       // A follow-up a Bot scheduled for itself runs unattended, on the working turn's clock (期五).
       turnTimeoutMs: turnTimeoutFor("unattended"),
+      maxToolSegments: toolSegmentsFor("unattended"),
       prepareRunInput: prepareProductRunInput,
       onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,

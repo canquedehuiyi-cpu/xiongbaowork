@@ -13,6 +13,8 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
   - 运维说明：看板卡、无人值守轮（例程、自动化、员工给自己定的跟进、卡片上的催办）和子代理的墙钟从 5 分钟改为 25 分钟
     （`TURN_LIMITS.workTurnTimeoutMs`）；check-in（仍为 3 分钟）、职责巡检、群聊和审批后的续跑保持原样。每轮 48 步上限和
     计量兜底不变。
+  - 同一批轮次的无头工具续跑轮数从 30 放到 80（`TURN_LIMITS.workToolSegments`，和对话轮 40 步再续 40 步对齐），超过仍报
+    「The headless tool continuation limit was reached.」；check-in、巡检等轻量轮仍为 30。
   - 例程运行、自动化执行的「视为中断」阈值随之从 10 分钟放到 50 分钟（两倍工作轮墙钟），慢而活着的轮次不会被提前判为中断；
     服务器真的中途重启时，卡片和例程运行要多等一会儿才会被标成失败。
   - `computer_run_command` 新增可选 `timeoutMs`：默认 120 秒，最多 600 秒，超过按 600 秒截断。不需要改任何配置。
