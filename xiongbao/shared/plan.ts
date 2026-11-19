@@ -95,3 +95,18 @@ export function planUpdated(items: readonly PlanItem[]): string {
   const done = items.filter((item) => item.status === "done").length;
   return `已更新计划：${items.length} 项，完成 ${done} 项`;
 }
+
+/**
+ * How a job of several steps is carried: a plan first, one item in progress at a time, each ticked
+ * off as soon as it is done, the summary only once all of them are. In Chinese, as the plan the
+ * person reads is.
+ */
+export const PLAN_GUIDANCE = `遇到需要多步才能完成的任务，先用 ${UPDATE_PLAN_TOOL} 列出计划。开始做哪一项，就把它标成 in_progress，同一时间只做一项；做完一项，立刻标 done；全部 done 后再给出总结。一两步就能完成的简单问题，不用列计划。`;
+
+/**
+ * Said to a Bot that holds `update_plan`, and to no other: one whose plan tool is switched off for it
+ * is not told to plan with a tool it does not have.
+ */
+export function planGuidance(toolNames: readonly string[]): string | undefined {
+  return toolNames.includes(UPDATE_PLAN_TOOL) ? PLAN_GUIDANCE : undefined;
+}

@@ -10,7 +10,11 @@ import {
 import { createTurnRunner } from "@openbot/toolkit/run-turn";
 import { Observable } from "rxjs";
 import { z } from "zod";
-import { type PlanItem, UPDATE_PLAN_TOOL } from "../../shared/plan";
+import {
+  PLAN_GUIDANCE,
+  type PlanItem,
+  UPDATE_PLAN_TOOL,
+} from "../../shared/plan";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { UPDATE_PLAN_REF, updatePlanTools } from "../src/agents/update-plan";
 import { toolDisabled } from "../src/approvals/policy";
@@ -305,6 +309,29 @@ describe("a person's run with a plan", () => {
     });
     expect(toolNames(asked[0])).toContain(lookup.name);
     expect(toolNames(asked[0])).not.toContain(UPDATE_PLAN_TOOL);
+  });
+
+  test("is told how to plan while it holds update_plan, and not once a rule switched it off", async () => {
+    modelSays([{ content: "ENG-1 在 Todo。" }, { content: "ENG-1 在 Todo。" }]);
+    await chat("查一下 ENG-1。");
+    const held = JSON.stringify(asked[0]?.messages ?? []);
+    expect(held).toContain(`<plan>\\n${PLAN_GUIDANCE}\\n</plan>`);
+    expect(held).toContain(
+      "遇到需要多步才能完成的任务，先用 update_plan 列出计划。",
+    );
+    expect(held).toContain("开始做哪一项，就把它标成 in_progress");
+    expect(held).toContain("做完一项，立刻标 done");
+    expect(held).toContain("全部 done 后再给出总结");
+    expect(held).toContain("一两步就能完成的简单问题，不用列计划");
+
+    asked = [];
+    await chat("查一下 ENG-1。", {
+      disabled: (ref) => ref === UPDATE_PLAN_REF,
+    });
+    const switchedOff = JSON.stringify(asked[0]?.messages ?? []);
+    expect(switchedOff).not.toContain("<plan>");
+    expect(switchedOff).not.toContain(UPDATE_PLAN_TOOL);
+    expect(switchedOff).not.toContain("列出计划");
   });
 
   test("that stops with an item not done is sent back, finishes it, and ends", async () => {
