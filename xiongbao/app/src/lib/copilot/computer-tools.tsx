@@ -28,6 +28,7 @@ import {
   commandTimeoutMs,
   computerToolPlace,
   DEVICE_RUN_COMMAND_DESCRIPTION,
+  LINE_RANGE_DESCRIPTION,
 } from "../../../../shared/computer-tool-words";
 import {
   DESKTOP_REF,
@@ -37,6 +38,7 @@ import {
   CANDIDATE_REF,
   LOCAL_TOOL_DESCRIPTIONS,
 } from "../../../../shared/local-tools";
+import { ownToolAttempt, ownToolLabel } from "../../../../shared/tool-name";
 import {
   type ToolCallContext,
   useActiveBotHolder,
@@ -198,6 +200,48 @@ function ActionLine({
 const STILL_STARTING_DETAIL = "电脑还在启动。";
 
 /**
+ * A coding tool's line (期五): its words from the shared table, what it acted on, and, for an edit
+ * whose passage was missing or ambiguous or a search that could not run, that it did not work.
+ */
+function FileStepLine({
+  name,
+  subject,
+  result,
+  status,
+}: {
+  name: string;
+  subject: string | undefined;
+  args: unknown;
+  result: string | undefined;
+  status: string;
+}) {
+  const outcome = outcomeOf(result);
+  const answered = outcome as ComputerOutcome & {
+    edited?: unknown;
+    error?: unknown;
+  };
+  const notDone =
+    didNotWork(outcome) ||
+    answered.edited === false ||
+    typeof answered.error === "string";
+  return (
+    <ActionLine
+      running={status !== "complete"}
+      label={ownToolLabel(name) ?? name}
+      attempted={ownToolAttempt(name) ?? undefined}
+      detail={
+        outcome.refused === true ? refusedDetail(subject, outcome) : subject
+      }
+      declined={outcome.declined === true}
+      refused={outcome.refused === true}
+      failed={notDone}
+      notYet={stillStarting(outcome)}
+      byYou={byPerson(outcome)}
+    />
+  );
+}
+
+/**
  * What a refused step's line says after its words: what it was aimed at, then why it did not
  * happen, as one phrase ("notes.txt · You declined it."). The target alone hid the reason; the reason
  * alone hid which file or field it was.
@@ -350,6 +394,10 @@ const OFFERED: Readonly<Record<string, OfferRule>> = {
   computer_read_file: offeredComputer,
   computer_run_command: offeredComputer,
   computer_write_file: offeredComputer,
+  // The coding tools (期五), offered with the file tools they stand beside.
+  computer_edit_file: offeredComputer,
+  computer_grep: offeredComputer,
+  computer_glob: offeredComputer,
   computer_scroll: offeredBrowser,
 };
 
@@ -781,17 +829,34 @@ export function ComputerTools() {
 
   useFrontendTool({
     name: "computer_read_file",
-    description: onDevice
-      ? `Read a saved file relative to ${place}, such as notes.md or reports/august.csv. The folder survives between conversations, so use this to pick up notes you made before.`
-      : "Read a file you saved earlier in your own workspace. Paths are relative to your workspace, " +
-        "such as notes.md or reports/august.csv. Your workspace survives between conversations, so use " +
-        "this to pick up notes you made before.",
+    description: `${
+      onDevice
+        ? `Read a saved file relative to ${place}, such as notes.md or reports/august.csv. The folder survives between conversations, so use this to pick up notes you made before.`
+        : "Read a file you saved earlier in your own workspace. Paths are relative to your workspace, " +
+          "such as notes.md or reports/august.csv. Your workspace survives between conversations, so use " +
+          "this to pick up notes you made before."
+    } ${LINE_RANGE_DESCRIPTION}`,
     parameters: z.object({
       path: z
         .string()
         .describe("Path relative to your workspace, such as notes.md"),
+      offset: z
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe("The first line to read, from 1"),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .optional()
+        .describe("How many lines to read"),
     }),
-    handler: async (input: { path: string }, { agent }: ToolCallContext = {}) =>
+    handler: async (
+      input: { path: string; offset?: number; limit?: number },
+      { agent }: ToolCallContext = {},
+    ) =>
       callComputer(botOf(agent), "/files/read", {
         method: "POST",
         body: input,
@@ -970,6 +1035,120 @@ export function ComputerTools() {
         body: input,
       }),
     render: (props) => <FileSavedLineRenderer {...props} />,
+  });
+
+  /*
+   * The coding tools (期五): one passage of a file replaced, a content search, a search by name. The
+   * edit is a change, so the approval wrapper sends it to the server's gate as it does a write; the
+   * searches only read and go straight to their routes.
+   */
+  useFrontendTool({
+    name: "computer_edit_file",
+    description: `Replace one passage of a text file in ${place}. old_string must appear in the file exactly once, so include enough of the surrounding lines to make it unique; it is replaced by new_string. Set replace_all to replace every occurrence. Prefer this to rewriting the whole file with computer_write_file. When old_string is not found or appears more than once, nothing is changed and you are told why: read the file again and retry.`,
+    parameters: z.object({
+      path: z.string().describe("Path relative to your workspace"),
+      old_string: z
+        .string()
+        .describe("The exact text to replace, as it is in the file"),
+      new_string: z.string().describe("The text to put in its place"),
+      replace_all: z
+        .boolean()
+        .optional()
+        .describe("Replace every occurrence instead of exactly one"),
+    }),
+    handler: async (
+      input: {
+        path: string;
+        old_string: string;
+        new_string: string;
+        replace_all?: boolean;
+      },
+      { agent }: ToolCallContext = {},
+    ) =>
+      callComputer(botOf(agent), "/files/edit", {
+        method: "POST",
+        body: input,
+      }),
+    render: ({ args, result, status }) => (
+      <FileStepLine
+        args={args}
+        result={result}
+        status={status}
+        name="computer_edit_file"
+        subject={typeof args?.path === "string" ? args.path : undefined}
+      />
+    ),
+  });
+
+  useFrontendTool({
+    name: "computer_grep",
+    description: `Search the contents of files in ${place} for a regular expression, as rg or grep -rn would. Returns the matching lines as path:line:text, at most 200 of them. Pass path to search one folder or file, glob to search only matching files (such as *.ts), and ignore_case to ignore case. Hidden files and node_modules are skipped.`,
+    parameters: z.object({
+      pattern: z.string().describe("The regular expression to search for"),
+      path: z
+        .string()
+        .optional()
+        .describe("A folder or file to search; omit for the whole workspace"),
+      glob: z
+        .string()
+        .optional()
+        .describe("Only search files matching this, such as *.ts"),
+      ignore_case: z
+        .boolean()
+        .optional()
+        .describe("Ignore upper and lower case"),
+    }),
+    handler: async (
+      input: {
+        pattern: string;
+        path?: string;
+        glob?: string;
+        ignore_case?: boolean;
+      },
+      { agent }: ToolCallContext = {},
+    ) =>
+      callComputer(botOf(agent), "/files/grep", {
+        method: "POST",
+        body: input,
+      }),
+    render: ({ args, result, status }) => (
+      <FileStepLine
+        args={args}
+        result={result}
+        status={status}
+        name="computer_grep"
+        subject={typeof args?.pattern === "string" ? args.pattern : undefined}
+      />
+    ),
+  });
+
+  useFrontendTool({
+    name: "computer_glob",
+    description: `Find files in ${place} whose path matches a glob pattern, such as src/**/*.ts, relative to path when one is given. Returns up to 500 paths, the most recently changed first.`,
+    parameters: z.object({
+      pattern: z.string().describe("A glob pattern, such as src/**/*.ts"),
+      path: z
+        .string()
+        .optional()
+        .describe("The folder to search from; omit for the whole workspace"),
+    }),
+    handler: async (
+      input: { pattern: string; path?: string },
+      { agent }: ToolCallContext = {},
+    ) =>
+      callComputer(botOf(agent), "/files/glob", {
+        method: "POST",
+        body: input,
+      }),
+    render: ({ args, result, status }) => (
+      <FileStepLine
+        args={args}
+        result={result}
+        status={status}
+        name="computer_glob"
+        subject={typeof args?.pattern === "string" ? args.pattern : undefined}
+      />
+    ),
   });
 
   useFrontendTool({

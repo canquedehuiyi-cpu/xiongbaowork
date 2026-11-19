@@ -235,6 +235,7 @@ tests/channel-summary.integration.test.ts
 tests/channel-titler.test.ts
 tests/channel-work.integration.test.ts
 tests/check-in-offer.test.ts
+tests/coding-tools.test.ts
 tests/command-timeout.test.ts
 tests/comments-say-the-reason.test.ts
 tests/compaction.integration.test.ts

@@ -26,13 +26,13 @@ import {
 } from "../audit";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
+import { englishName } from "../brand";
 import {
   type ModelAnswerSchema,
   type ModelCompleter,
   ModelNotConfiguredError,
 } from "../routing/model";
 import { checkPolicyRule, type PolicyContext } from "./policy";
-import { englishName } from "../brand";
 
 type Intent = NonNullable<PolicyContext["intent"]>;
 
@@ -56,6 +56,10 @@ export const COMPUTER_TOOLS: { tool: string; intent: Intent; key?: string }[] =
     { tool: "computer_write_file", intent: "write_file" },
     { tool: "computer_list_files", intent: "list_files" },
     { tool: "computer_run_command", intent: "run_command" },
+    // The coding tools (期五), with the intents of the tools they stand beside.
+    { tool: "computer_edit_file", intent: "write_file" },
+    { tool: "computer_grep", intent: "read_file" },
+    { tool: "computer_glob", intent: "list_files" },
   ];
 
 /** Every intent the policy can see, in words. Typed against the context, so a new one has to be added. */
@@ -65,10 +69,13 @@ const INTENTS: Record<Intent, string> = {
   type: "typing into a field, or any other keypress: computer_type, computer_key",
   navigate: "opening a page: computer_navigate",
   read: "scrolling the page, or reading the owner's own desktop: computer_scroll, computer_desktop_windows, computer_desktop_snapshot, computer_desktop_wait, computer_desktop_clipboard_read",
-  read_file: "reading a file in the Bot's workspace: computer_read_file",
+  read_file:
+    "reading a file in the Bot's workspace, or searching their contents: computer_read_file, computer_grep",
   download_file: "downloading a file: computer_download_file",
-  write_file: "saving a file in the Bot's workspace: computer_write_file",
-  list_files: "listing the Bot's workspace: computer_list_files",
+  write_file:
+    "saving a file in the Bot's workspace, or replacing a passage of one: computer_write_file, computer_edit_file",
+  list_files:
+    "listing the Bot's workspace, or finding files by name: computer_list_files, computer_glob",
   run_command: "running a shell command: computer_run_command",
   read_tool: "an app tool call that only reads",
   write_tool:

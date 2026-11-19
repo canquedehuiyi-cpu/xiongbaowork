@@ -125,3 +125,68 @@ test("the shell tool offers timeoutMs, and sends what was asked, the default, or
     { command: "bun test", timeoutMs: 600_000 },
   ]);
 });
+
+test("the coding tools are offered beside the file tools, and each goes to its own route", async () => {
+  await mount();
+  const parameters = (name: string) =>
+    Object.keys(
+      (
+        z.toJSONSchema(registered.get(name)?.parameters as z.ZodType) as {
+          properties: object;
+        }
+      ).properties,
+    );
+  expect(parameters("computer_edit_file")).toEqual([
+    "path",
+    "old_string",
+    "new_string",
+    "replace_all",
+  ]);
+  expect(parameters("computer_grep")).toEqual([
+    "pattern",
+    "path",
+    "glob",
+    "ignore_case",
+  ]);
+  expect(parameters("computer_glob")).toEqual(["pattern", "path"]);
+  expect(parameters("computer_read_file")).toEqual(["path", "offset", "limit"]);
+  expect(registered.get("computer_read_file")?.description).toContain("offset");
+
+  for (const route of ["read", "edit", "grep", "glob"])
+    answers[`/api/computers/bot-1/files/${route}`] = () => Response.json({});
+  requests = [];
+  const calls = [
+    ["computer_read_file", { path: "src/a.ts", offset: 10, limit: 20 }],
+    [
+      "computer_edit_file",
+      { path: "src/a.ts", old_string: "a", new_string: "b" },
+    ],
+    ["computer_grep", { pattern: "TODO", glob: "*.ts", ignore_case: true }],
+    ["computer_glob", { pattern: "src/**/*.ts" }],
+  ] as const;
+  for (const [name, args] of calls)
+    await registered.get(name)?.handler?.(args as never, {} as never);
+  expect(posted()).toEqual(
+    calls.map(([name, args]) => ({
+      path: `/api/computers/bot-1/files/${name.replace(/^computer_|_file$/g, "")}`,
+      method: "POST",
+      body: args,
+    })),
+  );
+});
+
+test("an edit is a change, asked about through the gate; the searches change nothing", async () => {
+  const { viewOfTool } = await import("@/lib/computers/panel-view");
+  for (const name of ["computer_edit_file", "computer_grep", "computer_glob"])
+    expect(viewOfTool(name)).toBeUndefined();
+  const source = await Bun.file(
+    new URL("../src/lib/copilot/approval-tools.tsx", import.meta.url),
+  ).text();
+  const writes = source.slice(
+    source.indexOf("const writes = new Set(["),
+    source.indexOf("]);", source.indexOf("const writes = new Set([")),
+  );
+  expect(writes).toContain('"computer_edit_file"');
+  expect(writes).not.toContain('"computer_grep"');
+  expect(writes).not.toContain('"computer_glob"');
+});

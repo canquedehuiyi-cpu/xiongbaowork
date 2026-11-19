@@ -21,6 +21,7 @@
  * A factory taking its root as an argument rather than reading the environment, so the confinement
  * can be tested against a temporary directory instead of being taken on trust.
  */
+import { spawn } from "node:child_process";
 import {
   constants,
   type FileHandle,
@@ -101,6 +102,75 @@ export const DEFAULT_WORKSPACE_LIMITS: WorkspaceLimits = {
   downloadBytes: 100 * 1024 * 1024,
 };
 
+/** A line range of a file: `offset` is the first line, from 1; `limit` how many lines. */
+export type ReadOptions = { offset?: number; limit?: number };
+
+/** What a line-range read returns: the lines, numbered, and where they sit in the file. */
+export type LineRead = {
+  path: string;
+  text: string;
+  /** Fewer lines than asked came back: the read limit, or a file longer than a write may be. */
+  truncated: boolean;
+  bytes: number;
+  startLine: number;
+  /** The last line shown; one less than `startLine` when none was. */
+  endLine: number;
+  totalLines: number;
+};
+
+/** How a line range is shown. */
+export const LINE_READ_LIMITS = {
+  /** Lines shown when `offset` is given without `limit`. */
+  defaultLines: 2000,
+  /** Characters of one line shown before the rest is left out. */
+  lineChars: 2000,
+} as const;
+
+/** What an edit returns: done, with how many passages changed, or why it was not done. */
+export type EditResult =
+  | { path: string; edited: true; replacements: number; bytes: number }
+  | { path: string; edited: false; error: string };
+
+/** A content search: a regular expression, where to look, which files, and whether case matters. */
+export type GrepOptions = {
+  pattern: string;
+  path?: string;
+  glob?: string;
+  ignoreCase?: boolean;
+};
+
+export type GrepResult =
+  | {
+      pattern: string;
+      path: string;
+      engine: "rg" | "grep";
+      /** Matching lines returned, one per line of `text` as `path:line:text`. */
+      matches: number;
+      text: string;
+      truncated: boolean;
+      timedOut?: boolean;
+    }
+  | { pattern: string; path: string; error: string };
+
+/** How much a search may return, and how long it may take. */
+export const SEARCH_LIMITS = {
+  matches: 200,
+  bytes: 64 * 1024,
+  /** Characters of one matching line shown. */
+  lineChars: 500,
+  timeoutMs: 30_000,
+} as const;
+
+/** A file search by name: a glob pattern, relative to `path` when one is given. */
+export type GlobOptions = { pattern: string; path?: string };
+
+export type GlobResult =
+  | { pattern: string; path: string; paths: string[]; truncated: boolean }
+  | { pattern: string; path: string; error: string };
+
+/** How many paths a glob returns, and how many entries it may walk to find them. */
+export const GLOB_LIMITS = { paths: 500, visited: 50_000 } as const;
+
 export type WorkspaceOptions = {
   /**
    * Check the file that was opened, not only the path before it was opened. Per-employee mode only.
@@ -121,6 +191,8 @@ export type WorkspaceOptions = {
    * opened, and for a folder a write creates, both before it is made and before it is opened.
    */
   beforeOpen?: (path: string) => void | Promise<void>;
+  /** For tests: the programs a content search runs, in place of `rg` and `grep` on PATH. */
+  searchTools?: { rg?: string; grep?: string };
 };
 
 const {
@@ -449,10 +521,11 @@ export function createWorkspace(
     return { path: requested, entries, truncated };
   }
 
-  /** `read`, from the descriptor that was checked. */
+  /** `read`, from the descriptor that was checked. At most `cap` bytes, the read limit by default. */
   async function readOpened(
     full: string,
     requested: string,
+    cap: number = limits.readBytes,
   ): Promise<{
     path: string;
     text: string;
@@ -469,10 +542,7 @@ export function createWorkspace(
         );
       if (!info.isFile())
         throw new WorkspaceFileError(`${requested} is not a file.`);
-      const slice = await readStart(
-        handle,
-        Math.min(info.size, limits.readBytes),
-      );
+      const slice = await readStart(handle, Math.min(info.size, cap));
       return {
         path: requested,
         text: slice.toString("utf8"),
@@ -590,7 +660,228 @@ export function createWorkspace(
     }
   }
 
-  return {
+  /**
+   * The text of a file, up to `cap` bytes: what a line range and an edit work on. Reached the same
+   * way a read is (the same confinement, from the checked descriptor in confined mode).
+   */
+  async function readText(
+    requested: string,
+    cap: number,
+  ): Promise<{ text: string; bytes: number; complete: boolean }> {
+    const full = await resolvePath(requested, false);
+    if (confined) {
+      const read = await readOpened(full, requested, cap);
+      return { text: read.text, bytes: read.bytes, complete: !read.truncated };
+    }
+    const info = await stat(full).catch(() => null);
+    if (!info) {
+      throw new WorkspaceFileNotFoundError(`There is no file at ${requested}.`);
+    }
+    if (info.isDirectory()) {
+      throw new WorkspaceFileError(`${requested} is a directory, not a file.`);
+    }
+    const buffer = await readFile(full);
+    const slice = buffer.subarray(0, cap);
+    return {
+      text: slice.toString("utf8"),
+      bytes: buffer.byteLength,
+      complete: buffer.byteLength <= cap,
+    };
+  }
+
+  /** A line range of a file, numbered as `cat -n` numbers it, bounded by the read limit. */
+  async function readLines(
+    requested: string,
+    options: ReadOptions,
+  ): Promise<LineRead> {
+    const whole = await readText(requested, limits.writeBytes);
+    const lines = whole.text.split(/\r?\n/);
+    // A file that ends with a newline has no line after it.
+    if (lines.length > 0 && lines.at(-1) === "") lines.pop();
+    const start = Math.max(1, Math.floor(options.offset ?? 1));
+    const count = Math.max(
+      1,
+      Math.floor(options.limit ?? LINE_READ_LIMITS.defaultLines),
+    );
+    const wanted = lines.slice(start - 1, start - 1 + count);
+    let text = "";
+    let used = 0;
+    let shown = 0;
+    let cut = false;
+    for (const [index, line] of wanted.entries()) {
+      const body =
+        line.length > LINE_READ_LIMITS.lineChars
+          ? `${line.slice(0, LINE_READ_LIMITS.lineChars)}…[这一行太长，后面省略]`
+          : line;
+      const numbered = `${String(start + index).padStart(6)}\t${body}\n`;
+      const size = Buffer.byteLength(numbered, "utf8");
+      if (used + size > limits.readBytes) {
+        cut = true;
+        break;
+      }
+      text += numbered;
+      used += size;
+      shown += 1;
+    }
+    return {
+      path: requested,
+      text,
+      truncated: cut || !whole.complete,
+      bytes: whole.bytes,
+      startLine: start,
+      endLine: start + shown - 1,
+      totalLines: lines.length,
+    };
+  }
+
+  /**
+   * Where a search starts: the workspace itself, or a folder or file inside it. In confined mode the
+   * thing is opened and checked first and the search is run on the descriptor (`/proc/<pid>/fd/<n>`),
+   * so a folder swapped for a link after the check cannot send it somewhere else.
+   */
+  async function searchStart(requested: string | undefined): Promise<{
+    root: string;
+    shown: string;
+    cwd: string;
+    target: string;
+    kind: "file" | "folder";
+    close: () => Promise<void>;
+  }> {
+    const root = await realpath(rootPath);
+    const wanted = requested?.trim() ? requested.trim() : ".";
+    const start = wanted === "." ? root : await resolvePath(wanted, false);
+    const shown = relative(root, start);
+    if (confined) {
+      const handle = await openInside(root, start, READ_FLAGS, wanted);
+      try {
+        const info = await handle.stat();
+        const pinned = `/proc/${process.pid}/fd/${handle.fd}`;
+        const close = () => handle.close().catch(() => {});
+        return info.isDirectory()
+          ? { root, shown, cwd: pinned, target: ".", kind: "folder", close }
+          : { root, shown, cwd: "/", target: pinned, kind: "file", close };
+      } catch (error) {
+        await handle.close().catch(() => {});
+        throw error;
+      }
+    }
+    const info = await stat(start).catch(() => null);
+    if (!info) throw new WorkspaceFileNotFoundError(`There is no ${wanted}.`);
+    const close = async () => {};
+    return info.isDirectory()
+      ? { root, shown, cwd: start, target: ".", kind: "folder", close }
+      : {
+          root,
+          shown,
+          cwd: dirname(start),
+          target: basename(start),
+          kind: "file",
+          close,
+        };
+  }
+
+  /**
+   * Every file and folder under `start`, newest walk first, never through a link. In confined mode
+   * each folder is read through its own descriptor and a folder inside it is opened relative to that
+   * descriptor with O_NOFOLLOW and checked, as `listOpened` does.
+   */
+  async function walkTree(
+    root: string,
+    start: string,
+    requested: string,
+    skipFolder: (name: string) => boolean,
+    visit: (entry: {
+      path: string;
+      kind: "file" | "folder";
+      modifiedMs: number;
+    }) => boolean,
+  ): Promise<void> {
+    let stopped = false;
+    const plain = async (dir: string): Promise<void> => {
+      const found = await readdir(dir, { withFileTypes: true }).catch(() => []);
+      for (const item of found) {
+        if (stopped) return;
+        const full = join(dir, item.name);
+        const shown = relative(root, full);
+        if (item.isDirectory()) {
+          if (skipFolder(item.name)) continue;
+          if (!visit({ path: shown, kind: "folder", modifiedMs: 0 })) {
+            stopped = true;
+            return;
+          }
+          await plain(full);
+          continue;
+        }
+        if (!item.isFile()) continue;
+        const info = await lstat(full).catch(() => null);
+        if (
+          !visit({ path: shown, kind: "file", modifiedMs: info?.mtimeMs ?? 0 })
+        ) {
+          stopped = true;
+          return;
+        }
+      }
+    };
+    if (!confined) {
+      await plain(start);
+      return;
+    }
+    const pinned = async (handle: FileHandle, real: string): Promise<void> => {
+      const here = `/proc/self/fd/${handle.fd}`;
+      const found = await readdir(here, { withFileTypes: true }).catch(
+        () => [],
+      );
+      for (const item of found) {
+        if (stopped) return;
+        const full = join(real, item.name);
+        const shown = relative(root, full);
+        if (item.isDirectory()) {
+          if (skipFolder(item.name)) continue;
+          if (!visit({ path: shown, kind: "folder", modifiedMs: 0 })) {
+            stopped = true;
+            return;
+          }
+          await options.beforeOpen?.(full);
+          const child = await open(
+            join(here, item.name),
+            READ_FLAGS | O_NOFOLLOW,
+          ).catch(() => null);
+          if (child === null) continue;
+          try {
+            const childReal = await openedPath(child);
+            try {
+              assertInside(root, childReal, shown);
+            } catch {
+              throw changedUnderneath(shown);
+            }
+            if ((await child.stat()).isDirectory())
+              await pinned(child, childReal);
+          } finally {
+            await child.close().catch(() => {});
+          }
+          continue;
+        }
+        if (!item.isFile()) continue;
+        const info = await lstat(join(here, item.name)).catch(() => null);
+        if (
+          !visit({ path: shown, kind: "file", modifiedMs: info?.mtimeMs ?? 0 })
+        ) {
+          stopped = true;
+          return;
+        }
+      }
+    };
+    const first = await openInside(root, start, READ_FLAGS, requested);
+    try {
+      if (!(await first.stat()).isDirectory())
+        throw new WorkspaceFileError(`${requested} is a file, not a folder.`);
+      await pinned(first, await openedPath(first));
+    } finally {
+      await first.close().catch(() => {});
+    }
+  }
+
+  const api = {
     resolvePath,
 
     /**
@@ -655,13 +946,26 @@ export function createWorkspace(
       return { path: requested, entries, truncated };
     },
 
-    /** Read a text file. Bounded, and it says when it gave you less than the whole thing. */
-    async read(requested: string): Promise<{
+    /**
+     * Read a text file. Bounded, and it says when it gave you less than the whole thing.
+     *
+     * With `offset` (the first line, from 1) or `limit` (how many lines), a line range instead,
+     * numbered as `cat -n` numbers it (期五). Without either, exactly as it always was.
+     */
+    async read(
+      requested: string,
+      options: ReadOptions = {},
+    ): Promise<{
       path: string;
       text: string;
       truncated: boolean;
       bytes: number;
+      startLine?: number;
+      endLine?: number;
+      totalLines?: number;
     }> {
+      if (options.offset !== undefined || options.limit !== undefined)
+        return readLines(requested, options);
       const full = await resolvePath(requested, false);
       if (confined) return readOpened(full, requested);
       const info = await stat(full).catch(() => null);
@@ -756,7 +1060,225 @@ export function createWorkspace(
       });
       return { path: requested, bytes, appended: options.append === true };
     },
+
+    /**
+     * Replace one passage of a text file (期五). `oldString` must be there exactly once, or every
+     * occurrence is replaced with `replaceAll`. A passage that is missing or ambiguous is answered in
+     * words, never thrown: the model reads it and tries again. The file is written back through
+     * `write`, so the same confinement and the same size limit apply; a file larger than a write may
+     * be is not edited at all.
+     */
+    async edit(
+      requested: string,
+      oldString: string,
+      newString: string,
+      options: { replaceAll?: boolean } = {},
+    ): Promise<EditResult> {
+      const refuse = (error: string): EditResult => ({
+        path: requested,
+        edited: false,
+        error,
+      });
+      if (typeof oldString !== "string" || oldString === "")
+        return refuse(
+          "old_string 不能为空。要新建文件或整体重写，请用 computer_write_file。",
+        );
+      if (typeof newString !== "string")
+        return refuse("new_string 必须是文本。");
+      if (oldString === newString)
+        return refuse("old_string 和 new_string 一样，没有要改的内容。");
+      const whole = await readText(requested, limits.writeBytes);
+      if (!whole.complete)
+        return refuse(
+          `${requested} 有 ${whole.bytes} 字节，超过按块编辑的上限 ${limits.writeBytes} 字节，没有修改。`,
+        );
+      const { text } = whole;
+      let count = 0;
+      for (
+        let at = text.indexOf(oldString);
+        at !== -1;
+        at = text.indexOf(oldString, at + oldString.length)
+      )
+        count += 1;
+      if (count === 0)
+        return refuse(
+          `在 ${requested} 里没有找到 old_string，没有修改。先用 computer_read_file 读出原文，照抄要替换的那一段（包括空格、缩进和换行）。`,
+        );
+      if (count > 1 && options.replaceAll !== true)
+        return refuse(
+          `old_string 在 ${requested} 里出现了 ${count} 次，没有修改。多带几行上下文让它只出现一次，或者把 replace_all 设为 true 全部替换。`,
+        );
+      const first = text.indexOf(oldString);
+      const next =
+        options.replaceAll === true
+          ? text.split(oldString).join(newString)
+          : text.slice(0, first) +
+            newString +
+            text.slice(first + oldString.length);
+      const written = await api.write(requested, next);
+      return {
+        path: requested,
+        edited: true,
+        replacements: options.replaceAll === true ? count : 1,
+        bytes: written.bytes,
+      };
+    },
+
+    /**
+     * Search file contents for a regular expression (期五): `rg` when this machine has it, `grep -rn`
+     * otherwise. At most {@link SEARCH_LIMITS.matches} matching lines or
+     * {@link SEARCH_LIMITS.bytes} bytes, and it says when there were more. Hidden files and folders
+     * are not searched (`rg` skips them, and what it ignores in `.gitignore`; `grep` is told to), so a
+     * search does not read a `.env` the file tools would have asked about. A bad pattern, or a machine
+     * with neither tool, is answered in words.
+     */
+    async grep(input: GrepOptions): Promise<GrepResult> {
+      const shownPath = input.path?.trim() ? input.path.trim() : ".";
+      if (typeof input.pattern !== "string" || input.pattern === "")
+        return { pattern: "", path: shownPath, error: "pattern 不能为空。" };
+      const start = await searchStart(input.path);
+      // node_modules is skipped by both, unless the files asked for are in it.
+      const modules = !(input.glob ?? "").includes("node_modules");
+      try {
+        const rg = [
+          "--line-number",
+          "--no-heading",
+          "--with-filename",
+          "--color",
+          "never",
+          "--no-messages",
+          ...(input.ignoreCase ? ["--ignore-case"] : []),
+          ...(modules ? ["--glob", "!**/node_modules/**"] : []),
+          ...(input.glob ? ["--glob", input.glob] : []),
+          "-e",
+          input.pattern,
+          "--",
+          start.target,
+        ];
+        const grep = [
+          "-rnHI",
+          "--color=never",
+          "-s",
+          /*
+           * The file filter first: GNU grep includes a file no filter matches unless the first one is
+           * an --include, and the last filter that matches wins, so a hidden `.x.ts` stays excluded.
+           */
+          ...(input.glob ? [`--include=${input.glob}`] : []),
+          // `.[!.]*`, not `.*`: the folder searched is `.` itself, which `.*` would skip.
+          "--exclude-dir=.[!.]*",
+          "--exclude=.[!.]*",
+          ...(modules ? ["--exclude-dir=node_modules"] : []),
+          ...(input.ignoreCase ? ["-i"] : []),
+          "-E",
+          "-e",
+          input.pattern,
+          "--",
+          start.target,
+        ];
+        const tools = options.searchTools ?? {};
+        let engine: "rg" | "grep" = "rg";
+        let run = await runSearch(tools.rg ?? "rg", rg, start.cwd);
+        if (run.missing) {
+          engine = "grep";
+          run = await runSearch(tools.grep ?? "grep", grep, start.cwd);
+        }
+        if (run.missing)
+          return {
+            pattern: input.pattern,
+            path: shownPath,
+            error: "这台电脑上没有 rg，也没有 grep，没法搜索文件内容。",
+          };
+        if (run.code === 2 && run.lines.length === 0)
+          return {
+            pattern: input.pattern,
+            path: shownPath,
+            error: `搜索没有完成：${run.stderr.trim().slice(0, 500) || "搜索工具报错了"}。检查 pattern 是不是合法的正则表达式。`,
+          };
+        const where = (found: string) =>
+          start.kind === "file"
+            ? start.shown
+            : join(start.shown, found.replace(/^\.[\\/]/, "")) || found;
+        const lines = run.lines.map((line) => {
+          const match = /^(.*?):(\d+):(.*)$/.exec(line);
+          if (!match) return line;
+          const body =
+            (match[3] ?? "").length > SEARCH_LIMITS.lineChars
+              ? `${(match[3] ?? "").slice(0, SEARCH_LIMITS.lineChars)}…`
+              : (match[3] ?? "");
+          return `${where(match[1] ?? "")}:${match[2]}:${body}`;
+        });
+        return {
+          pattern: input.pattern,
+          path: shownPath,
+          engine,
+          matches: lines.length,
+          text: lines.join("\n"),
+          truncated: run.truncated,
+          ...(run.timedOut ? { timedOut: true } : {}),
+        };
+      } finally {
+        await start.close();
+      }
+    },
+
+    /**
+     * The files matching a glob pattern such as `src/**\/*.ts` (期五), relative to `path` when one is
+     * given, newest first, at most {@link GLOB_LIMITS.paths}. `.git` and `node_modules` are not
+     * walked unless the pattern names them, and a link is never followed.
+     */
+    async glob(input: GlobOptions): Promise<GlobResult> {
+      const shownPath = input.path?.trim() ? input.path.trim() : ".";
+      if (typeof input.pattern !== "string" || !input.pattern.trim())
+        return { pattern: "", path: shownPath, error: "pattern 不能为空。" };
+      const pattern = input.pattern.trim().replace(/^\.\//, "");
+      const root = await realpath(rootPath);
+      const start =
+        shownPath === "." ? root : await resolvePath(shownPath, false);
+      if (!confined) {
+        const info = await stat(start).catch(() => null);
+        if (!info?.isDirectory())
+          return {
+            pattern,
+            path: shownPath,
+            error: `${shownPath} 不是文件夹；path 要给一个文件夹。`,
+          };
+      }
+      const matcher = new Bun.Glob(pattern);
+      const walked = (name: string) => pattern.includes(name);
+      const found: { path: string; modifiedMs: number }[] = [];
+      let visited = 0;
+      let cut = false;
+      await walkTree(
+        root,
+        start,
+        shownPath,
+        (name) => (name === ".git" || name === "node_modules") && !walked(name),
+        (entry) => {
+          visited += 1;
+          if (visited > GLOB_LIMITS.visited) {
+            cut = true;
+            return false;
+          }
+          if (entry.kind !== "file") return true;
+          const fromStart = relative(start, join(root, entry.path)).replace(
+            /\\/g,
+            "/",
+          );
+          if (matcher.match(fromStart))
+            found.push({ path: entry.path, modifiedMs: entry.modifiedMs });
+          return true;
+        },
+      );
+      found.sort((a, b) => b.modifiedMs - a.modifiedMs);
+      return {
+        pattern,
+        path: shownPath,
+        paths: found.slice(0, GLOB_LIMITS.paths).map((entry) => entry.path),
+        truncated: cut || found.length > GLOB_LIMITS.paths,
+      };
+    },
   };
+  return api;
 }
 
 export type Workspace = ReturnType<typeof createWorkspace>;
@@ -835,4 +1357,85 @@ async function nearestExistingAncestor(
       current = parent;
     }
   }
+}
+
+/**
+ * One content search, run without a shell (the pattern is an argument, never parsed), stopped at
+ * {@link SEARCH_LIMITS}. `missing` when the program is not on this machine.
+ */
+function runSearch(
+  command: string,
+  args: string[],
+  cwd: string,
+): Promise<{
+  lines: string[];
+  truncated: boolean;
+  timedOut: boolean;
+  code: number | null;
+  stderr: string;
+  missing: boolean;
+}> {
+  return new Promise((done) => {
+    const lines: string[] = [];
+    let pending = "";
+    let bytes = 0;
+    let truncated = false;
+    let timedOut = false;
+    let stderr = "";
+    let settled = false;
+    const child = spawn(command, args, {
+      cwd,
+      env: {
+        PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+        ...(process.env.SystemRoot
+          ? { SystemRoot: process.env.SystemRoot }
+          : {}),
+        LANG: process.env.LANG ?? "C.UTF-8",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+    });
+    const finish = (code: number | null, missing = false) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (!truncated && pending) lines.push(pending);
+      done({ lines, truncated, timedOut, code, stderr, missing });
+    };
+    const stop = () => {
+      truncated = true;
+      child.kill();
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      stop();
+    }, SEARCH_LIMITS.timeoutMs);
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      if (truncated) return;
+      pending += chunk;
+      const parts = pending.split("\n");
+      pending = parts.pop() ?? "";
+      for (const line of parts) {
+        const size = Buffer.byteLength(line, "utf8") + 1;
+        if (
+          lines.length >= SEARCH_LIMITS.matches ||
+          bytes + size > SEARCH_LIMITS.bytes
+        ) {
+          stop();
+          return;
+        }
+        lines.push(line.replace(/\r$/, ""));
+        bytes += size;
+      }
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      if (stderr.length < 4096) stderr += chunk;
+    });
+    child.on("error", (error: NodeJS.ErrnoException) =>
+      finish(null, error.code === "ENOENT"),
+    );
+    child.on("close", (code) => finish(code));
+  });
 }

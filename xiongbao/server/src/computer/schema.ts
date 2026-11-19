@@ -33,6 +33,10 @@ export const COMPUTER_TOOLS = [
   "computer_download_file",
   "computer_write_file",
   "computer_list_files",
+  // The coding tools (期五): a passage of a file replaced, a content search, a search by name.
+  "computer_edit_file",
+  "computer_grep",
+  "computer_glob",
 ] as const;
 
 /**
@@ -61,7 +65,22 @@ export const COMPUTER_ACTING_TOOLS = [
   "computer_download_file",
   "computer_write_file",
   "computer_list_files",
+  // Governed as the write, the read and the listing they stand beside (期五).
+  "computer_edit_file",
+  "computer_grep",
+  "computer_glob",
 ] as const;
+
+/**
+ * The coding tools stand beside an older tool and follow its rules (期五): a rule or a switch that
+ * disables saving files disables replacing a passage of one, a rule about reading covers a content
+ * search, a rule about listing covers a search by name.
+ */
+export const CODING_TOOL_GOVERNED_LIKE: Readonly<Record<string, string>> = {
+  computer_edit_file: "computer_write_file",
+  computer_grep: "computer_read_file",
+  computer_glob: "computer_list_files",
+};
 
 export type ComputerActingToolName = (typeof COMPUTER_ACTING_TOOLS)[number];
 
@@ -230,7 +249,14 @@ export type ListFilesResult = {
   truncated: boolean;
 };
 
-export type ReadFileInput = { path: string; root?: string };
+export type ReadFileInput = {
+  path: string;
+  root?: string;
+  /** The first line to read, from 1 (期五). With `limit`, the lines come back numbered. */
+  offset?: number;
+  /** How many lines to read (期五). */
+  limit?: number;
+};
 export type DownloadFileInput = { path: string };
 export type ReadFileResult = {
   untrusted?: string;
@@ -240,7 +266,59 @@ export type ReadFileResult = {
   truncated: boolean;
   /** The file's real size, even when the text was cut. */
   bytes: number;
+  /** For a line range: the first and last line shown, and how many the file has. */
+  startLine?: number;
+  endLine?: number;
+  totalLines?: number;
 };
+
+/**
+ * One passage of a file replaced (期五). `old_string` must appear exactly once, unless `replace_all`.
+ * The names are the tool's own, carried as they are to the computer.
+ */
+export type EditFileInput = {
+  path: string;
+  old_string: string;
+  new_string: string;
+  replace_all?: boolean;
+};
+
+/**
+ * What an edit reports: done, and how many passages changed, or why not, in words. Neither echoes
+ * the text, for the reason a write does not.
+ */
+export type EditFileResult =
+  | { path: string; edited: true; replacements: number; bytes: number }
+  | { path: string; edited: false; error: string };
+
+/** A content search (期五): a regular expression, where, which files, and whether case matters. */
+export type GrepInput = {
+  pattern: string;
+  path?: string;
+  glob?: string;
+  ignore_case?: boolean;
+};
+
+export type GrepResult =
+  | {
+      untrusted?: string;
+      pattern: string;
+      path: string;
+      engine: "rg" | "grep";
+      matches: number;
+      /** One match per line, as `path:line:text`. */
+      text: string;
+      truncated: boolean;
+      timedOut?: boolean;
+    }
+  | { pattern: string; path: string; error: string };
+
+/** A search by name (期五): a glob pattern, relative to `path` when one is given. */
+export type GlobInput = { pattern: string; path?: string };
+
+export type GlobResult =
+  | { pattern: string; path: string; paths: string[]; truncated: boolean }
+  | { pattern: string; path: string; error: string };
 
 /**
  * A command for the Bot's computer to run.

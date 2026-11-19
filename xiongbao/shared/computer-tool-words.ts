@@ -50,3 +50,7 @@ export function commandTimeoutMs(requested: number | undefined): number {
 /** What the model is told about `timeoutMs`, on both surfaces. */
 export const COMMAND_TIMEOUT_DESCRIPTION =
   "Optional. How long the command may run, in milliseconds. Defaults to 120000 (2 minutes); at most 600000 (10 minutes), and a larger value is cut to that. Ask for more for a long build, install or test run.";
+
+/** How `computer_read_file` reads part of a long file (期五). */
+export const LINE_RANGE_DESCRIPTION =
+  "To read part of a long file, pass offset (the first line, from 1) and limit (how many lines); the lines then come back numbered, with the file's total line count.";

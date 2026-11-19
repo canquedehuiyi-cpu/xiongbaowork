@@ -1,24 +1,25 @@
 import type { Message } from "@ag-ui/client";
 import { z } from "zod";
 import { desktopActionWordsOf } from "../../../shared/desktop-control";
+import { CODING_TOOL_GOVERNED_LIKE } from "../computer/schema";
 import {
   activeDesktopSession,
-  type DesktopFloor,
   DESKTOP_SESSION_TOOL,
   DESKTOP_SNAPSHOT_TOOL,
   DESKTOP_WAIT_TOOL,
+  type DesktopFloor,
   desktopFloors,
   desktopOnceOnly,
 } from "./desktop-policy";
 import {
   type ActionKind,
   type ActionKindPolicy,
-  accountBindingOf,
   type ApprovalCandidate,
   type ApprovalConversationGrant,
   type ApprovalPolicyOutcome,
   type ApprovalRule,
   type ApprovalTeamRule,
+  accountBindingOf,
   DEFAULT_EMPLOYEE_SECURITY,
   DELEGATE_EFFECT,
   type EmployeeSecuritySettings,
@@ -131,7 +132,7 @@ export function ruleMatches(
     return false;
   return (
     globMatches(rule.botId, candidate.botId) &&
-    globMatches(rule.toolRef, candidate.toolRef) &&
+    toolRefMatches(rule.toolRef, candidate.toolRef) &&
     globMatches(rule.effect, candidate.effect) &&
     globMatches(rule.scope, candidate.scope)
   );
@@ -241,6 +242,18 @@ export function strictestRule(
  * The layers arrive already filtered the way the gate filters them, so a tool hidden here is one the
  * gate would refuse on every call.
  */
+/**
+ * Whether a rule's tool names this call's tool: itself, or the older tool a coding tool stands beside
+ * and follows (期五). A rule about saving files is a rule about replacing a passage of one.
+ */
+function toolRefMatches(ruleRef: string, toolRef: string): boolean {
+  const like = CODING_TOOL_GOVERNED_LIKE[toolRef];
+  return (
+    globMatches(ruleRef, toolRef) ||
+    (like !== undefined && globMatches(ruleRef, like))
+  );
+}
+
 export function toolDisabled(
   input: { botId: string; toolRef: string },
   layers: readonly (readonly AnyRule[])[],
@@ -252,7 +265,7 @@ export function toolDisabled(
         rule.effect === "*" &&
         rule.scope === "*" &&
         globMatches(rule.botId, input.botId) &&
-        globMatches(rule.toolRef, input.toolRef),
+        toolRefMatches(rule.toolRef, input.toolRef),
     ),
   );
 }
@@ -575,7 +588,7 @@ function chineseSurface(candidate: ApprovalCandidate): {
  * verbatim in the native dialog on that computer.
  */
 const NOT_ACCOUNT_ACTIONS =
-  /^(computer_(write_file|read_file|list_files|run_command)|host\/)/;
+  /^(computer_(write_file|read_file|list_files|run_command|edit_file|grep|glob)|host\/)/;
 
 /** 总是先问、只给「允许一次 / 拒绝」的底线（见 types 的 `offersStandingRule`）。 */
 export type OnceOnlyFloor = {
@@ -1168,7 +1181,7 @@ export function sensitivePathsInForce(
  */
 const COMMAND_TOOLS = /^(computer_run_command|host\/run_command)$/;
 const PATH_TOOLS =
-  /^(computer_(read_file|write_file|list_files|download_file)|host\/(read_file|write_file|list_files)|acp\/(read|edit|move|delete|search))$/;
+  /^(computer_(read_file|write_file|list_files|download_file|edit_file|grep|glob)|host\/(read_file|write_file|list_files)|acp\/(read|edit|move|delete|search))$/;
 
 function field(value: unknown, key: string): unknown {
   return value && typeof value === "object" && !Array.isArray(value)

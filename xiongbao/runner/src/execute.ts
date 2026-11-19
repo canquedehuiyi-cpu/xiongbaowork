@@ -1,7 +1,14 @@
 import { mkdirSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createShell } from "../../agent-computer/src/shell";
-import { createWorkspace } from "../../agent-computer/src/workspace";
+import {
+  createWorkspace,
+  type Workspace,
+} from "../../agent-computer/src/workspace";
+// --- end app discovery ---
+// --- desktop control (sub-project 2) ---
+import { DESKTOP_ACTION_PREFIX } from "../../shared/desktop-control";
+import { AppHostError, type createAppHost } from "./app-host";
 import {
   BROWSER_ACTIONS,
   BrowserFailure,
@@ -9,17 +16,13 @@ import {
   createRunnerBrowser,
   type RunnerBrowser,
 } from "./browser";
-import { AppHostError, type createAppHost } from "./app-host";
+import { createDesktopActions, type DesktopActions } from "./desktop/actions";
 // --- app discovery (sub-project 3) ---
 import {
   DISCOVER_ACTIONS,
   DISCOVER_FAILED,
   type DiscoverActions,
 } from "./discover-actions";
-// --- end app discovery ---
-// --- desktop control (sub-project 2) ---
-import { DESKTOP_ACTION_PREFIX } from "../../shared/desktop-control";
-import { createDesktopActions, type DesktopActions } from "./desktop/actions";
 // --- end desktop control ---
 import { createGit, type Git } from "./git";
 import { isRootRef, PROJECTS_DIR, type RootRegistry } from "./roots";
@@ -88,7 +91,13 @@ function callerPayload(body: Record<string, unknown>): Record<string, unknown> {
  * refused: a write, a command run with a root as its folder, and any action added later, because a
  * root is a folder the owner offered to be read and nothing more.
  */
-const ROOT_READS = new Set(["files.list", "files.read"]);
+const ROOT_READS = new Set([
+  "files.list",
+  "files.read",
+  // Searching by content or name is reading too (期五).
+  "files.grep",
+  "files.glob",
+]);
 /**
  * The actions that may write in a root (story RES2, decision D3): a file write and a command run
  * there. Only in a root its owner registered `write` on this machine, and only when the server's own
@@ -96,9 +105,85 @@ const ROOT_READS = new Set(["files.list", "files.read"]);
  * never from a model's arguments). Either one missing and the root is read-only, as every F1 folder
  * always is.
  */
-const ROOT_WRITES = new Set(["files.write", "exec"]);
+const ROOT_WRITES = new Set(["files.write", "files.edit", "exec"]);
 const READ_ONLY =
   "That folder is read-only on this machine: it can be listed and read, never written to, changed or run in.";
+
+/** The line range a read frame asks for: whole numbers from 1, or nothing (期五). */
+function lineRange(body: Record<string, unknown>): {
+  offset?: number;
+  limit?: number;
+} {
+  const whole = (value: unknown) =>
+    typeof value === "number" && Number.isInteger(value) && value >= 1
+      ? value
+      : undefined;
+  const offset = whole(body.offset);
+  const limit = whole(body.limit);
+  return {
+    ...(offset !== undefined ? { offset } : {}),
+    ...(limit !== undefined ? { limit } : {}),
+  };
+}
+
+/** One passage of a file replaced, in the workspace or a writable project (期五). */
+async function editIn(
+  edit: Workspace["edit"],
+  body: Record<string, unknown>,
+): Promise<ActionOutcome> {
+  if (
+    typeof body.old_string !== "string" ||
+    typeof body.new_string !== "string"
+  )
+    return { ok: false, error: "old_string and new_string are required." };
+  return {
+    ok: true,
+    output: await edit(
+      String(body.path ?? ""),
+      body.old_string,
+      body.new_string,
+      {
+        replaceAll: body.replace_all === true,
+      },
+    ),
+  };
+}
+
+/** A content search, in the workspace or a project (期五). */
+async function grepIn(
+  grep: Workspace["grep"],
+  body: Record<string, unknown>,
+): Promise<ActionOutcome> {
+  if (typeof body.pattern !== "string" || !body.pattern)
+    return { ok: false, error: "A pattern is required." };
+  return {
+    ok: true,
+    output: await grep({
+      pattern: body.pattern,
+      ...(typeof body.path === "string" ? { path: body.path } : {}),
+      ...(typeof body.glob === "string" && body.glob
+        ? { glob: body.glob }
+        : {}),
+      ignoreCase: body.ignore_case === true,
+    }),
+  };
+}
+
+/** A search by name, in the workspace or a project (期五). */
+async function globIn(
+  glob: Workspace["glob"],
+  body: Record<string, unknown>,
+): Promise<ActionOutcome> {
+  if (typeof body.pattern !== "string" || !body.pattern.trim())
+    return { ok: false, error: "A pattern is required." };
+  return {
+    ok: true,
+    output: await glob({
+      pattern: body.pattern,
+      ...(typeof body.path === "string" ? { path: body.path } : {}),
+    }),
+  };
+}
 
 /** The runner actions for a Git project (story RES2, §3.3). */
 export const PROJECT_SYNC_ACTION = "projects.sync";
@@ -239,6 +324,10 @@ export function createRunnerExecutor(
               ? { ok: false, error: "The command was stopped on the device." }
               : { ok: true, output };
           }
+          if (action === "files.edit") {
+            if (!folder.edit) return { ok: false, error: READ_ONLY };
+            return editIn(folder.edit, body);
+          }
           if (typeof body.contents !== "string") {
             return { ok: false, error: "The contents to write are required." };
           }
@@ -249,6 +338,8 @@ export function createRunnerExecutor(
             }),
           };
         }
+        if (action === "files.grep") return grepIn(folder.grep, body);
+        if (action === "files.glob") return globIn(folder.glob, body);
         return {
           ok: true,
           output:
@@ -256,7 +347,7 @@ export function createRunnerExecutor(
               ? await folder.list(
                   typeof body.path === "string" ? body.path : undefined,
                 )
-              : await folder.read(String(body.path ?? "")),
+              : await folder.read(String(body.path ?? ""), lineRange(body)),
         };
       }
       /*
@@ -388,8 +479,17 @@ export function createRunnerExecutor(
         case "files.read":
           return {
             ok: true,
-            output: await workspace.read(String(body.path ?? "")),
+            output: await workspace.read(
+              String(body.path ?? ""),
+              lineRange(body),
+            ),
           };
+        case "files.edit":
+          return editIn(workspace.edit, body);
+        case "files.grep":
+          return grepIn(workspace.grep, body);
+        case "files.glob":
+          return globIn(workspace.glob, body);
         case "files.write": {
           if (typeof body.contents !== "string") {
             return { ok: false, error: "The contents to write are required." };
@@ -405,7 +505,10 @@ export function createRunnerExecutor(
         }
         case "apps.tools": {
           if (!apps || typeof body.app !== "string" || !body.app) {
-            return { ok: false, error: "这台电脑上没有这个本机应用，或它已停用。" };
+            return {
+              ok: false,
+              error: "这台电脑上没有这个本机应用，或它已停用。",
+            };
           }
           try {
             return {
@@ -418,7 +521,10 @@ export function createRunnerExecutor(
         }
         case "apps.call": {
           if (!apps || typeof body.app !== "string" || !body.app) {
-            return { ok: false, error: "这台电脑上没有这个本机应用，或它已停用。" };
+            return {
+              ok: false,
+              error: "这台电脑上没有这个本机应用，或它已停用。",
+            };
           }
           if (typeof body.tool !== "string" || !body.tool) {
             return { ok: false, error: "没有指明要调用本机应用的哪个工具。" };

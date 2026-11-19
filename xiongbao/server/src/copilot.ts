@@ -53,7 +53,11 @@ import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
 import { planGuidance } from "../../shared/plan";
 import { subagentGuidance } from "../../shared/subagent";
-import { COMMAND_TOOL, verifyGuidance } from "../../shared/verify";
+import {
+  codingToolsGuidance,
+  PROMPT_SECTION_TOOLS,
+  verifyGuidance,
+} from "../../shared/verify";
 import {
   ACP_UNAVAILABLE_REASON,
   type DeviceAcpEmployee,
@@ -1254,6 +1258,11 @@ export function builtInAgentConfiguration(
        * 持有 computer_run_command 的运行：没有命令工具的员工跑不了测试，不教它（期五）。
        */
       ...promptSection("verify", verifyGuidance(heldToolNames)),
+      /*
+       * 改文件用 computer_edit_file 按块改、找代码用 computer_grep 和 computer_glob。只给持有这些工具
+       * 的运行，和 <verify> 一样不改共用段落（期五）。
+       */
+      ...promptSection("coding_tools", codingToolsGuidance(heldToolNames)),
       /*
        * Only for a run that holds the computer. A third of the prompt is about the browser, and a
        * Linear-and-Notion routine that never opens one read all of it ahead of its own job.
@@ -3471,13 +3480,13 @@ function mastraOpenBotContext({
 
 /**
  * The tools a run brings with it that change what its prompt says: the browser (public-web search
- * steps) and the shell (the verification loop, 期五). Empty for a run that brings neither, which
+ * steps), the shell (the verification loop) and the coding tools (how to edit and search, 期五). Empty for a run that brings neither, which
  * keeps the configuration built before it.
  */
 function promptVariantTools(names: readonly string[]): string[] {
   return [
     ...(holdsBrowserSearchTools(names) ? BROWSER_SEARCH_TOOLS : []),
-    ...(names.includes(COMMAND_TOOL) ? [COMMAND_TOOL] : []),
+    ...PROMPT_SECTION_TOOLS.filter((name) => names.includes(name)),
   ];
 }
 

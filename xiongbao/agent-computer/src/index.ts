@@ -127,8 +127,8 @@ import { createWorkspaces, type Workspace } from "./workspaces";
  * audit row before calling this process. This process has no policy engine and no audit trail of its
  * own; its direct-port boundary is the computer token.
  *
- * `/files/read`, `/files/download` and `/files/write` reach the durable workspace volume, confined
- * to it by workspace.ts. Reading and writing are the two operations a Bot needs to keep notes between
+ * `/files/read`, `/files/download`, `/files/write`, `/files/edit`, `/files/grep` and `/files/glob`
+ * reach the durable workspace volume, confined to it by workspace.ts. Reading and writing are the two operations a Bot needs to keep notes between
  * turns; download returns the exact bytes so a PDF, image or archive is not damaged by text decoding.
  *
  * Elements are addressed by reference, not by pixel. `/snapshot` stamps every interactive element
@@ -571,6 +571,23 @@ async function ownUserTerminal(
 }
 
 /** The seat's files: its own user's directory, or its folder in `workspaces`. */
+/** The line range a read asks for, when it asks for one: whole numbers from 1, nothing else. */
+function lineRange(body: { offset?: unknown; limit?: unknown } | null): {
+  offset?: number;
+  limit?: number;
+} {
+  const whole = (value: unknown) =>
+    typeof value === "number" && Number.isInteger(value) && value >= 1
+      ? value
+      : undefined;
+  const offset = whole(body?.offset);
+  const limit = whole(body?.limit);
+  return {
+    ...(offset !== undefined ? { offset } : {}),
+    ...(limit !== undefined ? { limit } : {}),
+  };
+}
+
 async function filesFor(seat: string): Promise<Workspace> {
   return runsAsOwnUser(seat)
     ? perBot.workspaceFor(seat)
@@ -1951,10 +1968,14 @@ serve<StreamData & TerminalSocketData>({
       if (url.pathname === "/files/read" && request.method === "POST") {
         const body = (await request.json().catch(() => null)) as {
           path?: unknown;
+          offset?: unknown;
+          limit?: unknown;
         } | null;
         try {
           const files = await filesFor(botId);
-          return json(await files.read(String(body?.path ?? "")));
+          return json(
+            await files.read(String(body?.path ?? ""), lineRange(body)),
+          );
         } catch (error) {
           return json(
             { error: describe(error, "The file could not be read.") },
@@ -2027,6 +2048,101 @@ serve<StreamData & TerminalSocketData>({
           return json(
             { error: describe(error, "The command could not be run.") },
             error instanceof PerBotUnavailableError ? 503 : 500,
+          );
+        }
+      }
+
+      /*
+       * The coding tools (期五): one passage of a file replaced, a content search and a search by
+       * name. Confined to the workspace by workspace.ts like every file route; whether the Bot may is
+       * the gateway's, which decided before this was called. An edit whose passage is missing or
+       * ambiguous, a bad pattern, a machine without rg or grep: answered as 200 with the reason, for
+       * the model to read and try again.
+       */
+      if (url.pathname === "/files/edit" && request.method === "POST") {
+        const body = (await request.json().catch(() => null)) as {
+          path?: unknown;
+          old_string?: unknown;
+          new_string?: unknown;
+          replace_all?: unknown;
+        } | null;
+        if (
+          typeof body?.old_string !== "string" ||
+          typeof body?.new_string !== "string"
+        ) {
+          return json(
+            { error: "old_string and new_string are required." },
+            400,
+          );
+        }
+        try {
+          const files = await filesFor(botId);
+          return json(
+            await files.edit(
+              String(body?.path ?? ""),
+              body.old_string,
+              body.new_string,
+              { replaceAll: body.replace_all === true },
+            ),
+          );
+        } catch (error) {
+          return json(
+            { error: describe(error, "The file could not be edited.") },
+            fileStatus(error),
+          );
+        }
+      }
+
+      if (url.pathname === "/files/grep" && request.method === "POST") {
+        const body = (await request.json().catch(() => null)) as {
+          pattern?: unknown;
+          path?: unknown;
+          glob?: unknown;
+          ignore_case?: unknown;
+        } | null;
+        if (typeof body?.pattern !== "string" || !body.pattern) {
+          return json({ error: "A pattern is required." }, 400);
+        }
+        try {
+          const files = await filesFor(botId);
+          return json(
+            await files.grep({
+              pattern: body.pattern,
+              ...(typeof body.path === "string" ? { path: body.path } : {}),
+              ...(typeof body.glob === "string" && body.glob
+                ? { glob: body.glob }
+                : {}),
+              ignoreCase: body.ignore_case === true,
+            }),
+          );
+        } catch (error) {
+          return json(
+            { error: describe(error, "The files could not be searched.") },
+            fileStatus(error),
+          );
+        }
+      }
+
+      if (url.pathname === "/files/glob" && request.method === "POST") {
+        const body = (await request.json().catch(() => null)) as {
+          pattern?: unknown;
+          path?: unknown;
+        } | null;
+        if (typeof body?.pattern !== "string" || !body.pattern.trim()) {
+          return json({ error: "A pattern is required." }, 400);
+        }
+        try {
+          const files = await filesFor(botId);
+          return json(
+            await files.glob({
+              pattern: body.pattern,
+              ...(typeof body.path === "string" ? { path: body.path } : {}),
+            }),
+          );
+        } catch (error) {
+          return json(
+            { error: describe(error, "The files could not be listed.") },
+            fileStatus(error),
           );
         }
       }
