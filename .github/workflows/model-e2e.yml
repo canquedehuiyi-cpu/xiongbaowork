@@ -13,10 +13,50 @@
 # DEEPSEEK_API_KEY: an Environment secret reaches only a job that names that Environment.
 # The model and endpoint are variables (MODEL_E2E_MODEL, MODEL_E2E_BASE_URL) with DeepSeek's
 # own defaults when unset.
+#
+# 期六「熊宝员工对标 Codex」另加四个作业，只有手动触发时选了对应的 suite 才跑（默认 metering-only 只跑上面两个）：
+#
+#   employee-eval-xiongbao     五道真实题交给熊宝员工（看板派活，服务器执行电脑工具），自动判分并记录每期能力指标。
+#   employee-eval-codex        同样五道题交给 Codex CLI（codex exec），同一个模型、同一套判分。
+#   employee-eval-report       把两边结果合成一张对比表（步骤摘要 + artifact）。
+#   employee-capability-smoke  每期能力一个最小场景（计划、子代理、改完跑测试、长任务续跑、思考、编辑/检索工具），日常回归。
+#
+# 模型和提供方都是输入（provider / model / base_url），两边脚本从同一组输入读，不写死 DeepSeek；key 仍是
+# 上面那个 Environment secret。脚本在 xiongbao/scripts/e2e/employee-eval/，用法见各文件开头。
 name: 模型 E2E 计量对账
 
 on:
   workflow_dispatch:
+    inputs:
+      suite:
+        description: "跑哪一组：metering-only（只跑计量对账和 WakerFlow）、employee-eval（五道题对标）、capability-smoke（能力冒烟）、all"
+        type: choice
+        default: metering-only
+        options:
+          - metering-only
+          - employee-eval
+          - capability-smoke
+          - all
+      tasks:
+        description: "对标题目：all，或逗号分隔的 research,docs,code,data,office"
+        type: string
+        default: all
+      scenarios:
+        description: "冒烟场景：all，或逗号分隔的 plan,subagent,code,long,reasoning,edit-grep"
+        type: string
+        default: all
+      provider:
+        description: "模型提供方（熊宝模型库的提供方模板名；Codex 侧的自定义 provider 名）"
+        type: string
+        default: deepseek
+      model:
+        description: "模型名"
+        type: string
+        default: deepseek-v4-flash
+      base_url:
+        description: "OpenAI 兼容接口地址，留空按提供方默认（deepseek 为 https://api.deepseek.com）；Codex 侧要求它支持 Responses"
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -124,3 +164,199 @@ jobs:
           MODEL_E2E_BASE_URL: ${{ vars.MODEL_E2E_BASE_URL || 'https://api.deepseek.com/v1' }}
           MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
         run: bun scripts/e2e/wakerflow-real-model.ts
+
+  employee-eval-xiongbao:
+    name: 对标评测 · 熊宝员工
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["employee-eval","all"]'), inputs.suite)
+    runs-on: ubuntu-latest
+    environment: model-e2e
+    # 五道题、每题墙钟上限 20 分钟，再加起服务、装浏览器的时间。
+    timeout-minutes: 120
+    services:
+      # PostgreSQL 17 with pgvector: migration 0000 creates the `vector` extension.
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: e2e-owner
+          POSTGRES_DB: openbot_employee_eval
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_employee_eval"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGPASSWORD: e2e-owner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+      # This job holds a real key: no dependency lifecycle script runs in it.
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install the computer from its own frozen lockfile, and its browser
+        run: |
+          cd agent-computer && bun install --frozen-lockfile --ignore-scripts
+          bun x playwright install --with-deps chromium
+      - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/openbot_employee_eval bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'e2e-role-writer'"
+      - name: Five tasks for a Xiongbao employee
+        env:
+          MODEL_E2E: "1"
+          MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          EVAL_PROVIDER: ${{ inputs.provider }}
+          EVAL_MODEL: ${{ inputs.model }}
+          EVAL_BASE_URL: ${{ inputs.base_url }}
+          EVAL_SUITE: tasks
+          EVAL_TASKS: ${{ inputs.tasks }}
+          EVAL_OUT: ${{ runner.temp }}/employee-eval
+          E2E_DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/openbot_employee_eval
+          E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:e2e-role-writer@127.0.0.1:5432/openbot_employee_eval
+        run: bun scripts/e2e/employee-eval/run-xiongbao.ts
+      - name: Step summary
+        if: always()
+        run: bun scripts/e2e/employee-eval/report.ts "$RUNNER_TEMP/employee-eval"
+      # The server and computer logs stay on the runner (neither printed nor uploaded).
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: employee-eval-xiongbao
+          path: |
+            ${{ runner.temp }}/employee-eval
+            !${{ runner.temp }}/employee-eval/*.log
+
+  employee-eval-codex:
+    name: 对标评测 · Codex
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["employee-eval","all"]'), inputs.suite)
+    runs-on: ubuntu-latest
+    environment: model-e2e
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+      # The judges import nothing outside the repository, so no workspace install. Codex is the npm
+      # package @openai/codex (Apache-2.0) at the exact version run-codex.ts names (CODEX_VERSION),
+      # installed without lifecycle scripts into the runner's temp directory, never into the workspace.
+      - name: Install Codex CLI 0.166.0
+        run: |
+          npm install --prefix "$RUNNER_TEMP/codex" --no-save --no-audit --no-fund --ignore-scripts @openai/codex@0.166.0
+          "$RUNNER_TEMP/codex/node_modules/.bin/codex" --version
+      - name: Five tasks for Codex
+        env:
+          MODEL_E2E: "1"
+          MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          EVAL_PROVIDER: ${{ inputs.provider }}
+          EVAL_MODEL: ${{ inputs.model }}
+          EVAL_BASE_URL: ${{ inputs.base_url }}
+          EVAL_TASKS: ${{ inputs.tasks }}
+          EVAL_OUT: ${{ runner.temp }}/employee-eval
+          CODEX_BIN: ${{ runner.temp }}/codex/node_modules/.bin/codex
+          # The runner is the disposable sandbox, as it is for the Xiongbao employee's commands; Codex's
+          # own Linux sandbox needs user namespaces the hosted runner does not reliably allow.
+          EVAL_CODEX_SANDBOX: danger-full-access
+        run: bun scripts/e2e/employee-eval/run-codex.ts
+      - name: Step summary
+        if: always()
+        run: bun scripts/e2e/employee-eval/report.ts "$RUNNER_TEMP/employee-eval"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: employee-eval-codex
+          path: ${{ runner.temp }}/employee-eval
+
+  employee-eval-report:
+    name: 对标评测 · 对比表
+    needs: [employee-eval-xiongbao, employee-eval-codex]
+    if: always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["employee-eval","all"]'), inputs.suite)
+    runs-on: ubuntu-latest
+    environment: model-e2e
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: employee-eval-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/employee-eval
+      - name: Both sides in one table
+        run: bun scripts/e2e/employee-eval/report.ts "$RUNNER_TEMP/employee-eval"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: employee-eval-report
+          path: ${{ runner.temp }}/employee-eval/report.md
+
+  employee-capability-smoke:
+    name: 能力冒烟 · 熊宝员工
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["capability-smoke","all"]'), inputs.suite)
+    runs-on: ubuntu-latest
+    environment: model-e2e
+    # 六个最小场景，各自 5 到 12 分钟的上限。
+    timeout-minutes: 60
+    services:
+      # PostgreSQL 17 with pgvector: migration 0000 creates the `vector` extension.
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: e2e-owner
+          POSTGRES_DB: openbot_capability_smoke
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_capability_smoke"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGPASSWORD: e2e-owner
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version: 1.4.4
+      # This job holds a real key: no dependency lifecycle script runs in it.
+      - run: bun install --frozen-lockfile --ignore-scripts
+      - name: Install the computer from its own frozen lockfile (no browser, since no scenario browses)
+        run: cd agent-computer && bun install --frozen-lockfile --ignore-scripts
+      - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/openbot_capability_smoke bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'e2e-role-writer'"
+      - name: One minimal scenario per capability
+        env:
+          MODEL_E2E: "1"
+          MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          EVAL_PROVIDER: ${{ inputs.provider }}
+          EVAL_MODEL: ${{ inputs.model }}
+          EVAL_BASE_URL: ${{ inputs.base_url }}
+          EVAL_SUITE: smoke
+          EVAL_TASKS: ${{ inputs.scenarios }}
+          EVAL_OUT: ${{ runner.temp }}/capability-smoke
+          E2E_DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/openbot_capability_smoke
+          E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:e2e-role-writer@127.0.0.1:5432/openbot_capability_smoke
+        run: bun scripts/e2e/employee-eval/run-xiongbao.ts
+      - name: Step summary
+        if: always()
+        run: bun scripts/e2e/employee-eval/report.ts "$RUNNER_TEMP/capability-smoke"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: capability-smoke
+          path: |
+            ${{ runner.temp }}/capability-smoke
+            !${{ runner.temp }}/capability-smoke/*.log
