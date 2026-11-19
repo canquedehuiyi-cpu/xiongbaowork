@@ -3064,6 +3064,29 @@ await startupLifecycle.run(async (startup) => {
     console.info(
       `[web] ${webCrawlSetup.problem}web_crawl 使用进程内的简易爬取。`,
     );
+  /**
+   * Where a long output is kept for a Bot: its own workspace, written through the computer gateway. Asked
+   * at the call, not here, whether this Bot has a computer this person may use; without one it writes
+   * nothing and the caller falls back. Held by the web tools and by a subagent's answer alike.
+   */
+  const workspaceSinkFor = (
+    actorId: string,
+    botId: string,
+    initiator: AuditInitiator,
+  ) =>
+    lazyWorkspaceOutputSink(() =>
+      runAsTenant(actorId, async () => {
+        if (!computerGateway) return undefined;
+        const actor = await actorFor(actorId);
+        const profile = await agentProfileStore.get(actor, botId);
+        if (!profile || !canUseComputer(profile, actor)) return undefined;
+        return {
+          gateway: computerGateway,
+          seat: await computerGateway.seatFor(botId, actor.id),
+          actor: { id: actor.id, userId: actor.id, initiator },
+        };
+      }),
+    );
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -3084,21 +3107,7 @@ await startupLifecycle.run(async (startup) => {
        * 电脑（同下面的生成图片）：没有就截断并说明。
        */
       ...(computerGateway
-        ? {
-            saveOutput: lazyWorkspaceOutputSink(() =>
-              runAsTenant(actorId, async () => {
-                const actor = await actorFor(actorId);
-                const profile = await agentProfileStore.get(actor, botId);
-                if (!profile || !canUseComputer(profile, actor))
-                  return undefined;
-                return {
-                  gateway: computerGateway,
-                  seat: await computerGateway.seatFor(botId, actor.id),
-                  actor: { id: actor.id, userId: actor.id, initiator },
-                };
-              }),
-            ),
-          }
+        ? { saveOutput: workspaceSinkFor(actorId, botId, initiator) }
         : {}),
     }),
     /*
@@ -3808,6 +3817,11 @@ await startupLifecycle.run(async (startup) => {
         approvalComputerTools(ownerUserId, agentId, initiator),
     },
     buildAgentFor: (input) => buildAgentFor({ ...input, subagent: true }),
+    // A long answer is kept in the asking Bot's workspace, where its own file tools read it back.
+    outputSinkFor: (parent) =>
+      computerGateway
+        ? workspaceSinkFor(parent.actorId, parent.botId, parent.initiator)
+        : undefined,
     withdrawApprovals: async (ownerUserId, runId) =>
       approvalService.store.policy?.withdrawPending(
         ownerUserId,

@@ -1,5 +1,6 @@
 import type { AbstractAgent } from "@ag-ui/client";
 import type { ComputerGuidance } from "@openbot/shared/bot-prompt";
+import { toolsForSubagent } from "../../../shared/subagent";
 import type { AuditInitiator } from "../audit";
 import type { AgentFetch, StallGuard } from "../channels/stall-guard";
 import {
@@ -174,12 +175,20 @@ export function createActorAgentResolver(
      */
     const checkIn = isProactiveInitiator(context?.initiator);
     const runnable = checkIn ? registered.map(onOpenBotRunner) : registered;
+    const granted = deps.loadToolsForActor?.(actor.id, context?.initiator);
     return resolveRuntimeAgents(
       () => Promise.resolve(runnable),
       deps.model,
       deps.resolveModelApiKey,
       deps.stallGuard,
-      deps.loadToolsForActor?.(actor.id, context?.initiator),
+      /*
+       * A subagent is the same Bot for one part of an answer, so it is offered what it works with and not
+       * what belongs to the conversation (`SUBAGENT_WITHOUT_TOOLS`): every step it takes resends the
+       * definitions, and the prompt's delivery rules go with the tools they are about.
+       */
+      context?.subagent && granted
+        ? async (botId) => toolsForSubagent(await granted(botId))
+        : granted,
       deps.signRunForActor?.(actor.id, context?.initiator, context?.depth),
       // A check-in has no computer, so it is not told it has one, nor how to search with its browser.
       computerGuidanceForRun(context?.initiator, deps.computerGuidance),

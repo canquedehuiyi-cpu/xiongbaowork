@@ -5,9 +5,11 @@ import {
   SUBAGENT_GUIDANCE,
   SUBAGENT_PLAN_GUIDANCE,
   SUBAGENT_TOOL,
+  SUBAGENT_WITHOUT_TOOLS,
   SUBAGENTS_PER_ANSWER,
   subagentGuidance,
   subagentThreadId,
+  toolsForSubagent,
 } from "./subagent";
 
 /*
@@ -115,4 +117,40 @@ test("the delegation rule is said only to a Bot holding run_subagent, and the wo
   // 没有计划工具的员工，不被教用计划工具。
   expect(SUBAGENT_GUIDANCE).not.toContain(UPDATE_PLAN_TOOL);
   expect(SUBAGENT_GUIDANCE).not.toContain("列出计划");
+});
+
+test("a subagent is not offered the tools that belong to the conversation it came from", () => {
+  const names = (tools: readonly { name: string }[]) =>
+    tools.map((tool) => tool.name);
+  const held = [
+    "web_fetch",
+    "update_plan",
+    "recall_personal_memory",
+    "generate_image",
+    "request_app_access",
+    ...SUBAGENT_WITHOUT_TOOLS,
+  ].map((name) => ({ name }));
+  // What it needs to do a part of the work stays: the plan, the web, the memory it reads, pictures.
+  expect(names(toolsForSubagent(held))).toEqual([
+    "web_fetch",
+    "update_plan",
+    "recall_personal_memory",
+    "generate_image",
+    "request_app_access",
+  ]);
+  // The card's three steps, a follow-up on the conversation, a check-in offer and the card an app's
+  // access is drawn on: each acts on or for the person's conversation, which a subagent is not.
+  expect([...SUBAGENT_WITHOUT_TOOLS].sort()).toEqual([
+    "accept_task",
+    "cancel_follow_up",
+    "deliver_task",
+    "list_follow_ups",
+    "offer_check_in",
+    "request_extension",
+    "schedule_follow_up",
+    "show_app_access",
+  ]);
+  // Nothing is added to a list that has none of them, and the same objects come back.
+  const plain = [{ name: "web_fetch" }];
+  expect(toolsForSubagent(plain)[0]).toBe(plain[0] as { name: string });
 });
