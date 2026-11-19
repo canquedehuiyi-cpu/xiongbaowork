@@ -520,6 +520,67 @@ jobs:
           name: e2e-artifact-evidence
           path: ${{ runner.temp }}/g7/
 
+  # G8 (期九·六): the turn a person starts in a chat keeps going when nobody is watching, over plain HTTP
+  # (no browser, no built app) against the real server and its own PostgreSQL, with the model mocked
+  # (aimock) and the computer a fixed stand-in (a runner has none): the page closes at the first tool
+  # call and the turn still finishes with both results stored and each command run once; a dropped
+  # connection joins the live turn again (replay, then live); a killed and restarted server marks the
+  # running turn interrupted, says so in Chinese, and replays nothing. XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS
+  # is set by the script for the server it starts, not here. Scenario C waits out the real recovery
+  # horizon (about 45 s), so the job takes about a minute after install.
+  e2e-background-chat:
+    name: G8 background chat (HTTP, mocked model)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: openbot_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGPASSWORD: ci-owner
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
+      E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:ci-role-writer@127.0.0.1:5432/openbot_e2e
+      # The fresh-database check and reading the turn's rows back only (see the harness header).
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Migrate the job's own database and set the runtime role passwords (server-test recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'ci-role-writer'"
+      - name: G8 background chat
+        env:
+          E2E_ARTIFACTS_DIR: ${{ runner.temp }}/g8
+        run: bun scripts/e2e/background-chat.ts
+      - name: Print server logs (credentials masked)
+        if: failure()
+        run: |
+          for f in "$RUNNER_TEMP"/g8/server-*.log; do
+            bash scripts/ci/print-diagnostics.sh "$f"
+          done
+      # Both server logs and the record of every command the computer was asked to run.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: e2e-background-chat-evidence
+          path: ${{ runner.temp }}/g8/
+
   image:
     if: ${{ !inputs.skip_image }}
     runs-on: ubuntu-latest

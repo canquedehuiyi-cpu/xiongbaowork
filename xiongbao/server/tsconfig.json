@@ -35,6 +35,8 @@
   // the `wakerflow-real-model` job of model-e2e.yml; checked here for the same reason.
   // `../scripts/e2e/staffing-lifecycle.ts`: the G6 gate's harness (招聘与组群), run by the
   // `e2e-staffing` CI job; checked here for the same reason as G4's.
+  // `../scripts/e2e/background-chat.ts`: the G8 gate's harness (后台长跑), run by the `e2e-background-chat`
+  // CI job; checked here for the same reason as G4's.
   "include": [
     "src",
     "scripts",
@@ -42,6 +44,7 @@
     "../scripts/e2e/wakerflow-lifecycle.ts",
     "../scripts/e2e/wakerflow-real-model.ts",
     "../scripts/e2e/staffing-lifecycle.ts",
+    "../scripts/e2e/background-chat.ts",
     // Laptop setup and its regression tests are checked explicitly; root scripts are not a workspace.
     "../scripts/setup-composio.ts",
     "../scripts/setup-composio.test.ts",
