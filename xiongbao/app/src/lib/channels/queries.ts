@@ -1,6 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { client } from "@/lib/client";
-import { hasServerTurn, serverTurnSince, TURN_POLL_MS } from "./background-run";
+import { hasServerTurn, serverTurnSince, TURN_POLL_MS } from "./server-turn";
 
 /**
  * A channel as the browser sees it.

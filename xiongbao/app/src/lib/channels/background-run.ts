@@ -37,27 +37,9 @@ export function backgroundRunWords(elapsedMs: number): string {
     : `后台进行中 · 已跑 ${minutes} 分钟`;
 }
 
-/** 服务器说的起点：这段对话里最早开跑的那一轮；没有就是 null。 */
-export function serverTurnSince(
-  work: readonly ChannelWork[] | undefined,
-): number | null {
-  let earliest: number | null = null;
-  for (const entry of work ?? []) {
-    if (entry.kind !== "turn") continue;
-    const at = Date.parse(entry.since);
-    if (Number.isFinite(at) && (earliest === null || at < earliest))
-      earliest = at;
-  }
-  return earliest;
-}
+export { hasServerTurn, serverTurnSince, TURN_POLL_MS } from "./server-turn";
 
-/** 名册里有没有哪段对话有一轮在服务器上跑着：有就隔一会儿再读一次，免得说完了还挂着。 */
-export const TURN_POLL_MS = 15_000;
-export function hasServerTurn(
-  channels: readonly { work?: readonly ChannelWork[] }[],
-): boolean {
-  return channels.some((channel) => serverTurnSince(channel.work) !== null);
-}
+import { serverTurnSince } from "./server-turn";
 
 /**
  * 这个页面记着的起点，一段对话一份。放在模块里而不是组件里：发出这一轮的对话页关掉之后，这一轮还在跑，侧栏
