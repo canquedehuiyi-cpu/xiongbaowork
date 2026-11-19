@@ -3,6 +3,7 @@ import {
   type AcpPermissionOptionFrame,
   type AcpRuleKey,
   type AcpRuleValue,
+  acpCloudAgentOf,
   acpRulesFrom,
 } from "../../../../shared/acp";
 import {
@@ -810,7 +811,9 @@ export function createAcpEmployeeLoader(
     );
     return {
       name: row.name,
-      computer: device?.name ?? "这台电脑",
+      computer: acpCloudAgentOf(request.deviceId)
+        ? "云电脑"
+        : (device?.name ?? "这台电脑"),
       rules: acpRulesOf(row.configuration),
     };
   };

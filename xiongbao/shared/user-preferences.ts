@@ -96,6 +96,25 @@ export type WorkHours = {
 };
 
 /**
+ * Where a person is told that a conversation's turn ended while nobody was looking at it
+ * (threads/turn-notice.ts): their phone, the chat platforms they bound (WeChat and the like), and the
+ * pages of the app they have open (web and desktop system notifications).
+ *
+ * One switch each, all on until the person turns one off. Kept in the person's own preferences row
+ * under `runEndNotice`, and read and written through `/api/settings/preferences/run-notice` rather than
+ * the general preferences read, whose shape stays what it was.
+ */
+export const RUN_END_NOTICE_CHANNELS = ["push", "im", "desktop"] as const;
+export type RunEndNoticeChannel = (typeof RUN_END_NOTICE_CHANNELS)[number];
+export type RunEndNoticePreferences = Record<RunEndNoticeChannel, boolean>;
+
+export const DEFAULT_RUN_END_NOTICE: RunEndNoticePreferences = {
+  push: true,
+  im: true,
+  desktop: true,
+};
+
+/**
  * What a `users.preferences` row holds: the preferences above, this person's work hours, and — from
  * builds that predate work hours having an object of their own — the zone at the top level.
  *
@@ -108,4 +127,6 @@ export type StoredPreferences = Partial<UserPreferences> & {
   workHours?: Partial<WorkHours>;
   /** An older row's zone: read when `workHours` carries none. */
   timeZone?: string;
+  /** Which carriers hear that a turn ended while the person was away; a missing one is on. */
+  runEndNotice?: Partial<RunEndNoticePreferences>;
 };

@@ -12,8 +12,8 @@ import type {
   AcpPermissionRequestFrame,
   AcpTurnEndFrame,
 } from "../../../shared/acp";
-import { IDLE_MS } from "../app-host";
 import type { AppEntry } from "../apps";
+import { IDLE_MS } from "../idle";
 import {
   AcpAskModeLostError,
   type AcpClient,
@@ -26,6 +26,7 @@ import { acpProcessEnv } from "./login-path";
 import {
   adapterLaunch,
   claudeModelLaunch,
+  cloudAdapterLaunch,
   codexModelLaunch,
   type ModelLaunch,
   prepareAdapterDir,
@@ -172,6 +173,21 @@ export type AcpHostDeps = {
   tempRoot?: string;
   /** The clock a pass's expiry is read against (tests). */
   now?: () => number;
+  /**
+   * Set where this host runs on an employee's own cloud computer rather than on an owner's machine
+   * (manifest.ts, THE EMPLOYEE'S OWN COMPUTER): the adapters are the copies the image installed in
+   * `binDir`, a cloud employee has no login of its own so an open WITHOUT a `model` cannot start (an
+   * owner's settings are never read there), and the adapter gets `env` and nothing else from this
+   * process's environment. Only Claude Code runs there; a Codex open is refused.
+   * Absent: an owner's machine, exactly as before.
+   */
+  cloud?: {
+    binDir: string;
+    /** The environment an adapter runs with (an allow list); read on every start. */
+    env: () => Record<string, string>;
+    /** The environment a child would inherit from, which is then unset; this process's own by default. */
+    parentEnv?: Record<string, string | undefined>;
+  };
 };
 
 /** An idle process whose pass has less than this left is replaced by the next open with a new one. */
@@ -855,7 +871,7 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
     proc.ready = (async () => {
       // Made inside the process's own start, so a process that is retired meanwhile still removes it.
       let launch: ModelLaunch | undefined;
-      if (model && harness === "codex") {
+      if (model && harness === "codex" && !deps.cloud) {
         const home = mkdtempSync(
           join(deps.tempRoot ?? tmpdir(), "xiongbao-codex-"),
         );
@@ -864,6 +880,25 @@ export function createAcpHost(deps: AcpHostDeps): AcpHost {
         launch = codexModelLaunch(model, home);
       } else if (model && harness === "claude-code") {
         launch = claudeModelLaunch(model);
+      }
+      if (deps.cloud) {
+        // A cloud computer starts only Claude Code (it has no Codex), and only on the employee's model.
+        if (!launch || harness !== "claude-code")
+          throw new HostError("start_failed");
+        const cloud = deps.cloud;
+        prepareAdapterDir(deps.adapterDir);
+        const spec = cloudAdapterLaunch(
+          { adapterDir: deps.adapterDir },
+          {
+            binDir: cloud.binDir,
+            env: cloud.env(),
+            model: launch,
+            ...(cloud.parentEnv ? { parentEnv: cloud.parentEnv } : {}),
+          },
+        );
+        if (closed) throw new HostError("start_failed");
+        proc.client = spawn(spec, handlersFor(proc));
+        return proc.client.initialize();
       }
       const spec: AcpSpawnSpec =
         harness === "custom" && app?.kind === "stdio"

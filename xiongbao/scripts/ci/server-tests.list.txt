@@ -1,5 +1,6 @@
 tests/account-argument.test.ts
 tests/acp-agent.test.ts
+tests/acp-cloud.test.ts
 tests/acp-delivery.integration.test.ts
 tests/acp-e2e.integration.test.ts
 tests/acp-group.integration.test.ts
@@ -239,6 +240,7 @@ tests/channel-titler.test.ts
 tests/channel-work.integration.test.ts
 tests/chat-server-computer-tools-config.test.ts
 tests/chat-server-tools.integration.test.ts
+tests/chat-turn-notice.integration.test.ts
 tests/check-in-offer.test.ts
 tests/coding-tools.test.ts
 tests/command-timeout.test.ts
@@ -284,6 +286,7 @@ tests/computer-local-tools-routes.test.ts
 tests/computer-own-token.test.ts
 tests/computer-page-frame-route.test.ts
 tests/computer-page-frame-store.integration.test.ts
+tests/computer-policy-destinations.test.ts
 tests/computer-policy-dry-run-frame.test.ts
 tests/computer-policy-dry-run-limit.test.ts
 tests/computer-policy-key-names.test.ts
@@ -338,6 +341,7 @@ tests/deepseek-thinking-run.test.ts
 tests/deepseek-thinking.integration.test.ts
 tests/deepseek-thinking.test.ts
 tests/delivery-attention.integration.test.ts
+tests/delivery-away-notice.test.ts
 tests/delivery-briefing.integration.test.ts
 tests/delivery-chat-replay.integration.test.ts
 tests/delivery-checker.integration.test.ts
@@ -761,6 +765,8 @@ tests/run-events-persist.integration.test.ts
 tests/run-mode.test.ts
 tests/run-model-built-in.test.ts
 tests/run-model.test.ts
+tests/run-notice-announce.integration.test.ts
+tests/run-notice-preferences-routes.test.ts
 tests/run-side-events.test.ts
 tests/runner-browser-probe.test.ts
 tests/runner-browser.test.ts
@@ -875,6 +881,7 @@ tests/third-party-notices.test.ts
 tests/thread-identity.test.ts
 tests/thread-routes.test.ts
 tests/thread-status.test.ts
+tests/thread-viewers.test.ts
 tests/three-tenant-demo.integration.test.ts
 tests/tool-calls-come-back.integration.test.ts
 tests/tool-chooser-sign-in.test.ts
@@ -884,6 +891,9 @@ tests/tool-search.test.ts
 tests/tool-selection-environment-restoration-driver.test.ts
 tests/tool-selection-environment-restoration.test.ts
 tests/tool-selection.integration.test.ts
+tests/turn-notice-config.test.ts
+tests/turn-notice.integration.test.ts
+tests/turn-notice.test.ts
 tests/turn-watchdog.test.ts
 tests/unattended-platform-frame.integration.test.ts
 tests/unattended-single-card.integration.test.ts
