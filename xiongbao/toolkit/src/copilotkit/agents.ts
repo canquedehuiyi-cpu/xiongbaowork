@@ -24,6 +24,7 @@ import {
   takeUntil,
 } from "rxjs";
 import { sanitizeSeededHistory } from "../history-sanitize";
+import { plainToolResults } from "../tool-result-text";
 import { firingChecklist } from "./firing-checklist";
 import {
   answersOnLastStep,
@@ -312,7 +313,10 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
     const answeredByResume = new Set(
       (input.resume ?? []).map((entry) => entry.interruptId),
     );
-    const history = sanitizeSeededHistory(input.messages, answeredByResume);
+    // A string tool result is stored quoted (the runtime serializes it); the model is handed it as the tool returned it.
+    const history = plainToolResults(
+      sanitizeSeededHistory(input.messages, answeredByResume),
+    );
     // A routine's firing carries the checklist it has to close. See `firingChecklist`.
     const checklist = firingChecklist(history);
     // A new run counts its steps from where it starts, never from where an earlier run stopped.
