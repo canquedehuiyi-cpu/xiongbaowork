@@ -31,6 +31,11 @@ import {
   UPDATE_PLAN_TOOL,
 } from "../../../shared/plan";
 import { STEP_LIMIT_EVENT } from "../../../shared/step-limit";
+import {
+  joinReasoning,
+  readStoredReasoning,
+  type StoredReasoning,
+} from "../../../shared/thinking";
 import type { HandoffCaps } from "../agents/handoff";
 import { delegationFreed as readDelegationFreed } from "../approvals/delegation-freed";
 import type { ApprovalContinuation } from "../approvals/types";
@@ -423,6 +428,7 @@ const SHARED_DETAILS: ReadonlySet<string> = new Set([
   "delivery",
   "message",
   "plan",
+  "reasoning",
   "stepLimit",
   "via",
 ]);
@@ -485,6 +491,14 @@ const withStepLimit = (limit: GroupStepLimit | null) =>
 function planOf(name: string, args: unknown): PlanItem[] | null {
   return name === UPDATE_PLAN_TOOL ? (readPlan(args) ?? null) : null;
 }
+
+/**
+ * 这位员工这一轮想了什么、想了多久（期三）：各段推理连在一起，记在回复行的 `details.reasoning` 上，最长
+ * `REASONING_TEXT_LIMIT` 字，超过截断并注明（`shared/thinking.ts`）。群里每个人读到的一样，群聊在这一行
+ * 上方画折起来的「思考」块（`app/src/components/channels/group-chat.tsx`）。外部员工的轮次不记。
+ */
+const withReasoning = (reasoning: StoredReasoning | null) =>
+  reasoning ? { reasoning } : {};
 
 const withPlan = (plan: readonly PlanItem[] | null) =>
   plan ? { plan: [...plan] } : {};
@@ -2002,6 +2016,9 @@ export function createGroupConversations(deps: {
     let planned: PlanItem[] | null = null;
     // 外部员工的轮次在它自己那台电脑上跑，计划不记在这一行上。
     const ownPlan = () => (bot.hiredBy ? null : planned);
+    const thought: { text: string; ms?: number }[] = [];
+    // 思考也一样。
+    const ownReasoning = () => (bot.hiredBy ? null : joinReasoning(thought));
     const marks: GroupDeliveryMark[] = [];
     /*
      * 外部员工的轮次（它的招聘人 `hiredBy`，或这一轮回了 `detached`）只回一句「开始了」，它的三步在设备
@@ -2023,6 +2040,9 @@ export function createGroupConversations(deps: {
           },
           onToolCall: ({ name, args }) => {
             planned = planOf(name, args) ?? planned;
+          },
+          onReasoning: (piece) => {
+            thought.push(piece);
           },
           onCustom: ({ name, value }) => {
             compacted = compactionNoteOf(name) ?? compacted;
@@ -2090,6 +2110,7 @@ export function createGroupConversations(deps: {
       // 外部员工的轮次不走这里的步数（它在自己那台电脑上跑），不记。
       const shownLimit = detached || bot.hiredBy ? null : limited;
       const shownPlan = detached ? null : ownPlan();
+      const shownReasoning = detached ? null : ownReasoning();
       if (gate.status === "pending") {
         await deps.store.finish(id, "", "waiting", {
           ...gate.details,
@@ -2097,6 +2118,7 @@ export function createGroupConversations(deps: {
           ...withMarks(shownMarks),
           ...withStepLimit(shownLimit),
           ...withPlan(shownPlan),
+          ...withReasoning(shownReasoning),
         });
         /*
          * The card stays where the gate left it, and it is not this call's business to move it.
@@ -2113,6 +2135,7 @@ export function createGroupConversations(deps: {
         ...withMarks(shownMarks),
         ...withStepLimit(shownLimit),
         ...withPlan(shownPlan),
+        ...withReasoning(shownReasoning),
       };
       if (gate.status === "denied") {
         await deps.store.finish(id, gate.message, "failed", compaction);
@@ -2190,6 +2213,7 @@ export function createGroupConversations(deps: {
           // 等工具审批前已经走过的步骤：恢复后接着记（`continueWaiting`）。
           ...withMarks(ownMarks()),
           ...withPlan(ownPlan()),
+          ...withReasoning(ownReasoning()),
         });
         /*
          * Two different waits, and the board tells them apart.
@@ -2213,6 +2237,7 @@ export function createGroupConversations(deps: {
         await deps.store.finish(id, message, "failed", {
           ...withMarks(ownMarks()),
           ...withPlan(ownPlan()),
+          ...withReasoning(ownReasoning()),
         });
         await closeCard(cardTurn, agentId, runId, true, round(message));
       }
@@ -2508,6 +2533,8 @@ export function createGroupConversations(deps: {
         onCustom?: (event: { name: string; value: unknown }) => void;
         /** 恢复后这一轮的工具调用：计划从这里接着记。 */
         onToolCall?: (call: { name: string; args: unknown }) => void;
+        /** 恢复后这一轮的思考：接在等待前记下的后面。 */
+        onReasoning?: (reasoning: { text: string; ms?: number }) => void;
       }) => Promise<{ replyText: string }>,
     ): Promise<{ replyText: string }> {
       const row = await deps.store.waitingFor(approvalId);
@@ -2577,15 +2604,29 @@ export function createGroupConversations(deps: {
       // 等待前记下的计划；恢复后又更新了就换上新的。
       let resumedPlan: PlanItem[] | null =
         readPlan({ items: row.details.plan }) ?? null;
+      // 等待前记下的思考；恢复后又想了的接在后面。
+      const earlierThought = readStoredReasoning(row.details.reasoning);
+      const resumedThought: { text: string; ms?: number }[] = [];
       const allMarks = () => ({
         ...withMarks([...earlier, ...resumedMarks]),
         ...withStepLimit(resumedLimit),
         ...withPlan(resumedPlan),
+        ...withReasoning(
+          resumedThought.length > 0
+            ? joinReasoning([
+                ...(earlierThought ? [earlierThought] : []),
+                ...resumedThought,
+              ])
+            : earlierThought,
+        ),
       });
       try {
         const outcome = await run({
           onToolCall: ({ name, args }) => {
             resumedPlan = planOf(name, args) ?? resumedPlan;
+          },
+          onReasoning: (piece) => {
+            resumedThought.push(piece);
           },
           onCustom: ({ name, value }) => {
             resumedLimit = stepLimitOf(name, value) ?? resumedLimit;
@@ -2833,6 +2874,7 @@ export function createGroupConversations(deps: {
             ? { stepLimit: { steps: details.stepLimit.steps } }
             : {}),
           ...withPlan(readPlan({ items: details.plan }) ?? null),
+          ...withReasoning(readStoredReasoning(details.reasoning)),
           // 外部员工在等招聘人确认：每个成员读到的都只有谁在等谁、结果如何。
           ...(groupAcpPermissionOf(details.acpPermission)
             ? {

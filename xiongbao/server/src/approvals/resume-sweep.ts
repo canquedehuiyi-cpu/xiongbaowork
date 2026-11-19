@@ -263,6 +263,9 @@ export function createApprovalResumeTick(deps: {
                         ...(hooks?.onToolCall
                           ? { onToolCall: hooks.onToolCall }
                           : {}),
+                        ...(hooks?.onReasoning
+                          ? { onReasoning: hooks.onReasoning }
+                          : {}),
                         ownerUserId: input.ownerUserId,
                         routineId: "approval",
                         agentId: request.action.botId,

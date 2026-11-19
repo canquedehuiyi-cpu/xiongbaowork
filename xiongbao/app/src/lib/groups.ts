@@ -68,6 +68,11 @@ export type GroupMessage = {
    * 群聊顶部据此给每位员工钉一张计划卡（`components/channels/pinned-plans.tsx`）。
    */
   plan?: { text: string; status: "pending" | "in_progress" | "done" }[];
+  /**
+   * 这位员工这一轮想了什么、想了多久（期三）：服务器把各段推理连在一起记下，太长截断（`truncated`），时长每段
+   * 都量到才有。群里每个人读到的一样，回复上方画折起来的「思考」块。
+   */
+  reasoning?: { text: string; ms?: number; truncated?: boolean };
   /** 外部员工在等它的招聘人确认一个操作（见 {@link GroupAcpPermission}）。 */
   acpPermission?: GroupAcpPermission;
 };
