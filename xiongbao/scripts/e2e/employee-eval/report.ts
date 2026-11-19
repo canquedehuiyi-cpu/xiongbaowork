@@ -13,7 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
-import { TASK_TITLES, TASKS } from "./lib";
+import { HARD_TASKS, TASK_TITLES, TASKS } from "./lib";
 import type { Capabilities, Tri } from "./metrics";
 import type { EvalRecord, EvalResults } from "./records";
 
@@ -53,10 +53,15 @@ function table(header: string[], rows: string[][]): string {
   ].join("\n");
 }
 
-function passCount(results: EvalResults | undefined): string {
+function passCount(
+  results: EvalResults | undefined,
+  only?: readonly string[],
+): string {
   if (!results) return DASH;
   const scored = results.records.filter(
-    (record) => !record.error?.startsWith("不适用"),
+    (record) =>
+      !record.error?.startsWith("不适用") &&
+      (!only || only.includes(record.task)),
   );
   return `${scored.filter((record) => record.passed).length}/${scored.length}`;
 }
@@ -133,7 +138,7 @@ export function renderReport(results: EvalResults[]): string {
       (task) => find(xiongbao, task) || find(codex, task),
     );
     out.push(
-      `## 五道题（熊宝 ${passCount(xiongbao)}，Codex ${passCount(codex)}）`,
+      `## 五道题（熊宝 ${passCount(xiongbao, TASKS)}，Codex ${passCount(codex, TASKS)}）`,
       "",
     );
     out.push(
@@ -232,6 +237,54 @@ export function renderReport(results: EvalResults[]): string {
         "",
       );
     }
+  }
+
+  const hard = HARD_TASKS.filter((task) =>
+    [xiongbao, codex].some((side) =>
+      side?.records.some((record) => record.task === task),
+    ),
+  );
+  if (hard.length) {
+    const find = (side: EvalResults | undefined, task: string) =>
+      side?.records.find((record) => record.task === task);
+    out.push(
+      "## 加难题（多个独立部分 + 汇总：看会不会列计划、派子代理）",
+      "",
+      table(
+        [
+          "题目",
+          "熊宝",
+          "Codex",
+          "熊宝 token",
+          "Codex token",
+          "熊宝步数",
+          "熊宝计划",
+          "熊宝子代理",
+          "Codex 计划",
+          "Codex 子代理",
+        ],
+        hard.map((task) => {
+          const mine = find(xiongbao, task);
+          const theirs = find(codex, task);
+          const tri = (value: Tri | undefined) => (value ? TRI[value] : DASH);
+          return [
+            TASK_TITLES[task],
+            verdict(mine) + (mine?.timedOut ? " ⏱" : ""),
+            verdict(theirs) + (theirs?.timedOut ? " ⏱" : ""),
+            tokens(mine),
+            tokens(theirs),
+            count(mine?.steps),
+            tri(mine?.capabilities.plan),
+            mine?.capabilities.subagent === "yes"
+              ? `是（${mine.capabilities.subagentCount}）`
+              : tri(mine?.capabilities.subagent),
+            tri(theirs?.capabilities.plan),
+            tri(theirs?.capabilities.subagent),
+          ];
+        }),
+      ),
+      "",
+    );
   }
 
   if (smoke?.records.length) {

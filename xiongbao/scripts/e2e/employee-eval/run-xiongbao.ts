@@ -23,7 +23,7 @@
  * 环境变量（除 config.ts 里的门槛和模型参数外）：
  *   E2E_DATABASE_URL, E2E_ROLE_WRITER_DATABASE_URL   与 wakerflow-real-model.ts 相同
  *   EVAL_SUITE        tasks | smoke
- *   EVAL_TASKS        all 或逗号分隔的题名（smoke 套件里是场景名）
+ *   EVAL_TASKS        all（五道对标题）、hard（加难题）或逗号分隔的题名（smoke 套件里是场景名）
  *   EVAL_TASK_MINUTES 每题墙钟上限，默认 20（冒烟场景用各自的上限）
  *   EVAL_OUT          结果目录，默认 ./employee-eval-out；写 xiongbao.json / smoke.json、产物和服务器日志
  *   E2E_SERVER_PORT   默认取空闲端口
@@ -632,6 +632,7 @@ const OUTPUTS: Record<TaskName, string[]> = {
   code: ["src/duration.ts"],
   data: ["summary.csv"],
   office: ["actions.csv"],
+  compare: ["compare.md"],
 };
 
 async function runWork(work: Work): Promise<EvalRecord> {
