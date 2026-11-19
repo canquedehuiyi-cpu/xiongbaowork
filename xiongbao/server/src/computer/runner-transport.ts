@@ -72,6 +72,9 @@ export function createRunnerTransport(
     if (bare.startsWith("desktop/"))
       return `desktop.${bare.slice("desktop/".length)}`;
     // --- end desktop control ---
+    // The coding tools (期五): `files/edit` is `files.edit`, and so on.
+    if (bare === "files/edit" || bare === "files/grep" || bare === "files/glob")
+      return bare.replace("/", ".");
     return bare === "exec"
       ? "exec"
       : bare === "files/list"

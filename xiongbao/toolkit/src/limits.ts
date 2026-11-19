@@ -6,8 +6,32 @@
  * everything behind them into that process.
  */
 export const TURN_LIMITS = {
-  /** How long one headless turn may take before it is stopped. */
+  /**
+   * How long one light headless turn may take before it is stopped: a check-in, a patrol, a
+   * follow-up in a group. The default for every turn runner that is not told otherwise.
+   */
   turnTimeoutMs: 5 * 60_000,
+
+  /**
+   * How long one working turn may take: a board card's, an unattended routine's, a subagent's (期五).
+   * These write code, build and run tests, and one command alone may take ten minutes, so five
+   * minutes cut real work off half way. The step cap and metering still bound what a turn spends.
+   */
+  workTurnTimeoutMs: 25 * 60_000,
+
+  /**
+   * How many rounds of headless tool calls one light turn may take (`HeadlessToolsMiddleware`). A
+   * round is one run of the Bot that ends asking for tools only this host can run (the computer, a
+   * component): they are run here and the Bot is run again with their results. Not the model's step
+   * budget (`UNATTENDED_STEPS`, the last-step module), which caps the steps inside one run.
+   */
+  toolSegments: 30,
+
+  /**
+   * The same for a working turn (期五): 80, the order of a person's chat (40 steps, extended once by
+   * as many again). Thirty ended a board card's work half way through "search, read, edit, test".
+   */
+  workToolSegments: 80,
 
   /**
    * The gap between stopping a turn and giving up on it.
@@ -41,3 +65,28 @@ export const TURN_LIMITS = {
   lockTtlSeconds: 120,
   heartbeatMs: 15_000,
 } as const;
+
+/** The kinds of headless turn, by how long each may run. */
+export type TurnKind =
+  | "board"
+  | "unattended"
+  | "subagent"
+  | "check-in"
+  | "patrol";
+
+/**
+ * How long a turn of this kind may run: a working turn (board card, unattended, subagent) gets
+ * {@link TURN_LIMITS.workTurnTimeoutMs}, a light one (check-in, patrol) {@link TURN_LIMITS.turnTimeoutMs}.
+ */
+export function turnTimeoutFor(kind: TurnKind): number {
+  return kind === "board" || kind === "unattended" || kind === "subagent"
+    ? TURN_LIMITS.workTurnTimeoutMs
+    : TURN_LIMITS.turnTimeoutMs;
+}
+
+/** How many rounds of headless tool calls a turn of this kind may take; see `TURN_LIMITS.toolSegments`. */
+export function toolSegmentsFor(kind: TurnKind): number {
+  return turnTimeoutFor(kind) === TURN_LIMITS.workTurnTimeoutMs
+    ? TURN_LIMITS.workToolSegments
+    : TURN_LIMITS.toolSegments;
+}

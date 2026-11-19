@@ -1,6 +1,9 @@
 import {
+  COMMAND_TIMEOUT_DESCRIPTION,
+  commandTimeoutMs,
   computerToolPlace,
   DEVICE_RUN_COMMAND_DESCRIPTION,
+  LINE_RANGE_DESCRIPTION,
   WORKSPACE_RUN_COMMAND_DESCRIPTION,
 } from "@openbot/shared/computer-tool-words";
 import {
@@ -34,7 +37,7 @@ import {
   ComputerStillStartingError,
   HumanHasControlError,
 } from "./gateway";
-import type { ControlState } from "./schema";
+import { CODING_TOOL_GOVERNED_LIKE, type ControlState } from "./schema";
 
 /** What the headless sign-in tool needs from the passwords module. See passwords/service.ts. */
 export type HeadlessSignInRequester = {
@@ -98,9 +101,14 @@ export function createHeadlessComputerTools(options: {
   const noDesktopWrites = disabled(DESKTOP_SESSION_TOOL);
   // Looking at the desktop disabled takes the wait with it: a wait reads the window as a snapshot.
   const noDesktopReads = disabled(DESKTOP_SNAPSHOT_TOOL);
+  // A coding tool goes with the tool it stands beside: no saving files, no replacing a passage (期五).
+  const off = (name: string) =>
+    disabled(name) ||
+    (CODING_TOOL_GOVERNED_LIKE[name] !== undefined &&
+      disabled(CODING_TOOL_GOVERNED_LIKE[name]));
   return tools.filter(
     (tool) =>
-      !disabled(tool.definition.name) &&
+      !off(tool.definition.name) &&
       !(noDesktopWrites && DESKTOP_WRITE_TOOLS.has(tool.definition.name)) &&
       !(noDesktopReads && tool.definition.name === DESKTOP_WAIT_TOOL),
   );
@@ -128,6 +136,8 @@ function headlessComputerTools(options: {
    * gateway refuses a reference that is not this 分身's.
    */
   const folderRoot = z.string().min(1).optional();
+  /** A line of a file, from 1: where a line range starts, and how many lines it has (期五). */
+  const lineNumber = z.number().int().min(1);
   const noArgs = z.strictObject({});
   function tool<T extends z.ZodType>(
     name: string,
@@ -294,12 +304,61 @@ function headlessComputerTools(options: {
     ),
     tool(
       "computer_read_file",
-      `Read a saved file relative to ${onDevice ? where : "your persistent workspace"}, such as notes.md. To read from one of the person's shared read-only folders instead, pass its root and a path relative to that folder.`,
-      z.strictObject({ path: text, root: folderRoot }),
+      `Read a saved file relative to ${onDevice ? where : "your persistent workspace"}, such as notes.md. To read from one of the person's shared read-only folders instead, pass its root and a path relative to that folder. ${LINE_RANGE_DESCRIPTION}`,
+      z.strictObject({
+        path: text,
+        root: folderRoot,
+        offset: lineNumber.optional(),
+        limit: lineNumber.optional(),
+      }),
       async (input) => ({
         ok: true,
         ...(await gateway.readFile(seat, actor, input)),
       }),
+    ),
+    tool(
+      "computer_edit_file",
+      `Replace one passage of a text file in ${where}. old_string must appear in the file exactly once, so include enough of the surrounding lines to make it unique; it is replaced by new_string. Set replace_all to replace every occurrence. Prefer this to rewriting the whole file with computer_write_file. When old_string is not found or appears more than once, nothing is changed and you are told why: read the file again and retry.`,
+      z.strictObject({
+        path: text,
+        old_string: z.string(),
+        new_string: z.string(),
+        replace_all: z.boolean().optional(),
+      }),
+      async (input) => {
+        const result = await gateway.editFile(seat, actor, input);
+        // Not found or ambiguous: answered in words for the model to retry, never thrown.
+        return result.edited
+          ? { ok: true, ...result }
+          : { ok: false, path: result.path, error: result.error };
+      },
+    ),
+    tool(
+      "computer_grep",
+      `Search the contents of files in ${where} for a regular expression, as rg or grep -rn would. Returns the matching lines as path:line:text, at most 200 of them. Pass path to search one folder or file, glob to search only matching files (such as *.ts), and ignore_case to ignore case. Hidden files and node_modules are skipped.`,
+      z.strictObject({
+        pattern: text,
+        path: z.string().optional(),
+        glob: z.string().optional(),
+        ignore_case: z.boolean().optional(),
+      }),
+      async (input) => {
+        const result = await gateway.grep(seat, actor, input);
+        return "error" in result
+          ? { ok: false, ...result }
+          : { ok: true, ...result };
+      },
+    ),
+    tool(
+      "computer_glob",
+      `Find files in ${where} whose path matches a glob pattern, such as src/**/*.ts, relative to path when one is given. Returns up to 500 paths, the most recently changed first.`,
+      z.strictObject({ pattern: text, path: z.string().optional() }),
+      async (input) => {
+        const result = await gateway.glob(seat, actor, input);
+        return "error" in result
+          ? { ok: false, ...result }
+          : { ok: true, ...result };
+      },
     ),
     tool(
       "computer_write_file",
@@ -319,10 +378,23 @@ function headlessComputerTools(options: {
       onDevice
         ? DEVICE_RUN_COMMAND_DESCRIPTION
         : WORKSPACE_RUN_COMMAND_DESCRIPTION,
-      z.strictObject({ command: text }),
-      async (input, { signal }) => ({
+      z.strictObject({
+        command: text,
+        timeoutMs: z
+          .number()
+          .positive()
+          .optional()
+          .describe(COMMAND_TIMEOUT_DESCRIPTION),
+      }),
+      // Always sent with a time: the default when none was asked, cut to ten minutes when more was.
+      async ({ command, timeoutMs }, { signal }) => ({
         ok: true,
-        ...(await gateway.runCommand(seat, actor, input, signal)),
+        ...(await gateway.runCommand(
+          seat,
+          actor,
+          { command, timeoutMs: commandTimeoutMs(timeoutMs) },
+          signal,
+        )),
       }),
     ),
     tool(
