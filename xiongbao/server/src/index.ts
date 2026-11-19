@@ -210,6 +210,7 @@ import {
   createChannelDispatchRoutes,
 } from "./channels/dispatch";
 import {
+  announceRunNotice,
   announceTaskUpdate,
   createChannelEventHub,
   notifyChannelActivity,
@@ -648,12 +649,24 @@ import {
 import { PostgresAgentRunner } from "./threads/postgres-runner";
 import { createConversationSidebar } from "./threads/sidebar";
 import { createSidebarRoutes } from "./threads/sidebar-routes";
+import { threadViewers } from "./threads/thread-viewers";
+import {
+  createTurnNotifier,
+  interruptedChatTurn,
+  interruptedTurnTeller,
+  oneToOneConversation,
+  type TurnNotifier,
+} from "./threads/turn-notice";
 import { lazyWorkspaceOutputSink } from "./tool-output";
 import { createTranslationRoutes } from "./translations/routes";
 import { createTranslationStore, translatePending } from "./translations/store";
 import { createTranslator } from "./translations/translator";
 import { createUserInstructionsStore } from "./user-instructions";
-import { createUserPreferencesStore, readWorkHours } from "./user-preferences";
+import {
+  createUserPreferencesStore,
+  readRunEndNotice,
+  readWorkHours,
+} from "./user-preferences";
 import { createVoiceSessionStore } from "./voice/sessions";
 import { createVoiceSummarizer } from "./voice/summary";
 import {
@@ -1544,6 +1557,15 @@ await startupLifecycle.run(async (startup) => {
   ) => Promise<void> = async () => {
     throw new Error("Delivery is not initialized.");
   };
+  /*
+   * Tells a person that a chat turn ended while they were not looking (期九·五, `threads/turn-notice.ts`).
+   * Built where delivery is, below; a turn that ends before then has nobody to tell.
+   */
+  let turnNotifier: TurnNotifier | undefined;
+  const tellInterruptedTurn = interruptedTurnTeller({
+    lookup: interruptedChatTurn(database),
+    notifier: () => turnNotifier,
+  });
   const authoriseQuestion = async (question: PersonQuestion) => {
     const source = await sourceForCoordinationRun({
       ...question,
@@ -3931,8 +3953,18 @@ await startupLifecycle.run(async (startup) => {
         database,
         closeCard: ({ tenantId, runId }) =>
           taskProjector.finished({ tenantId, runRef: runId, failed: true }),
-        closed: ({ tenantId, threadId, runId }) =>
-          localThreadRunner.adoptClosedRun(tenantId, threadId, runId),
+        closed: async (run) => {
+          try {
+            await localThreadRunner.adoptClosedRun(
+              run.tenantId,
+              run.threadId,
+              run.runId,
+            );
+          } finally {
+            // A person's own chat turn that a restart cut off is told to them (期九·五).
+            await tellInterruptedTurn(run);
+          }
+        },
       });
       if (closed > 0)
         console.warn(
@@ -4215,6 +4247,7 @@ await startupLifecycle.run(async (startup) => {
             chatServerTools: createChatServerTools({
               toolsForTurn: computerToolsForTurn,
               holds: isAskedRun,
+              turnEnded: (ended) => turnNotifier?.ended(ended),
             }),
           }
         : {}),
@@ -4612,6 +4645,18 @@ await startupLifecycle.run(async (startup) => {
       }),
   });
   deliveryNotifications = (scope, input) => deliveryRouter.notify(scope, input);
+  // A chat turn that ends while nobody is looking at it: the phone, the chat platforms, the open pages.
+  turnNotifier = createTurnNotifier({
+    viewers: threadViewers,
+    preferences: (ownerUserId) => readRunEndNotice(database, ownerUserId),
+    conversation: oneToOneConversation(database),
+    botName: async (ownerUserId, agentId) =>
+      (await agentProfileStore.get(await actorFor(ownerUserId), agentId))?.name,
+    notify: (scope, input) => deliveryRouter.notify(scope, input),
+    announce: (ownerUserId, notice) =>
+      announceRunNotice(database, ownerUserId, notice),
+    windowMs: config.turnNoticeWindowMs,
+  });
 
   /*
    * Started work: an item a check-in raised, started by the person, runs as a task in a conversation

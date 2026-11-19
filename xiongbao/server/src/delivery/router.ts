@@ -222,6 +222,18 @@ export function createDeliveryRouter(deps: {
       text: string;
       kind: Exclude<DeliveryKind, PersonDeliveryKind>;
       requestId?: string | null;
+      /**
+       * A `reply` that says a turn ended while its person was away (`threads/turn-notice.ts`), the one
+       * thing sent to the places they are, whoever started the turn.
+       *
+       * `push` and `chat` are the person's own switches for the phone and for the chat platforms they
+       * bound. A reply from a turn begun in the browser is otherwise never pushed to WeChat (the
+       * routing rule below); this one is, because the person is away from the browser, and it follows
+       * the same gates as everything else sent there: the person's routing for progress (WeChat only
+       * where they opted in), the Bot's notification level and WeChat's time window. `chatText` is the
+       * line without the Bot's name, for a platform that posts under that Bot's own name.
+       */
+      away?: { push: boolean; chat: boolean; chatText: string };
     },
     includeBindings = true,
   ) {
@@ -257,7 +269,8 @@ export function createDeliveryRouter(deps: {
       kind: input.kind,
     });
     const noted = { done: false };
-    if (includeBindings) {
+    const away = input.away;
+    if (includeBindings && (away?.chat ?? true)) {
       const bindings: DeliveryBinding[] = await deps.store.bindingsFor(scope);
       /*
        * 「等你确认」在这段对话没有对口的微信绑定时（任务卡片那段对话、没在微信里找过的员工），回落到本人最近用过
@@ -265,7 +278,7 @@ export function createDeliveryRouter(deps: {
        * 所以这一行记在那个绑定的对话下。本人没打开微信、时间窗关着时照常不发。Slack / Teams 不回落。
        */
       if (
-        input.kind === "approval" &&
+        (input.kind === "approval" || away) &&
         deps.providers.wechat &&
         !bindings.some((binding) => binding.transport === "wechat")
       ) {
@@ -288,7 +301,7 @@ export function createDeliveryRouter(deps: {
         // 部署关了微信（`WECHAT_ENABLED`）：之前留下的微信绑定不再写行。
         if (binding.transport === "wechat" && !deps.providers.wechat) continue;
         let roundToClose: string | null = null;
-        if (binding.transport === "wechat" && input.kind === "reply") {
+        if (binding.transport === "wechat" && input.kind === "reply" && !away) {
           /*
            * 网页里发起的普通回复不推到微信：回复只发给入站来源为微信、还停在等人处理的那一轮（它在微信里停下等
            * 审批，别处批了，后续的回复回到微信）。这一轮本来就是从微信发起的，回复属于那段对话，所以不看本人在
@@ -347,7 +360,17 @@ export function createDeliveryRouter(deps: {
           bindingId: binding.id,
           deviceId: null,
           transport: binding.transport,
-          text: input.text,
+          /*
+           * A platform that posts as the Bot already names it, so the line without the name is sent
+           * there -- unless the row is filed under another Bot's conversation (a WeChat account the
+           * person last used with someone else), where the name is what says who it is about.
+           */
+          text:
+            away &&
+            binding.transport !== "sms" &&
+            binding.agentId === scope.agentId
+              ? away.chatText
+              : input.text,
           kind: input.kind,
           requestId: input.requestId ?? null,
         });
@@ -358,7 +381,7 @@ export function createDeliveryRouter(deps: {
         if (roundToClose) await deps.store.setInbox(roundToClose, "sent");
       }
     }
-    if (route.allows("push"))
+    if (route.allows("push") && (away?.push ?? true))
       for (const device of await deps.store.devices(scope.ownerUserId))
         await deps.store.offerOutbox({
           ...scope,

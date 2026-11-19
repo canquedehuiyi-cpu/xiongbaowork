@@ -63,6 +63,15 @@ const preferencesPatch = z
   })
   .refine((patch) => Object.keys(patch).length > 0);
 
+/** One or more of the run-end switches, as booleans; what is not named keeps what is saved. */
+const runNoticePatch = z
+  .strictObject({
+    push: z.boolean().optional(),
+    im: z.boolean().optional(),
+    desktop: z.boolean().optional(),
+  })
+  .refine((patch) => Object.keys(patch).length > 0);
+
 export function userPreferencesRoutes(
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>,
   store?: UserPreferencesStore,
@@ -77,6 +86,43 @@ export function userPreferencesRoutes(
       );
     return context.json({
       preferences: await store.read(context.var.actor.id),
+    });
+  });
+  /*
+   * Where a person is told that a conversation's turn ended while they were away: `push` (the phone),
+   * `im` (the chat platforms they bound) and `desktop` (system notifications from open pages). All on
+   * until turned off. A path of its own, before the general save, so the general read and its strict
+   * body stay what they were.
+   */
+  app.get("/run-notice", async (context) => {
+    if (!store?.runEndNotice)
+      return context.json(
+        { error: "User preferences are not available." },
+        503,
+      );
+    return context.json({
+      runNotice: await store.runEndNotice.read(context.var.actor.id),
+    });
+  });
+  app.patch("/run-notice", async (context) => {
+    if (!store?.runEndNotice)
+      return context.json(
+        { error: "User preferences are not available." },
+        503,
+      );
+    const parsed = runNoticePatch.safeParse(
+      await context.req.json().catch(() => undefined),
+    );
+    if (!parsed.success)
+      return context.json(
+        { error: "Choose true or false for push, im or desktop." },
+        400,
+      );
+    return context.json({
+      runNotice: await store.runEndNotice.patch(
+        context.var.actor.id,
+        parsed.data,
+      ),
     });
   });
   app.patch("/", async (context) => {
