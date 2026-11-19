@@ -19,6 +19,10 @@
  *      and started again. The turn is closed as interrupted, the thread says so in Chinese, the call
  *      that was running is answered as not re-run, and nothing is replayed: the command is not run a
  *      second time and the model is not asked again.
+ *   D  A long command does not cut the stream. One command runs for about 15 seconds, longer than the 10
+ *      seconds after which `Bun.serve` closes a response that has sent nothing, and the client stays
+ *      connected the whole time. Reading the stream raises no error, the turn goes on to its second
+ *      command and ends in `RUN_FINISHED`, and the stream carried no event for the silence.
  *
  * What is FIXED, because a CI runner has no computer to reach. The server is given a shared computer
  * (`AGENT_COMPUTER_URL`) and this script is that computer: it answers `POST /exec` with a finished
@@ -83,6 +87,8 @@ mkdirSync(ARTIFACTS, { recursive: true });
 const RECONNECT_AFTER_MS = 3_000;
 /** Scenario C: how long after the turn is closed the harness keeps watching for a replay. */
 const REPLAY_WATCH_MS = 8_000;
+/** Scenario D: how long its command runs, past the 10 s `Bun.serve` lets a response say nothing for. */
+const LONG_COMMAND_MS = 15_000;
 
 // ---------------------------------------------------------------------------------------------
 // Reporting
@@ -146,16 +152,18 @@ async function until<T>(
 // The scenarios' scripts: which commands the mocked model asks for, and the answer it ends with
 // ---------------------------------------------------------------------------------------------
 
-type Tag = "A" | "B" | "C";
+type Tag = "A" | "B" | "C" | "D";
 const COMMANDS: Record<Tag, [string, string]> = {
   A: ["echo a-step-one", "echo a-step-two"],
   B: ["echo b-step-one", "echo b-step-two"],
   C: ["echo c-step-one", "echo c-step-two"],
+  D: ["sleep 15", "echo d-after-the-wait"],
 };
 const ANSWER: Record<Tag, string> = {
   A: "A 场景完成：两条命令都已执行。",
   B: "B 场景完成：两条命令都已执行。",
   C: "C 场景完成：两条命令都已执行。",
+  D: "D 场景完成：长命令跑完了，后面的命令也已执行。",
 };
 /** The person's message names its scenario, so the mocked model knows which script to follow. */
 const askFor = (tag: Tag) =>
@@ -186,7 +194,7 @@ mock.on({ predicate: () => true }, async (request: ModelRequest) => {
     .filter((message) => message.role === "user")
     .map((message) => textOf(message.content))
     .join("\n");
-  const tag = (["A", "B", "C"] as const).find((candidate) =>
+  const tag = (["A", "B", "C", "D"] as const).find((candidate) =>
     asked.includes(`[场景 ${candidate}]`),
   );
   const toolResults = request.messages.filter(
@@ -930,6 +938,95 @@ try {
       );
     },
   );
+
+  // ------------------------------------------------------------------------------------------
+  await scenario(
+    "D 长命令不断流：一条命令跑 15 秒，客户端一直连着，整轮读流不出错并正常结束",
+    async () => {
+      const [slow, after] = COMMANDS.D;
+      hold(slow);
+      const run = startRun("D");
+      const stream = await run.open();
+      // The client reads to the end without hanging up, and records how that went.
+      const reading = stream.done(LONG_COMMAND_MS + 60_000).then(
+        (events) => ({ events }),
+        (error: unknown) => ({ error }),
+      );
+      await until("the long command to reach the computer", () =>
+        execs.some((entry) => entry.command === slow),
+      );
+      const began = Date.now();
+      await Bun.sleep(LONG_COMMAND_MS);
+      const early = await Promise.race([reading, Promise.resolve(undefined)]);
+      check(
+        early === undefined,
+        `the stream was still open after ${LONG_COMMAND_MS / 1000} s of the command running` +
+          (early && "error" in early
+            ? ` (it failed: ${String(early.error)})`
+            : ""),
+      );
+      equal(
+        execs.find((entry) => entry.command === slow)?.finished,
+        false,
+        "the long command is still running when the client has waited that long",
+      );
+      release(slow);
+      const outcome = await reading;
+      check(
+        "events" in outcome,
+        `reading the stream raised no error (${"error" in outcome ? String(outcome.error) : "none"})`,
+      );
+      const { events } = outcome;
+      check(
+        Date.now() - began >= LONG_COMMAND_MS,
+        "the whole turn took longer than the command did",
+      );
+      equal(
+        events.at(-1)?.type,
+        "RUN_FINISHED",
+        "the stream ends in RUN_FINISHED",
+      );
+      check(
+        !events.some((event) => event.type === "RUN_ERROR"),
+        "the stream carries no RUN_ERROR",
+      );
+      check(
+        !events.some((event) => /keep-?alive/i.test(JSON.stringify(event))),
+        "no event in the stream stands for the silence (it was only bytes between events)",
+      );
+      const said = digest(events);
+      equal(said.said, ANSWER.D, "the answer the client read is the model's");
+      equal(
+        ranOf("D").map((entry) => entry.command),
+        [slow, after],
+        "the computer ran the long command and then the next one, once each",
+      );
+
+      const messages = await until(
+        "the answer to be stored in the thread",
+        async () => {
+          const stored = await storedMessages(run.threadId).catch(() => []);
+          return lastAssistantText(stored) === ANSWER.D ? stored : false;
+        },
+        60_000,
+        500,
+      );
+      equal(
+        toolResultsOf(messages).length,
+        2,
+        "both tool results are stored in the thread",
+      );
+      check(
+        !JSON.stringify(messages).includes("keep-alive"),
+        "the stored thread holds nothing of the keep-alive",
+      );
+      const replay = await (await connectTo(run.threadId)).done(30_000);
+      check(
+        !JSON.stringify(replay).includes("keep-alive"),
+        "a replay of the thread holds nothing of it either",
+      );
+    },
+  );
 } catch (error) {
   failed = true;
   console.error(error instanceof Error ? error.stack : error);
@@ -955,7 +1052,7 @@ try {
 }
 
 console.log(
-  `\n${failed ? "FAILED" : "PASSED"}: ${results.length} of 3 scenarios, ${assertions} assertions`,
+  `\n${failed ? "FAILED" : "PASSED"}: ${results.length} of 4 scenarios, ${assertions} assertions`,
 );
 for (const result of results)
   console.log(`  ${result.scenario} (${result.seconds.toFixed(1)} s)`);
