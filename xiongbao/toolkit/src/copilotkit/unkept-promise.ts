@@ -82,9 +82,34 @@ const IMMEDIATE =
  * announce: a first-person (or zero-subject) commitment in the answer's last two sentences,
  * not a question, not waiting on the person and not deferred. A false positive costs one model
  * call, a miss costs the run; the bias is toward firing.
+ *
+ * The second line is how DeepSeek opens a step it then does not take: 「让我先查看一下项目结构。」
+ * 「我将读取三个文件。」「我先跑一遍测试。」「我来修复。」「首先，我需要…」「下面开始…」「然后我会…」
+ * 「我会先…」「马上开始…」. Several of them also open a report of work already done (「我先修复了
+ * A」「我将结果保存到了 B」「首先，我修复了…」), or a summary (「让我总结一下：…」), which is why
+ * what follows each one is read too ({@link ZH_NOT_ACTIONS}, {@link ZH_DONE}).
  */
-const ZH_ANNOUNCES =
-  /(?<!已经|正在|已)开工|这就去|这就开始|这就动手|这就着手|这就接着|我这就|我马上|我立刻|我即刻|马上就去|立刻就去|即刻就去|接下来我|下一步我|现在我就|我就把|现在就把/;
+const ZH_ANNOUNCES = new RegExp(
+  [
+    "(?<!已经|正在|已)开工|这就去|这就开始|这就动手|这就着手|这就接着|我这就|我马上|我立刻|我即刻|马上就去|立刻就去|即刻就去|接下来我|下一步我|现在我就|我就把|现在就把",
+    "(?<![这那它他她请也])让我|(?<!由)我将|我先|(?<![对于由])我来(?!自|说)|首先[，,、\\s]*(?:我(?!们?的)|让我|需要|要|得|来|先)|首先(?=查看|检查|看看|看一下|读取|搜索|获取|分析|确认|打开|运行|列出|执行|安装|创建)|下面开始|然后我会|我会先|^马上|[，,]\\s*马上",
+  ].join("|"),
+  "g",
+);
+
+/**
+ * What follows an opening that is not work this run could still do with a tool: a summary
+ * (「让我总结一下」「我来说明」), the person's turn (「让我知道」), or a feeling (「这让我想到」).
+ */
+const ZH_NOT_ACTIONS =
+  /^(?:先|再|来|也|就|简单|简要|快速|一起|地)*(?:总结|汇总|归纳|概括|小结|回顾|说明|解释|介绍|简述|汇报|报告|列出|列一下|说|讲|知道|想到|觉得|意识到|感到)/;
+
+/**
+ * Done already, in the clause an opening starts: 「已经」, 「已」 (not 「已有」「已知」), 「过了」, a 「了」
+ * anywhere but at its very end, 「完毕」. A 「了」 that ends the clause is the particle of a request
+ * or a plan as often as of a report (「我来把它修了。」), so it is not read as done.
+ */
+const ZH_DONE = /已经|已(?![有知])|过了|了(?![\s。！!….]*$)|完毕/;
 
 /** Waiting on the person, or for another day, in Chinese. */
 const ZH_DEFERRED =
@@ -110,9 +135,21 @@ export function unkeptPromise(text: string): string | undefined {
 
 function promises(sentence: string): boolean {
   // A question is the person's to answer; a colon introduces what follows it, which is the work.
-  if (/[?:？：]$/.test(sentence) || DEFERRED.test(sentence) || ZH_DEFERRED.test(sentence)) return false;
+  if (
+    /[?:？：]$/.test(sentence) ||
+    DEFERRED.test(sentence) ||
+    ZH_DEFERRED.test(sentence)
+  )
+    return false;
   if (UNDER_WAY.test(sentence)) return true;
-  if (ZH_ANNOUNCES.test(sentence)) return true;
+  for (const match of sentence.matchAll(ZH_ANNOUNCES)) {
+    // The clause the opening starts: up to the next comma or semicolon, or the sentence's end.
+    const clause =
+      sentence
+        .slice((match.index ?? 0) + match[0].length)
+        .split(/[，,；;]/)[0] ?? "";
+    if (!ZH_NOT_ACTIONS.test(clause) && !ZH_DONE.test(clause)) return true;
+  }
   for (const match of sentence.matchAll(ANNOUNCES)) {
     const after = sentence.slice((match.index ?? 0) + match[0].length);
     const verb = FILLER.exec(after)?.[1]?.toLowerCase();
