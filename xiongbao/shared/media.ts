@@ -33,8 +33,14 @@ export function mediaIdOf(url: string): string | undefined {
 /** 持有出图工具时说的话。 */
 const IMAGE_WORDS = `要图片（插图、海报、示意图、头像等）就用 ${GENERATE_IMAGE_TOOL} 生成，不要说自己不会画图，也不要用文字描述代替图片。`;
 
+/**
+ * 持有出图工具时说的话：图片也会写进员工自己电脑的工作区，路径在工具结果里。电脑上的脚本取不到
+ * `/api/media` 地址（要登录会话），所以做进 Word、PPT 要用这个路径。
+ */
+const IMAGE_FILE_WORDS = `生成好的图片，如果你有电脑，也会同时存进电脑工作区的 generated/ 文件夹里，路径在 ${GENERATE_IMAGE_TOOL} 的结果里（形如 generated/<id>.png）。要把图片放进 Word、PPT 等文档，就用这个路径，在电脑上直接读这个文件（python-docx、python-pptx 的 add_picture 等）；电脑上取不到 /api/media 地址，不要去下载它。结果里没有路径，就是电脑上没有这张图，只能给对方看站内地址。`;
+
 /** 持有视频工具时说的话。 */
-const VIDEO_WORDS = `要视频就用 ${GENERATE_VIDEO_TOOL}；视频要几分钟才生成好，它先等一会儿，没等到会给你一个任务号，过一会儿用 ${CHECK_VIDEO_TOOL} 带上任务号取结果，不要反复提交同一个视频。可以把刚生成的图片地址作为 image_url 让图片动起来。`;
+const VIDEO_WORDS = `要视频就用 ${GENERATE_VIDEO_TOOL}；视频要几分钟才生成好，它先等一会儿，没等到会给你一个任务号，过一会儿用 ${CHECK_VIDEO_TOOL} 带上任务号取结果，不要反复提交同一个视频。可以把刚生成的图片地址作为 image_url 让图片动起来。视频比较大，不会放进电脑工作区，只给站内地址。`;
 
 /** 两种都适用：怎么把结果给人看。 */
 const SHOW_WORDS =
@@ -58,7 +64,7 @@ export function mediaGuidance(
   const image = toolNames.includes(GENERATE_IMAGE_TOOL);
   const video = toolNames.includes(GENERATE_VIDEO_TOOL);
   const parts = [
-    ...(image ? [IMAGE_WORDS] : []),
+    ...(image ? [IMAGE_WORDS, IMAGE_FILE_WORDS] : []),
     ...(video ? [VIDEO_WORDS] : []),
     ...(image || video ? [SHOW_WORDS] : []),
     ...(options.computer ? [DOCUMENTS_GUIDANCE] : []),
