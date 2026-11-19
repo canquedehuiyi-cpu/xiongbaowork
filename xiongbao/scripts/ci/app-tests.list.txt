@@ -326,6 +326,7 @@ tests/group-people.test.tsx
 tests/group-question.test.tsx
 tests/group-settings.test.tsx
 tests/group-start-discard.test.tsx
+tests/group-step-limit.test.tsx
 tests/group-waiting-approval-link.test.tsx
 tests/group-write-invalidation.test.tsx
 tests/handoff-answer-attribution.test.tsx
@@ -633,6 +634,7 @@ tests/workbench-presence.test.tsx
 tests/workbench-today.test.ts
 tests/workbench-tokens.test.ts
 tests/working-now.test.tsx
+tests/working-spinner.test.tsx
 tests/wp32-status-shots.test.tsx
 tests/your-recordings.test.tsx
 vite-listen-port.test.ts

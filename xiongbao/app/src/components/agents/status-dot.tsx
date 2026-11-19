@@ -1,3 +1,4 @@
+import { IconLoader2 } from "@tabler/icons-react";
 import { PRESENCE_WORD, type PresenceStatus } from "@/lib/agents/presence";
 import { cn } from "@/lib/utils";
 
@@ -22,22 +23,40 @@ const DOT_COLOR: Record<Exclude<PresenceStatus, "unknown">, string> = {
  * - `overlay`：叠在头像右下角，带一圈底色描边（头像外面要有一个相对定位的祖先）；
  * - `decorative`：旁边已经写着那个词时用，读屏不再念一遍。
  * - `title`：鼠标停上去时多说一句（`presenceSummary`，例如「忙碌 · 正在做的事」「离线 · 2 件排队中」）。
+ * - `spin`：忙碌时画成旋转的加载图标（对话顶栏，期一），颜色还是忙碌那个；设了减少动画就不转。别的状态照旧是点。
  */
 export function StatusDot({
   status,
   overlay = false,
   decorative = false,
   title,
+  spin = false,
   className,
 }: {
   status: PresenceStatus | undefined;
   overlay?: boolean;
   decorative?: boolean;
   title?: string;
+  spin?: boolean;
   className?: string;
 }) {
   if (!status || status === "unknown") return null;
   const word = PRESENCE_WORD[status];
+  if (spin && status === "working")
+    return (
+      <span className="inline-flex shrink-0" title={title ?? word}>
+        <IconLoader2
+          aria-hidden="true"
+          className={cn(
+            "size-3 shrink-0 text-[color:var(--wb-busy,var(--signal))] motion-safe:animate-spin",
+            className,
+          )}
+          data-status-dot={status}
+          data-working-spinner=""
+        />
+        {decorative ? null : <span className="sr-only">{word}</span>}
+      </span>
+    );
   const dotClassName = cn(
     "inline-block size-2 shrink-0 rounded-full",
     overlay &&

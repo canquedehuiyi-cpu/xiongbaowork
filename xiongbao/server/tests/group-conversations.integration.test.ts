@@ -10,6 +10,7 @@ import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
+import { STEP_LIMIT_EVENT } from "../../shared/step-limit";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import {
@@ -827,6 +828,50 @@ describe("group conversations in PostgreSQL", () => {
       conversations.list(teammate.id, channel.id),
     );
     expect(theirs.messages.some((row) => "compaction" in row)).toBe(false);
+  });
+
+  test("跑满步数被收尾的一轮记在回复上（期一），群里每个人读到的一样", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    // Grace 这一轮好好答完了，它的回复不带 `stepLimit`。
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          // 形状不对的不记，只认最后那条像样的。
+          input.onCustom?.({ name: STEP_LIMIT_EVENT, value: { steps: "80" } });
+          input.onCustom?.({ name: STEP_LIMIT_EVENT, value: { steps: 80 } });
+          return "前两家写完了，第三家还没查。";
+        },
+        [grace]: () => "g",
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-step-limit`,
+        text: "调研三家竞品",
+      });
+      await drain(conversations);
+    });
+    for (const reader of [owner, teammate]) {
+      const seen = await as(reader, () =>
+        conversations.list(reader.id, channel.id),
+      );
+      expect(
+        seen.messages.map((row) => [row.agentId, row.stepLimit ?? null]),
+      ).toEqual([
+        [null, null],
+        [ada, { steps: 80 }],
+        [grace, null],
+      ]);
+    }
   });
 
   test("交付卡在群回复上只记不带内容的状态标记，群里每个人读到的一样", async () => {

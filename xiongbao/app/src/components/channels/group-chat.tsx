@@ -25,6 +25,7 @@ import {
   approvalInboxOptions,
 } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { CONTINUE_TEXT } from "@/lib/channels/step-limit";
 import {
   type GroupMessage,
   groupKeys,
@@ -47,6 +48,7 @@ import {
 } from "@/skins/xiongbao/delivery-chat";
 import { AcpGroupPermissionLine } from "./acp-group-line";
 import { ChannelAvatar } from "./avatar";
+import { WorkingSpinner } from "./chat-transcript";
 import {
   Composer,
   type CrewOption,
@@ -54,6 +56,7 @@ import {
   toGroupOptions,
   withGroupMembers,
 } from "./composer";
+import { StepLimitNote } from "./step-limit-note";
 import { TeamBotConsentCard } from "./team-bot-consent";
 
 /** Whether `groupId` is the group this channel is the chat of. */
@@ -147,6 +150,23 @@ export function GroupChat({ channelId }: { channelId: string }) {
   const working = messages.some(
     (message) => message.status === "running" || message.status === "queued",
   );
+  /*
+   * 最后一轮里有员工跑满了步数被收尾（期一）：末尾一行「已用完 N 步 · 继续」，按下就按群里点名的方式发给它。
+   * 按下就收起（记下是哪一行触的顶），没发出去时放回；新的一轮一开始它本来就不会再出现。
+   */
+  const stepLimit = groupStepLimit(messages);
+  const [continuedFrom, setContinuedFrom] = useState<string | null>(null);
+  const continueAfterLimit = (limit: GroupStepLimit) => {
+    setContinuedFrom(limit.messageId);
+    const name = names.get(limit.agentId) ?? "";
+    void send
+      .mutateAsync({
+        id: newId(),
+        text: name ? `@${name} ${CONTINUE_TEXT}` : CONTINUE_TEXT,
+        agentId: limit.agentId,
+      })
+      .catch(() => setContinuedFrom(null));
+  };
 
   const inbox = useQuery(approvalInboxOptions());
   const question = groupQuestion(inbox.data, channelId);
@@ -265,6 +285,12 @@ export function GroupChat({ channelId }: { channelId: string }) {
               meId={me?.id}
             />
           ))}
+          {stepLimit && continuedFrom !== stepLimit.messageId ? (
+            <StepLimitNote
+              onContinue={() => continueAfterLimit(stepLimit)}
+              steps={stepLimit.steps}
+            />
+          ) : null}
         </div>
       </div>
       <div className="mx-auto w-full max-w-3xl px-4 pb-4">
@@ -420,8 +446,42 @@ export function groupDeliveryCards(
   return cards;
 }
 
+/** 最后一轮里最后那位跑满步数的员工：哪一行、哪位、用了几步。 */
+export type GroupStepLimit = {
+  messageId: string;
+  agentId: string;
+  steps: number;
+};
+
+/**
+ * 群里的「已用完 N 步 · 继续」给谁（期一）。和单聊一样只看最后一轮：最后一句人话之后的员工回复；人刚说了话、
+ * 员工还没回，就已经是新的一轮了。这一轮里还有员工在跑或排着时不给。回复行上的 `stepLimit` 是服务器从那一轮的
+ * `step-limit` 事件记下的（`server/src/channels/group.ts`）。
+ */
+export function groupStepLimit(
+  messages: readonly GroupMessage[],
+): GroupStepLimit | null {
+  if (
+    messages.some(
+      (message) => message.status === "running" || message.status === "queued",
+    )
+  )
+    return null;
+  let found: GroupStepLimit | null = null;
+  for (const message of messages) {
+    if (message.agentId === null) {
+      found = null;
+      continue;
+    }
+    const steps = message.stepLimit?.steps;
+    if (typeof steps === "number" && Number.isInteger(steps) && steps > 0)
+      found = { messageId: message.id, agentId: message.agentId, steps };
+  }
+  return found;
+}
+
 /** One attributed line: a person's bubble, and a Bot's named reply on the left. */
-function GroupLine({
+export function GroupLine({
   message,
   name,
   answeredBy,
@@ -515,13 +575,20 @@ function GroupLine({
           {name}
           {mark}
           {answeredBy ? ` · 由${answeredBy}代答` : null}
+          {/* 已经在往外说了、还没说完：名字旁边转着，和「思考中」前面那个是同一个。 */}
+          {message.status === "running" && message.text ? (
+            <span className="ml-1.5 inline-flex align-middle">
+              <WorkingSpinner />
+            </span>
+          ) : null}
         </MessageHeader>
         {(message.status === "running" || message.status === "queued") &&
         !message.text ? (
           <p
-            className="tool-line-running text-sm text-muted-foreground"
+            className="tool-line-running flex items-center gap-1.5 text-sm text-muted-foreground"
             role="status"
           >
+            <WorkingSpinner />
             思考中
           </p>
         ) : message.status === "waiting" && !mine ? (
