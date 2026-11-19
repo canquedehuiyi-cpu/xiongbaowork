@@ -23,6 +23,10 @@ import {
   frontendApprovalSnapshot,
   WAITING_FOR_PERSON,
 } from "./approval-context";
+import {
+  isServerHeldTool,
+  useServerComputerTools,
+} from "./server-computer-tools";
 
 type RenderProps = { toolCallId: string; [key: string]: unknown };
 
@@ -102,8 +106,22 @@ async function asksEveryStep(
  * (`asksEveryStep`, answered by the server for the thread).
  */
 export function useFrontendTool<T extends Record<string, unknown>>(
-  tool: ReactFrontendTool<T>,
+  given: ReactFrontendTool<T>,
 ) {
+  /*
+   * THE SERVER RUNS THIS TOOL, SO THE PAGE ONLY DRAWS IT (期九·四). Registered with no handler and not
+   * offered to the model: the server offers its own, runs it, and the result arrives in the stream for
+   * the renderer below to draw. The approval card, the takeover card and the password card are the
+   * same renderers as ever; they find their request on the server by the tool call's id, which is how
+   * they already worked for a turn that ended waiting for a person.
+   *
+   * Flipping this re-registers the tool (its `available` is part of the SDK's registration key), so the
+   * handler a tool was first registered with is never the one a run uses after the answer changed.
+   */
+  const serverRuns = useServerComputerTools() && isServerHeldTool(given.name);
+  const tool: ReactFrontendTool<T> = serverRuns
+    ? { ...given, handler: undefined }
+    : given;
   const { copilotkit } = useCopilotKit();
   // Stable for the provider's life, so the SDK's once-registered handler may keep it.
   const queryClient = useQueryClient();
@@ -123,7 +141,7 @@ export function useFrontendTool<T extends Record<string, unknown>>(
   useSDKFrontendTool(
     {
       ...tool,
-      ...(hidden ? { available: false } : {}),
+      ...(hidden || serverRuns ? { available: false } : {}),
       // Every computer tool, not only changes: a look a rule asks about waits on the same card.
       ...(tool.name.startsWith("computer_")
         ? {
@@ -213,6 +231,6 @@ export function useFrontendTool<T extends Record<string, unknown>>(
           }
         : undefined,
     },
-    [hidden],
+    [hidden, serverRuns],
   );
 }

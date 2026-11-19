@@ -1,5 +1,6 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { client } from "@/lib/client";
+import { hasServerTurn, serverTurnSince, TURN_POLL_MS } from "./background-run";
 
 /**
  * A channel as the browser sees it.
@@ -61,6 +62,18 @@ export type ChannelWork =
       botId: string;
       botName: string | null;
       /** ISO-8601. */
+      since: string;
+    }
+  | {
+      /**
+       * The Bot's own turn in this conversation, running on the server (期九·四): the page may be
+       * closed, and the roster still says it is going. Only where the server runs a chat's computer.
+       */
+      kind: "turn";
+      key: string;
+      botId: string;
+      botName: string | null;
+      /** ISO-8601: when the turn began, which is what 「已跑 X 分钟」 counts from. */
       since: string;
     };
 
@@ -149,6 +162,17 @@ export function channelListQueryOptions() {
     getNextPageParam: (page: ChannelPage) => page.nextCursor ?? undefined,
     select: (data): ChannelSummary[] =>
       data.pages.flatMap((page) => page.channels),
+    /*
+     * While some conversation has a turn running on the server (期九·四), ask again every so often: what the
+     * server says about it is read, and nothing tells a page that was not there when it ended. Never
+     * on a deployment that does not run chat turns on the server, which sends no such entry.
+     */
+    refetchInterval: (query) =>
+      hasServerTurn(
+        query.state.data?.pages.flatMap((page) => page.channels) ?? [],
+      )
+        ? TURN_POLL_MS
+        : false,
   });
 }
 
@@ -160,5 +184,8 @@ export function channelQueryOptions(channelId: string) {
         fallback: "无法加载这段会话",
       });
     },
+    // The same reason as the roster's: a turn the server says is running has to be asked about again.
+    refetchInterval: (query) =>
+      serverTurnSince(query.state.data?.work) !== null ? TURN_POLL_MS : false,
   });
 }

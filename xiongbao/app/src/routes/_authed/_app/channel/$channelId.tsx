@@ -8,6 +8,7 @@ import { ConversationApprovals } from "@/components/approvals/inline-approval";
 import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
 import { useProfileStatus } from "@/components/bot-profile/waker-detail-sections";
 import { ChannelAvatar } from "@/components/channels/avatar";
+import { BackgroundRunBadge } from "@/components/channels/background-run-badge";
 import { ChannelChat } from "@/components/channels/channel-chat";
 import { ConversationActions } from "@/components/channels/conversation-actions";
 import {
@@ -27,6 +28,7 @@ import {
   type AgentProfile as AgentProfileData,
   agentListQueryOptions,
 } from "@/lib/agents/queries";
+import { useBackgroundRun } from "@/lib/channels/background-run";
 import { useMarkOpenChannelRead } from "@/lib/channels/mark-read";
 import { type AgentChannel, channelQueryOptions } from "@/lib/channels/queries";
 import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
@@ -106,6 +108,8 @@ function RouteComponent() {
   const phonePage = usePhoneSidebarPage();
 
   useMarkOpenChannelRead(channelId);
+  // 一轮在服务器上跑着时，顶栏上的「后台进行中 · 已跑 X 分钟」（期九·四）；没开这项的部署一直是 null。
+  const background = useBackgroundRun(channel.data);
 
   // Browser activity may auto-open the screen once per run unless this run was dismissed.
   const autoWatch = useAutoWatchScreen({
@@ -239,6 +243,7 @@ function RouteComponent() {
           </>
         )}
         <div className="flex flex-row gap-1.5">
+          <BackgroundRunBadge run={background} />
           {/* Only once it is known not to be an external employee: these poll its computer. */}
           {external || agentProfiles === undefined ? null : (
             <ComputerChatControls

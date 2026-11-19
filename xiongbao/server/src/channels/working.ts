@@ -36,7 +36,15 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 import { HANDOFF_KIND } from "../agents/handoff";
 import type { Database } from "../db/client";
-import { agents, routineRuns, routines, workItems } from "../db/schema";
+import {
+  agents,
+  routineRuns,
+  routines,
+  threadRunLiveness,
+  threadRuns,
+  workItems,
+} from "../db/schema";
+import { RUN_STALE_MS } from "../recovery/interrupted-runs";
 import { DEFAULT_MAX_ATTEMPTS } from "../work/queue";
 
 /** Something a conversation is waiting on. */
@@ -62,6 +70,20 @@ export type ChannelWork =
       /** The Bot the routine runs as. */
       botId: string;
       botName: string | null;
+      since: Date;
+    }
+  | {
+      /**
+       * The Bot's own turn in this conversation, running on the server (期九·四). The page may be
+       * closed: it is what lets the roster say 「后台进行中」 for a turn nobody's browser is carrying.
+       */
+      kind: "turn";
+      /** The run's id. */
+      key: string;
+      /** The Bot running it. */
+      botId: string;
+      botName: string | null;
+      /** When the run's first events were written, which is when the person's clock starts. */
       since: Date;
     };
 
@@ -113,6 +135,14 @@ export type ChannelThread = {
 export async function workIn(
   database: Database,
   channels: readonly ChannelThread[],
+  options: {
+    /**
+     * Count the person's own running turns as work (期九·四). Only where the server runs a chat's
+     * computer tools: the turn is then one the person can leave, and a deployment that has not
+     * switched that on answers exactly what it always did.
+     */
+    turns?: boolean;
+  } = {},
 ): Promise<Map<string, ChannelWork[]>> {
   const found = new Map<string, ChannelWork[]>();
   if (channels.length === 0) return found;
@@ -269,6 +299,46 @@ export async function workIn(
       botName: run.botName ?? null,
       since: run.startedAt,
     });
+  }
+
+  if (options.turns) {
+    /*
+     * A turn that writes its events as it goes has a `running` row whose heartbeat every write moves
+     * forward (`run-event-writer.ts`). One whose heartbeat has stopped belongs to a process that is
+     * gone and is left to the restart sweep, so it is not work: the same age the sweep uses.
+     */
+    const turns = await database
+      .select({
+        runId: threadRuns.id,
+        threadId: threadRuns.threadId,
+        botId: threadRuns.agentId,
+        botName: agents.name,
+        startedAt: threadRuns.createdAt,
+      })
+      .from(threadRunLiveness)
+      .innerJoin(threadRuns, eq(threadRuns.id, threadRunLiveness.runId))
+      .leftJoin(agents, eq(agents.id, threadRuns.agentId))
+      .where(
+        and(
+          eq(threadRunLiveness.status, "running"),
+          inArray(threadRuns.threadId, [...channelByThread.keys()]),
+          gt(
+            threadRunLiveness.heartbeatAt,
+            sql`now() - make_interval(secs => ${RUN_STALE_MS / 1000})`,
+          ),
+        ),
+      );
+    for (const turn of turns) {
+      const channelId = channelByThread.get(turn.threadId);
+      if (!channelId) continue;
+      add(channelId, {
+        kind: "turn",
+        key: turn.runId,
+        botId: turn.botId,
+        botName: turn.botName ?? null,
+        since: turn.startedAt,
+      });
+    }
   }
 
   for (const list of found.values())

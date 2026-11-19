@@ -165,11 +165,11 @@ import type {
   KeyGuideSource,
 } from "./plugins/broker";
 import { createAppGrantDraftRoutes } from "./plugins/grant-translate";
+import { createPluginRoutes } from "./plugins/routes";
 import type {
   SharedAudience,
   SharedUseStore,
 } from "./plugins/shared-use-store";
-import { createPluginRoutes } from "./plugins/routes";
 import {
   isDeploymentFault,
   PluginRefusedError,
@@ -765,6 +765,13 @@ export function createApp(
        * that is the same condition `index.ts` builds Better Auth under — see `emailPasswordAvailable`.
        */
       emailPassword: emailPasswordAvailable(config),
+      /*
+       * Whether a person's chat has its computer tools run by the server (期九): the page then only
+       * draws them, and a turn goes on with the page closed. A deployment switch with nothing secret
+       * in it, projected because the browser holds half of it: it declares the choice in each run's
+       * `forwardedProps`, and the server takes over only a run that does.
+       */
+      chatServerComputerTools: config.chatServerComputerTools,
     }),
   );
   // Ahead of every route it closes, the auth handler's SSO and SCIM routes included.

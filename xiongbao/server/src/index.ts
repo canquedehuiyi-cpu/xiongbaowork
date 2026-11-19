@@ -1190,6 +1190,8 @@ await startupLifecycle.run(async (startup) => {
     database,
     agentProfileStore,
     threadIdentity,
+    // A running turn is work the roster shows only where the server runs a chat's computer tools.
+    { turns: config.chatServerComputerTools },
   );
   /**
    * A person spoke in one of their conversations. Bound once memory defaults exist (memory/defaults.ts):

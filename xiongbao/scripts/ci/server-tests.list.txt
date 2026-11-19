@@ -233,6 +233,7 @@ tests/channel-one-line.test.ts
 tests/channel-routes.test.ts
 tests/channel-summary.integration.test.ts
 tests/channel-titler.test.ts
+tests/channel-turn-work.integration.test.ts
 tests/channel-work.integration.test.ts
 tests/chat-server-computer-tools-config.test.ts
 tests/chat-server-tools.integration.test.ts
