@@ -13,6 +13,11 @@ import { dirname, join } from "node:path";
 import { type Check, check, copyTree, readText } from "./lib";
 import type { Capabilities, Features, ToolCall } from "./metrics";
 import { TOOL } from "./metrics";
+import {
+  runWordfreqVerify,
+  WORDFREQ_PROMPT,
+  wordfreqFiles,
+} from "./smoke-background";
 
 export type SmokeContext = {
   dir: string;
@@ -31,7 +36,14 @@ export type SmokeScenario = {
   prompt: string;
   minutes: number;
   check: (context: SmokeContext) => Check[];
+  /**
+   * 后台长跑冒烟（期九·六）：只有单聊路径做得了，评测脚本不管 `EVAL_PATH` 一律走单聊接口，并在第一个工具
+   * 调用后断开（`disconnect`），或断开 30 秒后用 `/connect` 重连（`reconnect`）。
+   */
+  background?: BackgroundKind;
 };
+
+export type BackgroundKind = "disconnect" | "reconnect";
 
 const LONG_COUNT = 55;
 const WORDS = ["青松", "白鹭", "远山"];
@@ -230,16 +242,52 @@ export const SMOKE: SmokeScenario[] = [
   },
 ];
 
+/**
+ * 后台长跑的两个场景，用真模型走单聊路径。题面、夹具、校验脚本是同一份，区别只在客户端怎么断开：
+ * `disconnect` 断开后只轮询线程，`reconnect` 断开 30 秒后重新连上。
+ * 不在 `all` 里（`all` 仍是原来的六个，日常回归的时长不变），用 `background` 或场景名点名跑。
+ */
+const BACKGROUND_TITLE = "词频小程序（8 次以上工具调用，校验脚本退出 0）";
+const backgroundScenario = (
+  name: BackgroundKind,
+  title: string,
+): SmokeScenario => ({
+  name,
+  title: `${title}：${BACKGROUND_TITLE}`,
+  stage: "期九·六 后台长跑",
+  requires: [],
+  files: wordfreqFiles(),
+  prompt: WORDFREQ_PROMPT,
+  minutes: 15,
+  background: name,
+  check: ({ dir }) => {
+    const verified = runWordfreqVerify(dir);
+    return [check("校验脚本退出码为 0", verified.ok, verified.detail)];
+  },
+});
+
+export const BACKGROUND_SMOKE: SmokeScenario[] = [
+  backgroundScenario("disconnect", "中途断开网页仍完成"),
+  backgroundScenario("reconnect", "断开 30 秒后重连续上流"),
+];
+
+/** 从 `all`（原来的六个）、`background`（断开 / 重连两个）、空串或逗号分隔的场景名里挑，可以混写。 */
 export function selectSmoke(spec: string | undefined): SmokeScenario[] {
   const text = (spec ?? "").trim();
   if (!text || text === "all") return SMOKE;
-  const names = text.split(/[,\s]+/).filter(Boolean);
-  for (const name of names)
-    if (!SMOKE.some((scenario) => scenario.name === name))
+  const known = [...SMOKE, ...BACKGROUND_SMOKE];
+  const picked = new Set<string>();
+  for (const name of text.split(/[,\s]+/).filter(Boolean)) {
+    if (name === "all") for (const item of SMOKE) picked.add(item.name);
+    else if (name === "background")
+      for (const item of BACKGROUND_SMOKE) picked.add(item.name);
+    else if (known.some((item) => item.name === name)) picked.add(name);
+    else
       throw new Error(
-        `不认识的冒烟场景「${name}」，可选：${SMOKE.map((s) => s.name).join("、")}`,
+        `不认识的冒烟场景「${name}」，可选：all、background、${known.map((item) => item.name).join("、")}`,
       );
-  return SMOKE.filter((scenario) => names.includes(scenario.name));
+  }
+  return known.filter((item) => picked.has(item.name));
 }
 
 export function placeSmoke(scenario: SmokeScenario, dest: string) {
