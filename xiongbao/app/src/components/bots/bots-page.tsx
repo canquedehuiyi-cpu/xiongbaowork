@@ -9,6 +9,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AgentDialog } from "@/components/agents/agent-dialog";
 import { CreateAgentDialog } from "@/components/agents/create-agent-dialog";
+import { FixedEmployees } from "@/components/agents/external/fixed-employees";
 import {
   HireFromCloud,
   HireFromComputer,
@@ -65,8 +66,9 @@ import { useSearchDraft } from "@/lib/use-search-draft";
  * - 工具栏：搜索、运行状态、角色、环境、排序四个筛选，加上卡片 / 列表两种画法。每一项都在地址里，所以刷新、分享
  *   的链接和员工详情页的返回链接都回到同一个筛好的名单。
  * - `?agent=<id>` 在名单上打开那位员工的编辑框（每张卡上的「编辑」）。
- * - 最上面「人才市场 / 从我的电脑招 / 云端（下一步）」（`?source=computer|cloud`，外部员工 Task 10）：从我的
- *   电脑招列出本人电脑上装好的智能体，`?device=` 是哪台电脑，`?hire=` 打开那一家的招聘设置；云端只说明。
+ * - 最上面「人才市场 / 固定员工 / 从我的电脑招 / 云端（下一步）」（`?source=fixed|computer|cloud`，外部员工
+ *   Task 10）：固定员工是 Claude Code 和 Codex 两张现成的卡，一键启用（8.3）；从我的电脑招列出本人电脑上装好的
+ *   智能体，`?device=` 是哪台电脑，`?hire=` 打开那一家的招聘设置；云端只说明。
  */
 
 /** The card's environment tag in the same words: 本地 = one of this person's machines. */
@@ -191,11 +193,14 @@ export function BotsPage({ search }: { search: WakersSearch }) {
         )
       }
       description={
-        source !== "market"
-          ? `你电脑上已经在用的智能体，可以直接招进来当员工：它照样用自己的本事干活，${shortName()}给它排班、拉进群、上看板、守底线。`
-          : personal
-            ? "在这里召唤员工；召唤来的和你自己的员工也在这里管理。"
-            : "在这里召唤员工，管理你的员工、群组，以及别人共享给你的员工。"
+        source === "fixed"
+          ? "Claude Code 和 Codex 是现成的固定员工，选中就能用，不用填 key，模型走" +
+            `${shortName()}的模型代理。`
+          : source !== "market"
+            ? `你电脑上已经在用的智能体，可以直接招进来当员工：它照样用自己的本事干活，${shortName()}给它排班、拉进群、上看板、守底线。`
+            : personal
+              ? "在这里召唤员工；召唤来的和你自己的员工也在这里管理。"
+              : "在这里召唤员工，管理你的员工、群组，以及别人共享给你的员工。"
       }
       eyebrow="04 数字团队"
       title={source === "market" ? "人才市场" : "招一位新同事"}
@@ -218,6 +223,7 @@ export function BotsPage({ search }: { search: WakersSearch }) {
           panelId="hire-source"
           tabs={[
             { value: "market", label: "人才市场" },
+            { value: "fixed", label: "固定员工" },
             { value: "computer", label: "从我的电脑招" },
             { value: "cloud", label: "云端（下一步）" },
           ]}
@@ -225,7 +231,15 @@ export function BotsPage({ search }: { search: WakersSearch }) {
           variant="underline"
         />
       )}
-      {source === "computer" ? (
+      {source === "fixed" ? (
+        <div {...tabPanelProps("hire-source", source)} className="pb-8">
+          <FixedEmployees
+            onOpen={(agentId) =>
+              void navigate({ params: { agentId }, to: "/bots/$agentId" })
+            }
+          />
+        </div>
+      ) : source === "computer" ? (
         <div
           {...(hiring ? {} : tabPanelProps("hire-source", source))}
           className="pb-8"

@@ -30,9 +30,10 @@ export type WakerSort = "name" | "recent" | "tasks";
 export type WakerView = "list";
 
 /**
- * 「招一位新同事」从哪里招（外部员工 Task 10）：人才市场（默认，不写进地址）、从我的电脑招、云端（下一步）。
+ * 「招一位新同事」从哪里招（外部员工 Task 10）：人才市场（默认，不写进地址）、固定员工（Claude Code 和 Codex，
+ * 一键启用，8.3）、从我的电脑招、云端（下一步）。
  */
-export type HireSource = "market" | "computer" | "cloud";
+export type HireSource = "market" | "fixed" | "computer" | "cloud";
 
 export type WakersSearch = {
   /** 顶部「人才市场 / 从我的电脑招 / 云端（下一步）」；没有就是人才市场。 */
@@ -66,7 +67,11 @@ const STATUSES: readonly WakerStatus[] = [
 ];
 const ENVS: readonly WakerEnv[] = ["device", "unbound"];
 const SORTS: readonly WakerSort[] = ["name", "recent", "tasks"];
-const SOURCES: readonly Exclude<HireSource, "market">[] = ["computer", "cloud"];
+const SOURCES: readonly Exclude<HireSource, "market">[] = [
+  "fixed",
+  "computer",
+  "cloud",
+];
 const HARNESSES: readonly AcpHarness[] = [
   "codex",
   "claude-code",

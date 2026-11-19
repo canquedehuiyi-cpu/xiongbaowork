@@ -37,6 +37,7 @@ tests/agent-handoff.integration.test.ts
 tests/agent-handoff.test.ts
 tests/agent-key-rotation.integration.test.ts
 tests/agent-model-binding.test.ts
+tests/agent-model-proxy-default.integration.test.ts
 tests/agent-model-proxy.integration.test.ts
 tests/agent-model-proxy.test.ts
 tests/agent-on-this-machine.test.ts
@@ -437,6 +438,8 @@ tests/handoff-caps-defaults.test.ts
 tests/handoff-child-card.test.ts
 tests/handoff-fanout-cap.integration.test.ts
 tests/handoff-origin.test.ts
+tests/hard-model-routes.test.ts
+tests/hard-model-store.integration.test.ts
 tests/headless-components.integration.test.ts
 tests/headless-components.test.ts
 tests/headless-model-usage-callers.integration.test.ts

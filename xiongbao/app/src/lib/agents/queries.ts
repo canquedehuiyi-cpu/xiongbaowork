@@ -172,6 +172,11 @@ export type ExternalRun = {
   rules: Record<AcpRuleKey, AcpRuleValue>;
   /** 只有 `custom`：招聘时确认过它可能从不请求许可。 */
   noPermissionAcknowledged?: true;
+  /**
+   * 在哪里跑（8.3）：`cloud` 是它自己的云电脑，这时 `deviceId` 是服务器按它的 id 生成的、`workdirRef` 是固定的，
+   * 都不是招聘人的。服务器只给云上的员工写这一项，没有它就是在招聘人配对的电脑上跑。
+   */
+  runtime?: "cloud" | "device";
 };
 
 /**
