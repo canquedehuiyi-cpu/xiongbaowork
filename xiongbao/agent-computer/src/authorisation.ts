@@ -78,6 +78,8 @@ const ACTING_PATHS = new Set([
   "/scroll",
   "/exec",
   "/files/write",
+  // Replacing a passage of a file is a write (期五); searching by content or name is reading.
+  "/files/edit",
   // Typing a person's login into the page. Refused while they hold the wheel, like any other typing.
   "/sign-in/fill",
   "/sign-in/code",

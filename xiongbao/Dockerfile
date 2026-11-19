@@ -379,12 +379,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends sudo \
 # employee user. Root reads every other employee's directory, the browser profiles and the container's
 # environment. An employee installs user-level tools in its own directory (npm install, bun add,
 # `python3 -m venv .venv` then `.venv/bin/pip install`); system packages it needs belong in this
-# image, hence git, jq, python3 and python3-venv here.
+# image, hence git, jq, python3, python3-venv and ripgrep here (ripgrep for `computer_grep`, which
+# falls back to plain grep without it).
 #
 # `acl` for the default ACLs that let the file tools and the employee's commands write each other's
 # files; `procps` for `ps`/`pgrep`.
 COPY docker/xb-bot.sh /usr/local/sbin/xb-bot
-RUN apt-get update && apt-get install -y --no-install-recommends acl procps git jq python3 python3-venv \
+RUN apt-get update && apt-get install -y --no-install-recommends acl procps git jq python3 python3-venv ripgrep \
   && rm -rf /var/lib/apt/lists/* \
   && chown root:root /usr/local/sbin/xb-bot \
   && chmod 0755 /usr/local/sbin/xb-bot \

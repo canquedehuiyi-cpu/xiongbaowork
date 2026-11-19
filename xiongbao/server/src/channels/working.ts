@@ -78,7 +78,7 @@ export function channelWorkDto(work: ChannelWork): ChannelWorkWire {
  * The routine sweep's own cutoff for an abandoned run, so this never says a routine is running for
  * longer than the sweep would leave its row open. See `ABANDONED_RUN_MS` in routines/sweep.ts.
  */
-const ROUTINE_IN_FLIGHT_MS = 2 * TURN_LIMITS.turnTimeoutMs;
+const ROUTINE_IN_FLIGHT_MS = 2 * TURN_LIMITS.workTurnTimeoutMs;
 
 const RELAY_PREFIX = "relay:";
 

@@ -49,8 +49,10 @@ COPY --from=bun-toolchain /usr/local/bin/bun /usr/local/bin/bun
 # the full build for a named channel even when headless, so the headless shell is never started. It
 # was 340 MB unpacked and about 106 MB of every download. The bunx package cache goes too: Bun
 # writes it under both BUN_INSTALL and the home directory, 35 MB the image never reads.
+# git, python3 and ripgrep are a Bot's coding tools: cloning and diffing, the scripts and tests most
+# projects run, and `computer_grep`, which uses rg when it is there and plain grep otherwise.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      ca-certificates curl unzip xz-utils \
+      ca-certificates curl unzip xz-utils git python3 ripgrep \
   && ln -s bun /usr/local/bin/bunx \
   && bunx --bun "playwright@${PLAYWRIGHT_VERSION}" install --with-deps --no-shell chromium \
   && rm -rf /root/.cache /root/.bun /usr/local/install/cache /tmp/* /var/lib/apt/lists/*
