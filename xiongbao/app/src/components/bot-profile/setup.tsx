@@ -54,6 +54,7 @@ import {
   mayNeverAsk,
   RULE_ROWS,
   RULE_VALUE_LABEL,
+  runtimeOf,
   useExternalDevice,
 } from "@/lib/agents/external";
 import {
@@ -565,33 +566,43 @@ function ExternalConnectionSection({ agent }: { agent: AgentProfile }) {
     // 电脑列表还没读到、或者读失败时说读不到，不说文件夹不再共享。
     const readable = devices.isSuccess;
     const workdir = externalWorkdirName(run, device);
-    rows.push(
-      {
-        icon: IconDeviceDesktop,
-        title: "电脑",
-        value: device
-          ? device.online
-            ? device.name
-            : `${device.name}（离线，派给它的活会排队）`
-          : readable
-            ? "找不到这台电脑，请换一台"
-            : "读不到这台电脑",
-      },
-      {
-        icon: IconNotes,
-        title: "工作文件夹",
-        value:
-          workdir ??
-          (device
-            ? "这台电脑不再共享这个文件夹，请重新选一个"
-            : "读不到这台电脑"),
-      },
-      {
-        icon: IconShieldCheck,
-        title: "先问你",
-        value: asks || "都直接做（底线仍然每次交给你）",
-      },
-    );
+    // 云电脑上的员工（8.3）：没有电脑和文件夹的事，写明在哪里跑。
+    const where: typeof rows =
+      runtimeOf(run) === "cloud"
+        ? [
+            {
+              icon: IconDeviceDesktop,
+              title: "运行位置",
+              value: "云电脑（关掉网页照样跑，不用配对电脑）",
+            },
+          ]
+        : [
+            {
+              icon: IconDeviceDesktop,
+              title: "电脑",
+              value: device
+                ? device.online
+                  ? device.name
+                  : `${device.name}（离线，派给它的活会排队）`
+                : readable
+                  ? "找不到这台电脑，请换一台"
+                  : "读不到这台电脑",
+            },
+            {
+              icon: IconNotes,
+              title: "工作文件夹",
+              value:
+                workdir ??
+                (device
+                  ? "这台电脑不再共享这个文件夹，请重新选一个"
+                  : "读不到这台电脑"),
+            },
+          ];
+    rows.push(...where, {
+      icon: IconShieldCheck,
+      title: "先问你",
+      value: asks || "都直接做（底线仍然每次交给你）",
+    });
   }
   return (
     <PageSection
@@ -609,7 +620,9 @@ function ExternalConnectionSection({ agent }: { agent: AgentProfile }) {
             size="sm"
             variant="outline"
           >
-            改电脑、文件夹和规则
+            {runtimeOf(run) === "cloud"
+              ? "改运行位置和规则"
+              : "改电脑、文件夹和规则"}
           </Button>
         ) : undefined
       }

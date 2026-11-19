@@ -23,7 +23,9 @@ export function offlineComputers(
   for (const agent of agents) {
     const external = hiredRun(agent);
     const now = presence.get(agent.id);
-    if (!external || now?.status !== "offline") continue;
+    // 云电脑上的员工没有「它所在的电脑」，不是你的电脑离线了。
+    if (!external || external.runtime === "cloud" || now?.status !== "offline")
+      continue;
     const entry = byDevice.get(external.deviceId) ?? {
       deviceId: external.deviceId,
       device: devices.get(external.deviceId),

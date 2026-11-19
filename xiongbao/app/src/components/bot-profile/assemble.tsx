@@ -11,6 +11,7 @@ import {
   PersonaSection,
   useProfileSave,
 } from "@/components/agents/agent-dialog";
+import { HardModelItem } from "@/components/agents/hard-model-item";
 import { ThinkingItem } from "@/components/agents/thinking-item";
 import {
   PANEL_FACE,
@@ -107,6 +108,13 @@ export function AssembleSections({ profile }: { profile: AgentProfile }) {
               agent={profile}
               onSave={(thinking) => save({ thinking })}
             />
+            {/* 期七：派子代理遇到难任务时用的模型。只有在这台部署上跑的员工有。 */}
+            {profile.builtIn ? (
+              <HardModelItem
+                agentId={profile.id}
+                canManage={profile.canManage}
+              />
+            ) : null}
           </div>
         </ProfileSection>
       )}

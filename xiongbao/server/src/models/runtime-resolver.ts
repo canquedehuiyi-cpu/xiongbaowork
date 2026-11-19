@@ -700,17 +700,39 @@ export type AgentUpstream = {
 };
 
 /**
- * {@link createNamedAgentModelResolver}'s decision, handed over as the upstream itself. Null for every
- * reason that resolver falls back to the deployment's model: no binding, a revoked or unreadable key, a
- * pool row the tenant's plan does not reach.
+ * {@link createNamedAgentModelResolver}'s decision, handed over as the upstream itself. For every reason
+ * that resolver falls back to the deployment's model (no binding, a revoked or unreadable key, a pool row
+ * the tenant's plan does not reach) the upstream is the deployment default model, as for a built-in
+ * employee, metered to the person; null only when there is none to give (`options.deployment`).
  */
 export function createAgentUpstreamResolver(
   database: Database,
   credentials: CredentialSecretReader,
   encryptionKey: string,
-  options: Pick<AgentModelResolverOptions, "environment"> = {},
+  options: Pick<AgentModelResolverOptions, "environment"> & {
+    /**
+     * The deployment default model, which an employee with no usable binding of its own speaks, as a
+     * built-in employee does every turn (`modelOf`). Absent, or answering nothing (no key), such an
+     * employee has no upstream.
+     */
+    deployment?: () => Promise<DeploymentModel | undefined>;
+  } = {},
 ): (agentId: string) => Promise<AgentUpstream | null> {
   const environment = options.environment ?? process.env;
+  /** The deployment default, metered to the person whose frame this is; null when it is nobody's. */
+  const byDefault = async (agentId: string): Promise<AgentUpstream | null> => {
+    const tenantId = isTenantFramed() ? currentTenant() : "";
+    if (!options.deployment || !isPersonTenant(tenantId)) return null;
+    const deployment = await options.deployment().catch(() => undefined);
+    if (!deployment) return null;
+    return {
+      provider: deployment.provider,
+      baseUrl: deployment.baseUrl,
+      modelName: deployment.modelName,
+      apiKey: deployment.apiKey,
+      metering: deploymentMetering(deployment, tenantId, agentId),
+    };
+  };
   return async (agentId) => {
     const binding = await bindingFor(database, agentId, environment).catch(
       (error) => {
@@ -718,7 +740,7 @@ export function createAgentUpstreamResolver(
         return null;
       },
     );
-    if (!binding) return null;
+    if (!binding) return byDefault(agentId);
     if (binding.kind === "pool") {
       return {
         provider: binding.provider,
@@ -731,7 +753,7 @@ export function createAgentUpstreamResolver(
     const secret = await credentials
       .readSecret(binding.credentialId)
       .catch(() => null);
-    if (!secret || secret.revokedAt) return null;
+    if (!secret || secret.revokedAt) return byDefault(agentId);
     try {
       return {
         provider: binding.provider,
@@ -741,7 +763,7 @@ export function createAgentUpstreamResolver(
         metering: libraryMetering(binding, agentId, secret.encryptedValue),
       };
     } catch {
-      return null;
+      return byDefault(agentId);
     }
   };
 }
@@ -829,29 +851,41 @@ export function meteredDeploymentModel(
 ): LanguageModel {
   const tenantId = isTenantFramed() ? currentTenant() : "";
   if (!isPersonTenant(tenantId)) return deployment.model;
-  const originalText = `${deployment.provider}/${deployment.modelName}`;
   return meteredLanguageModel(
     deployment.model,
-    {
-      tenantId,
-      agentId,
-      modelRef: DEPLOYMENT_MODEL_REF,
-      provider: deployment.provider,
-      modelName: deployment.modelName,
-      credentialId: DEPLOYMENT_MODEL_REF,
-      // Moves when the deployment's key is rotated; a digest of a digest, never the key.
-      credentialDigest: sha256Hex(
-        `deployment:${deployment.provider}:${sha256Hex(deployment.apiKey)}`,
-      ),
-      originalModelFingerprint: sha256Hex(
-        JSON.stringify([
-          deployment.provider,
-          deployment.baseUrl,
-          deployment.modelName,
-        ]),
-      ),
-      originalText,
-    },
+    deploymentMetering(deployment, tenantId, agentId),
     sink,
   );
+}
+
+/**
+ * The record a call on the deployment default model is metered under, for the person whose frame it
+ * is: shared by a run that builds the model itself ({@link meteredDeploymentModel}) and the external
+ * employees' model proxy, which forwards the request, so both write the same row.
+ */
+export function deploymentMetering(
+  deployment: DeploymentModel,
+  tenantId: string,
+  agentId: string,
+): MeteredBinding {
+  return {
+    tenantId,
+    agentId,
+    modelRef: DEPLOYMENT_MODEL_REF,
+    provider: deployment.provider,
+    modelName: deployment.modelName,
+    credentialId: DEPLOYMENT_MODEL_REF,
+    // Moves when the deployment's key is rotated; a digest of a digest, never the key.
+    credentialDigest: sha256Hex(
+      `deployment:${deployment.provider}:${sha256Hex(deployment.apiKey)}`,
+    ),
+    originalModelFingerprint: sha256Hex(
+      JSON.stringify([
+        deployment.provider,
+        deployment.baseUrl,
+        deployment.modelName,
+      ]),
+    ),
+    originalText: `${deployment.provider}/${deployment.modelName}`,
+  };
 }

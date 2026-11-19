@@ -1050,3 +1050,291 @@ describe("an external employee in a group", () => {
     expect(left).toEqual(expect.arrayContaining([writer, reviewer]));
   });
 });
+
+/*
+ * 两个固定员工（8.3）：招聘和修改多了运行位置 `runtime`。Claude Code 可以招进自己的云电脑，不选电脑和文件夹；
+ * Codex 只能在本机，选云电脑被拒；Claude Code 可以在云电脑和本机之间切换，切回本机要选一台自己配对的电脑
+ * 和它共享的文件夹。
+ */
+describe("where an external employee runs", () => {
+  const cloudBody = (extra: Record<string, unknown> = {}) => ({
+    runtime: "cloud",
+    harness: "claude-code",
+    name: "Claude Code",
+    rules: RULES,
+    ...extra,
+  });
+
+  test("Claude Code is hired onto its own cloud computer with no computer or folder", async () => {
+    const owner = await person();
+    const before = (await quota.usageFor(owner.id)).wakers;
+    const response = await call(owner, "POST", "/agents/external", cloudBody());
+    expect(response.status).toBe(201);
+    const { agent } = (await response.json()) as Hired;
+    expect(agent).toMatchObject({
+      name: "Claude Code",
+      visibility: "private",
+      ownerUserId: owner.id,
+      type: "device_acp",
+      external: {
+        harness: "claude-code",
+        runtime: "cloud",
+        deviceId: `cloud:${agent.id}`,
+        workdirRef: "cloud:workspace",
+        rules: RULES,
+      },
+    });
+    expect((await quota.usageFor(owner.id)).wakers).toBe(before + 1);
+    expect(await stored(agent.id)).toMatchObject({
+      type: "device_acp",
+      configuration: {
+        harness: "claude-code",
+        runtime: "cloud",
+        deviceId: `cloud:${agent.id}`,
+        workdirRef: "cloud:workspace",
+      },
+      visibility: "private",
+      ownerUserId: owner.id,
+    });
+    // What its hirer reads through the generic route says the same.
+    const read = await call(owner, "GET", `/agents/${agent.id}`);
+    expect(await read.json()).toMatchObject({
+      agent: { external: { harness: "claude-code", runtime: "cloud" } },
+    });
+  });
+
+  test("only Claude Code runs in the cloud: Codex is refused with its sentence, the others with theirs, and nothing is made", async () => {
+    const owner = await person();
+    const before = (await quota.usageFor(owner.id)).wakers;
+    const codex = await call(
+      owner,
+      "POST",
+      "/agents/external",
+      cloudBody({ harness: "codex", name: "Codex" }),
+    );
+    expect(codex.status).toBe(409);
+    expect(await codex.json()).toEqual({
+      error: "Codex 员工暂时只能在你自己的电脑上跑。",
+    });
+    for (const harness of ["hermes", "custom"]) {
+      const refused = await call(
+        owner,
+        "POST",
+        "/agents/external",
+        cloudBody({ harness }),
+      );
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toEqual({
+        error: "只有 Claude Code 能在云电脑上干活。",
+      });
+    }
+    expect((await quota.usageFor(owner.id)).wakers).toBe(before);
+  });
+
+  test("a cloud hire takes no computer, folder or own agent, and a device hire may say `device`", async () => {
+    const owner = await person();
+    const device = await computer(owner);
+    for (const extra of [
+      { deviceId: device.deviceId },
+      { workdirRef: device.workdirRef },
+      { appRef: "app_x" },
+    ]) {
+      const refused = await call(
+        owner,
+        "POST",
+        "/agents/external",
+        cloudBody(extra),
+      );
+      expect(refused.status).toBe(400);
+      expect(await refused.json()).toEqual({
+        error: "在云电脑上干活的员工没有电脑和工作文件夹可选。",
+      });
+    }
+    // Said out loud, `device` is what hiring always was: the same configuration, no runtime key.
+    const { agent } = await hired(owner, device, { runtime: "device" });
+    expect((await stored(agent.id))?.configuration).not.toHaveProperty(
+      "runtime",
+    );
+    expect(agent.external).not.toHaveProperty("runtime");
+    // And a runtime that is neither is not a hire.
+    expect((await hire(owner, device, { runtime: "moon" })).status).toBe(400);
+  });
+
+  test("a cloud employee moves to the hirer's own computer, and back", async () => {
+    const owner = await person();
+    const device = await computer(owner);
+    const { agent } = (await (
+      await call(owner, "POST", "/agents/external", cloudBody())
+    ).json()) as Hired;
+
+    // Moving home takes a computer and a folder of its own.
+    for (const body of [
+      { runtime: "device" },
+      { runtime: "device", deviceId: device.deviceId },
+    ]) {
+      const refused = await call(
+        owner,
+        "PATCH",
+        `/agents/external/${agent.id}`,
+        body,
+      );
+      expect(refused.status).toBe(400);
+    }
+    expect((await stored(agent.id))?.configuration).toMatchObject({
+      runtime: "cloud",
+    });
+
+    const home = await call(owner, "PATCH", `/agents/external/${agent.id}`, {
+      runtime: "device",
+      deviceId: device.deviceId,
+      workdirRef: device.workdirRef,
+    });
+    expect(home.status).toBe(200);
+    const moved = ((await home.json()) as Hired).agent;
+    expect(moved.external).toMatchObject({
+      harness: "claude-code",
+      deviceId: device.deviceId,
+      workdirRef: device.workdirRef,
+    });
+    expect(moved.external).not.toHaveProperty("runtime");
+    const savedHome = (await stored(agent.id))?.configuration;
+    expect(savedHome).toMatchObject({
+      deviceId: device.deviceId,
+      workdirRef: device.workdirRef,
+    });
+    expect(savedHome).not.toHaveProperty("runtime");
+
+    // A rules-only edit leaves it where it is.
+    expect(
+      (
+        await call(owner, "PATCH", `/agents/external/${agent.id}`, {
+          rules: { push: "direct" },
+        })
+      ).status,
+    ).toBe(200);
+    expect((await stored(agent.id))?.configuration).not.toHaveProperty(
+      "runtime",
+    );
+
+    // And back to the cloud: no computer or folder may come with it.
+    expect(
+      (
+        await call(owner, "PATCH", `/agents/external/${agent.id}`, {
+          runtime: "cloud",
+          deviceId: device.deviceId,
+        })
+      ).status,
+    ).toBe(400);
+    const back = await call(owner, "PATCH", `/agents/external/${agent.id}`, {
+      runtime: "cloud",
+    });
+    expect(back.status).toBe(200);
+    expect(((await back.json()) as Hired).agent.external).toMatchObject({
+      runtime: "cloud",
+      deviceId: `cloud:${agent.id}`,
+      workdirRef: "cloud:workspace",
+    });
+    expect((await stored(agent.id))?.configuration).toMatchObject({
+      runtime: "cloud",
+      deviceId: `cloud:${agent.id}`,
+      workdirRef: "cloud:workspace",
+      permissions: { ...RULES, push: "direct" },
+    });
+  });
+
+  test("moving home needs a computer the hirer paired and a folder it shares", async () => {
+    const owner = await person();
+    const someone = await person();
+    const theirs = await computer(someone);
+    const unclaimed = await computer(owner, { pairedBy: null });
+    const mine = await computer(owner);
+    const { agent } = (await (
+      await call(owner, "POST", "/agents/external", cloudBody())
+    ).json()) as Hired;
+    const home = (over: Record<string, unknown>) =>
+      call(owner, "PATCH", `/agents/external/${agent.id}`, {
+        runtime: "device",
+        deviceId: mine.deviceId,
+        workdirRef: mine.workdirRef,
+        ...over,
+      });
+    expect((await home({ deviceId: "nope" })).status).toBe(404);
+    expect((await home({ deviceId: theirs.deviceId })).status).toBe(404);
+    expect((await home({ deviceId: unclaimed.deviceId })).status).toBe(403);
+    expect((await home({ workdirRef: folder() })).status).toBe(400);
+    expect((await stored(agent.id))?.configuration).toMatchObject({
+      runtime: "cloud",
+    });
+    expect((await home({})).status).toBe(200);
+  });
+
+  test("Codex stays on the hirer's computer: asked for the cloud it is refused, and nothing moves", async () => {
+    const owner = await person();
+    const device = await computer(owner);
+    const { agent } = await hired(owner, device);
+    const refused = await call(owner, "PATCH", `/agents/external/${agent.id}`, {
+      runtime: "cloud",
+    });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({
+      error: "Codex 员工暂时只能在你自己的电脑上跑。",
+    });
+    const saved = (await stored(agent.id))?.configuration;
+    expect(saved).toMatchObject({
+      deviceId: device.deviceId,
+      workdirRef: device.workdirRef,
+    });
+    expect(saved).not.toHaveProperty("runtime");
+    // Saying `device` to a device employee is no move at all.
+    expect(
+      (
+        await call(owner, "PATCH", `/agents/external/${agent.id}`, {
+          runtime: "device",
+          name: "小码二号",
+        })
+      ).status,
+    ).toBe(200);
+  });
+
+  test("a device employee moves to the cloud when it is Claude Code", async () => {
+    const owner = await person();
+    const device = await computer(owner);
+    const { agent } = await hired(owner, device, { harness: "claude-code" });
+    const moved = await call(owner, "PATCH", `/agents/external/${agent.id}`, {
+      runtime: "cloud",
+    });
+    expect(moved.status).toBe(200);
+    expect(((await moved.json()) as Hired).agent.external).toMatchObject({
+      runtime: "cloud",
+      deviceId: `cloud:${agent.id}`,
+      workdirRef: "cloud:workspace",
+    });
+    expect((await stored(agent.id))?.configuration).toMatchObject({
+      runtime: "cloud",
+      deviceId: `cloud:${agent.id}`,
+    });
+  });
+
+  test("only the hirer moves it", async () => {
+    const owner = await person();
+    const someone = await person();
+    const { agent } = (await (
+      await call(owner, "POST", "/agents/external", cloudBody())
+    ).json()) as Hired;
+    const mine = await computer(someone);
+    const refused = await call(
+      someone,
+      "PATCH",
+      `/agents/external/${agent.id}`,
+      {
+        runtime: "device",
+        deviceId: mine.deviceId,
+        workdirRef: mine.workdirRef,
+      },
+    );
+    expect(refused.status).toBe(403);
+    expect((await stored(agent.id))?.configuration).toMatchObject({
+      runtime: "cloud",
+    });
+  });
+});
