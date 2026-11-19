@@ -60,6 +60,20 @@ import {
   RUN_STALE_MS,
   TURN_INTERRUPTED_EVENT,
 } from "../../server/src/recovery/interrupted-runs";
+import {
+  CONNECT_PATH,
+  callsOf,
+  connectRequest,
+  digest,
+  fetchStoredMessages,
+  lastAssistantText,
+  openStream as openChatStream,
+  RUN_PATH,
+  runRequest,
+  type StoredMessage,
+  type Streamed,
+  toolResultsOf,
+} from "./chat-client";
 
 // ---------------------------------------------------------------------------------------------
 // Configuration
@@ -398,139 +412,9 @@ async function api<T = Record<string, unknown>>(
   };
 }
 
-type Streamed = {
-  type?: string;
-  toolCallId?: string;
-  toolCallName?: string;
-  messageId?: string;
-  delta?: string;
-  content?: string;
-  name?: string;
-  [key: string]: unknown;
-};
-
-/** What the page offers a Bot it may drive; the server drops them for a run that declares itself. */
-const browserTools = [
-  "computer_run_command",
-  "computer_navigate",
-  "computer_write_file",
-  "report_refusal",
-].map((name) => ({
-  name,
-  description: `The browser's ${name}.`,
-  parameters: { type: "object", properties: {} },
-}));
-
-/** An open event stream: events are read one at a time, and the connection can be hung up. */
-type Stream = {
-  events: Streamed[];
-  /** Resolves with the first event the test accepts, reading on from where it stopped. */
-  next(
-    accept: (event: Streamed) => boolean,
-    timeoutMs?: number,
-  ): Promise<Streamed>;
-  /** Resolves when the server ends the stream, with everything it sent. */
-  done(timeoutMs?: number): Promise<Streamed[]>;
-  /** Hang up: the client goes away mid-turn. */
-  hangUp(): void;
-};
-
-async function openStream(path: string, payload: unknown): Promise<Stream> {
-  const controller = new AbortController();
-  const response = await fetch(`${ORIGIN}${path}`, {
-    method: "POST",
-    headers: {
-      origin: ORIGIN,
-      cookie,
-      "content-type": "application/json",
-      accept: "text/event-stream",
-    },
-    body: JSON.stringify(payload),
-    signal: controller.signal,
-  });
-  if (response.status !== 200 || !response.body)
-    throw new Error(
-      `${path} answered ${response.status}: ${(await response.text()).slice(0, 300)}`,
-    );
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  const events: Streamed[] = [];
-  let buffer = "";
-  let cursor = 0;
-  let ended = false;
-
-  async function pull(): Promise<boolean> {
-    if (ended) return false;
-    const { done, value } = await reader.read();
-    if (done) {
-      ended = true;
-      return false;
-    }
-    buffer += decoder.decode(value, { stream: true });
-    for (;;) {
-      const cut = buffer.indexOf("\n\n");
-      if (cut < 0) break;
-      const frame = buffer.slice(0, cut);
-      buffer = buffer.slice(cut + 2);
-      const data = frame
-        .split("\n")
-        .filter((line) => line.startsWith("data:"))
-        .map((line) => line.slice(5).trim())
-        .join("");
-      if (data) events.push(JSON.parse(data) as Streamed);
-    }
-    return true;
-  }
-
-  const within = <T>(what: string, ms: number, work: Promise<T>) =>
-    Promise.race([
-      work,
-      Bun.sleep(ms).then(() => {
-        throw new Error(`Timed out after ${ms} ms waiting for ${what}`);
-      }),
-    ]);
-
-  return {
-    events,
-    async next(accept, timeoutMs = 60_000) {
-      return within(
-        "an event from the stream",
-        timeoutMs,
-        (async () => {
-          for (;;) {
-            while (cursor < events.length) {
-              const event = events[cursor++] as Streamed;
-              if (accept(event)) return event;
-            }
-            if (!(await pull()))
-              throw new Error(
-                `The stream ended before the event arrived (saw ${events.map((e) => e.type).join(", ")})`,
-              );
-          }
-        })(),
-      );
-    },
-    async done(timeoutMs = 120_000) {
-      await within(
-        "the stream to end",
-        timeoutMs,
-        (async () => {
-          while (await pull()) {}
-        })(),
-      );
-      return events;
-    },
-    hangUp() {
-      controller.abort();
-      reader.cancel().catch(() => undefined);
-    },
-  };
-}
-
-const RUN_PATH = (bot: string) =>
-  `/api/copilotkit/agent/${encodeURIComponent(bot)}/run`;
-const CONNECT_PATH = (bot: string) =>
-  `/api/copilotkit/agent/${encodeURIComponent(bot)}/connect`;
+/** The run and connect requests of this harness, over the shared client. */
+const openStream = (path: string, payload: unknown) =>
+  openChatStream(ORIGIN, cookie, path, payload);
 
 let botId = "";
 
@@ -538,50 +422,21 @@ let botId = "";
 function startRun(tag: Tag) {
   const threadId = `thread-g8-${tag.toLowerCase()}-${randomUUID()}`;
   const runId = `run-${randomUUID()}`;
-  const payload = {
+  const payload = runRequest({
     threadId,
     runId,
-    state: {},
     messages: [{ id: randomUUID(), role: "user", content: askFor(tag) }],
-    tools: browserTools,
-    context: [],
-    forwardedProps: { computerTools: "server" },
-  };
+  });
   return { threadId, runId, open: () => openStream(RUN_PATH(botId), payload) };
 }
 
 function connectTo(threadId: string) {
-  return openStream(CONNECT_PATH(botId), {
-    threadId,
-    runId: `run-${randomUUID()}`,
-    state: {},
-    messages: [],
-    tools: browserTools,
-    context: [],
-    forwardedProps: {},
-  });
+  return openStream(CONNECT_PATH(botId), connectRequest(threadId));
 }
-
-type StoredMessage = {
-  id?: string;
-  role: string;
-  content?: string;
-  toolCallId?: string;
-  toolCalls?: { id: string; function?: { name: string; arguments: string } }[];
-};
 
 /** The thread as the page reloads it: the stored messages, by the person's session alone. */
-async function storedMessages(threadId: string): Promise<StoredMessage[]> {
-  const answer = await api<{ messages?: StoredMessage[] }>(
-    "GET",
-    `/api/copilotkit/threads/${encodeURIComponent(threadId)}/messages?agentId=${encodeURIComponent(botId)}`,
-  );
-  if (answer.status !== 200)
-    throw new Error(
-      `thread messages answered ${answer.status}: ${JSON.stringify(answer.body).slice(0, 300)}`,
-    );
-  return answer.body.messages ?? [];
-}
+const storedMessages = (threadId: string): Promise<StoredMessage[]> =>
+  fetchStoredMessages(ORIGIN, cookie, botId, threadId);
 
 const owner = new SQL(OWNER_DATABASE_URL);
 
@@ -603,33 +458,9 @@ async function storedEventCount(threadId: string): Promise<number> {
   return (row as { n: number }).n;
 }
 
-const toolResultsOf = (messages: StoredMessage[]) =>
-  messages.filter((message) => message.role === "tool");
-const callsOf = (messages: StoredMessage[]) =>
-  messages.flatMap((message) => message.toolCalls ?? []);
-const lastAssistantText = (messages: StoredMessage[]) =>
-  messages
-    .filter((message) => message.role === "assistant" && message.content)
-    .at(-1)?.content;
-
 const toolCallStart = (event: Streamed) =>
   event.type === "TOOL_CALL_START" &&
   event.toolCallName === "computer_run_command";
-
-/** A condensed, comparable view of a stream: what was called, what came back, what was said. */
-function digest(events: Streamed[]) {
-  const calls: string[] = [];
-  const results: string[] = [];
-  let said = "";
-  for (const event of events) {
-    if (event.type === "TOOL_CALL_START") calls.push(String(event.toolCallId));
-    if (event.type === "TOOL_CALL_RESULT")
-      results.push(`${event.toolCallId}:${String(event.content)}`);
-    if (event.type === "TEXT_MESSAGE_CONTENT")
-      said += String(event.delta ?? "");
-  }
-  return { calls, results, said };
-}
 
 // ---------------------------------------------------------------------------------------------
 // The scenarios

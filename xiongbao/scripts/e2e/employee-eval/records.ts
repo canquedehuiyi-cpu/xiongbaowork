@@ -7,6 +7,8 @@ import type { Capabilities } from "./metrics";
 
 export type Side = "xiongbao" | "codex";
 export type Suite = "tasks" | "smoke";
+/** 熊宝侧的执行路径：看板派活，或单聊接口（`EVAL_PATH`）。没写这个字段的旧结果文件是看板路径。 */
+export type EvalPath = "board" | "chat";
 
 export type EvalRecord = {
   /** 题名（五道题）或冒烟场景名。 */
@@ -34,6 +36,10 @@ export type EvalRecord = {
     /** 输出里推理（思考）的部分（已含在 output 里）；没报时 null。 */
     reasoning?: number | null;
   } | null;
+  /** 这道题走的执行路径；旧结果文件没有，按看板路径算。Codex 侧没有。 */
+  path?: EvalPath;
+  /** 停在时间或段数上限的轮数（`turn-limit` / `step-limit` 事件）。旧结果文件没有这一项。 */
+  limitStops?: number;
   /** 没写完、没触顶、也没问人就停了。读不到时 null。 */
   silentStop: boolean | null;
   /** 跑题方停下后，评测脚本追了几次「继续」。 */
@@ -53,6 +59,8 @@ export type EvalResults = {
   baseUrl: string | null;
   /** 熊宝侧走的执行路径，或 Codex 的版本。 */
   runner: string;
+  /** 熊宝侧的执行路径；旧结果文件没有，按看板路径算。 */
+  path?: EvalPath;
   mock: boolean;
   startedAt: string;
   finishedAt: string;
