@@ -916,6 +916,16 @@
 
 **0.2.11 到期清理记录**：用户 2026-11-13 批准删除（8 条，均非 device）：
 `app/index.html` `"openbot-theme"`；`app/index.html` `"openbot-skin"`；`app/src/components/notifications/notify-prompt.tsx` `"openbot-notify-prompt-answered"`；`app/src/components/app-sidebar/app-sidebar.tsx` `"openbot-sidebar-`；`app/src/skins/store.ts` `"openbot-skin"`；`app/src/lib/theme.ts` `"openbot-theme"`；`app/src/lib/sidebar.ts` `"openbot-sidebar`；`server/src/auth/organization.ts` `"openbot.organization-session"`。
+
+**0.2.13 到期清理记录**：用户 2026-11-17 批准，四项答复原话：「批准整体清理（推荐）」「真删＋首帧验收（推荐）」「延期到 0.2.14（推荐）」「接受收紧（推荐）」。删除 20 条到期面（均非 device，白名单 192→172）：
+存储键双认 10 条 — `app/src/components/delivery/reaching-you.tsx`、`app/src/components/reachability/link-conversation-dialog.tsx` 的 `"openbot.reachability.pendingSms"`；`app/src/components/browser/teach-steps.tsx` `"openbot.teach-a-bot.introduced"`；`app/src/lib/wakerflows.ts` `"openbot.wakerflow-share-return"`；`app/src/lib/computers/handoff.ts` `` "`openbot:pending-handoff:" ``；`app/src/lib/computers/activity.ts` `"openbot:computer-activity-wiped:"`（`storage` 事件监听同步收成单前缀）；`app/src/lib/voice/outbox.ts` `"openbot:voice-outbox:"`；`app/src/lib/copilot/carry-on.ts` `"openbot:carried-on:"`；`app/src/lib/copilot/check-in-offer-tool.tsx` `"openbot:check-in-declined:"`；`app/src/lib/copilot/bot-thread.ts` `"openbot.bot-thread"`。`app/src/lib/storage-compat.ts` 收口为只读新键的 helper（隐私模式守卫语义保留），不再有旧键实参。
+皮肤 2 条 — `app/index.html` 首帧脚本的 `&& skin !== "openbot"`（按裁定②真删，首帧由 `scripts/e2e/artifact-reachability.ts` 的「the skin cached under the earlier name」用例取证）；`shared/user-preferences.ts` 的 `"openbot"`（`LEGACY_DEFAULT_SKIN`、`isKnownSkinInput` 的旧名接受、`normalizeSkinId` 的旧名分支一并删除＝裁定④；`server/src/user-preferences-routes.ts` 的 zod 链消费同一对函数，未改动）。
+扩展双 Symbol 6 条 — `extension/src/main-world/network-hook.ts` 的 `"openbot.recorder.configure"`／`"openbot.recorder.stop"`（各 1）、`extension/src/background/network/fallback.ts` 的同两个词、`extension/src/content/notice.ts` `"openbot-recorder-notice"`、`extension/src/content/indicator.ts` `"openbot-recorder-mark"`。
+镜像 1 条 — `Dockerfile` 的 `openbot-apt`（符号链接与 sudoers 第二路径）。
+Cookies 1 条 — `agent-computer/src/session-cookies.ts` 的 `openbot-session-cookies.json`：旧名双读与迁移函数删除，按窗口口径补上「旧名文件离开卷」的清理（删失败只经日志上报 `code`，不阻塞浏览器启动；删成功不恢复任何旧值）。
+产物词表随条目同步：`brand-artifacts/web.json` 89→80、`extension.json` 47→43、`image-files.json` 7→6。
+快照 `openbot-snapshots.sqlite`（`runner.json`／`deb.json`）是唯一 `device: true` 的条目，按裁定③把 `notBefore` 与 `removeIn` 设成 `0.2.14`，`reason` 追加「用户 2026-11-17 批准：延期到 0.2.14（推荐）」；`runner/src/browser.ts` 的双写与 `runner-browser.test.ts` 零改动。
+**补充豁免（用户 2026-11-18 批准，原话「批准最小补充豁免（推荐）」）**：三处既有断言随窗口关闭一起收紧，都是 CI 实跑暴露后停手上报、经追认再改的——`extension/tests/page-agent-hook.test.ts:115` 与 `extension/tests/page-network-hook.test.ts:128` 的夹具 `hookKey` 从旧 Symbol 键改为只注册存活的那一对（`xb.recorder.configure`／`xb.recorder.stop`）；24 条行为断言逐字保留，未跳、未弱、未删，夹具名 `openbot-chat`／`openbotOf` 与 `recorder-masking` 的 import 不动。`server/tests/user-preferences-routes.test.ts:296` 的「PATCH 旧皮肤名存为新名」按裁定④改写成拒绝用例：400、应答文案列出在售皮肤、且不写入任何偏好。`app/src/lib/storage-compat.ts:62` 的 `useOptionalChain` 是本票新写的行，属自修、零行为变化。
 - [ ] **Step 3**：运行全部测试、护栏、`brand-artifacts`；`brand-expiry.test.ts` 转绿。
 - [ ] **Step 4：提交** `到期清理：删除 <版本> 起双认的旧名（<条目数> 条）`。度量：白名单 `legacy-compat` 减去到期条数；`web` 等词表对应下降。
 

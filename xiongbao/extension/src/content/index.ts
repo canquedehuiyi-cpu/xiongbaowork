@@ -1,0 +1,128 @@
+import type { BackgroundToContent } from "../protocol/messages";
+import { startEventCapture } from "./collector";
+import { showIndicator } from "./indicator";
+import { createSensitivityTracker } from "./masking-context";
+import { showNotice } from "./notice";
+import { contentHello, createContentPort } from "./port";
+
+/**
+ * The two flags the service worker and this script share in the page's isolated world. Symbol keys, so they are not
+ * properties anyone lists with `Object.keys`. An older build of the extension still on the same page used string
+ * properties with the old names: those are read too (never written), so a page an older content script already
+ * captures is not captured twice, and a frame an older service worker flagged still starts capturing at once.
+ *
+ * legacy-compat：introducedIn 0.2.11，removeIn 0.2.14，reads of the old flags __openbotRecorderContent and __openbotRecorderActive below
+ */
+const CONTENT_FLAG = Symbol.for("xb.recorder.content");
+const ACTIVE_FLAG = Symbol.for("xb.recorder.active");
+
+type RecorderGlobals = typeof globalThis & {
+  [CONTENT_FLAG]?: boolean;
+  [ACTIVE_FLAG]?: string;
+  __openbotRecorderContent?: boolean;
+  __openbotRecorderActive?: string;
+};
+
+/**
+ * Injected by the service worker into each committed frame of a followed tab. A frame the worker flagged
+ * (`ACTIVE_FLAG`, set just before this script) starts capturing at once, without waiting for its
+ * port, so nothing clicked or typed during the round trip is lost; any other frame starts on
+ * `background.capture { active: true }`.
+ */
+function startContentScript() {
+  const flags = globalThis as RecorderGlobals;
+  // legacy-compat：introducedIn 0.2.11，removeIn 0.2.14，old flag __openbotRecorderContent
+  if (flags[CONTENT_FLAG] || flags.__openbotRecorderContent) return;
+  flags[CONTENT_FLAG] = true;
+
+  const port = createContentPort();
+  port.post(contentHello());
+
+  let capture: { stop(): void } | null = null;
+  const startCapture = () => {
+    if (capture) return;
+    const tracker = createSensitivityTracker();
+    const uninstall = tracker.install();
+    tracker.onSensitiveValue((digest) =>
+      port.post({ type: "content.sensitive", digest }),
+    );
+    const events = startEventCapture({
+      tracker,
+      send: (event) => port.post({ type: "content.event", event }),
+    });
+    capture = {
+      stop() {
+        events.stop();
+        uninstall();
+      },
+    };
+  };
+  let notice: { remove(): void } | null = null;
+  const stopCapture = () => {
+    capture?.stop();
+    capture = null;
+    // Capture stopping for any reason ends the 50-action notice: its buttons would otherwise act on a later recording.
+    notice?.remove();
+    notice = null;
+  };
+
+  // The recording mark, in the top frame alone: from the tab's first step until Stop, whatever the frame captures.
+  let mark: ReturnType<typeof showIndicator> | null = null;
+  const removeMark = () => {
+    mark?.remove();
+    mark = null;
+  };
+  const onMark = (
+    message: Extract<BackgroundToContent, { type: "background.capture" }>,
+  ) => {
+    if (window !== window.top) return;
+    if (message.site === undefined) {
+      removeMark();
+      return;
+    }
+    const view = {
+      site: message.site,
+      excluded: message.excluded === true,
+      ...(message.narrating !== undefined
+        ? { narrating: message.narrating }
+        : {}),
+    };
+    if (mark) mark.update(view);
+    else
+      mark = showIndicator({
+        view,
+        choose: (recorded) => port.post({ type: "content.site", recorded }),
+        stop: (save) => port.post({ type: "content.stop", save }),
+      });
+  };
+
+  const onNotice = (
+    message: Extract<BackgroundToContent, { type: "background.notice" }>,
+  ) => {
+    if (window !== window.top) return;
+    notice?.remove();
+    notice = null;
+    if (!message.show) return;
+    notice = showNotice({
+      actions: message.actions,
+      choose: (choice) => port.post({ type: "content.notice", choice }),
+    });
+  };
+
+  // The extension was updated or removed under this page: nothing captured here can reach it any more.
+  port.onOrphaned(() => {
+    stopCapture();
+    removeMark();
+  });
+  // legacy-compat：introducedIn 0.2.11，removeIn 0.2.14，old flag __openbotRecorderActive
+  if (flags[ACTIVE_FLAG] || flags.__openbotRecorderActive) startCapture();
+  port.onMessage((message) => {
+    if (message.type === "background.capture") {
+      if (message.active) startCapture();
+      else stopCapture();
+      onMark(message);
+    } else onNotice(message);
+  });
+}
+
+startContentScript();

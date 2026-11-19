@@ -1,0 +1,289 @@
+import { describe, expect, test } from "bun:test";
+import {
+  approvalPhrase,
+  approvalWords,
+  readToolName,
+} from "@openbot/shared/tool-name";
+
+/**
+ * What the person watching is told a Bot just did.
+ *
+ * The names under test are the ones the model is offered, which carry the server and a separator
+ * that exists to keep two vendors' `search` apart. A reader should never see either.
+ */
+describe("naming a tool call", () => {
+  test("a research call says what it did and not which provider did it", () => {
+    for (const name of [
+      "mcp__exa__web_search_exa",
+      "mcp__exa-authenticated__web_search_exa",
+      "mcp__parallel__web_search",
+      "mcp__firecrawl__firecrawl_search",
+    ]) {
+      expect(readToolName(name)).toEqual({ label: "搜索网页" });
+    }
+    expect(readToolName("mcp__exa__web_fetch_exa")).toEqual({
+      label: "读取网页",
+    });
+    expect(readToolName("mcp__firecrawl__firecrawl_scrape")).toEqual({
+      label: "读取网页",
+    });
+    // Only the research pair is relabelled; a provider's other tools keep their own names.
+    expect(readToolName("mcp__firecrawl__firecrawl_map")).toEqual({
+      label: "Map",
+      detail: "Firecrawl",
+    });
+  });
+
+  test("an MCP tool reads as an action against a named server", () => {
+    expect(readToolName("mcp__slack__post_message")).toEqual({
+      label: "Post message",
+      detail: "slack",
+    });
+  });
+
+  test("a vendor that leads its tools with its own name is named once, as the app", () => {
+    expect(readToolName("mcp__notion__notion-fetch")).toEqual({
+      label: "Fetch",
+      detail: "Notion",
+    });
+    expect(readToolName("mcp__google-drive__google_drive_search")).toEqual({
+      label: "Search",
+      detail: "Google Drive",
+    });
+  });
+
+  test("the server is dropped when the action already names it", () => {
+    // "Search notes notes" reads as a bug rather than a label.
+    expect(readToolName("mcp__notes__search_notes")).toEqual({
+      label: "Search notes",
+    });
+  });
+
+  test("the server is dropped when the action names it in the singular", () => {
+    // A vendor names the server for the collection and the tool for the one item it acts on, so the
+    // label is singular where the server is plural. The reader should not be shown "Create routine
+    // routines".
+    expect(readToolName("mcp__routines__create_routine")).toEqual({
+      label: "Create routine",
+    });
+  });
+
+  test("a goal's tools on the Routines app read as a goal's run reads them", () => {
+    // Asked for a goal in a conversation, the step read "Create goal" beside "routines".
+    expect(readToolName("mcp__routines__create_goal")).toEqual({
+      label: "创建了目标",
+    });
+    expect(readToolName("mcp__routines__list_goals", true)).toEqual({
+      label: "正在查看目标",
+    });
+  });
+
+  test("camelCase from a vendor reads the same way", () => {
+    // The server is dropped here too: the vendor put it in the tool name themselves.
+    expect(readToolName("mcp__jira__searchJiraIssues")).toEqual({
+      label: "Search jira issues",
+    });
+  });
+
+  test("a tool name containing the separator keeps all of it", () => {
+    // The server is the first segment and everything after it is the tool, however many
+    // separators the vendor used.
+    expect(readToolName("mcp__box__list__files")).toEqual({
+      label: "List files",
+      detail: "box",
+    });
+  });
+
+  test("a brokered app's action is named without any vendor's prefix", () => {
+    // Composio is how this deployment reaches Gmail, which is plumbing: the reader asked their Bot
+    // about their email, not about which broker holds the grant. Composio also prefixes every tool
+    // with the app, so the app is dropped from the action and named once, beside it.
+    expect(readToolName("mcp__composio-gmail__GMAIL_FETCH_EMAILS")).toEqual({
+      label: "Fetch emails",
+      detail: "Gmail",
+    });
+    expect(readToolName("mcp__composio-airtable__AIRTABLE_LIST_BASES")).toEqual(
+      { label: "List bases", detail: "Airtable" },
+    );
+    expect(
+      readToolName("mcp__composio-googlecalendar__GOOGLECALENDAR_CREATE_EVENT"),
+    ).toEqual({ label: "Create event", detail: "Googlecalendar" });
+  });
+
+  test("an action that does not lead with its app is kept whole, beside the app", () => {
+    expect(readToolName("mcp__composio-gmail__FETCH_EMAILS")).toEqual({
+      label: "Fetch emails",
+      detail: "Gmail",
+    });
+  });
+
+  test("a name outside MCP and the label table still reads in words", () => {
+    // A component's line is drawn before its renderer may have loaded, and a model can call a name
+    // it was never offered. Either way the line says it in words, from the first frame.
+    expect(readToolName("showBarChart")).toEqual({ label: "Show bar chart" });
+    expect(readToolName("web_search", true)).toEqual({ label: "Web search" });
+    expect(readToolName("web_search")).toEqual({ label: "Web search" });
+    expect(readToolName("", true)).toEqual({ label: "正在使用工具" });
+    expect(readToolName("__")).toEqual({ label: "使用了工具" });
+  });
+
+  test("the server is dropped when a hyphenated server's words are already in the label", () => {
+    // The server is one token with a separator inside it, `google-drive`. A word-at-a-time compare
+    // against the label's words never matches a token that never appears as a whole word itself, so
+    // this needs the same splitting `humanise` already does for the tool name.
+    expect(readToolName("mcp__google-drive__search_google_drive")).toEqual({
+      label: "Search google drive",
+    });
+  });
+
+  test("the server is dropped when an underscored server's words are already in the label", () => {
+    // Same case as the hyphenated server, spelled with an underscore instead. Either separator has to
+    // split into the same words.
+    expect(readToolName("mcp__google_drive__search_google_drive")).toEqual({
+      label: "Search google drive",
+    });
+  });
+
+  test("a multi-token server the label does not name is kept as detail", () => {
+    // "Search files" does not say "google" or "drive" anywhere, so the server still belongs on
+    // screen. This is what proves the check was tightened rather than deleted.
+    expect(readToolName("mcp__google-drive__search_files")).toEqual({
+      label: "Search files",
+      detail: "google-drive",
+    });
+  });
+
+  test("the server is kept when the singular of its name only matches the label's verb", () => {
+    // singular("posts") is "post", which is also the verb `humanise` put first in "Post message".
+    // That is a coincidence with the verb, not the server being named as the thing acted upon, so
+    // "posts" still belongs on screen.
+    expect(readToolName("mcp__posts__post_message")).toEqual({
+      label: "Post message",
+      detail: "posts",
+    });
+  });
+
+  test("the server is kept when the singular of its name only matches the label's verb, second case", () => {
+    // Same shape as `posts`/`post_message`: singular("lists") is "list", which collides with the
+    // verb in "List files" rather than naming the server as the thing acted upon.
+    expect(readToolName("mcp__lists__list_files")).toEqual({
+      label: "List files",
+      detail: "lists",
+    });
+  });
+});
+
+describe("this deployment's own tools", () => {
+  test("show_app_access is named for what it is doing, then for what it did", () => {
+    expect(readToolName("show_app_access", true)).toEqual({
+      label: "正在查看应用权限",
+    });
+    expect(readToolName("show_app_access")).toEqual({
+      label: "查看了应用权限",
+    });
+  });
+
+  test("any other bare name reads in words, never as its identifier", () => {
+    expect(readToolName("run_command", true)).toEqual({ label: "Run command" });
+  });
+});
+
+/**
+ * What an approval says it waits on, from the `toolRef` and `scope` the server asks under: an app's
+ * tool as `<app>/<tool>` on the app, a computer action on the site it acts on, a command on the
+ * computer it runs on.
+ */
+describe("naming what an approval asks to do", () => {
+  test("an app's tool reads as the action in words, on the app by its name", () => {
+    expect(
+      approvalWords({ toolRef: "requests/get_request", scope: "requests" }),
+    ).toEqual({ action: "get request", place: "Requests" });
+    expect(
+      approvalWords({
+        toolRef: "google-drive/createFile",
+        scope: "google-drive",
+      }),
+    ).toEqual({ action: "create file", place: "Google Drive" });
+  });
+
+  test("a brokered app is named as the app, and its action without the app's prefix", () => {
+    expect(
+      approvalWords({
+        toolRef: "composio-gmail/GMAIL_SEND_EMAIL",
+        scope: "composio-gmail",
+      }),
+    ).toEqual({ action: "send email", place: "Gmail" });
+  });
+
+  test("a computer action keeps its words, and a file or a command reads as its step does", () => {
+    expect(
+      approvalWords({ toolRef: "computer_click", scope: "example.com" }),
+    ).toEqual({ action: "点击", place: "example.com" });
+    expect(
+      approvalWords({ toolRef: "computer_write_file", scope: "workspace" }),
+    ).toEqual({ action: "保存文件", place: "workspace" });
+    expect(
+      approvalWords({ toolRef: "host/run_command", scope: "grant-1" }),
+    ).toEqual({ action: "执行命令", place: "grant-1" });
+  });
+});
+
+describe("an approval's phrase never shows an internal name", () => {
+  // The check's own name, as the server stores it.
+  const shareRef = ["openbot", "share_private_information"].join("/");
+  const internal = /openbot|acp\//i;
+
+  test("an external employee's request says its kind in Chinese", () => {
+    const cases: [string, string][] = [
+      ["execute", "运行命令"],
+      ["edit", "改文件"],
+      ["delete", "删除文件"],
+      ["fetch", "联网下载"],
+      ["read", "读文件"],
+      ["switch_mode", "切换工作模式"],
+      ["other", "执行一个操作"],
+      ["reticulate_splines", "执行一个操作"],
+    ];
+    for (const [kind, phrase] of cases) {
+      const said = approvalPhrase({
+        toolRef: `acp/${kind}`,
+        scope: "push+runCommand:git push origin main",
+      });
+      expect(said).toBe(phrase);
+      expect(said).not.toMatch(internal);
+    }
+  });
+
+  test("the share check says where the answer would go, in plain words", () => {
+    const cases: [unknown, string][] = [
+      [{ kind: "group", id: "g-1" }, "把回答发到群里（可能含私人信息）"],
+      [{ kind: "channel", id: "c-1" }, "把回答发到频道里（可能含私人信息）"],
+      [
+        { kind: "slack_channel", id: "C1" },
+        "把回答发到频道里（可能含私人信息）",
+      ],
+      [{ kind: "handoff", id: "h-1" }, "把回答转给别人（可能含私人信息）"],
+      [{ kind: "external", id: "x" }, "把回答发给别人（可能含私人信息）"],
+      [undefined, "把回答发给别人（可能含私人信息）"],
+    ];
+    for (const [target, phrase] of cases) {
+      const said = approvalPhrase({
+        toolRef: shareRef,
+        scope: "group:g-1:members:abc",
+        target,
+      });
+      expect(said).toBe(phrase);
+      expect(said).not.toMatch(internal);
+      expect(said).not.toContain("group:g-1");
+    }
+    // Known by its effect too, whatever its name.
+    expect(
+      approvalPhrase({
+        toolRef: "share",
+        scope: "group:g-1",
+        effect: "share_private",
+        target: { kind: "group" },
+      }),
+    ).toBe("把回答发到群里（可能含私人信息）");
+  });
+});

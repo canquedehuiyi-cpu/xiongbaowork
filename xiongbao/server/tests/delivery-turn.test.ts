@@ -1,0 +1,85 @@
+import { expect, test } from "bun:test";
+import { AbstractAgent, type Message, type RunAgentInput } from "@ag-ui/client";
+import { EMPTY } from "rxjs";
+import { createTurnRunner } from "../src/routines/run-turn";
+import { serverTurnAdmission } from "../src/agents/turn-admission";
+import { runAsTenant } from "../src/tenant/context";
+
+class Agent extends AbstractAgent {
+  run() {
+    return EMPTY;
+  }
+}
+test("verified inbound person message keeps canonical run ID and persists exact text without routine frame", async () => {
+  const agent = new Agent({ agentId: "bot" });
+  const locks: string[] = [];
+  const persisted: Message[][] = [];
+  const initiators: unknown[] = [];
+  const intelligence = {
+    getOrCreateThread: async () => ({}),
+    getThreadMessages: async () => ({
+      messages: [{ id: "old", role: "user", content: "Earlier" }],
+    }),
+    ɵacquireThreadLock: async (input: { runId: string; threadId: string }) => {
+      locks.push(input.runId);
+      return { ...input, joinToken: "token" };
+    },
+    ɵrenewThreadLock: async () => ({ ttlSeconds: 20 }),
+    ɵcleanupThreadLock: async (input: { runId: string }) => {
+      locks.push(input.runId);
+    },
+  };
+  const runner = {
+    run: (input: {
+      input: RunAgentInput;
+      persistedInputMessages?: Message[];
+    }) => ({
+      subscribe(observer: { complete(): void }) {
+        locks.push(input.input.runId);
+        persisted.push(input.persistedInputMessages ?? []);
+        agent.setMessages([
+          ...agent.messages,
+          { id: "reply", role: "assistant", content: "Hello" },
+        ]);
+        observer.complete();
+        return {};
+      },
+    }),
+    stop: async () => true,
+  };
+  const turn = createTurnRunner({
+    admission: serverTurnAdmission,
+    intelligence,
+    runner,
+    buildAgentFor: async (input) => {
+      initiators.push(input.initiator);
+      return agent;
+    },
+  });
+  // `satisfies` rather than an annotation: `Message.content` is `string | ContentPart[]`, and the
+  // turn's `instruction` is a string. A literal keeps the string a string and still checks the shape.
+  const userMessage = {
+    id: "delivery:inbox-id",
+    role: "user",
+    content: "My actual Slack message",
+  } as const satisfies Message;
+  expect(
+    // A delivered turn runs as the person it was delivered for, as its caller frames it.
+    await runAsTenant("owner", () =>
+      turn({
+        ownerUserId: "owner",
+        routineId: "delivery:inbox-id",
+        runId: "inbox-id",
+        agentId: "bot",
+        threadId: "canonical-thread",
+        instruction: userMessage.content,
+        userMessage,
+        initiator: { kind: "person" },
+      }),
+    ),
+  ).toEqual({ replyText: "Hello" });
+  expect(locks).toEqual(["inbox-id", "inbox-id", "inbox-id"]);
+  expect(persisted).toEqual([[userMessage]]);
+  expect(initiators).toEqual([{ kind: "person" }]);
+  expect(agent.threadId).toBe("canonical-thread");
+});
