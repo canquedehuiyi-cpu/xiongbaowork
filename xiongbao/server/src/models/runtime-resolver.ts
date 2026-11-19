@@ -49,6 +49,11 @@ export type AgentModelResolver = (
    * `null` and the runtime builds the deployment model itself, unmetered, as it always did.
    */
   deployment?: DeploymentModel,
+  /**
+   * 期七：`ignoreBinding` 不取员工在模型库里的绑定，只给 `deployment` 的计量版本（子代理指定了别的模型）。
+   * 没给 `deployment` 时没有可给的，答 `null`。
+   */
+  options?: { ignoreBinding?: boolean },
 ) => Promise<LanguageModel | null>;
 
 /**
@@ -798,8 +803,10 @@ export function modelOf(
   resolve: (agentId: string) => Promise<ResolvedAgentModel | null>,
   sink?: ModelTokenCallSink,
 ): AgentModelResolver {
-  return async (agentId, deployment) => {
-    const bound = (await resolve(agentId))?.model;
+  return async (agentId, deployment, options) => {
+    const bound = options?.ignoreBinding
+      ? undefined
+      : (await resolve(agentId))?.model;
     if (bound) return bound;
     if (!deployment || !sink) return null;
     return meteredDeploymentModel(deployment, agentId, sink);

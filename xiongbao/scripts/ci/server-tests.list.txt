@@ -819,6 +819,7 @@ tests/staffing-settle.integration.test.ts
 tests/staffing-store.integration.test.ts
 tests/stall-guard.test.ts
 tests/starter-tour-routes.test.ts
+tests/subagent-model.test.ts
 tests/subagent.integration.test.ts
 tests/subscriptions-unique-migration.integration.test.ts
 tests/subscriptions-unique.integration.test.ts
@@ -880,6 +881,7 @@ tests/three-tenant-demo.integration.test.ts
 tests/tool-calls-come-back.integration.test.ts
 tests/tool-chooser-sign-in.test.ts
 tests/tool-images.test.ts
+tests/tool-output-offload.test.ts
 tests/tool-search.test.ts
 tests/tool-selection-environment-restoration-driver.test.ts
 tests/tool-selection-environment-restoration.test.ts

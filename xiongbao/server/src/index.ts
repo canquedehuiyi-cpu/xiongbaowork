@@ -4,6 +4,7 @@ import type { AbstractAgent } from "@ag-ui/client";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { computerGuidance } from "../../shared/bot-prompt";
+import { hardModelOf } from "../../shared/hard-model";
 import { isPersonBrowserId } from "../../shared/openbot-browser";
 import { workOwner } from "../../shared/work-owner";
 import { toolSegmentsFor, turnTimeoutFor } from "../../toolkit/src/limits";
@@ -283,6 +284,7 @@ import {
 import { createDatabase } from "./db/client";
 import { ROLE_FACTS_SQL } from "./db/rls-role";
 import {
+  agents,
   channelAgents,
   channelMemberships,
   channels,
@@ -404,6 +406,7 @@ import { createMemoryStore } from "./memory/store";
 import { offeredMemoryTools } from "./memory/tools";
 import { reportModelAvailability } from "./model-availability-check";
 import { createModelCatalogue } from "./model-catalogue";
+import { configureContextWindowSource } from "./models/context-window";
 import {
   deepSeekThinkingOff,
   installDeepSeekThinkingOff,
@@ -645,6 +648,7 @@ import {
 import { PostgresAgentRunner } from "./threads/postgres-runner";
 import { createConversationSidebar } from "./threads/sidebar";
 import { createSidebarRoutes } from "./threads/sidebar-routes";
+import { lazyWorkspaceOutputSink } from "./tool-output";
 import { createTranslationRoutes } from "./translations/routes";
 import { createTranslationStore, translatePending } from "./translations/store";
 import { createTranslator } from "./translations/translator";
@@ -2727,6 +2731,13 @@ await startupLifecycle.run(async (startup) => {
     () => modelCatalogue.start(),
     (stop) => stop(),
   );
+  // 一轮之内的压缩问模型窗口时读这里（期七，`models/context-window.ts`）。
+  configureContextWindowSource((provider, modelName, baseUrl) =>
+    modelCatalogue.contextWindowFor(provider, modelName, baseUrl),
+  );
+
+  /** 期七：子代理指定了模型的线程（线程编号 → 模型名），只在那一次运行期间有。`createSubagents` 写，选模型时读。 */
+  const subagentModelPins = new Map<string, string>();
 
   /** Each person's pick per conversation, saved through `/api/channels/:id/model` and read per run. */
   const modelChoices = createModelChoices({
@@ -3026,6 +3037,27 @@ await startupLifecycle.run(async (startup) => {
       search: webSearchSetup,
       crawl: webCrawlSetup,
       scope: `${actorId}:${botId}`,
+      /*
+       * 期七：超长的网页正文存进这位员工自己的工作区，回传里只给头尾和路径。到调用时才查这位员工有没有
+       * 电脑（同下面的生成图片）：没有就截断并说明。
+       */
+      ...(computerGateway
+        ? {
+            saveOutput: lazyWorkspaceOutputSink(() =>
+              runAsTenant(actorId, async () => {
+                const actor = await actorFor(actorId);
+                const profile = await agentProfileStore.get(actor, botId);
+                if (!profile || !canUseComputer(profile, actor))
+                  return undefined;
+                return {
+                  gateway: computerGateway,
+                  seat: await computerGateway.seatFor(botId, actor.id),
+                  actor: { id: actor.id, userId: actor.id, initiator },
+                };
+              }),
+            ),
+          }
+        : {}),
     }),
     /*
      * 生成图片和视频（期五 C）：每位员工默认都有，工具权限里关掉 `bot/generate_image`、`bot/generate_video`
@@ -3697,6 +3729,29 @@ await startupLifecycle.run(async (startup) => {
    * the frame of the run that asked, which is the person's.
    */
   const subagents = createSubagents({
+    /*
+     * 期七：`run_subagent` 的 `model`。可用的模型是对话里模型选择器那份目录（管理员的白名单已算在里面）；
+     * "hard" 读这位员工 `agents.configuration.hardModel`；指定的模型记在子代理自己的线程上，只管那一次运行。
+     */
+    models: {
+      allowed: async () =>
+        (await modelCatalogue.read()).models.map((model) => model.id),
+      hardModelOf: (ownerUserId, botId) =>
+        runAsTenant(ownerUserId, async () => {
+          const [row] = await database
+            .select({ configuration: agents.configuration })
+            .from(agents)
+            .where(eq(agents.id, botId))
+            .limit(1);
+          return hardModelOf(row?.configuration);
+        }),
+      pin: (threadId, model) => {
+        subagentModelPins.set(threadId, model);
+        return () => {
+          subagentModelPins.delete(threadId);
+        };
+      },
+    },
     turn: {
       prepareRunInput: prepareProductRunInput,
       onKnownStop: productTelemetry.stopKnown,
@@ -4036,10 +4091,21 @@ await startupLifecycle.run(async (startup) => {
     resolveModelApiKey: resolveRuntimeModelApiKey,
     // The model the person picked for this conversation, or the catalogue's default.
     // Given what started the run, so a run nobody is watching can think harder (upstream #1407).
-    pickedModelForActor: (actorId, initiator) => (input) =>
-      modelChoices.forRun(actorId, input.threadId, {
+    pickedModelForActor: (actorId, initiator) => async (input) => {
+      // 期七：子代理指定了模型的那条线程，用指定的（排在员工绑定前面）；别的照旧。
+      const pinned = subagentModelPins.get(input.threadId);
+      if (pinned)
+        return {
+          ...(await modelCatalogue.choose(
+            { model: pinned },
+            isUnattended(runModeOf(initiator)) ? "high" : undefined,
+          )),
+          forced: true,
+        };
+      return modelChoices.forRun(actorId, input.threadId, {
         unattended: isUnattended(runModeOf(initiator)),
-      }),
+      });
+    },
     stallGuard,
     /*
      * Restricted by who started the run: a check-in reads only what the person connected (scope.ts).

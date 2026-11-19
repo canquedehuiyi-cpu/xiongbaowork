@@ -25,16 +25,6 @@ import {
   takeUntil,
 } from "rxjs";
 import { sanitizeSeededHistory } from "../history-sanitize";
-import { plainToolResults } from "../tool-result-text";
-import { firingChecklist } from "./firing-checklist";
-import {
-  answersOnLastStep,
-  type RunSteps,
-  STEP_LIMIT_EVENT,
-  type StepLimitPayload,
-  startRun,
-} from "./last-step";
-import { reasoningByToolCall } from "./replayed-reasoning";
 import {
   type NativeRunScope,
   nativeApprovalRun,
@@ -42,12 +32,23 @@ import {
   withinNativeRun,
 } from "../native-approval";
 import { historyOrEmpty } from "../thread-history";
+import { plainToolResults } from "../tool-result-text";
 import {
   answered,
   askPlatform,
   bodyOf,
   expectedRefusal,
 } from "./expected-answers";
+import { firingChecklist } from "./firing-checklist";
+import {
+  answersOnLastStep,
+  foldingEarlyResults,
+  type RunSteps,
+  STEP_LIMIT_EVENT,
+  type StepLimitPayload,
+  startRun,
+} from "./last-step";
+import { reasoningByToolCall } from "./replayed-reasoning";
 
 /**
  * The CopilotKit agents OpenBot runs its Bots as: a built-in Bot that will not send a broken
@@ -125,6 +126,16 @@ export type BuiltInAgentHooks = {
    * counts from where it starts.
    */
   wholeTurn?: (input: RunAgentInput) => boolean;
+  /**
+   * 一轮之内的压缩（期七，`turn-folding.ts`）：这个模型的上下文窗口（token）。读不到就按保守的默认值。
+   * 越过窗口的 70% 时，较早的工具结果在发给模型的那一份里折成摘要。
+   */
+  contextWindowFor?: (
+    provider: string,
+    modelId: string,
+  ) => number | undefined | Promise<number | undefined>;
+  /** `false` 关掉一轮内的压缩。不写就是开。 */
+  foldResults?: boolean;
 };
 
 /**
@@ -274,12 +285,24 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
   ) {
     const scope = nativeRunScope();
     const steps: RunSteps = {};
+    const answering = answersOnLastStep(configuration, steps, {
+      unattended: hooks.unattended === true,
+      ...(hooks.extension ? { extension: hooks.extension } : {}),
+    });
     super(
       toolsWithin(
-        answersOnLastStep(configuration, steps, {
-          unattended: hooks.unattended === true,
-          ...(hooks.extension ? { extension: hooks.extension } : {}),
-        }),
+        /*
+         * 期七：一轮里越过窗口的 70% 就折叠较早的工具结果，包在最外面，让里面的包装看到折叠后的提示。
+         * `foldResults: false` 关掉（部署开关 `XIONGBAO_TURN_FOLD=off`）。
+         */
+        hooks.foldResults === false
+          ? answering
+          : foldingEarlyResults(
+              answering,
+              hooks.contextWindowFor
+                ? { windowFor: hooks.contextWindowFor }
+                : {},
+            ),
         scope,
       ),
     );
