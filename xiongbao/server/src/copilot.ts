@@ -185,6 +185,10 @@ import {
   TenantContextError,
 } from "./tenant/context";
 import {
+  type ChatServerTools,
+  declaresServerComputerTools,
+} from "./threads/chat-server-tools";
+import {
   CompactionMiddleware,
   type RunCompaction,
   stoppingCompactionOnAbort,
@@ -2482,6 +2486,9 @@ async function buildAgent(
     const hooks: BuiltInAgentHooks = {
       // Somebody is watching: a run still at work on its last step gets one more budget of steps.
       ...(unattended ? { unattended } : { extension: TOOL_STEPS }),
+      // A chat the server carries on spends its step budget once over all its rounds, not once each.
+      wholeTurn: (runInput) =>
+        declaresServerComputerTools(runInput.forwardedProps),
       /*
        * 期三：DeepSeek 要求调过工具的 assistant 消息跨轮带回它的思考，历史里存着的就按工具调用 id 放回。
        * 只对 DeepSeek：别的提供方拿到没有签名的 reasoning 部分会拒绝或丢掉。见 `models/deepseek-thinking.ts`。
@@ -3976,11 +3983,17 @@ function runAsRuntimeActor<T>(actor: AgentActor, work: () => T): T {
 export function createRequestAgents(
   identifyActor: IdentifyActor,
   resolver: ActorAgentResolver,
+  /** A chat whose computer tools the server runs (`threads/chat-server-tools.ts`). Absent: the browser does. */
+  chatServerTools?: ChatServerTools,
 ) {
-  return async ({ request }: { request: Request }) =>
-    resolver.resolveAgentsForActor(await identifyActor(request), {
+  return async ({ request }: { request: Request }) => {
+    const actor = await identifyActor(request);
+    const agents = await resolver.resolveAgentsForActor(actor, {
       holdsTools: isAskedRun,
     });
+    chatServerTools?.attach(agents, actor);
+    return agents;
+  };
 }
 
 /**
@@ -4099,6 +4112,11 @@ export function mountCopilotRuntime(
      * runtime's runner. Required in practice; see {@link localRunnerOrRefused}.
      */
     localRunner?: PostgresAgentRunner;
+    /**
+     * Runs a browser chat's computer tools on the server for a run that asks for it, and carries a
+     * Stop to the tool in flight. Absent, the switch is off and the browser runs them all.
+     */
+    chatServerTools?: ChatServerTools;
     /**
      * The Recorder's capture pass (`trajectory/connect`): the gate that lets only a connected browser
      * through, and the selector that assigns the trajectory to its person's own Learning space
@@ -4274,7 +4292,11 @@ export function mountCopilotRuntime(
     forwardHeaders: { deny: ["authorization"], denyPrefixes: ["x-"] },
     // `identifyUser` is the thread-scoping projection of the same person `identifyActor` returns:
     // one resolver decides both whose threads these are and whose coworkers exist.
-    agents: createRequestAgents(actorOf, resolver) as never,
+    agents: createRequestAgents(
+      actorOf,
+      resolver,
+      options.chatServerTools,
+    ) as never,
   };
 
   /*
@@ -4332,6 +4354,7 @@ export function mountCopilotRuntime(
 
   if (options.decisionWaits)
     watchDecisionWaits(runtimeRunner, options.decisionWaits);
+  options.chatServerTools?.watch(runtimeRunner);
 
   const runtimeRoutes = createCopilotHonoHandler({
     runtime,
