@@ -7,9 +7,13 @@ import { openParts } from "@openbot/shared/routine-checklist";
 import {
   LAST_STEP_NOTICE,
   openPartsNudge,
+  type PlanItem,
+  planNudge,
   promiseNudge,
+  readPlan,
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
+  UPDATE_PLAN_TOOL,
 } from "@openbot/shared/run-notices";
 import { unkeptPromise } from "./unkept-promise";
 
@@ -107,6 +111,27 @@ function turnsIn(prompt: Prompt): number {
   return prompt.filter((message) => message.role === "assistant").length;
 }
 
+/**
+ * The items of this run's own plan that are not done, as its latest `update_plan` call left them.
+ *
+ * Read from the prompt, where each step's calls are, and only from the turns this run added: a plan
+ * an earlier run left open is history the model can read, not a list this run promised to finish. A
+ * call the tool turned down is no plan, so the one before it stands.
+ */
+function openPlanItems(prompt: Prompt, before: number): PlanItem[] {
+  let turns = 0;
+  let plan: PlanItem[] | undefined;
+  for (const message of prompt) {
+    if (message.role !== "assistant") continue;
+    turns += 1;
+    if (turns <= before) continue;
+    for (const part of message.content)
+      if (part.type === "tool-call" && part.toolName === UPDATE_PLAN_TOOL)
+        plan = readPlan(part.input) ?? plan;
+  }
+  return (plan ?? []).filter((item) => item.status !== "done");
+}
+
 /** A one-turn message: in this call's prompt only, never in the conversation. */
 function told(prompt: Prompt, text: string): Prompt {
   return [...prompt, { role: "user", content: [{ type: "text", text }] }];
@@ -123,8 +148,9 @@ function told(prompt: Prompt, text: string): Prompt {
  * and why ({@link LAST_STEP_NOTICE}). Every step before it is untouched.
  *
  * AN UNKEPT PROMISE. A step that ends the run (it called no tool and the model stopped) is held back
- * before the runtime sees it. If its words promise work it did not do ({@link unkeptPromise}), or a
- * routine's part is still open ({@link openParts}), the model is asked again in the same step with
+ * before the runtime sees it. If its words promise work it did not do ({@link unkeptPromise}), a
+ * routine's part is still open ({@link openParts}), or an item of the plan this run wrote with
+ * `update_plan` is not done ({@link openPlanItems}), the model is asked again in the same step with
  * the answer it gave and a one-turn nudge after it, and what it does then is streamed on as the
  * rest of that step: a tool call carries the run on as usual. At most {@link MOST_NUDGES} in a row,
  * counted again from nothing after any tool call, and never on the last step, where it has no tools
@@ -197,15 +223,18 @@ export function answersOnLastStep(
 
   /**
    * The nudge an answer that would end the run has earned, or undefined when it may end. `text` is
-   * already in `steps.said`, so a part this answer closes counts as closed.
+   * already in `steps.said`, so a part this answer closes counts as closed. `prompt` is the step's
+   * own, which holds every call the run made before it, its plan's among them.
    */
-  const nudgeFor = (text: string): string | undefined => {
+  const nudgeFor = (text: string, prompt: Prompt): string | undefined => {
     if ((steps.nudges ?? 0) >= MOST_NUDGES) return undefined;
     const open = openParts(steps.parts ?? [], steps.said ?? "");
     const promise = unkeptPromise(text);
+    const planned = openPlanItems(prompt, steps.before ?? 0);
     const nudge = [
       ...(promise ? [promiseNudge(promise)] : []),
       ...(open.length > 0 ? [openPartsNudge(open)] : []),
+      ...(planned.length > 0 ? [planNudge(planned)] : []),
     ].join(" ");
     if (!nudge) return undefined;
     steps.nudges = (steps.nudges ?? 0) + 1;
@@ -309,7 +338,7 @@ ${part.delta.trimStart()}`;
           if (called) steps.nudges = 0;
           const nudge =
             !called && part.finishReason.unified === "stop"
-              ? nudgeFor(text)
+              ? nudgeFor(text, call.prompt)
               : undefined;
           if (!nudge) {
             controller.enqueue({ ...part, usage });
@@ -361,7 +390,7 @@ ${part.delta.trimStart()}`;
         return result;
       }
       if (result.finishReason.unified !== "stop") return result;
-      const nudge = nudgeFor(text);
+      const nudge = nudgeFor(text, call.prompt);
       if (!nudge) return result;
       current = again(current, text, nudge);
       let next: GenerateResult;

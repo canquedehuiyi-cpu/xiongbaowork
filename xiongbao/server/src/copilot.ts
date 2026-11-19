@@ -51,6 +51,7 @@ import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
+import { planGuidance } from "../../shared/plan";
 import {
   ACP_UNAVAILABLE_REASON,
   type DeviceAcpEmployee,
@@ -1223,6 +1224,11 @@ export function builtInAgentConfiguration(
         "delivery",
         deliveryProtocolGuidance(tools.map((tool) => tool.name)),
       ),
+      /*
+       * How to carry a job of several steps with `update_plan`, for a Bot that holds it and only
+       * then: one whose plan tool is switched off for it is not taught to use it (期二).
+       */
+      ...promptSection("plan", planGuidance(tools.map((tool) => tool.name))),
       /*
        * Only for a run that holds the computer. A third of the prompt is about the browser, and a
        * Linear-and-Notion routine that never opens one read all of it ahead of its own job.
