@@ -39,6 +39,7 @@ import { currentApprovalContext } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import type { ProductSurface } from "../telemetry/product";
+import { type OutputSink, spill } from "../tool-output";
 import { resolveSubagentModel } from "./subagent-model";
 
 /**
@@ -170,6 +171,12 @@ export function createSubagents(options: {
    * 期七：`model` 参数要用的三样。不给，`model` 不起作用（子代理照旧用员工平时的模型），也不拒绝。
    */
   models?: SubagentModels;
+  /**
+   * Where a long answer is kept for the Bot that asked: its workspace. Given the run asking, so the
+   * file lands where that Bot's own commands and file tools reach. Absent, or a sink that cannot write,
+   * an answer is handed back whole whatever its length.
+   */
+  outputSinkFor?: (parent: SubagentParent) => OutputSink | undefined;
   perAnswer?: number;
 }) {
   const perAnswer = options.perAnswer ?? SUBAGENTS_PER_ANSWER;
@@ -306,8 +313,26 @@ export function createSubagents(options: {
               depth: (parent.depth ?? 0) + 1,
               ...(execution?.signal ? { signal: execution.signal } : {}),
             });
+            /*
+             * What the subagent says comes back into the asking conversation and is sent again on every
+             * step after it. A long one is kept in the workspace and only its head and tail come back,
+             * with the path, as a long command output does (`tool-output.ts`); the subagent's own thread
+             * still holds all of it. A sink that cannot write leaves the answer whole: nothing is lost.
+             */
+            const sink = options.outputSinkFor?.(parent);
+            const spilled = sink
+              ? await spill({
+                  tool: SUBAGENT_TOOL,
+                  id: toolCallId,
+                  full: replyText,
+                  sink,
+                })
+              : null;
             return answer({
-              answer: replyText,
+              answer: spilled?.savedTo ? spilled.show(replyText) : replyText,
+              ...(spilled?.savedTo
+                ? { savedTo: spilled.savedTo, truncated: spilled.note }
+                : {}),
               threadId,
               steps: stepsIn(messages()),
               ms: elapsed(),

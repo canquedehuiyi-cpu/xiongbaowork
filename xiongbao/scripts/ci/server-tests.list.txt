@@ -833,6 +833,8 @@ tests/starter-tour-routes.test.ts
 tests/stream-keep-alive.test.ts
 tests/subagent-folding.test.ts
 tests/subagent-model.test.ts
+tests/subagent-result.test.ts
+tests/subagent-tools.test.ts
 tests/subagent.integration.test.ts
 tests/subscriptions-unique-migration.integration.test.ts
 tests/subscriptions-unique.integration.test.ts
