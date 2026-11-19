@@ -6,8 +6,10 @@ import {
   DEFAULT_CONTEXT_WINDOW,
   estimateTokens,
   FIXED_PROMPT_TOKENS,
+  FOLD_BUDGET_TOKENS,
   FOLD_KEEP_STEPS,
   FOLDED_PREFIX,
+  foldBudgetFrom,
   foldEarlyResults,
   foldedSummary,
 } from "../src/copilotkit/turn-folding";
@@ -200,6 +202,152 @@ describe("缓存稳定", () => {
   });
 });
 
+describe("绝对预算：窗口再大也有一条线", () => {
+  /** 窗口大到 70% 永远到不了；预算压得小，几十步的提示就能越线。 */
+  const HUGE = 1_000_000;
+  const BUDGET = 20_000;
+
+  /** 第一次折叠发生在第几步。 */
+  function crossingAt(options: { window: number; budget?: number }, max = 80) {
+    for (let steps = 1; steps <= max; steps += 1) {
+      const raw = promptAfter(steps);
+      if (foldEarlyResults(raw, options) !== raw) return steps;
+    }
+    return 0;
+  }
+
+  test("窗口很大时，估算超过预算就折叠；没超过一个字不动，返回同一个数组", () => {
+    const crossing = crossingAt({ window: HUGE, budget: BUDGET });
+    expect(crossing).toBeGreaterThan(FOLD_KEEP_STEPS);
+    const calm = promptAfter(crossing - 1);
+    expect(foldEarlyResults(calm, { window: HUGE, budget: BUDGET })).toBe(calm);
+    const prompt = promptAfter(crossing);
+    const before = JSON.stringify(prompt);
+    const folded = foldEarlyResults(prompt, { window: HUGE, budget: BUDGET });
+    expect(folded).not.toBe(prompt);
+    expect(JSON.stringify(prompt)).toBe(before);
+    expect(outputOf(folded, 1).startsWith(FOLDED_PREFIX)).toBe(true);
+  });
+
+  test("不传预算就用默认的 FOLD_BUDGET_TOKENS：大窗口下重的一轮折叠，轻的一轮不动", () => {
+    expect(FOLD_BUDGET_TOKENS).toBeGreaterThanOrEqual(48_000);
+    expect(FOLD_BUDGET_TOKENS).toBeLessThanOrEqual(64_000);
+    // 每步约 4.6K token，30 步远超预算，窗口 1M 的 70% 却远没到。
+    const heavy = promptAfter(30, 16_000);
+    const folded = foldEarlyResults(heavy, { window: HUGE });
+    expect(folded).not.toBe(heavy);
+    expect(outputOf(folded, 1).startsWith(FOLDED_PREFIX)).toBe(true);
+    expect(outputOf(folded, 30)).toBe(resultText(30, 16_000));
+    // 每步约 1.2K token，十几步加起来也在预算以内。
+    const light = promptAfter(12);
+    expect(foldEarlyResults(light, { window: HUGE })).toBe(light);
+  });
+
+  test("预算取窗口比例和绝对预算里小的那个：窗口小时还是按窗口比例", () => {
+    // 窗口 20k 的 70% 是 14k，比默认预算小得多：折叠发生的那一步和没有预算时一样。
+    const byWindow = crossingAt({ window: WINDOW, budget: 0 });
+    expect(byWindow).toBeGreaterThan(FOLD_KEEP_STEPS);
+    expect(crossingAt({ window: WINDOW })).toBe(byWindow);
+    expect(crossingAt({ window: WINDOW, budget: 10 ** 9 })).toBe(byWindow);
+    // 预算比窗口比例还小，预算说了算。
+    expect(crossingAt({ window: WINDOW, budget: 8_000 })).toBeLessThan(
+      byWindow,
+    );
+  });
+
+  test("预算为 0：和期七原来一样，大窗口不折，小窗口折叠的位置和内容都不变", () => {
+    const long = promptAfter(60);
+    expect(foldEarlyResults(long, { window: HUGE, budget: 0 })).toBe(long);
+    for (let steps = 1; steps <= 40; steps += 1) {
+      const raw = promptAfter(steps);
+      const off = foldEarlyResults(raw, { window: WINDOW, budget: 0 });
+      // 一个大到永远越不到的预算，等于没有预算。
+      const never = foldEarlyResults(raw, { window: WINDOW, budget: 10 ** 12 });
+      expect(JSON.stringify(off)).toBe(JSON.stringify(never));
+      // 窗口比例比默认预算小时，默认预算也不改变结果。
+      expect(JSON.stringify(foldEarlyResults(raw, { window: WINDOW }))).toBe(
+        JSON.stringify(off),
+      );
+    }
+  });
+
+  test("折叠前缀稳定：重放两次逐字节相同，下一步只在末尾追加", () => {
+    const crossing = crossingAt({ window: HUGE, budget: BUDGET });
+    const options = { window: HUGE, budget: BUDGET };
+    const a = foldEarlyResults(promptAfter(crossing + 3), options);
+    const b = foldEarlyResults(promptAfter(crossing + 3), options);
+    expect(JSON.stringify(a)).toBe(JSON.stringify(b));
+    const at = foldEarlyResults(promptAfter(crossing), options);
+    const next = foldEarlyResults(promptAfter(crossing + 1), options);
+    expect(JSON.stringify(next.slice(0, at.length))).toBe(JSON.stringify(at));
+    expect(next.length).toBe(at.length + 2);
+  });
+
+  test("一批一批地折：前缀被改写的次数远少于步数，两次改写之间隔着几步，其余每步只在末尾追加", () => {
+    const options = { window: HUGE, budget: BUDGET };
+    const total = 60;
+    let previous: Prompt | undefined;
+    const rewrites: number[] = [];
+    for (let steps = 1; steps <= total; steps += 1) {
+      const folded = foldEarlyResults(promptAfter(steps), options);
+      if (previous) {
+        const shared =
+          JSON.stringify(folded.slice(0, previous.length)) ===
+          JSON.stringify(previous);
+        if (!shared) rewrites.push(steps);
+        else expect(folded.length).toBe(previous.length + 2);
+      }
+      previous = folded;
+    }
+    // 不止折一次：窗口比例算的「再涨 15% 窗口」在这里是 15 万，按它一次之后就再也不折了。
+    expect(rewrites.length).toBeGreaterThanOrEqual(2);
+    expect(rewrites.length).toBeLessThanOrEqual(total / 4);
+    for (let index = 1; index < rewrites.length; index += 1)
+      expect(
+        (rewrites[index] ?? 0) - (rewrites[index - 1] ?? 0),
+      ).toBeGreaterThan(2);
+  });
+
+  test("最近 4 步原样，不论折过几批", () => {
+    for (const steps of [20, 33, 47, 60]) {
+      const raw = promptAfter(steps);
+      const folded = foldEarlyResults(raw, { window: HUGE, budget: BUDGET });
+      expect(folded).not.toBe(raw);
+      for (let step = steps - FOLD_KEEP_STEPS + 1; step <= steps; step += 1)
+        expect(outputOf(folded, step)).toBe(resultText(step, 4_000));
+    }
+  });
+
+  test("摘要指向存盘的文件：存了盘的写明用 computer_read_file 读，没存盘的不编路径", () => {
+    const saved = foldedSummary(
+      "web_fetch",
+      JSON.stringify({
+        url: "https://example.com",
+        content: "正文".repeat(400),
+        saved_to: "tool-outputs/20261119-101010-web_fetch-ab12cd34.txt",
+      }),
+    );
+    expect(saved).toContain(
+      "tool-outputs/20261119-101010-web_fetch-ab12cd34.txt",
+    );
+    expect(saved).toContain("computer_read_file");
+    const unsaved = foldedSummary("web_fetch", "正文".repeat(400));
+    expect(unsaved).not.toContain("tool-outputs/");
+    expect(unsaved).toContain("重新调用工具");
+  });
+
+  test("环境变量：没设、空、不是数字、负数用默认值，0 关掉，其余取整", () => {
+    expect(foldBudgetFrom(undefined)).toBeUndefined();
+    expect(foldBudgetFrom("")).toBeUndefined();
+    expect(foldBudgetFrom("  ")).toBeUndefined();
+    expect(foldBudgetFrom("lots")).toBeUndefined();
+    expect(foldBudgetFrom("-5")).toBeUndefined();
+    expect(foldBudgetFrom("0")).toBe(0);
+    expect(foldBudgetFrom(" 48000 ")).toBe(48_000);
+    expect(foldBudgetFrom("48000.9")).toBe(48_000);
+  });
+});
+
 describe("包在模型外面", () => {
   function recordingModel(seen: Prompt[]) {
     return {
@@ -259,6 +407,32 @@ describe("包在模型外面", () => {
       }
     ).doGenerate({ prompt });
     expect(seen[0]).toBe(prompt);
+  });
+
+  test("窗口很大时，预算也折叠；预算 0 关掉；不给预算用默认值", async () => {
+    const run = async (budget?: number) => {
+      const seen: Prompt[] = [];
+      const wrapped = foldingEarlyResults(configurationFor(seen), {
+        windowFor: () => 1_000_000,
+        ...(budget === undefined ? {} : { budget }),
+      });
+      if ("factory" in wrapped) throw new Error("not a factory");
+      const prompt = promptAfter(30);
+      await (
+        wrapped.model as unknown as {
+          doStream: (options: { prompt: Prompt }) => Promise<unknown>;
+        }
+      ).doStream({ prompt });
+      return { prompt, sent: seen[0] as Prompt };
+    };
+    const small = await run(20_000);
+    expect(outputOf(small.sent, 1).startsWith(FOLDED_PREFIX)).toBe(true);
+    expect(outputOf(small.sent, 30)).toBe(resultText(30, 4_000));
+    const off = await run(0);
+    expect(off.sent).toBe(off.prompt);
+    // 默认预算比这一轮的总量大：一个字不动。
+    const byDefault = await run();
+    expect(byDefault.sent).toBe(byDefault.prompt);
   });
 
   test("读不到窗口（没给、返回空、抛错）就用保守的默认值", async () => {
@@ -400,6 +574,44 @@ describe("接在员工的运行里", () => {
     const seen = await promptSeen({ contextWindowFor: () => 1_000_000 });
     expect(seen).not.toContain(FOLDED_PREFIX);
     expect(seen).toContain(resultText(1, 4_000));
+  });
+
+  test("窗口再大，预算小了也折：foldBudgetTokens；0 关掉", async () => {
+    const small = await promptSeen({
+      contextWindowFor: () => 1_000_000,
+      foldBudgetTokens: 10_000,
+    });
+    expect(small).toContain(FOLDED_PREFIX);
+    expect(small).not.toContain(resultText(1, 4_000));
+    expect(small).toContain(resultText(12, 4_000));
+    const off = await promptSeen({
+      contextWindowFor: () => 1_000_000,
+      foldBudgetTokens: 0,
+    });
+    expect(off).not.toContain(FOLDED_PREFIX);
+    expect(off).toContain(resultText(1, 4_000));
+  });
+
+  test("部署的环境变量 XIONGBAO_TURN_FOLD_BUDGET_TOKENS 设预算；这一次运行的设置优先", async () => {
+    const saved = process.env.XIONGBAO_TURN_FOLD_BUDGET_TOKENS;
+    try {
+      process.env.XIONGBAO_TURN_FOLD_BUDGET_TOKENS = "10000";
+      const small = await promptSeen({ contextWindowFor: () => 1_000_000 });
+      expect(small).toContain(FOLDED_PREFIX);
+      // 运行的设置压过环境变量。
+      const off = await promptSeen({
+        contextWindowFor: () => 1_000_000,
+        foldBudgetTokens: 0,
+      });
+      expect(off).not.toContain(FOLDED_PREFIX);
+      process.env.XIONGBAO_TURN_FOLD_BUDGET_TOKENS = "0";
+      const disabled = await promptSeen({ contextWindowFor: () => 1_000_000 });
+      expect(disabled).not.toContain(FOLDED_PREFIX);
+    } finally {
+      if (saved === undefined)
+        delete process.env.XIONGBAO_TURN_FOLD_BUDGET_TOKENS;
+      else process.env.XIONGBAO_TURN_FOLD_BUDGET_TOKENS = saved;
+    }
   });
 
   test("foldResults: false 关掉", async () => {

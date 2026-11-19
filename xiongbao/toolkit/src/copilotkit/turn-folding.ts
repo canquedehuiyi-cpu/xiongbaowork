@@ -1,20 +1,22 @@
 import type { Prompt } from "./last-step";
 
 /**
- * 一轮之内的压缩（期七）：对话越过模型窗口的 70% 时，把较早的工具结果折成一句摘要，只改发给模型的那一份。
+ * 一轮之内的压缩（期七）：对话越过模型窗口的 70%（或绝对预算 {@link FOLD_BUDGET_TOKENS}，取小的）时，把较早的
+ * 工具结果折成一句摘要，只改发给模型的那一份。
  *
  * 为什么：历史里的工具结果占一轮 token 的七成左右（评测 #713），一轮里每多一步，前面所有的结果都要再发一遍。
  * 「轮次开始前压缩」（`server/src/threads/compaction.ts`）管的是下一轮，这一轮里越滚越大的结果它够不着。
  *
  * 做法，都是确定性的规则，不另外调用模型：
  *  - 一步里的估算 = 这一步发出去的全部文字估成 token，再加一份固定的工具定义开销；
- *  - 估算超过窗口的 {@link FOLD_AT} 时，把「最近 {@link FOLD_KEEP_STEPS} 步」之外、足够长的工具结果换成
+ *  - 估算超过 `min(窗口 × {@link FOLD_AT}, {@link FOLD_BUDGET_TOKENS})` 时，把「最近 {@link FOLD_KEEP_STEPS} 步」之外、足够长的工具结果换成
  *    「[已折叠：xx 工具输出 N 字，要点：…]」，要点是头尾的几句话；最近几步的结果原样不动；
  *  - 存起来的对话一个字不改，只有这一步发给模型的提示变短。
  *
  * 缓存稳定：提供方按前缀命中缓存，一步一步把已经发出去的历史改写，缓存就全废了。所以折叠不是「每步看一眼
  * 再改」，而是**从头重放**：沿着提示里每一次模型调用（每条 assistant 消息）的位置，用当时看到的前缀算估算，
- * 越线就折叠一批，折完要再涨 {@link FOLD_REGROW} 的窗口才会折下一批。这个重放只看前缀，所以
+ * 越线就折叠一批，折完要再涨一截（{@link FOLD_REGROW} 个窗口，绝对预算生效时取 {@link FOLD_REGROW_OF_BUDGET} 个预算，
+ * 两者取小）才会折下一批。这个重放只看前缀，所以
  *  - 没越线时一个字节不动（返回同一个数组）；
  *  - 越线折叠之后，下一步重放到同一个位置，得到同样的折叠结果，已折叠的部分逐字节不变，新的一步只在末尾添加；
  *  - 不靠任何实例里的状态：一轮被服务器分成几次运行、或者下一轮从存起来的完整历史重新开始，重放出的折叠
@@ -28,6 +30,25 @@ export const FOLD_AT = 0.7;
 export const FOLD_KEEP_STEPS = 4;
 /** 折完之后要再涨这么多窗口，才折下一批：把「每步折一条」合成一批一批。 */
 export const FOLD_REGROW = 0.15;
+/**
+ * 绝对预算生效时，折完要再涨这么多预算才折下一批。窗口很大时 {@link FOLD_REGROW} 乘窗口是一个巨大的数，等于
+ * 折一次就不再折了；按预算的比例算，才是一批一批地折，而不是每步改一点前缀、把提供方的缓存前缀每步都废掉。
+ */
+export const FOLD_REGROW_OF_BUDGET = 0.25;
+/**
+ * 一轮的绝对预算（估算的 token）：不管窗口多大，估算超过它就折叠。窗口比例管不住大窗口：DeepSeek 的窗口是 1M，
+ * 70% 是 70 万，一道调研题发到 13 万一步也没越线（评测 run 44517530843：19 步共输入 247 万，Codex 同题 34 万）。
+ *
+ * 取 64K：折完之后的下限约 3～4 万（固定开销 6K、最近 4 步每步最多一个 16KB 的结果约 5K、较早的摘要每条约 0.5K），
+ * 预算要明显高于这个下限，否则折完立刻又越线；再加上 {@link FOLD_REGROW_OF_BUDGET}（1.6 万），两次折叠之间隔着几步，
+ * 缓存前缀一批才废一次。离线复算调研题的 19 步（每步一个 16KB 的网页），48K 和 64K 折后的总输入分别约 66 万和 75 万、
+ * 缓存失效各 2 次和 1 次，按缓存命中一成价估，两者的总成本几乎一样；取 64K，少折、少丢信息，也碰不到平均每步只有
+ * 一两万的写文档、改代码、数据处理、办公题，它们的行为不变。部署用环境变量 `XIONGBAO_TURN_FOLD_BUDGET_TOKENS` 覆盖，
+ * 0 表示关掉绝对预算（只按窗口比例）。
+ */
+export const FOLD_BUDGET_TOKENS = 64_000;
+/** 覆盖 {@link FOLD_BUDGET_TOKENS} 的环境变量。 */
+export const FOLD_BUDGET_ENV = "XIONGBAO_TURN_FOLD_BUDGET_TOKENS";
 /** 短于这么多字的结果不折：折了省不了几个 token，摘要还会比它长。 */
 export const FOLD_MIN_CHARS = 1_500;
 /** 读不到模型窗口时按这个算：目前常见模型里偏小的一档（128k），宁可早折也不撑爆。 */
@@ -36,6 +57,16 @@ export const DEFAULT_CONTEXT_WINDOW = 128_000;
 export const FIXED_PROMPT_TOKENS = 6_000;
 /** 一张图或一个文件算多少 token，不按它的 base64 长度算。 */
 const MEDIA_TOKENS = 1_500;
+
+/**
+ * 读环境变量里的绝对预算：没设、空、不是数字、负数都当没设（用默认值），`0` 表示关掉绝对预算，其余取整。
+ */
+export function foldBudgetFrom(raw: string | undefined): number | undefined {
+  const text = raw?.trim();
+  if (!text) return undefined;
+  const value = Number(text);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : undefined;
+}
 
 /** 折叠摘要的开头；已经是摘要的结果不再折。 */
 export const FOLDED_PREFIX = "[已折叠：";
@@ -161,7 +192,9 @@ function gistOf(text: string): string {
 export function foldedSummary(toolName: string, text: string): string {
   const saved = /tool-outputs\/[\w.-]+\.txt/.exec(text)?.[0];
   return `${FOLDED_PREFIX}${toolName} 工具输出 ${text.length} 字，要点：${gistOf(text)}。${
-    saved ? `完整内容存在 ${saved}，` : ""
+    saved
+      ? `完整内容存在 ${saved}，需要细节时用 computer_read_file 按行段读，`
+      : ""
   }原文不在上下文里了，需要时重新调用工具，或按行段读取。]`;
 }
 
@@ -181,14 +214,22 @@ export type FoldOptions = {
   window: number;
   threshold?: number;
   keepSteps?: number;
+  /** 绝对预算（token）：默认 {@link FOLD_BUDGET_TOKENS}；0 关掉，只按窗口比例。 */
+  budget?: number;
 };
 
 /**
- * 越过窗口的 70% 时折叠较早的工具结果；没有要折的时候原样返回同一个数组。见文件头的说明：从头重放，只看前缀。
+ * 越过 `min(窗口 × 70%, 绝对预算)` 时折叠较早的工具结果；没有要折的时候原样返回同一个数组。见文件头的说明：
+ * 从头重放，只看前缀。
  */
 export function foldEarlyResults(
   prompt: Prompt,
-  { window, threshold = FOLD_AT, keepSteps = FOLD_KEEP_STEPS }: FoldOptions,
+  {
+    window,
+    threshold = FOLD_AT,
+    keepSteps = FOLD_KEEP_STEPS,
+    budget = FOLD_BUDGET_TOKENS,
+  }: FoldOptions,
 ): Prompt {
   // 每个工具调用属于第几个带工具调用的回合。
   const roundOfCall = new Map<string, number>();
@@ -239,8 +280,13 @@ export function foldEarlyResults(
     return tokensOfMessage(message);
   });
 
-  const limit = threshold * window;
-  const regrow = FOLD_REGROW * window;
+  const capped = budget > 0;
+  const limit = capped
+    ? Math.min(threshold * window, budget)
+    : threshold * window;
+  const regrow = capped
+    ? Math.min(FOLD_REGROW * window, FOLD_REGROW_OF_BUDGET * budget)
+    : FOLD_REGROW * window;
   const folded = new Set<Result>();
   let running = FIXED_PROMPT_TOKENS;
   let lastAfter = Number.NEGATIVE_INFINITY;
