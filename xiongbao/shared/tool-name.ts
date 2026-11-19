@@ -542,10 +542,10 @@ type OwnTool = {
    */
   attempted?: string;
   /**
-   * The argument naming what the step acted on, said beside its words: a file's path, a search's
-   * words (quoted, 「…」), a page's address.
+   * The argument naming what the step acted on, said beside its words: a file's path, what a search
+   * looked for (a file pattern; a web search's words, quoted 「…」), a page's address.
    */
-  subject?: "path" | "query" | "url";
+  subject?: "path" | "pattern" | "query" | "url";
   /**
    * What it was given and what it answered were both written for the model (a tool search's query
    * and limit), so its step in a folded group says what it did and does not open.
@@ -787,6 +787,25 @@ const OWN_TOOLS: Record<string, OwnTool> = {
     running: "正在执行命令",
     done: "执行了命令",
     attempted: "执行命令",
+  },
+  // The coding tools (期五): a passage of a file replaced, a content search, a search by name.
+  computer_edit_file: {
+    running: "正在修改文件",
+    done: "修改了文件",
+    attempted: "修改文件",
+    subject: "path",
+  },
+  computer_grep: {
+    running: "正在搜索文件内容",
+    done: "搜索了文件内容",
+    attempted: "搜索文件内容",
+    subject: "pattern",
+  },
+  computer_glob: {
+    running: "正在按名称查找文件",
+    done: "按名称查找了文件",
+    attempted: "按名称查找文件",
+    subject: "pattern",
   },
   host_list_folders: {
     running: "正在查看你的文件夹",

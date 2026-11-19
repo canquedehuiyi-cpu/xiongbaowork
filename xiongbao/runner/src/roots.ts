@@ -67,12 +67,14 @@ export type RegisteredRoot = {
 };
 
 /** One root, opened: the workspace's confinement over its folder, and what may be done there. */
-export type OpenRoot = Pick<Workspace, "list" | "read"> & {
+export type OpenRoot = Pick<Workspace, "list" | "read" | "grep" | "glob"> & {
   mode: RootMode;
   /** The folder on this machine. Used to run a command there; never sent anywhere. */
   path: string;
   /** Only on a `write` root. */
   write?: Workspace["write"];
+  /** Only on a `write` root: one passage of a file replaced, written back through `write` (期五). */
+  edit?: Workspace["edit"];
 };
 
 /** A refusal a person can act on. Chinese, because the device app shows it as it stands. */
@@ -343,17 +345,23 @@ export function createRootRegistry(options: {
       // The same confinement and the same per-read limits as the workspace. A `read` root has no
       // `write` at all, so no caller can reach one by mistake.
       const workspace = createWorkspace(root.path);
+      // Searching by content or name is reading, so a `read` root has both (期五).
       return root.mode === "write"
         ? {
             list: workspace.list,
             read: workspace.read,
+            grep: workspace.grep,
+            glob: workspace.glob,
             write: workspace.write,
+            edit: workspace.edit,
             mode: "write",
             path: root.path,
           }
         : {
             list: workspace.list,
             read: workspace.read,
+            grep: workspace.grep,
+            glob: workspace.glob,
             mode: "read",
             path: root.path,
           };

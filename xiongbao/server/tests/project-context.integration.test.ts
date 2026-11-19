@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -31,7 +32,11 @@ import {
 } from "../src/db/schema";
 import { createDeviceChannel } from "../src/devices/channel";
 import { createDeviceStore, reportedRoots } from "../src/devices/store";
-import { createProjectContext, projectGuidance } from "../src/projects/context";
+import {
+  createProjectContext,
+  projectGuidance,
+  runnerProjectFileReader,
+} from "../src/projects/context";
 import { createProjectStore } from "../src/projects/store";
 import { runAsTenant } from "../src/tenant/context";
 import { untrustedNotice } from "../src/untrusted-content";
@@ -503,6 +508,131 @@ describe("acceptance 4: the prompt", () => {
     expect(section).not.toContain(scratch);
     await store.remove(person, project.id);
     await projects.forPrompt(botY, study.target);
+    await runAsTenant(person, () =>
+      database
+        .delete(resourceProjects)
+        .where(eq(resourceProjects.tenantId, person)),
+    );
+  });
+});
+
+/*
+ * 期五 A2: the project's own AGENTS.md (or CLAUDE.md) goes into the prompt, read from the project's
+ * root on the machine through the deployment's own reader (`runnerProjectFileReader`): the real
+ * device channel carrying a real `files.read` to the runner executor, for a local folder and for a
+ * Git clone alike.
+ */
+describe("期五: the project's AGENTS.md or CLAUDE.md", () => {
+  /** A context that reads instructions from `on` over a real channel, as index.ts wires it. */
+  function readingContext(on: Machine) {
+    const channel = createDeviceChannel();
+    channel.attach(on.target, {
+      send(raw) {
+        const frame = JSON.parse(raw);
+        if (frame.type !== "action") return;
+        void on
+          .execute(frame)
+          .then((outcome) =>
+            channel.settle(on.target, { id: frame.id, ...outcome }),
+          );
+      },
+    });
+    return createProjectContext(database, {
+      readFile: runnerProjectFileReader(channel),
+    });
+  }
+
+  test("a local folder's AGENTS.md is in the prompt, inside the envelope; a long one is cut at 8 KB; none is no section and no error", async () => {
+    const context = readingContext(study);
+    await bound(study, botX, { name: "订单服务" });
+
+    // No file at the root: the section it always was, and nothing thrown.
+    const plain = await context.forPrompt(botX, study.target);
+    expect(plain).toMatchObject({ name: "订单服务", writable: true });
+    expect(plain).not.toHaveProperty("instructions");
+    expect(projectGuidance(plain)).not.toContain("untrusted_data");
+
+    writeFileSync(join(study.code, "CLAUDE.md"), "用 pnpm，不用 npm。\n");
+    const fallback = await context.forPrompt(botX, study.target);
+    expect(fallback?.instructions).toMatchObject({ file: "CLAUDE.md" });
+
+    writeFileSync(
+      join(study.code, "AGENTS.md"),
+      "# 约定\n构建：bun run build\n测试：bun test\n",
+    );
+    const told = await context.forPrompt(botX, study.target);
+    expect(told?.instructions).toEqual({
+      file: "AGENTS.md",
+      text: "# 约定\n构建：bun run build\n测试：bun test\n",
+      truncated: false,
+    });
+    const section = projectGuidance(told) as string;
+    expect(section).toContain(untrustedNotice("project AGENTS.md content"));
+    expect(section).toContain("测试：bun test");
+    expect(section.indexOf("测试：bun test")).toBeGreaterThan(
+      section.indexOf('<untrusted_data source="project AGENTS.md">'),
+    );
+    for (const path of [study.code, scratch])
+      expect(section).not.toContain(path);
+
+    writeFileSync(join(study.code, "AGENTS.md"), "长".repeat(4000));
+    const long = await context.forPrompt(botX, study.target);
+    expect(long?.instructions?.truncated).toBe(true);
+    expect(
+      Buffer.byteLength(long?.instructions?.text ?? "", "utf8"),
+    ).toBeLessThanOrEqual(8 * 1024);
+    expect(projectGuidance(long)).toContain("cut at 8 KB");
+
+    // A machine that is not connected: no instructions, the project still named, nothing thrown.
+    const offline = createProjectContext(database, {
+      readFile: runnerProjectFileReader(createDeviceChannel()),
+    });
+    const away = await offline.forPrompt(botX, study.target);
+    expect(away).toMatchObject({ name: "订单服务", writable: true });
+    expect(away).not.toHaveProperty("instructions");
+
+    rmSync(join(study.code, "AGENTS.md"));
+    rmSync(join(study.code, "CLAUDE.md"));
+    await clear(botX);
+  });
+
+  test("a Git clone's CLAUDE.md is read from the clone's root", async () => {
+    const ref = study.registry.mintCloneRef();
+    mkdirSync(study.registry.clonePath(ref), { recursive: true });
+    writeFileSync(
+      join(study.registry.clonePath(ref), "CLAUDE.md"),
+      "提交前跑 make check。\n",
+    );
+    study.registry.registerClone(ref, "site");
+    await study.report();
+    const project = await store.create(person, {
+      deviceId: study.id,
+      scope: "public",
+      agentId: null,
+      name: "官网",
+      description: "前端",
+      source: {
+        kind: "git",
+        url: "https://git.example.test/web/site.git",
+        branch: "main",
+        writable: true,
+      },
+    });
+    await store.recordSync(person, project.id, {
+      rootRef: ref,
+      commit: "0123456789abcdef0123456789abcdef01234567",
+    });
+    await store.choose(person, study.id, botY, project.id);
+    const told = await readingContext(study).forPrompt(botY, study.target);
+    expect(told?.instructions).toEqual({
+      file: "CLAUDE.md",
+      text: "提交前跑 make check。\n",
+      truncated: false,
+    });
+    expect(projectGuidance(told)).toContain(
+      untrustedNotice("project CLAUDE.md content"),
+    );
+    await store.remove(person, project.id);
     await runAsTenant(person, () =>
       database
         .delete(resourceProjects)

@@ -26,10 +26,21 @@ import type {
   RequestHelpInput,
   RequestHelpSource,
 } from "@openbot/shared/computer-control";
+// --- desktop control (sub-project 2) ---
+import {
+  type DesktopSnapshot,
+  type DesktopWindow,
+  desktopActionWordsOf,
+  snapshotForStorage,
+} from "@openbot/shared/desktop-control";
 import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 // --- app discovery (sub-project 3) ---
 import { APP_ENABLE_TOOL, canonicalKeyName } from "../approvals/policy";
+import {
+  approvedActionUnderway,
+  isApprovedExecution,
+} from "../approvals/service";
 import {
   ApprovalAlreadyAnsweredError,
   type ApprovalCandidate,
@@ -51,6 +62,7 @@ import {
   runnerAddress,
 } from "../devices/channel";
 import { DeviceDeliveryError } from "../devices/queue";
+import type { DesktopStoppedInfo } from "../devices/socket";
 import {
   DEVICE_HUMAN_HAS_CONTROL,
   type DeviceTakeovers,
@@ -85,18 +97,17 @@ import {
   type SeatAddress,
   StaleSnapshotError,
 } from "./client";
-// --- desktop control (sub-project 2) ---
+// --- end desktop control ---
 import {
-  type DesktopSnapshot,
-  type DesktopWindow,
-  desktopActionWordsOf,
-  snapshotForStorage,
-} from "@openbot/shared/desktop-control";
-import {
-  approvedActionUnderway,
-  isApprovedExecution,
-} from "../approvals/service";
-import type { DesktopStoppedInfo } from "../devices/socket";
+  botSeat,
+  type ComputerKey,
+  type ComputerSeat,
+  type ComputerSeatResolver,
+  computerKeyText,
+  personSeat,
+  seatText,
+} from "./computer-key";
+import { computerTokenOf } from "./computer-token";
 import {
   createDesktopMethods,
   type DesktopGovern,
@@ -120,17 +131,6 @@ import {
   type DesktopWriteRow,
   type DesktopWriteSubject,
 } from "./desktop-write";
-// --- end desktop control ---
-import {
-  botSeat,
-  type ComputerKey,
-  type ComputerSeat,
-  type ComputerSeatResolver,
-  computerKeyText,
-  personSeat,
-  seatText,
-} from "./computer-key";
-import { computerTokenOf } from "./computer-token";
 import { checkComputerAddress } from "./target";
 
 export {
@@ -167,6 +167,12 @@ import type {
   ComputerStatus,
   ControlState,
   DownloadFileInput,
+  EditFileInput,
+  EditFileResult,
+  GlobInput,
+  GlobResult,
+  GrepInput,
+  GrepResult,
   HumanInput,
   HumanInputResult,
   KeyInput,
@@ -516,6 +522,24 @@ export interface ComputerGateway {
     actor: ActionActor,
     input: WriteFileInput,
   ): Promise<WriteFileResult>;
+  /** One passage of a file replaced (期五), on the write's terms: governed, asked, refused read-only. */
+  editFile(
+    seat: ComputerSeat,
+    actor: ActionActor,
+    input: EditFileInput,
+  ): Promise<EditFileResult>;
+  /** A content search (期五), on the read's terms. */
+  grep(
+    seat: ComputerSeat,
+    actor: ActionActor,
+    input: GrepInput,
+  ): Promise<GrepResult>;
+  /** A search by name (期五), on the listing's terms. */
+  glob(
+    seat: ComputerSeat,
+    actor: ActionActor,
+    input: GlobInput,
+  ): Promise<GlobResult>;
   /*
    * The local apps and the desktop below are a per-Bot option on top of seats: they exist only on the
    * Bot owner's own paired machine, which `resolveDevice` finds by the Bot, so they are still asked
@@ -1946,7 +1970,14 @@ export function createComputerGateway(
     seat: ComputerSeat,
     actor: ActionActor,
     project: NonNullable<Awaited<ReturnType<typeof projectOf>>>,
-    route: "/files/read" | "/files/list" | "/files/write" | "/exec",
+    route:
+      | "/files/read"
+      | "/files/list"
+      | "/files/write"
+      | "/files/edit"
+      | "/files/grep"
+      | "/files/glob"
+      | "/exec",
     payload: object,
     subject: { filePath?: string; command?: string; signal?: AbortSignal },
     writes: boolean,
@@ -2216,7 +2247,14 @@ export function createComputerGateway(
     );
   }
   function desktopPost<T>(
-    ...[botId, path, payload, signal, timeoutMs, address]: Parameters<DesktopPost>
+    ...[
+      botId,
+      path,
+      payload,
+      signal,
+      timeoutMs,
+      address,
+    ]: Parameters<DesktopPost>
   ): Promise<T> {
     const machine = parseRunnerAddress(address);
     const send = () =>
@@ -3116,6 +3154,90 @@ export function createComputerGateway(
     },
 
     /**
+     * One passage of a file replaced (期五): the write's rules exactly. The same intent
+     * (`write_file`), so a policy about saving files covers it; asked about as a change; refused in a
+     * read-only project before the machine is asked. The answer says how many passages changed, or
+     * why none did, and never repeats the text.
+     */
+    async editFile(
+      seat: ComputerSeat,
+      actor: ActionActor,
+      input: EditFileInput,
+    ) {
+      const project = await projectOf(seat);
+      if (project) {
+        return inProject<EditFileResult>(
+          "computer_edit_file",
+          seat,
+          actor,
+          project,
+          "/files/edit",
+          input,
+          { filePath: input.path },
+          true,
+        );
+      }
+      return govern(
+        "computer_edit_file",
+        seat,
+        actor,
+        { filePath: input.path },
+        () => post<EditFileResult>(seat, "/files/edit", input),
+      );
+    },
+
+    /**
+     * A content search (期五): the read's rules (`read_file`). What it finds is file contents, so it
+     * comes back marked as outside content. A read-only project may be searched.
+     */
+    async grep(seat: ComputerSeat, actor: ActionActor, input: GrepInput) {
+      const project = await projectOf(seat);
+      if (project) {
+        return inProject<GrepResult>(
+          "computer_grep",
+          seat,
+          actor,
+          project,
+          "/files/grep",
+          input,
+          { filePath: input.path ?? "." },
+          false,
+        ).then((result) => markedSearch(result, "project file"));
+      }
+      return govern(
+        "computer_grep",
+        seat,
+        actor,
+        { filePath: input.path ?? "." },
+        () => post<GrepResult>(seat, "/files/grep", input),
+      ).then((result) => markedSearch(result, "workspace file"));
+    },
+
+    /** A search by name (期五): the listing's rules (`list_files`). A read-only project may be searched. */
+    async glob(seat: ComputerSeat, actor: ActionActor, input: GlobInput) {
+      const project = await projectOf(seat);
+      if (project) {
+        return inProject<GlobResult>(
+          "computer_glob",
+          seat,
+          actor,
+          project,
+          "/files/glob",
+          input,
+          { filePath: input.path ?? "." },
+          false,
+        );
+      }
+      return govern(
+        "computer_glob",
+        seat,
+        actor,
+        { filePath: input.path ?? "." },
+        () => post<GlobResult>(seat, "/files/glob", input),
+      );
+    },
+
+    /**
      * The owner's local apps on their paired machine, by name, each with the tools its machine lists
      * now (device MCP bridge §3.4). A read: governed and recorded, never asked about. An app whose
      * tools cannot be listed says why in its own entry and does not fail the others.
@@ -3642,14 +3764,19 @@ export function intentOf(
     case "computer_scroll":
       return "read";
     case "computer_read_file":
+    case "computer_grep":
       return "read_file";
     case "computer_download_file":
       return "download_file";
+    // The coding tools reach the policy as the write, the read and the listing they stand beside
+    // (期五), so a rule about saving, reading or listing files covers them without being rewritten.
     case "computer_write_file":
+    case "computer_edit_file":
       return "write_file";
     case "computer_run_command":
       return "run_command";
     case "computer_list_files":
+    case "computer_glob":
       return "list_files";
     // Listing a machine's local apps changes nothing; calling one of their tools runs a program there.
     case "computer_apps":
@@ -3987,4 +4114,11 @@ export function hostOf(url: string): string {
   } catch {
     return "";
   }
+}
+
+/** A search's matches are file contents, so they are marked as outside content; a refusal is not. */
+function markedSearch(result: GrepResult, source: string): GrepResult {
+  return "text" in result
+    ? withUntrustedNotice(result, source, ["text"])
+    : result;
 }

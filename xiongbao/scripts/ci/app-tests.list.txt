@@ -208,6 +208,7 @@ tests/code-highlighting-lazy.test.ts
 tests/code-highlighting.test.tsx
 tests/coding-calls.test.ts
 tests/coding-tool-cards.test.tsx
+tests/coding-tools.test.tsx
 tests/component-display-title.test.ts
 tests/component-preview.test.tsx
 tests/component-reply-notice.test.tsx
@@ -562,6 +563,8 @@ tests/team-settings.test.tsx
 tests/terminal-block.test.tsx
 tests/test-printing.test.tsx
 tests/theme-preference.test.ts
+tests/thinking-block.test.tsx
+tests/thinking-toggle.test.tsx
 tests/this-computer-back-end.test.tsx
 tests/this-computer-check-for-updates.test.tsx
 tests/this-computer-log-folder.test.tsx

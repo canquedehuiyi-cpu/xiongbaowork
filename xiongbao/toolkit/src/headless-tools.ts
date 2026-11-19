@@ -13,6 +13,7 @@ import { OPENBOT_WAITING_METADATA } from "@openbot/shared/waiting";
 import { Observable, type Subscription } from "rxjs";
 import { withApprovalContext } from "./continuation";
 import type { AuditInitiator } from "./initiator";
+import { TURN_LIMITS } from "./limits";
 
 /**
  * What a person reads when a Bot's stream ends with neither an answer nor an error.
@@ -63,18 +64,24 @@ export class HeadlessToolSuspension extends Error {
   }
 }
 
-const MAX_TOOL_SEGMENTS = 30;
+/** The light turn's ceiling, unless the turn says otherwise (`TURN_LIMITS.toolSegments`). */
+const MAX_TOOL_SEGMENTS = TURN_LIMITS.toolSegments;
 
 /**
  * Executes AG-UI client tools inside the Intelligence run. Backend results are
  * forwarded unchanged; only newly emitted unanswered calls can be executed.
  */
 export class HeadlessToolsMiddleware extends Middleware {
+  private readonly maxSegments: number;
+
   constructor(
     private readonly tools: HeadlessTool[],
     private readonly initiator?: AuditInitiator,
+    /** `maxSegments`: how many rounds of these tools one turn may take; 30 when not said (期五). */
+    options: { maxSegments?: number } = {},
   ) {
     super();
+    this.maxSegments = options.maxSegments ?? MAX_TOOL_SEGMENTS;
     const names = tools.map((tool) => tool.definition.name);
     if (new Set(names).size !== names.length)
       throw new Error("Headless tool names must be unique.");
@@ -108,7 +115,7 @@ export class HeadlessToolsMiddleware extends Middleware {
               .map((tool) => tool.definition),
           ],
         };
-        for (let segment = 0; segment <= MAX_TOOL_SEGMENTS; segment += 1) {
+        for (let segment = 0; segment <= this.maxSegments; segment += 1) {
           if (subscriber.closed) return;
           const historical = new Set(
             request.messages.flatMap((message) =>
@@ -187,7 +194,7 @@ export class HeadlessToolsMiddleware extends Middleware {
             subscriber.next(terminal);
             return;
           }
-          if (segment === MAX_TOOL_SEGMENTS)
+          if (segment === this.maxSegments)
             throw new Error(
               "The headless tool continuation limit was reached.",
             );

@@ -235,6 +235,8 @@ tests/channel-summary.integration.test.ts
 tests/channel-titler.test.ts
 tests/channel-work.integration.test.ts
 tests/check-in-offer.test.ts
+tests/coding-tools.test.ts
+tests/command-timeout.test.ts
 tests/comments-say-the-reason.test.ts
 tests/compaction.integration.test.ts
 tests/compaction.test.ts
@@ -370,6 +372,7 @@ tests/device-takeover.test.ts
 tests/devices.test.ts
 tests/dictation-provider.test.ts
 tests/dictation-routes.test.ts
+tests/dockerfile-coding-tools.test.ts
 tests/dockerfile-runtime-tree.test.ts
 tests/due-time.test.ts
 tests/duplicate-run.test.ts
@@ -871,6 +874,7 @@ tests/update-route-wechat-opt-in.test.ts
 tests/user-instructions.integration.test.ts
 tests/user-preferences-routes.test.ts
 tests/user-preferences.integration.test.ts
+tests/verify-section.test.ts
 tests/voice-provider.test.ts
 tests/voice-routes.test.ts
 tests/voice-session-preview.integration.test.ts
