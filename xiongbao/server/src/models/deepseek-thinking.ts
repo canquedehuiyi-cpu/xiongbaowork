@@ -161,12 +161,41 @@ function finishReasonV3(reason: CompatibleGenerate["finishReason"]) {
   return { unified: reason === "unknown" ? "other" : reason, raw: undefined };
 }
 
-function usageV3(usage: CompatibleGenerate["usage"]) {
+/** DeepSeek 在 usage 里报的缓存命中 / 未命中的输入 token 数（别的提供方没有这两个字段）。 */
+type CacheCounts = { hit?: number; miss?: number };
+
+function tokenCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : undefined;
+}
+
+/**
+ * 从响应体（或一个流式块）的 `usage` 读 DeepSeek 的缓存字段。`@ai-sdk/openai-compatible` 只认
+ * `prompt_tokens_details.cached_tokens`，DeepSeek 报的是 `prompt_cache_hit_tokens` /
+ * `prompt_cache_miss_tokens`，不读的话计量里的缓存命中恒为 0。
+ */
+function cacheCountsOf(raw: unknown): CacheCounts | undefined {
+  const usage =
+    typeof raw === "object" && raw !== null
+      ? (raw as { usage?: unknown }).usage
+      : undefined;
+  if (typeof usage !== "object" || usage === null) return undefined;
+  const hit = tokenCount(
+    (usage as Record<string, unknown>).prompt_cache_hit_tokens,
+  );
+  const miss = tokenCount(
+    (usage as Record<string, unknown>).prompt_cache_miss_tokens,
+  );
+  return hit === undefined && miss === undefined ? undefined : { hit, miss };
+}
+
+function usageV3(usage: CompatibleGenerate["usage"], cache?: CacheCounts) {
   return {
     inputTokens: {
       total: usage.inputTokens,
-      noCache: undefined,
-      cacheRead: usage.cachedInputTokens,
+      noCache: cache?.miss,
+      cacheRead: cache?.hit ?? usage.cachedInputTokens,
       cacheWrite: undefined,
     },
     outputTokens: {
@@ -195,22 +224,35 @@ function asV3(model: CompatibleModel): LanguageModel {
       return {
         ...result,
         finishReason: finishReasonV3(result.finishReason),
-        usage: usageV3(result.usage),
+        usage: usageV3(result.usage, cacheCountsOf(result.response?.body)),
       };
     },
     async doStream(options: CompatibleCall) {
-      const result = await model.doStream(withEffortCarried(options));
+      /*
+       * 缓存字段只在原始块里，所以一律要原始块，调用方没要的再丢掉。用量块在结束事件之前到，
+       * 结束时按最后一个带缓存字段的块报。
+       */
+      const result = await model.doStream({
+        ...withEffortCarried(options),
+        includeRawChunks: true,
+      });
+      let cache: CacheCounts | undefined;
       return {
         ...result,
         stream: result.stream.pipeThrough(
           new TransformStream({
             transform(part, controller) {
+              if (part.type === "raw") {
+                cache = cacheCountsOf(part.rawValue) ?? cache;
+                if (options.includeRawChunks) controller.enqueue(part);
+                return;
+              }
               controller.enqueue(
                 part.type === "finish"
                   ? {
                       ...part,
                       finishReason: finishReasonV3(part.finishReason),
-                      usage: usageV3(part.usage),
+                      usage: usageV3(part.usage, cache),
                     }
                   : part,
               );

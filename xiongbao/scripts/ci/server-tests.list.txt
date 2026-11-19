@@ -325,6 +325,7 @@ tests/database-pool-closing.test.ts
 tests/database.test.ts
 tests/db-client-address.test.ts
 tests/decision-waits.integration.test.ts
+tests/deepseek-cache-usage.test.ts
 tests/deepseek-thinking-run.test.ts
 tests/deepseek-thinking.integration.test.ts
 tests/deepseek-thinking.test.ts
@@ -742,6 +743,8 @@ tests/routing-model-url.test.ts
 tests/routing-routes.test.ts
 tests/routing-service.test.ts
 tests/run-built-agent-cancellation.test.ts
+tests/run-event-compaction.test.ts
+tests/run-events-persist.integration.test.ts
 tests/run-mode.test.ts
 tests/run-model-built-in.test.ts
 tests/run-model.test.ts
