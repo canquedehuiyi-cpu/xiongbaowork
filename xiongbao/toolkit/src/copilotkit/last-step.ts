@@ -53,12 +53,14 @@ export function startRun(steps: RunSteps, parts: readonly string[] = []) {
 /**
  * How many times in a row a run is sent back to work before it is let go.
  *
- * Two, and counted again from nothing whenever the run calls a tool: the shape of Claude Code's Stop
- * hook cap (consecutive continuations, reset on a tool call). A model that ends on a promise twice
- * in a row after being told is not going to keep it on the third, and the run should end with what
- * it has rather than spend more.
+ * Counted again from nothing whenever the run calls a tool: the shape of Claude Code's Stop hook cap
+ * (consecutive continuations, reset on a tool call). It was two; DeepSeek, told once, often opens
+ * the next answer with another announcement (「好的，让我先…」) and only then calls the tool, so two
+ * let go runs that were about to work. Four, decided with the person who runs it (2026-11-19). A
+ * model still ending on a promise after four is not going to keep it, and the run should end with
+ * what it has rather than spend more.
  */
-export const MOST_NUDGES = 2;
+export const MOST_NUDGES = 4;
 
 /**
  * The step budget of a run nobody is watching: a routine's firing, or a check-in.

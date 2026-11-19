@@ -6,7 +6,7 @@ import {
 } from "@copilotkit/runtime/v2";
 import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
 import { parametersFor } from "../src/granted-tool";
-import { answersOnLastStep } from "../src/copilotkit/last-step";
+import { answersOnLastStep, MOST_NUDGES } from "../src/copilotkit/last-step";
 
 /**
  * A run stops after `maxSteps` model steps. A Bot that searched once per step spent all of them on
@@ -207,5 +207,11 @@ describe("a run's last step", () => {
     expect(agent.modelHostClass).toBe(
       new BuiltInAgent(named as BuiltInAgentConfiguration).modelHostClass,
     );
+  });
+});
+
+describe("the nudges a run gets in a row", () => {
+  test("are four", () => {
+    expect(MOST_NUDGES).toBe(4);
   });
 });

@@ -18,7 +18,8 @@ import type { RuntimeModel } from "../src/copilot";
  * It had eight steps, the eighth was sent with its tools switched off and nothing saying so, and the
  * run ended "I'll fetch the rest now" with no call after it. So a run's last step now says tools are
  * off and to answer from what it has; a run that ends on a promise, or with a routine's part still
- * open, is sent back to work, at most twice in a row; and a routine gets a step budget for the work.
+ * open, is sent back to work, at most four times in a row (it was two); and a routine gets a step
+ * budget for the work.
  *
  * Driven through the path a run takes: the Bot built by the actor resolver (the server's
  * `buildAgents`), its granted tool executed by the AI SDK, the model a real OpenAI-compatible HTTP
@@ -269,12 +270,12 @@ describe("a run that ends on a promise", () => {
     expect(said).toContain("Both issues are in Todo");
   });
 
-  test("is sent back at most twice in a row, then the run ends", async () => {
+  test("is sent back at most four times in a row, then the run ends", async () => {
     modelAnswers(() => ({ content: "I'll fetch the rest now." }));
 
     const messages = await chat("Check ENG-1 and ENG-2.");
 
-    expect(asked).toHaveLength(1 + 2);
+    expect(asked).toHaveLength(1 + 4);
     expect(lookups).toEqual([]);
     // Each ask's words are set apart from the last, not run together into one sentence.
     const said = messages
@@ -288,13 +289,15 @@ describe("a run that ends on a promise", () => {
   });
 
   test("is counted again from nothing after a tool call", async () => {
-    // Promise, nudge, call; then promise, nudge, promise, nudge, promise: let go.
+    // Promise, nudge, call; then promise and nudge four times over, then a promise: let go.
     const script = [
       { content: "Let me look that up." },
       toolCall("ENG-1", 1),
       { content: "Got ENG-1. Next I'll pull ENG-2." },
       { content: "Pulling ENG-2 now." },
       { content: "I will fetch ENG-2 now." },
+      { content: "Fetching ENG-2 now." },
+      { content: "I'll pull ENG-2 now." },
     ];
     modelAnswers((_request, index) => script[index] ?? { content: "?" });
 
@@ -305,7 +308,7 @@ describe("a run that ends on a promise", () => {
     const nudged = asked.filter((request) =>
       JSON.stringify(lastMessage(request)).includes("made no tool call"),
     );
-    expect(nudged).toHaveLength(3);
+    expect(nudged).toHaveLength(1 + 4);
   });
 
   test("a question to the person is theirs to answer, and is not sent back", async () => {
