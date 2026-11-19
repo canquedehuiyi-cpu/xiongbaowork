@@ -36,6 +36,7 @@ import { SYSTEM_TENANT, TEAM_TENANT } from "../src/db/schema/tenant";
 import { MINIMUM_INTERVAL_MS } from "../src/routines/schedule";
 import { createRoutineStore } from "../src/routines/store";
 import {
+  ABANDONED_RUN_MS,
   DEFAULT_GRACE_MS,
   dispatchClaimedRoutines,
   offerDueRoutines,
@@ -1512,7 +1513,7 @@ describe("consuming a claimed firing", () => {
       await asPlatform(() =>
         database
           .update(routineRuns)
-          .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
+          .set({ startedAt: new Date(Date.now() - ABANDONED_RUN_MS - 60_000) })
           .where(eq(routineRuns.id, leaked?.id as string)),
       );
 
@@ -1598,7 +1599,7 @@ describe("consuming a claimed firing", () => {
     await asPlatform(() =>
       database
         .update(routineRuns)
-        .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
+        .set({ startedAt: new Date(Date.now() - ABANDONED_RUN_MS - 60_000) })
         .where(eq(routineRuns.id, attempt?.id as string)),
     );
     const warnAgain = spyOn(console, "warn").mockImplementation(() => {});
@@ -1650,7 +1651,7 @@ describe("consuming a claimed firing", () => {
     await asPlatform(() =>
       database
         .update(routineRuns)
-        .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
+        .set({ startedAt: new Date(Date.now() - ABANDONED_RUN_MS - 60_000) })
         .where(eq(routineRuns.id, leaked?.id as string)),
     );
 
@@ -1785,11 +1786,11 @@ describe("consuming a claimed firing", () => {
       store.insertRun(routine.id),
     );
     // Aged past the reaper's cutoff (twice the server's five-minute turn timeout) by hand: the run
-    // was opened by a server that died eleven minutes ago.
+    // was opened by a server that died longer ago than ABANDONED_RUN_MS.
     await asPlatform(() =>
       database
         .update(routineRuns)
-        .set({ startedAt: new Date(Date.now() - 11 * 60_000) })
+        .set({ startedAt: new Date(Date.now() - ABANDONED_RUN_MS - 60_000) })
         .where(eq(routineRuns.id, runId)),
     );
 
