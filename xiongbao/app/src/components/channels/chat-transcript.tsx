@@ -25,6 +25,7 @@ import {
   IconChevronDown,
   IconClock,
   IconFile,
+  IconLoader2,
   IconX,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
@@ -480,11 +481,12 @@ function Thinking({
   const suffix = elapsedSuffix(elapsed, observed);
   return (
     <p
-      className="tool-line-running text-muted-foreground text-sm"
+      className="tool-line-running flex items-center gap-1.5 text-muted-foreground text-sm"
       // `status` rather than `alert`: this is progress, not something that interrupts what somebody
       // is doing. The text says it, so a screen reader is told the same thing the shimmer implies.
       role="status"
     >
+      <WorkingSpinner />
       {stage ?? "思考中"}
       {suffix ? (
         <span className="tabular-nums opacity-70">{` · ${suffix}`}</span>
@@ -524,6 +526,7 @@ function Typing({
       <span aria-hidden="true" className="shrink-0">
         <ChannelAvatar participantIds={[typist.agentId]} size={20} />
       </span>
+      <WorkingSpinner />
       <span>{`${typist.name} ${stage ?? "正在输入"}`}</span>
       {suffix ? (
         <span className="tabular-nums opacity-70">{` · ${suffix}`}</span>
@@ -543,6 +546,21 @@ function Typing({
 
 /** The three dots' delays, so they blink one after another. */
 const TYPING_DOTS = ["0s", "0.2s", "0.4s"] as const;
+
+/**
+ * 员工正在干活的旋转图标（期一），画在「思考中」/「<员工名> 正在输入」前面，群聊还在跑的那一行也用它。样式就是
+ * 正在跑的工具行那一个（`tool-line.tsx`）：tabler 的 `IconLoader2`，`motion-safe:` 才转，设了减少动画时静止，
+ * 静止时也看得出是加载图标。只是装饰，读屏读旁边那句话。
+ */
+export function WorkingSpinner() {
+  return (
+    <IconLoader2
+      aria-hidden="true"
+      className="size-[14px] shrink-0 text-muted-foreground motion-safe:animate-spin"
+      data-working-spinner=""
+    />
+  );
+}
 
 /**
  * The turn ended and no answer came.

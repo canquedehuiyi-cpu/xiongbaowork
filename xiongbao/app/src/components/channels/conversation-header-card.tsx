@@ -98,7 +98,8 @@ export function ConversationHeaderCard({
             className="flex min-w-0 items-center gap-1.5 text-[12px] text-muted-foreground"
             data-presence={known.status}
           >
-            <StatusDot decorative status={known.status} />
+            {/* 忙碌时是旋转的加载图标（期一）：一眼看出员工正在干活。 */}
+            <StatusDot decorative spin status={known.status} />
             <span className="min-w-0 truncate" title={now}>
               {now}
             </span>
