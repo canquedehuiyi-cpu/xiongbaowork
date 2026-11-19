@@ -381,12 +381,14 @@ describe("web_fetch 的正文", () => {
     expect("saved_to" in answer).toBe(false);
   });
 
-  test("部署里根本没有电脑（没接存盘）：照旧，只按 max_chars 截", async () => {
+  test("部署里根本没有电脑（没接存盘）：同样截到阈值并说明（用户 2026-11-19 同意）", async () => {
     const answer = await fetchTool(lines(1_500))({
       url: "https://docs.example/long",
     });
-    expect(String(answer.content)).toHaveLength(20_000);
-    expect(String(answer.truncated)).toContain("前 20000 字");
+    const content = String(answer.content);
+    expect(content.startsWith(lineAt(1))).toBe(true);
+    expect(Buffer.byteLength(content)).toBeLessThanOrEqual(OUTPUT_INLINE_BYTES);
+    expect(String(answer.truncated)).toContain("已截断");
     expect("saved_to" in answer).toBe(false);
   });
 

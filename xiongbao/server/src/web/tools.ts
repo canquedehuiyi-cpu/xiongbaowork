@@ -489,6 +489,9 @@ async function renderWithService(
   return rendered;
 }
 
+/** 没有电脑时的存盘：什么也不存，交给截断。 */
+const noOutputSink: OutputSink = async () => undefined;
+
 /**
  * 正文交给模型的样子：不超过阈值（`tool-output.ts`）就按 `max_chars` 截；超过就存进工作区，回传头尾和路径，
  * 存不了（这位员工没有电脑、写不进去）就截断到阈值并说明。存的是全文，不是按 `max_chars` 截过的那份。
@@ -501,19 +504,17 @@ async function shapeBody(
 ): Promise<{ content: string; truncated?: string; savedTo?: string }> {
   const { text, truncated } = cut(markdown, maxChars);
   /*
-   * 没接存盘（部署里没有电脑）：照旧，只按 `max_chars`（默认 2 万字，至多 10 万字）截。接了存盘、而这位员工
-   * 用不了电脑（它回答空）时，走下面的截断：超过 16KB 就截到 16KB 并说明。
+   * 存不了盘（部署里没有电脑，或这位员工用不了电脑）时一律走下面的截断：超过 16KB 就截到 16KB 并说明
+   * （用户 2026-11-19 同意没有电脑的部署也降到 16KB）。
    */
-  const spilled = save
-    ? await spill({
-        tool: WEB_FETCH_TOOL,
-        id: callId,
-        full: markdown,
-        measured: text,
-        keep: "head",
-        sink: save,
-      })
-    : null;
+  const spilled = await spill({
+    tool: WEB_FETCH_TOOL,
+    id: callId,
+    full: markdown,
+    measured: text,
+    keep: "head",
+    sink: save ?? noOutputSink,
+  });
   if (!spilled)
     return {
       content: text,
