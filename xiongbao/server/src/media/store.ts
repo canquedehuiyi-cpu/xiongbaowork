@@ -4,10 +4,19 @@
  * In the caller's tenant frame, always: the tools save inside `runAsTenant(<the turn's person>)` and
  * the route reads inside the signed-in person's own frame (`requireUser`), so row security is what
  * keeps one person's pictures from another's. Nothing here takes a tenant argument to get wrong.
+ *
+ * A file made in a shared group carries that group's `channel_id` (migration 0231), and row security
+ * then lets everyone in the group read it and nobody else, the same test every group row uses.
  */
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { generatedMedia } from "../db/schema";
+import {
+  channelMemberships,
+  channels,
+  generatedMedia,
+  groupBotThreads,
+} from "../db/schema";
+import { TEAM_TENANT } from "../db/schema/tenant";
 
 export type MediaKind = "image" | "video";
 
@@ -26,6 +35,8 @@ export type MediaStore = {
     prompt: string;
     provider: string;
     model: string;
+    /** The shared group it is made in, so the group reads it; absent for a chat of one. */
+    channelId?: string;
   }): Promise<string>;
   /** The file, in the caller's frame; null for one that is not there or not theirs. */
   read(id: string): Promise<StoredMedia | null>;
@@ -51,6 +62,7 @@ export function createMediaStore(database: Database): MediaStore {
           prompt: file.prompt.slice(0, PROMPT_LIMIT),
           provider: file.provider,
           model: file.model,
+          ...(file.channelId ? { channelId: file.channelId } : {}),
         })
         .returning({ id: generatedMedia.id });
       if (!row) throw new Error("generated_media insert returned no row");
@@ -75,5 +87,42 @@ export function createMediaStore(database: Database): MediaStore {
         kind: row.kind as MediaKind,
       };
     },
+  };
+}
+
+/**
+ * The shared group a Bot's thread belongs to, for the person whose turn it is: asked in their own
+ * frame, answering only while they are still in the group. Null for a thread that is not a group's
+ * (a chat of one), a group that is not shared (only its maker is in it), or one they have left.
+ */
+export function mediaChannelOf(database: Database) {
+  return async (
+    ownerUserId: string,
+    agentId: string,
+    threadId: string,
+  ): Promise<string | null> => {
+    const [row] = await database
+      .select({ channelId: groupBotThreads.channelId })
+      .from(groupBotThreads)
+      .innerJoin(channels, eq(channels.id, groupBotThreads.channelId))
+      .innerJoin(
+        channelMemberships,
+        and(
+          eq(channelMemberships.channelId, groupBotThreads.channelId),
+          eq(channelMemberships.userId, ownerUserId),
+          eq(channelMemberships.tenantId, TEAM_TENANT),
+        ),
+      )
+      .where(
+        and(
+          eq(groupBotThreads.threadId, threadId),
+          eq(groupBotThreads.ownerUserId, ownerUserId),
+          eq(groupBotThreads.agentId, agentId),
+          eq(channels.tenantId, TEAM_TENANT),
+          isNull(channels.deletedAt),
+        ),
+      )
+      .limit(1);
+    return row?.channelId ?? null;
   };
 }

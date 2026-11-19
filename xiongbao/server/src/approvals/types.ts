@@ -4,6 +4,7 @@ import { approvalPhrase } from "@openbot/shared/tool-name";
 import {
   type ApprovalContinuation,
   currentApprovalContext,
+  outsideApprovalContext,
   withApprovalContext,
 } from "@openbot/toolkit/continuation";
 import type { ApprovalVia } from "../../../shared/approval-via";
@@ -193,6 +194,7 @@ export type ApprovalPolicyOutcome = {
 export {
   type ApprovalContinuation,
   currentApprovalContext,
+  outsideApprovalContext,
   withApprovalContext,
 };
 
