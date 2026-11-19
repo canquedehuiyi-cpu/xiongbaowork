@@ -142,6 +142,7 @@ const holdingResolver = createActorAgentResolver({
 function mount(
   chatServerTools?: ReturnType<typeof createChatServerTools>,
   withResolver = resolver,
+  streamKeepAliveMs?: number,
 ) {
   return mountCopilotRuntime(
     loadConfig(testEnvironment()),
@@ -151,6 +152,7 @@ function mount(
     {
       localRunner: new PostgresAgentRunner(database),
       ...(chatServerTools ? { chatServerTools } : {}),
+      ...(streamKeepAliveMs === undefined ? {} : { streamKeepAliveMs }),
     },
   );
 }
@@ -159,6 +161,7 @@ let notServing: ReturnType<typeof mount>;
 let shortClock: ReturnType<typeof mount>;
 let fewRounds: ReturnType<typeof mount>;
 let holding: ReturnType<typeof mount>;
+let beating: ReturnType<typeof mount>;
 
 /** The tools a browser offers a Bot it may drive, and one that is not the computer's. */
 const browserTools = [
@@ -172,6 +175,10 @@ const browserTools = [
   description: `The browser's ${name}.`,
   parameters: { type: "object", properties: {} },
 }));
+
+/** The beat the quiet-stream tests run on, and the comment line it writes. */
+const BEAT_MS = 40;
+const KEEP_ALIVE = ": keep-alive\n\n";
 
 type Streamed = { type?: string; [key: string]: unknown };
 
@@ -309,6 +316,12 @@ beforeAll(async () => {
   holding = mount(
     createChatServerTools({ toolsForTurn, holds: isAskedRun }),
     holdingResolver,
+  );
+  // A beat of 40 ms, so a command that hangs for a moment says what a 40 s one would.
+  beating = mount(
+    createChatServerTools({ toolsForTurn, holds: isAskedRun }),
+    resolver,
+    BEAT_MS,
   );
 });
 
@@ -560,4 +573,291 @@ describe("a chat the server does not take over", () => {
       "computer_screenshot",
     );
   });
+});
+
+/**
+ * A command the server runs that outlasts what `Bun.serve` allows a response to say nothing for. Its
+ * events were the only bytes on the stream, so the person's page lost the stream after 10 s ("network
+ * error") while the turn went on. The beat is a comment line in the stream, below the thread runner:
+ * not an event, not stored, not replayed.
+ */
+describe("a run that goes quiet keeps its stream open", () => {
+  /** A command that hangs until the test lets it go. */
+  function hangingCommand() {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    onCommand = async () => {
+      await gate;
+      return {
+        command: "sleep 40",
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+      };
+    };
+    script = (request) =>
+      hasToolResult(request) ? { content: "done" } : runCommand("sleep 40");
+    return release;
+  }
+
+  /** Reads `reader` until `enough` says so, or to the end; everything read is in `text`. */
+  async function readUntil(
+    reader: ReadableStreamDefaultReader<Uint8Array>,
+    enough: (text: string) => boolean,
+  ) {
+    const decoder = new TextDecoder();
+    let text = "";
+    for (;;) {
+      const chunk = await reader.read();
+      if (chunk.done) return { text, ended: true };
+      text += decoder.decode(chunk.value);
+      if (enough(text)) return { text, ended: false };
+    }
+  }
+  const beats = (text: string) => text.split(KEEP_ALIVE).length - 1;
+  /** The stream as the page's reader sees it: only `data:` lines are events. */
+  const eventsOf = (text: string) => parse(text);
+
+  async function commandRunning() {
+    const deadline = Date.now() + 10_000;
+    while (ran.length === 0 && Date.now() < deadline) await Bun.sleep(10);
+    expect(ran).toHaveLength(1);
+  }
+
+  test("/run: beats while the command hangs, then ends in RUN_FINISHED with nothing of it stored or replayed", async () => {
+    const release = hangingCommand();
+    const { threadId, request } = runRequest(true);
+    const response = await beating.handler.fetch(request);
+    expect(response.status).toBe(200);
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("the run has no stream");
+    const quiet = await readUntil(reader, (text) => beats(text) >= 3);
+    expect(quiet.ended).toBe(false);
+    expect(ran).toHaveLength(1);
+    release();
+    const rest = await readUntil(reader, () => false);
+    expect(rest.ended).toBe(true);
+
+    const text = quiet.text + rest.text;
+    const events = eventsOf(text);
+    expect(events.at(-1)?.type).toBe("RUN_FINISHED");
+    expect(events.some((event) => event.type === "RUN_ERROR")).toBe(false);
+    // The beat is a comment: not an event, so the reader's parse of the stream never sees it.
+    expect(JSON.stringify(events)).not.toContain("keep-alive");
+    expect(text).not.toContain("data: : keep-alive");
+
+    const messages = await storedMessages(threadId);
+    expect(JSON.stringify(messages)).not.toContain("keep-alive");
+    expect(messages.at(-1)?.content).toBe("done");
+    // The stored run and a replay of it hold the events and no beat.
+    const stored = await runAsTenant(person.id, () =>
+      database
+        .select({ id: threadRuns.id })
+        .from(threadRuns)
+        .where(eq(threadRuns.threadId, threadId)),
+    );
+    expect(stored.length).toBeGreaterThan(0);
+    const log = await beating.handler.fetch(
+      new Request(`http://127.0.0.1/api/copilotkit/threads/${threadId}/events`),
+    );
+    expect(await log.text()).not.toContain("keep-alive");
+    const replay = await beating.handler.fetch(
+      new Request(`http://127.0.0.1/api/copilotkit/agent/${BOT}/connect`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          threadId,
+          runId: `run-${randomUUID()}`,
+          state: {},
+          messages: [],
+          tools: [],
+          context: [],
+          forwardedProps: {},
+        }),
+      }),
+    );
+    const replayed = await replay.text();
+    expect(replayed).toContain("RUN_FINISHED");
+    expect(replayed).not.toContain("keep-alive");
+  });
+
+  test("/connect: a reconnect to the run in flight beats too, and ends with the run", async () => {
+    const release = hangingCommand();
+    const { threadId, request } = runRequest(true);
+    const response = await beating.handler.fetch(request);
+    const running = response.text();
+    await commandRunning();
+
+    const connected = await beating.handler.fetch(
+      new Request(`http://127.0.0.1/api/copilotkit/agent/${BOT}/connect`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          threadId,
+          runId: `run-${randomUUID()}`,
+          state: {},
+          messages: [],
+          tools: [],
+          context: [],
+          forwardedProps: {},
+        }),
+      }),
+    );
+    expect(connected.status).toBe(200);
+    const reader = connected.body?.getReader();
+    if (!reader) throw new Error("the reconnect has no stream");
+    const quiet = await readUntil(reader, (text) => beats(text) >= 3);
+    expect(quiet.ended).toBe(false);
+    release();
+    const rest = await readUntil(reader, () => false);
+    expect(rest.ended).toBe(true);
+
+    const events = eventsOf(quiet.text + rest.text);
+    expect(events.at(-1)?.type).toBe("RUN_FINISHED");
+    expect(JSON.stringify(events)).not.toContain("keep-alive");
+    // The run's own stream was kept the same way.
+    expect(beats(await running)).toBeGreaterThanOrEqual(3);
+  });
+
+  test("a run that waits for a person's approval is not silent either", async () => {
+    let answered!: () => void;
+    const asked = new Promise<void>((resolve) => {
+      answered = resolve;
+    });
+    onCommand = async () => {
+      await asked;
+      throw new HeadlessToolSuspension("Waiting for approval.", {
+        kind: "approval",
+        requestId: "approval-keep-alive",
+      });
+    };
+    const { request } = runRequest(true);
+    const response = await beating.handler.fetch(request);
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("the run has no stream");
+    const quiet = await readUntil(reader, (text) => beats(text) >= 2);
+    expect(quiet.ended).toBe(false);
+    answered();
+    const rest = await readUntil(reader, () => false);
+    const events = eventsOf(quiet.text + rest.text);
+    expect(events.at(-1)?.type).toBe("RUN_FINISHED");
+    expect(
+      events.some((event) => event.name === "openbot.headless.waiting"),
+    ).toBe(true);
+  });
+
+  test("a person's Stop ends the stream and leaves nothing beating", async () => {
+    script = (request) =>
+      hasToolResult(request) ? { content: "done" } : runCommand("sleep 40");
+    onCommand = (call) =>
+      new Promise((_resolve, reject) => {
+        call.signal?.addEventListener("abort", () =>
+          reject(new Error("The computer action was stopped.")),
+        );
+      });
+    const { threadId, request } = runRequest(true);
+    const response = await beating.handler.fetch(request);
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("the run has no stream");
+    await readUntil(reader, (text) => beats(text) >= 1);
+    const stop = await beating.handler.fetch(
+      new Request(
+        `http://127.0.0.1/api/copilotkit/agent/${BOT}/stop/${threadId}`,
+        { method: "POST" },
+      ),
+    );
+    expect(stop.status).toBe(200);
+    const rest = await readUntil(reader, () => false);
+    expect(rest.ended).toBe(true);
+  });
+
+  test("a page that goes away mid-run stops the beat, and the run is still finished by the server", async () => {
+    const release = hangingCommand();
+    const { threadId, request } = runRequest(true);
+    const response = await beating.handler.fetch(request);
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("the run has no stream");
+    await readUntil(reader, (text) => beats(text) >= 1);
+    await reader.cancel();
+    release();
+    const messages = await storedMessages(threadId);
+    expect(messages.at(-1)?.content).toBe("done");
+  });
+
+  /*
+   * The whole of it through a real `Bun.serve` with its default `idleTimeout`, as the person's browser
+   * meets it: a command that hangs for longer than 10 s, a page reading the run, and another page
+   * reconnected to it. Before the beat both were closed at 10 s ("TypeError: network connection
+   * lost") with the turn still running.
+   */
+  test(
+    "through a real Bun.serve at its default idle timeout: the run's stream and a reconnect both outlive 10 s of silence",
+    async () => {
+      const release = hangingCommand();
+      const server = Bun.serve({
+        hostname: "127.0.0.1",
+        port: 0,
+        fetch: (request) => serving.handler.fetch(request),
+      });
+      try {
+        const { threadId, request } = runRequest(true);
+        const base = `http://127.0.0.1:${server.port}`;
+        const run = await fetch(
+          new Request(`${base}/api/copilotkit/agent/${BOT}/run`, {
+            method: "POST",
+            headers: request.headers,
+            body: await request.text(),
+          }),
+        );
+        expect(run.status).toBe(200);
+        await commandRunning();
+        const connect = await fetch(
+          `${base}/api/copilotkit/agent/${BOT}/connect`,
+          {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              threadId,
+              runId: `run-${randomUUID()}`,
+              state: {},
+              messages: [],
+              tools: [],
+              context: [],
+              forwardedProps: {},
+            }),
+          },
+        );
+        expect(connect.status).toBe(200);
+
+        const read = async (response: Response) => {
+          const reader = response.body?.getReader();
+          if (!reader) throw new Error("no stream");
+          const decoder = new TextDecoder();
+          let text = "";
+          for (;;) {
+            const chunk = await reader.read();
+            if (chunk.done) return text;
+            text += decoder.decode(chunk.value);
+          }
+        };
+        const reading = Promise.all([read(run), read(connect)]);
+        // Silent for longer than Bun's default 10 s.
+        await Bun.sleep(11_500);
+        release();
+        const [ran_, reconnected] = await reading;
+        for (const text of [ran_, reconnected]) {
+          expect(parse(text).at(-1)?.type).toBe("RUN_FINISHED");
+          expect(beats(text)).toBeGreaterThanOrEqual(1);
+          expect(JSON.stringify(parse(text))).not.toContain("keep-alive");
+        }
+      } finally {
+        release();
+        server.stop(true);
+      }
+    },
+    { timeout: 45_000 },
+  );
 });
