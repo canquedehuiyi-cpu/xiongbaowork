@@ -16,14 +16,23 @@ export type EvalRecord = {
   wallMs: number;
   /** 撞上了墙钟上限。 */
   timedOut: boolean;
-  /** 工具调用次数（熊宝：主运行里的工具调用；Codex：命令、改文件等动作）。 */
+  /**
+   * 步数。熊宝：模型调用次数，读 `model_token_calls` 的行数（每一步一次调用，与运行事件存没存下无关）；
+   * Codex：`codex exec --json` 不报每一步的模型调用，记它的动作数（命令、改文件等）。
+   */
   steps: number | null;
+  /** 工具调用次数（熊宝：主运行里的工具调用；Codex：命令、改文件等动作）。旧结果文件没有这一项。 */
+  toolCalls?: number | null;
   /** 模型调用次数（熊宝读 model_token_calls 的行数）。 */
   modelCalls: number | null;
   tokens: {
     input: number | null;
     output: number | null;
     total: number | null;
+    /** 输入里命中上下文缓存的部分（已含在 input 里）；提供方没报时 null。 */
+    cachedInput?: number | null;
+    /** 输出里推理（思考）的部分（已含在 output 里）；没报时 null。 */
+    reasoning?: number | null;
   } | null;
   /** 没写完、没触顶、也没问人就停了。读不到时 null。 */
   silentStop: boolean | null;
