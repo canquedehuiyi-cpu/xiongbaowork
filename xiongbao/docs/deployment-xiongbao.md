@@ -19,6 +19,7 @@ Windows 命令块由人工验收。GHCR 包设为公开之前，未登录的拉�
 数据目录旁的 `pgpassword` 与 `pgpassword-app` 保存 owner / app 的随机口令，权限 600；
 必须与数据一并保留。镜像重建会复用口令，并在迁移后再次设置 app 角色。
 `/workspace` 与 `/profiles` 分别保存员工文件和浏览器会话。
+单容器不带搜索服务，员工的 `web_search` 会说明「未配置搜索」；怎么打开见 [5.3](#53-联网搜索读网页与爬网站)。
 
 本机模板开启单用户体验，只绑定 loopback。对外部署改用登录配置（第 3 节），
 在反向代理后提供 HTTPS。员工执行位置 `TENANT_RUNTIME=device` 需要配对并在线的设备；
@@ -220,6 +221,42 @@ BOT_MODEL=<供应商当前支持的准确模型名>
 
 升级换包时，同步只回收本包声明集合内的行（技能、频道、团队、连接器服务行），管理员手工添加的
 连接器与授予不受影响。
+
+### 5.3 联网搜索、读网页与爬网站
+
+每位员工默认有三个联网工具（员工权限里可以逐个关掉，规则写 `bot/web_search`、`bot/web_fetch`、`bot/web_crawl`）：
+
+| 工具 | 做什么 | 依赖 |
+| --- | --- | --- |
+| `web_search` | 搜公开网页，返回标题、网址、摘要 | 搜索提供方，默认自建的 SearXNG（`XIONGBAO_SEARCH_URL`） |
+| `web_fetch` | 读一个网页的正文，转成 Markdown；`render_js` 为真时先渲染 JS | 不依赖服务；`render_js` 用 Crawl4AI（`XIONGBAO_CRAWL_URL`），没有就按普通方式读 |
+| `web_crawl` | 从一个网址起爬同一网站的多页，只回每页摘要，全文存档两小时供 `web_fetch` 读 | 有 Crawl4AI 交给它深度爬取，没有就在服务进程里做简易爬取（只抓静态 HTML） |
+
+**Compose 形态默认带 SearXNG**（`searxng` 服务，镜像 `searxng/searxng:2026.11.2-cccbc9e15`，设置在
+`docker/searxng/settings.yml`），应用容器的 `XIONGBAO_SEARCH_URL` 默认指向 `http://searxng:8080`，`up -d` 即可用。
+SearXNG 不对外发布端口，它的限流器关着（那是给公网实例防爬虫的，要 Valkey），调用频率由服务端限在全部署每秒
+最多两次搜索。
+
+**Crawl4AI 按需打开**（`crawl4ai` 服务，`crawl` profile，镜像 `unclecode/crawl4ai:0.9.5`，有几个 GB）：
+
+```bash
+printf '\nXIONGBAO_CRAWL_TOKEN=%s\n' "$(openssl rand -hex 32)" >> .env.delivery
+docker compose --project-name xiongbao-local --env-file .env.delivery \
+  -f docker/compose.delivery.yml --profile crawl up -d
+```
+
+同一个令牌同时给 Crawl4AI（`CRAWL4AI_API_TOKEN`）和应用（`XIONGBAO_CRAWL_TOKEN`）。没设令牌时 Crawl4AI 只绑它自己的回环，
+应用连不上，员工自动退回进程内抓取，不报错。
+
+**单容器部署默认不带 SearXNG**：`web_search` 会回答「本部署没有配置搜索服务（未配置搜索）」，员工改用浏览器搜索或如实说明没能
+联网核对；`web_fetch` 和 `web_crawl` 照常可用（进程内抓取）。要打开搜索，另起一个 SearXNG（设置照抄
+`docker/searxng/settings.yml`，`search.formats` 必须含 `json`），在 `.env.delivery` 写 `XIONGBAO_SEARCH_URL=http://<它的地址>:8080`，
+重启应用容器。Crawl4AI 同理：写 `XIONGBAO_CRAWL_URL` 和 `XIONGBAO_CRAWL_TOKEN`。
+
+**安全边界**：`web_fetch`、`web_crawl` 的地址由模型给，每一跳都过出站校验（只许 http/https；回环、私网、链路本地、云元数据地址
+一律拒；DNS 解析结果逐个判；重定向每一跳重判）。交给 Crawl4AI 的只有校验过的公网地址，它交回的页面再按地址判一遍；爬取中途发现
+的链接由 Crawl4AI 自己请求，靠它自带的出站校验（`CRAWL4AI_ALLOW_INTERNAL_URLS=false`）拦内网。爬取默认遵守 robots.txt、同一网站
+每秒最多一个请求、User-Agent 固定为 `XiongbaoBot/1.0`，单次爬取最多 50 页、3 层、120 秒、20 MB。
 
 ## 6. 备份、恢复与升级
 

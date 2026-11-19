@@ -5,6 +5,7 @@ import { RESEARCH_ROLE_LABELS, researchRoleOfTool } from "./research";
 import { SUBAGENT_TOOL } from "./subagent";
 import { lowerFirst, nameInWords } from "./tool-name-words";
 import { SEARCH_TOOLS } from "./tool-search";
+import { WEB_CRAWL_TOOL, WEB_FETCH_TOOL, WEB_SEARCH_TOOL } from "./web-tools";
 
 /**
  * A tool call, named the way the person watching would name it.
@@ -540,8 +541,11 @@ type OwnTool = {
    * step did not happen, so its line says what was tried. Without it the line keeps `done`.
    */
   attempted?: string;
-  /** The argument naming what the step acted on, said beside its words: a file's path. */
-  subject?: "path";
+  /**
+   * The argument naming what the step acted on, said beside its words: a file's path, a search's
+   * words (quoted, 「…」), a page's address.
+   */
+  subject?: "path" | "query" | "url";
   /**
    * What it was given and what it answered were both written for the model (a tool search's query
    * and limit), so its step in a folded group says what it did and does not open.
@@ -613,6 +617,25 @@ const OWN_TOOLS: Record<string, OwnTool> = {
   [SUBAGENT_TOOL]: { running: "正在处理子任务", done: "处理了子任务" },
   // Its own plan for the work, written before it starts and ticked off as it goes.
   [UPDATE_PLAN_TOOL]: { running: "正在更新计划", done: "更新了计划" },
+  // The web: searching it, reading one page, crawling a site (期五 B).
+  [WEB_SEARCH_TOOL]: {
+    running: "正在搜索",
+    done: "搜索了",
+    attempted: "搜索",
+    subject: "query",
+  },
+  [WEB_FETCH_TOOL]: {
+    running: "正在读网页",
+    done: "读了网页",
+    attempted: "读网页",
+    subject: "url",
+  },
+  [WEB_CRAWL_TOOL]: {
+    running: "正在爬取网站",
+    done: "爬取了网站",
+    attempted: "爬取网站",
+    subject: "url",
+  },
   // A voice conversation handing what was said to the Bot behind it.
   ask_agent: { running: "正在问员工", done: "问了员工" },
   // Carrying a tracked piece of work: taking it on, handing it in, asking for more time.
@@ -887,9 +910,8 @@ export function ownToolSubject(
   }
   if (!value || typeof value !== "object") return undefined;
   const subject = (value as Record<string, unknown>)[own.subject];
-  return typeof subject === "string" && subject.trim()
-    ? subject.trim()
-    : undefined;
+  if (typeof subject !== "string" || !subject.trim()) return undefined;
+  return own.subject === "query" ? `「${subject.trim()}」` : subject.trim();
 }
 
 /** Whether a step's arguments and answer were written for the model and are not shown to the person. */

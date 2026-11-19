@@ -8,6 +8,15 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **员工能联网了：搜索、读网页、爬网站（`web_search`、`web_fetch`、`web_crawl`）。** 每位员工默认都有，员工权限里可以逐个关掉
+  （`bot/web_search`、`bot/web_fetch`、`bot/web_crawl`）。持有搜索工具时员工先搜、再读原文、回答附出处，浏览器搜百度只在搜索工具
+  出错时作为退路。
+  - 运维须知：Compose 形态新增 `searxng` 服务（`searxng/searxng:2026.11.2-cccbc9e15`，设置 `docker/searxng/settings.yml`），
+    应用默认指向它，升级后 `up -d` 会多拉一个约 100 MB 的镜像。可选的 `crawl4ai` 服务（`unclecode/crawl4ai:0.9.5`，几个 GB）在
+    `crawl` profile 后面，要设 `XIONGBAO_CRAWL_TOKEN` 再 `--profile crawl` 打开；不开时员工用进程内的简易抓取。
+  - 单容器部署不带 SearXNG：员工的搜索会回答「未配置搜索」；要打开，另起 SearXNG 并设 `XIONGBAO_SEARCH_URL`（见部署手册 5.3）。
+  - 新配置只有 `XIONGBAO_` 名字：`XIONGBAO_SEARCH_PROVIDER`、`XIONGBAO_SEARCH_URL`、`XIONGBAO_SEARXNG_SECRET`、`XIONGBAO_CRAWL_URL`、
+    `XIONGBAO_CRAWL_TOKEN`。没有新迁移。
 - **新手引导采用熊宝的黑白红样式。** 当前步骤用红色标记，演示使用石墨色面板，并在资料来源步骤加入示意图。
 
 ## 0.2.13

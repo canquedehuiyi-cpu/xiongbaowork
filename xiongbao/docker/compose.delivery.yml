@@ -6,12 +6,40 @@ services:
     restart: unless-stopped
     env_file:
       - ../.env.delivery
+    environment:
+      # 员工的联网搜索（web_search）用下面的 searxng；渲染 JS 和深度爬取用 crawl4ai（`crawl` profile）。
+      XIONGBAO_SEARCH_URL: ${XIONGBAO_SEARCH_URL:-http://searxng:8080}
+      XIONGBAO_CRAWL_URL: ${XIONGBAO_CRAWL_URL:-http://crawl4ai:11235}
     ports:
       - "127.0.0.1:${OPENBOT_PORT:-3772}:3001"
     volumes:
       - database:/var/lib/postgresql
       - workspace:/workspace
       - profiles:/profiles
+  # 联网搜索：自建的 SearXNG，免费、不要 key。设置见 searxng/settings.yml。
+  searxng:
+    image: searxng/searxng:2026.11.2-cccbc9e15
+    restart: unless-stopped
+    entrypoint:
+      - /bin/sh
+      - -c
+      - export SEARXNG_SECRET="$${SEARXNG_SECRET:-$$(head -c 24 /dev/urandom | base64 | tr -dc a-zA-Z0-9)}"; exec /usr/local/searxng/entrypoint.sh
+    environment:
+      SEARXNG_SECRET: ${XIONGBAO_SEARXNG_SECRET:-}
+      FORCE_OWNERSHIP: "false"
+    volumes:
+      - ./searxng/settings.yml:/etc/searxng/settings.yml:ro
+  # 渲染 JS 和深度爬取：Crawl4AI。镜像较大，按需打开：在 .env.delivery 设 XIONGBAO_CRAWL_TOKEN，
+  # 再加 --profile crawl 启动。没打开时员工退回进程内的简易抓取。
+  crawl4ai:
+    profiles: ["crawl"]
+    image: unclecode/crawl4ai:0.9.5
+    restart: unless-stopped
+    shm_size: "1g"
+    environment:
+      CRAWL4AI_API_TOKEN: ${XIONGBAO_CRAWL_TOKEN:-}
+      CRAWL4AI_ALLOW_DEEP_CRAWL: "true"
+      CRAWL4AI_ALLOW_INTERNAL_URLS: "false"
 volumes:
   database:
   workspace:
