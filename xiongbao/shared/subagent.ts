@@ -7,11 +7,50 @@
  * result exists.
  */
 
+import { UPDATE_PLAN_TOOL } from "./plan";
+
 /** What the model is offered. One name, so a transcript can find every subagent by searching for it. */
 export const SUBAGENT_TOOL = "run_subagent";
 
 /** How many subagents one answer may start. The next one is refused with a sentence. */
 export const SUBAGENTS_PER_ANSWER = 5;
+
+/**
+ * How a Bot that holds `run_subagent` shares out a job of several parts: one subagent for each part
+ * that stands on its own, started together, with the planning, the summing up and the final call
+ * kept by the Bot (期四). A request of a step or two it does itself.
+ *
+ * Said for doing it rather than for avoiding it. The rule it adds to used to lead with the cost
+ * ("slower than doing it yourself", "only when each part needs a lot of reading"), and the Bots
+ * called the tool almost never, even for three companies to compare. The cost is one sentence here;
+ * the facts that are hard limits (the cap per answer, no nesting, a team member is not a subagent)
+ * stay as they are. In Chinese, as the person's work is.
+ */
+export const SUBAGENT_GUIDANCE = [
+  `任务能拆成两个以上相互独立的部分时，主动委派：给每个部分派一个子代理（${SUBAGENT_TOOL}），在同一步里一起发出，让它们并行去做。例如分别调研几家公司、分别读几份文件，或者写完之后另派一个子代理做校对。不必等到每个部分都要大量阅读才派。你自己负责计划、汇总和最后的判断。一两步就能完成的简单任务自己做，不派。`,
+  "派出去的任务要写清楚：task 里写目标、范围和它需要知道的一切（名字、日期、编号、约束），因为子代理看不到这段对话；answer 里写明要交回什么、用什么格式，例如「一张表：公司、定价、来源链接」。",
+  `硬约束：每轮最多派 ${SUBAGENTS_PER_ANSWER} 个子代理，再多会被拒绝；子代理不能再派子代理；团队成员是独立的数字员工，不是子代理，给成员派活要按团队的方式找他们。每个子代理都会多花一些时间，所以同一件事不要拆给几个子代理重复做。`,
+].join("\n\n");
+
+/**
+ * For a Bot that also holds `update_plan`: the items of its plan that stand on their own are the
+ * parts to share out. The plan still has one item in progress at a time, so each comes back done.
+ */
+export const SUBAGENT_PLAN_GUIDANCE =
+  "列了计划时，计划里相互独立的几项可以在同一步里各派一个子代理去做；哪个子代理交回了，就把对应那项标 done，计划里同一时间仍最多一项 in_progress。";
+
+/**
+ * Said to a Bot that holds `run_subagent`, and to no other: a subagent holds no such tool, nor does a
+ * check-in, so neither is told to share work out. The word on plans only with the plan tool.
+ */
+export function subagentGuidance(
+  toolNames: readonly string[],
+): string | undefined {
+  if (!toolNames.includes(SUBAGENT_TOOL)) return undefined;
+  return toolNames.includes(UPDATE_PLAN_TOOL)
+    ? `${SUBAGENT_GUIDANCE}\n\n${SUBAGENT_PLAN_GUIDANCE}`
+    : SUBAGENT_GUIDANCE;
+}
 
 /**
  * What a subagent hands back to the Bot that started it, and what its card is drawn from.

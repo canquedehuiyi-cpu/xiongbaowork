@@ -35,8 +35,8 @@ import { createTurnRunner } from "@openbot/toolkit/run-turn";
 import { z } from "zod";
 import { currentApprovalContext } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
-import type { ProductSurface } from "../telemetry/product";
 import { REFUSAL_MARKER } from "../plugins/tools";
+import type { ProductSurface } from "../telemetry/product";
 
 /**
  * Stable JSON for a value, so the same action keyed by a different argument order still matches.
@@ -65,12 +65,12 @@ const parameters = z.object({
   task: z
     .string()
     .describe(
-      "The piece of work, complete in itself. The subagent sees none of this conversation, so include every name, date, id and constraint it needs",
+      "交给它的那部分工作，要能独立完成：写清目标和范围，以及它需要的每个名字、日期、编号和约束（它看不到这段对话）",
     ),
   answer: z
     .string()
     .describe(
-      "What to hand back: a list, a figure, a short summary with its sources, a yes or no with the reason",
+      "要交回什么、用什么格式：例如一张写明列名的表、一个数字、带来源的简短总结、是或否加理由",
     ),
 });
 
@@ -166,18 +166,19 @@ export function createSubagents(options: {
         name: SUBAGENT_TOOL,
         ref: `bot/${SUBAGENT_TOOL}`,
         /*
-         * The rule the prompt's subagents section gives, cost first. This used to say "whenever work
-         * takes more than two or three calls", the threshold the prompt had already dropped after a
-         * Bot split one web search three ways, so the two disagreed on every run. Anthropic found a
-         * subagent tool whose description states its cost first is called about a third less often,
-         * with the same results.
+         * Said for doing it (期四). This used to lead with the cost ("slower than doing the work
+         * yourself", "only when each part needs a lot of reading"), and the Bots almost never called
+         * it, even for three companies side by side. Now it says when to share work out and how to
+         * brief it, with the cost one clause, and the hard limits as the facts they are. In Chinese,
+         * as the `<delegation>` section of the prompt is (`SUBAGENT_GUIDANCE`).
          */
         description:
-          "Give one self-contained part of your work to a subagent: a fresh copy of you, with your tools, acting for the same person, that sees none of this conversation and returns only its answer. " +
-          "Each one is slower than doing the work yourself and is more for the person to follow, so use it only when a request falls into several independent parts that each need a lot of reading of their own, such as one account, document or company each. " +
-          "A single question, one search, or a lookup that takes a handful of tool calls, do yourself. " +
-          "Give it everything it needs to know and say what answer you want back. Call it several times in one step to run independent parts at the same time. " +
-          "If the subagent reaches an action that needs the person's approval, it stops and hands that action back to you.",
+          "把你工作里一个独立的部分交给子代理：它是你的一个新副本，带着你的工具、替同一个人办事，看不到这段对话，只交回它的答案。" +
+          "任务能拆成两个以上相互独立的部分时（例如分别调研几家公司、分别读几份文件、写完后另派一个做校对），主动给每个部分派一个，在同一步里多次调用就能并行去做；你自己负责计划、汇总和最后的判断。" +
+          "一两步就能完成的简单任务自己做，不派。" +
+          "task 里写清目标、范围和它需要知道的一切，answer 里写明要交回什么、用什么格式。" +
+          `每轮最多 ${perAnswer} 个，子代理不能再派子代理；团队成员不是子代理。每个子代理都会多花一些时间，同一件事不要拆给几个重复做。` +
+          "子代理碰到需要这个人批准的操作会停下，把它交还给你。",
         parameters,
         initiator: parent.initiator,
         concurrent: true,

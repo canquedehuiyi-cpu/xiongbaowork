@@ -1,5 +1,6 @@
 import { afterAll, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
+import { personaIsEmpty } from "../../shared/persona";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -11,7 +12,6 @@ import {
   skillAssets,
   skills,
 } from "../src/db/schema";
-import { personaIsEmpty } from "../../shared/persona";
 import { PORTRAIT_PRESETS } from "../src/portraits/store";
 import { runAsTenant } from "../src/tenant/context";
 import {
@@ -216,9 +216,9 @@ test("the ported capability block lands whole: three teams, three connectors, se
   expect(connectors.find((entry) => entry.id === "tapd")?.auth).toBe(
     "deployment-bearer",
   );
-  expect(
-    connectors.find((entry) => entry.id === "tencent-docs")?.auth,
-  ).toBe("deployment-bearer");
+  expect(connectors.find((entry) => entry.id === "tencent-docs")?.auth).toBe(
+    "deployment-bearer",
+  );
   for (const connector of connectors) {
     expect(connector.credentialEnv).toMatch(/^[A-Z_][A-Z0-9_]*$/);
   }
@@ -301,6 +301,42 @@ test("the shipped brand copy says nothing in English that a person would read as
     "Everyday Work",
   ]) {
     expect(text.includes(leftover)).toBeFalse();
+  }
+});
+
+/*
+ * 期四：租户包讲子代理时，讲多部分任务主动委派，而不是「优先串行」「只能发起短小子任务」。
+ * 硬约束（每轮最多 5 个、不能嵌套、团队成员不是子代理）照写。
+ */
+test("the package tells a coworker to share independent parts out to subagents, not to keep them serial or short", () => {
+  const said = loaded.skills
+    .filter((skill) => skill.instructions.includes("run_subagent"))
+    .map((skill) => skill.instructions);
+  expect(said.length).toBeGreaterThan(0);
+  for (const instructions of said)
+    for (const discouraging of [
+      "优先串行",
+      "短小子任务",
+      "禁止无限制创建大量子代理",
+    ])
+      expect(instructions).not.toContain(discouraging);
+  const tokens = loaded.skills.find(
+    (skill) => skill.slug === "token-efficient-dev",
+  )?.instructions;
+  expect(tokens).toContain(
+    "任务能拆成两个以上相互独立的部分时（如分别检索几个模块、写完后另派一个校验），给每部分派一个子代理并行去做",
+  );
+  expect(tokens).toContain("一两步的轻量任务自己做，不派");
+  expect(tokens).toContain("`run_subagent` 每 run 最多 5 次发起");
+  expect(tokens).toContain("子代理不能再生子代理");
+  for (const slug of ["persona-gstack-lead", "persona-software-team-lead"]) {
+    const lead = loaded.skills.find(
+      (skill) => skill.slug === slug,
+    )?.instructions;
+    expect(lead).toContain("团队成员是独立的数字员工，不是子代理");
+    expect(lead).toContain(
+      "`run_subagent` 用来把你自己手上相互独立的几部分工作分给子代理并行去做（每轮最多 5 个，子代理不能再派子代理）",
+    );
   }
 });
 

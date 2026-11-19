@@ -58,6 +58,16 @@ export type GroupMessage = {
     agentId: string;
     dueAt?: string;
   }[];
+  /**
+   * 这一轮员工跑满了步数、被收尾（期一）：服务器从那一轮的 `step-limit` 事件记下的步数。群里末尾据此给
+   * 「已用完 N 步 · 继续」（`groupStepLimit`）。
+   */
+  stepLimit?: { steps: number };
+  /**
+   * 这位员工这一轮最后一份计划（期二）：服务器从它最后一次 `update_plan` 调用记下的清单，群里每个人读到的一样。
+   * 群聊顶部据此给每位员工钉一张计划卡（`components/channels/pinned-plans.tsx`）。
+   */
+  plan?: { text: string; status: "pending" | "in_progress" | "done" }[];
   /** 外部员工在等它的招聘人确认一个操作（见 {@link GroupAcpPermission}）。 */
   acpPermission?: GroupAcpPermission;
 };
