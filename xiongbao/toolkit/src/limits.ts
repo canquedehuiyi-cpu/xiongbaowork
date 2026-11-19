@@ -6,8 +6,18 @@
  * everything behind them into that process.
  */
 export const TURN_LIMITS = {
-  /** How long one headless turn may take before it is stopped. */
+  /**
+   * How long one light headless turn may take before it is stopped: a check-in, a patrol, a
+   * follow-up in a group. The default for every turn runner that is not told otherwise.
+   */
   turnTimeoutMs: 5 * 60_000,
+
+  /**
+   * How long one working turn may take: a board card's, an unattended routine's, a subagent's (期五).
+   * These write code, build and run tests, and one command alone may take ten minutes, so five
+   * minutes cut real work off half way. The step cap and metering still bound what a turn spends.
+   */
+  workTurnTimeoutMs: 25 * 60_000,
 
   /**
    * The gap between stopping a turn and giving up on it.
@@ -41,3 +51,21 @@ export const TURN_LIMITS = {
   lockTtlSeconds: 120,
   heartbeatMs: 15_000,
 } as const;
+
+/** The kinds of headless turn, by how long each may run. */
+export type TurnKind =
+  | "board"
+  | "unattended"
+  | "subagent"
+  | "check-in"
+  | "patrol";
+
+/**
+ * How long a turn of this kind may run: a working turn (board card, unattended, subagent) gets
+ * {@link TURN_LIMITS.workTurnTimeoutMs}, a light one (check-in, patrol) {@link TURN_LIMITS.turnTimeoutMs}.
+ */
+export function turnTimeoutFor(kind: TurnKind): number {
+  return kind === "board" || kind === "unattended" || kind === "subagent"
+    ? TURN_LIMITS.workTurnTimeoutMs
+    : TURN_LIMITS.turnTimeoutMs;
+}

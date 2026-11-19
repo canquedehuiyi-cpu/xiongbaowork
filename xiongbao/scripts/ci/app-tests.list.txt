@@ -208,6 +208,7 @@ tests/code-highlighting-lazy.test.ts
 tests/code-highlighting.test.tsx
 tests/coding-calls.test.ts
 tests/coding-tool-cards.test.tsx
+tests/coding-tools.test.tsx
 tests/component-display-title.test.ts
 tests/component-preview.test.tsx
 tests/component-reply-notice.test.tsx

@@ -1,6 +1,7 @@
 import { buildResponsibilityTurn } from "@openbot/shared/responsibility-turn";
 import type { ComponentCatalog } from "@openbot/toolkit/ports";
 import { z } from "zod";
+import { turnTimeoutFor } from "../../../toolkit/src/limits";
 import { canUseComputer } from "../agents/computer-access";
 import type { AgentProfileStore } from "../agents/profile-store";
 import type { AgentActor } from "../agents/profile-types";
@@ -130,6 +131,8 @@ export function createServerResponsibilityEngine(deps: {
           responsibilityRunId: context.runId,
         });
         const runner = createTurnRunner({
+          // A responsibility's patrol is a light turn and keeps the light clock (期五).
+          turnTimeoutMs: turnTimeoutFor("patrol"),
           ...(deps.productTelemetry
             ? {
                 prepareRunInput: productHeadlessBoundary(deps.productTelemetry),

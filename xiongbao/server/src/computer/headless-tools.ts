@@ -1,4 +1,6 @@
 import {
+  COMMAND_TIMEOUT_DESCRIPTION,
+  commandTimeoutMs,
   computerToolPlace,
   DEVICE_RUN_COMMAND_DESCRIPTION,
   WORKSPACE_RUN_COMMAND_DESCRIPTION,
@@ -319,10 +321,23 @@ function headlessComputerTools(options: {
       onDevice
         ? DEVICE_RUN_COMMAND_DESCRIPTION
         : WORKSPACE_RUN_COMMAND_DESCRIPTION,
-      z.strictObject({ command: text }),
-      async (input, { signal }) => ({
+      z.strictObject({
+        command: text,
+        timeoutMs: z
+          .number()
+          .positive()
+          .optional()
+          .describe(COMMAND_TIMEOUT_DESCRIPTION),
+      }),
+      // Always sent with a time: the default when none was asked, cut to ten minutes when more was.
+      async ({ command, timeoutMs }, { signal }) => ({
         ok: true,
-        ...(await gateway.runCommand(seat, actor, input, signal)),
+        ...(await gateway.runCommand(
+          seat,
+          actor,
+          { command, timeoutMs: commandTimeoutMs(timeoutMs) },
+          signal,
+        )),
       }),
     ),
     tool(

@@ -18,6 +18,7 @@
  * The key format is `routines/sweep.ts`'s minute key, pinned in `minuteKey` below and asserted
  * literally in `tests/automation-sweep.integration.test.ts`.
  */
+import { TURN_LIMITS } from "../../../toolkit/src/limits";
 import { assertPersonTenant, runAsTenant } from "../tenant/context";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
 import type { AutomationFiring, AutomationStore } from "./store";
@@ -103,10 +104,11 @@ export type AutomationSweepReport = {
  */
 /**
  * How long a firing may stay `running`, untouched, before a pass declares it abandoned: twice the
- * unattended turn timeout, the same horizon as `ABANDONED_RUN_MS` in `routines/sweep.ts`, so a
- * slow-but-alive turn always records its own outcome first.
+ * working turn's timeout, which an unattended firing runs on (期五). The same horizon as
+ * `ABANDONED_RUN_MS` in `routines/sweep.ts`, so a slow-but-alive turn always records its own outcome
+ * first.
  */
-export const ABANDONED_FIRING_MS = 10 * 60_000;
+export const ABANDONED_FIRING_MS = 2 * TURN_LIMITS.workTurnTimeoutMs;
 
 export const ABANDONED_FIRING_ERROR =
   "服务器没有完成这次执行，可能中途重启了；本次不会重新执行。";

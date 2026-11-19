@@ -23,7 +23,9 @@ import {
   runNavigation,
 } from "@/lib/computers/handoff";
 import {
+  COMMAND_TIMEOUT_DESCRIPTION,
   type ComputerMachine,
+  commandTimeoutMs,
   computerToolPlace,
   DEVICE_RUN_COMMAND_DESCRIPTION,
 } from "../../../../shared/computer-tool-words";
@@ -842,6 +844,7 @@ export function ComputerTools() {
             ? "The command to run, written for the paired machine's own system"
             : "The command to run, such as: npm install marked",
         ),
+      timeoutMs: z.number().optional().describe(COMMAND_TIMEOUT_DESCRIPTION),
     }),
     /*
      * NOT WHERE ACTIVITY IS RECORDED, though it once was. A command is a change, and the approval
@@ -851,14 +854,21 @@ export function ComputerTools() {
      * of those paths ends with the answer in the conversation, which is what the pane reads; see
      * `useConversationActivity`.
      */
+    // Always sent with a time: the default when none was asked, cut to ten minutes when more was.
     handler: async (
-      input: { command: string },
+      input: { command: string; timeoutMs?: number },
       { signal, agent }: ToolCallContext = {},
     ) =>
       callComputer(
         botOf(agent),
         "/exec",
-        { method: "POST", body: input },
+        {
+          method: "POST",
+          body: {
+            command: input.command,
+            timeoutMs: commandTimeoutMs(input.timeoutMs),
+          },
+        },
         signal,
       ),
     render: ({ args, result, status }) => {
