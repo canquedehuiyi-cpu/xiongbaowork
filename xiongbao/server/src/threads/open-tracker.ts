@@ -15,6 +15,10 @@ export function openTracker() {
     get started() {
       return started;
     },
+    /** How many tool calls were started and never answered: a turn that ends on one waits for somebody. */
+    get unanswered() {
+      return unanswered.size;
+    },
     see(event: BaseEvent) {
       switch (event.type) {
         case EventType.RUN_STARTED:
