@@ -1,5 +1,5 @@
 import type { Message } from "@ag-ui/core";
-import { readSubagentResult, SUBAGENT_TOOL } from "@openbot/shared/subagent";
+import { readSubagentResult, SUBAGENT_TOOL } from "@/lib/subagents/queries";
 
 /*
  * 本轮收尾时那一句正性的话该说哪个版本（WP-3.2 S1b）。
@@ -44,7 +44,8 @@ export function closedVariantOf(
 /**
  * 最后一轮里有没有一个交还了的子任务。只看最后一条用户消息之后：更早的轮交还过、后来也批过
  * 或做过了，不该让这一轮的收尾还说「等你批准」。结果按 shared/subagent.ts 的同一份合同读
- * （readSubagentResult），不另写一套解析。
+ * （readSubagentResult，经 lib/subagents/queries 转手——品牌预算棘轮只减不增，不添新的
+ * 旧包名行），不另写一套解析。
  */
 function handedBackSinceLastMessage(messages: readonly Message[]): boolean {
   const since =
