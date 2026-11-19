@@ -4,12 +4,13 @@
  * 熊宝侧读的是运行存下的 AG-UI 事件（`thread_run_events`）；Codex 侧读的是 `codex exec --json` 打出的
  * JSONL。两边各自换算成同一个 {@link Capabilities}，报告才能并排比。
  *
- * 「不适用」（`n/a`）和「否」（`no`）分开记：产品里还没有这项能力（例如期三的推理流、期五的新工具还没合进
- * main），或这道题不考这一项，记 `n/a`；有这项能力、这次没用上，记 `no`。能力在不在由 {@link featureProbe}
- * 看源码判断，读不到就是不在，从不报错。
+ * 「不适用」（`n/a`）和「否」（`no`）分开记：产品里还没有这项能力（例如期五的新工具还没合进 main），或这道题
+ * 不考这一项，记 `n/a`；有这项能力、这次没用上，记 `no`。能力在不在由 {@link featureProbe} 读产品自己的标志
+ * 判断（导出的常量、真正构建出来的工具清单），再由 {@link observedFeatures} 用运行里实际出现的事件补上；
+ * 读不到就是不在，从不报错。
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 
 export type Tri = "yes" | "no" | "n/a";
@@ -64,7 +65,7 @@ export const ROUND_STEPS = 40;
 const VERIFY =
   /\b(test|tests|check|build|verify|validate|lint|tsc|diff|assert)\b|\bwc\s+-l\b|\bhead\s/i;
 
-/** 这一项能力在产品源码里在不在。`root` 是 `xiongbao/`。 */
+/** 这一项能力在产品里在不在。`root` 是 `xiongbao/`。 */
 export type Features = {
   plan: boolean;
   subagent: boolean;
@@ -74,36 +75,128 @@ export type Features = {
   stepLimit: boolean;
 };
 
-function sourceHas(root: string, files: string[], pattern: RegExp): boolean {
-  return files.some((file) => {
-    const path = join(root, file);
-    try {
-      return existsSync(path) && pattern.test(readFileSync(path, "utf8"));
-    } catch {
-      return false;
-    }
-  });
+/**
+ * 同步加载产品的一个模块（Bun 的 `require` 能直接读 TypeScript 和 ESM）；文件不在或加载失败都是 null。
+ * 同步是为了让调用方在起服务之前就拿到结果，不必等一轮事件循环。
+ */
+function productModule(
+  root: string,
+  file: string,
+): Record<string, unknown> | null {
+  const path = join(root, file);
+  if (!existsSync(path)) return null;
+  try {
+    return require(path) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
 }
 
+/**
+ * 服务器在无头轮次里真正交给员工的电脑工具名：用产品自己的 `createHeadlessComputerTools` 构建一遍（只构建、
+ * 不执行，所以网关和座位给空壳就行），读出每个工具的名字。期五的编辑、检索工具合进来以后自然出现在这里，
+ * 不用改评测。构建不出来时是空清单。
+ */
+export function headlessToolNames(root: string): string[] {
+  const module = productModule(root, "server/src/computer/headless-tools.ts");
+  const create = module?.createHeadlessComputerTools;
+  if (typeof create !== "function") return [];
+  try {
+    const tools = create({
+      gateway: {},
+      seat: { botId: "eval-feature-probe" },
+      actor: {},
+    }) as { definition?: { name?: unknown } }[];
+    return tools
+      .map((tool) => tool.definition?.name)
+      .filter((name): name is string => typeof name === "string");
+  } catch {
+    return [];
+  }
+}
+
+const exported = (
+  module: Record<string, unknown> | null,
+  name: string,
+  expected: unknown,
+) => module !== null && module[name] === expected;
+
+/**
+ * 能力在不在，按 main 上的真实标志判断，不再搜源码里的字符串：
+ *
+ * - 计划：`shared/plan.ts` 导出 `UPDATE_PLAN_TOOL = "update_plan"`；
+ * - 子代理：`shared/subagent.ts` 导出 `SUBAGENT_TOOL = "run_subagent"`；
+ * - 推理：`shared/thinking.ts` 导出非空的 `REASONING_EVENTS`（期三）；
+ * - 编辑、检索工具：{@link headlessToolNames} 里有 `computer_edit_file`、`computer_grep`（期五）；
+ * - 触顶：`shared/run-notices.ts` 导出 `STEP_LIMIT_EVENT = "step-limit"`。
+ */
 export function featureProbe(root: string): Features {
-  const tools = ["server/src/computer/headless-tools.ts"];
+  const thinking = productModule(root, "shared/thinking.ts");
+  const reasoningEvents = thinking?.REASONING_EVENTS;
+  const tools = headlessToolNames(root);
   return {
-    plan: sourceHas(root, ["shared/plan.ts"], /update_plan/),
-    subagent: sourceHas(root, ["shared/subagent.ts"], /run_subagent/),
-    // 期三把推理作为 AG-UI 的 REASONING_* 事件流出；在那之前运行里不会有这类事件。
-    reasoning: sourceHas(
-      root,
-      [
-        "toolkit/src/run-turn.ts",
-        "server/src/copilot.ts",
-        "shared/run-notices.ts",
-      ],
-      /REASONING_(START|MESSAGE|CONTENT)/,
+    plan: exported(
+      productModule(root, "shared/plan.ts"),
+      "UPDATE_PLAN_TOOL",
+      TOOL.plan,
     ),
-    editTool: sourceHas(root, tools, /computer_edit_file/),
-    grepTool: sourceHas(root, tools, /computer_grep/),
-    stepLimit: sourceHas(root, ["shared/run-notices.ts"], /step-limit/),
+    subagent: exported(
+      productModule(root, "shared/subagent.ts"),
+      "SUBAGENT_TOOL",
+      TOOL.subagent,
+    ),
+    reasoning:
+      Array.isArray(reasoningEvents) &&
+      reasoningEvents.some((type) => /^REASONING_/.test(String(type))),
+    editTool: tools.includes(TOOL.edit),
+    grepTool: tools.includes(TOOL.grep),
+    stepLimit: exported(
+      productModule(root, "shared/run-notices.ts"),
+      "STEP_LIMIT_EVENT",
+      STEP_LIMIT,
+    ),
   };
+}
+
+/** 触顶时运行里的自定义事件名（`shared/run-notices.ts` 的 `STEP_LIMIT_EVENT`）。 */
+export const STEP_LIMIT = "step-limit";
+
+const REASONING_EVENT = /^(REASONING|THINKING)_/;
+
+/**
+ * 运行里实际出现过的能力：有 REASONING_* 事件就有推理，调过某个工具就有那个工具，有触顶事件就有触顶。
+ * 和 {@link featureProbe} 取并集——标志读漏了（例如模块改了名），运行事件也能把它补上；反过来不会把在的
+ * 能力读成不在。
+ */
+export function observedFeatures(
+  events: readonly AgUiEvent[],
+  calls: readonly ToolCall[],
+  offeredTools: readonly string[] = [],
+): Partial<Features> {
+  const used = new Set([...calls.map((call) => call.name), ...offeredTools]);
+  const seen: Partial<Features> = {};
+  if (used.has(TOOL.plan)) seen.plan = true;
+  if (used.has(TOOL.subagent)) seen.subagent = true;
+  if (used.has(TOOL.edit)) seen.editTool = true;
+  if (used.has(TOOL.grep)) seen.grepTool = true;
+  if (events.some((event) => REASONING_EVENT.test(String(event.type ?? ""))))
+    seen.reasoning = true;
+  if (
+    events.some((event) => event.type === "CUSTOM" && event.name === STEP_LIMIT)
+  )
+    seen.stepLimit = true;
+  return seen;
+}
+
+/** 两份能力合起来：任何一份说在就在。 */
+export function withObserved(
+  features: Features,
+  seen: Partial<Features>,
+): Features {
+  const merged = { ...features };
+  for (const key of Object.keys(merged) as (keyof Features)[])
+    merged[key] = features[key] || seen[key] === true;
+  return merged;
 }
 
 export type ToolCall = {
@@ -139,6 +232,74 @@ export function toolCallsOf(events: readonly AgUiEvent[]): ToolCall[] {
     }
   }
   return [...calls.values()];
+}
+
+/**
+ * 对话快照（`threads.messages_snapshot`，AG-UI 的 Message[]）里的工具调用，按出现顺序，参数和结果配好。
+ *
+ * 运行事件存不进库时用它：服务器把一轮的全部事件用一条 INSERT 写进 `thread_run_events`，每行 4 个绑定
+ * 参数，超过 16383 条事件（PostgreSQL 驱动的 65534 个参数上限）整批失败，这一轮一条事件都不剩；而快照在
+ * 那条 INSERT 之前就写好了。思考模式开着时每个推理 token 都是一条事件，长一点的题很容易过线。
+ */
+export function toolCallsFromMessages(
+  messages: readonly unknown[],
+): ToolCall[] {
+  const calls = new Map<string, ToolCall>();
+  for (const message of messages) {
+    if (!message || typeof message !== "object") continue;
+    const { role, toolCalls, toolCallId, content } = message as {
+      role?: unknown;
+      toolCalls?: unknown;
+      toolCallId?: unknown;
+      content?: unknown;
+    };
+    if (role === "assistant" && Array.isArray(toolCalls))
+      for (const raw of toolCalls) {
+        const call = raw as {
+          id?: unknown;
+          function?: { name?: unknown; arguments?: unknown };
+        };
+        const id = String(call.id ?? "");
+        if (!id) continue;
+        calls.set(id, {
+          id,
+          name: String(call.function?.name ?? ""),
+          args:
+            typeof call.function?.arguments === "string"
+              ? call.function.arguments
+              : JSON.stringify(call.function?.arguments ?? ""),
+          result: "",
+        });
+      }
+    else if (role === "tool" && calls.has(String(toolCallId ?? ""))) {
+      const call = calls.get(String(toolCallId)) as ToolCall;
+      call.result =
+        typeof content === "string" ? content : JSON.stringify(content ?? "");
+    }
+  }
+  return [...calls.values()];
+}
+
+/** `threads.messages_snapshot` 列里的消息：驱动有时把 jsonb 存成一段 JSON 文本（与事件列一样），两种都认。 */
+export function snapshotMessages(value: unknown): unknown[] {
+  let parsed = value;
+  if (typeof value === "string")
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+/** 对话快照里有没有推理消息（AG-UI 的 `role: "reasoning"`）。 */
+export function snapshotHasReasoning(messages: readonly unknown[]): boolean {
+  return messages.some(
+    (message) =>
+      !!message &&
+      typeof message === "object" &&
+      (message as { role?: unknown }).role === "reasoning",
+  );
 }
 
 function parseJson(text: string): Record<string, unknown> | null {
@@ -177,7 +338,11 @@ const tri = (applicable: boolean, value: boolean): Tri =>
 
 /**
  * 熊宝员工一次做题（可能被追了几轮「继续」，`events` 是这几轮的事件按顺序拼起来）的能力指标。
- * `modelCalls` 是这次做题的模型调用次数（`model_token_calls` 的行数），用来判断有没有续跑。
+ * `modelCallsPerRound` 是每一轮的模型调用次数（`model_token_calls` 的行数），用来判断有没有续跑。
+ *
+ * `calls` 不给时从 `events` 里拼；运行事件没存进库时，调用方改从对话快照读出工具调用传进来
+ * （{@link toolCallsFromMessages}）。能力在不在 = `features` 与运行里实际出现的（{@link observedFeatures}）
+ * 取并集。
  */
 export function analyzeXiongbao(
   events: readonly AgUiEvent[],
@@ -185,10 +350,16 @@ export function analyzeXiongbao(
     features: Features;
     editsData: boolean;
     modelCallsPerRound: number[];
+    calls?: readonly ToolCall[];
+    /** 运行里实际出现过推理（对话快照里有 reasoning 消息），事件丢了也算。 */
+    reasoningSeen?: boolean;
   },
 ): Capabilities {
-  const { features } = options;
-  const calls = toolCallsOf(events);
+  const calls = options.calls ?? toolCallsOf(events);
+  const features = withObserved(options.features, {
+    ...observedFeatures(events, calls),
+    ...(options.reasoningSeen ? { reasoning: true } : {}),
+  });
   const named = (name: string) => calls.filter((call) => call.name === name);
 
   const plans = named(TOOL.plan);
@@ -224,7 +395,7 @@ export function analyzeXiongbao(
     );
 
   const stepLimited = events.some(
-    (event) => event.type === "CUSTOM" && event.name === "step-limit",
+    (event) => event.type === "CUSTOM" && event.name === STEP_LIMIT,
   );
   const subagents = named(TOOL.subagent).length;
   return {
@@ -235,9 +406,8 @@ export function analyzeXiongbao(
     subagentCount: subagents,
     reasoning: tri(
       features.reasoning,
-      events.some((event) =>
-        /^(REASONING|THINKING)_/.test(String(event.type ?? "")),
-      ),
+      options.reasoningSeen === true ||
+        events.some((event) => REASONING_EVENT.test(String(event.type ?? ""))),
     ),
     verified: options.editsData
       ? changes.length > 0 && verifiedAfter
@@ -268,7 +438,13 @@ type CodexEvent = Record<string, unknown> & {
 export type CodexSummary = {
   capabilities: Capabilities;
   steps: number;
-  tokens: { input: number; output: number; total: number } | null;
+  tokens: {
+    input: number;
+    output: number;
+    total: number;
+    /** `usage.cached_input_tokens` 的和（已含在 input 里）；一次都没报时不写。 */
+    cachedInput?: number;
+  } | null;
   lastMessage: string;
 };
 
@@ -286,6 +462,7 @@ export function analyzeCodex(
   const typeOf = (item: Record<string, unknown>) => String(item.type ?? "");
   let input = 0;
   let output = 0;
+  let cached: number | null = null;
   let sawUsage = false;
   for (const event of events)
     if (
@@ -296,6 +473,8 @@ export function analyzeCodex(
       const usage = event.usage as Record<string, unknown>;
       input += Number(usage.input_tokens ?? 0);
       output += Number(usage.output_tokens ?? 0);
+      if (typeof usage.cached_input_tokens === "number")
+        cached = (cached ?? 0) + usage.cached_input_tokens;
       sawUsage = true;
     }
   const todo = items.filter((item) => typeOf(item) === "todo_list");
@@ -349,7 +528,14 @@ export function analyzeCodex(
       verified: options.editsData ? (verified ? "yes" : "no") : "n/a",
     },
     steps: steps.length,
-    tokens: sawUsage ? { input, output, total: input + output } : null,
+    tokens: sawUsage
+      ? {
+          input,
+          output,
+          total: input + output,
+          ...(cached === null ? {} : { cachedInput: cached }),
+        }
+      : null,
     lastMessage: String(messages[messages.length - 1]?.text ?? ""),
   };
 }

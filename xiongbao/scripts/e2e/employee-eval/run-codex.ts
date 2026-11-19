@@ -183,6 +183,7 @@ async function runOne(
     wallMs,
     timedOut,
     steps: summary.steps,
+    toolCalls: summary.steps,
     modelCalls: null,
     tokens: summary.tokens,
     silentStop: null,

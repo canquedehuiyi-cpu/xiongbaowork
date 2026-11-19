@@ -33,6 +33,16 @@ const verdict = (record: EvalRecord | undefined) =>
       : record.passed
         ? "✅ 通过"
         : "❌ 未过";
+/** 输入里命中上下文缓存的比例；提供方没报缓存时「—」。 */
+export const cacheShare = (record: EvalRecord | undefined) => {
+  const input = record?.tokens?.input;
+  const cached = record?.tokens?.cachedInput;
+  return input && cached != null
+    ? `${Math.round((cached / input) * 100)}%`
+    : DASH;
+};
+const count = (value: number | null | undefined) =>
+  value == null ? DASH : String(value);
 const cell = (text: string) => text.replace(/\|/g, "\\|").replace(/\n/g, " ");
 
 function table(header: string[], rows: string[][]): string {
@@ -150,13 +160,46 @@ export function renderReport(results: EvalResults[]): string {
             theirs ? seconds(theirs.wallMs) : DASH,
             tokens(mine),
             tokens(theirs),
-            mine?.steps == null ? DASH : String(mine.steps),
-            theirs?.steps == null ? DASH : String(theirs.steps),
+            count(mine?.steps),
+            count(theirs?.steps),
           ];
         }),
       ),
       "",
-      "⏱ = 撞上墙钟上限。步数：熊宝是工具调用次数，Codex 是命令、改文件等动作数。",
+      "⏱ = 撞上墙钟上限。步数：熊宝 = 模型调用次数（`model_token_calls` 的行数，一步一次调用，不受运行事件存没存下影响）；Codex = 命令、改文件等动作数（`codex exec --json` 不报每一步的模型调用）。",
+      "",
+      "### token 与步数细分",
+      "",
+      table(
+        [
+          "题目",
+          "熊宝模型调用",
+          "熊宝工具调用",
+          "Codex 动作",
+          "熊宝输入",
+          "熊宝缓存命中",
+          "熊宝推理输出",
+          "Codex 输入",
+          "Codex 缓存命中",
+        ],
+        tasks.map((task) => {
+          const mine = find(xiongbao, task);
+          const theirs = find(codex, task);
+          return [
+            TASK_TITLES[task],
+            count(mine?.modelCalls),
+            count(mine?.toolCalls),
+            count(theirs?.toolCalls ?? theirs?.steps),
+            count(mine?.tokens?.input),
+            cacheShare(mine),
+            count(mine?.tokens?.reasoning),
+            count(theirs?.tokens?.input),
+            cacheShare(theirs),
+          ];
+        }),
+      ),
+      "",
+      "熊宝工具调用 = 运行事件里的工具调用数（事件没存下时读对话快照）。缓存命中 = 输入 token 里命中提供方上下文缓存的比例（DeepSeek 按前缀命中，命中部分按低价计费）；提供方没报时「—」。推理输出 = 输出 token 里思考的部分。",
       "",
     );
     if (xiongbao?.records.length) {
