@@ -8,6 +8,16 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **员工能生成图片、视频和文档类文件。** 新增 `generate_image`、`generate_video`、`check_video` 三件工具，每位员工默认都有，
+  工具权限里拒绝 `bot/generate_image` 或 `bot/generate_video` 即可关掉。生成服务走通用接口（OpenAI 兼容的
+  `images/generations` 与 `videos`），用新变量 `XIONGBAO_IMAGE_BASE_URL`、`XIONGBAO_IMAGE_API_KEY`、`XIONGBAO_IMAGE_MODEL`、
+  `XIONGBAO_VIDEO_BASE_URL`、`XIONGBAO_VIDEO_API_KEY`、`XIONGBAO_VIDEO_MODEL`、`XIONGBAO_VIDEO_PROVIDER`（默认 `openai-compatible`，
+  智谱视频填 `zhipu`）配置；不配置时工具只说明缺哪几项。智谱开放平台的免费模型（`cogview-3-flash`、`cogvideox-flash`）
+  可作起步，密钥在 open.bigmodel.cn 控制台「API Keys」里新建，填法见部署手册 5.3。
+  - **升级须知：有一条新迁移** `0230_generated_media`（新表，存生成的图片和视频，单个最大 50 MB），升级时照常先迁移。
+  - 两个镜像新增文档环境：python-docx、openpyxl、python-pptx、reportlab、weasyprint、pypdf、pdfplumber、pandas、
+    markitdown（MIT，0.1.9）、pandoc、中文字体 fonts-noto-cjk 与 fonts-wqy-microhei；单镜像另装 LibreOffice 无界面版。
+    镜像因此变大（单镜像约 1 GB，agent-computer 约 650 MB），构建时会跑一遍生成并读回带中文文件的自检。
 - **新手引导采用熊宝的黑白红样式。** 当前步骤用红色标记，演示使用石墨色面板，并在资料来源步骤加入示意图。
 
 ## 0.2.13

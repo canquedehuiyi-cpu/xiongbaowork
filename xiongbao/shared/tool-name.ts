@@ -1,5 +1,10 @@
 import { OFFER_CHECK_IN_TOOL } from "./check-in-offer";
 import { SHOW_APP_ACCESS_TOOL } from "./connect-prompt";
+import {
+  CHECK_VIDEO_TOOL,
+  GENERATE_IMAGE_TOOL,
+  GENERATE_VIDEO_TOOL,
+} from "./media";
 import { UPDATE_PLAN_TOOL } from "./plan";
 import { RESEARCH_ROLE_LABELS, researchRoleOfTool } from "./research";
 import { SUBAGENT_TOOL } from "./subagent";
@@ -613,6 +618,10 @@ const OWN_TOOLS: Record<string, OwnTool> = {
   [SUBAGENT_TOOL]: { running: "正在处理子任务", done: "处理了子任务" },
   // Its own plan for the work, written before it starts and ticked off as it goes.
   [UPDATE_PLAN_TOOL]: { running: "正在更新计划", done: "更新了计划" },
+  // Pictures and videos it makes for the person (`server/src/media/tools.ts`).
+  [GENERATE_IMAGE_TOOL]: { running: "正在生成图片", done: "生成了图片" },
+  [GENERATE_VIDEO_TOOL]: { running: "正在生成视频", done: "提交了视频" },
+  [CHECK_VIDEO_TOOL]: { running: "正在取视频", done: "查看了视频进度" },
   // A voice conversation handing what was said to the Bot behind it.
   ask_agent: { running: "正在问员工", done: "问了员工" },
   // Carrying a tracked piece of work: taking it on, handing it in, asking for more time.

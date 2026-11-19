@@ -28,7 +28,9 @@ describe("the documents toolchain's install", () => {
   test("every package is pinned to one exact version, transitive ones included", () => {
     expect(pins.length).toBeGreaterThan(20);
     for (const pin of pins)
-      expect(pin).toMatch(/^[A-Za-z0-9_.-]+(\[[a-z,]+\])?==[0-9][0-9A-Za-z.]*$/);
+      expect(pin).toMatch(
+        /^[A-Za-z0-9_.-]+(\[[a-z,]+\])?==[0-9][0-9A-Za-z.]*$/,
+      );
     const names = pins.map((pin) => pin.split(/[[=]/)[0]?.toLowerCase());
     expect(new Set(names).size).toBe(names.length);
     for (const wanted of [
@@ -61,7 +63,9 @@ describe("the documents toolchain's install", () => {
   ] as const) {
     test(`${label} installs Chinese fonts and the toolchain, and fails its build when the self-check fails`, () => {
       const dockerfile = read(root, path);
-      expect(dockerfile).toContain("COPY docker/docs-toolchain /opt/docs-toolchain");
+      expect(dockerfile).toContain(
+        "COPY docker/docs-toolchain /opt/docs-toolchain",
+      );
       expect(dockerfile).toContain("fonts-noto-cjk");
       expect(dockerfile).toContain("fonts-wqy-microhei");
       expect(dockerfile).toContain("pandoc");
@@ -100,7 +104,8 @@ function pythonWithToolchain(): string | undefined {
 }
 
 const python = pythonWithToolchain();
-const hasFontconfig = Bun.spawnSync(["sh", "-c", "command -v fc-list"]).exitCode === 0;
+const hasFontconfig =
+  Bun.spawnSync(["sh", "-c", "command -v fc-list"]).exitCode === 0;
 const runnable = python !== undefined && hasFontconfig;
 
 function selfcheck(env: Record<string, string> = {}) {
