@@ -380,6 +380,7 @@ tests/dockerfile-coding-tools.test.ts
 tests/dockerfile-runtime-tree.test.ts
 tests/due-time.test.ts
 tests/duplicate-run.test.ts
+tests/durable-runs.integration.test.ts
 tests/edition-routes.test.ts
 tests/egress-policy-delivery.integration.test.ts
 tests/egress-policy-on-wake.test.ts
@@ -458,6 +459,7 @@ tests/intelligence-entitlement-check.test.ts
 tests/intelligence-entitlements-quiet.test.ts
 tests/intelligence-expected-answers.test.ts
 tests/intelligence-memory.test.ts
+tests/interrupted-run-messages.test.ts
 tests/isolated-bots.integration.test.ts
 tests/jsonb-encoding.integration.test.ts
 tests/key-guide-link.test.ts
@@ -747,6 +749,7 @@ tests/routing-routes.test.ts
 tests/routing-service.test.ts
 tests/run-built-agent-cancellation.test.ts
 tests/run-event-compaction.test.ts
+tests/run-event-compactor.test.ts
 tests/run-events-persist.integration.test.ts
 tests/run-mode.test.ts
 tests/run-model-built-in.test.ts

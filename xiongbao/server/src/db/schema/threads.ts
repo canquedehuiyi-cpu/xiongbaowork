@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigserial,
   index,
@@ -32,7 +33,10 @@ export const threads = pgTable(
     agentId: text("agent_id").notNull(),
     name: text("name"),
     /** The ag-ui Message[] as of the last finalized run. */
-    messagesSnapshot: jsonb("messages_snapshot").$type<unknown[]>().notNull().default([]),
+    messagesSnapshot: jsonb("messages_snapshot")
+      .$type<unknown[]>()
+      .notNull()
+      .default([]),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -77,9 +81,22 @@ export const threadRuns = pgTable(
     agentId: text("agent_id").notNull(),
     parentRunId: text("parent_run_id"),
     eventCount: integer("event_count").notNull().default(0),
+    /**
+     * `running` while the turn writes its events as it goes, `finished` once the rest is in, and
+     * `interrupted` when the process that was running it died (`recovery/interrupted-runs.ts`).
+     * Rows from before the column are `finished`, which is what they are.
+     */
+    status: text("status").notNull().default("finished"),
+    /** The last time the process running the turn wrote it. A `running` row that stops moving is dead. */
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
-  (table) => [index("thread_runs_thread_idx").on(table.threadId, table.createdAt)],
+  (table) => [
+    index("thread_runs_thread_idx").on(table.threadId, table.createdAt),
+    index("thread_runs_running_idx")
+      .on(table.heartbeatAt)
+      .where(sql`${table.status} = 'running'`),
+  ],
 );
 
 export type ThreadRecord = typeof threads.$inferSelect;

@@ -498,6 +498,10 @@ import {
   RECOVERY_SWEEP_KIND,
   sweepAbandonedWork,
 } from "./recovery/abandoned-work";
+import {
+  INTERRUPT_SWEEP_MS,
+  interruptStaleRuns,
+} from "./recovery/interrupted-runs";
 import { createRequestActor } from "./request-actor";
 import { createResponsibilityBindingStore } from "./responsibilities/bindings";
 import {
@@ -3704,6 +3708,43 @@ await startupLifecycle.run(async (startup) => {
           );
         }
       }, 60_000),
+    (resource) => resource.stop(),
+  );
+  /*
+   * A conversation's turn whose process died (期九·二): marked interrupted, with a sentence in the
+   * conversation and a 「继续」 to reply. Not replayed. Asked again every 15 seconds on every replica,
+   * because a heartbeat that stopped moving is the only evidence and the claim is one conditional
+   * UPDATE; see `recovery/interrupted-runs.ts`.
+   */
+  const interruptStaleChatRuns = async () => {
+    try {
+      const closed = await interruptStaleRuns({
+        database,
+        closeCard: ({ tenantId, runId }) =>
+          taskProjector.finished({ tenantId, runRef: runId, failed: true }),
+        closed: ({ tenantId, threadId, runId }) =>
+          localThreadRunner.adoptClosedRun(tenantId, threadId, runId),
+      });
+      if (closed > 0)
+        console.warn(
+          JSON.stringify({ type: "interrupted-turns-closed", closed }),
+        );
+    } catch (error) {
+      console.error(
+        JSON.stringify({
+          type: "interrupted-turns-error",
+          error: error instanceof Error ? error.message : String(error),
+          timestamp: new Date().toISOString(),
+        }),
+      );
+    }
+  };
+  startup.acquireSync(
+    () => {
+      // Once at boot, so a turn that died while the server was down is closed as soon as it is up.
+      void interruptStaleChatRuns();
+      return repeatAfterEach(interruptStaleChatRuns, INTERRUPT_SWEEP_MS);
+    },
     (resource) => resource.stop(),
   );
   startup.acquireSync(

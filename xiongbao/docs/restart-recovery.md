@@ -27,6 +27,44 @@ The sweep leaves these alone:
 `work_items` leases (responsibility, delivery, approval queues) already recover themselves: an expired
 lease is claimed again.
 
+## A conversation's turn (期九·二)
+
+A person's turn in a chat can run for twenty-five minutes, so it is written to the database while it
+runs rather than once at the end.
+
+**While it runs.** `thread_runs.status` is `running`. The thread runner writes the turn's events to
+`thread_run_events` every 200 events or every 5 seconds, whichever comes first
+(`FLUSH_EVERY_EVENTS`, `FLUSH_EVERY_MS` in `threads/run-event-writer.ts`), and each write moves
+`thread_runs.heartbeat_at` forward. The end writes only what is left and sets `finished`. The rows
+and their `seq` are exactly what one write at the end stored: the joining of consecutive text and
+reasoning deltas is done by one compactor that holds back only the delta still being joined, so that
+last delta of a turn the process dies in is the one thing not on disk.
+
+**When the process dies.** Nothing moves the heartbeat again. Every replica checks every 15 seconds
+(and once at boot, `recovery/interrupted-runs.ts`) for a `running` turn whose heartbeat is older than
+30 seconds on the database's clock, and in one transaction, in that turn's own tenant:
+
+- claims it (`running` to `interrupted`; a second replica finds nothing to claim);
+- closes what its events left open and answers a tool call nobody answered with 「服务重启时这一步正在
+  执行，可能已经做了一部分，系统没有重新执行它」;
+- adds one sentence to the conversation ending 「要接着做，请回复「继续」」, the same reply a step limit
+  asks for, and a `turn-interrupted` event for a surface that wants to draw it;
+- writes the thread's messages as of the turn's end, and closes the turn's board card as failed.
+
+**Nothing is replayed**, and no tool call is run again, for the reason above: the step that was running
+may have spent money or touched the computer. 「继续」 starts a new turn that sees what was done.
+
+So a restarted conversation hears within about 45 seconds of the server being back. A `running` turn
+is not history until it is closed: loading a tenant's threads skips it, and the sweep hands the closed
+turn to a process that already holds the conversation.
+
+**Several replicas.** A turn's live stream (the events a page that is watching receives) is held in the
+memory of the process running it. Another replica can read what has been written, but not follow the
+turn live, and it cannot take a request that belongs to a turn running elsewhere. A deployment with
+more than one replica must therefore keep a thread on one replica (session affinity by thread id).
+A single replica (docker-compose, the desktop app) is unaffected. Following a turn across replicas
+is not implemented.
+
 ## Nothing is replayed
 
 A stopped step or firing may already have spent quota or written to the world. Re-running it is the

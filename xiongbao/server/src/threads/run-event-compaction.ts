@@ -36,23 +36,52 @@ function joinable(event: BaseEvent): event is Delta {
   );
 }
 
+/**
+ * The same joining, one event at a time, for a run that is written while it is still running.
+ *
+ * `take` hands over what can no longer change: every event up to the one in front, and that one too
+ * unless it is a delta the next event may still be joined onto. `end` hands over the rest. What
+ * `take` and `end` return, in the order they were taken, is exactly what {@link compactRunEvents}
+ * returns for the same events, wherever the cuts fell.
+ */
+export function createRunEventCompactor() {
+  const closed: BaseEvent[] = [];
+  let open: Delta | undefined;
+  return {
+    push(event: BaseEvent) {
+      if (
+        open &&
+        joinable(event) &&
+        event.type === open.type &&
+        event.messageId === open.messageId
+      ) {
+        open = { ...open, delta: `${open.delta}${event.delta}` };
+        return;
+      }
+      if (open) closed.push(open);
+      if (joinable(event)) {
+        open = event;
+        return;
+      }
+      open = undefined;
+      closed.push(event);
+    },
+    /** What is settled so far. */
+    take(): BaseEvent[] {
+      return closed.splice(0, closed.length);
+    },
+    /** Everything left, the delta still being joined included. */
+    end(): BaseEvent[] {
+      if (open) closed.push(open);
+      open = undefined;
+      return closed.splice(0, closed.length);
+    },
+  };
+}
+
 /** The run's events with each stretch of same-message deltas joined into one event. */
 export function compactRunEvents(events: readonly BaseEvent[]): BaseEvent[] {
-  const joined: BaseEvent[] = [];
-  let open: Delta | undefined;
-  for (const event of events) {
-    if (
-      open &&
-      joinable(event) &&
-      event.type === open.type &&
-      event.messageId === open.messageId
-    ) {
-      open = { ...open, delta: `${open.delta}${event.delta}` };
-      joined[joined.length - 1] = open;
-      continue;
-    }
-    joined.push(event);
-    open = joinable(event) ? event : undefined;
-  }
-  return joined;
+  const compactor = createRunEventCompactor();
+  for (const event of events) compactor.push(event);
+  return compactor.end();
 }
