@@ -497,8 +497,8 @@ export type DeploymentConfig = {
   selfHostBanner: boolean;
   /**
    * Whether a chat in the browser may have its computer tools run by the server, from the first step
-   * to the last, so that closing the page does not stop the work. Off unless
-   * XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS is `on`. Even on, only a run that says so itself (a
+   * to the last, so that closing the page does not stop the work. On unless
+   * XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS is `off` (期九·六; `off` stays one release as the way back). Even on, only a run that says so itself (a
    * `computerTools: "server"` in its forwardedProps) is taken over; every other run is left to the
    * browser, so a tool is never run twice. See `threads/chat-server-tools.ts`.
    */
@@ -1773,15 +1773,16 @@ function turnNoticeWindowMs(environment: Environment): number {
 }
 
 /**
- * Whether a browser chat's computer tools may be run by the server: `on` or `off`, off when unset.
+ * Whether a browser chat's computer tools may be run by the server: `on` or `off`, on when unset
+ * (期九·六, after the DeepSeek evaluation in docs/acceptance/2026-11-19-background-runs.md).
  * Refused rather than coerced, like the other switches that decide who does a thing: a typo that
  * quietly stayed off would leave an operator believing closed pages no longer stop the work.
  */
 function chatServerComputerToolsEnabled(environment: Environment): boolean {
   const name = "XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS";
   const value = optional(environment, name)?.toLowerCase();
-  if (value === undefined || value === "off") return false;
-  if (value === "on") return true;
+  if (value === undefined || value === "on") return true;
+  if (value === "off") return false;
   throw new Error(`${name} must be "on" or "off"`);
 }
 
