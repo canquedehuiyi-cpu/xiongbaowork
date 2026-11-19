@@ -855,6 +855,7 @@ tests/text-translations.test.ts
 tests/third-party-notices.test.ts
 tests/thread-identity.test.ts
 tests/thread-routes.test.ts
+tests/thread-run-events-many.integration.test.ts
 tests/thread-status.test.ts
 tests/three-tenant-demo.integration.test.ts
 tests/tool-calls-come-back.integration.test.ts
