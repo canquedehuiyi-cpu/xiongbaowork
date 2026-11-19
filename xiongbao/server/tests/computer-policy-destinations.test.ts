@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { recorderOriginRules } from "../src/browser/egress";
+import { originRules } from "../src/browser/egress";
 import {
   type EgressPolicy,
   withDestinations,
@@ -10,10 +10,7 @@ import {
  * policy that lists destinations, so an administrator's allowlist does not cut it off from its model.
  */
 
-const proxy = recorderOriginRules({
-  openbotUrls: ["http://server.internal:3001/api/agent-model"],
-  gatewayUrl: "",
-});
+const proxy = originRules(["http://server.internal:3001/api/agent-model"]);
 
 describe("withDestinations", () => {
   test("the proxy's origin, host and port only, is what is added", () => {
@@ -53,11 +50,8 @@ describe("withDestinations", () => {
   });
 
   test("an address given as an IP is a range rule, with its port", () => {
-    expect(
-      recorderOriginRules({
-        openbotUrls: ["http://10.0.0.7:3001/api/agent-model"],
-        gatewayUrl: "",
-      }),
-    ).toEqual([{ type: "cidr", value: "10.0.0.7/32", ports: "3001" }]);
+    expect(originRules(["http://10.0.0.7:3001/api/agent-model"])).toEqual([
+      { type: "cidr", value: "10.0.0.7/32", ports: "3001" },
+    ]);
   });
 });

@@ -190,10 +190,7 @@ import {
 import { englishName, setBrand } from "./brand";
 import { openbotAddress } from "./browser/address";
 import { botBrowserNetwork } from "./browser/bot-browser";
-import {
-  personBrowserEgressPolicy,
-  recorderOriginRules,
-} from "./browser/egress";
+import { originRules, personBrowserEgressPolicy } from "./browser/egress";
 import {
   botRecordRefusal,
   directBrowserComputers,
@@ -5560,10 +5557,7 @@ await startupLifecycle.run(async (startup) => {
         auditStore: bootAuditStore,
         personBrowserPolicy,
         // An external employee's agent on its computer reaches the model proxy, whatever the list says.
-        alwaysAllowed: recorderOriginRules({
-          openbotUrls: [agentModelComputerUrl],
-          gatewayUrl: "",
-        }),
+        alwaysAllowed: originRules([agentModelComputerUrl]),
         // While a person records in a Bot's browser, the Recorder there reaches OpenBot and the
         // gateway; the Bot does not.
         duringRecording: botBrowserNetwork({
