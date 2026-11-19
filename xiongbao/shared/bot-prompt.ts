@@ -339,11 +339,6 @@ export const COMPONENT_GUIDANCE = asParagraphs(COMPONENT_GUIDANCE_LINES);
  *
  * Conditional on holding the tool, because a subagent reads this prompt too and holds no such tool,
  * and a check-in is offered none.
- *
- * A Bot run here that holds the tool is also told, in its own `<delegation>` section, to share a job
- * of two or more independent parts out on its own initiative (`SUBAGENT_GUIDANCE` in `subagent.ts`,
- * 期四). That section is where the rule for doing it lives; this one is kept as it is, because a Bot
- * run elsewhere reads it byte for byte.
  */
 const ORCHESTRATION_GUIDANCE_LINES = [
   `When you hold ${SUBAGENT_TOOL}, you can give parts of your work to subagents. A subagent is a`,
