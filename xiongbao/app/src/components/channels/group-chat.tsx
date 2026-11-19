@@ -59,6 +59,7 @@ import {
 import { GroupPlans } from "./pinned-plans";
 import { StepLimitNote } from "./step-limit-note";
 import { TeamBotConsentCard } from "./team-bot-consent";
+import { ThinkingBlock } from "./thinking-block";
 
 /** Whether `groupId` is the group this channel is the chat of. */
 function isThisChat(
@@ -585,6 +586,18 @@ export function GroupLine({
             </span>
           ) : null}
         </MessageHeader>
+        {/* 这一轮的思考（期三），在回复上方，折起来；服务器写进回复行时这一轮已经想完了。 */}
+        {message.reasoning?.text ? (
+          <ThinkingBlock
+            id={`group:${message.id}`}
+            text={message.reasoning.text}
+            thinking={false}
+            {...(message.reasoning.ms === undefined
+              ? {}
+              : { ms: message.reasoning.ms })}
+            truncated={message.reasoning.truncated === true}
+          />
+        ) : null}
         {(message.status === "running" || message.status === "queued") &&
         !message.text ? (
           <p

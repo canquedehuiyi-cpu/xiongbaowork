@@ -67,6 +67,12 @@ export type RunSteps = {
    * mode). Each step's prompt has it put back (`withReplayedReasoning`). Empty for any other run.
    */
   reasoning?: ReadonlyMap<string, string>;
+  /**
+   * The steps are the whole turn's, not this run's: a turn whose tool calls the host runs between
+   * runs is several runs, and each starts from the conversation the last one left. Counted from the
+   * person's message instead, so the budget is spent once across them. See {@link answersOnLastStep}.
+   */
+  wholeTurn?: boolean;
 };
 
 /** A new run's state: counted from where it starts, never from where an earlier run stopped. */
@@ -74,8 +80,10 @@ export function startRun(
   steps: RunSteps,
   parts: readonly string[] = [],
   reasoning: ReadonlyMap<string, string> = new Map(),
+  wholeTurn = false,
 ) {
   steps.reasoning = reasoning;
+  steps.wholeTurn = wholeTurn;
   steps.before = undefined;
   steps.nudges = 0;
   steps.parts = parts;
@@ -122,6 +130,15 @@ export function unattendedLastStep(parts: number, maxSteps: number): number {
 
 function turnsIn(prompt: Prompt): number {
   return prompt.filter((message) => message.role === "assistant").length;
+}
+
+/**
+ * The model turns the conversation held before the person's latest message: where a whole turn's
+ * steps start, however many runs it took. A prompt with no person's message counts them all.
+ */
+function turnsBeforeLastUser(prompt: Prompt): number {
+  const last = prompt.map((message) => message.role).lastIndexOf("user");
+  return turnsIn(last < 0 ? prompt : prompt.slice(0, last));
 }
 
 /**
@@ -220,7 +237,9 @@ export function answersOnLastStep(
         }
       : asked;
     const turns = turnsIn(options.prompt);
-    steps.before ??= turns;
+    steps.before ??= steps.wholeTurn
+      ? turnsBeforeLastUser(options.prompt)
+      : turns;
     const step = turns - steps.before + 1;
     const budget = run.unattended
       ? unattendedLastStep(steps.parts?.length ?? 0, maxSteps)

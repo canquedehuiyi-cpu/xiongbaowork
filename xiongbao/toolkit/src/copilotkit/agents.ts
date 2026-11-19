@@ -18,12 +18,14 @@ import {
   finalize,
   from,
   fromEvent,
+  map,
   type Observable,
   of,
   switchMap,
   takeUntil,
 } from "rxjs";
 import { sanitizeSeededHistory } from "../history-sanitize";
+import { plainToolResults } from "../tool-result-text";
 import { firingChecklist } from "./firing-checklist";
 import {
   answersOnLastStep,
@@ -116,6 +118,13 @@ export type BuiltInAgentHooks = {
    * may refuse a reasoning part it did not sign. See `replayed-reasoning.ts`.
    */
   replayReasoning?: boolean;
+  /**
+   * Whether this run is one round of a turn the host carries on between runs (it runs the tool
+   * calls itself and starts the Bot again with their results). Then the step budget is the turn's:
+   * counted from the person's message, so it is not spent afresh by every round. Absent, a run
+   * counts from where it starts.
+   */
+  wholeTurn?: (input: RunAgentInput) => boolean;
 };
 
 /**
@@ -312,7 +321,10 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
     const answeredByResume = new Set(
       (input.resume ?? []).map((entry) => entry.interruptId),
     );
-    const history = sanitizeSeededHistory(input.messages, answeredByResume);
+    // A string tool result is stored quoted (the runtime serializes it); the model is handed it as the tool returned it.
+    const history = plainToolResults(
+      sanitizeSeededHistory(input.messages, answeredByResume),
+    );
     // A routine's firing carries the checklist it has to close. See `firingChecklist`.
     const checklist = firingChecklist(history);
     // A new run counts its steps from where it starts, never from where an earlier run stopped.
@@ -320,6 +332,7 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
       this.steps,
       checklist.parts,
       this.hooks.replayReasoning ? reasoningByToolCall(history) : undefined,
+      this.hooks.wholeTurn?.(input) === true,
     );
     const { inline, observe, attribute } = this.hooks;
     /*
@@ -328,17 +341,19 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
      * resumes. See `BuiltInAgentHooks.attribute`.
      */
     const toModel = (messages: Message[]) =>
-      sayingStepLimit(
-        observe(
-          super.run({
-            ...input,
-            messages: checklist.toModel(
-              attribute ? attribute(messages) : messages,
-            ),
-          }),
-          input,
+      stampingReasoning(
+        sayingStepLimit(
+          observe(
+            super.run({
+              ...input,
+              messages: checklist.toModel(
+                attribute ? attribute(messages) : messages,
+              ),
+            }),
+            input,
+          ),
+          this.steps,
         ),
-        this.steps,
       );
     /*
      * ALONGSIDE THE GUARD ABOVE, NOT INSTEAD OF IT. One drops a conversation the model provider is
@@ -431,6 +446,33 @@ function sayingStepLimit(
         event,
       );
     }),
+  );
+}
+
+/** The reasoning events a run's thinking is told in, which carry the moment they went out. */
+const STAMPED_REASONING: ReadonlySet<string> = new Set([
+  EventType.REASONING_START,
+  EventType.REASONING_MESSAGE_START,
+  EventType.REASONING_MESSAGE_END,
+  EventType.REASONING_END,
+]);
+
+/**
+ * The run's stream, with the moment each piece of thinking started and ended on its reasoning
+ * events (the event's own `timestamp`, milliseconds since the epoch) (期三).
+ *
+ * The runtime sends them bare, so a conversation opened later had the thinking and not how long it
+ * took: the replay arrives all at once. Stamped here, in the run's own stream, the runner stores the
+ * moments with the run's other events, and the chat says 「思考了 N 秒」 on a reload as it did live.
+ * An event that already carries a moment keeps it.
+ */
+function stampingReasoning(run: Observable<BaseEvent>): Observable<BaseEvent> {
+  return run.pipe(
+    map((event) =>
+      STAMPED_REASONING.has(event.type) && event.timestamp === undefined
+        ? ({ ...event, timestamp: Date.now() } as BaseEvent)
+        : event,
+    ),
   );
 }
 

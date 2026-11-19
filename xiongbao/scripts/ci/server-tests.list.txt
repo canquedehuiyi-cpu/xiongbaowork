@@ -234,6 +234,8 @@ tests/channel-routes.test.ts
 tests/channel-summary.integration.test.ts
 tests/channel-titler.test.ts
 tests/channel-work.integration.test.ts
+tests/chat-server-computer-tools-config.test.ts
+tests/chat-server-tools.integration.test.ts
 tests/check-in-offer.test.ts
 tests/coding-tools.test.ts
 tests/command-timeout.test.ts
@@ -270,6 +272,7 @@ tests/computer-culler.integration.test.ts
 tests/computer-download-routes.test.ts
 tests/computer-exec-timeout.test.ts
 tests/computer-fleet-route.test.ts
+tests/computer-gateway-turn.test.ts
 tests/computer-gateway.test.ts
 tests/computer-handoff-contract.test.ts
 tests/computer-human-input.test.ts
@@ -325,6 +328,7 @@ tests/database-pool-closing.test.ts
 tests/database.test.ts
 tests/db-client-address.test.ts
 tests/decision-waits.integration.test.ts
+tests/deepseek-cache-usage.test.ts
 tests/deepseek-thinking-run.test.ts
 tests/deepseek-thinking.integration.test.ts
 tests/deepseek-thinking.test.ts
@@ -744,6 +748,8 @@ tests/routing-model-url.test.ts
 tests/routing-routes.test.ts
 tests/routing-service.test.ts
 tests/run-built-agent-cancellation.test.ts
+tests/run-event-compaction.test.ts
+tests/run-events-persist.integration.test.ts
 tests/run-mode.test.ts
 tests/run-model-built-in.test.ts
 tests/run-model.test.ts

@@ -64,6 +64,10 @@ export class HeadlessToolSuspension extends Error {
   }
 }
 
+/** What the run's error says when a turn used up its rounds of tool calls. A host may recognise it. */
+export const SEGMENT_LIMIT_MESSAGE =
+  "The headless tool continuation limit was reached.";
+
 /** The light turn's ceiling, unless the turn says otherwise (`TURN_LIMITS.toolSegments`). */
 const MAX_TOOL_SEGMENTS = TURN_LIMITS.toolSegments;
 
@@ -195,9 +199,7 @@ export class HeadlessToolsMiddleware extends Middleware {
             return;
           }
           if (segment === this.maxSegments)
-            throw new Error(
-              "The headless tool continuation limit was reached.",
-            );
+            throw new Error(SEGMENT_LIMIT_MESSAGE);
           const results = new Map<string, string>();
           const run = async (call: ToolCall, seen: Message[]) => {
             const tool = tools.get(call.function.name);

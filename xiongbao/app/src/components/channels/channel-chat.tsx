@@ -42,6 +42,7 @@ import { PinnedPlans } from "@/components/channels/pinned-plans";
 import { PlanCard } from "@/components/channels/plan-card";
 import { ProgressRow } from "@/components/channels/progress-row";
 import { stepLimitNotes } from "@/components/channels/step-limit-note";
+import { reasoningTimesSubscriber } from "@/components/channels/thinking-block";
 import {
   seedMessage,
   takeFirstMessage,
@@ -700,6 +701,14 @@ export function ChannelChat({
     const subscription = agent.subscribe?.(stepLimitTracker.subscriber);
     return () => subscription?.unsubscribe();
   }, [agent, stepLimitTracker]);
+  /*
+   * 每段思考服务器记下的起止时刻（期三）：从推理事件上读，回放的也一样，刷新后思考块照样说「思考了 N 秒」。
+   * 和上面一样，订阅写在加入线程的 effect 前面。
+   */
+  useEffect(() => {
+    const subscription = agent.subscribe?.(reasoningTimesSubscriber);
+    return () => subscription?.unsubscribe();
+  }, [agent]);
   const stepLimit = useSyncExternalStore(
     stepLimitTracker.listen,
     stepLimitTracker.steps,

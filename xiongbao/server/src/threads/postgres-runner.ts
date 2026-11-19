@@ -51,6 +51,7 @@ import {
   isTenantFramed,
   runAsTenant,
 } from "../tenant/context";
+import { compactRunEvents } from "./run-event-compaction";
 import {
   entryHungRound,
   onlyOnIdleThreadRequested,
@@ -87,6 +88,9 @@ const tenantLoads = new Map<string, Promise<void>>();
 const LOAD_LIMIT = 500;
 /** Threads read per round trip while loading, so one tenant's history is never one huge result. */
 const LOAD_CHUNK = 50;
+
+/** Rows of one run's events per INSERT: four parameters each, well inside the driver's 65534. */
+const EVENT_INSERT_BATCH = 2000;
 
 function ownedBy(threadId: string, tenant: string): boolean {
   const owner = threadOwners.get(threadId);
@@ -1014,6 +1018,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       try {
         threadOwners.set(threadId, tenant);
         const snapshot = this.peekMessages(threadId);
+        const kept = compactRunEvents(events);
         await this.database
           .insert(threads)
           .values({
@@ -1029,15 +1034,30 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
           .where(eq(threads.id, threadId));
         await this.database
           .insert(threadRuns)
-          .values({ id: runId, threadId, agentId, eventCount: events.length })
+          .values({ id: runId, threadId, agentId, eventCount: kept.length })
           .onConflictDoNothing();
-        if (events.length > 0) {
-          await this.database
-            .insert(threadRunEvents)
-            .values(
-              events.map((event, seq) => ({ threadId, runId, seq, event })),
-            )
-            .onConflictDoNothing();
+        if (kept.length > 0) {
+          /*
+           * One INSERT binds four parameters a row and the driver takes 65534, so a run past 16383
+           * events lost every one of them at once, and a thinking run is made of one event per token.
+           * Written in batches, inside one transaction: the run's events still all land or none do.
+           */
+          await this.database.transaction(async (transaction) => {
+            for (let at = 0; at < kept.length; at += EVENT_INSERT_BATCH)
+              await transaction
+                .insert(threadRunEvents)
+                .values(
+                  kept
+                    .slice(at, at + EVENT_INSERT_BATCH)
+                    .map((event, offset) => ({
+                      threadId,
+                      runId,
+                      seq: at + offset,
+                      event,
+                    })),
+                )
+                .onConflictDoNothing();
+          });
         }
       } catch (error) {
         console.error("thread persistence failed", threadId, error);

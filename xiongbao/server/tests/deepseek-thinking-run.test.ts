@@ -256,6 +256,33 @@ describe("a person's run on DeepSeek, thinking on (the default)", () => {
     ).toEqual(["先查 ENG-1 的状态。", "查到了，可以作答。"]);
   });
 
+  test("each piece of thinking says when it started and when it ended, so a replay can say how long it took", async () => {
+    deepSeekSays([
+      lookupCall("ENG-1", "先查 ENG-1 的状态。"),
+      { content: "ENG-1 在 Todo。", reasoning: "查到了，可以作答。" },
+    ]);
+    const before = Date.now();
+    const { events } = await chat("ENG-1 是什么状态？");
+    const after = Date.now();
+    const stamped = (type: string) =>
+      events
+        .filter((event) => event.type === type)
+        .map(
+          (event) => (event as BaseEvent & { timestamp?: unknown }).timestamp,
+        );
+    const starts = stamped("REASONING_MESSAGE_START");
+    const ends = stamped("REASONING_MESSAGE_END");
+    expect(starts).toHaveLength(2);
+    expect(ends).toHaveLength(2);
+    for (const moment of [...starts, ...ends]) {
+      expect(typeof moment).toBe("number");
+      expect(moment as number).toBeGreaterThanOrEqual(before);
+      expect(moment as number).toBeLessThanOrEqual(after);
+    }
+    for (const [index, start] of starts.entries())
+      expect(ends[index] as number).toBeGreaterThanOrEqual(start as number);
+  });
+
   test("on the next turn, sends back the thinking of the turn that called a tool and drops the rest", async () => {
     deepSeekSays([
       lookupCall("ENG-1", "先查 ENG-1 的状态。"),
