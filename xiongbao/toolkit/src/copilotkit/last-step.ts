@@ -8,8 +8,12 @@ import {
   LAST_STEP_NOTICE,
   openPartsNudge,
   promiseNudge,
+  STEP_LIMIT_EVENT,
+  type StepLimitPayload,
 } from "@openbot/shared/run-notices";
 import { unkeptPromise } from "./unkept-promise";
+
+export { STEP_LIMIT_EVENT, type StepLimitPayload };
 
 // Use the model contract of the runtime we actually ship, without a second AI SDK version.
 type Model = Extract<
@@ -48,7 +52,7 @@ export type RunSteps = {
   /**
    * The step an extended run was made to answer on with its tools off, or unset while it has not
    * been. Set, the run ran out of steps, and says so (`STEP_LIMIT_EVENT` in
-   * `@openbot/shared/step-limit`).
+   * `shared/run-notices.ts`).
    */
   limited?: number;
 };

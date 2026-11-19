@@ -23,13 +23,15 @@ import {
   switchMap,
   takeUntil,
 } from "rxjs";
-import {
-  STEP_LIMIT_EVENT,
-  type StepLimitPayload,
-} from "@openbot/shared/step-limit";
 import { sanitizeSeededHistory } from "../history-sanitize";
 import { firingChecklist } from "./firing-checklist";
-import { answersOnLastStep, type RunSteps, startRun } from "./last-step";
+import {
+  answersOnLastStep,
+  type RunSteps,
+  STEP_LIMIT_EVENT,
+  type StepLimitPayload,
+  startRun,
+} from "./last-step";
 import {
   type NativeRunScope,
   nativeApprovalRun,
