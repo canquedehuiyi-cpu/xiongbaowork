@@ -21,6 +21,7 @@ import type { RunnerLike } from "@openbot/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { z } from "zod";
+import { SUBAGENT_GUIDANCE } from "../../shared/subagent";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { createSubagents, SUBAGENT_HANDED_BACK } from "../src/agents/subagent";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
@@ -46,8 +47,8 @@ import {
 } from "../src/db/schema";
 import { createPluginStore } from "../src/plugins/store";
 import { grantedTools, REFUSAL_MARKER } from "../src/plugins/tools";
-import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { runAsTenant } from "../src/tenant/context";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { afterAll, beforeAll, beforeEach } from "./support/platform-frame";
 
 /*
@@ -713,6 +714,71 @@ describe("a Bot gives part of its work to a subagent", () => {
     expect(released).toContain(answered.threadId);
   }, 30_000);
 
+  /*
+   * 期四：员工被告知多部分任务主动委派，在工具描述上，也在提示词的 <delegation> 段里；子代理自己
+   * 不持有这个工具，所以没有这段。模型调了 run_subagent 之后，这一轮照常往下走到最后的答复。
+   */
+  test("a person's Bot is told to share independent parts out, on the tool and in its prompt, and its turn carries on to the answer once the subagents are back", async () => {
+    script = (request) => {
+      if (isSubagent(request))
+        return { content: `${taskOf(request)}：已查到。` };
+      return toolResults(request).length === 0
+        ? {
+            toolCalls: [
+              subagentCall("调研 A 公司的定价", "一句话：价格和来源"),
+              subagentCall("调研 B 公司的定价", "一句话：价格和来源"),
+            ],
+          }
+        : { content: "两家公司的定价都查完了。" };
+    };
+
+    const run = await ask("分别调研 A、B 两家公司的定价，再给我对比。");
+
+    const [first, second] = parentRequests();
+    if (!first) throw new Error("The Bot was never asked.");
+    // On the tool: share out a job of independent parts, and no longer "slower than doing it yourself".
+    const description =
+      (first.tools ?? []).find((tool) => tool.function.name === SUBAGENT_TOOL)
+        ?.function.description ?? "";
+    expect(description).toContain("两个以上相互独立的部分");
+    expect(description).toContain("主动给每个部分派一个");
+    expect(description).toContain("你自己负责计划、汇总和最后的判断");
+    expect(description).toContain("一两步就能完成的简单任务自己做");
+    expect(description).toContain("answer 里写明要交回什么、用什么格式");
+    expect(description).toContain("每轮最多 5 个，子代理不能再派子代理");
+    expect(description).toContain("团队成员不是子代理");
+    for (const discouraging of [
+      "slower",
+      "only when",
+      "比自己做慢",
+      "优先串行",
+      "短小",
+    ])
+      expect(description).not.toContain(discouraging);
+    // In the prompt, in a section of its own; a subagent, holding no such tool, is not told it.
+    expect(
+      text(first.messages[0] ?? { role: "system", content: "" }),
+    ).toContain(`<delegation>\n${SUBAGENT_GUIDANCE}`);
+    const subs = subagentRequests();
+    expect(subs).toHaveLength(2);
+    for (const sub of subs)
+      expect(JSON.stringify(sub.messages)).not.toContain("<delegation>");
+
+    // The turn carries on: both answers come back to the Bot, and it gives its own answer.
+    expect(
+      resultsIn(second)
+        .map((result) => "answer" in result && result.answer)
+        .sort(),
+    ).toEqual(["调研 A 公司的定价：已查到。", "调研 B 公司的定价：已查到。"]);
+    expect(parentRequests()).toHaveLength(2);
+    expect(
+      run.newMessages
+        .filter((message) => message.role === "assistant")
+        .map((message) => message.content)
+        .at(-1),
+    ).toBe("两家公司的定价都查完了。");
+  }, 30_000);
+
   test("subagents called in one step run at the same time, and the sixth in one answer is refused", async () => {
     searching.until = 5;
     script = (request) => {
@@ -1184,9 +1250,7 @@ describe("a Bot gives part of its work to a subagent", () => {
     // The reason that is true, six times: nothing started there, so none of them was a subagent this
     // answer used, and the sixth is not told it had already started five.
     expect(
-      refusals.map((refusal) =>
-        refusal.includes("in a task from a check-in"),
-      ),
+      refusals.map((refusal) => refusal.includes("in a task from a check-in")),
     ).toEqual([true, true, true, true, true, true]);
     expect(refusals.join(" ")).not.toContain("one answer can start up to");
   }, 30_000);
@@ -1197,7 +1261,9 @@ describe("a Bot gives part of its work to a subagent", () => {
     script = (request) => {
       if (isSubagent(request))
         return {
-          toolCalls: [{ name: modelName(POST), arguments: JSON.stringify(note) }],
+          toolCalls: [
+            { name: modelName(POST), arguments: JSON.stringify(note) },
+          ],
         };
       // The raw count, not resultsIn(): a refusal is a plain string that resultsIn() drops, and
       // every request carries the whole history, so the count is what says which call is next.
@@ -1279,7 +1345,9 @@ describe("a Bot gives part of its work to a subagent", () => {
     script = (request) => {
       if (isSubagent(request))
         return {
-          toolCalls: [{ name: modelName(POST), arguments: JSON.stringify(note) }],
+          toolCalls: [
+            { name: modelName(POST), arguments: JSON.stringify(note) },
+          ],
         };
       if (toolResults(request).length < 2)
         return { toolCalls: [subagentCall("Post a note about the change.")] };
@@ -1302,7 +1370,9 @@ describe("a Bot gives part of its work to a subagent", () => {
     expect(toolResults(parentRequests()[3])).toHaveLength(0);
     const [third] = resultsIn(parentRequests()[4]);
     if (!third || !("handedBack" in third))
-      throw new Error("The new turn's call was refused instead of handed back.");
+      throw new Error(
+        "The new turn's call was refused instead of handed back.",
+      );
     expect(third.handedBack.args).toMatchObject(note);
     // And the breaker is armed again in the new turn: the same action a second time is refused.
     expect(toolResults(parentRequests()[5])[1]).toContain(REFUSAL_MARKER);
@@ -1314,7 +1384,9 @@ describe("a Bot gives part of its work to a subagent", () => {
     script = (request) => {
       if (isSubagent(request))
         return {
-          toolCalls: [{ name: modelName(POST), arguments: JSON.stringify(note) }],
+          toolCalls: [
+            { name: modelName(POST), arguments: JSON.stringify(note) },
+          ],
         };
       // The raw count: the four breaker refusals are plain strings that resultsIn() would drop,
       // and counting only parsed results would never reach six.
