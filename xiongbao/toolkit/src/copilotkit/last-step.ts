@@ -40,6 +40,17 @@ export type RunSteps = {
   parts?: readonly string[];
   /** Everything the model has said in this run, which is what closes a part. */
   said?: string;
+  /**
+   * The run went on past its first budget of steps, because it was still calling tools on what
+   * would have been its last. See {@link answersOnLastStep}'s `extension`. A run is extended once.
+   */
+  extended?: boolean;
+  /**
+   * The step an extended run was made to answer on with its tools off, or unset while it has not
+   * been. Set, the run ran out of steps, and says so (`STEP_LIMIT_EVENT` in
+   * `@openbot/shared/step-limit`).
+   */
+  limited?: number;
 };
 
 /** A new run's state: counted from where it starts, never from where an earlier run stopped. */
@@ -48,6 +59,8 @@ export function startRun(steps: RunSteps, parts: readonly string[] = []) {
   steps.nudges = 0;
   steps.parts = parts;
   steps.said = "";
+  steps.extended = false;
+  steps.limited = undefined;
 }
 
 /**
@@ -65,10 +78,10 @@ export const MOST_NUDGES = 4;
 /**
  * The step budget of a run nobody is watching: a routine's firing, or a check-in.
  *
- * Interactive chat keeps its eight (`TOOL_STEPS` in the server's copilot.ts): a person is there to
- * say "carry on", and every extra step is their wait. A routine has nobody to say it. The routine
- * that showed this needed about twenty lookups, and seven tool-enabled steps made one twenty-call
- * burst the only plan that fitted.
+ * Interactive chat has its own (`TOOL_STEPS` in the server's copilot.ts, extended once by as many
+ * again when a run is still at work on its last): a person is there to say "carry on". A routine
+ * has nobody to say it. The routine that showed this needed about twenty lookups, and seven
+ * tool-enabled steps made one twenty-call burst the only plan that fitted.
  *
  * `base` covers that routine even read one lookup per step, with room to answer; a model reading a
  * few at a time, as it is asked to, uses well under half. Each part of a multi-part routine is its
@@ -119,6 +132,15 @@ function told(prompt: Prompt, text: string): Prompt {
  * to the prompt, so the step a call is for is how many the prompt holds past where the run began. A
  * nudged step is still one assistant turn, so a nudge never uses a step up.
  *
+ * ONE MORE BUDGET, ONCE, FOR A PERSON'S RUN STILL AT WORK. With `extension`, a run somebody is
+ * watching is not made to answer on step `maxSteps`: that step is sent with its tools like any other.
+ * A model that answers on it ends the run there, as before. One that calls a tool is still working,
+ * and the run carries on for `extension` more steps, the last of which is sent without tools as
+ * above. That is the only extension a run gets ({@link RunSteps.extended}). A run that reaches it
+ * is marked ({@link RunSteps.limited}), and the agent says so in its stream (`STEP_LIMIT_EVENT`)
+ * so the person can carry on themselves. The configuration handed back holds `maxSteps + extension`,
+ * so the runtime allows the steps. A run nobody is watching is never extended: its budget is its own.
+ *
  * A wrapper around the model because the runtime takes only `maxSteps` and offers no hook between
  * steps, the same reason `withToolSearch` is one. A configuration with no step limit, or a model the
  * runtime cannot resolve here, is returned as it is.
@@ -126,7 +148,7 @@ function told(prompt: Prompt, text: string): Prompt {
 export function answersOnLastStep(
   configuration: BuiltInAgentConfiguration,
   steps: RunSteps,
-  run: { unattended?: boolean } = {},
+  run: { unattended?: boolean; extension?: number } = {},
 ): BuiltInAgentConfiguration {
   if ("factory" in configuration) return configuration;
   const { maxSteps } = configuration;
@@ -140,15 +162,23 @@ export function answersOnLastStep(
   }
   if (!isModel(model)) return configuration;
   const inner = model;
+  const extension =
+    !run.unattended && run.extension && run.extension > 0
+      ? Math.floor(run.extension)
+      : 0;
 
   /** The call for this step, and whether it is the run's last. */
   const forStep = (options: CallOptions) => {
     const turns = turnsIn(options.prompt);
     steps.before ??= turns;
     const step = turns - steps.before + 1;
-    const lastStep = run.unattended
+    const budget = run.unattended
       ? unattendedLastStep(steps.parts?.length ?? 0, maxSteps)
       : maxSteps;
+    // Past its first budget only because it was still calling tools on that budget's last step.
+    if (extension > 0 && step > budget) steps.extended = true;
+    const lastStep = budget + extension;
+    if (step >= lastStep && steps.extended) steps.limited = step;
     return step >= lastStep
       ? {
           last: true,
@@ -352,7 +382,11 @@ ${part.delta.trimStart()}`;
     doGenerate,
     doStream,
   };
-  return { ...configuration, model: wrapped };
+  return {
+    ...configuration,
+    model: wrapped,
+    ...(extension > 0 ? { maxSteps: maxSteps + extension } : {}),
+  };
 }
 
 /** The parts whose `id` names a block of text or reasoning, which a second ask in one step reuses. */

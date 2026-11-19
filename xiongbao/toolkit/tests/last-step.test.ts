@@ -7,6 +7,10 @@ import {
 import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
 import { parametersFor } from "../src/granted-tool";
 import { answersOnLastStep, MOST_NUDGES } from "../src/copilotkit/last-step";
+import {
+  STEP_LIMIT_EVENT,
+  type StepLimitPayload,
+} from "@openbot/shared/step-limit";
 
 /**
  * A run stops after `maxSteps` model steps. A Bot that searched once per step spent all of them on
@@ -207,6 +211,116 @@ describe("a run's last step", () => {
     expect(agent.modelHostClass).toBe(
       new BuiltInAgent(named as BuiltInAgentConfiguration).modelHostClass,
     );
+  });
+});
+
+/** Every event a run sends, in order. */
+async function eventsOf(agent: BuiltInAgent): Promise<BaseEvent[]> {
+  agent.threadId = "thread";
+  agent.setMessages([{ id: "ask", role: "user", content: "Find five." }]);
+  const events: BaseEvent[] = [];
+  await agent.runAgent({}, { onEvent: ({ event }) => void events.push(event) });
+  return events;
+}
+
+const stepLimits = (events: BaseEvent[]) =>
+  events.filter(
+    (event) =>
+      event.type === "CUSTOM" &&
+      (event as BaseEvent & { name?: string }).name === STEP_LIMIT_EVENT,
+  ) as (BaseEvent & { value: StepLimitPayload })[];
+
+/** A model that calls a tool on the first `working` steps it is offered tools, then answers. */
+function workingFor(calls: Call[], working: number) {
+  const model = searchingForever(calls);
+  return {
+    ...model,
+    doStream: async (options: {
+      toolChoice?: { type: string };
+      prompt: { role: string }[];
+    }) =>
+      model.doStream(
+        calls.length >= working
+          ? { ...options, toolChoice: { type: "none" } }
+          : options,
+      ),
+  };
+}
+
+describe("a person's run still at work on its last step", () => {
+  test("is given one more budget of steps, and only then answers without tools", async () => {
+    const calls: Call[] = [];
+    const agent = new BuiltInAgentWithSaneHistory(configuration(calls), {
+      observe: (run) => run,
+      extension: 3,
+    });
+    const events = await eventsOf(agent);
+    expect(calls.map((call) => call.toolChoice?.type)).toEqual([
+      "auto",
+      "auto",
+      "auto",
+      "auto",
+      "auto",
+      "none",
+    ]);
+    // Said once, in the run, before it finishes: how many steps the run used.
+    const limits = stepLimits(events);
+    expect(limits).toHaveLength(1);
+    expect(limits[0]?.value).toEqual({ steps: 6 });
+    const at = events.indexOf(limits[0] as BaseEvent);
+    expect(events.slice(at + 1).map((event) => String(event.type))).toEqual([
+      "RUN_FINISHED",
+    ]);
+  });
+
+  test("a run that stops calling tools by its last step ends there, unextended and unflagged", async () => {
+    const calls: Call[] = [];
+    const agent = new BuiltInAgentWithSaneHistory(
+      { ...configuration(calls), model: workingFor(calls, 2) as never },
+      { observe: (run) => run, extension: 3 },
+    );
+    const events = await eventsOf(agent);
+    expect(calls).toHaveLength(3);
+    expect(stepLimits(events)).toEqual([]);
+  });
+
+  test("the extension is given once, counted again for every run", async () => {
+    const calls: Call[] = [];
+    const agent = new BuiltInAgentWithSaneHistory(configuration(calls), {
+      observe: (run) => run,
+      extension: 3,
+    });
+    await eventsOf(agent);
+    const second = agent.clone();
+    calls.length = 0;
+    const events = await eventsOf(second);
+    expect(calls).toHaveLength(6);
+    expect(calls.at(-1)?.toolChoice?.type).toBe("none");
+    expect(stepLimits(events)).toHaveLength(1);
+  });
+
+  test("an unattended run keeps its own budget, with no extension and no event", async () => {
+    const calls: Call[] = [];
+    const agent = new BuiltInAgentWithSaneHistory(configuration(calls), {
+      observe: (run) => run,
+      unattended: true,
+      extension: 3,
+    });
+    const events = await eventsOf(agent);
+    expect(calls.map((call) => call.toolChoice?.type)).toEqual([
+      "auto",
+      "auto",
+      "none",
+    ]);
+    expect(stepLimits(events)).toEqual([]);
+  });
+
+  test("a run with no extension says nothing when it is cut off", async () => {
+    const calls: Call[] = [];
+    const agent = new BuiltInAgentWithSaneHistory(configuration(calls), {
+      observe: (run) => run,
+    });
+    expect(stepLimits(await eventsOf(agent))).toEqual([]);
   });
 });
 
