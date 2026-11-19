@@ -202,6 +202,7 @@ import {
 } from "./threads/run-side-events";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
+import { holdsOwnWebSearch, webResearchGuidance } from "./web/guidance";
 import { withBrowserWireCodeRunner } from "./wire-codes";
 
 /**
@@ -1170,8 +1171,13 @@ export function builtInAgentConfiguration(
     // 只认数组：较早的调用方可能在这个位置多传了一个无关参数。
     ...(Array.isArray(runToolNames) ? runToolNames : []),
   ]);
+  /*
+   * 员工持有自带的 `web_search` 时，找资料走它（`<web_research>` 段），浏览器搜百度只是它出错时的退路，
+   * 写在那一段里；所以这里不再给「先去浏览器搜百度」那段。不持有时与原来逐字一致。
+   */
+  const ownWebSearch = holdsOwnWebSearch(tools);
   const holdings = grantedToolGuidance(tools, connectedVendors, {
-    browser: browserSearch,
+    browser: browserSearch && !ownWebSearch,
   });
   /*
    * 这次运行实际持有的工具名：授予的，加上界面或无人值守那套随运行提供的。电脑工具只从后者来，所以
@@ -1253,6 +1259,17 @@ export function builtInAgentConfiguration(
       // M3: the fork's guidance; see the note on the plugins imports.
       ...promptSection("apps", holdings),
       /*
+       * 联网工具（`web_search`、`web_fetch`、`web_crawl`）怎么用，只对持有的员工说，持有哪个说哪个（期五 B）。
+       * 放在电脑说明之前：持有浏览器时，电脑说明里「照上面说的用浏览器搜」指的就是这一段写的退路。
+       */
+      ...promptSection(
+        "web_research",
+        webResearchGuidance(
+          tools.map((tool) => tool.name),
+          { browser: browserSearch },
+        ),
+      ),
+      /*
        * The delivery loop's four rules, for a coworker that holds `accept_task` and only then: one whose
        * 接活 is switched off does not work in three steps (spec 2026-11-15-delivery-loop §4).
        */
@@ -1293,7 +1310,7 @@ export function builtInAgentConfiguration(
         ? promptSection(
             "computer",
             computerGuidance({
-              search: holdsWebSearch(tools),
+              search: holdsWebSearch(tools) || ownWebSearch,
               personal: currentEdition() === "personal",
               browserSearch,
             }),

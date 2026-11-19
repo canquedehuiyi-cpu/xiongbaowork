@@ -1,0 +1,65 @@
+# 熊宝数字员工联网搜索（web_search）用的 SearXNG 设置。
+#
+# 在 SearXNG 自带的默认设置上改几项（use_default_settings），只留下国内外都可能可用的引擎。
+# 服务器按 GET /search?q=…&format=json 调用它，所以 search.formats 必须包含 json。
+use_default_settings:
+  engines:
+    keep_only:
+      - bing
+      - baidu
+      - sogou
+      - 360search
+      - duckduckgo
+      - brave
+      - wikipedia
+
+general:
+  instance_name: "xiongbao-search"
+  # 不收集统计，也不对外暴露 /metrics。
+  enable_metrics: false
+
+search:
+  safe_search: 1
+  autocomplete: ""
+  favicon_resolver: ""
+  default_lang: "zh-CN"
+  # html 留给运维在浏览器里排查，json 给服务器的 web_search。
+  formats:
+    - html
+    - json
+  # 引擎出错、被限流或遇到验证码后先停用一阵，免得越搜越被封。
+  ban_time_on_fail: 5
+  max_ban_time_on_fail: 120
+  suspended_times:
+    SearxEngineAccessDenied: 180
+    SearxEngineCaptcha: 3600
+    SearxEngineTooManyRequests: 300
+
+server:
+  # 由 SEARXNG_SECRET 覆盖：compose 在容器每次启动时生成随机值（见 docker-compose.yml）。
+  # 保留这个占位值是有意的：SearXNG 认得它，万一没被覆盖就拒绝启动，而不是带着公开的密钥运行。
+  secret_key: "ultrasecretkey"
+  # SearXNG 自带的限流器（limiter）是给公网实例防爬虫用的：它要 Valkey，还会按浏览器特征拦请求，
+  # 而这里唯一的调用方是本部署的服务器。这个实例不对外发布；调用频率由服务器限住（web_search
+  # 全部署每秒最多两次），对上游引擎的压力由上面的停用时间和下面的超时、连接数限住。
+  limiter: false
+  public_instance: false
+  image_proxy: false
+  method: "GET"
+
+outgoing:
+  request_timeout: 4.0
+  max_request_timeout: 10.0
+  pool_connections: 20
+  pool_maxsize: 10
+
+engines:
+  # 这几个在默认设置里是关着的，这里打开。
+  - name: bing
+    disabled: false
+  - name: baidu
+    disabled: false
+  - name: sogou
+    disabled: false
+  - name: 360search
+    disabled: false
