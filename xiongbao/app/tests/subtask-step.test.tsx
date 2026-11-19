@@ -138,15 +138,19 @@ async function subtaskRow(view: Awaited<ReturnType<typeof draw>>) {
   return within(row);
 }
 
-test("a subtask is one step of the turn's work line, not a card of its own", async () => {
+test("each subtask is a card of its own, titled with the start of its task", async () => {
   const view = await draw(answered, { settled: true, busy: false });
   expect(await view.findByText("执行了一个子任务")).toBeTruthy();
-  expect(view.container.querySelector("figure")).toBeNull();
-  // Its own line says what it was asked and how many steps it took.
+  // 一张独立的卡，不收在「用了几个工具」那一行里。
+  const cards = view.container.querySelectorAll("[data-subagent-card]");
+  expect(cards).toHaveLength(1);
+  expect(cards[0]?.closest("details:not([data-subagent-card])")).toBeNull();
+  // 卡的标题是它的任务开头 30 个字，旁边说它做完了、走了几步。
   const line = within(
     view.getByText("子任务").closest("summary") as HTMLElement,
   );
-  expect(line.getByText(/For customer account Birch Labs/)).toBeTruthy();
+  expect(line.getByText("For customer account Birch Lab…")).toBeTruthy();
+  expect(line.getByText("已完成")).toBeTruthy();
   expect(line.getByText("2 个步骤")).toBeTruthy();
 });
 
@@ -184,9 +188,7 @@ test("an action it handed back is said plainly, and nothing asks for an approval
   expect(notice.getByText("List open tickets（accounts）")).toBeTruthy();
   expect(notice.getByText("Acme Robotics")).toBeTruthy();
   // Why it stopped is on the card too, in the person's words and not the sentence meant for the Bot.
-  expect(
-    notice.getByText(/它停下来的原因：这一步在等你批准。/),
-  ).toBeTruthy();
+  expect(notice.getByText(/它停下来的原因：这一步在等你批准。/)).toBeTruthy();
   expect(notice.queryByText(/This action is waiting/)).toBeNull();
 });
 
@@ -210,7 +212,7 @@ test("a subtask its turn left behind says it never finished, and one the server 
   expect(refused.queryByText(/耗时/)).toBeNull();
 });
 
-test("subtasks started together share one line that counts them while their turn runs", async () => {
+test("subtasks started together are cards side by side, counted while their turn runs", async () => {
   // Two calls in one step, neither answered yet: the second row is drawn under the first.
   const first = answered;
   const second = { ...handedBack, parentThreadId: answered.parentThreadId };
@@ -245,8 +247,12 @@ test("subtasks started together share one line that counts them while their turn
     ),
   );
   expect(await view.findByText("正在处理 2 个子任务…")).toBeTruthy();
+  // 同一步派出的两张卡排在同一组里，各自转着。
+  const group = view.container.querySelector("[data-subagent-cards]");
+  expect(group?.querySelectorAll("[data-subagent-card]")).toHaveLength(2);
   expect(view.getAllByText("子任务")).toHaveLength(2);
   expect(view.getAllByText("工作中")).toHaveLength(2);
+  expect(group?.querySelectorAll("[data-working-spinner]")).toHaveLength(2);
   expect(view.queryByText("未完成")).toBeNull();
 });
 
@@ -269,9 +275,10 @@ function withResult(
   subtask: RecordedSubtask,
   change: (result: Record<string, unknown>) => Record<string, unknown>,
 ): RecordedSubtask {
-  const result = JSON.parse(
-    JSON.parse(subtask.result) as string,
-  ) as Record<string, unknown>;
+  const result = JSON.parse(JSON.parse(subtask.result) as string) as Record<
+    string,
+    unknown
+  >;
   // Stored the way the server sends it: its JSON, encoded once more as the tool message's text.
   const text = JSON.stringify(JSON.stringify(change(result)));
   return { ...subtask, result: text };
@@ -354,16 +361,13 @@ test("a handed-back subtask says why it stopped and what it had said before stop
 
 test("a subtask that did not finish is said in the person's words, whatever the server's reason was", async () => {
   const stopped = await draw(
-    withResult(
-      answered,
-      (result) => ({
-        ...result,
-        answer: undefined,
-        error:
-          "The subagent did not finish: The routine's turn was stopped after 300s.",
-        ms: 301_000,
-      }),
-    ),
+    withResult(answered, (result) => ({
+      ...result,
+      answer: undefined,
+      error:
+        "The subagent did not finish: The routine's turn was stopped after 300s.",
+      ms: 301_000,
+    })),
     { settled: true, busy: false },
   );
   const line = await subtaskLine(stopped);
@@ -377,21 +381,18 @@ test("a subtask that did not finish is said in the person's words, whatever the 
 
   // A reason nobody has words for yet is still shown, rather than quietly left off the page.
   const other = await draw(
-    withResult(
-      answered,
-      (result) => ({
-        ...result,
-        answer: undefined,
-        error: "The subagent did not finish: The provider is unavailable.",
-      }),
-    ),
+    withResult(answered, (result) => ({
+      ...result,
+      answer: undefined,
+      error: "The subagent did not finish: The provider is unavailable.",
+    })),
     { settled: true, busy: false },
   );
   expect((await subtaskLine(other)).getByText(/没能完成/)).toBeTruthy();
   expect(
-    await (
-      await subtaskRow(other)
-    ).findByText(/它没能完成：The provider is unavailable\./),
+    await (await subtaskRow(other)).findByText(
+      /它没能完成：The provider is unavailable\./,
+    ),
   ).toBeTruthy();
 });
 
@@ -420,9 +421,9 @@ test("a call refused before any run started says what it was refused for", async
     { settled: true, busy: false },
   );
   expect(
-    await (
-      await subtaskRow(checkin)
-    ).findByText(/这个任务里每一步都要在这段对话里问你/),
+    await (await subtaskRow(checkin)).findByText(
+      /这个任务里每一步都要在这段对话里问你/,
+    ),
   ).toBeTruthy();
   cleanup();
 
