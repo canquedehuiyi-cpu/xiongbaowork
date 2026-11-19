@@ -1,10 +1,16 @@
 import { declaredHarness } from "@openbot/shared/harnesses";
 import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import {
+  ACP_CLOUD_WORKDIR_REF,
+  ACP_CODEX_CLOUD_REFUSAL,
   type AcpHarness,
   type AcpRuleKey,
   type AcpRuleValue,
+  type AcpRuntime,
+  acpCloudDeviceId,
   acpRulesFrom,
+  acpRuntimeFrom,
+  codexCannotRunInCloud,
 } from "../../../shared/acp";
 import { thinkingOf } from "../../../shared/thinking";
 import { capabilityRefusal } from "../admin/capabilities";
@@ -357,6 +363,15 @@ export type ExternalAgentRun = {
   permissions: Record<AcpRuleKey, AcpRuleValue>;
   /** `custom` only: the hirer confirmed it was hired knowing it may never ask (Review Focus 5). */
   noPermissionAcknowledged?: true;
+  /**
+   * Where it runs (`agents.configuration.runtime`): `cloud` is the employee's own XiongBao computer,
+   * `device` the hirer's paired machine. Absent is `device`, which is what every employee made before
+   * there was a choice is, so nothing saved needs to change. A `cloud` employee has no device and no
+   * folder of the hirer's: its `deviceId` is made from its own id when it is created
+   * (`acpCloudDeviceId`) and its folder is the fixed `ACP_CLOUD_WORKDIR_REF`, which the computer
+   * resolves itself.
+   */
+  runtime?: AcpRuntime;
 };
 
 /**
@@ -549,11 +564,14 @@ export function externalField(row: {
   )
     return {};
   const rules = acpRulesFrom(saved);
+  const runtime = acpRuntimeFrom(saved);
   return {
     externalRun: {
       harness,
       deviceId: saved.deviceId,
       workdirRef: saved.workdirRef,
+      // Only a cloud employee says so: every other one publishes exactly what it always did.
+      ...(runtime === "cloud" ? { runtime } : {}),
       ...(harness === "custom" && typeof saved.appRef === "string"
         ? { appRef: saved.appRef }
         : {}),
@@ -670,11 +688,23 @@ function promptOf(
 }
 
 /** An external employee's `agents.configuration`, written whole: only the fields it runs on. */
-function externalConfiguration(run: ExternalAgentRun): Record<string, unknown> {
+export function externalConfiguration(
+  run: ExternalAgentRun,
+  /** The employee's own id, for a cloud employee's device id (`acpCloudDeviceId`). */
+  agentId?: string,
+): Record<string, unknown> {
+  const cloud = run.runtime === "cloud";
+  // Refused where it is written, whoever asks: the cloud computer has no Codex.
+  if (codexCannotRunInCloud(run.harness, run.runtime))
+    throw new ExternalAgentRefusedError(ACP_CODEX_CLOUD_REFUSAL);
   return {
-    deviceId: run.deviceId,
+    // A cloud employee is its own "device" in the relay's lanes and queues, named by its id; its
+    // folder is the one fixed reference the computer resolves. Neither is the hirer's to choose.
+    deviceId: cloud && agentId ? acpCloudDeviceId(agentId) : run.deviceId,
     harness: run.harness,
-    workdirRef: run.workdirRef,
+    workdirRef: cloud ? ACP_CLOUD_WORKDIR_REF : run.workdirRef,
+    // Written only for `cloud`: a device employee's configuration is what it always was.
+    ...(cloud ? { runtime: "cloud" } : {}),
     ...(run.harness === "custom" && run.appRef ? { appRef: run.appRef } : {}),
     permissions: { ...run.permissions },
     ...(run.harness === "custom" && run.noPermissionAcknowledged
@@ -1178,7 +1208,7 @@ export function createAgentProfileStore(
             id,
             name: input.name,
             type: "device_acp",
-            configuration: externalConfiguration(external),
+            configuration: externalConfiguration(external, id),
           });
         } else if (endpoint) {
           await transaction.insert(agents).values({
@@ -1395,10 +1425,16 @@ export function createAgentProfileStore(
           const configuration: Record<string, unknown> = {
             ...previous,
             ...(isExternal && input.external
-              ? externalConfiguration({
-                  ...input.external,
-                  harness: previous.harness as ExternalAgentRun["harness"],
-                })
+              ? externalConfiguration(
+                  {
+                    ...input.external,
+                    harness: previous.harness as ExternalAgentRun["harness"],
+                    // Where it runs is chosen when it is made, and an edit of its rules or name
+                    // leaves it there.
+                    runtime: acpRuntimeFrom(previous),
+                  },
+                  id,
+                )
               : {}),
             ...(!starter && row?.type === "built_in" && described
               ? { systemPrompt: input.roleDescription }

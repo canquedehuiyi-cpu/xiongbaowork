@@ -51,6 +51,13 @@ import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
+import {
+  ACP_CLOUD_WORKDIR_REF,
+  ACP_CODEX_CLOUD_REFUSAL,
+  acpCloudDeviceId,
+  acpRuntimeFrom,
+  codexCannotRunInCloud,
+} from "../../shared/acp";
 import { mediaGuidance } from "../../shared/media";
 import { planGuidance } from "../../shared/plan";
 import { subagentGuidance } from "../../shared/subagent";
@@ -726,7 +733,23 @@ export function registeredAgentFromRow(
      * Where and what it runs, by reference only (`fld_…`, `app_…`): the paths and the command stay on
      * the owner's computer. A row missing any of it is skipped, like an endpoint that is not a URL.
      */
-    const { deviceId, harness, workdirRef, appRef } = configuration;
+    const {
+      deviceId: savedDevice,
+      harness,
+      workdirRef: savedFolder,
+      appRef,
+    } = configuration;
+    // Where it runs; absent is the hirer's paired computer, as every employee made before this was.
+    const runtime = acpRuntimeFrom(configuration);
+    /*
+     * A cloud employee is its own "device" in the relay's lanes and queues, named by its id, and its
+     * folder is the one fixed reference its computer resolves; read from the id and not from what was
+     * saved, so a row cannot name another employee's lane or a path.
+     */
+    const deviceId =
+      runtime === "cloud" ? acpCloudDeviceId(row.id) : savedDevice;
+    const workdirRef =
+      runtime === "cloud" ? ACP_CLOUD_WORKDIR_REF : savedFolder;
     if (
       typeof deviceId !== "string" ||
       !deviceId ||
@@ -746,6 +769,8 @@ export function registeredAgentFromRow(
       deviceId,
       harness: harness as DeviceAcpEmployee["harness"],
       workdirRef,
+      // Only a cloud employee says where it runs: every other one is built exactly as it always was.
+      ...(runtime === "cloud" ? { runtime } : {}),
       ...(typeof appRef === "string" && appRef ? { appRef } : {}),
       persona: acpPersonaText(row),
       standingMessage: standingRoleMessage(row),
@@ -1995,6 +2020,15 @@ function refusingProvider(model: RuntimeModel): RefusingProvider {
   };
 }
 
+/** Why an external employee is not run at all, or null: Codex saved as `cloud` (its computer has none). */
+export function externalRefusalReason(
+  agent: Pick<DeviceAcpEmployee, "harness" | "runtime">,
+): string | null {
+  return codexCannotRunInCloud(agent.harness, agent.runtime)
+    ? ACP_CODEX_CLOUD_REFUSAL
+    : null;
+}
+
 async function buildAgent(
   agent: RegisteredAgent,
   model: RuntimeModel,
@@ -2039,6 +2073,15 @@ async function buildAgent(
      * A run the runtime makes for itself (a title) is answered on the deployment's built-in runner
      * instead (`answersOwnRunsHere`), holding nothing, so it never reaches the computer.
      */
+    // A Codex employee saved as `cloud` (the cloud computer has none) is not run, not moved to a
+    // computer of the owner's: it says why instead.
+    const refusedBecause = externalRefusalReason(agent);
+    if (refusedBecause)
+      return new UnavailableAgent({
+        id: agent.id,
+        name: agent.name,
+        reason: refusedBecause,
+      });
     const device =
       deviceAcpAgentFor(agent, { tenantId: currentTenant() }) ??
       new UnavailableAgent({

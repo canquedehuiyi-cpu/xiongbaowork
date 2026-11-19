@@ -1,5 +1,6 @@
 tests/account-argument.test.ts
 tests/acp-agent.test.ts
+tests/acp-cloud.test.ts
 tests/acp-delivery.integration.test.ts
 tests/acp-e2e.integration.test.ts
 tests/acp-group.integration.test.ts
@@ -285,6 +286,7 @@ tests/computer-local-tools-routes.test.ts
 tests/computer-own-token.test.ts
 tests/computer-page-frame-route.test.ts
 tests/computer-page-frame-store.integration.test.ts
+tests/computer-policy-destinations.test.ts
 tests/computer-policy-dry-run-frame.test.ts
 tests/computer-policy-dry-run-limit.test.ts
 tests/computer-policy-key-names.test.ts

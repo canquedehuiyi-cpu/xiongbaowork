@@ -38,9 +38,11 @@ import {
 import {
   deliverEgressPolicies,
   type EgressPolicy,
+  type EgressRule,
   effectiveNetworkPolicy,
   egressDecision,
   pushEgressPolicies,
+  withDestinations,
 } from "../computer/policy-network";
 import type { ComputerProvider } from "../computer/provider";
 import type { Database } from "../db/client";
@@ -108,6 +110,11 @@ export type EnterpriseDeps = {
     botId: string,
     policy: EgressPolicy,
   ) => Promise<EgressPolicy>;
+  /**
+   * Destinations every Bot's policy allows besides the organization's own (`withDestinations`): the
+   * address external employees on their computers reach the model proxy at. Absent: none.
+   */
+  alwaysAllowed?: readonly EgressRule[];
   /** Pushed to every computer with its policy; see `computer/policy-network.ts`. */
   webBotAuth?: WebBotAuth;
   /** `provider/model` the built-in Bot runs on, for the model allowlist and usage view. */
@@ -732,9 +739,12 @@ async function initializeEnterpriseControls(
         owner.member,
         owner.cloudNetwork,
       );
-      return deps.duringRecording
-        ? deps.duringRecording(botId, policy)
+      const pushed = deps.duringRecording
+        ? await deps.duringRecording(botId, policy)
         : policy;
+      return deps.alwaysAllowed
+        ? withDestinations(pushed, deps.alwaysAllowed)
+        : pushed;
     };
 
     // Tried again within seconds until it lands, quietly while a computer is likely still starting.
