@@ -459,7 +459,8 @@ describe("web_fetch: reading a page", () => {
         url: "https://big.example/",
       }),
     );
-    expect(String(defaults.content).length).toBe(20_000);
+    // 没有电脑可存盘时，默认截到 16KB（用户 2026-11-19 同意）：「字」占 3 字节，16384 / 3 取整是 5461 字。
+    expect(String(defaults.content).length).toBe(5_461);
   });
 
   test("a site that does not answer in time is answered, never thrown", async () => {

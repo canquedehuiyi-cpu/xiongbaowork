@@ -61,6 +61,7 @@ import {
   FLUSH_EVERY_MS,
   RunEventWriter,
 } from "./run-event-writer";
+import { watched } from "./thread-viewers";
 import {
   entryHungRound,
   onlyOnIdleThreadRequested,
@@ -1046,7 +1047,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
      */
     const kept = new ReplaySubject<BaseEvent>();
     turn.subscribe(kept);
-    return kept.asObservable();
+    // Whoever holds the stream is looking at the thread for as long as they hold it (`thread-viewers.ts`).
+    return watched(tenant, threadId, kept.asObservable());
   }
 
   private async persist(
@@ -1373,9 +1375,13 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
   override connect(request: AgentRunnerConnectRequest): Observable<BaseEvent> {
     if (!ownedBy(request.threadId, currentTenant())) return EMPTY;
     // A reconnect replays what the thread said, not the heartbeats of a run (`transient`).
-    return super
-      .connect({ ...request, ...storeScope(request.threadId) })
-      .pipe(filter((event) => !transient(event)));
+    return watched(
+      currentTenant(),
+      request.threadId,
+      super
+        .connect({ ...request, ...storeScope(request.threadId) })
+        .pipe(filter((event) => !transient(event))),
+    );
   }
 
   /**

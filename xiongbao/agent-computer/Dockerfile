@@ -71,6 +71,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && python3 /opt/docs-toolchain/selfcheck.py --require-pandoc \
   && rm -rf /root/.cache /tmp/*
 
+# 外部编码员工（云电脑里只有 Claude Code，2026-11-19 拍板）：员工在自己的这台电脑里跑 Claude Code。ACP 适配器和它带的
+# Claude Code 在构建时就装好，员工启动时不再 `npx -y` 下载任何东西。版本在 docker/acp-adapters/package.json 里钉到精确版本、
+# 锁在 bun.lock：@agentclientprotocol/claude-agent-acp@0.107.0（自带 Claude Code）。Codex 不预装：Codex 员工只能在用户自己
+# 配对的电脑上跑（runtime 为 device）。Claude Code 是专有许可，用户已知晓并决定预装（规格 §8.2）。
+# 要换版本，改 package.json、重生成 bun.lock，并同步 runner/src/acp/manifest.ts 的 ACP_MANIFEST。
+# 装完当场跑一遍，装不全或版本不对就构建失败。体积约 0.43 GB（Claude Code 约 350 MB，其余是依赖）。
+# 独立成一步，放在会常变的源码拷贝之前，改源码不会重装这一层。装进 /opt/xiongbao-acp，不碰系统的 node 和 bun。
+WORKDIR /opt/xiongbao-acp
+COPY docker/acp-adapters/package.json docker/acp-adapters/bun.lock ./
+RUN bun install --frozen-lockfile --production \
+  && test "$(node node_modules/.bin/claude-agent-acp --version)" = "0.107.0" \
+  && rm -rf /root/.cache /root/.bun /usr/local/install/cache /tmp/*
+ENV XIONGBAO_ACP_ADAPTERS_DIR=/opt/xiongbao-acp
+# Where the agents' own state and the adapters' start folder live (acp-cloud.ts). Not the workspace: that is the
+# employee's own folder, and nothing of the agents' belongs in its files.
+ENV XIONGBAO_ACP_STATE_DIR=/var/lib/xiongbao-acp
+RUN mkdir -p /var/lib/xiongbao-acp
+
 WORKDIR /app
 # The lockfile as well as the manifest: `--frozen-lockfile` with no lockfile present resolves afresh
 # and exits 0, so the file has to be here for the flag to mean anything.
@@ -91,6 +109,16 @@ COPY shared/recorder-extension.ts shared/recorder-extension.json /shared/
 # The header names the server sends and src/wire-headers.ts reads (both sides take them from here).
 COPY shared/wire-headers.ts /shared/
 RUN ln -s /app/node_modules /shared/node_modules
+
+# The external employees' host (src/acp-cloud.ts): the runner's own ACP host, which an owner's machine runs too.
+# It reaches only its own folder (runner/src/acp: the host, the client, the launch manifest, the path facts, the
+# login PATH, discovery), the transport the client is built on (mcp-client.ts and the bundled-runtime.ts it
+# starts children with), the idle time (idle.ts, alone in a file so the MCP bridge does not come with it), and
+# shared/acp.ts. A module resolves its imports from its own directory, so they go where `../../runner/...` and
+# `../../shared/...` resolve from /app/src.
+COPY runner/src/acp /runner/src/acp
+COPY runner/src/idle.ts runner/src/mcp-client.ts runner/src/bundled-runtime.ts /runner/src/
+COPY shared/acp.ts /shared/
 
 # The built Recorder, put into every person's browser this computer opens. Without it the computer
 # still serves Bots and refuses to open a person's browser, saying why.

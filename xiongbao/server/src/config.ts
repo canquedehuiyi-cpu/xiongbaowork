@@ -504,6 +504,12 @@ export type DeploymentConfig = {
    */
   chatServerComputerTools: boolean;
   /**
+   * How long, in milliseconds, one "your turn ended while you were away" notice stands in for the
+   * turns of the same conversation that end right after it (`threads/turn-notice.ts`). A minute unless
+   * XIONGBAO_TURN_NOTICE_WINDOW_SECONDS says otherwise; `0` says every turn.
+   */
+  turnNoticeWindowMs: number;
+  /**
    * Where the built app is, when this process serves it.
    *
    * Set in a container image that carries both. Unset in development, where Vite serves the app and
@@ -1749,6 +1755,24 @@ function generativeUiEnabled(environment: Environment): boolean {
 }
 
 /**
+ * XIONGBAO_TURN_NOTICE_WINDOW_SECONDS: a whole number of seconds, 0 to a day. Refused rather than
+ * coerced, so a typo does not quietly turn the merging off or make it swallow a day of notices.
+ */
+function turnNoticeWindowMs(environment: Environment): number {
+  const name = "XIONGBAO_TURN_NOTICE_WINDOW_SECONDS";
+  const value = optional(environment, name);
+  if (value === undefined) return 60_000;
+  const seconds = Number(value);
+  if (
+    !/^\d+$/.test(value) ||
+    !Number.isSafeInteger(seconds) ||
+    seconds > 86_400
+  )
+    throw new Error(`${name} must be a whole number of seconds, 0 to 86400`);
+  return seconds * 1000;
+}
+
+/**
  * Whether a browser chat's computer tools may be run by the server: `on` or `off`, off when unset.
  * Refused rather than coerced, like the other switches that decide who does a thing: a typo that
  * quietly stayed off would leave an operator believing closed pages no longer stop the work.
@@ -1953,6 +1977,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     generativeUi: generativeUiEnabled(environment),
     selfHostBanner: selfHostBannerEnabled(environment),
     chatServerComputerTools: chatServerComputerToolsEnabled(environment),
+    turnNoticeWindowMs: turnNoticeWindowMs(environment),
     ...(optional(environment, "APP_DIST_DIR")
       ? { appDistDir: optional(environment, "APP_DIST_DIR") as string }
       : {}),

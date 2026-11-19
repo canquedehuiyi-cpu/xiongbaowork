@@ -142,6 +142,12 @@ COPY toolkit /out/toolkit
 COPY examples /out/examples
 COPY agent-computer/src /out/agent-computer/src
 COPY agent-computer/package.json /out/agent-computer/package.json
+# The computer's ACP host (agent-computer/src/acp-cloud.ts) imports the runner's own host by relative path
+# (`../../runner/src/acp/host`), and index.ts imports acp-cloud at start: without these files the computer
+# dies on its first line. The same set agent-computer/Dockerfile copies (tests/acp-adapters-image.test.ts holds
+# both). No adapter is installed in this image: a cloud employee's open only fails with start_failed here.
+COPY runner/src/acp /out/runner/src/acp
+COPY runner/src/idle.ts runner/src/mcp-client.ts runner/src/bundled-runtime.ts /out/runner/src/
 RUN cd /out \
   # server/tests is the server's own test suite and server/tsconfig.tests.json only configures it;
   # nothing under src imports either. Most of the lines this image carried that do not belong to it.
@@ -270,6 +276,7 @@ COPY --from=runtime-src /out/toolkit toolkit
 COPY --from=runtime-src /out/examples examples
 COPY --from=runtime-src /out/agent-computer/src agent-computer/src
 COPY --from=runtime-src /out/agent-computer/package.json agent-computer/package.json
+COPY --from=runtime-src /out/runner/src runner/src
 
 # `bun run composio:smoke`, because the manifest copied above carries that entry and the question it
 # answers belongs here rather than on a laptop: it asks what THIS deployment's Composio key can see,

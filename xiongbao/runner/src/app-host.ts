@@ -1,8 +1,9 @@
 import type { AppEntry, createAppRegistry } from "./apps";
+import { IDLE_MS } from "./idle";
 import {
   connectApp,
-  type McpCallOutcome,
   McpAppError,
+  type McpCallOutcome,
   type McpConnection,
   type McpTool,
 } from "./mcp-client";
@@ -35,7 +36,8 @@ import {
  * waited its turn, connected or listed), since such a call cannot have done anything.
  */
 
-export const IDLE_MS = 600_000;
+export { IDLE_MS };
+
 /** How long closeAll waits for operations still running before it gives up on them. */
 const CLOSE_WAIT_MS = 3000;
 export const DESCRIPTION_LIMIT_BYTES = 1024;

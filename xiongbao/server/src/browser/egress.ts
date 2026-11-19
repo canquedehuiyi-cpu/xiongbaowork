@@ -130,6 +130,18 @@ function uniqueRules(rules: EgressRule[]): EgressRule[] {
   });
 }
 
+/** The rules for these services' origins, host and port only (the model proxy a computer's agent reaches). */
+export function originRules(
+  urls: readonly (string | undefined)[],
+): EgressRule[] {
+  return uniqueRules(
+    urls.flatMap((raw) => {
+      const origin = originOf(raw);
+      return origin ? rulesFor(origin) : [];
+    }),
+  );
+}
+
 /**
  * Every address range that is not the public internet, from IANA's special-purpose registries
  * (https://www.iana.org/assignments/iana-ipv4-special-registry, iana-ipv6-special-registry): this network, private
