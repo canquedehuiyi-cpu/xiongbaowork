@@ -166,9 +166,13 @@ test("actions are pinned to full commit SHAs, Bun is 1.4.4, the lockfile is froz
 });
 
 test("the key reaches the job only as the model-e2e Environment's secrets.DEEPSEEK_API_KEY, through env", () => {
-  const references = text.match(/secrets\.[A-Za-z0-9_]+/g) ?? [];
+  const references: string[] = [
+    ...(text.match(/secrets\.[A-Za-z0-9_]+/g) ?? []),
+  ];
   // One reference per carrier job (below), and no other secret named anywhere.
-  expect(references).toEqual(Array(5).fill("secrets.DEEPSEEK_API_KEY"));
+  expect(references).toEqual(
+    Array.from({ length: 5 }, () => "secrets.DEEPSEEK_API_KEY"),
+  );
   expect(text).not.toMatch(/secrets\[/);
   expect(text).not.toContain("toJSON(secrets");
 
