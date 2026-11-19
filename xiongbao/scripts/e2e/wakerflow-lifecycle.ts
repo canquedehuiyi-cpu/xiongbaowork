@@ -27,11 +27,11 @@
  *      itself asks no model.
  *
  * Recovery horizon. The server only closes a `running` Flow run whose heartbeat (`updated_at`) is older
- * than ABANDONED_RUN_MS (10 minutes, on the database clock), in a sweep that runs 60 s after start and
- * once per 5-minute bucket fleet-wide (`recovery/abandoned-work.ts`). A CI job cannot wait that out, so
+ * than ABANDONED_RUN_MS (twice the working turn's clock, on the database clock), in a sweep that runs
+ * 60 s after start and once per 5-minute bucket fleet-wide (`recovery/abandoned-work.ts`). A CI job cannot wait that out, so
  * after the kill — while no server process exists — this harness moves the stranded run's `updated_at`
  * back past the horizon and removes the sweep's per-bucket lease rows, exactly what the passage of
- * 10 minutes and a new bucket would have done. Nothing else is written behind the product's back; the
+ * that horizon and a new bucket would have done. Nothing else is written behind the product's back; the
  * restarted server's own timer runs the production sweep.
  *
  * Environment (all required unless a default is given):
@@ -66,6 +66,9 @@ import {
   type Locator,
   type Page,
 } from "playwright-core";
+// The recovery horizon the restarted server's sweep applies, read from the product so a change to
+// it moves the time shift below with it (期五 raised it to twice the working turn's 25 minutes).
+import { ABANDONED_RUN_MS } from "../../server/src/routines/sweep";
 // What the product writes on a step closed by restart recovery: read from the product, so a reworded
 // (or translated) sentence is asserted as it is, not as it once was.
 import {
@@ -109,7 +112,7 @@ if (!existsSync(resolve(APP_DIST_DIR, "index.html")))
 mkdirSync(ARTIFACTS, { recursive: true });
 
 /** The recovery horizon (`routines/sweep.ts` ABANDONED_RUN_MS) plus a minute of margin. */
-const PAST_HORIZON = "11 minutes";
+const PAST_HORIZON = `${Math.ceil(ABANDONED_RUN_MS / 60_000) + 1} minutes`;
 
 // ---------------------------------------------------------------------------------------------
 // Reporting
@@ -947,7 +950,7 @@ try {
   await step(
     "restart and recover: the interrupted run is marked failed, not replayed",
     async () => {
-      // Stand-in for ten minutes and a new sweep bucket passing while the server is down (see header).
+      // Stand-in for the horizon and a new sweep bucket passing while the server is down (see header).
       const shifted = await owner`
       update group_task_runs set updated_at = now() - ${PAST_HORIZON}::interval
       where id = ${run2} and status = 'running' returning id`;

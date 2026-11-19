@@ -548,7 +548,8 @@ describe("期五: the project's AGENTS.md or CLAUDE.md", () => {
 
     // No file at the root: the section it always was, and nothing thrown.
     const plain = await context.forPrompt(botX, study.target);
-    expect(plain?.instructions).toBeUndefined();
+    expect(plain).toMatchObject({ name: "订单服务", writable: true });
+    expect(plain).not.toHaveProperty("instructions");
     expect(projectGuidance(plain)).not.toContain("untrusted_data");
 
     writeFileSync(join(study.code, "CLAUDE.md"), "用 pnpm，不用 npm。\n");
@@ -587,8 +588,8 @@ describe("期五: the project's AGENTS.md or CLAUDE.md", () => {
       readFile: runnerProjectFileReader(createDeviceChannel()),
     });
     const away = await offline.forPrompt(botX, study.target);
-    expect(away).toMatchObject({ name: "订单服务" });
-    expect(away?.instructions).toBeUndefined();
+    expect(away).toMatchObject({ name: "订单服务", writable: true });
+    expect(away).not.toHaveProperty("instructions");
 
     rmSync(join(study.code, "AGENTS.md"));
     rmSync(join(study.code, "CLAUDE.md"));
