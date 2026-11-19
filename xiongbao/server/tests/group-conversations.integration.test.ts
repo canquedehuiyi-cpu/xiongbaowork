@@ -980,13 +980,14 @@ describe("group conversations in PostgreSQL", () => {
         conversations.list(reader.id, channel.id),
       );
       const [, adaRow, graceRow] = seen.messages;
-      expect(seen.messages[0]?.reasoning).toBeUndefined();
+      expect(seen.messages.length).toBeGreaterThanOrEqual(3);
+      expect(seen.messages[0]).not.toHaveProperty("reasoning");
       expect(adaRow?.reasoning).toEqual({
         text: "先查甲家。\n\n再查乙家。",
         ms: 12_000,
       });
       expect(graceRow?.reasoning?.truncated).toBe(true);
-      expect(graceRow?.reasoning?.ms).toBeUndefined();
+      expect(graceRow?.reasoning).not.toHaveProperty("ms");
       expect([...(graceRow?.reasoning?.text ?? "")]).toHaveLength(
         REASONING_TEXT_LIMIT,
       );
