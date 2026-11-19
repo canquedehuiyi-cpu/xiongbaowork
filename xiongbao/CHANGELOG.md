@@ -8,6 +8,12 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **运维须知：DeepSeek 的思考模式默认打开了。** `OPENAI_BASE_URL` 指向 `api.deepseek.com`（或员工绑定了 DeepSeek
+  官方地址的模型）时，员工先想再做：思考内容作为推理事件随对话流出、跟着这一轮存档，刷新后还在；带工具的多步对话
+  按 DeepSeek 的规则把思考传回去，不再像 0.2.7 之前那样被拒（400）。**token 用量和等待时间会上升。** 想关：设
+  `DEEPSEEK_THINKING=disabled` 后重新创建容器，全部员工关闭；只关某个员工，`PATCH /api/agents/<id>` 随员工资料带上
+  `"thinking": false`（界面开关在下一版）。路由、起标题这类辅助请求仍不思考，`DEEPSEEK_THINKING=enabled` 时也按
+  DeepSeek 的默认。别的模型供应商不受影响。没有新迁移：员工的开关存在已有的 `agents.configuration` 里。
 - **新手引导采用熊宝的黑白红样式。** 当前步骤用红色标记，演示使用石墨色面板，并在资料来源步骤加入示意图。
 - **员工干活的轮次放宽到 25 分钟，单条命令可以要到 10 分钟。**（期五）
   - 运维说明：看板卡、无人值守轮（例程、自动化、员工给自己定的跟进、卡片上的催办）和子代理的墙钟从 5 分钟改为 25 分钟

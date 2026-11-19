@@ -38,7 +38,10 @@ import {
   ConversationIntroBar,
 } from "@/components/channels/conversation-intro";
 import { ConversationView } from "@/components/channels/conversation-view";
+import { PinnedPlans } from "@/components/channels/pinned-plans";
+import { PlanCard } from "@/components/channels/plan-card";
 import { ProgressRow } from "@/components/channels/progress-row";
+import { stepLimitNotes } from "@/components/channels/step-limit-note";
 import {
   seedMessage,
   takeFirstMessage,
@@ -70,6 +73,7 @@ import {
   recordChannelActivityMutationOptions,
   setChannelBusy,
 } from "@/lib/channels/mutations";
+import { latestPlan } from "@/lib/channels/plan";
 import {
   type AgentChannel,
   type ChannelSummary,
@@ -80,6 +84,11 @@ import {
   type RunStageTracker,
   createRunStageTracker,
 } from "@/lib/channels/run-stage";
+import {
+  continueAfterStepLimit,
+  createStepLimitTracker,
+  type StepLimitTracker,
+} from "@/lib/channels/step-limit";
 import {
   onTurnFinishedAway,
   turnFinishedAway,
@@ -676,6 +685,26 @@ export function ChannelChat({
   const now = useNow(runStartedAt !== null);
   const runElapsedMs =
     runStartedAt === null ? undefined : Math.max(0, now - runStartedAt);
+  /*
+   * 员工这一轮跑满了步数被强制收尾（期一）：最后一轮的 `CUSTOM step-limit {steps}`，回答末尾给「已用完 N 步 ·
+   * 继续」。新一轮开始就清掉，所以回放到最后只剩最后一轮的。和上面一样，订阅写在加入线程的 effect 前面。
+   */
+  const stepLimitRef = useRef<{
+    agent: unknown;
+    tracker: StepLimitTracker;
+  } | null>(null);
+  if (stepLimitRef.current?.agent !== agent)
+    stepLimitRef.current = { agent, tracker: createStepLimitTracker() };
+  const stepLimitTracker = stepLimitRef.current.tracker;
+  useEffect(() => {
+    const subscription = agent.subscribe?.(stepLimitTracker.subscriber);
+    return () => subscription?.unsubscribe();
+  }, [agent, stepLimitTracker]);
+  const stepLimit = useSyncExternalStore(
+    stepLimitTracker.listen,
+    stepLimitTracker.steps,
+    stepLimitTracker.steps,
+  );
   /** 已经按过「重新派」的中断卡（按卡的 `key`）。 */
   const [acpResent, setAcpResent] = useState<ReadonlySet<string>>(
     () => new Set(),
@@ -1478,6 +1507,7 @@ export function ChannelChat({
       .slice(answeredAt + 1)
       .some((message) => message.role === "assistant");
   const botName = botProfile?.name ?? channel.name;
+  const plan = latestPlan(agent.messages);
   const botSeed = botProfile?.avatarSeed || runtimeAgentId;
 
   /*
@@ -1588,6 +1618,12 @@ export function ChannelChat({
             agentId={runtimeAgentId}
             taskRunning={agent.isRunning || runsInFlight > 0}
           />
+          {/* 员工最后一次写下的计划，钉在对话区顶部（期二）：流式里新的一份一到就换上。 */}
+          {plan ? (
+            <PinnedPlans>
+              <PlanCard items={plan} />
+            </PinnedPlans>
+          ) : null}
           <ConversationView
             // Remounted per conversation, so opening one puts the caret in its composer once.
             autoFocus
@@ -1634,6 +1670,23 @@ export function ChannelChat({
               ...turnArtifactNotes({
                 botId: runtimeAgentId,
                 messages: agent.messages,
+              }),
+              // 跑满步数被收尾的一轮，回答末尾的「已用完 N 步 · 继续」：按下以你的身份发「继续」。
+              ...stepLimitNotes({
+                steps: stepLimit,
+                busy: agent.isRunning || turnsInFlight > 0 || carryingOn,
+                ...(channel.active
+                  ? {
+                      onContinue: () =>
+                        continueAfterStepLimit(
+                          stepLimitTracker,
+                          async (text) => {
+                            await runModel.beforeSend();
+                            return sayRef.current(text);
+                          },
+                        ),
+                    }
+                  : {}),
               }),
             ]}
             // The clock beside `+`: a routine for the Bot this conversation talks to, posting here.

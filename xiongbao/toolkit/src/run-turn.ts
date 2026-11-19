@@ -158,6 +158,12 @@ export type TurnRunner = (input: {
    */
   onCustom?: (event: { name: string; value: unknown }) => void;
   /**
+   * Each tool call of the run once its arguments are complete, by the name the model called and the
+   * arguments as the stream assembled them, for a host that keeps something a call says (a group's
+   * reply row keeps the Bot's latest plan, so everyone in the group sees it).
+   */
+  onToolCall?: (call: { name: string; args: unknown }) => void;
+  /**
    * The skill the person picked for this turn, by its command, when the host resolved one: a group
    * turn's message starts with the group's framing, so the `/<command>` the person began with is not
    * where the server looks for it. Only a slug; the server reads the skill's instructions from its
@@ -836,6 +842,7 @@ export function createTurnRunner(options: {
       onText,
       onStarted,
       onCustom,
+      onToolCall,
       skill,
     } = hostTurn;
     const { runRef, tenantId } = hostTurn;
@@ -1056,6 +1063,19 @@ export function createTurnRunner(options: {
               event: { name: string; value: unknown };
             }) => {
               onCustom({ name: event.name, value: event.value });
+            },
+          }
+        : {}),
+      ...(onToolCall
+        ? {
+            onToolCallEndEvent: ({
+              toolCallName,
+              toolCallArgs,
+            }: {
+              toolCallName: string;
+              toolCallArgs: Record<string, unknown>;
+            }) => {
+              onToolCall({ name: toolCallName, args: toolCallArgs });
             },
           }
         : {}),

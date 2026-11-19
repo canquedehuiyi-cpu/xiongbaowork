@@ -1,10 +1,13 @@
 import { useCopilotChatConfiguration } from "@copilotkit/react-core/v2";
 import { humanise, readToolName } from "@openbot/shared/tool-name";
+import { IconLoader2 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { useContext, useState } from "react";
 import { TurnInFlightContext } from "@/components/gallery/streaming";
 import { spentOf } from "@/lib/spent-of";
 import { subagentStepsQueryOptions } from "@/lib/subagents/queries";
+import { cn } from "@/lib/utils";
+import { ACP_CARD } from "./acp-cards";
 import { toVisibleChatItems, type VisibleChatItem } from "./chat-messages";
 import {
   type StepDetails,
@@ -25,11 +28,13 @@ type ToolItem = Extract<VisibleChatItem, { kind: "tool" }>;
  * was a subtask, what it was asked and how it ended, which opens to the task, its answer and each
  * step it took, read from its own thread.
  *
- * IT USED TO BE A CARD. Task, status badge, a clamped answer and a disclosure for its steps, drawn
- * on its own between the question and the answer. A Bot that started three subtasks beside a search
- * drew five boxes for one question, and one that stopped before an approval wore a "Needs your
- * approval" badge with nothing to press while the Bot went on working. Now it is one more thing the
- * Bot did, next to the searches and pages, and the approval card, when there is one, is the Bot's.
+ * A CARD AGAIN (期四). It was one line inside the folded work line, next to the searches and pages,
+ * when a Bot started a subtask about once a week. Now Bots share work out on purpose, several parts
+ * at once, and a person wants each part in view: what it was asked, whether it is still working, how
+ * long it took and what it handed back. So each subtask is a card of its own, the subtasks of one
+ * step side by side (`SubtaskCards` in `tool-activity.tsx`), and nothing else draws them a second
+ * time. What the line learned stays: no "Needs your approval" badge with nothing to press (a stop is
+ * "已交还", said plainly inside), the reason and time from #678, the steps read only once it opens.
  *
  * Its steps are read only once the row is opened. A closed row needs nothing from its thread: how
  * it ended is in the call's own result, and while it works the folded line says so.
@@ -73,32 +78,44 @@ export function SubtaskStep({
   const handedBack =
     result && "handedBack" in result ? result.handedBack : null;
 
+  const title = step.subtask?.task ? titleOf(step.subtask.task) : undefined;
   return (
     <li className="min-w-0">
       <details
-        className="tool-line min-w-0"
+        className={cn(ACP_CARD, "tool-line max-w-none gap-0 py-3 text-[13px]")}
+        data-subagent-card=""
         onToggle={(event) => setOpen(event.currentTarget.open)}
       >
-        <summary className="flex cursor-pointer list-none items-center gap-1.5">
-          <span
-            aria-hidden
-            className="tool-line-chevron shrink-0 text-xs text-muted-foreground transition-transform"
-          >
-            ▸
-          </span>
-          <span className="flex min-w-0 items-center gap-2">
+        <summary className="flex min-w-0 cursor-pointer list-none flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="flex min-w-0 grow basis-64 items-center gap-1.5">
+            <span
+              aria-hidden
+              className="tool-line-chevron shrink-0 text-xs text-muted-foreground transition-transform"
+            >
+              ▸
+            </span>
             <StepIcon kind="subtask" />
             {/* Shimmers while it works, as every running step does. See `StepRow`. */}
             <span
-              className={running ? "shrink-0 tool-line-running" : "shrink-0"}
+              className={cn(
+                "shrink-0 font-medium",
+                running && "tool-line-running",
+              )}
             >
               {step.label}
             </span>
-            {step.detail ? (
-              <span className="truncate text-muted-foreground">
-                {step.detail}
-              </span>
+            {title ? (
+              <>
+                <span aria-hidden="true" className="text-muted-foreground">
+                  ·
+                </span>
+                <span className="min-w-0 truncate" title={step.subtask?.task}>
+                  {title}
+                </span>
+              </>
             ) : null}
+          </span>
+          <span className="ml-auto flex shrink-0 items-center gap-1.5 pl-5">
             <SubtaskStatus
               count={count}
               handedBack={handedBack !== null}
@@ -108,7 +125,7 @@ export function SubtaskStep({
             />
           </span>
         </summary>
-        <div className="mt-1.5 space-y-2 pl-5">
+        <div className="mt-2 space-y-2 pl-5">
           {step.subtask?.task ? (
             <p className="whitespace-pre-wrap break-words text-muted-foreground">
               {step.subtask.task}
@@ -157,9 +174,17 @@ function SubtaskStatus({
     [how, spent].filter((part) => part !== "").join(" · ");
   if (running)
     return (
-      <span className="shrink-0 text-muted-foreground">
-        {steps ? `工作中 · ${steps}` : "工作中"}
-      </span>
+      <>
+        {/* 和「思考中」前面那个是同一个：设了减少动画就不转。 */}
+        <IconLoader2
+          aria-hidden="true"
+          className="size-[14px] shrink-0 text-muted-foreground motion-safe:animate-spin"
+          data-working-spinner=""
+        />
+        <span className="shrink-0 text-muted-foreground">
+          {steps ? `工作中 · ${steps}` : "工作中"}
+        </span>
+      </>
     );
   if (step.pending)
     return <span className="shrink-0 text-muted-foreground">未完成</span>;
@@ -177,9 +202,27 @@ function SubtaskStatus({
         {withSpent("没能完成")}
       </span>
     );
-  return steps || spent ? (
-    <span className="shrink-0 text-muted-foreground">{withSpent(steps)}</span>
-  ) : null;
+  // 做完了：说一声，再说走了几步、用了多久（两样都有才写）。
+  return (
+    <>
+      <span className="shrink-0 text-muted-foreground">已完成</span>
+      {steps || spent ? (
+        <span className="shrink-0 text-muted-foreground">
+          {withSpent(steps)}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/** 卡的标题：任务开头 30 个字，长了带省略号。整段任务在卡里，点开就是。 */
+const TITLE_CHARACTERS = 30;
+
+function titleOf(task: string): string {
+  const characters = [...task.trim()];
+  return characters.length > TITLE_CHARACTERS
+    ? `${characters.slice(0, TITLE_CHARACTERS).join("")}…`
+    : task.trim();
 }
 
 /**

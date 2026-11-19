@@ -327,6 +327,7 @@ tests/group-people.test.tsx
 tests/group-question.test.tsx
 tests/group-settings.test.tsx
 tests/group-start-discard.test.tsx
+tests/group-step-limit.test.tsx
 tests/group-waiting-approval-link.test.tsx
 tests/group-write-invalidation.test.tsx
 tests/handoff-answer-attribution.test.tsx
@@ -410,6 +411,7 @@ tests/pipelines-dispatch-refusal.test.tsx
 tests/pipelines-group-param.test.tsx
 tests/pipelines-screen.test.tsx
 tests/pipelines-template-edit.test.tsx
+tests/plan-card.test.tsx
 tests/platform-model-pool.test.tsx
 tests/platform-tenant-usage.test.tsx
 tests/playground-json.test.ts
@@ -527,9 +529,11 @@ tests/start-model.test.ts
 tests/start-placeholder.test.tsx
 tests/starter-tour-route.test.tsx
 tests/starter-tour.test.tsx
+tests/step-limit-continue.test.tsx
 tests/stopped-turn.test.ts
 tests/storage-compat.test.ts
 tests/storage-migrate.test.ts
+tests/subagent-cards.test.tsx
 tests/subtask-step.test.tsx
 tests/summon-card-flip.test.tsx
 tests/take-the-wheel.test.ts
@@ -633,6 +637,7 @@ tests/workbench-presence.test.tsx
 tests/workbench-today.test.ts
 tests/workbench-tokens.test.ts
 tests/working-now.test.tsx
+tests/working-spinner.test.tsx
 tests/wp32-status-shots.test.tsx
 tests/your-recordings.test.tsx
 vite-listen-port.test.ts

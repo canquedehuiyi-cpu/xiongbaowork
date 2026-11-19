@@ -79,8 +79,8 @@ describe("withThinkingDisabled", () => {
 });
 
 describe("deepSeekThinkingOff", () => {
-  test("默认关闭思考；DEEPSEEK_THINKING=enabled 时保留 DeepSeek 自己的默认", () => {
-    expect(deepSeekThinkingOff({})).toBe(true);
+  test("默认开着思考（期三）；DEEPSEEK_THINKING=disabled 时关闭", () => {
+    expect(deepSeekThinkingOff({})).toBe(false);
     expect(deepSeekThinkingOff({ DEEPSEEK_THINKING: "disabled" })).toBe(true);
     expect(deepSeekThinkingOff({ DEEPSEEK_THINKING: " Enabled " })).toBe(false);
   });
