@@ -2,6 +2,7 @@
 import "../../shared/apply-env-aliases";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { setDefaultAutoSelectFamily } from "node:net";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type ServerWebSocket, serve } from "bun";
 import type { ConsoleMessage, Page } from "playwright";
@@ -10,6 +11,7 @@ import {
   isPersonBrowserId,
   RECORDER_DIR_ENV,
 } from "../../shared/openbot-browser";
+import { createCloudAcp, isAcpPath } from "./acp-cloud";
 import { unfinishedAction } from "./action-failure";
 import {
   cutAtCodeUnits,
@@ -117,7 +119,11 @@ import {
   WorkspaceFileTooLargeError,
   WorkspacePathError,
 } from "./workspace";
-import { createWorkspaces, type Workspace } from "./workspaces";
+import {
+  createWorkspaces,
+  type Workspace,
+  workspaceDirectoryFor,
+} from "./workspaces";
 
 /**
  * The Bot's computer: one long-lived browser, reachable over HTTP.
@@ -604,6 +610,39 @@ async function commandsFor(seat: string): Promise<CommandRunner> {
     ? perBot.shellFor(seat)
     : (await workspaces.for(seat)).shell;
 }
+
+/*
+ * The employees that run on this computer through the ACP host (acp-cloud.ts): Codex and Claude Code
+ * for a hirer whose employee is set to run in the cloud. Their adapters are installed in the image
+ * (`XIONGBAO_ACP_ADAPTERS_DIR`), their own state lives under `XIONGBAO_ACP_STATE_DIR`, and their
+ * working folder is the folder this seat's file tools and shell already use.
+ */
+const ACP_ADAPTERS_DIR =
+  process.env.XIONGBAO_ACP_ADAPTERS_DIR?.trim() || "/opt/xiongbao-acp";
+const ACP_STATE_DIR =
+  process.env.XIONGBAO_ACP_STATE_DIR?.trim() || join(tmpdir(), "xiongbao-acp");
+const cloudAcp = createCloudAcp({
+  workdirFor: async (seat) => {
+    // An employee with a Linux user of its own is refused (acp-cloud.ts, WHERE IT WORKS).
+    if (runsAsOwnUser(seat)) return null;
+    await workspaces.for(seat);
+    return workspaceDirectoryFor(
+      process.env.WORKSPACE_DIR?.trim() || "/workspace",
+      seat,
+      process.env.COMPUTER_SEPARATE_WORKSPACES?.trim().toLowerCase() === "on",
+    );
+  },
+  binDir: join(ACP_ADAPTERS_DIR, "node_modules", ".bin"),
+  adapterDir: join(ACP_STATE_DIR, "adapters"),
+  homeRoot: join(ACP_STATE_DIR, "homes"),
+  // What a command gets, so the employee's own network use is judged by the network policy: HOME is
+  // the agent's own home, not the working folder.
+  env: (_seat, workdir, home) => ({
+    ...environmentForCommand(process.env, workdir),
+    ...egressShellEnvironment(),
+    HOME: home,
+  }),
+});
 
 async function currentPage(
   botId: string,
@@ -1336,6 +1375,12 @@ serve<StreamData & TerminalSocketData>({
     // housekeeping, and nothing a Bot acts or reads through. See person-access.ts.
     if (isPersonBrowserId(botId) && !personMayUse(url.pathname))
       return json({ error: PERSONS_OWN_BROWSER }, 403);
+    // The external employees' channel (acp-cloud.ts). Behind the token above like every route; the
+    // stream is long-lived, so the server's idle timeout does not apply to it.
+    if (isAcpPath(url.pathname)) {
+      if (url.pathname === "/acp/events") server.timeout(request, 0);
+      return cloudAcp.handle(request, url, botId);
+    }
     if (isBrowserPath(url.pathname))
       return browserHost.handle(request, url.pathname, botId);
     if (isRealBrowserPath(url.pathname))
@@ -2571,6 +2616,7 @@ async function shutDown(reason: string, exitCode: number): Promise<void> {
   // not a second failure racing it.
   shuttingDown = true;
   console.info(`${reason}: closing the browser so its profile is flushed`);
+  await cloudAcp.closeAll();
   await profiles.closeAll();
   await VIRTUAL_DISPLAY?.stop();
   process.exit(exitCode);

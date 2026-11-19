@@ -32,6 +32,7 @@ import {
   routeExternalTurns,
   useDeviceAcp,
 } from "./agents/acp/agent";
+import { type CloudComputers, createCloudLink } from "./agents/acp/cloud-link";
 import { createAcpContextLoader } from "./agents/acp/context";
 import {
   cancelExternalTurns,
@@ -77,7 +78,10 @@ import {
   guardBotTurn,
 } from "./agents/lifecycle";
 import { createBotReset } from "./agents/lifecycle-reset";
-import { readAgentModelProxyConfig } from "./agents/model-proxy/access";
+import {
+  readAgentModelComputerUrl,
+  readAgentModelProxyConfig,
+} from "./agents/model-proxy/access";
 import { AGENT_MODEL_ROUTE } from "./agents/model-proxy/proxy";
 import { createAgentModelService } from "./agents/model-proxy/wiring";
 import { readAgentPresence } from "./agents/presence";
@@ -183,7 +187,10 @@ import {
 import { englishName, setBrand } from "./brand";
 import { openbotAddress } from "./browser/address";
 import { botBrowserNetwork } from "./browser/bot-browser";
-import { personBrowserEgressPolicy } from "./browser/egress";
+import {
+  personBrowserEgressPolicy,
+  recorderOriginRules,
+} from "./browser/egress";
 import {
   botRecordRefusal,
   directBrowserComputers,
@@ -1003,13 +1010,35 @@ await startupLifecycle.run(async (startup) => {
    * runner built further down; until that exists, a claimed turn goes back to the queue.
    */
   const acpTurnStore = createAcpTurnStore(database);
+  /*
+   * An employee that runs in the cloud is its own "device" for the relay (`cloud:<agentId>`), and its
+   * frames go to its computer through the computer gateway (agents/acp/cloud-link.ts); every other
+   * device is the runner socket's, as before. The gateway is built further down, so it is reached late.
+   */
+  let cloudComputers: CloudComputers | undefined;
+  const computersNow = (): CloudComputers => {
+    if (!cloudComputers)
+      throw new Error("The computer gateway is not ready yet.");
+    return cloudComputers;
+  };
+  const cloudLink = createCloudLink({
+    gateway: {
+      seatFor: (botId, personId) => computersNow().seatFor(botId, personId),
+      locate: (seat) => computersNow().locate(seat),
+      tokenFor: (seat) => computersNow().tokenFor(seat),
+      addressOf: (seat) => computersNow().addressOf(seat),
+    },
+    relay: () => acpRelay,
+    enabled: config.computer !== undefined,
+  });
+  const acpChannel = cloudLink.withCloudDevices(deviceChannel);
   let startAcpTurn: AcpTurnStarter | undefined;
   // The permission bridge, built further down once the approval service exists.
   let acpPermissionBridge: AcpPermissionBridge | undefined;
   /** The group service's `acpPermission`, once it is built (below). */
   let acpGroupLine: AcpPermissionBridgeDeps["groupLine"];
   const acpRelay = createAcpRelay({
-    channel: deviceChannel,
+    channel: acpChannel,
     turns: acpTurnStore,
     startQueuedTurn: async (row) => {
       if (!startAcpTurn)
@@ -1064,13 +1093,13 @@ await startupLifecycle.run(async (startup) => {
   const deviceReachableAnywhere = async (target: {
     tenantId: string;
     deviceId: string;
-  }) =>
-    deviceChannel.isReachable(target) || (await deviceOnlineElsewhere(target));
+  }) => acpChannel.isReachable(target) || (await deviceOnlineElsewhere(target));
   // What `device_acp` agents are built with, deep inside the runtime (copilot.ts).
   useDeviceAcp({
     relay: acpRelay,
     turns: acpTurnStore,
-    channel: deviceChannel,
+    channel: acpChannel,
+    cloud: cloudLink,
     sessions: createAcpSessionHints(),
     context: createAcpContextLoader(database),
     onlineElsewhere: deviceOnlineElsewhere,
@@ -1146,6 +1175,17 @@ await startupLifecycle.run(async (startup) => {
    * 外部员工（Codex、Claude Code）的模型请求走这里：服务器用这位员工在熊宝配的模型和凭据转发，计量写进
    * `model_token_calls`，设备只拿一个短期令牌，拿不到真实的 key。`acp.open` 带上令牌和代理地址。
    */
+  const agentModelConfig = readAgentModelProxyConfig(
+    process.env,
+    config.publicUrl,
+    AGENT_MODEL_ROUTE,
+  );
+  // The address of this server as a cloud computer reaches it (its network policy lets it through).
+  const agentModelComputerUrl = readAgentModelComputerUrl(
+    process.env,
+    agentModelConfig.baseUrl,
+    AGENT_MODEL_ROUTE,
+  );
   const agentModel = createAgentModelService({
     database,
     credentials: credentialStore,
@@ -1153,11 +1193,8 @@ await startupLifecycle.run(async (startup) => {
     sink: tokenCallSink,
     quota,
     outbound: modelOutbound,
-    config: readAgentModelProxyConfig(
-      process.env,
-      config.publicUrl,
-      AGENT_MODEL_ROUTE,
-    ),
+    config: agentModelConfig,
+    computerBaseUrl: agentModelComputerUrl,
   });
   const acpRuntimeForModel = deviceAcpRuntime();
   if (acpRuntimeForModel) acpRuntimeForModel.model = agentModel.access;
@@ -1816,6 +1853,12 @@ await startupLifecycle.run(async (startup) => {
         token: config.computer?.token,
       })
     : undefined;
+  // From here a cloud employee's frames can find its computer (see `cloudLink`), and the link ends with the server.
+  cloudComputers = computerGateway;
+  startup.acquireSync(
+    () => cloudLink,
+    (link) => link.close(),
+  );
 
   /**
    * What a Bot can reach beyond its own computer.
@@ -4725,7 +4768,7 @@ await startupLifecycle.run(async (startup) => {
     external: createAcpGroupTurn({
       turns: acpTurnStore,
       relay: acpRelay,
-      channel: deviceChannel,
+      channel: acpChannel,
       employeeFor: externalEmployee,
       onlineElsewhere: deviceOnlineElsewhere,
       delivery: acpDelivery,
@@ -5346,6 +5389,11 @@ await startupLifecycle.run(async (startup) => {
         databaseUrl: config.databaseUrl,
         auditStore: bootAuditStore,
         personBrowserPolicy,
+        // An external employee's agent on its computer reaches the model proxy, whatever the list says.
+        alwaysAllowed: recorderOriginRules({
+          openbotUrls: [agentModelComputerUrl],
+          gatewayUrl: "",
+        }),
         // While a person records in a Bot's browser, the Recorder there reaches OpenBot and the
         // gateway; the Bot does not.
         duringRecording: botBrowserNetwork({

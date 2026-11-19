@@ -50,6 +50,8 @@ export function createAgentModelService(options: {
   quota?: Pick<QuotaService, "planFor" | "usageFor">;
   outbound: OutboundPolicy;
   config: AgentModelProxyConfig;
+  /** The proxy's address as a cloud computer reaches it (`readAgentModelComputerUrl`). */
+  computerBaseUrl?: string | undefined;
   environment?: Readonly<Record<string, string | undefined>>;
 }): AgentModelService {
   const { database, config } = options;
@@ -82,6 +84,9 @@ export function createAgentModelService(options: {
   const access = createAcpModelAccess({
     tokens,
     baseUrl: config.baseUrl,
+    ...(options.computerBaseUrl === undefined
+      ? {}
+      : { computerBaseUrl: options.computerBaseUrl }),
     boundModel: async (tenantId, agentId) => {
       const name = await runAsTenant(tenantId, () =>
         boundModelName(database, agentId, options.environment ?? process.env),

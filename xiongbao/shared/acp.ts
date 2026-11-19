@@ -57,6 +57,51 @@ export function acpRulesFrom(
   return rules;
 }
 
+/**
+ * Where an external employee runs: `cloud` is the employee's own XiongBao computer (the agent
+ * computer container, reached through the computer gateway), `device` the owner's paired machine
+ * (the runner socket). Saved in `agents.configuration.runtime`; an employee saved before there was a
+ * choice has none and runs on its device.
+ */
+export type AcpRuntime = "cloud" | "device";
+
+/** An employee's runtime as a screen or the server reads it: `device` unless it says `cloud`. */
+export function acpRuntimeFrom(configuration: unknown): AcpRuntime {
+  const saved =
+    configuration &&
+    typeof configuration === "object" &&
+    !Array.isArray(configuration)
+      ? (configuration as Record<string, unknown>).runtime
+      : undefined;
+  return saved === "cloud" ? "cloud" : "device";
+}
+
+/**
+ * The working folder reference of a cloud employee's `acp.open`. There is one working folder on a
+ * cloud computer, the employee's own folder in its workspace, so the reference is fixed and the
+ * computer resolves it itself; no path ever travels.
+ */
+export const ACP_CLOUD_WORKDIR_REF = "cloud:workspace";
+
+/**
+ * The device id a cloud employee's turns are queued under (`acp_turns.device_id`), so the relay's
+ * lanes, queues and reconciliation work for it exactly as for a paired machine: one "device" per
+ * cloud employee, never colliding with a real device id (those never start with `cloud:`).
+ */
+export const ACP_CLOUD_DEVICE_PREFIX = "cloud:";
+
+export function acpCloudDeviceId(agentId: string): string {
+  return `${ACP_CLOUD_DEVICE_PREFIX}${agentId}`;
+}
+
+/** The employee a cloud device id stands for, or null for a real device id. */
+export function acpCloudAgentOf(deviceId: string): string | null {
+  return deviceId.startsWith(ACP_CLOUD_DEVICE_PREFIX) &&
+    deviceId.length > ACP_CLOUD_DEVICE_PREFIX.length
+    ? deviceId.slice(ACP_CLOUD_DEVICE_PREFIX.length)
+    : null;
+}
+
 /*
  * The `acp.*` frames on the runner socket. They belong to the tenant and device the socket was
  * authenticated as, like the live screen's; nothing in a frame can change that. Paths and commands
@@ -297,3 +342,14 @@ export type AcpUpFrame =
   | AcpTurnEndFrame
   | AcpSessionFrame
   | AcpErrorFrame;
+
+/*
+ * THE CLOUD COMPUTER'S TRANSPORT. A cloud employee's frames are the same `acp.*` frames, carried over
+ * the computer's HTTP port instead of a socket: down frames are POSTed to `/acp/frame`, up frames are
+ * read from a long-lived NDJSON response (`GET /acp/events`), one frame per line. Two lines only the
+ * stream itself uses: `acp.stream` first (naming the connection, which the acknowledgements quote) and
+ * `acp.beat` every few seconds, which the server answers with `POST /acp/ack` once it has taken in
+ * every frame before it, exactly as a runner's heartbeat is acked.
+ */
+export type AcpStreamOpenFrame = { type: "acp.stream"; connectionId: string };
+export type AcpStreamBeatFrame = { type: "acp.beat" };
