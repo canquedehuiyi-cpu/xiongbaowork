@@ -23,7 +23,7 @@
  * 环境变量（除 config.ts 里的门槛和模型参数外）：
  *   E2E_DATABASE_URL, E2E_ROLE_WRITER_DATABASE_URL   与 wakerflow-real-model.ts 相同
  *   EVAL_SUITE        tasks | smoke
- *   EVAL_TASKS        all 或逗号分隔的题名（smoke 套件里是场景名）
+ *   EVAL_TASKS        all（五道对标题）、hard（加难题）或逗号分隔的题名（smoke 套件里是场景名）
  *   EVAL_TASK_MINUTES 每题墙钟上限，默认 20（冒烟场景用各自的上限）
  *   EVAL_OUT          结果目录，默认 ./employee-eval-out；写 xiongbao.json / smoke.json、产物和服务器日志
  *   E2E_SERVER_PORT   默认取空闲端口
@@ -44,6 +44,7 @@ import {
   mkdtempSync,
   openSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -69,8 +70,14 @@ import {
   featureProbe,
   lastAssistantText,
   NOT_APPLICABLE,
+  observedFeatures,
+  snapshotHasReasoning,
+  snapshotMessages,
   TOOL,
+  type ToolCall,
+  toolCallsFromMessages,
   toolCallsOf,
+  withObserved,
 } from "./metrics";
 import { type MockRequest, type MockTurn, startMockModel } from "./mock-model";
 import { type EvalRecord, type EvalResults, writeResults } from "./records";
@@ -242,7 +249,26 @@ const deploymentStub = Bun.serve({
     return new Response(null, { status: 503 });
   },
 });
-const mock = config.mock ? startMockModel(mockPolicy) : null;
+/**
+ * 假模型收到的每一步请求体原样存进 `<结果目录>/mock-requests/`：系统提示、工具定义、历史消息都在里面，
+ * `token-breakdown.ts --requests <目录>` 按它算每一步各部分占多少 token。只在本机假模型模式下写。
+ */
+let mockRequestCount = 0;
+function keepMockRequest(request: MockRequest) {
+  mockRequestCount += 1;
+  const dir = join(OUT, "mock-requests");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(
+    join(dir, `${String(mockRequestCount).padStart(3, "0")}.json`),
+    `${JSON.stringify(request.raw)}\n`,
+  );
+}
+const mock = config.mock
+  ? startMockModel((request) => {
+      keepMockRequest(request);
+      return mockPolicy(request);
+    })
+  : null;
 const providerBaseUrl = mock ? `${mock.url}/v1` : config.baseUrl;
 
 // ---------------------------------------------------------------------------------------------
@@ -460,6 +486,39 @@ async function eventsOf(runIds: string[]): Promise<AgUiEvent[]> {
   );
 }
 
+/**
+ * 这几轮运行在库里留下的头信息和对话快照：每轮应有几条事件（`thread_runs.event_count`）、实际存下几条，以及
+ * 这条对话最新的消息快照。事件整批没存进库时（见 metrics.ts 的 `toolCallsFromMessages`），工具调用改从快照读。
+ */
+async function storedRuns(runIds: string[]) {
+  if (!runIds.length) return { expected: 0, messages: [] as unknown[] };
+  const runs = await runAsTenant(tenant, () =>
+    database
+      .select({
+        id: schema.threadRuns.id,
+        threadId: schema.threadRuns.threadId,
+        eventCount: schema.threadRuns.eventCount,
+      })
+      .from(schema.threadRuns),
+  );
+  const mine = runs.filter((run) => runIds.includes(run.id));
+  const threadIds = new Set(mine.map((run) => run.threadId));
+  const threads = await runAsTenant(tenant, () =>
+    database
+      .select({
+        id: schema.threads.id,
+        messages: schema.threads.messagesSnapshot,
+      })
+      .from(schema.threads),
+  );
+  return {
+    expected: mine.reduce((total, run) => total + run.eventCount, 0),
+    messages: threads
+      .filter((thread) => threadIds.has(thread.id))
+      .flatMap((thread) => snapshotMessages(thread.messages)),
+  };
+}
+
 async function tokenRows(agentId: string, since: Date) {
   const rows = await runAsTenant(tenant, () =>
     database.select().from(schema.modelTokenCalls),
@@ -559,6 +618,7 @@ type Work = {
     context: {
       capabilities: Capabilities;
       events: AgUiEvent[];
+      calls: ToolCall[];
       agentId: string;
       since: Date;
     },
@@ -572,6 +632,7 @@ const OUTPUTS: Record<TaskName, string[]> = {
   code: ["src/duration.ts"],
   data: ["summary.csv"],
   office: ["actions.csv"],
+  compare: ["compare.md"],
 };
 
 async function runWork(work: Work): Promise<EvalRecord> {
@@ -648,12 +709,25 @@ async function runWork(work: Work): Promise<EvalRecord> {
   const perRound = runIds.map(
     (runId) => tokens.filter((row) => row.runId === runId).length,
   );
+  /*
+   * 工具调用从运行事件里拼；事件没存全（一轮事件太多、整批写库失败）时改从对话快照读，并在报告里记一笔。
+   */
+  const stored = await storedRuns(runIds);
+  const eventsLost = stored.expected > events.length;
+  const calls = eventsLost
+    ? toolCallsFromMessages(stored.messages)
+    : toolCallsOf(events);
+  if (eventsLost)
+    notes.push(
+      `${work.key}：运行事件只存下 ${events.length}/${stored.expected} 条（一轮超过 16383 条事件时整批写库失败），工具调用改从对话快照读，触顶事件读不到`,
+    );
   const capabilities = analyzeXiongbao(events, {
     features,
     editsData: work.editsData,
     modelCallsPerRound: perRound,
+    calls,
+    reasoningSeen: snapshotHasReasoning(stored.messages),
   });
-  const calls = toolCallsOf(events);
   const tools: Record<string, number> = {};
   for (const call of calls) tools[call.name] = (tools[call.name] ?? 0) + 1;
   const computerCalls = calls.filter((call) =>
@@ -666,15 +740,24 @@ async function runWork(work: Work): Promise<EvalRecord> {
   const judged = await work.judge(copy, {
     capabilities,
     events,
+    calls,
     agentId,
     since,
   });
-  const sum = (key: "inputTokens" | "outputTokens") =>
+  const sum = (
+    key:
+      | "inputTokens"
+      | "outputTokens"
+      | "cachedInputTokens"
+      | "reasoningTokens",
+  ) =>
     tokens.some((row) => row[key] !== null)
       ? tokens.reduce((total, row) => total + (row[key] ?? 0), 0)
       : null;
   const input = sum("inputTokens");
   const output = sum("outputTokens");
+  const cachedInput = sum("cachedInputTokens");
+  const reasoning = sum("reasoningTokens");
   const stepLimited = capabilities.stepLimit === "yes";
   const finalText = lastAssistantText(events);
   // 每轮的报错只记产品自己的错误码（不记消息原文，免得带出提供方的话）；无头工具续接上限单独说明。
@@ -691,12 +774,20 @@ async function runWork(work: Work): Promise<EvalRecord> {
     passed: judged.passed,
     wallMs,
     timedOut,
-    steps: calls.length,
+    // 步数 = 模型调用次数（model_token_calls 的行数，每一步一次调用）；工具调用次数另记。
+    steps: tokens.length,
+    toolCalls: calls.length,
     modelCalls: tokens.length,
     tokens:
       input === null && output === null
         ? null
-        : { input, output, total: (input ?? 0) + (output ?? 0) },
+        : {
+            input,
+            output,
+            total: (input ?? 0) + (output ?? 0),
+            cachedInput,
+            reasoning,
+          },
     silentStop:
       !timedOut &&
       !stepLimited &&
@@ -715,7 +806,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     ...(error ? { error } : {}),
   };
   console.log(
-    `   ${judged.skipped ? "N/A " : record.passed ? "PASS" : "FAIL"} ${(wallMs / 1000).toFixed(1)} s, model calls ${record.modelCalls}, tokens ${record.tokens?.total ?? "?"}, nudges ${nudges}${timedOut ? ", timed out" : ""}`,
+    `   ${judged.skipped ? "N/A " : record.passed ? "PASS" : "FAIL"} ${(wallMs / 1000).toFixed(1)} s, model calls ${record.modelCalls}, tokens ${record.tokens?.total ?? "?"} (cached input ${cachedInput ?? "?"}), nudges ${nudges}${timedOut ? ", timed out" : ""}`,
   );
   for (const item of record.checks)
     console.log(`     ${item.ok ? "ok " : "NO "} ${item.name} ${item.detail}`);
@@ -768,7 +859,6 @@ function taskWork(task: TaskName): Work {
 
 function smokeWork(scenario: SmokeScenario): Work {
   const where = `smoke/${scenario.name}`;
-  const missing = scenario.requires.filter((feature) => !features[feature]);
   return {
     key: scenario.name,
     title: `${scenario.title}（${scenario.stage}）`,
@@ -778,7 +868,10 @@ function smokeWork(scenario: SmokeScenario): Work {
     minutes: scenario.minutes,
     editsData: scenario.name === "code",
     outputsReady: () => true,
-    judge: async (dir, { capabilities, events }) => {
+    judge: async (dir, { capabilities, events, calls }) => {
+      // 运行里实际出现的能力也算在：标志读漏了，事件能补上。
+      const known = withObserved(features, observedFeatures(events, calls));
+      const missing = scenario.requires.filter((feature) => !known[feature]);
       if (missing.length)
         return {
           passed: false,
@@ -787,11 +880,7 @@ function smokeWork(scenario: SmokeScenario): Work {
             check("能力已合入", false, `缺 ${missing.join("、")}，记为不适用`),
           ],
         };
-      const checks = scenario.check({
-        dir,
-        capabilities,
-        calls: toolCallsOf(events),
-      });
+      const checks = scenario.check({ dir, capabilities, calls });
       return result(scenario.name, checks);
     },
   };

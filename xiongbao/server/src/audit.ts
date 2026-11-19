@@ -883,6 +883,12 @@ export const auditEventTypes = [
   "staffing.proposal_edited",
   "staffing.proposal_discarded",
   "staffing.proposal_expired",
+  /*
+   * A coworker generated pictures or a video (`generate_image`, `generate_video`, `check_video`) and
+   * they were saved for the person. Target `generated_media`; payload `bot`, `kind` (`image` or
+   * `video`), `provider`, `model` and `count`. Never the prompt or the file.
+   */
+  "media.generated",
 ] as const;
 
 export type AuditEventType = (typeof auditEventTypes)[number];

@@ -28,7 +28,13 @@ export const GOLD_DIR = resolve(EVAL_DIR, "gold");
 
 /** 五道题，顺序就是报告里的顺序。 */
 export const TASKS = ["research", "docs", "code", "data", "office"] as const;
-export type TaskName = (typeof TASKS)[number];
+
+/**
+ * 加难题：几个相互独立的部分 + 最后汇总，真正用得上计划和子代理（五道对标题里员工都没用上这两样）。
+ * 不在 `all` 里（`all` 仍是五道对标题，Codex 侧的对照也只跑这五道），用 `hard` 或题名点名跑。
+ */
+export const HARD_TASKS = ["compare"] as const;
+export type TaskName = (typeof TASKS)[number] | (typeof HARD_TASKS)[number];
 
 export const TASK_TITLES: Record<TaskName, string> = {
   research: "调研",
@@ -36,6 +42,7 @@ export const TASK_TITLES: Record<TaskName, string> = {
   code: "改代码",
   data: "数据处理",
   office: "多步办公",
+  compare: "五个开源项目对比",
 };
 
 /** 存放时加在测试文件名后面、落地时去掉的后缀。 */
@@ -56,18 +63,25 @@ export function result(task: string, checks: Check[]): CheckResult {
   };
 }
 
-/** 从 `all`、空串或逗号分隔的题名里挑出要跑的题；不认识的名字直接报错，免得悄悄少跑一题。 */
+/**
+ * 从 `all`（五道对标题）、`hard`（加难题）、空串或逗号分隔的题名里挑出要跑的题，可以混写（`all,hard`）；
+ * 不认识的名字直接报错，免得悄悄少跑一题。
+ */
 export function selectTasks(spec: string | undefined): TaskName[] {
   const text = (spec ?? "").trim();
   if (!text || text === "all") return [...TASKS];
-  const picked = text
-    .split(/[,\s]+/)
-    .map((name) => name.trim())
-    .filter(Boolean);
-  for (const name of picked)
-    if (!(TASKS as readonly string[]).includes(name))
-      throw new Error(`不认识的题目「${name}」，可选：${TASKS.join("、")}`);
-  return TASKS.filter((name) => picked.includes(name));
+  const known: readonly TaskName[] = [...TASKS, ...HARD_TASKS];
+  const picked = new Set<string>();
+  for (const name of text.split(/[,\s]+/).filter(Boolean)) {
+    if (name === "all") for (const task of TASKS) picked.add(task);
+    else if (name === "hard") for (const task of HARD_TASKS) picked.add(task);
+    else if ((known as readonly string[]).includes(name)) picked.add(name);
+    else
+      throw new Error(
+        `不认识的题目「${name}」，可选：all、hard、${known.join("、")}`,
+      );
+  }
+  return known.filter((name) => picked.has(name));
 }
 
 /**

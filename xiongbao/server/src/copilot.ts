@@ -51,6 +51,7 @@ import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
+import { mediaGuidance } from "../../shared/media";
 import { planGuidance } from "../../shared/plan";
 import { subagentGuidance } from "../../shared/subagent";
 import { thinkingOf } from "../../shared/thinking";
@@ -1298,6 +1299,17 @@ export function builtInAgentConfiguration(
             }),
           )
         : []),
+      /*
+       * 生成图片、视频，和在电脑上生成文档（期五 C）：出图、出视频的工具在手上才说怎么用，这一轮能用电脑
+       * 才说怎么生成和校验 Word、Excel、PPT、PDF、怎么用 markitdown 读文件。两样都没有就没有这一段。
+       */
+      ...promptSection(
+        "media",
+        mediaGuidance(
+          tools.map((tool) => tool.name),
+          { computer: Boolean(computerGuidance) && run.usesComputer !== false },
+        ),
+      ),
       ...promptSection("learned_skills", learnedSkills?.catalog),
       /*
        * 它手上握着哪些技能，一行一条。跟着 grants 走，所以和 `learned_skills` 一样是稳定前缀；

@@ -401,6 +401,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends acl procps git 
   && visudo -cf /etc/sudoers.d/xb-bot
 ENV COMPUTER_PER_BOT_USERS=on
 
+# 生成与读取文档的环境，与 agent-computer/Dockerfile 同一套（docker/docs-toolchain）：Python 文档库与
+# markitdown、pandoc、中文字体（Noto CJK 给排版和浏览器，文泉驿微米黑是 TrueType 轮廓给 reportlab）。
+# 单镜像另装 LibreOffice 的无界面精简版（*-nogui，不装推荐包），员工用 `soffice --headless --convert-to pdf`
+# 把 Word、Excel、PPT 转成 PDF 来交付或检查版面。装完当场生成一遍各类文件再读回来，出不了中文就构建失败；
+# CI 的 image job 再以员工用户跑一次同一个自检。
+COPY docker/docs-toolchain /opt/docs-toolchain
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 python3-venv fontconfig fonts-noto-cjk fonts-wqy-microhei pandoc \
+      libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+      libreoffice-writer-nogui libreoffice-calc-nogui libreoffice-impress-nogui \
+  && rm -rf /var/lib/apt/lists/* \
+  && sh /opt/docs-toolchain/install.sh /opt/docs-toolchain/requirements.txt \
+  && python3 /opt/docs-toolchain/selfcheck.py --require-pandoc --require-soffice \
+  && rm -rf /root/.cache /tmp/*
+
 # THE PACKAGE MANAGER AND THE SHELL STAY. Both were removed here once as hardening, which was
 # backwards: a Bot being able to open a shell and use the tools it needs is a requested feature, not
 # an oversight. Removing them hardens the image by deleting the product. What an employee may not
