@@ -121,8 +121,10 @@ describe("naming a tool call", () => {
     // A component's line is drawn before its renderer may have loaded, and a model can call a name
     // it was never offered. Either way the line says it in words, from the first frame.
     expect(readToolName("showBarChart")).toEqual({ label: "Show bar chart" });
-    expect(readToolName("web_search", true)).toEqual({ label: "Web search" });
-    expect(readToolName("web_search")).toEqual({ label: "Web search" });
+    expect(readToolName("lookup_weather", true)).toEqual({
+      label: "Lookup weather",
+    });
+    expect(readToolName("lookup_weather")).toEqual({ label: "Lookup weather" });
     expect(readToolName("", true)).toEqual({ label: "正在使用工具" });
     expect(readToolName("__")).toEqual({ label: "使用了工具" });
   });
