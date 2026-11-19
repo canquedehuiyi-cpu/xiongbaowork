@@ -58,6 +58,11 @@ export type GroupMessage = {
     agentId: string;
     dueAt?: string;
   }[];
+  /**
+   * 这一轮员工跑满了步数、被收尾（期一）：服务器从那一轮的 `step-limit` 事件记下的步数。群里末尾据此给
+   * 「已用完 N 步 · 继续」（`groupStepLimit`）。
+   */
+  stepLimit?: { steps: number };
   /** 外部员工在等它的招聘人确认一个操作（见 {@link GroupAcpPermission}）。 */
   acpPermission?: GroupAcpPermission;
 };
