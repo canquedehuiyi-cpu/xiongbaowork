@@ -8,6 +8,8 @@
  * it and the next run never inherits it.
  */
 
+import { type PlanItem, UPDATE_PLAN_TOOL } from "./plan";
+
 /**
  * Sent with a run's last step, which goes to the model with its tools switched off.
  *
@@ -23,6 +25,25 @@ export const LAST_STEP_NOTICE =
  */
 export function promiseNudge(promise: string): string {
   return `You said "${promise}" but made no tool call. Do it now, or finish with the result and what is missing.`;
+}
+
+/**
+ * The plan a Bot writes with `update_plan` (`plan.ts`), passed on from here so the run harness reads
+ * it through the module it already reads its notices from.
+ */
+export {
+  type PlanItem,
+  readPlan,
+  UPDATE_PLAN_TOOL,
+} from "./plan";
+
+/**
+ * Sent when a run would end with items of its own plan not done: the plan it wrote with
+ * `update_plan` in this run, as its latest call left it. In the person's language, as the plan is.
+ */
+export function planNudge(open: readonly PlanItem[]): string {
+  const listed = open.map((item) => item.text).join("；");
+  return `计划里还有 ${open.length} 项没做完：${listed}，继续做，或者用 ${UPDATE_PLAN_TOOL} 说明为什么不做。`;
 }
 
 /** One part of a routine's checklist, by its number, as a nudge lists it. */

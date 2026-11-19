@@ -87,6 +87,7 @@ import {
 import { createSubagents, SUBAGENT_HANDED_BACK } from "./agents/subagent";
 import { toolLimitRecorder } from "./agents/tool-limit";
 import { serverTurnAdmission } from "./agents/turn-admission";
+import { updatePlanTools } from "./agents/update-plan";
 import {
   createWakeUpRunner,
   createWakeUpStore,
@@ -2858,6 +2859,8 @@ await startupLifecycle.run(async (startup) => {
     initiator: AuditInitiator,
     botId: string,
   ) => [
+    // 计划清单（`update_plan`）：每位员工默认都有，工具权限里关掉 `bot/update_plan` 即不给。
+    ...updatePlanTools(),
     ...wakeUpTools({
       store: wakeUpStore,
       ownerUserId: actorId,
