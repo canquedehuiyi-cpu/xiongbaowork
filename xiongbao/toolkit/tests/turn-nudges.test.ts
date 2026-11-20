@@ -29,9 +29,25 @@ type Message = { role: string; content: unknown };
 type Seen = { prompt: Message[]; tools: string[] };
 
 /** 第一次回一句收尾的话（没有工具调用）；被提醒之后再回一句。每次请求的提示和工具名都记下来。 */
-function closingModel(seen: Seen[], replies: string[]) {
+function closingModel(
+  seen: Seen[],
+  replies: string[],
+  spec: "v2" | "v3" = "v3",
+) {
+  const finish =
+    spec === "v3"
+      ? {
+          type: "finish",
+          finishReason: { unified: "stop", raw: "stop" },
+          usage,
+        }
+      : {
+          type: "finish",
+          finishReason: "stop",
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        };
   return {
-    specificationVersion: "v3" as const,
+    specificationVersion: spec,
     provider: "fake",
     modelId: "fake",
     supportedUrls: {},
@@ -52,11 +68,7 @@ function closingModel(seen: Seen[], replies: string[]) {
         { type: "text-start", id: "text" },
         { type: "text-delta", id: "text", delta: text },
         { type: "text-end", id: "text" },
-        {
-          type: "finish",
-          finishReason: { unified: "stop", raw: "stop" },
-          usage,
-        },
+        finish,
       ];
       return {
         stream: new ReadableStream({
@@ -94,11 +106,12 @@ function wrapped(
   seen: Seen[],
   replies: string[],
   run: Parameters<typeof answersOnLastStep>[2] = {},
+  spec: "v2" | "v3" = "v3",
 ) {
   const steps: RunSteps = {};
   const configuration = answersOnLastStep(
     {
-      model: closingModel(seen, replies) as never,
+      model: closingModel(seen, replies, spec) as never,
       prompt: "Work.",
       maxSteps: 40,
       tools: [
@@ -126,9 +139,10 @@ async function ask(
   options: {
     tools?: string[];
     run?: Parameters<typeof answersOnLastStep>[2];
+    spec?: "v2" | "v3";
   } = {},
 ) {
-  const { model } = wrapped(seen, replies, options.run);
+  const { model } = wrapped(seen, replies, options.run, options.spec);
   const streamed = (await model.doStream({
     prompt,
     tools: (options.tools ?? ["computer_run_command"]).map((name) => ({
@@ -297,6 +311,42 @@ describe("改完必验：改过文件的一轮，收尾前没有校验动作，�
       result("s2", "computer_run_command"),
     ];
     await ask(seen, ["看完了。"], prompt);
+    expect(seen).toHaveLength(1);
+  });
+});
+
+describe("规格 v2 的模型（自定义地址、Moonshot、智谱、OpenRouter）同样收到提醒", () => {
+  test("包出来的模型仍是 v2：运行时按 v2 转换，流的格式对得上", () => {
+    const { model } = wrapped([], ["好。"], {}, "v2") as unknown as {
+      model: { specificationVersion: string };
+    };
+    expect(model.specificationVersion).toBe("v2");
+  });
+
+  test("计划里还有没做的项：被提醒，提醒到上限为止", async () => {
+    const seen: Seen[] = [];
+    await ask(seen, ["都做完了。", "好，继续。"], plannedEarlier(), {
+      spec: "v2",
+    });
+    expect(seen).toHaveLength(1 + MOST_NUDGES);
+    expect(lastTold(seen)).toContain("计划里还有 2 项没做完");
+  });
+
+  test("改完没验：提醒一次，点出文件", async () => {
+    const seen: Seen[] = [];
+    const prompt = [
+      user("把重构做完"),
+      call("w1", "computer_write_file", { path: "src/money.ts" }),
+      result("w1", "computer_write_file"),
+    ];
+    await ask(seen, ["改好了。", "没有测试可跑。"], prompt, { spec: "v2" });
+    expect(seen).toHaveLength(2);
+    expect(lastTold(seen)).toContain("src/money.ts");
+  });
+
+  test("没有要提醒的：一次请求，原样通过", async () => {
+    const seen: Seen[] = [];
+    await ask(seen, ["你好。"], [user("你好")], { spec: "v2" });
     expect(seen).toHaveLength(1);
   });
 });
