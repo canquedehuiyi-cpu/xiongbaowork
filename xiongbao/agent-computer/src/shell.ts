@@ -318,11 +318,21 @@ export type RunAs = {
   launcher?: string[];
 };
 
+/** One shell word: `value` in single quotes, a quote inside it closed, escaped and reopened. */
+function shellSingleQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
 /** The command a caller hands a shell, and the Stop that ends it. */
 export type CommandInput = {
   command: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /**
+   * Start in the workspace root even if an earlier command left the live shell somewhere else. What
+   * the Bot's own commands ask for (`/exec`); a person typing at the terminal keeps their directory.
+   */
+  fromRoot?: boolean;
 };
 
 export type ShellOptions = {
@@ -341,7 +351,7 @@ export type ShellOptions = {
  * one bash in a pseudo-terminal that this process starts, so it runs as this process's user, pwuser,
  * and the root helper's `run` takes a command and its environment on stdin rather than a terminal.
  * An employee's live terminal made that way would be pwuser's bash in the employee's directory: every
- * other employee's files, the browser profiles, and `sudo openbot-apt`. So its commands run one at a
+ * other employee's files, the browser profiles, and the sudo-allowed package installer. So its commands run one at a
  * time through the helper, and the terminal a person watches is a separate bash the helper starts as
  * the employee (`xb-bot shell`, index.ts `ownUserTerminal`), into which the employee's own commands
  * are not typed.
@@ -468,8 +478,17 @@ export function createShell(
           timeoutMs,
         });
 
+      /*
+       * A Bot's command starts in the workspace root (`fromRoot`), the folder the file tools'
+       * relative paths are based on. The shell is one long-lived bash, so a `cd` in an earlier
+       * command (this run's, the last run's, or a person's at the terminal) would otherwise leave the
+       * next command somewhere else, and a relative `cd eval/x` that works for `computer_read_file`
+       * fails here. Exported variables still carry over; only the directory is reset.
+       */
       const outcome = await live.run({
-        command: input.command,
+        command: input.fromRoot
+          ? `cd -- ${shellSingleQuote(workspaceDir)} 2>/dev/null\n${input.command}`
+          : input.command,
         deadline: started + timeoutMs,
         ...(input.signal ? { signal: input.signal } : {}),
       });

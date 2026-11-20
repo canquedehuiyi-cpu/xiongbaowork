@@ -2083,6 +2083,7 @@ serve<StreamData & TerminalSocketData>({
           return json(
             await shell.run({
               command: body.command,
+              fromRoot: true,
               ...(timeout.timeoutMs !== undefined
                 ? { timeoutMs: timeout.timeoutMs }
                 : {}),
