@@ -5216,6 +5216,28 @@ await startupLifecycle.run(async (startup) => {
    * 看板自主认领（期 3·3.3，tasks/claim.ts、tasks/card-autonomy.ts）：卡的账，和领到之后开工的那一层。开工要用后面才
    * 建好的 `nudgeRuns`，所以这一层晚绑定（同 `deliveryNotifications`）。
    */
+  /*
+   * 心跳醒来、新卡踢员工之前的几道关（沿用巡检的）：本人关了主动检查、员工被暂停、管理员关了、本月额度用完。
+   * 答非空就是不做，原因写在里面；都不是答 null。
+   */
+  const heartbeatGate = async ({
+    ownerUserId,
+    agentId,
+  }: {
+    ownerUserId: string;
+    agentId: string;
+  }) => {
+    if (await proactiveStore.personOff(ownerUserId)) return "off_person" as const;
+    if (await proactiveStore.paused(ownerUserId, agentId)) return "paused" as const;
+    if (!(await proactiveEngine.allowed(ownerUserId))) return "off_admin" as const;
+    try {
+      await quota.assertCapacity(ownerUserId, "tasksPerMonth");
+    } catch (error) {
+      if (error instanceof QuotaExceeded) return "quota" as const;
+      throw error;
+    }
+    return null;
+  };
   const boardCardStore = createBoardCards(database);
   let cardAutonomy: ReturnType<typeof createCardAutonomy> | undefined;
   if (process.env.XIONGBAO_HEARTBEAT?.trim().toLowerCase() !== "off") {
@@ -5239,18 +5261,7 @@ await startupLifecycle.run(async (startup) => {
       actorFor,
       channels: channelStore,
       quietUntil,
-      gate: async ({ ownerUserId, agentId }) => {
-        if (await proactiveStore.personOff(ownerUserId)) return "off_person";
-        if (await proactiveStore.paused(ownerUserId, agentId)) return "paused";
-        if (!(await proactiveEngine.allowed(ownerUserId))) return "off_admin";
-        try {
-          await quota.assertCapacity(ownerUserId, "tasksPerMonth");
-        } catch (error) {
-          if (error instanceof QuotaExceeded) return "quota";
-          throw error;
-        }
-        return null;
-      },
+      gate: heartbeatGate,
       dailyRuns: (agentId) => proactiveAdmin.proactiveDailyRuns(agentId),
       // 醒来时先认领派给自己岗位的卡并开工（不用模型）；看板那一层建好之前（启动的头几秒）领不了，下一次醒来再领。
       claimCards: async ({ ownerUserId, agentId }) =>
@@ -5486,6 +5497,7 @@ await startupLifecycle.run(async (startup) => {
       );
     },
     quietUntil,
+    gate: heartbeatGate,
   });
   /*
    * Where the delivery loop speaks to the person outside a conversation (spec §10,

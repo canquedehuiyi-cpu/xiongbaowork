@@ -31,6 +31,7 @@ function fixture(
     quiet?: boolean;
     enabled?: boolean;
     employees?: string[];
+    gate?: string | null;
   } = {},
 ) {
   const queue = [...(options.cards ?? [card(1), card(2), card(3)])];
@@ -88,6 +89,7 @@ function fixture(
     canClaim: async () => options.canClaim ?? true,
     quietUntil: async (_o, o) =>
       options.quiet && !o?.urgent ? new Date("2026-11-21T00:00:00Z") : null,
+    gate: async () => options.gate ?? null,
     enabled: () => options.enabled ?? true,
     maxParallel: () => 2,
   });
@@ -155,16 +157,29 @@ describe("新卡放进来时踢一下", () => {
     );
   });
 
-  test("安静时段里不踢，留给心跳在时段结束后醒来领；紧急的照踢", async () => {
+  test("安静时段里普通卡不踢，留给心跳在时段结束后醒来领", async () => {
     const quiet = fixture({ quiet: true });
-    expect(
-      await quiet.autonomy.kick("alice", { role: "前端", urgent: false }),
-    ).toBe(0);
+    expect(await quiet.autonomy.kick("alice", { role: "前端", urgent: false })).toBe(0);
     expect(quiet.log.claims).toEqual([]);
+  });
+
+  test("安静时段里紧急卡才踢，而且领的时候只领紧急的，不把前面的普通卡一起带走", async () => {
     const urgent = fixture({ quiet: true });
-    expect(
-      await urgent.autonomy.kick("alice", { role: "前端", urgent: true }),
-    ).toBeGreaterThan(0);
+    expect(await urgent.autonomy.kick("alice", { role: "前端", urgent: true })).toBeGreaterThan(0);
+    expect(urgent.log.claims.length).toBeGreaterThan(0);
+    for (const claim of urgent.log.claims) expect(claim.onlyUrgent).toBe(true);
+  });
+
+  test("不在安静时段：不带 onlyUrgent，紧急不紧急都按优先级领", async () => {
+    const awake = fixture();
+    await awake.autonomy.kick("alice", { role: "前端", urgent: true });
+    for (const claim of awake.log.claims) expect(claim.onlyUrgent).toBeUndefined();
+  });
+
+  test("本人关了主动检查、管理员关了、员工被暂停：新卡也不踢", async () => {
+    const refused = fixture({ gate: "off_person" });
+    expect(await refused.autonomy.kick("alice", { role: "前端", urgent: false })).toBe(0);
+    expect(refused.log.claims).toEqual([]);
   });
 });
 

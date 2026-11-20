@@ -129,7 +129,13 @@ export function createBoardCards(
         const [profile] = await transaction
           .select({ title: agentProfiles.title })
           .from(agentProfiles)
-          .where(eq(agentProfiles.agentId, employeeId))
+          // 员工必须归卡的主人：别人发布给你的团队员工，头衔相同也领不到你的卡。
+          .where(
+            and(
+              eq(agentProfiles.agentId, employeeId),
+              eq(agentProfiles.ownerUserId, owner),
+            ),
+          )
           .limit(1);
         if (!profile?.title) return null;
         // 在做的：领了还没开出看板卡的，和看板卡还在做、在等人处理的。交出去等验收的不占名额。
@@ -201,6 +207,8 @@ export function createBoardCards(
         .where(
           and(
             eq(agentProfiles.title, role),
+            // 只点名归本人的员工：别人发布给你的团队员工不算。
+            eq(agentProfiles.ownerUserId, currentTenant()),
             sql`${agents.configuration} #>> '{heartbeat,enabled}' = 'true'`,
           ),
         );

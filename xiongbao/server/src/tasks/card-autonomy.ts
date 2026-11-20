@@ -43,6 +43,14 @@ export function createCardAutonomy(deps: {
   /** 这位员工现在能不能自己接活：不是外部员工、没被暂停、没关 `accept_task`。没有就都能。 */
   canClaim?: (ownerUserId: string, agentId: string) => Promise<boolean>;
   quietUntil?: QuietUntil;
+  /**
+   * 新卡踢员工之前的几道关，不用模型：本人关了主动检查、管理员关了、员工被暂停、本月额度用完。和心跳醒来用的是同一套
+   * （`heartbeat/runner.ts` 的 `gate`），答非空就是不踢。没有就不拦。
+   */
+  gate?: (input: {
+    ownerUserId: string;
+    agentId: string;
+  }) => Promise<string | null>;
   /** 整个功能的开关，默认看 `XIONGBAO_CARD_AUTOCLAIM`。 */
   enabled?: () => boolean;
   maxParallel?: () => number;
@@ -125,18 +133,24 @@ export function createCardAutonomy(deps: {
       card: Pick<BoardCard, "role" | "urgent">,
     ): Promise<number> {
       if (!enabled()) return 0;
+      /*
+       * 先不看紧急标记，只问现在是不是安静时段。在里面：普通卡不踢，留给时段结束后的心跳；紧急卡才踢，而且领的时候只领
+       * 紧急的（`onlyUrgent`），不然这一踢会把排在前面的普通卡一起带走。
+       */
       const resting = deps.quietUntil
-        ? await deps
-            .quietUntil(ownerUserId, { urgent: card.urgent })
-            .catch(() => null)
+        ? await deps.quietUntil(ownerUserId).catch(() => null)
         : null;
-      if (resting) return 0;
+      if (resting && !card.urgent) return 0;
       const employees = await runAsTenant(ownerUserId, () =>
         deps.cards.heartbeatEmployees(card.role),
       );
       let started = 0;
-      for (const employee of employees)
-        started += await this.claimAndStart(ownerUserId, employee);
+      for (const employee of employees) {
+        if (await deps.gate?.({ ownerUserId, agentId: employee })) continue;
+        started += await this.claimAndStart(ownerUserId, employee, {
+          ...(resting ? { onlyUrgent: true } : {}),
+        });
+      }
       return started;
     },
   };

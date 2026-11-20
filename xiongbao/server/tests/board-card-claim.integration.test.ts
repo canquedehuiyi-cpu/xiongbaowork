@@ -195,6 +195,37 @@ describe("挑哪一张、能不能领", () => {
     ).toBe("急");
   });
 
+  test("安静时段里有更高优先级的普通卡，领到的仍是紧急卡", async () => {
+    await reset();
+    await put("普通但优先", { priority: 10 });
+    const urgent = await put("急", { priority: 0, urgent: true });
+    const got = await asOwner(() => store.claimNextCard(alice, { onlyUrgent: true }));
+    expect(got?.id).toBe(urgent.id);
+  });
+
+  test("别人发布给你的团队员工：头衔相同、开着心跳，也领不到你的卡，也不被点名", async () => {
+    await reset();
+    const teamBot = `${prefix}-team`;
+    await asPlatform(async () => {
+      await db
+        .insert(agents)
+        .values({ id: teamBot, tenantId: "team", name: teamBot, type: "built_in", configuration: { heartbeat: { enabled: true } } });
+      await db.insert(agentProfiles).values({
+        agentId: teamBot,
+        tenantId: "team",
+        ownerUserId: other,
+        title: role,
+        roleDescription: "",
+        avatarSeed: teamBot,
+        visibility: "public",
+      });
+    });
+    agentIds.push(teamBot);
+    await put("我的卡");
+    expect(await asOwner(() => store.claimNextCard(teamBot))).toBeNull();
+    expect(await asOwner(() => store.heartbeatEmployees(role))).not.toContain(teamBot);
+  });
+
   test("没有岗位的员工领不到；领了没开成卡的可以放回去", async () => {
     await reset();
     await put("活");
