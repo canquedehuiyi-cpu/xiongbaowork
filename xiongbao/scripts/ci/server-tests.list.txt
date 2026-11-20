@@ -944,6 +944,7 @@ tests/tool-calls-come-back.integration.test.ts
 tests/tool-chooser-sign-in.test.ts
 tests/tool-images.test.ts
 tests/tool-output-offload.test.ts
+tests/tool-output-size.test.ts
 tests/tool-search.test.ts
 tests/tool-selection-environment-restoration-driver.test.ts
 tests/tool-selection-environment-restoration.test.ts
