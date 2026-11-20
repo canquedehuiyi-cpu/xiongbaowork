@@ -22,7 +22,7 @@ import {
 import {
   findOverreach,
   findSensitive,
-  hasExternalAddress,
+  externalAddressIn,
   maskEmails,
 } from "../learning/sensitive";
 import { similarity } from "../memory/extract";
@@ -292,7 +292,8 @@ export function heldForReview(draft: SkillDraft): string | undefined {
   const text = textOfDraft(draft);
   const overreach = findOverreach(text);
   if (overreach.length > 0) return `含越权的步骤（${overreach.join("、")}）`;
-  if (hasExternalAddress(text)) return "要求访问或外发到网址或域名";
+  const address = externalAddressIn(text);
+  if (address !== undefined) return `要求访问或外发到网址或域名（${address}）`;
   return undefined;
 }
 

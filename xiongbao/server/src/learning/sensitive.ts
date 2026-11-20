@@ -314,13 +314,27 @@ const DOMAIN_SUFFIXES: ReadonlySet<string> = new Set(
  * 它就转待审，要本人看过才生效（见 `skills/save-tool.ts` 的 `heldForReview`）。
  */
 export function hasExternalAddress(text: string): boolean {
+  return externalAddressIn(text) !== undefined;
+}
+
+/** 和 {@link hasExternalAddress} 一样的判断，返回认出来的第一处网址或域名（最多 80 个字符），没有就是 `undefined`。 */
+export function externalAddressIn(text: string): string | undefined {
   const bounded = text.length > SCAN_LIMIT ? text.slice(0, SCAN_LIMIT) : text;
   const scanned = maskEmails(bounded).text.normalize("NFKC");
-  if (URL_SHAPES.some((shape) => shape.test(scanned))) return true;
+  for (const shape of URL_SHAPES) {
+    const found = shape.exec(scanned);
+    if (found) return addressAround(scanned, found.index);
+  }
   for (const match of scanned.matchAll(DOMAIN_LIKE)) {
     const last = (match[1] ?? "").toLowerCase();
     if (FILE_EXTENSIONS.has(last)) continue;
-    if (last.length === 2 || DOMAIN_SUFFIXES.has(last)) return true;
+    if (last.length === 2 || DOMAIN_SUFFIXES.has(last)) return match[0];
   }
-  return false;
+  return undefined;
+}
+
+/** 从 `start` 起到下一个空白或中文标点为止的一段，最多 80 个字符：网址本身，不带后面的话。 */
+function addressAround(text: string, start: number): string {
+  const rest = text.slice(start, start + 80);
+  return rest.split(/[\s，。；、,;)」』"'`]/)[0] ?? rest;
 }

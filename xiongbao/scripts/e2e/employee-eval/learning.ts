@@ -96,6 +96,8 @@ export type RetroLine = {
   reason?: string;
   /** 这一行是哪张看板卡的复盘（卡的各轮合成的）；单独一轮的没有。 */
   cardId?: string;
+  /** 转待审时同一轮另记的 `retrospect-held` 行里的原因（规则的名字和认出的网址）；没转待审时没有。 */
+  heldReason?: string;
   runId: string;
 };
 
@@ -106,7 +108,22 @@ export function retroLinesOf(
 ): RetroLine[] {
   const wanted = new Set(runIds);
   const lines: RetroLine[] = [];
+  const heldReasons = new Map<string, string>();
   for (const raw of log.split("\n")) {
+    if (raw.includes('"type":"retrospect-held"')) {
+      try {
+        const parsed = JSON.parse(raw.slice(raw.indexOf("{"))) as Record<
+          string,
+          unknown
+        >;
+        const runId = String(parsed.runId ?? "");
+        if (wanted.has(runId) && typeof parsed.reason === "string")
+          heldReasons.set(runId, parsed.reason);
+      } catch {
+        // 读不懂就跳过。
+      }
+      continue;
+    }
     if (!raw.includes('"type":"retrospect"')) continue;
     try {
       const parsed = JSON.parse(raw.slice(raw.indexOf("{"))) as Record<
@@ -130,7 +147,11 @@ export function retroLinesOf(
       // 一行日志读不懂就跳过，不影响别的行。
     }
   }
-  return lines;
+  return lines.map((line) => {
+    const heldReason =
+      line.outcome === "held" ? heldReasons.get(line.runId) : undefined;
+    return heldReason ? { ...line, heldReason } : line;
+  });
 }
 
 /**
@@ -184,6 +205,7 @@ export async function waitForRetro(options: {
     outcome: line.outcome,
     ...(line.trigger ? { trigger: line.trigger } : {}),
     ...(line.steps === undefined ? {} : { steps: line.steps }),
+    ...(line.heldReason ? { heldReason: line.heldReason } : {}),
   });
   for (;;) {
     const seen = await lines();
