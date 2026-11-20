@@ -5,7 +5,11 @@ import { createDatabase } from "../src/db/client";
 import { agents, users } from "../src/db/schema/core";
 import { agentProfiles } from "../src/db/schema/coworker";
 import { personalMemories } from "../src/db/schema/memory";
+import { createAuditStore } from "../src/audit";
+import { createCredentialStore } from "../src/credentials";
 import { createMemoryExtractor } from "../src/memory/extract";
+import { createMemoryIngestion } from "../src/memory/ingestion";
+import { createPluginStore } from "../src/plugins/store";
 import { createMemoryStore } from "../src/memory/store";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -22,6 +26,17 @@ const bot = `extract-bot-${suite}`;
 const otherBot = `extract-other-bot-${suite}`;
 const asOwner = <T>(fn: () => Promise<T>) => runAsTenant(owner, fn);
 const store = createMemoryStore(database);
+const ingestion = createMemoryIngestion({
+  store,
+  plugins: createPluginStore({
+    database,
+    auditStore: createAuditStore(database),
+    credentials: createCredentialStore(database),
+    encryptionKey: Buffer.alloc(32, 7).toString("base64"),
+    policy: () => ({ mode: "enforce", deny: [], allow: ["true"] }),
+    callVendor: async () => ({ text: "[]", isError: false }),
+  }),
+});
 
 beforeAll(async () => {
   await runAsTenant("platform", () =>
@@ -133,5 +148,21 @@ test("同一件事下一轮再抽，不会存第二条", async () => {
         ),
       );
     expect(rows).toHaveLength(1);
+  });
+});
+
+test("what the Bot noticed is put in its context as an unconfirmed lead, and as an ordinary memory once the person confirms it", async () => {
+  await asOwner(async () => {
+    const before = await ingestion.contextFor(owner, bot, "周报发给谁");
+    expect(before).toContain('"status":"unconfirmed"');
+    expect(before).toContain("Treat them as leads only");
+    const [row] = await database
+      .select({ id: personalMemories.id })
+      .from(personalMemories)
+      .where(eq(personalMemories.formedByAgentId, bot));
+    await store.update(owner, row?.id ?? "", { reviewState: "confirmed" });
+    const after = await ingestion.contextFor(owner, bot, "周报发给谁");
+    expect(after).toContain("周报每周五发给团队，用要点格式");
+    expect(after).not.toContain("unconfirmed");
   });
 });

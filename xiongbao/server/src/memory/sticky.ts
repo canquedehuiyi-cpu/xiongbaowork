@@ -26,12 +26,18 @@ type Entry = {
 
 /** 候选记忆的指纹：编号、来源、正文和顺序，任何一条变了它就变。 */
 function fingerprintOf(
-  memories: readonly { id: string; content: string; provenance: string }[],
+  memories: readonly {
+    id: string;
+    content: string;
+    provenance: string;
+    reviewState?: string;
+  }[],
 ): string {
   const hash = createHash("sha256");
+  // 确认状态也算：本人确认一条之后，它在块里的标记和位置变了，不能再原样复用。
   for (const memory of memories)
     hash.update(
-      `${memory.id}\u0000${memory.provenance}\u0000${memory.content}\u0001`,
+      `${memory.id}\u0000${memory.provenance}\u0000${memory.content}\u0000${memory.reviewState ?? ""}\u0001`,
     );
   return hash.digest("hex");
 }
@@ -52,7 +58,12 @@ export function createStickyMemory(
   /** 这一条消息该复用上次的块还是重挑，以及重挑时用哪条消息、记下什么。 */
   function lookup(
     key: string,
-    memories: readonly { id: string; content: string; provenance: string }[],
+    memories: readonly {
+      id: string;
+      content: string;
+      provenance: string;
+      reviewState?: string;
+    }[],
     query: string,
   ) {
     const fingerprint = fingerprintOf(memories);
@@ -103,7 +114,12 @@ export function createStickyMemory(
      */
     choose(input: {
       key: string | undefined;
-      memories: readonly { id: string; content: string; provenance: string }[];
+      memories: readonly {
+        id: string;
+        content: string;
+        provenance: string;
+        reviewState?: string;
+      }[];
       query: string;
       render: (query: string) => string;
     }): string {
@@ -123,7 +139,12 @@ export function createStickyMemory(
      */
     async chooseAsync(input: {
       key: string | undefined;
-      memories: readonly { id: string; content: string; provenance: string }[];
+      memories: readonly {
+        id: string;
+        content: string;
+        provenance: string;
+        reviewState?: string;
+      }[];
       query: string;
       render: (query: string) => Promise<string>;
     }): Promise<string> {
