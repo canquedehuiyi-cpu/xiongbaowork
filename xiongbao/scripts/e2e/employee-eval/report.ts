@@ -282,6 +282,31 @@ export function learningRows(
   });
 }
 
+/**
+ * 后台调用表：每道题一行，题目自身的输入 token、后台调用（复盘、自动抽记忆）的次数和输入 token，以及含后台的
+ * 输入 token 合计。题目自身的步数和 token 只算主运行，后台成本在这里完整可见。没有 `backgroundCalls`
+ * 的记录（Codex、旧结果文件）不出行。
+ */
+export function backgroundRows(
+  sides: readonly (readonly [string, EvalResults | undefined])[],
+): string[][] {
+  return sides.flatMap(([label, results]) =>
+    (results?.records ?? []).flatMap((record) => {
+      const background = record.backgroundCalls;
+      if (!background) return [];
+      const own = record.tokens?.input ?? null;
+      return [
+        [
+          `${record.title}（${label}）`,
+          group(own),
+          `${background.count} 次 / ${group(background.inputTokens)}`,
+          own === null ? DASH : group(own + background.inputTokens),
+        ],
+      ];
+    }),
+  );
+}
+
 const chars = (value: number | undefined) =>
   value === undefined ? DASH : value.toLocaleString("en-US");
 
@@ -714,6 +739,28 @@ export function renderReport(results: EvalResults[]): string {
       ),
       "",
       "新增是和该次运行开始前比的；复盘结果取自服务器日志里这次最后一轮的 `retrospect` 行，第一次结束后最多等 90 秒再开第二次，超时照常开始。「用到」指技能账里的使用次数涨了：那一轮对得上这件事、已经放进上下文的，或员工用 `refine_skill` 读过的。",
+      "",
+    );
+
+  const backgroundTable = backgroundRows([
+    ...mineSides.map((mine) => [mine.label, mine.results] as const),
+    ["Codex", codex] as const,
+  ]);
+  if (backgroundTable.length)
+    out.push(
+      "## 后台调用（复盘、自动抽记忆）",
+      "",
+      table(
+        [
+          "题目",
+          "题目自身输入 token",
+          "后台调用（次 / 输入 token）",
+          "含后台的输入 token 合计",
+        ],
+        backgroundTable,
+      ),
+      "",
+      "题目自身的步数和 token 只算主运行；复盘、自动抽记忆是轮结束后另起的模型调用（计量记成 unscoped），单独列在这里，合计把它们算进去。",
       "",
     );
 

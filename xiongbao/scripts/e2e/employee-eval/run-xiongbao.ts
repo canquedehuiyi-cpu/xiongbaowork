@@ -1341,14 +1341,11 @@ async function runWork(work: Work): Promise<EvalRecord> {
   const events = await eventsOf(runIds);
   /*
    * 员工的背景小活（复盘、自动抽记忆）的模型调用不在任何一轮里，计量记成 `unscoped`：它们是轮结束后的另一次
-   * 调用，不算这道题的步数和 token（否则第一次会比第二次多一次复盘的调用）。只记一笔说明。
+   * 调用，题目自身的步数和 token 只算主运行（否则第一次会比第二次多一次复盘的调用）；后台调用另记在
+   * `backgroundCalls`（运行结束、等完复盘之后再读一遍），成本完整可见。
    */
   const allTokens = await tokenRows(agentId, since);
   const tokens = allTokens.filter((row) => row.runId !== "unscoped");
-  if (tokens.length < allTokens.length)
-    notes.push(
-      `${work.key}：另有 ${allTokens.length - tokens.length} 次轮外的背景调用（复盘、自动抽记忆），不计入这道题的步数和 token`,
-    );
   const perRound = runIds.map(
     (runId) => tokens.filter((row) => row.runId === runId).length,
   );
@@ -1434,6 +1431,9 @@ async function runWork(work: Work): Promise<EvalRecord> {
       `   learning: +${learning.newSkills.length} skills, +${learning.newMemories} memories, used ${learning.usedSkills.length}; retrospective ${retro.ended}${retro.outcome ? ` ${retro.outcome}` : ""} after ${(retro.waitedMs / 1000).toFixed(0)} s`,
     );
   }
+  const backgroundCalls = backgroundOf(
+    (await tokenRows(agentId, since)).filter((row) => row.runId === "unscoped"),
+  );
   const record: EvalRecord = {
     task: work.key,
     title: work.title,
@@ -1468,6 +1468,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     checks,
     ...(promptChars ? { promptChars } : {}),
     ...(learning ? { learning } : {}),
+    backgroundCalls,
     ...(roundErrors.length
       ? {
           error: `运行报错 ${roundErrors.length} 次：${[...new Set(roundErrors)].join("；")}`,

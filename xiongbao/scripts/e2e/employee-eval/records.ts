@@ -39,6 +39,9 @@ export type RunLearning = {
   };
 };
 
+/** 轮外的背景调用（复盘、自动抽记忆；计量记成 `unscoped`）：次数和输入 token。不计入题目自身的步数和 token。 */
+export type BackgroundCalls = { count: number; inputTokens: number };
+
 /** 重复任务里一次运行的指标（`firstRun` / `secondRun`）。 */
 export type RunMetrics = {
   passed: boolean;
@@ -54,6 +57,7 @@ export type RunMetrics = {
     total: number | null;
   } | null;
   nudges: number;
+  backgroundCalls?: BackgroundCalls;
   /** 这次运行学到了什么（见 {@link RunLearning}）。 */
   learning?: RunLearning;
 };
@@ -114,6 +118,8 @@ export type EvalRecord = {
   /** 重复任务（`repeat`）：同一位员工连做两次，各自的指标。其他题没有这两项。 */
   firstRun?: RunMetrics;
   secondRun?: RunMetrics;
+  /** 这道题期间员工的背景调用；没有这一项的旧结果文件读作没记。 */
+  backgroundCalls?: BackgroundCalls;
   /** 重复任务的一次运行（合成前的单次记录）里员工学到了什么；合成后在 `firstRun` / `secondRun` 里。 */
   learning?: RunLearning;
 };
@@ -160,6 +166,9 @@ export function runMetrics(record: EvalRecord): RunMetrics {
       : null,
     nudges: record.nudges,
     ...(record.learning ? { learning: record.learning } : {}),
+    ...(record.backgroundCalls
+      ? { backgroundCalls: record.backgroundCalls }
+      : {}),
   };
 }
 
@@ -248,6 +257,18 @@ export function combineRepeat(
     ],
     ...(errors.length ? { error: errors.join("；") } : {}),
     ...(second.promptChars ? { promptChars: second.promptChars } : {}),
+    ...(first.backgroundCalls || second.backgroundCalls
+      ? {
+          backgroundCalls: {
+            count:
+              (first.backgroundCalls?.count ?? 0) +
+              (second.backgroundCalls?.count ?? 0),
+            inputTokens:
+              (first.backgroundCalls?.inputTokens ?? 0) +
+              (second.backgroundCalls?.inputTokens ?? 0),
+          },
+        }
+      : {}),
     firstRun: runMetrics(first),
     secondRun: runMetrics(second),
   };

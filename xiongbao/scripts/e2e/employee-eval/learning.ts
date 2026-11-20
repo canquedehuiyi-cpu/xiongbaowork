@@ -6,7 +6,7 @@
  * 不降复盘门槛：产品默认值是什么就用什么。
  */
 
-import type { RunLearning } from "./records";
+import type { BackgroundCalls, RunLearning } from "./records";
 
 /** 第一次结束后最多等复盘多久；到了就照常开始第二次。 */
 export const RETRO_WAIT_MS = 90_000;
@@ -125,4 +125,14 @@ export async function waitForRetro(options: {
     if (waitedMs >= maxMs) return { waitedMs, ended: "timeout" };
     await sleep(options.everyMs ?? 1000);
   }
+}
+
+/** 轮外的背景调用（复盘、自动抽记忆）：几次、输入多少 token。 */
+export function backgroundOf(
+  rows: readonly { inputTokens: number | null }[],
+): BackgroundCalls {
+  return {
+    count: rows.length,
+    inputTokens: rows.reduce((total, row) => total + (row.inputTokens ?? 0), 0),
+  };
 }

@@ -1,12 +1,13 @@
 import { expect, test } from "bun:test";
 import {
   type LearnedState,
+  backgroundOf,
   learningDiff,
   RETRO_WAIT_MS,
   retroLinesOf,
   waitForRetro,
 } from "./learning";
-import { renderReport, learningRows } from "./report";
+import { backgroundRows, learningRows, renderReport } from "./report";
 import { combineRepeat, type EvalRecord, type EvalResults } from "./records";
 import type { Capabilities } from "./metrics";
 
@@ -238,4 +239,42 @@ test("a retrospective that never came, and a run that learned nothing, read plai
     learningRows([["Codex", side([combineRepeat(record(), record())])]]),
   ).toEqual([]);
   expect(learningRows([["Codex", undefined]])).toEqual([]);
+});
+
+// --- background calls -----------------------------------------------------------------------------
+
+test("background calls are counted apart: how many, how many input tokens, a missing count reads as zero", () => {
+  expect(backgroundOf([])).toEqual({ count: 0, inputTokens: 0 });
+  expect(
+    backgroundOf([
+      { inputTokens: 1200 },
+      { inputTokens: null },
+      { inputTokens: 300 },
+    ]),
+  ).toEqual({ count: 3, inputTokens: 1500 });
+});
+
+test("the report lists background calls and the total with them; two runs of a repeat add up", () => {
+  const repeated = combineRepeat(
+    record({ backgroundCalls: { count: 1, inputTokens: 2_000 } }),
+    record({ backgroundCalls: { count: 1, inputTokens: 1_500 } }),
+  );
+  expect(repeated.backgroundCalls).toEqual({ count: 2, inputTokens: 3_500 });
+  expect(repeated.firstRun?.backgroundCalls).toEqual({
+    count: 1,
+    inputTokens: 2_000,
+  });
+  const mine = side([repeated]);
+  expect(backgroundRows([["熊宝", mine]])).toEqual([
+    [
+      "重复任务（多步办公连做两次）（熊宝）",
+      "506,136",
+      "2 次 / 3,500",
+      "509,636",
+    ],
+  ]);
+  expect(backgroundRows([["Codex", side([record()])]])).toEqual([]);
+  const markdown = renderReport([mine]);
+  expect(markdown).toContain("## 后台调用（复盘、自动抽记忆）");
+  expect(markdown).toContain("2 次 / 3,500");
 });
