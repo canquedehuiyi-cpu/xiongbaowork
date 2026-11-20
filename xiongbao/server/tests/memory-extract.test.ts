@@ -231,6 +231,42 @@ describe("轮次结束处的抽取函数", () => {
     expect(modelCalls).toEqual(["light"]);
   });
 
+  test("只和这位员工看得见的记忆去重：另一位员工记下的不算，本人给的和自己记的算", async () => {
+    const memories = [
+      {
+        content: "周报每周五发给团队，用要点格式",
+        formedBy: "bot",
+        formedByAgentId: "other-bot",
+      },
+      {
+        content: "喜欢上午开会，下午留给写文档",
+        formedBy: "person",
+        formedByAgentId: null,
+      },
+    ];
+    const formed: { content: string }[] = [];
+    const { extract } = harness({
+      store: {
+        list: async () => memories as never,
+        formMemory: async (_owner, input) => {
+          formed.push(input);
+          return { id: "m", duplicate: false, forgotten: false };
+        },
+      },
+    });
+    expect(await extract(turn)).toEqual({ saved: 1 });
+    expect(formed.map((m) => m.content)).toEqual([
+      "周报每周五发给团队，用要点格式",
+    ]);
+    // Once this employee has noticed it itself, it is not noticed again.
+    memories.push({
+      content: "周报每周五发给团队，用要点格式",
+      formedBy: "bot",
+      formedByAgentId: "bot",
+    });
+    expect(await extract(turn)).toEqual({ saved: 0 });
+  });
+
   test("一次性闲聊：不调用模型，不存", async () => {
     const { extract, formed, modelCalls } = harness();
     expect(

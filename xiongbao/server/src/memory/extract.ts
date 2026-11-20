@@ -348,9 +348,16 @@ export function createMemoryExtractor(deps: MemoryExtractorDeps) {
         ...(deps.call ? { call: deps.call } : {}),
       });
       if (candidates.length === 0) return { saved: 0 };
-      const existing = (await deps.store.list(turn.ownerUserId)).map(
-        (memory) => memory.content,
-      );
+      // Compared with what this employee can already see: what the person or an app gave, and what this
+      // employee itself noticed. Another employee's observation is not visible to this one, so it is no
+      // reason for this one not to keep its own.
+      const existing = (await deps.store.list(turn.ownerUserId))
+        .filter(
+          (memory) =>
+            memory.formedBy !== "bot" ||
+            memory.formedByAgentId === turn.agentId,
+        )
+        .map((memory) => memory.content);
       let saved = 0;
       for (const memory of candidates) {
         if (saved >= MAX_MEMORIES_PER_TURN) break;
