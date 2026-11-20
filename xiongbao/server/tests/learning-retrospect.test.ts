@@ -279,13 +279,13 @@ describe("the retrospector at the end of a turn", () => {
     });
     const own = turnOf(20);
     own.steps.push(
-      ...traceStepsOf(call("s", "save_skill", goodDraft, '{"saved":true}')),
+      ...traceStepsOf(call("s", "save_learned_skill", goodDraft, '{"saved":true}')),
     );
     expect(await run(own)).toEqual({ outcome: "skipped" });
     expect(modelCalls).toEqual([]);
   });
 
-  test("an employee whose save_skill is switched off is not reviewed", async () => {
+  test("an employee whose save_learned_skill is switched off is not reviewed", async () => {
     const { run, modelCalls } = harness({ enabled: () => false });
     expect(await run(turnOf(30))).toEqual({ outcome: "skipped" });
     expect(modelCalls).toEqual([]);

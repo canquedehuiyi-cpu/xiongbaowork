@@ -1320,7 +1320,7 @@ export function builtInAgentConfiguration(
        */
       ...promptSection("plan", planGuidance(tools.map((tool) => tool.name))),
       /*
-       * 做完一件多步的活后把做法存成自己的技能、之后怎么读和修正（期 2），只对持有 `save_skill` 的运行说，和
+       * 做完一件多步的活后把做法存成自己的技能、之后怎么读和修正（期 2），只对持有 `save_learned_skill` 的运行说，和
        * `<plan>` 一样；另写在 `shared/self-skills.ts`，不并进任何共用段落（那些段落被提示词夹具逐字钉住）。
        */
       ...promptSection(

@@ -290,7 +290,7 @@ describe("nothing sensitive or overreaching is saved", () => {
   test("the tool answers a refusal in words, with the Refused marker", async () => {
     await asOwner(async () => {
       const tool = selfSkillTools(depsFor(bot)).find(
-        (candidate) => candidate.name === "save_skill",
+        (candidate) => candidate.name === "save_learned_skill",
       );
       const answer = await tool?.execute(
         draft("带邮箱", { when: "发给 a.b@example.com" }),

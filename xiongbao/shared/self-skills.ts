@@ -1,21 +1,15 @@
 /**
  * 员工自己写技能（期 2 · Task 2.4）：两个工具的名字、字段上限，和只说给持有它们的员工的那段提示词。
  *
- * 工具在服务器上（`server/src/skills/save-tool.ts`）：`save_skill` 把一件做成了的活的做法存成技能，`refine_skill`
+ * 工具在服务器上（`server/src/skills/save-tool.ts`）；与浏览器里那个请本人保存技能的 `save_skill` 分开，所以叫 `save_learned_skill`：`save_learned_skill` 把一件做成了的活的做法存成技能，`refine_skill`
  * 在之后用到这条技能时按结果修正它，或者只带 id 读出全文。生效规则：只给自己用的（`scope: "self"`）立刻生效，
  * 授予写它的这位员工；想共享给别的员工或团队的（`scope: "shared"`）进本人的待审列表，批准前不生效。
  *
  * 技能本身不增加任何能力：它只能请员工去用已经授予它的工具，每一次调用照旧过授权、审批和审计。
  */
 
-export const SAVE_SKILL_TOOL = "save_skill";
+export const SAVE_SKILL_TOOL = "save_learned_skill";
 export const REFINE_SKILL_TOOL = "refine_skill";
-
-/**
- * 持有它的员工，浏览器里有一个同名的 `save_skill`（请本人保存技能，`app/src/lib/skills/proposal.ts` 的
- * `SKILL_CREATOR_SLUG` 是同一个值）：这样的员工服务器这边不再给 `save_skill`，免得两个同名的工具同时出现。
- */
-export const SKILL_CREATOR_SLUG = "skill-creator";
 
 /** 一条技能写给谁用。 */
 export const SKILL_SCOPES = ["self", "shared"] as const;
@@ -52,10 +46,7 @@ export const SELF_SKILL_GUIDANCE = `做完一件步骤多、做法是你摸索�
 技能里不要写密钥、令牌、密码、邮箱、手机号、证件号和银行卡号，不要写具体的人名、账号和文件内容（写成「对方」「这份文件」），也不要写绕过审批、忽略规则或瞒着本人的步骤；写了会被拒绝。一次性的事、常识，不要存。
 你自己写的技能会出现在你手上的技能清单里。遇到同类任务，先调用 ${REFINE_SKILL_TOOL} 只带 id 读出它的全文，照着做；做的时候发现它有错或缺漏，再调用 ${REFINE_SKILL_TOOL} 带上 id 和 change，用一两句话写明哪里要改。`;
 
-/**
- * 只说给持有 `save_skill` 的员工：工具权限里关掉的、或者持有 `skill-creator` 技能（浏览器里有一个同名的
- * 「请本人保存技能」的工具，服务器这边就不给 `save_skill`）的员工不教它用。
- */
+/** 只说给持有 `save_learned_skill` 的员工：工具权限里关掉的员工不教它用。 */
 export function selfSkillGuidance(
   toolNames: readonly string[],
 ): string | undefined {

@@ -420,10 +420,7 @@ import { createEmbeddingStore } from "./memory/embeddings-store";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createMemoryVectors } from "./memory/vectors";
 import { createIntelligenceMemory } from "./memory/intelligence";
-import {
-  createMemoryExtractor,
-  memoryExtractEnabled,
-} from "./memory/extract";
+import { createMemoryExtractor, memoryExtractEnabled } from "./memory/extract";
 import { createMemoryRuntime } from "./memory/runtime";
 import { createMemoryStore } from "./memory/store";
 import { offeredMemoryTools } from "./memory/tools";
@@ -616,11 +613,7 @@ import {
   notifyOnHandIn,
 } from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
-import {
-  SAVE_SKILL_TOOL,
-  SKILL_CREATOR_SLUG,
-} from "../../shared/self-skills";
-import { selfSkillTools } from "./skills/save-tool";
+import { SAVE_SKILL_REF, selfSkillTools } from "./skills/save-tool";
 import { demoteStaleSkills, learnedUsageOf } from "./skills/usage";
 import { createDelivery, replyTextOf } from "./tasks/delivery";
 import {
@@ -3123,13 +3116,6 @@ await startupLifecycle.run(async (startup) => {
     ownerUserId,
     agentId,
   });
-  const selfSkillToolsFor = async (actorId: string, botId: string) => {
-    const tools = selfSkillTools(selfSkillDepsFor(actorId, botId));
-    const authors = (await pluginStore.listForAgent(botId)).skills.some(
-      (skill) => skill.slug === SKILL_CREATOR_SLUG,
-    );
-    return authors ? tools.filter((tool) => tool.name !== SAVE_SKILL_TOOL) : tools;
-  };
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -3204,11 +3190,11 @@ await startupLifecycle.run(async (startup) => {
       agentId: botId,
     }),
     /*
-     * 员工自己写技能（`save_skill`、`refine_skill`，期 2）：每位员工默认都有，工具权限里关掉 `bot/save_skill`、
-     * `bot/refine_skill` 即不给。持有 `skill-creator` 技能的员工不给 `save_skill`：浏览器里已经有一个同名的
-     * 「请本人保存技能」的工具，两个同名的工具不能同时给。
+     * 员工自己写技能（`save_learned_skill`、`refine_skill`，期 2）：每位员工默认都有，工具权限里关掉
+     * `bot/save_learned_skill`、`bot/refine_skill` 即不给。和浏览器里那个请本人保存技能的 `save_skill`
+     * 是两件事，名字分开，持有 `skill-creator` 技能的员工两个都有。
      */
-    ...(await selfSkillToolsFor(actorId, botId)),
+    ...selfSkillTools(selfSkillDepsFor(actorId, botId)),
     /*
      * 交付闭环的三步（接活、交付、延期）：每位员工默认都有，工具权限里关掉 `accept_task` 即不走三步
      * （见上面的 `offeredDeliveryTools`）。卡片的租户是这一轮的人。
@@ -4923,7 +4909,7 @@ await startupLifecycle.run(async (startup) => {
    * 做完复盘（learning/retrospect.ts）：一轮的工具调用到了 `XIONGBAO_RETRO_MIN_STEPS` 步（默认 15）就看一遍轨迹
    * 和每一步成没成，值得就存成技能：只给自己用的立刻授予这位员工，要共享的进本人的待审列表。每一种轮次都看
    * （看板卡的一轮、例行任务也是长活）。另一处触发是本人验收一张看板卡（见 `/api/tasks` 的 `onReviewed`）。
-   * 工具权限里关掉 `bot/save_skill` 的员工不复盘。
+   * 工具权限里关掉 `bot/save_learned_skill` 的员工不复盘。
    */
   const retrospectTurn = createRetrospector({
     database,
@@ -4931,7 +4917,7 @@ await startupLifecycle.run(async (startup) => {
     modelFor: agentModelFor,
     enabled: async (ownerUserId, agentId) =>
       !(await approvalService.disabledTools(ownerUserId, agentId))(
-        "bot/save_skill",
+        SAVE_SKILL_REF,
       ),
     existingSkills: async (agentId) =>
       (await pluginStore.listForAgent(agentId)).skills.map(

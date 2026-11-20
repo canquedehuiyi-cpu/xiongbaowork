@@ -25,7 +25,7 @@ import type { PluginStore } from "../plugins/store";
 import { currentTenant } from "../tenant/context";
 
 /**
- * The two tools an employee writes its own skills with (期 2 · Task 2.4): `save_skill` stores the way a
+ * The two tools an employee writes its own skills with (期 2 · Task 2.4): `save_learned_skill` stores the way a
  * piece of work was done as a skill, `refine_skill` corrects it later (or, with no `change`, reads it
  * back). The spec: 2026-11-20-employee-depth-optimization, sub-project 2.
  *
@@ -103,7 +103,7 @@ export const saveParameters = z
 const refineParameters = z
   .object({
     id: line(80).describe(
-      "技能的 id，取自 save_skill 的结果或你手上的技能清单里的命令名（不带 /）",
+      "技能的 id，取自 save_learned_skill 的结果或你手上的技能清单里的命令名（不带 /）",
     ),
     change: line(L.change)
       .optional()
@@ -229,7 +229,7 @@ async function kept(deps: SelfSkillDeps): Promise<number> {
 }
 
 /**
- * Save a skill an employee wrote: from `save_skill`, or from the retrospective after a long piece of
+ * Save a skill an employee wrote: from `save_learned_skill`, or from the retrospective after a long piece of
  * work (`origin: "retrospect"`). Both take the same road: the checks, the cap, then the rule for
  * `scope`. Never throws for a draft it cannot take: it says why.
  */
@@ -524,7 +524,7 @@ export async function similarSkillOf(
 const answer = (value: unknown) => JSON.stringify(value);
 const refused = (reason: string) => `${REFUSAL_MARKER} ${reason}`;
 
-/** `save_skill` and `refine_skill`, for one employee of one person. */
+/** `save_learned_skill` and `refine_skill`, for one employee of one person. */
 export function selfSkillTools(deps: SelfSkillDeps): GrantedTool[] {
   return [
     {
@@ -562,7 +562,7 @@ export function selfSkillTools(deps: SelfSkillDeps): GrantedTool[] {
       name: REFINE_SKILL_TOOL,
       ref: REFINE_SKILL_REF,
       description:
-        "读出或修正你自己写的一条技能。只带 id：读出全文，遇到同类任务时先读它再照着做。带上 change（一两句话）：把哪里要改记进这条技能的修正记录。只能动你自己用 save_skill 存下的技能。",
+        "读出或修正你自己写的一条技能。只带 id：读出全文，遇到同类任务时先读它再照着做。带上 change（一两句话）：把哪里要改记进这条技能的修正记录。只能动你自己用 save_learned_skill 存下的技能。",
       parameters: refineParameters,
       async execute(args) {
         const parsed = refineParameters.safeParse(args);
