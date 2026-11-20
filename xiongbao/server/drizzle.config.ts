@@ -56,6 +56,7 @@ export default defineConfig({
     "./src/db/schema/recorder.ts",
     "./src/db/schema/wechat.ts",
     "./src/db/schema/heartbeat.ts",
+    "./src/db/schema/board-cards.ts",
   ],
   out: "./drizzle",
   dbCredentials: {

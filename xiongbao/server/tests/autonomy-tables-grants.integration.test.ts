@@ -11,7 +11,10 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * privileges (as 0232 and 0233 do). Without the grant the first write fails with "permission denied", and
  * the tables are empty on every deployment whose role did not get default privileges.
  */
-const TABLES = [["0236_heartbeat_runs", "heartbeat_runs"]] as const;
+const TABLES = [
+  ["0236_heartbeat_runs", "heartbeat_runs"],
+  ["0237_board_cards", "board_cards"],
+] as const;
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 afterAll(async () => {
   await database.$client.close();

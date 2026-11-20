@@ -634,6 +634,9 @@ import {
   offeredDeliveryTools,
 } from "./tasks/delivery-tools";
 import { createEvidenceGate } from "./tasks/evidence-gate";
+import { createBoardCardRoutes } from "./tasks/board-cards-routes";
+import { createCardAutonomy } from "./tasks/card-autonomy";
+import { createBoardCards } from "./tasks/claim";
 import { createNudgeRuns } from "./tasks/nudge-run";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
@@ -5211,6 +5214,12 @@ await startupLifecycle.run(async (startup) => {
    * 有事才写进单聊、发通知。模型那一轮用员工的轻量模型（agents/light-model.ts 认 `heartbeat:` 的发起者），
    * 沿用巡检的几道关和每天次数上限，受安静时段管。XIONGBAO_HEARTBEAT=off 整个关掉，到点的条目不领、不排下一次。
    */
+  /*
+   * 看板自主认领（期 3·3.3，tasks/claim.ts、tasks/card-autonomy.ts）：卡的账，和领到之后开工的那一层。开工要用后面才
+   * 建好的 `nudgeRuns`，所以这一层晚绑定（同 `deliveryNotifications`）。
+   */
+  const boardCardStore = createBoardCards(database);
+  let cardAutonomy: ReturnType<typeof createCardAutonomy> | undefined;
   if (process.env.XIONGBAO_HEARTBEAT?.trim().toLowerCase() !== "off") {
     const heartbeatRunner = createHeartbeatRunner({
       queue: createWorkQueue(database),
@@ -5245,6 +5254,9 @@ await startupLifecycle.run(async (startup) => {
         return null;
       },
       dailyRuns: (agentId) => proactiveAdmin.proactiveDailyRuns(agentId),
+      // 醒来时先认领派给自己岗位的卡并开工（不用模型）；看板那一层建好之前（启动的头几秒）领不了，下一次醒来再领。
+      claimCards: async ({ ownerUserId, agentId }) =>
+        (await cardAutonomy?.claimAndStart(ownerUserId, agentId)) ?? 0,
       notify: (scope, input) => deliveryNotifications(scope, input),
       board: taskProjector,
     });
@@ -5459,6 +5471,23 @@ await startupLifecycle.run(async (startup) => {
     // An external employee's 再催 and hand-over name no tool it does not hold.
     isExternal: (tenantId, agentId) =>
       isExternalEmployee(database, tenantId, agentId),
+  });
+  cardAutonomy = createCardAutonomy({
+    cards: boardCardStore,
+    board: taskProjector,
+    delivery: deliveryLoop,
+    rounds: nudgeRuns,
+    actorFor,
+    channels: channelStore,
+    // 外部员工自己干活、不走三步；被暂停的、关了 `accept_task` 的员工不自己接活。
+    canClaim: async (ownerUserId, agentId) => {
+      if (await isExternalEmployee(database, ownerUserId, agentId)) return false;
+      if (await proactiveStore.paused(ownerUserId, agentId)) return false;
+      return !(await approvalService.disabledTools(ownerUserId, agentId))(
+        ACCEPT_TASK_REF,
+      );
+    },
+    quietUntil,
   });
   /*
    * Where the delivery loop speaks to the person outside a conversation (spec §10,
@@ -6643,6 +6672,21 @@ await startupLifecycle.run(async (startup) => {
         },
       },
     ),
+  );
+
+  /*
+   * 看板上派给岗位的卡（期 3·3.3）：放一张、看一遍、撤一张没人领的；放进来就踢一下同岗位开了心跳的员工。
+   */
+  app.route(
+    "/api/board-cards",
+    createBoardCardRoutes({
+      cards: boardCardStore,
+      requireUser: config.singleUser
+        ? createDevRequireUser(config.singleUserAccess)
+        : createRequireUser(auth as AuthService, roleRepository),
+      kick: (ownerUserId, card) =>
+        cardAutonomy?.kick(ownerUserId, card) ?? Promise.resolve(0),
+    }),
   );
 
   /*

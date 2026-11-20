@@ -201,6 +201,7 @@ tests/avatar-sources.test.ts
 tests/baidu-netdisk-rest.test.ts
 tests/ban-freezes-execution.test.ts
 tests/batch-grants-shared-use.integration.test.ts
+tests/board-card-claim.integration.test.ts
 tests/bot-access.test.ts
 tests/bot-answer-attribution.test.ts
 tests/bot-browser-routes.integration.test.ts
@@ -229,6 +230,7 @@ tests/builtin-routines.test.ts
 tests/builtin-staffing.integration.test.ts
 tests/bunfig-preload.test.ts
 tests/capability-activity-events.test.ts
+tests/card-autonomy.test.ts
 tests/catalogue-bot-grants.integration.test.ts
 tests/channel-activity-input.test.ts
 tests/channel-activity.integration.test.ts
