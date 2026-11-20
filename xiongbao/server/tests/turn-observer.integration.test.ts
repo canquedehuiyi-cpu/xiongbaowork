@@ -15,9 +15,13 @@ import {
   type FinishedTurn,
   PostgresAgentRunner,
 } from "../src/threads/postgres-runner";
+import { serverTurnScope } from "../src/routines/run-turn";
 import {
   asPersonChat,
+  clearPersonChat,
+  onlyOnIdleThread,
   suppressRunnerCard,
+  turnForCard,
 } from "../src/threads/unattended-card";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
@@ -268,4 +272,28 @@ test("an entry's own turn inside a person's chat request (a hop to another emplo
   expect(
     await runDirect((body) => asPersonChat(() => suppressRunnerCard(body))),
   ).toBe("task");
+});
+
+// The mark follows the async chain: a turn a server entry starts from inside a person's chat request is
+// a task, whichever entry started it (and not only when it also filed a card of its own).
+test("a nested turn started from inside a person's chat request is a task: the headless scope, an idle-only round, an explicit clear", async () => {
+  const nested: [string, <T>(body: () => T) => T][] = [
+    [
+      "headless turn scope",
+      (body) =>
+        serverTurnScope(
+          { cardOwnedByCaller: false } as never,
+          body as never,
+        ) as never,
+    ],
+    ["idle-only round", (body) => onlyOnIdleThread(body)],
+    ["turn for a card", (body) => turnForCard("task-1", body)],
+    ["clear", (body) => clearPersonChat(body)],
+  ];
+  for (const [name, enter] of nested) {
+    const kind = await runDirect((body) => asPersonChat(() => enter(body)));
+    expect([name, kind]).toEqual([name, "task"]);
+  }
+  // And the chat's own run, inside the same kind of request, is still a chat.
+  expect(await runDirect((body) => asPersonChat(body))).toBe("chat");
 });

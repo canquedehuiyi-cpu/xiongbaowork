@@ -65,6 +65,7 @@ import { watched } from "./thread-viewers";
 import {
   entryHungRound,
   onlyOnIdleThreadRequested,
+  clearPersonChat,
   personChatRequested,
   runnerCardSuppressed,
   suppressedCardRef,
@@ -292,7 +293,7 @@ const runnerLane = new AsyncLocalStorage<RunnerCardLane>();
  * `suppressRunnerCard`, wrap the region that subscribes to the run: the card is opened at subscribe time.
  */
 export function fileRunnerCardAs<T>(lane: RunnerCardLane, body: () => T): T {
-  return runnerLane.run(lane, body);
+  return runnerLane.run(lane, () => clearPersonChat(body));
 }
 
 const adoptedCard = new AsyncLocalStorage<string>();
@@ -304,7 +305,7 @@ const adoptedCard = new AsyncLocalStorage<string>();
  * second card, no second charge. Read at `run()`, like `fileRunnerCardAs`.
  */
 export function adoptRunnerCard<T>(runRef: string, body: () => T): T {
-  return adoptedCard.run(runRef, body);
+  return adoptedCard.run(runRef, () => clearPersonChat(body));
 }
 
 /**

@@ -30,7 +30,10 @@ import { serverTurnAdmission } from "../agents/turn-admission";
 import { createLocalContinuationTarget } from "../approvals/continuation-target-local";
 import { producedAttachments } from "../tasks/projector";
 import { currentTenant } from "../tenant/context";
-import { suppressRunnerCard } from "../threads/unattended-card";
+import {
+  clearPersonChat,
+  suppressRunnerCard,
+} from "../threads/unattended-card";
 
 export type { DrawnComponent, IntelligenceLike, RunnerLike, TurnRunner };
 export { frameFiring };
@@ -75,7 +78,10 @@ export const serverTurnAnswered: TurnAnswered = async ({
  * routine under its firing), so `accept_task` inside the turn can find the turn's own card.
  */
 export const serverTurnScope: TurnScope = (input, run) =>
-  input.cardOwnedByCaller ? suppressRunnerCard(run, input.runRef) : run();
+  // A turn the server starts is not the person's own chat, even when it starts inside that request.
+  clearPersonChat(() =>
+    input.cardOwnedByCaller ? suppressRunnerCard(run, input.runRef) : run(),
+  );
 
 type ToolkitOptions = Parameters<typeof createToolkitTurnRunner>[0];
 

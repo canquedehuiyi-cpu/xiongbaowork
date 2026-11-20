@@ -22,6 +22,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
  * this turn was asked for. Asking the store after that point would answer `false` for a turn that is
  * unattended, which is the bug wearing the shape of a flake.
  */
+/** Set by {@link asPersonChat}; cleared by every entry that starts a turn of its own ({@link clearPersonChat}). */
+const personChat = new AsyncLocalStorage<true>();
+
 const store = new AsyncLocalStorage<{ cardRef?: string }>();
 
 /**
@@ -40,7 +43,7 @@ export function suppressRunnerCard<T>(
    */
   cardRef?: string,
 ): T {
-  return store.run(cardRef ? { cardRef } : {}, body);
+  return store.run(cardRef ? { cardRef } : {}, () => personChat.exit(body));
 }
 
 /** Whether the turn now being accepted belongs to an entry that already opened its own card. */
@@ -62,7 +65,7 @@ const hung = new AsyncLocalStorage<true>();
  * the turn on a followed one, so for them the question is not asked at all.
  */
 export function roundHungByEntry<T>(body: () => T): T {
-  return hung.run(true, body);
+  return hung.run(true, () => personChat.exit(body));
 }
 
 /** Whether the turn running here is one an entry hung on a followed card first. */
@@ -80,7 +83,7 @@ const targeted = new AsyncLocalStorage<string>();
  * `deliver_task` all on the wrong card. Server code only, for the reason the marker above is.
  */
 export function turnForCard<T>(taskId: string, body: () => T): T {
-  return targeted.run(taskId, body);
+  return targeted.run(taskId, () => personChat.exit(body));
 }
 
 /** The followed card the turn now being accepted was started for, if one was named. */
@@ -98,15 +101,13 @@ const idleOnly = new AsyncLocalStorage<true>();
  * so a person's turn that started a moment ago is never stopped by it. Server code only.
  */
 export function onlyOnIdleThread<T>(body: () => T): T {
-  return idleOnly.run(true, body);
+  return idleOnly.run(true, () => personChat.exit(body));
 }
 
 /** Whether the turn now being accepted may only start on an idle thread. */
 export function onlyOnIdleThreadRequested(): boolean {
   return idleOnly.getStore() === true;
 }
-
-const personChat = new AsyncLocalStorage<true>();
 
 /**
  * Run `body` as a person's own chat request: what the browser sent to the runtime. Set where that request
@@ -123,4 +124,15 @@ export function asPersonChat<T>(body: () => T): T {
 /** Whether the turn now being accepted arrived as a person's own chat request. See {@link asPersonChat}. */
 export function personChatRequested(): boolean {
   return personChat.getStore() === true;
+}
+
+/**
+ * Run `body` outside any person's chat request. The marker follows the async chain, so a turn a server
+ * entry starts from inside a chat request (a nudge, a hop to another employee, a wake-up, a routine, a
+ * card's round) would otherwise carry it and be taken for the person's own. Every place that starts a
+ * turn of its own goes through this (the entry wrappers in this file, `fileRunnerCardAs`,
+ * `adoptRunnerCard`, the headless turn scope and an external employee's turn).
+ */
+export function clearPersonChat<T>(body: () => T): T {
+  return personChat.exit(body);
 }
