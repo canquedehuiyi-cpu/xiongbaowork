@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { EventType } from "@ag-ui/client";
 import type { BaseEvent } from "@ag-ui/client";
@@ -239,4 +239,9 @@ describe("the next run of the same kind of task is given what the first one lear
       expect(row?.useCount).toBe(1);
     });
   });
+});
+
+// 最后注册的 afterAll：关掉本文件打开的连接池。
+afterAll(async () => {
+  await database.$client.close();
 });
