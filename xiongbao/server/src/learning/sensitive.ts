@@ -131,8 +131,36 @@ export function findSensitive(text: string): SensitiveKind[] {
   return found;
 }
 
+/** 一条指令里提到的「要外发的东西」：配置、密钥、凭据、整个目录这一类。 */
+const EXFIL_DATA =
+  "(?:\\.env|密钥|令牌|token|密码|凭据|cookie|私钥|id_rsa|配置文件|所有文件|全部文件|整个目录|整个文件夹)";
+const EXFIL_VERB = "(?:发|上传|传|提交|推送|post|upload|send)";
+const EXFIL_DATA_THEN_VERB = new RegExp(
+  `${EXFIL_DATA}[^\\n]{0,30}?${EXFIL_VERB}([^\\n]{0,60})`,
+  "ig",
+);
+const EXFIL_VERB_THEN_DATA = new RegExp(
+  `${EXFIL_VERB}[^\\n]{0,30}?${EXFIL_DATA}([^\\n]{0,60})`,
+  "ig",
+);
+
+/**
+ * 把要紧的东西发到外面去：「发 / 上传」和「.env、密钥、令牌、所有文件」两个词挨着，后面跟着一个网址或域名
+ * （`https://…`，也包括没有协议的 `evil.example`）。
+ */
+function exfiltrates(text: string): boolean {
+  for (const pattern of [EXFIL_DATA_THEN_VERB, EXFIL_VERB_THEN_DATA])
+    for (const match of text.matchAll(pattern))
+      if (hasUrl(match[1] ?? "")) return true;
+  return false;
+}
+
 /** 技能里不许写的越权步骤：教员工绕过审批、忽略规则、做破坏性的事、瞒着本人。 */
-const OVERREACH: readonly { reason: string; shape: RegExp }[] = [
+const OVERREACH: readonly {
+  reason: string;
+  shape?: RegExp;
+  test?: (text: string) => boolean;
+}[] = [
   {
     reason: "让员工忽略指令或规则",
     shape:
@@ -153,9 +181,13 @@ const OVERREACH: readonly { reason: string; shape: RegExp }[] = [
       /\brm\s+(?:-\w+\s+)*(?:-[a-z]*r[a-z]*|--recursive)\b|chmod\s+-R\s*777|mkfs\b/i,
   },
   {
-    reason: "把文件、密钥或凭据发到外部网址",
+    reason: "把文件、密钥或凭据发到外部网址或域名",
+    test: exfiltrates,
+  },
+  {
+    reason: "把文件上传到外部（curl、wget 带文件）",
     shape:
-      /(?:\.env|密钥|令牌|token|密码|凭据|cookie|私钥|id_rsa|配置文件|所有文件|全部文件|整个目录|整个文件夹)[^\n]{0,30}(?:发|上传|传|提交|推送|post|upload|send)[^\n]{0,30}https?:\/\/|(?:发|上传|传|提交|推送|post|upload|send)[^\n]{0,30}(?:\.env|密钥|令牌|token|密码|凭据|cookie|私钥|id_rsa|配置文件|所有文件|全部文件|整个目录|整个文件夹)[^\n]{0,30}https?:\/\/|(?:curl|wget)[^\n]*(?:-d\s*@|--data(?:-binary)?\s*@|-F\s|--upload-file|-T\s)/i,
+      /(?:curl|wget)[^\n]*(?:-d\s*@|--data(?:-binary)?\s*@|-F\s|--upload-file|-T\s)/i,
   },
   {
     reason: "遇到确认或授权就自动点允许",
@@ -185,9 +217,9 @@ const OVERREACH: readonly { reason: string; shape: RegExp }[] = [
 /** 这段技能文字里越权的地方，每一类一次；没有就是空数组。 */
 export function findOverreach(text: string): string[] {
   const scanned = text.length > SCAN_LIMIT ? text.slice(0, SCAN_LIMIT) : text;
-  return OVERREACH.filter((rule) => rule.shape.test(scanned)).map(
-    (rule) => rule.reason,
-  );
+  return OVERREACH.filter(
+    (rule) => rule.test?.(scanned) ?? rule.shape?.test(scanned) ?? false,
+  ).map((rule) => rule.reason);
 }
 
 /** 带协议的网址、www 开头的、IP 地址。 */
