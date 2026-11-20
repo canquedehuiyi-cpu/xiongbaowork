@@ -9,6 +9,7 @@ import type { AppVariables } from "./auth/guards";
 import {
   isWorkClock,
   isWorkStretch,
+  QuietHoursRefusedError,
   savedTimeZone,
   type UserPreferencesStore,
 } from "./user-preferences";
@@ -178,12 +179,22 @@ export function userPreferencesRoutes(
         { error: "安静时段的开始和结束不能是同一时刻；不想要就把开关关掉。" },
         400,
       );
-    return context.json({
-      quietHours: await store.quietHours.patch(
-        context.var.actor.id,
-        parsed.data,
-      ),
-    });
+    try {
+      return context.json({
+        quietHours: await store.quietHours.patch(
+          context.var.actor.id,
+          parsed.data,
+        ),
+      });
+    } catch (error) {
+      // 上面的检查和写入之间别处又改了起止，库里的条件把它拦下。
+      if (error instanceof QuietHoursRefusedError)
+        return context.json(
+          { error: "安静时段的开始和结束不能是同一时刻；不想要就把开关关掉。" },
+          400,
+        );
+      throw error;
+    }
   });
   app.patch("/", async (context) => {
     if (!store)

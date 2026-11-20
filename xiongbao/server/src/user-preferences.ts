@@ -350,6 +350,11 @@ export type RunEndNoticeStore = {
   ) => Promise<RunEndNoticePreferences>;
 };
 
+/** 起止相同（等于没有安静时段）的保存，在库里被拒。 */
+export class QuietHoursRefusedError extends Error {
+  override name = "QuietHoursRefusedError";
+}
+
 /** The quiet hours: one read, and a save that names any part of them and keeps the rest. */
 export type QuietHoursStore = {
   read: (userId: string) => Promise<QuietHours & { timeZone: string }>;
@@ -415,16 +420,32 @@ export function createUserPreferencesStore(
         };
       },
       async patch(userId, patch) {
-        // Merged one level down in Postgres, so saving the start keeps the end and the switch.
+        /*
+         * Merged one level down in Postgres, so saving the start keeps the end and the switch. 起止相同的检查和写入
+         * 是同一条 UPDATE（条件里用合并后的起止），两次同时保存各改一头也不会写出一个起止相同的时段。
+         */
         const [user] = await database
           .update(users)
           .set({
             preferences: sql`${users.preferences} || jsonb_build_object('quietHours', coalesce(${users.preferences} -> 'quietHours', '{}'::jsonb) || ${patch}::jsonb)`,
             updatedAt: new Date(),
           })
-          .where(eq(users.id, userId))
+          .where(
+            and(
+              eq(users.id, userId),
+              sql`coalesce(${patch.start ?? null}::text, ${users.preferences} -> 'quietHours' ->> 'start', ${DEFAULT_QUIET_HOURS.start}) <> coalesce(${patch.end ?? null}::text, ${users.preferences} -> 'quietHours' ->> 'end', ${DEFAULT_QUIET_HOURS.end})`,
+            ),
+          )
           .returning({ preferences: users.preferences });
-        if (!user) throw new Error("User preferences could not be saved.");
+        if (!user) {
+          const [exists] = await database
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+          if (exists) throw new QuietHoursRefusedError("start equals end");
+          throw new Error("User preferences could not be saved.");
+        }
         return {
           ...quietHoursOf(user.preferences),
           timeZone: workHoursOf(user.preferences).timeZone,

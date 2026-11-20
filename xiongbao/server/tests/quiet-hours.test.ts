@@ -19,7 +19,10 @@ import { createProactiveEngine } from "../src/proactive/engine";
 import { runAsTenant } from "../src/tenant/context";
 import { Hono } from "hono";
 import { userPreferencesRoutes } from "../src/user-preferences-routes";
-import type { UserPreferencesStore } from "../src/user-preferences";
+import {
+  QuietHoursRefusedError,
+  type UserPreferencesStore,
+} from "../src/user-preferences";
 
 /**
  * 安静时段（期 3·3.2）：判断本身（按本人时区、跨午夜、边界），和每个主动入口怎么用它：推迟、不丢、紧急的不拦。
@@ -397,7 +400,7 @@ describe("巡检", () => {
 });
 
 describe("安静时段的读写接口", () => {
-  function app() {
+  function app(override: { patch?: () => Promise<unknown> } = {}) {
     let saved = {
       enabled: true,
       start: "22:00",
@@ -415,6 +418,7 @@ describe("安静时段的读写接口", () => {
       quietHours: {
         read: async () => saved,
         patch: async (_id: string, patch: object) => {
+          if (override.patch) return override.patch();
           saved = { ...saved, ...patch };
           return saved;
         },
@@ -463,6 +467,17 @@ describe("安静时段的读写接口", () => {
         }
       ).quietHours,
     ).toMatchObject({ start: "23:30", end: "08:00" });
+  });
+
+  test("检查之后别处又改了起止、库里把它拦下：同样是 400，不是 500", async () => {
+    const response = await runAsTenant("alice", () =>
+      app({
+        patch: async () => {
+          throw new QuietHoursRefusedError("start equals end");
+        },
+      }).request("/api/settings/preferences/quiet-hours", patch({ end: "07:00" })),
+    );
+    expect(response.status).toBe(400);
   });
 
   test("时刻写错、空的、多余的键、起止相同，都是 400", async () => {

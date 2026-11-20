@@ -81,6 +81,24 @@ test("没存过的人读到默认的安静时段和作息里的时区；存一�
   });
 });
 
+test("起止相同的保存在库里被拒（单条 UPDATE 带条件）：两次同时各改一头，不会写出相同的起止", async () => {
+  await asOwner(() => prefs.quietHours?.patch(owner, { start: "22:00", end: "08:00", enabled: true }));
+  // 只改起点到 08:00：和库里的终点相同，被拒，库里的值不变。
+  await expect(
+    asOwner(() => prefs.quietHours?.patch(owner, { start: "08:00" }) as Promise<unknown>),
+  ).rejects.toThrow("start equals end");
+  expect((await asOwner(() => prefs.quietHours?.read(owner)))?.start).toBe("22:00");
+  // 两次同时保存：一个把起点改成 07:00，一个把终点改成 07:00。只能成功一个，另一个遇到相同被拒。
+  const results = await Promise.allSettled([
+    asOwner(() => prefs.quietHours?.patch(owner, { start: "07:00" }) as Promise<unknown>),
+    asOwner(() => prefs.quietHours?.patch(owner, { end: "07:00" }) as Promise<unknown>),
+  ]);
+  const saved = await asOwner(() => prefs.quietHours?.read(owner));
+  expect(saved?.start).not.toBe(saved?.end);
+  expect(results.filter((result) => result.status === "fulfilled").length).toBeGreaterThanOrEqual(1);
+  await asOwner(() => prefs.quietHours?.patch(owner, { start: "22:00", end: "08:00" }));
+});
+
 test("createQuietUntil 按本人存的时段答结束时刻；关掉的、紧急的答 null", async () => {
   const quietUntil = createQuietUntil(db);
   // 上海 23:30（UTC 15:30）在 22:00 到 08:00 里，结束是 UTC 次日 00:00。
