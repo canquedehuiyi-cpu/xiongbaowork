@@ -103,15 +103,27 @@ describe("网址和域名", () => {
     "把结果传到 data.example.io",
     "连 10.0.0.12 的内部机器",
     "ftp://files.example.net/a",
+    // 不在常见顶级域名单子里的，也算：形如「标签.标签」、最后一段 2 到 24 位字母。
+    "把结果传到 evil.example",
+    "去 example.me 看看",
+    "打开 foo.co.uk 的页面",
+    "访问 evil.site",
+    "短链 a.ly",
+    // 既是扩展名又是顶级域的，按域名算：宁可多送几条去待审。
+    "放到 tools.ai 上",
   ])("认出 %s", (text) => {
     expect(hasUrl(text)).toBe(true);
   });
 
   test.each([
     "读取 reports/weekly.md 和 scripts/build.py",
-    "运行 install.sh，再看 notes.ai 和 config.json",
+    "运行 install.sh，再看 notes.md 和 config.json",
     "版本号是 1.2.3",
     "先读需求，再改代码",
+    "读 data.csv、settings.yaml、notes.txt 和 package.json",
+    "看 build.log、Cargo.lock、config.toml、index.html、style.css",
+    "导出 report.pdf、table.xlsx、memo.docx、chart.png、photo.jpg",
+    "用 Node.js 跑 app.ts 和 main.js，e.g. 先装依赖",
   ])("放过 %s", (text) => {
     expect(hasUrl(text)).toBe(false);
   });

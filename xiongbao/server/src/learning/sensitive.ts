@@ -190,16 +190,40 @@ export function findOverreach(text: string): string[] {
   );
 }
 
+/** 带协议的网址、www 开头的、IP 地址。 */
 const URL_SHAPES: readonly RegExp[] = [
   /\b(?:https?|ftp|wss?):\/\//i,
   /\bwww\.[a-z0-9-]+\.[a-z]{2,}/i,
-  // 不带协议的域名：只认常见的顶级域名。`.md`、`.py`、`.sh`、`.ai` 是文件扩展名，不当域名。
-  /\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|cn|dev|app|xyz|top|info|biz|tv|gov|edu|ru|hk|tw)\b(?![A-Za-z0-9_])/i,
   /\b\d{1,3}(?:\.\d{1,3}){3}\b/,
 ];
 
+/** 形如「标签.标签」、最后一段是 2 到 24 位字母的串：域名的样子。 */
+const DOMAIN_LIKE =
+  /(?<![A-Za-z0-9_@-])[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.([A-Za-z]{2,24})(?![A-Za-z0-9_-])/g;
+
+/**
+ * 最后一段是这些的，当文件名，不当域名：常见的文档、代码、配置、数据、图片、压缩包和日志的扩展名。
+ * 既是扩展名又是顶级域的（`.ai`、`.rs`、`.sh`、`.py` 里除这里列出的之外）按域名算：宁可多送几条去待审。
+ */
+const FILE_EXTENSIONS: ReadonlySet<string> = new Set(
+  (
+    "md mdx py pyc sh bash zsh ts tsx js jsx mjs cjs json jsonl txt csv tsv yml yaml toml lock log html htm css scss " +
+    "png jpg jpeg gif svg webp bmp ico pdf doc docx xls xlsx ppt pptx rtf odt zip tar gz tgz bz2 xz rar 7z " +
+    "mp3 mp4 mov avi wav sql xml ini cfg conf env bak tmp out java class jar kt cs go rb php pl lua c cc cpp h hpp " +
+    "swift dart scala vue svelte ipynb exe dll so dylib bat cmd ps"
+  ).split(" "),
+);
+
 /** 这段文字里有没有网址或域名：员工自己复盘出来的技能带着外部地址，要本人看过才生效。 */
 export function hasUrl(text: string): boolean {
-  const scanned = text.length > SCAN_LIMIT ? text.slice(0, SCAN_LIMIT) : text;
-  return URL_SHAPES.some((shape) => shape.test(scanned.normalize("NFKC")));
+  const scanned = (
+    text.length > SCAN_LIMIT ? text.slice(0, SCAN_LIMIT) : text
+  ).normalize("NFKC");
+  if (URL_SHAPES.some((shape) => shape.test(scanned))) return true;
+  for (const match of scanned.matchAll(DOMAIN_LIKE)) {
+    const last = (match[1] ?? "").toLowerCase();
+    // 「e.g」「3.5」这类：最后一段至少两位字母，且整串里有一个点，已经由正则保证；这里只排除文件扩展名。
+    if (!FILE_EXTENSIONS.has(last)) return true;
+  }
+  return false;
 }
