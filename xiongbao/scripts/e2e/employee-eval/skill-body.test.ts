@@ -148,9 +148,9 @@ describe("评测报告带出技能正文", () => {
   });
 
   test("正文里的反引号围栏不会冲破报告的代码块", () => {
-    const [block] = skillBodyBlocks([
+    const block = skillBodyBlocks([
       ["熊宝", side([repeated([{ title: "技能", text: "a\n```\nb" }])])],
-    ]);
+    ]).join("\n");
     expect(block).toContain("````");
   });
 });
