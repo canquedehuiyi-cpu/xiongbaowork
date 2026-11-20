@@ -215,6 +215,15 @@ function declaredBy(
 }
 
 /**
+ * 给挑选的那一步认「同一线程里同一主题」用的：这一轮的消息、所在线程、技能目录的内容（目录变了，旧的挑选不能用）。
+ */
+export type ChoiceHint = {
+  text: string;
+  threadId?: string;
+  catalogue: string;
+};
+
+/**
  * Narrow one Bot's granted tools for one run.
  *
  * `choose` is pass one, injected rather than called here so this stays a plain function a test can
@@ -229,7 +238,11 @@ export async function selectTools<Tool extends SelectableTool>(input: {
   choose: (
     prompt: string,
     signal?: AbortSignal,
+    /** `hint` 让 `choose` 认出同一线程里同一主题的消息，复用上次的挑选。不用它的 `choose` 可以不接。 */
+    options?: { hint?: ChoiceHint },
   ) => Promise<string | null> | (string | null) | Promise<never>;
+  /** 这一轮所在的线程，给 `choose` 的 hint 用。 */
+  threadId?: string;
   signal?: AbortSignal;
   /** Overridable so a deployment that measured its own knee is not stuck with ours. */
   floor?: number;
@@ -258,6 +271,15 @@ export async function selectTools<Tool extends SelectableTool>(input: {
     const answer = await input.choose(
       selectionPrompt(text, skills),
       input.signal,
+      {
+        hint: {
+          text,
+          ...(input.threadId ? { threadId: input.threadId } : {}),
+          catalogue: skills
+            .map((skill) => `${skill.slug}\n${skill.title}\n${skill.summary}`)
+            .join("\n"),
+        },
+      },
     );
     input.signal?.throwIfAborted();
     chosen =

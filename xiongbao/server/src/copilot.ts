@@ -158,7 +158,11 @@ import {
   pickedSkillGuidance,
 } from "./plugins/picked-skill";
 import { appCallsOfRun, withAppCallsOf } from "./plugins/run-calls";
-import type { SelectableSkill, Selection } from "./plugins/selection";
+import type {
+  ChoiceHint,
+  SelectableSkill,
+  Selection,
+} from "./plugins/selection";
 import {
   latestUserText,
   SELECTION_FLOOR,
@@ -2236,6 +2240,7 @@ async function buildAgent(
       skills,
       text,
       choose: narrowing.choose,
+      threadId: input.threadId,
       signal,
       ...(narrowing.floor === undefined ? {} : { floor: narrowing.floor }),
     });
@@ -2830,7 +2835,11 @@ export type ToolSelection = {
   /** What this Bot's granted skills declare. Failure is diagnosed and treated as "no skills". */
   loadSkills: (botId: string) => Promise<SelectableSkill[]>;
   /** Pass one. Ordinary failures skip narrowing; cancellation stops the run. */
-  choose: (prompt: string, signal?: AbortSignal) => Promise<string | null>;
+  choose: (
+    prompt: string,
+    signal?: AbortSignal,
+    options?: { hint?: ChoiceHint },
+  ) => Promise<string | null>;
   /** Writes the discovery row. Never allowed to fail a run. */
   record?: (botId: string, selection: Selection<GrantedTool>) => Promise<void>;
   /** Overrides the default catalogue size below which nothing is narrowed. */

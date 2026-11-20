@@ -9,6 +9,7 @@
  * 相似度只看词：英文数字按词（去掉复数的 s），中日韩文字按相邻两字（中文没有空格，整词切分要词典）。向量召回是期 2 的事，
  * 到时只换这里的打分，预算和取法不变。
  */
+import { tokensOf } from "../text-tokens";
 
 /** 注入的记忆合计最多这么多字符（含每条的来源和包装）。 */
 export const DEFAULT_MEMORY_INJECT_CHARS = 4000;
@@ -36,27 +37,6 @@ export const recordCost = (memory: Rankable): number =>
   Math.min(memory.content.length, MEMORY_RECORD_MAX_CHARS) +
   memory.provenance.length +
   RECORD_OVERHEAD_CHARS;
-
-const CJK =
-  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]+/gu;
-
-/** 一段文字的词集：英文数字的词，加中日韩文字的相邻两字（单独一个字就用它自己）。 */
-function tokensOf(text: string): Set<string> {
-  const lower = text.toLowerCase();
-  const tokens = new Set<string>();
-  // 去掉复数的 s，让 restaurant 和 restaurants 算同一个词。
-  for (const word of lower.match(/[a-z0-9_]{2,}/g) ?? [])
-    tokens.add(
-      word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word,
-    );
-  for (const run of lower.match(CJK) ?? []) {
-    if (run.length === 1) tokens.add(run);
-    else
-      for (let index = 0; index + 1 < run.length; index += 1)
-        tokens.add(run.slice(index, index + 2));
-  }
-  return tokens;
-}
 
 /**
  * 按和 `query` 的相关程度排序，从最相关的取起，合计不超过 `budgetChars` 个字符。

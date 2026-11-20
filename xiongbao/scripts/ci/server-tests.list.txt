@@ -813,6 +813,7 @@ tests/single-user-identity.integration.test.ts
 tests/single-user.test.ts
 tests/skill-asset-read-helpers.test.ts
 tests/skill-assets-tool.test.ts
+tests/skill-chooser-cache.test.ts
 tests/skill-ownership.integration.test.ts
 tests/skill-tenant-slugs.integration.test.ts
 tests/skill-tools.integration.test.ts
