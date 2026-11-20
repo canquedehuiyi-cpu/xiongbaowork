@@ -41,10 +41,10 @@ export function createMemoryRuntime(options: {
     }
   };
   return {
-    loadForActor: (ownerUserId) => (botId) => {
+    loadForActor: (ownerUserId) => (botId, query) => {
       // Apps connected since this Bot's last turn become its memory sources. Never waits.
       options.defaults.botTurn(ownerUserId, botId);
-      return options.ingestion.contextFor(ownerUserId, botId);
+      return options.ingestion.contextFor(ownerUserId, botId, query);
     },
     async sweep() {
       await attempt("syncDue", () => options.ingestion.syncDue());

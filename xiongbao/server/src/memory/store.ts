@@ -13,9 +13,10 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
-import { runAsTenant } from "../tenant/context";
+import { productName } from "../brand";
 import type { Database } from "../db/client";
 import { memorySources, personalMemories } from "../db/schema/memory";
+import { runAsTenant } from "../tenant/context";
 import { lockDefaults, recordOptOut, sourceServerId } from "./defaults";
 import type {
   IntelligenceMemory,
@@ -33,7 +34,6 @@ import {
   parseMemoryPatch,
   parseMemorySourceInput,
 } from "./types";
-import { productName } from "../brand";
 
 /**
  * The id a memory gets in OpenBot when only Intelligence holds it. Prefixed so the routes can tell
@@ -291,6 +291,7 @@ export function createMemoryStore(
     eligibleSourceIds: string[],
     formed: { botId: string; heldServerIds: ReadonlySet<string> } | undefined,
     narrow: { term?: string; intelligenceIds?: string[] },
+    limit = 40,
   ) {
     const held = [...(formed?.heldServerIds ?? [])];
     const formedByThisBot = formed
@@ -342,7 +343,7 @@ export function createMemoryStore(
         ),
       )
       .orderBy(desc(personalMemories.updatedAt))
-      .limit(40);
+      .limit(limit);
   }
 
   return {
@@ -788,11 +789,18 @@ export function createMemoryStore(
        * this argument none are returned.
        */
       formed?: { botId: string; heldServerIds: ReadonlySet<string> },
+      /** `limit`：最多取多少条，默认 40；放进上下文前要按相关程度挑的，候选取得多一些。 */
+      options: { limit?: number } = {},
     ): Promise<MemoryRecord[]> {
       const term = search.trim();
-      const local = await eligibleRows(ownerUserId, eligibleSourceIds, formed, {
-        term,
-      });
+      const limit = options.limit ?? 40;
+      const local = await eligibleRows(
+        ownerUserId,
+        eligibleSourceIds,
+        formed,
+        { term },
+        limit,
+      );
       if (!intelligence) return local;
       if (term) {
         /*
@@ -827,14 +835,14 @@ export function createMemoryStore(
         return [
           ...ranked,
           ...local.filter((memory) => !seen.has(memory.id)),
-        ].slice(0, 40);
+        ].slice(0, limit);
       }
       const remote = await intelligence.list(ownerUserId);
       if (!remote) return local;
       return [
         ...local,
         ...(await intelligenceOnly(ownerUserId, remote)).slice(0, 20),
-      ].slice(0, 40);
+      ].slice(0, limit);
     },
   };
 }

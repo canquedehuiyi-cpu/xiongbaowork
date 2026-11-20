@@ -37,7 +37,30 @@ const observedMemoryToolSchema = formedMemorySchema.extend({
   observedAt: z.string().datetime({ offset: true }).optional(),
 });
 
-export type LoadPersonalMemory = (botId: string) => Promise<string>;
+/** `query`：用户最新一条消息，记忆按和它的相关程度挑进上下文；不给就按最近更新的取。 */
+export type LoadPersonalMemory = (
+  botId: string,
+  query?: string,
+) => Promise<string>;
+
+/** 用来挑记忆的消息文字最多取多少字符。 */
+const MEMORY_QUERY_CHARS = 500;
+
+/** 最后一条用户消息里的文字（多段内容只取文字段，换行连起来），截到 {@link MEMORY_QUERY_CHARS}。 */
+function latestUserText(messages: RunAgentInput["messages"]): string {
+  const last = [...messages]
+    .reverse()
+    .find((message) => message.role === "user");
+  if (!last) return "";
+  const text =
+    typeof last.content === "string"
+      ? last.content
+      : (last.content ?? [])
+          .flatMap((part) => (part.type === "text" ? [part.text] : []))
+          .join("\n");
+  return text.slice(0, MEMORY_QUERY_CHARS);
+}
+
 export class PersonalMemoryMiddleware extends Middleware {
   constructor(
     private readonly botId: string,
@@ -46,7 +69,9 @@ export class PersonalMemoryMiddleware extends Middleware {
     super();
   }
   run(input: RunAgentInput, next: AbstractAgent): Observable<BaseEvent> {
-    return defer(() => from(this.load(this.botId))).pipe(
+    return defer(() =>
+      from(this.load(this.botId, latestUserText(input.messages))),
+    ).pipe(
       switchMap((content) =>
         this.runNext(
           {
