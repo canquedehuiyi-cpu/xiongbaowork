@@ -28,7 +28,7 @@ export type RunLearning = {
   retro?: {
     /** 等了多久（毫秒）。 */
     waitedMs: number;
-    /** `logged`：看到了这次最后一轮的复盘日志；`skill`：库里出现了新技能；`timeout`：到了上限照常往下走。 */
+    /** `logged`：看到了这张卡的复盘有结论的日志（存了、不值得、冷却等，步数不够的跳过不算）；`skill`：库里出现了新技能；`timeout`：到了上限照常往下走。 */
     ended: "logged" | "skill" | "timeout";
     /** 复盘的结果：`saved` `nothing` `similar` `refused` `skipped`；没看到日志时没有。 */
     outcome?: string;

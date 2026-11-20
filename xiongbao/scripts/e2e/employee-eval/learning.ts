@@ -1,6 +1,6 @@
 /**
  * 重复任务里「学没学到」的观测：一次运行前后各读一遍这位员工的自写技能和形成的记忆，差出来的就是这次运行
- * 学到的；两次之间等复盘跑完再开第二次（模拟「过一会儿再做同类任务」）。
+ * 学到的；两次之间等复盘有结论再开第二次（模拟「过一会儿再做同类任务」）。
  *
  * 纯函数和注入式的等待放在这里，`run-xiongbao.ts` 只负责接上数据库和服务器日志。评测不替熊宝侧开任何特殊开关、
  * 不降复盘门槛：产品默认值是什么就用什么。
@@ -41,6 +41,10 @@ export type RetroLine = {
   outcome: string;
   trigger?: string;
   steps?: number;
+  /** 跳过的原因：`steps` 步数不够、`failed` 这一轮失败了、`card_done` 这张卡已经复盘过；没写就是冷却、额度、没开等。 */
+  reason?: string;
+  /** 这一行是哪张看板卡的复盘（卡的各轮合成的）；单独一轮的没有。 */
+  cardId?: string;
   runId: string;
 };
 
@@ -67,6 +71,8 @@ export function retroLinesOf(
           ? { trigger: parsed.trigger }
           : {}),
         ...(typeof parsed.steps === "number" ? { steps: parsed.steps } : {}),
+        ...(typeof parsed.reason === "string" ? { reason: parsed.reason } : {}),
+        ...(typeof parsed.cardId === "string" ? { cardId: parsed.cardId } : {}),
         runId,
       });
     } catch {
@@ -77,8 +83,26 @@ export function retroLinesOf(
 }
 
 /**
- * 轮询直到这次运行最后一轮的复盘行出现，或库里出现了新的自写技能，或到了上限。
- * 所有读都注入：测试里不起服务器。读失败当作「还没有」，不让评测因此中止。
+ * 这一行是不是「这张卡的复盘」有了结论：
+ * - 存了、模型认为不值得、近似、被拒：有结论，哪一轮的都算；
+ * - 跳过但原因是步数不够：没结论。通用路径的 skipped 多半是这个，卡的复盘可能还在后面的轮里等着，
+ *   把它当成结束会让第二次提前开跑；
+ * - 跳过的是看板卡的复盘（冷却、额度用完、这张卡已经复盘过）：有结论；
+ * - 跳过的是失败的轮：只有最后一轮才算（后面没有别的轮了），较早的失败轮后面还有轮要跑；
+ * - 通用路径跳过、没写步数原因（冷却、没开）：只有最后一轮才算。
+ */
+export function concludesRetro(line: RetroLine, isLastRound: boolean): boolean {
+  if (line.outcome !== "skipped") return true;
+  if (line.reason === "steps") return false;
+  if (line.reason === "failed") return isLastRound;
+  if (line.trigger === "card_delivered" || line.trigger === "card_accepted")
+    return true;
+  return isLastRound;
+}
+
+/**
+ * 轮询直到这张卡的复盘有结论（见 {@link concludesRetro}，各轮的日志行都看），或库里出现了新的自写技能，或到了
+ * 上限。所有读都注入：测试里不起服务器。读失败当作「还没有」，不让评测因此中止。
  */
 export async function waitForRetro(options: {
   /** 这次运行各轮的运行号，最后一个是最后一轮。 */
@@ -98,31 +122,38 @@ export async function waitForRetro(options: {
   const started = now();
   const last = options.runIds.at(-1);
   const maxMs = options.maxMs ?? RETRO_WAIT_MS;
-  const result = async (): Promise<RetroLine | undefined> => {
-    if (!last) return undefined;
+  const lines = async (): Promise<RetroLine[]> => {
     try {
-      return retroLinesOf(await options.readLog(), [last]).at(-1);
+      return retroLinesOf(await options.readLog(), options.runIds);
     } catch {
-      return undefined;
+      return [];
     }
   };
+  const shown = (line: RetroLine) => ({
+    outcome: line.outcome,
+    ...(line.trigger ? { trigger: line.trigger } : {}),
+    ...(line.steps === undefined ? {} : { steps: line.steps }),
+  });
   for (;;) {
-    const line = await result();
+    const seen = await lines();
+    const concluded = seen
+      .filter((line) => concludesRetro(line, line.runId === last))
+      .at(-1);
     const grew = await options
       .skillCount()
       .then((total) => total > options.skillsBefore)
       .catch(() => false);
     const waitedMs = now() - started;
-    if (line)
+    if (concluded) return { waitedMs, ended: "logged", ...shown(concluded) };
+    if (grew) return { waitedMs, ended: "skill" };
+    if (waitedMs >= maxMs) {
+      const latest = seen.at(-1);
       return {
         waitedMs,
-        ended: "logged",
-        outcome: line.outcome,
-        ...(line.trigger ? { trigger: line.trigger } : {}),
-        ...(line.steps === undefined ? {} : { steps: line.steps }),
+        ended: "timeout",
+        ...(latest ? shown(latest) : {}),
       };
-    if (grew) return { waitedMs, ended: "skill" };
-    if (waitedMs >= maxMs) return { waitedMs, ended: "timeout" };
+    }
     await sleep(options.everyMs ?? 1000);
   }
 }

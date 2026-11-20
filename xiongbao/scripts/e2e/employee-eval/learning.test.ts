@@ -278,3 +278,180 @@ test("the report lists background calls and the total with them; two runs of a r
   expect(markdown).toContain("## 后台调用（复盘、自动抽记忆）");
   expect(markdown).toContain("2 次 / 3,500");
 });
+
+// --- waiting for the card's review, not for any line ------------------------------------------
+
+const stepsSkip = (runId: string, extra: Record<string, unknown> = {}) =>
+  line({
+    runId,
+    outcome: "skipped",
+    trigger: "steps",
+    reason: "steps",
+    steps: 14,
+    ...extra,
+  });
+
+test("the log lines carry the card and why a review was skipped", () => {
+  const log = line({
+    runId: "r1",
+    outcome: "skipped",
+    trigger: "card_delivered",
+    reason: "steps",
+    cardId: "c1",
+    steps: 3,
+  });
+  expect(retroLinesOf(log, ["r1"])).toEqual([
+    {
+      runId: "r1",
+      outcome: "skipped",
+      trigger: "card_delivered",
+      reason: "steps",
+      cardId: "c1",
+      steps: 3,
+    },
+  ]);
+});
+
+test("a plain turn skipped for too few steps does not end the wait; the card's review that follows does", async () => {
+  const time = clock();
+  let reads = 0;
+  const result = await waitForRetro({
+    runIds: ["r1"],
+    readLog: () => {
+      reads += 1;
+      return reads < 5
+        ? stepsSkip("r1")
+        : [
+            stepsSkip("r1"),
+            line({
+              runId: "r1",
+              outcome: "saved",
+              trigger: "card_delivered",
+              cardId: "c1",
+              steps: 11,
+            }),
+          ].join("\n");
+    },
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    ...time,
+  });
+  expect(result).toMatchObject({
+    ended: "logged",
+    outcome: "saved",
+    trigger: "card_delivered",
+    waitedMs: 4000,
+  });
+});
+
+test("only plain turns skipped for steps: it waits the whole cap, and says what it last saw", async () => {
+  const time = clock();
+  const result = await waitForRetro({
+    runIds: ["r1", "r2"],
+    readLog: () => [stepsSkip("r1"), stepsSkip("r2")].join("\n"),
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    ...time,
+  });
+  expect(result).toEqual({
+    waitedMs: RETRO_WAIT_MS,
+    ended: "timeout",
+    outcome: "skipped",
+    trigger: "steps",
+    steps: 14,
+  });
+});
+
+test("a card's review skipped for too few steps in an earlier round does not end the wait either", async () => {
+  const time = clock();
+  const result = await waitForRetro({
+    runIds: ["r1", "r2"],
+    readLog: () =>
+      [
+        stepsSkip("r1", { trigger: "card_delivered", cardId: "c1", steps: 3 }),
+        stepsSkip("r2"),
+      ].join("\n"),
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    ...time,
+  });
+  expect(result.ended).toBe("timeout");
+});
+
+test("a skip that is not about steps (cooldown, card already reviewed) is a conclusion", async () => {
+  for (const extra of [
+    { trigger: "card_delivered", cardId: "c1" },
+    { trigger: "card_delivered", cardId: "c1", reason: "card_done" },
+  ]) {
+    const result = await waitForRetro({
+      runIds: ["r1", "r2"],
+      readLog: () => line({ runId: "r1", outcome: "skipped", ...extra }),
+      skillCount: async () => 0,
+      skillsBefore: 0,
+      ...clock(),
+    });
+    expect(result).toMatchObject({
+      ended: "logged",
+      outcome: "skipped",
+      waitedMs: 0,
+    });
+  }
+  // The last round of a plain turn skipped without the step reason (cooldown, switched off): also over.
+  const last = await waitForRetro({
+    runIds: ["r1"],
+    readLog: () =>
+      line({ runId: "r1", outcome: "skipped", trigger: "steps", steps: 20 }),
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    ...clock(),
+  });
+  expect(last).toMatchObject({ ended: "logged", waitedMs: 0 });
+});
+
+test("a failed earlier round is not the card's review, but a failed last round has nothing more coming", async () => {
+  const failedLine = (runId: string) =>
+    line({
+      runId,
+      outcome: "skipped",
+      trigger: "steps",
+      reason: "failed",
+      steps: 4,
+    });
+  const early = await waitForRetro({
+    runIds: ["r1", "r2"],
+    readLog: () => failedLine("r1"),
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    ...clock(),
+  });
+  expect(early.ended).toBe("timeout");
+  const last = await waitForRetro({
+    runIds: ["r1", "r2"],
+    readLog: () => failedLine("r2"),
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    ...clock(),
+  });
+  expect(last).toMatchObject({ ended: "logged", waitedMs: 0 });
+});
+
+test("a review saved in an earlier round ends the wait", async () => {
+  const result = await waitForRetro({
+    runIds: ["r1", "r2"],
+    readLog: () =>
+      line({
+        runId: "r1",
+        outcome: "saved",
+        trigger: "card_delivered",
+        steps: 8,
+      }),
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    ...clock(),
+  });
+  expect(result).toMatchObject({
+    ended: "logged",
+    outcome: "saved",
+    waitedMs: 0,
+  });
+});

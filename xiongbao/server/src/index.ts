@@ -421,6 +421,8 @@ import {
   createRetroObserver,
   createRetrospector,
   deliveredCardOf,
+  deliveredCardOfRound,
+  handedInCardOfThread,
   markInjectedSkillsUsed,
   markPickedSkillUsed,
 } from "./learning/retrospect";
@@ -5073,7 +5075,7 @@ await startupLifecycle.run(async (startup) => {
    * 做完复盘（learning/retrospect.ts）：一轮的工具调用到了 `XIONGBAO_RETRO_MIN_STEPS` 步（默认 15）就看一遍轨迹
    * 和每一步成没成，值得就存成技能：只给自己用的立刻授予这位员工，要共享的进本人的待审列表。每一种轮次都看
    * （看板卡的一轮、例行任务也是长活）。看板卡交付成功（`deliver_task` 被接受，进入待验收）也复盘，门槛是
-   * `XIONGBAO_RETRO_CARD_MIN_STEPS`（默认 6）；本人验收一张看板卡是另一处触发（见 `/api/tasks` 的 `onReviewed`）。
+   * `XIONGBAO_RETRO_CARD_MIN_STEPS`（默认 6），交付在这张卡的哪一轮都认；本人验收一张看板卡是另一处触发（见 `/api/tasks` 的 `onReviewed`）。
    * 工具权限里关掉 `bot/save_learned_skill` 的员工不复盘。
    */
   const retrospectTurn = createRetrospector({
@@ -5092,6 +5094,9 @@ await startupLifecycle.run(async (startup) => {
   const observeRetro = createRetroObserver({
     retrospect: retrospectTurn,
     deliveredCard: (runId) => deliveredCardOf(database, runId),
+    cardOfRound: (runId) => deliveredCardOfRound(database, runId),
+    cardHandedInBefore: (turn) =>
+      handedInCardOfThread(database, turn.threadId, turn.agentId),
     cardTurn: (taskId, current) =>
       cardRetroTurn(database, taskId, "card_delivered", current),
     // 人用 `/命令` 点了员工自己写的技能：记成用过。
