@@ -43,6 +43,8 @@
  *                     smoke 套件里是场景名，另有 background
  *   EVAL_REPEAT_PAIRS 重复类的题（repeat、repeat-pitfall）连做几对，1 到 4，默认 1；每一对一位新员工、新种子（有坑可学的题），
  *                     复盘和技能只在同一对内有效；报告给出每一对和平均值
+ *                     有坑可学每一对还有第三次：同一份第二次夹具、没有技能和记忆的新员工做的对照运行（不等它的复盘），
+ *                     记 controlRun，验收看「有技能比没技能」
  *   EVAL_SEED         有坑可学的题的基础种子（作业里是 run id，熊宝、Codex 两个作业同一个）；没设就现抽一个并记在结果里
  *   EVAL_DEADLINE_EPOCH 作业截止时间（Unix 秒，作业开头记下）：来不及再做完一对时，剩下的对不做，已完成的照常记录；本机不设
  *   EVAL_XIONGBAO_MODEL  只给熊宝侧换的模型名，空表示和 EVAL_MODEL 一样（Codex 侧不受影响）
@@ -809,7 +811,10 @@ async function registerStandInDevice() {
 let modelRef = "";
 let firstAgent = "";
 
-async function newEmployee(label: string): Promise<string> {
+/** 对照运行要一位全新的员工；建不出来（名额满了）时不能退回到别的员工，那位带着技能。 */
+class FreshEmployeeUnavailable extends Error {}
+
+async function newEmployee(label: string, fresh = false): Promise<string> {
   const fields = {
     name: `评测员工·${label}`,
     title: "全能员工",
@@ -821,6 +826,10 @@ async function newEmployee(label: string): Promise<string> {
     "/api/agents",
     fields,
   );
+  if (created.status === 402 && fresh)
+    throw new FreshEmployeeUnavailable(
+      "员工名额不够，建不出对照运行要的新员工",
+    );
   if (created.status === 402 && firstAgent) return firstAgent;
   must(created, [201], "create employee");
   const id = created.body.agent.id;
@@ -876,14 +885,18 @@ async function roundEnded(runId: string): Promise<boolean> {
   return Boolean(card && card.status !== "running");
 }
 
+type PairRound = "first" | "second" | "control";
+
 type Work = {
   key: string;
   /** 夹具取自哪道题（题名；冒烟场景没有）。重复任务的两次都取这道题。 */
   task?: TaskName;
   /** 同一组的几次运行共用一位员工（重复任务：同一对的第一次和第二次）。 */
   group?: string;
-  /** 重复任务：这是第几对的第几次，一共几对。 */
-  pair?: { index: number; total: number; round: "first" | "second" };
+  /** 重复任务：这是第几对的第几次，一共几对。`control` 是有坑可学的对照运行（第二次的同一份夹具，没技能的新员工）。 */
+  pair?: { index: number; total: number; round: PairRound };
+  /** 同一对的几次运行共用的名字（跳过整对时按它认）。 */
+  pairKey?: string;
   /** 夹具由种子生成的题（有坑可学）：这一次的种子。 */
   seed?: string;
   /** 网页表单题的夹具网站，运行前由主流程起、运行后停。 */
@@ -1361,12 +1374,14 @@ async function runWork(work: Work): Promise<EvalRecord> {
   const since = new Date();
   const started = Date.now();
   const deadline = started + work.minutes * 60_000;
+  const isControl = work.pair?.round === "control";
   const agentId =
     (work.group ? agentOfGroup.get(work.group) : undefined) ??
-    (await newEmployee(work.label));
+    (await newEmployee(work.label, isControl));
   if (work.group) agentOfGroup.set(work.group, agentId);
-  // 重复任务：这次运行开始前这位员工已经有什么，运行后的差就是学到的。
-  const learnedBefore = work.group ? await learnedStateOf(agentId) : undefined;
+  // 重复任务：这次运行开始前这位员工已经有什么，运行后的差就是学到的。对照运行不看这些：它的复盘怎样不重要，也不等。
+  const learnedBefore =
+    work.group && !isControl ? await learnedStateOf(agentId) : undefined;
   // 请求记录里只留这一道题的：先清掉之前的（建模型库条目时的探测请求等）。
   recorder?.drain();
   const dir = join(WORKSPACE, work.where);
@@ -1590,6 +1605,16 @@ function taskWorks(task: TaskName): Work[] {
           { index, total: pairCount, round: "second" },
           secondSeed,
         ),
+        // 有坑可学：同一份第二次的夹具（新拷一份），换一位没有技能和记忆的新员工做，用来对照「有技能」的第二次。
+        ...(task === REPEAT_PITFALL_TASK
+          ? [
+              taskWork(
+                task,
+                { index, total: pairCount, round: "control" },
+                secondSeed,
+              ),
+            ]
+          : []),
       ];
     },
   );
@@ -1597,7 +1622,7 @@ function taskWorks(task: TaskName): Work[] {
 
 function taskWork(
   task: TaskName,
-  pair?: { index: number; total: number; round: "first" | "second" },
+  pair?: { index: number; total: number; round: PairRound },
   seed?: string,
 ): Work {
   // 一对（`repeat_pairs` 为 1）时目录和键还是原来的 `repeat-first`；多对加上第几对。
@@ -1607,10 +1632,20 @@ function taskWork(
   return {
     key,
     task,
-    ...(pair ? { group: `${task}${pairPart}`, pair } : {}),
+    ...(pair
+      ? {
+          // 对照运行的员工另算一组（新员工），整对跳过时按 pairKey 认。
+          group:
+            pair.round === "control"
+              ? `${task}${pairPart}-control`
+              : `${task}${pairPart}`,
+          pairKey: `${task}${pairPart}`,
+          pair,
+        }
+      : {}),
     ...(seed ? { seed } : {}),
     title: pair
-      ? `${TASK_TITLES[task]}（${pair.total > 1 ? `第${pair.index}对·` : ""}第${pair.round === "first" ? "一" : "二"}次）`
+      ? `${TASK_TITLES[task]}（${pair.total > 1 ? `第${pair.index}对·` : ""}${pair.round === "control" ? "对照·没技能" : `第${pair.round === "first" ? "一" : "二"}次`}）`
       : TASK_TITLES[task],
     label: key,
     where,
@@ -1777,6 +1812,7 @@ try {
       `有坑可学的题的基础种子 ${baseSeed}（每一对、每一次的种子在各次运行的 seed 里；熊宝、Codex 两侧用同一个基础种子时夹具一样）`,
     );
   let firstRound: EvalRecord | undefined;
+  let secondRound: EvalRecord | undefined;
   let pairStartedAt = 0;
   let lastPairMs: number | undefined;
   /** 重复类的题：跳过的对数，按题名分开。 */
@@ -1785,31 +1821,61 @@ try {
   for (const work of works) {
     // 多对放在同一次运行里做完：来不来得及再做一对，看作业开头记下的截止时间；来不及就不做，留个说明。
     if (work.pair?.round === "first" && work.group && work.task) {
-      if (!pairFits(process.env, Date.now(), lastPairMs, minutes)) {
-        skipped.add(work.group);
+      // 一对做几次：有坑可学加一次对照运行，共三次，会议纪要两次。
+      const runsPerPair = work.task === REPEAT_PITFALL_TASK ? 3 : 2;
+      if (
+        !pairFits(process.env, Date.now(), lastPairMs, minutes, runsPerPair)
+      ) {
+        skipped.add(work.pairKey ?? work.group);
         skippedPairs.set(work.task, (skippedPairs.get(work.task) ?? 0) + 1);
         notes.push(
           `${work.task} 第 ${work.pair.index}/${work.pair.total} 对没做：离作业截止时间不够做完一对，已完成的各对照常记录`,
         );
       } else pairStartedAt = Date.now();
     }
-    if (work.group && skipped.has(work.group)) continue;
+    if (work.pairKey && skipped.has(work.pairKey)) continue;
     if (work.task === "webform") work.site = startWebformSite();
     materializeWork(work);
-    let record: EvalRecord;
+    let record: EvalRecord | undefined;
     try {
       record = await runWork(work);
+    } catch (thrown) {
+      // 对照运行建不出新员工：这一对没有对照，记一笔，别拖垮整次评测。
+      if (
+        work.pair?.round !== "control" ||
+        !(thrown instanceof FreshEmployeeUnavailable)
+      )
+        throw thrown;
+      notes.push(`${work.key} 没做：${thrown.message}，这一对没有同种子对照`);
     } finally {
       work.site?.stop();
     }
-    // 重复任务：同一对的两次记录合成一条（`firstRun` / `secondRun` 各记一次的指标）；所有对做完后再合成一条总的。
-    if (work.group && work.pair?.round === "first") firstRound = record;
-    else if (work.group && work.task && firstRound) {
+    // 重复任务：同一对的几次记录合成一条（`firstRun` / `secondRun`，有坑可学还有 `controlRun`，各记一次的指标）；
+    // 所有对做完后再合成一条总的。
+    if (work.group && work.pair?.round === "first" && record)
+      firstRound = record;
+    else if (
+      work.group &&
+      work.pair?.round === "second" &&
+      record &&
+      work.task === REPEAT_PITFALL_TASK
+    )
+      secondRound = record;
+    else if (
+      work.group &&
+      work.task &&
+      firstRound &&
+      (work.pair?.round === "control" ||
+        (record && work.pair?.round === "second"))
+    ) {
+      const second = work.pair?.round === "control" ? secondRound : record;
+      if (!second) throw new Error("no second run to combine");
       lastPairMs = Date.now() - pairStartedAt;
       const parts = donePairs.get(work.task) ?? [];
-      parts.push(combineRepeat(firstRound, record, work.task));
+      parts.push(combineRepeat(firstRound, second, work.task, record));
       donePairs.set(work.task, parts);
       firstRound = undefined;
+      secondRound = undefined;
       if (
         work.pair &&
         parts.length + (skippedPairs.get(work.task) ?? 0) === work.pair.total
@@ -1817,7 +1883,7 @@ try {
         records.push(combinePairs(work.task, parts));
         donePairs.delete(work.task);
       }
-    } else records.push(record);
+    } else if (record && !work.group) records.push(record);
   }
   if (deploymentHits > 0)
     notes.push(

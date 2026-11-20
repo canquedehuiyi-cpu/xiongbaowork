@@ -80,6 +80,13 @@ export type RunMetrics = {
   seed?: string;
 };
 
+/** 一对：第一次、第二次，和（有坑可学熊宝侧才有的）同种子对照运行。 */
+export type PairMetrics = {
+  firstRun: RunMetrics;
+  secondRun: RunMetrics;
+  controlRun?: RunMetrics;
+};
+
 export type EvalRecord = {
   /** 题名（五道题）或冒烟场景名。 */
   task: string;
@@ -147,7 +154,12 @@ export type EvalRecord = {
    * 重复类的题连做多对（输入 `repeat_pairs` 大于 1）时，每一对的第一次、第二次；这时 `firstRun` / `secondRun`
    * 不再单独写（用 {@link pairsOf} 读，一对时读 `firstRun` / `secondRun`）。每一对用新员工、新种子。
    */
-  pairs?: { firstRun: RunMetrics; secondRun: RunMetrics }[];
+  pairs?: PairMetrics[];
+  /**
+   * 有坑可学（熊宝侧）的对照运行：同一个第二次的夹具，由没有自写技能、没有记忆的新员工做。不计入这条记录的总量
+   * （和 Codex 的总量同一口径）；一对时记在这里，多对时记在 `pairs` 的每一项里。
+   */
+  controlRun?: RunMetrics;
   /** 这次运行用的夹具种子（重复任务合成前的单次记录；合成后在 `firstRun` / `secondRun` 里）。 */
   seed?: string;
   /** 这道题期间员工的背景调用；没有这一项的旧结果文件读作没记。 */
@@ -214,6 +226,7 @@ export function combineRepeat(
   first: EvalRecord,
   second: EvalRecord,
   task: TaskName = REPEAT_TASK,
+  control?: EvalRecord,
 ): EvalRecord {
   const tools: Record<string, number> = {};
   for (const record of [first, second])
@@ -318,6 +331,7 @@ export function combineRepeat(
       : {}),
     firstRun: runMetrics(first),
     secondRun: runMetrics(second),
+    ...(control ? { controlRun: runMetrics(control) } : {}),
   };
 }
 
@@ -333,7 +347,12 @@ export function combinePairs(task: TaskName, pairs: EvalRecord[]): EvalRecord {
     (total, next) => combineRepeat(total, next, task),
     head,
   );
-  const { firstRun: _first, secondRun: _second, ...whole } = summed;
+  const {
+    firstRun: _first,
+    secondRun: _second,
+    controlRun: _control,
+    ...whole
+  } = summed;
   return {
     ...whole,
     checks: pairs.flatMap((pair, index) =>
@@ -344,19 +363,29 @@ export function combinePairs(task: TaskName, pairs: EvalRecord[]): EvalRecord {
     ),
     pairs: pairs.flatMap((pair) =>
       pair.firstRun && pair.secondRun
-        ? [{ firstRun: pair.firstRun, secondRun: pair.secondRun }]
+        ? [
+            {
+              firstRun: pair.firstRun,
+              secondRun: pair.secondRun,
+              ...(pair.controlRun ? { controlRun: pair.controlRun } : {}),
+            },
+          ]
         : [],
     ),
   };
 }
 
 /** 一条重复类记录里的各对：多对读 `pairs`，一对读 `firstRun` / `secondRun`（旧结果文件也是这样）。 */
-export function pairsOf(
-  record: EvalRecord | undefined,
-): { firstRun: RunMetrics; secondRun: RunMetrics }[] {
+export function pairsOf(record: EvalRecord | undefined): PairMetrics[] {
   if (!record) return [];
   if (record.pairs) return record.pairs;
   return record.firstRun && record.secondRun
-    ? [{ firstRun: record.firstRun, secondRun: record.secondRun }]
+    ? [
+        {
+          firstRun: record.firstRun,
+          secondRun: record.secondRun,
+          ...(record.controlRun ? { controlRun: record.controlRun } : {}),
+        },
+      ]
     : [];
 }

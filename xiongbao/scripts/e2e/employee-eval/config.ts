@@ -142,7 +142,7 @@ export function evalSeed(env: Record<string, string | undefined>): string {
 
 /**
  * 还来不来得及再做一对：作业开头记下一个截止时间（`EVAL_DEADLINE_EPOCH`，Unix 秒，比作业超时早，留出出报告和上传的
- * 时间），一对要做两次。有上一对的实测墙钟就按它的一倍半留余量，没有就按最坏情况（两次都跑满每题上限，再加两分钟
+ * 时间），一对要做 `runsPerPair` 次（会议纪要两次；有坑可学熊宝侧第三次是同种子的对照运行，共三次）。有上一对的实测墙钟就按它的一倍半留余量，没有就按最坏情况（每次都跑满每题上限，再加两分钟
  * 等复盘）。没设截止时间（本机）总是来得及。多对放在同一次运行里做完，不能被作业超时整个杀掉。
  */
 export function pairFits(
@@ -150,12 +150,13 @@ export function pairFits(
   nowMs: number,
   lastPairMs: number | undefined,
   perRunMinutes: number,
+  runsPerPair = 2,
 ): boolean {
   const epoch = Number(env.EVAL_DEADLINE_EPOCH ?? "");
   if (!Number.isFinite(epoch) || epoch <= 0) return true;
   const need =
     lastPairMs !== undefined
       ? lastPairMs * 1.5
-      : (2 * perRunMinutes + 2) * 60_000;
+      : (runsPerPair * perRunMinutes + 2) * 60_000;
   return epoch * 1000 - nowMs >= need;
 }
