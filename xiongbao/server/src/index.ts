@@ -85,6 +85,7 @@ import {
 } from "./agents/lifecycle";
 import { createBotReset } from "./agents/lifecycle-reset";
 import { lightModelFor } from "./agents/light-model";
+import { createPurposeModel } from "./agents/purpose-model";
 import {
   createLightModelRoutes,
   createLightModelStore,
@@ -4880,21 +4881,34 @@ await startupLifecycle.run(async (startup) => {
    * `XIONGBAO_PERSONAL_MEMORY=off` 关），`XIONGBAO_MEMORY_EXTRACT=off` 单独关抽取；员工的工具权限里关掉
    * `memory/save_observed_memory` 的也不抽。抽出的存成待确认的观察记忆，失败只记日志。
    */
-  const agentModelFor = async (
-    agentId: string,
-    // 轻量轮用的便宜模型：员工设置里的 `lightModel` 合入之前，两个意图都是员工平时的模型。
-    _purpose: "light" | "work",
-  ) => {
-    try {
-      const key = await resolveRuntimeModelApiKey();
-      return await resolveAgentModel(
-        agentId,
-        key ? deploymentModel(runtimeModel, key) : undefined,
-      );
-    } catch {
-      return null;
-    }
-  };
+  const agentModelFor = createPurposeModel({
+    resolve: resolveAgentModel,
+    deployment: async (modelName) => {
+      try {
+        const key = await resolveRuntimeModelApiKey();
+        return key
+          ? deploymentModel(
+              modelName
+                ? { ...runtimeModel, defaultModel: modelName }
+                : runtimeModel,
+              key,
+            )
+          : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    // 期 1·1.5：员工设置里的轻量模型；背景小活（抽记忆、复盘）用它，没设置就是平时的模型。
+    lightModelOf: (agentId) =>
+      database
+        .select({ configuration: agents.configuration })
+        .from(agents)
+        .where(eq(agents.id, agentId))
+        .limit(1)
+        .then(([row]) => lightModelOf(row?.configuration)),
+    allowed: async () =>
+      (await modelCatalogue.read()).models.map((model) => model.id),
+  });
   const extractTurnMemories = createMemoryExtractor({
     store: personalMemoryStore,
     modelFor: agentModelFor,
