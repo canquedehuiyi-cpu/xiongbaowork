@@ -8,6 +8,7 @@ import {
 } from "bun:test";
 import type { Message } from "@ag-ui/client";
 import { LLMock } from "@copilotkit/aimock";
+import type { SelectableSkill } from "../src/plugins/selection";
 import {
   buildAgents,
   type RegisteredAgent,
@@ -16,7 +17,6 @@ import {
 } from "../src/copilot";
 import {
   RELATED_SKILL_CHARS,
-  type PickableSkill,
   relatedSelfSkills,
   relatedSkillsGuidance,
   requestTextOf,
@@ -30,7 +30,7 @@ import {
  */
 
 const MARKER = "SELF-SKILL-9931";
-type Held = PickableSkill & { tools: string[] };
+type Held = SelectableSkill;
 const REPORT: Held = {
   tools: [],
   slug: "auto-1a2b3c4d5e",

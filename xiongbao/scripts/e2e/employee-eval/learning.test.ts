@@ -103,7 +103,7 @@ test("it waits until the last round's retrospective line shows up", async () => 
 
 test("a new skill in the table also ends the wait", async () => {
   const time = clock();
-  let counts = [0, 0, 1];
+  const counts = [0, 0, 1];
   const result = await waitForRetro({
     runIds: ["r1"],
     readLog: () => "",
