@@ -5,7 +5,9 @@ import {
 } from "@copilotkit/runtime/v2";
 import { openParts } from "@openbot/shared/routine-checklist";
 import {
+  COMMAND_TOOL,
   LAST_STEP_NOTICE,
+  type MadeCall,
   openPartsNudge,
   type PlanItem,
   planNudge,
@@ -14,13 +16,9 @@ import {
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
   UPDATE_PLAN_TOOL,
+  unverifiedChanges,
   verifyNudge,
 } from "@openbot/shared/run-notices";
-import {
-  COMMAND_TOOL,
-  type MadeCall,
-  unverifiedChanges,
-} from "@openbot/shared/verify";
 import { withReplayedReasoning } from "./replayed-reasoning";
 import { DEFAULT_CONTEXT_WINDOW, foldEarlyResults } from "./turn-folding";
 import { unkeptPromise } from "./unkept-promise";

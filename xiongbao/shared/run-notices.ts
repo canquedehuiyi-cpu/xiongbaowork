@@ -38,6 +38,12 @@ export {
 } from "./plan";
 
 /**
+ * What the run harness reads of the verification loop (`verify.ts`), passed on from here for the same
+ * reason as the plan: one module for everything it says to the model and everything it reads to decide.
+ */
+export { COMMAND_TOOL, type MadeCall, unverifiedChanges } from "./verify";
+
+/**
  * Sent when a run would end with items of its own plan not done: the plan it wrote with
  * `update_plan` in this run, as its latest call left it. In the person's language, as the plan is.
  */
