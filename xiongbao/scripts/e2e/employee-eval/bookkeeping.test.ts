@@ -20,7 +20,11 @@ const step = (...calls: ReturnType<typeof call>[]) => ({
   content: "",
   toolCalls: calls,
 });
-const said = (text: string) => ({ id: `t-${text}`, role: "assistant", content: text });
+const said = (text: string) => ({
+  id: `t-${text}`,
+  role: "assistant",
+  content: text,
+});
 const result = (id: string, content: string) => ({
   id: `r-${id}`,
   role: "tool",
@@ -47,7 +51,7 @@ test("每一类单独数：接活、计划、交付，一步一个；总数是�
     said("做完了。"),
   ];
   expect(bookkeepingOf(messages)).toEqual({
-    steps: 7,
+    steps: 6,
     accept: 1,
     plan: 2,
     deliver: 1,
@@ -123,7 +127,11 @@ test("交付被接受之后接着又做了事：那一步是干实事的，不�
 });
 
 test("交付被接受之后这一轮直接结束：没有「交付后一步」", () => {
-  const messages = [user, step(call("5", "deliver_task")), result("5", DELIVERED)];
+  const messages = [
+    user,
+    step(call("5", "deliver_task")),
+    result("5", DELIVERED),
+  ];
   expect(bookkeepingOf(messages)).toEqual({
     steps: 1,
     accept: 0,

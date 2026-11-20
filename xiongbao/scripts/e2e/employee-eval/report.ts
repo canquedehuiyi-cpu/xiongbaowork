@@ -15,6 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
+import { bookkeepingShare } from "./bookkeeping";
 import { HARD_SUITE, REPEAT_TASK, TASK_TITLES, TASKS } from "./lib";
 import {
   type Capabilities,
@@ -706,6 +707,58 @@ export function renderReport(results: EvalResults[]): string {
       ),
       "",
       "最长一步输入、前 / 中 / 后平均的算法同上面的「每步输入」表；逐步数字只有熊宝侧读得到，Codex 没有。",
+      "",
+    );
+  }
+
+  /*
+   * 记账步占比：接活、计划、交付各自单独占的步，和交付之后那一步（员工多说的收尾的话）。五道题和难题都看，
+   * 只要熊宝侧的记录里有这一项（旧结果文件没有，就没有这张表）。
+   */
+  const booked = [...TASKS, ...hard].filter((task) =>
+    mineSides.some((mine) =>
+      mine.results?.records.some(
+        (record) => record.task === task && record.bookkeeping,
+      ),
+    ),
+  );
+  if (booked.length) {
+    const find = (side: EvalResults | undefined, task: string) =>
+      side?.records.find((record) => record.task === task);
+    out.push(
+      "### 记账步占比（接活、计划、交付，以及交付之后的一步）",
+      "",
+      table(
+        [
+          "题目",
+          ...mineSides.flatMap((mine) => [
+            `${mine.label}步数`,
+            `${mine.label}接活`,
+            `${mine.label}计划`,
+            `${mine.label}交付`,
+            `${mine.label}交付后一步`,
+            `${mine.label}记账占比`,
+          ]),
+        ],
+        booked.map((task) => [
+          TASK_TITLES[task],
+          ...mineSides.flatMap((mine) => {
+            const found = find(mine.results, task)?.bookkeeping;
+            return found
+              ? [
+                  count(found.steps),
+                  count(found.accept),
+                  count(found.plan),
+                  count(found.deliver),
+                  count(found.afterDeliver),
+                  bookkeepingShare(found),
+                ]
+              : Array.from({ length: 6 }, () => DASH);
+          }),
+        ]),
+      ),
+      "",
+      "记账步 = 一步里只有 accept_task、update_plan、deliver_task、request_extension 的步，再加交付被接受之后的那一步（没有任何工具调用的收尾话）；和读取、命令同一步发出的不算。一步记在一类名下，优先级 交付 > 接活 > 计划。步数 = 对话快照里助手消息的条数；记账占比 = 记账步总数 ÷ 步数（含申请延期的步）。这几步各自要把整段历史再发一遍，占比越低越好；Codex 没有这几步，不列。",
       "",
     );
   }

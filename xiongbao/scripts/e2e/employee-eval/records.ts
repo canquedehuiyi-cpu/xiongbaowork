@@ -2,6 +2,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import type { Bookkeeping } from "./bookkeeping";
 import { type Check, TASK_TITLES } from "./lib";
 import type { Capabilities, PromptChars } from "./metrics";
 
@@ -97,6 +98,11 @@ export type EvalRecord = {
   callCached?: (number | null)[];
   /** 每次调用是主员工的（`main`）还是别处的（`other`：子代理、压缩等不在主运行里的调用）。 */
   callAgents?: ("main" | "other")[];
+  /**
+   * 记账步（熊宝侧，读对话快照）：接活、计划、交付各自单独占的步，和交付之后的那一步。旧结果文件没有这一项；
+   * Codex 侧没有。见 `bookkeeping.ts`。
+   */
+  bookkeeping?: Bookkeeping;
   /** 这道题走的执行路径；旧结果文件没有，按看板路径算。Codex 侧没有。 */
   path?: EvalPath;
   /** 停在时间或段数上限的轮数（`turn-limit` / `step-limit` 事件）。旧结果文件没有这一项。 */
@@ -244,6 +250,19 @@ export function combineRepeat(
         : Boolean(first.silentStop || second.silentStop),
     nudges: first.nudges + second.nudges,
     tools,
+    ...(first.bookkeeping && second.bookkeeping
+      ? {
+          bookkeeping: {
+            steps: first.bookkeeping.steps + second.bookkeeping.steps,
+            accept: first.bookkeeping.accept + second.bookkeeping.accept,
+            plan: first.bookkeeping.plan + second.bookkeeping.plan,
+            deliver: first.bookkeeping.deliver + second.bookkeeping.deliver,
+            afterDeliver:
+              first.bookkeeping.afterDeliver + second.bookkeeping.afterDeliver,
+            total: first.bookkeeping.total + second.bookkeeping.total,
+          },
+        }
+      : {}),
     capabilities: second.capabilities,
     checks: [
       ...first.checks.map((item) => ({

@@ -89,6 +89,7 @@ import {
   type Stream,
   type Streamed,
 } from "../chat-client";
+import { bookkeepingOf } from "./bookkeeping";
 import {
   afterRound,
   artifactDirName,
@@ -1461,6 +1462,8 @@ async function runWork(work: Work): Promise<EvalRecord> {
     // 步数 = 模型调用次数（model_token_calls 的行数，每一步一次调用）；工具调用次数另记。
     steps: tokens.length,
     ...callSeries(tokens, runIds),
+    // 记账步：接活、计划、交付各自单独占的步，和交付之后那一步（读对话快照）。
+    bookkeeping: bookkeepingOf(stored.messages),
     toolCalls: calls.length,
     modelCalls: tokens.length,
     tokens:
