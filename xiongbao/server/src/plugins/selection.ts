@@ -1,3 +1,4 @@
+import type { SourceFingerprint } from "../skills/source-fingerprint";
 import { textOf } from "../agents/message-text";
 /**
  * Choosing which of a Bot's tools to put in front of the model, one run at a time.
@@ -45,6 +46,8 @@ export type SelectableSkill = {
   runnable?: string | null;
   blockedReason?: string | null;
   blockedReasonRef?: string | null;
+  /** 员工自己写的技能的来源请求指纹（`skills/source-fingerprint.ts`），挑选时和新请求比。 */
+  sourceFingerprint?: SourceFingerprint | null;
 };
 
 /** A granted tool, as much of it as narrowing needs. */

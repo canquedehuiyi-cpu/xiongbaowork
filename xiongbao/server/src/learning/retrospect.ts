@@ -29,6 +29,7 @@ import {
   saveParameters,
   similarSkillOf,
 } from "../skills/save-tool";
+import { withSourceFingerprints } from "../skills/usage";
 import { replyTextOf } from "../tasks/delivery";
 import { currentTenant } from "../tenant/context";
 import { firstJsonObject } from "../wakerflows/generator";
@@ -441,7 +442,7 @@ export function createRetrospector(deps: RetrospectorDeps) {
       // 已经有一条差不多的：不再加一条近似的副本。
       const similar = await similarSkillOf(self, draft);
       if (similar) return { outcome: "similar", id: similar };
-      const saved = await saveSkill(self, draft, "retrospect");
+      const saved = await saveSkill(self, draft, "retrospect", turn.request);
       // 转待审和被拒各记一行原因（只有规则的名字，没有技能的内容），评测和排查看得出为什么没生效。
       if (saved.ok && saved.held)
         log(
@@ -504,7 +505,11 @@ export async function markInjectedSkillsUsed(
   heldBy: (agentId: string) => Promise<readonly PickableSkill[]>,
   at: Date,
 ): Promise<void> {
-  const held = await heldBy(turn.agentId);
+  // 和放进上下文时用同一份：带上来源请求的指纹，挑出来的才是同一批。
+  const held = await withSourceFingerprints(
+    database,
+    await heldBy(turn.agentId),
+  );
   const related = relatedSelfSkills(
     requestTextOf(
       turn.messages as readonly { role?: string; content?: unknown }[],

@@ -634,7 +634,11 @@ import {
 } from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
 import { SAVE_SKILL_REF, selfSkillTools } from "./skills/save-tool";
-import { demoteStaleSkills, learnedUsageOf } from "./skills/usage";
+import {
+  demoteStaleSkills,
+  learnedUsageOf,
+  withSourceFingerprints,
+} from "./skills/usage";
 import { createDelivery, replyTextOf } from "./tasks/delivery";
 import {
   runDeliveryCheck,
@@ -3567,10 +3571,13 @@ await startupLifecycle.run(async (startup) => {
     loadSkills: async (botId) => {
       const held = await grantedSkills({ store: pluginStore, botId });
       try {
-        return demoteStaleSkills(
-          held,
-          await runAsTenant(actorId, () => learnedUsageOf(database)),
-          new Date(),
+        return await runAsTenant(actorId, async () =>
+          demoteStaleSkills(
+            // 来源请求的指纹：让同类请求认得出复盘写的那条泛泛的技能（`skills/source-fingerprint.ts`）。
+            await withSourceFingerprints(database, held),
+            await learnedUsageOf(database),
+            new Date(),
+          ),
         );
       } catch {
         return held;

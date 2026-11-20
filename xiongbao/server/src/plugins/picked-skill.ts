@@ -21,6 +21,16 @@ import {
   SELF_SKILL_SLUG_PREFIX,
 } from "../../../shared/self-skills";
 import { textOf } from "../agents/message-text";
+import {
+  fingerprintScore,
+  MATCH_SIMILARITY,
+  type SourceFingerprint,
+} from "../skills/source-fingerprint";
+import {
+  hasSubstantiveWords,
+  similarity,
+  tokensOf as diceTokensOf,
+} from "../text-tokens";
 import { latestUserText } from "./selection";
 
 export { PICKED_SKILL_PROP };
@@ -48,6 +58,11 @@ export type PickableSkill = {
   /** 规则名（`shell-command-prose`）。`blockedReasonRef` 才是能给人读的那句。 */
   blockedReason?: string | null;
   blockedReasonRef?: string | null;
+  /**
+   * 员工自己写的技能：写它时的来源请求的指纹（词的哈希，不是原文），见 `skills/source-fingerprint.ts`。
+   * 复盘写出的「什么时候用」很泛，同类请求的字对不上它，靠这个找到。没有就只靠技能自己的字。
+   */
+  sourceFingerprint?: SourceFingerprint | null;
 };
 
 /**
@@ -224,9 +239,51 @@ function whenOf(skill: PickableSkill): string {
   return `${skill.title} ${line ?? skill.summary ?? ""}`;
 }
 
+/** 技能正文第一段「适用场景：…」那一行，没有就是摘要。 */
+function whenLineOf(skill: PickableSkill): string {
+  return (
+    /^适用场景：(.*)$/m.exec(skill.instructions ?? "")?.[1] ??
+    skill.summary ??
+    ""
+  );
+}
+
 /**
- * 这件事和哪几条员工自己写的技能对得上：按技能的「什么时候用」和标题里的词有多少出现在这件事的说法里排，
- * 够多才算，最多 `limit` 条。只看员工自己写的（`auto-`），也只看有正文的。
+ * 这条技能和这件事有多对得上，0 到 1，不够格就是 0。两条路，哪条够格取哪条的分：
+ * - 词：技能的「什么时候用」和标题里有 {@link MIN_SHARED_TOKENS} 个以上、{@link MIN_SHARED_RATIO} 以上的词出现在
+ *   这件事的说法里（原来的规则，分是共有词占技能那边的比例）；
+ * - 相似度：来源请求的指纹、「什么时候用」、标题三样，各自和这件事算 Dice 相似度（`text-tokens.ts`，期 1 记忆排序
+ *   用的那套），取最高，达到 {@link MATCH_SIMILARITY} 算数。复盘写的「什么时候用」很泛，同类请求的词对不上它，
+ *   来源请求的指纹才是比得上的那一样（`skills/source-fingerprint.ts`）。
+ */
+export function selfSkillScore(
+  text: string,
+  skill: PickableSkill,
+  wanted = tokensOf(text),
+): number {
+  const keys = tokensOf(whenOf(skill));
+  let shared = 0;
+  for (const key of keys) if (wanted.has(key)) shared += 1;
+  const byWords =
+    keys.size > 0 &&
+    shared >= MIN_SHARED_TOKENS &&
+    shared / keys.size >= MIN_SHARED_RATIO
+      ? shared / keys.size
+      : 0;
+  const request = diceTokensOf(text);
+  const best = Math.max(
+    skill.sourceFingerprint
+      ? fingerprintScore(skill.sourceFingerprint, text)
+      : 0,
+    similarity(diceTokensOf(whenLineOf(skill)), request),
+    similarity(diceTokensOf(skill.title), request),
+  );
+  return Math.max(byWords, best >= MATCH_SIMILARITY ? best : 0);
+}
+
+/**
+ * 这件事和哪几条员工自己写的技能对得上（`selfSkillScore`），按分高的在前，最多 `limit` 条。只看员工自己写的
+ * （`auto-`），也只看有正文的。
  */
 export function relatedSelfSkills<T extends PickableSkill>(
   text: string,
@@ -238,13 +295,8 @@ export function relatedSelfSkills<T extends PickableSkill>(
   const scored: { skill: T; score: number }[] = [];
   for (const skill of held) {
     if (!isSelfWrittenSkill(skill) || !skill.instructions?.trim()) continue;
-    const keys = tokensOf(whenOf(skill));
-    if (keys.size === 0) continue;
-    let shared = 0;
-    for (const key of keys) if (wanted.has(key)) shared += 1;
-    const score = shared / keys.size;
-    if (shared >= MIN_SHARED_TOKENS && score >= MIN_SHARED_RATIO)
-      scored.push({ skill, score });
+    const score = selfSkillScore(text, skill, wanted);
+    if (score > 0) scored.push({ skill, score });
   }
   return scored
     .sort((one, two) =>
@@ -283,12 +335,51 @@ export function relatedSkillsGuidance(
   ].join("\n\n");
 }
 
+/** 员工自己写的技能不超过这么多条时，没对上的也把清单放进上下文，让它自己判断。 */
+export const SELF_SKILL_LIST_MAX = 5;
+/** 清单里每条的「什么时候用」最多放多少字符。 */
+const LIST_WHEN_CHARS = 160;
+
 /**
- * 这一轮交给员工的技能指引：人点了命令就是那一条；没点，就是员工自己写过、和这件事对得上的那一两条。
+ * 员工自己写的技能不多、这一轮又没有哪条对得上时，给它一份清单：一条一行，标题、id、什么时候用。正文不放，
+ * 它觉得对得上就用 `refine_skill` 只带 id 读全文。自动匹配可能漏（请求只是一句指路的话），技能又只有几条，
+ * 清单的代价很小，交给员工自己判断。
+ *
+ * 只随这一条人说的话走（放在 `picked_skill` 那一段，在稳定前缀之后）：同一条消息的每一轮字节相同，前缀不变。
+ * 人只回了「继续」「好的」这类没有实词的短话时不放：话题没变，上一条消息那一轮已经放过。
+ */
+export function selfSkillListGuidance(
+  input: Pick<RunAgentInput, "messages">,
+  held: readonly PickableSkill[],
+): string | undefined {
+  const own = held
+    .filter((skill) => isSelfWrittenSkill(skill) && skill.instructions?.trim())
+    .sort((one, two) =>
+      one.slug < two.slug ? -1 : one.slug > two.slug ? 1 : 0,
+    );
+  if (own.length === 0 || own.length > SELF_SKILL_LIST_MAX) return undefined;
+  if (!hasSubstantiveWords(latestUserText(input.messages))) return undefined;
+  const lines = own.map((skill) => {
+    const when = whenLineOf(skill).replace(/\s+/g, " ").trim();
+    return `- ${skill.title || skill.slug} (id: ${skill.slug}) — ${when.length > LIST_WHEN_CHARS ? `${when.slice(0, LIST_WHEN_CHARS)}…` : when}`;
+  });
+  return [
+    `You have written down how you did these kinds of work before. None of them clearly matched what you were just asked, so their steps are not here. If one of them fits this task, read it whole with ${REFINE_SKILL_TOOL} (only its id) and follow it where it fits; if none fits, ignore this list.`,
+    ...lines,
+  ].join("\n");
+}
+
+/**
+ * 这一轮交给员工的技能指引：人点了命令就是那一条；没点，就是员工自己写过、和这件事对得上的那一两条；
+ * 都没有，员工自己写的技能不多时是一份清单（`selfSkillListGuidance`）。
  */
 export function skillGuidanceFor(
   input: Pick<RunAgentInput, "messages" | "forwardedProps">,
   held: readonly PickableSkill[],
 ): string | undefined {
-  return pickedSkillGuidance(input, held) ?? relatedSkillsGuidance(input, held);
+  return (
+    pickedSkillGuidance(input, held) ??
+    relatedSkillsGuidance(input, held) ??
+    selfSkillListGuidance(input, held)
+  );
 }
