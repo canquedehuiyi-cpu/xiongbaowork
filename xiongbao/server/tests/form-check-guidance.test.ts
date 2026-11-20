@@ -9,13 +9,17 @@ import { slimComputerGuidance } from "../src/agents/slim-guidance";
 const holding = { search: true, personal: false, browserSearch: false };
 
 describe("电脑段的表单核对", () => {
-  test("提交表单前逐项对照原值核对，不加原文没有的字", () => {
+  test("每一栏只填这一栏要的那部分，不加原文没有的字", () => {
     const text = slimComputerGuidance(holding);
     expect(text).toContain("Before submitting a form");
-    expect(text).toContain("against the values you were given");
-    expect(text).toContain("never add words the original does not have");
-    // 例子就是评测里出的错：名字后面多写了关系。
-    expect(text).toContain("(mother)");
+    // 第一层：只填该栏要的那部分，括号里的关系、备注不填进姓名栏。
+    expect(text).toContain("only the part that field asks for");
+    expect(text).toContain("name alone, not a bracketed note");
+    expect(text).toContain("relationship or remark");
+    // 第二层：不加原文没有的字。
+    expect(text).toContain("never add words the source does not have");
+    // 不能再叫模型「原样照填」：「周丽华（母亲）」会被整个填进姓名栏。
+    expect(text).not.toContain("exactly the original value");
   });
 
   test("说在提交之前，而不是提交之后才查", () => {
