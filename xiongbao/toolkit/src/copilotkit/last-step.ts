@@ -489,6 +489,18 @@ function addUsage(a: Usage, b: Usage): Usage {
   };
 }
 
+/**
+ * 规格 v2 的模型：提示的形状和 v3 一样（工具结果的 `output` 都是 text / json / content 几种），折叠只改提示，
+ * 所以可以折。别的包装（最后一步的收尾）要的是 v3 的流和用量，仍只认 {@link isModel}。
+ */
+function isOlderModel(model: unknown): boolean {
+  return (
+    typeof model === "object" &&
+    model !== null &&
+    (model as { specificationVersion?: unknown }).specificationVersion === "v2"
+  );
+}
+
 function isModel(model: unknown): model is Model {
   return (
     typeof model === "object" &&
@@ -510,9 +522,24 @@ export type FoldingOptions = {
 };
 
 /**
+ * 规格 v2 的模型：不重新拼一个对象，而是接在它前面。规格、提供方、模型名和它自己的其它成员（`provider` 是原型上的
+ * 取值函数）都从它那里读，只有这两个调用先折叠再交给它；换成 v3 的壳，运行时就不会再把它当 v2 转换，流的格式对不上。
+ * 两个调用用赋值挂上（可写、可配置）：运行时把 v2 模型转成 v3 时会再套一层代理，不可配置的属性它取不出来。
+ */
+function withFoldedCalls(
+  inner: Model,
+  folded: (asked: CallOptions) => Promise<CallOptions>,
+): Model {
+  const wrapper = Object.create(inner) as Model;
+  wrapper.doGenerate = async (asked) => inner.doGenerate(await folded(asked));
+  wrapper.doStream = async (asked) => inner.doStream(await folded(asked));
+  return wrapper;
+}
+
+/**
  * 每一步发给模型之前，先按 {@link foldEarlyResults} 折叠较早的工具结果。包在模型外面，是因为运行时只给
  * `maxSteps`，两步之间没有别的位置可以改这一步的提示，`answersOnLastStep` 也是这样做的；放在它外面，让它看到的
- * 已经是折叠后的提示（折叠不改回合数，它按回合数数步）。工厂式配置、解析不了的模型原样返回。
+ * 已经是折叠后的提示（折叠不改回合数，它按回合数数步）。v2、v3 规格的模型都折（见 {@link isOlderModel}）；工厂式配置、解析不了的、别的规格的模型原样返回。
  */
 export function foldingEarlyResults(
   configuration: BuiltInAgentConfiguration,
@@ -525,8 +552,9 @@ export function foldingEarlyResults(
   } catch {
     return configuration;
   }
-  if (!isModel(model)) return configuration;
-  const inner = model;
+  const older = isOlderModel(model);
+  if (!older && !isModel(model)) return configuration;
+  const inner = model as Model;
   let window: Promise<number> | undefined;
   const windowOf = () => {
     window ??= (async () => {
@@ -546,13 +574,15 @@ export function foldingEarlyResults(
     });
     return prompt === asked.prompt ? asked : { ...asked, prompt };
   };
-  const wrapped: Model = {
-    specificationVersion: "v3",
-    provider: inner.provider,
-    modelId: inner.modelId,
-    supportedUrls: inner.supportedUrls,
-    doGenerate: async (asked) => inner.doGenerate(await folded(asked)),
-    doStream: async (asked) => inner.doStream(await folded(asked)),
-  };
+  const wrapped: Model = older
+    ? withFoldedCalls(inner, folded)
+    : {
+        specificationVersion: "v3",
+        provider: inner.provider,
+        modelId: inner.modelId,
+        supportedUrls: inner.supportedUrls,
+        doGenerate: async (asked) => inner.doGenerate(await folded(asked)),
+        doStream: async (asked) => inner.doStream(await folded(asked)),
+      };
   return { ...configuration, model: wrapped };
 }

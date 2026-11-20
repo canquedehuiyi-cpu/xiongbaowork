@@ -464,6 +464,102 @@ describe("包在模型外面", () => {
   });
 });
 
+describe("规格 v2 的模型也折叠", () => {
+  /*
+   * 员工用的模型不是只有 v3 的：除了 DeepSeek 官方地址，所有 OpenAI 兼容的提供方（自定义地址、Moonshot、智谱、
+   * OpenRouter）建出来的都是 v2 规格的聊天模型。折叠以前只认 v3，它们一轮里的工具结果从来没被折过。
+   */
+  class V2Model {
+    readonly specificationVersion = "v2" as const;
+    readonly modelId = "compat-model";
+    readonly config = { marker: "kept" };
+    seen: Prompt[] = [];
+    get provider() {
+      return "custom.chat";
+    }
+    get supportedUrls() {
+      return { "image/*": [/^https:/] };
+    }
+    async doGenerate(options: { prompt: Prompt }) {
+      this.seen.push(options.prompt);
+      return {} as never;
+    }
+    async doStream(options: { prompt: Prompt }) {
+      this.seen.push(options.prompt);
+      return { stream: new ReadableStream() } as never;
+    }
+  }
+
+  test("越线就折叠，规格、提供方、模型名和模型自己的其它成员都不变", async () => {
+    const inner = new V2Model();
+    const wrapped = foldingEarlyResults(
+      { model: inner as never, prompt: "x" } as BuiltInAgentConfiguration,
+      { windowFor: () => WINDOW },
+    );
+    if ("factory" in wrapped) throw new Error("not a factory");
+    const model = wrapped.model as unknown as V2Model;
+    expect(model).not.toBe(inner);
+    expect(model.specificationVersion).toBe("v2");
+    expect(model.provider).toBe("custom.chat");
+    expect(model.modelId).toBe("compat-model");
+    expect(model.config).toEqual({ marker: "kept" });
+    expect(model.supportedUrls).toEqual(inner.supportedUrls);
+
+    await model.doStream({ prompt: promptAfter(12) });
+    await model.doGenerate({ prompt: promptAfter(12) });
+    expect(inner.seen).toHaveLength(2);
+    for (const sent of inner.seen) {
+      expect(outputOf(sent, 1).startsWith(FOLDED_PREFIX)).toBe(true);
+      expect(outputOf(sent, 12)).toBe(resultText(12, 4_000));
+    }
+  });
+
+  test("运行时把 v2 模型转成 v3 时会套一层代理、取出绑定过的方法：两个调用必须是可写可配置的属性", async () => {
+    const inner = new V2Model();
+    const wrapped = foldingEarlyResults(
+      { model: inner as never, prompt: "x" } as BuiltInAgentConfiguration,
+      { windowFor: () => WINDOW },
+    );
+    if ("factory" in wrapped) throw new Error("not a factory");
+    const model = wrapped.model as unknown as V2Model;
+    for (const name of ["doGenerate", "doStream"]) {
+      const own = Object.getOwnPropertyDescriptor(model, name);
+      expect(own?.writable).toBe(true);
+      expect(own?.configurable).toBe(true);
+    }
+    const proxied = new Proxy(model, {
+      get: (target, key, receiver) => {
+        const value = Reflect.get(target, key, receiver);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    await proxied.doStream({ prompt: promptAfter(12) });
+    expect(outputOf(inner.seen[0] as Prompt, 1).startsWith(FOLDED_PREFIX)).toBe(
+      true,
+    );
+  });
+
+  test("没越线时模型收到的就是原来那份", async () => {
+    const inner = new V2Model();
+    const wrapped = foldingEarlyResults(
+      { model: inner as never, prompt: "x" } as BuiltInAgentConfiguration,
+      { windowFor: () => 1_000_000 },
+    );
+    if ("factory" in wrapped) throw new Error("not a factory");
+    const prompt = promptAfter(12);
+    await (wrapped.model as unknown as V2Model).doStream({ prompt });
+    expect(inner.seen[0]).toBe(prompt);
+  });
+
+  test("不认识的规格原样返回，不包", () => {
+    const configuration = {
+      model: { specificationVersion: "v9", modelId: "future" } as never,
+      prompt: "x",
+    } as BuiltInAgentConfiguration;
+    expect(foldingEarlyResults(configuration)).toBe(configuration);
+  });
+});
+
 describe("接在员工的运行里", () => {
   /** 一个什么都不做的模型：把每一步收到的提示记下来，答一句话就结束。 */
   function listening(seen: Prompt[]) {

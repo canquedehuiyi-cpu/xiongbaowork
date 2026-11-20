@@ -53,6 +53,40 @@ export function subagentGuidance(
 }
 
 /**
+ * What a subagent is not offered, though the Bot it is a copy of holds them: the tools that act on, or
+ * for, the conversation the person is in. It is a run nobody watches, in a thread of its own, started
+ * for one part of an answer.
+ *
+ *  - `accept_task`, `deliver_task`, `request_extension`: the three steps of the card the person gave
+ *    the Bot. A subagent has no card; the Bot hands the card in.
+ *  - `schedule_follow_up`, `list_follow_ups`, `cancel_follow_up`: follow-ups that wake a conversation,
+ *    and the conversation is the Bot's.
+ *  - `offer_check_in`, `show_app_access`: each draws a card for the person to answer, and nobody sees a
+ *    subagent's thread.
+ *
+ * Each costs a definition (and with `accept_task`, the delivery rules in the prompt) on every step the
+ * subagent takes; the work they stand for was always the Bot's own. By name, because the server builds
+ * these tools in several places and the names are what the model is offered.
+ */
+export const SUBAGENT_WITHOUT_TOOLS: readonly string[] = [
+  "accept_task",
+  "deliver_task",
+  "request_extension",
+  "schedule_follow_up",
+  "list_follow_ups",
+  "cancel_follow_up",
+  "offer_check_in",
+  "show_app_access",
+];
+
+/** The tools a subagent is offered out of the ones its Bot holds. */
+export function toolsForSubagent<T extends { name: string }>(
+  tools: readonly T[],
+): T[] {
+  return tools.filter((tool) => !SUBAGENT_WITHOUT_TOOLS.includes(tool.name));
+}
+
+/**
  * 期七：子代理可以指定模型。`model` 只认两个别名，或者本租户可用模型里的名字：
  *  - `"hard"`：这位员工设置里的「难任务模型」（`agents.configuration.hardModel`），没设置就用默认模型并说明；
  *  - `"default"`：不指定，和不写一样，用员工平时的模型。
@@ -100,6 +134,13 @@ export type SubagentResult =
       threadId: string;
       steps: number;
       ms?: number;
+      /**
+       * Where the whole answer is, when it was too long to hand back and `answer` is its head and
+       * tail: a file in the Bot's workspace. Absent for an answer given whole.
+       */
+      savedTo?: string;
+      /** Said in words with `savedTo`: what was left out and how to read it. */
+      truncated?: string;
     } & SubagentModelFacts)
   /**
    * It stopped before an action that needs the person's yes. Nothing was done and nobody was asked;
