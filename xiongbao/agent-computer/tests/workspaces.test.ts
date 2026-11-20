@@ -92,3 +92,30 @@ test("one person's two Bots on that person's computer each get their own files",
   await sales.files.write("notes.md", "sales only");
   await expect(support.files.read("notes.md")).rejects.toThrow();
 });
+
+test("a relative path in a command means what it means to the file tools, even after an earlier cd", async () => {
+  const workspaces = createWorkspaces(root, false, { PATH: process.env.PATH });
+  const { files, shell } = await workspaces.for("sales");
+  try {
+    await files.write("eval/task/TASK.md", "do it");
+    // The file tool and the command name the same relative file.
+    expect((await files.read("eval/task/TASK.md")).text).toBe("do it");
+    const first = await shell.run({
+      command: "cd eval/task && cat TASK.md && pwd",
+      fromRoot: true,
+    });
+    expect(first.exitCode).toBe(0);
+    expect(first.stdout).toContain("do it");
+    // The cd above stays behind: the next command starts at the workspace root again.
+    const second = await shell.run({
+      command: "cd eval/task && cat TASK.md",
+      fromRoot: true,
+    });
+    expect(second.exitCode).toBe(0);
+    expect(second.stdout.trim()).toBe("do it");
+    const where = await shell.run({ command: "pwd", fromRoot: true });
+    expect(where.stdout.trim()).toBe(await realpath(root));
+  } finally {
+    shell.dispose();
+  }
+});

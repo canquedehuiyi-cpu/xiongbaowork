@@ -319,10 +319,19 @@ export type RunAs = {
 };
 
 /** The command a caller hands a shell, and the Stop that ends it. */
+function shellSingleQuote(value: string): string {
+  return `'${value.replaceAll("'", `'\\''`)}'`;
+}
+
 export type CommandInput = {
   command: string;
   timeoutMs?: number;
   signal?: AbortSignal;
+  /**
+   * Start in the workspace root even if an earlier command left the live shell somewhere else. What
+   * the Bot's own commands ask for (`/exec`); a person typing at the terminal keeps their directory.
+   */
+  fromRoot?: boolean;
 };
 
 export type ShellOptions = {
@@ -468,8 +477,17 @@ export function createShell(
           timeoutMs,
         });
 
+      /*
+       * A Bot's command starts in the workspace root (`fromRoot`), the folder the file tools'
+       * relative paths are based on. The shell is one long-lived bash, so a `cd` in an earlier
+       * command (this run's, the last run's, or a person's at the terminal) would otherwise leave the
+       * next command somewhere else, and a relative `cd eval/x` that works for `computer_read_file`
+       * fails here. Exported variables still carry over; only the directory is reset.
+       */
       const outcome = await live.run({
-        command: input.command,
+        command: input.fromRoot
+          ? `cd -- ${shellSingleQuote(workspaceDir)} 2>/dev/null\n${input.command}`
+          : input.command,
         deadline: started + timeoutMs,
         ...(input.signal ? { signal: input.signal } : {}),
       });
