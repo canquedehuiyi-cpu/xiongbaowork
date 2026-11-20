@@ -29,6 +29,7 @@ function fixture(
     roundFails?: boolean;
     canClaim?: boolean;
     quiet?: boolean;
+    trackFails?: boolean;
     enabled?: boolean;
     employees?: string[];
     gate?: string | null;
@@ -40,6 +41,7 @@ function fixture(
     tracked: [] as string[],
     rounds: [] as string[],
     released: [] as string[],
+    recovered: 0,
     started: [] as string[],
     claims: [] as { agent: string; onlyUrgent?: boolean | undefined }[],
   };
@@ -54,8 +56,12 @@ function fixture(
     markStarted: async (id: string) => {
       log.started.push(id);
     },
-    release: async (id: string) => {
-      log.released.push(id);
+    release: async (id: string, release?: { clearTask?: boolean }) => {
+      log.released.push(release?.clearTask ? `${id}:clear` : id);
+    },
+    recoverStale: async () => {
+      log.recovered += 1;
+      return 0;
     },
     heartbeatEmployees: async () => options.employees ?? ["bot"],
   } as unknown as BoardCardsStore;
@@ -70,6 +76,7 @@ function fixture(
     },
     delivery: {
       track: async (_t: string, taskId: string) => {
+        if (options.trackFails) throw new Error("db down");
         log.tracked.push(taskId);
         return { ok: true, threadRef: "thread" };
       },
@@ -131,6 +138,18 @@ describe("领到之后", () => {
     expect(await autonomy.claimAndStart("alice", "bot")).toBe(0);
     expect(log.released).toEqual(["card-1"]);
     expect(log.claims).toHaveLength(1);
+  });
+
+  test("看板卡开出来了却没跟起来：这张卡放回去（连看板卡的记录一起丢），不卡在「已领」", async () => {
+    const { autonomy, log } = fixture({ trackFails: true });
+    expect(await autonomy.claimAndStart("alice", "bot")).toBe(0);
+    expect(log.released).toEqual(["card-1:clear"]);
+  });
+
+  test("每次领之前先回收卡死在「已领」的卡", async () => {
+    const { autonomy, log } = fixture();
+    await autonomy.claimAndStart("alice", "bot");
+    expect(log.recovered).toBe(1);
   });
 
   test("不能自己接活的员工（外部、被暂停、关了 accept_task）、功能关掉：一张都不领", async () => {

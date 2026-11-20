@@ -7,7 +7,8 @@
  *   员工同时领只有一个领到。
  * - 列：`owner_user_id`（本人）、`title`、`detail`（要做什么、做到什么样）、`role`（岗位）、`priority`（越大越先，
  *   默认 0）、`urgent`（紧急的卡，安静时段里也可以领）、`status`（`open` 没人领 / `claimed` 已领，CHECK 约束）、
- *   `claimed_by`（领的员工，随员工删除置空）、`claimed_at`、`task_id`（领了之后开出来的看板卡，没开成时为空）、
+ *   `claimed_by`（领的员工，随员工删除置空）、`claimed_at`、`task_id`（领了之后开出来的看板卡，没开成时为空；看板卡
+ *   被清掉时置空）、`claim_count`（被领过几次，领了却失败的卡放回去重领，最多重领几次要看它）、
  *   `created_by`、`created_at`。已领的行必须写明谁领的（CHECK 约束）。
  * - 已有数据：新表，没有回填。
  * - 索引：只给没人领的卡建（本人、岗位、优先级、创建时间），挑下一张卡用；`claimed_by` 上一个，数每位员工在做几张。
@@ -28,7 +29,8 @@ CREATE TABLE "public"."board_cards" (
   "status" text DEFAULT 'open' NOT NULL,
   "claimed_by" text REFERENCES "public"."agents"("id") ON DELETE SET NULL,
   "claimed_at" timestamp with time zone,
-  "task_id" uuid,
+  "task_id" uuid REFERENCES "public"."tasks"("id") ON DELETE SET NULL,
+  "claim_count" integer DEFAULT 0 NOT NULL,
   "created_by" text NOT NULL,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   CONSTRAINT "board_cards_status" CHECK ("status" IN ('open', 'claimed')),

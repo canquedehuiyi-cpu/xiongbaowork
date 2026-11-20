@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { agentProfiles } from "../src/db/schema/coworker";
 import { boardCards } from "../src/db/schema/board-cards";
@@ -252,6 +252,78 @@ describe("挑哪一张、能不能领", () => {
     expect(maxParallelCards({ XIONGBAO_MAX_PARALLEL_CARDS: "4" })).toBe(4);
     for (const bad of ["0", "-1", "x", "2.5", "999"])
       expect(maxParallelCards({ XIONGBAO_MAX_PARALLEL_CARDS: bad })).toBe(2);
+  });
+});
+
+describe("回收卡死在已领的卡", () => {
+  const age = (id: string, minutes: number) =>
+    asPlatform(() =>
+      db.execute(
+        sql`update board_cards set claimed_at = now() - make_interval(mins => ${minutes}) where id = ${id}`,
+      ),
+    );
+
+  test("领了超过 10 分钟还没有看板卡：放回 open，能被别人领", async () => {
+    await reset();
+    await put("卡住的");
+    const claimed = await asOwner(() => store.claimNextCard(alice));
+    expect(await asOwner(() => store.recoverStale())).toBe(0);
+    await age(claimed?.id ?? "", 11);
+    expect(await asOwner(() => store.recoverStale())).toBe(1);
+    expect((await asOwner(() => store.claimNextCard(bob)))?.title).toBe("卡住的");
+  });
+
+  test("看板卡失败好一会儿了：放回去重领，最多三次；被本人取消的不回收", async () => {
+    await reset();
+    cap = 5;
+    try {
+      await put("会失败的");
+      await put("被取消的");
+      const first = await asOwner(() => store.claimNextCard(alice));
+      const second = await asOwner(() => store.claimNextCard(alice));
+      const make = async (card: typeof first, status: "failed" | "cancelled") => {
+        const [task] = await asOwner(() =>
+          db
+            .insert(tasks)
+            .values({ title: card?.title ?? "", source: "routine", status })
+            .returning({ id: tasks.id }),
+        );
+        await asOwner(() => store.markStarted(card?.id ?? "", task?.id ?? ""));
+        await asPlatform(() =>
+          db.execute(sql`update tasks set updated_at = now() - interval '11 minutes' where id = ${task?.id ?? ""}`),
+        );
+      };
+      await make(first, "failed");
+      await make(second, "cancelled");
+      expect(await asOwner(() => store.recoverStale())).toBe(1);
+      let card = await asOwner(() => store.claimNextCard(bob));
+      expect(card?.title).toBe("会失败的");
+      expect(card?.claimCount).toBe(2);
+      await make(card, "failed");
+      expect(await asOwner(() => store.recoverStale())).toBe(1);
+      card = await asOwner(() => store.claimNextCard(bob));
+      expect(card?.claimCount).toBe(3);
+      // 第三次领了又失败：留着等人处理，不再放回去。
+      await make(card, "failed");
+      expect(await asOwner(() => store.recoverStale())).toBe(0);
+    } finally {
+      cap = 2;
+    }
+  });
+
+  test("看板卡被清掉：外键置空，落进「领了没有看板卡」，之后放回去", async () => {
+    await reset();
+    await put("看板卡被清掉的");
+    const claimed = await asOwner(() => store.claimNextCard(alice));
+    const [task] = await asOwner(() =>
+      db.insert(tasks).values({ title: "x", source: "routine" }).returning({ id: tasks.id }),
+    );
+    await asOwner(() => store.markStarted(claimed?.id ?? "", task?.id ?? ""));
+    await asPlatform(() => db.delete(tasks).where(eq(tasks.id, task?.id ?? "")));
+    const [row] = await asOwner(() => db.select().from(boardCards).where(eq(boardCards.id, claimed?.id ?? "")));
+    expect(row?.taskId).toBeNull();
+    await age(claimed?.id ?? "", 11);
+    expect(await asOwner(() => store.recoverStale())).toBe(1);
   });
 });
 

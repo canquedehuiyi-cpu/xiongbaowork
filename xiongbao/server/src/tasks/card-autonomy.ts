@@ -80,8 +80,14 @@ export function createCardAutonomy(deps: {
       await deps.cards.release(card.id);
       throw error;
     }
-    await deps.cards.markStarted(card.id, taskId);
-    await deps.delivery.track(ownerUserId, taskId, "system");
+    try {
+      await deps.cards.markStarted(card.id, taskId);
+      await deps.delivery.track(ownerUserId, taskId, "system");
+    } catch (error) {
+      // 看板卡开出来了却没跟起来：这张卡放回去，别卡在「已领」。
+      await deps.cards.release(card.id, { clearTask: true }).catch(() => undefined);
+      throw error;
+    }
     try {
       await deps.rounds.startNudgeRun(ownerUserId, taskId, cardAsk(card));
     } catch (error) {
@@ -105,6 +111,12 @@ export function createCardAutonomy(deps: {
       if (!enabled()) return 0;
       return runAsTenant(ownerUserId, async () => {
         if ((await deps.canClaim?.(ownerUserId, agentId)) === false) return 0;
+        // 先把卡死在「已领」的放回去，再领。
+        await deps.cards.recoverStale().catch((error: unknown) =>
+          logged("board-card-recover-failed", {
+            reason: error instanceof Error ? error.name : "UnknownError",
+          }),
+        );
         let started = 0;
         for (let round = 0; round < maxParallel(); round += 1) {
           const card = await deps.cards.claimNextCard(agentId, options);

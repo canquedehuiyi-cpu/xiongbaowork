@@ -21,6 +21,11 @@ import { currentTenant } from "../tenant/context";
 
 export type BoardCard = typeof boardCards.$inferSelect;
 
+/** 领了超过这么久还没开出看板卡，或看板卡失败了这么久，就放回去。 */
+export const STALE_CLAIM_MS = 10 * 60_000;
+/** 一张卡最多被领几次：领了却做失败的卡放回去重领，到这个数就留着等人处理。 */
+export const MAX_CLAIMS = 3;
+
 /** 每位员工同时最多在做几张自己领的卡，没设置时用的数。 */
 export const DEFAULT_MAX_PARALLEL_CARDS = 2;
 
@@ -175,6 +180,7 @@ export function createBoardCards(
             status: "claimed",
             claimedBy: employeeId,
             claimedAt: sql`now()`,
+            claimCount: sql`${boardCards.claimCount} + 1`,
           })
           .where(eq(boardCards.id, next.id))
           .returning();
@@ -190,12 +196,61 @@ export function createBoardCards(
         .where(eq(boardCards.id, id));
     },
 
-    /** 领了却没能开出看板卡（比如超了本月额度）：放回去，让别人、或下一次再领。 */
-    async release(id: string): Promise<void> {
+    /**
+     * 领了却没能开出、或没能跟起来看板卡（比如超了本月额度）：放回去，让别人、或下一次再领。`clearTask` 是连已经记下的
+     * 看板卡一起丢掉（开出来了却没跟起来）；不带时只放回还没记看板卡的。
+     */
+    async release(id: string, options: { clearTask?: boolean } = {}): Promise<void> {
       await database
         .update(boardCards)
         .set({ status: "open", claimedBy: null, claimedAt: null, taskId: null })
-        .where(and(eq(boardCards.id, id), isNull(boardCards.taskId)));
+        .where(
+          and(
+            eq(boardCards.id, id),
+            eq(boardCards.status, "claimed"),
+            ...(options.clearTask ? [] : [isNull(boardCards.taskId)]),
+          ),
+        );
+    },
+
+    /**
+     * 回收卡死在「已领」的卡，放回 open：领了超过一段时间还没有看板卡（开卡中途进程没了），或开出的看板卡已经失败
+     * 好一会儿了（最多重领 `MAX_CLAIMS` 次，再失败就留着等人处理）。被清掉的看板卡由外键置空，落进第一种。
+     * 被本人取消的看板卡不回收：那是人的决定。答放回了几张。
+     */
+    async recoverStale(staleMs = STALE_CLAIM_MS): Promise<number> {
+      const rows = await database
+        .update(boardCards)
+        .set({ status: "open", claimedBy: null, claimedAt: null, taskId: null })
+        .where(
+          and(
+            eq(boardCards.ownerUserId, currentTenant()),
+            eq(boardCards.status, "claimed"),
+            or(
+              and(
+                isNull(boardCards.taskId),
+                sql`${boardCards.claimedAt} < now() - make_interval(secs => ${staleMs / 1000})`,
+              ),
+              and(
+                sql`${boardCards.claimCount} < ${MAX_CLAIMS}`,
+                inArray(
+                  boardCards.taskId,
+                  database
+                    .select({ id: tasks.id })
+                    .from(tasks)
+                    .where(
+                      and(
+                        eq(tasks.status, "failed"),
+                        sql`${tasks.updatedAt} < now() - make_interval(secs => ${staleMs / 1000})`,
+                      ),
+                    ),
+                ),
+              ),
+            ),
+          ),
+        )
+        .returning({ id: boardCards.id });
+      return rows.length;
     },
 
     /** 这个岗位上，本人名下开了心跳、可以自己领活的员工。 */

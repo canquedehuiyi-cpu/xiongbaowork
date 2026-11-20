@@ -11,6 +11,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { agents } from "./core";
+import { tasks } from "./tasks";
 import { tenantId } from "./tenant";
 
 /* The two scopes every tenant table has had since 0072: the owner's frame, and the platform's. */
@@ -41,7 +42,9 @@ export const boardCards = pgTable(
       onDelete: "set null",
     }),
     claimedAt: timestamp("claimed_at", { withTimezone: true }),
-    taskId: uuid("task_id"),
+    taskId: uuid("task_id").references(() => tasks.id, { onDelete: "set null" }),
+    /** 被领过几次：领了却做失败的卡放回去重领，有上限。 */
+    claimCount: integer("claim_count").notNull().default(0),
     createdBy: text("created_by").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
