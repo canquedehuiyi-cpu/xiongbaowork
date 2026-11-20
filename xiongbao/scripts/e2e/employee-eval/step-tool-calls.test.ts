@@ -71,5 +71,5 @@ test("没有模型调用数、没有工具调用数、模型调用为 0，或没
 test("报告的每步输入表多一列「每步工具调用」，旧列不变", () => {
   const markdown = renderReport([results([record()])]);
   expect(markdown).toContain("熊宝每步工具调用");
-  expect(markdown).toContain("| 调研 | 300 | 100 / 200 / 300 | 0 | 1.5 |");
+  expect(markdown).toContain("| 调研 | 300 | 100 / 200 / 300 | — | 1.5 |");
 });
