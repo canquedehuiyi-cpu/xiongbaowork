@@ -19,6 +19,7 @@ import { botSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import { createHeadlessComputerTools } from "../src/computer/headless-tools";
 import {
+  COMMAND_INLINE_BYTES,
   exceedsInline,
   excerpt,
   OUTPUT_HEAD_BYTES,
@@ -239,17 +240,38 @@ describe("computer_run_command 的输出", () => {
     expect(outputsIn(dir)).toHaveLength(0);
   });
 
-  test("刚好卡在阈值上的不动，多一个字节才动", async () => {
+  test("刚好卡在阈值上的不动，多一个字节才动（命令输出的阈值是 4KB，用户 2026-11-20 批准，原为 16KB）", async () => {
     const { invoke } = toolsOn(dir);
     const exact = await invoke("computer_run_command", {
-      command: `head -c ${OUTPUT_INLINE_BYTES} /dev/zero | tr '\\0' 'a'`,
+      command: `head -c ${COMMAND_INLINE_BYTES} /dev/zero | tr '\\0' 'a'`,
     });
-    expect(Buffer.byteLength(String(exact.stdout))).toBe(OUTPUT_INLINE_BYTES);
+    expect(Buffer.byteLength(String(exact.stdout))).toBe(COMMAND_INLINE_BYTES);
     expect("outputFile" in exact).toBe(false);
     const over = await invoke("computer_run_command", {
-      command: `head -c ${OUTPUT_INLINE_BYTES + 1} /dev/zero | tr '\\0' 'a'`,
+      command: `head -c ${COMMAND_INLINE_BYTES + 1} /dev/zero | tr '\\0' 'a'`,
     });
     expect(over.outputFile).toBeString();
+  });
+
+  test("XIONGBAO_COMMAND_INLINE_BYTES=16384 回到原来的行为：16KB 整的不动，多一个字节才动", async () => {
+    const before = process.env.XIONGBAO_COMMAND_INLINE_BYTES;
+    process.env.XIONGBAO_COMMAND_INLINE_BYTES = "16384";
+    try {
+      const { invoke } = toolsOn(dir);
+      const exact = await invoke("computer_run_command", {
+        command: `head -c ${OUTPUT_INLINE_BYTES} /dev/zero | tr '\\0' 'a'`,
+      });
+      expect(Buffer.byteLength(String(exact.stdout))).toBe(OUTPUT_INLINE_BYTES);
+      expect("outputFile" in exact).toBe(false);
+      const over = await invoke("computer_run_command", {
+        command: `head -c ${OUTPUT_INLINE_BYTES + 1} /dev/zero | tr '\\0' 'a'`,
+      });
+      expect(over.outputFile).toBeString();
+    } finally {
+      if (before === undefined)
+        delete process.env.XIONGBAO_COMMAND_INLINE_BYTES;
+      else process.env.XIONGBAO_COMMAND_INLINE_BYTES = before;
+    }
   });
 
   test("写不进工作区（策略不让、项目只读）：截断，并说明完整内容没能存下来", async () => {

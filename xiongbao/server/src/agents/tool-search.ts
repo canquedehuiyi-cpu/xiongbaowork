@@ -584,7 +584,7 @@ export function searchToolsTool(
     description: slim
       ? [
           "Load tools you hold that are not listed. Say what you need in a few words ('browser', 'image',",
-          "'remind me'); what it returns is callable from your next step. Not listed:",
+          "'remind me'); they are callable from your next step. Not listed:",
           `${waiting.map((tool) => tool.name).join(", ")}.`,
         ].join(" ")
       : [

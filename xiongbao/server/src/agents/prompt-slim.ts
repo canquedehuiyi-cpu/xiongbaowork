@@ -73,6 +73,8 @@ export const DEFERRED_TOOLS: Readonly<Record<string, string>> = {
   git_commit: GIT,
   git_diff_summary: GIT,
   open_pull_request: GIT,
+  report_refusal: "refuse refusal decline declined record",
+  update_heartbeat_checklist: "heartbeat checklist wake periodic check",
   save_learned_skill: "skill learn save lesson reuse",
   refine_skill: "skill learn refine improve lesson",
 };
@@ -126,15 +128,15 @@ export const TOOL_BRIEFS: Readonly<
 > = {
   ask_person: {
     description:
-      "Ask a person only when you cannot go on without them: a wrong guess would send, delete, pay or do something else hard to undo; the readings would lead to materially different work; or only they know the answer. Otherwise decide, say what you assumed, and keep going; do everything that does not depend on the answer first. Prefer it to asking another Bot when none could settle it either. Say what you need and why, then stop and wait. Put each decision in `parts`, one entry each; give `options` only when you can name likely answers.",
+      "Ask a person only when you cannot go on without them: a wrong guess would send, delete, pay or do something else hard to undo; the readings would lead to materially different work; or only they know the answer. Otherwise decide, say what you assumed, and keep going. Say what you need and why, then stop and wait. Put each decision in `parts`, one entry each; give `options` only when you can name likely answers.",
   },
   deliver_task: {
     description:
-      "交付（规约第 2 条）：做完接下的活时调用。items 列交付物：attachment（对话里的附件 id）、component（这件活里画过的组件，ref 写组件名或调用 id）、link（http(s) 地址）、workspace_file（工作区里的文件，ref 写相对路径，如 reports/对比.xlsx）、note（只有文字结论时，ref 写结论）；title 写清是什么。checks 写你怎么查过的，每条一句。验收标准写了「必需：…」时，每项都要在 title 或 checks 里提到。服务器会核对，缺了会挡回并告诉你，补齐再交；交了以后等验收，没被验收前不要说「做完了」。",
+      "交付：做完接下的活时调用。items 列交付物：attachment（对话里的附件 id）、component（画过的组件，ref 写组件名或调用 id）、link（http(s) 地址）、workspace_file（工作区里的文件，ref 写相对路径）、note（只有文字结论时，ref 写结论）；title 写清是什么。checks 写怎么查过的，每条一句。验收标准写了「必需：…」时，每项都要在 title 或 checks 里提到。服务器会核对，缺了会挡回，补齐再交。",
   },
   accept_task: {
     description:
-      "接活回执：对方交给你一件有交付物的活时调用（规约第 1 条）。due_at 写预计几点交（「40 分钟」「15:00」「明早 10 点」等，按对方的时区算）；不知道就不填，按接下后 2 小时核对。criteria 写你整理的验收标准，一两句；有必须交的项就在末尾写「必需：A、B、C」。同一个对话里再接另一件活就再调一次，另开一张卡。",
+      "接活回执：对方交给你一件有交付物的活时调用。due_at 写预计几点交（「40 分钟」「15:00」等，按对方的时区算）；不知道就不填，按接下后 2 小时核对。criteria 写验收标准，一两句；有必须交的项就在末尾写「必需：A、B、C」。同一个对话里再接另一件活就再调一次。",
   },
   request_extension: {
     description:
@@ -142,15 +144,15 @@ export const TOOL_BRIEFS: Readonly<
   },
   update_plan: {
     description:
-      "列出或更新你这次工作的计划清单，每次都传完整清单。多步任务先列计划；开始哪一项就标 in_progress，做完立刻标 done。一两步的小事不用列。",
+      "列出或更新你这次工作的计划清单，每次都传完整清单。多步任务先列计划；开始哪一项就标 in_progress，做完立刻标 done。",
   },
   run_subagent: {
     description:
-      "把工作里一个独立的部分交给子代理：你的新副本，带你的工具、替同一个人办事，看不到这段对话，只交回答案。能拆成两个以上相互独立的部分时（分别调研几家公司、分别读几份文件、写完另派校对），在同一步里多次调用并行去做；计划、汇总和最后的判断自己做，一两步的小事自己做。task 写目标、范围和它需要知道的一切，answer 写要交回什么、什么格式。每轮最多 5 个，子代理不能再派子代理，团队成员不是子代理；同一件事不要重复派。需要批准的操作子代理会停下，交还给你。",
+      "把工作里一个独立的部分交给子代理：它看不到这段对话，只交回答案。能拆成两个以上相互独立的部分时，在同一步里多次调用并行去做；计划、汇总和最后的判断自己做，一两步的小事自己做。task 写目标、范围和它需要知道的一切，answer 写要交回什么。每轮最多 5 个，子代理不能再派子代理。需要批准的操作子代理会停下，交还给你。",
   },
   computer_run_command: {
     description:
-      "Run a bash command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. Use installed tools first; to get a new one, install it inside your workspace (npm install without -g, bun add, or a python3 venv). If told you have no sudo permission, do not try to escalate: say so.",
+      "Run a bash command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. Install new tools inside your workspace (npm install without -g, bun add, a python3 venv); with no sudo permission, do not try to escalate: say so.",
     params: {
       timeoutMs:
         "Optional. Milliseconds the command may run; default 120000, at most 600000. Ask for more for a long build, install or test run.",
@@ -158,23 +160,23 @@ export const TOOL_BRIEFS: Readonly<
   },
   computer_read_file: {
     description:
-      "Read a file in your persistent workspace (such as notes.md) or in one of the person's shared read-only folders (pass its root and a path inside it). For part of a long file pass offset (first line, from 1) and limit (line count); lines then come back numbered with the file's total line count.",
+      "Read a file in your workspace, or in one of the person's shared read-only folders (pass its root and a path inside it). For part of a long file pass offset (first line, from 1) and limit (line count); lines come back numbered with the total line count.",
   },
   computer_edit_file: {
     description:
-      "Replace one passage of a text file in your workspace. old_string must appear exactly once, so include enough surrounding lines; it is replaced by new_string (replace_all replaces every occurrence). Prefer this to rewriting a file with computer_write_file. If old_string is missing or not unique nothing changes and you are told why: read the file again and retry.",
+      "Replace one passage of a text file in your workspace. old_string must appear exactly once, so include enough surrounding lines; it is replaced by new_string (replace_all replaces every occurrence). If old_string is missing or not unique nothing changes and you are told why: read the file again and retry.",
   },
   computer_grep: {
     description:
-      "Search file contents in your workspace for a regular expression, as rg -n would: path:line:text, at most 200 lines. path limits to a folder or file, glob to matching files (such as *.ts), ignore_case ignores case. Hidden files and node_modules are skipped.",
+      "Search file contents in your workspace for a regular expression, as rg -n would: path:line:text, at most 200 lines. path limits to a folder or file, glob to matching files (*.ts), ignore_case ignores case. Hidden files and node_modules are skipped.",
   },
   computer_glob: {
     description:
-      "Find files in your workspace by glob pattern, such as src/**/*.ts, relative to path when given. Up to 500 paths, the most recently changed first.",
+      "Find files in your workspace by glob pattern (src/**/*.ts), relative to path when given. Up to 500 paths, newest first.",
   },
   computer_list_files: {
     description:
-      "List files and folders in your workspace; call it before reading a filename you are unsure of. Pass root for one of the person's shared read-only folders.",
+      "List files and folders in your workspace; call it before reading an uncertain filename. Pass root for a shared read-only folder.",
   },
   web_fetch: {
     description:

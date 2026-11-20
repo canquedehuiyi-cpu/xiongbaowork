@@ -31,6 +31,7 @@ import { createLocalContinuationTarget } from "../approvals/continuation-target-
 import { producedAttachments } from "../tasks/projector";
 import { currentTenant } from "../tenant/context";
 import {
+  asBoardTurn,
   clearPersonChat,
   suppressRunnerCard,
 } from "../threads/unattended-card";
@@ -80,7 +81,9 @@ export const serverTurnAnswered: TurnAnswered = async ({
 export const serverTurnScope: TurnScope = (input, run) =>
   // A turn the server starts is not the person's own chat, even when it starts inside that request.
   clearPersonChat(() =>
-    input.cardOwnedByCaller ? suppressRunnerCard(run, input.runRef) : run(),
+    asBoardTurn(input.boardCard === true, () =>
+      input.cardOwnedByCaller ? suppressRunnerCard(run, input.runRef) : run(),
+    ),
   );
 
 type ToolkitOptions = Parameters<typeof createToolkitTurnRunner>[0];

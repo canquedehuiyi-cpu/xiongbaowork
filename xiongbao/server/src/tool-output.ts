@@ -32,6 +32,40 @@ export const OUTPUT_TAIL_BYTES = 4 * 1024;
 /** 完整输出存在工作区的这个目录里。 */
 export const WORKSPACE_OUTPUT_DIR = "tool-outputs";
 
+/*
+ * token 第五轮·每一步的体积：历史里的工具结果每一步都要再发一遍，一份 16KB 的命令输出（约 4～5 千 token）在最近 4 步里
+ * 原样留着，后段每步就是 2～3 万 token。所以命令输出和没指定行段的读文件各自再收紧，网页正文已经是 8KB。
+ * 都是环境变量可回退：设 `off` 回到 {@link OUTPUT_INLINE_BYTES}（16KB）和原来的头尾取法，设数字取那么多字节。
+ */
+/** `computer_run_command` 的输出不超过这么多字节原样回传（原为 16KB，用户 2026-11-20 批准降到 4KB）。部署用 `XIONGBAO_COMMAND_INLINE_BYTES` 覆盖（设 16384 或 off 回到原来的行为）。 */
+export const COMMAND_INLINE_BYTES = 4 * 1024;
+/** 没指定行段的 `computer_read_file` 不超过这么多字节原样回传（原为 16KB）。部署用 `XIONGBAO_READ_INLINE_BYTES` 覆盖。 */
+export const READ_INLINE_BYTES = 12 * 1024;
+
+type Env = Record<string, string | undefined>;
+
+/** 读一个字节数的环境变量：没设、不是正整数当没设（用默认值），`off` 回到 16KB。 */
+function bytesFromEnv(raw: string | undefined, fallback: number): number {
+  const text = raw?.trim().toLowerCase();
+  if (!text) return fallback;
+  if (text === "off") return OUTPUT_INLINE_BYTES;
+  const value = Number(text);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+export function commandInlineBytes(env: Env = process.env): number {
+  return bytesFromEnv(env.XIONGBAO_COMMAND_INLINE_BYTES, COMMAND_INLINE_BYTES);
+}
+
+export function readInlineBytes(env: Env = process.env): number {
+  return bytesFromEnv(env.XIONGBAO_READ_INLINE_BYTES, READ_INLINE_BYTES);
+}
+
+/** 安装、构建类命令成功时只留最后几行（`XIONGBAO_QUIET_BUILD_OUTPUT=off` 关掉）。 */
+export function quietOutputOn(env: Env = process.env): boolean {
+  return env.XIONGBAO_QUIET_BUILD_OUTPUT?.trim().toLowerCase() !== "off";
+}
+
 const bytesOf = (text: string) => Buffer.byteLength(text, "utf8");
 
 /** 超过没有：字节数超过 `limit`（默认 {@link OUTPUT_INLINE_BYTES}）。 */
@@ -209,6 +243,9 @@ export async function spill(input: {
   keep?: "head-and-tail" | "head";
   /** 内联上限（字节），默认 {@link OUTPUT_INLINE_BYTES}；网页正文用更小的。 */
   inlineBytes?: number;
+  /** 存了盘时回传的头和尾各留多少字节，默认 {@link OUTPUT_HEAD_BYTES}、{@link OUTPUT_TAIL_BYTES}。 */
+  head?: number;
+  tail?: number;
 }): Promise<Spilled | null> {
   const limit = input.inlineBytes ?? OUTPUT_INLINE_BYTES;
   const measured = input.measured ?? input.full;
@@ -223,7 +260,7 @@ export async function spill(input: {
     return {
       savedTo,
       note: `完整内容（约 ${size} 字节）已存到工作区的 ${savedTo}，这里只给了开头和结尾。要看中间，用 computer_read_file 读这个文件，offset 和 limit 按行段读；要找什么，用 computer_grep 在里面搜索。`,
-      show: (text) => excerpt(text).text,
+      show: (text) => excerpt(text, input.head, input.tail).text,
     };
   if (input.keep === "head")
     return {
@@ -235,6 +272,45 @@ export async function spill(input: {
     show: (text) => excerpt(text, limit / 4, (limit * 3) / 4).text,
   };
 }
+
+/** 命令输出收紧后，存了盘时头和尾各留多少：4KB 的线留 1KB 头加 2.5KB 尾，回退到 16KB 时用原来的 2KB 加 4KB。 */
+function commandExcerptBytes(limit: number): { head?: number; tail?: number } {
+  if (limit >= OUTPUT_INLINE_BYTES) return {};
+  return { head: Math.floor(limit / 4), tail: Math.floor((limit * 5) / 8) };
+}
+
+/** 一段命令算安装或构建：包管理器的安装、构建脚本、make、cargo/go 构建、tsc。 */
+const QUIET_SEGMENT =
+  /^(?:cd\s+\S+|(?:npm|pnpm|yarn|bun)\s+(?:(?:install|i|ci|add)\b|(?:run\s+)?build\b)|(?:pip3?|python3?\s+-m\s+pip|uv\s+pip)\s+install\b|(?:sudo\s+)?apt(?:-get)?\s+install\b|cargo\s+(?:build|install|fetch)\b|go\s+(?:build|mod\s+download)\b|make\b|tsc\b|poetry\s+install\b|uv\s+sync\b)/;
+
+/**
+ * 整条命令都是安装或构建（用 `&&` 连起来的每一段都是）：成功时只有最后几行有用，前面是一长串下载和编译进度。
+ * 带管道、`;`、`||`，或者后面还跑了别的脚本的不算：那些命令的输出就是员工要看的结果。
+ */
+export function isQuietCommand(command: string): boolean {
+  if (/[|;\n`$]|\|\|/.test(command)) return false;
+  const segments = command
+    .split("&&")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return (
+    segments.length > 0 && segments.every((part) => QUIET_SEGMENT.test(part))
+  );
+}
+
+/** 成功的安装或构建命令回传的行数，和低于这个字节数不动。 */
+const QUIET_KEEP_LINES = 12;
+const QUIET_MIN_BYTES = 1_500;
+
+const lastLines = (text: string, count: number) => {
+  const all = text.split("\n");
+  const trailing = all[all.length - 1] === "" ? 1 : 0;
+  const kept = all.slice(Math.max(0, all.length - trailing - count));
+  return {
+    text: kept.join("\n"),
+    omitted: Math.max(0, all.length - trailing - count),
+  };
+};
 
 /** `computer_run_command` 的结果里，超过阈值的输出换成头尾，并说明完整内容在哪儿。 */
 export async function offloadCommandResult<
@@ -248,17 +324,49 @@ export async function offloadCommandResult<
   result: T,
   context: { id: string; sink?: OutputSink },
 ): Promise<T & { outputFile?: string; outputNote?: string }> {
+  const full = [
+    `$ ${result.command}`,
+    `[exit ${result.exitCode}]`,
+    "--- stdout ---",
+    result.stdout,
+    ...(result.stderr ? ["--- stderr ---", result.stderr] : []),
+  ].join("\n");
+  // 安装、构建成功了：前面的进度没人看，只留最后几行，完整的存盘。
+  if (
+    result.exitCode === 0 &&
+    quietOutputOn() &&
+    isQuietCommand(result.command) &&
+    bytesOf(result.stdout) + bytesOf(result.stderr) > QUIET_MIN_BYTES
+  ) {
+    const out = lastLines(result.stdout, QUIET_KEEP_LINES);
+    const err = lastLines(result.stderr, QUIET_KEEP_LINES);
+    if (out.omitted + err.omitted > 0) {
+      const savedTo = await context.sink?.({
+        tool: "computer_run_command",
+        id: context.id,
+        contents: full,
+      });
+      const marker = (omitted: number) =>
+        omitted > 0 ? `…（前面省略 ${omitted} 行）…\n` : "";
+      return {
+        ...result,
+        stdout: `${marker(out.omitted)}${out.text}`,
+        stderr: `${marker(err.omitted)}${err.text}`,
+        ...(savedTo ? { outputFile: savedTo } : {}),
+        outputNote: savedTo
+          ? `命令成功（退出码 0），安装或构建的进度输出只留了最后 ${QUIET_KEEP_LINES} 行；完整内容存到工作区的 ${savedTo}，要看用 computer_read_file 按行段读。`
+          : `命令成功（退出码 0），安装或构建的进度输出只留了最后 ${QUIET_KEEP_LINES} 行，前面的没有存下来；要看完整输出，换一个只输出那部分的命令。`,
+      };
+    }
+  }
+  const limit = commandInlineBytes();
   const spilled = await spill({
     tool: "computer_run_command",
     id: context.id,
     measured: `${result.stdout}${result.stderr}`,
-    full: [
-      `$ ${result.command}`,
-      `[exit ${result.exitCode}]`,
-      "--- stdout ---",
-      result.stdout,
-      ...(result.stderr ? ["--- stderr ---", result.stderr] : []),
-    ].join("\n"),
+    full,
+    inlineBytes: limit,
+    ...commandExcerptBytes(limit),
     ...(context.sink ? { sink: context.sink } : {}),
   });
   if (!spilled) return result;
@@ -274,8 +382,9 @@ export async function offloadCommandResult<
 }
 
 /**
- * 没指定行段的 `computer_read_file`：结果超过阈值时只给头尾，并说明怎么按行段读。文件本来就在工作区里，不再抄一份；
- * 读的是只读文件夹（`root`）里的文件也一样，提示里带上 root。指定了 offset 或 limit 的读，员工自己选了范围，原样给。
+ * 没指定行段的 `computer_read_file`：结果超过阈值（{@link READ_INLINE_BYTES}）时只给头尾，并说明共多少行、怎么按行段读。
+ * 文件本来就在工作区里，不再抄一份；读的是只读文件夹（`root`）里的文件也一样，提示里带上 root。指定了 offset 或 limit
+ * 的读，员工自己选了范围，原样给。
  */
 export async function shrinkFileRead<
   T extends { path: string; text: string; bytes: number },
@@ -288,11 +397,17 @@ export async function shrinkFileRead<
   },
 ): Promise<T & { outputNote?: string }> {
   if (asked.offset !== undefined || asked.limit !== undefined) return result;
-  if (!exceedsInline(result.text)) return result;
+  const limit = readInlineBytes();
+  if (!exceedsInline(result.text, limit)) return result;
   const where = asked.root ? `（root 同样填 ${asked.root}）` : "";
+  // 收紧之后头多尾少（文件的开头比结尾有用）；回退到 16KB 时用原来的取法。
+  const shown =
+    limit >= OUTPUT_INLINE_BYTES
+      ? excerpt(result.text)
+      : excerpt(result.text, Math.floor(limit * 0.375), Math.floor(limit / 8));
   return {
     ...result,
-    text: excerpt(result.text).text,
-    outputNote: `这个文件有 ${result.bytes} 字节，这里只给了开头和结尾。要看中间，用 computer_read_file 读 ${result.path}${where}，offset 和 limit 按行段读；要找什么，用 computer_grep 搜索。`,
+    text: shown.text,
+    outputNote: `这个文件有 ${result.bytes} 字节、共 ${linesIn(result.text)} 行，这里只给了开头和结尾。要看中间，用 computer_read_file 读 ${result.path}${where}，offset 和 limit 按行段读；要找什么，用 computer_grep 搜索。`,
   };
 }
