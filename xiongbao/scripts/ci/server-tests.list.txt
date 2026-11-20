@@ -511,6 +511,9 @@ tests/learning-scopes.test.ts
 tests/learning-settings.integration.test.ts
 tests/learning-settings.test.ts
 tests/learning-sharing.integration.test.ts
+tests/light-model-routes.test.ts
+tests/light-model-store.integration.test.ts
+tests/light-model.test.ts
 tests/local-learning-propose.test.ts
 tests/local-learning.integration.test.ts
 tests/local-threads.test.ts

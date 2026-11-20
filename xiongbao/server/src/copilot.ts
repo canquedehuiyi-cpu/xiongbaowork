@@ -2319,7 +2319,7 @@ async function buildAgent(
         agent.headers?.["x-openbot-agent-token"] ===
           process.env.MANAGED_AGENT_TOKEN
         ? async (input) => {
-            const choice = await pickedModel(input);
+            const choice = await pickedModel(input, agent.id);
             if (!choice?.listed) return undefined;
             logRunModel(agent.id, input, choice.model, choice.effort, {
               harness: true,
@@ -2710,7 +2710,7 @@ async function buildAgent(
     whole,
     async (input, signal) => {
       const { runModel, runAgentModel } = await bindingFor(
-        await modelForRun(model, input, pickedModel),
+        await modelForRun(model, input, pickedModel, agent.id),
       );
       signal.throwIfAborted();
       logRunModel(agent.id, input, runModel.defaultModel, runModel.effort, {
@@ -3880,6 +3880,8 @@ export async function resolveRuntimeAgents(
  */
 export type PickedModel = (
   input: RunAgentInput,
+  /** 这一次运行的员工：员工设置里有只管它自己的模型（轻量模型），要按它查。 */
+  agentId?: string,
 ) => Promise<RunChoice | undefined>;
 
 /**
@@ -3898,9 +3900,10 @@ export async function modelForRun(
   model: RuntimeModel,
   input: RunAgentInput,
   pickedModel: PickedModel | undefined,
+  agentId?: string,
 ): Promise<RuntimeModel> {
   if (!pickedModel) return model;
-  const choice = await pickedModel(input);
+  const choice = await pickedModel(input, agentId);
   if (!choice) return model;
   if (model.plan && !choice.listed) return model;
   // The deployment's own model still gets its name, so the Bot can say what it runs on.
