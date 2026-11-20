@@ -98,6 +98,8 @@ export type EvalRecord = {
   callCached?: (number | null)[];
   /** 每次调用是主员工的（`main`）还是别处的（`other`：子代理、压缩等不在主运行里的调用）。 */
   callAgents?: ("main" | "other")[];
+  /** 每一轮的模型调用次数（熊宝侧，`model_token_calls` 按运行号分）：第一项是员工自己做的那一轮，后面是评测脚本追「继续」的轮。 */
+  roundCalls?: number[];
   /**
    * 记账步（熊宝侧，读对话快照）：接活、计划、交付各自单独占的步，和交付之后的那一步。旧结果文件没有这一项；
    * Codex 侧没有。见 `bookkeeping.ts`。

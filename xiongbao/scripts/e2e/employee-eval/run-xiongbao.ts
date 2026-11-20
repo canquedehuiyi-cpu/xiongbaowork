@@ -51,6 +51,9 @@
  *   EVAL_MOCK_SCRIPT  只在本机假模型下：设 research 时假模型演「调研题」——一步接一步读十几 KB 的文字，看一轮里每步
  *                     发给模型的请求有多大（请求体存在 `<结果目录>/mock-requests/`）。EVAL_MOCK_STEPS、EVAL_MOCK_BYTES、
  *                     EVAL_MOCK_SCREENSHOTS（哪几步改成打开网页再截图，如 6,12）可调；见 mock-research.ts
+ *   EVAL_MOCK_SCRIPT  设 board 时假模型演「一张看板卡」：接活、计划、读、写、校验、计划打勾、交付、收尾的话，提示里有并步的那几句
+ *                     （接活和读取同一步、计划和动作同一步、依赖的命令用 && 合成一条）就并成一步，用来在本机数每题模型调用次数、
+ *                     对照回退开关关掉前后；见 mock-board.ts
  *   EVAL_MOCK_SCRIPT  设 early-stop 时假模型演「提前收尾」的员工：计划没做完就收尾、改完不验就收尾，看收尾提醒生效没有；见 mock-early-stop.ts
  *                     设 learn 时假模型演「重复任务」：接活、摸索、交付，带着自写技能就少摸索几步，收到复盘请求就写
  *                     一份技能，用来在本机看两次之间有没有产生技能、第二次有没有用上；见 mock-learn.ts
@@ -147,6 +150,7 @@ import {
   toolCallsOf,
   withObserved,
 } from "./metrics";
+import { boardMockWanted, boardPolicy } from "./mock-board";
 import { earlyStopPolicy, earlyStopWanted } from "./mock-early-stop";
 import { learnPolicy } from "./mock-learn";
 import { type MockRequest, type MockTurn, startMockModel } from "./mock-model";
@@ -297,6 +301,8 @@ const researchScript = researchScriptFrom(process.env);
 function mockPolicy(request: MockRequest): MockTurn {
   // `EVAL_MOCK_SCRIPT=early-stop`：提前收尾的员工，看收尾提醒有没有生效（见 mock-early-stop.ts）。
   if (earlyStopWanted(process.env)) return earlyStopPolicy(request);
+  // `EVAL_MOCK_SCRIPT=board`：一张看板卡从接活到交付的固定几步，按提示里有没有并步的话并步（见 mock-board.ts）。
+  if (boardMockWanted(process.env)) return boardPolicy(request);
   // `EVAL_MOCK_SCRIPT=research`：一步接一步读大段文字，看一轮里每步的请求有多大。
   if (researchScript)
     return researchPolicy(request, researchScript, `${mock?.url}/page`);
@@ -1464,6 +1470,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     ...callSeries(tokens, runIds),
     // 记账步：接活、计划、交付各自单独占的步，和交付之后那一步（读对话快照）。
     bookkeeping: bookkeepingOf(stored.messages),
+    roundCalls: perRound,
     toolCalls: calls.length,
     modelCalls: tokens.length,
     tokens:
@@ -1498,7 +1505,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     ...(error ? { error } : {}),
   };
   console.log(
-    `   ${judged.skipped ? "N/A " : record.passed ? "PASS" : "FAIL"} ${(wallMs / 1000).toFixed(1)} s, model calls ${record.modelCalls}, tokens ${record.tokens?.total ?? "?"} (cached input ${cachedInput ?? "?"}), nudges ${nudges}${timedOut ? ", timed out" : ""}`,
+    `   ${judged.skipped ? "N/A " : record.passed ? "PASS" : "FAIL"} ${(wallMs / 1000).toFixed(1)} s, model calls ${record.modelCalls} (per round ${perRound.join("/")}), tokens ${record.tokens?.total ?? "?"} (cached input ${cachedInput ?? "?"}), nudges ${nudges}${timedOut ? ", timed out" : ""}`,
   );
   for (const item of record.checks)
     console.log(`     ${item.ok ? "ok " : "NO "} ${item.name} ${item.detail}`);
