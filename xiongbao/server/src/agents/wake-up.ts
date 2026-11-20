@@ -32,6 +32,7 @@ import {
   TenantContextError,
 } from "../tenant/context";
 import { fileRunnerCardAs } from "../threads/postgres-runner";
+import type { QuietUntil } from "../user-preferences";
 import type { WorkQueue } from "../work/queue";
 import {
   EXTERNAL_UNATTENDED_REFUSAL,
@@ -57,6 +58,11 @@ export type WakeUpPayload = {
   channelId?: string;
   dueAt: string;
   scheduledAt: string;
+  /**
+   * Not held for the person's quiet hours. Only set by code that knows the follow-up is urgent; the
+   * Bot's own `schedule_follow_up` never sets it, so a Bot cannot talk its way past someone's night.
+   */
+  urgent?: boolean;
   /** Written when it has run, was cancelled, or was skipped. */
   outcome?: {
     status: "succeeded" | "failed" | "waiting" | "skipped" | "cancelled";
@@ -474,7 +480,13 @@ export type WakeUpTurn = (input: {
  * surprise this feature must not produce.
  */
 export function createWakeUpRunner(options: {
-  queue: Pick<WorkQueue, "claim" | "finish" | "purge">;
+  queue: Pick<WorkQueue, "claim" | "finish" | "purge"> &
+    Partial<Pick<WorkQueue, "release">>;
+  /**
+   * 安静时段（期 3·3.2）：到点时这个人在安静时段，这条跟进推迟到时段结束再跑，不丢也不改它的内容。
+   * 要有 `queue.release` 才生效；没有就照旧。
+   */
+  quietUntil?: QuietUntil;
   store: WakeUpStore;
   owner: string;
   actorFor: (ownerUserId: string) => Promise<AgentActor>;
@@ -504,8 +516,16 @@ export function createWakeUpRunner(options: {
   const { queue, store, owner, actorFor, channels, runTurn, notify } = options;
   const leaseMs = options.leaseMs ?? 15 * 60_000;
   return {
-    async sweep(): Promise<{ ran: string[]; skipped: string[] }> {
-      const report = { ran: [] as string[], skipped: [] as string[] };
+    async sweep(): Promise<{
+      ran: string[];
+      skipped: string[];
+      deferred?: string[];
+    }> {
+      const report: {
+        ran: string[];
+        skipped: string[];
+        deferred?: string[];
+      } = { ran: [], skipped: [] };
       const claimed = await queue.claim({
         kind: WAKE_UP_KIND,
         owner,
@@ -555,6 +575,34 @@ export function createWakeUpRunner(options: {
           );
           report.skipped.push(item.key);
           continue;
+        }
+        /*
+         * QUIET HOURS: a follow-up that comes due while its person is resting is handed back to the
+         * queue, pushed out to the moment the quiet time ends, and its attempt is not counted. It is
+         * the same follow-up when it runs, so nothing is lost.
+         */
+        if (options.quietUntil && queue.release) {
+          const until = await options
+            .quietUntil(payload.ownerUserId, {
+              urgent: payload.urgent === true,
+            })
+            .catch(() => null);
+          if (until) {
+            const held = await queue
+              .release({
+                kind: WAKE_UP_KIND,
+                key: item.key,
+                owner,
+                delayMs: Math.max(1_000, until.getTime() - Date.now()),
+                uncounted: true,
+                reason: "quiet hours",
+              })
+              .catch(() => false);
+            if (held) {
+              report.deferred = [...(report.deferred ?? []), item.key];
+              continue;
+            }
+          }
         }
         await runAsTenant(tenant, async () => {
           try {

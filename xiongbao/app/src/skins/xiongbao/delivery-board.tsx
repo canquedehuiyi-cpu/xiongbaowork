@@ -109,17 +109,25 @@ function Who({
 
 function CardTitle({ card }: { card: FollowedCard }) {
   return (
-    <h3 className="m-0 font-semibold text-(--wb-fg) text-[14px] leading-[1.45] [overflow-wrap:anywhere]">
-      <Link
-        className="text-inherit no-underline outline-none hover:underline focus-visible:underline"
-        from="/tasks"
-        params={{ taskId: card.id }}
-        search={(previous) => previous}
-        to="/tasks/$taskId"
-      >
-        {card.title}
-      </Link>
-    </h3>
+    <>
+      <h3 className="m-0 font-semibold text-(--wb-fg) text-[14px] leading-[1.45] [overflow-wrap:anywhere]">
+        <Link
+          className="text-inherit no-underline outline-none hover:underline focus-visible:underline"
+          from="/tasks"
+          params={{ taskId: card.id }}
+          search={(previous) => previous}
+          to="/tasks/$taskId"
+        >
+          {card.title}
+        </Link>
+      </h3>
+      {/* 员工自己在看板上领的卡（期 3·3.3）：和人派的区分开。 */}
+      {card.selfClaimed ? (
+        <span className={CHIP} data-self-claimed="true">
+          员工已认领
+        </span>
+      ) : null}
+    </>
   );
 }
 

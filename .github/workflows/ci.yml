@@ -581,6 +581,45 @@ jobs:
           name: e2e-background-chat-evidence
           path: ${{ runner.temp }}/g8/
 
+  # 期 3 主动场景冒烟：员工自己认领看板上的卡并做完；安静时段内不发通知也不开工。接真库（应用角色）、用真的心跳、
+  # 认领、交付闭环和通知投递代码，只把模型那一轮换成固定的替身，不碰网络、不要密钥。比 G8 轻得多（不起服务器），
+  # 几秒钟就跑完；库的属主连接只用来种数据和读回结果。
+  e2e-proactive:
+    name: Proactive smoke (heartbeat, card claiming, quiet hours)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        # 钉住版本；升级 PostgreSQL 要显式改这里并跑全量
+        image: pgvector/pgvector:pg17@sha256:b513c48566e4777cd3370451400000c78eda6a08131d68f4c31d4a76f27bd8fd
+        env:
+          POSTGRES_USER: openbot
+          POSTGRES_PASSWORD: ci-owner
+          POSTGRES_DB: openbot_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U openbot -d openbot_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      PGPASSWORD: ci-owner
+      E2E_DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_e2e
+      E2E_OWNER_DATABASE_URL: postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Migrate the job's own database and set the runtime role password (server-test recipe)
+        run: |
+          DATABASE_URL=postgres://openbot:ci-owner@127.0.0.1:5432/openbot_e2e bun run --cwd server scripts/migrate.ts
+          psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'ci-app' NOSUPERUSER NOBYPASSRLS"
+      - name: Proactive smoke
+        run: bun scripts/e2e/employee-eval/smoke-proactive.ts
+
   image:
     if: ${{ !inputs.skip_image }}
     runs-on: ubuntu-latest

@@ -759,6 +759,10 @@ const OWN_TOOLS: Record<string, OwnTool> = {
     running: "正在取消跟进",
     done: "取消了跟进",
   },
+  update_heartbeat_checklist: {
+    running: "正在更新心跳清单",
+    done: "更新了心跳清单",
+  },
   [OFFER_CHECK_IN_TOOL]: {
     running: "正在提议主动巡检",
     done: "提议了主动巡检",
