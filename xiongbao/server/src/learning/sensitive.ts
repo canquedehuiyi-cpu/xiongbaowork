@@ -167,7 +167,13 @@ const CHANGE_DIR = /\b(?:cd|pushd)[ \t]+([^\s;&|,，。；、）)」』]+)/gi;
  * 带 `..` 的、通配符、重定向、当前目录本身（`.`、`./`、`./.`）、`.git`。引号和反斜杠先去掉再看，
  * `''/etc`、`.\./x` 这类拆开的写法也认得出。工作区里有名字的子目录（`build`、`out`、`.cache`）不算。
  */
-function dangerousPath(raw: string): boolean {
+function dangerousPath(written: string): boolean {
+  // 技能是 Markdown：`rm -rf out .cache` 末尾那个反引号是行内代码的边，不是命令替换。只有一个、
+  // 又在头或尾的反引号去掉；成对的（`pwd`、x`echo /`）照旧算命令替换。
+  const raw =
+    (written.match(/`/g) ?? []).length === 1
+      ? written.replace(/^`|`$/, "")
+      : written;
   if (/[`<>]|%\w+%|\$[({A-Za-z_]/.test(raw)) return true;
   const path = raw.replace(/["'\\]/g, "").replace(/(?:\/\.?)+$/, "");
   if (path === "" || path === ".") return true;

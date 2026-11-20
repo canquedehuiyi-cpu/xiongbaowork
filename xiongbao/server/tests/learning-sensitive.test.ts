@@ -97,6 +97,8 @@ describe("越权步骤检查", () => {
     "cd .. && rm -rf myproject",
     "cd $HOME; rm -rf .config",
     "rm -rf build `pwd`",
+    "rm -rf `pwd`",
+    "rm -rf /`",
     "xargs rm -rf < dirs.txt",
     "rm -rf %USERPROFILE%",
     "rm -rf ／",
@@ -124,6 +126,8 @@ describe("越权步骤检查", () => {
     "rm -rf out node_modules/.cache 后重跑 bun run import",
     "cd <dir> && rm -rf .cache && bun run warm",
     "rm -rf <dir>/out/",
+    // 技能是 Markdown：行内代码收尾的反引号不是命令替换。
+    "清掉旧产物（`rm -rf out .cache` 后由命令重新生成）",
     // 参数只看同一行：下一行的 * 不算 rm 的目标。
     "rm -rf out\nls inbox/*",
     "把周报发到 https://wiki.example/weekly",
