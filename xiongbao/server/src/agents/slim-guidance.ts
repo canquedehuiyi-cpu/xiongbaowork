@@ -28,13 +28,31 @@ import {
   WEB_SEARCH_TOOL,
 } from "../../../shared/web-tools";
 import { BAIDU_SEARCH_URL, BING_SEARCH_URL } from "../plugins/tools";
+import { PARALLEL_TOOLS_ENV, parallelToolsOn } from "./parallel-tools";
 
 /** 段与段之间、段内一组话之间的空行。 */
 const paragraphs = (...parts: readonly string[]) => parts.join("\n\n");
 
+export { PARALLEL_TOOLS_ENV, parallelToolsOn };
+
+const HOW_TO_WORK_FIRST =
+  "Use what you already have first: this conversation and earlier results in this run, then your apps, then the web, and the person last. Before calling tools, note what you need and hold, and fetch only what is missing; with an item's ID or link, look it up directly.";
+const HOW_TO_WORK_LAST =
+  "When you decide on a step, take it in the same reply. If a call fails, times out or comes back empty, retry once or go another way; if it still fails, carry on without it and say so. Deliver what was asked even when part is missing, and end with what you could not confirm.";
+
+/** 一步一个调用的原写法（`XIONGBAO_PARALLEL_TOOLS=off` 时用）。 */
+export const SLIM_HOW_TO_WORK_SERIAL = paragraphs(
+  HOW_TO_WORK_FIRST,
+  `Run independent reads together (about five at a time) and read every result before the next batch; keep dependent steps, and every change, one after another. ${HOW_TO_WORK_LAST}`,
+);
+
+/**
+ * 默认的写法：同一份内容，加上「互不依赖的读取、搜索、命令放在同一步里一次发出」。每一步都要把整段历史再发
+ * 一遍，步数越少越省；一步里发多个调用，运行器在同一段里都执行、结果一起带回。
+ */
 export const SLIM_HOW_TO_WORK = paragraphs(
-  "Use what you already have first: this conversation and earlier results in this run, then your apps, then the web, and the person last. Before calling tools, note what you need and hold, and fetch only what is missing; with an item's ID or link, look it up directly.",
-  "Run independent reads together (about five at a time) and read every result before the next batch; keep dependent steps, and every change, one after another. When you decide on a step, take it in the same reply. If a call fails, times out or comes back empty, retry once or go another way; if it still fails, carry on without it and say so. Deliver what was asked even when part is missing, and end with what you could not confirm.",
+  HOW_TO_WORK_FIRST,
+  `Run independent reads, searches and commands together: send them all in one reply as several tool calls (about five at a time), not one per reply, and read every result before the next batch. When you already know the next few things you need (open these files, search these terms, run these checks), that is one reply, not several. Keep dependent steps, and every change, one after another. ${HOW_TO_WORK_LAST}`,
 );
 
 export const SLIM_SOURCES = paragraphs(
@@ -88,7 +106,10 @@ export function slimWorkingGuidance(options: {
   asking: string;
 }): string[] {
   return [
-    ...promptSection("how_to_work", SLIM_HOW_TO_WORK),
+    ...promptSection(
+      "how_to_work",
+      parallelToolsOn() ? SLIM_HOW_TO_WORK : SLIM_HOW_TO_WORK_SERIAL,
+    ),
     ...promptSection("asking", options.asking),
     ...promptSection("sources", SLIM_SOURCES),
     ...promptSection("answer_format", SLIM_ANSWER_FORMAT),

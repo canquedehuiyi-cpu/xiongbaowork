@@ -585,6 +585,7 @@ tests/owner-grants-hardening.integration.test.ts
 tests/owner-grants-legacy.integration.test.ts
 tests/page-frame-retention.integration.test.ts
 tests/paging.test.ts
+tests/parallel-tool-calls.test.ts
 tests/parallel-tool-results.test.ts
 tests/passwords-sign-in.test.ts
 tests/passwords-store.integration.test.ts
