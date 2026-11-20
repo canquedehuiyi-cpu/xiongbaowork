@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { BuiltInAgentConfiguration } from "@copilotkit/runtime/v2";
-import { answersOnLastStep, type RunSteps } from "../src/copilotkit/last-step";
+import {
+  answersOnLastStep,
+  MOST_NUDGES,
+  type RunSteps,
+} from "../src/copilotkit/last-step";
 import { parametersFor } from "../src/granted-tool";
 
 /*
@@ -170,7 +174,8 @@ describe("计划提醒看整轮，不只看这一次运行", () => {
   test("早先的运行里写的计划还有没做的项：这一次运行一句话收尾，会被提醒", async () => {
     const seen: Seen[] = [];
     await ask(seen, ["都做完了。", "好，继续。"], plannedEarlier());
-    expect(seen).toHaveLength(2);
+    // 模型一直只说话不动手，提醒到上限（连续四次）为止。
+    expect(seen).toHaveLength(1 + MOST_NUDGES);
     expect(lastTold(seen)).toContain("计划里还有 2 项没做完");
   });
 

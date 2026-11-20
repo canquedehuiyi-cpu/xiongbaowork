@@ -46,6 +46,17 @@ export function planNudge(open: readonly PlanItem[]): string {
   return `计划里还有 ${open.length} 项没做完：${listed}，继续做，或者用 ${UPDATE_PLAN_TOOL} 说明为什么不做。`;
 }
 
+/**
+ * Sent when a run would end after changing files it never checked: nothing that looks like a test,
+ * build or lint ran after the last change. Once per run. The model may still end, but has to have
+ * looked first: run the project's own check, or say why there is none.
+ */
+export function verifyNudge(files: readonly string[]): string {
+  const listed = files.slice(0, 5).join("、");
+  const more = files.length > 5 ? ` 等 ${files.length} 个文件` : "";
+  return `你改过 ${listed}${more}，之后没有跑任何测试、构建或校验命令。收尾前先跑一次项目里现成的测试或校验（没有就自己写一条最小检查），读完输出再下结论；确实无法校验，就在回答里说明原因。`;
+}
+
 /** One part of a routine's checklist, by its number, as a nudge lists it. */
 export type OpenPart = { number: number; text: string };
 

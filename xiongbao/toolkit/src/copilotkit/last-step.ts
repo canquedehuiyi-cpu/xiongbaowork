@@ -14,7 +14,13 @@ import {
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
   UPDATE_PLAN_TOOL,
+  verifyNudge,
 } from "@openbot/shared/run-notices";
+import {
+  COMMAND_TOOL,
+  type MadeCall,
+  unverifiedChanges,
+} from "@openbot/shared/verify";
 import { withReplayedReasoning } from "./replayed-reasoning";
 import { DEFAULT_CONTEXT_WINDOW, foldEarlyResults } from "./turn-folding";
 import { unkeptPromise } from "./unkept-promise";
@@ -74,6 +80,8 @@ export type RunSteps = {
    * person's message instead, so the budget is spent once across them. See {@link answersOnLastStep}.
    */
   wholeTurn?: boolean;
+  /** The "files changed, nothing checked" reminder was already sent in this run. It is sent once. */
+  verifyNudged?: boolean;
 };
 
 /** A new run's state: counted from where it starts, never from where an earlier run stopped. */
@@ -91,6 +99,7 @@ export function startRun(
   steps.said = "";
   steps.extended = false;
   steps.limited = undefined;
+  steps.verifyNudged = false;
 }
 
 /**
@@ -163,6 +172,25 @@ function openPlanItems(prompt: Prompt, before: number): PlanItem[] {
   return (plan ?? []).filter((item) => item.status !== "done");
 }
 
+/**
+ * Every call the turn has made, in order: the model turns after the first `before` of them. Read from
+ * the prompt, so a turn cut into several runs by the host (it runs the tool calls itself) is read
+ * whole, whichever run asks.
+ */
+function callsSince(prompt: Prompt, before: number): MadeCall[] {
+  const calls: MadeCall[] = [];
+  let turns = 0;
+  for (const message of prompt) {
+    if (message.role !== "assistant") continue;
+    turns += 1;
+    if (turns <= before || typeof message.content === "string") continue;
+    for (const part of message.content)
+      if (part.type === "tool-call")
+        calls.push({ name: part.toolName, input: part.input });
+  }
+  return calls;
+}
+
 /** A one-turn message: in this call's prompt only, never in the conversation. */
 function told(prompt: Prompt, text: string): Prompt {
   return [...prompt, { role: "user", content: [{ type: "text", text }] }];
@@ -209,7 +237,21 @@ function told(prompt: Prompt, text: string): Prompt {
 export function answersOnLastStep(
   configuration: BuiltInAgentConfiguration,
   steps: RunSteps,
-  run: { unattended?: boolean; extension?: number } = {},
+  run: {
+    unattended?: boolean;
+    extension?: number;
+    /**
+     * Whether the plan an answer is held to is the whole turn's (the default) or only what this run
+     * added. A turn the host carries on between runs is many runs, and a plan written in an earlier
+     * one is the same turn's plan. `false` is the old reading.
+     */
+    planAcrossRuns?: boolean;
+    /**
+     * Whether an answer that ends a turn which changed files, with no check run since, is sent back
+     * once (the default). `false` never does.
+     */
+    verifyChanges?: boolean;
+  } = {},
 ): BuiltInAgentConfiguration {
   if ("factory" in configuration) return configuration;
   const { maxSteps } = configuration;
@@ -266,17 +308,34 @@ export function answersOnLastStep(
    * already in `steps.said`, so a part this answer closes counts as closed. `prompt` is the step's
    * own, which holds every call the run made before it, its plan's among them.
    */
-  const nudgeFor = (text: string, prompt: Prompt): string | undefined => {
+  const nudgeFor = (
+    text: string,
+    prompt: Prompt,
+    tools: readonly { name: string }[] = [],
+  ): string | undefined => {
     if ((steps.nudges ?? 0) >= MOST_NUDGES) return undefined;
     const open = openParts(steps.parts ?? [], steps.said ?? "");
     const promise = unkeptPromise(text);
-    const planned = openPlanItems(prompt, steps.before ?? 0);
+    const turnStart =
+      run.planAcrossRuns === false
+        ? (steps.before ?? 0)
+        : turnsBeforeLastUser(prompt);
+    const planned = openPlanItems(prompt, turnStart);
+    // Only a run that holds the shell can check anything; a Bot without one is not told to.
+    const unchecked =
+      run.verifyChanges !== false &&
+      !steps.verifyNudged &&
+      tools.some((tool) => tool.name === COMMAND_TOOL)
+        ? unverifiedChanges(callsSince(prompt, turnStart))
+        : [];
     const nudge = [
       ...(promise ? [promiseNudge(promise)] : []),
       ...(open.length > 0 ? [openPartsNudge(open)] : []),
       ...(planned.length > 0 ? [planNudge(planned)] : []),
+      ...(unchecked.length > 0 ? [verifyNudge(unchecked)] : []),
     ].join(" ");
     if (!nudge) return undefined;
+    if (unchecked.length > 0) steps.verifyNudged = true;
     steps.nudges = (steps.nudges ?? 0) + 1;
     return nudge;
   };
@@ -378,7 +437,7 @@ ${part.delta.trimStart()}`;
           if (called) steps.nudges = 0;
           const nudge =
             !called && part.finishReason.unified === "stop"
-              ? nudgeFor(text, call.prompt)
+              ? nudgeFor(text, call.prompt, call.tools)
               : undefined;
           if (!nudge) {
             controller.enqueue({ ...part, usage });
@@ -430,7 +489,7 @@ ${part.delta.trimStart()}`;
         return result;
       }
       if (result.finishReason.unified !== "stop") return result;
-      const nudge = nudgeFor(text, call.prompt);
+      const nudge = nudgeFor(text, call.prompt, call.tools);
       if (!nudge) return result;
       current = again(current, text, nudge);
       let next: GenerateResult;

@@ -115,6 +115,17 @@ export type BuiltInAgentHooks = {
    */
   extension?: number;
   /**
+   * `false`: an answer that would end a turn is held to the plan this run wrote, not the whole turn's
+   * (the old reading). Absent, the whole turn's, so a plan written in an earlier run of the same turn
+   * still holds. Deployment switch `XIONGBAO_NUDGE_WHOLE_TURN=off`. See `answersOnLastStep`.
+   */
+  planAcrossRuns?: boolean;
+  /**
+   * `false`: never send an answer back for changing files without checking them. Absent, it is sent
+   * back once. Deployment switch `XIONGBAO_VERIFY_NUDGE=off`. See `answersOnLastStep`.
+   */
+  verifyChanges?: boolean;
+  /**
    * Put back, on every step, what the model thought before each tool call the conversation already
    * holds (期三). The runtime drops `reasoning` messages on the way to the model; a provider that
    * wants them back (DeepSeek's thinking mode) gets them from here. Only for such a provider: another
@@ -295,6 +306,8 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
     const answering = answersOnLastStep(configuration, steps, {
       unattended: hooks.unattended === true,
       ...(hooks.extension ? { extension: hooks.extension } : {}),
+      ...(hooks.planAcrossRuns === false ? { planAcrossRuns: false } : {}),
+      ...(hooks.verifyChanges === false ? { verifyChanges: false } : {}),
     });
     // 绝对预算：这一次运行的设置优先，其次是部署的环境变量，都没有就用默认值。
     const foldBudget =
