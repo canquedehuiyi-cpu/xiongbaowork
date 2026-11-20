@@ -24,6 +24,7 @@ import {
   UPDATE_PLAN_TOOL,
 } from "../../../shared/plan";
 import type { GrantedTool } from "../plugins/tools";
+import { planWithActionOn, withToolHint } from "./step-hints";
 
 /** The spelling a rule switches it off by, as for every other tool. */
 export const UPDATE_PLAN_REF = `bot/${UPDATE_PLAN_TOOL}`;
@@ -54,8 +55,12 @@ export function updatePlanTools(): GrantedTool[] {
     {
       name: UPDATE_PLAN_TOOL,
       ref: UPDATE_PLAN_REF,
-      description:
+      description: withToolHint(
+        UPDATE_PLAN_TOOL,
         "列出或更新你这次工作的计划清单，每次都传完整清单。需要多步才能完成的任务，先用它列出计划；开始做哪一项就把它标成 in_progress，做完立刻标 done，全部 done 后再给出总结。一两步就能完成的简单问题不用列计划。",
+      ),
+      // 和同一步的别的调用一起开始（无头运行）；它什么都不存，不依赖也不影响同一步的其它调用。
+      ...(planWithActionOn() ? { concurrent: true as const } : {}),
       parameters,
       async execute(args) {
         const problem = planProblem(args);

@@ -249,6 +249,16 @@ export function answersOnLastStep(
      * once (the default). `false` never does.
      */
     verifyChanges?: boolean;
+    /**
+     * Whether a tool result ends the turn: the step that follows a step whose tool result this says
+     * yes to is not asked of the model, and the run ends there with nothing more said. The host gives it
+     * for a hand-in (`deliver_task` accepted): what was handed in is already in the call's arguments,
+     * and the model's one more sentence only sent the whole history up again. Absent, never.
+     *
+     * Not when a reminder is due: a plan with items still open, or changes made and never checked, is
+     * answered by the model once more, as it was before, so the reminder still has its say.
+     */
+    endsTurnAfter?: (toolName: string, result: string) => boolean;
   } = {},
 ): BuiltInAgentConfiguration {
   if ("factory" in configuration) return configuration;
@@ -312,6 +322,8 @@ export function answersOnLastStep(
     text: string,
     prompt: Prompt,
     tools: readonly { name: string }[] = [],
+    /** Only whether one is due: nothing is counted or marked as sent. */
+    dry = false,
   ): string | undefined => {
     if ((steps.nudges ?? 0) >= MOST_NUDGES) return undefined;
     const open = openParts(steps.parts ?? [], steps.said ?? "");
@@ -335,10 +347,20 @@ export function answersOnLastStep(
       ...(unchecked.length > 0 ? [verifyNudge(unchecked)] : []),
     ].join(" ");
     if (!nudge) return undefined;
+    if (dry) return nudge;
     if (unchecked.length > 0) steps.verifyNudged = true;
     steps.nudges = (steps.nudges ?? 0) + 1;
     return nudge;
   };
+
+  /**
+   * Whether this step is not worth asking the model: the step before it ended with an accepted
+   * hand-in (`run.endsTurnAfter`) and no reminder is due.
+   */
+  const turnEnded = (prompt: Prompt, tools: readonly { name: string }[]) =>
+    run.endsTurnAfter !== undefined &&
+    endedByResult(prompt, run.endsTurnAfter) &&
+    nudgeFor("", prompt, tools, true) === undefined;
 
   /** The same call asked again, with what it answered and the nudge after it. */
   const again = (call: CallOptions, text: string, nudge: string) => ({
@@ -357,6 +379,8 @@ export function answersOnLastStep(
 
   const doStream = async (options: CallOptions): Promise<StreamResult> => {
     const { last, call } = forStep(options);
+    if (!last && turnEnded(call.prompt, call.tools ?? []))
+      return { stream: endedStream(older) };
     const result = await inner.doStream(call);
     if (last) {
       return { ...result, stream: heard(result.stream) };
@@ -469,6 +493,8 @@ ${part.delta.trimStart()}`;
 
   const doGenerate = async (options: CallOptions): Promise<GenerateResult> => {
     const { last, call } = forStep(options);
+    if (!last && turnEnded(call.prompt, call.tools ?? []))
+      return endedGeneration(older);
     let result = await inner.doGenerate(call);
     if (last) return result;
     let current = call;
@@ -524,6 +550,85 @@ ${part.delta.trimStart()}`;
     ...configuration,
     model: wrapped,
     ...(extension > 0 ? { maxSteps: maxSteps + extension } : {}),
+  };
+}
+
+/** The text a tool result carries, whichever shape the prompt holds it in. */
+function resultText(output: unknown): string {
+  if (typeof output === "string") return output;
+  if (output === null || typeof output !== "object") return "";
+  const { value } = output as { value?: unknown };
+  if (typeof value === "string") return value;
+  return value === undefined ? "" : JSON.stringify(value);
+}
+
+/**
+ * Whether the step the prompt ends with was answered by a tool result the host says ends the turn:
+ * the last message is the tool results of the step just run, and one of them is such a result. Only
+ * that latest step counts, so a hand-in the run has gone on past does not end it later.
+ */
+function endedByResult(
+  prompt: Prompt,
+  ends: (toolName: string, result: string) => boolean,
+): boolean {
+  const last = prompt[prompt.length - 1];
+  if (last?.role !== "tool" || typeof last.content === "string") return false;
+  return last.content.some(
+    (part) =>
+      part.type === "tool-result" &&
+      ends(part.toolName, plainResult(resultText(part.output))),
+  );
+}
+
+/** A result the runtime stored as a quoted string is read as the tool returned it. */
+function plainResult(text: string): string {
+  if (text.length < 2 || !text.startsWith('"') || !text.endsWith('"'))
+    return text;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return typeof parsed === "string" ? parsed : text;
+  } catch {
+    return text;
+  }
+}
+
+/** A step that says nothing and ends the run, in the version of the contract the model speaks. */
+function endedStream(older: boolean): ReadableStream<Part> {
+  const finish = older
+    ? {
+        type: "finish",
+        finishReason: "stop",
+        usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      }
+    : {
+        type: "finish",
+        finishReason: { unified: "stop", raw: "stop" },
+        usage: endedUsage(),
+      };
+  return new ReadableStream<Part>({
+    start(controller) {
+      controller.enqueue({ type: "stream-start", warnings: [] } as Part);
+      controller.enqueue(finish as unknown as Part);
+      controller.close();
+    },
+  });
+}
+
+function endedGeneration(older: boolean): GenerateResult {
+  return {
+    content: [],
+    finishReason: older ? "stop" : { unified: "stop", raw: "stop" },
+    usage: older
+      ? { inputTokens: 0, outputTokens: 0, totalTokens: 0 }
+      : endedUsage(),
+    warnings: [],
+  } as unknown as GenerateResult;
+}
+
+function endedUsage() {
+  return {
+    inputTokens: { total: 0, noCache: 0, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 0, text: 0, reasoning: 0 },
   };
 }
 
