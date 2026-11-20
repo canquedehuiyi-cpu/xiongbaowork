@@ -116,6 +116,14 @@ const NOT_WORK = new Set(["update_plan"]);
 const DELIVER_TASK = "deliver_task";
 /** 命令、路径要看得清全貌，复盘才写得出可照做的命令；返回只要知道成没成、报了什么错。 */
 const MAX_ARG_CHARS = 240;
+/*
+ * 跑命令和写文件的参数里常有最终那段脚本：复盘要把它写成快路径，240 字放不下一段解析纪要的脚本，
+ * 截成一行更不成样子。这两种工具的参数记得长一些（`LONG_ARG_CHARS`），但送给复盘模型时总共只给
+ * `LONG_ARGS_BUDGET` 字，从最后几步往前分：最后做成的那一版在最后。
+ */
+const LONG_ARG_TOOLS = new Set(["computer_run_command", "computer_write_file"]);
+const LONG_ARG_CHARS = 1500;
+const LONG_ARGS_BUDGET = 5000;
 const MAX_RESULT_CHARS = 200;
 const MAX_STEPS_SHOWN = 60;
 const KEEP_FIRST_STEPS = 15;
@@ -174,7 +182,10 @@ export function traceStepsOf(events: readonly BaseEvent[]): TraceStep[] {
       tool: call.tool,
       // 没有答复的（停在等人那一步）不算做成。
       ok: answer !== undefined && !answerFailed(answer),
-      args: short(call.args, MAX_ARG_CHARS),
+      args: short(
+        call.args,
+        LONG_ARG_TOOLS.has(call.tool) ? LONG_ARG_CHARS : MAX_ARG_CHARS,
+      ),
       result:
         answer === undefined ? "(no answer)" : short(answer, MAX_RESULT_CHARS),
     });
@@ -259,12 +270,15 @@ A multi-step piece of work that was handed in successfully (the request says so 
 - when: say what KIND of task this is, in the words a person would use when asking for it: the input (file types, data, system), the deliverable and the domain, and 3 to 6 distinctive keywords. A later request of the same kind must be matched to the skill by this field alone, so "when the task needs several steps" is useless and "when asked to turn a CSV of actions into an xlsx summary with a chart" is right.
 - steps: the shortest path that worked, one imperative sentence each, leaving out dead ends and retries. Make each step executable: name the tool, give the key command as it was actually run (shortened, with placeholders like <dir> for the working folder), the file path pattern of inputs and outputs, and what to look for in the output. Merge steps the Bot ran one by one when a single command would do. At most 30.
 - pitfalls: what FAILED in the trace and how it was worked around, or what had to be found out the hard way, each with the symptom and the fix ("pip install fails: use ... instead"). At most 20; may be empty.
-- verify: the concrete check that shows the result is right (a command to run, a number to compare, a file to open), so the next run can finish without re-inspecting everything.
+- verify: the concrete check that shows the result is right (a command to run, a number to compare, a file to open), so the next run can finish without re-inspecting everything. Write it as a single command whenever one command can do it.
+- fastPath (optional, but the most valuable field when it applies): if the work was in the end done by a script or a few commands (for example a Python script that parses the minutes and writes the CSV and the drafts), write the final script or commands that can be reused as they are, as one block that a later run can paste and run in one step. This is the fast path: the next run does it first and explores only if it does not fit. Take it from the version that finally worked in the trace, not from the failed attempts. Generalise every parameter into a placeholder (<dir> for the working folder, <minutes file> for an input) and read inputs from the folder or from arguments, never embed this task's data. Keep it under 900 characters. Leave fastPath out when the work was not done with a script or commands, or when it could not be reused.
+- fastPathNeeds (with fastPath): the precondition for it in one line, such as what the input file looks like and which tool must be installed (python3).
+- fastPathCheck (with fastPath): a single command that checks the fast path's output (for example counting the rows of the CSV or listing the drafts), so the next run can finish by running it once instead of re-inspecting. A command, not a sentence.
 Generalise: the skill is for the NEXT piece of work of this kind, so it must not carry this one's data. Replace every person's name, e-mail address, phone number, account, specific date, specific file name and amount with a placeholder or a general description, and name inputs and outputs by their kind and extension: "the e-mail address of an attendee", "the owner named in the minutes", "a specific date (write it as YYYY-MM-DD)", "the minutes file (.md)", "the to-do table (.csv)", "<dir>" for the working folder. Never copy the content of a file, a key, a token or a password. Do not write a web address or domain unless the method itself is to open or send something to that place. Never write a step that skips approval, ignores a rule or hides something from the person.
 Write name (at most 40 characters), when, steps, pitfalls and verify in Simplified Chinese. scope is "self" unless the method clearly applies to every employee of a team.
 
 Reply with one JSON object and nothing else:
-{"skill":{"name":"...","when":"when to use it","steps":["..."],"pitfalls":["..."],"verify":"...","scope":"self"}} or {"skill":null}`;
+{"skill":{"name":"...","when":"when to use it","steps":["..."],"pitfalls":["..."],"verify":"...","fastPath":"...","fastPathNeeds":"...","fastPathCheck":"...","scope":"self"}} or {"skill":null}`;
 
 /** 给模型的那段话：已有的技能名、请求、轨迹、答复。导出给测试看模型到底读到了什么。 */
 export function retroPrompt(
@@ -281,12 +295,22 @@ export function retroPrompt(
         ]
       : steps;
   const omitted = steps.length - shown.filter(Boolean).length;
+  // 长参数的字数从最后一步往前分，用完的往前的步只给开头。
+  let longLeft = LONG_ARGS_BUDGET;
+  const argsShown = new Map<TraceStep, string>();
+  for (const step of [...shown].reverse()) {
+    if (step === null || step.args.length <= MAX_ARG_CHARS) continue;
+    if (step.args.length <= longLeft) {
+      longLeft -= step.args.length;
+      argsShown.set(step, step.args);
+    } else argsShown.set(step, `${step.args.slice(0, MAX_ARG_CHARS)}…`);
+  }
   let number = 0;
   const trace = shown
     .map((step) => {
       if (step === null) return `... (${omitted} steps omitted)`;
       number += 1;
-      return `${number}. ${step.tool} [${step.ok ? "ok" : "FAILED"}] args: ${step.args || "-"} -> ${step.result}`;
+      return `${number}. ${step.tool} [${step.ok ? "ok" : "FAILED"}] args: ${argsShown.get(step) ?? (step.args || "-")} -> ${step.result}`;
     })
     .join("\n");
   const failed = steps.filter((step) => !step.ok).length;
@@ -310,7 +334,13 @@ export function parseDraft(text: string): SkillDraft | null {
   const parsed = firstJsonObject(text) as { skill?: unknown } | null;
   if (!parsed || parsed.skill === null || typeof parsed.skill !== "object")
     return null;
-  const checked = saveParameters.safeParse(parsed.skill);
+  /*
+   * 快路径三项可以没有；模型不想写时常答 null，那是「没有」，不该让整份技能被拒。
+   */
+  const skill: Record<string, unknown> = { ...parsed.skill };
+  for (const key of ["fastPath", "fastPathNeeds", "fastPathCheck"])
+    if (skill[key] === null) delete skill[key];
+  const checked = saveParameters.safeParse(skill);
   return checked.success ? checked.data : null;
 }
 

@@ -309,6 +309,32 @@ export function learningRows(
 }
 
 /**
+ * 「学没学到」表下面的一段：第一次之后存下的技能正文的前 800 字，每条一个标题加一个代码块。第二次没变快时
+ * 先看这里，技能写了什么就一目了然。只放技能正文。没记正文的一侧（Codex、旧结果文件）不出。
+ */
+export function skillBodyBlocks(
+  sides: readonly (readonly [string, EvalResults | undefined])[],
+): string[] {
+  return sides.flatMap(([label, results]) => {
+    const record = results?.records.find((item) => item.task === REPEAT_TASK);
+    return (record?.firstRun?.learning?.skillBodies ?? []).flatMap((body) => {
+      // 正文里要是有连续的反引号，围栏就多放一个，免得冲破代码块。
+      const longest = Math.max(
+        2,
+        ...(body.text.match(/`+/g) ?? []).map((run) => run.length),
+      );
+      const fence = "`".repeat(longest + 1);
+      return [
+        `**${label}：「${body.title}」**（技能正文，前 ${body.text.length} 字）`,
+        "",
+        `${fence}text\n${body.text}\n${fence}`,
+        "",
+      ];
+    });
+  });
+}
+
+/**
  * 后台调用表：每道题一行，题目自身的输入 token、后台调用（复盘、自动抽记忆）的次数和输入 token，以及含后台的
  * 输入 token 合计。题目自身的步数和 token 只算主运行，后台成本在这里完整可见。没有 `backgroundCalls`
  * 的记录（Codex、旧结果文件）不出行。
@@ -823,6 +849,13 @@ export function renderReport(results: EvalResults[]): string {
       "新增是和该次运行开始前比的；复盘结果分三类：`saved` 存为自用并生效，`held` 存了但转待审（步骤要求访问或外发到网址、或带越权的步骤，本人批准前不授予员工，不进自写技能，在「待审」里列出），`refused` 被拒（含密钥、手机号、口令等，没存）；复盘结果取自服务器日志里这次最后一轮的 `retrospect` 行，第一次结束后最多等 90 秒再开第二次，超时照常开始。「用到」指技能账里的使用次数涨了：那一轮对得上这件事、已经放进上下文的，或员工用 `refine_skill` 读过的。",
       "",
     );
+
+  const skillBodies = skillBodyBlocks([
+    ...mineSides.map((mine) => [mine.label, mine.results] as const),
+    ["Codex", codex] as const,
+  ]);
+  if (skillBodies.length)
+    out.push("### 第一次之后存下的技能正文（前 800 字）", "", ...skillBodies);
 
   const backgroundTable = backgroundRows([
     ...mineSides.map((mine) => [mine.label, mine.results] as const),

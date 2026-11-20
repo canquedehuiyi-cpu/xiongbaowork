@@ -315,6 +315,48 @@ describe("改完必验：改过文件的一轮，收尾前没有校验动作，�
   });
 });
 
+describe("照着技能的快路径做：跑过技能自带的校验命令就算已校验", () => {
+  const SKILL_CHECK = "awk 'END{print NR}' <dir>/actions.csv";
+  const scripted = (check: boolean): Message[] => [
+    user("把纪要整理成待办表"),
+    call("s1", "computer_run_command", {
+      command:
+        "cat > /work/run.py <<'EOF'\nprint(1)\nEOF\npython3 /work/run.py",
+    }),
+    result("s1", "computer_run_command"),
+    ...(check
+      ? [
+          call("s2", "computer_run_command", {
+            command: "awk 'END{print NR}' /work/eval/actions.csv",
+          }),
+          result("s2", "computer_run_command"),
+        ]
+      : []),
+  ];
+
+  test("技能给了校验命令、员工跑过它：不提醒", async () => {
+    const seen: Seen[] = [];
+    await ask(seen, ["做完了。"], scripted(true), {
+      run: { skillChecks: [SKILL_CHECK] },
+    });
+    expect(seen).toHaveLength(1);
+  });
+
+  test("没跑它：照旧提醒一次", async () => {
+    const seen: Seen[] = [];
+    await ask(seen, ["做完了。", "好。"], scripted(false), {
+      run: { skillChecks: [SKILL_CHECK] },
+    });
+    expect(seen).toHaveLength(2);
+  });
+
+  test("没有技能校验时，同样的命令不算校验", async () => {
+    const seen: Seen[] = [];
+    await ask(seen, ["做完了。", "好。"], scripted(true));
+    expect(seen).toHaveLength(2);
+  });
+});
+
 describe("规格 v2 的模型（自定义地址、Moonshot、智谱、OpenRouter）同样收到提醒", () => {
   test("包出来的模型仍是 v2：运行时按 v2 转换，流的格式对得上", () => {
     const { model } = wrapped([], ["好。"], {}, "v2") as unknown as {

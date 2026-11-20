@@ -17,6 +17,8 @@
 import type { RunAgentInput } from "@ag-ui/client";
 import { PICKED_SKILL_PROP } from "@openbot/toolkit/run-turn";
 import {
+  FAST_PATH_CHECK_LABEL,
+  FAST_PATH_HEADING,
   REFINE_SKILL_TOOL,
   SELF_SKILL_SLUG_PREFIX,
 } from "../../../shared/self-skills";
@@ -310,6 +312,78 @@ export function relatedSelfSkills<T extends PickableSkill>(
     .map((entry) => entry.skill);
 }
 
+/** 技能正文各段的开头（`skills/save-tool.ts` 的 `renderSkill` 写的固定标题），按它切段。 */
+const SECTION_START = new RegExp(
+  `^(?=适用场景：|${FAST_PATH_HEADING}（|步骤：|注意（踩过的坑）：|怎么确认做对了：|修正记录：)`,
+  "m",
+);
+/** 放不下全文时各段留下的先后：「什么时候用」、快路径（含前提和校验命令）、校验，然后才是步骤、坑点、修正。 */
+const SECTION_PRIORITY = [
+  "适用场景：",
+  `${FAST_PATH_HEADING}（`,
+  "怎么确认做对了：",
+  "步骤：",
+  "注意（踩过的坑）：",
+  "修正记录：",
+];
+/** 别的段只剩这么点位置时就不放半截了；快路径例外，它是要紧的那一段。 */
+const MIN_PART_CHARS = 120;
+
+/**
+ * 技能正文的简短形式：放得下就是全文。放不下时，带快路径的技能按 {@link SECTION_PRIORITY} 的先后留段（快路径
+ * 和校验优先，其次才是步骤和坑点），留下的段仍按原来的次序排；没有快路径的技能照旧只取开头。被截过的结尾带
+ * 「…」，调用方据此说明全文怎么读。
+ */
+export function shortSkillBody(body: string, limit: number): string {
+  if (body.length <= limit) return body;
+  const parts = body.split(SECTION_START).filter((part) => part.trim());
+  const fast = parts.findIndex((part) => part.startsWith(FAST_PATH_HEADING));
+  if (fast === -1) return `${body.slice(0, limit)}…`;
+  const rank = (part: string) =>
+    SECTION_PRIORITY.findIndex((start) => part.startsWith(start));
+  const kept = new Set<number>();
+  let left = limit;
+  const order = parts
+    .map((_, index) => index)
+    .sort((one, two) => rank(parts[one] ?? "") - rank(parts[two] ?? ""));
+  const texts = new Map<number, string>();
+  for (const index of order) {
+    const part = (parts[index] ?? "").trim();
+    const joint = kept.size > 0 ? 2 : 0;
+    if (part.length + joint <= left) {
+      kept.add(index);
+      texts.set(index, part);
+      left -= part.length + joint;
+    } else if (index === fast || left - joint >= MIN_PART_CHARS) {
+      kept.add(index);
+      texts.set(index, part.slice(0, Math.max(0, left - joint)));
+      left = 0;
+    }
+  }
+  const shown = [...kept]
+    .sort((one, two) => one - two)
+    .map((index) => texts.get(index) ?? "")
+    .join("\n\n");
+  return `${shown}…`;
+}
+
+/** 注入的技能文字里，技能自带的校验命令（`快路径校验命令：…` 一行），一条一项。 */
+export function fastPathChecksIn(text: string): string[] {
+  const checks: string[] = [];
+  for (const line of text.split("\n")) {
+    if (!line.startsWith(FAST_PATH_CHECK_LABEL)) continue;
+    const check = line.slice(FAST_PATH_CHECK_LABEL.length).trim();
+    if (check && !checks.includes(check)) checks.push(check);
+  }
+  return checks;
+}
+
+/**
+ * 技能带了快路径时多说的一段：先按快路径做，别从头摸索。第二次没有更快的原因就在这里——只给步骤，员工
+ * 照样先逐个打开文件看一遍。校验命令跑过就算校验过，也不必为这件事再单独列计划。
+ */
+export const FAST_PATH_ADVICE = `这件事你做过。技能里有「${FAST_PATH_HEADING}」的，先按技能的快路径做：把它的脚本一步写好并运行（目录、文件名换成这次的），不要先逐个打开文件探索。跑完就运行它自带的${FAST_PATH_CHECK_LABEL.replace("：", "")}，通过就直接交付，不必再多做别的检查，也不必为此单独列计划。快路径对不上这次的输入，或者报错了，再摸索。`;
+
 /**
  * 员工自己写过、和这一轮的事对得上的技能，以简短的形式直接放进上下文（不必等人点命令，也不必等员工想起来去读）：
  * 一条一段，正文超长只放开头，全文用 `refine_skill` 只带 id 读出。没有对得上的就是 undefined。
@@ -322,15 +396,21 @@ export function relatedSkillsGuidance(
   if (related.length === 0) return undefined;
   const sections = related.map((skill) => {
     const body = (skill.instructions ?? "").trim();
+    const cut = shortSkillBody(body, RELATED_SKILL_CHARS);
     const shown =
-      body.length > RELATED_SKILL_CHARS
-        ? `${body.slice(0, RELATED_SKILL_CHARS)}…\n(cut short: call ${REFINE_SKILL_TOOL} with only the id "${skill.slug}" to read the whole skill)`
-        : body;
+      cut === body
+        ? body
+        : `${cut}\n(cut short: call ${REFINE_SKILL_TOOL} with only the id "${skill.slug}" to read the whole skill)`;
     return `### ${skill.title || skill.slug} (id: ${skill.slug})\n${shown}`;
   });
   return [
     "You have done this kind of work before and wrote down how. The skills below are your own and match what you were just asked; they are already here, nobody needs to send a command for them. Follow their steps and checks where they fit, and skip what this task does not need.",
     `If a step is wrong or something is missing, correct it afterwards with ${REFINE_SKILL_TOOL} (the id and one sentence on what to change).`,
+    ...(related.some((skill) =>
+      (skill.instructions ?? "").includes(`${FAST_PATH_HEADING}（`),
+    )
+      ? [FAST_PATH_ADVICE]
+      : []),
     ...sections,
   ].join("\n\n");
 }

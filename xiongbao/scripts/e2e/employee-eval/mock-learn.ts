@@ -17,6 +17,12 @@ const SHORT_STEPS = 2;
 
 /** 产品把对得上的自写技能放进上下文时的开头那句（`plugins/picked-skill.ts`）。 */
 export const SKILL_MARK = "You have done this kind of work before";
+/** 注入提示里叫员工先按快路径做的那句（`plugins/picked-skill.ts` 的 `FAST_PATH_ADVICE`）：带着它就一步做完。 */
+export const FAST_MARK = "先按技能的快路径做";
+/** 假模型的快路径：一条命令写出产物并校验，和复盘员写进技能里的那条一致（`<dir>` 换成这次的目录）。 */
+const FAST_PATH =
+  "printf 'owner,action\\nmock,placeholder\\n' > <dir>/actions.csv";
+const FAST_CHECK = "awk 'END{print NR}' <dir>/actions.csv";
 /** 复盘员的系统提示开头（`learning/retrospect.ts` 的 `RETRO_SYSTEM`）。 */
 export const RETRO_MARK = "You review how an AI coworker";
 
@@ -73,6 +79,9 @@ function retroAnswer(
     steps: retroSteps(env.EVAL_MOCK_RETRO?.trim()),
     pitfalls: ["不要逐个命令摸索，按上面的步骤一次做完"],
     verify: "test -f <dir>/actions.csv 通过",
+    fastPath: FAST_PATH,
+    fastPathNeeds: "目录里有 TASK.md，写权限正常",
+    fastPathCheck: FAST_CHECK,
     scope: "self",
   };
   return { text: JSON.stringify({ skill }) };
@@ -82,7 +91,9 @@ function retroAnswer(
 export function learnPolicy(request: MockRequest, dir: string): MockTurn {
   if (whole(request).includes(RETRO_MARK)) return retroAnswer(request);
   const known = whole(request).includes(SKILL_MARK);
-  const explore = known ? SHORT_STEPS : EXPLORE_STEPS;
+  // 技能带快路径、提示又叫它先照做：一条命令写出产物并校验，不摸索。
+  const fast = known && whole(request).includes(FAST_MARK);
+  const explore = fast ? 0 : known ? SHORT_STEPS : EXPLORE_STEPS;
   const done = request.toolResultsSinceUser;
   const accepted = request.offeredTools.includes("accept_task");
   const script: MockTurn[] = [
@@ -93,6 +104,20 @@ export function learnPolicy(request: MockRequest, dir: string): MockTurn {
               {
                 name: "accept_task",
                 arguments: { criteria: "产物 actions.csv 写好并核对过" },
+              },
+            ],
+          },
+        ]
+      : []),
+    ...(fast
+      ? [
+          {
+            tools: [
+              {
+                name: TOOL.command,
+                arguments: {
+                  command: `${FAST_PATH.replaceAll("<dir>", dir)} && ${FAST_CHECK.replaceAll("<dir>", dir)}`,
+                },
               },
             ],
           },
@@ -111,17 +136,22 @@ export function learnPolicy(request: MockRequest, dir: string): MockTurn {
         },
       ],
     })),
-    {
-      tools: [
-        {
-          name: TOOL.write,
-          arguments: {
-            path: `${dir}/actions.csv`,
-            contents: "owner,action\nmock,placeholder\n",
+    // 快路径那一条命令已经写好了产物，不再单独写一遍。
+    ...(fast
+      ? []
+      : [
+          {
+            tools: [
+              {
+                name: TOOL.write,
+                arguments: {
+                  path: `${dir}/actions.csv`,
+                  contents: "owner,action\nmock,placeholder\n",
+                },
+              },
+            ],
           },
-        },
-      ],
-    },
+        ]),
     ...(accepted
       ? [
           {

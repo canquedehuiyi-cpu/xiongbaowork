@@ -111,6 +111,32 @@ function writtenByCommand(command: string): string[] {
   return targets;
 }
 
+/**
+ * A skill's own check command (`<dir>` and the like stand for whatever this run used) as a pattern:
+ * whitespace is flexible, a `<placeholder>` matches any one word.
+ */
+function checkPattern(check: string): RegExp {
+  const source = check
+    .trim()
+    .split(/(<[A-Za-z_\u4e00-\u9fff-]{1,20}>)/)
+    .map((piece) =>
+      /^<.+>$/.test(piece)
+        ? "\\S+"
+        : piece.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"),
+    )
+    .join("");
+  return new RegExp(source, "g");
+}
+
+/** Where, in the command, the last of the skill's check commands ends; -1 when none is in it. */
+function lastCheckEnd(command: string, checks: readonly RegExp[]): number {
+  let end = -1;
+  for (const pattern of checks)
+    for (const found of command.matchAll(pattern))
+      end = Math.max(end, (found.index ?? 0) + found[0].length);
+  return end;
+}
+
 /** One call a model made, in the order it made them. */
 export type MadeCall = { name: string; input: unknown };
 
@@ -122,7 +148,16 @@ export type MadeCall = { name: string; input: unknown };
  * Read from the turn's calls, so it is the same on every run of a turn the host carries on between
  * runs, however the turn was cut into them.
  */
-export function unverifiedChanges(calls: readonly MadeCall[]): string[] {
+export function unverifiedChanges(
+  calls: readonly MadeCall[],
+  /**
+   * The check commands the skill this run follows brought with it. Running one counts as checking,
+   * even when it is not one of the commands the pattern above knows (`awk`, `python3 check.py`), and
+   * even in the same command as the script it checks, as long as it comes after the last write.
+   */
+  skillChecks: readonly string[] = [],
+): string[] {
+  const own = skillChecks.filter((check) => check.trim()).map(checkPattern);
   let changed: string[] = [];
   for (const call of calls) {
     if (call.name === WRITE_FILE_TOOL || call.name === EDIT_FILE_TOOL) {
@@ -136,8 +171,15 @@ export function unverifiedChanges(calls: readonly MadeCall[]): string[] {
     const written = writtenByCommand(command).filter(
       (path) => !PROSE_FILE.test(path),
     );
-    if (written.length > 0) changed.push(...written);
-    else if (VERIFYING_COMMAND.test(command)) changed = [];
+    const checked = lastCheckEnd(command, own);
+    if (written.length > 0) {
+      changed.push(...written);
+      // Written by this command, checked by the skill's own check later in it.
+      const lastWrite = Math.max(
+        ...written.map((path) => command.indexOf(path) + path.length),
+      );
+      if (checked > lastWrite) changed = [];
+    } else if (checked >= 0 || VERIFYING_COMMAND.test(command)) changed = [];
   }
   return [...new Set(changed)];
 }

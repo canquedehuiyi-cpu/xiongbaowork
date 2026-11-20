@@ -250,6 +250,12 @@ export function answersOnLastStep(
      */
     verifyChanges?: boolean;
     /**
+     * The check commands of the skill this run follows (its fast path's own check). Running one
+     * counts as having checked the changes, so a run that does what its skill says is not sent back
+     * to check again. Absent, only the commands that look like a check count.
+     */
+    skillChecks?: readonly string[];
+    /**
      * Whether a tool result ends the turn: the step that follows a step whose tool result this says
      * yes to is not asked of the model, and the run ends there with nothing more said. The host gives it
      * for a hand-in (`deliver_task` accepted): what was handed in is already in the call's arguments,
@@ -338,7 +344,7 @@ export function answersOnLastStep(
       run.verifyChanges !== false &&
       !steps.verifyNudged &&
       tools.some((tool) => tool.name === COMMAND_TOOL)
-        ? unverifiedChanges(callsSince(prompt, turnStart))
+        ? unverifiedChanges(callsSince(prompt, turnStart), run.skillChecks)
         : [];
     const nudge = [
       ...(promise ? [promiseNudge(promise)] : []),
