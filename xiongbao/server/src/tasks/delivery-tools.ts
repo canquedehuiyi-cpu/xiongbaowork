@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { z } from "zod";
+import {
+  ACCEPT_HINT,
+  acceptWithReadsOn,
+  withToolHint,
+} from "../agents/step-hints";
 import { currentApprovalContext } from "../approvals/types";
 import { shortName } from "../brand";
 import { currentModelRun, UNSCOPED } from "../models/token-metering";
@@ -52,6 +57,11 @@ const PLAIN_QUESTIONS = "问一句答一句的普通对话不要用这三个工�
  */
 const HAND_IN_WITH_FILES =
   "有文件产出的活，先用 accept_task 接下；做完用 deliver_task 交付，把你写在工作区里的文件用 workspace_file 逐个列上（ref 写工作区内的相对路径，如 reports/对比.xlsx）。";
+/** 开着 `XIONGBAO_ACCEPT_WITH_READS` 时，补充句后面再加一句：回执不单独占一步（`agents/step-hints.ts`）。 */
+const handInWithFiles = () =>
+  acceptWithReadsOn()
+    ? `${HAND_IN_WITH_FILES}${ACCEPT_HINT}`
+    : HAND_IN_WITH_FILES;
 
 /**
  * How an external employee (`device_acp`, which holds none of the three tools) walks the same steps:
@@ -71,8 +81,13 @@ export { DELIVERY_EVENTS };
  * coworker has not taken on yet (派出 · 待接下, spec §1 「你手动跟」): one line, and only while the card
  * waits. Not a message in the conversation -- nobody said it.
  */
-export const RECEIPT_ASKED =
-  "这段对话里有一件活被当作一件活来跟，还在等你的接活回执：先调用 accept_task（写上预计几点交和验收标准），再接着做。";
+export function receiptAsked(): string {
+  return acceptWithReadsOn()
+    ? "这段对话里有一件活被当作一件活来跟，还在等你的接活回执：调用 accept_task（写上预计几点交和验收标准），和第一批读取放在同一步一起发，再接着做。"
+    : "这段对话里有一件活被当作一件活来跟，还在等你的接活回执：先调用 accept_task（写上预计几点交和验收标准），再接着做。";
+}
+/** 进程启动时的那一句，给只认常量的调用方；每一轮带进去的是 {@link receiptAsked} 当下的。 */
+export const RECEIPT_ASKED = receiptAsked();
 
 /** A run's input, carrying {@link RECEIPT_ASKED} in its context (which the Bot's instructions include). */
 export function withReceiptAsked<T extends { context?: readonly unknown[] }>(
@@ -82,7 +97,7 @@ export function withReceiptAsked<T extends { context?: readonly unknown[] }>(
     ...input,
     context: [
       ...(input.context ?? []),
-      { description: "交付闭环", value: RECEIPT_ASKED },
+      { description: "交付闭环", value: receiptAsked() },
     ],
   };
 }
@@ -95,7 +110,7 @@ export function deliveryProtocolGuidance(
   toolNames: readonly string[],
 ): string | undefined {
   return toolNames.includes(ACCEPT_TASK)
-    ? `${deliveryProtocol()}\n${PLAIN_QUESTIONS}\n${HAND_IN_WITH_FILES}`
+    ? `${deliveryProtocol()}\n${PLAIN_QUESTIONS}\n${handInWithFiles()}`
     : undefined;
 }
 
@@ -222,7 +237,14 @@ export function deliveryTools(options: {
     return {
       name,
       ref: `${DELIVERY_TOOLS_SERVER}/${name}`,
-      description,
+      description: withToolHint(name, description),
+      /*
+       * 只有接活回执可以和同一步的别的调用一起开始（无头运行；`agents/step-hints.ts`）。交付、申请延期要在别的
+       * 调用之后按顺序做，不标。
+       */
+      ...(name === ACCEPT_TASK && acceptWithReadsOn()
+        ? { concurrent: true as const }
+        : {}),
       parameters,
       async execute(args) {
         const value = parameters.safeParse(args ?? {});
