@@ -13,11 +13,7 @@ import {
   createRetrospector,
 } from "../src/learning/retrospect";
 import { createPluginStore } from "../src/plugins/store";
-import {
-  type SelfSkillDeps,
-  saveSkill,
-  slugFor,
-} from "../src/skills/save-tool";
+import { type SelfSkillDeps, slugFor } from "../src/skills/save-tool";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
