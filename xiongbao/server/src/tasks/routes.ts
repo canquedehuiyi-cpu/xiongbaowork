@@ -373,6 +373,11 @@ export type TaskRouteOptions = {
   delivery?: Delivery;
   /** The server's own rounds on a followed card: 再催 and 换人接手 (`tasks/nudge-run.ts`). */
   rounds?: NudgeRuns;
+  /**
+   * Told after a person accepted a card as done (验收, or archiving an awaiting-review card): what the
+   * employee can learn from how the work went (期 2, `learning/retrospect.ts`). Never waited for.
+   */
+  onReviewed?: (tenantId: string, taskId: string) => void;
 };
 
 /**
@@ -604,6 +609,7 @@ export function createTaskRoutes(
         `user:${context.var.actor.id}`,
         "review",
       )) ?? (await projector.reviewed({ tenantId, taskId }));
+    if (ok) options.onReviewed?.(tenantId, taskId);
     return ok
       ? context.json({ ok: true })
       : context.json({ error: "Not awaiting review." }, 409);
@@ -633,6 +639,8 @@ export function createTaskRoutes(
         taskId,
         archivedBy: context.var.actor.id,
       }));
+    // Only a followed card's archive is an acceptance (`delivery.review` answered for it).
+    if (reviewed) options.onReviewed?.(tenantId, taskId);
     return ok
       ? context.json({ ok: true })
       : context.json({ error: "Cannot archive from this state." }, 409);

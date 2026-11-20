@@ -347,6 +347,10 @@ const serverEnv: Record<string, string> = {
   // default, so it pins `off`, the way back operators keep for one release; the server-run path is
   // G8's (`background-chat.ts`) and the real-model evaluation's.
   XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS: "off",
+  // These gates count and classify the mocked model's calls. A chat turn's automatic memory extraction (期 2)
+  // is one more call to the same mock after the answer, whose prompt quotes the person's message and so can
+  // read as a scripted call. It is not what this gate measures, so it pins `off`.
+  XIONGBAO_MEMORY_EXTRACT: "off",
   COPILOTKIT_TELEMETRY_DISABLED: "true",
   DO_NOT_TRACK: "1",
 };

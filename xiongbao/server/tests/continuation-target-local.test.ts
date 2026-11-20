@@ -28,7 +28,7 @@ import {
 import { createLocalTargetStore } from "../src/approvals/continuation-target-store";
 import { createLocalContinuationTurnTarget } from "../src/routines/run-turn";
 import { PostgresAgentRunner } from "../src/threads/postgres-runner";
-import { runAsTenant } from "../src/tenant/context";
+import { currentTenant, runAsTenant } from "../src/tenant/context";
 import type { QuotaService } from "../src/quota/limits";
 import {
   configureBotLifecycle,
@@ -877,4 +877,55 @@ test("r3 teardown throwing during trusted pause settles unknown and stops exact 
     finish();
     lifecycle.reset();
   }
+});
+
+// 期 2: a turn carried on after an approval ends in `runContinuation`, not in `stream`, so the same
+// observers (automatic memory, the retrospective) are told of it there: only one that ended well, as a task round.
+test("a continuation that ends well is told to the turn observers, in the person's frame", async () => {
+  const h = setup();
+  const seen: {
+    tenant: string;
+    kind: string;
+    failed: boolean;
+    runId: string;
+    types: string[];
+    roles: string[];
+    frame: string;
+  }[] = [];
+  h.runner.observeTurns((turn) => {
+    seen.push({
+      tenant: turn.tenant,
+      kind: turn.kind,
+      failed: turn.failed,
+      runId: turn.runId,
+      types: turn.events.map((event) => event.type),
+      roles: turn.messages.map((message) => message.role),
+      frame: currentTenant(),
+    });
+  });
+  expect((await h.admit()).kind).toBe("completed");
+  expect(seen).toHaveLength(1);
+  expect(seen[0]).toMatchObject({
+    tenant: h.plan.tenantId,
+    kind: "task",
+    failed: false,
+    runId: h.request.input.runId,
+    roles: ["assistant"],
+    frame: h.plan.tenantId,
+  });
+  expect(seen[0]?.types).toContain(EventType.RUN_FINISHED);
+});
+
+test("a continuation whose stream fails is not told to the observers", async () => {
+  const h = setup();
+  let told = 0;
+  h.runner.observeTurns(() => {
+    told += 1;
+  });
+  h.runner.drive = () =>
+    new Observable<BaseEvent>((subscriber) =>
+      subscriber.error(new Error("stream broke")),
+    );
+  await h.admit();
+  expect(told).toBe(0);
 });

@@ -119,6 +119,7 @@ import {
 import { mountDesktopConnectionFailure } from "./desktop-connection-failure";
 import { createTranscriptionProvider } from "./dictation/provider";
 import { createDictationRoutes } from "./dictation/routes";
+import { editionHasMemory } from "./edition";
 import { createEditionGate } from "./edition-routes";
 import type { HostAccessBroker } from "./host-access/broker";
 import { createHostAccessRoutes } from "./host-access/routes";
@@ -782,6 +783,12 @@ export function createApp(
        * `forwardedProps`, and the server takes over only a run that does.
        */
       chatServerComputerTools: config.chatServerComputerTools,
+      /*
+       * Whether this deployment has memory (`editionHasMemory`): both editions do, and the personal one
+       * stops having it with `XIONGBAO_PERSONAL_MEMORY=off`. The browser draws its memory screens from
+       * this, not from the edition.
+       */
+      memory: editionHasMemory(config.edition),
     }),
   );
   // Ahead of every route it closes, the auth handler's SSO and SCIM routes included.

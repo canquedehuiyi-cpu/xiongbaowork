@@ -1,6 +1,7 @@
 import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { threadRunEvents, threadRuns, threads } from "../db/schema";
+import { answerFailed } from "../learning/tool-outcome";
 import { currentTenant } from "../tenant/context";
 
 /**
@@ -137,6 +138,7 @@ type MessageLike = {
   role?: unknown;
   content?: unknown;
   toolCalls?: unknown;
+  toolCallId?: unknown;
 };
 
 /**
@@ -149,6 +151,7 @@ export function transcriptOf(messages: unknown): string {
   if (!Array.isArray(messages)) return "";
   const lines: string[] = [];
   let heardPerson = false;
+  const answers = toolAnswersOf(messages as MessageLike[]);
   for (const raw of messages as MessageLike[]) {
     if (!raw || typeof raw !== "object") continue;
     if (raw.role === "user") {
@@ -161,6 +164,8 @@ export function transcriptOf(messages: unknown): string {
       const tools = toolNamesOf(raw.toolCalls);
       if (text) lines.push(`Bot: ${text}`);
       if (tools.length > 0) lines.push(`(Bot used tools: ${tools.join(", ")})`);
+      const outcomes = toolOutcomesOf(raw.toolCalls, answers);
+      if (outcomes) lines.push(outcomes);
     }
   }
   if (!heardPerson) return "";
@@ -168,6 +173,45 @@ export function transcriptOf(messages: unknown): string {
   if (transcript.length > MAX_THREAD_CHARS)
     transcript = `${transcript.slice(0, MAX_THREAD_CHARS)}\n(rest omitted)`;
   return transcript;
+}
+
+/** 工具的答复，按它答的那次调用的编号。 */
+function toolAnswersOf(messages: readonly MessageLike[]): Map<string, string> {
+  const answers = new Map<string, string>();
+  for (const message of messages) {
+    if (
+      message &&
+      typeof message === "object" &&
+      message.role === "tool" &&
+      typeof message.toolCallId === "string"
+    )
+      answers.set(message.toolCallId, textOf(message.content));
+  }
+  return answers;
+}
+
+/**
+ * 这几次工具调用做成没做成：一行 `(Tool outcomes: search ok, write_file FAILED)`，只有名字和成败，没有
+ * 参数也没有返回的内容。一项技能该怎么写，取决于哪些步骤走不通、怎么绕过去的，光有用过哪些工具看不出来。
+ * 没有一次调用能对上它的答复（没有答复或没有编号）时返回 undefined，那一行就不出现。
+ */
+function toolOutcomesOf(
+  calls: unknown,
+  answers: ReadonlyMap<string, string>,
+): string | undefined {
+  if (!Array.isArray(calls)) return undefined;
+  const outcomes: string[] = [];
+  for (const call of calls) {
+    const id = (call as { id?: unknown })?.id;
+    const name = (call as { function?: { name?: unknown } })?.function?.name;
+    if (typeof id !== "string" || typeof name !== "string" || !name) continue;
+    const answer = answers.get(id);
+    if (answer === undefined) continue;
+    outcomes.push(`${name} ${answerFailed(answer) ? "FAILED" : "ok"}`);
+  }
+  return outcomes.length > 0
+    ? `(Tool outcomes: ${outcomes.join(", ")})`
+    : undefined;
 }
 
 function textOf(content: unknown): string {

@@ -147,26 +147,55 @@ test("every memory tool can be offered to a remote Bot as JSON Schema", async ()
   ]);
 });
 
-test("a Bot in the personal edition is offered no memory tools, and in the team edition all four", () => {
-  // OpenBot Desktop's local Intelligence isn't licensed for memory, and its screens show none.
+/** Runs `body` with `XIONGBAO_PERSONAL_MEMORY` set (or unset), and puts it back. */
+async function withPersonalMemory(
+  value: string | undefined,
+  body: () => void | Promise<void>,
+) {
+  const before = process.env.XIONGBAO_PERSONAL_MEMORY;
+  if (value === undefined) delete process.env.XIONGBAO_PERSONAL_MEMORY;
+  else process.env.XIONGBAO_PERSONAL_MEMORY = value;
+  try {
+    await body();
+  } finally {
+    if (before === undefined) delete process.env.XIONGBAO_PERSONAL_MEMORY;
+    else process.env.XIONGBAO_PERSONAL_MEMORY = before;
+  }
+}
+
+const ALL_MEMORY_TOOLS = [
+  "recall_personal_memory",
+  "remember_personal_fact",
+  "save_observed_memory",
+  "forget_personal_memory",
+];
+
+test("a Bot in either edition is offered all four memory tools, and the personal edition none with XIONGBAO_PERSONAL_MEMORY=off", async () => {
   const options = {
     store: {} as MemoryStore,
     ingestion: {} as MemoryIngestion,
     ownerUserId: "u1",
     agentId: "bot",
   };
-  expect(offeredMemoryTools("personal", options)).toEqual([]);
-  expect(offeredMemoryTools("team", options).map((tool) => tool.name)).toEqual([
-    "recall_personal_memory",
-    "remember_personal_fact",
-    "save_observed_memory",
-    "forget_personal_memory",
-  ]);
+  await withPersonalMemory(undefined, () => {
+    expect(
+      offeredMemoryTools("personal", options).map((tool) => tool.name),
+    ).toEqual(ALL_MEMORY_TOOLS);
+  });
+  await withPersonalMemory("off", () => {
+    expect(offeredMemoryTools("personal", options)).toEqual([]);
+    // The switch is the personal edition's own: a team deployment is unaffected.
+    expect(
+      offeredMemoryTools("team", options).map((tool) => tool.name),
+    ).toEqual(ALL_MEMORY_TOOLS);
+  });
+  expect(offeredMemoryTools("team", options).map((tool) => tool.name)).toEqual(
+    ALL_MEMORY_TOOLS,
+  );
 });
 
-test("the personal edition puts no memory in a Bot's turn and its sweep reads no source", async () => {
-  const calls: string[] = [];
-  const parts = {
+function runtimeParts(calls: string[]) {
+  return {
     defaults: {
       botTurn: (owner: string, bot: string) => {
         calls.push(`adopt ${owner} ${bot}`);
@@ -187,16 +216,36 @@ test("the personal edition puts no memory in a Bot's turn and its sweep reads no
       },
     },
   } as unknown as Omit<Parameters<typeof createMemoryRuntime>[0], "edition">;
+}
 
-  const personal = createMemoryRuntime({ edition: "personal", ...parts });
-  expect(personal.loadForActor).toBeUndefined();
-  await personal.sweep();
-  expect(calls).toEqual([]);
+test("the personal edition puts memory in a Bot's turn and runs its sweep, like the team edition", async () => {
+  await withPersonalMemory(undefined, async () => {
+    for (const edition of ["personal", "team"] as const) {
+      const calls: string[] = [];
+      const runtime = createMemoryRuntime({
+        edition,
+        ...runtimeParts(calls),
+      });
+      expect(await runtime.loadForActor?.("u1")("bot")).toBe(
+        "Prefers mornings",
+      );
+      await runtime.sweep();
+      expect(calls).toEqual(["adopt u1 bot", "context", "sync", "mirror"]);
+    }
+  });
+});
 
-  const team = createMemoryRuntime({ edition: "team", ...parts });
-  expect(await team.loadForActor?.("u1")("bot")).toBe("Prefers mornings");
-  await team.sweep();
-  expect(calls).toEqual(["adopt u1 bot", "context", "sync", "mirror"]);
+test("with XIONGBAO_PERSONAL_MEMORY=off the personal edition puts no memory in a Bot's turn and its sweep reads no source", async () => {
+  await withPersonalMemory("off", async () => {
+    const calls: string[] = [];
+    const personal = createMemoryRuntime({
+      edition: "personal",
+      ...runtimeParts(calls),
+    });
+    expect(personal.loadForActor).toBeUndefined();
+    await personal.sweep();
+    expect(calls).toEqual([]);
+  });
 });
 
 test("a source sync a connector's policy refuses answers 400 with the reason, not 503", async () => {
