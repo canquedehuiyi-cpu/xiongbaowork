@@ -944,7 +944,7 @@ async function driveBoard(
           `round ${round + 1} of ${work.key}`,
           () => roundEnded(runId),
           Math.max(remaining, 1000),
-          2000,
+          500,
         );
       } catch {
         timedOut = true;
@@ -1335,6 +1335,9 @@ async function runWork(work: Work): Promise<EvalRecord> {
     work.via === "chat"
       ? await driveChat(work, agentId, deadline, dir)
       : await driveBoard(work, agentId, deadline, dir);
+  // 墙钟记到这一轮真的结束的那一刻：后面等运行记录落库、给事件留的 2 秒是评测脚本自己的收尾，不是员工花的时间
+  // （Codex 那侧没有），算进去会把熊宝的墙钟平白多记几秒。
+  const wallMs = Date.now() - started;
   const { nudges, timedOut, error } = driven;
   if (driven.rejoins)
     notes.push(
@@ -1362,7 +1365,6 @@ async function runWork(work: Work): Promise<EvalRecord> {
   const runIds = driven.threadId
     ? (await runsOfThread(driven.threadId)).map((run) => run.id)
     : driven.runIds;
-  const wallMs = Date.now() - started;
 
   const copy = join(OUT, artifactDirName(suite, work.via), work.key);
   copyTree(dir, copy);
