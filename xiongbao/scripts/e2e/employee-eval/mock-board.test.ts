@@ -135,6 +135,44 @@ test("手上没有接活、计划、交付工具的员工：只有干活的几�
   ]);
 });
 
+test("服务器把相邻的助手消息合成一条以后，步数照样走对（按工具调用总数，不按消息条数）", () => {
+  const system = "你是员工。";
+  const ask = {
+    role: "user",
+    content: "【看板派活】标题：写占位文件，工作目录 eval/terminal",
+  };
+  const calls = (names: string[]) =>
+    names.map((name, index) => ({
+      id: `m${index}`,
+      type: "function",
+      function: { name, arguments: "{}" },
+    }));
+  const afterPlan = boardPolicy({
+    protocol: "chat",
+    lastUser: ask.content,
+    toolResultsSinceUser: 0,
+    offeredTools: ["accept_task", "update_plan", "deliver_task"],
+    raw: {
+      messages: [
+        { role: "system", content: system },
+        ask,
+        // 接活、计划、第一条命令，合成了一条助手消息。
+        {
+          role: "assistant",
+          content: null,
+          tool_calls: calls([
+            "accept_task",
+            "update_plan",
+            "computer_run_command",
+          ]),
+        },
+      ],
+    },
+  });
+  // 一步一个的剧本：前三个调用是接活、计划、读，下一步是写文件。
+  expect(names(afterPlan)).toEqual(["computer_write_file"]);
+});
+
 test("题目目录从交代里认，工具调用的参数带上它", () => {
   const plan = boardMockPlan("eval/refactor", {
     accept: false,

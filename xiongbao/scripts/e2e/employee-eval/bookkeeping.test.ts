@@ -6,51 +6,50 @@ import { renderReport } from "./report";
 /*
  * 「记账步」：一步里只有 accept_task、update_plan、deliver_task、request_extension 这几个不干实事的工具，
  * 再加上交付被接受之后的那一步（员工多说的一句收尾的话）。它们各自单独占一次模型调用，每次都要把整段历史再发一遍，
- * 所以报告里单独看它们占总步数的比例。读对话快照（AG-UI 的消息）：一条带工具调用的助手消息就是一步。
+ * 所以报告里单独看它们占总步数的比例。读运行事件（AG-UI）：一步发出的几个调用，结果都在它们全部发出之后。
+ * 不读对话快照：服务器把相邻的助手消息合成一条，步和步分不开。
  */
 
-const call = (id: string, name: string, args: unknown = {}) => ({
-  id,
-  type: "function",
-  function: { name, arguments: JSON.stringify(args) },
+type Event = Record<string, unknown>;
+const start = (id: string, name: string): Event => ({
+  type: "TOOL_CALL_START",
+  toolCallId: id,
+  toolCallName: name,
 });
-const step = (...calls: ReturnType<typeof call>[]) => ({
-  id: `a-${calls.map((c) => c.id).join("-") || "text"}`,
-  role: "assistant",
-  content: "",
-  toolCalls: calls,
-});
-const said = (text: string) => ({
-  id: `t-${text}`,
-  role: "assistant",
-  content: text,
-});
-const result = (id: string, content: string) => ({
-  id: `r-${id}`,
-  role: "tool",
+const result = (id: string, content: string): Event => ({
+  type: "TOOL_CALL_RESULT",
   toolCallId: id,
   content,
 });
-const user = { id: "u", role: "user", content: "做这一件事" };
+const said = (id: string, delta: string): Event => ({
+  type: "TEXT_MESSAGE_CHUNK",
+  messageId: id,
+  delta,
+});
+const runStarted: Event = { type: "RUN_STARTED" };
+const runFinished: Event = { type: "RUN_FINISHED" };
 const DELIVERED = JSON.stringify({ delivered: true, taskId: "t" });
 const BOUNCED = JSON.stringify({ bounced: true, reason: "缺必需项" });
+/** 运行把字符串结果存成带引号的 JSON 字符串。 */
+const stored = (text: string) => JSON.stringify(text);
 
 test("每一类单独数：接活、计划、交付，一步一个；总数是它们之和", () => {
-  const messages = [
-    user,
-    step(call("1", "accept_task")),
+  const events = [
+    runStarted,
+    start("1", "accept_task"),
     result("1", '{"accepted":true}'),
-    step(call("2", "update_plan")),
+    start("2", "update_plan"),
     result("2", "已更新计划"),
-    step(call("3", "computer_run_command")),
+    start("3", "computer_run_command"),
     result("3", "ok"),
-    step(call("4", "update_plan")),
+    start("4", "update_plan"),
     result("4", "已更新计划"),
-    step(call("5", "deliver_task")),
+    start("5", "deliver_task"),
     result("5", DELIVERED),
-    said("做完了。"),
+    said("m", "做完了。"),
+    runFinished,
   ];
-  expect(bookkeepingOf(messages)).toEqual({
+  expect(bookkeepingOf(events)).toEqual({
     steps: 6,
     accept: 1,
     plan: 2,
@@ -60,19 +59,22 @@ test("每一类单独数：接活、计划、交付，一步一个；总数是�
   });
 });
 
-test("和干实事的调用同一步发出的，不算记账步", () => {
-  const messages = [
-    user,
-    step(call("1", "accept_task"), call("2", "computer_read_file")),
+test("一步里的几个调用（结果都在它们全部发出之后）算一步；和干实事的调用同一步发出的不算记账步", () => {
+  const events = [
+    runStarted,
+    start("1", "accept_task"),
+    start("2", "computer_read_file"),
     result("1", "{}"),
     result("2", "x"),
-    step(call("3", "update_plan"), call("4", "computer_run_command")),
+    start("3", "update_plan"),
+    start("4", "computer_run_command"),
     result("3", "ok"),
     result("4", "ok"),
-    step(call("5", "deliver_task")),
+    start("5", "deliver_task"),
     result("5", DELIVERED),
+    runFinished,
   ];
-  expect(bookkeepingOf(messages)).toEqual({
+  expect(bookkeepingOf(events)).toEqual({
     steps: 3,
     accept: 0,
     plan: 0,
@@ -83,13 +85,15 @@ test("和干实事的调用同一步发出的，不算记账步", () => {
 });
 
 test("接活和计划同一步发（都是记账工具）：算一个记账步，记在接活名下", () => {
-  const messages = [
-    user,
-    step(call("1", "accept_task"), call("2", "update_plan")),
+  const events = [
+    runStarted,
+    start("1", "accept_task"),
+    start("2", "update_plan"),
     result("1", "{}"),
     result("2", "ok"),
+    runFinished,
   ];
-  expect(bookkeepingOf(messages)).toMatchObject({
+  expect(bookkeepingOf(events)).toMatchObject({
     steps: 1,
     accept: 1,
     plan: 0,
@@ -97,14 +101,32 @@ test("接活和计划同一步发（都是记账工具）：算一个记账步�
   });
 });
 
-test("交付被挡回的那一步之后的话，不算「交付后一步」", () => {
-  const messages = [
-    user,
-    step(call("5", "deliver_task")),
-    result("5", BOUNCED),
-    said("缺了必需项，我补上。"),
+test("计划和交付同一步发：记在交付名下", () => {
+  const events = [
+    runStarted,
+    start("1", "update_plan"),
+    start("2", "deliver_task"),
+    result("1", "ok"),
+    result("2", DELIVERED),
+    runFinished,
   ];
-  expect(bookkeepingOf(messages)).toMatchObject({
+  expect(bookkeepingOf(events)).toMatchObject({
+    steps: 1,
+    plan: 0,
+    deliver: 1,
+    total: 1,
+  });
+});
+
+test("交付被挡回之后的话，不算「交付后一步」", () => {
+  const events = [
+    runStarted,
+    start("5", "deliver_task"),
+    result("5", BOUNCED),
+    said("m", "缺了必需项，我补上。"),
+    runFinished,
+  ];
+  expect(bookkeepingOf(events)).toMatchObject({
     deliver: 1,
     afterDeliver: 0,
     total: 1,
@@ -112,27 +134,30 @@ test("交付被挡回的那一步之后的话，不算「交付后一步」", ()
 });
 
 test("交付被接受之后接着又做了事：那一步是干实事的，不算", () => {
-  const messages = [
-    user,
-    step(call("5", "deliver_task")),
+  const events = [
+    runStarted,
+    start("5", "deliver_task"),
     result("5", DELIVERED),
-    step(call("6", "computer_run_command")),
+    said("m1", "再看一眼。"),
+    start("6", "computer_run_command"),
     result("6", "ok"),
-    said("好了"),
+    said("m2", "好了"),
+    runFinished,
   ];
-  expect(bookkeepingOf(messages)).toMatchObject({
+  expect(bookkeepingOf(events)).toMatchObject({
     deliver: 1,
     afterDeliver: 0,
   });
 });
 
 test("交付被接受之后这一轮直接结束：没有「交付后一步」", () => {
-  const messages = [
-    user,
-    step(call("5", "deliver_task")),
+  const events = [
+    runStarted,
+    start("5", "deliver_task"),
     result("5", DELIVERED),
+    runFinished,
   ];
-  expect(bookkeepingOf(messages)).toEqual({
+  expect(bookkeepingOf(events)).toEqual({
     steps: 1,
     accept: 0,
     plan: 0,
@@ -142,16 +167,55 @@ test("交付被接受之后这一轮直接结束：没有「交付后一步」",
   });
 });
 
+test("结果被存成带引号的字符串也认；追「继续」的下一轮从头数，上一轮的交付不带过去", () => {
+  const events = [
+    runStarted,
+    start("5", "deliver_task"),
+    result("5", stored(DELIVERED)),
+    runFinished,
+    runStarted,
+    said("m", "我再确认一下。"),
+    runFinished,
+  ];
+  expect(bookkeepingOf(events)).toMatchObject({
+    deliver: 1,
+    afterDeliver: 0,
+  });
+  const same = [
+    runStarted,
+    start("5", "deliver_task"),
+    result("5", stored(DELIVERED)),
+    said("m", "好了。"),
+    runFinished,
+  ];
+  expect(bookkeepingOf(same)).toMatchObject({ afterDeliver: 1 });
+});
+
+test("总步数可以由调用方给（读 model_token_calls 的行数），占比按它算", () => {
+  const events = [
+    runStarted,
+    start("1", "accept_task"),
+    result("1", "{}"),
+    runFinished,
+  ];
+  expect(bookkeepingOf(events, { steps: 9 })).toMatchObject({
+    steps: 9,
+    accept: 1,
+    total: 1,
+  });
+});
+
 test("申请延期也是记账步，只记在总数里；读不懂的东西不抛错", () => {
-  const messages = [
-    user,
-    step(call("1", "request_extension")),
+  const events = [
+    runStarted,
+    start("1", "request_extension"),
     result("1", "{}"),
     null,
     "x",
-    { role: "assistant", toolCalls: "bad" },
+    { type: "TOOL_CALL_START" },
+    runFinished,
   ];
-  expect(bookkeepingOf(messages as unknown[])).toMatchObject({
+  expect(bookkeepingOf(events as unknown as Event[])).toMatchObject({
     accept: 0,
     plan: 0,
     deliver: 0,

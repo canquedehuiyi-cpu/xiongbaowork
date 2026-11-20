@@ -150,9 +150,13 @@ export function boardMockPlan(
   });
 }
 
-type Message = { role?: unknown; content?: unknown };
+type Message = { role?: unknown; content?: unknown; tool_calls?: unknown };
 
-/** 剧本的下一步：走到第几步，看这段对话里已经有几条助手消息。 */
+/**
+ * 剧本的下一步：走到第几步，看这段对话里已经发出过几个工具调用。不数助手消息：服务器在两次运行之间把相邻的
+ * 助手消息合成一条（电脑工具在运行外执行，接着再从历史起一次运行），消息条数不等于步数；工具调用总数不会被合并。
+ * 剧本是定的，前几步一共有几个调用，对得上的那一步就是下一步；对不上（被追了「继续」之类）就停在最后一步。
+ */
 export function boardPolicy(request: MockRequest): MockTurn {
   const messages = (request.raw.messages as Message[] | undefined) ?? [];
   // 提示的话分在两处：系统提示（交付规约、how_to_work）和工具定义的描述（update_plan、accept_task），都认。
@@ -169,8 +173,18 @@ export function boardPolicy(request: MockRequest): MockTurn {
     merge: system.includes(MARKS.merge),
     tools: new Set(request.offeredTools),
   });
-  const done = messages.filter(
-    (message) => message.role === "assistant",
-  ).length;
-  return plan[Math.min(done, plan.length - 1)] as MockTurn;
+  const made = messages.reduce(
+    (total, message) =>
+      message.role === "assistant" && Array.isArray(message.tool_calls)
+        ? total + message.tool_calls.length
+        : total,
+    0,
+  );
+  let cumulative = 0;
+  for (const [index, turn] of plan.entries()) {
+    if (cumulative === made) return turn;
+    cumulative += turn.tools?.length ?? 0;
+    if (index === plan.length - 1) break;
+  }
+  return plan[plan.length - 1] as MockTurn;
 }
