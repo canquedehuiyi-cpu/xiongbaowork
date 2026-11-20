@@ -25,6 +25,7 @@ export type TriggerSource =
   | "routine"
   | "responsibility"
   | "wake_up"
+  | "heartbeat"
   | `automation:${string}`;
 
 /**

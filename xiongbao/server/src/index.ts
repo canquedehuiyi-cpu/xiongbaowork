@@ -107,6 +107,7 @@ import {
 import { createSubagents, SUBAGENT_HANDED_BACK } from "./agents/subagent";
 import { toolLimitRecorder } from "./agents/tool-limit";
 import { serverTurnAdmission } from "./agents/turn-admission";
+import { createHeartbeatRoutes } from "./agents/heartbeat-routes";
 import { updatePlanTools } from "./agents/update-plan";
 import {
   createWakeUpRunner,
@@ -537,7 +538,12 @@ import {
 import { createProjectRoutes } from "./projects/routes";
 import { createProjectStore } from "./projects/store";
 import { createProviderOAuthProxy } from "./provider-oauth";
-import { createQuotaService } from "./quota/limits";
+import { QuotaExceeded, createQuotaService } from "./quota/limits";
+import {
+  createHeartbeatRunner,
+} from "./heartbeat/runner";
+import { createHeartbeatStore } from "./heartbeat/store";
+import { heartbeatTools } from "./heartbeat/tools";
 import { createQuotaRoutes } from "./quota/routes";
 import { createRecorderExtension } from "./recorder/wiring";
 import {
@@ -2992,6 +2998,10 @@ await startupLifecycle.run(async (startup) => {
   const wakeUpStore = createWakeUpStore(database, {
     auditStore: bootAuditStore,
   });
+  // 心跳：员工隔一段时间自己醒来、照清单检查（期 3·3.1）。下一次醒来排在共用的队列上。见 heartbeat/。
+  const heartbeatStore = createHeartbeatStore(database, {
+    queue: createWorkQueue(database),
+  });
   /** Team Bots: published Bots, their audiences, and teammates' consent to their own accounts. */
   const teamBots = createTeamBots({
     database,
@@ -3184,6 +3194,12 @@ await startupLifecycle.run(async (startup) => {
       ownerUserId: actorId,
       agentId: botId,
       initiator,
+    }),
+    // 心跳清单（`update_heartbeat_checklist`）：每位员工默认都有，工具权限里关掉 `bot/update_heartbeat_checklist` 即不给。
+    ...heartbeatTools({
+      store: heartbeatStore,
+      ownerUserId: actorId,
+      agentId: botId,
     }),
     ...offeredMemoryTools(config.edition, {
       store: personalMemoryStore,
@@ -5190,6 +5206,78 @@ await startupLifecycle.run(async (startup) => {
       }, 60 * 60_000),
     (resource) => resource.stop(),
   );
+  /*
+   * 心跳（期 3·3.1，heartbeat/runner.ts）：队列上到点的醒来，在本人的帧里照员工的清单检查，没事静默收工，
+   * 有事才写进单聊、发通知。模型那一轮用员工的轻量模型（agents/light-model.ts 认 `heartbeat:` 的发起者），
+   * 沿用巡检的几道关和每天次数上限，受安静时段管。XIONGBAO_HEARTBEAT=off 整个关掉，到点的条目不领、不排下一次。
+   */
+  if (process.env.XIONGBAO_HEARTBEAT?.trim().toLowerCase() !== "off") {
+    const heartbeatRunner = createHeartbeatRunner({
+      queue: createWorkQueue(database),
+      store: heartbeatStore,
+      owner: workOwner("heartbeat"),
+      runTurn: createTurnRunner({
+        prepareRunInput: prepareProductRunInput,
+        onKnownStop: productTelemetry.stopKnown,
+        intelligence: routineIntelligence,
+        runner: routineAgentRunner,
+        components: headlessComponents,
+        buildAgentFor,
+        // 轻量轮：不带电脑，守着巡检那样的轻量时钟。
+        toolsForTurn: async () => [],
+        turnTimeoutMs: turnTimeoutFor("patrol"),
+        maxToolSegments: toolSegmentsFor("patrol"),
+      }),
+      mintThreadId: () => threadIdentity.mint(),
+      actorFor,
+      channels: channelStore,
+      quietUntil,
+      gate: async ({ ownerUserId, agentId }) => {
+        if (await proactiveStore.personOff(ownerUserId)) return "off_person";
+        if (await proactiveStore.paused(ownerUserId, agentId)) return "paused";
+        if (!(await proactiveEngine.allowed(ownerUserId))) return "off_admin";
+        try {
+          await quota.assertCapacity(ownerUserId, "tasksPerMonth");
+        } catch (error) {
+          if (error instanceof QuotaExceeded) return "quota";
+          throw error;
+        }
+        return null;
+      },
+      dailyRuns: (agentId) => proactiveAdmin.proactiveDailyRuns(agentId),
+      notify: (scope, input) => deliveryNotifications(scope, input),
+      board: taskProjector,
+    });
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          try {
+            // 一次领一条；到点的有好几条就连着做，最多一口气十条，剩下的下一轮接着做。
+            for (let beats = 0; beats < 10; beats += 1) {
+              const report = await heartbeatRunner.sweep();
+              if (report.ran.length === 0 && report.skipped.length === 0) break;
+              console.info(JSON.stringify({ type: "heartbeat", ...report }));
+            }
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                type: "heartbeat-error",
+                error: error instanceof Error ? error.name : "UnknownError",
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }, 10_000),
+      (resource) => resource.stop(),
+    );
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          await heartbeatRunner.reap().catch(() => 0);
+        }, 60 * 60_000),
+      (resource) => resource.stop(),
+    );
+  }
   DELIVERY_WORK_KINDS.map((kind) =>
     startup.acquireSync(
       () =>
@@ -6732,6 +6820,21 @@ await startupLifecycle.run(async (startup) => {
       profiles: agentProfileStore,
       allowed: async () =>
         (await modelCatalogue.read()).models.map((model) => model.id),
+      requireUser: config.singleUser
+        ? createDevRequireUser(config.singleUserAccess)
+        : createRequireUser(auth as AuthService, roleRepository),
+      auditStore: bootAuditStore,
+    }),
+  );
+
+  /*
+   * 期 3·3.1：员工设置里的「心跳」（开关、间隔、清单）。路由和轻量模型一样，存在员工配置里，没有就是没开。
+   */
+  app.route(
+    "/api/agents",
+    createHeartbeatRoutes({
+      store: heartbeatStore,
+      profiles: agentProfileStore,
       requireUser: config.singleUser
         ? createDevRequireUser(config.singleUserAccess)
         : createRequireUser(auth as AuthService, roleRepository),

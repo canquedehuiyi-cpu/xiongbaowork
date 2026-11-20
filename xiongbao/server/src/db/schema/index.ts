@@ -36,6 +36,7 @@ export * from "./portrait-media";
 export * from "./computer-waits";
 export * from "./learned-skills";
 export * from "./memory-embeddings";
+export * from "./heartbeat";
 export * from "./thread-run-liveness";
 export * from "./generated-media";
 export * from "./proactive";

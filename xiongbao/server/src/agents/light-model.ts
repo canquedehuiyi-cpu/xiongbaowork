@@ -11,6 +11,8 @@ import { isProactiveInitiator } from "../proactive/initiator";
 
 /** 跟进（`wake-up.ts`）开的那一轮，发起者 id 的前缀。 */
 const FOLLOW_UP_PREFIX = "follow-up:";
+/** 心跳（`heartbeat/runner.ts`）醒来的那一轮，发起者 id 的前缀。 */
+const HEARTBEAT_PREFIX = "heartbeat:";
 
 /** 这一轮是不是轻量轮：巡检或跟进；转手的话看最初是什么发起的。 */
 export function isLightTurn(
@@ -23,7 +25,8 @@ export function isLightTurn(
     initiator.kind === "routine" &&
     "id" in initiator &&
     typeof initiator.id === "string" &&
-    initiator.id.startsWith(FOLLOW_UP_PREFIX)
+    (initiator.id.startsWith(FOLLOW_UP_PREFIX) ||
+      initiator.id.startsWith(HEARTBEAT_PREFIX))
   );
 }
 

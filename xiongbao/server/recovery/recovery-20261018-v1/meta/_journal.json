@@ -1513,6 +1513,13 @@
       "when": 1795144500000,
       "tag": "0235_memory_embeddings",
       "breakpoints": true
+    },
+    {
+      "idx": 236,
+      "version": "7",
+      "when": 1795230400000,
+      "tag": "0236_heartbeat_runs",
+      "breakpoints": true
     }
   ]
 }
