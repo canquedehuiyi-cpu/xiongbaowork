@@ -14,14 +14,19 @@ export const RETRO_WAIT_MS = 90_000;
 /** 某一刻这位员工的自写技能（命令名 -> 名字、使用次数）和形成的记忆条数。 */
 export type LearnedState = {
   skills: Map<string, { title: string; useCount: number }>;
+  /** 复盘存了、但转待审没授予的技能（命令名 -> 名字）：在本人的待审清单里，不在自写技能账里。没读到就没有这一项。 */
+  held?: Map<string, string>;
   memories: number;
 };
 
-/** 一次运行前后的差：新增的技能名、新增的记忆条数、使用次数涨了的技能名。 */
+/** 一次运行前后的差：新增的技能名、新增的待审技能名（有才带）、新增的记忆条数、使用次数涨了的技能名。 */
 export function learningDiff(
   before: LearnedState,
   after: LearnedState,
-): Pick<RunLearning, "newSkills" | "newMemories" | "usedSkills"> {
+): Pick<
+  RunLearning,
+  "newSkills" | "heldSkills" | "newMemories" | "usedSkills"
+> {
   const newSkills: string[] = [];
   const usedSkills: string[] = [];
   for (const [slug, skill] of after.skills) {
@@ -29,8 +34,12 @@ export function learningDiff(
     if (!was) newSkills.push(skill.title);
     else if (skill.useCount > was.useCount) usedSkills.push(skill.title);
   }
+  const heldSkills = [...(after.held ?? [])]
+    .filter(([slug]) => !before.held?.has(slug))
+    .map(([, title]) => title);
   return {
     newSkills,
+    ...(heldSkills.length > 0 ? { heldSkills } : {}),
     newMemories: Math.max(0, after.memories - before.memories),
     usedSkills,
   };

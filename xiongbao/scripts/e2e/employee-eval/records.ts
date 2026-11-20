@@ -17,6 +17,11 @@ export type EvalPath = "board" | "chat";
 export type RunLearning = {
   /** 这次运行之后新增的员工自写技能的名字。 */
   newSkills: string[];
+  /**
+   * 这次运行之后新增的待审技能名：复盘存了，但步骤要求访问或外发到网址、或带越权的步骤，转给本人审批，
+   * 没授予员工，也不在自写技能里。没有就不带这一项。
+   */
+  heldSkills?: string[];
   /** 这次运行之后新增的、这位员工形成的记忆条数。 */
   newMemories: number;
   /**
@@ -30,7 +35,10 @@ export type RunLearning = {
     waitedMs: number;
     /** `logged`：看到了这张卡的复盘有结论的日志（存了、不值得、冷却等，步数不够的跳过不算）；`skill`：库里出现了新技能；`timeout`：到了上限照常往下走。 */
     ended: "logged" | "skill" | "timeout";
-    /** 复盘的结果：`saved` `nothing` `similar` `refused` `skipped`；没看到日志时没有。 */
+    /**
+     * 复盘的结果：`saved`（存为自用并生效）、`held`（存了但转待审，没授予）、`refused`（被拒，没存）、
+     * `nothing` `similar` `skipped`；没看到日志时没有。
+     */
     outcome?: string;
     /** 复盘是按什么触发的：`steps` `card_delivered` `card_accepted`。 */
     trigger?: string;

@@ -259,3 +259,68 @@ export function hasUrl(text: string): boolean {
   }
   return false;
 }
+
+/** 邮箱换成的占位。 */
+export const EMAIL_PLACEHOLDER = "<邮箱>";
+
+/** 和 {@link EMAIL} 一样，只是 `@` 也认全角的 `＠`：这里不整段归一化，免得顺带改了别的标点。 */
+const EMAIL_SOURCE = EMAIL.source.replace("@", "[@＠]");
+const EMAIL_EVERY = new RegExp(EMAIL_SOURCE, "g");
+/** 「王芳 <wang.fang@…>」「王芳（wang.fang@…）」：邮箱前面紧挨着的人名连邮箱一起换掉。 */
+const NAMED_EMAIL = new RegExp(
+  `[\\u4e00-\\u9fa5]{2,4}\\s*[<《（(]\\s*${EMAIL_SOURCE}\\s*[>》）)]`,
+  "g",
+);
+
+/**
+ * 把文字里的邮箱地址换成 {@link EMAIL_PLACEHOLDER}（连同紧挨着它的人名），返回换完的文字和换了几处。没有邮箱就原样返回。
+ *
+ * 这是复盘草稿专用的：复盘读的是别人的数据（纪要、邮件），模型写技能时容易把邮箱抄进来；一个邮箱不是密钥，
+ * 换成占位不损失技能的用处，整条拒绝反而让办公类技能存不下来。员工自己写技能时不走这里，仍按 {@link findSensitive}
+ * 拒绝。号码、密钥、口令一概不动；换完之后保存前还会再查一遍，换不干净的（比如全角字母写的）照旧拒绝。
+ */
+export function maskEmails(text: string): { text: string; count: number } {
+  let count = 0;
+  const replaced = text
+    .replace(NAMED_EMAIL, () => {
+      count += 1;
+      return EMAIL_PLACEHOLDER;
+    })
+    .replace(EMAIL_EVERY, () => {
+      count += 1;
+      return EMAIL_PLACEHOLDER;
+    });
+  return count === 0 ? { text, count } : { text: replaced, count };
+}
+
+/**
+ * 没有协议的「标签.标签」，最后一段是这些的才当域名：常见的顶级域，加上本地和测试用的几个；再加上所有两位字母的
+ * （国家和地区的顶级域，扩展名已在 {@link FILE_EXTENSIONS} 里挑出去）。代码里的 `csv.writer`、`os.path` 这类
+ * 属性和方法名因此不被当成域名。写在「发 / 上传」后面的外发规则（{@link findOverreach}）仍用最宽的 {@link hasUrl}。
+ */
+const DOMAIN_SUFFIXES: ReadonlySet<string> = new Set(
+  (
+    "com net org edu gov mil int dev app info biz xyz top site online cloud tech store shop club vip link page blog " +
+    "news mobi pro name asia example test local localhost internal invalid lan corp home onion " +
+    "sbs cfd rest bid win men work loan click gdn kim party review trade date racing download stream science icu " +
+    "fun space website live life world today agency email digital network systems solutions services group " +
+    "company ltd inc fyi wtf lol ninja rocks guru tools zone social studio design art media center city run cash best"
+  ).split(" "),
+);
+
+/**
+ * 这段文字里有没有要访问或外发到的网址或域名：带协议的、`www.` 开头的、IP 地址，以及最后一段是常见顶级域的域名。
+ * 先把邮箱换成占位：邮箱不是网址，`zhang.san@example.test` 里的「zhang.san」不能被当成域名。复盘出来的技能带着
+ * 它就转待审，要本人看过才生效（见 `skills/save-tool.ts` 的 `heldForReview`）。
+ */
+export function hasExternalAddress(text: string): boolean {
+  const bounded = text.length > SCAN_LIMIT ? text.slice(0, SCAN_LIMIT) : text;
+  const scanned = maskEmails(bounded).text.normalize("NFKC");
+  if (URL_SHAPES.some((shape) => shape.test(scanned))) return true;
+  for (const match of scanned.matchAll(DOMAIN_LIKE)) {
+    const last = (match[1] ?? "").toLowerCase();
+    if (FILE_EXTENSIONS.has(last)) continue;
+    if (last.length === 2 || DOMAIN_SUFFIXES.has(last)) return true;
+  }
+  return false;
+}
