@@ -126,7 +126,7 @@ export const TOOL_BRIEFS: Readonly<
 > = {
   ask_person: {
     description:
-      "Ask a person only when you cannot go on without them: a wrong guess would send, delete, pay or do something else hard to undo; the readings would lead to materially different work; or only they know the answer. Otherwise decide, say what you assumed, and keep going; do everything that does not depend on the answer first. Prefer it to asking another Bot when none could settle it either. Say what you need and why, then stop and wait. Put each decision in `parts`, one entry each; give `options` only when you can name likely answers.",
+      "Ask a person only when you cannot go on without them: a wrong guess would send, delete, pay or do something else hard to undo; the readings would lead to materially different work; or only they know the answer. Otherwise decide, say what you assumed, and keep going. Say what you need and why, then stop and wait. Put each decision in `parts`, one entry each; give `options` only when you can name likely answers.",
   },
   deliver_task: {
     description:
@@ -146,7 +146,7 @@ export const TOOL_BRIEFS: Readonly<
   },
   run_subagent: {
     description:
-      "把工作里一个独立的部分交给子代理：你的新副本，带你的工具、替同一个人办事，看不到这段对话，只交回答案。能拆成两个以上相互独立的部分时（分别调研几家公司、分别读几份文件、写完另派校对），在同一步里多次调用并行去做；计划、汇总和最后的判断自己做，一两步的小事自己做。task 写目标、范围和它需要知道的一切，answer 写要交回什么、什么格式。每轮最多 5 个，子代理不能再派子代理，团队成员不是子代理；同一件事不要重复派。需要批准的操作子代理会停下，交还给你。",
+      "把工作里一个独立的部分交给子代理：你的新副本，带你的工具、替同一个人办事，看不到这段对话，只交回答案。能拆成两个以上相互独立的部分时，在同一步里多次调用并行去做；计划、汇总和最后的判断自己做，一两步的小事自己做。task 写目标、范围和它需要知道的一切，answer 写要交回什么、什么格式。每轮最多 5 个，子代理不能再派子代理，团队成员不是子代理。需要批准的操作子代理会停下，交还给你。",
   },
   computer_run_command: {
     description:
