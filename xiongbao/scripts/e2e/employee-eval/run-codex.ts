@@ -12,8 +12,11 @@
  * 环境变量（除 config.ts 里的模型参数外）：
  *   CODEX_BIN          codex 可执行文件；作业里用 npm 装好的精确版本（见 CODEX_VERSION）
  *   EVAL_TASKS         all（五道对标题）、hard（加难题：compare、refactor、terminal、webform）或逗号分隔的题名
- *                      （repeat 只能点名：同一道办公题连做两次，Codex 每次都是全新环境），默认 all。
+ *                      （repeat、repeat-pitfall 只能点名：同一道题连做两次，Codex 每次都是全新环境），默认 all。
  *                      网页表单题的夹具网站由本脚本在本机起，Codex 的命令（curl 等）访问得到
+ *   EVAL_REPEAT_PAIRS  重复类的题连做几对，1 到 4，默认 1（每一对两次，各次都是全新环境；Codex 只作对照）
+ *   EVAL_SEED          有坑可学的题的基础种子（作业里是 run id，和熊宝侧同一个，夹具才一样）；没设就现抽一个并记在结果里
+ *   EVAL_DEADLINE_EPOCH 作业截止时间（Unix 秒）：来不及再做完一对时，剩下的对不做，已完成的照常记录
  *   EVAL_TASK_MINUTES  每题墙钟上限，默认 20
  *   EVAL_OUT           结果目录，默认 ./employee-eval-out；写 codex.json、每题的 JSONL 记录和产物
  *   EVAL_CODEX_SANDBOX Codex 跑命令的沙箱：workspace-write（默认，联网打开）或 danger-full-access
@@ -26,13 +29,22 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { CHECKERS } from "./checkers";
-import { evalGate, type ModelConfig, taskMinutes } from "./config";
+import {
+  evalGate,
+  evalSeed,
+  type ModelConfig,
+  pairFits,
+  repeatPairs,
+  taskMinutes,
+} from "./config";
+import { pitfallPairSeeds } from "./gen-pitfall";
 import {
   copyTree,
   EDITS_CODE_TASKS,
   HARD_SUITE,
+  isRepeatTask,
   materialize,
-  REPEAT_TASK,
+  REPEAT_PITFALL_TASK,
   selectTasks,
   TASK_TITLES,
   type TaskName,
@@ -41,6 +53,7 @@ import {
 import { analyzeCodex } from "./metrics";
 import { startMockModel } from "./mock-model";
 import {
+  combinePairs,
   combineRepeat,
   type EvalRecord,
   type EvalResults,
@@ -118,13 +131,24 @@ async function runOne(
     out: string;
     /** 重复任务的第几次；产物和记录按它分开存。 */
     round?: "first" | "second";
+    /** 连做多对时的第几对（只有一对时不写）；产物和记录按它分开存。 */
+    pair?: number;
+    /** 夹具由种子生成的题（有坑可学）：这一次的种子。 */
+    seed?: string;
   },
 ): Promise<EvalRecord> {
-  const key = options.round ? `${task}-${options.round}` : task;
+  const key = options.round
+    ? `${task}${options.pair ? `-p${options.pair}` : ""}-${options.round}`
+    : task;
   const work = mkdtempSync(join(tmpdir(), `codex-${key}-`));
   // 网页表单题：夹具网站在本机起，Codex 的命令访问得到；判分读它收到的记录。
   const site = task === "webform" ? startWebformSite() : null;
-  materialize(task, work, site ? { SITE_URL: site.url } : undefined);
+  materialize(
+    task,
+    work,
+    site ? { SITE_URL: site.url } : undefined,
+    options.seed,
+  );
   const started = Date.now();
   const transcript = join(options.out, "codex", `${key}.jsonl`);
   mkdirSync(join(options.out, "codex"), { recursive: true });
@@ -183,7 +207,7 @@ async function runOne(
   }
   writeFileSync(transcript, stdout);
   copyTree(work, join(options.out, "codex", key));
-  const outcome = await CHECKERS[task](work);
+  const outcome = await CHECKERS[task](work, options.seed);
   rmSync(work, { recursive: true, force: true });
   const summary = analyzeCodex(stdout.split("\n"), {
     editsData: EDITS_CODE_TASKS.includes(task),
@@ -212,6 +236,7 @@ async function runOne(
     capabilities: summary.capabilities,
     checks: outcome.checks,
     ...(error ? { error } : {}),
+    ...(options.seed ? { seed: options.seed } : {}),
   };
 }
 
@@ -224,6 +249,14 @@ if (import.meta.main) {
   const config = verdict.config;
   delete process.env.MODEL_E2E_API_KEY;
   const tasks = selectTasks(process.env.EVAL_TASKS, HARD_SUITE);
+  // 重复类的题连做几对、夹具的基础种子：和熊宝侧同一组输入，两边的每一对夹具一样。
+  const pairChoice = repeatPairs(process.env);
+  if (!pairChoice.ok) {
+    console.error(`run-codex refused: ${pairChoice.reason}`);
+    process.exit(2);
+  }
+  const pairCount = pairChoice.pairs;
+  const baseSeed = evalSeed(process.env);
   const minutes = taskMinutes(process.env);
   const out = resolve(process.env.EVAL_OUT?.trim() || "employee-eval-out");
   const bin = process.env.CODEX_BIN?.trim() || "codex";
@@ -264,14 +297,47 @@ if (import.meta.main) {
         minutes,
         out,
       };
-      // 重复任务：同一道题连做两次（Codex 每次都是全新的临时目录，没有跨次的记忆，作对照）。
-      const record =
-        task === REPEAT_TASK
-          ? combineRepeat(
-              await runOne(task, { ...common, round: "first" }),
-              await runOne(task, { ...common, round: "second" }),
-            )
-          : await runOne(task, common);
+      // 重复任务：同一道题连做两次，连做 pairCount 对（Codex 每次都是全新的临时目录，没有跨次的记忆，作对照；
+      // 照样每一对一个新种子，和熊宝侧的夹具一样）。
+      let record: EvalRecord | undefined;
+      if (isRepeatTask(task)) {
+        const parts: EvalRecord[] = [];
+        let lastPairMs: number | undefined;
+        for (let index = 1; index <= pairCount; index += 1) {
+          if (!pairFits(process.env, Date.now(), lastPairMs, minutes)) {
+            notes.push(
+              `${task} 第 ${index}/${pairCount} 对没做：离作业截止时间不够做完一对，已完成的各对照常记录`,
+            );
+            break;
+          }
+          const pairStarted = Date.now();
+          const [firstSeed, secondSeed] =
+            task === REPEAT_PITFALL_TASK
+              ? pitfallPairSeeds(baseSeed, index)
+              : [undefined, undefined];
+          const pairPart = pairCount > 1 ? { pair: index } : {};
+          const first = await runOne(task, {
+            ...common,
+            ...pairPart,
+            round: "first",
+            seed: firstSeed,
+          });
+          const second = await runOne(task, {
+            ...common,
+            ...pairPart,
+            round: "second",
+            seed: secondSeed,
+          });
+          parts.push(combineRepeat(first, second, task));
+          lastPairMs = Date.now() - pairStarted;
+        }
+        if (parts.length === 0) continue;
+        record = combinePairs(task, parts);
+        if (task === REPEAT_PITFALL_TASK)
+          notes.push(
+            `有坑可学的题的基础种子 ${baseSeed}（各次运行的种子在 seed 里）`,
+          );
+      } else record = await runOne(task, common);
       records.push(record);
       console.log(
         `   ${record.passed ? "PASS" : "FAIL"} ${(record.wallMs / 1000).toFixed(1)} s, steps ${record.steps}, tokens ${record.tokens?.total ?? "?"}${record.timedOut ? "，超时" : ""}${record.error ? `，${record.error}` : ""}`,
