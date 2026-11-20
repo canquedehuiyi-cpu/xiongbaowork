@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import type { RunAgentInput } from "@ag-ui/client";
+import { AbstractAgent, EventType, type RunAgentInput } from "@ag-ui/client";
+import { of } from "rxjs";
 import { LLMock } from "@copilotkit/aimock";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { loadConfig } from "../src/config";
 import { mountCopilotRuntime, type RegisteredAgent } from "../src/copilot";
@@ -38,6 +39,8 @@ const resolver = createActorAgentResolver({
 const runner = new PostgresAgentRunner(database);
 const seen: { turn: FinishedTurn; frame: string }[] = [];
 let throwing = false;
+/** The stream the last `runTurn` read, to its end. */
+let lastBody = "";
 runner.observeTurns(async (turn) => {
   seen.push({ turn, frame: currentTenant() });
   if (throwing) throw new Error("observer broke");
@@ -63,7 +66,7 @@ async function runTurn(text: string) {
       body: JSON.stringify(body),
     }),
   );
-  await response.text();
+  lastBody = await response.text();
   return threadId;
 }
 
@@ -151,13 +154,42 @@ test("a person's chat turn is told to the observer in the person's frame, with i
   expect(replyTextOf(turn.events)).toContain("好的，记下了。");
 });
 
-test("an observer that throws does not fail the turn", async () => {
+test("an observer that throws does not fail the turn: the stream ends normally and the turn is stored", async () => {
   seen.length = 0;
   throwing = true;
   try {
-    await runTurn("再来一轮");
+    const threadId = await runTurn("再来一轮");
     await until(() => seen.length === 1);
     expect(seen[0]?.turn.failed).toBe(false);
+    // The stream the person read finished, with no error in it.
+    expect(lastBody).toContain("RUN_FINISHED");
+    expect(lastBody).not.toContain("RUN_ERROR");
+    // And the turn is written down as a finished one, with its events, whatever the observer did.
+    const stored = async () =>
+      runAsTenant(person.id, async () => {
+        const runs = await database
+          .select({ count: threadRuns.eventCount })
+          .from(threadRuns)
+          .where(eq(threadRuns.threadId, threadId));
+        const events = await database
+          .select({ seq: threadRunEvents.seq })
+          .from(threadRunEvents)
+          .where(eq(threadRunEvents.threadId, threadId));
+        return { runs, events };
+      });
+    const end = Date.now() + 10_000;
+    let found = await stored();
+    while (
+      (found.runs.length !== 1 ||
+        found.events.length < (found.runs[0]?.count ?? 1)) &&
+      Date.now() < end
+    ) {
+      await Bun.sleep(25);
+      found = await stored();
+    }
+    expect(found.runs).toHaveLength(1);
+    expect(found.runs[0]?.count).toBeGreaterThan(0);
+    expect(found.events).toHaveLength(found.runs[0]?.count ?? -1);
   } finally {
     throwing = false;
   }
