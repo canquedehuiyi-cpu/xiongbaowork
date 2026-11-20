@@ -26,7 +26,6 @@ import {
 import type { TaskProjector } from "../tasks/projector";
 import { productHeadlessBoundary } from "../telemetry/product-boundaries";
 import { markUntrusted } from "../untrusted-content";
-import type { QuietUntil } from "../user-preferences";
 import { createWorkQueue } from "../work/queue";
 import {
   type BusyRetry,
@@ -81,8 +80,6 @@ export function createServerResponsibilityEngine(deps: {
   deviceIdOf?: (agentId: string, taskRef?: string) => Promise<string | null>;
   /** Spec J5: a responsibility woken for a banned workspace stays in place until the ban is lifted. */
   accessRevokedOf?: (userId: string) => Promise<boolean>;
-  /** 安静时段：事件唤醒的运行在这个人的安静时段里推迟到结束（期 3·3.2）。 */
-  quietUntil?: QuietUntil;
   /** Where the computer tools act, so their descriptions tell the model the truth (G5). */
   machine?: "device" | "workspace";
   /** Whether this run gets the local-app tools (device MCP bridge §4.1). */
@@ -120,7 +117,6 @@ export function createServerResponsibilityEngine(deps: {
       ...(deps.accessRevokedOf
         ? { accessRevokedOf: deps.accessRevokedOf }
         : {}),
-      ...(deps.quietUntil ? { quietUntil: deps.quietUntil } : {}),
       runTurn: async (context) => {
         const initiator: AuditInitiator = {
           kind: "responsibility",

@@ -20,7 +20,6 @@
  */
 import { TURN_LIMITS } from "../../../toolkit/src/limits";
 import { assertPersonTenant, runAsTenant } from "../tenant/context";
-import type { QuietUntil } from "../user-preferences";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
 import type { AutomationFiring, AutomationStore } from "./store";
 import type { AutomationTargetKind } from "./types";
@@ -65,8 +64,7 @@ export type AutomationSweepOptions = {
     | "beginFiring"
     | "finishFiring"
     | "reapAbandonedFirings"
-  > &
-    Partial<Pick<AutomationStore, "triggerUrgent">>;
+  >;
   queue: WorkQueue;
   /** Who carries out each target kind (AUT3). A kind with nothing registered fails its firing. */
   executors: Partial<Record<AutomationTargetKind, AutomationFiringExecutor>>;
@@ -76,11 +74,6 @@ export type AutomationSweepOptions = {
   maxAttempts?: number;
   limit?: number;
   graceMs?: number;
-  /**
-   * 安静时段（期 3·3.2）：自动任务是自己开的轮，这个人在安静时段时不开，除非触发器标了紧急。定时的那一次推迟到
-   * 时段结束再跑（夜里错过的合成一次），外部事件的那一条留在队列里推迟到时段结束，都不丢。没有就不看。
-   */
-  quietUntil?: QuietUntil;
   /**
    * A clock for tests. Unset in production, where phase one judges "due" and "late" on the
    * database's clock end to end (`dueTriggers` hands its `now()` back with every row). When given,
@@ -205,28 +198,17 @@ export async function offerDueAutomations(
       const tenant = assertPersonTenant(trigger.tenantId);
       const lateBy = now.getTime() - trigger.nextRunAt.getTime();
       if (trigger.kind !== "unreadable" && lateBy <= graceMs) {
-        /*
-         * QUIET HOURS. While the owner rests, an occurrence is offered for the moment the quiet time
-         * ends, keyed and stamped by that moment: the occurrences of one night are one item, and one
-         * due exactly then is the same item. An urgent trigger is never held.
-         */
-        const quiet =
-          options.quietUntil && trigger.urgent !== true
-            ? await options.quietUntil(tenant, { now }).catch(() => null)
-            : null;
-        const fireAt = quiet ?? trigger.nextRunAt;
         // Offered BEFORE the clock moves: a crash between the two re-offers the same key next pass.
         await runAsTenant(tenant, async () => {
           await options.queue.offer({
             kind: AUTOMATION_FIRE_KIND,
-            key: `${trigger.id}:${minuteKey(fireAt)}`,
+            key: `${trigger.id}:${minuteKey(trigger.nextRunAt)}`,
             payload: {
               automationId: trigger.automationId,
               triggerId: trigger.id,
               triggerKind: trigger.kind,
-              scheduledFor: fireAt.toISOString(),
+              scheduledFor: trigger.nextRunAt.toISOString(),
             },
-            ...(quiet ? { runAt: quiet } : {}),
           });
         });
         offered.push(trigger.automationId);
@@ -355,41 +337,6 @@ export async function dispatchClaimedAutomations(
 
     try {
       const now = options.now?.() ?? new Date();
-      /*
-       * QUIET HOURS AGAIN, at the moment of acting (the offer may predate the quiet time, or the person
-       * moved their hours): unless the trigger is urgent, the item goes back to the queue, uncounted,
-       * for the end of the quiet time. A timed one is re-stamped for that moment so the window below
-       * measures from there; an event keeps its own and has no window.
-       */
-      if (options.quietUntil) {
-        const urgent = await runAsTenant(
-          tenant,
-          async () => (await options.store.triggerUrgent?.(triggerId)) ?? false,
-        ).catch(() => false);
-        const until = urgent
-          ? null
-          : await options.quietUntil(tenant, { now }).catch(() => null);
-        if (until) {
-          const held = await options.queue.release({
-            kind: AUTOMATION_FIRE_KIND,
-            key: item.key,
-            owner: options.owner,
-            delayMs: Math.max(1_000, until.getTime() - now.getTime()),
-            uncounted: true,
-            reason: "quiet hours",
-            ...(typeof item.payload.scheduledFor === "string"
-              ? { payload: { scheduledFor: until.toISOString() } }
-              : {}),
-          });
-          report.skipped.push({
-            automationId,
-            reason: held
-              ? "held for the owner's quiet hours"
-              : "not ours to hold",
-          });
-          continue;
-        }
-      }
       const stamp = item.payload.scheduledFor;
       const parsedStamp = typeof stamp === "string" ? new Date(stamp) : null;
       const scheduledFor =

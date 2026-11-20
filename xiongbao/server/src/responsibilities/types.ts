@@ -71,8 +71,6 @@ export const responsibilityEventSchema = z
      * consulted because the trigger's own filter already matched.
      */
     triggerId: text(128).optional(),
-    /** The trigger that delivered this is marked urgent: quiet hours do not hold its run. */
-    urgent: z.boolean().optional(),
   })
   .strict()
   .superRefine((event, context) => {

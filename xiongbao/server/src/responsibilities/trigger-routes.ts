@@ -50,12 +50,6 @@ export type DeliveryOutcome =
   | { status: "ignored"; reason: string }
   | { status: "inactive"; reason: string };
 
-/** Whether the trigger's filter marks it urgent (not every kind has a filter). */
-function urgentOf(trigger: ResolvedTrigger): boolean {
-  const filter = (trigger.config as { filter?: { urgent?: boolean } }).filter;
-  return filter?.urgent === true;
-}
-
 /**
  * The one path every trigger kind (webhook, providers, email, Slack) takes after authentication:
  * lifecycle gate, narrow filter, then the store's transactional event + run + queue insert, audited
@@ -90,7 +84,6 @@ export async function deliverToTrigger(
     externalId: `${trigger.id}:${delivery.deliveryId}`.slice(0, 256),
     type: delivery.type.slice(0, 128) || "received",
     payload: fitPayload(delivery.payload),
-    ...(urgentOf(trigger) ? { urgent: true } : {}),
   });
   if (deps.auditStore && !result.duplicate)
     await recordAuditEvent(deps.auditStore, {

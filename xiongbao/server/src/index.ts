@@ -4401,7 +4401,6 @@ await startupLifecycle.run(async (startup) => {
   const quietUntil = createQuietUntil(database);
   const responsibilityEngine = createServerResponsibilityEngine({
     productTelemetry,
-    quietUntil,
     database,
     responsibilityStore,
     routineIntelligence,
@@ -5052,7 +5051,6 @@ await startupLifecycle.run(async (startup) => {
     wakerflows: wakerFlowStore,
   });
   const automationSweep = {
-    quietUntil,
     store: automationStore,
     queue: automationQueue,
     owner: workOwner("automation"),
