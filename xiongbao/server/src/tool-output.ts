@@ -37,15 +37,8 @@ export const WORKSPACE_OUTPUT_DIR = "tool-outputs";
  * 原样留着，后段每步就是 2～3 万 token。所以命令输出和没指定行段的读文件各自再收紧，网页正文已经是 8KB。
  * 都是环境变量可回退：设 `off` 回到 {@link OUTPUT_INLINE_BYTES}（16KB）和原来的头尾取法，设数字取那么多字节。
  */
-/**
- * `computer_run_command` 的输出不超过这么多字节原样回传。部署用 `XIONGBAO_COMMAND_INLINE_BYTES` 覆盖（设 4096 就是 4KB）。
- *
- * 默认仍是 16KB：提议降到 4KB，但 `tool-output-offload.test.ts` 里「刚好卡在阈值上的不动」钉着 16KB 的命令输出不存盘，
- * 改默认值要先改那条断言，等批准后把这个常量改成 4 * 1024。
- */
-export const COMMAND_INLINE_BYTES = OUTPUT_INLINE_BYTES;
-/** 提议的命令输出内联上限，批准后成为 {@link COMMAND_INLINE_BYTES}；已能用环境变量取到。 */
-export const PROPOSED_COMMAND_INLINE_BYTES = 4 * 1024;
+/** `computer_run_command` 的输出不超过这么多字节原样回传（原为 16KB，用户 2026-11-20 批准降到 4KB）。部署用 `XIONGBAO_COMMAND_INLINE_BYTES` 覆盖（设 16384 或 off 回到原来的行为）。 */
+export const COMMAND_INLINE_BYTES = 4 * 1024;
 /** 没指定行段的 `computer_read_file` 不超过这么多字节原样回传（原为 16KB）。部署用 `XIONGBAO_READ_INLINE_BYTES` 覆盖。 */
 export const READ_INLINE_BYTES = 12 * 1024;
 

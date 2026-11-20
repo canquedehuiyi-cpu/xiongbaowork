@@ -6,7 +6,6 @@ import {
   offloadCommandResult,
   OUTPUT_INLINE_BYTES,
   type OutputSink,
-  PROPOSED_COMMAND_INLINE_BYTES,
   quietOutputOn,
   READ_INLINE_BYTES,
   readInlineBytes,
@@ -26,9 +25,7 @@ const lines = (count: number) =>
 let envBefore: string | undefined;
 beforeEach(() => {
   envBefore = process.env.XIONGBAO_COMMAND_INLINE_BYTES;
-  process.env.XIONGBAO_COMMAND_INLINE_BYTES = String(
-    PROPOSED_COMMAND_INLINE_BYTES,
-  );
+  process.env.XIONGBAO_COMMAND_INLINE_BYTES = String(COMMAND_INLINE_BYTES);
 });
 afterEach(() => {
   if (envBefore === undefined) delete process.env.XIONGBAO_COMMAND_INLINE_BYTES;
@@ -50,10 +47,9 @@ const run = (command: string, stdout: string, exitCode = 0, stderr = "") => ({
 });
 
 describe("命令输出的内联上限", () => {
-  test("默认还是 16KB（降到 4KB 待批准），环境变量能改，off 回到 16KB，不合理的值当没设", () => {
-    expect(COMMAND_INLINE_BYTES).toBe(OUTPUT_INLINE_BYTES);
-    expect(PROPOSED_COMMAND_INLINE_BYTES).toBe(4 * 1024);
-    expect(commandInlineBytes({})).toBe(OUTPUT_INLINE_BYTES);
+  test("默认 4KB，环境变量能改，off 回到 16KB，不合理的值当没设", () => {
+    expect(COMMAND_INLINE_BYTES).toBe(4 * 1024);
+    expect(commandInlineBytes({})).toBe(4 * 1024);
     expect(commandInlineBytes({ XIONGBAO_COMMAND_INLINE_BYTES: "8192" })).toBe(
       8192,
     );
@@ -61,10 +57,10 @@ describe("命令输出的内联上限", () => {
       OUTPUT_INLINE_BYTES,
     );
     expect(commandInlineBytes({ XIONGBAO_COMMAND_INLINE_BYTES: "abc" })).toBe(
-      OUTPUT_INLINE_BYTES,
+      4 * 1024,
     );
     expect(commandInlineBytes({ XIONGBAO_COMMAND_INLINE_BYTES: "-5" })).toBe(
-      OUTPUT_INLINE_BYTES,
+      4 * 1024,
     );
   });
 
