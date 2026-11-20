@@ -2682,6 +2682,17 @@ async function buildAgent(
     const hooks: BuiltInAgentHooks = {
       // Somebody is watching: a run still at work on its last step gets one more budget of steps.
       ...(unattended ? { unattended } : { extension: TOOL_STEPS }),
+      /*
+       * 收尾提醒（计划里还有没做的项、改完没校验）按整轮看：无头的一轮被切成很多次运行，早先写的计划和改的文件
+       * 不能因为在前面的运行里就看不见。部署开关 `XIONGBAO_NUDGE_WHOLE_TURN=off`、`XIONGBAO_VERIFY_NUDGE=off`
+       * 回到原来的样子。
+       */
+      ...(process.env.XIONGBAO_NUDGE_WHOLE_TURN === "off"
+        ? { planAcrossRuns: false }
+        : {}),
+      ...(process.env.XIONGBAO_VERIFY_NUDGE === "off"
+        ? { verifyChanges: false }
+        : {}),
       // A chat the server carries on spends its step budget once over all its rounds, not once each.
       wholeTurn: (runInput) =>
         declaresServerComputerTools(runInput.forwardedProps),

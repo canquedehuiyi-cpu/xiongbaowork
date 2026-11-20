@@ -61,3 +61,83 @@ export const PROMPT_SECTION_TOOLS = [
   GREP_TOOL,
   GLOB_TOOL,
 ] as const;
+
+/** The file-writing tool, by the name the model is offered. */
+export const WRITE_FILE_TOOL = "computer_write_file";
+
+/** Files that are prose, not something to run: writing one leaves nothing to test or build. */
+const PROSE_FILE = /\.(md|markdown|txt|rst|log|docx?|pdf|pptx?)$/i;
+
+/** A command that is itself a check: what a run does after a change to see that it holds. */
+const VERIFYING_COMMAND =
+  /\b(test|tests|check|build|verify|validate|lint|tsc|diff|assert|pytest|jest|vitest|make)\b|\bwc\s+-l\b|\bhead\s/i;
+
+/** A command that changes a file in place, other than by redirecting into one. */
+const IN_PLACE_COMMAND = /\bsed\s+-i\b|\bpatch\b|\bgit\s+apply\b|\b(mv|cp)\s/;
+
+const argumentsOf = (input: unknown): Record<string, unknown> => {
+  if (typeof input === "object" && input !== null)
+    return input as Record<string, unknown>;
+  if (typeof input !== "string") return {};
+  try {
+    const parsed: unknown = JSON.parse(input);
+    return typeof parsed === "object" && parsed !== null
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+/** The command a shell call ran, or an empty string. */
+function commandOf(input: unknown): string {
+  const command = argumentsOf(input).command;
+  return typeof command === "string" ? command : "";
+}
+
+/**
+ * The files a shell command writes, as far as its text shows it: the targets of `>` and `>>` and of
+ * `tee`, and the file `sed -i`, `mv` and `cp` leave behind. `/dev/null` and `2>&1` are not files.
+ */
+function writtenByCommand(command: string): string[] {
+  const targets = [
+    ...command.matchAll(/(?:^|[^=<>&0-9-])>{1,2}\s*([^\s;&|<>()]+)/g),
+    ...command.matchAll(/\btee\s+(?:-a\s+)?([^\s;&|<>()]+)/g),
+  ]
+    .map((found) => (found[1] ?? "").replace(/^["']|["']$/g, ""))
+    .filter((path) => path && path !== "/dev/null");
+  if (IN_PLACE_COMMAND.test(command) && targets.length === 0)
+    targets.push(command.trim().split(/\s+/).at(-1) ?? "");
+  return targets;
+}
+
+/** One call a model made, in the order it made them. */
+export type MadeCall = { name: string; input: unknown };
+
+/**
+ * The files a turn changed and has not checked since: everything the turn wrote or edited after the
+ * last command that looks like a check (`test`, `build`, `lint`, `tsc` …), or all of them when it
+ * ran none. Empty when the turn changed nothing worth checking: only prose files, or only reading.
+ *
+ * Read from the turn's calls, so it is the same on every run of a turn the host carries on between
+ * runs, however the turn was cut into them.
+ */
+export function unverifiedChanges(calls: readonly MadeCall[]): string[] {
+  let changed: string[] = [];
+  for (const call of calls) {
+    if (call.name === WRITE_FILE_TOOL || call.name === EDIT_FILE_TOOL) {
+      const path = argumentsOf(call.input).path;
+      if (typeof path === "string" && !PROSE_FILE.test(path))
+        changed.push(path);
+      continue;
+    }
+    if (call.name !== COMMAND_TOOL) continue;
+    const command = commandOf(call.input);
+    const written = writtenByCommand(command).filter(
+      (path) => !PROSE_FILE.test(path),
+    );
+    if (written.length > 0) changed.push(...written);
+    else if (VERIFYING_COMMAND.test(command)) changed = [];
+  }
+  return [...new Set(changed)];
+}

@@ -18,6 +18,7 @@ import {
   DESKTOP_WAIT_TOOL,
   DESKTOP_WRITE_TOOLS,
 } from "../approvals/desktop-policy";
+import { parallelToolsOn } from "../agents/parallel-tools";
 import { currentApprovalContext } from "../approvals/types";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import { isFinalSignIn, signInToolResult } from "../passwords/service";
@@ -157,6 +158,14 @@ export function createHeadlessComputerTools(options: {
   );
 }
 
+/** 只读的电脑工具：同一步里可以一起开始，互不影响（读文件、按内容搜、按名字找、列目录）。 */
+const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
+  "computer_read_file",
+  "computer_grep",
+  "computer_glob",
+  "computer_list_files",
+]);
+
 function headlessComputerTools(options: {
   gateway: ComputerGateway;
   seat: ComputerSeat;
@@ -194,6 +203,14 @@ function headlessComputerTools(options: {
   ): HeadlessTool {
     return {
       definition: { name, description, parameters: z.toJSONSchema(schema) },
+      /*
+       * 只读的工具和同一步的其他调用一起开始，结果仍按顺序取（`HeadlessTool.concurrent`）：一步里发出的几个
+       * 读取、搜索不必排队。写文件、改文件、命令、浏览器动作互相依赖，仍然一个接一个。
+       * 部署开关 `XIONGBAO_PARALLEL_TOOLS=off` 关掉。
+       */
+      ...(READ_ONLY_TOOLS.has(name) && parallelToolsOn()
+        ? { concurrent: true }
+        : {}),
       execute: async (args, context) => {
         const input = schema.parse(args);
         if (context.signal.aborted)

@@ -191,6 +191,17 @@ export function stepCells(record: EvalRecord | undefined): string[] {
   ];
 }
 
+/**
+ * 一道题平均每步工具调用数：运行事件里的工具调用数除以模型调用数，一位小数。一步一个调用是 1.0；每步都要把整段
+ * 历史再发一遍，这个数越大，同样的活发的历史越少。缺哪个数、或模型调用是 0，都是「—」。
+ */
+export function toolCallsPerStep(record: EvalRecord | undefined): string {
+  const tools = record?.toolCalls;
+  const steps = record?.modelCalls;
+  if (tools == null || steps == null || steps <= 0) return DASH;
+  return (tools / steps).toFixed(1);
+}
+
 /** 变化的百分比，例如 `-35%`；基数没有或是 0 时「—」。 */
 const change = (
   before: number | null | undefined,
@@ -558,15 +569,19 @@ export function renderReport(results: EvalResults[]): string {
               `${mine.label}最长一步输入`,
               `${mine.label}前 / 中 / 后平均`,
               `${mine.label}非主运行调用`,
+              `${mine.label}每步工具调用`,
             ]),
           ],
           tasks.map((task) => [
             TASK_TITLES[task],
-            ...stepped.flatMap((mine) => stepCells(find(mine.results, task))),
+            ...stepped.flatMap((mine) => [
+              ...stepCells(find(mine.results, task)),
+              toolCallsPerStep(find(mine.results, task)),
+            ]),
           ]),
         ),
         "",
-        "最长一步输入 = 这道题所有模型调用里输入 token 最多的一次；前 / 中 / 后平均 = 按时间把每次调用的输入平均分成三段各取平均，平的说明每步输入稳住了，越往后越大说明历史在越滚越大。非主运行调用 = 不在主员工那几轮里的调用（子代理等，记在同一个员工名下，汇总里混着它们）。数字读 `model_token_calls`，和上表的 token 同一批行；提供方没报的那一步不计入。",
+        "最长一步输入 = 这道题所有模型调用里输入 token 最多的一次；前 / 中 / 后平均 = 按时间把每次调用的输入平均分成三段各取平均，平的说明每步输入稳住了，越往后越大说明历史在越滚越大。非主运行调用 = 不在主员工那几轮里的调用（子代理等，记在同一个员工名下，汇总里混着它们）。数字读 `model_token_calls`，和上表的 token 同一批行；提供方没报的那一步不计入。每步工具调用 = 熊宝工具调用数 ÷ 模型调用数（一步一个调用是 1.0，越大说明一步里并行发出的调用越多）。",
         "",
       );
     for (const mine of mineSides) {
