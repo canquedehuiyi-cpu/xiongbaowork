@@ -34,7 +34,38 @@ export const TASKS = ["research", "docs", "code", "data", "office"] as const;
  * 不在 `all` 里（`all` 仍是五道对标题，Codex 侧的对照也只跑这五道），用 `hard` 或题名点名跑。
  */
 export const HARD_TASKS = ["compare"] as const;
-export type TaskName = (typeof TASKS)[number] | (typeof HARD_TASKS)[number];
+/**
+ * 期 0 加的三道难题：跨文件重构、终端修构建、网页表单（电脑操作）。和 `compare` 合在一起是评测里的 `hard` 组
+ * （{@link HARD_SUITE}），两个跑评测的脚本和报告用它。
+ */
+export const MORE_HARD_TASKS = ["refactor", "terminal", "webform"] as const;
+/**
+ * `EVAL_TASKS=hard` 跑的全体：compare、refactor、terminal、webform。`selectTasks` 的 `hard` 默认只认
+ * {@link HARD_TASKS}（保持它原来的含义），评测脚本把这一组传给它。
+ */
+export const HARD_SUITE = [...HARD_TASKS, ...MORE_HARD_TASKS] as const;
+/**
+ * 重复任务：同一道题（复用多步办公题的夹具和判分）在同一位员工身上连做两次，看第二次的步数和 token 有没有降。
+ * 不在 `all` 也不在 `hard` 里，只能点名跑（`EVAL_TASKS=repeat`）。
+ */
+export const REPEAT_TASK = "repeat" as const;
+export type TaskName =
+  | (typeof TASKS)[number]
+  | (typeof HARD_SUITE)[number]
+  | typeof REPEAT_TASK;
+
+/** 改代码类的题：判分时要看「改完有没有验证」（`metrics.ts` 的 `editsData`）。 */
+export const EDITS_CODE_TASKS: readonly TaskName[] = [
+  "code",
+  "data",
+  "refactor",
+  "terminal",
+];
+
+/** 题目的夹具、金标和隐藏测试放在哪个目录名下：重复任务复用多步办公题的。 */
+export function sourceTask(task: TaskName): Exclude<TaskName, "repeat"> {
+  return task === REPEAT_TASK ? "office" : task;
+}
 
 export const TASK_TITLES: Record<TaskName, string> = {
   research: "调研",
@@ -43,6 +74,10 @@ export const TASK_TITLES: Record<TaskName, string> = {
   data: "数据处理",
   office: "多步办公",
   compare: "五个开源项目对比",
+  refactor: "跨文件重构",
+  terminal: "终端修构建",
+  webform: "网页表单填写",
+  repeat: "重复任务（多步办公连做两次）",
 };
 
 /** 存放时加在测试文件名后面、落地时去掉的后缀。 */
@@ -65,16 +100,20 @@ export function result(task: string, checks: Check[]): CheckResult {
 
 /**
  * 从 `all`（五道对标题）、`hard`（加难题）、空串或逗号分隔的题名里挑出要跑的题，可以混写（`all,hard`）；
- * 不认识的名字直接报错，免得悄悄少跑一题。
+ * `repeat` 只能点名。`hard` 默认是 {@link HARD_TASKS}；评测脚本传 {@link HARD_SUITE}，让 `hard` 跑
+ * compare、refactor、terminal、webform。不认识的名字直接报错，免得悄悄少跑一题。
  */
-export function selectTasks(spec: string | undefined): TaskName[] {
+export function selectTasks(
+  spec: string | undefined,
+  hard: readonly TaskName[] = HARD_TASKS,
+): TaskName[] {
   const text = (spec ?? "").trim();
   if (!text || text === "all") return [...TASKS];
-  const known: readonly TaskName[] = [...TASKS, ...HARD_TASKS];
+  const known: readonly TaskName[] = [...TASKS, ...HARD_SUITE, REPEAT_TASK];
   const picked = new Set<string>();
   for (const name of text.split(/[,\s]+/).filter(Boolean)) {
     if (name === "all") for (const task of TASKS) picked.add(task);
-    else if (name === "hard") for (const task of HARD_TASKS) picked.add(task);
+    else if (name === "hard") for (const task of hard) picked.add(task);
     else if ((known as readonly string[]).includes(name)) picked.add(name);
     else
       throw new Error(
@@ -90,7 +129,7 @@ export function selectTasks(spec: string | undefined): TaskName[] {
  */
 export function taskPrompt(task: TaskName, where: string): string {
   return [
-    `请完成「${TASK_TITLES[task]}」这道题：先读 ${where}/TASK.md，按里面的要求做完。`,
+    `请完成「${TASK_TITLES[sourceTask(task)]}」这道题：先读 ${where}/TASK.md，按里面的要求做完。`,
     `所有产物都写进 ${where}（不要写到别处），做完后自己核对一遍要求再结束。`,
   ].join("\n");
 }
@@ -133,33 +172,51 @@ export function landedName(path: string): string {
 
 /** 把某道题的原始输入（夹具落地后的样子）作为 路径 → 内容 返回，判分时拿来对比「原样没动」。 */
 export function fixtureFiles(task: TaskName): Map<string, Buffer> {
-  const root = join(FIXTURES_DIR, task);
+  const root = join(FIXTURES_DIR, sourceTask(task));
   const files = new Map<string, Buffer>();
   for (const path of listFiles(root))
     files.set(landedName(path), readFileSync(join(root, path)));
-  if (task === "data") {
+  if (sourceTask(task) === "data") {
     const { csv } = salesFixture();
     files.set("sales.csv", Buffer.from(csv, "utf8"));
   }
   return files;
 }
 
-/** 把一道题的夹具落到 `dest`（不存在就建）。两边用的是同一份内容。 */
-export function materialize(task: TaskName, dest: string): string[] {
+/**
+ * 把一道题的夹具落到 `dest`（不存在就建）。两边用的是同一份内容。`vars` 给了就把文本里的 `{{名字}}` 换成值：
+ * 网页表单题的网址（端口由评测脚本现起）就这样写进题面。
+ */
+export function materialize(
+  task: TaskName,
+  dest: string,
+  vars: Record<string, string> = {},
+): string[] {
   const written: string[] = [];
   for (const [path, contents] of fixtureFiles(task)) {
     const target = join(dest, path);
     mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, contents);
+    writeFileSync(target, fill(contents, vars));
     written.push(path);
   }
   return written.sort();
 }
 
-/** 把 `from` 目录整个拷进 `to`（判分前把产物拷出来用）。 */
-export function copyTree(from: string, to: string) {
+function fill(contents: Buffer, vars: Record<string, string>): Buffer {
+  if (!Object.keys(vars).length || !contents.includes("{{")) return contents;
+  let text = contents.toString("utf8");
+  for (const [name, value] of Object.entries(vars))
+    text = text.replaceAll(`{{${name}}}`, value);
+  return Buffer.from(text, "utf8");
+}
+
+/**
+ * 把 `from` 目录整个拷进 `to`（判分前把产物拷出来用）。`land` 为真时去掉 `.fixture` 后缀（金标里带测试文件的题
+ * 用它叠到落地后的夹具上）。
+ */
+export function copyTree(from: string, to: string, land = false) {
   for (const path of listFiles(from)) {
-    const target = join(to, path);
+    const target = join(to, land ? landedName(path) : path);
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(join(from, path), target);
   }

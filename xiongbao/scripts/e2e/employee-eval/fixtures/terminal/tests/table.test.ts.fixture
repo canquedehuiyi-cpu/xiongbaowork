@@ -1,0 +1,23 @@
+import { expect, test } from "bun:test";
+import { columnWidths, renderTable } from "../src/table";
+
+test("each column is as wide as its longest cell, header included", () => {
+  expect(columnWidths([["name", "n"], ["Alice", "10"]])).toEqual([5, 2]);
+  expect(columnWidths([["longheader", "n"], ["a", "1"]])).toEqual([10, 1]);
+});
+
+test("a table has a header, a rule and left-aligned rows", () => {
+  expect(
+    renderTable([
+      ["name", "score"],
+      ["Alice", "91"],
+      ["Bob", "7"],
+    ]),
+  ).toBe(
+    ["name  | score", "------+------", "Alice | 91", "Bob   | 7"].join("\n"),
+  );
+});
+
+test("no rows, no table", () => {
+  expect(renderTable([])).toBe("");
+});

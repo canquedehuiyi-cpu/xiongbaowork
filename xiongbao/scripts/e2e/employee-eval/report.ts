@@ -15,7 +15,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { join, resolve } from "node:path";
-import { HARD_TASKS, TASK_TITLES, TASKS } from "./lib";
+import { HARD_SUITE, REPEAT_TASK, TASK_TITLES, TASKS } from "./lib";
 import {
   type Capabilities,
   inputThirds,
@@ -23,7 +23,7 @@ import {
   TOOL,
   type Tri,
 } from "./metrics";
-import type { EvalPath, EvalRecord, EvalResults } from "./records";
+import type { EvalPath, EvalRecord, EvalResults, RunMetrics } from "./records";
 
 const DASH = "—";
 const TRI: Record<Tri, string> = { yes: "是", no: "否", "n/a": "不适用" };
@@ -97,7 +97,7 @@ export function pathComparison(
   chat: EvalResults | undefined,
   codex?: EvalResults,
 ): string[][] {
-  const taskNames: readonly string[] = [...TASKS, ...HARD_TASKS];
+  const taskNames: readonly string[] = [...TASKS, ...HARD_SUITE];
   const scored = (side: EvalResults | undefined) =>
     (side?.records ?? []).filter((record) => taskNames.includes(record.task));
   const column = (side: EvalResults | undefined) => {
@@ -185,6 +185,84 @@ export function stepCells(record: EvalRecord | undefined): string[] {
   ];
 }
 
+/** 变化的百分比，例如 `-35%`；基数没有或是 0 时「—」。 */
+const change = (
+  before: number | null | undefined,
+  after: number | null | undefined,
+) =>
+  before == null || after == null || before === 0
+    ? DASH
+    : Math.round((Math.abs(after - before) / before) * 100) === 0
+      ? "0%"
+      : `${after >= before ? "+" : "-"}${Math.round((Math.abs(after - before) / before) * 100)}%`;
+
+/** 重复任务一次运行的一格：通过、步数、输入 token、墙钟。 */
+const runCell = (run: RunMetrics) =>
+  `${run.passed ? "✅" : "❌"} ${count(run.steps)} 步 / 输入 ${group(run.tokens?.input ?? null)} / ${seconds(run.wallMs)}`;
+
+/**
+ * 重复任务表（子项目 2 要看的数字）：每一侧一行，第一次、第二次各自的结果，以及第二次相对第一次的步数、输入 token、
+ * 墙钟变化。`sides` 是 `[标签, 结果文件]`，没有 `repeat` 记录的一侧不出行。
+ */
+export function repeatRows(
+  sides: readonly (readonly [string, EvalResults | undefined])[],
+): string[][] {
+  return sides.flatMap(([label, results]) => {
+    const record = results?.records.find((item) => item.task === REPEAT_TASK);
+    const first = record?.firstRun;
+    const second = record?.secondRun;
+    if (!first || !second) return [];
+    return [
+      [
+        label,
+        runCell(first),
+        runCell(second),
+        change(first.steps, second.steps),
+        change(first.tokens?.input, second.tokens?.input),
+        change(first.wallMs, second.wallMs),
+      ],
+    ];
+  });
+}
+
+const chars = (value: number | undefined) =>
+  value === undefined ? DASH : value.toLocaleString("en-US");
+
+/**
+ * 提示词体积表（熊宝侧，记录发给模型的请求体）：每道题第一个带工具的请求（员工主运行的第一步）里系统提示、
+ * 工具定义、历史各多少字符，以及最大的一次请求。没有 `promptChars` 的记录（Codex、没开请求记录）不出行。
+ */
+export function promptRows(
+  sides: readonly (readonly [string, EvalResults | undefined])[],
+): string[][] {
+  const sum = (values: number[]) =>
+    values.reduce((total, value) => total + value, 0);
+  return sides.flatMap(([label, results]) =>
+    (results?.records ?? []).flatMap((record) => {
+      const prompt = record.promptChars;
+      if (!prompt) return [];
+      const biggest = Object.entries(prompt.first.system)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([name, size]) => `${name} ${chars(size)}`)
+        .join("、");
+      return [
+        [
+          `${record.title}（${label}）`,
+          String(prompt.requests),
+          chars(sum(Object.values(prompt.first.system))),
+          chars(prompt.first.tools),
+          chars(sum(Object.values(prompt.first.history))),
+          chars(prompt.first.total),
+          chars(prompt.peak.total),
+          chars(sum(Object.values(prompt.peak.history))),
+          biggest || DASH,
+        ],
+      ];
+    }),
+  );
+}
+
 function capabilityRow(
   capabilities: Capabilities,
   record: EvalRecord,
@@ -235,6 +313,16 @@ function header(results: EvalResults[]): string[] {
     );
     for (const note of side.notes) lines.push(`  - ${note}`);
   }
+  // 三方对照：熊宝侧换了模型（workflow 输入 xiongbao_model）时，在这里写明两侧各用什么。
+  const codexSide = results.find((side) => side.side === "codex");
+  const swapped = results.find(
+    (side) =>
+      side.side === "xiongbao" && codexSide && side.model !== codexSide.model,
+  );
+  if (codexSide && swapped)
+    lines.push(
+      `- **模型不同**：熊宝侧用 \`${swapped.model}\`，Codex 侧用 \`${codexSide.model}\`；差距里有一部分来自模型，不全是做法`,
+    );
   return lines;
 }
 
@@ -435,7 +523,7 @@ export function renderReport(results: EvalResults[]): string {
     }
   }
 
-  const hard = HARD_TASKS.filter((task) =>
+  const hard = HARD_SUITE.filter((task) =>
     [...mineSides.map((mine) => mine.results), codex].some((side) =>
       side?.records.some((record) => record.task === task),
     ),
@@ -486,6 +574,95 @@ export function renderReport(results: EvalResults[]): string {
       "",
     );
   }
+
+  if (hard.length) {
+    const find = (side: EvalResults | undefined, task: string) =>
+      side?.records.find((record) => record.task === task);
+    out.push(
+      "### 难题的墙钟与逐步计量",
+      "",
+      table(
+        [
+          "题目",
+          ...mineSides.flatMap((mine) => [
+            `${mine.label}墙钟`,
+            `${mine.label}最长一步输入`,
+            `${mine.label}前 / 中 / 后平均`,
+          ]),
+          "Codex 墙钟",
+        ],
+        hard.map((task) => [
+          TASK_TITLES[task],
+          ...mineSides.flatMap((mine) => {
+            const record = find(mine.results, task);
+            const [longest, thirds] = stepCells(record);
+            return [
+              record ? seconds(record.wallMs) : DASH,
+              longest as string,
+              thirds as string,
+            ];
+          }),
+          find(codex, task)
+            ? seconds((find(codex, task) as EvalRecord).wallMs)
+            : DASH,
+        ]),
+      ),
+      "",
+      "最长一步输入、前 / 中 / 后平均的算法同上面的「每步输入」表；逐步数字只有熊宝侧读得到，Codex 没有。",
+      "",
+    );
+  }
+
+  const repeatTable = repeatRows([
+    ...mineSides.map((mine) => [mine.label, mine.results] as const),
+    ["Codex", codex] as const,
+  ]);
+  if (repeatTable.length)
+    out.push(
+      "## 重复任务（同一位员工把同一道题连做两次）",
+      "",
+      table(
+        [
+          "一侧",
+          "第一次（通过 / 步数 / 输入 token / 墙钟）",
+          "第二次",
+          "步数变化",
+          "输入 token 变化",
+          "墙钟变化",
+        ],
+        repeatTable,
+      ),
+      "",
+      "两次在各自干净的目录里做，各开一段新对话，员工是同一位；变化是第二次相对第一次。Codex 每次都是全新的环境，没有跨次的记忆，只作对照。",
+      "",
+    );
+
+  const promptTable = promptRows([
+    ...mineSides.map((mine) => [mine.label, mine.results] as const),
+    ["Codex", codex] as const,
+  ]);
+  if (promptTable.length)
+    out.push(
+      "## 提示词体积（熊宝侧，字符数）",
+      "",
+      table(
+        [
+          "题目",
+          "请求数",
+          "首步系统提示",
+          "首步工具定义",
+          "首步历史",
+          "首步合计",
+          "最大一步合计",
+          "最大一步的历史",
+          "首步系统提示里最大的段",
+        ],
+        promptTable,
+      ),
+      "",
+      "记录的是熊宝服务器发给模型的请求体：首步 = 这道题第一个带工具的请求（员工主运行的第一步）；最大一步 = 总字符最多的一次请求（历史越滚越大的话，差距在历史上）。请求数含子代理、压缩、挑选技能等不在主运行里的调用。字符数不是 token，看比例和趋势。",
+      "",
+    );
 
   const smokeRows = smokes.flatMap((side) =>
     side.records.map((record) => ({

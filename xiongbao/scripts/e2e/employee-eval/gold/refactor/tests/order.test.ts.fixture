@@ -1,0 +1,24 @@
+import { expect, test } from "bun:test";
+import { biggestLine, orderSummary, orderTotal } from "../src/order";
+
+const small = { items: [{ sku: "pen", unitCents: 150, quantity: 3 }] };
+const big = {
+  items: [
+    { sku: "desk", unitCents: 8000, quantity: 1 },
+    { sku: "pen", unitCents: 150, quantity: 20 },
+  ],
+};
+
+test("shipping is 8 yuan under 99 yuan and free from there", () => {
+  expect(orderTotal(small)).toBe(1250);
+  expect(orderTotal(big)).toBe(10700);
+});
+
+test("the biggest line wins, the first of equals", () => {
+  expect(biggestLine(big)?.sku).toBe("desk");
+  expect(biggestLine({ items: [] })).toBeUndefined();
+});
+
+test("the summary counts pieces and prints yuan", () => {
+  expect(orderSummary(small)).toBe("3 件，合计 12.50 元");
+});

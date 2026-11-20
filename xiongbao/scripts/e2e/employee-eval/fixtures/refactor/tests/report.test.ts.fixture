@@ -1,0 +1,24 @@
+import { expect, test } from "bun:test";
+import { salesReport, skuRevenue, topSku } from "../src/report";
+
+const orders = [
+  { items: [{ sku: "pen", unitCents: 150, qty: 3 }] },
+  {
+    items: [
+      { sku: "desk", unitCents: 8000, qty: 1 },
+      { sku: "pen", unitCents: 150, qty: 20 },
+    ],
+  },
+];
+
+test("the report has one line per order and a total", () => {
+  expect(salesReport(orders)).toBe(
+    "#1: 3 件, 12.50 元\n#2: 21 件, 107.00 元\n总计: 119.50 元",
+  );
+});
+
+test("top SKU and per-SKU revenue", () => {
+  expect(topSku(orders)).toBe("pen");
+  expect(topSku([])).toBeUndefined();
+  expect(skuRevenue(orders, "pen")).toBe(450 + 2700);
+});
