@@ -335,6 +335,7 @@ tests/credential-rotation-leak.integration.test.ts
 tests/credentials-reseal.test.ts
 tests/credentials.test.ts
 tests/cull-sweep-wiring.test.ts
+tests/daily-limit.test.ts
 tests/database-pool-closing.test.ts
 tests/database.test.ts
 tests/db-client-address.test.ts
@@ -679,6 +680,7 @@ tests/provider-selection.test.ts
 tests/provider-stored-rows.integration.test.ts
 tests/provider-tool-schemas.test.ts
 tests/provider-undecided.test.ts
+tests/purpose-model.test.ts
 tests/question-answer-in-conversation.integration.test.ts
 tests/quota-concurrency.integration.test.ts
 tests/quota-error-contract.test.ts
