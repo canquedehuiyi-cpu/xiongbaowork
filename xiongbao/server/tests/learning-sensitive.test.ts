@@ -124,6 +124,8 @@ describe("越权步骤检查", () => {
     "rm -rf out node_modules/.cache 后重跑 bun run import",
     "cd <dir> && rm -rf .cache && bun run warm",
     "rm -rf <dir>/out/",
+    // 参数只看同一行：下一行的 * 不算 rm 的目标。
+    "rm -rf out\nls inbox/*",
     "把周报发到 https://wiki.example/weekly",
     "把周报发给 weekly.md 里写的人",
     "把 .env.example 里的变量名整理成表",

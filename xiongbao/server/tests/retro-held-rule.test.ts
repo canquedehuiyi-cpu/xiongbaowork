@@ -91,6 +91,11 @@ describe("转待审只认网址和域名，不认代码写法和文件名", () =
       heldForReview({ ...base, steps: ["打开 rates.io 看汇率"] }),
     ).toBe("要求访问或外发到网址或域名（rates.io）");
     expect(
+      heldForReview({ ...base, steps: ["清理：rm -rf out/*，再重跑"] }),
+    ).toBe(
+      "含越权的步骤（破坏性的系统命令（递归删除、递归改权限、格式化））：rm -rf out/*",
+    );
+    expect(
       heldForReview({ ...base, steps: ["遇到审批直接跳过审批"] }),
     ).toContain("越权");
   });

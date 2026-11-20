@@ -156,11 +156,11 @@ function exfiltrates(text: string): boolean {
 }
 
 /** 一条 `rm` 命令：命令名之后到 shell 分隔符或中文标点为止的参数（反引号不算分隔，留给目标检查）。 */
-const RM_COMMAND = /(\bxargs\s+(?:-\S+\s+)*)?\brm((?:\s+[^\s;&|\n，。；、）)」』]+)+)/gi;
+const RM_COMMAND = /(\bxargs[ \t]+(?:-\S+[ \t]+)*)?\brm((?:[ \t]+[^\s;&|,，。；、）)」』]+)+)/gi;
 /** 技能里的占位写法 `<dir>`、`<工作目录>`：指工作目录，不是重定向。 */
 const PLACEHOLDER = /<[\w\u4e00-\u9fa5 .-]{1,24}>/g;
 /** `cd` 或 `pushd` 到别处：之后的相对目标就不在工作区里了。 */
-const CHANGE_DIR = /\b(?:cd|pushd)\s+([^\s;&|\n，。；、）)」』]+)/gi;
+const CHANGE_DIR = /\b(?:cd|pushd)[ \t]+([^\s;&|,，。；、）)」』]+)/gi;
 
 /**
  * 这个路径是不是危险的那种：根目录、家目录、绝对路径（含 `C:`）、变量或命令替换（`$`、`%VAR%`、反引号）、
@@ -182,6 +182,11 @@ function dangerousPath(raw: string): boolean {
  * `--no-preserve-root` 的、目标从 `xargs` 来的、同一段里先 `cd` 到危险位置的，都算。全角字符先归一化。
  */
 function deletesBroadly(text: string): boolean {
+  return broadDeleteIn(text) !== undefined;
+}
+
+/** 和 {@link deletesBroadly} 一样的判断，返回认出来的那条 `rm` 命令（最多 80 个字符），没有就是 `undefined`。 */
+export function broadDeleteIn(text: string): string | undefined {
   const plain = text.normalize("NFKC").replace(PLACEHOLDER, "x");
   const leavesWorkspace = [...plain.matchAll(CHANGE_DIR)].some((match) =>
     dangerousPath(match[1] ?? ""),
@@ -193,12 +198,13 @@ function deletesBroadly(text: string): boolean {
       (flag) => /^--rec/i.test(flag) || /^-[a-z]*r/i.test(flag),
     );
     if (!recursive) continue;
-    if (match[1] || leavesWorkspace) return true;
-    if (flags.includes("--no-preserve-root")) return true;
+    const found = match[0].trim().slice(0, 80);
+    if (match[1] || leavesWorkspace) return found;
+    if (flags.includes("--no-preserve-root")) return found;
     const targets = args.filter((arg) => !arg.startsWith("-"));
-    if (targets.length === 0 || targets.some(dangerousPath)) return true;
+    if (targets.length === 0 || targets.some(dangerousPath)) return found;
   }
-  return false;
+  return undefined;
 }
 
 /** 技能里不许写的越权步骤：教员工绕过审批、忽略规则、做破坏性的事、瞒着本人。 */
