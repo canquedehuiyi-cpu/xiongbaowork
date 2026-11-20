@@ -186,6 +186,16 @@ function responsesAnswer(turn: MockTurn, step: number) {
   });
 }
 
+/** 一张有文字、有色块的页面：截图出来是一张有内容的 PNG，而不是空白页。 */
+function demoPage(): string {
+  const rows = Array.from(
+    { length: 60 },
+    (_, index) =>
+      `<p style="margin:2px 0;color:hsl(${(index * 37) % 360} 60% 35%)">Row ${index}: revenue, margin and headcount by region, with notes on supply, pricing and the outlook.</p><div style="height:6px;background:linear-gradient(90deg,hsl(${(index * 53) % 360} 80% 60%),hsl(${(index * 91) % 360} 80% 40%))"></div>`,
+  ).join("");
+  return `<!doctype html><html><head><meta charset="utf-8"><title>Demo report</title></head><body style="font:14px sans-serif;margin:16px">${rows}</body></html>`;
+}
+
 export function startMockModel(
   policy: (request: MockRequest) => MockTurn,
 ): MockModel {
@@ -199,6 +209,11 @@ export function startMockModel(
         return Response.json({
           object: "list",
           data: [{ id: "mock", object: "model" }],
+        });
+      // 本机验证要打开的网页：假模型的剧本让电脑导航到这里，再截图。
+      if (request.method === "GET" && path === "/page")
+        return new Response(demoPage(), {
+          headers: { "content-type": "text/html; charset=utf-8" },
         });
       if (request.method !== "POST") return new Response(null, { status: 404 });
       const body = (await request.json().catch(() => ({}))) as Record<

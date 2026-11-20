@@ -16,7 +16,13 @@ import {
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { HARD_TASKS, TASK_TITLES, TASKS } from "./lib";
-import { type Capabilities, TOOL, type Tri } from "./metrics";
+import {
+  type Capabilities,
+  inputThirds,
+  longestInput,
+  TOOL,
+  type Tri,
+} from "./metrics";
 import type { EvalPath, EvalRecord, EvalResults } from "./records";
 
 const DASH = "—";
@@ -162,6 +168,21 @@ export function pathComparison(
     yours[index] as string,
     ...(base ? [base[index] as string] : []),
   ]);
+}
+
+/** 逐步计量表里一道题的三格；这道题没有逐步数字（旧结果文件、没跑这题）都是「—」。 */
+export function stepCells(record: EvalRecord | undefined): string[] {
+  if (!record?.callInputs?.length) return [DASH, DASH, DASH];
+  const longest = longestInput(record.callInputs);
+  const [front, middle, back] = inputThirds(record.callInputs);
+  const other = (record.callAgents ?? []).filter(
+    (agent) => agent === "other",
+  ).length;
+  return [
+    longest === null ? DASH : longest.toLocaleString("en-US"),
+    [front, middle, back].map((value) => group(value)).join(" / "),
+    record.callAgents ? String(other) : DASH,
+  ];
 }
 
 function capabilityRow(
@@ -353,6 +374,31 @@ export function renderReport(results: EvalResults[]): string {
       "熊宝工具调用 = 运行事件里的工具调用数（事件没存下时读对话快照）。缓存命中 = 输入 token 里命中提供方上下文缓存的比例（DeepSeek 按前缀命中，命中部分按低价计费）；提供方没报时「—」。推理输出 = 输出 token 里思考的部分。",
       "",
     );
+    const stepped = mineSides.filter((mine) =>
+      mine.results?.records.some((record) => record.callInputs?.length),
+    );
+    if (stepped.length)
+      out.push(
+        "### 每步输入（逐步计量）",
+        "",
+        table(
+          [
+            "题目",
+            ...stepped.flatMap((mine) => [
+              `${mine.label}最长一步输入`,
+              `${mine.label}前 / 中 / 后平均`,
+              `${mine.label}非主运行调用`,
+            ]),
+          ],
+          tasks.map((task) => [
+            TASK_TITLES[task],
+            ...stepped.flatMap((mine) => stepCells(find(mine.results, task))),
+          ]),
+        ),
+        "",
+        "最长一步输入 = 这道题所有模型调用里输入 token 最多的一次；前 / 中 / 后平均 = 按时间把每次调用的输入平均分成三段各取平均，平的说明每步输入稳住了，越往后越大说明历史在越滚越大。非主运行调用 = 不在主员工那几轮里的调用（子代理等，记在同一个员工名下，汇总里混着它们）。数字读 `model_token_calls`，和上表的 token 同一批行；提供方没报的那一步不计入。",
+        "",
+      );
     for (const mine of mineSides) {
       if (!mine.results?.records.length) continue;
       out.push(

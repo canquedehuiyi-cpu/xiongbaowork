@@ -333,6 +333,79 @@ export function lastAssistantText(events: readonly AgUiEvent[]): string {
   return texts.get(last) ?? "";
 }
 
+/** `model_token_calls` 里逐步计量要用到的几列。 */
+export type TokenCallRow = {
+  callId: string;
+  runId: string;
+  startedAt: Date | string;
+  inputTokens: number | null;
+  cachedInputTokens: number | null;
+};
+
+/** 这一步是主员工那几轮的调用，还是别处的（子代理、压缩等）。 */
+export type CallAgent = "main" | "other";
+
+/**
+ * 逐步计量：每次模型调用的输入 token、缓存命中 token，按开始时间从早到晚；和 token 汇总读同一批
+ * `model_token_calls` 行，所以逐步数字加起来就是汇总。
+ *
+ * `callAgents`：这一行的运行号在 `mainRunIds`（主员工自己的几轮，看板路径是派活的那几轮，单聊路径是对话下的
+ * 全部运行）里记 `main`，不在记 `other`。子代理用自己的对话和运行号，但记在同一个员工名下，所以汇总里
+ * 混着它们；表里没有「子代理」这一列，`other` 就是子代理或别的不在主运行里的调用。
+ */
+export function callSeries(
+  rows: readonly TokenCallRow[],
+  mainRunIds: readonly string[],
+): {
+  callInputs: (number | null)[];
+  callCached: (number | null)[];
+  callAgents: CallAgent[];
+} {
+  const ordered = [...rows].sort(
+    (a, b) =>
+      new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime() ||
+      a.callId.localeCompare(b.callId),
+  );
+  const main = new Set(mainRunIds);
+  return {
+    callInputs: ordered.map((row) => row.inputTokens),
+    callCached: ordered.map((row) => row.cachedInputTokens),
+    callAgents: ordered.map((row) => (main.has(row.runId) ? "main" : "other")),
+  };
+}
+
+/** 最长的一步输入；一步都没读到数字时 null。 */
+export function longestInput(
+  inputs: readonly (number | null)[] | undefined,
+): number | null {
+  const known = (inputs ?? []).filter(
+    (value): value is number => value !== null,
+  );
+  return known.length ? Math.max(...known) : null;
+}
+
+/**
+ * 前 / 中 / 后三段每步输入的平均（四舍五入）：把按时间排好的调用平均分成三段（不能整除时前面的段多一步），
+ * 一段里没有读到数字（或这一段没有调用）记 null。一眼看出每步输入是平的还是越涨越高。
+ */
+export function inputThirds(
+  inputs: readonly (number | null)[] | undefined,
+): [number | null, number | null, number | null] {
+  const list = inputs ?? [];
+  const sums: number[][] = [[], [], []];
+  list.forEach((value, index) => {
+    if (value !== null)
+      sums[Math.floor((index * 3) / list.length)]?.push(value);
+  });
+  const mean = (values: number[] | undefined) =>
+    values?.length
+      ? Math.round(
+          values.reduce((total, value) => total + value, 0) / values.length,
+        )
+      : null;
+  return [mean(sums[0]), mean(sums[1]), mean(sums[2])];
+}
+
 const tri = (applicable: boolean, value: boolean): Tri =>
   applicable ? (value ? "yes" : "no") : "n/a";
 
