@@ -15,8 +15,8 @@
  * 每一次醒来先把下一次排进队列再做这一次的事，所以一次出错、一次被挡下都不会让这串心跳断掉。受安静时段管：
  * 在安静时段里这一次不做，下一次排到时段结束；受每天次数上限管：和巡检合起来数，超了这一次不做。
  */
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import { EmptyTurnError, type TurnRunner } from "@openbot/toolkit/run-turn";
+import { HeadlessToolSuspension } from "../../../toolkit/src/headless-tools";
+import { EmptyTurnError, type TurnRunner } from "../../../toolkit/src/run-turn";
 import {
   type HeartbeatSettings,
   isHeartbeatQuiet,
