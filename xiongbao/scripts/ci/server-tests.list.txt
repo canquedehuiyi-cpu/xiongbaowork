@@ -567,6 +567,7 @@ tests/name-context.test.ts
 tests/network-allowlist-replay.integration.test.ts
 tests/network-allowlist-translate.test.ts
 tests/new-bot-without-managed-bot.integration.test.ts
+tests/new-tables-grants.integration.test.ts
 tests/oauth-refresh-redirect.test.ts
 tests/offboarding-retirement.integration.test.ts
 tests/onboarding-routes.test.ts

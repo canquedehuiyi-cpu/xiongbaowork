@@ -13,6 +13,7 @@
  * - 已有数据：新表，没有回填。
  * - 索引：（`tenant_id`, `skill_slug`）唯一；（`agent_id`）按员工数条数。
  * - 行级安全：和其它租户表一样，本人的帧读写自己的行，platform 帧读写全部；FORCE 让表的属主也受约束。
+ * - 授权：应用角色 `openbot_app` 对这张表有增删改查，和 0232、0233 一样；不授权，应用连上来读写会被拒。
  *
  * 回滚：DROP TABLE "public"."learned_skills";
  */
@@ -45,3 +46,5 @@ CREATE POLICY "tenant_isolation_insert" ON "public"."learned_skills" AS PERMISSI
 CREATE POLICY "tenant_isolation_update" ON "public"."learned_skills" AS PERMISSIVE FOR UPDATE TO public USING (tenant_id = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = 'platform') WITH CHECK (tenant_id = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = 'platform');
 --> statement-breakpoint
 CREATE POLICY "tenant_isolation_delete" ON "public"."learned_skills" AS PERMISSIVE FOR DELETE TO public USING (tenant_id = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = 'platform');
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON "public"."learned_skills" TO openbot_app;
