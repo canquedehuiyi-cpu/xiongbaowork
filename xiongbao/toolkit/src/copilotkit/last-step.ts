@@ -5,7 +5,9 @@ import {
 } from "@copilotkit/runtime/v2";
 import { openParts } from "@openbot/shared/routine-checklist";
 import {
+  COMMAND_TOOL,
   LAST_STEP_NOTICE,
+  type MadeCall,
   openPartsNudge,
   type PlanItem,
   planNudge,
@@ -14,6 +16,8 @@ import {
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
   UPDATE_PLAN_TOOL,
+  unverifiedChanges,
+  verifyNudge,
 } from "@openbot/shared/run-notices";
 import { withReplayedReasoning } from "./replayed-reasoning";
 import { DEFAULT_CONTEXT_WINDOW, foldEarlyResults } from "./turn-folding";
@@ -74,6 +78,8 @@ export type RunSteps = {
    * person's message instead, so the budget is spent once across them. See {@link answersOnLastStep}.
    */
   wholeTurn?: boolean;
+  /** The "files changed, nothing checked" reminder was already sent in this run. It is sent once. */
+  verifyNudged?: boolean;
 };
 
 /** A new run's state: counted from where it starts, never from where an earlier run stopped. */
@@ -91,6 +97,7 @@ export function startRun(
   steps.said = "";
   steps.extended = false;
   steps.limited = undefined;
+  steps.verifyNudged = false;
 }
 
 /**
@@ -163,6 +170,25 @@ function openPlanItems(prompt: Prompt, before: number): PlanItem[] {
   return (plan ?? []).filter((item) => item.status !== "done");
 }
 
+/**
+ * Every call the turn has made, in order: the model turns after the first `before` of them. Read from
+ * the prompt, so a turn cut into several runs by the host (it runs the tool calls itself) is read
+ * whole, whichever run asks.
+ */
+function callsSince(prompt: Prompt, before: number): MadeCall[] {
+  const calls: MadeCall[] = [];
+  let turns = 0;
+  for (const message of prompt) {
+    if (message.role !== "assistant") continue;
+    turns += 1;
+    if (turns <= before || typeof message.content === "string") continue;
+    for (const part of message.content)
+      if (part.type === "tool-call")
+        calls.push({ name: part.toolName, input: part.input });
+  }
+  return calls;
+}
+
 /** A one-turn message: in this call's prompt only, never in the conversation. */
 function told(prompt: Prompt, text: string): Prompt {
   return [...prompt, { role: "user", content: [{ type: "text", text }] }];
@@ -209,7 +235,21 @@ function told(prompt: Prompt, text: string): Prompt {
 export function answersOnLastStep(
   configuration: BuiltInAgentConfiguration,
   steps: RunSteps,
-  run: { unattended?: boolean; extension?: number } = {},
+  run: {
+    unattended?: boolean;
+    extension?: number;
+    /**
+     * Whether the plan an answer is held to is the whole turn's (the default) or only what this run
+     * added. A turn the host carries on between runs is many runs, and a plan written in an earlier
+     * one is the same turn's plan. `false` is the old reading.
+     */
+    planAcrossRuns?: boolean;
+    /**
+     * Whether an answer that ends a turn which changed files, with no check run since, is sent back
+     * once (the default). `false` never does.
+     */
+    verifyChanges?: boolean;
+  } = {},
 ): BuiltInAgentConfiguration {
   if ("factory" in configuration) return configuration;
   const { maxSteps } = configuration;
@@ -221,8 +261,10 @@ export function answersOnLastStep(
   } catch {
     return configuration;
   }
-  if (!isModel(model)) return configuration;
-  const inner = model;
+  // v2 stays v2 and v3 stays v3: the runtime converts a model by its own version.
+  const older = isOlderModel(model);
+  if (!older && !isModel(model)) return configuration;
+  const inner = model as Model;
   const extension =
     !run.unattended && run.extension && run.extension > 0
       ? Math.floor(run.extension)
@@ -266,17 +308,34 @@ export function answersOnLastStep(
    * already in `steps.said`, so a part this answer closes counts as closed. `prompt` is the step's
    * own, which holds every call the run made before it, its plan's among them.
    */
-  const nudgeFor = (text: string, prompt: Prompt): string | undefined => {
+  const nudgeFor = (
+    text: string,
+    prompt: Prompt,
+    tools: readonly { name: string }[] = [],
+  ): string | undefined => {
     if ((steps.nudges ?? 0) >= MOST_NUDGES) return undefined;
     const open = openParts(steps.parts ?? [], steps.said ?? "");
     const promise = unkeptPromise(text);
-    const planned = openPlanItems(prompt, steps.before ?? 0);
+    const turnStart =
+      run.planAcrossRuns === false
+        ? (steps.before ?? 0)
+        : turnsBeforeLastUser(prompt);
+    const planned = openPlanItems(prompt, turnStart);
+    // Only a run that holds the shell can check anything; a Bot without one is not told to.
+    const unchecked =
+      run.verifyChanges !== false &&
+      !steps.verifyNudged &&
+      tools.some((tool) => tool.name === COMMAND_TOOL)
+        ? unverifiedChanges(callsSince(prompt, turnStart))
+        : [];
     const nudge = [
       ...(promise ? [promiseNudge(promise)] : []),
       ...(open.length > 0 ? [openPartsNudge(open)] : []),
       ...(planned.length > 0 ? [planNudge(planned)] : []),
+      ...(unchecked.length > 0 ? [verifyNudge(unchecked)] : []),
     ].join(" ");
     if (!nudge) return undefined;
+    if (unchecked.length > 0) steps.verifyNudged = true;
     steps.nudges = (steps.nudges ?? 0) + 1;
     return nudge;
   };
@@ -377,8 +436,8 @@ ${part.delta.trimStart()}`;
           steps.said = `${steps.said ?? ""}\n${text}`;
           if (called) steps.nudges = 0;
           const nudge =
-            !called && part.finishReason.unified === "stop"
-              ? nudgeFor(text, call.prompt)
+            !called && stopped(part.finishReason)
+              ? nudgeFor(text, call.prompt, call.tools)
               : undefined;
           if (!nudge) {
             controller.enqueue({ ...part, usage });
@@ -429,8 +488,8 @@ ${part.delta.trimStart()}`;
         steps.nudges = 0;
         return result;
       }
-      if (result.finishReason.unified !== "stop") return result;
-      const nudge = nudgeFor(text, call.prompt);
+      if (!stopped(result.finishReason)) return result;
+      const nudge = nudgeFor(text, call.prompt, call.tools);
       if (!nudge) return result;
       current = again(current, text, nudge);
       let next: GenerateResult;
@@ -447,14 +506,20 @@ ${part.delta.trimStart()}`;
     }
   };
 
-  const wrapped: Model = {
-    specificationVersion: "v3",
-    provider: inner.provider,
-    modelId: inner.modelId,
-    supportedUrls: inner.supportedUrls,
-    doGenerate,
-    doStream,
-  };
+  /*
+   * A v2 model is not rebuilt: it is put in front of, as `withFoldedCalls` does, so its version, provider
+   * and the members it keeps on its prototype are still its own. Only the two calls are replaced.
+   */
+  const wrapped: Model = older
+    ? Object.assign(Object.create(inner) as Model, { doGenerate, doStream })
+    : {
+        specificationVersion: "v3",
+        provider: inner.provider,
+        modelId: inner.modelId,
+        supportedUrls: inner.supportedUrls,
+        doGenerate,
+        doStream,
+      };
   return {
     ...configuration,
     model: wrapped,
@@ -471,8 +536,26 @@ function add(a: number | undefined, b: number | undefined) {
   return a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0);
 }
 
+/** Whether a step ended because the model stopped: a v3 reason is `{ unified }`, a v2 one is the word. */
+function stopped(reason: unknown): boolean {
+  return typeof reason === "string"
+    ? reason === "stop"
+    : (reason as { unified?: unknown } | undefined)?.unified === "stop";
+}
+
 /** Two asks in one step are billed as one: what the step cost is what both of them cost. */
 function addUsage(a: Usage, b: Usage): Usage {
+  // A v2 usage is flat numbers (`inputTokens: 12`); every field is summed.
+  if (typeof (a as { inputTokens?: unknown }).inputTokens !== "object") {
+    const flat = (usage: Usage) => usage as unknown as Record<string, number>;
+    const summed: Record<string, number | undefined> = {};
+    for (const key of new Set([
+      ...Object.keys(flat(a)),
+      ...Object.keys(flat(b)),
+    ]))
+      summed[key] = add(flat(a)[key], flat(b)[key]);
+    return { ...b, ...summed } as unknown as Usage;
+  }
   return {
     ...b,
     inputTokens: {
@@ -490,8 +573,8 @@ function addUsage(a: Usage, b: Usage): Usage {
 }
 
 /**
- * 规格 v2 的模型：提示的形状和 v3 一样（工具结果的 `output` 都是 text / json / content 几种），折叠只改提示，
- * 所以可以折。别的包装（最后一步的收尾）要的是 v3 的流和用量，仍只认 {@link isModel}。
+ * 规格 v2 的模型：提示和流的形状和 v3 几乎一样，只有结束原因（一个词）和用量（平的数字）不同。折叠只改提示，
+ * 最后一步的收尾和提醒也读这两处，都按各自的版本读，v2 保持 v2。
  */
 function isOlderModel(model: unknown): boolean {
   return (

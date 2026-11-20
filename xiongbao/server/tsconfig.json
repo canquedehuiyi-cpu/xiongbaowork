@@ -37,6 +37,8 @@
   // `e2e-staffing` CI job; checked here for the same reason as G4's.
   // `../scripts/e2e/background-chat.ts`: the G8 gate's harness (后台长跑), run by the `e2e-background-chat`
   // CI job; checked here for the same reason as G4's.
+  // `../scripts/e2e/employee-eval/run-xiongbao.ts`: the 对标评测 runner, run only by model-e2e.yml by hand,
+  // so a broken import there surfaced only after a real-model run; checked here for the same reason.
   // `../scripts/e2e/employee-eval/smoke-proactive.ts`: the 期 3 proactive smoke (heartbeat, card claiming,
   // quiet hours), run by the `e2e-proactive` CI job; checked here for the same reason as G4's.
   "include": [
@@ -47,6 +49,7 @@
     "../scripts/e2e/wakerflow-real-model.ts",
     "../scripts/e2e/staffing-lifecycle.ts",
     "../scripts/e2e/background-chat.ts",
+    "../scripts/e2e/employee-eval/run-xiongbao.ts",
     "../scripts/e2e/employee-eval/smoke-proactive.ts",
     // Laptop setup and its regression tests are checked explicitly; root scripts are not a workspace.
     "../scripts/setup-composio.ts",

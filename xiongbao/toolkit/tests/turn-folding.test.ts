@@ -95,7 +95,10 @@ describe("没越线", () => {
 
   test("窗口大到 70% 远没到时，再长的历史也不动", () => {
     const prompt = promptAfter(30);
-    expect(foldEarlyResults(prompt, { window: 1_000_000 })).toBe(prompt);
+    // 这条测的是窗口比例的线；绝对预算按原来的 64K 给（默认值已降到 24K）。
+    expect(
+      foldEarlyResults(prompt, { window: 1_000_000, budget: 64_000 }),
+    ).toBe(prompt);
   });
 });
 
@@ -230,8 +233,9 @@ describe("绝对预算：窗口再大也有一条线", () => {
   });
 
   test("不传预算就用默认的 FOLD_BUDGET_TOKENS：大窗口下重的一轮折叠，轻的一轮不动", () => {
-    expect(FOLD_BUDGET_TOKENS).toBeGreaterThanOrEqual(48_000);
-    expect(FOLD_BUDGET_TOKENS).toBeLessThanOrEqual(64_000);
+    // 用户 2026-11-20 批准：折叠预算 24K（原来钉的是 48K 到 64K）。
+    expect(FOLD_BUDGET_TOKENS).toBeGreaterThanOrEqual(16_000);
+    expect(FOLD_BUDGET_TOKENS).toBeLessThanOrEqual(32_000);
     // 每步约 4.6K token，30 步远超预算，窗口 1M 的 70% 却远没到。
     const heavy = promptAfter(30, 16_000);
     const folded = foldEarlyResults(heavy, { window: HUGE });
@@ -410,14 +414,14 @@ describe("包在模型外面", () => {
   });
 
   test("窗口很大时，预算也折叠；预算 0 关掉；不给预算用默认值", async () => {
-    const run = async (budget?: number) => {
+    const run = async (budget?: number, steps = 30) => {
       const seen: Prompt[] = [];
       const wrapped = foldingEarlyResults(configurationFor(seen), {
         windowFor: () => 1_000_000,
         ...(budget === undefined ? {} : { budget }),
       });
       if ("factory" in wrapped) throw new Error("not a factory");
-      const prompt = promptAfter(30);
+      const prompt = promptAfter(steps);
       await (
         wrapped.model as unknown as {
           doStream: (options: { prompt: Prompt }) => Promise<unknown>;
@@ -430,9 +434,11 @@ describe("包在模型外面", () => {
     expect(outputOf(small.sent, 30)).toBe(resultText(30, 4_000));
     const off = await run(0);
     expect(off.sent).toBe(off.prompt);
-    // 默认预算比这一轮的总量大：一个字不动。
-    const byDefault = await run();
+    // 默认预算（24K）比 12 步的总量大：一个字不动；30 步远超它：折叠。
+    const byDefault = await run(undefined, 12);
     expect(byDefault.sent).toBe(byDefault.prompt);
+    const heavy = await run();
+    expect(outputOf(heavy.sent, 1).startsWith(FOLDED_PREFIX)).toBe(true);
   });
 
   test("读不到窗口（没给、返回空、抛错）就用保守的默认值", async () => {
@@ -717,5 +723,43 @@ describe("接在员工的运行里", () => {
     });
     expect(seen).not.toContain(FOLDED_PREFIX);
     expect(seen).toContain(resultText(1, 4_000));
+  });
+});
+
+describe("默认预算 24K（用户 2026-11-20 批准）", () => {
+  test("约 3 万 token 的历史越线：较早的结果折叠，摘要里带取回的办法；最近 4 步原样", () => {
+    const prompt = promptAfter(20) as unknown as {
+      role: string;
+      content: { output?: { type: string; value: string } }[];
+    }[];
+    // 第 1 步的结果是存了盘的长输出：摘要要指到那个文件。
+    const saved = `{"ok":true,"saved_to":"tool-outputs/page-1.txt","text":"${"y".repeat(4_000)}"}`;
+    (prompt[3] as (typeof prompt)[number]).content[0] = {
+      ...(prompt[3] as (typeof prompt)[number]).content[0],
+      output: { type: "text", value: saved },
+    };
+    const total = prompt.reduce(
+      (sum, message) => sum + estimateTokens(JSON.stringify(message.content)),
+      0,
+    );
+    expect(total).toBeGreaterThan(24_000);
+    expect(total).toBeLessThan(36_000);
+    const folded = foldEarlyResults(prompt as unknown as Prompt, {
+      window: 1_000_000,
+    });
+    expect(folded).not.toBe(prompt as unknown as Prompt);
+    // 存了盘的：给出路径和读取的办法。
+    const first = outputOf(folded, 1);
+    expect(first.startsWith(FOLDED_PREFIX)).toBe(true);
+    expect(first).toContain("tool-outputs/page-1.txt");
+    expect(first).toContain("computer_read_file");
+    // 没存盘的：说明原文不在上下文里，重新调用工具或按行段读。
+    const second = outputOf(folded, 2);
+    expect(second.startsWith(FOLDED_PREFIX)).toBe(true);
+    expect(second).toContain("重新调用工具");
+    // 最近 4 步原样，传进去的提示一个字不改。
+    for (const step of [17, 18, 19, 20])
+      expect(outputOf(folded, step)).toBe(resultText(step, 4_000));
+    expect(outputOf(prompt as unknown as Prompt, 2)).toBe(resultText(2, 4_000));
   });
 });

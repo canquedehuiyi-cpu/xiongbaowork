@@ -596,6 +596,7 @@ tests/owner-grants-hardening.integration.test.ts
 tests/owner-grants-legacy.integration.test.ts
 tests/page-frame-retention.integration.test.ts
 tests/paging.test.ts
+tests/parallel-tool-calls.test.ts
 tests/parallel-tool-results.test.ts
 tests/passwords-sign-in.test.ts
 tests/passwords-store.integration.test.ts
@@ -945,6 +946,7 @@ tests/tool-selection.integration.test.ts
 tests/turn-notice-config.test.ts
 tests/turn-notice.integration.test.ts
 tests/turn-notice.test.ts
+tests/turn-nudges-headless.test.ts
 tests/turn-observer.integration.test.ts
 tests/turn-watchdog.test.ts
 tests/unattended-platform-frame.integration.test.ts
