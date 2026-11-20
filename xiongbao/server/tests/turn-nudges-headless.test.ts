@@ -5,6 +5,7 @@ import { HeadlessToolsMiddleware } from "@openbot/toolkit/headless-tools";
 import { z } from "zod";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { deepSeekLanguageModel } from "../src/models/deepseek-thinking";
+import { languageModelFor } from "../src/models/runtime-resolver";
 import type { GrantedTool } from "../src/plugins/tools";
 
 /*
@@ -119,7 +120,21 @@ const updatePlan: GrantedTool = {
   execute: async () => "已更新计划",
 };
 
-async function carriedOut() {
+const COMPAT = "https://api.openai.com/v1";
+
+/** 规格 v2 的聊天模型（自定义地址、Moonshot、智谱、OpenRouter 建出来的），请求转给假模型。 */
+function compatModel() {
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    return realFetch(
+      url.startsWith(COMPAT) ? url.replace(COMPAT, `${base}/v1`) : input,
+      init,
+    );
+  }) as typeof fetch;
+  return languageModelFor("custom", null, "compat-model", "test-key");
+}
+
+async function carriedOut(spec: "v2" | "v3" = "v3") {
   const resolver = createActorAgentResolver({
     loadAgents: async () => [
       { id: "bot", name: "员工", type: "built_in", systemPrompt: "做事。" },
@@ -127,11 +142,13 @@ async function carriedOut() {
     model: { provider: "openai", defaultModel: "unused" },
     resolveModelApiKey: async () => "test-key",
     resolveAgentModel: async () =>
-      deepSeekLanguageModel({
-        baseURL: `${base}/v1`,
-        apiKey: "test-key",
-        modelName: "deepseek-chat",
-      }),
+      spec === "v2"
+        ? compatModel()
+        : deepSeekLanguageModel({
+            baseURL: `${base}/v1`,
+            apiKey: "test-key",
+            modelName: "deepseek-chat",
+          }),
     loadToolsForActor: () => async () => [updatePlan],
   });
   const agent = (await resolver.resolveAgentForActor(
@@ -205,5 +222,26 @@ describe("无头的一轮：收尾提醒看整轮", () => {
     expect(nudged).toHaveLength(1);
     expect(nudged[0]?.text).toContain("计划里还有");
     expect(nudged[0]?.text).not.toContain("没有跑任何测试");
+  });
+});
+
+describe("规格 v2 的模型（评测里的 custom 提供方、Moonshot、智谱、OpenRouter）", () => {
+  test("默认：同样在同一轮里收到提醒，把活做完", async () => {
+    const executed = await carriedOut("v2");
+    const nudged = seen.filter(
+      (request) => request.role === "user" && request.results === 3,
+    );
+    expect(nudged).toHaveLength(1);
+    expect(nudged[0]?.text).toContain("计划里还有 2 项没做完");
+    expect(nudged[0]?.text).toContain("src/money.ts");
+    expect(executed.some((item) => item.includes("bun test"))).toBe(true);
+    expect(seen).toHaveLength(6);
+  });
+
+  test("两个开关都关：一句话收尾就收尾", async () => {
+    process.env.XIONGBAO_NUDGE_WHOLE_TURN = "off";
+    process.env.XIONGBAO_VERIFY_NUDGE = "off";
+    await carriedOut("v2");
+    expect(seen).toHaveLength(3);
   });
 });

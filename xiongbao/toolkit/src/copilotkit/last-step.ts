@@ -261,8 +261,10 @@ export function answersOnLastStep(
   } catch {
     return configuration;
   }
-  if (!isModel(model)) return configuration;
-  const inner = model;
+  // v2 stays v2 and v3 stays v3: the runtime converts a model by its own version.
+  const older = isOlderModel(model);
+  if (!older && !isModel(model)) return configuration;
+  const inner = model as Model;
   const extension =
     !run.unattended && run.extension && run.extension > 0
       ? Math.floor(run.extension)
@@ -434,7 +436,7 @@ ${part.delta.trimStart()}`;
           steps.said = `${steps.said ?? ""}\n${text}`;
           if (called) steps.nudges = 0;
           const nudge =
-            !called && part.finishReason.unified === "stop"
+            !called && stopped(part.finishReason)
               ? nudgeFor(text, call.prompt, call.tools)
               : undefined;
           if (!nudge) {
@@ -486,7 +488,7 @@ ${part.delta.trimStart()}`;
         steps.nudges = 0;
         return result;
       }
-      if (result.finishReason.unified !== "stop") return result;
+      if (!stopped(result.finishReason)) return result;
       const nudge = nudgeFor(text, call.prompt, call.tools);
       if (!nudge) return result;
       current = again(current, text, nudge);
@@ -504,14 +506,20 @@ ${part.delta.trimStart()}`;
     }
   };
 
-  const wrapped: Model = {
-    specificationVersion: "v3",
-    provider: inner.provider,
-    modelId: inner.modelId,
-    supportedUrls: inner.supportedUrls,
-    doGenerate,
-    doStream,
-  };
+  /*
+   * A v2 model is not rebuilt: it is put in front of, as `withFoldedCalls` does, so its version, provider
+   * and the members it keeps on its prototype are still its own. Only the two calls are replaced.
+   */
+  const wrapped: Model = older
+    ? Object.assign(Object.create(inner) as Model, { doGenerate, doStream })
+    : {
+        specificationVersion: "v3",
+        provider: inner.provider,
+        modelId: inner.modelId,
+        supportedUrls: inner.supportedUrls,
+        doGenerate,
+        doStream,
+      };
   return {
     ...configuration,
     model: wrapped,
@@ -528,8 +536,26 @@ function add(a: number | undefined, b: number | undefined) {
   return a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0);
 }
 
+/** Whether a step ended because the model stopped: a v3 reason is `{ unified }`, a v2 one is the word. */
+function stopped(reason: unknown): boolean {
+  return typeof reason === "string"
+    ? reason === "stop"
+    : (reason as { unified?: unknown } | undefined)?.unified === "stop";
+}
+
 /** Two asks in one step are billed as one: what the step cost is what both of them cost. */
 function addUsage(a: Usage, b: Usage): Usage {
+  // A v2 usage is flat numbers (`inputTokens: 12`); every field is summed.
+  if (typeof (a as { inputTokens?: unknown }).inputTokens !== "object") {
+    const flat = (usage: Usage) => usage as unknown as Record<string, number>;
+    const summed: Record<string, number | undefined> = {};
+    for (const key of new Set([
+      ...Object.keys(flat(a)),
+      ...Object.keys(flat(b)),
+    ]))
+      summed[key] = add(flat(a)[key], flat(b)[key]);
+    return { ...b, ...summed } as unknown as Usage;
+  }
   return {
     ...b,
     inputTokens: {
@@ -547,8 +573,8 @@ function addUsage(a: Usage, b: Usage): Usage {
 }
 
 /**
- * 规格 v2 的模型：提示的形状和 v3 一样（工具结果的 `output` 都是 text / json / content 几种），折叠只改提示，
- * 所以可以折。别的包装（最后一步的收尾）要的是 v3 的流和用量，仍只认 {@link isModel}。
+ * 规格 v2 的模型：提示和流的形状和 v3 几乎一样，只有结束原因（一个词）和用量（平的数字）不同。折叠只改提示，
+ * 最后一步的收尾和提醒也读这两处，都按各自的版本读，v2 保持 v2。
  */
 function isOlderModel(model: unknown): boolean {
   return (
