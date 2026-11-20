@@ -101,3 +101,20 @@ export function taskMinutes(env: Record<string, string | undefined>): number {
   const value = Number(env.EVAL_TASK_MINUTES ?? "");
   return Number.isFinite(value) && value > 0 && value <= 120 ? value : 20;
 }
+
+/**
+ * `EVAL_SERVER_ENV`：给被测服务器多带几个部署开关，逗号分隔的 `名字=值`，例如
+ * `XIONGBAO_VERIFY_NUDGE=off,XIONGBAO_NUDGE_WHOLE_TURN=off`。只放行 `XIONGBAO_` 开头的名字，别的（`PATH`、
+ * 密钥）丢掉，评测脚本给服务器的环境仍然由它自己决定。用来对照同一个构建里开关开和关的差别。
+ */
+export function serverEnvFrom(raw: string | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const item of (raw ?? "").split(",")) {
+    const at = item.indexOf("=");
+    if (at < 0) continue;
+    const name = item.slice(0, at).trim();
+    if (/^XIONGBAO_[A-Z0-9_]+$/.test(name))
+      out[name] = item.slice(at + 1).trim();
+  }
+  return out;
+}

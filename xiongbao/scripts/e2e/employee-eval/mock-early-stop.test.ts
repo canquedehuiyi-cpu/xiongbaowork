@@ -45,11 +45,11 @@ test("先列计划并读文件，读完不动手就收尾", () => {
 
 test("被提醒或被追「继续」之后才改文件，改完不验就收尾，再被提醒才校验", () => {
   const four = [ask, tool(), tool(), tool(), tool()];
-  const nudged = (text: string) => [
-    ...four,
-    { role: "user", content: text },
-  ];
-  for (const text of ["计划里还有 2 项没做完：改，验", "继续完成上面交代的任务"]) {
+  const nudged = (text: string) => [...four, { role: "user", content: text }];
+  for (const text of [
+    "计划里还有 2 项没做完：改，验",
+    "继续完成上面交代的任务",
+  ]) {
     const write = earlyStopPolicy(request(nudged(text)));
     expect(write.tools?.[0]?.name).toBe("computer_write_file");
     expect(String(write.tools?.[0]?.arguments.path)).toMatch(/src\/money\.ts$/);
@@ -57,7 +57,10 @@ test("被提醒或被追「继续」之后才改文件，改完不验就收尾�
   const written = [...four, tool()];
   expect(earlyStopPolicy(request(written)).text).toContain("重构完成");
   const verify = earlyStopPolicy(
-    request([...written, { role: "user", content: "你改过 src/money.ts，之后没有跑任何测试" }]),
+    request([
+      ...written,
+      { role: "user", content: "你改过 src/money.ts，之后没有跑任何测试" },
+    ]),
   );
   expect(verify.tools?.[0]?.name).toBe("computer_run_command");
   expect(String(verify.tools?.[0]?.arguments.command)).toMatch(/test/);

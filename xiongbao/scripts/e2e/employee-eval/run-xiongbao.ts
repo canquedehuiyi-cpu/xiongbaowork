@@ -42,6 +42,7 @@
  *                     smoke 套件里是场景名，另有 background
  *   EVAL_XIONGBAO_MODEL  只给熊宝侧换的模型名，空表示和 EVAL_MODEL 一样（Codex 侧不受影响）
  *   EVAL_PROMPT_SLIM  on | off，传给服务器的 XIONGBAO_PROMPT_SLIM（提示词瘦身，服务器默认开）；off 用来做对照
+ *   EVAL_SERVER_ENV  给服务器多带几个 XIONGBAO_ 开头的部署开关，逗号分隔的 名字=值（例如 XIONGBAO_VERIFY_NUDGE=off），用来对照开关开和关
  *   EVAL_PROMPT_CHARS 真模型下设 on，才记每道题发给模型的请求体大小（在服务器和提供方之间夹一个回环转发，
  *                     结果记录里的 promptChars，报告里的「提示词体积」表）；本机假模型一律记
  *   EVAL_TASK_MINUTES 每题墙钟上限，默认 20（冒烟场景用各自的上限）
@@ -50,6 +51,7 @@
  *   EVAL_MOCK_SCRIPT  只在本机假模型下：设 research 时假模型演「调研题」——一步接一步读十几 KB 的文字，看一轮里每步
  *                     发给模型的请求有多大（请求体存在 `<结果目录>/mock-requests/`）。EVAL_MOCK_STEPS、EVAL_MOCK_BYTES、
  *                     EVAL_MOCK_SCREENSHOTS（哪几步改成打开网页再截图，如 6,12）可调；见 mock-research.ts
+ *   EVAL_MOCK_SCRIPT  设 early-stop 时假模型演「提前收尾」的员工：计划没做完就收尾、改完不验就收尾，看收尾提醒生效没有；见 mock-early-stop.ts
  *   COMPUTER_BROWSER_MODE  传给本地电脑；没有虚拟显示的机器上设 headless
  *
  * 本机验证：EVAL_LOCAL_MOCK=1 MODEL_E2E=1 E2E_DATABASE_URL=… E2E_ROLE_WRITER_DATABASE_URL=… \
@@ -101,7 +103,7 @@ import {
   transcriptChecks,
 } from "./chat-path";
 import { CHECKERS } from "./checkers";
-import { evalGate, taskMinutes, xiongbaoModel } from "./config";
+import { evalGate, serverEnvFrom, taskMinutes, xiongbaoModel } from "./config";
 import {
   type Check,
   check,
@@ -136,6 +138,7 @@ import {
   withObserved,
 } from "./metrics";
 import { type MockRequest, type MockTurn, startMockModel } from "./mock-model";
+import { earlyStopPolicy, earlyStopWanted } from "./mock-early-stop";
 import { researchPolicy, researchScriptFrom } from "./mock-research";
 import { startPromptRecorder } from "./prompt-recorder";
 import {
@@ -280,6 +283,8 @@ async function freePort(): Promise<number> {
  */
 const researchScript = researchScriptFrom(process.env);
 function mockPolicy(request: MockRequest): MockTurn {
+  // `EVAL_MOCK_SCRIPT=early-stop`：提前收尾的员工，看收尾提醒有没有生效（见 mock-early-stop.ts）。
+  if (earlyStopWanted(process.env)) return earlyStopPolicy(request);
   // `EVAL_MOCK_SCRIPT=research`：一步接一步读大段文字，看一轮里每步的请求有多大。
   if (researchScript)
     return researchPolicy(request, researchScript, `${mock?.url}/page`);
@@ -502,6 +507,8 @@ async function startServer() {
       ...(process.env.EVAL_PROMPT_SLIM?.trim()
         ? { XIONGBAO_PROMPT_SLIM: process.env.EVAL_PROMPT_SLIM.trim() }
         : {}),
+      // 对照用：再带几个 XIONGBAO_ 开头的部署开关（`EVAL_SERVER_ENV=名字=值,…`）。
+      ...serverEnvFrom(process.env.EVAL_SERVER_ENV),
       // 回环地址上的明文 http（假模型、请求记录、夹具网站）才打开开发用的开关；其余真模型运行里 SSRF 防护保持全开。
       ...(allowLoopback ? { AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true" } : {}),
     },
