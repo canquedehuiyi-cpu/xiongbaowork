@@ -228,9 +228,9 @@ describe("几条前后依赖的命令合成一条", () => {
   test("关着：逐字回到原来的话", () => {
     expect(slimHowToWork({ [MERGE_COMMANDS_ENV]: "off" })).toBe(ORIGINAL);
     process.env[MERGE_COMMANDS_ENV] = "off";
-    expect(slimWorkingGuidance({ untrusted: "u", asking: "a" })[1]).toContain(
-      ORIGINAL,
-    );
+    expect(
+      slimWorkingGuidance({ untrusted: "u", asking: "a" }).join(""),
+    ).toContain(ORIGINAL);
   });
 
   test("默认开：slimWorkingGuidance 带的是新写法", () => {

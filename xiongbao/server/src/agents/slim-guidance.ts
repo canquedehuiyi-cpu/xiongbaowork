@@ -29,6 +29,7 @@ import {
 } from "../../../shared/web-tools";
 import { BAIDU_SEARCH_URL, BING_SEARCH_URL } from "../plugins/tools";
 import { PARALLEL_TOOLS_ENV, parallelToolsOn } from "./parallel-tools";
+import { mergeCommandsOn } from "./step-hints";
 
 /** 段与段之间、段内一组话之间的空行。 */
 const paragraphs = (...parts: readonly string[]) => parts.join("\n\n");
@@ -50,10 +51,23 @@ export const SLIM_HOW_TO_WORK_SERIAL = paragraphs(
  * 默认的写法：同一份内容，加上「互不依赖的读取、搜索、命令放在同一步里一次发出」。每一步都要把整段历史再发
  * 一遍，步数越少越省；一步里发多个调用，运行器在同一段里都执行、结果一起带回。
  */
-export const SLIM_HOW_TO_WORK = paragraphs(
-  HOW_TO_WORK_FIRST,
-  `Run independent reads, searches and commands together: send them all in one reply as several tool calls (about five at a time), not one per reply, and read every result before the next batch. When you already know the next few things you need (open these files, search these terms, run these checks), that is one reply, not several. Keep dependent steps, and every change, one after another. ${HOW_TO_WORK_LAST}`,
-);
+export function slimHowToWork(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return paragraphs(
+    HOW_TO_WORK_FIRST,
+    `Run independent reads, searches and commands together: send them all in one reply as several tool calls (about five at a time), not one per reply, and read every result before the next batch. When you already know the next few things you need (open these files, search these terms, run these checks), that is one reply, not several. Keep dependent steps, and every change, one after another. ${mergeCommandsOn(env) ? `${MERGE_COMMANDS_HINT} ` : ""}${HOW_TO_WORK_LAST}`,
+  );
+}
+
+/**
+ * 几条前后依赖、不需要看中间输出的命令，一条命令比几步省：每一步都要把整段历史再发一遍。
+ * 开关 `XIONGBAO_MERGE_COMMANDS=off` 去掉这一句（`step-hints.ts`）。
+ */
+const MERGE_COMMANDS_HINT =
+  "Commands that depend on each other, when you do not need to see the output in between, go in one computer_run_command joined with && (install, build, test); read several files in one reply, or with one command.";
+
+export const SLIM_HOW_TO_WORK = slimHowToWork();
 
 export const SLIM_SOURCES = paragraphs(
   "Say where an answer came from: cite what you read with your tools; when answering from your own knowledge, say so in a line and never present it as looked up. Describe what you did in plain words ('I checked your Gmail profile'), never naming a tool or function. Address the person as 'you' and do not narrate your reasoning about what they asked.",
@@ -108,7 +122,7 @@ export function slimWorkingGuidance(options: {
   return [
     ...promptSection(
       "how_to_work",
-      parallelToolsOn() ? SLIM_HOW_TO_WORK : SLIM_HOW_TO_WORK_SERIAL,
+      parallelToolsOn() ? slimHowToWork() : SLIM_HOW_TO_WORK_SERIAL,
     ),
     ...promptSection("asking", options.asking),
     ...promptSection("sources", SLIM_SOURCES),
