@@ -17,7 +17,12 @@ import {
   localSkillCandidates,
   skills,
 } from "../db/schema";
-import { findOverreach, findSensitive, hasUrl } from "../learning/sensitive";
+import {
+  findOverreach,
+  findSensitive,
+  hasExternalAddress,
+  maskEmails,
+} from "../learning/sensitive";
 import { similarity } from "../memory/extract";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import type { GrantedTool } from "../plugins/tools";
@@ -206,16 +211,38 @@ export function draftProblem(
 }
 
 /**
+ * The retrospective's draft with every e-mail address replaced by a placeholder (and the name written
+ * right next to it). What the retrospective read is somebody else's data (minutes, mail), and a model
+ * writing a skill from it copies an address now and then; an address is not a secret, and the skill is
+ * as useful with `<邮箱>` in its place, so it is cleaned rather than refused. Only e-mail: a key, a
+ * phone number or a password is still refused. The employee's own `save_learned_skill` never comes
+ * through here: it is refused and told to rewrite.
+ */
+export function withoutEmails(draft: SkillDraft): SkillDraft {
+  const clean = (text: string) => maskEmails(text).text;
+  return {
+    ...draft,
+    name: clean(draft.name),
+    when: clean(draft.when),
+    steps: draft.steps.map(clean),
+    pitfalls: draft.pitfalls.map(clean),
+    verify: clean(draft.verify),
+  };
+}
+
+/**
  * Why a skill the retrospective wrote for the employee alone still waits for the person, or undefined
  * when it may take effect at once. What the retrospective read is data (a request, tool results, a
- * page): something in it may have been written to get a skill saved, so a skill with an address in it,
- * or a step that gets around a rule, is held for the person instead of being granted.
+ * page): something in it may have been written to get a skill saved, so a skill that sends the employee
+ * to, or sends something out to, a web address or a domain, or a step that gets around a rule, is held
+ * for the person instead of being granted. Only an address counts: an e-mail address is cleaned by
+ * {@link withoutEmails}, and a `csv.writer` or a file name is not a place on the internet.
  */
 export function heldForReview(draft: SkillDraft): string | undefined {
   const text = textOfDraft(draft);
   const overreach = findOverreach(text);
   if (overreach.length > 0) return `含越权的步骤（${overreach.join("、")}）`;
-  if (hasUrl(text)) return "含网址或域名";
+  if (hasExternalAddress(text)) return "要求访问或外发到网址或域名";
   return undefined;
 }
 
@@ -236,6 +263,8 @@ export type SaveSkillResult =
       /** `active`: granted to the employee. `pending_approval`: waiting for the person; nobody has it yet. */
       status: "active" | "pending_approval";
       updated: boolean;
+      /** Only when the retrospective's draft was sent to the person instead of granted: why. */
+      held?: string;
     }
   | { ok: false; reason: string };
 
@@ -270,6 +299,16 @@ async function kept(deps: SelfSkillDeps): Promise<number> {
  * `scope`. Never throws for a draft it cannot take: it says why.
  */
 export async function saveSkill(
+  deps: SelfSkillDeps,
+  draft: SkillDraft,
+  origin: LearnedSkillOrigin,
+): Promise<SaveSkillResult> {
+  // The retrospective's e-mail addresses become placeholders; the employee's own are refused below.
+  const written = origin === "retrospect" ? withoutEmails(draft) : draft;
+  return saveChecked(deps, written, origin);
+}
+
+async function saveChecked(
   deps: SelfSkillDeps,
   draft: SkillDraft,
   origin: LearnedSkillOrigin,
@@ -366,6 +405,7 @@ export async function saveSkill(
       id: slug,
       status: "pending_approval",
       updated: Boolean(pending),
+      ...(held ? { held } : {}),
     };
   }
 

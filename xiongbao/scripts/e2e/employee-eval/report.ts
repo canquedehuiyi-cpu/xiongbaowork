@@ -243,15 +243,26 @@ export function repeatRows(
   });
 }
 
-/** 一次运行新增的东西：技能名（带引号）和记忆条数。 */
-const addedCell = (learning: RunLearning | undefined) =>
-  !learning
-    ? DASH
-    : `技能 ${learning.newSkills.length}${
-        learning.newSkills.length
-          ? `（${learning.newSkills.map((name) => `「${name}」`).join("、")}）`
-          : ""
-      } / 记忆 ${learning.newMemories}`;
+/** 一次运行新增的东西：技能名（带引号）、记忆条数，和转待审的技能（有才写）。 */
+const addedCell = (learning: RunLearning | undefined) => {
+  if (!learning) return DASH;
+  const held = learning.heldSkills ?? [];
+  return `技能 ${learning.newSkills.length}${
+    learning.newSkills.length
+      ? `（${learning.newSkills.map((name) => `「${name}」`).join("、")}）`
+      : ""
+  } / 记忆 ${learning.newMemories}${
+    held.length
+      ? ` / 待审 ${held.length}（${held.map((name) => `「${name}」`).join("、")}）`
+      : ""
+  }`;
+};
+
+/** 复盘结果的三类：存了并生效照旧写 saved，转待审和被拒要把后果说出来，免得一个 saved 掩盖了没生效。 */
+const OUTCOME_NOTE: Readonly<Record<string, string>> = {
+  held: "held：存为待审，没授予员工",
+  refused: "refused：被拒，没存",
+};
 
 /** 一次运行之后等复盘的情况，一句话：结果、触发、步数、等了多久。 */
 const retroCell = (learning: RunLearning | undefined) => {
@@ -263,7 +274,10 @@ const retroCell = (learning: RunLearning | undefined) => {
   const how = retro.trigger
     ? `（${retro.trigger} / ${retro.steps ?? "?"} 步）`
     : "";
-  return `${retro.outcome ?? "新增了技能"}${how}，等了 ${waited}`;
+  const outcome = retro.outcome
+    ? (OUTCOME_NOTE[retro.outcome] ?? retro.outcome)
+    : "新增了技能";
+  return `${outcome}${how}，等了 ${waited}`;
 };
 
 /**
@@ -806,7 +820,7 @@ export function renderReport(results: EvalResults[]): string {
         learningTable,
       ),
       "",
-      "新增是和该次运行开始前比的；复盘结果取自服务器日志里这次最后一轮的 `retrospect` 行，第一次结束后最多等 90 秒再开第二次，超时照常开始。「用到」指技能账里的使用次数涨了：那一轮对得上这件事、已经放进上下文的，或员工用 `refine_skill` 读过的。",
+      "新增是和该次运行开始前比的；复盘结果分三类：`saved` 存为自用并生效，`held` 存了但转待审（步骤要求访问或外发到网址、或带越权的步骤，本人批准前不授予员工，不进自写技能，在「待审」里列出），`refused` 被拒（含密钥、手机号、口令等，没存）；复盘结果取自服务器日志里这次最后一轮的 `retrospect` 行，第一次结束后最多等 90 秒再开第二次，超时照常开始。「用到」指技能账里的使用次数涨了：那一轮对得上这件事、已经放进上下文的，或员工用 `refine_skill` 读过的。",
       "",
     );
 
