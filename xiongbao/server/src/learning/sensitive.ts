@@ -42,9 +42,29 @@ const TOKEN_SHAPES: readonly RegExp[] = [
   /\bBearer\s+[A-Za-z0-9._~+/=-]{16,}/i,
   // 又长又像随机的一串：含数字也含字母，32 个字符以上。
   /\b(?=[A-Za-z0-9_-]{0,200}\d)(?=[A-Za-z0-9_-]{0,200}[A-Za-z])[A-Za-z0-9_-]{32,200}\b/,
+  // 带 `/`、`+`、`=` 的（AWS 的 secret key 之类，base64 的样子）：32 个字符以上，大小写字母和数字都有，
+  // 免得把一般的长路径当成密钥（路径几乎都是小写）。
+  /(?<![A-Za-z0-9/+=_-])(?=[A-Za-z0-9/+=_-]{0,200}[A-Z])(?=[A-Za-z0-9/+=_-]{0,200}[a-z])(?=[A-Za-z0-9/+=_-]{0,200}\d)[A-Za-z0-9/+=_-]{32,200}(?![A-Za-z0-9/+=_-])/,
 ];
-const PASSWORD_ASSIGNMENT =
-  /(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|密码|口令|密钥|令牌)\s*(?:[:=：]|是|为)\s*["'`]?[A-Za-z0-9_\-./+=!@#$%^&*]{6,}/i;
+const PASSWORD_KEY =
+  "(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|密码|口令|密钥|令牌)";
+const PASSWORD_VALUE = "[A-Za-z0-9_\\-./+=!@#$%^&*]{6,}";
+/**
+ * 口令的几种写法：
+ *  - 冒号或等号：`密码：xxx`、`password=xxx`、`密码是：xxx`、`password is: xxx`，值是 6 个以上的 ASCII 字符；
+ *  - 「是 / 为 / is」或只有空格：`密码是 xxx`、`my password is hunter22`、`密码 hunter22!`、`口令 P@ssw0rd!`。
+ *    没有冒号时值里要有数字或符号：`password manager`、`token is required` 不是口令。
+ */
+const PASSWORD_ASSIGNMENTS: readonly RegExp[] = [
+  new RegExp(
+    `${PASSWORD_KEY}\\s*(?:(?:is|是|为)\\s*)?[:=]\\s*["'\`]?${PASSWORD_VALUE}`,
+    "i",
+  ),
+  new RegExp(
+    `${PASSWORD_KEY}(?:\\s+(?:is\\s+)?|\\s*(?:是|为)\\s*)["'\`]?(?=[A-Za-z0-9_\\-./+=!@#$%^&*]*[0-9!@#$%^&*])${PASSWORD_VALUE}`,
+    "i",
+  ),
+];
 const CREDENTIAL_URL = /:\/\/[^\s/:@]+:[^\s/@]+@/;
 const SECRET_QUERY =
   /[?&](?:token|key|apikey|api_key|access_token|secret|sig|signature|password)=[^&\s]{6,}/i;
@@ -73,26 +93,40 @@ function hasCardNumber(text: string): boolean {
   return false;
 }
 
+/**
+ * 先归一化再匹配：全角转半角（`＠`、全角数字和冒号），再把数字之间的空格和横杠去掉（`138 0013 8000`、
+ * `110101 19900307 123X`）。号码类的检查在去掉分隔之后的那份上做，别的在归一化后的原文上做。
+ */
+function normalised(text: string): { plain: string; squeezed: string } {
+  const bounded = text.length > SCAN_LIMIT ? text.slice(0, SCAN_LIMIT) : text;
+  const plain = bounded.normalize("NFKC");
+  return {
+    plain,
+    squeezed: plain.replace(/(?<=\d)[ \u00a0-]+(?=[\dXx])/g, ""),
+  };
+}
+
 /** 这段文字里认得出的敏感内容，每一类一次；没有就是空数组。 */
 export function findSensitive(text: string): SensitiveKind[] {
-  const scanned = text.length > SCAN_LIMIT ? text.slice(0, SCAN_LIMIT) : text;
+  const { plain, squeezed } = normalised(text);
   const found: SensitiveKind[] = [];
   const add = (kind: SensitiveKind) => {
     if (!found.includes(kind)) found.push(kind);
   };
-  if (EMAIL.test(scanned)) add("邮箱地址");
+  if (EMAIL.test(plain)) add("邮箱地址");
   if (
-    CN_MOBILE.test(scanned) ||
-    INTL_PHONE.test(scanned) ||
-    CN_LANDLINE.test(scanned)
+    [plain, squeezed].some(
+      (view) =>
+        CN_MOBILE.test(view) || INTL_PHONE.test(view) || CN_LANDLINE.test(view),
+    )
   )
     add("手机号或电话号码");
-  if (ID_NUMBER.test(scanned)) add("身份证号");
-  if (hasCardNumber(scanned)) add("银行卡号");
-  if (PRIVATE_KEY.test(scanned)) add("私钥");
-  if (TOKEN_SHAPES.some((shape) => shape.test(scanned))) add("密钥或令牌");
-  if (PASSWORD_ASSIGNMENT.test(scanned)) add("口令");
-  if (CREDENTIAL_URL.test(scanned) || SECRET_QUERY.test(scanned))
+  if (ID_NUMBER.test(squeezed)) add("身份证号");
+  if (hasCardNumber(squeezed)) add("银行卡号");
+  if (PRIVATE_KEY.test(plain)) add("私钥");
+  if (TOKEN_SHAPES.some((shape) => shape.test(plain))) add("密钥或令牌");
+  if (PASSWORD_ASSIGNMENTS.some((shape) => shape.test(plain))) add("口令");
+  if (CREDENTIAL_URL.test(plain) || SECRET_QUERY.test(plain))
     add("带凭据的网址");
   return found;
 }
@@ -114,8 +148,19 @@ const OVERREACH: readonly { reason: string; shape: RegExp }[] = [
     shape: /(?:自动|直接|默认)(?:同意|批准|通过).{0,4}(?:审批|请求|授权|权限)/,
   },
   {
-    reason: "破坏性的系统命令",
-    shape: /rm\s+-[a-z]*r[a-z]*f?\s+(?:\/|~|\$HOME)|chmod\s+-R\s*777|mkfs\b/i,
+    reason: "破坏性的系统命令（递归删除、递归改权限、格式化）",
+    shape:
+      /\brm\s+(?:-\w+\s+)*(?:-[a-z]*r[a-z]*|--recursive)\b|chmod\s+-R\s*777|mkfs\b/i,
+  },
+  {
+    reason: "把文件、密钥或凭据发到外部网址",
+    shape:
+      /(?:\.env|密钥|令牌|token|密码|凭据|cookie|私钥|id_rsa|配置文件|所有文件|全部文件|整个目录|整个文件夹)[^\n]{0,30}(?:发|上传|传|提交|推送|post|upload|send)[^\n]{0,30}https?:\/\/|(?:发|上传|传|提交|推送|post|upload|send)[^\n]{0,30}(?:\.env|密钥|令牌|token|密码|凭据|cookie|私钥|id_rsa|配置文件|所有文件|全部文件|整个目录|整个文件夹)[^\n]{0,30}https?:\/\/|(?:curl|wget)[^\n]*(?:-d\s*@|--data(?:-binary)?\s*@|-F\s|--upload-file|-T\s)/i,
+  },
+  {
+    reason: "遇到确认或授权就自动点允许",
+    shape:
+      /(?:弹窗|对话框|提示|审批|授权|确认)[^\n]{0,10}(?:就|都|直接|一律|自动)?\s*(?:点|点击|选|选择|按)[^\n]{0,4}(?:允许|同意|确认|批准|allow|accept|yes)|自动(?:点|点击)[^\n]{0,4}(?:允许|同意|确认|批准)/i,
   },
   {
     reason: "把网上下载的脚本直接交给 shell 执行",
