@@ -420,6 +420,8 @@ tests/evidence-gate-required.test.ts
 tests/external-agents-schema.integration.test.ts
 tests/generated-media-group.integration.test.ts
 tests/generated-media.integration.test.ts
+tests/git-tools-approval.test.ts
+tests/git-tools.test.ts
 tests/github-oauth-signup.test.ts
 tests/goal-conversation.integration.test.ts
 tests/goal-run-busy-conversation.integration.test.ts

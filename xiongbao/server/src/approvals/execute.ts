@@ -1,6 +1,7 @@
 import type { GrantedTool } from "@openbot/toolkit/granted-tool";
 import type { HeadlessTool } from "@openbot/toolkit/headless-tools";
 import { z } from "zod";
+import { GIT_LOCAL_TOOLS } from "../../../shared/git-tools";
 import type { RunAssertion } from "../agents/callback-token";
 import type { AuditInitiator } from "../audit";
 import { PluginRefusedError } from "../plugins/store";
@@ -31,6 +32,16 @@ export type ApprovedActionDependencies = {
     initiator: AuditInitiator,
   ): Promise<HeadlessTool[]>;
   hostTools(input: {
+    actorId: string;
+    botId: string;
+    initiator: AuditInitiator;
+  }): GrantedTool[];
+  /**
+   * The server's own tools that run a governed command or file call inside them, which the gate asks
+   * about as that call (the git workflow tools, `computer/git-tools.ts`). Optional: absent, such a tool
+   * is not carried out again after an approval.
+   */
+  nativeTools?(input: {
     actorId: string;
     botId: string;
     initiator: AuditInitiator;
@@ -124,6 +135,28 @@ export function createApprovedActionExecutor(deps: ApprovedActionDependencies) {
         toolCallId: snapshot.toolCallId,
         signal: new AbortController().signal,
       });
+    }
+    /*
+     * A git tool (`git_branch`, `git_commit`, `git_diff_summary`) is the call that was asked about: its one
+     * governed command was approved, so the tool is carried out again and that command passes the gate
+     * as the approved action. `open_pull_request` is not here: what it asks about is the connector's own
+     * call, with the arguments it was given, which the connector path below carries out.
+     */
+    if (GIT_LOCAL_TOOLS.includes(snapshot.toolName) && deps.nativeTools) {
+      const tool = deps
+        .nativeTools({
+          actorId: action.actorId,
+          botId: action.botId,
+          initiator,
+        })
+        .find((tool) => tool.name === snapshot.toolName);
+      if (!tool)
+        throw new ApprovalRefusedError("That git tool is no longer available.");
+      const result = await tool.execute(snapshot.args, {
+        toolCallId: snapshot.toolCallId,
+        signal: new AbortController().signal,
+      });
+      return result;
     }
     if (snapshot.toolName.startsWith("host_")) {
       const tool = deps
