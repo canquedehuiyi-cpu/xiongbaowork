@@ -39,6 +39,11 @@ export const learnedSkills = pgTable(
     origin: text("origin").$type<LearnedSkillOrigin>().notNull(),
     useCount: integer("use_count").notNull().default(0),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    /**
+     * 写这条技能时的来源请求的指纹（迁移 0238）：词的哈希，不是原文。复盘时是那张卡的请求。挑选时拿新请求
+     * 和它比，见 `skills/source-fingerprint.ts`。员工自己调 `save_learned_skill` 存的没有来源请求，是空。
+     */
+    sourceFingerprint: text("source_fingerprint"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
