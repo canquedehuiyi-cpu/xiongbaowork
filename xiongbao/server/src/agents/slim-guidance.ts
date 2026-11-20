@@ -225,7 +225,7 @@ export function slimWebResearchGuidance(
   const lines: string[] = [];
   if (search)
     lines.push(
-      `${fetch ? `需要事实、最新信息、数据或出处时，先用 ${WEB_SEARCH_TOOL} 搜，再用 ${WEB_FETCH_TOOL} 读最相关的一到三个结果的原文核对，不要只凭摘要下结论。` : `需要事实、最新信息、数据或出处时，先用 ${WEB_SEARCH_TOOL} 搜，再据结果回答。`}回答里附上你实际读过的网页地址，涉及会变的信息写明查询日期。搜索词只放问题需要的几个关键词，不放对话全文、私人文件内容或对方没让你查的个人信息。`,
+      `${fetch ? `需要事实、最新信息、数据或出处时，先用 ${WEB_SEARCH_TOOL} 搜，再用 ${WEB_FETCH_TOOL} 读最相关的一到三个结果的原文核对，不要只凭摘要下结论。` : `需要事实、最新信息、数据或出处时，先用 ${WEB_SEARCH_TOOL} 搜，再据结果回答。`}回答里附上来源链接（你实际读过的网页地址），涉及会变的信息写明查询日期。搜索词只放问题需要的几个关键词，不放对话全文、私人文件内容或对方没让你查的个人信息。`,
     );
   else if (fetch)
     lines.push(
