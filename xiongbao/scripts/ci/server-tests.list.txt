@@ -508,6 +508,7 @@ tests/learning-review.test.ts
 tests/learning-routes.test.ts
 tests/learning-runtime.test.ts
 tests/learning-scopes.test.ts
+tests/learning-sensitive.test.ts
 tests/learning-settings.integration.test.ts
 tests/learning-settings.test.ts
 tests/learning-sharing.integration.test.ts
@@ -525,6 +526,8 @@ tests/media-group-computer.test.ts
 tests/media-tools.test.ts
 tests/memory-default-source-tool.test.ts
 tests/memory-defaults.integration.test.ts
+tests/memory-extract.integration.test.ts
+tests/memory-extract.test.ts
 tests/memory-intelligence.integration.test.ts
 tests/memory-runtime.test.ts
 tests/memory-store.integration.test.ts
@@ -905,6 +908,7 @@ tests/tool-selection.integration.test.ts
 tests/turn-notice-config.test.ts
 tests/turn-notice.integration.test.ts
 tests/turn-notice.test.ts
+tests/turn-observer.integration.test.ts
 tests/turn-watchdog.test.ts
 tests/unattended-platform-frame.integration.test.ts
 tests/unattended-single-card.integration.test.ts

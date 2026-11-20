@@ -406,6 +406,10 @@ import { workspaceMedia } from "./media/workspace";
 import { createMemoryDefaults } from "./memory/defaults";
 import { createMemoryIngestion } from "./memory/ingestion";
 import { createIntelligenceMemory } from "./memory/intelligence";
+import {
+  createMemoryExtractor,
+  memoryExtractEnabled,
+} from "./memory/extract";
 import { createMemoryRuntime } from "./memory/runtime";
 import { createMemoryStore } from "./memory/store";
 import { offeredMemoryTools } from "./memory/tools";
@@ -598,7 +602,7 @@ import {
   notifyOnHandIn,
 } from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
-import { createDelivery } from "./tasks/delivery";
+import { createDelivery, replyTextOf } from "./tasks/delivery";
 import {
   runDeliveryCheck,
   savedWorkHours,
@@ -4797,6 +4801,50 @@ await startupLifecycle.run(async (startup) => {
       }, 60_000),
     (resource) => resource.stop(),
   );
+  /*
+   * 每轮自动抽记忆（期 2，memory/extract.ts）：挂在线程运行器的「轮次结束」上，因为每一种轮次（人的单聊、
+   * 看板卡的一轮、例行任务）都从这里经过，而且此刻这一轮的事件和线程都是完整的；只对人自己开的单聊轮
+   * （`kind: "chat"`）抽，看板和例行的轮次不是人在说话。有记忆的版本才抽（个人版可用
+   * `XIONGBAO_PERSONAL_MEMORY=off` 关），`XIONGBAO_MEMORY_EXTRACT=off` 单独关抽取；员工的工具权限里关掉
+   * `memory/save_observed_memory` 的也不抽。抽出的存成待确认的观察记忆，失败只记日志。
+   */
+  const agentModelFor = async (
+    agentId: string,
+    // 轻量轮用的便宜模型：员工设置里的 `lightModel` 合入之前，两个意图都是员工平时的模型。
+    _purpose: "light" | "work",
+  ) => {
+    try {
+      const key = await resolveRuntimeModelApiKey();
+      return await resolveAgentModel(
+        agentId,
+        key ? deploymentModel(runtimeModel, key) : undefined,
+      );
+    } catch {
+      return null;
+    }
+  };
+  const extractTurnMemories = createMemoryExtractor({
+    store: personalMemoryStore,
+    modelFor: agentModelFor,
+    enabled: async (ownerUserId, agentId) =>
+      editionHasMemory(config.edition) &&
+      memoryExtractEnabled() &&
+      !(await approvalService.disabledTools(ownerUserId, agentId))(
+        "memory/save_observed_memory",
+      ),
+  });
+  localThreadRunner.observeTurns(async (turn) => {
+    if (turn.kind !== "chat") return;
+    await extractTurnMemories({
+      ownerUserId: turn.tenant,
+      agentId: turn.agentId,
+      threadId: turn.threadId,
+      runId: turn.runId,
+      messages: turn.messages,
+      reply: replyTextOf(turn.events),
+      failed: turn.failed,
+    });
+  });
   /*
    * 本地学习（L1，local-learning/engine.ts）：每人每天读自己最近的对话，用那位员工的模型提出技能
    * 草案，等本人在设置「学习」里审。对话不出库；模型调用经 `resolveAgentModel` 计到这个人名下，

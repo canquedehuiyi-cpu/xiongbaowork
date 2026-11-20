@@ -328,6 +328,35 @@ function leftQueued(events: readonly BaseEvent[]): boolean {
 }
 
 /**
+ * A turn that ended on its own, as whoever watches turns end is told (期 2: automatic memory,
+ * the retrospective after a long piece of work).
+ */
+export type FinishedTurn = {
+  /** Whose thread this is: the person the turn ran for. */
+  tenant: string;
+  threadId: string;
+  runId: string;
+  agentId: string;
+  /** What the turn was handed: the thread's messages going in, the person's latest among them. */
+  messages: readonly Message[];
+  /** The turn's own stream, in order: its tool calls and their answers, its text. */
+  events: readonly BaseEvent[];
+  /** The stream said it failed (`RUN_ERROR`), though it closed normally. */
+  failed: boolean;
+  /**
+   * `chat` is a person's own turn, which opened its own card. `task` is a round of a card somebody
+   * else opened or followed (a board task, a routine, a follow-up the employee scheduled).
+   */
+  kind: "chat" | "task";
+};
+
+/**
+ * Told of a turn once it has ended, in the person's frame, after the stream has been handed on. Never
+ * waited for and never allowed to fail the turn: whatever it throws is dropped here (it logs its own).
+ */
+export type TurnObserver = (turn: FinishedTurn) => void | Promise<void>;
+
+/**
  * Local-mode thread persistence (`INTELLIGENCE_MODE=local`).
  *
  * The in-memory runner keeps live run semantics (SSE mode, local thread
@@ -340,6 +369,8 @@ function leftQueued(events: readonly BaseEvent[]): boolean {
 export class PostgresAgentRunner extends InMemoryAgentRunner {
   /** The followed cards a turn may hang on (`tasks/delivery.ts`); asked only when there is a board. */
   private readonly delivery: Delivery;
+  /** Who is told, one by one, when a turn ends on its own. See {@link TurnObserver}. */
+  private readonly turnObservers: TurnObserver[] = [];
 
   constructor(
     private readonly database: Database,
@@ -359,6 +390,30 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
   ) {
     super({ onConcurrentRun: "supersede" });
     this.delivery = createDelivery(database);
+  }
+
+  /**
+   * Hear of every turn this runner runs once it ends on its own (not one a person stopped, not one
+   * that threw). The one place every kind of turn passes -- a person's chat, a board card's round, a
+   * routine's -- and the point where its events and the thread are complete.
+   */
+  observeTurns(observer: TurnObserver): void {
+    this.turnObservers.push(observer);
+  }
+
+  private turnEnded(turn: FinishedTurn): void {
+    if (this.turnObservers.length === 0) return;
+    // Only a person's own thread: nothing is learned about, or for, the deployment's own tenants.
+    if (!isPersonTenant(turn.tenant)) return;
+    for (const observer of this.turnObservers) {
+      try {
+        void Promise.resolve(
+          runAsTenant(turn.tenant, () => observer(turn)),
+        ).catch(() => undefined);
+      } catch {
+        // An observer that cannot be raised is not a reason to fail the turn.
+      }
+    }
   }
 
   /** Trusted AP entry only: reserve/start CAS happens before the runtime; a
@@ -1021,6 +1076,16 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
              */
             stopHeartbeat();
             finish(carriedFailure(events));
+            this.turnEnded({
+              tenant,
+              threadId,
+              runId,
+              agentId,
+              messages: request.input.messages,
+              events,
+              failed: carriedFailure(events),
+              kind: !cardIsTaken && !lane && !adopted ? "chat" : "task",
+            });
             // The parent commits the run during teardown; one macrotask later
             // the snapshot is readable and goes to PostgreSQL.
             this.persistLater(

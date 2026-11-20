@@ -8,6 +8,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **员工每轮结束后自动记下值得记的事（期 2）。** 单聊每一轮结束后，用这位员工的模型从这一轮对话里抽出稳定的偏好、常用文件、联系人、固定流程，存成「待你确认」的记忆（和员工自己调用 `save_observed_memory` 是同一种），你可以在记忆页审阅、编辑、删除。每轮最多 3 条，和已有记忆去重；只给形成它的这位员工，不给你的其他员工，也不同步到 Intelligence（确认之后才会）；一次性闲聊、失败的轮次不抽，带密钥、邮箱、手机号的不存；抽取失败只写日志，不影响这一轮。**多一次模型调用，计入你的用量。** 只在有记忆的版本里跑；设 `XIONGBAO_MEMORY_EXTRACT=off` 关掉。本项不带迁移。
 - **个人版默认开记忆。** 个人版的员工现在也有记忆的四个工具（`recall_personal_memory`、`remember_personal_fact`、`save_observed_memory`、`forget_personal_memory`），每轮带上你的记忆，后台同步和记忆界面（`/api/memory`、能力里的「记忆与信息源」、员工详情的记忆页）也都开着。之前只有团队版有，没有安全或计费上的理由，是产品取舍。要回到旧行为，设 `XIONGBAO_PERSONAL_MEMORY=off`（只对个人版生效，团队版不受影响）。`/api/capabilities` 多了一个 `memory` 字段，浏览器的记忆入口据此显示。本项不带迁移。
 - **网页单聊里的电脑工具默认改由服务器执行（期九·六）。** 关掉网页、锁屏，员工照样把活干完，回来能看到每一步；`XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS` 默认由 `off` 改为 `on`。要回到旧行为（电脑工具全由浏览器执行），设 `XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS=off`；`off` 保留一个版本。验收与 DeepSeek 评测见 `docs/acceptance/2026-11-19-background-runs.md`。
 - **看板派活、群里 @ 派的活漏了交付，进「等验收」时带上员工写过的文件。** 员工做完没调用 `deliver_task` 时，这一轮结束卡会自动进等验收，
