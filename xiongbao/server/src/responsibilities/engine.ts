@@ -8,6 +8,7 @@ import {
 import { runAsTenant } from "../tenant/context";
 import { isThreadBusy } from "@openbot/toolkit/lease";
 import { BOT_PAUSED_REASON, isBotPaused } from "../agents/lifecycle";
+import type { QuietUntil } from "../user-preferences";
 import type { WorkQueue } from "../work/queue";
 import type { ResponsibilityRunContext, ResponsibilityStore } from "./types";
 
@@ -86,6 +87,11 @@ export function createResponsibilityEngine(options: {
    * an event that arrives for a banned account must not be spent on that account's models.
    */
   accessRevokedOf?: (userId: string) => Promise<boolean>;
+  /**
+   * 安静时段（期 3·3.2）：事件唤醒的运行在这个人的安静时段里不开，除非触发器标了紧急。这一条留在队列里，推迟到
+   * 时段结束，不算一次尝试，也不丢。没有就不看。
+   */
+  quietUntil?: QuietUntil;
   onReply?: (
     context: ResponsibilityRunContext,
     replyText: string,
@@ -101,6 +107,7 @@ export function createResponsibilityEngine(options: {
     quota,
     deviceIdOf,
     accessRevokedOf,
+    quietUntil,
   } = options;
   const busyRetry = options.busyRetry ?? BUSY_RETRY;
   return {
@@ -140,6 +147,24 @@ export function createResponsibilityEngine(options: {
           }))
         )
           throw new Error("Responsibility work lease expired before dispatch.");
+        // The tenant stamped on the claimed row is the subscriber: a person's id, as everywhere else.
+        const resting = quietUntil
+          ? await quietUntil(item.tenantId, {
+              urgent: item.payload.urgent === true,
+            }).catch(() => null)
+          : null;
+        if (resting) {
+          const held = await queue.release({
+            kind: RESPONSIBILITY_RUN_KIND,
+            key: item.key,
+            owner: input.owner,
+            delayMs: Math.max(1_000, resting.getTime() - Date.now()),
+            uncounted: true,
+            reason: "quiet hours",
+          });
+          if (held) report.busy.push(runId);
+          continue;
+        }
         const context = await store.beginRun(runId, {
           recovered: item.attempts > 1,
         });

@@ -59,10 +59,15 @@ export function createResponsibilityStore(
     transaction: Transaction,
     runId: string,
     key = runId,
+    urgent = false,
   ) {
     await transaction
       .insert(workItems)
-      .values({ kind: RESPONSIBILITY_RUN_KIND, key, payload: { runId } })
+      .values({
+        kind: RESPONSIBILITY_RUN_KIND,
+        key,
+        payload: urgent ? { runId, urgent: true } : { runId },
+      })
       .onConflictDoNothing();
   }
   /**
@@ -345,7 +350,13 @@ export function createResponsibilityStore(
           await transaction
             .insert(responsibilityRuns)
             .values({ id: runId, responsibilityId: goal.id, eventId });
-          await queueRun(transaction, runId);
+          // A person's own "run it now" is never held for quiet hours; only what wakes it unasked is.
+          await queueRun(
+            transaction,
+            runId,
+            runId,
+            event.urgent === true || event.source === "manual",
+          );
           runIds.push(runId);
         }
         return { eventId, duplicate: false, runIds };

@@ -29,6 +29,7 @@ import {
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
+import type { QuietUntil } from "../user-preferences";
 import { DEFAULT_MAX_ATTEMPTS, type WorkQueue } from "../work/queue";
 import { RoutineRefusedError, type RoutineStore } from "./store";
 
@@ -96,6 +97,11 @@ export type RoutineSweepOptions = {
   limit?: number;
   /** How late a firing may be and still be offered. Default ten minutes; see the policy below. */
   graceMs?: number;
+  /**
+   * 安静时段（期 3·3.2）：例行任务是 Bot 自己开的轮，这个人在安静时段时不开。到点的那一次推迟到时段结束
+   * 再跑，夜里错过的几次合成一次（它们用同一个时刻的键，同一分钟本来就有的那次也并进来），不丢。没有就不看。
+   */
+  quietUntil?: QuietUntil;
   /**
    * A clock for tests. Unset in production, where phase one uses the database's clock throughout.
    * When given, phase one uses it END TO END — it is handed to `dueRoutines`, so the database's
@@ -268,6 +274,18 @@ export async function offerDueRoutines(
        */
       if (lateBy <= graceMs) {
         /*
+         * QUIET HOURS. The firing is offered for the moment its owner's quiet time ends, not for now:
+         * keyed and stamped by that moment, so every occurrence that falls in one night is the same
+         * item (one catch-up run, not one per occurrence) and an occurrence due exactly then is the
+         * same item as well. The clock below still moves on as it always does.
+         */
+        const quiet = options.quietUntil
+          ? await options
+              .quietUntil(routine.ownerUserId, { now })
+              .catch(() => null)
+          : null;
+        const fireAt = quiet ?? routine.nextRunAt;
+        /*
          * OFFERED BEFORE THE CLOCK MOVES. A crash between the two leaves the stamp where it was, so
          * the next pass reads the same stamp, renders the same key and collides: the firing happens
          * once and nothing is lost. Advancing first and offering second loses that firing outright —
@@ -276,11 +294,12 @@ export async function offerDueRoutines(
         await asOwner(() =>
           options.queue.offer({
             kind: ROUTINE_FIRE_KIND,
-            key: `${routine.id}:${minuteKey(routine.nextRunAt)}`,
+            key: `${routine.id}:${minuteKey(fireAt)}`,
             payload: {
               routineId: routine.id,
-              scheduledFor: routine.nextRunAt.toISOString(),
+              scheduledFor: fireAt.toISOString(),
             },
+            ...(quiet ? { runAt: quiet } : {}),
           }),
         );
         offered.push(routine.id);
@@ -492,6 +511,34 @@ export async function dispatchClaimedRoutines(
        * inventing a reason to lose it.
        */
       const now = options.now?.() ?? new Date();
+      /*
+       * QUIET HOURS AGAIN, at the moment of acting: the offer may be from before the quiet time began,
+       * or the person may have moved their hours since. Handed back uncounted, pushed to the end of the
+       * quiet time, and re-stamped for that moment so the window below measures from there.
+       */
+      const holdUntil = options.quietUntil
+        ? await options
+            .quietUntil(routine.ownerUserId, { now })
+            .catch(() => null)
+        : null;
+      if (holdUntil) {
+        const held = await options.queue.release({
+          kind: ROUTINE_FIRE_KIND,
+          key: item.key,
+          owner: options.owner,
+          delayMs: Math.max(1_000, holdUntil.getTime() - now.getTime()),
+          uncounted: true,
+          reason: "quiet hours",
+          payload: { scheduledFor: holdUntil.toISOString() },
+        });
+        report.skipped.push({
+          routineId,
+          reason: held
+            ? "held for the owner's quiet hours"
+            : "not ours to hold",
+        });
+        continue;
+      }
       const stamp = item.payload.scheduledFor;
       const scheduledFor =
         typeof stamp === "string" ? new Date(stamp) : undefined;

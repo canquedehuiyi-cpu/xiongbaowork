@@ -84,6 +84,8 @@ export type DueAutomationTrigger = {
   /** `unreadable`: a config this server cannot parse. Never offered; advancing it switches it off. */
   kind: Exclude<AutomationTriggerKind, "webhook"> | "unreadable";
   nextRunAt: Date;
+  /** The trigger is marked urgent: quiet hours do not hold it. */
+  urgent?: boolean;
   /**
    * The clock this row was judged due by: the database's `now()` (or the caller's `asOf`). How late
    * the firing is, and where a stale clock lands, are measured on it, never on a replica's clock.
@@ -172,6 +174,11 @@ export type AutomationStore = {
    * it runs as `platform` itself, whatever frame it is called from.
    */
   dueTriggers(limit: number, asOf?: Date): Promise<DueAutomationTrigger[]>;
+  /**
+   * Whether the trigger is marked urgent, read in the caller's frame (the claimed item's tenant). A
+   * trigger that is gone or unreadable is not urgent.
+   */
+  triggerUrgent?(triggerId: string): Promise<boolean>;
   /**
    * Move a trigger past the moment `from`, once (compare-and-set on `next_run_at`). False when it
    * had already moved. A one-off switches itself off; `missed` says the moment was too stale to fire,
@@ -1078,10 +1085,28 @@ export function createAutomationStore(
           tenantId: row.tenantId,
           kind,
           nextRunAt: row.nextRunAt,
+          urgent: config.success && config.data.urgent === true,
           asOf: asOf ?? new Date(row.databaseNowMs),
         });
       }
       return due;
+    },
+
+    async triggerUrgent(triggerId) {
+      const tenant = callerTenant();
+      if (!isUuid(triggerId)) return false;
+      const [row] = await database
+        .select({ config: automationTriggers.config })
+        .from(automationTriggers)
+        .where(
+          and(
+            eq(automationTriggers.id, triggerId),
+            eq(automationTriggers.tenantId, tenant),
+          ),
+        )
+        .limit(1);
+      const config = automationTriggerConfigSchema.safeParse(row?.config);
+      return config.success && config.data.urgent === true;
     },
 
     async advanceTrigger(triggerId, from, options = {}) {

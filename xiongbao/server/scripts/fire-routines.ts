@@ -30,6 +30,7 @@ import {
 } from "../src/routines/sweep";
 import { createTaskProjector } from "../src/tasks/projector";
 import { runAsTenant } from "../src/tenant/context";
+import { createQuietUntil } from "../src/user-preferences";
 import { recoverInterruptedFlowRuns } from "../src/wakerflows/recovery";
 import { createWorkQueue } from "../src/work/queue";
 
@@ -125,7 +126,14 @@ const asPlatform = <T>(phase: () => Promise<T>) =>
   runAsTenant("platform", phase);
 
 try {
-  const options = { routineStore, queue, dispatch, owner };
+  // 例行任务是 Bot 自己开的轮：这个人在安静时段时推迟到结束再跑（期 3·3.2）。
+  const options = {
+    routineStore,
+    queue,
+    dispatch,
+    owner,
+    quietUntil: createQuietUntil(database),
+  };
   /*
    * Both halves in one pass, offering first: the items this offer puts on the queue are claimable by
    * the consume below, so a routine due right now fires in this sweep rather than in the next one.

@@ -1,7 +1,9 @@
 import {
+  DEFAULT_QUIET_HOURS,
   DEFAULT_RUN_END_NOTICE,
   DEFAULT_USER_PREFERENCES,
   normalizeSkinId,
+  type QuietHours,
   RUN_END_NOTICE_CHANNELS,
   type RunEndNoticePreferences,
   type StoredPreferences,
@@ -119,8 +121,8 @@ function workHoursOf(stored: StoredPreferences): WorkHours {
  * back to a build that has it brings it back, but this build answers with its default.
  */
 function withDefaults(stored: StoredPreferences): StoredUserPreferences {
-  // The run-end switches have their own read; the general one keeps the shape it has always had.
-  const { runEndNotice: _own, ...general } = stored;
+  // The run-end switches and the quiet hours have their own reads; the general one keeps its old shape.
+  const { runEndNotice: _own, quietHours: _quiet, ...general } = stored;
   const preferences = { ...DEFAULT_USER_PREFERENCES, ...general };
   // A row saved before the rename holds the old default's name; it reads as the new one.
   return {
@@ -146,6 +148,160 @@ export function runEndNoticeOf(
   for (const channel of RUN_END_NOTICE_CHANNELS)
     if (saved[channel] === false) notice[channel] = false;
   return notice;
+}
+
+/**
+ * 安静时段在这个部署上怎么算：`on`（默认）没存过的人也用 22:00–08:00；`opt-in` 只有本人自己存过且开着的才算；
+ * `off` 整个部署不看安静时段，所有入口照旧。每次现读，改了环境变量重启就生效。
+ */
+export type QuietHoursMode = "on" | "opt-in" | "off";
+
+export function quietHoursMode(
+  environment: Record<string, string | undefined> = process.env,
+): QuietHoursMode {
+  const value = environment.XIONGBAO_QUIET_HOURS?.trim().toLowerCase();
+  return value === "off" || value === "opt-in" ? value : "on";
+}
+
+/**
+ * The quiet hours a stored row says, over the defaults. A malformed clock reads as the default one, so
+ * a bad row never makes the whole day quiet; in `opt-in` mode a row with no saved quiet hours is off.
+ */
+export function quietHoursOf(
+  stored: StoredPreferences,
+  mode: QuietHoursMode = quietHoursMode(),
+): QuietHours {
+  const saved =
+    stored.quietHours && typeof stored.quietHours === "object"
+      ? (stored.quietHours as Record<string, unknown>)
+      : undefined;
+  const hours = saved ?? {};
+  return {
+    enabled:
+      typeof hours.enabled === "boolean"
+        ? hours.enabled
+        : // Anything saved is the person opting in; nothing saved follows the deployment's mode.
+          saved !== undefined || mode !== "opt-in",
+    start: isWorkClock(hours.start) ? hours.start : DEFAULT_QUIET_HOURS.start,
+    end: isWorkClock(hours.end) ? hours.end : DEFAULT_QUIET_HOURS.end,
+  };
+}
+
+/** What deciding "is it quiet for this person now" needs: their quiet hours and the zone they are read in. */
+export type QuietUser = { quietHours: QuietHours; timeZone: string };
+
+const clockFormats = new Map<string, Intl.DateTimeFormat>();
+
+/** The minute of the local day `at` is in `timeZone`, 0 to 1439. */
+function localMinute(at: Date, timeZone: string): number {
+  let format = clockFormats.get(timeZone);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      hourCycle: "h23",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    clockFormats.set(timeZone, format);
+  }
+  let hours = 0;
+  let minutes = 0;
+  for (const part of format.formatToParts(at)) {
+    if (part.type === "hour") hours = Number(part.value);
+    if (part.type === "minute") minutes = Number(part.value);
+  }
+  return (hours % 24) * 60 + minutes;
+}
+
+/**
+ * Whether `now` falls in the person's quiet hours, on their own clock. The start is inside and the end
+ * is not; a start later than the end runs across midnight (22:00 to 08:00 is quiet at 23:30 and at
+ * 07:59, not at 08:00); a start equal to the end is no quiet time at all. Off in `off` mode.
+ */
+export function inQuietHours(
+  user: QuietUser,
+  now: Date,
+  mode: QuietHoursMode = quietHoursMode(),
+): boolean {
+  if (mode === "off" || !user.quietHours.enabled) return false;
+  const start = minuteOfClock(user.quietHours.start);
+  const end = minuteOfClock(user.quietHours.end);
+  if (start === end) return false;
+  const minute = localMinute(now, user.timeZone);
+  return start < end
+    ? minute >= start && minute < end
+    : minute >= start || minute < end;
+}
+
+/**
+ * The first moment after `now` that is not quiet, or null when `now` is not quiet. Found by stepping a
+ * minute at a time, so a daylight-saving jump inside the stretch cannot make it land early.
+ */
+export function quietHoursEnd(
+  user: QuietUser,
+  now: Date,
+  mode: QuietHoursMode = quietHoursMode(),
+): Date | null {
+  if (!inQuietHours(user, now, mode)) return null;
+  const minute = 60_000;
+  let at = new Date(Math.floor(now.getTime() / minute) * minute + minute);
+  // A day's worth of minutes is the longest stretch there can be.
+  for (let step = 0; step < 24 * 60 && inQuietHours(user, at, mode); step += 1)
+    at = new Date(at.getTime() + minute);
+  return at;
+}
+
+/**
+ * The person's quiet hours and zone, read fresh in their own frame. A person who cannot be read is not
+ * quiet, so a database blip never holds anyone's work back, and says so in the log.
+ */
+export async function readQuietUser(
+  database: Database,
+  userId: string,
+): Promise<QuietUser | null> {
+  try {
+    const [user] = await runAsTenant(userId, () =>
+      database
+        .select({ preferences: users.preferences })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1),
+    );
+    if (!user) return null;
+    return {
+      quietHours: quietHoursOf(user.preferences),
+      timeZone: workHoursOf(user.preferences).timeZone,
+    };
+  } catch (error) {
+    console.warn(
+      JSON.stringify({
+        type: "quiet-hours-read-failed",
+        reason: error instanceof Error ? error.name : "UnknownError",
+      }),
+    );
+    return null;
+  }
+}
+
+/**
+ * The one question every proactive door asks: until when is this person's quiet time, or null when
+ * they may be reached now. `urgent` work is never held.
+ */
+export type QuietUntil = (
+  ownerUserId: string,
+  options?: { urgent?: boolean; now?: Date },
+) => Promise<Date | null>;
+
+export function createQuietUntil(
+  database: Database,
+  clock: () => Date = () => new Date(),
+): QuietUntil {
+  return async (ownerUserId, options) => {
+    if (options?.urgent) return null;
+    if (quietHoursMode() === "off") return null;
+    const user = await readQuietUser(database, ownerUserId);
+    return user ? quietHoursEnd(user, options?.now ?? clock()) : null;
+  };
 }
 
 /**
@@ -194,9 +350,20 @@ export type RunEndNoticeStore = {
   ) => Promise<RunEndNoticePreferences>;
 };
 
+/** The quiet hours: one read, and a save that names any part of them and keeps the rest. */
+export type QuietHoursStore = {
+  read: (userId: string) => Promise<QuietHours & { timeZone: string }>;
+  patch: (
+    userId: string,
+    patch: Partial<QuietHours>,
+  ) => Promise<QuietHours & { timeZone: string }>;
+};
+
 export type UserPreferencesStore = {
   /** Absent in a fake that does not care about the run-end switches. */
   runEndNotice?: RunEndNoticeStore;
+  /** Absent in a fake that does not care about the quiet hours. */
+  quietHours?: QuietHoursStore;
   claimStarterTour: (userId: string, channelId: string) => Promise<void>;
   read: (userId: string) => Promise<StoredUserPreferences>;
   patch: (
@@ -232,6 +399,36 @@ export function createUserPreferencesStore(
           .returning({ preferences: users.preferences });
         if (!user) throw new Error("User preferences could not be saved.");
         return runEndNoticeOf(user.preferences);
+      },
+    },
+    quietHours: {
+      async read(userId) {
+        const [user] = await database
+          .select({ preferences: users.preferences })
+          .from(users)
+          .where(eq(users.id, userId))
+          .limit(1);
+        if (!user) throw new Error("User preferences could not be found.");
+        return {
+          ...quietHoursOf(user.preferences),
+          timeZone: workHoursOf(user.preferences).timeZone,
+        };
+      },
+      async patch(userId, patch) {
+        // Merged one level down in Postgres, so saving the start keeps the end and the switch.
+        const [user] = await database
+          .update(users)
+          .set({
+            preferences: sql`${users.preferences} || jsonb_build_object('quietHours', coalesce(${users.preferences} -> 'quietHours', '{}'::jsonb) || ${patch}::jsonb)`,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, userId))
+          .returning({ preferences: users.preferences });
+        if (!user) throw new Error("User preferences could not be saved.");
+        return {
+          ...quietHoursOf(user.preferences),
+          timeZone: workHoursOf(user.preferences).timeZone,
+        };
       },
     },
     async claimStarterTour(userId, channelId) {

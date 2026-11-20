@@ -677,6 +677,7 @@ import { createTranslationStore, translatePending } from "./translations/store";
 import { createTranslator } from "./translations/translator";
 import { createUserInstructionsStore } from "./user-instructions";
 import {
+  createQuietUntil,
   createUserPreferencesStore,
   readRunEndNotice,
   readWorkHours,
@@ -4329,8 +4330,14 @@ await startupLifecycle.run(async (startup) => {
    * ceiling, same machine resolution as every other unattended firing; and a goal woken for a banned
    * workspace stays in place until the ban is lifted (spec J5).
    */
+  /*
+   * 安静时段（期 3·3.2）：每个会主动开轮或主动发通知的入口都问同一个问题，这个人现在是不是在安静时段。
+   * 答案是安静时段结束的时刻（要推迟到那时），或 null（可以做）。读不到时按可以做，不拦人。
+   */
+  const quietUntil = createQuietUntil(database);
   const responsibilityEngine = createServerResponsibilityEngine({
     productTelemetry,
+    quietUntil,
     database,
     responsibilityStore,
     routineIntelligence,
@@ -4641,6 +4648,7 @@ await startupLifecycle.run(async (startup) => {
     });
   const deliveryRouter = createDeliveryRouter({
     store: deliveryStore,
+    quietUntil,
     queue: createWorkQueue(database),
     owner: workOwner("delivery"),
     providers: deliveryProviders,
@@ -4775,6 +4783,7 @@ await startupLifecycle.run(async (startup) => {
    */
   const proactiveEngine = createProactiveEngine({
     store: proactiveStore,
+    quietUntil,
     // A check-in forms memories only where there is memory.
     ...(editionHasMemory(config.edition)
       ? { memory: personalMemoryStore }
@@ -4896,6 +4905,7 @@ await startupLifecycle.run(async (startup) => {
     wakerflows: wakerFlowStore,
   });
   const automationSweep = {
+    quietUntil,
     store: automationStore,
     queue: automationQueue,
     owner: workOwner("automation"),
@@ -4988,6 +4998,7 @@ await startupLifecycle.run(async (startup) => {
    */
   const wakeUpQueue = createWorkQueue(database);
   const wakeUpRunner = createWakeUpRunner({
+    quietUntil,
     queue: wakeUpQueue,
     store: wakeUpStore,
     owner: workOwner("wake-up"),
@@ -5345,6 +5356,7 @@ await startupLifecycle.run(async (startup) => {
           await runDeliveryCheck(
             {
               database,
+              quietUntil,
               workHours: savedWorkHours(database),
               notify: (tenantId, notice, now) =>
                 taskNotices.notify(tenantId, notice, now),

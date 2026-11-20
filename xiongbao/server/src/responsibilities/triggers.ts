@@ -78,6 +78,10 @@ export const triggerFilterSchema = z
       })
       .strict()
       .optional(),
+    /**
+     * 紧急（期 3·3.2）：这个触发器引起的运行不受安静时段限制，夜里也照常开轮。没写就是不紧急。
+     */
+    urgent: z.boolean().optional(),
   })
   .strict();
 export type TriggerFilter = z.infer<typeof triggerFilterSchema>;

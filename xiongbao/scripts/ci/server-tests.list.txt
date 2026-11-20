@@ -673,6 +673,8 @@ tests/provider-stored-rows.integration.test.ts
 tests/provider-tool-schemas.test.ts
 tests/provider-undecided.test.ts
 tests/question-answer-in-conversation.integration.test.ts
+tests/quiet-hours.integration.test.ts
+tests/quiet-hours.test.ts
 tests/quota-concurrency.integration.test.ts
 tests/quota-error-contract.test.ts
 tests/quota-token-usage.integration.test.ts

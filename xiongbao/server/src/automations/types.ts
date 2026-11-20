@@ -80,6 +80,11 @@ export const automationTargetSchema = z.discriminatedUnion(
 export type AutomationTarget = z.infer<typeof automationTargetSchema>;
 export type AutomationTargetKind = AutomationTarget["kind"];
 
+/**
+ * 紧急（期 3·3.2）：带这个标记的触发器不受安静时段限制，夜里也照常开轮。没写就是不紧急。
+ */
+const URGENT = z.boolean("紧急只能是开或关。").optional();
+
 const SCHEDULE_REFUSED =
   "定时规则需要五段 cron 表达式和有效时区，且间隔不少于 15 分钟。";
 const ONCE_REFUSED = "一次性触发需要一个带时区的具体时间。";
@@ -106,15 +111,17 @@ export const automationTriggerConfigSchema = z.discriminatedUnion(
           .trim()
           .min(1, SCHEDULE_REFUSED)
           .max(64, SCHEDULE_REFUSED),
+        urgent: URGENT,
       })
       .strict(),
     z
       .object({
         kind: z.literal("once"),
         at: z.iso.datetime({ offset: true, error: ONCE_REFUSED }),
+        urgent: URGENT,
       })
       .strict(),
-    z.object({ kind: z.literal("webhook") }).strict(),
+    z.object({ kind: z.literal("webhook"), urgent: URGENT }).strict(),
   ],
   "触发条件只能是定期、一次性或事件入口。",
 );

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gte, inArray, isNull, lte, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
 import { refuseExternalEmployeeWork } from "../agents/acp/external";
 import type { Database } from "../db/client";
 import { auditEvents, users } from "../db/schema/core";
@@ -540,6 +540,23 @@ export function createProactiveStore(database: Database) {
         if (row) claimed.push(row);
       }
       return claimed;
+    },
+    /**
+     * Push a setting's next check-in out to `until` (the end of the person's quiet hours), never
+     * earlier than it already was. The check-in that was due is not recorded as skipped: nothing ran,
+     * and the next one reads from the last check-in that did, so nothing in between is missed.
+     */
+    async deferNextRun(id: string, until: Date) {
+      await database
+        .update(proactiveSettings)
+        .set({ nextRunAt: until, updatedAt: new Date() })
+        .where(
+          and(
+            eq(proactiveSettings.id, id),
+            eq(proactiveSettings.enabled, true),
+            lt(proactiveSettings.nextRunAt, until),
+          ),
+        );
     },
     async recordRun(
       id: string,
