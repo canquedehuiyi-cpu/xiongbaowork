@@ -1,6 +1,12 @@
 import { OFFER_CHECK_IN_TOOL } from "./check-in-offer";
 import { SHOW_APP_ACCESS_TOOL } from "./connect-prompt";
 import {
+  GIT_BRANCH_TOOL,
+  GIT_COMMIT_TOOL,
+  GIT_DIFF_SUMMARY_TOOL,
+  OPEN_PULL_REQUEST_TOOL,
+} from "./git-tools";
+import {
   CHECK_VIDEO_TOOL,
   GENERATE_IMAGE_TOOL,
   GENERATE_VIDEO_TOOL,
@@ -625,7 +631,31 @@ const OWN_TOOLS: Record<string, OwnTool> = {
   [UPDATE_PLAN_TOOL]: { running: "正在更新计划", done: "更新了计划" },
   // Writing down a skill of its own, and correcting or reading it back later (期 2). Not the browser's `save_skill`.
   [SAVE_SKILL_TOOL]: { running: "正在记下一条技能", done: "记下了一条技能" },
-  [REFINE_SKILL_TOOL]: { running: "正在查看或修正技能", done: "查看或修正了技能" },
+  [REFINE_SKILL_TOOL]: {
+    running: "正在查看或修正技能",
+    done: "查看或修正了技能",
+  },
+  // Git in its own workspace, and a pull request through the connector (期 4).
+  [GIT_BRANCH_TOOL]: {
+    running: "正在处理分支",
+    done: "处理了分支",
+    attempted: "处理分支",
+  },
+  [GIT_COMMIT_TOOL]: {
+    running: "正在提交代码",
+    done: "提交了代码",
+    attempted: "提交代码",
+  },
+  [GIT_DIFF_SUMMARY_TOOL]: {
+    running: "正在查看改动摘要",
+    done: "查看了改动摘要",
+    attempted: "查看改动摘要",
+  },
+  [OPEN_PULL_REQUEST_TOOL]: {
+    running: "正在开 Pull Request",
+    done: "开了 Pull Request",
+    attempted: "开 Pull Request",
+  },
   // The web: searching it, reading one page, crawling a site (期五 B).
   [WEB_SEARCH_TOOL]: {
     running: "正在搜索",

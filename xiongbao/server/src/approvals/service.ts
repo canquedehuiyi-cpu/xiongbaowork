@@ -186,6 +186,15 @@ const validationProbe = new AsyncLocalStorage<{
  */
 export const isApprovalRecheck = () => validationProbe.getStore() !== undefined;
 /**
+ * Run `work` as if no re-check were under way. A re-check (`validateReentry`) takes the FIRST action the
+ * gate is asked about as the one the person approved, so anything a tool does before its governed action
+ * that goes through the gate too (a file read to check what it is about to commit) would be taken for it
+ * and never match. Only for a read whose answer the tool's own command depends on, which is then the same
+ * in the re-check as it was in the call that asked.
+ */
+export const outsideRecheck = <T>(work: () => T): T =>
+  validationProbe.exit(work);
+/**
  * The approved action this call is the re-check or the run of (`validateReentry`, `resume`), as its
  * approval bound it, or undefined anywhere else. For a call whose own view of its target is kept by
  * one replica for a while (a desktop control, plan Task 22): an approval answered after that view is

@@ -421,8 +421,12 @@ tests/env-aliases.test.ts
 tests/env-name.test.ts
 tests/evidence-gate-required.test.ts
 tests/external-agents-schema.integration.test.ts
+tests/form-check-guidance.test.ts
 tests/generated-media-group.integration.test.ts
 tests/generated-media.integration.test.ts
+tests/git-tools-approval-real.test.ts
+tests/git-tools-approval.test.ts
+tests/git-tools.test.ts
 tests/github-oauth-signup.test.ts
 tests/goal-conversation.integration.test.ts
 tests/goal-run-busy-conversation.integration.test.ts
@@ -456,6 +460,8 @@ tests/health.test.ts
 tests/heartbeat-routes.test.ts
 tests/heartbeat.integration.test.ts
 tests/heartbeat.test.ts
+tests/heavy-task-prompt.test.ts
+tests/heavy-task.test.ts
 tests/host-access-broker.test.ts
 tests/host-access-callback-route.test.ts
 tests/host-access-dispatch-audit.test.ts

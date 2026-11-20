@@ -82,6 +82,11 @@ import { attributeBotAnswers } from "./agents/bot-answers";
 import { frameworkLabel, frameworkOf } from "./agents/framework";
 import type { ThreadRunner } from "./agents/handoff-delivery";
 import { HANDOFF_TOOL } from "./agents/handoff-tool";
+import {
+  type HeavyTaskFacts,
+  loadHeavyTaskFacts,
+  noteHeavyTasks,
+} from "./agents/heavy-task";
 import { takesModelChoice } from "./agents/harness-model";
 import {
   PlanModel,
@@ -2577,6 +2582,8 @@ async function buildAgent(
     runAgentModel: LanguageModel | undefined = agentModel,
     /** What the Bot is told for the skill this run's message picked. See `picked-skill.ts`. */
     pickedSkill?: string,
+    /** 大型编码任务的建议要用的事实，只在有消息命中规则时才查。见 `agents/heavy-task.ts`。 */
+    heavyFacts?: HeavyTaskFacts,
   ) => {
     /*
      * What waits behind a search, decided where the run's tools are final. The count includes what
@@ -2762,7 +2769,22 @@ async function buildAgent(
        * see `tool-images.ts`.
        */
       // Another Bot's answer, as that Bot's words rather than this one's. See `bot-answers.ts`.
-      attribute: (messages) => attributeBotAnswers(messages, botNames),
+      attribute: (messages) => {
+        const attributed = attributeBotAnswers(messages, botNames);
+        /*
+         * 大型编码任务的建议跟在那条用户消息自己后面，不进系统提示：系统提示一变，后面整段历史的缓存都作废。
+         * 每条消息的建议只看它自己的字和固定的事实，每一轮字节一样。见 `agents/heavy-task.ts`。
+         */
+        return heavyFacts
+          ? ([
+              ...noteHeavyTasks(
+                attributed,
+                heavyFacts,
+                tools.map((tool) => tool.name),
+              ),
+            ] as typeof attributed)
+          : attributed;
+      },
       inline: async (messages: AgentRunInput["messages"], threadId: string) =>
         inlineToolImages(
           loadAttachment
@@ -2828,6 +2850,8 @@ async function buildAgent(
           runAgentModel,
         );
       const pickedSkill = pickedSkillFor(input);
+      // 重活分流（期 4）：先按规则看消息，有命中才查难任务模型和固定的 Codex、Claude Code 员工。
+      const heavyFacts = await loadHeavyTaskFacts(agent.id, input.messages);
       // Fetched per run, so a skill published a moment ago reaches the next run (upstream 0046).
       const learnedSkills = await acquireLearnedSkills?.(agent.id, signal);
       signal.throwIfAborted();
@@ -2878,7 +2902,8 @@ async function buildAgent(
         // `whole` carries the computer guidance, and this run holds no computer tool.
         !computerGuidance &&
         !timeZone &&
-        !pickedSkill
+        !pickedSkill &&
+        !heavyFacts
         ? whole
         : withTools(
             tools,
@@ -2890,6 +2915,7 @@ async function buildAgent(
             timeZone,
             runAgentModel,
             pickedSkill,
+            heavyFacts,
           );
     },
   );
