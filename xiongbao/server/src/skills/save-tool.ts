@@ -22,6 +22,7 @@ import {
 import {
   findOverreach,
   findSensitive,
+  broadDeleteIn,
   externalAddressIn,
   maskEmails,
 } from "../learning/sensitive";
@@ -291,7 +292,10 @@ export function withoutEmails(draft: SkillDraft): SkillDraft {
 export function heldForReview(draft: SkillDraft): string | undefined {
   const text = textOfDraft(draft);
   const overreach = findOverreach(text);
-  if (overreach.length > 0) return `含越权的步骤（${overreach.join("、")}）`;
+  if (overreach.length > 0) {
+    const command = broadDeleteIn(text);
+    return `含越权的步骤（${overreach.join("、")}）${command ? `：${command}` : ""}`;
+  }
   const address = externalAddressIn(text);
   if (address !== undefined) return `要求访问或外发到网址或域名（${address}）`;
   return undefined;

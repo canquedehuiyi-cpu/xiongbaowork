@@ -129,6 +129,7 @@ import {
 import { pitfallPairSeeds } from "./gen-pitfall";
 import {
   backgroundOf,
+  callTrace,
   type LearnedState,
   learningDiff,
   newSkillBodies,
@@ -1447,6 +1448,9 @@ async function runWork(work: Work): Promise<EvalRecord> {
   console.log(
     `   rounds ${runIds.length}, tool calls ${calls.length} (computer ${computerCalls}), files out ${listFiles(copy).length}`,
   );
+  // 重复任务把每一步打出来：看第二次有没有照技能的快路径走，还是又从头摸索。
+  if (work.key.startsWith("repeat-"))
+    for (const line of callTrace(calls)) console.log(`     ${line}`);
 
   const judged = await work.judge(copy, {
     capabilities,

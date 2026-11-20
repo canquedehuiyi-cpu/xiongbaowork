@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import {
+  callTrace,
   type LearnedState,
   backgroundOf,
   learningDiff,
@@ -82,6 +83,18 @@ test("a held retrospective carries the reason from its retrospect-held line", ()
       heldReason: "要求访问或外发到网址或域名（rates.fx）",
     },
   ]);
+});
+
+test("the call trace prints one line per call with the arguments cut short", () => {
+  expect(
+    callTrace(
+      [
+        { name: "computer_run", args: '{"command":"ls\n -la"}' },
+        { name: "deliver_task", args: "x".repeat(10) },
+      ],
+      8,
+    ),
+  ).toEqual([' 1. computer_run {"comman…', " 2. deliver_task xxxxxxxx…"]);
 });
 
 function clock() {
