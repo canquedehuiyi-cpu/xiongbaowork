@@ -416,7 +416,9 @@ import { createMediaStore, mediaChannelOf } from "./media/store";
 import { mediaTools, offeredMediaTools } from "./media/tools";
 import { workspaceMedia } from "./media/workspace";
 import { createMemoryDefaults } from "./memory/defaults";
+import { createEmbeddingStore } from "./memory/embeddings-store";
 import { createMemoryIngestion } from "./memory/ingestion";
+import { createMemoryVectors } from "./memory/vectors";
 import { createIntelligenceMemory } from "./memory/intelligence";
 import {
   createMemoryExtractor,
@@ -2936,6 +2938,11 @@ await startupLifecycle.run(async (startup) => {
   const memoryIngestion = createMemoryIngestion({
     store: personalMemoryStore,
     plugins: pluginStore,
+    // 按语义挑记忆（`XIONGBAO_EMBEDDING_*`，没配就按词挑）：出站和模型地址同一道校验。
+    vectors: createMemoryVectors({
+      store: createEmbeddingStore(database),
+      embed: { outbound: modelOutbound },
+    }),
     canUseBot: async (owner, bot) =>
       (await pluginStore.agentOwner(bot)) === owner ||
       (await agentProfileStore.get(await actorFor(owner), bot)) !== null,

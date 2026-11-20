@@ -531,6 +531,8 @@ tests/media-group-computer.test.ts
 tests/media-tools.test.ts
 tests/memory-default-source-tool.test.ts
 tests/memory-defaults.integration.test.ts
+tests/memory-embed.test.ts
+tests/memory-embeddings.integration.test.ts
 tests/memory-extract.integration.test.ts
 tests/memory-extract.test.ts
 tests/memory-intelligence.integration.test.ts

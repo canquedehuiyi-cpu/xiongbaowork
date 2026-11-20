@@ -8,9 +8,11 @@ import { runAsClaimedTenant, runAsTenant } from "../tenant/context";
 import {
   MEMORY_RECORD_MAX_CHARS,
   memoryInjectBudget,
+  type RankVectors,
   rankMemories,
 } from "./rank";
 import { createStickyMemory } from "./sticky";
+import type { MemoryVectorsService } from "./vectors";
 import type { MemoryStore } from "./store";
 import {
   type ImportedMemory,
@@ -118,11 +120,21 @@ export function quoteMemoryContext(
     provenance: string;
     sourceId: string | null;
   }[],
-  options: { query?: string; budgetChars?: number } = {},
+  options: {
+    query?: string;
+    budgetChars?: number;
+    /** 这一批记忆和消息的向量（`vectors.ts`）：有就按语义排，没有按词排。 */
+    vectors?: RankVectors | null;
+  } = {},
 ): string {
   if (!memories.length) return "";
   const budget = options.budgetChars ?? memoryInjectBudget();
-  const picked = rankMemories(options.query ?? "", memories, budget);
+  const picked = rankMemories(
+    options.query ?? "",
+    memories,
+    budget,
+    options.vectors,
+  );
   const records: { id: string; source: string; content: string }[] = [];
   let remaining = budget;
   for (const memory of picked) {
@@ -210,6 +222,11 @@ export function createMemoryIngestion(options: {
    * Bot qualifies.
    */
   canUseBot?: (ownerUserId: string, botId: string) => Promise<boolean>;
+  /**
+   * 记忆的向量（期 2，`vectors.ts`）：有它、并且部署配了向量服务，注入按语义相关程度挑；没有或没配，按词挑，和
+   * 以前一样。在本人的帧里被问。
+   */
+  vectors?: MemoryVectorsService;
   /** 记忆注入粘住的设置，见 `sticky.ts`；测试用。 */
   env?: Record<string, string | undefined>;
   stickyMaxThreads?: number;
@@ -452,13 +469,20 @@ export function createMemoryIngestion(options: {
       /*
        * 同一线程里话题没变就逐字节复用上次的块，前缀缓存才不会每轮失效（`sticky.ts`）。
        */
-      return sticky.choose({
+      return sticky.chooseAsync({
         key: threadId
           ? `${ownerUserId}\u0000${botId}\u0000${threadId}`
           : undefined,
         memories,
         query,
-        render: (asked) => quoteMemoryContext(memories, { query: asked }),
+        // 只有真的要重挑才花这一次：复用上次的块不调向量服务（`sticky.ts`）。
+        render: async (asked) =>
+          quoteMemoryContext(memories, {
+            query: asked,
+            vectors: await options.vectors
+              ?.vectorsFor(memories, asked)
+              .catch(() => null),
+          }),
       });
     },
     /**

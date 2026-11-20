@@ -32,6 +32,7 @@ export default defineConfig({
     "./src/db/schema/approvals.ts",
     "./src/db/schema/approval-conversation-grants.ts",
     "./src/db/schema/memory.ts",
+    "./src/db/schema/memory-embeddings.ts",
     "./src/db/schema/defaults.ts",
     "./src/db/schema/proactive.ts",
     "./src/db/schema/tasks.ts",

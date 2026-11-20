@@ -49,6 +49,53 @@ export function createStickyMemory(
   const maxThreads = options.maxThreads ?? DEFAULT_MAX_THREADS;
   // 插入顺序就是最近使用的顺序（命中时重新插入）：满了丢最前面的。
   const entries = new Map<string, Entry>();
+  /** 这一条消息该复用上次的块还是重挑，以及重挑时用哪条消息、记下什么。 */
+  function lookup(
+    key: string,
+    memories: readonly { id: string; content: string; provenance: string }[],
+    query: string,
+  ) {
+    const fingerprint = fingerprintOf(memories);
+    const substantive = hasSubstantiveWords(query);
+    const tokens = substantive ? tokensOf(query) : new Set<string>();
+    const previous = entries.get(key);
+    if (
+      previous &&
+      previous.fingerprint === fingerprint &&
+      (!substantive ||
+        (previous.tokens.size > 0 &&
+          similarity(tokens, previous.tokens) >= MEMORY_STICKY_SIMILARITY))
+    ) {
+      entries.delete(key);
+      entries.set(key, previous);
+      return { reuse: previous } as const;
+    }
+    /*
+     * 记忆变了而这条消息没有实词：话题还是上次那个，按上次挑选时的那条消息重挑，不退回按最近更新取。
+     */
+    return {
+      reuse: undefined,
+      asked: substantive ? query : (previous?.query ?? query),
+      keep: {
+        tokens: substantive ? tokens : (previous?.tokens ?? tokens),
+        query: substantive ? query : (previous?.query ?? ""),
+        fingerprint,
+      },
+    } as const;
+  }
+  function remember(
+    key: string,
+    state: { keep: Omit<Entry, "block"> },
+    block: string,
+  ) {
+    entries.delete(key);
+    entries.set(key, { ...state.keep, block });
+    while (entries.size > maxThreads) {
+      const oldest = entries.keys().next().value;
+      if (oldest === undefined) break;
+      entries.delete(oldest);
+    }
+  }
   return {
     /**
      * 这一轮的注入块。`key` 是人、员工和线程合起来的键，没有线程（没有可粘的东西）就不粘；
@@ -60,40 +107,32 @@ export function createStickyMemory(
       query: string;
       render: (query: string) => string;
     }): string {
-      const { key, memories, query, render } = input;
+      const { key, query, render } = input;
       if (!enabled || !key) return render(query);
-      const fingerprint = fingerprintOf(memories);
-      const substantive = hasSubstantiveWords(query);
-      const tokens = substantive ? tokensOf(query) : new Set<string>();
-      const previous = entries.get(key);
-      if (
-        previous &&
-        previous.fingerprint === fingerprint &&
-        (!substantive ||
-          (previous.tokens.size > 0 &&
-            similarity(tokens, previous.tokens) >= MEMORY_STICKY_SIMILARITY))
-      ) {
-        entries.delete(key);
-        entries.set(key, previous);
-        return previous.block;
-      }
-      /*
-       * 记忆变了而这条消息没有实词：话题还是上次那个，按上次挑选时的那条消息重挑，不退回按最近更新取。
-       */
-      const asked = substantive ? query : (previous?.query ?? query);
-      const block = render(asked);
-      entries.delete(key);
-      entries.set(key, {
-        tokens: substantive ? tokens : (previous?.tokens ?? tokens),
-        query: substantive ? query : (previous?.query ?? ""),
-        fingerprint,
-        block,
-      });
-      while (entries.size > maxThreads) {
-        const oldest = entries.keys().next().value;
-        if (oldest === undefined) break;
-        entries.delete(oldest);
-      }
+      const state = lookup(key, input.memories, query);
+      if (state.reuse) return state.reuse.block;
+      const block = render(state.asked);
+      remember(key, state, block);
+      return block;
+    },
+    /**
+     * {@link choose} for a `render` that has to wait (期 2: the vectors of the memories and of the
+     * message come from an embedding call). The decision to reuse the last block or to pick again is the
+     * same one, made by the same code; only the picking is awaited, and a block that is reused costs no
+     * call at all.
+     */
+    async chooseAsync(input: {
+      key: string | undefined;
+      memories: readonly { id: string; content: string; provenance: string }[];
+      query: string;
+      render: (query: string) => Promise<string>;
+    }): Promise<string> {
+      const { key, query, render } = input;
+      if (!enabled || !key) return render(query);
+      const state = lookup(key, input.memories, query);
+      if (state.reuse) return state.reuse.block;
+      const block = await render(state.asked);
+      remember(key, state, block);
       return block;
     },
   };

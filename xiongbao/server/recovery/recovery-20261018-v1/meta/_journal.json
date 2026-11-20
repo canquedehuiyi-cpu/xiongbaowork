@@ -1506,6 +1506,13 @@
       "when": 1795144000000,
       "tag": "0234_learned_skills",
       "breakpoints": true
+    },
+    {
+      "idx": 235,
+      "version": "7",
+      "when": 1795144500000,
+      "tag": "0235_memory_embeddings",
+      "breakpoints": true
     }
   ]
 }
