@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { unverifiedChanges } from "../../shared/verify";
 import { parseDraft, RETRO_SYSTEM } from "../src/learning/retrospect";
 import {
+  FAST_PATH_ADVICE,
   fastPathChecksIn,
   RELATED_SKILL_CHARS,
   relatedSkillsGuidance,
@@ -219,5 +220,18 @@ describe("跑过技能自带的校验就算已校验", () => {
       { name: "computer_run_command", input: { command: "ls /work" } },
     ];
     expect(unverifiedChanges(calls, [CHECK])).toEqual(["/work/run.py"]);
+  });
+});
+
+describe("快路径从任务的起点做到交付", () => {
+  test("复盘提示：快路径从开始的状态做到交付，会变的值让脚本自己判断，或者先用一条命令查齐", () => {
+    expect(RETRO_SYSTEM).toContain("from the state the task STARTED in");
+    expect(RETRO_SYSTEM).toContain("not only a check that assumes the work is already done");
+    expect(RETRO_SYSTEM).toContain("worked out by the script itself");
+    expect(RETRO_SYSTEM).toContain("ONE command that prints everything needed");
+  });
+
+  test("注入提示：要填的值用一条命令一次查齐", () => {
+    expect(FAST_PATH_ADVICE).toContain("用一条命令一次查齐");
   });
 });
