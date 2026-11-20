@@ -12,6 +12,7 @@
 import { z } from "zod";
 import {
   WEB_CRAWL_TOOL,
+  WEB_FETCH_INLINE_BYTES,
   WEB_FETCH_LIMITS,
   WEB_FETCH_TOOL,
   WEB_SEARCH_LIMITS,
@@ -266,7 +267,7 @@ export function webTools(options: WebToolOptions): GrantedTool[] {
     ref: WEB_FETCH_REF,
     concurrent: true,
     description:
-      "读取一个公开网页的正文，转成 Markdown（标题、链接、列表、表格保留）。只能读 http 或 https 的公开网址，内网地址会被拒绝。页面靠脚本加载时设 render_js 为 true。web_crawl 返回的 ref（crawl://…）也可以交给它读全文。",
+      "读取一个公开网页的正文，转成 Markdown（标题、链接、列表、表格保留）。只能读 http 或 https 的公开网址，内网地址会被拒绝。页面靠脚本加载时设 render_js 为 true。web_crawl 返回的 ref（crawl://…）也可以交给它读全文。正文超过 8KB 时，有电脑的员工会把全文存进工作区，这里只给开头和结尾（要看中间用 computer_read_file 按行段读，要找什么用 computer_grep 搜）；没有电脑的只给前 8KB。",
     parameters: fetchParameters,
     async execute(args, execution) {
       const input = argumentsOf(args);
@@ -504,8 +505,9 @@ async function shapeBody(
 ): Promise<{ content: string; truncated?: string; savedTo?: string }> {
   const { text, truncated } = cut(markdown, maxChars);
   /*
-   * 存不了盘（部署里没有电脑，或这位员工用不了电脑）时一律走下面的截断：超过 16KB 就截到 16KB 并说明
-   * （用户 2026-11-19 同意没有电脑的部署也降到 16KB）。
+   * 内联上限是 8KB（{@link WEB_FETCH_INLINE_BYTES}，用户 2026-11-20 批准，原为 16KB）：超过就存盘，对话里
+   * 只留头尾、路径和读法。存不了盘（部署里没有电脑，或这位员工用不了电脑）时一律走截断：截到 8KB 并说明，
+   * 读不回全文的员工要知道这份不完整。
    */
   const spilled = await spill({
     tool: WEB_FETCH_TOOL,
@@ -513,6 +515,7 @@ async function shapeBody(
     full: markdown,
     measured: text,
     keep: "head",
+    inlineBytes: WEB_FETCH_INLINE_BYTES,
     sink: save ?? noOutputSink,
   });
   if (!spilled)

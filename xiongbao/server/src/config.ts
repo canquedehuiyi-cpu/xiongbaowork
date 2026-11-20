@@ -535,9 +535,9 @@ export type DeploymentConfig = {
    */
   localLearning: boolean;
   /**
-   * 对话侧栏的自动压缩：一轮开始前，上一轮已用 ≥ 上限 − 预留时先压缩再跑。默认关，
-   * `SIDEBAR_AUTO_COMPACTION=true`（或 `1`）打开；界面的分隔线和「看摘要」做完再开。手动压缩和侧栏读取
-   * 不受影响。
+   * 对话侧栏的自动压缩：一轮开始前，上一轮已用 ≥ 上限 − 预留时先压缩再跑。默认开（期 1·1.4）；
+   * `XIONGBAO_AUTO_COMPACTION=off` 关掉，原有的 `SIDEBAR_AUTO_COMPACTION=false`（或 `0`、`off`）也关。
+   * 手动压缩和侧栏读取不受影响。
    */
   sidebarAutoCompaction: boolean;
   /**
@@ -614,6 +614,22 @@ function required(environment: Environment, name: string): string {
     throw new Error(`${name} must be configured`);
   }
   return value;
+}
+
+/**
+ * 对话侧栏的自动压缩开不开（期 1·1.4）：默认开。`XIONGBAO_AUTO_COMPACTION=off` 是回退开关，压过别的；
+ * 其次是原有的 `SIDEBAR_AUTO_COMPACTION`：`false`、`0`、`off`、`no` 关，`true`、`1` 开；没写或写了别的就是默认（开）。
+ */
+function autoCompactionEnabled(environment: Environment): boolean {
+  if (
+    optional(environment, "XIONGBAO_AUTO_COMPACTION")?.toLowerCase() === "off"
+  )
+    return false;
+  const legacy = optional(
+    environment,
+    "SIDEBAR_AUTO_COMPACTION",
+  )?.toLowerCase();
+  return !["false", "0", "off", "no"].includes(legacy ?? "");
 }
 
 function optional(environment: Environment, name: string): string | undefined {
@@ -1986,9 +2002,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     modelEndpointsAllowPrivateHosts: privateHostsAllowed(environment),
     localLearning:
       optional(environment, "OPENBOT_LOCAL_LEARNING")?.toLowerCase() !== "off",
-    sidebarAutoCompaction: ["true", "1"].includes(
-      optional(environment, "SIDEBAR_AUTO_COMPACTION")?.toLowerCase() ?? "",
-    ),
+    sidebarAutoCompaction: autoCompactionEnabled(environment),
     /*
      * Where a coworker's actions are carried out (ticket 017). `cloud` is the deployment's own
      * container, which is what a development machine runs. `device` sends them to the tenant's

@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
 import { PlanModel, type PlanModelConfig } from "../agents/plan-model";
 import type { RuntimeModel } from "../copilot";
+import type { ChoiceHint } from "../plugins/selection";
+import { similarity, tokensOf } from "../text-tokens";
 
 /**
  * One model call on the deployment's own model, for the router, the approval reviewer and the tool
@@ -47,6 +50,8 @@ export type ModelCallOptions = {
    * request body to put it in, so the prompt carries it there too.
    */
   schema?: ModelAnswerSchema;
+  /** Only the skill chooser reads it (`createSkillChooser`): what lets it reuse an earlier choice. */
+  hint?: ChoiceHint;
 };
 
 export type ModelCompleter = (
@@ -189,6 +194,36 @@ export function createModelCompleter(deps: {
 }
 
 /**
+ * 同一线程里同一主题的消息，复用上次的挑选，不再调用模型（期 1·1.3）。
+ *
+ * 为什么：挑技能每轮多一次模型调用，而一段对话里连着几条消息常常是同一件事（「汇总这张表」「再汇总一下
+ * 第三季度的」），每一次挑出来的都一样。新消息和上次挑选时的消息，词重叠相似度（`text-tokens.ts`）不低于
+ * {@link SKILL_CHOICE_REUSE_SIMILARITY}、技能目录没变、没过 {@link SKILL_CHOICE_TTL_MS}，就把上次的答案
+ * 原样给回去；主题变了就重挑，并记下新的。
+ *
+ * 复用错了的代价是漏挑一个技能（它的工具这一轮不在候选里），所以阈值取得严：短的接话（「好的，继续」）
+ * 和上次没有共同的词，一定重挑。失败的调用不缓存。没有线程可以对应的调用（没带 hint）不缓存。
+ * `XIONGBAO_SKILL_CHOOSE_CACHE=off` 关掉整个缓存。
+ */
+export const SKILL_CHOICE_REUSE_SIMILARITY = 0.6;
+export const SKILL_CHOICE_TTL_MS = 10 * 60_000;
+/** 最多同时记着多少个线程的挑选，满了丢最久没用的。 */
+const SKILL_CHOICE_MAX_THREADS = 500;
+
+export type SkillChooserOptions = {
+  now?: () => number;
+  env?: Record<string, string | undefined>;
+  maxThreads?: number;
+};
+
+type CachedChoice = {
+  tokens: Set<string>;
+  catalogue: string;
+  answer: string;
+  at: number;
+};
+
+/**
  * Pass one of tool selection: which skills a message needs, on the model the built-in Bots run on.
  *
  * ON A CLAUDE OR CHATGPT PLAN THERE IS NO KEY, so it is asked of the plan's own harness, as the Bots
@@ -198,17 +233,56 @@ export function createModelCompleter(deps: {
 export function createSkillChooser(
   model: RuntimeModel,
   resolveApiKey: () => Promise<string | null>,
-): (prompt: string, signal?: AbortSignal) => Promise<string> {
+  options: SkillChooserOptions = {},
+): ModelCompleter {
   const complete = createModelCompleter({ model, resolveApiKey });
+  const now = options.now ?? (() => Date.now());
+  const maxThreads = options.maxThreads ?? SKILL_CHOICE_MAX_THREADS;
+  const reuse =
+    (
+      options.env ?? process.env
+    ).XIONGBAO_SKILL_CHOOSE_CACHE?.trim().toLowerCase() !== "off";
+  // Map keeps insertion order, so the first key is the one used least recently (a hit re-inserts).
+  const choices = new Map<string, CachedChoice>();
   /*
    * Why it could not choose, in the log, once for each reason. The run carries on with every tool
    * that fits (see `fitToolLimit`) and its Activity row says it could not choose, but not why, and
    * a reason that holds for every turn is worth one line rather than one per turn.
    */
   const said = new Set<string>();
-  return async (prompt, signal) => {
+  return async (prompt, signal, callOptions) => {
+    const hint = callOptions?.hint;
+    const keyed =
+      reuse && hint?.threadId && hint.text.trim() ? hint : undefined;
+    const tokens = keyed ? tokensOf(keyed.text) : undefined;
+    const catalogue = keyed
+      ? createHash("sha256").update(keyed.catalogue).digest("hex")
+      : undefined;
+    if (keyed?.threadId && tokens && catalogue) {
+      const previous = choices.get(keyed.threadId);
+      if (
+        previous &&
+        previous.catalogue === catalogue &&
+        now() - previous.at <= SKILL_CHOICE_TTL_MS &&
+        similarity(tokens, previous.tokens) >= SKILL_CHOICE_REUSE_SIMILARITY
+      ) {
+        choices.delete(keyed.threadId);
+        choices.set(keyed.threadId, previous);
+        return previous.answer;
+      }
+    }
     try {
-      return await complete(prompt, signal);
+      const answer = await complete(prompt, signal);
+      if (keyed?.threadId && tokens && catalogue) {
+        choices.delete(keyed.threadId);
+        choices.set(keyed.threadId, { tokens, catalogue, answer, at: now() });
+        while (choices.size > maxThreads) {
+          const oldest = choices.keys().next().value;
+          if (oldest === undefined) break;
+          choices.delete(oldest);
+        }
+      }
+      return answer;
     } catch (error) {
       if (!signal?.aborted) {
         const reason = (error instanceof Error ? error.message : String(error))

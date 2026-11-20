@@ -511,6 +511,9 @@ tests/learning-scopes.test.ts
 tests/learning-settings.integration.test.ts
 tests/learning-settings.test.ts
 tests/learning-sharing.integration.test.ts
+tests/light-model-routes.test.ts
+tests/light-model-store.integration.test.ts
+tests/light-model.test.ts
 tests/local-learning-propose.test.ts
 tests/local-learning.integration.test.ts
 tests/local-threads.test.ts
@@ -526,7 +529,10 @@ tests/media-tools.test.ts
 tests/memory-default-source-tool.test.ts
 tests/memory-defaults.integration.test.ts
 tests/memory-intelligence.integration.test.ts
+tests/memory-rank.test.ts
+tests/memory-relevance.integration.test.ts
 tests/memory-runtime.test.ts
+tests/memory-sticky.test.ts
 tests/memory-store.integration.test.ts
 tests/memory.test.ts
 tests/migrate-teardown.test.ts
@@ -812,6 +818,7 @@ tests/single-user-identity.integration.test.ts
 tests/single-user.test.ts
 tests/skill-asset-read-helpers.test.ts
 tests/skill-assets-tool.test.ts
+tests/skill-chooser-cache.test.ts
 tests/skill-ownership.integration.test.ts
 tests/skill-tenant-slugs.integration.test.ts
 tests/skill-tools.integration.test.ts
