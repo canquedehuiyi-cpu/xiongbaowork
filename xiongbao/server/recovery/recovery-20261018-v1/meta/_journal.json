@@ -1499,6 +1499,13 @@
       "when": 1795070975302,
       "tag": "0233_computer_waits",
       "breakpoints": true
+    },
+    {
+      "idx": 234,
+      "version": "7",
+      "when": 1795144000000,
+      "tag": "0234_learned_skills",
+      "breakpoints": true
     }
   ]
 }

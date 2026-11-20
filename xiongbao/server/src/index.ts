@@ -397,6 +397,12 @@ import {
   createLearningSharingStore,
   createOpenSkillIndex,
 } from "./learning/sharing";
+import {
+  cardRetroTurn,
+  createRetrospector,
+  markPickedSkillUsed,
+  retroTurnOf,
+} from "./learning/retrospect";
 import { createLocalLearningEngine } from "./local-learning/engine";
 import { readMediaConfig } from "./media/config";
 import { createMediaRoutes } from "./media/routes";
@@ -602,6 +608,12 @@ import {
   notifyOnHandIn,
 } from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
+import {
+  SAVE_SKILL_TOOL,
+  SKILL_CREATOR_SLUG,
+} from "@openbot/shared/self-skills";
+import { selfSkillTools } from "./skills/save-tool";
+import { demoteStaleSkills, learnedUsageOf } from "./skills/usage";
 import { createDelivery, replyTextOf } from "./tasks/delivery";
 import {
   runDeliveryCheck,
@@ -3091,6 +3103,20 @@ await startupLifecycle.run(async (startup) => {
         };
       }),
     );
+  /** What `save-tool.ts` needs for one person's one employee. */
+  const selfSkillDepsFor = (ownerUserId: string, agentId: string) => ({
+    database,
+    plugins: pluginStore,
+    ownerUserId,
+    agentId,
+  });
+  const selfSkillToolsFor = async (actorId: string, botId: string) => {
+    const tools = selfSkillTools(selfSkillDepsFor(actorId, botId));
+    const authors = (await pluginStore.listForAgent(botId)).skills.some(
+      (skill) => skill.slug === SKILL_CREATOR_SLUG,
+    );
+    return authors ? tools.filter((tool) => tool.name !== SAVE_SKILL_TOOL) : tools;
+  };
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -3164,6 +3190,12 @@ await startupLifecycle.run(async (startup) => {
       ownerUserId: actorId,
       agentId: botId,
     }),
+    /*
+     * 员工自己写技能（`save_skill`、`refine_skill`，期 2）：每位员工默认都有，工具权限里关掉 `bot/save_skill`、
+     * `bot/refine_skill` 即不给。持有 `skill-creator` 技能的员工不给 `save_skill`：浏览器里已经有一个同名的
+     * 「请本人保存技能」的工具，两个同名的工具不能同时给。
+     */
+    ...(await selfSkillToolsFor(actorId, botId)),
     /*
      * 交付闭环的三步（接活、交付、延期）：每位员工默认都有，工具权限里关掉 `accept_task` 即不走三步
      * （见上面的 `offeredDeliveryTools`）。卡片的租户是这一轮的人。
@@ -3420,7 +3452,22 @@ await startupLifecycle.run(async (startup) => {
    * lands on the whole catalogue: the narrowing is worth an accuracy point, never a capability.
    */
   const selectionForActor = (actorId: string): ToolSelection => ({
-    loadSkills: (botId) => grantedSkills({ store: pluginStore, botId }),
+    /*
+     * 员工自己写的技能里，最近 30 天没用过的降权：排到后面、摘要后加一句说明（`skills/usage.ts`）。
+     * 查不到使用情况就原样给，挑选不因此失败。
+     */
+    loadSkills: async (botId) => {
+      const held = await grantedSkills({ store: pluginStore, botId });
+      try {
+        return demoteStaleSkills(
+          held,
+          await runAsTenant(actorId, () => learnedUsageOf(database)),
+          new Date(),
+        );
+      } catch {
+        return held;
+      }
+    },
     // The deployment's own model and key, the same pair the intent router uses, so selection is
     // never a second thing to configure. It throws on a missing key, which reads as "could not
     // choose" and leaves the whole catalogue offered.
@@ -4832,6 +4879,32 @@ await startupLifecycle.run(async (startup) => {
       !(await approvalService.disabledTools(ownerUserId, agentId))(
         "memory/save_observed_memory",
       ),
+  });
+  /*
+   * 做完复盘（learning/retrospect.ts）：一轮的工具调用到了 `XIONGBAO_RETRO_MIN_STEPS` 步（默认 15）就看一遍轨迹
+   * 和每一步成没成，值得就存成技能：只给自己用的立刻授予这位员工，要共享的进本人的待审列表。每一种轮次都看
+   * （看板卡的一轮、例行任务也是长活）。另一处触发是本人验收一张看板卡（见 `/api/tasks` 的 `onReviewed`）。
+   * 工具权限里关掉 `bot/save_skill` 的员工不复盘。
+   */
+  const retrospectTurn = createRetrospector({
+    database,
+    selfSkill: selfSkillDepsFor,
+    modelFor: agentModelFor,
+    enabled: async (ownerUserId, agentId) =>
+      !(await approvalService.disabledTools(ownerUserId, agentId))(
+        "bot/save_skill",
+      ),
+    existingSkills: async (agentId) =>
+      (await pluginStore.listForAgent(agentId)).skills.map(
+        (skill) => skill.title,
+      ),
+  });
+  localThreadRunner.observeTurns(async (turn) => {
+    // 人用 `/命令` 点了员工自己写的技能：记成用过。
+    await markPickedSkillUsed(database, turn, new Date()).catch(
+      () => undefined,
+    );
+    if (!turn.failed) await retrospectTurn(retroTurnOf(turn));
   });
   localThreadRunner.observeTurns(async (turn) => {
     if (turn.kind !== "chat") return;
@@ -6422,6 +6495,13 @@ await startupLifecycle.run(async (startup) => {
           (await approvalService.disabledTools(tenantId, agentId))(
             ACCEPT_TASK_REF,
           ),
+        // 本人验收通过一张卡：回头看这件活是怎么做成的，值得就存成技能（learning/retrospect.ts）。
+        onReviewed: (tenantId, taskId) => {
+          void runAsTenant(tenantId, async () => {
+            const turn = await cardRetroTurn(database, taskId);
+            if (turn) await retrospectTurn(turn);
+          }).catch(() => undefined);
+        },
       },
     ),
   );

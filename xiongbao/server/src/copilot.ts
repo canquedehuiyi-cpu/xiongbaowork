@@ -60,6 +60,7 @@ import {
 } from "../../shared/acp";
 import { mediaGuidance } from "../../shared/media";
 import { planGuidance } from "../../shared/plan";
+import { selfSkillGuidance } from "../../shared/self-skills";
 import { subagentGuidance, subagentModelGuidance } from "../../shared/subagent";
 import { thinkingOf } from "../../shared/thinking";
 import {
@@ -1314,6 +1315,14 @@ export function builtInAgentConfiguration(
        * then: one whose plan tool is switched off for it is not taught to use it (期二).
        */
       ...promptSection("plan", planGuidance(tools.map((tool) => tool.name))),
+      /*
+       * 做完一件多步的活后把做法存成自己的技能、之后怎么读和修正（期 2），只对持有 `save_skill` 的运行说，和
+       * `<plan>` 一样；另写在 `shared/self-skills.ts`，不并进任何共用段落（那些段落被提示词夹具逐字钉住）。
+       */
+      ...promptSection(
+        "self_skills",
+        selfSkillGuidance(tools.map((tool) => tool.name)),
+      ),
       /*
        * How to share a job of several parts out to subagents, for a run that holds `run_subagent`
        * and only then: a subagent and a check-in hold none. Beside the shared `<subagents>` section,

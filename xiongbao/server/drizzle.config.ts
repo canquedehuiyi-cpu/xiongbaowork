@@ -27,6 +27,7 @@ export default defineConfig({
     "./src/db/schema/voice.ts",
     "./src/db/schema/learning.ts",
     "./src/db/schema/local-learning.ts",
+    "./src/db/schema/learned-skills.ts",
     "./src/db/schema/responsibilities.ts",
     "./src/db/schema/approvals.ts",
     "./src/db/schema/approval-conversation-grants.ts",
