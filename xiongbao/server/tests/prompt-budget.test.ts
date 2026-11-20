@@ -134,6 +134,9 @@ function grantedForBoardTurn(): GrantedTool[] {
     "host_list_folders",
     "save_learned_skill",
     "refine_skill",
+    // token 第五轮（用户 2026-11-20 批准）：这两个也排在检索后面，夹具里补上同名的桩。
+    "report_refusal",
+    "update_heartbeat_checklist",
   ].filter((name) => !have.has(name));
   return [...real, ...others.map(stub)];
 }

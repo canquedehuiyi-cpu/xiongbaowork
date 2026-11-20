@@ -8,6 +8,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **`report_refusal`、`update_heartbeat_checklist` 两个工具排到 `search_tools` 后面（token 第五轮）。** 它们几乎用不到，却每步占约 570 字符的工具定义；现在和别的偶尔才用的工具一样，名字写在 `search_tools` 的描述里，搜一次就能用。回退：`XIONGBAO_PROMPT_SLIM=off`。本项不带迁移。
 - **命令输出的内联上限由 16KB 降到 4KB（token 第五轮）。** `computer_run_command` 的输出超过 4KB 就把完整内容存进 `tool-outputs/`，回传 1KB 开头加 2.5KB 结尾和路径；最近 4 步里原样留着的大段输出是后段每步 2～3 万 token 的主要来源。回退：`XIONGBAO_COMMAND_INLINE_BYTES=16384`（或 `off`）回到 16KB。本项不带迁移。
 - **对标评测的熊宝墙钟记到这一轮真的结束的那一刻（只改评测脚本）。** 之前墙钟在等运行记录落库、给事件留的 2 秒之后才记，看板路径查一轮有没有结束又是每 2 秒一次，一道题平白多记 2～3 秒（Codex 那侧没有）；现在轮询改为每 0.5 秒，墙钟在结束的那一刻记。服务器侧查过：派活走 `LISTEN/NOTIFY` 即时唤醒、事件按批异步落库（5 秒的节拍只是后台心跳，不拦着下一步），没有每一步都要等的固定间隔。本项不带迁移。
 - **每一步都发的固定提示词再压短约 650 字符（token 第五轮）。** 瘦身写法里的「来源」「回答格式」「子代理」「交付」四段，以及 `ask_person`、`run_subagent` 两个工具的短描述，去掉重复的说明和举例；电脑段里请人接管的两段也压短。含义不变：询问、批准后执行、付款底线、不可信内容、交付闭环的话原样保留，「别把打算派说成已经派」「别经文件分享站交付」这类要点都还在。新增各段字数上限的测试，以后往里加话先过它。回退：沿用 `XIONGBAO_PROMPT_SLIM=off`（换回未瘦身的原文）。本项不带迁移。

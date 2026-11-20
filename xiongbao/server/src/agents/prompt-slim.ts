@@ -73,6 +73,8 @@ export const DEFERRED_TOOLS: Readonly<Record<string, string>> = {
   git_commit: GIT,
   git_diff_summary: GIT,
   open_pull_request: GIT,
+  report_refusal: "refuse refusal decline declined record",
+  update_heartbeat_checklist: "heartbeat checklist wake periodic check",
   save_learned_skill: "skill learn save lesson reuse",
   refine_skill: "skill learn refine improve lesson",
 };
