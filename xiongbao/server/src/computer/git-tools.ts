@@ -162,15 +162,20 @@ export function validRefName(name: string): boolean {
 /**
  * 每条命令的脚本，退出码 90 到 97 是这里自己定的，下面翻译成话。
  *
- * 在一个新的 `bash -c` 里跑，不是直接贴进员工的活 shell：活 shell 里 `cd` 会一直留着，`exit` 会结束整个
- * shell（员工的后台进程跟着没了），员工自己定义的别名和函数也会改掉 `git` 的意思。子进程里这些都影响不到外面，
- * 外面的目录不变、shell 不退出。
+ * 在一个干净的子进程里跑：`/usr/bin/env -i` 清空环境，只给固定的 PATH、HOME 和语言，再起 `bash --noprofile
+ * --norc -c`，git 用绝对路径。不是直接贴进员工的活 shell：活 shell 里 `cd` 会一直留着，`exit` 会结束整个
+ * shell（员工的后台进程跟着没了）；员工 shell 里导出的函数（`export -f git`）、放在 PATH 前面的假 git、别名，
+ * 也会让下面所有的 `-c` 防护落空。清空环境之后，这些都进不了子进程；外面的目录不变、shell 不退出。
+ * 要说明的是：这挡不住员工把 `HOME` 本身改掉（命令是贴进员工自己的 shell 里的，`$HOME` 在那里展开）。
  *
  * 工作区根是 `$HOME`（电脑把 HOME 设成工作区），不是当前目录：员工先 `cd app` 再调用，工作区根也还是那个根。
  *
- * 仓库里的 git 配置不能拿来绕过底线：每条 git 都经 `g`，关掉钩子（`core.hooksPath`）、文件系统监视器
- * （`core.fsmonitor`，`git diff`、`git status` 会启动它）、外部 diff 程序、属性文件、提交签名程序；diff 再加
- * `--no-ext-diff --no-textconv`。过滤器（`filter.*.clean`）列不全，直接拒绝有过滤器的仓库（见 `git_commit`）。
+ * 仓库里的 git 配置不能拿来绕过底线：不读全局和系统配置（`GIT_CONFIG_GLOBAL=/dev/null`、
+ * `GIT_CONFIG_NOSYSTEM=1`：HOME 就是工作区，员工写个 `.gitconfig` 就会被当成全局配置）；每条 git 都经 `g`，
+ * 关掉钩子（`core.hooksPath`）、文件系统监视器（`core.fsmonitor`，`git diff`、`git status` 会启动它）、外部
+ * diff 程序、属性文件、提交签名程序；diff 再加 `--no-ext-diff --no-textconv`。过滤器（`filter.*.clean`）
+ * 列不全，三个工具都在进仓库之后先查仓库自己的配置（含 `include.path` 引进来的），有 `filter.*` 就拒绝；
+ * `.gitattributes` 指定了 `filter=` 而配置里没定义的，git 不会执行任何东西，放行。
  */
 const EXIT = {
   filter: 90,
@@ -183,18 +188,22 @@ const EXIT = {
 };
 
 /** 关掉仓库配置能带来的执行：钩子、监视器、外部 diff、属性文件、提交签名、换行转换。 */
-const SAFE_GIT =
-  "git -c core.hooksPath=/dev/null -c core.fsmonitor= -c diff.external= -c core.attributesFile=/dev/null -c commit.gpgsign=false -c core.autocrlf=false";
+const SAFE_GIT = `"$GITBIN" -c core.hooksPath=/dev/null -c core.fsmonitor= -c diff.external= -c core.attributesFile=/dev/null -c commit.gpgsign=false -c core.autocrlf=false`;
 
 function inRepo(directory: string, body: string): string {
   return [
     "set +e",
+    // git 用绝对路径，不走 PATH。
+    'GITBIN=; for c in /usr/bin/git /usr/local/bin/git /bin/git; do [ -x "$c" ] && { GITBIN=$c; break; }; done',
+    '[ -n "$GITBIN" ] || exit 89',
     `g() { ${SAFE_GIT} "$@"; }`,
     'W="$(cd -- "$HOME" 2>/dev/null && pwd -P)" || exit 95',
     'cd -- "$W" || exit 95',
     `cd -- ${shellQuote(directory)} 2>/dev/null || exit ${EXIT.noDir}`,
     `T="$(g rev-parse --show-toplevel 2>/dev/null)" || exit ${EXIT.noRepo}`,
     `case "$T" in "$W"|"$W"/*) ;; *) exit ${EXIT.outside};; esac`,
+    // 有过滤器的仓库不处理：过滤器是仓库配置里的命令，列不全，也会改写文件内容。
+    `[ -z "$(g config --get-regexp '^filter\\..*\\.(clean|smudge|process)$' 2>/dev/null)" ] || exit ${EXIT.filter}`,
     body,
   ].join("\n");
 }
@@ -219,9 +228,12 @@ export function showingCommand<T>(
   return withApprovalContext({ ...context, args: { ...args, command } }, work);
 }
 
-/** 把脚本交给一个干净的 bash：不读启动文件，没有员工 shell 里的别名、函数和当前目录。 */
+/**
+ * 把脚本交给一个干净的 bash：清空环境（只留固定的 PATH、HOME、语言，和不读全局、系统配置的两个变量），
+ * 不读启动文件，没有员工 shell 里的别名、导出的函数和当前目录。`HOME` 由员工 shell 展开，是工作区根。
+ */
 export function launch(script: string): string {
-  return `bash --noprofile --norc -c ${shellQuote(script)}`;
+  return `/usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin HOME="$HOME" LANG=C.UTF-8 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 /bin/bash --noprofile --norc -c ${shellQuote(script)}`;
 }
 
 function failure(error: string, extra: Record<string, unknown> = {}): string {
@@ -241,7 +253,7 @@ function explain(result: GitCommandResult, directory: string): string {
     case EXIT.diff:
       return "没能比较：base 写的引用不存在，或者仓库还没有任何提交。";
     case EXIT.filter:
-      return "这个仓库配置了 git 过滤器（filter），提交时它会改写文件内容，这个工具没法保证检查的就是提交的内容，所以不处理。需要提交的话请本人来。";
+      return "这个仓库的 git 配置里有过滤器（filter），它是会执行命令、改写文件内容的配置，这几个工具不处理这样的仓库。需要的话请本人来。";
     case EXIT.mismatch: {
       const path = /^@@mismatch=(.*)$/m.exec(result.stdout)?.[1];
       return `没有提交：暂存的「${path ?? "某个文件"}」和检查过的内容不一致（检查之后文件变了，或者 git 配置改写了内容），已经撤回暂存。请重新读一遍再提交。`;
@@ -499,13 +511,11 @@ export function gitTools(options: GitToolsOptions): GrantedTool[] {
         const quoted = paths.map(shellQuote).join(" ");
         const checks = expected.map(
           ({ path, id }) =>
-            `check ${shellQuote(path)} ${id} || { g reset -q -- ${quoted} >/dev/null 2>&1 || g rm --cached -q --ignore-unmatch -- ${quoted} >/dev/null 2>&1; echo "@@mismatch=$1"; exit ${EXIT.mismatch}; }`,
+            `check ${shellQuote(path)} ${id} || { g reset -q -- ${quoted} >/dev/null 2>&1 || g rm --cached -q --ignore-unmatch -- ${quoted} >/dev/null 2>&1; printf '@@mismatch=%s\\n' ${shellQuote(path)}; exit ${EXIT.mismatch}; }`,
         );
         const script = inRepo(
           directory,
           [
-            // 有过滤器的仓库不处理：过滤器是仓库配置里的命令，列不全，也会改写提交的内容。
-            `[ -z "$(g config --get-regexp '^filter\\..*\\.(clean|smudge|process)$' 2>/dev/null)" ] || exit ${EXIT.filter}`,
             `for p in ${quoted}; do [ -d "$p" ] && exit ${EXIT.directory}; done`,
             // 没配置提交人的仓库，用一个固定的名字，免得提交因为「请告诉我你是谁」失败。
             'U="$(g config user.name || true)"; E="$(g config user.email || true)"',
@@ -515,6 +525,13 @@ export function gitTools(options: GitToolsOptions): GrantedTool[] {
             'check() { if [ "$2" = deleted ]; then g rev-parse -q --verify ":./$1" >/dev/null 2>&1 && return 1; return 0; fi; [ "$(g rev-parse -q --verify ":./$1" 2>/dev/null)" = "$2" ]; }',
             ...checks,
             `g -c user.name="$U" -c user.email="$E" commit -q -m ${shellQuote(message)} -- ${quoted} 2>&1 || exit 1`,
+            // 核对和提交之间文件又变了：提交进去的不是检查过的。撤回这次提交（没有父提交就删掉 HEAD），不提交。
+            'landed() { if [ "$2" = deleted ]; then g rev-parse -q --verify "HEAD:./$1" >/dev/null 2>&1 && return 1; return 0; fi; [ "$(g rev-parse -q --verify "HEAD:./$1" 2>/dev/null)" = "$2" ]; }',
+            `undo() { if g rev-parse -q --verify HEAD~1 >/dev/null 2>&1; then g reset -q --soft HEAD~1 >/dev/null 2>&1; g reset -q -- ${quoted} >/dev/null 2>&1; else g update-ref -d HEAD >/dev/null 2>&1; g rm --cached -q -r --ignore-unmatch -- ${quoted} >/dev/null 2>&1; fi; }`,
+            ...expected.map(
+              ({ path, id }) =>
+                `landed ${shellQuote(path)} ${id} || { undo; printf '@@mismatch=%s\\n' ${shellQuote(path)}; exit ${EXIT.mismatch}; }`,
+            ),
             'echo "@@commit=$(g rev-parse HEAD)"',
             'echo "@@branch=$(g branch --show-current)"',
             'echo "@@stat"',

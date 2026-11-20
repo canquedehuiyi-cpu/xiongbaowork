@@ -95,8 +95,6 @@ function computerIn(root: string): GitComputer {
         env: {
           ...process.env,
           HOME: root,
-          GIT_CONFIG_GLOBAL: "/dev/null",
-          GIT_CONFIG_SYSTEM: "/dev/null",
         },
       });
       return {
@@ -639,8 +637,6 @@ function liveShell(root: string) {
     env: {
       ...process.env,
       HOME: root,
-      GIT_CONFIG_GLOBAL: "/dev/null",
-      GIT_CONFIG_SYSTEM: "/dev/null",
     },
   });
   const decoder = new TextDecoder();
@@ -833,6 +829,7 @@ describe("what the repository's own git configuration cannot make the tools do",
     ) as Answer;
     expect(answer.ok).toBe(false);
     expect(answer.error).toContain("不一致");
+    expect(answer.error).toContain("「a.txt」");
     expect(sh(join(root, "app"), "git rev-parse HEAD")).toBe(before);
     expect(sh(join(root, "app"), "git diff --cached --name-only").trim()).toBe(
       "",
@@ -874,5 +871,175 @@ describe("tools switched off in the employee's permissions", () => {
       OPEN_PULL_REQUEST_TOOL,
     ]);
     expect(offeredGitTools(tools, () => false)).toHaveLength(4);
+  });
+});
+
+describe("what the employee's own files and shell cannot make the tools do", () => {
+  const allThree = (root: string) => {
+    const { byName } = toolsFor(root);
+    return [
+      () => byName(GIT_BRANCH_TOOL)({ repo: "app" }),
+      () => byName(GIT_DIFF_SUMMARY_TOOL)({ repo: "app", include_diff: true }),
+      () =>
+        byName(GIT_COMMIT_TOOL)({
+          repo: "app",
+          paths: ["a.txt"],
+          message: "m",
+        }),
+    ];
+  };
+
+  test("a .gitconfig in the workspace root (HOME) is not read as global configuration", async () => {
+    const root = workspace();
+    const marker = join(root, "filter-ran");
+    writeFileSync(
+      join(root, ".gitconfig"),
+      `[filter "x"]\n\tclean = touch ${marker} && cat\n\tsmudge = cat\n[core]\n\tfsmonitor = ${join(root, "nothing.sh")}\n`,
+    );
+    writeFileSync(join(root, "app", ".gitattributes"), "* filter=x\n");
+    writeFileSync(join(root, "app", "a.txt"), "one\nmore\n");
+    // Control: git itself does run that filter for a plain diff.
+    Bun.spawnSync(["bash", "-c", "git diff >/dev/null"], {
+      cwd: join(root, "app"),
+      env: { ...process.env, HOME: root },
+    });
+    expect(existsSync(marker)).toBe(true);
+    rmSync(marker);
+    const [branch, summary, commit] = allThree(root);
+    expect((await branch?.())?.ok).toBe(true);
+    expect((await summary?.())?.ok).toBe(true);
+    expect(existsSync(marker)).toBe(false);
+    expect((await commit?.())?.ok).toBe(true);
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  test("a filter in the repository's own configuration, even through include.path, is refused by all three", async () => {
+    const root = workspace();
+    const marker = join(root, "filter-ran");
+    writeFileSync(
+      join(root, "app", "inc.cfg"),
+      `[filter "x"]\n\tclean = touch ${marker} && cat\n`,
+    );
+    sh(join(root, "app"), "git config include.path ../inc.cfg");
+    writeFileSync(join(root, "app", ".gitattributes"), "* filter=x\n");
+    writeFileSync(join(root, "app", "a.txt"), "one\nmore\n");
+    for (const call of allThree(root)) {
+      const answer = await call();
+      expect(answer.ok).toBe(false);
+      expect(answer.error).toContain("过滤器");
+    }
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  test("a .gitattributes naming a filter that is not defined anywhere is let through", async () => {
+    const root = workspace();
+    writeFileSync(join(root, "app", ".gitattributes"), "* filter=nothing\n");
+    writeFileSync(join(root, "app", "a.txt"), "one\nmore\n");
+    for (const call of allThree(root)) expect((await call()).ok).toBe(true);
+  });
+
+  test("an exported git function and a fake git first on PATH do not take over", async () => {
+    const root = workspace();
+    mkdirSync(join(root, "bin"));
+    const fake = join(root, "bin", "git");
+    writeFileSync(
+      fake,
+      `#!/bin/sh\ntouch ${join(root, "fake-git-ran")}\nexit 0\n`,
+    );
+    chmodSync(fake, 0o755);
+    const shell = liveShell(root);
+    try {
+      await shell.run(
+        `git() { touch ${join(root, "function-ran")}; }; export -f git; export PATH=${join(root, "bin")}:$PATH`,
+      );
+      // Control: the employee's own shell does run the function.
+      await shell.run("git status");
+      expect(existsSync(join(root, "function-ran"))).toBe(true);
+      rmSync(join(root, "function-ran"));
+      const computer: GitComputer = {
+        run: (command) => shell.run(command),
+        read: async (path) => {
+          const text = readFileSync(join(root, path), "utf8");
+          return { text, truncated: false, bytes: Buffer.byteLength(text) };
+        },
+      };
+      const tools = gitTools({
+        computer: async () => computer,
+        connectorTools: async () => [],
+      });
+      writeFileSync(join(root, "app", "a.txt"), "one\nmore\n");
+      for (const [name, args] of [
+        [GIT_BRANCH_TOOL, { repo: "app" }],
+        [GIT_DIFF_SUMMARY_TOOL, { repo: "app" }],
+        [GIT_COMMIT_TOOL, { repo: "app", paths: ["a.txt"], message: "m" }],
+      ] as const) {
+        const answer = JSON.parse(
+          (await tools.find((tool) => tool.name === name)?.execute(args)) ??
+            "{}",
+        ) as Answer;
+        expect(answer.ok).toBe(true);
+      }
+      expect(existsSync(join(root, "function-ran"))).toBe(false);
+      expect(existsSync(join(root, "fake-git-ran"))).toBe(false);
+      expect(sh(join(root, "app"), "git log -1 --format=%s")).toContain("m");
+    } finally {
+      shell.stop();
+    }
+  });
+
+  /** 在核对之后、提交之前改文件：往脚本里 commit 那一行前面插一句。 */
+  const tampering = (root: string, text: string): GitComputer => {
+    const base = computerIn(root);
+    return {
+      read: base.read,
+      run: (command, signal) =>
+        base.run(
+          command.replace(
+            "g -c user.name=",
+            `echo ${shellQuote(text)} > a.txt
+g -c user.name=`,
+          ),
+          signal,
+        ),
+    };
+  };
+  const commitWith = async (computer: GitComputer) =>
+    JSON.parse(
+      (await gitTools({
+        computer: async () => computer,
+        connectorTools: async () => [],
+      })
+        .find((tool) => tool.name === GIT_COMMIT_TOOL)
+        ?.execute({ repo: "app", paths: ["a.txt"], message: "window" })) ??
+        "{}",
+    ) as Answer;
+
+  test("a file changed between the check and the commit is taken back out, naming the file", async () => {
+    const root = workspace();
+    writeFileSync(join(root, "app", "a.txt"), "checked\n");
+    const before = sh(join(root, "app"), "git rev-parse HEAD");
+    const answer = await commitWith(tampering(root, "tampered"));
+    expect(answer.ok).toBe(false);
+    expect(answer.error).toContain("「a.txt」");
+    expect(sh(join(root, "app"), "git rev-parse HEAD")).toBe(before);
+    expect(sh(join(root, "app"), "git diff --cached --name-only").trim()).toBe(
+      "",
+    );
+    // The employee's file is left as it is, tampered or not.
+    expect(readFileSync(join(root, "app", "a.txt"), "utf8")).toBe("tampered\n");
+  });
+
+  test("the same with no parent commit: HEAD is removed again", async () => {
+    const root = mkdtempSync(join(tmpdir(), "git-first-"));
+    roots.push(root);
+    mkdirSync(join(root, "app"));
+    sh(root, "cd app && git init -q -b main && echo checked > a.txt");
+    const answer = await commitWith(tampering(root, "tampered"));
+    expect(answer.ok).toBe(false);
+    expect(answer.error).toContain("「a.txt」");
+    expect(sh(join(root, "app"), "git rev-parse -q --verify HEAD").trim()).toBe(
+      "",
+    );
+    expect(sh(join(root, "app"), "git ls-files").trim()).toBe("");
   });
 });
