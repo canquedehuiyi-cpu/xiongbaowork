@@ -1279,7 +1279,14 @@ async function learnedStateOf(agentId: string): Promise<LearnedState> {
     const memories = (
       await database.select().from(schema.personalMemories)
     ).filter((row) => row.formedByAgentId === agentId && !row.deletedAt);
+    // 转待审的技能：复盘存了、没授予，在本人的待审清单里（有的话才带）。
+    const held = (
+      await database.select().from(schema.localSkillCandidates)
+    ).filter(
+      (row) => row.agentId === agentId && row.status === "pending_review",
+    );
     return {
+      held: new Map(held.map((row) => [row.slug, row.title])),
       skills: new Map(
         ledger.map((row) => [
           row.skillSlug,
@@ -1445,7 +1452,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
       retro,
     };
     console.log(
-      `   learning: +${learning.newSkills.length} skills, +${learning.newMemories} memories, used ${learning.usedSkills.length}; retrospective ${retro.ended}${retro.outcome ? ` ${retro.outcome}` : ""} after ${(retro.waitedMs / 1000).toFixed(0)} s`,
+      `   learning: +${learning.newSkills.length} skills${learning.heldSkills ? ` (+${learning.heldSkills.length} held for review)` : ""}, +${learning.newMemories} memories, used ${learning.usedSkills.length}; retrospective ${retro.ended}${retro.outcome ? ` ${retro.outcome}` : ""} after ${(retro.waitedMs / 1000).toFixed(0)} s`,
     );
   }
   const backgroundCalls = backgroundOf(

@@ -109,8 +109,8 @@ test("refused：说明被拒、没存", () => {
 });
 
 test("三类的行互不相同，报告正文说明三类", () => {
-  const cells = ["saved", "held", "refused"].map((outcome) =>
-    firstRunCell(outcome)[1],
+  const cells = ["saved", "held", "refused"].map(
+    (outcome) => firstRunCell(outcome)[1],
   );
   expect(new Set(cells).size).toBe(3);
   const markdown = renderReport([

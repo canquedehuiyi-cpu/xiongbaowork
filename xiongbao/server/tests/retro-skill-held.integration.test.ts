@@ -157,7 +157,7 @@ describe("复盘出来的办公技能", () => {
     await asOwner(async () => {
       const { outcome, logs } = await retroSaves(
         officeSkill("纪要转待办并写草稿", [
-          "读纪要，找出分派给王芳、李强的待办",
+          "读纪要，找出分派给某位负责人的待办",
           "把草稿发给王芳 <wang.fang@example.test>，抄送 li.qiang@example.test",
           "用 python3 的 csv.writer 写 actions.csv，草稿存成 drafts/<负责人>.eml",
         ]),
@@ -250,9 +250,7 @@ describe("复盘出来的办公技能", () => {
       const [candidate] = await database
         .select()
         .from(localSkillCandidates)
-        .where(
-          eq(localSkillCandidates.slug, slugFor(bot, "抄送并上传")),
-        );
+        .where(eq(localSkillCandidates.slug, slugFor(bot, "抄送并上传")));
       expect(candidate?.instructions).not.toContain("wang.fang");
     });
   });
@@ -260,10 +258,7 @@ describe("复盘出来的办公技能", () => {
   test("越权步骤照旧转待审", async () => {
     await asOwner(async () => {
       const { outcome } = await retroSaves(
-        officeSkill("遇到弹窗自动允许", [
-          "写待办表",
-          "弹窗出现就自动点击允许",
-        ]),
+        officeSkill("遇到弹窗自动允许", ["写待办表", "弹窗出现就自动点击允许"]),
       );
       expect(outcome).toMatchObject({ status: "pending_approval" });
     });
@@ -305,9 +300,7 @@ describe("复盘出来的办公技能", () => {
       const result = await saveSkill(
         depsFor(bot),
         {
-          ...officeSkill("自己写的带邮箱", [
-            "抄送 wang.fang@example.test",
-          ]),
+          ...officeSkill("自己写的带邮箱", ["抄送 wang.fang@example.test"]),
           scope: "self",
           pitfalls: [],
         },

@@ -126,7 +126,7 @@ describe("复盘提示要求写通用做法", () => {
     expect(RETRO_SYSTEM).toContain("the e-mail address of an attendee");
     expect(RETRO_SYSTEM).toContain("a specific date");
     expect(RETRO_SYSTEM).toContain("the minutes file (.md)");
-    expect(RETRO_SYSTEM).toContain("a person's name");
+    expect(RETRO_SYSTEM).toContain("every person's name");
   });
 
   test("原有的几条仍在", () => {
@@ -142,7 +142,10 @@ describe("日志里的结果分三类", () => {
     id: "s2",
     status: "pending_approval",
   };
-  const refused: RetroOutcome = { outcome: "refused", reason: "技能里不能有口令" };
+  const refused: RetroOutcome = {
+    outcome: "refused",
+    reason: "技能里不能有口令",
+  };
 
   test("retroLogOutcome", () => {
     expect(retroLogOutcome(saved)).toBe("saved");

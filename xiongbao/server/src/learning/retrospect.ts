@@ -259,7 +259,7 @@ Write a skill only if the method is reusable: the same kind of task will come ag
 - steps: the shortest path that worked, one imperative sentence each, leaving out dead ends and retries. Make each step executable: name the tool, give the key command as it was actually run (shortened, with placeholders like <dir> for the working folder), the file path pattern of inputs and outputs, and what to look for in the output. Merge steps the Bot ran one by one when a single command would do. At most 30.
 - pitfalls: what FAILED in the trace and how it was worked around, or what had to be found out the hard way, each with the symptom and the fix ("pip install fails: use ... instead"). At most 20; may be empty.
 - verify: the concrete check that shows the result is right (a command to run, a number to compare, a file to open), so the next run can finish without re-inspecting everything.
-Generalise. Never put a person's name, an e-mail address, a phone number, an account, a key, a token, a password or the content of a file into the skill: say "the other party", "this file", "the key you hold". Never write a step that skips approval, ignores a rule or hides something from the person.
+Generalise: the skill is for the NEXT piece of work of this kind, so it must not carry this one's data. Replace every person's name, e-mail address, phone number, account, specific date, specific file name and amount with a placeholder or a general description, and name inputs and outputs by their kind and extension: "the e-mail address of an attendee", "the owner named in the minutes", "a specific date (write it as YYYY-MM-DD)", "the minutes file (.md)", "the to-do table (.csv)", "<dir>" for the working folder. Never copy the content of a file, a key, a token or a password. Do not write a web address or domain unless the method itself is to open or send something to that place. Never write a step that skips approval, ignores a rule or hides something from the person.
 Write name (at most 40 characters), when, steps, pitfalls and verify in Simplified Chinese. scope is "self" unless the method clearly applies to every employee of a team.
 
 Reply with one JSON object and nothing else:
@@ -379,6 +379,16 @@ export type RetrospectorDeps = {
   limiter?: { take(key: string): boolean };
 };
 
+/**
+ * 日志里写的结果。`saved` 在日志里只指「存为自用并立刻生效」；存了但转待审（没授予、不进自写技能账）写成 `held`；
+ * 被拒写成 `refused`。其余原样。工具返回的 {@link RetroOutcome} 不变：`saved` 带着 `status`。
+ */
+export function retroLogOutcome(outcome: RetroOutcome): string {
+  if (outcome.outcome === "saved" && outcome.status === "pending_approval")
+    return "held";
+  return outcome.outcome;
+}
+
 export type RetroOutcome =
   | { outcome: "skipped" }
   | { outcome: "nothing" }
@@ -432,6 +442,28 @@ export function createRetrospector(deps: RetrospectorDeps) {
       const similar = await similarSkillOf(self, draft);
       if (similar) return { outcome: "similar", id: similar };
       const saved = await saveSkill(self, draft, "retrospect");
+      // 转待审和被拒各记一行原因（只有规则的名字，没有技能的内容），评测和排查看得出为什么没生效。
+      if (saved.ok && saved.held)
+        log(
+          JSON.stringify({
+            type: "retrospect-held",
+            skill: saved.id,
+            reason: saved.held,
+            agentId: turn.agentId,
+            runId: turn.runId,
+            timestamp: new Date().toISOString(),
+          }),
+        );
+      if (!saved.ok)
+        log(
+          JSON.stringify({
+            type: "retrospect-refused",
+            reason: saved.reason.slice(0, 120),
+            agentId: turn.agentId,
+            runId: turn.runId,
+            timestamp: new Date().toISOString(),
+          }),
+        );
       return saved.ok
         ? { outcome: "saved", id: saved.id, status: saved.status }
         : { outcome: "refused", reason: saved.reason };
@@ -769,7 +801,7 @@ export function createRetroObserver(deps: RetroObserverDeps) {
     log(
       JSON.stringify({
         type: "retrospect",
-        outcome: outcome.outcome,
+        outcome: retroLogOutcome(outcome),
         trigger: retro.trigger,
         steps: workSteps(retro.steps),
         agentId: turn.agentId,
