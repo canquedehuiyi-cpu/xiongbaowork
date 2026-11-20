@@ -73,6 +73,8 @@ export type RetroTurn = {
   reply: string;
   steps: TraceStep[];
   failed: boolean;
+  /** 这是哪张看板卡的复盘（卡的各轮合成的）；单独一轮没有。冷却按它分开算。 */
+  cardId?: string;
   /**
    * `steps` 是步数到了门槛；`card_delivered` 是一张看板卡交付成功（进入待验收）；`card_accepted` 是本人验收通过了
    * 一张看板卡。
@@ -404,8 +406,10 @@ export function createRetrospector(deps: RetrospectorDeps) {
       if (!(await (deps.enabled?.(turn.ownerUserId, turn.agentId) ?? true)))
         return { outcome: "skipped" };
       const now = (deps.now ?? (() => new Date()))().getTime();
+      // 冷却按「人 + 员工 + 卡」算，没有卡就按「人 + 员工」：同一张卡前一轮的复盘不挡交付那一轮。
       const key = `${turn.ownerUserId}:${turn.agentId}`;
-      const before = lastAt.get(key);
+      const cooldownKey = turn.cardId ? `${key}:${turn.cardId}` : key;
+      const before = lastAt.get(cooldownKey);
       if (
         before !== undefined &&
         now - before < (deps.cooldownMs ?? RETRO_COOLDOWN_MS)
@@ -415,7 +419,7 @@ export function createRetrospector(deps: RetrospectorDeps) {
       if (!model) return { outcome: "skipped" };
       // 今天这位员工的次数用完了：静默跳过。
       if (!limiter.take(key)) return { outcome: "skipped" };
-      lastAt.set(key, now);
+      lastAt.set(cooldownKey, now);
       const draft = await retrospect(turn, {
         model,
         existingSkills: (await deps.existingSkills?.(turn.agentId)) ?? [],
@@ -591,6 +595,7 @@ export async function cardRetroTurn(
     reply: short(replyTextOf(last), 600),
     steps,
     failed: false,
+    cardId: taskId,
     trigger,
   };
 }

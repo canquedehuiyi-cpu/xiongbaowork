@@ -4,6 +4,7 @@ import type { BaseEvent } from "@ag-ui/client";
 import {
   CARD_DELIVERED_MIN_STEPS_DEFAULT,
   createRetroObserver,
+  createRetrospector,
   type ObservedTurn,
   type RetroOutcome,
   type RetroTurn,
@@ -226,5 +227,50 @@ describe("what the review model is told to write", () => {
     const prompt = retroPrompt(turn, []);
     expect(prompt).toContain("handed this work in");
     expect(prompt).toContain("x".repeat(150));
+  });
+});
+
+describe("the cooldown is per person, employee and card", () => {
+  const turn = (cardId?: string): RetroTurn => ({
+    ownerUserId: "u1",
+    agentId: "bot",
+    threadId: "t",
+    runId: "r",
+    request: "x",
+    reply: "y",
+    steps: traceStepsOf(work(20)),
+    failed: false,
+    trigger: "steps",
+    ...(cardId ? { cardId } : {}),
+  });
+  const make = () => {
+    let calls = 0;
+    const run = createRetrospector({
+      database: {} as never,
+      selfSkill: () => ({}) as never,
+      modelFor: async () => ({}) as never,
+      call: async () => {
+        calls += 1;
+        return { text: '{"skill":null}' };
+      },
+      limiter: { take: () => true },
+      log: () => {},
+    });
+    return { run, calls: () => calls };
+  };
+
+  test("another card is not held back by the first one; the same card is", async () => {
+    const { run, calls } = make();
+    expect(await run(turn("card-a"))).toEqual({ outcome: "nothing" });
+    expect(await run(turn("card-a"))).toEqual({ outcome: "skipped" });
+    expect(await run(turn("card-b"))).toEqual({ outcome: "nothing" });
+    expect(calls()).toBe(2);
+  });
+
+  test("without a card it is per person and employee, as before", async () => {
+    const { run, calls } = make();
+    expect(await run(turn())).toEqual({ outcome: "nothing" });
+    expect(await run(turn())).toEqual({ outcome: "skipped" });
+    expect(calls()).toBe(1);
   });
 });
