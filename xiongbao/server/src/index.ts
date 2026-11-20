@@ -409,9 +409,11 @@ import {
 } from "./learning/sharing";
 import {
   cardRetroTurn,
+  createRetroObserver,
   createRetrospector,
+  deliveredCardOf,
+  markInjectedSkillsUsed,
   markPickedSkillUsed,
-  retroTurnOf,
 } from "./learning/retrospect";
 import { createLocalLearningEngine } from "./local-learning/engine";
 import { readMediaConfig } from "./media/config";
@@ -4957,7 +4959,8 @@ await startupLifecycle.run(async (startup) => {
   /*
    * 做完复盘（learning/retrospect.ts）：一轮的工具调用到了 `XIONGBAO_RETRO_MIN_STEPS` 步（默认 15）就看一遍轨迹
    * 和每一步成没成，值得就存成技能：只给自己用的立刻授予这位员工，要共享的进本人的待审列表。每一种轮次都看
-   * （看板卡的一轮、例行任务也是长活）。另一处触发是本人验收一张看板卡（见 `/api/tasks` 的 `onReviewed`）。
+   * （看板卡的一轮、例行任务也是长活）。看板卡交付成功（`deliver_task` 被接受，进入待验收）也复盘，门槛是
+   * `XIONGBAO_RETRO_CARD_MIN_STEPS`（默认 6）；本人验收一张看板卡是另一处触发（见 `/api/tasks` 的 `onReviewed`）。
    * 工具权限里关掉 `bot/save_learned_skill` 的员工不复盘。
    */
   const retrospectTurn = createRetrospector({
@@ -4973,12 +4976,26 @@ await startupLifecycle.run(async (startup) => {
         (skill) => skill.title,
       ),
   });
-  localThreadRunner.observeTurns(async (turn) => {
+  const observeRetro = createRetroObserver({
+    retrospect: retrospectTurn,
+    deliveredCard: (runId) => deliveredCardOf(database, runId),
+    cardTurn: (taskId, current) =>
+      cardRetroTurn(database, taskId, "card_delivered", current),
     // 人用 `/命令` 点了员工自己写的技能：记成用过。
-    await markPickedSkillUsed(database, turn, new Date()).catch(
-      () => undefined,
-    );
-    if (!turn.failed) await retrospectTurn(retroTurnOf(turn));
+    markUsed: async (turn) => {
+      const at = new Date();
+      await markPickedSkillUsed(database, turn, at);
+      // 对得上这件事、已经放进上下文的自写技能：同样记成用过。
+      await markInjectedSkillsUsed(
+        database,
+        turn,
+        async (agentId) => (await pluginStore.listForAgent(agentId)).skills,
+        at,
+      );
+    },
+  });
+  localThreadRunner.observeTurns(async (turn) => {
+    await observeRetro(turn);
   });
   localThreadRunner.observeTurns(async (turn) => {
     if (turn.kind !== "chat") return;
