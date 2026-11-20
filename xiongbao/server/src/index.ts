@@ -4,6 +4,8 @@ import type { AbstractAgent } from "@ag-ui/client";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { computerGuidance } from "../../shared/bot-prompt";
+import { promptSlimOn } from "./agents/prompt-slim";
+import { slimComputerGuidance } from "./agents/slim-guidance";
 import { hardModelOf } from "../../shared/hard-model";
 import { lightModelOf } from "../../shared/light-model";
 import { isPersonBrowserId } from "../../shared/openbot-browser";
@@ -4270,7 +4272,13 @@ await startupLifecycle.run(async (startup) => {
     signRunForActor,
     // Whenever this deployment has a computer to drive — a container or, with TENANT_RUNTIME=device,
     // the person's paired machine — every built-in Bot is told how its tools go together.
-    computerGuidance: computerProvider ? computerGuidance : undefined,
+    // 瘦身开着（默认）时用短写法，`XIONGBAO_PROMPT_SLIM=off` 换回原文；每次构建时读，改了开关不用重启。
+    computerGuidance: computerProvider
+      ? (holding) =>
+          promptSlimOn()
+            ? slimComputerGuidance(holding)
+            : computerGuidance(holding)
+      : undefined,
     loadVendors,
     selectionForActor,
     agentFetch,

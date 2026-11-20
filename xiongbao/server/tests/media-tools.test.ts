@@ -1,3 +1,4 @@
+import { slimMediaGuidance } from "../src/agents/slim-guidance";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -775,8 +776,9 @@ describe("the prompt", () => {
     const list = tools(environment());
     const held = await promptWith([list.image, list.video, list.check]);
     const section = held.match(/<media>\n([\s\S]*?)\n<\/media>/)?.[1];
+    // 用户 2026-11-20 批准：瘦身默认开，钉瘦身后的原文；关着时的原文见下面的 off 用例。
     expect(section).toBe(
-      mediaGuidance(
+      slimMediaGuidance(
         [GENERATE_IMAGE_TOOL, GENERATE_VIDEO_TOOL, CHECK_VIDEO_TOOL],
         { computer: false },
       ),
@@ -802,7 +804,29 @@ describe("the prompt", () => {
     const list = tools(environment());
     const both = await promptWith([list.image], "used");
     expect(both.match(/<media>\n([\s\S]*?)\n<\/media>/)?.[1]).toBe(
-      mediaGuidance([GENERATE_IMAGE_TOOL], { computer: true }),
+      slimMediaGuidance([GENERATE_IMAGE_TOOL], { computer: true }),
     );
+  });
+
+  test("with XIONGBAO_PROMPT_SLIM=off the section is the original, word for word", async () => {
+    const saved = process.env.XIONGBAO_PROMPT_SLIM;
+    process.env.XIONGBAO_PROMPT_SLIM = "off";
+    try {
+      const list = tools(environment());
+      const held = await promptWith([list.image, list.video, list.check]);
+      expect(held.match(/<media>\n([\s\S]*?)\n<\/media>/)?.[1]).toBe(
+        mediaGuidance(
+          [GENERATE_IMAGE_TOOL, GENERATE_VIDEO_TOOL, CHECK_VIDEO_TOOL],
+          { computer: false },
+        ),
+      );
+      const both = await promptWith([list.image], "used");
+      expect(both.match(/<media>\n([\s\S]*?)\n<\/media>/)?.[1]).toBe(
+        mediaGuidance([GENERATE_IMAGE_TOOL], { computer: true }),
+      );
+    } finally {
+      if (saved === undefined) delete process.env.XIONGBAO_PROMPT_SLIM;
+      else process.env.XIONGBAO_PROMPT_SLIM = saved;
+    }
   });
 });

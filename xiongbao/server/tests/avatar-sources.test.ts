@@ -5,6 +5,7 @@ import { LLMock } from "@copilotkit/aimock";
 import { and, eq, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { PROVENANCE_GUIDANCE } from "../../shared/bot-prompt";
+import { SLIM_SOURCES } from "../src/agents/slim-guidance";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createRuntimeAgentLoader } from "../src/agents/runtime-agents";
 import type { AppVariables } from "../src/auth/guards";
@@ -400,9 +401,8 @@ describe("what the 分身 is told", () => {
     expect(prompt.indexOf("standing instructions")).toBeLessThan(
       prompt.indexOf(DECLARED),
     );
-    expect(prompt.indexOf(DECLARED)).toBeLessThan(
-      prompt.indexOf(PROVENANCE_GUIDANCE),
-    );
+    // 用户 2026-11-20 批准：瘦身默认开，来源段钉瘦身后的原文；顺序的语义不变。
+    expect(prompt.indexOf(DECLARED)).toBeLessThan(prompt.indexOf(SLIM_SOURCES));
   });
 
   test("no sources is no block, byte for byte the prompt it was before", () => {
@@ -424,12 +424,30 @@ describe("what the 分身 is told", () => {
     // are no longer joined back to back: the role section holds the description, and the next
     // thing after it about sources is the provenance section, with no 分身 sources section between.
     expect(prompt).toContain(`<role>\n${avatar.systemPrompt}\n\n`);
-    expect(prompt).toContain(`<sources>\n${PROVENANCE_GUIDANCE}`);
+    // 用户 2026-11-20 批准：瘦身默认开，钉瘦身后的原文。
+    expect(prompt).toContain(`<sources>\n${SLIM_SOURCES}`);
     expect(prompt).not.toContain("<avatar_sources>");
     expect(prompt.indexOf(avatar.systemPrompt)).toBeLessThan(
-      prompt.indexOf(PROVENANCE_GUIDANCE),
+      prompt.indexOf(SLIM_SOURCES),
     );
     expect(prompt).toContain(UNTRUSTED_GUIDANCE);
+  });
+
+  test("with XIONGBAO_PROMPT_SLIM=off the sources section is the shared original, after the role", () => {
+    const savedSlim = process.env.XIONGBAO_PROMPT_SLIM;
+    process.env.XIONGBAO_PROMPT_SLIM = "off";
+    try {
+      const prompt = promptOf(
+        builtInAgentConfiguration(avatar, model, "synthetic-model-key"),
+      );
+      expect(prompt).toContain(`<sources>\n${PROVENANCE_GUIDANCE}`);
+      expect(prompt.indexOf(avatar.systemPrompt)).toBeLessThan(
+        prompt.indexOf(PROVENANCE_GUIDANCE),
+      );
+    } finally {
+      if (savedSlim === undefined) delete process.env.XIONGBAO_PROMPT_SLIM;
+      else process.env.XIONGBAO_PROMPT_SLIM = savedSlim;
+    }
   });
 
   test("the loader answers the asker's own 分身 only, and follows a removal on the next run", async () => {
