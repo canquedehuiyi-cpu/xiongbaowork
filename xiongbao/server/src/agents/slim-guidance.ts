@@ -114,10 +114,34 @@ export function slimDelegationGuidance(
   ].join("\n\n");
 }
 
+/**
+ * 看板上的交付轮，没有人在看：员工握着 `accept_task`，这一轮随运行来的工具只有电脑工具（无人值守的执行器只给这些；
+ * 有人看的界面还会带自己画组件的工具）。这样的轮次没有组件可画，「回答格式」那段讲的就是什么时候画组件，每步白发
+ * 约 750 字符，所以不放。运行带的工具还不知道（构建时没有请求）、或带了别的工具，一律不算：该段照旧。
+ * `XIONGBAO_HEADLESS_ANSWER_FORMAT=on` 回到每一轮都放。
+ */
+export function headlessDeliveryRun(
+  heldToolNames: readonly string[],
+  runToolNames: readonly string[] | undefined,
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  if (env.XIONGBAO_HEADLESS_ANSWER_FORMAT?.trim().toLowerCase() === "on")
+    return false;
+  if (!runToolNames || runToolNames.length === 0) return false;
+  return (
+    heldToolNames.includes("accept_task") &&
+    runToolNames.every(
+      (name) => name.startsWith("computer_") || name === "report_refusal",
+    )
+  );
+}
+
 /** `workingGuidance` 的短写法：同样的段、同样的顺序，`asking` 和 `untrusted` 仍由调用方给。 */
 export function slimWorkingGuidance(options: {
   untrusted: string;
   asking: string;
+  /** 假就不放「回答格式」段（看板无人值守的交付轮，见 {@link headlessDeliveryRun}）；默认放。 */
+  answerFormat?: boolean;
 }): string[] {
   return [
     ...promptSection(
@@ -126,7 +150,9 @@ export function slimWorkingGuidance(options: {
     ),
     ...promptSection("asking", options.asking),
     ...promptSection("sources", SLIM_SOURCES),
-    ...promptSection("answer_format", SLIM_ANSWER_FORMAT),
+    ...(options.answerFormat === false
+      ? []
+      : promptSection("answer_format", SLIM_ANSWER_FORMAT)),
     ...promptSection("subagents", SLIM_SUBAGENTS),
     ...promptSection("untrusted_content", options.untrusted),
     ...promptSection("delivery", SLIM_DELIVERY),

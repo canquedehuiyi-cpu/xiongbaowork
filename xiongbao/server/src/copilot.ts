@@ -107,6 +107,7 @@ import {
 } from "./agents/provider-refusal";
 import { isUnattended, runModeOf } from "./agents/run-mode";
 import {
+  headlessDeliveryRun,
   SLIM_NO_HANDOFF,
   slimDelegationGuidance,
   slimMediaGuidance,
@@ -1332,6 +1333,10 @@ export function builtInAgentConfiguration(
       ...(slim ? slimWorkingGuidance : workingGuidance)({
         untrusted: UNTRUSTED_GUIDANCE,
         asking: builtInAskingGuidance({ apps: holdsAppTools(tools) }),
+        // 看板无人值守的交付轮没有组件可画，不放「回答格式」段（token 第五轮，见 `headlessDeliveryRun`）。
+        ...(slim && headlessDeliveryRun(heldToolNames, runToolNames)
+          ? { answerFormat: false }
+          : {}),
       }),
       // M3: the fork's guidance; see the note on the plugins imports.
       ...promptSection("apps", holdings),

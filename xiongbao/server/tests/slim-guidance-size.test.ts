@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { TOOL_BRIEFS } from "../src/agents/prompt-slim";
 import {
+  headlessDeliveryRun,
   SLIM_ANSWER_FORMAT,
   SLIM_DELIVERY,
   SLIM_SOURCES,
@@ -59,5 +60,31 @@ describe("压短之后要点还在", () => {
     expect(TOOL_BRIEFS.run_subagent?.description).toContain(
       "需要批准的操作子代理会停下",
     );
+  });
+});
+
+describe("headlessDeliveryRun：什么样的轮次不放「回答格式」", () => {
+  const held = ["accept_task", "deliver_task", "computer_run_command"];
+  test("只带电脑工具、握着 accept_task 的：是", () => {
+    expect(
+      headlessDeliveryRun(held, ["computer_run_command", "report_refusal"], {}),
+    ).toBe(true);
+  });
+  test("带了别的工具（界面的组件）、没带任何工具、不知道、没有 accept_task：不是", () => {
+    expect(
+      headlessDeliveryRun(held, ["computer_click", "render_chart"], {}),
+    ).toBe(false);
+    expect(headlessDeliveryRun(held, [], {})).toBe(false);
+    expect(headlessDeliveryRun(held, undefined, {})).toBe(false);
+    expect(headlessDeliveryRun(["deliver_task"], ["computer_click"], {})).toBe(
+      false,
+    );
+  });
+  test("回退：XIONGBAO_HEADLESS_ANSWER_FORMAT=on", () => {
+    expect(
+      headlessDeliveryRun(held, ["computer_click"], {
+        XIONGBAO_HEADLESS_ANSWER_FORMAT: "on",
+      }),
+    ).toBe(false);
   });
 });

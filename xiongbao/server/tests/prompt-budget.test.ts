@@ -141,7 +141,9 @@ function grantedForBoardTurn(): GrantedTool[] {
   return [...real, ...others.map(stub)];
 }
 
-async function firstStep() {
+async function firstStep(
+  extraTools: { name: string; description: string; parameters: unknown }[] = [],
+) {
   const subagents = createSubagents({
     turn: {} as never,
     buildAgentFor: (async () => ({})) as never,
@@ -180,7 +182,9 @@ async function firstStep() {
   const run = agent.clone();
   run.threadId = "thread-budget";
   run.setMessages([{ id: "ask", role: "user", content: "做这一件事。" }]);
-  await run.runAgent({ tools: computerDefinitions as never });
+  await run.runAgent({
+    tools: [...computerDefinitions, ...extraTools] as never,
+  });
   const first = requests[0];
   if (!first) throw new Error("the model was never asked");
   return first;
@@ -232,6 +236,39 @@ describe("看板轮首步的提示词体积", () => {
       expect(listing).toContain(name);
     // 运行时的状态工具模型用不到。
     for (const name of HIDDEN_TOOLS) expect(sent).not.toContain(name);
+  });
+
+  test("看板无人值守的交付轮没有「回答格式」段；运行带了组件工具的轮（有人看）仍有，顺序照旧（用户 2026-11-20 批准）", async () => {
+    delete process.env.XIONGBAO_PROMPT_SLIM;
+    const board = await firstStep();
+    expect(board.system).not.toContain("<answer_format>");
+    expect(board.system).toContain("<sources>");
+    expect(board.system).toContain("<subagents>");
+    requests.length = 0;
+    const watched = await firstStep([
+      {
+        name: "render_chart",
+        description: "Draw a chart.",
+        parameters: { type: "object", properties: {} },
+      },
+    ]);
+    const order = [...watched.system.matchAll(/^<([a-z_]+)>$/gm)].map(
+      (match) => match[1],
+    );
+    expect(order.indexOf("answer_format")).toBe(order.indexOf("sources") + 1);
+    expect(order.indexOf("subagents")).toBe(order.indexOf("answer_format") + 1);
+    expect(watched.system.split("<answer_format>")).toHaveLength(2);
+    // 回退：XIONGBAO_HEADLESS_ANSWER_FORMAT=on 时看板轮也放。
+    const saved = process.env.XIONGBAO_HEADLESS_ANSWER_FORMAT;
+    process.env.XIONGBAO_HEADLESS_ANSWER_FORMAT = "on";
+    requests.length = 0;
+    try {
+      expect((await firstStep()).system).toContain("<answer_format>");
+    } finally {
+      if (saved === undefined)
+        delete process.env.XIONGBAO_HEADLESS_ANSWER_FORMAT;
+      else process.env.XIONGBAO_HEADLESS_ANSWER_FORMAT = saved;
+    }
   });
 
   test("关着瘦身（off）：和原来一样，整套工具首步都发，没有 search_tools，提示词是原文", async () => {
