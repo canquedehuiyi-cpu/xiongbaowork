@@ -7,6 +7,7 @@ import {
 } from "./media";
 import { UPDATE_PLAN_TOOL } from "./plan";
 import { RESEARCH_ROLE_LABELS, researchRoleOfTool } from "./research";
+import { REFINE_SKILL_TOOL, SAVE_SKILL_TOOL } from "./self-skills";
 import { SUBAGENT_TOOL } from "./subagent";
 import { lowerFirst, nameInWords } from "./tool-name-words";
 import { SEARCH_TOOLS } from "./tool-search";
@@ -622,6 +623,9 @@ const OWN_TOOLS: Record<string, OwnTool> = {
   [SUBAGENT_TOOL]: { running: "正在处理子任务", done: "处理了子任务" },
   // Its own plan for the work, written before it starts and ticked off as it goes.
   [UPDATE_PLAN_TOOL]: { running: "正在更新计划", done: "更新了计划" },
+  // Writing down a skill of its own, and correcting or reading it back later (期 2). Not the browser's `save_skill`.
+  [SAVE_SKILL_TOOL]: { running: "正在记下一条技能", done: "记下了一条技能" },
+  [REFINE_SKILL_TOOL]: { running: "正在查看或修正技能", done: "查看或修正了技能" },
   // The web: searching it, reading one page, crawling a site (期五 B).
   [WEB_SEARCH_TOOL]: {
     running: "正在搜索",

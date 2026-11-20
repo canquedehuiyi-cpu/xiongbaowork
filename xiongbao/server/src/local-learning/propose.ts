@@ -31,6 +31,7 @@ Find the things the person repeatedly asks this Bot to do whose method can be fi
 Propose a skill only on clear evidence: the same kind of task in at least two conversations, or the person explicitly correcting how the Bot did something (then the skill must contain the corrected way).
 Do not propose: one-off requests, small talk, general knowledge the Bot already has, or anything that needs the person's private details to carry out.
 Do not repeat a skill that already exists.
+Where a line "(Tool outcomes: ...)" follows the tools a Bot used, it says which calls worked (ok) and which did not (FAILED). Learn from it: a method that kept failing is not one to teach, and what the Bot did after a FAILED step is often the part worth writing down as a caveat.
 
 Write the instructions to the Bot, in the imperative: what to do first and next, what to do when a step finds nothing, what the final answer must contain, and why the key steps matter.
 Never put a specific name, email address, phone number, account, key or file content into a skill; say "the other party", "this file" and so on instead.

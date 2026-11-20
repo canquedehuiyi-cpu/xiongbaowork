@@ -117,10 +117,11 @@ type MemoryToolOptions = {
 };
 
 /**
- * The memory tools a Bot is offered in this edition: none in the personal edition. OpenBot Desktop
- * runs a local Intelligence whose licence leaves memory out, and the personal edition's screens show
- * no memory, so a Bot offering to remember something would promise what the person can never see
- * or change. Every place a Bot's tools are listed or called asks this, not `memoryTools`.
+ * The memory tools a Bot is offered in this edition: all four in either edition, and none in the
+ * personal edition when its operator switched memory off (`XIONGBAO_PERSONAL_MEMORY=off`, see
+ * `editionHasMemory`), because then its screens show no memory and a Bot offering to remember
+ * something would promise what the person can never see or change. Every place a Bot's tools are
+ * listed or called asks this, not `memoryTools`.
  */
 export function offeredMemoryTools(
   edition: Edition,

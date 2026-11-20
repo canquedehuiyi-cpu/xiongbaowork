@@ -65,6 +65,8 @@ import { watched } from "./thread-viewers";
 import {
   entryHungRound,
   onlyOnIdleThreadRequested,
+  clearPersonChat,
+  personChatRequested,
   runnerCardSuppressed,
   suppressedCardRef,
   targetedCard,
@@ -291,7 +293,7 @@ const runnerLane = new AsyncLocalStorage<RunnerCardLane>();
  * `suppressRunnerCard`, wrap the region that subscribes to the run: the card is opened at subscribe time.
  */
 export function fileRunnerCardAs<T>(lane: RunnerCardLane, body: () => T): T {
-  return runnerLane.run(lane, body);
+  return runnerLane.run(lane, () => clearPersonChat(body));
 }
 
 const adoptedCard = new AsyncLocalStorage<string>();
@@ -303,7 +305,7 @@ const adoptedCard = new AsyncLocalStorage<string>();
  * second card, no second charge. Read at `run()`, like `fileRunnerCardAs`.
  */
 export function adoptRunnerCard<T>(runRef: string, body: () => T): T {
-  return adoptedCard.run(runRef, body);
+  return adoptedCard.run(runRef, () => clearPersonChat(body));
 }
 
 /**
@@ -328,6 +330,35 @@ function leftQueued(events: readonly BaseEvent[]): boolean {
 }
 
 /**
+ * A turn that ended on its own, as whoever watches turns end is told (期 2: automatic memory,
+ * the retrospective after a long piece of work).
+ */
+export type FinishedTurn = {
+  /** Whose thread this is: the person the turn ran for. */
+  tenant: string;
+  threadId: string;
+  runId: string;
+  agentId: string;
+  /** What the turn was handed: the thread's messages going in, the person's latest among them. */
+  messages: readonly Message[];
+  /** The turn's own stream, in order: its tool calls and their answers, its text. */
+  events: readonly BaseEvent[];
+  /** The stream said it failed (`RUN_ERROR`), though it closed normally. */
+  failed: boolean;
+  /**
+   * `chat` is a person's own turn, which opened its own card. `task` is a round of a card somebody
+   * else opened or followed (a board task, a routine, a follow-up the employee scheduled).
+   */
+  kind: "chat" | "task";
+};
+
+/**
+ * Told of a turn once it has ended, in the person's frame, after the stream has been handed on. Never
+ * waited for and never allowed to fail the turn: whatever it throws is dropped here (it logs its own).
+ */
+export type TurnObserver = (turn: FinishedTurn) => void | Promise<void>;
+
+/**
  * Local-mode thread persistence (`INTELLIGENCE_MODE=local`).
  *
  * The in-memory runner keeps live run semantics (SSE mode, local thread
@@ -340,6 +371,8 @@ function leftQueued(events: readonly BaseEvent[]): boolean {
 export class PostgresAgentRunner extends InMemoryAgentRunner {
   /** The followed cards a turn may hang on (`tasks/delivery.ts`); asked only when there is a board. */
   private readonly delivery: Delivery;
+  /** Who is told, one by one, when a turn ends on its own. See {@link TurnObserver}. */
+  private readonly turnObservers: TurnObserver[] = [];
 
   constructor(
     private readonly database: Database,
@@ -359,6 +392,30 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
   ) {
     super({ onConcurrentRun: "supersede" });
     this.delivery = createDelivery(database);
+  }
+
+  /**
+   * Hear of every turn this runner runs once it ends on its own (not one a person stopped, not one
+   * that threw). The one place every kind of turn passes -- a person's chat, a board card's round, a
+   * routine's -- and the point where its events and the thread are complete.
+   */
+  observeTurns(observer: TurnObserver): void {
+    this.turnObservers.push(observer);
+  }
+
+  private turnEnded(turn: FinishedTurn): void {
+    if (this.turnObservers.length === 0) return;
+    // Only a person's own thread: nothing is learned about, or for, the deployment's own tenants.
+    if (!isPersonTenant(turn.tenant)) return;
+    for (const observer of this.turnObservers) {
+      try {
+        void Promise.resolve(
+          runAsTenant(turn.tenant, () => observer(turn)),
+        ).catch(() => undefined);
+      } catch {
+        // An observer that cannot be raised is not a reason to fail the turn.
+      }
+    }
   }
 
   /** Trusted AP entry only: reserve/start CAS happens before the runtime; a
@@ -525,6 +582,22 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       });
       checkCancellation();
       threadOwners.set(request.threadId, tenant);
+      /*
+       * A turn carried on after an approval ends here, not in `stream`, so the observers are told here too:
+       * the retrospective counts its steps with the ones before the approval's. Only one that ended well, and
+       * as a `task` round: it is the rest of a turn somebody already asked, not a person's own new one.
+       */
+      if (!failed)
+        this.turnEnded({
+          tenant,
+          threadId: request.threadId,
+          runId: request.input.runId,
+          agentId: request.agent.agentId ?? "unknown",
+          messages,
+          events,
+          failed,
+          kind: "task",
+        });
       return receipt;
     } finally {
       signal.removeEventListener("abort", cancel);
@@ -567,6 +640,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const forCard = targetedCard();
     // Read in the same breath and for the same reason: unset for every turn a person sends.
     const lane = runnerLane.getStore();
+    // Whether the turn arrived as a person's own chat request, read here for the same reason (期 2).
+    const personChat = personChatRequested();
     // A server-started turn (a nudge, a hand-over, a 退回) that stands back rather than supersede.
     const idleOnly = onlyOnIdleThreadRequested();
     const adopted = adoptedCard.getStore();
@@ -678,6 +753,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
               adopted,
               enter,
               idleOnly,
+              personChat,
             ).subscribe(subscriber);
           } catch (thrown) {
             enter();
@@ -761,6 +837,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     entered: () => void = () => {},
     /** A turn that may only start on an idle thread (`onlyOnIdleThread`). */
     idleOnly = false,
+    /** The turn arrived as a person's own chat request (`asPersonChat`). */
+    personChat = false,
   ): Observable<BaseEvent> {
     const { threadId } = request;
     const runId = request.input.runId;
@@ -1021,6 +1099,21 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
              */
             stopHeartbeat();
             finish(carriedFailure(events));
+            this.turnEnded({
+              tenant,
+              threadId,
+              runId,
+              agentId,
+              messages: request.input.messages,
+              events,
+              failed: carriedFailure(events),
+              // Explicit, not inferred from the card: a person's chat is a turn that arrived as one, and
+              // an entry's own turn (a group's, a routine's, a hop to another employee) is never one.
+              kind:
+                personChat && !cardIsTaken && !lane && !adopted
+                  ? "chat"
+                  : "task",
+            });
             // The parent commits the run during teardown; one macrotask later
             // the snapshot is readable and goes to PostgreSQL.
             this.persistLater(

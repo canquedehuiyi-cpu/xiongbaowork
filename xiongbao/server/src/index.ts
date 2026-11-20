@@ -85,6 +85,7 @@ import {
 } from "./agents/lifecycle";
 import { createBotReset } from "./agents/lifecycle-reset";
 import { lightModelFor } from "./agents/light-model";
+import { createPurposeModel } from "./agents/purpose-model";
 import {
   createLightModelRoutes,
   createLightModelStore,
@@ -403,6 +404,12 @@ import {
   createLearningSharingStore,
   createOpenSkillIndex,
 } from "./learning/sharing";
+import {
+  cardRetroTurn,
+  createRetrospector,
+  markPickedSkillUsed,
+  retroTurnOf,
+} from "./learning/retrospect";
 import { createLocalLearningEngine } from "./local-learning/engine";
 import { readMediaConfig } from "./media/config";
 import { createMediaRoutes } from "./media/routes";
@@ -410,8 +417,11 @@ import { createMediaStore, mediaChannelOf } from "./media/store";
 import { mediaTools, offeredMediaTools } from "./media/tools";
 import { workspaceMedia } from "./media/workspace";
 import { createMemoryDefaults } from "./memory/defaults";
+import { createEmbeddingStore } from "./memory/embeddings-store";
 import { createMemoryIngestion } from "./memory/ingestion";
+import { createMemoryVectors } from "./memory/vectors";
 import { createIntelligenceMemory } from "./memory/intelligence";
+import { createMemoryExtractor, memoryExtractEnabled } from "./memory/extract";
 import { createMemoryRuntime } from "./memory/runtime";
 import { createMemoryStore } from "./memory/store";
 import { offeredMemoryTools } from "./memory/tools";
@@ -604,7 +614,9 @@ import {
   notifyOnHandIn,
 } from "./tasks/briefing";
 import { createCardTurns } from "./tasks/card-turns";
-import { createDelivery } from "./tasks/delivery";
+import { SAVE_SKILL_REF, selfSkillTools } from "./skills/save-tool";
+import { demoteStaleSkills, learnedUsageOf } from "./skills/usage";
+import { createDelivery, replyTextOf } from "./tasks/delivery";
 import {
   runDeliveryCheck,
   savedWorkHours,
@@ -2920,6 +2932,11 @@ await startupLifecycle.run(async (startup) => {
   const memoryIngestion = createMemoryIngestion({
     store: personalMemoryStore,
     plugins: pluginStore,
+    // 按语义挑记忆（`XIONGBAO_EMBEDDING_*`，没配就按词挑）：出站和模型地址同一道校验。
+    vectors: createMemoryVectors({
+      store: createEmbeddingStore(database),
+      embed: { outbound: modelOutbound },
+    }),
     canUseBot: async (owner, bot) =>
       (await pluginStore.agentOwner(bot)) === owner ||
       (await agentProfileStore.get(await actorFor(owner), bot)) !== null,
@@ -3093,6 +3110,13 @@ await startupLifecycle.run(async (startup) => {
         };
       }),
     );
+  /** What `save-tool.ts` needs for one person's one employee. */
+  const selfSkillDepsFor = (ownerUserId: string, agentId: string) => ({
+    database,
+    plugins: pluginStore,
+    ownerUserId,
+    agentId,
+  });
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -3166,6 +3190,12 @@ await startupLifecycle.run(async (startup) => {
       ownerUserId: actorId,
       agentId: botId,
     }),
+    /*
+     * 员工自己写技能（`save_learned_skill`、`refine_skill`，期 2）：每位员工默认都有，工具权限里关掉
+     * `bot/save_learned_skill`、`bot/refine_skill` 即不给。和浏览器里那个请本人保存技能的 `save_skill`
+     * 是两件事，名字分开，持有 `skill-creator` 技能的员工两个都有。
+     */
+    ...selfSkillTools(selfSkillDepsFor(actorId, botId)),
     /*
      * 交付闭环的三步（接活、交付、延期）：每位员工默认都有，工具权限里关掉 `accept_task` 即不走三步
      * （见上面的 `offeredDeliveryTools`）。卡片的租户是这一轮的人。
@@ -3422,7 +3452,22 @@ await startupLifecycle.run(async (startup) => {
    * lands on the whole catalogue: the narrowing is worth an accuracy point, never a capability.
    */
   const selectionForActor = (actorId: string): ToolSelection => ({
-    loadSkills: (botId) => grantedSkills({ store: pluginStore, botId }),
+    /*
+     * 员工自己写的技能里，最近 30 天没用过的降权：排到后面、摘要后加一句说明（`skills/usage.ts`）。
+     * 查不到使用情况就原样给，挑选不因此失败。
+     */
+    loadSkills: async (botId) => {
+      const held = await grantedSkills({ store: pluginStore, botId });
+      try {
+        return demoteStaleSkills(
+          held,
+          await runAsTenant(actorId, () => learnedUsageOf(database)),
+          new Date(),
+        );
+      } catch {
+        return held;
+      }
+    },
     // The deployment's own model and key, the same pair the intent router uses, so selection is
     // never a second thing to configure. It throws on a missing key, which reads as "could not
     // choose" and leaves the whole catalogue offered.
@@ -4829,6 +4874,89 @@ await startupLifecycle.run(async (startup) => {
       }, 60_000),
     (resource) => resource.stop(),
   );
+  /*
+   * 每轮自动抽记忆（期 2，memory/extract.ts）：挂在线程运行器的「轮次结束」上，因为每一种轮次（人的单聊、
+   * 看板卡的一轮、例行任务）都从这里经过，而且此刻这一轮的事件和线程都是完整的；只对人自己开的单聊轮
+   * （`kind: "chat"`）抽，看板和例行的轮次不是人在说话。有记忆的版本才抽（个人版可用
+   * `XIONGBAO_PERSONAL_MEMORY=off` 关），`XIONGBAO_MEMORY_EXTRACT=off` 单独关抽取；员工的工具权限里关掉
+   * `memory/save_observed_memory` 的也不抽。抽出的存成待确认的观察记忆，失败只记日志。
+   */
+  const agentModelFor = createPurposeModel({
+    resolve: resolveAgentModel,
+    deployment: async (modelName) => {
+      try {
+        const key = await resolveRuntimeModelApiKey();
+        return key
+          ? deploymentModel(
+              modelName
+                ? { ...runtimeModel, defaultModel: modelName }
+                : runtimeModel,
+              key,
+            )
+          : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    // 期 1·1.5：员工设置里的轻量模型；背景小活（抽记忆、复盘）用它，没设置就是平时的模型。
+    lightModelOf: (agentId) =>
+      database
+        .select({ configuration: agents.configuration })
+        .from(agents)
+        .where(eq(agents.id, agentId))
+        .limit(1)
+        .then(([row]) => lightModelOf(row?.configuration)),
+    allowed: async () =>
+      (await modelCatalogue.read()).models.map((model) => model.id),
+  });
+  const extractTurnMemories = createMemoryExtractor({
+    store: personalMemoryStore,
+    modelFor: agentModelFor,
+    enabled: async (ownerUserId, agentId) =>
+      editionHasMemory(config.edition) &&
+      memoryExtractEnabled() &&
+      !(await approvalService.disabledTools(ownerUserId, agentId))(
+        "memory/save_observed_memory",
+      ),
+  });
+  /*
+   * 做完复盘（learning/retrospect.ts）：一轮的工具调用到了 `XIONGBAO_RETRO_MIN_STEPS` 步（默认 15）就看一遍轨迹
+   * 和每一步成没成，值得就存成技能：只给自己用的立刻授予这位员工，要共享的进本人的待审列表。每一种轮次都看
+   * （看板卡的一轮、例行任务也是长活）。另一处触发是本人验收一张看板卡（见 `/api/tasks` 的 `onReviewed`）。
+   * 工具权限里关掉 `bot/save_learned_skill` 的员工不复盘。
+   */
+  const retrospectTurn = createRetrospector({
+    database,
+    selfSkill: selfSkillDepsFor,
+    modelFor: agentModelFor,
+    enabled: async (ownerUserId, agentId) =>
+      !(await approvalService.disabledTools(ownerUserId, agentId))(
+        SAVE_SKILL_REF,
+      ),
+    existingSkills: async (agentId) =>
+      (await pluginStore.listForAgent(agentId)).skills.map(
+        (skill) => skill.title,
+      ),
+  });
+  localThreadRunner.observeTurns(async (turn) => {
+    // 人用 `/命令` 点了员工自己写的技能：记成用过。
+    await markPickedSkillUsed(database, turn, new Date()).catch(
+      () => undefined,
+    );
+    if (!turn.failed) await retrospectTurn(retroTurnOf(turn));
+  });
+  localThreadRunner.observeTurns(async (turn) => {
+    if (turn.kind !== "chat") return;
+    await extractTurnMemories({
+      ownerUserId: turn.tenant,
+      agentId: turn.agentId,
+      threadId: turn.threadId,
+      runId: turn.runId,
+      messages: turn.messages,
+      reply: replyTextOf(turn.events),
+      failed: turn.failed,
+    });
+  });
   /*
    * 本地学习（L1，local-learning/engine.ts）：每人每天读自己最近的对话，用那位员工的模型提出技能
    * 草案，等本人在设置「学习」里审。对话不出库；模型调用经 `resolveAgentModel` 计到这个人名下，
@@ -6406,6 +6534,13 @@ await startupLifecycle.run(async (startup) => {
           (await approvalService.disabledTools(tenantId, agentId))(
             ACCEPT_TASK_REF,
           ),
+        // 本人验收通过一张卡：回头看这件活是怎么做成的，值得就存成技能（learning/retrospect.ts）。
+        onReviewed: (tenantId, taskId) => {
+          void runAsTenant(tenantId, async () => {
+            const turn = await cardRetroTurn(database, taskId);
+            if (turn) await retrospectTurn(turn);
+          }).catch(() => undefined);
+        },
       },
     ),
   );
