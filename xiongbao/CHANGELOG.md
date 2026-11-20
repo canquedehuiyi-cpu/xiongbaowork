@@ -8,6 +8,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **网页单聊里的电脑工具默认改由服务器执行（期九·六）。** 关掉网页、锁屏，员工照样把活干完，回来能看到每一步；`XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS` 默认由 `off` 改为 `on`。要回到旧行为（电脑工具全由浏览器执行），设 `XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS=off`；`off` 保留一个版本。验收与 DeepSeek 评测见 `docs/acceptance/2026-11-19-background-runs.md`。
 - **看板派活、群里 @ 派的活漏了交付，进「等验收」时带上员工写过的文件。** 员工做完没调用 `deliver_task` 时，这一轮结束卡会自动进等验收，
   以前交付物是空的，验收的人看不到产物；现在卡上带着这件活各轮里员工成功写过、改过的工作区文件（`computer_write_file`、
   `computer_edit_file`，只收工作区内的相对路径，去重，最多 20 个）。收尾读事件前会先等这一轮最后一批事件写进库（最多 5 秒）。调用过 `deliver_task` 的、没写过文件的，行为不变。员工的交付规约

@@ -8,9 +8,9 @@ describe("XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS", () => {
   const configWith = (value?: string) =>
     loadConfig(testEnvironment(value === undefined ? {} : { [name]: value }));
 
-  test("is off when it is not set, and when it is empty", () => {
-    expect(configWith().chatServerComputerTools).toBe(false);
-    expect(configWith("").chatServerComputerTools).toBe(false);
+  test("is on when it is not set, and when it is empty (期九·六)", () => {
+    expect(configWith().chatServerComputerTools).toBe(true);
+    expect(configWith("").chatServerComputerTools).toBe(true);
   });
 
   test("is on only for `on`, and off for `off`", () => {
