@@ -115,6 +115,8 @@ import {
   backgroundOf,
   type LearnedState,
   learningDiff,
+  newSkillBodies,
+  skillBodyLog,
   waitForRetro,
 } from "./learning";
 import {
@@ -1277,11 +1279,10 @@ async function learnedStateOf(agentId: string): Promise<LearnedState> {
     const ledger = (await database.select().from(schema.learnedSkills)).filter(
       (row) => row.agentId === agentId,
     );
-    const titles = new Map(
-      (await database.select().from(schema.skills)).map((row) => [
-        row.slug,
-        row.title,
-      ]),
+    const skillRows = await database.select().from(schema.skills);
+    const titles = new Map(skillRows.map((row) => [row.slug, row.title]));
+    const instructionsOf = new Map(
+      skillRows.map((row) => [row.slug, row.instructions]),
     );
     const memories = (
       await database.select().from(schema.personalMemories)
@@ -1300,6 +1301,7 @@ async function learnedStateOf(agentId: string): Promise<LearnedState> {
           {
             title: titles.get(row.skillSlug) ?? row.skillSlug,
             useCount: row.useCount,
+            instructions: instructionsOf.get(row.skillSlug),
           },
         ]),
       ),
@@ -1456,10 +1458,14 @@ async function runWork(work: Work): Promise<EvalRecord> {
       skillCount: async () => (await learnedStateOf(agentId)).skills.size,
       skillsBefore: learnedBefore.skills.size,
     });
+    const learnedAfter = await learnedStateOf(agentId);
+    const skillBodies = newSkillBodies(learnedBefore, learnedAfter);
     learning = {
-      ...learningDiff(learnedBefore, await learnedStateOf(agentId)),
+      ...learningDiff(learnedBefore, learnedAfter),
+      ...(skillBodies.length > 0 ? { skillBodies } : {}),
       retro,
     };
+    if (skillBodies.length > 0) console.log(skillBodyLog(skillBodies));
     console.log(
       `   learning: +${learning.newSkills.length} skills${learning.heldSkills ? ` (+${learning.heldSkills.length} held for review)` : ""}, +${learning.newMemories} memories, used ${learning.usedSkills.length}; retrospective ${retro.ended}${retro.outcome ? ` ${retro.outcome}` : ""} after ${(retro.waitedMs / 1000).toFixed(0)} s`,
     );

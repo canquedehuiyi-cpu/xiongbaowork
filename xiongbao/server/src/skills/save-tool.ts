@@ -3,6 +3,8 @@ import {
   REFINE_SKILL_TOOL,
   SAVE_SKILL_TOOL,
   SELF_SKILL_SLUG_PREFIX,
+  FAST_PATH_CHECK_LABEL,
+  FAST_PATH_HEADING,
   SKILL_FIELD_LIMITS,
   SKILL_SCOPES,
   SKILLS_PER_EMPLOYEE_DEFAULT,
@@ -65,6 +67,15 @@ export type SkillDraft = {
   pitfalls: string[];
   verify: string;
   scope: SkillScope;
+  /**
+   * 快路径：这件事最后是靠一段脚本或几条命令做成的，能直接复用的最终脚本或命令（参数泛化成占位）。
+   * 第二次做同类事先照它做，对不上再摸索。没有就是没有。
+   */
+  fastPath?: string;
+  /** 快路径的前提条件：输入是什么、要有什么工具。 */
+  fastPathNeeds?: string;
+  /** 快路径的校验：尽量一条命令，跑完看输出就知道对不对。 */
+  fastPathCheck?: string;
 };
 
 /** `XIONGBAO_SKILLS_PER_EMPLOYEE`: how many skills one employee may keep. Default 50; a bad value is the default. */
@@ -78,6 +89,8 @@ export function skillsPerEmployee(
 }
 
 const line = (max: number) => z.string().trim().min(1).max(max);
+/** A field that may be left out: absent or empty both mean "none", too long is still refused. */
+const optionalLine = (max: number) => z.string().trim().max(max).optional();
 
 /** What the model is offered. Limits are said in the descriptions and enforced here, in the person's language. */
 export const saveParameters = z
@@ -96,7 +109,18 @@ export const saveParameters = z
       .max(L.pitfalls)
       .default([])
       .describe("踩过的坑和怎么避开，可以没有"),
-    verify: line(L.verify).describe("怎么确认这件事做对了"),
+    verify: line(L.verify).describe(
+      "怎么确认这件事做对了；能用一条命令确认的写成那条命令",
+    ),
+    fastPath: optionalLine(L.fastPath).describe(
+      "快路径，可以没有：这件事若最后是靠一段脚本或几条命令做成的，写能直接复用的最终脚本或命令，目录、文件名等写成占位（<dir>），不带具体数据",
+    ),
+    fastPathNeeds: optionalLine(L.fastPathNeeds).describe(
+      "快路径的前提条件：输入是什么、要有什么工具，可以没有",
+    ),
+    fastPathCheck: optionalLine(L.fastPathCheck).describe(
+      "快路径跑完怎么校验，尽量一条命令，可以没有",
+    ),
     scope: z
       .enum(SKILL_SCOPES)
       .default("self")
@@ -136,12 +160,27 @@ export function renderSkill(draft: SkillDraft): {
     draft.pitfalls.length > 0
       ? `\n\n注意（踩过的坑）：\n${draft.pitfalls.map((item) => `- ${item}`).join("\n")}`
       : "";
+  /*
+   * 快路径排在步骤之前：简短形式放不下全文时先保留它（`shortSkillBody`）。标题行和「校验命令」一行的
+   * 字面是固定的，`picked-skill.ts` 靠它们切段、读出校验命令。
+   */
+  const fast = draft.fastPath
+    ? [
+        `${FAST_PATH_HEADING}（做过的做法：先照这个做，对不上这次的输入再摸索）：`,
+        ...(draft.fastPathNeeds ? [`前提：${draft.fastPathNeeds}`] : []),
+        draft.fastPath,
+        ...(draft.fastPathCheck
+          ? [`${FAST_PATH_CHECK_LABEL}${draft.fastPathCheck}`]
+          : []),
+      ].join("\n")
+    : undefined;
   return {
     title: draft.name,
     summary:
       draft.when.length > 120 ? `${draft.when.slice(0, 120)}…` : draft.when,
     instructions: [
       `适用场景：${draft.when}`,
+      ...(fast ? [fast] : []),
       `步骤：\n${draft.steps.map((step, index) => `${index + 1}. ${step}`).join("\n")}`,
     ]
       .join("\n\n")
@@ -194,6 +233,9 @@ const textOfDraft = (draft: SkillDraft) =>
     ...draft.steps,
     ...draft.pitfalls,
     draft.verify,
+    draft.fastPath ?? "",
+    draft.fastPathNeeds ?? "",
+    draft.fastPathCheck ?? "",
   ].join("\n");
 
 /** Why a draft cannot be saved, in the person's language, or undefined when it can. */
@@ -228,6 +270,13 @@ export function withoutEmails(draft: SkillDraft): SkillDraft {
     steps: draft.steps.map(clean),
     pitfalls: draft.pitfalls.map(clean),
     verify: clean(draft.verify),
+    ...(draft.fastPath ? { fastPath: clean(draft.fastPath) } : {}),
+    ...(draft.fastPathNeeds
+      ? { fastPathNeeds: clean(draft.fastPathNeeds) }
+      : {}),
+    ...(draft.fastPathCheck
+      ? { fastPathCheck: clean(draft.fastPathCheck) }
+      : {}),
   };
 }
 

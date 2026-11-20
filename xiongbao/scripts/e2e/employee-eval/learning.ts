@@ -13,7 +13,15 @@ export const RETRO_WAIT_MS = 90_000;
 
 /** 某一刻这位员工的自写技能（命令名 -> 名字、使用次数）和形成的记忆条数。 */
 export type LearnedState = {
-  skills: Map<string, { title: string; useCount: number }>;
+  skills: Map<
+    string,
+    {
+      title: string;
+      useCount: number;
+      /** 技能正文（存下的 `instructions`），评测报告摘它的前 800 字。读不到就没有。 */
+      instructions?: string;
+    }
+  >;
   /** 复盘存了、但转待审没授予的技能（命令名 -> 名字）：在本人的待审清单里，不在自写技能账里。没读到就没有这一项。 */
   held?: Map<string, string>;
   memories: number;
@@ -43,6 +51,40 @@ export function learningDiff(
     newMemories: Math.max(0, after.memories - before.memories),
     usedSkills,
   };
+}
+
+/** 报告和日志里每条新技能的正文只放前这么多字。 */
+export const SKILL_BODY_CHARS = 800;
+
+/**
+ * 第一次之后新存下的技能的正文，每条取前 {@link SKILL_BODY_CHARS} 字：看真跑时技能到底写了什么，第二次没变快
+ * 时先看这里。只放技能正文，不放别的：复盘已经把个人数据换成了占位。没有正文的技能不列。
+ */
+export function newSkillBodies(
+  before: LearnedState,
+  after: LearnedState,
+): { title: string; text: string }[] {
+  const bodies: { title: string; text: string }[] = [];
+  for (const [slug, skill] of after.skills) {
+    if (before.skills.has(slug) || !skill.instructions?.trim()) continue;
+    bodies.push({
+      title: skill.title,
+      text: skill.instructions.slice(0, SKILL_BODY_CHARS),
+    });
+  }
+  return bodies;
+}
+
+/** 日志里打的那一份：一条技能一段，带技能名。没有就是空串。 */
+export function skillBodyLog(
+  bodies: readonly { title: string; text: string }[],
+): string {
+  return bodies
+    .map(
+      (body) =>
+        `   skill 「${body.title}」 (first ${SKILL_BODY_CHARS} chars):\n${body.text}`,
+    )
+    .join("\n");
 }
 
 /** 服务器日志里复盘观察者写的一行（`learning/retrospect.ts` 的 `createRetroObserver`）。 */

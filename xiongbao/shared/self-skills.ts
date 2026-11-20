@@ -31,10 +31,18 @@ export const SKILL_FIELD_LIMITS = {
   pitfalls: 20,
   pitfall: 300,
   verify: 400,
+  /** 快路径：能直接复用的最终脚本或命令（一段），要放得进技能简短形式的 1400 字里。 */
+  fastPath: 900,
+  fastPathNeeds: 200,
+  fastPathCheck: 240,
   change: 300,
   /** 一条技能的修正记录最多保留几条，更早的丢掉。 */
   revisions: 8,
 } as const;
+
+/** 技能正文里「快路径」一段的标题字样，和校验命令那一行的开头；存的时候写、读的时候认，两边用同一个。 */
+export const FAST_PATH_HEADING = "快路径";
+export const FAST_PATH_CHECK_LABEL = "快路径校验命令：";
 
 /** 排在技能名前、让人一眼认出是员工自己写的：`/auto-…` 命令。 */
 export const SELF_SKILL_SLUG_PREFIX = "auto-";

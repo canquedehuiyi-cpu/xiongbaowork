@@ -23,6 +23,11 @@ export type RunLearning = {
    * 没授予员工，也不在自写技能里。没有就不带这一项。
    */
   heldSkills?: string[];
+  /**
+   * 这次运行之后新增的自写技能的正文，每条只取前 800 字（`newSkillBodies`）：报告在「学没学到」表下面列出，
+   * 看技能到底写了什么。旧结果文件没有。
+   */
+  skillBodies?: { title: string; text: string }[];
   /** 这次运行之后新增的、这位员工形成的记忆条数。 */
   newMemories: number;
   /**

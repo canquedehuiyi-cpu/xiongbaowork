@@ -174,7 +174,11 @@ import type {
   DeploymentModel,
 } from "./models/runtime-resolver";
 import { withModelRun } from "./models/token-metering";
-import { heldSkillsGuidance, skillGuidanceFor } from "./plugins/picked-skill";
+import {
+  fastPathChecksIn,
+  heldSkillsGuidance,
+  skillGuidanceFor,
+} from "./plugins/picked-skill";
 import { appCallsOfRun, withAppCallsOf } from "./plugins/run-calls";
 import type {
   ChoiceHint,
@@ -2708,6 +2712,16 @@ async function buildAgent(
         : {}),
       ...(process.env.XIONGBAO_VERIFY_NUDGE === "off"
         ? { verifyChanges: false }
+        : {}),
+      /*
+       * 这一轮照着技能的快路径做：技能自带的校验命令，跑过它就算改完已验，不再为「改完必验」多走一步。
+       * 命令是技能里存的、注入给模型的那一行（`fastPathChecksIn`），不是请求带来的。
+       */
+      ...(pickedSkill
+        ? (() => {
+            const skillChecks = fastPathChecksIn(pickedSkill);
+            return skillChecks.length > 0 ? { skillChecks } : {};
+          })()
         : {}),
       /*
        * 交付被接受之后这一轮直接结束，不再为一句收尾的话多调一次模型（`tasks/delivery-end.ts`）；
