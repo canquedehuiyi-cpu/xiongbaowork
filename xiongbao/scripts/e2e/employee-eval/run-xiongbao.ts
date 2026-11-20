@@ -41,6 +41,7 @@
  *                     （repeat 只能点名：多步办公题在同一位员工身上连做两次，记 firstRun / secondRun）；
  *                     smoke 套件里是场景名，另有 background
  *   EVAL_XIONGBAO_MODEL  只给熊宝侧换的模型名，空表示和 EVAL_MODEL 一样（Codex 侧不受影响）
+ *   EVAL_PROMPT_SLIM  on | off，传给服务器的 XIONGBAO_PROMPT_SLIM（提示词瘦身，服务器默认开）；off 用来做对照
  *   EVAL_PROMPT_CHARS 真模型下设 on，才记每道题发给模型的请求体大小（在服务器和提供方之间夹一个回环转发，
  *                     结果记录里的 promptChars，报告里的「提示词体积」表）；本机假模型一律记
  *   EVAL_TASK_MINUTES 每题墙钟上限，默认 20（冒烟场景用各自的上限）
@@ -497,6 +498,10 @@ async function startServer() {
       OPENAI_API_KEY: "eval-deployment-stub-not-a-secret",
       COPILOTKIT_TELEMETRY_DISABLED: "true",
       DO_NOT_TRACK: "1",
+      // 提示词瘦身开关（`EVAL_PROMPT_SLIM=on|off`，不写就用服务器的默认：开）。off 用来做对照。
+      ...(process.env.EVAL_PROMPT_SLIM?.trim()
+        ? { XIONGBAO_PROMPT_SLIM: process.env.EVAL_PROMPT_SLIM.trim() }
+        : {}),
       // 回环地址上的明文 http（假模型、请求记录、夹具网站）才打开开发用的开关；其余真模型运行里 SSRF 防护保持全开。
       ...(allowLoopback ? { AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true" } : {}),
     },

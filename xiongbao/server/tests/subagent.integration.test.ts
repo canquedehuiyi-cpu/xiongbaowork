@@ -21,8 +21,8 @@ import type { RunnerLike } from "@openbot/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { z } from "zod";
-import { SUBAGENT_GUIDANCE } from "../../shared/subagent";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
+import { SLIM_SUBAGENTS } from "../src/agents/slim-guidance";
 import { createSubagents, SUBAGENT_HANDED_BACK } from "../src/agents/subagent";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { createApprovalService } from "../src/approvals/service";
@@ -650,7 +650,11 @@ describe("a Bot gives part of its work to a subagent", () => {
 
     await ask("What is our expense rule?", {
       history: [
-        { id: randomUUID(), role: "user", content: "My locker code is QX-4417." },
+        {
+          id: randomUUID(),
+          role: "user",
+          content: "My locker code is QX-4417.",
+        },
         { id: randomUUID(), role: "assistant", content: "Noted." },
       ],
     });
@@ -757,9 +761,13 @@ describe("a Bot gives part of its work to a subagent", () => {
     ])
       expect(description).not.toContain(discouraging);
     // In the prompt, in a section of its own; a subagent, holding no such tool, is not told it.
-    expect(
-      text(first.messages[0] ?? { role: "system", content: "" }),
-    ).toContain(`<delegation>\n${SUBAGENT_GUIDANCE}`);
+    // 用户 2026-11-20 批准：瘦身默认开。怎么派已在 <subagents> 段（瘦身后的原文）里说了，<delegation> 段只剩
+    // 计划配合和难任务模型两句，仍是自己的一段；子代理手上没有这个工具，一样不被告知。
+    const prompt = text(first.messages[0] ?? { role: "system", content: "" });
+    expect(prompt).toContain(`<subagents>\n${SLIM_SUBAGENTS}`);
+    expect(prompt).toMatch(
+      /<delegation>\n[\s\S]*难的子任务可指定 model: "hard"/,
+    );
     const subs = subagentRequests();
     expect(subs).toHaveLength(2);
     for (const sub of subs)

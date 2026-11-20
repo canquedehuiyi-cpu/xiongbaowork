@@ -1,14 +1,12 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import {
-  PROVENANCE_GUIDANCE,
-  ROLE_SCOPE_GUIDANCE,
-} from "../../shared/bot-prompt";
+import { ROLE_SCOPE_GUIDANCE } from "../../shared/bot-prompt";
 import type { Persona } from "../../shared/persona";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import { createRuntimeAgentLoader } from "../src/agents/runtime-agents";
+import { SLIM_SOURCES } from "../src/agents/slim-guidance";
 import {
   bibleGuidance,
   builtInAgentConfiguration,
@@ -113,7 +111,8 @@ describe("the Bible section", () => {
     expect(prompt.indexOf("直接、简短。")).toBeLessThan(at);
     expect(at).toBeLessThan(prompt.indexOf("回答用中文。"));
     expect(prompt.indexOf("回答用中文。")).toBeLessThan(
-      prompt.indexOf(PROVENANCE_GUIDANCE),
+      // 用户 2026-11-20 批准：瘦身默认开，钉瘦身后的来源段；顺序的语义不变。
+      prompt.indexOf(SLIM_SOURCES),
     );
   });
 
