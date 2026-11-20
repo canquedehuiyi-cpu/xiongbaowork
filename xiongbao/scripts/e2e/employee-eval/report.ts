@@ -23,7 +23,13 @@ import {
   TOOL,
   type Tri,
 } from "./metrics";
-import type { EvalPath, EvalRecord, EvalResults, RunMetrics } from "./records";
+import type {
+  EvalPath,
+  EvalRecord,
+  EvalResults,
+  RunLearning,
+  RunMetrics,
+} from "./records";
 
 const DASH = "—";
 const TRI: Record<Tri, string> = { yes: "是", no: "否", "n/a": "不适用" };
@@ -234,6 +240,82 @@ export function repeatRows(
       ],
     ];
   });
+}
+
+/** 一次运行新增的东西：技能名（带引号）和记忆条数。 */
+const addedCell = (learning: RunLearning | undefined) =>
+  !learning
+    ? DASH
+    : `技能 ${learning.newSkills.length}${
+        learning.newSkills.length
+          ? `（${learning.newSkills.map((name) => `「${name}」`).join("、")}）`
+          : ""
+      } / 记忆 ${learning.newMemories}`;
+
+/** 一次运行之后等复盘的情况，一句话：结果、触发、步数、等了多久。 */
+const retroCell = (learning: RunLearning | undefined) => {
+  const retro = learning?.retro;
+  if (!retro) return DASH;
+  const waited = seconds(retro.waitedMs);
+  if (retro.ended === "timeout")
+    return `等满 ${waited}，没等到复盘结果${retro.trigger ? `（${retro.trigger} / ${retro.steps ?? "?"} 步）` : ""}`;
+  const how = retro.trigger
+    ? `（${retro.trigger} / ${retro.steps ?? "?"} 步）`
+    : "";
+  return `${retro.outcome ?? "新增了技能"}${how}，等了 ${waited}`;
+};
+
+/**
+ * 重复任务「学没学到」表：每一侧一行。两次之间复盘跑没跑、结果是什么，第一次之后新增的自写技能和员工形成的记忆，
+ * 第二次那一轮用到了哪些自写技能，第二次之后又新增了什么。没有学习记录的一侧（Codex、旧结果文件）不出行。
+ */
+export function learningRows(
+  sides: readonly (readonly [string, EvalResults | undefined])[],
+): string[][] {
+  return sides.flatMap(([label, results]) => {
+    const record = results?.records.find((item) => item.task === REPEAT_TASK);
+    const first = record?.firstRun?.learning;
+    const second = record?.secondRun?.learning;
+    if (!first && !second) return [];
+    return [
+      [
+        label,
+        retroCell(first),
+        addedCell(first),
+        second?.usedSkills.length
+          ? second.usedSkills.map((name) => `「${name}」`).join("、")
+          : second
+            ? "没有"
+            : DASH,
+        addedCell(second),
+      ],
+    ];
+  });
+}
+
+/**
+ * 后台调用表：每道题一行，题目自身的输入 token、后台调用（复盘、自动抽记忆）的次数和输入 token，以及含后台的
+ * 输入 token 合计。题目自身的步数和 token 只算主运行，后台成本在这里完整可见。没有 `backgroundCalls`
+ * 的记录（Codex、旧结果文件）不出行。
+ */
+export function backgroundRows(
+  sides: readonly (readonly [string, EvalResults | undefined])[],
+): string[][] {
+  return sides.flatMap(([label, results]) =>
+    (results?.records ?? []).flatMap((record) => {
+      const background = record.backgroundCalls;
+      if (!background) return [];
+      const own = record.tokens?.input ?? null;
+      return [
+        [
+          `${record.title}（${label}）`,
+          group(own),
+          `${background.count} 次 / ${group(background.inputTokens)}`,
+          own === null ? DASH : group(own + background.inputTokens),
+        ],
+      ];
+    }),
+  );
 }
 
 const chars = (value: number | undefined) =>
@@ -649,6 +731,51 @@ export function renderReport(results: EvalResults[]): string {
       ),
       "",
       "两次在各自干净的目录里做，各开一段新对话，员工是同一位；变化是第二次相对第一次。Codex 每次都是全新的环境，没有跨次的记忆，只作对照。",
+      "",
+    );
+
+  const learningTable = learningRows([
+    ...mineSides.map((mine) => [mine.label, mine.results] as const),
+    ["Codex", codex] as const,
+  ]);
+  if (learningTable.length)
+    out.push(
+      "## 重复任务：学没学到",
+      "",
+      table(
+        [
+          "一侧",
+          "两次之间的复盘",
+          "第一次之后新增（自写技能 / 员工形成的记忆）",
+          "第二次那一轮用到的自写技能",
+          "第二次之后新增",
+        ],
+        learningTable,
+      ),
+      "",
+      "新增是和该次运行开始前比的；复盘结果取自服务器日志里这次最后一轮的 `retrospect` 行，第一次结束后最多等 90 秒再开第二次，超时照常开始。「用到」指技能账里的使用次数涨了：那一轮对得上这件事、已经放进上下文的，或员工用 `refine_skill` 读过的。",
+      "",
+    );
+
+  const backgroundTable = backgroundRows([
+    ...mineSides.map((mine) => [mine.label, mine.results] as const),
+    ["Codex", codex] as const,
+  ]);
+  if (backgroundTable.length)
+    out.push(
+      "## 后台调用（复盘、自动抽记忆）",
+      "",
+      table(
+        [
+          "题目",
+          "题目自身输入 token",
+          "后台调用（次 / 输入 token）",
+          "含后台的输入 token 合计",
+        ],
+        backgroundTable,
+      ),
+      "",
+      "题目自身的步数和 token 只算主运行；复盘、自动抽记忆是轮结束后另起的模型调用（计量记成 unscoped），单独列在这里，合计把它们算进去。",
       "",
     );
 

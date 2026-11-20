@@ -168,10 +168,7 @@ import type {
   DeploymentModel,
 } from "./models/runtime-resolver";
 import { withModelRun } from "./models/token-metering";
-import {
-  heldSkillsGuidance,
-  pickedSkillGuidance,
-} from "./plugins/picked-skill";
+import { heldSkillsGuidance, skillGuidanceFor } from "./plugins/picked-skill";
 import { appCallsOfRun, withAppCallsOf } from "./plugins/run-calls";
 import type {
   ChoiceHint,
@@ -2238,7 +2235,7 @@ async function buildAgent(
    * from the same grants narrowing reads, fresh per request. See `picked-skill.ts`.
    */
   const pickedSkillFor = (input: RunAgentInput) =>
-    pickedSkillGuidance(input, skills);
+    skillGuidanceFor(input, skills);
   /*
    * 它手上握着哪些技能，作为索引交给模型。不带 input：同一批 grants 每次都是同一段字节，落在
    * prompt 的稳定前缀里。见 `heldSkillsGuidance`。
