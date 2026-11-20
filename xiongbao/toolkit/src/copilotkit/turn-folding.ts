@@ -93,6 +93,24 @@ export function foldBudgetFrom(raw: string | undefined): number | undefined {
   return Number.isFinite(value) && value >= 0 ? Math.floor(value) : undefined;
 }
 
+type Env = Record<string, string | undefined>;
+
+/**
+ * 折叠摘要写短一点（token 第五轮）：只留工具、字数、退出码一类的短字段、头尾各一句和存盘的路径，不留 `ok=true`、
+ * 空字段、耗时这类没信息量的。`XIONGBAO_TURN_FOLD_BRIEF=off` 回到原来的摘要。
+ */
+export function foldBriefOn(env: Env = process.env): boolean {
+  return env.XIONGBAO_TURN_FOLD_BRIEF?.trim().toLowerCase() !== "off";
+}
+
+/**
+ * 较早的写文件、改文件、长命令的参数里的大段文字（整份文件、整段脚本）也折成一句：它们发出去之后留在历史里，
+ * 之后每一步再发一遍，而文件已经写在工作区里。`XIONGBAO_TURN_FOLD_CALLS=off` 关掉。
+ */
+export function foldCallsOn(env: Env = process.env): boolean {
+  return env.XIONGBAO_TURN_FOLD_CALLS?.trim().toLowerCase() !== "off";
+}
+
 /** 折叠摘要的开头；已经是摘要的结果不再折。 */
 export const FOLDED_PREFIX = "[已折叠：";
 
@@ -174,8 +192,21 @@ function tailOf(text: string, max: number): string {
   return flat.length <= max ? flat : `…${flat.slice(-max)}`;
 }
 
-/** 一个结果的要点：JSON 取几个短字段和最长那个字段的头尾，别的文字取头尾。 */
-function gistOf(text: string): string {
+/** 摘要里不留的字段：每个结果都有、没有信息量的（成功标记、耗时、命令回显，命令在调用参数里）。 */
+const BRIEF_SKIP_KEYS = new Set([
+  "untrusted",
+  "ok",
+  "elapsedMs",
+  "command",
+  "outputFile",
+  "outputNote",
+]);
+
+/** 一个结果的要点：JSON 取几个短字段和最长那个字段的头尾，别的文字取头尾。`brief` 时更短。 */
+function gistOf(text: string, brief = false): string {
+  const head = brief ? 100 : 200;
+  const tail = brief ? 50 : 100;
+  const cap = brief ? 4 : 6;
   let parsed: unknown;
   if (text.startsWith("{")) {
     try {
@@ -190,6 +221,9 @@ function gistOf(text: string): string {
     let big = "";
     for (const [key, value] of Object.entries(parsed)) {
       if (key === "untrusted") continue;
+      if (brief && BRIEF_SKIP_KEYS.has(key)) continue;
+      // 简短摘要不留空字符串和 false：`stderr=`、`truncated=false` 没有信息。
+      if (brief && (value === "" || value === false)) continue;
       if (typeof value === "string" && value.length > 200) {
         if (value.length > big.length) {
           bigKey = key;
@@ -200,28 +234,86 @@ function gistOf(text: string): string {
         typeof value === "number" ||
         typeof value === "boolean"
       ) {
-        if (scalars.length < 6)
+        if (scalars.length < cap)
           scalars.push(`${key}=${squeeze(`${value}`, 80)}`);
       }
     }
     const body = bigKey
-      ? `${bigKey}：${squeeze(big, 200)}${big.length > 320 ? ` … ${tailOf(big, 100)}` : ""}`
+      ? `${bigKey}：${squeeze(big, head)}${big.length > head + tail + 20 ? ` … ${tailOf(big, tail)}` : ""}`
       : "";
     const joined = [scalars.join("，"), body].filter(Boolean).join("；");
     if (joined) return joined;
   }
-  return `${squeeze(text, 200)}${text.length > 320 ? ` … ${tailOf(text, 100)}` : ""}`;
+  return `${squeeze(text, head)}${text.length > head + tail + 20 ? ` … ${tailOf(text, tail)}` : ""}`;
 }
 
-/** 折叠后的摘要：确定性的，同一个结果永远折成同一句。 */
-export function foldedSummary(toolName: string, text: string): string {
+/** 折叠后的摘要：确定性的，同一个结果永远折成同一句。`brief` 为假时是原来的写法。 */
+export function foldedSummary(
+  toolName: string,
+  text: string,
+  brief = true,
+): string {
   const saved = /tool-outputs\/[\w.-]+\.txt/.exec(text)?.[0];
   // 要点只取读得懂的部分：二进制数据换成一句说明，别把它的头尾当要点。
-  return `${FOLDED_PREFIX}${toolName} 工具输出 ${text.length} 字，要点：${gistOf(withoutBlobs(text))}。${
+  const gist = gistOf(withoutBlobs(text), brief);
+  if (brief)
+    return `${FOLDED_PREFIX}${toolName} 工具输出 ${text.length} 字，${gist}。${
+      saved
+        ? `完整内容存在 ${saved}，用 computer_read_file 按行段读。`
+        : "原文已不在上下文里，需要时重新调用工具。"
+    }]`;
+  return `${FOLDED_PREFIX}${toolName} 工具输出 ${text.length} 字，要点：${gist}。${
     saved
       ? `完整内容存在 ${saved}，需要细节时用 computer_read_file 按行段读，`
       : ""
   }原文不在上下文里了，需要时重新调用工具，或按行段读取。]`;
+}
+
+/** 参数里的大段文字可以折的工具和字段：写文件的内容、改文件的新旧段、长命令（整段脚本）。 */
+const FOLDABLE_CALL_FIELDS: Record<string, { fields: string[]; done: string }> =
+  {
+    computer_write_file: { fields: ["contents"], done: "已写入文件" },
+    computer_edit_file: {
+      fields: ["old_string", "new_string"],
+      done: "已用于改文件",
+    },
+    computer_run_command: { fields: ["command"], done: "已执行" },
+  };
+
+/** 一个调用参数折完的样子；没有可折的大段文字时答 undefined。 */
+function foldedCallInput(
+  toolName: string,
+  input: unknown,
+): { input: unknown; before: string; after: string } | undefined {
+  const rule = FOLDABLE_CALL_FIELDS[toolName];
+  if (!rule) return undefined;
+  let object: Record<string, unknown> | undefined;
+  try {
+    const parsed = typeof input === "string" ? JSON.parse(input) : input;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed))
+      object = parsed as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+  if (!object) return undefined;
+  const next: Record<string, unknown> = { ...object };
+  let changed = false;
+  for (const field of rule.fields) {
+    const value = object[field];
+    if (typeof value === "string" && value.length >= FOLD_MIN_CHARS) {
+      next[field] =
+        `${FOLDED_PREFIX}${value.length} 字，${rule.done}，不在上下文里了]`;
+      changed = true;
+    }
+  }
+  if (!changed) return undefined;
+  const asText = (value: unknown) =>
+    typeof input === "string" ? JSON.stringify(value) : value;
+  return {
+    input: asText(next),
+    before: `${toolName}${typeof input === "string" ? input : JSON.stringify(input ?? {})}`,
+    after: `${toolName}${JSON.stringify(next)}`,
+  };
 }
 
 type Result = {
@@ -233,6 +325,8 @@ type Result = {
   tokens: number;
   summary: string;
   summaryTokens: number;
+  /** 是调用参数里的大段文字而不是工具结果：折完替换的是参数。 */
+  call?: unknown;
 };
 
 export type FoldOptions = {
@@ -242,6 +336,10 @@ export type FoldOptions = {
   keepSteps?: number;
   /** 绝对预算（token）：默认 {@link FOLD_BUDGET_TOKENS}；0 关掉，只按窗口比例。 */
   budget?: number;
+  /** 摘要写短一点；默认看 `XIONGBAO_TURN_FOLD_BRIEF`。 */
+  brief?: boolean;
+  /** 也折较早的写文件、改文件、长命令的参数；默认看 `XIONGBAO_TURN_FOLD_CALLS`。 */
+  calls?: boolean;
 };
 
 /**
@@ -255,6 +353,8 @@ export function foldEarlyResults(
     threshold = FOLD_AT,
     keepSteps = FOLD_KEEP_STEPS,
     budget = FOLD_BUDGET_TOKENS,
+    brief = foldBriefOn(),
+    calls: foldCalls = foldCallsOn(),
   }: FoldOptions,
 ): Prompt {
   // 每个工具调用属于第几个带工具调用的回合。
@@ -271,6 +371,28 @@ export function foldEarlyResults(
       );
       if (calls.length > 0) {
         for (const id of calls) roundOfCall.set(id, rounds);
+        if (foldCalls)
+          (message.content as Part[]).forEach((part, partIndex) => {
+            const call = part as {
+              type: string;
+              toolName: string;
+              input: unknown;
+            };
+            if (call.type !== "tool-call") return;
+            const folded = foldedCallInput(call.toolName, call.input);
+            if (!folded) return;
+            results.push({
+              message: index,
+              part: partIndex,
+              round: rounds,
+              toolName: call.toolName,
+              text: "",
+              tokens: estimateTokens(folded.before),
+              summary: "",
+              summaryTokens: estimateTokens(folded.after),
+              call: folded.input,
+            });
+          });
         rounds += 1;
       }
     }
@@ -291,7 +413,7 @@ export function foldEarlyResults(
           view.text.startsWith(FOLDED_PREFIX)
         )
           return;
-        const summary = foldedSummary(result.toolName, view.text);
+        const summary = foldedSummary(result.toolName, view.text, brief);
         results.push({
           message: index,
           part: partIndex,
@@ -350,9 +472,10 @@ export function foldEarlyResults(
       ...message,
       content: (message.content as Part[]).map((part, partIndex) => {
         const result = parts.get(partIndex);
-        return result
-          ? { ...part, output: { type: "text", value: result.summary } }
-          : part;
+        if (!result) return part;
+        return result.call !== undefined
+          ? { ...part, input: result.call }
+          : { ...part, output: { type: "text", value: result.summary } };
       }),
     } as Message;
   });

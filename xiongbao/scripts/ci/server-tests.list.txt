@@ -202,6 +202,7 @@ tests/baidu-netdisk-rest.test.ts
 tests/ban-freezes-execution.test.ts
 tests/batch-grants-shared-use.integration.test.ts
 tests/board-card-claim.integration.test.ts
+tests/board-turn-marker.test.ts
 tests/bot-access.test.ts
 tests/bot-answer-attribution.test.ts
 tests/bot-browser-routes.integration.test.ts
@@ -862,6 +863,7 @@ tests/skill-tenant-slugs.integration.test.ts
 tests/skill-tools.integration.test.ts
 tests/skill-uninstall-grants.integration.test.ts
 tests/skill-usage.test.ts
+tests/slim-guidance-size.test.ts
 tests/spa-business-routes.integration.test.ts
 tests/sso-required-sessions.integration.test.ts
 tests/staffing-app-key.integration.test.ts
@@ -946,6 +948,7 @@ tests/tool-calls-come-back.integration.test.ts
 tests/tool-chooser-sign-in.test.ts
 tests/tool-images.test.ts
 tests/tool-output-offload.test.ts
+tests/tool-output-size.test.ts
 tests/tool-search.test.ts
 tests/tool-selection-environment-restoration-driver.test.ts
 tests/tool-selection-environment-restoration.test.ts

@@ -313,6 +313,8 @@ export function createChannelDispatch(deps: ChannelDispatchDeps) {
         initiator: PERSON_INITIATOR,
         // The card above is this turn's record; the runner must not file a second one.
         cardOwnedByCaller: carded,
+        // A round of the card the person handed over: no page is drawing for it (`asBoardTurn`).
+        boardCard: true,
       });
       if (carded) await closeCard(tenantId, runId, false);
       await say(actor, channel, runId, `${bot.name}：${result.replyText}`);

@@ -107,6 +107,7 @@ import {
 } from "./agents/provider-refusal";
 import { isUnattended, runModeOf } from "./agents/run-mode";
 import {
+  omitsAnswerFormat,
   SLIM_NO_HANDOFF,
   slimDelegationGuidance,
   slimMediaGuidance,
@@ -231,7 +232,7 @@ import {
   withRunSideEvents,
 } from "./threads/run-side-events";
 import { keepStreamAlive } from "./threads/stream-keep-alive";
-import { asPersonChat } from "./threads/unattended-card";
+import { asPersonChat, boardTurnNow } from "./threads/unattended-card";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 import { holdsOwnWebSearch, webResearchGuidance } from "./web/guidance";
@@ -1151,7 +1152,7 @@ export function builtInAgentConfiguration(
    * nobody knows yet (a Bot built before its first request), and the computer guidance goes in
    * whenever the deployment has a computer, as it always did.
    */
-  run: { mode?: RunMode; usesComputer?: boolean } = {},
+  run: { mode?: RunMode; usesComputer?: boolean; boardCard?: boolean } = {},
   /**
    * 员工手上握着的技能，一行一条：命令、名字、一句干什么、档位。索引，不是正文。
    *
@@ -1332,6 +1333,10 @@ export function builtInAgentConfiguration(
       ...(slim ? slimWorkingGuidance : workingGuidance)({
         untrusted: UNTRUSTED_GUIDANCE,
         asking: builtInAskingGuidance({ apps: holdsAppTools(tools) }),
+        // 看板卡的一轮没有页面在画组件，不放「回答格式」段（token 第五轮，见 `omitsAnswerFormat`）。
+        ...(slim && omitsAnswerFormat(run.boardCard)
+          ? { answerFormat: false }
+          : {}),
       }),
       // M3: the fork's guidance; see the note on the plugins imports.
       ...promptSection("apps", holdings),
@@ -2205,6 +2210,7 @@ async function buildAgent(
 
   // Whether anybody is watching this run: a routine or a check-in is told it runs unattended.
   const mode = runModeOf(initiator);
+  const boardCard = boardTurnNow();
   /*
    * This run's app calls, a few at a time. A subagent is this Bot built again inside the run's
    * `run_subagent` call, and takes the run's calls rather than a set of its own (`appCallsOfRun`).
@@ -2656,6 +2662,8 @@ async function buildAgent(
            * whose owner's computer it may use. Unknown before the first request.
            */
           ...(input ? { usesComputer: input.tools.some(isComputerTool) } : {}),
+          // 派活的入口自己说的（`asBoardTurn`），在构建这一轮时读一次，之后只带着值走。
+          ...(boardCard ? { boardCard } : {}),
         },
         heldSkillsFor,
         clientWaiting,

@@ -268,6 +268,8 @@ test("the worker runs the coworker named, on the channel's thread, in the claime
   expect(turn?.threadId).toBe(CHANNEL.threadId);
   expect(turn?.runId).toBe(runId);
   expect(turn?.cardOwnedByCaller).toBe(true);
+  // 用户 2026-11-20 批准的看板卡标记：派活的一轮自己说这是看板卡的一轮（提示里据此不放「回答格式」）。
+  expect(turn?.boardCard).toBe(true);
   expect(turn?.initiator).toEqual({ kind: "person" });
   // The persisted user line is the person's own words, @Name included, so the transcript reads true.
   expect(turn?.userMessage).toMatchObject({

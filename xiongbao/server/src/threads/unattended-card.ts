@@ -27,6 +27,23 @@ const personChat = new AsyncLocalStorage<true>();
 
 const store = new AsyncLocalStorage<{ cardRef?: string }>();
 
+const boardTurn = new AsyncLocalStorage<true>();
+
+/**
+ * Run `body` as a round of a task-board card (a dispatch), or, when `board` is false, outside any such
+ * round, so a turn another entry starts from inside one is not taken for it. Set where the turn is
+ * accepted (`serverTurnScope`), from the entry's own say-so (`boardCard`), never from what the turn
+ * holds or does.
+ */
+export function asBoardTurn<T>(board: boolean, body: () => T): T {
+  return board ? boardTurn.run(true, body) : boardTurn.exit(body);
+}
+
+/** Whether the turn being built runs as a round of a task-board card. See {@link asBoardTurn}. */
+export function boardTurnNow(): boolean {
+  return boardTurn.getStore() === true;
+}
+
 /**
  * Run `body`, and let the turns it starts write the thread without also filing a card.
  *
