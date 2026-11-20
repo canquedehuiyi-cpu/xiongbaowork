@@ -155,6 +155,39 @@ function exfiltrates(text: string): boolean {
   return false;
 }
 
+/** 一条 `rm` 命令：命令名之后到 shell 分隔符或中文标点为止的参数。 */
+const RM_COMMAND = /\brm((?:\s+[^\s;&|\n，。；、）)」』`]+)+)/gi;
+
+/**
+ * 递归删除的目标是不是危险的那种：根目录、家目录、绝对路径（含 `C:`）、变量或命令替换、带 `..` 的、通配符、
+ * 当前目录本身（`.`、`./`）。工作区里有名字的子目录（`build`、`out`、`.cache`、`node_modules`）不算：
+ * 清掉构建产物和缓存重来是常见的做法，真正执行时审批照样要问。
+ */
+function dangerousTarget(raw: string): boolean {
+  const target = raw.replace(/^["']|["']$/g, "");
+  if (target === "" || target === "." || target === "./") return true;
+  if (/^[/~$\\]|^[A-Za-z]:/.test(target)) return true;
+  if (/\$[({A-Za-z_]/.test(target)) return true;
+  if (/(?:^|[/\\])\.\.(?:[/\\]|$)/.test(target)) return true;
+  return /[*?[\]{}]/.test(target);
+}
+
+/** 一段文字里有没有递归删除危险目标的 `rm`（见 {@link dangerousTarget}）；递归了但没写目标的也算。 */
+function deletesBroadly(text: string): boolean {
+  for (const match of text.matchAll(RM_COMMAND)) {
+    const args = (match[1] ?? "").trim().split(/\s+/);
+    const flags = args.filter((arg) => arg.startsWith("-"));
+    const recursive = flags.some(
+      (flag) => flag === "--recursive" || /^-[a-z]*r/i.test(flag),
+    );
+    if (!recursive) continue;
+    if (flags.includes("--no-preserve-root")) return true;
+    const targets = args.filter((arg) => !arg.startsWith("-"));
+    if (targets.length === 0 || targets.some(dangerousTarget)) return true;
+  }
+  return false;
+}
+
 /** 技能里不许写的越权步骤：教员工绕过审批、忽略规则、做破坏性的事、瞒着本人。 */
 const OVERREACH: readonly {
   reason: string;
@@ -177,8 +210,7 @@ const OVERREACH: readonly {
   },
   {
     reason: "破坏性的系统命令（递归删除、递归改权限、格式化）",
-    shape:
-      /\brm\s+(?:-\w+\s+)*(?:-[a-z]*r[a-z]*|--recursive)\b|chmod\s+-R\s*777|mkfs\b/i,
+    test: (text) => /chmod\s+-R\s*777|mkfs\b/i.test(text) || deletesBroadly(text),
   },
   {
     reason: "把文件、密钥或凭据发到外部网址或域名",
