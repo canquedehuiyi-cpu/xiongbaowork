@@ -13,6 +13,7 @@ import {
   skills,
 } from "../src/db/schema";
 import { createPluginStore } from "../src/plugins/store";
+import { grantedSkills } from "../src/plugins/tools";
 import { EventType } from "@ag-ui/client";
 import type { LanguageModel } from "ai";
 import { tasks, threadRunEvents, threadRuns, threads } from "../src/db/schema";
@@ -40,6 +41,7 @@ const other = `skill-other-${suite}`;
 const bot = `skill-bot-${suite}`;
 const secondBot = `skill-second-${suite}`;
 const otherBot = `skill-other-bot-${suite}`;
+const teamBot = `skill-team-bot-${suite}`;
 const asOwner = <T>(fn: () => Promise<T>) => runAsTenant(owner, fn);
 const asOther = <T>(fn: () => Promise<T>) => runAsTenant(other, fn);
 
@@ -101,12 +103,33 @@ beforeAll(async () => {
       }
     });
 });
+beforeAll(async () => {
+  // A Team Bot: the owner's, stamped `team`, which a teammate runs.
+  await runAsTenant("platform", async () => {
+    await database.insert(agents).values({
+      id: teamBot,
+      tenantId: "team",
+      name: teamBot,
+      type: "built_in",
+      configuration: {},
+    });
+    await database.insert(agentProfiles).values({
+      agentId: teamBot,
+      tenantId: "team",
+      ownerUserId: owner,
+      title: teamBot,
+      roleDescription: "Assist",
+      avatarSeed: teamBot,
+      visibility: "private",
+    });
+  });
+});
 afterAll(async () => {
   await runAsTenant("platform", async () => {
     await database.delete(users).where(inArray(users.id, [owner, other]));
     await database
       .delete(agents)
-      .where(inArray(agents.id, [bot, secondBot, otherBot]));
+      .where(inArray(agents.id, [bot, secondBot, otherBot, teamBot]));
   });
   await database.$client.close();
 });
@@ -709,6 +732,63 @@ describe("the retrospective, against the real store", () => {
     // Another person's frame cannot read the card at all.
     await asOther(async () => {
       expect(await cardRetroTurn(database, taskId)).toBeNull();
+    });
+  });
+});
+
+describe("a Team Bot: a skill it wrote for itself is its owner's, not the team's", () => {
+  test("the owner's own run holds it; a teammate's run on the same Bot does not", async () => {
+    const slug = slugFor(teamBot, "团队员工的做法");
+    await asOwner(async () => {
+      const result = await saveSkill(
+        depsFor(teamBot),
+        draft("团队员工的做法"),
+        "tool",
+      );
+      expect(result).toMatchObject({ ok: true, status: "active" });
+      expect(
+        (await plugins.listForAgent(teamBot)).skills.map((skill) => skill.slug),
+      ).toContain(slug);
+    });
+    // The teammate's turn: the Bot's grants are the team's, but the skill is a row of the owner's.
+    await asOther(async () => {
+      expect(
+        (await plugins.listForAgent(teamBot)).skills.map((skill) => skill.slug),
+      ).not.toContain(slug);
+      expect(
+        (await grantedSkills({ store: plugins, botId: teamBot })).map(
+          (skill) => skill.slug,
+        ),
+      ).not.toContain(slug);
+      expect(
+        await database.select().from(skills).where(eq(skills.slug, slug)),
+      ).toEqual([]);
+      expect(await database.select().from(learnedSkills)).toEqual([]);
+    });
+  });
+
+  test("a teammate cannot write one onto the owner's Bot: refused, and nothing is left behind", async () => {
+    await asOther(async () => {
+      const result = await saveSkill(
+        { ...depsFor(teamBot), ownerUserId: other },
+        draft("队友想写的"),
+        "tool",
+      );
+      expect(result.ok).toBe(false);
+      expect(
+        await database
+          .select()
+          .from(skills)
+          .where(eq(skills.ownerUserId, other)),
+      ).toEqual([]);
+      expect(await database.select().from(learnedSkills)).toEqual([]);
+    });
+    await asOwner(async () => {
+      expect(
+        (await skillRows()).some(
+          (row) => row.slug === slugFor(teamBot, "队友想写的"),
+        ),
+      ).toBe(false);
     });
   });
 });
