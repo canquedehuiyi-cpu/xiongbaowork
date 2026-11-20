@@ -342,6 +342,11 @@ const serverEnv: Record<string, string> = {
   OPENAI_BASE_URL: MODEL_BASE_URL,
   OPENAI_API_KEY: "g7-mock-key-not-a-secret",
   AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+  // This gate drives the page-run computer path: the page's computer is answered by hand below and
+  // the deployment has none of its own. Since 期九·六 a chat's computer tools are the server's by
+  // default, so it pins `off`, the way back operators keep for one release; the server-run path is
+  // G8's (`background-chat.ts`) and the real-model evaluation's.
+  XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS: "off",
   COPILOTKIT_TELEMETRY_DISABLED: "true",
   DO_NOT_TRACK: "1",
 };

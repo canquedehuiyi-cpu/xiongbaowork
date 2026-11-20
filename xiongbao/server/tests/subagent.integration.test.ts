@@ -650,7 +650,7 @@ describe("a Bot gives part of its work to a subagent", () => {
 
     await ask("What is our expense rule?", {
       history: [
-        { id: randomUUID(), role: "user", content: "My locker code is 4417." },
+        { id: randomUUID(), role: "user", content: "My locker code is QX-4417." },
         { id: randomUUID(), role: "assistant", content: "Noted." },
       ],
     });
@@ -673,7 +673,8 @@ describe("a Bot gives part of its work to a subagent", () => {
     expect(
       sub.messages.filter((message) => message.role === "user"),
     ).toHaveLength(1);
-    expect(JSON.stringify(sub.messages)).not.toContain("4417");
+    // Not plain digits: the suite's ids are random hex (`notes_594417eb` once carried "4417").
+    expect(JSON.stringify(sub.messages)).not.toContain("QX-4417");
     expect(JSON.stringify(sub.messages)).not.toContain(
       "What is our expense rule?",
     );
