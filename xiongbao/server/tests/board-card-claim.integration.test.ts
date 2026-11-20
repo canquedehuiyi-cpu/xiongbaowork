@@ -119,14 +119,54 @@ describe("原子认领", () => {
   test("同一位员工同时来领多次，并行上限照样守住", async () => {
     await reset();
     cap = 1;
-    await put("一");
-    await put("二");
-    await put("三");
-    const results = await Promise.all(
-      [0, 1, 2].map(() => asOwner(() => store.claimNextCard(alice))),
+    try {
+      await put("一");
+      await put("二");
+      await put("三");
+      const results = await Promise.all(
+        [0, 1, 2].map(() => asOwner(() => store.claimNextCard(alice))),
+      );
+      expect(results.filter(Boolean)).toHaveLength(1);
+    } finally {
+      cap = 2;
+    }
+  });
+
+  test("真重叠一：别的事务正握着这张卡的行锁时，领的人跳过它（不等、不重复领）", async () => {
+    await reset();
+    const card = await put("被别人握着的");
+    let during: unknown = "unset";
+    await asOwner(() =>
+      db.transaction(async (holder) => {
+        await holder.execute(sql`select id from board_cards where id = ${card.id} for update`);
+        // 握着锁的这段时间里，另一个事务来领：卡在被锁，只能跳过。
+        during = await store.claimNextCard(bob);
+      }),
     );
-    expect(results.filter(Boolean)).toHaveLength(1);
-    cap = 2;
+    expect(during).toBeNull();
+    // 锁放了以后，这张卡还在，能被领。
+    expect((await asOwner(() => store.claimNextCard(bob)))?.id).toBe(card.id);
+  });
+
+  test("真重叠二：同一位员工的领卡，在别的事务握着它的锁时排队等着，放了才往下走", async () => {
+    await reset();
+    await put("等锁的");
+    let settled = false;
+    let pending: Promise<unknown> = Promise.resolve();
+    await asOwner(() =>
+      db.transaction(async (holder) => {
+        await holder.execute(
+          sql`select pg_advisory_xact_lock(hashtextextended(${`board-claim\u001f${owner}\u001f${alice}`}, 0))`,
+        );
+        pending = asOwner(() => store.claimNextCard(alice)).finally(() => {
+          settled = true;
+        });
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        // 锁还握着：领卡的那个事务被它拦在门口，没有往下走。
+        expect(settled).toBe(false);
+      }),
+    );
+    expect(((await pending) as { title: string } | null)?.title).toBe("等锁的");
   });
 });
 
