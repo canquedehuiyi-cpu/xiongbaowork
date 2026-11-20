@@ -117,9 +117,9 @@ export function deploymentCapabilitiesQueryOptions() {
  *
  * Both editions have memory, and the personal one stops having it only when its operator turns it off
  * (`XIONGBAO_PERSONAL_MEMORY=off`). The server says which in `memory`, read from the same rule that
- * decides its memory tools, routes and sweep (`editionHasMemory`), not from Intelligence's
- * entitlement: that answer only chooses where memory is kept (Intelligence, or OpenBot's own tables)
- * and changes from one minute to the next while Intelligence starts, so a screen gated on it would come
+ * decides its memory tools, routes and sweep (`editionHasMemory`), not from the back end's
+ * entitlement: that answer only chooses where memory is kept (the back end, or the app's own tables)
+ * and changes from one minute to the next while the back end starts, so a screen gated on it would come
  * and go.
  *
  * A server that does not say (one from before the field) is read as before: no memory in the personal

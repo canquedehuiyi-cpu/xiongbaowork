@@ -98,15 +98,15 @@ export function personalMemoryEnabled(
 /**
  * Whether this edition has memory: what a person's Bots remember about them, the apps they learn it
  * from, and the background sync that reads them. Both editions have it. The personal edition used to
- * be left out (OpenBot Desktop's local Intelligence licence has no memory), but memory is kept in
- * OpenBot's own tables whenever Intelligence cannot hold it, so there was never a safety or billing
+ * be left out (the desktop's local back end is licensed without memory), but memory is kept in
+ * this product's own tables whenever that back end cannot hold it, so there was never a safety or billing
  * reason to withhold it there: it was a product choice, and it is now the other one. The one person
  * can switch it off with `XIONGBAO_PERSONAL_MEMORY=off`, and then the personal edition is what it was:
  * no screens, no routes, no tools, no sources and no place in a Bot's context.
  *
- * The edition and that switch, not Intelligence's memory entitlement: that answer only chooses where
- * memory is kept (Intelligence, or OpenBot's own tables when Intelligence is unlicensed or
- * unreachable), and it changes while Intelligence starts. The browser is told the same answer
+ * The edition and that switch, not the back end's memory entitlement: that answer only chooses where
+ * memory is kept (the back end, or this product's own tables when it is unlicensed or
+ * unreachable), and it changes while that back end starts. The browser is told the same answer
  * (`memory` in `/api/capabilities`, read by `offersMemory` in the app's `lib/deployment/queries.ts`).
  */
 export function editionHasMemory(

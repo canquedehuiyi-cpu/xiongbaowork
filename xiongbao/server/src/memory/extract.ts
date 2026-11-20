@@ -7,7 +7,7 @@ import type { MemoryStore } from "./store";
  * 每一轮结束后，从这一轮的对话里抽出值得记住的事（期 2 · Task 2.2）。
  *
  * 抽出来的和员工自己调用 `save_observed_memory` 存的是同一种记忆：同一个存储（`MemoryStore.formMemory`），
- * 状态一律是「待你确认」，只给形成它的这一位员工，不进跨员工共享、也不同步到 Intelligence（只有确认或
+ * 状态一律是「待你确认」，只给形成它的这一位员工，不进跨员工共享、也不同步到后端（只有确认或
  * 改过的才会）。人在记忆页里审阅、编辑、删除。
  *
  * 抽错的代价比漏抽大：一次性闲聊、员工自己的猜测、工具返回的错误信息被存成「事实」，以后每一轮都会
@@ -84,7 +84,11 @@ Reply with one JSON object and nothing else:
 {"memories":[{"content":"one sentence","kind":"preference|file|contact|workflow|fact","confidence":0.0-1.0}]}
 If nothing is worth remembering, reply {"memories":[]}. At most ${MAX_MEMORIES_PER_TURN} memories.`;
 
-type MessageLike = { role?: unknown; content?: unknown };
+type MessageLike = {
+  role?: unknown;
+  content?: unknown;
+  toolCalls?: unknown;
+};
 
 function textOf(content: unknown): string {
   if (typeof content === "string") return content;
