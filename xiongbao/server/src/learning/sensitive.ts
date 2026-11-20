@@ -155,6 +155,52 @@ function exfiltrates(text: string): boolean {
   return false;
 }
 
+/** 一条 `rm` 命令：命令名之后到 shell 分隔符或中文标点为止的参数（反引号不算分隔，留给目标检查）。 */
+const RM_COMMAND = /(\bxargs\s+(?:-\S+\s+)*)?\brm((?:\s+[^\s;&|\n，。；、）)」』]+)+)/gi;
+/** 技能里的占位写法 `<dir>`、`<工作目录>`：指工作目录，不是重定向。 */
+const PLACEHOLDER = /<[\w\u4e00-\u9fa5 .-]{1,24}>/g;
+/** `cd` 或 `pushd` 到别处：之后的相对目标就不在工作区里了。 */
+const CHANGE_DIR = /\b(?:cd|pushd)\s+([^\s;&|\n，。；、）)」』]+)/gi;
+
+/**
+ * 这个路径是不是危险的那种：根目录、家目录、绝对路径（含 `C:`）、变量或命令替换（`$`、`%VAR%`、反引号）、
+ * 带 `..` 的、通配符、重定向、当前目录本身（`.`、`./`、`./.`）、`.git`。引号和反斜杠先去掉再看，
+ * `''/etc`、`.\./x` 这类拆开的写法也认得出。工作区里有名字的子目录（`build`、`out`、`.cache`）不算。
+ */
+function dangerousPath(raw: string): boolean {
+  if (/[`<>]|%\w+%|\$[({A-Za-z_]/.test(raw)) return true;
+  const path = raw.replace(/["'\\]/g, "").replace(/(?:\/\.?)+$/, "");
+  if (path === "" || path === ".") return true;
+  if (/^[/~$]|^[A-Za-z]:/.test(path)) return true;
+  if (/(?:^|\/)\.\.(?:\/|$)/.test(path)) return true;
+  if (/(?:^|\/)\.git(?:\/|$)/i.test(path)) return true;
+  return /[*?[\]{}]/.test(path);
+}
+
+/**
+ * 一段文字里有没有递归删除危险目标的 `rm`（见 {@link dangerousPath}）：递归了但没写目标的、带
+ * `--no-preserve-root` 的、目标从 `xargs` 来的、同一段里先 `cd` 到危险位置的，都算。全角字符先归一化。
+ */
+function deletesBroadly(text: string): boolean {
+  const plain = text.normalize("NFKC").replace(PLACEHOLDER, "x");
+  const leavesWorkspace = [...plain.matchAll(CHANGE_DIR)].some((match) =>
+    dangerousPath(match[1] ?? ""),
+  );
+  for (const match of plain.matchAll(RM_COMMAND)) {
+    const args = (match[2] ?? "").trim().split(/\s+/);
+    const flags = args.filter((arg) => arg.startsWith("-"));
+    const recursive = flags.some(
+      (flag) => /^--rec/i.test(flag) || /^-[a-z]*r/i.test(flag),
+    );
+    if (!recursive) continue;
+    if (match[1] || leavesWorkspace) return true;
+    if (flags.includes("--no-preserve-root")) return true;
+    const targets = args.filter((arg) => !arg.startsWith("-"));
+    if (targets.length === 0 || targets.some(dangerousPath)) return true;
+  }
+  return false;
+}
+
 /** 技能里不许写的越权步骤：教员工绕过审批、忽略规则、做破坏性的事、瞒着本人。 */
 const OVERREACH: readonly {
   reason: string;
@@ -177,8 +223,9 @@ const OVERREACH: readonly {
   },
   {
     reason: "破坏性的系统命令（递归删除、递归改权限、格式化）",
-    shape:
-      /\brm\s+(?:-\w+\s+)*(?:-[a-z]*r[a-z]*|--recursive)\b|chmod\s+-R\s*777|mkfs\b/i,
+    test: (text) =>
+      /chmod\s+-R\s*777|mkfs\b/i.test(text.normalize("NFKC")) ||
+      deletesBroadly(text),
   },
   {
     reason: "把文件、密钥或凭据发到外部网址或域名",
