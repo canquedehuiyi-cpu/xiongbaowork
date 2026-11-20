@@ -114,7 +114,9 @@ describe("the source request's fingerprint", () => {
 describe("the same kind of task finds the skill the review wrote", () => {
   test("without the fingerprint the generalised skill misses the real second request (the bug)", () => {
     expect(
-      relatedSelfSkills(SECOND_REQUEST, [skillWith("auto-aaaaaaaaaa", GENERAL)]),
+      relatedSelfSkills(SECOND_REQUEST, [
+        skillWith("auto-aaaaaaaaaa", GENERAL),
+      ]),
     ).toEqual([]);
   });
 
@@ -359,14 +361,17 @@ describe("on OpenBot's own harness the list rides on the message, not on the pre
   test("a new kind of task carries the list; 继续 on it does not", async () => {
     const task = "帮我把仓库里所有的旧接口调用换成新接口，换完跑一遍测试";
     const first = await sent([{ id: "q", role: "user", content: task }]);
-    expect(first).toContain("订机票");
-    expect(first).toContain("出差要订机票和酒店的时候");
+    // The standing index of held skills carries the name and summary every time; the list is this
+    // message's own section, told apart by its opening line and the id in parentheses.
+    expect(first).toContain("You have written down how you did these kinds");
+    expect(first).toContain("(id: auto-1111111111)");
     wire.length = 0;
     const follow = await sent([
       { id: "q", role: "user", content: task },
       { id: "a", role: "assistant", content: "做了一半" },
       { id: "q2", role: "user", content: "继续" },
     ]);
-    expect(follow).not.toContain("出差要订机票和酒店的时候");
+    expect(follow).not.toContain("You have written down how you did these");
+    expect(follow).not.toContain("(id: auto-1111111111)");
   });
 });

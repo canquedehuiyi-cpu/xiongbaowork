@@ -21,7 +21,11 @@ import {
 import { relatedSelfSkills } from "../src/plugins/picked-skill";
 import { createPluginStore } from "../src/plugins/store";
 import { grantedSkills } from "../src/plugins/tools";
-import { type SelfSkillDeps, saveSkill } from "../src/skills/save-tool";
+import {
+  type SelfSkillDeps,
+  type SkillDraft,
+  saveSkill,
+} from "../src/skills/save-tool";
 import { withSourceFingerprints } from "../src/skills/usage";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -56,7 +60,7 @@ const FIRST = taskPrompt("repeat", "eval/repeat-first");
 const SECOND = taskPrompt("repeat", "eval/repeat-second");
 
 /** 复盘按 RETRO_SYSTEM 写出的泛化技能：没有人名、日期、文件名。 */
-const draft = {
+const draft: SkillDraft = {
   name: "会议纪要转待办CSV与邮件草稿",
   when: "收到一份项目周会纪要（.md），要求把明确分派给某位负责人的待办整理成待办表（.csv），再为每位负责人写一份邮件草稿（.md）时",
   steps: [
@@ -67,7 +71,7 @@ const draft = {
   pitfalls: [],
   verify: "待办表行数与纪要里分派的事项数一致",
   scope: "self",
-} as const;
+};
 
 beforeAll(async () => {
   await runAsTenant("platform", () =>
@@ -211,9 +215,9 @@ describe("the request a skill was learned from is kept as a fingerprint, not as 
       const mine = held.find((skill) => skill.title === draft.name);
       expect(mine).toBeDefined();
       // The review's `when` is general; it is the fingerprint that finds it.
-      expect(relatedSelfSkills(SECOND, held).map((skill) => skill.slug)).toEqual(
-        [mine?.slug as string],
-      );
+      expect(
+        relatedSelfSkills(SECOND, held).map((skill) => skill.slug),
+      ).toEqual([mine?.slug as string]);
       expect(
         relatedSelfSkills(taskPrompt("refactor", "eval/refactor"), held),
       ).toEqual([]);
