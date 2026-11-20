@@ -371,6 +371,85 @@ describe("a card of several rounds is reviewed once, whichever round handed it i
     expect(seen[0]).toMatchObject({ trigger: "card_delivered" });
   });
 
+  test("work carried on in the same conversation after a hand-in, under a card of its own, still counts toward the delivered card", async () => {
+    let steps = 3;
+    const reviewed: RetroTurn[] = [];
+    const attempts: RetroTurn[] = [];
+    const { observe, logs } = harness({
+      retrospect: async (turn): Promise<RetroOutcome> => {
+        attempts.push(turn);
+        if (!shouldRetrospect(turn, {})) return { outcome: "skipped" };
+        reviewed.push(turn);
+        return { outcome: "saved", id: "auto-1", status: "active" };
+      },
+      // r1 handed card-1 in with too little behind it; the later rounds were dispatched as new cards.
+      deliveredCard: async (runId) => (runId === "r1" ? "card-1" : null),
+      cardOfRound: async () => null,
+      cardHandedInBefore: async () => "card-1",
+      cardTurn: async (taskId, current) => ({
+        ownerUserId: "u1",
+        agentId: "bot",
+        threadId: "t1",
+        runId: current.runId,
+        request: "整理动作清单",
+        reply: "好了",
+        steps: traceStepsOf(work(steps)),
+        failed: false,
+        cardId: taskId,
+        trigger: "card_accepted",
+      }),
+    });
+    await observe(turnOf([...work(1), ...delivery("card-1")], { runId: "r1" }));
+    expect(reviewed).toHaveLength(0);
+    steps = 9;
+    expect(await observe(turnOf(work(6), { runId: "r2" }))).toMatchObject({
+      outcome: "saved",
+    });
+    await observe(turnOf(work(6, "y"), { runId: "r3" }));
+    expect(reviewed).toHaveLength(1);
+    expect(reviewed[0]).toMatchObject({
+      trigger: "card_delivered",
+      cardId: "card-1",
+    });
+    // r1 (too thin) and r2 (enough) were the card's; r3 is an ordinary 6-step round, below the long-turn bar.
+    expect(attempts.map((turn) => turn.trigger)).toEqual([
+      "card_delivered",
+      "card_delivered",
+      "steps",
+    ]);
+    expect(JSON.parse(logs[2] ?? "{}")).toMatchObject({
+      trigger: "steps",
+      reason: "steps",
+    });
+  });
+
+  test("a card the conversation already reviewed does not swallow a long round of something else", async () => {
+    const { observe, seen } = harness({
+      deliveredCard: async () => null,
+      cardOfRound: async () => null,
+      cardHandedInBefore: async () => "card-1",
+      cardTurn: async (taskId) => ({
+        ownerUserId: "u1",
+        agentId: "bot",
+        threadId: "t1",
+        runId: "r1",
+        request: "x",
+        reply: "y",
+        steps: traceStepsOf(work(9)),
+        failed: false,
+        cardId: taskId,
+        trigger: "card_accepted",
+      }),
+    });
+    await observe(turnOf(work(7), { runId: "r1" }));
+    // card-1 is reviewed now; the next round of the conversation is judged on its own steps.
+    await observe(turnOf(work(20, "q"), { runId: "r2" }));
+    expect(seen.map((turn) => turn.trigger)).toEqual([
+      "card_delivered",
+      "steps",
+    ]);
+  });
+
   test("a skip that is not about the step count (cooldown, daily limit) closes the card too", async () => {
     let tries = 0;
     const { observe, logs } = harness({

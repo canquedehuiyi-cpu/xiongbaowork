@@ -16,6 +16,7 @@ import {
   createRetrospector,
   deliveredCardOf,
   deliveredCardOfRound,
+  handedInCardOfThread,
   markInjectedSkillsUsed,
 } from "../src/learning/retrospect";
 import { relatedSelfSkills } from "../src/plugins/picked-skill";
@@ -206,6 +207,38 @@ describe("a delivered card is reviewed, without waiting for the person to accept
     });
     await runAsTenant(`someone-else-${suite}`, async () => {
       expect(await deliveredCardOfRound(database, hung)).toBeNull();
+    });
+  });
+
+  test("the card last handed in on a conversation is found for the same employee, within the window", async () => {
+    const run = `run-thread-${suite}`;
+    const taskId = await cardDeliveredIn(run);
+    const now = new Date();
+    await asOwner(async () => {
+      expect(
+        await handedInCardOfThread(database, `thread-${run}`, bot, now),
+      ).toBe(taskId);
+      // Another conversation, another employee: not this card.
+      expect(
+        await handedInCardOfThread(database, `thread-else-${suite}`, bot, now),
+      ).toBeNull();
+      expect(
+        await handedInCardOfThread(database, `thread-${run}`, `${bot}-x`, now),
+      ).toBeNull();
+      // Long after the hand-in it is no longer the work being carried on.
+      expect(
+        await handedInCardOfThread(
+          database,
+          `thread-${run}`,
+          bot,
+          new Date(now.getTime() + 3 * 60 * 60_000),
+        ),
+      ).toBeNull();
+    });
+    await runAsTenant(`someone-else-${suite}`, async () => {
+      expect(
+        await handedInCardOfThread(database, `thread-${run}`, bot, now),
+      ).toBeNull();
     });
   });
 
