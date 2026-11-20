@@ -115,7 +115,15 @@ export type HeartbeatRunnerDeps = {
       agentId: string;
       threadId: string;
     },
-    input: { id: string; text: string; kind: "reply" },
+    input: {
+      id: string;
+      text: string;
+      kind: "reply";
+      /**
+       * 醒来这一轮跨进了安静时段、或本人不在时：按「人不在时的通知」发，和别的主动通知一样，在安静时段里推迟到结束。
+       */
+      away: { push: boolean; chat: boolean; chatText: string };
+    },
   ) => Promise<void>;
   /** 有事时：在看板上留一张卡（路线同巡检：只有有事的才留）。 */
   board?: Pick<TaskProjector, "opened" | "finished">;
@@ -210,7 +218,12 @@ export function createHeartbeatRunner(deps: HeartbeatRunnerDeps) {
           agentId: payload.agentId,
           threadId: channel.threadId,
         },
-        { id: `heartbeat:${runId}`, text, kind: "reply" },
+        {
+          id: `heartbeat:${runId}`,
+          text,
+          kind: "reply",
+          away: { push: true, chat: true, chatText: text },
+        },
       )
       .catch((error: unknown) =>
         logged("heartbeat-notify-failed", {

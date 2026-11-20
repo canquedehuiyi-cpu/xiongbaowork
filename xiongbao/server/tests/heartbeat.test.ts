@@ -129,6 +129,7 @@ function fixture(
     finishedItems: 0,
     released: [] as Record<string, unknown>[],
     claimCalls: 0,
+    awayNotices: [] as unknown[],
   };
   const heartbeat =
     options.settings === null
@@ -217,6 +218,7 @@ function fixture(
       : {}),
     notify: async (_scope, input) => {
       log.notified.push(input.text);
+      log.awayNotices.push(input.away);
     },
     board: {
       opened: async (input) => {
@@ -279,6 +281,8 @@ describe("醒来这一轮", () => {
     expect(report.ran[0]?.outcome).toBe("acted");
     expect(log.activity).toEqual(["构建挂了，我已经重跑。"]);
     expect(log.notified).toEqual(["构建挂了，我已经重跑。"]);
+    // 按「人不在时的通知」发：安静时段里会被推迟，和别的主动通知一致。
+    expect(log.awayNotices[0]).toMatchObject({ push: true, chat: true });
     expect(log.cards).toHaveLength(1);
   });
 
