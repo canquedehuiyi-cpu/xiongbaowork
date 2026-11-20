@@ -12,11 +12,14 @@ import { agents, users } from "../src/db/schema/core";
 import { agentProfiles } from "../src/db/schema/coworker";
 import {
   createRetroObserver,
+  cardRetroTurn,
   createRetrospector,
   deliveredCardOf,
-  cardRetroTurn,
+  markInjectedSkillsUsed,
 } from "../src/learning/retrospect";
+import { relatedSelfSkills } from "../src/plugins/picked-skill";
 import { createPluginStore } from "../src/plugins/store";
+import { grantedSkills } from "../src/plugins/tools";
 import type { SelfSkillDeps } from "../src/skills/save-tool";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -199,6 +202,41 @@ describe("a delivered card is reviewed, without waiting for the person to accept
       expect(
         (await plugins.listForAgent(bot)).skills.map((skill) => skill.title),
       ).toEqual([draft.name]);
+    });
+  });
+});
+
+describe("the next run of the same kind of task is given what the first one learned", () => {
+  const SECOND_RUN =
+    "把 eval/repeat-second/actions.csv 里的动作清单整理成带图表的 xlsx 汇总表，按负责人汇总，做好后交付给领导。";
+
+  test("the skill the review granted is picked for a similar request, and counted as used", async () => {
+    await asOwner(async () => {
+      const held = await grantedSkills({ store: plugins, botId: bot });
+      const slug = (
+        await database
+          .select()
+          .from(learnedSkills)
+          .where(eq(learnedSkills.agentId, bot))
+      )[0]?.skillSlug;
+      expect(slug).toBeDefined();
+      const related = relatedSelfSkills(SECOND_RUN, held);
+      expect(related.map((skill) => skill.slug)).toEqual([slug as string]);
+      expect(related[0]?.instructions).toContain("summary.xlsx");
+      // A request of another kind is not given it.
+      expect(relatedSelfSkills("订一张下周去上海的机票", held)).toEqual([]);
+
+      await markInjectedSkillsUsed(
+        database,
+        { agentId: bot, messages: [{ role: "user", content: SECOND_RUN }] },
+        async (agentId) => (await plugins.listForAgent(agentId)).skills,
+        new Date("2026-11-20T11:00:00Z"),
+      );
+      const [row] = await database
+        .select()
+        .from(learnedSkills)
+        .where(eq(learnedSkills.skillSlug, slug as string));
+      expect(row?.useCount).toBe(1);
     });
   });
 });

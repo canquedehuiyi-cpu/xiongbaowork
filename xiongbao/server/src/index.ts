@@ -409,6 +409,7 @@ import {
   createRetroObserver,
   createRetrospector,
   deliveredCardOf,
+  markInjectedSkillsUsed,
   markPickedSkillUsed,
 } from "./learning/retrospect";
 import { createLocalLearningEngine } from "./local-learning/engine";
@@ -4947,7 +4948,17 @@ await startupLifecycle.run(async (startup) => {
       cardTurn: (taskId, current) =>
         cardRetroTurn(database, taskId, "card_delivered", current),
       // 人用 `/命令` 点了员工自己写的技能：记成用过。
-      markUsed: (turn) => markPickedSkillUsed(database, turn, new Date()),
+      markUsed: async (turn) => {
+        const at = new Date();
+        await markPickedSkillUsed(database, turn, at);
+        // 对得上这件事、已经放进上下文的自写技能：同样记成用过。
+        await markInjectedSkillsUsed(
+          database,
+          turn,
+          async (agentId) => (await pluginStore.listForAgent(agentId)).skills,
+          at,
+        );
+      },
     }),
   );
   localThreadRunner.observeTurns(async (turn) => {

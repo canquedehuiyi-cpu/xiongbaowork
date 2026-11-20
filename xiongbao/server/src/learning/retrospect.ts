@@ -15,7 +15,12 @@ import {
   RETRO_PER_DAY_DEFAULT,
 } from "./daily-limit";
 import { answerFailed } from "./tool-outcome";
-import { leadingSkillCommand } from "../plugins/picked-skill";
+import {
+  leadingSkillCommand,
+  type PickableSkill,
+  relatedSelfSkills,
+  requestTextOf,
+} from "../plugins/picked-skill";
 import {
   markSkillsUsed,
   type SelfSkillDeps,
@@ -450,6 +455,30 @@ export async function markPickedSkillUsed(
 ): Promise<void> {
   const command = leadingSkillCommand(personTextRaw(turn.messages));
   if (command) await markSkillsUsed(database, [command], at);
+}
+
+/**
+ * 这一轮里对得上这件事、因此已经放进上下文的员工自己写的技能（`plugins/picked-skill.ts` 的 `skillGuidanceFor`
+ * 挑的同一批）：记成用过，评测和「学习」里才看得出它被用上了，也不会被当成 30 天没用的。在本人帧里调用。
+ */
+export async function markInjectedSkillsUsed(
+  database: Database,
+  turn: { agentId: string; messages: readonly MessageLike[] },
+  heldBy: (agentId: string) => Promise<readonly PickableSkill[]>,
+  at: Date,
+): Promise<void> {
+  const held = await heldBy(turn.agentId);
+  const related = relatedSelfSkills(
+    requestTextOf(
+      turn.messages as readonly { role?: string; content?: unknown }[],
+    ),
+    held,
+  );
+  await markSkillsUsed(
+    database,
+    related.map((skill) => skill.slug),
+    at,
+  );
 }
 
 function personTextRaw(messages: readonly MessageLike[]): string {

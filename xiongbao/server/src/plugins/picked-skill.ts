@@ -16,6 +16,11 @@
  */
 import type { RunAgentInput } from "@ag-ui/client";
 import { PICKED_SKILL_PROP } from "@openbot/toolkit/run-turn";
+import {
+  REFINE_SKILL_TOOL,
+  SELF_SKILL_SLUG_PREFIX,
+} from "../../../shared/self-skills";
+import { textOf } from "../agents/message-text";
 import { latestUserText } from "./selection";
 
 export { PICKED_SKILL_PROP };
@@ -167,4 +172,123 @@ function shortGrade(skill: PickableSkill): string | undefined {
     : skill.runnable === "degraded"
       ? "(this deployment can only partly run it)"
       : undefined;
+}
+
+/** 一轮里最多把几条相关的自写技能直接放进上下文。 */
+export const RELATED_SKILL_LIMIT = 2;
+/** 每条放进上下文的技能正文最多多少字符；更长的只放开头，全文用 `refine_skill` 只带 id 读出。 */
+export const RELATED_SKILL_CHARS = 1400;
+/** 技能的「适用场景」里至少有这么多个词（单字词组、英文词）出现在这件事的说法里才算相关。 */
+const MIN_SHARED_TOKENS = 4;
+/** 技能的「适用场景」里至少这一成的词出现在这件事的说法里才算相关。 */
+const MIN_SHARED_RATIO = 0.3;
+
+/** 员工自己写的技能：命令名带 `auto-`。人写的、部署自带的不在这里，它们照旧要点命令才给正文。 */
+export const isSelfWrittenSkill = (skill: { slug: string }) =>
+  skill.slug.startsWith(SELF_SKILL_SLUG_PREFIX);
+
+/**
+ * 一段话拆成的「词」：英文和数字按词，汉字按相邻两字（中文没有空格，两字是最小的有意思的单位）。
+ * 文件名里的点和下划线也切开，`actions.csv` 是 `actions` 和 `csv`。
+ */
+export function tokensOf(text: string): Set<string> {
+  const tokens = new Set<string>();
+  const lowered = text.normalize("NFKC").toLowerCase();
+  for (const word of lowered.match(/[a-z0-9]{2,}/g) ?? []) tokens.add(word);
+  for (const run of lowered.match(/[\u4e00-\u9fff]+/g) ?? []) {
+    if (run.length === 1) tokens.add(run);
+    for (let index = 0; index + 1 < run.length; index += 1)
+      tokens.add(run.slice(index, index + 2));
+  }
+  return tokens;
+}
+
+/**
+ * 这一轮是在做什么事：最后一条人说的话；那是一句很短的「继续」「好」时，加上第一条，这样追问的那几轮
+ * 也认得出还是同一件事。
+ */
+export function requestTextOf(
+  messages: readonly { role?: string; content?: unknown }[],
+): string {
+  const latest = latestUserText(messages);
+  if (latest.length >= 40) return latest;
+  const first = messages.find((message) => message.role === "user");
+  const opening = first ? textOf(first.content) : "";
+  return opening && opening !== latest ? `${opening}\n${latest}` : latest;
+}
+
+/** 技能的「什么时候用」：存下来的正文第一段是「适用场景：…」，没有就用摘要。 */
+function whenOf(skill: PickableSkill): string {
+  const instructions = skill.instructions ?? "";
+  const line = /^适用场景：(.*)$/m.exec(instructions)?.[1];
+  return `${skill.title} ${line ?? skill.summary ?? ""}`;
+}
+
+/**
+ * 这件事和哪几条员工自己写的技能对得上：按技能的「什么时候用」和标题里的词有多少出现在这件事的说法里排，
+ * 够多才算，最多 `limit` 条。只看员工自己写的（`auto-`），也只看有正文的。
+ */
+export function relatedSelfSkills<T extends PickableSkill>(
+  text: string,
+  held: readonly T[],
+  limit = RELATED_SKILL_LIMIT,
+): T[] {
+  const wanted = tokensOf(text);
+  if (wanted.size === 0) return [];
+  const scored: { skill: T; score: number }[] = [];
+  for (const skill of held) {
+    if (!isSelfWrittenSkill(skill) || !skill.instructions?.trim()) continue;
+    const keys = tokensOf(whenOf(skill));
+    if (keys.size === 0) continue;
+    let shared = 0;
+    for (const key of keys) if (wanted.has(key)) shared += 1;
+    const score = shared / keys.size;
+    if (shared >= MIN_SHARED_TOKENS && score >= MIN_SHARED_RATIO)
+      scored.push({ skill, score });
+  }
+  return scored
+    .sort((one, two) =>
+      two.score !== one.score
+        ? two.score - one.score
+        : one.skill.slug < two.skill.slug
+          ? -1
+          : 1,
+    )
+    .slice(0, limit)
+    .map((entry) => entry.skill);
+}
+
+/**
+ * 员工自己写过、和这一轮的事对得上的技能，以简短的形式直接放进上下文（不必等人点命令，也不必等员工想起来去读）：
+ * 一条一段，正文超长只放开头，全文用 `refine_skill` 只带 id 读出。没有对得上的就是 undefined。
+ */
+export function relatedSkillsGuidance(
+  input: Pick<RunAgentInput, "messages">,
+  held: readonly PickableSkill[],
+): string | undefined {
+  const related = relatedSelfSkills(requestTextOf(input.messages), held);
+  if (related.length === 0) return undefined;
+  const sections = related.map((skill) => {
+    const body = (skill.instructions ?? "").trim();
+    const shown =
+      body.length > RELATED_SKILL_CHARS
+        ? `${body.slice(0, RELATED_SKILL_CHARS)}…\n(cut short: call ${REFINE_SKILL_TOOL} with only the id "${skill.slug}" to read the whole skill)`
+        : body;
+    return `### ${skill.title || skill.slug} (id: ${skill.slug})\n${shown}`;
+  });
+  return [
+    "You have done this kind of work before and wrote down how. The skills below are your own and match what you were just asked; they are already here, nobody needs to send a command for them. Follow their steps and checks where they fit, and skip what this task does not need.",
+    `If a step is wrong or something is missing, correct it afterwards with ${REFINE_SKILL_TOOL} (the id and one sentence on what to change).`,
+    ...sections,
+  ].join("\n\n");
+}
+
+/**
+ * 这一轮交给员工的技能指引：人点了命令就是那一条；没点，就是员工自己写过、和这件事对得上的那一两条。
+ */
+export function skillGuidanceFor(
+  input: Pick<RunAgentInput, "messages" | "forwardedProps">,
+  held: readonly PickableSkill[],
+): string | undefined {
+  return pickedSkillGuidance(input, held) ?? relatedSkillsGuidance(input, held);
 }
