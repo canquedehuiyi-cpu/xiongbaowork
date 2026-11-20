@@ -758,7 +758,7 @@ export function renderReport(results: EvalResults[]): string {
         ]),
       ),
       "",
-      "记账步 = 一步里只有 accept_task、update_plan、deliver_task、request_extension 的步，再加交付被接受之后的那一步（没有任何工具调用的收尾话）；和读取、命令同一步发出的不算。一步记在一类名下，优先级 交付 > 接活 > 计划。步数 = 对话快照里助手消息的条数；记账占比 = 记账步总数 ÷ 步数（含申请延期的步）。这几步各自要把整段历史再发一遍，占比越低越好；Codex 没有这几步，不列。",
+      "记账步 = 一步里只有 accept_task、update_plan、deliver_task、request_extension 的步，再加交付被接受之后的那一步（没有任何工具调用的收尾话）；和读取、命令同一步发出的不算。一步记在一类名下，优先级 交付 > 接活 > 计划。步数 = 模型调用次数（和上面的表同一批 `model_token_calls`）；记账占比 = 记账步总数 ÷ 步数（含申请延期的步）。这几步各自要把整段历史再发一遍，占比越低越好；Codex 没有这几步，不列。",
       "",
     );
   }
