@@ -124,6 +124,7 @@ function fixture(
     notified: [] as string[],
     cards: [] as string[],
     finishedItems: 0,
+    claimCalls: 0,
   };
   const heartbeat =
     options.settings === null
@@ -140,6 +141,7 @@ function fixture(
     schedule: async (_o: string, _a: string, chain: string, at: Date) => {
       log.scheduled.push({ chain, at });
     },
+    runsToday: async () => (options.begin === "capped" ? 99 : 0),
     beginRun: async () => {
       log.began += 1;
       return options.begin ?? true;
@@ -194,7 +196,12 @@ function fixture(
     gate: async () => options.gate ?? null,
     dailyRuns: async () => 24,
     ...(options.claimed !== undefined
-      ? { claimCards: async () => options.claimed ?? 0 }
+      ? {
+          claimCards: async () => {
+            log.claimCalls += 1;
+            return options.claimed ?? 0;
+          },
+        }
       : {}),
     notify: async (_scope, input) => {
       log.notified.push(input.text);
@@ -297,11 +304,12 @@ describe("醒来这一轮", () => {
     expect(log.scheduled).toEqual([{ chain: "chain-1", at: until }]);
   });
 
-  test("超了每天次数上限：不叫模型，下一次照排", async () => {
-    const { runner, log } = fixture({ begin: "capped" });
+  test("超了每天次数上限：不叫模型，也不去认领卡，下一次照排", async () => {
+    const { runner, log } = fixture({ begin: "capped", claimed: 3 });
     const report = await runner.sweep();
     expect(report.skipped[0]?.reason).toBe("capped");
     expect(log.turns).toEqual([]);
+    expect(log.claimCalls).toBe(0);
     expect(log.scheduled).toHaveLength(1);
   });
 

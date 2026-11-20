@@ -247,7 +247,14 @@ export function createHeartbeatRunner(deps: HeartbeatRunnerDeps) {
     });
     if (refusal) return skipped(refusal);
 
-    // 先认领看板上派给自己岗位的卡（不用模型）；清单是空的又没有卡可领，这一次就什么都不做、什么都不留。
+    // 先看每天的上限，再去认领：超了这一次什么都不做。只认领卡不占名额，但也不能越过上限去认领。
+    if (
+      (await deps.store.runsToday(payload.ownerUserId, payload.agentId)) >=
+      (await deps.dailyRuns(payload.agentId))
+    )
+      return skipped("capped");
+
+    // 认领看板上派给自己岗位的卡（不用模型）；清单是空的又没有卡可领，这一次就什么都不做、什么都不留。
     const claimed = deps.claimCards
       ? await deps
           .claimCards({
@@ -265,14 +272,15 @@ export function createHeartbeatRunner(deps: HeartbeatRunnerDeps) {
     if (!checklist && claimed === 0) return skipped("empty");
 
     const runId = crypto.randomUUID();
-    const threadId = deps.mintThreadId();
+    // 只认领了卡、没有叫模型的醒来：记账，但没有线程，不占每天的名额。
+    const threadId = checklist ? deps.mintThreadId() : null;
     const admitted = await deps.store.beginRun({
       id: runId,
       ownerUserId: payload.ownerUserId,
       agentId: payload.agentId,
       scheduledFor: new Date(payload.scheduledFor),
       threadId,
-      dailyLimit: await deps.dailyRuns(payload.agentId),
+      dailyLimit: checklist ? await deps.dailyRuns(payload.agentId) : null,
     });
     if (admitted !== true) return skipped("capped");
 
@@ -289,7 +297,7 @@ export function createHeartbeatRunner(deps: HeartbeatRunnerDeps) {
             routineId: `heartbeat:${payload.agentId}`,
             agentId: payload.agentId,
             // 不挂在任何对话上的新线程：醒来一次一条，不拖着之前的历史。
-            threadId,
+            threadId: threadId ?? deps.mintThreadId(),
             instruction: heartbeatInstruction({ checklist, now: now() }),
             userMessage: {
               id: `heartbeat:${runId}`,

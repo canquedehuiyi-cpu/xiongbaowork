@@ -1,5 +1,17 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, gte, inArray, isNull, lt, lte, ne, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  ne,
+  sql,
+} from "drizzle-orm";
 import { refuseExternalEmployeeWork } from "../agents/acp/external";
 import type { Database } from "../db/client";
 import { auditEvents, users } from "../db/schema/core";
@@ -10,6 +22,7 @@ import {
   proactiveSettings,
   proactiveSuggestions,
 } from "../db/schema/proactive";
+import { heartbeatRuns } from "../db/schema/heartbeat";
 import { botTasks } from "../db/schema/tasks";
 import { workItems } from "../db/schema/work";
 import { lockDefaults, recordOptOut } from "../memory/defaults";
@@ -378,7 +391,22 @@ export function createProactiveStore(database: Database) {
           gte(proactiveCheckInRuns.startedAt, sql`now() - interval '24 hours'`),
         ),
       );
-    return row?.count ?? 0;
+    /*
+     * 心跳（期 3·3.1）和巡检共用每天次数上限，所以这里也算上心跳醒来的次数；心跳那边（`heartbeat/store.ts`）
+     * 同样算上巡检，两边用同一把锁（`lockDefaults`）。
+     */
+    const [beats] = await executor
+      .select({ count: sql<number>`count(*)::int` })
+      .from(heartbeatRuns)
+      .where(
+        and(
+          eq(heartbeatRuns.ownerUserId, ownerUserId),
+          eq(heartbeatRuns.agentId, agentId),
+          isNotNull(heartbeatRuns.threadId),
+          gte(heartbeatRuns.startedAt, sql`now() - interval '24 hours'`),
+        ),
+      );
+    return (row?.count ?? 0) + (beats?.count ?? 0);
   }
   return {
     get,

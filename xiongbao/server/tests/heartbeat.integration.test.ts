@@ -250,3 +250,39 @@ test("没事的醒来在库里只留一行 quiet：不写对话、不发通知",
   expect(after.find((row) => row.outcome === "quiet")?.cardsClaimed).toBe(0);
   clock = new Date(clock.getTime());
 });
+
+test("心跳和巡检双向共用上限：心跳用满后巡检开不了，巡检用满后心跳开不了；只认领卡的醒来不占名额", async () => {
+  const channel = `${prefix}-channel2`;
+  const proactive = createProactiveStore(db);
+  const other = `${prefix}-bot2`;
+  const setting = await asOwner(async () => {
+    await db.insert(agents).values({ id: other, name: other, type: "built_in", configuration: {} });
+    await db.insert(channels).values({ id: channel, name: "hb2", description: "" });
+    return proactive.create(owner, { agentId: other, channelId: channel, subject: "邮件" }, randomUUID());
+  });
+  const base = { ownerUserId: owner, agentId: other, scheduledFor: new Date() };
+  // 只认领卡的醒来（没有线程）不占名额。
+  await asOwner(() => store.beginRun({ ...base, id: randomUUID(), threadId: null, dailyLimit: null }));
+  expect(await asOwner(() => store.runsToday(owner, other))).toBe(0);
+  // 心跳用掉 1 个名额，上限 1：巡检再开一次被挡。
+  expect(await asOwner(() => store.beginRun({ ...base, id: randomUUID(), threadId: "t", dailyLimit: 1 }))).toBe(true);
+  expect(
+    await asOwner(() =>
+      proactive.beginRun({ id: randomUUID(), setting, trigger: "schedule", threadId: "p", dailyLimit: 1 }),
+    ),
+  ).toBe("capped");
+  // 反过来：清掉心跳的账，巡检先开一次，心跳再开被挡。
+  await asOwner(() => db.delete(heartbeatRuns).where(eq(heartbeatRuns.agentId, other)));
+  expect(
+    await asOwner(() =>
+      proactive.beginRun({ id: randomUUID(), setting, trigger: "schedule", threadId: "p2", dailyLimit: 1 }),
+    ),
+  ).toBe(true);
+  expect(await asOwner(() => store.beginRun({ ...base, id: randomUUID(), threadId: "t2", dailyLimit: 1 }))).toBe("capped");
+  await asOwner(async () => {
+    await db.delete(proactiveCheckInRuns).where(eq(proactiveCheckInRuns.settingId, setting.id));
+    await db.delete(proactiveSettings).where(eq(proactiveSettings.id, setting.id));
+    await db.delete(channels).where(eq(channels.id, channel));
+    await db.delete(agents).where(eq(agents.id, other));
+  });
+});

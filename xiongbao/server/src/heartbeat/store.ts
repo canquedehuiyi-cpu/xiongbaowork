@@ -8,7 +8,7 @@
  * 所以排队也在这里：打开或改了间隔就换一个新的串号，把第一次排上；原来那一串醒来时看到串号对不上，自己收掉。
  */
 import { randomUUID } from "node:crypto";
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
 import {
   HEARTBEAT_KEY,
   type HeartbeatPatch,
@@ -21,6 +21,7 @@ import type { Database } from "../db/client";
 import { agents } from "../db/schema/core";
 import { heartbeatRuns } from "../db/schema/heartbeat";
 import { proactiveCheckInRuns } from "../db/schema/proactive";
+import { lockDefaults } from "../memory/defaults";
 import { runAsTenant } from "../tenant/context";
 import type { WorkQueue } from "../work/queue";
 import {
@@ -151,6 +152,8 @@ export function createHeartbeatStore(
           and(
             eq(heartbeatRuns.ownerUserId, ownerUserId),
             eq(heartbeatRuns.agentId, agentId),
+            // 只数用了模型的醒来；只认领了卡的（没有线程）不占每天的名额。
+            isNotNull(heartbeatRuns.threadId),
             gte(heartbeatRuns.startedAt, sql`now() - interval '24 hours'`),
           ),
         );
@@ -180,13 +183,14 @@ export function createHeartbeatStore(
       ownerUserId: string;
       agentId: string;
       scheduledFor: Date;
-      threadId: string;
-      dailyLimit: number;
+      /** 没用模型、只认领了卡的醒来没有线程，也不占每天的名额。 */
+      threadId: string | null;
+      /** 每天最多几次；null 是不数（只认领卡的醒来）。 */
+      dailyLimit: number | null;
     }): Promise<true | "capped"> {
       return database.transaction(async (transaction) => {
-        await transaction.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended(${`heartbeat-runs\u001f${input.ownerUserId}\u001f${input.agentId}`}, 0))`,
-        );
+        // 和巡检开始一次检查用的是同一把锁：两边合起来数每天次数，谁先谁后都不会一起挤进最后一个名额。
+        await lockDefaults(transaction, input.ownerUserId, input.agentId);
         await transaction
           .update(heartbeatRuns)
           .set({
@@ -208,6 +212,7 @@ export function createHeartbeatStore(
             and(
               eq(heartbeatRuns.ownerUserId, input.ownerUserId),
               eq(heartbeatRuns.agentId, input.agentId),
+              isNotNull(heartbeatRuns.threadId),
               gte(heartbeatRuns.startedAt, sql`now() - interval '24 hours'`),
             ),
           );
@@ -225,7 +230,10 @@ export function createHeartbeatStore(
               ),
             ),
           );
-        if ((heart?.count ?? 0) + (check?.count ?? 0) >= input.dailyLimit)
+        if (
+          input.dailyLimit !== null &&
+          (heart?.count ?? 0) + (check?.count ?? 0) >= input.dailyLimit
+        )
           return "capped" as const;
         await transaction.insert(heartbeatRuns).values({
           id: input.id,
