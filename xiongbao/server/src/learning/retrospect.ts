@@ -9,6 +9,11 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { taskEvents, tasks, threadRunEvents } from "../db/schema";
 import { mask } from "../local-learning/evidence";
+import {
+  createDailyLimiter,
+  dailyLimitOf,
+  RETRO_PER_DAY_DEFAULT,
+} from "./daily-limit";
 import { answerFailed } from "./tool-outcome";
 import { leadingSkillCommand } from "../plugins/picked-skill";
 import {
@@ -28,7 +33,7 @@ import { firstJsonObject } from "../wakerflows/generator";
  * 存成技能，值得就产出一份技能草稿（什么情况下用、步骤、坑点、校验方法），交给 `saveSkill` 按生效规则处理。
  *
  * WHEN. 一轮结束时工具调用的步数达到 `XIONGBAO_RETRO_MIN_STEPS`（默认 15），或者一张看板卡被本人验收通过
- * （`cardRetroTurn`，这时门槛只是别太短）。失败的轮不复盘。员工这一轮自己已经调用过 `save_skill` 的不再复盘。
+ * （`cardRetroTurn`，这时门槛只是别太短）。失败的轮不复盘。员工这一轮自己已经调用过 `save_learned_skill` 的不再复盘。
  *
  * WHAT IT READS. 轨迹，不只是聊天文字：每一步用了什么工具、成功还是失败（失败的步骤是坑点的来源），
  * 再加这件事是怎么提的、最后怎么答的。工具的参数和返回只带一小段、脱敏过的开头：那里最可能有文件内容、
@@ -320,7 +325,7 @@ export type RetrospectorDeps = {
     agentId: string,
     purpose: "light" | "work",
   ) => Promise<LanguageModel | null>;
-  /** 这位员工现在有没有这项功能：工具权限里关掉 `save_skill` 的不复盘。缺省总是有。 */
+  /** 这位员工现在有没有这项功能：工具权限里关掉 `save_learned_skill` 的不复盘。缺省总是有。 */
   enabled?: (
     ownerUserId: string,
     agentId: string,
@@ -331,6 +336,11 @@ export type RetrospectorDeps = {
   now?: () => Date;
   cooldownMs?: number;
   log?: (line: string) => void;
+  /**
+   * 每位员工每天最多复盘几次（`XIONGBAO_RETRO_PER_DAY`，默认 6）；用完静默跳过。只数真的调了模型的。
+   * 测试可以换成自己的。
+   */
+  limiter?: { take(key: string): boolean };
 };
 
 export type RetroOutcome =
@@ -346,6 +356,12 @@ export type RetroOutcome =
 export function createRetrospector(deps: RetrospectorDeps) {
   const log = deps.log ?? ((line: string) => console.error(line));
   const lastAt = new Map<string, number>();
+  const limiter =
+    deps.limiter ??
+    createDailyLimiter({
+      limit: () =>
+        dailyLimitOf("XIONGBAO_RETRO_PER_DAY", RETRO_PER_DAY_DEFAULT),
+    });
   return async function retrospectTurn(turn: RetroTurn): Promise<RetroOutcome> {
     try {
       if (!shouldRetrospect(turn)) return { outcome: "skipped" };
@@ -364,6 +380,8 @@ export function createRetrospector(deps: RetrospectorDeps) {
         return { outcome: "skipped" };
       const model = await deps.modelFor(turn.agentId, "light");
       if (!model) return { outcome: "skipped" };
+      // 今天这位员工的次数用完了：静默跳过。
+      if (!limiter.take(key)) return { outcome: "skipped" };
       lastAt.set(key, now);
       const draft = await retrospect(turn, {
         model,

@@ -1,4 +1,9 @@
 import { generateText, type LanguageModel } from "ai";
+import {
+  createDailyLimiter,
+  dailyLimitOf,
+  MEMORY_EXTRACT_PER_DAY_DEFAULT,
+} from "../learning/daily-limit";
 import { findSensitive } from "../learning/sensitive";
 import { firstJsonObject } from "../wakerflows/generator";
 import type { MemoryStore } from "./store";
@@ -303,6 +308,11 @@ export type MemoryExtractorDeps = {
   ) => boolean | Promise<boolean>;
   call?: ExtractionCall;
   log?: (line: string) => void;
+  /**
+   * 每位员工每天最多抽几次（`XIONGBAO_MEMORY_EXTRACT_PER_DAY`，默认 40）；用完静默跳过。只数真的调了模型的。
+   * 测试可以换成自己的。
+   */
+  limiter?: { take(key: string): boolean };
 };
 
 /**
@@ -311,6 +321,15 @@ export type MemoryExtractorDeps = {
  */
 export function createMemoryExtractor(deps: MemoryExtractorDeps) {
   const log = deps.log ?? ((line: string) => console.error(line));
+  const limiter =
+    deps.limiter ??
+    createDailyLimiter({
+      limit: () =>
+        dailyLimitOf(
+          "XIONGBAO_MEMORY_EXTRACT_PER_DAY",
+          MEMORY_EXTRACT_PER_DAY_DEFAULT,
+        ),
+    });
   return async function extractTurnMemories(
     turn: ExtractableTurn,
   ): Promise<{ saved: number }> {
@@ -322,6 +341,9 @@ export function createMemoryExtractor(deps: MemoryExtractorDeps) {
       if (!transcript) return { saved: 0 };
       const model = await deps.modelFor(turn.agentId, "light");
       if (!model) return { saved: 0 };
+      // 今天这位员工的次数用完了：静默跳过。
+      if (!limiter.take(`${turn.ownerUserId}:${turn.agentId}`))
+        return { saved: 0 };
       const candidates = await extractMemories(transcript, model, {
         ...(deps.call ? { call: deps.call } : {}),
       });
