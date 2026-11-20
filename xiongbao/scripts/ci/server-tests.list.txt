@@ -452,6 +452,8 @@ tests/headless-model-usage.integration.test.ts
 tests/headless-stop-record.test.ts
 tests/headless-tools.test.ts
 tests/health.test.ts
+tests/heavy-task-prompt.test.ts
+tests/heavy-task.test.ts
 tests/host-access-broker.test.ts
 tests/host-access-callback-route.test.ts
 tests/host-access-dispatch-audit.test.ts

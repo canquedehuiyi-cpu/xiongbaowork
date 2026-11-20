@@ -111,6 +111,7 @@ import { createSubagents, SUBAGENT_HANDED_BACK } from "./agents/subagent";
 import { toolLimitRecorder } from "./agents/tool-limit";
 import { serverTurnAdmission } from "./agents/turn-admission";
 import { updatePlanTools } from "./agents/update-plan";
+import { configureHeavyTaskFacts } from "./agents/heavy-task";
 import { type GitComputer, gitTools } from "./computer/git-tools";
 import {
   createWakeUpRunner,
@@ -3898,6 +3899,31 @@ await startupLifecycle.run(async (startup) => {
     runTurn: unattendedTurnRunner,
   });
 
+  /*
+   * 重活分流（`agents/heavy-task.ts`，期 4）：大型编码任务的建议要用到的事实，每一轮按员工查一次：这位员工设置里的
+   * 难任务模型，和这个人手上固定的 Codex、Claude Code 员工（只看他自己的、没删的）。读的是这一轮的人的租户。
+   */
+  configureHeavyTaskFacts(async (agentId) => {
+    const person = currentTenant();
+    const [row] = await database
+      .select({ configuration: agents.configuration })
+      .from(agents)
+      .where(eq(agents.id, agentId))
+      .limit(1);
+    const hardModel = hardModelOf(row?.configuration);
+    const profiles = await agentProfileStore.list(await actorFor(person));
+    return {
+      ...(hardModel ? { hardModel } : {}),
+      externalCoders: profiles.flatMap((profile) => {
+        const harness = profile.externalRun?.harness;
+        return profile.type === "device_acp" &&
+          profile.ownerUserId === person &&
+          (harness === "codex" || harness === "claude-code")
+          ? [{ name: profile.name, harness }]
+          : [];
+      }),
+    };
+  });
   /**
    * Subagents: every Bot's way to give part of its work to a fresh run of itself (agents/subagent.ts).
    *

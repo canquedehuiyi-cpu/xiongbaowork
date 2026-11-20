@@ -82,6 +82,7 @@ import { attributeBotAnswers } from "./agents/bot-answers";
 import { frameworkLabel, frameworkOf } from "./agents/framework";
 import type { ThreadRunner } from "./agents/handoff-delivery";
 import { HANDOFF_TOOL } from "./agents/handoff-tool";
+import { heavyTaskGuidanceFor, loadHeavyTaskFacts } from "./agents/heavy-task";
 import { takesModelChoice } from "./agents/harness-model";
 import {
   PlanModel,
@@ -2817,6 +2818,8 @@ async function buildAgent(
           runAgentModel,
         );
       const pickedSkill = pickedSkillFor(input);
+      // 重活分流（期 4）：难任务模型和固定的 Codex、Claude Code 员工，按员工查；关着或查不到就是 undefined。
+      const heavyFacts = await loadHeavyTaskFacts(agent.id);
       // Fetched per run, so a skill published a moment ago reaches the next run (upstream 0046).
       const learnedSkills = await acquireLearnedSkills?.(agent.id, signal);
       signal.throwIfAborted();
@@ -2854,6 +2857,19 @@ async function buildAgent(
       );
       signal.throwIfAborted();
       const tools = passing.length > 0 ? [...offered, ...passing] : offered;
+      /*
+       * 大型编码任务的建议，和员工自己写的、对得上的技能同处：随消息变的那一段（`picked_skill`）。按这一轮
+       * 手上的工具定：派不了子代理也不能转交的（子代理自己）不加。见 `agents/heavy-task.ts`。
+       */
+      const heavy = heavyTaskGuidanceFor(
+        input,
+        heavyFacts,
+        tools.map((tool) => tool.name),
+      );
+      const guidance =
+        [pickedSkill, heavy]
+          .filter((part) => part !== undefined)
+          .join("\n\n") || undefined;
       // Nothing added and nothing narrowed means nothing to rebuild, and reusing the agent already
       // built for this request keeps that path allocation-for-allocation what it was.
       return !model.plan &&
@@ -2867,7 +2883,7 @@ async function buildAgent(
         // `whole` carries the computer guidance, and this run holds no computer tool.
         !computerGuidance &&
         !timeZone &&
-        !pickedSkill
+        !guidance
         ? whole
         : withTools(
             tools,
@@ -2878,7 +2894,7 @@ async function buildAgent(
             runModel,
             timeZone,
             runAgentModel,
-            pickedSkill,
+            guidance,
           );
     },
   );
