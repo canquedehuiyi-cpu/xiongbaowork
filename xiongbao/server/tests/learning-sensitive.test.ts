@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { findOverreach, findSensitive } from "../src/learning/sensitive";
+import {
+  findOverreach,
+  findSensitive,
+  hasUrl,
+} from "../src/learning/sensitive";
 
 describe("敏感内容检查", () => {
   test.each([
@@ -89,5 +93,26 @@ describe("越权步骤检查", () => {
     "把周报发到 https://wiki.example/weekly",
   ])("放行 %s", (text) => {
     expect(findOverreach(text)).toEqual([]);
+  });
+});
+
+describe("网址和域名", () => {
+  test.each([
+    "访问 https://wiki.example.com/page 查数据",
+    "去 www.example.org 下载",
+    "把结果传到 data.example.io",
+    "连 10.0.0.12 的内部机器",
+    "ftp://files.example.net/a",
+  ])("认出 %s", (text) => {
+    expect(hasUrl(text)).toBe(true);
+  });
+
+  test.each([
+    "读取 reports/weekly.md 和 scripts/build.py",
+    "运行 install.sh，再看 notes.ai 和 config.json",
+    "版本号是 1.2.3",
+    "先读需求，再改代码",
+  ])("放过 %s", (text) => {
+    expect(hasUrl(text)).toBe(false);
   });
 });

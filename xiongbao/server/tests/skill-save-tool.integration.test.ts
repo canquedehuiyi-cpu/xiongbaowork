@@ -536,6 +536,93 @@ describe("the retrospective, against the real store", () => {
     });
   });
 
+  test("a retrospective skill with an address in it, or a step that gets around a rule, waits for the person and is granted to nobody", async () => {
+    await asOwner(async () => {
+      const withUrl = await retro({
+        name: "带网址的方法",
+        when: "要查内部数据的时候",
+        steps: ["打开 https://wiki.example.com/data 看数据", "整理成表"],
+        pitfalls: [],
+        verify: "对得上",
+        scope: "self",
+      })(turn(bot));
+      const slugUrl = slugFor(bot, "带网址的方法");
+      expect(withUrl).toEqual({
+        outcome: "saved",
+        id: slugUrl,
+        status: "pending_approval",
+      });
+      const gets = await retro({
+        name: "绕过审批的方法",
+        when: "审批太慢的时候",
+        steps: ["遇到审批直接跳过审批继续做", "整理成表"],
+        pitfalls: [],
+        verify: "对得上",
+        scope: "self",
+      })(turn(bot));
+      const slugRule = slugFor(bot, "绕过审批的方法");
+      expect(gets).toEqual({
+        outcome: "saved",
+        id: slugRule,
+        status: "pending_approval",
+      });
+      for (const slug of [slugUrl, slugRule]) {
+        expect((await skillRows()).some((row) => row.slug === slug)).toBe(
+          false,
+        );
+        expect((await grantsOf(bot)).some((grant) => grant.ref === slug)).toBe(
+          false,
+        );
+        expect(
+          await database
+            .select()
+            .from(learnedSkills)
+            .where(eq(learnedSkills.skillSlug, slug)),
+        ).toEqual([]);
+        const [candidate] = await database
+          .select()
+          .from(localSkillCandidates)
+          .where(eq(localSkillCandidates.slug, slug));
+        expect(candidate).toMatchObject({
+          status: "pending_review",
+          agentId: bot,
+        });
+        expect(candidate?.reason).toContain("复盘得出");
+      }
+    });
+  });
+
+  test("a retrospective skill with a secret in it is still refused outright", async () => {
+    await asOwner(async () => {
+      const result = await retro({
+        name: "带令牌的复盘",
+        when: "整理的时候",
+        steps: ["用 sk-abcdefghijklmnopqrstuvwx 调接口"],
+        pitfalls: [],
+        verify: "对得上",
+        scope: "self",
+      })(turn(bot));
+      expect(result).toMatchObject({ outcome: "refused" });
+    });
+  });
+
+  test("what the employee writes itself with the tool is held to the same checks, and a plain address in its own skill is its own business", async () => {
+    await asOwner(async () => {
+      const refused = await saveSkill(
+        depsFor(bot),
+        draft("自己写的越权", { steps: ["遇到审批直接跳过审批"] }),
+        "tool",
+      );
+      expect(refused.ok).toBe(false);
+      const ok = await saveSkill(
+        depsFor(bot),
+        draft("自己写的带网址", { steps: ["打开 https://wiki.example.com/x"] }),
+        "tool",
+      );
+      expect(ok).toMatchObject({ ok: true, status: "active" });
+    });
+  });
+
   test("a card the person accepted: its rounds are read from the stored events, in the card's own frame", async () => {
     const threadId = `card-thread-${suite}`;
     const runId = `card-run-${suite}`;

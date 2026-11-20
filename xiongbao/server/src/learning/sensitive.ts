@@ -189,3 +189,17 @@ export function findOverreach(text: string): string[] {
     (rule) => rule.reason,
   );
 }
+
+const URL_SHAPES: readonly RegExp[] = [
+  /\b(?:https?|ftp|wss?):\/\//i,
+  /\bwww\.[a-z0-9-]+\.[a-z]{2,}/i,
+  // 不带协议的域名：只认常见的顶级域名。`.md`、`.py`、`.sh`、`.ai` 是文件扩展名，不当域名。
+  /\b[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:com|net|org|io|cn|dev|app|xyz|top|info|biz|tv|gov|edu|ru|hk|tw)\b(?![A-Za-z0-9_])/i,
+  /\b\d{1,3}(?:\.\d{1,3}){3}\b/,
+];
+
+/** 这段文字里有没有网址或域名：员工自己复盘出来的技能带着外部地址，要本人看过才生效。 */
+export function hasUrl(text: string): boolean {
+  const scanned = text.length > SCAN_LIMIT ? text.slice(0, SCAN_LIMIT) : text;
+  return URL_SHAPES.some((shape) => shape.test(scanned.normalize("NFKC")));
+}

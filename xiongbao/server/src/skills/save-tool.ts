@@ -17,7 +17,7 @@ import {
   localSkillCandidates,
   skills,
 } from "../db/schema";
-import { findOverreach, findSensitive } from "../learning/sensitive";
+import { findOverreach, findSensitive, hasUrl } from "../learning/sensitive";
 import { similarity } from "../memory/extract";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import type { GrantedTool } from "../plugins/tools";
@@ -165,21 +165,42 @@ export function withRevision(
   return `${body}${REVISIONS}${kept.join("\n")}`;
 }
 
-/** Why a draft cannot be saved, in the person's language, or undefined when it can. */
-export function draftProblem(draft: SkillDraft): string | undefined {
-  const text = [
+/** The text of a draft, every field, as the checks read it. */
+const textOfDraft = (draft: SkillDraft) =>
+  [
     draft.name,
     draft.when,
     ...draft.steps,
     ...draft.pitfalls,
     draft.verify,
   ].join("\n");
+
+/** Why a draft cannot be saved, in the person's language, or undefined when it can. */
+export function draftProblem(
+  draft: SkillDraft,
+  options: { allowOverreach?: boolean } = {},
+): string | undefined {
+  const text = textOfDraft(draft);
   const sensitive = findSensitive(text);
   if (sensitive.length > 0)
     return `技能里不能有${sensitive.join("、")}。去掉它们（写成「对方」「这份文件」「你的密钥」这样的说法）再存。`;
-  const overreach = findOverreach(text);
+  const overreach = options.allowOverreach ? [] : findOverreach(text);
   if (overreach.length > 0)
     return `技能里不能有这样的内容：${overreach.join("、")}。技能只能请你用已经授予你的工具，不能让你绕过审批和规则。`;
+  return undefined;
+}
+
+/**
+ * Why a skill the retrospective wrote for the employee alone still waits for the person, or undefined
+ * when it may take effect at once. What the retrospective read is data (a request, tool results, a
+ * page): something in it may have been written to get a skill saved, so a skill with an address in it,
+ * or a step that gets around a rule, is held for the person instead of being granted.
+ */
+export function heldForReview(draft: SkillDraft): string | undefined {
+  const text = textOfDraft(draft);
+  const overreach = findOverreach(text);
+  if (overreach.length > 0) return `含越权的步骤（${overreach.join("、")}）`;
+  if (hasUrl(text)) return "含网址或域名";
   return undefined;
 }
 
@@ -238,8 +259,14 @@ export async function saveSkill(
   draft: SkillDraft,
   origin: LearnedSkillOrigin,
 ): Promise<SaveSkillResult> {
-  const problem = draftProblem(draft);
+  // The retrospective's draft that gets around a rule is held for the person, not refused: it may be
+  // what the employee really did, and the person decides. A secret is refused either way.
+  const problem = draftProblem(draft, {
+    allowOverreach: origin === "retrospect",
+  });
   if (problem) return { ok: false, reason: problem };
+  const held = origin === "retrospect" ? heldForReview(draft) : undefined;
+  const scope: SkillScope = held ? "shared" : draft.scope;
   const tenant = currentTenant();
   const slug = slugFor(deps.agentId, draft.name);
   const rendered = renderSkill(draft);
@@ -276,7 +303,7 @@ export async function saveSkill(
       reason: `你已经有 ${(deps.maxSkills ?? skillsPerEmployee)()} 条自己写的技能，到上限了。先用 ${REFINE_SKILL_TOOL} 改进已有的，别再新增。`,
     };
 
-  if (draft.scope === "shared") {
+  if (scope === "shared") {
     // Waiting for the person: the same list the daily local learning's drafts go to. Nothing is granted.
     const [pending] = await deps.database
       .select({ id: localSkillCandidates.id })
@@ -290,7 +317,11 @@ export async function saveSkill(
         ),
       )
       .limit(1);
-    const reason = `员工自己写下来、想共享：${rendered.summary}`.slice(0, 200);
+    const reason = (
+      held
+        ? `复盘得出，${held}，等你看过再生效：${rendered.summary}`
+        : `员工自己写下来、想共享：${rendered.summary}`
+    ).slice(0, 200);
     if (pending)
       await deps.database
         .update(localSkillCandidates)
