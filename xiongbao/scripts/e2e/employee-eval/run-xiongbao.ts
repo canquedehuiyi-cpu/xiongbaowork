@@ -107,7 +107,12 @@ import {
 } from "./chat-path";
 import { CHECKERS } from "./checkers";
 import { evalGate, serverEnvFrom, taskMinutes, xiongbaoModel } from "./config";
-import { type LearnedState, learningDiff, waitForRetro } from "./learning";
+import {
+  backgroundOf,
+  type LearnedState,
+  learningDiff,
+  waitForRetro,
+} from "./learning";
 import {
   type Check,
   check,
