@@ -1,4 +1,4 @@
-import { SKILL_STALE_DAYS } from "@openbot/shared/self-skills";
+import { SKILL_STALE_DAYS } from "../../../shared/self-skills";
 import { eq } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { learnedSkills } from "../db/schema";

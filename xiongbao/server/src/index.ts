@@ -611,7 +611,7 @@ import { createCardTurns } from "./tasks/card-turns";
 import {
   SAVE_SKILL_TOOL,
   SKILL_CREATOR_SLUG,
-} from "@openbot/shared/self-skills";
+} from "../../shared/self-skills";
 import { selfSkillTools } from "./skills/save-tool";
 import { demoteStaleSkills, learnedUsageOf } from "./skills/usage";
 import { createDelivery, replyTextOf } from "./tasks/delivery";

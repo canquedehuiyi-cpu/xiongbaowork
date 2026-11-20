@@ -7,7 +7,7 @@ import {
   SKILL_SCOPES,
   SKILLS_PER_EMPLOYEE_DEFAULT,
   type SkillScope,
-} from "@openbot/shared/self-skills";
+} from "../../../shared/self-skills";
 import { and, count, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Database } from "../db/client";

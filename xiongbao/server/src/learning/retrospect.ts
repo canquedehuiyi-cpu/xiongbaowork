@@ -3,7 +3,7 @@ import type { BaseEvent } from "@ag-ui/client";
 import {
   RETRO_MIN_STEPS_DEFAULT,
   SAVE_SKILL_TOOL,
-} from "@openbot/shared/self-skills";
+} from "../../../shared/self-skills";
 import { generateText, type LanguageModel } from "ai";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
