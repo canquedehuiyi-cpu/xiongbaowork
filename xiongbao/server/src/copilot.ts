@@ -209,6 +209,7 @@ import {
 } from "./threads/compaction";
 import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
+import { asPersonChat } from "./threads/unattended-card";
 import {
   withoutServerOnlyEvents,
   withRunSideEvents,
@@ -4595,19 +4596,26 @@ export function mountCopilotRuntime(
         ),
         corsOrigin(config),
       );
-    return runAsRuntimeActor(actor, async () => {
-      if (!describesItself) await runner.hydrate();
-      /*
-       * A run or a reconnect can say nothing for longer than `Bun.serve` lets a response (a long
-       * command the server runs, a model thinking, a card waiting for the person), so a stream that
-       * has gone quiet gets a comment line. Applied here, to whatever stream the runtime answers
-       * with, so `/run` and `/connect` are kept the same way.
-       */
-      return keepStreamAlive(
-        await runtimeRoutes.fetch(request),
-        streamKeepAliveMs,
-      );
-    });
+    /*
+     * What arrives here is a person's own chat, and the runner is told so (`asPersonChat`): it is what
+     * makes a turn "a person's chat" for whoever watches turns end (automatic memory), instead of
+     * guessing from what the turn did or did not file.
+     */
+    return runAsRuntimeActor(actor, () =>
+      asPersonChat(async () => {
+        if (!describesItself) await runner.hydrate();
+        /*
+         * A run or a reconnect can say nothing for longer than `Bun.serve` lets a response (a long
+         * command the server runs, a model thinking, a card waiting for the person), so a stream that
+         * has gone quiet gets a comment line. Applied here, to whatever stream the runtime answers
+         * with, so `/run` and `/connect` are kept the same way.
+         */
+        return keepStreamAlive(
+          await runtimeRoutes.fetch(request),
+          streamKeepAliveMs,
+        );
+      }),
+    );
   });
 
   return {

@@ -105,3 +105,22 @@ export function onlyOnIdleThread<T>(body: () => T): T {
 export function onlyOnIdleThreadRequested(): boolean {
   return idleOnly.getStore() === true;
 }
+
+const personChat = new AsyncLocalStorage<true>();
+
+/**
+ * Run `body` as a person's own chat request: what the browser sent to the runtime. Set where that request
+ * is handled (`mountCopilotRuntime`), and nowhere else, so a turn is a person's chat turn because it
+ * arrived that way and not because of what it did or did not file: a group's turn, a routine's, a card's
+ * round and a hop to another employee all start from server code outside it. Read by the runner when it
+ * is handed the turn, to tell the observers what kind it is (期 2: only a person's chat is read for
+ * memories).
+ */
+export function asPersonChat<T>(body: () => T): T {
+  return personChat.run(true, body);
+}
+
+/** Whether the turn now being accepted arrived as a person's own chat request. See {@link asPersonChat}. */
+export function personChatRequested(): boolean {
+  return personChat.getStore() === true;
+}

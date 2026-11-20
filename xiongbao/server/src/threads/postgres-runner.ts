@@ -65,6 +65,7 @@ import { watched } from "./thread-viewers";
 import {
   entryHungRound,
   onlyOnIdleThreadRequested,
+  personChatRequested,
   runnerCardSuppressed,
   suppressedCardRef,
   targetedCard,
@@ -638,6 +639,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     const forCard = targetedCard();
     // Read in the same breath and for the same reason: unset for every turn a person sends.
     const lane = runnerLane.getStore();
+    // Whether the turn arrived as a person's own chat request, read here for the same reason (期 2).
+    const personChat = personChatRequested();
     // A server-started turn (a nudge, a hand-over, a 退回) that stands back rather than supersede.
     const idleOnly = onlyOnIdleThreadRequested();
     const adopted = adoptedCard.getStore();
@@ -749,6 +752,7 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
               adopted,
               enter,
               idleOnly,
+              personChat,
             ).subscribe(subscriber);
           } catch (thrown) {
             enter();
@@ -832,6 +836,8 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
     entered: () => void = () => {},
     /** A turn that may only start on an idle thread (`onlyOnIdleThread`). */
     idleOnly = false,
+    /** The turn arrived as a person's own chat request (`asPersonChat`). */
+    personChat = false,
   ): Observable<BaseEvent> {
     const { threadId } = request;
     const runId = request.input.runId;
@@ -1100,7 +1106,12 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
               messages: request.input.messages,
               events,
               failed: carriedFailure(events),
-              kind: !cardIsTaken && !lane && !adopted ? "chat" : "task",
+              // Explicit, not inferred from the card: a person's chat is a turn that arrived as one, and
+              // an entry's own turn (a group's, a routine's, a hop to another employee) is never one.
+              kind:
+                personChat && !cardIsTaken && !lane && !adopted
+                  ? "chat"
+                  : "task",
             });
             // The parent commits the run during teardown; one macrotask later
             // the snapshot is readable and goes to PostgreSQL.

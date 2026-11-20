@@ -15,6 +15,10 @@ import {
   type FinishedTurn,
   PostgresAgentRunner,
 } from "../src/threads/postgres-runner";
+import {
+  asPersonChat,
+  suppressRunnerCard,
+} from "../src/threads/unattended-card";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
@@ -193,4 +197,75 @@ test("an observer that throws does not fail the turn: the stream ends normally a
   } finally {
     throwing = false;
   }
+});
+
+/*
+ * What kind a turn is, is decided by how it arrived and not by what it filed: only a request the browser
+ * sent to the runtime is a person's chat. A turn server code starts (a group's, a routine's, a hop to
+ * another employee) is a task, and so is one that merely arrives with no card of its own.
+ */
+class QuickAgent extends AbstractAgent {
+  run(input: RunAgentInput) {
+    return of(
+      {
+        type: EventType.RUN_STARTED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+      { type: EventType.TEXT_MESSAGE_START, messageId: "m", role: "assistant" },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m", delta: "好的" },
+      { type: EventType.TEXT_MESSAGE_END, messageId: "m" },
+      {
+        type: EventType.RUN_FINISHED,
+        threadId: input.threadId,
+        runId: input.runId,
+      },
+    ) as never;
+  }
+}
+
+async function runDirect(wrap: <T>(body: () => T) => T) {
+  const threadId = `thread-${randomUUID()}`;
+  started.push(threadId);
+  const agent = new QuickAgent({ agentId: BOT });
+  const input: RunAgentInput = {
+    threadId,
+    runId: `run-${randomUUID()}`,
+    state: {},
+    messages: [
+      { id: randomUUID(), role: "user", content: "我每周五都要发周报" },
+    ],
+    tools: [],
+    context: [],
+    forwardedProps: {},
+  };
+  agent.threadId = threadId;
+  agent.setMessages(input.messages);
+  seen.length = 0;
+  await runAsTenant(person.id, () =>
+    wrap(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          runner
+            .run({ threadId, agent, input, persistedInputMessages: [] })
+            .subscribe({ complete: resolve, error: reject });
+        }),
+    ),
+  );
+  await until(() => seen.length === 1);
+  return seen[0]?.turn.kind;
+}
+
+test("a turn that did not arrive as a person's chat is a task, even with no card of its own", async () => {
+  expect(await runDirect((body) => body())).toBe("task");
+});
+
+test("a turn that arrived as a person's chat is a chat", async () => {
+  expect(await runDirect((body) => asPersonChat(body))).toBe("chat");
+});
+
+test("an entry's own turn inside a person's chat request (a hop to another employee, a group's round) is a task", async () => {
+  expect(
+    await runDirect((body) => asPersonChat(() => suppressRunnerCard(body))),
+  ).toBe("task");
 });
