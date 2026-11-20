@@ -81,12 +81,17 @@ const twelve = (at: number, special: string, steps = 12) =>
     ),
   );
 
+/** 这个文件测的是二进制数据的估算，线按原来的 64K 给（默认值已降到 24K，用户 2026-11-20 批准）。 */
+const BUDGET_64K = 64_000;
+
 describe("二进制数据按每 1.5 个字符 1 个 token 估", () => {
   const blob = 90_000;
 
   test("同样长的重复字符不算二进制：估得少，没越线，一个字不动", () => {
     const prompt = twelve(12, "x".repeat(blob));
-    expect(foldEarlyResults(prompt, { window: WINDOW })).toBe(prompt);
+    expect(
+      foldEarlyResults(prompt, { window: WINDOW, budget: BUDGET_64K }),
+    ).toBe(prompt);
   });
 
   test("夹着 base64 的结果：估算涨到 6 万 token，越线，较早的结果折叠", () => {
@@ -118,14 +123,19 @@ describe("二进制数据按每 1.5 个字符 1 个 token 估", () => {
   test("没有二进制数据：一个字节不动，返回同一个数组", () => {
     const prompt = promptOf(Array.from({ length: 12 }, (_, i) => note(i + 1)));
     const before = JSON.stringify(prompt);
-    const folded = foldEarlyResults(prompt, { window: WINDOW });
+    const folded = foldEarlyResults(prompt, {
+      window: WINDOW,
+      budget: BUDGET_64K,
+    });
     expect(folded).toBe(prompt);
     expect(JSON.stringify(folded)).toBe(before);
   });
 
   test("二进制数据没把估算推过线：也一个字不动", () => {
     const prompt = twelve(12, shot(20_000));
-    expect(foldEarlyResults(prompt, { window: WINDOW })).toBe(prompt);
+    expect(
+      foldEarlyResults(prompt, { window: WINDOW, budget: BUDGET_64K }),
+    ).toBe(prompt);
   });
 
   test("重放确定、缓存前缀稳定：下一步只在末尾添加，已折的部分逐字节不变", () => {
