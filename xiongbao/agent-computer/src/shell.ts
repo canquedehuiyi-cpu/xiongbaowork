@@ -318,11 +318,12 @@ export type RunAs = {
   launcher?: string[];
 };
 
-/** The command a caller hands a shell, and the Stop that ends it. */
+/** One shell word: `value` in single quotes, a quote inside it closed, escaped and reopened. */
 function shellSingleQuote(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
+/** The command a caller hands a shell, and the Stop that ends it. */
 export type CommandInput = {
   command: string;
   timeoutMs?: number;
@@ -350,7 +351,7 @@ export type ShellOptions = {
  * one bash in a pseudo-terminal that this process starts, so it runs as this process's user, pwuser,
  * and the root helper's `run` takes a command and its environment on stdin rather than a terminal.
  * An employee's live terminal made that way would be pwuser's bash in the employee's directory: every
- * other employee's files, the browser profiles, and `sudo openbot-apt`. So its commands run one at a
+ * other employee's files, the browser profiles, and the sudo-allowed package installer. So its commands run one at a
  * time through the helper, and the terminal a person watches is a separate bash the helper starts as
  * the employee (`xb-bot shell`, index.ts `ownUserTerminal`), into which the employee's own commands
  * are not typed.
