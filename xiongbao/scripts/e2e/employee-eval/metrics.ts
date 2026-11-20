@@ -12,6 +12,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { type ChatRequest, sectionTexts, textOf } from "./token-breakdown";
 
 export type Tri = "yes" | "no" | "n/a";
 
@@ -616,4 +617,110 @@ export function analyzeCodex(
 /** 停下时是不是在问人（问句收尾），问人不算「无提示地停」。 */
 export function asksQuestion(text: string): boolean {
   return /[?？]\s*$/.test(text.trim());
+}
+
+// ---------------------------------------------------------------------------------------------
+// 提示词体积：每次发给模型的请求里，系统提示各段、工具定义、历史各占多少字符
+// ---------------------------------------------------------------------------------------------
+
+/** 一次请求的字符构成。读的是员工真正发出去的 Chat Completions 请求体；其他形状的请求体读不出东西，全记 0。 */
+export type PromptBreakdown = {
+  /** 系统提示按 `<段名>` 分段的字符数，同名段累加；段外的文字记作 `(段外)`。 */
+  system: Record<string, number>;
+  /** 工具定义（名字、描述、参数 schema，按发出去的 JSON 算）的字符数。 */
+  tools: number;
+  toolCount: number;
+  /** 历史消息按种类：用户话、助手文字、工具调用参数、推理、工具结果。 */
+  history: {
+    user: number;
+    assistantText: number;
+    toolCallArgs: number;
+    reasoning: number;
+    toolResults: number;
+  };
+  /** 上面三块加起来。 */
+  total: number;
+};
+
+const sumValues = (values: Iterable<number>) => {
+  let total = 0;
+  for (const value of values) total += value;
+  return total;
+};
+
+/** 一份请求体里各部分的字符数。 */
+export function promptBreakdown(requestBody: ChatRequest): PromptBreakdown {
+  const messages = requestBody.messages ?? [];
+  const system: Record<string, number> = {};
+  const history = {
+    user: 0,
+    assistantText: 0,
+    toolCallArgs: 0,
+    reasoning: 0,
+    toolResults: 0,
+  };
+  for (const message of messages) {
+    const text = textOf(message.content);
+    if (message.role === "system" || message.role === "developer") {
+      for (const part of sectionTexts(text))
+        system[part.name] = (system[part.name] ?? 0) + part.text.length;
+    } else if (message.role === "user") history.user += text.length;
+    else if (message.role === "tool") history.toolResults += text.length;
+    else if (message.role === "assistant") {
+      history.assistantText += text.length;
+      history.reasoning += (message.reasoning_content ?? "").length;
+      for (const call of message.tool_calls ?? [])
+        history.toolCallArgs += `${call.function?.name ?? ""}${
+          call.function?.arguments ?? ""
+        }`.length;
+    }
+  }
+  const tools = (requestBody.tools ?? []).reduce(
+    (total, tool) => total + JSON.stringify(tool).length,
+    0,
+  );
+  return {
+    system,
+    tools,
+    toolCount: requestBody.tools?.length ?? 0,
+    history,
+    total:
+      sumValues(Object.values(system)) +
+      tools +
+      sumValues(Object.values(history)),
+  };
+}
+
+/** 一道题（或一段运行）里全部请求的提示词体积，写进结果记录的 `promptChars`。 */
+export type PromptChars = {
+  /** 这段运行里发给模型的请求数（含子代理、压缩、挑选技能等不在主运行里的调用）。 */
+  requests: number;
+  /** 每次请求的总字符数，按时间从早到晚。 */
+  totals: number[];
+  /** 第一个带工具的请求（员工主运行的第一步；都没带工具就取第一个）。 */
+  first: PromptBreakdown;
+  /** 总字符数最多的那次请求。 */
+  peak: PromptBreakdown;
+};
+
+/** 汇总一段运行里按时间排好的请求体；没有请求返回 null。 */
+export function summarizePrompts(
+  bodies: readonly ChatRequest[],
+): PromptChars | null {
+  if (!bodies.length) return null;
+  const parts = bodies.map(promptBreakdown);
+  const firstIndex = Math.max(
+    0,
+    bodies.findIndex((body) => (body.tools?.length ?? 0) > 0),
+  );
+  let peak = 0;
+  parts.forEach((part, index) => {
+    if (part.total > (parts[peak]?.total ?? 0)) peak = index;
+  });
+  return {
+    requests: bodies.length,
+    totals: parts.map((part) => part.total),
+    first: parts[firstIndex] as PromptBreakdown,
+    peak: parts[peak] as PromptBreakdown,
+  };
 }

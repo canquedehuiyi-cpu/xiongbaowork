@@ -5,6 +5,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { computerGuidance } from "../../shared/bot-prompt";
 import { hardModelOf } from "../../shared/hard-model";
+import { lightModelOf } from "../../shared/light-model";
 import { isPersonBrowserId } from "../../shared/openbot-browser";
 import { workOwner } from "../../shared/work-owner";
 import { toolSegmentsFor, turnTimeoutFor } from "../../toolkit/src/limits";
@@ -83,6 +84,11 @@ import {
   guardBotTurn,
 } from "./agents/lifecycle";
 import { createBotReset } from "./agents/lifecycle-reset";
+import { lightModelFor } from "./agents/light-model";
+import {
+  createLightModelRoutes,
+  createLightModelStore,
+} from "./agents/light-model-routes";
 import {
   readAgentModelComputerUrl,
   readAgentModelProxyConfig,
@@ -4208,7 +4214,7 @@ await startupLifecycle.run(async (startup) => {
     resolveModelApiKey: resolveRuntimeModelApiKey,
     // The model the person picked for this conversation, or the catalogue's default.
     // Given what started the run, so a run nobody is watching can think harder (upstream #1407).
-    pickedModelForActor: (actorId, initiator) => async (input) => {
+    pickedModelForActor: (actorId, initiator) => async (input, agentId) => {
       // 期七：子代理指定了模型的那条线程，用指定的（排在员工绑定前面）；别的照旧。
       const pinned = subagentModelPins.get(input.threadId);
       if (pinned)
@@ -4217,6 +4223,32 @@ await startupLifecycle.run(async (startup) => {
             { model: pinned },
             isUnattended(runModeOf(initiator)) ? "high" : undefined,
           )),
+          forced: true,
+        };
+      /*
+       * 期 1·1.5：巡检和跟进这类轻量轮，用这位员工设置里的轻量模型（排在员工绑定前面，同子代理的指定）。
+       * 没设置、或者那个模型现在不在目录里，照旧走下面。
+       */
+      const light = await lightModelFor(
+        {
+          read: (id) =>
+            runAsTenant(actorId, async () => {
+              const [row] = await database
+                .select({ configuration: agents.configuration })
+                .from(agents)
+                .where(eq(agents.id, id))
+                .limit(1);
+              return lightModelOf(row?.configuration);
+            }),
+          allowed: async () =>
+            (await modelCatalogue.read()).models.map((model) => model.id),
+        },
+        agentId,
+        initiator,
+      );
+      if (light)
+        return {
+          ...(await modelCatalogue.choose({ model: light }, undefined)),
           forced: true,
         };
       return modelChoices.forRun(actorId, input.threadId, {
@@ -4294,7 +4326,7 @@ await startupLifecycle.run(async (startup) => {
     // 对话侧栏的上下文分类：每次内置运行开始时记一行比例，记在发起的人名下。
     recordContextBreakdownForActor: (actorId) =>
       contextBreakdownRecorder(database, actorId),
-    // 压缩会话：每一轮开始前换上摘要；部署开关 `SIDEBAR_AUTO_COMPACTION`（默认关）打开时先按需自动压缩。
+    // 压缩会话：每一轮开始前换上摘要；自动压缩默认开，`XIONGBAO_AUTO_COMPACTION=off` 关掉（config.ts）；开着时先按需自动压缩。
     compactionForActor: (actorId) =>
       runCompaction({
         ...compactionDeps,
@@ -6661,6 +6693,23 @@ await startupLifecycle.run(async (startup) => {
     "/api/agents",
     createHardModelRoutes({
       store: createHardModelStore(database),
+      profiles: agentProfileStore,
+      allowed: async () =>
+        (await modelCatalogue.read()).models.map((model) => model.id),
+      requireUser: config.singleUser
+        ? createDevRequireUser(config.singleUserAccess)
+        : createRequireUser(auth as AuthService, roleRepository),
+      auditStore: bootAuditStore,
+    }),
+  );
+
+  /*
+   * 期 1·1.5：员工设置里的「轻量模型」，巡检和跟进这类轻量轮用。路由和难任务模型一样，只是多一个键。
+   */
+  app.route(
+    "/api/agents",
+    createLightModelRoutes({
+      store: createLightModelStore(database),
       profiles: agentProfileStore,
       allowed: async () =>
         (await modelCatalogue.read()).models.map((model) => model.id),

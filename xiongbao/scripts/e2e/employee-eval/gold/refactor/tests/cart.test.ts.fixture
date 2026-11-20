@@ -1,0 +1,24 @@
+import { expect, test } from "bun:test";
+import { addItem, cartSubtotal, describeCart } from "../src/cart";
+
+const empty = { items: [] };
+
+test("the same SKU adds up instead of starting a new line", () => {
+  const cart = addItem(
+    addItem(empty, { sku: "pen", unitCents: 150, quantity: 1 }),
+    { sku: "pen", unitCents: 150, quantity: 2 },
+  );
+  expect(cart.items).toEqual([{ sku: "pen", unitCents: 150, quantity: 3 }]);
+  expect(empty.items).toEqual([]);
+});
+
+test("the subtotal and the text list follow the line totals", () => {
+  const cart = {
+    items: [
+      { sku: "pen", unitCents: 150, quantity: 3 },
+      { sku: "ink", unitCents: 1999, quantity: 1 },
+    ],
+  };
+  expect(cartSubtotal(cart)).toBe(2449);
+  expect(describeCart(cart)).toBe("pen x3 = 4.50\nink x1 = 19.99");
+});

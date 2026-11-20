@@ -214,6 +214,51 @@ test("the capability smoke can reach the background scenarios and has the time f
   expect(job["timeout-minutes"]).toBeGreaterThanOrEqual(42 + 2 * 15);
 });
 
+/**
+ * 期 0 三方对照：输入 `xiongbao_model` 只改熊宝侧的模型。它以环境变量 `EVAL_XIONGBAO_MODEL` 交给熊宝侧的两个作业，
+ * Codex 侧不收它，仍用 `inputs.model`；空表示和 model 一样（由脚本里的 `xiongbaoModel` 判断）。
+ */
+test("xiongbao_model reaches only the Xiongbao side, and the Xiongbao job records prompt sizes", () => {
+  const inputs = (
+    workflow.on as {
+      workflow_dispatch: {
+        inputs: Record<
+          string,
+          { default?: string; description?: string; type?: string }
+        >;
+      };
+    }
+  ).workflow_dispatch.inputs;
+  expect(inputs.xiongbao_model).toMatchObject({ type: "string", default: "" });
+  expect(inputs.xiongbao_model?.description).toContain("熊宝");
+  // The hard group and the repeat task can be named in the tasks input.
+  for (const name of ["hard", "refactor", "terminal", "webform", "repeat"])
+    expect(inputs.tasks?.description).toContain(name);
+
+  const carrierOf = (name: string) =>
+    (workflow.jobs[name] as Job).steps.find((step) =>
+      Object.values(step.env ?? {}).some((value) =>
+        String(value).includes("secrets."),
+      ),
+    );
+  for (const name of ["employee-eval-xiongbao", "employee-capability-smoke"]) {
+    expect(carrierOf(name)?.env?.EVAL_XIONGBAO_MODEL).toBe(
+      expression("inputs.xiongbao_model"),
+    );
+    // The shared model input is untouched: the script picks the override, the workflow does not splice it in.
+    expect(carrierOf(name)?.env?.EVAL_MODEL).toBe(expression("inputs.model"));
+  }
+  const codex = carrierOf("employee-eval-codex");
+  expect(Object.keys(codex?.env ?? {})).not.toContain("EVAL_XIONGBAO_MODEL");
+  expect(codex?.env?.EVAL_MODEL).toBe(expression("inputs.model"));
+
+  // The prompt sizes are recorded in the job that runs the Xiongbao employee on the tasks.
+  expect(carrierOf("employee-eval-xiongbao")?.env?.EVAL_PROMPT_CHARS).toBe(
+    "on",
+  );
+  expect(text).toContain("提示词体积");
+});
+
 test("permissions are read-only contents and runs never overlap", () => {
   expect(workflow.permissions).toEqual({ contents: "read" });
   const group =

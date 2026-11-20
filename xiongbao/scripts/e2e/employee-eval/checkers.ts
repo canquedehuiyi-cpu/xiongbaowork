@@ -5,7 +5,11 @@ import { checkCompare } from "./check-compare";
 import { checkData } from "./check-data";
 import { checkDocs } from "./check-docs";
 import { checkOffice } from "./check-office";
+import { checkRefactor } from "./check-refactor";
+import { checkRepeat } from "./check-repeat";
 import { checkResearch } from "./check-research";
+import { checkTerminal } from "./check-terminal";
+import { checkWebform } from "./check-webform";
 import type { CheckResult, TaskName } from "./lib";
 
 export const CHECKERS: Record<TaskName, (dir: string) => Promise<CheckResult>> =
@@ -16,4 +20,8 @@ export const CHECKERS: Record<TaskName, (dir: string) => Promise<CheckResult>> =
     data: async (dir) => checkData(dir),
     office: async (dir) => checkOffice(dir),
     compare: (dir) => checkCompare(dir),
+    refactor: async (dir) => checkRefactor(dir),
+    terminal: async (dir) => checkTerminal(dir),
+    webform: async (dir) => checkWebform(dir),
+    repeat: async (dir) => checkRepeat(dir),
   };

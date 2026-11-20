@@ -26,6 +26,8 @@
 #
 # 模型和提供方都是输入（provider / model / base_url），两边脚本从同一组输入读，不写死 DeepSeek；key 仍是
 # 上面那个 Environment secret。脚本在 xiongbao/scripts/e2e/employee-eval/，用法见各文件开头。
+# 输入 xiongbao_model 只改熊宝侧的模型（空表示和 model 一样，Codex 侧永远用 model），三方对照：熊宝、Codex、换更强模型的熊宝。
+# 熊宝侧作业另记每道题发给模型的提示词体积（EVAL_PROMPT_CHARS），报告里有「提示词体积」表。
 name: 模型 E2E 计量对账
 
 on:
@@ -41,7 +43,7 @@ on:
           - capability-smoke
           - all
       tasks:
-        description: "对标题目：all（五道对标题）、hard（加难题 compare），或逗号分隔的 research,docs,code,data,office,compare"
+        description: "对标题目：all（五道对标题）、hard（加难题 compare,refactor,terminal,webform），或逗号分隔的 research,docs,code,data,office,compare,refactor,terminal,webform,repeat（repeat 只能点名：多步办公连做两次，记第一次和第二次的指标）"
         type: string
         default: all
       paths:
@@ -61,9 +63,13 @@ on:
         type: string
         default: deepseek
       model:
-        description: "模型名"
+        description: "模型名（熊宝和 Codex 两侧都用它；填了 xiongbao_model 时只有 Codex 侧用它）"
         type: string
         default: deepseek-v4-flash
+      xiongbao_model:
+        description: "只给熊宝侧换的模型名，留空表示和 model 一样；填了以后熊宝侧用它、Codex 侧仍用 model，用来分清差距有多少来自模型、多少来自做法"
+        type: string
+        default: ""
       base_url:
         description: "OpenAI 兼容接口地址，留空按提供方默认（deepseek 为 https://api.deepseek.com）；Codex 侧要求它支持 Responses"
         type: string
@@ -225,6 +231,10 @@ jobs:
           EVAL_PROVIDER: ${{ inputs.provider }}
           EVAL_MODEL: ${{ inputs.model }}
           EVAL_BASE_URL: ${{ inputs.base_url }}
+          # 只影响熊宝侧；空表示和 EVAL_MODEL 一样（run-xiongbao.ts 里的 xiongbaoModel）。
+          EVAL_XIONGBAO_MODEL: ${{ inputs.xiongbao_model }}
+          # 记录每道题发给模型的请求体大小（提示词体积表）：在服务器和提供方之间夹一个回环转发，不改请求。
+          EVAL_PROMPT_CHARS: "on"
           EVAL_SUITE: tasks
           EVAL_TASKS: ${{ inputs.tasks }}
           EVAL_PATHS: ${{ inputs.paths }}
@@ -369,6 +379,7 @@ jobs:
           EVAL_PROVIDER: ${{ inputs.provider }}
           EVAL_MODEL: ${{ inputs.model }}
           EVAL_BASE_URL: ${{ inputs.base_url }}
+          EVAL_XIONGBAO_MODEL: ${{ inputs.xiongbao_model }}
           EVAL_SUITE: smoke
           EVAL_TASKS: ${{ inputs.scenarios }}
           EVAL_OUT: ${{ runner.temp }}/capability-smoke

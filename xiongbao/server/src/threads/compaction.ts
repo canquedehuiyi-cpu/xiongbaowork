@@ -901,7 +901,7 @@ export function runCompaction(
     /** 自动压缩最多等多久，默认 {@link AUTO_COMPACTION_TIMEOUT_MS}。 */
     autoTimeoutMs?: number;
     /**
-     * 一轮开始前要不要自动压缩（部署开关 `SIDEBAR_AUTO_COMPACTION`）。关的时候只换上已有的摘要（手动压缩的
+     * 一轮开始前要不要自动压缩（部署开关 `XIONGBAO_AUTO_COMPACTION`，默认开）。关的时候只换上已有的摘要（手动压缩的
      * 结果照样生效），不判断、不压。默认开，部署里按开关传。
      */
     auto?: boolean;

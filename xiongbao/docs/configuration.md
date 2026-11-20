@@ -486,7 +486,8 @@ policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guide
 
 | Variable                  | Meaning |
 | ------------------------- | ------- |
-| `SIDEBAR_AUTO_COMPACTION` | 默认关。设为 `true` 或 `1` 时，内置员工每一轮开始前，若上一轮已用 ≥ 上限 − 预留（上限的 10%），先把较早的消息压缩成摘要再跑。关着时手动「压缩会话」和侧栏读取照常可用，手动压缩的摘要照样生效。 |
+| `XIONGBAO_AUTO_COMPACTION` | 默认开（期 1·1.4 起）。内置员工每一轮开始前，若上一轮已用 ≥ 上限 − 预留（上限的 10%），先把较早的消息压缩成摘要再跑，省去长对话里每一步重发全部历史。设为 `off` 回到旧行为（不自动压缩，`off` 保留一个版本作为回退）；手动「压缩会话」和侧栏读取不受影响，手动压缩的摘要照样生效。 |
+| `SIDEBAR_AUTO_COMPACTION` | 原有的开关，仍然认：显式设为 `false`、`0` 或 `off` 关，`true` 或 `1` 开；没设就跟随上一行的默认（开）。`XIONGBAO_AUTO_COMPACTION=off` 压过它。 |
 
 ## Authentication
 

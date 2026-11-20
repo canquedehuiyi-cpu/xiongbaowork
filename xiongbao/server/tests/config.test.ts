@@ -80,18 +80,49 @@ describe("deployment configuration", () => {
     expect(config.auth).toBeUndefined();
     expect(config.organizationAuthUrl).toBe("https://openbot.company.example");
   });
-  test("SIDEBAR_AUTO_COMPACTION is off unless set to true or 1", () => {
-    expect(loadConfig(baseEnvironment).sidebarAutoCompaction).toBe(false);
+  /*
+   * 期 1·1.4：轮次之间的自动压缩默认打开（规格子项目 1）。回退开关 `XIONGBAO_AUTO_COMPACTION=off`；
+   * 原有的 `SIDEBAR_AUTO_COMPACTION` 显式给 false/0/off 仍然关，给 true/1 仍然开。
+   */
+  test("auto-compaction is on by default", () => {
+    expect(loadConfig(baseEnvironment).sidebarAutoCompaction).toBe(true);
+    // An empty value is no value.
+    expect(
+      loadConfig({ ...baseEnvironment, SIDEBAR_AUTO_COMPACTION: "" })
+        .sidebarAutoCompaction,
+    ).toBe(true);
+    expect(
+      loadConfig({ ...baseEnvironment, XIONGBAO_AUTO_COMPACTION: "on" })
+        .sidebarAutoCompaction,
+    ).toBe(true);
+  });
+
+  test("XIONGBAO_AUTO_COMPACTION=off turns auto-compaction off, whatever else is set", () => {
+    for (const value of ["off", "OFF", " off "])
+      expect(
+        loadConfig({ ...baseEnvironment, XIONGBAO_AUTO_COMPACTION: value })
+          .sidebarAutoCompaction,
+      ).toBe(false);
+    expect(
+      loadConfig({
+        ...baseEnvironment,
+        XIONGBAO_AUTO_COMPACTION: "off",
+        SIDEBAR_AUTO_COMPACTION: "true",
+      }).sidebarAutoCompaction,
+    ).toBe(false);
+  });
+
+  test("SIDEBAR_AUTO_COMPACTION still says no when it says false, 0 or off, and yes for true or 1", () => {
+    for (const value of ["false", "FALSE", "0", "off"])
+      expect(
+        loadConfig({ ...baseEnvironment, SIDEBAR_AUTO_COMPACTION: value })
+          .sidebarAutoCompaction,
+      ).toBe(false);
     for (const value of ["true", "TRUE", "1"])
       expect(
         loadConfig({ ...baseEnvironment, SIDEBAR_AUTO_COMPACTION: value })
           .sidebarAutoCompaction,
       ).toBe(true);
-    for (const value of ["false", "0", "off", ""])
-      expect(
-        loadConfig({ ...baseEnvironment, SIDEBAR_AUTO_COMPACTION: value })
-          .sidebarAutoCompaction,
-      ).toBe(false);
   });
 
   test("resolves the local runtime, which is the only runtime", () => {
