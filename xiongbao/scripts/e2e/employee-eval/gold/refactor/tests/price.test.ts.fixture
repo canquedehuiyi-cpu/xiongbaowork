@@ -1,0 +1,11 @@
+import { expect, test } from "bun:test";
+import { lineTotal } from "../src/price";
+
+test("a line costs unit price times quantity", () => {
+  expect(lineTotal({ sku: "pen", unitCents: 150, quantity: 3 })).toBe(450);
+});
+
+test("ten or more pieces get ten percent off, rounded to the cent", () => {
+  expect(lineTotal({ sku: "pen", unitCents: 150, quantity: 10 })).toBe(1350);
+  expect(lineTotal({ sku: "gum", unitCents: 33, quantity: 11 })).toBe(327);
+});

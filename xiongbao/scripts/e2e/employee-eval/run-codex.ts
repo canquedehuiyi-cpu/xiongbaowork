@@ -11,7 +11,9 @@
  *
  * 环境变量（除 config.ts 里的模型参数外）：
  *   CODEX_BIN          codex 可执行文件；作业里用 npm 装好的精确版本（见 CODEX_VERSION）
- *   EVAL_TASKS         all（五道对标题）、hard（加难题）或逗号分隔的题名，默认 all
+ *   EVAL_TASKS         all（五道对标题）、hard（加难题：compare、refactor、terminal、webform）或逗号分隔的题名
+ *                      （repeat 只能点名：同一道办公题连做两次，Codex 每次都是全新环境），默认 all。
+ *                      网页表单题的夹具网站由本脚本在本机起，Codex 的命令（curl 等）访问得到
  *   EVAL_TASK_MINUTES  每题墙钟上限，默认 20
  *   EVAL_OUT           结果目录，默认 ./employee-eval-out；写 codex.json、每题的 JSONL 记录和产物
  *   EVAL_CODEX_SANDBOX Codex 跑命令的沙箱：workspace-write（默认，联网打开）或 danger-full-access
@@ -27,7 +29,10 @@ import { CHECKERS } from "./checkers";
 import { evalGate, type ModelConfig, taskMinutes } from "./config";
 import {
   copyTree,
+  EDITS_CODE_TASKS,
+  HARD_SUITE,
   materialize,
+  REPEAT_TASK,
   selectTasks,
   TASK_TITLES,
   type TaskName,
@@ -35,7 +40,13 @@ import {
 } from "./lib";
 import { analyzeCodex } from "./metrics";
 import { startMockModel } from "./mock-model";
-import { type EvalRecord, type EvalResults, writeResults } from "./records";
+import {
+  combineRepeat,
+  type EvalRecord,
+  type EvalResults,
+  writeResults,
+} from "./records";
+import { sealReceived, startWebformSite } from "./webform-site";
 
 /** 作业里安装的 Codex CLI 版本（npm 包 `@openai/codex`，Apache-2.0）。改版本时同步改 workflow。 */
 export const CODEX_VERSION = "0.166.0";
@@ -105,12 +116,17 @@ async function runOne(
     model: string;
     minutes: number;
     out: string;
+    /** 重复任务的第几次；产物和记录按它分开存。 */
+    round?: "first" | "second";
   },
 ): Promise<EvalRecord> {
-  const work = mkdtempSync(join(tmpdir(), `codex-${task}-`));
-  materialize(task, work);
+  const key = options.round ? `${task}-${options.round}` : task;
+  const work = mkdtempSync(join(tmpdir(), `codex-${key}-`));
+  // 网页表单题：夹具网站在本机起，Codex 的命令访问得到；判分读它收到的记录。
+  const site = task === "webform" ? startWebformSite() : null;
+  materialize(task, work, site ? { SITE_URL: site.url } : undefined);
   const started = Date.now();
-  const transcript = join(options.out, "codex", `${task}.jsonl`);
+  const transcript = join(options.out, "codex", `${key}.jsonl`);
   mkdirSync(join(options.out, "codex"), { recursive: true });
   let timedOut = false;
   let error: string | undefined;
@@ -161,12 +177,16 @@ async function runOne(
     error = thrown instanceof Error ? thrown.message : String(thrown);
   }
   const wallMs = Date.now() - started;
+  if (site) {
+    sealReceived(site, work);
+    site.stop();
+  }
   writeFileSync(transcript, stdout);
-  copyTree(work, join(options.out, "codex", task));
+  copyTree(work, join(options.out, "codex", key));
   const outcome = await CHECKERS[task](work);
   rmSync(work, { recursive: true, force: true });
   const summary = analyzeCodex(stdout.split("\n"), {
-    editsData: task === "code" || task === "data",
+    editsData: EDITS_CODE_TASKS.includes(task),
   });
   const tools: Record<string, number> = {};
   for (const line of stdout.split("\n")) {
@@ -203,7 +223,7 @@ if (import.meta.main) {
   }
   const config = verdict.config;
   delete process.env.MODEL_E2E_API_KEY;
-  const tasks = selectTasks(process.env.EVAL_TASKS);
+  const tasks = selectTasks(process.env.EVAL_TASKS, HARD_SUITE);
   const minutes = taskMinutes(process.env);
   const out = resolve(process.env.EVAL_OUT?.trim() || "employee-eval-out");
   const bin = process.env.CODEX_BIN?.trim() || "codex";
@@ -236,14 +256,22 @@ if (import.meta.main) {
     );
     for (const task of tasks) {
       console.log(`\n== ${task}（${TASK_TITLES[task]}）`);
-      const record = await runOne(task, {
+      const common = {
         bin,
         home,
         apiKey: config.apiKey,
         model: config.model,
         minutes,
         out,
-      });
+      };
+      // 重复任务：同一道题连做两次（Codex 每次都是全新的临时目录，没有跨次的记忆，作对照）。
+      const record =
+        task === REPEAT_TASK
+          ? combineRepeat(
+              await runOne(task, { ...common, round: "first" }),
+              await runOne(task, { ...common, round: "second" }),
+            )
+          : await runOne(task, common);
       records.push(record);
       console.log(
         `   ${record.passed ? "PASS" : "FAIL"} ${(record.wallMs / 1000).toFixed(1)} s, steps ${record.steps}, tokens ${record.tokens?.total ?? "?"}${record.timedOut ? "，超时" : ""}${record.error ? `，${record.error}` : ""}`,

@@ -1,0 +1,12 @@
+{
+  "name": "report-cli",
+  "version": "0.4.0",
+  "type": "module",
+  "scripts": {
+    "build": "bun build src/cli.ts --outdir dist --target bun",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "textkit": "file:./vendor/textkit"
+  }
+}

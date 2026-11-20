@@ -1,0 +1,13 @@
+import { expect, test } from "bun:test";
+import { parseCsv, parseLine } from "../src/csv";
+
+test("a line is split on commas and trimmed", () => {
+  expect(parseLine("a, b ,c")).toEqual(["a", "b", "c"]);
+});
+
+test("blank lines are skipped and CRLF is fine", () => {
+  expect(parseCsv("x,y\r\n\r\n1,2\r\n")).toEqual([
+    ["x", "y"],
+    ["1", "2"],
+  ]);
+});

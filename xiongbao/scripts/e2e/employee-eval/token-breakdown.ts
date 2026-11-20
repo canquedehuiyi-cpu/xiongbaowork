@@ -58,7 +58,7 @@ export type Breakdown = {
   total: number;
 };
 
-function textOf(content: unknown): string {
+export function textOf(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content))
     return content
@@ -71,17 +71,25 @@ function textOf(content: unknown): string {
   return "";
 }
 
-/** 把系统提示切成 `<段名>…</段名>` 的段，同名段（例如两个 delivery）分开计但同名。 */
-export function systemSections(prompt: string): Part[] {
-  const parts: Part[] = [];
+/** 系统提示里的 `<段名>…</段名>` 段，同名段（例如两个 delivery）分开列；段外的文字记作 `(段外)`。 */
+export function sectionTexts(prompt: string): { name: string; text: string }[] {
+  const parts: { name: string; text: string }[] = [];
   let rest = prompt;
   for (const match of prompt.matchAll(/^<([a-z_]+)>\n[\s\S]*?\n<\/\1>$/gm)) {
-    parts.push({ name: match[1] ?? "?", tokens: estimateTokens(match[0]) });
+    parts.push({ name: match[1] ?? "?", text: match[0] });
     rest = rest.replace(match[0], "");
   }
   const outside = rest.trim();
-  if (outside) parts.push({ name: "(段外)", tokens: estimateTokens(outside) });
+  if (outside) parts.push({ name: "(段外)", text: outside });
   return parts;
+}
+
+/** 把系统提示切成 `<段名>…</段名>` 的段，同名段（例如两个 delivery）分开计但同名。 */
+export function systemSections(prompt: string): Part[] {
+  return sectionTexts(prompt).map((part) => ({
+    name: part.name,
+    tokens: estimateTokens(part.text),
+  }));
 }
 
 /** 一份请求体的 token 构成。 */

@@ -3,7 +3,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { copyTree, GOLD_DIR, materialize, type TaskName } from "./lib";
+import {
+  copyTree,
+  GOLD_DIR,
+  materialize,
+  sourceTask,
+  type TaskName,
+} from "./lib";
 
 const made: string[] = [];
 
@@ -14,16 +20,16 @@ export function emptyDir(): string {
 }
 
 /** 夹具原样落地（还没做题）。 */
-export function untouched(task: TaskName): string {
+export function untouched(task: TaskName, vars: Record<string, string> = {}) {
   const dir = emptyDir();
-  materialize(task, dir);
+  materialize(task, dir, vars);
   return dir;
 }
 
 /** 夹具落地后叠上 gold/<task>/ 里的标准答案。 */
-export function solved(task: TaskName): string {
-  const dir = untouched(task);
-  copyTree(join(GOLD_DIR, task), dir);
+export function solved(task: TaskName, vars: Record<string, string> = {}) {
+  const dir = untouched(task, vars);
+  copyTree(join(GOLD_DIR, sourceTask(task)), dir, true);
   return dir;
 }
 
