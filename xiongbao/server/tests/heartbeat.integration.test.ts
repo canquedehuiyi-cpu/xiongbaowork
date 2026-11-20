@@ -286,3 +286,45 @@ test("心跳和巡检双向共用上限：心跳用满后巡检开不了，巡�
     await db.delete(agents).where(eq(agents.id, other));
   });
 });
+
+test("领它的进程领了就没了：租约到期后同一条被再领，补排下一次、不重做", async () => {
+  clock = new Date("2026-11-20T11:07:00Z");
+  await asOwner(() => store.apply(owner, bot, { enabled: true, intervalMinutes: 15, checklist: "看卡" }));
+  const chain = (await asOwner(() => store.read(bot)))?.heartbeat?.chain ?? "";
+  const key = `${bot}:${chain}:2026-11-20T11:15Z`;
+  await asPlatform(() =>
+    db
+      .update(workItems)
+      .set({ runAt: new Date("2026-11-20T00:00:00Z") })
+      .where(and(eq(workItems.kind, HEARTBEAT_KIND), eq(workItems.key, key))),
+  );
+  // 第一个进程领走（租约只有 1 毫秒），然后就没了。
+  const crashed = await queue.claim({ kind: HEARTBEAT_KIND, owner: "dead", leaseMs: 1, limit: 50, maxAttempts: 3 });
+  expect(crashed.map((item) => item.key)).toContain(key);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  let turns = 0;
+  const runner = createHeartbeatRunner({
+    queue,
+    store,
+    owner: "test-heartbeat-2",
+    runTurn: async () => {
+      turns += 1;
+      return { replyText: "HEARTBEAT_OK" };
+    },
+    mintThreadId: () => `${prefix}-thread2`,
+    actorFor: async () => ({ id: owner, role: "user" as const }),
+    channels: {
+      direct: async () => {
+        throw new Error("no conversation expected");
+      },
+      recordActivity: async () => {},
+    },
+    dailyRuns: async () => 100,
+    now: () => clock,
+  });
+  const before = (await items()).length;
+  const report = await asPlatform(() => runner.sweep());
+  expect(report.skipped.some((entry) => entry.key === key && entry.reason === "recovered")).toBe(true);
+  expect(turns).toBe(0);
+  expect((await items()).length).toBeGreaterThan(before - 1);
+});

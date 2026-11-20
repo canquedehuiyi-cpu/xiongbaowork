@@ -110,6 +110,9 @@ function fixture(
       chain: string;
     }> | null;
     quiet?: Date | null;
+    readFails?: boolean;
+    scheduleFails?: boolean;
+    attempts?: number;
     begin?: true | "capped";
     gate?: "paused" | null;
     claimed?: number;
@@ -124,6 +127,7 @@ function fixture(
     notified: [] as string[],
     cards: [] as string[],
     finishedItems: 0,
+    released: [] as Record<string, unknown>[],
     claimCalls: 0,
   };
   const heartbeat =
@@ -137,8 +141,12 @@ function fixture(
           ...options.settings,
         };
   const store = {
-    read: async () => ({ type: "built_in", heartbeat }),
+    read: async () => {
+      if (options.readFails) throw new Error("db blip");
+      return { type: "built_in", heartbeat };
+    },
     schedule: async (_o: string, _a: string, chain: string, at: Date) => {
+      if (options.scheduleFails) throw new Error("queue blip");
       log.scheduled.push({ chain, at });
     },
     runsToday: async () => (options.begin === "capped" ? 99 : 0),
@@ -160,7 +168,7 @@ function fixture(
           kind: HEARTBEAT_KIND,
           key: "bot:chain-1:2026-11-20T10:00Z",
           tenantId: "alice",
-          attempts: 1,
+          attempts: options.attempts ?? 1,
           payload: {
             ownerUserId: "alice",
             agentId: "bot",
@@ -175,6 +183,10 @@ function fixture(
         return true;
       },
       purge: async () => 0,
+      release: async (input) => {
+        log.released.push(input as unknown as Record<string, unknown>);
+        return true;
+      },
     },
     store,
     owner: "test",
@@ -336,6 +348,41 @@ describe("醒来这一轮", () => {
     expect(report.ran[0]?.outcome).toBe("failed");
     expect(log.activity).toEqual([]);
     expect(log.scheduled).toHaveLength(1);
+  });
+});
+
+describe("这串心跳不会断", () => {
+  test("读设置出错、还没排上下一次：放回队列一分钟后重来，不算一次尝试，不收掉", async () => {
+    const { runner, log } = fixture({ readFails: true });
+    await runner.sweep();
+    expect(log.finishedItems).toBe(0);
+    expect(log.released).toHaveLength(1);
+    expect(log.released[0]).toMatchObject({ delayMs: 60_000, uncounted: true });
+    expect(log.turns).toEqual([]);
+  });
+
+  test("排下一次出错：同样放回去重来，这一次没有做事", async () => {
+    const { runner, log } = fixture({ scheduleFails: true });
+    await runner.sweep();
+    expect(log.finishedItems).toBe(0);
+    expect(log.released).toHaveLength(1);
+    expect(log.turns).toEqual([]);
+  });
+
+  test("下一次排好之后才出的错：这一条收掉，不放回，免得做两遍", async () => {
+    const { runner, log } = fixture({ reply: new Error("boom") });
+    await runner.sweep();
+    expect(log.finishedItems).toBe(1);
+    expect(log.released).toEqual([]);
+  });
+
+  test("领它的进程做到一半没了、租约到期后被再领：只补排下一次，不重做这一次", async () => {
+    const { runner, log } = fixture({ attempts: 2 });
+    const report = await runner.sweep();
+    expect(report.skipped[0]?.reason).toBe("recovered");
+    expect(log.scheduled).toHaveLength(1);
+    expect(log.turns).toEqual([]);
+    expect(log.began).toBe(0);
   });
 });
 

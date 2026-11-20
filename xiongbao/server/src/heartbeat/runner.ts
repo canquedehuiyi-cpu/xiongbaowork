@@ -58,7 +58,8 @@ export type HeartbeatSkip =
   | "quota"
   | "capped"
   | "unreachable"
-  | "empty";
+  | "empty"
+  | "recovered";
 
 export type HeartbeatReport = {
   /** 用了模型或做了事的醒来：键和结局。 */
@@ -68,7 +69,7 @@ export type HeartbeatReport = {
 };
 
 export type HeartbeatRunnerDeps = {
-  queue: Pick<WorkQueue, "claim" | "renew" | "finish" | "purge">;
+  queue: Pick<WorkQueue, "claim" | "renew" | "finish" | "purge" | "release">;
   store: HeartbeatStore;
   owner: string;
   runTurn: TurnRunner;
@@ -226,20 +227,29 @@ export function createHeartbeatRunner(deps: HeartbeatRunnerDeps) {
     key: string,
     signal: AbortSignal,
     report: HeartbeatReport,
+    /** 这一条是第几次被领出来：大于 1 是上一个领它的进程没做完就没了。 */
+    attempt: number,
+    /** 下一次排上了（或这一串本该到此为止）：没排上就失败的，这一条要放回去重来，不能收掉。 */
+    chain: { settled: boolean },
   ) {
     const skipped = (reason: HeartbeatSkip) =>
       report.skipped.push({ key, reason });
     const settings = await settingsOf(payload.agentId);
     // 关了、删了、或是另一串的（改过间隔、重新打开过）：这一条到此为止，不再接下一次。
-    if (!settings?.enabled || settings.chain !== payload.chain)
+    if (!settings?.enabled || settings.chain !== payload.chain) {
+      chain.settled = true;
       return skipped("dropped");
+    }
 
     const resting = deps.quietUntil
       ? await deps.quietUntil(payload.ownerUserId).catch(() => null)
       : null;
     // 下一次先排上，这一次出什么事都断不了这一串。
     await scheduleNext(payload, settings, resting);
+    chain.settled = true;
     if (resting) return skipped("quiet_hours");
+    // 上一个领它的进程做到一半没了：下一次已经排好，这一次不重来（重来可能把模型那一轮做两遍）。
+    if (attempt > 1) return skipped("recovered");
 
     const refusal = await deps.gate?.({
       ownerUserId: payload.ownerUserId,
@@ -363,8 +373,9 @@ export function createHeartbeatRunner(deps: HeartbeatRunnerDeps) {
         owner: deps.owner,
         leaseMs,
         limit: 1,
-        // 一次醒来不重来：这一次没做成，下一次已经排好了。
-        maxAttempts: 1,
+        // 领出来的进程没做完就没了，租约到期后会再被领一次（最多三次）；再领到时只补排下一次，不重做
+        // （`attempt` > 1，见 `beat`）。正常失败不靠它：没排上下一次的失败走 `release`，见下面。
+        maxAttempts: 3,
       });
       if (!item) return report;
       const finish = () =>
@@ -388,6 +399,7 @@ export function createHeartbeatRunner(deps: HeartbeatRunnerDeps) {
         return report;
       }
       const controller = new AbortController();
+      const chain = { settled: false };
       const renew = setInterval(() => {
         void deps.queue
           .renew({
@@ -412,17 +424,33 @@ export function createHeartbeatRunner(deps: HeartbeatRunnerDeps) {
             item.key,
             controller.signal,
             report,
+            item.attempts,
+            chain,
           ),
         );
       } catch (error) {
-        // 这一条的失败只是这一条的：记下来，下一次已经排好了。
         logged("heartbeat-run-error", {
           key: item.key,
           reason: error instanceof Error ? error.name : "UnknownError",
         });
       } finally {
         clearInterval(renew);
-        await finish();
+        if (chain.settled) await finish();
+        else
+          /*
+           * 下一次还没排上就出了错（读设置、排队失败）：这一串不能就此断掉。放回队列、一分钟后重来，不算一次尝试；
+           * 放回也失败了，租约到期后同一条会被再领出来（见 `maxAttempts`）。
+           */
+          await deps.queue
+            .release({
+              kind: HEARTBEAT_KIND,
+              key: item.key,
+              owner: deps.owner,
+              delayMs: 60_000,
+              uncounted: true,
+              reason: "next beat not scheduled",
+            })
+            .catch(() => false);
       }
       return report;
     },
