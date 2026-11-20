@@ -78,6 +78,24 @@ export function evalGate(
   return { ok: true, config: { provider, model, baseUrl, apiKey, mock } };
 }
 
+/**
+ * 熊宝侧用哪个模型：`EVAL_XIONGBAO_MODEL` 有值就用它，没有（空串、纯空白）就和 `EVAL_MODEL` 一样。
+ * 只影响熊宝侧；Codex 侧永远用 `EVAL_MODEL`，所以同一次评测里能把「换更强模型的熊宝」和「同模型的熊宝」「Codex」
+ * 放在一起比，分清差距多少来自模型、多少来自做法。`base` 是 {@link evalGate} 已经核过的 `EVAL_MODEL`。
+ */
+export function xiongbaoModel(
+  env: Record<string, string | undefined>,
+  base: string,
+):
+  | { ok: true; model: string; overridden: boolean }
+  | { ok: false; reason: string } {
+  const named = env.EVAL_XIONGBAO_MODEL?.trim();
+  if (!named) return { ok: true, model: base, overridden: false };
+  if (!/^[\w.:/@-]{1,120}$/.test(named))
+    return { ok: false, reason: "EVAL_XIONGBAO_MODEL is not a model name" };
+  return { ok: true, model: named, overridden: named !== base };
+}
+
 /** 每题的墙钟上限（分钟），默认 20。 */
 export function taskMinutes(env: Record<string, string | undefined>): number {
   const value = Number(env.EVAL_TASK_MINUTES ?? "");

@@ -1,0 +1,30 @@
+import { expect, test } from "bun:test";
+import { columnWidths, renderTable } from "../src/table";
+
+test("the header counts when it is the widest cell in its column", () => {
+  expect(columnWidths([["department", "n"], ["ops", "3"]])).toEqual([10, 1]);
+  expect(
+    renderTable([
+      ["department", "n"],
+      ["ops", "3"],
+    ]),
+  ).toBe(["department | n", "-----------+--", "ops        | 3"].join("\n"));
+});
+
+test("short rows are padded with empty cells", () => {
+  expect(
+    renderTable([
+      ["a", "b", "c"],
+      ["1"],
+    ]),
+  ).toBe(["a | b | c", "--+---+--", "1 |   |"].join("\n"));
+});
+
+test("Chinese text is measured in characters", () => {
+  expect(
+    renderTable([
+      ["姓名", "组"],
+      ["李想", "基础设施"],
+    ]),
+  ).toBe(["姓名 | 组", "---+-----", "李想 | 基础设施"].join("\n"));
+});

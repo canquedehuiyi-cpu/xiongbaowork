@@ -37,7 +37,12 @@
  *   E2E_DATABASE_URL, E2E_ROLE_WRITER_DATABASE_URL   与 wakerflow-real-model.ts 相同
  *   EVAL_SUITE        tasks | smoke
  *   EVAL_PATH         board | chat，默认 board
- *   EVAL_TASKS        all（五道对标题）、hard（加难题）或逗号分隔的题名（smoke 套件里是场景名，另有 background）
+ *   EVAL_TASKS        all（五道对标题）、hard（加难题：compare、refactor、terminal、webform）或逗号分隔的题名
+ *                     （repeat 只能点名：多步办公题在同一位员工身上连做两次，记 firstRun / secondRun）；
+ *                     smoke 套件里是场景名，另有 background
+ *   EVAL_XIONGBAO_MODEL  只给熊宝侧换的模型名，空表示和 EVAL_MODEL 一样（Codex 侧不受影响）
+ *   EVAL_PROMPT_CHARS 真模型下设 on，才记每道题发给模型的请求体大小（在服务器和提供方之间夹一个回环转发，
+ *                     结果记录里的 promptChars，报告里的「提示词体积」表）；本机假模型一律记
  *   EVAL_TASK_MINUTES 每题墙钟上限，默认 20（冒烟场景用各自的上限）
  *   EVAL_OUT          结果目录，默认 ./employee-eval-out；写 xiongbao.json / smoke.json（chat 路径是 -chat 结尾）、产物和服务器日志
  *   E2E_SERVER_PORT   默认取空闲端口
@@ -95,13 +100,16 @@ import {
   transcriptChecks,
 } from "./chat-path";
 import { CHECKERS } from "./checkers";
-import { evalGate, taskMinutes } from "./config";
+import { evalGate, taskMinutes, xiongbaoModel } from "./config";
 import {
   type Check,
   check,
   copyTree,
+  EDITS_CODE_TASKS,
+  HARD_SUITE,
   listFiles,
   materialize,
+  REPEAT_TASK,
   result,
   selectTasks,
   TASK_TITLES,
@@ -119,6 +127,7 @@ import {
   observedFeatures,
   snapshotHasReasoning,
   snapshotMessages,
+  summarizePrompts,
   TOOL,
   type ToolCall,
   toolCallsFromMessages,
@@ -127,7 +136,9 @@ import {
 } from "./metrics";
 import { type MockRequest, type MockTurn, startMockModel } from "./mock-model";
 import { researchPolicy, researchScriptFrom } from "./mock-research";
+import { startPromptRecorder } from "./prompt-recorder";
 import {
+  combineRepeat,
   type EvalPath,
   type EvalRecord,
   type EvalResults,
@@ -139,6 +150,11 @@ import {
   type SmokeScenario,
   selectSmoke,
 } from "./smoke";
+import {
+  sealReceived,
+  startWebformSite,
+  type WebformSite,
+} from "./webform-site";
 
 const ROOT = resolve(import.meta.dir, "../../..");
 const SERVER_DIR = resolve(ROOT, "server");
@@ -156,7 +172,13 @@ if (!verdict.ok) {
   console.error(`run-xiongbao refused: ${verdict.reason}`);
   process.exit(2);
 }
-const config = verdict.config;
+/** 熊宝侧的模型：`EVAL_XIONGBAO_MODEL` 有值就用它（只影响这一侧，Codex 侧仍用 `EVAL_MODEL`）。 */
+const modelChoice = xiongbaoModel(process.env, verdict.config.model);
+if (!modelChoice.ok) {
+  console.error(`run-xiongbao refused: ${modelChoice.reason}`);
+  process.exit(2);
+}
+const config = { ...verdict.config, model: modelChoice.model };
 delete process.env.MODEL_E2E_API_KEY;
 const suite = process.env.EVAL_SUITE?.trim() === "smoke" ? "smoke" : "tasks";
 let evalPath: EvalPath;
@@ -180,7 +202,7 @@ if (!databaseUrl || !roleWriterDatabaseUrl) {
 const OUT = resolve(process.env.EVAL_OUT?.trim() || "employee-eval-out");
 mkdirSync(OUT, { recursive: true });
 const tasks: TaskName[] =
-  suite === "tasks" ? selectTasks(process.env.EVAL_TASKS) : [];
+  suite === "tasks" ? selectTasks(process.env.EVAL_TASKS, HARD_SUITE) : [];
 const scenarios: SmokeScenario[] =
   suite === "smoke" ? selectSmoke(process.env.EVAL_TASKS) : [];
 /** 这道题实际走的路径：后台长跑冒烟只有单聊路径做得了，不管 `EVAL_PATH`。 */
@@ -191,6 +213,18 @@ const needsChat =
   evalPath === "chat" || scenarios.some((scenario) => scenario.background);
 const minutes = taskMinutes(process.env);
 const features = featureProbe(ROOT);
+/**
+ * 记录每道题发给模型的请求体大小（提示词体积）：本机假模型模式一律记；真模型下 `EVAL_PROMPT_CHARS=on` 才记，
+ * 因为要在服务器和提供方之间夹一个回环转发（见 prompt-recorder.ts），服务器的模型地址校验得放开回环地址。
+ */
+const recordPrompts =
+  config.mock || process.env.EVAL_PROMPT_CHARS?.trim() === "on";
+/**
+ * 服务器要不要放开回环地址（`AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS`，只开发和评测用）：假模型和请求记录都讲回环上的
+ * 明文 http；网页表单题的夹具网站也在回环地址上，员工的浏览器要打得开它。评测机是一次性的，员工本来就能在
+ * 它的命令行里访问回环地址，这里放开的只是浏览器和模型地址校验。
+ */
+const allowLoopback = recordPrompts || tasks.includes("webform");
 
 // ---------------------------------------------------------------------------------------------
 // 小工具
@@ -361,7 +395,12 @@ const mock = config.mock
       return mockPolicy(request);
     })
   : null;
-const providerBaseUrl = mock ? `${mock.url}/v1` : config.baseUrl;
+const upstreamBaseUrl = mock ? `${mock.url}/v1` : config.baseUrl;
+const recorder =
+  recordPrompts && upstreamBaseUrl
+    ? startPromptRecorder(upstreamBaseUrl)
+    : null;
+const providerBaseUrl = recorder ? recorder.url : upstreamBaseUrl;
 
 // ---------------------------------------------------------------------------------------------
 // 电脑和服务器
@@ -458,8 +497,8 @@ async function startServer() {
       OPENAI_API_KEY: "eval-deployment-stub-not-a-secret",
       COPILOTKIT_TELEMETRY_DISABLED: "true",
       DO_NOT_TRACK: "1",
-      // 假模型在回环地址上讲明文 http，只有这个模式才打开开发用的开关；真模型下 SSRF 防护保持全开。
-      ...(config.mock ? { AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true" } : {}),
+      // 回环地址上的明文 http（假模型、请求记录、夹具网站）才打开开发用的开关；其余真模型运行里 SSRF 防护保持全开。
+      ...(allowLoopback ? { AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true" } : {}),
     },
     stdout: fd,
     stderr: fd,
@@ -772,6 +811,12 @@ async function roundEnded(runId: string): Promise<boolean> {
 
 type Work = {
   key: string;
+  /** 夹具取自哪道题（题名；冒烟场景没有）。重复任务的两次都取 `repeat`。 */
+  task?: TaskName;
+  /** 同一组的几次运行共用一位员工（重复任务：第一次和第二次）。 */
+  group?: string;
+  /** 网页表单题的夹具网站，运行前由主流程起、运行后停。 */
+  site?: WebformSite;
   title: string;
   label: string;
   where: string;
@@ -803,6 +848,10 @@ const OUTPUTS: Record<TaskName, string[]> = {
   data: ["summary.csv"],
   office: ["actions.csv"],
   compare: ["compare.md"],
+  refactor: ["src/money.ts"],
+  terminal: ["dist/cli.js"],
+  webform: ["receipt.txt"],
+  repeat: ["actions.csv"],
 };
 
 /** 一道题交给员工、等它做完之后的结果：用到的运行、追了几次「继续」、有没有超时，和路径自己的几项判分。 */
@@ -1186,6 +1235,9 @@ async function driveChat(
   };
 }
 
+/** 同一组运行（重复任务）共用的员工。 */
+const agentOfGroup = new Map<string, string>();
+
 async function runWork(work: Work): Promise<EvalRecord> {
   console.log(
     `\n== ${work.key}（${work.title}）${work.via === "chat" ? " [chat]" : ""}`,
@@ -1193,7 +1245,12 @@ async function runWork(work: Work): Promise<EvalRecord> {
   const since = new Date();
   const started = Date.now();
   const deadline = started + work.minutes * 60_000;
-  const agentId = await newEmployee(work.label);
+  const agentId =
+    (work.group ? agentOfGroup.get(work.group) : undefined) ??
+    (await newEmployee(work.label));
+  if (work.group) agentOfGroup.set(work.group, agentId);
+  // 请求记录里只留这一道题的：先清掉之前的（建模型库条目时的探测请求等）。
+  recorder?.drain();
   const dir = join(WORKSPACE, work.where);
   const driven =
     work.via === "chat"
@@ -1230,6 +1287,9 @@ async function runWork(work: Work): Promise<EvalRecord> {
 
   const copy = join(OUT, artifactDirName(suite, work.via), work.key);
   copyTree(dir, copy);
+  // 网页表单题：判分读服务端收到的记录，在员工做完以后由评测脚本写进去。
+  if (work.site) sealReceived(work.site, copy);
+  const promptChars = summarizePrompts(recorder?.drain() ?? []);
   const events = await eventsOf(runIds);
   const tokens = await tokenRows(agentId, since);
   const perRound = runIds.map(
@@ -1329,6 +1389,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     tools,
     capabilities,
     checks,
+    ...(promptChars ? { promptChars } : {}),
     ...(roundErrors.length
       ? {
           error: `运行报错 ${roundErrors.length} 次：${[...new Set(roundErrors)].join("；")}`,
@@ -1345,17 +1406,31 @@ async function runWork(work: Work): Promise<EvalRecord> {
   return record;
 }
 
-function taskWork(task: TaskName): Work {
-  const where = `eval/${task}`;
+/**
+ * 一道题交给员工的几次运行：一般一次；重复任务是同一位员工、两个干净目录（`eval/repeat-first`、
+ * `eval/repeat-second`）里各做一次同一道办公题，两次各开一段新对话。
+ */
+function taskWorks(task: TaskName): Work[] {
+  if (task !== REPEAT_TASK) return [taskWork(task)];
+  return [taskWork(task, "first"), taskWork(task, "second")];
+}
+
+function taskWork(task: TaskName, round?: "first" | "second"): Work {
+  const key = round ? `${task}-${round}` : task;
+  const where = `eval/${key}`;
   return {
-    key: task,
-    title: TASK_TITLES[task],
-    label: task,
+    key,
+    task,
+    ...(round ? { group: task } : {}),
+    title: round
+      ? `${TASK_TITLES[task]}（第${round === "first" ? "一" : "二"}次）`
+      : TASK_TITLES[task],
+    label: key,
     where,
     prompt: taskPrompt(task, where),
     minutes,
     via: pathOf(),
-    editsData: task === "code" || task === "data",
+    editsData: EDITS_CODE_TASKS.includes(task),
     outputsReady: (dir) =>
       OUTPUTS[task].every((path) => existsSync(join(dir, path))),
     judge: async (dir, { agentId, since }) => {
@@ -1506,10 +1581,23 @@ try {
   modelRef = model.body.model.id;
 
   const works =
-    suite === "tasks" ? tasks.map(taskWork) : scenarios.map(smokeWork);
+    suite === "tasks" ? tasks.flatMap(taskWorks) : scenarios.map(smokeWork);
+  let firstRound: EvalRecord | undefined;
   for (const work of works) {
+    if (work.task === "webform") work.site = startWebformSite();
     materializeWork(work);
-    records.push(await runWork(work));
+    let record: EvalRecord;
+    try {
+      record = await runWork(work);
+    } finally {
+      work.site?.stop();
+    }
+    // 重复任务：两次的记录合成一条（`firstRun` / `secondRun` 各记一次的指标）。
+    if (work.group && !firstRound) firstRound = record;
+    else if (work.group && firstRound) {
+      records.push(combineRepeat(firstRound, record));
+      firstRound = undefined;
+    } else records.push(record);
   }
   if (deploymentHits > 0)
     notes.push(
@@ -1533,7 +1621,12 @@ function materializeWork(work: Work) {
   const dir = join(WORKSPACE, work.where);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
-  if (suite === "tasks") materialize(work.key as TaskName, dir);
+  if (suite === "tasks" && work.task)
+    materialize(
+      work.task,
+      dir,
+      work.site ? { SITE_URL: work.site.url } : undefined,
+    );
   else {
     const scenario = scenarios.find((item) => item.name === work.key);
     if (scenario) placeSmoke(scenario, dir);
