@@ -70,6 +70,13 @@ on:
         description: "只给熊宝侧换的模型名，留空表示和 model 一样；填了以后熊宝侧用它、Codex 侧仍用 model，用来分清差距有多少来自模型、多少来自做法"
         type: string
         default: ""
+      prompt_slim:
+        description: "熊宝侧的提示词瘦身（XIONGBAO_PROMPT_SLIM）：on 是默认，off 关掉做对照（系统提示和工具定义回到原样）；只影响熊宝侧"
+        type: choice
+        default: "on"
+        options:
+          - "on"
+          - "off"
       base_url:
         description: "OpenAI 兼容接口地址，留空按提供方默认（deepseek 为 https://api.deepseek.com）；Codex 侧要求它支持 Responses"
         type: string
@@ -233,6 +240,8 @@ jobs:
           EVAL_BASE_URL: ${{ inputs.base_url }}
           # 只影响熊宝侧；空表示和 EVAL_MODEL 一样（run-xiongbao.ts 里的 xiongbaoModel）。
           EVAL_XIONGBAO_MODEL: ${{ inputs.xiongbao_model }}
+          # 熊宝侧的提示词瘦身开关，run-xiongbao.ts 传给服务器的 XIONGBAO_PROMPT_SLIM；off 用来做对照。
+          EVAL_PROMPT_SLIM: ${{ inputs.prompt_slim }}
           # 记录每道题发给模型的请求体大小（提示词体积表）：在服务器和提供方之间夹一个回环转发，不改请求。
           EVAL_PROMPT_CHARS: "on"
           EVAL_SUITE: tasks
@@ -380,6 +389,8 @@ jobs:
           EVAL_MODEL: ${{ inputs.model }}
           EVAL_BASE_URL: ${{ inputs.base_url }}
           EVAL_XIONGBAO_MODEL: ${{ inputs.xiongbao_model }}
+          # 熊宝侧的提示词瘦身开关，run-xiongbao.ts 传给服务器的 XIONGBAO_PROMPT_SLIM；off 用来做对照。
+          EVAL_PROMPT_SLIM: ${{ inputs.prompt_slim }}
           EVAL_SUITE: smoke
           EVAL_TASKS: ${{ inputs.scenarios }}
           EVAL_OUT: ${{ runner.temp }}/capability-smoke
