@@ -15,6 +15,7 @@ import {
 import { slimComputerGuidance } from "../src/agents/slim-guidance";
 import { createSubagents } from "../src/agents/subagent";
 import { updatePlanTools } from "../src/agents/update-plan";
+import { gitTools } from "../src/computer/git-tools";
 import { createHeadlessComputerTools } from "../src/computer/headless-tools";
 import type { GrantedTool } from "../src/plugins/tools";
 import { deliveryTools } from "../src/tasks/delivery-tools";
@@ -97,6 +98,11 @@ const computerDefinitions = createHeadlessComputerTools({
 function grantedForBoardTurn(): GrantedTool[] {
   const real = [
     ...updatePlanTools(),
+    // 期 4：Git 工作流四个工具，排在检索后面。
+    ...gitTools({
+      computer: async () => undefined,
+      connectorTools: async () => [],
+    }),
     ...webTools({ search: { problem: "x" }, scope: "owner:bot" }),
     ...deliveryTools({
       delivery: {} as never,

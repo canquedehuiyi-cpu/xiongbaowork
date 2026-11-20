@@ -31,6 +31,7 @@ const MEDIA = "image picture video poster draw generate media";
 const FOLLOW_UP = "follow up reminder remind schedule later wake";
 const MEMORY = "memory remember recall forget fact preference";
 const ACCESS = "app access connect connector grant permission";
+const GIT = "git branch commit diff changes pull request pr github push";
 
 /**
  * 排在检索后面的工具，和各自的检索关键词（在名字和描述之外再多几个词，让「browser」「image」「remind」这样的
@@ -66,6 +67,10 @@ export const DEFERRED_TOOLS: Readonly<Record<string, string>> = {
   request_app_access: ACCESS,
   show_app_access: ACCESS,
   host_list_folders: "folder folders shared host local files",
+  git_branch: GIT,
+  git_commit: GIT,
+  git_diff_summary: GIT,
+  open_pull_request: GIT,
   save_learned_skill: "skill learn save lesson reuse",
   refine_skill: "skill learn refine improve lesson",
 };

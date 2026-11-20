@@ -7,6 +7,7 @@ import { computerGuidance } from "../../shared/bot-prompt";
 import { promptSlimOn } from "./agents/prompt-slim";
 import { slimComputerGuidance } from "./agents/slim-guidance";
 import { hardModelOf } from "../../shared/hard-model";
+import { commandTimeoutMs } from "../../shared/computer-tool-words";
 import { lightModelOf } from "../../shared/light-model";
 import { isPersonBrowserId } from "../../shared/openbot-browser";
 import { workOwner } from "../../shared/work-owner";
@@ -111,6 +112,13 @@ import { toolLimitRecorder } from "./agents/tool-limit";
 import { serverTurnAdmission } from "./agents/turn-admission";
 import { createHeartbeatRoutes } from "./agents/heartbeat-routes";
 import { updatePlanTools } from "./agents/update-plan";
+import { configureHeavyTaskFacts } from "./agents/heavy-task";
+import {
+  type GitComputer,
+  gitTools,
+  offeredGitTools,
+  showingCommand,
+} from "./computer/git-tools";
 import {
   createWakeUpRunner,
   createWakeUpStore,
@@ -120,6 +128,7 @@ import { createApp } from "./app";
 import { createDecisionWaits } from "./approvals/decision-waits";
 import { createApprovedActionExecutor } from "./approvals/execute";
 import { createPersonResponseTick } from "./approvals/person-response-sweep";
+import { outsideRecheck } from "./approvals/service";
 import {
   createApprovalQuestions,
   type PersonQuestion,
@@ -545,9 +554,7 @@ import { createProjectRoutes } from "./projects/routes";
 import { createProjectStore } from "./projects/store";
 import { createProviderOAuthProxy } from "./provider-oauth";
 import { QuotaExceeded, createQuotaService } from "./quota/limits";
-import {
-  createHeartbeatRunner,
-} from "./heartbeat/runner";
+import { createHeartbeatRunner } from "./heartbeat/runner";
 import { createHeartbeatStore } from "./heartbeat/store";
 import { heartbeatTools } from "./heartbeat/tools";
 import { createQuotaRoutes } from "./quota/routes";
@@ -3137,6 +3144,88 @@ await startupLifecycle.run(async (startup) => {
     ownerUserId,
     agentId,
   });
+  /** 授予这位员工的应用工具（连接器）。每一轮的工具列表和 `open_pull_request` 找 GitHub 连接器都读它。 */
+  const appToolsFor = async (
+    actorId: string,
+    initiator: AuditInitiator,
+    botId: string,
+  ) =>
+    grantedTools({
+      store: pluginStore,
+      botId,
+      actorId,
+      initiator,
+      // A Team Bot reaches its owner's accounts, and a teammate's own only with their consent.
+      credentialActorFor: teamBots.credentialActorFor(actorId, botId),
+      // 账号可选（上游 #1298）只告诉在用自己账号的人；别人的 Team Bot 不告诉，读法不花同意。
+      offersAccountsOf:
+        (await teamBots.unaskedOwnAccount(actorId, botId)) === null
+          ? actorId
+          : null,
+    });
+  /**
+   * 员工的 Git 工作流工具（`computer/git-tools.ts`，期 4）：在这位员工自己的工作区里跑 git，命令走电脑网关的
+   * `runCommand`，审批和审计与 `computer_run_command` 同一套。到调用时才查这位员工有没有电脑可用；开 PR 从
+   * 授予这位员工的应用工具里找 GitHub 连接器的「创建 PR」。命令是写给 bash 的，接了本人电脑的部署不提供。
+   */
+  const gitToolsFor = (
+    actorId: string,
+    initiator: AuditInitiator,
+    botId: string,
+  ) =>
+    computerGateway && computerMachine === "workspace"
+      ? gitTools({
+          computer: () =>
+            runAsTenant(actorId, async (): Promise<GitComputer | undefined> => {
+              const actor = await actorFor(actorId);
+              const profile = await agentProfileStore.get(actor, botId);
+              if (!profile || !canUseComputer(profile, actor)) return undefined;
+              const seat = await computerGateway.seatFor(botId, actor.id);
+              const acting = { id: actor.id, userId: actor.id, initiator };
+              return {
+                run: (command, signal) =>
+                  showingCommand(command, () =>
+                    runAsTenant(actorId, () =>
+                      computerGateway.runCommand(
+                        seat,
+                        acting,
+                        { command, timeoutMs: commandTimeoutMs(60_000) },
+                        signal,
+                      ),
+                    ),
+                  ),
+                read: (path, signal) =>
+                  runAsTenant(actorId, async () => {
+                    try {
+                      // 复核批准时不把这次读当成被批准的那条命令（见 `outsideRecheck`）。
+                      const file = await outsideRecheck(() =>
+                        computerGateway.readFile(
+                          seat,
+                          acting,
+                          { path },
+                          signal,
+                        ),
+                      );
+                      return {
+                        text: file.text,
+                        truncated: file.truncated,
+                        bytes: file.bytes,
+                      };
+                    } catch (error) {
+                      // 删掉的文件读不到：交给 git 判断，不当成错误。
+                      if (
+                        error instanceof Error &&
+                        /There is no file/i.test(error.message)
+                      )
+                        return null;
+                      throw error;
+                    }
+                  }),
+              };
+            }),
+          connectorTools: () => appToolsFor(actorId, initiator, botId),
+        })
+      : [];
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -3223,6 +3312,11 @@ await startupLifecycle.run(async (startup) => {
      */
     ...selfSkillTools(selfSkillDepsFor(actorId, botId)),
     /*
+     * Git 工作流（`git_branch`、`git_commit`、`git_diff_summary`、`open_pull_request`，期 4）：每位员工默认都有
+     * （没有电脑时工具照实说），工具权限里关掉 `bot/git_branch` 等即不给。排在 `search_tools` 后面按需检索。
+     */
+    ...gitToolsFor(actorId, initiator, botId),
+    /*
      * 交付闭环的三步（接活、交付、延期）：每位员工默认都有，工具权限里关掉 `accept_task` 即不走三步
      * （见上面的 `offeredDeliveryTools`）。卡片的租户是这一轮的人。
      */
@@ -3253,19 +3347,7 @@ await startupLifecycle.run(async (startup) => {
       ownerUserId: actorId,
       agentId: botId,
     })),
-    ...(await grantedTools({
-      store: pluginStore,
-      botId,
-      actorId,
-      initiator,
-      // A Team Bot reaches its owner's accounts, and a teammate's own only with their consent.
-      credentialActorFor: teamBots.credentialActorFor(actorId, botId),
-      // 账号可选（上游 #1298）只告诉在用自己账号的人；别人的 Team Bot 不告诉，读法不花同意。
-      offersAccountsOf:
-        (await teamBots.unaskedOwnAccount(actorId, botId)) === null
-          ? actorId
-          : null,
-    })),
+    ...(await appToolsFor(actorId, initiator, botId)),
     // 申请访问：用不了某个应用时替对方向管理员申请（迁移 0153）。只建一条本租户的申请，不碰应用。
     // 类型与浏览器入口同一个判定，broker 应用的状态要知道 Composio 配没配，否则 broker 应用会被读成没打开。
     ...appAccessTools({
@@ -3848,6 +3930,31 @@ await startupLifecycle.run(async (startup) => {
     runTurn: unattendedTurnRunner,
   });
 
+  /*
+   * 重活分流（`agents/heavy-task.ts`，期 4）：大型编码任务的建议要用到的事实，每一轮按员工查一次：这位员工设置里的
+   * 难任务模型，和这个人手上固定的 Codex、Claude Code 员工（只看他自己的、没删的）。读的是这一轮的人的租户。
+   */
+  configureHeavyTaskFacts(async (agentId) => {
+    const person = currentTenant();
+    const [row] = await database
+      .select({ configuration: agents.configuration })
+      .from(agents)
+      .where(eq(agents.id, agentId))
+      .limit(1);
+    const hardModel = hardModelOf(row?.configuration);
+    const profiles = await agentProfileStore.list(await actorFor(person));
+    return {
+      ...(hardModel ? { hardModel } : {}),
+      externalCoders: profiles.flatMap((profile) => {
+        const harness = profile.externalRun?.harness;
+        return profile.type === "device_acp" &&
+          profile.ownerUserId === person &&
+          (harness === "codex" || harness === "claude-code")
+          ? [{ name: profile.name, harness }]
+          : [];
+      }),
+    };
+  });
   /**
    * Subagents: every Bot's way to give part of its work to a fresh run of itself (agents/subagent.ts).
    *
@@ -4553,6 +4660,12 @@ await startupLifecycle.run(async (startup) => {
         initiator,
         auditStore: bootAuditStore,
       }),
+    // 重放前也按员工的工具权限过滤：批准之后才被关掉的 `bot/git_*` 不再执行。
+    nativeTools: async ({ actorId, botId, initiator }) =>
+      offeredGitTools(
+        gitToolsFor(actorId, initiator, botId),
+        await approvalService.disabledTools(actorId, botId),
+      ),
     callTool: (input) => pluginStore.callTool(input),
     credentialActorFor: (actorId, botId, ref) =>
       teamBots.credentialActorFor(actorId, botId)(ref),
@@ -5257,9 +5370,12 @@ await startupLifecycle.run(async (startup) => {
     ownerUserId: string;
     agentId: string;
   }) => {
-    if (await proactiveStore.personOff(ownerUserId)) return "off_person" as const;
-    if (await proactiveStore.paused(ownerUserId, agentId)) return "paused" as const;
-    if (!(await proactiveEngine.allowed(ownerUserId))) return "off_admin" as const;
+    if (await proactiveStore.personOff(ownerUserId))
+      return "off_person" as const;
+    if (await proactiveStore.paused(ownerUserId, agentId))
+      return "paused" as const;
+    if (!(await proactiveEngine.allowed(ownerUserId)))
+      return "off_admin" as const;
     try {
       await quota.assertCapacity(ownerUserId, "tasksPerMonth");
     } catch (error) {
@@ -5520,7 +5636,8 @@ await startupLifecycle.run(async (startup) => {
     channels: channelStore,
     // 外部员工自己干活、不走三步；被暂停的、关了 `accept_task` 的员工不自己接活。
     canClaim: async (ownerUserId, agentId) => {
-      if (await isExternalEmployee(database, ownerUserId, agentId)) return false;
+      if (await isExternalEmployee(database, ownerUserId, agentId))
+        return false;
       if (await proactiveStore.paused(ownerUserId, agentId)) return false;
       return !(await approvalService.disabledTools(ownerUserId, agentId))(
         ACCEPT_TASK_REF,
