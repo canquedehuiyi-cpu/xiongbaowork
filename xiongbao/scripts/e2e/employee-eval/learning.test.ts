@@ -63,6 +63,27 @@ test("the log lines of a run's retrospective are read out of a noisy server log"
   expect(retroLinesOf(log, ["r3", "r9"])).toEqual([]);
 });
 
+test("a held retrospective carries the reason from its retrospect-held line", () => {
+  const log = [
+    JSON.stringify({
+      type: "retrospect-held",
+      runId: "r2",
+      reason: "要求访问或外发到网址或域名（rates.fx）",
+    }),
+    line({ runId: "r2", outcome: "held", trigger: "card_delivered", steps: 20 }),
+    JSON.stringify({ type: "retrospect-held", runId: "r9", reason: "别的轮" }),
+  ].join("\n");
+  expect(retroLinesOf(log, ["r2"])).toEqual([
+    {
+      runId: "r2",
+      outcome: "held",
+      trigger: "card_delivered",
+      steps: 20,
+      heldReason: "要求访问或外发到网址或域名（rates.fx）",
+    },
+  ]);
+});
+
 function clock() {
   let at = 0;
   return {

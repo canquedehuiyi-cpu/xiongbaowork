@@ -50,6 +50,8 @@ export type RunLearning = {
     trigger?: string;
     /** 复盘看的工具调用步数。 */
     steps?: number;
+    /** 转待审的原因（`retrospect-held` 日志行里的）；没转待审时没有。 */
+    heldReason?: string;
   };
 };
 
