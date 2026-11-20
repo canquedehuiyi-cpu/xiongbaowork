@@ -1,8 +1,15 @@
-import { SKILL_STALE_DAYS } from "../../../shared/self-skills";
-import { eq } from "drizzle-orm";
+import {
+  SELF_SKILL_SLUG_PREFIX,
+  SKILL_STALE_DAYS,
+} from "../../../shared/self-skills";
+import { and, eq, isNotNull } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { learnedSkills } from "../db/schema";
 import { currentTenant } from "../tenant/context";
+import {
+  decodeFingerprint,
+  type SourceFingerprint,
+} from "./source-fingerprint";
 
 /**
  * 最近 30 天没用过的技能，在挑选时降权（期 2 · Task 2.4）。
@@ -75,4 +82,38 @@ export async function learnedUsageOf(
       { lastUsedAt: row.lastUsedAt, createdAt: row.createdAt },
     ]),
   );
+}
+
+/**
+ * 把员工自己写的技能的来源请求指纹挂到技能上（`sourceFingerprint`），挑选时才比得到
+ * （`plugins/picked-skill.ts` 的 `relatedSelfSkills`）。没有指纹的行、人写的技能原样。在本人帧里调用。
+ * 清单里没有员工自己写的技能时不查库。
+ */
+export async function withSourceFingerprints<T extends { slug: string }>(
+  database: Database,
+  held: readonly T[],
+): Promise<(T & { sourceFingerprint?: SourceFingerprint })[]> {
+  if (!held.some((skill) => skill.slug.startsWith(SELF_SKILL_SLUG_PREFIX)))
+    return [...held];
+  const rows = await database
+    .select({
+      slug: learnedSkills.skillSlug,
+      sourceFingerprint: learnedSkills.sourceFingerprint,
+    })
+    .from(learnedSkills)
+    .where(
+      and(
+        eq(learnedSkills.tenantId, currentTenant()),
+        isNotNull(learnedSkills.sourceFingerprint),
+      ),
+    );
+  const bySlug = new Map<string, SourceFingerprint>();
+  for (const row of rows) {
+    const fingerprint = decodeFingerprint(row.sourceFingerprint);
+    if (fingerprint) bySlug.set(row.slug, fingerprint);
+  }
+  return held.map((skill) => {
+    const fingerprint = bySlug.get(skill.slug);
+    return fingerprint ? { ...skill, sourceFingerprint: fingerprint } : skill;
+  });
 }

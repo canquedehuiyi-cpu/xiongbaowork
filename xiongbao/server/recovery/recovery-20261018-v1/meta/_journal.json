@@ -1527,6 +1527,13 @@
       "when": 1795145500000,
       "tag": "0237_board_cards",
       "breakpoints": true
+    },
+    {
+      "idx": 238,
+      "version": "7",
+      "when": 1795150000000,
+      "tag": "0238_learned_skill_fingerprint",
+      "breakpoints": true
     }
   ]
 }

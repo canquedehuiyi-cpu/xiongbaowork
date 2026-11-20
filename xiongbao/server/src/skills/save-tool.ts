@@ -24,6 +24,7 @@ import {
   maskEmails,
 } from "../learning/sensitive";
 import { similarity } from "../memory/extract";
+import { encodeFingerprint, fingerprintOf } from "./source-fingerprint";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import type { GrantedTool } from "../plugins/tools";
 import type { PluginStore } from "../plugins/store";
@@ -302,16 +303,28 @@ export async function saveSkill(
   deps: SelfSkillDeps,
   draft: SkillDraft,
   origin: LearnedSkillOrigin,
+  /**
+   * The request the skill was learned from (the card's request, for the retrospective). Only a
+   * fingerprint of its words is stored, never the text: see `source-fingerprint.ts`.
+   */
+  sourceRequest?: string,
 ): Promise<SaveSkillResult> {
   // The retrospective's e-mail addresses become placeholders; the employee's own are refused below.
   const written = origin === "retrospect" ? withoutEmails(draft) : draft;
-  return saveChecked(deps, written, origin);
+  const fingerprint = sourceRequest ? fingerprintOf(sourceRequest) : undefined;
+  return saveChecked(
+    deps,
+    written,
+    origin,
+    fingerprint ? encodeFingerprint(fingerprint) : undefined,
+  );
 }
 
 async function saveChecked(
   deps: SelfSkillDeps,
   draft: SkillDraft,
   origin: LearnedSkillOrigin,
+  sourceFingerprint?: string,
 ): Promise<SaveSkillResult> {
   // The retrospective's draft that gets around a rule is held for the person, not refused: it may be
   // what the employee really did, and the person decides. A secret is refused either way.
@@ -445,12 +458,16 @@ async function saveChecked(
       agentId: deps.agentId,
       skillSlug: slug,
       origin,
+      ...(sourceFingerprint ? { sourceFingerprint } : {}),
       createdAt: at,
       updatedAt: at,
     })
     .onConflictDoUpdate({
       target: [learnedSkills.tenantId, learnedSkills.skillSlug],
-      set: { updatedAt: at },
+      set: {
+        updatedAt: at,
+        ...(sourceFingerprint ? { sourceFingerprint } : {}),
+      },
     });
   return { ok: true, id: slug, status: "active", updated: Boolean(existing) };
 }
