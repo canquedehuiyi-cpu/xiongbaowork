@@ -199,11 +199,13 @@ describe("the middleware asks for memory by the latest user message", () => {
     state: {},
     forwardedProps: {},
   });
+  const threads: (string | undefined)[] = [];
   const ask = async (messages: RunAgentInput["messages"]) => {
     const seen: (string | undefined)[] = [];
     await lastValueFrom(
-      new PersonalMemoryMiddleware("bot", async (_bot, query) => {
+      new PersonalMemoryMiddleware("bot", async (_bot, query, threadId) => {
         seen.push(query);
+        threads.push(threadId);
         return "";
       })
         .run(request(messages), new Spy({ agentId: "bot" }))
@@ -211,6 +213,11 @@ describe("the middleware asks for memory by the latest user message", () => {
     );
     return seen[0];
   };
+
+  test("the thread goes along, so an unchanged topic can keep its block", async () => {
+    await ask([{ id: "1", role: "user", content: "hi" }]);
+    expect(threads).toEqual(["thread"]);
+  });
 
   test("a string message", async () => {
     expect(
@@ -257,16 +264,21 @@ test("the runtime hands the message through to the memory context", async () => 
     edition: "team",
     defaults: { botTurn: () => {} },
     ingestion: {
-      contextFor: async (_owner: string, _bot: string, query?: string) => {
-        asked.push(query);
+      contextFor: async (
+        _owner: string,
+        _bot: string,
+        query?: string,
+        threadId?: string,
+      ) => {
+        asked.push(`${query}@${threadId}`);
         return "ctx";
       },
       syncDue: async () => {},
     },
     store: { mirrorPending: async () => {} },
   } as unknown as Parameters<typeof createMemoryRuntime>[0]);
-  expect(await runtime.loadForActor?.("u1")("bot", "who owns Orion?")).toBe(
-    "ctx",
-  );
-  expect(asked).toEqual(["who owns Orion?"]);
+  expect(
+    await runtime.loadForActor?.("u1")("bot", "who owns Orion?", "t-1"),
+  ).toBe("ctx");
+  expect(asked).toEqual(["who owns Orion?@t-1"]);
 });

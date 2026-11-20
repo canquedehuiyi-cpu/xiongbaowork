@@ -532,6 +532,7 @@ tests/memory-intelligence.integration.test.ts
 tests/memory-rank.test.ts
 tests/memory-relevance.integration.test.ts
 tests/memory-runtime.test.ts
+tests/memory-sticky.test.ts
 tests/memory-store.integration.test.ts
 tests/memory.test.ts
 tests/migrate-teardown.test.ts

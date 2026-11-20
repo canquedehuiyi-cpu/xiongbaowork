@@ -41,6 +41,8 @@ const observedMemoryToolSchema = formedMemorySchema.extend({
 export type LoadPersonalMemory = (
   botId: string,
   query?: string,
+  /** 这一轮所在的线程：同一线程里话题没变就复用上次的块（`sticky.ts`）。 */
+  threadId?: string,
 ) => Promise<string>;
 
 /** 用来挑记忆的消息文字最多取多少字符。 */
@@ -70,7 +72,9 @@ export class PersonalMemoryMiddleware extends Middleware {
   }
   run(input: RunAgentInput, next: AbstractAgent): Observable<BaseEvent> {
     return defer(() =>
-      from(this.load(this.botId, latestUserText(input.messages))),
+      from(
+        this.load(this.botId, latestUserText(input.messages), input.threadId),
+      ),
     ).pipe(
       switchMap((content) =>
         this.runNext(

@@ -10,6 +10,7 @@ import {
   memoryInjectBudget,
   rankMemories,
 } from "./rank";
+import { createStickyMemory } from "./sticky";
 import type { MemoryStore } from "./store";
 import {
   type ImportedMemory,
@@ -209,8 +210,17 @@ export function createMemoryIngestion(options: {
    * Bot qualifies.
    */
   canUseBot?: (ownerUserId: string, botId: string) => Promise<boolean>;
+  /** 记忆注入粘住的设置，见 `sticky.ts`；测试用。 */
+  env?: Record<string, string | undefined>;
+  stickyMaxThreads?: number;
 }) {
   const { store, plugins } = options;
+  const sticky = createStickyMemory({
+    ...(options.env ? { env: options.env } : {}),
+    ...(options.stickyMaxThreads === undefined
+      ? {}
+      : { maxThreads: options.stickyMaxThreads }),
+  });
   const mayUse = async (ownerUserId: string, botId: string) =>
     options.canUseBot
       ? options.canUseBot(ownerUserId, botId)
@@ -426,17 +436,30 @@ export function createMemoryIngestion(options: {
      * 这一轮上下文里的记忆。`query` 是用户最新一条消息：候选多取一些（最近更新的 {@link CONTEXT_CANDIDATES} 条），
      * 再按相关程度挑进预算（`quoteMemoryContext`）。
      */
-    async contextFor(ownerUserId: string, botId: string, query = "") {
-      return quoteMemoryContext(
-        await store.retrieve(
-          ownerUserId,
-          await eligibleSources(ownerUserId, botId),
-          "",
-          await formedFor(botId),
-          { limit: CONTEXT_CANDIDATES },
-        ),
-        { query },
+    async contextFor(
+      ownerUserId: string,
+      botId: string,
+      query = "",
+      threadId?: string,
+    ) {
+      const memories = await store.retrieve(
+        ownerUserId,
+        await eligibleSources(ownerUserId, botId),
+        "",
+        await formedFor(botId),
+        { limit: CONTEXT_CANDIDATES },
       );
+      /*
+       * 同一线程里话题没变就逐字节复用上次的块，前缀缓存才不会每轮失效（`sticky.ts`）。
+       */
+      return sticky.choose({
+        key: threadId
+          ? `${ownerUserId}\u0000${botId}\u0000${threadId}`
+          : undefined,
+        memories,
+        query,
+        render: (asked) => quoteMemoryContext(memories, { query: asked }),
+      });
     },
     /**
      * The memory source OpenBot would switch on by itself for each app this person connected that the
