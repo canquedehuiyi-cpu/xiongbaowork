@@ -42,7 +42,7 @@ type Edition = "team" | "personal";
  * The memory routes' own guards, in a router at the paths they have in the app. Each page is a
  * stand-in that names itself, so where the router lands is what the test reads.
  */
-async function land(edition: Edition, at: string) {
+async function land(edition: Edition, at: string, memory?: boolean) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -51,6 +51,9 @@ async function land(edition: Edition, at: string) {
     selfHostBanner: false,
     localEvaluation: edition === "personal",
     edition,
+    // What the server says: both editions have memory unless its operator turned it off. A server
+    // that says nothing leaves the edition to decide, which is what the other tests here rely on.
+    ...(memory === undefined ? {} : { memory }),
   });
   const root = createRootRouteWithContext<{ queryClient: QueryClient }>()({
     component: Outlet,
@@ -109,6 +112,21 @@ test("an address that opened memory still opens memory", async () => {
     const { view, path } = await land("team", at);
     await waitFor(() => expect(path()).toBe("/capabilities/memory"));
     expect(await view.findByText("Memory")).toBeTruthy();
+    cleanup();
+  }
+});
+
+test("the personal edition opens memory when the server says it has some, and closes it again when the server says it has none", async () => {
+  for (const at of OLD_ADDRESSES) {
+    const { view, path } = await land("personal", at, true);
+    await waitFor(() => expect(path()).toBe("/capabilities/memory"));
+    expect(await view.findByText("Memory")).toBeTruthy();
+    cleanup();
+  }
+  for (const at of OLD_ADDRESSES) {
+    const { view, path } = await land("personal", at, false);
+    await waitFor(() => expect(path()).toBe("/bots"));
+    expect(await view.findByText("Bots")).toBeTruthy();
     cleanup();
   }
 });

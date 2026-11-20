@@ -130,6 +130,8 @@ describe("runtime capabilities", () => {
       emailPassword: true,
       // 期九·六: on unless the operator switched server-run computer tools off for a person's chat.
       chatServerComputerTools: true,
+      // Both editions have memory (the personal one unless XIONGBAO_PERSONAL_MEMORY=off).
+      memory: true,
     });
   });
 
@@ -158,6 +160,7 @@ describe("runtime capabilities", () => {
       "ssoRequired",
       "emailPassword",
       "chatServerComputerTools",
+      "memory",
     ]);
     // The provider list is names, never the clients and secrets behind them.
     expect(body).not.toContain("google-client-secret");

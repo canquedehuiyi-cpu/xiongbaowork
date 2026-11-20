@@ -8,9 +8,9 @@ import type { LoadPersonalMemory } from "./tools";
  * What of memory runs while OpenBot runs: what a Bot's turn is told it remembers, and the sweep that
  * reads memory sources and mirrors memories to Intelligence.
  *
- * NOTHING IN AN EDITION WITHOUT MEMORY (`editionHasMemory`). No loader, so no turn picks up memory
- * sources or carries memory in its context, and a sweep that reads nothing, so a source left from
- * before is never synced.
+ * NOTHING WHERE MEMORY IS OFF (`editionHasMemory`: the personal edition with `XIONGBAO_PERSONAL_MEMORY=off`).
+ * No loader, so no turn picks up memory sources or carries memory in its context, and a sweep that
+ * reads nothing, so a source left from before is never synced. Both editions run all of it otherwise.
  */
 export function createMemoryRuntime(options: {
   edition: Edition;

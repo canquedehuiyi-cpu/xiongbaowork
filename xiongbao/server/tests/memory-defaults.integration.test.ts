@@ -428,21 +428,44 @@ describe("background research, on by default", () => {
 describe("the personal edition", () => {
   const channel = `personal-channel-${suite}`;
 
-  test("adopts no memory source, on a Bot's turn or when the person speaks, and still adopts research", async () => {
+  test("adopts a memory source for each connected app, as the team edition does, and research too", async () => {
     await reset();
     synced.length = 0;
-    // OpenBot Desktop's local Intelligence isn't licensed for memory. The switch is left on.
+    // Memory is on in the personal edition (`XIONGBAO_PERSONAL_MEMORY` unset).
     const personal = defaults({ edition: "personal" });
-    expect(await personal.adoptSources(owner, bot)).toEqual([]);
-    personal.botTurn(owner, bot);
+    const created = await personal.adoptSources(owner, bot);
+    expect(created).toHaveLength(1);
+    expect((await sourcesOf(owner, bot)).map((row) => row.id)).toEqual(created);
     personal.personSpoke(owner, channel);
     for (let attempt = 0; attempt < 50; attempt++) {
       if ((await researchOf(owner, bot)).length) break;
       await Bun.sleep(50);
     }
-    await Bun.sleep(200);
     expect(await researchOf(owner, bot)).toHaveLength(1);
-    expect(await sourcesOf(owner, bot)).toEqual([]);
-    expect(synced).toEqual([]);
+    expect(synced).toEqual(created);
+  });
+
+  test("adopts no memory source, on a Bot's turn or when the person speaks, and still adopts research, when XIONGBAO_PERSONAL_MEMORY is off", async () => {
+    await reset();
+    synced.length = 0;
+    const before = process.env.XIONGBAO_PERSONAL_MEMORY;
+    process.env.XIONGBAO_PERSONAL_MEMORY = "off";
+    try {
+      const personal = defaults({ edition: "personal" });
+      expect(await personal.adoptSources(owner, bot)).toEqual([]);
+      personal.botTurn(owner, bot);
+      personal.personSpoke(owner, channel);
+      for (let attempt = 0; attempt < 50; attempt++) {
+        if ((await researchOf(owner, bot)).length) break;
+        await Bun.sleep(50);
+      }
+      await Bun.sleep(200);
+      expect(await researchOf(owner, bot)).toHaveLength(1);
+      expect(await sourcesOf(owner, bot)).toEqual([]);
+      expect(synced).toEqual([]);
+    } finally {
+      if (before === undefined) delete process.env.XIONGBAO_PERSONAL_MEMORY;
+      else process.env.XIONGBAO_PERSONAL_MEMORY = before;
+    }
   });
 });

@@ -321,6 +321,11 @@ const serverEnv: Record<string, string> = {
   TENANT_PACKAGE_DIR: "../examples/xiongbao",
   // The switch under test.
   XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS: "on",
+  // The scenarios count the model's calls (two tool calls, one answer). A turn's automatic memory
+  // extraction (期 2) is one more call to the same mock after the answer, which is not what this gate
+  // measures, so it pins `off`. The retrospective needs `XIONGBAO_RETRO_MIN_STEPS` (15) tool calls and
+  // these turns make two, so it does not run here.
+  XIONGBAO_MEMORY_EXTRACT: "off",
   // The deployment's model (a coworker with no binding of its own speaks it) is the mock.
   OPENAI_BASE_URL: MODEL_BASE_URL,
   OPENAI_API_KEY: "g8-mock-key-not-a-secret",

@@ -47,6 +47,12 @@ export type DeploymentCapabilities = {
    * a server that does not say reads as off, and the page runs its own tools as it always did.
    */
   chatServerComputerTools?: boolean;
+  /**
+   * Whether this deployment has memory. Both editions do, and the personal one stops having it when its
+   * operator sets `XIONGBAO_PERSONAL_MEMORY=off`. A server from before this field says nothing, and
+   * {@link offersMemory} then reads the edition as it used to: no memory in the personal one.
+   */
+  memory?: boolean;
 };
 
 export const deploymentKeys = {
@@ -88,6 +94,7 @@ export function deploymentCapabilitiesQueryOptions() {
         transcription?: boolean;
         voice?: boolean;
         chatServerComputerTools?: boolean;
+        memory?: boolean;
       };
 
       return {
@@ -98,6 +105,7 @@ export function deploymentCapabilitiesQueryOptions() {
         transcription: body.transcription === true,
         voice: body.voice === true,
         chatServerComputerTools: body.chatServerComputerTools === true,
+        ...(typeof body.memory === "boolean" ? { memory: body.memory } : {}),
       };
     },
   });
@@ -107,19 +115,20 @@ export function deploymentCapabilitiesQueryOptions() {
  * Whether this deployment offers memory: what a person's Bots remember about them, and the apps a
  * Bot learns it from. Every memory screen, row and link reads this.
  *
- * NOT IN THE PERSONAL EDITION. OpenBot Desktop runs a local Intelligence whose licence leaves memory
- * out, so the personal edition has no memory to show. Read from the edition, not from Intelligence's
- * entitlement: the server's entitlement read only chooses where memory is kept (Intelligence, or
- * OpenBot's own tables when Intelligence is unlicensed or unreachable), and it changes from one
- * minute to the next while Intelligence starts. A screen gated on it would come and go, and a team
- * deployment that keeps memory in its own tables would lose screens that work.
+ * Both editions have memory, and the personal one stops having it only when its operator turns it off
+ * (`XIONGBAO_PERSONAL_MEMORY=off`). The server says which in `memory`, read from the same rule that
+ * decides its memory tools, routes and sweep (`editionHasMemory`), not from the back end's
+ * entitlement: that answer only chooses where memory is kept (the back end, or the app's own tables)
+ * and changes from one minute to the next while the back end starts, so a screen gated on it would come
+ * and go.
  *
- * An edition that could not be read is the team edition, as everywhere else.
+ * A server that does not say (one from before the field) is read as before: no memory in the personal
+ * edition. An edition that could not be read is the team edition, as everywhere else.
  */
 export function offersMemory(
-  capabilities: Pick<DeploymentCapabilities, "edition"> | undefined,
+  capabilities: Pick<DeploymentCapabilities, "edition" | "memory"> | undefined,
 ): boolean {
-  return capabilities?.edition !== "personal";
+  return capabilities?.memory ?? capabilities?.edition !== "personal";
 }
 
 /**

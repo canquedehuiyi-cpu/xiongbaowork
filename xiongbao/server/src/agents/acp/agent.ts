@@ -19,6 +19,7 @@ import type { DeviceChannel } from "../../devices/channel";
 import { dueSaidIn } from "../../tasks/due-time";
 import { runAsTenant } from "../../tenant/context";
 import { adoptRunnerCard } from "../../threads/postgres-runner";
+import { clearPersonChat } from "../../threads/unattended-card";
 import { withRunSideEvents } from "../../threads/run-side-events";
 import type { AcpModelAccess } from "../model-proxy/access";
 import { type AcpContextLoader, messageText } from "./context";
@@ -1429,7 +1430,10 @@ export function createAcpTurnStarter(options: {
             forwardedProps: {},
           },
         });
-      (runRef ? adoptRunnerCard(runRef, start) : start()).subscribe({
+      (runRef
+        ? adoptRunnerCard(runRef, start)
+        : clearPersonChat(start)
+      ).subscribe({
         next: (event) => {
           const { delta, message, name } = event as {
             delta?: unknown;

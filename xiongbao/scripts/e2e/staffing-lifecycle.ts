@@ -375,6 +375,10 @@ const serverEnv: Record<string, string> = {
   OPENAI_API_KEY: "g6-mock-key-not-a-secret",
   // The mock listens on loopback over plain http; development-only switch (audit defect #6).
   AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
+  // These gates count and classify the mocked model's calls. A chat turn's automatic memory extraction (期 2)
+  // is one more call to the same mock after the answer, whose prompt quotes the person's message and so can
+  // read as a scripted call. It is not what this gate measures, so it pins `off`.
+  XIONGBAO_MEMORY_EXTRACT: "off",
   COPILOTKIT_TELEMETRY_DISABLED: "true",
   DO_NOT_TRACK: "1",
 };
