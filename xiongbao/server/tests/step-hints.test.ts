@@ -15,6 +15,7 @@ import {
   planWithActionOn,
 } from "../src/agents/step-hints";
 import { updatePlanTools } from "../src/agents/update-plan";
+import type { GrantedTool } from "../src/plugins/tools";
 import { cardAsk } from "../src/tasks/claim";
 import {
   ACCEPT_TASK,
@@ -66,8 +67,8 @@ const delivery = () =>
     ownerUserId: "owner",
     agentId: "bot",
   });
-const byName = (tools: { name: string }[], name: string) =>
-  tools.find((tool) => tool.name === name) as (typeof tools)[number];
+const byName = (tools: GrantedTool[], name: string) =>
+  tools.find((tool) => tool.name === name) as GrantedTool;
 
 describe("三个开关", () => {
   test("默认都开，只有明确写 off 才关", () => {

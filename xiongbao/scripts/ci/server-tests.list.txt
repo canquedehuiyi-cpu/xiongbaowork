@@ -872,6 +872,7 @@ tests/staffing-settle.integration.test.ts
 tests/staffing-store.integration.test.ts
 tests/stall-guard.test.ts
 tests/starter-tour-routes.test.ts
+tests/step-hints.test.ts
 tests/stream-keep-alive.test.ts
 tests/subagent-folding.test.ts
 tests/subagent-model.test.ts
