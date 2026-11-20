@@ -771,6 +771,7 @@ tests/responsibility-triggers.test.ts
 tests/restart-recovery-sweep.integration.test.ts
 tests/restart-recovery-sweep.test.ts
 tests/retro-held-rule.test.ts
+tests/retro-nothing-retry.integration.test.ts
 tests/retro-observer.test.ts
 tests/retro-repeat-learning.integration.test.ts
 tests/retro-skill-held.integration.test.ts
