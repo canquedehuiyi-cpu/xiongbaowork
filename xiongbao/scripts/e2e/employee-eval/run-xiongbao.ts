@@ -49,6 +49,8 @@
  *   EVAL_MOCK_SCRIPT  只在本机假模型下：设 research 时假模型演「调研题」——一步接一步读十几 KB 的文字，看一轮里每步
  *                     发给模型的请求有多大（请求体存在 `<结果目录>/mock-requests/`）。EVAL_MOCK_STEPS、EVAL_MOCK_BYTES、
  *                     EVAL_MOCK_SCREENSHOTS（哪几步改成打开网页再截图，如 6,12）可调；见 mock-research.ts
+ *                     设 learn 时假模型演「重复任务」：接活、摸索、交付，带着自写技能就少摸索几步，收到复盘请求就写
+ *                     一份技能，用来在本机看两次之间有没有产生技能、第二次有没有用上；见 mock-learn.ts
  *   COMPUTER_BROWSER_MODE  传给本地电脑；没有虚拟显示的机器上设 headless
  *
  * 本机验证：EVAL_LOCAL_MOCK=1 MODEL_E2E=1 E2E_DATABASE_URL=… E2E_ROLE_WRITER_DATABASE_URL=… \
@@ -67,6 +69,7 @@ import {
   mkdirSync,
   mkdtempSync,
   openSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -101,6 +104,7 @@ import {
 } from "./chat-path";
 import { CHECKERS } from "./checkers";
 import { evalGate, taskMinutes, xiongbaoModel } from "./config";
+import { type LearnedState, learningDiff, waitForRetro } from "./learning";
 import {
   type Check,
   check,
@@ -135,6 +139,7 @@ import {
   withObserved,
 } from "./metrics";
 import { type MockRequest, type MockTurn, startMockModel } from "./mock-model";
+import { learnPolicy } from "./mock-learn";
 import { researchPolicy, researchScriptFrom } from "./mock-research";
 import { startPromptRecorder } from "./prompt-recorder";
 import {
@@ -142,6 +147,7 @@ import {
   type EvalPath,
   type EvalRecord,
   type EvalResults,
+  type RunLearning,
   writeResults,
 } from "./records";
 import {
@@ -283,6 +289,9 @@ function mockPolicy(request: MockRequest): MockTurn {
   if (researchScript)
     return researchPolicy(request, researchScript, `${mock?.url}/page`);
   const dir = /((?:eval|smoke)\/[a-z-]+)/.exec(request.lastUser)?.[1] ?? "eval";
+  // `EVAL_MOCK_SCRIPT=learn`：重复任务的剧本，带着技能就走短路径；复盘的请求按这件事写一份技能。
+  if (process.env.EVAL_MOCK_SCRIPT?.trim() === "learn")
+    return learnPolicy(request, dir);
   const done = request.toolResultsSinceUser;
   // 冒烟「长任务」：一步一条命令，追加 1..55，用来在本机走一遍触顶与续跑。
   const long = /单独\*{0,2}调用一次命令工具/.exec(request.lastUser);
@@ -1235,6 +1244,43 @@ async function driveChat(
   };
 }
 
+/**
+ * 这位员工现在的自写技能（名字取技能表里的标题、使用次数取技能账）和形成的记忆条数。
+ * 读整张表再在这里筛：评测库是一次性的，行数很少。
+ */
+async function learnedStateOf(agentId: string): Promise<LearnedState> {
+  return runAsTenant(tenant, async () => {
+    const ledger = (await database.select().from(schema.learnedSkills)).filter(
+      (row) => row.agentId === agentId,
+    );
+    const titles = new Map(
+      (await database.select().from(schema.skills)).map((row) => [
+        row.slug,
+        row.title,
+      ]),
+    );
+    const memories = (
+      await database.select().from(schema.personalMemories)
+    ).filter((row) => row.formedByAgentId === agentId && !row.deletedAt);
+    return {
+      skills: new Map(
+        ledger.map((row) => [
+          row.skillSlug,
+          {
+            title: titles.get(row.skillSlug) ?? row.skillSlug,
+            useCount: row.useCount,
+          },
+        ]),
+      ),
+      memories: memories.length,
+    };
+  });
+}
+
+/** 服务器日志的当前全文（评测把它写在结果目录里）。 */
+const serverLogText = () =>
+  readFileSync(join(OUT, logFileName("server", evalPath)), "utf8");
+
 /** 同一组运行（重复任务）共用的员工。 */
 const agentOfGroup = new Map<string, string>();
 
@@ -1249,6 +1295,8 @@ async function runWork(work: Work): Promise<EvalRecord> {
     (work.group ? agentOfGroup.get(work.group) : undefined) ??
     (await newEmployee(work.label));
   if (work.group) agentOfGroup.set(work.group, agentId);
+  // 重复任务：这次运行开始前这位员工已经有什么，运行后的差就是学到的。
+  const learnedBefore = work.group ? await learnedStateOf(agentId) : undefined;
   // 请求记录里只留这一道题的：先清掉之前的（建模型库条目时的探测请求等）。
   recorder?.drain();
   const dir = join(WORKSPACE, work.where);
@@ -1291,7 +1339,16 @@ async function runWork(work: Work): Promise<EvalRecord> {
   if (work.site) sealReceived(work.site, copy);
   const promptChars = summarizePrompts(recorder?.drain() ?? []);
   const events = await eventsOf(runIds);
-  const tokens = await tokenRows(agentId, since);
+  /*
+   * 员工的背景小活（复盘、自动抽记忆）的模型调用不在任何一轮里，计量记成 `unscoped`：它们是轮结束后的另一次
+   * 调用，不算这道题的步数和 token（否则第一次会比第二次多一次复盘的调用）。只记一笔说明。
+   */
+  const allTokens = await tokenRows(agentId, since);
+  const tokens = allTokens.filter((row) => row.runId !== "unscoped");
+  if (tokens.length < allTokens.length)
+    notes.push(
+      `${work.key}：另有 ${allTokens.length - tokens.length} 次轮外的背景调用（复盘、自动抽记忆），不计入这道题的步数和 token`,
+    );
   const perRound = runIds.map(
     (runId) => tokens.filter((row) => row.runId === runId).length,
   );
@@ -1357,6 +1414,26 @@ async function runWork(work: Work): Promise<EvalRecord> {
         ? "无头工具续接上限（一轮最多 30 段工具调用）"
         : String(event.code ?? "RUN_ERROR"),
     );
+  /*
+   * 重复任务：等这次运行的复盘跑完再往下（第一次之后再开第二次，模拟「过一会儿再做同类任务」；上限 90 秒，
+   * 超时照常开始）。不给熊宝侧开任何开关、不降门槛：触发不触发全看产品默认值。
+   */
+  let learning: RunLearning | undefined;
+  if (learnedBefore) {
+    const retro = await waitForRetro({
+      runIds,
+      readLog: serverLogText,
+      skillCount: async () => (await learnedStateOf(agentId)).skills.size,
+      skillsBefore: learnedBefore.skills.size,
+    });
+    learning = {
+      ...learningDiff(learnedBefore, await learnedStateOf(agentId)),
+      retro,
+    };
+    console.log(
+      `   learning: +${learning.newSkills.length} skills, +${learning.newMemories} memories, used ${learning.usedSkills.length}; retrospective ${retro.ended}${retro.outcome ? ` ${retro.outcome}` : ""} after ${(retro.waitedMs / 1000).toFixed(0)} s`,
+    );
+  }
   const record: EvalRecord = {
     task: work.key,
     title: work.title,
@@ -1390,6 +1467,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     capabilities,
     checks,
     ...(promptChars ? { promptChars } : {}),
+    ...(learning ? { learning } : {}),
     ...(roundErrors.length
       ? {
           error: `运行报错 ${roundErrors.length} 次：${[...new Set(roundErrors)].join("；")}`,

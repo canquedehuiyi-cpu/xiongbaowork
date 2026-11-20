@@ -10,6 +10,35 @@ export type Suite = "tasks" | "smoke";
 /** 熊宝侧的执行路径：看板派活，或单聊接口（`EVAL_PATH`）。没写这个字段的旧结果文件是看板路径。 */
 export type EvalPath = "board" | "chat";
 
+/**
+ * 一次运行（含它之后等复盘的那一段）里这位员工学到了什么：只有熊宝侧的重复任务记。
+ * 新增是和这次运行开始前比的：技能读 `learned_skills` 的新行（名字取技能表里的标题），记忆读员工形成的记忆条数。
+ */
+export type RunLearning = {
+  /** 这次运行之后新增的员工自写技能的名字。 */
+  newSkills: string[];
+  /** 这次运行之后新增的、这位员工形成的记忆条数。 */
+  newMemories: number;
+  /**
+   * 这次运行里用到的自写技能的名字：那一轮对得上这件事、已放进上下文的，或员工用 `refine_skill` 读过的，
+   * 技能账里的使用次数涨了的就算。
+   */
+  usedSkills: string[];
+  /** 这次运行结束后等复盘的情况；没等（没有服务器日志可读）时没有这一项。 */
+  retro?: {
+    /** 等了多久（毫秒）。 */
+    waitedMs: number;
+    /** `logged`：看到了这次最后一轮的复盘日志；`skill`：库里出现了新技能；`timeout`：到了上限照常往下走。 */
+    ended: "logged" | "skill" | "timeout";
+    /** 复盘的结果：`saved` `nothing` `similar` `refused` `skipped`；没看到日志时没有。 */
+    outcome?: string;
+    /** 复盘是按什么触发的：`steps` `card_delivered` `card_accepted`。 */
+    trigger?: string;
+    /** 复盘看的工具调用步数。 */
+    steps?: number;
+  };
+};
+
 /** 重复任务里一次运行的指标（`firstRun` / `secondRun`）。 */
 export type RunMetrics = {
   passed: boolean;
@@ -25,6 +54,8 @@ export type RunMetrics = {
     total: number | null;
   } | null;
   nudges: number;
+  /** 这次运行学到了什么（见 {@link RunLearning}）。 */
+  learning?: RunLearning;
 };
 
 export type EvalRecord = {
@@ -83,6 +114,8 @@ export type EvalRecord = {
   /** 重复任务（`repeat`）：同一位员工连做两次，各自的指标。其他题没有这两项。 */
   firstRun?: RunMetrics;
   secondRun?: RunMetrics;
+  /** 重复任务的一次运行（合成前的单次记录）里员工学到了什么；合成后在 `firstRun` / `secondRun` 里。 */
+  learning?: RunLearning;
 };
 
 export type EvalResults = {
@@ -126,6 +159,7 @@ export function runMetrics(record: EvalRecord): RunMetrics {
         }
       : null,
     nudges: record.nudges,
+    ...(record.learning ? { learning: record.learning } : {}),
   };
 }
 
