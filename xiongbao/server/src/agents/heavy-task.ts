@@ -1,12 +1,14 @@
 /**
  * 重活分流（期 4 · Task 4.3）：大型编码任务，建议用更合适的办法做，而不是员工一个人在平时的模型上硬做。
  *
- * 怎么识别：用规则，不调模型（最便宜、也最稳：一轮的提示词里多一次模型调用不值）。看人交代的这件事
- * （最后一条消息，太短就连第一条）：
- *  - 明说要大范围重构：「重构整个项目」「重写整个代码库」「大规模重构」，和英文的同类说法；
- *  - 涉及的文件多：写明「N 个文件」（N 不小于 {@link HEAVY_FILES}），或者列出了不少于 {@link HEAVY_PATHS} 个不同的文件路径；
- *  - 预计步数多：写明「预计 N 步」（N 不小于 {@link HEAVY_STEPS}），或者计划清单有不少于 {@link HEAVY_ITEMS} 项。
- * 数字类的规则只在话里有改代码的动词时才算，免得「整理 20 个文件的名字」被当成编码活。
+ * 怎么识别：用规则，不调模型（最便宜、也最稳：一轮的提示词里多一次模型调用不值）。一条用户消息自己说的
+ * 话（不拼别的消息，「继续」「好」这类短回复不判断），必须同时满足两条：
+ *  - 有代码语境：出现代码文件扩展名、代码路径，或者「代码、代码库、模块、函数、接口、仓库、repo、源文件」一类的词；
+ *  - 规模条件之一：
+ *    - 明说要大范围重构：「重构整个项目」「重写整个代码库」「大规模重构」，和英文的同类说法；
+ *    - 涉及的文件多：写明「N 个文件」（N 不小于 {@link HEAVY_FILES}），或者列出了不少于 {@link HEAVY_PATHS} 个不同的文件路径；
+ *    - 预计步数多：写明「预计 N 步」（N 不小于 {@link HEAVY_STEPS}），或者计划清单有不少于 {@link HEAVY_ITEMS} 项。
+ * 数字类的规模条件还要话里有改动的动词，免得「整理 20 个文件的名字」被当成编码活。
  *
  * 识别出来后，按顺序建议，只建议，从不自动转交：
  *  1. 员工设置里有「难任务模型」（`shared/hard-model.ts`），而这一轮能派子代理：建议自己先读代码、列计划，把最重的编码
@@ -15,13 +17,14 @@
  *  3. 都没有：照常做，什么也不加。
  * 这一轮手上既不能派子代理也不能转交的（子代理自己，它不能再往下派），什么也不加。
  *
- * 建议作为一段话放进这一轮随消息变的那部分提示词（`copilot.ts`，和员工自己写的、对得上的技能同处）。
- * `XIONGBAO_HEAVY_TASK_ROUTING=off` 关掉：不查事实，也不加这段话。
+ * 建议跟在那条用户消息自己的末尾（只给模型看的那一份，不改存下来的对话），不放在系统提示里：系统提示是整个
+ * 请求的最前面，它一变，后面所有历史的缓存都作废。判断只看每条消息自己的字和这位员工固定的事实（难任务模型、
+ * 固定员工），所以同一条消息每一轮的字节都一样，历史前缀不变；只有设置难任务模型这样的事实变了才会变一次。
+ * 先判规则，有消息命中了才去查事实。`XIONGBAO_HEAVY_TASK_ROUTING=off` 关掉：不查事实，也不加这段话。
  */
-import type { RunAgentInput } from "@ag-ui/client";
 import { SUBAGENT_TOOL } from "../../../shared/subagent";
-import { requestTextOf } from "../plugins/picked-skill";
 import { HANDOFF_TOOL } from "./handoff-tool";
+import { textOf } from "./message-text";
 
 export const HEAVY_TASK_ROUTING_ENV = "XIONGBAO_HEAVY_TASK_ROUTING";
 
@@ -47,7 +50,7 @@ const EXPLICIT: readonly RegExp[] = [
   new RegExp(`${REWORK}[^。！？\\n]{0,6}${WIDE}[^。！？\\n]{0,4}${TARGET}`),
   new RegExp(`${WIDE}[^。！？\\n]{0,4}${TARGET}[^。！？\\n]{0,6}${REWORK}`),
   /(?:大规模|大型|全面|整体|彻底|系统性)(?:的)?(?:重构|重写|改造|迁移)/,
-  /\b(?:refactor|rewrite|migrate|port|overhaul|restructure)\b[^.\n]{0,40}\b(?:entire|whole|all of the|every)\b[^.\n]{0,24}\b(?:project|codebase|code base|repo|repository|application|app|backend|frontend)\b/i,
+  /\b(?:refactor|rewrite|migrate|port|overhaul|restructure)\b[^.\n]{0,40}\b(?:entire|whole|all of the|every)\b[^.\n]{0,24}\b(?:project|codebase|code base|repo|repository|modules?|application|app|backend|frontend)\b/i,
   /\b(?:large[- ]scale|massive|major|full|wholesale|sweeping)\s+(?:refactor|rewrite|migration|overhaul)/i,
 ];
 
@@ -56,16 +59,24 @@ const CODING =
   /改|修改|重构|迁移|重写|改写|改成|改为|替换|重命名|更新|升级|修复|实现|添加|新增|删除|拆分|合并|优化|调整|改造|refactor|migrate|rename|replace|update|upgrade|fix|implement|rewrite|port|convert|add\b|remove\b|change/i;
 
 const FILE_COUNT =
-  /(\d{1,5})\s*\+?\s*个?\s*(?:文件|模块|组件|接口|源文件|files|modules|components|endpoints|services)/gi;
+  /(\d{1,5})\s*\+?\s*个?\s*(?:文件|模块|组件|接口|源文件|(?:source )?files|modules|components|endpoints|services)/gi;
 const FILE_PATH =
   /[\w@.\-/]+\.(?:tsx?|jsx?|mjs|cjs|py|go|rs|java|kt|swift|rb|php|c|cc|cpp|h|hpp|cs|vue|svelte|sql|scala|sh)\b/gi;
 const STEP_COUNT =
   /(?:预计|大概|大约|约|至少|需要|要)[^0-9\n]{0,6}(\d{1,4})\s*(?:个)?(?:步骤|步)|(\d{1,4})\s*(?:steps|个步骤)/gi;
 const PLAN_ITEM = /^\s*(?:\d{1,3}\s*[.、)）]|[-*]\s*\[[ xX]\])\s*\S/gm;
 
+/** 短于这个字数的消息（「继续」「好的」）不判断。 */
+export const HEAVY_MIN_CHARS = 6;
+
+/** 有代码语境：代码文件扩展名，或者代码相关的词。没有它，不管多大的规模都不是编码任务。 */
+const CODE_CONTEXT =
+  /\.(?:tsx?|jsx?|mjs|cjs|py|go|java|rs|kt|swift|rb|php|c|cc|cpp|h|hpp|cs|vue|svelte|sql|sh)\b|代码|源码|源文件|模块|函数|接口|仓库|前端|后端|\b(?:repo|repository|modules?|codebase|code base|source files?|api|typescript|javascript|python|golang|rust|java|react|vue|backend|frontend)\b/i;
+
 /** 这件事为什么算大型编码任务：每条一句话。空就是不算。 */
 export function heavyTaskReasons(text: string): string[] {
-  if (!text.trim()) return [];
+  if (text.trim().length < HEAVY_MIN_CHARS || !CODE_CONTEXT.test(text))
+    return [];
   const reasons: string[] = [];
   if (EXPLICIT.some((pattern) => pattern.test(text)))
     reasons.push("明说要大范围重构");
@@ -133,34 +144,84 @@ export function configureHeavyTaskFacts(
   source = next;
 }
 
-/** 这一轮用的事实。关着、没接来源、查出错都答 undefined：照常做，不因为这一步耽误一轮。 */
+type MessageLike = { role?: string; content?: unknown };
+
+/** 这些消息里有没有哪条用户消息自己被规则判成大型编码任务。纯规则，不查库。 */
+export function hasHeavyTask(
+  messages: readonly MessageLike[],
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return (
+    heavyTaskRoutingOn(env) &&
+    messages.some(
+      (message) =>
+        message.role === "user" &&
+        heavyTaskReasons(textOf(message.content)).length > 0,
+    )
+  );
+}
+
+/**
+ * 这一轮用的事实。先判规则：没有消息命中、关着、没接来源、查出错、或者什么事实都没有（没有难任务模型也没有
+ * 固定员工，建议不会出现），都答 undefined：照常做，不因为这一步耽误一轮。
+ */
 export async function loadHeavyTaskFacts(
   agentId: string,
+  messages: readonly MessageLike[],
   env: Record<string, string | undefined> = process.env,
 ): Promise<HeavyTaskFacts | undefined> {
-  if (!heavyTaskRoutingOn(env) || !source) return undefined;
+  if (!source || !hasHeavyTask(messages, env)) return undefined;
   try {
-    return await source(agentId);
+    const facts = await source(agentId);
+    return facts.hardModel || facts.externalCoders.length > 0
+      ? facts
+      : undefined;
   } catch {
     return undefined;
   }
 }
 
-/** 这一轮的建议：按这一轮的消息和手上的工具名。 */
-export function heavyTaskGuidanceFor(
-  input: Pick<RunAgentInput, "messages">,
+const NOTE_TAG = "heavy_task";
+
+/**
+ * 给模型看的那份消息：每条被判成大型编码任务的用户消息，在自己的末尾带上建议。字符串内容直接接在后面；
+ * 分段内容在最后一个文字段后面加一段。没有要加的就原样返回同一个数组。
+ */
+export function noteHeavyTasks<T extends MessageLike>(
+  messages: readonly T[],
   facts: HeavyTaskFacts | undefined,
   toolNames: Iterable<string>,
   env: Record<string, string | undefined> = process.env,
-): string | undefined {
-  if (!facts || !heavyTaskRoutingOn(env)) return undefined;
+): readonly T[] {
+  if (!facts || !heavyTaskRoutingOn(env)) return messages;
   const held = new Set(toolNames);
-  return heavyTaskGuidance({
-    text: requestTextOf(input.messages),
-    facts,
-    holds: {
-      subagent: held.has(SUBAGENT_TOOL),
-      handoff: held.has(HANDOFF_TOOL),
-    },
+  const holds = {
+    subagent: held.has(SUBAGENT_TOOL),
+    handoff: held.has(HANDOFF_TOOL),
+  };
+  let changed = false;
+  const out = messages.map((message) => {
+    if (message.role !== "user") return message;
+    const note = heavyTaskGuidance({
+      text: textOf(message.content),
+      facts,
+      holds,
+    });
+    if (!note) return message;
+    const block = `\n\n<${NOTE_TAG}>${note}</${NOTE_TAG}>`;
+    const content = message.content;
+    if (typeof content === "string") {
+      changed = true;
+      return { ...message, content: `${content}${block}` };
+    }
+    if (Array.isArray(content)) {
+      changed = true;
+      return {
+        ...message,
+        content: [...content, { type: "text", text: block.trim() }],
+      };
+    }
+    return message;
   });
+  return changed ? out : messages;
 }
