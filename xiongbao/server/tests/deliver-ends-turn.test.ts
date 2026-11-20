@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { withModelRun } from "../src/models/token-metering";
+import { withinModelRun } from "../src/models/token-metering";
 import { acceptedDelivery, deliverEndsTurnOn } from "../src/tasks/delivery-end";
 import { DELIVER_TASK, deliveryTools } from "../src/tasks/delivery-tools";
 
@@ -63,7 +63,7 @@ describe("哪个结果算交付被接受", () => {
       emit: () => undefined,
     });
     expect(deliver?.name).toBe(DELIVER_TASK);
-    const handed = await withModelRun({ runId: "r1", threadId: "t1" }, () =>
+    const handed = await withinModelRun({ runId: "r1", threadId: "t1" }, () =>
       (deliver as NonNullable<typeof deliver>).execute({
         items: [{ kind: "note", ref: "结论" }],
         checks: ["查过了"],
@@ -98,7 +98,7 @@ describe("哪个结果算交付被接受", () => {
       agentId: "bot",
       emit: () => undefined,
     });
-    const handed = await withModelRun({ runId: "r1", threadId: "t1" }, () =>
+    const handed = await withinModelRun({ runId: "r1", threadId: "t1" }, () =>
       (deliver as NonNullable<typeof deliver>).execute({
         items: [],
         checks: [],

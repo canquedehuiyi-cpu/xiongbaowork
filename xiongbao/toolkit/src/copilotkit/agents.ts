@@ -126,6 +126,12 @@ export type BuiltInAgentHooks = {
    */
   verifyChanges?: boolean;
   /**
+   * Which tool results end the turn: the step after one of them is not asked of the model. The server
+   * gives it for an accepted `deliver_task`. Absent, none do. Deployment switch
+   * `XIONGBAO_DELIVER_ENDS_TURN=off`. See `answersOnLastStep`.
+   */
+  endsTurnAfter?: (toolName: string, result: string) => boolean;
+  /**
    * Put back, on every step, what the model thought before each tool call the conversation already
    * holds (期三). The runtime drops `reasoning` messages on the way to the model; a provider that
    * wants them back (DeepSeek's thinking mode) gets them from here. Only for such a provider: another
@@ -308,6 +314,7 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
       ...(hooks.extension ? { extension: hooks.extension } : {}),
       ...(hooks.planAcrossRuns === false ? { planAcrossRuns: false } : {}),
       ...(hooks.verifyChanges === false ? { verifyChanges: false } : {}),
+      ...(hooks.endsTurnAfter ? { endsTurnAfter: hooks.endsTurnAfter } : {}),
     });
     // 绝对预算：这一次运行的设置优先，其次是部署的环境变量，都没有就用默认值。
     const foldBudget =

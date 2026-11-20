@@ -82,12 +82,12 @@ import { attributeBotAnswers } from "./agents/bot-answers";
 import { frameworkLabel, frameworkOf } from "./agents/framework";
 import type { ThreadRunner } from "./agents/handoff-delivery";
 import { HANDOFF_TOOL } from "./agents/handoff-tool";
+import { takesModelChoice } from "./agents/harness-model";
 import {
   type HeavyTaskFacts,
   loadHeavyTaskFacts,
   noteHeavyTasks,
 } from "./agents/heavy-task";
-import { takesModelChoice } from "./agents/harness-model";
 import {
   PlanModel,
   type PlanModelConfig,
@@ -95,10 +95,24 @@ import {
 } from "./agents/plan-model";
 import type { AgentActor } from "./agents/profile-types";
 import {
+  deferredNames,
+  isDeferredTool,
+  isDeploymentTool,
+  promptSlimOn,
+  SLIM_NAMES_LIMIT,
+} from "./agents/prompt-slim";
+import {
   type RefusingProvider,
   sayingProviderRefusals,
 } from "./agents/provider-refusal";
 import { isUnattended, runModeOf } from "./agents/run-mode";
+import {
+  SLIM_NO_HANDOFF,
+  slimDelegationGuidance,
+  slimMediaGuidance,
+  slimWebResearchGuidance,
+  slimWorkingGuidance,
+} from "./agents/slim-guidance";
 import {
   OPENBOT_TOOL_LIMIT,
   toolLimitFor,
@@ -113,20 +127,6 @@ import {
   searchToolsTool,
   withToolSearch,
 } from "./agents/tool-search";
-import {
-  deferredNames,
-  isDeferredTool,
-  isDeploymentTool,
-  promptSlimOn,
-  SLIM_NAMES_LIMIT,
-} from "./agents/prompt-slim";
-import {
-  SLIM_NO_HANDOFF,
-  slimDelegationGuidance,
-  slimMediaGuidance,
-  slimWebResearchGuidance,
-  slimWorkingGuidance,
-} from "./agents/slim-guidance";
 import { sayingWhenUnreachable } from "./agents/unreachable";
 import {
   type DecisionWaits,
@@ -201,6 +201,7 @@ import { type ProjectForPrompt, projectGuidance } from "./projects/context";
 import { withQuotaRunErrors } from "./quota/limits";
 import { createTrajectoryConnect } from "./recorder/trajectory-connect";
 import { corsOrigin } from "./request-trust";
+import { acceptedDelivery, deliverEndsTurnOn } from "./tasks/delivery-end";
 import { deliveryProtocolGuidance } from "./tasks/delivery-tools";
 import type { ProductTelemetry } from "./telemetry/product";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
@@ -225,12 +226,12 @@ import {
 } from "./threads/compaction";
 import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
-import { asPersonChat } from "./threads/unattended-card";
 import {
   withoutServerOnlyEvents,
   withRunSideEvents,
 } from "./threads/run-side-events";
 import { keepStreamAlive } from "./threads/stream-keep-alive";
+import { asPersonChat } from "./threads/unattended-card";
 import { inlineToolImages } from "./tool-images";
 import { UNTRUSTED_GUIDANCE, withUntrustedNotice } from "./untrusted-content";
 import { holdsOwnWebSearch, webResearchGuidance } from "./web/guidance";
@@ -2700,6 +2701,11 @@ async function buildAgent(
       ...(process.env.XIONGBAO_VERIFY_NUDGE === "off"
         ? { verifyChanges: false }
         : {}),
+      /*
+       * 交付被接受之后这一轮直接结束，不再为一句收尾的话多调一次模型（`tasks/delivery-end.ts`）；
+       * 计划没做完、改完没校验时提醒照旧。部署开关 `XIONGBAO_DELIVER_ENDS_TURN=off` 回到原样。
+       */
+      ...(deliverEndsTurnOn() ? { endsTurnAfter: acceptedDelivery } : {}),
       // A chat the server carries on spends its step budget once over all its rounds, not once each.
       wholeTurn: (runInput) =>
         declaresServerComputerTools(runInput.forwardedProps),
