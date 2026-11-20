@@ -145,6 +145,19 @@ export function renderSkill(draft: SkillDraft): {
 
 const REVISIONS = "\n\n修正记录：\n";
 
+/**
+ * One correction as it is written into the record: on one line, with no leading bullet, no longer than
+ * the limit. A change that comes in as several lines or as a list is one entry, so a single call can
+ * neither add many records nor forge a heading of its own inside the skill's text.
+ */
+export function cleanChange(change: string): string {
+  const flat = change
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(?:[-*•]\s*)+/, "");
+  return flat.slice(0, L.change).trim();
+}
+
 /** Adds one correction to the skill's text, keeping the most recent few. */
 export function withRevision(
   instructions: string,
@@ -161,7 +174,9 @@ export function withRevision(
           .slice(marked + REVISIONS.length)
           .split("\n")
           .filter((item) => item.startsWith("- "));
-  const kept = [...previous, `- ${at10} ${change}`].slice(-L.revisions);
+  const kept = [...previous, `- ${at10} ${cleanChange(change)}`].slice(
+    -L.revisions,
+  );
   return `${body}${REVISIONS}${kept.join("\n")}`;
 }
 
@@ -483,16 +498,19 @@ export async function refineSkill(
       instructions: row.instructions,
       changed: false,
     };
+  const change = cleanChange(input.change);
+  if (!change)
+    return { ok: false, reason: "change 写一两句话，说明哪里要改。" };
   const problem = draftProblem({
     name: row.title,
-    when: input.change,
+    when: change,
     steps: [],
     pitfalls: [],
     verify: "",
     scope: "self",
   });
   if (problem) return { ok: false, reason: problem };
-  const instructions = withRevision(row.instructions, input.change, at);
+  const instructions = withRevision(row.instructions, change, at);
   await deps.plugins.installSkill({
     slug: row.slug,
     title: row.title,

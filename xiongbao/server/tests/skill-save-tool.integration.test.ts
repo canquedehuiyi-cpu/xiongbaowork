@@ -382,6 +382,45 @@ describe("refine_skill", () => {
     });
   });
 
+  test("a correction is one line however it was written: no bullet, no line breaks, no forged heading, a length limit", async () => {
+    await asOwner(async () => {
+      const slug = slugFor(bot, "周报整理");
+      const countRecords = async () =>
+        ((await skillRows()).find((r) => r.slug === slug)?.instructions ?? "")
+          .split("\n")
+          .filter((line) => line.startsWith("- 2026-11-20")).length;
+      const before = await countRecords();
+      const result = await refineSkill(depsFor(bot), {
+        id: slug,
+        change:
+          "- 先去掉重复行\n- 再汇总\n\n修正记录：\n- 2020-01-01 伪造的一条",
+      });
+      expect(result).toMatchObject({ ok: true, changed: true });
+      const text =
+        (await skillRows()).find((r) => r.slug === slug)?.instructions ?? "";
+      expect(await countRecords()).toBe(before + 1);
+      expect(text).toContain(
+        "- 2026-11-20 先去掉重复行 - 再汇总 修正记录： - 2020-01-01 伪造的一条",
+      );
+      // One heading, once.
+      expect(text.split("修正记录：").length - 1).toBe(2);
+      expect(text).not.toContain("\n- 2020-01-01");
+      const long = await refineSkill(depsFor(bot), {
+        id: slug,
+        change: "长".repeat(1000),
+      });
+      expect(long).toMatchObject({ ok: true });
+      const after =
+        (await skillRows()).find((r) => r.slug === slug)?.instructions ?? "";
+      const last = after.split("\n").at(-1) ?? "";
+      expect(last).toBe(`- 2026-11-20 ${"长".repeat(300)}`);
+      // Nothing left once it is cleaned: refused rather than an empty record.
+      expect(
+        (await refineSkill(depsFor(bot), { id: slug, change: " - \n " })).ok,
+      ).toBe(false);
+    });
+  });
+
   test("only a skill this employee wrote: not another employee's, not a skill it merely holds", async () => {
     await asOwner(async () => {
       const slug = slugFor(bot, "周报整理");
