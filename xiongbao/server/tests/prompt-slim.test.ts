@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { RUNTIME_STATE_TOOLS } from "@openbot/toolkit/copilotkit/agents";
 import { z } from "zod";
 import {
   deferredNames,
+  HIDDEN_TOOLS,
   isDeploymentTool,
   promptSlimOn,
   slimModelTools,
@@ -14,6 +16,10 @@ import {
 } from "../src/agents/tool-search";
 
 /** 提示词瘦身的几个小零件（体积守卫在 prompt-budget.test.ts）。 */
+
+test("隐藏的就是运行时每次都加的那两个状态工具", () => {
+  expect([...HIDDEN_TOOLS].sort()).toEqual([...RUNTIME_STATE_TOOLS].sort());
+});
 
 describe("开关", () => {
   test("默认开，只有 off 才关", () => {
@@ -73,9 +79,9 @@ describe("发给模型的工具定义", () => {
       [{ type: "function", name: "x_tool", inputSchema: schema }],
       { strict: true },
     );
-    expect((tool?.inputSchema as typeof schema).additionalProperties).toBe(
-      false,
-    );
+    expect(
+      (tool as { inputSchema: typeof schema }).inputSchema.additionalProperties,
+    ).toBe(false);
   });
 
   test("常驻工具换短描述、参数说明，别的工具描述不动；运行时状态工具不发", () => {
@@ -101,7 +107,7 @@ describe("发给模型的工具定义", () => {
     ]);
     expect(tools[0]?.description?.length).toBeLessThan(500);
     const props = (
-      tools[0]?.inputSchema as {
+      (tools[0] as { inputSchema: unknown }).inputSchema as {
         properties: Record<string, { description?: string }>;
       }
     ).properties;

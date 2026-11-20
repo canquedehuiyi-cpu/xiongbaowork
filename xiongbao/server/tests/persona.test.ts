@@ -2,10 +2,10 @@ import { afterAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import { PROVENANCE_GUIDANCE } from "../../shared/bot-prompt";
 import { type Persona, personaIsEmpty } from "../../shared/persona";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
+import { SLIM_SOURCES } from "../src/agents/slim-guidance";
 import type { AppVariables } from "../src/auth/guards";
 import { buildAgents, standingRoleMessage } from "../src/copilot";
 import { createDatabase } from "../src/db/client";
@@ -77,8 +77,9 @@ test("a built-in coworker is told who it is, after its role and before what it h
   expect(prompt.indexOf("Review the control evidence.")).toBeLessThan(
     prompt.indexOf("Plain and unhedged"),
   );
+  // 用户 2026-11-20 批准：瘦身默认开，钉瘦身后的来源段；顺序的语义不变。
   expect(prompt.indexOf("Plain and unhedged")).toBeLessThan(
-    prompt.indexOf(PROVENANCE_GUIDANCE),
+    prompt.indexOf(SLIM_SOURCES),
   );
 });
 

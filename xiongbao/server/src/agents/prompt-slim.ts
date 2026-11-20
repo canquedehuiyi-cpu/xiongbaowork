@@ -16,8 +16,6 @@
  *
  * 开关：`XIONGBAO_PROMPT_SLIM=off` 一次关掉全部（系统提示的短写法见 `slim-guidance.ts`），回到原样。默认开。
  */
-import { RUNTIME_STATE_TOOLS } from "@openbot/toolkit/copilotkit/agents";
-
 export const PROMPT_SLIM_ENV = "XIONGBAO_PROMPT_SLIM";
 
 /** 瘦身是否开着：默认开，只有明确写 `off` 才关（关着就是原样，逐字节）。 */
@@ -88,7 +86,15 @@ export function isDeploymentTool(name: string): boolean {
 }
 
 /** 模型用不到、也不该看到的运行时状态工具（`AGUISendState*`，共享状态用的）。 */
-export const HIDDEN_TOOLS: ReadonlySet<string> = new Set(RUNTIME_STATE_TOOLS);
+export const HIDDEN_TOOLS: ReadonlySet<string> = new Set([
+  "AGUISendStateSnapshot",
+  "AGUISendStateDelta",
+]);
+
+/** 这个名字是不是瘦身时排到检索后面的熊宝自带工具。 */
+export function isDeferredTool(name: string): boolean {
+  return Object.hasOwn(DEFERRED_TOOLS, name);
+}
 
 /** 这一轮手上的工具名里，哪些排到检索后面。关着瘦身就是空。 */
 export function deferredNames(

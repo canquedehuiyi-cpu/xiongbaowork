@@ -12,15 +12,16 @@
  * 改这里的字要小心两件事：一，含义要和被替换的原文对得上，那是写给模型的话，不是注释；二，体积有上限
  * 守卫（`tests/prompt-budget.test.ts`），超线测试会失败。
  */
-import { SHOW_APP_ACCESS_TOOL } from "@openbot/shared/connect-prompt";
-import { RESEARCH_APP_NAMES } from "@openbot/shared/research";
-import { SUBAGENT_TOOL } from "@openbot/shared/subagent";
-import { UPDATE_PLAN_TOOL } from "@openbot/shared/plan";
-import { DOCUMENTS_GUIDANCE } from "../../../shared/media";
+
 import {
-  promptSection,
   type ComputerHolding,
+  promptSection,
 } from "../../../shared/bot-prompt";
+import { SHOW_APP_ACCESS_TOOL } from "../../../shared/connect-prompt";
+import { DOCUMENTS_GUIDANCE } from "../../../shared/media";
+import { UPDATE_PLAN_TOOL } from "../../../shared/plan";
+import { RESEARCH_APP_NAMES } from "../../../shared/research";
+import { SUBAGENT_TOOL } from "../../../shared/subagent";
 import {
   WEB_CRAWL_TOOL,
   WEB_FETCH_TOOL,
@@ -60,7 +61,7 @@ export const SLIM_DELIVERY = paragraphs(
 
 /** 没有「把活交给别的 Bot」的工具时说的话（`NO_HANDOFF_GUIDANCE` 的短写法）。 */
 export const SLIM_NO_HANDOFF = paragraphs(
-  "This run gives you no tool for handing work to another Bot: do whatever the job needs yourself, and for a part beyond you, finish everything else and say which part is not done and what it would need. Never say you asked a colleague, or that one will deliver a part, unless you actually addressed that colleague yourself: the person would wait for something that is not coming.",
+  "This run gives you no tool here for handing work to another Bot: do whatever the job needs yourself, and for a part beyond you, finish everything else and say which part is not done and what it would need. Do not say you have asked a colleague, or that a colleague will deliver a part, unless you have actually addressed that colleague yourself: the person would wait for something that is not coming.",
 );
 
 /**

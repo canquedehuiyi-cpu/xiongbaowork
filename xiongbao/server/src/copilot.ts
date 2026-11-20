@@ -110,6 +110,7 @@ import {
 } from "./agents/tool-search";
 import {
   deferredNames,
+  isDeferredTool,
   isDeploymentTool,
   promptSlimOn,
   SLIM_NAMES_LIMIT,
@@ -1509,7 +1510,13 @@ export function builtInAgentConfiguration(
           // Each search is a step of its own, so a run that searches gets two more.
           maxSteps:
             (unattended ? UNATTENDED_STEPS.most : TOOL_STEPS) +
-            (searching ? SEARCH_STEPS : 0),
+            /*
+             * 应用的工具排在后面时，搜一次是一步，所以多给两步。只有熊宝自带的那一小批（瘦身，
+             * `DEFERRED_TOOLS`）排在后面时不加：每一轮的步数预算和没瘦身时一样，不因为开了瘦身就变。
+             */
+            (searching && [...waiting].some((name) => !isDeferredTool(name))
+              ? SEARCH_STEPS
+              : 0),
         }
       : {}),
   };
