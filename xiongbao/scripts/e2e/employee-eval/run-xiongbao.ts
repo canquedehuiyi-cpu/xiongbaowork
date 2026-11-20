@@ -41,6 +41,10 @@
  *   EVAL_TASK_MINUTES 每题墙钟上限，默认 20（冒烟场景用各自的上限）
  *   EVAL_OUT          结果目录，默认 ./employee-eval-out；写 xiongbao.json / smoke.json（chat 路径是 -chat 结尾）、产物和服务器日志
  *   E2E_SERVER_PORT   默认取空闲端口
+ *   EVAL_MOCK_SCRIPT  只在本机假模型下：设 research 时假模型演「调研题」——一步接一步读十几 KB 的文字，看一轮里每步
+ *                     发给模型的请求有多大（请求体存在 `<结果目录>/mock-requests/`）。EVAL_MOCK_STEPS、EVAL_MOCK_BYTES、
+ *                     EVAL_MOCK_SCREENSHOTS（哪几步改成打开网页再截图，如 6,12）可调；见 mock-research.ts
+ *   COMPUTER_BROWSER_MODE  传给本地电脑；没有虚拟显示的机器上设 headless
  *
  * 本机验证：EVAL_LOCAL_MOCK=1 MODEL_E2E=1 E2E_DATABASE_URL=… E2E_ROLE_WRITER_DATABASE_URL=… \
  *   bun scripts/e2e/employee-eval/run-xiongbao.ts
@@ -107,6 +111,7 @@ import {
 import {
   analyzeXiongbao,
   asksQuestion,
+  callSeries,
   type Capabilities,
   featureProbe,
   lastAssistantText,
@@ -121,6 +126,7 @@ import {
   withObserved,
 } from "./metrics";
 import { type MockRequest, type MockTurn, startMockModel } from "./mock-model";
+import { researchPolicy, researchScriptFrom } from "./mock-research";
 import {
   type EvalPath,
   type EvalRecord,
@@ -237,7 +243,11 @@ async function freePort(): Promise<number> {
  * 不懂题目，只按固定节奏动手：列计划 → 跑命令读题 → 写占位文件 → 跑校验命令 → 计划打勾 → 收尾。
  * 题目目录从交代里认（`eval/<题>` 或 `smoke/<场景>`）。
  */
+const researchScript = researchScriptFrom(process.env);
 function mockPolicy(request: MockRequest): MockTurn {
+  // `EVAL_MOCK_SCRIPT=research`：一步接一步读大段文字，看一轮里每步的请求有多大。
+  if (researchScript)
+    return researchPolicy(request, researchScript, `${mock?.url}/page`);
   const dir = /((?:eval|smoke)\/[a-z-]+)/.exec(request.lastUser)?.[1] ?? "eval";
   const done = request.toolResultsSinceUser;
   // 冒烟「长任务」：一步一条命令，追加 1..55，用来在本机走一遍触顶与续跑。
@@ -387,6 +397,10 @@ async function startComputer() {
       COMPUTER_TOKEN,
       ...(process.env.PLAYWRIGHT_BROWSERS_PATH
         ? { PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH }
+        : {}),
+      // 没有虚拟显示的机器上，本机验证可以设 headless。
+      ...(process.env.COMPUTER_BROWSER_MODE
+        ? { COMPUTER_BROWSER_MODE: process.env.COMPUTER_BROWSER_MODE }
         : {}),
     },
     stdout: fd,
@@ -1292,6 +1306,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     timedOut,
     // 步数 = 模型调用次数（model_token_calls 的行数，每一步一次调用）；工具调用次数另记。
     steps: tokens.length,
+    ...callSeries(tokens, runIds),
     toolCalls: calls.length,
     modelCalls: tokens.length,
     tokens:

@@ -36,6 +36,15 @@ export type EvalRecord = {
     /** 输出里推理（思考）的部分（已含在 output 里）；没报时 null。 */
     reasoning?: number | null;
   } | null;
+  /**
+   * 逐步计量（熊宝侧，读 `model_token_calls`，和 `tokens` 同一批行）：每次模型调用的输入 token，按时间从早到晚。
+   * 旧结果文件没有这三项；提供方没报的那一步是 null。
+   */
+  callInputs?: (number | null)[];
+  /** 每次调用里命中上下文缓存的 token（已含在 `callInputs` 里）。 */
+  callCached?: (number | null)[];
+  /** 每次调用是主员工的（`main`）还是别处的（`other`：子代理、压缩等不在主运行里的调用）。 */
+  callAgents?: ("main" | "other")[];
   /** 这道题走的执行路径；旧结果文件没有，按看板路径算。Codex 侧没有。 */
   path?: EvalPath;
   /** 停在时间或段数上限的轮数（`turn-limit` / `step-limit` 事件）。旧结果文件没有这一项。 */
