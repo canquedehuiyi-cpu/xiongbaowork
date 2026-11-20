@@ -14,6 +14,7 @@ import {
   WorkspaceFileError,
   WorkspacePathError,
 } from "../../agent-computer/src/workspace";
+import { WEB_FETCH_INLINE_BYTES } from "../../shared/web-tools";
 import { botSeat } from "../src/computer/computer-key";
 import { createComputerGateway } from "../src/computer/gateway";
 import { createHeadlessComputerTools } from "../src/computer/headless-tools";
@@ -390,6 +391,59 @@ describe("web_fetch 的正文", () => {
     expect(Buffer.byteLength(content)).toBeLessThanOrEqual(OUTPUT_INLINE_BYTES);
     expect(String(answer.truncated)).toContain("已截断");
     expect("saved_to" in answer).toBe(false);
+  });
+
+  test("网页正文的内联上限是 8KB，比命令输出的 16KB 小一半", async () => {
+    expect(WEB_FETCH_INLINE_BYTES).toBe(8 * 1024);
+    // 7KB 左右：原样回传，不存盘。
+    const gateway = gatewayOn(dir);
+    const sink = workspaceOutputSink({ gateway, seat: botSeat("bot"), actor });
+    const under = await fetchTool(
+      lines(100),
+      sink,
+    )({
+      url: "https://docs.example/under",
+    });
+    expect(under.content).toBe(lines(100));
+    expect("saved_to" in under).toBe(false);
+    expect(outputsIn(dir)).toEqual([]);
+    // 10KB 左右：超过 8KB，存全文，回传头尾、路径和读法。
+    const over = await fetchTool(
+      lines(150),
+      sink,
+    )({
+      url: "https://docs.example/over",
+    });
+    expect(Buffer.byteLength(lines(150))).toBeGreaterThan(8 * 1024);
+    expect(Buffer.byteLength(lines(150))).toBeLessThan(OUTPUT_INLINE_BYTES);
+    expect(Buffer.byteLength(String(over.content))).toBeLessThanOrEqual(
+      8 * 1024,
+    );
+    expect(String(over.content)).toContain("中间省略");
+    const saved = String(over.saved_to);
+    expect(readFileSync(join(dir, saved), "utf8")).toBe(lines(150));
+    expect(String(over.truncated)).toContain("computer_read_file");
+    expect(String(over.truncated)).toContain("computer_grep");
+  });
+
+  test("没有落盘目的地：退回截断到 8KB，说明截了、为什么没存、怎么办", async () => {
+    for (const sink of [undefined, async () => undefined] as const) {
+      const answer = await fetchTool(
+        lines(150),
+        sink,
+      )({
+        url: "https://docs.example/nowhere",
+      });
+      const content = String(answer.content);
+      expect(content.startsWith(lineAt(1))).toBe(true);
+      expect(content).not.toContain(lineAt(150));
+      expect(Buffer.byteLength(content)).toBeLessThanOrEqual(8 * 1024);
+      expect(Buffer.byteLength(content)).toBeGreaterThan(7 * 1024);
+      expect(String(answer.truncated)).toContain("已截断");
+      expect(String(answer.truncated)).toContain("没有电脑");
+      expect(String(answer.truncated)).toContain("8192");
+      expect("saved_to" in answer).toBe(false);
+    }
   });
 
   test("没超过阈值的网页原样回传", async () => {

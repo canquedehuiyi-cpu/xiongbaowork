@@ -19,3 +19,9 @@ export const WEB_SEARCH_LIMITS = { default: 8, most: 20 } as const;
 
 /** 读网页返回的正文字数：默认与上限。 */
 export const WEB_FETCH_LIMITS = { default: 20_000, most: 100_000 } as const;
+
+/**
+ * 读网页返回的正文里，最多直接放进对话的字节数（UTF-8）。超过的存进员工的工作区，对话里只留头尾、路径和读法；
+ * 没有电脑可存时截到这么多并说明。比命令输出的 16KB 小一半：网页常是一次性读完就用不上的背景，不该每一步都再发一遍。
+ */
+export const WEB_FETCH_INLINE_BYTES = 8 * 1024;

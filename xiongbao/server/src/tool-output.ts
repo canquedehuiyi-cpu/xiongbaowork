@@ -14,6 +14,8 @@
  *  - 超过则给头 {@link OUTPUT_HEAD_BYTES}（2KB，命令的回显、版本和第一个错误）和尾 {@link OUTPUT_TAIL_BYTES}
  *    （4KB，退出前的最后输出、测试汇总），合计约 6KB，比原来最大的 64KB 少约 9 成。
  *
+ * 网页正文的上限更小：{@link WEB_FETCH_INLINE_BYTES}（8KB），经 `spill` 的 `inlineBytes` 传入；头尾的取法不变。
+ *
  * 写文件走网关自己的写入（`computer_write_file` 的同一条路：策略、审批、审计都照常），在原调用的审批上下文之外
  * （这一次写没有对话可以问，要问的写入直接放弃）。写不进去（没有电脑、策略不让写、项目只读）就退回截断，
  * 并说明没存成，员工知道这份输出不完整，可以换个更窄的命令。
@@ -32,12 +34,13 @@ export const WORKSPACE_OUTPUT_DIR = "tool-outputs";
 
 const bytesOf = (text: string) => Buffer.byteLength(text, "utf8");
 
-/** 超过没有：字节数超过 {@link OUTPUT_INLINE_BYTES}。 */
-export function exceedsInline(text: string): boolean {
-  // 字符数乘 3 是 UTF-8 的上界，不超过它就一定不超过 16KB，省掉对每段短文字数字节。
-  return (
-    text.length * 3 > OUTPUT_INLINE_BYTES && bytesOf(text) > OUTPUT_INLINE_BYTES
-  );
+/** 超过没有：字节数超过 `limit`（默认 {@link OUTPUT_INLINE_BYTES}）。 */
+export function exceedsInline(
+  text: string,
+  limit: number = OUTPUT_INLINE_BYTES,
+): boolean {
+  // 字符数乘 3 是 UTF-8 的上界，不超过它就一定不超过 limit，省掉对每段短文字数字节。
+  return text.length * 3 > limit && bytesOf(text) > limit;
 }
 
 /** 前面整行整行取，不超过 `budget` 字节；第一行就超过时按字符硬切。 */
@@ -204,9 +207,12 @@ export async function spill(input: {
   measured?: string;
   sink?: OutputSink;
   keep?: "head-and-tail" | "head";
+  /** 内联上限（字节），默认 {@link OUTPUT_INLINE_BYTES}；网页正文用更小的。 */
+  inlineBytes?: number;
 }): Promise<Spilled | null> {
+  const limit = input.inlineBytes ?? OUTPUT_INLINE_BYTES;
   const measured = input.measured ?? input.full;
-  if (!exceedsInline(measured)) return null;
+  if (!exceedsInline(measured, limit)) return null;
   const size = bytesOf(measured);
   const savedTo = await input.sink?.({
     tool: input.tool,
@@ -221,14 +227,12 @@ export async function spill(input: {
     };
   if (input.keep === "head")
     return {
-      note: `内容约 ${size} 字节，超过了 ${OUTPUT_INLINE_BYTES} 字节，已截断，只留下开头；这位员工没有电脑可以存全文。需要后面的部分，请换一个更具体的来源。`,
-      show: (text) => headBytes(text, OUTPUT_INLINE_BYTES),
+      note: `内容约 ${size} 字节，超过了 ${limit} 字节，已截断，只留下开头；这位员工没有电脑可以存全文。需要后面的部分，请换一个更具体的来源。`,
+      show: (text) => headBytes(text, limit),
     };
   return {
-    note: `输出约 ${size} 字节，超过了 ${OUTPUT_INLINE_BYTES} 字节，已截断，只留下开头和结尾，完整内容没能存下来。需要中间的部分，请换一个只输出那部分的命令（加 grep、head、tail 之类）。`,
-    show: (text) =>
-      excerpt(text, OUTPUT_INLINE_BYTES / 4, (OUTPUT_INLINE_BYTES * 3) / 4)
-        .text,
+    note: `输出约 ${size} 字节，超过了 ${limit} 字节，已截断，只留下开头和结尾，完整内容没能存下来。需要中间的部分，请换一个只输出那部分的命令（加 grep、head、tail 之类）。`,
+    show: (text) => excerpt(text, limit / 4, (limit * 3) / 4).text,
   };
 }
 
