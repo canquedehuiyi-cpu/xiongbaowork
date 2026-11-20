@@ -1,3 +1,9 @@
+import {
+  BLOB_CHARS_PER_TOKEN,
+  BLOB_MIN_CHARS,
+  blobChars,
+  withoutBlobs,
+} from "../tool-result-blobs";
 import type { Prompt } from "./last-step";
 
 /**
@@ -57,6 +63,25 @@ export const DEFAULT_CONTEXT_WINDOW = 128_000;
 export const FIXED_PROMPT_TOKENS = 6_000;
 /** 一张图或一个文件算多少 token，不按它的 base64 长度算。 */
 const MEDIA_TOKENS = 1_500;
+/*
+ * 工具结果文字里夹着的二进制数据（截图的 base64）：模型读不了它，提供方却照字数收 token，一张 1280×800 的
+ * 截图约 40 万个字符。主要的处理在发给模型之前（`withoutToolBlobs`，`../tool-result-blobs.ts`）；这里是兜底，
+ * 给到不了那一步的提示：估算时二进制数据按每 {@link BLOB_CHARS_PER_TOKEN} 个字符 1 个 token 算，越线判断才不会慢。
+ * 折叠的范围不变：最近几步的结果照旧原样，不因为带二进制数据就多折。
+ */
+export { BLOB_CHARS_PER_TOKEN, BLOB_MIN_CHARS };
+
+/**
+ * 一个工具结果的文字估成多少 token：二进制数据的字符按 {@link BLOB_CHARS_PER_TOKEN} 估，其余按 {@link estimateTokens}。
+ * 没有二进制数据时和 `estimateTokens` 完全一样。
+ */
+function resultTokens(text: string): number {
+  const blob = blobChars(text);
+  return blob === 0
+    ? estimateTokens(text)
+    : estimateTokens(withoutBlobs(text)) +
+        Math.ceil(blob / BLOB_CHARS_PER_TOKEN);
+}
 
 /**
  * 读环境变量里的绝对预算：没设、空、不是数字、负数都当没设（用默认值），`0` 表示关掉绝对预算，其余取整。
@@ -133,7 +158,7 @@ function tokensOfMessage(message: Message): number {
       );
     } else if (kind === "tool-result") {
       const view = viewOf((part as { output: Output }).output);
-      tokens += estimateTokens(view.text) + view.media * MEDIA_TOKENS;
+      tokens += resultTokens(view.text) + view.media * MEDIA_TOKENS;
     } else if (kind === "file") tokens += MEDIA_TOKENS;
   }
   return tokens;
@@ -191,7 +216,8 @@ function gistOf(text: string): string {
 /** 折叠后的摘要：确定性的，同一个结果永远折成同一句。 */
 export function foldedSummary(toolName: string, text: string): string {
   const saved = /tool-outputs\/[\w.-]+\.txt/.exec(text)?.[0];
-  return `${FOLDED_PREFIX}${toolName} 工具输出 ${text.length} 字，要点：${gistOf(text)}。${
+  // 要点只取读得懂的部分：二进制数据换成一句说明，别把它的头尾当要点。
+  return `${FOLDED_PREFIX}${toolName} 工具输出 ${text.length} 字，要点：${gistOf(withoutBlobs(text))}。${
     saved
       ? `完整内容存在 ${saved}，需要细节时用 computer_read_file 按行段读，`
       : ""
@@ -272,7 +298,7 @@ export function foldEarlyResults(
           round: roundOfCall.get(result.toolCallId) ?? -1,
           toolName: result.toolName,
           text: view.text,
-          tokens: estimateTokens(view.text),
+          tokens: resultTokens(view.text),
           summary,
           summaryTokens: estimateTokens(summary),
         });

@@ -32,6 +32,7 @@ import {
   withinNativeRun,
 } from "../native-approval";
 import { historyOrEmpty } from "../thread-history";
+import { withoutToolBlobs } from "../tool-result-blobs";
 import { plainToolResults } from "../tool-result-text";
 import {
   answered,
@@ -372,6 +373,10 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
      * continuation keeps the conversation as the thread holds it, and is attributed again when it
      * resumes. See `BuiltInAgentHooks.attribute`.
      */
+    /*
+     * A tool result's picture data (a screenshot's `base64`) never goes to the model as text: the stored
+     * conversation and the screen keep it, this copy says where it went. See `tool-result-blobs.ts`.
+     */
     const toModel = (messages: Message[]) =>
       stampingReasoning(
         sayingStepLimit(
@@ -379,7 +384,7 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
             super.run({
               ...input,
               messages: checklist.toModel(
-                attribute ? attribute(messages) : messages,
+                withoutToolBlobs(attribute ? attribute(messages) : messages),
               ),
             }),
             input,
