@@ -5,7 +5,7 @@ import {
   SAVE_SKILL_TOOL,
 } from "../../../shared/self-skills";
 import { generateText, type LanguageModel } from "ai";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { taskEvents, tasks, threadRunEvents } from "../db/schema";
 import { mask } from "../local-learning/evidence";
@@ -40,7 +40,8 @@ import { firstJsonObject } from "../wakerflows/generator";
  * WHEN. 三种情况，满足一种就复盘：
  *   1. 一轮结束时工具调用的步数达到 `XIONGBAO_RETRO_MIN_STEPS`（默认 15）；
  *   2. 一张看板卡交付成功（`deliver_task` 过了证据核对，卡进入待验收，`card_delivered`）：这已经是「复杂的活做成了」，
- *      不必等本人验收，门槛是 `XIONGBAO_RETRO_CARD_MIN_STEPS`（默认 6）；
+ *      不必等本人验收，门槛是 `XIONGBAO_RETRO_CARD_MIN_STEPS`（默认 6）。一张卡常由好几轮做成，交付在哪一轮都一样：
+ *      交付之后结束的每一轮都会按这张卡全部轮的轨迹判一次，同一张卡只复盘一次（见 `createRetroObserver`）；
  *   3. 一张看板卡被本人验收通过（`card_accepted`，门槛只是别太短）。
  * 失败的轮不复盘。员工这一轮自己已经调用过 `save_learned_skill` 的不再复盘。
  *
@@ -620,6 +621,20 @@ export type RetroObserverDeps = {
    * 不记这一行）。没有就是 null。在本人帧里调用。
    */
   deliveredCard: (runId: string) => Promise<string | null>;
+  /**
+   * 这一轮属于哪张已经交付过的卡（交付可能发生在这张卡较早的一轮，这一轮只是后面接着做的）。没有就是 null。
+   * 在本人帧里调用。不给就只认这一轮自己的交付。
+   */
+  cardOfRound?: (runId: string) => Promise<string | null>;
+  /**
+   * 这一轮不属于任何已交付的卡时，这段对话里这位员工不久前交付的那张卡（评测里追问「继续」派出的是另一张新卡，
+   * 做的却是交付那张卡的后续）。只在那张卡还没复盘过时才用。没有就是 null；不给就不找。在本人帧里调用。
+   */
+  cardHandedInBefore?: (turn: {
+    runId: string;
+    threadId: string;
+    agentId: string;
+  }) => Promise<string | null>;
   /** 一张卡的各轮合成的复盘输入，带上刚结束那一轮的事件（见 {@link cardRetroTurn}）。 */
   cardTurn: (
     taskId: string,
@@ -630,35 +645,123 @@ export type RetroObserverDeps = {
   log?: (line: string) => void;
 };
 
+/** 观察者记住多少张已经有结论的卡：够用就行，满了丢最早的。 */
+const REVIEWED_CARDS_KEPT = 1000;
+
+/**
+ * 这一轮自己的事件里 `deliver_task` 被接受的那张卡：答复里 `delivered: true` 带着卡号。交付写库和轮次结束
+ * 之间读到的库可能还没有这一行，事件却一定在；多次交付取最后一次。读不出就是 null。
+ */
+export function deliveredCardIn(events: readonly BaseEvent[]): string | null {
+  const names = new Map<string, string>();
+  let found: string | null = null;
+  for (const event of events) {
+    const value = event as BaseEvent & {
+      toolCallId?: string;
+      toolCallName?: string;
+      content?: unknown;
+    };
+    if (!value.toolCallId) continue;
+    if (
+      (event.type === EventType.TOOL_CALL_START ||
+        event.type === EventType.TOOL_CALL_CHUNK) &&
+      value.toolCallName
+    )
+      names.set(value.toolCallId, value.toolCallName);
+    if (
+      event.type !== EventType.TOOL_CALL_RESULT ||
+      names.get(value.toolCallId) !== DELIVER_TASK ||
+      typeof value.content !== "string"
+    )
+      continue;
+    try {
+      const answer = JSON.parse(value.content) as {
+        delivered?: unknown;
+        taskId?: unknown;
+      };
+      if (answer.delivered === true && typeof answer.taskId === "string")
+        found = answer.taskId;
+    } catch {
+      // 不是 JSON 的答复（被挡回的文字）不是交付。
+    }
+  }
+  return found;
+}
+
 /**
  * 轮次结束处挂的那一个观察者：先记用过的技能，再决定复盘看什么。
  *
- * 一轮里 `deliver_task` 被接受（卡进入待验收），复盘看的是这张卡所有轮合起来的轨迹，按 `card_delivered` 的
- * 门槛；其余的轮看这一轮自己的轨迹，按步数门槛。每一轮都记一行日志（类型、结果、触发、步数），评测据此知道
- * 这一轮的复盘已经跑完，没存技能时也能看出是门槛没到、冷却、还是模型认为不值得。
+ * 一张看板卡常常由好几轮（运行）做成：交付（`deliver_task` 被接受，卡进入待验收）可能在中间某一轮，结束的那一轮
+ * 只是后面接着做的。所以每一轮结束都问一句「这一轮属于哪张已经交付的卡」：是，就看这张卡所有轮合起来的轨迹，
+ * 按 `card_delivered` 的门槛。认卡有四处：这一轮自己的交付行、这一轮自己的 `deliver_task` 答复（库里的行还没落
+ * 下时它先到）、库里这一轮所属的卡有交付行（交付在更早的一轮）、这段对话里这位员工不久前交付、还没复盘的卡
+ * （看板路径追问「继续」派出的是另一张新卡，做的却是那张卡的后续）。
+ *
+ * 同一张卡只复盘一次：有了结论（存了、模型认为不值得、冷却或额度用完而跳过）之后这张卡后面的轮不再复盘；只有
+ * 「步数不够」的跳过不算结论，卡上后面的轮补了步数还会再看一次。其余不属于已交付卡的轮看这一轮自己的轨迹，按
+ * 步数门槛。每一轮都记一行日志（类型、结果、触发、步数、卡号，跳过时带原因 `steps` / `failed` / `card_done`），
+ * 评测据此知道这张卡的复盘已经跑完，没存技能时也能看出是门槛没到、冷却、还是模型认为不值得。
  */
 export function createRetroObserver(deps: RetroObserverDeps) {
   const log = deps.log ?? ((line: string) => console.error(line));
+  const reviewed = new Set<string>();
+  const remember = (key: string) => {
+    reviewed.add(key);
+    if (reviewed.size > REVIEWED_CARDS_KEPT) {
+      const oldest = reviewed.values().next().value;
+      if (oldest !== undefined) reviewed.delete(oldest);
+    }
+  };
+  /** 这一轮属于哪张已经交付的卡；读库失败就当没有，不因此漏掉别的。 */
+  const cardOf = async (
+    turn: ObservedTurn,
+    ownSteps: readonly TraceStep[],
+  ): Promise<string | null> => {
+    const own = ownSteps.some((step) => step.tool === DELIVER_TASK)
+      ? await deps.deliveredCard(turn.runId).catch(() => null)
+      : null;
+    const found =
+      own ??
+      deliveredCardIn(turn.events) ??
+      (await deps.cardOfRound?.(turn.runId).catch(() => null));
+    if (found) return found;
+    // 这一轮自己不认得那张卡，对话认得：只在那张卡还没复盘过时才算它的后续，免得吞掉别的长轮。
+    const before = await deps.cardHandedInBefore?.(turn).catch(() => null);
+    return before && !reviewed.has(`${turn.tenant}:${before}`) ? before : null;
+  };
   return async function observe(turn: ObservedTurn): Promise<RetroOutcome> {
     await deps.markUsed?.(turn).catch(() => undefined);
     let outcome: RetroOutcome = { outcome: "skipped" };
     let retro = retroTurnOf(turn);
+    let reason: "steps" | "failed" | "card_done" | undefined;
+    let reviewedKey: string | undefined;
     try {
-      if (!turn.failed) {
-        if (
-          turn.kind === "task" &&
-          retro.steps.some((step) => step.tool === DELIVER_TASK)
-        ) {
+      if (turn.failed) reason = "failed";
+      else {
+        const taskId =
+          turn.kind === "task" ? await cardOf(turn, retro.steps) : null;
+        const key = taskId ? `${turn.tenant}:${taskId}` : undefined;
+        if (taskId && key && reviewed.has(key)) {
+          // 这张卡已经复盘过：后面的轮不再看一遍。
+          retro = { ...retro, cardId: taskId, trigger: "card_delivered" };
+          reason = "card_done";
+        } else {
           // 读不到这张卡就当一轮普通的轮复盘，不因此漏掉。
-          const taskId = await deps.deliveredCard(turn.runId).catch(() => null);
           const card = taskId
             ? await deps
                 .cardTurn(taskId, { runId: turn.runId, events: turn.events })
                 .catch(() => null)
             : null;
-          if (card) retro = { ...card, trigger: "card_delivered" };
+          if (card) {
+            retro = { ...card, trigger: "card_delivered" };
+            reviewedKey = key;
+          }
+          outcome = await deps.retrospect(retro);
+          if (outcome.outcome === "skipped" && !shouldRetrospect(retro))
+            reason = "steps";
+          // 步数不够的跳过不是结论：这张卡后面的轮补了步数还要再看。
+          if (reviewedKey && reason !== "steps") remember(reviewedKey);
         }
-        outcome = await deps.retrospect(retro);
       }
     } catch {
       // 复盘自己记错误；这里只保证日志那一行照出。
@@ -671,6 +774,8 @@ export function createRetroObserver(deps: RetroObserverDeps) {
         steps: workSteps(retro.steps),
         agentId: turn.agentId,
         runId: turn.runId,
+        ...(retro.cardId ? { cardId: retro.cardId } : {}),
+        ...(outcome.outcome === "skipped" && reason ? { reason } : {}),
         ...("id" in outcome ? { skill: outcome.id } : {}),
         timestamp: new Date().toISOString(),
       }),
@@ -694,6 +799,90 @@ export async function deliveredCardOf(
         sql`${taskEvents.detail}->>'runId' = ${runId}`,
       ),
     )
+    .limit(1);
+  return row?.taskId ?? null;
+}
+
+/**
+ * 这一轮属于哪张已经交付过的卡：这一轮挂在卡上（卡的 `active_run_ref` / `run_ref`），或这一轮结束时在卡上写过
+ * 一行（`run_ended` 等，带这一轮的运行号），并且这张卡有交付行（任何一轮交付的）。没有就是 null。
+ *
+ * 一轮结束会在同一个事务里清掉 `active_run_ref` 并写 `run_ended`，所以先读卡上的列、再读日志行：读两次之间
+ * 即使它结束了，也总有一处认得出。
+ */
+export async function deliveredCardOfRound(
+  database: Database,
+  runId: string,
+): Promise<string | null> {
+  const tenant = currentTenant();
+  const hung = await database
+    .select({ id: tasks.id })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.tenantId, tenant),
+        or(eq(tasks.runRef, runId), eq(tasks.activeRunRef, runId)),
+      ),
+    );
+  const written = await database
+    .selectDistinct({ id: taskEvents.taskId })
+    .from(taskEvents)
+    .where(
+      and(
+        eq(taskEvents.tenantId, tenant),
+        sql`${taskEvents.detail}->>'runId' = ${runId}`,
+      ),
+    );
+  const cards = [...new Set([...hung, ...written].map((row) => row.id))];
+  if (cards.length === 0) return null;
+  const [delivered] = await database
+    .select({ taskId: taskEvents.taskId })
+    .from(taskEvents)
+    .where(
+      and(
+        eq(taskEvents.tenantId, tenant),
+        eq(taskEvents.kind, "delivered"),
+        inArray(taskEvents.taskId, cards),
+      ),
+    )
+    .orderBy(desc(taskEvents.createdAt))
+    .limit(1);
+  return delivered?.taskId ?? null;
+}
+
+/** 交付之后多久内，同一段对话里同一位员工接着做的活还算那张卡的后续。 */
+export const HANDED_IN_FOLLOW_MS = 30 * 60_000;
+
+/**
+ * 这段对话里这位员工最近交付的那张卡（交付行在 {@link HANDED_IN_FOLLOW_MS} 之内、卡还没结束）。没有就是 null。
+ * 在本人帧里调用。
+ */
+export async function handedInCardOfThread(
+  database: Database,
+  threadId: string,
+  agentId: string,
+  now: Date = new Date(),
+): Promise<string | null> {
+  const tenant = currentTenant();
+  const [row] = await database
+    .select({ taskId: taskEvents.taskId })
+    .from(taskEvents)
+    .innerJoin(tasks, eq(tasks.id, taskEvents.taskId))
+    .where(
+      and(
+        eq(taskEvents.tenantId, tenant),
+        eq(tasks.tenantId, tenant),
+        eq(taskEvents.kind, "delivered"),
+        eq(tasks.threadRef, threadId),
+        eq(tasks.executorAgentId, agentId),
+        inArray(tasks.status, ["running", "awaiting_review"]),
+        gte(
+          taskEvents.createdAt,
+          new Date(now.getTime() - HANDED_IN_FOLLOW_MS),
+        ),
+      ),
+    )
+    .orderBy(desc(taskEvents.createdAt))
     .limit(1);
   return row?.taskId ?? null;
 }
