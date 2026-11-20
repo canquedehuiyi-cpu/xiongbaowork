@@ -930,6 +930,7 @@ tests/tool-selection.integration.test.ts
 tests/turn-notice-config.test.ts
 tests/turn-notice.integration.test.ts
 tests/turn-notice.test.ts
+tests/turn-nudges-headless.test.ts
 tests/turn-observer.integration.test.ts
 tests/turn-watchdog.test.ts
 tests/unattended-platform-frame.integration.test.ts
