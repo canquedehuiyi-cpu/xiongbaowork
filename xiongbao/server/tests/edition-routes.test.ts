@@ -14,11 +14,6 @@ function appFor(edition: Edition) {
 }
 
 const closed = [
-  // No memory in the personal edition: OpenBot Desktop's local Intelligence isn't licensed for it.
-  "/api/memory",
-  "/api/memory/sources",
-  "/api/memory/sources/available/expenses",
-  "/api/memory/m1",
   "/api/admin/people",
   "/api/admin/people/abc/role",
   "/api/admin/identity-providers",
@@ -47,9 +42,21 @@ const open = [
   "/api/admin/enterprise/me",
   "/api/groups",
   "/api/team-bots",
+  // Memory is in the personal edition too (closed only with XIONGBAO_PERSONAL_MEMORY=off, below).
+  "/api/memory",
+  "/api/memory/sources",
+  "/api/memory/sources/available/expenses",
+  "/api/memory/m1",
   // Prefixes, not substrings: a sibling that merely starts the same way stays open.
   "/api/admin/peoplex",
   "/api/memoryx",
+];
+
+const memoryRoutes = [
+  "/api/memory",
+  "/api/memory/sources",
+  "/api/memory/sources/available/expenses",
+  "/api/memory/m1",
 ];
 
 describe("the personal edition", () => {
@@ -63,6 +70,25 @@ describe("the personal edition", () => {
 
   test.each(open)("leaves %s open", async (path) => {
     expect((await appFor("personal").request(path)).status).toBe(200);
+  });
+});
+
+describe("the personal edition with XIONGBAO_PERSONAL_MEMORY=off", () => {
+  test.each(memoryRoutes)("closes %s", async (path) => {
+    const before = process.env.XIONGBAO_PERSONAL_MEMORY;
+    process.env.XIONGBAO_PERSONAL_MEMORY = "off";
+    try {
+      for (const method of ["GET", "POST", "PUT", "DELETE"]) {
+        const response = await appFor("personal").request(path, { method });
+        expect(response.status).toBe(404);
+        expect(await response.text()).toBe("");
+      }
+      // The switch is the personal edition's: a team deployment keeps memory.
+      expect((await appFor("team").request(path)).status).toBe(200);
+    } finally {
+      if (before === undefined) delete process.env.XIONGBAO_PERSONAL_MEMORY;
+      else process.env.XIONGBAO_PERSONAL_MEMORY = before;
+    }
   });
 });
 

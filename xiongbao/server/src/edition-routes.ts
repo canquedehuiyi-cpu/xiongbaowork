@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import type { Edition } from "./edition";
+import { type Edition, editionHasMemory } from "./edition";
 
 /**
  * The API the personal edition does not have: what governs other people (who may sign in, their
@@ -12,11 +12,10 @@ import type { Edition } from "./edition";
  * Team Bots, which a person's own screens read; the capability switches refuse what the edition
  * turns off.
  *
- * Memory is closed too: the personal edition has none (`editionHasMemory`), and its screens never
- * ask for it.
+ * Memory is not in this list: both editions have it. It is closed again, as the personal edition used
+ * to have it, only when `XIONGBAO_PERSONAL_MEMORY=off` ({@link PERSONAL_MEMORY_ROUTES}).
  */
 export const PERSONAL_CLOSED_ROUTES: readonly RegExp[] = [
-  "/api/memory",
   "/api/admin/people",
   "/api/admin/identity-providers",
   "/api/admin/enterprise",
@@ -25,6 +24,11 @@ export const PERSONAL_CLOSED_ROUTES: readonly RegExp[] = [
   "/api/auth/scim",
   "/api/auth/sso",
 ].map((prefix) => new RegExp(`^${prefix}(?:/|$)`));
+
+/** What closes with memory: the personal edition with `XIONGBAO_PERSONAL_MEMORY=off` has none. */
+export const PERSONAL_MEMORY_ROUTES: readonly RegExp[] = [
+  /^\/api\/memory(?:\/|$)/,
+];
 
 /** Under a closed prefix and still open: what anybody may ask about their own capabilities. */
 const PERSONAL_OPEN_ROUTES: readonly string[] = ["/api/admin/enterprise/me"];
@@ -36,7 +40,9 @@ export function createEditionGate(edition: Edition): MiddlewareHandler {
     if (
       edition === "personal" &&
       !PERSONAL_OPEN_ROUTES.includes(path) &&
-      PERSONAL_CLOSED_ROUTES.some((route) => route.test(path))
+      (PERSONAL_CLOSED_ROUTES.some((route) => route.test(path)) ||
+        (!editionHasMemory(edition) &&
+          PERSONAL_MEMORY_ROUTES.some((route) => route.test(path))))
     ) {
       return context.body(null, 404);
     }
