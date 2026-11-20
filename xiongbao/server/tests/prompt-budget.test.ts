@@ -31,8 +31,8 @@ import { webTools } from "../src/web/tools";
  * 先想想是不是该排在 search_tools 后面（`DEFERRED_TOOLS`），或者把话说短。
  */
 
-/** 看板轮首步「系统提示 + 工具定义」的字符数上限。本机实测约 22.5K，留出一点余量。 */
-const BUDGET_CHARS = 24_000;
+/** 看板轮首步「系统提示 + 工具定义」的字符数上限。用户 2026-11-20 批准从 24K 收紧到 20K；本机实测约 19.8K。 */
+const BUDGET_CHARS = 20_000;
 
 let llm: LLMock;
 let requests: {

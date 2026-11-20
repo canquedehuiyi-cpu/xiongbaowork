@@ -8,6 +8,7 @@ Newest first. `Unreleased` is what is on `main` and not yet tagged.
 
 ## Unreleased
 
+- **看板轮首步的系统提示加工具定义压到 20K 字符以下（token 第五轮）。** 守卫上限由 24K 收紧到 20K。除上面两项外，再压短计划、接活、交付、读文件、搜索等工具的短描述，以及电脑、媒体、来源、交付、子代理几段的措辞；询问、批准后执行、付款底线、不可信内容的原文一字未动。回退：`XIONGBAO_PROMPT_SLIM=off`。本项不带迁移。
 - **看板上无人值守的交付轮不再带系统提示里的「回答格式」段（token 第五轮）。** 这一段讲什么时候画图表、表格、卡片，看板轮没有组件可画，每步白发约 750 字符。判定：员工握着 `accept_task`，且这一轮随运行来的工具只有电脑工具（有人看的界面还会带组件工具）；运行带的工具还不知道时一律不算，该段照旧。单聊和有人看的轮、关着瘦身的轮不受影响。回退：`XIONGBAO_HEADLESS_ANSWER_FORMAT=on`。本项不带迁移。
 - **`report_refusal`、`update_heartbeat_checklist` 两个工具排到 `search_tools` 后面（token 第五轮）。** 它们几乎用不到，却每步占约 570 字符的工具定义；现在和别的偶尔才用的工具一样，名字写在 `search_tools` 的描述里，搜一次就能用。回退：`XIONGBAO_PROMPT_SLIM=off`。本项不带迁移。
 - **命令输出的内联上限由 16KB 降到 4KB（token 第五轮）。** `computer_run_command` 的输出超过 4KB 就把完整内容存进 `tool-outputs/`，回传 1KB 开头加 2.5KB 结尾和路径；最近 4 步里原样留着的大段输出是后段每步 2～3 万 token 的主要来源。回退：`XIONGBAO_COMMAND_INLINE_BYTES=16384`（或 `off`）回到 16KB。本项不带迁移。
