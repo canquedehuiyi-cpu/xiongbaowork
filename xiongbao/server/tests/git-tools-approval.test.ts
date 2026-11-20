@@ -98,6 +98,25 @@ test("a git tool that is no longer offered is refused, not sent anywhere", async
   expect(connectorCalls).toHaveLength(0);
 });
 
+test("a git tool switched off for the employee after it was asked is not carried out", async () => {
+  const action = approvalAction({
+    actorId: "person",
+    botId: "dev",
+    toolRef: "computer_run_command",
+    effect: "write",
+    scope: "workspace",
+    args: { command: "git add" },
+    target: { workspace: true },
+    continuation: continuation("git_commit", { paths: ["a"], message: "m" }),
+  });
+  // What index.ts passes: the tools, less the ones the employee's permissions switch off.
+  const { execute, nativeRuns } = harness({
+    nativeTools: () => [],
+  });
+  await expect(execute(action)).rejects.toThrow("switched off");
+  expect(nativeRuns).toEqual([]);
+});
+
 test("an approved open_pull_request goes to the connector with the arguments it was given", async () => {
   const args = {
     owner: "acme",

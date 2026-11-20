@@ -113,7 +113,12 @@ import { serverTurnAdmission } from "./agents/turn-admission";
 import { createHeartbeatRoutes } from "./agents/heartbeat-routes";
 import { updatePlanTools } from "./agents/update-plan";
 import { configureHeavyTaskFacts } from "./agents/heavy-task";
-import { type GitComputer, gitTools } from "./computer/git-tools";
+import {
+  type GitComputer,
+  gitTools,
+  offeredGitTools,
+  showingCommand,
+} from "./computer/git-tools";
 import {
   createWakeUpRunner,
   createWakeUpStore,
@@ -123,6 +128,7 @@ import { createApp } from "./app";
 import { createDecisionWaits } from "./approvals/decision-waits";
 import { createApprovedActionExecutor } from "./approvals/execute";
 import { createPersonResponseTick } from "./approvals/person-response-sweep";
+import { outsideRecheck } from "./approvals/service";
 import {
   createApprovalQuestions,
   type PersonQuestion,
@@ -546,9 +552,7 @@ import { createProjectRoutes } from "./projects/routes";
 import { createProjectStore } from "./projects/store";
 import { createProviderOAuthProxy } from "./provider-oauth";
 import { QuotaExceeded, createQuotaService } from "./quota/limits";
-import {
-  createHeartbeatRunner,
-} from "./heartbeat/runner";
+import { createHeartbeatRunner } from "./heartbeat/runner";
 import { createHeartbeatStore } from "./heartbeat/store";
 import { heartbeatTools } from "./heartbeat/tools";
 import { createQuotaRoutes } from "./quota/routes";
@@ -3178,22 +3182,27 @@ await startupLifecycle.run(async (startup) => {
               const acting = { id: actor.id, userId: actor.id, initiator };
               return {
                 run: (command, signal) =>
-                  runAsTenant(actorId, () =>
-                    computerGateway.runCommand(
-                      seat,
-                      acting,
-                      { command, timeoutMs: commandTimeoutMs(60_000) },
-                      signal,
+                  showingCommand(command, () =>
+                    runAsTenant(actorId, () =>
+                      computerGateway.runCommand(
+                        seat,
+                        acting,
+                        { command, timeoutMs: commandTimeoutMs(60_000) },
+                        signal,
+                      ),
                     ),
                   ),
                 read: (path, signal) =>
                   runAsTenant(actorId, async () => {
                     try {
-                      const file = await computerGateway.readFile(
-                        seat,
-                        acting,
-                        { path },
-                        signal,
+                      // 复核批准时不把这次读当成被批准的那条命令（见 `outsideRecheck`）。
+                      const file = await outsideRecheck(() =>
+                        computerGateway.readFile(
+                          seat,
+                          acting,
+                          { path },
+                          signal,
+                        ),
                       );
                       return {
                         text: file.text,
@@ -4649,8 +4658,12 @@ await startupLifecycle.run(async (startup) => {
         initiator,
         auditStore: bootAuditStore,
       }),
-    nativeTools: ({ actorId, botId, initiator }) =>
-      gitToolsFor(actorId, initiator, botId),
+    // 重放前也按员工的工具权限过滤：批准之后才被关掉的 `bot/git_*` 不再执行。
+    nativeTools: async ({ actorId, botId, initiator }) =>
+      offeredGitTools(
+        gitToolsFor(actorId, initiator, botId),
+        await approvalService.disabledTools(actorId, botId),
+      ),
     callTool: (input) => pluginStore.callTool(input),
     credentialActorFor: (actorId, botId, ref) =>
       teamBots.credentialActorFor(actorId, botId)(ref),
@@ -5352,9 +5365,12 @@ await startupLifecycle.run(async (startup) => {
     ownerUserId: string;
     agentId: string;
   }) => {
-    if (await proactiveStore.personOff(ownerUserId)) return "off_person" as const;
-    if (await proactiveStore.paused(ownerUserId, agentId)) return "paused" as const;
-    if (!(await proactiveEngine.allowed(ownerUserId))) return "off_admin" as const;
+    if (await proactiveStore.personOff(ownerUserId))
+      return "off_person" as const;
+    if (await proactiveStore.paused(ownerUserId, agentId))
+      return "paused" as const;
+    if (!(await proactiveEngine.allowed(ownerUserId)))
+      return "off_admin" as const;
     try {
       await quota.assertCapacity(ownerUserId, "tasksPerMonth");
     } catch (error) {
@@ -5615,7 +5631,8 @@ await startupLifecycle.run(async (startup) => {
     channels: channelStore,
     // 外部员工自己干活、不走三步；被暂停的、关了 `accept_task` 的员工不自己接活。
     canClaim: async (ownerUserId, agentId) => {
-      if (await isExternalEmployee(database, ownerUserId, agentId)) return false;
+      if (await isExternalEmployee(database, ownerUserId, agentId))
+        return false;
       if (await proactiveStore.paused(ownerUserId, agentId)) return false;
       return !(await approvalService.disabledTools(ownerUserId, agentId))(
         ACCEPT_TASK_REF,

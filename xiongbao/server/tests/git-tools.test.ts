@@ -1,5 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import {
+  chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -21,6 +23,7 @@ import {
   findPullRequestTool,
   gitTools,
   isSecretFileName,
+  offeredGitTools,
   secretKindsIn,
   shellQuote,
   validRefName,
@@ -91,6 +94,7 @@ function computerIn(root: string): GitComputer {
         cwd: root,
         env: {
           ...process.env,
+          HOME: root,
           GIT_CONFIG_GLOBAL: "/dev/null",
           GIT_CONFIG_SYSTEM: "/dev/null",
         },
@@ -537,14 +541,20 @@ describe("open_pull_request", () => {
   test("recognises the other spellings of the same action", () => {
     const calls: unknown[] = [];
     for (const ref of [
+      "github/create_pull_request",
       "composio-github/GITHUB_CREATE_A_PULL_REQUEST",
-      "github-app/create-pull-request",
+      "arcade-github/Github_CreatePullRequest",
+      "github-mcp/create-pull-request",
     ])
       expect(findPullRequestTool([connector(ref, calls)])?.ref).toBe(ref);
     for (const ref of [
       "github/create_pull_request_with_copilot",
       "github/merge_pull_request",
       "gitlab/create_pull_request",
+      // 名字里带 github、却不在 server id 名单里的，不认。
+      "github-app/create_pull_request",
+      "my-github-tools/create_pull_request",
+      "notgithub/create_pull_request",
     ])
       expect(findPullRequestTool([connector(ref, calls)])).toBeUndefined();
   });
@@ -616,5 +626,253 @@ describe("the helpers", () => {
       ),
     ).toContain("密钥或令牌");
     expect(secretKindsIn(padding)).toEqual([]);
+  });
+});
+
+/** 一个会延续的交互式 bash，和员工的活 shell 一样：`cd` 留着，`exit` 会结束它。 */
+function liveShell(root: string) {
+  const child = Bun.spawn(["bash", "--noprofile", "--norc", "-i"], {
+    cwd: root,
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "ignore",
+    env: {
+      ...process.env,
+      HOME: root,
+      GIT_CONFIG_GLOBAL: "/dev/null",
+      GIT_CONFIG_SYSTEM: "/dev/null",
+    },
+  });
+  const decoder = new TextDecoder();
+  const reader = child.stdout.getReader();
+  let alive = true;
+  void child.exited.then(() => {
+    alive = false;
+  });
+  async function run(command: string) {
+    const mark = `__END_${Math.random().toString(36).slice(2)}__`;
+    child.stdin.write(`${command}\necho ${mark}$?\n`);
+    child.stdin.flush();
+    let seen = "";
+    while (!new RegExp(`${mark}\\d+`).test(seen)) {
+      const chunk = await Promise.race([
+        reader.read(),
+        child.exited.then(() => ({ done: true, value: undefined })),
+      ]);
+      if (chunk.done) break;
+      seen += decoder.decode(chunk.value);
+    }
+    const done = new RegExp(`${mark}(\\d+)`).exec(seen);
+    return {
+      exitCode: done ? Number(done[1]) : -1,
+      stdout: seen.replace(new RegExp(`${mark}\\d+`), ""),
+      stderr: "",
+    };
+  }
+  return { run, alive: () => alive, stop: () => child.kill() };
+}
+
+describe("in the employee's live shell, where the directory carries over and exit ends it", () => {
+  test("works after the employee cd'd elsewhere, leaves the shell where it was, and never ends it", async () => {
+    const root = workspace();
+    mkdirSync(join(root, "app", "sub"));
+    mkdirSync(join(root, "plain"));
+    const shell = liveShell(root);
+    try {
+      await shell.run("cd app/sub && alias git='echo hijacked'");
+      const computer: GitComputer = {
+        run: (command) => shell.run(command),
+        async read(path) {
+          try {
+            const text = readFileSync(join(root, path), "utf8");
+            return { text, truncated: false, bytes: Buffer.byteLength(text) };
+          } catch {
+            return null;
+          }
+        },
+      };
+      const tools = gitTools({
+        computer: async () => computer,
+        connectorTools: async () => [],
+      });
+      const call = async (name: string, args: unknown) =>
+        JSON.parse(
+          (await tools.find((tool) => tool.name === name)?.execute(args)) ??
+            "{}",
+        ) as Answer;
+      writeFileSync(join(root, "app", "a.txt"), "one\ntwo\n");
+      // The repository is named from the workspace root, whatever directory the shell is in.
+      const summary = await call(GIT_DIFF_SUMMARY_TOOL, { repo: "app" });
+      expect(summary.ok).toBe(true);
+      expect(summary.files).toEqual([{ path: "a.txt", added: 1, deleted: 0 }]);
+      const commit = await call(GIT_COMMIT_TOOL, {
+        repo: "app",
+        paths: ["a.txt"],
+        message: "from a subdirectory",
+      });
+      expect(commit.ok).toBe(true);
+      expect(sh(join(root, "app"), "git log -1 --format=%s")).toContain(
+        "from a subdirectory",
+      );
+      // The shell is where the employee left it, and alive.
+      expect((await shell.run("pwd")).stdout).toContain(
+        join(root, "app", "sub"),
+      );
+      // Every way out of the script ends the script, not the shell.
+      for (const failing of [{ repo: "nowhere" }, { repo: "plain" }])
+        expect((await call(GIT_BRANCH_TOOL, failing)).ok).toBe(false);
+      expect(
+        (
+          await call(GIT_COMMIT_TOOL, {
+            repo: "app",
+            paths: ["sub"],
+            message: "m",
+          })
+        ).ok,
+      ).toBe(false);
+      expect(shell.alive()).toBe(true);
+      expect((await shell.run("echo still-here")).stdout).toContain(
+        "still-here",
+      );
+      expect((await shell.run("pwd")).stdout).toContain(
+        join(root, "app", "sub"),
+      );
+    } finally {
+      shell.stop();
+    }
+  });
+});
+
+describe("what the repository's own git configuration cannot make the tools do", () => {
+  test("a pre-commit hook does not run", async () => {
+    const root = workspace();
+    const marker = join(root, "hook-ran");
+    const hook = join(root, "app", ".git", "hooks", "pre-commit");
+    writeFileSync(hook, `#!/bin/sh\ntouch ${marker}\n`);
+    chmodSync(hook, 0o755);
+    writeFileSync(join(root, "app", "a.txt"), "two\n");
+    const answer = await toolsFor(root).byName(GIT_COMMIT_TOOL)({
+      repo: "app",
+      paths: ["a.txt"],
+      message: "hooks off",
+    });
+    expect(answer.ok).toBe(true);
+    expect(existsSync(marker)).toBe(false);
+    // Control: the same hook does run for a plain commit.
+    writeFileSync(join(root, "app", "b.txt"), "x\n");
+    sh(join(root, "app"), "git add b.txt && git commit -q -m plain");
+    expect(existsSync(marker)).toBe(true);
+  });
+
+  test("core.fsmonitor and diff.external do not run", async () => {
+    const root = workspace();
+    const marker = join(root, "monitor-ran");
+    const script = join(root, "monitor.sh");
+    writeFileSync(script, `#!/bin/sh\ntouch ${marker}\n`);
+    chmodSync(script, 0o755);
+    sh(
+      join(root, "app"),
+      `git config core.fsmonitor ${script} && git config diff.external ${script}`,
+    );
+    writeFileSync(join(root, "app", "a.txt"), "one\nmore\n");
+    const tools = toolsFor(root);
+    const summary = await tools.byName(GIT_DIFF_SUMMARY_TOOL)({
+      repo: "app",
+      include_diff: true,
+    });
+    expect(summary.ok).toBe(true);
+    expect(summary.diff).toContain("+more");
+    await tools.byName(GIT_BRANCH_TOOL)({ repo: "app" });
+    expect(existsSync(marker)).toBe(false);
+  });
+
+  test("a clean filter that would inject a key makes the commit refused, with nothing committed", async () => {
+    const root = workspace();
+    const token = `ghp_${"a1B2c3D4e5F6g7H8i9J0".repeat(2)}`;
+    writeFileSync(join(root, "app", ".gitattributes"), "*.txt filter=inject\n");
+    sh(
+      join(root, "app"),
+      `git config filter.inject.clean "sed 's/$/ ${token}/'" && git config filter.inject.smudge cat`,
+    );
+    writeFileSync(join(root, "app", "a.txt"), "two\n");
+    const before = sh(join(root, "app"), "git rev-parse HEAD");
+    const answer = await toolsFor(root).byName(GIT_COMMIT_TOOL)({
+      repo: "app",
+      paths: ["a.txt"],
+      message: "filtered",
+    });
+    expect(answer.ok).toBe(false);
+    expect(answer.error).toContain("过滤器");
+    expect(sh(join(root, "app"), "git rev-parse HEAD")).toBe(before);
+    expect(sh(join(root, "app"), "git status --porcelain")).not.toContain("A ");
+  });
+
+  test("a file that changes after it was checked is not committed, and is taken back out of the index", async () => {
+    const root = workspace();
+    const token = `ghp_${"a1B2c3D4e5F6g7H8i9J0".repeat(2)}`;
+    writeFileSync(join(root, "app", "a.txt"), "harmless\n");
+    const computer = computerIn(root);
+    const racing: GitComputer = {
+      run: computer.run,
+      async read(path, signal) {
+        const answer = await computer.read(path, signal);
+        // After the check, before the commit.
+        writeFileSync(join(root, path), `export const t = "${token}";\n`);
+        return answer;
+      },
+    };
+    const tools = gitTools({
+      computer: async () => racing,
+      connectorTools: async () => [],
+    });
+    const before = sh(join(root, "app"), "git rev-parse HEAD");
+    const answer = JSON.parse(
+      (await tools
+        .find((tool) => tool.name === GIT_COMMIT_TOOL)
+        ?.execute({ repo: "app", paths: ["a.txt"], message: "race" })) ?? "{}",
+    ) as Answer;
+    expect(answer.ok).toBe(false);
+    expect(answer.error).toContain("不一致");
+    expect(sh(join(root, "app"), "git rev-parse HEAD")).toBe(before);
+    expect(sh(join(root, "app"), "git diff --cached --name-only").trim()).toBe(
+      "",
+    );
+  });
+
+  test("a binary file is refused, not skipped", async () => {
+    const root = workspace();
+    writeFileSync(join(root, "app", "blob.bin"), Buffer.from([1, 2, 0, 3]));
+    const answer = await toolsFor(root).byName(GIT_COMMIT_TOOL)({
+      repo: "app",
+      paths: ["blob.bin"],
+      message: "bin",
+    });
+    expect(answer).toMatchObject({ ok: false, refused: true });
+    expect(answer.error).toContain("二进制");
+  });
+
+  test("deleting a tracked file commits the deletion", async () => {
+    const root = workspace();
+    rmSync(join(root, "app", "a.txt"));
+    const answer = await toolsFor(root).byName(GIT_COMMIT_TOOL)({
+      repo: "app",
+      paths: ["a.txt"],
+      message: "remove a",
+    });
+    expect(answer.ok).toBe(true);
+    expect(sh(join(root, "app"), "git ls-files")).not.toContain("a.txt");
+  });
+});
+
+describe("tools switched off in the employee's permissions", () => {
+  test("are not offered, here or when an approval is carried out", () => {
+    const { tools } = toolsFor(undefined);
+    const offered = offeredGitTools(tools, (ref) => ref === "bot/git_commit");
+    expect(offered.map((tool) => tool.name)).toEqual([
+      GIT_BRANCH_TOOL,
+      GIT_DIFF_SUMMARY_TOOL,
+      OPEN_PULL_REQUEST_TOOL,
+    ]);
+    expect(offeredGitTools(tools, () => false)).toHaveLength(4);
   });
 });

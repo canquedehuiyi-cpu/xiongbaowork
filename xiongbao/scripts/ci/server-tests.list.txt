@@ -424,6 +424,7 @@ tests/external-agents-schema.integration.test.ts
 tests/form-check-guidance.test.ts
 tests/generated-media-group.integration.test.ts
 tests/generated-media.integration.test.ts
+tests/git-tools-approval-real.test.ts
 tests/git-tools-approval.test.ts
 tests/git-tools.test.ts
 tests/github-oauth-signup.test.ts

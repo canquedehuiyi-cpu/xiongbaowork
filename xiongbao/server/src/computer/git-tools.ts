@@ -22,6 +22,7 @@
  * 请求原样交给那个连接器工具，外发的审批、账号、审计都是连接器自己那一套；没有就用一句话说明，请本人接入。
  * 参数和连接器的「创建 PR」一一对应、不改写，批准之后重放走的就是连接器那条路径。
  */
+import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
   GIT_BRANCH_TOOL,
@@ -31,6 +32,10 @@ import {
   GIT_DIFF_SUMMARY_TOOL,
   OPEN_PULL_REQUEST_TOOL,
 } from "../../../shared/git-tools";
+import {
+  currentApprovalContext,
+  withApprovalContext,
+} from "../approvals/types";
 import { findSensitive, type SensitiveKind } from "../learning/sensitive";
 import type { GrantedTool } from "../plugins/tools";
 
@@ -154,17 +159,69 @@ export function validRefName(name: string): boolean {
   );
 }
 
-/** 脚本的开头：进仓库目录，并确认仓库在工作区里面。退出码 92 到 97 是这里自己定的，下面翻译成话。 */
-const EXIT = { directory: 92, diff: 93, noDir: 94, noRepo: 96, outside: 97 };
+/**
+ * 每条命令的脚本，退出码 90 到 97 是这里自己定的，下面翻译成话。
+ *
+ * 在一个新的 `bash -c` 里跑，不是直接贴进员工的活 shell：活 shell 里 `cd` 会一直留着，`exit` 会结束整个
+ * shell（员工的后台进程跟着没了），员工自己定义的别名和函数也会改掉 `git` 的意思。子进程里这些都影响不到外面，
+ * 外面的目录不变、shell 不退出。
+ *
+ * 工作区根是 `$HOME`（电脑把 HOME 设成工作区），不是当前目录：员工先 `cd app` 再调用，工作区根也还是那个根。
+ *
+ * 仓库里的 git 配置不能拿来绕过底线：每条 git 都经 `g`，关掉钩子（`core.hooksPath`）、文件系统监视器
+ * （`core.fsmonitor`，`git diff`、`git status` 会启动它）、外部 diff 程序、属性文件、提交签名程序；diff 再加
+ * `--no-ext-diff --no-textconv`。过滤器（`filter.*.clean`）列不全，直接拒绝有过滤器的仓库（见 `git_commit`）。
+ */
+const EXIT = {
+  filter: 90,
+  mismatch: 91,
+  directory: 92,
+  diff: 93,
+  noDir: 94,
+  noRepo: 96,
+  outside: 97,
+};
+
+/** 关掉仓库配置能带来的执行：钩子、监视器、外部 diff、属性文件、提交签名、换行转换。 */
+const SAFE_GIT =
+  "git -c core.hooksPath=/dev/null -c core.fsmonitor= -c diff.external= -c core.attributesFile=/dev/null -c commit.gpgsign=false -c core.autocrlf=false";
 
 function inRepo(directory: string, body: string): string {
   return [
-    'W="$(pwd -P)" || exit 95',
+    "set +e",
+    `g() { ${SAFE_GIT} "$@"; }`,
+    'W="$(cd -- "$HOME" 2>/dev/null && pwd -P)" || exit 95',
+    'cd -- "$W" || exit 95',
     `cd -- ${shellQuote(directory)} 2>/dev/null || exit ${EXIT.noDir}`,
-    `T="$(git rev-parse --show-toplevel 2>/dev/null)" || exit ${EXIT.noRepo}`,
+    `T="$(g rev-parse --show-toplevel 2>/dev/null)" || exit ${EXIT.noRepo}`,
     `case "$T" in "$W"|"$W"/*) ;; *) exit ${EXIT.outside};; esac`,
     body,
   ].join("\n");
+}
+
+/**
+ * 在这次工具调用的审批上下文里，把实际要执行的命令文本也写进 `args.command`：审批卡片和审计看到的是这份
+ * 参数，只有模型传的几个字段（paths、message）的话，批准的人看不出究竟要跑什么。工具自己的参数解析会丢掉
+ * 多出来的 `command`，所以批准之后重放不受影响；原调用和复核写进去的命令一样，摘要也一样。
+ */
+export function showingCommand<T>(
+  command: string,
+  work: () => Promise<T>,
+): Promise<T> {
+  const context = currentApprovalContext();
+  if (!context) return work();
+  const args =
+    context.args &&
+    typeof context.args === "object" &&
+    !Array.isArray(context.args)
+      ? (context.args as Record<string, unknown>)
+      : {};
+  return withApprovalContext({ ...context, args: { ...args, command } }, work);
+}
+
+/** 把脚本交给一个干净的 bash：不读启动文件，没有员工 shell 里的别名、函数和当前目录。 */
+export function launch(script: string): string {
+  return `bash --noprofile --norc -c ${shellQuote(script)}`;
 }
 
 function failure(error: string, extra: Record<string, unknown> = {}): string {
@@ -183,6 +240,12 @@ function explain(result: GitCommandResult, directory: string): string {
       return `「${directory}」所在的仓库不在你的工作区里面，这几个工具只动工作区里的仓库。`;
     case EXIT.diff:
       return "没能比较：base 写的引用不存在，或者仓库还没有任何提交。";
+    case EXIT.filter:
+      return "这个仓库配置了 git 过滤器（filter），提交时它会改写文件内容，这个工具没法保证检查的就是提交的内容，所以不处理。需要提交的话请本人来。";
+    case EXIT.mismatch: {
+      const path = /^@@mismatch=(.*)$/m.exec(result.stdout)?.[1];
+      return `没有提交：暂存的「${path ?? "某个文件"}」和检查过的内容不一致（检查之后文件变了，或者 git 配置改写了内容），已经撤回暂存。请重新读一遍再提交。`;
+    }
     case EXIT.directory:
       return "paths 里写了目录。请逐个写文件（可以先用 git_diff_summary 看有哪些改动文件）。";
     default: {
@@ -224,23 +287,55 @@ const NO_COMPUTER = "你现在没有可用的电脑，这个工具要在你的�
 const NOT_CONNECTED =
   "你还没有接入可以开 Pull Request 的连接器（GitHub 一类，并且允许创建 PR）。我不会自己存令牌，也不会绕开：请本人在「应用」里接入 GitHub，并允许创建 Pull Request，接好之后再让我开。在那之前，可以把分支名、标题和说明交给本人，请本人手动开。";
 
+/** 一段文字作为 git 对象（blob）的编号：sha1("blob <字节数>\0" + 内容)。 */
+export function gitBlobId(text: string): string {
+  const bytes = Buffer.from(text, "utf8");
+  return createHash("sha1")
+    .update(`blob ${bytes.length}\0`)
+    .update(bytes)
+    .digest("hex");
+}
+
 const EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 
-/** 从授予员工的应用工具里找「创建 Pull Request」：GitHub 一类的连接器，名字里去掉符号后是 createpullrequest。 */
+/**
+ * 能开 Pull Request 的连接器，按 server id 精确认：内置目录的 GitHub（`github`，管理员把它放宽到带写权限的端点后
+ * 才有「创建 PR」，默认的只读端点没有）、Composio 的 GitHub（`composio-github`）、Arcade 的（`arcade-github`），
+ * 以及管理员登记 GitHub MCP 时用的 `github-mcp`。id 不在名单里的不认，免得名字里带 github 的别的服务被当成它。
+ */
+export const PULL_REQUEST_SERVERS: ReadonlySet<string> = new Set([
+  "github",
+  "composio-github",
+  "arcade-github",
+  "github-mcp",
+]);
+
+const PULL_REQUEST_ACTIONS: ReadonlySet<string> = new Set([
+  "createpullrequest",
+  "createapullrequest",
+  "githubcreatepullrequest",
+  "githubcreateapullrequest",
+]);
+
+/** 从授予员工的应用工具里找「创建 Pull Request」：server id 在名单里，动作名去掉符号后是 createpullrequest 一类。 */
 export function findPullRequestTool(
   tools: readonly GrantedTool[],
 ): GrantedTool | undefined {
   return tools.find((tool) => {
     const [server = "", name = ""] = tool.ref.split("/");
-    const plain = name.toLowerCase().replace(/[^a-z]/g, "");
     return (
-      /github/i.test(server) &&
-      (plain === "createpullrequest" ||
-        plain === "createapullrequest" ||
-        plain === "githubcreatepullrequest" ||
-        plain === "githubcreateapullrequest")
+      PULL_REQUEST_SERVERS.has(server) &&
+      PULL_REQUEST_ACTIONS.has(name.toLowerCase().replace(/[^a-z]/g, ""))
     );
   });
+}
+
+/** 员工的工具权限里关掉的 git 工具不给：授予时和批准之后重放时都按它过滤。 */
+export function offeredGitTools(
+  tools: readonly GrantedTool[],
+  disabled: (ref: string) => boolean,
+): GrantedTool[] {
+  return tools.filter((tool) => !disabled(tool.ref));
 }
 
 export function gitTools(options: GitToolsOptions): GrantedTool[] {
@@ -288,23 +383,23 @@ export function gitTools(options: GitToolsOptions): GrantedTool[] {
         return failure("start 要写分支名或提交的引用，不能含空格和特殊符号。");
       const change =
         action === "create"
-          ? `git switch -c ${shellQuote(name as string)}${start ? ` ${shellQuote(start)}` : ""} 2>&1 || exit 1`
+          ? `g switch -c ${shellQuote(name as string)}${start ? ` ${shellQuote(start)}` : ""} 2>&1 || exit 1`
           : action === "switch"
-            ? `git switch ${shellQuote(name as string)} 2>&1 || exit 1`
+            ? `g switch ${shellQuote(name as string)} 2>&1 || exit 1`
             : "";
       const script = inRepo(
         directory,
         [
           change,
-          'echo "@@current=$(git branch --show-current)"',
+          'echo "@@current=$(g branch --show-current)"',
           'echo "@@branches"',
-          "git branch --list --format='%(refname:short)' | head -n 100",
+          "g branch --list --format='%(refname:short)' | head -n 100",
         ]
           .filter(Boolean)
           .join("\n"),
       );
       return withComputer(async (computer) => {
-        const result = await computer.run(script, execution?.signal);
+        const result = await computer.run(launch(script), execution?.signal);
         if (result.exitCode !== 0)
           return failure(explain(result, directory), { action });
         const parts = sections(result.stdout);
@@ -366,44 +461,67 @@ export function gitTools(options: GitToolsOptions): GrantedTool[] {
           { refused: true },
         );
       return withComputer(async (computer) => {
-        // 先读一遍要提交的文件。读不到（删除的文件、还不存在）交给 git 自己判断。
+        /*
+         * 先读一遍要提交的文件，算出它们作为 git 对象的编号，写进命令里。命令在 `git add` 之后核对每个文件的暂存
+         * 内容编号和这里一样：一样，说明检查过的就是要提交的（无论过滤器、换行转换做过什么）；不一样就撤回暂存、
+         * 不提交。这样检查看到的和提交的是同一份，而要过审批门的命令仍然只有一条。
+         * 读不到（删除的文件）：命令里核对它确实不在暂存区里了。
+         */
+        const expected: { path: string; id: string }[] = [];
         for (const path of paths) {
           const file = await computer.read(
             directory === "." ? path : `${directory}/${path}`,
             execution?.signal,
           );
-          if (!file) continue;
+          if (!file) {
+            expected.push({ path, id: "deleted" });
+            continue;
+          }
           if (file.truncated || file.bytes > GIT_COMMIT_LIMITS.fileBytes)
             return failure(
               `没有提交：「${path}」太大（${file.bytes} 字节），没法完整检查里面有没有密钥。请拆小，或者本人自己提交这个文件。`,
               { refused: true },
             );
-          // 二进制文件看不了文字，不检查内容。
-          if (file.text.includes("\u0000")) continue;
+          // 二进制文件看不了文字，没法检查，不提交。
+          if (file.text.includes("\u0000"))
+            return failure(
+              `没有提交：「${path}」是二进制文件，没法检查里面有没有密钥。这个工具只提交文本文件，二进制文件请本人提交。`,
+              { refused: true, path },
+            );
           const kinds = secretKindsIn(file.text);
           if (kinds.length > 0)
             return failure(
               `没有提交：「${path}」里有${kinds.join("、")}。把它拿掉（改成从环境变量读取）再提交；这次什么都没有提交。`,
               { refused: true, path },
             );
+          expected.push({ path, id: gitBlobId(file.text) });
         }
         const quoted = paths.map(shellQuote).join(" ");
+        const checks = expected.map(
+          ({ path, id }) =>
+            `check ${shellQuote(path)} ${id} || { g reset -q -- ${quoted} >/dev/null 2>&1 || g rm --cached -q --ignore-unmatch -- ${quoted} >/dev/null 2>&1; echo "@@mismatch=$1"; exit ${EXIT.mismatch}; }`,
+        );
         const script = inRepo(
           directory,
           [
+            // 有过滤器的仓库不处理：过滤器是仓库配置里的命令，列不全，也会改写提交的内容。
+            `[ -z "$(g config --get-regexp '^filter\\..*\\.(clean|smudge|process)$' 2>/dev/null)" ] || exit ${EXIT.filter}`,
             `for p in ${quoted}; do [ -d "$p" ] && exit ${EXIT.directory}; done`,
             // 没配置提交人的仓库，用一个固定的名字，免得提交因为「请告诉我你是谁」失败。
-            'U="$(git config user.name || true)"; E="$(git config user.email || true)"',
+            'U="$(g config user.name || true)"; E="$(g config user.email || true)"',
             '[ -n "$U" ] || U=xiongbao; [ -n "$E" ] || E=employee@xiongbao.invalid',
-            `git add -- ${quoted} 2>&1 || exit 1`,
-            `git -c user.name="$U" -c user.email="$E" commit -q -m ${shellQuote(message)} -- ${quoted} 2>&1 || exit 1`,
-            'echo "@@commit=$(git rev-parse HEAD)"',
-            'echo "@@branch=$(git branch --show-current)"',
+            `g add -- ${quoted} 2>&1 || exit 1`,
+            // 暂存区里这个文件的编号，和检查过的一样才算（deleted：已经不在暂存区里）。
+            'check() { if [ "$2" = deleted ]; then g rev-parse -q --verify ":./$1" >/dev/null 2>&1 && return 1; return 0; fi; [ "$(g rev-parse -q --verify ":./$1" 2>/dev/null)" = "$2" ]; }',
+            ...checks,
+            `g -c user.name="$U" -c user.email="$E" commit -q -m ${shellQuote(message)} -- ${quoted} 2>&1 || exit 1`,
+            'echo "@@commit=$(g rev-parse HEAD)"',
+            'echo "@@branch=$(g branch --show-current)"',
             'echo "@@stat"',
-            "git show --stat --format= HEAD | tail -n 30",
+            "g show --no-ext-diff --no-textconv --stat --format= HEAD | tail -n 30",
           ].join("\n"),
         );
-        const result = await computer.run(script, execution?.signal);
+        const result = await computer.run(launch(script), execution?.signal);
         if (result.exitCode !== 0) return failure(explain(result, directory));
         const parts = sections(result.stdout);
         return JSON.stringify({
@@ -462,28 +580,28 @@ export function gitTools(options: GitToolsOptions): GrantedTool[] {
       const script = inRepo(
         directory,
         [
-          `HEADREF="$(git rev-parse -q --verify HEAD || echo ${EMPTY_TREE})"`,
-          'echo "@@branch=$(git branch --show-current)"',
-          `NUM="$(git diff --numstat ${range})" || exit ${EXIT.diff}`,
+          `HEADREF="$(g rev-parse -q --verify HEAD || echo ${EMPTY_TREE})"`,
+          'echo "@@branch=$(g branch --show-current)"',
+          `NUM="$(g diff --no-ext-diff --no-textconv --numstat ${range})" || exit ${EXIT.diff}`,
           'echo "@@count=$(printf \'%s\\n\' "$NUM" | grep -c .)"',
           'echo "@@numstat"',
           "printf '%s\\n' \"$NUM\" | head -n 200",
           ...(mode === "worktree"
             ? [
                 'echo "@@untracked"',
-                "git ls-files --others --exclude-standard | head -n 100",
+                "g ls-files --others --exclude-standard | head -n 100",
               ]
             : []),
           ...(includeDiff
             ? [
                 'echo "@@diff"',
-                `git diff --no-color ${range} | head -c ${limit}`,
+                `g diff --no-ext-diff --no-textconv --no-color ${range} | head -c ${limit}`,
               ]
             : []),
         ].join("\n"),
       );
       return withComputer(async (computer) => {
-        const result = await computer.run(script, execution?.signal);
+        const result = await computer.run(launch(script), execution?.signal);
         if (result.exitCode !== 0) return failure(explain(result, directory));
         const parts = sections(result.stdout);
         const files = (parts.get("numstat") ?? [])

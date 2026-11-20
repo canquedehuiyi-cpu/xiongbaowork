@@ -45,7 +45,7 @@ export type ApprovedActionDependencies = {
     actorId: string;
     botId: string;
     initiator: AuditInitiator;
-  }): GrantedTool[];
+  }): GrantedTool[] | Promise<GrantedTool[]>;
   callTool(input: {
     ref: string;
     args: Record<string, unknown>;
@@ -143,15 +143,18 @@ export function createApprovedActionExecutor(deps: ApprovedActionDependencies) {
      * call, with the arguments it was given, which the connector path below carries out.
      */
     if (GIT_LOCAL_TOOLS.includes(snapshot.toolName) && deps.nativeTools) {
-      const tool = deps
-        .nativeTools({
+      const tool = (
+        await deps.nativeTools({
           actorId: action.actorId,
           botId: action.botId,
           initiator,
         })
-        .find((tool) => tool.name === snapshot.toolName);
+      ).find((tool) => tool.name === snapshot.toolName);
+      // Switched off for this employee since it was approved, or not offered any more: not carried out.
       if (!tool)
-        throw new ApprovalRefusedError("That git tool is no longer available.");
+        throw new ApprovalRefusedError(
+          "Not done: that git tool is no longer available to this employee (it may have been switched off in their tool permissions).",
+        );
       const result = await tool.execute(snapshot.args, {
         toolCallId: snapshot.toolCallId,
         signal: new AbortController().signal,
