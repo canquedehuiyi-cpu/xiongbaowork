@@ -29,6 +29,7 @@ import {
   wakerFlows,
   wakerGroupMembers,
 } from "../db/schema";
+import { boardCards } from "../db/schema/board-cards";
 import { taskArchives } from "../db/schema/task-archives";
 import type { CardTurns } from "./card-turns";
 import { createDelivery, type Delivery, stageOf } from "./delivery";
@@ -557,11 +558,28 @@ export function createTaskRoutes(
         parentTaskId: row.parentTaskId,
       })),
     );
+    // 员工自己在看板上领的卡（`board_cards`，期 3·3.3）：界面据此显示「员工已认领」。
+    const claimed = new Set(
+      rows.length === 0
+        ? []
+        : (
+            await database
+              .select({ taskId: boardCards.taskId })
+              .from(boardCards)
+              .where(
+                inArray(
+                  boardCards.taskId,
+                  rows.map((row) => row.id),
+                ),
+              )
+          ).map((card) => card.taskId),
+    );
     return rows.map((row) => ({
       ...row,
       stage: stageOf(row),
       model: row.runRef ? (models.get(row.runRef) ?? null) : null,
       open: open.get(row.id) ?? null,
+      selfClaimed: claimed.has(row.id),
     }));
   };
 

@@ -40,6 +40,7 @@ import {
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
+import type { QuietUntil } from "../user-preferences";
 import type { WorkQueue } from "../work/queue";
 import type {
   AttentionDelivery,
@@ -156,6 +157,11 @@ export type ProactiveEngineDeps = {
     channelId: string,
     agentId: string,
   ): Promise<ProactiveScope | null>;
+  /**
+   * 安静时段（期 3·3.2）：到点的定时巡检在这个人的安静时段里不开，下一次推到时段结束；人自己点的「现在检查」不受
+   * 限。没有就不看。（巡检找到的事发给人的那条通知，在送达那一层另外推迟。）
+   */
+  quietUntil?: QuietUntil;
   /** Delivery of a ping to the person's push devices, Slack and Teams (`delivery/*`). */
   attention: AttentionDelivery;
   /** The admin's switch and daily cap (`admin/*`). Without it, on for everyone and 24 a day. */
@@ -631,6 +637,16 @@ export function createProactiveEngine(deps: ProactiveEngineDeps) {
     // A `system` row is still visible from a person's frame; it is not theirs to run.
     if (settingTenant(setting) !== tenant)
       throw new TenantContextError("setting/tenant mismatch");
+    // A check-in on its schedule waits for the end of the person's quiet time; Run now is theirs.
+    if (trigger === "schedule" && deps.quietUntil) {
+      const until = await deps
+        .quietUntil(setting.ownerUserId)
+        .catch(() => null);
+      if (until) {
+        await deps.store.deferNextRun(setting.id, until);
+        return;
+      }
+    }
     const gate = await gateOf(setting);
     if ("skip" in gate) return skip(setting, runId, trigger, gate.skip);
     // Read before this run is in the ledger, so the window opens at a check-in before it.

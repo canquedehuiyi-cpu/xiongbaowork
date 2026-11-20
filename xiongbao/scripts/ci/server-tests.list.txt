@@ -193,6 +193,7 @@ tests/automation-waker-executor.test.ts
 tests/automations-model.test.ts
 tests/automations-store.integration.test.ts
 tests/autonomous-summary.test.ts
+tests/autonomy-tables-grants.integration.test.ts
 tests/avatar-local-folder-turn.integration.test.ts
 tests/avatar-local-folder.test.ts
 tests/avatar-notebook-connector.integration.test.ts
@@ -200,6 +201,7 @@ tests/avatar-sources.test.ts
 tests/baidu-netdisk-rest.test.ts
 tests/ban-freezes-execution.test.ts
 tests/batch-grants-shared-use.integration.test.ts
+tests/board-card-claim.integration.test.ts
 tests/bot-access.test.ts
 tests/bot-answer-attribution.test.ts
 tests/bot-browser-routes.integration.test.ts
@@ -228,6 +230,7 @@ tests/builtin-routines.test.ts
 tests/builtin-staffing.integration.test.ts
 tests/bunfig-preload.test.ts
 tests/capability-activity-events.test.ts
+tests/card-autonomy.test.ts
 tests/catalogue-bot-grants.integration.test.ts
 tests/channel-activity-input.test.ts
 tests/channel-activity.integration.test.ts
@@ -450,6 +453,9 @@ tests/headless-model-usage.integration.test.ts
 tests/headless-stop-record.test.ts
 tests/headless-tools.test.ts
 tests/health.test.ts
+tests/heartbeat-routes.test.ts
+tests/heartbeat.integration.test.ts
+tests/heartbeat.test.ts
 tests/host-access-broker.test.ts
 tests/host-access-callback-route.test.ts
 tests/host-access-dispatch-audit.test.ts
@@ -687,6 +693,8 @@ tests/provider-tool-schemas.test.ts
 tests/provider-undecided.test.ts
 tests/purpose-model.test.ts
 tests/question-answer-in-conversation.integration.test.ts
+tests/quiet-hours.integration.test.ts
+tests/quiet-hours.test.ts
 tests/quota-concurrency.integration.test.ts
 tests/quota-error-contract.test.ts
 tests/quota-token-usage.integration.test.ts

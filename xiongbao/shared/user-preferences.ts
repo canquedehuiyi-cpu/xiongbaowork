@@ -96,6 +96,25 @@ export type WorkHours = {
 };
 
 /**
+ * 安静时段（期 3·3.2）：这段时间里，员工不主动开轮、不推送通知。按本人的时区算，可以跨午夜（22:00 到次日
+ * 08:00）。开始和结束相同当作没有这段时间。存在 `users.preferences.quietHours`，没存过的人用默认：22:00 到 08:00，
+ * 开着；部署上用 `XIONGBAO_QUIET_HOURS` 整体关掉，或改成「要本人自己设了才算」。
+ */
+export type QuietHours = {
+  enabled: boolean;
+  /** "HH:MM". */
+  start: string;
+  /** "HH:MM"，早于 `start` 就是跨午夜。 */
+  end: string;
+};
+
+export const DEFAULT_QUIET_HOURS: QuietHours = {
+  enabled: true,
+  start: "22:00",
+  end: "08:00",
+};
+
+/**
  * Where a person is told that a conversation's turn ended while nobody was looking at it
  * (threads/turn-notice.ts): their phone, the chat platforms they bound (WeChat and the like), and the
  * pages of the app they have open (web and desktop system notifications).
@@ -129,4 +148,6 @@ export type StoredPreferences = Partial<UserPreferences> & {
   timeZone?: string;
   /** Which carriers hear that a turn ended while the person was away; a missing one is on. */
   runEndNotice?: Partial<RunEndNoticePreferences>;
+  /** 安静时段；缺的键用默认，整段没存过的人看部署的 `XIONGBAO_QUIET_HOURS`。 */
+  quietHours?: Partial<QuietHours>;
 };

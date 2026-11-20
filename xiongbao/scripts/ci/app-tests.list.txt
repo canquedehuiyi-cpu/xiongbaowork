@@ -338,6 +338,7 @@ tests/handoff-resume.test.ts
 tests/handoff-roster.test.ts
 tests/hard-model-item.test.tsx
 tests/harness-mark.test.tsx
+tests/heartbeat-settings.test.tsx
 tests/help-handback.test.tsx
 tests/history-loading.test.ts
 tests/home-fallback-routing.test.tsx
@@ -427,6 +428,7 @@ tests/plugin-mutation-refresh.test.ts
 tests/plugin-read-failure.test.tsx
 tests/plugin-token-replace.test.tsx
 tests/portraits.test.tsx
+tests/post-role-card.test.tsx
 tests/preset-summon-entries.test.tsx
 tests/preview-visibility.test.tsx
 tests/profile.test.tsx
@@ -438,6 +440,7 @@ tests/query-client.test.ts
 tests/question-answer-message.test.ts
 tests/question-answer-streams.test.tsx
 tests/question-parts.test.tsx
+tests/quiet-hours-settings.test.tsx
 tests/quota-error-contract.test.ts
 tests/quota-guidance.test.tsx
 tests/quota-panel.test.tsx

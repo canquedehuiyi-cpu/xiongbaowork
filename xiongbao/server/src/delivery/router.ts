@@ -14,6 +14,7 @@ import {
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
+import type { QuietUntil } from "../user-preferences";
 import type { WorkItem, WorkQueue } from "../work/queue";
 import type { ExpoPushTransport } from "./push";
 import type { DeliveryStore } from "./store";
@@ -101,6 +102,12 @@ export function createDeliveryRouter(deps: {
   queue: Pick<WorkQueue, "claim" | "renew" | "finish" | "release">;
   owner: string;
   authoriseScope(scope: DeliveryScope): Promise<boolean>;
+  /**
+   * 安静时段（期 3·3.2）：这个人现在要是在安静时段，答它结束的时刻，否则 null。主动发出的通知（巡检的「有事找你」、
+   * 开工收工清点、逾期提醒、人不在时的「这一轮结束了」）在这段时间里照常写进发件箱，但推迟到那个时刻才发，不丢。
+   * 对话里的回复、审批和提问是对人正在做的事的回应，不受它管。没有这个函数就不看安静时段。
+   */
+  quietUntil?: QuietUntil;
   /**
    * The person's conversation with a Bot, as delivery addresses it, or null when they can no longer
    * reach either. A ping's push is filed under one of these.
@@ -215,6 +222,24 @@ export function createDeliveryRouter(deps: {
     }
     return null;
   }
+  /**
+   * The moment a held notification may go out: the end of the person's quiet hours, or undefined when
+   * they may be told now (no quiet time, urgent, or nobody to ask). A failed read lets it through.
+   */
+  async function heldUntil(
+    ownerUserId: string,
+    urgent?: boolean,
+  ): Promise<Date | undefined> {
+    if (!deps.quietUntil) return undefined;
+    try {
+      return (
+        (await deps.quietUntil(ownerUserId, { urgent: urgent === true })) ??
+        undefined
+      );
+    } catch {
+      return undefined;
+    }
+  }
   async function notify(
     scope: DeliveryScope,
     input: {
@@ -234,6 +259,8 @@ export function createDeliveryRouter(deps: {
        * line without the Bot's name, for a platform that posts under that Bot's own name.
        */
       away?: { push: boolean; chat: boolean; chatText: string };
+      /** Not held for the person's quiet hours (only an `away` notice is held at all). */
+      urgent?: boolean;
     },
     includeBindings = true,
   ) {
@@ -270,6 +297,12 @@ export function createDeliveryRouter(deps: {
     });
     const noted = { done: false };
     const away = input.away;
+    // Only the "your turn ended while you were away" notice is unprompted; a reply, an approval or a
+    // question answers what the person is doing right now, so it goes out at once.
+    const runAt = away
+      ? await heldUntil(scope.ownerUserId, input.urgent)
+      : undefined;
+    const later = runAt ? { runAt } : {};
     if (includeBindings && (away?.chat ?? true)) {
       const bindings: DeliveryBinding[] = await deps.store.bindingsFor(scope);
       /*
@@ -373,6 +406,7 @@ export function createDeliveryRouter(deps: {
               : input.text,
           kind: input.kind,
           requestId: input.requestId ?? null,
+          ...later,
         });
         /*
          * 这一轮的回复交出去了：把那一轮的入站行置为终态。它停下等审批时被记成 `accepted`，网页聊天不会产生新的
@@ -392,6 +426,7 @@ export function createDeliveryRouter(deps: {
           text: input.text,
           kind: input.kind,
           requestId: input.requestId ?? null,
+          ...later,
         });
   }
   /**
@@ -415,6 +450,9 @@ export function createDeliveryRouter(deps: {
     const routeFor = deps.routeFor ?? resolveUpdateRoute;
     const chosen = new Map<BindingTransport, DeliveryBinding>();
     const noted = { done: false };
+    // A ping is the Bot reaching out on its own: held until the person's quiet hours end.
+    const heldAt = await heldUntil(ping.ownerUserId);
+    const later = heldAt ? { runAt: heldAt } : {};
     for (const binding of await deps.store.bindingsByUse(ping.ownerUserId)) {
       if (chosen.has(binding.transport)) continue;
       if (binding.transport === "wechat" && !deps.providers.wechat) continue;
@@ -446,6 +484,7 @@ export function createDeliveryRouter(deps: {
         text: ping.text,
         kind: "attention",
         requestId: null,
+        ...later,
       });
     const route = await routeFor({
       ownerUserId: ping.ownerUserId,
@@ -466,6 +505,7 @@ export function createDeliveryRouter(deps: {
         text: `${pingHeadline(ping.items.length)}\n${ping.pushBody}`,
         kind: "attention",
         requestId: null,
+        ...later,
       });
   }
   /**
@@ -527,6 +567,9 @@ export function createDeliveryRouter(deps: {
     const requestId = input.taskId ?? null;
     const key = (place: string) =>
       `${input.kind}:${input.ownerUserId}:${input.id}:${place}`;
+    // A briefing or a reminder is the server reaching out on its own: held until quiet hours end.
+    const heldAt = await heldUntil(input.ownerUserId);
+    const later = heldAt ? { runAt: heldAt } : {};
     /*
      * One row: queued, or found there already. A key taken by a row that is not this person's
      * same message (which the person in the key rules out, short of a bug) is reported and counted
@@ -535,7 +578,7 @@ export function createDeliveryRouter(deps: {
     const offer = async (
       row: Parameters<RouterStore["offerOutbox"]>[0],
     ): Promise<void> => {
-      if (await deps.store.offerOutbox(row)) {
+      if (await deps.store.offerOutbox({ ...row, ...later })) {
         reached.queued += 1;
         return;
       }
