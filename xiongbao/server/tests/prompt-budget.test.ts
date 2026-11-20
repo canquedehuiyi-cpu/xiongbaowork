@@ -19,6 +19,7 @@ import { gitTools } from "../src/computer/git-tools";
 import { createHeadlessComputerTools } from "../src/computer/headless-tools";
 import type { GrantedTool } from "../src/plugins/tools";
 import { deliveryTools } from "../src/tasks/delivery-tools";
+import { asBoardTurn } from "../src/threads/unattended-card";
 import { webTools } from "../src/web/tools";
 
 /*
@@ -193,7 +194,8 @@ async function firstStep(
 describe("看板轮首步的提示词体积", () => {
   test("瘦身开着（默认）：系统提示加工具定义不超过上限，核心工具常驻，其余排在 search_tools 后面", async () => {
     delete process.env.XIONGBAO_PROMPT_SLIM;
-    const first = await firstStep();
+    // 看板轮：派活的入口说了这是看板卡的一轮（`asBoardTurn`），和实际的看板轮一样。
+    const first = await asBoardTurn(true, () => firstStep());
     expect(first.bytes).toBeLessThanOrEqual(BUDGET_CHARS);
 
     const sent = first.tools.map((tool) => tool.function?.name ?? "");
@@ -238,12 +240,23 @@ describe("看板轮首步的提示词体积", () => {
     for (const name of HIDDEN_TOOLS) expect(sent).not.toContain(name);
   });
 
-  test("看板无人值守的交付轮没有「回答格式」段；运行带了组件工具的轮（有人看）仍有，顺序照旧（用户 2026-11-20 批准）", async () => {
+  test("看板卡的一轮没有「回答格式」段；单聊（服务器电脑工具、不带组件工具）和带组件工具的轮仍有，顺序照旧（用户 2026-11-20 批准）", async () => {
     delete process.env.XIONGBAO_PROMPT_SLIM;
-    const board = await firstStep();
+    // 看板卡的一轮：派活的入口说了（asBoardTurn），和这一轮握着什么工具无关。
+    const board = await asBoardTurn(true, () => firstStep());
     expect(board.system).not.toContain("<answer_format>");
     expect(board.system).toContain("<sources>");
     expect(board.system).toContain("<subagents>");
+    // 单聊走服务器电脑工具：运行带的就是电脑工具，不带组件工具，人在页面上看着：仍有。
+    requests.length = 0;
+    const chat = await firstStep();
+    expect(chat.system.split("<answer_format>")).toHaveLength(2);
+    const order = [...chat.system.matchAll(/^<([a-z_]+)>$/gm)].map(
+      (match) => match[1],
+    );
+    expect(order.indexOf("answer_format")).toBe(order.indexOf("sources") + 1);
+    expect(order.indexOf("subagents")).toBe(order.indexOf("answer_format") + 1);
+    // 带组件工具的轮也有。
     requests.length = 0;
     const watched = await firstStep([
       {
@@ -252,18 +265,15 @@ describe("看板轮首步的提示词体积", () => {
         parameters: { type: "object", properties: {} },
       },
     ]);
-    const order = [...watched.system.matchAll(/^<([a-z_]+)>$/gm)].map(
-      (match) => match[1],
-    );
-    expect(order.indexOf("answer_format")).toBe(order.indexOf("sources") + 1);
-    expect(order.indexOf("subagents")).toBe(order.indexOf("answer_format") + 1);
-    expect(watched.system.split("<answer_format>")).toHaveLength(2);
+    expect(watched.system).toContain("<answer_format>");
     // 回退：XIONGBAO_HEADLESS_ANSWER_FORMAT=on 时看板轮也放。
     const saved = process.env.XIONGBAO_HEADLESS_ANSWER_FORMAT;
     process.env.XIONGBAO_HEADLESS_ANSWER_FORMAT = "on";
     requests.length = 0;
     try {
-      expect((await firstStep()).system).toContain("<answer_format>");
+      expect((await asBoardTurn(true, () => firstStep())).system).toContain(
+        "<answer_format>",
+      );
     } finally {
       if (saved === undefined)
         delete process.env.XIONGBAO_HEADLESS_ANSWER_FORMAT;

@@ -132,6 +132,13 @@ export type TurnRunner = (input: {
    * runner files for it. The host acts on it through the `scope` port of `createTurnRunner`.
    */
   cardOwnedByCaller?: boolean;
+  /**
+   * This turn is one round of a task-board card handed to the coworker (a dispatch): nobody reads the
+   * answer as it streams and no page draws components for it. Set only by that entry; the host's
+   * `scope` makes it known to the prompt (`boardTurnNow`), which then leaves out the section about
+   * when to draw a component.
+   */
+  boardCard?: boolean;
   /** How deep in a Bot-to-Bot chain this turn is. Absent is a person's own turn, depth zero. */
   depth?: number;
   /** Trusted host context, never a browser-provided analytics claim. */

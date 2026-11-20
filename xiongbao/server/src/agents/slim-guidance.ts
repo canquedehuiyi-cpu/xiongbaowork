@@ -115,25 +115,17 @@ export function slimDelegationGuidance(
 }
 
 /**
- * 看板上的交付轮，没有人在看：员工握着 `accept_task`，这一轮随运行来的工具只有电脑工具（无人值守的执行器只给这些；
- * 有人看的界面还会带自己画组件的工具）。这样的轮次没有组件可画，「回答格式」那段讲的就是什么时候画组件，每步白发
- * 约 750 字符，所以不放。运行带的工具还不知道（构建时没有请求）、或带了别的工具，一律不算：该段照旧。
- * `XIONGBAO_HEADLESS_ANSWER_FORMAT=on` 回到每一轮都放。
+ * 这一轮是看板卡的一轮（派活）吗，据此不放「回答格式」段：它讲的是什么时候画组件，看板轮没有页面在画，每步白发约
+ * 750 字符。判断只看来源（派活的入口自己说的，`asBoardTurn`），不看这一轮握着什么工具：单聊、有人看的轮、例行、
+ * 心跳都不是，该段照旧。`XIONGBAO_HEADLESS_ANSWER_FORMAT=on` 回到每一轮都放。
  */
-export function headlessDeliveryRun(
-  heldToolNames: readonly string[],
-  runToolNames: readonly string[] | undefined,
+export function omitsAnswerFormat(
+  boardCard: boolean | undefined,
   env: Record<string, string | undefined> = process.env,
 ): boolean {
   if (env.XIONGBAO_HEADLESS_ANSWER_FORMAT?.trim().toLowerCase() === "on")
     return false;
-  if (!runToolNames || runToolNames.length === 0) return false;
-  return (
-    heldToolNames.includes("accept_task") &&
-    runToolNames.every(
-      (name) => name.startsWith("computer_") || name === "report_refusal",
-    )
-  );
+  return boardCard === true;
 }
 
 /** `workingGuidance` 的短写法：同样的段、同样的顺序，`asking` 和 `untrusted` 仍由调用方给。 */
