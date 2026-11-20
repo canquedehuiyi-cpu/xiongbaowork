@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { HireSettings } from "@/components/agents/external/hire-settings";
 import { AssembleSections } from "@/components/bot-profile/assemble";
+import { HeartbeatSection } from "@/components/bot-profile/heartbeat";
 import { BotSubpage } from "@/components/bot-profile/bot-subpage";
 import { SetupSections } from "@/components/bot-profile/setup";
 import { ProjectSection } from "@/components/bot-profile/waker-detail-sections";
@@ -57,6 +58,7 @@ function SetupPage() {
         ) : (
           <>
             <SetupSections agent={agent} />
+            <HeartbeatSection agent={agent} />
             {agent.external ? null : <ProjectSection profile={agent} />}
             <AssembleSections profile={agent} />
           </>
