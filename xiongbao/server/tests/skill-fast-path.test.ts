@@ -187,6 +187,21 @@ describe("跑过技能自带的校验就算已校验", () => {
     expect(unverifiedChanges(calls, [CHECK])).toEqual([]);
   });
 
+  test("命令写的文件就是校验命令检查的文件（最常见的快路径）：也算", () => {
+    const calls = [
+      {
+        name: "computer_run_command",
+        input: {
+          command:
+            "printf 'a,b\\n' > eval/x/actions.csv && awk 'END{print NR}' eval/x/actions.csv",
+        },
+      },
+    ];
+    expect(unverifiedChanges(calls, [CHECK])).toEqual([]);
+    // 技能没带校验命令时，同一条命令照旧是「写了没验」。
+    expect(unverifiedChanges(calls)).toEqual(["eval/x/actions.csv"]);
+  });
+
   test("校验跑在最后一次改动之前不算", () => {
     const calls = [
       {
