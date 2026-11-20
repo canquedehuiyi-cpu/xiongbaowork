@@ -547,15 +547,18 @@ export function createDeliveryStore(database: Database) {
         text: string;
         kind: DeliveryKind;
         requestId: string | null;
+        /** Held until then (the person's quiet hours): the send is not claimable before this moment. */
+        runAt?: Date;
       },
     ) {
+      const { runAt, ...columns } = input;
       return database.transaction(async (tx) => {
         const [row] = await tx
           .insert(deliveryOutbox)
-          .values({ ...input, id: randomUUID() })
+          .values({ ...columns, id: randomUUID() })
           .onConflictDoNothing()
           .returning();
-        if (row) await enqueue(tx, "delivery.outbound", row.id);
+        if (row) await enqueue(tx, "delivery.outbound", row.id, runAt);
         return row ?? null;
       });
     },

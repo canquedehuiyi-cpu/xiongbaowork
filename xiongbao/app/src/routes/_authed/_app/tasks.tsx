@@ -36,6 +36,7 @@ import {
   useApprovalDecision,
 } from "@/components/tasks/approval-actions";
 import { DispatchToGroup } from "@/components/tasks/dispatch-to-group";
+import { PostRoleCard } from "@/components/tasks/post-role-card";
 import {
   StatusDistribution,
   type WorkRecord,
@@ -382,6 +383,8 @@ const AUTONOMOUS_DETAIL: Record<string, string> = {
   proactive: "巡检",
   automation: "自动任务",
   wake_up: "唤醒跟进",
+  heartbeat: "心跳",
+  board_claim: "员工自领",
 };
 
 /** The stored trigger may carry a suffix (`automation:<kind>`); its kind is the part before it. */
@@ -1109,6 +1112,9 @@ function TaskCard({
               ? `${origin.label} · ${origin.detail}`
               : origin.label}
           </span>
+          {task.selfClaimed ? (
+            <span data-self-claimed="true">员工已认领</span>
+          ) : null}
           {/*
            * Which model answered it. The board can hold a developer's task and its reviewer's task in
            * one lane, and those two are now different models by design — a card that cannot say which
@@ -1685,7 +1691,12 @@ function TasksPage() {
       width="workbench"
       eyebrow="01 工作记录"
       /* Spec I2: hand a crew's flow a task from the board itself. */
-      action={<DispatchToGroup />}
+      action={
+        <div className="flex flex-wrap items-center gap-2">
+          <PostRoleCard />
+          <DispatchToGroup />
+        </div>
+      }
       title="任务看板"
       description="从「事」出发：查看员工做了什么，完成必要操作并查收结果。"
     >

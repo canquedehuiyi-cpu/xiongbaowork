@@ -10,6 +10,7 @@ import {
 } from "../tenant/context";
 import {
   DEFAULT_WORK_HOURS,
+  type QuietUntil,
   readWorkHours,
   type WorkHours,
 } from "../user-preferences";
@@ -122,6 +123,11 @@ export type DeliveryCheckDeps = {
   database: Database;
   /** The person's work hours and time zone. */
   workHours: (userId: string) => Promise<WorkHours>;
+  /**
+   * 安静时段（期 3·3.2）：在安静时段里和不在工作时间一样对待：不催员工、不推提醒，提醒留着给下一次开工清点。
+   * 没有就只看工作时间。
+   */
+  quietUntil?: QuietUntil;
   /**
    * Tell the person (push, chat apps: `tasks/briefing.ts` `createTaskNotices`). `now` is the pass's
    * clock, which also keys the message.
@@ -651,7 +657,11 @@ async function checkCard(
       .catch(() => false)) ?? false;
 
   const hours = await deps.workHours(tenantId);
-  const inHours = withinWorkHours(hours, now);
+  // Quiet hours count as out of hours: nobody is nudged and nothing is pushed until they end.
+  const resting = deps.quietUntil
+    ? await deps.quietUntil(tenantId, { now }).catch(() => null)
+    : null;
+  const inHours = withinWorkHours(hours, now) && !resting;
   const startBriefing = inHours && inStartBriefingHour(hours, now);
   const today = localDay(now, hours.timeZone);
   const name =

@@ -9,6 +9,7 @@ import type { AppVariables } from "./auth/guards";
 import {
   isWorkClock,
   isWorkStretch,
+  QuietHoursRefusedError,
   savedTimeZone,
   type UserPreferencesStore,
 } from "./user-preferences";
@@ -72,6 +73,21 @@ const runNoticePatch = z
   })
   .refine((patch) => Object.keys(patch).length > 0);
 
+/** The quiet hours, any part of them: what is not named keeps what is saved. */
+const quietHoursPatch = z
+  .strictObject({
+    enabled: z.boolean().optional(),
+    start: z
+      .string()
+      .refine((value) => isWorkClock(value))
+      .optional(),
+    end: z
+      .string()
+      .refine((value) => isWorkClock(value))
+      .optional(),
+  })
+  .refine((patch) => Object.keys(patch).length > 0);
+
 export function userPreferencesRoutes(
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>,
   store?: UserPreferencesStore,
@@ -124,6 +140,61 @@ export function userPreferencesRoutes(
         parsed.data,
       ),
     });
+  });
+  /*
+   * 安静时段（期 3·3.2）：这段时间里员工不主动开轮、不推送。`GET` 答 `{ quietHours: { enabled, start, end,
+   * timeZone } }`，时区是作息里存的那个；`PATCH` 可以只改其中几项。开始和结束相同没有意义（等于没有），要关就关开关。
+   * 一条自己的路径，放在通用保存之前，通用读和它严格的请求体保持原样。
+   */
+  app.get("/quiet-hours", async (context) => {
+    if (!store?.quietHours)
+      return context.json(
+        { error: "User preferences are not available." },
+        503,
+      );
+    return context.json({
+      quietHours: await store.quietHours.read(context.var.actor.id),
+    });
+  });
+  app.patch("/quiet-hours", async (context) => {
+    if (!store?.quietHours)
+      return context.json(
+        { error: "User preferences are not available." },
+        503,
+      );
+    const parsed = quietHoursPatch.safeParse(
+      await context.req.json().catch(() => undefined),
+    );
+    if (!parsed.success)
+      return context.json(
+        {
+          error:
+            "安静时段要写 enabled（开关）、start 和 end（HH:MM）里的一项或几项。",
+        },
+        400,
+      );
+    const saved = await store.quietHours.read(context.var.actor.id);
+    if ((parsed.data.start ?? saved.start) === (parsed.data.end ?? saved.end))
+      return context.json(
+        { error: "安静时段的开始和结束不能是同一时刻；不想要就把开关关掉。" },
+        400,
+      );
+    try {
+      return context.json({
+        quietHours: await store.quietHours.patch(
+          context.var.actor.id,
+          parsed.data,
+        ),
+      });
+    } catch (error) {
+      // 上面的检查和写入之间别处又改了起止，库里的条件把它拦下。
+      if (error instanceof QuietHoursRefusedError)
+        return context.json(
+          { error: "安静时段的开始和结束不能是同一时刻；不想要就把开关关掉。" },
+          400,
+        );
+      throw error;
+    }
   });
   app.patch("/", async (context) => {
     if (!store)

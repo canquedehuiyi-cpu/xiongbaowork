@@ -26,6 +26,8 @@ export type FollowedFields = {
   nudges?: number;
   returns?: number;
   createdAt?: string;
+  /** 这张卡是员工自己在看板上领的（期 3·3.3）；老服务端不带，读作没领。 */
+  selfClaimed?: boolean;
 };
 
 /** 看板上一张在跟卡用得到的全部字段。 */
