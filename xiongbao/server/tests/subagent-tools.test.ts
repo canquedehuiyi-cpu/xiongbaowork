@@ -22,18 +22,31 @@ import {
 let llm: LLMock;
 const saved: Record<string, string | undefined> = {};
 /** 每次模型请求收到的工具名和系统提示。 */
-let requests: { tools: string[]; system: string }[];
+let requests: { tools: string[]; held: string[]; system: string }[];
 
 beforeEach(async () => {
   llm = new LLMock({ host: "127.0.0.1", port: 0 });
   requests = [];
   llm.on({ predicate: () => true }, (request: ChatCompletionRequest) => {
     const body = request as unknown as {
-      tools?: { function?: { name?: string } }[];
+      tools?: { function?: { name?: string; description?: string } }[];
       messages: { role: string; content?: unknown }[];
     };
+    const tools = (body.tools ?? []).map((tool) => tool.function?.name ?? "");
+    // 瘦身开着时（默认），偶尔才用的工具排在 search_tools 后面，名字写在它的描述里：员工「持有」它们，
+    // 只是首步没把定义发出去。持有的 = 发出去的 + 排在后面的。
+    const waiting = (
+      (body.tools ?? []).find((tool) => tool.function?.name === "search_tools")
+        ?.function?.description ?? ""
+    )
+      .split("Not listed:")[1]
+      ?.replace(/\.$/, "")
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean);
     requests.push({
-      tools: (body.tools ?? []).map((tool) => tool.function?.name ?? ""),
+      tools,
+      held: [...tools, ...(waiting ?? [])],
       system: body.messages
         .filter((message) => ["system", "developer"].includes(message.role))
         .map((message) => String(message.content))
@@ -42,11 +55,15 @@ beforeEach(async () => {
     return { content: "好了。" };
   });
   saved.OPENAI_BASE_URL = process.env.OPENAI_BASE_URL;
+  saved.XIONGBAO_PROMPT_SLIM = process.env.XIONGBAO_PROMPT_SLIM;
   process.env.OPENAI_BASE_URL = `${await llm.start()}/v1`;
 });
 
 afterEach(async () => {
   await llm.stop();
+  if (saved.XIONGBAO_PROMPT_SLIM === undefined)
+    delete process.env.XIONGBAO_PROMPT_SLIM;
+  else process.env.XIONGBAO_PROMPT_SLIM = saved.XIONGBAO_PROMPT_SLIM;
   if (saved.OPENAI_BASE_URL === undefined) delete process.env.OPENAI_BASE_URL;
   else process.env.OPENAI_BASE_URL = saved.OPENAI_BASE_URL;
 });
@@ -82,7 +99,8 @@ const workTools = [
 ];
 
 /** 这位员工的一次运行：模型收到了什么工具、什么系统提示。 */
-async function modelSaw(options: { subagent: boolean }) {
+async function modelSaw(options: { subagent: boolean }, slim = "on") {
+  process.env.XIONGBAO_PROMPT_SLIM = slim;
   const resolver = createActorAgentResolver({
     loadAgents: async () => [
       { id: "bot", name: "员工", type: "built_in", systemPrompt: "做事。" },
@@ -115,22 +133,30 @@ describe("子代理带的工具", () => {
     expect(new Set(SUBAGENT_WITHOUT_TOOLS)).toEqual(new Set(conversationTools));
   });
 
-  test("员工自己的一轮带全套：接活交付、跟进、签到邀请、应用权限卡都在，交付规矩也在", async () => {
-    const seen = await modelSaw({ subagent: false });
-    for (const name of [...conversationTools, ...workTools])
-      expect(seen.tools).toContain(name);
-    expect(seen.tools).toContain(SUBAGENT_TOOL);
-    expect(protocolLine).toBeTruthy();
-    expect(seen.system).toContain(protocolLine as string);
-  });
+  // 用户 2026-11-20 批准：瘦身默认开。「带着」改成「持有」：发出去的加上排在 search_tools 后面的；
+  // 关着（off）时两者相同，原断言的意图不变。
+  test.each(["on", "off"])(
+    "员工自己的一轮带全套：接活交付、跟进、签到邀请、应用权限卡都在，交付规矩也在（瘦身 %s）",
+    async (slim) => {
+      const seen = await modelSaw({ subagent: false }, slim);
+      for (const name of [...conversationTools, ...workTools])
+        expect(seen.held).toContain(name);
+      expect(seen.tools).toContain(SUBAGENT_TOOL);
+      expect(protocolLine).toBeTruthy();
+      expect(seen.system).toContain(protocolLine as string);
+    },
+  );
 
-  test("子代理不带只属于那段对话的工具，干活要用的都在，提示里持有接活才说的交付规矩也没有了", async () => {
-    const seen = await modelSaw({ subagent: true });
-    for (const name of conversationTools)
-      expect(seen.tools).not.toContain(name);
-    for (const name of workTools) expect(seen.tools).toContain(name);
-    expect(seen.tools).not.toContain(SUBAGENT_TOOL);
-    expect(seen.system).not.toContain(protocolLine as string);
-    expect(seen.system).not.toContain(ACCEPT_TASK);
-  });
+  test.each(["on", "off"])(
+    "子代理不带只属于那段对话的工具，干活要用的都在，提示里持有接活才说的交付规矩也没有了（瘦身 %s）",
+    async (slim) => {
+      const seen = await modelSaw({ subagent: true }, slim);
+      for (const name of conversationTools)
+        expect(seen.held).not.toContain(name);
+      for (const name of workTools) expect(seen.held).toContain(name);
+      expect(seen.tools).not.toContain(SUBAGENT_TOOL);
+      expect(seen.system).not.toContain(protocolLine as string);
+      expect(seen.system).not.toContain(ACCEPT_TASK);
+    },
+  );
 });

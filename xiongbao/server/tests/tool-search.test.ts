@@ -831,37 +831,49 @@ describe("the pre-flight count", () => {
     }
   });
 
-  test("the largest search answer fits exactly at the limit", async () => {
-    const llm = await provider("chat", (mock) => {
-      mock.on({ toolResultContains: FOUND_LINE }, { content: "Found them." });
-      mock.onMessage(/./, {
-        toolCalls: [
-          { name: SEARCH_TOOLS, arguments: { query: "resource", limit: 20 } },
-        ],
+  test.each([
+    ["on", RUNTIME_STATE_TOOLS.length],
+    ["off", 0],
+  ])(
+    "the largest search answer fits exactly at the limit (XIONGBAO_PROMPT_SLIM=%s)",
+    async (slim, hidden) => {
+      const savedSlim = process.env.XIONGBAO_PROMPT_SLIM;
+      process.env.XIONGBAO_PROMPT_SLIM = slim;
+      const llm = await provider("chat", (mock) => {
+        mock.on({ toolResultContains: FOUND_LINE }, { content: "Found them." });
+        mock.onMessage(/./, {
+          toolCalls: [
+            { name: SEARCH_TOOLS, arguments: { query: "resource", limit: 20 } },
+          ],
+        });
       });
-    });
-    const own = Array.from({ length: 105 }, (_, index) => ({
-      ...remember,
-      name: `own_${index}`,
-    }));
-    try {
-      const seen = await events(
-        await assistant([...own, ...(await heldTools()).slice(1)], {
-          provider: "openai",
-          defaultModel: "gpt-5.5",
-        }),
-        input([asked]),
-      );
-      expect(seen.map((event) => event.type)).not.toContain(
-        EventType.RUN_ERROR,
-      );
-      expect(llm.sent).toHaveLength(2);
-      expect(llm.names(1)).toHaveLength(MODEL_TOOL_LIMIT);
-      expect(llm.names(1).filter((name) => name.startsWith(SHOP))).toHaveLength(
-        20,
-      );
-    } finally {
-      await llm.restore();
-    }
-  });
+      const own = Array.from({ length: 105 }, (_, index) => ({
+        ...remember,
+        name: `own_${index}`,
+      }));
+      try {
+        const seen = await events(
+          await assistant([...own, ...(await heldTools()).slice(1)], {
+            provider: "openai",
+            defaultModel: "gpt-5.5",
+          }),
+          input([asked]),
+        );
+        expect(seen.map((event) => event.type)).not.toContain(
+          EventType.RUN_ERROR,
+        );
+        expect(llm.sent).toHaveLength(2);
+        // 用户 2026-11-20 批准：瘦身默认开时，运行时的两个状态工具不再发给模型，所以比上限少两个；
+        // 关着时（off）仍恰好等于上限，原断言的意图不变。
+        expect(llm.names(1)).toHaveLength(MODEL_TOOL_LIMIT - hidden);
+        expect(
+          llm.names(1).filter((name) => name.startsWith(SHOP)),
+        ).toHaveLength(20);
+      } finally {
+        if (savedSlim === undefined) delete process.env.XIONGBAO_PROMPT_SLIM;
+        else process.env.XIONGBAO_PROMPT_SLIM = savedSlim;
+        await llm.restore();
+      }
+    },
+  );
 });
