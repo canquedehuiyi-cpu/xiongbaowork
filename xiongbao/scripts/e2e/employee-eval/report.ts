@@ -358,6 +358,149 @@ export function repeatRows(sides: Sides): string[][] {
   );
 }
 
+/** 同种子对照里「有技能」的第二次和「没技能」的对照运行都通过的对（任一次没做成就不进平均）。 */
+const validAbPairs = (record: EvalRecord) =>
+  pairsOf(record).filter(
+    (pair) =>
+      pair.controlRun !== undefined &&
+      pair.secondRun.passed &&
+      pair.controlRun.passed,
+  );
+
+/** 这条记录有没有同种子对照运行（熊宝侧有坑可学才有；旧结果文件没有）。 */
+const hasControl = (record: EvalRecord) =>
+  pairsOf(record).some((pair) => pair.controlRun !== undefined);
+
+/** 有技能相对没技能的变化：有技能 ÷ 没技能 − 1，百分数未取整；没技能的基数没有或是 0 时 null。 */
+const abChange = (
+  withSkill: number | null | undefined,
+  control: number | null | undefined,
+): number | null =>
+  withSkill == null || control == null || control === 0
+    ? null
+    : (withSkill / control - 1) * 100;
+
+/**
+ * 同种子对照的平均（有坑可学，熊宝侧）：只算两次都通过的对。每个指标给三样：各对变化的平均（`mean`，判定用）、
+ * 总量之比 − 1（`ratio`，参考），和两侧的平均值（`withSkill`、`control`，用来画平均行）。
+ */
+export function abAverage(record: EvalRecord) {
+  const pairs = validAbPairs(record);
+  const field = (pick: (run: RunMetrics) => number | null | undefined) => {
+    const both = pairs.filter(
+      (pair) =>
+        pair.controlRun &&
+        pick(pair.secondRun) != null &&
+        pick(pair.controlRun) != null,
+    );
+    return {
+      withSkill: meanOf(both.map((pair) => pick(pair.secondRun) ?? null)),
+      control: meanOf(
+        both.map(
+          (pair) => (pair.controlRun ? pick(pair.controlRun) : null) ?? null,
+        ),
+      ),
+      withSkillTotal: sumOf(both.map((pair) => pick(pair.secondRun))),
+      controlTotal: sumOf(
+        both.map((pair) => (pair.controlRun ? pick(pair.controlRun) : null)),
+      ),
+      mean: meanOf(
+        pairs.map((pair) =>
+          pair.controlRun
+            ? abChange(pick(pair.secondRun), pick(pair.controlRun))
+            : null,
+        ),
+      ),
+      ratio: abChange(
+        sumOf(both.map((pair) => pick(pair.secondRun))),
+        sumOf(
+          both.map((pair) => (pair.controlRun ? pick(pair.controlRun) : null)),
+        ),
+      ),
+    };
+  };
+  return {
+    valid: pairs.length,
+    total: pairsOf(record).length,
+    steps: field((run) => run.steps),
+    input: field((run) => run.tokens?.input),
+    wall: field((run) => run.wallMs),
+  };
+}
+
+/**
+ * 「重复任务 · 同种子对照（有技能 vs 没技能）」表：每一侧、每道带对照运行的题，每一对一行（第二次有技能、对照没技能、
+ * 步数 / 输入 token / 墙钟变化），再加两行平均：各对变化的平均（判定用）和总量之比（参考，各对总量相加后相除）。
+ * 平均只算两次都通过的对。没有对照运行的记录不出行。
+ */
+export function abRows(sides: Sides): string[][] {
+  return sides.flatMap(([label, results]) =>
+    repeatRecordsOf(results)
+      .filter(hasControl)
+      .flatMap((record) => {
+        const tag = repeatTag(label, record, results);
+        const pairs = pairsOf(record);
+        const rows = pairs.map((pair, index) => [
+          pairs.length > 1 ? `${tag} · 第${index + 1}对` : tag,
+          runCell(pair.secondRun),
+          pair.controlRun ? runCell(pair.controlRun) : DASH,
+          pair.controlRun
+            ? percentText(abChange(pair.secondRun.steps, pair.controlRun.steps))
+            : DASH,
+          pair.controlRun
+            ? percentText(
+                abChange(
+                  pair.secondRun.tokens?.input,
+                  pair.controlRun.tokens?.input,
+                ),
+              )
+            : DASH,
+          pair.controlRun
+            ? percentText(
+                abChange(pair.secondRun.wallMs, pair.controlRun.wallMs),
+              )
+            : DASH,
+        ]);
+        const average = abAverage(record);
+        return [
+          ...rows,
+          [
+            `${tag} · 平均：各对百分比的平均，判定用（${average.valid}/${average.total} 对有效）`,
+            averageCell(
+              average.steps.withSkill,
+              average.input.withSkill,
+              average.wall.withSkill,
+            ),
+            averageCell(
+              average.steps.control,
+              average.input.control,
+              average.wall.control,
+            ),
+            percentText(average.steps.mean),
+            percentText(average.input.mean),
+            percentText(average.wall.mean),
+          ],
+          [
+            `${tag} · 总量之比，参考（${average.valid}/${average.total} 对有效）`,
+            averageCell(
+              average.steps.withSkillTotal,
+              average.input.withSkillTotal,
+              average.wall.withSkillTotal,
+            ),
+            averageCell(
+              average.steps.controlTotal,
+              average.input.controlTotal,
+              average.wall.controlTotal,
+            ),
+            percentText(average.steps.ratio),
+            percentText(average.input.ratio),
+            percentText(average.wall.ratio),
+          ],
+        ];
+      }),
+  );
+}
+
 /**
  * 平均值对照目标：每一侧、每道有坑可学的题（和连做了多对的题）一句话，说平均步数、平均输入 token 的变化和
  * 有几对有效，再判是否达到「都降 ≥30%」。Codex 只作对照，也给，但注明。
@@ -370,8 +513,18 @@ export function repeatVerdicts(sides: Sides): string[] {
           record.task === REPEAT_PITFALL_TASK || pairsOf(record).length > 1,
       )
       .map((record) => {
-        const average = repeatAverage(record);
         const tag = repeatTag(label, record, results);
+        // 有坑可学（熊宝侧）有同种子对照运行时，判有技能比没技能；会议纪要和没有对照运行的旧结果仍是第二次比第一次。
+        if (record.task === REPEAT_PITFALL_TASK && hasControl(record)) {
+          const ab = abAverage(record);
+          if (ab.steps.mean === null || ab.input.mean === null)
+            return `- **${tag}**：没有第二次和对照都通过的对（${ab.valid}/${ab.total}），算不出平均，不判目标`;
+          const abMet =
+            Math.round(ab.steps.mean) <= -REPEAT_TARGET_PERCENT &&
+            Math.round(ab.input.mean) <= -REPEAT_TARGET_PERCENT;
+          return `- **${tag}**：有技能比没技能：平均步数 ${percentText(ab.steps.mean)}、平均输入 token ${percentText(ab.input.mean)}（${ab.valid}/${ab.total} 对有效）；目标是两项都降 ≥${REPEAT_TARGET_PERCENT}%：${abMet ? "✅ 达标" : "❌ 未达标"}`;
+        }
+        const average = repeatAverage(record);
         const control = label === "Codex" ? "（Codex 只作对照）" : "";
         if (average.steps.change === null || average.input.change === null)
           return `- **${tag}**${control}：没有两次都通过的对（${average.valid}/${average.total}），算不出平均，不判目标`;
@@ -961,7 +1114,11 @@ export function renderReport(results: EvalResults[]): string {
   const verdicts = repeatVerdicts(repeatSides);
   if (repeatTable.length)
     out.push(
-      "## 重复任务（同一位员工把同一道题连做两次）",
+      repeatSides.some(([, results]) =>
+        repeatRecordsOf(results).some(hasControl),
+      )
+        ? "## 重复任务 · 第二次比第一次（参考，有坑可学的判定看后面的同种子对照）"
+        : "## 重复任务（同一位员工把同一道题连做两次）",
       "",
       table(
         [
@@ -981,12 +1138,33 @@ export function renderReport(results: EvalResults[]): string {
         ? [
             `有坑可学一题是账单导入：第一次要排查几处（报错指向没坏的那一项，还有一步文档没写的初始化），学会以后能直接跳过；夹具由种子生成，每一次的文件名、分隔符、汇率目录、币种、金额都不同，只有写成通用做法的技能才有用。连做多对时每一对用新员工、新的随机种子，复盘和技能只在同一对内有效；平均行是各对（两次都通过的）的平均，变化是各对变化的平均，输入 token 和上表同一口径。熊宝、Codex 都给出各对的变化和平均值，Codex 只作对照。`,
             "",
-            `**平均值对照目标（期 2：第二次比第一次，步数和输入 token 都降 ≥${REPEAT_TARGET_PERCENT}%）**`,
+            `**平均值对照目标（期 2：步数和输入 token 都降 ≥${REPEAT_TARGET_PERCENT}%；熊宝有坑可学比有技能和没技能的同种子对照，其余比第二次和第一次）**`,
             "",
             ...verdicts,
             "",
           ]
         : []),
+    );
+
+  const abTable = abRows(repeatSides);
+  if (abTable.length)
+    out.push(
+      "## 重复任务 · 同种子对照（有技能 vs 没技能）",
+      "",
+      table(
+        [
+          "一侧",
+          "第二次，有技能（通过 / 步数 / 输入 token / 墙钟）",
+          "对照，没技能",
+          "步数变化",
+          "输入 token 变化",
+          "墙钟变化",
+        ],
+        abTable,
+      ),
+      "",
+      `对照运行是同一份第二次的夹具（同一个种子，新拷一份，各在自己的目录里），由一位全新的员工做：没有自写技能、没有记忆，学习功能照常配置；它自己的复盘不等、不计。变化 = 有技能 ÷ 没技能 − 1。平均只算两次都通过的对：**各对百分比的平均是判定用的**（和上面「第二次比第一次」同一个约定），总量之比（各对总量相加后相除）只作参考。有坑可学的判定看这张表：目标是步数和输入 token 都降 ≥${REPEAT_TARGET_PERCENT}%。上面「第二次比第一次」的表只作参考，第一次的运行噪声大。对照运行不计入重复任务的总量。Codex 没有跨次的记忆，它的第二次本来就是对照，不另做。`,
+      "",
     );
 
   const learningTable = learningRows([

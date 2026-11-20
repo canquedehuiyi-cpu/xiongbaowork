@@ -47,7 +47,7 @@ on:
         type: string
         default: all
       repeat_pairs:
-        description: "重复类的题（repeat、repeat-pitfall）连做几对，1 到 4，默认 1；每一对一位新员工、新的随机种子，复盘和技能只在同一对内有效；报告给出每一对和平均值，平均值对照「步数和 token 降 ≥30%」。多对在同一次运行里做完（model-e2e 并发组同一时刻只放一个在跑），每对两次；来不及在作业超时前做完的对会被跳过并在报告里注明"
+        description: "重复类的题（repeat、repeat-pitfall）连做几对，1 到 4，默认 1；每一对一位新员工、新的随机种子，复盘和技能只在同一对内有效；报告给出每一对和平均值，平均值对照「步数和 token 降 ≥30%」。多对在同一次运行里做完（model-e2e 并发组同一时刻只放一个在跑），每对两次（repeat-pitfall 的熊宝侧每对三次：第三次是同一份第二次夹具、没有技能的新员工做的对照，判定看「有技能比没技能」）；来不及在作业超时前做完的对会被跳过并在报告里注明"
         type: choice
         default: "1"
         options:
@@ -204,10 +204,11 @@ jobs:
     runs-on: ubuntu-latest
     environment: model-e2e
     # 五道题、每题墙钟上限 20 分钟；paths 选两条路径时是两遍，再加起服务、装浏览器的时间（GitHub 单个作业上限 6 小时，这里按 3 小时）。
-    # 重复类的题多对（repeat_pairs）：只点名 repeat-pitfall、四对、一条路径，典型约 40 分钟（第一次约 6 分钟、第二次约 3 分钟、
-    # 复盘最多等 90 秒，每对约 10 分钟），最坏每次都跑满 20 分钟是 4 × 42 = 168 分钟；同时点名 repeat,repeat-pitfall 再选两条路径就
-    # 会超过上限，所以作业开头记截止时间（165 分钟），脚本来不及时把剩下的对跳过，不让作业超时丢掉全部结果。
-    timeout-minutes: 180
+    # 重复类的题多对（repeat_pairs）：只点名 repeat-pitfall、四对、一条路径，典型约 55 分钟（有坑可学每对三次：第一次约 6 分钟、
+    # 第二次和同种子对照各约 3 分钟、复盘最多等 90 秒，每对约 13 分钟），最坏每次都跑满 20 分钟是 4 × 62 = 248 分钟；同时点名
+    # repeat,repeat-pitfall 再选两条路径还要更多，所以作业开头记截止时间（195 分钟），脚本来不及时把剩下的对跳过，不让作业超时丢掉
+    # 全部结果。作业上限从 180 提到 210 分钟（对照运行让每对多一次）。
+    timeout-minutes: 210
     services:
       # PostgreSQL 17 with pgvector: migration 0000 creates the `vector` extension.
       postgres:
@@ -241,10 +242,10 @@ jobs:
           DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/openbot_employee_eval bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'e2e-role-writer'"
-      # 多对放在同一次运行里做完，不能被作业超时整个杀掉：记下一个比作业超时（180 分钟）早的截止时间，评测脚本在开始每一对之前
+      # 多对放在同一次运行里做完，不能被作业超时整个杀掉：记下一个比作业超时（210 分钟）早的截止时间，评测脚本在开始每一对之前
       # 看还剩多少时间，来不及做完一对就不做，已完成的各对照常记录。留出十五分钟给装依赖、出报告和上传。
       - name: Record the wall-clock deadline for repeat pairs
-        run: echo "EVAL_DEADLINE_EPOCH=$(( $(date +%s) + 165 * 60 ))" >> "$GITHUB_ENV"
+        run: echo "EVAL_DEADLINE_EPOCH=$(( $(date +%s) + 195 * 60 ))" >> "$GITHUB_ENV"
       # 每条路径一遍：board 写 xiongbao.json，chat 写 xiongbao-chat.json，同一个结果目录。一条路径失败不拦下一条，
       # 最后作业按有没有失败收尾。路径名只认 board 和 chat（输入是 choice，这里再核一遍）。
       - name: Five tasks for a Xiongbao employee, over each chosen path
