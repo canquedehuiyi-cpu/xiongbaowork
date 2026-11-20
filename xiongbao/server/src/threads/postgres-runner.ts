@@ -580,6 +580,22 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
       });
       checkCancellation();
       threadOwners.set(request.threadId, tenant);
+      /*
+       * A turn carried on after an approval ends here, not in `stream`, so the observers are told here too:
+       * the retrospective counts its steps with the ones before the approval's. Only one that ended well, and
+       * as a `task` round: it is the rest of a turn somebody already asked, not a person's own new one.
+       */
+      if (!failed)
+        this.turnEnded({
+          tenant,
+          threadId: request.threadId,
+          runId: request.input.runId,
+          agentId: request.agent.agentId ?? "unknown",
+          messages,
+          events,
+          failed,
+          kind: "task",
+        });
       return receipt;
     } finally {
       signal.removeEventListener("abort", cancel);
