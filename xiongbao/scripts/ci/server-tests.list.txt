@@ -347,6 +347,7 @@ tests/deepseek-cache-usage.test.ts
 tests/deepseek-thinking-run.test.ts
 tests/deepseek-thinking.integration.test.ts
 tests/deepseek-thinking.test.ts
+tests/deliver-ends-turn.test.ts
 tests/delivery-attention.integration.test.ts
 tests/delivery-away-notice.test.ts
 tests/delivery-briefing.integration.test.ts
@@ -873,6 +874,7 @@ tests/staffing-settle.integration.test.ts
 tests/staffing-store.integration.test.ts
 tests/stall-guard.test.ts
 tests/starter-tour-routes.test.ts
+tests/step-hints.test.ts
 tests/stream-keep-alive.test.ts
 tests/subagent-folding.test.ts
 tests/subagent-model.test.ts

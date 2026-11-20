@@ -1,3 +1,5 @@
+import { withToolHint } from "./step-hints";
+
 /**
  * 提示词瘦身（期 1 补充）：每一步都发给模型的固定部分，工具定义这一半。
  *
@@ -250,7 +252,9 @@ export function slimModelTools<T extends FunctionTool>(
         }
       return {
         ...tool,
-        ...(brief ? { description: brief.description } : {}),
+        ...(brief
+          ? { description: withToolHint(tool.name, brief.description) }
+          : {}),
         ...(tool.inputSchema !== undefined ? { inputSchema: schema } : {}),
       };
     });

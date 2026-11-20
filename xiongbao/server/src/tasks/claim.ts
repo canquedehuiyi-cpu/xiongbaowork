@@ -12,10 +12,11 @@
  * 在本人的租户帧里做，别人的卡看不到；不开新的跨租户的门。
  */
 import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { acceptWithReadsOn } from "../agents/step-hints";
 import type { Database } from "../db/client";
-import { agentProfiles } from "../db/schema/coworker";
 import { boardCards } from "../db/schema/board-cards";
 import { agents } from "../db/schema/core";
+import { agentProfiles } from "../db/schema/coworker";
 import { tasks } from "../db/schema/tasks";
 import { currentTenant } from "../tenant/context";
 
@@ -200,7 +201,10 @@ export function createBoardCards(
      * 领了却没能开出、或没能跟起来看板卡（比如超了本月额度）：放回去，让别人、或下一次再领。`clearTask` 是连已经记下的
      * 看板卡一起丢掉（开出来了却没跟起来）；不带时只放回还没记看板卡的。
      */
-    async release(id: string, options: { clearTask?: boolean } = {}): Promise<void> {
+    async release(
+      id: string,
+      options: { clearTask?: boolean } = {},
+    ): Promise<void> {
       await database
         .update(boardCards)
         .set({ status: "open", claimedBy: null, claimedAt: null, taskId: null })
@@ -278,6 +282,8 @@ export function cardAsk(card: Pick<BoardCard, "title" | "detail">): string {
     "【看板派活】看板上有一张派给你这个岗位的卡，你领下来了：",
     `标题：${card.title}`,
     ...(card.detail ? [`说明：${card.detail}`] : []),
-    "照常先用 accept_task 回执（写清楚你怎么做、什么算做完），做完用 deliver_task 交成果，等本人验收。",
+    acceptWithReadsOn()
+      ? "照常用 accept_task 回执（写清楚你怎么做、什么算做完），和第一批读取放在同一步一起发；做完用 deliver_task 交成果，等本人验收。"
+      : "照常先用 accept_task 回执（写清楚你怎么做、什么算做完），做完用 deliver_task 交成果，等本人验收。",
   ].join("\n");
 }
