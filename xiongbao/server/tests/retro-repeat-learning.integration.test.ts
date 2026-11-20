@@ -15,6 +15,7 @@ import {
   cardRetroTurn,
   createRetrospector,
   deliveredCardOf,
+  deliveredCardOfRound,
   markInjectedSkillsUsed,
 } from "../src/learning/retrospect";
 import { relatedSelfSkills } from "../src/plugins/picked-skill";
@@ -171,6 +172,58 @@ describe("a delivered card is reviewed, without waiting for the person to accept
     });
     await runAsTenant(`someone-else-${suite}`, async () => {
       expect(await deliveredCardOf(database, runId)).toBeNull();
+    });
+  });
+
+  test("a later round of a delivered card finds the card, from the run it hangs on or the line its end wrote", async () => {
+    const first = `run-a-${suite}`;
+    const hung = `run-b-${suite}`;
+    const ended = `run-c-${suite}`;
+    const taskId = await cardDeliveredIn(first);
+    const other = await cardDeliveredIn(`run-x-${suite}`);
+    await asOwner(async () => {
+      // Round B is running on the card; round C has ended (the end clears the column and writes a line).
+      await database
+        .update(tasks)
+        .set({ activeRunRef: hung })
+        .where(eq(tasks.id, taskId));
+      await database.insert(taskEvents).values({
+        tenantId: owner,
+        taskId,
+        kind: "run_ended",
+        actor: "system",
+        detail: { runId: ended },
+      });
+      expect(await deliveredCardOfRound(database, first)).toBe(taskId);
+      expect(await deliveredCardOfRound(database, hung)).toBe(taskId);
+      expect(await deliveredCardOfRound(database, ended)).toBe(taskId);
+      expect(await deliveredCardOfRound(database, `run-x-${suite}`)).toBe(
+        other,
+      );
+      expect(
+        await deliveredCardOfRound(database, `nobody-${suite}`),
+      ).toBeNull();
+    });
+    await runAsTenant(`someone-else-${suite}`, async () => {
+      expect(await deliveredCardOfRound(database, hung)).toBeNull();
+    });
+  });
+
+  test("a card that has not been handed in has no delivered round", async () => {
+    const run = `run-open-${suite}`;
+    const taskId = randomUUID();
+    await asOwner(async () => {
+      await database.insert(tasks).values({
+        id: taskId,
+        tenantId: owner,
+        title: "还没交的活",
+        source: "chat",
+        executorAgentId: bot,
+        runRef: run,
+        activeRunRef: run,
+        threadRef: `thread-${run}`,
+      } as never);
+      expect(await deliveredCardOfRound(database, run)).toBeNull();
     });
   });
 
