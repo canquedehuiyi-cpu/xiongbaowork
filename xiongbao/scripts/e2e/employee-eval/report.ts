@@ -16,7 +16,13 @@ import {
 } from "node:fs";
 import { join, resolve } from "node:path";
 import { bookkeepingShare } from "./bookkeeping";
-import { HARD_SUITE, REPEAT_TASK, TASK_TITLES, TASKS } from "./lib";
+import {
+  HARD_SUITE,
+  REPEAT_PITFALL_TASK,
+  REPEAT_TASKS,
+  TASK_TITLES,
+  TASKS,
+} from "./lib";
 import {
   type Capabilities,
   inputThirds,
@@ -24,12 +30,13 @@ import {
   TOOL,
   type Tri,
 } from "./metrics";
-import type {
-  EvalPath,
-  EvalRecord,
-  EvalResults,
-  RunLearning,
-  RunMetrics,
+import {
+  type EvalPath,
+  type EvalRecord,
+  type EvalResults,
+  pairsOf,
+  type RunLearning,
+  type RunMetrics,
 } from "./records";
 
 const DASH = "—";
@@ -218,29 +225,162 @@ const change = (
 const runCell = (run: RunMetrics) =>
   `${run.passed ? "✅" : "❌"} ${count(run.steps)} 步 / 输入 ${group(run.tokens?.input ?? null)} / ${seconds(run.wallMs)}`;
 
+/** 期 2 的目标：第二次比第一次，步数和输入 token 都降至少这么多（百分比）。 */
+export const REPEAT_TARGET_PERCENT = 30;
+
+type Sides = readonly (readonly [string, EvalResults | undefined])[];
+
+/** 一侧结果里的重复类记录，按 `repeat`、`repeat-pitfall` 的顺序。 */
+const repeatRecordsOf = (results: EvalResults | undefined): EvalRecord[] =>
+  REPEAT_TASKS.flatMap((task) =>
+    (results?.records ?? []).filter((record) => record.task === task),
+  );
+
 /**
- * 重复任务表（子项目 2 要看的数字）：每一侧一行，第一次、第二次各自的结果，以及第二次相对第一次的步数、输入 token、
- * 墙钟变化。`sides` 是 `[标签, 结果文件]`，没有 `repeat` 记录的一侧不出行。
+ * 重复类记录在表里的名字：有坑可学的带「有坑可学」；会议纪要那道只有同一侧还有有坑可学时才注明（作对照），
+ * 单独跑时保持原来的样子。
  */
-export function repeatRows(
-  sides: readonly (readonly [string, EvalResults | undefined])[],
-): string[][] {
-  return sides.flatMap(([label, results]) => {
-    const record = results?.records.find((item) => item.task === REPEAT_TASK);
-    const first = record?.firstRun;
-    const second = record?.secondRun;
-    if (!first || !second) return [];
-    return [
-      [
-        label,
-        runCell(first),
-        runCell(second),
-        change(first.steps, second.steps),
-        change(first.tokens?.input, second.tokens?.input),
-        change(first.wallMs, second.wallMs),
-      ],
-    ];
+function repeatTag(
+  label: string,
+  record: EvalRecord,
+  results: EvalResults | undefined,
+): string {
+  if (record.task === REPEAT_PITFALL_TASK) return `${label} · 有坑可学`;
+  const withPitfall = (results?.records ?? []).some(
+    (item) => item.task === REPEAT_PITFALL_TASK,
+  );
+  return withPitfall ? `${label} · 会议纪要（对照）` : label;
+}
+
+/** 第二次相对第一次的变化（百分数，未取整）；基数没有或是 0 时 null。 */
+const changePercent = (
+  before: number | null | undefined,
+  after: number | null | undefined,
+): number | null =>
+  before == null || after == null || before === 0
+    ? null
+    : ((after - before) / before) * 100;
+
+/** 百分数的写法，和 {@link change} 一致：取整，正数带 +，0 写 0%。 */
+const percentText = (value: number | null): string =>
+  value === null
+    ? DASH
+    : Math.round(Math.abs(value)) === 0
+      ? "0%"
+      : `${value >= 0 ? "+" : "-"}${Math.round(Math.abs(value))}%`;
+
+const meanOf = (values: (number | null)[]): number | null => {
+  const known = values.filter((value): value is number => value !== null);
+  return known.length
+    ? known.reduce((total, value) => total + value, 0) / known.length
+    : null;
+};
+
+/** 各对里两次都通过的（只有它们进平均：没做成的那次步数少不代表学到了）。 */
+const validPairs = (record: EvalRecord) =>
+  pairsOf(record).filter(
+    (pair) => pair.firstRun.passed && pair.secondRun.passed,
+  );
+
+/** 一条重复类记录的平均：各对（两次都通过的）的指标平均，和各对变化的平均。 */
+function repeatAverage(record: EvalRecord) {
+  const pairs = validPairs(record);
+  const field = (pick: (run: RunMetrics) => number | null | undefined) => ({
+    first: meanOf(pairs.map((pair) => pick(pair.firstRun) ?? null)),
+    second: meanOf(pairs.map((pair) => pick(pair.secondRun) ?? null)),
+    change: meanOf(
+      pairs.map((pair) =>
+        changePercent(pick(pair.firstRun), pick(pair.secondRun)),
+      ),
+    ),
   });
+  return {
+    valid: pairs.length,
+    total: pairsOf(record).length,
+    steps: field((run) => run.steps),
+    input: field((run) => run.tokens?.input),
+    wall: field((run) => run.wallMs),
+  };
+}
+
+/** 平均行里一次运行的一格：平均步数、平均输入 token、平均墙钟；没有有效的对时「—」。 */
+const averageCell = (
+  steps: number | null,
+  input: number | null,
+  wall: number | null,
+) =>
+  steps === null
+    ? DASH
+    : `✅ ${Number.isInteger(steps) ? steps : steps.toFixed(1)} 步 / 输入 ${group(
+        input === null ? null : Math.round(input),
+      )} / ${wall === null ? DASH : seconds(wall)}`;
+
+/**
+ * 重复任务表（子项目 2 要看的数字）：每一侧、每道重复题一行（连做多对时每一对一行，再加一行平均），第一次、
+ * 第二次各自的结果，以及第二次相对第一次的步数、输入 token、墙钟变化。平均行是各对（两次都通过的）的平均，
+ * 变化是各对变化的平均。`sides` 是 `[标签, 结果文件]`，没有重复类记录的一侧不出行。
+ */
+export function repeatRows(sides: Sides): string[][] {
+  return sides.flatMap(([label, results]) =>
+    repeatRecordsOf(results).flatMap((record) => {
+      const tag = repeatTag(label, record, results);
+      const pairs = pairsOf(record);
+      const rows = pairs.map((pair, index) => [
+        pairs.length > 1 ? `${tag} · 第${index + 1}对` : tag,
+        runCell(pair.firstRun),
+        runCell(pair.secondRun),
+        change(pair.firstRun.steps, pair.secondRun.steps),
+        change(pair.firstRun.tokens?.input, pair.secondRun.tokens?.input),
+        change(pair.firstRun.wallMs, pair.secondRun.wallMs),
+      ]);
+      if (pairs.length < 2) return rows;
+      const average = repeatAverage(record);
+      return [
+        ...rows,
+        [
+          `${tag} · 平均（${average.valid}/${average.total} 对有效）`,
+          averageCell(
+            average.steps.first,
+            average.input.first,
+            average.wall.first,
+          ),
+          averageCell(
+            average.steps.second,
+            average.input.second,
+            average.wall.second,
+          ),
+          percentText(average.steps.change),
+          percentText(average.input.change),
+          percentText(average.wall.change),
+        ],
+      ];
+    }),
+  );
+}
+
+/**
+ * 平均值对照目标：每一侧、每道有坑可学的题（和连做了多对的题）一句话，说平均步数、平均输入 token 的变化和
+ * 有几对有效，再判是否达到「都降 ≥30%」。Codex 只作对照，也给，但注明。
+ */
+export function repeatVerdicts(sides: Sides): string[] {
+  return sides.flatMap(([label, results]) =>
+    repeatRecordsOf(results)
+      .filter(
+        (record) =>
+          record.task === REPEAT_PITFALL_TASK || pairsOf(record).length > 1,
+      )
+      .map((record) => {
+        const average = repeatAverage(record);
+        const tag = repeatTag(label, record, results);
+        const control = label === "Codex" ? "（Codex 只作对照）" : "";
+        if (average.steps.change === null || average.input.change === null)
+          return `- **${tag}**${control}：没有两次都通过的对（${average.valid}/${average.total}），算不出平均，不判目标`;
+        const met =
+          Math.round(average.steps.change) <= -REPEAT_TARGET_PERCENT &&
+          Math.round(average.input.change) <= -REPEAT_TARGET_PERCENT;
+        return `- **${tag}**${control}：平均步数 ${percentText(average.steps.change)}、平均输入 token ${percentText(average.input.change)}（${average.valid}/${average.total} 对有效）；目标是两项都降 ≥${REPEAT_TARGET_PERCENT}%：${met ? "✅ 达标" : "❌ 未达标"}`;
+      }),
+  );
 }
 
 /** 一次运行新增的东西：技能名（带引号）、记忆条数，和转待审的技能（有才写）。 */
@@ -284,54 +424,60 @@ const retroCell = (learning: RunLearning | undefined) => {
  * 重复任务「学没学到」表：每一侧一行。两次之间复盘跑没跑、结果是什么，第一次之后新增的自写技能和员工形成的记忆，
  * 第二次那一轮用到了哪些自写技能，第二次之后又新增了什么。没有学习记录的一侧（Codex、旧结果文件）不出行。
  */
-export function learningRows(
-  sides: readonly (readonly [string, EvalResults | undefined])[],
-): string[][] {
-  return sides.flatMap(([label, results]) => {
-    const record = results?.records.find((item) => item.task === REPEAT_TASK);
-    const first = record?.firstRun?.learning;
-    const second = record?.secondRun?.learning;
-    if (!first && !second) return [];
-    return [
-      [
-        label,
-        retroCell(first),
-        addedCell(first),
-        second?.usedSkills.length
-          ? second.usedSkills.map((name) => `「${name}」`).join("、")
-          : second
-            ? "没有"
-            : DASH,
-        addedCell(second),
-      ],
-    ];
-  });
+export function learningRows(sides: Sides): string[][] {
+  return sides.flatMap(([label, results]) =>
+    repeatRecordsOf(results).flatMap((record) => {
+      const tag = repeatTag(label, record, results);
+      const pairs = pairsOf(record);
+      return pairs.flatMap((pair, index) => {
+        const first = pair.firstRun.learning;
+        const second = pair.secondRun.learning;
+        if (!first && !second) return [];
+        return [
+          [
+            pairs.length > 1 ? `${tag} · 第${index + 1}对` : tag,
+            retroCell(first),
+            addedCell(first),
+            second?.usedSkills.length
+              ? second.usedSkills.map((name) => `「${name}」`).join("、")
+              : second
+                ? "没有"
+                : DASH,
+            addedCell(second),
+          ],
+        ];
+      });
+    }),
+  );
 }
 
 /**
  * 「学没学到」表下面的一段：第一次之后存下的技能正文的前 800 字，每条一个标题加一个代码块。第二次没变快时
  * 先看这里，技能写了什么就一目了然。只放技能正文。没记正文的一侧（Codex、旧结果文件）不出。
  */
-export function skillBodyBlocks(
-  sides: readonly (readonly [string, EvalResults | undefined])[],
-): string[] {
-  return sides.flatMap(([label, results]) => {
-    const record = results?.records.find((item) => item.task === REPEAT_TASK);
-    return (record?.firstRun?.learning?.skillBodies ?? []).flatMap((body) => {
-      // 正文里要是有连续的反引号，围栏就多放一个，免得冲破代码块。
-      const longest = Math.max(
-        2,
-        ...(body.text.match(/`+/g) ?? []).map((run) => run.length),
+export function skillBodyBlocks(sides: Sides): string[] {
+  return sides.flatMap(([label, results]) =>
+    repeatRecordsOf(results).flatMap((record) => {
+      const tag = repeatTag(label, record, results);
+      const pairs = pairsOf(record);
+      return pairs.flatMap((pair, index) =>
+        (pair.firstRun.learning?.skillBodies ?? []).flatMap((body) => {
+          // 正文里要是有连续的反引号，围栏就多放一个，免得冲破代码块。
+          const longest = Math.max(
+            2,
+            ...(body.text.match(/`+/g) ?? []).map((run) => run.length),
+          );
+          const fence = "`".repeat(longest + 1);
+          return [
+            `**${pairs.length > 1 ? `${tag} · 第${index + 1}对` : tag}：「${body.title}」**（技能正文，前 ${body.text.length} 字）`,
+            "",
+            `${fence}text\n${body.text}\n${fence}`,
+            "",
+          ];
+        }),
       );
-      const fence = "`".repeat(longest + 1);
-      return [
-        `**${label}：「${body.title}」**（技能正文，前 ${body.text.length} 字）`,
-        "",
-        `${fence}text\n${body.text}\n${fence}`,
-        "",
-      ];
-    });
-  });
+    }),
+  );
 }
 
 /**
@@ -807,6 +953,11 @@ export function renderReport(results: EvalResults[]): string {
     ...mineSides.map((mine) => [mine.label, mine.results] as const),
     ["Codex", codex] as const,
   ]);
+  const repeatSides = [
+    ...mineSides.map((mine) => [mine.label, mine.results] as const),
+    ["Codex", codex] as const,
+  ];
+  const verdicts = repeatVerdicts(repeatSides);
   if (repeatTable.length)
     out.push(
       "## 重复任务（同一位员工把同一道题连做两次）",
@@ -825,6 +976,16 @@ export function renderReport(results: EvalResults[]): string {
       "",
       "两次在各自干净的目录里做，各开一段新对话，员工是同一位；变化是第二次相对第一次。Codex 每次都是全新的环境，没有跨次的记忆，只作对照。",
       "",
+      ...(verdicts.length
+        ? [
+            `有坑可学一题是账单导入：第一次要排查几处（报错指向没坏的那一项，还有一步文档没写的初始化），学会以后能直接跳过；夹具由种子生成，每一次的文件名、分隔符、汇率目录、币种、金额都不同，只有写成通用做法的技能才有用。连做多对时每一对用新员工、新的随机种子，复盘和技能只在同一对内有效；平均行是各对（两次都通过的）的平均，变化是各对变化的平均，输入 token 和上表同一口径。熊宝、Codex 都给出各对的变化和平均值，Codex 只作对照。`,
+            "",
+            `**平均值对照目标（期 2：第二次比第一次，步数和输入 token 都降 ≥${REPEAT_TARGET_PERCENT}%）**`,
+            "",
+            ...verdicts,
+            "",
+          ]
+        : []),
     );
 
   const learningTable = learningRows([

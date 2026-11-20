@@ -1,0 +1,16 @@
+import { expect, test } from "bun:test";
+import { existsSync, readFileSync } from "node:fs";
+
+test("bun run import has produced a well-formed summary", () => {
+  expect(existsSync("out/summary.json")).toBe(true);
+  const summary = JSON.parse(readFileSync("out/summary.json", "utf8"));
+  expect(typeof summary.currency).toBe("string");
+  expect(summary.base).toBe("EUR");
+  expect(typeof summary.rows).toBe("number");
+  expect(summary.merchants.length).toBeGreaterThan(0);
+  for (const item of summary.merchants) {
+    expect(typeof item.merchant).toBe("string");
+    expect(Number.isInteger(item.total)).toBe(true);
+    expect(item.total).toBeGreaterThanOrEqual(0);
+  }
+});

@@ -1,0 +1,21 @@
+import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+// 判分时拷进 tests/，同目录的 expected.hidden.json 是这一期的预期汇总；out/summary.json 是在干净副本里重新导入出来的。
+const root = join(import.meta.dir, "..");
+const expected = JSON.parse(
+  readFileSync(join(import.meta.dir, "expected.hidden.json"), "utf8"),
+);
+const actual = JSON.parse(
+  readFileSync(join(root, "out", "summary.json"), "utf8"),
+);
+
+test("no row was skipped and every row was counted", () => {
+  expect(actual.skipped).toBe(0);
+  expect(actual.rows).toBe(expected.rows);
+});
+
+test("each merchant's total matches the hidden expectation", () => {
+  expect(actual).toEqual(expected);
+});

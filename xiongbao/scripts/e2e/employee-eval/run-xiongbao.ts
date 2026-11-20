@@ -38,8 +38,13 @@
  *   EVAL_SUITE        tasks | smoke
  *   EVAL_PATH         board | chat，默认 board
  *   EVAL_TASKS        all（五道对标题）、hard（加难题：compare、refactor、terminal、webform）或逗号分隔的题名
- *                     （repeat 只能点名：多步办公题在同一位员工身上连做两次，记 firstRun / secondRun）；
+ *                     （repeat、repeat-pitfall 只能点名：同一道题在同一位员工身上连做两次，记 firstRun / secondRun；
+ *                     repeat 是多步办公题，repeat-pitfall 是第一次有坑、学会后能跳过的账单导入题）；
  *                     smoke 套件里是场景名，另有 background
+ *   EVAL_REPEAT_PAIRS 重复类的题（repeat、repeat-pitfall）连做几对，1 到 4，默认 1；每一对一位新员工、新种子（有坑可学的题），
+ *                     复盘和技能只在同一对内有效；报告给出每一对和平均值
+ *   EVAL_SEED         有坑可学的题的基础种子（作业里是 run id，熊宝、Codex 两个作业同一个）；没设就现抽一个并记在结果里
+ *   EVAL_DEADLINE_EPOCH 作业截止时间（Unix 秒，作业开头记下）：来不及再做完一对时，剩下的对不做，已完成的照常记录；本机不设
  *   EVAL_XIONGBAO_MODEL  只给熊宝侧换的模型名，空表示和 EVAL_MODEL 一样（Codex 侧不受影响）
  *   EVAL_PROMPT_SLIM  on | off，传给服务器的 XIONGBAO_PROMPT_SLIM（提示词瘦身，服务器默认开）；off 用来做对照
  *   EVAL_SERVER_ENV  给服务器多带几个 XIONGBAO_ 开头的部署开关，逗号分隔的 名字=值（例如 XIONGBAO_VERIFY_NUDGE=off），用来对照开关开和关
@@ -57,6 +62,8 @@
  *   EVAL_MOCK_SCRIPT  设 early-stop 时假模型演「提前收尾」的员工：计划没做完就收尾、改完不验就收尾，看收尾提醒生效没有；见 mock-early-stop.ts
  *                     设 learn 时假模型演「重复任务」：接活、摸索、交付，带着自写技能就少摸索几步，收到复盘请求就写
  *                     一份技能，用来在本机看两次之间有没有产生技能、第二次有没有用上；见 mock-learn.ts
+ *                     设 pitfall 时假模型演「有坑可学」：第一次一步步排查再按通用做法做完，带着技能一条命令做完；
+ *                     EVAL_MOCK_PITFALL=copy 让第二次照抄第一次的具体值（判分应当判不通过）；见 mock-pitfall.ts
  *   COMPUTER_BROWSER_MODE  传给本地电脑；没有虚拟显示的机器上设 headless
  *
  * 本机验证：EVAL_LOCAL_MOCK=1 MODEL_E2E=1 E2E_DATABASE_URL=… E2E_ROLE_WRITER_DATABASE_URL=… \
@@ -110,7 +117,16 @@ import {
   transcriptChecks,
 } from "./chat-path";
 import { CHECKERS } from "./checkers";
-import { evalGate, serverEnvFrom, taskMinutes, xiongbaoModel } from "./config";
+import {
+  evalGate,
+  evalSeed,
+  pairFits,
+  repeatPairs,
+  serverEnvFrom,
+  taskMinutes,
+  xiongbaoModel,
+} from "./config";
+import { pitfallPairSeeds } from "./gen-pitfall";
 import {
   backgroundOf,
   type LearnedState,
@@ -125,9 +141,10 @@ import {
   copyTree,
   EDITS_CODE_TASKS,
   HARD_SUITE,
+  isRepeatTask,
   listFiles,
   materialize,
-  REPEAT_TASK,
+  REPEAT_PITFALL_TASK,
   result,
   selectTasks,
   TASK_TITLES,
@@ -156,9 +173,11 @@ import { boardMockWanted, boardPolicy } from "./mock-board";
 import { earlyStopPolicy, earlyStopWanted } from "./mock-early-stop";
 import { learnPolicy } from "./mock-learn";
 import { type MockRequest, type MockTurn, startMockModel } from "./mock-model";
+import { pitfallPolicy } from "./mock-pitfall";
 import { researchPolicy, researchScriptFrom } from "./mock-research";
 import { startPromptRecorder } from "./prompt-recorder";
 import {
+  combinePairs,
   combineRepeat,
   type EvalPath,
   type EvalRecord,
@@ -202,6 +221,14 @@ if (!modelChoice.ok) {
 }
 const config = { ...verdict.config, model: modelChoice.model };
 delete process.env.MODEL_E2E_API_KEY;
+/** 重复类的题连做几对（`EVAL_REPEAT_PAIRS`，默认 1），和夹具的基础种子（`EVAL_SEED`）。 */
+const pairChoice = repeatPairs(process.env);
+if (!pairChoice.ok) {
+  console.error(`run-xiongbao refused: ${pairChoice.reason}`);
+  process.exit(2);
+}
+const pairCount = pairChoice.pairs;
+const baseSeed = evalSeed(process.env);
 const suite = process.env.EVAL_SUITE?.trim() === "smoke" ? "smoke" : "tasks";
 let evalPath: EvalPath;
 try {
@@ -308,7 +335,11 @@ function mockPolicy(request: MockRequest): MockTurn {
   // `EVAL_MOCK_SCRIPT=research`：一步接一步读大段文字，看一轮里每步的请求有多大。
   if (researchScript)
     return researchPolicy(request, researchScript, `${mock?.url}/page`);
-  const dir = /((?:eval|smoke)\/[a-z-]+)/.exec(request.lastUser)?.[1] ?? "eval";
+  const dir =
+    /((?:eval|smoke)\/[a-z0-9-]+)/.exec(request.lastUser)?.[1] ?? "eval";
+  // `EVAL_MOCK_SCRIPT=pitfall`：有坑可学的重复题，第一次排查，带着技能就一条命令；`EVAL_MOCK_PITFALL=copy` 第二次照抄第一次的值。
+  if (process.env.EVAL_MOCK_SCRIPT?.trim() === "pitfall")
+    return pitfallPolicy(request, dir, process.env, WORKSPACE);
   // `EVAL_MOCK_SCRIPT=learn`：重复任务的剧本，带着技能就走短路径；复盘的请求按这件事写一份技能。
   if (process.env.EVAL_MOCK_SCRIPT?.trim() === "learn")
     return learnPolicy(request, dir);
@@ -846,10 +877,14 @@ async function roundEnded(runId: string): Promise<boolean> {
 
 type Work = {
   key: string;
-  /** 夹具取自哪道题（题名；冒烟场景没有）。重复任务的两次都取 `repeat`。 */
+  /** 夹具取自哪道题（题名；冒烟场景没有）。重复任务的两次都取这道题。 */
   task?: TaskName;
-  /** 同一组的几次运行共用一位员工（重复任务：第一次和第二次）。 */
+  /** 同一组的几次运行共用一位员工（重复任务：同一对的第一次和第二次）。 */
   group?: string;
+  /** 重复任务：这是第几对的第几次，一共几对。 */
+  pair?: { index: number; total: number; round: "first" | "second" };
+  /** 夹具由种子生成的题（有坑可学）：这一次的种子。 */
+  seed?: string;
   /** 网页表单题的夹具网站，运行前由主流程起、运行后停。 */
   site?: WebformSite;
   title: string;
@@ -887,6 +922,7 @@ const OUTPUTS: Record<TaskName, string[]> = {
   terminal: ["dist/cli.js"],
   webform: ["receipt.txt"],
   repeat: ["actions.csv"],
+  "repeat-pitfall": ["out/summary.json"],
 };
 
 /** 一道题交给员工、等它做完之后的结果：用到的运行、追了几次「继续」、有没有超时，和路径自己的几项判分。 */
@@ -1512,6 +1548,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     checks,
     ...(promptChars ? { promptChars } : {}),
     ...(learning ? { learning } : {}),
+    ...(work.seed ? { seed: work.seed } : {}),
     backgroundCalls,
     ...(roundErrors.length
       ? {
@@ -1530,23 +1567,46 @@ async function runWork(work: Work): Promise<EvalRecord> {
 }
 
 /**
- * 一道题交给员工的几次运行：一般一次；重复任务是同一位员工、两个干净目录（`eval/repeat-first`、
- * `eval/repeat-second`）里各做一次同一道办公题，两次各开一段新对话。
+ * 一道题交给员工的几次运行：一般一次；重复类的题是同一位员工、两个干净目录（`eval/repeat-first`、`eval/repeat-second`）
+ * 里各做一次，两次各开一段新对话；`repeat_pairs` 大于 1 时连做多对（目录 `eval/repeat-p2-first` 这样），每一对用
+ * 新员工；有坑可学的题每一对还有自己的一对种子（两次的具体值不同）。
  */
 function taskWorks(task: TaskName): Work[] {
-  if (task !== REPEAT_TASK) return [taskWork(task)];
-  return [taskWork(task, "first"), taskWork(task, "second")];
+  if (!isRepeatTask(task)) return [taskWork(task)];
+  return Array.from({ length: pairCount }, (_, at) => at + 1).flatMap(
+    (index) => {
+      const [firstSeed, secondSeed] =
+        task === REPEAT_PITFALL_TASK
+          ? pitfallPairSeeds(baseSeed, index)
+          : [undefined, undefined];
+      return [
+        taskWork(task, { index, total: pairCount, round: "first" }, firstSeed),
+        taskWork(
+          task,
+          { index, total: pairCount, round: "second" },
+          secondSeed,
+        ),
+      ];
+    },
+  );
 }
 
-function taskWork(task: TaskName, round?: "first" | "second"): Work {
-  const key = round ? `${task}-${round}` : task;
+function taskWork(
+  task: TaskName,
+  pair?: { index: number; total: number; round: "first" | "second" },
+  seed?: string,
+): Work {
+  // 一对（`repeat_pairs` 为 1）时目录和键还是原来的 `repeat-first`；多对加上第几对。
+  const pairPart = pair && pair.total > 1 ? `-p${pair.index}` : "";
+  const key = pair ? `${task}${pairPart}-${pair.round}` : task;
   const where = `eval/${key}`;
   return {
     key,
     task,
-    ...(round ? { group: task } : {}),
-    title: round
-      ? `${TASK_TITLES[task]}（第${round === "first" ? "一" : "二"}次）`
+    ...(pair ? { group: `${task}${pairPart}`, pair } : {}),
+    ...(seed ? { seed } : {}),
+    title: pair
+      ? `${TASK_TITLES[task]}（${pair.total > 1 ? `第${pair.index}对·` : ""}第${pair.round === "first" ? "一" : "二"}次）`
       : TASK_TITLES[task],
     label: key,
     where,
@@ -1557,7 +1617,7 @@ function taskWork(task: TaskName, round?: "first" | "second"): Work {
     outputsReady: (dir) =>
       OUTPUTS[task].every((path) => existsSync(join(dir, path))),
     judge: async (dir, { agentId, since }) => {
-      const outcome = await CHECKERS[task](dir);
+      const outcome = await CHECKERS[task](dir, seed);
       if (task !== "office") return outcome;
       // 看板路径：办公题多查一条，员工交付后卡片进入等验收，交付物里有工作区文件。单聊路径没有这张卡，标不适用。
       let board = { delivered: false, detail: "" };
@@ -1630,6 +1690,8 @@ function smokeWork(scenario: SmokeScenario): Work {
 
 const startedAt = new Date().toISOString();
 const records: EvalRecord[] = [];
+/** 重复类的题：已完成的各对（合成前），按题名分开。 */
+const donePairs = new Map<string, EvalRecord[]>();
 const notes: string[] = [];
 let failed = false;
 try {
@@ -1705,8 +1767,29 @@ try {
 
   const works =
     suite === "tasks" ? tasks.flatMap(taskWorks) : scenarios.map(smokeWork);
+  // 有坑可学的题夹具由种子生成：基础种子和每一对的种子记在结果里，要复现就用同一个 EVAL_SEED。
+  if (works.some((work) => work.seed))
+    notes.push(
+      `有坑可学的题的基础种子 ${baseSeed}（每一对、每一次的种子在各次运行的 seed 里；熊宝、Codex 两侧用同一个基础种子时夹具一样）`,
+    );
   let firstRound: EvalRecord | undefined;
+  let pairStartedAt = 0;
+  let lastPairMs: number | undefined;
+  /** 重复类的题：跳过的对数，按题名分开。 */
+  const skippedPairs = new Map<string, number>();
+  const skipped = new Set<string>();
   for (const work of works) {
+    // 多对放在同一次运行里做完：来不来得及再做一对，看作业开头记下的截止时间；来不及就不做，留个说明。
+    if (work.pair?.round === "first" && work.group && work.task) {
+      if (!pairFits(process.env, Date.now(), lastPairMs, minutes)) {
+        skipped.add(work.group);
+        skippedPairs.set(work.task, (skippedPairs.get(work.task) ?? 0) + 1);
+        notes.push(
+          `${work.task} 第 ${work.pair.index}/${work.pair.total} 对没做：离作业截止时间不够做完一对，已完成的各对照常记录`,
+        );
+      } else pairStartedAt = Date.now();
+    }
+    if (work.group && skipped.has(work.group)) continue;
     if (work.task === "webform") work.site = startWebformSite();
     materializeWork(work);
     let record: EvalRecord;
@@ -1715,11 +1798,21 @@ try {
     } finally {
       work.site?.stop();
     }
-    // 重复任务：两次的记录合成一条（`firstRun` / `secondRun` 各记一次的指标）。
-    if (work.group && !firstRound) firstRound = record;
-    else if (work.group && firstRound) {
-      records.push(combineRepeat(firstRound, record));
+    // 重复任务：同一对的两次记录合成一条（`firstRun` / `secondRun` 各记一次的指标）；所有对做完后再合成一条总的。
+    if (work.group && work.pair?.round === "first") firstRound = record;
+    else if (work.group && work.task && firstRound) {
+      lastPairMs = Date.now() - pairStartedAt;
+      const parts = donePairs.get(work.task) ?? [];
+      parts.push(combineRepeat(firstRound, record, work.task));
+      donePairs.set(work.task, parts);
       firstRound = undefined;
+      if (
+        work.pair &&
+        parts.length + (skippedPairs.get(work.task) ?? 0) === work.pair.total
+      ) {
+        records.push(combinePairs(work.task, parts));
+        donePairs.delete(work.task);
+      }
     } else records.push(record);
   }
   if (deploymentHits > 0)
@@ -1740,6 +1833,10 @@ try {
   mock?.stop();
 }
 
+// 有对被跳过或中途出错时，已完成的各对也要留下。
+for (const [task, parts] of donePairs)
+  records.push(combinePairs(task as TaskName, parts));
+
 function materializeWork(work: Work) {
   const dir = join(WORKSPACE, work.where);
   rmSync(dir, { recursive: true, force: true });
@@ -1749,6 +1846,7 @@ function materializeWork(work: Work) {
       work.task,
       dir,
       work.site ? { SITE_URL: work.site.url } : undefined,
+      work.seed,
     );
   else {
     const scenario = scenarios.find((item) => item.name === work.key);

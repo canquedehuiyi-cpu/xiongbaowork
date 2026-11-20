@@ -1,0 +1,10 @@
+{
+  "name": "ledger-import",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "import": "bun src/import.ts",
+    "warm": "bun scripts/warm.ts",
+    "test": "bun test"
+  }
+}

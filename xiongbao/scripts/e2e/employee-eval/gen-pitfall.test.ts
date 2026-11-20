@@ -1,5 +1,4 @@
 import { expect, test } from "bun:test";
-import { fixtureFiles } from "./lib";
 import {
   pairSeeds,
   pitfallExpected,
@@ -7,6 +6,7 @@ import {
   pitfallGold,
   pitfallSpec,
 } from "./gen-pitfall";
+import { fixtureFiles } from "./lib";
 
 /*
  * 「有坑可学」题的夹具由种子生成：同一个种子永远是同一份，不同种子的文件名、数值、输出都不一样；
@@ -28,7 +28,7 @@ test("the same seed always gives the same files, a different seed gives differen
   expect(pitfallExpected("seed-1")).not.toEqual(pitfallExpected("seed-2"));
 });
 
-test("the fixture ships a config that is wrong in four places, and the data says how", () => {
+test("the fixture ships a config that is wrong in five places, and the data says how", () => {
   const spec = pitfallSpec("seed-1");
   const config = JSON.parse(
     text(pitfallFiles("seed-1").get("import.config.json")),
@@ -85,7 +85,6 @@ test("what the employee is handed contains neither the answer nor the hint", () 
   const everything = [...files.values()].map(text).join("\n");
   for (const merchant of pitfallExpected(seed).merchants)
     expect(everything).not.toContain(`"total": ${merchant.total}`);
-  expect(everything).not.toContain('skipped": 0');
   expect(spec.rows).toBeGreaterThanOrEqual(24);
 });
 

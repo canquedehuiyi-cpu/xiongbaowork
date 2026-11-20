@@ -14,6 +14,8 @@
  * 拒绝的理由只写变量名，从不写值。
  */
 
+import { randomBytes } from "node:crypto";
+
 export type ModelConfig = {
   provider: string;
   model: string;
@@ -117,4 +119,43 @@ export function serverEnvFrom(raw: string | undefined): Record<string, string> {
       out[name] = item.slice(at + 1).trim();
   }
   return out;
+}
+
+/** 重复类的题连做几对：`EVAL_REPEAT_PAIRS`，1 到 4，默认 1。每一对用新员工、新种子，复盘和技能只在同一对内有效。 */
+export function repeatPairs(
+  env: Record<string, string | undefined>,
+): { ok: true; pairs: number } | { ok: false; reason: string } {
+  const text = env.EVAL_REPEAT_PAIRS?.trim() ?? "";
+  if (!text) return { ok: true, pairs: 1 };
+  if (!/^[1-4]$/.test(text))
+    return { ok: false, reason: "EVAL_REPEAT_PAIRS must be 1, 2, 3 or 4" };
+  return { ok: true, pairs: Number(text) };
+}
+
+/**
+ * 夹具的基础种子：`EVAL_SEED`（作业里是 run id，熊宝和 Codex 两个作业同一个，两边夹具才一样），没设就现抽一个。
+ * 具体每一对、每一次用的种子由它派生（`gen-pitfall.ts` 的 `pairSeeds`），结果里记着。
+ */
+export function evalSeed(env: Record<string, string | undefined>): string {
+  return env.EVAL_SEED?.trim() || randomBytes(6).toString("hex");
+}
+
+/**
+ * 还来不来得及再做一对：作业开头记下一个截止时间（`EVAL_DEADLINE_EPOCH`，Unix 秒，比作业超时早，留出出报告和上传的
+ * 时间），一对要做两次。有上一对的实测墙钟就按它的一倍半留余量，没有就按最坏情况（两次都跑满每题上限，再加两分钟
+ * 等复盘）。没设截止时间（本机）总是来得及。多对放在同一次运行里做完，不能被作业超时整个杀掉。
+ */
+export function pairFits(
+  env: Record<string, string | undefined>,
+  nowMs: number,
+  lastPairMs: number | undefined,
+  perRunMinutes: number,
+): boolean {
+  const epoch = Number(env.EVAL_DEADLINE_EPOCH ?? "");
+  if (!Number.isFinite(epoch) || epoch <= 0) return true;
+  const need =
+    lastPairMs !== undefined
+      ? lastPairMs * 1.5
+      : (2 * perRunMinutes + 2) * 60_000;
+  return epoch * 1000 - nowMs >= need;
 }

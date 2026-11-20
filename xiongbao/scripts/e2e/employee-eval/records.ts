@@ -3,7 +3,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { Bookkeeping } from "./bookkeeping";
-import { type Check, TASK_TITLES } from "./lib";
+import { type Check, REPEAT_TASK, TASK_TITLES, type TaskName } from "./lib";
 import type { Capabilities, PromptChars } from "./metrics";
 
 export type Side = "xiongbao" | "codex";
@@ -74,6 +74,8 @@ export type RunMetrics = {
   backgroundCalls?: BackgroundCalls;
   /** 这次运行学到了什么（见 {@link RunLearning}）。 */
   learning?: RunLearning;
+  /** 这次运行用的夹具种子（夹具由种子生成的题才有）。 */
+  seed?: string;
 };
 
 export type EvalRecord = {
@@ -139,6 +141,13 @@ export type EvalRecord = {
   /** 重复任务（`repeat`）：同一位员工连做两次，各自的指标。其他题没有这两项。 */
   firstRun?: RunMetrics;
   secondRun?: RunMetrics;
+  /**
+   * 重复类的题连做多对（输入 `repeat_pairs` 大于 1）时，每一对的第一次、第二次；这时 `firstRun` / `secondRun`
+   * 不再单独写（用 {@link pairsOf} 读，一对时读 `firstRun` / `secondRun`）。每一对用新员工、新种子。
+   */
+  pairs?: { firstRun: RunMetrics; secondRun: RunMetrics }[];
+  /** 这次运行用的夹具种子（重复任务合成前的单次记录；合成后在 `firstRun` / `secondRun` 里）。 */
+  seed?: string;
   /** 这道题期间员工的背景调用；没有这一项的旧结果文件读作没记。 */
   backgroundCalls?: BackgroundCalls;
   /** 重复任务的一次运行（合成前的单次记录）里员工学到了什么；合成后在 `firstRun` / `secondRun` 里。 */
@@ -187,6 +196,7 @@ export function runMetrics(record: EvalRecord): RunMetrics {
       : null,
     nudges: record.nudges,
     ...(record.learning ? { learning: record.learning } : {}),
+    ...(record.seed ? { seed: record.seed } : {}),
     ...(record.backgroundCalls
       ? { backgroundCalls: record.backgroundCalls }
       : {}),
@@ -201,6 +211,7 @@ export function runMetrics(record: EvalRecord): RunMetrics {
 export function combineRepeat(
   first: EvalRecord,
   second: EvalRecord,
+  task: TaskName = REPEAT_TASK,
 ): EvalRecord {
   const tools: Record<string, number> = {};
   for (const record of [first, second])
@@ -208,8 +219,8 @@ export function combineRepeat(
       tools[name] = (tools[name] ?? 0) + count;
   const errors = [first.error, second.error].filter(Boolean);
   return {
-    task: "repeat",
-    title: TASK_TITLES.repeat,
+    task,
+    title: TASK_TITLES[task],
     ...(second.path ? { path: second.path } : {}),
     passed: first.passed && second.passed,
     wallMs: first.wallMs + second.wallMs,
@@ -306,4 +317,44 @@ export function combineRepeat(
     firstRun: runMetrics(first),
     secondRun: runMetrics(second),
   };
+}
+
+/**
+ * 重复类的题连做多对：每一对已经是 {@link combineRepeat} 的结果。总量是各对之和，通过要每一对都过，检查项加「第 N 对·」
+ * 前缀，`pairs` 逐对记两次的指标。只有一对时原样返回（和原来的记录一个样）。
+ */
+export function combinePairs(task: TaskName, pairs: EvalRecord[]): EvalRecord {
+  const [head, ...rest] = pairs;
+  if (!head) throw new Error("combinePairs needs at least one pair");
+  if (rest.length === 0) return head;
+  const summed = rest.reduce(
+    (total, next) => combineRepeat(total, next, task),
+    head,
+  );
+  const { firstRun: _first, secondRun: _second, ...whole } = summed;
+  return {
+    ...whole,
+    checks: pairs.flatMap((pair, index) =>
+      pair.checks.map((item) => ({
+        ...item,
+        name: `第${index + 1}对·${item.name}`,
+      })),
+    ),
+    pairs: pairs.flatMap((pair) =>
+      pair.firstRun && pair.secondRun
+        ? [{ firstRun: pair.firstRun, secondRun: pair.secondRun }]
+        : [],
+    ),
+  };
+}
+
+/** 一条重复类记录里的各对：多对读 `pairs`，一对读 `firstRun` / `secondRun`（旧结果文件也是这样）。 */
+export function pairsOf(
+  record: EvalRecord | undefined,
+): { firstRun: RunMetrics; secondRun: RunMetrics }[] {
+  if (!record) return [];
+  if (record.pairs) return record.pairs;
+  return record.firstRun && record.secondRun
+    ? [{ firstRun: record.firstRun, secondRun: record.secondRun }]
+    : [];
 }

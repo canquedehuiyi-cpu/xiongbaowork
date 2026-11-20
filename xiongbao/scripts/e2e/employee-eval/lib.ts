@@ -19,6 +19,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { pitfallFiles } from "./gen-pitfall";
 import { salesFixture } from "./gen-sales";
 
 export const EVAL_DIR = import.meta.dir;
@@ -49,10 +50,22 @@ export const HARD_SUITE = [...HARD_TASKS, ...MORE_HARD_TASKS] as const;
  * 不在 `all` 也不在 `hard` 里，只能点名跑（`EVAL_TASKS=repeat`）。
  */
 export const REPEAT_TASK = "repeat" as const;
+/**
+ * 「有坑可学」的重复任务：商户对账单导入。第一次容易走弯路（报错指向没坏的那一项，真正要修的几处在别处，还有一步
+ * 文档里没写的初始化），学会以后能直接跳过；夹具由种子生成，两次的具体值不同。`repeat` 保留，作对照。
+ * 同样只能点名跑。
+ */
+export const REPEAT_PITFALL_TASK = "repeat-pitfall" as const;
+/** 重复类的题：同一位员工连做两次，记第一次和第二次；输入 `repeat_pairs` 决定连做几对。 */
+export const REPEAT_TASKS = [REPEAT_TASK, REPEAT_PITFALL_TASK] as const;
+export const isRepeatTask = (
+  task: string,
+): task is (typeof REPEAT_TASKS)[number] =>
+  (REPEAT_TASKS as readonly string[]).includes(task);
 export type TaskName =
   | (typeof TASKS)[number]
   | (typeof HARD_SUITE)[number]
-  | typeof REPEAT_TASK;
+  | (typeof REPEAT_TASKS)[number];
 
 /** 改代码类的题：判分时要看「改完有没有验证」（`metrics.ts` 的 `editsData`）。 */
 export const EDITS_CODE_TASKS: readonly TaskName[] = [
@@ -60,6 +73,7 @@ export const EDITS_CODE_TASKS: readonly TaskName[] = [
   "data",
   "refactor",
   "terminal",
+  REPEAT_PITFALL_TASK,
 ];
 
 /** 题目的夹具、金标和隐藏测试放在哪个目录名下：重复任务复用多步办公题的。 */
@@ -78,7 +92,11 @@ export const TASK_TITLES: Record<TaskName, string> = {
   terminal: "终端修构建",
   webform: "网页表单填写",
   repeat: "重复任务（多步办公连做两次）",
+  "repeat-pitfall": "重复任务（账单导入：第一次有坑，连做两次）",
 };
+
+/** 交给员工的题面里这道题叫什么：有坑的那道用一个平平的名字，不提「坑」「重复」。 */
+export const PITFALL_PROMPT_TITLE = "账单导入";
 
 /** 存放时加在测试文件名后面、落地时去掉的后缀。 */
 export const FIXTURE_SUFFIX = ".fixture";
@@ -109,7 +127,7 @@ export function selectTasks(
 ): TaskName[] {
   const text = (spec ?? "").trim();
   if (!text || text === "all") return [...TASKS];
-  const known: readonly TaskName[] = [...TASKS, ...HARD_SUITE, REPEAT_TASK];
+  const known: readonly TaskName[] = [...TASKS, ...HARD_SUITE, ...REPEAT_TASKS];
   const picked = new Set<string>();
   for (const name of text.split(/[,\s]+/).filter(Boolean)) {
     if (name === "all") for (const task of TASKS) picked.add(task);
@@ -129,7 +147,7 @@ export function selectTasks(
  */
 export function taskPrompt(task: TaskName, where: string): string {
   return [
-    `请完成「${TASK_TITLES[sourceTask(task)]}」这道题：先读 ${where}/TASK.md，按里面的要求做完。`,
+    `请完成「${task === REPEAT_PITFALL_TASK ? PITFALL_PROMPT_TITLE : TASK_TITLES[sourceTask(task)]}」这道题：先读 ${where}/TASK.md，按里面的要求做完。`,
     `所有产物都写进 ${where}（不要写到别处），做完后自己核对一遍要求再结束。`,
   ].join("\n");
 }
@@ -171,7 +189,10 @@ export function landedName(path: string): string {
 }
 
 /** 把某道题的原始输入（夹具落地后的样子）作为 路径 → 内容 返回，判分时拿来对比「原样没动」。 */
-export function fixtureFiles(task: TaskName): Map<string, Buffer> {
+export function fixtureFiles(
+  task: TaskName,
+  seed?: string,
+): Map<string, Buffer> {
   const root = join(FIXTURES_DIR, sourceTask(task));
   const files = new Map<string, Buffer>();
   for (const path of listFiles(root))
@@ -180,20 +201,27 @@ export function fixtureFiles(task: TaskName): Map<string, Buffer> {
     const { csv } = salesFixture();
     files.set("sales.csv", Buffer.from(csv, "utf8"));
   }
+  // 有坑可学的题：静态的部分在 fixtures/repeat-pitfall/，随种子变的部分（坏配置、对账单、汇率目录）由生成器给。
+  if (task === REPEAT_PITFALL_TASK) {
+    if (!seed) throw new Error(`${task} 的夹具要有种子`);
+    for (const [path, contents] of pitfallFiles(seed))
+      files.set(path, contents);
+  }
   return files;
 }
 
 /**
- * 把一道题的夹具落到 `dest`（不存在就建）。两边用的是同一份内容。`vars` 给了就把文本里的 `{{名字}}` 换成值：
+ * 把一道题的夹具落到 `dest`（不存在就建）。两边用的是同一份内容；有坑可学的题还要种子（`seed`）。`vars` 给了就把文本里的 `{{名字}}` 换成值：
  * 网页表单题的网址（端口由评测脚本现起）就这样写进题面。
  */
 export function materialize(
   task: TaskName,
   dest: string,
   vars: Record<string, string> = {},
+  seed?: string,
 ): string[] {
   const written: string[] = [];
-  for (const [path, contents] of fixtureFiles(task)) {
+  for (const [path, contents] of fixtureFiles(task, seed)) {
     const target = join(dest, path);
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, fill(contents, vars));
