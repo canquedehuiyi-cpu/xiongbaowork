@@ -315,6 +315,92 @@ describe("the retrospector at the end of a turn", () => {
     expect(modelCalls).toHaveLength(2);
   });
 
+  describe("a delivered card the model calls not worth keeping is asked once more", () => {
+    const cardTurn = (steps: number) =>
+      turnOf(steps, { trigger: "card_delivered", cardId: "card1" });
+    /** The fake model: answers come from the list in order; every prompt it is shown is kept. */
+    const scripted = (answers: unknown[]) => {
+      const prompts: string[] = [];
+      const call: RetroCall = async (input) => {
+        prompts.push(input.prompt);
+        return {
+          text: JSON.stringify({ skill: answers[prompts.length - 1] ?? null }),
+        };
+      };
+      return { call, prompts };
+    };
+
+    test("the second question carries the step count and asks for fewer detours", async () => {
+      const { call, prompts } = scripted([null, null]);
+      const { run } = harness({ call });
+      await run(cardTurn(10));
+      expect(prompts).toHaveLength(2);
+      expect(prompts[1]).toContain("took 10 steps");
+      expect(prompts[1]).toContain("fewer detours");
+      expect(prompts[0]).not.toContain("fewer detours");
+    });
+
+    test("nothing both times: nothing, asked exactly twice", async () => {
+      const { call, prompts } = scripted([null, null, goodDraft]);
+      const { run } = harness({ call });
+      expect(await run(cardTurn(12))).toEqual({
+        outcome: "nothing",
+        retried: true,
+      });
+      expect(prompts).toHaveLength(2);
+    });
+
+    test("under ten steps there is no second question", async () => {
+      const { call, prompts } = scripted([null, goodDraft]);
+      const { run } = harness({ call });
+      const outcome = await run(cardTurn(9));
+      expect(outcome).toEqual({ outcome: "nothing" });
+      expect(outcome).not.toHaveProperty("retried");
+      expect(prompts).toHaveLength(1);
+    });
+
+    test("a turn that is not a delivered card is not asked again", async () => {
+      const { call, prompts } = scripted([null, goodDraft]);
+      const { run } = harness({ call });
+      expect(await run(turnOf(30))).toEqual({ outcome: "nothing" });
+      expect(prompts).toHaveLength(1);
+    });
+
+    test("when the daily allowance is used up there is no second question", async () => {
+      const { call, prompts } = scripted([null, goodDraft]);
+      let asked = 0;
+      const { run } = harness({
+        call,
+        limiter: { take: () => ++asked <= 1 },
+      });
+      const outcome = await run(cardTurn(15));
+      expect(outcome).toEqual({ outcome: "nothing" });
+      expect(prompts).toHaveLength(1);
+      expect(asked).toBe(2);
+    });
+
+    test("the second question counts against the daily allowance", async () => {
+      const { call } = scripted([null, null]);
+      const keys: string[] = [];
+      const { run } = harness({
+        call,
+        limiter: {
+          take: (key: string) => {
+            keys.push(key);
+            return true;
+          },
+        },
+      });
+      await run(cardTurn(10));
+      expect(keys).toEqual(["u1:bot", "u1:bot"]);
+    });
+  });
+
+  test("the system prompt says a delivered multi-step job is a skill by default", () => {
+    expect(RETRO_SYSTEM).toContain("write the skill by default");
+    expect(RETRO_SYSTEM).toContain("only two cases");
+  });
+
   test("a model that fails is logged as a type only and does not throw", async () => {
     const { run, logs } = harness({
       call: async () => {
