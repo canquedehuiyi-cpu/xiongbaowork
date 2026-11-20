@@ -203,6 +203,7 @@ tests/ban-freezes-execution.test.ts
 tests/batch-grants-shared-use.integration.test.ts
 tests/board-card-claim.integration.test.ts
 tests/board-turn-marker.test.ts
+tests/board-turn-self-skill.test.ts
 tests/bot-access.test.ts
 tests/bot-answer-attribution.test.ts
 tests/bot-browser-routes.integration.test.ts
