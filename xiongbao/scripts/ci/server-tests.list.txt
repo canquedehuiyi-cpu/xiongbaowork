@@ -752,6 +752,8 @@ tests/responsibility-triggers.integration.test.ts
 tests/responsibility-triggers.test.ts
 tests/restart-recovery-sweep.integration.test.ts
 tests/restart-recovery-sweep.test.ts
+tests/retro-observer.test.ts
+tests/retro-repeat-learning.integration.test.ts
 tests/reviewer-guidance.integration.test.ts
 tests/rls-role.test.ts
 tests/rls-write-scope.test.ts
