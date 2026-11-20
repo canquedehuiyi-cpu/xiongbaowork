@@ -3,6 +3,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AbstractAgent, RunAgentInput } from "@ag-ui/client";
 import { HttpAgent } from "@ag-ui/client";
+import {
+  SLIM_ANSWER_FORMAT,
+  SLIM_HOW_TO_WORK,
+  SLIM_SOURCES,
+  SLIM_SUBAGENTS,
+} from "../src/agents/slim-guidance";
 import { LLMock } from "@copilotkit/aimock";
 import {
   BuiltInAgent,
@@ -403,7 +409,8 @@ describe("registered Copilot agents", () => {
     expect(sectionOf(prompt, "role")).toBe(
       `Be helpful.\n\n${ROLE_SCOPE_GUIDANCE}`,
     );
-    expect(sectionOf(prompt, "how_to_work")).toBe(HOW_TO_WORK_GUIDANCE);
+    // 用户 2026-11-20 批准：瘦身默认开，这几段钉瘦身后的原文；关着时的原文见文件末尾的 off 对照。
+    expect(sectionOf(prompt, "how_to_work")).toBe(SLIM_HOW_TO_WORK);
     // M5: this fork's floors, worded for a run without a connected-app tool, then the closed test.
     expect(sectionOf(prompt, "asking")).toBe(
       builtInAskingGuidance({ apps: false }),
@@ -411,9 +418,10 @@ describe("registered Copilot agents", () => {
     expect(sectionOf(prompt, "asking")).toStartWith(
       approvalGuidance({ apps: false }),
     );
-    expect(sectionOf(prompt, "sources")).toBe(PROVENANCE_GUIDANCE);
-    expect(sectionOf(prompt, "answer_format")).toBe(COMPONENT_GUIDANCE);
-    expect(sectionOf(prompt, "subagents")).toBe(ORCHESTRATION_GUIDANCE);
+    expect(sectionOf(prompt, "sources")).toBe(SLIM_SOURCES);
+    expect(sectionOf(prompt, "answer_format")).toBe(SLIM_ANSWER_FORMAT);
+    // 用户 2026-11-20 批准：瘦身默认开，钉瘦身后的原文。
+    expect(sectionOf(prompt, "subagents")).toBe(SLIM_SUBAGENTS);
     expect(sectionOf(prompt, "untrusted_content")).toBe(UNTRUSTED_GUIDANCE);
     expect(sectionOf(prompt, "model_and_date")).toBe(
       todayGuidance(new Date("2026-11-05T15:44:00Z")),
@@ -1488,7 +1496,8 @@ describe("where a Bot says its answer came from", () => {
       ) as { prompt?: unknown }
     ).prompt as string;
 
-    expect(prompt).toContain(PROVENANCE_GUIDANCE);
+    // 用户 2026-11-20 批准：瘦身默认开，钉瘦身后的原文。
+    expect(prompt).toContain(SLIM_SOURCES);
   });
 
   test("a remote Bot carries it in the only instruction it ever gets", () => {
@@ -1585,7 +1594,7 @@ describe("when a Bot answers with a component", () => {
     expect(sections.indexOf("answer_format")).toBe(
       sections.indexOf("sources") + 1,
     );
-    expect(sectionOf(prompt, "answer_format")).toBe(COMPONENT_GUIDANCE);
+    expect(sectionOf(prompt, "answer_format")).toBe(SLIM_ANSWER_FORMAT);
   });
 
   test("a remote Bot carries it in its standing role", () => {
@@ -1685,17 +1694,20 @@ describe("when a Bot answers with a component", () => {
        * And, because a routine fires with nobody watching, the unattended run mode with the shape
        * its final answer takes, on the Bot OpenBot runs and on the one it does not alike.
        */
-      for (const guidance of [
-        COMPONENT_GUIDANCE,
-        ORCHESTRATION_GUIDANCE,
-        HOW_TO_WORK_GUIDANCE,
-        runModeGuidance("routine"),
-      ]) {
-        const quoted = JSON.stringify(guidance).slice(1, -1);
+      // 用户 2026-11-20 批准：瘦身默认开。内置的这一路带瘦身后的原文，远端的那一路带共享的原文。
+      for (const [guidance, builtIn] of [
+        [COMPONENT_GUIDANCE, SLIM_ANSWER_FORMAT],
+        [ORCHESTRATION_GUIDANCE, SLIM_SUBAGENTS],
+        [HOW_TO_WORK_GUIDANCE, SLIM_HOW_TO_WORK],
+        [runModeGuidance("routine"), runModeGuidance("routine")],
+      ] as const) {
+        const quoted = JSON.stringify(builtIn).slice(1, -1);
         expect(JSON.stringify(recorder.getRequests()[0]?.body)).toContain(
           quoted,
         );
-        expect(JSON.stringify(endpoint.requests[0])).toContain(quoted);
+        expect(JSON.stringify(endpoint.requests[0])).toContain(
+          JSON.stringify(guidance).slice(1, -1),
+        );
       }
     } finally {
       if (originalBase === undefined) delete process.env.OPENAI_BASE_URL;
@@ -1899,7 +1911,8 @@ describe("when a Bot gives work to subagents", () => {
     expect(sections.indexOf("subagents")).toBe(
       sections.indexOf("answer_format") + 1,
     );
-    expect(sectionOf(prompt, "subagents")).toBe(ORCHESTRATION_GUIDANCE);
+    // 用户 2026-11-20 批准：瘦身默认开，钉瘦身后的原文。
+    expect(sectionOf(prompt, "subagents")).toBe(SLIM_SUBAGENTS);
   });
 
   test("a remote Bot carries it in its standing role", () => {
@@ -1939,9 +1952,10 @@ describe("when a Bot gives work to subagents", () => {
     const configuration = builtInAgentConfiguration(onOurs, model, "key");
     const prompt =
       "prompt" in configuration ? (configuration.prompt ?? "") : "";
-    expect(prompt.split(ORCHESTRATION_GUIDANCE)).toHaveLength(2);
-    expect(prompt.split(COMPONENT_GUIDANCE)).toHaveLength(2);
-    expect(prompt.split(HOW_TO_WORK_GUIDANCE)).toHaveLength(2);
+    // 用户 2026-11-20 批准：瘦身默认开，数的是瘦身后的原文，仍是各说一次。
+    expect(prompt.split(SLIM_SUBAGENTS)).toHaveLength(2);
+    expect(prompt.split(SLIM_ANSWER_FORMAT)).toHaveLength(2);
+    expect(prompt.split(SLIM_HOW_TO_WORK)).toHaveLength(2);
     expect(prompt).toStartWith("<identity>\nYou are Risk, Risk & Compliance.");
     // On OpenBot's runner every tool it holds is OpenBot's, so it is told OpenBot asks for all of them,
     // in this fork's words for its floors (M5).
@@ -3810,5 +3824,51 @@ describe("generativeUiMiddlewares", () => {
   test("the A2UI 0.9 middleware is off either way", () => {
     expect(generativeUiMiddlewares(true).a2ui).toEqual({ enabled: false });
     expect(generativeUiMiddlewares(false).a2ui).toEqual({ enabled: false });
+  });
+});
+
+/*
+ * 关着瘦身（`XIONGBAO_PROMPT_SLIM=off`）：上面几条断言原来钉的共享原文，一字不差地还在。
+ * 用户 2026-11-20 批准瘦身默认开；这里留着旧断言的意图，免得回退开关悄悄失效。
+ */
+describe("with XIONGBAO_PROMPT_SLIM=off the working rules are the shared originals", () => {
+  const model = { provider: "openai" as const, defaultModel: "gpt-5.6-terra" };
+  const promptOff = () => {
+    const saved = process.env.XIONGBAO_PROMPT_SLIM;
+    process.env.XIONGBAO_PROMPT_SLIM = "off";
+    try {
+      const configuration = builtInAgentConfiguration(
+        {
+          id: "general-assistant",
+          name: "General Assistant",
+          type: "built_in",
+          systemPrompt: "Be helpful.",
+        },
+        model,
+        "openai-secret",
+      );
+      return String(
+        "prompt" in configuration ? configuration.prompt : undefined,
+      );
+    } finally {
+      if (saved === undefined) delete process.env.XIONGBAO_PROMPT_SLIM;
+      else process.env.XIONGBAO_PROMPT_SLIM = saved;
+    }
+  };
+
+  test("the sections are the originals, in the same order, each said once", () => {
+    const prompt = promptOff();
+    const sections = sectionsOf(prompt);
+    expect(sections.indexOf("answer_format")).toBe(
+      sections.indexOf("sources") + 1,
+    );
+    expect(sections.indexOf("subagents")).toBe(
+      sections.indexOf("answer_format") + 1,
+    );
+    expect(sectionOf(prompt, "how_to_work")).toBe(HOW_TO_WORK_GUIDANCE);
+    expect(sectionOf(prompt, "sources")).toBe(PROVENANCE_GUIDANCE);
+    expect(sectionOf(prompt, "answer_format")).toBe(COMPONENT_GUIDANCE);
+    expect(sectionOf(prompt, "subagents")).toBe(ORCHESTRATION_GUIDANCE);
+    expect(prompt.split(ORCHESTRATION_GUIDANCE)).toHaveLength(2);
   });
 });

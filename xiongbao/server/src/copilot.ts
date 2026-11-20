@@ -108,6 +108,20 @@ import {
   searchToolsTool,
   withToolSearch,
 } from "./agents/tool-search";
+import {
+  deferredNames,
+  isDeferredTool,
+  isDeploymentTool,
+  promptSlimOn,
+  SLIM_NAMES_LIMIT,
+} from "./agents/prompt-slim";
+import {
+  SLIM_NO_HANDOFF,
+  slimDelegationGuidance,
+  slimMediaGuidance,
+  slimWebResearchGuidance,
+  slimWorkingGuidance,
+} from "./agents/slim-guidance";
 import { sayingWhenUnreachable } from "./agents/unreachable";
 import {
   type DecisionWaits,
@@ -1140,7 +1154,13 @@ export function builtInAgentConfiguration(
    * 一百多篇正文比整段对话都贵，但「有哪些」从来没说过，于是员工能做的事它自己不知道。
    */
   heldSkills?: string,
+  /**
+   * 提示词瘦身（`agents/prompt-slim.ts`）：排在检索后面、却不在 `tools` 里的工具，也就是随这次运行来的电脑
+   * 工具（浏览器的几个动作等）。只用来让 `search_tools` 找得到它们；它们的执行不归这里。
+   */
+  clientWaiting: readonly GrantedTool[] = [],
 ): BuiltInAgentConfiguration {
+  const slim = promptSlimOn();
   const unattended = isUnattended(run.mode);
   if (!apiKey && !planModel && !agentModel) {
     return {
@@ -1180,14 +1200,23 @@ export function builtInAgentConfiguration(
           apiKey ?? undefined,
         ))
       : undefined;
-  const wrapped = isSearchingModel(unwrapped)
-    ? withToolSearch(unwrapped, waiting)
+  const wrapped = isSearchingModel(unwrapped, { v2: slim })
+    ? withToolSearch(unwrapped, waiting, { slim })
     : undefined;
   const searching = wrapped !== undefined;
   const allTools = [
     ...tools,
     ...(searching
-      ? [searchToolsTool(tools.filter((tool) => waiting.has(tool.name)))]
+      ? [
+          searchToolsTool(
+            [
+              ...tools.filter((tool) => waiting.has(tool.name)),
+              ...clientWaiting,
+            ],
+            // 排在后面的只有熊宝自己的一小批工具时，名字直接写进描述；几百个应用工具时不写。
+            { slim: slim && waiting.size <= SLIM_NAMES_LIMIT },
+          ),
+        ]
       : []),
     ...(learnedSkills?.tools.map((tool) => ({
       name: tool.name,
@@ -1211,9 +1240,16 @@ export function builtInAgentConfiguration(
    * 写在那一段里；所以这里不再给「先去浏览器搜百度」那段。不持有时与原来逐字一致。
    */
   const ownWebSearch = holdsOwnWebSearch(tools);
-  const holdings = grantedToolGuidance(tools, connectedVendors, {
-    browser: browserSearch && !ownWebSearch,
-  });
+  /*
+   * 瘦身时，熊宝自己的工具（计划、联网、记忆、跟进、交付……）不再列在「你可以直接访问这些系统」里：它们
+   * 不是外部系统，名字本来就在工具定义里，这一行只是把每个名字多说一遍，还接着一段「别去浏览器里打开
+   * 它们的网站」，对它们没有意义。真正的应用（`mcp__…`）和「部署连着但这位员工没有」的那段照旧。
+   */
+  const holdings = grantedToolGuidance(
+    slim ? tools.filter((tool) => !isDeploymentTool(tool.name)) : tools,
+    connectedVendors,
+    { browser: browserSearch && !ownWebSearch },
+  );
   /*
    * 这次运行实际持有的工具名：授予的，加上界面或无人值守那套随运行提供的。电脑工具只从后者来，所以
    * 「持有 computer_run_command」要在这里看，和浏览器搜索引导一样（期五）。
@@ -1287,7 +1323,7 @@ export function builtInAgentConfiguration(
        * connected-app bullet only for a run that holds a connected-app tool, as
        * `CONNECTOR_APPROVAL_GUIDANCE` is; then upstream's closed test. See `builtInAskingGuidance`.
        */
-      ...workingGuidance({
+      ...(slim ? slimWorkingGuidance : workingGuidance)({
         untrusted: UNTRUSTED_GUIDANCE,
         asking: builtInAskingGuidance({ apps: holdsAppTools(tools) }),
       }),
@@ -1299,7 +1335,7 @@ export function builtInAgentConfiguration(
        */
       ...promptSection(
         "web_research",
-        webResearchGuidance(
+        (slim ? slimWebResearchGuidance : webResearchGuidance)(
           tools.map((tool) => tool.name),
           { browser: browserSearch },
         ),
@@ -1337,12 +1373,14 @@ export function builtInAgentConfiguration(
          * 期七：再多一句「难的子任务可指定 model: "hard"」，同样只给持有 `run_subagent` 的运行。另写在
          * `subagentModelGuidance` 里，不并进上面那段（那段的文字被提示词夹具逐字钉住）。
          */
-        [
-          subagentGuidance(tools.map((tool) => tool.name)),
-          subagentModelGuidance(tools.map((tool) => tool.name)),
-        ]
-          .filter((part) => part !== undefined)
-          .join("\n\n") || undefined,
+        slim
+          ? slimDelegationGuidance(tools.map((tool) => tool.name))
+          : [
+              subagentGuidance(tools.map((tool) => tool.name)),
+              subagentModelGuidance(tools.map((tool) => tool.name)),
+            ]
+              .filter((part) => part !== undefined)
+              .join("\n\n") || undefined,
       ),
       /*
        * 改完就验证：跑项目的测试或构建、读结果、失败就修，最多 3 轮，交付时附上命令和退出码。只给
@@ -1374,7 +1412,7 @@ export function builtInAgentConfiguration(
        */
       ...promptSection(
         "media",
-        mediaGuidance(
+        (slim ? slimMediaGuidance : mediaGuidance)(
           tools.map((tool) => tool.name),
           { computer: Boolean(computerGuidance) && run.usesComputer !== false },
         ),
@@ -1402,7 +1440,9 @@ export function builtInAgentConfiguration(
         "handing_over",
         tools.some((tool) => tool.name === HANDOFF_TOOL)
           ? undefined
-          : NO_HANDOFF_GUIDANCE,
+          : slim
+            ? SLIM_NO_HANDOFF
+            : NO_HANDOFF_GUIDANCE,
       ),
       /*
        * The model it answers on, as the person sees it named, and the date. Near the end: the model
@@ -1467,7 +1507,13 @@ export function builtInAgentConfiguration(
           // Each search is a step of its own, so a run that searches gets two more.
           maxSteps:
             (unattended ? UNATTENDED_STEPS.most : TOOL_STEPS) +
-            (searching ? SEARCH_STEPS : 0),
+            /*
+             * 应用的工具排在后面时，搜一次是一步，所以多给两步。只有熊宝自带的那一小批（瘦身，
+             * `DEFERRED_TOOLS`）排在后面时不加：每一轮的步数预算和没瘦身时一样，不因为开了瘦身就变。
+             */
+            (searching && [...waiting].some((name) => !isDeferredTool(name))
+              ? SEARCH_STEPS
+              : 0),
         }
       : {}),
   };
@@ -2537,13 +2583,37 @@ async function buildAgent(
      * this configuration does not list but the provider is sent anyway: learned skills, the client's
      * tools when the request is known, and the runtime's two.
      */
-    const waiting = planToolSearch(tools, {
+    const searchWaiting = planToolSearch(tools, {
       ...(pinned ? { pinned } : {}),
       alsoSent:
         (learnedSkills?.tools.length ?? 0) +
         (input?.tools.length ?? 0) +
         RUNTIME_STATE_TOOLS.length,
     });
+    /*
+     * 提示词瘦身：熊宝自己那批偶尔才用的工具（`DEFERRED_TOOLS`）也排到检索后面，不管总数超没超过 50。授予的和
+     * 随这次运行来的电脑工具都算；后者不是 `GrantedTool`，给 `search_tools` 做一份只用来检索的描述。
+     */
+    const slimWaiting = deferredNames([
+      ...tools.map((tool) => tool.name),
+      ...(input?.tools.map((tool) => tool.name) ?? []),
+    ]);
+    const waiting: ReadonlySet<string> =
+      slimWaiting.size > 0
+        ? new Set([...searchWaiting, ...slimWaiting])
+        : searchWaiting;
+    const granted = new Set(tools.map((tool) => tool.name));
+    const clientWaiting: GrantedTool[] = (input?.tools ?? [])
+      .filter((tool) => slimWaiting.has(tool.name) && !granted.has(tool.name))
+      .map((tool) => ({
+        name: tool.name,
+        ref: `client/${tool.name}`,
+        description: tool.description ?? "",
+        parameters: parametersFor(
+          (tool.parameters ?? {}) as Record<string, unknown>,
+        ),
+        execute: async () => "",
+      }));
     const configurationFor = (runToolNames?: readonly string[]) =>
       builtInAgentConfiguration(
         agent,
@@ -2580,6 +2650,7 @@ async function buildAgent(
           ...(input ? { usesComputer: input.tools.some(isComputerTool) } : {}),
         },
         heldSkillsFor,
+        clientWaiting,
       );
     const runToolNames = input?.tools.map((tool) => tool.name);
     const configuration = configurationFor(runToolNames);

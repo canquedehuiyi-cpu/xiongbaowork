@@ -8,6 +8,7 @@ import {
 import type { GrantedTool } from "@openbot/toolkit/granted-tool";
 import { z } from "zod";
 import { markUntrusted } from "../untrusted-content";
+import { DEFERRED_TOOLS, slimModelTools } from "./prompt-slim";
 
 /*
  * M3: upstream reads these two from `../plugins/catalogue` (`researchRoleFor`, the web search and
@@ -262,10 +263,10 @@ export function appToolsInOrder(
       if (!said.has(meant)) weight.set(meant, 0.5);
   for (const word of said) weight.set(word, 1);
   const score = new Map(
-    scoreIndexed(text, candidates.map(indexed)).map((match) => [
-      match.tool,
-      match.score,
-    ]),
+    scoreIndexed(
+      text,
+      candidates.map((tool) => indexed(tool)),
+    ).map((match) => [match.tool, match.score]),
   );
   const scoreOf = (tool: GrantedTool) => score.get(tool) ?? 0;
   const actsOn = new Map(
@@ -468,15 +469,20 @@ export function rankTools(
   tools: readonly GrantedTool[],
   limit = SEARCH_RESULTS,
 ): GrantedTool[] {
-  return rankIndexed(query, tools.map(indexed), limit);
+  return rankIndexed(
+    query,
+    tools.map((tool) => indexed(tool)),
+    limit,
+  );
 }
 
-function indexed(tool: GrantedTool): Indexed {
+function indexed(tool: GrantedTool, keywords = ""): Indexed {
   return {
     tool,
     name: new Set(words(tool.name)),
     rest: new Set([
       ...words(tool.description),
+      ...words(keywords),
       ...argumentNames(tool).flatMap(words),
     ]),
   };
@@ -536,12 +542,12 @@ export function systemOf(name: string): string {
 }
 
 /** A description cut to one readable line, between characters and never inside one. */
-function brief(description: string): string {
+function brief(description: string, limit = 200): string {
   const line = description.replace(/\s+/g, " ").trim();
   const characters = Array.from(line);
-  return characters.length <= 200
+  return characters.length <= limit
     ? line
-    : `${characters.slice(0, 199).join("")}…`;
+    : `${characters.slice(0, limit - 1).join("")}…`;
 }
 
 /**
@@ -554,7 +560,17 @@ function brief(description: string): string {
  * The descriptions are the apps' own words, so they arrive in the untrusted envelope every other
  * outside result arrives in. Unwrapped, they would read to the model as this deployment speaking.
  */
-export function searchToolsTool(waiting: readonly GrantedTool[]): GrantedTool {
+export function searchToolsTool(
+  waiting: readonly GrantedTool[],
+  options: {
+    /**
+     * 提示词瘦身（`prompt-slim.ts`）：排在后面的是熊宝自己的一小批工具，不是应用的几百个。名字写进描述里，
+     * 模型凭名字就能取；搜不到时把整张清单给它；检索多认几个关键词（「browser」「image」「remind」）。
+     */
+    slim?: boolean;
+  } = {},
+): GrantedTool {
+  const slim = options.slim === true;
   let index: Indexed[] | undefined;
   const systems = new Map<string, number>();
   for (const tool of waiting)
@@ -565,13 +581,19 @@ export function searchToolsTool(waiting: readonly GrantedTool[]): GrantedTool {
   return {
     name: SEARCH_TOOLS,
     ref: `openbot/${SEARCH_TOOLS}`,
-    description: [
-      "Find tools you hold that are not in front of you yet.",
-      "You hold more tools than fit at once. Describe what you need in a few words, naming the action and",
-      "the thing it acts on (for example 'list orders' or 'create issue'). The tools it returns can be",
-      "called from your next step, by their names. Search again in other words when none of them fits.",
-      "Searching runs nothing.",
-    ].join(" "),
+    description: slim
+      ? [
+          "Load tools you hold that are not listed. Say what you need in a few words ('browser', 'image',",
+          "'remind me'); what it returns is callable from your next step. Not listed:",
+          `${waiting.map((tool) => tool.name).join(", ")}.`,
+        ].join(" ")
+      : [
+          "Find tools you hold that are not in front of you yet.",
+          "You hold more tools than fit at once. Describe what you need in a few words, naming the action and",
+          "the thing it acts on (for example 'list orders' or 'create issue'). The tools it returns can be",
+          "called from your next step, by their names. Search again in other words when none of them fits.",
+          "Searching runs nothing.",
+        ].join(" "),
     parameters: z.object({
       query: z
         .string()
@@ -591,10 +613,18 @@ export function searchToolsTool(waiting: readonly GrantedTool[]): GrantedTool {
         args && typeof args === "object"
           ? (args as { query?: string; limit?: number })
           : {};
-      index ??= waiting.map(indexed);
+      index ??= waiting.map((tool) =>
+        indexed(tool, slim ? DEFERRED_TOOLS[tool.name] : undefined),
+      );
       // Echoed on one line, so a query cannot start a line of its own in the answer.
       const asked = String(query).replace(/\s+/g, " ").trim();
       const found = rankIndexed(asked, index, limit);
+      if (found.length === 0 && slim)
+        return [
+          `No tool matched "${asked}".`,
+          `Tools you can load: ${waiting.map((tool) => tool.name).join(", ")}.`,
+          "Try other words, or a tool's own name.",
+        ].join("\n");
       if (found.length === 0)
         return [
           `No tool matched "${asked}".`,
@@ -606,7 +636,10 @@ export function searchToolsTool(waiting: readonly GrantedTool[]): GrantedTool {
         `You can call them from your next step, for "${asked}". What each one does, in its app's words:`,
         markUntrusted(
           found
-            .map((tool) => `- ${tool.name}: ${brief(tool.description)}`)
+            .map(
+              (tool) =>
+                `- ${tool.name}: ${brief(tool.description, slim ? 120 : 200)}`,
+            )
             .join("\n"),
           "app tool descriptions",
         ),
@@ -728,15 +761,28 @@ export function toolsForStep(
 export function withToolSearch(
   model: SearchingModel,
   waiting: ReadonlySet<string>,
+  options: { slim?: boolean } = {},
 ): SearchingModel {
   // The AI SDK names the Responses API model `openai.responses`, and Chat Completions `openai.chat`.
   const relaxed = model.provider.endsWith(".responses");
-  const narrowed = (options: CallOptions): CallOptions => ({
-    ...options,
-    tools: toolsForStep(options.tools, options.prompt, waiting, relaxed),
-  });
+  const narrowed = (call: CallOptions): CallOptions => {
+    const tools = toolsForStep(call.tools, call.prompt, waiting, relaxed);
+    return {
+      ...call,
+      tools:
+        options.slim && tools
+          ? slimModelTools(tools, { strict: relaxed })
+          : tools,
+    };
+  };
   const wrapped: SearchingModel = {
-    specificationVersion: "v3",
+    /*
+     * 模型自己是哪一版就是哪一版。模型库里指向代理的 DeepSeek 条目（评测里夹着提示词记录器的那种）是
+     * `@ai-sdk/openai-compatible` 的 v2 模型；这里的包装只读、改请求里的工具定义，两版的形状一样，运行时
+     * 自己会把 v2 接上。以前只认 v3，v2 的模型整个绕过了检索，每一步都收到全部工具。
+     */
+    specificationVersion: (model as { specificationVersion: "v3" })
+      .specificationVersion,
     provider: model.provider,
     modelId: model.modelId,
     supportedUrls: model.supportedUrls,
@@ -761,10 +807,18 @@ export function searchesTools(model: unknown): boolean {
 }
 
 /** Whether a resolved model is one this module can wrap. */
-export function isSearchingModel(model: unknown): model is SearchingModel {
+export function isSearchingModel(
+  model: unknown,
+  /** 提示词瘦身开着时才认 v2 模型；不写就只认 v3，和以前一样。 */
+  options: { v2?: boolean } = {},
+): model is SearchingModel {
   return (
     typeof model === "object" &&
     model !== null &&
-    (model as { specificationVersion?: unknown }).specificationVersion === "v3"
+    ((model as { specificationVersion?: string }).specificationVersion ===
+      "v3" ||
+      (options.v2 === true &&
+        (model as { specificationVersion?: string }).specificationVersion ===
+          "v2"))
   );
 }

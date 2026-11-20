@@ -2,14 +2,11 @@ import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { ChatCompletionRequest } from "@copilotkit/aimock";
 import { LLMock } from "@copilotkit/aimock";
-import {
-  COMPONENT_GUIDANCE,
-  PROVENANCE_GUIDANCE,
-} from "@openbot/shared/bot-prompt";
 import { createTurnRunner, type RunnerLike } from "@openbot/toolkit/run-turn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
+import { SLIM_ANSWER_FORMAT, SLIM_SOURCES } from "../src/agents/slim-guidance";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
 import type { ApprovalCandidate } from "../src/approvals/types";
 import { type AuditInitiator, createAuditStore } from "../src/audit";
@@ -844,8 +841,9 @@ describe("a check-in reads what the person connected, through the tools that say
     expect(system).toContain("You are Harness Bot, Planner.");
     expect(system).toContain("Plans the person's week.");
     // Said once: the guidance its standing role ends with is the guidance OpenBot gives every Bot.
-    expect(system.split(PROVENANCE_GUIDANCE)).toHaveLength(2);
-    expect(system.split(COMPONENT_GUIDANCE)).toHaveLength(2);
+    // 用户 2026-11-20 批准：瘦身默认开，数的是瘦身后的来源段，仍是只说一次。
+    expect(system.split(SLIM_SOURCES)).toHaveLength(2);
+    expect(system.split(SLIM_ANSWER_FORMAT)).toHaveLength(2);
     expect(system.split(UNTRUSTED_GUIDANCE)).toHaveLength(2);
     expect(vendorCalls.map((call) => call.tool)).toEqual(["MAIL_FETCH_EMAILS"]);
     const [item] = await itemsOf(harness);

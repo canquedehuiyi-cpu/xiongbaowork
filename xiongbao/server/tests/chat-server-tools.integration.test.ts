@@ -251,6 +251,22 @@ async function storedMessages(threadId: string) {
 const toolNames = (request: ChatCompletionRequest) =>
   (request.tools ?? []).map((tool) => tool.function.name);
 
+/*
+ * 用户 2026-11-20 批准：瘦身默认开。偶尔才用的工具（浏览器的动作、截图……）首步不发定义，排在 `search_tools`
+ * 后面、名字写在它的描述里；员工「持有」的 = 发出去的 + 排在后面的。关着瘦身时两者相同。
+ */
+const heldNames = (request: ChatCompletionRequest) => [
+  ...toolNames(request),
+  ...((
+    (request.tools ?? []).find((tool) => tool.function.name === "search_tools")
+      ?.function.description ?? ""
+  )
+    .split("Not listed:")[1]
+    ?.replace(/\.$/, "")
+    .split(",")
+    .map((name) => name.trim()) ?? []),
+];
+
 beforeAll(async () => {
   llm.on({ predicate: () => true }, async (request) => {
     modelRequests.push(request);
@@ -413,11 +429,12 @@ describe("a chat that hands its computer tools to the server", () => {
   test("offers the Bot the server's list: the browser's own copies of the computer are not sent, its other tools are", async () => {
     await runToEnd(serving, true);
     const offered = toolNames(modelRequests[0] as ChatCompletionRequest);
+    const held = heldNames(modelRequests[0] as ChatCompletionRequest);
     expect(offered).toContain("computer_run_command");
-    expect(offered).toContain("computer_navigate");
+    expect(held).toContain("computer_navigate");
     expect(offered).toContain("show_card");
     // The server holds a screenshot tool the browser never registered.
-    expect(offered).toContain("computer_screenshot");
+    expect(held).toContain("computer_screenshot");
   });
 
   test("leaves out a tool the employee's permissions switch off, even when the browser offers it", async () => {
@@ -425,8 +442,12 @@ describe("a chat that hands its computer tools to the server", () => {
     script = () => ({ content: "no commands for me" });
     await runToEnd(serving, true);
     const offered = toolNames(modelRequests[0] as ChatCompletionRequest);
-    expect(offered).not.toContain("computer_run_command");
-    expect(offered).toContain("computer_navigate");
+    expect(heldNames(modelRequests[0] as ChatCompletionRequest)).not.toContain(
+      "computer_run_command",
+    );
+    expect(heldNames(modelRequests[0] as ChatCompletionRequest)).toContain(
+      "computer_navigate",
+    );
     expect(offered).toContain("show_card");
     expect(ran).toEqual([]);
   });

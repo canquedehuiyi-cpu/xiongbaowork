@@ -310,9 +310,12 @@ describe("a person's question that needs the web", () => {
 
     expect(asked).toHaveLength(3);
     const offered = (asked[0]?.tools ?? []).map((tool) => tool.function.name);
+    // 用户 2026-11-20 批准：瘦身默认开，web_crawl 排到 search_tools 后面（偶尔才用），不在首步的定义里；
+    // 搜索、读网页仍常驻，原断言要的「搜→读来源→引用」这条路不变。
     expect(offered).toEqual(
-      expect.arrayContaining([WEB_SEARCH_TOOL, WEB_FETCH_TOOL, WEB_CRAWL_TOOL]),
+      expect.arrayContaining([WEB_SEARCH_TOOL, WEB_FETCH_TOOL, "search_tools"]),
     );
+    expect(offered).not.toContain(WEB_CRAWL_TOOL);
     expect(JSON.stringify(asked[0]?.messages)).toContain("<web_research>");
     // The search result reached the model, then the page it chose to read.
     expect(JSON.stringify(asked[1]?.messages.at(-1))).toContain(
