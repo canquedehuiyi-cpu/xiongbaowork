@@ -4275,7 +4275,7 @@ await startupLifecycle.run(async (startup) => {
     // 对话侧栏的上下文分类：每次内置运行开始时记一行比例，记在发起的人名下。
     recordContextBreakdownForActor: (actorId) =>
       contextBreakdownRecorder(database, actorId),
-    // 压缩会话：每一轮开始前换上摘要；部署开关 `SIDEBAR_AUTO_COMPACTION`（默认关）打开时先按需自动压缩。
+    // 压缩会话：每一轮开始前换上摘要；自动压缩默认开，`XIONGBAO_AUTO_COMPACTION=off` 关掉（config.ts）；开着时先按需自动压缩。
     compactionForActor: (actorId) =>
       runCompaction({
         ...compactionDeps,
