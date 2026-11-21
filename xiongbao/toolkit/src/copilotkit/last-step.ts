@@ -26,11 +26,11 @@ import { unkeptPromise } from "./unkept-promise";
 export { STEP_LIMIT_EVENT, type StepLimitPayload };
 
 // Use the model contract of the runtime we actually ship, without a second AI SDK version.
-export type Model = Extract<
+type Model = Extract<
   BuiltInAgentClassicConfig["model"],
   { specificationVersion: "v3" }
 >;
-export type CallOptions = Parameters<Model["doStream"]>[0];
+type CallOptions = Parameters<Model["doStream"]>[0];
 /** What a model is sent on one step: the conversation, in the runtime's own model contract. */
 export type Prompt = CallOptions["prompt"];
 type StreamResult = Awaited<ReturnType<Model["doStream"]>>;
@@ -190,7 +190,7 @@ function callsSince(prompt: Prompt, before: number): MadeCall[] {
 }
 
 /** A one-turn message: in this call's prompt only, never in the conversation. */
-export function told(prompt: Prompt, text: string): Prompt {
+function told(prompt: Prompt, text: string): Prompt {
   return [...prompt, { role: "user", content: [{ type: "text", text }] }];
 }
 
@@ -687,7 +687,7 @@ function addUsage(a: Usage, b: Usage): Usage {
  * 规格 v2 的模型：提示和流的形状和 v3 几乎一样，只有结束原因（一个词）和用量（平的数字）不同。折叠只改提示，
  * 最后一步的收尾和提醒也读这两处，都按各自的版本读，v2 保持 v2。
  */
-export function isOlderModel(model: unknown): boolean {
+function isOlderModel(model: unknown): boolean {
   return (
     typeof model === "object" &&
     model !== null &&
@@ -695,7 +695,7 @@ export function isOlderModel(model: unknown): boolean {
   );
 }
 
-export function isModel(model: unknown): model is Model {
+function isModel(model: unknown): model is Model {
   return (
     typeof model === "object" &&
     model !== null &&
@@ -720,7 +720,7 @@ export type FoldingOptions = {
  * 取值函数）都从它那里读，只有这两个调用先折叠再交给它；换成 v3 的壳，运行时就不会再把它当 v2 转换，流的格式对不上。
  * 两个调用用赋值挂上（可写、可配置）：运行时把 v2 模型转成 v3 时会再套一层代理，不可配置的属性它取不出来。
  */
-export function withFoldedCalls(
+function withFoldedCalls(
   inner: Model,
   folded: (asked: CallOptions) => Promise<CallOptions>,
 ): Model {
@@ -777,56 +777,6 @@ export function foldingEarlyResults(
         supportedUrls: inner.supportedUrls,
         doGenerate: async (asked) => inner.doGenerate(await folded(asked)),
         doStream: async (asked) => inner.doStream(await folded(asked)),
-      };
-  return { ...configuration, model: wrapped };
-}
-
-/**
- * Whether this call is a turn's first: nothing the model said (an assistant message) comes after the
- * person's latest message. A prompt with no person's message is not one.
- */
-export function isFirstStepOfTurn(prompt: Prompt): boolean {
-  const last = prompt.map((message) => message.role).lastIndexOf("user");
-  if (last < 0) return false;
-  return prompt
-    .slice(last + 1)
-    .every((message) => message.role !== "assistant");
-}
-
-/**
- * 只在本轮第一步给的上下文（员工自己写的技能的整段正文）。
- *
- * 放在这一步提示的最末尾，作为一条追加的消息，而不是改系统提示：系统提示和历史每一步字节相同，第二步起去掉这条
- * 末尾消息，前缀（系统提示、历史、人的话）依然整段命中提供方的缓存；若是在系统提示里换文字，每一步的缓存都会从系统提示
- * 处断掉。第二步起模型看到的是系统提示里那一行指引。工厂式配置、解析不了的、别的规格的模型原样返回。
- */
-export function withFirstStepContext(
-  configuration: BuiltInAgentConfiguration,
-  text: string | undefined,
-): BuiltInAgentConfiguration {
-  if (!text || "factory" in configuration) return configuration;
-  let model: unknown;
-  try {
-    model = resolveModel(configuration.model, configuration.apiKey);
-  } catch {
-    return configuration;
-  }
-  const older = isOlderModel(model);
-  if (!older && !isModel(model)) return configuration;
-  const inner = model as Model;
-  const given = async (asked: CallOptions): Promise<CallOptions> =>
-    isFirstStepOfTurn(asked.prompt)
-      ? { ...asked, prompt: told(asked.prompt, text) }
-      : asked;
-  const wrapped: Model = older
-    ? withFoldedCalls(inner, given)
-    : {
-        specificationVersion: "v3",
-        provider: inner.provider,
-        modelId: inner.modelId,
-        supportedUrls: inner.supportedUrls,
-        doGenerate: async (asked) => inner.doGenerate(await given(asked)),
-        doStream: async (asked) => inner.doStream(await given(asked)),
       };
   return { ...configuration, model: wrapped };
 }

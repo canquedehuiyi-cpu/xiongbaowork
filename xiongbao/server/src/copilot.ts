@@ -2251,7 +2251,7 @@ async function buildAgent(
    * from the same grants narrowing reads, fresh per request. See `picked-skill.ts`.
    */
   const pickedSkillFor = (input: RunAgentInput) =>
-    skillGuidanceFor(input, skills, { boardCard });
+    skillGuidanceFor(input, skills);
   /*
    * 它手上握着哪些技能，作为索引交给模型。不带 input：同一批 grants 每次都是同一段字节，落在
    * prompt 的稳定前缀里。见 `heldSkillsGuidance`。
@@ -2595,8 +2595,6 @@ async function buildAgent(
     pickedSkill?: string,
     /** 大型编码任务的建议要用的事实，只在有消息命中规则时才查。见 `agents/heavy-task.ts`。 */
     heavyFacts?: HeavyTaskFacts,
-    /** The matched skills' full text, given on this turn's first model call only. See `picked-skill.ts`. */
-    firstStepSkill?: string,
   ) => {
     /*
      * What waits behind a search, decided where the run's tools are final. The count includes what
@@ -2721,14 +2719,10 @@ async function buildAgent(
        */
       ...(pickedSkill
         ? (() => {
-            // The check line lives in the body, which the first step carries when it is split out.
-            const skillChecks = fastPathChecksIn(
-              [pickedSkill, firstStepSkill].filter(Boolean).join("\n"),
-            );
+            const skillChecks = fastPathChecksIn(pickedSkill);
             return skillChecks.length > 0 ? { skillChecks } : {};
           })()
         : {}),
-      ...(firstStepSkill ? { firstStepContext: firstStepSkill } : {}),
       /*
        * 交付被接受之后这一轮直接结束，不再为一句收尾的话多调一次模型（`tasks/delivery-end.ts`）；
        * 计划没做完、改完没校验时提醒照旧。部署开关 `XIONGBAO_DELIVER_ENDS_TURN=off` 回到原样。
@@ -2883,15 +2877,7 @@ async function buildAgent(
           timeZone,
           runAgentModel,
         );
-      /*
-       * The matched skill's whole guidance (fast path included) stays in the system prompt for every
-       * model call of the run. Putting the body on the first call only (#763) left the later calls
-       * without the fast path: the step-one message is not kept in history, and in the eval the employee
-       * with a skill explored from scratch (42 steps against 18 for one without). Same bytes every step,
-       * so the prompt prefix still hits the provider's cache.
-       */
       const pickedSkill = pickedSkillFor(input);
-      const firstStepSkill: string | undefined = undefined;
       // 重活分流（期 4）：先按规则看消息，有命中才查难任务模型和固定的 Codex、Claude Code 员工。
       const heavyFacts = await loadHeavyTaskFacts(agent.id, input.messages);
       // Fetched per run, so a skill published a moment ago reaches the next run (upstream 0046).
@@ -2958,7 +2944,6 @@ async function buildAgent(
             runAgentModel,
             pickedSkill,
             heavyFacts,
-            firstStepSkill,
           );
     },
   );

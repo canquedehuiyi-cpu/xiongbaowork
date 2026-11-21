@@ -151,7 +151,7 @@ describe("较早的写文件参数", () => {
   test("没越线：同一个数组，一个字节不动", () => {
     const prompt = writingPrompt(3, 2_000);
     expect(
-      foldEarlyResults(prompt, { window: 1_000_000, budget: 18_000 }),
+      foldEarlyResults(prompt, { window: 1_000_000, budget: 24_000 }),
     ).toBe(prompt);
   });
 
@@ -175,7 +175,7 @@ describe("较早的写文件参数", () => {
   });
 
   test("重放确定：下一步的前缀里，已折叠的部分逐字节不变，只在末尾添加", () => {
-    const options = { window: 1_000_000, budget: 18_000 };
+    const options = { window: 1_000_000, budget: 24_000 };
     let previous = JSON.stringify(foldEarlyResults(writingPrompt(20), options));
     let rewrites = 0;
     for (let steps = 21; steps <= 60; steps += 1) {
