@@ -125,6 +125,46 @@ export function deepSeekRequestBody(body: Body, deploymentOff = false): Body {
   };
 }
 
+/**
+ * 名字是 DeepSeek 的模型（`deepseek-v4-flash`、`deepseek-ai/DeepSeek-V3` 这样），不论在哪个地址上。
+ *
+ * 经代理、OpenAI 兼容的转发（评测的计量代理、自建网关、第三方托管）接的 DeepSeek 模型，不走
+ * {@link deepSeekLanguageModel}，可思考模式的规则一样：调过工具的那步没带 `reasoning_content`，就回 400
+ * 「The `reasoning_content` in the thinking mode must be passed back to the API」，这一轮就此出错。
+ */
+export function isDeepSeekModelName(modelName: string): boolean {
+  return /deepseek/i.test(modelName);
+}
+
+/**
+ * 只守那一条规则的请求体：调过工具的 assistant 消息必有 `reasoning_content`，没有就补空字符串（DeepSeek 只认
+ * 字段在不在）。和 {@link deepSeekRequestBody} 不同，不写 `thinking`、不去掉别的思考：不在 DeepSeek 自己的地址上，
+ * 思考开不开、历史怎么留，按那边的默认。
+ */
+export function withToolTurnReasoning(body: Body): Body {
+  if (!Array.isArray(body.messages)) return body;
+  const messages = body.messages as ChatMessage[];
+  if (
+    !messages.some(
+      (message) =>
+        message?.role === "assistant" &&
+        hasToolCalls(message) &&
+        typeof message.reasoning_content !== "string",
+    )
+  )
+    return body;
+  return {
+    ...body,
+    messages: messages.map((message) =>
+      message?.role === "assistant" &&
+      hasToolCalls(message) &&
+      typeof message.reasoning_content !== "string"
+        ? { ...message, reasoning_content: "" }
+        : message,
+    ),
+  };
+}
+
 type CompatibleModel = ReturnType<
   ReturnType<typeof createOpenAICompatible>["chatModel"]
 >;
