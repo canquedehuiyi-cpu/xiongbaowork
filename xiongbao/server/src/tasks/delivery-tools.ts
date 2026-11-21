@@ -381,16 +381,17 @@ export function deliveryTools(options: {
         const run = currentRun();
         if (!run) return OUTSIDE_A_RUN;
         const card = await cardOf(run);
-        if (!card?.tracked)
+        if (!card)
           return `${REFUSAL_MARKER} 这一轮没有接下的活：先用 accept_task 接下，再交付。`;
         if (card.status === "needs_action")
           return `${REFUSAL_MARKER} 这件活还在等对方处理（审批或提问），处理完再交。`;
         /*
          * 还没接下就交付：按卡片上已有的验收标准替它接下（不报预计时间，和 accept_task 不填 due_at 一样），
-         * 再照常走证据门。证据门挡回时接下已经生效，下一次交付直接走证据门。
+         * 再照常走证据门。证据门挡回时接下已经生效，下一次交付直接走证据门。和 accept_task 认同一张卡：
+         * 这一轮的卡还没被跟（看板派来的活在接下前就是这样）或跟了还没接下，都接这张。
          */
         let autoAccepted = false;
-        if (!card.acceptedAt) {
+        if (!(card.tracked && card.acceptedAt)) {
           const { accepted } = await takeOn(run, card.id, {
             dueAt: null,
             ...(card.criteria ? { criteria: card.criteria } : {}),

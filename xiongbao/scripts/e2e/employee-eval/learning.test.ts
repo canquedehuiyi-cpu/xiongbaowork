@@ -133,6 +133,25 @@ test("a refused or bounced call also prints the first 120 characters of its resu
   expect(lines[2]).toBe(" 3. deliver_task [参数 2 字 / 结果 18 字] {}");
 });
 
+test("the server's own refusal marker and an escaped bounced answer are printed too", () => {
+  const escaped = JSON.stringify(
+    JSON.stringify({ bounced: true, reason: "缺 A" }),
+  );
+  const lines = callTrace(
+    [
+      {
+        name: "deliver_task",
+        args: "{}",
+        result: "Refused. 这一轮没有接下的活",
+      },
+      { name: "deliver_task", args: "{}", result: escaped },
+    ],
+    8,
+  );
+  expect(lines[0]?.endsWith(" → Refused. 这一轮没有接下的活")).toBe(true);
+  expect(lines[1]?.endsWith(` → ${escaped.slice(0, 120)}`)).toBe(true);
+});
+
 function clock() {
   let at = 0;
   return {

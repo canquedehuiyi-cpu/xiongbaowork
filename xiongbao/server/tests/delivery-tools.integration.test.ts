@@ -1110,6 +1110,35 @@ describe("deliver_task and the evidence gate", () => {
     expect(custom.map((event) => event.name)).toContain("delivery.accepted");
   });
 
+  test("a card this round has not followed yet (a board card before 接下) is taken on by deliver_task too", async () => {
+    const tenantId = await tenant("autoaccept-untracked");
+    const agentId = `agent-${suite}-autoaccept-untracked`;
+    const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+    const round = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "把报销单核一遍交给我",
+      work: async (run) => {
+        await run.call("deliver_task", {
+          items: [{ kind: "note", ref: "报销单已逐张核对，无异常。" }],
+          checks: ["逐张对过金额和日期"],
+        });
+      },
+    });
+    const answer = parsed(round.results[0] ?? "{}");
+    expect(answer.delivered).toBe(true);
+    expect(answer.autoAccepted).toBe(true);
+    const [card] = await cardsOf(tenantId, agentId);
+    if (!card) throw new Error("no card");
+    await roundLogged(tenantId, card.id, round.runId);
+    const row = await cardRow(tenantId, card.id);
+    expect(row?.acceptedAt).toBeInstanceOf(Date);
+    const kinds = (await eventsOf(tenantId, card.id)).map((line) => line.kind);
+    expect(kinds).toContain("accepted");
+    expect(kinds).toContain("delivered");
+  });
+
   test("no items → bounced", async () => {
     const card = await acceptedCard("noitems");
     const { runId, result } = await deliverOnThread(card, {
