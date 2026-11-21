@@ -205,7 +205,7 @@ jobs:
     environment: model-e2e
     # 五道题、每题墙钟上限 20 分钟；paths 选两条路径时是两遍，再加起服务、装浏览器的时间（GitHub 单个作业上限 6 小时，这里按 3 小时）。
     # 重复类的题多对（repeat_pairs）：只点名 repeat-pitfall、四对、一条路径，典型约 55 分钟（有坑可学每对三次：第一次约 6 分钟、
-    # 第二次和同种子对照各约 3 分钟、复盘最多等 90 秒，每对约 13 分钟），最坏每次都跑满 20 分钟会超过上限；所以作业开头记截止时间
+    # 第二次和同种子对照各约 3 分钟、复盘最多等 150 秒，每对约 14 分钟），最坏每次都跑满 20 分钟会超过上限；所以作业开头记截止时间
     # （165 分钟），脚本来不及时把剩下的对跳过，不让作业超时丢掉全部结果。
     timeout-minutes: 180
     services:
@@ -232,10 +232,34 @@ jobs:
           bun-version: 1.4.4
       # This job holds a real key: no dependency lifecycle script runs in it.
       - run: bun install --frozen-lockfile --ignore-scripts
+      # 浏览器装在 /opt（不在 runner 的 home 里）：下面隔离员工电脑以后，员工用户读得到它。
       - name: Install the computer from its own frozen lockfile, and its browser
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
         run: |
+          sudo mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
+          sudo chown "$(id -u):$(id -g)" "$PLAYWRIGHT_BROWSERS_PATH"
           cd agent-computer && bun install --frozen-lockfile --ignore-scripts
           bun x playwright install --with-deps chromium
+      # 员工的电脑读不到评测仓库：员工的命令以专用系统用户 xbeval 运行（评测脚本 isolation.ts 以 EVAL_EMPLOYEE_USER 起电脑），
+      # runner 的 home（检出目录、临时目录都在里面）对它关闭；电脑的运行副本放 /opt/xbeval（它 import ../../shared，
+      # 依赖 zod 从 agent-computer/node_modules 找）；bun 等工具须在该用户也读得到的位置。评测开始时脚本还会以员工身份自检，
+      # 日志里「员工的命令读不到评测仓库（自检通过）」就是隔离生效，「未隔离」就是没生效（不让评测失败）。
+      - name: Isolate the employee's computer from the checkout
+        run: |
+          set -euo pipefail
+          sudo useradd --create-home --shell /bin/bash xbeval
+          sudo chmod o-rwx "$HOME"
+          sudo mkdir -p /opt/xbeval
+          sudo cp -a agent-computer shared /opt/xbeval/
+          sudo ln -s agent-computer/node_modules /opt/xbeval/node_modules
+          sudo chmod -R a+rX /opt/xbeval
+          if [ -d /opt/ms-playwright ]; then sudo chmod -R a+rX /opt/ms-playwright; fi
+          bun_path="$(command -v bun)"
+          case "$bun_path" in "$HOME"/*) sudo install -m 0755 "$bun_path" /usr/local/bin/bun ;; esac
+          for tool in bun python3 node; do
+            sudo -n -u xbeval env "PATH=$PATH" "$tool" --version
+          done
       - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
         run: |
           DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/openbot_employee_eval bun run --cwd server scripts/migrate.ts
@@ -267,6 +291,10 @@ jobs:
           EVAL_SEED: ${{ github.run_id }}-${{ github.run_attempt }}
           EVAL_PATHS: ${{ inputs.paths }}
           EVAL_OUT: ${{ runner.temp }}/employee-eval
+          # 员工的电脑以专用用户运行、读不到评测仓库（上面的隔离步骤；评测脚本 isolation.ts）。
+          EVAL_EMPLOYEE_USER: xbeval
+          EVAL_COMPUTER_DIR: /opt/xbeval/agent-computer
+          PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
           E2E_DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/openbot_employee_eval
           E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:e2e-role-writer@127.0.0.1:5432/openbot_employee_eval
         run: |
@@ -400,6 +428,25 @@ jobs:
       - run: bun install --frozen-lockfile --ignore-scripts
       - name: Install the computer from its own frozen lockfile (no browser, since no scenario browses)
         run: cd agent-computer && bun install --frozen-lockfile --ignore-scripts
+      # 员工的电脑读不到评测仓库：员工的命令以专用系统用户 xbeval 运行（评测脚本 isolation.ts 以 EVAL_EMPLOYEE_USER 起电脑），
+      # runner 的 home（检出目录、临时目录都在里面）对它关闭；电脑的运行副本放 /opt/xbeval（它 import ../../shared，
+      # 依赖 zod 从 agent-computer/node_modules 找）；bun 等工具须在该用户也读得到的位置。评测开始时脚本还会以员工身份自检，
+      # 日志里「员工的命令读不到评测仓库（自检通过）」就是隔离生效，「未隔离」就是没生效（不让评测失败）。
+      - name: Isolate the employee's computer from the checkout
+        run: |
+          set -euo pipefail
+          sudo useradd --create-home --shell /bin/bash xbeval
+          sudo chmod o-rwx "$HOME"
+          sudo mkdir -p /opt/xbeval
+          sudo cp -a agent-computer shared /opt/xbeval/
+          sudo ln -s agent-computer/node_modules /opt/xbeval/node_modules
+          sudo chmod -R a+rX /opt/xbeval
+          if [ -d /opt/ms-playwright ]; then sudo chmod -R a+rX /opt/ms-playwright; fi
+          bun_path="$(command -v bun)"
+          case "$bun_path" in "$HOME"/*) sudo install -m 0755 "$bun_path" /usr/local/bin/bun ;; esac
+          for tool in bun python3 node; do
+            sudo -n -u xbeval env "PATH=$PATH" "$tool" --version
+          done
       - name: Migrate the job's own database and set the runtime role passwords (ci.yml e2e-wakerflow recipe)
         run: |
           DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/openbot_capability_smoke bun run --cwd server scripts/migrate.ts
@@ -418,6 +465,9 @@ jobs:
           EVAL_SUITE: smoke
           EVAL_TASKS: ${{ inputs.scenarios }}
           EVAL_OUT: ${{ runner.temp }}/capability-smoke
+          # 同对标评测：员工的电脑以专用用户运行、读不到评测仓库。
+          EVAL_EMPLOYEE_USER: xbeval
+          EVAL_COMPUTER_DIR: /opt/xbeval/agent-computer
           E2E_DATABASE_URL: postgres://openbot_app:e2e-app@127.0.0.1:5432/openbot_capability_smoke
           E2E_ROLE_WRITER_DATABASE_URL: postgres://openbot_role_writer:e2e-role-writer@127.0.0.1:5432/openbot_capability_smoke
         run: bun scripts/e2e/employee-eval/run-xiongbao.ts

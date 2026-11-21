@@ -8,8 +8,11 @@
 
 import type { BackgroundCalls, RunLearning } from "./records";
 
-/** 第一次结束后最多等复盘多久；到了就照常开始第二次。 */
-export const RETRO_WAIT_MS = 90_000;
+/**
+ * 第一次结束后最多等复盘多久；到了就照常开始第二次。150 秒 = 复盘模型调用超时（120 秒，服务器 `retrospect.ts`）+ 30 秒余量，
+ * 不然复盘还没出结论第二次就开始了。
+ */
+export const RETRO_WAIT_MS = 150_000;
 
 /** 某一刻这位员工的自写技能（命令名 -> 名字、使用次数）和形成的记忆条数。 */
 export type LearnedState = {
