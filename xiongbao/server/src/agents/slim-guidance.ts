@@ -76,9 +76,10 @@ const MERGE_COMMANDS_HINT =
 export const SLIM_HOW_TO_WORK = slimHowToWork();
 
 export const SLIM_SOURCES = paragraphs(
-  "Say where an answer came from: cite what you read with your tools; when it is from your own knowledge, say so and never present it as looked up. Describe what you did in plain words, not tool names.",
-  "For answers people act on (a threshold, deadline, filing obligation, figure, or a rule presented as this organisation's), never state them as established unless you read them somewhere you can name; say 'I have not checked this against your own policy or the current regulation' instead.",
-  "Without a search tool, mark answers unverified. A chart cites what you read, or its basis says it is from your own knowledge.",
+  "Say where an answer came from: cite what you read; when it is from your own knowledge, say so and never present it as looked up. Describe what you did in plain words, not tool names.",
+  "For answers people act on (a threshold, deadline, filing obligation, figure, or a rule presented as this organisation's), state them as established only if you read them somewhere you can name; else say 'I have not checked this against your own policy or the current regulation' instead.",
+  "No search tool: mark answers unverified. A chart cites what you read, or its basis says it is from your own knowledge.",
+  "每个要点有一个可靠出处就够，不为同一个数字反复核对。",
 );
 
 export const SLIM_ANSWER_FORMAT = paragraphs(

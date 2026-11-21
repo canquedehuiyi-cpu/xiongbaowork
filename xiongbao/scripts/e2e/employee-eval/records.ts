@@ -5,6 +5,7 @@ import { dirname } from "node:path";
 import type { Bookkeeping } from "./bookkeeping";
 import { type Check, REPEAT_TASK, TASK_TITLES, type TaskName } from "./lib";
 import type { Capabilities, PromptChars } from "./metrics";
+import { addWallSplits, type WallSplit } from "./wall-split";
 
 export type Side = "xiongbao" | "codex";
 export type Suite = "tasks" | "smoke";
@@ -129,6 +130,11 @@ export type EvalRecord = {
    * Codex 侧没有。见 `bookkeeping.ts`。
    */
   bookkeeping?: Bookkeeping;
+  /**
+   * 墙钟拆分（熊宝侧）：模型时间 / 工具时间 / 其余，毫秒；某项拿不到可靠时间戳时是 null（报告里写「—」）。口径见
+   * `wall-split.ts`。旧结果文件没有这一项；Codex 侧没有。
+   */
+  wallSplit?: WallSplit;
   /** 这道题走的执行路径；旧结果文件没有，按看板路径算。Codex 侧没有。 */
   path?: EvalPath;
   /** 停在时间或段数上限的轮数（`turn-limit` / `step-limit` 事件）。旧结果文件没有这一项。 */
@@ -291,6 +297,9 @@ export function combineRepeat(
         : Boolean(first.silentStop || second.silentStop),
     nudges: first.nudges + second.nudges,
     tools,
+    ...(first.wallSplit && second.wallSplit
+      ? { wallSplit: addWallSplits(first.wallSplit, second.wallSplit) }
+      : {}),
     ...(first.bookkeeping && second.bookkeeping
       ? {
           bookkeeping: {

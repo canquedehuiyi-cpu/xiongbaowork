@@ -20,6 +20,7 @@
  * （这一次写没有对话可以问，要问的写入直接放弃）。写不进去（没有电脑、策略不让写、项目只读）就退回截断，
  * 并说明没存成，员工知道这份输出不完整，可以换个更窄的命令。
  */
+import { testsPassedHintOn } from "./agents/step-hints";
 import { outsideApprovalContext } from "./approvals/types";
 import type { ComputerSeat } from "./computer/computer-key";
 import type { ActionActor, ComputerGateway } from "./computer/gateway";
@@ -312,8 +313,55 @@ const lastLines = (text: string, count: number) => {
   };
 };
 
-/** `computer_run_command` 的结果里，超过阈值的输出换成头尾，并说明完整内容在哪儿。 */
+const TEST_COMMAND =
+  /\bbun\s+test\b|\bnpm\s+test\b|\bnpm\s+run\s+test|\bpnpm\s+test\b|\byarn\s+test\b|\bpytest\b|\bgo\s+test\b|\bcargo\s+test\b|\bvitest\b|\bjest\b/;
+/** 各测试框架的通过摘要：bun `N pass`、pytest/jest/vitest `N passed`、go `ok`/`PASS`、cargo `test result: ok`。 */
+const TEST_PASS_SIGNAL =
+  /^\s*\d+ pass\b|\b\d+ passed\b|^ok\s|^PASS$|test result: ok\b/m;
+/** 任何一种失败的迹象（失败数非 0、FAIL、cargo FAILED、pytest 的 error）。 */
+const TEST_FAIL_SIGNAL =
+  /\b[1-9]\d* (?:fail|failed|failures?|errors?)\b|\bFAIL(?:ED)?\b|test result: FAILED/;
+
+const ANSI_COLOUR = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g");
+
+/** 收尾提示，给模型看。 */
+export const TESTS_PASSED_HINT =
+  "（测试全部通过：没有别的要求就交付，不另写对照脚本，不逐个重读改过的文件。）";
+
+/** 常见测试命令、退出码 0、输出里认得出「失败数为 0」的通过摘要时，给收尾提示；认不准就是 undefined。 */
+export function testsPassedHint(
+  result: { command: string; exitCode: number; stdout: string; stderr: string },
+  env: Env = process.env,
+): string | undefined {
+  if (!testsPassedHintOn(env)) return undefined;
+  if (result.exitCode !== 0 || !TEST_COMMAND.test(result.command)) {
+    return undefined;
+  }
+  const plain = `${result.stdout}\n${result.stderr}`.replace(ANSI_COLOUR, "");
+  if (!TEST_PASS_SIGNAL.test(plain)) return undefined;
+  if (TEST_FAIL_SIGNAL.test(plain)) return undefined;
+  return TESTS_PASSED_HINT;
+}
+
+/** `computer_run_command` 的结果：超过阈值的输出换成头尾，测试全部通过时末尾带收尾提示（`hint`）。 */
 export async function offloadCommandResult<
+  T extends {
+    command: string;
+    exitCode: number;
+    stdout: string;
+    stderr: string;
+  },
+>(
+  result: T,
+  context: { id: string; sink?: OutputSink },
+): Promise<T & { outputFile?: string; outputNote?: string; hint?: string }> {
+  const hint = testsPassedHint(result);
+  const shrunk = await shrinkCommandResult(result, context);
+  return hint ? { ...shrunk, hint } : shrunk;
+}
+
+/** `computer_run_command` 的结果里，超过阈值的输出换成头尾，并说明完整内容在哪儿。 */
+async function shrinkCommandResult<
   T extends {
     command: string;
     exitCode: number;

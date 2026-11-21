@@ -194,6 +194,7 @@ import {
   type SmokeScenario,
   selectSmoke,
 } from "./smoke";
+import { modelSpans, toolSpans, wallSplit, wallSplitLine } from "./wall-split";
 import {
   sealReceived,
   startWebformSite,
@@ -1551,6 +1552,13 @@ async function runWork(work: Work): Promise<EvalRecord> {
       `   learning: +${learning.newSkills.length} skills${learning.heldSkills ? ` (+${learning.heldSkills.length} held for review)` : ""}, +${learning.newMemories} memories, used ${learning.usedSkills.length}; retrospective ${retro.ended}${retro.outcome ? ` ${retro.outcome}` : ""} after ${(retro.waitedMs / 1000).toFixed(0)} s`,
     );
   }
+  // 墙钟拆分：模型时间读 model_token_calls 的起止；工具时间读运行事件的时间戳（事件没存全时不给）。
+  const toolTimes = eventsLost ? undefined : toolSpans(events);
+  const split = wallSplit({
+    wallMs,
+    model: modelSpans(tokens),
+    tools: toolTimes?.spans,
+  });
   const backgroundCalls = backgroundOf(
     (await tokenRows(agentId, since)).filter((row) => row.runId === "unscoped"),
   );
@@ -1563,6 +1571,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     timedOut,
     // 步数 = 模型调用次数（model_token_calls 的行数，每一步一次调用）；工具调用次数另记。
     steps: tokens.length,
+    wallSplit: split,
     ...callSeries(tokens, runIds),
     // 记账步：接活、计划、交付各自单独占的步，和交付之后那一步（读运行事件；事件没存全时不记）。
     ...(eventsLost
@@ -1606,6 +1615,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
   console.log(
     `   ${judged.skipped ? "N/A " : record.passed ? "PASS" : "FAIL"} ${(wallMs / 1000).toFixed(1)} s, model calls ${record.modelCalls} (per round ${perRound.join("/")}), tokens ${record.tokens?.total ?? "?"} (cached input ${cachedInput ?? "?"}), nudges ${nudges}${timedOut ? ", timed out" : ""}`,
   );
+  console.log(`   ${wallSplitLine(split, wallMs, record.steps)}`);
   for (const item of record.checks)
     console.log(`     ${item.ok ? "ok " : "NO "} ${item.name} ${item.detail}`);
   return record;

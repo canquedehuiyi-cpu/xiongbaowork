@@ -22,6 +22,7 @@
 export const ACCEPT_WITH_READS_ENV = "XIONGBAO_ACCEPT_WITH_READS";
 export const PLAN_WITH_ACTION_ENV = "XIONGBAO_PLAN_WITH_ACTION";
 export const MERGE_COMMANDS_ENV = "XIONGBAO_MERGE_COMMANDS";
+export const TESTS_PASSED_HINT_ENV = "XIONGBAO_TESTS_PASSED_HINT";
 
 type Env = Record<string, string | undefined>;
 
@@ -37,6 +38,11 @@ export function planWithActionOn(env: Env = process.env): boolean {
 
 export function mergeCommandsOn(env: Env = process.env): boolean {
   return on(env, MERGE_COMMANDS_ENV);
+}
+
+/** 测试命令全部通过时，命令结果末尾提示收尾（`tool-output.ts`）；默认开，写 `off` 关。 */
+export function testsPassedHintOn(env: Env = process.env): boolean {
+  return on(env, TESTS_PASSED_HINT_ENV);
 }
 
 /** 接下活之后第一件事常常是读：回执不单独占一步。 */
