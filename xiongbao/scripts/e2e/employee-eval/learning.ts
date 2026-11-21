@@ -98,6 +98,8 @@ export type RetroLine = {
   cardId?: string;
   /** 转待审时同一轮另记的 `retrospect-held` 行里的原因（规则的名字和认出的网址）；没转待审时没有。 */
   heldReason?: string;
+  /** 复盘出错时同一轮另记的 `retrospect-error` 行里的错误类型（只有类型，没有内容）；没出错时没有。 */
+  error?: string;
   runId: string;
 };
 
@@ -109,7 +111,22 @@ export function retroLinesOf(
   const wanted = new Set(runIds);
   const lines: RetroLine[] = [];
   const heldReasons = new Map<string, string>();
+  const errors = new Map<string, string>();
   for (const raw of log.split("\n")) {
+    if (raw.includes('"type":"retrospect-error"')) {
+      try {
+        const parsed = JSON.parse(raw.slice(raw.indexOf("{"))) as {
+          error?: unknown;
+          context?: { runId?: unknown };
+        };
+        const runId = String(parsed.context?.runId ?? "");
+        if (wanted.has(runId) && typeof parsed.error === "string")
+          errors.set(runId, parsed.error);
+      } catch {
+        // 读不懂就跳过。
+      }
+      continue;
+    }
     if (raw.includes('"type":"retrospect-held"')) {
       try {
         const parsed = JSON.parse(raw.slice(raw.indexOf("{"))) as Record<
@@ -150,7 +167,13 @@ export function retroLinesOf(
   return lines.map((line) => {
     const heldReason =
       line.outcome === "held" ? heldReasons.get(line.runId) : undefined;
-    return heldReason ? { ...line, heldReason } : line;
+    const error =
+      line.outcome === "skipped" ? errors.get(line.runId) : undefined;
+    return {
+      ...line,
+      ...(heldReason ? { heldReason } : {}),
+      ...(error ? { error } : {}),
+    };
   });
 }
 
@@ -206,6 +229,8 @@ export async function waitForRetro(options: {
     ...(line.trigger ? { trigger: line.trigger } : {}),
     ...(line.steps === undefined ? {} : { steps: line.steps }),
     ...(line.heldReason ? { heldReason: line.heldReason } : {}),
+    ...(line.reason ? { reason: line.reason } : {}),
+    ...(line.error ? { error: line.error } : {}),
   });
   for (;;) {
     const seen = await lines();

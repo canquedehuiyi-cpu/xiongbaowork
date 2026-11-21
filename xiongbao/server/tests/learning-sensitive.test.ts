@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  externalAddressIn,
   findOverreach,
   findSensitive,
   hasUrl,
@@ -166,7 +167,19 @@ describe("网址和域名", () => {
     "看 build.log、Cargo.lock、config.toml、index.html、style.css",
     "导出 report.pdf、table.xlsx、memo.docx、chart.png、photo.jpg",
     "用 Node.js 跑 app.ts 和 main.js，e.g. 先装依赖",
+    'python3 -c \'import subprocess; subprocess.run(["bun", "run", "import"])\'',
   ])("放过 %s", (text) => {
     expect(hasUrl(text)).toBe(false);
+  });
+
+  test("代码里的函数调用不算地址，带协议或写成域名的地址照样认", () => {
+    expect(
+      externalAddressIn("subprocess.run(cmd, check=True)"),
+    ).toBeUndefined();
+    expect(externalAddressIn("r = requests.get(url)")).toBeUndefined();
+    expect(externalAddressIn("curl https://api.example.run(1)")).toBeDefined();
+    expect(externalAddressIn("上传到 files.example.run 再看")).toBe(
+      "files.example.run",
+    );
   });
 });
