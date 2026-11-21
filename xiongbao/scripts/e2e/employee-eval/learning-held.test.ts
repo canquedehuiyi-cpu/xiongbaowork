@@ -59,7 +59,11 @@ const side = (records: EvalRecord[]): EvalResults => ({
 
 const firstRunCell = (
   outcome: string,
-  extra: { newSkills?: string[]; heldSkills?: string[] } = {},
+  extra: {
+    newSkills?: string[];
+    heldSkills?: string[];
+    replaced?: number;
+  } = {},
 ) => {
   const repeated = combineRepeat(
     record({
@@ -74,6 +78,7 @@ const firstRunCell = (
           outcome,
           trigger: "card_delivered",
           steps: 19,
+          ...(extra.replaced ? { replaced: extra.replaced } : {}),
         },
       },
     }),
@@ -89,6 +94,16 @@ test("saved 照旧：技能进了账，行里写新增的技能名", () => {
   const row = firstRunCell("saved", { newSkills: ["办公题做法"] });
   expect(row[1]).toBe("saved（card_delivered / 19 步），等了 15 s");
   expect(row[2]).toBe("技能 1（「办公题做法」） / 记忆 0");
+});
+
+test("saved 且替换了员工自存的技能：行里写替换了几条", () => {
+  const row = firstRunCell("saved", {
+    newSkills: ["办公题做法"],
+    replaced: 1,
+  });
+  expect(row[1]).toBe(
+    "saved（card_delivered / 19 步），替换了员工自存的 1 条，等了 15 s",
+  );
 });
 
 test("held：说明转待审、没授予；待审的技能单独列，不算新增的自写技能", () => {

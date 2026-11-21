@@ -4,10 +4,8 @@ import type { AbstractAgent } from "@ag-ui/client";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { computerGuidance } from "../../shared/bot-prompt";
-import { promptSlimOn } from "./agents/prompt-slim";
-import { slimComputerGuidance } from "./agents/slim-guidance";
-import { hardModelOf } from "../../shared/hard-model";
 import { commandTimeoutMs } from "../../shared/computer-tool-words";
+import { hardModelOf } from "../../shared/hard-model";
 import { lightModelOf } from "../../shared/light-model";
 import { isPersonBrowserId } from "../../shared/openbot-browser";
 import { workOwner } from "../../shared/work-owner";
@@ -80,6 +78,8 @@ import {
   createHardModelRoutes,
   createHardModelStore,
 } from "./agents/hard-model-routes";
+import { createHeartbeatRoutes } from "./agents/heartbeat-routes";
+import { configureHeavyTaskFacts } from "./agents/heavy-task";
 import { runsIsolated } from "./agents/isolation";
 import {
   configureBotLifecycle,
@@ -88,7 +88,6 @@ import {
 } from "./agents/lifecycle";
 import { createBotReset } from "./agents/lifecycle-reset";
 import { lightModelFor } from "./agents/light-model";
-import { createPurposeModel } from "./agents/purpose-model";
 import {
   createLightModelRoutes,
   createLightModelStore,
@@ -102,23 +101,18 @@ import { createAgentModelService } from "./agents/model-proxy/wiring";
 import { readAgentPresence } from "./agents/presence";
 import { createAgentProfileStore } from "./agents/profile-store";
 import type { AgentActor } from "./agents/profile-types";
+import { promptSlimOn } from "./agents/prompt-slim";
+import { createPurposeModel } from "./agents/purpose-model";
 import { isUnattended, runModeOf } from "./agents/run-mode";
 import {
   createRuntimeAgentLoader,
   loadDeviceAcpEmployee,
 } from "./agents/runtime-agents";
+import { slimComputerGuidance } from "./agents/slim-guidance";
 import { createSubagents, SUBAGENT_HANDED_BACK } from "./agents/subagent";
 import { toolLimitRecorder } from "./agents/tool-limit";
 import { serverTurnAdmission } from "./agents/turn-admission";
-import { createHeartbeatRoutes } from "./agents/heartbeat-routes";
 import { updatePlanTools } from "./agents/update-plan";
-import { configureHeavyTaskFacts } from "./agents/heavy-task";
-import {
-  type GitComputer,
-  gitTools,
-  offeredGitTools,
-  showingCommand,
-} from "./computer/git-tools";
 import {
   createWakeUpRunner,
   createWakeUpStore,
@@ -128,7 +122,6 @@ import { createApp } from "./app";
 import { createDecisionWaits } from "./approvals/decision-waits";
 import { createApprovedActionExecutor } from "./approvals/execute";
 import { createPersonResponseTick } from "./approvals/person-response-sweep";
-import { outsideRecheck } from "./approvals/service";
 import {
   createApprovalQuestions,
   type PersonQuestion,
@@ -138,6 +131,7 @@ import {
 import { waitForReplyInTranscript } from "./approvals/reply-in-transcript";
 import { createApprovalResumeTick } from "./approvals/resume-sweep";
 import { loadRuleVocabulary } from "./approvals/rule-vocabulary";
+import { outsideRecheck } from "./approvals/service";
 import { createApprovalStore } from "./approvals/store";
 import {
   type ApprovalContinuation,
@@ -263,6 +257,12 @@ import {
   createComputerSeatResolver,
 } from "./computer/computer-key";
 import { createComputerGateway, localAppsAllowed } from "./computer/gateway";
+import {
+  type GitComputer,
+  gitTools,
+  offeredGitTools,
+  showingCommand,
+} from "./computer/git-tools";
 import { createHeadlessComputerTools } from "./computer/headless-tools";
 import { createPageFrameStore } from "./computer/page-frames";
 import { startPolicyListener } from "./computer/policy-listener";
@@ -359,6 +359,9 @@ import { computerProviderFor, createDeviceSelector } from "./devices/selection";
 import { createDeviceStore } from "./devices/store";
 import { createDeviceTakeovers } from "./devices/takeover";
 import { currentEdition, editionHasMemory, setEdition } from "./edition";
+import { createHeartbeatRunner } from "./heartbeat/runner";
+import { createHeartbeatStore } from "./heartbeat/store";
+import { heartbeatTools } from "./heartbeat/tools";
 import {
   createHostAccessBroker,
   HostAccessRefusedError,
@@ -402,6 +405,16 @@ import {
   type PersonalLearningSpaces,
   personalLearningContainerId,
 } from "./learning/personal-space";
+import {
+  cardRetroTurn,
+  createRetroObserver,
+  createRetrospector,
+  deliveredCardOf,
+  deliveredCardOfRound,
+  handedInCardOfThread,
+  markInjectedSkillsUsed,
+  markPickedSkillUsed,
+} from "./learning/retrospect";
 import { learningModelUnavailable } from "./learning/routes";
 import {
   clearLearningRevisionFallback,
@@ -416,16 +429,6 @@ import {
   createLearningSharingStore,
   createOpenSkillIndex,
 } from "./learning/sharing";
-import {
-  cardRetroTurn,
-  createRetroObserver,
-  createRetrospector,
-  deliveredCardOf,
-  deliveredCardOfRound,
-  handedInCardOfThread,
-  markInjectedSkillsUsed,
-  markPickedSkillUsed,
-} from "./learning/retrospect";
 import { createLocalLearningEngine } from "./local-learning/engine";
 import { readMediaConfig } from "./media/config";
 import { createMediaRoutes } from "./media/routes";
@@ -434,13 +437,13 @@ import { mediaTools, offeredMediaTools } from "./media/tools";
 import { workspaceMedia } from "./media/workspace";
 import { createMemoryDefaults } from "./memory/defaults";
 import { createEmbeddingStore } from "./memory/embeddings-store";
-import { createMemoryIngestion } from "./memory/ingestion";
-import { createMemoryVectors } from "./memory/vectors";
-import { createIntelligenceMemory } from "./memory/intelligence";
 import { createMemoryExtractor, memoryExtractEnabled } from "./memory/extract";
+import { createMemoryIngestion } from "./memory/ingestion";
+import { createIntelligenceMemory } from "./memory/intelligence";
 import { createMemoryRuntime } from "./memory/runtime";
 import { createMemoryStore } from "./memory/store";
 import { offeredMemoryTools } from "./memory/tools";
+import { createMemoryVectors } from "./memory/vectors";
 import { reportModelAvailability } from "./model-availability-check";
 import { createModelCatalogue } from "./model-catalogue";
 import { configureContextWindowSource } from "./models/context-window";
@@ -553,10 +556,7 @@ import {
 import { createProjectRoutes } from "./projects/routes";
 import { createProjectStore } from "./projects/store";
 import { createProviderOAuthProxy } from "./provider-oauth";
-import { QuotaExceeded, createQuotaService } from "./quota/limits";
-import { createHeartbeatRunner } from "./heartbeat/runner";
-import { createHeartbeatStore } from "./heartbeat/store";
-import { heartbeatTools } from "./heartbeat/tools";
+import { createQuotaService, QuotaExceeded } from "./quota/limits";
 import { createQuotaRoutes } from "./quota/routes";
 import { createRecorderExtension } from "./recorder/wiring";
 import {
@@ -615,6 +615,12 @@ import { createSelfHostBanner } from "./self-host-banner";
 import { createSetupSources, modelKeyOf } from "./setup/checklist";
 import { createComputerCheck } from "./setup/computer-check";
 import { useSkillAssetTools } from "./skills/read-tool";
+import { SAVE_SKILL_REF, selfSkillTools } from "./skills/save-tool";
+import {
+  demoteStaleSkills,
+  learnedUsageOf,
+  withSourceFingerprints,
+} from "./skills/usage";
 import {
   ensureStaffingServer,
   staffingAppMemory,
@@ -626,19 +632,16 @@ import {
   createThreadVisibility,
 } from "./staffing/routes";
 import { createStaffingProposalStore } from "./staffing/store";
+import { createBoardCardRoutes } from "./tasks/board-cards-routes";
 import {
   createBriefingRoutes,
   createBriefings,
   createTaskNotices,
   notifyOnHandIn,
 } from "./tasks/briefing";
+import { createCardAutonomy } from "./tasks/card-autonomy";
 import { createCardTurns } from "./tasks/card-turns";
-import { SAVE_SKILL_REF, selfSkillTools } from "./skills/save-tool";
-import {
-  demoteStaleSkills,
-  learnedUsageOf,
-  withSourceFingerprints,
-} from "./skills/usage";
+import { createBoardCards } from "./tasks/claim";
 import { createDelivery, replyTextOf } from "./tasks/delivery";
 import {
   runDeliveryCheck,
@@ -651,9 +654,6 @@ import {
   offeredDeliveryTools,
 } from "./tasks/delivery-tools";
 import { createEvidenceGate } from "./tasks/evidence-gate";
-import { createBoardCardRoutes } from "./tasks/board-cards-routes";
-import { createCardAutonomy } from "./tasks/card-autonomy";
-import { createBoardCards } from "./tasks/claim";
 import { createNudgeRuns } from "./tasks/nudge-run";
 import { createTaskProjector } from "./tasks/projector";
 import { createTaskRoutes } from "./tasks/routes";
@@ -5093,10 +5093,10 @@ await startupLifecycle.run(async (startup) => {
       !(await approvalService.disabledTools(ownerUserId, agentId))(
         SAVE_SKILL_REF,
       ),
-    existingSkills: async (agentId) =>
-      (await pluginStore.listForAgent(agentId)).skills.map(
-        (skill) => skill.title,
-      ),
+    existingSkills: async (agentId, excludeSlugs = []) =>
+      (await pluginStore.listForAgent(agentId)).skills
+        .filter((skill) => !excludeSlugs.includes(skill.slug))
+        .map((skill) => skill.title),
   });
   const observeRetro = createRetroObserver({
     retrospect: retrospectTurn,

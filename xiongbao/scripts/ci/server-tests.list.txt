@@ -779,6 +779,7 @@ tests/retro-held-rule.test.ts
 tests/retro-nothing-retry.integration.test.ts
 tests/retro-observer.test.ts
 tests/retro-repeat-learning.integration.test.ts
+tests/retro-replace-self.integration.test.ts
 tests/retro-skill-held.integration.test.ts
 tests/reviewer-guidance.integration.test.ts
 tests/rls-role.test.ts
