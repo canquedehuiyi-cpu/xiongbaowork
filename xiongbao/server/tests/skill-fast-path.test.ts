@@ -235,3 +235,15 @@ describe("快路径从任务的起点做到交付", () => {
     expect(FAST_PATH_ADVICE).toContain("用一条命令一次查齐");
   });
 });
+
+describe("复盘写出的技能只留请求要的，会变的值认常见的几种", () => {
+  test("复盘提示：不写请求没要的说明文件、额外核对脚本和翻别的目录；分隔符在四种里判断", () => {
+    expect(RETRO_SYSTEM).toContain("Leave out what the request did not ask for");
+    expect(RETRO_SYSTEM).toContain("comma, semicolon, tab and pipe");
+  });
+
+  test("注入提示：不翻以前的任务目录，不另写没要求的说明文件或核对脚本", () => {
+    expect(FAST_PATH_ADVICE).toContain("不必去翻以前做过的任务目录");
+    expect(FAST_PATH_ADVICE).toContain("不要另写请求没要求的说明文件或核对脚本");
+  });
+});
