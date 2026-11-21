@@ -48,7 +48,6 @@ import {
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
   startRun,
-  withFirstStepContext,
 } from "./last-step";
 import { reasoningByToolCall } from "./replayed-reasoning";
 import { FOLD_BUDGET_ENV, foldBudgetFrom } from "./turn-folding";
@@ -138,14 +137,6 @@ export type BuiltInAgentHooks = {
    * `XIONGBAO_DELIVER_ENDS_TURN=off`. See `answersOnLastStep`.
    */
   endsTurnAfter?: (toolName: string, result: string) => boolean;
-  /**
-   * Context for the first model call of a turn only, added at the very end of that call's prompt (the
-   * system prompt and the history stay byte-identical from step to step, so a provider's prompt cache
-   * keeps hitting). The server gives the full body of the skills the Bot matched; every later step
-   * carries a one-line pointer in the system prompt instead. Absent, nothing is added.
-   * See `last-step.ts` (`withFirstStepContext`).
-   */
-  firstStepContext?: string;
   /**
    * Put back, on every step, what the model thought before each tool call the conversation already
    * holds (期三). The runtime drops `reasoning` messages on the way to the model; a provider that
@@ -341,18 +332,14 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
          * 期七：一轮里越过窗口的 70%（或绝对预算）就折叠较早的工具结果，包在最外面，让里面的包装看到折叠后的提示。
          * `foldResults: false` 关掉（部署开关 `XIONGBAO_TURN_FOLD=off`）。
          */
-        // Outermost, so the wrappers inside never see the first step's added message as the person's.
-        withFirstStepContext(
-          hooks.foldResults === false
-            ? answering
-            : foldingEarlyResults(answering, {
-                ...(hooks.contextWindowFor
-                  ? { windowFor: hooks.contextWindowFor }
-                  : {}),
-                ...(foldBudget === undefined ? {} : { budget: foldBudget }),
-              }),
-          hooks.firstStepContext,
-        ),
+        hooks.foldResults === false
+          ? answering
+          : foldingEarlyResults(answering, {
+              ...(hooks.contextWindowFor
+                ? { windowFor: hooks.contextWindowFor }
+                : {}),
+              ...(foldBudget === undefined ? {} : { budget: foldBudget }),
+            }),
         scope,
       ),
     );
