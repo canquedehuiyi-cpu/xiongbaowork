@@ -19,6 +19,7 @@ import { PICKED_SKILL_PROP } from "@openbot/toolkit/run-turn";
 import {
   FAST_PATH_CHECK_LABEL,
   FAST_PATH_HEADING,
+  READ_SKILL_TOOL,
   REFINE_SKILL_TOOL,
   SELF_SKILL_SLUG_PREFIX,
 } from "../../../shared/self-skills";
@@ -29,9 +30,9 @@ import {
   type SourceFingerprint,
 } from "../skills/source-fingerprint";
 import {
+  tokensOf as diceTokensOf,
   hasSubstantiveWords,
   similarity,
-  tokensOf as diceTokensOf,
 } from "../text-tokens";
 import { latestUserText } from "./selection";
 
@@ -462,4 +463,98 @@ export function skillGuidanceFor(
     relatedSkillsGuidance(input, held) ??
     selfSkillListGuidance(input, held)
   );
+}
+
+/** 清单里最多放几条员工自己写的技能；超过这个数，没有对得上的就不放清单（它们在持有技能的索引里）。 */
+export const OWN_SKILL_LIST_MAX = 8;
+/** 清单里每一条（标题、id、什么时候用、标记）最多多少字符。 */
+export const OWN_SKILL_LINE_CHARS = 160;
+/** 清单里对得上这件事的那条后面的标记。 */
+const MATCH_MARK = " [MATCH]";
+
+/**
+ * 员工自己写的技能，以一份清单放进系统提示（正文不放）：一条一行，标题、id、什么时候用；和这件事对得上的
+ * （`relatedSelfSkills`）排在最前并标 MATCH，告诉员工先读它。要用哪条就用 `read_skill` 只带 id 读全文，读出的
+ * 全文和快路径的做法提示留在对话历史里（{@link readSkillText}），不再每一步都带着正文。
+ *
+ * 放在 `picked_skill` 那一段（稳定前缀之后），同一条消息的每一步字节相同。技能不超过 {@link OWN_SKILL_LIST_MAX} 条
+ * 时没对上的也列出来，让员工自己判断（人只回「继续」这类没有实词的短话时，没有对上的就不放）；更多时只放对上的。
+ */
+export function ownSkillsGuidance(
+  input: Pick<RunAgentInput, "messages">,
+  held: readonly PickableSkill[],
+): string | undefined {
+  const own = held
+    .filter((skill) => isSelfWrittenSkill(skill) && skill.instructions?.trim())
+    .sort((one, two) =>
+      one.slug < two.slug ? -1 : one.slug > two.slug ? 1 : 0,
+    );
+  if (own.length === 0) return undefined;
+  const matched = relatedSelfSkills(requestTextOf(input.messages), own);
+  if (matched.length === 0) {
+    if (own.length > OWN_SKILL_LIST_MAX) return undefined;
+    if (!hasSubstantiveWords(latestUserText(input.messages))) return undefined;
+  }
+  const shown =
+    own.length > OWN_SKILL_LIST_MAX
+      ? matched
+      : [...matched, ...own.filter((skill) => !matched.includes(skill))];
+  const lines = shown.map((skill) => {
+    const mark = matched.includes(skill) ? MATCH_MARK : "";
+    const head = `- ${skill.title || skill.slug} (id: ${skill.slug}) — `;
+    const room = Math.max(0, OWN_SKILL_LINE_CHARS - head.length - mark.length);
+    const when = whenLineOf(skill).replace(/\s+/g, " ").trim();
+    return `${head}${when.length > room ? `${when.slice(0, Math.max(0, room - 1))}…` : when}${mark}`;
+  });
+  return [
+    `Skills you wrote down from earlier work. None is loaded: read one in full with ${READ_SKILL_TOOL} (only its id).`,
+    matched.length > 0
+      ? `The ones marked MATCH fit this request: read them first and follow their steps and checks where they fit, skipping what this task does not need. If a step is wrong or missing, correct it afterwards with ${REFINE_SKILL_TOOL} (the id and one sentence on what to change).`
+      : "None clearly fits this request: if one does, read it and follow it where it fits; otherwise ignore the list.",
+    ...lines,
+  ].join("\n");
+}
+
+/**
+ * 员工用 `read_skill` 读一条自己的技能时得到的：技能全文；带快路径的，再加上先按快路径做的提示
+ * （{@link FAST_PATH_ADVICE}），一并留在对话历史里，不必再每一步放进提示。
+ */
+export function readSkillText(skill: {
+  slug: string;
+  title: string;
+  instructions: string;
+}): string {
+  const body = skill.instructions.trim();
+  return [
+    `### ${skill.title || skill.slug} (id: ${skill.slug})`,
+    "This is your own skill, written from earlier work. Follow its steps and checks where they fit, and skip what this task does not need.",
+    ...(body.includes(`${FAST_PATH_HEADING}（`) ? [FAST_PATH_ADVICE] : []),
+    body,
+  ].join("\n\n");
+}
+
+/**
+ * 这一轮对得上的员工自己写的技能里带的校验命令（`快路径校验命令：…`），由服务器从技能里算出来，不看提示里写了什么：
+ * 技能正文不再放进提示，改完文件后「跑过技能自带的校验就算验过」仍要认得它们。
+ */
+export function matchedSkillChecks(
+  input: Pick<RunAgentInput, "messages">,
+  held: readonly PickableSkill[],
+): string[] {
+  const checks: string[] = [];
+  for (const skill of relatedSelfSkills(requestTextOf(input.messages), held))
+    for (const check of fastPathChecksIn(skill.instructions ?? ""))
+      if (!checks.includes(check)) checks.push(check);
+  return checks;
+}
+
+/**
+ * 内置员工这一轮的技能指引：人点了命令就是那一条（正文照旧给）；没点，就是员工自己写的技能清单
+ * （{@link ownSkillsGuidance}）。
+ */
+export function builtInSkillGuidanceFor(
+  input: Pick<RunAgentInput, "messages" | "forwardedProps">,
+  held: readonly PickableSkill[],
+): string | undefined {
+  return pickedSkillGuidance(input, held) ?? ownSkillsGuidance(input, held);
 }

@@ -1,23 +1,26 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
+import { EventType } from "@ag-ui/client";
+import type { LanguageModel } from "ai";
 import { and, eq, inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
-import { agents, users } from "../src/db/schema/core";
-import { agentProfiles } from "../src/db/schema/coworker";
 import {
   learnedSkills,
   localSkillCandidates,
   pluginGrants,
   skills,
+  tasks,
+  threadRunEvents,
+  threadRuns,
+  threads,
 } from "../src/db/schema";
+import { agents, users } from "../src/db/schema/core";
+import { agentProfiles } from "../src/db/schema/coworker";
+import { cardRetroTurn, createRetrospector } from "../src/learning/retrospect";
 import { createPluginStore } from "../src/plugins/store";
 import { grantedSkills } from "../src/plugins/tools";
-import { EventType } from "@ag-ui/client";
-import type { LanguageModel } from "ai";
-import { tasks, threadRunEvents, threadRuns, threads } from "../src/db/schema";
-import { cardRetroTurn, createRetrospector } from "../src/learning/retrospect";
 import {
   refineSkill,
   type SelfSkillDeps,
@@ -454,6 +457,38 @@ describe("refine_skill", () => {
       expect(result.ok).toBe(false);
       const missing = await refineSkill(depsFor(bot), { id: "no-such-skill" });
       expect(missing.ok).toBe(false);
+    });
+  });
+
+  test("read_skill answers the whole body, with the fast-path advice when the skill has one, and only for this employee's own skill", async () => {
+    await asOwner(async () => {
+      const fast = draft("带快路径的", {
+        fastPath: "printf 'x' > <dir>/out.txt",
+        fastPathCheck: "test -s <dir>/out.txt",
+      });
+      expect((await saveSkill(depsFor(bot), fast, "tool")).ok).toBe(true);
+      const slug = slugFor(bot, "带快路径的");
+      const read = selfSkillTools(depsFor(bot)).find(
+        (candidate) => candidate.name === "read_skill",
+      );
+      const text = String(await read?.execute({ id: slug }));
+      expect(text).toContain("先按技能的快路径做");
+      expect(text).toContain("不要先逐个打开文件");
+      expect(text).toContain("printf 'x' > <dir>/out.txt");
+      expect(text).toContain("按地区汇总");
+      // A skill without a fast path gets no advice about one.
+      const plain = String(
+        await read?.execute({ id: slugFor(bot, "周报整理") }),
+      );
+      expect(plain).not.toContain("先按技能的快路径做");
+      expect(plain).toContain("按地区汇总");
+      // Not another employee's skill: refused, with no body in the answer.
+      const other = selfSkillTools(depsFor(secondBot)).find(
+        (candidate) => candidate.name === "read_skill",
+      );
+      const refused = String(await other?.execute({ id: slug }));
+      expect(refused).toStartWith("Refused.");
+      expect(refused).not.toContain("printf");
     });
   });
 

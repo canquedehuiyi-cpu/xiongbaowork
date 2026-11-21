@@ -10,6 +10,11 @@
 
 export const SAVE_SKILL_TOOL = "save_learned_skill";
 export const REFINE_SKILL_TOOL = "refine_skill";
+/**
+ * 按 id 读出自己写的一条技能全文，只读、不排在检索后面：员工手上有自己写的技能时，每一步的工具定义里都有它
+ * （参数只有一个 id，定义很小）。读出的全文连同快路径的做法提示留在对话历史里。
+ */
+export const READ_SKILL_TOOL = "read_skill";
 
 /** 一条技能写给谁用。 */
 export const SKILL_SCOPES = ["self", "shared"] as const;

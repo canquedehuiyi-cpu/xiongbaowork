@@ -14,7 +14,7 @@
 
 import { join } from "node:path";
 import { TOOL } from "./metrics";
-import { FAST_MARK, RETRO_MARK, SKILL_MARK } from "./mock-learn";
+import { FAST_MARK, RETRO_MARK, readSkillStep, skillKnown } from "./mock-learn";
 import type { MockRequest, MockTurn } from "./mock-model";
 
 /** 通用做法的脚本（本机绝对路径：假模型只在本机，命令在本机跑）。 */
@@ -90,8 +90,9 @@ export function pitfallPolicy(
   root?: string,
 ): MockTurn {
   if (whole(request).includes(RETRO_MARK)) return retroAnswer();
-  const known = whole(request).includes(SKILL_MARK);
+  const known = skillKnown(whole(request));
   const fast = known && whole(request).includes(FAST_MARK);
+  const reading = readSkillStep(request, whole(request));
   const second = dir.endsWith("-second");
   const copy = second && env.EVAL_MOCK_PITFALL?.trim() === "copy";
   const accepted = request.offeredTools.includes("accept_task");
@@ -117,6 +118,7 @@ export function pitfallPolicy(
           },
         ]
       : []),
+    ...(reading ? [reading] : []),
     ...work,
     ...(accepted
       ? [
