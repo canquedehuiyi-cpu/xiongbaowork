@@ -45,14 +45,14 @@ export const FOLD_REGROW_OF_BUDGET = 0.25;
  * 一轮的绝对预算（估算的 token）：不管窗口多大，估算超过它就折叠。窗口比例管不住大窗口：DeepSeek 的窗口是 1M，
  * 70% 是 70 万，一道调研题发到 13 万一步也没越线（评测 run 44517530843：19 步共输入 247 万，Codex 同题 34 万）。
  *
- * 取 24K（token 第三轮，用户 2026-11-20 批准，原来是 64K）：评测里调研题后段每步约 36K token、历史最长约 8.5 万字符，
- * 64K 的线基本不触发，历史越滚越大。24K 约等于固定开销 6K 加十几步普通结果，轻的任务（写文档、改代码、办公，每步一两千 token）
+ * 取 18K（token 第六轮，用户批准，原来 24K，更早是 64K）：评测里调研题后段每步约 36K token、历史最长约 8.5 万字符，
+ * 64K 的线基本不触发，历史越滚越大。18K 约等于固定开销 6K 加十来步普通结果，轻的任务（写文档、改代码、办公，每步一两千 token）
  * 十来步内不越线，行为不变；重的任务（每步一个 16KB 网页）更早开始折。折完之后的下限（固定开销 6K、最近 4 步每步最多
- * 一个 16KB 的结果约 5K、较早的摘要每条约 0.5K）可能高过 24K，所以折完不会「立刻再折」：要再涨 {@link FOLD_REGROW_OF_BUDGET}
- * （25%，6K）才折下一批，缓存前缀一批才废一次。部署用环境变量 `XIONGBAO_TURN_FOLD_BUDGET_TOKENS` 覆盖（设 64000 回到原来的值），
+ * 一个 16KB 的结果约 5K、较早的摘要每条约 0.5K）可能高过 18K，所以折完不会「立刻再折」：要再涨 {@link FOLD_REGROW_OF_BUDGET}
+ * （25%，4.5K）才折下一批，缓存前缀一批才废一次。部署用环境变量 `XIONGBAO_TURN_FOLD_BUDGET_TOKENS` 覆盖（设 64000 回到更早的值），
  * 0 表示关掉绝对预算（只按窗口比例）。
  */
-export const FOLD_BUDGET_TOKENS = 24_000;
+export const FOLD_BUDGET_TOKENS = 18_000;
 /** 覆盖 {@link FOLD_BUDGET_TOKENS} 的环境变量。 */
 export const FOLD_BUDGET_ENV = "XIONGBAO_TURN_FOLD_BUDGET_TOKENS";
 /** 短于这么多字的结果不折：折了省不了几个 token，摘要还会比它长。 */
@@ -63,6 +63,7 @@ export const DEFAULT_CONTEXT_WINDOW = 128_000;
 export const FIXED_PROMPT_TOKENS = 6_000;
 /** 一张图或一个文件算多少 token，不按它的 base64 长度算。 */
 const MEDIA_TOKENS = 1_500;
+
 /*
  * 工具结果文字里夹着的二进制数据（截图的 base64）：模型读不了它，提供方却照字数收 token，一张 1280×800 的
  * 截图约 40 万个字符。主要的处理在发给模型之前（`withoutToolBlobs`，`../tool-result-blobs.ts`）；这里是兜底，
