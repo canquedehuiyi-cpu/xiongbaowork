@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { requiredItemMet, requiredItemsOf } from "../src/tasks/evidence-gate";
+import {
+  passEvidenceIn,
+  requiredItemMet,
+  requiredItemsOf,
+} from "../src/tasks/evidence-gate";
 
 /**
  * 「必需：…」 in a card's criteria names what a hand-in must mention (spec 2026-11-15-delivery-loop §5).
@@ -66,4 +70,46 @@ test("a Chinese part with no spaces is met when most of its two-character pairs 
   expect(requiredItemMet("compare.md 小节齐全", "report.md 小节齐全")).toBe(
     false,
   );
+});
+
+/* 测试类必需项：自查或交付物标题里有测试/校验通过的证据就算对上（同一条里，不跨条拼）。 */
+const met = (required: string, ...segments: string[]) =>
+  requiredItemMet(required, segments.join(" "), segments);
+
+test("测试类必需项认真实写法的通过证据", () => {
+  expect(met("测试通过", "bun test：exit 0，1 pass / 0 fail")).toBe(true);
+  expect(
+    met("bun test 通过记录", "bun test 通过记录：退出码 0，1 pass / 0 fail"),
+  ).toBe(true);
+  expect(
+    met(
+      "验证记录",
+      "验证记录（干净跑）：rm -rf .cache out && bun run import，exit=0",
+    ),
+  ).toBe(true);
+  expect(met("bun test 通过", "bun test v1.4.4 … 1 pass 0 fail")).toBe(true);
+  expect(met("pytest 通过", "pytest -q：12 passed")).toBe(true);
+});
+
+test("测试类必需项：失败、没提测试、跨条拼都不算", () => {
+  expect(met("测试通过", "bun test：2 fail")).toBe(false);
+  expect(met("测试通过", "bun test：1 pass, 2 fail")).toBe(false);
+  expect(met("测试通过", "bun test 未通过")).toBe(false);
+  expect(met("测试通过", "汇总表已生成，格式正确")).toBe(false);
+  // 测试词在一条、通过字样在另一条：不拼。
+  expect(met("测试通过", "跑了 bun test", "文件已保存，exit 0")).toBe(false);
+  // 点名 bun test 的必需项，证据里是别的命令且没有 test/测试 字样。
+  expect(met("bun test 通过", "校验脚本 exit 0")).toBe(false);
+});
+
+test("非测试类必需项的行为不变", () => {
+  expect(met("README 更新", "bun test：exit 0，1 pass / 0 fail")).toBe(false);
+  expect(met("README 更新", "更新了 README 文件")).toBe(true);
+});
+
+test("passEvidenceIn", () => {
+  expect(passEvidenceIn("go test ./... ok")).toBe(true);
+  expect(passEvidenceIn("vitest 全绿")).toBe(true);
+  expect(passEvidenceIn("npm test：3 failed")).toBe(false);
+  expect(passEvidenceIn("exit 0")).toBe(false);
 });

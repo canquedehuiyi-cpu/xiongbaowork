@@ -16,7 +16,11 @@ import { emitRunEvent } from "../threads/run-side-events";
 import type { Delivery } from "./delivery";
 import { DELIVERY_EVENTS } from "./delivery-events";
 import { dueRefusalText, readDueTime } from "./due-time";
-import { DELIVERY_ITEM_KINDS, type EvidenceGate } from "./evidence-gate";
+import {
+  DELIVERY_ITEM_KINDS,
+  type EvidenceGate,
+  requiredItemsOf,
+} from "./evidence-gate";
 import type { TaskProjector, TriggerSource } from "./projector";
 import { entryCardRefOf, roundOnCard } from "./turn-cards";
 
@@ -353,6 +357,8 @@ export function deliveryTools(options: {
           return `${REFUSAL_MARKER} 这件活现在接不了：它已经结束或已经被接下了。`;
         // The person's own criteria, set while the card waited, stand: the coworker is told which.
         const theirs = accepted.criteria !== value.criteria;
+        // 和证据门用的是同一份：从这张卡现在的验收标准里解析出来的必需项。
+        const required = requiredItemsOf(accepted.criteria);
         return JSON.stringify({
           accepted: true,
           taskId,
@@ -363,6 +369,13 @@ export function deliveryTools(options: {
                 criteria: accepted.criteria,
                 criteriaNote:
                   "对方在你接下前改过验收标准，按对方的为准（含其中的必需项）。",
+              }
+            : {}),
+          ...(required.length > 0
+            ? {
+                requiredItems: required,
+                requiredNote:
+                  "交付时在交付物标题或自查里逐条写到这些必需项的原词。",
               }
             : {}),
           note: dueAt

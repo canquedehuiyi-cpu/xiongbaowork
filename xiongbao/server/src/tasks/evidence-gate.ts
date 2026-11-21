@@ -283,7 +283,13 @@ const comparable = (text: string) =>
  * (a) 整项比对后是它的子串；或 (b) 把必需项按空白和标点拆段，比对后长度 >= 2 的段全都出现在里面
  * （单个汉字或字母的段丢掉；一段都不剩就只按 (a) 判）。
  */
-export function requiredItemMet(required: string, named: string): boolean {
+export function requiredItemMet(
+  required: string,
+  named: string,
+  segments: readonly string[] = [],
+): boolean {
+  if (isTestKind(required) && segments.some(testEvidenceFor(required)))
+    return true;
   const whole = comparable(named);
   const item = comparable(required);
   // 整项全是标点：没有什么可比的，和原来一样算对上。
@@ -293,6 +299,58 @@ export function requiredItemMet(required: string, named: string): boolean {
     .map(comparable)
     .filter((part) => [...part].length >= 2);
   return parts.length > 0 && parts.every((part) => partMet(part, whole));
+}
+
+/** 必需项里点了名的测试命令。 */
+const TEST_COMMAND =
+  /\b(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?test\b|\bpytest\b|\bgo\s+test\b|\bcargo\s+test\b|\bvitest\b|\bjest\b/gi;
+
+/** 必需项是「测试 / 校验 / 验证 / 核对」这一类：含这些词之一，或点了名的测试命令。 */
+export function isTestKind(required: string): boolean {
+  if (/测试|校验|验证|核对|自测/.test(required)) return true;
+  if (/\b(?:tests?|check|verify|verified)\b/i.test(required)) return true;
+  return namedTestCommands(required).length > 0;
+}
+
+function namedTestCommands(text: string): string[] {
+  return (text.match(TEST_COMMAND) ?? []).map((command) =>
+    command.toLowerCase().replace(/\s+/g, " "),
+  );
+}
+
+const TEST_WORD =
+  /\b(?:(?:bun|npm|pnpm|yarn)\s+(?:run\s+)?test|pytest|go\s+test|cargo\s+test|vitest|jest|tests?)\b|测试|校验|验证|核对|复现/i;
+const PASS_WORD =
+  /\bpass(?:ed)?\b|\b0\s+fail(?:ed|s)?\b|\bexit\s*(?:code)?\s*[=:]?\s*0\b|退出码\s*[=:：]?\s*0|通过|全绿|\bok\b/i;
+const FAIL_WORD =
+  /(?:[1-9]\d*)\s+(?:fail(?:ed|s|ures?)?)\b|\b(?:fail(?:ed|ures?)?)\s*[:=]\s*[1-9]|未通过|没通过|不通过|失败|\bfailed\b(?!\s*[:=]?\s*0\b)/i;
+
+/**
+ * 一段文字（一条自查或一个交付物标题）里有没有测试或校验通过的证据：有测试/校验命令或词，
+ * 同时有通过的字样（pass、0 fail、exit 0、退出码 0、通过、全绿、ok），且没有失败字样
+ * （非零的 fail、failed、未通过、失败）。
+ */
+export function passEvidenceIn(text: string): boolean {
+  if (!TEST_WORD.test(text) || !PASS_WORD.test(text)) return false;
+  // 「0 fail」「0 failed」是通过的写法，先拿掉再查失败字样。
+  const rest = text.replace(/\b0\s+fail(?:ed|s|ures?)?\b/gi, "");
+  return !FAIL_WORD.test(rest);
+}
+
+/**
+ * 必需项点了名的测试命令时，证据那一段要出现同一个命令，或者 test / 测试 也行；没点名命令就只要是测试证据。
+ */
+function testEvidenceFor(required: string): (segment: string) => boolean {
+  const commands = namedTestCommands(required);
+  return (segment) => {
+    if (!passEvidenceIn(segment)) return false;
+    if (commands.length === 0) return true;
+    const lower = segment.toLowerCase().replace(/\s+/g, " ");
+    return (
+      commands.some((command) => lower.includes(command)) ||
+      /\btests?\b|测试/i.test(segment)
+    );
+  };
 }
 
 /** 至少这么多比例的相邻两字出现，一段中文才算对上。 */
@@ -575,8 +633,13 @@ export function createEvidenceGate(
           ...items.flatMap((item) => [item.title ?? "", item.ref]),
           ...checks,
         ].join(" ");
+        // 测试类必需项的证据只认同一条 check 或同一个交付物标题，不跨条拼。
+        const segments = [
+          ...items.map((item) => `${item.title ?? ""} ${item.ref}`),
+          ...checks,
+        ];
         const missing = requiredItemsOf(input.criteria).filter(
-          (required) => !requiredItemMet(required, named),
+          (required) => !requiredItemMet(required, named, segments),
         );
         if (missing.length > 0)
           return {
