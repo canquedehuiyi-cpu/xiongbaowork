@@ -30,9 +30,8 @@ beforeEach(async () => {
   llm = new LLMock({ host: "127.0.0.1", port: 0 });
   requests = [];
   llm.on({ predicate: () => true }, (request: ChatCompletionRequest) => {
-    const messages = (
-      request as unknown as { messages: { role: string }[] }
-    ).messages;
+    const messages = (request as unknown as { messages: { role: string }[] })
+      .messages;
     const tools = messages.filter((message) => message.role === "tool").length;
     requests.push({ tools, calls: requests.length });
     if (tools > 0) return { content: "三个都读完了。" };
@@ -120,8 +119,9 @@ describe("系统提示鼓励一步多个调用", () => {
     expect(SLIM_HOW_TO_WORK.length).toBeGreaterThan(
       SLIM_HOW_TO_WORK_SERIAL.length,
     );
-    // 改动一律还是一个接一个。
-    expect(SLIM_HOW_TO_WORK).toContain("every change, one after another");
+    // 依赖前一步结果的仍在后面；互不相关的修改可以同一步一起发（用户 2026-11-21 批准，和编辑指引一致）。
+    expect(SLIM_HOW_TO_WORK).toContain("a step needing a result waits");
+    expect(SLIM_HOW_TO_WORK).toContain("Independent edits may share a reply");
     expect(section()).toBeString();
   });
 

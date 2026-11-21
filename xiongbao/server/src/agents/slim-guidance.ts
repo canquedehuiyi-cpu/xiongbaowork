@@ -62,7 +62,7 @@ export function slimHowToWork(
 ): string {
   return paragraphs(
     HOW_TO_WORK_FIRST,
-    `Send independent reads, searches and commands together in one reply (about five tool calls), not one per reply; read every result before the next batch. Keep dependent steps, and every change, one after another. ${mergeCommandsOn(env) ? `${MERGE_COMMANDS_HINT} ` : ""}${HOW_TO_WORK_LAST}`,
+    `Send independent reads, searches and commands together in one reply (about five), not one per reply; read every result before the next batch. Independent edits may share a reply; a step needing a result waits. ${mergeCommandsOn(env) ? `${MERGE_COMMANDS_HINT} ` : ""}${HOW_TO_WORK_LAST}`,
   );
 }
 

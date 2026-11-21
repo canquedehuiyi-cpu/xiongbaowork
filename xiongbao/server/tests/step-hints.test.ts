@@ -212,15 +212,16 @@ describe("更新计划和下一步动作放在同一步发", () => {
 });
 
 describe("几条前后依赖的命令合成一条", () => {
-  // 用户 2026-11-21 批准：how_to_work 压短（对标 Codex CLI），「合成一条命令」那一句关着时的写法也跟着换。
+  // 用户 2026-11-21 批准：how_to_work 压短（对标 Codex CLI），「合成一条命令」那一句关着时的写法也跟着换；
+  // 同日批准：互不相关的修改可以同一步一起发（和编辑指引一致）。
   const ORIGINAL =
-    "Use what you already have before fetching more.\n\nSend independent reads, searches and commands together in one reply (about five tool calls), not one per reply; read every result before the next batch. Keep dependent steps, and every change, one after another. Decide and act in the same reply. If a call fails, retry once or go another way, then carry on without it and say so. Deliver what was asked even when part is missing, and say what you could not confirm.";
+    "Use what you already have before fetching more.\n\nSend independent reads, searches and commands together in one reply (about five), not one per reply; read every result before the next batch. Independent edits may share a reply; a step needing a result waits. Decide and act in the same reply. If a call fails, retry once or go another way, then carry on without it and say so. Deliver what was asked even when part is missing, and say what you could not confirm.";
 
   test("默认的 how_to_work 多一句：依赖的命令用 && 合成一条，一次读完多个文件", () => {
     expect(SLIM_HOW_TO_WORK).toContain("&&");
     expect(SLIM_HOW_TO_WORK).toContain("computer_run_command");
     expect(SLIM_HOW_TO_WORK).toContain("install, build");
-    expect(SLIM_HOW_TO_WORK).toContain("every change, one after another");
+    expect(SLIM_HOW_TO_WORK).toContain("Independent edits may share a reply");
     expect(SLIM_HOW_TO_WORK.length).toBeGreaterThan(ORIGINAL.length);
     // 原来的话一个字不少。
     for (const sentence of ORIGINAL.split(/(?<=\.) /))
