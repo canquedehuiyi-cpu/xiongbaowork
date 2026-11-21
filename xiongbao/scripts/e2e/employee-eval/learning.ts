@@ -243,12 +243,14 @@ export function backgroundOf(
 
 /** 一次运行的工具调用，一行一个：工具名和参数的前一段（换行压成空格）。重复任务看第二次照没照技能走用。 */
 export function callTrace(
-  calls: readonly { name: string; args: string }[],
+  calls: readonly { name: string; args: string; result?: string }[],
   argChars = 140,
 ): string[] {
   return calls.map((call, index) => {
     const args = call.args.replace(/\s+/g, " ").trim();
     const cut = args.length > argChars ? `${args.slice(0, argChars)}…` : args;
-    return `${String(index + 1).padStart(2, " ")}. ${call.name} ${cut}`;
+    // 参数和结果各多少字：看历史里堆的是什么（写文件的长参数、读文件和命令的长结果）。
+    const sizes = ` [参数 ${call.args.length} 字${call.result === undefined ? "" : ` / 结果 ${call.result.length} 字`}]`;
+    return `${String(index + 1).padStart(2, " ")}. ${call.name}${sizes} ${cut}`;
   });
 }
