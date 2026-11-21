@@ -53,6 +53,10 @@ export type RunLearning = {
     steps?: number;
     /** 转待审的原因（`retrospect-held` 日志行里的）；没转待审时没有。 */
     heldReason?: string;
+    /** 跳过的原因（`steps` `failed` `card_done`）；没写就是冷却、额度、没开或出错。 */
+    reason?: string;
+    /** 复盘出错时的错误类型（`retrospect-error` 行）；没出错时没有。 */
+    error?: string;
   };
 };
 

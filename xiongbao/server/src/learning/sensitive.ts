@@ -156,7 +156,8 @@ function exfiltrates(text: string): boolean {
 }
 
 /** 一条 `rm` 命令：命令名之后到 shell 分隔符或中文标点为止的参数（反引号不算分隔，留给目标检查）。 */
-const RM_COMMAND = /(\bxargs[ \t]+(?:-\S+[ \t]+)*)?\brm((?:[ \t]+[^\s;&|,，。；、）)」』]+)+)/gi;
+const RM_COMMAND =
+  /(\bxargs[ \t]+(?:-\S+[ \t]+)*)?\brm((?:[ \t]+[^\s;&|,，。；、）)」』]+)+)/gi;
 /** 技能里的占位写法 `<dir>`、`<工作目录>`：指工作目录，不是重定向。 */
 const PLACEHOLDER = /<[\w\u4e00-\u9fa5 .-]{1,24}>/g;
 /** `cd` 或 `pushd` 到别处：之后的相对目标就不在工作区里了。 */
@@ -314,7 +315,8 @@ export function hasUrl(text: string): boolean {
   for (const match of scanned.matchAll(DOMAIN_LIKE)) {
     const last = (match[1] ?? "").toLowerCase();
     // 「e.g」「3.5」这类：最后一段至少两位字母，且整串里有一个点，已经由正则保证；这里只排除文件扩展名。
-    if (!FILE_EXTENSIONS.has(last)) return true;
+    if (FILE_EXTENSIONS.has(last) || calledInCode(scanned, match)) continue;
+    return true;
   }
   return false;
 }
@@ -386,10 +388,19 @@ export function externalAddressIn(text: string): string | undefined {
   }
   for (const match of scanned.matchAll(DOMAIN_LIKE)) {
     const last = (match[1] ?? "").toLowerCase();
-    if (FILE_EXTENSIONS.has(last)) continue;
+    if (FILE_EXTENSIONS.has(last) || calledInCode(scanned, match)) continue;
     if (last.length === 2 || DOMAIN_SUFFIXES.has(last)) return match[0];
   }
   return undefined;
+}
+
+/**
+ * 紧跟着左括号的「域名」是代码里的函数调用，不是地址：`subprocess.run(…)`、`requests.get(…)` 的最后一段恰好也是
+ * 顶级域（.run、.get）。带协议、`www.` 开头的网址不走这里，照样认。
+ */
+function calledInCode(text: string, match: RegExpMatchArray): boolean {
+  const end = (match.index ?? 0) + match[0].length;
+  return text[end] === "(";
 }
 
 /** 从 `start` 起到下一个空白或中文标点为止的一段，最多 80 个字符：网址本身，不带后面的话。 */

@@ -571,7 +571,13 @@ const retroCell = (learning: RunLearning | undefined) => {
   const outcome = retro.outcome
     ? (OUTCOME_NOTE[retro.outcome] ?? retro.outcome)
     : "新增了技能";
-  const why = retro.heldReason ? `，原因：${retro.heldReason}` : "";
+  const why = retro.heldReason
+    ? `，原因：${retro.heldReason}`
+    : retro.error
+      ? `，出错：${retro.error}`
+      : retro.outcome === "skipped" && retro.reason
+        ? `，原因：${retro.reason}`
+        : "";
   return `${outcome}${how}${why}，等了 ${waited}`;
 };
 
