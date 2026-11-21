@@ -1149,7 +1149,7 @@ export function renderReport(results: EvalResults[]): string {
         ]),
       ),
       "",
-      "口径：模型 = 每次模型调用从发出请求到流读完（`model_token_calls` 的 started_at 到 observed_at）的时长之和，并行的按区间并集算；工具 = 各工具调用从开始执行（`TOOL_CALL_END`，没有时间戳时用 `TOOL_CALL_START`）到 `TOOL_CALL_RESULT` 的区间并集，用运行事件里的 `timestamp`，和模型区间重叠的部分只算模型；其余 = 墙钟 − 模型 − 工具（服务器写库、续接、评测脚本追「继续」的等待等）。「—」= 拿不到可靠时间戳（事件没带时间戳、事件没存全、或有调用没记下结束时刻），不拿别的数凑；其余随模型或工具一起缺。事件库表的 `created_at` 是写库时间，不用。Codex 没有这几项，不列。",
+      "口径：模型 = 每次模型调用从发出请求到流读完（`model_token_calls` 的 started_at 到 observed_at）的时长之和，并行的按区间并集算；工具 = 各工具调用从开始执行（`TOOL_CALL_END`，没有时间戳时用 `TOOL_CALL_START`）到 `TOOL_CALL_RESULT` 的区间并集，用运行事件里的 `timestamp`，和模型区间重叠的部分只算模型；其余 = 墙钟 − 模型 − 工具（服务器写库、续接、评测脚本追「继续」的等待等）。「—」= 拿不到可靠时间戳（事件没带时间戳、事件没存全、或有调用没记下结束时刻），不拿别的数凑；工具拿不到时，其余 = 墙钟 − 模型（含工具执行）；模型拿不到时其余也不给。事件库表的 `created_at` 是写库时间，不用。Codex 没有这几项，不列。",
       "",
     );
   }

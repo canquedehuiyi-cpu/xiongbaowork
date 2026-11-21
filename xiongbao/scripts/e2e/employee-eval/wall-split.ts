@@ -9,7 +9,8 @@
  *    用事件 JSON 里的 `timestamp`；`TOOL_CALL_END` 没有时间戳时退回 `TOOL_CALL_START`（这时区间会把模型流出参数的
  *    那一小段算进来，所以再减掉和模型区间重叠的部分）。同一步并行的几个调用按并集算。只要有一个调用缺时间戳，
  *    整题不给工具时间（「—」）：事件库表的 `created_at` 是写库时间，不是事件发生的时间，不能拿来凑。
- *  - 其余 = 墙钟 − 模型 − 工具：服务器写库、续接、评测脚本追「继续」的等待、事件流重连等；模型或工具缺一项就不算。
+ *  - 其余 = 墙钟 − 模型 − 工具：服务器写库、续接、评测脚本追「继续」的等待、事件流重连等。工具时间拿不到时，其余 =
+ *    墙钟 − 模型（含工具执行，日志里标「其余（含工具）」），至少分得出模型和非模型；模型拿不到就不算。
  */
 
 export type Span = { start: number; end: number };
@@ -19,7 +20,7 @@ export type WallSplit = {
   modelMs: number | null;
   /** 工具时间（毫秒）；拿不到可靠时间戳时 null。 */
   toolMs: number | null;
-  /** 其余（毫秒）；模型或工具缺一项时 null。 */
+  /** 其余（毫秒）；工具时间拿不到时含工具执行；模型拿不到时 null。 */
   otherMs: number | null;
 };
 
@@ -144,8 +145,8 @@ export function wallSplit(input: {
     ? lengthOf(toolUnion) - (modelUnion ? overlapOf(toolUnion, modelUnion) : 0)
     : null;
   const otherMs =
-    modelMs !== null && toolMs !== null
-      ? Math.max(0, input.wallMs - modelMs - toolMs)
+    modelMs !== null
+      ? Math.max(0, input.wallMs - modelMs - (toolMs ?? 0))
       : null;
   return { modelMs, toolMs, otherMs };
 }
@@ -159,7 +160,8 @@ export function wallSplitLine(
   wallMs: number,
   steps: number | null,
 ): string {
-  return `墙钟拆分：总 ${secondsText(wallMs)} = 模型 ${secondsText(split.modelMs)} + 工具 ${secondsText(split.toolMs)} + 其余 ${secondsText(split.otherMs)}，步数 ${steps ?? "—"}`;
+  const rest = split.toolMs === null ? "其余（含工具）" : "其余";
+  return `墙钟拆分：总 ${secondsText(wallMs)} = 模型 ${secondsText(split.modelMs)} + 工具 ${secondsText(split.toolMs)} + ${rest} ${secondsText(split.otherMs)}，步数 ${steps ?? "—"}`;
 }
 
 /** 两段（重复任务的第一次和第二次）相加；任一段的某项拿不到，合计也拿不到。 */

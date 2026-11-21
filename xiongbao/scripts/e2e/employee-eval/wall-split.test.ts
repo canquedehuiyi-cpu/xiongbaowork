@@ -83,7 +83,8 @@ test("wallSplit: a missing source is null, not a made-up number", () => {
     model: [{ start: 0, end: 3000 }],
     tools: undefined,
   });
-  expect(noTools).toEqual({ modelMs: 3000, toolMs: null, otherMs: null });
+  // 工具时间拿不到：其余 = 墙钟 − 模型（含工具执行），至少分得出模型和非模型。
+  expect(noTools).toEqual({ modelMs: 3000, toolMs: null, otherMs: 6000 });
   const nothing = wallSplit({
     wallMs: 9000,
     model: undefined,
@@ -164,12 +165,12 @@ test("toolSpans falls back to START (inexact) and gives up when a stamp is missi
 
 test("wallSplitLine and addWallSplits", () => {
   const line = wallSplitLine(
-    { modelMs: 10_000, toolMs: null, otherMs: null },
+    { modelMs: 10_000, toolMs: null, otherMs: 10_000 },
     20_000,
     7,
   );
   expect(line).toBe(
-    "墙钟拆分：总 20.0 s = 模型 10.0 s + 工具 — + 其余 —，步数 7",
+    "墙钟拆分：总 20.0 s = 模型 10.0 s + 工具 — + 其余（含工具） 10.0 s，步数 7",
   );
   expect(
     addWallSplits(
