@@ -575,6 +575,40 @@ describe("accept_task", () => {
     });
   });
 
+  test("accept_task 结果列出必需项和提示；没有必需项就不加", async () => {
+    const tenantId = await tenant("accept-required");
+    const withItems = await turn({
+      tenantId,
+      agentId: `agent-${suite}-req-a`,
+      threadId: `thread-${suite}-${randomUUID().slice(0, 8)}`,
+      ask: "做汇总",
+      reply: "已接下。",
+      work: async (run) => {
+        await run.call("accept_task", {
+          criteria: "汇总完整。必需：汇总表、测试通过",
+        });
+      },
+    });
+    const got = parsed(withItems.results[0] ?? "{}");
+    expect(got.requiredItems).toEqual(["汇总表", "测试通过"]);
+    expect(got.requiredNote).toBe(
+      "交付时在交付物标题或自查里逐条写到这些必需项的原词。",
+    );
+    const without = await turn({
+      tenantId,
+      agentId: `agent-${suite}-req-b`,
+      threadId: `thread-${suite}-${randomUUID().slice(0, 8)}`,
+      ask: "做汇总",
+      reply: "已接下。",
+      work: async (run) => {
+        await run.call("accept_task", { criteria: "汇总完整。" });
+      },
+    });
+    const none = parsed(without.results[0] ?? "{}");
+    expect(none.requiredItems).toBeUndefined();
+    expect(none.requiredNote).toBeUndefined();
+  });
+
   test("accept_task without due_at sets due_reported false", async () => {
     const tenantId = await tenant("nodue");
     const agentId = `agent-${suite}-nodue`;
