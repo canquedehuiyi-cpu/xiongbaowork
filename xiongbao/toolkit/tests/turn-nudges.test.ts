@@ -392,3 +392,88 @@ describe("规格 v2 的模型（自定义地址、Moonshot、智谱、OpenRouter
     expect(seen).toHaveLength(1);
   });
 });
+
+describe("看板卡的轮要结束却没交付：提醒一次", () => {
+  const TOOLS = ["computer_run_command", "deliver_task"];
+  const due = { deliveryDue: true };
+  const worked = (): Message[] => [
+    user("做这张卡"),
+    call("c1", "computer_run_command", { command: "ls" }),
+    result("c1", "computer_run_command"),
+  ];
+  const handedIn = (id: string, value: string): Message[] => [
+    call(id, "deliver_task", { deliverables: ["x"] }),
+    {
+      role: "tool",
+      content: [
+        {
+          type: "tool-result",
+          toolCallId: id,
+          toolName: "deliver_task",
+          output: { type: "text", value },
+        },
+      ],
+    },
+  ];
+  const DELIVERED = JSON.stringify({ delivered: true, taskId: "t1" });
+  const BOUNCED = JSON.stringify({ bounced: true, reason: "缺必需项" });
+
+  test("没交付要结束：提醒，用的是约定的文案", async () => {
+    const seen: Seen[] = [];
+    await ask(seen, ["做完了。", "好。"], worked(), {
+      tools: TOOLS,
+      run: due,
+    });
+    expect(seen).toHaveLength(2);
+    expect(lastTold(seen)).toContain(
+      "这件活还没交付：用 deliver_task 列出交付物和自查，交付后再结束。",
+    );
+  });
+
+  test("只提醒一次：提醒过之后再要结束，放行", async () => {
+    const seen: Seen[] = [];
+    await ask(seen, ["做完了。", "还是做完了。", "真的做完了。"], worked(), {
+      tools: TOOLS,
+      run: due,
+    });
+    expect(seen).toHaveLength(2);
+  });
+
+  test("交付成功：不提醒", async () => {
+    const seen: Seen[] = [];
+    await ask(seen, ["交付了。"], [...worked(), ...handedIn("d1", DELIVERED)], {
+      tools: TOOLS,
+      run: due,
+    });
+    expect(seen).toHaveLength(1);
+  });
+
+  test("宿主没说是看板卡的活：不提醒", async () => {
+    const seen: Seen[] = [];
+    await ask(seen, ["做完了。"], worked(), { tools: TOOLS });
+    expect(seen).toHaveLength(1);
+  });
+
+  test("这一步手里没有 deliver_task：不提醒", async () => {
+    const seen: Seen[] = [];
+    await ask(seen, ["做完了。"], worked(), { run: due });
+    expect(seen).toHaveLength(1);
+  });
+
+  test("被挡回或被拒之后要结束：提醒", async () => {
+    for (const value of [BOUNCED, "Refused. 这张卡不是你的。"]) {
+      const seen: Seen[] = [];
+      await ask(
+        seen,
+        ["好吧。", "好。"],
+        [...worked(), ...handedIn("d1", value)],
+        {
+          tools: TOOLS,
+          run: due,
+        },
+      );
+      expect(seen).toHaveLength(2);
+      expect(lastTold(seen)).toContain("deliver_task");
+    }
+  });
+});

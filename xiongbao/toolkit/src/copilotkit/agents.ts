@@ -126,6 +126,11 @@ export type BuiltInAgentHooks = {
    */
   verifyChanges?: boolean;
   /**
+   * `true`: this run is a board card's work, to be handed in with `deliver_task`; an answer that would
+   * end the turn without an accepted hand-in is sent back once. Absent, never. See `answersOnLastStep`.
+   */
+  deliveryDue?: boolean;
+  /**
    * The check commands the skill this run follows brought with it: running one counts as having
    * checked what the run changed. Absent, only the commands that look like a check count. See
    * `answersOnLastStep`.
@@ -320,6 +325,7 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
       ...(hooks.extension ? { extension: hooks.extension } : {}),
       ...(hooks.planAcrossRuns === false ? { planAcrossRuns: false } : {}),
       ...(hooks.verifyChanges === false ? { verifyChanges: false } : {}),
+      ...(hooks.deliveryDue === true ? { deliveryDue: true } : {}),
       ...(hooks.skillChecks?.length ? { skillChecks: hooks.skillChecks } : {}),
       ...(hooks.endsTurnAfter ? { endsTurnAfter: hooks.endsTurnAfter } : {}),
     });

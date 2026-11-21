@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { EventType } from "@ag-ui/client";
 import type { BaseEvent } from "@ag-ui/client";
+import { EventType } from "@ag-ui/client";
 import {
   CARD_DELIVERED_MIN_STEPS_DEFAULT,
   createRetroObserver,
@@ -158,7 +158,8 @@ describe("a card handed in is a piece of work done", () => {
         ...call("d", "deliver_task", {}, '{"bounced":true}'),
       ]),
     );
-    expect(seen[0]?.trigger).toBe("steps");
+    // A card's round that was bounced is not a delivery, and is not called one.
+    expect(seen[0]?.trigger).toBe("card_turn");
   });
 
   test("a person's own chat turn never asks about a card", async () => {
@@ -205,7 +206,7 @@ describe("a card handed in is a piece of work done", () => {
     ];
     expect(await observe(turnOf(events))).toMatchObject({ outcome: "saved" });
     expect(seen).toHaveLength(1);
-    expect(seen[0]?.trigger).toBe("steps");
+    expect(seen[0]?.trigger).toBe("card_turn");
     expect(logs).toHaveLength(1);
   });
 });
@@ -336,12 +337,12 @@ describe("a card of several rounds is reviewed once, whichever round handed it i
     expect(logOf(logs, "r3")).toMatchObject({ reason: "card_done" });
   });
 
-  test("a round of a card nobody has handed in yet is an ordinary turn", async () => {
+  test("a round of a card nobody has handed in yet is a card turn, not a delivery", async () => {
     const { observe, attempts, round } = board(() => 9);
     round("r1", "card-1");
     await observe(turnOf(work(5), { runId: "r1" }));
     expect(attempts).toHaveLength(1);
-    expect(attempts[0]).toMatchObject({ trigger: "steps" });
+    expect(attempts[0]).toMatchObject({ trigger: "card_turn" });
     expect(attempts[0]).not.toHaveProperty("cardId");
   });
 
@@ -405,20 +406,20 @@ describe("a card of several rounds is reviewed once, whichever round handed it i
     expect(await observe(turnOf(work(6), { runId: "r2" }))).toMatchObject({
       outcome: "saved",
     });
-    await observe(turnOf(work(6, "y"), { runId: "r3" }));
+    await observe(turnOf(work(5, "y"), { runId: "r3" }));
     expect(reviewed).toHaveLength(1);
     expect(reviewed[0]).toMatchObject({
       trigger: "card_delivered",
       cardId: "card-1",
     });
-    // r1 (too thin) and r2 (enough) were the card's; r3 is an ordinary 6-step round, below the long-turn bar.
+    // r1 (too thin) and r2 (enough) were the card's; r3 is a 5-step card turn, below the card bar of 6.
     expect(attempts.map((turn) => turn.trigger)).toEqual([
       "card_delivered",
       "card_delivered",
-      "steps",
+      "card_turn",
     ]);
     expect(JSON.parse(logs[2] ?? "{}")).toMatchObject({
-      trigger: "steps",
+      trigger: "card_turn",
       reason: "steps",
     });
   });
@@ -446,7 +447,7 @@ describe("a card of several rounds is reviewed once, whichever round handed it i
     await observe(turnOf(work(20, "q"), { runId: "r2" }));
     expect(seen.map((turn) => turn.trigger)).toEqual([
       "card_delivered",
-      "steps",
+      "card_turn",
     ]);
   });
 
@@ -541,5 +542,88 @@ describe("the cooldown is per person, employee and card", () => {
     expect(await run(turn())).toEqual({ outcome: "nothing" });
     expect(await run(turn())).toEqual({ outcome: "skipped" });
     expect(calls()).toBe(1);
+  });
+});
+
+describe("a card's round that was never handed in is reviewed on the card bar", () => {
+  test("13 steps, kind task, no hand-in: reviewed, and said not to be handed in", async () => {
+    const { observe, logs } = harness({
+      retrospect: async (turn) => {
+        expect(shouldRetrospect(turn, {})).toBe(true);
+        return { outcome: "saved", id: "auto-1", status: "active" };
+      },
+    });
+    await observe(turnOf(work(13)));
+    expect(JSON.parse(logs[0] ?? "{}")).toMatchObject({
+      outcome: "saved",
+      trigger: "card_turn",
+      steps: 13,
+    });
+    const prompt = retroPrompt(
+      {
+        ownerUserId: "u1",
+        agentId: "bot",
+        threadId: "t1",
+        runId: "r1",
+        request: "x",
+        reply: "y",
+        steps: traceStepsOf(work(13)),
+        failed: false,
+        trigger: "card_turn",
+      },
+      [],
+    );
+    expect(prompt).toContain("was not handed in");
+    expect(prompt).not.toContain("handed this work in and the server");
+  });
+
+  test("5 steps: skipped for steps, and does not count as a conclusion", async () => {
+    const { observe, logs } = harness({
+      retrospect: async (turn) =>
+        shouldRetrospect(turn, {})
+          ? { outcome: "saved", id: "a", status: "active" }
+          : { outcome: "skipped" },
+    });
+    expect(await observe(turnOf(work(5)))).toEqual({ outcome: "skipped" });
+    expect(JSON.parse(logs[0] ?? "{}")).toMatchObject({
+      trigger: "card_turn",
+      reason: "steps",
+    });
+  });
+
+  test("a plain chat turn of 13 steps still needs 15", async () => {
+    const seen: RetroTurn[] = [];
+    const { observe, logs } = harness({
+      retrospect: async (turn) => {
+        seen.push(turn);
+        return shouldRetrospect(turn, {})
+          ? { outcome: "saved", id: "a", status: "active" }
+          : { outcome: "skipped" };
+      },
+    });
+    expect(await observe(turnOf(work(13), { kind: "chat" }))).toEqual({
+      outcome: "skipped",
+    });
+    expect(seen[0]?.trigger).toBe("steps");
+    expect(JSON.parse(logs[0] ?? "{}")).toMatchObject({ reason: "steps" });
+  });
+
+  test("shouldRetrospect: card_turn uses the card bar, which can be set", () => {
+    const turn = (steps: number): RetroTurn => ({
+      ownerUserId: "u1",
+      agentId: "bot",
+      threadId: "t",
+      runId: "r",
+      request: "x",
+      reply: "y",
+      steps: traceStepsOf(work(steps)),
+      failed: false,
+      trigger: "card_turn",
+    });
+    expect(shouldRetrospect(turn(6), {})).toBe(true);
+    expect(shouldRetrospect(turn(5), {})).toBe(false);
+    expect(
+      shouldRetrospect(turn(4), { XIONGBAO_RETRO_CARD_MIN_STEPS: "4" }),
+    ).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import {
   backgroundOf,
   callTrace,
+  concludesRetro,
   type LearnedState,
   learningDiff,
   RETRO_WAIT_MS,
@@ -545,6 +546,31 @@ test("a review saved in an earlier round ends the wait", async () => {
     outcome: "saved",
     waitedMs: 0,
   });
+});
+
+test("card_turn (a card's round never handed in): too few steps keeps waiting, other skips count only on the last round", async () => {
+  const skip = (runId: string, extra: Record<string, unknown>) =>
+    line({ runId, outcome: "skipped", trigger: "card_turn", ...extra });
+  const wait = (log: string) =>
+    waitForRetro({
+      runIds: ["r1", "r2"],
+      readLog: () => log,
+      skillCount: async () => 0,
+      skillsBefore: 0,
+      ...clock(),
+    });
+  expect((await wait(skip("r1", { reason: "steps", steps: 4 }))).ended).toBe(
+    "timeout",
+  );
+  // An earlier round skipped for the cooldown: a later round may still hand the card in.
+  expect((await wait(skip("r1", {}))).ended).toBe("timeout");
+  expect((await wait(skip("r2", {}))).ended).toBe("logged");
+  expect(
+    concludesRetro(
+      { runId: "r1", outcome: "saved", trigger: "card_turn" },
+      false,
+    ),
+  ).toBe(true);
 });
 
 test("a review that errored is recorded with the error's type, and says so in place of an outcome only", () => {
