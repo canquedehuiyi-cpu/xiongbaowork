@@ -12,6 +12,7 @@ import {
   foldBudgetFrom,
   foldEarlyResults,
   foldedSummary,
+  NEVER_FOLDED_TOOLS,
 } from "../src/copilotkit/turn-folding";
 import { parametersFor } from "../src/granted-tool";
 
@@ -761,5 +762,21 @@ describe("默认预算 24K（用户 2026-11-20 批准）", () => {
     for (const step of [17, 18, 19, 20])
       expect(outputOf(folded, step)).toBe(resultText(step, 4_000));
     expect(outputOf(prompt as unknown as Prompt, 2)).toBe(resultText(2, 4_000));
+  });
+});
+
+describe("search_tools 的结果不折", () => {
+  test("越过预算时，别的工具的旧结果折了，search_tools 的结果原样留着（随结果附上的工具规则不丢）", () => {
+    const steps = 30;
+    const prompt = promptAfter(steps);
+    // 第一步换成 search_tools：它的结果带着取到的工具的用法和规则。
+    const first = prompt[2] as { content: { toolName: string }[] };
+    const firstResult = prompt[3] as { content: { toolName: string }[] };
+    (first.content[1] as { toolName: string }).toolName = "search_tools";
+    (firstResult.content[0] as { toolName: string }).toolName = "search_tools";
+    const folded = foldEarlyResults(prompt, { window: WINDOW });
+    expect(NEVER_FOLDED_TOOLS.has("search_tools")).toBe(true);
+    expect(outputOf(folded, 1)).toBe(resultText(1, 4_000));
+    expect(outputOf(folded, 2).startsWith(FOLDED_PREFIX)).toBe(true);
   });
 });

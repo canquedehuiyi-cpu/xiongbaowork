@@ -3,6 +3,7 @@ import { z } from "zod";
 import { APPROVAL_GUIDANCE_WEB_AND_HANDED_OVER } from "../../shared/bot-prompt";
 import { READ_SKILL_TOOL } from "../../shared/self-skills";
 import {
+  browserRulesDeferred,
   deferredCategories,
   isBrowserTool,
   isDeploymentTool,
@@ -302,5 +303,18 @@ describe("发给模型的工具定义去掉用不上的约束", () => {
 
   test("严格模式的接口（Responses）照旧原样", () => {
     expect(sent(true)).toContain("minLength");
+  });
+});
+
+describe("浏览器工具直接带着时，浏览器规则留在系统提示里", () => {
+  test("只有浏览器工具确实排在 search_tools 后面才挪走规则", () => {
+    expect(
+      browserRulesDeferred(true, ["computer_navigate", "save_learned_skill"]),
+    ).toBe(true);
+    // 排在后面的只有记忆、技能这些，浏览器工具直接带着：规则不能挪走。
+    expect(browserRulesDeferred(true, ["save_learned_skill", "recall"])).toBe(
+      false,
+    );
+    expect(browserRulesDeferred(false, ["computer_navigate"])).toBe(false);
   });
 });

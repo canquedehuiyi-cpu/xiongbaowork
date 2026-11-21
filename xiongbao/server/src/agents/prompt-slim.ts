@@ -88,6 +88,17 @@ export const DEFERRED_TOOLS: Readonly<Record<string, string>> = {
  * 这个名字是不是浏览器那一类（开页面、填表、请人接管）：模型用 `search_tools` 取到它们时，浏览器的用法说明
  * 随检索结果一起交给它（`slim-guidance.ts` 的 `slimBrowserGuidance`），不再每步放在系统提示里。
  */
+/**
+ * 浏览器的用法和网页按钮的批准规则能不能挪到 `search_tools` 的结果里：只有短写法的检索开着、而且确实有浏览器
+ * 工具排在检索后面时才行。浏览器工具直接带着时，规则必须留在系统提示里。
+ */
+export function browserRulesDeferred(
+  slimSearch: boolean,
+  waiting: Iterable<string>,
+): boolean {
+  return slimSearch && [...waiting].some(isBrowserTool);
+}
+
 export function isBrowserTool(name: string): boolean {
   const words = DEFERRED_TOOLS[name];
   return words === BROWSER || words === HELP;

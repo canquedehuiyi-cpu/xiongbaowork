@@ -96,6 +96,7 @@ import {
 import type { AgentActor } from "./agents/profile-types";
 import {
   deferredNames,
+  browserRulesDeferred,
   isBrowserTool,
   isDeferredTool,
   isDeploymentTool,
@@ -1229,6 +1230,12 @@ export function builtInAgentConfiguration(
    * 的那次检索结果给；这时系统提示里的电脑段和提问段不再带浏览器的话。几百个应用工具时不走这条：照原样都放在提示里。
    */
   const slimSearch = slim && searching && waiting.size <= SLIM_NAMES_LIMIT;
+  /*
+   * 浏览器的用法和网页按钮的批准规则只有在浏览器工具真的排在 `search_tools` 后面时才挪到检索结果里。
+   * 浏览器工具直接带着（比如配置没有 input 就建好、工具随这一轮的 input 才到）时，规则照旧留在系统提示里，
+   * 不然员工拿着浏览器却从没看到这些规则。
+   */
+  const browserDeferred = browserRulesDeferred(slimSearch, waiting);
   const allTools = [
     ...tools,
     ...(searching
@@ -1362,7 +1369,7 @@ export function builtInAgentConfiguration(
         asking: slim
           ? slimAskingGuidance({
               apps: holdsAppTools(tools),
-              web: !slimSearch,
+              web: !browserDeferred,
             })
           : builtInAskingGuidance({ apps: holdsAppTools(tools) }),
         // 瘦身时「熊宝交付规约」和交付规则合成一段（下面不再另放一个 `<delivery>`）。
@@ -1388,7 +1395,7 @@ export function builtInAgentConfiguration(
         "web_research",
         (slim ? slimWebResearchGuidance : webResearchGuidance)(
           tools.map((tool) => tool.name),
-          { browser: browserSearch, browserDeferred: slimSearch },
+          { browser: browserSearch, browserDeferred },
         ),
       ),
       /*
@@ -1461,7 +1468,7 @@ export function builtInAgentConfiguration(
               search: holdsWebSearch(tools) || ownWebSearch,
               personal: currentEdition() === "personal",
               browserSearch,
-              ...(slimSearch ? { browserDeferred: true } : {}),
+              ...(browserDeferred ? { browserDeferred: true } : {}),
             }),
           )
         : []),
