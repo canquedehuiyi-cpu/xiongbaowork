@@ -95,8 +95,8 @@ import {
 } from "./agents/plan-model";
 import type { AgentActor } from "./agents/profile-types";
 import {
-  deferredNames,
   browserRulesDeferred,
+  deferredNames,
   isBrowserTool,
   isDeferredTool,
   isDeploymentTool,

@@ -61,13 +61,16 @@ export const FOLD_MIN_CHARS = 1_500;
  * 这些工具的结果不折：`search_tools` 取到工具时会随结果附上那批工具的用法和规则（比如网页按钮的批准规则），
  * 工具在后面的步里照样能用，规则不能被折掉。
  */
-export const NEVER_FOLDED_TOOLS: ReadonlySet<string> = new Set(["search_tools"]);
+export const NEVER_FOLDED_TOOLS: ReadonlySet<string> = new Set([
+  "search_tools",
+]);
 /** 读不到模型窗口时按这个算：目前常见模型里偏小的一档（128k），宁可早折也不撑爆。 */
 export const DEFAULT_CONTEXT_WINDOW = 128_000;
 /** 工具定义和提示头的固定开销（token）。不取这一步实际带的工具：工具搜索会让它逐步变化，重放就不稳了。 */
 export const FIXED_PROMPT_TOKENS = 6_000;
 /** 一张图或一个文件算多少 token，不按它的 base64 长度算。 */
 const MEDIA_TOKENS = 1_500;
+
 /*
  * 工具结果文字里夹着的二进制数据（截图的 base64）：模型读不了它，提供方却照字数收 token，一张 1280×800 的
  * 截图约 40 万个字符。主要的处理在发给模型之前（`withoutToolBlobs`，`../tool-result-blobs.ts`）；这里是兜底，
