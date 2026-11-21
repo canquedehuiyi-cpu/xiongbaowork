@@ -3,7 +3,7 @@
  * included, unless the upstream already has the same line at the same path (a sync brings those in).
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -234,16 +234,51 @@ export function cleanupScratchRepositories(): void {
     removeScratchRepository(directory);
 }
 
+/** Scratch repositories are named `brand-upstream-<pid>-*` so a later process can tell whose they are. */
+export const SCRATCH_PREFIX = "brand-upstream-";
+
+/**
+ * Removes the scratch repositories of processes that are gone: a kill or a crash skips a process's own
+ * cleanup. A directory whose process may still run (alive, or EPERM: someone else's) is left alone.
+ */
+function sweepDeadScratchRepositories(): void {
+  let names: string[];
+  try {
+    names = readdirSync(tmpdir());
+  } catch {
+    return;
+  }
+  for (const name of names) {
+    const owner = new RegExp(`^${SCRATCH_PREFIX}(\\d+)-`).exec(name);
+    if (!owner || Number(owner[1]) === process.pid) continue;
+    try {
+      process.kill(Number(owner[1]), 0);
+      continue;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") continue;
+    }
+    try {
+      rmSync(join(tmpdir(), name), { recursive: true, force: true });
+    } catch {
+      // another process got there first, or it is not removable: leave it
+    }
+  }
+}
+
 /**
  * A git that runs in a scratch bare repository, made on first use: fetched upstream commits land there,
  * never in this repository, so a shallow fetch cannot cut its history. The process cleans up its own
  * repositories at exit. Bun test files also call cleanup explicitly because the test runner skips exit hooks.
+ * What a killed or crashed process left behind is swept by the next one that makes a scratch repository.
  */
 export function scratchGit(): Git {
   let dir: string | undefined;
   return (args) => {
     if (dir === undefined) {
-      const directory = mkdtempSync(join(tmpdir(), "brand-upstream-"));
+      sweepDeadScratchRepositories();
+      const directory = mkdtempSync(
+        join(tmpdir(), `${SCRATCH_PREFIX}${process.pid}-`),
+      );
       scratchRepositories.add(directory);
       if (!cleanupRegistered) {
         process.once("exit", cleanupScratchRepositories);

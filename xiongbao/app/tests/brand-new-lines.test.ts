@@ -1,5 +1,8 @@
 import { afterAll, expect, test } from "bun:test";
-import { existsSync, readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   addedLines,
   baseRef,
@@ -8,6 +11,7 @@ import {
   forkIntroduced,
   newLineFindings,
   readSyncPoint,
+  SCRATCH_PREFIX,
   scratchGit,
   upstreamReader,
 } from "../../scripts/brand/guard/new-lines";
@@ -177,3 +181,50 @@ test("this branch adds no unexplained upstream name", () => {
   const found = forkIntroduced(newLineFindings(lines, allow), upstream);
   expect(found).toEqual([]);
 }, 120_000);
+
+const scratchDirsOf = (pid: number) =>
+  readdirSync(tmpdir()).filter((n) => n.startsWith(`${SCRATCH_PREFIX}${pid}-`));
+const MISSING = {
+  commit: "1".repeat(40),
+  repository: "/nonexistent/upstream.git",
+};
+
+test("cleanup also removes a scratch repository a failing fetch left behind", () => {
+  expect(() => upstreamReader(MISSING)).toThrow("upstream-sync.json");
+  cleanupScratchRepositories();
+  expect(scratchDirsOf(process.pid)).toEqual([]);
+});
+
+test("a process that exits leaves no scratch repository", () => {
+  const module = new URL(
+    "../../scripts/brand/guard/new-lines.ts",
+    import.meta.url,
+  ).pathname;
+  const code = `
+    import { scratchGit, upstreamReader } from ${JSON.stringify(module)};
+    scratchGit()(["rev-parse", "--git-dir"]);
+    try { upstreamReader(${JSON.stringify(MISSING)}); } catch {}
+    console.log(process.pid);
+  `;
+  const pid = Number(
+    execFileSync(process.execPath, ["-e", code], { encoding: "utf8" }).trim(),
+  );
+  expect(pid).toBeGreaterThan(0);
+  expect(scratchDirsOf(pid)).toEqual([]);
+});
+
+test("a scratch repository of a process that is gone is swept", () => {
+  let dead = 4_000_000;
+  for (; ; dead--) {
+    try {
+      process.kill(dead, 0);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") break;
+    }
+  }
+  const stale = join(tmpdir(), `${SCRATCH_PREFIX}${dead}-stale`);
+  mkdirSync(stale, { recursive: true });
+  scratchGit()(["rev-parse", "--git-dir"]);
+  cleanupScratchRepositories();
+  expect(existsSync(stale)).toBe(false);
+});
