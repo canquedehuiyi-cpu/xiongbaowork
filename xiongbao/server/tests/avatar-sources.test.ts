@@ -5,9 +5,9 @@ import { LLMock } from "@copilotkit/aimock";
 import { and, eq, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { PROVENANCE_GUIDANCE } from "../../shared/bot-prompt";
-import { SLIM_SOURCES } from "../src/agents/slim-guidance";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import { createRuntimeAgentLoader } from "../src/agents/runtime-agents";
+import { SLIM_SOURCES, SLIM_UNTRUSTED } from "../src/agents/slim-guidance";
 import type { AppVariables } from "../src/auth/guards";
 import {
   AVATAR_SOURCE_LIMIT,
@@ -38,7 +38,7 @@ import {
   avatarAgentId,
   provisionTenant,
 } from "../src/tenant/provisioning";
-import { UNTRUSTED_GUIDANCE, untrustedNotice } from "../src/untrusted-content";
+import { untrustedNotice } from "../src/untrusted-content";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /** The system prompt a built-in configuration carries; a configuration without a key has none. */
@@ -430,7 +430,8 @@ describe("what the 分身 is told", () => {
     expect(prompt.indexOf(avatar.systemPrompt)).toBeLessThan(
       prompt.indexOf(SLIM_SOURCES),
     );
-    expect(prompt).toContain(UNTRUSTED_GUIDANCE);
+    // 用户 2026-11-21 批准：瘦身时不可信内容一段是精简版。
+    expect(prompt).toContain(SLIM_UNTRUSTED);
   });
 
   test("with XIONGBAO_PROMPT_SLIM=off the sources section is the shared original, after the role", () => {

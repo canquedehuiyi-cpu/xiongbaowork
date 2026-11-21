@@ -108,7 +108,10 @@ export function isBrowserTool(name: string): boolean {
  * `search_tools` 描述里替代整张名字清单的分类：每类带哪些工具。描述只列这一轮真排在后面的那几类，一行说完；
  * 具体的名字模型搜到以后在结果里看，搜不到时也把整张清单给它。
  */
-const DEFERRED_CATEGORIES: readonly (readonly [string, readonly string[]])[] = [
+export const DEFERRED_CATEGORIES: readonly (readonly [
+  string,
+  readonly string[],
+])[] = [
   [
     "browser",
     [

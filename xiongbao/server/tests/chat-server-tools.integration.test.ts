@@ -14,6 +14,7 @@ import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
+import { DEFERRED_CATEGORIES } from "../src/agents/prompt-slim";
 import type { AuditStore } from "../src/audit";
 import { personSeat } from "../src/computer/computer-key";
 import type { ComputerGateway } from "../src/computer/gateway";
@@ -253,19 +254,27 @@ const toolNames = (request: ChatCompletionRequest) =>
 
 /*
  * 用户 2026-11-20 批准：瘦身默认开。偶尔才用的工具（浏览器的动作、截图……）首步不发定义，排在 `search_tools`
- * 后面、名字写在它的描述里；员工「持有」的 = 发出去的 + 排在后面的。关着瘦身时两者相同。
+ * 后面；员工「持有」的 = 发出去的 + 排在后面的。关着瘦身时两者相同。
+ * 用户 2026-11-21 批准：`search_tools` 的描述只用一行说有哪几类，不再逐个列名字；排在后面的按描述里的类别展开。
  */
-const heldNames = (request: ChatCompletionRequest) => [
-  ...toolNames(request),
-  ...((
-    (request.tools ?? []).find((tool) => tool.function.name === "search_tools")
-      ?.function.description ?? ""
-  )
-    .split("Not listed:")[1]
-    ?.replace(/\.$/, "")
-    .split(",")
-    .map((name) => name.trim()) ?? []),
-];
+const heldNames = (request: ChatCompletionRequest) => {
+  const categories =
+    (
+      (request.tools ?? []).find(
+        (tool) => tool.function.name === "search_tools",
+      )?.function.description ?? ""
+    )
+      .split("Load unlisted tools:")[1]
+      ?.split(". Say")[0]
+      ?.split(",")
+      .map((label) => label.trim()) ?? [];
+  return [
+    ...toolNames(request),
+    ...DEFERRED_CATEGORIES.filter(([label]) =>
+      categories.includes(label),
+    ).flatMap(([, members]) => members),
+  ];
+};
 
 beforeAll(async () => {
   llm.on({ predicate: () => true }, async (request) => {
