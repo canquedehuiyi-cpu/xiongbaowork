@@ -1463,9 +1463,8 @@ async function runWork(work: Work): Promise<EvalRecord> {
   console.log(
     `   rounds ${runIds.length}, tool calls ${calls.length} (computer ${computerCalls}), files out ${listFiles(copy).length}`,
   );
-  // 重复任务把每一步打出来：看第二次有没有照技能的快路径走，还是又从头摸索。
-  if (work.key.startsWith("repeat-"))
-    for (const line of callTrace(calls)) console.log(`     ${line}`);
+  // 每一步打出来（工具、参数和结果的字数）：重复任务看第二次有没有照技能走，难题看步数和历史花在哪。
+  for (const line of callTrace(calls)) console.log(`     ${line}`);
 
   const judged = await work.judge(copy, {
     capabilities,

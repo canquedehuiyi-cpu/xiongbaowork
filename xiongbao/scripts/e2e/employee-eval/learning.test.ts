@@ -85,16 +85,19 @@ test("a held retrospective carries the reason from its retrospect-held line", ()
   ]);
 });
 
-test("the call trace prints one line per call with the arguments cut short", () => {
+test("the call trace prints one line per call with sizes and the arguments cut short", () => {
   expect(
     callTrace(
       [
-        { name: "computer_run", args: '{"command":"ls\n -la"}' },
+        { name: "computer_run_command", args: '{"command":"ls\n -la"}', result: "a\nb" },
         { name: "deliver_task", args: "x".repeat(10) },
       ],
       8,
     ),
-  ).toEqual([' 1. computer_run {"comman…', " 2. deliver_task xxxxxxxx…"]);
+  ).toEqual([
+    ' 1. computer_run_command [参数 21 字 / 结果 3 字] {"comman…',
+    " 2. deliver_task [参数 10 字] xxxxxxxx…",
+  ]);
 });
 
 function clock() {
