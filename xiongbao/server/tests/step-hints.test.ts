@@ -9,6 +9,9 @@ import {
 import {
   ACCEPT_WITH_READS_ENV,
   acceptWithReadsOn,
+  DELIVER_NUDGE_ENV,
+  deliverNudgeOn,
+  deliveryDueFor,
   MERGE_COMMANDS_ENV,
   mergeCommandsOn,
   PLAN_WITH_ACTION_ENV,
@@ -240,5 +243,24 @@ describe("几条前后依赖的命令合成一条", () => {
     expect(
       slimWorkingGuidance({ untrusted: "u", asking: "a" }).join(""),
     ).toContain(SLIM_HOW_TO_WORK);
+  });
+});
+
+describe("看板卡的轮要结束却没交付时提醒", () => {
+  test("看板卡的无人值守轮带 deliveryDue，聊天轮、例行和巡检不带", () => {
+    expect(deliveryDueFor(true, true, {})).toBe(true);
+    // 聊天：有人看着，也不是看板派活。
+    expect(deliveryDueFor(false, false, {})).toBe(false);
+    // 例行任务、巡检：无人值守，但不是看板卡派的。
+    expect(deliveryDueFor(false, true, {})).toBe(false);
+    expect(deliveryDueFor(true, false, {})).toBe(false);
+  });
+
+  test("默认开，只有明确写 off 才关", () => {
+    expect(deliverNudgeOn({})).toBe(true);
+    expect(deliverNudgeOn({ [DELIVER_NUDGE_ENV]: "off" })).toBe(false);
+    expect(deliveryDueFor(true, true, { [DELIVER_NUDGE_ENV]: "OFF" })).toBe(
+      false,
+    );
   });
 });

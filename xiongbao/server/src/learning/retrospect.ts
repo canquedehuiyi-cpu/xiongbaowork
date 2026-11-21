@@ -1,20 +1,14 @@
-import { EventType } from "@ag-ui/client";
 import type { BaseEvent } from "@ag-ui/client";
+import { EventType } from "@ag-ui/client";
+import { generateText, type LanguageModel } from "ai";
+import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import {
   RETRO_MIN_STEPS_DEFAULT,
   SAVE_SKILL_TOOL,
 } from "../../../shared/self-skills";
-import { generateText, type LanguageModel } from "ai";
-import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { taskEvents, tasks, threadRunEvents } from "../db/schema";
 import { mask } from "../local-learning/evidence";
-import {
-  createDailyLimiter,
-  dailyLimitOf,
-  RETRO_PER_DAY_DEFAULT,
-} from "./daily-limit";
-import { answerFailed } from "./tool-outcome";
 import {
   leadingSkillCommand,
   type PickableSkill,
@@ -25,25 +19,33 @@ import {
   markSkillsUsed,
   type SelfSkillDeps,
   type SkillDraft,
-  saveSkill,
   saveParameters,
+  saveSkill,
   similarSkillOf,
 } from "../skills/save-tool";
 import { withSourceFingerprints } from "../skills/usage";
 import { replyTextOf } from "../tasks/delivery";
 import { currentTenant } from "../tenant/context";
 import { firstJsonObject } from "../wakerflows/generator";
+import {
+  createDailyLimiter,
+  dailyLimitOf,
+  RETRO_PER_DAY_DEFAULT,
+} from "./daily-limit";
+import { answerFailed } from "./tool-outcome";
 
 /**
  * 做完一件复杂的活之后复盘（期 2 · Task 2.4）：看这一轮的工具轨迹和每一步成没成功，判断这套做法值不值得
  * 存成技能，值得就产出一份技能草稿（什么情况下用、步骤、坑点、校验方法），交给 `saveSkill` 按生效规则处理。
  *
- * WHEN. 三种情况，满足一种就复盘：
+ * WHEN. 四种情况，满足一种就复盘：
  *   1. 一轮结束时工具调用的步数达到 `XIONGBAO_RETRO_MIN_STEPS`（默认 15）；
  *   2. 一张看板卡交付成功（`deliver_task` 过了证据核对，卡进入待验收，`card_delivered`）：这已经是「复杂的活做成了」，
  *      不必等本人验收，门槛是 `XIONGBAO_RETRO_CARD_MIN_STEPS`（默认 6）。一张卡常由好几轮做成，交付在哪一轮都一样：
  *      交付之后结束的每一轮都会按这张卡全部轮的轨迹判一次，同一张卡只复盘一次（见 `createRetroObserver`）；
- *   3. 一张看板卡被本人验收通过（`card_accepted`，门槛只是别太短）。
+ *   3. 一张看板卡被本人验收通过（`card_accepted`，门槛只是别太短）；
+ *   4. 看板卡派的一轮，这一轮和这张卡都没交付成功（`card_turn`）：员工把活做完了却没调 `deliver_task`，轨迹和
+ *      交付了的一样有价值，门槛同 2（`XIONGBAO_RETRO_CARD_MIN_STEPS`，默认 6）；复盘请求里照实写这一轮没交付。
  * 失败的轮不复盘。员工这一轮自己已经调用过 `save_learned_skill` 的不再复盘。
  *
  * WHAT IT READS. 轨迹，不只是聊天文字：每一步用了什么工具、成功还是失败（失败的步骤是坑点的来源），
@@ -79,9 +81,9 @@ export type RetroTurn = {
   cardId?: string;
   /**
    * `steps` 是步数到了门槛；`card_delivered` 是一张看板卡交付成功（进入待验收）；`card_accepted` 是本人验收通过了
-   * 一张看板卡。
+   * 一张看板卡；`card_turn` 是看板卡派的一轮，这一轮（和这张卡）没有交付成功，按卡的门槛算步数。
    */
-  trigger: "steps" | "card_delivered" | "card_accepted";
+  trigger: "steps" | "card_delivered" | "card_accepted" | "card_turn";
 };
 
 /** `XIONGBAO_RETRO_MIN_STEPS`：一轮至少多少步工具调用才复盘。默认 15；不是正整数就用默认。 */
@@ -255,7 +257,7 @@ export function shouldRetrospect(
   const needed =
     turn.trigger === "card_accepted"
       ? CARD_RETRO_MIN_STEPS
-      : turn.trigger === "card_delivered"
+      : turn.trigger === "card_delivered" || turn.trigger === "card_turn"
         ? retroCardMinSteps(environment)
         : retroMinSteps(environment);
   return workSteps(turn.steps) >= needed;
@@ -323,7 +325,9 @@ export function retroPrompt(
       ? "The person accepted this work as done."
       : turn.trigger === "card_delivered"
         ? "The Bot handed this work in and the server's evidence check passed; the person has not reviewed it yet."
-        : "",
+        : turn.trigger === "card_turn"
+          ? "This round of a task-board card was not handed in: the Bot never had a deliver_task accepted for it, so the work is not known to be finished. Judge the method from the trace only."
+          : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -794,7 +798,9 @@ export function deliveredCardIn(events: readonly BaseEvent[]): string | null {
  *
  * 同一张卡只复盘一次：有了结论（存了、模型认为不值得、冷却或额度用完而跳过）之后这张卡后面的轮不再复盘；只有
  * 「步数不够」的跳过不算结论，卡上后面的轮补了步数还会再看一次。其余不属于已交付卡的轮看这一轮自己的轨迹，按
- * 步数门槛。每一轮都记一行日志（类型、结果、触发、步数、卡号，跳过时带原因 `steps` / `failed` / `card_done`），
+ * 步数门槛；其中看板卡派的轮（`kind: "task"`）没认到已交付的卡时标 `card_turn`，门槛同卡的 `card_delivered`
+ * （`XIONGBAO_RETRO_CARD_MIN_STEPS`），因为员工做完了活却没调 `deliver_task` 也是一次复杂的活做成了的样子。
+ * 每一轮都记一行日志（类型、结果、触发、步数、卡号，跳过时带原因 `steps` / `failed` / `card_done`），
  * 评测据此知道这张卡的复盘已经跑完，没存技能时也能看出是门槛没到、冷却、还是模型认为不值得。
  */
 export function createRetroObserver(deps: RetroObserverDeps) {
@@ -851,6 +857,9 @@ export function createRetroObserver(deps: RetroObserverDeps) {
             retro = { ...card, trigger: "card_delivered" };
             reviewedKey = key;
           }
+          // 看板卡派的一轮、没认到已交付的卡：不是普通聊天，按卡的门槛算步数；照实标成没交付。
+          if (!card && turn.kind === "task")
+            retro = { ...retro, trigger: "card_turn" };
           outcome = await deps.retrospect(retro);
           if (outcome.outcome === "skipped" && !shouldRetrospect(retro))
             reason = "steps";

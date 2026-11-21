@@ -162,6 +162,9 @@ export function retroLinesOf(
  * - 跳过的是看板卡的复盘（冷却、额度用完、这张卡已经复盘过）：有结论；
  * - 跳过的是失败的轮：只有最后一轮才算（后面没有别的轮了），较早的失败轮后面还有轮要跑；
  * - 通用路径跳过、没写步数原因（冷却、没开）：只有最后一轮才算。
+ *
+ * `card_turn`（看板卡派的一轮，这一轮没交付）走的是后两条，不和 `card_delivered` 一样算「这张卡有结论」：它只是这一轮
+ * 自己的复盘，卡后面的轮还可能交付、按整张卡再复盘一次。步数不够的跳过照样「再等」，冷却等跳过只有最后一轮才算。
  */
 export function concludesRetro(line: RetroLine, isLastRound: boolean): boolean {
   if (line.outcome !== "skipped") return true;

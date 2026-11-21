@@ -23,6 +23,7 @@ export const ACCEPT_WITH_READS_ENV = "XIONGBAO_ACCEPT_WITH_READS";
 export const PLAN_WITH_ACTION_ENV = "XIONGBAO_PLAN_WITH_ACTION";
 export const MERGE_COMMANDS_ENV = "XIONGBAO_MERGE_COMMANDS";
 export const TESTS_PASSED_HINT_ENV = "XIONGBAO_TESTS_PASSED_HINT";
+export const DELIVER_NUDGE_ENV = "XIONGBAO_DELIVER_NUDGE";
 
 type Env = Record<string, string | undefined>;
 
@@ -43,6 +44,26 @@ export function mergeCommandsOn(env: Env = process.env): boolean {
 /** 测试命令全部通过时，命令结果末尾提示收尾（`tool-output.ts`）；默认开，写 `off` 关。 */
 export function testsPassedHintOn(env: Env = process.env): boolean {
   return on(env, TESTS_PASSED_HINT_ENV);
+}
+
+/**
+ * 看板卡的无人值守轮要结束却没交付时，提醒一次（toolkit 的 `answersOnLastStep` 的 `deliveryDue`）；
+ * 默认开，写 `off` 关。
+ */
+export function deliverNudgeOn(env: Env = process.env): boolean {
+  return on(env, DELIVER_NUDGE_ENV);
+}
+
+/**
+ * 这一轮该不该被提醒交付：只有看板卡派的活（派活入口自己说的，`asBoardTurn`）、而且无人值守时才算。
+ * 聊天、例行任务、巡检都不是；这一轮手里有没有 `deliver_task` 由运行器按当步的工具再看。
+ */
+export function deliveryDueFor(
+  boardCard: boolean,
+  unattended: boolean,
+  env: Env = process.env,
+): boolean {
+  return boardCard && unattended && deliverNudgeOn(env);
 }
 
 /** 接下活之后第一件事常常是读：回执不单独占一步。 */

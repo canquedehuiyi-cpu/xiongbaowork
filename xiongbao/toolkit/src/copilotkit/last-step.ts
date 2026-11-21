@@ -80,6 +80,8 @@ export type RunSteps = {
   wholeTurn?: boolean;
   /** The "files changed, nothing checked" reminder was already sent in this run. It is sent once. */
   verifyNudged?: boolean;
+  /** The "this card's work is not handed in" reminder was already sent in this run. It is sent once. */
+  deliveryNudged?: boolean;
 };
 
 /** A new run's state: counted from where it starts, never from where an earlier run stopped. */
@@ -98,6 +100,7 @@ export function startRun(
   steps.extended = false;
   steps.limited = undefined;
   steps.verifyNudged = false;
+  steps.deliveryNudged = false;
 }
 
 /**
@@ -189,6 +192,51 @@ function callsSince(prompt: Prompt, before: number): MadeCall[] {
   return calls;
 }
 
+/** The tool a coworker hands a board card in with. */
+const DELIVER_TOOL = "deliver_task";
+
+/** 给模型看的：没交付就要结束时的提醒。 */
+const DELIVERY_NUDGE =
+  "这件活还没交付：用 deliver_task 列出交付物和自查，交付后再结束。";
+
+/**
+ * Whether a `deliver_task` call after the first `before` model turns was accepted: its result says
+ * `delivered: true`. A bounced hand-in (`bounced`), a refusal (text starting `Refused.`) and text that
+ * is not JSON are not.
+ */
+function deliveredSince(prompt: Prompt, before: number): boolean {
+  let turns = 0;
+  const called = new Set<string>();
+  for (const message of prompt) {
+    if (message.role === "assistant") {
+      turns += 1;
+      if (turns <= before || typeof message.content === "string") continue;
+      for (const part of message.content)
+        if (part.type === "tool-call" && part.toolName === DELIVER_TOOL)
+          called.add(part.toolCallId);
+    } else if (message.role === "tool" && typeof message.content !== "string") {
+      for (const part of message.content) {
+        if (part.type !== "tool-result" || !called.has(part.toolCallId))
+          continue;
+        try {
+          const parsed: unknown = JSON.parse(
+            plainResult(resultText(part.output)),
+          );
+          if (
+            typeof parsed === "object" &&
+            parsed !== null &&
+            (parsed as { delivered?: unknown }).delivered === true
+          )
+            return true;
+        } catch {
+          // Not JSON: a refusal or plain text, not a hand-in.
+        }
+      }
+    }
+  }
+  return false;
+}
+
 /** A one-turn message: in this call's prompt only, never in the conversation. */
 function told(prompt: Prompt, text: string): Prompt {
   return [...prompt, { role: "user", content: [{ type: "text", text }] }];
@@ -249,6 +297,11 @@ export function answersOnLastStep(
      * once (the default). `false` never does.
      */
     verifyChanges?: boolean;
+    /**
+     * The host says this run is a board card's work, which is to be handed in with `deliver_task`. An
+     * answer that would end the turn with no accepted hand-in is sent back once. Absent, never.
+     */
+    deliveryDue?: boolean;
     /**
      * The check commands of the skill this run follows (its fast path's own check). Running one
      * counts as having checked the changes, so a run that does what its skill says is not sent back
@@ -346,15 +399,22 @@ export function answersOnLastStep(
       tools.some((tool) => tool.name === COMMAND_TOOL)
         ? unverifiedChanges(callsSince(prompt, turnStart), run.skillChecks)
         : [];
+    const undelivered =
+      run.deliveryDue === true &&
+      !steps.deliveryNudged &&
+      tools.some((tool) => tool.name === DELIVER_TOOL) &&
+      !deliveredSince(prompt, turnStart);
     const nudge = [
       ...(promise ? [promiseNudge(promise)] : []),
       ...(open.length > 0 ? [openPartsNudge(open)] : []),
       ...(planned.length > 0 ? [planNudge(planned)] : []),
       ...(unchecked.length > 0 ? [verifyNudge(unchecked)] : []),
+      ...(undelivered ? [DELIVERY_NUDGE] : []),
     ].join(" ");
     if (!nudge) return undefined;
     if (dry) return nudge;
     if (unchecked.length > 0) steps.verifyNudged = true;
+    if (undelivered) steps.deliveryNudged = true;
     steps.nudges = (steps.nudges ?? 0) + 1;
     return nudge;
   };

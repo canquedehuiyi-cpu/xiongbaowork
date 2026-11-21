@@ -121,6 +121,7 @@ import {
   slimWebResearchGuidance,
   slimWorkingGuidance,
 } from "./agents/slim-guidance";
+import { deliveryDueFor } from "./agents/step-hints";
 import {
   OPENBOT_TOOL_LIMIT,
   toolLimitFor,
@@ -2787,6 +2788,8 @@ async function buildAgent(
       ...(process.env.XIONGBAO_VERIFY_NUDGE === "off"
         ? { verifyChanges: false }
         : {}),
+      // 看板卡派的无人值守轮：要结束却没交付时提醒一次（`deliveryDueFor`）。
+      ...(deliveryDueFor(boardCard, unattended) ? { deliveryDue: true } : {}),
       /*
        * 这一轮照着技能的快路径做：技能自带的校验命令，跑过它就算改完已验，不再为「改完必验」多走一步。
        * 命令是技能里存的、注入给模型的那一行（`fastPathChecksIn`），不是请求带来的。

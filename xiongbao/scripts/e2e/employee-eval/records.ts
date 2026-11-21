@@ -47,7 +47,7 @@ export type RunLearning = {
      * `nothing` `similar` `skipped`；没看到日志时没有。
      */
     outcome?: string;
-    /** 复盘是按什么触发的：`steps` `card_delivered` `card_accepted`。 */
+    /** 复盘是按什么触发的：`steps` `card_delivered` `card_accepted` `card_turn`（看板卡派的一轮，没交付）。 */
     trigger?: string;
     /** 复盘看的工具调用步数。 */
     steps?: number;
