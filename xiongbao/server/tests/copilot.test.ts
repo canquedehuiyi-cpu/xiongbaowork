@@ -3,12 +3,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AbstractAgent, RunAgentInput } from "@ag-ui/client";
 import { HttpAgent } from "@ag-ui/client";
-import {
-  SLIM_ANSWER_FORMAT,
-  SLIM_HOW_TO_WORK,
-  SLIM_SOURCES,
-  SLIM_SUBAGENTS,
-} from "../src/agents/slim-guidance";
 import { LLMock } from "@copilotkit/aimock";
 import {
   BuiltInAgent,
@@ -18,7 +12,6 @@ import {
 import {
   approvalGuidance,
   BROUGHT_BOT_ASKING_GUIDANCE,
-  builtInAskingGuidance,
   COMPONENT_GUIDANCE,
   computerGuidance,
   HOW_TO_WORK_GUIDANCE,
@@ -34,6 +27,14 @@ import { createTurnRunner } from "@openbot/toolkit/run-turn";
 import { EMPTY, lastValueFrom, Observable } from "rxjs";
 import { z } from "zod";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
+import {
+  SLIM_ANSWER_FORMAT,
+  SLIM_HOW_TO_WORK,
+  SLIM_SOURCES,
+  SLIM_SUBAGENTS,
+  SLIM_UNTRUSTED,
+  slimAskingGuidance,
+} from "../src/agents/slim-guidance";
 import { MAX_INLINED_BYTES_PER_RUN } from "../src/channels/attachment-parts";
 import { loadConfig } from "../src/config";
 import type { LoadAttachment } from "../src/copilot";
@@ -58,8 +59,8 @@ import {
 import { grantedToolGuidance } from "../src/plugins/tools";
 import { loadTenantPackage } from "../src/tenant-package";
 import { UNTRUSTED_GUIDANCE } from "../src/untrusted-content";
-import { fetchDouble } from "./support/fetch-double";
 import { testEnvironment } from "./support/environment";
+import { fetchDouble } from "./support/fetch-double";
 
 /** What every built-in Bot reads first: its name, and that a request for it is for it. */
 const identity = (name: string) =>
@@ -412,8 +413,9 @@ describe("registered Copilot agents", () => {
     // 用户 2026-11-20 批准：瘦身默认开，这几段钉瘦身后的原文；关着时的原文见文件末尾的 off 对照。
     expect(sectionOf(prompt, "how_to_work")).toBe(SLIM_HOW_TO_WORK);
     // M5: this fork's floors, worded for a run without a connected-app tool, then the closed test.
+    // 用户 2026-11-21 批准：瘦身默认开，提问段用短写法（网页按钮的批准规则一字不动，后面的「何时才问」压短）。
     expect(sectionOf(prompt, "asking")).toBe(
-      builtInAskingGuidance({ apps: false }),
+      slimAskingGuidance({ apps: false, web: true }),
     );
     expect(sectionOf(prompt, "asking")).toStartWith(
       approvalGuidance({ apps: false }),
@@ -422,7 +424,7 @@ describe("registered Copilot agents", () => {
     expect(sectionOf(prompt, "answer_format")).toBe(SLIM_ANSWER_FORMAT);
     // 用户 2026-11-20 批准：瘦身默认开，钉瘦身后的原文。
     expect(sectionOf(prompt, "subagents")).toBe(SLIM_SUBAGENTS);
-    expect(sectionOf(prompt, "untrusted_content")).toBe(UNTRUSTED_GUIDANCE);
+    expect(sectionOf(prompt, "untrusted_content")).toBe(SLIM_UNTRUSTED);
     expect(sectionOf(prompt, "model_and_date")).toBe(
       todayGuidance(new Date("2026-11-05T15:44:00Z")),
     );
@@ -1960,7 +1962,7 @@ describe("when a Bot gives work to subagents", () => {
     // On OpenBot's runner every tool it holds is OpenBot's, so it is told OpenBot asks for all of them,
     // in this fork's words for its floors (M5).
     expect(sectionOf(prompt, "asking")).toBe(
-      builtInAskingGuidance({ apps: false }),
+      slimAskingGuidance({ apps: false, web: true }),
     );
     expect(sectionsOf(prompt).filter((tag) => tag === "role")).toHaveLength(1);
   });
@@ -2264,7 +2266,7 @@ describe("a person's standing instructions", () => {
       ]);
       // M5: the asking section in this fork's words for its floors, as before.
       expect(sectionOf(prompt, "asking")).toBe(
-        builtInAskingGuidance({ apps: false }),
+        slimAskingGuidance({ apps: false, web: true }),
       );
     },
   );

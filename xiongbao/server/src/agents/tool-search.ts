@@ -8,7 +8,11 @@ import {
 import type { GrantedTool } from "@openbot/toolkit/granted-tool";
 import { z } from "zod";
 import { markUntrusted } from "../untrusted-content";
-import { DEFERRED_TOOLS, slimModelTools } from "./prompt-slim";
+import {
+  DEFERRED_TOOLS,
+  deferredCategories,
+  slimModelTools,
+} from "./prompt-slim";
 
 /*
  * M3: upstream reads these two from `../plugins/catalogue` (`researchRoleFor`, the web search and
@@ -564,10 +568,16 @@ export function searchToolsTool(
   waiting: readonly GrantedTool[],
   options: {
     /**
-     * 提示词瘦身（`prompt-slim.ts`）：排在后面的是熊宝自己的一小批工具，不是应用的几百个。名字写进描述里，
-     * 模型凭名字就能取；搜不到时把整张清单给它；检索多认几个关键词（「browser」「image」「remind」）。
+     * 提示词瘦身（`prompt-slim.ts`）：排在后面的是熊宝自己的一小批工具，不是应用的几百个。描述里只用一行
+     * 说有哪几类，不逐个列名字（名字在搜到的结果里）；搜不到时把整张清单给它；检索多认几个关键词（「browser」
+     * 「image」「remind」）。
      */
     slim?: boolean;
+    /**
+     * 提示词瘦身：搜到的工具需要附一段用法说明时（浏览器的做法），按找到的工具名给出，原样接在结果后面。
+     * 它是这个部署自己的话，不进应用描述那个不可信的信封。每次搜到都给：较早的工具结果可能已被折叠。
+     */
+    afterFound?: (names: readonly string[]) => string | undefined;
   } = {},
 ): GrantedTool {
   const slim = options.slim === true;
@@ -583,9 +593,9 @@ export function searchToolsTool(
     ref: `openbot/${SEARCH_TOOLS}`,
     description: slim
       ? [
-          "Load tools you hold that are not listed. Say what you need in a few words ('browser', 'image',",
-          "'remind me'); they are callable from your next step. Not listed:",
-          `${waiting.map((tool) => tool.name).join(", ")}.`,
+          "Load unlisted tools:",
+          `${deferredCategories(waiting.map((tool) => tool.name))}.`,
+          "Say what you need in a few words; they are callable from your next step.",
         ].join(" ")
       : [
           "Find tools you hold that are not in front of you yet.",
@@ -594,20 +604,27 @@ export function searchToolsTool(
           "called from your next step, by their names. Search again in other words when none of them fits.",
           "Searching runs nothing.",
         ].join(" "),
-    parameters: z.object({
-      query: z
-        .string()
-        .describe(
-          "What you need to do, in a few words. For example: list orders.",
-        ),
-      limit: z
-        .number()
-        .int()
-        .min(1)
-        .max(SEARCH_RESULTS_LIMIT)
-        .optional()
-        .describe(`How many tools to return. ${SEARCH_RESULTS} when left out.`),
-    }),
+    parameters: slim
+      ? z.object({
+          query: z.string(),
+          limit: z.number().int().min(1).max(SEARCH_RESULTS_LIMIT).optional(),
+        })
+      : z.object({
+          query: z
+            .string()
+            .describe(
+              "What you need to do, in a few words. For example: list orders.",
+            ),
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(SEARCH_RESULTS_LIMIT)
+            .optional()
+            .describe(
+              `How many tools to return. ${SEARCH_RESULTS} when left out.`,
+            ),
+        }),
     execute: async (args) => {
       const { query = "", limit = SEARCH_RESULTS } =
         args && typeof args === "object"
@@ -631,6 +648,7 @@ export function searchToolsTool(
           `Tools you can search: ${[...systems].map(([system, count]) => `${system} (${count})`).join(", ")}.`,
           "Try other words, naming the action and the thing it acts on.",
         ].join("\n");
+      const extra = options.afterFound?.(found.map((tool) => tool.name));
       return [
         `${FOUND_LINE} ${found.map((tool) => tool.name).join(", ")}`,
         `You can call them from your next step, for "${asked}". What each one does, in its app's words:`,
@@ -643,6 +661,7 @@ export function searchToolsTool(
             .join("\n"),
           "app tool descriptions",
         ),
+        ...(extra ? [extra] : []),
       ].join("\n");
     },
   };

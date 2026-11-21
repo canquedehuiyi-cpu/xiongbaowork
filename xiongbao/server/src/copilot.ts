@@ -60,7 +60,7 @@ import {
 } from "../../shared/acp";
 import { mediaGuidance } from "../../shared/media";
 import { planGuidance } from "../../shared/plan";
-import { selfSkillGuidance } from "../../shared/self-skills";
+import { READ_SKILL_TOOL, selfSkillGuidance } from "../../shared/self-skills";
 import { subagentGuidance, subagentModelGuidance } from "../../shared/subagent";
 import { thinkingOf } from "../../shared/thinking";
 import {
@@ -96,6 +96,7 @@ import {
 import type { AgentActor } from "./agents/profile-types";
 import {
   deferredNames,
+  isBrowserTool,
   isDeferredTool,
   isDeploymentTool,
   promptSlimOn,
@@ -109,8 +110,13 @@ import { isUnattended, runModeOf } from "./agents/run-mode";
 import {
   omitsAnswerFormat,
   SLIM_NO_HANDOFF,
+  SLIM_UNTRUSTED,
+  slimAskingGuidance,
+  slimBrowserGuidance,
+  slimCodingToolsGuidance,
   slimDelegationGuidance,
   slimMediaGuidance,
+  slimSelfSkillGuidance,
   slimWebResearchGuidance,
   slimWorkingGuidance,
 } from "./agents/slim-guidance";
@@ -175,8 +181,11 @@ import type {
 } from "./models/runtime-resolver";
 import { withModelRun } from "./models/token-metering";
 import {
+  builtInSkillGuidanceFor,
   fastPathChecksIn,
   heldSkillsGuidance,
+  isSelfWrittenSkill,
+  matchedSkillChecks,
   skillGuidanceFor,
 } from "./plugins/picked-skill";
 import { appCallsOfRun, withAppCallsOf } from "./plugins/run-calls";
@@ -1215,6 +1224,11 @@ export function builtInAgentConfiguration(
     ? withToolSearch(unwrapped, waiting, { slim })
     : undefined;
   const searching = wrapped !== undefined;
+  /*
+   * 排在后面的只有熊宝自己的一小批工具时，`search_tools` 用短写法（只说有哪几类），浏览器的用法随搜到浏览器工具
+   * 的那次检索结果给；这时系统提示里的电脑段和提问段不再带浏览器的话。几百个应用工具时不走这条：照原样都放在提示里。
+   */
+  const slimSearch = slim && searching && waiting.size <= SLIM_NAMES_LIMIT;
   const allTools = [
     ...tools,
     ...(searching
@@ -1224,8 +1238,17 @@ export function builtInAgentConfiguration(
               ...tools.filter((tool) => waiting.has(tool.name)),
               ...clientWaiting,
             ],
-            // 排在后面的只有熊宝自己的一小批工具时，名字直接写进描述；几百个应用工具时不写。
-            { slim: slim && waiting.size <= SLIM_NAMES_LIMIT },
+            slimSearch
+              ? {
+                  slim: true,
+                  afterFound: (names) =>
+                    names.some(isBrowserTool)
+                      ? slimBrowserGuidance({
+                          searchFallback: browserSearch && !ownWebSearch,
+                        })
+                      : undefined,
+                }
+              : { slim: slim && waiting.size <= SLIM_NAMES_LIMIT },
           ),
         ]
       : []),
@@ -1335,8 +1358,21 @@ export function builtInAgentConfiguration(
        * `CONNECTOR_APPROVAL_GUIDANCE` is; then upstream's closed test. See `builtInAskingGuidance`.
        */
       ...(slim ? slimWorkingGuidance : workingGuidance)({
-        untrusted: UNTRUSTED_GUIDANCE,
-        asking: builtInAskingGuidance({ apps: holdsAppTools(tools) }),
+        untrusted: slim ? SLIM_UNTRUSTED : UNTRUSTED_GUIDANCE,
+        asking: slim
+          ? slimAskingGuidance({
+              apps: holdsAppTools(tools),
+              web: !slimSearch,
+            })
+          : builtInAskingGuidance({ apps: holdsAppTools(tools) }),
+        // 瘦身时「熊宝交付规约」和交付规则合成一段（下面不再另放一个 `<delivery>`）。
+        ...(slim
+          ? {
+              deliveryProtocol: deliveryProtocolGuidance(
+                tools.map((tool) => tool.name),
+              ),
+            }
+          : {}),
         // 看板卡的一轮没有页面在画组件，不放「回答格式」段（token 第五轮，见 `omitsAnswerFormat`）。
         ...(slim && omitsAnswerFormat(run.boardCard)
           ? { answerFormat: false }
@@ -1352,17 +1388,19 @@ export function builtInAgentConfiguration(
         "web_research",
         (slim ? slimWebResearchGuidance : webResearchGuidance)(
           tools.map((tool) => tool.name),
-          { browser: browserSearch },
+          { browser: browserSearch, browserDeferred: slimSearch },
         ),
       ),
       /*
        * The delivery loop's four rules, for a coworker that holds `accept_task` and only then: one whose
        * 接活 is switched off does not work in three steps (spec 2026-11-15-delivery-loop §4).
        */
-      ...promptSection(
-        "delivery",
-        deliveryProtocolGuidance(tools.map((tool) => tool.name)),
-      ),
+      ...(slim
+        ? []
+        : promptSection(
+            "delivery",
+            deliveryProtocolGuidance(tools.map((tool) => tool.name)),
+          )),
       /*
        * How to carry a job of several steps with `update_plan`, for a Bot that holds it and only
        * then: one whose plan tool is switched off for it is not taught to use it (期二).
@@ -1374,7 +1412,9 @@ export function builtInAgentConfiguration(
        */
       ...promptSection(
         "self_skills",
-        selfSkillGuidance(tools.map((tool) => tool.name)),
+        (slim ? slimSelfSkillGuidance : selfSkillGuidance)(
+          tools.map((tool) => tool.name),
+        ),
       ),
       /*
        * How to share a job of several parts out to subagents, for a run that holds `run_subagent`
@@ -1406,7 +1446,10 @@ export function builtInAgentConfiguration(
        * 改文件用 computer_edit_file 按块改、找代码用 computer_grep 和 computer_glob。只给持有这些工具
        * 的运行，和 <verify> 一样不改共用段落（期五）。
        */
-      ...promptSection("coding_tools", codingToolsGuidance(heldToolNames)),
+      ...promptSection(
+        "coding_tools",
+        (slim ? slimCodingToolsGuidance : codingToolsGuidance)(heldToolNames),
+      ),
       /*
        * Only for a run that holds the computer. A third of the prompt is about the browser, and a
        * Linear-and-Notion routine that never opens one read all of it ahead of its own job.
@@ -1418,6 +1461,7 @@ export function builtInAgentConfiguration(
               search: holdsWebSearch(tools) || ownWebSearch,
               personal: currentEdition() === "personal",
               browserSearch,
+              ...(slimSearch ? { browserDeferred: true } : {}),
             }),
           )
         : []),
@@ -2220,7 +2264,7 @@ async function buildAgent(
    * `run_subagent` call, and takes the run's calls rather than a set of its own (`appCallsOfRun`).
    */
   const appCalls = appCallsOfRun();
-  const granted = await withAppCallsOf(appCalls, () => loadTools(agent.id));
+  const loaded = await withAppCallsOf(appCalls, () => loadTools(agent.id));
   // Nobody is watching, so the run has to finish on its own: the same reading the prompt is given.
   const unattended = isUnattended(mode);
   // M3: upstream's `loadApps` (the apps this Bot holds, as they stand) is not taken; see the plugins imports.
@@ -2253,11 +2297,34 @@ async function buildAgent(
   const pickedSkillFor = (input: RunAgentInput) =>
     skillGuidanceFor(input, skills);
   /*
+   * 内置员工：瘦身开着时给自己写的技能清单加人点的那条（`builtInSkillGuidanceFor`），关着时和远端的员工一样，
+   * 把对得上的技能正文直接放进提示。
+   */
+  const pickedSkillForBuiltIn = (input: RunAgentInput) =>
+    promptSlimOn()
+      ? builtInSkillGuidanceFor(input, skills)
+      : skillGuidanceFor(input, skills);
+  // 对得上的技能自带的校验命令，由服务器从技能里算（不看提示里写了什么）。
+  const skillChecksFor = (input: RunAgentInput) =>
+    promptSlimOn() ? matchedSkillChecks(input, skills) : [];
+  /*
    * 它手上握着哪些技能，作为索引交给模型。不带 input：同一批 grants 每次都是同一段字节，落在
    * prompt 的稳定前缀里。见 `heldSkillsGuidance`。
    */
   const heldSkillsFor = heldSkillsGuidance(skills);
   const holdsInstructions = skills.some((skill) => skill.instructions);
+  /*
+   * 手上有自己写的技能、瘦身开着时，每一步都带着只读技能的 `read_skill`（参数只有一个 id，定义很小）；没有自己写的技能
+   * 就不给它，没有技能的员工不为它付每一步的定义。技能清单放在 `picked_skill` 段（`ownSkillsGuidance`），正文不放。
+   */
+  const readsOwnSkills =
+    promptSlimOn() &&
+    skills.some(
+      (skill) => isSelfWrittenSkill(skill) && skill.instructions?.trim(),
+    );
+  const granted = loaded.filter(
+    (tool) => tool.name !== READ_SKILL_TOOL || readsOwnSkills,
+  );
   const narrowing =
     selection &&
     skills.some((skill) => skill.tools.length > 0) &&
@@ -2717,12 +2784,16 @@ async function buildAgent(
        * 这一轮照着技能的快路径做：技能自带的校验命令，跑过它就算改完已验，不再为「改完必验」多走一步。
        * 命令是技能里存的、注入给模型的那一行（`fastPathChecksIn`），不是请求带来的。
        */
-      ...(pickedSkill
-        ? (() => {
-            const skillChecks = fastPathChecksIn(pickedSkill);
-            return skillChecks.length > 0 ? { skillChecks } : {};
-          })()
-        : {}),
+      ...(() => {
+        // 人点的那条的正文在提示里；对得上的自写技能只有清单，它们的校验命令由服务器从技能里取。
+        const skillChecks = [
+          ...new Set([
+            ...(pickedSkill ? fastPathChecksIn(pickedSkill) : []),
+            ...(input ? skillChecksFor(input) : []),
+          ]),
+        ];
+        return skillChecks.length > 0 ? { skillChecks } : {};
+      })(),
       /*
        * 交付被接受之后这一轮直接结束，不再为一句收尾的话多调一次模型（`tasks/delivery-end.ts`）；
        * 计划没做完、改完没校验时提醒照旧。部署开关 `XIONGBAO_DELIVER_ENDS_TURN=off` 回到原样。
@@ -2877,7 +2948,7 @@ async function buildAgent(
           timeZone,
           runAgentModel,
         );
-      const pickedSkill = pickedSkillFor(input);
+      const pickedSkill = pickedSkillForBuiltIn(input);
       // 重活分流（期 4）：先按规则看消息，有命中才查难任务模型和固定的 Codex、Claude Code 员工。
       const heavyFacts = await loadHeavyTaskFacts(agent.id, input.messages);
       // Fetched per run, so a skill published a moment ago reaches the next run (upstream 0046).

@@ -212,8 +212,9 @@ describe("更新计划和下一步动作放在同一步发", () => {
 });
 
 describe("几条前后依赖的命令合成一条", () => {
+  // 用户 2026-11-21 批准：how_to_work 压短（对标 Codex CLI），「合成一条命令」那一句关着时的写法也跟着换。
   const ORIGINAL =
-    "Use what you already have first: this conversation and earlier results in this run, then your apps, then the web, and the person last. Before calling tools, note what you need and hold, and fetch only what is missing; with an item's ID or link, look it up directly.\n\nRun independent reads, searches and commands together: send them all in one reply as several tool calls (about five at a time), not one per reply, and read every result before the next batch. When you already know the next few things you need (open these files, search these terms, run these checks), that is one reply, not several. Keep dependent steps, and every change, one after another. When you decide on a step, take it in the same reply. If a call fails, times out or comes back empty, retry once or go another way; if it still fails, carry on without it and say so. Deliver what was asked even when part is missing, and end with what you could not confirm.";
+    "Use what you already have before fetching more.\n\nSend independent reads, searches and commands together in one reply (about five tool calls), not one per reply; read every result before the next batch. Keep dependent steps, and every change, one after another. Decide and act in the same reply. If a call fails, retry once or go another way, then carry on without it and say so. Deliver what was asked even when part is missing, and say what you could not confirm.";
 
   test("默认的 how_to_work 多一句：依赖的命令用 && 合成一条，一次读完多个文件", () => {
     expect(SLIM_HOW_TO_WORK).toContain("&&");

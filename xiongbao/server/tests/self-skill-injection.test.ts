@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import type { Message } from "@ag-ui/client";
 import { LLMock } from "@copilotkit/aimock";
-import type { SelectableSkill } from "../src/plugins/selection";
+import { z } from "zod";
 import {
   buildAgents,
   type RegisteredAgent,
@@ -23,6 +23,7 @@ import {
   skillGuidanceFor,
   tokensOf,
 } from "../src/plugins/picked-skill";
+import type { SelectableSkill } from "../src/plugins/selection";
 
 /*
  * 员工自己写的技能，同类任务第二次一定看得到：不必人点命令，也不必员工想起来去读，对得上的一两条
@@ -203,17 +204,26 @@ describe("on OpenBot's own harness, the model is sent it", () => {
     wire.length = 0;
   });
 
-  async function sent(text: string) {
+  // 员工手上的 `read_skill`（真的在 `skills/save-tool.ts`，要数据库）：这里只要一个同名的桩，看 `copilot.ts` 给不给。
+  const readSkill = {
+    name: "read_skill",
+    ref: "bot/read_skill",
+    description: "Read one of your own skills in full, by id.",
+    parameters: z.object({ id: z.string() }),
+    execute: async () => "",
+  };
+
+  async function sent(text: string, chosen: ToolSelection = selection) {
     const agents = await buildAgents(
       [bot],
       model,
       "synthetic-key",
       undefined,
-      async () => [],
+      async () => [readSkill],
       undefined,
       undefined,
       undefined,
-      selection,
+      chosen,
     );
     const agent = agents[bot.id]?.clone();
     if (!agent) throw new Error("Bot missing");
@@ -222,10 +232,36 @@ describe("on OpenBot's own harness, the model is sent it", () => {
     return wire.join("\n");
   }
 
-  test("a second request of the same kind carries the skill's steps; an unrelated one does not", async () => {
-    expect(await sent(SECOND_RUN)).toContain(MARKER);
+  /*
+   * 用户 2026-11-21 批准：对标 Codex CLI，技能不再每一步把正文放进提示，只列清单（标题、id、什么时候用），对得上的标
+   * MATCH；正文用 `read_skill` 读，读出的结果留在对话历史里。原来这条断言钉的是「正文在提示里」。
+   */
+  test("a second request of the same kind lists the skill as MATCH without its steps; an unrelated one has no MATCH", async () => {
+    const second = await sent(SECOND_RUN);
+    expect(second).toContain(`(id: ${REPORT.slug})`);
+    expect(second).toContain("[MATCH]");
+    expect(second).not.toContain(MARKER);
+    // 员工手上有自己写的技能：每一步都带着读它的工具。
+    expect(second).toContain('"name":"read_skill"');
     wire.length = 0;
     const unrelated = await sent(UNRELATED);
     expect(unrelated).not.toContain(MARKER);
+    expect(unrelated).not.toContain("[MATCH]");
+  });
+
+  test("an employee with no skill of its own is not sent read_skill, and has no list", async () => {
+    const human: Held = {
+      tools: [],
+      slug: "pirate-haiku",
+      title: "Pirate haiku",
+      summary: "Write a haiku like a pirate.",
+      instructions: "Write a haiku like a pirate.",
+    };
+    const none = await sent(SECOND_RUN, {
+      loadSkills: async () => [human],
+      choose: async () => null,
+    });
+    expect(none).not.toContain("read_skill");
+    expect(none).not.toContain("[MATCH]");
   });
 });

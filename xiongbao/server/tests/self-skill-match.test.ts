@@ -363,7 +363,8 @@ describe("on OpenBot's own harness the list rides on the message, not on the pre
     const first = await sent([{ id: "q", role: "user", content: task }]);
     // The standing index of held skills carries the name and summary every time; the list is this
     // message's own section, told apart by its opening line and the id in parentheses.
-    expect(first).toContain("You have written down how you did these kinds");
+    // 用户 2026-11-21 批准：清单换了开头那句（现在叫员工用 read_skill 读全文）。
+    expect(first).toContain("Skills you wrote down from earlier work");
     expect(first).toContain("(id: auto-1111111111)");
     wire.length = 0;
     const follow = await sent([
@@ -371,7 +372,7 @@ describe("on OpenBot's own harness the list rides on the message, not on the pre
       { id: "a", role: "assistant", content: "做了一半" },
       { id: "q2", role: "user", content: "继续" },
     ]);
-    expect(follow).not.toContain("You have written down how you did these");
+    expect(follow).not.toContain("Skills you wrote down from earlier work");
     expect(follow).not.toContain("(id: auto-1111111111)");
   });
 });

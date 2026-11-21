@@ -179,6 +179,12 @@ export type ComputerHolding = {
    * remote harnesses do not set it and keep the lines.
    */
   browserSearch?: boolean;
+  /**
+   * The browser tools wait behind `search_tools` on this run, and their how-to arrives with the search
+   * result that loads them (`server/src/agents/slim-guidance.ts`). The computer section is then three
+   * short lines. Only the built-in Bots' short wording reads it; absent, the whole section is said.
+   */
+  browserDeferred?: boolean;
 };
 
 /**
@@ -460,7 +466,12 @@ const APPROVAL_GUIDANCE_OPENING =
 export const APPROVAL_GUIDANCE_APPS =
   "- 已连接应用的工具（名字以 mcp__ 开头）：名字表明会删除或归档的；应用标为破坏性的（会删除或覆盖内容）；名字表明会发送、回复、转发、通知、邀请、评论、分享或修改访问权限、发帖或公开发布的；以及参数里写明了收件人或受邀人邮箱的调用。";
 
-const APPROVAL_GUIDANCE_WEB_AND_HANDED_OVER = [
+/**
+ * The three bullets about web pages, payments and the two cards a send can show. Exported so the built-in
+ * Bots' short wording can say the web ones together with the browser's how-to, when the browser tools wait
+ * behind a search (`server/src/agents/slim-guidance.ts`).
+ */
+export const APPROVAL_GUIDANCE_WEB_AND_HANDED_OVER = [
   "- 网页上：点删除、移除、发送、回复、评论（包括「Add comment」「发表评论」）、分享、邀请、发帖、发布、转发这类按钮，也包括用 Enter 或空格按下它们；在写消息、回复或评论的输入框里按 Enter、Ctrl+Enter 或 Cmd+Enter；没有指明元素时在页面上按 Enter 或空格。系统认得常见的中英文按钮文字（如 Delete、Send、Share、Post，删除、发送、分享、发布、立即购买）；文字更长或少见的按钮未必认得，这类按钮如果会发出、删除、公开或付款，你先问对方。其它按钮，例如 Submit、Save、Continue、提交、保存，不在此列，按平常的方式确认。",
   "- 付款、购买、转账、升降级付费套餐，以及修改密码、两步验证、安全或分享设置：你不要替对方做，告诉对方需要他本人操作（系统遇到这些也会交给本人）。",
   "- 一次发送有时会先后出现两张卡（私密分享确认和发送确认），这是正常的，不要因此改用别的方式发送。",
