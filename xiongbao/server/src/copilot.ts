@@ -178,7 +178,6 @@ import {
   fastPathChecksIn,
   heldSkillsGuidance,
   skillGuidanceFor,
-  skillGuidanceParts,
 } from "./plugins/picked-skill";
 import { appCallsOfRun, withAppCallsOf } from "./plugins/run-calls";
 import type {
@@ -2253,9 +2252,6 @@ async function buildAgent(
    */
   const pickedSkillFor = (input: RunAgentInput) =>
     skillGuidanceFor(input, skills, { boardCard });
-  // The same guidance split in two for a built-in run: one line per step, the body on the first.
-  const pickedSkillPartsFor = (input: RunAgentInput) =>
-    skillGuidanceParts(input, skills, { boardCard });
   /*
    * 它手上握着哪些技能，作为索引交给模型。不带 input：同一批 grants 每次都是同一段字节，落在
    * prompt 的稳定前缀里。见 `heldSkillsGuidance`。
@@ -2887,10 +2883,15 @@ async function buildAgent(
           timeZone,
           runAgentModel,
         );
-      // Built-in run: the matched skill's body goes on the first model call only; one line on the rest.
-      const pickedParts = pickedSkillPartsFor(input);
-      const pickedSkill = pickedParts?.system;
-      const firstStepSkill = pickedParts?.firstStep;
+      /*
+       * The matched skill's whole guidance (fast path included) stays in the system prompt for every
+       * model call of the run. Putting the body on the first call only (#763) left the later calls
+       * without the fast path: the step-one message is not kept in history, and in the eval the employee
+       * with a skill explored from scratch (42 steps against 18 for one without). Same bytes every step,
+       * so the prompt prefix still hits the provider's cache.
+       */
+      const pickedSkill = pickedSkillFor(input);
+      const firstStepSkill: string | undefined = undefined;
       // 重活分流（期 4）：先按规则看消息，有命中才查难任务模型和固定的 Codex、Claude Code 员工。
       const heavyFacts = await loadHeavyTaskFacts(agent.id, input.messages);
       // Fetched per run, so a skill published a moment ago reaches the next run (upstream 0046).
