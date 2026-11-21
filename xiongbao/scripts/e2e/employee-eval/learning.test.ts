@@ -448,6 +448,8 @@ test("only plain turns skipped for steps: it waits the whole cap, and says what 
     outcome: "skipped",
     trigger: "steps",
     steps: 14,
+    // 跳过的原因也记下（步数不够），报告里说得出为什么没学到。
+    reason: "steps",
   });
 });
 
@@ -543,4 +545,20 @@ test("a review saved in an earlier round ends the wait", async () => {
     outcome: "saved",
     waitedMs: 0,
   });
+});
+
+test("a review that errored is recorded with the error's type, and says so in place of an outcome only", () => {
+  const log = [
+    `{"type":"retrospect-error","error":"TypeError","context":{"threadId":"t","runId":"run-e"}}`,
+    `{"type":"retrospect","outcome":"skipped","trigger":"steps","steps":35,"agentId":"a","runId":"run-e"}`,
+  ].join("\n");
+  expect(retroLinesOf(log, ["run-e"])).toEqual([
+    {
+      outcome: "skipped",
+      trigger: "steps",
+      steps: 35,
+      error: "TypeError",
+      runId: "run-e",
+    },
+  ]);
 });
