@@ -969,6 +969,14 @@ function runErrorLines(events: readonly AgUiEvent[]): string[] {
     });
 }
 
+/** 服务器日志里服务商拒绝的那几行（`model-provider-refused`），各取前 600 个字。 */
+function refusedLines(log: string): string[] {
+  return log
+    .split("\n")
+    .filter((line) => line.includes("model-provider-refused"))
+    .map((line) => line.slice(0, 600));
+}
+
 /** 看板路径：派活 → 等这一轮结束 → 没做完就以本人身份再派一句「继续」。 */
 async function driveBoard(
   work: Work,
@@ -1030,6 +1038,10 @@ async function driveBoard(
       );
       // 只打在评测日志里（不进报告）：报错的错误码和原文前 200 个字，看得出是哪一步、为什么停的。
       for (const line of runErrorLines(events)) console.log(`     ${line}`);
+      // 服务商拒绝时，服务器日志里有它的原话（model-provider-refused）：打最近的两条，看得出是哪种 400。
+      if (failed)
+        for (const line of refusedLines(serverLogText()).slice(-2))
+          console.log(`     provider said: ${line}`);
     }
   } catch (thrown) {
     error = thrown instanceof Error ? thrown.message : String(thrown);
