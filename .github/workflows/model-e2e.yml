@@ -251,7 +251,9 @@ jobs:
           sudo useradd --create-home --shell /bin/bash xbeval
           sudo chmod o-rwx "$HOME"
           sudo mkdir -p /opt/xbeval
-          sudo cp -a agent-computer shared /opt/xbeval/
+          # 电脑的代码还引用 runner/（ACP 宿主、浏览器）和 server/src/computer/target.ts（导航目标校验），一并拷过去。
+          sudo cp -a agent-computer shared runner /opt/xbeval/
+          sudo install -D -m 0644 server/src/computer/target.ts /opt/xbeval/server/src/computer/target.ts
           sudo ln -s agent-computer/node_modules /opt/xbeval/node_modules
           sudo chmod -R a+rX /opt/xbeval
           if [ -d /opt/ms-playwright ]; then sudo chmod -R a+rX /opt/ms-playwright; fi
@@ -438,7 +440,9 @@ jobs:
           sudo useradd --create-home --shell /bin/bash xbeval
           sudo chmod o-rwx "$HOME"
           sudo mkdir -p /opt/xbeval
-          sudo cp -a agent-computer shared /opt/xbeval/
+          # 电脑的代码还引用 runner/（ACP 宿主、浏览器）和 server/src/computer/target.ts（导航目标校验），一并拷过去。
+          sudo cp -a agent-computer shared runner /opt/xbeval/
+          sudo install -D -m 0644 server/src/computer/target.ts /opt/xbeval/server/src/computer/target.ts
           sudo ln -s agent-computer/node_modules /opt/xbeval/node_modules
           sudo chmod -R a+rX /opt/xbeval
           if [ -d /opt/ms-playwright ]; then sudo chmod -R a+rX /opt/ms-playwright; fi
