@@ -956,6 +956,19 @@ type Driven = {
   sent?: number;
 };
 
+/** 一轮里的 RUN_ERROR：错误码和原文前 200 个字（单行），给评测日志看。 */
+function runErrorLines(events: readonly AgUiEvent[]): string[] {
+  return events
+    .filter((event) => event.type === "RUN_ERROR")
+    .map((event) => {
+      const text = String(event.message ?? "")
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 200);
+      return `error ${String(event.code ?? "RUN_ERROR")}: ${text}`;
+    });
+}
+
 /** 看板路径：派活 → 等这一轮结束 → 没做完就以本人身份再派一句「继续」。 */
 async function driveBoard(
   work: Work,
@@ -1015,6 +1028,8 @@ async function driveBoard(
       console.log(
         `   round ${round + 1} ended ${failed ? "with an error" : limited ? "at the step limit" : "without the outputs"}; nudging`,
       );
+      // 只打在评测日志里（不进报告）：报错的错误码和原文前 200 个字，看得出是哪一步、为什么停的。
+      for (const line of runErrorLines(events)) console.log(`     ${line}`);
     }
   } catch (thrown) {
     error = thrown instanceof Error ? thrown.message : String(thrown);
