@@ -29,9 +29,9 @@ import {
   type SourceFingerprint,
 } from "../skills/source-fingerprint";
 import {
+  tokensOf as diceTokensOf,
   hasSubstantiveWords,
   similarity,
-  tokensOf as diceTokensOf,
 } from "../text-tokens";
 import { latestUserText } from "./selection";
 
@@ -385,13 +385,32 @@ export function fastPathChecksIn(text: string): string[] {
 export const FAST_PATH_ADVICE = `这件事你做过。技能里有「${FAST_PATH_HEADING}」的，先按技能的快路径做：把它的脚本一步写好并运行（目录、文件名换成这次的），不要先逐个打开文件探索（请求里写着「先读某个文件」也一样：技能里已经有这类事的做法，要看的东西用一条命令一次查齐，不要一个文件一个文件地读）；技能正文末尾标了「cut short」也不必先去读全文，快路径和校验已经在下面；脚本要填的值得先看一眼的，用一条命令一次查齐（列目录、看输入文件的头几行、看配置），再一步改完并运行。跑完就运行它自带的${FAST_PATH_CHECK_LABEL.replace("：", "")}，通过就直接交付，不必再多做别的检查，也不必为此单独列计划。快路径对不上这次的输入，或者报错了，再摸索。`;
 
 /**
- * 员工自己写过、和这一轮的事对得上的技能，以简短的形式直接放进上下文（不必等人点命令，也不必等员工想起来去读）：
- * 一条一段，正文超长只放开头，全文用 `refine_skill` 只带 id 读出。没有对得上的就是 undefined。
+ * 看板卡的一轮又命中了快路径时多说的一段：接下卡片，照快路径做、跑它的校验，通过就交付，中间不单独列计划，
+ * 也不另写说明文件。只在命中快路径的看板轮说；没有快路径的技能、单聊、例行都不说，计划照旧。
  */
-export function relatedSkillsGuidance(
+export const FAST_PATH_BOARD_ADVICE =
+  "这是看板卡的一轮，又命中了快路径：直接 accept_task 接下卡片，运行快路径和它自带的校验，通过就 deliver_task 交付。不要单独调用 update_plan 列计划，也不要另写 NOTES.md 或别的说明文件，除非请求里明确要这样的文件。";
+
+/** 这一轮的技能指引分成两处放：随每一步都发的（`system`），和只在本轮第一步发的（`firstStep`）。 */
+export type SkillGuidanceParts = { system: string; firstStep?: string };
+
+/** 员工自己写的技能正文带快路径吗。 */
+function hasFastPath(skill: PickableSkill): boolean {
+  return (skill.instructions ?? "").includes(`${FAST_PATH_HEADING}（`);
+}
+
+/**
+ * 员工自己写过、和这一轮的事对得上的技能，拆成两处：
+ *  - `firstStep`：快路径的说法和每条技能的简短正文（快路径和校验在里面），只放在本轮第一步；
+ *  - `system`：开头两句，加上每条一行的指引（名字、id、已在第一步给出、要再看用 `refine_skill` 只带 id 读出）。
+ * 第二步起模型看到的只有那一行，不再重复整段正文；系统提示每一步字节相同，缓存前缀不被打断。
+ * `boardCard`：这一轮是看板卡的一轮，命中快路径时再多一句「不单独列计划、不另写说明文件」。没有对得上的就是 undefined。
+ */
+export function relatedSkillsParts(
   input: Pick<RunAgentInput, "messages">,
   held: readonly PickableSkill[],
-): string | undefined {
+  options: { boardCard?: boolean } = {},
+): (SkillGuidanceParts & { firstStep: string }) | undefined {
   const related = relatedSelfSkills(requestTextOf(input.messages), held);
   if (related.length === 0) return undefined;
   const sections = related.map((skill) => {
@@ -403,16 +422,40 @@ export function relatedSkillsGuidance(
         : `${cut}\n(cut short: call ${REFINE_SKILL_TOOL} with only the id "${skill.slug}" to read the whole skill)`;
     return `### ${skill.title || skill.slug} (id: ${skill.slug})\n${shown}`;
   });
-  return [
+  const head = [
     "You have done this kind of work before and wrote down how. The skills below are your own and match what you were just asked; they are already here, nobody needs to send a command for them. Follow their steps and checks where they fit, and skip what this task does not need.",
     `If a step is wrong or something is missing, correct it afterwards with ${REFINE_SKILL_TOOL} (the id and one sentence on what to change).`,
-    ...(related.some((skill) =>
-      (skill.instructions ?? "").includes(`${FAST_PATH_HEADING}（`),
-    )
-      ? [FAST_PATH_ADVICE]
-      : []),
-    ...sections,
-  ].join("\n\n");
+  ];
+  const fast = related.some(hasFastPath);
+  const advice = fast
+    ? [FAST_PATH_ADVICE, ...(options.boardCard ? [FAST_PATH_BOARD_ADVICE] : [])]
+    : [];
+  const pointers = related.map(
+    (skill) =>
+      `- ${skill.title || skill.slug} (id: ${skill.slug})：已在本轮第一步给出，${hasFastPath(skill) ? "快路径照做" : "按它的步骤做"}；需要再看用 ${REFINE_SKILL_TOOL} 只带 id 读出`,
+  );
+  return {
+    system: [...head, ...pointers].join("\n\n"),
+    firstStep: [...advice, ...sections].join("\n\n"),
+  };
+}
+
+/**
+ * 员工自己写过、和这一轮的事对得上的技能，以简短的形式直接放进上下文（不必等人点命令，也不必等员工想起来去读）：
+ * 一条一段，正文超长只放开头，全文用 `refine_skill` 只带 id 读出。没有对得上的就是 undefined。
+ * 两处合在一起的完整形式；每一步只留一行的分法见 {@link relatedSkillsParts}。
+ */
+export function relatedSkillsGuidance(
+  input: Pick<RunAgentInput, "messages">,
+  held: readonly PickableSkill[],
+  options: { boardCard?: boolean } = {},
+): string | undefined {
+  const parts = relatedSkillsParts(input, held, options);
+  if (!parts) return undefined;
+  // 开头两句在 `system` 的最前面，其后才是每条一行的指引。
+  return [...parts.system.split("\n\n").slice(0, 2), parts.firstStep].join(
+    "\n\n",
+  );
 }
 
 /** 员工自己写的技能不超过这么多条时，没对上的也把清单放进上下文，让它自己判断。 */
@@ -456,10 +499,28 @@ export function selfSkillListGuidance(
 export function skillGuidanceFor(
   input: Pick<RunAgentInput, "messages" | "forwardedProps">,
   held: readonly PickableSkill[],
+  options: { boardCard?: boolean } = {},
 ): string | undefined {
   return (
     pickedSkillGuidance(input, held) ??
-    relatedSkillsGuidance(input, held) ??
+    relatedSkillsGuidance(input, held, options) ??
     selfSkillListGuidance(input, held)
   );
+}
+
+/**
+ * 同 {@link skillGuidanceFor}，但对得上的自己的技能拆成两处：整段正文只放在本轮第一步（`firstStep`），每一步
+ * 都发的 `system` 里只剩一行指引。人点的命令、清单照旧整段放在 `system`。
+ */
+export function skillGuidanceParts(
+  input: Pick<RunAgentInput, "messages" | "forwardedProps">,
+  held: readonly PickableSkill[],
+  options: { boardCard?: boolean } = {},
+): SkillGuidanceParts | undefined {
+  const picked = pickedSkillGuidance(input, held);
+  if (picked !== undefined) return { system: picked };
+  const related = relatedSkillsParts(input, held, options);
+  if (related) return related;
+  const list = selfSkillListGuidance(input, held);
+  return list === undefined ? undefined : { system: list };
 }
