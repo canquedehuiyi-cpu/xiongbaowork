@@ -79,6 +79,7 @@
 
 import { randomBytes, randomUUID } from "node:crypto";
 import {
+  chmodSync,
   closeSync,
   existsSync,
   mkdirSync,
@@ -129,6 +130,15 @@ import {
   xiongbaoModel,
 } from "./config";
 import { pitfallPairSeeds } from "./gen-pitfall";
+import {
+  canSudoAs,
+  computerLaunch,
+  isolationFrom,
+  openUp,
+  parseProbe,
+  probeCommand,
+  probeNotes,
+} from "./isolation";
 import {
   backgroundOf,
   callTrace,
@@ -471,10 +481,33 @@ const providerBaseUrl = recorder ? recorder.url : upstreamBaseUrl;
 // 电脑和服务器
 // ---------------------------------------------------------------------------------------------
 
+/*
+ * 员工的电脑与仓库隔离（isolation.ts）：CI 里设了 EVAL_EMPLOYEE_USER 且能免密 sudo 时，`agent-computer` 以该用户运行，
+ * 员工的命令读不到评测仓库和工作区以外的评测文件；否则照旧，日志里说明，不让评测失败。
+ */
+const requestedIsolation = isolationFrom(process.env, process.platform);
+const isolation =
+  requestedIsolation && canSudoAs(requestedIsolation)
+    ? requestedIsolation
+    : undefined;
+if (!isolation)
+  console.log(
+    `   员工电脑未与仓库隔离（${requestedIsolation ? "sudo 不可用或没有运行副本目录" : "没设 EVAL_EMPLOYEE_USER，或不是 Linux"}），照旧运行`,
+  );
+// 隔离时员工用户建的文件、评测建给它写的文件都放开读写：评测进程要拷产物、归档、清理。
+if (isolation) process.umask(0);
 const scratch = mkdtempSync(join(tmpdir(), "xiongbao-eval-"));
 const WORKSPACE = join(scratch, "workspace");
 mkdirSync(WORKSPACE, { recursive: true });
 mkdirSync(join(scratch, "profiles"), { recursive: true });
+mkdirSync(join(scratch, "done-runs"), { recursive: true });
+if (isolation) {
+  // 临时目录只许穿过（不许列出）；工作区和浏览器资料目录给员工用户读写；归档目录只有 runner 自己读得到。
+  chmodSync(scratch, 0o711);
+  chmodSync(WORKSPACE, 0o777);
+  chmodSync(join(scratch, "profiles"), 0o777);
+  chmodSync(join(scratch, "done-runs"), 0o700);
+}
 const COMPUTER_TOKEN = randomBytes(24).toString("hex");
 const COMPUTER_PORT = await freePort();
 const PORT = Number(process.env.E2E_SERVER_PORT?.trim() || (await freePort()));
@@ -490,9 +523,9 @@ function logFile(name: string): number {
 
 async function startComputer() {
   const fd = logFile(logFileName("computer", evalPath));
-  computer = Bun.spawn(["bun", "src/index.ts"], {
-    cwd: COMPUTER_DIR,
-    env: {
+  const launch = computerLaunch(
+    isolation,
+    {
       PATH: process.env.PATH ?? "",
       HOME: process.env.HOME ?? "/tmp",
       PORT: String(COMPUTER_PORT),
@@ -507,6 +540,11 @@ async function startComputer() {
         ? { COMPUTER_BROWSER_MODE: process.env.COMPUTER_BROWSER_MODE }
         : {}),
     },
+    COMPUTER_DIR,
+  );
+  computer = Bun.spawn(launch.argv, {
+    cwd: launch.cwd,
+    env: launch.env,
     stdout: fd,
     stderr: fd,
   });
@@ -531,6 +569,51 @@ async function startComputer() {
     500,
   );
   console.log(`   computer on :${COMPUTER_PORT}, workspace ${WORKSPACE}`);
+}
+
+/**
+ * 开始时的自检：以员工身份（走电脑的 /exec）读评测仓库里的出题源码和工作区以外的评测目录。读得到就标「未隔离」
+ * （日志和报告，不让评测失败）；读不到才算隔离成功。路径在这里展开成绝对路径，员工的命令环境里没有 `$GITHUB_WORKSPACE`。
+ * CI 上确认隔离生效：看日志里「员工的命令读不到评测仓库（自检通过）」那一行，或报告备注里同一句。
+ */
+async function checkIsolation(): Promise<string[]> {
+  const genPitfall = join(import.meta.dir, "gen-pitfall.ts");
+  const workspaceRoot = process.env.GITHUB_WORKSPACE?.trim();
+  try {
+    const response = await fetch(`http://127.0.0.1:${COMPUTER_PORT}/exec`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${COMPUTER_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        command: probeCommand({
+          repoFiles: [
+            genPitfall,
+            ...(workspaceRoot
+              ? [
+                  join(
+                    workspaceRoot,
+                    "xiongbao/scripts/e2e/employee-eval/gen-pitfall.ts",
+                  ),
+                ]
+              : []),
+          ],
+          scratchPaths: [scratch, join(scratch, "done-runs")],
+          workspace: WORKSPACE,
+        }),
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const body = (await response.json().catch(() => ({}))) as {
+      stdout?: string;
+    };
+    return probeNotes(isolation, parseProbe(body.stdout ?? ""));
+  } catch (thrown) {
+    return [
+      `员工电脑与仓库的隔离自检没跑成：${thrown instanceof Error ? thrown.message : String(thrown)}`,
+    ];
+  }
 }
 
 async function startServer() {
@@ -1450,6 +1533,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     : driven.runIds;
 
   const copy = join(OUT, artifactDirName(suite, work.via), work.key);
+  if (isolation) openUp(dir);
   copyTree(dir, copy);
   // 网页表单题：判分读服务端收到的记录，在员工做完以后由评测脚本写进去。
   if (work.site) sealReceived(work.site, copy);
@@ -1782,6 +1866,10 @@ try {
       .join(" ")}`,
   );
   await startComputer();
+  for (const line of await checkIsolation()) {
+    console.log(`   ${line}`);
+    notes.push(line);
+  }
   await startServer();
 
   must(
@@ -1987,6 +2075,7 @@ const results: EvalResults = {
 };
 const file = join(OUT, resultFileName(suite, evalPath));
 writeResults(file, results);
+if (isolation) openUp(scratch);
 rmSync(scratch, { recursive: true, force: true });
 console.log(`\nresults: ${file}`);
 process.exit(failed ? 1 : 0);
