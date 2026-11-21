@@ -573,7 +573,7 @@ const HOW_TO_WORK_LINES = [
   "already hold, and fetch only what is missing: when you already have an item's ID or link, look it",
   "up directly instead of searching for it again. Run reads that do not depend on each other",
   "together, a few at a time (about five), and read every result before the next batch. Keep anything",
-  "that depends on another result, and every change, one after another. When you decide on a step,",
+  "that depends on another result after it; independent writes and edits may go in one reply. When you decide on a step,",
   "take it in the same reply instead of saying you will. If a call fails, times out or comes back",
   "empty, try once more or another way; if it still fails, carry on without it and say so. Deliver",
   "what was asked even when part of it is missing, and end with what you could not confirm, if anything.",
