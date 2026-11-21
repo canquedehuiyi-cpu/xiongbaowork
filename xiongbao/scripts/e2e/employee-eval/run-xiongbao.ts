@@ -139,6 +139,7 @@ import {
   waitForRetro,
 } from "./learning";
 import {
+  archiveRunDir,
   type Check,
   check,
   copyTree,
@@ -1452,6 +1453,8 @@ async function runWork(work: Work): Promise<EvalRecord> {
   copyTree(dir, copy);
   // 网页表单题：判分读服务端收到的记录，在员工做完以后由评测脚本写进去。
   if (work.site) sealReceived(work.site, copy);
+  // 产物已拷到 OUT，判分读的是拷出来的：把这次运行的目录移出员工的工作区，后面的运行（别的题、别的对）看不到它。
+  archiveRunDir(WORKSPACE, work.where, join(scratch, "done-runs"), work.key);
   const promptChars = summarizePrompts(recorder?.drain() ?? []);
   const events = await eventsOf(runIds);
   /*

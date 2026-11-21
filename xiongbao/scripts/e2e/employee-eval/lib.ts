@@ -11,10 +11,13 @@
 import { createHash } from "node:crypto";
 import {
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  renameSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
@@ -247,6 +250,38 @@ export function copyTree(from: string, to: string, land = false) {
     const target = join(to, land ? landedName(path) : path);
     mkdirSync(dirname(target), { recursive: true });
     copyFileSync(join(from, path), target);
+  }
+}
+
+/**
+ * 一次运行做完后，把它在工作区里的目录整个移到工作区之外的归档目录（`archiveRoot/key`）：后面的运行（别的题、
+ * 别的对）在工作区里看不到它留下的笔记、配置和产物。源不存在或移动失败都不抛错，返回是否移走。
+ */
+export function archiveRunDir(
+  workspace: string,
+  where: string,
+  archiveRoot: string,
+  key: string,
+): boolean {
+  const from = join(workspace, where);
+  const to = join(archiveRoot, key);
+  try {
+    if (!existsSync(from)) return false;
+    rmSync(to, { recursive: true, force: true });
+    mkdirSync(dirname(to), { recursive: true });
+    try {
+      renameSync(from, to);
+    } catch {
+      // 跨文件系统时 rename 不行：拷过去再删。
+      cpSync(from, to, { recursive: true });
+      rmSync(from, { recursive: true, force: true });
+    }
+    return true;
+  } catch (thrown) {
+    console.log(
+      `   归档运行目录失败（${where}）：${thrown instanceof Error ? thrown.message : String(thrown)}`,
+    );
+    return false;
   }
 }
 
