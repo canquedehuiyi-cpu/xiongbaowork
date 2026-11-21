@@ -292,7 +292,24 @@ export function requiredItemMet(required: string, named: string): boolean {
     .split(/[^\p{L}\p{N}]+/u)
     .map(comparable)
     .filter((part) => [...part].length >= 2);
-  return parts.length > 0 && parts.every((part) => whole.includes(part));
+  return parts.length > 0 && parts.every((part) => partMet(part, whole));
+}
+
+/** 至少这么多比例的相邻两字出现，一段中文才算对上。 */
+export const CJK_PAIR_SHARE = 0.6;
+
+/**
+ * 一段（已比对化）有没有出现：整段是子串就算；含汉字、又不是整段出现时，中文没有空格可拆，
+ * 就拆成相邻两字，至少 {@link CJK_PAIR_SHARE} 的两字出现在里面才算（「五个项目小节齐全且数据有出处」
+ * 对「五个项目小节都在，数据附了出处」）。不含汉字的段（英文、数字、文件名）仍要整段出现。
+ */
+function partMet(part: string, whole: string): boolean {
+  if (whole.includes(part)) return true;
+  if (!/\p{Script=Han}/u.test(part)) return false;
+  const chars = [...part];
+  const pairs = chars.slice(1).map((char, index) => `${chars[index]}${char}`);
+  const met = pairs.filter((pair) => whole.includes(pair)).length;
+  return met / pairs.length >= CJK_PAIR_SHARE;
 }
 
 export function createEvidenceGate(

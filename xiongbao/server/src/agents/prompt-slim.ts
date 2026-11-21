@@ -232,7 +232,7 @@ export const TOOL_BRIEFS: Readonly<
   },
   accept_task: {
     description:
-      "接活回执：接到有交付物的活时调用。due_at 写预计几点交（「40 分钟」「15:00」，按对方时区；不知道就不填）；criteria 写验收标准，必须交的项在末尾写「必需：A、B」。再接一件就再调一次。",
+      "接活回执：接到有交付物的活时调用。due_at 写预计几点交（「40 分钟」「15:00」，按对方时区；不知道就不填）；criteria 写验收标准，必须交的项在末尾写「必需：A、B」，每项写短名称（如「汇总表」），不写整句。再接一件就再调一次。",
   },
   request_extension: {
     description:
