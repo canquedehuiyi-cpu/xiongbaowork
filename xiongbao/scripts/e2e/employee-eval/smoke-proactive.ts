@@ -285,7 +285,9 @@ async function scenarioB() {
   check(
     held.every(
       (row: { run_at: Date }) =>
-        row.run_at.getTime() > Date.now() + 60 * 60_000,
+        // 和拨过的时钟比，不和真实的「现在」比：时段结束是按拨过的时钟算的（2026-11-21 00:00 UTC），
+        // 真实时间过了那一刻以后，拿 Date.now() 比就永远不成立。
+        row.run_at.getTime() > clock.getTime() + 60 * 60_000,
     ),
     "它们都推迟到了时段结束，现在没有一条能被领去发",
   );
