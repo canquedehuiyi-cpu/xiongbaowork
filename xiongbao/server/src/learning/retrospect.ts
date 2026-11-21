@@ -18,11 +18,13 @@ import {
 } from "../plugins/picked-skill";
 import {
   markSkillsUsed,
+  removeOwnToolSkill,
   type SelfSkillDeps,
   type SkillDraft,
   saveParameters,
   saveSkill,
   similarSkillOf,
+  slugFor,
 } from "../skills/save-tool";
 import { withSourceFingerprints } from "../skills/usage";
 import { replyTextOf } from "../tasks/delivery";
@@ -452,7 +454,11 @@ export type RetrospectorDeps = {
     agentId: string,
   ) => boolean | Promise<boolean>;
   /** 员工已有技能的名字，给模型看，免得重复写。在本人帧里调用。 */
-  existingSkills?: (agentId: string) => Promise<string[]>;
+  existingSkills?: (
+    agentId: string,
+    /** 不列出的技能 id：员工这一轮自己存的，复盘要写一条更好的来替换它们。 */
+    excludeSlugs?: readonly string[],
+  ) => Promise<string[]>;
   call?: RetroCall;
   now?: () => Date;
   cooldownMs?: number;
@@ -480,8 +486,42 @@ export type RetroOutcome = (
   | { outcome: "nothing" }
   | { outcome: "similar"; id: string }
   | { outcome: "refused"; reason: string }
-  | { outcome: "saved"; id: string; status: "active" | "pending_approval" }
+  | {
+      outcome: "saved";
+      id: string;
+      status: "active" | "pending_approval";
+      /** 存下的同时被替换掉的、员工这一轮自存的技能 id；没替换就没有这一项。 */
+      replaced?: string[];
+    }
 ) & { retried?: true };
+
+/**
+ * 这一轮里员工自己调 `save_learned_skill` 存下的技能 id：成功的那几步的结果里（`{"saved":true,"id":"auto-…"`，
+ * 开头就带着 id，截到 200 字也在）。结果是脱敏截短过的文本，id 偶尔会被当成一串数字遮掉（`auto-[number]`）：
+ * 这时改用参数里的技能名按存的时候同一套规则算出 id。两样都认不出就当没有；真要移除时还会按账再校验归属。
+ */
+export function selfSavedSlugsOf(
+  steps: readonly TraceStep[],
+  agentId: string,
+): string[] {
+  const slugs = new Set<string>();
+  for (const step of steps) {
+    if (step.tool !== SAVE_SKILL_TOOL || !step.ok) continue;
+    const found = /"id":\s*"(auto-[0-9a-f]{10})"/.exec(step.result);
+    if (found?.[1]) {
+      slugs.add(found[1]);
+      continue;
+    }
+    const named = /^\{\s*"name":\s*("(?:[^"\\]|\\.)*")/.exec(step.args);
+    if (!named?.[1]) continue;
+    try {
+      slugs.add(slugFor(agentId, JSON.parse(named[1]) as string));
+    } catch {
+      // 名字读不懂就当没有。
+    }
+  }
+  return [...slugs];
+}
 
 /** 交付的看板卡步数到了这个数，模型却答「不值得」，就重问一次。 */
 export const RETRO_RETRY_MIN_STEPS = 10;
@@ -501,9 +541,8 @@ export function createRetrospector(deps: RetrospectorDeps) {
   return async function retrospectTurn(turn: RetroTurn): Promise<RetroOutcome> {
     try {
       if (!shouldRetrospect(turn)) return { outcome: "skipped" };
-      // 员工自己已经把这一轮的做法存过了。
-      if (turn.steps.some((step) => step.tool === SAVE_SKILL_TOOL && step.ok))
-        return { outcome: "skipped" };
+      // 员工这一轮自己存过技能的，照样复盘：自存的常常只写了一半，复盘写出的存下后替换它们。
+      const ownSaved = selfSavedSlugsOf(turn.steps, turn.agentId);
       if (!(await (deps.enabled?.(turn.ownerUserId, turn.agentId) ?? true)))
         return { outcome: "skipped" };
       const now = (deps.now ?? (() => new Date()))().getTime();
@@ -523,7 +562,8 @@ export function createRetrospector(deps: RetrospectorDeps) {
       lastAt.set(cooldownKey, now);
       const options = {
         model,
-        existingSkills: (await deps.existingSkills?.(turn.agentId)) ?? [],
+        existingSkills:
+          (await deps.existingSkills?.(turn.agentId, ownSaved)) ?? [],
         ...(deps.call ? { call: deps.call } : {}),
       };
       let draft = await retrospect(turn, options);
@@ -545,8 +585,8 @@ export function createRetrospector(deps: RetrospectorDeps) {
       const mark = retried ? ({ retried: true } as const) : {};
       if (!draft) return { outcome: "nothing", ...mark };
       const self = deps.selfSkill(turn.ownerUserId, turn.agentId);
-      // 已经有一条差不多的：不再加一条近似的副本。
-      const similar = await similarSkillOf(self, draft);
+      // 已经有一条差不多的：不再加一条近似的副本（这一轮员工自存的不算，那几条正是要被替换的）。
+      const similar = await similarSkillOf(self, draft, undefined, ownSaved);
       if (similar) return { outcome: "similar", id: similar, ...mark };
       const saved = await saveSkill(self, draft, "retrospect", turn.request);
       // 转待审和被拒各记一行原因（只有规则的名字，没有技能的内容），评测和排查看得出为什么没生效。
@@ -573,9 +613,25 @@ export function createRetrospector(deps: RetrospectorDeps) {
             timestamp: new Date().toISOString(),
           }),
         );
-      return saved.ok
-        ? { outcome: "saved", id: saved.id, status: saved.status, ...mark }
-        : { outcome: "refused", reason: saved.reason, ...mark };
+      if (!saved.ok)
+        return { outcome: "refused", reason: saved.reason, ...mark };
+      // 复盘这条已经生效：员工自存的（名字不同的）移除。转待审的还没生效，员工自存的先留着。
+      const replaced: string[] = [];
+      if (saved.status === "active")
+        for (const slug of ownSaved) {
+          if (slug === saved.id) continue;
+          const removed = await removeOwnToolSkill(self, slug).catch(
+            () => false,
+          );
+          if (removed) replaced.push(slug);
+        }
+      return {
+        outcome: "saved",
+        id: saved.id,
+        status: saved.status,
+        ...(replaced.length > 0 ? { replaced } : {}),
+        ...mark,
+      };
     } catch (error) {
       log(
         JSON.stringify({
@@ -927,6 +983,9 @@ export function createRetroObserver(deps: RetroObserverDeps) {
         ...(retro.cardId ? { cardId: retro.cardId } : {}),
         ...(outcome.outcome === "skipped" && reason ? { reason } : {}),
         ...("id" in outcome ? { skill: outcome.id } : {}),
+        ...(outcome.outcome === "saved" && outcome.replaced
+          ? { replaced: outcome.replaced }
+          : {}),
         ...(outcome.retried ? { retried: true } : {}),
         timestamp: new Date().toISOString(),
       }),

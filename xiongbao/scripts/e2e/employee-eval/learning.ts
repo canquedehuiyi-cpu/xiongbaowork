@@ -96,6 +96,8 @@ export type RetroLine = {
   reason?: string;
   /** 这一行是哪张看板卡的复盘（卡的各轮合成的）；单独一轮的没有。 */
   cardId?: string;
+  /** 存下复盘技能的同时，替换（移除）了几条员工这一轮自存的技能；日志里的 `replaced` 数组的长度，没替换就没有。 */
+  replaced?: number;
   /** 转待审时同一轮另记的 `retrospect-held` 行里的原因（规则的名字和认出的网址）；没转待审时没有。 */
   heldReason?: string;
   /** 复盘出错时同一轮另记的 `retrospect-error` 行里的错误类型（只有类型，没有内容）；没出错时没有。 */
@@ -158,6 +160,9 @@ export function retroLinesOf(
         ...(typeof parsed.steps === "number" ? { steps: parsed.steps } : {}),
         ...(typeof parsed.reason === "string" ? { reason: parsed.reason } : {}),
         ...(typeof parsed.cardId === "string" ? { cardId: parsed.cardId } : {}),
+        ...(Array.isArray(parsed.replaced) && parsed.replaced.length > 0
+          ? { replaced: parsed.replaced.length }
+          : {}),
         runId,
       });
     } catch {
@@ -232,6 +237,7 @@ export async function waitForRetro(options: {
     ...(line.trigger ? { trigger: line.trigger } : {}),
     ...(line.steps === undefined ? {} : { steps: line.steps }),
     ...(line.heldReason ? { heldReason: line.heldReason } : {}),
+    ...(line.replaced ? { replaced: line.replaced } : {}),
     ...(line.reason ? { reason: line.reason } : {}),
     ...(line.error ? { error: line.error } : {}),
   });

@@ -663,6 +663,8 @@ export async function similarSkillOf(
   deps: Pick<SelfSkillDeps, "database" | "agentId">,
   draft: Pick<SkillDraft, "name" | "when">,
   threshold = 0.75,
+  /** 不拿来比的技能：复盘要替换掉的、员工这一轮自己存的那几条。 */
+  exclude: readonly string[] = [],
 ): Promise<string | undefined> {
   const tenant = currentTenant();
   const rows = await deps.database
@@ -683,8 +685,36 @@ export async function similarSkillOf(
     );
   const mine = `${draft.name} ${draft.when}`;
   return rows.find(
-    (row) => similarity(`${row.title} ${row.summary}`, mine) >= threshold,
+    (row) =>
+      !exclude.includes(row.slug) &&
+      similarity(`${row.title} ${row.summary}`, mine) >= threshold,
   )?.slug;
+}
+
+/**
+ * 移除员工自己用 `save_learned_skill` 存下的一条技能（复盘写出更好的一条之后替换它）。照 {@link refineSkill}
+ * 的归属校验：只认这位员工名下、来源是员工自存的账；复盘写的、别人的、没有账的都不动。技能行删除后，账随外键一并清掉，
+ * 授予由 `uninstallSkill` 一并收回。移除了返回 true。
+ */
+export async function removeOwnToolSkill(
+  deps: Pick<SelfSkillDeps, "database" | "plugins" | "agentId">,
+  id: string,
+): Promise<boolean> {
+  const [row] = await deps.database
+    .select({ slug: learnedSkills.skillSlug })
+    .from(learnedSkills)
+    .where(
+      and(
+        eq(learnedSkills.tenantId, currentTenant()),
+        eq(learnedSkills.agentId, deps.agentId),
+        eq(learnedSkills.skillSlug, id),
+        eq(learnedSkills.origin, "tool"),
+      ),
+    )
+    .limit(1);
+  if (!row) return false;
+  await deps.plugins.uninstallSkill(row.slug, `employee:${deps.agentId}`);
+  return true;
 }
 
 const answer = (value: unknown) => JSON.stringify(value);

@@ -578,7 +578,10 @@ const retroCell = (learning: RunLearning | undefined) => {
       : retro.outcome === "skipped" && retro.reason
         ? `，原因：${retro.reason}`
         : "";
-  return `${outcome}${how}${why}，等了 ${waited}`;
+  const replaced = retro.replaced
+    ? `，替换了员工自存的 ${retro.replaced} 条`
+    : "";
+  return `${outcome}${how}${why}${replaced}，等了 ${waited}`;
 };
 
 /**

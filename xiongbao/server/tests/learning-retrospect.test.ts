@@ -14,9 +14,11 @@ import {
   retroMinSteps,
   retroPrompt,
   retrospect,
+  selfSavedSlugsOf,
   shouldRetrospect,
   traceStepsOf,
 } from "../src/learning/retrospect";
+import { slugFor } from "../src/skills/save-tool";
 
 const model = {} as LanguageModel;
 
@@ -280,19 +282,76 @@ describe("the retrospector at the end of a turn", () => {
     expect(modelCalls).toEqual([]);
   });
 
-  test("a failed turn, and one where the employee already saved its own skill, are skipped", async () => {
+  test("a failed turn is skipped", async () => {
     const { run, modelCalls } = harness();
     expect(await run(turnOf(30, { failed: true }))).toEqual({
       outcome: "skipped",
     });
+    expect(modelCalls).toEqual([]);
+  });
+
+  test("a turn where the employee saved its own skill is still reviewed, and the model is not told that skill exists", async () => {
+    const asked: (readonly string[] | undefined)[] = [];
+    const { run, modelCalls } = harness({
+      existingSkills: async (_agent, exclude) => {
+        asked.push(exclude);
+        return [];
+      },
+    });
     const own = turnOf(20);
     own.steps.push(
       ...traceStepsOf(
-        call("s", "save_learned_skill", goodDraft, '{"saved":true}'),
+        call(
+          "s",
+          "save_learned_skill",
+          goodDraft,
+          '{"saved":true,"id":"auto-0123456789","updated":false,"note":"x"}',
+        ),
       ),
     );
-    expect(await run(own)).toEqual({ outcome: "skipped" });
-    expect(modelCalls).toEqual([]);
+    await run(own);
+    expect(modelCalls).toEqual(["light"]);
+    // 结果里的 id 全是数字，被脱敏成了 [number]：按参数里的技能名算出同一个 id。
+    expect(asked).toEqual([[slugFor("bot", goodDraft.name)]]);
+  });
+
+  test("selfSavedSlugsOf reads the ids of this turn's successful self-saves, nothing else", () => {
+    const steps = traceStepsOf([
+      ...call(
+        "a",
+        "save_learned_skill",
+        goodDraft,
+        '{"saved":true,"id":"auto-aaaaaaaaaa","updated":false}',
+      ),
+      ...call(
+        "b",
+        "save_learned_skill",
+        goodDraft,
+        "Refused. 已经有一条同名的技能",
+      ),
+      ...call(
+        "c",
+        "save_learned_skill",
+        goodDraft,
+        '{"saved":true,"id":"auto-aaaaaaaaaa","updated":true}',
+      ),
+      ...call(
+        "d",
+        "refine_skill",
+        { id: "auto-bbbbbbbbbb" },
+        '{"id":"auto-bbbbbbbbbb"}',
+      ),
+      ...call(
+        "e",
+        "save_learned_skill",
+        goodDraft,
+        '{"saved":true,"id":"auto-cccccccccc"}',
+      ),
+    ]);
+    expect(selfSavedSlugsOf(steps, "bot")).toEqual([
+      "auto-aaaaaaaaaa",
+      "auto-cccccccccc",
+    ]);
   });
 
   test("an employee whose save_learned_skill is switched off is not reviewed", async () => {

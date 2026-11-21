@@ -65,6 +65,28 @@ test("the log lines of a run's retrospective are read out of a noisy server log"
   expect(retroLinesOf(log, ["r3", "r9"])).toEqual([]);
 });
 
+test("a retrospective that replaced the employee's own skills carries how many", () => {
+  const log = line({
+    runId: "r1",
+    outcome: "saved",
+    trigger: "steps",
+    steps: 20,
+    replaced: ["auto-aaaaaaaaaa", "auto-bbbbbbbbbb"],
+  });
+  expect(retroLinesOf(log, ["r1"])).toEqual([
+    {
+      runId: "r1",
+      outcome: "saved",
+      trigger: "steps",
+      steps: 20,
+      replaced: 2,
+    },
+  ]);
+  expect(
+    retroLinesOf(line({ runId: "r1", outcome: "saved", replaced: [] }), ["r1"]),
+  ).toEqual([{ runId: "r1", outcome: "saved" }]);
+});
+
 test("a held retrospective carries the reason from its retrospect-held line", () => {
   const log = [
     JSON.stringify({
