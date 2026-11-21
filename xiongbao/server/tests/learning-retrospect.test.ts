@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { EventType } from "@ag-ui/client";
 import type { BaseEvent } from "@ag-ui/client";
+import { EventType } from "@ag-ui/client";
 import type { LanguageModel } from "ai";
 import {
   answerFailed,
@@ -8,9 +8,9 @@ import {
   createRetrospector,
   parseDraft,
   RETRO_COOLDOWN_MS,
+  RETRO_SYSTEM,
   type RetroCall,
   type RetroTurn,
-  RETRO_SYSTEM,
   retroMinSteps,
   retroPrompt,
   retrospect,
@@ -411,5 +411,58 @@ describe("the retrospector at the end of a turn", () => {
     expect(logs).toHaveLength(1);
     expect(JSON.parse(logs[0] ?? "{}").type).toBe("retrospect-error");
     expect(logs[0]).not.toContain("销售数据");
+  });
+});
+
+describe("复盘草稿超长时收到上限，不整份丢掉", () => {
+  const draft = {
+    name: "修复账单导入配置并重算汇总",
+    when: "账单 CSV 导入跑不通时",
+    steps: ["读配置", "改配置", "跑导入"],
+    pitfalls: [],
+    verify: "bun run import",
+  };
+
+  test("名字、步骤条数、单步过长都收到上限，草稿照旧能用", () => {
+    const parsed = parseDraft(
+      JSON.stringify({
+        skill: {
+          ...draft,
+          name: "长".repeat(60),
+          steps: Array.from(
+            { length: 40 },
+            (_, i) => `第${i}步${"字".repeat(500)}`,
+          ),
+        },
+      }),
+    );
+    expect(parsed).not.toBeNull();
+    expect(Array.from(parsed?.name ?? "")).toHaveLength(40);
+    expect(parsed?.steps).toHaveLength(30);
+    expect(Array.from(parsed?.steps[0] ?? "").length).toBe(400);
+  });
+
+  test("快路径超长时三项一起去掉，其余照存", () => {
+    const parsed = parseDraft(
+      JSON.stringify({
+        skill: {
+          ...draft,
+          fastPath: "x".repeat(901),
+          fastPathNeeds: "python3",
+          fastPathCheck: "cat out/summary.json",
+        },
+      }),
+    );
+    expect(parsed?.name).toBe(draft.name);
+    expect(parsed).not.toHaveProperty("fastPath");
+    expect(parsed).not.toHaveProperty("fastPathNeeds");
+    expect(parsed).not.toHaveProperty("fastPathCheck");
+  });
+
+  test("不长的快路径原样保留", () => {
+    const parsed = parseDraft(
+      JSON.stringify({ skill: { ...draft, fastPath: "bun run import" } }),
+    );
+    expect(parsed?.fastPath).toBe("bun run import");
   });
 });

@@ -3,6 +3,7 @@ import { EventType } from "@ag-ui/client";
 import { generateText, type LanguageModel } from "ai";
 import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import {
+  SKILL_FIELD_LIMITS as L,
   RETRO_MIN_STEPS_DEFAULT,
   SAVE_SKILL_TOOL,
 } from "../../../shared/self-skills";
@@ -344,8 +345,53 @@ export function parseDraft(text: string): SkillDraft | null {
   const skill: Record<string, unknown> = { ...parsed.skill };
   for (const key of ["fastPath", "fastPathNeeds", "fastPathCheck"])
     if (skill[key] === null) delete skill[key];
-  const checked = saveParameters.safeParse(skill);
+  const checked = saveParameters.safeParse(fitToLimits(skill));
   return checked.success ? checked.data : null;
+}
+
+/** 按字符（不是 UTF-16 码元）截到 `max` 个，免得把一个字切成半个。 */
+const clip = (value: unknown, max: number) =>
+  typeof value === "string" && Array.from(value).length > max
+    ? Array.from(value).slice(0, max).join("")
+    : value;
+
+/**
+ * 超长、超量的字段收到上限再交给 {@link saveParameters}：一份能用的技能，不该因为名字多了几个字、步骤多写了几条、
+ * 快路径脚本长了一点就整份丢掉，记成「不值得记」（重复任务评测里，交付成功的长轮复盘常常因此什么都没留下）。
+ * 文字字段截到上限，步骤和坑点只留前面的条数；快路径超长时三项一起去掉（截断的脚本跑不了），其余照存。
+ * 空的步骤、不认识的范围这类不是「太长」的问题，照旧不收。
+ */
+export function fitToLimits(
+  skill: Record<string, unknown>,
+): Record<string, unknown> {
+  const fitted: Record<string, unknown> = {
+    ...skill,
+    name: clip(skill.name, L.name),
+    when: clip(skill.when, L.when),
+    verify: clip(skill.verify, L.verify),
+  };
+  if (Array.isArray(skill.steps))
+    fitted.steps = skill.steps
+      .slice(0, L.steps)
+      .map((step) => clip(step, L.step));
+  if (Array.isArray(skill.pitfalls))
+    fitted.pitfalls = skill.pitfalls
+      .slice(0, L.pitfalls)
+      .map((pitfall) => clip(pitfall, L.pitfall));
+  if (
+    typeof skill.fastPath === "string" &&
+    Array.from(skill.fastPath.trim()).length > L.fastPath
+  ) {
+    delete fitted.fastPath;
+    delete fitted.fastPathNeeds;
+    delete fitted.fastPathCheck;
+  } else {
+    if ("fastPathNeeds" in skill)
+      fitted.fastPathNeeds = clip(skill.fastPathNeeds, L.fastPathNeeds);
+    if ("fastPathCheck" in skill)
+      fitted.fastPathCheck = clip(skill.fastPathCheck, L.fastPathCheck);
+  }
+  return fitted;
 }
 
 export type RetroCall = (input: {
