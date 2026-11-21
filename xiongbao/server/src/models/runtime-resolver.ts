@@ -24,7 +24,12 @@ import {
   runAsTenant,
   TenantContextError,
 } from "../tenant/context";
-import { deepSeekLanguageModel, isDeepSeekEndpoint } from "./deepseek-thinking";
+import {
+  deepSeekLanguageModel,
+  isDeepSeekEndpoint,
+  isDeepSeekModelName,
+  withToolTurnReasoning,
+} from "./deepseek-thinking";
 import {
   databaseTokenCallSink,
   type MeteredBinding,
@@ -176,6 +181,10 @@ export function languageModelFor(
     baseURL,
     apiKey,
     includeUsage: true,
+    // 别的地址上的 DeepSeek 模型（代理、转发）：调过工具的那步也带上 reasoning_content，免得思考模式回 400。
+    ...(isDeepSeekModelName(modelName)
+      ? { transformRequestBody: withToolTurnReasoning }
+      : {}),
     ...(baseUrl ? { fetch: createGuardedFetch(outbound) } : {}),
   }).chatModel(modelName);
 }
