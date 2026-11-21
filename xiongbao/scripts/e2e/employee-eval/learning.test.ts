@@ -241,7 +241,7 @@ test("no retrospective in time: it stops at the cap and the second run starts as
     ...time,
   });
   expect(result).toEqual({ waitedMs: RETRO_WAIT_MS, ended: "timeout" });
-  expect(RETRO_WAIT_MS).toBe(90_000);
+  expect(RETRO_WAIT_MS).toBe(150_000);
 });
 
 // --- the report ---------------------------------------------------------------------------------
@@ -339,13 +339,13 @@ test("a retrospective that never came, and a run that learned nothing, read plai
         newSkills: [],
         newMemories: 0,
         usedSkills: [],
-        retro: { waitedMs: 90_000, ended: "timeout" },
+        retro: { waitedMs: 150_000, ended: "timeout" },
       },
     }),
     record({ learning: { newSkills: [], newMemories: 0, usedSkills: [] } }),
   );
   const [row] = learningRows([["熊宝", side([repeated])]]);
-  expect(row?.[1]).toBe("等满 90 s，没等到复盘结果");
+  expect(row?.[1]).toBe("等满 150 s，没等到复盘结果");
   expect(row?.[3]).toBe("没有");
   expect(
     learningRows([["Codex", side([combineRepeat(record(), record())])]]),
