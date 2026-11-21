@@ -296,7 +296,7 @@ export function compare(options: {
     resultTokens,
     rows: [
       { name: "改动前（规格 v2 的模型不折叠，子代理带全套）", run: at({}) },
-      { name: "只折叠（预算 24K）", run: at({ fold }) },
+      { name: "只折叠（预算 18K）", run: at({ fold }) },
       {
         name: "只瘦身子代理的工具",
         run: at({ subFixed: FIXED.subAfter }),

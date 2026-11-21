@@ -95,7 +95,7 @@ describe("没越线", () => {
 
   test("窗口大到 70% 远没到时，再长的历史也不动", () => {
     const prompt = promptAfter(30);
-    // 这条测的是窗口比例的线；绝对预算按原来的 64K 给（默认值已降到 24K）。
+    // 这条测的是窗口比例的线；绝对预算按原来的 64K 给（默认值已降到 18K）。
     expect(
       foldEarlyResults(prompt, { window: 1_000_000, budget: 64_000 }),
     ).toBe(prompt);
@@ -233,7 +233,7 @@ describe("绝对预算：窗口再大也有一条线", () => {
   });
 
   test("不传预算就用默认的 FOLD_BUDGET_TOKENS：大窗口下重的一轮折叠，轻的一轮不动", () => {
-    // 用户 2026-11-20 批准：折叠预算 24K（原来钉的是 48K 到 64K）。
+    // 用户批准：折叠预算 18K（原来 24K，更早钉的是 48K 到 64K）。
     expect(FOLD_BUDGET_TOKENS).toBeGreaterThanOrEqual(16_000);
     expect(FOLD_BUDGET_TOKENS).toBeLessThanOrEqual(32_000);
     // 每步约 4.6K token，30 步远超预算，窗口 1M 的 70% 却远没到。
@@ -242,8 +242,8 @@ describe("绝对预算：窗口再大也有一条线", () => {
     expect(folded).not.toBe(heavy);
     expect(outputOf(folded, 1).startsWith(FOLDED_PREFIX)).toBe(true);
     expect(outputOf(folded, 30)).toBe(resultText(30, 16_000));
-    // 每步约 1.2K token，十几步加起来也在预算以内。
-    const light = promptAfter(12);
+    // 每步约 1.2K token，十来步加起来也在预算以内。
+    const light = promptAfter(10);
     expect(foldEarlyResults(light, { window: HUGE })).toBe(light);
   });
 
@@ -404,7 +404,7 @@ describe("包在模型外面", () => {
       windowFor: () => 1_000_000,
     });
     if ("factory" in wrapped) throw new Error("not a factory");
-    const prompt = promptAfter(12);
+    const prompt = promptAfter(10);
     await (
       wrapped.model as unknown as {
         doGenerate: (options: { prompt: Prompt }) => Promise<unknown>;
@@ -434,8 +434,8 @@ describe("包在模型外面", () => {
     expect(outputOf(small.sent, 30)).toBe(resultText(30, 4_000));
     const off = await run(0);
     expect(off.sent).toBe(off.prompt);
-    // 默认预算（24K）比 12 步的总量大：一个字不动；30 步远超它：折叠。
-    const byDefault = await run(undefined, 12);
+    // 默认预算（18K）比 10 步的总量大：一个字不动；30 步远超它：折叠。
+    const byDefault = await run(undefined, 10);
     expect(byDefault.sent).toBe(byDefault.prompt);
     const heavy = await run();
     expect(outputOf(heavy.sent, 1).startsWith(FOLDED_PREFIX)).toBe(true);
@@ -552,7 +552,7 @@ describe("规格 v2 的模型也折叠", () => {
       { windowFor: () => 1_000_000 },
     );
     if ("factory" in wrapped) throw new Error("not a factory");
-    const prompt = promptAfter(12);
+    const prompt = promptAfter(10);
     await (wrapped.model as unknown as V2Model).doStream({ prompt });
     expect(inner.seen[0]).toBe(prompt);
   });
@@ -673,7 +673,11 @@ describe("接在员工的运行里", () => {
   });
 
   test("窗口够大：和没有这个功能一样，模型收到的是原样", async () => {
-    const seen = await promptSeen({ contextWindowFor: () => 1_000_000 });
+    // 这条测的是窗口比例的线；绝对预算按 64K 给，默认的 18K 不在这里测。
+    const seen = await promptSeen({
+      contextWindowFor: () => 1_000_000,
+      foldBudgetTokens: 64_000,
+    });
     expect(seen).not.toContain(FOLDED_PREFIX);
     expect(seen).toContain(resultText(1, 4_000));
   });
@@ -726,7 +730,7 @@ describe("接在员工的运行里", () => {
   });
 });
 
-describe("默认预算 24K（用户 2026-11-20 批准）", () => {
+describe("默认预算 18K（用户批准，原来 24K）", () => {
   test("约 3 万 token 的历史越线：较早的结果折叠，摘要里带取回的办法；最近 4 步原样", () => {
     const prompt = promptAfter(20) as unknown as {
       role: string;
@@ -742,7 +746,7 @@ describe("默认预算 24K（用户 2026-11-20 批准）", () => {
       (sum, message) => sum + estimateTokens(JSON.stringify(message.content)),
       0,
     );
-    expect(total).toBeGreaterThan(24_000);
+    expect(total).toBeGreaterThan(18_000);
     expect(total).toBeLessThan(36_000);
     const folded = foldEarlyResults(prompt as unknown as Prompt, {
       window: 1_000_000,
