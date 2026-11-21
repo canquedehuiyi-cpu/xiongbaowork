@@ -261,6 +261,39 @@ export function deliveryTools(options: {
     };
   }
 
+  /**
+   * 把一张卡接下：`accept_task` 和交付时还没接下的自动接下共用这一段存储调用和事件。返回 null 表示接不了
+   * （卡片已结束或已被接下）。
+   */
+  async function takeOn(
+    run: { runId: string; threadId: string },
+    taskId: string,
+    input: { title?: string; dueAt: Date | null; criteria?: string },
+  ) {
+    // The 接下 line's id, named here so the chat's 接活回执 finds that line by it (not by its due time).
+    const line = randomUUID();
+    const accepted = await delivery.accept(tenantId, taskId, {
+      eventId: line,
+      at: now(),
+      runId: run.runId,
+      threadRef: run.threadId,
+      actor,
+      ...(input.title ? { title: input.title } : {}),
+      dueAt: input.dueAt,
+      ...(input.criteria !== undefined ? { criteria: input.criteria } : {}),
+    });
+    if (!accepted) return { accepted: null, line };
+    // This round now belongs to the card, whichever entry started the turn: its end is written there.
+    roundOnCard(run.runId, tenantId, taskId);
+    said(run.runId, DELIVERY_EVENTS.accepted, {
+      taskId,
+      eventId: line,
+      dueAt: accepted.dueAt?.toISOString() ?? null,
+      criteria: accepted.criteria,
+    });
+    return { accepted, line };
+  }
+
   return [
     tool(
       ACCEPT_TASK,
@@ -311,28 +344,13 @@ export function deliveryTools(options: {
             return `${REFUSAL_MARKER} 没能另开一件活：${error instanceof Error ? error.message : String(error)}`;
           }
         }
-        // The 接下 line's id, named here so the chat's 接活回执 finds that line by it (not by its due time).
-        const acceptedLine = randomUUID();
-        const accepted = await delivery.accept(tenantId, taskId, {
-          eventId: acceptedLine,
-          at: now(),
-          runId: run.runId,
-          threadRef: run.threadId,
-          actor,
+        const { accepted } = await takeOn(run, taskId, {
           ...(value.title ? { title: value.title } : {}),
           dueAt,
           criteria: value.criteria,
         });
         if (!accepted)
           return `${REFUSAL_MARKER} 这件活现在接不了：它已经结束或已经被接下了。`;
-        // This round now belongs to the card, whichever entry started the turn: its end is written there.
-        roundOnCard(run.runId, tenantId, taskId);
-        said(run.runId, DELIVERY_EVENTS.accepted, {
-          taskId,
-          eventId: acceptedLine,
-          dueAt: accepted.dueAt?.toISOString() ?? null,
-          criteria: accepted.criteria,
-        });
         // The person's own criteria, set while the card waited, stand: the coworker is told which.
         const theirs = accepted.criteria !== value.criteria;
         return JSON.stringify({
@@ -365,10 +383,22 @@ export function deliveryTools(options: {
         const card = await cardOf(run);
         if (!card?.tracked)
           return `${REFUSAL_MARKER} 这一轮没有接下的活：先用 accept_task 接下，再交付。`;
-        if (!card.acceptedAt)
-          return `${REFUSAL_MARKER} 这件活还没接下：先用 accept_task 回执（预计几点交、验收标准），再交付。`;
         if (card.status === "needs_action")
           return `${REFUSAL_MARKER} 这件活还在等对方处理（审批或提问），处理完再交。`;
+        /*
+         * 还没接下就交付：按卡片上已有的验收标准替它接下（不报预计时间，和 accept_task 不填 due_at 一样），
+         * 再照常走证据门。证据门挡回时接下已经生效，下一次交付直接走证据门。
+         */
+        let autoAccepted = false;
+        if (!card.acceptedAt) {
+          const { accepted } = await takeOn(run, card.id, {
+            dueAt: null,
+            ...(card.criteria ? { criteria: card.criteria } : {}),
+          });
+          if (!accepted)
+            return `${REFUSAL_MARKER} 这件活现在接不了：它已经结束或已经被接下了。`;
+          autoAccepted = true;
+        }
         const verdict = await gate.checkEvidence({
           tenantId,
           taskId: card.id,
@@ -417,6 +447,7 @@ export function deliveryTools(options: {
         return JSON.stringify({
           delivered: true,
           taskId: card.id,
+          ...(autoAccepted ? { autoAccepted: true } : {}),
           note: "已交成果，等对方验收。没被验收前，不要说「做完了」。",
         });
       },

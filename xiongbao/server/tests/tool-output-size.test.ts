@@ -3,9 +3,9 @@ import {
   COMMAND_INLINE_BYTES,
   commandInlineBytes,
   isQuietCommand,
-  offloadCommandResult,
   OUTPUT_INLINE_BYTES,
   type OutputSink,
+  offloadCommandResult,
   quietOutputOn,
   READ_INLINE_BYTES,
   readInlineBytes,
@@ -13,7 +13,7 @@ import {
 } from "../src/tool-output";
 
 /*
- * token 第五轮·每一步的体积：命令输出的内联上限从 16KB 降到 4KB，没指定行段的读文件上限降到 12KB，
+ * token 第五轮·每一步的体积：命令输出的内联上限从 16KB 降到 4KB（用户 2026-11-21 批准提到 8KB），没指定行段的读文件上限降到 12KB，
  * 安装、构建类命令成功时只留最后几行。三处都有 XIONGBAO_* 回退开关。
  */
 
@@ -47,27 +47,27 @@ const run = (command: string, stdout: string, exitCode = 0, stderr = "") => ({
 });
 
 describe("命令输出的内联上限", () => {
-  test("默认 4KB，环境变量能改，off 回到 16KB，不合理的值当没设", () => {
-    expect(COMMAND_INLINE_BYTES).toBe(4 * 1024);
-    expect(commandInlineBytes({})).toBe(4 * 1024);
-    expect(commandInlineBytes({ XIONGBAO_COMMAND_INLINE_BYTES: "8192" })).toBe(
-      8192,
+  test("默认 8KB，环境变量能改，off 回到 16KB，不合理的值当没设", () => {
+    expect(COMMAND_INLINE_BYTES).toBe(8 * 1024);
+    expect(commandInlineBytes({})).toBe(8 * 1024);
+    expect(commandInlineBytes({ XIONGBAO_COMMAND_INLINE_BYTES: "4096" })).toBe(
+      4096,
     );
     expect(commandInlineBytes({ XIONGBAO_COMMAND_INLINE_BYTES: "off" })).toBe(
       OUTPUT_INLINE_BYTES,
     );
     expect(commandInlineBytes({ XIONGBAO_COMMAND_INLINE_BYTES: "abc" })).toBe(
-      4 * 1024,
+      8 * 1024,
     );
     expect(commandInlineBytes({ XIONGBAO_COMMAND_INLINE_BYTES: "-5" })).toBe(
-      4 * 1024,
+      8 * 1024,
     );
   });
 
-  test("5KB 的输出超过 4KB：存盘，回传头尾，比 4KB 小", async () => {
+  test("9KB 的输出超过 8KB：存盘，回传头尾，比 8KB 小", async () => {
     saved.length = 0;
-    const out = lines(80);
-    expect(Buffer.byteLength(out)).toBeGreaterThan(4 * 1024);
+    const out = lines(130);
+    expect(Buffer.byteLength(out)).toBeGreaterThan(8 * 1024);
     const result = await offloadCommandResult(run("cat big.log", out), {
       id: "call-1",
       sink,
@@ -77,15 +77,15 @@ describe("命令输出的内联上限", () => {
     );
     expect(result.stdout).toContain("中间省略");
     expect(result.stdout.startsWith(lineAt(1))).toBe(true);
-    expect(result.stdout.trimEnd().endsWith(lineAt(80))).toBe(true);
-    expect(Buffer.byteLength(result.stdout)).toBeLessThan(4 * 1024);
-    expect(saved[0]?.contents).toContain(lineAt(40));
+    expect(result.stdout.trimEnd().endsWith(lineAt(130))).toBe(true);
+    expect(Buffer.byteLength(result.stdout)).toBeLessThan(8 * 1024);
+    expect(saved[0]?.contents).toContain(lineAt(65));
   });
 
-  test("4KB 以内的输出原样，不落盘", async () => {
+  test("8KB 以内的输出原样，不落盘", async () => {
     saved.length = 0;
-    const out = lines(40);
-    expect(Buffer.byteLength(out)).toBeLessThan(4 * 1024);
+    const out = lines(100);
+    expect(Buffer.byteLength(out)).toBeLessThan(8 * 1024);
     const result = await offloadCommandResult(run("cat small.log", out), {
       id: "call-2",
       sink,
@@ -95,11 +95,11 @@ describe("命令输出的内联上限", () => {
     expect(saved).toHaveLength(0);
   });
 
-  test("回退：XIONGBAO_COMMAND_INLINE_BYTES=off 时 5KB 的输出原样回传", async () => {
+  test("回退：XIONGBAO_COMMAND_INLINE_BYTES=off 时 9KB 的输出原样回传", async () => {
     const before = process.env.XIONGBAO_COMMAND_INLINE_BYTES;
     process.env.XIONGBAO_COMMAND_INLINE_BYTES = "off";
     try {
-      const out = lines(80);
+      const out = lines(130);
       const result = await offloadCommandResult(run("cat big.log", out), {
         id: "call-3",
         sink,
@@ -140,15 +140,15 @@ describe("安装、构建类命令成功时只留最后几行", () => {
 
   test("成功：只留最后 12 行，完整的存盘；失败：不走这条，整份头尾照旧", async () => {
     saved.length = 0;
-    const out = lines(60);
+    const out = lines(130);
     const ok = await offloadCommandResult(run("bun install", out, 0), {
       id: "call-4",
       sink,
     });
     expect(ok.stdout).not.toContain(lineAt(1));
-    expect(ok.stdout.trimEnd().endsWith(lineAt(60))).toBe(true);
-    expect(ok.stdout).toContain(lineAt(49));
-    expect(ok.stdout).not.toContain(lineAt(48));
+    expect(ok.stdout.trimEnd().endsWith(lineAt(130))).toBe(true);
+    expect(ok.stdout).toContain(lineAt(119));
+    expect(ok.stdout).not.toContain(lineAt(118));
     expect(ok.outputFile).toBe("tool-outputs/computer_run_command-call-4.txt");
     expect(String(ok.outputNote)).toContain("退出码 0");
     expect(saved[0]?.contents).toContain(lineAt(1));
@@ -157,18 +157,18 @@ describe("安装、构建类命令成功时只留最后几行", () => {
       id: "call-5",
       sink,
     });
-    // 失败的安装要看报错：照旧超过 4KB 才给头尾，不是只留最后 12 行。
+    // 失败的安装要看报错：照旧超过 8KB 才给头尾，不是只留最后 12 行。
     expect(bad.stdout).toContain("中间省略");
     expect(bad.stdout.startsWith(lineAt(1))).toBe(true);
     expect(String(bad.outputNote)).not.toContain("退出码 0");
   });
 
   test("没有电脑可存：照样只留最后几行，说明没存", async () => {
-    const result = await offloadCommandResult(run("npm ci", lines(60)), {
+    const result = await offloadCommandResult(run("npm ci", lines(130)), {
       id: "call-6",
     });
     expect(result.stdout).not.toContain(lineAt(1));
-    expect(result.stdout.trimEnd().endsWith(lineAt(60))).toBe(true);
+    expect(result.stdout.trimEnd().endsWith(lineAt(130))).toBe(true);
     expect(result).not.toHaveProperty("outputFile");
     expect(String(result.outputNote)).toContain("没有存");
   });

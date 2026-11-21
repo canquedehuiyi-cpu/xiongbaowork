@@ -1063,6 +1063,53 @@ describe("deliver_task and the evidence gate", () => {
     });
   });
 
+  test("a followed card not yet taken on is taken on by deliver_task, then delivered (autoAccepted)", async () => {
+    const tenantId = await tenant("autoaccept");
+    const agentId = `agent-${suite}-autoaccept`;
+    const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+    // The person follows a card by hand (派出 · 待接下): tracked, not accepted.
+    await turn({ tenantId, agentId, threadId, ask: "看下报销" });
+    const [opened] = await cardsOf(tenantId, agentId);
+    if (!opened) throw new Error("no card");
+    const pending = await until(
+      () => cardRow(tenantId, opened.id),
+      (row) => row?.status === "awaiting_review",
+    );
+    if (!pending) throw new Error("no card");
+    await delivery.markTracked(tenantId, pending.id, `user:${tenantId}`, {
+      threadRef: threadId,
+    });
+    expect((await cardRow(tenantId, pending.id))?.acceptedAt).toBeNull();
+
+    const round = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      ask: "报销看完了就交",
+      work: async (run) => {
+        await run.call("deliver_task", {
+          items: [{ kind: "note", ref: "报销单已逐张核对，无异常。" }],
+          checks: ["逐张对过金额和日期"],
+        });
+      },
+    });
+    await roundLogged(tenantId, pending.id, round.runId);
+    const answer = parsed(round.results[0] ?? "{}");
+    expect(answer.delivered).toBe(true);
+    expect(answer.autoAccepted).toBe(true);
+    const row = await cardRow(tenantId, pending.id);
+    expect(row?.acceptedAt).toBeInstanceOf(Date);
+    expect(row?.status).toBe("awaiting_review");
+    const kinds = (await eventsOf(tenantId, pending.id)).map(
+      (line) => line.kind,
+    );
+    expect(kinds).toContain("accepted");
+    expect(kinds).toContain("delivered");
+    // Already taken on: a later hand-in is not marked as auto-accepted.
+    const custom = await storedCustom(tenantId, round.runId);
+    expect(custom.map((event) => event.name)).toContain("delivery.accepted");
+  });
+
   test("no items → bounced", async () => {
     const card = await acceptedCard("noitems");
     const { runId, result } = await deliverOnThread(card, {
