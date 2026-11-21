@@ -15,8 +15,35 @@ import type { MockRequest, MockTurn } from "./mock-model";
 export const EXPLORE_STEPS = 9;
 const SHORT_STEPS = 2;
 
-/** 产品把对得上的自写技能放进上下文时的开头那句（`plugins/picked-skill.ts`）。 */
-export const SKILL_MARK = "You have done this kind of work before";
+/**
+ * 产品把对得上的自写技能列进系统提示时，那一行末尾的标记（`plugins/picked-skill.ts` 的 `ownSkillsGuidance`）：
+ * 清单里只有标题、id 和什么时候用，正文要员工用 `read_skill` 读。
+ */
+export const SKILL_MARK = "[MATCH]";
+/** 关着瘦身时，对得上的技能正文直接放进提示的开头那句（`relatedSkillsGuidance`）。 */
+export const INJECTED_SKILL_MARK = "You have done this kind of work before";
+/** `read_skill` 读出的结果里的开头那句（`readSkillText`）：看到它，就是这一轮已经读过了。 */
+export const READ_MARK = "This is your own skill, written from earlier work";
+/** 读技能的工具。 */
+export const READ_SKILL = "read_skill";
+
+/** 这一轮的请求里有没有对得上的自写技能（清单里标了 MATCH，或关着瘦身时正文已在提示里）。 */
+export const skillKnown = (text: string) =>
+  text.includes(SKILL_MARK) || text.includes(INJECTED_SKILL_MARK);
+
+/**
+ * 有对得上的技能、又带着读技能的工具、还没读过：第一步先 `read_skill` 读它，读出的结果带着快路径的提示。
+ * 没带这个工具的请求（关着瘦身、测试里的静态请求）没有这一步。
+ */
+export function readSkillStep(
+  request: MockRequest,
+  text: string,
+): MockTurn | undefined {
+  if (!text.includes(SKILL_MARK) || !request.offeredTools.includes(READ_SKILL))
+    return undefined;
+  const id = /\(id: (auto-[0-9a-f]+)\)[^\\]*\[MATCH\]/.exec(text)?.[1];
+  return id ? { tools: [{ name: READ_SKILL, arguments: { id } }] } : undefined;
+}
 /** 注入提示里叫员工先按快路径做的那句（`plugins/picked-skill.ts` 的 `FAST_PATH_ADVICE`）：带着它就一步做完。 */
 export const FAST_MARK = "先按技能的快路径做";
 /** 假模型的快路径：一条命令写出产物并校验，和复盘员写进技能里的那条一致（`<dir>` 换成这次的目录）。 */
@@ -90,9 +117,10 @@ function retroAnswer(
 /** 一轮里第几步该发什么（按这一轮已收到的工具结果数算）。 */
 export function learnPolicy(request: MockRequest, dir: string): MockTurn {
   if (whole(request).includes(RETRO_MARK)) return retroAnswer(request);
-  const known = whole(request).includes(SKILL_MARK);
-  // 技能带快路径、提示又叫它先照做：一条命令写出产物并校验，不摸索。
+  const known = skillKnown(whole(request));
+  // 技能带快路径、读出的提示又叫它先照做：一条命令写出产物并校验，不摸索。
   const fast = known && whole(request).includes(FAST_MARK);
+  const reading = readSkillStep(request, whole(request));
   const explore = fast ? 0 : known ? SHORT_STEPS : EXPLORE_STEPS;
   const done = request.toolResultsSinceUser;
   const accepted = request.offeredTools.includes("accept_task");
@@ -109,6 +137,7 @@ export function learnPolicy(request: MockRequest, dir: string): MockTurn {
           },
         ]
       : []),
+    ...(reading ? [reading] : []),
     ...(fast
       ? [
           {

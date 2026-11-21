@@ -7,6 +7,7 @@ import {
   test,
 } from "bun:test";
 import { LLMock } from "@copilotkit/aimock";
+import { z } from "zod";
 import { taskPrompt } from "../../scripts/e2e/employee-eval/lib";
 import {
   buildAgents,
@@ -14,14 +15,19 @@ import {
   type RuntimeModel,
   type ToolSelection,
 } from "../src/copilot";
-import { skillGuidanceFor } from "../src/plugins/picked-skill";
+import {
+  matchedSkillChecks,
+  readSkillText,
+  skillGuidanceFor,
+} from "../src/plugins/picked-skill";
 import { renderSkill } from "../src/skills/save-tool";
 import { fingerprintOf } from "../src/skills/source-fingerprint";
 import { asBoardTurn } from "../src/threads/unattended-card";
 
 /*
- * 看板卡的一轮（`asBoardTurn`），员工自己写的、对得上的技能连同快路径和校验，第一次调用时就在提示里，和
- * 单聊的一轮一样；不是等员工自己 `search_tools` 去找 `refine_skill` 再读。
+ * 看板卡的一轮（`asBoardTurn`），员工自己写的、对得上的技能第一次调用时就以清单的形式在提示里（标 MATCH），
+ * 和单聊的一轮一样，并且带着不排在检索后面的 `read_skill`：员工一步读出全文、快路径的提示和校验命令，它们留在
+ * 对话历史里；不是等员工自己 `search_tools` 去找 `refine_skill` 再读，也不是每一步都把正文放进提示。
  */
 
 const FIRST_REQUEST = taskPrompt("repeat", "eval/repeat-pitfall-first");
@@ -66,7 +72,32 @@ describe("the guidance a card turn's second run is given", () => {
   });
 });
 
-describe("on OpenBot's own harness, the first call of a board-card turn carries it", () => {
+describe("what read_skill hands back, and the check the server takes from the skill", () => {
+  test("the whole skill with the fast path and its check, and the advice to follow it first", () => {
+    const text = readSkillText({
+      slug: own.slug,
+      title: own.title,
+      instructions: own.instructions,
+    });
+    expect(text).toContain("BOARD-FAST-PATH-7731");
+    expect(text).toContain(CHECK);
+    expect(text).toContain("先按技能的快路径做");
+    expect(text).toContain("不要先逐个打开文件");
+  });
+
+  test("the verify check comes from the skill, not from the prompt text", () => {
+    expect(
+      matchedSkillChecks(
+        {
+          messages: [{ id: "q", role: "user", content: SECOND_REQUEST }],
+        },
+        [own],
+      ),
+    ).toEqual([CHECK]);
+  });
+});
+
+describe("on the built-in harness, the first call of a board-card turn lists it", () => {
   const llm = new LLMock();
   const wire: string[] = [];
   let recorder: ReturnType<typeof Bun.serve> | undefined;
@@ -114,6 +145,14 @@ describe("on OpenBot's own harness, the first call of a board-card turn carries 
     wire.length = 0;
   });
 
+  const readSkill = {
+    name: "read_skill",
+    ref: "bot/read_skill",
+    description: "Read one of your own skills in full, by id.",
+    parameters: z.object({ id: z.string() }),
+    execute: async () => "",
+  };
+
   async function sent(board: boolean) {
     return asBoardTurn(board, async () => {
       const agents = await buildAgents(
@@ -121,7 +160,7 @@ describe("on OpenBot's own harness, the first call of a board-card turn carries 
         model,
         "synthetic-key",
         undefined,
-        async () => [],
+        async () => [readSkill],
         undefined,
         undefined,
         undefined,
@@ -136,11 +175,14 @@ describe("on OpenBot's own harness, the first call of a board-card turn carries 
   }
 
   for (const board of [false, true])
-    test(`${board ? "board-card" : "chat"} turn: fast path, its check and the advice are in the prompt`, async () => {
+    test(`${board ? "board-card" : "chat"} turn: the skill is listed as a match with read_skill at hand, its body is not in the prompt`, async () => {
       const prompt = await sent(board);
-      expect(prompt).toContain("BOARD-FAST-PATH-7731");
-      expect(prompt).toContain("先按技能的快路径做");
-      expect(prompt).toContain("不要先逐个打开文件");
-      expect(prompt).toContain(CHECK);
+      expect(prompt).toContain(`(id: ${own.slug})`);
+      expect(prompt).toContain("[MATCH]");
+      expect(prompt).toContain('"name":"read_skill"');
+      // 正文、快路径和提示在 read_skill 的结果里，不在每一步都发的提示里。
+      expect(prompt).not.toContain("BOARD-FAST-PATH-7731");
+      expect(prompt).not.toContain("先按技能的快路径做");
+      expect(prompt).not.toContain(CHECK);
     });
 });

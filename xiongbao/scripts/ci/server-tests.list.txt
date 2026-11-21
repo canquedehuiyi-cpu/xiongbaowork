@@ -250,6 +250,7 @@ tests/chat-server-computer-tools-config.test.ts
 tests/chat-server-tools.integration.test.ts
 tests/chat-turn-notice.integration.test.ts
 tests/check-in-offer.test.ts
+tests/codex-parity-prompt.test.ts
 tests/coding-tools.test.ts
 tests/command-timeout.test.ts
 tests/comments-say-the-reason.test.ts

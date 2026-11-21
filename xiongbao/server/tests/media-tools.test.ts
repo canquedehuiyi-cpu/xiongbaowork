@@ -1,4 +1,3 @@
-import { slimMediaGuidance } from "../src/agents/slim-guidance";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -12,6 +11,7 @@ import {
   mediaGuidance,
 } from "../../shared/media";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
+import { SLIM_DOCUMENTS, slimMediaGuidance } from "../src/agents/slim-guidance";
 import { toolDisabled } from "../src/approvals/policy";
 import type { AuditEventInput, AuditStore } from "../src/audit";
 import type { RuntimeModel } from "../src/copilot";
@@ -784,9 +784,10 @@ describe("the prompt", () => {
       ),
     );
     expect(section).toContain("要图片");
-    expect(section).toContain("要视频就用 generate_video");
+    expect(section).toContain("要视频用 generate_video");
     // No computer in this run: nothing about documents.
     expect(section).not.toContain(DOCUMENTS_GUIDANCE);
+    expect(section).not.toContain(SLIM_DOCUMENTS);
 
     const without = await promptWith([]);
     expect(without).not.toContain("<media>");
@@ -796,7 +797,8 @@ describe("the prompt", () => {
   test("a run that uses the computer is told how to make and check documents, and to read files with markitdown", async () => {
     const used = await promptWith([], "used");
     const section = used.match(/<media>\n([\s\S]*?)\n<\/media>/)?.[1];
-    expect(section).toBe(DOCUMENTS_GUIDANCE);
+    // 瘦身默认开：没有出图、出视频的工具时只有一行文档的说明（`SLIM_DOCUMENTS`）。
+    expect(section).toBe(SLIM_DOCUMENTS);
     expect(section).toContain("`markitdown <文件>`");
     // Beside the computer's own section, which it does not change.
     expect(used).toContain("<computer>\nCOMPUTER GUIDANCE\n</computer>");

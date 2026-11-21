@@ -1,17 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
+import { and, count, eq, sql } from "drizzle-orm";
+import { z } from "zod";
 import {
+  FAST_PATH_CHECK_LABEL,
+  FAST_PATH_HEADING,
+  READ_SKILL_TOOL,
   REFINE_SKILL_TOOL,
   SAVE_SKILL_TOOL,
   SELF_SKILL_SLUG_PREFIX,
-  FAST_PATH_CHECK_LABEL,
-  FAST_PATH_HEADING,
   SKILL_FIELD_LIMITS,
   SKILL_SCOPES,
   SKILLS_PER_EMPLOYEE_DEFAULT,
   type SkillScope,
 } from "../../../shared/self-skills";
-import { and, count, eq, sql } from "drizzle-orm";
-import { z } from "zod";
 import type { Database } from "../db/client";
 import {
   type LearnedSkillOrigin,
@@ -20,18 +21,19 @@ import {
   skills,
 } from "../db/schema";
 import {
-  findOverreach,
-  findSensitive,
   broadDeleteIn,
   externalAddressIn,
+  findOverreach,
+  findSensitive,
   maskEmails,
 } from "../learning/sensitive";
 import { similarity } from "../memory/extract";
-import { encodeFingerprint, fingerprintOf } from "./source-fingerprint";
-import { REFUSAL_MARKER } from "../plugins/tools";
-import type { GrantedTool } from "../plugins/tools";
+import { readSkillText } from "../plugins/picked-skill";
 import type { PluginStore } from "../plugins/store";
+import type { GrantedTool } from "../plugins/tools";
+import { REFUSAL_MARKER } from "../plugins/tools";
 import { currentTenant } from "../tenant/context";
+import { encodeFingerprint, fingerprintOf } from "./source-fingerprint";
 
 /**
  * The two tools an employee writes its own skills with (期 2 · Task 2.4): `save_learned_skill` stores the way a
@@ -57,6 +59,7 @@ import { currentTenant } from "../tenant/context";
 
 export const SAVE_SKILL_REF = `bot/${SAVE_SKILL_TOOL}`;
 export const REFINE_SKILL_REF = `bot/${REFINE_SKILL_TOOL}`;
+export const READ_SKILL_REF = `bot/${READ_SKILL_TOOL}`;
 
 const L = SKILL_FIELD_LIMITS;
 
@@ -141,6 +144,9 @@ const refineParameters = z
       .describe("要改什么，一两句话；不带就只读出这条技能的全文"),
   })
   .strict();
+
+/** `read_skill`: only the id, with no description of its own (the tool's one line says it). */
+const readParameters = z.object({ id: line(80) }).strict();
 
 /** The slug an employee's skill of this name has: stable, so writing it again updates it rather than adding another. */
 export function slugFor(agentId: string, name: string): string {
@@ -716,6 +722,24 @@ export function selfSkillTools(deps: SelfSkillDeps): GrantedTool[] {
                 note: `已提交给本人审批：批准之前这条技能不会生效，也不会给其他员工用。`,
               },
         );
+      },
+    },
+    {
+      /*
+       * 只读一条自己的技能：参数只有 id、描述一句话，定义很小，所以手上有自己写的技能时每一步都带着它
+       * （`copilot.ts` 按持有情况决定给不给），不排在 `search_tools` 后面。授权和 `refine_skill` 只带 id 时
+       * 一样：只读得到这位员工自己写的（`refineSkill` 里的 `ownSkill`）。读出的全文连同快路径的做法提示留在历史里。
+       */
+      name: READ_SKILL_TOOL,
+      ref: READ_SKILL_REF,
+      description: "Read one of your own skills in full, by id.",
+      parameters: readParameters,
+      async execute(args) {
+        const parsed = readParameters.safeParse(args);
+        if (!parsed.success) return refused("需要技能的 id。");
+        const result = await refineSkill(deps, { id: parsed.data.id });
+        if (!result.ok) return refused(result.reason);
+        return readSkillText({ ...result, slug: result.id });
       },
     },
     {

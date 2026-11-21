@@ -33,17 +33,22 @@ beforeEach(async () => {
       messages: { role: string; content?: unknown }[];
     };
     const tools = (body.tools ?? []).map((tool) => tool.function?.name ?? "");
-    // 瘦身开着时（默认），偶尔才用的工具排在 search_tools 后面，名字写在它的描述里：员工「持有」它们，
-    // 只是首步没把定义发出去。持有的 = 发出去的 + 排在后面的。
-    const waiting = (
+    // 瘦身开着时（默认），偶尔才用的工具排在 search_tools 后面，描述里用一行说有哪几类（不再逐个列名字）：
+    // 员工「持有」它们，只是首步没把定义发出去。持有的 = 发出去的 + 描述里有它那一类的。
+    const categories = (
       (body.tools ?? []).find((tool) => tool.function?.name === "search_tools")
         ?.function?.description ?? ""
     )
-      .split("Not listed:")[1]
-      ?.replace(/\.$/, "")
-      .split(",")
-      .map((name) => name.trim())
-      .filter(Boolean);
+      .split("Load unlisted tools:")[1]
+      ?.split(". Say")[0]
+      ?.split(",")
+      .map((label) => label.trim());
+    const waiting = Object.entries(CATEGORY_OF)
+      .filter(
+        ([name, label]) =>
+          !tools.includes(name) && categories?.includes(label) === true,
+      )
+      .map(([name]) => name);
     requests.push({
       tools,
       held: [...tools, ...(waiting ?? [])],
@@ -75,6 +80,18 @@ const stub = (name: string): GrantedTool => ({
   parameters: z.object({}),
   execute: async () => "ok",
 });
+
+/** 这个测试里用到的、排在 search_tools 后面的工具各属于描述里的哪一类。 */
+const CATEGORY_OF: Record<string, string> = {
+  request_extension: "extension",
+  schedule_follow_up: "reminders",
+  list_follow_ups: "reminders",
+  cancel_follow_up: "reminders",
+  offer_check_in: "reminders",
+  show_app_access: "access card",
+  request_app_access: "app access",
+  recall_personal_memory: "memory",
+};
 
 /** 只在员工持有 `accept_task` 时才说的那几条交付规矩里的一句。 */
 const protocolLine = (deliveryProtocolGuidance([ACCEPT_TASK]) ?? "")

@@ -6,7 +6,11 @@ import { createTurnRunner, type RunnerLike } from "@openbot/toolkit/run-turn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
-import { SLIM_ANSWER_FORMAT, SLIM_SOURCES } from "../src/agents/slim-guidance";
+import {
+  SLIM_ANSWER_FORMAT,
+  SLIM_SOURCES,
+  SLIM_UNTRUSTED,
+} from "../src/agents/slim-guidance";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
 import type { ApprovalCandidate } from "../src/approvals/types";
 import { type AuditInitiator, createAuditStore } from "../src/audit";
@@ -50,7 +54,6 @@ import {
 import { createProactiveStore } from "../src/proactive/store";
 import { type ProactiveSetting, SKIPPED_BECAUSE } from "../src/proactive/types";
 import { runAsTenant } from "../src/tenant/context";
-import { UNTRUSTED_GUIDANCE } from "../src/untrusted-content";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import {
@@ -844,7 +847,8 @@ describe("a check-in reads what the person connected, through the tools that say
     // 用户 2026-11-20 批准：瘦身默认开，数的是瘦身后的来源段，仍是只说一次。
     expect(system.split(SLIM_SOURCES)).toHaveLength(2);
     expect(system.split(SLIM_ANSWER_FORMAT)).toHaveLength(2);
-    expect(system.split(UNTRUSTED_GUIDANCE)).toHaveLength(2);
+    // 用户 2026-11-21 批准：不可信内容一段改成精简版，数的是精简后的那段，仍是只说一次。
+    expect(system.split(SLIM_UNTRUSTED)).toHaveLength(2);
     expect(vendorCalls.map((call) => call.tool)).toEqual(["MAIL_FETCH_EMAILS"]);
     const [item] = await itemsOf(harness);
     expect(item).toMatchObject({

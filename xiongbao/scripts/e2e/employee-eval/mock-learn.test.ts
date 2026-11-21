@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { learnPolicy, RETRO_MARK } from "./mock-learn";
-import type { MockRequest } from "./mock-model";
 import { taskPrompt } from "./lib";
+import {
+  FAST_MARK,
+  learnPolicy,
+  READ_MARK,
+  READ_SKILL,
+  RETRO_MARK,
+  SKILL_MARK,
+} from "./mock-learn";
+import type { MockRequest } from "./mock-model";
 
 /*
  * 假模型复盘员的 `general` 变体：照 RETRO_SYSTEM 的泛化要求写技能，名字和「什么时候用」里没有这次请求里的词。
@@ -43,5 +50,41 @@ describe("the mock review's skill", () => {
       expect(skill.name).not.toContain(word);
     }
     expect(skill.when).toContain("YYYY-MM-DD");
+  });
+});
+
+describe("with the skill listed as a match, the mock reads it before it works", () => {
+  const listed = `- 会议纪要转待办 (id: auto-0123456789) — 收到会议纪要时 ${SKILL_MARK}`;
+  const request = (
+    prompt: string,
+    done: number,
+    tools: string[] = [READ_SKILL, "computer_run_command"],
+  ): MockRequest => ({
+    protocol: "chat",
+    lastUser: "",
+    toolResultsSinceUser: done,
+    offeredTools: tools,
+    raw: { messages: [prompt] },
+  });
+
+  test("the first step is read_skill with the listed id; after the read, the fast path comes in one command", () => {
+    const first = learnPolicy(request(listed, 0), "/tmp/w");
+    expect(first.tools?.[0]).toEqual({
+      name: READ_SKILL,
+      arguments: { id: "auto-0123456789" },
+    });
+    const after = learnPolicy(
+      request(`${listed} ${READ_MARK} ${FAST_MARK}`, 1),
+      "/tmp/w",
+    );
+    expect(String(after.tools?.[0]?.name)).toBe("computer_run_command");
+  });
+
+  test("a request that does not offer read_skill has no read step", () => {
+    const turn = learnPolicy(
+      request(listed, 0, ["computer_run_command"]),
+      "/tmp/w",
+    );
+    expect(turn.tools?.[0]?.name).not.toBe(READ_SKILL);
   });
 });

@@ -1,3 +1,4 @@
+import { READ_SKILL_TOOL } from "../../../shared/self-skills";
 import { withToolHint } from "./step-hints";
 
 /**
@@ -34,6 +35,7 @@ const FOLLOW_UP = "follow up reminder remind schedule later wake";
 const MEMORY = "memory remember recall forget fact preference";
 const ACCESS = "app access connect connector grant permission";
 const GIT = "git branch commit diff changes pull request pr github push";
+const EXTENSION = "extension extend deadline delay postpone due late";
 
 /**
  * 排在检索后面的工具，和各自的检索关键词（在名字和描述之外再多几个词，让「browser」「image」「remind」这样的
@@ -55,6 +57,9 @@ export const DEFERRED_TOOLS: Readonly<Record<string, string>> = {
   computer_request_help: HELP,
   computer_request_secret: HELP,
   computer_request_sign_in: HELP,
+  computer_list_files: "list files folder directory ls",
+  computer_glob: "glob find files pattern name",
+  request_extension: EXTENSION,
   generate_image: MEDIA,
   generate_video: MEDIA,
   check_video: MEDIA,
@@ -79,6 +84,96 @@ export const DEFERRED_TOOLS: Readonly<Record<string, string>> = {
   refine_skill: "skill learn refine improve lesson",
 };
 
+/**
+ * 这个名字是不是浏览器那一类（开页面、填表、请人接管）：模型用 `search_tools` 取到它们时，浏览器的用法说明
+ * 随检索结果一起交给它（`slim-guidance.ts` 的 `slimBrowserGuidance`），不再每步放在系统提示里。
+ */
+/**
+ * 浏览器的用法和网页按钮的批准规则能不能挪到 `search_tools` 的结果里：只有短写法的检索开着、而且确实有浏览器
+ * 工具排在检索后面时才行。浏览器工具直接带着时，规则必须留在系统提示里。
+ */
+export function browserRulesDeferred(
+  slimSearch: boolean,
+  waiting: Iterable<string>,
+): boolean {
+  return slimSearch && [...waiting].some(isBrowserTool);
+}
+
+export function isBrowserTool(name: string): boolean {
+  const words = DEFERRED_TOOLS[name];
+  return words === BROWSER || words === HELP;
+}
+
+/**
+ * `search_tools` 描述里替代整张名字清单的分类：每类带哪些工具。描述只列这一轮真排在后面的那几类，一行说完；
+ * 具体的名字模型搜到以后在结果里看，搜不到时也把整张清单给它。
+ */
+export const DEFERRED_CATEGORIES: readonly (readonly [
+  string,
+  readonly string[],
+])[] = [
+  [
+    "browser",
+    [
+      "computer_navigate",
+      "computer_snapshot",
+      "computer_click",
+      "computer_type",
+      "computer_key",
+      "computer_scroll",
+      "computer_screenshot",
+      "computer_read",
+    ],
+  ],
+  [
+    "sign-in help",
+    [
+      "computer_request_help",
+      "computer_request_secret",
+      "computer_request_sign_in",
+    ],
+  ],
+  ["image/video", ["generate_image", "generate_video", "check_video"]],
+  [
+    "reminders",
+    [
+      "schedule_follow_up",
+      "list_follow_ups",
+      "cancel_follow_up",
+      "offer_check_in",
+    ],
+  ],
+  [
+    "memory",
+    [
+      "save_observed_memory",
+      "remember_personal_fact",
+      "recall_personal_memory",
+      "forget_personal_memory",
+    ],
+  ],
+  ["app access", ["request_app_access", "host_list_folders"]],
+  ["access card", ["show_app_access"]],
+  [
+    "git",
+    ["git_branch", "git_commit", "git_diff_summary", "open_pull_request"],
+  ],
+  ["skills", ["save_learned_skill", "refine_skill"]],
+  ["crawl", ["web_crawl"]],
+  ["extension", ["request_extension"]],
+  ["files", ["computer_list_files", "computer_glob"]],
+];
+
+/** 这一轮排在后面的工具属于哪几类，一行；一类都对不上就是空。 */
+export function deferredCategories(names: readonly string[]): string {
+  const held = new Set(names);
+  return DEFERRED_CATEGORIES.filter(([, members]) =>
+    members.some((name) => held.has(name)),
+  )
+    .map(([label]) => label)
+    .join(", ");
+}
+
 /** 名字直接写进 `search_tools` 描述的上限：排在后面的工具不超过这个数才写（应用的几百个工具不写）。 */
 export const SLIM_NAMES_LIMIT = 40;
 
@@ -90,7 +185,8 @@ export function isDeploymentTool(name: string): boolean {
   return (
     Object.hasOwn(DEFERRED_TOOLS, name) ||
     Object.hasOwn(TOOL_BRIEFS, name) ||
-    name === "web_search"
+    name === "web_search" ||
+    name === READ_SKILL_TOOL
   );
 }
 
@@ -128,47 +224,49 @@ export const TOOL_BRIEFS: Readonly<
 > = {
   ask_person: {
     description:
-      "Ask a person only when you cannot go on without them: a wrong guess would send, delete, pay or do something else hard to undo; the readings would lead to materially different work; or only they know the answer. Otherwise decide, say what you assumed, and keep going. Say what you need and why, then stop and wait. Put each decision in `parts`, one entry each; give `options` only when you can name likely answers.",
+      "Ask only when you cannot go on without the person: a wrong guess would be hard to undo, the readings lead to materially different work, or only they know the answer. Otherwise decide, say what you assumed, and go on. State what you need and why, then stop and wait.",
   },
   deliver_task: {
     description:
-      "交付：做完接下的活时调用。items 列交付物：attachment（对话里的附件 id）、component（画过的组件，ref 写组件名或调用 id）、link（http(s) 地址）、workspace_file（工作区里的文件，ref 写相对路径）、note（只有文字结论时，ref 写结论）；title 写清是什么。checks 写怎么查过的，每条一句。验收标准写了「必需：…」时，每项都要在 title 或 checks 里提到。服务器会核对，缺了会挡回，补齐再交。",
+      "交付：做完接下的活时调用。items 的 kind：attachment（附件 id）、component（组件名或调用 id）、link（网址）、workspace_file（工作区相对路径）、note（ref 写文字结论）。checks 每条一句写怎么查过的。验收标准有「必需：…」的每项都要在 title 或 checks 里提到，缺了会被挡回。",
   },
   accept_task: {
     description:
-      "接活回执：对方交给你一件有交付物的活时调用。due_at 写预计几点交（「40 分钟」「15:00」等，按对方的时区算）；不知道就不填，按接下后 2 小时核对。criteria 写验收标准，一两句；有必须交的项就在末尾写「必需：A、B、C」。同一个对话里再接另一件活就再调一次。",
+      "接活回执：接到有交付物的活时调用。due_at 写预计几点交（「40 分钟」「15:00」，按对方时区；不知道就不填）；criteria 写验收标准，必须交的项在末尾写「必需：A、B」。再接一件就再调一次。",
   },
   request_extension: {
     description:
       "申请延期（规约第 3 条）：接下的活到预计时间交不了时调用。due_at 写想延到几点，reason 写缺什么、为什么。对方准许前，预计时间不变。",
   },
   update_plan: {
-    description:
-      "列出或更新你这次工作的计划清单，每次都传完整清单。多步任务先列计划；开始哪一项就标 in_progress，做完立刻标 done。",
+    description: "列出或更新计划，每次传完整清单。",
   },
   run_subagent: {
     description:
-      "把工作里一个独立的部分交给子代理：它看不到这段对话，只交回答案。能拆成两个以上相互独立的部分时，在同一步里多次调用并行去做；计划、汇总和最后的判断自己做，一两步的小事自己做。task 写目标、范围和它需要知道的一切，answer 写要交回什么。每轮最多 5 个，子代理不能再派子代理。需要批准的操作子代理会停下，交还给你。",
+      "把一个独立的部分交给子代理：它看不到这段对话，只交回答案。独立的几部分在同一步里多次调用并行去做。task 写目标、范围和它需要知道的一切，answer 写要交回什么。需要批准的操作子代理会停下，交还给你。",
+  },
+  web_search: {
+    description:
+      "搜索公开网页，返回标题、网址和摘要。需要事实、最新信息或出处时先搜，再用 web_fetch 读最相关的一到三个结果核对原文；回答附来源链接。只放几个关键词，不放对话全文或私人信息。",
   },
   computer_run_command: {
     description:
-      "Run a bash command in your workspace. Pipes and && work; long output is truncated and long commands are stopped. Install new tools inside your workspace (npm install without -g, bun add, a python3 venv); with no sudo permission, do not try to escalate: say so.",
+      "Run a bash command in your workspace; pipes and && work, long output is truncated. Install tools inside it (npm install without -g, bun add, a python3 venv); no sudo: say so, do not escalate.",
     params: {
-      timeoutMs:
-        "Optional. Milliseconds the command may run; default 120000, at most 600000. Ask for more for a long build, install or test run.",
+      timeoutMs: "Optional ms; default 120000, max 600000.",
     },
   },
   computer_read_file: {
     description:
-      "Read a file in your workspace, or in one of the person's shared read-only folders (pass its root and a path inside it). For part of a long file pass offset (first line, from 1) and limit (line count); lines come back numbered with the total line count.",
+      "Read a workspace file (or a shared read-only folder: pass root). offset (first line, from 1) and limit (line count) select a range; lines come back numbered.",
   },
   computer_edit_file: {
     description:
-      "Replace one passage of a text file in your workspace. old_string must appear exactly once, so include enough surrounding lines; it is replaced by new_string (replace_all replaces every occurrence). If old_string is missing or not unique nothing changes and you are told why: read the file again and retry.",
+      "Replace old_string (must occur exactly once: add surrounding lines) with new_string in a workspace file; replace_all replaces every occurrence. On a miss nothing changes.",
   },
   computer_grep: {
     description:
-      "Search file contents in your workspace for a regular expression, as rg -n would: path:line:text, at most 200 lines. path limits to a folder or file, glob to matching files (*.ts), ignore_case ignores case. Hidden files and node_modules are skipped.",
+      "Search workspace file contents by regex (rg -n style: path:line:text, at most 200 lines). path limits to a folder or file, glob to matching files (*.ts).",
   },
   computer_glob: {
     description:
@@ -180,7 +278,7 @@ export const TOOL_BRIEFS: Readonly<
   },
   web_fetch: {
     description:
-      "读取一个公开网页的正文，转成 Markdown。只读 http 或 https 的公开网址，内网地址会被拒绝；页面靠脚本加载时 render_js 设为 true；web_crawl 返回的 ref（crawl://…）也可以交给它读全文。正文超过 8KB 时，有电脑的员工会把全文存进工作区、这里只给头尾（看中间用 computer_read_file 按行段读，找内容用 computer_grep）；没有电脑的只给前 8KB。",
+      "读公开网页（http/https）正文，转成 Markdown；页面靠脚本加载时 render_js 设为 true；也可读 web_crawl 的 crawl://… ref。正文超过 8KB 时有电脑的员工只得头尾，全文存进工作区（用 computer_read_file、computer_grep 读），没电脑的只给前 8KB。",
   },
 };
 
@@ -202,6 +300,15 @@ function cleanSchema(value: unknown, loose: boolean, root = true): unknown {
   for (const [key, inner] of Object.entries(value)) {
     if (root && key === "$schema") continue;
     if (key === "maximum" && inner === MAX_SAFE) continue;
+    // 非空、大于零、默认值这类约束模型用不上（服务器按 zod 再校验一遍）；严格模式的接口照旧留着。
+    if (
+      loose &&
+      (key === "minLength" ||
+        key === "exclusiveMinimum" ||
+        key === "minimum" ||
+        key === "default")
+    )
+      continue;
     if (loose && key === "additionalProperties" && inner === false) continue;
     // `properties` 的键是参数名，不是关键字：参数叫 `maximum` 也照留。
     out[key] =

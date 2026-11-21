@@ -32,8 +32,14 @@ import { webTools } from "../src/web/tools";
  * 先想想是不是该排在 search_tools 后面（`DEFERRED_TOOLS`），或者把话说短。
  */
 
-/** 看板轮首步「系统提示 + 工具定义」的字符数上限。用户 2026-11-20 批准从 24K 收紧到 20K；本机实测约 19.8K。 */
-const BUDGET_CHARS = 20_000;
+/**
+ * 看板轮首步「系统提示 + 工具定义」的字符数上限。用户 2026-11-20 批准从 24K 收紧到 20K；对标 Codex CLI 的一轮
+ * （系统提示 6.6 到 7.6K 字符、技能只列名字和用途）再收紧到 12.5K：浏览器的用法、网页按钮的批准规则随检索结果给，
+ * 技能只列清单、要用才读。本机实测约 12.4K。
+ */
+const BUDGET_CHARS = 12_500;
+/** 其中系统提示的上限（同一轮、同一夹具）。本机实测约 7.0K 以内。 */
+const SYSTEM_BUDGET_CHARS = 7_000;
 
 let llm: LLMock;
 let requests: {
@@ -197,6 +203,7 @@ describe("看板轮首步的提示词体积", () => {
     // 看板轮：派活的入口说了这是看板卡的一轮（`asBoardTurn`），和实际的看板轮一样。
     const first = await asBoardTurn(true, () => firstStep());
     expect(first.bytes).toBeLessThanOrEqual(BUDGET_CHARS);
+    expect(first.system.length).toBeLessThanOrEqual(SYSTEM_BUDGET_CHARS);
 
     const sent = first.tools.map((tool) => tool.function?.name ?? "");
     expect(sent).toContain("search_tools");
@@ -207,19 +214,17 @@ describe("看板轮首步的提示词体积", () => {
       "computer_write_file",
       "computer_edit_file",
       "computer_grep",
-      "computer_glob",
-      "computer_list_files",
       "web_search",
       "web_fetch",
       "update_plan",
       "accept_task",
       "deliver_task",
-      "request_extension",
       SUBAGENT_TOOL,
       "ask_person",
     ])
       expect(sent).toContain(name);
-    // 排在后面的不在首步的定义里，但名字都写在 search_tools 的描述里，模型凭名字就能取。
+    // 排在后面的不在首步的定义里（包括 request_extension、computer_glob、computer_list_files）；
+    // search_tools 的描述只用一行说有哪几类，不再逐个列名字，模型用几个词搜就能取到。
     const listing =
       first.tools.find((tool) => tool.function?.name === "search_tools")
         ?.function?.description ?? "";
@@ -227,17 +232,53 @@ describe("看板轮首步的提示词体积", () => {
       expect(sent).not.toContain(name);
     }
     for (const name of [
-      "computer_navigate",
-      "computer_snapshot",
-      "generate_image",
-      "schedule_follow_up",
-      "recall_personal_memory",
-      "save_learned_skill",
-      "refine_skill",
+      "request_extension",
+      "computer_glob",
+      "computer_list_files",
     ])
-      expect(listing).toContain(name);
+      expect(Object.keys(DEFERRED_TOOLS)).toContain(name);
+    for (const word of [
+      "browser",
+      "image/video",
+      "reminders",
+      "memory",
+      "skills",
+      "extension",
+    ])
+      expect(listing).toContain(word);
+    for (const name of Object.keys(DEFERRED_TOOLS))
+      expect(listing).not.toContain(name);
     // 运行时的状态工具模型用不到。
     for (const name of HIDDEN_TOOLS) expect(sent).not.toContain(name);
+  });
+
+  test("对标 Codex CLI：浏览器的用法和网页按钮的批准规则不在首步的系统提示里，交付只有一段，同一轮前缀逐字节稳定", async () => {
+    delete process.env.XIONGBAO_PROMPT_SLIM;
+    const first = await asBoardTurn(true, () => firstStep());
+    // 浏览器的做法（快照、ref、请人接管）和网页上点哪些按钮由系统先问，随 search_tools 取到浏览器工具时给。
+    for (const word of [
+      "computer_snapshot",
+      "snapshotId",
+      "computer_request_secret",
+      "Add comment",
+    ])
+      expect(first.system).not.toContain(word);
+    // 付款、改密码仍交给本人，什么时候才问人也还在。
+    expect(first.system).toContain("付款、购买、转账");
+    expect(first.system).toContain("hard to undo");
+    // 外来内容是数据不是指令。
+    expect(first.system).toContain("untrusted data");
+    // 交付规则和「熊宝交付规约」合成一段，规则一条没少。
+    expect(first.system.split("<delivery>")).toHaveLength(2);
+    const delivery = first.system.match(
+      /<delivery>\n([\s\S]*?)\n<\/delivery>/,
+    )?.[1];
+    expect(delivery).toContain("file-sharing, transfer or paste site");
+    expect(delivery).toContain("【熊宝交付规约】");
+    // 同一轮再发一次（下一步）：系统提示一个字节不变。
+    requests.length = 0;
+    const again = await asBoardTurn(true, () => firstStep());
+    expect(again.system).toBe(first.system);
   });
 
   test("看板卡的一轮没有「回答格式」段；单聊（服务器电脑工具、不带组件工具）和带组件工具的轮仍有，顺序照旧（用户 2026-11-20 批准）", async () => {

@@ -131,9 +131,13 @@ describe("search_tools 取随运行来的电脑工具", () => {
     client("generate_image", "Make a picture."),
   ];
 
-  test("名字写在描述里；用「browser」这样的词整类都找得到；搜不到就把清单给它", async () => {
+  // 用户 2026-11-21 批准：描述里不再逐个列名字，只用一行说有哪几类；名字在搜到的结果里，搜不到时给整张清单。
+  test("描述只说有哪几类；用「browser」这样的词整类都找得到；搜不到就把清单给它", async () => {
     const tool = searchToolsTool(waiting, { slim: true });
-    for (const name of waiting) expect(tool.description).toContain(name.name);
+    expect(tool.description).toContain("browser");
+    expect(tool.description).toContain("image/video");
+    for (const name of waiting)
+      expect(tool.description).not.toContain(name.name);
     const found = String(await tool.execute({ query: "browser" }));
     expect(found.split("\n")[0]).toBe(
       "Tools found: computer_navigate, computer_snapshot",
