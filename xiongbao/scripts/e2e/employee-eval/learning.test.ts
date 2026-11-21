@@ -1,16 +1,16 @@
 import { expect, test } from "bun:test";
 import {
+  backgroundOf,
   callTrace,
   type LearnedState,
-  backgroundOf,
   learningDiff,
   RETRO_WAIT_MS,
   retroLinesOf,
   waitForRetro,
 } from "./learning";
-import { backgroundRows, learningRows, renderReport } from "./report";
-import { combineRepeat, type EvalRecord, type EvalResults } from "./records";
 import type { Capabilities } from "./metrics";
+import { combineRepeat, type EvalRecord, type EvalResults } from "./records";
+import { backgroundRows, learningRows, renderReport } from "./report";
 
 const state = (
   skills: Record<string, [string, number]>,
@@ -71,7 +71,12 @@ test("a held retrospective carries the reason from its retrospect-held line", ()
       runId: "r2",
       reason: "要求访问或外发到网址或域名（rates.fx）",
     }),
-    line({ runId: "r2", outcome: "held", trigger: "card_delivered", steps: 20 }),
+    line({
+      runId: "r2",
+      outcome: "held",
+      trigger: "card_delivered",
+      steps: 20,
+    }),
     JSON.stringify({ type: "retrospect-held", runId: "r9", reason: "别的轮" }),
   ].join("\n");
   expect(retroLinesOf(log, ["r2"])).toEqual([
@@ -89,7 +94,11 @@ test("the call trace prints one line per call with sizes and the arguments cut s
   expect(
     callTrace(
       [
-        { name: "computer_run_command", args: '{"command":"ls\n -la"}', result: "a\nb" },
+        {
+          name: "computer_run_command",
+          args: '{"command":"ls\n -la"}',
+          result: "a\nb",
+        },
         { name: "deliver_task", args: "x".repeat(10) },
       ],
       8,
@@ -98,6 +107,30 @@ test("the call trace prints one line per call with sizes and the arguments cut s
     ' 1. computer_run_command [参数 21 字 / 结果 3 字] {"comman…',
     " 2. deliver_task [参数 10 字] xxxxxxxx…",
   ]);
+});
+
+test("a refused or bounced call also prints the first 120 characters of its result on one line", () => {
+  const bounced = JSON.stringify({
+    bounced: true,
+    reason: "缺必需项：A".repeat(40),
+  });
+  const lines = callTrace(
+    [
+      {
+        name: "deliver_task",
+        args: "{}",
+        result: "[refused] 这件活\n还没接下",
+      },
+      { name: "deliver_task", args: "{}", result: bounced },
+      { name: "deliver_task", args: "{}", result: '{"delivered":true}' },
+    ],
+    8,
+  );
+  expect(lines[0]).toBe(
+    " 1. deliver_task [参数 2 字 / 结果 18 字] {} → [refused] 这件活 还没接下",
+  );
+  expect(lines[1]?.endsWith(` → ${bounced.slice(0, 120)}`)).toBe(true);
+  expect(lines[2]).toBe(" 3. deliver_task [参数 2 字 / 结果 18 字] {}");
 });
 
 function clock() {

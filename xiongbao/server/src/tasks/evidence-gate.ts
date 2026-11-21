@@ -274,7 +274,26 @@ export function attachmentsProduced(events: readonly BaseEvent[]): string[] {
   return [...ids];
 }
 
-const comparable = (text: string) => text.toLowerCase().replace(/\s+/g, "");
+/** 小写，去掉所有不是字母、数字的字符：标点、括号、引号、空格都不影响比对。 */
+const comparable = (text: string) =>
+  text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+
+/**
+ * 一个必需项有没有对上：`named` 是所有交付物标题、ref 和自查拼成的一整段。
+ * (a) 整项比对后是它的子串；或 (b) 把必需项按空白和标点拆段，比对后长度 >= 2 的段全都出现在里面
+ * （单个汉字或字母的段丢掉；一段都不剩就只按 (a) 判）。
+ */
+export function requiredItemMet(required: string, named: string): boolean {
+  const whole = comparable(named);
+  const item = comparable(required);
+  // 整项全是标点：没有什么可比的，和原来一样算对上。
+  if (whole.includes(item)) return true;
+  const parts = required
+    .split(/[^\p{L}\p{N}]+/u)
+    .map(comparable)
+    .filter((part) => [...part].length >= 2);
+  return parts.length > 0 && parts.every((part) => whole.includes(part));
+}
 
 export function createEvidenceGate(
   database: Database,
@@ -535,10 +554,12 @@ export function createEvidenceGate(
               "只有文字结论时，至少写一条你怎么查过的（checks），比如核对了哪些数据、跑了什么测试。",
           };
 
-        const named = [...items.map(nameOf), ...checks].map(comparable);
+        const named = [
+          ...items.flatMap((item) => [item.title ?? "", item.ref]),
+          ...checks,
+        ].join(" ");
         const missing = requiredItemsOf(input.criteria).filter(
-          (required) =>
-            !named.some((text) => text.includes(comparable(required))),
+          (required) => !requiredItemMet(required, named),
         );
         if (missing.length > 0)
           return {

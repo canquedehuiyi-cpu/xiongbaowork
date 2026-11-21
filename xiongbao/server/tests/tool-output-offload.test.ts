@@ -197,7 +197,7 @@ describe("computer_run_command 的输出", () => {
     expect(stdout.startsWith("1\n")).toBe(true);
     expect(stdout.trimEnd().endsWith("8000")).toBe(true);
     expect(stdout).toContain("中间省略");
-    expect(Buffer.byteLength(stdout)).toBeLessThan(7_000);
+    expect(Buffer.byteLength(stdout)).toBeLessThan(COMMAND_INLINE_BYTES);
     expect(result.exitCode).toBe(0);
     // 路径和说明。
     const saved = String(result.outputFile);
@@ -240,7 +240,7 @@ describe("computer_run_command 的输出", () => {
     expect(outputsIn(dir)).toHaveLength(0);
   });
 
-  test("刚好卡在阈值上的不动，多一个字节才动（命令输出的阈值是 4KB，用户 2026-11-20 批准，原为 16KB）", async () => {
+  test("刚好卡在阈值上的不动，多一个字节才动（命令输出的阈值是 8KB，原为 16KB，2026-11-20 降到 4KB，用户 2026-11-21 批准提到 8KB）", async () => {
     const { invoke } = toolsOn(dir);
     const exact = await invoke("computer_run_command", {
       command: `head -c ${COMMAND_INLINE_BYTES} /dev/zero | tr '\\0' 'a'`,

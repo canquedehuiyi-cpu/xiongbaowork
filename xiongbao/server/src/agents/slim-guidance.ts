@@ -352,7 +352,7 @@ export function slimCodingToolsGuidance(
   const parts = [
     ...(toolNames.includes("computer_edit_file")
       ? [
-          "改已有的文件优先用 computer_edit_file：先读出要改的地方，把原文一字不差作为 old_string（带足上下文，只出现一次），新内容写成 new_string，一次改一处；不要用 computer_write_file 整文件重写，它只用来新建。",
+          "改已有的文件优先用 computer_edit_file：先读出要改的地方，把原文一字不差作为 old_string（带足上下文，只出现一次），新内容写成 new_string。一次调用改一处，互不相关的几处修改放在同一步一起发出多个调用，按顺序执行，不要一步只改一处；不要用 computer_write_file 整文件重写，它只用来新建。",
         ]
       : []),
     ...(toolNames.includes("computer_grep") ||

@@ -37,8 +37,8 @@ export const WORKSPACE_OUTPUT_DIR = "tool-outputs";
  * 原样留着，后段每步就是 2～3 万 token。所以命令输出和没指定行段的读文件各自再收紧，网页正文已经是 8KB。
  * 都是环境变量可回退：设 `off` 回到 {@link OUTPUT_INLINE_BYTES}（16KB）和原来的头尾取法，设数字取那么多字节。
  */
-/** `computer_run_command` 的输出不超过这么多字节原样回传（原为 16KB，用户 2026-11-20 批准降到 4KB）。部署用 `XIONGBAO_COMMAND_INLINE_BYTES` 覆盖（设 16384 或 off 回到原来的行为）。 */
-export const COMMAND_INLINE_BYTES = 4 * 1024;
+/** `computer_run_command` 的输出不超过这么多字节原样回传（原为 16KB，2026-11-20 降到 4KB，用户 2026-11-21 批准提到 8KB）。部署用 `XIONGBAO_COMMAND_INLINE_BYTES` 覆盖（设 16384 或 off 回到原来的行为）。 */
+export const COMMAND_INLINE_BYTES = 8 * 1024;
 /** 没指定行段的 `computer_read_file` 不超过这么多字节原样回传（原为 16KB）。部署用 `XIONGBAO_READ_INLINE_BYTES` 覆盖。 */
 export const READ_INLINE_BYTES = 12 * 1024;
 
@@ -273,7 +273,7 @@ export async function spill(input: {
   };
 }
 
-/** 命令输出收紧后，存了盘时头和尾各留多少：4KB 的线留 1KB 头加 2.5KB 尾，回退到 16KB 时用原来的 2KB 加 4KB。 */
+/** 命令输出收紧后，存了盘时头和尾各留多少：8KB 的线留 2KB 头加 5KB 尾，回退到 16KB 时用原来的 2KB 加 4KB。 */
 function commandExcerptBytes(limit: number): { head?: number; tail?: number } {
   if (limit >= OUTPUT_INLINE_BYTES) return {};
   return { head: Math.floor(limit / 4), tail: Math.floor((limit * 5) / 8) };

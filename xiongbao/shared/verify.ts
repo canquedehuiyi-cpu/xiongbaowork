@@ -32,8 +32,8 @@ export function verifyGuidance(
   return toolNames.includes(COMMAND_TOOL) ? VERIFY_GUIDANCE : undefined;
 }
 
-/** How to change a file: one passage at a time, never the whole file rewritten (期五). */
-export const EDIT_GUIDANCE = `改已有的文件优先用 ${EDIT_FILE_TOOL}：先用 computer_read_file 读出要改的地方（长文件传 offset 和 limit 只读那一段），把要替换的原文一字不差地作为 old_string（带上足够的上下文，让它在文件里只出现一次），改后的内容写成 new_string，一次改一处。不要用 computer_write_file 整文件重写已有的文件，它只用来新建文件。`;
+/** How to change a file: one passage per call, several unrelated edits issued in one step, never the whole file rewritten (期五). */
+export const EDIT_GUIDANCE = `改已有的文件优先用 ${EDIT_FILE_TOOL}：先用 computer_read_file 读出要改的地方（长文件传 offset 和 limit 只读那一段），把要替换的原文一字不差地作为 old_string（带上足够的上下文，让它在文件里只出现一次），改后的内容写成 new_string。一次调用改一处；互不相关的几处修改（同一个文件或不同文件）放在同一步一起发出多个 computer_edit_file 调用，按顺序执行，不要一步只改一处。不要用 computer_write_file 整文件重写已有的文件，它只用来新建文件。`;
 
 /** How to find code: by content and by name, not by paging through listings (期五). */
 export const SEARCH_GUIDANCE = `找代码用 ${GREP_TOOL}（按内容搜正则表达式，可用 glob 限定文件类型）和 ${GLOB_TOOL}（按文件名模式找，如 src/**/*.ts），不要靠 computer_list_files 一层层翻目录，也不要用命令把整个文件打印出来。`;

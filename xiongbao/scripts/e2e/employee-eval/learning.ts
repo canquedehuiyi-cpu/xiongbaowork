@@ -251,6 +251,11 @@ export function callTrace(
     const cut = args.length > argChars ? `${args.slice(0, argChars)}…` : args;
     // 参数和结果各多少字：看历史里堆的是什么（写文件的长参数、读文件和命令的长结果）。
     const sizes = ` [参数 ${call.args.length} 字${call.result === undefined ? "" : ` / 结果 ${call.result.length} 字`}]`;
-    return `${String(index + 1).padStart(2, " ")}. ${call.name}${sizes} ${cut}`;
+    const line = `${String(index + 1).padStart(2, " ")}. ${call.name}${sizes} ${cut}`;
+    // 被拒或被挡回的调用，行末带上结果的前 120 个字，看得出原因。
+    const result = call.result ?? "";
+    return result.startsWith("[refused]") || /"bounced"\s*:\s*true/.test(result)
+      ? `${line} → ${result.replace(/\s+/g, " ").trim().slice(0, 120)}`
+      : line;
   });
 }
