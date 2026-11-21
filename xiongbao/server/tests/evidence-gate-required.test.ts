@@ -49,3 +49,21 @@ test("a required item nobody mentions is still missing", () => {
   // 单个汉字的段不算：只提到「更」不能让「更新日志」对上。
   expect(requiredItemMet("更 新", "更改了配置")).toBe(false);
 });
+
+test("a Chinese part with no spaces is met when most of its two-character pairs are named", () => {
+  expect(
+    requiredItemMet(
+      "compare.md 五个项目小节齐全且数据有出处",
+      "compare.md：五个项目小节齐全，数据都有出处",
+    ),
+  ).toBe(true);
+  expect(requiredItemMet("代码改名完成", "改名完成：calcPrice→lineTotal")).toBe(
+    true,
+  );
+  // Too few pairs named: still missing.
+  expect(requiredItemMet("汇总表列齐全", "写了检索日期")).toBe(false);
+  // A part without Han characters still has to be named whole.
+  expect(requiredItemMet("compare.md 小节齐全", "report.md 小节齐全")).toBe(
+    false,
+  );
+});
