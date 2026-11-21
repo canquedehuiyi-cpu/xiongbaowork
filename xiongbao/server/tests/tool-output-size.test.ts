@@ -10,6 +10,8 @@ import {
   READ_INLINE_BYTES,
   readInlineBytes,
   shrinkFileRead,
+  TESTS_PASSED_HINT,
+  testsPassedHint,
 } from "../src/tool-output";
 
 /*
@@ -238,5 +240,105 @@ describe("没指定行段的读文件", () => {
       if (before === undefined) delete process.env.XIONGBAO_READ_INLINE_BYTES;
       else process.env.XIONGBAO_READ_INLINE_BYTES = before;
     }
+  });
+});
+
+describe("测试全部通过时的收尾提示", () => {
+  const run = (command: string, stdout: string, exitCode = 0, stderr = "") => ({
+    command,
+    exitCode,
+    stdout,
+    stderr,
+  });
+  const cases: Array<[string, string, string]> = [
+    ["bun test", "bun test v1.2\n\n 12 pass\n 0 fail\nRan 12 tests", ""],
+    ["pytest -q", "......\n6 passed in 0.12s", ""],
+    [
+      "npx jest",
+      "Test Suites: 2 passed, 2 total\nTests:       9 passed, 9 total",
+      "",
+    ],
+    [
+      "npx vitest run",
+      " Test Files  1 passed (1)\n      Tests  4 passed (4)",
+      "",
+    ],
+    [
+      "go test ./...",
+      "ok  \texample.com/pkg\t0.01s\nok  \texample.com/b\t0.02s",
+      "",
+    ],
+    [
+      "cargo test",
+      "running 3 tests\ntest result: ok. 3 passed; 0 failed; 0 ignored",
+      "",
+    ],
+    ["cd app && npm test", " 5 pass\n 0 fail", ""],
+  ];
+  for (const [command, out] of cases) {
+    test(`${command} 通过：加提示`, () => {
+      expect(testsPassedHint(run(command, out))).toBe(TESTS_PASSED_HINT);
+    });
+  }
+
+  test("通过摘要在 stderr 里也认（pytest、cargo 常写到 stderr）", () => {
+    expect(testsPassedHint(run("bun test", "", 0, " 3 pass\n 0 fail"))).toBe(
+      TESTS_PASSED_HINT,
+    );
+  });
+
+  const notAdded: Array<[string, ReturnType<typeof run>]> = [
+    ["bun 有失败", run("bun test", " 11 pass\n 1 fail")],
+    ["pytest 有失败", run("pytest", "1 failed, 5 passed in 0.2s")],
+    ["pytest 有 error", run("pytest", "5 passed, 1 error in 0.2s")],
+    ["jest 有失败", run("jest", "Tests:       1 failed, 8 passed, 9 total")],
+    [
+      "go 有 FAIL",
+      run("go test ./...", "--- FAIL: TestA\nFAIL\nok  \tb\t0.1s"),
+    ],
+    [
+      "cargo FAILED",
+      run("cargo test", "test result: FAILED. 2 passed; 1 failed"),
+    ],
+    ["退出码非 0", run("bun test", " 5 pass\n 0 fail", 1)],
+    ["不是测试命令", run("cat report.txt", " 5 pass\n 0 fail")],
+    ["认不出摘要", run("bun test", "done")],
+  ];
+  for (const [name, result] of notAdded) {
+    test(`${name}：不加`, () => {
+      expect(testsPassedHint(result)).toBeUndefined();
+    });
+  }
+
+  test("开关 off 关掉", () => {
+    expect(
+      testsPassedHint(run("bun test", " 5 pass\n 0 fail"), {
+        XIONGBAO_TESTS_PASSED_HINT: "off",
+      }),
+    ).toBeUndefined();
+  });
+
+  test("offloadCommandResult：提示在结果末尾；输出很长时也在", async () => {
+    const small = await offloadCommandResult(
+      run("bun test", " 5 pass\n 0 fail"),
+      {
+        id: "t1",
+      },
+    );
+    expect(small.hint).toBe(TESTS_PASSED_HINT);
+    expect(Object.keys(small).at(-1)).toBe("hint");
+    const big = await offloadCommandResult(
+      run("bun test", `${lines(130)}\n 5 pass\n 0 fail`),
+      { id: "t2" },
+    );
+    expect(big.hint).toBe(TESTS_PASSED_HINT);
+    expect(big.outputNote).toBeDefined();
+    const failed = await offloadCommandResult(
+      run("bun test", " 4 pass\n 1 fail", 1),
+      {
+        id: "t3",
+      },
+    );
+    expect(failed.hint).toBeUndefined();
   });
 });

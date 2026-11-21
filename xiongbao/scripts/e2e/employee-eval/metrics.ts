@@ -339,6 +339,8 @@ export type TokenCallRow = {
   callId: string;
   runId: string;
   startedAt: Date | string;
+  /** 这次调用的流读完、记下用量的时刻（墙钟拆分用；旧数据或没读完的调用没有）。 */
+  observedAt?: Date | string | null;
   inputTokens: number | null;
   cachedInputTokens: number | null;
 };

@@ -38,6 +38,7 @@ import {
   type RunLearning,
   type RunMetrics,
 } from "./records";
+import { secondsCell } from "./wall-split";
 
 const DASH = "—";
 const TRI: Record<Tri, string> = { yes: "是", no: "否", "n/a": "不适用" };
@@ -1099,6 +1100,56 @@ export function renderReport(results: EvalResults[]): string {
       ),
       "",
       "记账步 = 一步里只有 accept_task、update_plan、deliver_task、request_extension 的步，再加交付被接受之后的那一步（没有任何工具调用的收尾话）；和读取、命令同一步发出的不算。一步记在一类名下，优先级 交付 > 接活 > 计划。步数 = 模型调用次数（和上面的表同一批 `model_token_calls`）；记账占比 = 记账步总数 ÷ 步数（含申请延期的步）。这几步各自要把整段历史再发一遍，占比越低越好；Codex 没有这几步，不列。",
+      "",
+    );
+  }
+
+  /*
+   * 墙钟拆分：每道题的墙钟花在模型、工具还是别处。只要熊宝侧的记录里有这一项（旧结果文件没有，就没有这张表）。
+   */
+  const split = [...TASKS, ...hard].filter((task) =>
+    mineSides.some((mine) =>
+      mine.results?.records.some(
+        (record) => record.task === task && record.wallSplit,
+      ),
+    ),
+  );
+  if (split.length) {
+    out.push(
+      "### 墙钟拆分（模型时间 / 工具时间 / 其余）",
+      "",
+      table(
+        [
+          "题目",
+          ...mineSides.flatMap((mine) => [
+            `${mine.label}墙钟`,
+            `${mine.label}模型`,
+            `${mine.label}工具`,
+            `${mine.label}其余`,
+            `${mine.label}步数`,
+          ]),
+        ],
+        split.map((task) => [
+          TASK_TITLES[task],
+          ...mineSides.flatMap((mine) => {
+            const found = mine.results?.records.find(
+              (record) => record.task === task,
+            );
+            const parts = found?.wallSplit;
+            return parts && found
+              ? [
+                  secondsCell(found.wallMs),
+                  secondsCell(parts.modelMs),
+                  secondsCell(parts.toolMs),
+                  secondsCell(parts.otherMs),
+                  count(found.steps),
+                ]
+              : Array.from({ length: 5 }, () => DASH);
+          }),
+        ]),
+      ),
+      "",
+      "口径：模型 = 每次模型调用从发出请求到流读完（`model_token_calls` 的 started_at 到 observed_at）的时长之和，并行的按区间并集算；工具 = 各工具调用从开始执行（`TOOL_CALL_END`，没有时间戳时用 `TOOL_CALL_START`）到 `TOOL_CALL_RESULT` 的区间并集，用运行事件里的 `timestamp`，和模型区间重叠的部分只算模型；其余 = 墙钟 − 模型 − 工具（服务器写库、续接、评测脚本追「继续」的等待等）。「—」= 拿不到可靠时间戳（事件没带时间戳、事件没存全、或有调用没记下结束时刻），不拿别的数凑；工具拿不到时，其余 = 墙钟 − 模型（含工具执行）；模型拿不到时其余也不给。事件库表的 `created_at` 是写库时间，不用。Codex 没有这几项，不列。",
       "",
     );
   }
