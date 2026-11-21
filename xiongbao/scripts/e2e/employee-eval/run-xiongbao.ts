@@ -517,11 +517,25 @@ const ADMIN_EMAIL = `eval-${randomUUID().slice(0, 8)}@example.test`;
 let computer: Subprocess | undefined;
 let server: Subprocess | undefined;
 
+/** 日志文件的最后几行（单行化），电脑起不来时打进作业日志：日志文件只在评测产物里，不下载看不到。 */
+function logTail(path: string, lines = 15): string {
+  try {
+    return readFileSync(path, "utf8")
+      .trim()
+      .split("\n")
+      .slice(-lines)
+      .join(" | ");
+  } catch {
+    return "（没有日志）";
+  }
+}
+
 function logFile(name: string): number {
   return openSync(join(OUT, name), "w");
 }
 
 async function startComputer() {
+  const computerLog = join(OUT, logFileName("computer", evalPath));
   const fd = logFile(logFileName("computer", evalPath));
   const launch = computerLaunch(
     isolation,
@@ -553,7 +567,9 @@ async function startComputer() {
     "the computer to answer",
     async () => {
       if (computer?.exitCode !== null)
-        throw new Error(`computer exited ${computer?.exitCode}`);
+        throw new Error(
+          `computer exited ${computer?.exitCode}: ${logTail(computerLog)}`,
+        );
       const response = await fetch(`http://127.0.0.1:${COMPUTER_PORT}/exec`, {
         method: "POST",
         headers: {
