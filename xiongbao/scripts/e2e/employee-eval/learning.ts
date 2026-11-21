@@ -254,7 +254,8 @@ export function callTrace(
     const line = `${String(index + 1).padStart(2, " ")}. ${call.name}${sizes} ${cut}`;
     // 被拒或被挡回的调用，行末带上结果的前 120 个字，看得出原因。
     const result = call.result ?? "";
-    return result.startsWith("[refused]") || /"bounced"\s*:\s*true/.test(result)
+    return /^(Refused\.|\[refused\])/.test(result) ||
+      /bounced\\?"\s*:\s*true/.test(result)
       ? `${line} → ${result.replace(/\s+/g, " ").trim().slice(0, 120)}`
       : line;
   });
