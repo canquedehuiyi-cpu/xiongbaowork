@@ -108,6 +108,24 @@ export function retroMinSteps(
     : RETRO_MIN_STEPS_DEFAULT;
 }
 
+/** 一次复盘（观察者从认卡到复盘函数返回的整段）总共最多等多久：8 分钟。 */
+export const RETRO_TOTAL_TIMEOUT_MS_DEFAULT = 480_000;
+
+/**
+ * `XIONGBAO_RETRO_TOTAL_TIMEOUT_MS`：一次复盘整段的总上限（毫秒），含模型调用超时重试、追问快路径、改写、重问。
+ * 默认 480000；写 `off` 不限；不是正整数就用默认。
+ */
+export function retroTotalTimeoutMs(
+  environment: Record<string, string | undefined> = process.env,
+): number | undefined {
+  const raw = environment.XIONGBAO_RETRO_TOTAL_TIMEOUT_MS?.trim();
+  if (raw?.toLowerCase() === "off") return undefined;
+  const value = Number(raw);
+  return Number.isInteger(value) && value >= 1
+    ? value
+    : RETRO_TOTAL_TIMEOUT_MS_DEFAULT;
+}
+
 /** 看板卡验收通过后复盘，至少要有这么多步：一两步的活没有「做法」可言。 */
 export const CARD_RETRO_MIN_STEPS = 3;
 /** 看板卡交付成功后复盘的默认门槛（`XIONGBAO_RETRO_CARD_MIN_STEPS`）：接活、交付各算一步，六步大致是做了四件事。 */
@@ -615,9 +633,17 @@ export function createRetrospector(deps: RetrospectorDeps) {
       limit: () =>
         dailyLimitOf("XIONGBAO_RETRO_PER_DAY", RETRO_PER_DAY_DEFAULT),
     });
-  return async function retrospectTurn(turn: RetroTurn): Promise<RetroOutcome> {
+  /**
+   * `abandon`：观察者等不下去、放弃了这一次（总超时）。放弃之后不再起新的模型调用，也不存技能；
+   * 已经在飞的那一次模型调用不被打断，它的结果被丢掉。
+   */
+  return async function retrospectTurn(
+    turn: RetroTurn,
+    abandon?: AbortSignal,
+  ): Promise<RetroOutcome> {
+    const gone = () => abandon?.aborted === true;
     try {
-      if (!shouldRetrospect(turn)) return { outcome: "skipped" };
+      if (gone() || !shouldRetrospect(turn)) return { outcome: "skipped" };
       // 员工这一轮自己存过技能的，照样复盘：自存的常常只写了一半，复盘写出的存下后替换它们。
       const ownSaved = selfSavedSlugsOf(turn.steps, turn.agentId);
       if (!(await (deps.enabled?.(turn.ownerUserId, turn.agentId) ?? true)))
@@ -655,11 +681,13 @@ export function createRetrospector(deps: RetrospectorDeps) {
           ),
       };
       let draft = await retrospect(turn, options);
+      if (gone()) return { outcome: "skipped" };
       // 交付成功的卡步数不少，模型却说没什么可记的：多半是误判，重问一次，重问也占当天额度。
       let retried = false;
       const steps = workSteps(turn.steps);
       if (
         !draft &&
+        !gone() &&
         turn.trigger === "card_delivered" &&
         steps >= RETRO_RETRY_MIN_STEPS &&
         limiter.take(key)
@@ -675,6 +703,7 @@ export function createRetrospector(deps: RetrospectorDeps) {
       let askedFastPath = false;
       if (
         draft &&
+        !gone() &&
         !draft.fastPath &&
         turn.trigger === "card_delivered" &&
         steps >= RETRO_RETRY_MIN_STEPS &&
@@ -699,6 +728,7 @@ export function createRetrospector(deps: RetrospectorDeps) {
       let rewriteCleared = false;
       if (
         draft &&
+        !gone() &&
         heldOnlyForDestructive(withoutEmails(draft)) &&
         limiter.take(key)
       ) {
@@ -722,6 +752,7 @@ export function createRetrospector(deps: RetrospectorDeps) {
           // 用原草稿转待审。
         }
       }
+      if (gone()) return { outcome: "skipped" };
       const mark = {
         ...(retried ? { retried: true as const } : {}),
         ...(rewroteUnsafe ? { rewroteUnsafe: true as const } : {}),
@@ -736,6 +767,7 @@ export function createRetrospector(deps: RetrospectorDeps) {
       // 已经有一条差不多的：不再加一条近似的副本（这一轮员工自存的不算，那几条正是要被替换的）。
       const similar = await similarSkillOf(self, draft, undefined, ownSaved);
       if (similar) return { outcome: "similar", id: similar, ...mark };
+      if (gone()) return { outcome: "skipped" };
       const saved = await saveSkill(self, draft, "retrospect", turn.request);
       // 转待审和被拒各记一行原因（只有规则的名字，没有技能的内容），评测和排查看得出为什么没生效。
       if (saved.ok && saved.held)
@@ -781,6 +813,7 @@ export function createRetrospector(deps: RetrospectorDeps) {
         ...mark,
       };
     } catch (error) {
+      if (gone()) return { outcome: "skipped" };
       log(
         JSON.stringify({
           type: "retrospect-error",
@@ -964,7 +997,16 @@ export type ObservedTurn = {
 
 export type RetroObserverDeps = {
   /** {@link createRetrospector} 造出来的复盘函数。 */
-  retrospect: (turn: RetroTurn) => Promise<RetroOutcome>;
+  retrospect: (
+    turn: RetroTurn,
+    /** 观察者放弃（总超时）时触发：之后不再起新的模型调用，也不存技能。 */
+    abandon?: AbortSignal,
+  ) => Promise<RetroOutcome>;
+  /**
+   * 一次复盘整段的总上限（毫秒）；不给就读 `XIONGBAO_RETRO_TOTAL_TIMEOUT_MS`（默认 8 分钟，`off` 不限）。
+   * 到点放弃，记一行 `outcome: "timeout"`，不存技能。`null`：不限。
+   */
+  totalTimeoutMs?: number | null;
   /**
    * 这一轮交付成功的那张卡：任务卡的日志里有这一轮的 `delivered` 行（`deliver_task` 过了证据核对，被挡回的
    * 不记这一行）。没有就是 null。在本人帧里调用。
@@ -1137,7 +1179,7 @@ export function createRetroObserver(deps: RetroObserverDeps) {
   };
   return async function observe(turn: ObservedTurn): Promise<RetroOutcome> {
     await deps.markUsed?.(turn).catch(() => undefined);
-    let outcome: RetroOutcome = { outcome: "skipped" };
+    let outcome = { outcome: "skipped" } as RetroOutcome;
     let retro = retroTurnOf(turn);
     let reason: "steps" | "failed" | "card_done" | undefined;
     let reviewedKey: string | undefined;
@@ -1153,46 +1195,76 @@ export function createRetroObserver(deps: RetroObserverDeps) {
       turn.failed &&
       (ownDeliveryAccepted(turn.events) || deliveredRow !== null);
     if (failedButDelivered) retro = { ...retro, failed: false };
-    try {
-      if (turn.failed && !failedButDelivered) reason = "failed";
-      else {
-        const taskId =
-          turn.kind === "task"
-            ? await cardOf(turn, retro.steps, deliveredRow)
-            : null;
-        const key = taskId ? `${turn.tenant}:${taskId}` : undefined;
-        if (taskId && key && reviewed.has(key)) {
-          // 这张卡已经复盘过：后面的轮不再看一遍。
-          retro = { ...retro, cardId: taskId, trigger: "card_delivered" };
-          reason = "card_done";
-        } else {
-          // 读不到这张卡就当一轮普通的轮复盘，不因此漏掉。
-          const card = taskId
-            ? await deps
-                .cardTurn(taskId, { runId: turn.runId, events: turn.events })
-                .catch(() => null)
-            : null;
-          if (card) {
-            retro = { ...card, trigger: "card_delivered" };
-            reviewedKey = key;
+    const abandon = new AbortController();
+    const review = async (): Promise<void> => {
+      try {
+        if (turn.failed && !failedButDelivered) reason = "failed";
+        else {
+          const taskId =
+            turn.kind === "task"
+              ? await cardOf(turn, retro.steps, deliveredRow)
+              : null;
+          const key = taskId ? `${turn.tenant}:${taskId}` : undefined;
+          if (taskId && key && reviewed.has(key)) {
+            // 这张卡已经复盘过：后面的轮不再看一遍。
+            retro = { ...retro, cardId: taskId, trigger: "card_delivered" };
+            reason = "card_done";
+          } else {
+            // 读不到这张卡就当一轮普通的轮复盘，不因此漏掉。
+            const card = taskId
+              ? await deps
+                  .cardTurn(taskId, { runId: turn.runId, events: turn.events })
+                  .catch(() => null)
+              : null;
+            if (card) {
+              retro = { ...card, trigger: "card_delivered" };
+              reviewedKey = key;
+            }
+            // 看板卡派的一轮、没认到已交付的卡：不是普通聊天，按卡的门槛算步数；照实标成没交付。
+            if (!card && turn.kind === "task")
+              retro = { ...retro, trigger: "card_turn" };
+            if (abandon.signal.aborted) return;
+            outcome = await deps.retrospect(retro, abandon.signal);
+            if (outcome.outcome === "skipped" && !shouldRetrospect(retro))
+              reason = "steps";
+            // 步数不够的跳过不是结论：这张卡后面的轮补了步数还要再看。
+            if (reviewedKey && reason !== "steps" && !abandon.signal.aborted)
+              remember(reviewedKey);
           }
-          // 看板卡派的一轮、没认到已交付的卡：不是普通聊天，按卡的门槛算步数；照实标成没交付。
-          if (!card && turn.kind === "task")
-            retro = { ...retro, trigger: "card_turn" };
-          outcome = await deps.retrospect(retro);
-          if (outcome.outcome === "skipped" && !shouldRetrospect(retro))
-            reason = "steps";
-          // 步数不够的跳过不是结论：这张卡后面的轮补了步数还要再看。
-          if (reviewedKey && reason !== "steps") remember(reviewedKey);
         }
+      } catch {
+        // 复盘自己记错误；这里只保证日志那一行照出。
       }
-    } catch {
-      // 复盘自己记错误；这里只保证日志那一行照出。
+    };
+    /*
+     * 整段（认卡、拼整卡轨迹、复盘函数里的模型调用、重试、追问、改写、重问）有一个总上限：到点放弃，
+     * 日志写 `outcome: "timeout"`，放弃之后不再存技能。单次模型调用的超时等原有设置不变。
+     */
+    const limit =
+      deps.totalTimeoutMs === undefined
+        ? retroTotalTimeoutMs()
+        : (deps.totalTimeoutMs ?? undefined);
+    let timedOut = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (limit === undefined) await review();
+    else {
+      const late = new Promise<"timeout">((resolve) => {
+        timer = setTimeout(() => resolve("timeout"), limit);
+        timer.unref?.();
+      });
+      const finished = await Promise.race([review(), late]);
+      clearTimeout(timer);
+      if (finished === "timeout") {
+        timedOut = true;
+        abandon.abort();
+        outcome = { outcome: "skipped" };
+        reason = undefined;
+      }
     }
     log(
       JSON.stringify({
         type: "retrospect",
-        outcome: retroLogOutcome(outcome),
+        outcome: timedOut ? "timeout" : retroLogOutcome(outcome),
         trigger: retro.trigger,
         steps: workSteps(retro.steps),
         agentId: turn.agentId,

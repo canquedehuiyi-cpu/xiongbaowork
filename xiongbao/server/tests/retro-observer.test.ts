@@ -10,10 +10,12 @@ import {
   createRetroObserver,
   createRetrospector,
   type ObservedTurn,
+  RETRO_TOTAL_TIMEOUT_MS_DEFAULT,
   type RetroOutcome,
   type RetroTurn,
   retroCardMinSteps,
   retroPrompt,
+  retroTotalTimeoutMs,
   runErrorKindOf,
   shouldRetrospect,
   traceStepsOf,
@@ -915,5 +917,115 @@ describe("a card's round that was never handed in is reviewed on the card bar", 
     expect(
       shouldRetrospect(turn(4), { XIONGBAO_RETRO_CARD_MIN_STEPS: "4" }),
     ).toBe(true);
+  });
+});
+
+describe("a review has a total time limit", () => {
+  const delivered = (runId: string) =>
+    turnOf(
+      [
+        ...work(8),
+        ...call(
+          "d1",
+          "deliver_task",
+          {},
+          '{"delivered":true,"taskId":"card-1"}',
+        ),
+      ],
+      { runId },
+    );
+
+  test("the limit is 8 minutes, can be set, and `off` means none", () => {
+    expect(RETRO_TOTAL_TIMEOUT_MS_DEFAULT).toBe(480_000);
+    expect(retroTotalTimeoutMs({})).toBe(480_000);
+    expect(
+      retroTotalTimeoutMs({ XIONGBAO_RETRO_TOTAL_TIMEOUT_MS: "90000" }),
+    ).toBe(90_000);
+    expect(
+      retroTotalTimeoutMs({ XIONGBAO_RETRO_TOTAL_TIMEOUT_MS: " OFF " }),
+    ).toBe(undefined);
+    expect(
+      retroTotalTimeoutMs({ XIONGBAO_RETRO_TOTAL_TIMEOUT_MS: "abc" }),
+    ).toBe(480_000);
+    expect(retroTotalTimeoutMs({ XIONGBAO_RETRO_TOTAL_TIMEOUT_MS: "0" })).toBe(
+      480_000,
+    );
+  });
+
+  test("a review that never comes back is given up at the limit: one `timeout` row, no content, nothing remembered", async () => {
+    let abandon: AbortSignal | undefined;
+    let calls = 0;
+    const { observe, logs } = harness({
+      totalTimeoutMs: 30,
+      cardTurn: async (id) => ({
+        ownerUserId: "u1",
+        agentId: "bot",
+        threadId: "t1",
+        runId: "r1",
+        request: "x",
+        reply: "y",
+        steps: traceStepsOf(work(8)),
+        failed: false,
+        cardId: id,
+        trigger: "card_delivered",
+      }),
+      retrospect: (_turn, signal) => {
+        calls += 1;
+        abandon = signal;
+        return new Promise<RetroOutcome>(() => {});
+      },
+    });
+    const outcome = await observe(delivered("r1"));
+    expect(outcome).toEqual({ outcome: "skipped" });
+    expect(logs).toHaveLength(1);
+    expect(JSON.parse(logs[0] as string)).toMatchObject({
+      type: "retrospect",
+      outcome: "timeout",
+      runId: "r1",
+      agentId: "bot",
+      cardId: "card-1",
+    });
+    expect(logs[0]).not.toContain("把动作清单");
+    expect(abandon?.aborted).toBe(true);
+    // The card was not marked as reviewed: the next round of it is looked at.
+    await observe(delivered("r2")).catch(() => {});
+    expect(calls).toBe(2);
+  });
+
+  test("a hang before the review (reading the card) is also given up", async () => {
+    const { observe, logs } = harness({
+      totalTimeoutMs: 30,
+      deliveredCard: () => new Promise<string | null>(() => {}),
+    });
+    await observe(delivered("r1"));
+    expect(JSON.parse(logs.at(-1) as string)).toMatchObject({
+      type: "retrospect",
+      outcome: "timeout",
+    });
+  });
+
+  test("a review that finishes in time is logged as usual, and the timer does not fire later", async () => {
+    const { observe, logs } = harness({
+      totalTimeoutMs: 5_000,
+    });
+    await observe(turnOf(work(20)));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(logs).toHaveLength(1);
+    expect(JSON.parse(logs[0] as string)).toMatchObject({
+      type: "retrospect",
+      outcome: "saved",
+    });
+  });
+
+  test("`null` means no limit", async () => {
+    const { observe, logs } = harness({
+      totalTimeoutMs: null,
+      retrospect: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        return { outcome: "nothing" };
+      },
+    });
+    await observe(turnOf(work(20)));
+    expect(JSON.parse(logs[0] as string).outcome).toBe("nothing");
   });
 });
