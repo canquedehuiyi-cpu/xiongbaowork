@@ -59,17 +59,18 @@ test("the pitfall is told to the employee under a plain name that gives nothing 
   expect(TASK_TITLES[REPEAT_PITFALL_TASK]).toContain("账单导入");
 });
 
-test("repeat_pairs: 1 to 4, default 1", () => {
+test("repeat_pairs: 1 to 6, default 1", () => {
   expect(repeatPairs({})).toEqual({ ok: true, pairs: 1 });
   expect(repeatPairs({ EVAL_REPEAT_PAIRS: "" })).toEqual({
     ok: true,
     pairs: 1,
   });
-  expect(repeatPairs({ EVAL_REPEAT_PAIRS: "4" })).toEqual({
-    ok: true,
-    pairs: 4,
-  });
-  for (const bad of ["0", "5", "2.5", "abc", "-1", "1e1"])
+  for (const pairs of [4, 5, 6])
+    expect(repeatPairs({ EVAL_REPEAT_PAIRS: String(pairs) })).toEqual({
+      ok: true,
+      pairs,
+    });
+  for (const bad of ["0", "7", "2.5", "abc", "-1", "1e1"])
     expect(repeatPairs({ EVAL_REPEAT_PAIRS: bad }).ok).toBe(false);
 });
 

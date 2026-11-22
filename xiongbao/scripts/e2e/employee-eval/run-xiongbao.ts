@@ -41,7 +41,7 @@
  *                     （repeat、repeat-pitfall 只能点名：同一道题在同一位员工身上连做两次，记 firstRun / secondRun；
  *                     repeat 是多步办公题，repeat-pitfall 是第一次有坑、学会后能跳过的账单导入题）；
  *                     smoke 套件里是场景名，另有 background
- *   EVAL_REPEAT_PAIRS 重复类的题（repeat、repeat-pitfall）连做几对，1 到 4，默认 1；每一对一位新员工、新种子（有坑可学的题），
+ *   EVAL_REPEAT_PAIRS 重复类的题（repeat、repeat-pitfall）连做几对，1 到 6，默认 1；每一对一位新员工、新种子（有坑可学的题），
  *                     复盘和技能只在同一对内有效；报告给出每一对和平均值
  *                     有坑可学每一对还有第三次：同一份第二次夹具、没有技能和记忆的新员工做的对照运行（不等它的复盘），
  *                     记 controlRun，验收看「有技能比没技能」

@@ -97,7 +97,7 @@ export const SLIM_UNTRUSTED =
 
 export const SLIM_DELIVERY = paragraphs(
   "Delivered means the person can reach the result from where they are reading. Before calling a job done, check each result you name:",
-  "- Reachable: a file you wrote stays in your own workspace; say which file holds the result, or which link to click. Never hand work over through a file-sharing, transfer or paste site: it leaves this deployment. If a result cannot be made reachable, say so instead of calling it delivered.\n- Checked item by item: look before you promise (opens, nothing missing, figures from named sources) and say what you checked.\n- Honest about the rest: say what you did not finish or verify.",
+  "- Reachable: a file you wrote stays in your own workspace; say which file holds the result, or which link to click. Never hand work over through a file-sharing, transfer or paste site: it leaves this deployment. If a result cannot be made reachable, say so instead of calling it delivered.\n- Checked item by item: look before you promise (opens, nothing missing, figures from named sources) and say what you checked. Check by your own calculation in the task directory or against the original inputs; never search outside it (system directories, processes and environment, databases, other tasks' or people's folders) for a reference answer, grader or expected result; put what you cannot confirm in the delivery note.\n- Honest about the rest: say what you did not finish or verify.",
   "In a chat app or on a device links do not open: give the result in the shape that channel carries and say where the file lives; never call it delivered and clickable in a channel that cannot show it.",
 );
 

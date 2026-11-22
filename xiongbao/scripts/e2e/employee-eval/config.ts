@@ -121,14 +121,17 @@ export function serverEnvFrom(raw: string | undefined): Record<string, string> {
   return out;
 }
 
-/** 重复类的题连做几对：`EVAL_REPEAT_PAIRS`，1 到 4，默认 1。每一对用新员工、新种子，复盘和技能只在同一对内有效。 */
+/** 重复类的题连做几对：`EVAL_REPEAT_PAIRS`，1 到 6，默认 1。每一对用新员工、新种子，复盘和技能只在同一对内有效。 */
 export function repeatPairs(
   env: Record<string, string | undefined>,
 ): { ok: true; pairs: number } | { ok: false; reason: string } {
   const text = env.EVAL_REPEAT_PAIRS?.trim() ?? "";
   if (!text) return { ok: true, pairs: 1 };
-  if (!/^[1-4]$/.test(text))
-    return { ok: false, reason: "EVAL_REPEAT_PAIRS must be 1, 2, 3 or 4" };
+  if (!/^[1-6]$/.test(text))
+    return {
+      ok: false,
+      reason: "EVAL_REPEAT_PAIRS must be 1, 2, 3, 4, 5 or 6",
+    };
   return { ok: true, pairs: Number(text) };
 }
 

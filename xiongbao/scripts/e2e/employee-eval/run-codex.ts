@@ -14,7 +14,7 @@
  *   EVAL_TASKS         all（五道对标题）、hard（加难题：compare、refactor、terminal、webform）或逗号分隔的题名
  *                      （repeat、repeat-pitfall 只能点名：同一道题连做两次，Codex 每次都是全新环境），默认 all。
  *                      网页表单题的夹具网站由本脚本在本机起，Codex 的命令（curl 等）访问得到
- *   EVAL_REPEAT_PAIRS  重复类的题连做几对，1 到 4，默认 1（每一对两次，各次都是全新环境；Codex 只作对照）
+ *   EVAL_REPEAT_PAIRS  重复类的题连做几对，1 到 6，默认 1（每一对两次，各次都是全新环境；Codex 只作对照）
  *   EVAL_SEED          有坑可学的题的基础种子（作业里是 run id，和熊宝侧同一个，夹具才一样）；没设就现抽一个并记在结果里
  *   EVAL_DEADLINE_EPOCH 作业截止时间（Unix 秒）：来不及再做完一对时，剩下的对不做，已完成的照常记录
  *   EVAL_TASK_MINUTES  每题墙钟上限，默认 20

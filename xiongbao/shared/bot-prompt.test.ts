@@ -351,6 +351,8 @@ describe("delivery", () => {
     expect(text).toContain("the text is not garbled");
     expect(text).toContain("which link to click");
     expect(text).toContain("say what you did not finish");
+    expect(text).toContain("never search outside it (system directories");
+    expect(text).toContain("for a reference answer, grader or expected result");
     // The channel boundary: no clickable promise on a channel that cannot show one.
     expect(text).toContain("in a channel that cannot show it");
   });
