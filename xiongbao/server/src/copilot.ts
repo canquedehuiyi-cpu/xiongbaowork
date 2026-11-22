@@ -219,6 +219,7 @@ import { createTrajectoryConnect } from "./recorder/trajectory-connect";
 import { corsOrigin } from "./request-trust";
 import { acceptedDelivery, deliverEndsTurnOn } from "./tasks/delivery-end";
 import { deliveryProtocolGuidance } from "./tasks/delivery-tools";
+import { noteAttachedFastPath } from "./tasks/fastpath-gate";
 import type { ProductTelemetry } from "./telemetry/product";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
 import {
@@ -2795,6 +2796,11 @@ async function buildAgent(
        * 命令是技能里存的、注入给模型的那一行（`fastPathChecksIn`），不是请求带来的。
        */
       ...(() => {
+        // 这一轮开头附上的快路径带的核对命令，交付前要跑过（`tasks/fastpath-gate.ts`，在 `deliver_task` 里查）。
+        noteAttachedFastPath(
+          input?.runId,
+          pickedSkill ? fastPathChecksIn(pickedSkill) : [],
+        );
         // 人点的那条的正文在提示里；对得上的自写技能只有清单，它们的校验命令由服务器从技能里取。
         const skillChecks = [
           ...new Set([

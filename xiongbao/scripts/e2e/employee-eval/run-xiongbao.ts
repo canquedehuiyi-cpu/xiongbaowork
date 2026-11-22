@@ -142,6 +142,7 @@ import {
 import {
   backgroundOf,
   callTrace,
+  fastPathBounceLine,
   type LearnedState,
   learningDiff,
   logTypeCounts,
@@ -1862,8 +1863,11 @@ async function runWork(work: Work): Promise<EvalRecord> {
     try {
       const log = serverLogText();
       for (const line of retroLogLines(log, runIds, claim)) console.log(line);
-      const counts = logTypeCountsLine(logTypeCounts(log, runIds));
+      const typeCounts = logTypeCounts(log, runIds);
+      const counts = logTypeCountsLine(typeCounts);
       if (counts) console.log(counts);
+      const bounces = fastPathBounceLine(typeCounts);
+      if (bounces) console.log(bounces);
     } catch {
       console.log("   (读不到服务器日志，复盘日志行没打)");
     }

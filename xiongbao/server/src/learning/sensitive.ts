@@ -393,9 +393,80 @@ export function externalAddressIn(text: string): string | undefined {
   for (const match of scanned.matchAll(DOMAIN_LIKE)) {
     const last = (match[1] ?? "").toLowerCase();
     if (FILE_EXTENSIONS.has(last) || calledInCode(scanned, match)) continue;
-    if (last.length === 2 || DOMAIN_SUFFIXES.has(last)) return match[0];
+    if (!(last.length === 2 || DOMAIN_SUFFIXES.has(last))) continue;
+    // curl、wget、fetch 这类的目标参数照旧判：只有不是它们的目标时，才看是不是代码里的「标识符.属性」。
+    if (!fetchTarget(scanned, match) && isCodeAccess(scanned, match, last))
+      continue;
+    return match[0];
   }
   return undefined;
+}
+
+/** 真实存在的国家和地区顶级域（两位）。`re.fu` 这样的两位字母不在其中，不是域名。 */
+const COUNTRY_TLDS: ReadonlySet<string> = new Set(
+  (
+    "ac ad ae af ag ai al am ao aq ar as at au aw ax az ba bb bd be bf bg bh bi bj bm bn bo br bs bt bw by bz " +
+    "ca cc cd cf cg ch ci ck cl cm cn co cr cu cv cw cx cy cz de dj dk dm do dz ec ee eg er es et eu fi fj fk fm fo fr " +
+    "ga gd ge gf gg gh gi gl gm gn gp gq gr gs gt gu gw gy hk hm hn hr ht hu id ie il im in io iq ir is it je jm jo jp " +
+    "ke kg kh ki km kn kp kr kw ky kz la lb lc li lk lr ls lt lu lv ly ma mc md me mg mh mk ml mm mn mo mp mq mr ms mt " +
+    "mu mv mw mx my mz na nc ne nf ng ni nl no np nr nu nz om pa pe pf pg ph pk pl pm pn pr ps pt pw py qa re ro rs ru " +
+    "rw sa sb sc sd se sg sh si sk sl sm sn so sr ss st su sv sx sy sz tc td tf tg th tj tk tl tm tn to tr tt tv tw tz " +
+    "ua ug uk us uy uz va vc ve vg vi vn vu wf ws ye yt za zm zw"
+  ).split(" "),
+);
+
+/** 代码里常见的变量、模块和对象名：它们后面的「.属性」是代码，不是域名（`self.id`、`os.name`、`row.date`）。 */
+const CODE_RECEIVERS: ReadonlySet<string> = new Set(
+  (
+    "self this cls os sys re np pd df json csv glob math time datetime random string path pathlib shutil subprocess " +
+    "itertools collections functools io args argv kwargs params opts options cfg conf config env data result res " +
+    "row rows col item items line lines rec record obj node el elem entry file files dir name text msg req resp " +
+    "response request ctx state props store window document console process Path Date Math Object Array JSON"
+  ).split(" "),
+);
+
+/** 本来就是主机名常用的结尾：单字母变量后面跟着它们，仍当域名。 */
+const STRONG_SUFFIXES: ReadonlySet<string> = new Set([
+  "com",
+  "net",
+  "org",
+  "edu",
+  "gov",
+  "io",
+  "co",
+  "cn",
+  "dev",
+  "app",
+]);
+
+/** 这一处前面，同一行里有没有 curl、wget、fetch 之类：有，它就是要访问的目标。 */
+function fetchTarget(text: string, match: RegExpMatchArray): boolean {
+  const start = match.index ?? 0;
+  const lineStart = text.lastIndexOf("\n", start - 1) + 1;
+  return /\b(?:curl|wget|fetch|urlopen|axios|requests\.[a-z]+\(|http\.get\()/i.test(
+    text.slice(lineStart, start),
+  );
+}
+
+/**
+ * 代码里的「标识符.方法 / 属性」，不是域名：后面跟着 `[` 或接着又一个 `.名字`（`s.id.strip`、`df.to[0]`）；
+ * 两位字母但不是真实的国家顶级域（`re.fu`）；前面的名字是常见的变量或模块名（`self.id`、`os.name`）；
+ * 单个字母的变量（`s.id`、`x.is`）。写成域名的样子（`api.example.com`、`evil.io/x`、`foo.cn`）不受影响。
+ */
+function isCodeAccess(
+  text: string,
+  match: RegExpMatchArray,
+  last: string,
+): boolean {
+  const end = (match.index ?? 0) + match[0].length;
+  if (text[end] === "[" || /^\.[A-Za-z_]/.test(text.slice(end, end + 2)))
+    return true;
+  if (last.length === 2 && !COUNTRY_TLDS.has(last)) return true;
+  const labels = match[0].split(".");
+  if (labels.length !== 2) return false;
+  const first = labels[0] ?? "";
+  if (CODE_RECEIVERS.has(first)) return true;
+  return /^[a-z]$/.test(first) && !STRONG_SUFFIXES.has(last);
 }
 
 /**

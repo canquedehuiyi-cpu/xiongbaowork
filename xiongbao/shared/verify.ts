@@ -128,6 +128,20 @@ function checkPattern(check: string): RegExp {
   return new RegExp(source, "g");
 }
 
+/**
+ * Whether a shell command ran the skill's check command: the check is somewhere in it, whatever comes
+ * before (`cd <dir> && `) or after (`| tail`), a `<placeholder>` standing for whatever this run used.
+ * Generous on purpose: quotes and spacing do not matter either, so a check written `python3 "check.py"`
+ * is run by `python3 check.py`.
+ */
+export function ranCheckCommand(command: string, check: string): boolean {
+  if (!check.trim()) return false;
+  if (checkPattern(check).test(command)) return true;
+  const plain = (text: string) =>
+    text.replace(/["'`]/g, "").replace(/\s+/g, " ").trim();
+  return checkPattern(plain(check)).test(plain(command));
+}
+
 /** Where, in the command, the last of the skill's check commands ends; -1 when none is in it. */
 function lastCheckEnd(command: string, checks: readonly RegExp[]): number {
   let end = -1;

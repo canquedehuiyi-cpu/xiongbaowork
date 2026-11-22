@@ -3,6 +3,7 @@ import {
   backgroundOf,
   callTrace,
   concludesRetro,
+  fastPathBounceLine,
   type LearnedState,
   learningDiff,
   logTypeCounts,
@@ -549,6 +550,10 @@ test("logTypeCounts counts the other log lines of the given runs by type, whatev
     "   server-log lines by run: agent-stream-stalled×1, run-model×2, task-card-turn-ended-early×1",
   );
   expect(logTypeCountsLine({})).toBe("");
+  expect(fastPathBounceLine({ "fastpath-check-bounce": 2 })).toBe(
+    "   交付前核对：挡回 2 次",
+  );
+  expect(fastPathBounceLine({ "run-model": 3 })).toBe("");
   expect(logTypeCounts(serverLog, [])).toEqual({});
 });
 

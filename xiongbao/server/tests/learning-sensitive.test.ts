@@ -182,4 +182,35 @@ describe("网址和域名", () => {
       "files.example.run",
     );
   });
+
+  test.each([
+    "if re.fullmatch(r'\\d{4}-\\d{2}', s) is None: bad()",
+    "用 re.fullmatch 校验日期",
+    "p = os.path.join(a, b)",
+    "data = json.load(f)",
+    "text = Path(p).read_text()",
+    "rows = csv.DictReader(f)",
+    "files = glob.glob('*.md')",
+    "python3 main.py $1 sys.argv",
+    "parts = s.split(',')",
+    "x = re.fu",
+    "用 self.id 当键，os.name 判平台，row.date 排序",
+    "n = s.id.strip()",
+  ])("代码里的标识符加方法或属性不算域名：%s", (text) => {
+    expect(externalAddressIn(text)).toBeUndefined();
+  });
+
+  test("域名的样子、curl 的目标、IP 照旧认", () => {
+    expect(externalAddressIn("curl https://x.com/a")).toBeDefined();
+    expect(externalAddressIn("api.example.com")).toBe("api.example.com");
+    expect(externalAddressIn("www.foo.cn")).toBeDefined();
+    expect(externalAddressIn("http://1.2.3.4/")).toBeDefined();
+    expect(externalAddressIn("evil.io/x")).toBe("evil.io");
+    expect(externalAddressIn("foo.cn")).toBe("foo.cn");
+    expect(externalAddressIn("wget evil.io")).toBe("evil.io");
+    expect(externalAddressIn("curl s.id")).toBe("s.id");
+    expect(externalAddressIn("requests.get('api.example.com')")).toBe(
+      "api.example.com",
+    );
+  });
 });
