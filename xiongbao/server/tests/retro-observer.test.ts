@@ -956,6 +956,7 @@ describe("a review has a total time limit", () => {
     let abandon: AbortSignal | undefined;
     let calls = 0;
     const { observe, logs } = harness({
+      logStart: () => {},
       totalTimeoutMs: 30,
       cardTurn: async (id) => ({
         ownerUserId: "u1",
@@ -994,6 +995,7 @@ describe("a review has a total time limit", () => {
 
   test("a hang before the review (reading the card) is also given up", async () => {
     const { observe, logs } = harness({
+      logStart: () => {},
       totalTimeoutMs: 30,
       deliveredCard: () => new Promise<string | null>(() => {}),
     });
@@ -1006,6 +1008,7 @@ describe("a review has a total time limit", () => {
 
   test("a review that finishes in time is logged as usual, and the timer does not fire later", async () => {
     const { observe, logs } = harness({
+      logStart: () => {},
       totalTimeoutMs: 5_000,
     });
     await observe(turnOf(work(20)));
@@ -1019,6 +1022,7 @@ describe("a review has a total time limit", () => {
 
   test("`null` means no limit", async () => {
     const { observe, logs } = harness({
+      logStart: () => {},
       totalTimeoutMs: null,
       retrospect: async () => {
         await new Promise((resolve) => setTimeout(resolve, 40));
@@ -1027,5 +1031,20 @@ describe("a review has a total time limit", () => {
     });
     await observe(turnOf(work(20)));
     expect(JSON.parse(logs[0] as string).outcome).toBe("nothing");
+  });
+});
+
+describe("the observer says it was called", () => {
+  test("one `retrospect-start` line with the run, no content, before anything else", async () => {
+    const lines: string[] = [];
+    const { observe, logs } = harness({ logStart: (line) => lines.push(line) });
+    await observe(turnOf(work(20)));
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0] as string)).toMatchObject({
+      type: "retrospect-start",
+      runId: "r1",
+    });
+    expect(lines[0]).not.toContain("汇总表");
+    expect(logs).toHaveLength(1);
   });
 });

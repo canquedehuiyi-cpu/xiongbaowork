@@ -1034,6 +1034,8 @@ export type RetroObserverDeps = {
   /** 这一轮用到了哪些员工自己写的技能：记成用过。失败不影响复盘。 */
   markUsed?: (turn: ObservedTurn) => Promise<void>;
   log?: (line: string) => void;
+  /** 入口那一行 `retrospect-start` 写到哪里；不给就是服务器日志（stderr）。 */
+  logStart?: (line: string) => void;
 };
 
 /** 观察者记住多少张已经有结论的卡：够用就行，满了丢最早的。 */
@@ -1148,6 +1150,8 @@ export function runErrorKindOf(
  */
 export function createRetroObserver(deps: RetroObserverDeps) {
   const log = deps.log ?? ((line: string) => console.error(line));
+  // The entry line goes to the server's log on its own, so `deps.log` holds only the one `retrospect` row per turn.
+  const logStart = deps.logStart ?? ((line: string) => console.error(line));
   const reviewed = new Set<string>();
   const remember = (key: string) => {
     reviewed.add(key);
@@ -1178,6 +1182,14 @@ export function createRetroObserver(deps: RetroObserverDeps) {
     return before && !reviewed.has(`${turn.tenant}:${before}`) ? before : null;
   };
   return async function observe(turn: ObservedTurn): Promise<RetroOutcome> {
+    // 一行不含内容的入口日志：看得出观察者被调用了（没有后面的 `retrospect` 行就是挂住了）。
+    logStart(
+      JSON.stringify({
+        type: "retrospect-start",
+        runId: turn.runId,
+        timestamp: new Date().toISOString(),
+      }),
+    );
     await deps.markUsed?.(turn).catch(() => undefined);
     let outcome = { outcome: "skipped" } as RetroOutcome;
     let retro = retroTurnOf(turn);
