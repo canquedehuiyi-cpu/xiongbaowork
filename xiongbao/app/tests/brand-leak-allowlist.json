@@ -674,12 +674,12 @@
   {
     "file": "runner/src/browser.ts",
     "text": "\"openbot-snapshots.sqlite\"",
-    "reason": "persisted-identifier: 旧快照计数文件名；启动时先 checkpoint 再改名为 xiongbao-snapshots.sqlite，改名失败仍读旧名（L1-18，附录 A 第 10 行）。用户 2026-11-17 批准：延期到 0.2.14（推荐）",
+    "reason": "persisted-identifier: 旧快照计数文件名；启动时先 checkpoint 再改名为 xiongbao-snapshots.sqlite，改名失败仍读旧名（L1-18，附录 A 第 10 行）。用户 2026-11-17 批准：延期到 0.2.14（推荐）；用户 2026-11-22 批准：再延期到 0.2.15（推荐）",
     "category": "legacy-compat",
     "plan": "remove",
     "introducedIn": "0.2.11",
-    "removeIn": "0.2.14",
-    "notBefore": "0.2.14",
+    "removeIn": "0.2.15",
+    "notBefore": "0.2.15",
     "device": true
   },
   {
@@ -1200,8 +1200,8 @@
     "category": "legacy-compat",
     "plan": "remove",
     "introducedIn": "0.2.10",
-    "removeIn": "0.2.14",
-    "notBefore": "0.2.14",
+    "removeIn": "0.2.15",
+    "notBefore": "0.2.15",
     "device": true
   },
   {
@@ -1211,8 +1211,8 @@
     "category": "legacy-compat",
     "plan": "remove",
     "introducedIn": "0.2.10",
-    "removeIn": "0.2.14",
-    "notBefore": "0.2.14",
+    "removeIn": "0.2.15",
+    "notBefore": "0.2.15",
     "device": true
   }
 ]
