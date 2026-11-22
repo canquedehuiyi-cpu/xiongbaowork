@@ -465,6 +465,27 @@ export function skillGuidanceFor(
   );
 }
 
+/**
+ * 对上的那条技能的快路径段（标题行、前提、脚本、校验命令一行，到「步骤：」之前）超过这么多字符就不在清单后面附：
+ * 截断的脚本跑不了，宁可照旧只给清单，让员工 `read_skill` 读全文。
+ */
+export const MATCHED_FAST_PATH_CHARS = 1200;
+
+/**
+ * 技能正文里只取快路径那一段（标题行起，含前提、脚本、校验命令，到下一段的开头为止，按 {@link SECTION_START} 切）。
+ * 没有快路径、或这一段超过 `limit` 就是 undefined：不截断。
+ */
+export function fastPathSection(
+  body: string,
+  limit = MATCHED_FAST_PATH_CHARS,
+): string | undefined {
+  const part = body
+    .split(SECTION_START)
+    .find((candidate) => candidate.startsWith(`${FAST_PATH_HEADING}（`));
+  const text = part?.trim();
+  return text && text.length <= limit ? text : undefined;
+}
+
 /** 清单里最多放几条员工自己写的技能；超过这个数，没有对得上的就不放清单（它们在持有技能的索引里）。 */
 export const OWN_SKILL_LIST_MAX = 8;
 /** 清单里每一条（标题、id、什么时候用、标记）最多多少字符。 */
@@ -476,6 +497,9 @@ const MATCH_MARK = " [MATCH]";
  * 员工自己写的技能，以一份清单放进系统提示（正文不放）：一条一行，标题、id、什么时候用；和这件事对得上的
  * （`relatedSelfSkills`）排在最前并标 MATCH，告诉员工先读它。要用哪条就用 `read_skill` 只带 id 读全文，读出的
  * 全文和快路径的做法提示留在对话历史里（{@link readSkillText}），不再每一步都带着正文。
+ *
+ * 第十二轮：对上的第一条带快路径（且这一段不超过 {@link MATCHED_FAST_PATH_CHARS}）时，清单后面直接附
+ * {@link FAST_PATH_ADVICE} 和这条的快路径段（{@link fastPathSection}），员工不必先 `read_skill`；其余照旧。
  *
  * 放在 `picked_skill` 那一段（稳定前缀之后），同一条消息的每一步字节相同。技能不超过 {@link OWN_SKILL_LIST_MAX} 条
  * 时没对上的也列出来，让员工自己判断（人只回「继续」这类没有实词的短话时，没有对上的就不放）；更多时只放对上的。
@@ -506,12 +530,29 @@ export function ownSkillsGuidance(
     const when = whenLineOf(skill).replace(/\s+/g, " ").trim();
     return `${head}${when.length > room ? `${when.slice(0, Math.max(0, room - 1))}…` : when}${mark}`;
   });
+  /*
+   * 对上的第一条带快路径、这一段放得下：直接附在清单后面，员工不必先 `read_skill`（评测里有的员工第 14 步才去读，
+   * 前面逐个打开文件）。只附一条，别的照旧只在清单里。放不下就不附，截断的脚本跑不了。
+   */
+  const fast = fastPathSection(matched[0]?.instructions ?? "");
   return [
-    `Skills you wrote down from earlier work. None is loaded: read one in full with ${READ_SKILL_TOOL} (only its id).`,
+    fast
+      ? `Skills you wrote down from earlier work. Only the first matching one's fast path is loaded (below); read any of them in full with ${READ_SKILL_TOOL} (only its id).`
+      : `Skills you wrote down from earlier work. None is loaded: read one in full with ${READ_SKILL_TOOL} (only its id).`,
     matched.length > 0
-      ? `The ones marked MATCH fit this request: read them first and follow their steps and checks where they fit, skipping what this task does not need. If a step is wrong or missing, correct it afterwards with ${REFINE_SKILL_TOOL} (the id and one sentence on what to change).`
+      ? `The ones marked MATCH fit this request: ${
+          fast
+            ? "follow the fast path below; read the skill in full only if the fast path does not fit"
+            : "read them first and follow their steps and checks where they fit, skipping what this task does not need"
+        }. If a step is wrong or missing, correct it afterwards with ${REFINE_SKILL_TOOL} (the id and one sentence on what to change).`
       : "None clearly fits this request: if one does, read it and follow it where it fits; otherwise ignore the list.",
     ...lines,
+    ...(fast && matched[0]
+      ? [
+          FAST_PATH_ADVICE,
+          `### ${matched[0].title || matched[0].slug} (id: ${matched[0].slug})\n${fast}`,
+        ]
+      : []),
   ].join("\n");
 }
 

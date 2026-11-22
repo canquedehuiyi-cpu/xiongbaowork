@@ -175,14 +175,15 @@ describe("on the built-in harness, the first call of a board-card turn lists it"
   }
 
   for (const board of [false, true])
-    test(`${board ? "board-card" : "chat"} turn: the skill is listed as a match with read_skill at hand, its body is not in the prompt`, async () => {
+    test(`${board ? "board-card" : "chat"} turn: the skill is listed as a match with read_skill at hand, its fast path is in the prompt`, async () => {
       const prompt = await sent(board);
       expect(prompt).toContain(`(id: ${own.slug})`);
       expect(prompt).toContain("[MATCH]");
       expect(prompt).toContain('"name":"read_skill"');
-      // 正文、快路径和提示在 read_skill 的结果里，不在每一步都发的提示里。
-      expect(prompt).not.toContain("BOARD-FAST-PATH-7731");
-      expect(prompt).not.toContain("先按技能的快路径做");
-      expect(prompt).not.toContain(CHECK);
+      // 用户 2026-11-22 批准（第十二轮）：对上的技能带快路径时，快路径（脚本、校验命令）和先按快路径做的提示
+      // 随清单放在提示里；原来这里钉的是它们都不在提示里。步骤正文仍只在 read_skill 的结果里。
+      expect(prompt).toContain("BOARD-FAST-PATH-7731");
+      expect(prompt).toContain("先按技能的快路径做");
+      expect(prompt).toContain(CHECK);
     });
 });
