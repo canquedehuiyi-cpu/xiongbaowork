@@ -277,6 +277,35 @@ describe("the retrospector at the end of a turn", () => {
     };
   }
 
+  test("a review given up by the observer starts no further model call and saves nothing", async () => {
+    const abandon = new AbortController();
+    const asked: string[] = [];
+    const { run, logs, modelCalls } = harness({
+      call: async () => {
+        asked.push("first");
+        abandon.abort();
+        return { text: "null" };
+      },
+    });
+    expect(
+      await run(turnOf(30, { trigger: "card_delivered" }), abandon.signal),
+    ).toEqual({ outcome: "skipped" });
+    // The answer was "nothing", which would have been asked again; given up, it is not, and nothing is logged as an error.
+    expect(asked).toEqual(["first"]);
+    expect(logs).toEqual([]);
+    expect(modelCalls).toEqual(["light"]);
+  });
+
+  test("a review already given up before it starts does nothing", async () => {
+    const abandon = new AbortController();
+    abandon.abort();
+    const { run, modelCalls } = harness();
+    expect(await run(turnOf(30), abandon.signal)).toEqual({
+      outcome: "skipped",
+    });
+    expect(modelCalls).toEqual([]);
+  });
+
   test("a short turn is skipped without a model call", async () => {
     const { run, modelCalls } = harness();
     expect(await run(turnOf(14))).toEqual({ outcome: "skipped" });

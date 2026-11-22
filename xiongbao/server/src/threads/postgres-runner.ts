@@ -410,13 +410,47 @@ export class PostgresAgentRunner extends InMemoryAgentRunner {
 
   private turnEnded(turn: FinishedTurn): void {
     if (this.turnObservers.length === 0) return;
+    const person = isPersonTenant(turn.tenant);
+    // One line, no content: a turn that ended and reached this point. Without a `retrospect-start` after
+    // it, the observer was not raised (`person: false`) or threw before it logged.
+    console.error(
+      JSON.stringify({
+        type: "turn-ended",
+        kind: turn.kind,
+        runId: turn.runId,
+        failed: turn.failed,
+        person,
+        timestamp: new Date().toISOString(),
+      }),
+    );
     // Only a person's own thread: nothing is learned about, or for, the deployment's own tenants.
-    if (!isPersonTenant(turn.tenant)) return;
+    if (!person) return;
     for (const observer of this.turnObservers) {
       try {
         void Promise.resolve(
           runAsTenant(turn.tenant, () => observer(turn)),
-        ).catch(() => undefined);
+        ).catch((error) => {
+          // Still dropped, as before, but not silently: the kind of failure, never its message.
+          try {
+            const code = (error as { code?: unknown } | null)?.code;
+            const kind =
+              typeof code === "string"
+                ? code
+                : error instanceof Error
+                  ? error.name
+                  : typeof error;
+            console.error(
+              JSON.stringify({
+                type: "retro-observer-error",
+                runId: turn.runId,
+                error: kind.slice(0, 60),
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          } catch {
+            // A line that cannot be written changes nothing.
+          }
+        });
       } catch {
         // An observer that cannot be raised is not a reason to fail the turn.
       }

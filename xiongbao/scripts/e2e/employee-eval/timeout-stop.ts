@@ -89,3 +89,87 @@ export function stopLine(outcome: StopOutcome): string {
     ? `${head}，另有 ${outcome.stillRunning} 轮 30 秒内没停下`
     : head;
 }
+
+/** 一次运行开始前，这位员工在服务器上还在跑的一轮（上一次的）。 */
+export type EarlierRun = { runId: string; threadId: string };
+
+/** {@link settleEarlierRuns} 的结果。 */
+export type SettleOutcome = {
+  /** 一开始找到几轮还在跑。 */
+  found: number;
+  /** 其中几轮在等待时间内自己结束了。 */
+  endedOnTheirOwn: number;
+  /** 等不及、被停掉并确实停下的几轮。 */
+  stopped: number;
+  /** 停了也还没停下的几轮。 */
+  stillRunning: number;
+  waitedMs: number;
+};
+
+/**
+ * 一次运行开始之前，确认这位员工没有仍在跑的轮（上一次的）：有就先等它结束，最多 `waitMs`（默认 60 秒）；还不结束
+ * 就走和超时一样的办法停掉（{@link stopRunning} 用的那个停止接口），再等它停下。不然上一次的轮会接着占模型、
+ * 往工作区写东西，串进这一次（评测 45037964307 第 5 对第二次的 46 步就是这样）。读写失败都不抛错。
+ */
+export async function settleEarlierRuns(options: {
+  running: () => Promise<readonly EarlierRun[]>;
+  stop: (run: EarlierRun) => Promise<boolean>;
+  waitMs?: number;
+  everyMs?: number;
+  stopMs?: number;
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
+}): Promise<SettleOutcome> {
+  const now = options.now ?? Date.now;
+  const sleep = options.sleep ?? ((ms: number) => Bun.sleep(ms));
+  const read = async () => {
+    try {
+      return [...(await options.running())];
+    } catch {
+      return [];
+    }
+  };
+  const started = now();
+  const first = await read();
+  if (first.length === 0)
+    return {
+      found: 0,
+      endedOnTheirOwn: 0,
+      stopped: 0,
+      stillRunning: 0,
+      waitedMs: 0,
+    };
+  let left = first;
+  while (left.length > 0 && now() - started < (options.waitMs ?? 60_000)) {
+    await sleep(options.everyMs ?? 1000);
+    left = await read();
+  }
+  const endedOnTheirOwn = first.length - left.length;
+  if (left.length > 0) {
+    await Promise.all(left.map((run) => options.stop(run).catch(() => false)));
+    const stopStarted = now();
+    while (
+      left.length > 0 &&
+      now() - stopStarted < (options.stopMs ?? 30_000)
+    ) {
+      await sleep(options.everyMs ?? 500);
+      left = await read();
+    }
+  }
+  return {
+    found: first.length,
+    endedOnTheirOwn,
+    stopped: first.length - endedOnTheirOwn - left.length,
+    stillRunning: left.length,
+    waitedMs: now() - started,
+  };
+}
+
+/** 作业日志里这次开始前清理上一次的轮的一行；没有还在跑的轮就是空串（不打）。 */
+export function settleLine(outcome: SettleOutcome): string {
+  if (outcome.found === 0) return "";
+  const waited = `${Math.round(outcome.waitedMs / 1000)} s`;
+  if (outcome.stopped === 0 && outcome.stillRunning === 0)
+    return `   开始前：这位员工上一次的 ${outcome.found} 轮还在跑，等了 ${waited} 自己结束了`;
+  return `   开始前：这位员工上一次的 ${outcome.found} 轮还在跑，等了 ${waited}：自己结束 ${outcome.endedOnTheirOwn} 轮，已停掉 ${outcome.stopped} 轮${outcome.stillRunning > 0 ? `，另有 ${outcome.stillRunning} 轮没停下` : ""}`;
+}

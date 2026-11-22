@@ -162,6 +162,53 @@ test("a person's chat turn is told to the observer in the person's frame, with i
   expect(replyTextOf(turn.events)).toContain("好的，记下了。");
 });
 
+/** The JSON lines the runner wrote to the server's log while `body` ran. */
+async function logged(body: () => Promise<void>) {
+  const lines: Record<string, unknown>[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => {
+    if (typeof args[0] === "string" && args[0].startsWith("{"))
+      try {
+        lines.push(JSON.parse(args[0]));
+      } catch {
+        // Not one of ours.
+      }
+    original(...args);
+  };
+  try {
+    await body();
+  } finally {
+    console.error = original;
+  }
+  return lines;
+}
+
+test("a turn that ends writes one `turn-ended` line, and an observer that throws leaves a `retro-observer-error` line with only its kind", async () => {
+  seen.length = 0;
+  throwing = true;
+  try {
+    const lines = await logged(async () => {
+      await runTurn("再来一轮日志");
+      await until(() => seen.length === 1);
+      await Bun.sleep(100);
+    });
+    const ended = lines.filter((line) => line.type === "turn-ended");
+    expect(ended).toHaveLength(1);
+    expect(ended[0]).toMatchObject({
+      kind: "chat",
+      runId: seen[0]?.turn.runId,
+      failed: false,
+      person: true,
+    });
+    const errors = lines.filter((line) => line.type === "retro-observer-error");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toMatchObject({ error: "Error" });
+    expect(JSON.stringify(errors[0])).not.toContain("observer broke");
+  } finally {
+    throwing = false;
+  }
+});
+
 test("an observer that throws does not fail the turn: the stream ends normally and the turn is stored", async () => {
   seen.length = 0;
   throwing = true;

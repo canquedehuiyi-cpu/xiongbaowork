@@ -317,8 +317,9 @@ export function answersOnLastStep(
      * for a hand-in (`deliver_task` accepted): what was handed in is already in the call's arguments,
      * and the model's one more sentence only sent the whole history up again. Absent, never.
      *
-     * Not when a reminder is due: a plan with items still open, or changes made and never checked, is
-     * answered by the model once more, as it was before, so the reminder still has its say.
+     * Not at once when a reminder is due: a plan with items still open, or changes made and never
+     * checked, is answered by the model once more, as it was before, so the reminder still has its
+     * say. That is ONE step (it may call tools, and they run); the step after it ends the turn.
      */
     endsTurnAfter?: (toolName: string, result: string) => boolean;
   } = {},
@@ -423,13 +424,24 @@ export function answersOnLastStep(
   };
 
   /**
-   * Whether this step is not worth asking the model: the step before it ended with an accepted
-   * hand-in (`run.endsTurnAfter`) and no reminder is due.
+   * Whether this step is not worth asking the model, because the turn's hand-in (`run.endsTurnAfter`)
+   * was accepted and the turn has had all it is owed since:
+   *  - the step before this one ended with the accepted hand-in and no reminder is due: it ends;
+   *  - a reminder is due: ONE step is let through (a check or a plan update, its tool calls run as
+   *    usual), and the step after that ends the turn, whatever it did. A hand-in made again in that
+   *    step, and accepted, ends it just the same.
+   * A hand-in that was bounced is no hand-in: nothing here applies to it.
    */
-  const turnEnded = (prompt: Prompt, tools: readonly { name: string }[]) =>
-    run.endsTurnAfter !== undefined &&
-    endedByResult(prompt, run.endsTurnAfter) &&
-    nudgeFor("", prompt, tools, true) === undefined;
+  const turnEnded = (prompt: Prompt, tools: readonly { name: string }[]) => {
+    if (run.endsTurnAfter === undefined) return false;
+    const since = stepsSinceHandIn(prompt, run.endsTurnAfter);
+    if (since === undefined) return false;
+    if (since >= STEPS_AFTER_HAND_IN) return true;
+    return (
+      endedByResult(prompt, run.endsTurnAfter) &&
+      nudgeFor("", prompt, tools, true) === undefined
+    );
+  };
 
   /** The same call asked again, with what it answered and the nudge after it. */
   const again = (call: CallOptions, text: string, nudge: string) => ({
@@ -649,6 +661,40 @@ function endedByResult(
   );
 }
 
+/**
+ * How many steps a turn is given after its hand-in was accepted, when a reminder was due and so the
+ * turn was not ended at once: one, so the coworker can check or update its plan, and no more.
+ */
+const STEPS_AFTER_HAND_IN = 1;
+
+/**
+ * How many model steps the turn has taken since its first accepted hand-in (`ends` says which tool
+ * result is one), or undefined when none was accepted in it. Read from the prompt after the person's
+ * latest message, so a turn the host cut into several runs counts the same.
+ */
+function stepsSinceHandIn(
+  prompt: Prompt,
+  ends: (toolName: string, result: string) => boolean,
+): number | undefined {
+  const last = prompt.map((message) => message.role).lastIndexOf("user");
+  let since: number | undefined;
+  for (const message of prompt.slice(last + 1)) {
+    if (message.role === "assistant" && since !== undefined) since += 1;
+    else if (
+      message.role === "tool" &&
+      since === undefined &&
+      typeof message.content !== "string" &&
+      message.content.some(
+        (part) =>
+          part.type === "tool-result" &&
+          ends(part.toolName, plainResult(resultText(part.output))),
+      )
+    )
+      since = 0;
+  }
+  return since;
+}
+
 /** A result the runtime stored as a quoted string is read as the tool returned it. */
 function plainResult(text: string): string {
   if (text.length < 2 || !text.startsWith('"') || !text.endsWith('"'))
@@ -854,10 +900,20 @@ export type NetRetryOptions = {
   sleep?: (milliseconds: number) => Promise<unknown>;
   /** One JSON line, no content. Absent, the server's log. */
   log?: (line: string) => void;
+  /**
+   * Nobody is watching the run (a board card's turn, a routine): its thinking parts are held back
+   * until the stream says its first word or calls its first tool, so a connection that drops while
+   * the model is only thinking is also made again. A person's chat leaves this off: the thinking is
+   * shown as it comes, and only a stream that has said nothing at all is made again.
+   */
+  holdThinking?: boolean;
 };
 
 /** The parts a stream sends before it says anything: holding them back costs nothing, and lets a retry start clean. */
 const PREAMBLE_PARTS = new Set(["stream-start", "response-metadata", "raw"]);
+
+/** The parts that carry the model's thinking (`reasoning-start`, `reasoning-delta`, `reasoning-end`). */
+const isThinkingPart = (type: string): boolean => type.startsWith("reasoning-");
 
 /**
  * ONE MORE TRY FOR A MODEL CALL WHOSE CONNECTION DROPPED. The model call of one step is made again,
@@ -870,6 +926,10 @@ const PREAMBLE_PARTS = new Set(["stream-start", "response-metadata", "raw"]);
  * carried on by later runs that spent steps getting back to where it was. The AI SDK does not
  * make such a call again by itself unless the provider wrapped the failure as a retryable API error;
  * a stream cut after its headers, or a plain error out of `doStream`, goes straight up.
+ *
+ * A run nobody is watching (`holdThinking`) also gets its second try when the stream had sent only
+ * thinking before it dropped: the thinking is held until the first text or tool-call part, thrown
+ * away on a retry, and the log line says `afterReasoning: true`.
  *
  * NEVER AFTER ANYTHING WAS SAID. A stream that sent a part of the answer and then dropped is given
  * up as it is: making the call again would say it twice, or call a tool twice. An answer from the
@@ -915,6 +975,7 @@ export function retryingDroppedConnection(
     error: unknown,
     asked: CallOptions,
     recovered: boolean,
+    afterReasoning = false,
   ): void => {
     try {
       log(
@@ -924,6 +985,7 @@ export function retryingDroppedConnection(
           code: codeOf(error),
           step: turnsIn(asked.prompt) + 1,
           recovered,
+          afterReasoning,
         }),
       );
     } catch {
@@ -960,16 +1022,16 @@ export function retryingDroppedConnection(
 
   const doStream = async (asked: CallOptions): Promise<StreamResult> => {
     let result: StreamResult;
-    let tried: { error: unknown } | undefined;
+    let tried: { error: unknown; afterReasoning: boolean } | undefined;
     try {
       result = await inner.doStream(asked);
     } catch (error) {
       if (!(await worthAnotherTry(error, asked))) throw error;
-      tried = { error };
+      tried = { error, afterReasoning: false };
       try {
         result = await inner.doStream(asked);
       } catch (second) {
-        report(error, asked, false);
+        report(error, asked, false, false);
         throw second;
       }
     }
@@ -989,6 +1051,7 @@ export function retryingDroppedConnection(
           tried.error,
           asked,
           !failure && !held.some((part) => part.type === "error"),
+          tried.afterReasoning,
         );
       }
     };
@@ -996,7 +1059,10 @@ export function retryingDroppedConnection(
     /** The first try failed before saying anything: ask again, once, and carry on from the new stream. */
     const startOver = async (error: unknown): Promise<boolean> => {
       if (tried || !(await worthAnotherTry(error, asked))) return false;
-      tried = { error };
+      tried = {
+        error,
+        afterReasoning: held.some((part) => isThinkingPart(part.type)),
+      };
       reader.cancel().catch(() => {});
       try {
         const next = await inner.doStream(asked);
@@ -1050,7 +1116,8 @@ export function retryingDroppedConnection(
           if (
             !flowing &&
             !PREAMBLE_PARTS.has(part.type) &&
-            part.type !== "error"
+            part.type !== "error" &&
+            !(options.holdThinking && isThinkingPart(part.type))
           )
             flow();
         }

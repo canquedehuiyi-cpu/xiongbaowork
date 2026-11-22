@@ -42,6 +42,8 @@ export type RunLearning = {
     waitedMs: number;
     /** `logged`：看到了这张卡的复盘有结论的日志（存了、不值得、冷却等，步数不够的跳过不算）；`skill`：库里出现了新技能；`timeout`：到了上限照常往下走。 */
     ended: "logged" | "skill" | "timeout";
+    /** 到了上限，而这次运行的某一轮在服务器上还没结束（复盘要等它结束才开始）；其余情况没有。 */
+    turnRunning?: true;
     /**
      * 复盘的结果：`saved`（存为自用并生效）、`held`（存了但转待审，没授予）、`refused`（被拒，没存）、
      * `nothing` `similar` `skipped`；没看到日志时没有。
