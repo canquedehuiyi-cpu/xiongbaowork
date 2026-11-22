@@ -467,9 +467,10 @@ export function skillGuidanceFor(
 
 /**
  * 对上的那条技能的快路径段（标题行、前提、脚本、校验命令一行，到「步骤：」之前）超过这么多字符就不在清单后面附：
- * 截断的脚本跑不了，宁可照旧只给清单，让员工 `read_skill` 读全文。
+ * 截断的脚本跑不了，宁可照旧只给清单，让员工 `read_skill` 读全文。取 1400：复盘存得下的最长快路径
+ * （脚本 900、前提 200、校验命令 240，加标题行和标签）都放得下，只挡手写的超长技能。
  */
-export const MATCHED_FAST_PATH_CHARS = 1200;
+export const MATCHED_FAST_PATH_CHARS = 1400;
 
 /**
  * 技能正文里只取快路径那一段（标题行起，含前提、脚本、校验命令，到下一段的开头为止，按 {@link SECTION_START} 切）。

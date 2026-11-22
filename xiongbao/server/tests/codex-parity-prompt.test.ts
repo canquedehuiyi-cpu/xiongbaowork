@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { APPROVAL_GUIDANCE_WEB_AND_HANDED_OVER } from "../../shared/bot-prompt";
-import { READ_SKILL_TOOL } from "../../shared/self-skills";
+import { READ_SKILL_TOOL, SKILL_FIELD_LIMITS } from "../../shared/self-skills";
 import {
   browserRulesDeferred,
   deferredCategories,
@@ -128,6 +128,32 @@ describe("技能：清单在提示里，正文不在", () => {
     expect(text).toContain("None is loaded");
     expect(text).not.toContain(FAST_PATH_ADVICE);
     expect(text).not.toContain("printf x");
+  });
+
+  test("复盘存得下的最长快路径（各项都到上限）也整段附上", () => {
+    const longest = own(
+      "会议纪要转待办",
+      "收到会议纪要，要整理成待办表时",
+      true,
+    );
+    const full: PickableSkill = {
+      ...longest,
+      instructions: renderSkill({
+        name: "会议纪要转待办",
+        when: "收到会议纪要，要整理成待办表时",
+        steps: ["读输入"],
+        pitfalls: [],
+        verify: "行数对得上",
+        scope: "self",
+        fastPathNeeds: "需".repeat(SKILL_FIELD_LIMITS.fastPathNeeds),
+        fastPath: `printf x > <dir>/out.txt # ${"长".repeat(SKILL_FIELD_LIMITS.fastPath - 30)}`,
+        fastPathCheck: `test -s <dir>/out.txt ${"#".repeat(SKILL_FIELD_LIMITS.fastPathCheck - 22)}`,
+      }).instructions,
+    };
+    expect(fastPathSection(full.instructions ?? "")).toBeDefined();
+    const text = ownSkillsGuidance(said(REQUEST), [full]) ?? "";
+    expect(text).toContain(FAST_PATH_ADVICE);
+    expect(text).toContain("printf x");
   });
 
   test("两条都对上：只附第一条的快路径", () => {
