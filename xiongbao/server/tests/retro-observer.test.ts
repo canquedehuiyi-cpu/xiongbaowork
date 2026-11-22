@@ -2,6 +2,10 @@ import { describe, expect, test } from "bun:test";
 import type { BaseEvent } from "@ag-ui/client";
 import { EventType } from "@ag-ui/client";
 import {
+  RUN_ENDED_EARLY,
+  SEGMENT_LIMIT_MESSAGE,
+} from "@openbot/toolkit/headless-tools";
+import {
   CARD_DELIVERED_MIN_STEPS_DEFAULT,
   createRetroObserver,
   createRetrospector,
@@ -10,6 +14,7 @@ import {
   type RetroTurn,
   retroCardMinSteps,
   retroPrompt,
+  runErrorKindOf,
   shouldRetrospect,
   traceStepsOf,
 } from "../src/learning/retrospect";
@@ -275,6 +280,81 @@ describe("a card handed in is a piece of work done", () => {
         code: "stream_stalled",
       },
     ] as unknown as BaseEvent[];
+
+  test("a turn whose only error came after an accepted delivery is not failed now: it is a delivered card, and the log says what the error was", async () => {
+    const { observe, seen, logs } = harness({
+      deliveredCard: async () => "card-1",
+      cardTurn: async (taskId, current) => cardRound(taskId, current),
+    });
+    const events = realisticRun(
+      '{"delivered":true,"taskId":"card-1"}',
+      "start",
+    ).map((event) =>
+      event.type === EventType.RUN_ERROR
+        ? ({ ...event, message: RUN_ENDED_EARLY } as BaseEvent)
+        : event,
+    );
+    // 服务器不再把这样的一轮记成失败：failed 为 false，不走 failedButDelivered 那条路。
+    expect(await observe(turnOf(events, { failed: false }))).toMatchObject({
+      outcome: "saved",
+    });
+    expect(seen[0]).toMatchObject({ trigger: "card_delivered", failed: false });
+    const logged = JSON.parse(logs[0] ?? "{}");
+    expect(logged).toMatchObject({
+      outcome: "saved",
+      trigger: "card_delivered",
+      cardId: "card-1",
+      runError: "stream_stalled",
+      runErrorKind: "ended_early",
+      runErrorAfterDelivery: true,
+    });
+    expect(logged.failedButDelivered).toBeUndefined();
+    // 没失败，失败轮才有的那几项不带；错误原文不进日志。
+    expect(logged.deliverSeen).toBeUndefined();
+    expect(logs[0]).not.toContain(RUN_ENDED_EARLY);
+  });
+
+  test("the failed-but-delivered path still logs the new run error fields; an error with no delivery says so", async () => {
+    const { observe, logs } = harness({ deliveredCard: async () => "card-1" });
+    const delivered = realisticRun(
+      '{"delivered":true,"taskId":"card-1"}',
+      "start",
+    );
+    await observe(turnOf(delivered, { failed: true }));
+    expect(JSON.parse(logs[0] ?? "{}")).toMatchObject({
+      failedButDelivered: true,
+      runErrorKind: "other",
+      runErrorAfterDelivery: true,
+    });
+    const early = harness({ deliveredCard: async () => null });
+    await early.observe(
+      turnOf(
+        [
+          ...work(8),
+          {
+            type: EventType.RUN_ERROR,
+            message: SEGMENT_LIMIT_MESSAGE,
+            code: "x",
+          } as BaseEvent,
+        ],
+        { failed: true },
+      ),
+    );
+    expect(JSON.parse(early.logs[0] ?? "{}")).toMatchObject({
+      reason: "failed",
+      runErrorKind: "segment_limit",
+      runErrorAfterDelivery: false,
+    });
+  });
+
+  test("runErrorKindOf tells the kinds apart by the headless constants and has nothing without an error", () => {
+    const err = (message: string) =>
+      [{ type: EventType.RUN_ERROR, message }] as unknown as BaseEvent[];
+    expect(runErrorKindOf(err(RUN_ENDED_EARLY))).toBe("ended_early");
+    expect(runErrorKindOf(err(SEGMENT_LIMIT_MESSAGE))).toBe("segment_limit");
+    expect(runErrorKindOf(err("provider 529 overloaded"))).toBe("other");
+    expect(runErrorKindOf([])).toBeUndefined();
+  });
 
   const cardRound = (
     taskId: string,

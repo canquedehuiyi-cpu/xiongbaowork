@@ -9,7 +9,14 @@ import {
   type RunFinishedEvent,
   type ToolCall,
 } from "@ag-ui/client";
-import { RUN_ENDED_EARLY } from "@openbot/toolkit/headless-tools";
+import {
+  RUN_ENDED_EARLY,
+  SEGMENT_LIMIT_MESSAGE,
+} from "@openbot/toolkit/headless-tools";
+
+/** 复盘按这两句认运行错误的类型，从这里转出去，免得每个模块各自导入一次。 */
+export { RUN_ENDED_EARLY, SEGMENT_LIMIT_MESSAGE };
+
 import { map, Observable, type Subscription } from "rxjs";
 import type { AcquireLearnedSkills, LearnedSkillInvocation } from "./runtime";
 
