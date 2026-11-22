@@ -7,6 +7,7 @@ import {
   type Features,
   featureProbe,
   lastAssistantText,
+  runErrorsIn,
   toolCallsOf,
 } from "./metrics";
 
@@ -176,4 +177,47 @@ test("the last assistant text and a closing question", () => {
   expect(lastAssistantText(events)).toBe("要我继续吗？");
   expect(asksQuestion("要我继续吗？")).toBe(true);
   expect(asksQuestion("我先去查一下。")).toBe(false);
+});
+
+test("run errors are listed with their position and the last tool call before them, single-lined and masked", () => {
+  const events = [
+    { type: "RUN_STARTED" },
+    {
+      type: "TOOL_CALL_START",
+      toolCallId: "a",
+      toolCallName: "computer_run_command",
+    },
+    { type: "TOOL_CALL_START", toolCallId: "b", toolCallName: "deliver_task" },
+    {
+      type: "RUN_ERROR",
+      code: "stalled",
+      message: `line one\nline two Bearer abc.def-123 key sk-abcdef123456 ${"x".repeat(300)}`,
+    },
+    { type: "RUN_ERROR", message: "later" },
+  ];
+  const found = runErrorsIn(events);
+  expect(found).toHaveLength(2);
+  expect(found[0]).toStartWith(
+    "stalled：line one line two Bearer *** key sk-*** ",
+  );
+  expect(found[0]).not.toContain("abcdef123456");
+  expect(found[0]).not.toContain("\n");
+  expect(found[0]).toEndWith(
+    "（在第 4 个事件，之前最后一个工具调用是 deliver_task）",
+  );
+  expect(found[0]?.split("（在第")[0]?.length).toBeLessThanOrEqual(
+    "stalled：".length + 200,
+  );
+  expect(found[1]).toBe(
+    "RUN_ERROR：later（在第 5 个事件，之前最后一个工具调用是 deliver_task）",
+  );
+});
+
+test("no run errors, or one before any tool call", () => {
+  expect(
+    runErrorsIn([{ type: "RUN_STARTED" }, { type: "RUN_FINISHED" }]),
+  ).toEqual([]);
+  expect(runErrorsIn([{ type: "RUN_ERROR", code: "x", message: "m" }])).toEqual(
+    ["x：m（在第 1 个事件，之前没有工具调用）"],
+  );
 });

@@ -191,6 +191,66 @@ describe("a card handed in is a piece of work done", () => {
     });
   });
 
+  test("a failed turn that handed its card in is still reviewed, and the log says so", async () => {
+    const { observe, seen, logs } = harness({
+      deliveredCard: async () => "card-1",
+      cardTurn: async (taskId, current) => ({
+        ownerUserId: "u1",
+        agentId: "bot",
+        threadId: "t1",
+        runId: current.runId,
+        request: "做汇总表",
+        reply: "",
+        steps: traceStepsOf(current.events),
+        failed: false,
+        cardId: taskId,
+        trigger: "card_delivered",
+      }),
+    });
+    const events = [
+      ...work(8),
+      ...call("d", "deliver_task", {}, '{"delivered":true,"taskId":"card-1"}'),
+    ];
+    expect(await observe(turnOf(events, { failed: true }))).toMatchObject({
+      outcome: "saved",
+    });
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ trigger: "card_delivered", failed: false });
+    expect(JSON.parse(logs[0] ?? "{}")).toMatchObject({
+      outcome: "saved",
+      trigger: "card_delivered",
+      cardId: "card-1",
+      failedButDelivered: true,
+    });
+  });
+
+  test("a failed turn whose delivery was bounced or refused is skipped as failed", async () => {
+    for (const answer of ['{"bounced":true}', "Refused. not allowed", "?"]) {
+      const { observe, seen, logs } = harness({
+        deliveredCard: async () => "card-1",
+      });
+      const events = [...work(8), ...call("d", "deliver_task", {}, answer)];
+      expect(await observe(turnOf(events, { failed: true }))).toEqual({
+        outcome: "skipped",
+      });
+      expect(seen).toEqual([]);
+      const logged = JSON.parse(logs[0] ?? "{}");
+      expect(logged).toMatchObject({ outcome: "skipped", reason: "failed" });
+      expect(logged.failedButDelivered).toBeUndefined();
+    }
+  });
+
+  test("a turn that did not fail keeps its log line without the failed-but-delivered mark", async () => {
+    const { observe, logs } = harness();
+    await observe(
+      turnOf([
+        ...work(8),
+        ...call("d", "deliver_task", {}, '{"delivered":true}'),
+      ]),
+    );
+    expect(JSON.parse(logs[0] ?? "{}").failedButDelivered).toBeUndefined();
+  });
+
   test("a card that cannot be read falls back to the round itself, and a marker that throws changes nothing", async () => {
     const { observe, seen, logs } = harness({
       deliveredCard: async () => {

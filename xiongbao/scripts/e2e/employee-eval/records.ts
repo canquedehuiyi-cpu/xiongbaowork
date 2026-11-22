@@ -63,7 +63,11 @@ export type RunLearning = {
     askedFastPath?: true;
     /** 追问之后用上的草稿带快路径；没补上或没追问时没有。 */
     gotFastPath?: true;
+    /** 这一轮带了运行错误，但自己有一次交付成功，复盘照常跑了；其余情况没有。 */
+    failedButDelivered?: true;
   };
+  /** 这次运行的运行错误（同 `EvalRecord.runErrors`）；没有就没有这一项。 */
+  runErrors?: string[];
 };
 
 /** 轮外的背景调用（复盘、自动抽记忆；计量记成 `unscoped`）：次数和输入 token。不计入题目自身的步数和 token。 */
@@ -158,6 +162,8 @@ export type EvalRecord = {
   capabilities: Capabilities;
   checks: Check[];
   error?: string;
+  /** 运行事件里的 `RUN_ERROR`，每条一句（见 `metrics.ts` 的 `runErrorsIn`）；没有就没有这一项。 */
+  runErrors?: string[];
   /**
    * 提示词体积（熊宝侧，记录发给模型的请求体）：系统提示各段、工具定义、历史各多少字符。只有开了请求记录才有
    * （本机假模型模式，或 `EVAL_PROMPT_CHARS=on`）；Codex 侧读不到，没有这一项。

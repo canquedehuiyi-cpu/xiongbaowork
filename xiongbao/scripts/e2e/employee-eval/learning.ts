@@ -109,6 +109,8 @@ export type RetroLine = {
   askedFastPath?: true;
   /** 追问之后用上的草稿带快路径（日志里的 `gotFastPath`）。 */
   gotFastPath?: true;
+  /** 这一轮带了失败标记（运行错误），但自己有一次交付成功，复盘照常跑了（日志里的 `failedButDelivered`）。 */
+  failedButDelivered?: true;
   runId: string;
 };
 
@@ -171,6 +173,9 @@ export function retroLinesOf(
           ? { askedFastPath: true as const }
           : {}),
         ...(parsed.gotFastPath === true ? { gotFastPath: true as const } : {}),
+        ...(parsed.failedButDelivered === true
+          ? { failedButDelivered: true as const }
+          : {}),
         ...(Array.isArray(parsed.replaced) && parsed.replaced.length > 0
           ? { replaced: parsed.replaced.length }
           : {}),
@@ -253,6 +258,7 @@ export async function waitForRetro(options: {
     ...(line.error ? { error: line.error } : {}),
     ...(line.askedFastPath ? { askedFastPath: true as const } : {}),
     ...(line.gotFastPath ? { gotFastPath: true as const } : {}),
+    ...(line.failedButDelivered ? { failedButDelivered: true as const } : {}),
   });
   for (;;) {
     const seen = await lines();

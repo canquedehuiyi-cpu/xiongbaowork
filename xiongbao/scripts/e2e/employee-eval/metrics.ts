@@ -209,6 +209,47 @@ export type ToolCall = {
 
 type AgUiEvent = Record<string, unknown> & { type?: string };
 
+/** 运行错误消息里可能带的密钥（`sk-…`、`Bearer …`、`api_key=…`）打码。 */
+export function redactSecrets(text: string): string {
+  return text
+    .replace(/\bsk-[A-Za-z0-9_-]{6,}/g, "sk-***")
+    .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer ***")
+    .replace(
+      /\b((?:api[_-]?key|token|secret|password|authorization)["']?\s*[:=]\s*["']?)[^\s"',;]+/gi,
+      "$1***",
+    );
+}
+
+/**
+ * 事件里的每一个 `RUN_ERROR`，一条一句：`<code 或 type>：<message 前 200 字，单行、已打码>（在第 N 个事件，
+ * 之前最后一个工具调用是 <toolName>）`。N 从 1 数，按传入事件的顺序（几轮拼在一起时是拼起来后的位置）；之前没有工具调用时写
+ * 「之前没有工具调用」。没有 `RUN_ERROR` 就是空数组。
+ */
+export function runErrorsIn(events: readonly AgUiEvent[]): string[] {
+  const found: string[] = [];
+  let lastTool: string | undefined;
+  events.forEach((event, index) => {
+    if (event.type === "TOOL_CALL_START" && event.toolCallName)
+      lastTool = String(event.toolCallName);
+    if (event.type !== "RUN_ERROR") return;
+    const label = String(event.code ?? event.type);
+    const raw =
+      typeof event.message === "string"
+        ? event.message
+        : event.message === undefined
+          ? ""
+          : JSON.stringify(event.message);
+    const message = redactSecrets(raw.replace(/\s+/g, " ").trim()).slice(
+      0,
+      200,
+    );
+    found.push(
+      `${label}：${message}（在第 ${index + 1} 个事件，${lastTool ? `之前最后一个工具调用是 ${lastTool}` : "之前没有工具调用"}）`,
+    );
+  });
+  return found;
+}
+
 /** AG-UI 事件里的工具调用，按出现顺序，参数和结果拼好。 */
 export function toolCallsOf(events: readonly AgUiEvent[]): ToolCall[] {
   const calls = new Map<string, ToolCall>();

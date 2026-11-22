@@ -174,6 +174,7 @@ import {
   lastAssistantText,
   NOT_APPLICABLE,
   observedFeatures,
+  runErrorsIn,
   snapshotHasReasoning,
   snapshotMessages,
   summarizePrompts,
@@ -1557,6 +1558,8 @@ async function runWork(work: Work): Promise<EvalRecord> {
   archiveRunDir(WORKSPACE, work.where, join(scratch, "done-runs"), work.key);
   const promptChars = summarizePrompts(recorder?.drain() ?? []);
   const events = await eventsOf(runIds);
+  const runErrors = runErrorsIn(events);
+  for (const line of runErrors) console.log(`   运行错误：${line}`);
   /*
    * 员工的背景小活（复盘、自动抽记忆）的模型调用不在任何一轮里，计量记成 `unscoped`：它们是轮结束后的另一次
    * 调用，题目自身的步数和 token 只算主运行（否则第一次会比第二次多一次复盘的调用）；后台调用另记在
@@ -1648,6 +1651,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     learning = {
       ...learningDiff(learnedBefore, learnedAfter),
       ...(skillBodies.length > 0 ? { skillBodies } : {}),
+      ...(runErrors.length > 0 ? { runErrors } : {}),
       retro,
     };
     if (skillBodies.length > 0) console.log(skillBodyLog(skillBodies));
@@ -1705,6 +1709,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
     checks,
     ...(promptChars ? { promptChars } : {}),
     ...(learning ? { learning } : {}),
+    ...(runErrors.length > 0 ? { runErrors } : {}),
     ...(work.seed ? { seed: work.seed } : {}),
     backgroundCalls,
     ...(roundErrors.length
