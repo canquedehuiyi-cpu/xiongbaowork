@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
 import type { LanguageModel } from "ai";
+import { eq, inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
 import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
@@ -84,7 +84,7 @@ const draft = {
   scope: "self",
 };
 
-const cardTurn = (steps: number) => ({
+const cardTurn = (steps: number, tool = "computer_read_file") => ({
   ownerUserId: owner,
   agentId: bot,
   threadId: "t",
@@ -93,7 +93,7 @@ const cardTurn = (steps: number) => ({
   request: "把月度销售表整理成带图表的汇总报告",
   reply: "好了",
   steps: Array.from({ length: steps }, () => ({
-    tool: "computer_run_command",
+    tool,
     ok: true,
     args: "",
     result: "",
@@ -137,6 +137,119 @@ describe("交付的看板卡被判不值得时重问", () => {
           .from(learnedSkills)
           .where(eq(learnedSkills.skillSlug, slug)),
       ).toHaveLength(1);
+    });
+  });
+
+  test("命令做成的卡草稿没有快路径：追问一次，补上了就用新草稿并存下", async () => {
+    await asOwner(async () => {
+      let asked = 0;
+      const prompts: string[] = [];
+      const withFast = {
+        name: "仓库盘点脚本",
+        when: "要核对仓库里各货架的库存数量并生成差异清单时",
+        steps: ["列出货架目录", "逐个统计库存", "写差异清单（.txt）"],
+        pitfalls: [],
+        verify: "差异清单的行数等于有差异的货架数",
+        scope: "self",
+        fastPath: "python3 stock.py <dir>",
+      };
+      const retrospect = createRetrospector({
+        database,
+        selfSkill: (ownerUserId, agentId) => ({
+          ...depsFor(agentId),
+          ownerUserId,
+        }),
+        modelFor: async () => ({}) as LanguageModel,
+        call: async (input) => {
+          asked += 1;
+          prompts.push(input.prompt);
+          return {
+            text: JSON.stringify({ skill: asked === 1 ? draft : withFast }),
+          };
+        },
+        existingSkills: async () => [],
+        log: () => undefined,
+        limiter: { take: () => true },
+      });
+      const outcome = await retrospect(cardTurn(12, "computer_run_command"));
+      const slug = slugFor(bot, "仓库盘点脚本");
+      expect(asked).toBe(2);
+      expect(prompts[1]).toContain("fastPath");
+      expect(outcome).toEqual({
+        outcome: "saved",
+        id: slug,
+        status: "active",
+        askedFastPath: true,
+        gotFastPath: true,
+      });
+    });
+  });
+
+  test("追问失败：用第一次的草稿，复盘不失败，只记追问过", async () => {
+    await asOwner(async () => {
+      let asked = 0;
+      const first = {
+        name: "门店巡检记录",
+        when: "每天要把门店巡检的拍照记录整理成问题清单并发给店长时",
+        steps: ["收集照片", "标出问题项", "写成清单（.md）"],
+        pitfalls: [],
+        verify: "清单条数与标出的问题数一致",
+        scope: "self",
+      };
+      const retrospect = createRetrospector({
+        database,
+        selfSkill: (ownerUserId, agentId) => ({
+          ...depsFor(agentId),
+          ownerUserId,
+        }),
+        modelFor: async () => ({}) as LanguageModel,
+        call: async () => {
+          asked += 1;
+          if (asked === 1) return { text: JSON.stringify({ skill: first }) };
+          throw new DOMException("timed out", "TimeoutError");
+        },
+        existingSkills: async () => [],
+        log: () => undefined,
+        limiter: { take: () => true },
+      });
+      const outcome = await retrospect(cardTurn(12, "computer_run_command"));
+      // 第一次 1 次 + 追问超时后自动再调 1 次。
+      expect(asked).toBe(3);
+      expect(outcome).toEqual({
+        outcome: "saved",
+        id: slugFor(bot, "门店巡检记录"),
+        status: "active",
+        askedFastPath: true,
+      });
+    });
+  });
+
+  test("观察者的日志行写明追问过快路径", async () => {
+    const lines: Record<string, unknown>[] = [];
+    const observe = createRetroObserver({
+      retrospect: async () => ({
+        outcome: "nothing",
+        askedFastPath: true,
+        gotFastPath: true,
+      }),
+      deliveredCard: async () => null,
+      cardTurn: async () => null,
+      log: (line) => lines.push(JSON.parse(line)),
+    });
+    await observe({
+      tenant: owner,
+      agentId: bot,
+      threadId: "t",
+      runId: "r",
+      messages: [],
+      events: [],
+      failed: false,
+      kind: "chat",
+    });
+    expect(lines[0]).toMatchObject({
+      type: "retrospect",
+      askedFastPath: true,
+      gotFastPath: true,
     });
   });
 

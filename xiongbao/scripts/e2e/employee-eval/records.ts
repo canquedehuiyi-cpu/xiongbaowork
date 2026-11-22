@@ -59,6 +59,10 @@ export type RunLearning = {
     reason?: string;
     /** 复盘出错时的错误类型（`retrospect-error` 行）；没出错时没有。 */
     error?: string;
+    /** 草稿没有快路径、复盘追问了一次；没追问时没有。 */
+    askedFastPath?: true;
+    /** 追问之后用上的草稿带快路径；没补上或没追问时没有。 */
+    gotFastPath?: true;
   };
 };
 

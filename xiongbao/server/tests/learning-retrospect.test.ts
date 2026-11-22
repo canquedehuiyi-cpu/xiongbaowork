@@ -8,6 +8,7 @@ import {
   createRetrospector,
   parseDraft,
   RETRO_COOLDOWN_MS,
+  RETRO_FASTPATH_MIN_COMMANDS,
   RETRO_SYSTEM,
   type RetroCall,
   type RetroTurn,
@@ -455,6 +456,84 @@ describe("the retrospector at the end of a turn", () => {
     });
   });
 
+  describe("a delivered card done with commands but written up without a fastPath is asked once more", () => {
+    const withFast = { ...goodDraft, fastPath: "python3 run.py <dir>" };
+    /** Answers from the list in order (an Error in the list is thrown); every prompt is kept. */
+    const scripted = (answers: unknown[]) => {
+      const prompts: string[] = [];
+      const call: RetroCall = async (input) => {
+        prompts.push(input.prompt);
+        const answer = answers[prompts.length - 1];
+        if (answer instanceof Error) throw answer;
+        return { text: JSON.stringify({ skill: answer ?? null }) };
+      };
+      return { call, prompts };
+    };
+    const cardTurn = (steps: number, overrides: Partial<RetroTurn> = {}) =>
+      turnOf(steps, {
+        trigger: "card_delivered",
+        cardId: "card1",
+        ...overrides,
+      });
+    const readSteps = (turn: RetroTurn, keep: number): RetroTurn => ({
+      ...turn,
+      steps: turn.steps.map((step, index) =>
+        index < keep ? step : { ...step, tool: "computer_read_file" },
+      ),
+    });
+
+    test("the follow-up carries the first draft and asks for a fastPath under 900 characters", async () => {
+      const { call, prompts } = scripted([goodDraft, withFast]);
+      const { run } = harness({ call, limiter: { take: () => true } });
+      await run(cardTurn(10));
+      expect(prompts).toHaveLength(2);
+      expect(prompts[1]).toContain("周报整理");
+      expect(prompts[1]).toContain("fastPath");
+      expect(prompts[1]).toContain("900");
+      expect(prompts[0]).not.toContain("has no fastPath");
+    });
+
+    test("the threshold is three successful commands", () => {
+      expect(RETRO_FASTPATH_MIN_COMMANDS).toBe(3);
+    });
+
+    test("no follow-up: not delivered, too few steps, already has a fastPath, few commands", async () => {
+      const cases: [string, RetroTurn, unknown][] = [
+        ["steps trigger", turnOf(20), goodDraft],
+        ["under ten steps", cardTurn(9), goodDraft],
+        ["has fastPath", cardTurn(12), withFast],
+        ["two commands", readSteps(cardTurn(12), 2), goodDraft],
+      ];
+      for (const [label, turn, first] of cases) {
+        const { call, prompts } = scripted([first, withFast]);
+        const { run } = harness({ call, limiter: { take: () => true } });
+        await run(turn);
+        expect([label, prompts.length]).toEqual([label, 1]);
+      }
+    });
+
+    test("failed commands do not count", async () => {
+      const turn = cardTurn(12);
+      const failing: RetroTurn = {
+        ...turn,
+        steps: turn.steps.map((step, index) => ({ ...step, ok: index < 2 })),
+      };
+      const { call, prompts } = scripted([goodDraft, withFast]);
+      const { run } = harness({ call, limiter: { take: () => true } });
+      await run(failing);
+      expect(prompts).toHaveLength(1);
+    });
+
+    test("the follow-up counts against the daily allowance", async () => {
+      const { call, prompts } = scripted([goodDraft, withFast]);
+      let taken = 0;
+      const { run } = harness({ call, limiter: { take: () => ++taken <= 1 } });
+      await run(cardTurn(12));
+      expect(taken).toBe(2);
+      expect(prompts).toHaveLength(1);
+    });
+  });
+
   test("the system prompt says a delivered multi-step job is a skill by default", () => {
     expect(RETRO_SYSTEM).toContain("write the skill by default");
     expect(RETRO_SYSTEM).toContain("only two cases");
@@ -470,6 +549,112 @@ describe("the retrospector at the end of a turn", () => {
     expect(logs).toHaveLength(1);
     expect(JSON.parse(logs[0] ?? "{}").type).toBe("retrospect-error");
     expect(logs[0]).not.toContain("销售数据");
+  });
+});
+
+describe("a model call that times out is made once more", () => {
+  const timeout = () => new DOMException("timed out", "TimeoutError");
+
+  test("first call times out, second answers: a draft comes out", async () => {
+    let calls = 0;
+    const signals: AbortSignal[] = [];
+    const retries: string[] = [];
+    const draft = await retrospect(turnOf(15), {
+      model,
+      onRetry: (reason) => retries.push(reason),
+      call: async (input) => {
+        calls += 1;
+        signals.push(input.abortSignal);
+        if (calls === 1) throw timeout();
+        return { text: JSON.stringify({ skill: goodDraft }) };
+      },
+    });
+    expect(draft?.name).toBe("周报整理");
+    expect(calls).toBe(2);
+    expect(retries).toEqual(["timeout"]);
+    expect(signals[1]).not.toBe(signals[0]);
+  });
+
+  test("an abort caused by the timeout signal counts too", async () => {
+    let calls = 0;
+    const draft = await retrospect(turnOf(15), {
+      model,
+      timeoutMs: 5,
+      call: async (input) => {
+        calls += 1;
+        if (calls === 1) {
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          throw new DOMException("aborted", "AbortError");
+        }
+        expect(input.abortSignal.aborted).toBe(false);
+        return { text: JSON.stringify({ skill: goodDraft }) };
+      },
+    });
+    expect(draft).not.toBeNull();
+    expect(calls).toBe(2);
+  });
+
+  test("both calls time out: the error is thrown, and logged by the retrospector", async () => {
+    let calls = 0;
+    await expect(
+      retrospect(turnOf(15), {
+        model,
+        call: async () => {
+          calls += 1;
+          throw timeout();
+        },
+      }),
+    ).rejects.toThrow("timed out");
+    expect(calls).toBe(2);
+
+    const logs: string[] = [];
+    let modelCalls = 0;
+    const run = createRetrospector({
+      database: {} as never,
+      selfSkill: () => ({}) as never,
+      modelFor: async () => model,
+      call: async () => {
+        modelCalls += 1;
+        throw timeout();
+      },
+      log: (line) => logs.push(line),
+    });
+    expect(await run(turnOf(30))).toEqual({ outcome: "skipped" });
+    expect(modelCalls).toBe(2);
+    const types = logs.map((line) => JSON.parse(line).type);
+    expect(types).toEqual(["retrospect-retry", "retrospect-error"]);
+    expect(JSON.parse(logs[0] ?? "{}")).toMatchObject({
+      type: "retrospect-retry",
+      reason: "timeout",
+    });
+  });
+
+  test("any other error is not retried", async () => {
+    let calls = 0;
+    await expect(
+      retrospect(turnOf(15), {
+        model,
+        call: async () => {
+          calls += 1;
+          throw new Error("rate limited");
+        },
+      }),
+    ).rejects.toThrow("rate limited");
+    expect(calls).toBe(1);
+  });
+
+  test("an AbortError that did not come from the timeout is not retried", async () => {
+    let calls = 0;
+    await expect(
+      retrospect(turnOf(15), {
+        model,
+        call: async () => {
+          calls += 1;
+          throw new DOMException("stopped", "AbortError");
+        },
+      }),
+    ).rejects.toThrow("stopped");
+    expect(calls).toBe(1);
   });
 });
 

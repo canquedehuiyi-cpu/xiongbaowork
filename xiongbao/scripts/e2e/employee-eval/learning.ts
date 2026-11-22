@@ -9,10 +9,10 @@
 import type { BackgroundCalls, RunLearning } from "./records";
 
 /**
- * 第一次结束后最多等复盘多久；到了就照常开始第二次。150 秒 = 复盘模型调用超时（120 秒，服务器 `retrospect.ts`）+ 30 秒余量，
+ * 第一次结束后最多等复盘多久；到了就照常开始第二次。270 秒 = 两次复盘模型调用的超时（各 120 秒；超时会自动再调一次，服务器 `retrospect.ts`）+ 30 秒余量，
  * 不然复盘还没出结论第二次就开始了。
  */
-export const RETRO_WAIT_MS = 150_000;
+export const RETRO_WAIT_MS = 270_000;
 
 /** 某一刻这位员工的自写技能（命令名 -> 名字、使用次数）和形成的记忆条数。 */
 export type LearnedState = {
@@ -105,6 +105,10 @@ export type RetroLine = {
   heldReason?: string;
   /** 复盘出错时同一轮另记的 `retrospect-error` 行里的错误类型（只有类型，没有内容）；没出错时没有。 */
   error?: string;
+  /** 草稿只有步骤、没有快路径，复盘又追问了一次快路径（日志里的 `askedFastPath`）。 */
+  askedFastPath?: true;
+  /** 追问之后用上的草稿带快路径（日志里的 `gotFastPath`）。 */
+  gotFastPath?: true;
   runId: string;
 };
 
@@ -163,6 +167,10 @@ export function retroLinesOf(
         ...(typeof parsed.steps === "number" ? { steps: parsed.steps } : {}),
         ...(typeof parsed.reason === "string" ? { reason: parsed.reason } : {}),
         ...(typeof parsed.cardId === "string" ? { cardId: parsed.cardId } : {}),
+        ...(parsed.askedFastPath === true
+          ? { askedFastPath: true as const }
+          : {}),
+        ...(parsed.gotFastPath === true ? { gotFastPath: true as const } : {}),
         ...(Array.isArray(parsed.replaced) && parsed.replaced.length > 0
           ? { replaced: parsed.replaced.length }
           : {}),
@@ -243,6 +251,8 @@ export async function waitForRetro(options: {
     ...(line.replaced ? { replaced: line.replaced } : {}),
     ...(line.reason ? { reason: line.reason } : {}),
     ...(line.error ? { error: line.error } : {}),
+    ...(line.askedFastPath ? { askedFastPath: true as const } : {}),
+    ...(line.gotFastPath ? { gotFastPath: true as const } : {}),
   });
   for (;;) {
     const seen = await lines();
