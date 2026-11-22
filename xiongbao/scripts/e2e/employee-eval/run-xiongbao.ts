@@ -190,6 +190,7 @@ import { learnPolicy } from "./mock-learn";
 import { type MockRequest, type MockTurn, startMockModel } from "./mock-model";
 import { pitfallPolicy } from "./mock-pitfall";
 import { researchPolicy, researchScriptFrom } from "./mock-research";
+import { isLastRunOfPair, pairEmployees } from "./pair-quota";
 import { startPromptRecorder } from "./prompt-recorder";
 import {
   combinePairs,
@@ -711,7 +712,7 @@ async function stop(process_: Subprocess | undefined) {
 const cookies = new Map<string, string>();
 
 async function api<T = Record<string, unknown>>(
-  method: "GET" | "POST" | "PUT" | "PATCH",
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE",
   path: string,
   data?: unknown,
 ): Promise<{ status: number; body: T }> {
@@ -913,7 +914,7 @@ async function registerStandInDevice() {
 let modelRef = "";
 let firstAgent = "";
 
-/** 对照运行要一位全新的员工；建不出来（名额满了）时不能退回到别的员工，那位带着技能。 */
+/** 重复任务的员工（第一次那位、对照那位）要全新的；建不出来（名额满了）时不能退回到别的员工，那位带着技能。 */
 class FreshEmployeeUnavailable extends Error {}
 
 async function newEmployee(label: string, fresh = false): Promise<string> {
@@ -929,9 +930,7 @@ async function newEmployee(label: string, fresh = false): Promise<string> {
     fields,
   );
   if (created.status === 402 && fresh)
-    throw new FreshEmployeeUnavailable(
-      "员工名额不够，建不出对照运行要的新员工",
-    );
+    throw new FreshEmployeeUnavailable("员工名额不够，建不出这一对要的新员工");
   if (created.status === 402 && firstAgent) return firstAgent;
   must(created, [201], "create employee");
   const id = created.body.agent.id;
@@ -955,7 +954,8 @@ async function newEmployee(label: string, fresh = false): Promise<string> {
     console.log(
       `   (security settings left at defaults: HTTP ${security.status})`,
     );
-  if (!firstAgent) firstAgent = id;
+  // 退回用的员工只认普通题的：重复任务的员工每一对做完会删掉，也带着技能。
+  if (!firstAgent && !fresh) firstAgent = id;
   return id;
 }
 
@@ -1496,6 +1496,25 @@ const serverLogText = () =>
 /** 同一组运行（重复任务）共用的员工。 */
 const agentOfGroup = new Map<string, string>();
 
+/**
+ * 一对做完（判分、拷产物、记录、读学到了什么都已经做完）后，把这一对用过的员工删掉，名额还给下一对
+ * （员工数有上限，软删除后不再计数，见 `server/src/quota/limits.ts`）。删不掉只打一行日志，不让评测失败。
+ */
+async function releasePairEmployees(pairKey: string) {
+  for (const { group, agentId } of pairEmployees(pairKey, agentOfGroup)) {
+    agentOfGroup.delete(group);
+    try {
+      const deleted = await api("DELETE", `/api/agents/${agentId}`);
+      if (deleted.status !== 204)
+        console.log(`   (员工 ${group} 没删掉：HTTP ${deleted.status})`);
+    } catch (thrown) {
+      console.log(
+        `   (员工 ${group} 没删掉：${thrown instanceof Error ? thrown.message : String(thrown)})`,
+      );
+    }
+  }
+}
+
 async function runWork(work: Work): Promise<EvalRecord> {
   console.log(
     `\n== ${work.key}（${work.title}）${work.via === "chat" ? " [chat]" : ""}`,
@@ -1506,7 +1525,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
   const isControl = work.pair?.round === "control";
   const agentId =
     (work.group ? agentOfGroup.get(work.group) : undefined) ??
-    (await newEmployee(work.label, isControl));
+    (await newEmployee(work.label, Boolean(work.group)));
   if (work.group) agentOfGroup.set(work.group, agentId);
   // 重复任务：这次运行开始前这位员工已经有什么，运行后的差就是学到的。对照运行不看这些：它的复盘怎样不重要，也不等。
   const learnedBefore =
@@ -1966,7 +1985,7 @@ try {
   /** 重复类的题：跳过的对数，按题名分开。 */
   const skippedPairs = new Map<string, number>();
   const skipped = new Set<string>();
-  for (const work of works) {
+  for (const [at, work] of works.entries()) {
     // 多对放在同一次运行里做完：来不来得及再做一对，看作业开头记下的截止时间；来不及就不做，留个说明。
     if (work.pair?.round === "first" && work.group && work.task) {
       // 一对做几次：有坑可学加一次对照运行，共三次，会议纪要两次。
@@ -1988,13 +2007,23 @@ try {
     try {
       record = await runWork(work);
     } catch (thrown) {
-      // 对照运行建不出新员工：这一对没有对照，记一笔，别拖垮整次评测。
-      if (
-        work.pair?.round !== "control" ||
-        !(thrown instanceof FreshEmployeeUnavailable)
-      )
+      // 建不出新员工（名额不够）：记一笔，别拖垮整次评测。对照建不出来，这一对没有对照；
+      // 第一次建不出来，这一对剩下的运行（第二次、对照）都不做，也不退回到别的员工。
+      if (!work.pair || !(thrown instanceof FreshEmployeeUnavailable))
         throw thrown;
-      notes.push(`${work.key} 没做：${thrown.message}，这一对没有同种子对照`);
+      if (work.pair.round === "control")
+        notes.push(`${work.key} 没做：${thrown.message}，这一对没有同种子对照`);
+      else {
+        notes.push(
+          `${work.key} 没做：${thrown.message}，这一对剩下的运行也不做，已完成的各对照常记录`,
+        );
+        if (work.pairKey && work.task) {
+          skipped.add(work.pairKey);
+          skippedPairs.set(work.task, (skippedPairs.get(work.task) ?? 0) + 1);
+        }
+        firstRound = undefined;
+        secondRound = undefined;
+      }
     } finally {
       work.site?.stop();
     }
@@ -2032,6 +2061,9 @@ try {
         donePairs.delete(work.task);
       }
     } else if (record && !work.group) records.push(record);
+    // 这一对的最后一次运行做完了：记录都已合好，不会再有读这两位员工的步骤，删掉它们腾名额。
+    if (work.pairKey && isLastRunOfPair(works, at))
+      await releasePairEmployees(work.pairKey);
   }
   if (deploymentHits > 0)
     notes.push(
