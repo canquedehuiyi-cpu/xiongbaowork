@@ -42,12 +42,12 @@ const carrierOf = (name: string) =>
     ),
   );
 
-test("repeat_pairs is a choice of 1 to 4 that defaults to 1, and tasks can name repeat-pitfall", () => {
+test("repeat_pairs is a choice of 1 to 6 that defaults to 1, and tasks can name repeat-pitfall", () => {
   const inputs = workflow.on.workflow_dispatch.inputs;
   expect(inputs.repeat_pairs).toMatchObject({
     type: "choice",
     default: "1",
-    options: ["1", "2", "3", "4"],
+    options: ["1", "2", "3", "4", "5", "6"],
   });
   expect(inputs.repeat_pairs?.description).toContain("新员工");
   expect(inputs.tasks?.description).toContain("repeat-pitfall");
