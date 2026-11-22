@@ -63,6 +63,10 @@ export type RunLearning = {
     askedFastPath?: true;
     /** 追问之后用上的草稿带快路径；没补上或没追问时没有。 */
     gotFastPath?: true;
+    /** 草稿只因破坏性命令要转待审，复盘让模型改写了一次；没改写时没有。 */
+    rewroteUnsafe?: true;
+    /** 改写后的草稿过了安全检查、用上了；没成或没改写时没有。 */
+    rewriteCleared?: true;
     /** 这一轮带了运行错误，但自己有一次交付成功，复盘照常跑了；其余情况没有。 */
     failedButDelivered?: true;
   };

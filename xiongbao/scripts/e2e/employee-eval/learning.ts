@@ -124,6 +124,10 @@ export type RetroLine = {
   askedFastPath?: true;
   /** 追问之后用上的草稿带快路径（日志里的 `gotFastPath`）。 */
   gotFastPath?: true;
+  /** 草稿只因破坏性命令要转待审，复盘让模型改写了一次（日志里的 `rewroteUnsafe`）。 */
+  rewroteUnsafe?: true;
+  /** 改写后的草稿过了安全检查、用上了（日志里的 `rewriteCleared`）。 */
+  rewriteCleared?: true;
   /** 这一轮带了失败标记（运行错误），但自己有一次交付成功，复盘照常跑了（日志里的 `failedButDelivered`）。 */
   failedButDelivered?: true;
   runId: string;
@@ -188,6 +192,12 @@ export function retroLinesOf(
           ? { askedFastPath: true as const }
           : {}),
         ...(parsed.gotFastPath === true ? { gotFastPath: true as const } : {}),
+        ...(parsed.rewroteUnsafe === true
+          ? { rewroteUnsafe: true as const }
+          : {}),
+        ...(parsed.rewriteCleared === true
+          ? { rewriteCleared: true as const }
+          : {}),
         ...(parsed.failedButDelivered === true
           ? { failedButDelivered: true as const }
           : {}),
@@ -255,7 +265,7 @@ function runIdOfLog(parsed: Record<string, unknown>): string {
 /**
  * 这几轮在服务器日志里的复盘相关行，一行一条，写进作业日志：服务器日志不上传，作业日志里看不到复盘就没法查
  * 「为什么记成跳过」。只取不含内容的字段：type、outcome、trigger、steps、reason、retried、askedFastPath、
- * gotFastPath、failedButDelivered、cardId 和运行号各前 8 位、时间戳；`error`（只有错误类型）和 `reason`
+ * gotFastPath、rewroteUnsafe、rewriteCleared、failedButDelivered、cardId 和运行号各前 8 位、时间戳；`error`（只有错误类型）和 `reason`
  * （规则名、网址）单行化、打码、各取前 120 字。技能正文、名称、步骤、轨迹一律不打。
  */
 export function retroLogLines(
@@ -285,6 +295,8 @@ export function retroLogLines(
       "retried",
       "askedFastPath",
       "gotFastPath",
+      "rewroteUnsafe",
+      "rewriteCleared",
       "failedButDelivered",
     ])
       if (parsed[flag] === true) fields.push(`${flag}=true`);
@@ -396,6 +408,8 @@ export async function waitForRetro(options: {
     ...(line.error ? { error: line.error } : {}),
     ...(line.askedFastPath ? { askedFastPath: true as const } : {}),
     ...(line.gotFastPath ? { gotFastPath: true as const } : {}),
+    ...(line.rewroteUnsafe ? { rewroteUnsafe: true as const } : {}),
+    ...(line.rewriteCleared ? { rewriteCleared: true as const } : {}),
     ...(line.failedButDelivered ? { failedButDelivered: true as const } : {}),
   });
   for (;;) {

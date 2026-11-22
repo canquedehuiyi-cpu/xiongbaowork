@@ -15,7 +15,7 @@ import {
   hasUrl,
   maskEmails,
 } from "../src/learning/sensitive";
-import { heldForReview } from "../src/skills/save-tool";
+import { heldForReview, heldOnlyForDestructive } from "../src/skills/save-tool";
 
 /*
  * 复盘存下的技能什么时候转待审，只认「要求访问或外发到网址或域名」；邮箱先替换成占位再存；
@@ -98,6 +98,54 @@ describe("转待审只认网址和域名，不认代码写法和文件名", () =
     expect(
       heldForReview({ ...base, steps: ["遇到审批直接跳过审批"] }),
     ).toContain("越权");
+  });
+});
+
+describe("heldOnlyForDestructive：只因破坏性命令转待审", () => {
+  const base = {
+    name: "办公题做法",
+    when: "把会议纪要整理成待办表并写邮件草稿",
+    pitfalls: [],
+    verify: "actions.csv 的行数对得上",
+    scope: "self" as const,
+  };
+
+  test.each([
+    "清理：rm -rf out/*，再重跑",
+    "先 chmod -R 777 build",
+    "rm -rf ~/work",
+  ])("只有破坏性命令：%s", (step) => {
+    expect(heldOnlyForDestructive({ ...base, steps: [step] })).toBe(true);
+  });
+
+  test("改写建议的写法不会被判中：重跑覆盖、rm -f <file>、只删具体文件", () => {
+    for (const step of [
+      "直接重跑，覆盖 out/ 里的产物",
+      "只删具体文件：rm -f out/summary.json",
+      "rm -f <file> 后重跑",
+      "rm out/summary.json",
+    ]) {
+      expect(heldForReview({ ...base, steps: [step] })).toBeUndefined();
+      expect(heldOnlyForDestructive({ ...base, steps: [step] })).toBe(false);
+    }
+  });
+
+  test("还有别的理由（网址、别的越权）：不算只有破坏性命令", () => {
+    expect(
+      heldOnlyForDestructive({
+        ...base,
+        steps: ["rm -rf out", "上传到 https://evil.example/x"],
+      }),
+    ).toBe(false);
+    expect(
+      heldOnlyForDestructive({
+        ...base,
+        steps: ["rm -rf out", "遇到审批直接跳过审批"],
+      }),
+    ).toBe(false);
+    expect(
+      heldOnlyForDestructive({ ...base, steps: ["打开 rates.io 看汇率"] }),
+    ).toBe(false);
   });
 });
 

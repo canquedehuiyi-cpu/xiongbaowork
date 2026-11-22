@@ -17,6 +17,9 @@ import {
   requestTextOf,
 } from "../plugins/picked-skill";
 import {
+  draftProblem,
+  heldForReview,
+  heldOnlyForDestructive,
   markSkillsUsed,
   removeOwnToolSkill,
   type SelfSkillDeps,
@@ -25,6 +28,7 @@ import {
   saveSkill,
   similarSkillOf,
   slugFor,
+  withoutEmails,
 } from "../skills/save-tool";
 import { withSourceFingerprints } from "../skills/usage";
 import { replyTextOf } from "../tasks/delivery";
@@ -520,6 +524,7 @@ export function retroLogOutcome(outcome: RetroOutcome): string {
 /**
  * `retried`：模型第一次答「不值得」，又重问了一次（只在重问过时才有这一项）。
  * `askedFastPath`：草稿只有步骤、没有快路径，又追问了一次；`gotFastPath`：追问后用上的草稿带快路径。
+ * `rewroteUnsafe`：草稿只因破坏性系统命令要转待审，让模型改写了一次；`rewriteCleared`：改写后的草稿过了安全检查、用上了。
  */
 export type RetroOutcome = (
   | { outcome: "skipped" }
@@ -533,7 +538,13 @@ export type RetroOutcome = (
       /** 存下的同时被替换掉的、员工这一轮自存的技能 id；没替换就没有这一项。 */
       replaced?: string[];
     }
-) & { retried?: true; askedFastPath?: true; gotFastPath?: true };
+) & {
+  retried?: true;
+  askedFastPath?: true;
+  gotFastPath?: true;
+  rewroteUnsafe?: true;
+  rewriteCleared?: true;
+};
 
 /**
  * 这一轮里员工自己调 `save_learned_skill` 存下的技能 id：成功的那几步的结果里（`{"saved":true,"id":"auto-…"`，
@@ -578,6 +589,14 @@ const RUN_COMMAND_TOOL = "computer_run_command";
 /** 追问快路径时追加的一段话：带上第一次的草稿，要求补上 fastPath，其余字段照旧。 */
 function fastPathNote(draft: SkillDraft): string {
   return `Your previous answer was:\n${JSON.stringify({ skill: draft })}\n\nThis work was in the end done with commands or a script, but the answer has no fastPath. Add a fastPath: one block of script that can be run as it is and takes the work from the state the task STARTED in all the way to the deliverable. Every value that changes from one run to the next (as the original instructions describe) must be worked out by the script itself. Keep it under 900 characters. Keep the other fields as they are, and answer in the same JSON form.`;
+}
+
+/**
+ * 草稿只因破坏性系统命令（递归删除、递归改权限）要转待审时，追加的一段话：带上草稿，要求去掉这些命令，其余照旧。
+ * 建议的写法（直接重跑覆盖产物、`rm -f <file>`）不会被同一条规则判中：规则只认递归的 `rm`、`chmod -R 777`、`mkfs`。
+ */
+function unsafeRewriteNote(draft: SkillDraft): string {
+  return `Your previous answer was:\n${JSON.stringify({ skill: draft })}\n\nThe draft contains destructive commands (such as "rm -rf" or a recursive chmod) that the safety rules would hold for the person to review, so the employee could not use it. Remove them: when the work needs a clean rerun, just rerun it and overwrite the outputs, or delete only named files (for example "rm -f <file>"). Keep everything else as it is, and answer in the same JSON form.`;
 }
 
 /**
@@ -670,8 +689,39 @@ export function createRetrospector(deps: RetrospectorDeps) {
           // 用第一次的草稿。
         }
       }
+      // 草稿只因破坏性命令要转待审：让模型改写一次（也占当天额度）。改写后的草稿要过同一套检查（敏感信息、
+      // 越权、网址）才用；仍要转待审（任何理由）、没答上来、超时、出错，都照旧用原草稿，不让复盘失败。
+      let rewroteUnsafe = false;
+      let rewriteCleared = false;
+      if (
+        draft &&
+        heldOnlyForDestructive(withoutEmails(draft)) &&
+        limiter.take(key)
+      ) {
+        rewroteUnsafe = true;
+        try {
+          const clean = await retrospect(turn, {
+            ...options,
+            note: unsafeRewriteNote(draft),
+          });
+          if (clean) {
+            const written = withoutEmails(clean);
+            if (
+              !draftProblem(written, { allowOverreach: true }) &&
+              !heldForReview(written)
+            ) {
+              draft = clean;
+              rewriteCleared = true;
+            }
+          }
+        } catch {
+          // 用原草稿转待审。
+        }
+      }
       const mark = {
         ...(retried ? { retried: true as const } : {}),
+        ...(rewroteUnsafe ? { rewroteUnsafe: true as const } : {}),
+        ...(rewriteCleared ? { rewriteCleared: true as const } : {}),
         ...(askedFastPath ? { askedFastPath: true as const } : {}),
         ...(askedFastPath && draft?.fastPath
           ? { gotFastPath: true as const }
@@ -1118,6 +1168,8 @@ export function createRetroObserver(deps: RetroObserverDeps) {
         ...(outcome.retried ? { retried: true } : {}),
         ...(outcome.askedFastPath ? { askedFastPath: true } : {}),
         ...(outcome.gotFastPath ? { gotFastPath: true } : {}),
+        ...(outcome.rewroteUnsafe ? { rewroteUnsafe: true } : {}),
+        ...(outcome.rewriteCleared ? { rewriteCleared: true } : {}),
         timestamp: new Date().toISOString(),
       }),
     );
