@@ -324,11 +324,16 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
     const steps: RunSteps = {};
     /*
      * 模型连接瞬时断开（还没吐出任何内容）时，这一步的模型调用再试一次，包在最里面，所有路径的每一步都覆盖。
+     * 无人值守的运行（看板卡、例行）把思考部件先扣住，到第一个正文或工具部件才放出，所以只吐了思考就断也能重试；
+     * 有人看的聊天保持思考实时显示，只在一个字都没吐时重试。
      * 部署开关 `XIONGBAO_MODEL_NET_RETRY=off` 关掉。见 `retryingDroppedConnection`。
      */
     const answering = answersOnLastStep(
       modelNetRetryOn()
-        ? retryingDroppedConnection(configuration, { steps })
+        ? retryingDroppedConnection(configuration, {
+            steps,
+            holdThinking: hooks.unattended === true,
+          })
         : configuration,
       steps,
       {

@@ -854,10 +854,20 @@ export type NetRetryOptions = {
   sleep?: (milliseconds: number) => Promise<unknown>;
   /** One JSON line, no content. Absent, the server's log. */
   log?: (line: string) => void;
+  /**
+   * Nobody is watching the run (a board card's turn, a routine): its thinking parts are held back
+   * until the stream says its first word or calls its first tool, so a connection that drops while
+   * the model is only thinking is also made again. A person's chat leaves this off: the thinking is
+   * shown as it comes, and only a stream that has said nothing at all is made again.
+   */
+  holdThinking?: boolean;
 };
 
 /** The parts a stream sends before it says anything: holding them back costs nothing, and lets a retry start clean. */
 const PREAMBLE_PARTS = new Set(["stream-start", "response-metadata", "raw"]);
+
+/** The parts that carry the model's thinking (`reasoning-start`, `reasoning-delta`, `reasoning-end`). */
+const isThinkingPart = (type: string): boolean => type.startsWith("reasoning-");
 
 /**
  * ONE MORE TRY FOR A MODEL CALL WHOSE CONNECTION DROPPED. The model call of one step is made again,
@@ -870,6 +880,10 @@ const PREAMBLE_PARTS = new Set(["stream-start", "response-metadata", "raw"]);
  * carried on by later runs that spent steps getting back to where it was. The AI SDK does not
  * make such a call again by itself unless the provider wrapped the failure as a retryable API error;
  * a stream cut after its headers, or a plain error out of `doStream`, goes straight up.
+ *
+ * A run nobody is watching (`holdThinking`) also gets its second try when the stream had sent only
+ * thinking before it dropped: the thinking is held until the first text or tool-call part, thrown
+ * away on a retry, and the log line says `afterReasoning: true`.
  *
  * NEVER AFTER ANYTHING WAS SAID. A stream that sent a part of the answer and then dropped is given
  * up as it is: making the call again would say it twice, or call a tool twice. An answer from the
@@ -915,6 +929,7 @@ export function retryingDroppedConnection(
     error: unknown,
     asked: CallOptions,
     recovered: boolean,
+    afterReasoning = false,
   ): void => {
     try {
       log(
@@ -924,6 +939,7 @@ export function retryingDroppedConnection(
           code: codeOf(error),
           step: turnsIn(asked.prompt) + 1,
           recovered,
+          afterReasoning,
         }),
       );
     } catch {
@@ -960,16 +976,16 @@ export function retryingDroppedConnection(
 
   const doStream = async (asked: CallOptions): Promise<StreamResult> => {
     let result: StreamResult;
-    let tried: { error: unknown } | undefined;
+    let tried: { error: unknown; afterReasoning: boolean } | undefined;
     try {
       result = await inner.doStream(asked);
     } catch (error) {
       if (!(await worthAnotherTry(error, asked))) throw error;
-      tried = { error };
+      tried = { error, afterReasoning: false };
       try {
         result = await inner.doStream(asked);
       } catch (second) {
-        report(error, asked, false);
+        report(error, asked, false, false);
         throw second;
       }
     }
@@ -989,6 +1005,7 @@ export function retryingDroppedConnection(
           tried.error,
           asked,
           !failure && !held.some((part) => part.type === "error"),
+          tried.afterReasoning,
         );
       }
     };
@@ -996,7 +1013,10 @@ export function retryingDroppedConnection(
     /** The first try failed before saying anything: ask again, once, and carry on from the new stream. */
     const startOver = async (error: unknown): Promise<boolean> => {
       if (tried || !(await worthAnotherTry(error, asked))) return false;
-      tried = { error };
+      tried = {
+        error,
+        afterReasoning: held.some((part) => isThinkingPart(part.type)),
+      };
       reader.cancel().catch(() => {});
       try {
         const next = await inner.doStream(asked);
@@ -1050,7 +1070,8 @@ export function retryingDroppedConnection(
           if (
             !flowing &&
             !PREAMBLE_PARTS.has(part.type) &&
-            part.type !== "error"
+            part.type !== "error" &&
+            !(options.holdThinking && isThinkingPart(part.type))
           )
             flow();
         }

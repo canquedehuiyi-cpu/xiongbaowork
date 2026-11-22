@@ -76,7 +76,12 @@ function fakeModel(attempts: Attempt[]) {
 
 function wrap(
   attempts: Attempt[],
-  options: { sleeps?: number[]; logs?: string[] } = {},
+  options: {
+    sleeps?: number[];
+    logs?: string[];
+    holdThinking?: boolean;
+    signal?: AbortSignal;
+  } = {},
 ) {
   const fake = fakeModel(attempts);
   const configuration = retryingDroppedConnection(
@@ -87,6 +92,7 @@ function wrap(
         options.sleeps?.push(milliseconds);
       },
       log: (line) => options.logs?.push(line),
+      ...(options.holdThinking ? { holdThinking: true } : {}),
     },
   );
   const model = (configuration as unknown as { model: typeof fake.model })
@@ -126,6 +132,7 @@ describe("a model call is made again once after a dropped connection", () => {
       code: "ECONNRESET",
       step: 1,
       recovered: true,
+      afterReasoning: false,
     });
   });
 
@@ -285,6 +292,205 @@ describe("what is not made again", () => {
   });
 });
 
+const thinking: Part[] = [
+  { type: "reasoning-start", id: "r" },
+  { type: "reasoning-delta", id: "r", delta: "hmm" },
+  { type: "reasoning-end", id: "r" },
+];
+const thoughtAnswer: Part[] = [
+  { type: "stream-start", warnings: [] },
+  { type: "reasoning-start", id: "r2" },
+  { type: "reasoning-delta", id: "r2", delta: "second thoughts" },
+  { type: "reasoning-end", id: "r2" },
+  ...answer.slice(1),
+];
+
+describe("a run nobody watches is made again after a drop that came while it was only thinking", () => {
+  test("thinking only, then the connection drops: retried, downstream sees only the second try, the log says afterReasoning", async () => {
+    const logs: string[] = [];
+    const { model, calls } = wrap(
+      [
+        {
+          parts: [{ type: "stream-start", warnings: [] }, ...thinking],
+          after: { errors: reset() },
+        },
+        { parts: thoughtAnswer },
+      ],
+      { logs, holdThinking: true },
+    );
+    const result = await model.doStream(call);
+    expect(await drain(result.stream)).toEqual(thoughtAnswer);
+    expect(calls).toHaveLength(2);
+    expect(JSON.parse(logs[0] as string)).toEqual({
+      type: "model-net-retry",
+      runId: "run-1",
+      code: "ECONNRESET",
+      step: 1,
+      recovered: true,
+      afterReasoning: true,
+    });
+  });
+
+  test("an error part after thinking is retried too", async () => {
+    const { model, calls } = wrap(
+      [
+        {
+          parts: [
+            { type: "stream-start", warnings: [] },
+            ...thinking,
+            { type: "error", error: reset() },
+          ],
+        },
+        { parts: answer },
+      ],
+      { holdThinking: true },
+    );
+    const result = await model.doStream(call);
+    expect(await drain(result.stream)).toEqual(answer);
+    expect(calls).toHaveLength(2);
+  });
+
+  test("thinking is passed on once the first text part comes, and a drop after that is not retried", async () => {
+    const said: Part[] = [...thinking, ...answer.slice(1, 3)];
+    const { model, calls } = wrap(
+      [{ parts: said, after: { errors: reset() } }, { parts: answer }],
+      { holdThinking: true },
+    );
+    const result = await model.doStream(call);
+    const reader = result.stream.getReader();
+    const seen: unknown[] = [];
+    let failure: unknown;
+    try {
+      for (;;) {
+        const step = await reader.read();
+        if (step.done) break;
+        seen.push(step.value);
+      }
+    } catch (error) {
+      failure = error;
+    }
+    expect(seen).toEqual(said);
+    expect((failure as Error).message).toContain("closed unexpectedly");
+    expect(calls).toHaveLength(1);
+  });
+
+  test("a drop after the first tool-input-delta is not retried, the thinking before it kept", async () => {
+    const said: Part[] = [
+      ...thinking,
+      { type: "tool-input-start", id: "c", toolName: "shell" },
+      { type: "tool-input-delta", id: "c", delta: '{"a' },
+    ];
+    const { model, calls } = wrap(
+      [{ parts: said, after: { errors: reset() } }, { parts: answer }],
+      { holdThinking: true },
+    );
+    const result = await model.doStream(call);
+    const reader = result.stream.getReader();
+    const seen: unknown[] = [];
+    let failure: unknown;
+    try {
+      for (;;) {
+        const step = await reader.read();
+        if (step.done) break;
+        seen.push(step.value);
+      }
+    } catch (error) {
+      failure = error;
+    }
+    expect(seen).toEqual(said);
+    expect(failure).toBeDefined();
+    expect(calls).toHaveLength(1);
+  });
+
+  test("a stream that only thinks and then finishes is passed on whole", async () => {
+    const parts: Part[] = [
+      ...thinking,
+      { type: "finish", finishReason: { unified: "stop", raw: "stop" }, usage },
+    ];
+    const { model, calls } = wrap([{ parts }], { holdThinking: true });
+    const result = await model.doStream(call);
+    expect(await drain(result.stream)).toEqual(parts);
+    expect(calls).toHaveLength(1);
+  });
+
+  test("a second drop while thinking is reported as it is, the second thinking kept", async () => {
+    const logs: string[] = [];
+    const { model, calls } = wrap(
+      [
+        { parts: thinking, after: { errors: reset() } },
+        { parts: thinking, after: { errors: reset() } },
+      ],
+      { logs, holdThinking: true },
+    );
+    const result = await model.doStream(call);
+    const reader = result.stream.getReader();
+    const seen: unknown[] = [];
+    let failure: unknown;
+    try {
+      for (;;) {
+        const step = await reader.read();
+        if (step.done) break;
+        seen.push(step.value);
+      }
+    } catch (error) {
+      failure = error;
+    }
+    expect(seen).toEqual(thinking);
+    expect(failure).toBeDefined();
+    expect(calls).toHaveLength(2);
+    expect(JSON.parse(logs[0] as string).recovered).toBe(false);
+  });
+
+  test("a stopped run is not retried even after only thinking", async () => {
+    const stopped = new AbortController();
+    const fake = fakeModel([
+      { parts: thinking, after: { errors: reset() } },
+      { parts: answer },
+    ]);
+    const configuration = retryingDroppedConnection(
+      { model: fake.model } as unknown as BuiltInAgentConfiguration,
+      {
+        sleep: async () => stopped.abort(),
+        log: () => {},
+        holdThinking: true,
+      },
+    );
+    const model = (configuration as unknown as { model: typeof fake.model })
+      .model;
+    const result = await model.doStream({
+      ...(call as object),
+      abortSignal: stopped.signal,
+    } as never);
+    await expect(drain(result.stream)).rejects.toThrow("closed unexpectedly");
+    expect(fake.calls).toHaveLength(1);
+  });
+
+  test("a person's chat (not held): thinking is passed on as it comes and a drop after it is not retried", async () => {
+    const { model, calls } = wrap([
+      { parts: thinking, after: { errors: reset() } },
+      { parts: answer },
+    ]);
+    const result = await model.doStream(call);
+    const reader = result.stream.getReader();
+    const first = await reader.read();
+    expect(first.value).toEqual(thinking[0]);
+    const seen: unknown[] = [first.value];
+    let failure: unknown;
+    try {
+      for (;;) {
+        const step = await reader.read();
+        if (step.done) break;
+        seen.push(step.value);
+      }
+    } catch (error) {
+      failure = error;
+    }
+    expect(seen).toEqual(thinking);
+    expect(failure).toBeDefined();
+    expect(calls).toHaveLength(1);
+  });
+});
+
 describe("what counts as a dropped connection", () => {
   test("codes, words, causes; not HTTP answers or aborts", () => {
     expect(droppedConnection(reset())).toBe(true);
@@ -328,21 +534,22 @@ describe("the deployment switch", () => {
   });
 
   /** A run through the agent: the connection drops before any content on the first call. */
-  async function throughAgent(env: string | undefined) {
+  async function throughAgent(
+    env: string | undefined,
+    first: Part[] = [{ type: "stream-start", warnings: [] }],
+    unattended = false,
+  ) {
     const saved = process.env.XIONGBAO_MODEL_NET_RETRY;
     if (env === undefined) delete process.env.XIONGBAO_MODEL_NET_RETRY;
     else process.env.XIONGBAO_MODEL_NET_RETRY = env;
     try {
       const fake = fakeModel([
-        {
-          parts: [{ type: "stream-start", warnings: [] }],
-          after: { errors: reset() },
-        },
+        { parts: first, after: { errors: reset() } },
         { parts: answer },
       ]);
       const agent = new BuiltInAgentWithSaneHistory(
         { model: fake.model, prompt: "Help.", maxSteps: 3 } as never,
-        { observe: (run) => run },
+        { observe: (run) => run, ...(unattended ? { unattended } : {}) },
       );
       agent.threadId = "thread";
       agent.setMessages([{ id: "ask", role: "user", content: "Hi." }]);
@@ -383,5 +590,27 @@ describe("the deployment switch", () => {
     const result = await throughAgent("off");
     expect(result.calls).toBe(1);
     expect(result.text).toBe("");
+  });
+
+  const onlyThinking: Part[] = [
+    { type: "stream-start", warnings: [] },
+    ...thinking,
+  ];
+
+  test("an unattended run whose connection drops while it only thinks carries on", async () => {
+    const result = await throughAgent(undefined, onlyThinking, true);
+    expect(result.calls).toBe(2);
+    expect(result.text).toBe("hello");
+  }, 10_000);
+
+  test("a person's chat with the same drop is given up as before", async () => {
+    const result = await throughAgent(undefined, onlyThinking, false);
+    expect(result.calls).toBe(1);
+    expect(result.text).toBe("");
+  });
+
+  test("off, an unattended run is not retried either", async () => {
+    const result = await throughAgent("off", onlyThinking, true);
+    expect(result.calls).toBe(1);
   });
 });
