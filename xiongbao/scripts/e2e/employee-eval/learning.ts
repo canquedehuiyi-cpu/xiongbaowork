@@ -433,6 +433,15 @@ export function logTypeCountsLine(counts: Record<string, number>): string {
 }
 
 /**
+ * 「交付前核对：挡回 N 次」：这几轮里员工用了带核对命令的技能快路径、没跑核对就交付，`deliver_task` 被挡回的次数
+ * （服务器日志里的 `fastpath-check-bounce` 行，按运行号数；见 `server/src/tasks/fastpath-gate.ts`）。一次也没有就是空串。
+ */
+export function fastPathBounceLine(counts: Record<string, number>): string {
+  const bounced = counts["fastpath-check-bounce"] ?? 0;
+  return bounced > 0 ? `   交付前核对：挡回 ${bounced} 次` : "";
+}
+
+/**
  * 这一行是不是「这张卡的复盘」有了结论：
  * - 存了、模型认为不值得、近似、被拒：有结论，哪一轮的都算；
  * - 跳过但原因是步数不够：没结论。通用路径的 skipped 多半是这个，卡的复盘可能还在后面的轮里等着，

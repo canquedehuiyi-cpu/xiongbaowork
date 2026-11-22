@@ -20,7 +20,7 @@ import {
   withQuestionParking,
 } from "../src/approvals/questions";
 import { createApprovalStore } from "../src/approvals/store";
-import { approvalAction } from "../src/approvals/types";
+import { approvalAction, withApprovalContext } from "../src/approvals/types";
 import type { AppVariables } from "../src/auth/guards";
 import {
   buildAgents,
@@ -55,6 +55,7 @@ import {
 } from "../src/tasks/delivery-tools";
 import { listTaskEvents } from "../src/tasks/events";
 import { createEvidenceGate } from "../src/tasks/evidence-gate";
+import { noteAttachedFastPath } from "../src/tasks/fastpath-gate";
 import {
   createTaskProjector,
   type TaskProjector,
@@ -87,6 +88,11 @@ const gate = createEvidenceGate(database);
 const suite = randomUUID().slice(0, 8);
 const tenants: string[] = [];
 const ZONE = "Asia/Shanghai";
+/** 上面第一次交付被挡回时的结果（历史里留着，第二次交付据此放行）。 */
+const round1Bounce = JSON.stringify({
+  bounced: true,
+  fastPathCheckBounce: true,
+});
 
 async function tenant(label: string): Promise<string> {
   const id = `dt-${label}-${suite}`;
@@ -1095,6 +1101,60 @@ describe("deliver_task and the evidence gate", () => {
     expect(custom[0]?.value).toMatchObject({
       eventId: lines.find((line) => line.kind === "accepted")?.id,
     });
+  });
+
+  test("用了带核对命令的技能快路径、没跑核对：第一次交付被挡回，卡片没动；再交放行", async () => {
+    const tenantId = await tenant("fastpath");
+    const agentId = `agent-${suite}-fastpath`;
+    const threadId = `thread-${suite}-${randomUUID().slice(0, 8)}`;
+    const runId = `run-${suite}-${randomUUID().slice(0, 8)}`;
+    const check = "python3 check_summary.py <dir>/summary.json";
+    noteAttachedFastPath(runId, [check]);
+    const asked = { role: "user", id: "u1", content: "汇总账单" };
+    const handIn = {
+      items: [{ kind: "note", ref: "已汇总" }],
+      checks: ["看过输出"],
+    };
+    const inScope = <T>(messages: unknown[], work: () => Promise<T>) =>
+      withApprovalContext(
+        {
+          runId,
+          threadId,
+          toolCallId: `tc-${randomUUID()}`,
+          toolName: "deliver_task",
+          args: {},
+          messages: messages as never,
+          state: {},
+          context: [],
+          forwardedProps: {},
+        },
+        work,
+      );
+    const round = await turn({
+      tenantId,
+      agentId,
+      threadId,
+      runId,
+      ask: "汇总账单",
+      work: async (run) => {
+        await run.call("accept_task", {
+          due_at: "10 分钟",
+          criteria: "汇总。",
+        });
+        await inScope([asked], () => run.call("deliver_task", handIn));
+        await inScope(
+          [asked, { role: "tool", toolCallId: "t1", content: round1Bounce }],
+          () => run.call("deliver_task", handIn),
+        );
+      },
+    });
+    const [first, second] = [round.results[1], round.results[2]];
+    expect(parsed(first ?? "{}").bounced).toBe(true);
+    expect(parsed(first ?? "{}").fastPathCheckBounce).toBe(true);
+    expect(String(parsed(first ?? "{}").reason)).toContain(
+      "python3 check_summary.py <dir>/summary.json",
+    );
+    expect(parsed(second ?? "{}").delivered).toBe(true);
   });
 
   test("a followed card not yet taken on is taken on by deliver_task, then delivered (autoAccepted)", async () => {

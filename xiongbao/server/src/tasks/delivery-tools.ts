@@ -21,6 +21,11 @@ import {
   type EvidenceGate,
   requiredItemsOf,
 } from "./evidence-gate";
+import {
+  FASTPATH_BOUNCE_KEY,
+  fastPathBounceReason,
+  uncheckedFastPath,
+} from "./fastpath-gate";
 import type { TaskProjector, TriggerSource } from "./projector";
 import { entryCardRefOf, roundOnCard } from "./turn-cards";
 
@@ -440,6 +445,30 @@ export function deliveryTools(options: {
             reason: verdict.reason,
             ...(verdict.missing?.length ? { missing: verdict.missing } : {}),
             note: "没交上：卡片没动。补齐后再调用 deliver_task。",
+          });
+        }
+        /*
+         * 用了技能快路径、还没运行过技能的核对命令：这一轮第一次交付挡回，让员工先核对（`fastpath-gate.ts`）。
+         * 卡片没动，不算已交付；每轮只挡一次。
+         */
+        const unchecked = uncheckedFastPath({
+          runId: run.runId,
+          messages: (currentApprovalContext()?.messages ?? []) as never,
+        });
+        if (unchecked) {
+          console.error(
+            JSON.stringify({
+              type: "fastpath-check-bounce",
+              runId: run.runId,
+              timestamp: new Date().toISOString(),
+            }),
+          );
+          const reason = fastPathBounceReason(unchecked);
+          return JSON.stringify({
+            bounced: true,
+            [FASTPATH_BOUNCE_KEY]: true,
+            reason,
+            note: "没交上：卡片没动。先运行核对命令，确认通过后再调用 deliver_task。",
           });
         }
         // Each hand-in its own line id: a second, identical hand-in after a 退回 is its own card.
