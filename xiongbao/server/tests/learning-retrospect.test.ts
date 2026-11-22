@@ -491,6 +491,8 @@ describe("the retrospector at the end of a turn", () => {
       expect(prompts[1]).toContain("fastPath");
       expect(prompts[1]).toContain("900");
       expect(prompts[0]).not.toContain("has no fastPath");
+      expect(prompts[1]).toContain("never by taking the first of several");
+      expect(prompts[1]).toContain("assert there is exactly one");
     });
 
     test("the threshold is three successful commands", () => {
@@ -537,6 +539,13 @@ describe("the retrospector at the end of a turn", () => {
   test("the system prompt says a delivered multi-step job is a skill by default", () => {
     expect(RETRO_SYSTEM).toContain("write the skill by default");
     expect(RETRO_SYSTEM).toContain("only two cases");
+  });
+
+  test("the system prompt asks for a verified selection rule, never the first of several candidates", () => {
+    expect(RETRO_SYSTEM).toContain("selection rule that was verified");
+    expect(RETRO_SYSTEM).toContain("[0], head -1 or sorted(...)[0]");
+    expect(RETRO_SYSTEM).toContain("assert that there is exactly one");
+    expect(RETRO_SYSTEM).toContain("instead of guessing");
   });
 
   test("a model that fails is logged as a type only and does not throw", async () => {
