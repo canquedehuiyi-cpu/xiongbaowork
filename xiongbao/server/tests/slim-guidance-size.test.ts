@@ -32,6 +32,13 @@ describe("压短之后要点还在", () => {
     expect(SLIM_DELIVERY).toContain("file-sharing, transfer or paste site");
     expect(SLIM_DELIVERY).toContain("Checked item by item");
     expect(SLIM_DELIVERY).toContain("Honest about the rest");
+    // 第十二轮（用户 2026-11-22 批准）：核对靠任务目录里的独立计算，不到目录外翻参考答案。
+    expect(SLIM_DELIVERY).toContain(
+      "never search outside it (system directories, processes and environment, databases",
+    );
+    expect(SLIM_DELIVERY).toContain(
+      "for a reference answer, grader or expected result",
+    );
     expect(SLIM_DELIVERY).toContain(
       "clickable in a channel that cannot show it",
     );
