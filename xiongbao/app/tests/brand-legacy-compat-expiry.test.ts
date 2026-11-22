@@ -96,7 +96,7 @@ describe("the tree", () => {
     expect(line).toBeDefined();
     expect(COMPAT_COMMENT.exec(line as string)?.slice(1)).toEqual([
       "0.2.11",
-      "0.2.14",
+      "0.2.15",
     ]);
     for (const name of ["botId", "personId", "computerToken", "egress"])
       expect(line).toContain(name);
