@@ -5,8 +5,13 @@ import {
   concludesRetro,
   type LearnedState,
   learningDiff,
+  logTypeCounts,
+  logTypeCountsLine,
+  RETRO_WAIT_AFTER_SECOND_MS,
   RETRO_WAIT_MS,
   retroLinesOf,
+  retroLogLines,
+  retroWaitFor,
   waitForRetro,
 } from "./learning";
 import type { Capabilities } from "./metrics";
@@ -332,7 +337,110 @@ test("no retrospective in time: it stops at the cap and the second run starts as
     ...time,
   });
   expect(result).toEqual({ waitedMs: RETRO_WAIT_MS, ended: "timeout" });
-  expect(RETRO_WAIT_MS).toBe(270_000);
+  // 用户 2026-11-22 批准：第一次之后等到复盘出结论，最多 600 秒。
+  expect(RETRO_WAIT_MS).toBe(600_000);
+});
+
+test("only the wait after the first run is 600 s; after the second (and anything else) it stays 270 s", () => {
+  expect(RETRO_WAIT_AFTER_SECOND_MS).toBe(270_000);
+  expect(retroWaitFor("first")).toBe(600_000);
+  expect(retroWaitFor("second")).toBe(270_000);
+  expect(retroWaitFor("control")).toBe(270_000);
+  expect(retroWaitFor(undefined)).toBe(270_000);
+});
+
+test("a retrospective that errored after both model calls timed out is a conclusion on the last round (no waiting out the cap)", async () => {
+  const log = [
+    `{"type":"retrospect-retry","reason":"timeout","agentId":"a","runId":"r2"}`,
+    `{"type":"retrospect-error","error":"TimeoutError","context":{"threadId":"t","runId":"r2"}}`,
+    `{"type":"retrospect","outcome":"skipped","trigger":"card_turn","steps":21,"agentId":"a","runId":"r2"}`,
+  ].join("\n");
+  const result = await waitForRetro({
+    runIds: ["r1", "r2"],
+    readLog: () => log,
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    maxMs: RETRO_WAIT_MS,
+    ...clock(),
+  });
+  expect(result).toMatchObject({
+    ended: "logged",
+    waitedMs: 0,
+    outcome: "skipped",
+    error: "TimeoutError",
+  });
+  // The same error on an earlier round does not end the wait: the last round's review is still to come.
+  const early = await waitForRetro({
+    runIds: ["r1", "r2"],
+    readLog: () => log.replaceAll("r2", "r1"),
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    maxMs: 5000,
+    ...clock(),
+  });
+  expect(early.ended).toBe("timeout");
+  expect(
+    concludesRetro(
+      { runId: "r2", outcome: "skipped", trigger: "card_turn", error: "X" },
+      true,
+    ),
+  ).toBe(true);
+});
+
+const serverLog = [
+  "2026-11-22T01:00:00Z info {" +
+    `"type":"retrospect-retry","reason":"timeout","agentId":"a","runId":"abcdef0123456789","timestamp":"2026-11-22T01:00:01.000Z"}`,
+  `{"type":"retrospect-error","error":"Bearer sk-abcdefghijklmnop failed\\nwith\\ttabs ${"x".repeat(200)}","context":{"threadId":"t","runId":"abcdef0123456789"},"timestamp":"2026-11-22T01:00:02.000Z"}`,
+  `{"type":"retrospect","outcome":"skipped","trigger":"card_turn","steps":52,"reason":"failed","cardId":"card-0123456789","askedFastPath":true,"failedButDelivered":true,"retried":true,"skill":"secret-skill-name","instructions":"SECRET BODY","agentId":"a","runId":"abcdef0123456789","timestamp":"2026-11-22T01:00:03.000Z"}`,
+  `{"type":"retrospect-held","skill":"secret-skill-name","reason":"url: example.test","runId":"abcdef0123456789"}`,
+  `{"type":"retrospect","outcome":"saved","runId":"other-run"}`,
+  "not json at all retrospect",
+  `{"type":"run-model","agentId":"a","runId":"abcdef0123456789","model":"m"}`,
+  `{"type":"run-model","agentId":"a","runId":"abcdef0123456789","model":"m"}`,
+  `{"type":"agent-stream-stalled","bot":"a","run":"abcdef0123456789"}`,
+  `{"type":"channel-dispatch-error","runId":"other-run"}`,
+  `{"type":"task-card-turn-ended-early","runId":"abcdef0123456789","detail":"x"}`,
+].join("\n");
+
+test("retroLogLines prints the retrospective lines of the given runs without any content", () => {
+  const lines = retroLogLines(serverLog, ["abcdef0123456789"]);
+  expect(lines).toHaveLength(4);
+  expect(lines[0]).toBe(
+    "   retro-log retrospect-retry reason=timeout run=abcdef01 at=2026-11-22T01:00:01.000Z",
+  );
+  expect(lines[1]).toStartWith(
+    "   retro-log retrospect-error run=abcdef01 error=Bearer ***",
+  );
+  expect(lines[1]).not.toContain("sk-abcdefghijklmnop");
+  expect(lines[1]).not.toContain("\n");
+  expect(lines[1]?.match(/error=(.*) at=/)?.[1]?.length).toBeLessThanOrEqual(
+    120,
+  );
+  expect(lines[2]).toBe(
+    "   retro-log retrospect outcome=skipped trigger=card_turn steps=52 reason=failed retried=true askedFastPath=true failedButDelivered=true cardId=card-012 run=abcdef01 at=2026-11-22T01:00:03.000Z",
+  );
+  expect(lines[3]).toBe(
+    "   retro-log retrospect-held reason=url: example.test run=abcdef01",
+  );
+  const all = lines.join("\n");
+  expect(all).not.toContain("secret-skill-name");
+  expect(all).not.toContain("SECRET BODY");
+  expect(all).not.toContain("other-run");
+  expect(retroLogLines(serverLog, [])).toEqual([]);
+});
+
+test("logTypeCounts counts the other log lines of the given runs by type, whatever field carries the run id", () => {
+  const counts = logTypeCounts(serverLog, ["abcdef0123456789"]);
+  expect(counts).toEqual({
+    "run-model": 2,
+    "agent-stream-stalled": 1,
+    "task-card-turn-ended-early": 1,
+  });
+  expect(logTypeCountsLine(counts)).toBe(
+    "   server-log lines by run: agent-stream-stalled×1, run-model×2, task-card-turn-ended-early×1",
+  );
+  expect(logTypeCountsLine({})).toBe("");
+  expect(logTypeCounts(serverLog, [])).toEqual({});
 });
 
 // --- the report ---------------------------------------------------------------------------------

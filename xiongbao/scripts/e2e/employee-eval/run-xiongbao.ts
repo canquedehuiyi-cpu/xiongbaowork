@@ -144,12 +144,16 @@ import {
   callTrace,
   type LearnedState,
   learningDiff,
+  logTypeCounts,
+  logTypeCountsLine,
   newSkillBodies,
+  retroLogLines,
+  retroWaitFor,
   skillBodyLog,
   waitForRetro,
 } from "./learning";
 import {
-  archiveRunDir,
+  archiveRunLeftovers,
   type Check,
   check,
   copyTree,
@@ -207,6 +211,7 @@ import {
   type SmokeScenario,
   selectSmoke,
 } from "./smoke";
+import { stopLine, stopPath, stopRunning } from "./timeout-stop";
 import { modelSpans, toolSpans, wallSplit, wallSplitLine } from "./wall-split";
 import {
   sealReceived,
@@ -765,6 +770,10 @@ function must(
 const { createDatabase } = await import("../../../server/src/db/client");
 const schema = await import("../../../server/src/db/schema");
 const { runAsTenant } = await import("../../../server/src/tenant/context");
+// 服务器把大段工具输出存在工作区根下的这个目录里；每次运行做完要把它和题目目录一起移出工作区。
+const { WORKSPACE_OUTPUT_DIR } = await import(
+  "../../../server/src/tool-output"
+);
 const database = createDatabase(databaseUrl, { max: 2 });
 let tenant = "";
 
@@ -874,6 +883,42 @@ async function turnStatus(runId: string): Promise<string | undefined> {
     database.select({ id: schema.threadRuns.id }).from(schema.threadRuns),
   );
   return runs.some((run) => run.id === runId) ? "finished" : undefined;
+}
+
+/**
+ * 超时了：停掉这次运行在服务器上还在跑的每一轮，等它们变成非 running（最多 30 秒），在作业日志里打一行。
+ * 走对话的「停止」接口（`POST …/agent/:员工/stop/:对话`，前缀和单聊的运行接口一样，请求体 `{ runId }`）：单聊和看板派活的轮都
+ * 跑在某段对话里，同一个接口都停得了。失败只打一行日志，不让评测失败。
+ */
+async function stopTimedOutRuns(agentId: string, driven: Driven) {
+  const threadId = driven.threadId ?? driven.channelThreadId;
+  if (!threadId) {
+    console.log("   超时：没有对话可停（没有拿到对话 id）");
+    return;
+  }
+  try {
+    // 单聊路径的运行号按对话读（审批、续接带出来的轮也要停）；看板路径用派活时拿到的。
+    const runIds = driven.threadId
+      ? (await runsOfThread(threadId)).map((run) => run.id)
+      : driven.runIds;
+    const outcome = await stopRunning({
+      runIds,
+      statusOf: turnStatus,
+      stop: async (runId) => {
+        const answered = await api<{ stopped?: boolean }>(
+          "POST",
+          stopPath(agentId, threadId),
+          { runId },
+        );
+        return answered.status === 200 && answered.body?.stopped === true;
+      },
+    });
+    console.log(stopLine(outcome));
+  } catch (thrown) {
+    console.log(
+      `   超时：停服务器上的轮失败（${thrown instanceof Error ? thrown.message : String(thrown)}）`,
+    );
+  }
 }
 
 /** 这个人的 `reply` 发件箱行：完成通知（九·五）按推送设备各记一条，去重键 `reply:turn-end:<运行>:…`。 */
@@ -1052,6 +1097,8 @@ type Driven = {
   checks?: Check[];
   /** 单聊路径：这道题的对话，运行号从这里读（含审批、续接带出来的运行）。 */
   threadId?: string;
+  /** 看板路径：派活那段对话的 id；只用来在超时时停掉这段对话里还在跑的轮（运行号读法不变，仍是派活时拿到的）。 */
+  channelThreadId?: string;
   /** 单聊路径：事件流中途被服务器断开、又用 `/connect` 接上的次数。 */
   rejoins?: number;
   /** 单聊路径：发出去的运行请求数。一轮的运行记录在这一轮结束后才写进库，读之前要等它们到齐。 */
@@ -1086,13 +1133,14 @@ async function driveBoard(
   deadline: number,
   dir: string,
 ): Promise<Driven> {
-  const channel = await api<{ channel: { id: string } }>(
+  const channel = await api<{ channel: { id: string; threadId: string } }>(
     "POST",
     "/api/channels",
     { agentIds: [agentId] },
   );
   must(channel, [201], "create channel");
   const channelId = channel.body.channel.id;
+  const channelThreadId = channel.body.channel.threadId;
 
   const runIds: string[] = [];
   let nudges = 0;
@@ -1148,7 +1196,13 @@ async function driveBoard(
   } catch (thrown) {
     error = thrown instanceof Error ? thrown.message : String(thrown);
   }
-  return { runIds, nudges, timedOut, ...(error ? { error } : {}) };
+  return {
+    runIds,
+    nudges,
+    timedOut,
+    channelThreadId,
+    ...(error ? { error } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1541,6 +1595,8 @@ async function runWork(work: Work): Promise<EvalRecord> {
   // （Codex 那侧没有），算进去会把熊宝的墙钟平白多记几秒。
   const wallMs = Date.now() - started;
   const { nudges, timedOut, error } = driven;
+  // 超时：服务器上那一轮还在跑的话先停掉，不然它会接着占模型、往工作区写东西，和后面的运行抢。
+  if (timedOut) await stopTimedOutRuns(agentId, driven);
   if (driven.rejoins)
     notes.push(
       `${work.key}：事件流在这一轮还在跑时被服务器断开 ${driven.rejoins} 次，已用 /connect 接上继续读（服务器对 10 秒没出声的连接会关掉它，工具静默运行时就会这样；这一轮本身不受影响）`,
@@ -1573,8 +1629,16 @@ async function runWork(work: Work): Promise<EvalRecord> {
   copyTree(dir, copy);
   // 网页表单题：判分读服务端收到的记录，在员工做完以后由评测脚本写进去。
   if (work.site) sealReceived(work.site, copy);
-  // 产物已拷到 OUT，判分读的是拷出来的：把这次运行的目录移出员工的工作区，后面的运行（别的题、别的对）看不到它。
-  archiveRunDir(WORKSPACE, work.where, join(scratch, "done-runs"), work.key);
+  // 产物已拷到 OUT，判分读的是拷出来的：把这次运行的目录移出员工的工作区，后面的运行（别的题、别的对）看不到它；
+  // 工作区根下落盘的工具输出（`tool-outputs/`）一起移走，不然后面的运行 `cd` 过去能读到前几次运行的输出。
+  archiveRunLeftovers(
+    WORKSPACE,
+    work.where,
+    WORKSPACE_OUTPUT_DIR,
+    join(scratch, "done-runs"),
+    work.key,
+    isolation ? openUp : undefined,
+  );
   const promptChars = summarizePrompts(recorder?.drain() ?? []);
   const events = await eventsOf(runIds);
   const runErrors = runErrorsIn(events);
@@ -1654,8 +1718,10 @@ async function runWork(work: Work): Promise<EvalRecord> {
         : String(event.code ?? "RUN_ERROR"),
     );
   /*
-   * 重复任务：等这次运行的复盘跑完再往下（第一次之后再开第二次，模拟「过一会儿再做同类任务」；上限 270 秒（复盘模型调用超时 120 秒、超时重试一次，共 240 秒 + 30 秒），
-   * 超时照常开始）。不给熊宝侧开任何开关、不降门槛：触发不触发全看产品默认值。
+   * 重复任务：等这次运行的复盘跑完再往下（第一次之后再开第二次，模拟「过一会儿再做同类任务」）。第一次之后等到
+   * 复盘出结论，最多 600 秒（用户 2026-11-22 批准：复盘模型调用 120 秒、超时重试一次，加追问快路径同样最多
+   * 240 秒，共约 480 秒 + 余量）；第二次之后只为记下它的结论，仍最多 270 秒；对照运行不等。超时照常开始。
+   * 不给熊宝侧开任何开关、不降门槛：触发不触发全看产品默认值。
    */
   let learning: RunLearning | undefined;
   if (learnedBefore) {
@@ -1664,6 +1730,7 @@ async function runWork(work: Work): Promise<EvalRecord> {
       readLog: serverLogText,
       skillCount: async () => (await learnedStateOf(agentId)).skills.size,
       skillsBefore: learnedBefore.skills.size,
+      maxMs: retroWaitFor(work.pair?.round),
     });
     const learnedAfter = await learnedStateOf(agentId);
     const skillBodies = newSkillBodies(learnedBefore, learnedAfter);
@@ -1677,6 +1744,16 @@ async function runWork(work: Work): Promise<EvalRecord> {
     console.log(
       `   learning: +${learning.newSkills.length} skills${learning.heldSkills ? ` (+${learning.heldSkills.length} held for review)` : ""}, +${learning.newMemories} memories, used ${learning.usedSkills.length}; retrospective ${retro.ended}${retro.outcome ? ` ${retro.outcome}` : ""} after ${(retro.waitedMs / 1000).toFixed(0)} s`,
     );
+    // 这次运行各轮在服务器日志里的复盘行（不含内容）和日志行类型统计：服务器日志不上传，作业日志里要能查复盘为什么
+    // 记成跳过、步数为什么对不上。读不到日志不让评测失败。
+    try {
+      const log = serverLogText();
+      for (const line of retroLogLines(log, runIds)) console.log(line);
+      const counts = logTypeCountsLine(logTypeCounts(log, runIds));
+      if (counts) console.log(counts);
+    } catch {
+      console.log("   (读不到服务器日志，复盘日志行没打)");
+    }
   }
   // 墙钟拆分：模型时间读 model_token_calls 的起止；工具时间读运行事件的时间戳（事件没存全时不给）。
   const toolTimes = eventsLost ? undefined : toolSpans(events);

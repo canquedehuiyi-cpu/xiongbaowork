@@ -6,13 +6,28 @@
  * 不降复盘门槛：产品默认值是什么就用什么。
  */
 
+import { redactSecrets } from "./metrics";
 import type { BackgroundCalls, RunLearning } from "./records";
 
 /**
- * 第一次结束后最多等复盘多久；到了就照常开始第二次。270 秒 = 两次复盘模型调用的超时（各 120 秒；超时会自动再调一次，服务器 `retrospect.ts`）+ 30 秒余量，
- * 不然复盘还没出结论第二次就开始了。
+ * 第一次结束后最多等复盘多久；到了就照常开始第二次。用户 2026-11-22 批准：等到复盘出结论，最多 600 秒
+ * （复盘模型调用 120 秒、超时重试一次，加追问快路径同样最多 240 秒，共约 480 秒 + 余量）。
+ * 之前是 270 秒，评测 44986303220 第 3 对第一次的复盘 270 秒内没出结论，第二次就没技能可用。
  */
-export const RETRO_WAIT_MS = 270_000;
+export const RETRO_WAIT_MS = 600_000;
+
+/**
+ * 第二次结束后最多等复盘多久（只为在记录里写下它的结论，之后才开对照运行）：保持 270 秒 = 两次复盘模型调用的超时
+ * （各 120 秒；超时会自动再调一次，服务器 `retrospect.ts`）+ 30 秒余量。对照运行不等复盘。
+ */
+export const RETRO_WAIT_AFTER_SECOND_MS = 270_000;
+
+/** 这次运行做完之后等复盘的上限：第一次之后要等到出结论才开第二次（{@link RETRO_WAIT_MS}），其余的用短的。 */
+export function retroWaitFor(
+  round: "first" | "second" | "control" | undefined,
+) {
+  return round === "first" ? RETRO_WAIT_MS : RETRO_WAIT_AFTER_SECOND_MS;
+}
 
 /** 某一刻这位员工的自写技能（命令名 -> 名字、使用次数）和形成的记忆条数。 */
 export type LearnedState = {
@@ -198,6 +213,127 @@ export function retroLinesOf(
   });
 }
 
+/** 打进作业日志的服务器日志行里，行首的类型名：复盘相关的几种。 */
+const RETRO_LOG_TYPES = new Set([
+  "retrospect",
+  "retrospect-retry",
+  "retrospect-held",
+  "retrospect-refused",
+  "retrospect-error",
+]);
+
+/** 一个值压成单行、打码、最多 120 字。 */
+function shortText(value: unknown): string {
+  return redactSecrets(String(value).replace(/\s+/g, " ").trim()).slice(0, 120);
+}
+
+/** 服务器日志的一行里 `{` 开头的 JSON；读不懂返回 undefined。 */
+function jsonOfLine(raw: string): Record<string, unknown> | undefined {
+  const at = raw.indexOf("{");
+  if (at < 0) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(raw.slice(at));
+    return parsed && typeof parsed === "object"
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** 日志行属于哪一轮：顶层 `runId`，或 `context.runId`（`retrospect-error` 把它放在 context 里），或 `runRef` / `run`（停滞守卫的行）。 */
+function runIdOfLog(parsed: Record<string, unknown>): string {
+  const context = parsed.context;
+  const nested =
+    context && typeof context === "object"
+      ? (context as { runId?: unknown }).runId
+      : undefined;
+  const value = parsed.runId ?? nested ?? parsed.runRef ?? parsed.run;
+  return typeof value === "string" ? value : "";
+}
+
+/**
+ * 这几轮在服务器日志里的复盘相关行，一行一条，写进作业日志：服务器日志不上传，作业日志里看不到复盘就没法查
+ * 「为什么记成跳过」。只取不含内容的字段：type、outcome、trigger、steps、reason、retried、askedFastPath、
+ * gotFastPath、failedButDelivered、cardId 和运行号各前 8 位、时间戳；`error`（只有错误类型）和 `reason`
+ * （规则名、网址）单行化、打码、各取前 120 字。技能正文、名称、步骤、轨迹一律不打。
+ */
+export function retroLogLines(
+  log: string,
+  runIds: readonly string[],
+): string[] {
+  const wanted = new Set(runIds);
+  const out: string[] = [];
+  for (const raw of log.split("\n")) {
+    if (!raw.includes('"type":"retrospect')) continue;
+    const parsed = jsonOfLine(raw);
+    if (!parsed) continue;
+    const type = String(parsed.type ?? "");
+    if (!RETRO_LOG_TYPES.has(type)) continue;
+    const runId = runIdOfLog(parsed);
+    if (!wanted.has(runId)) continue;
+    const fields: string[] = [type];
+    const put = (name: string, value: unknown) => {
+      if (value !== undefined && value !== null && value !== "")
+        fields.push(`${name}=${shortText(value)}`);
+    };
+    put("outcome", parsed.outcome);
+    put("trigger", parsed.trigger);
+    put("steps", parsed.steps);
+    put("reason", parsed.reason);
+    for (const flag of [
+      "retried",
+      "askedFastPath",
+      "gotFastPath",
+      "failedButDelivered",
+    ])
+      if (parsed[flag] === true) fields.push(`${flag}=true`);
+    if (typeof parsed.cardId === "string")
+      fields.push(`cardId=${parsed.cardId.slice(0, 8)}`);
+    fields.push(`run=${runId.slice(0, 8)}`);
+    put("error", parsed.error);
+    put("at", parsed.timestamp);
+    out.push(`   retro-log ${fields.join(" ")}`);
+  }
+  return out;
+}
+
+/**
+ * 服务器日志里带着这几轮运行号的非复盘行，按类型数个数（`run-model`、`agent-stream-stalled`、
+ * `task-card-turn-ended-early`、`channel-dispatch-…` 等）：只有类型和个数，不含内容。下次能看出一轮为什么被复盘当成
+ * 失败、步数为什么对不上。不带运行号的行（如 `postgres-runner` 的收尾，它不写 JSON 日志）看不到。
+ */
+export function logTypeCounts(
+  log: string,
+  runIds: readonly string[],
+): Record<string, number> {
+  const wanted = new Set(runIds.filter(Boolean));
+  const counts: Record<string, number> = {};
+  if (wanted.size === 0) return counts;
+  const ids = [...wanted];
+  for (const raw of log.split("\n")) {
+    if (!ids.some((id) => raw.includes(id))) continue;
+    const parsed = jsonOfLine(raw);
+    if (!parsed) continue;
+    const type = String(parsed.type ?? "");
+    if (!type || RETRO_LOG_TYPES.has(type) || !wanted.has(runIdOfLog(parsed)))
+      continue;
+    const name = shortText(type);
+    counts[name] = (counts[name] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/** {@link logTypeCounts} 打成一行：`   server-log lines by run: run-model×3, …`；没有就是空串。 */
+export function logTypeCountsLine(counts: Record<string, number>): string {
+  const parts = Object.entries(counts)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([type, count]) => `${type}×${count}`);
+  return parts.length > 0
+    ? `   server-log lines by run: ${parts.join(", ")}`
+    : "";
+}
+
 /**
  * 这一行是不是「这张卡的复盘」有了结论：
  * - 存了、模型认为不值得、近似、被拒：有结论，哪一轮的都算；
@@ -205,7 +341,9 @@ export function retroLinesOf(
  *   把它当成结束会让第二次提前开跑；
  * - 跳过的是看板卡的复盘（冷却、额度用完、这张卡已经复盘过）：有结论；
  * - 跳过的是失败的轮：只有最后一轮才算（后面没有别的轮了），较早的失败轮后面还有轮要跑；
- * - 通用路径跳过、没写步数原因（冷却、没开）：只有最后一轮才算。
+ * - 通用路径跳过、没写步数原因（冷却、没开）：只有最后一轮才算。复盘出错（两次模型调用都超时等，日志里的
+ *   `retrospect-error`，这里在 `error` 里）也是这一条：服务器照常写一行 `retrospect`、结果记 skipped，最后一轮的
+ *   出错就是结论，不必白等到上限。
  *
  * `card_turn`（看板卡派的一轮，这一轮没交付）走的是后两条，不和 `card_delivered` 一样算「这张卡有结论」：它只是这一轮
  * 自己的复盘，卡后面的轮还可能交付、按整张卡再复盘一次。步数不够的跳过照样「再等」，冷却等跳过只有最后一轮才算。
