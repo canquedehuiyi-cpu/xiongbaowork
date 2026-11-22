@@ -506,6 +506,31 @@ test("retroLogLines and retroLinesOf carry the failed-turn diagnosis, without an
     deliveredRow: false,
     eventCount: 143,
   });
+  // 运行错误的类别和「在交付之后」：只认三个类别值，原文打不出来。
+  const kind = line({
+    runId: "abcdef0123456789",
+    outcome: "saved",
+    steps: 9,
+    failedButDelivered: true,
+    runError: "OPENBOT_HEADLESS_TOOL_ERROR",
+    runErrorKind: "ended_early",
+    runErrorAfterDelivery: true,
+  });
+  expect(retroLogLines(kind, ["abcdef0123456789"])[0]).toContain(
+    "runError=OPENBOT_HEADLESS_TOOL_ERROR runErrorKind=ended_early runErrorAfterDelivery=true",
+  );
+  expect(retroLinesOf(kind, ["abcdef0123456789"])[0]).toMatchObject({
+    runErrorKind: "ended_early",
+    runErrorAfterDelivery: true,
+  });
+  const odd = line({
+    runId: "r2",
+    outcome: "saved",
+    steps: 9,
+    runErrorKind: "provider 529 overloaded secret",
+  });
+  expect(retroLogLines(odd, ["r2"])[0]).not.toContain("runErrorKind");
+  expect(retroLinesOf(odd, ["r2"])[0]).not.toHaveProperty("runErrorKind");
   // 没有这些项的行照旧。
   const plain = line({ runId: "r1", outcome: "saved", steps: 8 });
   expect(retroLogLines(plain, ["r1"])[0]).not.toContain("deliverSeen");

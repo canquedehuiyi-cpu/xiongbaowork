@@ -47,6 +47,7 @@ import {
   replyTextOf,
   runErrorOf,
 } from "../tasks/delivery";
+import { turnFailedByStream } from "../tasks/delivery-stream";
 import { withReceiptAsked } from "../tasks/delivery-tools";
 import { deliverableFromEvents, type TaskProjector } from "../tasks/projector";
 import { beginTurn, endTurn } from "../tasks/turn-cards";
@@ -63,9 +64,9 @@ import {
 } from "./run-event-writer";
 import { watched } from "./thread-viewers";
 import {
+  clearPersonChat,
   entryHungRound,
   onlyOnIdleThreadRequested,
-  clearPersonChat,
   personChatRequested,
   runnerCardSuppressed,
   suppressedCardRef,
@@ -266,10 +267,14 @@ function continuationInFlight(run: {
  * `RUN_ERROR` is written by a run that could not carry on — the stall watchdog, an unreachable
  * coworker, a model that refused — and the stream then closes normally, so the observable reports a
  * completion. A branch that only asks which way the stream ended calls every one of those a success.
+ *
+ * One error is not a failure: the one that comes AFTER an accepted `deliver_task` and with nothing more
+ * said or called after it (`tasks/delivery-stream.ts`). The delivery had landed; what failed was the
+ * wrap-up that follows it (stopped, or the one model call a reminder asked for). Every other
+ * `RUN_ERROR` — before the delivery, after a bounced one, with no delivery, or followed by more work —
+ * still fails the turn. The error itself stays in the stream and the thread's history.
  */
-function carriedFailure(events: readonly BaseEvent[]): boolean {
-  return events.some((event) => event.type === EventType.RUN_ERROR);
-}
+const carriedFailure = turnFailedByStream;
 
 /**
  * The lane an unattended turn's RUNNER-filed card belongs on, for an entry that owns no card of its own.

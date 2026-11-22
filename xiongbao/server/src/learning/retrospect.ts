@@ -1,5 +1,9 @@
 import type { BaseEvent } from "@ag-ui/client";
 import { EventType } from "@ag-ui/client";
+import {
+  RUN_ENDED_EARLY,
+  SEGMENT_LIMIT_MESSAGE,
+} from "@openbot/toolkit/headless-tools";
 import { generateText, type LanguageModel } from "ai";
 import { and, desc, eq, gte, inArray, or, sql } from "drizzle-orm";
 import {
@@ -32,7 +36,10 @@ import {
 } from "../skills/save-tool";
 import { withSourceFingerprints } from "../skills/usage";
 import { replyTextOf } from "../tasks/delivery";
-import { acceptedDelivery } from "../tasks/delivery-end";
+import {
+  ownDeliveryAccepted,
+  runErrorAfterDelivery,
+} from "../tasks/delivery-stream";
 import { currentTenant } from "../tenant/context";
 import { firstJsonObject } from "../wakerflows/generator";
 import {
@@ -1060,33 +1067,24 @@ export function runErrorCodeOf(
   return (code || String(found.type)).slice(0, 60);
 }
 
+/** `RUN_ERROR` 的类别，供日志用；不记 message 原文。 */
+export type RunErrorKind = "ended_early" | "segment_limit" | "other";
+
 /**
- * 这一轮自己的事件里有没有一次被接受的 `deliver_task`（答复 `delivered: true`；被挡回、被拒、读不懂的都不算），
- * 口径同服务器判断「交付即收尾」用的 `acceptedDelivery`。不要求答复带卡号。
+ * 第一个 `RUN_ERROR` 是哪一类：message 等于 headless 的 `RUN_ENDED_EARLY`（这一轮被停掉、内层流空着结束）是
+ * `ended_early`，等于 `SEGMENT_LIMIT_MESSAGE` 是 `segment_limit`，其余（模型调用出错等）是 `other`。没有
+ * `RUN_ERROR` 是 undefined。
  */
-export function ownDeliveryAccepted(events: readonly BaseEvent[]): boolean {
-  const names = new Map<string, string>();
-  for (const event of events) {
-    const value = event as BaseEvent & {
-      toolCallId?: string;
-      toolCallName?: string;
-      content?: unknown;
-    };
-    if (!value.toolCallId) continue;
-    if (
-      (event.type === EventType.TOOL_CALL_START ||
-        event.type === EventType.TOOL_CALL_CHUNK) &&
-      value.toolCallName
-    )
-      names.set(value.toolCallId, value.toolCallName);
-    if (
-      event.type === EventType.TOOL_CALL_RESULT &&
-      typeof value.content === "string" &&
-      acceptedDelivery(names.get(value.toolCallId) ?? "", value.content)
-    )
-      return true;
-  }
-  return false;
+export function runErrorKindOf(
+  events: readonly BaseEvent[],
+): RunErrorKind | undefined {
+  const found = events.find((event) => event.type === EventType.RUN_ERROR) as
+    | (BaseEvent & { message?: unknown })
+    | undefined;
+  if (!found) return undefined;
+  if (found.message === RUN_ENDED_EARLY) return "ended_early";
+  if (found.message === SEGMENT_LIMIT_MESSAGE) return "segment_limit";
+  return "other";
 }
 
 /**
@@ -1105,7 +1103,7 @@ export function ownDeliveryAccepted(events: readonly BaseEvent[]): boolean {
  * 带失败标记的轮（如事件里有运行错误）若自己有一次 `deliver_task` 被接受，就当没失败照常复盘，日志行带
  * `failedButDelivered: true`；被挡回、被拒、没交付的失败轮照旧按 `failed` 跳过。「自己有一次被接受」除了事件里的
  * `deliver_task` 答复，也认库里这一轮的交付行（`deps.deliveredCard`，和认卡同一口径）。失败轮的日志行另带不含内容的
- * 诊断：`runError`（错误码）、`deliverSeen`、`deliveredRow`、`eventCount`。
+ * 诊断：`deliverSeen`、`deliveredRow`、`eventCount`；事件里有 `RUN_ERROR` 的轮（不论记没记失败）另带 `runError`（错误码）、`runErrorKind`（`ended_early` / `segment_limit` / `other`，不记原文）、`runErrorAfterDelivery`（错误在被接受的交付之后）。
  * 每一轮都记一行日志（类型、结果、触发、步数、卡号，跳过时带原因 `steps` / `failed` / `card_done`），
  * 评测据此知道这张卡的复盘已经跑完，没存技能时也能看出是门槛没到、冷却、还是模型认为不值得。
  */
@@ -1206,9 +1204,16 @@ export function createRetroObserver(deps: RetroObserverDeps) {
         ...(failedButDelivered ? { failedButDelivered: true } : {}),
         ...(outcome.outcome === "skipped" && reason ? { reason } : {}),
         // 失败轮才有：为什么记成失败的线索，不含内容（错误码、事件里有没有交付调用、库里有没有这一轮的交付行、事件数）。
-        ...(turn.failed
+        // 有 RUN_ERROR 就带（交付之后的尾部错误不再记成失败，但仍要看得出）：错误码、哪一类、是不是在被接受的交付之后。
+        ...(runErrorKindOf(turn.events)
           ? {
               runError: runErrorCodeOf(turn.events),
+              runErrorKind: runErrorKindOf(turn.events),
+              runErrorAfterDelivery: runErrorAfterDelivery(turn.events),
+            }
+          : {}),
+        ...(turn.failed
+          ? {
               deliverSeen: deliverCalled(turn.events),
               deliveredRow: deliveredRow !== null,
               eventCount: turn.events.length,
