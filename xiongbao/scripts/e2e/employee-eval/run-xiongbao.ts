@@ -150,6 +150,8 @@ import {
   retroLogLines,
   retroWaitFor,
   skillBodyLog,
+  turnEnded,
+  turnStateLine,
   waitForRetro,
 } from "./learning";
 import {
@@ -211,7 +213,13 @@ import {
   type SmokeScenario,
   selectSmoke,
 } from "./smoke";
-import { stopLine, stopPath, stopRunning } from "./timeout-stop";
+import {
+  settleEarlierRuns,
+  settleLine,
+  stopLine,
+  stopPath,
+  stopRunning,
+} from "./timeout-stop";
 import { modelSpans, toolSpans, wallSplit, wallSplitLine } from "./wall-split";
 import {
   sealReceived,
@@ -885,6 +893,52 @@ async function turnStatus(runId: string): Promise<string | undefined> {
   return runs.some((run) => run.id === runId) ? "finished" : undefined;
 }
 
+/** 一轮在库里读到的状态：事件里有没有收尾事件、活性状态、事件数、最后一个事件的时间（事件带时间戳才有）。 */
+async function readTurn(runId: string) {
+  const events = await eventsOf([runId]);
+  const stamps = events
+    .map((event) => Number(event.timestamp))
+    .filter((value) => Number.isFinite(value) && value > 0);
+  return {
+    reading: {
+      terminalEvent: events.some(
+        (event) => event.type === "RUN_FINISHED" || event.type === "RUN_ERROR",
+      ),
+      status: await turnStatus(runId),
+    },
+    eventCount: events.length,
+    ...(stamps.length > 0 ? { lastEventAt: Math.max(...stamps) } : {}),
+  };
+}
+
+/** 这位员工在服务器上还在跑的轮（运行记录属于这位员工、活性状态是 running）。 */
+async function runningRunsOf(agentId: string) {
+  const live = await runAsTenant(tenant, () =>
+    database
+      .select({
+        runId: schema.threadRunLiveness.runId,
+        status: schema.threadRunLiveness.status,
+      })
+      .from(schema.threadRunLiveness),
+  );
+  const running = new Set(
+    live.filter((row) => row.status === "running").map((row) => row.runId),
+  );
+  if (running.size === 0) return [];
+  const runs = await runAsTenant(tenant, () =>
+    database
+      .select({
+        id: schema.threadRuns.id,
+        threadId: schema.threadRuns.threadId,
+        agentId: schema.threadRuns.agentId,
+      })
+      .from(schema.threadRuns),
+  );
+  return runs
+    .filter((run) => run.agentId === agentId && running.has(run.id))
+    .map((run) => ({ runId: run.id, threadId: run.threadId }));
+}
+
 /**
  * 超时了：停掉这次运行在服务器上还在跑的每一轮，等它们变成非 running（最多 30 秒），在作业日志里打一行。
  * 走对话的「停止」接口（`POST …/agent/:员工/stop/:对话`，前缀和单聊的运行接口一样，请求体 `{ runId }`）：单聊和看板派活的轮都
@@ -1097,6 +1151,8 @@ type Driven = {
   checks?: Check[];
   /** 单聊路径：这道题的对话，运行号从这里读（含审批、续接带出来的运行）。 */
   threadId?: string;
+  /** 看板路径：这一次派活时开的卡（含追问「继续」另开的），复盘行按卡认的依据（`RetroClaim`）。 */
+  taskIds?: string[];
   /** 看板路径：派活那段对话的 id；只用来在超时时停掉这段对话里还在跑的轮（运行号读法不变，仍是派活时拿到的）。 */
   channelThreadId?: string;
   /** 单聊路径：事件流中途被服务器断开、又用 `/connect` 接上的次数。 */
@@ -1143,6 +1199,7 @@ async function driveBoard(
   const channelThreadId = channel.body.channel.threadId;
 
   const runIds: string[] = [];
+  const taskIds: string[] = [];
   let nudges = 0;
   let timedOut = false;
   let error: string | undefined;
@@ -1160,6 +1217,8 @@ async function driveBoard(
       must(dispatched, [200, 201, 202], "dispatch");
       const runId = dispatched.body.runId;
       runIds.push(runId);
+      if (typeof dispatched.body.taskId === "string")
+        taskIds.push(dispatched.body.taskId);
       if (round > 0) nudges += 1;
       const remaining = deadline - Date.now();
       try {
@@ -1198,6 +1257,7 @@ async function driveBoard(
   }
   return {
     runIds,
+    taskIds,
     nudges,
     timedOut,
     channelThreadId,
@@ -1573,6 +1633,23 @@ async function runWork(work: Work): Promise<EvalRecord> {
   console.log(
     `\n== ${work.key}（${work.title}）${work.via === "chat" ? " [chat]" : ""}`,
   );
+  // 这位员工上一次的轮要是还在服务器上跑，先等它结束（最多 60 秒），再不结束就停掉，免得它串进这一次。
+  const earlierAgent = work.group ? agentOfGroup.get(work.group) : undefined;
+  if (earlierAgent) {
+    const settled = await settleEarlierRuns({
+      running: () => runningRunsOf(earlierAgent),
+      stop: async (run) => {
+        const answered = await api<{ stopped?: boolean }>(
+          "POST",
+          stopPath(earlierAgent, run.threadId),
+          { runId: run.runId },
+        );
+        return answered.status === 200 && answered.body?.stopped === true;
+      },
+    }).catch(() => undefined);
+    const line = settled ? settleLine(settled) : "";
+    if (line) console.log(line);
+  }
   const since = new Date();
   const started = Date.now();
   const deadline = started + work.minutes * 60_000;
@@ -1725,8 +1802,28 @@ async function runWork(work: Work): Promise<EvalRecord> {
    */
   let learning: RunLearning | undefined;
   if (learnedBefore) {
+    // 这次运行派活时开的卡：复盘行里带的运行号可能是服务器之后在这张卡上起的轮，按卡也认下来。
+    const claim = {
+      ...(driven.taskIds?.length ? { cardIds: driven.taskIds } : {}),
+      since: since.getTime(),
+    };
     const retro = await waitForRetro({
       runIds,
+      claim,
+      // 卡片离开「进行中」（交付被接受）不等于这一轮结束：等每一轮在服务器上真的结束，再看复盘（计入上限）。
+      // 超时被评测停掉的那一轮不等。
+      ...(timedOut
+        ? {}
+        : {
+            turnsEnded: async () =>
+              (
+                await Promise.all(
+                  runIds.map(async (runId) =>
+                    turnEnded((await readTurn(runId)).reading),
+                  ),
+                )
+              ).every(Boolean),
+          }),
       readLog: serverLogText,
       skillCount: async () => (await learnedStateOf(agentId)).skills.size,
       skillsBefore: learnedBefore.skills.size,
@@ -1744,11 +1841,27 @@ async function runWork(work: Work): Promise<EvalRecord> {
     console.log(
       `   learning: +${learning.newSkills.length} skills${learning.heldSkills ? ` (+${learning.heldSkills.length} held for review)` : ""}, +${learning.newMemories} memories, used ${learning.usedSkills.length}; retrospective ${retro.ended}${retro.outcome ? ` ${retro.outcome}` : ""} after ${(retro.waitedMs / 1000).toFixed(0)} s`,
     );
+    // 等满了没等到：多打一行这一轮在服务器上的状态（还在跑，还是结束了、复盘没写），看得出是哪一种。
+    if (retro.ended === "timeout") {
+      try {
+        const lastRun = runIds.at(-1);
+        if (lastRun)
+          console.log(
+            turnStateLine({
+              runId: lastRun,
+              ...(await readTurn(lastRun)),
+              now: Date.now(),
+            }),
+          );
+      } catch {
+        console.log("   (读不到这一轮在服务器上的状态)");
+      }
+    }
     // 这次运行各轮在服务器日志里的复盘行（不含内容）和日志行类型统计：服务器日志不上传，作业日志里要能查复盘为什么
     // 记成跳过、步数为什么对不上。读不到日志不让评测失败。
     try {
       const log = serverLogText();
-      for (const line of retroLogLines(log, runIds)) console.log(line);
+      for (const line of retroLogLines(log, runIds, claim)) console.log(line);
       const counts = logTypeCountsLine(logTypeCounts(log, runIds));
       if (counts) console.log(counts);
     } catch {

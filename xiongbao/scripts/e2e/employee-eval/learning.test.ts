@@ -12,6 +12,8 @@ import {
   retroLinesOf,
   retroLogLines,
   retroWaitFor,
+  turnEnded,
+  turnStateLine,
   waitForRetro,
 } from "./learning";
 import type { Capabilities } from "./metrics";
@@ -925,4 +927,200 @@ test("logTypeCounts shows a model call that was made again after a dropped conne
   expect(logTypeCounts(log, ["abcdef0123456789"])).toEqual({
     "model-net-retry": 1,
   });
+});
+
+const rowOf = (fields: Record<string, unknown>) =>
+  JSON.stringify({ type: "retrospect", ...fields });
+
+test("timeout from the server counts as a conclusion on any round, and is not waited on", async () => {
+  expect(concludesRetro({ runId: "r1", outcome: "timeout" }, false)).toBe(true);
+  expect(concludesRetro({ runId: "r1", outcome: "timeout" }, true)).toBe(true);
+  const time = clock();
+  const result = await waitForRetro({
+    runIds: ["r1"],
+    readLog: () =>
+      rowOf({
+        outcome: "timeout",
+        trigger: "card_delivered",
+        steps: 9,
+        cardId: "c1",
+        runId: "r1",
+        timestamp: "2026-11-22T01:00:00.000Z",
+      }),
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    maxMs: 600_000,
+    ...time,
+  });
+  expect(result).toMatchObject({ ended: "logged", outcome: "timeout" });
+  expect(result.waitedMs).toBeLessThan(5000);
+});
+
+test("a row of the same card, after the run began, counts even when its run id is not one this run got", () => {
+  const log = [
+    rowOf({
+      outcome: "saved",
+      cardId: "c1",
+      runId: "later-round",
+      timestamp: "2026-11-22T01:10:00.000Z",
+      skill: "s",
+    }),
+    `{"type":"retrospect-held","runId":"later-round","reason":"url: x"}`,
+    // an earlier run's row of another card, and the same card before the run began: not this run's
+    rowOf({
+      outcome: "saved",
+      cardId: "c0",
+      runId: "old-round",
+      timestamp: "2026-11-22T01:10:00.000Z",
+    }),
+    rowOf({
+      outcome: "saved",
+      cardId: "c1",
+      runId: "older",
+      timestamp: "2026-11-22T00:00:00.000Z",
+    }),
+    rowOf({
+      outcome: "nothing",
+      runId: "r1",
+      timestamp: "2026-11-22T01:05:00.000Z",
+    }),
+  ].join("\n");
+  const claim = {
+    cardIds: ["c1"],
+    since: Date.parse("2026-11-22T01:00:00.000Z"),
+  };
+  expect(retroLinesOf(log, ["r1"]).map((line) => line.runId)).toEqual(["r1"]);
+  const lines = retroLinesOf(log, ["r1"], claim);
+  expect(lines.map((line) => line.runId)).toEqual(["later-round", "r1"]);
+  expect(lines[0]).toMatchObject({ outcome: "saved" });
+  expect(retroLogLines(log, ["r1"], claim).join("\n")).toContain(
+    "run=later-ro",
+  );
+  expect(retroLogLines(log, ["r1"], claim).join("\n")).not.toContain(
+    "old-roun",
+  );
+  expect(retroLogLines(log, ["r1"], claim).join("\n")).not.toContain(
+    "run=older",
+  );
+  // A later run of the same employee (other cards, later start) does not take this run's late row.
+  expect(
+    retroLinesOf(log, ["r2"], {
+      cardIds: ["c2"],
+      since: Date.parse("2026-11-22T01:20:00.000Z"),
+    }),
+  ).toEqual([]);
+  // No timestamp, no claim.
+  expect(
+    retroLinesOf(
+      rowOf({ outcome: "saved", cardId: "c1", runId: "x" }),
+      ["r1"],
+      claim,
+    ),
+  ).toEqual([]);
+});
+
+test("a late row of the card ends the wait as the last round's", async () => {
+  const time = clock();
+  const result = await waitForRetro({
+    runIds: ["r1"],
+    claim: { cardIds: ["c1"], since: 0 },
+    // a skipped row with no reason concludes only for the last round: a round the server started later is the last
+    readLog: () =>
+      rowOf({
+        outcome: "skipped",
+        trigger: "card_turn",
+        cardId: "c1",
+        runId: "later",
+        timestamp: "2026-11-22T01:00:00.000Z",
+      }),
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    maxMs: 600_000,
+    ...time,
+  });
+  expect(result.ended).toBe("logged");
+});
+
+test("the wait goes on while a round has not really ended, counts against the cap, and says so when it runs out", async () => {
+  const time = clock();
+  let asked = 0;
+  const concludedLog = rowOf({ outcome: "saved", runId: "r1", cardId: "c1" });
+  // The log already has a conclusion and a new skill is there, but the round is still running: not looked at.
+  const ending = await waitForRetro({
+    runIds: ["r1"],
+    readLog: () => concludedLog,
+    skillCount: async () => 5,
+    skillsBefore: 0,
+    turnsEnded: async () => {
+      asked += 1;
+      return asked > 3;
+    },
+    maxMs: 600_000,
+    everyMs: 1000,
+    ...time,
+  });
+  expect(ending).toMatchObject({ ended: "logged", outcome: "saved" });
+  expect(ending.waitedMs).toBe(3000);
+
+  const never = await waitForRetro({
+    runIds: ["r1"],
+    readLog: () => concludedLog,
+    skillCount: async () => 5,
+    skillsBefore: 0,
+    turnsEnded: async () => false,
+    maxMs: 10_000,
+    everyMs: 1000,
+    ...clock(),
+  });
+  expect(never).toEqual({
+    waitedMs: 10_000,
+    ended: "timeout",
+    turnRunning: true,
+  });
+
+  // A read that fails is taken as ended: the wait is not held up by the evaluation's own trouble.
+  const failing = await waitForRetro({
+    runIds: ["r1"],
+    readLog: () => concludedLog,
+    skillCount: async () => 0,
+    skillsBefore: 0,
+    turnsEnded: async () => {
+      throw new Error("db");
+    },
+    maxMs: 10_000,
+    ...clock(),
+  });
+  expect(failing.ended).toBe("logged");
+});
+
+test("a round has ended by its closing event or by a status that is not running; a card leaving 'running' says nothing", () => {
+  expect(turnEnded({ terminalEvent: true, status: "running" })).toBe(true);
+  expect(turnEnded({ terminalEvent: false, status: "finished" })).toBe(true);
+  expect(turnEnded({ terminalEvent: false, status: "interrupted" })).toBe(true);
+  expect(turnEnded({ terminalEvent: false, status: "running" })).toBe(false);
+  expect(turnEnded({ terminalEvent: false, status: undefined })).toBe(false);
+});
+
+test("the line for a wait that ran out says whether the round is still running, how many events, and how long since the last", () => {
+  expect(
+    turnStateLine({
+      runId: "abcdef0123456789",
+      reading: { terminalEvent: false, status: "running" },
+      eventCount: 412,
+      lastEventAt: 1_000_000,
+      now: 1_042_400,
+    }),
+  ).toBe(
+    "   turn state at the end of the wait: run=abcdef01 running, status running, events 412, last event 42 s ago",
+  );
+  expect(
+    turnStateLine({
+      runId: "r",
+      reading: { terminalEvent: true, status: undefined },
+      eventCount: 9,
+      now: 5,
+    }),
+  ).toBe(
+    "   turn state at the end of the wait: run=r ended, events 9, last event n/a",
+  );
 });

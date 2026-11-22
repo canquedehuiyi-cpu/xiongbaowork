@@ -1,6 +1,13 @@
 import { expect, test } from "bun:test";
 import { RUN_PATH } from "../chat-client";
-import { runsToStop, stopLine, stopPath, stopRunning } from "./timeout-stop";
+import {
+  runsToStop,
+  settleEarlierRuns,
+  settleLine,
+  stopLine,
+  stopPath,
+  stopRunning,
+} from "./timeout-stop";
 
 function clock() {
   let at = 0;
@@ -95,4 +102,89 @@ test("停止接口和单聊运行接口同一前缀，结尾是 /stop/:对话（
     `${run.slice(0, -"/run".length)}/stop/t%2F1`,
   );
   expect(stopPath("a b", "t1").endsWith("/agent/a%20b/stop/t1")).toBe(true);
+});
+
+test("开始前：上一次的轮没有在跑就不等、不停、不打日志", async () => {
+  const stopped: string[] = [];
+  const outcome = await settleEarlierRuns({
+    running: async () => [],
+    stop: async (run) => {
+      stopped.push(run.runId);
+      return true;
+    },
+    ...clock(),
+  });
+  expect(outcome).toEqual({
+    found: 0,
+    endedOnTheirOwn: 0,
+    stopped: 0,
+    stillRunning: 0,
+    waitedMs: 0,
+  });
+  expect(stopped).toEqual([]);
+  expect(settleLine(outcome)).toBe("");
+});
+
+test("开始前：上一次的轮在 60 秒内自己结束了，只等不停", async () => {
+  const time = clock();
+  const stopped: string[] = [];
+  let reads = 0;
+  const outcome = await settleEarlierRuns({
+    running: async () => {
+      reads += 1;
+      return reads <= 4 ? [{ runId: "r1", threadId: "t1" }] : [];
+    },
+    stop: async (run) => {
+      stopped.push(run.runId);
+      return true;
+    },
+    ...time,
+  });
+  expect(outcome).toMatchObject({
+    found: 1,
+    endedOnTheirOwn: 1,
+    stopped: 0,
+    stillRunning: 0,
+  });
+  expect(stopped).toEqual([]);
+  expect(settleLine(outcome)).toContain("自己结束了");
+});
+
+test("开始前：60 秒后还在跑的轮被停掉（带上它的对话），停下后继续", async () => {
+  const time = clock();
+  const running = new Set(["r1", "r2"]);
+  const stopped: { runId: string; threadId: string }[] = [];
+  const outcome = await settleEarlierRuns({
+    running: async () =>
+      [...running].map((runId) => ({ runId, threadId: `t-${runId}` })),
+    stop: async (run) => {
+      stopped.push(run);
+      if (run.runId === "r1") running.delete("r1");
+      return true;
+    },
+    ...time,
+  });
+  expect(stopped.map((run) => run.threadId).sort()).toEqual(["t-r1", "t-r2"]);
+  // r2 never stops within 30 s.
+  expect(outcome).toMatchObject({
+    found: 2,
+    endedOnTheirOwn: 0,
+    stopped: 1,
+    stillRunning: 1,
+  });
+  expect(outcome.waitedMs).toBeGreaterThanOrEqual(60_000);
+  expect(settleLine(outcome)).toContain("另有 1 轮没停下");
+});
+
+test("开始前：读库或停止接口出错都不抛", async () => {
+  const outcome = await settleEarlierRuns({
+    running: async () => {
+      throw new Error("db");
+    },
+    stop: async () => {
+      throw new Error("http");
+    },
+    ...clock(),
+  });
+  expect(outcome.found).toBe(0);
 });

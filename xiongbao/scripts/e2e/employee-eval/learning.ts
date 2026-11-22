@@ -142,12 +142,55 @@ export type RetroLine = {
   runId: string;
 };
 
-/** 从服务器日志的全文里挑出这几轮的复盘行；不是 JSON 的行、别的类型的行都跳过。 */
+/**
+ * 除运行号之外，还认哪些复盘行是这次运行的：同一张卡（这次运行派活时开的卡，复盘按卡合并各轮，行里带的运行号可能是
+ * 服务器之后在这张卡上起的轮，不在这次拿到的运行号里）、而且时间在这次运行开始之后的行。晚到的行因此不再被丢，
+ * 也不会被后面一次运行误当成自己的（别的运行的卡号不在这里）。
+ */
+export type RetroClaim = {
+  /** 这次运行派活时开的卡。 */
+  cardIds?: readonly string[];
+  /** 这次运行开始的时刻（毫秒）；复盘行的时间戳早于它的不认。 */
+  since?: number;
+};
+
+/**
+ * 这次运行的运行号，加上「按卡认下来」的复盘行带的运行号（见 {@link RetroClaim}）。别的行（`retrospect-held`、
+ * `retrospect-error` 等）只带运行号，认下复盘行的运行号之后它们也跟着进来。
+ */
+function claimedRuns(
+  log: string,
+  runIds: readonly string[],
+  claim: RetroClaim | undefined,
+): Set<string> {
+  const wanted = new Set(runIds);
+  const cards = new Set(claim?.cardIds ?? []);
+  if (cards.size === 0 || claim?.since === undefined) return wanted;
+  for (const raw of log.split("\n")) {
+    if (!raw.includes('"type":"retrospect"')) continue;
+    const parsed = jsonOfLine(raw);
+    if (parsed?.type !== "retrospect") continue;
+    const runId = runIdOfLog(parsed);
+    if (!runId || wanted.has(runId)) continue;
+    const at = Date.parse(String(parsed.timestamp ?? ""));
+    if (
+      typeof parsed.cardId === "string" &&
+      cards.has(parsed.cardId) &&
+      Number.isFinite(at) &&
+      at >= claim.since
+    )
+      wanted.add(runId);
+  }
+  return wanted;
+}
+
+/** 从服务器日志的全文里挑出这几轮的复盘行（和 {@link RetroClaim} 认下的）；不是 JSON 的行、别的类型的行都跳过。 */
 export function retroLinesOf(
   log: string,
   runIds: readonly string[],
+  claim?: RetroClaim,
 ): RetroLine[] {
-  const wanted = new Set(runIds);
+  const wanted = claimedRuns(log, runIds, claim);
   const lines: RetroLine[] = [];
   const heldReasons = new Map<string, string>();
   const errors = new Map<string, string>();
@@ -260,6 +303,7 @@ const RUN_ERROR_KINDS: ReadonlySet<string> = new Set([
 
 const RETRO_LOG_TYPES = new Set([
   "retrospect",
+  "retrospect-start",
   "retrospect-retry",
   "retrospect-held",
   "retrospect-refused",
@@ -305,8 +349,9 @@ function runIdOfLog(parsed: Record<string, unknown>): string {
 export function retroLogLines(
   log: string,
   runIds: readonly string[],
+  claim?: RetroClaim,
 ): string[] {
-  const wanted = new Set(runIds);
+  const wanted = claimedRuns(log, runIds, claim);
   const out: string[] = [];
   for (const raw of log.split("\n")) {
     if (!raw.includes('"type":"retrospect')) continue;
@@ -394,6 +439,7 @@ export function logTypeCountsLine(counts: Record<string, number>): string {
  *   把它当成结束会让第二次提前开跑；
  * - 跳过的是看板卡的复盘（冷却、额度用完、这张卡已经复盘过）：有结论；
  * - 跳过的是失败的轮：只有最后一轮才算（后面没有别的轮了），较早的失败轮后面还有轮要跑；
+ * - `timeout`（复盘整段超过服务器的总上限，放弃了）：有结论，哪一轮的都算；
  * - 通用路径跳过、没写步数原因（冷却、没开）：只有最后一轮才算。复盘出错（两次模型调用都超时等，日志里的
  *   `retrospect-error`，这里在 `error` 里）也是这一条：服务器照常写一行 `retrospect`、结果记 skipped，最后一轮的
  *   出错就是结论，不必白等到上限。
@@ -402,6 +448,8 @@ export function logTypeCountsLine(counts: Record<string, number>): string {
  * 自己的复盘，卡后面的轮还可能交付、按整张卡再复盘一次。步数不够的跳过照样「再等」，冷却等跳过只有最后一轮才算。
  */
 export function concludesRetro(line: RetroLine, isLastRound: boolean): boolean {
+  // `timeout`：服务器的复盘整段超过总上限（8 分钟）放弃了，不会再有结论，不必白等到评测的上限。
+  if (line.outcome === "timeout") return true;
   if (line.outcome !== "skipped") return true;
   if (line.reason === "steps") return false;
   if (line.reason === "failed") return isLastRound;
@@ -417,6 +465,13 @@ export function concludesRetro(line: RetroLine, isLastRound: boolean): boolean {
 export async function waitForRetro(options: {
   /** 这次运行各轮的运行号，最后一个是最后一轮。 */
   runIds: readonly string[];
+  /** 除运行号外按卡认下的行（见 {@link RetroClaim}）。 */
+  claim?: RetroClaim;
+  /**
+   * 这次运行的各轮在服务器上是不是真的结束了。没结束就接着等（计入上限），不看日志也不看技能数：复盘只在一轮
+   * 结束之后才开始，卡片离开「进行中」（交付被接受）不等于这一轮结束了。不给就当结束了。读失败当作结束。
+   */
+  turnsEnded?: () => Promise<boolean>;
   /** 服务器日志的当前全文。 */
   readLog: () => string | Promise<string>;
   /** 这位员工现在的自写技能条数，和运行前比。 */
@@ -434,7 +489,11 @@ export async function waitForRetro(options: {
   const maxMs = options.maxMs ?? RETRO_WAIT_MS;
   const lines = async (): Promise<RetroLine[]> => {
     try {
-      return retroLinesOf(await options.readLog(), options.runIds);
+      return retroLinesOf(
+        await options.readLog(),
+        options.runIds,
+        options.claim,
+      );
     } catch {
       return [];
     }
@@ -454,9 +513,25 @@ export async function waitForRetro(options: {
     ...(line.failedButDelivered ? { failedButDelivered: true as const } : {}),
   });
   for (;;) {
+    const waitedBefore = now() - started;
+    const over = options.turnsEnded
+      ? await options.turnsEnded().catch(() => true)
+      : true;
+    if (!over) {
+      if (waitedBefore >= maxMs)
+        return { waitedMs: waitedBefore, ended: "timeout", turnRunning: true };
+      await sleep(options.everyMs ?? 1000);
+      continue;
+    }
     const seen = await lines();
+    // 按卡认下来的行，运行号不在这次拿到的里面：是服务器之后在这张卡上起的轮，算最后一轮。
     const concluded = seen
-      .filter((line) => concludesRetro(line, line.runId === last))
+      .filter((line) =>
+        concludesRetro(
+          line,
+          line.runId === last || !options.runIds.includes(line.runId),
+        ),
+      )
       .at(-1);
     const grew = await options
       .skillCount()
@@ -505,4 +580,38 @@ export function callTrace(
       ? `${line} → ${result.replace(/\s+/g, " ").trim().slice(0, 120)}`
       : line;
   });
+}
+
+/** 一轮在库里读到的状态：事件里有没有 RUN_FINISHED / RUN_ERROR，和运行活性状态（`running` / `finished` / `interrupted`，没记录是 undefined）。 */
+export type TurnReading = {
+  terminalEvent: boolean;
+  status: string | undefined;
+};
+
+/**
+ * 一轮真的结束了没有：事件里有 RUN_FINISHED / RUN_ERROR，或活性状态是 `finished` / `interrupted`。
+ * 状态是 `running`、或运行记录还没出现、事件里也没有收尾事件，都算没结束。卡片离开「进行中」不算：交付被接受
+ * 之后这一轮还可能接着跑几十段模型调用，复盘要等它真结束。
+ */
+export function turnEnded(reading: TurnReading): boolean {
+  if (reading.terminalEvent) return true;
+  return reading.status === "finished" || reading.status === "interrupted";
+}
+
+/** 等复盘等满了：这一轮在服务器上的状态，一行，不含内容。 */
+export function turnStateLine(info: {
+  runId: string;
+  reading: TurnReading;
+  eventCount: number;
+  /** 最后一个事件的时间（毫秒）；事件没带时间戳就没有。 */
+  lastEventAt?: number;
+  now: number;
+}): string {
+  const state = turnEnded(info.reading) ? "ended" : "running";
+  const detail = info.reading.status ? `, status ${info.reading.status}` : "";
+  const quiet =
+    info.lastEventAt === undefined
+      ? "n/a"
+      : `${Math.max(0, Math.round((info.now - info.lastEventAt) / 1000))} s ago`;
+  return `   turn state at the end of the wait: run=${info.runId.slice(0, 8)} ${state}${detail}, events ${info.eventCount}, last event ${quiet}`;
 }
