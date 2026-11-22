@@ -285,6 +285,42 @@ export function archiveRunDir(
   }
 }
 
+/**
+ * 一次运行做完后移出工作区的两样东西：这次运行的题目目录，和工作区根下落盘的工具输出目录（服务器把大段命令输出
+ * 存在工作区的 `tool-outputs/`，一直留着，后面的运行 `cd` 过去就能读到前几次运行的输出；目录名取自服务器的
+ * `WORKSPACE_OUTPUT_DIR`，由调用方传入）。工具输出移到 `archiveRoot/<key>-tool-outputs`，和题目目录的归档
+ * （`archiveRoot/<key>`）并排。`beforeMove` 在移动前对要移的目录各调一次（员工的命令环境隔离时用来放开读写权限），
+ * 它抛错也不影响移动。都不抛错，返回各自有没有移走。
+ */
+export function archiveRunLeftovers(
+  workspace: string,
+  where: string,
+  toolOutputsDir: string,
+  archiveRoot: string,
+  key: string,
+  beforeMove?: (dir: string) => void,
+): { run: boolean; toolOutputs: boolean } {
+  const open = (name: string) => {
+    const dir = join(workspace, name);
+    try {
+      if (beforeMove && existsSync(dir)) beforeMove(dir);
+    } catch {
+      // 放开权限失败时照常试着移，移不动会在 archiveRunDir 里打一行日志。
+    }
+  };
+  open(where);
+  open(toolOutputsDir);
+  return {
+    run: archiveRunDir(workspace, where, archiveRoot, key),
+    toolOutputs: archiveRunDir(
+      workspace,
+      toolOutputsDir,
+      archiveRoot,
+      `${key}-tool-outputs`,
+    ),
+  };
+}
+
 /** 一个最小的 RFC 4180 CSV 解析：双引号包裹、`""` 转义、CRLF 或 LF；去掉 UTF-8 BOM。 */
 export function parseCsv(text: string): string[][] {
   const source = text.replace(/^\uFEFF/, "");
