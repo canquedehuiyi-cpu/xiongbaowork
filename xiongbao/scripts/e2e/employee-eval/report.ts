@@ -590,10 +590,13 @@ const retroCell = (learning: RunLearning | undefined) => {
   const asked = retro.askedFastPath
     ? `，追问快路径（${retro.gotFastPath ? "补上了" : "没补上"}）`
     : "";
+  const rewrote = retro.rewroteUnsafe
+    ? `，改写去掉破坏性命令（${retro.rewriteCleared ? "成了" : "没成"}）`
+    : "";
   const failedButDelivered = retro.failedButDelivered
     ? "，这一轮带运行错误但已交付"
     : "";
-  return `${outcome}${how}${why}${replaced}${asked}${failedButDelivered}，等了 ${waited}${runErrorsNote(learning)}`;
+  return `${outcome}${how}${why}${replaced}${asked}${rewrote}${failedButDelivered}，等了 ${waited}${runErrorsNote(learning)}`;
 };
 
 /**

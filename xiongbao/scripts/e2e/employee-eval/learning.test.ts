@@ -70,6 +70,62 @@ test("the log lines of a run's retrospective are read out of a noisy server log"
   expect(retroLinesOf(log, ["r3", "r9"])).toEqual([]);
 });
 
+test("a retrospective line that rewrote a destructive draft is read, shown, and the report says whether it worked", () => {
+  const log = [
+    line({
+      runId: "r1",
+      outcome: "saved",
+      trigger: "steps",
+      steps: 12,
+      rewroteUnsafe: true,
+      rewriteCleared: true,
+    }),
+    line({
+      runId: "r2",
+      outcome: "held",
+      trigger: "steps",
+      steps: 12,
+      rewroteUnsafe: true,
+    }),
+  ].join("\n");
+  expect(retroLinesOf(log, ["r1"])[0]).toMatchObject({
+    rewroteUnsafe: true,
+    rewriteCleared: true,
+  });
+  expect(retroLinesOf(log, ["r2"])[0]?.rewriteCleared).toBeUndefined();
+  expect(retroLogLines(log, ["r1"])[0]).toContain(
+    "rewroteUnsafe=true rewriteCleared=true",
+  );
+  const cellOf = (retro: Record<string, unknown>) =>
+    learningRows([
+      [
+        "熊宝",
+        side([
+          combineRepeat(
+            record({
+              learning: {
+                newSkills: [],
+                newMemories: 0,
+                usedSkills: [],
+                retro: { waitedMs: 1000, ended: "logged", ...retro },
+              },
+            }),
+            record({
+              learning: { newSkills: [], newMemories: 0, usedSkills: [] },
+            }),
+          ),
+        ]),
+      ],
+    ])[0]?.[1];
+  expect(
+    cellOf({ outcome: "saved", rewroteUnsafe: true, rewriteCleared: true }),
+  ).toContain("，改写去掉破坏性命令（成了）");
+  expect(cellOf({ outcome: "held", rewroteUnsafe: true })).toContain(
+    "，改写去掉破坏性命令（没成）",
+  );
+  expect(cellOf({ outcome: "saved" })).not.toContain("改写去掉");
+});
+
 test("a retrospective line of a failed turn that still handed in is read, and the report says so", () => {
   const log = line({
     runId: "r1",
@@ -427,6 +483,32 @@ test("retroLogLines prints the retrospective lines of the given runs without any
   expect(all).not.toContain("SECRET BODY");
   expect(all).not.toContain("other-run");
   expect(retroLogLines(serverLog, [])).toEqual([]);
+});
+
+test("retroLogLines and retroLinesOf carry the failed-turn diagnosis, without any content", () => {
+  const log = line({
+    runId: "abcdef0123456789",
+    outcome: "skipped",
+    trigger: "steps",
+    steps: 16,
+    reason: "failed",
+    runError: "stream_stalled",
+    deliverSeen: false,
+    deliveredRow: false,
+    eventCount: 143,
+  });
+  expect(retroLogLines(log, ["abcdef0123456789"])[0]).toContain(
+    "reason=failed runError=stream_stalled deliverSeen=false deliveredRow=false eventCount=143",
+  );
+  expect(retroLinesOf(log, ["abcdef0123456789"])[0]).toMatchObject({
+    runError: "stream_stalled",
+    deliverSeen: false,
+    deliveredRow: false,
+    eventCount: 143,
+  });
+  // 没有这些项的行照旧。
+  const plain = line({ runId: "r1", outcome: "saved", steps: 8 });
+  expect(retroLogLines(plain, ["r1"])[0]).not.toContain("deliverSeen");
 });
 
 test("logTypeCounts counts the other log lines of the given runs by type, whatever field carries the run id", () => {

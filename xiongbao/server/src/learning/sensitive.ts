@@ -214,6 +214,10 @@ export function broadDeleteIn(text: string): string | undefined {
   return undefined;
 }
 
+/** 越权规则里「破坏性的系统命令」这一类的名字（{@link findOverreach} 返回的就是它），供认出「只因这一类」的草稿。 */
+export const DESTRUCTIVE_REASON =
+  "破坏性的系统命令（递归删除、递归改权限、格式化）";
+
 /** 技能里不许写的越权步骤：教员工绕过审批、忽略规则、做破坏性的事、瞒着本人。 */
 const OVERREACH: readonly {
   reason: string;
@@ -235,7 +239,7 @@ const OVERREACH: readonly {
     shape: /(?:自动|直接|默认)(?:同意|批准|通过).{0,4}(?:审批|请求|授权|权限)/,
   },
   {
-    reason: "破坏性的系统命令（递归删除、递归改权限、格式化）",
+    reason: DESTRUCTIVE_REASON,
     test: (text) =>
       /chmod\s+-R\s*777|mkfs\b/i.test(text.normalize("NFKC")) ||
       deletesBroadly(text),

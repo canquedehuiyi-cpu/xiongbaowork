@@ -22,6 +22,7 @@ import {
 } from "../db/schema";
 import {
   broadDeleteIn,
+  DESTRUCTIVE_REASON,
   externalAddressIn,
   findOverreach,
   findSensitive,
@@ -305,6 +306,21 @@ export function heldForReview(draft: SkillDraft): string | undefined {
   const address = externalAddressIn(text);
   if (address !== undefined) return `要求访问或外发到网址或域名（${address}）`;
   return undefined;
+}
+
+/**
+ * Whether {@link heldForReview} would hold this draft for destructive system commands (recursive delete,
+ * recursive chmod, format) and for nothing else: no other rule fires and no web address is in it. Same
+ * text, same rules as the hold itself; nothing is judged anew. The retrospective rewrites such a draft once.
+ */
+export function heldOnlyForDestructive(draft: SkillDraft): boolean {
+  const text = textOfDraft(draft);
+  const overreach = findOverreach(text);
+  return (
+    overreach.length === 1 &&
+    overreach[0] === DESTRUCTIVE_REASON &&
+    externalAddressIn(text) === undefined
+  );
 }
 
 export type SelfSkillDeps = {

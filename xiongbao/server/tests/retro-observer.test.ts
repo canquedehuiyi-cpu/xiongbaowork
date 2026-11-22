@@ -226,8 +226,9 @@ describe("a card handed in is a piece of work done", () => {
 
   test("a failed turn whose delivery was bounced or refused is skipped as failed", async () => {
     for (const answer of ['{"bounced":true}', "Refused. not allowed", "?"]) {
+      // 被挡回、被拒的交付不写 `delivered` 行：库里读不到这一轮的交付。
       const { observe, seen, logs } = harness({
-        deliveredCard: async () => "card-1",
+        deliveredCard: async () => null,
       });
       const events = [...work(8), ...call("d", "deliver_task", {}, answer)];
       expect(await observe(turnOf(events, { failed: true }))).toEqual({
@@ -238,6 +239,155 @@ describe("a card handed in is a piece of work done", () => {
       expect(logged).toMatchObject({ outcome: "skipped", reason: "failed" });
       expect(logged.failedButDelivered).toBeUndefined();
     }
+  });
+
+  /** 一轮真实的样子：开头、文字、几步活、交付、交付之后的一次错误。 */
+  const realisticRun = (deliverAnswer: string, deliverAs: "start" | "chunk") =>
+    [
+      { type: EventType.RUN_STARTED, threadId: "t1", runId: "r1" },
+      {
+        type: EventType.TEXT_MESSAGE_START,
+        messageId: "m0",
+        role: "assistant",
+      },
+      { type: EventType.TEXT_MESSAGE_CONTENT, messageId: "m0", delta: "好的" },
+      { type: EventType.TEXT_MESSAGE_END, messageId: "m0" },
+      ...work(8),
+      ...(deliverAs === "start"
+        ? call("d", "deliver_task", { items: [] }, deliverAnswer)
+        : ([
+            {
+              type: EventType.TOOL_CALL_CHUNK,
+              toolCallId: "d",
+              toolCallName: "deliver_task",
+              delta: "{}",
+            },
+            {
+              type: EventType.TOOL_CALL_RESULT,
+              toolCallId: "d",
+              messageId: "m-d",
+              content: deliverAnswer,
+            },
+          ] as unknown as BaseEvent[])),
+      {
+        type: EventType.RUN_ERROR,
+        message: "private provider sentence about the request",
+        code: "stream_stalled",
+      },
+    ] as unknown as BaseEvent[];
+
+  const cardRound = (
+    taskId: string,
+    current: { runId: string; events: readonly BaseEvent[] },
+  ): RetroTurn => ({
+    ownerUserId: "u1",
+    agentId: "bot",
+    threadId: "t1",
+    runId: current.runId,
+    request: "做汇总表",
+    reply: "",
+    steps: traceStepsOf(current.events),
+    failed: false,
+    cardId: taskId,
+    trigger: "card_delivered",
+  });
+
+  test("a failed turn whose delivered answer cannot be read from the events is still a delivered card: the stored delivery row says so", async () => {
+    for (const shape of ["start", "chunk"] as const) {
+      const asked: string[] = [];
+      const { observe, seen, logs } = harness({
+        deliveredCard: async (runId) => {
+          asked.push(runId);
+          return "card-1";
+        },
+        cardTurn: async (taskId, current) => cardRound(taskId, current),
+      });
+      // 答复被包了一层、不是裸的 JSON：事件里认不出，库里的行认得。
+      const events = realisticRun(
+        'Tool result: {"delivered":true,"taskId":"card-1"}',
+        shape,
+      );
+      expect(await observe(turnOf(events, { failed: true }))).toMatchObject({
+        outcome: "saved",
+      });
+      expect(asked[0]).toBe("r1");
+      expect(seen[0]).toMatchObject({ trigger: "card_delivered" });
+      const logged = JSON.parse(logs[0] ?? "{}");
+      expect(logged).toMatchObject({
+        outcome: "saved",
+        trigger: "card_delivered",
+        cardId: "card-1",
+        failedButDelivered: true,
+        runError: "stream_stalled",
+        deliverSeen: true,
+        deliveredRow: true,
+        eventCount: events.length,
+      });
+      // 诊断里没有错误原文。
+      expect(logs[0]).not.toContain("private provider sentence");
+    }
+  });
+
+  test("a failed turn with no deliver call at all and no delivery row stays skipped as failed, with the diagnosis", async () => {
+    const { observe, seen, logs } = harness();
+    const events = [
+      ...work(8),
+      { type: EventType.RUN_ERROR, message: "x" },
+    ] as unknown as BaseEvent[];
+    expect(await observe(turnOf(events, { failed: true }))).toEqual({
+      outcome: "skipped",
+    });
+    expect(seen).toEqual([]);
+    expect(JSON.parse(logs[0] ?? "{}")).toMatchObject({
+      outcome: "skipped",
+      reason: "failed",
+      runError: "RUN_ERROR",
+      deliverSeen: false,
+      deliveredRow: false,
+      eventCount: events.length,
+    });
+  });
+
+  test("a bounced delivery in a failed turn is skipped as failed: the call is seen, the row is not there", async () => {
+    const { observe, seen, logs } = harness({
+      deliveredCard: async () => null,
+    });
+    const events = realisticRun('{"bounced":true,"reason":"x"}', "start");
+    expect(await observe(turnOf(events, { failed: true }))).toEqual({
+      outcome: "skipped",
+    });
+    expect(seen).toEqual([]);
+    expect(JSON.parse(logs[0] ?? "{}")).toMatchObject({
+      reason: "failed",
+      deliverSeen: true,
+      deliveredRow: false,
+    });
+  });
+
+  test("a failed turn whose delivery row cannot be read still counts an accepted answer in its own events", async () => {
+    const { observe, logs } = harness({
+      deliveredCard: async () => {
+        throw new Error("db down");
+      },
+      cardTurn: async (taskId, current) => cardRound(taskId, current),
+    });
+    const events = realisticRun(
+      '{"delivered":true,"taskId":"card-1"}',
+      "start",
+    );
+    await observe(turnOf(events, { failed: true }));
+    expect(JSON.parse(logs[0] ?? "{}")).toMatchObject({
+      failedButDelivered: true,
+      deliveredRow: false,
+    });
+  });
+
+  test("a turn that did not fail carries no diagnosis fields", async () => {
+    const { observe, logs } = harness();
+    await observe(turnOf(work(8)));
+    const logged = JSON.parse(logs[0] ?? "{}");
+    for (const key of ["runError", "deliverSeen", "deliveredRow", "eventCount"])
+      expect(logged).not.toHaveProperty(key);
   });
 
   test("a turn that did not fail keeps its log line without the failed-but-delivered mark", async () => {
