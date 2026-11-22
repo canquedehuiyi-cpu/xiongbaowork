@@ -31,6 +31,7 @@ import {
   nativeRunScope,
   withinNativeRun,
 } from "../native-approval";
+import { modelNetRetryOn } from "../network-error";
 import { historyOrEmpty } from "../thread-history";
 import { withoutToolBlobs } from "../tool-result-blobs";
 import { plainToolResults } from "../tool-result-text";
@@ -45,6 +46,7 @@ import {
   answersOnLastStep,
   foldingEarlyResults,
   type RunSteps,
+  retryingDroppedConnection,
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
   startRun,
@@ -320,15 +322,27 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
   ) {
     const scope = nativeRunScope();
     const steps: RunSteps = {};
-    const answering = answersOnLastStep(configuration, steps, {
-      unattended: hooks.unattended === true,
-      ...(hooks.extension ? { extension: hooks.extension } : {}),
-      ...(hooks.planAcrossRuns === false ? { planAcrossRuns: false } : {}),
-      ...(hooks.verifyChanges === false ? { verifyChanges: false } : {}),
-      ...(hooks.deliveryDue === true ? { deliveryDue: true } : {}),
-      ...(hooks.skillChecks?.length ? { skillChecks: hooks.skillChecks } : {}),
-      ...(hooks.endsTurnAfter ? { endsTurnAfter: hooks.endsTurnAfter } : {}),
-    });
+    /*
+     * 模型连接瞬时断开（还没吐出任何内容）时，这一步的模型调用再试一次，包在最里面，所有路径的每一步都覆盖。
+     * 部署开关 `XIONGBAO_MODEL_NET_RETRY=off` 关掉。见 `retryingDroppedConnection`。
+     */
+    const answering = answersOnLastStep(
+      modelNetRetryOn()
+        ? retryingDroppedConnection(configuration, { steps })
+        : configuration,
+      steps,
+      {
+        unattended: hooks.unattended === true,
+        ...(hooks.extension ? { extension: hooks.extension } : {}),
+        ...(hooks.planAcrossRuns === false ? { planAcrossRuns: false } : {}),
+        ...(hooks.verifyChanges === false ? { verifyChanges: false } : {}),
+        ...(hooks.deliveryDue === true ? { deliveryDue: true } : {}),
+        ...(hooks.skillChecks?.length
+          ? { skillChecks: hooks.skillChecks }
+          : {}),
+        ...(hooks.endsTurnAfter ? { endsTurnAfter: hooks.endsTurnAfter } : {}),
+      },
+    );
     // 绝对预算：这一次运行的设置优先，其次是部署的环境变量，都没有就用默认值。
     const foldBudget =
       hooks.foldBudgetTokens ?? foldBudgetFrom(process.env[FOLD_BUDGET_ENV]);
@@ -400,6 +414,7 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
       this.hooks.replayReasoning ? reasoningByToolCall(history) : undefined,
       this.hooks.wholeTurn?.(input) === true,
     );
+    this.steps.runId = input.runId;
     const { inline, observe, attribute } = this.hooks;
     /*
      * Last, after both passes that read roles, and only on the way to the model. The approval

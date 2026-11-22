@@ -19,6 +19,7 @@ import {
   unverifiedChanges,
   verifyNudge,
 } from "@openbot/shared/run-notices";
+import { droppedConnection } from "../network-error";
 import { withReplayedReasoning } from "./replayed-reasoning";
 import { DEFAULT_CONTEXT_WINDOW, foldEarlyResults } from "./turn-folding";
 import { unkeptPromise } from "./unkept-promise";
@@ -82,6 +83,8 @@ export type RunSteps = {
   verifyNudged?: boolean;
   /** The "this card's work is not handed in" reminder was already sent in this run. It is sent once. */
   deliveryNudged?: boolean;
+  /** The run's id, for the line a retried model call logs ({@link retryingDroppedConnection}). Never read for anything else. */
+  runId?: string;
 };
 
 /** A new run's state: counted from where it starts, never from where an earlier run stopped. */
@@ -837,6 +840,236 @@ export function foldingEarlyResults(
         supportedUrls: inner.supportedUrls,
         doGenerate: async (asked) => inner.doGenerate(await folded(asked)),
         doStream: async (asked) => inner.doStream(await folded(asked)),
+      };
+  return { ...configuration, model: wrapped };
+}
+
+/** How long a model call waits before it is made again after a dropped connection: one to two seconds. */
+const NET_RETRY_DELAY_MS = { base: 1000, jitter: 1000 } as const;
+
+export type NetRetryOptions = {
+  /** Where the run's id is read for the log line. */
+  steps?: RunSteps;
+  /** Waits before the second try. Tests give a quick one. */
+  sleep?: (milliseconds: number) => Promise<unknown>;
+  /** One JSON line, no content. Absent, the server's log. */
+  log?: (line: string) => void;
+};
+
+/** The parts a stream sends before it says anything: holding them back costs nothing, and lets a retry start clean. */
+const PREAMBLE_PARTS = new Set(["stream-start", "response-metadata", "raw"]);
+
+/**
+ * ONE MORE TRY FOR A MODEL CALL WHOSE CONNECTION DROPPED. The model call of one step is made again,
+ * once, when it throws, or when its stream fails BEFORE it has sent anything (no text, thinking or
+ * tool-call part of any kind), and the failure is a dropped connection (`droppedConnection`:
+ * ECONNRESET, "the socket connection was closed unexpectedly", and the like). It waits one to two
+ * seconds first.
+ *
+ * Seen in an evaluation: three runs ended on `ECONNRESET` between two tool calls, and the work was
+ * carried on by later runs that spent steps getting back to where it was. The AI SDK does not
+ * make such a call again by itself unless the provider wrapped the failure as a retryable API error;
+ * a stream cut after its headers, or a plain error out of `doStream`, goes straight up.
+ *
+ * NEVER AFTER ANYTHING WAS SAID. A stream that sent a part of the answer and then dropped is given
+ * up as it is: making the call again would say it twice, or call a tool twice. An answer from the
+ * provider (an HTTP status: 401, 402, 429, 5xx) is not a dropped connection and is left to the
+ * SDK's own retries, which are unchanged; a run somebody stopped (its abort signal) is never made
+ * again.
+ *
+ * Inside the other wrappers (the last-step one and the folding one), around the model as the runtime
+ * resolved it, so every step of every kind of run is covered and each is retried on its own. A
+ * configuration with a factory, or a model the runtime cannot resolve here, is returned as it is.
+ * Deployment switch `XIONGBAO_MODEL_NET_RETRY=off` (the agent reads it).
+ */
+export function retryingDroppedConnection(
+  configuration: BuiltInAgentConfiguration,
+  options: NetRetryOptions = {},
+): BuiltInAgentConfiguration {
+  if ("factory" in configuration) return configuration;
+  let model: unknown;
+  try {
+    model = resolveModel(configuration.model, configuration.apiKey);
+  } catch {
+    return configuration;
+  }
+  const older = isOlderModel(model);
+  if (!older && !isModel(model)) return configuration;
+  const inner = model as Model;
+  const sleep =
+    options.sleep ??
+    ((milliseconds: number) =>
+      new Promise((resolve) => setTimeout(resolve, milliseconds)));
+  const log = options.log ?? ((line: string) => console.info(line));
+
+  const codeOf = (error: unknown): string => {
+    for (let depth = 0, value = error; depth < 5 && value; depth++) {
+      if (typeof value !== "object") break;
+      const code = (value as { code?: unknown }).code;
+      if (typeof code === "string") return code;
+      value = (value as { cause?: unknown }).cause;
+    }
+    return "network";
+  };
+  const report = (
+    error: unknown,
+    asked: CallOptions,
+    recovered: boolean,
+  ): void => {
+    try {
+      log(
+        JSON.stringify({
+          type: "model-net-retry",
+          ...(options.steps?.runId ? { runId: options.steps.runId } : {}),
+          code: codeOf(error),
+          step: turnsIn(asked.prompt) + 1,
+          recovered,
+        }),
+      );
+    } catch {
+      // A log line that cannot be written is not a reason to fail the step.
+    }
+  };
+  /** Whether this failure is made up for by one more try, and the wait for it has passed. */
+  const worthAnotherTry = async (
+    error: unknown,
+    asked: CallOptions,
+  ): Promise<boolean> => {
+    if (asked.abortSignal?.aborted || !droppedConnection(error)) return false;
+    await sleep(
+      NET_RETRY_DELAY_MS.base + Math.random() * NET_RETRY_DELAY_MS.jitter,
+    );
+    return !asked.abortSignal?.aborted;
+  };
+
+  const doGenerate = async (asked: CallOptions): Promise<GenerateResult> => {
+    try {
+      return await inner.doGenerate(asked);
+    } catch (error) {
+      if (!(await worthAnotherTry(error, asked))) throw error;
+      try {
+        const result = await inner.doGenerate(asked);
+        report(error, asked, true);
+        return result;
+      } catch (second) {
+        report(error, asked, false);
+        throw second;
+      }
+    }
+  };
+
+  const doStream = async (asked: CallOptions): Promise<StreamResult> => {
+    let result: StreamResult;
+    let tried: { error: unknown } | undefined;
+    try {
+      result = await inner.doStream(asked);
+    } catch (error) {
+      if (!(await worthAnotherTry(error, asked))) throw error;
+      tried = { error };
+      try {
+        result = await inner.doStream(asked);
+      } catch (second) {
+        report(error, asked, false);
+        throw second;
+      }
+    }
+    let reader = result.stream.getReader();
+    // Parts held until the stream has said something, and what happens once it has.
+    let held: Part[] = [];
+    let flowing = false;
+    let failure: { error: unknown } | undefined;
+    let ended = false;
+    let reported = false;
+    /** The stream has said all it will say first: what is held goes out, and a retry's outcome is logged. */
+    const flow = () => {
+      flowing = true;
+      if (tried && !reported) {
+        reported = true;
+        report(
+          tried.error,
+          asked,
+          !failure && !held.some((part) => part.type === "error"),
+        );
+      }
+    };
+
+    /** The first try failed before saying anything: ask again, once, and carry on from the new stream. */
+    const startOver = async (error: unknown): Promise<boolean> => {
+      if (tried || !(await worthAnotherTry(error, asked))) return false;
+      tried = { error };
+      reader.cancel().catch(() => {});
+      try {
+        const next = await inner.doStream(asked);
+        reader = next.stream.getReader();
+        held = [];
+      } catch (second) {
+        held = [];
+        failure = { error: second };
+        flow();
+      }
+      return true;
+    };
+
+    const stream = new ReadableStream<Part>({
+      async pull(controller) {
+        for (;;) {
+          if (flowing && held.length > 0) {
+            controller.enqueue(held.shift() as Part);
+            return;
+          }
+          if (flowing && failure) {
+            controller.error(failure.error);
+            return;
+          }
+          if (flowing && ended) {
+            controller.close();
+            return;
+          }
+          let step: Awaited<ReturnType<typeof reader.read>>;
+          try {
+            step = await reader.read();
+          } catch (error) {
+            if (!flowing && (await startOver(error))) continue;
+            failure = { error };
+            flow();
+            continue;
+          }
+          if (step.done) {
+            ended = true;
+            flow();
+            continue;
+          }
+          const part = step.value;
+          if (
+            !flowing &&
+            part.type === "error" &&
+            (await startOver(part.error))
+          )
+            continue;
+          held.push(part);
+          if (
+            !flowing &&
+            !PREAMBLE_PARTS.has(part.type) &&
+            part.type !== "error"
+          )
+            flow();
+        }
+      },
+      cancel: (reason) => reader.cancel(reason),
+    });
+    return { ...result, stream };
+  };
+
+  // A v2 model is put in front of, not rebuilt, as `answersOnLastStep` does.
+  const wrapped: Model = older
+    ? Object.assign(Object.create(inner) as Model, { doGenerate, doStream })
+    : {
+        specificationVersion: "v3",
+        provider: inner.provider,
+        modelId: inner.modelId,
+        supportedUrls: inner.supportedUrls,
+        doGenerate,
+        doStream,
       };
   return { ...configuration, model: wrapped };
 }
