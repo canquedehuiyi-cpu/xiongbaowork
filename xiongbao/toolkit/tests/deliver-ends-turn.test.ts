@@ -291,10 +291,21 @@ describe("该照旧走的情形一步不省", () => {
     expect(asked).toHaveLength(1);
   });
 
-  test("交付被接受之后又做了别的事：最新一步不是交付，照常走", async () => {
+  test("没给判断（开关关着）：交付之后又做了别的事，照常再走一步", async () => {
     const asked: Message[][] = [];
     const prompt = [
       ...delivering(),
+      call("c1", "computer_run_command", { command: "ls" }),
+      result("c1", "computer_run_command"),
+    ];
+    await stream(asked, prompt, { run: {} });
+    expect(asked).toHaveLength(1);
+  });
+
+  test("被挡回的交付之后又做了别的事：不算已交付，照常再走一步", async () => {
+    const asked: Message[][] = [];
+    const prompt = [
+      ...delivering(BOUNCED),
       call("c1", "computer_run_command", { command: "ls" }),
       result("c1", "computer_run_command"),
     ];
@@ -365,6 +376,80 @@ describe("该照旧走的情形一步不省", () => {
       tools: ["computer_run_command", "computer_edit_file"],
     });
     expect(asked).toHaveLength(0);
+  });
+});
+
+describe("交付被接受之后有提醒：只放行一步，这一步之后结束", () => {
+  const openPlan = (): Message[] => [
+    call("p1", "update_plan", {
+      items: [
+        { text: "写产物", status: "done" },
+        { text: "核对", status: "pending" },
+      ],
+    }),
+    result("p1", "update_plan"),
+  ];
+
+  test("交付后又走了一步（有提醒时放行的那一步）：下一步不再问模型", async () => {
+    const asked: Message[][] = [];
+    const prompt: Message[] = [
+      user("交付"),
+      ...openPlan(),
+      call("d1", "deliver_task", {}),
+      result("d1", "deliver_task", DELIVERED),
+      call("c1", "computer_run_command", { command: "ls" }),
+      result("c1", "computer_run_command"),
+    ];
+    const parts = await stream(asked, prompt, {
+      run: { endsTurnAfter: endsAfter },
+    });
+    expect(asked).toHaveLength(0);
+    expect(parts.at(-1)).toMatchObject({ type: "finish" });
+  });
+
+  test("放行的那一步里又交付了一次、被接受：同样结束，不再放行", async () => {
+    const asked: Message[][] = [];
+    const prompt: Message[] = [
+      user("交付"),
+      ...openPlan(),
+      call("d1", "deliver_task", {}),
+      result("d1", "deliver_task", DELIVERED),
+      call("d2", "deliver_task", {}),
+      result("d2", "deliver_task", DELIVERED),
+    ];
+    await stream(asked, prompt, { run: { endsTurnAfter: endsAfter } });
+    expect(asked).toHaveLength(0);
+  });
+
+  test("非流式调用同样：放行的一步之后结束", async () => {
+    const asked: Message[][] = [];
+    const { model } = wrapped(asked, { endsTurnAfter: endsAfter });
+    const generated = await model.doGenerate({
+      prompt: [
+        user("交付"),
+        ...openPlan(),
+        call("d1", "deliver_task", {}),
+        result("d1", "deliver_task", DELIVERED),
+        call("c1", "computer_run_command", { command: "ls" }),
+        result("c1", "computer_run_command"),
+      ],
+      tools: [],
+    });
+    expect(asked).toHaveLength(0);
+    expect(generated.content).toEqual([]);
+  });
+
+  test("之前的一次被挡回、后来才被接受：从被接受那一次算起", async () => {
+    const asked: Message[][] = [];
+    const prompt: Message[] = [
+      ...delivering(BOUNCED),
+      ...openPlan(),
+      call("d2", "deliver_task", {}),
+      result("d2", "deliver_task", DELIVERED),
+    ];
+    await stream(asked, prompt, { run: { endsTurnAfter: endsAfter } });
+    // 刚被接受、还有提醒：这一步放行（问模型），而不是结束。
+    expect(asked.length).toBeGreaterThan(0);
   });
 });
 
@@ -461,5 +546,167 @@ describe("整条运行链路里：交付后的一步被省掉", () => {
     const types = await runIt(agentFor(asked, {}));
     expect(asked).toHaveLength(2);
     expect(types.at(-1)).toBe("RUN_FINISHED");
+  });
+});
+
+describe("整条运行链路里：交付后有提醒，只多走一步", () => {
+  const tool = (id: string, name: string, input: unknown) => ({
+    type: "tool-call",
+    toolCallId: id,
+    toolName: name,
+    input: JSON.stringify(input),
+  });
+  const toolsFinish = {
+    type: "finish",
+    finishReason: { unified: "tool-calls", raw: "tool_calls" },
+    usage,
+  };
+  const stopFinish = {
+    type: "finish",
+    finishReason: { unified: "stop", raw: "stop" },
+    usage,
+  };
+  const said = [
+    { type: "text-start", id: "text" },
+    { type: "text-delta", id: "text", delta: "好了。" },
+    { type: "text-end", id: "text" },
+  ];
+
+  /** 每一步按脚本说话；脚本用完就说一句话收尾。 */
+  function scripted(script: Record<string, unknown>[][], asked: number[]) {
+    return {
+      ...closingModel([]),
+      doStream: async () => {
+        asked.push(1);
+        const parts = script[asked.length - 1] ?? [...said, stopFinish];
+        return {
+          stream: new ReadableStream({
+            start(controller) {
+              controller.enqueue({ type: "stream-start", warnings: [] });
+              for (const part of parts) controller.enqueue(part);
+              controller.close();
+            },
+          }),
+        };
+      },
+    };
+  }
+
+  async function runScript(
+    script: Record<string, unknown>[][],
+    options: { on: boolean; deliveries?: string[] },
+  ) {
+    const asked: number[] = [];
+    const ran: string[] = [];
+    const deliveries = [...(options.deliveries ?? [DELIVERED])];
+    const make = (name: string, execute: () => Promise<string>) => ({
+      name,
+      description: name,
+      parameters: parametersFor({ type: "object", properties: {} } as never),
+      execute: async () => {
+        ran.push(name);
+        return execute();
+      },
+    });
+    const agent = new BuiltInAgentWithSaneHistory(
+      {
+        model: scripted(script, asked) as never,
+        prompt: "Work.",
+        maxSteps: 20,
+        tools: [
+          make("update_plan", async () => "ok"),
+          make("computer_run_command", async () => "ok"),
+          make("deliver_task", async () => deliveries.shift() ?? DELIVERED),
+        ],
+      } as BuiltInAgentConfiguration,
+      {
+        observe: (r) => r,
+        ...(options.on ? { endsTurnAfter: endsAfter } : {}),
+      },
+    );
+    agent.threadId = "thread";
+    agent.setMessages([{ id: "ask", role: "user", content: "交付它。" }]);
+    const types: string[] = [];
+    await agent.runAgent(
+      {},
+      { onEvent: ({ event }: { event: BaseEvent }) => types.push(event.type) },
+    );
+    return { asked: asked.length, ran, types };
+  }
+
+  const plan = (status: string) => ({
+    items: [
+      { text: "写产物", status: "done" },
+      { text: "核对", status },
+    ],
+  });
+  /** 第 1 步：计划里留一项没做，同一步交付（被接受）；第 2 步照提醒做点事。 */
+  const deliverWithOpenPlan = [
+    tool("p1", "update_plan", plan("pending")),
+    tool("d1", "deliver_task", {}),
+    toolsFinish,
+  ];
+
+  test("无提醒：交付后 0 步结束", async () => {
+    const result = await runScript(
+      [[tool("d1", "deliver_task", {}), toolsFinish]],
+      { on: true },
+    );
+    expect(result.asked).toBe(1);
+    expect(result.types.at(-1)).toBe("RUN_FINISHED");
+  });
+
+  test("有提醒：恰好再问 1 次模型，这一步里的工具照常执行，之后结束", async () => {
+    const result = await runScript(
+      [
+        deliverWithOpenPlan,
+        [tool("p2", "update_plan", plan("done")), toolsFinish],
+        [tool("c1", "computer_run_command", { command: "ls" }), toolsFinish],
+      ],
+      { on: true },
+    );
+    expect(result.asked).toBe(2);
+    expect(result.ran).toEqual(["update_plan", "deliver_task", "update_plan"]);
+    expect(result.types.at(-1)).toBe("RUN_FINISHED");
+  });
+
+  test("放行的那一步里又交付一次、被接受：结束，不再问", async () => {
+    const result = await runScript(
+      [deliverWithOpenPlan, [tool("d2", "deliver_task", {}), toolsFinish]],
+      { on: true },
+    );
+    expect(result.asked).toBe(2);
+    expect(result.types.at(-1)).toBe("RUN_FINISHED");
+  });
+
+  test("开关关着（不给判断）：照旧，不限步数", async () => {
+    const result = await runScript(
+      [
+        deliverWithOpenPlan,
+        [tool("p2", "update_plan", plan("done")), toolsFinish],
+        [tool("c1", "computer_run_command", { command: "ls" }), toolsFinish],
+      ],
+      { on: false },
+    );
+    // 第 3 步调了工具，第 4 步（说一句话）照问。
+    expect(result.asked).toBe(4);
+    expect(result.types.at(-1)).toBe("RUN_FINISHED");
+  });
+
+  test("被挡回的交付：不受影响，模型照常继续，直到交付被接受", async () => {
+    const result = await runScript(
+      [
+        [tool("d1", "deliver_task", {}), toolsFinish],
+        [tool("c1", "computer_run_command", { command: "ls" }), toolsFinish],
+        [tool("d2", "deliver_task", {}), toolsFinish],
+      ],
+      { on: true, deliveries: [BOUNCED, DELIVERED] },
+    );
+    expect(result.asked).toBe(3);
+    expect(result.ran).toEqual([
+      "deliver_task",
+      "computer_run_command",
+      "deliver_task",
+    ]);
   });
 });

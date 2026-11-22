@@ -317,8 +317,9 @@ export function answersOnLastStep(
      * for a hand-in (`deliver_task` accepted): what was handed in is already in the call's arguments,
      * and the model's one more sentence only sent the whole history up again. Absent, never.
      *
-     * Not when a reminder is due: a plan with items still open, or changes made and never checked, is
-     * answered by the model once more, as it was before, so the reminder still has its say.
+     * Not at once when a reminder is due: a plan with items still open, or changes made and never
+     * checked, is answered by the model once more, as it was before, so the reminder still has its
+     * say. That is ONE step (it may call tools, and they run); the step after it ends the turn.
      */
     endsTurnAfter?: (toolName: string, result: string) => boolean;
   } = {},
@@ -423,13 +424,24 @@ export function answersOnLastStep(
   };
 
   /**
-   * Whether this step is not worth asking the model: the step before it ended with an accepted
-   * hand-in (`run.endsTurnAfter`) and no reminder is due.
+   * Whether this step is not worth asking the model, because the turn's hand-in (`run.endsTurnAfter`)
+   * was accepted and the turn has had all it is owed since:
+   *  - the step before this one ended with the accepted hand-in and no reminder is due: it ends;
+   *  - a reminder is due: ONE step is let through (a check or a plan update, its tool calls run as
+   *    usual), and the step after that ends the turn, whatever it did. A hand-in made again in that
+   *    step, and accepted, ends it just the same.
+   * A hand-in that was bounced is no hand-in: nothing here applies to it.
    */
-  const turnEnded = (prompt: Prompt, tools: readonly { name: string }[]) =>
-    run.endsTurnAfter !== undefined &&
-    endedByResult(prompt, run.endsTurnAfter) &&
-    nudgeFor("", prompt, tools, true) === undefined;
+  const turnEnded = (prompt: Prompt, tools: readonly { name: string }[]) => {
+    if (run.endsTurnAfter === undefined) return false;
+    const since = stepsSinceHandIn(prompt, run.endsTurnAfter);
+    if (since === undefined) return false;
+    if (since >= STEPS_AFTER_HAND_IN) return true;
+    return (
+      endedByResult(prompt, run.endsTurnAfter) &&
+      nudgeFor("", prompt, tools, true) === undefined
+    );
+  };
 
   /** The same call asked again, with what it answered and the nudge after it. */
   const again = (call: CallOptions, text: string, nudge: string) => ({
@@ -647,6 +659,40 @@ function endedByResult(
       part.type === "tool-result" &&
       ends(part.toolName, plainResult(resultText(part.output))),
   );
+}
+
+/**
+ * How many steps a turn is given after its hand-in was accepted, when a reminder was due and so the
+ * turn was not ended at once: one, so the coworker can check or update its plan, and no more.
+ */
+const STEPS_AFTER_HAND_IN = 1;
+
+/**
+ * How many model steps the turn has taken since its first accepted hand-in (`ends` says which tool
+ * result is one), or undefined when none was accepted in it. Read from the prompt after the person's
+ * latest message, so a turn the host cut into several runs counts the same.
+ */
+function stepsSinceHandIn(
+  prompt: Prompt,
+  ends: (toolName: string, result: string) => boolean,
+): number | undefined {
+  const last = prompt.map((message) => message.role).lastIndexOf("user");
+  let since: number | undefined;
+  for (const message of prompt.slice(last + 1)) {
+    if (message.role === "assistant" && since !== undefined) since += 1;
+    else if (
+      message.role === "tool" &&
+      since === undefined &&
+      typeof message.content !== "string" &&
+      message.content.some(
+        (part) =>
+          part.type === "tool-result" &&
+          ends(part.toolName, plainResult(resultText(part.output))),
+      )
+    )
+      since = 0;
+  }
+  return since;
 }
 
 /** A result the runtime stored as a quoted string is read as the tool returned it. */
