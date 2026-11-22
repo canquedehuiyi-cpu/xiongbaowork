@@ -65,6 +65,56 @@ test("the log lines of a run's retrospective are read out of a noisy server log"
   expect(retroLinesOf(log, ["r3", "r9"])).toEqual([]);
 });
 
+test("the fast-path follow-up on a retrospective line is read, and the report says whether it paid off", () => {
+  const log = [
+    line({
+      runId: "r1",
+      outcome: "saved",
+      askedFastPath: true,
+      gotFastPath: true,
+    }),
+    line({ runId: "r2", outcome: "saved", askedFastPath: true }),
+    line({ runId: "r3", outcome: "saved" }),
+  ].join("\n");
+  expect(retroLinesOf(log, ["r1"])[0]).toMatchObject({
+    askedFastPath: true,
+    gotFastPath: true,
+  });
+  expect(retroLinesOf(log, ["r2"])[0]?.gotFastPath).toBeUndefined();
+  expect(retroLinesOf(log, ["r3"])[0]?.askedFastPath).toBeUndefined();
+  const cell = (retro: Record<string, unknown>) =>
+    learningRows([
+      [
+        "熊宝",
+        side([
+          combineRepeat(
+            record({
+              learning: {
+                newSkills: [],
+                newMemories: 0,
+                usedSkills: [],
+                retro: {
+                  waitedMs: 1000,
+                  ended: "logged",
+                  outcome: "saved",
+                  ...retro,
+                },
+              },
+            }),
+            record({
+              learning: { newSkills: [], newMemories: 0, usedSkills: [] },
+            }),
+          ),
+        ]),
+      ],
+    ])[0]?.[1];
+  expect(cell({ askedFastPath: true, gotFastPath: true })).toContain(
+    "，追问快路径（补上了）",
+  );
+  expect(cell({ askedFastPath: true })).toContain("，追问快路径（没补上）");
+  expect(cell({})).not.toContain("追问快路径");
+});
+
 test("a retrospective that replaced the employee's own skills carries how many", () => {
   const log = line({
     runId: "r1",
@@ -241,7 +291,7 @@ test("no retrospective in time: it stops at the cap and the second run starts as
     ...time,
   });
   expect(result).toEqual({ waitedMs: RETRO_WAIT_MS, ended: "timeout" });
-  expect(RETRO_WAIT_MS).toBe(150_000);
+  expect(RETRO_WAIT_MS).toBe(270_000);
 });
 
 // --- the report ---------------------------------------------------------------------------------
@@ -339,13 +389,13 @@ test("a retrospective that never came, and a run that learned nothing, read plai
         newSkills: [],
         newMemories: 0,
         usedSkills: [],
-        retro: { waitedMs: 150_000, ended: "timeout" },
+        retro: { waitedMs: 270_000, ended: "timeout" },
       },
     }),
     record({ learning: { newSkills: [], newMemories: 0, usedSkills: [] } }),
   );
   const [row] = learningRows([["熊宝", side([repeated])]]);
-  expect(row?.[1]).toBe("等满 150 s，没等到复盘结果");
+  expect(row?.[1]).toBe("等满 270 s，没等到复盘结果");
   expect(row?.[3]).toBe("没有");
   expect(
     learningRows([["Codex", side([combineRepeat(record(), record())])]]),

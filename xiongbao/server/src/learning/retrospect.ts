@@ -427,19 +427,53 @@ export async function retrospect(
     timeoutMs?: number;
     /** 重问时追加在提示后面的一段话。 */
     note?: string;
+    /** 模型调用超时、自动再调一次时通知一下（只说原因，不带内容）；这和「答不值得就重问」是两回事。 */
+    onRetry?: (reason: "timeout") => void;
   },
 ): Promise<SkillDraft | null> {
   if (workSteps(turn.steps) === 0) return null;
-  const answer = await (options.call ?? defaultCall)({
-    model: options.model,
-    system: RETRO_SYSTEM,
-    prompt: [retroPrompt(turn, options.existingSkills ?? []), options.note]
-      .filter(Boolean)
-      .join("\n\n"),
-    // 原为 60 秒，用户 2026-11-21 批准提到 120 秒（复盘在后台，不占员工时间）
-    abortSignal: AbortSignal.timeout(options.timeoutMs ?? 120_000),
-  });
+  const callModel = options.call ?? defaultCall;
+  const prompt = [retroPrompt(turn, options.existingSkills ?? []), options.note]
+    .filter(Boolean)
+    .join("\n\n");
+  // 原为 60 秒，用户 2026-11-21 批准提到 120 秒（复盘在后台，不占员工时间）
+  const attempt = (signal: AbortSignal) =>
+    callModel({
+      model: options.model,
+      system: RETRO_SYSTEM,
+      prompt,
+      abortSignal: signal,
+    });
+  const first = AbortSignal.timeout(options.timeoutMs ?? RETRO_TIMEOUT_MS);
+  let answer: { text: string };
+  try {
+    answer = await attempt(first);
+  } catch (error) {
+    // 只有超时再调一次（同样的上限）；第二次再超时、或别的错误，照旧抛出。
+    if (!isTimeoutError(error, first)) throw error;
+    options.onRetry?.("timeout");
+    answer = await attempt(
+      AbortSignal.timeout(options.timeoutMs ?? RETRO_TIMEOUT_MS),
+    );
+  }
   return parseDraft(answer.text);
+}
+
+/** 复盘的一次模型调用最多等多久。超时会自动再调一次，所以一次复盘最多约两倍这个数（评测等复盘的上限按此算）。 */
+export const RETRO_TIMEOUT_MS = 120_000;
+
+/** 这个错误是不是调用自己的超时信号引起的（`TimeoutError`，或超时信号触发的 `AbortError`）。 */
+function isTimeoutError(error: unknown, signal: AbortSignal): boolean {
+  const name = (value: unknown) =>
+    typeof value === "object" && value !== null && "name" in value
+      ? String((value as { name: unknown }).name)
+      : "";
+  if (name(error) === "TimeoutError") return true;
+  return (
+    name(error) === "AbortError" &&
+    signal.aborted &&
+    name(signal.reason) === "TimeoutError"
+  );
 }
 
 export type RetrospectorDeps = {
@@ -482,7 +516,10 @@ export function retroLogOutcome(outcome: RetroOutcome): string {
   return outcome.outcome;
 }
 
-/** `retried`：模型第一次答「不值得」，又重问了一次（只在重问过时才有这一项）。 */
+/**
+ * `retried`：模型第一次答「不值得」，又重问了一次（只在重问过时才有这一项）。
+ * `askedFastPath`：草稿只有步骤、没有快路径，又追问了一次；`gotFastPath`：追问后用上的草稿带快路径。
+ */
 export type RetroOutcome = (
   | { outcome: "skipped" }
   | { outcome: "nothing" }
@@ -495,7 +532,7 @@ export type RetroOutcome = (
       /** 存下的同时被替换掉的、员工这一轮自存的技能 id；没替换就没有这一项。 */
       replaced?: string[];
     }
-) & { retried?: true };
+) & { retried?: true; askedFastPath?: true; gotFastPath?: true };
 
 /**
  * 这一轮里员工自己调 `save_learned_skill` 存下的技能 id：成功的那几步的结果里（`{"saved":true,"id":"auto-…"`，
@@ -527,6 +564,20 @@ export function selfSavedSlugsOf(
 
 /** 交付的看板卡步数到了这个数，模型却答「不值得」，就重问一次。 */
 export const RETRO_RETRY_MIN_STEPS = 10;
+
+/**
+ * 交付的看板卡步数够多、主要靠命令做成、草稿却没有快路径时，追问一次要快路径。「主要靠命令」= 成功的
+ * `computer_run_command` 至少这么多次：三次以上说明最后是一串命令/脚本做成的，值得整理成一段能直接跑的脚本；
+ * 只有一两条命令的多半是在探索或收尾，写不出可复用的脚本。
+ */
+export const RETRO_FASTPATH_MIN_COMMANDS = 3;
+
+const RUN_COMMAND_TOOL = "computer_run_command";
+
+/** 追问快路径时追加的一段话：带上第一次的草稿，要求补上 fastPath，其余字段照旧。 */
+function fastPathNote(draft: SkillDraft): string {
+  return `Your previous answer was:\n${JSON.stringify({ skill: draft })}\n\nThis work was in the end done with commands or a script, but the answer has no fastPath. Add a fastPath: one block of script that can be run as it is and takes the work from the state the task STARTED in all the way to the deliverable. Every value that changes from one run to the next (as the original instructions describe) must be worked out by the script itself. Keep it under 900 characters. Keep the other fields as they are, and answer in the same JSON form.`;
+}
 
 /**
  * 轮次结束处挂的复盘函数。从不抛错：失败记一行日志（只记类型）。在本人帧里调用。
@@ -567,6 +618,17 @@ export function createRetrospector(deps: RetrospectorDeps) {
         existingSkills:
           (await deps.existingSkills?.(turn.agentId, ownSaved)) ?? [],
         ...(deps.call ? { call: deps.call } : {}),
+        // 模型调用超时自动再调一次时记一行（只有原因，不含内容），评测里看得出。
+        onRetry: (reason: "timeout") =>
+          log(
+            JSON.stringify({
+              type: "retrospect-retry",
+              reason,
+              agentId: turn.agentId,
+              runId: turn.runId,
+              timestamp: new Date().toISOString(),
+            }),
+          ),
       };
       let draft = await retrospect(turn, options);
       // 交付成功的卡步数不少，模型却说没什么可记的：多半是误判，重问一次，重问也占当天额度。
@@ -584,7 +646,36 @@ export function createRetrospector(deps: RetrospectorDeps) {
           note: `This work took ${steps} steps and was handed in successfully. Write the steps that would let the next run take fewer detours. Answer null only if the work was truly trivial or an existing skill already covers it.`,
         });
       }
-      const mark = retried ? ({ retried: true } as const) : {};
+      // 交付的卡步数不少、主要靠命令做成，草稿却只有步骤没有快路径：追问一次要快路径（也占当天额度）。
+      // 追问失败、超时或仍没有快路径，都用第一次的草稿，不让复盘失败。
+      let askedFastPath = false;
+      if (
+        draft &&
+        !draft.fastPath &&
+        turn.trigger === "card_delivered" &&
+        steps >= RETRO_RETRY_MIN_STEPS &&
+        turn.steps.filter((step) => step.tool === RUN_COMMAND_TOOL && step.ok)
+          .length >= RETRO_FASTPATH_MIN_COMMANDS &&
+        limiter.take(key)
+      ) {
+        askedFastPath = true;
+        try {
+          const better = await retrospect(turn, {
+            ...options,
+            note: fastPathNote(draft),
+          });
+          if (better?.fastPath) draft = better;
+        } catch {
+          // 用第一次的草稿。
+        }
+      }
+      const mark = {
+        ...(retried ? { retried: true as const } : {}),
+        ...(askedFastPath ? { askedFastPath: true as const } : {}),
+        ...(askedFastPath && draft?.fastPath
+          ? { gotFastPath: true as const }
+          : {}),
+      };
       if (!draft) return { outcome: "nothing", ...mark };
       const self = deps.selfSkill(turn.ownerUserId, turn.agentId);
       // 已经有一条差不多的：不再加一条近似的副本（这一轮员工自存的不算，那几条正是要被替换的）。
@@ -989,6 +1080,8 @@ export function createRetroObserver(deps: RetroObserverDeps) {
           ? { replaced: outcome.replaced }
           : {}),
         ...(outcome.retried ? { retried: true } : {}),
+        ...(outcome.askedFastPath ? { askedFastPath: true } : {}),
+        ...(outcome.gotFastPath ? { gotFastPath: true } : {}),
         timestamp: new Date().toISOString(),
       }),
     );
