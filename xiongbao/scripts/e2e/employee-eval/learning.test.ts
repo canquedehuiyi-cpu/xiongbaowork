@@ -916,3 +916,13 @@ test("a review that errored is recorded with the error's type, and says so in pl
     },
   ]);
 });
+
+test("logTypeCounts shows a model call that was made again after a dropped connection, by run", () => {
+  const log = [
+    '{"type":"model-net-retry","runId":"abcdef0123456789","code":"ECONNRESET","step":3,"recovered":true}',
+    '{"type":"model-net-retry","runId":"0000000000000000","code":"EPIPE","step":1,"recovered":false}',
+  ].join("\n");
+  expect(logTypeCounts(log, ["abcdef0123456789"])).toEqual({
+    "model-net-retry": 1,
+  });
+});

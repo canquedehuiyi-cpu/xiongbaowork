@@ -1,3 +1,4 @@
+import { NETWORK_CODES } from "../../../toolkit/src/network-error";
 import { englishName } from "../brand";
 /**
  * An app's read that failed for a reason that passes, tried again before the Bot hears of it.
@@ -29,19 +30,6 @@ function passingStatus(status: unknown): boolean {
 
 /** MCP's own "the server did not answer in time" (`ErrorCode.RequestTimeout`). */
 const MCP_REQUEST_TIMEOUT = -32001;
-
-/** A connection that dropped or never opened, by the code Node, Bun and undici give it. */
-const NETWORK_CODES = new Set([
-  "ETIMEDOUT",
-  "ECONNRESET",
-  "ECONNREFUSED",
-  "EAI_AGAIN",
-  "EPIPE",
-  "UND_ERR_CONNECT_TIMEOUT",
-  "UND_ERR_SOCKET",
-  "ConnectionRefused",
-  "ConnectionClosed",
-]);
 
 /**
  * How an app says "not now" in words: a rate limit, an overload, a timeout. Read only on an app's
