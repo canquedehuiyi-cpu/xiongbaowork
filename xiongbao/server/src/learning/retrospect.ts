@@ -28,6 +28,7 @@ import {
 } from "../skills/save-tool";
 import { withSourceFingerprints } from "../skills/usage";
 import { replyTextOf } from "../tasks/delivery";
+import { acceptedDelivery } from "../tasks/delivery-end";
 import { currentTenant } from "../tenant/context";
 import { firstJsonObject } from "../wakerflows/generator";
 import {
@@ -983,6 +984,35 @@ export function deliveredCardIn(events: readonly BaseEvent[]): string | null {
 }
 
 /**
+ * 这一轮自己的事件里有没有一次被接受的 `deliver_task`（答复 `delivered: true`；被挡回、被拒、读不懂的都不算），
+ * 口径同服务器判断「交付即收尾」用的 `acceptedDelivery`。不要求答复带卡号。
+ */
+export function ownDeliveryAccepted(events: readonly BaseEvent[]): boolean {
+  const names = new Map<string, string>();
+  for (const event of events) {
+    const value = event as BaseEvent & {
+      toolCallId?: string;
+      toolCallName?: string;
+      content?: unknown;
+    };
+    if (!value.toolCallId) continue;
+    if (
+      (event.type === EventType.TOOL_CALL_START ||
+        event.type === EventType.TOOL_CALL_CHUNK) &&
+      value.toolCallName
+    )
+      names.set(value.toolCallId, value.toolCallName);
+    if (
+      event.type === EventType.TOOL_CALL_RESULT &&
+      typeof value.content === "string" &&
+      acceptedDelivery(names.get(value.toolCallId) ?? "", value.content)
+    )
+      return true;
+  }
+  return false;
+}
+
+/**
  * 轮次结束处挂的那一个观察者：先记用过的技能，再决定复盘看什么。
  *
  * 一张看板卡常常由好几轮（运行）做成：交付（`deliver_task` 被接受，卡进入待验收）可能在中间某一轮，结束的那一轮
@@ -995,6 +1025,8 @@ export function deliveredCardIn(events: readonly BaseEvent[]): string | null {
  * 「步数不够」的跳过不算结论，卡上后面的轮补了步数还会再看一次。其余不属于已交付卡的轮看这一轮自己的轨迹，按
  * 步数门槛；其中看板卡派的轮（`kind: "task"`）没认到已交付的卡时标 `card_turn`，门槛同卡的 `card_delivered`
  * （`XIONGBAO_RETRO_CARD_MIN_STEPS`），因为员工做完了活却没调 `deliver_task` 也是一次复杂的活做成了的样子。
+ * 带失败标记的轮（如事件里有运行错误）若自己有一次 `deliver_task` 被接受，就当没失败照常复盘，日志行带
+ * `failedButDelivered: true`；被挡回、被拒、没交付的失败轮照旧按 `failed` 跳过。
  * 每一轮都记一行日志（类型、结果、触发、步数、卡号，跳过时带原因 `steps` / `failed` / `card_done`），
  * 评测据此知道这张卡的复盘已经跑完，没存技能时也能看出是门槛没到、冷却、还是模型认为不值得。
  */
@@ -1031,8 +1063,11 @@ export function createRetroObserver(deps: RetroObserverDeps) {
     let retro = retroTurnOf(turn);
     let reason: "steps" | "failed" | "card_done" | undefined;
     let reviewedKey: string | undefined;
+    // 这一轮带了失败标记（如事件里有运行错误），但自己有一次 `deliver_task` 被接受：活已经交付，照常复盘。
+    const failedButDelivered = turn.failed && ownDeliveryAccepted(turn.events);
+    if (failedButDelivered) retro = { ...retro, failed: false };
     try {
-      if (turn.failed) reason = "failed";
+      if (turn.failed && !failedButDelivered) reason = "failed";
       else {
         const taskId =
           turn.kind === "task" ? await cardOf(turn, retro.steps) : null;
@@ -1074,6 +1109,7 @@ export function createRetroObserver(deps: RetroObserverDeps) {
         agentId: turn.agentId,
         runId: turn.runId,
         ...(retro.cardId ? { cardId: retro.cardId } : {}),
+        ...(failedButDelivered ? { failedButDelivered: true } : {}),
         ...(outcome.outcome === "skipped" && reason ? { reason } : {}),
         ...("id" in outcome ? { skill: outcome.id } : {}),
         ...(outcome.outcome === "saved" && outcome.replaced

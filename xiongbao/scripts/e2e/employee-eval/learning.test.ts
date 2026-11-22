@@ -65,6 +65,47 @@ test("the log lines of a run's retrospective are read out of a noisy server log"
   expect(retroLinesOf(log, ["r3", "r9"])).toEqual([]);
 });
 
+test("a retrospective line of a failed turn that still handed in is read, and the report says so", () => {
+  const log = line({
+    runId: "r1",
+    outcome: "saved",
+    trigger: "card_delivered",
+    steps: 8,
+    failedButDelivered: true,
+  });
+  expect(retroLinesOf(log, ["r1"])[0]?.failedButDelivered).toBe(true);
+  const cell = learningRows([
+    [
+      "熊宝",
+      side([
+        combineRepeat(
+          record({
+            learning: {
+              newSkills: [],
+              newMemories: 0,
+              usedSkills: [],
+              runErrors: [
+                "RUN_ERROR：boom（在第 9 个事件，之前最后一个工具调用是 deliver_task）",
+              ],
+              retro: {
+                waitedMs: 1000,
+                ended: "logged",
+                outcome: "saved",
+                failedButDelivered: true,
+              },
+            },
+          }),
+          record({
+            learning: { newSkills: [], newMemories: 0, usedSkills: [] },
+          }),
+        ),
+      ]),
+    ],
+  ])[0]?.[1];
+  expect(cell).toContain("，这一轮带运行错误但已交付");
+  expect(cell).toContain("运行错误：RUN_ERROR：boom（在第 9 个事件");
+});
+
 test("the fast-path follow-up on a retrospective line is read, and the report says whether it paid off", () => {
   const log = [
     line({

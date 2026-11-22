@@ -558,6 +558,12 @@ const OUTCOME_NOTE: Readonly<Record<string, string>> = {
   refused: "refused：被拒，没存",
 };
 
+/** 这次运行事件里的运行错误：附在「学没学到」那一格后面；没有就是空。 */
+const runErrorsNote = (learning: RunLearning | undefined) =>
+  learning?.runErrors?.length
+    ? `；运行错误：${learning.runErrors.join("；")}`
+    : "";
+
 /** 一次运行之后等复盘的情况，一句话：结果、触发、步数、等了多久。 */
 const retroCell = (learning: RunLearning | undefined) => {
   const retro = learning?.retro;
@@ -584,7 +590,10 @@ const retroCell = (learning: RunLearning | undefined) => {
   const asked = retro.askedFastPath
     ? `，追问快路径（${retro.gotFastPath ? "补上了" : "没补上"}）`
     : "";
-  return `${outcome}${how}${why}${replaced}${asked}，等了 ${waited}`;
+  const failedButDelivered = retro.failedButDelivered
+    ? "，这一轮带运行错误但已交付"
+    : "";
+  return `${outcome}${how}${why}${replaced}${asked}${failedButDelivered}，等了 ${waited}${runErrorsNote(learning)}`;
 };
 
 /**
