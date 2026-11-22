@@ -1033,6 +1033,33 @@ export function deliveredCardIn(events: readonly BaseEvent[]): string | null {
   return found;
 }
 
+/** 这一轮的事件里有没有调用过 `deliver_task`（不论结果）：工具名在 START 或 CHUNK 上。 */
+export function deliverCalled(events: readonly BaseEvent[]): boolean {
+  return events.some((event) => {
+    const value = event as BaseEvent & { toolCallName?: string };
+    return (
+      (event.type === EventType.TOOL_CALL_START ||
+        event.type === EventType.TOOL_CALL_CHUNK) &&
+      value.toolCallName === DELIVER_TASK
+    );
+  });
+}
+
+/**
+ * 失败轮的诊断：第一个 `RUN_ERROR` 的错误码（没有就写事件类型），前 60 字；不含错误原文，免得带出内容。
+ * 没有 `RUN_ERROR` 就是 undefined（失败标记另有来路）。
+ */
+export function runErrorCodeOf(
+  events: readonly BaseEvent[],
+): string | undefined {
+  const found = events.find((event) => event.type === EventType.RUN_ERROR) as
+    | (BaseEvent & { code?: unknown })
+    | undefined;
+  if (!found) return undefined;
+  const code = typeof found.code === "string" && found.code ? found.code : "";
+  return (code || String(found.type)).slice(0, 60);
+}
+
 /**
  * 这一轮自己的事件里有没有一次被接受的 `deliver_task`（答复 `delivered: true`；被挡回、被拒、读不懂的都不算），
  * 口径同服务器判断「交付即收尾」用的 `acceptedDelivery`。不要求答复带卡号。
@@ -1076,7 +1103,9 @@ export function ownDeliveryAccepted(events: readonly BaseEvent[]): boolean {
  * 步数门槛；其中看板卡派的轮（`kind: "task"`）没认到已交付的卡时标 `card_turn`，门槛同卡的 `card_delivered`
  * （`XIONGBAO_RETRO_CARD_MIN_STEPS`），因为员工做完了活却没调 `deliver_task` 也是一次复杂的活做成了的样子。
  * 带失败标记的轮（如事件里有运行错误）若自己有一次 `deliver_task` 被接受，就当没失败照常复盘，日志行带
- * `failedButDelivered: true`；被挡回、被拒、没交付的失败轮照旧按 `failed` 跳过。
+ * `failedButDelivered: true`；被挡回、被拒、没交付的失败轮照旧按 `failed` 跳过。「自己有一次被接受」除了事件里的
+ * `deliver_task` 答复，也认库里这一轮的交付行（`deps.deliveredCard`，和认卡同一口径）。失败轮的日志行另带不含内容的
+ * 诊断：`runError`（错误码）、`deliverSeen`、`deliveredRow`、`eventCount`。
  * 每一轮都记一行日志（类型、结果、触发、步数、卡号，跳过时带原因 `steps` / `failed` / `card_done`），
  * 评测据此知道这张卡的复盘已经跑完，没存技能时也能看出是门槛没到、冷却、还是模型认为不值得。
  */
@@ -1094,10 +1123,14 @@ export function createRetroObserver(deps: RetroObserverDeps) {
   const cardOf = async (
     turn: ObservedTurn,
     ownSteps: readonly TraceStep[],
+    /** 已经从库里读到的这一轮的交付行（失败轮先读过），不再读第二遍。 */
+    known?: string | null,
   ): Promise<string | null> => {
-    const own = ownSteps.some((step) => step.tool === DELIVER_TASK)
-      ? await deps.deliveredCard(turn.runId).catch(() => null)
-      : null;
+    const own =
+      known ??
+      (ownSteps.some((step) => step.tool === DELIVER_TASK)
+        ? await deps.deliveredCard(turn.runId).catch(() => null)
+        : null);
     const found =
       own ??
       deliveredCardIn(turn.events) ??
@@ -1113,14 +1146,25 @@ export function createRetroObserver(deps: RetroObserverDeps) {
     let retro = retroTurnOf(turn);
     let reason: "steps" | "failed" | "card_done" | undefined;
     let reviewedKey: string | undefined;
-    // 这一轮带了失败标记（如事件里有运行错误），但自己有一次 `deliver_task` 被接受：活已经交付，照常复盘。
-    const failedButDelivered = turn.failed && ownDeliveryAccepted(turn.events);
+    /*
+     * 这一轮带了失败标记（如事件里有运行错误），但自己有一次 `deliver_task` 被接受：活已经交付，照常复盘。
+     * 「被接受」认两处：这一轮自己的事件，和库里这一轮的交付行（`deliver_task` 过了证据核对才写，被挡回、被拒的
+     * 不写；和 `cardOf` 同一口径）。事件的形状各处不一，库里的行不依赖它。
+     */
+    const deliveredRow = turn.failed
+      ? await deps.deliveredCard(turn.runId).catch(() => null)
+      : null;
+    const failedButDelivered =
+      turn.failed &&
+      (ownDeliveryAccepted(turn.events) || deliveredRow !== null);
     if (failedButDelivered) retro = { ...retro, failed: false };
     try {
       if (turn.failed && !failedButDelivered) reason = "failed";
       else {
         const taskId =
-          turn.kind === "task" ? await cardOf(turn, retro.steps) : null;
+          turn.kind === "task"
+            ? await cardOf(turn, retro.steps, deliveredRow)
+            : null;
         const key = taskId ? `${turn.tenant}:${taskId}` : undefined;
         if (taskId && key && reviewed.has(key)) {
           // 这张卡已经复盘过：后面的轮不再看一遍。
@@ -1161,6 +1205,15 @@ export function createRetroObserver(deps: RetroObserverDeps) {
         ...(retro.cardId ? { cardId: retro.cardId } : {}),
         ...(failedButDelivered ? { failedButDelivered: true } : {}),
         ...(outcome.outcome === "skipped" && reason ? { reason } : {}),
+        // 失败轮才有：为什么记成失败的线索，不含内容（错误码、事件里有没有交付调用、库里有没有这一轮的交付行、事件数）。
+        ...(turn.failed
+          ? {
+              runError: runErrorCodeOf(turn.events),
+              deliverSeen: deliverCalled(turn.events),
+              deliveredRow: deliveredRow !== null,
+              eventCount: turn.events.length,
+            }
+          : {}),
         ...("id" in outcome ? { skill: outcome.id } : {}),
         ...(outcome.outcome === "saved" && outcome.replaced
           ? { replaced: outcome.replaced }

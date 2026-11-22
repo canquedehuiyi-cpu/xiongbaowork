@@ -485,6 +485,32 @@ test("retroLogLines prints the retrospective lines of the given runs without any
   expect(retroLogLines(serverLog, [])).toEqual([]);
 });
 
+test("retroLogLines and retroLinesOf carry the failed-turn diagnosis, without any content", () => {
+  const log = line({
+    runId: "abcdef0123456789",
+    outcome: "skipped",
+    trigger: "steps",
+    steps: 16,
+    reason: "failed",
+    runError: "stream_stalled",
+    deliverSeen: false,
+    deliveredRow: false,
+    eventCount: 143,
+  });
+  expect(retroLogLines(log, ["abcdef0123456789"])[0]).toContain(
+    "reason=failed runError=stream_stalled deliverSeen=false deliveredRow=false eventCount=143",
+  );
+  expect(retroLinesOf(log, ["abcdef0123456789"])[0]).toMatchObject({
+    runError: "stream_stalled",
+    deliverSeen: false,
+    deliveredRow: false,
+    eventCount: 143,
+  });
+  // 没有这些项的行照旧。
+  const plain = line({ runId: "r1", outcome: "saved", steps: 8 });
+  expect(retroLogLines(plain, ["r1"])[0]).not.toContain("deliverSeen");
+});
+
 test("logTypeCounts counts the other log lines of the given runs by type, whatever field carries the run id", () => {
   const counts = logTypeCounts(serverLog, ["abcdef0123456789"]);
   expect(counts).toEqual({

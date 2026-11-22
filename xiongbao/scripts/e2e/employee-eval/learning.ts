@@ -128,6 +128,11 @@ export type RetroLine = {
   rewroteUnsafe?: true;
   /** 改写后的草稿过了安全检查、用上了（日志里的 `rewriteCleared`）。 */
   rewriteCleared?: true;
+  /** 失败轮的诊断（日志里同名的项，不含内容）：第一个运行错误的错误码、事件里有没有 `deliver_task` 调用、库里有没有这一轮的交付行、事件数。 */
+  runError?: string;
+  deliverSeen?: boolean;
+  deliveredRow?: boolean;
+  eventCount?: number;
   /** 这一轮带了失败标记（运行错误），但自己有一次交付成功，复盘照常跑了（日志里的 `failedButDelivered`）。 */
   failedButDelivered?: true;
   runId: string;
@@ -198,6 +203,18 @@ export function retroLinesOf(
         ...(parsed.rewriteCleared === true
           ? { rewriteCleared: true as const }
           : {}),
+        ...(typeof parsed.runError === "string"
+          ? { runError: shortText(parsed.runError) }
+          : {}),
+        ...(typeof parsed.deliverSeen === "boolean"
+          ? { deliverSeen: parsed.deliverSeen }
+          : {}),
+        ...(typeof parsed.deliveredRow === "boolean"
+          ? { deliveredRow: parsed.deliveredRow }
+          : {}),
+        ...(typeof parsed.eventCount === "number"
+          ? { eventCount: parsed.eventCount }
+          : {}),
         ...(parsed.failedButDelivered === true
           ? { failedButDelivered: true as const }
           : {}),
@@ -264,7 +281,7 @@ function runIdOfLog(parsed: Record<string, unknown>): string {
 
 /**
  * 这几轮在服务器日志里的复盘相关行，一行一条，写进作业日志：服务器日志不上传，作业日志里看不到复盘就没法查
- * 「为什么记成跳过」。只取不含内容的字段：type、outcome、trigger、steps、reason、retried、askedFastPath、
+ * 「为什么记成跳过」。只取不含内容的字段：type、outcome、trigger、steps、reason、失败轮的诊断（runError 错误码、deliverSeen、deliveredRow、eventCount）、retried、askedFastPath、
  * gotFastPath、rewroteUnsafe、rewriteCleared、failedButDelivered、cardId 和运行号各前 8 位、时间戳；`error`（只有错误类型）和 `reason`
  * （规则名、网址）单行化、打码、各取前 120 字。技能正文、名称、步骤、轨迹一律不打。
  */
@@ -291,6 +308,10 @@ export function retroLogLines(
     put("trigger", parsed.trigger);
     put("steps", parsed.steps);
     put("reason", parsed.reason);
+    put("runError", parsed.runError);
+    put("deliverSeen", parsed.deliverSeen);
+    put("deliveredRow", parsed.deliveredRow);
+    put("eventCount", parsed.eventCount);
     for (const flag of [
       "retried",
       "askedFastPath",
