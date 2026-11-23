@@ -181,7 +181,8 @@ describe("出口兜底：全局 fetch 包装", () => {
     );
     const response = await post(broken());
     expect(response.status).toBe(200);
-    expect(sent[0]?.thinking).toBeUndefined();
+    expect(sent).toHaveLength(1);
+    expect(Object.hasOwn(sent[0] as object, "thinking")).toBe(false);
     expect(sent[0]?.messages[3]?.reasoning_content).toBe("");
   });
 
