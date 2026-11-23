@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import type { TranscriptNote } from "@/components/channels/chat-transcript";
+import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { artifactHref } from "@/lib/computers/artifact";
 import { useScheduleZone } from "@/lib/settings/work-hours";
@@ -454,7 +455,7 @@ function EvidenceItem({
       </span>
       <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
       {row.kind === "workspace_file" && download ? (
-        <a className={`${link} shrink-0`} href={download}>
+        <a className={ARTIFACT_DOWNLOAD_LINK} href={download}>
           下载
         </a>
       ) : null}

@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
+import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
 import {
   ApprovalActions,
   useApprovalDecision,
@@ -233,10 +234,7 @@ export function EvidenceLine({
       <RowIcon kind={row.kind} />
       <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{label}</span>
       {download ? (
-        <a
-          className="shrink-0 text-inherit text-[12px] underline-offset-2 hover:underline"
-          href={download}
-        >
+        <a className={ARTIFACT_DOWNLOAD_LINK} href={download}>
           下载
         </a>
       ) : null}

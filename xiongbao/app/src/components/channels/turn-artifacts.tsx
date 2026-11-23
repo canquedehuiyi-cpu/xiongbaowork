@@ -138,11 +138,7 @@ function rowsOf(
   for (const path of paths) {
     const here = listed.present.has(path);
     // 去过这个目录、读完了、里面没有它：它被删了，或者从来就不在工作区里。
-    if (
-      !here &&
-      listed.read.has(artifactFolderOf(path)) &&
-      !listed.truncated
-    )
+    if (!here && listed.read.has(artifactFolderOf(path)) && !listed.truncated)
       continue;
     const bytes = listed.present.get(path);
     rows.push({ path, ...(here && bytes !== undefined ? { bytes } : {}) });
@@ -201,7 +197,9 @@ function TurnArtifacts({
           >
             <span className="min-w-0 truncate">{row.path}</span>
             {row.bytes === undefined ? null : (
-              <span className="shrink-0 opacity-70">{formatBytes(row.bytes)}</span>
+              <span className="shrink-0 opacity-70">
+                {formatBytes(row.bytes)}
+              </span>
             )}
           </a>
         );
@@ -222,9 +220,13 @@ function TurnArtifacts({
   );
 }
 
-/** 一份清单的外壳：和上面那些执行行同一副，一行一件事，图标在前。 */
+/** 清单里每个文件的一行：按内容宽度的卡片（单聊、群聊同一副，`self-start` 防止在纵向 flex 里被拉满整宽）。 */
 const ROW =
-  "inline-flex min-w-0 max-w-full items-baseline gap-1.5 rounded-[10px] border border-border bg-card px-[10px] py-[5px]";
+  "inline-flex min-w-0 max-w-full items-baseline gap-1.5 self-start rounded-[10px] border border-border bg-card px-[10px] py-[5px]";
+
+/** 「下载」链接的样式：本轮产物清单、交付卡、任务页的证据行共用同一组。 */
+export const ARTIFACT_DOWNLOAD_LINK =
+  "shrink-0 underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60";
 
 /**
  * 有事件时的清单：一位员工一组，每个文件一行（文件名、大小、「下载」）。
@@ -291,7 +293,7 @@ export function EventArtifacts({
                   {href === undefined ? null : (
                     <a
                       aria-label={`下载 ${file.path}`}
-                      className="shrink-0 underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                      className={ARTIFACT_DOWNLOAD_LINK}
                       // 空值：文件名由路由的 Content-Disposition 定，见下面老清单同一处的说明。
                       download=""
                       href={href}
