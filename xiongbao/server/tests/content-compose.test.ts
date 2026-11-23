@@ -27,6 +27,12 @@ describe("the content port is published", () => {
     );
   });
 
+  test("both compose files name the host port the same way", () => {
+    for (const file of ["docker-compose.yml", "docker/compose.delivery.yml"]) {
+      expect(read(file)).toContain("XIONGBAO_CONTENT_HOST_PORT:-3773");
+    }
+  });
+
   test("the Dockerfile exposes 3773", () => {
     expect(read("Dockerfile")).toMatch(/^EXPOSE 3773$/m);
   });
@@ -39,6 +45,10 @@ describe("the content port is published", () => {
     expect(manual).toContain("XIONGBAO_CONTENT_DOMAIN");
     expect(manual).toContain("泛域名解析");
     expect(manual).toContain("泛域名证书");
+    expect(manual).toContain("proxy_set_header Host $host");
+    expect(manual).toContain("HSTS");
+    expect(manual).toContain("access_log off");
+    expect(manual).toContain("约 1 分钟");
   });
 
   test("the configuration reference and the changelog describe the content origin", () => {

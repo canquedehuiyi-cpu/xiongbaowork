@@ -17,6 +17,7 @@ import {
   OPEN_TOKEN_TTL_MS,
   readOpenToken,
 } from "../src/content/token";
+import { createOriginGuard } from "../src/request-trust";
 
 const KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
 const T0 = 1_800_000_000_000;
@@ -268,6 +269,7 @@ describe("POST /api/computers/:botId/open", () => {
         seat: "person:p1",
         target: { kind: "dir", path: "site" },
         exp: T0 + OPEN_TOKEN_TTL_MS,
+        born: T0,
       });
     });
 
@@ -486,14 +488,40 @@ function realAccess(
 const member = { id: "m2", role: "user" } as const;
 
 describe("who may open a folder", () => {
-  test("a run that announced a file under the folder opens it, and the seat is the run owner's", async () => {
-    const access = realAccess({ events: [artifacts(["site/sub/deep.html"])] });
+  test("a run that announced a file directly in the folder opens it, and the seat is the run owner's", async () => {
+    const access = realAccess({ events: [artifacts(["site/deep.html"])] });
     const found = await access.authorize(member, {
       botId: "b1",
       dir: "site",
       scope: { channel: "c1", run: "r1" },
     });
     expect(found?.seat.key).toEqual({ kind: "person", personId: "owner-1" });
+  });
+
+  test("a file deeper down does not open its ancestors, only its own folder", async () => {
+    const access = realAccess({ events: [artifacts(["work/p1/out.md"])] });
+    const scope = { channel: "c1", run: "r1" };
+    expect(
+      await access.authorize(member, { botId: "b1", dir: "work", scope }),
+    ).toBeNull();
+    expect(
+      await access.authorize(member, { botId: "b1", dir: "work/p1", scope }),
+    ).not.toBeNull();
+    const card = realAccess({ card: ["work/p1/out.md"] });
+    expect(
+      await card.authorize(member, {
+        botId: "b1",
+        dir: "work",
+        scope: { task: "t1" },
+      }),
+    ).toBeNull();
+    expect(
+      await card.authorize(member, {
+        botId: "b1",
+        dir: "work/p1",
+        scope: { task: "t1" },
+      }),
+    ).not.toBeNull();
   });
 
   test("the folder's own index.html is enough, and a delivered file counts", async () => {
@@ -649,6 +677,40 @@ describe("stillAllowed", () => {
       await realAccess({ card: ["site/index.html"] }).stillAllowed(task),
     ).toBe(true);
     expect(await realAccess({ card: null }).stillAllowed(task)).toBe(false);
+  });
+});
+
+describe("cross-site requests", () => {
+  test("the application's origin guard stands in front of the open route", async () => {
+    const { routes } = (() => {
+      const built = build();
+      return { routes: built.app };
+    })();
+    const app = new Hono<{ Variables: AppVariables }>();
+    app.use(
+      "/api/*",
+      createOriginGuard({ browserOrigins: [], recorder: undefined } as never),
+    );
+    app.route("/", routes);
+    const attempt = (headers: Record<string, string>) =>
+      app.fetch(
+        new Request("http://app.test:3010/api/computers/b1/open", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "x-user": "p1",
+            ...headers,
+          },
+          body: JSON.stringify(dirBody()),
+        }),
+      );
+    expect((await attempt({ origin: "https://evil.test" })).status).toBe(403);
+    expect((await attempt({ "sec-fetch-site": "cross-site" })).status).toBe(
+      403,
+    );
+    expect((await attempt({ origin: "http://app.test:3010" })).status).toBe(
+      200,
+    );
   });
 });
 

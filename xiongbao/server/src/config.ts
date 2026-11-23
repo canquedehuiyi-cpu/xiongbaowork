@@ -1815,7 +1815,11 @@ function chatServerComputerToolsEnabled(environment: Environment): boolean {
  * quietly collided with the API's, or a domain with a scheme on it, would fail far from where it was
  * written.
  */
-function contentConfig(environment: Environment): {
+function contentConfig(
+  environment: Environment,
+  /** The addresses the application itself is reached at (public, app and trusted origins). */
+  appAddresses: readonly (string | undefined)[] = [],
+): {
   port?: number;
   domain?: string;
 } {
@@ -1859,6 +1863,25 @@ function contentConfig(environment: Environment): {
       throw new Error(
         `${domainName} cannot be an IP address; to reach content by IP use ${portName} instead`,
       );
+    }
+    /*
+     * Every name under the content domain is answered by the content server and never by the app
+     * (http-server.ts). A domain that is, or is above, the app's own host would take the app away.
+     */
+    // A single label (`localhost`) is local development, where the app and the content names share it.
+    for (const address of domain.includes(".") ? appAddresses : []) {
+      if (!address) continue;
+      let host: string;
+      try {
+        host = new URL(address).hostname.toLowerCase().replace(/\.+$/, "");
+      } catch {
+        continue;
+      }
+      if (host === domain || host.endsWith(`.${domain}`)) {
+        throw new Error(
+          `${domainName} (${domain}) is, or is above, the host of the application (${host}); every name under it is served as content, so the application would become unreachable: pick a domain of its own, such as apps.<your domain>`,
+        );
+      }
     }
     content.domain = domain;
   }
@@ -2057,7 +2080,11 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     generativeUi: generativeUiEnabled(environment),
     selfHostBanner: selfHostBannerEnabled(environment),
     chatServerComputerTools: chatServerComputerToolsEnabled(environment),
-    content: contentConfig(environment),
+    content: contentConfig(environment, [
+      publicUrl,
+      appUrl,
+      ...commaSeparated(environment, "TRUSTED_ORIGINS"),
+    ]),
     turnNoticeWindowMs: turnNoticeWindowMs(environment),
     ...(optional(environment, "APP_DIST_DIR")
       ? { appDistDir: optional(environment, "APP_DIST_DIR") as string }

@@ -227,12 +227,12 @@ export async function resolveArtifactAccess(
  * The seat to read a folder of `botId` from for this asker, or null: the rules of
  * {@link resolveArtifactAccess}, asked of a folder instead of one file.
  *
- * The folder is reachable when the conversation's run (or the card) listed at least one file under
- * it, `<dir>/index.html` included. That is wider than one file on purpose, and it is the whole
- * widening: a page and the files it loads sit in one folder, and a run that announced any of them
- * announced the site. Nothing outside the folder opens, and `dir` is the same safe relative path the
- * downloads take (never empty, never leaving the workspace). Whether the folder exists and has an
- * `index.html` is the caller's question to the computer, not a thing a record can answer.
+ * The folder is reachable when the conversation's run (or the card) listed `<dir>/index.html`, or a
+ * file whose DIRECT parent is `dir`. A file deeper down does not open its ancestors: a run that wrote
+ * `work/p1/out.md` announced `work/p1`, not `work`, which may hold other projects. `dir` is the same
+ * safe relative path the downloads take (never empty, never leaving the workspace). Whether the
+ * folder exists and has an `index.html` is the caller's question to the computer, not a thing a
+ * record can answer.
  */
 export async function resolveArtifactDirAccess(
   input: {
@@ -246,13 +246,14 @@ export async function resolveArtifactDirAccess(
   const { actor, botId, scope } = input;
   const dir = normalizedArtifactPath(input.dir);
   if (dir === null || botId === "") return null;
-  const prefix = `${dir}/`;
   const seat = await seatFor(
     actor,
     botId,
     (listed) => {
       const named = normalizedArtifactPath(listed);
-      return named?.startsWith(prefix) === true;
+      if (named === null) return false;
+      const slash = named.lastIndexOf("/");
+      return slash > 0 && named.slice(0, slash) === dir;
     },
     scope,
     deps,

@@ -1,13 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import type { AgentProfileStore } from "../src/agents/profile-store";
 import type { DeploymentConfig } from "../src/config";
-import { CONTENT_COOKIE, createContentServer } from "../src/content/server";
+import {
+  ALLOWED_CACHE_MS,
+  appLocation,
+  CONTENT_COOKIE,
+  createContentServer,
+} from "../src/content/server";
 import {
   type ContentGrant,
   hostCodeOf,
   issueOpenToken,
+  issuePathToken,
   issueSessionToken,
+  MAX_SESSION_AGE_MS,
   OPEN_TOKEN_TTL_MS,
+  readPathToken,
   readSessionToken,
 } from "../src/content/token";
 import { startHttpServer } from "../src/http-server";
@@ -107,7 +115,7 @@ describe("/__open", () => {
     expect(res.headers.get("location")).toBe("/");
   });
 
-  test("a folder token redirects to /u/<session token>/, never carrying the open token", async () => {
+  test("a folder token redirects to /u/<path token>/, never carrying the open token", async () => {
     const { server } = setup();
     const open = issueOpenToken(dirGrant(), KEY);
     const res = await get(server, `http://c/__open/${open}`);
@@ -117,10 +125,17 @@ describe("/__open", () => {
     const session = cookieOf(res);
     expect(session).not.toBeNull();
     expect(session).not.toBe(open);
-    expect(location).toBe(`/u/${session}/`);
-    expect(readSessionToken(session ?? "", KEY, T0)).toEqual(
-      dirGrant({ exp: T0 + OPEN_TOKEN_TTL_MS }),
+    const pathToken = location.slice("/u/".length, -1);
+    // The path token and the cookie are different values with different labels.
+    expect(pathToken).not.toBe(session);
+    expect(readPathToken(pathToken, KEY, T0)).toEqual(
+      dirGrant({ exp: T0 + OPEN_TOKEN_TTL_MS, born: T0 }),
     );
+    expect(readSessionToken(pathToken, KEY, T0)).toBeNull();
+    expect(readSessionToken(session ?? "", KEY, T0)).toEqual(
+      dirGrant({ exp: T0 + OPEN_TOKEN_TTL_MS, born: T0 }),
+    );
+    expect(readPathToken(session ?? "", KEY, T0)).toBeNull();
   });
 
   test("the cookie is host-only, HttpOnly, Lax and Path=/, Secure only over https", async () => {
@@ -320,7 +335,7 @@ describe("the cookie's target", () => {
 describe("/u/<token>/", () => {
   test("serves the folder named by the token in the path, without any cookie", async () => {
     const { server } = setup();
-    const t = issueSessionToken(dirGrant(), KEY);
+    const t = issuePathToken(dirGrant(), KEY);
     const res = await get(server, `http://c/u/${t}/app.css`);
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("body{}");
@@ -334,7 +349,7 @@ describe("/u/<token>/", () => {
   test("the token in the path wins over a cookie with a different target, each verified by itself", async () => {
     const { server } = setup();
     const site = issueSessionToken(dirGrant(), KEY);
-    const other = issueSessionToken(
+    const other = issuePathToken(
       dirGrant({ target: { kind: "dir", path: "other" } }),
       KEY,
     );
@@ -348,7 +363,7 @@ describe("/u/<token>/", () => {
 
   test("expired, tampered, one-time-link and malformed path tokens are 404", async () => {
     const { server, clock } = setup();
-    const t = issueSessionToken(dirGrant(), KEY);
+    const t = issuePathToken(dirGrant(), KEY);
     for (const path of [
       `/u/${t}x/`,
       `/u/${issueOpenToken(dirGrant(), KEY)}/`,
@@ -363,24 +378,144 @@ describe("/u/<token>/", () => {
     expect((await get(server, `http://c/u/${t}/`)).status).toBe(404);
   });
 
-  test("does not renew or set a cookie, and is cut off past half-life when no longer allowed", async () => {
+  test("is checked on every request, not renewed, and cut off once the answer has expired", async () => {
     const { server, asked, state, clock } = setup();
-    const t = issueSessionToken(dirGrant(), KEY);
-    const early = await get(server, `http://c/u/${t}/`);
-    expect(early.headers.get("set-cookie")).toBeNull();
-    expect(asked.length).toBe(0);
-    clock.now = T0 + OPEN_TOKEN_TTL_MS / 2 + 1;
-    const late = await get(server, `http://c/u/${t}/`);
-    expect(late.status).toBe(200);
-    expect(late.headers.get("set-cookie")).toBeNull();
+    const t = issuePathToken(dirGrant(), KEY);
+    const first = await get(server, `http://c/u/${t}/`);
+    expect(first.status).toBe(200);
+    expect(first.headers.get("set-cookie")).toBeNull();
     expect(asked.length).toBe(1);
     state.allowed = false;
+    // Still inside the minute: the remembered answer stands.
+    expect((await get(server, `http://c/u/${t}/app.css`)).status).toBe(200);
+    expect(asked.length).toBe(1);
+    clock.now = T0 + ALLOWED_CACHE_MS + 1;
     expect((await get(server, `http://c/u/${t}/`)).status).toBe(404);
+    expect(asked.length).toBe(2);
+  });
+
+  test("a cookie value is no path token, and a path token is no cookie", async () => {
+    const { server } = setup();
+    const cookieValue = issueSessionToken(dirGrant(), KEY);
+    const pathValue = issuePathToken(dirGrant(), KEY);
+    expect((await get(server, `http://c/u/${cookieValue}/`)).status).toBe(404);
+    const planted = await get(server, "http://c/", asCookie(pathValue));
+    expect(planted.status).toBe(404);
+    expect(planted.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  describe("an expired page", () => {
+    const navigation = { "sec-fetch-dest": "document" };
+    const expired = () => issuePathToken(dirGrant({ exp: T0 - 1 }), KEY);
+    const later = (clock: { now: number }) => {
+      clock.now = T0 + 5 * 60_000;
+    };
+
+    test("is continued to a fresh path token when a document navigation carries the same target's cookie", async () => {
+      const { server, clock } = setup();
+      later(clock);
+      const cookie = issueSessionToken(
+        dirGrant({ exp: clock.now + 1000 }),
+        KEY,
+      );
+      for (const dest of ["document", "iframe"]) {
+        const res = await get(
+          server,
+          `http://c/u/${expired()}/sub/page.html?x=1`,
+          { ...asCookie(cookie), "sec-fetch-dest": dest },
+        );
+        expect(res.status).toBe(302);
+        const location = res.headers.get("location") ?? "";
+        const match = /^\/u\/([^/]+)\/sub\/page\.html\?x=1$/.exec(location);
+        expect(match).not.toBeNull();
+        const grant = readPathToken(match?.[1], KEY, clock.now);
+        expect(grant?.target).toEqual({ kind: "dir", path: "site" });
+        expect(grant?.exp).toBe(clock.now + OPEN_TOKEN_TTL_MS);
+        expect(res.headers.get("set-cookie")).toBeNull();
+      }
+    });
+
+    test("is 404 for a sub-resource fetch, a missing header, a missing cookie or another method", async () => {
+      const { server, clock } = setup();
+      later(clock);
+      const cookie = issueSessionToken(
+        dirGrant({ exp: clock.now + 1000 }),
+        KEY,
+      );
+      const url = `http://c/u/${expired()}/`;
+      expect(
+        (
+          await get(server, url, {
+            ...asCookie(cookie),
+            "sec-fetch-dest": "image",
+          })
+        ).status,
+      ).toBe(404);
+      expect((await get(server, url, asCookie(cookie))).status).toBe(404);
+      expect((await get(server, url, navigation)).status).toBe(404);
+      expect(
+        (await get(server, url, { ...asCookie(cookie), ...navigation }, "POST"))
+          .status,
+      ).toBe(404);
+    });
+
+    test("is 404 when the cookie is another target's, another person's, expired, or not allowed any more", async () => {
+      const { server, clock, state } = setup();
+      later(clock);
+      const url = `http://c/u/${expired()}/`;
+      const fresh = (over: Partial<ContentGrant>) =>
+        asCookie(
+          issueSessionToken(dirGrant({ exp: clock.now + 1000, ...over }), KEY),
+        );
+      for (const over of [
+        { target: { kind: "dir", path: "other" } } as const,
+        { person: "p2" },
+        { bot: "b2" },
+        { seat: "person:p2" },
+        { exp: clock.now },
+      ]) {
+        expect(
+          (await get(server, url, { ...fresh(over), ...navigation })).status,
+        ).toBe(404);
+      }
+      state.allowed = false;
+      expect(
+        (await get(server, url, { ...fresh({}), ...navigation })).status,
+      ).toBe(404);
+    });
+
+    test("is 404 past the absolute lifetime", async () => {
+      const { server, clock } = setup();
+      clock.now = T0 + MAX_SESSION_AGE_MS + 1000;
+      const cookie = issueSessionToken(
+        dirGrant({ born: T0, exp: clock.now + 1000 }),
+        KEY,
+      );
+      const res = await get(server, `http://c/u/${expired()}/`, {
+        ...asCookie(cookie),
+        ...navigation,
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test("a forged expired token is not continued", async () => {
+      const { server, clock } = setup();
+      later(clock);
+      const cookie = issueSessionToken(
+        dirGrant({ exp: clock.now + 1000 }),
+        KEY,
+      );
+      const res = await get(server, `http://c/u/${expired()}x/`, {
+        ...asCookie(cookie),
+        ...navigation,
+      });
+      expect(res.status).toBe(404);
+    });
   });
 
   test("HEAD has no body and other methods are 405", async () => {
     const { server } = setup();
-    const t = issueSessionToken(dirGrant(), KEY);
+    const t = issuePathToken(dirGrant(), KEY);
     const head = await get(server, `http://c/u/${t}/`, {}, "HEAD");
     expect(head.status).toBe(200);
     expect(await head.text()).toBe("");
@@ -393,41 +528,192 @@ describe("/u/<token>/", () => {
 describe("renewal and revocation", () => {
   const cookieFor = (grant: ContentGrant) => issueSessionToken(grant, KEY);
 
-  test("a fresh grant is not asked about and not reissued", async () => {
+  test("a fresh grant is checked but not reissued", async () => {
     const { server, asked } = setup();
     const res = await get(server, "http://c/", asCookie(cookieFor(dirGrant())));
     expect(res.status).toBe(200);
-    expect(asked.length).toBe(0);
+    expect(asked.length).toBe(1);
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 
-  test("past half-life it is checked, and the cookie is reissued for another 30 minutes", async () => {
-    const { server, asked, clock } = setup();
+  test("past half-life the cookie is reissued for another 30 minutes, keeping its birth", async () => {
+    const { server, clock } = setup();
     const old = cookieFor(dirGrant());
     clock.now = T0 + OPEN_TOKEN_TTL_MS / 2 + 1_000;
     const res = await get(server, "http://c/", asCookie(old));
     expect(res.status).toBe(200);
-    expect(asked.length).toBe(1);
     const renewed = cookieOf(res) ?? "";
     expect(renewed).not.toBe(old);
     const grant = readSessionToken(renewed, KEY, clock.now);
     expect(grant).not.toBeNull();
     expect(grant?.exp).toBe(clock.now + OPEN_TOKEN_TTL_MS);
+    expect(grant?.born).toBe(T0);
     expect(grant?.target).toEqual({ kind: "dir", path: "site" });
     expect(res.headers.get("set-cookie")).toContain("HttpOnly");
   });
 
+  test("renewals stop twelve hours after the first issue", async () => {
+    const { server, clock } = setup();
+    // A session kept alive by renewals for just under twelve hours...
+    clock.now = T0 + MAX_SESSION_AGE_MS - 60_000;
+    const nearEnd = cookieFor(dirGrant({ born: T0, exp: clock.now + 60_000 }));
+    const last = await get(server, "http://c/", asCookie(nearEnd));
+    expect(last.status).toBe(200);
+    const renewed = readSessionToken(cookieOf(last) ?? "", KEY, clock.now);
+    // ...gets a short last one, ending exactly at the cap.
+    expect(renewed?.exp).toBe(T0 + MAX_SESSION_AGE_MS);
+    // And after the cap there is nothing to renew: the cookie has expired on its own.
+    clock.now = T0 + MAX_SESSION_AGE_MS + 1;
+    const past = await get(server, "http://c/", asCookie(cookieOf(last) ?? ""));
+    expect(past.status).toBe(404);
+    // Even a long-lived value (made by some earlier bug) is refused for renewal past the cap.
+    const stuck = cookieFor(dirGrant({ born: T0, exp: clock.now + 60_000 }));
+    const refused = await get(server, "http://c/", asCookie(stuck));
+    expect(refused.status).toBe(404);
+    expect(refused.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
   test("a person who is no longer allowed gets 404 and the cookie is cleared", async () => {
-    const { server, state, clock } = setup();
+    const { server, state } = setup();
     const old = cookieFor(dirGrant());
     state.allowed = false;
-    clock.now = T0 + OPEN_TOKEN_TTL_MS / 2 + 1_000;
     const res = await get(server, "http://c/", asCookie(old));
     expect(res.status).toBe(404);
     const cleared = res.headers.get("set-cookie") ?? "";
     expect(cleared).toContain(`${CONTENT_COOKIE}=;`);
     expect(cleared).toContain("Max-Age=0");
     expect(cleared).toContain("HttpOnly");
+  });
+
+  test("a person removed after a request is cut off by the first request once the minute is up", async () => {
+    const { server, state, clock } = setup();
+    const cookie = cookieFor(dirGrant({ exp: T0 + 10 * 60_000 }));
+    expect((await get(server, "http://c/", asCookie(cookie))).status).toBe(200);
+    state.allowed = false;
+    clock.now = T0 + ALLOWED_CACHE_MS - 1;
+    expect((await get(server, "http://c/", asCookie(cookie))).status).toBe(200);
+    clock.now = T0 + ALLOWED_CACHE_MS + 1;
+    const res = await get(server, "http://c/", asCookie(cookie));
+    expect(res.status).toBe(404);
+    expect(res.headers.get("set-cookie")).toContain("Max-Age=0");
+  });
+
+  test("an answer is remembered by the grant, not by the token text, refusals too", async () => {
+    const { server, asked, state } = setup({ allowed: false });
+    // Two different tokens for the same grant (the birth differs) share one remembered answer.
+    const a = cookieFor(dirGrant({ born: T0 - 1 }));
+    const b = cookieFor(dirGrant({ born: T0 - 2 }));
+    expect((await get(server, "http://c/", asCookie(a))).status).toBe(404);
+    expect((await get(server, "http://c/", asCookie(b))).status).toBe(404);
+    expect(asked.length).toBe(1);
+    state.allowed = true;
+    expect((await get(server, "http://c/", asCookie(a))).status).toBe(404);
+    // A different grant is a different question.
+    const other = cookieFor(
+      dirGrant({ target: { kind: "dir", path: "other" } }),
+    );
+    expect((await get(server, "http://c/", asCookie(other))).status).toBe(200);
+    expect(asked.length).toBe(2);
+  });
+
+  test("concurrent requests for one grant share one lookup", async () => {
+    let calls = 0;
+    let release: (value: boolean) => void = () => undefined;
+    const gate = new Promise<boolean>((resolve) => {
+      release = resolve;
+    });
+    const server = createContentServer({
+      key: KEY,
+      now: () => T0,
+      gateway: {
+        serveFile: async () => stream("ok"),
+      },
+      stillAllowed: () => {
+        calls += 1;
+        return gate;
+      },
+    });
+    const cookie = asCookie(cookieFor(dirGrant()));
+    const pending = [1, 2, 3, 4].map(() => get(server, "http://c/", cookie));
+    await Bun.sleep(5);
+    expect(calls).toBe(1);
+    release(true);
+    const answers = await Promise.all(pending);
+    expect(answers.map((res) => res.status)).toEqual([200, 200, 200, 200]);
+    expect(calls).toBe(1);
+  });
+
+  test("the table of remembered answers is bounded, oldest first", async () => {
+    let calls = 0;
+    const server = createContentServer({
+      key: KEY,
+      now: () => T0,
+      gateway: { serveFile: async () => stream("ok") },
+      stillAllowed: async () => {
+        calls += 1;
+        return true;
+      },
+    });
+    const as = (person: string) => asCookie(cookieFor(dirGrant({ person })));
+    for (let i = 0; i < 1005; i += 1)
+      await get(server, "http://c/", as(`p${i}`));
+    expect(calls).toBe(1005);
+    await get(server, "http://c/", as("p1004"));
+    expect(calls).toBe(1005);
+    await get(server, "http://c/", as("p0"));
+    expect(calls).toBe(1006);
+  });
+
+  test("a failing lookup is a 502 and is not remembered", async () => {
+    let fail = true;
+    const server = createContentServer({
+      key: KEY,
+      now: () => T0,
+      gateway: { serveFile: async () => stream("ok") },
+      stillAllowed: async () => {
+        if (fail) throw new Error("down");
+        return true;
+      },
+    });
+    const cookie = asCookie(cookieFor(dirGrant()));
+    expect((await get(server, "http://c/", cookie)).status).toBe(502);
+    fail = false;
+    expect((await get(server, "http://c/", cookie)).status).toBe(200);
+  });
+});
+
+describe("an app target's location", () => {
+  test("only a plain absolute path is taken", () => {
+    expect(appLocation("/dash")).toBe("/dash");
+    expect(appLocation("/a/b?x=1")).toBe("/a/b?x=1");
+    for (const bad of [
+      "",
+      "dash",
+      "//evil.com",
+      "\t/evil.com",
+      "\t//evil.com",
+      "/\\evil.com",
+      "/a\nb",
+      "/a b",
+      "https://evil.com",
+      "///x",
+    ]) {
+      expect(appLocation(bad)).toBe("/");
+    }
+  });
+
+  test("the redirect from /__open never leaves the origin", async () => {
+    const { server } = setup();
+    for (const path of ["//evil.com", "\t/evil.com", "evil.com", "/ok"]) {
+      const token = issueOpenToken(
+        { ...appGrant(), target: { kind: "app", port: 4000, path } },
+        KEY,
+      );
+      const location = (
+        await get(server, `http://c/__open/${token}`)
+      ).headers.get("location");
+      expect(location).toBe(path === "/ok" ? "/ok" : "/");
+    }
   });
 });
 
@@ -457,11 +743,12 @@ describe("domain mode", () => {
     const { server } = setup({ domain: DOMAIN });
     const open = issueOpenToken(grant, KEY);
     const session = issueSessionToken(grant, KEY);
+    const pathToken = issuePathToken(grant, KEY);
     expect(
       (await get(server, `https://${otherHost}/__open/${open}`)).status,
     ).toBe(404);
     expect(
-      (await get(server, `https://${otherHost}/u/${session}/`)).status,
+      (await get(server, `https://${otherHost}/u/${pathToken}/`)).status,
     ).toBe(404);
     expect(
       (await get(server, `https://${otherHost}/`, asCookie(session))).status,

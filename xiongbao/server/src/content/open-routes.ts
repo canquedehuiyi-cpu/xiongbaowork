@@ -168,6 +168,7 @@ export function createOpenRoutes(deps: OpenRoutesDeps) {
         ...(body.scope?.task !== undefined ? { task: body.scope.task } : {}),
         target: { kind: "dir", path: dir },
         exp: issuedAt + OPEN_TOKEN_TTL_MS,
+        born: issuedAt,
       };
       const token = issueOpenToken(grant, deps.key);
 
