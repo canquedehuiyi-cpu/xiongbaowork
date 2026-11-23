@@ -48,7 +48,7 @@
  *                     有坑可学每一对还有第三次：同一份第二次夹具、没有技能和记忆的新员工做的对照运行（不等它的复盘），
  *                     记 controlRun，验收看「有技能比没技能」
  *   EVAL_SEED         有坑可学的题的基础种子（作业里是 run id，熊宝、Codex 两个作业同一个）；没设就现抽一个并记在结果里
- *   EVAL_DEADLINE_EPOCH 作业截止时间（Unix 秒，作业开头记下）：来不及再做完一对时，剩下的对不做，已完成的照常记录；本机不设
+ *   EVAL_DEADLINE_EPOCH 作业截止时间（Unix 秒，作业开头记下）：来不及再做完一对时，剩下的对不做，已完成的照常记录；交付题剩余时间不够一题（按每题上限）就不开新题、不重跑；本机不设
  *   EVAL_XIONGBAO_MODEL  只给熊宝侧换的模型名，空表示和 EVAL_MODEL 一样（Codex 侧不受影响）
  *   EVAL_PROMPT_SLIM  on | off，传给服务器的 XIONGBAO_PROMPT_SLIM（提示词瘦身，服务器默认开）；off 用来做对照
  *   EVAL_SERVER_ENV  给服务器多带几个 XIONGBAO_ 开头的部署开关，逗号分隔的 名字=值（例如 XIONGBAO_VERIFY_NUDGE=off），用来对照开关开和关
@@ -223,6 +223,7 @@ import {
   type RunLearning,
   writeResults,
 } from "./records";
+import { withRerun } from "./rerun";
 import {
   type BackgroundKind,
   placeSmoke,
@@ -2391,19 +2392,35 @@ try {
       } else pairStartedAt = Date.now();
     }
     if (work.pairKey && skipped.has(work.pairKey)) continue;
+    // 交付题也看作业截止时间：剩下的时间不够做一题（按每题上限）就不开新题，没跑的格在报告里显示「没有结果」。
+    if (
+      work.task &&
+      isDeliverableTask(work.task) &&
+      !pairFits(process.env, Date.now(), undefined, work.minutes, 1)
+    ) {
+      notes.push(`${work.key} 没做：离作业截止时间不够做完一题`);
+      continue;
+    }
     if (work.task === "webform") work.site = startWebformSite();
     materializeWork(work);
     let record: EvalRecord | undefined;
     try {
       record = await runWork(work);
-      // 交付题没过：新员工、新夹具重跑一次。结果取重跑那次，reruns 记 1；不管第一次怎么失败，重跑后仍失败就是失败。
-      if (work.task && isDeliverableTask(work.task) && !work.pair) {
-        if (record && !record.passed && rerunFailed) {
-          console.log(`   ${work.key} 没过，重跑一次`);
-          materializeWork(work);
-          record = { ...(await runWork(work)), reruns: 1 };
-        } else if (record) record = { ...record, reruns: 0 };
-      }
+      // 交付题没过：新员工、新夹具重跑一次，结果取重跑那次（reruns 记 1）；重跑出错或来不及就保留第一次。
+      if (record && work.task && isDeliverableTask(work.task) && !work.pair)
+        record = await withRerun(record, {
+          enabled: rerunFailed,
+          fits: () =>
+            pairFits(process.env, Date.now(), undefined, work.minutes, 1),
+          rerun: async () => {
+            console.log(`   ${work.key} 没过，重跑一次`);
+            materializeWork(work);
+            const again = await runWork(work);
+            if (!again) throw new Error("重跑没有产出记录");
+            return again;
+          },
+          note: (line) => notes.push(line),
+        });
     } catch (thrown) {
       // 建不出新员工（名额不够）：记一笔，别拖垮整次评测。对照建不出来，这一对没有对照；
       // 第一次建不出来，这一对剩下的运行（第二次、对照）都不做，也不退回到别的员工。

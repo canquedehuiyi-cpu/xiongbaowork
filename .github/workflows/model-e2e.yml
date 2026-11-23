@@ -215,13 +215,13 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["employee-eval","all"]'), inputs.suite)
     runs-on: ubuntu-latest
     environment: model-e2e
-    # 五道题、每题墙钟上限 20 分钟；paths 选两条路径时是两遍，再加起服务、装浏览器的时间（GitHub 单个作业上限 6 小时，这里按 3 小时）。
+    # 五道题、每题墙钟上限 20 分钟；paths 选两条路径时是两遍，再加起服务、装浏览器的时间（GitHub 单个作业上限 6 小时，这里按 6 小时：交付题 7 题 × 两条路径，失败还重跑，要留足）。
     # 重复类的题多对（repeat_pairs）：只点名 repeat-pitfall、六对、一条路径。有坑可学每对三次：第一次约 6 分钟、第二次和
     # 同种子对照各约 3 分钟；第一次之后等复盘出结论，最多 600 秒（用户 2026-11-22 批准），第二次之后最多 270 秒，对照不等。
     # 复盘快时每对约 16 分钟、六对约 96 分钟；复盘慢时第一次之后最多多等 330 秒，每对约 21.5 分钟、六对约 129 分钟，
-    # 仍在 165 分钟截止内。最坏每次都跑满 20 分钟会超过上限；所以作业开头记截止时间（165 分钟），脚本来不及时把剩下的对跳过
+    # 仍在 345 分钟截止内。最坏每次都跑满 20 分钟会超过上限；所以作业开头记截止时间（345 分钟），脚本来不及时把剩下的对跳过
     # （超了截止的对照旧跳过，这是现有机制，没改），不让作业超时丢掉全部结果。
-    timeout-minutes: 180
+    timeout-minutes: 360
     services:
       # PostgreSQL 17 with pgvector: migration 0000 creates the `vector` extension.
       postgres:
@@ -256,18 +256,13 @@ jobs:
           cd agent-computer && bun install --frozen-lockfile --ignore-scripts
           bun x playwright install --with-deps chromium
       # 交付题的判分（check-deliverables.ts）：python3 -I 读演示文稿、文档、表格，ffmpeg 读视频。python 依赖装在系统级
-      # （不用 --user：隔离后的判分和员工用户都读得到）；浏览器按 ci.yml 的 computer-browser 作业的写法，用 agent-computer 自己的
-      # Playwright 装无 shell 的 Chromium（上一步已装完整版，这一步补 --no-shell 的那个构建，网页题截图用）。
-      - name: Install the deliverables checkers (python office libraries, ffmpeg, headless Chromium)
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
+      # （不用 --user：隔离后的判分和员工用户都读得到）。网页题要的 Chromium 上一步已装在 /opt/ms-playwright。
+      - name: Install the deliverables checkers (python office libraries, ffmpeg)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg python3-pip
           sudo python3 -m pip install --break-system-packages python-pptx python-docx openpyxl
           python3 -I -c "import pptx, docx, openpyxl"
-          cd agent-computer && bunx playwright install --with-deps --no-shell chromium
-          sudo chmod -R a+rX "$PLAYWRIGHT_BROWSERS_PATH"
       # 员工的电脑读不到评测仓库：员工的命令以专用系统用户 xbeval 运行（评测脚本 isolation.ts 以 EVAL_EMPLOYEE_USER 起电脑），
       # runner 的 home（检出目录、临时目录都在里面）对它关闭；电脑的运行副本放 /opt/xbeval（它 import ../../shared，
       # 依赖 zod 从 agent-computer/node_modules 找）；bun 等工具须在该用户也读得到的位置。评测开始时脚本还会以员工身份自检，
@@ -294,13 +289,13 @@ jobs:
           DATABASE_URL=postgres://openbot:e2e-owner@127.0.0.1:5432/openbot_employee_eval bun run --cwd server scripts/migrate.ts
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_app WITH PASSWORD 'e2e-app' NOSUPERUSER NOBYPASSRLS"
           psql -h 127.0.0.1 -U openbot -d postgres -v ON_ERROR_STOP=1 -c "ALTER ROLE openbot_role_writer WITH PASSWORD 'e2e-role-writer'"
-      # 多对放在同一次运行里做完，不能被作业超时整个杀掉：记下一个比作业超时（180 分钟）早的截止时间，评测脚本在开始每一对之前
+      # 多对放在同一次运行里做完，不能被作业超时整个杀掉：记下一个比作业超时（360 分钟）早的截止时间，评测脚本在开始每一对（交付题是每一题）之前
       # 看还剩多少时间，来不及做完一对就不做，已完成的各对照常记录。留出十五分钟给装依赖、出报告和上传。
       - name: Record the wall-clock deadline for repeat pairs
-        run: echo "EVAL_DEADLINE_EPOCH=$(( $(date +%s) + 165 * 60 ))" >> "$GITHUB_ENV"
+        run: echo "EVAL_DEADLINE_EPOCH=$(( $(date +%s) + 345 * 60 ))" >> "$GITHUB_ENV"
       # 每条路径一遍：board 写 xiongbao.json，chat 写 xiongbao-chat.json，同一个结果目录。一条路径失败不拦下一条，
       # 最后作业按有没有失败收尾。路径名只认 board、chat 和 group（输入是 choice，这里再核一遍）。
-      - name: Five tasks for a Xiongbao employee, over each chosen path
+      - name: Tasks for a Xiongbao employee, over each chosen path
         env:
           MODEL_E2E: "1"
           MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
@@ -322,6 +317,7 @@ jobs:
           # 交付题没过重跑至多 1 次（run-xiongbao.ts 的 EVAL_RERUN_FAILED）。
           EVAL_RERUN_FAILED: ${{ inputs.rerun_failed }}
           # 网页、程序题经内容端口打开：评测的服务器进程只收白名单里的变量，所以同一个值也走 EVAL_SERVER_ENV 带过去。
+          # 3773 是固定端口，评测服务器自己的端口是随机取的空闲端口，理论上可能撞上；撞上时服务器启动报错（评测整体失败，重跑即可）。
           XIONGBAO_CONTENT_PORT: "3773"
           EVAL_SERVER_ENV: XIONGBAO_CONTENT_PORT=3773
           EVAL_OUT: ${{ runner.temp }}/employee-eval
@@ -356,7 +352,7 @@ jobs:
 
   employee-eval-codex:
     name: 对标评测 · Codex
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["employee-eval","all"]'), inputs.suite)
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["employee-eval","all"]'), inputs.suite) && inputs.tasks != 'deliverables'
     runs-on: ubuntu-latest
     environment: model-e2e
     timeout-minutes: 120
