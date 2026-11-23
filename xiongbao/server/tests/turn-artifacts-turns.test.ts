@@ -21,6 +21,7 @@ import {
 } from "../src/computer/turn-artifacts";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
 import { runAsTenant } from "../src/tenant/context";
+import { emitRunEvent } from "../src/threads/run-side-events";
 import { workspaceComputer } from "./support/workspace-computer";
 
 /**
@@ -615,5 +616,82 @@ describe("the step observers that give way to a whole turn", () => {
       }),
     );
     expect(seen).toEqual([true, false]);
+  });
+});
+
+describe("a turn the page carries on over a long time", () => {
+  const delivered: BaseEvent = {
+    type: EventType.CUSTOM,
+    name: "delivery.delivered",
+    value: { agentId: BOT, deliverable: { workspaceFiles: ["out/final.md"] } },
+  } as BaseEvent;
+
+  test("a run in which the employee delivered lists the files at its own end, though it then calls a page tool", async () => {
+    const computer = wired();
+    const seat = await computer.seatOf(BOT, PERSON);
+    const stream = new Observable<BaseEvent>((subscriber) => {
+      subscriber.next(run("run-1")[0] as BaseEvent);
+      setTimeout(async () => {
+        await computer.run(seat, "write out/final.md x");
+        // The way a delivery tool puts its card in the run: not through the agent's own stream.
+        emitRunEvent("run-1", delivered);
+        for (const event of askFor("page-1")) subscriber.next(event);
+        subscriber.next(run("run-1").at(-1) as BaseEvent);
+        subscriber.complete();
+      }, 10);
+    });
+    const out = await collect(
+      withSideEventsThenArtifacts(stream, {
+        runId: "run-1",
+        botId: BOT,
+        personId: PERSON,
+        threadId: "thread-1",
+        continues: false,
+      }),
+    );
+    expect(paths(out)).toEqual(["out/final.md"]);
+    const next = await browserRun("run-2", say("done"), true);
+    expect(listed(next)).toEqual([]);
+  });
+
+  test("another employee's delivery does not end the wait", async () => {
+    const computer = wired();
+    const seat = await computer.seatOf(BOT, PERSON);
+    await computer.run(seat, "write out/early.md x");
+    const other = {
+      ...delivered,
+      value: { agentId: "someone-else" },
+    } as BaseEvent;
+    const first = await collect(
+      withSideEventsThenArtifacts(
+        of(...run("run-1", [other, ...askFor("p")])),
+        {
+          runId: "run-1",
+          botId: BOT,
+          personId: PERSON,
+          threadId: "thread-1",
+          continues: false,
+        },
+      ),
+    );
+    expect(listed(first)).toEqual([]);
+  });
+
+  test("each wait starts the clock again: a turn kept waiting past the limit in all, but not between runs, goes on", async () => {
+    const computer = wired();
+    const seat = await computer.seatOf(BOT, PERSON);
+    const now = Date.now();
+    const clock = spyOn(Date, "now").mockReturnValue(now);
+    try {
+      await browserRun("run-1", askFor("call-1"), false);
+      await computer.run(seat, "write out/slow.txt x");
+      clock.mockReturnValue(now + CARRIED_TTL_MS - 1_000);
+      await browserRun("run-2", askFor("call-2"), true);
+      clock.mockReturnValue(now + 2 * CARRIED_TTL_MS - 2_000);
+      const last = await browserRun("run-3", say("done"), true);
+      expect(paths(last)).toEqual(["out/slow.txt"]);
+    } finally {
+      clock.mockRestore();
+    }
   });
 });

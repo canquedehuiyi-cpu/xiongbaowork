@@ -41,6 +41,8 @@ export type TurnArtifactsTurn = {
 type TurnArtifactsGateway = Pick<ComputerGateway, "markTurn" | "turnChanges"> &
   Partial<Pick<ComputerGateway, "forgetTurn">>;
 
+const DELIVERED_EVENT = "delivery.delivered";
+
 /** 轮末等电脑列出文件最多等多久；超了就不列，这一轮照常结束。 */
 export const TURN_ARTIFACTS_DEADLINE_MS = 15_000;
 
@@ -48,14 +50,15 @@ export const TURN_ARTIFACTS_DEADLINE_MS = 15_000;
  * 跨 run 的标记：key 是（人、员工、对话），值是这一轮第一个 run 登记的快照标记和它的座位。
  * 只存在内存里，和网关里的标记同寿；超出上限丢最旧的。
  *
- * 丢下的轮（页面关了、出错、停在页面不会续跑的工具调用上）留在这里的标记不会自己消失：被新一轮替换、
- * 被淘汰、过了 {@link CARRIED_TTL_MS} 时，对应的网关标记一并忘掉，否则电脑下次被用到时要把它们一个个
- * 都记一遍快照，挤占这一轮自己的标记。
+ * 丢下的轮（页面关了、出错、停在页面不会续跑的工具调用上）留在这里的标记不会自己消失：被同一对话的新一轮
+ * 替换、被淘汰时，对应的网关标记一并忘掉，否则电脑下次被用到时要把它们一个个都记一遍快照，挤占这一轮
+ * 自己的标记。过了 {@link CARRIED_TTL_MS} 的条目是惰性处理的：只在同一对话的下一个 run 到来时才被发现、
+ * 当作新一轮并忘掉；对话不再有 run，它就留到被淘汰。
  */
 const CARRIED_MAX = 500;
 /**
- * 一轮的标记最多留多久。人迟迟不答的页面工具会把时间窗拉长，窗内别人在同一台电脑上的改动也会被列进来；
- * 超时的当新一轮。
+ * 一轮的标记从最后一次推迟起最多留多久。人迟迟不答的页面工具会把时间窗拉长，窗内别人在同一台电脑上的
+ * 改动也会被列进来；同一对话下一个 run 到来时发现超时的，当新一轮。
  */
 export const CARRIED_TTL_MS = 30 * 60_000;
 type Carried = {
@@ -178,6 +181,8 @@ export function withTurnArtifacts(
       });
     /** 这个 run 里开了头、还没有结果的工具调用：留到下一个 run 才有结果的，这一轮还没完。 */
     const unanswered = new Set<string>();
+    /** 这个 run 里本员工交了付：交付卡按这个 run 下载，清单必须在这个 run 上。 */
+    let delivered = false;
 
     const artifactsBefore = async (): Promise<BaseEvent[]> => {
       const deadline = AbortSignal.timeout(deadlineMs);
@@ -223,6 +228,16 @@ export function withTurnArtifacts(
     };
 
     const track = (event: BaseEvent) => {
+      const named = event as unknown as {
+        name?: unknown;
+        value?: { agentId?: unknown };
+      };
+      if (
+        event.type === EventType.CUSTOM &&
+        named.name === DELIVERED_EVENT &&
+        named.value?.agentId === turn.botId
+      )
+        delivered = true;
       const id = (event as unknown as { toolCallId?: unknown }).toolCallId;
       if (typeof id !== "string") return;
       if (event.type === EventType.TOOL_CALL_START) unanswered.add(id);
@@ -237,10 +252,20 @@ export function withTurnArtifacts(
             /*
              * 这个 run 停在待执行的工具调用上：页面执行完会再发一个 run，这一轮在那里结束。服务器执行过的工具
              * 都有结果事件，剩下没答复的就是页面要执行的调用。服务器自己接着办的等待（审批）不会有页面续跑，
-             * 当场比对。
+             * 当场比对。本员工在这个 run 里交了付也当场比对：交付卡下载只认交付所在的 run，等下一个 run
+             * 就晚了，页面工具一直没人答时整轮更是永远没有清单。
              */
-            if (carry && unanswered.size > 0 && !waitsOnServer(event))
+            if (
+              carry &&
+              unanswered.size > 0 &&
+              !delivered &&
+              !waitsOnServer(event)
+            ) {
+              // 又推迟了一次：时限从这一次起算，一轮在被等待时不会过期。
+              const own = carried.get(carry.key);
+              if (own?.markId === markId) own.at = Date.now();
               return of(event);
+            }
             return defer(async () => {
               const events = await artifactsBefore();
               if (carry && carried.get(carry.key)?.markId === markId)
