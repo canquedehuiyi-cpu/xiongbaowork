@@ -2222,8 +2222,9 @@ describe("deliver_task and a hand-in that is only a note, for work that wants a 
     const [first, second] = [round.results[0], round.results[1]];
     expect(parsed(first ?? "{}").bounced).toBe(true);
     expect(parsed(first ?? "{}").physicalDeliverableBounce).toBe(true);
-    expect(afterFirst?.status).toBe(before?.status);
-    expect(afterFirst?.deliverableRef).toEqual(before?.deliverableRef);
+    if (!before || !afterFirst) throw new Error("the card row is missing");
+    expect(afterFirst.status).toBe(before.status);
+    expect(afterFirst.deliverableRef).toEqual(before.deliverableRef);
     expect(parsed(second ?? "{}").delivered).toBe(true);
   });
 });

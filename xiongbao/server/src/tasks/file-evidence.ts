@@ -54,7 +54,7 @@ export async function verifyWorkspaceFiles(input: {
         });
       } catch (error) {
         answers[index] = null;
-        console.error(
+        console.warn(
           JSON.stringify({
             type: "file-evidence-unverified",
             agentId: input.agentId,

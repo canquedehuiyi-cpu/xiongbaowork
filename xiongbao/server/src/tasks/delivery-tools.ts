@@ -492,7 +492,7 @@ export function deliveryTools(options: {
             messages: currentApprovalContext()?.messages ?? [],
           })
         ) {
-          console.error(
+          console.warn(
             JSON.stringify({
               type: "physical-gate-bounce",
               agentId,
