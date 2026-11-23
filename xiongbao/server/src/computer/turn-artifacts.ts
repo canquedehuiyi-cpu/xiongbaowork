@@ -170,6 +170,11 @@ export function withConfiguredTurnArtifacts(
  * both, the turn's artifacts. The order matters: the artifacts event is the server's own and would be
  * dropped as a forgery if it passed through the cleaning, and one the agent's stream carried must not
  * survive it.
+ *
+ * One consequence of the order: the side-events stream ends with the agent's own stream, and the
+ * artifacts wait (and with it RUN_FINISHED) comes after that. In that gap the run is no longer open to
+ * `emitRunEvent`, which then returns false and the caller takes the fallback it already has for a run
+ * that is not open; the same as for a tool that finishes after the run's stream has ended.
  */
 export function withSideEventsThenArtifacts(
   stream: Observable<BaseEvent>,

@@ -92,7 +92,13 @@ export function createArtifactAccessDeps(
   }
 
   return {
-    seatFor,
+    /*
+     * Worked out in the frame of the person the run or card belongs to, the one every turn of theirs
+     * used, and not in the asker's: what the resolver reads about the Bot (its owner, whether it is
+     * private or isolated) is that person's to see, not a group member's.
+     */
+    seatFor: (botId, personId) =>
+      runAsTenant(personId, () => seatFor(botId, personId)),
 
     // In that person's own frame: an employee they cannot see, or one they deleted, is gone to them.
     botIsLive: (personId, botId) =>
