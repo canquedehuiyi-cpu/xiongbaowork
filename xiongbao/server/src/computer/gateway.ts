@@ -88,6 +88,7 @@ import {
   readEnabled,
 } from "./app-discovery";
 import {
+  type ComputerDownload,
   type ComputerEndpoint,
   ComputerStillStartingError,
   ComputerStoppedError,
@@ -99,6 +100,8 @@ import {
   StaleSnapshotError,
   WorkspaceNotFoundError,
   WorkspaceRefusedError,
+  WorkspaceRequestError,
+  WorkspaceTooLargeError,
 } from "./client";
 // --- end desktop control ---
 import {
@@ -527,6 +530,20 @@ export interface ComputerGateway {
     bytes: number;
     name: string;
   }>;
+  /**
+   * One file of a folder the content server hands to a browser, as a stream; `null` when there is
+   * nothing to serve (no such file; a link or path the computer refuses to follow out of the
+   * workspace (403); a path it will not read as a file, such as a folder (400); a file over the
+   * download limit (413), whose size a static page does not reveal; or a paired personal computer, whose files this server cannot reach this way).
+   * Not governed here: the "open" that made the link was decided and recorded as the folder's
+   * download, and every page asset after it rides on that one decision. The computer still checks
+   * links and the workspace boundary on every file. Any other failure throws.
+   */
+  serveFile(
+    seat: ComputerSeat,
+    input: { path: string },
+    signal?: AbortSignal,
+  ): Promise<ComputerDownload | null>;
   /**
    * An Office file as a PDF for the preview pane: the computer converts it into the workspace's
    * hidden preview folder and this reads the result back as a stream. `unavailable` when the
@@ -3275,6 +3292,31 @@ export function createComputerGateway(
           };
         },
       );
+    },
+
+    async serveFile(
+      seat: ComputerSeat,
+      input: { path: string },
+      signal?: AbortSignal,
+    ) {
+      if (options.resolveDevice) return null;
+      try {
+        return await transport.download(
+          ...route(seat, await locate(seat)),
+          `/files/download?path=${encodeURIComponent(input.path)}`,
+          signal,
+          DOWNLOAD_BACKSTOP_MS,
+        );
+      } catch (error) {
+        if (
+          error instanceof WorkspaceNotFoundError ||
+          error instanceof WorkspaceRefusedError ||
+          error instanceof WorkspaceRequestError ||
+          error instanceof WorkspaceTooLargeError
+        )
+          return null;
+        throw error;
+      }
     },
 
     /**

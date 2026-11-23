@@ -2501,3 +2501,72 @@ describe("markTurn and turnChanges (lazy snapshot)", () => {
     expect(requests).toEqual([]);
   });
 });
+
+describe("serveFile", () => {
+  const download = (status: number, body: string) => ({
+    routes: {
+      "/files/download": () => new Response(body, { status }),
+    },
+  });
+
+  test("streams the file and is not governed or recorded", async () => {
+    const { gateway, rows, requests } = await gatewayWith(undefined, {
+      token: "computer-secret",
+    });
+    const file = await gateway.serveFile(botSeat("bot-1"), {
+      path: "site/a b.js",
+    });
+    expect(file?.bytes).toBe(4);
+    expect(
+      new Uint8Array(await new Response(file?.body).arrayBuffer()),
+    ).toEqual(Uint8Array.from([0, 1, 2, 255]));
+    // No policy at all, and still served: the decision was made when the link was opened.
+    expect(rows).toEqual([]);
+    const request = requests.find(({ url }) => url.includes("/files/download"));
+    expect(new URL(request?.url ?? "").searchParams.get("path")).toBe(
+      "site/a b.js",
+    );
+    expect(request?.init?.headers).toMatchObject({
+      "x-xiongbao-computer-token": "computer-secret",
+    });
+  });
+
+  test("a paired personal computer answers null and is not asked", async () => {
+    const { provider } = fakeComputer();
+    const requests: string[] = [];
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl: (async (url: string) => {
+        requests.push(url);
+        return new Response("x");
+      }) as never,
+      auditStore: fakeAudit().store,
+      policy: () => PERMISSIVE,
+      resolveDevice: async () => ({ tenantId: "t", deviceId: "d" }),
+    });
+    expect(await gateway.serveFile(botSeat("bot-1"), { path: "a" })).toBeNull();
+    expect(requests).toEqual([]);
+  });
+
+  test("404, 403, 400 (a folder) and 413 (too large) from the computer read as null", async () => {
+    for (const status of [404, 403, 400, 413]) {
+      const { gateway } = await gatewayWith(
+        PERMISSIVE,
+        download(status, JSON.stringify({ error: "no" })),
+      );
+      expect(
+        await gateway.serveFile(botSeat("bot-1"), { path: "x" }),
+      ).toBeNull();
+    }
+  });
+
+  test("any other failure is thrown", async () => {
+    const { gateway } = await gatewayWith(
+      PERMISSIVE,
+      download(500, JSON.stringify({ error: "boom" })),
+    );
+    await expect(
+      gateway.serveFile(botSeat("bot-1"), { path: "x" }),
+    ).rejects.toThrow();
+  });
+});

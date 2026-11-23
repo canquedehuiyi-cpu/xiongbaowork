@@ -68,7 +68,7 @@ import {
   readApprovedRunAssertion,
   readRunAssertion,
 } from "./agents/callback-token";
-import { canUseComputer } from "./agents/computer-access";
+import { canUseComputer, computerAccessCheck } from "./agents/computer-access";
 import { wireCoordination } from "./agents/coordination-wiring";
 import { createAgentFetch } from "./agents/endpoint";
 import { createHandoffDesk } from "./agents/handoff";
@@ -292,6 +292,8 @@ import {
   WAIT_SWEEP_MS,
 } from "./computer/waits";
 import { loadConfig } from "./config";
+import { createContentAccess } from "./content/access";
+import { createContentServer } from "./content/server";
 import {
   chooseOpenAIApi,
   deploymentModel,
@@ -6258,6 +6260,41 @@ await startupLifecycle.run(async (startup) => {
         })
       : undefined;
 
+  /*
+   * The pages an employee made, shown from their own origin (content/*). Who may open which folder
+   * is the download rules' (a conversation's run, a card) or the person's own employee; the content
+   * server asks the same question again before it renews a grant (`stillAllowed`). Only where there
+   * is a computer to read files from and a content source configured.
+   */
+  const artifactAccessDeps = computerGateway
+    ? createArtifactAccessDeps(database, (botId, personId) =>
+        computerGateway.seatFor(botId, personId),
+      )
+    : undefined;
+  const contentAccess =
+    computerGateway && artifactAccessDeps
+      ? createContentAccess({
+          canUseBot: computerAccessCheck(agentProfileStore),
+          seatFor: (botId, personId) =>
+            computerGateway.seatFor(botId, personId),
+          artifact: artifactAccessDeps,
+          roleOf,
+        })
+      : undefined;
+  const contentServer =
+    computerGateway &&
+    contentAccess &&
+    (config.content.port !== undefined || config.content.domain !== undefined)
+      ? createContentServer({
+          key: config.keyEncryptionKey,
+          gateway: computerGateway,
+          stillAllowed: (grant) => contentAccess.stillAllowed(grant),
+          ...(config.content.domain !== undefined
+            ? { domain: config.content.domain }
+            : {}),
+        })
+      : undefined;
+
   const app = createApp(
     config,
     auth,
@@ -6582,12 +6619,14 @@ await startupLifecycle.run(async (startup) => {
       },
       memory: { store: personalMemoryStore, ingestion: memoryIngestion },
       proactive: { store: proactiveStore, engine: proactiveEngine },
-      ...(computerGateway
+      ...(computerGateway && artifactAccessDeps && contentAccess
         ? {
-            artifactAccess: createArtifactAccessDeps(
-              database,
-              (botId, personId) => computerGateway.seatFor(botId, personId),
-            ),
+            artifactAccess: artifactAccessDeps,
+            contentOpen: {
+              content: config.content,
+              key: config.keyEncryptionKey,
+              access: contentAccess,
+            },
           }
         : {}),
       localLearning: { database, engine: localLearningEngine },
@@ -7259,6 +7298,7 @@ await startupLifecycle.run(async (startup) => {
       startHttpServer({
         port,
         config,
+        ...(contentServer ? { content: contentServer } : {}),
         resolveRequestActor,
         agentProfileStore,
         computerGateway,
@@ -7283,4 +7323,11 @@ await startupLifecycle.run(async (startup) => {
   }
 
   console.info(`${englishName()} server listening on http://127.0.0.1:${port}`);
+  if (contentServer) {
+    console.info(
+      config.content.domain !== undefined
+        ? `Content origin: subdomains of ${config.content.domain}, served on the main port`
+        : `Content origin listening on port ${config.content.port}`,
+    );
+  }
 });

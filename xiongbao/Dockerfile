@@ -527,7 +527,10 @@ RUN set -eu; \
 # server/src/config.ts. It is IN_CONTAINER=true in docker/defaults.env (above).
 ENV NODE_ENV=production
 ENV PORT=3001
+# The second port is the content origin (XIONGBAO_CONTENT_PORT=3773), where the pages an employee made
+# are served apart from the app. Listening only when that variable is set; publishing it is the deployment's.
 EXPOSE 3001
+EXPOSE 3773
 
 # One port out. The browser's 4100 is deliberately not exposed: it holds real logins and its only
 # caller is the process next to it.

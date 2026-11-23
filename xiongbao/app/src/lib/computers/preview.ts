@@ -1,7 +1,7 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { createContext, useContext, useMemo } from "react";
 import { previewKindOf } from "../../../../shared/preview-kind";
-import { scopedFileHref } from "./artifact";
+import { normalizedArtifactPath, scopedFileHref } from "./artifact";
 
 /*
  * 预览面板要的那一小块：看哪个文件（连同它在哪里被宣布的）、放进地址栏参数里的写法、
@@ -175,4 +175,104 @@ export function parseCsv(text: string): string[][] {
   }
   if (field !== "" || row.length > 0) endRow();
   return rows;
+}
+
+/*
+ * 通过内容源打开员工做的网页。
+ *
+ * 服务器 `POST /api/computers/:botId/open` 在配了内容源时答一个一次性的 `url`：打开后 302 到
+ * 内容源上的路径令牌地址，页面在不透明源里运行。没配内容源时答 `{ available: false }`。
+ */
+
+/** 打开请求的体：`dir` 是工作区里一个网页目录；`app` 是运行中的程序（本期服务器返回不可用占位）。 */
+export type OpenBody = (
+  | { kind: "dir"; path: string }
+  | { kind: "app"; port: number; path?: string }
+) & { channel?: string; run?: string; task?: string };
+
+/** 服务器的答案：没配内容源，或可用的一次性地址。 */
+export type OpenResult =
+  | { available: false; reason: string }
+  | {
+      available: true;
+      url: string;
+      mode: "port" | "domain";
+      expiresAt: string;
+      replaces: boolean;
+    };
+
+/** 把预览目标的归属（哪次 run 或哪张交付卡）写成打开请求里的字段。 */
+export function scopeFields(
+  scope: PreviewScope,
+): { channel: string; run: string } | { task: string } {
+  return "task" in scope
+    ? { task: scope.task }
+    : { channel: scope.channel, run: scope.run };
+}
+
+/**
+ * 请求内容源打开一个目录。服务器答 404（无权限、没有 index.html、工作区根等）或任何失败都抛错，
+ * 调用方一律当作「打不开」。
+ */
+export async function openTarget(
+  botId: string,
+  body: OpenBody,
+  signal?: AbortSignal,
+): Promise<OpenResult> {
+  const response = await fetch(
+    `/api/computers/${encodeURIComponent(botId)}/open`,
+    {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal,
+    },
+  );
+  if (!response.ok) throw new Error(`open failed: ${response.status}`);
+  const answer = (await response.json()) as Partial<OpenResult> & {
+    available?: unknown;
+  };
+  if (answer.available === false)
+    return {
+      available: false,
+      reason: typeof answer.reason === "string" ? answer.reason : "",
+    };
+  const ok = answer as Extract<OpenResult, { available: true }>;
+  if (typeof ok.url !== "string" || ok.url === "")
+    throw new Error("open failed: no url");
+  // 服务器给的地址不可信到什么程度由这里定：只认 http(s)，且必须是另一个源（不是本应用）。
+  let parsed: URL;
+  try {
+    parsed = new URL(ok.url, location.href);
+  } catch {
+    throw new Error("open failed: bad url");
+  }
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    parsed.origin === location.origin
+  )
+    throw new Error("open failed: url not on a separate http(s) origin");
+  return {
+    available: true,
+    url: parsed.href,
+    mode: ok.mode === "domain" ? "domain" : "port",
+    expiresAt: String(ok.expiresAt),
+    replaces: ok.replaces === true,
+  };
+}
+
+/**
+ * 这个文件走内容源时要打开的目录：只有文件名恰好是 `index.html` 的 html 才走（打开令牌 302 到目录根，
+ * 拼不出别的文件名）。`root` 表示 index.html 在工作区根：服务器会拒绝，界面改用受限预览并说明。
+ */
+export function openDirOf(
+  path: string,
+): { kind: "none" } | { kind: "root" } | { kind: "dir"; dir: string } {
+  const normalised = normalizedArtifactPath(path);
+  if (normalised === undefined) return { kind: "none" };
+  const segments = normalised.split("/");
+  if (segments.pop() !== "index.html") return { kind: "none" };
+  if (segments.length === 0) return { kind: "root" };
+  return { kind: "dir", dir: segments.join("/") };
 }

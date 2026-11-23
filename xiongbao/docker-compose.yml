@@ -136,6 +136,10 @@ services:
       # is always 3001; the host port is the mapping's business, below.
       PORT: "3001"
       SERVER_PORT: "3001"
+      # The content origin: the pages an employee builds are served from this second port, never from
+      # the application's, so a page cannot run as the signed-in app. Always 3773 inside the container;
+      # the host port is the mapping's business, below. Remove this line to turn the feature off.
+      XIONGBAO_CONTENT_PORT: "3773"
       # Not production, as a host server is not. The image says production, and in production the
       # server refuses `AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS`, which a local OpenBot needs: its
       # supervisor, computers and Bots are all at private addresses, on purpose. Empty rather than
@@ -248,6 +252,12 @@ services:
       - "[::1]:${APP_PORT:-3010}:3001"
       - "127.0.0.1:${SERVER_PORT:-3001}:3001"
       - "[::1]:${SERVER_PORT:-3001}:3001"
+      # The content origin (XIONGBAO_CONTENT_PORT above), on loopback like the rest. A deployment that
+      # people reach over the network must change the binding to an address they can route to
+      # (`0.0.0.0:`, or the host's own) AND open this port, 3773/TCP, in its firewall or security
+      # group: a link to a page is built on the host name the person used plus this port.
+      - "127.0.0.1:${XIONGBAO_CONTENT_HOST_PORT:-3773}:3773"
+      - "[::1]:${XIONGBAO_CONTENT_HOST_PORT:-3773}:3773"
     # For whatever stays on the host and is addressed as such: a model endpoint on this machine, and
     # anything else the Bots below already reach the same way. OpenBot Desktop sets
     # `OPENBOT_HOST_GATEWAY` under rootless Podman on Linux, where `host-gateway` is not this

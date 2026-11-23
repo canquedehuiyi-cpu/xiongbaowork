@@ -236,6 +236,7 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
   "staffing.proposal_discarded": "作废招聘提议",
   "staffing.proposal_expired": "招聘提议过期",
   "media.generated": "生成图片或视频",
+  "content.opened": "打开网页",
 };
 
 /**

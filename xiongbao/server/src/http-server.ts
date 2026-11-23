@@ -246,6 +246,12 @@ export function startHttpServer(deps: {
       env: FrontDoorBindings,
     ) => Response | Promise<Response>;
   };
+  /**
+   * The content server (content/server.ts), when `config.content` names one. With a domain it is
+   * reached on this listener, for any `Host` under `.<domain>`; with only a port it gets a listener of
+   * its own, which answers nothing but it. It is never handed the app's bindings or sockets.
+   */
+  content?: { fetch(request: Request): Promise<Response> };
 }): { stop(closeActiveConnections?: boolean): Promise<void> } {
   const {
     port,
@@ -255,7 +261,11 @@ export function startHttpServer(deps: {
     computerGateway,
     devices,
     app,
+    content,
   } = deps;
+  // Optional-chained: a test hands in a config of only what it exercises.
+  const contentPort = config.content?.port;
+  const contentDomain = config.content?.domain?.toLowerCase();
   const runnerOptions: RunnerMessageOptions = {
     ...runnerMessageOptions(computerGateway),
     ...(devices?.acp ? { acp: devices.acp } : {}),
@@ -303,11 +313,37 @@ export function startHttpServer(deps: {
   const asChannelSocket = (ws: { data: SocketData }) =>
     ws as unknown as ChannelSocket;
 
+  /*
+   * The content server's own port, only in port mode (a domain, when there is one, decides the mode
+   * and is served from the main listener below). Same listening address as the main one: `serve` is
+   * given no hostname here, so both take Bun's default. A request here is never a websocket upgrade
+   * and never reaches the app.
+   */
+  const contentListener =
+    content && contentPort !== undefined && contentDomain === undefined
+      ? serve({
+          port: contentPort,
+          fetch: (request) => content.fetch(request),
+        })
+      : undefined;
+
   // Answered so a test can stop the server it started; the deployment keeps it for its whole life.
-  return serve<SocketData>({
+  const main = serve<SocketData>({
     port,
     async fetch(request, server) {
       const url = new URL(request.url);
+      /*
+       * Domain mode: a name under the content domain is the content server's, and nothing else
+       * (the app is on another name). Decided on the host before any other route can look at it, so
+       * an employee's page never meets the app's API on that name.
+       */
+      if (
+        content &&
+        contentDomain !== undefined &&
+        url.hostname.toLowerCase().endsWith(`.${contentDomain}`)
+      ) {
+        return content.fetch(request);
+      }
       /*
        * The connection this came on, read here because only the server that accepted it can say. Handed
        * to the app as a binding and never on the request: see `callerOf`.
@@ -550,4 +586,11 @@ export function startHttpServer(deps: {
       },
     },
   });
+  if (!contentListener) return main;
+  return {
+    async stop(closeActiveConnections) {
+      await contentListener.stop(closeActiveConnections);
+      await main.stop(closeActiveConnections);
+    },
+  };
 }

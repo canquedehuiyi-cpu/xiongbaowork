@@ -151,10 +151,13 @@ function valuesOf(events: BaseEvent[], name: string): unknown[] {
   return found;
 }
 
+/** Which of the paths a run or card lists count as the one asked for. */
+type PathMatch = (listed: string) => boolean;
+
 function viaRun(
   events: BaseEvent[],
   botId: string,
-  path: string,
+  matches: PathMatch,
 ): ComputerSeat | null {
   // Every announcement of this employee in the run, with the seat it was made on.
   const announced: { seat: string; files: string[] }[] = [];
@@ -171,7 +174,7 @@ function viaRun(
   }
 
   // Listed in a turn's artifacts: the seat of the announcement that lists it.
-  const listing = announced.find((turn) => turn.files.includes(path));
+  const listing = announced.find((turn) => turn.files.some(matches));
   if (listing) return seatOf(botId, listing.seat);
 
   // Delivered on the run: the delivery event carries no seat, so it is the seat the same run
@@ -182,8 +185,8 @@ function viaRun(
       ? value.deliverable.workspaceFiles
       : undefined;
     return (
-      strings(deliverable).includes(path) ||
-      strings(value.workspaceFiles).includes(path)
+      strings(deliverable).some(matches) ||
+      strings(value.workspaceFiles).some(matches)
     );
   });
   if (!delivered) return null;
@@ -210,14 +213,58 @@ export async function resolveArtifactAccess(
   const { actor, botId, scope } = input;
   const path = normalizedArtifactPath(input.path);
   if (path === null || botId === "") return null;
-  const seat = await seatFor(actor, botId, path, scope, deps);
+  const seat = await seatFor(
+    actor,
+    botId,
+    (listed) => listed === path,
+    scope,
+    deps,
+  );
+  return seat ? { seat } : null;
+}
+
+/**
+ * The seat to read a folder of `botId` from for this asker, or null: the rules of
+ * {@link resolveArtifactAccess}, asked of a folder instead of one file.
+ *
+ * The folder is reachable when the conversation's run (or the card) listed `<dir>/index.html`, or a
+ * file whose DIRECT parent is `dir`. A file deeper down does not open its ancestors: a run that wrote
+ * `work/p1/out.md` announced `work/p1`, not `work`, which may hold other projects. `dir` is the same
+ * safe relative path the downloads take (never empty, never leaving the workspace). Whether the
+ * folder exists and has an `index.html` is the caller's question to the computer, not a thing a
+ * record can answer.
+ */
+export async function resolveArtifactDirAccess(
+  input: {
+    actor: AgentActor;
+    botId: string;
+    dir: string;
+    scope: ArtifactScope;
+  },
+  deps: ArtifactAccessDeps,
+): Promise<{ seat: ComputerSeat } | null> {
+  const { actor, botId, scope } = input;
+  const dir = normalizedArtifactPath(input.dir);
+  if (dir === null || botId === "") return null;
+  const seat = await seatFor(
+    actor,
+    botId,
+    (listed) => {
+      const named = normalizedArtifactPath(listed);
+      if (named === null) return false;
+      const slash = named.lastIndexOf("/");
+      return slash > 0 && named.slice(0, slash) === dir;
+    },
+    scope,
+    deps,
+  );
   return seat ? { seat } : null;
 }
 
 async function seatFor(
   actor: AgentActor,
   botId: string,
-  path: string,
+  matches: PathMatch,
   scope: ArtifactScope,
   deps: ArtifactAccessDeps,
 ): Promise<ComputerSeat | null> {
@@ -238,7 +285,7 @@ async function seatFor(
     if (channel !== undefined || run !== undefined || task === "") return null;
     const card = await deps.cardFor(actor, task);
     if (!card || card.botId !== botId) return null;
-    if (!strings(card.workspaceFiles).includes(path)) return null;
+    if (!strings(card.workspaceFiles).some(matches)) return null;
     return confirmed(seatOf(botId, card.seat), card.ownerId);
   }
 
@@ -248,5 +295,5 @@ async function seatFor(
   if (!seen.agentIds.includes(botId)) return null;
   const found = await deps.runOf(actor, channel, run);
   if (!found || !seen.threadIds.includes(found.threadId)) return null;
-  return confirmed(viaRun(found.events, botId, path), found.ownerId);
+  return confirmed(viaRun(found.events, botId, matches), found.ownerId);
 }
