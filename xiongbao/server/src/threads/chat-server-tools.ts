@@ -21,6 +21,7 @@ import {
 import { TURN_LIMITS } from "../../../toolkit/src/limits";
 import type { AgentActor } from "../agents/profile-types";
 import { type AuditInitiator, PERSON_INITIATOR } from "../audit";
+import { withConfiguredTurnArtifacts } from "../computer/turn-artifacts";
 import type { ComputerToolsForTurn } from "../computer/turn-tools";
 import { runAsTenant } from "../tenant/context";
 import { openTracker } from "./open-tracker";
@@ -347,7 +348,24 @@ export function createChatServerTools(options: {
       if (!declaresServerComputerTools(input.forwardedProps))
         return next.run(input);
       if (!options.holds(input)) return next.run(withoutDeclaration(input));
-      return serverRun(agentId, actor, input, next);
+      /*
+       * The turn's files are listed over the whole of it, outside the rounds: the tools run between
+       * the model's steps, so no single step's stream sees the computer used. A turn the clock or the
+       * rounds stop ends in this stream too, which is why it is not left to the agent's own stream.
+       * Subscribed in the person's frame, as the turn's own work is.
+       */
+      const turn = withConfiguredTurnArtifacts(
+        serverRun(agentId, actor, input, next),
+        {
+          runId: input.runId,
+          botId: agentId,
+          personId: actor.id,
+          wholeTurn: true,
+        },
+      );
+      return new Observable<BaseEvent>((subscriber) =>
+        runAsTenant(actor.id, () => turn.subscribe(subscriber)),
+      );
     };
 
   return {

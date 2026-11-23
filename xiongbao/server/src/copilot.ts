@@ -2865,6 +2865,13 @@ async function buildAgent(
               isTenantFramed() && isPersonTenant(currentTenant())
                 ? currentTenant()
                 : null,
+            /*
+             * A run that ends on a tool call the page runs itself is only part of a turn: the page
+             * sends the result in a run of its own. That run's last message is not the person's,
+             * which is what ties it to the turn before it (`computer/turn-artifacts.ts`).
+             */
+            threadId: runInput.threadId,
+            continues: (runInput.messages.at(-1)?.role ?? "user") !== "user",
           },
         );
       },

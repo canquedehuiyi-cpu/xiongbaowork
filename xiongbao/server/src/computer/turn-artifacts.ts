@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { defer, from, Observable, of } from "rxjs";
 import { concatMap } from "rxjs/operators";
@@ -22,12 +23,54 @@ export type TurnArtifactsTurn = {
   botId: string;
   /** 这一轮用的电脑座位；没有（或设备上的电脑）答 null。 */
   seat: () => Promise<ComputerSeat | null>;
+  /**
+   * 一轮可能跨好几个 run：浏览器自己执行电脑工具时，每个工具调用都让 run 结束，页面带着结果再发下一个 run。
+   * 给了它，这一轮的快照标记按 `key`（人、员工、对话）留在两个 run 之间，只在结束时不再有待执行工具调用的那个 run
+   * 才比对并发事件；中间的 run 结束时标记不丢。`continues` 为真表示这个 run 接着上一个 run 的那一轮
+   * （最后一条消息不是人说的话），为假表示新的一轮开始，旧的标记作废。
+   */
+  carry?: { key: string; continues: boolean };
+  /**
+   * 这条流本身就是完整的一轮（服务器分段执行工具，段与段之间的工具在流外跑）：它的 `RUN_FINISHED`
+   * 一定是这一轮的结尾，不看有没有未答复的工具调用。流里面各段的观察由它代劳，见 `wholeTurnOf`。
+   */
+  wholeTurn?: boolean;
 };
 
 type TurnArtifactsGateway = Pick<ComputerGateway, "markTurn" | "turnChanges">;
 
 /** 轮末等电脑列出文件最多等多久；超了就不列，这一轮照常结束。 */
 export const TURN_ARTIFACTS_DEADLINE_MS = 15_000;
+
+/**
+ * 跨 run 的标记：key 是（人、员工、对话），值是这一轮第一个 run 登记的快照标记和它的座位。
+ * 只存在内存里，和网关里的标记同寿；超出上限丢最旧的（对应的网关标记也会被它自己的上限淘汰）。
+ */
+const CARRIED_MAX = 500;
+const carried = new Map<
+  string,
+  { markId: string; marked: Promise<ComputerSeat | null> }
+>();
+
+function carryOver(
+  key: string,
+  entry: { markId: string; marked: Promise<ComputerSeat | null> },
+) {
+  carried.delete(key);
+  carried.set(key, entry);
+  while (carried.size > CARRIED_MAX) {
+    const oldest = carried.keys().next().value;
+    if (oldest === undefined) break;
+    carried.delete(oldest);
+  }
+}
+
+/**
+ * 整轮已经由外层的 `wholeTurn` 流观察时，里面每一段的观察要让位：段与段之间用同一个 `markId` 去
+ * 记、去比对，会把外层的标记冲掉。按 run 号认，同一个 run 的各段才让位，别的 run（比如这一轮里
+ * 叫来的另一位员工）仍各自观察。
+ */
+const wholeTurnOf = new AsyncLocalStorage<string>();
 
 function warn(operation: string, runId: string, botId: string, error: unknown) {
   // 只记错误种类，不记抛出的内容：它可能带着连接信息。
@@ -52,21 +95,28 @@ export function withTurnArtifacts(
 ): Observable<BaseEvent> {
   return new Observable<BaseEvent>((subscriber) => {
     const abort = new AbortController();
-    // 同一个电脑可能被好几个座位共用，快照名必须全局唯一。
-    const markId = `${turn.runId}:${turn.botId}`;
+    const carry = turn.carry;
+    const earlier = carry?.continues ? carried.get(carry.key) : undefined;
+    // 同一个电脑可能被好几个座位共用，快照名必须全局唯一。接着上一个 run 的一轮，沿用那一轮的标记。
+    const markId = earlier?.markId ?? `${turn.runId}:${turn.botId}`;
     /** 订阅时后台记快照，不挡第一个事件；成功答座位，失败或没有座位答 null。 */
-    const marked: Promise<ComputerSeat | null> = (async () => {
-      try {
-        const seat = await turn.seat();
-        if (!seat) return null;
-        await gateway.markTurn(seat, markId);
-        return seat;
-      } catch (error) {
-        if (!abort.signal.aborted)
-          warn("markTurn", turn.runId, turn.botId, error);
-        return null;
-      }
-    })();
+    const marked: Promise<ComputerSeat | null> =
+      earlier?.marked ??
+      (async () => {
+        try {
+          const seat = await turn.seat();
+          if (!seat) return null;
+          await gateway.markTurn(seat, markId);
+          return seat;
+        } catch (error) {
+          if (!abort.signal.aborted)
+            warn("markTurn", turn.runId, turn.botId, error);
+          return null;
+        }
+      })();
+    if (carry && !earlier) carryOver(carry.key, { markId, marked });
+    /** 这个 run 里开了头、还没有结果的工具调用：留到下一个 run 才有结果的，这一轮还没完。 */
+    const unanswered = new Set<string>();
 
     const artifactsBefore = async (): Promise<BaseEvent[]> => {
       const deadline = AbortSignal.timeout(deadlineMs);
@@ -111,17 +161,33 @@ export function withTurnArtifacts(
       }
     };
 
-    const subscription = stream
-      .pipe(
-        concatMap((event) =>
-          event.type === EventType.RUN_FINISHED
-            ? defer(async () => [...(await artifactsBefore()), event]).pipe(
-                concatMap((events) => from(events)),
-              )
-            : of(event),
-        ),
-      )
-      .subscribe(subscriber);
+    const track = (event: BaseEvent) => {
+      const id = (event as unknown as { toolCallId?: unknown }).toolCallId;
+      if (typeof id !== "string") return;
+      if (event.type === EventType.TOOL_CALL_START) unanswered.add(id);
+      else if (event.type === EventType.TOOL_CALL_RESULT) unanswered.delete(id);
+    };
+    const subscribeInside = () =>
+      stream
+        .pipe(
+          concatMap((event) => {
+            track(event);
+            if (event.type !== EventType.RUN_FINISHED) return of(event);
+            // 这个 run 停在待执行的工具调用上：页面执行完会再发一个 run，这一轮在那里结束。
+            if (carry && !turn.wholeTurn && unanswered.size > 0)
+              return of(event);
+            return defer(async () => {
+              const events = await artifactsBefore();
+              if (carry && carried.get(carry.key)?.markId === markId)
+                carried.delete(carry.key);
+              return [...events, event];
+            }).pipe(concatMap((events) => from(events)));
+          }),
+        )
+        .subscribe(subscriber);
+    const subscription = turn.wholeTurn
+      ? wholeTurnOf.run(turn.runId, subscribeInside)
+      : subscribeInside();
     return () => {
       abort.abort();
       subscription.unsubscribe();
@@ -148,17 +214,37 @@ export function configureTurnArtifacts(next: TurnArtifactsWiring | undefined) {
  */
 export function withConfiguredTurnArtifacts(
   stream: Observable<BaseEvent>,
-  turn: { runId: string; botId: string; personId: string | null },
+  turn: {
+    runId: string;
+    botId: string;
+    personId: string | null;
+    /** 对话号，和 `continues` 一起让一轮跨几个 run（浏览器自己执行电脑工具的单聊）时保住标记。 */
+    threadId?: string;
+    /** 这个 run 接着上一个 run 的那一轮：最后一条消息不是人说的话。 */
+    continues?: boolean;
+    /** 这条流是完整的一轮，里面各段的观察让位给它。 */
+    wholeTurn?: boolean;
+  },
 ): Observable<BaseEvent> {
   const current = wiring;
   const { personId } = turn;
   if (!current || !personId) return stream;
+  if (!turn.wholeTurn && wholeTurnOf.getStore() === turn.runId) return stream;
   return withTurnArtifacts(
     stream,
     {
       runId: turn.runId,
       botId: turn.botId,
       seat: () => current.seatOf(turn.botId, personId),
+      ...(turn.wholeTurn ? { wholeTurn: true } : {}),
+      ...(turn.threadId !== undefined
+        ? {
+            carry: {
+              key: `${personId}\u0000${turn.botId}\u0000${turn.threadId}`,
+              continues: turn.continues === true,
+            },
+          }
+        : {}),
     },
     current.gateway,
   );
@@ -178,7 +264,7 @@ export function withConfiguredTurnArtifacts(
  */
 export function withSideEventsThenArtifacts(
   stream: Observable<BaseEvent>,
-  turn: { runId: string; botId: string; personId: string | null },
+  turn: Parameters<typeof withConfiguredTurnArtifacts>[1],
 ): Observable<BaseEvent> {
   return withConfiguredTurnArtifacts(
     withRunSideEvents(turn.runId, stream),
