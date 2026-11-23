@@ -7,6 +7,7 @@ import {
   resolveArtifactDirAccess,
 } from "../computer/artifact-access";
 import { type ComputerSeat, computerKeyText } from "../computer/computer-key";
+import { isPersonTenant, runAsTenant } from "../tenant/context";
 import type { ContentGrant } from "./token";
 
 /**
@@ -75,36 +76,47 @@ export function createContentAccess(deps: {
     return { seat: await deps.seatFor(input.botId, actor.id) };
   };
 
+  async function stillAllowedAsPerson(grant: ContentGrant): Promise<boolean> {
+    const role = await deps.roleOf(grant.person);
+    if (role === null) return false;
+    const scope: ArtifactScope | null =
+      grant.channel !== undefined ||
+      grant.run !== undefined ||
+      grant.task !== undefined
+        ? {
+            ...(grant.channel !== undefined ? { channel: grant.channel } : {}),
+            ...(grant.run !== undefined ? { run: grant.run } : {}),
+            ...(grant.task !== undefined ? { task: grant.task } : {}),
+          }
+        : null;
+    const found =
+      grant.target.kind === "dir"
+        ? await authorize(
+            { id: grant.person, role },
+            { botId: grant.bot, dir: grant.target.path, scope },
+          )
+        : await authorizeApp(
+            { id: grant.person, role },
+            { botId: grant.bot, port: grant.target.port, scope },
+          );
+    // The seat is part of the grant: if the employee now runs somewhere else, this grant is over.
+    return found !== null && computerKeyText(found.seat.key) === grant.seat;
+  }
+
   return {
     authorize,
     authorizeApp,
-    async stillAllowed(grant) {
-      const role = await deps.roleOf(grant.person);
-      if (role === null) return false;
-      const scope: ArtifactScope | null =
-        grant.channel !== undefined ||
-        grant.run !== undefined ||
-        grant.task !== undefined
-          ? {
-              ...(grant.channel !== undefined
-                ? { channel: grant.channel }
-                : {}),
-              ...(grant.run !== undefined ? { run: grant.run } : {}),
-              ...(grant.task !== undefined ? { task: grant.task } : {}),
-            }
-          : null;
-      const found =
-        grant.target.kind === "dir"
-          ? await authorize(
-              { id: grant.person, role },
-              { botId: grant.bot, dir: grant.target.path, scope },
-            )
-          : await authorizeApp(
-              { id: grant.person, role },
-              { botId: grant.bot, port: grant.target.port, scope },
-            );
-      // The seat is part of the grant: if the employee now runs somewhere else, this grant is over.
-      return found !== null && computerKeyText(found.seat.key) === grant.seat;
-    },
+    /*
+     * Asked from the content server, whose requests come in on a listener of their own, outside the
+     * app's per-request frame, and again from a timer for an open socket. Every question below reads
+     * the database (the person's role, the employee's profile, the run's events), and a read outside a
+     * frame is refused, so the answer is worked out in the frame of the person the grant names: its
+     * `person` is the user id the server signed it for, which is that person's tenant. A grant that
+     * names nobody who can be acted as (an empty, shared or platform id) is not a grant to honour.
+     */
+    stillAllowed: (grant) =>
+      isPersonTenant(grant.person)
+        ? runAsTenant(grant.person, () => stillAllowedAsPerson(grant))
+        : Promise.resolve(false),
   };
 }

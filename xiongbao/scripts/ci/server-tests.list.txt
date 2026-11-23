@@ -334,6 +334,7 @@ tests/content-governance.test.ts
 tests/content-open-routes.test.ts
 tests/content-server.test.ts
 tests/content-static.test.ts
+tests/content-tenant-frame.integration.test.ts
 tests/content-token.test.ts
 tests/context-usage.integration.test.ts
 tests/context-usage.test.ts
