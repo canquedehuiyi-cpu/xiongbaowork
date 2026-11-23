@@ -220,6 +220,13 @@ function frameLetGo(stream: StreamData) {
  * What a runner's socket hands on beyond its frames: a heartbeat's desktop stop goes to the gateway,
  * whose desktop write gate holds this replica's sessions (desktop write, phase 2). No gateway, nothing.
  */
+/**
+ * Idle seconds allowed on a request forwarded to a program: a little over the computer's own 120 s
+ * between chunks, so the computer's limit decides, and not 0, which would let a connection that has
+ * gone quiet stay open for ever. Bun accepts up to 255.
+ */
+const PROGRAM_IDLE_SECONDS = 130;
+
 export function runnerMessageOptions(
   computerGateway: ComputerGateway | undefined,
 ): RunnerMessageOptions {
@@ -347,8 +354,7 @@ export function startHttpServer(deps: {
                       ...(options.headers ? { headers: options.headers } : {}),
                     })
                 : undefined,
-              // The computer's forwarder bounds a program's answer; Bun's 10 s idle default must not cut it first.
-              () => server.timeout(request, 0),
+              () => server.timeout(request, PROGRAM_IDLE_SECONDS),
             ) as Response | Promise<Response>,
           websocket: {
             open: (ws) => content.sockets?.open(ws),
@@ -385,8 +391,7 @@ export function startHttpServer(deps: {
                   ...(options.headers ? { headers: options.headers } : {}),
                 })
             : undefined,
-          // The computer's forwarder bounds a program's answer; Bun's 10 s idle default must not cut it first.
-          () => server.timeout(request, 0),
+          () => server.timeout(request, PROGRAM_IDLE_SECONDS),
         )) as Response;
       }
       /*

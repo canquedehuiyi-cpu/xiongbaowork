@@ -219,8 +219,11 @@ function viaRun(
   // Delivered on the run: the delivery event carries no seat, so it is the seat the same run
   // announced for this employee. One computer or none; two different ones are ambiguous.
   const delivered = valuesOf(events, DELIVERED_EVENT).some((value) => {
-    // Another employee's hand-in in the same run says nothing about this one's computer or ports.
-    if (!isRecord(value) || value.agentId !== botId) return false;
+    // Another employee's hand-in in the same run says nothing about this one's computer or ports. An
+    // event written before hand-ins carried `agentId` has none: it is taken as this employee's, because
+    // the caller has already required the run itself to be this employee's.
+    if (!isRecord(value)) return false;
+    if (value.agentId !== undefined && value.agentId !== botId) return false;
     const deliverable = isRecord(value.deliverable)
       ? value.deliverable.workspaceFiles
       : undefined;

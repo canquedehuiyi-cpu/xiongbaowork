@@ -710,6 +710,9 @@ describe("what a program's cache headers become", () => {
         etag: '"abc"',
         "last-modified": "Wed, 21 Oct 2015 07:28:00 GMT",
         pragma: "cache",
+        "cdn-cache-control": "max-age=999",
+        "surrogate-control": "max-age=999",
+        "x-accel-expires": "999",
       },
     });
 
@@ -720,6 +723,13 @@ describe("what a program's cache headers become", () => {
     expect(res.headers.has("expires")).toBe(false);
     expect(res.headers.has("etag")).toBe(false);
     expect(res.headers.has("last-modified")).toBe(false);
+    for (const name of [
+      "cdn-cache-control",
+      "surrogate-control",
+      "x-accel-expires",
+    ]) {
+      expect(res.headers.has(name)).toBe(false);
+    }
   });
 
   test("domain mode: the program's caching stays but public becomes private", async () => {

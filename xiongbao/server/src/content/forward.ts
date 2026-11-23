@@ -450,6 +450,10 @@ export function programResponse(
     headers.delete("etag");
     headers.delete("last-modified");
     headers.delete("pragma");
+    // The headers a CDN or reverse proxy in front of the content port reads instead of Cache-Control.
+    headers.delete("cdn-cache-control");
+    headers.delete("surrogate-control");
+    headers.delete("x-accel-expires");
   }
   headers.set("x-content-type-options", "nosniff");
   if (!headers.has("referrer-policy")) {
