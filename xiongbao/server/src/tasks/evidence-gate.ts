@@ -84,7 +84,8 @@ export function appPathOf(path: string | undefined): string | undefined {
   const wanted = path ?? "/";
   // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what is refused
   const unsafe = /[\\\u0000-\u001f\u007f]/;
-  return wanted.length <= 2000 &&
+  // The same limit as the open route (content/open-routes.ts): a longer path could be handed in but never opened.
+  return wanted.length <= 1024 &&
     wanted.startsWith("/") &&
     !wanted.startsWith("//") &&
     !unsafe.test(wanted)
