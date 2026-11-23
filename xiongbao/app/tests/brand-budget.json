@@ -257,7 +257,7 @@
   {
     "rule": "openbot-package",
     "scope": "server/src",
-    "lines": 212
+    "lines": 211
   },
   {
     "rule": "openbot-package",

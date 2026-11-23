@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
+import { ArtifactPreview } from "@/components/channels/artifact-preview";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { GroupChat } from "@/components/channels/group-chat";
 import { GroupPeopleButton } from "@/components/channels/group-people";
@@ -11,6 +12,11 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { useMarkOpenChannelRead } from "@/lib/channels/mark-read";
 import { channelQueryOptions } from "@/lib/channels/queries";
+import {
+  PREVIEW_PANEL_WIDTH,
+  PreviewTargetContext,
+  useRoutePreviewTarget,
+} from "@/lib/computers/preview";
 import { groupQueryOptions } from "@/lib/groups";
 import { useGroupCompactionOutcomes } from "@/lib/threads/sidebar";
 import { wakerGroupsQueryOptions } from "@/lib/waker-groups/queries";
@@ -28,11 +34,15 @@ export const Route = createFileRoute("/_authed/_app/group/$channelId")({
   component: RouteComponent,
   /*
    * `?settings=1` opens the group's settings; the card's 「设置」 links here. `?sidebar=1` is the default
-   * skin's full-screen conversation sidebar on a phone. Nothing else is kept.
+   * skin's full-screen conversation sidebar on a phone. `?preview=` is the file preview in the detail pane
+   * (a bad value reads as none). Nothing else is kept.
    */
   validateSearch: (
     search: Record<string, unknown>,
-  ): { settings?: 1; sidebar?: 1 } => ({
+  ): { settings?: 1; sidebar?: 1; preview?: string } => ({
+    ...(typeof search.preview === "string" && search.preview !== ""
+      ? { preview: search.preview }
+      : {}),
     ...(search.settings === 1 || search.settings === "1"
       ? { settings: 1 as const }
       : {}),
@@ -48,6 +58,8 @@ function RouteComponent() {
   const group = useQuery(groupQueryOptions(channelId));
   const { settings } = Route.useSearch();
   const navigate = Route.useNavigate();
+  // 群聊的详情栏只放文件预览这一种内容。
+  const preview = useRoutePreviewTarget();
   /*
    * 默认皮肤（聊天工作台）：右边常驻对话侧栏，按群组频道取（成员、每位员工的上下文；目标和输出内容是查看者
    * 自己名下的）。电脑上顶栏一个「收起侧栏 / 展开侧栏」，手机上一个按钮打开全屏侧栏（`usePhoneSidebarPage`）。
@@ -103,7 +115,10 @@ function RouteComponent() {
           // The drawer and the address are one thing, so the card's 「设置」 link and a reload both land here.
           onOpenChange={(open) =>
             void navigate({
-              search: open ? { settings: 1 } : {},
+              search: (previous) => ({
+                ...previous,
+                settings: open ? (1 as const) : undefined,
+              }),
               replace: true,
             })
           }
@@ -128,27 +143,34 @@ function RouteComponent() {
   );
   if (!workbench) return conversation;
   return (
-    <DetailPanel
-      aside={
-        <ConversationSidebar
-          peopleCount={peopleCount}
-          source={{ channelId }}
-          title={groupName}
-          variant="panel"
-        />
-      }
-      onClose={() => undefined}
-      open={false}
-    >
-      {conversation}
-      {phone && phonePage.isOpen ? (
-        <SidebarPage
-          onBack={phonePage.close}
-          peopleCount={peopleCount}
-          source={{ channelId }}
-          title={groupName}
-        />
-      ) : null}
-    </DetailPanel>
+    <PreviewTargetContext.Provider value={preview}>
+      <DetailPanel
+        aside={
+          <ConversationSidebar
+            peopleCount={peopleCount}
+            source={{ channelId }}
+            title={groupName}
+            variant="panel"
+          />
+        }
+        detail={
+          preview.target ? <ArtifactPreview target={preview.target} /> : null
+        }
+        detailWidth={PREVIEW_PANEL_WIDTH}
+        onClose={preview.close}
+        open={preview.target !== undefined}
+        title="预览"
+      >
+        {conversation}
+        {phone && phonePage.isOpen ? (
+          <SidebarPage
+            onBack={phonePage.close}
+            peopleCount={peopleCount}
+            source={{ channelId }}
+            title={groupName}
+          />
+        ) : null}
+      </DetailPanel>
+    </PreviewTargetContext.Provider>
   );
 }

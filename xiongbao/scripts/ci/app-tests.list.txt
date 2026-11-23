@@ -74,6 +74,7 @@ tests/arcade-index.test.tsx
 tests/archive-duplicate-pages.test.tsx
 tests/archive-resource-pages.test.tsx
 tests/artifact-download-href.test.ts
+tests/artifact-preview.test.tsx
 tests/assemble-install.test.tsx
 tests/assemble-knowledge.test.tsx
 tests/assemble-screen.test.tsx
@@ -292,6 +293,8 @@ tests/desktop-open-requests.test.tsx
 tests/desktop-part-names.test.ts
 tests/desktop-return.test.tsx
 tests/desktop-speech.test.ts
+tests/detail-panel-preview-routes.test.tsx
+tests/detail-panel-preview.test.tsx
 tests/detail-panel.test.tsx
 tests/device-live-screen.test.tsx
 tests/device-presence.test.ts

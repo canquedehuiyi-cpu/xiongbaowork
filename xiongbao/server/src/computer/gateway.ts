@@ -20,7 +20,6 @@
  * The refs are opaque to the caller precisely so that the server holds the mapping.
  */
 
-import type { TurnArtifact } from "../../../shared/turn-artifacts";
 import { DECLINED_BY_PERSON } from "@openbot/shared/approval-outcomes";
 import type {
   ControlRequestInput,
@@ -36,6 +35,7 @@ import {
 } from "@openbot/shared/desktop-control";
 import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import type { TurnArtifact } from "../../../shared/turn-artifacts";
 // --- app discovery (sub-project 3) ---
 import { APP_ENABLE_TOOL, canonicalKeyName } from "../approvals/policy";
 import {
@@ -527,6 +527,20 @@ export interface ComputerGateway {
     bytes: number;
     name: string;
   }>;
+  /**
+   * An Office file as a PDF for the preview pane: the computer converts it into the workspace's
+   * hidden preview folder and this reads the result back as a stream. `unavailable` when the
+   * computer has no converter. Decided and recorded as the file's download, since the bytes leave
+   * the workspace the same way.
+   */
+  previewPdf(
+    seat: ComputerSeat,
+    actor: ActionActor,
+    input: { path: string },
+    signal?: AbortSignal,
+  ): Promise<
+    { body: ReadableStream<Uint8Array>; bytes: number } | { unavailable: true }
+  >;
   listFiles(
     seat: ComputerSeat,
     actor: ActionActor,
@@ -1163,6 +1177,15 @@ export function createComputerGateway(
    * link. Five minutes is a backstop, not a size limit.
    */
   const DOWNLOAD_BACKSTOP_MS = 300_000;
+
+  /*
+   * The computer's own conversion limit is 60 seconds; this only has to outlast it, so the
+   * computer's reason for a failed conversion arrives instead of the transport's deadline.
+   */
+  const PREVIEW_CONVERT_BACKSTOP_MS = 90_000;
+
+  /** Where the computer keeps converted previews: its hidden folder, one file per source and edit. */
+  const PREVIEW_PDF_PATH = /^\.xb-preview\/[0-9a-f]{16}-\d+\.pdf$/;
 
   /** Read-only, so it passes straight through. Nothing has changed and there is nothing to decide. */
   async function screenshot(
@@ -3250,6 +3273,57 @@ export function createComputerGateway(
             ...download,
             name: describeFile(input.path).name || "download",
           };
+        },
+      );
+    },
+
+    /**
+     * The converted PDF of an Office file, for the preview pane.
+     *
+     * One decision and one audit row, under the download's own intent: the preview is a read of the
+     * file's content by somebody outside the workspace, so a rule that stops its download stops this.
+     * The computer answers with where the PDF is kept; this reads that and nothing else, and only
+     * from the computer's preview folder, so a reply cannot send it to another file.
+     */
+    previewPdf(
+      seat: ComputerSeat,
+      actor: ActionActor,
+      input: { path: string },
+      signal?: AbortSignal,
+    ) {
+      return govern(
+        "computer_download_file",
+        seat,
+        actor,
+        { filePath: input.path, ...(signal ? { signal } : {}) },
+        async () => {
+          const address = await locate(seat);
+          const converted = await post<{
+            path?: unknown;
+            unavailable?: unknown;
+          }>(
+            seat,
+            "/files/pdf",
+            { path: input.path },
+            signal,
+            PREVIEW_CONVERT_BACKSTOP_MS,
+            address,
+          );
+          if (converted.unavailable === true) {
+            return { unavailable: true as const };
+          }
+          if (
+            typeof converted.path !== "string" ||
+            !PREVIEW_PDF_PATH.test(converted.path)
+          ) {
+            throw new Error("The computer did not return a converted PDF.");
+          }
+          return await transport.download(
+            ...route(seat, address),
+            `/files/download?path=${encodeURIComponent(converted.path)}`,
+            signal,
+            DOWNLOAD_BACKSTOP_MS,
+          );
         },
       );
     },

@@ -1,9 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import type { TranscriptNote } from "@/components/channels/chat-transcript";
-import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
+import {
+  ARTIFACT_DOWNLOAD_LINK,
+  PreviewButton,
+} from "@/components/channels/turn-artifacts";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { artifactHref } from "@/lib/computers/artifact";
+import type { PreviewTarget } from "@/lib/computers/preview";
 import { useScheduleZone } from "@/lib/settings/work-hours";
 import {
   canExtend,
@@ -419,12 +423,15 @@ function EvidenceItem({
   row,
   linked,
   download,
+  previewTarget,
 }: {
   row: Exclude<EvidenceRow, { kind: "check" }>;
   /** 附件只有派活的人打得开（在它和员工的线程里）。 */
   linked: boolean;
   /** 工作区文件的下载地址；交付事件没带员工 id（旧事件）时为 undefined，这行只念文件名。 */
   download?: string;
+  /** 同一个文件的预览目标（范围是这张卡的任务）；和下载一样，没有员工 id 就没有。 */
+  previewTarget?: PreviewTarget;
 }) {
   const link = "text-inherit underline-offset-2 hover:underline";
   const label =
@@ -454,6 +461,9 @@ function EvidenceItem({
         <FileIcon kind={row.kind} />
       </span>
       <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
+      {row.kind === "workspace_file" && previewTarget ? (
+        <PreviewButton target={previewTarget} />
+      ) : null}
       {row.kind === "workspace_file" && download ? (
         <a className={ARTIFACT_DOWNLOAD_LINK} href={download}>
           下载
@@ -516,6 +526,15 @@ function DeliveredCard({
               : undefined
           }
           linked={mine}
+          previewTarget={
+            row.kind === "workspace_file" && event.agentId
+              ? {
+                  botId: event.agentId,
+                  path: row.path,
+                  scope: { task: event.taskId },
+                }
+              : undefined
+          }
           row={row}
         />
       ))}

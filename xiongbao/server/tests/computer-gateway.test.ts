@@ -985,6 +985,110 @@ describe("the computer gateway", () => {
     expect(denied.rows[0]?.eventType).toBe("computer.action_refused");
   });
 
+  describe("previewPdf", () => {
+    const pdfRoutes = (path: unknown) => ({
+      "/files/pdf": () => Response.json({ path, cached: false }),
+    });
+    const good = ".xb-preview/0123456789abcdef-1700000000000.pdf";
+
+    test("converts, then reads only the returned preview file, under one download decision", async () => {
+      const { gateway, calls, rows, requests } = await gatewayWith(PERMISSIVE, {
+        routes: pdfRoutes(good),
+      });
+
+      const result = await gateway.previewPdf(botSeat("bot-1"), ACTOR, {
+        path: "decks/Q3 汇报.pptx",
+      });
+
+      expect("unavailable" in result).toBe(false);
+      if ("unavailable" in result) return;
+      expect(result.bytes).toBe(4);
+      expect(
+        new Uint8Array(await new Response(result.body).arrayBuffer()),
+      ).toEqual(Uint8Array.from([0, 1, 2, 255]));
+      expect(calls).toContain("downloadFile");
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.eventType).toBe("computer.action_allowed");
+      expect(rows[0]?.payload).toMatchObject({
+        action: "computer_download_file",
+        bot: "bot-1",
+        file: "decks/Q3 汇报.pptx",
+      });
+      const download = requests.find(({ url }) =>
+        url.includes("/files/download"),
+      );
+      expect(new URL(download?.url ?? "").searchParams.get("path")).toBe(good);
+      const convert = requests.find(({ url }) => url.endsWith("/files/pdf"));
+      expect(convert?.init?.method).toBe("POST");
+      expect(JSON.parse(String(convert?.init?.body))).toEqual({
+        path: "decks/Q3 汇报.pptx",
+      });
+    });
+
+    test.each([
+      "../secret.pdf",
+      "/etc/x.pdf",
+      ".xb-preview/../a.pdf",
+      ".xb-preview/x.pdf",
+      ".xb-preview/0123456789abcdef-1700000000000.pdf/../../a.pdf",
+      ".xb-preview/0123456789ABCDEF-1.pdf",
+      42,
+      undefined,
+    ])("refuses a reply naming %p and never reads it", async (path) => {
+      const { gateway, calls } = await gatewayWith(PERMISSIVE, {
+        routes: pdfRoutes(path),
+      });
+
+      await expect(
+        gateway.previewPdf(botSeat("bot-1"), ACTOR, { path: "a.pptx" }),
+      ).rejects.toThrow();
+      expect(calls).not.toContain("downloadFile");
+    });
+
+    test("passes `unavailable` through and reads nothing", async () => {
+      const { gateway, calls } = await gatewayWith(PERMISSIVE, {
+        routes: { "/files/pdf": () => Response.json({ unavailable: true }) },
+      });
+
+      await expect(
+        gateway.previewPdf(botSeat("bot-1"), ACTOR, { path: "a.pptx" }),
+      ).resolves.toEqual({ unavailable: true });
+      expect(calls).not.toContain("downloadFile");
+    });
+
+    test("a policy refusal never reaches the computer's converter", async () => {
+      const denied = await gatewayWith(
+        { ...PERMISSIVE, deny: ['intent == "download_file"'] },
+        { routes: pdfRoutes(good) },
+      );
+
+      await expect(
+        denied.gateway.previewPdf(botSeat("bot-1"), ACTOR, {
+          path: "a.pptx",
+        }),
+      ).rejects.toThrow(ActionRefusedError);
+      expect(
+        denied.requests.some(({ url }) => url.endsWith("/files/pdf")),
+      ).toBe(false);
+      expect(denied.calls).not.toContain("downloadFile");
+      expect(denied.rows).toHaveLength(1);
+      expect(denied.rows[0]?.eventType).toBe("computer.action_refused");
+      expect(denied.rows[0]?.payload.action).toBe("computer_download_file");
+    });
+
+    test("an absent policy refuses too", async () => {
+      const { gateway, requests } = await gatewayWith(undefined, {
+        routes: pdfRoutes(good),
+      });
+      await expect(
+        gateway.previewPdf(botSeat("bot-1"), ACTOR, { path: "a.pptx" }),
+      ).rejects.toThrow(ActionRefusedError);
+      expect(requests.some(({ url }) => url.endsWith("/files/pdf"))).toBe(
+        false,
+      );
+    });
+  });
+
   test("records a failed download attempt after the allowed decision", async () => {
     const { gateway, rows } = await gatewayWith(PERMISSIVE, {
       routes: {

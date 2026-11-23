@@ -2,11 +2,16 @@ import {
   DESKTOP_REF,
   DESKTOP_WINDOW_ID,
 } from "@openbot/shared/desktop-control";
-import { downloadHeaders } from "@openbot/shared/file-download";
 import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
+import { downloadHeaders, inlineHeaders } from "../../../shared/file-download";
+import {
+  previewContentType,
+  previewKindOf,
+  TEXT_PREVIEW_BYTES,
+} from "../../../shared/preview-kind";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import {
   ApprovalNeedsConversationError,
@@ -84,22 +89,28 @@ import {
 /** What a person's own browser answers under this router: the reads its live screen makes. */
 const PERSON_BROWSER_READS = new Set(["control", "status", "screenshot"]);
 
+/** The three file routes a scope may name, each answered by the same rule (`resolveFileRequest`). */
+const SCOPED_FILE_ROUTES = new Set(["download", "preview", "text"]);
+
 /**
- * Whether `path` is exactly this Bot's file download: its last three segments are the Bot, `files`
- * and `download`, under at most the two segments this router is mounted on (`/api/computers`).
- * The Bot is compared as the router decoded it, so an encoded slash cannot stand in for a segment.
+ * Whether `path` is exactly one of this Bot's scoped file routes: its last three segments are the
+ * Bot, `files` and `download`, `preview` or `text`, under at most the two segments this router is
+ * mounted on (`/api/computers`). The Bot is compared as the router decoded it, so an encoded slash
+ * cannot stand in for a segment.
  */
-function isDownloadPath(path: string, botId: string): boolean {
+function isScopedFilePath(path: string, botId: string): boolean {
   const segments = path.split("/").filter((segment) => segment !== "");
   if (segments.length < 3 || segments.length > 5) return false;
-  const [bot, files, download] = segments.slice(-3);
+  const [bot, files, route] = segments.slice(-3);
   let named: string;
   try {
     named = decodeURIComponent(bot ?? "");
   } catch {
     return false;
   }
-  return files === "files" && download === "download" && named === botId;
+  return (
+    files === "files" && SCOPED_FILE_ROUTES.has(route ?? "") && named === botId
+  );
 }
 
 export function createComputerRoutes(
@@ -151,6 +162,23 @@ export function createComputerRoutes(
   if (botBrowser)
     routes.use("/:botId/browser/narration", stampNarrationArrival);
 
+  /*
+   * Whatever the preview and text routes answer that is not a file (a refusal, a 415, an error, the
+   * `unavailable` note) is still private and still not to be sniffed into something else. Registered
+   * ahead of the guard, so its own 404 is covered too; a file response sets both itself.
+   */
+  for (const route of ["preview", "text"]) {
+    routes.use(`/:botId/files/${route}`, async (context, next) => {
+      await next();
+      if (!context.res.headers.has("Cache-Control")) {
+        context.res.headers.set("Cache-Control", "private, no-store");
+      }
+      if (!context.res.headers.has("X-Content-Type-Options")) {
+        context.res.headers.set("X-Content-Type-Options", "nosniff");
+      }
+    });
+  }
+
   /**
    * Every route under a Bot id, in one place.
    *
@@ -200,15 +228,16 @@ export function createComputerRoutes(
     }
 
     /*
-     * A download that names where its file was announced is decided by that rule alone, in the route
-     * itself (`artifactScopeOf`), and is not asked whether the person may use the Bot: a member of a
-     * group chat may fetch what the chat was shown without being able to drive the owner's employee.
-     * Only this one route, and only a GET; the route answers 404 itself when the rule does not hold.
+     * A download, preview or text read that names where its file was announced is decided by that
+     * rule alone, in the route itself (`artifactScopeOf`), and is not asked whether the person may use
+     * the Bot: a member of a group chat may fetch what the chat was shown without being able to drive
+     * the owner's employee. Only these three routes, and only a GET; the route answers 404 itself when
+     * the rule does not hold.
      */
     if (
       botId &&
       context.req.method === "GET" &&
-      isDownloadPath(path, botId) &&
+      isScopedFilePath(path, botId) &&
       artifactScopeOf(context.req.url)
     ) {
       return next();
@@ -850,7 +879,14 @@ export function createComputerRoutes(
    * before the computer is asked for bytes. Ownership is enforced by the `/:botId/*` middleware
    * above, and the response is always an opaque attachment so HTML cannot render on this origin.
    */
-  routes.get("/:botId/files/download", async (context) => {
+  /**
+   * Which file a download, preview or text request is for and whose seat it is read from, or the
+   * answer to send instead. One function for all three routes, so there is one rule for who may read
+   * what and the preview cannot be looser than the download.
+   */
+  const resolveFileRequest = async (
+    context: ComputerContext,
+  ): Promise<{ seat: ComputerSeat; wanted: string } | Response> => {
     const path = context.req.query("path");
     const scope = artifactScopeOf(context.req.url);
 
@@ -859,8 +895,6 @@ export function createComputerRoutes(
      * person's own seat, and what it refuses is refused like a Bot that does not exist, with no
      * word on which part did not hold. The file asked for is the one the rule matched.
      */
-    let seat: Promise<ComputerSeat> | ComputerSeat;
-    let wanted = path?.trim() ?? "";
     if (scope) {
       const botId = context.req.param("botId") ?? "";
       const named = normalizedArtifactPath(path ?? "");
@@ -882,25 +916,130 @@ export function createComputerRoutes(
       if (!access || named === null) {
         return context.json({ error: "There is no such Bot." }, 404);
       }
-      seat = access.seat;
-      wanted = named;
-    } else {
-      if (!path?.trim()) {
-        return context.json({ error: "A file path is required." }, 400);
-      }
-      seat = seatOf(context);
+      return { seat: access.seat, wanted: named };
     }
+    if (!path?.trim()) {
+      return context.json({ error: "A file path is required." }, 400);
+    }
+    try {
+      return { seat: await seatOf(context), wanted: path.trim() };
+    } catch (error) {
+      return actionFailure(context, error);
+    }
+  };
+
+  routes.get("/:botId/files/download", async (context) => {
+    const resolved = await resolveFileRequest(context);
+    if (resolved instanceof Response) return resolved;
 
     try {
       const file = await gateway.downloadFile(
-        await seat,
+        resolved.seat,
         actorOf(context.var.actor),
-        { path: wanted },
+        { path: resolved.wanted },
         context.req.raw.signal,
       );
       return new Response(file.body, {
         headers: downloadHeaders(file.name, file.bytes),
       });
+    } catch (error) {
+      return actionFailure(context, error);
+    }
+  });
+
+  /*
+   * The preview pane's file, shown in place instead of saved. The same access, the same governed
+   * read; what differs is the response, and it is made safe in three ways. (1) Only a kind the
+   * preview knows (`previewKindOf`) is answered at all; anything else is 415 before the computer is
+   * asked. (2) The content type comes from that kind, never from the bytes, and `nosniff` holds the
+   * browser to it. (3) The response is sandboxed without this application's origin, so an employee's
+   * HTML or a crafted file runs, if at all, as a stranger to the session. An Office file is read as
+   * the PDF the computer converts it to.
+   */
+  routes.get("/:botId/files/preview", async (context) => {
+    const resolved = await resolveFileRequest(context);
+    if (resolved instanceof Response) return resolved;
+    const { seat, wanted } = resolved;
+
+    const kind = previewKindOf(wanted);
+    const contentType = previewContentType(wanted);
+    if (kind !== "office" && !contentType) {
+      return context.json({ error: "This file cannot be previewed." }, 415);
+    }
+
+    try {
+      const actor = actorOf(context.var.actor);
+      if (kind === "office") {
+        const converted = await gateway.previewPdf(
+          seat,
+          actor,
+          { path: wanted },
+          context.req.raw.signal,
+        );
+        if ("unavailable" in converted) {
+          return context.json({ unavailable: true });
+        }
+        return new Response(converted.body, {
+          headers: inlineHeaders(
+            pdfNameOf(wanted),
+            converted.bytes,
+            "application/pdf",
+          ),
+        });
+      }
+      const file = await gateway.downloadFile(
+        seat,
+        actor,
+        { path: wanted },
+        context.req.raw.signal,
+      );
+      return new Response(file.body, {
+        headers: inlineHeaders(file.name, file.bytes, contentType ?? ""),
+      });
+    } catch (error) {
+      return actionFailure(context, error);
+    }
+  });
+
+  /*
+   * The first `TEXT_PREVIEW_BYTES` of a text-like file, as JSON. The text is a string inside a JSON
+   * body, so nothing in it is ever rendered as a page; the stream is cancelled once enough has been
+   * read, so a large file costs one mebibyte and not its whole length.
+   */
+  routes.get("/:botId/files/text", async (context) => {
+    const resolved = await resolveFileRequest(context);
+    if (resolved instanceof Response) return resolved;
+    const { seat, wanted } = resolved;
+
+    const kind = previewKindOf(wanted);
+    if (kind !== "markdown" && kind !== "csv" && kind !== "text") {
+      return context.json(
+        { error: "This file cannot be previewed as text." },
+        415,
+      );
+    }
+
+    try {
+      const file = await gateway.downloadFile(
+        seat,
+        actorOf(context.var.actor),
+        { path: wanted },
+        context.req.raw.signal,
+      );
+      const { text, truncated } = await readTextHead(file.body);
+      return context.json(
+        {
+          kind,
+          text,
+          truncated,
+          bytes: file.bytes,
+        },
+        200,
+        {
+          "Cache-Control": "private, no-store",
+          "X-Content-Type-Options": "nosniff",
+        },
+      );
     } catch (error) {
       return actionFailure(context, error);
     }
@@ -1388,6 +1527,53 @@ function actionFailure(context: ComputerContext, error: unknown) {
     return context.json({ error: error.message }, 403);
   }
   return context.json(errorBody(error), statusFor(error));
+}
+
+/** The file's own name with its extension swapped for `.pdf`, which is what the preview serves. */
+function pdfNameOf(path: string): string {
+  const name = path.split(/[\\/]/).pop() ?? "";
+  const dot = name.lastIndexOf(".");
+  return `${dot > 0 ? name.slice(0, dot) : name || "preview"}.pdf`;
+}
+
+/**
+ * Up to `TEXT_PREVIEW_BYTES` of a stream as text, then the stream is cancelled. A cut in the middle
+ * of a multi-byte character drops the unfinished character rather than showing a replacement mark;
+ * bytes that are not UTF-8 anywhere else are replaced, never thrown on.
+ */
+async function readTextHead(
+  body: ReadableStream<Uint8Array>,
+): Promise<{ text: string; truncated: boolean }> {
+  const reader = body.getReader();
+  const head = new Uint8Array(TEXT_PREVIEW_BYTES);
+  let filled = 0;
+  let truncated = false;
+  try {
+    while (filled < TEXT_PREVIEW_BYTES) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const room = TEXT_PREVIEW_BYTES - filled;
+      head.set(value.subarray(0, room), filled);
+      filled += Math.min(value.byteLength, room);
+      if (value.byteLength > room) {
+        truncated = true;
+        break;
+      }
+    }
+    if (!truncated && filled === TEXT_PREVIEW_BYTES) {
+      // Exactly full: truncated only if another byte is waiting.
+      const next = await reader.read();
+      truncated = !next.done && next.value.byteLength > 0;
+    }
+  } finally {
+    await reader.cancel().catch(() => undefined);
+  }
+  // `stream: true` and no flush: an incomplete character at the cut is held back, not decoded.
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(
+    head.subarray(0, filled),
+    { stream: truncated },
+  );
+  return { text, truncated };
 }
 
 function isBadRequest(value: unknown): value is BadRequest {

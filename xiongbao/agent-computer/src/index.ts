@@ -57,6 +57,7 @@ import {
   navigateWebPage,
   type PagePurpose,
 } from "./navigation";
+import { convertToPdf, OfficeConversionError } from "./office-preview";
 import {
   botKeyOf,
   createPerBotComputer,
@@ -2058,6 +2059,33 @@ serve<StreamData & TerminalSocketData>({
         } catch (error) {
           return json(
             { error: describe(error, "The path could not be checked.") },
+            fileStatus(error),
+          );
+        }
+      }
+
+      // An Office file as a PDF for the preview pane, cached in a hidden workspace folder. Run as the
+      // employee through the same runner its commands use. No LibreOffice here: 200 with
+      // `unavailable`; a conversion that failed or timed out: 502 with the reason.
+      if (url.pathname === "/files/pdf" && request.method === "POST") {
+        const body = (await request.json().catch(() => null)) as {
+          path?: unknown;
+        } | null;
+        try {
+          const files = await filesFor(botId);
+          const shell = await commandsFor(botId);
+          return json(
+            await convertToPdf({
+              workspace: files,
+              run: shell,
+              path: String(body?.path ?? ""),
+            }),
+          );
+        } catch (error) {
+          if (error instanceof OfficeConversionError)
+            return json({ error: error.message }, 502);
+          return json(
+            { error: describe(error, "The file could not be converted.") },
             fileStatus(error),
           );
         }

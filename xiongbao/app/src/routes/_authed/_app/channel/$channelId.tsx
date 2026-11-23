@@ -7,6 +7,7 @@ import { AgentProfile } from "@/components/agents/agent-profile";
 import { ConversationApprovals } from "@/components/approvals/inline-approval";
 import { BotPausedBanner } from "@/components/bot-profile/pause-banner";
 import { useProfileStatus } from "@/components/bot-profile/waker-detail-sections";
+import { ArtifactPreview } from "@/components/channels/artifact-preview";
 import { ChannelAvatar } from "@/components/channels/avatar";
 import { BackgroundRunBadge } from "@/components/channels/background-run-badge";
 import { ChannelChat } from "@/components/channels/channel-chat";
@@ -32,6 +33,12 @@ import { useBackgroundRun } from "@/lib/channels/background-run";
 import { useMarkOpenChannelRead } from "@/lib/channels/mark-read";
 import { type AgentChannel, channelQueryOptions } from "@/lib/channels/queries";
 import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
+import {
+  PREVIEW_PANEL_WIDTH,
+  type PreviewTarget,
+  PreviewTargetContext,
+  useRoutePreviewTarget,
+} from "@/lib/computers/preview";
 import { useSkinId } from "@/skins/store";
 import {
   ConversationSidebar,
@@ -49,6 +56,13 @@ const chatSearchSchema = z.object({
   watch: z.boolean().optional(),
   /** 默认皮肤的手机上：全屏的对话侧栏（`usePhoneSidebarPage`）。 */
   sidebar: z.literal(1).optional(),
+  /** 右侧详情栏里的文件预览（`lib/computers/preview.ts` 的写法）；坏值读成没有，面板不开。 */
+  preview: z
+    .string()
+    .optional()
+    // 地址里 `?preview=123` 会被读成数字、`true` 读成布尔：不是字符串、或是空串，都当没有，不抛进错误页。
+    .catch(undefined)
+    .transform((value) => (value === "" ? undefined : value)),
 });
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -72,6 +86,9 @@ function RouteComponent() {
   const { settings, watch } = Route.useSearch();
   const channel = useQuery(channelQueryOptions(channelId));
   const navigate = Route.useNavigate();
+  // 预览是详情栏的第三种内容：和看电脑、员工资料互斥，开哪个就清掉另外两个的参数。
+  const preview = useRoutePreviewTarget();
+  const previewing = preview.target !== undefined;
   const workbench = useSkinId() === "xiongbao";
   // 默认皮肤没有员工资料抽屉了：旧链接、浏览器历史里残留的 `?settings` 不读，不再压住自动看屏幕。
   const isSettingsOpen = settings === true && !workbench;
@@ -115,18 +132,29 @@ function RouteComponent() {
   const autoWatch = useAutoWatchScreen({
     botId: external ? undefined : agentId,
     watching: isWatching,
-    busy: isSettingsOpen,
+    // 预览开着也是人要的内容：自动看电脑不抢它（人手动点「看电脑」仍可替换）。
+    busy: isSettingsOpen || previewing,
     open: () =>
       navigate({
         search: (previous) => ({
           ...previous,
           settings: undefined,
           watch: true,
+          preview: undefined,
         }),
       }),
     close: () =>
       navigate({ search: (previous) => ({ ...previous, watch: undefined }) }),
   });
+
+  // 打开预览算人对这一轮的选择：这一轮不再自动开电脑（「一轮只自动开一次」）。
+  const previewController = {
+    ...preview,
+    open: (target: PreviewTarget) => {
+      autoWatch.dismiss();
+      preview.open(target);
+    },
+  };
 
   // A command in the chat clicked opens the Computer on its terminal.
   useOpenComputerOnRequest(external ? undefined : agentId, () => show("watch"));
@@ -140,160 +168,173 @@ function RouteComponent() {
         ...previous,
         settings: next === "settings" ? true : undefined,
         watch: next === "watch" ? true : undefined,
+        preview: undefined,
       }),
     });
   };
 
   return (
-    <DetailPanel
-      onClose={() => show(null)}
-      open={(isWatching || isSettingsOpen) && agentId !== undefined}
-      aside={
-        sidebarThread ? (
-          <ConversationSidebar
-            agentId={agentId}
-            source={{ threadId: sidebarThread }}
-            title={sidebarTitle}
-            variant="panel"
-          />
-        ) : undefined
-      }
-      detailWidth={isWatching ? SCREEN_PANEL_WIDTH : undefined}
-      title={isWatching ? "电脑" : undefined}
-      waiting={
-        channel.data ? (
-          <ConversationApprovals threadId={channel.data.threadId} />
-        ) : null
-      }
-      detail={
-        agentId === undefined ? null : isWatching ? (
-          // Manual watch remains active even when there is no current browser action.
-          <ComputerViewPanel agentId={agentId} name={channel?.data?.name} />
-        ) : (
-          <AgentProfile
-            agentId={agentId}
-            footer={
-              channel.data ? (
-                <ConversationActions
-                  channelId={channelId}
-                  leave={() => navigate({ to: "/" })}
-                  name={channel.data.name}
-                />
-              ) : null
-            }
-          />
-        )
-      }
-    >
-      {/* A direct child of the pane's column, so `sticky` has the whole chat to stay pinned across. */}
-      <div
-        className={CONVERSATION_HEADER_CLASS}
-        data-slot="conversation-header"
+    <PreviewTargetContext.Provider value={previewController}>
+      <DetailPanel
+        onClose={() => show(null)}
+        open={
+          (isWatching || isSettingsOpen || previewing) && agentId !== undefined
+        }
+        aside={
+          sidebarThread ? (
+            <ConversationSidebar
+              agentId={agentId}
+              source={{ threadId: sidebarThread }}
+              title={sidebarTitle}
+              variant="panel"
+            />
+          ) : undefined
+        }
+        detailWidth={
+          previewing
+            ? PREVIEW_PANEL_WIDTH
+            : isWatching
+              ? SCREEN_PANEL_WIDTH
+              : undefined
+        }
+        title={previewing ? "预览" : isWatching ? "电脑" : undefined}
+        waiting={
+          channel.data ? (
+            <ConversationApprovals threadId={channel.data.threadId} />
+          ) : null
+        }
+        detail={
+          agentId === undefined ? null : preview.target ? (
+            <ArtifactPreview target={preview.target} />
+          ) : isWatching ? (
+            // Manual watch remains active even when there is no current browser action.
+            <ComputerViewPanel agentId={agentId} name={channel?.data?.name} />
+          ) : (
+            <AgentProfile
+              agentId={agentId}
+              footer={
+                channel.data ? (
+                  <ConversationActions
+                    channelId={channelId}
+                    leave={() => navigate({ to: "/" })}
+                    name={channel.data.name}
+                  />
+                ) : null
+              }
+            />
+          )
+        }
       >
-        {card ? (
-          <div className="flex min-w-0 items-center gap-1.5">
-            <SidebarToggle />
-            <HeaderCard agent={card} />
-          </div>
-        ) : (
-          <>
-            {/* Keyed on the displayed name so cold channel loads animate the resolved name, not the id. */}
+        {/* A direct child of the pane's column, so `sticky` has the whole chat to stay pinned across. */}
+        <div
+          className={CONVERSATION_HEADER_CLASS}
+          data-slot="conversation-header"
+        >
+          {card ? (
             <div className="flex min-w-0 items-center gap-1.5">
               <SidebarToggle />
-              <motion.div
-                animate={{ opacity: 1 }}
-                className="shrink-0"
-                initial={{ opacity: 0 }}
-                key={`avatar:${channel.data?.name ?? channelId}`}
-                transition={{
-                  duration: HEADING_ENTRANCE_SECONDS,
-                  ease: EASE_OUT,
-                }}
-              >
-                {agentId ? (
-                  <HeaderFace
-                    agentId={agentId}
-                    participantIds={channel.data?.agentIds ?? []}
-                  />
-                ) : (
-                  <ChannelAvatar participantIds={[]} size={24} />
-                )}
-              </motion.div>
-              <motion.span
-                animate={
-                  prefersReducedMotion
-                    ? { opacity: 1 }
-                    : { opacity: 1, transform: "translateY(0px)" }
-                }
-                className="min-w-0 truncate font-medium text-[14px] tracking-tight"
-                initial={
-                  prefersReducedMotion
-                    ? { opacity: 0 }
-                    : { opacity: 0, transform: HEADING_ENTRANCE_OFFSET }
-                }
-                key={`name:${channel.data?.name ?? channelId}`}
-                transition={{
-                  duration: HEADING_ENTRANCE_SECONDS,
-                  ease: EASE_OUT,
-                }}
-              >
-                {channel.data?.name ?? "会话"}
-              </motion.span>
+              <HeaderCard agent={card} />
             </div>
-          </>
-        )}
-        <div className="flex flex-row gap-1.5">
-          <BackgroundRunBadge run={background} />
-          {/* Only once it is known not to be an external employee: these poll its computer. */}
-          {external || agentProfiles === undefined ? null : (
-            <ComputerChatControls
-              computerId={agentId}
-              open={isWatching}
-              onOpenChange={(open) => show(open ? "watch" : null)}
-            />
-          )}
-          {card ? <EmployeeCardButton agentId={card.id} /> : null}
-          {workbench ? (
-            sidebarThread ? (
-              phone ? (
-                <SidebarPageButton onOpen={phonePage.open} />
-              ) : (
-                <SidebarCollapseButton collapseKey={sidebarThread} />
-              )
-            ) : null
           ) : (
-            <Button
-              aria-label="会话里的员工"
-              aria-pressed={isSettingsOpen}
-              className={isSettingsOpen ? "bg-foreground/5" : undefined}
-              disabled={agentId === undefined}
-              onClick={() => show(isSettingsOpen ? null : "settings")}
-              variant="ghost"
-              size="icon"
-            >
-              <IconSettings className="size-4.5" />
-            </Button>
+            <>
+              {/* Keyed on the displayed name so cold channel loads animate the resolved name, not the id. */}
+              <div className="flex min-w-0 items-center gap-1.5">
+                <SidebarToggle />
+                <motion.div
+                  animate={{ opacity: 1 }}
+                  className="shrink-0"
+                  initial={{ opacity: 0 }}
+                  key={`avatar:${channel.data?.name ?? channelId}`}
+                  transition={{
+                    duration: HEADING_ENTRANCE_SECONDS,
+                    ease: EASE_OUT,
+                  }}
+                >
+                  {agentId ? (
+                    <HeaderFace
+                      agentId={agentId}
+                      participantIds={channel.data?.agentIds ?? []}
+                    />
+                  ) : (
+                    <ChannelAvatar participantIds={[]} size={24} />
+                  )}
+                </motion.div>
+                <motion.span
+                  animate={
+                    prefersReducedMotion
+                      ? { opacity: 1 }
+                      : { opacity: 1, transform: "translateY(0px)" }
+                  }
+                  className="min-w-0 truncate font-medium text-[14px] tracking-tight"
+                  initial={
+                    prefersReducedMotion
+                      ? { opacity: 0 }
+                      : { opacity: 0, transform: HEADING_ENTRANCE_OFFSET }
+                  }
+                  key={`name:${channel.data?.name ?? channelId}`}
+                  transition={{
+                    duration: HEADING_ENTRANCE_SECONDS,
+                    ease: EASE_OUT,
+                  }}
+                >
+                  {channel.data?.name ?? "会话"}
+                </motion.span>
+              </div>
+            </>
           )}
+          <div className="flex flex-row gap-1.5">
+            <BackgroundRunBadge run={background} />
+            {/* Only once it is known not to be an external employee: these poll its computer. */}
+            {external || agentProfiles === undefined ? null : (
+              <ComputerChatControls
+                computerId={agentId}
+                open={isWatching}
+                onOpenChange={(open) => show(open ? "watch" : null)}
+              />
+            )}
+            {card ? <EmployeeCardButton agentId={card.id} /> : null}
+            {workbench ? (
+              sidebarThread ? (
+                phone ? (
+                  <SidebarPageButton onOpen={phonePage.open} />
+                ) : (
+                  <SidebarCollapseButton collapseKey={sidebarThread} />
+                )
+              ) : null
+            ) : (
+              <Button
+                aria-label="会话里的员工"
+                aria-pressed={isSettingsOpen}
+                className={isSettingsOpen ? "bg-foreground/5" : undefined}
+                disabled={agentId === undefined}
+                onClick={() => show(isSettingsOpen ? null : "settings")}
+                variant="ghost"
+                size="icon"
+              >
+                <IconSettings className="size-4.5" />
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
-      {agentId && channel.data?.agentIds.length === 1 ? (
-        <BotPausedBanner agentId={agentId} />
-      ) : null}
-      <ChannelBody
-        channel={channel.data}
-        isPending={channel.isPending}
-        hasError={Boolean(channel.error)}
-        workbench={workbench}
-      />
-      {phone && sidebarThread && phonePage.isOpen ? (
-        <SidebarPage
-          agentId={agentId}
-          onBack={phonePage.close}
-          source={{ threadId: sidebarThread }}
-          title={sidebarTitle}
+        {agentId && channel.data?.agentIds.length === 1 ? (
+          <BotPausedBanner agentId={agentId} />
+        ) : null}
+        <ChannelBody
+          channel={channel.data}
+          isPending={channel.isPending}
+          hasError={Boolean(channel.error)}
+          workbench={workbench}
         />
-      ) : null}
-    </DetailPanel>
+        {phone && sidebarThread && phonePage.isOpen ? (
+          <SidebarPage
+            agentId={agentId}
+            onBack={phonePage.close}
+            source={{ threadId: sidebarThread }}
+            title={sidebarTitle}
+          />
+        ) : null}
+      </DetailPanel>
+    </PreviewTargetContext.Provider>
   );
 }
 
