@@ -63,3 +63,50 @@ export function downloadHeaders(
     "Cache-Control": "private, no-store",
   };
 }
+
+/**
+ * The same escaping as `contentDisposition`, for a response the browser may render in place. Only
+ * the disposition type differs; the name is quoted and encoded by the one function above, so an
+ * inline response cannot carry a filename the attachment path would have neutralised.
+ */
+export function inlineContentDisposition(name: string): string {
+  return contentDisposition(name).replace(/^attachment/, "inline");
+}
+
+/**
+ * The directives every inline response carries. `sandbox` without `allow-same-origin` gives the
+ * document an opaque origin: a script in an employee's HTML file runs, but cannot read this
+ * application's cookies or storage or call its API as the signed-in person. Everything else is
+ * closed (no network from the page, no forms, no top navigation, no popups).
+ */
+export const INLINE_CONTENT_SECURITY_POLICY =
+  "sandbox allow-scripts; default-src 'none'; img-src data: blob: 'self'; media-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'";
+
+const INLINE_CONTENT_TYPE = /^[a-z]+\/[a-z0-9.+-]+(; charset=[a-z0-9-]+)?$/;
+
+/**
+ * Headers for a file shown inline in the preview pane. The type is the caller's to choose from the
+ * file's kind (`previewContentType`), never from the bytes, and `nosniff` stops the browser from
+ * second-guessing it. Applied to every inline kind, PDF included: a PDF is shown by the browser's
+ * viewer under the same sandbox without loss (checked in Chromium, see the Task 11 report).
+ */
+export function inlineHeaders(
+  name: string,
+  bytes: number,
+  contentType: string,
+): Record<string, string> {
+  if (!Number.isSafeInteger(bytes) || bytes < 0) {
+    throw new Error("An inline file must have a non-negative byte length.");
+  }
+  if (!INLINE_CONTENT_TYPE.test(contentType)) {
+    throw new Error("An inline file needs a plain content type.");
+  }
+  return {
+    "Content-Type": contentType,
+    "Content-Length": String(bytes),
+    "Content-Disposition": inlineContentDisposition(name),
+    "X-Content-Type-Options": "nosniff",
+    "Cache-Control": "private, no-store",
+    "Content-Security-Policy": INLINE_CONTENT_SECURITY_POLICY,
+  };
+}

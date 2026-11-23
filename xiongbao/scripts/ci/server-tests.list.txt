@@ -303,6 +303,7 @@ tests/computer-policy-dry-run-limit.test.ts
 tests/computer-policy-key-names.test.ts
 tests/computer-policy-route.test.ts
 tests/computer-policy.test.ts
+tests/computer-preview-routes.test.ts
 tests/computer-provider.test.ts
 tests/computer-routes.test.ts
 tests/computer-sandbox.test.ts
