@@ -339,6 +339,36 @@ function urlOf(input: RequestInfo | URL): URL | null {
 }
 
 /**
+ * 发往 DeepSeek 官方主机 chat/completions 的 POST，正文是 JSON 对象时解出来；别的情况给 `undefined`。
+ * 只认主机正好是 `api.deepseek.com`、路径以 `/chat/completions` 结尾（带不带 `/v1` 都行）、正文是字符串。
+ */
+function deepSeekChatPayload(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+): Body | undefined {
+  const url = urlOf(input);
+  if (
+    !url ||
+    url.hostname !== DEEPSEEK_HOST ||
+    !url.pathname.replace(/\/+$/, "").endsWith("/chat/completions")
+  )
+    return undefined;
+  const method = (
+    init?.method ?? (input instanceof Request ? input.method : "GET")
+  ).toUpperCase();
+  if (method !== "POST" || typeof init?.body !== "string") return undefined;
+  let payload: unknown;
+  try {
+    payload = JSON.parse(init.body);
+  } catch {
+    return undefined;
+  }
+  return payload && typeof payload === "object" && !Array.isArray(payload)
+    ? (payload as Body)
+    : undefined;
+}
+
+/**
  * 给一个发往 DeepSeek chat/completions 的请求加上 `thinking: { type: "disabled" }`。不该改的请求
  * 原样返回同一个 `init`，调用方可以按引用判断有没有改。
  *
@@ -349,30 +379,8 @@ export function withThinkingDisabled(
   input: RequestInfo | URL,
   init: RequestInit | undefined,
 ): RequestInit | undefined {
-  const url = urlOf(input);
-  if (
-    !url ||
-    url.hostname !== DEEPSEEK_HOST ||
-    !url.pathname.replace(/\/+$/, "").endsWith("/chat/completions")
-  )
-    return init;
-  const method = (
-    init?.method ?? (input instanceof Request ? input.method : "GET")
-  ).toUpperCase();
-  if (method !== "POST" || typeof init?.body !== "string") return init;
-  let payload: unknown;
-  try {
-    payload = JSON.parse(init.body);
-  } catch {
-    return init;
-  }
-  if (
-    !payload ||
-    typeof payload !== "object" ||
-    Array.isArray(payload) ||
-    "thinking" in payload
-  )
-    return init;
+  const payload = deepSeekChatPayload(input, init);
+  if (!payload || "thinking" in payload) return init;
   return {
     ...init,
     body: JSON.stringify({ ...payload, thinking: { type: "disabled" } }),
@@ -380,18 +388,49 @@ export function withThinkingDisabled(
 }
 
 /**
- * 在启动时装一次：之后经全局 fetch 发往 DeepSeek、没写 `thinking` 的对话请求都关闭思考模式。返回是否装上。
+ * 出口兜底：发往 DeepSeek 官方主机 chat/completions、思考没关的请求，带 tool_calls 的 assistant 消息缺
+ * `reasoning_content`（不是字符串）就补空字符串，否则 DeepSeek 回 400「The `reasoning_content` in the thinking
+ * mode must be passed back to the API」。不管请求体是哪条路径、哪个模型对象拼出来的，都在最后一道发出前守这一条。
  *
- * 这些是路由、起标题之类的辅助调用，不带工具、要快，思考只添等待。员工对话不经这里决定（见文件开头）。
- * `DEEPSEEK_THINKING=enabled` 时不装，辅助调用也按 DeepSeek 自己的默认。
+ * 思考没关：`thinking.type` 不是 `disabled`。没写 `thinking` 的请求，`auxiliaryOff`（全局包装默认）为真时
+ * 它会被补成 `disabled`，这里不动；为假（`DEEPSEEK_THINKING=enabled`）时按 DeepSeek 自己的默认（开）算。
+ *
+ * 只在确实缺字段时才重编码正文，只补这一个字段，不删、不改别的；别的主机、别的接口、不是 JSON 的正文原样
+ * 返回同一个 `init`，调用方可以按引用判断有没有改。
+ */
+export function withReasoningGuarded(
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  auxiliaryOff = auxiliaryThinkingOff(process.env),
+): RequestInit | undefined {
+  const payload = deepSeekChatPayload(input, init);
+  if (!payload) return init;
+  const declared = payload.thinking as { type?: unknown } | null | undefined;
+  if (declared?.type === "disabled") return init;
+  if (!("thinking" in payload) && auxiliaryOff) return init;
+  const guarded = withToolTurnReasoning(payload);
+  return guarded === payload
+    ? init
+    : { ...init, body: JSON.stringify(guarded) };
+}
+
+/**
+ * 在启动时装一次全局 fetch 包装，返回是否关掉了辅助请求的思考。
+ *
+ * - 没写 `thinking` 的对话请求（路由、起标题之类的辅助调用，不带工具、要快，思考只添等待）关闭思考模式；
+ *   `DEEPSEEK_THINKING=enabled` 时不做，辅助调用也按 DeepSeek 自己的默认。员工对话不经这里决定（见文件开头）。
+ * - 无论这个开关，思考没关的请求都过一遍 {@link withReasoningGuarded}：这是所有发往 DeepSeek 官方主机的请求
+ *   共用的最外一层（`createGuardedFetch` 最终也调全局 fetch，自己再守一遍）。
  */
 export function installDeepSeekThinkingOff(
   environment: Record<string, string | undefined> = process.env,
 ): boolean {
-  if (!auxiliaryThinkingOff(environment)) return false;
+  const auxiliaryOff = auxiliaryThinkingOff(environment);
   const inner = globalThis.fetch;
-  const wrapped = ((input: RequestInfo | URL, init?: RequestInit) =>
-    inner(input, withThinkingDisabled(input, init))) as typeof fetch;
+  const wrapped = ((input: RequestInfo | URL, init?: RequestInit) => {
+    const asked = auxiliaryOff ? withThinkingDisabled(input, init) : init;
+    return inner(input, withReasoningGuarded(input, asked, auxiliaryOff));
+  }) as typeof fetch;
   globalThis.fetch = Object.assign(wrapped, inner);
-  return true;
+  return auxiliaryOff;
 }

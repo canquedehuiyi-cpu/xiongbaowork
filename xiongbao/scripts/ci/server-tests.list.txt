@@ -348,6 +348,7 @@ tests/db-client-address.test.ts
 tests/decision-waits.integration.test.ts
 tests/deepseek-cache-usage.test.ts
 tests/deepseek-proxy-reasoning.test.ts
+tests/deepseek-reasoning-guard.test.ts
 tests/deepseek-thinking-run.test.ts
 tests/deepseek-thinking.integration.test.ts
 tests/deepseek-thinking.test.ts

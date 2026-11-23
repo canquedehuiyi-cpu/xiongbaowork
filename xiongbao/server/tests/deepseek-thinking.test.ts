@@ -120,12 +120,20 @@ describe("installDeepSeekThinkingOff", () => {
     ]);
   });
 
-  test("DEEPSEEK_THINKING=enabled 时什么都不装", () => {
-    const before = globalThis.fetch;
+  test("DEEPSEEK_THINKING=enabled 时不给辅助请求补 disabled（只剩 reasoning_content 的兜底）", async () => {
+    const seen: unknown[] = [];
+    globalThis.fetch = (async (
+      _input: RequestInfo | URL,
+      init?: RequestInit,
+    ) => {
+      seen.push(JSON.parse(String(init?.body)));
+      return new Response("{}");
+    }) as typeof fetch;
     expect(installDeepSeekThinkingOff({ DEEPSEEK_THINKING: "enabled" })).toBe(
       false,
     );
-    expect(globalThis.fetch).toBe(before);
+    await fetch(URL_CHAT, { method: "POST", body: body({ model: "m" }) });
+    expect(seen).toEqual([{ model: "m" }]);
   });
 });
 
