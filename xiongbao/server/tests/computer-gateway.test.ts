@@ -2249,3 +2249,69 @@ describe("statFile", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("markTurn and turnChanges", () => {
+  test("the mark and the change list are the server's own questions", async () => {
+    const { gateway, requests } = await gatewayWith(PERMISSIVE, {
+      routes: {
+        "/files/mark": () =>
+          Response.json({ scanned: 2, scanTruncated: false }),
+        "/files/changes": () =>
+          Response.json({
+            files: [{ path: "a.md", bytes: 1, modifiedMs: 2, change: "new" }],
+            scanned: 2,
+            scanTruncated: false,
+            omitted: 0,
+            extra: "dropped",
+          }),
+      },
+    });
+    await gateway.markTurn(botSeat("bot-1"), "r:b");
+    const changes = await gateway.turnChanges(botSeat("bot-1"), "r:b");
+    expect(changes).toEqual({
+      files: [{ path: "a.md", bytes: 1, modifiedMs: 2, change: "new" }],
+      scanned: 2,
+      scanTruncated: false,
+      omitted: 0,
+    });
+    const bodies = requests
+      .filter(({ url }) => new URL(url).pathname.startsWith("/files/"))
+      .map(({ init }) => JSON.parse(String(init?.body)));
+    expect(bodies).toEqual([{ mark: "r:b" }, { mark: "r:b" }]);
+  });
+
+  test("an unknown mark (404) is null; other failures are thrown", async () => {
+    const missing = await gatewayWith(PERMISSIVE, {
+      routes: {
+        "/files/changes": () => Response.json({ error: "no" }, { status: 404 }),
+      },
+    });
+    expect(await missing.gateway.turnChanges(botSeat("bot-1"), "x")).toBeNull();
+    const broken = await gatewayWith(PERMISSIVE, {
+      routes: {
+        "/files/changes": () => Response.json({ error: "no" }, { status: 500 }),
+      },
+    });
+    await expect(
+      broken.gateway.turnChanges(botSeat("bot-1"), "x"),
+    ).rejects.toThrow();
+  });
+
+  test("a paired personal computer: nothing is asked", async () => {
+    const { provider } = fakeComputer();
+    const requests: string[] = [];
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl: (async (url: string) => {
+        requests.push(url);
+        return Response.json({});
+      }) as never,
+      auditStore: fakeAudit().store,
+      policy: () => PERMISSIVE,
+      resolveDevice: async () => ({ tenantId: "t", deviceId: "d" }),
+    });
+    await gateway.markTurn(botSeat("bot-1"), "m");
+    expect(await gateway.turnChanges(botSeat("bot-1"), "m")).toBeNull();
+    expect(requests).toEqual([]);
+  });
+});

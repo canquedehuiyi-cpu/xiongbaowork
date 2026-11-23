@@ -20,6 +20,7 @@
  * The refs are opaque to the caller precisely so that the server holds the mapping.
  */
 
+import type { TurnArtifact } from "../../../shared/turn-artifacts";
 import { DECLINED_BY_PERSON } from "@openbot/shared/approval-outcomes";
 import type {
   ControlRequestInput,
@@ -541,6 +542,29 @@ export interface ComputerGateway {
     input: { path: string },
     signal?: AbortSignal,
   ): Promise<{ kind: "file" | "folder"; bytes: number } | "absent" | null>;
+  /**
+   * 一轮开始时让电脑记下工作区的文件快照（`/files/mark`），名字由调用方定、要全局唯一。不过 `govern`：
+   * 它不读内容，是服务器自己的事。设备上的电脑空操作。连不上就抛出，调用方只打日志。
+   */
+  markTurn(
+    seat: ComputerSeat,
+    markId: string,
+    signal?: AbortSignal,
+  ): Promise<void>;
+  /**
+   * 对比 `markTurn` 记的快照，答这一轮新建或改过的文件（`/files/changes`）。快照不在了（电脑重启过）
+   * 答 `null`，设备上的电脑也答 `null`；其它失败抛出。
+   */
+  turnChanges(
+    seat: ComputerSeat,
+    markId: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    files: TurnArtifact[];
+    scanned: number;
+    scanTruncated: boolean;
+    omitted: number;
+  } | null>;
   runCommand(
     seat: ComputerSeat,
     actor: ActionActor,
@@ -3179,6 +3203,36 @@ export function createComputerGateway(
           error instanceof WorkspaceRefusedError
         )
           return "absent";
+        throw error;
+      }
+    },
+
+    async markTurn(seat: ComputerSeat, markId: string, signal?: AbortSignal) {
+      if (options.resolveDevice) return;
+      await post<unknown>(seat, "/files/mark", { mark: markId }, signal);
+    },
+
+    async turnChanges(
+      seat: ComputerSeat,
+      markId: string,
+      signal?: AbortSignal,
+    ) {
+      if (options.resolveDevice) return null;
+      try {
+        const found = await post<{
+          files: TurnArtifact[];
+          scanned: number;
+          scanTruncated: boolean;
+          omitted: number;
+        }>(seat, "/files/changes", { mark: markId }, signal);
+        return {
+          files: found.files,
+          scanned: found.scanned,
+          scanTruncated: found.scanTruncated,
+          omitted: found.omitted,
+        };
+      } catch (error) {
+        if (error instanceof WorkspaceNotFoundError) return null;
         throw error;
       }
     },

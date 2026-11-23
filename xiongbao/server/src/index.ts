@@ -69,6 +69,7 @@ import {
   readRunAssertion,
 } from "./agents/callback-token";
 import { canUseComputer } from "./agents/computer-access";
+import { configureTurnArtifacts } from "./computer/turn-artifacts";
 import { wireCoordination } from "./agents/coordination-wiring";
 import { createAgentFetch } from "./agents/endpoint";
 import { createHandoffDesk } from "./agents/handoff";
@@ -3925,6 +3926,24 @@ await startupLifecycle.run(async (startup) => {
       });
     },
   });
+
+  /*
+   * 每一轮首尾记员工电脑上的文件（`computer/turn-artifacts.ts`）：座位的取法和 `toolsForTurn` 一样，
+   * 这一轮的人、这位员工；员工不能用电脑就不记。
+   */
+  configureTurnArtifacts(
+    computerGateway
+      ? {
+          gateway: computerGateway,
+          seatOf: async (botId, personId) => {
+            const actor = await actorFor(personId);
+            const profile = await agentProfileStore.get(actor, botId);
+            if (!profile || !canUseComputer(profile, actor)) return null;
+            return computerGateway.seatFor(botId, actor.id);
+          },
+        }
+      : undefined,
+  );
 
   const routineRunner = createRoutineRunner({
     routineStore,

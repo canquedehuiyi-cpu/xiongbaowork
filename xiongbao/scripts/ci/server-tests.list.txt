@@ -966,6 +966,7 @@ tests/tool-search.test.ts
 tests/tool-selection-environment-restoration-driver.test.ts
 tests/tool-selection-environment-restoration.test.ts
 tests/tool-selection.integration.test.ts
+tests/turn-artifacts.test.ts
 tests/turn-failed-by-stream.test.ts
 tests/turn-notice-config.test.ts
 tests/turn-notice.integration.test.ts

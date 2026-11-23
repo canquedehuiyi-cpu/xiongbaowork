@@ -219,6 +219,7 @@ import { acceptedDelivery, deliverEndsTurnOn } from "./tasks/delivery-end";
 import { deliveryProtocolGuidance } from "./tasks/delivery-tools";
 import { noteAttachedFastPath } from "./tasks/fastpath-gate";
 import type { ProductTelemetry } from "./telemetry/product";
+import { withConfiguredTurnArtifacts } from "./computer/turn-artifacts";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
 import {
   disableRuntimeTelemetryByDefault,
@@ -227,6 +228,7 @@ import {
 import {
   currentTenant,
   isPersonTenant,
+  isTenantFramed,
   runAsTenant,
   TenantContextError,
 } from "./tenant/context";
@@ -2848,14 +2850,22 @@ async function buildAgent(
          */
         return withRunSideEvents(
           runInput.runId,
-          sayingProviderRefusals(
-            withModelRun(
-              { runId: runInput.runId, threadId: runInput.threadId },
-              observeModelConnection(stream, { refusalsSaidByCaller: true }),
+          // 内层：这一轮首尾记员工电脑上的文件，结束时把新建、改过的列成一条事件（`computer/turn-artifacts.ts`）。
+          withConfiguredTurnArtifacts(
+            sayingProviderRefusals(
+              withModelRun(
+                { runId: runInput.runId, threadId: runInput.threadId },
+                observeModelConnection(stream, { refusalsSaidByCaller: true }),
+              ),
+              agent,
+              refusingProvider(runModel),
+              { untilError: true },
             ),
-            agent,
-            refusingProvider(runModel),
-            { untilError: true },
+            {
+              runId: runInput.runId,
+              botId: agent.id,
+              personId: isTenantFramed() ? currentTenant() : null,
+            },
           ),
         );
       },
