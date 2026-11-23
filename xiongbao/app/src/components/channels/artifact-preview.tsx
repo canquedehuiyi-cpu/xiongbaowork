@@ -4,10 +4,14 @@ import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
 import { artifactHref } from "@/lib/computers/artifact";
 import {
   CSV_ROW_LIMIT,
+  type OpenBody,
+  openDirOf,
+  openTarget,
   type PreviewTarget,
   parseCsv,
   previewHref,
   previewKindOfTarget,
+  scopeFields,
   textHref,
 } from "@/lib/computers/preview";
 
@@ -19,6 +23,9 @@ import {
  * office 转出的 pdf 也放 iframe，但元素上不能带 sandbox——它会拦掉浏览器的 PDF 查看器——隔离靠服务器
  * 响应头里的 CSP sandbox。文本类（markdown、csv、纯文本）只画成文字或表格，markdown 不渲染成 html。
  * 面板不听 iframe 的任何 message。
+ *
+ * 例外：文件名是 `index.html` 的网页先问内容源（独立的源，见 `openTarget`），可用时 iframe 指向它给的
+ * 一次性地址，脚本和相对资源都能用；没配内容源、被拒绝、或在工作区根目录时，仍回到上面的受限沙箱预览。
  */
 
 const BAR_LINK =
@@ -131,6 +138,83 @@ function useOfficeAvailable(url: string | undefined, enabled: boolean) {
   return currentResult(keyed, url);
 }
 
+/** 打开一个网页目录的结果：还在问、内容源已打开、没配内容源、被拒绝或出错。 */
+type Opened =
+  | { state: "loading" }
+  | { state: "opened"; url: string; expiresAt: string; replaces: boolean }
+  | { state: "unconfigured" }
+  | { state: "refused" };
+
+/** `scope` 用 JSON 字符串传：对象每次渲染都是新的，字符串才能当依赖。 */
+function openBody(dir: string, scopeJson: string): OpenBody {
+  return {
+    kind: "dir",
+    path: dir,
+    ...(JSON.parse(scopeJson) as ReturnType<typeof scopeFields>),
+  };
+}
+
+/**
+ * 向内容源要一个网页目录的打开地址。写法同上面两个取数：结果记着它属于哪个目录，旧答案不写进来。
+ * `reopen` 重新要一个（令牌到期后用）。
+ */
+function useOpenedPage(
+  botId: string,
+  dir: string | undefined,
+  scopeJson: string,
+) {
+  const key = `${botId}\n${dir}\n${scopeJson}`;
+  const [keyed, setKeyed] = useState<{ key: string; result: Opened }>({
+    key: "",
+    result: { state: "loading" },
+  });
+  const [tries, setTries] = useState(0);
+  const [expiredUrl, setExpiredUrl] = useState<string>();
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `tries` 只用来让「重新打开」再跑一次
+  useEffect(() => {
+    if (dir === undefined) return;
+    const abort = new AbortController();
+    const set = (result: Opened) => {
+      if (!abort.signal.aborted) setKeyed({ key, result });
+    };
+    set({ state: "loading" });
+    openTarget(botId, openBody(dir, scopeJson), abort.signal).then(
+      (answer) =>
+        set(
+          answer.available
+            ? {
+                state: "opened",
+                url: answer.url,
+                expiresAt: answer.expiresAt,
+                replaces: answer.replaces,
+              }
+            : { state: "unconfigured" },
+        ),
+      () => set({ state: "refused" }),
+    );
+    return () => abort.abort();
+  }, [botId, dir, scopeJson, key, tries]);
+  const result: Opened =
+    keyed.key === key ? keyed.result : { state: "loading" };
+  const openedUrl = result.state === "opened" ? result.url : undefined;
+  const expiresAt = result.state === "opened" ? result.expiresAt : undefined;
+  useEffect(() => {
+    if (openedUrl === undefined || expiresAt === undefined) return;
+    // iframe 跨源读不到失败，只能按服务器给的到期时间计时；到点只提示，不自动换掉内容。
+    const wait = Math.min(
+      Math.max(0, new Date(expiresAt).getTime() - Date.now()),
+      2 ** 31 - 1,
+    );
+    const timer = setTimeout(() => setExpiredUrl(openedUrl), wait);
+    return () => clearTimeout(timer);
+  }, [openedUrl, expiresAt]);
+  return {
+    result,
+    expired: openedUrl !== undefined && expiredUrl === openedUrl,
+    reopen: () => setTries((n) => n + 1),
+  };
+}
+
 function Note({
   children,
   download,
@@ -224,6 +308,32 @@ function TextBody({ answer }: { answer: TextAnswer }) {
   );
 }
 
+/** 面板顶部的一行说明。 */
+function Banner({ children }: { children: ReactNode }) {
+  return (
+    <div className="border-b border-border bg-card px-3 py-2 text-xs text-muted-foreground">
+      {children}
+    </div>
+  );
+}
+
+/**
+ * 内容源条目的「在新标签页打开」：打开地址不复用面板 iframe 已用的那个，点击时再要一个新的。
+ * 要不到就什么也不做（面板里的页面还在）。
+ */
+async function openFreshTab(
+  botId: string,
+  openDir: ReturnType<typeof openDirOf>,
+  scopeJson: string,
+) {
+  if (openDir.kind !== "dir") return;
+  try {
+    const answer = await openTarget(botId, openBody(openDir.dir, scopeJson));
+    if (answer.available)
+      window.open(answer.url, "_blank", "noopener,noreferrer");
+  } catch {}
+}
+
 const FRAME = "min-h-0 w-full flex-1 border-0 bg-background";
 
 export function ArtifactPreview({
@@ -241,6 +351,14 @@ export function ArtifactPreview({
   const framed = src === undefined ? undefined : `${src}#navpanes=0`;
   const download = artifactHref(target);
   const name = target.path.split("/").pop() ?? target.path;
+  const openDir: ReturnType<typeof openDirOf> =
+    kind === "html" ? openDirOf(target.path) : { kind: "none" };
+  const scopeJson = JSON.stringify(scopeFields(target.scope));
+  const page = useOpenedPage(
+    target.botId,
+    openDir.kind === "dir" ? openDir.dir : undefined,
+    scopeJson,
+  );
   const text = useTextAnswer(textHref(target), textual);
   const office = useOfficeAvailable(src, kind === "office");
   // 一次取回的结果只对取它的那个地址有效：换了文件，下一帧先当作「还在取」。
@@ -254,6 +372,7 @@ export function ArtifactPreview({
 
   let body: ReactNode;
   let canOpen = !textual;
+  let contentOpened = false;
   if (kind === "none") {
     body = unsupported;
     canOpen = false;
@@ -287,17 +406,71 @@ export function ArtifactPreview({
       // biome-ignore lint/a11y/useMediaCaption: 员工的文件没有字幕轨
       <audio className="m-3 w-[calc(100%-1.5rem)]" controls src={src} />
     );
-  else if (kind === "html")
-    body = (
+  else if (kind === "html") {
+    // 受限预览：应用源上的 iframe 永远只有 allow-scripts，没有 allow-same-origin。
+    const sandboxed = (
       <iframe
         className={FRAME}
-        // 恰好这个值：能跑脚本，但没有 allow-same-origin，拿不到本页的 cookie 和存储。
         sandbox="allow-scripts"
         src={src}
         title={name}
       />
     );
-  else if (kind === "pdf")
+    if (openDir.kind === "none") body = sandboxed;
+    else if (openDir.kind === "root")
+      body = (
+        <>
+          <Banner>这个网页在工作区根目录，只能在受限预览里查看</Banner>
+          {sandboxed}
+        </>
+      );
+    else if (page.result.state === "loading") body = <Note>加载中…</Note>;
+    else if (page.result.state === "unconfigured")
+      body = (
+        <>
+          <Banner>
+            没有配置内容源，网页在受限沙箱里显示，部分功能可能不可用。
+          </Banner>
+          {sandboxed}
+        </>
+      );
+    else if (page.result.state === "refused")
+      body = (
+        <>
+          <Banner>打不开这个网页，已改用受限预览</Banner>
+          {sandboxed}
+        </>
+      );
+    else {
+      contentOpened = true;
+      body = (
+        <>
+          {page.result.replaces ? (
+            <Banner>已替换你之前打开的程序</Banner>
+          ) : null}
+          {page.expired ? (
+            <Banner>
+              <button
+                className="underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+                onClick={page.reopen}
+                type="button"
+              >
+                已过期，重新打开
+              </button>
+            </Banner>
+          ) : null}
+          <iframe
+            className={FRAME}
+            // 「同源」指内容源（不是本应用）；内容源的响应头 CSP sandbox 不含 allow-same-origin，
+            // 沙箱取交集，页面实际仍在不透明源里，拿不到任何源的 cookie 和存储。
+            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+            src={page.result.url}
+            title={name}
+          />
+        </>
+      );
+    }
+  } else if (kind === "pdf")
     // 不加 sandbox 属性：它会拦掉 PDF 查看器。隔离靠响应头里的 CSP sandbox。
     body = <iframe className={FRAME} src={framed} title={name} />;
   else if (office.state === "loading") body = <Note>正在转成 PDF…</Note>;
@@ -330,7 +503,15 @@ export function ArtifactPreview({
             下载
           </a>
         )}
-        {canOpen && src !== undefined ? (
+        {contentOpened ? (
+          <button
+            className={BAR_LINK}
+            onClick={() => openFreshTab(target.botId, openDir, scopeJson)}
+            type="button"
+          >
+            在新标签页打开
+          </button>
+        ) : canOpen && src !== undefined ? (
           <a
             className={BAR_LINK}
             href={src}
