@@ -25,6 +25,8 @@ export const PHYSICAL_BOUNCE_KEY = "physicalDeliverableBounce";
 
 /** 确实没有文件产物时，员工在 note 里写的固定说法。 */
 export const NO_FILE_PHRASE = "这件活没有文件产物";
+/** 给员工看的一句：交付的是文件就存进工作区交付，别只贴在对话里；真没有文件就按 {@link NO_FILE_PHRASE} 写明。 */
+export const FILE_DELIVERY_HINT = `交付的是文件/网页就把它存在工作区里，作为 workspace_file 交付；不要只把内容贴在对话里。确实没有文件产物，就在 note 里写「${NO_FILE_PHRASE}」。`;
 
 export const PHYSICAL_WORDS = [
   "文件",

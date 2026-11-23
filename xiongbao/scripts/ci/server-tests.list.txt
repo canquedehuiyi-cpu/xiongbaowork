@@ -363,6 +363,7 @@ tests/delivery-link-audit.test.ts
 tests/delivery-message-id.test.ts
 tests/delivery-one-card.integration.test.ts
 tests/delivery-overdue.test.ts
+tests/delivery-prompt-files.test.ts
 tests/delivery-providers.test.ts
 tests/delivery-return-failure.test.ts
 tests/delivery-router.test.ts
