@@ -232,7 +232,7 @@ export function EvidenceLine({
       row.label
     );
   return (
-    <div className="flex items-center gap-2.5 rounded-[10px] border border-(--wb-line) bg-(--wb-card) px-3 py-2.5 text-[13px]">
+    <div className="flex flex-wrap items-center gap-2.5 rounded-[10px] border border-(--wb-line) bg-(--wb-card) px-3 py-2.5 text-[13px]">
       <RowIcon kind={row.kind} />
       <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{label}</span>
       {download ? (

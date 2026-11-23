@@ -74,7 +74,8 @@ export function AppOpenButton({
         <span className="text-[12px]">打不开这个程序</span>
       ) : null}
       {notice !== null ? (
-        <span className="text-[12px] text-muted-foreground">
+        // 单独占一行（父级是可换行的横排），左边与标题文字对齐：图标 16px + 间距 10px。
+        <span className="order-last basis-full pl-[26px] text-[12px] text-amber-700 dark:text-amber-300">
           {PORT_MODE_NOTICE}
           {notice.replaces ? ` ${REPLACED_NOTICE}` : ""}
         </span>
