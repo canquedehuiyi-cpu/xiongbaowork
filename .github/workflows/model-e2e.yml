@@ -219,7 +219,7 @@ jobs:
     # 重复类的题多对（repeat_pairs）：只点名 repeat-pitfall、六对、一条路径。有坑可学每对三次：第一次约 6 分钟、第二次和
     # 同种子对照各约 3 分钟；第一次之后等复盘出结论，最多 600 秒（用户 2026-11-22 批准），第二次之后最多 270 秒，对照不等。
     # 复盘快时每对约 16 分钟、六对约 96 分钟；复盘慢时第一次之后最多多等 330 秒，每对约 21.5 分钟、六对约 129 分钟，
-    # 仍在 345 分钟截止内。最坏每次都跑满 20 分钟会超过上限；所以作业开头记截止时间（345 分钟），脚本来不及时把剩下的对跳过
+    # 仍在 335 分钟截止内。最坏每次都跑满 20 分钟会超过上限；所以作业开头记截止时间（335 分钟），脚本来不及时把剩下的对跳过
     # （超了截止的对照旧跳过，这是现有机制，没改），不让作业超时丢掉全部结果。
     timeout-minutes: 360
     services:
@@ -292,7 +292,7 @@ jobs:
       # 多对放在同一次运行里做完，不能被作业超时整个杀掉：记下一个比作业超时（360 分钟）早的截止时间，评测脚本在开始每一对（交付题是每一题）之前
       # 看还剩多少时间，来不及做完一对就不做，已完成的各对照常记录。留出十五分钟给装依赖、出报告和上传。
       - name: Record the wall-clock deadline for repeat pairs
-        run: echo "EVAL_DEADLINE_EPOCH=$(( $(date +%s) + 345 * 60 ))" >> "$GITHUB_ENV"
+        run: echo "EVAL_DEADLINE_EPOCH=$(( $(date +%s) + 335 * 60 ))" >> "$GITHUB_ENV"
       # 每条路径一遍：board 写 xiongbao.json，chat 写 xiongbao-chat.json，同一个结果目录。一条路径失败不拦下一条，
       # 最后作业按有没有失败收尾。路径名只认 board、chat 和 group（输入是 choice，这里再核一遍）。
       - name: Tasks for a Xiongbao employee, over each chosen path
