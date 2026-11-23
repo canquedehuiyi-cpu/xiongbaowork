@@ -26,6 +26,12 @@ import {
   fastPathBounceReason,
   uncheckedFastPath,
 } from "./fastpath-gate";
+import {
+  PHYSICAL_BOUNCE_KEY,
+  physicalBounceReason,
+  physicalGateOn,
+  uncheckedPhysical,
+} from "./physical-gate";
 import type { TaskProjector, TriggerSource } from "./projector";
 import { entryCardRefOf, roundOnCard } from "./turn-cards";
 
@@ -470,6 +476,26 @@ export function deliveryTools(options: {
             [FASTPATH_BOUNCE_KEY]: true,
             reason,
             note: "没交上：卡片没动。先运行核对命令，确认通过后再调用 deliver_task。",
+          });
+        }
+        /*
+         * 只交了 note、而这件活要实物：这一轮第一次交付挡回，让员工存成文件交付（`physical-gate.ts`）。
+         * 卡片没动，不算已交付；每轮只挡一次。
+         */
+        if (
+          physicalGateOn() &&
+          uncheckedPhysical({
+            items: value.items,
+            criteria: card.criteria,
+            title: card.title,
+            messages: currentApprovalContext()?.messages ?? [],
+          })
+        ) {
+          return JSON.stringify({
+            bounced: true,
+            [PHYSICAL_BOUNCE_KEY]: true,
+            reason: physicalBounceReason(),
+            note: "没交上：卡片没动。把产物存成文件后用 workspace_file 交付。",
           });
         }
         // Each hand-in its own line id: a second, identical hand-in after a 退回 is its own card.
