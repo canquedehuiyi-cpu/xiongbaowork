@@ -1139,6 +1139,13 @@ const OUTPUTS: Record<TaskName, string[]> = {
   webform: ["receipt.txt"],
   repeat: ["actions.csv"],
   "repeat-pitfall": ["out/summary.json"],
+  "deliv-pptx": ["deck.pptx"],
+  "deliv-docx": ["report.docx"],
+  "deliv-xlsx": ["budget.xlsx"],
+  "deliv-web": ["site/index.html"],
+  "deliv-app": ["app/index.html"],
+  "deliv-image": ["cover.png"],
+  "deliv-video": ["intro.mp4"],
 };
 
 /** 一道题交给员工、等它做完之后的结果：用到的运行、追了几次「继续」、有没有超时，和路径自己的几项判分。 */

@@ -1,6 +1,12 @@
 import { expect, test } from "bun:test";
 import { xiongbaoModel } from "./config";
-import { HARD_SUITE, HARD_TASKS, selectTasks, taskPrompt } from "./lib";
+import {
+  DELIVERABLES_SUITE,
+  HARD_SUITE,
+  HARD_TASKS,
+  selectTasks,
+  taskPrompt,
+} from "./lib";
 import {
   type Capabilities,
   promptBreakdown,
@@ -280,4 +286,25 @@ test("the report shows the prompt sizes by section, and says when the two sides 
   expect(markdown).toContain("## 加难题");
   expect(markdown).toContain("### 难题的墙钟与逐步计量");
   expect(markdown).toContain("| 跨文件重构 |");
+});
+
+test("selectTasks('deliverables', HARD_SUITE) gives seven; 'all' and 'hard' are unchanged", () => {
+  expect(selectTasks("deliverables", HARD_SUITE)).toEqual([
+    ...DELIVERABLES_SUITE,
+  ]);
+  expect(selectTasks("deliverables", HARD_SUITE)).toHaveLength(7);
+  expect(selectTasks("deliv-web, deliv-pptx", HARD_SUITE)).toEqual([
+    "deliv-pptx",
+    "deliv-web",
+  ]);
+  expect(selectTasks("all", HARD_SUITE)).toHaveLength(5);
+  expect(selectTasks("hard", HARD_SUITE)).toEqual([
+    "compare",
+    "refactor",
+    "terminal",
+    "webform",
+  ]);
+  expect(selectTasks("all,hard", HARD_SUITE)).toHaveLength(9);
+  expect(selectTasks("all,hard,deliverables", HARD_SUITE)).toHaveLength(16);
+  expect(selectTasks(undefined, HARD_SUITE)).not.toContain("deliv-pptx");
 });
