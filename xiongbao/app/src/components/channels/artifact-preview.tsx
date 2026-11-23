@@ -201,17 +201,21 @@ function useOpenedPage(
   useEffect(() => {
     if (openedUrl === undefined || expiresAt === undefined) return;
     // iframe 跨源读不到失败，只能按服务器给的到期时间计时；到点只提示，不自动换掉内容。
-    const wait = Math.min(
-      Math.max(0, new Date(expiresAt).getTime() - Date.now()),
-      2 ** 31 - 1,
-    );
+    const end = new Date(expiresAt).getTime();
+    if (Number.isNaN(end)) return; // 时间不合法：不计时，不当作已过期
+    const wait = Math.min(Math.max(0, end - Date.now()), 2 ** 31 - 1);
     const timer = setTimeout(() => setExpiredUrl(openedUrl), wait);
     return () => clearTimeout(timer);
   }, [openedUrl, expiresAt]);
   return {
     result,
     expired: openedUrl !== undefined && expiredUrl === openedUrl,
-    reopen: () => setTries((n) => n + 1),
+    reopen: () => {
+      // 正在要的时候再点不重复请求；清掉已过期标记，服务器哪怕给回同一个地址横幅也不会立刻再现。
+      if (result.state === "loading") return;
+      setExpiredUrl(undefined);
+      setTries((n) => n + 1);
+    },
   };
 }
 
@@ -319,19 +323,34 @@ function Banner({ children }: { children: ReactNode }) {
 
 /**
  * 内容源条目的「在新标签页打开」：打开地址不复用面板 iframe 已用的那个，点击时再要一个新的。
- * 要不到就什么也不做（面板里的页面还在）。
+ *
+ * 要在点击的同一刻同步开一个空白标签页，否则异步之后再开会被浏览器当作弹窗拦掉。`opener = null` 不等于
+ * noopener：新标签页仍在同一浏览上下文组、导航时会带应用源的 Referer；但内容源页本身在 CSP sandbox 的
+ * 不透明源里，这个风险可以接受。拿不到新地址（不可用、出错）就关掉空白页，面板里的页面不受影响。
+ * 返回 false 表示浏览器拦截了新标签页。
  */
 async function openFreshTab(
   botId: string,
   openDir: ReturnType<typeof openDirOf>,
   scopeJson: string,
-) {
-  if (openDir.kind !== "dir") return;
+): Promise<boolean> {
+  if (openDir.kind !== "dir") return true;
+  const tab = window.open("", "_blank");
+  if (tab === null) return false;
+  tab.opener = null;
+  let opened = false;
   try {
     const answer = await openTarget(botId, openBody(openDir.dir, scopeJson));
-    if (answer.available)
-      window.open(answer.url, "_blank", "noopener,noreferrer");
-  } catch {}
+    if (answer.available) {
+      tab.location.replace(answer.url);
+      opened = true;
+    }
+  } catch {
+    // 落到 finally 关掉空白页。
+  } finally {
+    if (!opened) tab.close();
+  }
+  return true;
 }
 
 const FRAME = "min-h-0 w-full flex-1 border-0 bg-background";
@@ -359,6 +378,8 @@ export function ArtifactPreview({
     openDir.kind === "dir" ? openDir.dir : undefined,
     scopeJson,
   );
+  const [opening, setOpening] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const text = useTextAnswer(textHref(target), textual);
   const office = useOfficeAvailable(src, kind === "office");
   // 一次取回的结果只对取它的那个地址有效：换了文件，下一帧先当作「还在取」。
@@ -506,7 +527,15 @@ export function ArtifactPreview({
         {contentOpened ? (
           <button
             className={BAR_LINK}
-            onClick={() => openFreshTab(target.botId, openDir, scopeJson)}
+            disabled={opening}
+            onClick={() => {
+              if (opening) return;
+              setOpening(true);
+              setBlocked(false);
+              openFreshTab(target.botId, openDir, scopeJson)
+                .then((allowed) => setBlocked(!allowed))
+                .finally(() => setOpening(false));
+            }}
             type="button"
           >
             在新标签页打开
@@ -532,6 +561,7 @@ export function ArtifactPreview({
           </button>
         )}
       </div>
+      {blocked ? <Banner>浏览器拦截了新标签页</Banner> : null}
       {body}
     </section>
   );

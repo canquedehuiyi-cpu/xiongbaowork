@@ -197,16 +197,45 @@ describe("open through the content origin", () => {
     expect(calls.length).toBe(0);
   });
 
-  test("open in a new tab asks again for a fresh url", async () => {
-    let n = 0;
-    const calls = serveOpen(() => available(`http://c.example/__open/t${++n}`));
+  type FakeTab = {
+    opener: unknown;
+    replaced: string[];
+    closed: number;
+    location: { replace(url: string): void };
+    close(): void;
+  };
+  const fakeTab = (): FakeTab => {
+    const tab: FakeTab = {
+      opener: "app",
+      replaced: [],
+      closed: 0,
+      location: { replace: (url) => void tab.replaced.push(url) },
+      close: () => void tab.closed++,
+    };
+    return tab;
+  };
+  async function withWindowOpen<T>(
+    result: FakeTab | null,
+    run: (opened: unknown[][]) => Promise<T>,
+  ) {
     const opened: unknown[][] = [];
     const real = window.open;
     window.open = ((...args: unknown[]) => {
       opened.push(args);
-      return null;
+      return result;
     }) as typeof window.open;
     try {
+      return await run(opened);
+    } finally {
+      window.open = real;
+    }
+  }
+
+  test("open in a new tab opens a blank tab synchronously, clears opener, then navigates it to a fresh url", async () => {
+    let n = 0;
+    const calls = serveOpen(() => available(`http://c.example/__open/t${++n}`));
+    const tab = fakeTab();
+    await withWindowOpen(tab, async (opened) => {
       render(<ArtifactPreview target={target("site/index.html")} />);
       await waitFor(() =>
         expect(document.querySelector("iframe")).not.toBeNull(),
@@ -214,20 +243,166 @@ describe("open through the content origin", () => {
       fireEvent.click(
         await ui().findByRole("button", { name: "在新标签页打开" }),
       );
-      await waitFor(() => expect(opened.length).toBe(1));
+      expect(opened).toEqual([["", "_blank"]]);
+      expect(tab.opener).toBeNull();
+      await waitFor(() => expect(tab.replaced.length).toBe(1));
       expect(calls.length).toBe(2);
-      expect(opened[0]).toEqual([
-        "http://c.example/__open/t2",
-        "_blank",
-        "noopener,noreferrer",
-      ]);
-      // 面板里的 iframe 没被新地址替换。
+      expect(tab.replaced[0]).toBe("http://c.example/__open/t2");
+      expect(tab.closed).toBe(0);
       expect(document.querySelector("iframe")?.getAttribute("src")).toBe(
         "http://c.example/__open/t1",
       );
-    } finally {
-      window.open = real;
-    }
+    });
+  });
+
+  test("open in a new tab: a failed or unavailable answer closes the blank tab", async () => {
+    let n = 0;
+    serveOpen(() => {
+      n++;
+      return n === 1
+        ? available("http://c.example/__open/t1")
+        : n === 2
+          ? json({ available: false, reason: "x" })
+          : json({ error: "x" }, 500);
+    });
+    const tab = fakeTab();
+    await withWindowOpen(tab, async () => {
+      render(<ArtifactPreview target={target("site/index.html")} />);
+      const button = await ui().findByRole("button", {
+        name: "在新标签页打开",
+      });
+      fireEvent.click(button);
+      await waitFor(() => expect(tab.closed).toBe(1));
+      fireEvent.click(button);
+      await waitFor(() => expect(tab.closed).toBe(2));
+      expect(tab.replaced).toEqual([]);
+    });
+  });
+
+  test("open in a new tab: a blocked tab shows a notice and sends no request", async () => {
+    const calls = serveOpen(() => available("http://c.example/__open/t1"));
+    await withWindowOpen(null, async () => {
+      render(<ArtifactPreview target={target("site/index.html")} />);
+      const button = await ui().findByRole("button", {
+        name: "在新标签页打开",
+      });
+      fireEvent.click(button);
+      await ui().findByText("浏览器拦截了新标签页");
+      expect(calls.length).toBe(1);
+    });
+  });
+
+  test("open in a new tab: clicking again while in flight does not send a second request", async () => {
+    let n = 0;
+    let release = () => {};
+    const calls = serveOpen(() =>
+      ++n === 1
+        ? available("http://c.example/__open/t1")
+        : new Promise<Response>((resolve) => {
+            release = () => resolve(available("http://c.example/__open/t2"));
+          }),
+    );
+    const tab = fakeTab();
+    await withWindowOpen(tab, async (opened) => {
+      render(<ArtifactPreview target={target("site/index.html")} />);
+      const button = await ui().findByRole("button", {
+        name: "在新标签页打开",
+      });
+      fireEvent.click(button);
+      fireEvent.click(button);
+      expect(opened.length).toBe(1);
+      expect(calls.length).toBe(2);
+      release();
+      await waitFor(() => expect(tab.replaced.length).toBe(1));
+    });
+  });
+
+  for (const [label, url] of [
+    ["same-origin url", "http://localhost/__open/t"],
+    ["relative url", "/__open/t"],
+    ["javascript: url", "javascript:alert(1)"],
+  ] as const) {
+    test(`${label} from the server falls back to the sandbox preview`, async () => {
+      serveOpen(() => available(url));
+      render(<ArtifactPreview target={target("site/index.html")} />);
+      await ui().findByText("打不开这个网页，已改用受限预览");
+      for (const frame of document.querySelectorAll("iframe")) {
+        expect(frame.getAttribute("sandbox")).toBe("allow-scripts");
+        expect(frame.getAttribute("src")).toBe(
+          previewHref(target("site/index.html")),
+        );
+      }
+    });
+  }
+
+  test("reopen with the same url does not bring the expired banner straight back", async () => {
+    let n = 0;
+    serveOpen(() => {
+      n++;
+      return available("http://c.example/__open/same", {
+        expiresAt: new Date(
+          Date.now() + (n === 1 ? 30 : 3_600_000),
+        ).toISOString(),
+      });
+    });
+    render(<ArtifactPreview target={target("site/index.html")} />);
+    fireEvent.click(
+      await ui().findByRole("button", { name: "已过期，重新打开" }),
+    );
+    await waitFor(() => expect(n).toBe(2));
+    await waitFor(() =>
+      expect(document.querySelector("iframe")).not.toBeNull(),
+    );
+    await act(async () => {});
+    expect(ui().queryByRole("button", { name: "已过期，重新打开" })).toBeNull();
+  });
+
+  test("an invalid expiresAt does not count as expired", async () => {
+    serveOpen(() =>
+      available("http://c.example/__open/t", { expiresAt: "soon" }),
+    );
+    render(<ArtifactPreview target={target("site/index.html")} />);
+    await waitFor(() =>
+      expect(document.querySelector("iframe")).not.toBeNull(),
+    );
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(ui().queryByRole("button", { name: "已过期，重新打开" })).toBeNull();
+  });
+
+  test("switching files in the middle of a reopen: the old reopen answer never lands", async () => {
+    const pending: Array<(r: Response) => void> = [];
+    let n = 0;
+    serveOpen((call) => {
+      n++;
+      if (n === 1)
+        return available("http://c.example/one", {
+          expiresAt: new Date(Date.now() + 30).toISOString(),
+        });
+      return new Promise<Response>((resolve) => {
+        pending.push((r) => resolve(r));
+        void call;
+      });
+    });
+    const view = render(<ArtifactPreview target={target("one/index.html")} />);
+    fireEvent.click(
+      await ui().findByRole("button", { name: "已过期，重新打开" }),
+    );
+    await waitFor(() => expect(pending.length).toBe(1));
+    view.rerender(<ArtifactPreview target={target("two/index.html")} />);
+    await waitFor(() => expect(pending.length).toBe(2));
+    pending[1]?.(available("http://c.example/two"));
+    await waitFor(() =>
+      expect(document.querySelector("iframe")?.getAttribute("src")).toBe(
+        "http://c.example/two",
+      ),
+    );
+    pending[0]?.(available("http://c.example/one-late"));
+    await act(async () => {});
+    expect(document.querySelector("iframe")?.getAttribute("src")).toBe(
+      "http://c.example/two",
+    );
   });
 
   test("switching files: a late answer for the old file never overwrites the new one", async () => {

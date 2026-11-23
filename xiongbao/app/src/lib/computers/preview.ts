@@ -241,9 +241,21 @@ export async function openTarget(
   const ok = answer as Extract<OpenResult, { available: true }>;
   if (typeof ok.url !== "string" || ok.url === "")
     throw new Error("open failed: no url");
+  // 服务器给的地址不可信到什么程度由这里定：只认 http(s)，且必须是另一个源（不是本应用）。
+  let parsed: URL;
+  try {
+    parsed = new URL(ok.url, location.href);
+  } catch {
+    throw new Error("open failed: bad url");
+  }
+  if (
+    (parsed.protocol !== "http:" && parsed.protocol !== "https:") ||
+    parsed.origin === location.origin
+  )
+    throw new Error("open failed: url not on a separate http(s) origin");
   return {
     available: true,
-    url: ok.url,
+    url: parsed.href,
     mode: ok.mode === "domain" ? "domain" : "port",
     expiresAt: String(ok.expiresAt),
     replaces: ok.replaces === true,
