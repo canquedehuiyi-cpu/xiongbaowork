@@ -3,6 +3,8 @@ import { openInNewTab } from "@/components/channels/artifact-preview";
 import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
 import {
   type AppPreviewTarget,
+  PORT_MODE_NOTICE,
+  REPLACED_NOTICE,
   scopeFields,
   usePreviewTarget,
 } from "@/lib/computers/preview";
@@ -26,6 +28,8 @@ export function AppOpenButton({
     "idle" | "busy" | "unavailable" | "failed"
   >("idle");
   const [blocked, setBlocked] = useState(false);
+  // 端口模式下后开的程序能读到先开的：新标签页打开后在按钮旁提示，和侧栏的横幅同一句。
+  const [notice, setNotice] = useState<{ replaces: boolean } | null>(null);
   // 打不开（出错）可以再试，只有没配内容源才置灰。
   const disabled = state === "busy" || state === "unavailable";
   const open = async () => {
@@ -35,12 +39,20 @@ export function AppOpenButton({
     }
     setState("busy");
     setBlocked(false);
-    const answer = await openInNewTab(target.botId, {
-      kind: "app",
-      port: target.app.port,
-      path: target.app.path,
-      ...scopeFields(target.scope),
-    });
+    setNotice(null);
+    const answer = await openInNewTab(
+      target.botId,
+      {
+        kind: "app",
+        port: target.app.port,
+        path: target.app.path,
+        ...scopeFields(target.scope),
+      },
+      (opened) =>
+        setNotice(
+          opened.mode === "port" ? { replaces: opened.replaces } : null,
+        ),
+    );
     setBlocked(answer === "blocked");
     setState(answer === "unavailable" || answer === "failed" ? answer : "idle");
   };
@@ -60,6 +72,12 @@ export function AppOpenButton({
       ) : null}
       {state === "failed" ? (
         <span className="text-[12px]">打不开这个程序</span>
+      ) : null}
+      {notice !== null ? (
+        <span className="text-[12px] text-muted-foreground">
+          {PORT_MODE_NOTICE}
+          {notice.replaces ? ` ${REPLACED_NOTICE}` : ""}
+        </span>
       ) : null}
       {blocked ? (
         <span className="text-[12px]">浏览器拦截了新标签页</span>

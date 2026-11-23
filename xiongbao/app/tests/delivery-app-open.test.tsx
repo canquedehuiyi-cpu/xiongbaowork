@@ -324,6 +324,64 @@ test("on the task page open goes to a new tab, no pane", async () => {
   expect(view.getByText(/端口 8000/)).toBeDefined();
 });
 
+function taskPageTab() {
+  const replaced: string[] = [];
+  const tab = {
+    opener: {} as unknown,
+    location: { replace: (url: string) => void replaced.push(url) },
+    close: () => {},
+  };
+  window.open = (() => tab) as unknown as typeof window.open;
+  return replaced;
+}
+
+test("on the task page the port-mode warning appears beside the button once the program is opened", async () => {
+  serve(() => opened("http://c.example:9000/__open/tab"));
+  taskPageTab();
+  const view = render(
+    <EvidenceLine
+      agentId="bot-1"
+      row={{ kind: "app", port: 8000, path: "/", label: "销售看板" }}
+      taskId={TASK}
+    />,
+  );
+  expect(view.queryByText(PORT_NOTE)).toBeNull();
+  fireEvent.click(view.getByRole("button", { name: "打开 销售看板" }));
+  await waitFor(() => expect(view.getByText(PORT_NOTE)).toBeDefined());
+  expect(view.queryByText(/已替换你之前打开的程序/)).toBeNull();
+});
+
+test("on the task page a replaced program is said too, and domain mode shows no warning", async () => {
+  serve(() => opened("http://c.example:9000/__open/tab", { replaces: true }));
+  taskPageTab();
+  const view = render(
+    <EvidenceLine
+      agentId="bot-1"
+      row={{ kind: "app", port: 8000, path: "/", label: "销售看板" }}
+      taskId={TASK}
+    />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "打开 销售看板" }));
+  await waitFor(() =>
+    expect(view.getByText(`${PORT_NOTE} 已替换你之前打开的程序`)).toBeDefined(),
+  );
+  cleanup();
+  serve(() => opened("http://a.example/__open/tab", { mode: "domain" }));
+  const replaced = taskPageTab();
+  const domain = render(
+    <EvidenceLine
+      agentId="bot-1"
+      row={{ kind: "app", port: 8000, path: "/", label: "销售看板" }}
+      taskId={TASK}
+    />,
+  );
+  fireEvent.click(domain.getByRole("button", { name: "打开 销售看板" }));
+  await waitFor(() =>
+    expect(replaced).toEqual(["http://a.example/__open/tab"]),
+  );
+  expect(domain.queryByText(PORT_NOTE)).toBeNull();
+});
+
 test("without an agentId there is no open button; an unverified app says so", () => {
   serve(() => opened("http://c.example:9000/__open/x"));
   let view = drawCard(delivered([app8000], {}, {}));

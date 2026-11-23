@@ -239,6 +239,12 @@ export type OpenBody = (
   | { kind: "app"; port: number; path?: string }
 ) & { channel?: string; run?: string; task?: string };
 
+/** 独立端口模式的提示：侧栏横幅和任务页的「打开」按钮旁共用这一句。 */
+export const PORT_MODE_NOTICE =
+  "独立端口模式下，同一浏览器里先后打开的程序能互相读到内容，只打开你信任的程序。";
+/** 这次打开顶掉了同一浏览器里之前打开的程序。 */
+export const REPLACED_NOTICE = "已替换你之前打开的程序";
+
 /** 服务器的答案：没配内容源，或可用的一次性地址。 */
 export type OpenResult =
   | { available: false; reason: string }

@@ -10,10 +10,12 @@ import {
   type OpenBody,
   openDirOf,
   openTarget,
+  PORT_MODE_NOTICE,
   type PreviewTarget,
   parseCsv,
   previewHref,
   previewKindOfTarget,
+  REPLACED_NOTICE,
   scopeFields,
   textHref,
 } from "@/lib/computers/preview";
@@ -349,6 +351,8 @@ function Banner({ children }: { children: ReactNode }) {
 export async function openInNewTab(
   botId: string,
   body: OpenBody,
+  /** 拿到可用地址后告诉调用方这次是怎么打开的，好在按钮旁给出提示。 */
+  onAnswer?: (answer: { mode: "port" | "domain"; replaces: boolean }) => void,
 ): Promise<"opened" | "blocked" | "unavailable" | "failed"> {
   const tab = window.open("", "_blank");
   if (tab === null) return "blocked";
@@ -357,6 +361,7 @@ export async function openInNewTab(
   try {
     const answer = await openTarget(botId, body);
     if (answer.available) {
+      onAnswer?.({ mode: answer.mode, replaces: answer.replaces });
       tab.location.replace(answer.url);
       result = "opened";
     } else result = "unavailable";
@@ -412,12 +417,8 @@ function AppPreview({
   else
     body = (
       <>
-        {result.mode === "port" ? (
-          <Banner>
-            独立端口模式下，同一浏览器里先后打开的程序能互相读到内容，只打开你信任的程序。
-          </Banner>
-        ) : null}
-        {result.replaces ? <Banner>已替换你之前打开的程序</Banner> : null}
+        {result.mode === "port" ? <Banner>{PORT_MODE_NOTICE}</Banner> : null}
+        {result.replaces ? <Banner>{REPLACED_NOTICE}</Banner> : null}
         {page.expired ? (
           <Banner>
             <button
