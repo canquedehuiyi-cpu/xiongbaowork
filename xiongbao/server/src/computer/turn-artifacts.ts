@@ -25,6 +25,9 @@ export type TurnArtifactsTurn = {
 
 type TurnArtifactsGateway = Pick<ComputerGateway, "markTurn" | "turnChanges">;
 
+/** 轮末等电脑列出文件最多等多久；超了就不列，这一轮照常结束。 */
+export const TURN_ARTIFACTS_DEADLINE_MS = 15_000;
+
 function warn(operation: string, runId: string, botId: string, error: unknown) {
   // 只记错误种类，不记抛出的内容：它可能带着连接信息。
   console.warn({
@@ -43,6 +46,8 @@ export function withTurnArtifacts(
   stream: Observable<BaseEvent>,
   turn: TurnArtifactsTurn,
   gateway: TurnArtifactsGateway,
+  /** 轮末等待的截止（毫秒），测试里调小。 */
+  deadlineMs: number = TURN_ARTIFACTS_DEADLINE_MS,
 ): Observable<BaseEvent> {
   return new Observable<BaseEvent>((subscriber) => {
     const abort = new AbortController();
@@ -53,19 +58,29 @@ export function withTurnArtifacts(
       try {
         const seat = await turn.seat();
         if (!seat) return null;
-        await gateway.markTurn(seat, markId, abort.signal);
+        await gateway.markTurn(seat, markId);
         return seat;
       } catch (error) {
-        warn("markTurn", turn.runId, turn.botId, error);
+        if (!abort.signal.aborted)
+          warn("markTurn", turn.runId, turn.botId, error);
         return null;
       }
     })();
 
     const artifactsBefore = async (): Promise<BaseEvent[]> => {
-      const seat = await marked;
-      if (!seat || abort.signal.aborted) return [];
-      try {
-        const changes = await gateway.turnChanges(seat, markId, abort.signal);
+      const deadline = AbortSignal.timeout(deadlineMs);
+      const signal = AbortSignal.any([abort.signal, deadline]);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const late = new Promise<never>((_, reject) => {
+        timer = setTimeout(
+          () => reject(new Error("turn artifacts deadline")),
+          deadlineMs,
+        );
+      });
+      const work = async (): Promise<BaseEvent[]> => {
+        const seat = await marked;
+        if (!seat || abort.signal.aborted) return [];
+        const changes = await gateway.turnChanges(seat, markId, signal);
         if (!changes || changes.files.length === 0) return [];
         const value: TurnArtifactsValue = {
           botId: turn.botId,
@@ -82,9 +97,16 @@ export function withTurnArtifacts(
             value,
           } as BaseEvent,
         ];
+      };
+      try {
+        // 整个等待限时：mark 挂着或查询挂着，都不能拖住 RUN_FINISHED。
+        return await Promise.race([work(), late]);
       } catch (error) {
-        warn("turnChanges", turn.runId, turn.botId, error);
+        if (!abort.signal.aborted)
+          warn("turnChanges", turn.runId, turn.botId, error);
         return [];
+      } finally {
+        clearTimeout(timer);
       }
     };
 

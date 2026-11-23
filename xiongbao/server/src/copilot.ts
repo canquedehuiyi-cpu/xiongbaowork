@@ -2864,7 +2864,10 @@ async function buildAgent(
             {
               runId: runInput.runId,
               botId: agent.id,
-              personId: isTenantFramed() ? currentTenant() : null,
+              personId:
+                isTenantFramed() && isPersonTenant(currentTenant())
+                  ? currentTenant()
+                  : null,
             },
           ),
         );

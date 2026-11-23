@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { type BaseEvent, EventType } from "@ag-ui/client";
-import { type Observable, of } from "rxjs";
+import { type Observable, of, Subject } from "rxjs";
 import { TURN_ARTIFACTS_EVENT } from "../../shared/turn-artifacts";
-import { withTurnArtifacts } from "../src/computer/turn-artifacts";
+import {
+  configureTurnArtifacts,
+  withConfiguredTurnArtifacts,
+  withTurnArtifacts,
+} from "../src/computer/turn-artifacts";
 import type { ComputerSeat } from "../src/computer/computer-key";
 
 const started = { type: EventType.RUN_STARTED } as BaseEvent;
@@ -160,5 +164,73 @@ describe("withTurnArtifacts", () => {
       });
     });
     expect(first).toBeLessThan(100);
+  });
+
+  test("a hung query cannot hold RUN_FINISHED past the deadline", async () => {
+    let seen: AbortSignal | undefined;
+    const gateway: Gateway = {
+      async markTurn() {},
+      turnChanges: (_seat, _id, signal) => {
+        seen = signal;
+        return new Promise(() => {});
+      },
+    };
+    const out = await collect(
+      withTurnArtifacts(of(started, finished), turn(), gateway, 40),
+    );
+    expect(out.map((e) => String(e.type))).toEqual([
+      "RUN_STARTED",
+      "RUN_FINISHED",
+    ]);
+    expect(seen?.aborted).toBe(true);
+  });
+
+  test("a hung mark cannot hold RUN_FINISHED either", async () => {
+    const gateway: Gateway = {
+      markTurn: () => new Promise(() => {}),
+      turnChanges: async () => some,
+    };
+    const out = await collect(
+      withTurnArtifacts(of(started, finished), turn(), gateway, 40),
+    );
+    expect(out.map((e) => String(e.type))).toEqual([
+      "RUN_STARTED",
+      "RUN_FINISHED",
+    ]);
+  });
+
+  test("unsubscribing aborts the gateway call and emits nothing more", async () => {
+    let seen: AbortSignal | undefined;
+    const gateway: Gateway = {
+      async markTurn() {},
+      turnChanges: (_seat, _id, signal) => {
+        seen = signal;
+        return new Promise((resolve) => setTimeout(() => resolve(some), 30));
+      },
+    };
+    const source = new Subject<BaseEvent>();
+    const got: BaseEvent[] = [];
+    const subscription = withTurnArtifacts(source, turn(), gateway).subscribe(
+      (event) => got.push(event),
+    );
+    source.next(started);
+    source.next(finished);
+    await Bun.sleep(5);
+    subscription.unsubscribe();
+    await Bun.sleep(60);
+    expect(seen?.aborted).toBe(true);
+    expect(got.map((e) => String(e.type))).toEqual(["RUN_STARTED"]);
+  });
+
+  test("without wiring the stream is returned as it was", () => {
+    configureTurnArtifacts(undefined);
+    const stream = of(started, finished);
+    expect(
+      withConfiguredTurnArtifacts(stream, {
+        runId: "r",
+        botId: "b",
+        personId: "ada",
+      }),
+    ).toBe(stream);
   });
 });
