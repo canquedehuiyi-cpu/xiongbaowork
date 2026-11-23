@@ -889,6 +889,13 @@ export const auditEventTypes = [
    * `video`), `provider`, `model` and `count`. Never the prompt or the file.
    */
   "media.generated",
+  /*
+   * Somebody asked to show a folder of a coworker's workspace as a web page and was given the link
+   * (content/open-routes.ts). Target `bot`; payload `bot`, `kind` (`dir`), `path` (the folder),
+   * `scopeType` (`channel`, `task` or `none`), `scopeId`, `run` when there is one, and `mode` (`port`
+   * or `domain`). Never the link or any token: the link is the credential.
+   */
+  "content.opened",
 ] as const;
 
 export type AuditEventType = (typeof auditEventTypes)[number];

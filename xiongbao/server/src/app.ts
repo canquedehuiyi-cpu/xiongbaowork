@@ -106,6 +106,7 @@ import {
   type DeploymentConfig,
   emailPasswordAvailable,
 } from "./config";
+import { createOpenRoutes, type OpenRoutesDeps } from "./content/open-routes";
 import {
   type CredentialAdminService,
   type CredentialInput,
@@ -535,6 +536,11 @@ export function createApp(
      */
     /** Who may download a workspace file the conversation or a card announced (computer/artifact-access.ts). */
     artifactAccess?: ArtifactAccessDeps;
+    /**
+     * The "open this folder as a web page" route (content/open-routes.ts), given what decides it.
+     * Absent where no computer is configured; with no content source configured it answers that.
+     */
+    contentOpen?: Pick<OpenRoutesDeps, "content" | "key" | "access">;
     localLearning?: {
       database: Database;
       engine: LocalLearningEngine | undefined;
@@ -1961,6 +1967,18 @@ export function createApp(
       "/api/computers/*",
       createStaleAdminGate(requireAdminUser, COMPUTER_ADMIN_PATHS),
     );
+    // Before the computer router: its Bot guard asks whether the person may drive the Bot, and a
+    // member opening what a conversation showed them is decided by the conversation instead.
+    if (coworker?.contentOpen)
+      app.route(
+        "/api/computers",
+        createOpenRoutes({
+          ...coworker.contentOpen,
+          requireUser,
+          gateway: computerGateway,
+          ...(auditStore ? { auditStore } : {}),
+        }),
+      );
     app.route(
       "/api/computers",
       createComputerRoutes(

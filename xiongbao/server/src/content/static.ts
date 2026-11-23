@@ -17,7 +17,7 @@ import type { ContentGrant } from "./token";
  * `no-store` keeps a private page out of shared caches, and `no-referrer` keeps the token in the
  * address from leaking to anywhere the page links.
  */
-const SECURITY_HEADERS: Readonly<Record<string, string>> = {
+export const SECURITY_HEADERS: Readonly<Record<string, string>> = {
   "Content-Security-Policy":
     "sandbox allow-scripts allow-forms allow-popups allow-modals",
   "X-Content-Type-Options": "nosniff",
