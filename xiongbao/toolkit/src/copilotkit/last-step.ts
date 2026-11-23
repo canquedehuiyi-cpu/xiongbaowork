@@ -890,6 +890,46 @@ export function foldingEarlyResults(
   return { ...configuration, model: wrapped };
 }
 
+/**
+ * 每一步发给模型之前，把对话里记下的思考放回 assistant 消息（`withReplayedReasoning`，见 `RunSteps.reasoning`）。
+ *
+ * 单独成一层，不依赖员工有没有自己授予的工具：`answersOnLastStep` 在没有工具、也没有步数上限时直接原样返回，
+ * 放在它里面的回放就跟着没了（服务器执行单聊时工具全靠 `input.tools`，续跑只剩空的 `reasoning_content`）。
+ * 已经带着思考的消息不动，所以和 `answersOnLastStep` 里那一次叠在一起也没有副作用。没记下思考的运行原样透传。
+ * 工厂式配置、解析不了的、别的规格的模型原样返回。
+ */
+export function replayingReasoning(
+  configuration: BuiltInAgentConfiguration,
+  steps: RunSteps,
+): BuiltInAgentConfiguration {
+  if ("factory" in configuration) return configuration;
+  let model: unknown;
+  try {
+    model = resolveModel(configuration.model, configuration.apiKey);
+  } catch {
+    return configuration;
+  }
+  const older = isOlderModel(model);
+  if (!older && !isModel(model)) return configuration;
+  const inner = model as Model;
+  const replayed = async (asked: CallOptions): Promise<CallOptions> => {
+    if (!steps.reasoning?.size) return asked;
+    const prompt = withReplayedReasoning(asked.prompt, steps.reasoning);
+    return prompt === asked.prompt ? asked : { ...asked, prompt };
+  };
+  const wrapped: Model = older
+    ? withFoldedCalls(inner, replayed)
+    : {
+        specificationVersion: "v3",
+        provider: inner.provider,
+        modelId: inner.modelId,
+        supportedUrls: inner.supportedUrls,
+        doGenerate: async (asked) => inner.doGenerate(await replayed(asked)),
+        doStream: async (asked) => inner.doStream(await replayed(asked)),
+      };
+  return { ...configuration, model: wrapped };
+}
+
 /** How long a model call waits before it is made again after a dropped connection: one to two seconds. */
 const NET_RETRY_DELAY_MS = { base: 1000, jitter: 1000 } as const;
 

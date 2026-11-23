@@ -45,6 +45,7 @@ import { firingChecklist } from "./firing-checklist";
 import {
   answersOnLastStep,
   foldingEarlyResults,
+  replayingReasoning,
   type RunSteps,
   retryingDroppedConnection,
   STEP_LIMIT_EVENT,
@@ -354,17 +355,24 @@ export class BuiltInAgentWithSaneHistory extends BuiltInAgent {
     super(
       toolsWithin(
         /*
-         * 期七：一轮里越过窗口的 70%（或绝对预算）就折叠较早的工具结果，包在最外面，让里面的包装看到折叠后的提示。
-         * `foldResults: false` 关掉（部署开关 `XIONGBAO_TURN_FOLD=off`）。
+         * 思考回放包在最外面，不论员工有没有自己授予的工具都做（服务器执行单聊的工具全靠 `input.tools`，
+         * `answersOnLastStep` 在那种配置下早退）。见 `replayingReasoning`。
          */
-        hooks.foldResults === false
-          ? answering
-          : foldingEarlyResults(answering, {
-              ...(hooks.contextWindowFor
-                ? { windowFor: hooks.contextWindowFor }
-                : {}),
-              ...(foldBudget === undefined ? {} : { budget: foldBudget }),
-            }),
+        replayingReasoning(
+          /*
+           * 期七：一轮里越过窗口的 70%（或绝对预算）就折叠较早的工具结果，包在最外面，让里面的包装看到折叠后的提示。
+           * `foldResults: false` 关掉（部署开关 `XIONGBAO_TURN_FOLD=off`）。
+           */
+          hooks.foldResults === false
+            ? answering
+            : foldingEarlyResults(answering, {
+                ...(hooks.contextWindowFor
+                  ? { windowFor: hooks.contextWindowFor }
+                  : {}),
+                ...(foldBudget === undefined ? {} : { budget: foldBudget }),
+              }),
+          steps,
+        ),
         scope,
       ),
     );
