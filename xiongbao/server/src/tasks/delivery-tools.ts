@@ -71,7 +71,7 @@ const PLAIN_QUESTIONS = "问一句答一句的普通对话不要用这三个工�
  * in its workspace go on the hand-in. Without it a coworker that wrote its files and said so in words left
  * a card nobody had handed in.
  */
-const HAND_IN_WITH_FILES = `${FILE_DELIVERY_HINT}先 accept_task 接下，做完 deliver_task 交付：文件用 workspace_file 列（ref 写路径），运行中的程序用 app（port、path 默认 /、title）。`;
+const HAND_IN_WITH_FILES = `${FILE_DELIVERY_HINT}有文件产出的活，先用 accept_task 接下；做完用 deliver_task 交付，把你写在工作区里的文件用 workspace_file 逐个列上（ref 写工作区内的相对路径，如 reports/对比.xlsx）。`;
 /** 开着 `XIONGBAO_ACCEPT_WITH_READS` 时，补充句后面再加一句：回执不单独占一步（`agents/step-hints.ts`）。 */
 const handInWithFiles = () =>
   acceptWithReadsOn()

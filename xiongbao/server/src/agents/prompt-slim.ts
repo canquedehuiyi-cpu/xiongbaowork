@@ -229,7 +229,7 @@ export const TOOL_BRIEFS: Readonly<
   },
   deliver_task: {
     description:
-      "交付：做完时用。items 的 kind：attachment（附件 id）、component（组件名/调用 id）、link（网址）、workspace_file（相对路径）、note（ref 写结论）。checks 写查法。「必需：…」每项要在 title 或 checks 里提到，缺了挡回。" +
+      "交付，kind：attachment（附件）、component（组件）、link（网址）、workspace_file（路径）、app（port、path 默认 /、title）、note（ref 写结论）。checks：查法。「必需：…」每项写进 title 或 checks。" +
       FILE_DELIVERY_HINT,
   },
   accept_task: {
