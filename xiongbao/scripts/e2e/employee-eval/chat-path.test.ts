@@ -6,6 +6,7 @@ import {
   conversationWith,
   driveGroup,
   finishedCheck,
+  GROUP_OWN_WORK,
   limitStops,
   logFileName,
   noticeCheck,
@@ -401,9 +402,8 @@ test("parseEvalPath knows chat, board and group", () => {
   expect(parseEvalPath(" group ")).toBe("group");
   expect(parseEvalPath("chat")).toBe("chat");
   expect(parseEvalPath("board")).toBe("board");
-  expect(() => parseEvalPath("room")).toThrow(
-    "chat、board、group".split("、")[0],
-  );
+  for (const name of ["room", "chat", "board", "group"])
+    expect(() => parseEvalPath("room")).toThrow(name);
 });
 
 test("the group path writes its own result file, artifact folder and logs", () => {
@@ -427,6 +427,8 @@ type StubGroup = {
   statuses: Record<number, string>;
   /** 第一次读记录时还在跑的次数。 */
   runningReads: number;
+  /** 同伴在群里有了自己的行（活被转交）。 */
+  peerRow: boolean;
 };
 
 const stopStubs: (() => void)[] = [];
@@ -441,6 +443,7 @@ function groupStub(init: Partial<StubGroup> = {}): StubGroup {
     created: [],
     statuses: {},
     runningReads: 0,
+    peerRow: false,
     ...init,
   };
   let reads = 0;
@@ -472,6 +475,15 @@ function groupStub(init: Partial<StubGroup> = {}): StubGroup {
               : (state.statuses[index + 1] ?? "completed"),
           turnArtifacts: [{ runId: `run-${index + 1}`, value: { files: [] } }],
         }));
+        if (state.peerRow)
+          messages.push({
+            id: "x:bot-b",
+            agentId: "bot-b",
+            threadId: "thread-peer",
+            text: "收到",
+            status: "completed",
+            turnArtifacts: [],
+          });
         return Response.json({ messages });
       }
       return new Response("?", { status: 404 });
@@ -504,7 +516,9 @@ test("a group turn creates a shared group with the peer, addresses the employee 
   const stub = groupStub({ runningReads: 2 });
   const driven = await driveGroup(groupInput(stub, () => true));
   expect(stub.created).toEqual([["bot-a", "bot-b"]]);
-  expect(stub.sent).toEqual([{ id: "m1", text: "做题", agentId: "bot-a" }]);
+  expect(stub.sent).toEqual([
+    { id: "m1", text: `${GROUP_OWN_WORK}做题`, agentId: "bot-a" },
+  ]);
   expect(driven).toMatchObject({
     channelId: "g1",
     threadId: "thread-bot",
@@ -523,7 +537,10 @@ test("a group turn without the outputs is nudged in the same group, a failed tur
   );
   expect(driven.error).toBeUndefined();
   expect(stub.created).toHaveLength(1);
-  expect(stub.sent.map((message) => message.text)).toEqual(["做题", "继续"]);
+  expect(stub.sent.map((message) => message.text)).toEqual([
+    `${GROUP_OWN_WORK}做题`,
+    `${GROUP_OWN_WORK}继续`,
+  ]);
   expect(driven.nudges).toBe(1);
   expect(driven.replies.map((reply) => reply.status)).toEqual([
     "failed",
@@ -539,6 +556,15 @@ test("a group reply still running at the deadline is a timeout, not an error", a
   expect(driven.timedOut).toBe(true);
   expect(driven.error).toBeUndefined();
   expect(driven.replies).toEqual([]);
+  // 还在跑的那一行也带出对话 id，超时才停得掉服务器上的轮。
+  expect(driven.threadId).toBe("thread-bot");
+});
+
+test("work handed to the peer is reported and not nudged again", async () => {
+  const stub = groupStub({ peerRow: true });
+  const driven = await driveGroup(groupInput(stub, () => false));
+  expect(driven.handedOff).toBe(true);
+  expect(stub.sent).toHaveLength(1);
 });
 
 test("a group the server refuses is reported as the error of that turn", async () => {

@@ -26,6 +26,8 @@ export type ServerCheckExtras = {
   appPort?: number;
   /** 程序的落地路径，默认 `/`。 */
   appPath?: string;
+  /** 打开程序用的运行（列出该端口交付的那一轮）；缺省同文件的运行。 */
+  appRunId?: string;
 };
 
 const OFFICE_TASKS: readonly Task[] = [
@@ -73,7 +75,8 @@ async function downloadCheck(
   const bytes = new Uint8Array(await response.arrayBuffer());
   const disposition = response.headers.get("content-disposition") ?? "";
   const expected = extras.localBytes?.(file);
-  const declared = Number(response.headers.get("content-length"));
+  const lengthHeader = response.headers.get("content-length");
+  const declared = lengthHeader === null ? Number.NaN : Number(lengthHeader);
   const flaws = [
     ...(response.status === 200 ? [] : [`状态 ${response.status}`]),
     ...(/^attachment\b/i.test(disposition)
@@ -84,16 +87,18 @@ async function downloadCheck(
       ? bytes.length === expected
         ? []
         : [`下载 ${bytes.length} 字节，电脑上是 ${expected} 字节`]
-      : Number.isFinite(declared) && declared === bytes.length
-        ? []
-        : [`Content-Length ${declared} 与收到的 ${bytes.length} 字节不一致`]),
+      : lengthHeader === null || !Number.isFinite(declared)
+        ? [] // 没有电脑上的字节数、响应也没带长度：没有可对的，跳过并在 detail 里写明
+        : declared === bytes.length
+          ? []
+          : [`Content-Length ${declared} 与收到的 ${bytes.length} 字节不一致`]),
   ];
   return check(
     name,
     flaws.length === 0,
     flaws.length
       ? flaws.join("；")
-      : `200，attachment，${bytes.length} 字节${expected === undefined ? "（没有电脑上的字节数，只核对了长度头）" : ""}`,
+      : `200，attachment，${bytes.length} 字节${expected !== undefined ? "" : lengthHeader === null ? "（没有电脑上的字节数，响应也没带 Content-Length，跳过字节数核对）" : "（没有电脑上的字节数，只核对了长度头）"}`,
   );
 }
 
@@ -300,7 +305,10 @@ async function webInteraction(opened: Opened): Promise<Check[]> {
       try {
         const page = await context.newPage();
         await page.goto(url, { waitUntil: "load", timeout: 30_000 });
-        const buttons = page.locator("button");
+        // 题面要求的按钮是「推荐一杯」；员工换了文字时退回页面上第一个按钮。
+        const named = page.getByRole("button", { name: "推荐一杯" });
+        const buttons =
+          (await named.count()) > 0 ? named : page.locator("button");
         if ((await buttons.count()) === 0)
           return [check(WEB_CLICK, false, "页面上没有 <button>")];
         const before = await page.evaluate(() => document.body.innerText);
@@ -477,41 +485,48 @@ export function deliveriesOf(
 
 /**
  * 下载路由认的是「列出这个文件的那条事件所在的运行」：多轮（追过「继续」）时文件只出现在写下它的那一轮。
- * 取最后一个列出任一产物（程序题：列出该端口的交付）的运行；都没有就取最后一轮。
+ * 取最后一个在 `computer.turn_artifacts` 里列出任一产物的运行；都没有就取最后一轮。
  */
 export function runListing(
   runs: readonly { runId: string; events: readonly RunEvent[] }[],
-  input: { files: readonly string[]; appPort?: number },
+  input: { files: readonly string[] },
 ): string | undefined {
   const lists = (events: readonly RunEvent[]) =>
-    input.appPort !== undefined
-      ? events.some((event) =>
-          deliveredPorts(event).includes(input.appPort as number),
+    events.some((event) => {
+      if (event.type !== "CUSTOM" || event.name !== "computer.turn_artifacts")
+        return false;
+      const files = isObject(event.value) ? event.value.files : undefined;
+      return (
+        Array.isArray(files) &&
+        files.some(
+          (file) =>
+            isObject(file) &&
+            typeof file.path === "string" &&
+            input.files.some(
+              (wanted) =>
+                file.path === wanted ||
+                (file.path as string).endsWith(`/${wanted}`) ||
+                wanted.endsWith(`/${file.path as string}`),
+            ),
         )
-      : events.some((event) => {
-          if (
-            event.type !== "CUSTOM" ||
-            event.name !== "computer.turn_artifacts"
-          )
-            return false;
-          const files = isObject(event.value) ? event.value.files : undefined;
-          return (
-            Array.isArray(files) &&
-            files.some(
-              (file) =>
-                isObject(file) &&
-                typeof file.path === "string" &&
-                input.files.some(
-                  (wanted) =>
-                    file.path === wanted ||
-                    (file.path as string).endsWith(`/${wanted}`) ||
-                    wanted.endsWith(`/${file.path as string}`),
-                ),
-            )
-          );
-        });
+      );
+    });
   const listed = runs.filter((run) => lists(run.events)).at(-1);
   return (listed ?? runs.at(-1))?.runId;
+}
+
+/**
+ * 程序的内容源范围认的是列出该端口的交付事件所在的运行，和文件所在的运行可以不是同一轮（`index.html` 写在第一轮，
+ * 交付在后面）。取最后一个列出该端口的运行；没有交付事件（没有任务卡时服务器不发）就取最后一轮。
+ */
+export function runDelivering(
+  runs: readonly { runId: string; events: readonly RunEvent[] }[],
+  port: number,
+): string | undefined {
+  const delivered = runs
+    .filter((run) => run.events.some((e) => deliveredPorts(e).includes(port)))
+    .at(-1);
+  return (delivered ?? runs.at(-1))?.runId;
 }
 
 const dirOf = (file: string) => file.split("/").slice(0, -1).join("/");
@@ -575,7 +590,7 @@ export async function serverChecks(
         port: extras.appPort,
         path: extras.appPath ?? "/",
         channel: i.channelId,
-        run: i.runId,
+        run: extras.appRunId ?? i.runId,
       });
       checks.push(
         ...(await landingChecks("程序", opened)),

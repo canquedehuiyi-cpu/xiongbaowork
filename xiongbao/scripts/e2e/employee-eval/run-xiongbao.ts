@@ -134,7 +134,12 @@ import {
   taskMinutes,
   xiongbaoModel,
 } from "./config";
-import { deliveriesOf, runListing, serverChecks } from "./deliverables-server";
+import {
+  deliveriesOf,
+  runDelivering,
+  runListing,
+  serverChecks,
+} from "./deliverables-server";
 import { pitfallPairSeeds } from "./gen-pitfall";
 import {
   canSudoAs,
@@ -1589,6 +1594,22 @@ async function driveChat(
 /** 群聊里陪着的另一位员工：群聊至少要两位员工，同伴只在群里，不被点名，不做题。一次评测共用一位。 */
 let groupPeer = "";
 
+/** 评测结束删掉群聊同伴，不占员工名额。 */
+async function releaseGroupPeer() {
+  if (!groupPeer) return;
+  const id = groupPeer;
+  groupPeer = "";
+  try {
+    const deleted = await api("DELETE", `/api/agents/${id}`);
+    if (deleted.status !== 204)
+      console.log(`   (群聊同伴没删掉：HTTP ${deleted.status})`);
+  } catch (thrown) {
+    console.log(
+      `   (群聊同伴没删掉：${thrown instanceof Error ? thrown.message : String(thrown)})`,
+    );
+  }
+}
+
 /** 群聊路径：新建含这位员工和同伴的 shared 群聊，点名发题、读到回复结束，没做完同样在群里点名发「继续」。 */
 async function driveGroupPath(
   work: Work,
@@ -1622,6 +1643,12 @@ async function driveGroupPath(
     timedOut: driven.timedOut,
     sent: driven.sent,
     channelId: driven.channelId,
+    // 活转给了同伴：这道题不是员工自己完成的，判失败并写明（不静默）。
+    ...(driven.handedOff
+      ? {
+          checks: [check("活由这位员工自己完成", false, "转交给了同伴")],
+        }
+      : {}),
     ...(driven.threadId ? { threadId: driven.threadId } : {}),
     ...(driven.error ? { error: driven.error } : {}),
   };
@@ -1707,22 +1734,20 @@ async function judgeOnServer(
   },
 ): Promise<Check[]> {
   const files = OUTPUTS[task].map((file) => `${work.where}/${file}`);
-  const app = input.deliveries.find(
-    (item) => item.kind === "app" && typeof item.port === "number",
+  // 交付过几次就以最后一次为准（前面的可能是被退回的）。
+  const appPort = input.deliveries
+    .filter((item) => item.kind === "app" && typeof item.port === "number")
+    .at(-1)?.port;
+  const runs = await Promise.all(
+    input.runIds.map(async (id) => ({
+      runId: id,
+      events: await eventsOf([id]),
+    })),
   );
-  const appPort = app?.port;
-  const runId = runListing(
-    await Promise.all(
-      input.runIds.map(async (id) => ({
-        runId: id,
-        events: await eventsOf([id]),
-      })),
-    ),
-    {
-      files,
-      ...(task === "deliv-app" && appPort !== undefined ? { appPort } : {}),
-    },
-  );
+  // 文件的范围按列出文件的那一轮；程序的范围按交付该端口的那一轮，两者可以不是同一轮。
+  const runId = runListing(runs, { files });
+  const appRunId =
+    appPort === undefined ? undefined : runDelivering(runs, appPort);
   if (!input.channelId || !runId)
     return [
       check(
@@ -1752,6 +1777,7 @@ async function judgeOnServer(
           }
         },
         ...(appPort !== undefined ? { appPort } : {}),
+        ...(appRunId ? { appRunId } : {}),
       },
     );
   } catch (thrown) {
@@ -2437,6 +2463,7 @@ try {
   );
   console.error(`\nFAIL: ${notes[notes.length - 1]}`);
 } finally {
+  await releaseGroupPeer();
   await stop(server);
   await stop(computer);
   await database.$client.end({ timeout: 5 }).catch(() => undefined);

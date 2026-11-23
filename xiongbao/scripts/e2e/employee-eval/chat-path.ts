@@ -424,28 +424,33 @@ export async function sendGroupMessage(
     );
 }
 
-/** 读群聊记录里这句话下面、这位员工的那一行。还没有（没排上）返回 undefined。 */
-export async function readGroupRow(
+/** 读群聊记录整段。 */
+export async function readGroupMessages(
   origin: string,
   cookie: string,
   channelId: string,
-  messageId: string,
-  agentId: string,
-): Promise<GroupRow | undefined> {
+): Promise<GroupRow[]> {
   const listed = await groupFetch(origin, cookie, `/api/groups/${channelId}`);
   if (listed.status !== 200)
     throw new Error(
       `group transcript answered ${listed.status}: ${JSON.stringify(listed.body).slice(0, 300)}`,
     );
-  const messages =
-    (listed.body as { messages?: GroupRow[] } | null)?.messages ?? [];
-  // 回复行的 id 是 `<这句话的 id>:<员工 id>`（服务器按这个规则建行）。
-  return messages.find((row) => row.id === `${messageId}:${agentId}`);
+  return (listed.body as { messages?: GroupRow[] } | null)?.messages ?? [];
 }
 
 /**
+ * 转交：群聊里员工可以用 `message_bot` 把活交给同伴（服务器默认开着，`group.ts` 的 `handoffTool`），同伴那一行
+ * 的 agentId 是同伴的。被测员工自己的行 id 是 `<这句话的 id>:<员工 id>`，除此之外同伴有任何一行都说明活转出去了。
+ */
+export const handedOffTo = (
+  messages: readonly GroupRow[],
+  peerId: string,
+): boolean => messages.some((row) => row.agentId === peerId);
+
+/**
  * 读群聊里这位员工的回复到它不再排队 / 在跑：`completed`、`failed`、`waiting`（等人）都算这一轮结束。
- * 读到墙钟上限还没结束返回 undefined（服务器上的这一轮不受影响）。
+ * 读到墙钟上限还没结束时 `reply` 是 undefined（服务器上的这一轮不受影响），但只要读到过这位员工的行（哪怕
+ * 还在 queued / running），就带出它的对话 id：超时要靠它停掉服务器上的轮、读运行号。
  */
 export async function readGroupReply(input: {
   origin: string;
@@ -453,33 +458,51 @@ export async function readGroupReply(input: {
   channelId: string;
   messageId: string;
   agentId: string;
+  peerId?: string;
   deadline: number;
   pollMs?: number;
-}): Promise<GroupReply | undefined> {
+}): Promise<{
+  reply?: GroupReply;
+  threadId?: string;
+  handedOff: boolean;
+}> {
   const pollMs = input.pollMs ?? 1000;
+  let threadId: string | undefined;
   for (;;) {
-    const row = await readGroupRow(
+    const messages = await readGroupMessages(
       input.origin,
       input.cookie,
       input.channelId,
-      input.messageId,
-      input.agentId,
     );
+    // 回复行的 id 是 `<这句话的 id>:<员工 id>`（服务器按这个规则建行）。
+    const row = messages.find(
+      (item) => item.id === `${input.messageId}:${input.agentId}`,
+    );
+    if (row?.threadId) threadId = row.threadId;
+    const handedOff =
+      input.peerId !== undefined && handedOffTo(messages, input.peerId);
     if (row && row.status !== "queued" && row.status !== "running")
       return {
-        id: row.id,
-        threadId: row.threadId ?? undefined,
-        status: row.status ?? "completed",
-        text: row.text ?? "",
-        limited: row.stepLimit !== undefined && row.stepLimit !== null,
-        artifactRuns: [
-          ...new Set((row.turnArtifacts ?? []).map((item) => item.runId)),
-        ],
+        threadId,
+        handedOff,
+        reply: {
+          id: row.id,
+          threadId,
+          status: row.status ?? "completed",
+          text: row.text ?? "",
+          limited: row.stepLimit !== undefined && row.stepLimit !== null,
+          artifactRuns: [
+            ...new Set((row.turnArtifacts ?? []).map((item) => item.runId)),
+          ],
+        },
       };
-    if (Date.now() + pollMs > input.deadline) return undefined;
+    if (Date.now() + pollMs > input.deadline) return { threadId, handedOff };
     await Bun.sleep(pollMs);
   }
 }
+
+/** 群聊发题时加在题面前的一句：同伴在群里，免得员工把活转给它。 */
+export const GROUP_OWN_WORK = "这件事请你自己完成，不要转给群里其他人。";
 
 /** 群聊路径一道题的结果：字段和 `run-xiongbao.ts` 的 `Driven` 对齐，那边直接并进同一套判分和记录。 */
 export type GroupDriven = {
@@ -491,6 +514,8 @@ export type GroupDriven = {
   error?: string;
   /** 发出去的话数（每句一轮）。 */
   sent: number;
+  /** 活转给了同伴（同伴在群里有了自己的行）：这道题记失败，不再追问。 */
+  handedOff: boolean;
   /** 各轮里这位员工的回复，按先后。 */
   replies: GroupReply[];
 };
@@ -517,6 +542,7 @@ export async function driveGroup(input: {
     nudges: 0,
     timedOut: false,
     sent: 0,
+    handedOff: false,
     replies: [],
   };
   try {
@@ -528,26 +554,33 @@ export async function driveGroup(input: {
       const messageId = input.newId();
       await sendGroupMessage(input.origin, input.cookie, out.channelId, {
         id: messageId,
-        text: round === 0 ? input.prompt : input.nudge,
+        text: `${GROUP_OWN_WORK}${round === 0 ? input.prompt : input.nudge}`,
         agentId: input.agentId,
       });
       out.sent += 1;
       if (round > 0) out.nudges += 1;
-      const reply = await readGroupReply({
+      const read = await readGroupReply({
         origin: input.origin,
         cookie: input.cookie,
         channelId: out.channelId,
         messageId,
         agentId: input.agentId,
+        peerId: input.peerId,
         deadline: input.deadline,
         ...(input.pollMs === undefined ? {} : { pollMs: input.pollMs }),
       });
+      // 超时也要留下对话 id：stopTimedOutRuns 靠它停轮，运行号也从它读。
+      if (read.threadId) out.threadId = read.threadId;
+      if (read.handedOff) {
+        out.handedOff = true;
+        break;
+      }
+      const reply = read.reply;
       if (!reply) {
         out.timedOut = true;
         break;
       }
       out.replies.push(reply);
-      if (reply.threadId) out.threadId = reply.threadId;
       const next = afterRound({
         state: { failed: reply.status === "failed", limited: reply.limited },
         outputsReady: input.outputsReady(),

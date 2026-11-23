@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import {
   chromiumAvailable,
   deliveriesOf,
+  runDelivering,
   runListing,
   serverChecks,
 } from "./deliverables-server";
@@ -311,17 +312,57 @@ describe("交付清单和下载认的运行", () => {
     ];
     expect(runListing(runs, { files: ["eval/x/deck.pptx"] })).toBe("r1");
     expect(runListing(runs, { files: ["nothing.md"] })).toBe("r2");
-    expect(
-      runListing(
-        [
-          {
-            runId: "a",
-            events: [delivered([{ port: 4321, path: "/", title: "t" }])],
-          },
-          { runId: "b", events: [] },
-        ],
-        { files: [], appPort: 4321 },
-      ),
-    ).toBe("a");
+    // 程序题：文件的运行按产物列表认，端口的运行单独取。
+    const appRuns = [
+      { runId: "a", events: [listed("eval/x/app/index.html")] },
+      {
+        runId: "b",
+        events: [delivered([{ port: 4321, path: "/", title: "t" }])],
+      },
+    ];
+    expect(runListing(appRuns, { files: ["eval/x/app/index.html"] })).toBe("a");
+    expect(runDelivering(appRuns, 4321)).toBe("b");
+  });
+
+  test("没有交付事件、多轮、index.html 在第 1 轮时：文件取第 1 轮，程序取最后一轮", () => {
+    const runs = [
+      { runId: "r1", events: [listed("eval/x/app/index.html")] },
+      { runId: "r2", events: [] },
+      { runId: "r3", events: [] },
+    ];
+    expect(runListing(runs, { files: ["eval/x/app/index.html"] })).toBe("r1");
+    expect(runDelivering(runs, 4321)).toBe("r3");
+  });
+
+  test("响应没带 Content-Length 且没有电脑上的字节数时跳过字节数核对，不误报", async () => {
+    const server = Bun.serve({
+      port: 0,
+      fetch: (request) =>
+        new URL(request.url).pathname.endsWith("/download")
+          ? new Response(
+              new ReadableStream({
+                // 分块发送：Bun 对一次写完的流会补上 Content-Length，这里要一个没有长度的响应。
+                async start(controller) {
+                  controller.enqueue(new TextEncoder().encode("ab"));
+                  await Bun.sleep(20);
+                  controller.enqueue(new TextEncoder().encode("c"));
+                  controller.close();
+                },
+              }),
+              {
+                headers: { "content-disposition": "attachment; filename=x" },
+              },
+            )
+          : new Response("pdf", {
+              headers: { "x-content-type-options": "nosniff" },
+            }),
+    });
+    stopList.push(() => server.stop(true));
+    const checks = await serverChecks({
+      ...input(`http://127.0.0.1:${server.port}`, "deliv-docx", ["r.docx"]),
+      cookie: "",
+    });
+    expect(failedNames(checks)).toEqual([]);
+    expect(checks[0]?.detail).toContain("跳过字节数核对");
   });
 });
