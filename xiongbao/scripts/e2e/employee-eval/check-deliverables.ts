@@ -54,7 +54,7 @@ function runPython(script: string, args: string[]): Probe {
   } catch {
     return { ok: false, detail: "本机没有 python3，没法判分" };
   }
-  const out = run.stdout.toString().trim();
+  const out = (run.stdout ?? "").toString().trim();
   try {
     const data = JSON.parse(out.split("\n").pop() ?? "") as Record<
       string,
@@ -66,7 +66,7 @@ function runPython(script: string, args: string[]): Probe {
       data,
     };
   } catch {
-    const err = run.stderr.toString().trim().split("\n").pop() ?? "";
+    const err = (run.stderr ?? "").toString().trim().split("\n").pop() ?? "";
     return { ok: false, detail: `python 没跑通：${err || "没有输出"}` };
   }
 }
