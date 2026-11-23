@@ -95,6 +95,7 @@ import { createComponentRoutes } from "./components/routes";
 import type { SandboxedStore } from "./components/sandboxed";
 import { createSandboxedRoutes } from "./components/sandboxed-routes";
 import type { ComponentStore } from "./components/store";
+import type { ArtifactAccessDeps } from "./computer/artifact-access";
 import type { ComputerGateway } from "./computer/gateway";
 import type { PageFrameStore } from "./computer/page-frames";
 import type { PolicyStore } from "./computer/policy-store";
@@ -532,6 +533,8 @@ export function createApp(
      * 本地学习（L1）的本人路由。`engine` 不在时（`OPENBOT_LOCAL_LEARNING=off`）路由照样回答设置页，
      * 说明这个部署没有开启。
      */
+    /** Who may download a workspace file the conversation or a card announced (computer/artifact-access.ts). */
+    artifactAccess?: ArtifactAccessDeps;
     localLearning?: {
       database: Database;
       engine: LocalLearningEngine | undefined;
@@ -1983,6 +1986,7 @@ export function createApp(
             })
           : undefined,
         auditStore,
+        coworker?.artifactAccess,
       ),
     );
     // Beside `/policy` and named in DEPLOYMENT_ROUTES with it: the computer router's Bot guard

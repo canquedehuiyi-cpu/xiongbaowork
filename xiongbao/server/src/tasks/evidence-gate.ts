@@ -132,7 +132,7 @@ const nameOf = (item: DeliveryItem) => item.title?.trim() || item.ref.trim();
  * segments (`//`, a leading `./`) are joined away, and separators are read whichever way the
  * coworker's machine wrote them.
  */
-function workspaceFilePathOf(ref: string): string | undefined {
+export function workspaceFilePathOf(ref: string): string | undefined {
   const path = ref.trim();
   if (path === "") return undefined;
   if (path.startsWith("/") || path.startsWith("~")) return undefined;

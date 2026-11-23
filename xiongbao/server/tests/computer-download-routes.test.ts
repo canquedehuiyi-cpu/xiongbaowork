@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import type { BaseEvent } from "@ag-ui/client";
 import type { MiddlewareHandler } from "hono";
 import type { AgentActor } from "../src/agents/profile-types";
 import type { AppVariables, AuthenticatedActor } from "../src/auth/guards";
+import type { ArtifactAccessDeps } from "../src/computer/artifact-access";
 import { personSeat } from "../src/computer/computer-key";
 import type { ComputerGateway } from "../src/computer/gateway";
 import {
@@ -305,5 +307,138 @@ describe("the public computer file download route", () => {
         "季度报告.pdf",
       )}`,
     );
+  });
+});
+
+describe("a download that names where its file was announced", () => {
+  const ownersSeat = personSeat("owner-1", "bot-17");
+  const allowed = {
+    channelFor: async (_actor: AgentActor, id: string) =>
+      id === "channel-1"
+        ? { agentIds: ["bot-17"], threadIds: ["thread-1"] }
+        : null,
+    runOf: async (_actor: AgentActor, _channel: string, run: string) =>
+      run === "run-1"
+        ? {
+            threadId: "thread-1",
+            events: [
+              {
+                type: "CUSTOM",
+                name: "computer.turn_artifacts",
+                value: {
+                  botId: "bot-17",
+                  seat: "person:owner-1",
+                  files: [{ path: "报告 #1?.pptx" }],
+                },
+              },
+            ] as unknown as BaseEvent[],
+          }
+        : null,
+    cardFor: async () => null,
+  } satisfies ArtifactAccessDeps;
+
+  function scopedApp(
+    gateway: ComputerGateway,
+    canUseBot: (actor: AgentActor, botId: string) => Promise<boolean>,
+  ) {
+    return createComputerRoutes(
+      gateway,
+      {} as PolicyStore,
+      asActor(),
+      canUseBot,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      allowed,
+    );
+  }
+
+  const url = (query: string) =>
+    `http://openbot.test/bot-17/files/download?${query}`;
+  const named = encodeURIComponent("报告 #1?.pptx");
+
+  test("a member who may not use the Bot gets the file from the seat the run announced", async () => {
+    const seats: unknown[] = [];
+    const { gateway, calls } = gatewayThatReturns(
+      "deck.pptx",
+      Uint8Array.from([7]),
+    );
+    const asked = gateway.downloadFile.bind(gateway);
+    gateway.downloadFile = (seat, ...rest) => {
+      seats.push(seat);
+      return asked(seat, ...rest);
+    };
+    const response = await scopedApp(gateway, async () => false).request(
+      url(`channel=channel-1&run=run-1&path=${named}`),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe(
+      "application/octet-stream",
+    );
+    expect(response.headers.get("content-disposition")).toMatch(/^attachment;/);
+    expect(seats).toEqual([ownersSeat]);
+    expect(calls).toEqual([
+      { botId: "bot-17", actorId: "user-1", path: "报告 #1?.pptx" },
+    ]);
+  });
+
+  test.each([
+    [
+      "a path the run did not announce",
+      "channel=channel-1&run=run-1&path=other.pptx",
+    ],
+    ["a run of nowhere", `channel=channel-1&run=run-9&path=${named}`],
+    [
+      "a conversation the person cannot see",
+      `channel=channel-9&run=run-1&path=${named}`,
+    ],
+    ["a channel without a run", `channel=channel-1&path=${named}`],
+    ["an empty scope", `channel=&run=&path=${named}`],
+    ["a bare task", `task=&path=${named}`],
+    [
+      "a path that leaves the workspace",
+      "channel=channel-1&run=run-1&path=..%2Fx",
+    ],
+    ["no path at all", "channel=channel-1&run=run-1"],
+  ])("answers 404 and never asks the gateway for %s", async (_name, query) => {
+    const { gateway, calls } = gatewayThatReturns("x", Uint8Array.from([1]));
+    const response = await scopedApp(gateway, async () => true).request(
+      url(query),
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual({
+      error: "There is no such Bot.",
+    });
+    expect(calls).toHaveLength(0);
+  });
+
+  test("a scope is never answered from the person's own seat, even for their own Bot", async () => {
+    const { gateway, calls } = gatewayThatReturns("x", Uint8Array.from([1]));
+    const response = await scopedApp(gateway, async () => true).request(
+      url("channel=channel-1&path=anything.md"),
+    );
+    expect(response.status).toBe(404);
+    expect(calls).toHaveLength(0);
+  });
+
+  test("a router wired without the rules refuses every scoped download", async () => {
+    const { gateway, calls } = gatewayThatReturns("x", Uint8Array.from([1]));
+    const response = await appFor(gateway).request(
+      url(`channel=channel-1&run=run-1&path=${named}`),
+    );
+    expect(response.status).toBe(404);
+    expect(calls).toHaveLength(0);
+  });
+
+  test("the scope does not open any other route under the Bot", async () => {
+    const { gateway } = gatewayThatReturns("x", Uint8Array.from([1]));
+    const response = await scopedApp(gateway, async () => false).request(
+      "http://openbot.test/bot-17/status?channel=channel-1&run=run-1",
+    );
+    expect(response.status).toBe(404);
   });
 });

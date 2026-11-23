@@ -69,7 +69,6 @@ import {
   readRunAssertion,
 } from "./agents/callback-token";
 import { canUseComputer } from "./agents/computer-access";
-import { configureTurnArtifacts } from "./computer/turn-artifacts";
 import { wireCoordination } from "./agents/coordination-wiring";
 import { createAgentFetch } from "./agents/endpoint";
 import { createHandoffDesk } from "./agents/handoff";
@@ -253,6 +252,7 @@ import { createChannelTitler } from "./channels/titler";
 import { headlessComponentCatalog } from "./components/headless";
 import { createSandboxedStore } from "./components/sandboxed";
 import { createComponentStore } from "./components/store";
+import { createArtifactAccessDeps } from "./computer/artifact-access-store";
 import {
   botOwnership,
   createComputerSeatResolver,
@@ -281,6 +281,7 @@ import {
 } from "./computer/provider";
 import { createRunnerTransport } from "./computer/runner-transport";
 import { createSnapshotStore } from "./computer/snapshot-store";
+import { configureTurnArtifacts } from "./computer/turn-artifacts";
 import { createComputerToolsForTurn } from "./computer/turn-tools";
 import {
   configureComputerWaits,
@@ -6581,6 +6582,7 @@ await startupLifecycle.run(async (startup) => {
       },
       memory: { store: personalMemoryStore, ingestion: memoryIngestion },
       proactive: { store: proactiveStore, engine: proactiveEngine },
+      artifactAccess: createArtifactAccessDeps(database),
       localLearning: { database, engine: localLearningEngine },
       // Upstream's started work, at `/api/bot-tasks` (`/api/tasks` is the board, mounted below).
       tasks: { store: taskStore, runner: taskRunner },
