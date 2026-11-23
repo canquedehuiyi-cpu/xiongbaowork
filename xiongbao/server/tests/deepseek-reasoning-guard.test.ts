@@ -366,7 +366,7 @@ describe("出口兜底：createGuardedFetch（员工绑定模型的出站守卫�
     deepSeekSays([{ content: "done" }]);
     const model = languageModelFor("deepseek", null, "deepseek-flash", "k");
     await (
-      model as { doGenerate: (o: unknown) => Promise<unknown> }
+      model as unknown as { doGenerate: (o: unknown) => Promise<unknown> }
     ).doGenerate({
       prompt: [
         { role: "user", content: [{ type: "text", text: "ENG-1?" }] },
