@@ -329,7 +329,7 @@ describe("open through the content origin", () => {
       for (const frame of document.querySelectorAll("iframe")) {
         expect(frame.getAttribute("sandbox")).toBe("allow-scripts");
         expect(frame.getAttribute("src")).toBe(
-          previewHref(target("site/index.html")),
+          previewHref(target("site/index.html")) ?? null,
         );
       }
     });
