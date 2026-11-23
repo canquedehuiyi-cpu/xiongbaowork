@@ -8,7 +8,7 @@ import {
   OPEN_TOKEN_TTL_MS,
   readOpenToken,
   readSessionToken,
-  renewedGrant,
+  renewedWithinCap,
 } from "../src/content/token";
 
 const KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
@@ -103,11 +103,12 @@ describe("open token", () => {
   });
 });
 
-describe("renewedGrant and hostCodeOf", () => {
+describe("renewedWithinCap and hostCodeOf", () => {
   test("renews the expiry from now and nothing else", () => {
     const later = now + 5 * 60_000;
-    expect(renewedGrant(grant, later)).toEqual({
+    expect(renewedWithinCap(grant, later)).toEqual({
       ...grant,
+      born: now,
       exp: later + OPEN_TOKEN_TTL_MS,
     });
   });

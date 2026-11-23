@@ -616,6 +616,37 @@ describe("renewal and revocation", () => {
     expect(asked.length).toBe(2);
   });
 
+  test.each([
+    ["person", { person: "p2" }],
+    ["seat", { seat: "person:p2" }],
+    ["bot", { bot: "b2" }],
+    ["channel", { channel: "c2" }],
+    ["run", { run: "r2" }],
+    ["task", { task: "t2" }],
+    ["target path", { target: { kind: "dir", path: "other" } }],
+    ["target kind", { target: { kind: "app", port: 4000, path: "site" } }],
+  ] as [string, Partial<ContentGrant>][])(
+    "the remembered answer does not carry over when only the %s differs",
+    async (_name, difference) => {
+      const base = dirGrant({ channel: "c1", run: "r1", task: "t1" });
+      const { server, asked, state } = setup();
+      expect(
+        (await get(server, "http://c/", asCookie(cookieFor(base)))).status,
+      ).toBe(200);
+      // A is remembered as allowed; B must be asked, and refused, on its own.
+      state.allowed = false;
+      const other = { ...base, ...difference } as ContentGrant;
+      const res = await get(server, "http://c/", asCookie(cookieFor(other)));
+      expect(res.status).toBe(404);
+      expect(asked.length).toBe(2);
+      // And A is still remembered as allowed.
+      expect(
+        (await get(server, "http://c/", asCookie(cookieFor(base)))).status,
+      ).toBe(200);
+      expect(asked.length).toBe(2);
+    },
+  );
+
   test("concurrent requests for one grant share one lookup", async () => {
     let calls = 0;
     let release: (value: boolean) => void = () => undefined;

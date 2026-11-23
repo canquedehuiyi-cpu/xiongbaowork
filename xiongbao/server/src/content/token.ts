@@ -3,7 +3,7 @@ import { sign, verify } from "../auth/signed-value";
 
 /**
  * How long an "open" link and a content session stay good: thirty minutes from when they were made.
- * A session is renewed (see {@link renewedGrant}) while somebody keeps using it.
+ * A session is renewed (see {@link renewedWithinCap}) while somebody keeps using it.
  */
 export const OPEN_TOKEN_TTL_MS = 30 * 60_000;
 
@@ -197,11 +197,6 @@ export function renewedWithinCap(
     born,
     exp: Math.min(now + OPEN_TOKEN_TTL_MS, born + MAX_SESSION_AGE_MS),
   };
-}
-
-/** The same grant, good for another {@link OPEN_TOKEN_TTL_MS} from `now`. */
-export function renewedGrant(grant: ContentGrant, now: number): ContentGrant {
-  return { ...grant, exp: now + OPEN_TOKEN_TTL_MS };
 }
 
 /**
