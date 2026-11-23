@@ -256,8 +256,8 @@ services:
       # people reach over the network must change the binding to an address they can route to
       # (`0.0.0.0:`, or the host's own) AND open this port, 3773/TCP, in its firewall or security
       # group: a link to a page is built on the host name the person used plus this port.
-      - "127.0.0.1:${CONTENT_PORT:-3773}:3773"
-      - "[::1]:${CONTENT_PORT:-3773}:3773"
+      - "127.0.0.1:${XIONGBAO_CONTENT_HOST_PORT:-3773}:3773"
+      - "[::1]:${XIONGBAO_CONTENT_HOST_PORT:-3773}:3773"
     # For whatever stays on the host and is addressed as such: a model endpoint on this machine, and
     # anything else the Bots below already reach the same way. OpenBot Desktop sets
     # `OPENBOT_HOST_GATEWAY` under rootless Podman on Linux, where `host-gateway` is not this

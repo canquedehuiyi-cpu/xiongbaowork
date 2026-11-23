@@ -1390,10 +1390,12 @@ Teams. They are read from `GET /api/setup`, and `POST /api/setup/check` asks aga
 | Variable | Meaning |
 | --- | --- |
 | `XIONGBAO_CONTENT_PORT` | 内容源端口，1024 到 65535，不能与 API 端口、`APP_PORT` 相同。设了就多监听一个端口，只回答内容源，监听地址与主服务一致。链接是 `<打开请求的协议>://<打开请求的主机名>:<端口>/__open/<令牌>`，不读转发头。容器里写 `3773`，宿主要映射并在安全组放行。 |
-| `XIONGBAO_CONTENT_DOMAIN` | 内容源域名，只写主机名（小写字母、数字、`-`、`.`；不含协议、端口、路径、通配符，也不能是 IP）。设了就用泛子域名：链接是 `https://<16 位十六进制>.<域名>/__open/<令牌>`，由主监听按 `Host` 后缀 `.<域名>` 分流，需要泛域名解析、泛域名证书和保留 `Host` 的反代。**两项都设时以域名为准**，端口不再监听。域名不能是应用所在域名的上级。 |
+| `XIONGBAO_CONTENT_DOMAIN` | 内容源域名，只写主机名（小写字母、数字、`-`、`.`；不含协议、端口、路径、通配符，也不能是 IP）。设了就用泛子域名：链接是 `https://<16 位十六进制>.<域名>/__open/<令牌>`，由主监听按 `Host` 后缀 `.<域名>` 分流，需要泛域名解析、泛域名证书和保留 `Host` 的反代。**两项都设时以域名为准**，端口不再监听。 |
+
+宿主侧映射用 `XIONGBAO_CONTENT_HOST_PORT`（默认 3773），绑定地址用 `XIONGBAO_CONTENT_BIND`（`docker/compose.delivery.yml`，默认 `127.0.0.1`；`docker-compose.yml` 固定绑本机，公网部署要改文件里的地址）。
 
 令牌 30 分钟有效，换成 `xb_content` cookie（HttpOnly、`Path=/`、`SameSite=Lax`，HTTPS 下加 `Secure`，不设 `Domain`）。
-内容源只认这一个 cookie。用满一半后每次请求重新确认权限并续期，权限没了就 404 并清 cookie。完整的部署步骤见
+内容源只认这一个 cookie。每次请求都确认权限（同一授权缓存 1 分钟），没有了就 404 并清 cookie；cookie 用满一半续期，从首次打开起最长 12 小时。域名不能等于或是应用主机名（`OPENBOT_PUBLIC_URL`、`OPENBOT_APP_URL`、`TRUSTED_ORIGINS`）的上级，否则启动失败。完整的部署步骤见
 [部署手册 3.1](deployment-xiongbao.md)。
 
 ## Ports
@@ -1402,7 +1404,7 @@ Teams. They are read from `GET /api/setup`, and `POST /api/setup/check` asks aga
 | ----------------- | -------------------------- | ----------------- |
 | `app`             | 3010                       | `APP_PORT`        |
 | `server`          | 3001                       | `SERVER_PORT`     |
-| content origin    | 3773 (opt-in)              | `XIONGBAO_CONTENT_PORT` (inside the container) / `CONTENT_PORT` (host side of the mapping) |
+| content origin    | 3773 (opt-in)              | `XIONGBAO_CONTENT_HOST_PORT` (host side of the mapping); `XIONGBAO_CONTENT_PORT` is the port inside the container |
 | `agent-computer`  | 4100                       | `COMPUTER_PORT`   |
 | `agent-bot`       | 4200                       | `BOT_PORT`        |
 | `agent-langgraph` | 4201                       | `LANGGRAPH_PORT`  |
