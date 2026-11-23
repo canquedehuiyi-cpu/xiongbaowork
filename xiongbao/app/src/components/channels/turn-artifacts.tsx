@@ -3,6 +3,7 @@ import { IconDownload } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { TranscriptNote } from "@/components/channels/chat-transcript";
 import {
+  groupTurnArtifactEvents,
   mergedTurnArtifacts,
   type TrackedTurnArtifacts,
   type TurnArtifactGroup,
@@ -229,7 +230,7 @@ const ROW =
  * 链接带上这个对话和列出这个文件的那条事件所在的 run：服务器只放行「在哪里被宣布」的文件，同一轮被切成
  * 多次 run 时，各行的 run 不同。不依赖这台电脑在不在工作区上：事件是服务器在能取到文件的电脑上记的。
  */
-function EventArtifacts({
+export function EventArtifacts({
   groups,
   channelId,
   nameOf,
@@ -237,8 +238,8 @@ function EventArtifacts({
 }: {
   groups: readonly TurnArtifactGroup[];
   channelId: string;
-  nameOf: ((botId: string) => string | undefined) | undefined;
-  primaryBotId: string | undefined;
+  nameOf?: ((botId: string) => string | undefined) | undefined;
+  primaryBotId?: string | undefined;
 }) {
   return (
     <div
@@ -367,4 +368,26 @@ export function turnArtifactNotes({
       node: <TurnArtifacts botId={botId} paths={paths} />,
     },
   ];
+}
+
+/**
+ * 群聊末尾的「本轮产物」：员工回复行里记的事件（`groupTurnArtifactEvents`），频道是群的频道，
+ * 链接各带自己那条事件的 run，每位员工一组、写上名字。这一轮没有产物什么都不画。
+ */
+export function GroupTurnArtifacts({
+  messages,
+  channelId,
+  nameOf,
+}: {
+  messages: Parameters<typeof groupTurnArtifactEvents>[0];
+  channelId: string;
+  nameOf: (botId: string) => string | undefined;
+}) {
+  const groups = mergedTurnArtifacts(groupTurnArtifactEvents(messages)).filter(
+    (group) => group.files.length > 0,
+  );
+  if (groups.length === 0) return null;
+  return (
+    <EventArtifacts channelId={channelId} groups={groups} nameOf={nameOf} />
+  );
 }

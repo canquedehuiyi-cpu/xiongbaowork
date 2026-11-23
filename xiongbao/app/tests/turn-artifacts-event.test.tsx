@@ -16,7 +16,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { turnArtifactNotes } from "@/components/channels/turn-artifacts";
+import {
+  GroupTurnArtifacts,
+  turnArtifactNotes,
+} from "@/components/channels/turn-artifacts";
 import {
   createTurnArtifactTracker,
   type TurnArtifactTracker,
@@ -280,5 +283,72 @@ describe("没有事件时退回按写入事件列", () => {
         channelId: "c1",
       }),
     ).toEqual([]);
+  });
+});
+
+describe("群聊读回复行里记的事件", () => {
+  const person = { agentId: null };
+  const row = (
+    agentId: string,
+    turnArtifacts?: { runId: string; value: unknown }[],
+  ) => ({
+    agentId,
+    ...(turnArtifacts ? { turnArtifacts } : {}),
+  });
+  const entry = (runId: string, botId: string, files: File[], extra = {}) => ({
+    runId,
+    value: {
+      botId,
+      files,
+      scanned: 4,
+      scanTruncated: false,
+      omitted: 0,
+      ...extra,
+    },
+  });
+  const nameOf = (id: string) => ({ b1: "小熊", b2: "小猫" })[id];
+
+  test("a group reply with events gets download links carrying the group channel and its own run", () => {
+    render(
+      <GroupTurnArtifacts
+        channelId="g1"
+        nameOf={nameOf}
+        messages={[
+          person,
+          row("b1", [entry("r1", "b1", [file("out/报告 #1.pptx", 2048)])]),
+          row("b2", [
+            entry("r2", "b2", [file("b.md", 10)], {
+              omitted: 2,
+              scanTruncated: true,
+            }),
+          ]),
+        ]}
+      />,
+    );
+    const links = ui().getAllByRole("link");
+    expect(links.map((link) => link.getAttribute("href"))).toEqual([
+      "/api/computers/b1/files/download?path=out%2F%E6%8A%A5%E5%91%8A%20%231.pptx&channel=g1&run=r1",
+      "/api/computers/b2/files/download?path=b.md&channel=g1&run=r2",
+    ]);
+    expect(ui().getByText("小熊")).toBeTruthy();
+    expect(ui().getByText("小猫")).toBeTruthy();
+    expect(ui().getByText("这一轮还有 2 项没列出")).toBeTruthy();
+    expect(ui().getByText("工作区文件太多，这份清单可能没列全")).toBeTruthy();
+  });
+
+  test("only the latest turn is listed, and nothing is drawn without events", () => {
+    render(
+      <GroupTurnArtifacts
+        channelId="g1"
+        nameOf={nameOf}
+        messages={[
+          person,
+          row("b1", [entry("r1", "b1", [file("old.md", 10)])]),
+          person,
+          row("b1"),
+        ]}
+      />,
+    );
+    expect(ui().queryByRole("link")).toBeNull();
   });
 });

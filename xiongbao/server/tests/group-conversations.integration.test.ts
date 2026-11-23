@@ -12,6 +12,7 @@ import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { STEP_LIMIT_EVENT } from "../../shared/step-limit";
 import { REASONING_TEXT_LIMIT } from "../../shared/thinking";
+import { TURN_ARTIFACTS_EVENT } from "../../shared/turn-artifacts";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import {
@@ -872,6 +873,79 @@ describe("group conversations in PostgreSQL", () => {
         [ada, { steps: 80 }],
         [grace, null],
       ]);
+    }
+  });
+
+  test("这一轮留在电脑上的文件连同各自的 run 记在回复上，群里每个人读到的一样；说别的员工的不记", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const file = (path: string) => ({
+      path,
+      bytes: 2048,
+      modifiedMs: 5,
+      change: "new" as const,
+    });
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: {
+              botId: ada,
+              seat: "person:private",
+              files: [file("out/报告 #1.pptx")],
+              scanned: 4,
+              scanTruncated: true,
+              omitted: 3,
+            },
+          });
+          // 说的是别的员工、不是清单：都不记。
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: { botId: grace, files: [file("forged.md")] },
+          });
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: { botId: ada, files: "nope" },
+          });
+          return "做好了。";
+        },
+        [grace]: () => "g",
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    let runId = "";
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-turn-artifacts`,
+        text: "做个 ppt",
+      });
+      await drain(conversations);
+    });
+    for (const reader of [owner, teammate]) {
+      const seen = await as(reader, () =>
+        conversations.list(reader.id, channel.id),
+      );
+      const [, adaRow, graceRow] = seen.messages;
+      expect(graceRow?.turnArtifacts).toBeUndefined();
+      const items = adaRow?.turnArtifacts ?? [];
+      expect(items).toHaveLength(1);
+      runId = items[0]?.runId ?? "";
+      expect(runId).not.toBe("");
+      expect(items[0]?.value).toEqual({
+        botId: ada,
+        files: [file("out/报告 #1.pptx")],
+        scanned: 4,
+        scanTruncated: true,
+        omitted: 3,
+      });
     }
   });
 

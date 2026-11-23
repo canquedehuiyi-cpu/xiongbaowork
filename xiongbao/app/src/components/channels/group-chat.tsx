@@ -7,6 +7,7 @@ import {
   QuestionNotice,
   type WaitingQuestion,
 } from "@/components/approvals/question-notice";
+import { GroupTurnArtifacts } from "@/components/channels/turn-artifacts";
 import {
   BearMascot,
   WorkbenchEmpty,
@@ -289,6 +290,12 @@ export function GroupChat({ channelId }: { channelId: string }) {
               meId={me?.id}
             />
           ))}
+          {/* 这一轮员工留在电脑上的文件，各带下载链接。 */}
+          <GroupTurnArtifacts
+            channelId={channelId}
+            messages={messages}
+            nameOf={(botId) => names.get(botId)}
+          />
           {stepLimit && continuedFrom !== stepLimit.messageId ? (
             <StepLimitNote
               onContinue={() => continueAfterLimit(stepLimit)}

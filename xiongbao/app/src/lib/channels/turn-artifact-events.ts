@@ -13,12 +13,15 @@ import {
  * 它所在的 run：下载路由只认「列出这个路径的那条事件所在的 run」，链接必须带各自的 runId。
  */
 
+/** 清单要用的部分：`seat` 只有服务器自己用（下载路由从 run 的事件里还原），对话里不需要。 */
+export type TurnArtifactsBody = Omit<TurnArtifactsValue, "seat">;
+
 /** 记下的一条事件。 */
 export type TrackedTurnArtifacts = {
   runId: string;
   /** 事件到时最后一条消息的 id：用来判断它属于哪一轮。 */
   anchor: string | null;
-  value: TurnArtifactsValue;
+  value: TurnArtifactsBody;
 };
 
 /** 一位员工本轮合并后的清单。 */
@@ -50,7 +53,7 @@ function readFile(raw: unknown): TurnArtifact | null {
 /** 事件的内容：字段不全（没有员工、不是清单）为 null。 */
 export function readTurnArtifactsValue(
   value: unknown,
-): TurnArtifactsValue | null {
+): TurnArtifactsBody | null {
   if (typeof value !== "object" || value === null) return null;
   const body = value as Record<string, unknown>;
   if (typeof body.botId !== "string" || body.botId.trim() === "") return null;
@@ -61,7 +64,6 @@ export function readTurnArtifactsValue(
   });
   return {
     botId: body.botId,
-    seat: typeof body.seat === "string" ? body.seat : "",
     files,
     scanned: typeof body.scanned === "number" ? body.scanned : 0,
     scanTruncated: body.scanTruncated === true,
@@ -195,4 +197,27 @@ export function mergedTurnArtifacts(
     omitted: group.omitted,
     scanTruncated: group.scanTruncated,
   }));
+}
+
+/**
+ * 群转录里这一轮的事件：最后一条人发的消息之后，各条员工回复行 `turnArtifacts` 里记的。
+ * 服务器写进去的东西按结构再判一次，不认的整条丢掉。
+ */
+export function groupTurnArtifactEvents(
+  messages: ReadonlyArray<{
+    agentId: string | null;
+    turnArtifacts?: readonly { runId: string; value: unknown }[];
+  }>,
+): TrackedTurnArtifacts[] {
+  let turn = 0;
+  for (let index = 0; index < messages.length; index++)
+    if (messages[index]?.agentId === null) turn = index + 1;
+  const events: TrackedTurnArtifacts[] = [];
+  for (const message of messages.slice(turn))
+    for (const item of message.turnArtifacts ?? []) {
+      const value = readTurnArtifactsValue(item.value);
+      if (value && typeof item.runId === "string" && item.runId !== "")
+        events.push({ runId: item.runId, anchor: null, value });
+    }
+  return events;
 }
