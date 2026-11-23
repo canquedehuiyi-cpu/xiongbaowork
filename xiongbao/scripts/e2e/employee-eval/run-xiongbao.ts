@@ -20,7 +20,9 @@
  *
  * 两个套件：`EVAL_SUITE=tasks`（五道题，默认）和 `EVAL_SUITE=smoke`（能力冒烟，见 smoke.ts）。
  *
- * 两条执行路径（`EVAL_PATH=board|chat`，默认 board，行为不变）：
+ * 三条执行路径（`EVAL_PATH=board|chat|group`，默认 board，行为不变）：
+ *   group 同样的题走群聊：新建含这位员工和一位同伴的 shared 群聊（`POST /api/groups`），在群里点名这位员工发题，
+ *         读群聊记录里它那一行到不再排队 / 在跑；没做完在同一个群里点名发「继续」。结果写 `xiongbao-group.json`。
  *   chat  同样的题走单聊接口（期九·六）。服务器开着 `XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS=on`，每道题给同一个
  *         新员工开一段单聊（`POST /api/channels` 拿到对话），客户端用 HTTP 发运行请求
  *         （运行接口 `POST …/agent/:id/run`，`forwardedProps.computerTools="server"`，和页面发的一样），读事件流
@@ -36,7 +38,7 @@
  * 环境变量（除 config.ts 里的门槛和模型参数外）：
  *   E2E_DATABASE_URL, E2E_ROLE_WRITER_DATABASE_URL   与 wakerflow-real-model.ts 相同
  *   EVAL_SUITE        tasks | smoke
- *   EVAL_PATH         board | chat，默认 board
+ *   EVAL_PATH         board | chat | group，默认 board（group：新建含这位员工和一位同伴的 shared 群聊，点名发题，读群聊记录）
  *   EVAL_TASKS        all（五道对标题）、hard（加难题：compare、refactor、terminal、webform）或逗号分隔的题名
  *                     （repeat、repeat-pitfall 只能点名：同一道题在同一位员工身上连做两次，记 firstRun / secondRun；
  *                     repeat 是多步办公题，repeat-pitfall 是第一次有坑、学会后能跳过的账单导入题）；
@@ -87,6 +89,7 @@ import {
   openSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -107,6 +110,7 @@ import {
   afterRound,
   artifactDirName,
   conversationWith,
+  driveGroup,
   finishedCheck,
   limitStops,
   logFileName,
@@ -119,6 +123,7 @@ import {
   runnerLabel,
   transcriptChecks,
 } from "./chat-path";
+import { checkDelivApp, type DelivItem } from "./check-deliverables";
 import { CHECKERS } from "./checkers";
 import {
   evalGate,
@@ -129,6 +134,7 @@ import {
   taskMinutes,
   xiongbaoModel,
 } from "./config";
+import { deliveriesOf, runListing, serverChecks } from "./deliverables-server";
 import { pitfallPairSeeds } from "./gen-pitfall";
 import {
   canSudoAs,
@@ -160,8 +166,10 @@ import {
   type Check,
   check,
   copyTree,
+  type DELIVERABLES_SUITE,
   EDITS_CODE_TASKS,
   HARD_SUITE,
+  isDeliverableTask,
   isRepeatTask,
   listFiles,
   materialize,
@@ -1122,6 +1130,9 @@ type Work = {
       calls: ToolCall[];
       agentId: string;
       since: Date;
+      /** 交付题：员工交付了什么（服务器事件、`deliver_task` 的 items）和服务器侧判分的结果。 */
+      deliveries: DelivItem[];
+      serverSide: Check[];
     },
   ) => Promise<{ passed: boolean; checks: Check[]; skipped?: string }>;
   editsData: boolean;
@@ -1159,6 +1170,8 @@ type Driven = {
   checks?: Check[];
   /** 单聊路径：这道题的对话，运行号从这里读（含审批、续接带出来的运行）。 */
   threadId?: string;
+  /** 这道题开的对话（看板、单聊的频道，或群聊）：下载和打开内容源的范围用它。 */
+  channelId?: string;
   /** 看板路径：这一次派活时开的卡（含追问「继续」另开的），复盘行按卡认的依据（`RetroClaim`）。 */
   taskIds?: string[];
   /** 看板路径：派活那段对话的 id；只用来在超时时停掉这段对话里还在跑的轮（运行号读法不变，仍是派活时拿到的）。 */
@@ -1269,6 +1282,7 @@ async function driveBoard(
     nudges,
     timedOut,
     channelThreadId,
+    channelId,
     ...(error ? { error } : {}),
   };
 }
@@ -1565,9 +1579,51 @@ async function driveChat(
     nudges,
     timedOut,
     threadId,
+    channelId: channel.body.channel.id,
     rejoins,
     sent,
     ...(error ? { error } : {}),
+  };
+}
+
+/** 群聊里陪着的另一位员工：群聊至少要两位员工，同伴只在群里，不被点名，不做题。一次评测共用一位。 */
+let groupPeer = "";
+
+/** 群聊路径：新建含这位员工和同伴的 shared 群聊，点名发题、读到回复结束，没做完同样在群里点名发「继续」。 */
+async function driveGroupPath(
+  work: Work,
+  agentId: string,
+  deadline: number,
+  dir: string,
+): Promise<Driven> {
+  let error: string | undefined;
+  try {
+    if (!groupPeer) groupPeer = await newEmployee("群聊同伴", true);
+  } catch (thrown) {
+    error = thrown instanceof Error ? thrown.message : String(thrown);
+  }
+  if (!groupPeer)
+    return { runIds: [], nudges: 0, timedOut: false, error, sent: 0 };
+  const driven = await driveGroup({
+    origin: ORIGIN,
+    cookie: cookieHeader(),
+    agentId,
+    peerId: groupPeer,
+    prompt: work.prompt,
+    nudge: NUDGE,
+    deadline,
+    maxNudges: MAX_NUDGES,
+    outputsReady: () => work.outputsReady(dir),
+    newId: () => randomUUID(),
+  });
+  return {
+    runIds: [],
+    nudges: driven.nudges,
+    timedOut: driven.timedOut,
+    sent: driven.sent,
+    channelId: driven.channelId,
+    ...(driven.threadId ? { threadId: driven.threadId } : {}),
+    ...(driven.error ? { error: driven.error } : {}),
   };
 }
 
@@ -1637,9 +1693,81 @@ async function releasePairEmployees(pairKey: string) {
   }
 }
 
+/** 交付题：在服务器上请求下载、预览，网页和程序再打开、操作；返回判分项（下载范围是列出这些文件的那一轮）。 */
+async function judgeOnServer(
+  work: Work,
+  task: (typeof DELIVERABLES_SUITE)[number],
+  input: {
+    agentId: string;
+    channelId: string;
+    runIds: string[];
+    events: AgUiEvent[];
+    deliveries: DelivItem[];
+    copy: string;
+  },
+): Promise<Check[]> {
+  const files = OUTPUTS[task].map((file) => `${work.where}/${file}`);
+  const app = input.deliveries.find(
+    (item) => item.kind === "app" && typeof item.port === "number",
+  );
+  const appPort = app?.port;
+  const runId = runListing(
+    await Promise.all(
+      input.runIds.map(async (id) => ({
+        runId: id,
+        events: await eventsOf([id]),
+      })),
+    ),
+    {
+      files,
+      ...(task === "deliv-app" && appPort !== undefined ? { appPort } : {}),
+    },
+  );
+  if (!input.channelId || !runId)
+    return [
+      check(
+        "服务器侧判分",
+        false,
+        !input.channelId ? "没有对话 id" : "这道题没有运行",
+      ),
+    ];
+  try {
+    return await serverChecks(
+      {
+        base: ORIGIN,
+        cookie: cookieHeader(),
+        botId: input.agentId,
+        channelId: input.channelId,
+        runId,
+        task,
+        files,
+      },
+      {
+        localBytes: (file) => {
+          try {
+            return statSync(join(input.copy, file.slice(work.where.length + 1)))
+              .size;
+          } catch {
+            return undefined;
+          }
+        },
+        ...(appPort !== undefined ? { appPort } : {}),
+      },
+    );
+  } catch (thrown) {
+    return [
+      check(
+        "服务器侧判分",
+        false,
+        thrown instanceof Error ? thrown.message : String(thrown),
+      ),
+    ];
+  }
+}
+
 async function runWork(work: Work): Promise<EvalRecord> {
   console.log(
-    `\n== ${work.key}（${work.title}）${work.via === "chat" ? " [chat]" : ""}`,
+    `\n== ${work.key}（${work.title}）${work.via === "board" ? "" : ` [${work.via}]`}`,
   );
   // 这位员工上一次的轮要是还在服务器上跑，先等它结束（最多 60 秒），再不结束就停掉，免得它串进这一次。
   const earlierAgent = work.group ? agentOfGroup.get(work.group) : undefined;
@@ -1673,9 +1801,11 @@ async function runWork(work: Work): Promise<EvalRecord> {
   recorder?.drain();
   const dir = join(WORKSPACE, work.where);
   const driven =
-    work.via === "chat"
-      ? await driveChat(work, agentId, deadline, dir)
-      : await driveBoard(work, agentId, deadline, dir);
+    work.via === "group"
+      ? await driveGroupPath(work, agentId, deadline, dir)
+      : work.via === "chat"
+        ? await driveChat(work, agentId, deadline, dir)
+        : await driveBoard(work, agentId, deadline, dir);
   // 墙钟记到这一轮真的结束的那一刻：后面等运行记录落库、给事件留的 2 秒是评测脚本自己的收尾，不是员工花的时间
   // （Codex 那侧没有），算进去会把熊宝的墙钟平白多记几秒。
   const wallMs = Date.now() - started;
@@ -1712,6 +1842,26 @@ async function runWork(work: Work): Promise<EvalRecord> {
   const copy = join(OUT, artifactDirName(suite, work.via), work.key);
   if (isolation) openUp(dir);
   copyTree(dir, copy);
+  /*
+   * 交付题的服务器侧判分要在员工的目录还在电脑上、程序还在跑的时候做：下面把这次运行的目录移出工作区之后，
+   * 下载和预览就读不到了。
+   */
+  const early = await eventsOf(runIds);
+  const deliveries =
+    work.task && isDeliverableTask(work.task)
+      ? deliveriesOf(early, toolCallsOf(early))
+      : [];
+  const serverSide =
+    work.task && isDeliverableTask(work.task)
+      ? await judgeOnServer(work, work.task, {
+          agentId,
+          channelId: driven.channelId ?? "",
+          runIds,
+          events: early,
+          deliveries,
+          copy,
+        })
+      : [];
   // 网页表单题：判分读服务端收到的记录，在员工做完以后由评测脚本写进去。
   if (work.site) sealReceived(work.site, copy);
   // 产物已拷到 OUT，判分读的是拷出来的：把这次运行的目录移出员工的工作区，后面的运行（别的题、别的对）看不到它；
@@ -1774,6 +1924,8 @@ async function runWork(work: Work): Promise<EvalRecord> {
     calls,
     agentId,
     since,
+    deliveries,
+    serverSide,
   });
   const pathChecks = driven.checks ?? [];
   const checks = [...judged.checks, ...pathChecks];
@@ -2019,7 +2171,15 @@ function taskWork(
     editsData: EDITS_CODE_TASKS.includes(task),
     outputsReady: (dir) =>
       OUTPUTS[task].every((path) => existsSync(join(dir, path))),
-    judge: async (dir, { agentId, since }) => {
+    judge: async (dir, { agentId, since, deliveries, serverSide }) => {
+      // 交付题：本地判分（程序题带上交付清单）加服务器侧判分。
+      if (isDeliverableTask(task)) {
+        const local =
+          task === "deliv-app"
+            ? checkDelivApp(dir, deliveries)
+            : await CHECKERS[task](dir, seed);
+        return result(task, [...local.checks, ...serverSide]);
+      }
       const outcome = await CHECKERS[task](dir, seed);
       if (task !== "office") return outcome;
       // 看板路径：办公题多查一条，员工交付后卡片进入等验收，交付物里有工作区文件。单聊路径没有这张卡，标不适用。

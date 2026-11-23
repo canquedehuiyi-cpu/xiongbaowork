@@ -6,7 +6,10 @@
  * 两条路径的区别只在「怎么把话交给员工、怎么知道这一轮结束」：
  *  - board：`POST /api/channels/:id/dispatch`，服务器上的无人值守轮，看运行事件和看板卡；
  *  - chat：单聊的运行接口 `POST …/agent/:id/run`，带 `forwardedProps.computerTools = "server"`，电脑工具由服务器
- *    执行，客户端是 HTTP，读事件流到结束，不开浏览器。
+ *    执行，客户端是 HTTP，读事件流到结束，不开浏览器；
+ *  - group：新建一个含这位员工的 shared 群聊（`POST /api/groups`），在群里点名发题（`POST /api/groups/:id`），
+ *    读群聊记录里这位员工那一行直到它不再 queued / running；员工在群里的那一轮是服务器后台跑的，结果归一成和
+ *    chat 同一个结构（`GroupDriven`，对应 run-xiongbao 的 `Driven`）。
  * 拷产物、判分、算指标两条路径用同一套代码。
  */
 
@@ -23,7 +26,7 @@ import type { EvalPath, Suite } from "./records";
 // 路径和结果文件
 // ---------------------------------------------------------------------------------------------
 
-export const EVAL_PATHS: readonly EvalPath[] = ["board", "chat"];
+export const EVAL_PATHS: readonly EvalPath[] = ["board", "chat", "group"];
 
 /** `EVAL_PATH`：空是 board（原来的做法）；不认识的值直接报错，免得悄悄跑错路径。 */
 export function parseEvalPath(spec: string | undefined): EvalPath {
@@ -41,23 +44,25 @@ export function parseEvalPath(spec: string | undefined): EvalPath {
  */
 export function resultFileName(suite: Suite, path: EvalPath): string {
   const base = suite === "smoke" ? "smoke" : "xiongbao";
-  return path === "chat" ? `${base}-chat.json` : `${base}.json`;
+  return path === "board" ? `${base}.json` : `${base}-${path}.json`;
 }
 
 /** 产物拷到哪个子目录（结果目录下）。 */
 export function artifactDirName(suite: Suite, path: EvalPath): string {
   const base = suite === "smoke" ? "smoke" : "xiongbao";
-  return path === "chat" ? `${base}-chat` : base;
+  return path === "board" ? base : `${base}-${path}`;
 }
 
 /** 服务器和电脑的日志文件名，两条路径各一份。 */
 export function logFileName(kind: "server" | "computer", path: EvalPath) {
-  return path === "chat" ? `${kind}-chat.log` : `${kind}.log`;
+  return path === "board" ? `${kind}.log` : `${kind}-${path}.log`;
 }
 
 export const RUNNER_LABEL: Record<EvalPath, string> = {
   board: "看板派活（服务器上的无人值守轮，电脑工具由服务器执行）",
   chat: "单聊接口（forwardedProps.computerTools=server，电脑工具由服务器执行，HTTP 读事件流，不开浏览器）",
+  group:
+    "群聊（新建含这位员工的 shared 群聊，在群里点名发题，读群聊记录到这位员工的回复结束，电脑工具由服务器执行）",
 };
 
 /** 结果文件里写的执行路径说明；看板路径的冒烟里夹着单聊场景（disconnect / reconnect）时，把这一点写明。 */
@@ -178,11 +183,11 @@ export function officeCardCheck(
   path: EvalPath,
   board: { delivered: boolean; detail: string },
 ): Check {
-  if (path === "chat")
+  if (path !== "board")
     return check(
       `${OFFICE_CARD_CHECK}（不适用）`,
       true,
-      "不适用：单聊路径没有看板卡",
+      `不适用：${path === "group" ? "群聊" : "单聊"}路径没有看板卡`,
     );
   return check(
     `${OFFICE_CARD_CHECK}（看板路径）`,
@@ -331,3 +336,230 @@ export function replayChecks(input: {
 
 const sameList = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((item, index) => item === b[index]);
+
+// ---------------------------------------------------------------------------------------------
+// 群聊路径：HTTP 建群、发题、读群聊记录
+// ---------------------------------------------------------------------------------------------
+
+/** 群聊记录里一条消息（`GET /api/groups/:id` 的 `messages` 里这位员工那一行用到的几列）。 */
+export type GroupRow = {
+  id: string;
+  agentId?: string | null;
+  threadId?: string | null;
+  text?: string;
+  status?: string;
+  stepLimit?: unknown;
+  turnArtifacts?: { runId: string; value: { files: { path: string }[] } }[];
+};
+
+/** 一轮群聊里这位员工的回复，读到不再 queued / running 为止。 */
+export type GroupReply = {
+  id: string;
+  threadId: string | undefined;
+  status: string;
+  text: string;
+  limited: boolean;
+  /** 这一轮电脑上留下的文件所在的运行号（下载路由的范围用）。 */
+  artifactRuns: string[];
+};
+
+const groupFetch = async (
+  origin: string,
+  cookie: string,
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+) => {
+  const response = await fetch(`${origin}${path}`, {
+    method: init.method ?? "GET",
+    headers: {
+      origin,
+      ...(cookie ? { cookie } : {}),
+      ...(init.body === undefined
+        ? {}
+        : { "content-type": "application/json" }),
+    },
+    ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const text = await response.text();
+  let body: unknown = text;
+  try {
+    body = JSON.parse(text);
+  } catch {}
+  return { status: response.status, body };
+};
+
+/** 新建 shared 群聊（服务器要求至少两位员工），返回群聊 id。 */
+export async function createSharedGroup(
+  origin: string,
+  cookie: string,
+  agentIds: readonly string[],
+): Promise<string> {
+  const made = await groupFetch(origin, cookie, "/api/groups", {
+    method: "POST",
+    body: { agentIds },
+  });
+  const id = (made.body as { channel?: { id?: unknown } } | null)?.channel?.id;
+  if (made.status !== 201 || typeof id !== "string")
+    throw new Error(
+      `create group answered ${made.status}: ${JSON.stringify(made.body).slice(0, 300)}`,
+    );
+  return id;
+}
+
+/** 在群里点名一位员工发一句话（只有它答）。 */
+export async function sendGroupMessage(
+  origin: string,
+  cookie: string,
+  channelId: string,
+  message: { id: string; text: string; agentId: string },
+): Promise<void> {
+  const sent = await groupFetch(origin, cookie, `/api/groups/${channelId}`, {
+    method: "POST",
+    body: message,
+  });
+  if (sent.status !== 202)
+    throw new Error(
+      `send to group answered ${sent.status}: ${JSON.stringify(sent.body).slice(0, 300)}`,
+    );
+}
+
+/** 读群聊记录里这句话下面、这位员工的那一行。还没有（没排上）返回 undefined。 */
+export async function readGroupRow(
+  origin: string,
+  cookie: string,
+  channelId: string,
+  messageId: string,
+  agentId: string,
+): Promise<GroupRow | undefined> {
+  const listed = await groupFetch(origin, cookie, `/api/groups/${channelId}`);
+  if (listed.status !== 200)
+    throw new Error(
+      `group transcript answered ${listed.status}: ${JSON.stringify(listed.body).slice(0, 300)}`,
+    );
+  const messages =
+    (listed.body as { messages?: GroupRow[] } | null)?.messages ?? [];
+  // 回复行的 id 是 `<这句话的 id>:<员工 id>`（服务器按这个规则建行）。
+  return messages.find((row) => row.id === `${messageId}:${agentId}`);
+}
+
+/**
+ * 读群聊里这位员工的回复到它不再排队 / 在跑：`completed`、`failed`、`waiting`（等人）都算这一轮结束。
+ * 读到墙钟上限还没结束返回 undefined（服务器上的这一轮不受影响）。
+ */
+export async function readGroupReply(input: {
+  origin: string;
+  cookie: string;
+  channelId: string;
+  messageId: string;
+  agentId: string;
+  deadline: number;
+  pollMs?: number;
+}): Promise<GroupReply | undefined> {
+  const pollMs = input.pollMs ?? 1000;
+  for (;;) {
+    const row = await readGroupRow(
+      input.origin,
+      input.cookie,
+      input.channelId,
+      input.messageId,
+      input.agentId,
+    );
+    if (row && row.status !== "queued" && row.status !== "running")
+      return {
+        id: row.id,
+        threadId: row.threadId ?? undefined,
+        status: row.status ?? "completed",
+        text: row.text ?? "",
+        limited: row.stepLimit !== undefined && row.stepLimit !== null,
+        artifactRuns: [
+          ...new Set((row.turnArtifacts ?? []).map((item) => item.runId)),
+        ],
+      };
+    if (Date.now() + pollMs > input.deadline) return undefined;
+    await Bun.sleep(pollMs);
+  }
+}
+
+/** 群聊路径一道题的结果：字段和 `run-xiongbao.ts` 的 `Driven` 对齐，那边直接并进同一套判分和记录。 */
+export type GroupDriven = {
+  /** 这位员工在群里的对话 id：运行号从这里读（同单聊路径）。 */
+  threadId?: string;
+  channelId: string;
+  nudges: number;
+  timedOut: boolean;
+  error?: string;
+  /** 发出去的话数（每句一轮）。 */
+  sent: number;
+  /** 各轮里这位员工的回复，按先后。 */
+  replies: GroupReply[];
+};
+
+/**
+ * 群聊路径：新建含这位员工和另一位同伴的 shared 群聊（群至少两位员工），点名这位员工发题，读到它的回复结束；
+ * 产物没齐、没出错、没触顶之外的情况在同一个群里点名发「继续」，规则同单聊（`afterRound`）。
+ */
+export async function driveGroup(input: {
+  origin: string;
+  cookie: string;
+  agentId: string;
+  peerId: string;
+  prompt: string;
+  nudge: string;
+  deadline: number;
+  maxNudges: number;
+  outputsReady: () => boolean;
+  newId: () => string;
+  pollMs?: number;
+}): Promise<GroupDriven> {
+  const out: GroupDriven = {
+    channelId: "",
+    nudges: 0,
+    timedOut: false,
+    sent: 0,
+    replies: [],
+  };
+  try {
+    out.channelId = await createSharedGroup(input.origin, input.cookie, [
+      input.agentId,
+      input.peerId,
+    ]);
+    for (let round = 0; round <= input.maxNudges; round += 1) {
+      const messageId = input.newId();
+      await sendGroupMessage(input.origin, input.cookie, out.channelId, {
+        id: messageId,
+        text: round === 0 ? input.prompt : input.nudge,
+        agentId: input.agentId,
+      });
+      out.sent += 1;
+      if (round > 0) out.nudges += 1;
+      const reply = await readGroupReply({
+        origin: input.origin,
+        cookie: input.cookie,
+        channelId: out.channelId,
+        messageId,
+        agentId: input.agentId,
+        deadline: input.deadline,
+        ...(input.pollMs === undefined ? {} : { pollMs: input.pollMs }),
+      });
+      if (!reply) {
+        out.timedOut = true;
+        break;
+      }
+      out.replies.push(reply);
+      if (reply.threadId) out.threadId = reply.threadId;
+      const next = afterRound({
+        state: { failed: reply.status === "failed", limited: reply.limited },
+        outputsReady: input.outputsReady(),
+        msLeft: input.deadline - Date.now(),
+      });
+      if (next.action !== "nudge") {
+        out.timedOut = next.timedOut;
+        break;
+      }
+    }
+  } catch (thrown) {
+    out.error = thrown instanceof Error ? thrown.message : String(thrown);
+  }
+  return out;
+}

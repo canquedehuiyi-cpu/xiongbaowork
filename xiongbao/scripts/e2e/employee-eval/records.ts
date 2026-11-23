@@ -10,7 +10,7 @@ import { addWallSplits, type WallSplit } from "./wall-split";
 export type Side = "xiongbao" | "codex";
 export type Suite = "tasks" | "smoke";
 /** 熊宝侧的执行路径：看板派活，或单聊接口（`EVAL_PATH`）。没写这个字段的旧结果文件是看板路径。 */
-export type EvalPath = "board" | "chat";
+export type EvalPath = "board" | "chat" | "group";
 
 /**
  * 一次运行（含它之后等复盘的那一段）里这位员工学到了什么：只有熊宝侧的重复任务记。
