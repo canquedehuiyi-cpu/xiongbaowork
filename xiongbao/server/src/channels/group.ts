@@ -68,12 +68,12 @@ import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
 import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
+import { type Delivery, firstSentenceOf } from "../tasks/delivery";
+import { DELIVERY_EVENTS } from "../tasks/delivery-events";
 import {
   type AutoDeliveryReader,
   autoDeliverable,
 } from "../tasks/auto-delivery";
-import { type Delivery, firstSentenceOf } from "../tasks/delivery";
-import { DELIVERY_EVENTS } from "../tasks/delivery-events";
 import type { TaskProjector } from "../tasks/projector";
 import {
   currentTenant,
@@ -2238,7 +2238,10 @@ export function createGroupConversations(deps: {
           ...chainOf(turn),
           ...withMarks(shownMarks),
           ...withStepLimit(shownLimit),
-          ...withTurnArtifacts(shownArtifacts),
+          // 回复还扣着：文件名和 run 也一起扣着（不在共享的部分），主人放行时再放出来。
+          ...(shownArtifacts.length > 0
+            ? { heldTurnArtifacts: [...shownArtifacts] }
+            : {}),
           ...withPlan(shownPlan),
           ...withReasoning(shownReasoning),
         });
@@ -2256,7 +2259,6 @@ export function createGroupConversations(deps: {
         ...(compacted ? { compaction: compacted } : {}),
         ...withMarks(shownMarks),
         ...withStepLimit(shownLimit),
-        ...withTurnArtifacts(shownArtifacts),
         ...withPlan(shownPlan),
         ...withReasoning(shownReasoning),
       };
@@ -2265,7 +2267,11 @@ export function createGroupConversations(deps: {
         await closeCard(cardTurn, agentId, runId, true, round(gate.message));
         return;
       }
-      await deps.store.finish(id, result.replyText, "completed", compaction);
+      // 回复放行了，这一轮的文件才跟着放出来。
+      await deps.store.finish(id, result.replyText, "completed", {
+        ...compaction,
+        ...withTurnArtifacts(shownArtifacts),
+      });
       /*
        * An external employee's turn answers at once that it started and goes on on its owner's
        * computer (agents/acp/agent.ts `createAcpGroupTurn`): its card stays open for the run that
@@ -2696,7 +2702,16 @@ export function createGroupConversations(deps: {
           );
           return { replyText: "" };
         }
-        const { privateShare: _held, ...kept } = row.details;
+        const {
+          privateShare: _held,
+          heldTurnArtifacts,
+          ...rest
+        } = row.details;
+        // 主人放行了回复：扣着的文件清单随它一起放出来。
+        const kept = {
+          ...rest,
+          ...withTurnArtifacts(storedTurnArtifacts(heldTurnArtifacts)),
+        };
         await deps.store.finish(row.id, held.text, "completed", kept);
         await closeCard(
           { ownerUserId: row.ownerUserId, channelId: row.channelId },
@@ -2725,12 +2740,9 @@ export function createGroupConversations(deps: {
       // 恢复后这一段又跑满了步数：和标记一样记在这一行上。
       let resumedLimit: GroupStepLimit | null = null;
       /*
-       * 等待前记下的产物清单，原样带着。恢复后的那一段不再记：续跑的 run 用的是它自己新取的 run id
-       * （`continuationRunner` 不传），`onCustom` 不告诉我们它是什么，而下载链接要的正是那个 id。
+       * 恢复后的这一段不记产物清单：续跑的 run 用的是它自己新取的 run id（`continuationRunner` 不传），
+       * `onCustom` 不告诉我们它是什么，而下载链接要的正是那个 id。
        */
-      const resumedArtifacts: GroupTurnArtifacts[] = storedTurnArtifacts(
-        row.details.turnArtifacts,
-      );
       // 等待前记下的计划；恢复后又更新了就换上新的。
       let resumedPlan: PlanItem[] | null =
         readPlan({ items: row.details.plan }) ?? null;
@@ -2740,7 +2752,6 @@ export function createGroupConversations(deps: {
       const allMarks = () => ({
         ...withMarks([...earlier, ...resumedMarks]),
         ...withStepLimit(resumedLimit),
-        ...withTurnArtifacts(resumedArtifacts),
         ...withPlan(resumedPlan),
         ...withReasoning(
           resumedThought.length > 0

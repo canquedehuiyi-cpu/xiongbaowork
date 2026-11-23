@@ -138,7 +138,11 @@ function rowsOf(
   for (const path of paths) {
     const here = listed.present.has(path);
     // 去过这个目录、读完了、里面没有它：它被删了，或者从来就不在工作区里。
-    if (!here && listed.read.has(artifactFolderOf(path)) && !listed.truncated)
+    if (
+      !here &&
+      listed.read.has(artifactFolderOf(path)) &&
+      !listed.truncated
+    )
       continue;
     const bytes = listed.present.get(path);
     rows.push({ path, ...(here && bytes !== undefined ? { bytes } : {}) });
@@ -197,9 +201,7 @@ function TurnArtifacts({
           >
             <span className="min-w-0 truncate">{row.path}</span>
             {row.bytes === undefined ? null : (
-              <span className="shrink-0 opacity-70">
-                {formatBytes(row.bytes)}
-              </span>
+              <span className="shrink-0 opacity-70">{formatBytes(row.bytes)}</span>
             )}
           </a>
         );

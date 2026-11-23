@@ -11,11 +11,25 @@ import {
   expect,
   test,
 } from "bun:test";
-import type { Message } from "@ag-ui/core";
+import {
+  type BaseEvent,
+  EventType,
+  type Message,
+  type RunAgentInput,
+} from "@ag-ui/core";
+import { AbstractAgent } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  cleanup,
+  render,
+  renderHook,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import type { ReactNode } from "react";
+import { Observable } from "rxjs";
 import {
   GroupTurnArtifacts,
   turnArtifactNotes,
@@ -23,7 +37,9 @@ import {
 import {
   createTurnArtifactTracker,
   type TurnArtifactTracker,
+  turnArtifactEvents,
 } from "@/lib/channels/turn-artifact-events";
+import { useTurnArtifactEvents } from "@/lib/channels/use-turn-artifact-events";
 import { queryClient } from "@/query-client";
 import { TURN_ARTIFACTS_EVENT } from "../../shared/turn-artifacts";
 import { settleReactWork } from "./settle-react-work";
@@ -180,6 +196,37 @@ describe("本轮产物读服务器的事件", () => {
     render(<Notes tracker={tracker} />);
     expect(ui().queryByText(/没列出/)).toBeNull();
     expect(ui().queryByText(/没列全/)).toBeNull();
+  });
+
+  test.each([
+    ["what?.md", "what%3F.md"],
+    ["100%.md", "100%25.md"],
+    ["a&b=c.md", "a%26b%3Dc.md"],
+  ])("%s is asked for as %s, verbatim", (path, encoded) => {
+    const tracker = createTurnArtifactTracker();
+    emit(tracker, "r1", { ...base, botId: "b1", files: [file(path, 10)] });
+    render(<Notes tracker={tracker} />);
+    expect(ui().getByRole("link").getAttribute("href")).toBe(
+      `/api/computers/b1/files/download?path=${encoded}&channel=c1&run=r1`,
+    );
+  });
+
+  test("two hundred files with a cut-off scan render, with both sentences", () => {
+    const tracker = createTurnArtifactTracker();
+    const files = Array.from({ length: 200 }, (_, index) =>
+      file(`out/f${index}.txt`, 1000 + index),
+    );
+    emit(tracker, "r1", {
+      ...base,
+      botId: "b1",
+      files,
+      scanTruncated: true,
+      omitted: 37,
+    });
+    render(<Notes tracker={tracker} />);
+    expect(ui().getAllByRole("link")).toHaveLength(200);
+    expect(ui().getByText("这一轮还有 37 项没列出")).toBeTruthy();
+    expect(ui().getByText("工作区文件太多，这份清单可能没列全")).toBeTruthy();
   });
 
   test("each coworker in a conversation gets its own group, named", () => {
@@ -350,5 +397,143 @@ describe("群聊读回复行里记的事件", () => {
       />,
     );
     expect(ui().queryByRole("link")).toBeNull();
+  });
+});
+
+/**
+ * 刷新页面：对话先连上回放（服务器按存库顺序放 RUN_STARTED 带着人那句话、文字、事件、RUN_FINISHED），历史另走
+ * 一次读取、再合并进本地消息。两种先后都得画出清单；旧轮的不画到新轮；同一个代理对象换线程不串。
+ */
+class Replaying extends AbstractAgent {
+  constructor(
+    private readonly rounds: { runId: string; ask: string; files: File[] }[],
+  ) {
+    super({ agentId: "coworker" });
+  }
+  run(): Observable<BaseEvent> {
+    return new Observable<BaseEvent>(() => {});
+  }
+  override connect(): Observable<BaseEvent> {
+    return new Observable<BaseEvent>((stream) => {
+      const next = (event: Record<string, unknown>) =>
+        stream.next(event as unknown as BaseEvent);
+      for (const round of this.rounds) {
+        next({
+          type: EventType.RUN_STARTED,
+          threadId: "t1",
+          runId: round.runId,
+          input: {
+            runId: round.runId,
+            threadId: "t1",
+            state: {},
+            tools: [],
+            context: [],
+            forwardedProps: {},
+            messages: [
+              { id: `ask-${round.runId}`, role: "user", content: round.ask },
+            ],
+          } as unknown as RunAgentInput,
+        });
+        next({
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: `said-${round.runId}`,
+          role: "assistant",
+        });
+        next({
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          messageId: `said-${round.runId}`,
+          delta: "好了",
+        });
+        next({
+          type: EventType.TEXT_MESSAGE_END,
+          messageId: `said-${round.runId}`,
+        });
+        next({
+          type: EventType.CUSTOM,
+          name: TURN_ARTIFACTS_EVENT,
+          value: { ...base, botId: "b1", files: round.files },
+        });
+        next({
+          type: EventType.RUN_FINISHED,
+          threadId: "t1",
+          runId: round.runId,
+        });
+      }
+      stream.complete();
+    });
+  }
+}
+
+const stored = (runId: string): Message[] => [
+  { id: `ask-${runId}`, role: "user", content: "x" },
+  { id: `said-${runId}`, role: "assistant", content: "好了" },
+];
+
+describe("刷新后回放历史，清单仍在", () => {
+  const rounds = [
+    { runId: "r1", ask: "旧的", files: [file("old.md", 10)] },
+    { runId: "r2", ask: "新的", files: [file("new.md", 10)] },
+  ];
+  const listed = (events: ReturnType<typeof turnArtifactEvents>) =>
+    events.flatMap((event) =>
+      event.value.files.map((f) => `${f.path}@${event.runId}`),
+    );
+
+  test("replay first, then the stored history is merged in", async () => {
+    const agent = new Replaying(rounds);
+    const { result } = renderHook(() => useTurnArtifactEvents(agent, "t1"));
+    await act(async () => {
+      await agent.connectAgent({});
+    });
+    // 历史读回来再合并：存库的行（同 id）与本地行并在一起，另有本地没有的旧行。
+    await act(async () => {
+      agent.setMessages([
+        { id: "older", role: "user", content: "更早" },
+        ...stored("r1"),
+        ...stored("r2"),
+      ]);
+    });
+    expect(listed(turnArtifactEvents(result.current, agent.messages))).toEqual([
+      "new.md@r2",
+    ]);
+  });
+
+  test("stored history first, then the replay arrives", async () => {
+    const agent = new Replaying(rounds);
+    agent.setMessages([...stored("r1"), ...stored("r2")]);
+    const { result } = renderHook(() => useTurnArtifactEvents(agent, "t1"));
+    await act(async () => {
+      await agent.connectAgent({});
+    });
+    expect(listed(turnArtifactEvents(result.current, agent.messages))).toEqual([
+      "new.md@r2",
+    ]);
+  });
+
+  test("a new user message hides the earlier turn's list", async () => {
+    const agent = new Replaying(rounds);
+    const { result } = renderHook(() => useTurnArtifactEvents(agent, "t1"));
+    await act(async () => {
+      await agent.connectAgent({});
+    });
+    const asked: Message[] = [
+      ...agent.messages,
+      { id: "u3", role: "user", content: "再来一个" },
+    ];
+    expect(turnArtifactEvents(result.current, asked)).toEqual([]);
+  });
+
+  test("the same agent object moving to another thread starts a clean list", async () => {
+    const agent = new Replaying(rounds);
+    const { result, rerender } = renderHook(
+      ({ thread }) => useTurnArtifactEvents(agent, thread),
+      { initialProps: { thread: "t1" } },
+    );
+    await act(async () => {
+      await agent.connectAgent({});
+    });
+    expect(result.current.length).toBeGreaterThan(0);
+    rerender({ thread: "t2" });
+    expect(result.current).toEqual([]);
   });
 });

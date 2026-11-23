@@ -100,10 +100,7 @@ import {
   createStepLimitTracker,
   type StepLimitTracker,
 } from "@/lib/channels/step-limit";
-import {
-  createTurnArtifactTracker,
-  type TurnArtifactTracker,
-} from "@/lib/channels/turn-artifact-events";
+import { useTurnArtifactEvents } from "@/lib/channels/use-turn-artifact-events";
 import {
   createTurnStopTracker,
   type TurnStopTracker,
@@ -661,27 +658,9 @@ export function ChannelChat({
   );
   /*
    * 本轮产物事件（服务器每次 run 收尾前插的 `computer.turn_artifacts`）：和上面一样从事件流里记，订阅要在
-   * 加入线程之前，重放的历史才听得到。
+   * 加入线程之前，重放的历史才听得到；换线程重新记。
    */
-  const artifactTrackerRef = useRef<{
-    agent: unknown;
-    tracker: TurnArtifactTracker;
-  } | null>(null);
-  if (artifactTrackerRef.current?.agent !== agent)
-    artifactTrackerRef.current = {
-      agent,
-      tracker: createTurnArtifactTracker(),
-    };
-  const artifactTracker = artifactTrackerRef.current.tracker;
-  useEffect(() => {
-    const subscription = agent.subscribe?.(artifactTracker.subscriber);
-    return () => subscription?.unsubscribe();
-  }, [agent, artifactTracker]);
-  const turnArtifactEvents = useSyncExternalStore(
-    artifactTracker.listen,
-    artifactTracker.events,
-    artifactTracker.events,
-  );
+  const turnArtifactEvents = useTurnArtifactEvents(agent, channel.threadId);
   /*
    * 这一轮还有几轮问答没落地（WP-3.2 S1a 的按轮累计）。`say()` 在自增/自减 `turnsRef` 的地方同步这里；
    * 单独一个 ref 是因为阶段计时器建在 `turnsRef` 声明之前，闭包不能引用后声明的绑定。

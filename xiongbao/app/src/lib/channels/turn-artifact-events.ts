@@ -77,7 +77,9 @@ export function readTurnArtifactsValue(
 }
 
 type Subscriber = {
-  onRunStartedEvent?: (params: { event: { runId: string } }) => void;
+  onRunStartedEvent?: (params: {
+    event: { runId: string; input?: { messages?: ReadonlyArray<{ role?: string }> } };
+  }) => void;
   onCustomEvent?: (params: {
     event: { name: string; value: unknown };
     messages: ReadonlyArray<{ id: string }>;
@@ -115,6 +117,15 @@ export function createTurnArtifactTracker(): TurnArtifactTracker {
     subscriber: {
       onRunStartedEvent: ({ event }) => {
         runId = event.runId;
+        /*
+         * 这一次 run 带来了人新发的话：新的一轮开始，旧轮的事件不会再画，不必留着（重放历史时每一轮都从
+         * 这里开始，所以只剩最近一轮；后台续跑的 run 不带新话，同一轮的事件接着留）。
+         */
+        if (event.input?.messages?.some((message) => message.role === "user")) {
+          if (events.length === 0) return;
+          events = [];
+          for (const listener of listeners) listener();
+        }
       },
       onCustomEvent: ({ event, messages }) => {
         if (event.name !== TURN_ARTIFACTS_EVENT) return;
