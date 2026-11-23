@@ -293,6 +293,8 @@ export type ComputerGatewayOptions = {
   resolveDevice?: (
     botId: string,
   ) => Promise<{ tenantId: string; deviceId: string } | null>;
+  /** 一次记快照最多占多久（毫秒）；超出的记为失败。默认 {@link TURN_MARK_FLUSH_MS}，测试里调小。 */
+  turnMarkFlushMs?: number;
   /**
    * The local apps a machine reported on its heartbeat, `{ref, name}` and nothing else (device MCP
    * bridge §3.4). Asked for the machine `resolveDevice` answered; absent means no Bot here can use a
@@ -804,6 +806,8 @@ export interface ComputerGateway {
 /** 懒快照每个座位、全部座位最多记着多少个。 */
 const TURN_MARKS_PER_SEAT = 50;
 const TURN_MARKS_TOTAL = 1000;
+/** 一次记快照（含每个 mark 自己的请求）最多占多久，电脑挂住时不拖住员工的动作。 */
+const TURN_MARK_FLUSH_MS = 10_000;
 
 export function createComputerGateway(
   options: ComputerGatewayOptions,
@@ -1061,21 +1065,32 @@ export function createComputerGateway(
       .filter(([, state]) => state === "pending")
       .map(([markId]) => markId);
     if (pending.length === 0) return;
+    const budgetMs = options.turnMarkFlushMs ?? TURN_MARK_FLUSH_MS;
     const run = (async () => {
+      const cutoff = AbortSignal.timeout(budgetMs);
+      const expired = new Promise<"expired">((resolve) =>
+        cutoff.addEventListener("abort", () => resolve("expired"), {
+          once: true,
+        }),
+      );
       for (const markId of pending) {
-        try {
-          await post<unknown>(
-            seat,
-            "/files/mark",
-            { mark: markId },
-            undefined,
-            undefined,
-            address,
-          );
-          noteTurnMark(seat, markId, "recorded");
-        } catch {
+        if (cutoff.aborted) {
           noteTurnMark(seat, markId, "failed");
+          continue;
         }
+        const sent = post<unknown>(
+          seat,
+          "/files/mark",
+          { mark: markId },
+          cutoff,
+          budgetMs,
+          address,
+        ).then(
+          () => "ok" as const,
+          () => "failed" as const,
+        );
+        const outcome = await Promise.race([sent, expired]);
+        noteTurnMark(seat, markId, outcome === "ok" ? "recorded" : "failed");
       }
     })();
     flushing.set(key, run);
@@ -3317,8 +3332,8 @@ export function createComputerGateway(
     ) {
       if (options.resolveDevice) return null;
       const state = turnMarks.get(computerKeyText(seat.key))?.get(markId);
-      // 这一轮没动过电脑，或快照没记成：没有可比的，也不为它唤醒电脑。
-      if (state === "pending" || state === "failed") {
+      // 这一轮没动过电脑、快照没记成、或登记被淘汰：没有可比的，也不为它唤醒电脑。
+      if (state !== "recorded") {
         dropTurnMark(seat, markId);
         return null;
       }

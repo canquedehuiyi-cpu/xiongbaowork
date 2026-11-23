@@ -2348,6 +2348,37 @@ describe("markTurn and turnChanges (lazy snapshot)", () => {
     expect(paths(requests).filter((p) => p === "/files/mark")).toHaveLength(50);
   });
 
+  test("a mark that hangs cannot hold the computer past the flush budget", async () => {
+    const { provider, fetchImpl } = fakeComputer({
+      routes: {
+        "/files/mark": () => new Promise<Response>(() => {}),
+        "/files/changes": () => Response.json(changesBody),
+      },
+    });
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl,
+      auditStore: fakeAudit().store,
+      policy: () => PERMISSIVE,
+      turnMarkFlushMs: 40,
+    });
+    await gateway.markTurn(botSeat("bot-1"), "a");
+    await gateway.markTurn(botSeat("bot-1"), "b");
+    const started = Date.now();
+    await gateway.snapshot(botSeat("bot-1"));
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(await gateway.turnChanges(botSeat("bot-1"), "a")).toBeNull();
+    expect(await gateway.turnChanges(botSeat("bot-1"), "b")).toBeNull();
+  });
+
+  test("an unknown mark answers null without asking the computer", async () => {
+    const { gateway, requests } = await gatewayWith(PERMISSIVE, {
+      routes: { "/files/changes": () => Response.json(changesBody) },
+    });
+    expect(await gateway.turnChanges(botSeat("bot-1"), "never")).toBeNull();
+    expect(paths(requests)).toEqual([]);
+  });
+
   test("a paired personal computer: nothing is asked", async () => {
     const { provider } = fakeComputer();
     const requests: string[] = [];
