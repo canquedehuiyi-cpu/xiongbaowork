@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import {
   type BaseEvent,
   EventType,
@@ -7,10 +7,15 @@ import {
 } from "@ag-ui/client";
 import { Observable, of } from "rxjs";
 import { TURN_ARTIFACTS_EVENT } from "../../shared/turn-artifacts";
-import { HeadlessToolsMiddleware } from "../../toolkit/src/headless-tools";
+import {
+  HeadlessToolSuspension,
+  HeadlessToolsMiddleware,
+} from "../../toolkit/src/headless-tools";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
 import {
+  CARRIED_TTL_MS,
   configureTurnArtifacts,
+  continuesTurn,
   withConfiguredTurnArtifacts,
   withSideEventsThenArtifacts,
 } from "../src/computer/turn-artifacts";
@@ -178,7 +183,7 @@ class ObservedAgent extends HttpAgent {
       botId: BOT,
       personId: PERSON,
       threadId: input.threadId,
-      continues: (input.messages.at(-1)?.role ?? "user") !== "user",
+      continues: continuesTurn(input.messages),
     });
   }
 }
@@ -355,5 +360,260 @@ describe("an unattended turn (a card, a group's turn, a routine)", () => {
     await turn();
     expect(listed(persisted)).toEqual([]);
     expect(computer.asked).toEqual([]);
+  });
+});
+
+/** A model that asks for the computer, then for a tool only the page can run, then answers. */
+function modelAskingThenPage(options: { observed: boolean }) {
+  const make = (init: ConstructorParameters<typeof HttpAgent>[0]) =>
+    options.observed ? new ObservedAgent(init) : new HttpAgent(init);
+  return make({
+    agentId: BOT,
+    url: "https://agent.example/ag-ui",
+    fetch: async (_url, init) => {
+      const input = JSON.parse(String(init?.body)) as RunAgentInput;
+      const answered = input.messages.filter((m) => m.role === "tool").length;
+      const body =
+        answered === 0
+          ? askFor("c1")
+          : answered === 1
+            ? [
+                {
+                  type: EventType.TOOL_CALL_START,
+                  toolCallId: "p1",
+                  toolCallName: "pick_option",
+                  parentMessageId: "message-p1",
+                } as BaseEvent,
+                {
+                  type: EventType.TOOL_CALL_END,
+                  toolCallId: "p1",
+                } as BaseEvent,
+              ]
+            : say("done");
+      return new Response(
+        run(input.runId, body)
+          .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+          .join(""),
+        { headers: { "content-type": "text/event-stream" } },
+      );
+    },
+  });
+}
+
+const firstInput: RunAgentInput = {
+  threadId: "thread-1",
+  runId: "run-1",
+  state: {},
+  messages: [{ id: "u", role: "user", content: "go" }],
+  tools: [
+    {
+      name: "pick_option",
+      description: "The page asks the person.",
+      parameters: { type: "object", properties: {} },
+    },
+  ],
+  context: [],
+  forwardedProps: {},
+};
+
+describe("a turn the server runs that also calls a tool only the page runs", () => {
+  /** The stream of one run of such a chat, as `chat-server-tools.ts` observes it. */
+  const serverRun = (
+    input: RunAgentInput,
+    tool: ReturnType<typeof computerTool>,
+  ) =>
+    collect(
+      withConfiguredTurnArtifacts(
+        new HeadlessToolsMiddleware([tool]).run(
+          input,
+          modelAskingThenPage({ observed: true }),
+        ),
+        {
+          runId: input.runId,
+          botId: BOT,
+          personId: PERSON,
+          wholeTurn: true,
+          threadId: input.threadId,
+          continues: continuesTurn(input.messages),
+        },
+      ),
+    );
+
+  test("the run that ends the turn lists the files an earlier run's server-run tool left, and the earlier run lists none", async () => {
+    const computer = wired();
+    const tool = {
+      ...computerTool(computer, "unused"),
+      execute: async () => {
+        await computer.run(
+          await computer.seatOf(BOT, PERSON),
+          "write out/report.md x",
+        );
+        return { ok: true };
+      },
+    };
+    const first = await serverRun(firstInput, tool);
+    expect(listed(first)).toEqual([]);
+    const second = await serverRun(
+      {
+        ...firstInput,
+        runId: "run-2",
+        messages: [
+          ...firstInput.messages,
+          {
+            id: "a1",
+            role: "assistant",
+            toolCalls: [
+              {
+                id: "c1",
+                type: "function",
+                function: { name: "computer_run_command", arguments: "{}" },
+              },
+              {
+                id: "p1",
+                type: "function",
+                function: { name: "pick_option", arguments: "{}" },
+              },
+            ],
+          },
+          { id: "t1", role: "tool", toolCallId: "c1", content: "{}" },
+          { id: "t2", role: "tool", toolCallId: "p1", content: '"A"' },
+        ],
+      },
+      tool,
+    );
+    expect(paths(second)).toEqual(["out/report.md"]);
+    expect(listed(second)).toHaveLength(1);
+  });
+
+  test("a turn that stops to wait for an approval lists what it did before it stopped, on that run", async () => {
+    const computer = wired();
+    const waiting = {
+      ...computerTool(computer, "unused"),
+      execute: async () => {
+        await computer.run(
+          await computer.seatOf(BOT, PERSON),
+          "write out/before-approval.md x",
+        );
+        throw new HeadlessToolSuspension("Waiting for approval.", {
+          kind: "approval",
+          requestId: "approval-1",
+        });
+      },
+    };
+    const out = await serverRun(firstInput, waiting);
+    expect(paths(out)).toEqual(["out/before-approval.md"]);
+    expect(out.at(-1)?.type).toBe(EventType.RUN_FINISHED);
+  });
+});
+
+describe("what a turn the page never finished leaves behind", () => {
+  test("a new turn forgets the earlier one's snapshot, so the computer records one snapshot at its first use", async () => {
+    const computer = wired();
+    for (let i = 0; i < 5; i++)
+      await browserRun(`abandoned-${i}`, askFor(`x${i}`), false);
+    await browserRun("fresh", askFor("n1"), false);
+    await computer.run(await computer.seatOf(BOT, PERSON), "write out/a.txt a");
+    expect(
+      computer.asked.filter((path) => path === "/files/mark"),
+    ).toHaveLength(1);
+  });
+
+  test("a turn picked up after the time allowed begins again instead of listing the hours in between", async () => {
+    const computer = wired();
+    const seat = await computer.seatOf(BOT, PERSON);
+    const now = Date.now();
+    const clock = spyOn(Date, "now").mockReturnValue(now);
+    try {
+      await browserRun("run-1", askFor("call-1"), false);
+      await computer.run(seat, "write out/long-ago.txt x");
+      clock.mockReturnValue(now + CARRIED_TTL_MS + 1);
+      const late = await browserRun("run-2", say("done"), true);
+      expect(listed(late)).toEqual([]);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  test("a turn picked up within the time allowed still lists the whole of it", async () => {
+    const computer = wired();
+    const seat = await computer.seatOf(BOT, PERSON);
+    const now = Date.now();
+    const clock = spyOn(Date, "now").mockReturnValue(now);
+    try {
+      await browserRun("run-1", askFor("call-1"), false);
+      await computer.run(seat, "write out/kept.txt x");
+      clock.mockReturnValue(now + CARRIED_TTL_MS - 1);
+      expect(paths(await browserRun("run-2", say("done"), true))).toEqual([
+        "out/kept.txt",
+      ]);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+});
+
+describe("which runs continue a turn", () => {
+  const user = { id: "u", role: "user", content: "go" } as const;
+  const asking = {
+    id: "a",
+    role: "assistant",
+    toolCalls: [
+      {
+        id: "c",
+        type: "function",
+        function: { name: "x", arguments: "{}" },
+      },
+    ],
+  } as const;
+  const result = {
+    id: "t",
+    role: "tool",
+    toolCallId: "c",
+    content: "{}",
+  } as const;
+
+  test("a tool's result, or a call nobody has answered, continues a turn; a person's message does not", () => {
+    expect(continuesTurn([user, asking, result])).toBe(true);
+    expect(continuesTurn([user, asking])).toBe(true);
+    expect(continuesTurn([user])).toBe(false);
+    expect(continuesTurn([])).toBe(false);
+  });
+
+  test("messages added after the person's own do not make it a continuation", () => {
+    const note = { id: "s", role: "system", content: "note" } as const;
+    const said = { id: "b", role: "assistant", content: "hello" } as const;
+    expect(continuesTurn([user, note, said])).toBe(false);
+  });
+});
+
+describe("the step observers that give way to a whole turn", () => {
+  test("only the same Bot's observers give way: another Bot in the same run is still observed", async () => {
+    wired();
+    const seen: boolean[] = [];
+    const probe = new Observable<BaseEvent>((subscriber) => {
+      const stream = of(...run("run-1"));
+      seen.push(
+        withConfiguredTurnArtifacts(stream, {
+          runId: "run-1",
+          botId: BOT,
+          personId: PERSON,
+        }) === stream,
+        withConfiguredTurnArtifacts(stream, {
+          runId: "run-1",
+          botId: "other-bot",
+          personId: PERSON,
+        }) === stream,
+      );
+      subscriber.complete();
+    });
+    await collect(
+      withConfiguredTurnArtifacts(probe, {
+        runId: "run-1",
+        botId: BOT,
+        personId: PERSON,
+        wholeTurn: true,
+      }),
+    );
+    expect(seen).toEqual([true, false]);
   });
 });

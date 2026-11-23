@@ -95,6 +95,11 @@ export const serverTurnScope: TurnScope = (input, run) =>
  * The files an unattended turn leaves on the Bot's computer, listed once over the whole turn: the
  * tools run between the model's steps, so no one step's stream sees the computer used. The person is
  * the frame the turn runs in, the same as for a person's chat (`copilot.ts`).
+ *
+ * It applies to every unattended turn that holds tools of its own, including a Bot that runs somewhere
+ * else (an external one): the built-in Bots' per-step observer in `copilot.ts` never sees those, and
+ * the event is the server's own, worked out from what the computer shows changed under the same seat
+ * rule, so nothing the Bot says can put a file on the list.
  */
 export const serverTurnObserved: NonNullable<
   Parameters<typeof createToolkitTurnRunner>[0]["observeTurn"]

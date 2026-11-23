@@ -149,7 +149,10 @@ import {
   type StoredAttachment,
 } from "./channels/attachment-parts";
 import type { AgentFetch, StallGuard } from "./channels/stall-guard";
-import { withSideEventsThenArtifacts } from "./computer/turn-artifacts";
+import {
+  continuesTurn,
+  withSideEventsThenArtifacts,
+} from "./computer/turn-artifacts";
 import type { DeploymentConfig } from "./config";
 import { SYSTEM_TENANT } from "./db/schema/tenant";
 import { observeModelConnection } from "./desktop-connection-failure";
@@ -2867,11 +2870,12 @@ async function buildAgent(
                 : null,
             /*
              * A run that ends on a tool call the page runs itself is only part of a turn: the page
-             * sends the result in a run of its own. That run's last message is not the person's,
-             * which is what ties it to the turn before it (`computer/turn-artifacts.ts`).
+             * sends the result in a run of its own. That run's last message is that result, or a call
+             * nobody has answered, which is what ties it to the turn before it
+             * (`computer/turn-artifacts.ts`).
              */
             threadId: runInput.threadId,
-            continues: (runInput.messages.at(-1)?.role ?? "user") !== "user",
+            continues: continuesTurn(runInput.messages),
           },
         );
       },

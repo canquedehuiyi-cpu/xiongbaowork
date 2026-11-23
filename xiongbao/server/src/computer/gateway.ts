@@ -615,6 +615,8 @@ export interface ComputerGateway {
    * 被用到（定位）时才先记快照（`/files/mark`）再放行。不过 `govern`，设备上的电脑空操作。
    */
   markTurn(seat: ComputerSeat, markId: string): Promise<void>;
+  /** 一轮被丢下（不会再比对）时忘掉它的快照标记，免得电脑下次被用到时白记一份。 */
+  forgetTurn(seat: ComputerSeat, markId: string): Promise<void>;
   /**
    * 对比 `markTurn` 登记的快照，答这一轮新建或改过的文件（`/files/changes`）。这一轮没动过电脑、快照没记成、
    * 快照不在了（电脑重启过）、设备上的电脑都答 `null`，前两种不发任何请求；其它失败抛出。
@@ -3545,6 +3547,11 @@ export function createComputerGateway(
     async markTurn(seat: ComputerSeat, markId: string) {
       if (options.resolveDevice) return;
       noteTurnMark(seat, markId, "pending");
+    },
+
+    async forgetTurn(seat: ComputerSeat, markId: string) {
+      if (options.resolveDevice) return;
+      dropTurnMark(seat, markId);
     },
 
     async turnChanges(

@@ -31,44 +31,91 @@ export type TurnArtifactsTurn = {
    */
   carry?: { key: string; continues: boolean };
   /**
-   * 这条流本身就是完整的一轮（服务器分段执行工具，段与段之间的工具在流外跑）：它的 `RUN_FINISHED`
-   * 一定是这一轮的结尾，不看有没有未答复的工具调用。流里面各段的观察由它代劳，见 `wholeTurnOf`。
+   * 这条流本身就是一整轮里服务器执行的部分（服务器分段执行工具，段与段之间的工具在流外跑），
+   * 流里面各段的观察由它代劳，见 `wholeTurnOf`。它同样可以带 `carry`：服务器执行电脑工具的单聊里，页面工具
+   * 会让一轮跨几个 run。不带 `carry`（无人值守轮）则 `RUN_FINISHED` 一定是这一轮的结尾。
    */
   wholeTurn?: boolean;
 };
 
-type TurnArtifactsGateway = Pick<ComputerGateway, "markTurn" | "turnChanges">;
+type TurnArtifactsGateway = Pick<ComputerGateway, "markTurn" | "turnChanges"> &
+  Partial<Pick<ComputerGateway, "forgetTurn">>;
 
 /** 轮末等电脑列出文件最多等多久；超了就不列，这一轮照常结束。 */
 export const TURN_ARTIFACTS_DEADLINE_MS = 15_000;
 
 /**
  * 跨 run 的标记：key 是（人、员工、对话），值是这一轮第一个 run 登记的快照标记和它的座位。
- * 只存在内存里，和网关里的标记同寿；超出上限丢最旧的（对应的网关标记也会被它自己的上限淘汰）。
+ * 只存在内存里，和网关里的标记同寿；超出上限丢最旧的。
+ *
+ * 丢下的轮（页面关了、出错、停在页面不会续跑的工具调用上）留在这里的标记不会自己消失：被新一轮替换、
+ * 被淘汰、过了 {@link CARRIED_TTL_MS} 时，对应的网关标记一并忘掉，否则电脑下次被用到时要把它们一个个
+ * 都记一遍快照，挤占这一轮自己的标记。
  */
 const CARRIED_MAX = 500;
-const carried = new Map<
-  string,
-  { markId: string; marked: Promise<ComputerSeat | null> }
->();
+/**
+ * 一轮的标记最多留多久。人迟迟不答的页面工具会把时间窗拉长，窗内别人在同一台电脑上的改动也会被列进来；
+ * 超时的当新一轮。
+ */
+export const CARRIED_TTL_MS = 30 * 60_000;
+type Carried = {
+  markId: string;
+  marked: Promise<ComputerSeat | null>;
+  at: number;
+  forget: () => void;
+};
+const carried = new Map<string, Carried>();
 
-function carryOver(
-  key: string,
-  entry: { markId: string; marked: Promise<ComputerSeat | null> },
-) {
+function carryOver(key: string, entry: Carried) {
+  carried.get(key)?.forget();
   carried.delete(key);
   carried.set(key, entry);
   while (carried.size > CARRIED_MAX) {
-    const oldest = carried.keys().next().value;
+    const oldest = carried.entries().next().value;
     if (oldest === undefined) break;
-    carried.delete(oldest);
+    oldest[1].forget();
+    carried.delete(oldest[0]);
   }
 }
 
 /**
+ * 这个 run 是不是接着上一个 run 的那一轮：最后一条消息是工具的结果，或是一条还没人答复的工具调用。
+ * 人说的话之后再追加的系统、助手文字不算续跑。
+ */
+export function continuesTurn(
+  messages: readonly { role: string; toolCalls?: unknown }[],
+): boolean {
+  const last = messages.at(-1);
+  if (!last) return false;
+  if (last.role === "tool") return true;
+  return (
+    last.role === "assistant" &&
+    Array.isArray(last.toolCalls) &&
+    last.toolCalls.length > 0
+  );
+}
+
+/** 终止事件是不是服务器自己接着办的等待（审批、提问、登录）：不经过页面，不会有页面续跑的 run。 */
+function waitsOnServer(event: BaseEvent): boolean {
+  const outcome = (event as unknown as { outcome?: unknown }).outcome as
+    | {
+        type?: unknown;
+        interrupts?: { reason?: unknown }[];
+      }
+    | undefined;
+  return (
+    outcome?.type === "interrupt" &&
+    // The server raises these with the reason "human_input" (the headless tools and the native approval).
+    (outcome.interrupts ?? []).some(
+      (interrupt) => interrupt.reason === "human_input",
+    )
+  );
+}
+
+/**
  * 整轮已经由外层的 `wholeTurn` 流观察时，里面每一段的观察要让位：段与段之间用同一个 `markId` 去
- * 记、去比对，会把外层的标记冲掉。按 run 号认，同一个 run 的各段才让位，别的 run（比如这一轮里
- * 叫来的另一位员工）仍各自观察。
+ * 记、去比对，会把外层的标记冲掉。按 run 号加员工认（`runId\0botId`），同一个 run 里同一位员工的各段才让位，
+ * 别的 run、同一个 run 里别的员工仍各自观察。
  */
 const wholeTurnOf = new AsyncLocalStorage<string>();
 
@@ -96,7 +143,11 @@ export function withTurnArtifacts(
   return new Observable<BaseEvent>((subscriber) => {
     const abort = new AbortController();
     const carry = turn.carry;
-    const earlier = carry?.continues ? carried.get(carry.key) : undefined;
+    const known = carry ? carried.get(carry.key) : undefined;
+    const earlier =
+      carry?.continues && known && Date.now() - known.at < CARRIED_TTL_MS
+        ? known
+        : undefined;
     // 同一个电脑可能被好几个座位共用，快照名必须全局唯一。接着上一个 run 的一轮，沿用那一轮的标记。
     const markId = earlier?.markId ?? `${turn.runId}:${turn.botId}`;
     /** 订阅时后台记快照，不挡第一个事件；成功答座位，失败或没有座位答 null。 */
@@ -114,7 +165,17 @@ export function withTurnArtifacts(
           return null;
         }
       })();
-    if (carry && !earlier) carryOver(carry.key, { markId, marked });
+    if (carry && !earlier)
+      carryOver(carry.key, {
+        markId,
+        marked,
+        at: Date.now(),
+        forget: () => {
+          void marked
+            .then((seat) => seat && gateway.forgetTurn?.(seat, markId))
+            .catch(() => undefined);
+        },
+      });
     /** 这个 run 里开了头、还没有结果的工具调用：留到下一个 run 才有结果的，这一轮还没完。 */
     const unanswered = new Set<string>();
 
@@ -173,8 +234,12 @@ export function withTurnArtifacts(
           concatMap((event) => {
             track(event);
             if (event.type !== EventType.RUN_FINISHED) return of(event);
-            // 这个 run 停在待执行的工具调用上：页面执行完会再发一个 run，这一轮在那里结束。
-            if (carry && !turn.wholeTurn && unanswered.size > 0)
+            /*
+             * 这个 run 停在待执行的工具调用上：页面执行完会再发一个 run，这一轮在那里结束。服务器执行过的工具
+             * 都有结果事件，剩下没答复的就是页面要执行的调用。服务器自己接着办的等待（审批）不会有页面续跑，
+             * 当场比对。
+             */
+            if (carry && unanswered.size > 0 && !waitsOnServer(event))
               return of(event);
             return defer(async () => {
               const events = await artifactsBefore();
@@ -186,7 +251,7 @@ export function withTurnArtifacts(
         )
         .subscribe(subscriber);
     const subscription = turn.wholeTurn
-      ? wholeTurnOf.run(turn.runId, subscribeInside)
+      ? wholeTurnOf.run(`${turn.runId}\u0000${turn.botId}`, subscribeInside)
       : subscribeInside();
     return () => {
       abort.abort();
@@ -229,7 +294,11 @@ export function withConfiguredTurnArtifacts(
   const current = wiring;
   const { personId } = turn;
   if (!current || !personId) return stream;
-  if (!turn.wholeTurn && wholeTurnOf.getStore() === turn.runId) return stream;
+  if (
+    !turn.wholeTurn &&
+    wholeTurnOf.getStore() === `${turn.runId}\u0000${turn.botId}`
+  )
+    return stream;
   return withTurnArtifacts(
     stream,
     {

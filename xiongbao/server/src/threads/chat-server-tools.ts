@@ -21,7 +21,10 @@ import {
 import { TURN_LIMITS } from "../../../toolkit/src/limits";
 import type { AgentActor } from "../agents/profile-types";
 import { type AuditInitiator, PERSON_INITIATOR } from "../audit";
-import { withConfiguredTurnArtifacts } from "../computer/turn-artifacts";
+import {
+  continuesTurn,
+  withConfiguredTurnArtifacts,
+} from "../computer/turn-artifacts";
 import type { ComputerToolsForTurn } from "../computer/turn-tools";
 import { runAsTenant } from "../tenant/context";
 import { openTracker } from "./open-tracker";
@@ -361,6 +364,9 @@ export function createChatServerTools(options: {
           botId: agentId,
           personId: actor.id,
           wholeTurn: true,
+          // A page tool the Bot calls ends this run, and the page's answer starts the next one.
+          threadId: input.threadId,
+          continues: continuesTurn(input.messages),
         },
       );
       return new Observable<BaseEvent>((subscriber) =>

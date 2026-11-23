@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import type { RunAgentInput } from "@ag-ui/client";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
 import { eq, inArray, sql } from "drizzle-orm";
+import { HeadlessToolSuspension } from "../../toolkit/src/headless-tools";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import type { AuditStore } from "../src/audit";
 import { configureTurnArtifacts } from "../src/computer/turn-artifacts";
@@ -50,8 +51,23 @@ const started: string[] = [];
 let environmentBefore: Record<string, string | undefined> = {};
 
 const computer = workspaceComputer();
+/** The same gateway, except that a command with `then-wait` in it is one that waits for an approval after it ran. */
+const gatewayWithApprovals = new Proxy(computer.gateway, {
+  get(target, key, receiver) {
+    if (key !== "runCommand") return Reflect.get(target, key, receiver);
+    return async (...given: Parameters<typeof target.runCommand>) => {
+      const result = await target.runCommand(...given);
+      if (given[2].command.includes("then-wait"))
+        throw new HeadlessToolSuspension("Waiting for approval.", {
+          kind: "approval",
+          requestId: "approval-1",
+        });
+      return result;
+    };
+  },
+});
 const toolsForTurn = createComputerToolsForTurn({
-  gateway: computer.gateway,
+  gateway: gatewayWithApprovals,
   actorFor: async (id) => ({ id, role: "user" }),
   profileOf: async () =>
     ({ visibility: "public", ownerUserId: null, type: "built_in" }) as never,
@@ -104,7 +120,7 @@ let serving: ReturnType<typeof mount>;
 let fewRounds: ReturnType<typeof mount>;
 let browserDriven: ReturnType<typeof mount>;
 
-const browserTools = ["computer_run_command"].map((name) => ({
+const browserTools = ["computer_run_command", "pick_option"].map((name) => ({
   name,
   description: `The browser's ${name}.`,
   parameters: { type: "object", properties: {} },
@@ -362,5 +378,83 @@ describe("a chat whose computer tools the page runs", () => {
     expect(pathsOf(run3).sort()).toEqual(["out/page-1.md", "out/page-2.md"]);
     expect(artifactsOf(run3)).toHaveLength(1);
     expect(run3.at(-1)?.type).toBe("RUN_FINISHED");
+  });
+});
+
+describe("a chat whose server-run computer tools share a turn with a tool only the page runs", () => {
+  const callsOf = (events: Streamed[]) =>
+    events
+      .filter((event) => event.type === "TOOL_CALL_START")
+      .map((event) => ({
+        id: String(event.toolCallId),
+        name: String(event.toolCallName),
+      }));
+
+  test("the run the page's answer starts lists the files the earlier run's tool wrote; the earlier run lists none", async () => {
+    const threadId = `thread-${randomUUID()}`;
+    const asked = [user("Write it, then ask me which.")];
+    script = (incoming) => {
+      const answered = incoming.messages.filter(
+        (message) => message.role === "tool",
+      ).length;
+      if (answered === 0) return writing("out/report.md");
+      if (answered === 1)
+        return { toolCalls: [{ name: "pick_option", arguments: "{}" }] };
+      return { content: "done" };
+    };
+    const run1 = await send(serving, {
+      threadId,
+      runId: `run-${randomUUID()}`,
+      messages: asked,
+      declare: true,
+    });
+    expect(artifactsOf(run1)).toEqual([]);
+    const [computerCall, pageCall] = callsOf(run1);
+    expect(pageCall?.name).toBe("pick_option");
+    const run2 = await send(serving, {
+      threadId,
+      runId: `run-${randomUUID()}`,
+      messages: [
+        ...asked,
+        {
+          id: randomUUID(),
+          role: "assistant" as const,
+          toolCalls: [computerCall, pageCall].map((call) => ({
+            id: String(call?.id),
+            type: "function" as const,
+            function: { name: String(call?.name), arguments: "{}" },
+          })),
+        },
+        {
+          id: randomUUID(),
+          role: "tool" as const,
+          toolCallId: String(computerCall?.id),
+          content: JSON.stringify({ ok: true }),
+        },
+        {
+          id: randomUUID(),
+          role: "tool" as const,
+          toolCallId: String(pageCall?.id),
+          content: JSON.stringify("A"),
+        },
+      ],
+      declare: true,
+    });
+    expect(pathsOf(run2)).toEqual(["out/report.md"]);
+    expect(artifactsOf(run2)).toHaveLength(1);
+    expect(run2.at(-1)?.type).toBe("RUN_FINISHED");
+  });
+
+  test("a turn that stops for an approval lists what it did before it stopped, on that run", async () => {
+    script = () => writing("out/waited.md then-wait");
+    const events = await send(serving, {
+      threadId: `thread-${randomUUID()}`,
+      runId: `run-${randomUUID()}`,
+      messages: [user("Write it, then wait for approval.")],
+      declare: true,
+    });
+    const finished = events.find((event) => event.type === "RUN_FINISHED");
+    expect(finished?.outcome).toMatchObject({ type: "interrupt" });
+    expect(pathsOf(events)).toEqual(["out/waited.md"]);
   });
 });
