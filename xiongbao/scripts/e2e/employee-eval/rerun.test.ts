@@ -7,6 +7,7 @@ const record = (passed: boolean, error?: string): EvalRecord =>
     task: "deliv-web",
     title: "交付：静态网页",
     passed,
+    checks: [],
     ...(error ? { error } : {}),
   }) as EvalRecord;
 
@@ -63,7 +64,10 @@ test("a rerun that throws keeps the first record and notes why", async () => {
     error: "first",
     reruns: 0,
   });
-  expect(x.notes).toEqual(["deliv-web 重跑没做：员工名额不够"]);
+  expect(x.notes).toEqual([
+    "deliv-web 首次没过：first",
+    "deliv-web 重跑没做：员工名额不够",
+  ]);
 });
 
 test("no rerun when it is off or the deadline is too close", async () => {

@@ -277,6 +277,12 @@ if (!pairChoice.ok) {
 const pairCount = pairChoice.pairs;
 const baseSeed = evalSeed(process.env);
 const suite = process.env.EVAL_SUITE?.trim() === "smoke" ? "smoke" : "tasks";
+if (suite === "smoke" && process.env.EVAL_PATH?.trim() === "group") {
+  console.error(
+    "run-xiongbao refused: EVAL_PATH=group 只做交付题等 tasks 套件，能力冒烟没有群聊路径",
+  );
+  process.exit(2);
+}
 let evalPath: EvalPath;
 try {
   evalPath = parseEvalPath(process.env.EVAL_PATH);
@@ -1871,6 +1877,8 @@ async function runWork(work: Work): Promise<EvalRecord> {
 
   const copy = join(OUT, artifactDirName(suite, work.via), work.key);
   if (isolation) openUp(dir);
+  // 重跑用同一个结果目录名：先清掉上一次的拷贝，免得判分读到旧文件。
+  rmSync(copy, { recursive: true, force: true });
   copyTree(dir, copy);
   /*
    * 交付题的服务器侧判分要在员工的目录还在电脑上、程序还在跑的时候做：下面把这次运行的目录移出工作区之后，

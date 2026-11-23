@@ -255,14 +255,16 @@ jobs:
           sudo chown "$(id -u):$(id -g)" "$PLAYWRIGHT_BROWSERS_PATH"
           cd agent-computer && bun install --frozen-lockfile --ignore-scripts
           bun x playwright install --with-deps chromium
-      # 交付题的判分（check-deliverables.ts）：python3 -I 读演示文稿、文档、表格，ffmpeg 读视频。python 依赖装在系统级
-      # （不用 --user：隔离后的判分和员工用户都读得到）。网页题要的 Chromium 上一步已装在 /opt/ms-playwright。
-      - name: Install the deliverables checkers (python office libraries, ffmpeg)
+      # 交付题的判分（check-deliverables.ts）：python3 -I 读演示文稿、文档、表格，ffmpeg 读视频，LibreOffice 把办公文件转成
+      # 图片 / PDF 来看。python 依赖装在系统级（不用 --user：隔离后的判分和员工用户都读得到）。网页题要的 Chromium 上一步已装在
+      # /opt/ms-playwright。
+      - name: Install the deliverables checkers (python office libraries, ffmpeg, LibreOffice)
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg python3-pip
-          sudo python3 -m pip install --break-system-packages python-pptx python-docx openpyxl
-          python3 -I -c "import pptx, docx, openpyxl"
+          sudo apt-get install -y --no-install-recommends ffmpeg python3-pip libreoffice-calc libreoffice-writer libreoffice-impress fonts-noto-cjk
+          sudo python3 -m pip install --break-system-packages python-pptx python-docx openpyxl pillow
+          python3 -I -c "import pptx, docx, openpyxl, PIL"
+          soffice --version
       # 员工的电脑读不到评测仓库：员工的命令以专用系统用户 xbeval 运行（评测脚本 isolation.ts 以 EVAL_EMPLOYEE_USER 起电脑），
       # runner 的 home（检出目录、临时目录都在里面）对它关闭；电脑的运行副本放 /opt/xbeval（它 import ../../shared，
       # 依赖 zod 从 agent-computer/node_modules 找）；bun 等工具须在该用户也读得到的位置。评测开始时脚本还会以员工身份自检，
@@ -352,7 +354,7 @@ jobs:
 
   employee-eval-codex:
     name: 对标评测 · Codex
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["employee-eval","all"]'), inputs.suite) && inputs.tasks != 'deliverables'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && contains(fromJSON('["employee-eval","all"]'), inputs.suite) && !contains(inputs.tasks, 'deliv')
     runs-on: ubuntu-latest
     environment: model-e2e
     timeout-minutes: 120

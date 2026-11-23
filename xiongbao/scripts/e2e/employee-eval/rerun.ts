@@ -19,6 +19,10 @@ export async function withRerun(
     input.note(`${first.task} 重跑没做：离作业截止时间不够再做一题`);
     return once;
   }
+  const failedChecks = first.checks.filter((item) => !item.ok);
+  input.note(
+    `${first.task} 首次没过：${failedChecks.map((item) => item.name).join("、") || first.error || "没有失败检查项"}`,
+  );
   try {
     return { ...(await input.rerun()), reruns: 1 };
   } catch (thrown) {

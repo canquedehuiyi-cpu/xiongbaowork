@@ -42,7 +42,7 @@ async function fetchOrNull(
   init: RequestInit,
 ): Promise<Response | null> {
   try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(60_000) });
+    return await fetch(url, { ...init, signal: AbortSignal.timeout(120_000) });
   } catch {
     return null;
   }
@@ -249,12 +249,22 @@ export async function launchChromium(): Promise<
 > {
   try {
     const { chromium } = await import("playwright-core");
-    const executablePath = chromePath();
-    const browser = await chromium.launch({
+    const options = {
       headless: true,
-      ...(executablePath ? { executablePath } : {}),
       args: ["--no-sandbox", "--disable-dev-shm-usage"],
-    });
+    };
+    const executablePath = chromePath();
+    // 设了 PLAYWRIGHT_BROWSERS_PATH（工作流装在 /opt/ms-playwright）时先让 playwright 按自己的版本找，不传路径；
+    // 找不到再用 chromePath 找到的那个（版本对不上时不至于起不来）。
+    const browser = process.env.PLAYWRIGHT_BROWSERS_PATH?.trim()
+      ? await chromium.launch(options).catch((error) => {
+          if (!executablePath) throw error;
+          return chromium.launch({ ...options, executablePath });
+        })
+      : await chromium.launch({
+          ...options,
+          ...(executablePath ? { executablePath } : {}),
+        });
     return { browser };
   } catch (error) {
     return {

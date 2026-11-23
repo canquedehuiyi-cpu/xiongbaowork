@@ -83,9 +83,10 @@ test("both sides get the pair count and one shared seed, and each records a dead
   expect(seeds.size).toBe(1);
 });
 
-test("the job ceilings stay where they were", () => {
+// 交付题验收：七题 × 单聊 / 群聊两条路径，失败还重跑，一个作业最长要到 GitHub 托管机器的上限 360 分钟（用户 2026-11-23 批准）。
+test("the job ceilings are the approved ones", () => {
   expect(workflow.jobs["employee-eval-xiongbao"]?.["timeout-minutes"]).toBe(
-    180,
+    360,
   );
   expect(workflow.jobs["employee-eval-codex"]?.["timeout-minutes"]).toBe(120);
 });
