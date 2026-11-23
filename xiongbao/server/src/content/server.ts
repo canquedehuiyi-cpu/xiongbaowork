@@ -239,6 +239,12 @@ export function createContentServer(deps: ContentServerDeps): {
   fetch(
     request: Request,
     upgrade: SocketUpgrade | undefined,
+    /**
+     * Called just before a request is forwarded to a program, so the listener can lift its own idle
+     * timeout: the computer's forwarder has its own limits (60 s for the first byte, 120 s between
+     * chunks), and the listener's default 10 s would cut a slow API or a quiet event stream first.
+     */
+    forwardingToProgram?: () => void,
   ): Promise<Response | undefined>;
   /** The handlers for the sockets `fetch` upgrades, for the listener's `websocket`. */
   sockets: ContentSockets;
@@ -302,6 +308,7 @@ export function createContentServer(deps: ContentServerDeps): {
       forwardSocket: deps.gateway.forwardSocket ?? missingForwarding,
     },
     allowed,
+    recheck: (grant) => deps.stillAllowed(grant),
     domainMode: domain !== undefined,
     now,
     contentCookie: CONTENT_COOKIE,
@@ -321,6 +328,7 @@ export function createContentServer(deps: ContentServerDeps): {
     rel: string,
     fromCookie: boolean,
     upgrade?: SocketUpgrade,
+    forwardingToProgram?: () => void,
   ): Promise<Response | undefined> {
     if (!hostFits(request, grant)) return notFound(request.method);
     const refused = () => {
@@ -343,6 +351,7 @@ export function createContentServer(deps: ContentServerDeps): {
     if (grant.target.kind === "app") {
       // A program is reached by the cookie alone; a path token is only ever made for a folder.
       if (!fromCookie) return notFound(request.method);
+      forwardingToProgram?.();
       const answered = await forwarding.forwardToApp(
         { ...grant, target: grant.target } as AppGrant,
         request,
@@ -445,6 +454,7 @@ export function createContentServer(deps: ContentServerDeps): {
   async function handle(
     request: Request,
     upgrade: SocketUpgrade | undefined,
+    forwardingToProgram?: () => void,
   ): Promise<Response | undefined> {
     const url = new URL(request.url);
     const { pathname } = url;
@@ -501,7 +511,14 @@ export function createContentServer(deps: ContentServerDeps): {
      */
     const session = sessionOf(request);
     if (session?.target.kind === "app") {
-      return serveGrant(request, session, pathname.slice(1), true, upgrade);
+      return serveGrant(
+        request,
+        session,
+        pathname.slice(1),
+        true,
+        upgrade,
+        forwardingToProgram,
+      );
     }
 
     /*
@@ -533,9 +550,13 @@ export function createContentServer(deps: ContentServerDeps): {
 
   return {
     sockets: forwarding.socket,
-    async fetch(request: Request, upgrade?: SocketUpgrade) {
+    async fetch(
+      request: Request,
+      upgrade?: SocketUpgrade,
+      forwardingToProgram?: () => void,
+    ) {
       try {
-        const answered = await handle(request, upgrade);
+        const answered = await handle(request, upgrade, forwardingToProgram);
         // No answer of this origin, a program's included, may widen where a service worker could be
         // registered.
         return answered?.headers.has("service-worker-allowed")

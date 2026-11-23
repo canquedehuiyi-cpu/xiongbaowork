@@ -2,7 +2,7 @@ import type { ServerWebSocket } from "bun";
 import { HEADER } from "../../../shared/wire-headers";
 import { type ComputerSeat, parseComputerKey } from "../computer/computer-key";
 import type { ComputerGateway } from "../computer/gateway";
-import type { ContentGrant } from "./token";
+import { bornOf, type ContentGrant, MAX_SESSION_AGE_MS } from "./token";
 
 /**
  * Forwarding what a browser asks of the content origin to a program an employee runs on its computer.
@@ -28,10 +28,12 @@ import type { ContentGrant } from "./token";
  *   has to be able to fetch its own files and API with the content cookie, which a sandboxed page
  *   (opaque origin, no `allow-same-origin`) cannot do. In domain mode the subdomain is the isolation. In
  *   port mode the program's origin differs from the application's only by its port, so the residual
- *   risk is stated here: a program's script can write cookies for the shared host (the application's
- *   cookies are not readable by it, and the application's session cookie is HttpOnly), and can make
- *   the person's browser send read-only requests to the application with their cookies, whose answers
- *   it cannot read. The application's state-changing routes refuse a foreign `Origin`. What the
+ *   risk is stated here: a program's script can write cookies for the shared host and can read the
+ *   ones on that host that are not HttpOnly (cookies ignore ports, and a Secure one is readable too when
+ *   the content port is served over HTTPS). The application's session cookie is HttpOnly, so nothing of
+ *   it is readable today. INVARIANT: the application must not add a cookie that is not HttpOnly. The
+ *   program can also make the person's browser send read-only requests to the application with their
+ *   cookies, whose answers it cannot read. The application's state-changing routes refuse a foreign `Origin`. What the
  *   program is NOT given is the means to read or replace the content cookie (it is HttpOnly and a
  *   program's own `Set-Cookie` is dropped or host-only) or anything of the application.
  * - A STATE-CHANGING REQUEST MUST BE THIS ORIGIN'S OWN. The program gets `Origin` rewritten to its own,
@@ -48,8 +50,17 @@ import type { ContentGrant } from "./token";
  *   that points anywhere else is removed, and on a 3xx answer the answer becomes 502, so a program
  *   cannot send a person's browser (carrying the person's trust) to another site through this origin.
  *   `Refresh` can do the same and is dropped.
- * - A RATE LIMIT PER EMPLOYEE ON ITS COMPUTER, 600 requests a minute, so one page cannot make an employee's computer
- *   the target of a flood through this origin.
+ * - A RATE LIMIT PER PERSON AND EMPLOYEE ON ITS COMPUTER, 600 requests a minute, and 3000 a minute for
+ *   all the people of one employee together, so one page cannot make an employee's computer the target
+ *   of a flood through this origin, and one person's flood does not lock the others out.
+ * - AN ANSWER THAT IS STILL BEING STREAMED IS WATCHED LIKE A SOCKET. The grant is asked again at every
+ *   recheck, without the remembered answer, and the stream is cut once it is no longer allowed or when
+ *   the session reaches its absolute age (`MAX_SESSION_AGE_MS`). Not at `grant.exp`: that is thirty
+ *   minutes and a long download must not be cut by it.
+ * - NO CACHE KEPT FOR ANOTHER PROGRAM. In port mode every program is served from one origin and one set
+ *   of URLs, so a browser (or a cache in front) would hand one program's `/index.js` to the next one:
+ *   every answer is `no-store`. In domain mode each target has its own host; the program's cache
+ *   headers stay but are made `private`.
  * - A WEBSOCKET IS OPENED TOWARD THE PROGRAM FIRST, then accepted from the browser (so the subprotocol
  *   the program picked is the one the browser is told). It is closed when its grant expires, when
  *   `stillAllowed` turns false at the periodic recheck, or when either side has more than 16 MB waiting.
@@ -58,6 +69,8 @@ import type { ContentGrant } from "./token";
  */
 
 export const FORWARD_RATE_PER_MINUTE = 600;
+/** All the people looking at one employee's programs on one computer, together. */
+export const FORWARD_RATE_PER_SEAT_PER_MINUTE = 3000;
 /** How many employees the rate table remembers before the least recently active are forgotten. */
 const RATE_TABLE_MAX = 10_000;
 /** How often an open socket asks again whether its grant still holds. */
@@ -92,8 +105,8 @@ export type AppSocketData = {
     /** The program's side went away before the browser's side was open. */
     upstreamClosed?: { code: number; reason: string };
     closed: boolean;
-    timers: ReturnType<typeof setTimeout>[];
-    checker?: ReturnType<typeof setInterval>;
+    /** Stops the watch over the grant (see `watchGrant`). */
+    stopWatching?: () => void;
   };
 };
 
@@ -106,6 +119,8 @@ export type ForwardDeps = {
   gateway: Pick<ComputerGateway, "forwardHttp" | "forwardSocket">;
   /** `stillAllowed`, as the content server asks it (remembered for a minute). */
   allowed(grant: ContentGrant): Promise<boolean>;
+  /** The same question without the remembered answer: what an open stream or socket asks at each recheck. */
+  recheck(grant: ContentGrant): Promise<boolean>;
   domainMode: boolean;
   now(): number;
   recheckMs?: number;
@@ -238,6 +253,13 @@ export function programRequestHeaders(
       lower === "host" ||
       lower === "forwarded" ||
       lower === "x-real-ip" ||
+      // Other spellings of the viewer's address, which the program has no business knowing.
+      lower === "cf-connecting-ip" ||
+      lower === "true-client-ip" ||
+      lower === "x-client-ip" ||
+      lower === "x-original-forwarded-for" ||
+      lower === "x-cluster-client-ip" ||
+      lower === "fastly-client-ip" ||
       lower === "content-length" ||
       lower === "origin" ||
       lower === "referer" ||
@@ -361,6 +383,18 @@ function hostOnlyCookies(values: string[], contentCookie: string): string[] {
   return kept;
 }
 
+/** The program's `Cache-Control` with `public` replaced by `private`, and `private` added when it had neither. */
+function privateCaching(value: string | null): string {
+  const directives = (value ?? "")
+    .split(",")
+    .map((one) => one.trim())
+    .filter((one) => one !== "" && one.toLowerCase() !== "public");
+  if (!directives.some((one) => one.toLowerCase() === "private")) {
+    directives.push("private");
+  }
+  return directives.join(", ");
+}
+
 /** The program's answer as this origin gives it; 502 when a redirect tries to send the browser elsewhere. */
 export function programResponse(
   upstream: Response,
@@ -407,6 +441,16 @@ export function programResponse(
       return plain(502, "Unavailable");
     }
   }
+  if (input.domainMode) {
+    headers.set("cache-control", privateCaching(headers.get("cache-control")));
+  } else {
+    // Conditional requests are dropped too: a validator from one program must not revalidate another's file.
+    headers.set("cache-control", "no-store");
+    headers.delete("expires");
+    headers.delete("etag");
+    headers.delete("last-modified");
+    headers.delete("pragma");
+  }
   headers.set("x-content-type-options", "nosniff");
   if (!headers.has("referrer-policy")) {
     headers.set("referrer-policy", "no-referrer");
@@ -427,7 +471,9 @@ const isUpgrade = (request: Request) =>
   request.headers.get("upgrade")?.toLowerCase() === "websocket";
 
 /** One allowance per employee on one computer: the same employee id on another person's computer is another. */
-const limitKey = (grant: ContentGrant) => `${grant.seat}:${grant.bot}`;
+const seatKey = (grant: ContentGrant) => `${grant.seat}:${grant.bot}`;
+/** The same, per person: one person's flood must not use up what the others are allowed. */
+const limitKey = (grant: ContentGrant) => `${grant.person}:${seatKey(grant)}`;
 
 const seatOf = (grant: ContentGrant): ComputerSeat | null => {
   const key = parseComputerKey(grant.seat);
@@ -436,7 +482,104 @@ const seatOf = (grant: ContentGrant): ComputerSeat | null => {
 
 export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
   const limiter = createRateLimiter(FORWARD_RATE_PER_MINUTE, deps.now);
+  const seatLimiter = createRateLimiter(
+    FORWARD_RATE_PER_SEAT_PER_MINUTE,
+    deps.now,
+  );
   const recheckMs = deps.recheckMs ?? SOCKET_RECHECK_MS;
+
+  /**
+   * One watch over an open socket or a streamed answer: `onEnd` is called once, at `until` (to the
+   * millisecond), or at the first recheck that finds the grant no longer allowed, or unanswerable.
+   * The recheck does not use the remembered answer, so a removal is seen within one period. Returns
+   * what stops the watch.
+   */
+  function watchGrant(
+    grant: ContentGrant,
+    until: number,
+    onEnd: (code: number, reason: string) => void,
+  ): () => void {
+    let over = false;
+    const finish = (code: number, reason: string) => {
+      if (over) return;
+      over = true;
+      stop();
+      onEnd(code, reason);
+    };
+    const timer = setTimeout(
+      () => finish(1008, "Session expired"),
+      Math.max(0, until - deps.now()),
+    );
+    const checker = setInterval(() => {
+      if (over) return;
+      if (deps.now() >= until) {
+        finish(1008, "Session expired");
+        return;
+      }
+      deps.recheck(grant).then(
+        (still) => {
+          if (!still) finish(1008, "No longer allowed");
+        },
+        () => finish(1011, "Could not be checked"),
+      );
+    }, recheckMs);
+    function stop() {
+      over = true;
+      clearTimeout(timer);
+      clearInterval(checker);
+    }
+    return stop;
+  }
+
+  /** The body of an answer, cut when the watch over the grant ends it; the program's side is cancelled too. */
+  function guardedBody(
+    body: ReadableStream<Uint8Array>,
+    grant: ContentGrant,
+  ): ReadableStream<Uint8Array> {
+    const reader = body.getReader();
+    let stop = () => {};
+    let ended = false;
+    return new ReadableStream<Uint8Array>({
+      start(controller) {
+        stop = watchGrant(
+          grant,
+          bornOf(grant) + MAX_SESSION_AGE_MS,
+          (_code, reason) => {
+            ended = true;
+            reader.cancel(reason).catch(() => undefined);
+            try {
+              controller.error(new Error(reason));
+            } catch {}
+          },
+        );
+      },
+      async pull(controller) {
+        try {
+          const next = await reader.read();
+          if (ended) return;
+          if (next.done) {
+            stop();
+            controller.close();
+            return;
+          }
+          controller.enqueue(next.value);
+        } catch (error) {
+          stop();
+          if (!ended) controller.error(error);
+        }
+      },
+      cancel(reason) {
+        ended = true;
+        stop();
+        return reader.cancel(reason);
+      },
+    });
+  }
+
+  const take = (g: ContentGrant) => {
+    const mine = limiter.take(limitKey(g));
+    return mine.ok ? seatLimiter.take(seatKey(g)) : mine;
+  };
 
   // --- sockets ---
 
@@ -448,8 +591,7 @@ export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
     const state = ws.data.contentProgram;
     if (state.closed) return;
     state.closed = true;
-    for (const timer of state.timers) clearTimeout(timer);
-    if (state.checker) clearInterval(state.checker);
+    state.stopWatching?.();
     const usable = code !== undefined && sendableCode(code);
     try {
       if (usable) state.upstream.close(code, reason);
@@ -511,25 +653,9 @@ export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
         if (state.closed) return;
       }
       // The grant's own end, to the millisecond, and the periodic question of whether it still holds.
-      state.timers.push(
-        setTimeout(
-          () => end(ws, 1008, "Session expired"),
-          Math.max(0, grant.exp - deps.now()),
-        ),
+      state.stopWatching = watchGrant(grant, grant.exp, (code, reason) =>
+        end(ws, code, reason),
       );
-      state.checker = setInterval(() => {
-        if (state.closed) return;
-        if (deps.now() >= grant.exp) {
-          end(ws, 1008, "Session expired");
-          return;
-        }
-        deps.allowed(grant).then(
-          (still) => {
-            if (!still) end(ws, 1008, "No longer allowed");
-          },
-          () => end(ws, 1011, "Could not be checked"),
-        );
-      }, recheckMs);
     },
     message(ws: ServerWebSocket<AppSocketData>, raw: string | Buffer) {
       const state = ws.data.contentProgram;
@@ -572,7 +698,6 @@ export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
         pending: [],
         pendingBytes: 0,
         closed: false,
-        timers: [],
       };
       let settled = false;
       const settle = (
@@ -639,7 +764,7 @@ export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
     if (!validForwardPath(path)) return plain(400, "Bad path");
     const seat = seatOf(g);
     if (!seat) return plain(502, "Unavailable");
-    const taken = limiter.take(limitKey(g));
+    const taken = take(g);
     if (!taken.ok) {
       return plain(429, "Too many requests", {
         "Retry-After": String(taken.retryAfterSeconds),
@@ -705,7 +830,7 @@ export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
     if (!validForwardPath(path)) return plain(400, "Bad path");
     const seat = seatOf(g);
     if (!seat) return plain(502, "Unavailable");
-    const taken = limiter.take(limitKey(g));
+    const taken = take(g);
     if (!taken.ok) {
       return plain(429, "Too many requests", {
         "Retry-After": String(taken.retryAfterSeconds),
@@ -734,10 +859,16 @@ export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
     } catch {
       return plain(502, request.method === "HEAD" ? null : "Unavailable");
     }
-    return programResponse(upstream, {
+    const answer = programResponse(upstream, {
       port: g.target.port,
       domainMode: deps.domainMode,
       contentCookie: deps.contentCookie,
+    });
+    if (answer.body === null) return answer;
+    return new Response(guardedBody(answer.body, g), {
+      status: answer.status,
+      statusText: answer.statusText,
+      headers: answer.headers,
     });
   }
 

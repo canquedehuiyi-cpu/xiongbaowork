@@ -322,6 +322,7 @@ describe("a download that names where its file was announced", () => {
         ? {
             threadId: "thread-1",
             ownerId: "owner-1",
+            agentId: "bot-17",
             events: [
               {
                 type: "CUSTOM",
@@ -391,6 +392,7 @@ describe("a download that names where its file was announced", () => {
         runOf: async () => ({
           threadId: "thread-1",
           ownerId: "owner-1",
+          agentId: "bot-17",
           events,
         }),
       },

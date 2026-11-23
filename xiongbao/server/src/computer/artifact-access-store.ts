@@ -141,7 +141,10 @@ export function createArtifactAccessDeps(
       for (const [owner, threadIds] of byOwner) {
         const found = await runAsTenant(owner, async () => {
           const [run] = await database
-            .select({ threadId: threadRuns.threadId })
+            .select({
+              threadId: threadRuns.threadId,
+              agentId: threadRuns.agentId,
+            })
             .from(threadRuns)
             .where(
               and(
@@ -154,6 +157,7 @@ export function createArtifactAccessDeps(
           return {
             threadId: run.threadId,
             ownerId: owner,
+            agentId: run.agentId,
             events: (await eventsOf([runId])).get(runId) ?? [],
           };
         });

@@ -261,6 +261,7 @@ export function startHttpServer(deps: {
     fetch(
       request: Request,
       upgrade?: SocketUpgrade,
+      forwardingToProgram?: () => void,
     ): Response | undefined | Promise<Response | undefined>;
     /** The handlers of the sockets it upgrades (a program's WebSocket); without them it upgrades none. */
     sockets?: ContentSockets;
@@ -346,6 +347,8 @@ export function startHttpServer(deps: {
                       ...(options.headers ? { headers: options.headers } : {}),
                     })
                 : undefined,
+              // The computer's forwarder bounds a program's answer; Bun's 10 s idle default must not cut it first.
+              () => server.timeout(request, 0),
             ) as Response | Promise<Response>,
           websocket: {
             open: (ws) => content.sockets?.open(ws),
@@ -382,6 +385,8 @@ export function startHttpServer(deps: {
                   ...(options.headers ? { headers: options.headers } : {}),
                 })
             : undefined,
+          // The computer's forwarder bounds a program's answer; Bun's 10 s idle default must not cut it first.
+          () => server.timeout(request, 0),
         )) as Response;
       }
       /*

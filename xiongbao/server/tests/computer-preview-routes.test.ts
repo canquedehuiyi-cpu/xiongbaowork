@@ -432,6 +432,7 @@ describe("who may preview", () => {
         ? {
             threadId: "thread-1",
             ownerId: "owner-1",
+            agentId: "bot-17",
             events: [
               {
                 type: "CUSTOM",

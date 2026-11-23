@@ -204,7 +204,12 @@ describe("交付到打开程序的整条链", () => {
     } as unknown as BaseEvent;
     const deps: ArtifactAccessDeps = {
       channelFor: async () => ({ agentIds: ["a1"], threadIds: ["th1"] }),
-      runOf: async () => ({ threadId: "th1", ownerId: "p1", events: [event] }),
+      runOf: async () => ({
+        threadId: "th1",
+        ownerId: "p1",
+        agentId: "a1",
+        events: [event],
+      }),
       cardFor: async () => null,
       seatFor: async (botId, personId) => personSeat(personId, botId),
       botIsLive: async () => true,

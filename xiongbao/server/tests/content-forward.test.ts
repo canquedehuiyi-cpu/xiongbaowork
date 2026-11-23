@@ -14,6 +14,7 @@ import { createContentAccess } from "../src/content/access";
 import {
   createRateLimiter,
   FORWARD_RATE_PER_MINUTE,
+  FORWARD_RATE_PER_SEAT_PER_MINUTE,
   programRequestHeaders,
   programResponse,
   programSocketHeaders,
@@ -30,6 +31,7 @@ import {
   type ContentGrant,
   hostCodeOf,
   issueSessionToken,
+  MAX_SESSION_AGE_MS,
   OPEN_TOKEN_TTL_MS,
 } from "../src/content/token";
 
@@ -538,17 +540,45 @@ describe("the rate limit, per employee", () => {
     expect(other.status).toBe(200);
   });
 
-  test("the same employee shared by two people shares one allowance", async () => {
+  test("one person's flood does not use up what another person of the same employee is allowed", async () => {
     const { server } = setup();
     for (let i = 0; i < FORWARD_RATE_PER_MINUTE; i += 1) {
       await call(server, "http://c/x", withCookie(appGrant({ person: "p1" })));
     }
+    const flooded = await call(
+      server,
+      "http://c/x",
+      withCookie(appGrant({ person: "p1" })),
+    );
+    expect(flooded.status).toBe(429);
     const second = await call(
       server,
       "http://c/x",
       withCookie(appGrant({ person: "p2" })),
     );
-    expect(second.status).toBe(429);
+    expect(second.status).toBe(200);
+  });
+
+  test("all the people of one employee together are held to the per-employee total", async () => {
+    const { server } = setup();
+    const people = FORWARD_RATE_PER_SEAT_PER_MINUTE / FORWARD_RATE_PER_MINUTE;
+    for (let person = 0; person < people; person += 1) {
+      for (let i = 0; i < FORWARD_RATE_PER_MINUTE; i += 1) {
+        const res = await call(
+          server,
+          "http://c/x",
+          withCookie(appGrant({ person: `q${person}` })),
+        );
+        expect(res.status).toBe(200);
+      }
+    }
+    // A person who has not asked at all still finds the employee's total used up.
+    const late = await call(
+      server,
+      "http://c/x",
+      withCookie(appGrant({ person: "late" })),
+    );
+    expect(late.status).toBe(429);
   });
 
   test("allowance comes back as time passes, and the table does not grow without bound", async () => {
@@ -562,6 +592,175 @@ describe("the rate limit, per employee", () => {
     // More employees than the table holds push the oldest out; one forgotten simply starts with a full bucket.
     for (let i = 0; i < 12_000; i += 1) limiter.take(`bot-${i}`);
     expect(limiter.take("e").ok).toBe(true);
+  });
+});
+
+describe("an answer that is still being streamed", () => {
+  const stops: (() => void)[] = [];
+  afterEach(() => {
+    for (const stop of stops.splice(0)) stop();
+  });
+
+  /** A program that sends a line every 10 ms until it is cancelled. */
+  const endless = (seen: { cancelled: boolean }) => () => {
+    let timer: ReturnType<typeof setInterval> | undefined;
+    stops.push(() => clearInterval(timer));
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          timer = setInterval(() => {
+            try {
+              controller.enqueue(new TextEncoder().encode("data: x\n\n"));
+            } catch {}
+          }, 10);
+        },
+        cancel() {
+          clearInterval(timer);
+          seen.cancelled = true;
+        },
+      }),
+      { headers: { "content-type": "text/event-stream" } },
+    );
+  };
+
+  /** Reads until the stream ends, fails, or five seconds pass; says which. */
+  async function drain(res: Response): Promise<"ended" | "failed" | "hung"> {
+    const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+    const give_up = new Promise<"hung">((resolve) =>
+      setTimeout(() => resolve("hung"), 5_000),
+    );
+    const read = (async () => {
+      try {
+        for (;;) {
+          const next = await reader.read();
+          if (next.done) return "ended" as const;
+        }
+      } catch {
+        return "failed" as const;
+      }
+    })();
+    const outcome = await Promise.race([read, give_up]);
+    if (outcome === "hung") await reader.cancel().catch(() => undefined);
+    return outcome;
+  }
+
+  test("it is cut within about one recheck after the person is removed, and the program's side is cancelled", async () => {
+    const seen = { cancelled: false };
+    const s = setup({ program: endless(seen), recheckMs: 20 });
+    const res = await call(s.server, "http://c/events", withCookie(appGrant()));
+    expect(res.status).toBe(200);
+    const done = drain(res);
+    // The clock is not moved: the recheck must not be answered from the remembered minute.
+    s.state.allowed = false;
+    const started = Date.now();
+    expect(await done).toBe("failed");
+    expect(Date.now() - started).toBeLessThan(3_000);
+    expect(seen.cancelled).toBe(true);
+  });
+
+  test("it is cut at the session's absolute age, not at the grant's own thirty minutes", async () => {
+    const seen = { cancelled: false };
+    // A recheck that never comes in this test: only the age limit can end it.
+    const s = setup({ program: endless(seen), recheckMs: 600_000 });
+    const grant = appGrant({ born: T0 - MAX_SESSION_AGE_MS + 150 });
+    const res = await call(s.server, "http://c/events", withCookie(grant));
+    expect(res.status).toBe(200);
+    const started = Date.now();
+    expect(await drain(res)).toBe("failed");
+    expect(Date.now() - started).toBeLessThan(3_000);
+    expect(seen.cancelled).toBe(true);
+  });
+
+  test("a stream that outlives the grant's own expiry is not cut while it is still allowed", async () => {
+    const seen = { cancelled: false };
+    const s = setup({ program: endless(seen), recheckMs: 20 });
+    const res = await call(
+      s.server,
+      "http://c/events",
+      withCookie(appGrant({ exp: T0 + 100 })),
+    );
+    const reader = (res.body as ReadableStream<Uint8Array>).getReader();
+    s.clock.now = T0 + 1_000;
+    const began = Date.now();
+    let chunks = 0;
+    while (Date.now() - began < 400) {
+      const next = await reader.read();
+      if (next.done) break;
+      chunks += 1;
+    }
+    expect(Date.now() - began).toBeGreaterThanOrEqual(400);
+    expect(chunks).toBeGreaterThan(5);
+    await reader.cancel();
+    expect(seen.cancelled).toBe(true);
+  });
+
+  test("an ordinary answer arrives whole", async () => {
+    const s = setup({ program: () => new Response("whole body") });
+    const res = await call(s.server, "http://c/", withCookie(appGrant()));
+    expect(await res.text()).toBe("whole body");
+  });
+});
+
+describe("what a program's cache headers become", () => {
+  const cached = () =>
+    new Response("ok", {
+      headers: {
+        "cache-control": "public, max-age=31536000, immutable",
+        expires: "Wed, 21 Oct 2099 07:28:00 GMT",
+        etag: '"abc"',
+        "last-modified": "Wed, 21 Oct 2015 07:28:00 GMT",
+        pragma: "cache",
+      },
+    });
+
+  test("port mode: no-store whatever the program said, and no validators to revalidate with", async () => {
+    const { server } = setup({ program: cached });
+    const res = await call(server, "http://c/index.js", withCookie(appGrant()));
+    expect(res.headers.get("cache-control")).toBe("no-store");
+    expect(res.headers.has("expires")).toBe(false);
+    expect(res.headers.has("etag")).toBe(false);
+    expect(res.headers.has("last-modified")).toBe(false);
+  });
+
+  test("domain mode: the program's caching stays but public becomes private", async () => {
+    const code = hostCodeOf(appGrant());
+    const { server } = setup({ domain: "apps.example.com", program: cached });
+    const res = await call(
+      server,
+      `http://${code}.apps.example.com/index.js`,
+      withCookie(appGrant()),
+    );
+    expect(res.headers.get("cache-control")).toBe(
+      "max-age=31536000, immutable, private",
+    );
+    expect(res.headers.get("etag")).toBe('"abc"');
+  });
+
+  test("domain mode: an answer with no Cache-Control gets private, and one that already says private is kept as is", async () => {
+    const code = hostCodeOf(appGrant());
+    const none = setup({
+      domain: "apps.example.com",
+      program: () => new Response("ok"),
+    });
+    const bare = await call(
+      none.server,
+      `http://${code}.apps.example.com/`,
+      withCookie(appGrant()),
+    );
+    expect(bare.headers.get("cache-control")).toBe("private");
+    const own = setup({
+      domain: "apps.example.com",
+      program: () =>
+        new Response("ok", {
+          headers: { "cache-control": "private, max-age=5" },
+        }),
+    });
+    const kept = await call(
+      own.server,
+      `http://${code}.apps.example.com/`,
+      withCookie(appGrant()),
+    );
+    expect(kept.headers.get("cache-control")).toBe("private, max-age=5");
   });
 });
 
@@ -796,6 +995,20 @@ describe("a program's WebSocket", () => {
     expect((await gone).code).toBe(1008);
   });
 
+  test("the periodic check does not use the remembered answer: a removal is seen without a minute passing", async () => {
+    const upstream = program();
+    const s = setup({
+      socketUrl: () => `ws://127.0.0.1:${upstream.port}/x`,
+      recheckMs: 20,
+    });
+    const port = listen(s.server);
+    const ws = connect(port, "/live", { cookie: cookieFor(appGrant()) });
+    await opened(ws);
+    const gone = closed(ws);
+    s.state.allowed = false;
+    expect((await gone).code).toBe(1008);
+  });
+
   test("more than 16 MB in one message closes it with 1009", async () => {
     const upstream = program();
     const s = setup({ socketUrl: () => `ws://127.0.0.1:${upstream.port}/x` });
@@ -835,7 +1048,7 @@ const announced = custom(TURN_ARTIFACTS_EVENT, {
   omitted: 0,
 });
 const delivered = (apps: unknown) =>
-  custom("delivery.delivered", { deliverable: { apps } });
+  custom("delivery.delivered", { agentId: "b1", deliverable: { apps } });
 
 function openSetup(
   over: {
@@ -843,17 +1056,20 @@ function openSetup(
     cardApps?: unknown[] | null;
     canUse?: boolean;
     content?: { port?: number; domain?: string };
+    /** The employee the person opens; the run below was made by `b1`, and `b2` is in the same conversation. */
+    bot?: string;
   } = {},
 ) {
   const audits: AuditEventInput[] = [];
   const artifact: ArtifactAccessDeps = {
     channelFor: async (_a, id) =>
-      id === "c1" ? { agentIds: ["b1"], threadIds: ["th1"] } : null,
+      id === "c1" ? { agentIds: ["b1", "b2"], threadIds: ["th1"] } : null,
     runOf: async (_a, _c, id) =>
       id === "r1"
         ? {
             threadId: "th1",
             ownerId: "owner-1",
+            agentId: "b1",
             events: over.events ?? [
               announced,
               delivered([{ port: 4000, path: "/", title: "Dash" }]),
@@ -899,11 +1115,14 @@ function openSetup(
     headers: Record<string, string> = { "x-user": "p1" },
   ) =>
     app.fetch(
-      new Request("http://app.test:3010/api/computers/b1/open", {
-        method: "POST",
-        headers: { "content-type": "application/json", ...headers },
-        body: JSON.stringify(body),
-      }),
+      new Request(
+        `http://app.test:3010/api/computers/${over.bot ?? "b1"}/open`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", ...headers },
+          body: JSON.stringify(body),
+        },
+      ),
     );
   return { open, audits, access };
 }
@@ -935,6 +1154,26 @@ describe("POST /api/computers/:botId/open for a program", () => {
       path: "/dash?x=1",
       mode: "port",
     });
+  });
+
+  test("a run's delivered program is not open to another employee of the same conversation", async () => {
+    // b1 delivered port 4000 in run r1; b2 is in the conversation but did not run it.
+    const { open, audits } = openSetup({ bot: "b2" });
+    const res = await open({
+      kind: "app",
+      port: 4000,
+      channel: "c1",
+      run: "r1",
+    });
+    expect(res.status).toBe(404);
+    expect(audits).toEqual([]);
+    const own = await openSetup().open({
+      kind: "app",
+      port: 4000,
+      channel: "c1",
+      run: "r1",
+    });
+    expect(own.status).toBe(200);
   });
 
   test("the path defaults to the program's root", async () => {
@@ -1289,6 +1528,22 @@ describe("the rest of what a program's answer and request are cleaned of", () =>
       [],
     );
     expect(out.get("x-kept")).toBe("1");
+  });
+
+  test("the other spellings of the viewer's address are not sent on", () => {
+    const out = programRequestHeaders(
+      new Headers({
+        "cf-connecting-ip": "9.9.9.9",
+        "true-client-ip": "9.9.9.9",
+        "x-client-ip": "9.9.9.9",
+        "x-original-forwarded-for": "9.9.9.9",
+        "x-cluster-client-ip": "9.9.9.9",
+        "fastly-client-ip": "9.9.9.9",
+        "x-kept": "1",
+      }),
+      4000,
+    );
+    expect([...out.keys()].sort()).toEqual(["accept-encoding", "x-kept"]);
   });
 
   test("Refresh is removed from the answer, since it can send the browser elsewhere", async () => {

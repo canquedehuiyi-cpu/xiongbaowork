@@ -119,6 +119,8 @@ export type ArtifactAccessDeps = {
     threadId: string;
     /** Whose run it is: the person the thread belongs to, whose computer the turn used. */
     ownerId: string;
+    /** The employee the run was made by: a run only speaks for the employee that ran it. */
+    agentId: string;
     events: BaseEvent[];
   } | null>;
   /**
@@ -217,7 +219,8 @@ function viaRun(
   // Delivered on the run: the delivery event carries no seat, so it is the seat the same run
   // announced for this employee. One computer or none; two different ones are ambiguous.
   const delivered = valuesOf(events, DELIVERED_EVENT).some((value) => {
-    if (!isRecord(value)) return false;
+    // Another employee's hand-in in the same run says nothing about this one's computer or ports.
+    if (!isRecord(value) || value.agentId !== botId) return false;
     const deliverable = isRecord(value.deliverable)
       ? value.deliverable.workspaceFiles
       : undefined;
@@ -383,6 +386,8 @@ async function seatFor(
   if (!seen.agentIds.includes(botId)) return null;
   const found = await deps.runOf(actor, channel, run);
   if (!found || !seen.threadIds.includes(found.threadId)) return null;
+  // A conversation can hold several employees: a run is read only as the employee that made it.
+  if (found.agentId !== botId) return null;
   const own =
     "appPort" in wanted ? await deps.seatFor(botId, found.ownerId) : null;
   return confirmed(viaRun(found.events, botId, wanted, own), found.ownerId);

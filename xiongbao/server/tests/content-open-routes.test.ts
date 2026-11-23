@@ -466,6 +466,7 @@ function realAccess(
         ? {
             threadId: "th1",
             ownerId: "owner-1",
+            agentId: "b1",
             events: setup.events ?? [artifacts(["site/index.html"])],
           }
         : null,
@@ -529,6 +530,7 @@ describe("who may open a folder", () => {
 
   test("the folder's own index.html is enough, and a delivered file counts", async () => {
     const delivered = custom("delivery.delivered", {
+      agentId: "b1",
       deliverable: { workspaceFiles: ["site/index.html"] },
     });
     const access = realAccess({ events: [artifacts(["x.txt"]), delivered] });

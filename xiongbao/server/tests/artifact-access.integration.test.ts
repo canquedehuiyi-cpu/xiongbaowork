@@ -105,8 +105,10 @@ async function seedRun(
   tenant: string,
   runId: string,
   events: unknown[],
+  /** The employee that ran it: a run is only read as that employee. */
+  agent: string = bot,
 ) {
-  await fixtures`insert into thread_runs (id, tenant_id, thread_id, agent_id) values (${runId}, ${tenant}, ${thread}, ${bot})`;
+  await fixtures`insert into thread_runs (id, tenant_id, thread_id, agent_id) values (${runId}, ${tenant}, ${thread}, ${agent})`;
   let seq = 0;
   for (const event of events) {
     seq += 1;
@@ -158,6 +160,7 @@ beforeAll(async () => {
     custom("delivery.delivered", {
       taskId: randomUUID(),
       eventId: randomUUID(),
+      agentId: bot,
       deliverable: {
         kind: "deliverable",
         workspaceFiles: ["final/summary.md"],
@@ -170,6 +173,7 @@ beforeAll(async () => {
     custom("delivery.delivered", {
       taskId: randomUUID(),
       eventId: randomUUID(),
+      agentId: bot,
       deliverable: { kind: "deliverable", apps: APPS },
     }),
   ]);
@@ -178,21 +182,34 @@ beforeAll(async () => {
     custom("delivery.delivered", {
       taskId: randomUUID(),
       eventId: randomUUID(),
+      agentId: bot,
       deliverable: { kind: "deliverable", apps: APPS },
     }),
   ]);
   await seedRun(ownerThread, owner, forgedRun, [
     artifacts(`person:${outsider}`, ["secret.md"]),
   ]);
-  await seedRun(ownerThread, owner, privateRun, [
-    artifacts(`person:${owner}`, ["private.md"], botPrivate),
-  ]);
-  await seedRun(ownerThread, owner, isolatedRun, [
-    artifacts(`bot:${botIsolated}`, ["iso.md"], botIsolated),
-  ]);
-  await seedRun(ownerThread, owner, goneRun, [
-    artifacts(`person:${owner}`, ["gone.md"], botGone),
-  ]);
+  await seedRun(
+    ownerThread,
+    owner,
+    privateRun,
+    [artifacts(`person:${owner}`, ["private.md"], botPrivate)],
+    botPrivate,
+  );
+  await seedRun(
+    ownerThread,
+    owner,
+    isolatedRun,
+    [artifacts(`bot:${botIsolated}`, ["iso.md"], botIsolated)],
+    botIsolated,
+  );
+  await seedRun(
+    ownerThread,
+    owner,
+    goneRun,
+    [artifacts(`person:${owner}`, ["gone.md"], botGone)],
+    botGone,
+  );
 
   // A group chat that was deleted after the run.
   await fixtures`insert into channels (id, tenant_id, name, description, deleted_at) values (${dead}, 'team', 'd', '', now())`;
