@@ -78,7 +78,16 @@ export function readTurnArtifactsValue(
 
 type Subscriber = {
   onRunStartedEvent?: (params: {
-    event: { runId: string; input?: { messages?: ReadonlyArray<{ role?: string }> } };
+    event: {
+      runId: string;
+      input?: {
+        messages?: ReadonlyArray<{ id?: string; role?: string }>;
+      };
+    };
+  }) => void;
+  onTextMessageStartEvent?: (params: { event: { messageId: string } }) => void;
+  onToolCallStartEvent?: (params: {
+    event: { parentMessageId?: string };
   }) => void;
   onCustomEvent?: (params: {
     event: { name: string; value: unknown };
@@ -98,6 +107,10 @@ export type TurnArtifactTracker = {
 export function createTurnArtifactTracker(): TurnArtifactTracker {
   let runId = "";
   let events: readonly TrackedTurnArtifacts[] = [];
+  /** 见过的用户消息 id。 */
+  const askedIds = new Set<string>();
+  /** 当前这个 run 自己产生的最后一条消息：事件的锚点（重放时本地消息的末尾不是它）。 */
+  let lastMessage: string | null = null;
   const listeners = new Set<() => void>();
   const take: TurnArtifactTracker["take"] = (input) => {
     const value = readTurnArtifactsValue(input.value);
@@ -118,20 +131,35 @@ export function createTurnArtifactTracker(): TurnArtifactTracker {
       onRunStartedEvent: ({ event }) => {
         runId = event.runId;
         /*
-         * 这一次 run 带来了人新发的话：新的一轮开始，旧轮的事件不会再画，不必留着（重放历史时每一轮都从
-         * 这里开始，所以只剩最近一轮；后台续跑的 run 不带新话，同一轮的事件接着留）。
+         * 这一次 run 带来了一条此前没见过的用户消息（按 id；看这一次 run 的 input 里最后一条用户消息，它才是触发这次 run 的话，前面的是历史）：新的一轮开始，旧轮的事件不会再画，不必留着。
+         * 实时发起的 run 的 input 是整段历史，必含用户消息，所以不能看「有没有用户消息」，要看有没有「新的」：
+         * 同一轮的第二个 run（工具结果回填、批准后继续）带的都是见过的，事件接着留。重放历史时每一轮的新话
+         * 依次到来，只剩最近一轮；哪一轮算当前，最终仍由 `turnArtifactEvents` 按消息锚点判。
          */
-        if (event.input?.messages?.some((message) => message.role === "user")) {
-          if (events.length === 0) return;
+        const asked = (event.input?.messages ?? []).filter(
+          (message) =>
+            message.role === "user" && typeof message.id === "string",
+        );
+        const latest = asked.at(-1)?.id;
+        const fresh = latest !== undefined && !askedIds.has(latest);
+        for (const message of asked) askedIds.add(message.id as string);
+        lastMessage = null;
+        if (fresh && events.length > 0) {
           events = [];
           for (const listener of listeners) listener();
         }
+      },
+      onTextMessageStartEvent: ({ event }) => {
+        lastMessage = event.messageId;
+      },
+      onToolCallStartEvent: ({ event }) => {
+        if (event.parentMessageId) lastMessage = event.parentMessageId;
       },
       onCustomEvent: ({ event, messages }) => {
         if (event.name !== TURN_ARTIFACTS_EVENT) return;
         take({
           runId,
-          anchor: messages.at(-1)?.id ?? null,
+          anchor: lastMessage ?? messages.at(-1)?.id ?? null,
           value: event.value,
         });
       },

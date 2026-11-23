@@ -406,7 +406,12 @@ describe("群聊读回复行里记的事件", () => {
  */
 class Replaying extends AbstractAgent {
   constructor(
-    private readonly rounds: { runId: string; ask: string; files: File[] }[],
+    private readonly rounds: {
+      runId: string;
+      /** 这一次 run 的 input 里带的用户消息 id；不给就是不带 input。 */
+      asked?: string[];
+      files: File[];
+    }[],
   ) {
     super({ agentId: "coworker" });
   }
@@ -422,17 +427,23 @@ class Replaying extends AbstractAgent {
           type: EventType.RUN_STARTED,
           threadId: "t1",
           runId: round.runId,
-          input: {
-            runId: round.runId,
-            threadId: "t1",
-            state: {},
-            tools: [],
-            context: [],
-            forwardedProps: {},
-            messages: [
-              { id: `ask-${round.runId}`, role: "user", content: round.ask },
-            ],
-          } as unknown as RunAgentInput,
+          ...(round.asked
+            ? {
+                input: {
+                  runId: round.runId,
+                  threadId: "t1",
+                  state: {},
+                  tools: [],
+                  context: [],
+                  forwardedProps: {},
+                  messages: round.asked.map((id) => ({
+                    id,
+                    role: "user",
+                    content: "x",
+                  })),
+                } as unknown as RunAgentInput,
+              }
+            : {}),
         });
         next({
           type: EventType.TEXT_MESSAGE_START,
@@ -470,48 +481,153 @@ const stored = (runId: string): Message[] => [
 ];
 
 describe("刷新后回放历史，清单仍在", () => {
-  const rounds = [
-    { runId: "r1", ask: "旧的", files: [file("old.md", 10)] },
-    { runId: "r2", ask: "新的", files: [file("new.md", 10)] },
-  ];
   const listed = (events: ReturnType<typeof turnArtifactEvents>) =>
     events.flatMap((event) =>
       event.value.files.map((f) => `${f.path}@${event.runId}`),
     );
+  /** 回放里的 RUN_STARTED 带不带 input：不带时旧轮只能靠消息锚点挡掉，不靠清空。 */
+  const variants = [
+    { name: "RUN_STARTED carries the input", withInput: true },
+    { name: "RUN_STARTED has no input", withInput: false },
+  ];
+  const twoTurns = (withInput: boolean) =>
+    new Replaying([
+      {
+        runId: "r1",
+        ...(withInput ? { asked: ["ask-r1"] } : {}),
+        files: [file("old.md", 10)],
+      },
+      {
+        runId: "r2",
+        ...(withInput ? { asked: ["ask-r2"] } : {}),
+        files: [file("new.md", 10)],
+      },
+    ]);
 
-  test("replay first, then the stored history is merged in", async () => {
-    const agent = new Replaying(rounds);
+  describe.each(variants)("$name", ({ withInput }) => {
+    test("replay first, then the stored history is merged in: only the latest turn is drawn", async () => {
+      const agent = twoTurns(withInput);
+      const { result } = renderHook(() => useTurnArtifactEvents(agent, "t1"));
+      await act(async () => {
+        await agent.connectAgent({});
+      });
+      // 历史读回来再合并：存库的行（同 id）与本地行并在一起，另有本地没有的旧行。
+      await act(async () => {
+        agent.setMessages([
+          { id: "older", role: "user", content: "更早" },
+          ...stored("r1"),
+          ...stored("r2"),
+        ]);
+      });
+      expect(
+        listed(turnArtifactEvents(result.current, agent.messages)),
+      ).toEqual(["new.md@r2"]);
+    });
+
+    test("stored history first, then the replay arrives: only the latest turn is drawn", async () => {
+      const agent = twoTurns(withInput);
+      agent.setMessages([...stored("r1"), ...stored("r2")]);
+      const { result } = renderHook(() => useTurnArtifactEvents(agent, "t1"));
+      await act(async () => {
+        await agent.connectAgent({});
+      });
+      expect(
+        listed(turnArtifactEvents(result.current, agent.messages)),
+      ).toEqual(["new.md@r2"]);
+    });
+  });
+
+  test("two runs of one turn, one replayed and one live, are both listed with their own run", async () => {
+    // 回放：这一轮的第一个 run；实时：第二个 run（input 是整段历史，带着见过的那条用户消息）。
+    const agent = new Replaying([
+      { runId: "r1", asked: ["ask-r1"], files: [file("a.md", 10)] },
+      { runId: "r1b", asked: ["ask-r1"], files: [file("b.md", 10)] },
+    ]);
     const { result } = renderHook(() => useTurnArtifactEvents(agent, "t1"));
     await act(async () => {
       await agent.connectAgent({});
     });
-    // 历史读回来再合并：存库的行（同 id）与本地行并在一起，另有本地没有的旧行。
     await act(async () => {
       agent.setMessages([
-        { id: "older", role: "user", content: "更早" },
-        ...stored("r1"),
-        ...stored("r2"),
+        { id: "ask-r1", role: "user", content: "x" },
+        { id: "said-r1", role: "assistant", content: "好了" },
+        { id: "said-r1b", role: "assistant", content: "好了" },
       ]);
     });
     expect(listed(turnArtifactEvents(result.current, agent.messages))).toEqual([
-      "new.md@r2",
+      "a.md@r1",
+      "b.md@r1b",
+    ]);
+    // 清单里两个链接各带自己那条事件的 run。
+    const tracker = createTurnArtifactTracker();
+    for (const event of result.current)
+      tracker.take({
+        runId: event.runId,
+        anchor: event.anchor,
+        value: event.value,
+      });
+    render(<Notes tracker={tracker} messages={agent.messages as Message[]} />);
+    const hrefs = ui()
+      .getAllByRole("link")
+      .map((link) => link.getAttribute("href"));
+    expect(hrefs).toEqual([
+      "/api/computers/b1/files/download?path=a.md&channel=c1&run=r1",
+      "/api/computers/b1/files/download?path=b.md&channel=c1&run=r1b",
     ]);
   });
 
-  test("stored history first, then the replay arrives", async () => {
-    const agent = new Replaying(rounds);
-    agent.setMessages([...stored("r1"), ...stored("r2")]);
-    const { result } = renderHook(() => useTurnArtifactEvents(agent, "t1"));
-    await act(async () => {
-      await agent.connectAgent({});
-    });
-    expect(listed(turnArtifactEvents(result.current, agent.messages))).toEqual([
+  test("a second live run with the whole history in its input keeps the first run's files", () => {
+    const tracker = createTurnArtifactTracker();
+    const started = (runId: string, asked: string[]) =>
+      tracker.subscriber.onRunStartedEvent?.({
+        event: {
+          runId,
+          input: {
+            messages: asked.map((id) => ({ id, role: "user" })),
+          },
+        },
+      });
+    const custom = (files: File[]) =>
+      tracker.subscriber.onCustomEvent?.({
+        event: {
+          name: TURN_ARTIFACTS_EVENT,
+          value: { ...base, botId: "b1", files },
+        },
+        messages: [{ id: "said" }],
+      });
+    started("r1", ["u1"]);
+    custom([file("a.md", 1)]);
+    // 工具结果回填后的第二个 run：input 是整段历史，只有见过的用户消息。
+    started("r2", ["u0", "u1"]);
+    custom([file("b.md", 1)]);
+    expect(tracker.events().map((event) => event.runId)).toEqual(["r1", "r2"]);
+    // 人又发了一句：新的一轮，旧的丢掉。
+    started("r3", ["u0", "u1", "u2"]);
+    expect(tracker.events()).toEqual([]);
+  });
+
+  test("the anchor alone keeps an earlier turn out of the list", () => {
+    const tracker = createTurnArtifactTracker();
+    emit(tracker, "r1", { ...base, botId: "b1", files: [file("old.md", 1)] });
+    emit(tracker, "r2", { ...base, botId: "b1", files: [file("new.md", 1)] }, [
+      user,
+      reply,
+      { id: "u2", role: "user", content: "再来" },
+      { id: "a2", role: "assistant", content: "嗯" },
+    ]);
+    const messages: Message[] = [
+      user,
+      reply,
+      { id: "u2", role: "user", content: "再来" },
+      { id: "a2", role: "assistant", content: "嗯" },
+    ];
+    expect(listed(turnArtifactEvents(tracker.events(), messages))).toEqual([
       "new.md@r2",
     ]);
   });
 
   test("a new user message hides the earlier turn's list", async () => {
-    const agent = new Replaying(rounds);
+    const agent = twoTurns(true);
     const { result } = renderHook(() => useTurnArtifactEvents(agent, "t1"));
     await act(async () => {
       await agent.connectAgent({});
@@ -524,7 +640,7 @@ describe("刷新后回放历史，清单仍在", () => {
   });
 
   test("the same agent object moving to another thread starts a clean list", async () => {
-    const agent = new Replaying(rounds);
+    const agent = twoTurns(true);
     const { result, rerender } = renderHook(
       ({ thread }) => useTurnArtifactEvents(agent, thread),
       { initialProps: { thread: "t1" } },

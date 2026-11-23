@@ -68,12 +68,12 @@ import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
 import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
-import { type Delivery, firstSentenceOf } from "../tasks/delivery";
-import { DELIVERY_EVENTS } from "../tasks/delivery-events";
 import {
   type AutoDeliveryReader,
   autoDeliverable,
 } from "../tasks/auto-delivery";
+import { type Delivery, firstSentenceOf } from "../tasks/delivery";
+import { DELIVERY_EVENTS } from "../tasks/delivery-events";
 import type { TaskProjector } from "../tasks/projector";
 import {
   currentTenant,
@@ -2702,11 +2702,7 @@ export function createGroupConversations(deps: {
           );
           return { replyText: "" };
         }
-        const {
-          privateShare: _held,
-          heldTurnArtifacts,
-          ...rest
-        } = row.details;
+        const { privateShare: _held, heldTurnArtifacts, ...rest } = row.details;
         // 主人放行了回复：扣着的文件清单随它一起放出来。
         const kept = {
           ...rest,
