@@ -20,6 +20,7 @@
  * The refs are opaque to the caller precisely so that the server holds the mapping.
  */
 
+import type { TurnArtifact } from "../../../shared/turn-artifacts";
 import { DECLINED_BY_PERSON } from "@openbot/shared/approval-outcomes";
 import type {
   ControlRequestInput,
@@ -292,6 +293,8 @@ export type ComputerGatewayOptions = {
   resolveDevice?: (
     botId: string,
   ) => Promise<{ tenantId: string; deviceId: string } | null>;
+  /** 一次记快照最多占多久（毫秒）；超出的记为失败。默认 {@link TURN_MARK_FLUSH_MS}，测试里调小。 */
+  turnMarkFlushMs?: number;
   /**
    * The local apps a machine reported on its heartbeat, `{ref, name}` and nothing else (device MCP
    * bridge §3.4). Asked for the machine `resolveDevice` answered; absent means no Bot here can use a
@@ -541,6 +544,25 @@ export interface ComputerGateway {
     input: { path: string },
     signal?: AbortSignal,
   ): Promise<{ kind: "file" | "folder"; bytes: number } | "absent" | null>;
+  /**
+   * 一轮开始时登记「待记快照」，名字由调用方定、要全局唯一。只登记，不发请求、不唤醒电脑：电脑第一次
+   * 被用到（定位）时才先记快照（`/files/mark`）再放行。不过 `govern`，设备上的电脑空操作。
+   */
+  markTurn(seat: ComputerSeat, markId: string): Promise<void>;
+  /**
+   * 对比 `markTurn` 登记的快照，答这一轮新建或改过的文件（`/files/changes`）。这一轮没动过电脑、快照没记成、
+   * 快照不在了（电脑重启过）、设备上的电脑都答 `null`，前两种不发任何请求；其它失败抛出。
+   */
+  turnChanges(
+    seat: ComputerSeat,
+    markId: string,
+    signal?: AbortSignal,
+  ): Promise<{
+    files: TurnArtifact[];
+    scanned: number;
+    scanTruncated: boolean;
+    omitted: number;
+  } | null>;
   runCommand(
     seat: ComputerSeat,
     actor: ActionActor,
@@ -781,6 +803,12 @@ export interface ComputerGateway {
   // --- end desktop control ---
 }
 
+/** 懒快照每个座位、全部座位最多记着多少个。 */
+const TURN_MARKS_PER_SEAT = 50;
+const TURN_MARKS_TOTAL = 1000;
+/** 一次记快照（含每个 mark 自己的请求）最多占多久，电脑挂住时不拖住员工的动作。 */
+const TURN_MARK_FLUSH_MS = 10_000;
+
 export function createComputerGateway(
   options: ComputerGatewayOptions,
 ): ComputerGateway {
@@ -913,6 +941,13 @@ export function createComputerGateway(
      */
     const device = await options.resolveDevice?.(seat.botId);
     if (device) return runnerAddress(device);
+    const address = await locateOnComputer(seat);
+    await flushTurnMarks(seat, address);
+    return address;
+  }
+
+  /** 定位员工电脑（不含「这一轮的快照」）。 */
+  async function locateOnComputer(seat: ComputerSeat): Promise<string> {
     const address = await provider.locate(seat);
     /*
      * A device is not an address.
@@ -964,6 +999,108 @@ export function createComputerGateway(
    * they can disagree: the run the action was decided against would not be the run it was sent to.
    * Passing the address through means the check and the send are the same trip.
    */
+  /*
+   * 懒快照：一轮开始只登记「待记」，不碰电脑；电脑第一次被用到（`locate`）时先把待记的快照都记下，
+   * 再返回地址，所以快照恰在这一轮第一次动电脑之前。纯聊天的一轮从不唤醒电脑。
+   * 每个座位按 `computerKeyText(seat.key)` 存一组 markId 的状态，超出上限丢最旧的。
+   */
+  const turnMarks = new Map<
+    string,
+    Map<string, "pending" | "recorded" | "failed">
+  >();
+  const flushing = new Map<string, Promise<void>>();
+
+  function marksOf(seat: ComputerSeat) {
+    const key = computerKeyText(seat.key);
+    let marks = turnMarks.get(key);
+    if (!marks) {
+      marks = new Map();
+      turnMarks.set(key, marks);
+    }
+    return { key, marks };
+  }
+
+  function dropTurnMark(seat: ComputerSeat, markId: string) {
+    const { key, marks } = marksOf(seat);
+    marks.delete(markId);
+    if (marks.size === 0) turnMarks.delete(key);
+  }
+
+  function noteTurnMark(
+    seat: ComputerSeat,
+    markId: string,
+    state: "pending" | "recorded" | "failed",
+  ) {
+    const { marks } = marksOf(seat);
+    marks.delete(markId);
+    marks.set(markId, state);
+    while (marks.size > TURN_MARKS_PER_SEAT) {
+      const oldest = marks.keys().next().value;
+      if (oldest === undefined) break;
+      marks.delete(oldest);
+    }
+    let total = 0;
+    for (const each of turnMarks.values()) total += each.size;
+    while (total > TURN_MARKS_TOTAL) {
+      const firstSeat = turnMarks.entries().next().value;
+      if (!firstSeat) break;
+      const [key, each] = firstSeat;
+      const oldest = each.keys().next().value;
+      if (oldest === undefined) {
+        turnMarks.delete(key);
+        continue;
+      }
+      each.delete(oldest);
+      total -= 1;
+      if (each.size === 0) turnMarks.delete(key);
+    }
+  }
+
+  async function flushTurnMarks(seat: ComputerSeat, address: string) {
+    const key = computerKeyText(seat.key);
+    // 别的动作正在记的，等它记完再走：不能让第二个动作抢在快照前面。
+    const inflight = flushing.get(key);
+    if (inflight) await inflight;
+    const pending = [...(turnMarks.get(key) ?? [])]
+      .filter(([, state]) => state === "pending")
+      .map(([markId]) => markId);
+    if (pending.length === 0) return;
+    const budgetMs = options.turnMarkFlushMs ?? TURN_MARK_FLUSH_MS;
+    const run = (async () => {
+      const cutoff = AbortSignal.timeout(budgetMs);
+      const expired = new Promise<"expired">((resolve) =>
+        cutoff.addEventListener("abort", () => resolve("expired"), {
+          once: true,
+        }),
+      );
+      for (const markId of pending) {
+        if (cutoff.aborted) {
+          noteTurnMark(seat, markId, "failed");
+          continue;
+        }
+        const sent = post<unknown>(
+          seat,
+          "/files/mark",
+          { mark: markId },
+          cutoff,
+          budgetMs,
+          address,
+        ).then(
+          () => "ok" as const,
+          () => "failed" as const,
+        );
+        const outcome = await Promise.race([sent, expired]);
+        noteTurnMark(seat, markId, outcome === "ok" ? "recorded" : "failed");
+      }
+    })();
+    flushing.set(key, run);
+    try {
+      await run;
+    } finally {
+      if (flushing.get(key) === run) flushing.delete(key);
+    }
+  }
+
   async function post<T>(
     seat: ComputerSeat,
     path: string,
@@ -3180,6 +3317,44 @@ export function createComputerGateway(
         )
           return "absent";
         throw error;
+      }
+    },
+
+    async markTurn(seat: ComputerSeat, markId: string) {
+      if (options.resolveDevice) return;
+      noteTurnMark(seat, markId, "pending");
+    },
+
+    async turnChanges(
+      seat: ComputerSeat,
+      markId: string,
+      signal?: AbortSignal,
+    ) {
+      if (options.resolveDevice) return null;
+      const state = turnMarks.get(computerKeyText(seat.key))?.get(markId);
+      // 这一轮没动过电脑、快照没记成、或登记被淘汰：没有可比的，也不为它唤醒电脑。
+      if (state !== "recorded") {
+        dropTurnMark(seat, markId);
+        return null;
+      }
+      try {
+        const found = await post<{
+          files: TurnArtifact[];
+          scanned: number;
+          scanTruncated: boolean;
+          omitted: number;
+        }>(seat, "/files/changes", { mark: markId }, signal);
+        return {
+          files: found.files,
+          scanned: found.scanned,
+          scanTruncated: found.scanTruncated,
+          omitted: found.omitted,
+        };
+      } catch (error) {
+        if (error instanceof WorkspaceNotFoundError) return null;
+        throw error;
+      } finally {
+        dropTurnMark(seat, markId);
       }
     },
 

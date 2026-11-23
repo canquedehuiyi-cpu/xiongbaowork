@@ -160,6 +160,8 @@ tests/arcade-vendor-read-contract.test.ts
 tests/arcade-verifier-notice.test.ts
 tests/arcade-verifier-repoint.test.ts
 tests/arcade-verify.integration.test.ts
+tests/artifact-access.integration.test.ts
+tests/artifact-access.test.ts
 tests/ask-person-free-text.integration.test.ts
 tests/ask-person-one-part.integration.test.ts
 tests/assertion-shape.test.ts
@@ -966,6 +968,8 @@ tests/tool-search.test.ts
 tests/tool-selection-environment-restoration-driver.test.ts
 tests/tool-selection-environment-restoration.test.ts
 tests/tool-selection.integration.test.ts
+tests/turn-artifacts-replay.integration.test.ts
+tests/turn-artifacts.test.ts
 tests/turn-failed-by-stream.test.ts
 tests/turn-notice-config.test.ts
 tests/turn-notice.integration.test.ts

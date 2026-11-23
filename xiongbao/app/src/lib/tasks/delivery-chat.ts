@@ -34,7 +34,13 @@ export type ChatDeliveryEvent = { eventId?: string } & (
       dueAt: string;
       reason: string;
     }
-  | { kind: "delivered"; taskId: string; deliverable: unknown }
+  | {
+      kind: "delivered";
+      taskId: string;
+      deliverable: unknown;
+      /** 交付的员工；旧事件没有，卡上就不出下载按钮（不猜是哪位）。 */
+      agentId?: string;
+    }
   | { kind: "bounced"; taskId: string; reason: string }
 );
 
@@ -95,6 +101,9 @@ export function readDeliveryEvent(
         taskId,
         ...line,
         deliverable: record.deliverable ?? null,
+        ...(textOr(record.agentId, null)
+          ? { agentId: textOr(record.agentId, null) as string }
+          : {}),
       };
     case "bounced":
       return { kind, taskId, ...line, reason: textOr(record.reason, "") ?? "" };

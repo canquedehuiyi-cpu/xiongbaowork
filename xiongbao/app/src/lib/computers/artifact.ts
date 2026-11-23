@@ -71,6 +71,34 @@ export function artifactDownloadHref(
 }
 
 /**
+ * The download address for a file the server announced, with the scope that tells the route where it
+ * was announced: a conversation and the run that listed it (`channel` + `run`), or a delivery card
+ * (`task`). The route accepts a path only from the run whose event listed it, so a link must carry
+ * that run's id, not the id of whichever run came last.
+ *
+ * Undefined when no link should be drawn: the same refusals as {@link artifactDownloadHref}, and a
+ * scope with an empty id.
+ */
+export function artifactHref(input: {
+  botId: string;
+  path: string;
+  scope?: { channel: string; run: string } | { task: string };
+}): string | undefined {
+  const base = artifactDownloadHref(input.botId, input.path);
+  if (base === undefined) return undefined;
+  const scope = input.scope;
+  if (scope === undefined) return base;
+  const query = (name: string, value: string) =>
+    `&${name}=${encodeURIComponent(value)}`;
+  if ("task" in scope)
+    return scope.task.trim() === ""
+      ? undefined
+      : base + query("task", scope.task);
+  if (scope.channel.trim() === "" || scope.run.trim() === "") return undefined;
+  return base + query("channel", scope.channel) + query("run", scope.run);
+}
+
+/**
  * Whether the answer says the files are where this address looks for them.
  *
  * THE SERVER'S ANSWER ONLY. `workspace` is what a deployment that runs the Bot in its own container

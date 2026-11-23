@@ -36,6 +36,10 @@ import {
   readStoredReasoning,
   type StoredReasoning,
 } from "../../../shared/thinking";
+import {
+  TURN_ARTIFACTS_EVENT,
+  type TurnArtifact,
+} from "../../../shared/turn-artifacts";
 import type { HandoffCaps } from "../agents/handoff";
 import { delegationFreed as readDelegationFreed } from "../approvals/delegation-freed";
 import type { ApprovalContinuation } from "../approvals/types";
@@ -64,12 +68,12 @@ import { TEAM_TENANT } from "../db/schema/tenant";
 import { workItems } from "../db/schema/work";
 import { leadingSkillCommand } from "../plugins/picked-skill";
 import type { CheckPrivateShare } from "../proactive/private-share";
-import { type Delivery, firstSentenceOf } from "../tasks/delivery";
-import { DELIVERY_EVENTS } from "../tasks/delivery-events";
 import {
   type AutoDeliveryReader,
   autoDeliverable,
 } from "../tasks/auto-delivery";
+import { type Delivery, firstSentenceOf } from "../tasks/delivery";
+import { DELIVERY_EVENTS } from "../tasks/delivery-events";
 import type { TaskProjector } from "../tasks/projector";
 import {
   currentTenant,
@@ -434,6 +438,7 @@ const SHARED_DETAILS: ReadonlySet<string> = new Set([
   "plan",
   "reasoning",
   "stepLimit",
+  "turnArtifacts",
   "via",
 ]);
 
@@ -486,6 +491,88 @@ function stepLimitOf(name: string, value: unknown): GroupStepLimit | null {
 
 const withStepLimit = (limit: GroupStepLimit | null) =>
   limit ? { stepLimit: limit } : {};
+
+/**
+ * 这一轮员工在自己电脑上留下的文件（`computer.turn_artifacts`，服务器在每次 run 收尾前插的那条），记在回复行的
+ * `details.turnArtifacts` 上：每条连同它所在的 run（下载路由只认「列出这个路径的那条事件所在的 run」）。
+ *
+ * 读的是 `runTurn` 的 `onCustom`，那是服务器清洗过之后的流：员工自己流里伪造的这类事件在入库前已被丢掉
+ * （`threads/run-side-events.ts`）。这里再核一次员工：事件说的不是这位员工，就不记。`seat` 不记：它是
+ * 下载路由自己从那个 run 的事件里还原的，群里其他人不需要读到。群聊据此画「本轮产物」
+ * （`app/src/components/channels/group-chat.tsx`）。
+ */
+type GroupTurnArtifacts = {
+  runId: string;
+  value: {
+    botId: string;
+    files: TurnArtifact[];
+    scanned: number;
+    scanTruncated: boolean;
+    omitted: number;
+  };
+};
+
+function turnArtifactsOf(
+  name: string,
+  value: unknown,
+  agentId: string,
+  runId: string,
+): GroupTurnArtifacts | null {
+  if (name !== TURN_ARTIFACTS_EVENT || runId === "") return null;
+  const body = value as Record<string, unknown> | null;
+  if (!body || body.botId !== agentId || !Array.isArray(body.files))
+    return null;
+  const files = body.files.flatMap((raw): TurnArtifact[] => {
+    const file = raw as Partial<TurnArtifact> | null;
+    if (!file || typeof file.path !== "string" || file.path === "") return [];
+    return [
+      {
+        path: file.path,
+        bytes: Number.isFinite(file.bytes) ? Number(file.bytes) : 0,
+        modifiedMs: Number.isFinite(file.modifiedMs)
+          ? Number(file.modifiedMs)
+          : 0,
+        change: file.change === "modified" ? "modified" : "new",
+      },
+    ];
+  });
+  if (files.length === 0) return null;
+  const omitted = Number(body.omitted);
+  return {
+    runId,
+    value: {
+      botId: agentId,
+      files,
+      scanned: Number.isFinite(Number(body.scanned)) ? Number(body.scanned) : 0,
+      scanTruncated: body.scanTruncated === true,
+      omitted: Number.isFinite(omitted) && omitted > 0 ? omitted : 0,
+    },
+  };
+}
+
+/** 回复行上已记的（读回来的 JSON 列，按结构再判一次）。 */
+function storedTurnArtifacts(value: unknown): GroupTurnArtifacts[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const item = entry as { runId?: unknown; value?: { botId?: unknown } };
+    if (
+      typeof item?.runId !== "string" ||
+      typeof item.value?.botId !== "string"
+    )
+      return [];
+    return (
+      turnArtifactsOf(
+        TURN_ARTIFACTS_EVENT,
+        item.value,
+        item.value.botId,
+        item.runId,
+      ) ?? []
+    );
+  });
+}
+
+const withTurnArtifacts = (items: readonly GroupTurnArtifacts[]) =>
+  items.length > 0 ? { turnArtifacts: [...items] } : {};
 
 /**
  * 这位员工这一轮最后一份计划（期二）：它最后一次 `update_plan` 调用里能读成计划的参数（`shared/plan.ts`），记在
@@ -2043,6 +2130,7 @@ export function createGroupConversations(deps: {
     };
     let compacted: GroupCompactionNote | null = null;
     let limited: GroupStepLimit | null = null;
+    const artifacts: GroupTurnArtifacts[] = [];
     let planned: PlanItem[] | null = null;
     // 外部员工的轮次在它自己那台电脑上跑，计划不记在这一行上。
     const ownPlan = () => (bot.hiredBy ? null : planned);
@@ -2077,6 +2165,8 @@ export function createGroupConversations(deps: {
           onCustom: ({ name, value }) => {
             compacted = compactionNoteOf(name) ?? compacted;
             limited = stepLimitOf(name, value) ?? limited;
+            const made = turnArtifactsOf(name, value, agentId, runId);
+            if (made) artifacts.push(made);
             const mark = deliveryMarkOf(name, value, agentId, new Date());
             if (mark) marks.push(mark);
           },
@@ -2139,6 +2229,7 @@ export function createGroupConversations(deps: {
       const shownMarks = detached ? [] : ownMarks();
       // 外部员工的轮次不走这里的步数（它在自己那台电脑上跑），不记。
       const shownLimit = detached || bot.hiredBy ? null : limited;
+      const shownArtifacts = detached || bot.hiredBy ? [] : artifacts;
       const shownPlan = detached ? null : ownPlan();
       const shownReasoning = detached ? null : ownReasoning();
       if (gate.status === "pending") {
@@ -2147,6 +2238,10 @@ export function createGroupConversations(deps: {
           ...chainOf(turn),
           ...withMarks(shownMarks),
           ...withStepLimit(shownLimit),
+          // 回复还扣着：文件名和 run 也一起扣着（不在共享的部分），主人放行时再放出来。
+          ...(shownArtifacts.length > 0
+            ? { heldTurnArtifacts: [...shownArtifacts] }
+            : {}),
           ...withPlan(shownPlan),
           ...withReasoning(shownReasoning),
         });
@@ -2172,7 +2267,11 @@ export function createGroupConversations(deps: {
         await closeCard(cardTurn, agentId, runId, true, round(gate.message));
         return;
       }
-      await deps.store.finish(id, result.replyText, "completed", compaction);
+      // 回复放行了，这一轮的文件才跟着放出来。
+      await deps.store.finish(id, result.replyText, "completed", {
+        ...compaction,
+        ...withTurnArtifacts(shownArtifacts),
+      });
       /*
        * An external employee's turn answers at once that it started and goes on on its owner's
        * computer (agents/acp/agent.ts `createAcpGroupTurn`): its card stays open for the run that
@@ -2603,7 +2702,12 @@ export function createGroupConversations(deps: {
           );
           return { replyText: "" };
         }
-        const { privateShare: _held, ...kept } = row.details;
+        const { privateShare: _held, heldTurnArtifacts, ...rest } = row.details;
+        // 主人放行了回复：扣着的文件清单随它一起放出来。
+        const kept = {
+          ...rest,
+          ...withTurnArtifacts(storedTurnArtifacts(heldTurnArtifacts)),
+        };
         await deps.store.finish(row.id, held.text, "completed", kept);
         await closeCard(
           { ownerUserId: row.ownerUserId, channelId: row.channelId },
@@ -2631,6 +2735,10 @@ export function createGroupConversations(deps: {
       const resumedMarks: GroupDeliveryMark[] = [];
       // 恢复后这一段又跑满了步数：和标记一样记在这一行上。
       let resumedLimit: GroupStepLimit | null = null;
+      /*
+       * 恢复后的这一段不记产物清单：续跑的 run 用的是它自己新取的 run id（`continuationRunner` 不传），
+       * `onCustom` 不告诉我们它是什么，而下载链接要的正是那个 id。
+       */
       // 等待前记下的计划；恢复后又更新了就换上新的。
       let resumedPlan: PlanItem[] | null =
         readPlan({ items: row.details.plan }) ?? null;
@@ -2903,6 +3011,7 @@ export function createGroupConversations(deps: {
           ...(isStepLimit(details.stepLimit)
             ? { stepLimit: { steps: details.stepLimit.steps } }
             : {}),
+          ...withTurnArtifacts(storedTurnArtifacts(details.turnArtifacts)),
           ...withPlan(readPlan({ items: details.plan }) ?? null),
           ...withReasoning(readStoredReasoning(details.reasoning)),
           // 外部员工在等招聘人确认：每个成员读到的都只有谁在等谁、结果如何。

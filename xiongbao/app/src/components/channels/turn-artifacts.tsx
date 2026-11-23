@@ -2,10 +2,18 @@ import type { Message } from "@ag-ui/core";
 import { IconDownload } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { TranscriptNote } from "@/components/channels/chat-transcript";
+import {
+  groupTurnArtifactEvents,
+  mergedTurnArtifacts,
+  type TrackedTurnArtifacts,
+  type TurnArtifactGroup,
+  turnArtifactEvents,
+} from "@/lib/channels/turn-artifact-events";
 import { client } from "@/lib/client";
 import {
   artifactDownloadHref,
   artifactFolderOf,
+  artifactHref,
   isWorkspaceScope,
   normalizedArtifactPath,
   writtenPathsInTurn,
@@ -130,11 +138,7 @@ function rowsOf(
   for (const path of paths) {
     const here = listed.present.has(path);
     // 去过这个目录、读完了、里面没有它：它被删了，或者从来就不在工作区里。
-    if (
-      !here &&
-      listed.read.has(artifactFolderOf(path)) &&
-      !listed.truncated
-    )
+    if (!here && listed.read.has(artifactFolderOf(path)) && !listed.truncated)
       continue;
     const bytes = listed.present.get(path);
     rows.push({ path, ...(here && bytes !== undefined ? { bytes } : {}) });
@@ -193,7 +197,9 @@ function TurnArtifacts({
           >
             <span className="min-w-0 truncate">{row.path}</span>
             {row.bytes === undefined ? null : (
-              <span className="shrink-0 opacity-70">{formatBytes(row.bytes)}</span>
+              <span className="shrink-0 opacity-70">
+                {formatBytes(row.bytes)}
+              </span>
             )}
           </a>
         );
@@ -214,6 +220,108 @@ function TurnArtifacts({
   );
 }
 
+/** 清单里每个文件的一行：按内容宽度的卡片（单聊、群聊同一副，`self-start` 防止在纵向 flex 里被拉满整宽）。 */
+const ROW =
+  "inline-flex min-w-0 max-w-full items-baseline gap-1.5 self-start rounded-[10px] border border-border bg-card px-[10px] py-[5px]";
+
+/** 「下载」链接的样式：本轮产物清单、交付卡、任务页的证据行共用同一组。 */
+export const ARTIFACT_DOWNLOAD_LINK =
+  "shrink-0 underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60";
+
+/**
+ * 有事件时的清单：一位员工一组，每个文件一行（文件名、大小、「下载」）。
+ *
+ * 链接带上这个对话和列出这个文件的那条事件所在的 run：服务器只放行「在哪里被宣布」的文件，同一轮被切成
+ * 多次 run 时，各行的 run 不同。不依赖这台电脑在不在工作区上：事件是服务器在能取到文件的电脑上记的。
+ */
+export function EventArtifacts({
+  groups,
+  channelId,
+  nameOf,
+  primaryBotId,
+}: {
+  groups: readonly TurnArtifactGroup[];
+  channelId: string;
+  nameOf?: ((botId: string) => string | undefined) | undefined;
+  primaryBotId?: string | undefined;
+}) {
+  return (
+    <div
+      className="flex min-w-0 max-w-full flex-col gap-2 text-sm text-muted-foreground"
+      data-artifact-list=""
+    >
+      <div className="inline-flex min-w-0 max-w-full items-center gap-[7px] self-start rounded-[10px] border border-border bg-card px-[10px] py-[5px]">
+        <span className="shrink-0 self-center">
+          <IconDownload
+            aria-hidden
+            className="size-[14px] shrink-0 text-faint"
+          />
+        </span>
+        <span className="shrink-0 whitespace-nowrap">本轮产物</span>
+      </div>
+      {groups.map((group) => {
+        // 不止一位员工，或不是这段对话自己的员工做的：写上是谁的。
+        const named =
+          groups.length > 1 || group.botId !== primaryBotId
+            ? (nameOf?.(group.botId) ?? "员工")
+            : null;
+        return (
+          <div
+            className="flex min-w-0 max-w-full flex-col gap-1"
+            data-artifact-group={group.botId}
+            key={group.botId}
+          >
+            {named === null ? null : (
+              <span className="opacity-70">{named}</span>
+            )}
+            {group.files.map((file) => {
+              const href = artifactHref({
+                botId: group.botId,
+                path: file.path,
+                scope: { channel: channelId, run: file.runId },
+              });
+              return (
+                <div
+                  className={ROW}
+                  data-artifact-path={file.path}
+                  key={file.path}
+                >
+                  <span className="min-w-0 truncate">{file.path}</span>
+                  <span className="shrink-0 opacity-70">
+                    {formatBytes(file.bytes)}
+                  </span>
+                  {href === undefined ? null : (
+                    <a
+                      aria-label={`下载 ${file.path}`}
+                      className={ARTIFACT_DOWNLOAD_LINK}
+                      // 空值：文件名由路由的 Content-Disposition 定，见下面老清单同一处的说明。
+                      download=""
+                      href={href}
+                      rel="noopener"
+                    >
+                      下载
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+            {group.omitted > 0 ? (
+              <span className="opacity-70">
+                这一轮还有 {group.omitted} 项没列出
+              </span>
+            ) : null}
+            {group.scanTruncated ? (
+              <span className="opacity-70" data-artifact-truncated="">
+                工作区文件太多，这份清单可能没列全
+              </span>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * 本轮产物清单，作为一条附注交进转录（和交付卡、外部员工的卡走同一套 `TranscriptNote`）。
  *
@@ -223,10 +331,37 @@ function TurnArtifacts({
 export function turnArtifactNotes({
   messages,
   botId,
+  events = [],
+  channelId,
+  nameOf,
 }: {
   messages: ReadonlyArray<Readonly<Message>>;
   botId: string | undefined;
+  /** 代理事件流里记下的本轮产物事件（`createTurnArtifactTracker`）。 */
+  events?: readonly TrackedTurnArtifacts[];
+  /** 这段对话的频道 id：下载链接带它，服务器据此查谁能看这段对话。 */
+  channelId: string;
+  nameOf?: (botId: string) => string | undefined;
 }): TranscriptNote[] {
+  // 有事件就按事件画；一份清单也没有（事件里一个文件都没有）时同样退回老办法。
+  const groups = mergedTurnArtifacts(
+    turnArtifactEvents(events, messages),
+  ).filter((group) => group.files.length > 0);
+  if (groups.length > 0)
+    return [
+      {
+        key: "turn-artifacts",
+        anchor: null,
+        node: (
+          <EventArtifacts
+            channelId={channelId}
+            groups={groups}
+            nameOf={nameOf}
+            primaryBotId={botId}
+          />
+        ),
+      },
+    ];
   if (botId === undefined || botId.trim() === "") return [];
   const paths = writtenPathsInTurn(messages);
   if (paths.length === 0) return [];
@@ -237,4 +372,26 @@ export function turnArtifactNotes({
       node: <TurnArtifacts botId={botId} paths={paths} />,
     },
   ];
+}
+
+/**
+ * 群聊末尾的「本轮产物」：员工回复行里记的事件（`groupTurnArtifactEvents`），频道是群的频道，
+ * 链接各带自己那条事件的 run，每位员工一组、写上名字。这一轮没有产物什么都不画。
+ */
+export function GroupTurnArtifacts({
+  messages,
+  channelId,
+  nameOf,
+}: {
+  messages: Parameters<typeof groupTurnArtifactEvents>[0];
+  channelId: string;
+  nameOf: (botId: string) => string | undefined;
+}) {
+  const groups = mergedTurnArtifacts(groupTurnArtifactEvents(messages)).filter(
+    (group) => group.files.length > 0,
+  );
+  if (groups.length === 0) return null;
+  return (
+    <EventArtifacts channelId={channelId} groups={groups} nameOf={nameOf} />
+  );
 }

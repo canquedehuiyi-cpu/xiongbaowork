@@ -444,6 +444,7 @@ export function createAcpDelivery(options: {
           said(turn.runId, DELIVERY_EVENTS.delivered, {
             taskId: card.id,
             eventId: deliveredLine,
+            agentId: turn.agentId,
             deliverable: verdict.ref,
           });
         return undefined;

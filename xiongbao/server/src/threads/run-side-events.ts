@@ -1,6 +1,7 @@
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { filter, Observable } from "rxjs";
 import { STEP_LIMIT_EVENT } from "../../../shared/step-limit";
+import { TURN_ARTIFACTS_EVENT } from "../../../shared/turn-artifacts";
 
 /**
  * Events a server tool adds to the run it is called in.
@@ -19,13 +20,18 @@ import { STEP_LIMIT_EVENT } from "../../../shared/step-limit";
  */
 
 /**
- * Events only the server may put in a run: the delivery loop's cards (`delivery.*`), and a run's
- * `step-limit` ({@link STEP_LIMIT_EVENT}). Drawn as "已交成果" and the like, and as 「已用完 N 步 ·
- * 继续」, so one an agent's own stream carries -- an external coworker's endpoint can send any event
- * it likes -- is a forgery, and is dropped before anything stores or shows it. The real cards enter
- * through {@link emitRunEvent}, after the agent's stream has been cleaned; the real `step-limit` is
- * added by a built-in coworker's run outside the server's watch of it (`sayingStepLimit` in
- * the toolkit's `agents.ts`), so it is never in the stream this cleans.
+ * Events only the server may put in a run: the delivery loop's cards (`delivery.*`), a run's
+ * `step-limit` ({@link STEP_LIMIT_EVENT}), and the list of files a turn left on the employee's
+ * computer ({@link TURN_ARTIFACTS_EVENT}). Drawn as "已交成果" and the like, as 「已用完 N 步 · 继续」
+ * and as a download list, and the last one also decides which computer a download reads from, so
+ * one an agent's own stream carries -- an external coworker's endpoint can send any event it likes --
+ * is a forgery, and is dropped before anything stores or shows it. This only cleans what an agent's
+ * own stream carries, never what is drawn for the person. The real cards enter through
+ * {@link emitRunEvent}, after the agent's stream has been cleaned; the real `step-limit` is added by
+ * a built-in coworker's run outside the server's watch of it (`sayingStepLimit` in the toolkit's
+ * `agents.ts`), so it is never in the stream this cleans; the real turn artifacts are added by
+ * `withTurnArtifacts` around the run's side-events stream (`computer/turn-artifacts.ts`), so they
+ * join it after this has cleaned it.
  */
 export function isServerOnlyEvent(event: BaseEvent): boolean {
   if (event.type !== EventType.CUSTOM) return false;
@@ -33,7 +39,11 @@ export function isServerOnlyEvent(event: BaseEvent): boolean {
   if (typeof name !== "string") return false;
   // However it is cased or padded: the chat would draw " Delivery.delivered" as the same card.
   const said = name.trim().toLowerCase();
-  return said.startsWith("delivery.") || said === STEP_LIMIT_EVENT;
+  return (
+    said.startsWith("delivery.") ||
+    said === STEP_LIMIT_EVENT ||
+    said === TURN_ARTIFACTS_EVENT
+  );
 }
 
 /** An agent's own stream without the events only the server may send. */

@@ -76,3 +76,20 @@ test("a step-limit in an agent's own stream is dropped before anything stores or
     ),
   ).toEqual(expected);
 });
+
+/*
+ * The list of files a turn left on the employee's computer also says which computer a download reads
+ * from, so an agent's own stream may not carry one.
+ */
+test("a turn-artifacts event is the server's, however it is cased or padded", () => {
+  const custom = (name: unknown) =>
+    ({ type: EventType.CUSTOM, name, value: {} }) as unknown as BaseEvent;
+  for (const name of [
+    "computer.turn_artifacts",
+    "Computer.Turn_Artifacts",
+    "  COMPUTER.TURN_ARTIFACTS ",
+  ])
+    expect(isServerOnlyEvent(custom(name))).toBe(true);
+  for (const name of ["computer.turn_artifacts2", "turn_artifacts"])
+    expect(isServerOnlyEvent(custom(name))).toBe(false);
+});

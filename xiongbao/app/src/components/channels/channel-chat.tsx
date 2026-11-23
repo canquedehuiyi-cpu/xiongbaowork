@@ -100,6 +100,7 @@ import {
   createStepLimitTracker,
   type StepLimitTracker,
 } from "@/lib/channels/step-limit";
+import { useTurnArtifactEvents } from "@/lib/channels/use-turn-artifact-events";
 import {
   createTurnStopTracker,
   type TurnStopTracker,
@@ -655,6 +656,11 @@ export function ChannelChat({
     acpTracker.cards,
     acpTracker.cards,
   );
+  /*
+   * 本轮产物事件（服务器每次 run 收尾前插的 `computer.turn_artifacts`）：和上面一样从事件流里记，订阅要在
+   * 加入线程之前，重放的历史才听得到；换线程重新记。
+   */
+  const turnArtifactEvents = useTurnArtifactEvents(agent, channel.threadId);
   /*
    * 这一轮还有几轮问答没落地（WP-3.2 S1a 的按轮累计）。`say()` 在自增/自减 `turnsRef` 的地方同步这里；
    * 单独一个 ref 是因为阶段计时器建在 `turnsRef` 声明之前，闭包不能引用后声明的绑定。
@@ -1791,6 +1797,12 @@ export function ChannelChat({
               ...turnArtifactNotes({
                 botId: runtimeAgentId,
                 messages: agent.messages,
+                events: turnArtifactEvents,
+                channelId: channel.id,
+                nameOf: (id) =>
+                  id === runtimeAgentId
+                    ? botName
+                    : agentProfiles?.find((profile) => profile.id === id)?.name,
               }),
               /*
                * 到点、工具轮数用完、被打断的一轮，回答末尾的「到 25 分钟了 · 继续」等：和下面步数用完的

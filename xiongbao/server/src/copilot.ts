@@ -149,6 +149,7 @@ import {
   type StoredAttachment,
 } from "./channels/attachment-parts";
 import type { AgentFetch, StallGuard } from "./channels/stall-guard";
+import { withSideEventsThenArtifacts } from "./computer/turn-artifacts";
 import type { DeploymentConfig } from "./config";
 import { SYSTEM_TENANT } from "./db/schema/tenant";
 import { observeModelConnection } from "./desktop-connection-failure";
@@ -227,6 +228,7 @@ import {
 import {
   currentTenant,
   isPersonTenant,
+  isTenantFramed,
   runAsTenant,
   TenantContextError,
 } from "./tenant/context";
@@ -241,10 +243,7 @@ import {
 } from "./threads/compaction";
 import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
-import {
-  withoutServerOnlyEvents,
-  withRunSideEvents,
-} from "./threads/run-side-events";
+import { withoutServerOnlyEvents } from "./threads/run-side-events";
 import { keepStreamAlive } from "./threads/stream-keep-alive";
 import { asPersonChat, boardTurnNow } from "./threads/unattended-card";
 import { inlineToolImages } from "./tool-images";
@@ -2842,12 +2841,14 @@ async function buildAgent(
           waiting: held,
         });
         /*
-         * Outermost, the events the run's own tools add for the person to see (the delivery loop's
-         * cards), sent in this stream so they are stored and replayed with the run. See
-         * `threads/run-side-events.ts`.
+         * The run's own stream is cleaned of events only the server may send and left open to the
+         * events its tools add for the person to see (the delivery loop's cards), sent in this stream
+         * so they are stored and replayed with the run (`threads/run-side-events.ts`). Outside that,
+         * the turn's first and last look at the employee's computer lists the files it left as one
+         * event (`computer/turn-artifacts.ts`); it goes outside the cleaning because it is the
+         * server's own event, which the cleaning would drop.
          */
-        return withRunSideEvents(
-          runInput.runId,
+        return withSideEventsThenArtifacts(
           sayingProviderRefusals(
             withModelRun(
               { runId: runInput.runId, threadId: runInput.threadId },
@@ -2857,6 +2858,14 @@ async function buildAgent(
             refusingProvider(runModel),
             { untilError: true },
           ),
+          {
+            runId: runInput.runId,
+            botId: agent.id,
+            personId:
+              isTenantFramed() && isPersonTenant(currentTenant())
+                ? currentTenant()
+                : null,
+          },
         );
       },
       ...(admit ? { admitTools: admit } : {}),

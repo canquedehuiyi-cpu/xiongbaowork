@@ -2249,3 +2249,151 @@ describe("statFile", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("markTurn and turnChanges (lazy snapshot)", () => {
+  const changesBody = {
+    files: [{ path: "a.md", bytes: 1, modifiedMs: 2, change: "new" }],
+    scanned: 2,
+    scanTruncated: false,
+    omitted: 0,
+    extra: "dropped",
+  };
+  const paths = (requests: { url: string }[]) =>
+    requests
+      .map(({ url }) => new URL(url).pathname)
+      .filter((path) => path.startsWith("/files/"));
+
+  test("a turn that never touches the computer sends nothing and lists nothing", async () => {
+    const { gateway, requests } = await gatewayWith(PERMISSIVE, {
+      routes: { "/files/changes": () => Response.json(changesBody) },
+    });
+    await gateway.markTurn(botSeat("bot-1"), "r:b");
+    expect(await gateway.turnChanges(botSeat("bot-1"), "r:b")).toBeNull();
+    expect(paths(requests)).toEqual([]);
+  });
+
+  test("the first use of the computer records the snapshot before it answers", async () => {
+    const { gateway, requests } = await gatewayWith(PERMISSIVE, {
+      routes: {
+        "/files/mark": () =>
+          Response.json({ scanned: 2, scanTruncated: false }),
+        "/files/changes": () => Response.json(changesBody),
+      },
+    });
+    await gateway.markTurn(botSeat("bot-1"), "r:b");
+    expect(paths(requests)).toEqual([]);
+    await gateway.snapshot(botSeat("bot-1"));
+    const order = requests
+      .map(({ url }) => new URL(url).pathname)
+      .filter((p) => p === "/files/mark" || p === "/snapshot");
+    expect(order[order.length - 2]).toBe("/files/mark");
+    expect(
+      JSON.parse(
+        String(
+          requests.find(({ url }) => new URL(url).pathname === "/files/mark")
+            ?.init?.body,
+        ),
+      ),
+    ).toEqual({ mark: "r:b" });
+    expect(await gateway.turnChanges(botSeat("bot-1"), "r:b")).toEqual({
+      files: [{ path: "a.md", bytes: 1, modifiedMs: 2, change: "new" }],
+      scanned: 2,
+      scanTruncated: false,
+      omitted: 0,
+    });
+    // Recorded once only: a second use does not mark again.
+    await gateway.snapshot(botSeat("bot-1"));
+    expect(paths(requests).filter((p) => p === "/files/mark")).toHaveLength(1);
+  });
+
+  test("a snapshot that failed to record means null, with no change query", async () => {
+    const { gateway, requests } = await gatewayWith(PERMISSIVE, {
+      routes: {
+        "/files/mark": () => Response.json({ error: "no" }, { status: 500 }),
+        "/files/changes": () => Response.json(changesBody),
+      },
+    });
+    await gateway.markTurn(botSeat("bot-1"), "r:b");
+    await gateway.snapshot(botSeat("bot-1"));
+    expect(await gateway.turnChanges(botSeat("bot-1"), "r:b")).toBeNull();
+    expect(paths(requests)).toEqual(["/files/mark"]);
+  });
+
+  test("an unknown mark (404) is null; other failures are thrown", async () => {
+    for (const [status, rejects] of [
+      [404, false],
+      [500, true],
+    ] as const) {
+      const { gateway } = await gatewayWith(PERMISSIVE, {
+        routes: {
+          "/files/mark": () => Response.json({}),
+          "/files/changes": () => Response.json({ error: "x" }, { status }),
+        },
+      });
+      await gateway.markTurn(botSeat("bot-1"), "x");
+      await gateway.snapshot(botSeat("bot-1"));
+      const asked = gateway.turnChanges(botSeat("bot-1"), "x");
+      if (rejects) await expect(asked).rejects.toThrow();
+      else expect(await asked).toBeNull();
+    }
+  });
+
+  test("the pending list is bounded per seat", async () => {
+    const { gateway, requests } = await gatewayWith(PERMISSIVE, {
+      routes: { "/files/mark": () => Response.json({}) },
+    });
+    for (let i = 0; i < 60; i++)
+      await gateway.markTurn(botSeat("bot-1"), `m${i}`);
+    await gateway.snapshot(botSeat("bot-1"));
+    expect(paths(requests).filter((p) => p === "/files/mark")).toHaveLength(50);
+  });
+
+  test("a mark that hangs cannot hold the computer past the flush budget", async () => {
+    const { provider, fetchImpl } = fakeComputer({
+      routes: {
+        "/files/mark": () => new Promise<Response>(() => {}),
+        "/files/changes": () => Response.json(changesBody),
+      },
+    });
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl,
+      auditStore: fakeAudit().store,
+      policy: () => PERMISSIVE,
+      turnMarkFlushMs: 40,
+    });
+    await gateway.markTurn(botSeat("bot-1"), "a");
+    await gateway.markTurn(botSeat("bot-1"), "b");
+    const started = Date.now();
+    await gateway.snapshot(botSeat("bot-1"));
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(await gateway.turnChanges(botSeat("bot-1"), "a")).toBeNull();
+    expect(await gateway.turnChanges(botSeat("bot-1"), "b")).toBeNull();
+  });
+
+  test("an unknown mark answers null without asking the computer", async () => {
+    const { gateway, requests } = await gatewayWith(PERMISSIVE, {
+      routes: { "/files/changes": () => Response.json(changesBody) },
+    });
+    expect(await gateway.turnChanges(botSeat("bot-1"), "never")).toBeNull();
+    expect(paths(requests)).toEqual([]);
+  });
+
+  test("a paired personal computer: nothing is asked", async () => {
+    const { provider } = fakeComputer();
+    const requests: string[] = [];
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl: (async (url: string) => {
+        requests.push(url);
+        return Response.json({});
+      }) as never,
+      auditStore: fakeAudit().store,
+      policy: () => PERMISSIVE,
+      resolveDevice: async () => ({ tenantId: "t", deviceId: "d" }),
+    });
+    await gateway.markTurn(botSeat("bot-1"), "m");
+    expect(await gateway.turnChanges(botSeat("bot-1"), "m")).toBeNull();
+    expect(requests).toEqual([]);
+  });
+});

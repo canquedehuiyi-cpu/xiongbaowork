@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
+import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
 import {
   ApprovalActions,
   useApprovalDecision,
@@ -8,6 +9,7 @@ import {
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { agentListQueryOptions } from "@/lib/agents/queries";
 import { RequestError } from "@/lib/client";
+import { artifactHref } from "@/lib/computers/artifact";
 import { useScheduleZone } from "@/lib/settings/work-hours";
 import {
   canExtend,
@@ -187,9 +189,24 @@ const ROW_NOTE: Record<EvidenceRow["kind"], string> = {
   check: "员工自查",
 };
 
-function EvidenceLine({ row }: { row: EvidenceRow }) {
-  // 工作区文件这一行只念路径文本：下载入口要的是「这次调用发生在哪个 Bot 上」那个标识，
-  // 任务卡上拿不到它（PR2 裁定 1）。一个点开是 404 的链接比不写链接更不诚实，所以先不给。
+export function EvidenceLine({
+  row,
+  taskId,
+  agentId,
+}: {
+  row: EvidenceRow;
+  taskId: string;
+  /** 卡的负责员工：工作区文件在它的工作区里；没有负责员工就不出下载。 */
+  agentId: string | null;
+}) {
+  const download =
+    row.kind === "workspace_file" && agentId
+      ? artifactHref({
+          botId: agentId,
+          path: row.path,
+          scope: { task: taskId },
+        })
+      : undefined;
   const label =
     row.kind === "attachment" ? (
       <a
@@ -216,6 +233,11 @@ function EvidenceLine({ row }: { row: EvidenceRow }) {
     <div className="flex items-center gap-2.5 rounded-[10px] border border-(--wb-line) bg-(--wb-card) px-3 py-2.5 text-[13px]">
       <RowIcon kind={row.kind} />
       <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{label}</span>
+      {download ? (
+        <a className={ARTIFACT_DOWNLOAD_LINK} href={download}>
+          下载
+        </a>
+      ) : null}
       <span className="ml-auto shrink-0 text-(--wb-muted) text-[12px]">
         {row.kind === "diff"
           ? `${row.detail} · ${ROW_NOTE.diff}`
@@ -654,8 +676,13 @@ function TaskDetail({ taskId }: { taskId: string }) {
         <h3 className={SECTION_TITLE}>交付物与证据</h3>
         {evidence.length > 0 ? (
           evidence.map((row, index) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: 同一份交付物里的行，先后不会变。
-            <EvidenceLine key={index} row={row} />
+            <EvidenceLine
+              agentId={task.executorAgentId}
+              // biome-ignore lint/suspicious/noArrayIndexKey: 同一份交付物里的行，先后不会变。
+              key={index}
+              row={row}
+              taskId={task.id}
+            />
           ))
         ) : (
           <p className="m-0 text-(--wb-muted) text-[13px]">还没交成果。</p>

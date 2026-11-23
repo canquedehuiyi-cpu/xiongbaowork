@@ -64,6 +64,25 @@ export type GroupMessage = {
    */
   stepLimit?: { steps: number };
   /**
+   * 这一轮员工在自己电脑上留下的文件：服务器从每次 run 收尾前的 `computer.turn_artifacts` 事件记下，连同各自的
+   * run（下载链接要带它）。群转录底部据此画「本轮产物」（`components/channels/turn-artifacts.tsx`）。
+   */
+  turnArtifacts?: {
+    runId: string;
+    value: {
+      botId: string;
+      files: {
+        path: string;
+        bytes: number;
+        modifiedMs: number;
+        change: "new" | "modified";
+      }[];
+      scanned: number;
+      scanTruncated: boolean;
+      omitted: number;
+    };
+  }[];
+  /**
    * 这位员工这一轮最后一份计划（期二）：服务器从它最后一次 `update_plan` 调用记下的清单，群里每个人读到的一样。
    * 群聊顶部据此给每位员工钉一张计划卡（`components/channels/pinned-plans.tsx`）。
    */

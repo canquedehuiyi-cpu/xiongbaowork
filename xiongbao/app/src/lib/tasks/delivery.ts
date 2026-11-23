@@ -307,7 +307,7 @@ export type EvidenceRow =
   | { kind: "link"; url: string; label: string }
   | {
       kind: "workspace_file";
-      /** 工作区内的相对路径。卡上把它当一行产物念出来；下载入口等 Bot 标识来源明确后另票再接。 */
+      /** 工作区内的相对路径。卡上念成一行产物，并在知道负责员工时给「下载」（`artifactHref`，按这张卡的范围）。 */
       path: string;
       label: string;
       /** 服务器查不了这份文件在不在（配对的个人电脑，或电脑没应答）：卡上标「未核实」。 */

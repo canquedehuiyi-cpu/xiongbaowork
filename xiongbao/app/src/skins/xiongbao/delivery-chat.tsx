@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import type { TranscriptNote } from "@/components/channels/chat-transcript";
+import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
+import { artifactHref } from "@/lib/computers/artifact";
 import { useScheduleZone } from "@/lib/settings/work-hours";
 import {
   canExtend,
@@ -416,15 +418,15 @@ function FileIcon({ kind }: { kind: EvidenceRow["kind"] }) {
 function EvidenceItem({
   row,
   linked,
+  download,
 }: {
   row: Exclude<EvidenceRow, { kind: "check" }>;
   /** 附件只有派活的人打得开（在它和员工的线程里）。 */
   linked: boolean;
+  /** 工作区文件的下载地址；交付事件没带员工 id（旧事件）时为 undefined，这行只念文件名。 */
+  download?: string;
 }) {
   const link = "text-inherit underline-offset-2 hover:underline";
-  // 工作区文件这一行只念路径文本：下载入口要的是「这次调用发生在哪个 Bot 上」那个标识，
-  // 交付卡上拿不到它（PR2 裁定 1）。没有入口时这行照旧念出文件名，
-  // 比一个点开是 404 的链接诚实。
   const label =
     row.kind === "attachment" && linked ? (
       <a
@@ -441,6 +443,8 @@ function EvidenceItem({
       </a>
     ) : row.kind === "diff" ? (
       `${row.label} · ${row.detail}`
+    ) : row.kind === "workspace_file" && row.unverified ? (
+      `${row.label}（未核实）`
     ) : (
       row.label
     );
@@ -450,6 +454,11 @@ function EvidenceItem({
         <FileIcon kind={row.kind} />
       </span>
       <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
+      {row.kind === "workspace_file" && download ? (
+        <a className={ARTIFACT_DOWNLOAD_LINK} href={download}>
+          下载
+        </a>
+      ) : null}
     </span>
   );
 }
@@ -497,6 +506,15 @@ function DeliveredCard({
       {items.map((row) => (
         <EvidenceItem
           key={`${row.kind}:${row.label}`}
+          download={
+            row.kind === "workspace_file" && event.agentId
+              ? artifactHref({
+                  botId: event.agentId,
+                  path: row.path,
+                  scope: { task: event.taskId },
+                })
+              : undefined
+          }
           linked={mine}
           row={row}
         />
@@ -630,7 +648,12 @@ export function GroupDeliveryMark({
   const index = history ? matchByMark(history, mark) : -1;
   const zone = useScheduleZone();
   const line = index >= 0 && history ? history[index] : undefined;
-  const event = line ? eventFromFlow(line, mark.taskId) : null;
+  const flowEvent = line ? eventFromFlow(line, mark.taskId) : null;
+  // 流水行不记员工 id，标记记着；只有交付事件用得上。
+  const event =
+    flowEvent && flowEvent.kind === "delivered"
+      ? { ...flowEvent, agentId: mark.agentId }
+      : flowEvent;
   if (!owner || !event)
     return (
       <SystemLine kind="状态">

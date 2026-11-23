@@ -12,6 +12,7 @@ import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { STEP_LIMIT_EVENT } from "../../shared/step-limit";
 import { REASONING_TEXT_LIMIT } from "../../shared/thinking";
+import { TURN_ARTIFACTS_EVENT } from "../../shared/turn-artifacts";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";
 import {
@@ -875,6 +876,81 @@ describe("group conversations in PostgreSQL", () => {
     }
   });
 
+  test("这一轮留在电脑上的文件连同各自的 run 记在回复上，群里每个人读到的一样；说别的员工的不记", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const file = (path: string) => ({
+      path,
+      bytes: 2048,
+      modifiedMs: 5,
+      change: "new" as const,
+    });
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: {
+              botId: ada,
+              seat: "person:private",
+              files: [file("out/报告 #1.pptx")],
+              scanned: 4,
+              scanTruncated: true,
+              omitted: 3,
+            },
+          });
+          // 说的是别的员工、不是清单：都不记。
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: { botId: grace, files: [file("forged.md")] },
+          });
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: { botId: ada, files: "nope" },
+          });
+          return "做好了。";
+        },
+        [grace]: () => "g",
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    let runId = "";
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-turn-artifacts`,
+        text: "做个 ppt",
+      });
+      await drain(conversations);
+    });
+    for (const reader of [owner, teammate]) {
+      const seen = await as(reader, () =>
+        conversations.list(reader.id, channel.id),
+      );
+      const [, adaRow, graceRow] = seen.messages;
+      expect(
+        graceRow === undefined ? "no row" : graceRow.turnArtifacts,
+      ).toBeUndefined();
+      const items = adaRow?.turnArtifacts ?? [];
+      expect(items).toHaveLength(1);
+      runId = items[0]?.runId ?? "";
+      expect(runId).not.toBe("");
+      expect(items[0]?.value).toEqual({
+        botId: ada,
+        files: [file("out/报告 #1.pptx")],
+        scanned: 4,
+        scanTruncated: true,
+        omitted: 3,
+      });
+    }
+  });
+
   test("员工这一轮最后一份计划记在回复上（期二），群里每个人读到的一样", async () => {
     const owner = await person();
     const teammate = await person();
@@ -1647,6 +1723,188 @@ describe("group conversations in PostgreSQL", () => {
       ),
     );
     expect(left).toEqual({ n: 0 });
+  });
+  test("the files of a held or refused reply are not shown; an allowed one brings them with it", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    let decision: "pending" | "approved" | "denied" = "pending";
+    const privateShare = createPrivateShareCheck({
+      approvals: {
+        open: async () =>
+          ({ id: `${prefix}-files-share`, status: decision }) as never,
+        list: async () => [],
+        rules: async () => [],
+      },
+    });
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: {
+              botId: ada,
+              seat: "person:private",
+              files: [
+                {
+                  path: "secret-plan.pptx",
+                  bytes: 10,
+                  modifiedMs: 1,
+                  change: "new",
+                },
+              ],
+              scanned: 1,
+              scanTruncated: false,
+              omitted: 0,
+            },
+          });
+          return "做好了。";
+        },
+      },
+      privateShare,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-files-held`,
+        text: "做个 ppt",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    const held = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(held.messages.at(-1)).toMatchObject({
+      agentId: ada,
+      status: "waiting",
+    });
+    const heldRow = held.messages.at(-1);
+    expect(
+      heldRow === undefined ? "no row" : heldRow.turnArtifacts,
+    ).toBeUndefined();
+    expect(JSON.stringify(held)).not.toContain("secret-plan");
+    expect(await rawTranscript(teammate, channel.id)).not.toContain(
+      "secret-plan",
+    );
+
+    decision = "approved";
+    await as(owner, () =>
+      conversations.continueWaiting(`${prefix}-files-share`, async () => {
+        throw new Error("a held reply is shown, not re-run");
+      }),
+    );
+    const after = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    const released = after.messages.at(-1);
+    expect(released?.status).toBe("completed");
+    expect(released?.turnArtifacts?.[0]?.value.files[0]?.path).toBe(
+      "secret-plan.pptx",
+    );
+    expect(JSON.stringify(after)).not.toContain("person:private");
+
+    // 被拒的回复：没有放行，清单也不出现。
+    decision = "denied";
+    await as(owner, async () => {
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-files-denied`,
+        text: "再做一个",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    const refused = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    const last = refused.messages.at(-1);
+    expect(last?.agentId).toBe(ada);
+    expect(last?.status).not.toBe("completed");
+    expect(last === undefined ? "no row" : last.turnArtifacts).toBeUndefined();
+  });
+  test("a held reply the owner then refuses drops its files with it", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    let decision: "pending" | "denied" = "pending";
+    const privateShare = createPrivateShareCheck({
+      approvals: {
+        open: async () =>
+          ({ id: `${prefix}-files-refuse`, status: decision }) as never,
+        list: async () => [],
+        rules: async () => [],
+      },
+    });
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: {
+              botId: ada,
+              files: [
+                {
+                  path: "refused-plan.pptx",
+                  bytes: 10,
+                  modifiedMs: 1,
+                  change: "new",
+                },
+              ],
+              scanned: 1,
+              scanTruncated: false,
+              omitted: 0,
+            },
+          });
+          return "做好了。";
+        },
+      },
+      privateShare,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-files-refuse-send`,
+        text: "做个 ppt",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    // 扣下时，清单在主人的私有行里，成员读不到。
+    expect(await rawTranscript(teammate, channel.id)).not.toContain(
+      "refused-plan",
+    );
+    expect(await rawTranscript(owner, channel.id)).toContain("refused-plan");
+
+    decision = "denied";
+    await as(owner, () =>
+      conversations.continueWaiting(`${prefix}-files-refuse`, async () => {
+        throw new Error("a held reply is decided, not re-run");
+      }),
+    );
+    const after = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    const last = after.messages.at(-1);
+    expect(last?.agentId).toBe(ada);
+    expect(last?.status).toBe("failed");
+    expect(last === undefined ? "no row" : last.turnArtifacts).toBeUndefined();
+    expect(JSON.stringify(after)).not.toContain("refused-plan");
+    // 主人那边也不再留着：私有行随决定一起清掉。
+    expect(await rawTranscript(owner, channel.id)).not.toContain(
+      "refused-plan",
+    );
   });
   test("a reply held for the owner's permission still hands off to the Bot it names", async () => {
     const owner = await person();

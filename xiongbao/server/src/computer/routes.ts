@@ -26,6 +26,12 @@ import { capabilityFor } from "../tenant/context";
 import { computerActionIdentity } from "./action-identity";
 import { CANDIDATE_REF } from "./app-discovery";
 import {
+  type ArtifactAccessDeps,
+  artifactScopeOf,
+  normalizedArtifactPath,
+  resolveArtifactAccess,
+} from "./artifact-access";
+import {
   type ComputerSeat,
   parseComputerKey,
   personSeat,
@@ -78,6 +84,24 @@ import {
 /** What a person's own browser answers under this router: the reads its live screen makes. */
 const PERSON_BROWSER_READS = new Set(["control", "status", "screenshot"]);
 
+/**
+ * Whether `path` is exactly this Bot's file download: its last three segments are the Bot, `files`
+ * and `download`, under at most the two segments this router is mounted on (`/api/computers`).
+ * The Bot is compared as the router decoded it, so an encoded slash cannot stand in for a segment.
+ */
+function isDownloadPath(path: string, botId: string): boolean {
+  const segments = path.split("/").filter((segment) => segment !== "");
+  if (segments.length < 3 || segments.length > 5) return false;
+  const [bot, files, download] = segments.slice(-3);
+  let named: string;
+  try {
+    named = decodeURIComponent(bot ?? "");
+  } catch {
+    return false;
+  }
+  return files === "files" && download === "download" && named === botId;
+}
+
 export function createComputerRoutes(
   gateway: ComputerGateway,
   policyStore: PolicyStore,
@@ -111,6 +135,12 @@ export function createComputerRoutes(
    * is: a deployment wired without a trail still saves its boundary, and has nowhere to record it.
    */
   auditStore?: AuditStore,
+  /**
+   * What lets a download name the conversation, run or card its file was announced in, for somebody
+   * who is not the person whose computer it is on (artifact-access.ts). Absent, every download that
+   * carries such a scope is refused.
+   */
+  artifactAccess?: ArtifactAccessDeps,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
   const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> =
@@ -167,6 +197,21 @@ export function createComputerRoutes(
         ownsPersonBrowser(context.var.actor, botId)
         ? next()
         : context.json({ error: "There is no such Bot." }, 404);
+    }
+
+    /*
+     * A download that names where its file was announced is decided by that rule alone, in the route
+     * itself (`artifactScopeOf`), and is not asked whether the person may use the Bot: a member of a
+     * group chat may fetch what the chat was shown without being able to drive the owner's employee.
+     * Only this one route, and only a GET; the route answers 404 itself when the rule does not hold.
+     */
+    if (
+      botId &&
+      context.req.method === "GET" &&
+      isDownloadPath(path, botId) &&
+      artifactScopeOf(context.req.url)
+    ) {
+      return next();
     }
 
     if (botId && !(await canUseBot(context.var.actor, botId))) {
@@ -807,15 +852,50 @@ export function createComputerRoutes(
    */
   routes.get("/:botId/files/download", async (context) => {
     const path = context.req.query("path");
-    if (!path?.trim()) {
-      return context.json({ error: "A file path is required." }, 400);
+    const scope = artifactScopeOf(context.req.url);
+
+    /*
+     * A scope, however little of one, is the only rule that applies. It never falls back to the
+     * person's own seat, and what it refuses is refused like a Bot that does not exist, with no
+     * word on which part did not hold. The file asked for is the one the rule matched.
+     */
+    let seat: Promise<ComputerSeat> | ComputerSeat;
+    let wanted = path?.trim() ?? "";
+    if (scope) {
+      const botId = context.req.param("botId") ?? "";
+      const named = normalizedArtifactPath(path ?? "");
+      const access =
+        artifactAccess && named !== null
+          ? await resolveArtifactAccess(
+              {
+                actor: {
+                  id: context.var.actor.id,
+                  role: context.var.actor.role,
+                },
+                botId,
+                path: named,
+                scope,
+              },
+              artifactAccess,
+            )
+          : null;
+      if (!access || named === null) {
+        return context.json({ error: "There is no such Bot." }, 404);
+      }
+      seat = access.seat;
+      wanted = named;
+    } else {
+      if (!path?.trim()) {
+        return context.json({ error: "A file path is required." }, 400);
+      }
+      seat = seatOf(context);
     }
 
     try {
       const file = await gateway.downloadFile(
-        await seatOf(context),
+        await seat,
         actorOf(context.var.actor),
-        { path: path.trim() },
+        { path: wanted },
         context.req.raw.signal,
       );
       return new Response(file.body, {
