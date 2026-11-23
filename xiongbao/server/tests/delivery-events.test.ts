@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import { deliveryMarkOf } from "../src/channels/group";
+import { withinModelRun } from "../src/models/token-metering";
 import { DELIVERY_EVENTS } from "../src/tasks/delivery-events";
-import { DELIVERY_EVENTS as FROM_TOOLS } from "../src/tasks/delivery-tools";
+import {
+  deliveryTools,
+  DELIVERY_EVENTS as FROM_TOOLS,
+} from "../src/tasks/delivery-tools";
 
 /**
  * 交付卡的事件名只写在一个不引任何东西的模块里（`tasks/delivery-events.ts`），员工工具和群聊的状态标记
@@ -77,4 +81,55 @@ test("群聊标记带上流水行的 id，只收 uuid", () => {
     at: at.toISOString(),
     agentId: "a1",
   });
+});
+
+/**
+ * 交付事件带上交付的员工 id：下载按钮要它指明文件在哪个员工的工作区。群聊的状态标记按同一个 id 记，
+ * 不靠对话里的名字猜。
+ */
+test("delivery.delivered 事件带上交付的员工 id，群聊标记也带", async () => {
+  const said: { name?: string; value?: unknown }[] = [];
+  const [, deliver] = deliveryTools({
+    delivery: {
+      cardOfRun: async () => ({
+        id: "t1",
+        tracked: true,
+        acceptedAt: new Date(),
+        status: "in_progress",
+        threadRef: "thread-1",
+        criteria: "写好",
+      }),
+      delivered: async () => ({}),
+    } as never,
+    gate: {
+      checkEvidence: async () => ({
+        ok: true,
+        ref: { kind: "deliverable", workspaceFiles: ["reports/a.xlsx"] },
+      }),
+    } as never,
+    board: {} as never,
+    ownerUserId: "owner",
+    agentId: "bot-1",
+    emit: (_runId, event) => {
+      said.push(event as { name?: string; value?: unknown });
+    },
+  });
+  await withinModelRun({ runId: "r1", threadId: "thread-1" }, () =>
+    (deliver as NonNullable<typeof deliver>).execute({
+      items: [{ kind: "workspace_file", ref: "reports/a.xlsx" }],
+      checks: ["打开看过"],
+    }),
+  );
+  const delivered = said.find(
+    (event) => event.name === "delivery.delivered",
+  ) as { value: unknown };
+  expect(delivered.value).toMatchObject({ taskId: "t1", agentId: "bot-1" });
+  expect(
+    deliveryMarkOf(
+      "delivery.delivered",
+      delivered.value,
+      "bot-1",
+      new Date("2026-11-15T03:00:00.000Z"),
+    ),
+  ).toMatchObject({ kind: "delivered", taskId: "t1", agentId: "bot-1" });
 });

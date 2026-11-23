@@ -520,6 +520,7 @@ export function deliveryTools(options: {
         said(run.runId, DELIVERY_EVENTS.delivered, {
           taskId: card.id,
           eventId: deliveredLine,
+          agentId,
           deliverable: verdict.ref,
         });
         return JSON.stringify({

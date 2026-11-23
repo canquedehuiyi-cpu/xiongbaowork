@@ -55,8 +55,8 @@ import {
 } from "../src/tasks/delivery-tools";
 import { listTaskEvents } from "../src/tasks/events";
 import { createEvidenceGate } from "../src/tasks/evidence-gate";
-import type { FileProbe } from "../src/tasks/file-evidence";
 import { noteAttachedFastPath } from "../src/tasks/fastpath-gate";
+import type { FileProbe } from "../src/tasks/file-evidence";
 import {
   createTaskProjector,
   type TaskProjector,
@@ -1097,6 +1097,7 @@ describe("deliver_task and the evidence gate", () => {
     expect(custom[1]?.value).toEqual({
       taskId: card.id,
       eventId: lines.find((line) => line.kind === "delivered")?.id,
+      agentId,
       deliverable: row?.deliverableRef,
     });
     expect(custom[0]?.value).toMatchObject({

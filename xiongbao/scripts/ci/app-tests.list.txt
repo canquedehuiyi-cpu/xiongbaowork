@@ -284,6 +284,7 @@ tests/decision-card.test.tsx
 tests/decision-registration.test.tsx
 tests/declared-bot.test.ts
 tests/default-agent.test.ts
+tests/delivery-evidence-download.test.tsx
 tests/delivery-loop-briefing.test.tsx
 tests/design-tokens.test.ts
 tests/desktop-notify-prompt.test.tsx
