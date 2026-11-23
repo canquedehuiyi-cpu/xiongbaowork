@@ -74,6 +74,7 @@ tests/arcade-index.test.tsx
 tests/archive-duplicate-pages.test.tsx
 tests/archive-resource-pages.test.tsx
 tests/artifact-download-href.test.ts
+tests/artifact-preview.test.tsx
 tests/assemble-install.test.tsx
 tests/assemble-knowledge.test.tsx
 tests/assemble-screen.test.tsx

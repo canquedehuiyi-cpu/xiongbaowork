@@ -64,27 +64,42 @@ export function artifactDownloadHref(
   botId: string | undefined | null,
   path: unknown,
 ): string | undefined {
+  return workspaceFileHref("download", botId, path);
+}
+
+/** The routes under `/api/computers/:botId/files/` that read one file by path. */
+export type FileAction = "download" | "preview" | "text";
+
+/** The address of one of the file routes, for a path with no scope yet. Same refusals as {@link artifactDownloadHref}. */
+export function workspaceFileHref(
+  action: FileAction,
+  botId: string | undefined | null,
+  path: unknown,
+): string | undefined {
   if (typeof botId !== "string" || botId.trim() === "") return undefined;
   const normalised = normalizedArtifactPath(path);
   if (normalised === undefined) return undefined;
-  return `/api/computers/${encodeURIComponent(botId.trim())}/files/download?path=${encodeURIComponent(normalised)}`;
+  return `/api/computers/${encodeURIComponent(botId.trim())}/files/${action}?path=${encodeURIComponent(normalised)}`;
 }
 
 /**
- * The download address for a file the server announced, with the scope that tells the route where it
- * was announced: a conversation and the run that listed it (`channel` + `run`), or a delivery card
- * (`task`). The route accepts a path only from the run whose event listed it, so a link must carry
- * that run's id, not the id of whichever run came last.
+ * The address of a file route for a file the server announced, with the scope that tells the route
+ * where it was announced: a conversation and the run that listed it (`channel` + `run`), or a
+ * delivery card (`task`). The route accepts a path only from the run whose event listed it, so an
+ * address must carry that run's id, not the id of whichever run came last.
  *
- * Undefined when no link should be drawn: the same refusals as {@link artifactDownloadHref}, and a
+ * Undefined when no address should be drawn: the same refusals as {@link artifactDownloadHref}, and a
  * scope with an empty id.
  */
-export function artifactHref(input: {
-  botId: string;
-  path: string;
-  scope?: { channel: string; run: string } | { task: string };
-}): string | undefined {
-  const base = artifactDownloadHref(input.botId, input.path);
+export function scopedFileHref(
+  action: FileAction,
+  input: {
+    botId: string;
+    path: string;
+    scope?: { channel: string; run: string } | { task: string };
+  },
+): string | undefined {
+  const base = workspaceFileHref(action, input.botId, input.path);
   if (base === undefined) return undefined;
   const scope = input.scope;
   if (scope === undefined) return base;
@@ -96,6 +111,15 @@ export function artifactHref(input: {
       : base + query("task", scope.task);
   if (scope.channel.trim() === "" || scope.run.trim() === "") return undefined;
   return base + query("channel", scope.channel) + query("run", scope.run);
+}
+
+/** The download address for a file the server announced (see {@link scopedFileHref}). */
+export function artifactHref(input: {
+  botId: string;
+  path: string;
+  scope?: { channel: string; run: string } | { task: string };
+}): string | undefined {
+  return scopedFileHref("download", input);
 }
 
 /**

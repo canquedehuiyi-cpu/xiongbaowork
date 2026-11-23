@@ -1,0 +1,266 @@
+/*
+ * 侧边栏的文件预览面板：按文件类型选一种画法，内容一律不在本页的源里执行。
+ * html 用 sandbox="allow-scripts" 的 iframe；pdf 和 office 的 iframe 不带 sandbox 属性（元素上的
+ * sandbox 会拦掉浏览器的 PDF 查看器，隔离靠服务器响应头里的 CSP sandbox）；文本类只画成文字或表格。
+ */
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { cleanup, render, waitFor, within } from "@testing-library/react";
+import { ArtifactPreview } from "@/components/channels/artifact-preview";
+import { artifactHref } from "@/lib/computers/artifact";
+import {
+  decodePreview,
+  encodePreview,
+  type PreviewTarget,
+  parseCsv,
+  previewHref,
+} from "@/lib/computers/preview";
+import { settleReactWork } from "./settle-react-work";
+
+const originalFetch = globalThis.fetch;
+const ui = () => within(document.body);
+
+beforeAll(() => {
+  GlobalRegistrator.register({
+    url: "http://localhost/",
+    // 面板的 iframe 只看属性：让 happy-dom 取 iframe 页面时拿到一页空的，不真去连网。
+    settings: {
+      fetch: {
+        interceptor: {
+          beforeAsyncRequest: async ({ window }) =>
+            new window.Response("", {
+              headers: { "content-type": "text/html" },
+            }),
+        },
+      },
+    },
+  });
+});
+afterEach(() => {
+  cleanup();
+  globalThis.fetch = originalFetch;
+});
+afterAll(async () => {
+  await settleReactWork();
+  GlobalRegistrator.unregister();
+});
+
+const target = (path: string): PreviewTarget => ({
+  botId: "b1",
+  path,
+  scope: { channel: "c1", run: "r1" },
+});
+
+function serve(handler: (url: URL) => Response) {
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) =>
+      handler(new URL(String(input), "http://localhost/")),
+    { preconnect: originalFetch.preconnect },
+  );
+}
+
+describe("preview param", () => {
+  test("round-trips; a bad value is undefined", () => {
+    const t = target("a b/#.pdf");
+    expect(decodePreview(encodePreview(t))).toEqual(t);
+    expect(decodePreview("%%")).toBeUndefined();
+    expect(decodePreview(undefined)).toBeUndefined();
+    const raw = (v: unknown) =>
+      Buffer.from(JSON.stringify(v)).toString("base64url");
+    expect(decodePreview("bm90IGpzb24")).toBeUndefined(); // "not json"
+    expect(decodePreview(raw({ botId: "b", path: "p" }))).toBeUndefined();
+    expect(
+      decodePreview(raw({ botId: "b", path: "p", scope: {} })),
+    ).toBeUndefined();
+    expect(
+      decodePreview(raw({ path: "p", scope: { task: "t" } })),
+    ).toBeUndefined();
+    expect(
+      decodePreview(raw({ botId: "b", path: "p", scope: { task: "t" } })),
+    ).toEqual({ botId: "b", path: "p", scope: { task: "t" } });
+  });
+
+  test("special-character path encodes the same as the download link", () => {
+    const t = target("a b/#?%.pdf");
+    const down = artifactHref(t) as string;
+    expect(previewHref(t)).toBe(
+      down.replace("/files/download?", "/files/preview?"),
+    );
+  });
+});
+
+describe("parseCsv", () => {
+  test("handles quotes, commas and newlines inside quotes", () => {
+    expect(parseCsv('a,"b,c","d ""q"""\n1,2,3\n"x\ny",,')).toEqual([
+      ["a", "b,c", 'd "q"'],
+      ["1", "2", "3"],
+      ["x\ny", "", ""],
+    ]);
+  });
+});
+
+describe("ArtifactPreview", () => {
+  test("image, video and audio use native tags", () => {
+    const { container, rerender } = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.png")} />,
+    );
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(
+      previewHref(target("a.png")),
+    );
+    rerender(<ArtifactPreview onClose={() => {}} target={target("a.mp4")} />);
+    expect(container.querySelector("video")).not.toBeNull();
+    rerender(<ArtifactPreview onClose={() => {}} target={target("a.mp3")} />);
+    expect(container.querySelector("audio")).not.toBeNull();
+  });
+
+  test("html iframe sandbox is exactly allow-scripts", () => {
+    const { container } = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.html")} />,
+    );
+    const frame = container.querySelector("iframe");
+    expect(frame?.getAttribute("sandbox")).toBe("allow-scripts");
+    expect(frame?.getAttribute("src")).toBe(previewHref(target("a.html")));
+  });
+
+  test("pdf iframe has no sandbox attribute", () => {
+    const { container } = render(
+      <ArtifactPreview onClose={() => {}} target={target("a b/#?%.pdf")} />,
+    );
+    const frame = container.querySelector("iframe");
+    expect(frame?.hasAttribute("sandbox")).toBe(false);
+    expect(frame?.getAttribute("src")).toBe(previewHref(target("a b/#?%.pdf")));
+  });
+
+  test("office: converted PDF goes in an iframe without sandbox", async () => {
+    serve(
+      () =>
+        new Response("%PDF", {
+          headers: { "content-type": "application/pdf" },
+        }),
+    );
+    const { container } = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.docx")} />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector("iframe")).not.toBeNull(),
+    );
+    expect(container.querySelector("iframe")?.hasAttribute("sandbox")).toBe(
+      false,
+    );
+  });
+
+  test("office unavailable draws the cannot-preview note and download", async () => {
+    serve(() => Response.json({ unavailable: true }));
+    const { container } = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.docx")} />,
+    );
+    await waitFor(() =>
+      expect(ui().getByText(/预览不了这个类型/)).toBeTruthy(),
+    );
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(ui().getAllByRole("link", { name: /下载/ }).length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  test("none and svg are download only", () => {
+    const { container } = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.svg")} />,
+    );
+    expect(ui().getByText(/预览不了这个类型/)).toBeTruthy();
+    expect(container.querySelector("iframe, img, object, embed")).toBeNull();
+    expect(ui().queryByRole("link", { name: /新标签页/ })).toBeNull();
+  });
+
+  test("415 from the text route draws the cannot-preview note", async () => {
+    serve(() => Response.json({ error: "no" }, { status: 415 }));
+    render(<ArtifactPreview onClose={() => {}} target={target("a.txt")} />);
+    await waitFor(() =>
+      expect(ui().getByText(/预览不了这个类型/)).toBeTruthy(),
+    );
+  });
+
+  test("other errors draw the load-failed note with download", async () => {
+    serve(() => Response.json({ error: "boom" }, { status: 500 }));
+    render(<ArtifactPreview onClose={() => {}} target={target("a.txt")} />);
+    await waitFor(() => expect(ui().getByText("预览加载失败")).toBeTruthy());
+  });
+
+  test("text shows markup as words, never as elements", async () => {
+    serve(() =>
+      Response.json({
+        kind: "markdown",
+        text: "<b>x</b>\nline2",
+        truncated: false,
+        bytes: 14,
+      }),
+    );
+    const { container } = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.md")} />,
+    );
+    await waitFor(() => expect(ui().getByText(/<b>x<\/b>/)).toBeTruthy());
+    expect(container.querySelector("b")).toBeNull();
+  });
+
+  test("truncated text says only the first 1MB is shown", async () => {
+    serve(() =>
+      Response.json({
+        kind: "text",
+        text: "hi",
+        truncated: true,
+        bytes: 9_000_000,
+      }),
+    );
+    render(<ArtifactPreview onClose={() => {}} target={target("a.txt")} />);
+    await waitFor(() => expect(ui().getByText(/只显示了前 1MB/)).toBeTruthy());
+  });
+
+  test("csv draws a table and caps the rows", async () => {
+    const rows = ["h1,h2", '"a,b",2'];
+    for (let i = 0; i < 600; i++) rows.push(`r${i},x`);
+    serve(() =>
+      Response.json({
+        kind: "csv",
+        text: rows.join("\n"),
+        truncated: false,
+        bytes: 1,
+      }),
+    );
+    const { container } = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.csv")} />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector("table")).not.toBeNull(),
+    );
+    expect(ui().getByText("a,b")).toBeTruthy();
+    expect(container.querySelectorAll("tbody tr").length).toBe(500);
+    expect(ui().getByText(/只显示了前 500 行/)).toBeTruthy();
+  });
+
+  test("top bar: name, download, open in new tab, close", () => {
+    let closed = 0;
+    const { container } = render(
+      <ArtifactPreview onClose={() => closed++} target={target("d/a.pdf")} />,
+    );
+    expect(ui().getByText("a.pdf")).toBeTruthy();
+    const open = ui().getByRole("link", { name: /新标签页/ });
+    expect(open.getAttribute("target")).toBe("_blank");
+    expect(open.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(open.getAttribute("href")).toBe(
+      previewHref(target("d/a.pdf")) ?? null,
+    );
+    expect(
+      ui().getAllByRole("link", { name: /下载/ })[0]?.getAttribute("href"),
+    ).toBe(artifactHref(target("d/a.pdf")) as string);
+    (ui().getByRole("button", { name: /关闭/ }) as HTMLButtonElement).click();
+    expect(closed).toBe(1);
+    expect(container.querySelector("[dangerouslySetInnerHTML]")).toBeNull();
+  });
+});
