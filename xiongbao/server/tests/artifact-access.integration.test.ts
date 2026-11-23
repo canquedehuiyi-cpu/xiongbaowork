@@ -8,6 +8,7 @@ import {
   type ArtifactAccessDeps,
   type ArtifactScope,
   resolveArtifactAccess,
+  resolveArtifactAppAccess,
 } from "../src/computer/artifact-access";
 import { createArtifactAccessDeps } from "../src/computer/artifact-access-store";
 import {
@@ -63,6 +64,8 @@ const deadRun = id("run-dead");
 const isolatedRun = id("run-isolated");
 const cardForgedRun = id("run-card-forged");
 const cardGoneRun = id("run-card-gone");
+const appsRun = id("run-apps");
+const APPS = [{ port: 8000, path: "/", title: "Dash" }];
 
 const SPECIAL = "报告 #1?.pptx";
 const as = (actor: string): AgentActor => ({ id: actor, role: "user" });
@@ -92,6 +95,7 @@ let appPool: ReturnType<typeof createDatabase>;
 let fixtures: postgres.Sql;
 let taskId = "";
 let strangerTask = "";
+let appsTask = "";
 let forgedTask = "";
 let goneTask = "";
 
@@ -160,6 +164,14 @@ beforeAll(async () => {
     }),
   ]);
 
+  await seedRun(ownerThread, owner, appsRun, [
+    artifacts(`person:${owner}`, []),
+    custom("delivery.delivered", {
+      taskId: randomUUID(),
+      eventId: randomUUID(),
+      deliverable: { kind: "deliverable", apps: APPS },
+    }),
+  ]);
   await seedRun(ownerThread, owner, forgedRun, [
     artifacts(`person:${outsider}`, ["secret.md"]),
   ]);
@@ -233,6 +245,13 @@ beforeAll(async () => {
             ${fixtures.json({ kind: "deliverable", workspaceFiles: ["card/out.pptx"] })})
     returning id`;
   goneTask = gone?.id ?? "";
+  // A card that lists a running program and no files at all.
+  const [withApp] = await fixtures<{ id: string }[]>`
+    insert into tasks (tenant_id, title, source, executor_agent_id, run_ref, deliverable_ref)
+    values (${member}, 'app', 'chat', ${bot}, ${cardRun},
+            ${fixtures.json({ kind: "deliverable", apps: APPS })})
+    returning id`;
+  appsTask = withApp?.id ?? "";
   const [theirs] = await fixtures<{ id: string }[]>`
     insert into tasks (tenant_id, title, source, executor_agent_id, run_ref, deliverable_ref)
     values (${owner}, 'theirs', 'chat', ${bot}, ${run},
@@ -415,6 +434,30 @@ describe.skipIf(!bypass)("workspace file access, against the database", () => {
         { channel: group, run: id("run-isolated-forged") },
         botIsolated,
       ),
+    ).toBeNull();
+  });
+
+  const askApp = (actor: string, port: number, scope: ArtifactScope) =>
+    resolveArtifactAppAccess(
+      { actor: as(actor), botId: bot, port, scope },
+      deps,
+    );
+
+  test("a card that lists a program opens that port and no other", async () => {
+    expect(await askApp(member, 8000, { task: appsTask })).not.toBeNull();
+    expect(await askApp(member, 8001, { task: appsTask })).toBeNull();
+    expect(await askApp(outsider, 8000, { task: appsTask })).toBeNull();
+    // The card lists no files, so it opens no folder either.
+    expect(await ask(member, "card/out.pptx", { task: appsTask })).toBeNull();
+  });
+
+  test("a group's run that delivered a program opens that port to a member and no other", async () => {
+    const scope = { channel: group, run: appsRun };
+    expect(await askApp(member, 8000, scope)).not.toBeNull();
+    expect(await askApp(member, 8001, scope)).toBeNull();
+    expect(await askApp(outsider, 8000, scope)).toBeNull();
+    expect(
+      await askApp(member, 8000, { channel: group, run: deliveredRun }),
     ).toBeNull();
   });
 });
