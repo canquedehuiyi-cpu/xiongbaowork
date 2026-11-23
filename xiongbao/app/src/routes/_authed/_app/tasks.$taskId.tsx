@@ -219,7 +219,9 @@ function EvidenceLine({ row }: { row: EvidenceRow }) {
       <span className="ml-auto shrink-0 text-(--wb-muted) text-[12px]">
         {row.kind === "diff"
           ? `${row.detail} · ${ROW_NOTE.diff}`
-          : ROW_NOTE[row.kind]}
+          : row.kind === "workspace_file" && row.unverified
+            ? `${ROW_NOTE.workspace_file} · 未核实`
+            : ROW_NOTE[row.kind]}
       </span>
     </div>
   );

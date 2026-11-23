@@ -1002,6 +1002,32 @@ export function createWorkspace(
     },
 
     /**
+     * What is at a path, from one stat call and without reading content: a file or a folder, its size
+     * and last-modified time. Confined by the same `resolvePath` as every read, so a link or `..`
+     * leaving the workspace is refused and a missing path is not found.
+     */
+    async stat(requested: string): Promise<{
+      path: string;
+      kind: "file" | "folder";
+      bytes: number;
+      modifiedMs: number;
+    }> {
+      const full = await resolvePath(requested, false);
+      const info = await stat(full).catch(() => null);
+      if (!info) {
+        throw new WorkspaceFileNotFoundError(
+          `There is no file at ${requested}.`,
+        );
+      }
+      return {
+        path: requested,
+        kind: info.isDirectory() ? "folder" : "file",
+        bytes: info.size,
+        modifiedMs: Math.trunc(info.mtimeMs),
+      };
+    },
+
+    /**
      * Open a file as raw bytes for a download.
      *
      * The same `resolvePath` used by text reads enforces the workspace boundary, including symlink

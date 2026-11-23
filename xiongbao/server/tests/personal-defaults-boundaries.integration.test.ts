@@ -74,7 +74,7 @@ const EXTRA = `${KEY}/only_on_own_row`;
 const SKILL = `pdb-skill-${suite}`;
 
 const audit = createAuditStore(database);
-const real = personalDefaultsDeps(database, OWNER, audit);
+const real = personalDefaultsDeps(database, OWNER);
 /** 真的读，只收窄到这个测试自己的员工、应用和技能。 */
 const deps = {
   ...real,
@@ -336,12 +336,12 @@ describe("asking before changes, once OpenBot gives Bots tools that change thing
   const preference = () =>
     asOwner(async () => (await approvals.policy?.preferences(OWNER))?.enabled);
 
-  test("is turned on for a person who never chose, before the first write tool is given", async () => {
+  test("is not turned on for a person who never chose, when the first write tool is given", async () => {
     const since = new Date();
     await asOwner(() => store.listForAgent(BOT));
     expect(await holds(BOT)).toContain(WRITE);
-    expect(await preference()).toBe(true);
-    const [row] = await asPlatform(() =>
+    expect(await preference()).not.toBe(true);
+    const rows = await asPlatform(() =>
       database
         .select({ initiatorKind: auditEvents.initiatorKind })
         .from(auditEvents)
@@ -353,7 +353,15 @@ describe("asking before changes, once OpenBot gives Bots tools that change thing
           ),
         ),
     );
-    expect(row?.initiatorKind).toBe("deployment");
+    expect(rows).toEqual([]);
+  });
+
+  test("a person who turned it on keeps it on", async () => {
+    await asOwner(() =>
+      approvals.policy?.setPreferences(OWNER, { enabled: true }),
+    );
+    await asOwner(() => store.listForAgent(BOT));
+    expect(await preference()).toBe(true);
   });
 
   test("a person who turned it off keeps it off", async () => {

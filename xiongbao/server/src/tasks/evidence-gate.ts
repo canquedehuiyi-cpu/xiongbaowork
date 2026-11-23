@@ -12,6 +12,7 @@ import {
 import { runAsTenant } from "../tenant/context";
 import { runEventsSoFar } from "../threads/run-side-events";
 import { diffSummary, editedFiles } from "./diff-summary";
+import { type FileProbe, verifyWorkspaceFiles } from "./file-evidence";
 import {
   type DeliverableComponent,
   type DeliverableRef,
@@ -29,8 +30,9 @@ import {
  *    component drawn in one of the card's rounds, a link that is an http(s) address, a change summary
  *    of one of the card's rounds that an external employee ran (`externalRun`: only the server's own
  *    hand-in for that employee names one, never a coworker's `deliver_task`), or a workspace file
- *    whose ref is a relative path inside the coworker Bot's own workspace (the gate checks the shape;
- *    whether the file is still there is what the person finds on opening that path);
+ *    whose ref is a relative path inside the coworker Bot's own workspace and that is really there
+ *    and not empty (a folder counts; on a paired personal computer it cannot be checked and the card
+ *    marks it unverified);
  * 2. a words-only hand-in (only `note`s) says how it was checked: at least one `checks` line;
  * 3. when the criteria list required items (「必需：A、B、C」), each one is named by an item's title
  *    or a check line, and the refusal says which are missing.
@@ -79,6 +81,8 @@ export type EvidenceGate = {
      * reading of an external employee's edits, not something a coworker can report.
      */
     externalRun?: string;
+    /** The employee handing in: whose workspace a `workspace_file` item is looked for in. */
+    agentId?: string;
   }): Promise<EvidenceVerdict>;
 };
 
@@ -372,6 +376,7 @@ function partMet(part: string, whole: string): boolean {
 
 export function createEvidenceGate(
   database: Database,
+  options: { fileProbe?: FileProbe } = {},
 ): EvidenceGate & RunFiles {
   /** Every run the card has had: the one that opened it, the one on it now, and each in its history. */
   async function runsOf(tenantId: string, taskId: string): Promise<string[]> {
@@ -600,9 +605,9 @@ export function createEvidenceGate(
             }
             case "workspace_file": {
               /*
-               * The file itself lives on the coworker Bot's computer, which this gate cannot open;
-               * what it can promise is the shape a workspace-relative path has to keep. A path outside the
-               * workspace is refused with the same reasoning the chat refuses to draw a link for it.
+               * The shape first: a path outside the workspace is refused with the same reasoning the
+               * chat refuses to draw a link for it. Whether the file is really there is asked after
+               * the loop, of every named path at once.
                */
               const path = workspaceFilePathOf(item.ref);
               if (!path)
@@ -620,6 +625,25 @@ export function createEvidenceGate(
                 reason: `不认识的交付物类型「${String((item as { kind: unknown }).kind)}」。`,
               };
           }
+        }
+
+        let unverifiedFiles: string[] = [];
+        if (options.fileProbe && input.agentId && workspaceFiles.length > 0) {
+          const { failures, unverified } = await verifyWorkspaceFiles({
+            tenantId: input.tenantId,
+            agentId: input.agentId,
+            paths: [...new Set(workspaceFiles)],
+            probe: options.fileProbe,
+          });
+          if (failures.length > 0) {
+            const names = failures.map((failure) => failure.path);
+            return {
+              ok: false,
+              reason: `工作区文件「${names.join("」「")}」不存在或是空的，先把它真正存到工作区再交。`,
+              missing: names,
+            };
+          }
+          unverifiedFiles = unverified;
         }
 
         if (items.every((item) => item.kind === "note") && checks.length === 0)
@@ -653,6 +677,7 @@ export function createEvidenceGate(
         if (links.length) ref.links = links;
         if (workspaceFiles.length)
           ref.workspaceFiles = [...new Set(workspaceFiles)];
+        if (unverifiedFiles.length) ref.unverifiedFiles = unverifiedFiles;
         if (diffs.length) ref.diffs = diffs;
         if (notes.length) ref.notes = notes;
         if (checks.length) ref.checks = checks;

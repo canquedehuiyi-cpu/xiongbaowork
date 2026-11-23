@@ -11,10 +11,10 @@
  * 安全面（每一条都有测试）：
  * - 授予只改「员工持有什么」，不改调用时的任何一道门：审批底线（`approvals/policy.ts`：交给本人、删除和
  *   外发只给允许一次）、共享使用闸门（X3）、账号规则（X1）、check-in 只认可靠读，都在调用那一刻照旧判。
- * - 个人默认会把写工具也给每位员工（和上游一样），而底线不管普通写（新建、修改）。所以在给出第一个工具
- *   之前，先把这个人的「改动之前先问」打开（`askBeforeChangesFirst`）：默认配置下普通写也要本人点头，网页里
- *   的提示注入不能让员工默默改写他的内容。他自己选过的（包括关掉）原样保留，之后也可以在设置里关掉。
- *   和上游不同：上游个人版默认不问普通写。
+ * - 个人默认会把写工具也给每位员工（和上游一样）。2026-11-23 起，首次授工具时不再替这个人打开「改动之前
+ *   先问」：新员工默认不逐条询问写文件、跑命令，底线（删除、对外发送、危险命令、敏感路径）照问（见
+ *   `approvals/policy.ts`）。这个人自己在设置里选过的（开或关）原样保留，已有的行不动；要逐条问的人在
+ *   「设置 → 审批」里打开。`askBeforeChangesFirst` 这个注入点还在，三处调用不动，个人版不再给它实现。
  * - 「每位员工」是这个人能看见的、内置的普通员工：分身不算（它的连接器来源只写只读工具，移除来源就收回，
  *   见 `avatar-sources.ts`），远端员工不算（本人不控制的外部端点）。
  * - 拒绝过的不再回来：关掉的默认应用记在 `personal_default_apps` 里，下次启动不再打开；一位员工身上关掉的
@@ -42,7 +42,6 @@ import { productName } from "../brand";
 import type { Database } from "../db/client";
 import { reasonWithoutStatement } from "../db/query-failure";
 import { enterpriseSettings } from "../db/schema/admin";
-import { approvalPreferences } from "../db/schema/approvals";
 import { agents } from "../db/schema/core";
 import { agentProfiles } from "../db/schema/coworker";
 import { learningSettings } from "../db/schema/learning";
@@ -111,7 +110,7 @@ export type PersonalDefaultsDeps = {
    */
   includeEveryBotInLearning(): Promise<string[]>;
   /**
-   * 第一次给员工工具之前，把这个人的「改动之前先问」打开；他选过的不动。只在个人版里调。
+   * 第一次给员工工具之前要做的事的注入点；个人版已不再给实现（新员工默认不逐条询问），保留调用位置不动。
    */
   askBeforeChangesFirst?: () => Promise<void>;
   /** 清掉已删除员工的「技能已给过」记录。 */
@@ -314,9 +313,7 @@ export async function ensurePersonalSkills(
 }
 
 /**
- * 个人版启动时：替还没做过选择的人把「改动之前先问」打开，不等有工具要补。默认值因此不依赖这次启动有没有
- * 东西要给；给工具的每条路径另外还会在给之前再确保一次（`withPersonalDefaults` 的 `grant` 包装）。团队版
- * 什么也不写。
+ * 个人版启动时调注入点（`askBeforeChangesFirst`）；个人版已不再给它实现，所以什么也不写，团队版同样不写。
  */
 export async function ensurePersonalAskBeforeChanges(
   deps: Pick<PersonalDefaultsDeps, "askBeforeChangesFirst">,
@@ -669,8 +666,6 @@ const serverKey = sql<string>`coalesce(${mcpServers.catalogueKey}, ${mcpServers.
 export function personalDefaultsDeps(
   database: Database,
   person?: string,
-  /** 替这个人打开「改动之前先问」时写的轨迹。 */
-  audit?: AuditStore,
 ): PersonalDefaultsDeps {
   const asPerson = person
     ? <T>(work: () => Promise<T>): Promise<T> => runAsTenant(person, work)
@@ -865,34 +860,6 @@ export function personalDefaultsDeps(
         `);
         return [...rows].flatMap((row) => row.bots);
       }),
-    /*
-     * 写下这个人的「改动之前先问」= 开，只在他还没有任何选择时（`onConflictDoNothing`）。他关掉过的、打开过
-     * 的都原样保留。写下了就记一行由 OpenBot 发起的轨迹，和他自己在设置里改时同一个事件。只在真有工具要给时
-     * 才走到这里，所以每次多的只是一条什么都不改的插入。
-     */
-    ...(person
-      ? {
-          askBeforeChangesFirst: () =>
-            framed(async () => {
-              const written = await database
-                .insert(approvalPreferences)
-                .values({ ownerUserId: person, enabled: true })
-                .onConflictDoNothing()
-                .returning({ owner: approvalPreferences.ownerUserId });
-              if (written.length > 0 && audit)
-                await recordAuditEvent(audit, {
-                  eventType: "approval.settings_changed",
-                  targetType: "approval_settings",
-                  targetId: person,
-                  initiator: DEPLOYMENT_INITIATOR,
-                  payload: {
-                    change: "ask_before_changes_personal_default",
-                    enabled: true,
-                  },
-                });
-            }),
-        }
-      : {}),
     /*
      * 已删除（软删）的员工不再需要「技能已给过」那一行；只看这个人能看见的员工。包里带来的员工除外：导入会
      * 把退役的包员工复活（`tenant-package.ts`），清掉的话它复活后会被再给一遍全部技能，本人为它关掉的也会回来。

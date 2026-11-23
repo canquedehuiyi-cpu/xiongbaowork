@@ -2048,6 +2048,21 @@ serve<StreamData & TerminalSocketData>({
         }
       }
 
+      if (url.pathname === "/files/stat" && request.method === "POST") {
+        const body = (await request.json().catch(() => null)) as {
+          path?: unknown;
+        } | null;
+        try {
+          const files = await filesFor(botId);
+          return json(await files.stat(String(body?.path ?? "")));
+        } catch (error) {
+          return json(
+            { error: describe(error, "The path could not be checked.") },
+            fileStatus(error),
+          );
+        }
+      }
+
       /*
        * A command on this computer.
        *

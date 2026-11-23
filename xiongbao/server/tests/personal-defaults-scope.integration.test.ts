@@ -69,7 +69,7 @@ const SKILL = `pds-skill-${suite}`;
 const PACKAGE_TENANT = `pds-package-${suite}`;
 
 const audit = createAuditStore(database);
-const real = personalDefaultsDeps(database, OWNER, audit);
+const real = personalDefaultsDeps(database, OWNER);
 const deps: PersonalDefaultsDeps = {
   ...real,
   bots: async () => (await real.bots()).filter((id) => id.endsWith(suite)),
@@ -309,10 +309,10 @@ describe("taking a grant from a Bot outside every Bot, in the personal edition",
   });
 });
 
-describe("asking before changes is on before any app's action is given", () => {
-  test("a start writes it for a person who never chose, with nothing to grant", async () => {
+describe("asking before changes is not turned on by a grant of an app's action", () => {
+  test("a start writes nothing for a person who never chose, with nothing to grant", async () => {
     await ensurePersonalAskBeforeChanges(deps);
-    expect(await preferenceRows()).toEqual([{ enabled: true }]);
+    expect(await preferenceRows()).toEqual([]);
   });
 
   test("the team edition's start writes nothing", async () => {
@@ -321,22 +321,22 @@ describe("asking before changes is on before any app's action is given", () => {
     expect(await preferenceRows()).toEqual([]);
   });
 
-  test("an admin's grant by hand writes it first", async () => {
+  test("an admin's grant by hand writes nothing", async () => {
     const response = await call("POST", "/grants", {
       kind: "mcp",
       ref: WRITE,
       agentId: BOT,
     });
     expect(response.status).toBe(200);
-    expect(await preferenceRows()).toEqual([{ enabled: true }]);
+    expect(await preferenceRows()).toEqual([]);
     expect(await holds(BOT)).toEqual([WRITE]);
   });
 
-  test("an owner's grant writes it first", async () => {
+  test("an owner's grant writes nothing", async () => {
     await asOwner(() =>
       store.grant("mcp", READ, AVATAR, `${OWNER}@x.test`, { as: "owner" }),
     );
-    expect(await preferenceRows()).toEqual([{ enabled: true }]);
+    expect(await preferenceRows()).toEqual([]);
   });
 
   test("a person who turned it off keeps it off through a grant", async () => {

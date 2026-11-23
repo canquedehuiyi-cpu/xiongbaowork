@@ -363,6 +363,7 @@ tests/delivery-link-audit.test.ts
 tests/delivery-message-id.test.ts
 tests/delivery-one-card.integration.test.ts
 tests/delivery-overdue.test.ts
+tests/delivery-prompt-files.test.ts
 tests/delivery-providers.test.ts
 tests/delivery-return-failure.test.ts
 tests/delivery-router.test.ts
@@ -428,6 +429,7 @@ tests/env-name.test.ts
 tests/evidence-gate-required.test.ts
 tests/external-agents-schema.integration.test.ts
 tests/fastpath-gate.test.ts
+tests/file-evidence.test.ts
 tests/form-check-guidance.test.ts
 tests/generated-media-group.integration.test.ts
 tests/generated-media.integration.test.ts
@@ -563,6 +565,7 @@ tests/memory-sticky.test.ts
 tests/memory-store.integration.test.ts
 tests/memory-unconfirmed.test.ts
 tests/memory.test.ts
+tests/merge-deliverables.test.ts
 tests/migrate-teardown.test.ts
 tests/migration-journal.test.ts
 tests/migration-reach.integration.test.ts
@@ -623,6 +626,7 @@ tests/personal-edition-defaults.test.ts
 tests/personal-handoff.integration.test.ts
 tests/personal-local-folders.integration.test.ts
 tests/personal-plugin-defaults.test.ts
+tests/physical-gate.test.ts
 tests/picked-harness-auth.test.ts
 tests/picked-skill-tenancy.integration.test.ts
 tests/picked-skill.test.ts
