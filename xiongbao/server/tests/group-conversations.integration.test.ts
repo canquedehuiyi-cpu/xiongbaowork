@@ -934,7 +934,9 @@ describe("group conversations in PostgreSQL", () => {
         conversations.list(reader.id, channel.id),
       );
       const [, adaRow, graceRow] = seen.messages;
-      expect(graceRow?.turnArtifacts).toBeUndefined();
+      expect(
+        graceRow === undefined ? "no row" : graceRow.turnArtifacts,
+      ).toBeUndefined();
       const items = adaRow?.turnArtifacts ?? [];
       expect(items).toHaveLength(1);
       runId = items[0]?.runId ?? "";
@@ -1783,7 +1785,10 @@ describe("group conversations in PostgreSQL", () => {
       agentId: ada,
       status: "waiting",
     });
-    expect(held.messages.at(-1)?.turnArtifacts).toBeUndefined();
+    const heldRow = held.messages.at(-1);
+    expect(
+      heldRow === undefined ? "no row" : heldRow.turnArtifacts,
+    ).toBeUndefined();
     expect(JSON.stringify(held)).not.toContain("secret-plan");
     expect(await rawTranscript(teammate, channel.id)).not.toContain(
       "secret-plan",
@@ -1821,7 +1826,7 @@ describe("group conversations in PostgreSQL", () => {
     const last = refused.messages.at(-1);
     expect(last?.agentId).toBe(ada);
     expect(last?.status).not.toBe("completed");
-    expect(last?.turnArtifacts).toBeUndefined();
+    expect(last === undefined ? "no row" : last.turnArtifacts).toBeUndefined();
   });
   test("a held reply the owner then refuses drops its files with it", async () => {
     const owner = await person();
@@ -1894,7 +1899,7 @@ describe("group conversations in PostgreSQL", () => {
     const last = after.messages.at(-1);
     expect(last?.agentId).toBe(ada);
     expect(last?.status).toBe("failed");
-    expect(last?.turnArtifacts).toBeUndefined();
+    expect(last === undefined ? "no row" : last.turnArtifacts).toBeUndefined();
     expect(JSON.stringify(after)).not.toContain("refused-plan");
     // 主人那边也不再留着：私有行随决定一起清掉。
     expect(await rawTranscript(owner, channel.id)).not.toContain(
