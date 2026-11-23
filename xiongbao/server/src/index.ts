@@ -2207,11 +2207,7 @@ await startupLifecycle.run(async (startup) => {
    * 个人版的默认（`plugins/personal-defaults.ts`，X4）：个人版里应用列出的每个工具给每位员工，新技能给每位
    * 员工，每位员工都参与自动学习。授予在那一个人（`DEV_ACTOR`）的帧里写。团队版里包装原样放行。
    */
-  const personalDeps = personalDefaultsDeps(
-    database,
-    DEV_ACTOR.id,
-    bootAuditStore,
-  );
+  const personalDeps = personalDefaultsDeps(database, DEV_ACTOR.id);
   /*
    * 共享使用批准（X3，上游 #757）：谁可以驾驶用到 Shared 应用团队账号的运行。批准记在员工主人名下，
    * 闸门在主人帧里只读它（`plugins/shared-use-store.ts`）。职责的触发来源由同一个存储读，读不到的职责
