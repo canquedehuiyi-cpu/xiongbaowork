@@ -3,7 +3,7 @@
  * 的检查项。写到 `<结果目录>/report.md`，在 GitHub Actions 里同时追加到 `$GITHUB_STEP_SUMMARY`。
  *
  * 用法：bun scripts/e2e/employee-eval/report.ts <结果目录>
- * 目录里有哪几份（xiongbao.json、xiongbao-chat.json、codex.json、smoke.json、smoke-chat.json）就合哪几份，缺的
+ * 目录里有哪几份（xiongbao.json、xiongbao-chat.json、xiongbao-group.json、codex.json、smoke.json、smoke-chat.json）就合哪几份，缺的
  * 那一侧在表里显示「—」。有单聊路径的结果（`-chat`）时，五道题的表里看板和单聊并排，另出一张两条路径的验收对比表
  * （通过率、token、步数、墙钟、中途停、计划、子代理），Codex 的对照列照旧。
  */
@@ -17,7 +17,9 @@ import {
 import { join, resolve } from "node:path";
 import { bookkeepingShare } from "./bookkeeping";
 import {
+  DELIVERABLES_SUITE,
   HARD_SUITE,
+  isDeliverableTask,
   REPEAT_PITFALL_TASK,
   REPEAT_TASKS,
   TASK_TITLES,
@@ -95,6 +97,13 @@ export const pathOfResults = (results: EvalResults): EvalPath =>
 /** 一条记录走的路径：记录自己写的，没有就取它所在文件的。 */
 const pathOfRecord = (record: EvalRecord, results: EvalResults): EvalPath =>
   record.path ?? pathOfResults(results);
+
+/** 熊宝侧各条路径在表头和小标题里的叫法（看板是默认路径，只在有别的路径并排时才写出来）。 */
+const PATH_LABEL: Record<EvalPath, string> = {
+  board: "看板",
+  chat: "单聊",
+  group: "群聊",
+};
 
 const sumOf = (values: (number | null | undefined)[]): number | null => {
   const known = values.filter((value): value is number => value != null);
@@ -760,13 +769,16 @@ const CAPABILITY_HEADER = [
 function header(results: EvalResults[]): string[] {
   const lines: string[] = [];
   for (const side of results) {
-    const chat = side.side === "xiongbao" && pathOfResults(side) === "chat";
+    const named =
+      side.side === "xiongbao" && pathOfResults(side) !== "board"
+        ? `${PATH_LABEL[pathOfResults(side)]}路径`
+        : "";
     const name =
       side.side === "codex"
         ? "Codex"
         : side.suite === "smoke"
-          ? `熊宝（能力冒烟${chat ? "，单聊路径" : ""}）`
-          : `熊宝员工${chat ? "（单聊路径）" : ""}`;
+          ? `熊宝（能力冒烟${named ? `，${named}` : ""}）`
+          : `熊宝员工${named ? `（${named}）` : ""}`;
     lines.push(
       `- **${name}**：${side.provider} / \`${side.model}\`${side.baseUrl ? `（${side.baseUrl}）` : ""}；${side.runner}${side.mock ? "；⚠️ 本机假模型，结果不代表能力" : ""}`,
     );
@@ -791,21 +803,29 @@ export function renderReport(results: EvalResults[]): string {
       (side) =>
         side.side === "xiongbao" &&
         side.suite === "tasks" &&
-        pathOfResults(side) === path,
+        pathOfResults(side) === path &&
+        // 只有交付题的结果文件另出「交付题验收」一节，不当成五道题的一列。
+        !(
+          side.records.length > 0 &&
+          side.records.every((record) => isDeliverableTask(record.task))
+        ),
     );
   const board = taskSide("board");
   const chat = taskSide("chat");
+  const groupSide = taskSide("group");
   const codex = results.find((side) => side.side === "codex");
   const smokes = results.filter((side) => side.suite === "smoke");
   /*
    * 熊宝侧的列：只有看板路径（或什么都没有）时和原来一样叫「熊宝」；有单聊路径的结果就看板、单聊各一列。
    */
-  const mineSides: { label: string; results: EvalResults | undefined }[] = chat
-    ? [
-        { label: "熊宝（看板）", results: board },
-        { label: "熊宝（单聊）", results: chat },
-      ]
-    : [{ label: "熊宝", results: board }];
+  const mineSides: { label: string; results: EvalResults | undefined }[] =
+    chat || groupSide
+      ? [
+          { label: "熊宝（看板）", results: board },
+          ...(chat ? [{ label: "熊宝（单聊）", results: chat }] : []),
+          ...(groupSide ? [{ label: "熊宝（群聊）", results: groupSide }] : []),
+        ]
+      : [{ label: "熊宝", results: board }];
   const out: string[] = [
     "# 熊宝员工 vs Codex 对标评测",
     "",
@@ -813,7 +833,7 @@ export function renderReport(results: EvalResults[]): string {
     "",
   ];
 
-  if (board || chat || codex) {
+  if (board || chat || groupSide || codex) {
     const find = (side: EvalResults | undefined, task: string) =>
       side?.records.find((record) => record.task === task);
     const tasks = TASKS.filter(
@@ -953,7 +973,11 @@ export function renderReport(results: EvalResults[]): string {
     for (const mine of mineSides) {
       if (!mine.results?.records.length) continue;
       out.push(
-        `### 熊宝员工的工作方式（每期能力）${chat ? `：${mine.label === "熊宝（单聊）" ? "单聊路径" : "看板路径"}` : ""}`,
+        `### 熊宝员工的工作方式（每期能力）${
+          mineSides.length > 1
+            ? `：${mine.label.replace(/^熊宝（|）$/g, "")}路径`
+            : ""
+        }`,
         "",
       );
       out.push(
@@ -1321,6 +1345,71 @@ export function renderReport(results: EvalResults[]): string {
       "",
     );
 
+  /*
+   * 交付题验收：七道题 × 单聊 / 群聊共 14 格，14 格都过（含重跑后过）才算达成。缺一格、或重跑后仍没过都是未达成。
+   * 看板路径不在验收范围内，交付题只在单聊和群聊两条路径上判。
+   */
+  const deliverableRecords = results
+    .filter((side) => side.side === "xiongbao" && side.suite === "tasks")
+    .flatMap((side) =>
+      side.records
+        .filter((record) => isDeliverableTask(record.task))
+        .map((record) => ({ record, path: pathOfRecord(record, side) })),
+    );
+  if (deliverableRecords.length) {
+    const paths = ["chat", "group"] as const;
+    const cellOf = (task: string, path: (typeof paths)[number]) =>
+      deliverableRecords.findLast(
+        (row) => row.record.task === task && row.path === path,
+      )?.record;
+    const cells = DELIVERABLES_SUITE.flatMap((task) =>
+      paths.map((path) => ({ task, path, record: cellOf(task, path) })),
+    );
+    const passedCells = cells.filter((item) => item.record?.passed);
+    const missing = cells.filter((item) => !item.record);
+    const failed = cells.filter((item) => item.record && !item.record.passed);
+    const rerunText = (record: EvalRecord | undefined) =>
+      record?.reruns ? `（重跑 ${record.reruns} 次）` : "";
+    out.push(
+      `## 交付题验收（${passedCells.length}/${cells.length}）`,
+      "",
+      table(
+        ["题目", ...paths.map((path) => PATH_LABEL[path])],
+        DELIVERABLES_SUITE.map((task) => [
+          `${TASK_TITLES[task]}（${task}）`,
+          ...paths.map((path) => {
+            const record = cellOf(task, path);
+            return record
+              ? `${verdict(record)}${record.timedOut ? " ⏱" : ""}${rerunText(record)}`
+              : DASH;
+          }),
+        ]),
+      ),
+      "",
+      passedCells.length === cells.length
+        ? `判定：达成（${cells.length} 项全部通过，含重跑）`
+        : `判定：未达成（${[
+            ...(failed.length
+              ? [
+                  `没通过：${failed
+                    .map((item) => `${item.task}（${PATH_LABEL[item.path]}）`)
+                    .join("、")}`,
+                ]
+              : []),
+            ...(missing.length
+              ? [
+                  `没有结果：${missing
+                    .map((item) => `${item.task}（${PATH_LABEL[item.path]}）`)
+                    .join("、")}`,
+                ]
+              : []),
+          ].join("；")}）`,
+      "",
+      "每格是这道题在这条路径上的最终结果；「重跑 1 次」= 第一次没过、重跑了一次，格里是重跑的结果，重跑后仍没过就是没过。14 项全部通过（含重跑）才算达成。",
+      "",
+    );
+  }
+
   const smokeRows = smokes.flatMap((side) =>
     side.records.map((record) => ({
       record,
@@ -1330,7 +1419,7 @@ export function renderReport(results: EvalResults[]): string {
   if (smokeRows.length) {
     const all = smokeRows.map((row) => row.record);
     const scored = all.filter((record) => !record.error?.startsWith("不适用"));
-    const showPath = smokeRows.some((row) => row.path === "chat");
+    const showPath = smokeRows.some((row) => row.path !== "board");
     out.push(
       `## 能力冒烟（${scored.filter((record) => record.passed).length}/${scored.length}）`,
       "",
@@ -1348,7 +1437,7 @@ export function renderReport(results: EvalResults[]): string {
         ],
         smokeRows.map(({ record, path }) => [
           record.title,
-          ...(showPath ? [path === "chat" ? "单聊" : "看板"] : []),
+          ...(showPath ? [PATH_LABEL[path]] : []),
           verdict(record),
           seconds(record.wallMs),
           tokens(record),
@@ -1376,9 +1465,9 @@ export function renderReport(results: EvalResults[]): string {
       const name =
         side.side === "codex"
           ? "Codex"
-          : pathOfRecord(record, side) === "chat"
-            ? "熊宝（单聊）"
-            : "熊宝";
+          : pathOfRecord(record, side) === "board"
+            ? "熊宝"
+            : `熊宝（${PATH_LABEL[pathOfRecord(record, side)]}）`;
       out.push(
         `**${name} · ${record.title}**${record.error ? `（${record.error}）` : ""}`,
         "",
@@ -1400,6 +1489,7 @@ if (import.meta.main) {
   const results = [
     "xiongbao.json",
     "xiongbao-chat.json",
+    "xiongbao-group.json",
     "codex.json",
     "smoke.json",
     "smoke-chat.json",
@@ -1409,7 +1499,7 @@ if (import.meta.main) {
     .map((path) => JSON.parse(readFileSync(path, "utf8")) as EvalResults);
   if (!results.length) {
     console.error(
-      `${dir} 里没有评测结果（xiongbao.json / xiongbao-chat.json / codex.json / smoke.json / smoke-chat.json）`,
+      `${dir} 里没有评测结果（xiongbao.json / xiongbao-chat.json / xiongbao-group.json / codex.json / smoke.json / smoke-chat.json）`,
     );
     process.exit(1);
   }

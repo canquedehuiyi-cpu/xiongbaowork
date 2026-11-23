@@ -157,6 +157,11 @@ export type EvalRecord = {
   wallSplit?: WallSplit;
   /** 这道题走的执行路径；旧结果文件没有，按看板路径算。Codex 侧没有。 */
   path?: EvalPath;
+  /**
+   * 失败后重跑的次数（交付题，输入 `rerun_failed`）：0 = 一次就是最终结果，1 = 第一次没过、重跑了一次，
+   * 这条记录是重跑的结果；重跑后仍失败就是失败。旧结果文件没有这一项，读作 0。
+   */
+  reruns?: 0 | 1;
   /** 停在时间或段数上限的轮数（`turn-limit` / `step-limit` 事件）。旧结果文件没有这一项。 */
   limitStops?: number;
   /** 没写完、没触顶、也没问人就停了。读不到时 null。 */

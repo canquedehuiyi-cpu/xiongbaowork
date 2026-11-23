@@ -54,6 +54,8 @@
  *   EVAL_SERVER_ENV  给服务器多带几个 XIONGBAO_ 开头的部署开关，逗号分隔的 名字=值（例如 XIONGBAO_VERIFY_NUDGE=off），用来对照开关开和关
  *   EVAL_PROMPT_CHARS 真模型下设 on，才记每道题发给模型的请求体大小（在服务器和提供方之间夹一个回环转发，
  *                     结果记录里的 promptChars，报告里的「提示词体积」表）；本机假模型一律记
+ *   EVAL_RERUN_FAILED 1 | 0，默认 0：交付题没过时用新员工、新夹具重跑至多 1 次，记录里 reruns 写 1，结果取重跑那一次
+ *                     （重跑后仍没过就是没过）；作业输入 rerun_failed 传这个
  *   EVAL_TASK_MINUTES 每题墙钟上限，默认 20（冒烟场景用各自的上限）
  *   EVAL_OUT          结果目录，默认 ./employee-eval-out；写 xiongbao.json / smoke.json（chat 路径是 -chat 结尾）、产物和服务器日志
  *   E2E_SERVER_PORT   默认取空闲端口
@@ -294,6 +296,7 @@ if (!databaseUrl || !roleWriterDatabaseUrl) {
 }
 const OUT = resolve(process.env.EVAL_OUT?.trim() || "employee-eval-out");
 mkdirSync(OUT, { recursive: true });
+const rerunFailed = process.env.EVAL_RERUN_FAILED?.trim() === "1";
 const tasks: TaskName[] =
   suite === "tasks" ? selectTasks(process.env.EVAL_TASKS, HARD_SUITE) : [];
 const scenarios: SmokeScenario[] =
@@ -2393,6 +2396,14 @@ try {
     let record: EvalRecord | undefined;
     try {
       record = await runWork(work);
+      // 交付题没过：新员工、新夹具重跑一次。结果取重跑那次，reruns 记 1；不管第一次怎么失败，重跑后仍失败就是失败。
+      if (work.task && isDeliverableTask(work.task) && !work.pair) {
+        if (record && !record.passed && rerunFailed) {
+          console.log(`   ${work.key} 没过，重跑一次`);
+          materializeWork(work);
+          record = { ...(await runWork(work)), reruns: 1 };
+        } else if (record) record = { ...record, reruns: 0 };
+      }
     } catch (thrown) {
       // 建不出新员工（名额不够）：记一笔，别拖垮整次评测。对照建不出来，这一对没有对照；
       // 第一次建不出来，这一对剩下的运行（第二次、对照）都不做，也不退回到别的员工。

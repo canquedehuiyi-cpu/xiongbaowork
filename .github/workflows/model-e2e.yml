@@ -17,8 +17,9 @@
 # 期六「熊宝员工对标 Codex」另加四个作业，只有手动触发时选了对应的 suite 才跑（默认 metering-only 只跑上面两个）：
 #
 #   employee-eval-xiongbao     五道真实题交给熊宝员工，自动判分并记录每期能力指标。执行路径由输入 paths 选：board（看板派活，
-#                              服务器执行电脑工具）、chat（单聊接口，期九·六，HTTP 读事件流、服务器执行电脑工具）、board,chat
-#                              （依次两条都跑，同一个结果目录里各写各的文件）。
+#                              服务器执行电脑工具）、chat（单聊接口，期九·六，HTTP 读事件流、服务器执行电脑工具）、group（群聊）、
+#                              board,chat、chat,group（依次几条都跑，同一个结果目录里各写各的文件）。tasks 填 deliverables
+#                              跑七道交付题，输入 rerun_failed 决定没过的题重跑一次。
 #   employee-eval-codex        同样五道题交给 Codex CLI（codex exec），同一个模型、同一套判分。
 #   employee-eval-report       把两边结果合成一张对比表（步骤摘要 + artifact）；有单聊路径的结果时，看板和单聊并排。
 #   employee-capability-smoke  每期能力一个最小场景（计划、子代理、改完跑测试、长任务续跑、思考、编辑/检索工具），日常回归；
@@ -43,7 +44,7 @@ on:
           - capability-smoke
           - all
       tasks:
-        description: "对标题目：all（五道对标题）、hard（加难题 compare,refactor,terminal,webform），或逗号分隔的 research,docs,code,data,office,compare,refactor,terminal,webform,repeat,repeat-pitfall（repeat、repeat-pitfall 只能点名，同一道题连做两次，记第一次和第二次的指标：repeat 是多步办公（会议纪要），repeat-pitfall 是第一次有坑、学会后能跳过的账单导入题，可以同时点名 repeat,repeat-pitfall）"
+        description: "对标题目：all（五道对标题）、hard（加难题 compare,refactor,terminal,webform），deliverables（七道交付题 deliv-pptx,deliv-docx,deliv-xlsx,deliv-web,deliv-app,deliv-image,deliv-video，只能点名；看员工交出的演示文稿、文档、表格、网页、本机程序、图片、视频能不能直接用，配合 paths 的 group 或 chat,group），或逗号分隔的 research,docs,code,data,office,compare,refactor,terminal,webform,repeat,repeat-pitfall（repeat、repeat-pitfall 只能点名，同一道题连做两次，记第一次和第二次的指标：repeat 是多步办公（会议纪要），repeat-pitfall 是第一次有坑、学会后能跳过的账单导入题，可以同时点名 repeat,repeat-pitfall）"
         type: string
         default: all
       repeat_pairs:
@@ -58,13 +59,22 @@ on:
           - "5"
           - "6"
       paths:
-        description: "熊宝员工对标走哪条执行路径：board（看板派活）、chat（单聊接口，期九·六）、board,chat（依次两条都跑，出并排表）"
+        description: "熊宝员工对标走哪条执行路径：board（看板派活）、chat（单聊接口，期九·六）、group（群聊：新建含这位员工和一位同伴的群聊，点名发题）、board,chat（依次两条都跑，出并排表）、chat,group（交付题验收：单聊和群聊各一遍）"
         type: choice
         default: board
         options:
           - board
           - chat
+          - group
           - board,chat
+          - chat,group
+      rerun_failed:
+        description: "交付题没过时重跑至多 1 次（1 重跑，0 不重跑），结果记 reruns；重跑后仍没过就是没过。验收看「14 项全部通过（含重跑）」"
+        type: choice
+        default: "1"
+        options:
+          - "1"
+          - "0"
       scenarios:
         description: "冒烟场景：all（plan,subagent,code,long,reasoning,edit-grep 六个），background（后台长跑 disconnect,reconnect，真模型走单聊路径，各约 3～5 分钟、上限 15 分钟），或逗号分隔的场景名，可混写如 all,background"
         type: string
@@ -245,6 +255,19 @@ jobs:
           sudo chown "$(id -u):$(id -g)" "$PLAYWRIGHT_BROWSERS_PATH"
           cd agent-computer && bun install --frozen-lockfile --ignore-scripts
           bun x playwright install --with-deps chromium
+      # 交付题的判分（check-deliverables.ts）：python3 -I 读演示文稿、文档、表格，ffmpeg 读视频。python 依赖装在系统级
+      # （不用 --user：隔离后的判分和员工用户都读得到）；浏览器按 ci.yml 的 computer-browser 作业的写法，用 agent-computer 自己的
+      # Playwright 装无 shell 的 Chromium（上一步已装完整版，这一步补 --no-shell 的那个构建，网页题截图用）。
+      - name: Install the deliverables checkers (python office libraries, ffmpeg, headless Chromium)
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: /opt/ms-playwright
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ffmpeg python3-pip
+          sudo python3 -m pip install --break-system-packages python-pptx python-docx openpyxl
+          python3 -I -c "import pptx, docx, openpyxl"
+          cd agent-computer && bunx playwright install --with-deps --no-shell chromium
+          sudo chmod -R a+rX "$PLAYWRIGHT_BROWSERS_PATH"
       # 员工的电脑读不到评测仓库：员工的命令以专用系统用户 xbeval 运行（评测脚本 isolation.ts 以 EVAL_EMPLOYEE_USER 起电脑），
       # runner 的 home（检出目录、临时目录都在里面）对它关闭；电脑的运行副本放 /opt/xbeval（它 import ../../shared，
       # 依赖 zod 从 agent-computer/node_modules 找）；bun 等工具须在该用户也读得到的位置。评测开始时脚本还会以员工身份自检，
@@ -276,7 +299,7 @@ jobs:
       - name: Record the wall-clock deadline for repeat pairs
         run: echo "EVAL_DEADLINE_EPOCH=$(( $(date +%s) + 165 * 60 ))" >> "$GITHUB_ENV"
       # 每条路径一遍：board 写 xiongbao.json，chat 写 xiongbao-chat.json，同一个结果目录。一条路径失败不拦下一条，
-      # 最后作业按有没有失败收尾。路径名只认 board 和 chat（输入是 choice，这里再核一遍）。
+      # 最后作业按有没有失败收尾。路径名只认 board、chat 和 group（输入是 choice，这里再核一遍）。
       - name: Five tasks for a Xiongbao employee, over each chosen path
         env:
           MODEL_E2E: "1"
@@ -296,6 +319,11 @@ jobs:
           EVAL_REPEAT_PAIRS: ${{ inputs.repeat_pairs }}
           EVAL_SEED: ${{ github.run_id }}-${{ github.run_attempt }}
           EVAL_PATHS: ${{ inputs.paths }}
+          # 交付题没过重跑至多 1 次（run-xiongbao.ts 的 EVAL_RERUN_FAILED）。
+          EVAL_RERUN_FAILED: ${{ inputs.rerun_failed }}
+          # 网页、程序题经内容端口打开：评测的服务器进程只收白名单里的变量，所以同一个值也走 EVAL_SERVER_ENV 带过去。
+          XIONGBAO_CONTENT_PORT: "3773"
+          EVAL_SERVER_ENV: XIONGBAO_CONTENT_PORT=3773
           EVAL_OUT: ${{ runner.temp }}/employee-eval
           # 员工的电脑以专用用户运行、读不到评测仓库（上面的隔离步骤；评测脚本 isolation.ts）。
           EVAL_EMPLOYEE_USER: xbeval
@@ -307,7 +335,7 @@ jobs:
           status=0
           for path in ${EVAL_PATHS//,/ }; do
             case "$path" in
-              board | chat) ;;
+              board | chat | group) ;;
               *) echo "unknown execution path in the paths input"; exit 2 ;;
             esac
             echo "== execution path: $path"
