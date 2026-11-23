@@ -100,13 +100,18 @@ async function employeeSaves(name: string, when: string) {
   );
   if (!result.ok) throw new Error(result.reason);
   const id = result.id;
+  /*
+   * 参数带着技能名，和真实的一步一样：结果里的 id 偶尔有一长串数字（随机，每次跑不同），会被脱敏成
+   * `[number]`，这时复盘按参数里的名字算出同一个 id（`selfSavedSlugsOf`）。没带名字就认不出，测试随机变红。
+   */
+  const args = JSON.stringify({ name });
   const step = traceStepsOf([
     {
       type: "TOOL_CALL_START",
       toolCallId: `s-${id}`,
       toolCallName: "save_learned_skill",
     },
-    { type: "TOOL_CALL_ARGS", toolCallId: `s-${id}`, delta: "{}" },
+    { type: "TOOL_CALL_ARGS", toolCallId: `s-${id}`, delta: args },
     {
       type: "TOOL_CALL_RESULT",
       toolCallId: `s-${id}`,
