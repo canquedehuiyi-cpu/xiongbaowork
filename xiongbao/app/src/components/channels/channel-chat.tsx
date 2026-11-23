@@ -101,6 +101,10 @@ import {
   type StepLimitTracker,
 } from "@/lib/channels/step-limit";
 import {
+  createTurnArtifactTracker,
+  type TurnArtifactTracker,
+} from "@/lib/channels/turn-artifact-events";
+import {
   createTurnStopTracker,
   type TurnStopTracker,
 } from "@/lib/channels/turn-notice";
@@ -654,6 +658,29 @@ export function ChannelChat({
     acpTracker.listen,
     acpTracker.cards,
     acpTracker.cards,
+  );
+  /*
+   * 本轮产物事件（服务器每次 run 收尾前插的 `computer.turn_artifacts`）：和上面一样从事件流里记，订阅要在
+   * 加入线程之前，重放的历史才听得到。
+   */
+  const artifactTrackerRef = useRef<{
+    agent: unknown;
+    tracker: TurnArtifactTracker;
+  } | null>(null);
+  if (artifactTrackerRef.current?.agent !== agent)
+    artifactTrackerRef.current = {
+      agent,
+      tracker: createTurnArtifactTracker(),
+    };
+  const artifactTracker = artifactTrackerRef.current.tracker;
+  useEffect(() => {
+    const subscription = agent.subscribe?.(artifactTracker.subscriber);
+    return () => subscription?.unsubscribe();
+  }, [agent, artifactTracker]);
+  const turnArtifactEvents = useSyncExternalStore(
+    artifactTracker.listen,
+    artifactTracker.events,
+    artifactTracker.events,
   );
   /*
    * 这一轮还有几轮问答没落地（WP-3.2 S1a 的按轮累计）。`say()` 在自增/自减 `turnsRef` 的地方同步这里；
@@ -1791,6 +1818,12 @@ export function ChannelChat({
               ...turnArtifactNotes({
                 botId: runtimeAgentId,
                 messages: agent.messages,
+                events: turnArtifactEvents,
+                channelId: channel.id,
+                nameOf: (id) =>
+                  id === runtimeAgentId
+                    ? botName
+                    : agentProfiles?.find((profile) => profile.id === id)?.name,
               }),
               /*
                * 到点、工具轮数用完、被打断的一轮，回答末尾的「到 25 分钟了 · 继续」等：和下面步数用完的

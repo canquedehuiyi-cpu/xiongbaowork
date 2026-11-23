@@ -608,6 +608,7 @@ tests/transcript-skill-badge.test.tsx
 tests/transcript-stream.test.tsx
 tests/transcript-turns.test.ts
 tests/translations.test.tsx
+tests/turn-artifacts-event.test.tsx
 tests/turn-notice.test.ts
 tests/turn-stop-chat.test.tsx
 tests/typed-reveal.test.ts
