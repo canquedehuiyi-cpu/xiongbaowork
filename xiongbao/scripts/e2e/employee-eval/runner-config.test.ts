@@ -59,6 +59,19 @@ test("provider, model and endpoint are parameters, not DeepSeek literals", () =>
   expect(taskMinutes({ EVAL_TASK_MINUTES: "5" })).toBe(5);
 });
 
+test("the AIHUB relay has its own default endpoint", () => {
+  const relay = evalGate({
+    ...armed,
+    EVAL_PROVIDER: "aihub",
+    EVAL_MODEL: "gemini-4-argon",
+  });
+  expect(relay.ok && relay.config).toMatchObject({
+    provider: "aihub",
+    model: "gemini-4-argon",
+    baseUrl: "https://aihubcc.cc/v1",
+  });
+});
+
 test("the Codex config points a responses provider at the model, with the key only by env name", () => {
   const toml = codexConfig(
     {

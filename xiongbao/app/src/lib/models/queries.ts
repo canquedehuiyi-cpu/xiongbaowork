@@ -76,6 +76,7 @@ export const PROVIDER_NAMES: Record<string, string> = {
   deepseek: "DeepSeek",
   zhipu: "智谱 GLM",
   moonshot: "Moonshot Kimi",
+  aihub: "AIHUB 中转",
   custom: "自定义端点",
 };
 

@@ -1534,6 +1534,13 @@
       "when": 1795150000000,
       "tag": "0238_learned_skill_fingerprint",
       "breakpoints": true
+    },
+    {
+      "idx": 239,
+      "version": "7",
+      "when": 1795155000000,
+      "tag": "0239_aihub_provider_template",
+      "breakpoints": true
     }
   ]
 }
