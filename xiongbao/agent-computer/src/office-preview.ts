@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { basename, extname, posix } from "node:path";
+import { pathToFileURL } from "node:url";
 import type { CommandRunner } from "./shell";
 import type { Workspace } from "./workspace";
 import { WorkspaceFileError, WorkspaceFileNotFoundError } from "./workspace";
@@ -96,10 +97,22 @@ async function convert(
   const work = `${PREVIEW_CACHE_DIR}/.tmp-${randomBytes(6).toString("hex")}`;
   const produced = `${work}/${basename(i.path, extname(i.path))}.pdf`;
   // A profile folder of its own, so two conversions never queue behind one LibreOffice instance.
-  // The profile lives under /tmp, named by random hex, so no workspace path is spliced into a URL.
-  const profileDir = `/tmp/xb-soffice-${randomBytes(6).toString("hex")}`;
-  const profile = `-env:UserInstallation=file://${profileDir}`;
   try {
+    // The profile sits beside the conversion's temporary folder (so a crash leftover is swept with
+    // it), not in /tmp, which an employee's private TMPDIR may not share. LibreOffice wants a URL,
+    // so the absolute folder is read back from the shell and encoded here.
+    const here = await i.run.run({
+      command: "pwd",
+      fromRoot: true,
+      timeoutMs: 15_000,
+    });
+    const cwd = here.stdout.trim();
+    if (here.exitCode !== 0 || !cwd.startsWith("/")) {
+      throw new OfficeConversionError(
+        "The workspace folder could not be found.",
+      );
+    }
+    const profile = `-env:UserInstallation=${pathToFileURL(posix.join(cwd, work, "profile")).href}`;
     await i.run
       .run({
         command: `[ -d ${shellWord(PREVIEW_CACHE_DIR)} ] && ${commandLine(["find", PREVIEW_CACHE_DIR, "-maxdepth", "1", "-name", ".tmp-*", "-mmin", `+${STALE_MINUTES}`, "-exec", "rm", "-rf", "{}", "+"])}; true`,
@@ -107,11 +120,15 @@ async function convert(
         timeoutMs: 15_000,
       })
       .catch(() => undefined);
-    const converted = await i.run.run({
-      command: `mkdir -p ${shellWord(work)} && ${commandLine([i.soffice ?? "soffice", "--headless", profile, "--convert-to", "pdf", "--outdir", work, asOperand(i.path)])}`,
-      fromRoot: true,
-      timeoutMs: CONVERT_TIMEOUT_MS,
-    });
+    const convertOnce = () =>
+      i.run.run({
+        command: `mkdir -p ${shellWord(work)} && ${commandLine([i.soffice ?? "soffice", "--headless", profile, "--convert-to", "pdf", "--outdir", work, asOperand(i.path)])}`,
+        fromRoot: true,
+        timeoutMs: CONVERT_TIMEOUT_MS,
+      });
+    let converted = await convertOnce();
+    // 81 is LibreOffice saying its fresh profile was just set up: the same command then works.
+    if (converted.exitCode === 81) converted = await convertOnce();
     if (converted.exitCode === 127) return { unavailable: true };
     if (converted.timedOut) {
       throw new OfficeConversionError(
@@ -137,7 +154,7 @@ async function convert(
   } finally {
     await i.run
       .run({
-        command: commandLine(["rm", "-rf", "--", work, profileDir]),
+        command: commandLine(["rm", "-rf", "--", work]),
         fromRoot: true,
         timeoutMs: 15_000,
       })

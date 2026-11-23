@@ -49,6 +49,7 @@ function stubRunner(calls: string[], exit = 0): CommandRunner {
   return {
     async run(input) {
       calls.push(input.command);
+      if (input.command === "pwd") return result(0, { stdout: `${root}\n` });
       if (input.command.includes("'--convert-to'")) return result(exit);
       if (input.command.startsWith("'mv'")) {
         await mkdir(join(root, PREVIEW_CACHE_DIR), { recursive: true });
@@ -116,6 +117,7 @@ describe("convertToPdf", () => {
     await writeFile(join(root, "a.docx"), "x");
     const run: CommandRunner = {
       async run(input) {
+        if (input.command === "pwd") return result(0, { stdout: root });
         return input.command.startsWith("'mv'")
           ? result(1)
           : result(0, { stderr: "boom" });
@@ -157,6 +159,67 @@ describe("convertToPdf", () => {
 });
 
 describe("convertToPdf hardening", () => {
+  test("the profile is under .xb-preview/.tmp- as an encoded file URL", async () => {
+    const spaced = join(base, "my work#1%x");
+    await mkdir(spaced, { recursive: true });
+    await writeFile(join(spaced, "a.docx"), "x");
+    const calls: string[] = [];
+    const run: CommandRunner = {
+      async run(input) {
+        calls.push(input.command);
+        if (input.command === "pwd")
+          return result(0, { stdout: `${spaced}\n` });
+        if (input.command.startsWith("'mv'")) {
+          const target =
+            input.command.split(" ").at(-1)?.replaceAll("'", "") ?? "";
+          await mkdir(join(spaced, PREVIEW_CACHE_DIR), { recursive: true });
+          await writeFile(join(spaced, target), "%PDF");
+        }
+        return result(0);
+      },
+    };
+    await convertToPdf({
+      workspace: createWorkspace(spaced),
+      run,
+      path: "a.docx",
+    });
+    const line = calls.find((c) => c.includes("'--convert-to'")) ?? "";
+    const url = /'-env:UserInstallation=([^']*)'/.exec(line)?.[1] ?? "";
+    expect(url).toStartWith("file:///");
+    expect(url).toContain("my%20work%231%25x/.xb-preview/.tmp-");
+    expect(url).toEndWith("/profile");
+    expect(url).not.toContain("/tmp/xb-soffice");
+  });
+
+  test("exit 81 on a fresh profile is retried once", async () => {
+    await writeFile(join(root, "a.docx"), "x");
+    let tries = 0;
+    const run: CommandRunner = {
+      async run(input) {
+        if (input.command === "pwd") return result(0, { stdout: root });
+        if (input.command.includes("'--convert-to'")) {
+          tries += 1;
+          return result(tries === 1 ? 81 : 0);
+        }
+        if (input.command.startsWith("'mv'")) {
+          const target =
+            input.command.split(" ").at(-1)?.replaceAll("'", "") ?? "";
+          await mkdir(join(root, PREVIEW_CACHE_DIR), { recursive: true });
+          await writeFile(join(root, target), "%PDF");
+        }
+        return result(0);
+      },
+    };
+    expect(
+      await convertToPdf({
+        workspace: createWorkspace(root),
+        run,
+        path: "a.docx",
+      }),
+    ).toMatchObject({ cached: false });
+    expect(tries).toBe(2);
+  });
+
   test("a source name starting with a dash is passed as ./name", async () => {
     await writeFile(join(root, "-x.docx"), "x");
     const calls: string[] = [];
@@ -181,6 +244,7 @@ describe("convertToPdf hardening", () => {
     const theirs: string[] = [];
     const run = (calls: string[], dir: string): CommandRunner => ({
       async run(input) {
+        if (input.command === "pwd") return result(0, { stdout: dir });
         calls.push(input.command);
         await new Promise((r) => setTimeout(r, 20));
         if (input.command.startsWith("'mv'")) {
@@ -213,6 +277,7 @@ describe("convertToPdf hardening", () => {
     const calls: string[] = [];
     const run: CommandRunner = {
       async run(input) {
+        if (input.command === "pwd") return result(0, { stdout: root });
         calls.push(input.command);
         return input.command.includes("'--convert-to'")
           ? result(124, { timedOut: true })
@@ -231,6 +296,7 @@ describe("convertToPdf hardening", () => {
     const calls: string[] = [];
     const run: CommandRunner = {
       async run(input) {
+        if (input.command === "pwd") return result(0, { stdout: root });
         calls.push(input.command);
         return input.command.includes("'--convert-to'")
           ? result(1, { stderr: "bad file" })
