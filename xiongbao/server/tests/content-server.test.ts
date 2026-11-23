@@ -321,9 +321,9 @@ describe("the cookie's target", () => {
     }
   });
 
-  test("a web app target answers nothing yet", async () => {
+  test("a web app target is not served from files: without a way to forward it is an unavailable answer, never a folder", async () => {
     const { server, cookie } = await opened(undefined, appGrant());
-    expect((await get(server, "http://c/", asCookie(cookie))).status).toBe(404);
+    expect((await get(server, "http://c/", asCookie(cookie))).status).toBe(502);
   });
 
   test("a second open replaces the first: the cookie is the latest target", async () => {

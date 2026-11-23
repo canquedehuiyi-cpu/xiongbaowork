@@ -3,6 +3,7 @@ import type { AgentActor } from "../agents/profile-types";
 import {
   type ArtifactAccessDeps,
   type ArtifactScope,
+  resolveArtifactAppAccess,
   resolveArtifactDirAccess,
 } from "../computer/artifact-access";
 import { type ComputerSeat, computerKeyText } from "../computer/computer-key";
@@ -22,6 +23,14 @@ export type ContentAccess = {
   authorize(
     actor: AgentActor,
     input: { botId: string; dir: string; scope: ArtifactScope | null },
+  ): Promise<{ seat: ComputerSeat } | null>;
+  /**
+   * The seat to forward to a running program from, or null: the same rules as a folder, with a
+   * delivery that lists the program (its port) standing in for a delivery that lists the folder.
+   */
+  authorizeApp(
+    actor: AgentActor,
+    input: { botId: string; port: number; scope: ArtifactScope | null },
   ): Promise<{ seat: ComputerSeat } | null>;
   /** Whether a grant made earlier still holds: the same question, for the same seat, asked again. */
   stillAllowed(grant: ContentGrant): Promise<boolean>;
@@ -50,10 +59,26 @@ export function createContentAccess(deps: {
     return { seat: await deps.seatFor(input.botId, actor.id) };
   };
 
+  const authorizeApp: ContentAccess["authorizeApp"] = async (actor, input) => {
+    if (input.scope) {
+      return resolveArtifactAppAccess(
+        {
+          actor,
+          botId: input.botId,
+          port: input.port,
+          scope: input.scope,
+        },
+        deps.artifact,
+      );
+    }
+    if (!(await deps.canUseBot(actor, input.botId))) return null;
+    return { seat: await deps.seatFor(input.botId, actor.id) };
+  };
+
   return {
     authorize,
+    authorizeApp,
     async stillAllowed(grant) {
-      if (grant.target.kind !== "dir") return false;
       const role = await deps.roleOf(grant.person);
       if (role === null) return false;
       const scope: ArtifactScope | null =
@@ -68,10 +93,16 @@ export function createContentAccess(deps: {
               ...(grant.task !== undefined ? { task: grant.task } : {}),
             }
           : null;
-      const found = await authorize(
-        { id: grant.person, role },
-        { botId: grant.bot, dir: grant.target.path, scope },
-      );
+      const found =
+        grant.target.kind === "dir"
+          ? await authorize(
+              { id: grant.person, role },
+              { botId: grant.bot, dir: grant.target.path, scope },
+            )
+          : await authorizeApp(
+              { id: grant.person, role },
+              { botId: grant.bot, port: grant.target.port, scope },
+            );
       // The seat is part of the grant: if the employee now runs somewhere else, this grant is over.
       return found !== null && computerKeyText(found.seat.key) === grant.seat;
     },

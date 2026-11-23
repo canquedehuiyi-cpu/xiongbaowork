@@ -1,4 +1,10 @@
 import type { ComputerGateway } from "../computer/gateway";
+import {
+  type AppGrant,
+  type AppSocketData,
+  createForwarder,
+  type SocketUpgrade,
+} from "./forward";
 import { SECURITY_HEADERS, serveStatic } from "./static";
 import {
   type ContentGrant,
@@ -59,7 +65,8 @@ const ALLOWED_CACHE_MAX = 1000;
 export type ContentServerDeps = {
   /** The deployment's encryption key (`config.keyEncryptionKey`): what every token is signed with. */
   key: string;
-  gateway: Pick<ComputerGateway, "serveFile">;
+  gateway: Pick<ComputerGateway, "serveFile"> &
+    Partial<Pick<ComputerGateway, "forwardHttp" | "forwardSocket">>;
   /**
    * Whether this grant may still be used: the person is still a member, the employee still exists,
    * the card is still visible to them. Asked on every request; this server reuses an answer for
@@ -70,7 +77,26 @@ export type ContentServerDeps = {
   domain?: string;
   /** The clock, for tests. Epoch milliseconds. */
   now?: () => number;
+  /** How often an open program socket asks `stillAllowed` again (default one minute); for tests. */
+  socketRecheckMs?: number;
 };
+
+/** What a program's socket carries once accepted, and the handlers a listener needs to serve it. */
+export type ContentSockets = {
+  isSocket(data: unknown): data is AppSocketData;
+  open(ws: import("bun").ServerWebSocket<AppSocketData>): void;
+  message(
+    ws: import("bun").ServerWebSocket<AppSocketData>,
+    raw: string | Buffer,
+  ): void;
+  close(
+    ws: import("bun").ServerWebSocket<AppSocketData>,
+    code: number,
+    reason: string,
+  ): void;
+};
+
+export type { AppSocketData, SocketUpgrade };
 
 const plain = (status: number, body: string | null, extra?: HeadersInit) =>
   new Response(body, {
@@ -150,7 +176,17 @@ const grantKey = (grant: ContentGrant): string =>
   ]);
 
 export function createContentServer(deps: ContentServerDeps): {
+  /**
+   * Answers one request. A listener that can accept WebSockets passes its `upgrade`, and a socket
+   * request to a program is then answered with `undefined` once the upgrade has been taken.
+   */
   fetch(request: Request): Promise<Response>;
+  fetch(
+    request: Request,
+    upgrade: SocketUpgrade | undefined,
+  ): Promise<Response | undefined>;
+  /** The handlers for the sockets `fetch` upgrades, for the listener's `websocket`. */
+  sockets: ContentSockets;
 } {
   const now = deps.now ?? Date.now;
   const domain = deps.domain?.toLowerCase();
@@ -202,16 +238,35 @@ export function createContentServer(deps: ContentServerDeps): {
     return lookup;
   }
 
+  const missingForwarding = () => {
+    throw new Error("This deployment cannot forward to programs.");
+  };
+  const forwarding = createForwarder({
+    gateway: {
+      forwardHttp: deps.gateway.forwardHttp ?? missingForwarding,
+      forwardSocket: deps.gateway.forwardSocket ?? missingForwarding,
+    },
+    allowed,
+    domainMode: domain !== undefined,
+    now,
+    contentCookie: CONTENT_COOKIE,
+    ...(deps.socketRecheckMs !== undefined
+      ? { recheckMs: deps.socketRecheckMs }
+      : {}),
+  });
+
   /**
    * Serve one request of a grant that has been read from a credential (not yet trusted to be current).
-   * `fromCookie` says the grant came from the cookie: only then is it renewed or cleared.
+   * `fromCookie` says the grant came from the cookie: only then is it renewed or cleared. `undefined`
+   * is a socket that was upgraded.
    */
   async function serveGrant(
     request: Request,
     grant: ContentGrant,
     rel: string,
     fromCookie: boolean,
-  ): Promise<Response> {
+    upgrade?: SocketUpgrade,
+  ): Promise<Response | undefined> {
     if (!hostFits(request, grant)) return notFound(request.method);
     const refused = () => {
       const gone = notFound(request.method);
@@ -230,9 +285,17 @@ export function createContentServer(deps: ContentServerDeps): {
         secureFor(request),
       );
     }
-    if (grant.target.kind !== "dir") {
-      // A forwarded web app is the next task's; until it exists there is nothing to answer with.
-      return notFound(request.method);
+    if (grant.target.kind === "app") {
+      // A program is reached by the cookie alone; a path token is only ever made for a folder.
+      if (!fromCookie) return notFound(request.method);
+      const answered = await forwarding.forwardToApp(
+        { ...grant, target: grant.target } as AppGrant,
+        request,
+        upgrade,
+      );
+      return answered && renewal
+        ? withHeader(answered, "Set-Cookie", renewal)
+        : answered;
     }
     const served = await serveStatic(
       { ...grant, target: grant.target },
@@ -320,7 +383,10 @@ export function createContentServer(deps: ContentServerDeps): {
     });
   }
 
-  async function handle(request: Request): Promise<Response> {
+  async function handle(
+    request: Request,
+    upgrade: SocketUpgrade | undefined,
+  ): Promise<Response | undefined> {
     const url = new URL(request.url);
     const { pathname } = url;
 
@@ -338,15 +404,32 @@ export function createContentServer(deps: ContentServerDeps): {
         return serveGrant(request, grant, pathed[2] ?? "", false);
       }
       const stale = readExpiredPathToken(pathed[1], deps.key);
-      if (stale === null) return notFound(request.method);
-      return continuePage(request, stale, `${pathed[2] ?? ""}${url.search}`);
-    }
-    if (pathname === "/u" || pathname.startsWith("/u/")) {
+      if (stale !== null) {
+        return continuePage(request, stale, `${pathed[2] ?? ""}${url.search}`);
+      }
+      // Not a path token: for a program, `/u/...` is one of its own routes.
+      if (sessionOf(request)?.target.kind !== "app") {
+        return notFound(request.method);
+      }
+    } else if (
+      (pathname === "/u" || pathname.startsWith("/u/")) &&
+      sessionOf(request)?.target.kind !== "app"
+    ) {
       return notFound(request.method);
     }
 
     /*
-     * Everything else is the browser's current target, from the one cookie this server knows, and
+     * A program is the cookie's whole target: everything the page asks for (its scripts, styles,
+     * fetches and sockets) has to reach it, so none of the folder rule below applies. That rule exists
+     * because a folder's files are fetched by pages that are sandboxed, and this is not one.
+     */
+    const session = sessionOf(request);
+    if (session?.target.kind === "app") {
+      return serveGrant(request, session, pathname.slice(1), true, upgrade);
+    }
+
+    /*
+     * Everything else is the browser's current folder, from the one cookie this server knows, and
      * only for a page being opened. A sandboxed page of another tab may still make the browser send
      * this cookie with a script, style or image request; answering those would hand that page the
      * files of whatever the cookie points at (a script include reads cross-origin JavaScript). So only
@@ -361,9 +444,8 @@ export function createContentServer(deps: ContentServerDeps): {
         : dest === "document" || dest === "iframe";
     if (!navigation) return notFound(request.method);
     if (contentCookies(request).length === 0) return notFound(request.method);
-    const grant = sessionOf(request);
-    if (grant !== null) {
-      return serveGrant(request, grant, pathname.slice(1), true);
+    if (session !== null) {
+      return serveGrant(request, session, pathname.slice(1), true);
     }
     // A cookie that is expired or forged is cleared rather than kept being sent.
     return withHeader(
@@ -374,13 +456,14 @@ export function createContentServer(deps: ContentServerDeps): {
   }
 
   return {
-    async fetch(request) {
+    sockets: forwarding.socket,
+    async fetch(request: Request, upgrade?: SocketUpgrade) {
       try {
-        return await handle(request);
+        return await handle(request, upgrade);
       } catch {
         // Nothing about why: a fault here is not for the page's visitor to read.
         return plain(502, request.method === "HEAD" ? null : "Unavailable");
       }
     },
-  };
+  } as ReturnType<typeof createContentServer>;
 }

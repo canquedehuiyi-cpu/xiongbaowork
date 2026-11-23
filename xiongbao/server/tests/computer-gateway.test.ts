@@ -2570,3 +2570,78 @@ describe("serveFile", () => {
     ).rejects.toThrow();
   });
 });
+
+describe("forwarding to a program on the computer", () => {
+  test("forwardHttp goes to /forward/<port><path> with the computer's token and the seat, streams the body, and never follows a redirect", async () => {
+    const { gateway, requests } = await gatewayWith(undefined, {
+      token: "computer-secret",
+      routes: {
+        "/forward/4000/api/x": () =>
+          new Response("answer", {
+            status: 302,
+            headers: { location: "http://elsewhere.test/" },
+          }),
+      },
+    });
+    const sent = new Headers({ "x-api-key": "kept" });
+    const response = await gateway.forwardHttp(botSeat("bot-1"), {
+      port: 4000,
+      method: "POST",
+      path: "/api/x?y=1",
+      headers: sent,
+      body: new Response("body text").body,
+    });
+    expect(response.status).toBe(302);
+    expect(await response.text()).toBe("answer");
+    const request = requests.find(({ url }) => url.includes("/forward/4000/"));
+    expect(request?.url.endsWith("/forward/4000/api/x?y=1")).toBe(true);
+    expect(request?.init?.method).toBe("POST");
+    expect((request?.init as { redirect?: string })?.redirect).toBe("manual");
+    const headers = new Headers(request?.init?.headers as HeadersInit);
+    expect(headers.get("x-xiongbao-computer-token")).toBe("computer-secret");
+    expect(headers.get("x-xiongbao-bot-id")).toBe("bot-1");
+    expect(headers.get("x-api-key")).toBe("kept");
+  });
+
+  test("forwardSocket gives the computer's socket address, the seat and the token, and no query", async () => {
+    const { gateway } = await gatewayWith(undefined, {
+      token: "computer-secret",
+    });
+    const where = await gateway.forwardSocket(
+      botSeat("bot-1"),
+      4000,
+      "/live?room=1",
+    );
+    expect(where.url).toMatch(/^ws:\/\/.*\/forward-ws\/4000\/live\?room=1$/);
+    expect(where.headers["x-xiongbao-computer-token"]).toBe("computer-secret");
+    expect(where.headers["x-xiongbao-bot-id"]).toBe("bot-1");
+  });
+
+  test("a paired personal computer cannot be forwarded to, and nothing is asked of it", async () => {
+    const { provider } = fakeComputer();
+    const requests: string[] = [];
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl: (async (url: string) => {
+        requests.push(url);
+        return new Response("x");
+      }) as never,
+      auditStore: fakeAudit().store,
+      policy: () => PERMISSIVE,
+      resolveDevice: async () => ({ tenantId: "t", deviceId: "d" }),
+    });
+    await expect(
+      gateway.forwardHttp(botSeat("bot-1"), {
+        port: 4000,
+        method: "GET",
+        path: "/",
+        headers: new Headers(),
+        body: null,
+      }),
+    ).rejects.toThrow();
+    await expect(
+      gateway.forwardSocket(botSeat("bot-1"), 4000, "/"),
+    ).rejects.toThrow();
+    expect(requests).toEqual([]);
+  });
+});

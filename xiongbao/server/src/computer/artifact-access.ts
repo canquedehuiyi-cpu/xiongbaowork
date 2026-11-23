@@ -37,6 +37,29 @@ import {
  * learn which conversations, runs, cards or files exist.
  */
 
+/**
+ * A running program a delivery lists: the loopback port on the employee's computer, the path to land
+ * on, and the name shown to people. The delivery event `delivery.delivered` and a card's deliverable
+ * carry them as `apps`.
+ */
+export type DeliveredApp = { port: number; path: string; title: string };
+
+/** The apps a stored value lists: only well-formed ones (a usable port, a string path and title). */
+export function deliveredAppsOf(value: unknown): DeliveredApp[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item): DeliveredApp[] =>
+    isRecord(item) &&
+    typeof item.port === "number" &&
+    Number.isInteger(item.port) &&
+    item.port >= 1024 &&
+    item.port <= 65535 &&
+    typeof item.path === "string" &&
+    typeof item.title === "string"
+      ? [{ port: item.port, path: item.path, title: item.title }]
+      : [],
+  );
+}
+
 /** The query parameters that scope a download, under the names they have in the URL. */
 export type ArtifactScope = { channel?: string; run?: string; task?: string };
 
@@ -105,6 +128,8 @@ export type ArtifactAccessDeps = {
     ownerId: string;
     seat: string;
     workspaceFiles: string[];
+    /** The running programs the card lists (port and landing path); absent when it lists none. */
+    apps?: DeliveredApp[];
   } | null>;
   /** The seat this employee runs on for this person: the one every turn of theirs used. */
   seatFor(botId: string, personId: string): Promise<ComputerSeat>;
@@ -154,11 +179,15 @@ function valuesOf(events: BaseEvent[], name: string): unknown[] {
 /** Which of the paths a run or card lists count as the one asked for. */
 type PathMatch = (listed: string) => boolean;
 
+/** What a request is for: files or a folder by path, or a running program by port. */
+type Wanted = { files: PathMatch } | { appPort: number };
+
 function viaRun(
   events: BaseEvent[],
   botId: string,
-  matches: PathMatch,
+  wanted: Wanted,
 ): ComputerSeat | null {
+  const matches: PathMatch = "files" in wanted ? wanted.files : () => false;
   // Every announcement of this employee in the run, with the seat it was made on.
   const announced: { seat: string; files: string[] }[] = [];
   for (const value of valuesOf(events, TURN_ARTIFACTS_EVENT)) {
@@ -184,6 +213,14 @@ function viaRun(
     const deliverable = isRecord(value.deliverable)
       ? value.deliverable.workspaceFiles
       : undefined;
+    if ("appPort" in wanted) {
+      const listed = isRecord(value.deliverable)
+        ? value.deliverable.apps
+        : undefined;
+      return [...deliveredAppsOf(listed), ...deliveredAppsOf(value.apps)].some(
+        (app) => app.port === wanted.appPort,
+      );
+    }
     return (
       strings(deliverable).some(matches) ||
       strings(value.workspaceFiles).some(matches)
@@ -216,7 +253,7 @@ export async function resolveArtifactAccess(
   const seat = await seatFor(
     actor,
     botId,
-    (listed) => listed === path,
+    { files: (listed) => listed === path },
     scope,
     deps,
   );
@@ -249,13 +286,41 @@ export async function resolveArtifactDirAccess(
   const seat = await seatFor(
     actor,
     botId,
-    (listed) => {
-      const named = normalizedArtifactPath(listed);
-      if (named === null) return false;
-      const slash = named.lastIndexOf("/");
-      return slash > 0 && named.slice(0, slash) === dir;
+    {
+      files: (listed) => {
+        const named = normalizedArtifactPath(listed);
+        if (named === null) return false;
+        const slash = named.lastIndexOf("/");
+        return slash > 0 && named.slice(0, slash) === dir;
+      },
     },
     scope,
+    deps,
+  );
+  return seat ? { seat } : null;
+}
+
+/**
+ * The seat to forward to the program on `port` of `botId` from, for this asker, or null: the rules of
+ * {@link resolveArtifactDirAccess}, asked of a running program. It is reachable only when the run's
+ * `delivery.delivered` event, or the card's deliverable, lists an app with that port (`apps`, see
+ * {@link DeliveredApp}). Whether anything is listening there is the computer's own question.
+ */
+export async function resolveArtifactAppAccess(
+  input: {
+    actor: AgentActor;
+    botId: string;
+    port: number;
+    scope: ArtifactScope;
+  },
+  deps: ArtifactAccessDeps,
+): Promise<{ seat: ComputerSeat } | null> {
+  if (input.botId === "" || !Number.isInteger(input.port)) return null;
+  const seat = await seatFor(
+    input.actor,
+    input.botId,
+    { appPort: input.port },
+    input.scope,
     deps,
   );
   return seat ? { seat } : null;
@@ -264,7 +329,7 @@ export async function resolveArtifactDirAccess(
 async function seatFor(
   actor: AgentActor,
   botId: string,
-  matches: PathMatch,
+  wanted: Wanted,
   scope: ArtifactScope,
   deps: ArtifactAccessDeps,
 ): Promise<ComputerSeat | null> {
@@ -285,7 +350,11 @@ async function seatFor(
     if (channel !== undefined || run !== undefined || task === "") return null;
     const card = await deps.cardFor(actor, task);
     if (!card || card.botId !== botId) return null;
-    if (!strings(card.workspaceFiles).some(matches)) return null;
+    const listed =
+      "appPort" in wanted
+        ? (card.apps ?? []).some((app) => app.port === wanted.appPort)
+        : strings(card.workspaceFiles).some(wanted.files);
+    if (!listed) return null;
     return confirmed(seatOf(botId, card.seat), card.ownerId);
   }
 
@@ -295,5 +364,5 @@ async function seatFor(
   if (!seen.agentIds.includes(botId)) return null;
   const found = await deps.runOf(actor, channel, run);
   if (!found || !seen.threadIds.includes(found.threadId)) return null;
-  return confirmed(viaRun(found.events, botId, matches), found.ownerId);
+  return confirmed(viaRun(found.events, botId, wanted), found.ownerId);
 }
