@@ -249,7 +249,7 @@ describe("serveStatic", () => {
   });
 });
 
-describe("review fixes", () => {
+describe("path length and look-alike names", () => {
   test("an over-long path is refused", () => {
     expect(resolveServedPath("site", "a".repeat(1024))).toBe(
       `site/${"a".repeat(1024)}`,
