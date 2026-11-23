@@ -1,4 +1,5 @@
 import { lookup as dnsLookup } from "node:dns/promises";
+import { withReasoningGuarded } from "../models/deepseek-thinking";
 import {
   canonicalHostname,
   expandIpv6,
@@ -409,8 +410,9 @@ export async function guardedFetch(
         : AbortSignal.any(signals);
   await untilAborted(assertResolvesPublic(verdict.url, policy), signal);
 
+  // DeepSeek 官方主机的请求在发出前守住「带工具调用的消息必带 reasoning_content」，见 `withReasoningGuarded`。
   const response = await (policy.fetchImpl ?? fetch)(input, {
-    ...init,
+    ...withReasoningGuarded(input, init),
     redirect: "manual",
     ...(signal ? { signal } : {}),
   });

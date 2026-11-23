@@ -246,12 +246,91 @@ export class ModelRefusedError extends Error {
   }
 }
 
+/**
+ * What a 400 about `reasoning_content` says about the request that drew it, as numbers only: whether it
+ * wrote `thinking` and its type, how many assistant messages it held, how many of them called tools, and
+ * which of those had no string `reasoning_content` (their positions in `messages`). Never any content.
+ * `bodyUnavailable` when the request body is not on the error (a harness's text, a truncated body).
+ */
+export type ReasoningDiagnosis =
+  | { bodyUnavailable: true }
+  | {
+      thinking: string;
+      assistantMessages: number;
+      withToolCalls: number;
+      toolCallsMissingReasoning: number;
+      toolCallsMissingReasoningAt: number[];
+    };
+
+/** The most positions the log line lists. */
+const MISSING_AT_LIMIT = 50;
+
+function requestBodyOf(error: unknown): Record<string, unknown> | undefined {
+  for (const link of chain(error)) {
+    let body: unknown = link.requestBodyValues;
+    if (typeof body === "string") {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        continue;
+      }
+    }
+    if (body && typeof body === "object" && !Array.isArray(body))
+      return body as Record<string, unknown>;
+  }
+  return undefined;
+}
+
+/** The shape of a request body, from the error a run threw; undefined when it is not that kind of 400. */
+export function reasoningDiagnosis(
+  error: unknown,
+  refusal: Refusal,
+  raw: string,
+): ReasoningDiagnosis | undefined {
+  if (refusal.status !== 400) return undefined;
+  const said = chain(error)
+    .map((link) =>
+      typeof link.responseBody === "string" ? link.responseBody : "",
+    )
+    .join(" ");
+  if (!/reasoning_content/.test(`${raw} ${refusal.said} ${said}`))
+    return undefined;
+  const body = requestBodyOf(error);
+  if (!body || !Array.isArray(body.messages)) return { bodyUnavailable: true };
+  const thinking = body.thinking as { type?: unknown } | null | undefined;
+  let assistantMessages = 0;
+  let withToolCalls = 0;
+  const missing: number[] = [];
+  body.messages.forEach((entry: unknown, index: number) => {
+    const message = entry as Record<string, unknown> | null;
+    if (message?.role !== "assistant") return;
+    assistantMessages += 1;
+    if (!Array.isArray(message.tool_calls) || message.tool_calls.length === 0)
+      return;
+    withToolCalls += 1;
+    if (typeof message.reasoning_content !== "string") missing.push(index);
+  });
+  return {
+    thinking:
+      thinking && typeof thinking === "object"
+        ? typeof thinking.type === "string"
+          ? thinking.type
+          : "unknown"
+        : "absent",
+    assistantMessages,
+    withToolCalls,
+    toolCallsMissingReasoning: missing.length,
+    toolCallsMissingReasoningAt: missing.slice(0, MISSING_AT_LIMIT),
+  };
+}
+
 /** The provider's words go here, where somebody diagnosing a refusal reads them. */
 function logRefusal(
   bot: { id: string },
   provider: string,
   refusal: Refusal,
   raw: string,
+  diagnosis?: ReasoningDiagnosis,
 ): void {
   console.error(
     JSON.stringify({
@@ -261,6 +340,7 @@ function logRefusal(
       kind: refusal.kind,
       ...(refusal.status ? { status: refusal.status } : {}),
       error: raw,
+      ...(diagnosis ? { reasoningDiagnosis: diagnosis } : {}),
     }),
   );
 }
@@ -296,7 +376,13 @@ export function sayingProviderRefusals(
     );
     if (!refusal) return event;
     const provider = providerFor(message);
-    logRefusal(bot, provider.provider, refusal, message);
+    logRefusal(
+      bot,
+      provider.provider,
+      refusal,
+      message,
+      reasoningDiagnosis(undefined, refusal, message),
+    );
     return {
       ...event,
       message: refusalSentence(refusal, provider),
@@ -319,7 +405,13 @@ export function sayingProviderRefusals(
     }
     const refusal = readRefusal(error);
     if (!refusal) return undefined;
-    logRefusal(bot, provider.provider, refusal, raw);
+    logRefusal(
+      bot,
+      provider.provider,
+      refusal,
+      raw,
+      reasoningDiagnosis(error, refusal, raw),
+    );
     return new ModelRefusedError(refusalSentence(refusal, provider), {
       cause: error,
     });
