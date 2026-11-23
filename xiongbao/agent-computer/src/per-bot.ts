@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { type CommandRunner, createShell } from "./shell";
@@ -24,6 +25,32 @@ import { createWorkspace, DEFAULT_WORKSPACE_LIMITS } from "./workspace";
 /** The hash part of `xb-<botKey>`: the first twelve hex digits of sha256(botId). */
 export function botKeyOf(botId: string): string {
   return createHash("sha256").update(botId).digest("hex").slice(0, 12);
+}
+
+/**
+ * The Linux uid of this employee's own user (`xb-<botKey>`), from the passwd file; null when there is
+ * no such user. Callers that need an answer for an employee who must have one treat null as a refusal.
+ */
+export function employeeUid(
+  botId: string,
+  options: { passwd?: string } = {},
+): number | null {
+  let text = options.passwd;
+  if (text === undefined) {
+    try {
+      text = readFileSync("/etc/passwd", "utf8");
+    } catch {
+      return null;
+    }
+  }
+  const name = `xb-${botKeyOf(botId)}`;
+  for (const line of text.split("\n")) {
+    const fields = line.split(":");
+    if (fields[0] !== name) continue;
+    const uid = Number(fields[2]);
+    return Number.isInteger(uid) && uid >= 0 ? uid : null;
+  }
+  return null;
 }
 
 /** On only where it can work: Linux, with the switch set to `on`. */
