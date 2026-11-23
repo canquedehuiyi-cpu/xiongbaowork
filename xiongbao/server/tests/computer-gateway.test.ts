@@ -2617,6 +2617,32 @@ describe("forwarding to a program on the computer", () => {
     expect(where.headers["x-xiongbao-bot-id"]).toBe("bot-1");
   });
 
+  test("a port outside 1024 to 65535, or not a whole number, is refused before the computer is asked", async () => {
+    const { gateway, requests } = await gatewayWith(undefined, {
+      token: "computer-secret",
+    });
+    const before = requests.length;
+    for (const port of [0, 22, 1023, 65536, -1, 4000.5, Number.NaN]) {
+      await expect(
+        gateway.forwardHttp(botSeat("bot-1"), {
+          port,
+          method: "GET",
+          path: "/",
+          headers: new Headers(),
+          body: null,
+        }),
+      ).rejects.toThrow();
+      await expect(
+        gateway.forwardSocket(botSeat("bot-1"), port, "/"),
+      ).rejects.toThrow();
+    }
+    expect(requests.length).toBe(before);
+    for (const port of [1024, 65535]) {
+      const where = await gateway.forwardSocket(botSeat("bot-1"), port, "/");
+      expect(where.url).toContain(`/forward-ws/${port}/`);
+    }
+  });
+
   test("a paired personal computer cannot be forwarded to, and nothing is asked of it", async () => {
     const { provider } = fakeComputer();
     const requests: string[] = [];

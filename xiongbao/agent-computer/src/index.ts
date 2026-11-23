@@ -50,6 +50,7 @@ import {
   type ForwardSocketData,
   forwardHttp,
   offeredProtocols,
+  socketHandshakeHeaders,
   validForwardPath,
 } from "./forward";
 import { identity } from "./identity";
@@ -1473,6 +1474,7 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
           port,
           path,
           protocols: offeredProtocols(request.headers),
+          headers: socketHandshakeHeaders(request.headers),
           recheck: verdictNow,
         });
         if (!program)

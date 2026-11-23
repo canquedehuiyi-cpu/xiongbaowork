@@ -6,9 +6,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reservePort } from "../../tests/support/reserved-port";
 import {
+  connectProgramSocket,
   FORWARD_MAX_REQUEST_BYTES,
   FORWARD_MAX_RESPONSE_BYTES,
   forwardHttp,
+  socketHandshakeHeaders,
   validForwardPath,
 } from "../src/forward";
 import type { ForwardVerdict } from "../src/listeners";
@@ -201,6 +203,56 @@ function forward(path: string, init: RequestInit = {}, authenticated = true) {
     },
   });
 }
+
+describe("the handshake of a program's socket", () => {
+  test("only the Cookie and Origin the server sent reach the program; the computer's own headers do not", async () => {
+    const wanted = socketHandshakeHeaders(
+      new Headers({
+        cookie: "sid=1",
+        origin: "http://127.0.0.1:4000",
+        "x-xiongbao-computer-token": "secret",
+        "x-xiongbao-bot-id": "bot",
+        authorization: "Bearer x",
+      }),
+    );
+    expect(wanted).toEqual({
+      cookie: "sid=1",
+      origin: "http://127.0.0.1:4000",
+    });
+    expect(socketHandshakeHeaders(new Headers())).toEqual({});
+
+    const seen: Record<string, string | null>[] = [];
+    const upstream = Bun.serve<Record<string, never>>({
+      port: 0,
+      fetch(request, server) {
+        seen.push({
+          cookie: request.headers.get("cookie"),
+          origin: request.headers.get("origin"),
+          token: request.headers.get("x-xiongbao-computer-token"),
+        });
+        return server.upgrade(request, { data: {} })
+          ? undefined
+          : new Response("no", { status: 400 });
+      },
+      websocket: { message() {} },
+    });
+    try {
+      const program = await connectProgramSocket({
+        port: upstream.port ?? 0,
+        path: "/ws",
+        protocols: [],
+        headers: wanted,
+      });
+      expect(program).not.toBeNull();
+      program?.forward.upstream.close();
+      expect(seen).toEqual([
+        { cookie: "sid=1", origin: "http://127.0.0.1:4000", token: null },
+      ]);
+    } finally {
+      upstream.stop(true);
+    }
+  });
+});
 
 describe.skipIf(!asked)("/forward/<port>/<path>", () => {
   test("GET reaches the employee's program on the path and query", async () => {

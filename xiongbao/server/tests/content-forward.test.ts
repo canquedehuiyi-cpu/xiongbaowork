@@ -15,6 +15,8 @@ import {
   createRateLimiter,
   FORWARD_RATE_PER_MINUTE,
   programRequestHeaders,
+  programResponse,
+  programSocketHeaders,
   rewrittenLocation,
 } from "../src/content/forward";
 import { createOpenRoutes } from "../src/content/open-routes";
@@ -324,11 +326,46 @@ describe("what the person gets back", () => {
     expect(await res.text()).toBe("ok");
   });
 
+  test("Bun's fetch decodes gzip, deflate and zstd bodies and leaves Content-Encoding, which is why those are dropped", async () => {
+    const text = "hello ".repeat(300);
+    const bodies: Record<string, Uint8Array> = {
+      gzip: Bun.gzipSync(Buffer.from(text)),
+      deflate: Bun.deflateSync(Buffer.from(text)),
+      zstd: Bun.zstdCompressSync(Buffer.from(text)),
+    };
+    const upstream = Bun.serve({
+      port: 0,
+      fetch(request) {
+        const kind = new URL(request.url).pathname.slice(1);
+        return new Response(Buffer.from(bodies[kind] ?? ""), {
+          headers: { "content-encoding": kind },
+        });
+      },
+    });
+    try {
+      for (const kind of Object.keys(bodies)) {
+        const fetched = await fetch(
+          `http://127.0.0.1:${upstream.port}/${kind}`,
+        );
+        const answered = programResponse(fetched, {
+          port: 4000,
+          domainMode: false,
+          contentCookie: CONTENT_COOKIE,
+        });
+        expect(answered.headers.get("content-encoding")).toBeNull();
+        expect(await answered.text()).toBe(text);
+      }
+    } finally {
+      upstream.stop(true);
+    }
+  });
+
   test("a redirect to the program itself, or a relative one, becomes a path and query on this origin", async () => {
     for (const [from, to] of [
       ["/next?a=1", "/next?a=1"],
       ["next", "/next"],
-      ["http://127.0.0.1:4000/a?b=1#frag", "/a?b=1"],
+      ["http://127.0.0.1:4000/a?b=1#frag", "/a?b=1#frag"],
+      ["/page#top", "/page#top"],
       ["http://localhost:4000/x", "/x"],
       ["http://127.0.0.1:4000//evil.test/p", "/evil.test/p"],
     ] as const) {
@@ -539,12 +576,16 @@ describe("a program's WebSocket", () => {
     const info = {
       protocols: [] as string[],
       paths: [] as string[],
+      cookies: [] as (string | null)[],
+      origins: [] as (string | null)[],
       sockets: [] as { close(code?: number, reason?: string): void }[],
     };
     const upstream = Bun.serve<Record<string, never>>({
       port: 0,
       fetch(request, server) {
         info.paths.push(new URL(request.url).pathname);
+        info.cookies.push(request.headers.get("cookie"));
+        info.origins.push(request.headers.get("origin"));
         info.protocols.push(
           request.headers.get("sec-websocket-protocol") ?? "",
         );
@@ -669,6 +710,42 @@ describe("a program's WebSocket", () => {
     });
     expect(await opened(own)).toBe("open");
     own.close();
+  });
+
+  test("the socket to the program carries no cookie in port mode, and the browser's Origin becomes the program's own", async () => {
+    const upstream = program();
+    const s = setup({ socketUrl: () => `ws://127.0.0.1:${upstream.port}/x` });
+    const port = listen(s.server);
+    const ws = connect(port, "/live", {
+      cookie: `${cookieFor(appGrant())}; sid=main-app`,
+      origin: `http://127.0.0.1:${port}`,
+    });
+    expect(await opened(ws)).toBe("open");
+    expect(upstream.info.cookies[0]).toBeNull();
+    expect(upstream.info.origins[0]).toBe("http://127.0.0.1:4000");
+    ws.close();
+    const bare = connect(port, "/live", { cookie: cookieFor(appGrant()) });
+    expect(await opened(bare)).toBe("open");
+    expect(upstream.info.origins[1]).toBeNull();
+    bare.close();
+  });
+
+  test("it is closed by its own timer when the grant runs out, with no recheck needed", async () => {
+    const upstream = program();
+    const s = setup({
+      socketUrl: () => `ws://127.0.0.1:${upstream.port}/x`,
+      // Long enough that only the grant's own timer can end it.
+      recheckMs: 600_000,
+    });
+    const port = listen(s.server);
+    const ws = connect(port, "/live", {
+      cookie: cookieFor(appGrant({ exp: T0 + 150 })),
+    });
+    expect(await opened(ws)).toBe("open");
+    const started = Date.now();
+    const gone = await closed(ws);
+    expect(gone.code).toBe(1008);
+    expect(Date.now() - started).toBeLessThan(5_000);
   });
 
   test("a program that cannot be reached is a failed upgrade", async () => {
@@ -994,5 +1071,263 @@ describe("POST /api/computers/:botId/open for a program", () => {
     expect(body.url).toMatch(
       /^https:\/\/[0-9a-f]{16}\.apps\.example\.com\/__open\//,
     );
+  });
+});
+
+describe("a request that another site made the browser send", () => {
+  const post = (
+    server: ReturnType<typeof setup>["server"],
+    headers: Record<string, string>,
+    method = "POST",
+  ) =>
+    call(server, "http://c.test:3774/api/do", {
+      method,
+      body: "x",
+      headers: { cookie: cookieFor(appGrant()), ...headers },
+    });
+
+  test("a state-changing request from another origin, or from the opaque origin, is 403 and never reaches the program", async () => {
+    const { server, seen } = setup();
+    for (const origin of ["http://evil.test", "http://c.test:3775", "null"]) {
+      for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+        expect((await post(server, { origin }, method)).status).toBe(403);
+      }
+    }
+    expect(seen).toEqual([]);
+  });
+
+  test("a same-origin request passes, and the program sees its own origin in Origin", async () => {
+    const { server, seen } = setup();
+    const res = await post(server, { origin: "http://c.test:3774" });
+    expect(res.status).toBe(200);
+    expect(seen[0]?.headers.get("origin")).toBe("http://127.0.0.1:4000");
+  });
+
+  test("without Origin, Sec-Fetch-Site decides: only same-origin and none pass", async () => {
+    const { server, seen } = setup();
+    expect(
+      (await post(server, { "sec-fetch-site": "cross-site" })).status,
+    ).toBe(403);
+    expect((await post(server, { "sec-fetch-site": "same-site" })).status).toBe(
+      403,
+    );
+    expect(seen).toEqual([]);
+    expect(
+      (await post(server, { "sec-fetch-site": "same-origin" })).status,
+    ).toBe(200);
+    expect((await post(server, { "sec-fetch-site": "none" })).status).toBe(200);
+    // A client that sends neither header is not a browser acting for another site.
+    expect((await post(server, {})).status).toBe(200);
+  });
+
+  test("a same-origin Origin with a cross-site Sec-Fetch-Site is still refused", async () => {
+    const { server } = setup();
+    const res = await post(server, {
+      origin: "http://c.test:3774",
+      "sec-fetch-site": "cross-site",
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test("reading is not restricted: a cross-origin GET, HEAD or OPTIONS reaches the program", async () => {
+    const { server, seen } = setup();
+    for (const method of ["GET", "HEAD", "OPTIONS"]) {
+      const res = await call(server, "http://c.test:3774/x", {
+        method,
+        headers: {
+          cookie: cookieFor(appGrant()),
+          origin: "http://evil.test",
+          "sec-fetch-site": "cross-site",
+        },
+      });
+      expect(res.status).toBe(200);
+    }
+    expect(seen).toHaveLength(3);
+  });
+});
+
+describe("more than one content cookie", () => {
+  test("two xb_content cookies are refused, and both ways of writing one are cleared", async () => {
+    const { server, seen } = setup();
+    const good = cookieFor(appGrant());
+    const res = await call(server, "http://c.test:3774/x", {
+      headers: { cookie: `${CONTENT_COOKIE}=planted; ${good}` },
+    });
+    expect(res.status).toBe(404);
+    expect(seen).toEqual([]);
+    const cleared = res.headers.getSetCookie();
+    expect(cleared).toHaveLength(2);
+    expect(cleared.every((line) => /Max-Age=0/.test(line))).toBe(true);
+    expect(cleared.filter((line) => /Domain=c\.test/i.test(line))).toHaveLength(
+      1,
+    );
+    expect(cleared.filter((line) => !/Domain=/i.test(line))).toHaveLength(1);
+  });
+
+  test("the same holds with the valid cookie first, and for a link to open", async () => {
+    const { server, seen } = setup();
+    const good = cookieFor(appGrant());
+    const res = await call(server, "http://c.test:3774/x", {
+      headers: { cookie: `${good}; ${CONTENT_COOKIE}=planted` },
+    });
+    expect(res.status).toBe(404);
+    const open = await call(server, "http://c.test:3774/__open/anything", {
+      headers: { cookie: `${good}; ${CONTENT_COOKIE}=planted` },
+    });
+    expect(open.status).toBe(404);
+    expect(open.headers.getSetCookie()).toHaveLength(2);
+    expect(seen).toEqual([]);
+  });
+
+  test("in domain mode the parent domain's spelling is cleared too", async () => {
+    const code = hostCodeOf(appGrant());
+    const { server } = setup({ domain: "apps.example.com" });
+    const good = cookieFor(appGrant());
+    const res = await call(server, `http://${code}.apps.example.com/x`, {
+      headers: { cookie: `${CONTENT_COOKIE}=planted; ${good}` },
+    });
+    expect(res.status).toBe(404);
+    const domains = res.headers
+      .getSetCookie()
+      .map((line) => /Domain=([^;]+)/i.exec(line)?.[1] ?? null);
+    expect(domains.sort()).toEqual(
+      [null, `${code}.apps.example.com`, "apps.example.com"].sort(),
+    );
+  });
+
+  test("one cookie, with other people's cookies beside it, still works", async () => {
+    const { server } = setup();
+    const res = await call(server, "http://c.test:3774/x", {
+      headers: { cookie: `session=main; ${cookieFor(appGrant())}` },
+    });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("service workers", () => {
+  test("a service worker script request is 403 before it is forwarded", async () => {
+    const { server, seen } = setup();
+    const res = await call(server, "http://c/sw.js", {
+      headers: { cookie: cookieFor(appGrant()), "service-worker": "script" },
+    });
+    expect(res.status).toBe(403);
+    expect(seen).toEqual([]);
+  });
+
+  test("a program cannot widen a worker's scope: Service-Worker-Allowed is dropped from its answers", async () => {
+    const { server } = setup({
+      program: () =>
+        new Response("self.x=1", {
+          headers: { "service-worker-allowed": "/", "x-app": "kept" },
+        }),
+    });
+    const res = await call(server, "http://c/sw.js", withCookie(appGrant()));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("service-worker-allowed")).toBeNull();
+    expect(res.headers.get("x-app")).toBe("kept");
+  });
+});
+
+describe("the rest of what a program's answer and request are cleaned of", () => {
+  test("every header that begins with proxy- is removed from the request, Proxy-Connection included", () => {
+    const out = programRequestHeaders(
+      new Headers({
+        "proxy-connection": "keep-alive",
+        "proxy-authorization": "Basic x",
+        "proxy-foo": "1",
+        "x-kept": "1",
+      }),
+      4000,
+    );
+    expect([...out.keys()].filter((name) => name.startsWith("proxy-"))).toEqual(
+      [],
+    );
+    expect(out.get("x-kept")).toBe("1");
+  });
+
+  test("Refresh is removed from the answer, since it can send the browser elsewhere", async () => {
+    const { server } = setup({
+      program: () =>
+        new Response("ok", {
+          headers: { refresh: "0; url=https://evil.test/", "x-app": "kept" },
+        }),
+    });
+    const res = await call(server, "http://c/", withCookie(appGrant()));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("refresh")).toBeNull();
+    expect(res.headers.get("x-app")).toBe("kept");
+  });
+
+  test("a created resource that names another site loses its Location but is not an error; a redirect still is", async () => {
+    const created = setup({
+      program: () =>
+        new Response("made", {
+          status: 201,
+          headers: { location: "https://evil.test/x" },
+        }),
+    });
+    const res = await call(created.server, "http://c/", withCookie(appGrant()));
+    expect(res.status).toBe(201);
+    expect(res.headers.get("location")).toBeNull();
+    expect(await res.text()).toBe("made");
+    const own = setup({
+      program: () =>
+        new Response("made", {
+          status: 201,
+          headers: { location: "http://127.0.0.1:4000/items/1#a" },
+        }),
+    });
+    const ownRes = await call(own.server, "http://c/", withCookie(appGrant()));
+    expect(ownRes.status).toBe(201);
+    expect(ownRes.headers.get("location")).toBe("/items/1#a");
+    const moved = setup({
+      program: () =>
+        new Response(null, {
+          status: 307,
+          headers: { location: "https://evil.test/x" },
+        }),
+    });
+    const redirected = await call(
+      moved.server,
+      "http://c/",
+      withCookie(appGrant()),
+    );
+    expect(redirected.status).toBe(502);
+  });
+
+  test("the rate limit is kept per computer seat and employee", async () => {
+    const { server } = setup();
+    for (let i = 0; i < FORWARD_RATE_PER_MINUTE; i += 1) {
+      await call(server, "http://c/x", withCookie(appGrant()));
+    }
+    // The same employee id on another person's computer is another allowance.
+    const elsewhere = await call(
+      server,
+      "http://c/x",
+      withCookie(appGrant({ person: "p2", seat: "person:p2" })),
+    );
+    expect(elsewhere.status).toBe(200);
+    const same = await call(server, "http://c/x", withCookie(appGrant()));
+    expect(same.status).toBe(429);
+  });
+
+  test("programSocketHeaders sends the program's own cookies in domain mode only, and an Origin of the program's own", () => {
+    const from = new Headers({
+      cookie: `${CONTENT_COOKIE}=secret; sid=1`,
+      origin: "https://c.example",
+      authorization: "Bearer x",
+      "x-other": "no",
+    });
+    const domain = programSocketHeaders(from, 4000, {
+      keepExcept: CONTENT_COOKIE,
+    });
+    expect(domain).toEqual({
+      cookie: "sid=1",
+      origin: "http://127.0.0.1:4000",
+    });
+    expect(programSocketHeaders(from, 4000)).toEqual({
+      origin: "http://127.0.0.1:4000",
+    });
+    expect(programSocketHeaders(new Headers(), 4000)).toEqual({});
   });
 });

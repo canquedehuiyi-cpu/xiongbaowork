@@ -139,11 +139,39 @@ function cookieHeader(value: string, maxAgeSeconds: number, secure: boolean) {
   return `${CONTENT_COOKIE}=${value}; Max-Age=${maxAgeSeconds}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
 }
 
+/**
+ * What clears the content cookie however it was written: host-only, with `Domain` the request's own
+ * host, and in domain mode with `Domain` the content domain too (a sibling subdomain's script may have
+ * written the cookie for the whole domain, which the browser then sends here).
+ */
+function clearingEverywhere(
+  request: Request,
+  domain: string | undefined,
+  secure: boolean,
+): string[] {
+  const base = cookieHeader("", 0, secure);
+  const host = hostOf(request);
+  const lines = [base];
+  if (host !== null) lines.push(`${base}; Domain=${host}`);
+  if (domain !== undefined) lines.push(`${base}; Domain=${domain}`);
+  return lines;
+}
+
 /** The same response with one more header; a response a handler made may have frozen headers. */
 function withHeader(response: Response, name: string, value: string) {
   const headers = new Headers(response.headers);
   headers.append(name, value);
   return new Response(response.body, { status: response.status, headers });
+}
+
+function withoutHeader(response: Response, name: string) {
+  const headers = new Headers(response.headers);
+  headers.delete(name);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 /**
@@ -307,13 +335,17 @@ export function createContentServer(deps: ContentServerDeps): {
     return renewal ? withHeader(served, "Set-Cookie", renewal) : served;
   }
 
-  /** The first cookie of the request that is a valid session grant, or null. */
+  /**
+   * The request's session grant, or null. Only a request with exactly one `xb_content` cookie has one:
+   * browsers keep cookies by host and path, not by who wrote them, so a second one is somebody else's
+   * (a page on another port of the same host, or a sibling subdomain, writing a cookie of its own to
+   * stand in front of the real one), and which of two a browser lists first is not something to rely on.
+   * `handle` refuses such a request before anything reads a cookie.
+   */
   function sessionOf(request: Request): ContentGrant | null {
-    for (const value of contentCookies(request)) {
-      const grant = readSessionToken(value, deps.key, now());
-      if (grant !== null) return grant;
-    }
-    return null;
+    const values = contentCookies(request);
+    const only = values.length === 1 ? values[0] : undefined;
+    return only === undefined ? null : readSessionToken(only, deps.key, now());
   }
 
   async function open(request: Request, token: string): Promise<Response> {
@@ -390,6 +422,18 @@ export function createContentServer(deps: ContentServerDeps): {
     const url = new URL(request.url);
     const { pathname } = url;
 
+    if (contentCookies(request).length > 1) {
+      const refusal = notFound(request.method);
+      for (const line of clearingEverywhere(
+        request,
+        domain,
+        secureFor(request),
+      )) {
+        refusal.headers.append("Set-Cookie", line);
+      }
+      return refusal;
+    }
+
     const opening = /^\/__open\/([^/]+)$/.exec(pathname);
     if (opening) return open(request, opening[1] ?? "");
     if (pathname === "/__open" || pathname.startsWith("/__open/")) {
@@ -459,7 +503,12 @@ export function createContentServer(deps: ContentServerDeps): {
     sockets: forwarding.socket,
     async fetch(request: Request, upgrade?: SocketUpgrade) {
       try {
-        return await handle(request, upgrade);
+        const answered = await handle(request, upgrade);
+        // No answer of this origin, a program's included, may widen where a service worker could be
+        // registered.
+        return answered?.headers.has("service-worker-allowed")
+          ? withoutHeader(answered, "service-worker-allowed")
+          : answered;
       } catch {
         // Nothing about why: a fault here is not for the page's visitor to read.
         return plain(502, request.method === "HEAD" ? null : "Unavailable");

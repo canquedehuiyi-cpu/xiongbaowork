@@ -875,6 +875,13 @@ const TURN_MARKS_TOTAL = 1000;
 /** 一次记快照（含每个 mark 自己的请求）最多占多久，电脑挂住时不拖住员工的动作。 */
 const TURN_MARK_FLUSH_MS = 10_000;
 
+/** A program's port is a user port: the callers check it, and this is the last place that does. */
+function requireForwardPort(port: number): void {
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new ComputerUnavailableError("That port cannot be forwarded to.");
+  }
+}
+
 export function createComputerGateway(
   options: ComputerGatewayOptions,
 ): ComputerGateway {
@@ -3365,6 +3372,7 @@ export function createComputerGateway(
       },
       signal?: AbortSignal,
     ) {
+      requireForwardPort(input.port);
       const base = await locate(seat);
       if (isRunnerAddress(base)) {
         throw new ComputerUnavailableError(
@@ -3400,6 +3408,7 @@ export function createComputerGateway(
     },
 
     async forwardSocket(seat: ComputerSeat, port: number, path: string) {
+      requireForwardPort(port);
       const base = await locate(seat);
       if (isRunnerAddress(base)) {
         throw new ComputerUnavailableError(

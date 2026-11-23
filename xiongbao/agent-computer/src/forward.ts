@@ -395,6 +395,20 @@ export type ForwardSocketData = {
   };
 };
 
+/**
+ * The only headers of the server's socket request the program is given: the `Cookie` and `Origin` the
+ * server chose to send for it. Everything else on that request is the computer's own (its token, the
+ * seat) or the connection's, and is not the program's business.
+ */
+export function socketHandshakeHeaders(from: Headers): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const name of ["cookie", "origin"]) {
+    const value = from.get(name);
+    if (value) out[name] = value;
+  }
+  return out;
+}
+
 /** The subprotocols the client offered, as the tokens a WebSocket constructor accepts. */
 export function offeredProtocols(headers: Headers): string[] {
   return (headers.get("sec-websocket-protocol") ?? "")
@@ -428,6 +442,8 @@ export function connectProgramSocket(input: {
   port: number;
   path: string;
   protocols: string[];
+  /** Headers for the program's handshake; see {@link socketHandshakeHeaders}. */
+  headers?: Record<string, string>;
   recheck?: () => ForwardVerdict;
   timeoutMs?: number;
 }): Promise<{
@@ -437,10 +453,10 @@ export function connectProgramSocket(input: {
   return new Promise((resolve) => {
     let upstream: WebSocket;
     try {
-      upstream = new WebSocket(
-        `ws://127.0.0.1:${input.port}${input.path}`,
-        input.protocols,
-      );
+      upstream = new WebSocket(`ws://127.0.0.1:${input.port}${input.path}`, {
+        protocols: input.protocols,
+        headers: input.headers ?? {},
+      } as never);
     } catch {
       resolve(null);
       return;

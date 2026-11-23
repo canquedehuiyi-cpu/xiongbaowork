@@ -34,11 +34,21 @@ import type { ContentGrant } from "./token";
  *   it cannot read. The application's state-changing routes refuse a foreign `Origin`. What the
  *   program is NOT given is the means to read or replace the content cookie (it is HttpOnly and a
  *   program's own `Set-Cookie` is dropped or host-only) or anything of the application.
+ * - A STATE-CHANGING REQUEST MUST BE THIS ORIGIN'S OWN. The program gets `Origin` rewritten to its own,
+ *   which would turn a request another site made the browser send (with the content cookie) into one
+ *   that looks same-origin to it. So a POST, PUT, PATCH or DELETE whose `Origin` is not this host
+ *   (`null` included), or whose `Sec-Fetch-Site` is anything but `same-origin` or `none`, is refused
+ *   before the rewrite. Reading (GET, HEAD, OPTIONS) is not restricted.
+ * - NO SERVICE WORKER. A program's script is not allowed to register one on this origin (a request for a
+ *   worker script carries `Service-Worker` and is refused, and `Service-Worker-Allowed` is dropped from
+ *   every answer): in port mode a worker would outlive the program and sit on the host that the next
+ *   program, and the application, are also served from.
  * - REDIRECTS STAY ON THIS ORIGIN. A `Location` that is relative, or points at the program itself
- *   (`127.0.0.1:<port>`, `localhost:<port>`), becomes a bare path and query on this origin; one that
- *   points anywhere else is removed and the answer is 502, so a program cannot send a person's browser
- *   (carrying the person's trust) to another site through this origin.
- * - A RATE LIMIT PER EMPLOYEE, 600 requests a minute, so one page cannot make an employee's computer
+ *   (`127.0.0.1:<port>`, `localhost:<port>`), becomes a bare path, query and fragment on this origin; one
+ *   that points anywhere else is removed, and on a 3xx answer the answer becomes 502, so a program
+ *   cannot send a person's browser (carrying the person's trust) to another site through this origin.
+ *   `Refresh` can do the same and is dropped.
+ * - A RATE LIMIT PER EMPLOYEE ON ITS COMPUTER, 600 requests a minute, so one page cannot make an employee's computer
  *   the target of a flood through this origin.
  * - A WEBSOCKET IS OPENED TOWARD THE PROGRAM FIRST, then accepted from the browser (so the subprotocol
  *   the program picked is the one the browser is told). It is closed when its grant expires, when
@@ -176,6 +186,9 @@ const HOP_BY_HOP = new Set([
   "proxy-authenticate",
 ]);
 
+/** Methods that only read; the others change something and have to be this origin's own. */
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
 /** Headers that name a computer seat or carry its secret, under this name or any older spelling. */
 const SEAT_HEADER_SHAPE = /^x-[a-z]+-(bot-id|person-id|computer-token|egress)$/;
 const SEAT_HEADERS = new Set<string>(Object.values(HEADER));
@@ -230,6 +243,7 @@ export function programRequestHeaders(
       lower === "referer" ||
       lower === "accept-encoding" ||
       lower.startsWith("x-forwarded-") ||
+      lower.startsWith("proxy-") ||
       SEAT_HEADERS.has(lower) ||
       SEAT_HEADER_SHAPE.test(lower)
     ) {
@@ -264,6 +278,45 @@ export function programRequestHeaders(
 }
 
 /**
+ * Whether a state-changing request is one this origin's own page made: its `Origin`, when it has one,
+ * is the host it was addressed to, and a browser's `Sec-Fetch-Site`, when present, says same-origin (or
+ * none: typed in or bookmarked). A client that sends neither is not a browser acting for another site.
+ */
+export function isCrossSiteWrite(request: Request): boolean {
+  if (READ_METHODS.has(request.method)) return false;
+  const origin = request.headers.get("origin");
+  if (origin !== null) {
+    try {
+      if (new URL(origin).host !== new URL(request.url).host) return true;
+    } catch {
+      // "null" and anything else that is not an origin.
+      return true;
+    }
+  }
+  const site = request.headers.get("sec-fetch-site");
+  return site !== null && site !== "same-origin" && site !== "none";
+}
+
+/**
+ * What the program's socket is sent besides the computer's own headers: the browser's cookies in domain
+ * mode (the content cookie left out), none in port mode, and an `Origin` of the program's own when the
+ * browser sent one. Nothing else of the browser's request goes on.
+ */
+export function programSocketHeaders(
+  from: Headers,
+  port: number,
+  cookies?: { keepExcept: string },
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  const via = programRequestHeaders(from, port, cookies);
+  const cookie = via.get("cookie");
+  if (cookie) out.cookie = cookie;
+  const origin = via.get("origin");
+  if (origin) out.origin = origin;
+  return out;
+}
+
+/**
  * Where a `Location` points once the program's own address is taken out: a bare path and query on
  * this origin, or null when it leaves for another host (or cannot be read).
  */
@@ -282,7 +335,7 @@ export function rewrittenLocation(value: string, port: number): string | null {
       port;
   if (!own) return null;
   // One leading slash only: `//host` would be read by a browser as another site.
-  return `/${`${target.pathname}${target.search}`.replace(/^\/+/, "")}`;
+  return `/${`${target.pathname}${target.search}`.replace(/^\/+/, "")}${target.hash}`;
 }
 
 const DECODED_BY_FETCH = /^(gzip|x-gzip|deflate|br|zstd)$/i;
@@ -308,7 +361,7 @@ function hostOnlyCookies(values: string[], contentCookie: string): string[] {
   return kept;
 }
 
-/** The program's answer as this origin gives it; 502 when it tries to send the browser elsewhere. */
+/** The program's answer as this origin gives it; 502 when a redirect tries to send the browser elsewhere. */
 export function programResponse(
   upstream: Response,
   input: { port: number; domainMode: boolean; contentCookie: string },
@@ -321,6 +374,8 @@ export function programResponse(
       lower === "strict-transport-security" ||
       lower === "clear-site-data" ||
       lower === "alt-svc" ||
+      lower === "refresh" ||
+      lower === "service-worker-allowed" ||
       lower === "location" ||
       HOP_BY_HOP.has(lower)
     ) {
@@ -345,11 +400,12 @@ export function programResponse(
   const location = upstream.headers.get("location");
   if (location !== null) {
     const path = rewrittenLocation(location, input.port);
-    if (path === null) {
+    if (path !== null) {
+      headers.set("location", path);
+    } else if (upstream.status >= 300 && upstream.status < 400) {
       upstream.body?.cancel().catch(() => undefined);
       return plain(502, "Unavailable");
     }
-    headers.set("location", path);
   }
   headers.set("x-content-type-options", "nosniff");
   if (!headers.has("referrer-policy")) {
@@ -369,6 +425,9 @@ export function programResponse(
 
 const isUpgrade = (request: Request) =>
   request.headers.get("upgrade")?.toLowerCase() === "websocket";
+
+/** One allowance per employee on one computer: the same employee id on another person's computer is another. */
+const limitKey = (grant: ContentGrant) => `${grant.seat}:${grant.bot}`;
 
 const seatOf = (grant: ContentGrant): ComputerSeat | null => {
   const key = parseComputerKey(grant.seat);
@@ -580,7 +639,7 @@ export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
     if (!validForwardPath(path)) return plain(400, "Bad path");
     const seat = seatOf(g);
     if (!seat) return plain(502, "Unavailable");
-    const taken = limiter.take(g.bot);
+    const taken = limiter.take(limitKey(g));
     if (!taken.ok) {
       return plain(429, "Too many requests", {
         "Retry-After": String(taken.retryAfterSeconds),
@@ -593,7 +652,19 @@ export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
     let connected: Awaited<ReturnType<typeof connectProgram>>;
     try {
       const where = await deps.gateway.forwardSocket(seat, g.target.port, path);
-      connected = await connectProgram(where.url, where.headers, protocols, g);
+      connected = await connectProgram(
+        where.url,
+        {
+          ...programSocketHeaders(
+            request.headers,
+            g.target.port,
+            deps.domainMode ? { keepExcept: deps.contentCookie } : undefined,
+          ),
+          ...where.headers,
+        },
+        protocols,
+        g,
+      );
     } catch {
       return plain(502, "Unavailable");
     }
@@ -624,15 +695,17 @@ export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
     request: Request,
     upgrade?: SocketUpgrade,
   ): Promise<Response | undefined> {
+    if (request.headers.has("service-worker")) return plain(403, "Forbidden");
     if (isUpgrade(request)) return openSocket(g, request, upgrade);
     if (!METHODS.has(request.method)) {
       return plain(405, null, { Allow: [...METHODS].join(", ") });
     }
+    if (isCrossSiteWrite(request)) return plain(403, "Forbidden");
     const path = pathOf(request);
     if (!validForwardPath(path)) return plain(400, "Bad path");
     const seat = seatOf(g);
     if (!seat) return plain(502, "Unavailable");
-    const taken = limiter.take(g.bot);
+    const taken = limiter.take(limitKey(g));
     if (!taken.ok) {
       return plain(429, "Too many requests", {
         "Retry-After": String(taken.retryAfterSeconds),
