@@ -248,3 +248,68 @@ describe("serveStatic", () => {
     ).rejects.toThrow("boom");
   });
 });
+
+describe("review fixes", () => {
+  test("an over-long path is refused", () => {
+    expect(resolveServedPath("site", "a".repeat(1024))).toBe(
+      `site/${"a".repeat(1024)}`,
+    );
+    expect(resolveServedPath("site", "a".repeat(1025))).toBeNull();
+  });
+
+  test("look-alike characters stay literal names", () => {
+    expect(resolveServedPath("site", "．．/x")).toBe("site/．．/x");
+    expect(resolveServedPath("site", "a∕b")).toBe("site/a∕b");
+  });
+
+  const tracked = () => {
+    const state = { cancelled: false };
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        controller.enqueue(new Uint8Array([1]));
+      },
+      cancel() {
+        state.cancelled = true;
+      },
+    });
+    return { state, gateway: { serveFile: async () => ({ body, bytes: 1 }) } };
+  };
+
+  test("HEAD cancels the upstream stream", async () => {
+    const { state, gateway } = tracked();
+    await serveStatic(grant(), "a.js", gateway, undefined, "HEAD");
+    expect(state.cancelled).toBe(true);
+  });
+
+  test("a client that cancels a GET cancels the upstream stream", async () => {
+    const { state, gateway } = tracked();
+    const res = await serveStatic(grant(), "a.js", gateway, undefined, "GET");
+    await res.body?.cancel();
+    expect(state.cancelled).toBe(true);
+  });
+
+  test("a folder the computer answers 400 for is a 404 through the real gateway", async () => {
+    const { createComputerGateway } = await import("../src/computer/gateway");
+    const gateway = createComputerGateway({
+      provider: {
+        name: "test",
+        isolation: "per-person",
+        locate: async () => "http://agent-computer:4100",
+        status: async (seat: { botId: string }) => ({
+          botId: seat.botId,
+          state: "ready",
+        }),
+        stop: async () => ({ wasRunning: false }),
+        reset: async () => ({ cleared: false }),
+        list: async () => [],
+      } as never,
+      fetchImpl: (async () =>
+        Response.json({ error: "is a folder" }, { status: 400 })) as never,
+      auditStore: { insert: async () => {} } as never,
+      policy: () => undefined,
+    });
+    const res = await serveStatic(grant(), "docs", gateway, undefined, "GET");
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("Not found");
+  });
+});

@@ -100,6 +100,8 @@ import {
   StaleSnapshotError,
   WorkspaceNotFoundError,
   WorkspaceRefusedError,
+  WorkspaceRequestError,
+  WorkspaceTooLargeError,
 } from "./client";
 // --- end desktop control ---
 import {
@@ -530,8 +532,9 @@ export interface ComputerGateway {
   }>;
   /**
    * One file of a folder the content server hands to a browser, as a stream; `null` when there is
-   * nothing to serve (no such file, a link or path the computer refuses to follow out of the
-   * workspace, or a paired personal computer, whose files this server cannot reach this way).
+   * nothing to serve (no such file; a link or path the computer refuses to follow out of the
+   * workspace (403); a path it will not read as a file, such as a folder (400); a file over the
+   * download limit (413), whose size a static page does not reveal; or a paired personal computer, whose files this server cannot reach this way).
    * Not governed here: the "open" that made the link was decided and recorded as the folder's
    * download, and every page asset after it rides on that one decision. The computer still checks
    * links and the workspace boundary on every file. Any other failure throws.
@@ -3307,7 +3310,9 @@ export function createComputerGateway(
       } catch (error) {
         if (
           error instanceof WorkspaceNotFoundError ||
-          error instanceof WorkspaceRefusedError
+          error instanceof WorkspaceRefusedError ||
+          error instanceof WorkspaceRequestError ||
+          error instanceof WorkspaceTooLargeError
         )
           return null;
         throw error;

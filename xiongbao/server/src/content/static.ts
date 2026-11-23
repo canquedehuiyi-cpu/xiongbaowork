@@ -67,7 +67,10 @@ const notFound = (method: string): Response =>
  * The segments of a workspace-relative path, or null when the text is not safe to use as one:
  * empty, absolute, with a backslash, a control character (NUL included), a drive letter, or a
  * segment that is `..` or starts with a dot. A dot-leading segment is hidden material (`.git`,
- * `.env`, the preview folder) that is not website content, so it is never served.
+ * `.env`, the preview folder) that is not website content, so it is never served. A segment that
+ * starts like a drive letter (`C:`) is refused too, conservatively, though a folder name can hardly
+ * need it. Look-alike characters (full-width dots, the division slash) are not normalized: they
+ * stay literal names.
  */
 function safeSegments(path: string): string[] | null {
   // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what is refused
@@ -80,6 +83,9 @@ function safeSegments(path: string): string[] | null {
   }
   return segments;
 }
+
+/** The longest decoded request path served; nothing a real site needs comes near it. */
+const MAX_REL_LENGTH = 1024;
 
 /**
  * The workspace path of a requested file, or null for anything that must not be served.
@@ -98,6 +104,7 @@ export function resolveServedPath(dir: string, rel: string): string | null {
   } catch {
     return null;
   }
+  if (decoded.length > MAX_REL_LENGTH) return null;
   const wantsIndex = decoded === "" || decoded.endsWith("/");
   const parts = decoded === "" ? [] : safeSegments(decoded);
   if (!parts) return null;

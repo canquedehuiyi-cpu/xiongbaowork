@@ -2548,8 +2548,8 @@ describe("serveFile", () => {
     expect(requests).toEqual([]);
   });
 
-  test("404 and 403 from the computer read as null", async () => {
-    for (const status of [404, 403]) {
+  test("404, 403, 400 (a folder) and 413 (too large) from the computer read as null", async () => {
+    for (const status of [404, 403, 400, 413]) {
       const { gateway } = await gatewayWith(
         PERMISSIVE,
         download(status, JSON.stringify({ error: "no" })),
