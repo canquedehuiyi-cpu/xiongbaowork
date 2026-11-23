@@ -124,7 +124,7 @@ OPENBOT_SELF_HOST_BANNER=false
 1. 选一个专用域名，例如 `apps.example.com`，设 `XIONGBAO_CONTENT_DOMAIN=apps.example.com`
    （只写主机名，不要协议、端口和路径；**不能等于或是应用所在域名的上级**：应用在 `app.example.com`，
    就不能把内容域名设成 `example.com`，否则整个应用都会被当成内容源。启动时会按 `OPENBOT_PUBLIC_URL`、
-   `OPENBOT_APP_URL`、`TRUSTED_ORIGINS` 里的主机名检查，撞上就拒绝启动）。设了域名就不再单独监听内容端口，
+   前端地址和 `TRUSTED_ORIGINS` 里的主机名检查，撞上就拒绝启动）。设了域名就不再单独监听内容端口，
    `XIONGBAO_CONTENT_PORT` 不再起作用，3773 也不必放行。
 2. **泛域名解析：** 给 `*.apps.example.com` 加一条解析，指向和应用相同的入口。
 3. **泛域名证书：** 申请 `*.apps.example.com` 的泛域名证书（通配符证书只能用 DNS 验证方式签发，
