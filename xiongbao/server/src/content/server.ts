@@ -345,7 +345,21 @@ export function createContentServer(deps: ContentServerDeps): {
       return notFound(request.method);
     }
 
-    // Everything else is the browser's current target, from the one cookie this server knows.
+    /*
+     * Everything else is the browser's current target, from the one cookie this server knows, and
+     * only for a page being opened. A sandboxed page of another tab may still make the browser send
+     * this cookie with a script, style or image request; answering those would hand that page the
+     * files of whatever the cookie points at (a script include reads cross-origin JavaScript). So only
+     * `Sec-Fetch-Dest: document` or `iframe` is answered. A browser too old to send the header is
+     * answered for GET and HEAD alone and treated as a navigation: refusing it would break it
+     * entirely, and the files of a current page are what it would have been shown anyway.
+     */
+    const dest = request.headers.get("sec-fetch-dest");
+    const navigation =
+      dest === null
+        ? request.method === "GET" || request.method === "HEAD"
+        : dest === "document" || dest === "iframe";
+    if (!navigation) return notFound(request.method);
     if (contentCookies(request).length === 0) return notFound(request.method);
     const grant = sessionOf(request);
     if (grant !== null) {

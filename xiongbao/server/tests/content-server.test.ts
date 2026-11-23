@@ -236,6 +236,34 @@ describe("the cookie's target", () => {
     expect(await css.text()).toBe("body{}");
   });
 
+  test.each(["script", "style", "image", "font", "empty", "worker", "object"])(
+    "a %s request through the cookie's root path is 404, a document or iframe is served",
+    async (dest) => {
+      const { server, cookie } = await opened();
+      const headers = { ...asCookie(cookie), "sec-fetch-dest": dest };
+      expect((await get(server, "http://c/", headers)).status).toBe(404);
+      expect((await get(server, "http://c/app.css", headers)).status).toBe(404);
+      for (const ok of ["document", "iframe"]) {
+        const res = await get(server, "http://c/", {
+          ...asCookie(cookie),
+          "sec-fetch-dest": ok,
+        });
+        expect(res.status).toBe(200);
+      }
+    },
+  );
+
+  test("without Sec-Fetch-Dest (an old browser) only GET and HEAD are answered", async () => {
+    const { server, cookie } = await opened();
+    expect((await get(server, "http://c/", asCookie(cookie))).status).toBe(200);
+    expect(
+      (await get(server, "http://c/", asCookie(cookie), "HEAD")).status,
+    ).toBe(200);
+    expect(
+      (await get(server, "http://c/", asCookie(cookie), "POST")).status,
+    ).toBe(404);
+  });
+
   test("no cookie is 404", async () => {
     const { server } = setup();
     const res = await get(server, "http://c/");
