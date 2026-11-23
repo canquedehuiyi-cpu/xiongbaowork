@@ -525,6 +525,36 @@ export function runListing(
   return (listed ?? runs.at(-1))?.runId;
 }
 
+/** 服务器侧检查失败、而且运行里一条 `computer.turn_artifacts` 都没有时，失败详情里加的这一句。 */
+export const NO_TURN_ARTIFACTS_NOTE = "服务器没记到这一轮的产物（没放行）";
+
+/**
+ * 区分「服务器没放行」和「电脑上没文件」：失败的检查，在这一题所有运行都没有 `computer.turn_artifacts`
+ * 事件时，详情末尾注明服务器没记到产物。只改失败项的文字，不改任何一项的通过与否。
+ */
+export function noteMissingRelease(
+  checks: readonly Check[],
+  runs: readonly { events: readonly RunEvent[] }[],
+): Check[] {
+  const recorded = runs.some((run) =>
+    run.events.some(
+      (event) =>
+        event.type === "CUSTOM" && event.name === "computer.turn_artifacts",
+    ),
+  );
+  if (recorded) return [...checks];
+  return checks.map((item) =>
+    item.ok
+      ? item
+      : {
+          ...item,
+          detail: item.detail
+            ? `${item.detail}；${NO_TURN_ARTIFACTS_NOTE}`
+            : NO_TURN_ARTIFACTS_NOTE,
+        },
+  );
+}
+
 /**
  * 程序的内容源范围认的是列出该端口的交付事件所在的运行，和文件所在的运行可以不是同一轮（`index.html` 写在第一轮，
  * 交付在后面）。取最后一个列出该端口的运行；没有交付事件（没有任务卡时服务器不发）就取最后一轮。

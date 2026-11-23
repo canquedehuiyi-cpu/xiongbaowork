@@ -58,6 +58,7 @@ import { EventType } from "@ag-ui/client";
 import { NOT_RUN_WHILE_WAITING } from "@openbot/shared/approval-outcomes";
 import { NOT_SHOWN } from "@openbot/shared/component-markers";
 import { frameFiring } from "@openbot/shared/routine-firing";
+import type { Observable } from "rxjs";
 import type { ApprovalContinuation } from "./continuation";
 import {
   type HeadlessTool,
@@ -815,6 +816,16 @@ export function createTurnRunner(options: {
   answered?: TurnAnswered;
   /** Wraps the whole turn, for the host's own per-turn context (whose board card it is). */
   scope?: TurnScope;
+  /**
+   * Looks at the whole stream of a turn that runs tools between the model's steps. The model's steps
+   * are separate runs of the agent and the tools run between them, outside any one step's stream, so
+   * whatever must see the turn as one (the files it left on the Bot's computer) is given the stream
+   * of all of it, ending with the turn's own `RUN_FINISHED`.
+   */
+  observeTurn?: (
+    stream: Observable<BaseEvent>,
+    turn: { runId: string; threadId: string; agentId: string },
+  ) => Observable<BaseEvent>;
 }): TurnRunner {
   const {
     intelligence,
@@ -832,6 +843,7 @@ export function createTurnRunner(options: {
     modelNamedIn,
     answered,
     scope,
+    observeTurn,
   } = options;
 
   /*
@@ -1001,12 +1013,18 @@ export function createTurnRunner(options: {
         initiator,
       })) ?? []),
     ];
-    if (headlessTools.length > 0)
+    if (headlessTools.length > 0) {
+      // First added is outermost, so this sees the stream of every segment the middleware below runs.
+      if (observeTurn)
+        agent.use((request, next) =>
+          observeTurn(next.run(request), { runId, threadId, agentId }),
+        );
       agent.use(
         new HeadlessToolsMiddleware(headlessTools, initiator, {
           maxSegments: maxToolSegments,
         }),
       );
+    }
     if (signal?.aborted) throw new Error("The headless turn was cancelled.");
 
     let input = turnInput({

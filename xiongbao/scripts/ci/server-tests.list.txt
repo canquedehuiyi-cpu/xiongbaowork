@@ -334,6 +334,7 @@ tests/content-governance.test.ts
 tests/content-open-routes.test.ts
 tests/content-server.test.ts
 tests/content-static.test.ts
+tests/content-tenant-frame.integration.test.ts
 tests/content-token.test.ts
 tests/context-usage.integration.test.ts
 tests/context-usage.test.ts
@@ -978,7 +979,9 @@ tests/tool-search.test.ts
 tests/tool-selection-environment-restoration-driver.test.ts
 tests/tool-selection-environment-restoration.test.ts
 tests/tool-selection.integration.test.ts
+tests/turn-artifacts-chat.integration.test.ts
 tests/turn-artifacts-replay.integration.test.ts
+tests/turn-artifacts-turns.test.ts
 tests/turn-artifacts.test.ts
 tests/turn-failed-by-stream.test.ts
 tests/turn-notice-config.test.ts
