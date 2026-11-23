@@ -10,7 +10,7 @@ import { addWallSplits, type WallSplit } from "./wall-split";
 export type Side = "xiongbao" | "codex";
 export type Suite = "tasks" | "smoke";
 /** 熊宝侧的执行路径：看板派活，或单聊接口（`EVAL_PATH`）。没写这个字段的旧结果文件是看板路径。 */
-export type EvalPath = "board" | "chat";
+export type EvalPath = "board" | "chat" | "group";
 
 /**
  * 一次运行（含它之后等复盘的那一段）里这位员工学到了什么：只有熊宝侧的重复任务记。
@@ -157,6 +157,11 @@ export type EvalRecord = {
   wallSplit?: WallSplit;
   /** 这道题走的执行路径；旧结果文件没有，按看板路径算。Codex 侧没有。 */
   path?: EvalPath;
+  /**
+   * 失败后重跑的次数（交付题，输入 `rerun_failed`）：0 = 一次就是最终结果，1 = 第一次没过、重跑了一次，
+   * 这条记录是重跑的结果；重跑后仍失败就是失败。旧结果文件没有这一项，读作 0。
+   */
+  reruns?: 0 | 1;
   /** 停在时间或段数上限的轮数（`turn-limit` / `step-limit` 事件）。旧结果文件没有这一项。 */
   limitStops?: number;
   /** 没写完、没触顶、也没问人就停了。读不到时 null。 */

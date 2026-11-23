@@ -20,7 +20,9 @@
  *
  * 两个套件：`EVAL_SUITE=tasks`（五道题，默认）和 `EVAL_SUITE=smoke`（能力冒烟，见 smoke.ts）。
  *
- * 两条执行路径（`EVAL_PATH=board|chat`，默认 board，行为不变）：
+ * 三条执行路径（`EVAL_PATH=board|chat|group`，默认 board，行为不变）：
+ *   group 同样的题走群聊：新建含这位员工和一位同伴的 shared 群聊（`POST /api/groups`），在群里点名这位员工发题，
+ *         读群聊记录里它那一行到不再排队 / 在跑；没做完在同一个群里点名发「继续」。结果写 `xiongbao-group.json`。
  *   chat  同样的题走单聊接口（期九·六）。服务器开着 `XIONGBAO_CHAT_SERVER_COMPUTER_TOOLS=on`，每道题给同一个
  *         新员工开一段单聊（`POST /api/channels` 拿到对话），客户端用 HTTP 发运行请求
  *         （运行接口 `POST …/agent/:id/run`，`forwardedProps.computerTools="server"`，和页面发的一样），读事件流
@@ -36,7 +38,7 @@
  * 环境变量（除 config.ts 里的门槛和模型参数外）：
  *   E2E_DATABASE_URL, E2E_ROLE_WRITER_DATABASE_URL   与 wakerflow-real-model.ts 相同
  *   EVAL_SUITE        tasks | smoke
- *   EVAL_PATH         board | chat，默认 board
+ *   EVAL_PATH         board | chat | group，默认 board（group：新建含这位员工和一位同伴的 shared 群聊，点名发题，读群聊记录）
  *   EVAL_TASKS        all（五道对标题）、hard（加难题：compare、refactor、terminal、webform）或逗号分隔的题名
  *                     （repeat、repeat-pitfall 只能点名：同一道题在同一位员工身上连做两次，记 firstRun / secondRun；
  *                     repeat 是多步办公题，repeat-pitfall 是第一次有坑、学会后能跳过的账单导入题）；
@@ -46,12 +48,14 @@
  *                     有坑可学每一对还有第三次：同一份第二次夹具、没有技能和记忆的新员工做的对照运行（不等它的复盘），
  *                     记 controlRun，验收看「有技能比没技能」
  *   EVAL_SEED         有坑可学的题的基础种子（作业里是 run id，熊宝、Codex 两个作业同一个）；没设就现抽一个并记在结果里
- *   EVAL_DEADLINE_EPOCH 作业截止时间（Unix 秒，作业开头记下）：来不及再做完一对时，剩下的对不做，已完成的照常记录；本机不设
+ *   EVAL_DEADLINE_EPOCH 作业截止时间（Unix 秒，作业开头记下）：来不及再做完一对时，剩下的对不做，已完成的照常记录；交付题剩余时间不够一题（按每题上限）就不开新题、不重跑；本机不设
  *   EVAL_XIONGBAO_MODEL  只给熊宝侧换的模型名，空表示和 EVAL_MODEL 一样（Codex 侧不受影响）
  *   EVAL_PROMPT_SLIM  on | off，传给服务器的 XIONGBAO_PROMPT_SLIM（提示词瘦身，服务器默认开）；off 用来做对照
  *   EVAL_SERVER_ENV  给服务器多带几个 XIONGBAO_ 开头的部署开关，逗号分隔的 名字=值（例如 XIONGBAO_VERIFY_NUDGE=off），用来对照开关开和关
  *   EVAL_PROMPT_CHARS 真模型下设 on，才记每道题发给模型的请求体大小（在服务器和提供方之间夹一个回环转发，
  *                     结果记录里的 promptChars，报告里的「提示词体积」表）；本机假模型一律记
+ *   EVAL_RERUN_FAILED 1 | 0，默认 0：交付题没过时用新员工、新夹具重跑至多 1 次，记录里 reruns 写 1，结果取重跑那一次
+ *                     （重跑后仍没过就是没过）；作业输入 rerun_failed 传这个
  *   EVAL_TASK_MINUTES 每题墙钟上限，默认 20（冒烟场景用各自的上限）
  *   EVAL_OUT          结果目录，默认 ./employee-eval-out；写 xiongbao.json / smoke.json（chat 路径是 -chat 结尾）、产物和服务器日志
  *   E2E_SERVER_PORT   默认取空闲端口
@@ -87,6 +91,7 @@ import {
   openSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -107,6 +112,7 @@ import {
   afterRound,
   artifactDirName,
   conversationWith,
+  driveGroup,
   finishedCheck,
   limitStops,
   logFileName,
@@ -119,6 +125,7 @@ import {
   runnerLabel,
   transcriptChecks,
 } from "./chat-path";
+import { checkDelivApp, type DelivItem } from "./check-deliverables";
 import { CHECKERS } from "./checkers";
 import {
   evalGate,
@@ -129,6 +136,12 @@ import {
   taskMinutes,
   xiongbaoModel,
 } from "./config";
+import {
+  deliveriesOf,
+  runDelivering,
+  runListing,
+  serverChecks,
+} from "./deliverables-server";
 import { pitfallPairSeeds } from "./gen-pitfall";
 import {
   canSudoAs,
@@ -160,8 +173,10 @@ import {
   type Check,
   check,
   copyTree,
+  type DELIVERABLES_SUITE,
   EDITS_CODE_TASKS,
   HARD_SUITE,
+  isDeliverableTask,
   isRepeatTask,
   listFiles,
   materialize,
@@ -208,6 +223,7 @@ import {
   type RunLearning,
   writeResults,
 } from "./records";
+import { withRerun } from "./rerun";
 import {
   type BackgroundKind,
   placeSmoke,
@@ -261,6 +277,12 @@ if (!pairChoice.ok) {
 const pairCount = pairChoice.pairs;
 const baseSeed = evalSeed(process.env);
 const suite = process.env.EVAL_SUITE?.trim() === "smoke" ? "smoke" : "tasks";
+if (suite === "smoke" && process.env.EVAL_PATH?.trim() === "group") {
+  console.error(
+    "run-xiongbao refused: EVAL_PATH=group 只做交付题等 tasks 套件，能力冒烟没有群聊路径",
+  );
+  process.exit(2);
+}
 let evalPath: EvalPath;
 try {
   evalPath = parseEvalPath(process.env.EVAL_PATH);
@@ -281,6 +303,7 @@ if (!databaseUrl || !roleWriterDatabaseUrl) {
 }
 const OUT = resolve(process.env.EVAL_OUT?.trim() || "employee-eval-out");
 mkdirSync(OUT, { recursive: true });
+const rerunFailed = process.env.EVAL_RERUN_FAILED?.trim() === "1";
 const tasks: TaskName[] =
   suite === "tasks" ? selectTasks(process.env.EVAL_TASKS, HARD_SUITE) : [];
 const scenarios: SmokeScenario[] =
@@ -1122,6 +1145,9 @@ type Work = {
       calls: ToolCall[];
       agentId: string;
       since: Date;
+      /** 交付题：员工交付了什么（服务器事件、`deliver_task` 的 items）和服务器侧判分的结果。 */
+      deliveries: DelivItem[];
+      serverSide: Check[];
     },
   ) => Promise<{ passed: boolean; checks: Check[]; skipped?: string }>;
   editsData: boolean;
@@ -1139,6 +1165,13 @@ const OUTPUTS: Record<TaskName, string[]> = {
   webform: ["receipt.txt"],
   repeat: ["actions.csv"],
   "repeat-pitfall": ["out/summary.json"],
+  "deliv-pptx": ["deck.pptx"],
+  "deliv-docx": ["report.docx"],
+  "deliv-xlsx": ["budget.xlsx"],
+  "deliv-web": ["site/index.html"],
+  "deliv-app": ["app/index.html"],
+  "deliv-image": ["cover.png"],
+  "deliv-video": ["intro.mp4"],
 };
 
 /** 一道题交给员工、等它做完之后的结果：用到的运行、追了几次「继续」、有没有超时，和路径自己的几项判分。 */
@@ -1152,6 +1185,8 @@ type Driven = {
   checks?: Check[];
   /** 单聊路径：这道题的对话，运行号从这里读（含审批、续接带出来的运行）。 */
   threadId?: string;
+  /** 这道题开的对话（看板、单聊的频道，或群聊）：下载和打开内容源的范围用它。 */
+  channelId?: string;
   /** 看板路径：这一次派活时开的卡（含追问「继续」另开的），复盘行按卡认的依据（`RetroClaim`）。 */
   taskIds?: string[];
   /** 看板路径：派活那段对话的 id；只用来在超时时停掉这段对话里还在跑的轮（运行号读法不变，仍是派活时拿到的）。 */
@@ -1262,6 +1297,7 @@ async function driveBoard(
     nudges,
     timedOut,
     channelThreadId,
+    channelId,
     ...(error ? { error } : {}),
   };
 }
@@ -1558,9 +1594,73 @@ async function driveChat(
     nudges,
     timedOut,
     threadId,
+    channelId: channel.body.channel.id,
     rejoins,
     sent,
     ...(error ? { error } : {}),
+  };
+}
+
+/** 群聊里陪着的另一位员工：群聊至少要两位员工，同伴只在群里，不被点名，不做题。一次评测共用一位。 */
+let groupPeer = "";
+
+/** 评测结束删掉群聊同伴，不占员工名额。 */
+async function releaseGroupPeer() {
+  if (!groupPeer) return;
+  const id = groupPeer;
+  groupPeer = "";
+  try {
+    const deleted = await api("DELETE", `/api/agents/${id}`);
+    if (deleted.status !== 204)
+      console.log(`   (群聊同伴没删掉：HTTP ${deleted.status})`);
+  } catch (thrown) {
+    console.log(
+      `   (群聊同伴没删掉：${thrown instanceof Error ? thrown.message : String(thrown)})`,
+    );
+  }
+}
+
+/** 群聊路径：新建含这位员工和同伴的 shared 群聊，点名发题、读到回复结束，没做完同样在群里点名发「继续」。 */
+async function driveGroupPath(
+  work: Work,
+  agentId: string,
+  deadline: number,
+  dir: string,
+): Promise<Driven> {
+  let error: string | undefined;
+  try {
+    if (!groupPeer) groupPeer = await newEmployee("群聊同伴", true);
+  } catch (thrown) {
+    error = thrown instanceof Error ? thrown.message : String(thrown);
+  }
+  if (!groupPeer)
+    return { runIds: [], nudges: 0, timedOut: false, error, sent: 0 };
+  const driven = await driveGroup({
+    origin: ORIGIN,
+    cookie: cookieHeader(),
+    agentId,
+    peerId: groupPeer,
+    prompt: work.prompt,
+    nudge: NUDGE,
+    deadline,
+    maxNudges: MAX_NUDGES,
+    outputsReady: () => work.outputsReady(dir),
+    newId: () => randomUUID(),
+  });
+  return {
+    runIds: [],
+    nudges: driven.nudges,
+    timedOut: driven.timedOut,
+    sent: driven.sent,
+    channelId: driven.channelId,
+    // 活转给了同伴：这道题不是员工自己完成的，判失败并写明（不静默）。
+    ...(driven.handedOff
+      ? {
+          checks: [check("活由这位员工自己完成", false, "转交给了同伴")],
+        }
+      : {}),
+    ...(driven.threadId ? { threadId: driven.threadId } : {}),
+    ...(driven.error ? { error: driven.error } : {}),
   };
 }
 
@@ -1630,9 +1730,80 @@ async function releasePairEmployees(pairKey: string) {
   }
 }
 
+/** 交付题：在服务器上请求下载、预览，网页和程序再打开、操作；返回判分项（下载范围是列出这些文件的那一轮）。 */
+async function judgeOnServer(
+  work: Work,
+  task: (typeof DELIVERABLES_SUITE)[number],
+  input: {
+    agentId: string;
+    channelId: string;
+    runIds: string[];
+    events: AgUiEvent[];
+    deliveries: DelivItem[];
+    copy: string;
+  },
+): Promise<Check[]> {
+  const files = OUTPUTS[task].map((file) => `${work.where}/${file}`);
+  // 交付过几次就以最后一次为准（前面的可能是被退回的）。
+  const appPort = input.deliveries
+    .filter((item) => item.kind === "app" && typeof item.port === "number")
+    .at(-1)?.port;
+  const runs = await Promise.all(
+    input.runIds.map(async (id) => ({
+      runId: id,
+      events: await eventsOf([id]),
+    })),
+  );
+  // 文件的范围按列出文件的那一轮；程序的范围按交付该端口的那一轮，两者可以不是同一轮。
+  const runId = runListing(runs, { files });
+  const appRunId =
+    appPort === undefined ? undefined : runDelivering(runs, appPort);
+  if (!input.channelId || !runId)
+    return [
+      check(
+        "服务器侧判分",
+        false,
+        !input.channelId ? "没有对话 id" : "这道题没有运行",
+      ),
+    ];
+  try {
+    return await serverChecks(
+      {
+        base: ORIGIN,
+        cookie: cookieHeader(),
+        botId: input.agentId,
+        channelId: input.channelId,
+        runId,
+        task,
+        files,
+      },
+      {
+        localBytes: (file) => {
+          try {
+            return statSync(join(input.copy, file.slice(work.where.length + 1)))
+              .size;
+          } catch {
+            return undefined;
+          }
+        },
+        ...(appPort !== undefined ? { appPort } : {}),
+        ...(appRunId ? { appRunId } : {}),
+      },
+    );
+  } catch (thrown) {
+    return [
+      check(
+        "服务器侧判分",
+        false,
+        thrown instanceof Error ? thrown.message : String(thrown),
+      ),
+    ];
+  }
+}
+
 async function runWork(work: Work): Promise<EvalRecord> {
   console.log(
-    `\n== ${work.key}（${work.title}）${work.via === "chat" ? " [chat]" : ""}`,
+    `\n== ${work.key}（${work.title}）${work.via === "board" ? "" : ` [${work.via}]`}`,
   );
   // 这位员工上一次的轮要是还在服务器上跑，先等它结束（最多 60 秒），再不结束就停掉，免得它串进这一次。
   const earlierAgent = work.group ? agentOfGroup.get(work.group) : undefined;
@@ -1666,9 +1837,11 @@ async function runWork(work: Work): Promise<EvalRecord> {
   recorder?.drain();
   const dir = join(WORKSPACE, work.where);
   const driven =
-    work.via === "chat"
-      ? await driveChat(work, agentId, deadline, dir)
-      : await driveBoard(work, agentId, deadline, dir);
+    work.via === "group"
+      ? await driveGroupPath(work, agentId, deadline, dir)
+      : work.via === "chat"
+        ? await driveChat(work, agentId, deadline, dir)
+        : await driveBoard(work, agentId, deadline, dir);
   // 墙钟记到这一轮真的结束的那一刻：后面等运行记录落库、给事件留的 2 秒是评测脚本自己的收尾，不是员工花的时间
   // （Codex 那侧没有），算进去会把熊宝的墙钟平白多记几秒。
   const wallMs = Date.now() - started;
@@ -1704,7 +1877,29 @@ async function runWork(work: Work): Promise<EvalRecord> {
 
   const copy = join(OUT, artifactDirName(suite, work.via), work.key);
   if (isolation) openUp(dir);
+  // 重跑用同一个结果目录名：先清掉上一次的拷贝，免得判分读到旧文件。
+  rmSync(copy, { recursive: true, force: true });
   copyTree(dir, copy);
+  /*
+   * 交付题的服务器侧判分要在员工的目录还在电脑上、程序还在跑的时候做：下面把这次运行的目录移出工作区之后，
+   * 下载和预览就读不到了。
+   */
+  const early = await eventsOf(runIds);
+  const deliveries =
+    work.task && isDeliverableTask(work.task)
+      ? deliveriesOf(early, toolCallsOf(early))
+      : [];
+  const serverSide =
+    work.task && isDeliverableTask(work.task)
+      ? await judgeOnServer(work, work.task, {
+          agentId,
+          channelId: driven.channelId ?? "",
+          runIds,
+          events: early,
+          deliveries,
+          copy,
+        })
+      : [];
   // 网页表单题：判分读服务端收到的记录，在员工做完以后由评测脚本写进去。
   if (work.site) sealReceived(work.site, copy);
   // 产物已拷到 OUT，判分读的是拷出来的：把这次运行的目录移出员工的工作区，后面的运行（别的题、别的对）看不到它；
@@ -1767,6 +1962,8 @@ async function runWork(work: Work): Promise<EvalRecord> {
     calls,
     agentId,
     since,
+    deliveries,
+    serverSide,
   });
   const pathChecks = driven.checks ?? [];
   const checks = [...judged.checks, ...pathChecks];
@@ -2012,7 +2209,15 @@ function taskWork(
     editsData: EDITS_CODE_TASKS.includes(task),
     outputsReady: (dir) =>
       OUTPUTS[task].every((path) => existsSync(join(dir, path))),
-    judge: async (dir, { agentId, since }) => {
+    judge: async (dir, { agentId, since, deliveries, serverSide }) => {
+      // 交付题：本地判分（程序题带上交付清单）加服务器侧判分。
+      if (isDeliverableTask(task)) {
+        const local =
+          task === "deliv-app"
+            ? checkDelivApp(dir, deliveries)
+            : await CHECKERS[task](dir, seed);
+        return result(task, [...local.checks, ...serverSide]);
+      }
       const outcome = await CHECKERS[task](dir, seed);
       if (task !== "office") return outcome;
       // 看板路径：办公题多查一条，员工交付后卡片进入等验收，交付物里有工作区文件。单聊路径没有这张卡，标不适用。
@@ -2195,11 +2400,35 @@ try {
       } else pairStartedAt = Date.now();
     }
     if (work.pairKey && skipped.has(work.pairKey)) continue;
+    // 交付题也看作业截止时间：剩下的时间不够做一题（按每题上限）就不开新题，没跑的格在报告里显示「没有结果」。
+    if (
+      work.task &&
+      isDeliverableTask(work.task) &&
+      !pairFits(process.env, Date.now(), undefined, work.minutes, 1)
+    ) {
+      notes.push(`${work.key} 没做：离作业截止时间不够做完一题`);
+      continue;
+    }
     if (work.task === "webform") work.site = startWebformSite();
     materializeWork(work);
     let record: EvalRecord | undefined;
     try {
       record = await runWork(work);
+      // 交付题没过：新员工、新夹具重跑一次，结果取重跑那次（reruns 记 1）；重跑出错或来不及就保留第一次。
+      if (record && work.task && isDeliverableTask(work.task) && !work.pair)
+        record = await withRerun(record, {
+          enabled: rerunFailed,
+          fits: () =>
+            pairFits(process.env, Date.now(), undefined, work.minutes, 1),
+          rerun: async () => {
+            console.log(`   ${work.key} 没过，重跑一次`);
+            materializeWork(work);
+            const again = await runWork(work);
+            if (!again) throw new Error("重跑没有产出记录");
+            return again;
+          },
+          note: (line) => notes.push(line),
+        });
     } catch (thrown) {
       // 建不出新员工（名额不够）：记一笔，别拖垮整次评测。对照建不出来，这一对没有对照；
       // 第一次建不出来，这一对剩下的运行（第二次、对照）都不做，也不退回到别的员工。
@@ -2270,6 +2499,7 @@ try {
   );
   console.error(`\nFAIL: ${notes[notes.length - 1]}`);
 } finally {
+  await releaseGroupPeer();
   await stop(server);
   await stop(computer);
   await database.$client.end({ timeout: 5 }).catch(() => undefined);

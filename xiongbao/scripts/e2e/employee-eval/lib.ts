@@ -65,10 +65,28 @@ export const isRepeatTask = (
   task: string,
 ): task is (typeof REPEAT_TASKS)[number] =>
   (REPEAT_TASKS as readonly string[]).includes(task);
+/**
+ * 交付题组：七种交付物（演示文稿、文档、表格、网页、本机程序、图片、视频）各一道，看员工交出来的东西能不能直接用。
+ * 不在 `all` 也不在 `hard` 里，只能点名跑（`EVAL_TASKS=deliverables` 或题名）；夹具在 `fixtures/deliverables/<题名>/`。
+ */
+export const DELIVERABLES_SUITE = [
+  "deliv-pptx",
+  "deliv-docx",
+  "deliv-xlsx",
+  "deliv-web",
+  "deliv-app",
+  "deliv-image",
+  "deliv-video",
+] as const;
+export const isDeliverableTask = (
+  task: string,
+): task is (typeof DELIVERABLES_SUITE)[number] =>
+  (DELIVERABLES_SUITE as readonly string[]).includes(task);
 export type TaskName =
   | (typeof TASKS)[number]
   | (typeof HARD_SUITE)[number]
-  | (typeof REPEAT_TASKS)[number];
+  | (typeof REPEAT_TASKS)[number]
+  | (typeof DELIVERABLES_SUITE)[number];
 
 /** 改代码类的题：判分时要看「改完有没有验证」（`metrics.ts` 的 `editsData`）。 */
 export const EDITS_CODE_TASKS: readonly TaskName[] = [
@@ -84,6 +102,11 @@ export function sourceTask(task: TaskName): Exclude<TaskName, "repeat"> {
   return task === REPEAT_TASK ? "office" : task;
 }
 
+/** 夹具所在目录（相对 fixtures/）：交付题组放在 deliverables/ 下，其余按题名。 */
+export function fixtureDir(task: TaskName): string {
+  return isDeliverableTask(task) ? `deliverables/${task}` : sourceTask(task);
+}
+
 export const TASK_TITLES: Record<TaskName, string> = {
   research: "调研",
   docs: "写文档",
@@ -96,6 +119,13 @@ export const TASK_TITLES: Record<TaskName, string> = {
   webform: "网页表单填写",
   repeat: "重复任务（多步办公连做两次）",
   "repeat-pitfall": "重复任务（账单导入：第一次有坑，连做两次）",
+  "deliv-pptx": "交付：演示文稿",
+  "deliv-docx": "交付：Word 文档",
+  "deliv-xlsx": "交付：Excel 表格",
+  "deliv-web": "交付：静态网页",
+  "deliv-app": "交付：本机运行的程序",
+  "deliv-image": "交付：图片",
+  "deliv-video": "交付：视频",
 };
 
 /** 交给员工的题面里这道题叫什么：有坑的那道用一个平平的名字，不提「坑」「重复」。 */
@@ -121,7 +151,7 @@ export function result(task: string, checks: Check[]): CheckResult {
 
 /**
  * 从 `all`（五道对标题）、`hard`（加难题）、空串或逗号分隔的题名里挑出要跑的题，可以混写（`all,hard`）；
- * `repeat` 只能点名。`hard` 默认是 {@link HARD_TASKS}；评测脚本传 {@link HARD_SUITE}，让 `hard` 跑
+ * `repeat` 和交付题组（`deliverables`）只能点名。`hard` 默认是 {@link HARD_TASKS}；评测脚本传 {@link HARD_SUITE}，让 `hard` 跑
  * compare、refactor、terminal、webform。不认识的名字直接报错，免得悄悄少跑一题。
  */
 export function selectTasks(
@@ -130,15 +160,22 @@ export function selectTasks(
 ): TaskName[] {
   const text = (spec ?? "").trim();
   if (!text || text === "all") return [...TASKS];
-  const known: readonly TaskName[] = [...TASKS, ...HARD_SUITE, ...REPEAT_TASKS];
+  const known: readonly TaskName[] = [
+    ...TASKS,
+    ...HARD_SUITE,
+    ...REPEAT_TASKS,
+    ...DELIVERABLES_SUITE,
+  ];
   const picked = new Set<string>();
   for (const name of text.split(/[,\s]+/).filter(Boolean)) {
     if (name === "all") for (const task of TASKS) picked.add(task);
     else if (name === "hard") for (const task of hard) picked.add(task);
+    else if (name === "deliverables")
+      for (const task of DELIVERABLES_SUITE) picked.add(task);
     else if ((known as readonly string[]).includes(name)) picked.add(name);
     else
       throw new Error(
-        `不认识的题目「${name}」，可选：all、hard、${known.join("、")}`,
+        `不认识的题目「${name}」，可选：all、hard、deliverables、${known.join("、")}`,
       );
   }
   return known.filter((name) => picked.has(name));
@@ -196,10 +233,13 @@ export function fixtureFiles(
   task: TaskName,
   seed?: string,
 ): Map<string, Buffer> {
-  const root = join(FIXTURES_DIR, sourceTask(task));
+  const root = join(FIXTURES_DIR, fixtureDir(task));
   const files = new Map<string, Buffer>();
-  for (const path of listFiles(root))
+  for (const path of listFiles(root)) {
+    // 交付题的 pass/、fail/ 是判分自测用的样例，不能落进员工的目录。
+    if (isDeliverableTask(task) && /^(pass|fail)\//.test(path)) continue;
     files.set(landedName(path), readFileSync(join(root, path)));
+  }
   if (sourceTask(task) === "data") {
     const { csv } = salesFixture();
     files.set("sales.csv", Buffer.from(csv, "utf8"));

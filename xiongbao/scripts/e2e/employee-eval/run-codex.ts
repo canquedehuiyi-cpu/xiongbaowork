@@ -42,6 +42,7 @@ import {
   copyTree,
   EDITS_CODE_TASKS,
   HARD_SUITE,
+  isDeliverableTask,
   isRepeatTask,
   materialize,
   REPEAT_PITFALL_TASK,
@@ -248,7 +249,10 @@ if (import.meta.main) {
   }
   const config = verdict.config;
   delete process.env.MODEL_E2E_API_KEY;
-  const tasks = selectTasks(process.env.EVAL_TASKS, HARD_SUITE);
+  const selected = selectTasks(process.env.EVAL_TASKS, HARD_SUITE);
+  // 交付题只在熊宝侧跑（Codex 没有单聊 / 群聊路径和服务器侧判分）；作业条件已跳过，这里再滤一遍。
+  const tasks = selected.filter((task) => !isDeliverableTask(task));
+  const droppedDeliverables = selected.length - tasks.length;
   // 重复类的题连做几对、夹具的基础种子：和熊宝侧同一组输入，两边的每一对夹具一样。
   const pairChoice = repeatPairs(process.env);
   if (!pairChoice.ok) {
@@ -271,6 +275,8 @@ if (import.meta.main) {
   const baseUrl = mock ? `${mock.url}/v1` : config.baseUrl;
   const home = mkdtempSync(join(tmpdir(), "codex-home-"));
   const notes: string[] = [];
+  if (droppedDeliverables)
+    notes.push(`交付题只在熊宝侧跑，Codex 侧跳过了 ${droppedDeliverables} 道`);
   const startedAt = new Date().toISOString();
   const records: EvalRecord[] = [];
   let version = "unknown";

@@ -46,8 +46,9 @@ const workflow = parse(text) as Workflow;
  * 超时按作业给，其余规矩与上面两个作业相同。不在这张表里的作业（计量对账、WakerFlow）仍是 10 分钟。
  */
 const EVAL_CEILINGS: Record<string, number> = {
-  // 期九·六：paths 选两条路径时五道题跑两遍，上限 180 分钟（GitHub 托管机器单个作业最长 6 小时）。
-  "employee-eval-xiongbao": 180,
+  // 期九·六：paths 选两条路径时五道题跑两遍；交付题验收（七题 × 两条路径、失败重跑）把上限提到 360 分钟，
+  // 即 GitHub 托管机器单个作业的最长 6 小时（用户 2026-11-23 批准）。
+  "employee-eval-xiongbao": 360,
   "employee-eval-codex": 120,
   "employee-eval-report": 10,
   // 加了后台长跑两个场景（各 15 分钟上限）。
@@ -156,7 +157,7 @@ test("the Xiongbao evaluation runs each chosen execution path, one after the oth
   expect(inputs.paths).toMatchObject({
     type: "choice",
     default: "board",
-    options: ["board", "chat", "board,chat"],
+    options: ["board", "chat", "group", "board,chat", "chat,group"],
   });
   // The scenarios input names the background group.
   expect(inputs.scenarios).toMatchObject({ default: "all" });
@@ -196,7 +197,7 @@ test("the Xiongbao evaluation runs each chosen execution path, one after the oth
   ).toBe(true);
   // Two passes of five tasks, each task held to the same wall clock as before, fit the ceiling.
   expect(job["timeout-minutes"]).toBeGreaterThanOrEqual(120);
-  expect(job["timeout-minutes"]).toBeLessThanOrEqual(180);
+  expect(job["timeout-minutes"]).toBeLessThanOrEqual(360);
 });
 
 test("the capability smoke can reach the background scenarios and has the time for them", () => {

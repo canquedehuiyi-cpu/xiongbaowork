@@ -171,3 +171,76 @@ test("the smoke table names the path when a scenario ran over chat", () => {
   expect(two).toContain("## 能力冒烟（2/2）");
   expect(two).toContain("| 计划（单聊） | 单聊 |");
 });
+
+const DELIVERABLES = [
+  "deliv-pptx",
+  "deliv-docx",
+  "deliv-xlsx",
+  "deliv-web",
+  "deliv-app",
+  "deliv-image",
+  "deliv-video",
+];
+
+const deliverableSides = (
+  mutate: (path: "chat" | "group", task: string) => Partial<EvalRecord> | null,
+) =>
+  (["chat", "group"] as const).map((path) =>
+    side(
+      path,
+      DELIVERABLES.flatMap((task) => {
+        const over = mutate(path, task);
+        return over === null ? [] : [record(task, { reruns: 0, ...over })];
+      }),
+    ),
+  );
+
+test("all 14 deliverable cells passing, one after a rerun, is reached", () => {
+  const markdown = renderReport(
+    deliverableSides((path, task) =>
+      path === "group" && task === "deliv-web" ? { reruns: 1 } : {},
+    ),
+  );
+  expect(markdown).toContain("## 交付题验收（14/14）");
+  expect(markdown).toContain("| 题目 | 单聊 | 群聊 |");
+  expect(markdown).toContain("✅ 通过（重跑 1 次）");
+  expect(markdown).toContain("判定：达成");
+  expect(markdown).not.toContain("判定：未达成");
+  // Group results are their own path, not a board column.
+  expect(markdown).not.toContain("熊宝（看板）");
+  expect(markdown).not.toContain("## 五道题");
+});
+
+test("a missing cell makes the deliverables verdict not reached and names it", () => {
+  const markdown = renderReport(
+    deliverableSides((path, task) =>
+      path === "chat" && task === "deliv-video" ? null : {},
+    ),
+  );
+  expect(markdown).toContain("## 交付题验收（13/14）");
+  expect(markdown).toContain("判定：未达成");
+  expect(markdown).toContain("没有结果：deliv-video（单聊）");
+});
+
+test("a cell still failing after its rerun is a failure and shows reruns", () => {
+  const markdown = renderReport(
+    deliverableSides((path, task) =>
+      path === "group" && task === "deliv-app"
+        ? { passed: false, reruns: 1 }
+        : {},
+    ),
+  );
+  expect(markdown).toContain("## 交付题验收（13/14）");
+  expect(markdown).toContain("❌ 未过（重跑 1 次）");
+  expect(markdown).toContain("判定：未达成");
+  expect(markdown).toContain("**熊宝（群聊） · deliv-app**");
+});
+
+test("group results sit in their own column next to the board and chat ones", () => {
+  const board = side("board", [record("data")]);
+  const group = side("group", [record("data", { passed: false })]);
+  const markdown = renderReport([board, group]);
+  expect(markdown).toContain("熊宝（群聊） 0/1");
+  expect(markdown).toContain("| 题目 | 熊宝（看板） | 熊宝（群聊） | Codex |");
+  expect(markdown).toContain("**熊宝（群聊） · data**");
+});
