@@ -96,6 +96,8 @@ import {
   HumanHasControlError,
   type SeatAddress,
   StaleSnapshotError,
+  WorkspaceNotFoundError,
+  WorkspaceRefusedError,
 } from "./client";
 // --- end desktop control ---
 import {
@@ -528,6 +530,17 @@ export interface ComputerGateway {
     input: ListFilesInput,
     signal?: AbortSignal,
   ): Promise<ListFilesResult>;
+  /**
+   * Whether something is at a workspace path, for the evidence gate: its kind and size, `"absent"` when
+   * there is nothing there (or the path leaves the workspace), and `null` on a paired personal computer,
+   * whose files this server cannot check. Not governed: it reads no content and is the server's own
+   * question, not an act of the employee. A computer that cannot be reached throws.
+   */
+  statFile(
+    seat: ComputerSeat,
+    input: { path: string },
+    signal?: AbortSignal,
+  ): Promise<{ kind: "file" | "folder"; bytes: number } | "absent" | null>;
   runCommand(
     seat: ComputerSeat,
     actor: ActionActor,
@@ -3146,6 +3159,28 @@ export function createComputerGateway(
         { filePath: input.path ?? ".", ...(signal ? { signal } : {}) },
         () => post<ListFilesResult>(seat, "/files/list", input, signal),
       );
+    },
+
+    async statFile(
+      seat: ComputerSeat,
+      input: { path: string },
+      signal?: AbortSignal,
+    ) {
+      if (options.resolveDevice) return null;
+      try {
+        const found = await post<{
+          kind: "file" | "folder";
+          bytes: number;
+        }>(seat, "/files/stat", { path: input.path }, signal);
+        return { kind: found.kind, bytes: found.bytes };
+      } catch (error) {
+        if (
+          error instanceof WorkspaceNotFoundError ||
+          error instanceof WorkspaceRefusedError
+        )
+          return "absent";
+        throw error;
+      }
     },
 
     /**

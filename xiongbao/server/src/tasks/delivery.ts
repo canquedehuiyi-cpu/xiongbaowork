@@ -1610,6 +1610,17 @@ export function mergeDeliverables(
   if (notes.length) merged.notes = notes;
   if (checks.length) merged.checks = checks;
   if (workspaceFiles.length) merged.workspaceFiles = workspaceFiles;
+  // A file this hand-in checked is no longer unverified, whatever an earlier hand-in said of it.
+  const checkedNow = new Set(
+    (added.workspaceFiles ?? []).filter(
+      (path) => !(added.unverifiedFiles ?? []).includes(path),
+    ),
+  );
+  const unverifiedFiles = unique(
+    both("unverifiedFiles"),
+    (path) => path,
+  ).filter((path) => !checkedNow.has(path) && workspaceFiles.includes(path));
+  if (unverifiedFiles.length) merged.unverifiedFiles = unverifiedFiles;
   return merged;
 }
 

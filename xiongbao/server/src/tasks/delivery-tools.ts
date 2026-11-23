@@ -425,6 +425,7 @@ export function deliveryTools(options: {
           items: value.items,
           checks: value.checks,
           criteria: card.criteria,
+          agentId,
         });
         if (!verdict.ok) {
           const bouncedLine = randomUUID();

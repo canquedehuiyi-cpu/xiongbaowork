@@ -3088,7 +3088,15 @@ await startupLifecycle.run(async (startup) => {
     createDelivery(database),
     async (tenantId, taskId) => handInNotice?.(tenantId, taskId),
   );
-  const evidenceGate = createEvidenceGate(database);
+  const evidenceGate = createEvidenceGate(database, {
+    fileProbe: computerGateway
+      ? async ({ tenantId, agentId, path }) =>
+          computerGateway.statFile(
+            await computerGateway.seatFor(agentId, tenantId),
+            { path },
+          )
+      : undefined,
+  });
   /*
    * External employees walk the same three steps, the server walking them for them (spec §9,
    * `agents/acp/delivery.ts`): their 「预计 16:00」 is read on the person's saved zone.

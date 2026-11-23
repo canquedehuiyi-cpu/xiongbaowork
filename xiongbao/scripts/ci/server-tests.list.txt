@@ -428,6 +428,7 @@ tests/env-name.test.ts
 tests/evidence-gate-required.test.ts
 tests/external-agents-schema.integration.test.ts
 tests/fastpath-gate.test.ts
+tests/file-evidence.test.ts
 tests/form-check-guidance.test.ts
 tests/generated-media-group.integration.test.ts
 tests/generated-media.integration.test.ts

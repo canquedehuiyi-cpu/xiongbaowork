@@ -55,6 +55,7 @@ import {
 } from "../src/tasks/delivery-tools";
 import { listTaskEvents } from "../src/tasks/events";
 import { createEvidenceGate } from "../src/tasks/evidence-gate";
+import type { FileProbe } from "../src/tasks/file-evidence";
 import { noteAttachedFastPath } from "../src/tasks/fastpath-gate";
 import {
   createTaskProjector,
@@ -84,7 +85,7 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const quota = createQuotaService(database);
 const projector = createTaskProjector(database, undefined, quota);
 const delivery = createDelivery(database);
-const gate = createEvidenceGate(database);
+let gate = createEvidenceGate(database);
 const suite = randomUUID().slice(0, 8);
 const tenants: string[] = [];
 const ZONE = "Asia/Shanghai";
@@ -2166,6 +2167,75 @@ describe("deliver_task and a workspace file", () => {
     expect(
       (await cardRow(card.tenantId, card.cardId))?.deliverableRef,
     ).toBeNull();
+  });
+});
+
+/*
+ * With a probe, the gate asks the computer whether the named file is really there: nothing there bounces
+ * the hand-in and leaves the card as it was; a file that is there goes through.
+ */
+describe("deliver_task and the file really being there", () => {
+  const withProbe = async (probe: FileProbe, run: () => Promise<void>) => {
+    const before = gate;
+    gate = createEvidenceGate(database, { fileProbe: probe });
+    try {
+      await run();
+    } finally {
+      gate = before;
+    }
+  };
+  const item = {
+    items: [
+      { kind: "workspace_file", ref: "reports/对比.xlsx", title: "对比表" },
+    ],
+    checks: ["打开确认过"],
+  };
+
+  test("the probe says absent → bounced, missing names the path, the card is unchanged", async () => {
+    const card = await acceptedCard("workspace-absent");
+    await withProbe(
+      async () => "absent",
+      async () => {
+        const { result } = await deliverOnThread(card, item);
+        const answer = parsed(result);
+        expect(answer.bounced).toBe(true);
+        expect(answer.missing).toContain("reports/对比.xlsx");
+        expect(String(answer.reason)).toContain("不存在或是空的");
+      },
+    );
+    const row = await cardRow(card.tenantId, card.cardId);
+    expect(row?.deliverableRef).toBeNull();
+    expect(row?.status).not.toBe("awaiting_review");
+  });
+
+  test("the probe finds it → delivered; a seat that cannot be checked is marked unverified", async () => {
+    const seen: string[] = [];
+    const found = await acceptedCard("workspace-found");
+    await withProbe(
+      async ({ agentId, path }) => {
+        seen.push(`${agentId}:${path}`);
+        return { kind: "file", bytes: 12 };
+      },
+      async () => {
+        expect(
+          parsed((await deliverOnThread(found, item)).result).delivered,
+        ).toBe(true);
+      },
+    );
+    expect(seen).toEqual([`${found.agentId}:reports/对比.xlsx`]);
+
+    const device = await acceptedCard("workspace-device");
+    await withProbe(
+      async () => null,
+      async () => {
+        expect(
+          parsed((await deliverOnThread(device, item)).result).delivered,
+        ).toBe(true);
+      },
+    );
+    expect(
+      (await cardRow(device.tenantId, device.cardId))?.deliverableRef,
+    ).toMatchObject({ unverifiedFiles: ["reports/对比.xlsx"] });
   });
 });
 

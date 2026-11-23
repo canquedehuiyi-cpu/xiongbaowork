@@ -163,6 +163,8 @@ export type DeliverableRef = {
    * that may be stored here is a path inside that workspace.
    */
   workspaceFiles?: string[];
+  /** The `workspaceFiles` the server could not check for being there (a paired personal computer): the card says 未核实. */
+  unverifiedFiles?: string[];
 };
 
 /**
