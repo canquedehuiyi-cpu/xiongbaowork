@@ -250,6 +250,9 @@ test("the Setup page holds the coworker's assembly zones; its routines are on th
     .getByRole("heading", { level: 2, name: "模型" })
     .closest("section");
   expect(modelZone?.querySelector('[role="combobox"]')).toBeTruthy();
+  // Thinking is on for every coworker: no switch, and no row about it, in the model zone.
+  expect(modelZone?.textContent).not.toContain("思考模式");
+  expect(view.queryByRole("switch", { name: "思考模式" })).toBeNull();
   expect(
     view.container.querySelector<HTMLTextAreaElement>("#persona-tone")
       ?.readOnly,

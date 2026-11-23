@@ -12,7 +12,6 @@ import {
   useProfileSave,
 } from "@/components/agents/agent-dialog";
 import { HardModelItem } from "@/components/agents/hard-model-item";
-import { ThinkingItem } from "@/components/agents/thinking-item";
 import {
   PANEL_FACE,
   ProfileAlert,
@@ -102,11 +101,6 @@ export function AssembleSections({ profile }: { profile: AgentProfile }) {
               modelRef={profile.modelRef}
               onSave={(binding) => save(binding)}
               platformModelRef={profile.platformModelRef ?? null}
-            />
-            {/* 期三：用不用先想再答，和模型放在一起。远端员工的开关拨不动，行上说为什么。 */}
-            <ThinkingItem
-              agent={profile}
-              onSave={(thinking) => save({ thinking })}
             />
             {/* 期七：派子代理遇到难任务时用的模型。只有在这台部署上跑的员工有。 */}
             {profile.builtIn ? (

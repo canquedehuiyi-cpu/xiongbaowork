@@ -23,8 +23,6 @@ export type AgentInput = {
    * it to the deployment's model.
    */
   modelRef?: string | null;
-  /** 思考模式（期三）：不带就是不改，`true` 打开，`false` 关掉。 */
-  thinking?: boolean;
   /** Written whole: a persona is read as one character, so a part cleared should stop being said. */
   persona?: Persona;
   /**

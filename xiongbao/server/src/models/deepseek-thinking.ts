@@ -33,14 +33,6 @@ const DEEPSEEK_HOST = "api.deepseek.com";
 export const DEEPSEEK_PROVIDER = "deepseek";
 
 /**
- * 员工关掉思考时，运行配置里带的 providerOptions。`@ai-sdk/openai-compatible` 把提供方名下它不认识的键原样
- * 写进请求体，于是请求带上 `thinking: { type: "disabled" }`。别的提供方读不到这个键，不受影响。
- */
-export const THINKING_OFF_PROVIDER_OPTIONS = {
-  [DEEPSEEK_PROVIDER]: { thinking: { type: "disabled" } },
-};
-
-/**
  * 这台部署是否关闭员工对话的思考模式。默认开着；`DEEPSEEK_THINKING=disabled` 关掉。
  */
 export function deepSeekThinkingOff(
@@ -92,7 +84,7 @@ function withoutReasoning(message: ChatMessage): ChatMessage {
 /**
  * 发往 DeepSeek 的请求体，按思考模式的规则整理（`createOpenAICompatible` 的 `transformRequestBody`）。
  *
- * `thinking` 总是写明：员工关掉时运行配置已经带了 `disabled`（{@link THINKING_OFF_PROVIDER_OPTIONS}），部署
+ * `thinking` 总是写明：请求自己写明 `disabled`（辅助请求）或部署
  * 关掉时这里写 `disabled`，否则写 `enabled`。关着思考时历史里的 `reasoning_content` 全部去掉；开着时，调过
  * 工具的 assistant 消息必有 `reasoning_content`（没有就是空字符串），最后一条用户消息之前、没调工具的去掉。
  */
