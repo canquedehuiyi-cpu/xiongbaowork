@@ -139,21 +139,48 @@ function cookieHeader(value: string, maxAgeSeconds: number, secure: boolean) {
   return `${CONTENT_COOKIE}=${value}; Max-Age=${maxAgeSeconds}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
 }
 
+/** How many path levels (the root included) a clearing goes up and down; a deeper path is cut there. */
+const CLEAR_PATH_LEVELS = 8;
+
+/** `/`, then each leading part of the path: `/a/b/c` gives `/`, `/a`, `/a/b`, `/a/b/c`. */
+function pathPrefixes(pathname: string): string[] {
+  const found = ["/"];
+  let walked = "";
+  for (const part of pathname.split("/").filter((one) => one !== "")) {
+    walked = `${walked}/${part}`;
+    // A path with `;` or a control character cannot be written into a `Set-Cookie`.
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what is refused
+    if (/[;\u0000-\u0020\u007f]/.test(walked)) break;
+    found.push(walked);
+    if (found.length >= CLEAR_PATH_LEVELS) break;
+  }
+  return found;
+}
+
 /**
  * What clears the content cookie however it was written: host-only, with `Domain` the request's own
  * host, and in domain mode with `Domain` the content domain too (a sibling subdomain's script may have
- * written the cookie for the whole domain, which the browser then sends here).
+ * written the cookie for the whole domain, which the browser then sends here). Each spelling is sent
+ * for every `Path` that would still match the request, since a cookie written for `/api` is cleared
+ * only by a line that names `/api`.
  */
 function clearingEverywhere(
   request: Request,
   domain: string | undefined,
   secure: boolean,
 ): string[] {
-  const base = cookieHeader("", 0, secure);
   const host = hostOf(request);
-  const lines = [base];
-  if (host !== null) lines.push(`${base}; Domain=${host}`);
-  if (domain !== undefined) lines.push(`${base}; Domain=${domain}`);
+  const domains: (string | null)[] = [null];
+  if (host !== null) domains.push(host);
+  if (domain !== undefined) domains.push(domain);
+  const lines: string[] = [];
+  for (const path of pathPrefixes(new URL(request.url).pathname)) {
+    for (const scope of domains) {
+      lines.push(
+        `${CONTENT_COOKIE}=; Max-Age=0; Path=${path}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}${scope === null ? "" : `; Domain=${scope}`}`,
+      );
+    }
+  }
   return lines;
 }
 
@@ -421,6 +448,11 @@ export function createContentServer(deps: ContentServerDeps): {
   ): Promise<Response | undefined> {
     const url = new URL(request.url);
     const { pathname } = url;
+
+    // No worker script of this origin is ever answered, whichever path it is asked for.
+    if (request.headers.has("service-worker")) {
+      return plain(403, request.method === "HEAD" ? null : "Forbidden");
+    }
 
     if (contentCookies(request).length > 1) {
       const refusal = notFound(request.method);

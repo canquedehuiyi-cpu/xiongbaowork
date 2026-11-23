@@ -1156,12 +1156,10 @@ describe("more than one content cookie", () => {
     expect(res.status).toBe(404);
     expect(seen).toEqual([]);
     const cleared = res.headers.getSetCookie();
-    expect(cleared).toHaveLength(2);
     expect(cleared.every((line) => /Max-Age=0/.test(line))).toBe(true);
-    expect(cleared.filter((line) => /Domain=c\.test/i.test(line))).toHaveLength(
-      1,
-    );
-    expect(cleared.filter((line) => !/Domain=/i.test(line))).toHaveLength(1);
+    const root = cleared.filter((line) => line.includes("Path=/;"));
+    expect(root.filter((line) => /Domain=c\.test/i.test(line))).toHaveLength(1);
+    expect(root.filter((line) => !/Domain=/i.test(line))).toHaveLength(1);
   });
 
   test("the same holds with the valid cookie first, and for a link to open", async () => {
@@ -1175,8 +1173,38 @@ describe("more than one content cookie", () => {
       headers: { cookie: `${good}; ${CONTENT_COOKIE}=planted` },
     });
     expect(open.status).toBe(404);
-    expect(open.headers.getSetCookie()).toHaveLength(2);
+    expect(open.headers.getSetCookie().length).toBeGreaterThanOrEqual(2);
     expect(seen).toEqual([]);
+  });
+
+  test("a cookie written for a deeper path is cleared at every prefix of the request's path", async () => {
+    const { server } = setup();
+    const res = await call(server, "http://c.test:3774/api/x", {
+      headers: {
+        cookie: `${CONTENT_COOKIE}=planted; ${cookieFor(appGrant())}`,
+      },
+    });
+    expect(res.status).toBe(404);
+    const lines = res.headers.getSetCookie();
+    for (const path of ["/", "/api", "/api/x"]) {
+      const spelled = lines.filter((line) => line.includes(`Path=${path};`));
+      // Once host-only and once with Domain=<host>.
+      expect(spelled).toHaveLength(2);
+    }
+  });
+
+  test("the prefixes of a very deep path stop at eight levels", async () => {
+    const { server } = setup();
+    const res = await call(server, "http://c.test:3774/a/b/c/d/e/f/g/h/i/j/k", {
+      headers: {
+        cookie: `${CONTENT_COOKIE}=planted; ${cookieFor(appGrant())}`,
+      },
+    });
+    const paths = new Set(
+      res.headers.getSetCookie().map((line) => /Path=([^;]+)/.exec(line)?.[1]),
+    );
+    expect(paths.size).toBe(8);
+    expect(paths.has("/")).toBe(true);
   });
 
   test("in domain mode the parent domain's spelling is cleared too", async () => {
@@ -1189,6 +1217,7 @@ describe("more than one content cookie", () => {
     expect(res.status).toBe(404);
     const domains = res.headers
       .getSetCookie()
+      .filter((line) => line.includes("Path=/;"))
       .map((line) => /Domain=([^;]+)/i.exec(line)?.[1] ?? null);
     expect(domains.sort()).toEqual(
       [null, `${code}.apps.example.com`, "apps.example.com"].sort(),
@@ -1205,6 +1234,23 @@ describe("more than one content cookie", () => {
 });
 
 describe("service workers", () => {
+  test("a service worker request is 403 on every path: a folder's, the open link's and a program's own /u/ route", async () => {
+    const { server, seen } = setup();
+    const dir = await call(server, "http://c/u/anything/sw.js", {
+      headers: { cookie: cookieFor(dirGrant()), "service-worker": "script" },
+    });
+    expect(dir.status).toBe(403);
+    const open = await call(server, "http://c/__open/anything", {
+      headers: { "service-worker": "script" },
+    });
+    expect(open.status).toBe(403);
+    const own = await call(server, "http://c/u/x/sw.js", {
+      headers: { cookie: cookieFor(appGrant()), "service-worker": "script" },
+    });
+    expect(own.status).toBe(403);
+    expect(seen).toEqual([]);
+  });
+
   test("a service worker script request is 403 before it is forwarded", async () => {
     const { server, seen } = setup();
     const res = await call(server, "http://c/sw.js", {

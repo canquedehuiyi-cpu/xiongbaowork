@@ -111,7 +111,8 @@ OPENBOT_SELF_HOST_BANNER=false
 4. 链接的形态是 `<协议>://<你打开应用时用的主机名>:3773/__open/<令牌>`：主机名取自你发起「打开」的那个请求，
    协议取该请求自己的协议。**服务器不读 `X-Forwarded-Proto` 等转发头**，所以应用放在 HTTPS 反代后面时，服务器看到的是
    HTTP，链接会写成 `http://…:3773`。点链接在新标签页里打开不受影响；但 3773 若要给 HTTPS 页面里嵌着用，浏览器会拦混合内容，
-   这种情况请用方式二，或在 3773 前面再放一个带证书的反代。
+   这种情况请用方式二，或在 3773 前面再放一个带证书的反代。若在 3773 前另加 TLS 反代，要用
+   `proxy_set_header Host $http_host;`（保留端口，而不是 `$host`），否则写请求与 WebSocket 的来源检查会因主机对不上而被误拒。
 5. **主反代必须保留 `Host`**（Nginx 写 `proxy_set_header Host $host;`）。链接的主机名取自「打开」请求的 `Host`，
    不保留的话主机名会变成 `127.0.0.1` 之类，链接在别人的浏览器里打不开。
 6. **应用若发 HSTS**（`Strict-Transport-Security`，尤其带 `includeSubDomains`，或同一主机名），浏览器会把
