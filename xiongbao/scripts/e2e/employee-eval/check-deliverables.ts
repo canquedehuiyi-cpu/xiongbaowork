@@ -246,17 +246,33 @@ export function checkDelivXlsx(dir: string) {
   return result("deliv-xlsx", checks);
 }
 
-/** HTML 里 src/href 引用的本地路径：去掉查询串和锚点，跳过网址、data:、锚点、mailto: 等。 */
+/**
+ * HTML 里 src/href 引用的本地路径：先去掉注释和 script/style 的内容（内联 JS 里的 `img.src = url` 不是引用），
+ * 再只在标签里取属性（属性名前要是空白，`data-src`、`xlink:href` 不算）；跳过网址、data:、mailto:、javascript:、
+ * 锚点，去掉查询串和片段，百分号编码先解开（解不开用原样）。
+ */
 export function localRefs(html: string): string[] {
+  const stripped = html
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, (whole) =>
+      whole.slice(0, whole.indexOf(">") + 1),
+    );
   const refs = new Set<string>();
-  for (const match of html.matchAll(
-    /\b(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi,
-  )) {
-    const raw = (match[1] ?? match[2] ?? match[3] ?? "").trim();
-    if (!raw || raw.startsWith("#")) continue;
-    if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(raw)) continue;
-    const path = raw.split(/[?#]/)[0];
-    if (path) refs.add(path);
+  for (const tag of stripped.matchAll(/<[a-z][^>]*>/gi)) {
+    for (const match of tag[0].matchAll(
+      /\s(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi,
+    )) {
+      const raw = (match[1] ?? match[2] ?? match[3] ?? "").trim();
+      if (!raw || raw.startsWith("#")) continue;
+      if (/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(raw)) continue;
+      const path = raw.split(/[?#]/)[0];
+      if (!path) continue;
+      try {
+        refs.add(decodeURIComponent(path));
+      } catch {
+        refs.add(path);
+      }
+    }
   }
   return [...refs];
 }
@@ -274,14 +290,15 @@ export function checkDelivWeb(dir: string) {
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, "")
     .replace(/<[^>]*>/g, "")
     .trim();
-  checks.push(
-    check("页面有可见文字", visible.length > 0, html === null ? "" : ""),
-  );
+  checks.push(check("页面有可见文字", visible.length > 0));
   const root = resolve(dir, dirname(WEB_INDEX));
   const missing = localRefs(html ?? "").filter((ref) => {
     // 以 / 开头的路径在静态站里指站点根，也按 site/ 内找；跳出 site/ 的不算数。
     const target = resolve(root, ref.replace(/^\/+/, ""));
-    return !(target.startsWith(root + sep) && existsSync(target));
+    return !(
+      (target === root || target.startsWith(root + sep)) &&
+      existsSync(target)
+    );
   });
   checks.push(
     check(

@@ -235,8 +235,11 @@ export function fixtureFiles(
 ): Map<string, Buffer> {
   const root = join(FIXTURES_DIR, fixtureDir(task));
   const files = new Map<string, Buffer>();
-  for (const path of listFiles(root))
+  for (const path of listFiles(root)) {
+    // 交付题的 pass/、fail/ 是判分自测用的样例，不能落进员工的目录。
+    if (isDeliverableTask(task) && /^(pass|fail)\//.test(path)) continue;
     files.set(landedName(path), readFileSync(join(root, path)));
+  }
   if (sourceTask(task) === "data") {
     const { csv } = salesFixture();
     files.set("sales.csv", Buffer.from(csv, "utf8"));

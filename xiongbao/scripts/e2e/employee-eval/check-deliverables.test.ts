@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import {
@@ -16,6 +16,7 @@ import { CHECKERS } from "./checkers";
 import {
   DELIVERABLES_SUITE,
   FIXTURES_DIR,
+  listFiles,
   materialize,
   TASK_TITLES,
   taskPrompt,
@@ -296,6 +297,30 @@ describe("web", () => {
     expect(checkDelivWeb(outside).passed).toBe(false);
   });
 
+  test("references in inline scripts, comments, data-src and xlink:href are not resources", () => {
+    const dir = emptyDir();
+    write(
+      dir,
+      "site/index.html",
+      `<h1>菜单</h1><!-- <img src="gone.png"> --><script>const img = new Image(); img.src = url; el.innerHTML = '<img src="nope.png">';</script><style>.a{background:url(x.png)}</style><img data-src="lazy.png"><svg><use xlink:href="icons.svg#a"></use></svg>`,
+    );
+    expect(failed(checkDelivWeb(dir))).toEqual([]);
+    expect(localRefs(`<script src="app.js"></script>`)).toEqual(["app.js"]);
+  });
+
+  test("a link to the site root passes; percent-encoded names find their files", () => {
+    const dir = emptyDir();
+    write(
+      dir,
+      "site/index.html",
+      `<h1>菜单</h1><a href="/">首页</a><a href="./">本页</a><a href=".">点</a><img src="my%20pic.png"><img src="%E5%9B%BE%E7%89%87.png?v=2#x"><img src="100%.png">`,
+    );
+    write(dir, "site/my pic.png", "x");
+    write(dir, "site/图片.png", "x");
+    write(dir, "site/100%.png", "x");
+    expect(failed(checkDelivWeb(dir))).toEqual([]);
+  });
+
   test("localRefs skips addresses, anchors and data URIs", () => {
     expect(
       localRefs(
@@ -409,12 +434,69 @@ describe("suite wiring", () => {
     }
   });
 
-  test("each fixture stays under 50KB", () => {
+  test("every file in a fixture directory, pass/ and fail/ samples included, stays under 50KB", () => {
     for (const task of DELIVERABLES_SUITE) {
-      const size = readFileSync(
-        join(FIXTURES_DIR, "deliverables", task, "TASK.md"),
-      ).length;
-      expect(size).toBeLessThan(50 * 1024);
+      const root = join(FIXTURES_DIR, "deliverables", task);
+      for (const path of listFiles(root))
+        expect(statSync(join(root, path)).size).toBeLessThan(50 * 1024);
     }
+  });
+
+  test("the pass/ and fail/ samples are not handed to the employee", () => {
+    for (const task of DELIVERABLES_SUITE)
+      expect(materialize(task, emptyDir())).toEqual(["TASK.md"]);
+  });
+});
+
+// 入库的最小样例：pass/ 必须全过，fail/ 必须恰好败在各题要查的那一项上。
+const sample = (task: string, kind: "pass" | "fail") =>
+  join(FIXTURES_DIR, "deliverables", task, kind);
+
+describe("committed samples", () => {
+  pptxTest("pptx", () => {
+    expect(failed(checkDelivPptx(sample("deliv-pptx", "pass")))).toEqual([]);
+    expect(failed(checkDelivPptx(sample("deliv-pptx", "fail")))).toEqual([
+      "页数不少于 5 页",
+    ]);
+  });
+  docxTest("docx", () => {
+    expect(failed(checkDelivDocx(sample("deliv-docx", "pass")))).toEqual([]);
+    expect(failed(checkDelivDocx(sample("deliv-docx", "fail")))).toHaveLength(
+      1,
+    );
+  });
+  xlsxTest("xlsx", () => {
+    expect(failed(checkDelivXlsx(sample("deliv-xlsx", "pass")))).toEqual([]);
+    expect(failed(checkDelivXlsx(sample("deliv-xlsx", "fail")))).toEqual([
+      "公式缓存值等于金标",
+    ]);
+  });
+  test("web", () => {
+    expect(failed(checkDelivWeb(sample("deliv-web", "pass")))).toEqual([]);
+    expect(failed(checkDelivWeb(sample("deliv-web", "fail")))).toEqual([
+      "引用的相对资源都在",
+    ]);
+  });
+  test("app", () => {
+    const items = [{ kind: "app", port: 4321 }];
+    expect(failed(checkDelivApp(sample("deliv-app", "pass"), items))).toEqual(
+      [],
+    );
+    expect(failed(checkDelivApp(sample("deliv-app", "fail"), items))).toEqual([
+      "服务脚本在",
+    ]);
+  });
+  test("image", () => {
+    expect(failed(checkDelivImage(sample("deliv-image", "pass")))).toEqual([]);
+    expect(failed(checkDelivImage(sample("deliv-image", "fail")))).toEqual([
+      "文件头是 PNG 魔数",
+      "宽高都大于 0",
+    ]);
+  });
+  videoTest("video", () => {
+    expect(failed(checkDelivVideo(sample("deliv-video", "pass")))).toEqual([]);
+    expect(failed(checkDelivVideo(sample("deliv-video", "fail")))).toEqual([
+      "时长 1–30 秒",
+    ]);
   });
 });
