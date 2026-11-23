@@ -504,6 +504,14 @@ export type DeploymentConfig = {
    */
   chatServerComputerTools: boolean;
   /**
+   * Where the pages a Bot's employee made are served from, apart from the app and the API.
+   * `port` is XIONGBAO_CONTENT_PORT (1024-65535, never the API's or the app's port) and `domain` is
+   * XIONGBAO_CONTENT_DOMAIN (a bare host name; each site gets a subdomain of it). Neither set means
+   * no separate content server. When both are set the mode is the domain's: `port` is kept only for
+   * the log, and the domain decides how addresses are built.
+   */
+  content: { port?: number; domain?: string };
+  /**
    * How long, in milliseconds, one "your turn ended while you were away" notice stands in for the
    * turns of the same conversation that end right after it (`threads/turn-notice.ts`). A minute unless
    * XIONGBAO_TURN_NOTICE_WINDOW_SECONDS says otherwise; `0` says every turn.
@@ -1802,6 +1810,51 @@ function chatServerComputerToolsEnabled(environment: Environment): boolean {
   throw new Error(`${name} must be "on" or "off"`);
 }
 
+/**
+ * The content origin settings. Refused rather than coerced, like the switches around it: a port that
+ * quietly collided with the API's, or a domain with a scheme on it, would fail far from where it was
+ * written.
+ */
+function contentConfig(environment: Environment): {
+  port?: number;
+  domain?: string;
+} {
+  const portName = "XIONGBAO_CONTENT_PORT";
+  const domainName = "XIONGBAO_CONTENT_DOMAIN";
+  const content: { port?: number; domain?: string } = {};
+  const rawPort = optional(environment, portName);
+  if (rawPort !== undefined) {
+    const port = /^\d+$/.test(rawPort) ? Number(rawPort) : Number.NaN;
+    if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+      throw new Error(
+        `${portName} must be a whole number between 1024 and 65535`,
+      );
+    }
+    const appPort = listenPort(environment.APP_PORT, 3010);
+    const taken = [serverPort(environment), appPort.ok ? appPort.port : 3010];
+    if (taken.includes(port)) {
+      throw new Error(
+        `${portName} (${port}) is already the port of the API or the app: pick another`,
+      );
+    }
+    content.port = port;
+  }
+  const domain = optional(environment, domainName);
+  if (domain !== undefined) {
+    if (
+      !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(
+        domain,
+      )
+    ) {
+      throw new Error(
+        `${domainName} must be a bare host name (lowercase letters, digits, "-" and "."), without a scheme, port, path or wildcard`,
+      );
+    }
+    content.domain = domain;
+  }
+  return content;
+}
+
 /** The opposite rule from generated interfaces: off unless explicitly "true". */
 function selfHostBannerEnabled(environment: Environment): boolean {
   return optional(environment, "OPENBOT_SELF_HOST_BANNER") === "true";
@@ -1994,6 +2047,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     generativeUi: generativeUiEnabled(environment),
     selfHostBanner: selfHostBannerEnabled(environment),
     chatServerComputerTools: chatServerComputerToolsEnabled(environment),
+    content: contentConfig(environment),
     turnNoticeWindowMs: turnNoticeWindowMs(environment),
     ...(optional(environment, "APP_DIST_DIR")
       ? { appDistDir: optional(environment, "APP_DIST_DIR") as string }
