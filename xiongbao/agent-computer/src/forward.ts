@@ -1,3 +1,4 @@
+import { type IncomingMessage, request } from "node:http";
 import type { ServerWebSocket, WebSocketHandler } from "bun";
 import type { ForwardVerdict } from "./listeners";
 import { HEADER, LEGACY_HEADER } from "./wire-headers";
@@ -78,26 +79,59 @@ function upstreamHeaders(from: Headers): Headers {
   return out;
 }
 
-/** The body, read as it arrives and refused the moment it passes the limit; null for too large. */
+export type ForwardLimits = {
+  /** Reading the whole request body, from the first byte asked for to the last. */
+  bodyTimeoutMs: number;
+  /** From sending the request to the program's response headers. */
+  headerTimeoutMs: number;
+  /** Between two pieces of the response body once its headers are in. */
+  idleTimeoutMs: number;
+};
+
+export const FORWARD_BODY_TIMEOUT_MS = 60_000;
+export const FORWARD_IDLE_TIMEOUT_MS = 120_000;
+const DEFAULT_LIMITS: ForwardLimits = {
+  bodyTimeoutMs: FORWARD_BODY_TIMEOUT_MS,
+  headerTimeoutMs: FORWARD_HEADER_TIMEOUT_MS,
+  idleTimeoutMs: FORWARD_IDLE_TIMEOUT_MS,
+};
+
+/**
+ * The body, read as it arrives: refused the moment it passes the size limit, and given up on when it
+ * has not all arrived in time (a client that sends a byte at a time would otherwise hold the request).
+ */
 async function readLimited(
   request: Request,
-): Promise<Uint8Array<ArrayBuffer> | null> {
+  timeoutMs: number,
+): Promise<Uint8Array<ArrayBuffer> | "too-large" | "too-slow"> {
   const declared = Number(request.headers.get("content-length"));
   if (Number.isFinite(declared) && declared > FORWARD_MAX_REQUEST_BYTES)
-    return null;
+    return "too-large";
   if (!request.body) return new Uint8Array(0);
   const reader = request.body.getReader();
   const chunks: Uint8Array[] = [];
   let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > FORWARD_MAX_REQUEST_BYTES) {
-      await reader.cancel().catch(() => undefined);
-      return null;
+  let late = false;
+  const timer = setTimeout(() => {
+    late = true;
+    reader.cancel().catch(() => undefined);
+  }, timeoutMs);
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (late) return "too-slow";
+      if (done) break;
+      total += value.byteLength;
+      if (total > FORWARD_MAX_REQUEST_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return "too-large";
+      }
+      chunks.push(value);
     }
-    chunks.push(value);
+  } catch {
+    return late ? "too-slow" : "too-large";
+  } finally {
+    clearTimeout(timer);
   }
   const bytes = new Uint8Array(total);
   let at = 0;
@@ -108,33 +142,121 @@ async function readLimited(
   return bytes;
 }
 
-/** The program's body, passed on as it arrives and cut off after the limit. */
-function truncated(
-  body: ReadableStream<Uint8Array>,
+/**
+ * The program's body as a stream: passed on as it arrives, cut off after the size limit, and ended
+ * when nothing has come for `idleMs`.
+ */
+function bodyStream(
+  incoming: IncomingMessage,
+  idleMs: number,
+  onDone: () => void,
 ): ReadableStream<Uint8Array> {
-  const reader = body.getReader();
   let sent = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const stop = () => {
+    if (timer) clearTimeout(timer);
+    incoming.destroy();
+  };
+  incoming.once("close", onDone);
   return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      const { done, value } = await reader.read();
-      if (done) {
-        controller.close();
-        return;
-      }
-      const room = FORWARD_MAX_RESPONSE_BYTES - sent;
-      if (value.byteLength >= room) {
-        if (room > 0) controller.enqueue(value.subarray(0, room));
-        sent = FORWARD_MAX_RESPONSE_BYTES;
-        controller.close();
-        await reader.cancel().catch(() => undefined);
-        return;
-      }
-      sent += value.byteLength;
-      controller.enqueue(value);
+    start(controller) {
+      const arm = () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          controller.error(new Error("The program stopped sending."));
+          incoming.destroy();
+        }, idleMs);
+      };
+      arm();
+      incoming.on("data", (chunk: Buffer) => {
+        arm();
+        const room = FORWARD_MAX_RESPONSE_BYTES - sent;
+        if (chunk.byteLength >= room) {
+          if (room > 0)
+            controller.enqueue(new Uint8Array(chunk.subarray(0, room)));
+          sent = FORWARD_MAX_RESPONSE_BYTES;
+          if (timer) clearTimeout(timer);
+          controller.close();
+          incoming.destroy();
+          return;
+        }
+        sent += chunk.byteLength;
+        controller.enqueue(new Uint8Array(chunk));
+        // The consumer is slower than the program: stop reading until it asks again.
+        if ((controller.desiredSize ?? 0) <= 0) incoming.pause();
+      });
+      incoming.on("end", () => {
+        if (timer) clearTimeout(timer);
+        try {
+          controller.close();
+        } catch {}
+      });
+      incoming.on("error", (error) => {
+        if (timer) clearTimeout(timer);
+        try {
+          controller.error(error);
+        } catch {}
+      });
     },
-    cancel(reason) {
-      return reader.cancel(reason);
+    pull() {
+      incoming.resume();
     },
+    cancel: stop,
+  });
+}
+
+/**
+ * One request to the program, made with node:http. Not `fetch`: Bun's fetch honours HTTP_PROXY even for
+ * 127.0.0.1, which would send an employee's request (and what the program answers) to the deployment's
+ * egress proxy. `node:http` with `agent: false` reads no proxy variable.
+ */
+function requestProgram(input: {
+  port: number;
+  path: string;
+  method: string;
+  headers: Headers;
+  body: Uint8Array<ArrayBuffer> | undefined;
+  signal: AbortSignal;
+  headerTimeoutMs: number;
+}): Promise<IncomingMessage> {
+  return new Promise((resolve, reject) => {
+    const headers: Record<string, string> = {};
+    input.headers.forEach((value, name) => {
+      headers[name] = value;
+    });
+    const out = request(
+      {
+        host: "127.0.0.1",
+        port: input.port,
+        path: input.path,
+        method: input.method,
+        headers,
+        agent: false,
+      },
+      (incoming) => {
+        clearTimeout(timer);
+        resolve(incoming);
+      },
+    );
+    const fail = (error: Error) => {
+      clearTimeout(timer);
+      out.destroy();
+      reject(error);
+    };
+    const timer = setTimeout(() => {
+      const error = new Error("No response headers in time.");
+      error.name = "HeaderTimeout";
+      fail(error);
+    }, input.headerTimeoutMs);
+    out.on("error", fail);
+    if (input.signal.aborted) {
+      fail(new Error("Aborted."));
+      return;
+    }
+    input.signal.addEventListener("abort", () => fail(new Error("Aborted.")), {
+      once: true,
+    });
+    out.end(input.body && input.body.byteLength > 0 ? input.body : undefined);
   });
 }
 
@@ -146,96 +268,109 @@ export async function forwardHttp(input: {
   verdict: ForwardVerdict;
   /** Asked again once the program has answered; anything but "ok" drops the answer. */
   recheck?: () => ForwardVerdict;
+  limits?: Partial<ForwardLimits>;
 }): Promise<Response> {
-  const { request, port, path, verdict } = input;
+  const { request: incomingRequest, port, path, verdict } = input;
+  const limits = { ...DEFAULT_LIMITS, ...input.limits };
   if (verdict !== "ok") return json(REFUSED, 403);
   if (!validForwardPath(path))
     return json({ error: "That path is not allowed." }, 400);
 
   let body: Uint8Array<ArrayBuffer> | undefined;
-  if (request.method !== "GET" && request.method !== "HEAD") {
-    const read = await readLimited(request);
-    if (read === null)
+  if (incomingRequest.method !== "GET" && incomingRequest.method !== "HEAD") {
+    const read = await readLimited(incomingRequest, limits.bodyTimeoutMs);
+    if (read === "too-large")
       return json({ error: "The request body is too large." }, 413);
+    if (read === "too-slow")
+      return json({ error: "The request body arrived too slowly." }, 408);
     body = read;
   }
 
   const controller = new AbortController();
-  let timedOut = false;
-  const timer = setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, FORWARD_HEADER_TIMEOUT_MS);
   const onGone = () => controller.abort();
-  request.signal.addEventListener("abort", onGone, { once: true });
+  incomingRequest.signal.addEventListener("abort", onGone, { once: true });
+  const detach = () =>
+    incomingRequest.signal.removeEventListener("abort", onGone);
 
-  let upstream: Response;
+  let upstream: IncomingMessage;
   try {
-    upstream = await fetch(`http://127.0.0.1:${port}${path}`, {
-      method: request.method,
-      headers: upstreamHeaders(request.headers),
-      ...(body && body.byteLength > 0 ? { body: new Blob([body]) } : {}),
-      redirect: "manual",
+    upstream = await requestProgram({
+      port,
+      path,
+      method: incomingRequest.method,
+      headers: upstreamHeaders(incomingRequest.headers),
+      body,
       signal: controller.signal,
+      headerTimeoutMs: limits.headerTimeoutMs,
     });
-  } catch {
-    clearTimeout(timer);
-    request.signal.removeEventListener("abort", onGone);
-    return timedOut
+  } catch (error) {
+    detach();
+    return (error as Error).name === "HeaderTimeout"
       ? json({ error: "The program did not answer in time." }, 504)
       : json({ error: "The program could not be reached." }, 502);
   }
-  clearTimeout(timer);
+  detach();
 
   if (input.recheck && input.recheck() !== "ok") {
-    controller.abort();
-    request.signal.removeEventListener("abort", onGone);
+    upstream.destroy();
     return json(REFUSED, 403);
   }
+  // A client that goes away takes the program's response with it; the listener goes when the response is over.
+  const dropResponse = () => upstream.destroy();
+  incomingRequest.signal.addEventListener("abort", dropResponse, {
+    once: true,
+  });
+  const release = () =>
+    incomingRequest.signal.removeEventListener("abort", dropResponse);
 
   const headers = new Headers();
   const named = new Set(
-    (upstream.headers.get("connection") ?? "")
+    String(upstream.headers.connection ?? "")
       .split(",")
       .map((token) => token.trim().toLowerCase())
       .filter(Boolean),
   );
-  const decoded = upstream.headers.has("content-encoding");
-  upstream.headers.forEach((value, name) => {
+  for (let at = 0; at + 1 < upstream.rawHeaders.length; at += 2) {
+    const name = upstream.rawHeaders[at] as string;
+    const value = upstream.rawHeaders[at + 1] as string;
     const lower = name.toLowerCase();
-    if (isHopByHop(lower) || named.has(lower)) return;
-    // The body arrives decoded, and may be cut short: the original length and encoding no longer hold.
-    if (lower === "content-encoding") return;
-    if (lower === "content-length") {
-      if (decoded || Number(value) > FORWARD_MAX_RESPONSE_BYTES) return;
-    }
+    if (isHopByHop(lower) || named.has(lower)) continue;
+    // A body cut at the limit is shorter than the length the program announced.
+    if (
+      lower === "content-length" &&
+      Number(value) > FORWARD_MAX_RESPONSE_BYTES
+    )
+      continue;
     headers.append(name, value);
-  });
-  const nullBody =
-    upstream.body === null ||
-    upstream.status === 204 ||
-    upstream.status === 304 ||
-    request.method === "HEAD";
+  }
+  const status = upstream.statusCode ?? 502;
+  const bodiless =
+    status === 204 ||
+    status === 205 ||
+    status === 304 ||
+    incomingRequest.method === "HEAD";
+  if (bodiless) {
+    upstream.destroy();
+    release();
+  }
   return new Response(
-    nullBody ? null : truncated(upstream.body as ReadableStream<Uint8Array>),
+    bodiless ? null : bodyStream(upstream, limits.idleTimeoutMs, release),
     {
-      status: upstream.status,
-      statusText: upstream.statusText,
+      status,
+      statusText: upstream.statusMessage ?? "",
       headers,
     },
   );
 }
 
+/** What one forwarded socket carries between the upgrade and the sockets' handlers. */
 export type ForwardSocketData = {
   forward?: {
-    port: number;
-    path: string;
-    recheck?: () => ForwardVerdict;
-    protocols: string[];
-    upstream?: WebSocket;
-    /** Messages that arrived before the program's socket was open. */
-    queue: (string | Buffer)[];
-    queuedBytes: number;
+    upstream: WebSocket;
+    /** Messages from the program that arrived before the client's side was open. */
+    pending: (string | Uint8Array)[];
+    /** The program's side went away before the client's side was open. */
+    upstreamClosed?: { code: number; reason: string };
     closed: boolean;
   };
 };
@@ -252,80 +387,165 @@ function sizeOf(raw: string | Buffer | ArrayBuffer | Uint8Array): number {
   return typeof raw === "string" ? Buffer.byteLength(raw) : raw.byteLength;
 }
 
+/** A close code that may be sent on the wire; others (1005, 1006, 1015 ...) are only ever reported. */
+function sendableCode(code: number): boolean {
+  return (
+    (code >= 1000 && code <= 1003) ||
+    (code >= 1007 && code <= 1011) ||
+    (code >= 3000 && code <= 4999)
+  );
+}
+
+/**
+ * The program's side of a forwarded socket, opened before the client's is accepted: a program that
+ * refuses is answered with an error rather than an upgrade that closes at once, and the subprotocol the
+ * program chose can be the one the client is told. Null when it could not be opened.
+ *
+ * The WebSocket is Bun's, whose client reads no proxy variable for a loopback address (forward-http.test.ts
+ * runs the computer with every proxy variable pointing at a recording server and asserts nothing reaches it).
+ */
+export function connectProgramSocket(input: {
+  port: number;
+  path: string;
+  protocols: string[];
+  recheck?: () => ForwardVerdict;
+  timeoutMs?: number;
+}): Promise<{
+  forward: NonNullable<ForwardSocketData["forward"]>;
+  protocol: string;
+} | null> {
+  return new Promise((resolve) => {
+    let upstream: WebSocket;
+    try {
+      upstream = new WebSocket(
+        `ws://127.0.0.1:${input.port}${input.path}`,
+        input.protocols,
+      );
+    } catch {
+      resolve(null);
+      return;
+    }
+    upstream.binaryType = "arraybuffer";
+    const forward: NonNullable<ForwardSocketData["forward"]> = {
+      upstream,
+      pending: [],
+      closed: false,
+    };
+    let settled = false;
+    const settle = (
+      value: { forward: typeof forward; protocol: string } | null,
+    ) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (value === null) {
+        try {
+          upstream.close();
+        } catch {}
+      }
+      resolve(value);
+    };
+    const timer = setTimeout(
+      () => settle(null),
+      input.timeoutMs ?? FORWARD_HEADER_TIMEOUT_MS,
+    );
+    upstream.onopen = () => {
+      if (input.recheck && input.recheck() !== "ok") {
+        settle(null);
+        return;
+      }
+      settle({ forward, protocol: upstream.protocol });
+    };
+    upstream.onmessage = (event) => {
+      const data = event.data as string | ArrayBuffer;
+      forward.pending.push(
+        typeof data === "string" ? data : new Uint8Array(data),
+      );
+    };
+    upstream.onclose = (event) => {
+      forward.upstreamClosed = { code: event.code, reason: event.reason };
+      settle(null);
+    };
+    upstream.onerror = () => settle(null);
+  });
+}
+
 /**
  * The forwarded sockets, and how they share the one WebSocket handler Bun allows: `around` answers a
  * socket that carries `forward` data and leaves every other socket to the handler it wraps.
+ *
+ * Both directions are bounded: a message over 16 MB, or more than 16 MB waiting to be written to either
+ * side, closes both sockets with 1009. Either side closing closes the other, with its code and reason
+ * where those may be sent.
  */
 export function createForwardSockets<T extends ForwardSocketData>() {
   function end(ws: ServerWebSocket<T>, code?: number, reason?: string) {
     const forward = ws.data.forward;
     if (!forward || forward.closed) return;
     forward.closed = true;
+    const usable = code !== undefined && sendableCode(code);
     try {
-      forward.upstream?.close();
+      if (usable) forward.upstream.close(code, reason);
+      else forward.upstream.close();
     } catch {}
     try {
-      if (code === 1009) ws.close(1009, reason);
+      if (usable) ws.close(code, reason);
       else ws.close();
     } catch {}
+  }
+
+  function tooMuchWaiting(ws: ServerWebSocket<T>, upstream: WebSocket) {
+    return (
+      ws.getBufferedAmount() > FORWARD_MAX_MESSAGE_BYTES ||
+      upstream.bufferedAmount > FORWARD_MAX_MESSAGE_BYTES
+    );
+  }
+
+  function toClient(ws: ServerWebSocket<T>, data: string | Uint8Array) {
+    const forward = ws.data.forward;
+    if (!forward || forward.closed) return;
+    if (sizeOf(data) > FORWARD_MAX_MESSAGE_BYTES) {
+      end(ws, 1009, "Message too big");
+      return;
+    }
+    // 0 is a message dropped because the socket has gone; -1 is one queued behind a slow reader.
+    if (ws.send(data) === 0) {
+      end(ws);
+      return;
+    }
+    if (tooMuchWaiting(ws, forward.upstream)) end(ws, 1009, "Too much waiting");
   }
 
   function open(ws: ServerWebSocket<T>) {
     const forward = ws.data.forward;
     if (!forward) return;
-    let upstream: WebSocket;
-    try {
-      upstream = new WebSocket(
-        `ws://127.0.0.1:${forward.port}${forward.path}`,
-        forward.protocols,
-      );
-    } catch {
-      end(ws);
+    const { upstream } = forward;
+    upstream.onmessage = (event) => {
+      const data = event.data as string | ArrayBuffer;
+      toClient(ws, typeof data === "string" ? data : new Uint8Array(data));
+    };
+    upstream.onclose = (event) => end(ws, event.code, event.reason);
+    upstream.onerror = () => end(ws);
+    if (forward.upstreamClosed) {
+      end(ws, forward.upstreamClosed.code, forward.upstreamClosed.reason);
       return;
     }
-    upstream.binaryType = "arraybuffer";
-    forward.upstream = upstream;
-    upstream.onopen = () => {
-      if (forward.closed) return;
-      if (forward.recheck && forward.recheck() !== "ok") {
-        end(ws);
-        return;
-      }
-      for (const queued of forward.queue.splice(0)) upstream.send(queued);
-      forward.queuedBytes = 0;
-    };
-    upstream.onmessage = (event) => {
-      if (forward.closed) return;
-      const data = event.data as string | ArrayBuffer;
-      if (sizeOf(data) > FORWARD_MAX_MESSAGE_BYTES) {
-        end(ws, 1009, "Message too big");
-        return;
-      }
-      ws.send(typeof data === "string" ? data : new Uint8Array(data));
-    };
-    upstream.onclose = () => end(ws);
-    upstream.onerror = () => end(ws);
+    for (const data of forward.pending.splice(0)) toClient(ws, data);
   }
 
   function message(ws: ServerWebSocket<T>, raw: string | Buffer) {
     const forward = ws.data.forward;
     if (!forward || forward.closed) return;
-    const size = sizeOf(raw);
-    if (size > FORWARD_MAX_MESSAGE_BYTES) {
+    if (sizeOf(raw) > FORWARD_MAX_MESSAGE_BYTES) {
       end(ws, 1009, "Message too big");
       return;
     }
-    const upstream = forward.upstream;
-    if (upstream && upstream.readyState === WebSocket.OPEN) {
-      upstream.send(raw);
+    if (forward.upstream.readyState !== WebSocket.OPEN) {
+      end(ws);
       return;
     }
-    forward.queuedBytes += size;
-    if (forward.queuedBytes > FORWARD_MAX_MESSAGE_BYTES) {
-      end(ws, 1009, "Message too big");
-      return;
-    }
-    forward.queue.push(raw);
+    forward.upstream.send(raw);
+    if (tooMuchWaiting(ws, forward.upstream)) end(ws, 1009, "Too much waiting");
   }
 
   return {
@@ -341,7 +561,7 @@ export function createForwardSockets<T extends ForwardSocketData>() {
           return other.message(ws, raw);
         },
         close(ws, code, reason) {
-          if (ws.data.forward) return end(ws);
+          if (ws.data.forward) return end(ws, code, reason);
           return other.close?.(ws, code, reason);
         },
         drain(ws) {

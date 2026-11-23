@@ -3,6 +3,8 @@ import {
   checkForwardPort,
   FORWARD_PORT_MAX,
   FORWARD_PORT_MIN,
+  forwardOwnerUid,
+  parseDenyPorts,
   parseForwardPort,
   parseProcNetTcp,
 } from "../src/listeners";
@@ -202,5 +204,57 @@ describe("employeeUid", () => {
   test("null when there is no such user", () => {
     expect(employeeUid("bot-b", { passwd })).toBeNull();
     expect(employeeUid("bot-a", { passwd: "" })).toBeNull();
+  });
+});
+
+describe("forwardOwnerUid", () => {
+  test("an employee with its own user is held to that user", () => {
+    expect(
+      forwardOwnerUid({ ownUser: true, employeeUid: 20001, processUid: 1001 }),
+    ).toBe(20001);
+  });
+  test("an own-user employee with no user found gets no answer, never the process's uid", () => {
+    expect(
+      forwardOwnerUid({ ownUser: true, employeeUid: null, processUid: 1001 }),
+    ).toBeUndefined();
+  });
+  test("the default employee and shared computers use the process's own uid, not null", () => {
+    expect(
+      forwardOwnerUid({ ownUser: false, employeeUid: null, processUid: 1001 }),
+    ).toBe(1001);
+  });
+  test("with the process's uid, listeners of other users (the platform's API, database, other employees) are refused", () => {
+    const uid =
+      forwardOwnerUid({
+        ownUser: false,
+        employeeUid: null,
+        processUid: 1000,
+      }) ?? -1;
+    // 8080 is uid 1000's; 3000 is uid 1001's (stands for a service of the platform run as another user).
+    expect(
+      checkForwardPort({ port: 8080, uid, tables: [sample], selfPorts: [] }),
+    ).toBe("ok");
+    expect(
+      checkForwardPort({ port: 3000, uid, tables: [sample], selfPorts: [] }),
+    ).toBe("not-yours");
+  });
+});
+
+describe("parseDenyPorts", () => {
+  test("keeps ports, drops anything else", () => {
+    expect(parseDenyPorts("3001, 5432,abc,0,70000,+80,3773")).toEqual([
+      3001, 5432, 3773,
+    ]);
+    expect(parseDenyPorts(undefined)).toEqual([]);
+  });
+  test("a denied port is refused as one of the computer's own", () => {
+    expect(
+      checkForwardPort({
+        port: 8080,
+        uid: 1000,
+        tables: [sample],
+        selfPorts: parseDenyPorts("8080"),
+      }),
+    ).toBe("self");
   });
 });

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { connect, createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { reservePort } from "../../tests/support/reserved-port";
@@ -31,6 +32,11 @@ let computerPort = 0;
 let base = "";
 let child: ReturnType<typeof Bun.spawn> | undefined;
 let program: ReturnType<typeof Bun.serve> | undefined;
+/** Stands in for the deployment's egress proxy: records every connection made to it. */
+let proxy: Server | undefined;
+let proxyConnections = 0;
+let floodClosed: Promise<void> = Promise.resolve();
+let markFloodClosed: () => void = () => undefined;
 let programPort = 0;
 const seenByProgram: { headers: Record<string, string> }[] = [];
 
@@ -47,6 +53,17 @@ beforeAll(async () => {
         server.upgrade(request, { data: { closeAtOnce: true } })
       )
         return undefined;
+      if (
+        url.pathname === "/ws-close-code" &&
+        server.upgrade(request, { data: { closeCode: true } })
+      )
+        return undefined;
+      if (
+        url.pathname === "/ws-flood" &&
+        server.upgrade(request, { data: { flood: true } })
+      )
+        return undefined;
+      if (url.pathname === "/205") return new Response(null, { status: 205 });
       if (url.pathname === "/redirect")
         return new Response(null, {
           status: 302,
@@ -87,8 +104,21 @@ beforeAll(async () => {
     websocket: {
       maxPayloadLength: 64 * 1024 * 1024,
       open(ws) {
-        if ((ws.data as { closeAtOnce?: boolean } | undefined)?.closeAtOnce)
-          setTimeout(() => ws.close(), 50);
+        const data = ws.data as {
+          closeAtOnce?: boolean;
+          closeCode?: boolean;
+          flood?: boolean;
+        };
+        if (data?.closeAtOnce) setTimeout(() => ws.close(), 50);
+        if (data?.closeCode) setTimeout(() => ws.close(4001, "bye"), 50);
+        if (data?.flood) {
+          const chunk = new Uint8Array(1024 * 1024);
+          for (let n = 0; n < 60; n += 1) ws.send(chunk);
+        }
+      },
+      close(ws) {
+        if ((ws.data as { flood?: boolean } | undefined)?.flood)
+          markFloodClosed();
       },
       message(ws, message) {
         ws.send(message);
@@ -96,6 +126,28 @@ beforeAll(async () => {
     },
   });
   programPort = program.port as number;
+
+  floodClosed = new Promise<void>((resolve) => {
+    markFloodClosed = resolve;
+  });
+  proxy = createServer((socket) => {
+    proxyConnections += 1;
+    socket.on("error", () => undefined);
+    socket.destroy();
+  });
+  await new Promise<void>((resolve) => proxy?.listen(0, "127.0.0.1", resolve));
+  const proxyUrl = `http://127.0.0.1:${(proxy.address() as { port: number }).port}`;
+  const environment: Record<string, string | undefined> = { ...process.env };
+  for (const name of ["NO_PROXY", "no_proxy"]) delete environment[name];
+  for (const name of [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+  ])
+    environment[name] = proxyUrl;
 
   root = await mkdtemp(join(tmpdir(), "forward-http-"));
   const workspace = join(root, "workspace");
@@ -105,7 +157,7 @@ beforeAll(async () => {
   child = Bun.spawn([process.execPath, "src/index.ts"], {
     cwd: join(import.meta.dir, ".."),
     env: {
-      ...process.env,
+      ...environment,
       COMPUTER_TOKEN: TOKEN,
       COMPUTER_BROWSER_BACKEND: "managed",
       COMPUTER_BROWSER_MODE: "headless",
@@ -132,6 +184,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (!asked) return;
   program?.stop(true);
+  proxy?.close();
   child?.kill();
   if (child) await child.exited;
   await rm(root, { recursive: true, force: true });
@@ -255,6 +308,12 @@ describe.skipIf(!asked)("/forward/<port>/<path>", () => {
     );
   });
 
+  test("a 205 answer carries no body", async () => {
+    const response = await forward(`/forward/${programPort}/205`);
+    expect(response.status).toBe(205);
+    expect(await response.text()).toBe("");
+  });
+
   test("a response over the limit is cut at the limit", async () => {
     const response = await forward(
       `/forward/${programPort}/big?n=${FORWARD_MAX_RESPONSE_BYTES + 5 * 1024 * 1024}`,
@@ -314,6 +373,55 @@ describe.skipIf(!asked)("/forward-ws/<port>/<path>", () => {
     await expect(open(`/forward-ws/0x1F90/ws`)).rejects.toThrow();
   });
 
+  test("the program's close code and reason reach the client", async () => {
+    const socket = await open(`/forward-ws/${programPort}/ws-close-code`);
+    const closed = new Promise<{ code: number; reason: string }>((resolve) => {
+      socket.onclose = (event) =>
+        resolve({ code: event.code, reason: event.reason });
+    });
+    expect(await closed).toEqual({ code: 4001, reason: "bye" });
+  });
+
+  test("the client's subprotocol is offered to the program and the answer returned", async () => {
+    const socket = await new Promise<WebSocket>((resolve, reject) => {
+      const opened = new WebSocket(
+        `ws://127.0.0.1:${computerPort}/forward-ws/${programPort}/ws`,
+        { headers: AUTH, protocols: ["chat"] } as never,
+      );
+      opened.onopen = () => resolve(opened);
+      opened.onerror = () => reject(new Error("not opened"));
+    });
+    expect(socket.protocol).toBe("chat");
+    socket.close();
+  });
+
+  test("a client that does not read is cut off when more than 16 MB waits for it, and the program's side closes too", async () => {
+    const wire = connect(computerPort, "127.0.0.1");
+    wire.on("error", () => undefined);
+    await new Promise<void>((resolve) => wire.once("connect", resolve));
+    wire.pause();
+    wire.write(
+      [
+        `GET /forward-ws/${programPort}/ws-flood HTTP/1.1`,
+        `Host: 127.0.0.1:${computerPort}`,
+        "Upgrade: websocket",
+        "Connection: Upgrade",
+        "Sec-WebSocket-Version: 13",
+        "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==",
+        `x-xiongbao-bot-id: ${BOT}`,
+        `x-xiongbao-computer-token: ${TOKEN}`,
+        "",
+        "",
+      ].join("\r\n"),
+    );
+    const closed = await Promise.race([
+      floodClosed.then(() => true),
+      Bun.sleep(15_000).then(() => false),
+    ]);
+    wire.destroy();
+    expect(closed).toBe(true);
+  }, 30_000);
+
   test("a message over 16 MB closes the socket", async () => {
     const socket = await open(`/forward-ws/${programPort}/ws`);
     const closed = new Promise<number>((resolve) => {
@@ -324,6 +432,27 @@ describe.skipIf(!asked)("/forward-ws/<port>/<path>", () => {
     expect(code).not.toBe(-1);
   }, 20_000);
 });
+
+describe.skipIf(!asked)(
+  "the employee's program is reached without the egress proxy",
+  () => {
+    test("no forwarded request or socket reached the proxy the computer was given", async () => {
+      await forward(`/forward/${programPort}/echo`);
+      const socket = await new Promise<WebSocket>((resolve, reject) => {
+        const opened = new WebSocket(
+          `ws://127.0.0.1:${computerPort}/forward-ws/${programPort}/ws`,
+          {
+            headers: AUTH,
+          } as never,
+        );
+        opened.onopen = () => resolve(opened);
+        opened.onerror = () => reject(new Error("not opened"));
+      });
+      socket.close();
+      expect(proxyConnections).toBe(0);
+    });
+  },
+);
 
 describe("forwardHttp without a computer", () => {
   const request = () => new Request("http://computer/forward/1/x");
@@ -387,6 +516,66 @@ describe("forwardHttp without a computer", () => {
       expect(await response.text()).not.toContain("secret");
     } finally {
       server.stop(true);
+    }
+  });
+
+  test("a request body that does not finish in time is 408", async () => {
+    const slow = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1]));
+      },
+    });
+    const response = await forwardHttp({
+      request: new Request("http://computer/forward/1/x", {
+        method: "POST",
+        body: slow,
+        duplex: "half",
+      } as RequestInit),
+      port: 3000,
+      path: "/",
+      verdict: "ok",
+      limits: { bodyTimeoutMs: 100 },
+    });
+    expect(response.status).toBe(408);
+  });
+
+  test("a program that never answers is 504", async () => {
+    const quiet = createServer(() => undefined);
+    await new Promise<void>((resolve) => quiet.listen(0, "127.0.0.1", resolve));
+    try {
+      const response = await forwardHttp({
+        request: request(),
+        port: (quiet.address() as { port: number }).port,
+        path: "/",
+        verdict: "ok",
+        limits: { headerTimeoutMs: 100 },
+      });
+      expect(response.status).toBe(504);
+    } finally {
+      quiet.close();
+    }
+  });
+
+  test("a response body that stops coming is ended with an error after the idle time", async () => {
+    const stalled = createServer((socket) => {
+      socket.on("error", () => undefined);
+      socket.write("HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nabc");
+    });
+    await new Promise<void>((resolve) =>
+      stalled.listen(0, "127.0.0.1", resolve),
+    );
+    try {
+      const response = await forwardHttp({
+        request: request(),
+        port: (stalled.address() as { port: number }).port,
+        path: "/",
+        verdict: "ok",
+        limits: { idleTimeoutMs: 150 },
+      });
+      expect(response.status).toBe(200);
+      await expect(response.text()).rejects.toThrow();
+    } finally {
+      stalled.close();
     }
   });
 

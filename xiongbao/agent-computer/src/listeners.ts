@@ -150,3 +150,30 @@ export function readListenTables(): string[] {
     }
   });
 }
+
+/**
+ * Whose listeners an employee may be sent to: an employee with its own Linux user, that user's uid;
+ * every other employee runs its commands as this process's own user, so that user's uid. Null only where
+ * the platform has no uids, and undefined (refuse) for an employee that should have a user and has none.
+ *
+ * Never null for "anybody's": the default employee shares this process's user, and a null there would
+ * let it reach other employees' programs and every service of the container.
+ */
+export function forwardOwnerUid(input: {
+  ownUser: boolean;
+  employeeUid: number | null;
+  processUid: number | null;
+}): number | null | undefined {
+  if (input.ownUser) return input.employeeUid ?? undefined;
+  return input.processUid;
+}
+
+/** Extra ports to refuse (`COMPUTER_FORWARD_DENY_PORTS`, comma-separated); anything that is not a port is ignored. */
+export function parseDenyPorts(text: string | undefined): number[] {
+  return (text ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => /^[0-9]{1,5}$/.test(part))
+    .map(Number)
+    .filter((port) => port >= 1 && port <= FORWARD_PORT_MAX);
+}

@@ -45,6 +45,7 @@ import {
 } from "./egress";
 import { enterText, FieldValueError } from "./enter-text";
 import {
+  connectProgramSocket,
   createForwardSockets,
   type ForwardSocketData,
   forwardHttp,
@@ -56,6 +57,8 @@ import { createInputQueue, type InputQueue } from "./input-queue";
 import {
   checkForwardPort,
   type ForwardVerdict,
+  forwardOwnerUid,
+  parseDenyPorts,
   parseForwardPort,
   readListenTables,
 } from "./listeners";
@@ -423,6 +426,9 @@ const SELF_PORTS: readonly number[] = [
   egressFilter.port,
   egressFilter.browserPort,
   ...loopbackRelays.map((relay) => relay.port),
+  // Services of the platform that run as this process's own user, where a deployment has any. The
+  // image has none: its API and database run as other users, which the owner check already refuses.
+  ...parseDenyPorts(process.env.COMPUTER_FORWARD_DENY_PORTS),
 ];
 const profiles = createProfiles(
   process.env.PROFILES_DIR?.trim() || "/profiles",
@@ -545,13 +551,18 @@ function forwardTargetOf(
 }
 
 /**
- * May this seat be sent to this port? An employee with its own Linux user only to listeners that user
- * owns; with no such user found the answer is no, never the shared computer's looser check.
+ * May this seat be sent to this port? Only to listeners owned by the Linux user its commands run as: its
+ * own user, or this process's user for the default employee and for computers the employees share. With no
+ * such own user found the answer is no.
  */
 function forwardVerdict(seat: string, port: number): ForwardVerdict {
   const own = runsAsOwnUser(seat);
-  const uid = own ? employeeUid(seat) : null;
-  if (own && uid === null) return "not-yours";
+  const uid = forwardOwnerUid({
+    ownUser: own,
+    employeeUid: own ? employeeUid(seat) : null,
+    processUid: process.getuid?.() ?? null,
+  });
+  if (uid === undefined) return "not-yours";
   return checkForwardPort({
     port,
     uid,
@@ -1452,28 +1463,31 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
       const verdictNow = (): ForwardVerdict => forwardVerdict(botId, port);
       const path = forwardTarget.rest + url.search;
       if (forwardTarget.socket) {
-        const verdict = verdictNow();
-        if (verdict !== "ok")
+        if (verdictNow() !== "ok")
           return json({ error: "That port cannot be opened." }, 403);
         if (!validForwardPath(path))
           return json({ error: "That path is not allowed." }, 400);
+        if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
+          return json({ error: "Expected a WebSocket upgrade." }, 400);
+        const program = await connectProgramSocket({
+          port,
+          path,
+          protocols: offeredProtocols(request.headers),
+          recheck: verdictNow,
+        });
+        if (!program)
+          return json({ error: "The program could not be reached." }, 502);
+        const { protocol, forward } = program;
         if (
           server.upgrade(request, {
-            data: {
-              botId,
-              forward: {
-                port,
-                path,
-                recheck: verdictNow,
-                protocols: offeredProtocols(request.headers),
-                queue: [],
-                queuedBytes: 0,
-                closed: false,
-              },
-            },
+            data: { botId, forward },
+            ...(protocol
+              ? { headers: { "sec-websocket-protocol": protocol } }
+              : {}),
           })
         )
           return undefined as unknown as Response;
+        forward.upstream.close();
         return json({ error: "Expected a WebSocket upgrade." }, 400);
       }
       server.timeout(request, 0);
