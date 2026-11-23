@@ -162,6 +162,23 @@ export function createComputerRoutes(
   if (botBrowser)
     routes.use("/:botId/browser/narration", stampNarrationArrival);
 
+  /*
+   * Whatever the preview and text routes answer that is not a file (a refusal, a 415, an error, the
+   * `unavailable` note) is still private and still not to be sniffed into something else. Registered
+   * ahead of the guard, so its own 404 is covered too; a file response sets both itself.
+   */
+  for (const route of ["preview", "text"]) {
+    routes.use(`/:botId/files/${route}`, async (context, next) => {
+      await next();
+      if (!context.res.headers.has("Cache-Control")) {
+        context.res.headers.set("Cache-Control", "private, no-store");
+      }
+      if (!context.res.headers.has("X-Content-Type-Options")) {
+        context.res.headers.set("X-Content-Type-Options", "nosniff");
+      }
+    });
+  }
+
   /**
    * Every route under a Bot id, in one place.
    *
@@ -904,7 +921,11 @@ export function createComputerRoutes(
     if (!path?.trim()) {
       return context.json({ error: "A file path is required." }, 400);
     }
-    return { seat: await seatOf(context), wanted: path.trim() };
+    try {
+      return { seat: await seatOf(context), wanted: path.trim() };
+    } catch (error) {
+      return actionFailure(context, error);
+    }
   };
 
   routes.get("/:botId/files/download", async (context) => {
@@ -1010,7 +1031,7 @@ export function createComputerRoutes(
         {
           kind,
           text,
-          truncated: truncated || file.bytes > TEXT_PREVIEW_BYTES,
+          truncated,
           bytes: file.bytes,
         },
         200,

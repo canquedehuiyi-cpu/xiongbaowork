@@ -77,10 +77,11 @@ export function inlineContentDisposition(name: string): string {
  * The directives every inline response carries. `sandbox` without `allow-same-origin` gives the
  * document an opaque origin: a script in an employee's HTML file runs, but cannot read this
  * application's cookies or storage or call its API as the signed-in person. Everything else is
- * closed (no network from the page, no forms, no top navigation, no popups).
+ * closed (no network from the page, no forms, no top navigation, no popups), and only this
+ * application may frame the response, which the preview pane does.
  */
 export const INLINE_CONTENT_SECURITY_POLICY =
-  "sandbox allow-scripts; default-src 'none'; img-src data: blob: 'self'; media-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'";
+  "sandbox allow-scripts; default-src 'none'; img-src data: blob: 'self'; media-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; frame-ancestors 'self'";
 
 const INLINE_CONTENT_TYPE = /^[a-z]+\/[a-z0-9.+-]+(; charset=[a-z0-9-]+)?$/;
 

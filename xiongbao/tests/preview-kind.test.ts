@@ -102,6 +102,7 @@ describe("inlineHeaders", () => {
     expect(csp.startsWith("sandbox allow-scripts")).toBe(true);
     expect(csp).not.toContain("allow-same-origin");
     expect(csp).toContain("default-src 'none'");
+    expect(csp).toContain("frame-ancestors 'self'");
     expect(h["Content-Type"]).toBe("text/html; charset=utf-8");
     expect(h["Content-Length"]).toBe("3");
     expect(h["X-Content-Type-Options"]).toBe("nosniff");

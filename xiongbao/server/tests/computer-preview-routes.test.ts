@@ -9,6 +9,7 @@ import { personSeat } from "../src/computer/computer-key";
 import type { ComputerGateway } from "../src/computer/gateway";
 import {
   ActionRefusedError,
+  ComputerUnavailableError,
   WorkspaceNotFoundError,
 } from "../src/computer/gateway";
 import type { PolicyStore } from "../src/computer/policy-store";
@@ -52,6 +53,8 @@ type Calls = {
 
 function gatewayWith(options: {
   files?: Record<string, Uint8Array>;
+  /** What the computer claims a file's length is, when that is not the length it then sends. */
+  declared?: Record<string, number>;
   pdf?: { bytes: Uint8Array } | { unavailable: true } | Error;
   streams?: Array<{ cancelled: boolean; pulled: number }>;
 }) {
@@ -72,7 +75,7 @@ function gatewayWith(options: {
       options.streams?.push(state);
       return {
         body: stream,
-        bytes: bytes.byteLength,
+        bytes: options.declared?.[input.path] ?? bytes.byteLength,
         name: input.path.split("/").pop() ?? "download",
       };
     },
@@ -572,6 +575,27 @@ describe("who may preview", () => {
     },
   );
 
+  test.each(["preview", "text"])(
+    "%s: an employee that no longer exists is a 404 and the gateway is never asked",
+    async (route) => {
+      const { gateway, calls } = gatewayWith({
+        files: { "notes.md": bytesOf("hi") },
+        pdf: { bytes: bytesOf("%PDF") },
+      });
+      const response = await appFor(gateway, async () => true, {
+        ...allowed,
+        botIsLive: async () => false,
+      }).request(`${base}/${route}?${scope}&path=notes.md`);
+
+      expect(response.status).toBe(404);
+      await expect(response.json()).resolves.toEqual({
+        error: "There is no such Bot.",
+      });
+      expect(calls.downloads).toHaveLength(0);
+      expect(calls.pdfs).toHaveLength(0);
+    },
+  );
+
   test("a scope on a scoped route never falls back to the person's own Bot", async () => {
     const { gateway, calls } = gatewayWith({
       files: { "notes.md": bytesOf("hi") },
@@ -615,5 +639,101 @@ describe("who may preview", () => {
     expect(response.status).toBe(404);
     expect(asked).toEqual(["bot-17"]);
     expect(calls.downloads).toHaveLength(0);
+  });
+});
+
+describe("what is not a file is still private", () => {
+  const privateHeaders = (response: Response) => {
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+  };
+
+  test.each(["preview", "text"])(
+    "%s: a 415, a missing path, a refused Bot and a failed read carry both headers",
+    async (route) => {
+      const kindless = route === "preview" ? "a.txt" : "a.png";
+      const { gateway } = gatewayWith({ files: { [kindless]: bytesOf("x") } });
+      privateHeaders(
+        await appFor(gateway).request(`${base}/${route}?path=${kindless}`),
+      );
+      privateHeaders(await appFor(gateway).request(`${base}/${route}`));
+      privateHeaders(
+        await appFor(gateway, async () => false).request(
+          `${base}/${route}?path=${kindless}`,
+        ),
+      );
+      const ok = route === "preview" ? "gone.png" : "gone.txt";
+      const missing = await appFor(gateway).request(
+        `${base}/${route}?path=${ok}`,
+      );
+      expect(missing.status).toBe(404);
+      privateHeaders(missing);
+    },
+  );
+
+  test("the `unavailable` answer carries both headers", async () => {
+    const { gateway } = gatewayWith({ pdf: { unavailable: true } });
+    const response = await appFor(gateway).request(
+      `${base}/preview?path=a.docx`,
+    );
+    expect(response.status).toBe(200);
+    privateHeaders(response);
+  });
+
+  test("a scoped refusal carries both headers", async () => {
+    const { gateway } = gatewayWith({});
+    const response = await appFor(gateway).request(
+      `${base}/preview?channel=c&run=r&path=a.png`,
+    );
+    expect(response.status).toBe(404);
+    privateHeaders(response);
+  });
+
+  test("every inline response may be framed by this application only", async () => {
+    const { gateway } = gatewayWith({
+      files: { "a.html": bytesOf("x"), "a.pdf": bytesOf("x") },
+      pdf: { bytes: bytesOf("%PDF") },
+    });
+    for (const name of ["a.html", "a.pdf", "a.docx"]) {
+      const response = await appFor(gateway).request(
+        `${base}/preview?path=${encode(name)}`,
+      );
+      expect(response.headers.get("content-security-policy")).toContain(
+        "frame-ancestors 'self'",
+      );
+    }
+  });
+});
+
+describe("the download route still maps a seat failure as before", () => {
+  test("a computer that cannot be found answers 503, not an unhandled error", async () => {
+    const { gateway } = gatewayWith({});
+    gateway.seatFor = async () => {
+      throw new ComputerUnavailableError("The computer is not running.");
+    };
+    for (const route of ["download", "preview", "text"]) {
+      const response = await appFor(gateway).request(
+        `${base}/${route}?path=a.txt`,
+      );
+      expect(response.status).toBe(503);
+    }
+  });
+});
+
+describe("a stream shorter than its declared length", () => {
+  test("is not truncated and gains no replacement character", async () => {
+    const { gateway } = gatewayWith({
+      files: { "a.txt": bytesOf("你好") },
+      declared: { "a.txt": TEXT_PREVIEW_BYTES * 2 },
+    });
+    const response = await appFor(gateway).request(`${base}/text?path=a.txt`);
+    const body = (await response.json()) as {
+      text: string;
+      truncated: boolean;
+      bytes: number;
+    };
+    expect(body.text).toBe("你好");
+    expect(body.truncated).toBe(false);
+    expect(body.bytes).toBe(TEXT_PREVIEW_BYTES * 2);
   });
 });
