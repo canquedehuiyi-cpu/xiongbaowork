@@ -2174,6 +2174,60 @@ describe("deliver_task and a workspace file", () => {
  * With a probe, the gate asks the computer whether the named file is really there: nothing there bounces
  * the hand-in and leaves the card as it was; a file that is there goes through.
  */
+describe("deliver_task and a hand-in that is only a note, for work that wants a file", () => {
+  test("the first hand-in is bounced and leaves the card as it was; the second, after the bounce, goes through", async () => {
+    const card = await acceptedCard("physical-note", "做一份 PPT 汇报。");
+    const before = await cardRow(card.tenantId, card.cardId);
+    const runId = `run-${suite}-${randomUUID().slice(0, 8)}`;
+    const asked = { role: "user", id: "u1", content: "做完了吗？" };
+    const handIn = {
+      items: [{ kind: "note", ref: "汇报写好了" }],
+      checks: ["看过一遍"],
+    };
+    const inScope = <T>(messages: unknown[], work: () => Promise<T>) =>
+      withApprovalContext(
+        {
+          runId,
+          threadId: card.threadId,
+          toolCallId: `tc-${randomUUID()}`,
+          toolName: "deliver_task",
+          args: {},
+          messages: messages as never,
+          state: {},
+          context: [],
+          forwardedProps: {},
+        },
+        work,
+      );
+    let afterFirst: Awaited<ReturnType<typeof cardRow>> | undefined;
+    const bounce = JSON.stringify({
+      bounced: true,
+      physicalDeliverableBounce: true,
+    });
+    const round = await turn({
+      tenantId: card.tenantId,
+      agentId: card.agentId,
+      threadId: card.threadId,
+      runId,
+      ask: "做完了吗？",
+      work: async (run) => {
+        await inScope([asked], () => run.call("deliver_task", handIn));
+        afterFirst = await cardRow(card.tenantId, card.cardId);
+        await inScope(
+          [asked, { role: "tool", toolCallId: "t1", content: bounce }],
+          () => run.call("deliver_task", handIn),
+        );
+      },
+    });
+    const [first, second] = [round.results[0], round.results[1]];
+    expect(parsed(first ?? "{}").bounced).toBe(true);
+    expect(parsed(first ?? "{}").physicalDeliverableBounce).toBe(true);
+    expect(afterFirst?.status).toBe(before?.status);
+    expect(afterFirst?.deliverableRef).toEqual(before?.deliverableRef);
+    expect(parsed(second ?? "{}").delivered).toBe(true);
+  });
+});
+
 describe("deliver_task and the file really being there", () => {
   const withProbe = async (probe: FileProbe, run: () => Promise<void>) => {
     const before = gate;

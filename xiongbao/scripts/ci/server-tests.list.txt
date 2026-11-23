@@ -565,6 +565,7 @@ tests/memory-sticky.test.ts
 tests/memory-store.integration.test.ts
 tests/memory-unconfirmed.test.ts
 tests/memory.test.ts
+tests/merge-deliverables.test.ts
 tests/migrate-teardown.test.ts
 tests/migration-journal.test.ts
 tests/migration-reach.integration.test.ts

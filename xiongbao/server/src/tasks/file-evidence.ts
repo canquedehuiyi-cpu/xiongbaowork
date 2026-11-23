@@ -10,6 +10,19 @@ export type FileProbe = (input: {
 /** How many paths are checked at the same time. */
 const PROBE_CONCURRENCY = 4;
 
+/** A short label for a probe failure: the error code or name, at most 60 characters. */
+function errorLabel(error: unknown): string {
+  const code = (error as { code?: unknown } | null)?.code;
+  const name = (error as { name?: unknown } | null)?.name;
+  const label =
+    typeof code === "string" || typeof code === "number"
+      ? String(code)
+      : typeof name === "string"
+        ? name
+        : "unknown";
+  return label.slice(0, 60);
+}
+
 /**
  * Whether the workspace files a hand-in names are really there, for the evidence gate.
  *
@@ -39,8 +52,16 @@ export async function verifyWorkspaceFiles(input: {
           agentId: input.agentId,
           path: input.paths[index] as string,
         });
-      } catch {
+      } catch (error) {
         answers[index] = null;
+        console.error(
+          JSON.stringify({
+            type: "file-evidence-unverified",
+            agentId: input.agentId,
+            path: input.paths[index],
+            error: errorLabel(error),
+          }),
+        );
       }
     }
   };

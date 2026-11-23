@@ -310,7 +310,7 @@ export type EvidenceRow =
       /** 工作区内的相对路径。卡上把它当一行产物念出来；下载入口等 Bot 标识来源明确后另票再接。 */
       path: string;
       label: string;
-      /** 服务器查不了这份文件在不在（配对的个人电脑）：卡上标「未核实」。 */
+      /** 服务器查不了这份文件在不在（配对的个人电脑，或电脑没应答）：卡上标「未核实」。 */
       unverified?: boolean;
     }
   | { kind: "diff"; label: string; detail: string }

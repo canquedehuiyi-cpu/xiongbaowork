@@ -2185,3 +2185,67 @@ describe("seats on the shared computer", () => {
     ]);
   });
 });
+
+describe("statFile", () => {
+  const stat = (status: number, body: unknown) => ({
+    routes: {
+      "/files/stat": () => Response.json(body as never, { status }),
+    },
+  });
+
+  test("answers the kind and size of what is there", async () => {
+    const { gateway, requests } = await gatewayWith(
+      PERMISSIVE,
+      stat(200, { kind: "file", bytes: 12, extra: "dropped" }),
+    );
+    expect(await gateway.statFile(botSeat("bot-1"), { path: "a.md" })).toEqual({
+      kind: "file",
+      bytes: 12,
+    });
+    const sent = requests.find(
+      ({ url }) => new URL(url).pathname === "/files/stat",
+    );
+    expect(JSON.parse(String(sent?.init?.body))).toEqual({ path: "a.md" });
+  });
+
+  test("404 and 403 both read as absent", async () => {
+    for (const status of [404, 403]) {
+      const { gateway } = await gatewayWith(
+        PERMISSIVE,
+        stat(status, { error: "no" }),
+      );
+      expect(await gateway.statFile(botSeat("bot-1"), { path: "x" })).toBe(
+        "absent",
+      );
+    }
+  });
+
+  test("a paired personal computer cannot be checked: null, and nothing is asked", async () => {
+    const { provider } = fakeComputer();
+    const requests: string[] = [];
+    const gateway = createComputerGateway({
+      provider,
+      fetchImpl: (async (url: string) => {
+        requests.push(url);
+        return Response.json({ kind: "file", bytes: 1 });
+      }) as never,
+      auditStore: fakeAudit().store,
+      policy: () => PERMISSIVE,
+      resolveDevice: async () => ({ tenantId: "t", deviceId: "d" }),
+    });
+    expect(
+      await gateway.statFile(botSeat("bot-1"), { path: "a.md" }),
+    ).toBeNull();
+    expect(requests).toEqual([]);
+  });
+
+  test("any other failure is thrown, not turned into an answer", async () => {
+    const { gateway } = await gatewayWith(
+      PERMISSIVE,
+      stat(500, { error: "boom" }),
+    );
+    await expect(
+      gateway.statFile(botSeat("bot-1"), { path: "a.md" }),
+    ).rejects.toThrow();
+  });
+});
