@@ -184,6 +184,7 @@ const ROW_NOTE: Record<EvidenceRow["kind"], string> = {
   component: "组件",
   link: "链接",
   workspace_file: "工作区文件",
+  app: "程序",
   diff: "改动汇总",
   note: "文字结论",
   check: "员工自查",

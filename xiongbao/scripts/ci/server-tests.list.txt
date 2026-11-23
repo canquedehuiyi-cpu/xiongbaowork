@@ -363,6 +363,7 @@ tests/deepseek-thinking-run.test.ts
 tests/deepseek-thinking.integration.test.ts
 tests/deepseek-thinking.test.ts
 tests/deliver-ends-turn.test.ts
+tests/delivery-app-item.test.ts
 tests/delivery-attention.integration.test.ts
 tests/delivery-away-notice.test.ts
 tests/delivery-briefing.integration.test.ts

@@ -313,6 +313,15 @@ export type EvidenceRow =
       /** 服务器查不了这份文件在不在（配对的个人电脑，或电脑没应答）：卡上标「未核实」。 */
       unverified?: boolean;
     }
+  | {
+      kind: "app";
+      port: number;
+      /** 程序首页的路径，以 / 开头。 */
+      path: string;
+      label: string;
+      /** 服务器没能请求一次首页核实它在跑（配对的个人电脑）：卡上标「未核实」。 */
+      unverified?: boolean;
+    }
   | { kind: "diff"; label: string; detail: string }
   | { kind: "note"; label: string }
   | { kind: "check"; label: string };
@@ -362,6 +371,26 @@ export function evidenceOf(ref: unknown): EvidenceRow[] {
       label: path,
       ...(unverified.has(path) ? { unverified: true } : {}),
     });
+  const unverifiedApps = new Set(
+    Array.isArray(record.unverifiedApps)
+      ? record.unverifiedApps.filter(
+          (port): port is number => typeof port === "number",
+        )
+      : [],
+  );
+  if (Array.isArray(record.apps))
+    for (const app of record.apps) {
+      if (!app || typeof app !== "object") continue;
+      const { port, path, title } = app as Record<string, unknown>;
+      if (typeof port !== "number" || typeof path !== "string") continue;
+      rows.push({
+        kind: "app",
+        port,
+        path,
+        label: typeof title === "string" && title ? title : `端口 ${port}`,
+        ...(unverifiedApps.has(port) ? { unverified: true } : {}),
+      });
+    }
   if (Array.isArray(record.diffs))
     for (const diff of record.diffs) {
       if (!diff || typeof diff !== "object") continue;

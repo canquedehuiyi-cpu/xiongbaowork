@@ -47,6 +47,7 @@ export const DELIVERY_ITEM_KINDS = [
   "diff",
   "note",
   "workspace_file",
+  "app",
 ] as const;
 
 export type DeliveryItem = {
@@ -60,7 +61,36 @@ export type DeliveryItem = {
    */
   ref: string;
   title?: string;
+  /** app: the port the program listens on, and its first page (default `/`); `title` is its name. */
+  port?: number;
+  path?: string;
 };
+
+/**
+ * Asks the employee's computer for a program's first page (`ComputerGateway.forwardHttp`): the HTTP
+ * status it answered, `refused` when the computer would not forward it (not this Bot's port, or
+ * nothing listening) or could not be reached, and null when this deployment cannot ask (a paired
+ * personal computer), which the card shows as unverified.
+ */
+export type AppProbe = (input: {
+  tenantId: string;
+  agentId: string;
+  port: number;
+  path: string;
+}) => Promise<{ status: number } | { refused: string } | null>;
+
+/** The first page a program item names: `/` when none is given, and only a path that stays on that port. */
+export function appPathOf(path: string | undefined): string | undefined {
+  const wanted = path ?? "/";
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what is refused
+  const unsafe = /[\\\u0000-\u001f\u007f]/;
+  return wanted.length <= 2000 &&
+    wanted.startsWith("/") &&
+    !wanted.startsWith("//") &&
+    !unsafe.test(wanted)
+    ? wanted
+    : undefined;
+}
 
 export type EvidenceVerdict =
   | { ok: true; ref: DeliverableRef }
@@ -376,7 +406,7 @@ function partMet(part: string, whole: string): boolean {
 
 export function createEvidenceGate(
   database: Database,
-  options: { fileProbe?: FileProbe } = {},
+  options: { fileProbe?: FileProbe; appProbe?: AppProbe } = {},
 ): EvidenceGate & RunFiles {
   /** Every run the card has had: the one that opened it, the one on it now, and each in its history. */
   async function runsOf(tenantId: string, taskId: string): Promise<string[]> {
@@ -506,6 +536,7 @@ export function createEvidenceGate(
         const links: { url: string; title: string }[] = [];
         const notes: string[] = [];
         const workspaceFiles: string[] = [];
+        const apps: { port: number; path: string; title: string }[] = [];
 
         const wantedAttachments = items
           .filter((item) => item.kind === "attachment")
@@ -619,6 +650,37 @@ export function createEvidenceGate(
               workspaceFiles.push(path);
               break;
             }
+            case "app": {
+              const title = item.title?.trim();
+              if (!title)
+                return {
+                  ok: false,
+                  reason: "程序要写名字（title），交不了。",
+                  missing: [],
+                };
+              const port = item.port;
+              if (
+                typeof port !== "number" ||
+                !Number.isInteger(port) ||
+                port < 1024 ||
+                port > 65535
+              )
+                return {
+                  ok: false,
+                  reason: `程序「${title}」的端口要在 1024 到 65535 之间。`,
+                  missing: [title],
+                };
+              const path = appPathOf(item.path);
+              if (!path)
+                return {
+                  ok: false,
+                  reason: `程序「${title}」的路径不对，要以 / 开头。`,
+                  missing: [title],
+                };
+              if (!apps.some((app) => app.port === port && app.path === path))
+                apps.push({ port, path, title });
+              break;
+            }
             default:
               return {
                 ok: false,
@@ -644,6 +706,29 @@ export function createEvidenceGate(
             };
           }
           unverifiedFiles = unverified;
+        }
+
+        const unverifiedApps: number[] = [];
+        if (options.appProbe && input.agentId) {
+          for (const app of apps) {
+            const answer = await options.appProbe({
+              tenantId: input.tenantId,
+              agentId: input.agentId,
+              port: app.port,
+              path: app.path,
+            });
+            if (answer === null) {
+              unverifiedApps.push(app.port);
+              continue;
+            }
+            const status = "status" in answer ? answer.status : undefined;
+            if (status === undefined || status < 200 || status >= 400)
+              return {
+                ok: false,
+                reason: `程序「${app.title}」在端口 ${app.port} 上打不开（HTTP ${status ?? "无响应"} 或没有在监听）。先把它跑起来再交。`,
+                missing: [app.title],
+              };
+          }
         }
 
         if (items.every((item) => item.kind === "note") && checks.length === 0)
@@ -678,6 +763,8 @@ export function createEvidenceGate(
         if (workspaceFiles.length)
           ref.workspaceFiles = [...new Set(workspaceFiles)];
         if (unverifiedFiles.length) ref.unverifiedFiles = unverifiedFiles;
+        if (apps.length) ref.apps = apps;
+        if (unverifiedApps.length) ref.unverifiedApps = unverifiedApps;
         if (diffs.length) ref.diffs = diffs;
         if (notes.length) ref.notes = notes;
         if (checks.length) ref.checks = checks;
