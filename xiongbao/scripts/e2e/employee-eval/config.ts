@@ -35,6 +35,7 @@ export const DEFAULT_BASE_URLS: Record<string, string> = {
   moonshot: "https://api.moonshot.cn/v1",
   zhipu: "https://open.bigmodel.cn/api/paas/v4",
   openrouter: "https://openrouter.ai/api/v1",
+  aihub: "https://aihubcc.cc/v1",
 };
 
 export const DEFAULT_PROVIDER = "deepseek";

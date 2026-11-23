@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { LLMock } from "@copilotkit/aimock";
 import { SQL } from "bun";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { buildAgents } from "../src/copilot";
 import { createDatabase } from "../src/db/client";
@@ -330,6 +330,22 @@ describe("context usage", () => {
           id,
           vendors: true,
         });
+  });
+});
+
+describe("provider templates", () => {
+  test("the AIHUB relay is seeded as an OpenAI-compatible provider that takes its own base URL", async () => {
+    const [aihub] = await runAsTenant("platform", () =>
+      database
+        .select()
+        .from(providerTemplates)
+        .where(eq(providerTemplates.id, "aihub")),
+    );
+    expect(aihub).toMatchObject({
+      label: "AIHUB 中转 (OpenAI 兼容)",
+      allowsBaseUrl: true,
+      probe: "chat-completions",
+    });
   });
 });
 

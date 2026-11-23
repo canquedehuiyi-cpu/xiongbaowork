@@ -719,12 +719,14 @@ export const KNOWN_CONTEXT_WINDOWS: Readonly<Record<string, number>> = {
   "glm-4-flash": 128_000,
   "glm-4.5": 131_072,
   "glm-4.5-air": 131_072,
+  // AIHUB 中转文档（docs.aihubcc.cc，2026-11-23）写明 gemini-4-argon 为 1M 上下文；hydrogen 文档未写，不列。
+  "gemini-4-argon": 1_000_000,
 };
 
 /**
  * models.dev vendor ids a provider template id names, first one that has the model wins. Keys cover
  * every id seeded in `provider_templates` (migration 0063: openai, anthropic, google, openrouter,
- * deepseek, zhipu, moonshot; `custom` has no vendor and is matched by its base URL's host), plus
+ * deepseek, zhipu, moonshot; 0239 adds aihub; `custom` has no vendor and is matched by its base URL's host), plus
  * names an operator may give a platform pool row.
  */
 const TEMPLATE_VENDORS: Record<string, string[]> = {
@@ -744,6 +746,8 @@ const TEMPLATE_VENDORS: Record<string, string[]> = {
   zhipuai: ["zhipuai"],
   glm: ["zhipuai"],
   bigmodel: ["zhipuai"],
+  // 中转站转发的是 Gemini 模型，models.dev 里归 google。
+  aihub: ["google"],
 };
 
 /** The models.dev vendors a provider template id names; none for an unknown id or `custom`. */
@@ -761,6 +765,7 @@ const HOST_VENDORS: [RegExp, string[]][] = [
   ],
   [/(^|\.)moonshot\.(cn|ai)$/, ["moonshotai", "moonshotai-cn"]],
   [/(^|\.)(bigmodel\.cn|zhipuai\.cn|z\.ai)$/, ["zhipuai"]],
+  [/(^|\.)aihubcc\.cc$/, ["google"]],
 ];
 
 /** Failed capability reads are not retried sooner than this, so an unreachable models.dev costs nothing. */
