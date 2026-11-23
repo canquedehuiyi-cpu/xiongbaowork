@@ -12,6 +12,10 @@ services:
       XIONGBAO_CRAWL_URL: ${XIONGBAO_CRAWL_URL:-http://crawl4ai:11235}
     ports:
       - "127.0.0.1:${OPENBOT_PORT:-3772}:3001"
+      # 内容源端口（.env.delivery 里设 XIONGBAO_CONTENT_PORT=3773 才会监听）。默认只绑本机；
+      # 要让别的机器上的浏览器打开员工做的网页，把 XIONGBAO_CONTENT_BIND 设成 0.0.0.0，
+      # 并在云安全组放行 3773/TCP，见部署手册「内容源端口」。
+      - "${XIONGBAO_CONTENT_BIND:-127.0.0.1}:${XIONGBAO_CONTENT_HOST_PORT:-3773}:3773"
     volumes:
       - database:/var/lib/postgresql
       - workspace:/workspace

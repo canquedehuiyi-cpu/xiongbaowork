@@ -326,8 +326,11 @@ tests/config.test.ts
 tests/connection-siblings.integration.test.ts
 tests/connections-upstream-shape.integration.test.ts
 tests/connector-tokens-never-reach-computer.test.ts
+tests/content-compose.test.ts
 tests/content-config.test.ts
 tests/content-governance.test.ts
+tests/content-open-routes.test.ts
+tests/content-server.test.ts
 tests/content-static.test.ts
 tests/content-token.test.ts
 tests/context-usage.integration.test.ts
