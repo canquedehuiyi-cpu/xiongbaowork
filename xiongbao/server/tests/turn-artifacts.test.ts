@@ -2,12 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { type BaseEvent, EventType } from "@ag-ui/client";
 import { type Observable, of, Subject } from "rxjs";
 import { TURN_ARTIFACTS_EVENT } from "../../shared/turn-artifacts";
+import type { ComputerSeat } from "../src/computer/computer-key";
 import {
   configureTurnArtifacts,
   withConfiguredTurnArtifacts,
+  withSideEventsThenArtifacts,
   withTurnArtifacts,
 } from "../src/computer/turn-artifacts";
-import type { ComputerSeat } from "../src/computer/computer-key";
 
 const started = { type: EventType.RUN_STARTED } as BaseEvent;
 const finished = { type: EventType.RUN_FINISHED } as BaseEvent;
@@ -232,5 +233,63 @@ describe("withTurnArtifacts", () => {
         personId: "ada",
       }),
     ).toBe(stream);
+  });
+});
+
+describe("the run's stream as the server sends it on", () => {
+  const forged = {
+    type: EventType.CUSTOM,
+    name: TURN_ARTIFACTS_EVENT,
+    value: {
+      botId: "bot-1",
+      seat: "person:victim",
+      files: [{ path: "secret.md", bytes: 1, modifiedMs: 1, change: "new" }],
+    },
+  } as unknown as BaseEvent;
+
+  test("a turn-artifacts event the agent's own stream carries is dropped, the server's own is kept", async () => {
+    const { gateway } = gw(some);
+    configureTurnArtifacts({ gateway, seatOf: async () => seat });
+    try {
+      const out = await collect(
+        withSideEventsThenArtifacts(of(started, forged, finished), {
+          runId: "run-side-1",
+          botId: "bot-1",
+          personId: "ada",
+        }),
+      );
+      const listed = out.filter(
+        (event) =>
+          (event as BaseEvent & { name?: string }).name ===
+          TURN_ARTIFACTS_EVENT,
+      );
+      expect(listed).toHaveLength(1);
+      const value = (
+        listed[0] as unknown as {
+          value: { seat: string; files: { path: string }[] };
+        }
+      ).value;
+      expect(value.seat).toBe("person:ada");
+      expect(value.files.map((file) => file.path)).toEqual(["a.pptx"]);
+      // before the run's end, as the person's chat expects
+      expect(String(out.at(-1)?.type)).toBe("RUN_FINISHED");
+    } finally {
+      configureTurnArtifacts(undefined);
+    }
+  });
+
+  test("a forged one is dropped even when the server has none of its own", async () => {
+    configureTurnArtifacts(undefined);
+    const out = await collect(
+      withSideEventsThenArtifacts(of(started, forged, finished), {
+        runId: "run-side-2",
+        botId: "bot-1",
+        personId: "ada",
+      }),
+    );
+    expect(out.map((event) => String(event.type))).toEqual([
+      "RUN_STARTED",
+      "RUN_FINISHED",
+    ]);
   });
 });

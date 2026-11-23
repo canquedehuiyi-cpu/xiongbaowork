@@ -84,6 +84,24 @@ import {
 /** What a person's own browser answers under this router: the reads its live screen makes. */
 const PERSON_BROWSER_READS = new Set(["control", "status", "screenshot"]);
 
+/**
+ * Whether `path` is exactly this Bot's file download: its last three segments are the Bot, `files`
+ * and `download`, under at most the two segments this router is mounted on (`/api/computers`).
+ * The Bot is compared as the router decoded it, so an encoded slash cannot stand in for a segment.
+ */
+function isDownloadPath(path: string, botId: string): boolean {
+  const segments = path.split("/").filter((segment) => segment !== "");
+  if (segments.length < 3 || segments.length > 5) return false;
+  const [bot, files, download] = segments.slice(-3);
+  let named: string;
+  try {
+    named = decodeURIComponent(bot ?? "");
+  } catch {
+    return false;
+  }
+  return files === "files" && download === "download" && named === botId;
+}
+
 export function createComputerRoutes(
   gateway: ComputerGateway,
   policyStore: PolicyStore,
@@ -190,7 +208,7 @@ export function createComputerRoutes(
     if (
       botId &&
       context.req.method === "GET" &&
-      path.endsWith(`/${botId}/files/download`) &&
+      isDownloadPath(path, botId) &&
       artifactScopeOf(context.req.url)
     ) {
       return next();

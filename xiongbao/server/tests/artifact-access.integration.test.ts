@@ -9,6 +9,7 @@ import {
   resolveArtifactAccess,
 } from "../src/computer/artifact-access";
 import { createArtifactAccessDeps } from "../src/computer/artifact-access-store";
+import { personSeat } from "../src/computer/computer-key";
 import { createDatabase } from "../src/db/client";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -34,17 +35,27 @@ const bot = id("bot");
 const group = id("group");
 const elsewhere = id("elsewhere");
 const alone = id("alone");
+const dead = id("dead");
+const botGone = id("bot-gone");
+const botPrivate = id("bot-private");
 
 const ownerThread = id("thread-owner");
 const elsewhereThread = id("thread-elsewhere");
 const aloneThread = id("thread-alone");
 const memberThread = id("thread-member");
+const deadThread = id("thread-dead");
 
 const run = id("run");
 const deliveredRun = id("run-delivered");
 const elsewhereRun = id("run-elsewhere");
 const aloneRun = id("run-alone");
 const cardRun = id("run-card");
+const forgedRun = id("run-forged");
+const privateRun = id("run-private");
+const goneRun = id("run-gone");
+const deadRun = id("run-dead");
+const cardForgedRun = id("run-card-forged");
+const cardGoneRun = id("run-card-gone");
 
 const SPECIAL = "报告 #1?.pptx";
 const as = (actor: string): AgentActor => ({ id: actor, role: "user" });
@@ -54,9 +65,9 @@ const custom = (name: string, value: unknown) => ({
   name,
   value,
 });
-const artifacts = (seat: string, paths: string[]) =>
+const artifacts = (seat: string, paths: string[], botId = bot) =>
   custom(TURN_ARTIFACTS_EVENT, {
-    botId: bot,
+    botId,
     seat,
     files: paths.map((path) => ({
       path,
@@ -74,6 +85,8 @@ let appPool: ReturnType<typeof createDatabase>;
 let fixtures: postgres.Sql;
 let taskId = "";
 let strangerTask = "";
+let forgedTask = "";
+let goneTask = "";
 
 async function seedRun(
   thread: string,
@@ -95,17 +108,25 @@ beforeAll(async () => {
   url.pathname = new URL(testDatabaseUrl()).pathname;
   fixtures = postgres(url.href, { max: 1, onnotice: () => {} });
   appPool = createDatabase(testDatabaseUrl(), TEST_POOL);
-  deps = createArtifactAccessDeps(appPool);
+  deps = createArtifactAccessDeps(appPool, async (botId, personId) =>
+    personSeat(personId, botId),
+  );
 
   for (const user of [owner, member, outsider])
     await fixtures`insert into users (id, email) values (${user}, ${`${user}@example.test`})`;
-  await fixtures`insert into agents (id, name, type, configuration, tenant_id) values (${bot}, ${bot}, 'built_in', '{}'::jsonb, 'system')`;
+  for (const agent of [bot, botGone, botPrivate])
+    await fixtures`insert into agents (id, name, type, configuration, tenant_id) values (${agent}, ${agent}, 'built_in', '{}'::jsonb, 'system')`;
+  // A catalogue employee everybody sees, one that was deleted, and the owner's own private one.
+  await fixtures`insert into agent_profiles (agent_id, tenant_id, title, role_description, avatar_seed, visibility) values (${bot}, 'system', 't', 'r', 'a', 'public')`;
+  await fixtures`insert into agent_profiles (agent_id, tenant_id, title, role_description, avatar_seed, visibility, deleted_at) values (${botGone}, 'system', 't', 'r', 'a', 'public', now())`;
+  await fixtures`insert into agent_profiles (agent_id, tenant_id, owner_user_id, title, role_description, avatar_seed, visibility) values (${botPrivate}, ${owner}, ${owner}, 't', 'r', 'a', 'private')`;
 
   // A group chat of two people, stamped `team`, with one Bot. The owner asked; the member did not.
   await fixtures`insert into channels (id, tenant_id, name, description) values (${group}, 'team', 'g', '')`;
   for (const person of [owner, member])
     await fixtures`insert into channel_memberships (channel_id, user_id, tenant_id) values (${group}, ${person}, 'team')`;
-  await fixtures`insert into channel_agents (channel_id, agent_id, tenant_id) values (${group}, ${bot}, 'team')`;
+  for (const agent of [bot, botGone, botPrivate])
+    await fixtures`insert into channel_agents (channel_id, agent_id, tenant_id) values (${group}, ${agent}, 'team')`;
   await fixtures`insert into threads (id, tenant_id, agent_id) values (${ownerThread}, ${owner}, ${bot})`;
   await fixtures`insert into group_bot_threads (owner_user_id, channel_id, agent_id, thread_id, tenant_id) values (${owner}, ${group}, ${bot}, ${ownerThread}, 'team')`;
   await seedRun(ownerThread, owner, run, [
@@ -123,6 +144,27 @@ beforeAll(async () => {
         workspaceFiles: ["final/summary.md"],
       },
     }),
+  ]);
+
+  await seedRun(ownerThread, owner, forgedRun, [
+    artifacts(`person:${outsider}`, ["secret.md"]),
+  ]);
+  await seedRun(ownerThread, owner, privateRun, [
+    artifacts(`person:${owner}`, ["private.md"], botPrivate),
+  ]);
+  await seedRun(ownerThread, owner, goneRun, [
+    artifacts(`person:${owner}`, ["gone.md"], botGone),
+  ]);
+
+  // A group chat that was deleted after the run.
+  await fixtures`insert into channels (id, tenant_id, name, description, deleted_at) values (${dead}, 'team', 'd', '', now())`;
+  for (const person of [owner, member])
+    await fixtures`insert into channel_memberships (channel_id, user_id, tenant_id) values (${dead}, ${person}, 'team')`;
+  await fixtures`insert into channel_agents (channel_id, agent_id, tenant_id) values (${dead}, ${bot}, 'team')`;
+  await fixtures`insert into threads (id, tenant_id, agent_id) values (${deadThread}, ${owner}, ${bot})`;
+  await fixtures`insert into group_bot_threads (owner_user_id, channel_id, agent_id, thread_id, tenant_id) values (${owner}, ${dead}, ${bot}, ${deadThread}, 'team')`;
+  await seedRun(deadThread, owner, deadRun, [
+    artifacts(`person:${owner}`, ["out/deck.pptx"]),
   ]);
 
   // Another group the member is not in, with a run of its own.
@@ -156,6 +198,24 @@ beforeAll(async () => {
             ${fixtures.json({ kind: "deliverable", workspaceFiles: ["card/out.pptx", SPECIAL] })})
     returning id`;
   taskId = mine?.id ?? "";
+  await seedRun(memberThread, member, cardForgedRun, [
+    artifacts(`person:${outsider}`, ["card/out.pptx"]),
+  ]);
+  await seedRun(memberThread, member, cardGoneRun, [
+    artifacts(`person:${member}`, ["card/out.pptx"], botGone),
+  ]);
+  const [forged] = await fixtures<{ id: string }[]>`
+    insert into tasks (tenant_id, title, source, executor_agent_id, run_ref, deliverable_ref)
+    values (${member}, 'forged', 'chat', ${bot}, ${cardForgedRun},
+            ${fixtures.json({ kind: "deliverable", workspaceFiles: ["card/out.pptx"] })})
+    returning id`;
+  forgedTask = forged?.id ?? "";
+  const [gone] = await fixtures<{ id: string }[]>`
+    insert into tasks (tenant_id, title, source, executor_agent_id, run_ref, deliverable_ref)
+    values (${member}, 'gone', 'chat', ${botGone}, ${cardGoneRun},
+            ${fixtures.json({ kind: "deliverable", workspaceFiles: ["card/out.pptx"] })})
+    returning id`;
+  goneTask = gone?.id ?? "";
   const [theirs] = await fixtures<{ id: string }[]>`
     insert into tasks (tenant_id, title, source, executor_agent_id, run_ref, deliverable_ref)
     values (${owner}, 'theirs', 'chat', ${bot}, ${run},
@@ -168,9 +228,10 @@ afterAll(async () => {
   if (!bypass) return;
   const people = [owner, member, outsider];
   await fixtures`delete from tasks where tenant_id in ${fixtures(people)}`;
-  await fixtures`delete from threads where id in ${fixtures([ownerThread, elsewhereThread, aloneThread, memberThread])}`;
-  await fixtures`delete from channels where id in ${fixtures([group, elsewhere, alone])}`;
-  await fixtures`delete from agents where id = ${bot}`;
+  await fixtures`delete from threads where id in ${fixtures([ownerThread, elsewhereThread, aloneThread, memberThread, deadThread])}`;
+  await fixtures`delete from channels where id in ${fixtures([group, elsewhere, alone, dead])}`;
+  await fixtures`delete from agent_profiles where agent_id in ${fixtures([bot, botGone, botPrivate])}`;
+  await fixtures`delete from agents where id in ${fixtures([bot, botGone, botPrivate])}`;
   await fixtures`delete from users where id in ${fixtures(people)}`;
   await fixtures.end({ timeout: 5 });
   await appPool.$client.close();
@@ -275,6 +336,42 @@ describe.skipIf(!bypass)("workspace file access, against the database", () => {
     expect(await ask(outsider, "card/out.pptx", { task: taskId })).toBeNull();
     expect(
       await ask(member, "card/out.pptx", { task: "not-a-uuid" }),
+    ).toBeNull();
+  });
+
+  test("a run that names somebody else's computer opens nothing, in a chat or on a card", async () => {
+    expect(
+      await ask(member, "secret.md", { channel: group, run: forgedRun }),
+    ).toBeNull();
+    expect(await ask(member, "card/out.pptx", { task: forgedTask })).toBeNull();
+  });
+
+  test("an employee who is the owner's own private one can still be fetched from by the group", async () => {
+    const access = await ask(
+      member,
+      "private.md",
+      { channel: group, run: privateRun },
+      botPrivate,
+    );
+    expect(access).not.toBeNull();
+    expect(access?.seat.key).toEqual({ kind: "person", personId: owner });
+  });
+
+  test("a deleted employee opens nothing, in a chat or on a card", async () => {
+    expect(
+      await ask(member, "gone.md", { channel: group, run: goneRun }, botGone),
+    ).toBeNull();
+    expect(
+      await ask(member, "card/out.pptx", { task: goneTask }, botGone),
+    ).toBeNull();
+  });
+
+  test("a deleted conversation opens nothing", async () => {
+    expect(
+      await ask(member, "out/deck.pptx", { channel: dead, run: deadRun }),
+    ).toBeNull();
+    expect(
+      await ask(owner, "out/deck.pptx", { channel: dead, run: deadRun }),
     ).toBeNull();
   });
 });

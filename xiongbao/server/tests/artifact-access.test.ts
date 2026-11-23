@@ -8,6 +8,7 @@ import {
   normalizedArtifactPath,
   resolveArtifactAccess,
 } from "../src/computer/artifact-access";
+import { personSeat } from "../src/computer/computer-key";
 
 const member: AgentActor = { id: "member-2", role: "user" };
 const channel = "channel-1";
@@ -44,6 +45,9 @@ type Setup = {
   runThread?: string;
   channelAnswer?: { agentIds: string[]; threadIds: string[] } | null;
   card?: { botId: string; seat: string; workspaceFiles: string[] } | null;
+  /** The person the run and the card belong to; the seat every turn of theirs used is theirs. */
+  owner?: string;
+  live?: boolean;
 };
 
 function depsFor(setup: Setup = {}) {
@@ -61,13 +65,18 @@ function depsFor(setup: Setup = {}) {
       if (id !== run) return null;
       return {
         threadId: setup.runThread ?? thread,
+        ownerId: setup.owner ?? "owner-1",
         events: setup.events ?? [artifacts(["a.pptx"])],
       };
     },
     cardFor: async (_actor, id) => {
       asked.push(`card:${id}`);
-      return id === "task-1" ? (setup.card ?? null) : null;
+      return id === "task-1" && setup.card
+        ? { ...setup.card, ownerId: setup.owner ?? "member-2" }
+        : null;
     },
+    seatFor: async (botId, personId) => personSeat(personId, botId),
+    botIsLive: async () => setup.live ?? true,
   };
   return { deps, asked };
 }
@@ -137,8 +146,9 @@ describe("who may download which workspace file", () => {
 
   test("any of several announcements in one turn may list the path", async () => {
     const { deps } = depsFor({
+      owner: "owner-9",
       events: [
-        artifacts(["first.md"]),
+        artifacts(["first.md"], "person:owner-9"),
         artifacts(["a.pptx"], "person:owner-9"),
       ],
     });
@@ -170,6 +180,7 @@ describe("who may download which workspace file", () => {
 
   test("a delivered file is reachable through the seat the same turn announced", async () => {
     const { deps } = depsFor({
+      owner: "owner-3",
       events: [
         artifacts(["something.md"], "person:owner-3"),
         delivered(["out/deck.pptx"]),
@@ -196,6 +207,25 @@ describe("who may download which workspace file", () => {
 
   test("an announced seat that is not a computer key is refused", async () => {
     const { deps } = depsFor({ events: [artifacts(["a.pptx"], "nonsense")] });
+    expect(await resolve(deps, "a.pptx")).toBeNull();
+  });
+
+  test("a seat naming somebody other than the run's person is refused, announced or delivered", async () => {
+    const forged = depsFor({
+      events: [artifacts(["a.pptx"], "person:victim")],
+    });
+    expect(await resolve(forged.deps, "a.pptx")).toBeNull();
+    const delivery = depsFor({
+      events: [artifacts(["x"], "person:victim"), delivered(["out/deck.pptx"])],
+    });
+    expect(await resolve(delivery.deps, "out/deck.pptx")).toBeNull();
+    // an isolated bot's seat is not a person's either
+    const bot = depsFor({ events: [artifacts(["a.pptx"], "bot:bot-1")] });
+    expect(await resolve(bot.deps, "a.pptx")).toBeNull();
+  });
+
+  test("an employee who no longer exists opens nothing", async () => {
+    const { deps } = depsFor({ live: false });
     expect(await resolve(deps, "a.pptx")).toBeNull();
   });
 
@@ -260,6 +290,20 @@ describe("who may download which workspace file", () => {
 
     test("a card whose seat is not a computer key is refused", async () => {
       const { deps } = depsFor({ card: { ...card, seat: "" } });
+      expect(
+        await resolve(deps, "out/deck.pptx", { scope: { task: "task-1" } }),
+      ).toBeNull();
+    });
+
+    test("a card whose seat names a third person is refused", async () => {
+      const { deps } = depsFor({ card: { ...card, seat: "person:victim" } });
+      expect(
+        await resolve(deps, "out/deck.pptx", { scope: { task: "task-1" } }),
+      ).toBeNull();
+    });
+
+    test("a card of an employee who no longer exists is refused", async () => {
+      const { deps } = depsFor({ card, live: false });
       expect(
         await resolve(deps, "out/deck.pptx", { scope: { task: "task-1" } }),
       ).toBeNull();

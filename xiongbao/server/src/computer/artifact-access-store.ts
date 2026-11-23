@@ -4,6 +4,7 @@ import { TURN_ARTIFACTS_EVENT } from "../../../shared/turn-artifacts";
 import type { AgentActor } from "../agents/profile-types";
 import type { Database } from "../db/client";
 import {
+  agentProfiles,
   channelAgents,
   channelMemberships,
   channels,
@@ -35,6 +36,8 @@ const parsed = (stored: unknown): BaseEvent =>
  */
 export function createArtifactAccessDeps(
   database: Database,
+  /** The gateway's seat for a Bot and a person (`gateway.seatFor`). */
+  seatFor: ArtifactAccessDeps["seatFor"],
 ): ArtifactAccessDeps {
   /** The conversation's threads and who owns each, as the asker sees them. Null: not theirs to see. */
   async function threadsOf(actor: AgentActor, channelId: string) {
@@ -89,6 +92,24 @@ export function createArtifactAccessDeps(
   }
 
   return {
+    seatFor,
+
+    // In that person's own frame: an employee they cannot see, or one they deleted, is gone to them.
+    botIsLive: (personId, botId) =>
+      runAsTenant(personId, async () => {
+        const [row] = await database
+          .select({ id: agentProfiles.agentId })
+          .from(agentProfiles)
+          .where(
+            and(
+              eq(agentProfiles.agentId, botId),
+              isNull(agentProfiles.deletedAt),
+            ),
+          )
+          .limit(1);
+        return Boolean(row);
+      }),
+
     channelFor: (actor, channelId) =>
       runAsTenant(actor.id, async () => {
         const owners = await threadsOf(actor, channelId);
@@ -126,6 +147,7 @@ export function createArtifactAccessDeps(
           if (!run) return null;
           return {
             threadId: run.threadId,
+            ownerId: owner,
             events: (await eventsOf([runId])).get(runId) ?? [],
           };
         });
@@ -202,6 +224,7 @@ export function createArtifactAccessDeps(
         if (seats.size !== 1) return null;
         return {
           botId: card.botId,
+          ownerId: actor.id,
           seat: [...seats][0] as string,
           workspaceFiles: files,
         };

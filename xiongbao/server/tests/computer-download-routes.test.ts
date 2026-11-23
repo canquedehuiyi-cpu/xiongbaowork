@@ -321,6 +321,7 @@ describe("a download that names where its file was announced", () => {
       run === "run-1"
         ? {
             threadId: "thread-1",
+            ownerId: "owner-1",
             events: [
               {
                 type: "CUSTOM",
@@ -335,6 +336,9 @@ describe("a download that names where its file was announced", () => {
           }
         : null,
     cardFor: async () => null,
+    seatFor: async (botId: string, personId: string) =>
+      personSeat(personId, botId),
+    botIsLive: async () => true,
   } satisfies ArtifactAccessDeps;
 
   function scopedApp(
@@ -358,6 +362,52 @@ describe("a download that names where its file was announced", () => {
   const url = (query: string) =>
     `http://openbot.test/bot-17/files/download?${query}`;
   const named = encodeURIComponent("报告 #1?.pptx");
+
+  test("a name with a percent sign or a plus sign reaches the gateway as written", async () => {
+    const events = [
+      {
+        type: "CUSTOM",
+        name: "computer.turn_artifacts",
+        value: {
+          botId: "bot-17",
+          seat: "person:owner-1",
+          files: [{ path: "100% done+more.txt" }],
+        },
+      },
+    ] as unknown as BaseEvent[];
+    const { gateway, calls } = gatewayThatReturns("x", Uint8Array.from([1]));
+    const app = createComputerRoutes(
+      gateway,
+      {} as PolicyStore,
+      asActor(),
+      async () => false,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {
+        ...allowed,
+        runOf: async () => ({
+          threadId: "thread-1",
+          ownerId: "owner-1",
+          events,
+        }),
+      },
+    );
+    const response = await app.request(
+      url(
+        `channel=channel-1&run=run-1&path=${encodeURIComponent("100% done+more.txt")}`,
+      ),
+    );
+    expect(response.status).toBe(200);
+    expect(calls.map((call) => call.path)).toEqual(["100% done+more.txt"]);
+    // a `+` left bare is a space in a query, which is another file, which the run did not announce
+    const spaced = await app.request(
+      url("channel=channel-1&run=run-1&path=100%25+done+more.txt"),
+    );
+    expect(spaced.status).toBe(404);
+  });
 
   test("a member who may not use the Bot gets the file from the seat the run announced", async () => {
     const seats: unknown[] = [];

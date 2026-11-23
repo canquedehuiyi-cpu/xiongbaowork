@@ -6582,7 +6582,14 @@ await startupLifecycle.run(async (startup) => {
       },
       memory: { store: personalMemoryStore, ingestion: memoryIngestion },
       proactive: { store: proactiveStore, engine: proactiveEngine },
-      artifactAccess: createArtifactAccessDeps(database),
+      ...(computerGateway
+        ? {
+            artifactAccess: createArtifactAccessDeps(
+              database,
+              (botId, personId) => computerGateway.seatFor(botId, personId),
+            ),
+          }
+        : {}),
       localLearning: { database, engine: localLearningEngine },
       // Upstream's started work, at `/api/bot-tasks` (`/api/tasks` is the board, mounted below).
       tasks: { store: taskStore, runner: taskRunner },

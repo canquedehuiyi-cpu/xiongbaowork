@@ -5,6 +5,7 @@ import {
   TURN_ARTIFACTS_EVENT,
   type TurnArtifactsValue,
 } from "../../../shared/turn-artifacts";
+import { withRunSideEvents } from "../threads/run-side-events";
 import { type ComputerSeat, computerKeyText } from "./computer-key";
 import type { ComputerGateway } from "./gateway";
 
@@ -160,5 +161,22 @@ export function withConfiguredTurnArtifacts(
       seat: () => current.seatOf(turn.botId, personId),
     },
     current.gateway,
+  );
+}
+
+/**
+ * A built-in employee's run stream as the server sends it on: the agent's own stream cleaned of events
+ * only the server may send and open to the events its tools add (`withRunSideEvents`), and then, outside
+ * both, the turn's artifacts. The order matters: the artifacts event is the server's own and would be
+ * dropped as a forgery if it passed through the cleaning, and one the agent's stream carried must not
+ * survive it.
+ */
+export function withSideEventsThenArtifacts(
+  stream: Observable<BaseEvent>,
+  turn: { runId: string; botId: string; personId: string | null },
+): Observable<BaseEvent> {
+  return withConfiguredTurnArtifacts(
+    withRunSideEvents(turn.runId, stream),
+    turn,
   );
 }

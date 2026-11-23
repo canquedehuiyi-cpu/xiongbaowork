@@ -5,7 +5,11 @@ import {
 } from "../../../shared/turn-artifacts";
 import type { AgentActor } from "../agents/profile-types";
 import { workspaceFilePathOf } from "../tasks/evidence-gate";
-import { type ComputerSeat, parseComputerKey } from "./computer-key";
+import {
+  type ComputerSeat,
+  computerKeyText,
+  parseComputerKey,
+} from "./computer-key";
 
 /**
  * Who may download which file from an employee's workspace, when the asker is not the person whose
@@ -21,6 +25,12 @@ import { type ComputerSeat, parseComputerKey } from "./computer-key";
  * can see that conversation or card, and (2) the server itself recorded that file there: listed in
  * the run's turn artifacts, delivered on the run, or on the card's delivered files. The seat the
  * file is read from is the one the server recorded with it, never one worked out from the asker.
+ *
+ * A RECORD IS NOT TRUSTED FOR ITS SEAT. The seat a record names must be the one this employee runs on
+ * for the person the run (or card) belongs to, as the server itself works it out (`seatFor`), and
+ * the employee must still exist. A record that names anyone else's computer, however it got
+ * into the run, opens nothing. (Run streams also drop a forged turn-artifacts event before it is
+ * stored: `threads/run-side-events.ts`.)
  *
  * REFUSAL IS THE ONLY OTHER ANSWER. Every rule that does not hold gives `null`, and the route
  * answers that exactly as it answers "there is no such employee", so the answer cannot be used to
@@ -76,7 +86,12 @@ export type ArtifactAccessDeps = {
     actor: AgentActor,
     channelId: string,
     runId: string,
-  ): Promise<{ threadId: string; events: BaseEvent[] } | null>;
+  ): Promise<{
+    threadId: string;
+    /** Whose run it is: the person the thread belongs to, whose computer the turn used. */
+    ownerId: string;
+    events: BaseEvent[];
+  } | null>;
   /**
    * The delivery card as this person sees it: null when it is not theirs to see, else the employee
    * in charge, the computer seat (as text) its files were made on, and the files it lists.
@@ -84,7 +99,17 @@ export type ArtifactAccessDeps = {
   cardFor(
     actor: AgentActor,
     taskId: string,
-  ): Promise<{ botId: string; seat: string; workspaceFiles: string[] } | null>;
+  ): Promise<{
+    botId: string;
+    /** Whose card it is. */
+    ownerId: string;
+    seat: string;
+    workspaceFiles: string[];
+  } | null>;
+  /** The seat this employee runs on for this person: the one every turn of theirs used. */
+  seatFor(botId: string, personId: string): Promise<ComputerSeat>;
+  /** Whether the employee still exists for that person (not deleted). */
+  botIsLive(personId: string, botId: string): Promise<boolean>;
 };
 
 /**
@@ -110,7 +135,11 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const DELIVERED_EVENT = "delivery.delivered";
 
-/** The run's server-written events of one name, as their values. */
+/**
+ * The run's events of one name, as their values. They are the server's own by the time they are
+ * stored: an agent's stream cannot carry `computer.turn_artifacts` or `delivery.*` into a run
+ * (`isServerOnlyEvent`), and this still checks the seat each one names (`seatFor` below).
+ */
 function valuesOf(events: BaseEvent[], name: string): unknown[] {
   const found: unknown[] = [];
   for (const event of events) {
@@ -193,6 +222,16 @@ async function seatFor(
   deps: ArtifactAccessDeps,
 ): Promise<ComputerSeat | null> {
   const { channel, run, task } = scope;
+  const confirmed = async (
+    seat: ComputerSeat | null,
+    ownerId: string,
+  ): Promise<ComputerSeat | null> => {
+    if (!seat || ownerId === "") return null;
+    const expected = await deps.seatFor(botId, ownerId);
+    if (computerKeyText(expected.key) !== computerKeyText(seat.key))
+      return null;
+    return (await deps.botIsLive(ownerId, botId)) ? expected : null;
+  };
 
   if (task !== undefined) {
     // One kind of scope at a time.
@@ -200,7 +239,7 @@ async function seatFor(
     const card = await deps.cardFor(actor, task);
     if (!card || card.botId !== botId) return null;
     if (!strings(card.workspaceFiles).includes(path)) return null;
-    return seatOf(botId, card.seat);
+    return confirmed(seatOf(botId, card.seat), card.ownerId);
   }
 
   if (!channel || !run) return null;
@@ -209,5 +248,5 @@ async function seatFor(
   if (!seen.agentIds.includes(botId)) return null;
   const found = await deps.runOf(actor, channel, run);
   if (!found || !seen.threadIds.includes(found.threadId)) return null;
-  return viaRun(found.events, botId, path);
+  return confirmed(viaRun(found.events, botId, path), found.ownerId);
 }

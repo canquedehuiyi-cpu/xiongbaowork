@@ -149,6 +149,7 @@ import {
   type StoredAttachment,
 } from "./channels/attachment-parts";
 import type { AgentFetch, StallGuard } from "./channels/stall-guard";
+import { withSideEventsThenArtifacts } from "./computer/turn-artifacts";
 import type { DeploymentConfig } from "./config";
 import { SYSTEM_TENANT } from "./db/schema/tenant";
 import { observeModelConnection } from "./desktop-connection-failure";
@@ -219,7 +220,6 @@ import { acceptedDelivery, deliverEndsTurnOn } from "./tasks/delivery-end";
 import { deliveryProtocolGuidance } from "./tasks/delivery-tools";
 import { noteAttachedFastPath } from "./tasks/fastpath-gate";
 import type { ProductTelemetry } from "./telemetry/product";
-import { withConfiguredTurnArtifacts } from "./computer/turn-artifacts";
 import { productRuntimeHook } from "./telemetry/product-boundaries";
 import {
   disableRuntimeTelemetryByDefault,
@@ -243,10 +243,7 @@ import {
 } from "./threads/compaction";
 import type { RecordContextBreakdown } from "./threads/context-usage";
 import type { PostgresAgentRunner } from "./threads/postgres-runner";
-import {
-  withoutServerOnlyEvents,
-  withRunSideEvents,
-} from "./threads/run-side-events";
+import { withoutServerOnlyEvents } from "./threads/run-side-events";
 import { keepStreamAlive } from "./threads/stream-keep-alive";
 import { asPersonChat, boardTurnNow } from "./threads/unattended-card";
 import { inlineToolImages } from "./tool-images";
@@ -2844,32 +2841,31 @@ async function buildAgent(
           waiting: held,
         });
         /*
-         * Outermost, the events the run's own tools add for the person to see (the delivery loop's
-         * cards), sent in this stream so they are stored and replayed with the run. See
-         * `threads/run-side-events.ts`.
+         * The run's own stream is cleaned of events only the server may send and left open to the
+         * events its tools add for the person to see (the delivery loop's cards), sent in this stream
+         * so they are stored and replayed with the run (`threads/run-side-events.ts`). Outside that,
+         * the turn's first and last look at the employee's computer lists the files it left as one
+         * event (`computer/turn-artifacts.ts`); it goes outside the cleaning because it is the
+         * server's own event, which the cleaning would drop.
          */
-        return withRunSideEvents(
-          runInput.runId,
-          // 内层：这一轮首尾记员工电脑上的文件，结束时把新建、改过的列成一条事件（`computer/turn-artifacts.ts`）。
-          withConfiguredTurnArtifacts(
-            sayingProviderRefusals(
-              withModelRun(
-                { runId: runInput.runId, threadId: runInput.threadId },
-                observeModelConnection(stream, { refusalsSaidByCaller: true }),
-              ),
-              agent,
-              refusingProvider(runModel),
-              { untilError: true },
+        return withSideEventsThenArtifacts(
+          sayingProviderRefusals(
+            withModelRun(
+              { runId: runInput.runId, threadId: runInput.threadId },
+              observeModelConnection(stream, { refusalsSaidByCaller: true }),
             ),
-            {
-              runId: runInput.runId,
-              botId: agent.id,
-              personId:
-                isTenantFramed() && isPersonTenant(currentTenant())
-                  ? currentTenant()
-                  : null,
-            },
+            agent,
+            refusingProvider(runModel),
+            { untilError: true },
           ),
+          {
+            runId: runInput.runId,
+            botId: agent.id,
+            personId:
+              isTenantFramed() && isPersonTenant(currentTenant())
+                ? currentTenant()
+                : null,
+          },
         );
       },
       ...(admit ? { admitTools: admit } : {}),
