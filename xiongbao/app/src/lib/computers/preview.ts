@@ -1,3 +1,5 @@
+import { useNavigate, useSearch } from "@tanstack/react-router";
+import { createContext, useContext, useMemo } from "react";
 import { previewKindOf } from "../../../../shared/preview-kind";
 import { scopedFileHref } from "./artifact";
 
@@ -71,6 +73,65 @@ export function previewHref(target: PreviewTarget): string | undefined {
 /** 文本类内容的地址（markdown、csv、纯文本）。 */
 export function textHref(target: PreviewTarget): string | undefined {
   return scopedFileHref("text", target);
+}
+
+/** 预览面板在右侧详情栏里的宽度（像素）：比看电脑屏幕的那一栏宽，要读文档。 */
+export const PREVIEW_PANEL_WIDTH = 560;
+
+/** 当前页面的预览开关：谁在看、打开一个、关掉。 */
+export type PreviewController = {
+  target: PreviewTarget | undefined;
+  open(target: PreviewTarget): void;
+  close(): void;
+};
+
+/**
+ * 读写当前路由 `preview` 参数的那一个。
+ *
+ * 打开时清掉 `watch` / `settings`（右侧详情栏同一时间只放一种内容），关闭时只删 `preview`，其余参数不动。
+ * 地址里的坏值读成没有目标：面板不开。
+ */
+export function useRoutePreviewTarget(): PreviewController {
+  const search = useSearch({ strict: false }) as { preview?: unknown };
+  const navigate = useNavigate();
+  const raw = typeof search.preview === "string" ? search.preview : undefined;
+  const target = useMemo(() => decodePreview(raw), [raw]);
+  return useMemo(
+    () => ({
+      target,
+      open: (next) =>
+        void navigate({
+          search: ((previous: Record<string, unknown>) => ({
+            ...previous,
+            watch: undefined,
+            settings: undefined,
+            preview: encodePreview(next),
+          })) as never,
+          replace: true,
+        }),
+      close: () =>
+        void navigate({
+          search: ((previous: Record<string, unknown>) => ({
+            ...previous,
+            preview: undefined,
+          })) as never,
+          replace: true,
+        }),
+    }),
+    [target, navigate],
+  );
+}
+
+/**
+ * 路由把自己的预览开关放在这里，清单、交付卡里的「预览」按钮从这里取。没有面板可开的页面（没人提供）
+ * 取到 undefined，那些按钮就不画。
+ */
+export const PreviewTargetContext = createContext<
+  PreviewController | undefined
+>(undefined);
+
+export function usePreviewTarget(): PreviewController | undefined {
+  return useContext(PreviewTargetContext);
 }
 
 /** 这个文件在面板里的预览类别。 */

@@ -19,7 +19,9 @@ import {
   writtenPathsInTurn,
 } from "@/lib/computers/artifact";
 import { callComputer } from "@/lib/computers/call";
+import { type PreviewTarget, usePreviewTarget } from "@/lib/computers/preview";
 import { formatBytes } from "@/lib/desktop/queries";
+import { previewKindOf } from "../../../../shared/preview-kind";
 
 /*
  * 一轮里存下的文件，摆在对话末尾成一页清单。
@@ -229,6 +231,27 @@ export const ARTIFACT_DOWNLOAD_LINK =
   "shrink-0 underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60";
 
 /**
+ * 「预览」按钮，和「下载」并排、同一个链接样式：点开右侧的预览面板。
+ *
+ * 只给有预览可看的类型（svg 之类只能下载的不给）；页面没有面板可开时也不画。
+ */
+export function PreviewButton({ target }: { target: PreviewTarget }) {
+  const preview = usePreviewTarget();
+  if (preview === undefined || previewKindOf(target.path) === "none")
+    return null;
+  return (
+    <button
+      aria-label={`预览 ${target.path}`}
+      className={ARTIFACT_DOWNLOAD_LINK}
+      onClick={() => preview.open(target)}
+      type="button"
+    >
+      预览
+    </button>
+  );
+}
+
+/**
  * 有事件时的清单：一位员工一组，每个文件一行（文件名、大小、「下载」）。
  *
  * 链接带上这个对话和列出这个文件的那条事件所在的 run：服务器只放行「在哪里被宣布」的文件，同一轮被切成
@@ -290,6 +313,15 @@ export function EventArtifacts({
                   <span className="shrink-0 opacity-70">
                     {formatBytes(file.bytes)}
                   </span>
+                  {href === undefined ? null : (
+                    <PreviewButton
+                      target={{
+                        botId: group.botId,
+                        path: file.path,
+                        scope: { channel: channelId, run: file.runId },
+                      }}
+                    />
+                  )}
                   {href === undefined ? null : (
                     <a
                       aria-label={`下载 ${file.path}`}

@@ -293,6 +293,7 @@ tests/desktop-open-requests.test.tsx
 tests/desktop-part-names.test.ts
 tests/desktop-return.test.tsx
 tests/desktop-speech.test.ts
+tests/detail-panel-preview.test.tsx
 tests/detail-panel.test.tsx
 tests/device-live-screen.test.tsx
 tests/device-presence.test.ts
