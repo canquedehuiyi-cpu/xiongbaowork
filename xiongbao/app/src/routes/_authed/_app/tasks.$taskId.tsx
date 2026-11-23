@@ -246,6 +246,7 @@ export function EvidenceLine({
           target={{
             botId: agentId,
             app: { port: row.port, path: row.path },
+            label: row.label,
             scope: { task: taskId },
           }}
         />

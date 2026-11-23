@@ -236,8 +236,59 @@ test("opening a second app unmounts the first iframe and the preview target beco
   expect(targets.at(-1)).toEqual({
     botId: "bot-1",
     app: { port: 9000, path: "/x?a=1" },
+    label: "库存表",
     scope: { task: TASK },
   });
+});
+
+test("the pane title and iframe title use the app name, falling back to the port", async () => {
+  serve(() => opened("http://c.example:9000/__open/n"));
+  const view = drawCard(delivered([app8000]));
+  fireEvent.click(view.getByRole("button", { name: "打开 销售看板" }));
+  await waitFor(() => expect(document.querySelector("iframe")).not.toBeNull());
+  expect(document.querySelector("iframe")?.getAttribute("title")).toBe(
+    "销售看板",
+  );
+  const pane = document.querySelector("[data-artifact-preview]") as HTMLElement;
+  expect(within(pane).getByText("程序 · 销售看板")).toBeDefined();
+  cleanup();
+
+  render(
+    <ArtifactPreview
+      target={{
+        botId: "bot-1",
+        app: { port: 8000, path: "/" },
+        scope: { task: TASK },
+      }}
+    />,
+  );
+  await waitFor(() => expect(document.querySelector("iframe")).not.toBeNull());
+  expect(document.querySelector("iframe")?.getAttribute("title")).toBe(
+    "端口 8000",
+  );
+});
+
+test("on the task page a failed open says so and can be tried again", async () => {
+  serve(() => json({}, 500));
+  window.open = (() => ({
+    opener: {},
+    location: { replace: () => {} },
+    close: () => {},
+  })) as unknown as typeof window.open;
+  const view = render(
+    <EvidenceLine
+      agentId="bot-1"
+      row={{ kind: "app", port: 8000, path: "/", label: "销售看板" }}
+      taskId={TASK}
+    />,
+  );
+  fireEvent.click(view.getByRole("button", { name: "打开 销售看板" }));
+  await waitFor(() => expect(view.getByText("打不开这个程序")).toBeDefined());
+  expect(
+    view
+      .getByRole("button", { name: "打开 销售看板" })
+      .hasAttribute("disabled"),
+  ).toBe(false);
 });
 
 test("on the task page open goes to a new tab, no pane", async () => {

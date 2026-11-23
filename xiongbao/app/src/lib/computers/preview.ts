@@ -21,6 +21,8 @@ export type FilePreviewTarget = {
 export type AppPreviewTarget = {
   botId: string;
   app: { port: number; path: string };
+  /** 交付卡上的程序名；侧栏标题用它，缺省用「端口 N」。 */
+  label?: string;
   scope: PreviewScope;
 };
 
@@ -97,7 +99,13 @@ export function decodePreview(
         return undefined;
       const { port, path: appPath } = app as Record<string, unknown>;
       if (!validAppPort(port) || !validAppPath(appPath)) return undefined;
-      return { botId, app: { port, path: appPath }, scope: decodedScope };
+      const { label } = parsed as Record<string, unknown>;
+      return {
+        botId,
+        app: { port, path: appPath },
+        ...(nonEmpty(label) ? { label } : {}),
+        scope: decodedScope,
+      };
     }
     if (!nonEmpty(path)) return undefined;
     return { botId, path, scope: decodedScope };

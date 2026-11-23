@@ -22,9 +22,12 @@ export function AppOpenButton({
   label: string;
 }) {
   const preview = usePreviewTarget();
-  const [state, setState] = useState<"idle" | "busy" | "unavailable">("idle");
+  const [state, setState] = useState<
+    "idle" | "busy" | "unavailable" | "failed"
+  >("idle");
   const [blocked, setBlocked] = useState(false);
-  const disabled = state !== "idle";
+  // 打不开（出错）可以再试，只有没配内容源才置灰。
+  const disabled = state === "busy" || state === "unavailable";
   const open = async () => {
     if (preview !== undefined) {
       preview.open(target);
@@ -39,7 +42,7 @@ export function AppOpenButton({
       ...scopeFields(target.scope),
     });
     setBlocked(answer === "blocked");
-    setState(answer === "unavailable" ? "unavailable" : "idle");
+    setState(answer === "unavailable" || answer === "failed" ? answer : "idle");
   };
   return (
     <>
@@ -54,6 +57,9 @@ export function AppOpenButton({
       </button>
       {state === "unavailable" ? (
         <span className="text-[12px]">没有配置内容源，不能打开程序</span>
+      ) : null}
+      {state === "failed" ? (
+        <span className="text-[12px]">打不开这个程序</span>
       ) : null}
       {blocked ? (
         <span className="text-[12px]">浏览器拦截了新标签页</span>

@@ -546,6 +546,7 @@ function DeliveredCard({
               ? {
                   botId: event.agentId,
                   app: { port: row.port, path: row.path },
+                  label: row.label,
                   scope: { task: event.taskId },
                 }
               : undefined

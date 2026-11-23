@@ -398,7 +398,7 @@ function AppPreview({
   target: AppPreviewTarget;
   onClose?: (() => void) | undefined;
 }) {
-  const name = `端口 ${target.app.port}`;
+  const name = target.label ?? `端口 ${target.app.port}`;
   const request = JSON.stringify(appOpenBody(target));
   const page = useOpenedPage(target.botId, request);
   const [opening, setOpening] = useState(false);
@@ -431,7 +431,10 @@ function AppPreview({
         ) : null}
         <iframe
           className={FRAME}
-          // 内容源（不是本应用）的页面；应用源上的 iframe 永远不给 allow-same-origin。
+          // 程序的响应不带 CSP sandbox（端口模式下程序要能发带 cookie 的子请求，域名模式靠子域隔离），
+          // 所以这里的 allow-same-origin 让它运行在内容源的真实源里：拿不到本应用的 cookie 和存储
+          // （内容源是另一个源），但端口模式下同一浏览器里先后打开的程序共用一个主机，能互相读到内容，
+          // 面板顶部的说明已提示这一点。本应用源上的 iframe 仍永远不给 allow-same-origin。
           sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
           src={result.url}
           title={name}
