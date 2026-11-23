@@ -115,7 +115,10 @@ function RouteComponent() {
           // The drawer and the address are one thing, so the card's 「设置」 link and a reload both land here.
           onOpenChange={(open) =>
             void navigate({
-              search: open ? { settings: 1 } : {},
+              search: (previous) => ({
+                ...previous,
+                settings: open ? (1 as const) : undefined,
+              }),
               replace: true,
             })
           }

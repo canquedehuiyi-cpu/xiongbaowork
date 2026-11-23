@@ -35,6 +35,7 @@ import { type AgentChannel, channelQueryOptions } from "@/lib/channels/queries";
 import { useOpenComputerOnRequest } from "@/lib/computers/panel-view";
 import {
   PREVIEW_PANEL_WIDTH,
+  type PreviewTarget,
   PreviewTargetContext,
   useRoutePreviewTarget,
 } from "@/lib/computers/preview";
@@ -56,7 +57,12 @@ const chatSearchSchema = z.object({
   /** 默认皮肤的手机上：全屏的对话侧栏（`usePhoneSidebarPage`）。 */
   sidebar: z.literal(1).optional(),
   /** 右侧详情栏里的文件预览（`lib/computers/preview.ts` 的写法）；坏值读成没有，面板不开。 */
-  preview: z.string().optional(),
+  preview: z
+    .string()
+    .optional()
+    // 地址里 `?preview=123` 会被读成数字、`true` 读成布尔：不是字符串、或是空串，都当没有，不抛进错误页。
+    .catch(undefined)
+    .transform((value) => (value === "" ? undefined : value)),
 });
 
 const EASE_OUT = [0.23, 1, 0.32, 1] as const;
@@ -126,7 +132,8 @@ function RouteComponent() {
   const autoWatch = useAutoWatchScreen({
     botId: external ? undefined : agentId,
     watching: isWatching,
-    busy: isSettingsOpen,
+    // 预览开着也是人要的内容：自动看电脑不抢它（人手动点「看电脑」仍可替换）。
+    busy: isSettingsOpen || previewing,
     open: () =>
       navigate({
         search: (previous) => ({
@@ -139,6 +146,15 @@ function RouteComponent() {
     close: () =>
       navigate({ search: (previous) => ({ ...previous, watch: undefined }) }),
   });
+
+  // 打开预览算人对这一轮的选择：这一轮不再自动开电脑（「一轮只自动开一次」）。
+  const previewController = {
+    ...preview,
+    open: (target: PreviewTarget) => {
+      autoWatch.dismiss();
+      preview.open(target);
+    },
+  };
 
   // A command in the chat clicked opens the Computer on its terminal.
   useOpenComputerOnRequest(external ? undefined : agentId, () => show("watch"));
@@ -158,7 +174,7 @@ function RouteComponent() {
   };
 
   return (
-    <PreviewTargetContext.Provider value={preview}>
+    <PreviewTargetContext.Provider value={previewController}>
       <DetailPanel
         onClose={() => show(null)}
         open={
