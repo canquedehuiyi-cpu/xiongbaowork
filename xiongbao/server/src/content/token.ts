@@ -138,7 +138,7 @@ export function renewedGrant(grant: ContentGrant, now: number): ContentGrant {
 
 /**
  * The subdomain a grant's pages are served from in domain mode: sixteen lowercase hex characters of
- * a hash over person, Bot and target, so two people, two Bots or two sites never share an origin.
+ * a hash over the JSON of [person, Bot, target] (not a joined string, so no choice of values can collide through a separator), so two people, two Bots or two sites never share an origin.
  * The target is written with a fixed key order, so equal targets always give equal codes.
  */
 export function hostCodeOf(grant: ContentGrant): string {
@@ -147,7 +147,7 @@ export function hostCodeOf(grant: ContentGrant): string {
       ? { kind: "dir", path: grant.target.path }
       : { kind: "app", port: grant.target.port, path: grant.target.path };
   return createHash("sha256")
-    .update(`${grant.person}|${grant.bot}|${JSON.stringify(target)}`)
+    .update(JSON.stringify([grant.person, grant.bot, target]))
     .digest("hex")
     .slice(0, 16);
 }

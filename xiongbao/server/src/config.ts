@@ -1841,13 +1841,23 @@ function contentConfig(environment: Environment): {
   }
   const domain = optional(environment, domainName);
   if (domain !== undefined) {
-    if (
-      !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/.test(
-        domain,
-      )
-    ) {
+    const labels = domain.split(".");
+    const wellFormed =
+      domain.length <= 253 &&
+      labels.every(
+        (label) =>
+          /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(label) && label.length <= 63,
+      );
+    if (!wellFormed) {
       throw new Error(
-        `${domainName} must be a bare host name (lowercase letters, digits, "-" and "."), without a scheme, port, path or wildcard`,
+        `${domainName} must be a bare host name (lowercase letters, digits, "-" and "."; labels up to 63 characters, 253 in all), without a scheme, port, path or wildcard`,
+      );
+    }
+    // A name ending in digits only is an IPv4 address (or looks like one): sites are subdomains of
+    // this name, which an address cannot have.
+    if (/^\d+$/.test(labels[labels.length - 1] as string)) {
+      throw new Error(
+        `${domainName} cannot be an IP address; to reach content by IP use ${portName} instead`,
       );
     }
     content.domain = domain;

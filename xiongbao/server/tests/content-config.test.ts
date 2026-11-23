@@ -83,6 +83,25 @@ describe("content origin configuration", () => {
     }
   });
 
+  test("refuses IP addresses, over-long labels and over-long names", () => {
+    for (const value of ["127.0.0.1", "10.1.2.3", "a.1", "1"]) {
+      expect(() => configWith({ XIONGBAO_CONTENT_DOMAIN: value })).toThrow(
+        "XIONGBAO_CONTENT_PORT",
+      );
+    }
+    expect(() =>
+      configWith({ XIONGBAO_CONTENT_DOMAIN: `${"a".repeat(64)}.com` }),
+    ).toThrow("XIONGBAO_CONTENT_DOMAIN");
+    expect(
+      configWith({ XIONGBAO_CONTENT_DOMAIN: `${"a".repeat(63)}.com` }).content
+        .domain,
+    ).toBe(`${"a".repeat(63)}.com`);
+    const long = Array(5).fill("a".repeat(62)).join(".");
+    expect(() => configWith({ XIONGBAO_CONTENT_DOMAIN: long })).toThrow(
+      "XIONGBAO_CONTENT_DOMAIN",
+    );
+  });
+
   test("keeps both when both are set; the domain decides the mode", () => {
     const content = configWith({
       XIONGBAO_CONTENT_PORT: "3773",

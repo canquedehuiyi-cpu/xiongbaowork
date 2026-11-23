@@ -49,10 +49,9 @@ describe("open token", () => {
   test("another key, an edited body, or the session label is rejected", () => {
     const t = issueOpenToken(grant, KEY);
     expect(readOpenToken(t, `${KEY}x`, now)).toBeNull();
-    const [body, signature] = t.split(".");
+    const signature = t.split(".")[1];
     const edited = b64({ ...grant, bot: "bot-2" });
     expect(readOpenToken(`${edited}.${signature}`, KEY, now)).toBeNull();
-    expect(body).toBeTruthy();
     expect(readOpenToken(issueSessionToken(grant, KEY), KEY, now)).toBeNull();
   });
 
@@ -80,6 +79,7 @@ describe("open token", () => {
       signedOpen({ ...grant, seat: undefined }),
       signedOpen({ ...grant, exp: "soon" }),
       signedOpen({ ...grant, exp: undefined }),
+      signedOpen({ ...grant, exp: -1 }),
       signedOpen({ ...grant, exp: Number.NaN }),
       signedOpen({ ...grant, channel: 5 }),
       signedOpen({ ...grant, target: undefined }),
@@ -120,6 +120,9 @@ describe("renewedGrant and hostCodeOf", () => {
     );
     expect(hostCodeOf({ ...grant, person: "p2" })).not.toBe(code);
     expect(hostCodeOf({ ...grant, bot: "b2" })).not.toBe(code);
+    expect(hostCodeOf({ ...grant, person: "a|b", bot: "c" })).not.toBe(
+      hostCodeOf({ ...grant, person: "a", bot: "b|c" }),
+    );
     expect(
       hostCodeOf({ ...grant, target: { kind: "dir", path: "other" } }),
     ).not.toBe(code);
