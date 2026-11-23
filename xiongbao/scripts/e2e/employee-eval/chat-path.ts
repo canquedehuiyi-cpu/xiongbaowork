@@ -571,16 +571,22 @@ export async function driveGroup(input: {
       });
       // 超时也要留下对话 id：stopTimedOutRuns 靠它停轮，运行号也从它读。
       if (read.threadId) out.threadId = read.threadId;
-      if (read.handedOff) {
+      const reply = read.reply;
+      /*
+       * 同伴有了自己的行不等于活转出去了：员工自己做完、回复里顺带 @ 同伴时同伴也会开一轮。判据看产物：产物在员工
+       * 自己的工作区里，同伴在它自己的电脑上干活，员工工作区里的产物只能是员工自己做的；所以产物已齐就不算转交，
+       * 产物没齐而同伴有行才是转交。员工这条回复无论如何照常记下。
+       */
+      const handedOff = read.handedOff && !input.outputsReady();
+      if (reply) out.replies.push(reply);
+      if (handedOff) {
         out.handedOff = true;
         break;
       }
-      const reply = read.reply;
       if (!reply) {
         out.timedOut = true;
         break;
       }
-      out.replies.push(reply);
       const next = afterRound({
         state: { failed: reply.status === "failed", limited: reply.limited },
         outputsReady: input.outputsReady(),

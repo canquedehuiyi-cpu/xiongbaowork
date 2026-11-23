@@ -567,6 +567,21 @@ test("work handed to the peer is reported and not nudged again", async () => {
   expect(stub.sent).toHaveLength(1);
 });
 
+test("a peer row beside outputs the employee made is not a hand-off, and the reply is kept", async () => {
+  const stub = groupStub({ peerRow: true });
+  const driven = await driveGroup(groupInput(stub, () => true));
+  expect(driven.handedOff).toBe(false);
+  expect(driven.replies.map((reply) => reply.status)).toEqual(["completed"]);
+  expect(driven.timedOut).toBe(false);
+});
+
+test("a peer row with the outputs missing is a hand-off, and the finished reply is still recorded", async () => {
+  const stub = groupStub({ peerRow: true });
+  const driven = await driveGroup(groupInput(stub, () => false));
+  expect(driven.handedOff).toBe(true);
+  expect(driven.replies).toHaveLength(1);
+});
+
 test("a group the server refuses is reported as the error of that turn", async () => {
   const stub = groupStub();
   const driven = await driveGroup(
