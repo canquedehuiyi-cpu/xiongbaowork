@@ -2063,6 +2063,31 @@ serve<StreamData & TerminalSocketData>({
         }
       }
 
+      if (
+        (url.pathname === "/files/mark" || url.pathname === "/files/changes") &&
+        request.method === "POST"
+      ) {
+        const body = (await request.json().catch(() => null)) as {
+          mark?: unknown;
+        } | null;
+        if (typeof body?.mark !== "string" || !body.mark.trim())
+          return json({ error: "A mark is required." }, 400);
+        try {
+          const files = await filesFor(botId);
+          if (url.pathname === "/files/mark")
+            return json(await files.mark(body.mark));
+          const changes = await files.changedSince(body.mark);
+          if (!changes)
+            return json({ error: "There is no snapshot for that mark." }, 404);
+          return json(changes);
+        } catch (error) {
+          return json(
+            { error: describe(error, "The files could not be compared.") },
+            fileStatus(error),
+          );
+        }
+      }
+
       /*
        * A command on this computer.
        *

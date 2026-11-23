@@ -45,6 +45,15 @@ import {
   resolve,
   sep,
 } from "node:path";
+import {
+  ARTIFACT_LIST_LIMIT,
+  ARTIFACT_SCAN_LIMIT,
+  isIgnoredArtifactPath,
+  type TurnArtifact,
+} from "../../shared/turn-artifacts";
+
+/** Most turn snapshots one workspace keeps at once. */
+const ARTIFACT_MARK_LIMIT = 50;
 
 export class WorkspacePathError extends Error {
   constructor(message: string) {
@@ -203,6 +212,8 @@ export type WorkspaceOptions = {
   beforeOpen?: (path: string) => void | Promise<void>;
   /** For tests: the programs a content search runs, in place of `rg` and `grep` on PATH. */
   searchTools?: { rg?: string; grep?: string };
+  /** For tests: how many files a turn snapshot looks at, in place of `ARTIFACT_SCAN_LIMIT`. */
+  artifactScanLimit?: number;
 };
 
 const {
@@ -253,6 +264,9 @@ export function createWorkspace(
   options: WorkspaceOptions = {},
 ) {
   const confined = options.confineOpened === true;
+  const scanLimit = options.artifactScanLimit ?? ARTIFACT_SCAN_LIMIT;
+  /** Turn snapshots, oldest first: path to size and mtime. Lost with the process, by design. */
+  const marks = new Map<string, Map<string, string>>();
 
   /** Open `path` and prove that what was opened is inside `root`, or close it and refuse. */
   async function openInside(
@@ -804,6 +818,7 @@ export function createWorkspace(
       path: string;
       kind: "file" | "folder";
       modifiedMs: number;
+      bytes?: number;
     }) => boolean,
   ): Promise<void> {
     let stopped = false;
@@ -825,7 +840,12 @@ export function createWorkspace(
         if (!item.isFile()) continue;
         const info = await lstat(full).catch(() => null);
         if (
-          !visit({ path: shown, kind: "file", modifiedMs: info?.mtimeMs ?? 0 })
+          !visit({
+            path: shown,
+            kind: "file",
+            modifiedMs: info?.mtimeMs ?? 0,
+            bytes: info?.size ?? 0,
+          })
         ) {
           stopped = true;
           return;
@@ -874,7 +894,12 @@ export function createWorkspace(
         if (!item.isFile()) continue;
         const info = await lstat(join(here, item.name)).catch(() => null);
         if (
-          !visit({ path: shown, kind: "file", modifiedMs: info?.mtimeMs ?? 0 })
+          !visit({
+            path: shown,
+            kind: "file",
+            modifiedMs: info?.mtimeMs ?? 0,
+            bytes: info?.size ?? 0,
+          })
         ) {
           stopped = true;
           return;
@@ -891,8 +916,96 @@ export function createWorkspace(
     }
   }
 
+  /** Every file a turn could have produced, as path to "size:mtime"; links and empty files skipped. */
+  async function snapshotFiles(): Promise<{
+    files: Map<string, { bytes: number; modifiedMs: number }>;
+    scanned: number;
+    scanTruncated: boolean;
+  }> {
+    const root = await realpath(rootPath);
+    const files = new Map<string, { bytes: number; modifiedMs: number }>();
+    let scanned = 0;
+    let scanTruncated = false;
+    await walkTree(
+      root,
+      root,
+      ".",
+      (name) => isIgnoredArtifactPath(name),
+      (entry) => {
+        if (entry.kind !== "file" || isIgnoredArtifactPath(entry.path))
+          return true;
+        if (scanned >= scanLimit) {
+          scanTruncated = true;
+          return false;
+        }
+        scanned += 1;
+        const bytes = entry.bytes ?? 0;
+        if (bytes > 0)
+          files.set(entry.path.replace(/\\/g, "/"), {
+            bytes,
+            modifiedMs: Math.trunc(entry.modifiedMs),
+          });
+        return true;
+      },
+    );
+    return { files, scanned, scanTruncated };
+  }
+
   const api = {
     resolvePath,
+
+    /** Remember what the workspace holds now, under `markId`, for {@link api.changedSince}. */
+    async mark(
+      markId: string,
+    ): Promise<{ scanned: number; scanTruncated: boolean }> {
+      const { files, scanned, scanTruncated } = await snapshotFiles();
+      const stamps = new Map<string, string>();
+      for (const [path, info] of files)
+        stamps.set(path, `${info.bytes}:${info.modifiedMs}`);
+      marks.delete(markId);
+      marks.set(markId, stamps);
+      while (marks.size > ARTIFACT_MARK_LIMIT) {
+        const oldest = marks.keys().next().value;
+        if (oldest === undefined) break;
+        marks.delete(oldest);
+      }
+      return { scanned, scanTruncated };
+    },
+
+    /**
+     * The files that are new or changed since `markId`, newest first, at most
+     * {@link ARTIFACT_LIST_LIMIT}. The mark is spent; an unknown one (the computer restarted) is null.
+     */
+    async changedSince(markId: string): Promise<{
+      files: TurnArtifact[];
+      scanned: number;
+      scanTruncated: boolean;
+      omitted: number;
+    } | null> {
+      const before = marks.get(markId);
+      if (!before) return null;
+      marks.delete(markId);
+      const { files, scanned, scanTruncated } = await snapshotFiles();
+      const changed: TurnArtifact[] = [];
+      for (const [path, info] of files) {
+        const was = before.get(path);
+        const stamp = `${info.bytes}:${info.modifiedMs}`;
+        if (was === stamp) continue;
+        changed.push({
+          path,
+          bytes: info.bytes,
+          modifiedMs: info.modifiedMs,
+          change: was === undefined ? "new" : "modified",
+        });
+      }
+      changed.sort((a, b) => b.modifiedMs - a.modifiedMs);
+      return {
+        files: changed.slice(0, ARTIFACT_LIST_LIMIT),
+        scanned,
+        scanTruncated,
+        omitted: Math.max(0, changed.length - ARTIFACT_LIST_LIMIT),
+      };
+    },
 
     /**
      * What is in the workspace.
