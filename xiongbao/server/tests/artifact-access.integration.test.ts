@@ -65,6 +65,7 @@ const isolatedRun = id("run-isolated");
 const cardForgedRun = id("run-card-forged");
 const cardGoneRun = id("run-card-gone");
 const appsRun = id("run-apps");
+const appsOnlyRun = id("run-apps-only");
 const APPS = [{ port: 8000, path: "/", title: "Dash" }];
 
 const SPECIAL = "报告 #1?.pptx";
@@ -166,6 +167,14 @@ beforeAll(async () => {
 
   await seedRun(ownerThread, owner, appsRun, [
     artifacts(`person:${owner}`, []),
+    custom("delivery.delivered", {
+      taskId: randomUUID(),
+      eventId: randomUUID(),
+      deliverable: { kind: "deliverable", apps: APPS },
+    }),
+  ]);
+  // Only a program was delivered and no file changed, so no turn announced a seat.
+  await seedRun(ownerThread, owner, appsOnlyRun, [
     custom("delivery.delivered", {
       taskId: randomUUID(),
       eventId: randomUUID(),
@@ -459,5 +468,15 @@ describe.skipIf(!bypass)("workspace file access, against the database", () => {
     expect(
       await askApp(member, 8000, { channel: group, run: deliveredRun }),
     ).toBeNull();
+  });
+
+  test("a run that delivered only a program, with no file changed, still opens that port", async () => {
+    const scope = { channel: group, run: appsOnlyRun };
+    const seat = await askApp(member, 8000, scope);
+    expect(seat?.seat.key).toEqual((await deps.seatFor(bot, owner)).key);
+    expect(await askApp(member, 8001, scope)).toBeNull();
+    expect(await askApp(outsider, 8000, scope)).toBeNull();
+    // A folder still needs a turn that listed it.
+    expect(await ask(member, "final/summary.md", scope)).toBeNull();
   });
 });

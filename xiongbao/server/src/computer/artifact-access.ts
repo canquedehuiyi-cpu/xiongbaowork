@@ -186,6 +186,8 @@ function viaRun(
   events: BaseEvent[],
   botId: string,
   wanted: Wanted,
+  /** The seat this employee runs on for the run's owner; what a program is read from when no turn named one. */
+  ownSeat: ComputerSeat | null,
 ): ComputerSeat | null {
   const matches: PathMatch = "files" in wanted ? wanted.files : () => false;
   // Every announcement of this employee in the run, with the seat it was made on.
@@ -228,6 +230,9 @@ function viaRun(
   });
   if (!delivered) return null;
   const seats = new Set(announced.map((turn) => turn.seat));
+  // A run that only delivered a program changed no file, so no turn announced a seat; the seat is
+  // then the owner's own, which the caller checks against the same resolver as for any other seat.
+  if (seats.size === 0 && "appPort" in wanted) return ownSeat;
   if (seats.size !== 1) return null;
   return seatOf(botId, [...seats][0]);
 }
@@ -355,6 +360,14 @@ async function seatFor(
         ? (card.apps ?? []).some((app) => app.port === wanted.appPort)
         : strings(card.workspaceFiles).some(wanted.files);
     if (!listed) return null;
+    if ("appPort" in wanted) {
+      // A card with a program and no file may carry no seat of its own.
+      const named = seatOf(botId, card.seat);
+      return confirmed(
+        named ?? (await deps.seatFor(botId, card.ownerId)),
+        card.ownerId,
+      );
+    }
     return confirmed(seatOf(botId, card.seat), card.ownerId);
   }
 
@@ -364,5 +377,7 @@ async function seatFor(
   if (!seen.agentIds.includes(botId)) return null;
   const found = await deps.runOf(actor, channel, run);
   if (!found || !seen.threadIds.includes(found.threadId)) return null;
-  return confirmed(viaRun(found.events, botId, wanted), found.ownerId);
+  const own =
+    "appPort" in wanted ? await deps.seatFor(botId, found.ownerId) : null;
+  return confirmed(viaRun(found.events, botId, wanted, own), found.ownerId);
 }
