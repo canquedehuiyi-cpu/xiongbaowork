@@ -37,8 +37,9 @@ import { PostgresAgentRunner } from "../src/threads/postgres-runner";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /*
- * 期三「看得见的思考」on the real database: the switch an owner turns thinking off with, stored on the
- * coworker and read back by the run; and a run's thinking stored with the run, replayed when the
+
+ * 期三「看得见的思考」on the real database: thinking is on for every coworker, with no switch of its own (the
+ * `thinking` field is accepted and ignored); and a run's thinking stored with the run, replayed when the
  * conversation is opened again, and sent back to DeepSeek from the stored conversation on the next turn.
  */
 
@@ -107,7 +108,7 @@ const form = {
   visibility: "private",
 };
 
-type Dto = { id: string; thinking: boolean };
+type Dto = { id: string };
 
 async function createCoworker(actor: AgentActor, profiles = store) {
   const response = await request(actor, "POST", "/", form, profiles);
@@ -149,73 +150,86 @@ async function asRun(actor: AgentActor, id: string) {
   });
 }
 
-describe("an owner switches thinking off for one coworker", () => {
-  test("a new coworker thinks; PATCH turns it off and on, and the run reads what was saved", async () => {
+describe("thinking has no per-coworker switch", () => {
+  test("a new coworker's profile carries no thinking field, and the run reads none", async () => {
     const owner = await person("owner");
     const agent = await createCoworker(owner);
-    expect(agent.thinking).toBe(true);
+    expect(agent).not.toHaveProperty("thinking");
     expect((await asRun(owner, agent.id)).registered).not.toHaveProperty(
       "thinking",
     );
-
-    const off = await patch(owner, agent.id, { thinking: false });
-    expect(off.status).toBe(200);
-    expect(((await off.json()) as { agent: Dto }).agent.thinking).toBe(false);
-    let stored = await asRun(owner, agent.id);
-    expect(stored.configuration.thinking).toBe(false);
-    // The prompt it runs on is untouched by the switch.
-    expect(stored.configuration.systemPrompt).toBe(form.roleDescription);
-    expect(stored.registered).toMatchObject({ thinking: false });
-
-    // A save that does not mention it leaves it where it is.
-    const unrelated = await patch(owner, agent.id, { title: "资深调研员" });
-    expect(unrelated.status).toBe(200);
-    expect(((await unrelated.json()) as { agent: Dto }).agent.thinking).toBe(
-      false,
-    );
-
-    const on = await patch(owner, agent.id, { thinking: true });
-    expect(((await on.json()) as { agent: Dto }).agent.thinking).toBe(true);
-    stored = await asRun(owner, agent.id);
-    expect(stored.configuration).not.toHaveProperty("thinking");
-    expect(stored.registered).not.toHaveProperty("thinking");
-
-    const read = await request(owner, "GET", `/${agent.id}`);
-    expect(((await read.json()) as { agent: Dto }).agent.thinking).toBe(true);
   });
 
-  test("anything but true or false is refused, and nothing is saved", async () => {
-    const owner = await person("typo");
-    const agent = await createCoworker(owner);
-    const typo = await patch(owner, agent.id, { thinking: "false" });
-    expect(typo.status).toBe(400);
-    expect(((await typo.json()) as { error: string }).error).toBe(
-      "思考模式只能是 true 或 false。",
-    );
+  test("PATCH and create accept thinking but ignore it: nothing is stored, nothing is returned", async () => {
+    const owner = await person("ignored");
+    const made = await request(owner, "POST", "/", {
+      ...form,
+      thinking: false,
+    });
+    expect(made.status).toBe(201);
+    const { agent } = (await made.json()) as { agent: Dto };
+    agentIds.push(agent.id);
+    expect(agent).not.toHaveProperty("thinking");
     expect((await asRun(owner, agent.id)).configuration).not.toHaveProperty(
+      "thinking",
+    );
+
+    for (const value of [false, true, "false"]) {
+      const response = await patch(owner, agent.id, {
+        thinking: value,
+        title: "资深调研员",
+      });
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as {
+        agent: Dto & { title: string };
+      };
+      expect(body.agent).not.toHaveProperty("thinking");
+      expect(body.agent.title).toBe("资深调研员");
+      const stored = await asRun(owner, agent.id);
+      expect(stored.configuration).not.toHaveProperty("thinking");
+      expect(stored.configuration.systemPrompt).toBe(form.roleDescription);
+      expect(stored.registered).not.toHaveProperty("thinking");
+    }
+  });
+
+  test("a coworker whose stored configuration still says thinking: false is read as thinking all the same", async () => {
+    const owner = await person("legacy");
+    const agent = await createCoworker(owner);
+    await runAsTenant(owner.id, async () => {
+      const [row] = await database
+        .select({ configuration: agents.configuration })
+        .from(agents)
+        .where(eq(agents.id, agent.id));
+      await database
+        .update(agents)
+        .set({
+          configuration: { ...(row?.configuration as object), thinking: false },
+        })
+        .where(eq(agents.id, agent.id));
+    });
+    const stored = await asRun(owner, agent.id);
+    expect(stored.configuration.thinking).toBe(false);
+    expect(stored.registered).not.toHaveProperty("thinking");
+    const read = await request(owner, "GET", `/${agent.id}`);
+    expect(((await read.json()) as { agent: Dto }).agent).not.toHaveProperty(
       "thinking",
     );
   });
 
-  test("a coworker that runs on another server is not switched here", async () => {
+  test("a coworker that runs on another server accepts and ignores it too", async () => {
     const owner = await person("remote");
     const agent = await createCoworker(owner, remoteStore);
-    const refused = await request(
+    const response = await request(
       owner,
       "PATCH",
       `/${agent.id}`,
       { ...form, thinking: false },
       remoteStore,
     );
-    expect(refused.status).toBe(400);
-    const kept = await request(
-      owner,
-      "PATCH",
-      `/${agent.id}`,
-      { ...form, thinking: true },
-      remoteStore,
+    expect(response.status).toBe(200);
+    expect((await asRun(owner, agent.id)).configuration).not.toHaveProperty(
+      "thinking",
     );
-    expect(kept.status).toBe(200);
   });
 });
 

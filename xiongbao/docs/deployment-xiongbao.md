@@ -171,7 +171,7 @@ BOT_MODEL=<供应商当前支持的准确模型名>
 DEEPSEEK_THINKING=disabled
 ```
 
-单个员工可以单独关掉「思考模式」：`PATCH /api/agents/<id>`，随员工资料一起提交 `"thinking": false`（界面开关在下一版）。
+员工设置里没有「思考模式」开关，所有员工一律开着；要全关只能用上面的 `DEEPSEEK_THINKING=disabled`。`PATCH /api/agents/<id>` 和创建员工时带的 `thinking` 字段会被接受但忽略，员工资料里也不再返回它。
 `DEEPSEEK_THINKING=enabled` 只多一件事：辅助请求也按 DeepSeek 自己的默认思考。别的模型供应商不受这个开关影响。
 改完同样要重新创建容器。
 

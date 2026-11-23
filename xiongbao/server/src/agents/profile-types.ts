@@ -46,13 +46,6 @@ export type AgentProfile = {
    */
   platformModelRef: string | null;
   /**
-   * Whether this coworker thinks before it answers (期三, `shared/thinking.ts`): on DeepSeek its
-   * reasoning streams into the conversation. On unless its owner switched it off. Read from
-   * `agents.configuration.thinking`, where only `false` is ever written. Optional on the type only so
-   * profiles written by hand in tests before it existed still check; the store always sets it.
-   */
-  thinking?: boolean;
-  /**
    * Who this coworker is, as its owner wrote it.
    *
    * Null means nothing was ever written, which is not the same as three empty boxes: only the first
@@ -212,12 +205,6 @@ export type CreateAgentInput = Pick<
    * pool's enabled rows and the record tenant's plan, never trusted from the form.
    */
   platformModelRef?: string | null;
-  /**
-   * Its thinking mode (期三, `shared/thinking.ts`): absent leaves it, `true` switches it on, `false`
-   * off. Read on update only, as the model binding is: a new coworker thinks. Only a coworker that
-   * runs here has one; switching it off for any other is refused, as binding it a model is.
-   */
-  thinking?: boolean;
   /**
    * The coworker's persona. Absent on an update leaves it where it is; an object writes it, and the
    * server decides which parts are worth sending to a model at all.

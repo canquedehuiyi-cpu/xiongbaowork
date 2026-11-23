@@ -55,7 +55,6 @@ type AgentInputObject = {
   auth?: unknown;
   modelRef?: unknown;
   platformModelRef?: unknown;
-  thinking?: unknown;
   persona?: unknown;
   bible?: unknown;
   department?: unknown;
@@ -229,12 +228,6 @@ export function parseAgentInput(
   }
   const isolated = input.isolated;
 
-  // 期三：思考模式。同上，只查带了的值；字符串 "false" 不当成关。
-  if (input.thinking !== undefined && typeof input.thinking !== "boolean") {
-    return { ok: false, error: "思考模式只能是 true 或 false。" };
-  }
-  const thinking = input.thinking;
-
   /*
    * The framework a person named for an agent they run themselves, by its id in the harness list.
    * Kept only with an address: a Bot with none runs here, on OpenBot. See `frameworkOf`.
@@ -283,7 +276,6 @@ export function parseAgentInput(
       ...(department === undefined ? {} : { department }),
       ...(avatarSeed === undefined ? {} : { avatarSeed }),
       ...(isolated === undefined ? {} : { isolated }),
-      ...(thinking === undefined ? {} : { thinking }),
       ...(instructions === undefined ? {} : { instructions }),
       ...(harness === undefined ? {} : { harness }),
     },
@@ -519,6 +511,25 @@ export function parseConnectionHeaders(
   return { ok: true, value: entries.length === 0 ? undefined : headers };
 }
 
+/**
+ * Whether the coworker runs on this deployment: a `built_in` Bot, the managed Bot's own address, or
+ * a profile with no address at all (a single-container deployment keeps none for a Bot made here).
+ * An external employee's agent runs on its hirer's computer, and a Bot with an address of its own
+ * is remote: neither is ours. Null is not compared with an unset managed address, which is how an
+ * address-less Bot used to read as remote.
+ */
+export function runsOnThisDeployment(
+  agent: Pick<AgentProfile, "endpoint" | "type" | "externalRun">,
+  managedEndpoint: string | undefined,
+): boolean {
+  if (agent.type === "built_in") return true;
+  if (agent.externalRun || agent.type === "device_acp") return false;
+  if (agent.endpoint === null || agent.endpoint === "") {
+    return agent.type === undefined || agent.type === "remote_ag_ui";
+  }
+  return managedEndpoint !== undefined && agent.endpoint === managedEndpoint;
+}
+
 export function createAgentRoutes(
   store: AgentProfileStore,
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>,
@@ -642,9 +653,7 @@ export function createAgentRoutes(
   /** The dto with the one fact only this closure knows: whether the coworker runs on our own Bot. */
   const dto = (actor: AgentActor, agent: AgentProfile) => ({
     ...agentDto(actor, agent),
-    // A string comparison on purpose: two absent values must not read as "runs on our Bot".
-    builtIn:
-      typeof agent.endpoint === "string" && agent.endpoint === managedEndpoint,
+    builtIn: runsOnThisDeployment(agent, managedEndpoint),
     /*
      * Whether it runs on this deployment's model, so a person can pick the model and effort per
      * conversation: a `built_in` Bot (no endpoint), or the harness picked in setup when it is one of
@@ -1483,8 +1492,6 @@ function agentDto(actor: AgentActor, agent: AgentProfile) {
     modelRef: agent.modelRef,
     // Which platform pool model it answers on instead, if any. Never both.
     platformModelRef: agent.platformModelRef,
-    // 期三：思考模式，没关过就是开着（`shared/thinking.ts`）。存储总会给出；手写的资料没有就不发。
-    ...(agent.thinking === undefined ? {} : { thinking: agent.thinking }),
     persona: agent.persona,
     // ROLE1: the handbook, the template it came from, and whether a template may be applied at all.
     // The store always sets all three; a profile without them publishes none.

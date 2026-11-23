@@ -12,7 +12,11 @@ import type {
   AgentProfile,
   CreateAgentInput,
 } from "../src/agents/profile-types";
-import { createAgentRoutes, parseAgentInput } from "../src/agents/routes";
+import {
+  createAgentRoutes,
+  parseAgentInput,
+  runsOnThisDeployment,
+} from "../src/agents/routes";
 import { createApp } from "../src/app";
 import type { AppVariables, AuthenticatedActor } from "../src/auth/guards";
 import { loadConfig } from "../src/config";
@@ -401,7 +405,7 @@ describe("agent lifecycle routes", () => {
           systemOwned: false,
           canManage: true,
           mine: true,
-          builtIn: false,
+          builtIn: true,
           endpoint: null,
           runsOnOpenBotModel: true,
           keyFromOpenBot: false,
@@ -427,7 +431,7 @@ describe("agent lifecycle routes", () => {
           systemOwned: false,
           canManage: false,
           mine: false,
-          builtIn: false,
+          builtIn: true,
           endpoint: null,
           runsOnOpenBotModel: true,
           keyFromOpenBot: false,
@@ -453,7 +457,7 @@ describe("agent lifecycle routes", () => {
           systemOwned: true,
           canManage: false,
           mine: false,
-          builtIn: false,
+          builtIn: true,
           endpoint: null,
           runsOnOpenBotModel: true,
           keyFromOpenBot: false,
@@ -879,5 +883,69 @@ describe("which Bots a Bot may hand work to", () => {
     const response = await app.request("/somebody-elses/handoff");
 
     expect(response.status).toBe(404);
+  });
+});
+
+describe("whether a coworker runs on this deployment (builtIn)", () => {
+  const managed = "http://agent-harness:4212/ag-ui";
+
+  test("a Bot made here has no address on a single-container deployment, and is ours", () => {
+    // The old string comparison read null against an unset managed address as "not ours".
+    expect(
+      runsOnThisDeployment({ type: "built_in", endpoint: null }, undefined),
+    ).toBe(true);
+    expect(
+      runsOnThisDeployment({ type: "built_in", endpoint: null }, managed),
+    ).toBe(true);
+  });
+
+  test("the managed Bot's own address is ours; any other address is a remote Bot", () => {
+    expect(
+      runsOnThisDeployment(
+        { type: "remote_ag_ui", endpoint: managed },
+        managed,
+      ),
+    ).toBe(true);
+    expect(
+      runsOnThisDeployment(
+        { type: "remote_ag_ui", endpoint: "https://agent.example.com/ag-ui" },
+        managed,
+      ),
+    ).toBe(false);
+    expect(
+      runsOnThisDeployment(
+        { type: "remote_ag_ui", endpoint: "https://agent.example.com/ag-ui" },
+        undefined,
+      ),
+    ).toBe(false);
+  });
+
+  test("an external employee runs on its hirer's computer, not here", () => {
+    expect(
+      runsOnThisDeployment({ type: "device_acp", endpoint: null }, undefined),
+    ).toBe(false);
+  });
+
+  test("the published dto carries it, for a Bot with no address and for one with its own", async () => {
+    const store = fakeStore({
+      async list() {
+        return [
+          profile({ type: "built_in", endpoint: null }),
+          profile({
+            id: "agent-2",
+            type: "remote_ag_ui",
+            endpoint: "https://agent.example.com/ag-ui",
+          }),
+        ];
+      },
+    });
+    const response = await appFor(store).request("http://openbot.test/");
+    const { agents } = (await json(response)) as {
+      agents: { id: string; builtIn: boolean }[];
+    };
+    expect(agents.map((agent) => [agent.id, agent.builtIn])).toEqual([
+      ["agent-1", true],
+      ["agent-2", false],
+    ]);
   });
 });

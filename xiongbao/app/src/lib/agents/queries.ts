@@ -59,11 +59,6 @@ export type AgentProfile = {
    */
   modelRef: string | null;
   /**
-   * Whether it thinks before it answers (期三, `shared/thinking.ts`). Absent on an older server's
-   * profile, which reads as on, as the server reads an unset one.
-   */
-  thinking?: boolean;
-  /**
    * Which platform experience model it answers on instead (stories H1, K1). Never set together with
    * `modelRef`; null or absent means it is not on the pool. Optional because a profile drawn before
    * the pool existed does not carry it, and absent reads the same as null.

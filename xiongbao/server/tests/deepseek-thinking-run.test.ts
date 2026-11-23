@@ -365,34 +365,6 @@ describe("a person's run on DeepSeek, thinking on (the default)", () => {
 });
 
 describe("thinking off", () => {
-  test("for one Bot its owner switched off: DeepSeek is told so, and nothing is streamed as thinking", async () => {
-    deepSeekSays([
-      lookupCall("ENG-1", "先查 ENG-1 的状态。"),
-      { content: "ENG-1 在 Todo。", reasoning: "查到了。" },
-    ]);
-
-    const { events } = await chat("ENG-1 是什么状态？", {
-      bot: { ...thinker, thinking: false },
-      history: [
-        { id: "old-ask", role: "user", content: "早上好" },
-        { id: "old-thought", role: "reasoning", content: "打个招呼。" },
-        { id: "old-answer", role: "assistant", content: "早上好！" },
-      ] as Message[],
-    });
-
-    expect(sent).toHaveLength(2);
-    for (const body of sent) {
-      expect(body.thinking).toEqual({ type: "disabled" });
-      expect(
-        body.messages.some((message) => "reasoning_content" in message),
-      ).toBe(false);
-    }
-    expect(types(events)).not.toContain("RUN_ERROR");
-    for (const type of REASONING_EVENTS)
-      expect(types(events)).not.toContain(type);
-    expect(lookups).toEqual(["ENG-1"]);
-  });
-
   test("for every Bot, with DEEPSEEK_THINKING=disabled", async () => {
     process.env.DEEPSEEK_THINKING = "disabled";
     expect(deepSeekThinkingOff()).toBe(true);
@@ -422,7 +394,7 @@ describe("other models are left as they were", () => {
     });
     expect(deepSeekDeploymentModel(deepSeek, "k")).toBeUndefined();
 
-    await chat("你好", { bot: { ...thinker, thinking: false } });
+    await chat("你好");
 
     expect(sent).toEqual([]);
     expect(asked).toHaveLength(1);
