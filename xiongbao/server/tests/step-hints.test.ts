@@ -106,7 +106,7 @@ describe("接活回执和第一批读取放在同一步发", () => {
     expect(text).not.toContain("同一步");
     expect(
       text.endsWith(
-        "有文件产出的活，先用 accept_task 接下；做完用 deliver_task 交付，把你写在工作区里的文件用 workspace_file 逐个列上（ref 写工作区内的相对路径，如 reports/对比.xlsx）。",
+        "先 accept_task 接下，做完 deliver_task 交付：文件用 workspace_file 列（ref 写路径），运行中的程序用 app（port、path 默认 /、title）。",
       ),
     ).toBe(true);
   });

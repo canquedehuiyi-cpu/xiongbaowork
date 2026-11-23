@@ -71,7 +71,7 @@ const PLAIN_QUESTIONS = "问一句答一句的普通对话不要用这三个工�
  * in its workspace go on the hand-in. Without it a coworker that wrote its files and said so in words left
  * a card nobody had handed in.
  */
-const HAND_IN_WITH_FILES = `${FILE_DELIVERY_HINT}有文件产出的活，先用 accept_task 接下；做完用 deliver_task 交付，把你写在工作区里的文件用 workspace_file 逐个列上（ref 写工作区内的相对路径，如 reports/对比.xlsx）。`;
+const HAND_IN_WITH_FILES = `${FILE_DELIVERY_HINT}先 accept_task 接下，做完 deliver_task 交付：文件用 workspace_file 列（ref 写路径），运行中的程序用 app（port、path 默认 /、title）。`;
 /** 开着 `XIONGBAO_ACCEPT_WITH_READS` 时，补充句后面再加一句：回执不单独占一步（`agents/step-hints.ts`）。 */
 const handInWithFiles = () =>
   acceptWithReadsOn()
@@ -401,7 +401,7 @@ export function deliveryTools(options: {
     ),
     tool(
       DELIVER_TASK,
-      "交付（规约第 2 条）：做完接下的活时调用。items 列出交付物：attachment（这个对话里的附件 id）、component（这件活里画过的组件，ref 写组件名或它那次调用的 id）、link（http(s) 地址）、workspace_file（写在你自己工作区里的文件，ref 写工作区内的相对路径，如 reports/对比.xlsx，任务卡会把它念成一行产物）、app（正在运行的程序：port 写端口，path 写首页路径默认 /，title 写程序名，ref 可省；服务器会请求一次首页）、note（只有文字结论时，ref 写结论）；title 写清是什么。checks 写你怎么查过的，每条一句。验收标准写了「必需：…」时，每个必需项都要在 title 或 checks 里提到。服务器会核对，不过会被挡回并告诉你缺什么；补齐再交。交了以后等对方验收，没被验收前不要说「做完了」。" +
+      "交付（规约第 2 条）：做完接下的活时调用。items 列出交付物：attachment（这个对话里的附件 id）、component（这件活里画过的组件，ref 写组件名或它那次调用的 id）、link（http(s) 地址）、workspace_file（写在你自己工作区里的文件，ref 写工作区内的相对路径，如 reports/对比.xlsx，任务卡会把它念成一行产物）、app（运行中的程序：port、path 默认 /、title，ref 可省；服务器会请求一次首页）、note（只有文字结论时，ref 写结论）；title 写清是什么。checks 写你怎么查过的，每条一句。验收标准写了「必需：…」时，每个必需项都要在 title 或 checks 里提到。服务器会核对，不过会被挡回并告诉你缺什么；补齐再交。交了以后等对方验收，没被验收前不要说「做完了」。" +
         FILE_DELIVERY_HINT,
       deliverSchema,
       async (value) => {

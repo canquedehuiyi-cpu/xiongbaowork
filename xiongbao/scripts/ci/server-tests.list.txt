@@ -65,6 +65,7 @@ tests/app-access-upstream.integration.test.ts
 tests/app-discovery.test.ts
 tests/app-grants-describe.integration.test.ts
 tests/app-grants-rules.test.ts
+tests/app-probe.test.ts
 tests/approval-account-binding.integration.test.ts
 tests/approval-activity-words.integration.test.ts
 tests/approval-continuation-preparation-transaction.integration.test.ts

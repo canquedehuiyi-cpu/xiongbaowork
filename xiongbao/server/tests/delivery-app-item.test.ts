@@ -1,7 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import type { BaseEvent } from "@ag-ui/client";
 import { TOOL_BRIEFS } from "../src/agents/prompt-slim";
-import { deliveredAppsOf } from "../src/computer/artifact-access";
+import {
+  type ArtifactAccessDeps,
+  deliveredAppsOf,
+  resolveArtifactAppAccess,
+} from "../src/computer/artifact-access";
+import { personSeat } from "../src/computer/computer-key";
 import type { Database } from "../src/db/client";
+import { mergeDeliverables } from "../src/tasks/delivery";
+import { DELIVERY_EVENTS } from "../src/tasks/delivery-events";
 import { deliveryProtocolGuidance } from "../src/tasks/delivery-tools";
 import {
   type AppProbe,
@@ -168,6 +176,51 @@ describe("交付项 app", () => {
     expect(deliveredAppsOf(verdict.ref.apps)).toEqual([
       { port: 8123, path: "/", title: "待办" },
     ]);
+  });
+});
+
+describe("交付到打开程序的整条链", () => {
+  test("交付 → 合并进卡片 → 写进 delivery.delivered 事件 → 鉴权按同一个端口放行", async () => {
+    const verdict = await check(
+      [todo({ port: 8123, path: "/app/", title: "记账" })],
+      async () => ({ status: 200 }),
+    );
+    expect(verdict.ok).toBe(true);
+    if (!verdict.ok) return;
+    const merged = mergeDeliverables(undefined, verdict.ref);
+    const expected = [{ port: 8123, path: "/app/", title: "记账" }];
+    expect(deliveredAppsOf(merged.apps)).toEqual(expected);
+
+    // deliver_task 写进这一轮事件流的那一条：值里带 deliverable，就是证据门给出的 ref。
+    const event = {
+      type: "CUSTOM",
+      name: DELIVERY_EVENTS.delivered,
+      value: {
+        taskId: "k1",
+        eventId: "e1",
+        agentId: "a1",
+        deliverable: verdict.ref,
+      },
+    } as unknown as BaseEvent;
+    const deps: ArtifactAccessDeps = {
+      channelFor: async () => ({ agentIds: ["a1"], threadIds: ["th1"] }),
+      runOf: async () => ({ threadId: "th1", ownerId: "p1", events: [event] }),
+      cardFor: async () => null,
+      seatFor: async (botId, personId) => personSeat(personId, botId),
+      botIsLive: async () => true,
+    };
+    const open = (port: number) =>
+      resolveArtifactAppAccess(
+        {
+          actor: { id: "p2", role: "user" },
+          botId: "a1",
+          port,
+          scope: { channel: "c1", run: "r1" },
+        },
+        deps,
+      );
+    expect((await open(8123))?.seat.botId).toBe("a1");
+    expect(await open(8124)).toBeNull();
   });
 });
 

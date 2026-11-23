@@ -44,7 +44,13 @@ import {
  */
 export type DeliveredApp = { port: number; path: string; title: string };
 
-/** The apps a stored value lists: only well-formed ones (a usable port, a string path and title). */
+/**
+ * The apps a stored value lists: only well-formed ones (a usable port, a string path and title).
+ *
+ * `unverifiedApps` on the same deliverable is deliberately not read: it only says the gate could not
+ * request the first page (a device seat cannot be reached from the server), and `forwardHttp` cannot
+ * reach that seat either, so it changes nothing about whether the program may be opened.
+ */
 export function deliveredAppsOf(value: unknown): DeliveredApp[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((item): DeliveredApp[] =>

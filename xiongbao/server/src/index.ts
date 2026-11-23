@@ -636,6 +636,7 @@ import {
   createThreadVisibility,
 } from "./staffing/routes";
 import { createStaffingProposalStore } from "./staffing/store";
+import { createAppProbe } from "./tasks/app-probe";
 import { createBoardCardRoutes } from "./tasks/board-cards-routes";
 import {
   createBriefingRoutes,
@@ -3100,32 +3101,7 @@ await startupLifecycle.run(async (startup) => {
             { path },
           )
       : undefined,
-    appProbe: computerGateway
-      ? async ({ tenantId, agentId, port, path }) => {
-          // A paired personal computer cannot be reached from the server: the card says 未核实.
-          if (config.tenantRuntime === "device") return null;
-          try {
-            const answer = await computerGateway.forwardHttp(
-              await computerGateway.seatFor(agentId, tenantId),
-              {
-                port,
-                method: "GET",
-                path,
-                headers: new Headers(),
-                body: null,
-              },
-              AbortSignal.timeout(10_000),
-            );
-            await answer.body?.cancel().catch(() => undefined);
-            // The computer answers 403 for a port that is not this Bot's or has nothing listening.
-            return answer.status === 403
-              ? { refused: "forbidden" }
-              : { status: answer.status };
-          } catch {
-            return { refused: "unreachable" };
-          }
-        }
-      : undefined,
+    appProbe: computerGateway ? createAppProbe(computerGateway) : undefined,
   });
   /*
    * External employees walk the same three steps, the server walking them for them (spec §9,
