@@ -66,9 +66,7 @@ function Page({ content }: { content: React.ReactNode }) {
     <PreviewTargetContext.Provider value={preview}>
       <DetailPanel
         detail={
-          preview.target ? (
-            <ArtifactPreview onClose={preview.close} target={preview.target} />
-          ) : null
+          preview.target ? <ArtifactPreview target={preview.target} /> : null
         }
         detailWidth={PREVIEW_PANEL_WIDTH}
         onClose={preview.close}
@@ -168,6 +166,13 @@ test("opening a preview closes the live screen and settings; the other params st
   });
 });
 
+test("the pane has exactly one close button", async () => {
+  await openPage({ preview: encodePreview(TARGET) }, <p>chat</p>);
+  expect(panel()).not.toBeNull();
+  expect(ui().getAllByRole("button", { name: /^关闭/ })).toHaveLength(1);
+  expect(ui().queryByRole("button", { name: "关闭预览" })).toBeNull();
+});
+
 test("closing removes only the preview param", async () => {
   const router = await openPage(
     { preview: encodePreview(TARGET), keep: "x" },
@@ -175,7 +180,7 @@ test("closing removes only the preview param", async () => {
   );
   expect(panel()).not.toBeNull();
   await act(async () => {
-    ui().getByRole("button", { name: "关闭预览" }).click();
+    ui().getByRole("button", { name: /^关闭/ }).click();
   });
   await waitFor(() => expect(searchOf(router).preview).toBeUndefined());
   expect(searchOf(router).keep).toBe("x");

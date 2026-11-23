@@ -236,3 +236,30 @@ test("group: ?preview opens the pane; a bad value does not; settings keeps it", 
   await waitFor(() => expect(ui().getByText("周报群")).toBeTruthy());
   expect(panel()).toBeNull();
 });
+
+test("single chat: the pane's close button closes the preview and clears ?preview; only one close button", async () => {
+  const { router } = single(`?preview=${GOOD}`);
+  await waitFor(() => expect(panel()).not.toBeNull());
+  expect(
+    ui()
+      .getAllByRole("button", { name: /^关闭/ })
+      .filter((button) =>
+        button.closest("[role=dialog], [data-slot=detail-pane]"),
+      ),
+  ).toHaveLength(1);
+  await act(async () => {
+    ui().getByRole("button", { name: /^关闭/ }).click();
+  });
+  await waitFor(() => expect(searchOf(router).preview).toBeUndefined());
+  await waitFor(() => expect(panel()).toBeNull());
+});
+
+test("group: the pane's close button closes the preview and clears ?preview", async () => {
+  const { router } = mount(`/group/g-1?preview=${GOOD}`, groupRoute, "group");
+  await waitFor(() => expect(panel()).not.toBeNull());
+  await act(async () => {
+    ui().getByRole("button", { name: /^关闭/ }).click();
+  });
+  await waitFor(() => expect(searchOf(router).preview).toBeUndefined());
+  await waitFor(() => expect(panel()).toBeNull());
+});

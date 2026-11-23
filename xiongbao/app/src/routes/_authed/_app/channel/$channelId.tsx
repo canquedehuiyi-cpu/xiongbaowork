@@ -205,7 +205,7 @@ function RouteComponent() {
         }
         detail={
           agentId === undefined ? null : preview.target ? (
-            <ArtifactPreview onClose={preview.close} target={preview.target} />
+            <ArtifactPreview target={preview.target} />
           ) : isWatching ? (
             // Manual watch remains active even when there is no current browser action.
             <ComputerViewPanel agentId={agentId} name={channel?.data?.name} />

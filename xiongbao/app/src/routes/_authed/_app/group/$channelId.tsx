@@ -154,9 +154,7 @@ function RouteComponent() {
           />
         }
         detail={
-          preview.target ? (
-            <ArtifactPreview onClose={preview.close} target={preview.target} />
-          ) : null
+          preview.target ? <ArtifactPreview target={preview.target} /> : null
         }
         detailWidth={PREVIEW_PANEL_WIDTH}
         onClose={preview.close}

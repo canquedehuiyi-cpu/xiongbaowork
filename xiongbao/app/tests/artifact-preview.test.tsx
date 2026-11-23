@@ -144,7 +144,38 @@ describe("ArtifactPreview", () => {
     );
     const frame = container.querySelector("iframe");
     expect(frame?.hasAttribute("sandbox")).toBe(false);
-    expect(frame?.getAttribute("src")).toBe(previewHref(target("a b/#?%.pdf")));
+    expect(frame?.getAttribute("src")).toBe(
+      `${previewHref(target("a b/#?%.pdf"))}#navpanes=0`,
+    );
+  });
+
+  test("pdf iframe src ends with #navpanes=0; html and the open link do not", () => {
+    const pdf = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.pdf")} />,
+    );
+    expect(
+      pdf.container
+        .querySelector("iframe")
+        ?.getAttribute("src")
+        ?.endsWith("#navpanes=0"),
+    ).toBe(true);
+    expect(
+      ui()
+        .getByRole("link", { name: /新标签页/ })
+        .getAttribute("href"),
+    ).toBe(previewHref(target("a.pdf")) as string);
+    cleanup();
+    const html = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.html")} />,
+    );
+    expect(
+      html.container.querySelector("iframe")?.getAttribute("src"),
+    ).not.toContain("#");
+  });
+
+  test("without onClose there is no close button", () => {
+    render(<ArtifactPreview target={target("a.pdf")} />);
+    expect(ui().queryByRole("button", { name: /关闭/ })).toBeNull();
   });
 
   test("office: converted PDF goes in an iframe without sandbox", async () => {

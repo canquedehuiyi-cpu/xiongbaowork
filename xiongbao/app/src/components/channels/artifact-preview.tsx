@@ -231,11 +231,14 @@ export function ArtifactPreview({
   onClose,
 }: {
   target: PreviewTarget;
-  onClose: () => void;
+  /** 在 DetailPanel 里时不传：标题栏已有关闭按钮，不再画第二个；单独使用时传，顶栏画「×」。 */
+  onClose?: () => void;
 }) {
   const kind = previewKindOfTarget(target);
   const textual = kind === "markdown" || kind === "csv" || kind === "text";
   const src = previewHref(target);
+  // PDF 查看器默认展开缩略图栏会挤窄正文：fragment 只给查看器看，不进服务器请求；「在新标签页打开」仍用 src。
+  const framed = src === undefined ? undefined : `${src}#navpanes=0`;
   const download = artifactHref(target);
   const name = target.path.split("/").pop() ?? target.path;
   const text = useTextAnswer(textHref(target), textual);
@@ -296,13 +299,13 @@ export function ArtifactPreview({
     );
   else if (kind === "pdf")
     // 不加 sandbox 属性：它会拦掉 PDF 查看器。隔离靠响应头里的 CSP sandbox。
-    body = <iframe className={FRAME} src={src} title={name} />;
+    body = <iframe className={FRAME} src={framed} title={name} />;
   else if (office.state === "loading") body = <Note>正在转成 PDF…</Note>;
   else if (office.state === "unsupported") {
     body = unsupported;
     canOpen = false;
   } else if (office.state === "failed") body = failed;
-  else body = <iframe className={FRAME} src={src} title={name} />;
+  else body = <iframe className={FRAME} src={framed} title={name} />;
 
   return (
     <section
@@ -337,14 +340,16 @@ export function ArtifactPreview({
             在新标签页打开
           </a>
         ) : null}
-        <button
-          aria-label="关闭预览"
-          className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
-          onClick={onClose}
-          type="button"
-        >
-          <IconX aria-hidden className="size-4" />
-        </button>
+        {onClose === undefined ? null : (
+          <button
+            aria-label="关闭预览"
+            className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            onClick={onClose}
+            type="button"
+          >
+            <IconX aria-hidden className="size-4" />
+          </button>
+        )}
       </div>
       {body}
     </section>
