@@ -6,6 +6,7 @@ import {
   readFile,
   rm,
   symlink,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -48,7 +49,7 @@ function stubRunner(calls: string[], exit = 0): CommandRunner {
   return {
     async run(input) {
       calls.push(input.command);
-      if (input.command.includes("soffice")) return result(exit);
+      if (input.command.includes("'--convert-to'")) return result(exit);
       if (input.command.startsWith("'mv'")) {
         await mkdir(join(root, PREVIEW_CACHE_DIR), { recursive: true });
         const target =
@@ -89,7 +90,7 @@ describe("convertToPdf", () => {
     expect(first).toMatchObject({ cached: false });
     const used = calls.length;
     expect(
-      calls.some((c) => c.includes(shellWord("my deck #1;'x'.pptx"))),
+      calls.some((c) => c.includes(shellWord("./my deck #1;'x'.pptx"))),
     ).toBe(true);
     const second = await convertToPdf(args);
     expect(second).toEqual({
@@ -151,7 +152,123 @@ describe("convertToPdf", () => {
     };
     const [a, b] = await Promise.all([convertToPdf(args), convertToPdf(args)]);
     expect(a).toEqual(b);
-    expect(calls.filter((c) => c.includes("soffice")).length).toBe(1);
+    expect(calls.filter((c) => c.includes("'--convert-to'")).length).toBe(1);
+  });
+});
+
+describe("convertToPdf hardening", () => {
+  test("a source name starting with a dash is passed as ./name", async () => {
+    await writeFile(join(root, "-x.docx"), "x");
+    const calls: string[] = [];
+    await convertToPdf({
+      workspace: createWorkspace(root),
+      run: stubRunner(calls),
+      path: "-x.docx",
+    });
+    expect(calls.some((c) => c.includes("'./-x.docx'"))).toBe(true);
+    expect(calls.some((c) => c.includes("'-x.docx'"))).toBe(false);
+  });
+
+  test("two workspaces with the same name and time each convert", async () => {
+    const other = join(base, "other");
+    await mkdir(other, { recursive: true });
+    const when = new Date(2026, 0, 1);
+    for (const dir of [root, other]) {
+      await writeFile(join(dir, "a.docx"), "x");
+      await utimes(join(dir, "a.docx"), when, when);
+    }
+    const mine: string[] = [];
+    const theirs: string[] = [];
+    const run = (calls: string[], dir: string): CommandRunner => ({
+      async run(input) {
+        calls.push(input.command);
+        await new Promise((r) => setTimeout(r, 20));
+        if (input.command.startsWith("'mv'")) {
+          const target =
+            input.command.split(" ").at(-1)?.replaceAll("'", "") ?? "";
+          await mkdir(join(dir, PREVIEW_CACHE_DIR), { recursive: true });
+          await writeFile(join(dir, target), "%PDF");
+        }
+        return result(0);
+      },
+    });
+    await Promise.all([
+      convertToPdf({
+        workspace: createWorkspace(root),
+        run: run(mine, root),
+        path: "a.docx",
+      }),
+      convertToPdf({
+        workspace: createWorkspace(other),
+        run: run(theirs, other),
+        path: "a.docx",
+      }),
+    ]);
+    expect(mine.some((c) => c.includes("'--convert-to'"))).toBe(true);
+    expect(theirs.some((c) => c.includes("'--convert-to'"))).toBe(true);
+  });
+
+  test("a timeout is an error and the temporary folder is removed", async () => {
+    await writeFile(join(root, "a.docx"), "x");
+    const calls: string[] = [];
+    const run: CommandRunner = {
+      async run(input) {
+        calls.push(input.command);
+        return input.command.includes("'--convert-to'")
+          ? result(124, { timedOut: true })
+          : result(0);
+      },
+    };
+    await expect(
+      convertToPdf({ workspace: createWorkspace(root), run, path: "a.docx" }),
+    ).rejects.toThrow(/too long/);
+    expect(calls.some((c) => c.startsWith("'rm' '-rf'"))).toBe(true);
+    expect(calls.some((c) => c.startsWith("'mv'"))).toBe(false);
+  });
+
+  test("a failing soffice stops before mv and still cleans up", async () => {
+    await writeFile(join(root, "a.docx"), "x");
+    const calls: string[] = [];
+    const run: CommandRunner = {
+      async run(input) {
+        calls.push(input.command);
+        return input.command.includes("'--convert-to'")
+          ? result(1, { stderr: "bad file" })
+          : result(0);
+      },
+    };
+    await expect(
+      convertToPdf({ workspace: createWorkspace(root), run, path: "a.docx" }),
+    ).rejects.toThrow(/bad file/);
+    expect(calls.some((c) => c.startsWith("'mv'"))).toBe(false);
+    expect(calls.some((c) => c.startsWith("'rm' '-rf'"))).toBe(true);
+  });
+
+  test("stale temporary folders are swept before converting", async () => {
+    await writeFile(join(root, "a.docx"), "x");
+    const calls: string[] = [];
+    await convertToPdf({
+      workspace: createWorkspace(root),
+      run: stubRunner(calls),
+      path: "a.docx",
+    });
+    expect(calls.some((c) => c.includes("'-mmin' '+10'"))).toBe(true);
+  });
+
+  test("a cache folder linked outside the workspace is refused with no command", async () => {
+    await writeFile(join(root, "a.docx"), "x");
+    const away = join(base, "away");
+    await mkdir(away, { recursive: true });
+    await symlink(away, join(root, PREVIEW_CACHE_DIR));
+    const calls: string[] = [];
+    await expect(
+      convertToPdf({
+        workspace: createWorkspace(root),
+        run: stubRunner(calls),
+        path: "a.docx",
+      }),
+    ).rejects.toBeInstanceOf(WorkspacePathError);
+    expect(calls).toEqual([]);
   });
 });
 

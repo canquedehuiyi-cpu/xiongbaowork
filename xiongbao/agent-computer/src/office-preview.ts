@@ -38,7 +38,20 @@ export type PdfResult =
   | { unavailable: true };
 
 // The same source converted twice at once shares one run rather than racing on one output name.
-const running = new Map<string, Promise<PdfResult>>();
+// Kept per workspace: two employees' same-named files with the same time are different files.
+const runningByWorkspace = new WeakMap<
+  Workspace,
+  Map<string, Promise<PdfResult>>
+>();
+
+/** A relative path that can never be read as an option: `-x.docx` becomes `./-x.docx`. */
+function asOperand(path: string): string {
+  const clean = posix.normalize(path);
+  return clean.startsWith("/") || clean.startsWith("./") ? clean : `./${clean}`;
+}
+
+/** Remove leftovers of conversions that were killed before they could clean up. */
+const STALE_MINUTES = 10;
 
 export async function convertToPdf(i: {
   workspace: Workspace;
@@ -52,16 +65,27 @@ export async function convertToPdf(i: {
     throw new WorkspaceFileError(`${i.path} is a folder, not a file.`);
   }
   const target = pdfCachePath(i.path, info.modifiedMs);
+  // A cache folder that is a link out of the workspace is refused here, before any command runs.
+  await i.workspace.stat(PREVIEW_CACHE_DIR).catch((error: unknown) => {
+    if (error instanceof WorkspaceFileNotFoundError) return null;
+    throw error;
+  });
   const hit = await i.workspace.stat(target).catch((error: unknown) => {
     if (error instanceof WorkspaceFileNotFoundError) return null;
     throw error;
   });
   if (hit) return { path: target, cached: true };
 
+  let running = runningByWorkspace.get(i.workspace);
+  if (!running) {
+    running = new Map();
+    runningByWorkspace.set(i.workspace, running);
+  }
   const pending = running.get(target);
   if (pending) return pending;
-  const work = convert(i, target).finally(() => running.delete(target));
-  running.set(target, work);
+  const table = running;
+  const work = convert(i, target).finally(() => table.delete(target));
+  table.set(target, work);
   return work;
 }
 
@@ -72,10 +96,19 @@ async function convert(
   const work = `${PREVIEW_CACHE_DIR}/.tmp-${randomBytes(6).toString("hex")}`;
   const produced = `${work}/${basename(i.path, extname(i.path))}.pdf`;
   // A profile folder of its own, so two conversions never queue behind one LibreOffice instance.
-  const profile = `-env:UserInstallation=file://"$PWD"/${work}/profile`;
+  // The profile lives under /tmp, named by random hex, so no workspace path is spliced into a URL.
+  const profileDir = `/tmp/xb-soffice-${randomBytes(6).toString("hex")}`;
+  const profile = `-env:UserInstallation=file://${profileDir}`;
   try {
+    await i.run
+      .run({
+        command: `[ -d ${shellWord(PREVIEW_CACHE_DIR)} ] && ${commandLine(["find", PREVIEW_CACHE_DIR, "-maxdepth", "1", "-name", ".tmp-*", "-mmin", `+${STALE_MINUTES}`, "-exec", "rm", "-rf", "{}", "+"])}; true`,
+        fromRoot: true,
+        timeoutMs: 15_000,
+      })
+      .catch(() => undefined);
     const converted = await i.run.run({
-      command: `mkdir -p ${shellWord(`${work}/profile`)} && ${shellWord(i.soffice ?? "soffice")} ${shellWord("--headless")} ${profile} ${commandLine(["--convert-to", "pdf", "--outdir", work, i.path])}`,
+      command: `mkdir -p ${shellWord(work)} && ${commandLine([i.soffice ?? "soffice", "--headless", profile, "--convert-to", "pdf", "--outdir", work, asOperand(i.path)])}`,
       fromRoot: true,
       timeoutMs: CONVERT_TIMEOUT_MS,
     });
@@ -85,8 +118,13 @@ async function convert(
         "The conversion took too long and was stopped.",
       );
     }
+    if (converted.exitCode !== 0) {
+      throw new OfficeConversionError(
+        `The file could not be converted to PDF. ${converted.stderr.trim()}`.trim(),
+      );
+    }
     const moved = await i.run.run({
-      command: commandLine(["mv", "-f", produced, target]),
+      command: commandLine(["mv", "-f", "--", produced, target]),
       fromRoot: true,
       timeoutMs: 15_000,
     });
@@ -99,7 +137,7 @@ async function convert(
   } finally {
     await i.run
       .run({
-        command: commandLine(["rm", "-rf", work]),
+        command: commandLine(["rm", "-rf", "--", work, profileDir]),
         fromRoot: true,
         timeoutMs: 15_000,
       })
