@@ -2,6 +2,8 @@ import { afterAll, describe, expect, test } from "bun:test";
 import {
   chromiumAvailable,
   deliveriesOf,
+  NO_TURN_ARTIFACTS_NOTE,
+  noteMissingRelease,
   runDelivering,
   runListing,
   serverChecks,
@@ -364,5 +366,38 @@ describe("交付清单和下载认的运行", () => {
     });
     expect(failedNames(checks)).toEqual([]);
     expect(checks[0]?.detail).toContain("跳过字节数核对");
+  });
+});
+
+describe("失败详情区分「没放行」和「电脑上没文件」", () => {
+  const failing = [
+    { name: "下载", ok: false, detail: "状态 404" },
+    { name: "预览", ok: false, detail: "" },
+    { name: "打开", ok: true, detail: "" },
+  ];
+  const withEvent = {
+    events: [
+      {
+        type: "CUSTOM",
+        name: "computer.turn_artifacts",
+        value: { botId: "bot-1", files: [] },
+      },
+    ],
+  };
+
+  test("所有运行都没有 computer.turn_artifacts：失败项加一句，通过项和判分结果不变", () => {
+    const noted = noteMissingRelease(failing, [
+      { events: [{ type: "RUN_FINISHED" }] },
+    ]);
+    expect(noted.map((item) => item.ok)).toEqual([false, false, true]);
+    expect(noted[0]?.detail).toBe(`状态 404；${NO_TURN_ARTIFACTS_NOTE}`);
+    expect(noted[1]?.detail).toBe(NO_TURN_ARTIFACTS_NOTE);
+    expect(noted[2]).toEqual(failing[2]);
+  });
+
+  test("任何一个运行有这条事件：详情原样不动", () => {
+    expect(noteMissingRelease(failing, [{ events: [] }, withEvent])).toEqual(
+      failing,
+    );
   });
 });

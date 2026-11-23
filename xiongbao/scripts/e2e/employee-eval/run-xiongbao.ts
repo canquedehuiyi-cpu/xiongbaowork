@@ -138,6 +138,7 @@ import {
 } from "./config";
 import {
   deliveriesOf,
+  noteMissingRelease,
   runDelivering,
   runListing,
   serverChecks,
@@ -1767,7 +1768,7 @@ async function judgeOnServer(
       ),
     ];
   try {
-    return await serverChecks(
+    const checks = await serverChecks(
       {
         base: ORIGIN,
         cookie: cookieHeader(),
@@ -1790,6 +1791,7 @@ async function judgeOnServer(
         ...(appRunId ? { appRunId } : {}),
       },
     );
+    return noteMissingRelease(checks, runs);
   } catch (thrown) {
     return [
       check(
