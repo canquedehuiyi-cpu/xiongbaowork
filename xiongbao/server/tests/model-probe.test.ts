@@ -68,6 +68,24 @@ describe("the probe", () => {
     expect(network.calls[0]?.init?.redirect).toBe("manual");
   });
 
+  test("the AIHUB relay is probed at its default address when no base URL is given", async () => {
+    const network = recordingFetch(() => new Response("{}", { status: 200 }));
+    const answer = await probe(
+      "aihub",
+      null,
+      "gemini-4-argon",
+      "sk-relay-secret",
+      { lookup, fetchImpl: network.impl },
+    );
+    expect(answer.ok).toBeTrue();
+    expect(network.calls[0]?.url).toBe(
+      "https://aihubcc.cc/v1/chat/completions",
+    );
+    expect(network.calls[0]?.headers.get("authorization")).toBe(
+      "Bearer sk-relay-secret",
+    );
+  });
+
   for (const baseUrl of [
     "http://169.254.169.254/latest",
     "https://10.0.0.5/v1",
@@ -192,6 +210,35 @@ describe("the probe", () => {
 });
 
 describe("a run on a tenant's model", () => {
+  test("a run on the AIHUB relay goes to its default address when the row has no base URL", async () => {
+    const network = recordingFetch(
+      () =>
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: "pong" }, finish_reason: "stop" }],
+          }),
+          { headers: { "content-type": "application/json" } },
+        ),
+    );
+    const model = languageModelFor(
+      "aihub",
+      null,
+      "gemini-4-argon",
+      "sk-run-secret",
+    );
+    // 行里没有自填地址时不套租户的出站守卫，请求走全局 fetch：这里只看它发往哪里。
+    const original = globalThis.fetch;
+    globalThis.fetch = network.impl;
+    try {
+      await generateText({ model, prompt: "ping", maxRetries: 0 });
+    } finally {
+      globalThis.fetch = original;
+    }
+    expect(network.calls[0]?.url).toBe(
+      "https://aihubcc.cc/v1/chat/completions",
+    );
+  });
+
   test("an endpoint that resolves inside the deployment is never sent the key", async () => {
     const network = recordingFetch(() => new Response("{}"));
     const model = languageModelFor(

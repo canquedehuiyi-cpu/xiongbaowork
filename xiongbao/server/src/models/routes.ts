@@ -618,7 +618,9 @@ export async function probe(
           ? "https://openrouter.ai/api/v1"
           : provider === "deepseek"
             ? "https://api.deepseek.com/v1"
-            : "");
+            : provider === "aihub"
+              ? "https://aihubcc.cc/v1"
+              : "");
     if (!base) return { ok: false, error: "尚未配置接口地址。" };
     let response: Response;
     try {

@@ -139,6 +139,7 @@ const OPENAI_COMPATIBLE_DEFAULTS: Record<string, string> = {
   deepseek: "https://api.deepseek.com/v1",
   zhipu: "https://open.bigmodel.cn/api/paas/v4",
   moonshot: "https://api.moonshot.cn/v1",
+  aihub: "https://aihubcc.cc/v1",
 };
 
 export function languageModelFor(

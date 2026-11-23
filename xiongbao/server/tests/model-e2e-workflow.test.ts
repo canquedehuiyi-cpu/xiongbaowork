@@ -293,14 +293,19 @@ test("actions are pinned to full commit SHAs, Bun is 1.4.4, the lockfile is froz
   }
 });
 
-test("the key reaches the job only as the model-e2e Environment's secrets.DEEPSEEK_API_KEY, through env", () => {
+test("the key reaches the job only as the model-e2e Environment's secrets.DEEPSEEK_API_KEY or, for provider aihub, secrets.AIHUB_API_KEY, through env", () => {
   const references: string[] = [
     ...(text.match(/secrets\.[A-Za-z0-9_]+/g) ?? []),
   ];
-  // One reference per carrier job (below), and no other secret named anywhere.
-  expect(references).toEqual(
-    Array.from({ length: 5 }, () => "secrets.DEEPSEEK_API_KEY"),
+  // One DeepSeek reference per carrier job (below); the three evaluation jobs that take the provider as
+  // an input also name the AIHUB key, picked when provider is aihub. No other secret is named anywhere.
+  expect(
+    references.filter((r) => r === "secrets.DEEPSEEK_API_KEY"),
+  ).toHaveLength(5);
+  expect(references.filter((r) => r === "secrets.AIHUB_API_KEY")).toHaveLength(
+    3,
   );
+  expect(references).toHaveLength(8);
   expect(text).not.toMatch(/secrets\[/);
   expect(text).not.toContain("toJSON(secrets");
 
@@ -344,9 +349,12 @@ test("the key reaches the job only as the model-e2e Environment's secrets.DEEPSE
   );
   for (const [index, carrier] of evalCarriers.entries()) {
     // The evaluation reads its model from the dispatch inputs (provider, model, base_url), so the
-    // same jobs run any model; the key is the same Environment secret, through the same variable.
+    // same jobs run any model; the key is an Environment secret picked by that provider input (the
+    // AIHUB key for aihub, the DeepSeek key otherwise), through the same variable.
     expect(carrier.env?.MODEL_E2E_API_KEY).toBe(
-      expression("secrets.DEEPSEEK_API_KEY"),
+      expression(
+        "inputs.provider == 'aihub' && secrets.AIHUB_API_KEY || secrets.DEEPSEEK_API_KEY",
+      ),
     );
     expect(carrier.env?.MODEL_E2E).toBe("1");
     expect(carrier.env?.EVAL_PROVIDER).toBe(expression("inputs.provider"));

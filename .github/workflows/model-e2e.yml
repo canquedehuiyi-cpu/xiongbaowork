@@ -25,7 +25,8 @@
 #                              另有后台长跑两个场景 disconnect / reconnect（scenarios 填 background，真模型走单聊路径）。
 #
 # 模型和提供方都是输入（provider / model / base_url），两边脚本从同一组输入读，不写死 DeepSeek；key 仍是
-# 上面那个 Environment secret。脚本在 xiongbao/scripts/e2e/employee-eval/，用法见各文件开头。
+# 上面那个 Environment secret；provider 选 aihub（AIHUB 中转，OpenAI 兼容）时改用同一个 Environment 里的 AIHUB_API_KEY，
+# 此时 model 要填中转站上支持工具调用的 gemini-4-argon 或 gemini-4-hydrogen（-app 后缀的版本不支持工具调用）。脚本在 xiongbao/scripts/e2e/employee-eval/，用法见各文件开头。
 # 输入 xiongbao_model 只改熊宝侧的模型（空表示和 model 一样，Codex 侧永远用 model），三方对照：熊宝、Codex、换更强模型的熊宝。
 # 熊宝侧作业另记每道题发给模型的提示词体积（EVAL_PROMPT_CHARS），报告里有「提示词体积」表。
 name: 模型 E2E 计量对账
@@ -70,7 +71,7 @@ on:
         type: string
         default: all
       provider:
-        description: "模型提供方（熊宝模型库的提供方模板名；Codex 侧的自定义 provider 名）"
+        description: "模型提供方（熊宝模型库的提供方模板名；Codex 侧的自定义 provider 名）；aihub 用 Environment secret AIHUB_API_KEY，其余用 DEEPSEEK_API_KEY"
         type: string
         default: deepseek
       model:
@@ -89,7 +90,7 @@ on:
           - "on"
           - "off"
       base_url:
-        description: "OpenAI 兼容接口地址，留空按提供方默认（deepseek 为 https://api.deepseek.com）；Codex 侧要求它支持 Responses"
+        description: "OpenAI 兼容接口地址，留空按提供方默认（deepseek 为 https://api.deepseek.com，aihub 为 https://aihubcc.cc/v1）；Codex 侧要求它支持 Responses"
         type: string
         default: ""
 
@@ -280,7 +281,7 @@ jobs:
       - name: Five tasks for a Xiongbao employee, over each chosen path
         env:
           MODEL_E2E: "1"
-          MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MODEL_E2E_API_KEY: ${{ inputs.provider == 'aihub' && secrets.AIHUB_API_KEY || secrets.DEEPSEEK_API_KEY }}
           EVAL_PROVIDER: ${{ inputs.provider }}
           EVAL_MODEL: ${{ inputs.model }}
           EVAL_BASE_URL: ${{ inputs.base_url }}
@@ -353,7 +354,7 @@ jobs:
       - name: Five tasks for Codex
         env:
           MODEL_E2E: "1"
-          MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MODEL_E2E_API_KEY: ${{ inputs.provider == 'aihub' && secrets.AIHUB_API_KEY || secrets.DEEPSEEK_API_KEY }}
           EVAL_PROVIDER: ${{ inputs.provider }}
           EVAL_MODEL: ${{ inputs.model }}
           EVAL_BASE_URL: ${{ inputs.base_url }}
@@ -464,7 +465,7 @@ jobs:
       - name: One minimal scenario per capability
         env:
           MODEL_E2E: "1"
-          MODEL_E2E_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          MODEL_E2E_API_KEY: ${{ inputs.provider == 'aihub' && secrets.AIHUB_API_KEY || secrets.DEEPSEEK_API_KEY }}
           EVAL_PROVIDER: ${{ inputs.provider }}
           EVAL_MODEL: ${{ inputs.model }}
           EVAL_BASE_URL: ${{ inputs.base_url }}

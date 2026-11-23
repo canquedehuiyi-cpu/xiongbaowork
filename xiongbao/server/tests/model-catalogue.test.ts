@@ -1574,6 +1574,28 @@ describe("model context window", () => {
     expect(templateVendors("custom")).toEqual([]);
   });
 
+  test("the AIHUB relay's Gemini models are matched on Google's entries, by template and by host", () => {
+    expect(templateVendors("aihub")).toEqual(["google"]);
+    const table = new Map([["google/gemini-4-argon", 777]]);
+    expect(
+      lookupContextWindow(
+        table,
+        "custom",
+        "gemini-4-argon",
+        "https://aihubcc.cc/v1",
+      ),
+    ).toBe(777);
+  });
+
+  test("gemini-4-argon has the 1M window its relay documents and hydrogen has none until it is documented", () => {
+    expect(lookupContextWindow(undefined, "aihub", "gemini-4-argon")).toBe(
+      1_000_000,
+    );
+    expect(
+      lookupContextWindow(undefined, "aihub", "gemini-4-hydrogen"),
+    ).toBeUndefined();
+  });
+
   test("an OpenRouter model resolves to OpenRouter's own entry, not the namesake vendor's", () => {
     const table = new Map([
       ["openrouter/anthropic/claude-x", 1_000],
