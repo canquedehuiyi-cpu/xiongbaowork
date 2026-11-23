@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
+import { AppOpenButton } from "@/components/channels/app-open-button";
 import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
 import {
   ApprovalActions,
@@ -239,12 +240,24 @@ export function EvidenceLine({
           下载
         </a>
       ) : null}
+      {row.kind === "app" && agentId ? (
+        <AppOpenButton
+          label={row.label}
+          target={{
+            botId: agentId,
+            app: { port: row.port, path: row.path },
+            scope: { task: taskId },
+          }}
+        />
+      ) : null}
       <span className="ml-auto shrink-0 text-(--wb-muted) text-[12px]">
         {row.kind === "diff"
           ? `${row.detail} · ${ROW_NOTE.diff}`
           : row.kind === "workspace_file" && row.unverified
             ? `${ROW_NOTE.workspace_file} · 未核实`
-            : ROW_NOTE[row.kind]}
+            : row.kind === "app"
+              ? `${ROW_NOTE.app} · 端口 ${row.port}${row.unverified ? " · 未核实" : ""}`
+              : ROW_NOTE[row.kind]}
       </span>
     </div>
   );

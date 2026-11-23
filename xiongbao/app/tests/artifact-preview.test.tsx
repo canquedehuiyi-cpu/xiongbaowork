@@ -19,7 +19,7 @@ import { artifactHref } from "@/lib/computers/artifact";
 import {
   decodePreview,
   encodePreview,
-  type PreviewTarget,
+  type FilePreviewTarget,
   parseCsv,
   previewHref,
 } from "@/lib/computers/preview";
@@ -53,7 +53,7 @@ afterAll(async () => {
   GlobalRegistrator.unregister();
 });
 
-const target = (path: string): PreviewTarget => ({
+const target = (path: string): FilePreviewTarget => ({
   botId: "b1",
   path,
   scope: { channel: "c1", run: "r1" },

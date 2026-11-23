@@ -11,11 +11,39 @@ import { normalizedArtifactPath, scopedFileHref } from "./artifact";
 export type PreviewScope = { channel: string; run: string } | { task: string };
 
 /** 一个要预览的文件：哪位员工的、哪个路径、在哪次对话的哪次 run（或哪张交付卡）里被宣布。 */
-export type PreviewTarget = {
+export type FilePreviewTarget = {
   botId: string;
   path: string;
   scope: PreviewScope;
 };
+
+/** 一个运行中的程序：哪位员工的、哪个端口与首页路径、在哪张交付卡（或哪次 run）里被宣布。 */
+export type AppPreviewTarget = {
+  botId: string;
+  app: { port: number; path: string };
+  scope: PreviewScope;
+};
+
+export type PreviewTarget = FilePreviewTarget | AppPreviewTarget;
+
+export const isAppTarget = (
+  target: PreviewTarget,
+): target is AppPreviewTarget => "app" in target;
+
+/** 程序首页路径的规范：以 / 开头、不以 // 开头、没有反斜杠和控制字符。 */
+export const validAppPath = (path: unknown): path is string =>
+  typeof path === "string" &&
+  path.startsWith("/") &&
+  !path.startsWith("//") &&
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: 就是要拒绝控制字符
+  !/[\\\u0000-\u001f\u007f]/.test(path);
+
+/** 程序端口：非保留端口的整数。 */
+export const validAppPort = (port: unknown): port is number =>
+  typeof port === "number" &&
+  Number.isInteger(port) &&
+  port >= 1024 &&
+  port <= 65535;
 
 const nonEmpty = (value: unknown): value is string =>
   typeof value === "string" && value.trim() !== "";
@@ -52,26 +80,39 @@ export function decodePreview(
       ),
     );
     if (typeof parsed !== "object" || parsed === null) return undefined;
-    const { botId, path, scope } = parsed as Record<string, unknown>;
-    if (!nonEmpty(botId) || !nonEmpty(path)) return undefined;
+    const { botId, path, scope, app } = parsed as Record<string, unknown>;
+    if (!nonEmpty(botId)) return undefined;
     if (typeof scope !== "object" || scope === null) return undefined;
     const { channel, run, task } = scope as Record<string, unknown>;
-    if (nonEmpty(channel) && nonEmpty(run))
-      return { botId, path, scope: { channel, run } };
-    if (nonEmpty(task)) return { botId, path, scope: { task } };
-    return undefined;
+    const decodedScope: PreviewScope | undefined =
+      nonEmpty(channel) && nonEmpty(run)
+        ? { channel, run }
+        : nonEmpty(task)
+          ? { task }
+          : undefined;
+    if (decodedScope === undefined) return undefined;
+    if (app !== undefined) {
+      // 程序变体：不带文件路径，端口和首页路径各自严格校验。
+      if (path !== undefined || typeof app !== "object" || app === null)
+        return undefined;
+      const { port, path: appPath } = app as Record<string, unknown>;
+      if (!validAppPort(port) || !validAppPath(appPath)) return undefined;
+      return { botId, app: { port, path: appPath }, scope: decodedScope };
+    }
+    if (!nonEmpty(path)) return undefined;
+    return { botId, path, scope: decodedScope };
   } catch {
     return undefined;
   }
 }
 
 /** 内联预览的地址（图片、音视频、pdf、html、office 转出的 pdf）。 */
-export function previewHref(target: PreviewTarget): string | undefined {
+export function previewHref(target: FilePreviewTarget): string | undefined {
   return scopedFileHref("preview", target);
 }
 
 /** 文本类内容的地址（markdown、csv、纯文本）。 */
-export function textHref(target: PreviewTarget): string | undefined {
+export function textHref(target: FilePreviewTarget): string | undefined {
   return scopedFileHref("text", target);
 }
 
@@ -135,7 +176,7 @@ export function usePreviewTarget(): PreviewController | undefined {
 }
 
 /** 这个文件在面板里的预览类别。 */
-export const previewKindOfTarget = (target: PreviewTarget) =>
+export const previewKindOfTarget = (target: FilePreviewTarget) =>
   previewKindOf(target.path);
 
 /** csv 表格最多画这么多行数据（表头另算）。 */

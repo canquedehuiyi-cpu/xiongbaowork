@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
+import { AppOpenButton } from "@/components/channels/app-open-button";
 import type { TranscriptNote } from "@/components/channels/chat-transcript";
 import {
   ARTIFACT_DOWNLOAD_LINK,
@@ -7,7 +8,10 @@ import {
 } from "@/components/channels/turn-artifacts";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { artifactHref } from "@/lib/computers/artifact";
-import type { PreviewTarget } from "@/lib/computers/preview";
+import type {
+  AppPreviewTarget,
+  FilePreviewTarget,
+} from "@/lib/computers/preview";
 import { useScheduleZone } from "@/lib/settings/work-hours";
 import {
   canExtend,
@@ -424,6 +428,7 @@ function EvidenceItem({
   linked,
   download,
   previewTarget,
+  appTarget,
 }: {
   row: Exclude<EvidenceRow, { kind: "check" }>;
   /** 附件只有派活的人打得开（在它和员工的线程里）。 */
@@ -431,7 +436,9 @@ function EvidenceItem({
   /** 工作区文件的下载地址；交付事件没带员工 id（旧事件）时为 undefined，这行只念文件名。 */
   download?: string;
   /** 同一个文件的预览目标（范围是这张卡的任务）；和下载一样，没有员工 id 就没有。 */
-  previewTarget?: PreviewTarget;
+  previewTarget?: FilePreviewTarget;
+  /** 程序行的打开目标；没有员工 id 就没有。 */
+  appTarget?: AppPreviewTarget;
 }) {
   const link = "text-inherit underline-offset-2 hover:underline";
   const label =
@@ -452,6 +459,12 @@ function EvidenceItem({
       `${row.label} · ${row.detail}`
     ) : row.kind === "workspace_file" && row.unverified ? (
       `${row.label}（未核实）`
+    ) : row.kind === "app" ? (
+      [
+        row.label,
+        ...(row.label === `端口 ${row.port}` ? [] : [`端口 ${row.port}`]),
+        ...(row.unverified ? ["未核实"] : []),
+      ].join(" · ")
     ) : (
       row.label
     );
@@ -463,6 +476,9 @@ function EvidenceItem({
       <span className="min-w-0 [overflow-wrap:anywhere]">{label}</span>
       {row.kind === "workspace_file" && previewTarget ? (
         <PreviewButton target={previewTarget} />
+      ) : null}
+      {row.kind === "app" && appTarget ? (
+        <AppOpenButton label={row.label} target={appTarget} />
       ) : null}
       {row.kind === "workspace_file" && download ? (
         <a className={ARTIFACT_DOWNLOAD_LINK} href={download}>
@@ -523,6 +539,15 @@ function DeliveredCard({
                   path: row.path,
                   scope: { task: event.taskId },
                 })
+              : undefined
+          }
+          appTarget={
+            row.kind === "app" && event.agentId
+              ? {
+                  botId: event.agentId,
+                  app: { port: row.port, path: row.path },
+                  scope: { task: event.taskId },
+                }
               : undefined
           }
           linked={mine}
