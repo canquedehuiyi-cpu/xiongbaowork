@@ -11,6 +11,7 @@ import {
   expect,
   test,
 } from "bun:test";
+import { readFileSync } from "node:fs";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import { ArtifactPreview } from "@/components/channels/artifact-preview";
@@ -74,6 +75,14 @@ describe("preview param", () => {
     expect(decodePreview(undefined)).toBeUndefined();
     const raw = (v: unknown) =>
       Buffer.from(JSON.stringify(v)).toString("base64url");
+    expect(
+      decodePreview(raw({ botId: 1, path: "p", scope: { task: "t" } })),
+    ).toBeUndefined();
+    expect(
+      decodePreview(
+        raw({ botId: "b", path: "p".repeat(5000), scope: { task: "t" } }),
+      ),
+    ).toBeUndefined();
     expect(decodePreview("bm90IGpzb24")).toBeUndefined(); // "not json"
     expect(decodePreview(raw({ botId: "b", path: "p" }))).toBeUndefined();
     expect(
@@ -246,7 +255,7 @@ describe("ArtifactPreview", () => {
 
   test("top bar: name, download, open in new tab, close", () => {
     let closed = 0;
-    const { container } = render(
+    render(
       <ArtifactPreview onClose={() => closed++} target={target("d/a.pdf")} />,
     );
     expect(ui().getByText("a.pdf")).toBeTruthy();
@@ -254,13 +263,122 @@ describe("ArtifactPreview", () => {
     expect(open.getAttribute("target")).toBe("_blank");
     expect(open.getAttribute("rel")).toBe("noopener noreferrer");
     expect(open.getAttribute("href")).toBe(
-      previewHref(target("d/a.pdf")) ?? null,
+      "/api/computers/b1/files/preview?path=d%2Fa.pdf&channel=c1&run=r1",
     );
     expect(
       ui().getAllByRole("link", { name: /下载/ })[0]?.getAttribute("href"),
     ).toBe(artifactHref(target("d/a.pdf")) as string);
     (ui().getByRole("button", { name: /关闭/ }) as HTMLButtonElement).click();
     expect(closed).toBe(1);
-    expect(container.querySelector("[dangerouslySetInnerHTML]")).toBeNull();
   });
+});
+
+describe("switching files", () => {
+  const deferred = () => {
+    let resolve: (r: Response) => void = () => {};
+    const promise = new Promise<Response>((r) => {
+      resolve = r;
+    });
+    return { promise, resolve };
+  };
+  const answer = (text: string) =>
+    Response.json({ kind: "text", text, truncated: false, bytes: 1 });
+
+  test("a late answer for the first file never overwrites the second", async () => {
+    const slow = deferred();
+    globalThis.fetch = Object.assign(
+      async (input: RequestInfo | URL) =>
+        String(input).includes("one.txt") ? slow.promise : answer("SECOND"),
+      { preconnect: originalFetch.preconnect },
+    );
+    const { rerender } = render(
+      <ArtifactPreview onClose={() => {}} target={target("one.txt")} />,
+    );
+    rerender(<ArtifactPreview onClose={() => {}} target={target("two.txt")} />);
+    await waitFor(() => expect(ui().getByText("SECOND")).toBeTruthy());
+    slow.resolve(answer("FIRST"));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(ui().queryByText("FIRST")).toBeNull();
+    expect(ui().getByText("SECOND")).toBeTruthy();
+  });
+
+  test("the first frame after a switch never shows the old text", async () => {
+    serve((url) => answer(url.searchParams.get("path") ?? ""));
+    const { rerender } = render(
+      <ArtifactPreview onClose={() => {}} target={target("one.txt")} />,
+    );
+    await waitFor(() =>
+      expect(ui().getByText("one.txt", { selector: "pre" })).toBeTruthy(),
+    );
+    rerender(<ArtifactPreview onClose={() => {}} target={target("two.txt")} />);
+    expect(ui().queryByText("one.txt", { selector: "pre" })).toBeNull();
+  });
+
+  test("office draws no iframe for a new file until its check is done", async () => {
+    const slow = deferred();
+    serve((url) =>
+      url.searchParams.get("path") === "a.docx"
+        ? new Response("%PDF", {
+            headers: { "content-type": "application/pdf" },
+          })
+        : (undefined as never),
+    );
+    const { container, rerender } = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.docx")} />,
+    );
+    await waitFor(() =>
+      expect(container.querySelector("iframe")).not.toBeNull(),
+    );
+    globalThis.fetch = Object.assign(async () => slow.promise, {
+      preconnect: originalFetch.preconnect,
+    });
+    rerender(<ArtifactPreview onClose={() => {}} target={target("b.docx")} />);
+    expect(container.querySelector("iframe")).toBeNull();
+    slow.resolve(Response.json({ unavailable: true }));
+    await waitFor(() =>
+      expect(ui().getByText(/预览不了这个类型/)).toBeTruthy(),
+    );
+    expect(container.querySelector("iframe")).toBeNull();
+  });
+});
+
+describe("office failures", () => {
+  test("non-2xx and JSON without unavailable draw load-failed with download", async () => {
+    serve(() => Response.json({ error: "boom" }, { status: 500 }));
+    const first = render(
+      <ArtifactPreview onClose={() => {}} target={target("a.docx")} />,
+    );
+    await waitFor(() => expect(ui().getByText("预览加载失败")).toBeTruthy());
+    expect(ui().getAllByRole("link", { name: /下载/ }).length).toBeGreaterThan(
+      1,
+    );
+    first.unmount();
+    serve(() => Response.json({ hello: 1 }));
+    render(<ArtifactPreview onClose={() => {}} target={target("a.docx")} />);
+    await waitFor(() => expect(ui().getByText("预览加载失败")).toBeTruthy());
+  });
+});
+
+test("the panel never uses dangerouslySetInnerHTML or a message listener", () => {
+  const source = readFileSync(
+    new URL("../src/components/channels/artifact-preview.tsx", import.meta.url),
+    "utf8",
+  );
+  expect(source).not.toContain("dangerouslySetInnerHTML");
+  expect(source).not.toContain("addEventListener");
+});
+
+test("truncated csv warns that the last row may be cut", async () => {
+  serve(() =>
+    Response.json({
+      kind: "csv",
+      text: "a,b\n1,2",
+      truncated: true,
+      bytes: 9_000_000,
+    }),
+  );
+  render(<ArtifactPreview onClose={() => {}} target={target("a.csv")} />);
+  await waitFor(() =>
+    expect(ui().getByText(/最后一行可能不完整/)).toBeTruthy(),
+  );
 });

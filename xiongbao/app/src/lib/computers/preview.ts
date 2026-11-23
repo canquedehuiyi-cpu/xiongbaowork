@@ -30,10 +30,16 @@ export function encodePreview(target: PreviewTarget): string {
 }
 
 /** 读回参数；任何坏值（不是 base64url、不是 JSON、缺字段、scope 两种都不是）都是 undefined。 */
+export const PREVIEW_PARAM_LIMIT = 4096;
+
 export function decodePreview(
   value: string | undefined,
 ): PreviewTarget | undefined {
-  if (typeof value !== "string" || !/^[A-Za-z0-9_-]+$/.test(value))
+  if (
+    typeof value !== "string" ||
+    value.length > PREVIEW_PARAM_LIMIT ||
+    !/^[A-Za-z0-9_-]+$/.test(value)
+  )
     return undefined;
   try {
     const base64 = value.replace(/-/g, "+").replace(/_/g, "/");

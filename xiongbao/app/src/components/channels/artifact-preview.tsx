@@ -38,19 +38,32 @@ type Loaded<T> =
   | { state: "unsupported" }
   | { state: "failed" };
 
+/** 结果记着它属于哪个地址：换了文件，旧结果在新地址的第一帧就不算数。 */
+type Keyed<T> = { url: string | undefined; result: Loaded<T> };
+
+/** 只认属于当前地址的结果，其余一律当作还在取。 */
+function currentResult<T>(keyed: Keyed<T>, url: string | undefined): Loaded<T> {
+  return keyed.url === url ? keyed.result : { state: "loading" };
+}
+
 /** 取一个地址的 JSON（文本类）。`url` 变了就重取，卸载时作废。 */
 function useTextAnswer(url: string | undefined, enabled: boolean) {
-  const [loaded, setLoaded] = useState<Loaded<TextAnswer>>({
-    state: "loading",
+  const [keyed, setKeyed] = useState<Keyed<TextAnswer>>({
+    url: undefined,
+    result: { state: "loading" },
   });
   useEffect(() => {
     if (!enabled) return;
+    const abort = new AbortController();
+    // 换了文件后，上一个地址迟到的答案不许写进来。
+    const setLoaded = (result: Loaded<TextAnswer>) => {
+      if (!abort.signal.aborted) setKeyed({ url, result });
+    };
     if (url === undefined) {
       setLoaded({ state: "failed" });
       return;
     }
     setLoaded({ state: "loading" });
-    const abort = new AbortController();
     (async () => {
       try {
         const response = await fetch(url, { signal: abort.signal });
@@ -73,20 +86,26 @@ function useTextAnswer(url: string | undefined, enabled: boolean) {
     })();
     return () => abort.abort();
   }, [url, enabled]);
-  return loaded;
+  return currentResult(keyed, url);
 }
 
 /** office：先问一次，转不了时服务器答 200 的 `{unavailable:true}`，否则是 pdf，交给 iframe 去显示。 */
 function useOfficeAvailable(url: string | undefined, enabled: boolean) {
-  const [loaded, setLoaded] = useState<Loaded<true>>({ state: "loading" });
+  const [keyed, setKeyed] = useState<Keyed<true>>({
+    url: undefined,
+    result: { state: "loading" },
+  });
   useEffect(() => {
     if (!enabled) return;
+    const abort = new AbortController();
+    const setLoaded = (result: Loaded<true>) => {
+      if (!abort.signal.aborted) setKeyed({ url, result });
+    };
     if (url === undefined) {
       setLoaded({ state: "failed" });
       return;
     }
     setLoaded({ state: "loading" });
-    const abort = new AbortController();
     (async () => {
       try {
         const response = await fetch(url, { signal: abort.signal });
@@ -109,7 +128,7 @@ function useOfficeAvailable(url: string | undefined, enabled: boolean) {
     })();
     return () => abort.abort();
   }, [url, enabled]);
-  return loaded;
+  return currentResult(keyed, url);
 }
 
 function Note({
@@ -187,6 +206,11 @@ function TextBody({ answer }: { answer: TextAnswer }) {
       {answer.truncated ? (
         <span className="px-3 pt-3 text-xs text-muted-foreground">
           只显示了前 1MB。
+        </span>
+      ) : null}
+      {answer.truncated && answer.kind === "csv" ? (
+        <span className="px-3 pt-1 text-xs text-muted-foreground">
+          最后一行可能不完整。
         </span>
       ) : null}
       {answer.kind === "csv" ? (
