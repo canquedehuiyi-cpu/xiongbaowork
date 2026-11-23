@@ -37,12 +37,15 @@ const delivered = (workspaceFiles: string[]) =>
   custom("delivery.delivered", {
     taskId: "t",
     eventId: "e",
+    agentId: "bot-1",
     deliverable: { kind: "deliverable", workspaceFiles },
   });
 
 type Setup = {
   events?: BaseEvent[];
   runThread?: string;
+  /** The employee that made the run; `bot-1` unless said. */
+  runAgent?: string;
   channelAnswer?: { agentIds: string[]; threadIds: string[] } | null;
   card?: { botId: string; seat: string; workspaceFiles: string[] } | null;
   /** The person the run and the card belong to; the seat every turn of theirs used is theirs. */
@@ -66,6 +69,7 @@ function depsFor(setup: Setup = {}) {
       return {
         threadId: setup.runThread ?? thread,
         ownerId: setup.owner ?? "owner-1",
+        agentId: setup.runAgent ?? "bot-1",
         events: setup.events ?? [artifacts(["a.pptx"])],
       };
     },
@@ -203,6 +207,62 @@ describe("who may download which workspace file", () => {
       ],
     });
     expect(await resolve(deps, "out/deck.pptx")).toBeNull();
+  });
+
+  test("a file delivered by another employee in the run does not open for this one", async () => {
+    const { deps } = depsFor({
+      events: [
+        artifacts(["x"], "person:owner-1"),
+        custom("delivery.delivered", {
+          taskId: "t",
+          eventId: "e",
+          agentId: "bot-2",
+          deliverable: {
+            kind: "deliverable",
+            workspaceFiles: ["out/deck.pptx"],
+          },
+        }),
+      ],
+    });
+    expect(await resolve(deps, "out/deck.pptx")).toBeNull();
+  });
+
+  test("an old hand-in with no agentId, in this employee's own run, still opens its file", async () => {
+    const { deps } = depsFor({
+      events: [
+        artifacts(["x"], "person:owner-1"),
+        custom("delivery.delivered", {
+          taskId: "t",
+          eventId: "e",
+          deliverable: {
+            kind: "deliverable",
+            workspaceFiles: ["out/deck.pptx"],
+          },
+        }),
+      ],
+    });
+    expect(await resolve(deps, "out/deck.pptx")).not.toBeNull();
+  });
+
+  test("a hand-in that names this employee does not open anything when the run was made by another one", async () => {
+    const { deps } = depsFor({
+      runAgent: "bot-2",
+      channelAnswer: { agentIds: ["bot-1", "bot-2"], threadIds: [thread] },
+      events: [
+        artifacts(["x"], "person:owner-1"),
+        delivered(["out/deck.pptx"]),
+      ],
+    });
+    expect(await resolve(deps, "out/deck.pptx")).toBeNull();
+  });
+
+  test("a run made by another employee is not read as this one's", async () => {
+    const { deps } = depsFor({
+      channelAnswer: { agentIds: ["bot-1", "bot-2"], threadIds: [thread] },
+    });
+    // The run's own employee is bot-1; asking as bot-2 finds its announcement under another name.
+    expect(await resolve(deps, "a.pptx", { botId: "bot-2" })).toBeNull();
+    expect(await resolve(deps, "a.pptx")).not.toBeNull();
   });
 
   test("an announced seat that is not a computer key is refused", async () => {

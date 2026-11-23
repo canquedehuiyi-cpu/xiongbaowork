@@ -636,6 +636,7 @@ import {
   createThreadVisibility,
 } from "./staffing/routes";
 import { createStaffingProposalStore } from "./staffing/store";
+import { createAppProbe } from "./tasks/app-probe";
 import { createBoardCardRoutes } from "./tasks/board-cards-routes";
 import {
   createBriefingRoutes,
@@ -3100,6 +3101,7 @@ await startupLifecycle.run(async (startup) => {
             { path },
           )
       : undefined,
+    appProbe: computerGateway ? createAppProbe(computerGateway) : undefined,
   });
   /*
    * External employees walk the same three steps, the server walking them for them (spec §9,

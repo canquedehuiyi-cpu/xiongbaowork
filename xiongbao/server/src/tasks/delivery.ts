@@ -1621,6 +1621,18 @@ export function mergeDeliverables(
     (path) => path,
   ).filter((path) => !checkedNow.has(path) && workspaceFiles.includes(path));
   if (unverifiedFiles.length) merged.unverifiedFiles = unverifiedFiles;
+  const apps = unique(both("apps"), (app) => `${app.port} ${app.path}`);
+  if (apps.length) merged.apps = apps;
+  // A program this hand-in requested a page from is no longer unverified either.
+  const askedNow = new Set(
+    (added.apps ?? [])
+      .map((app) => app.port)
+      .filter((port) => !(added.unverifiedApps ?? []).includes(port)),
+  );
+  const unverifiedApps = unique(both("unverifiedApps"), String).filter(
+    (port) => !askedNow.has(port) && apps.some((app) => app.port === port),
+  );
+  if (unverifiedApps.length) merged.unverifiedApps = unverifiedApps;
   return merged;
 }
 

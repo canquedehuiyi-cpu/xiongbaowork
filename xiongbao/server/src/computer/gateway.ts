@@ -36,6 +36,7 @@ import {
 import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import type { TurnArtifact } from "../../../shared/turn-artifacts";
+import { HEADER } from "../../../shared/wire-headers";
 // --- app discovery (sub-project 3) ---
 import { APP_ENABLE_TOOL, canonicalKeyName } from "../approvals/policy";
 import {
@@ -98,6 +99,7 @@ import {
   HumanHasControlError,
   type SeatAddress,
   StaleSnapshotError,
+  seatHeaders,
   WorkspaceNotFoundError,
   WorkspaceRefusedError,
   WorkspaceRequestError,
@@ -545,6 +547,39 @@ export interface ComputerGateway {
     signal?: AbortSignal,
   ): Promise<ComputerDownload | null>;
   /**
+   * One HTTP request to a program the employee runs on its computer, as the computer's forwarder
+   * answers it (`/forward/<port>/<path>`): the computer's own response, headers and body as they come.
+   *
+   * What goes is the caller's headers plus the computer's token and the seat; what the caller must
+   * have already removed (cookies, credentials of the person) is the caller's business. The body is
+   * streamed. There is no overall deadline here: the computer bounds the time to the program's
+   * response headers, and the body ends when the caller cancels or `signal` aborts. A computer that
+   * cannot be reached, or a paired personal computer (nothing to forward through), throws
+   * `ComputerUnavailableError`.
+   */
+  forwardHttp(
+    seat: ComputerSeat,
+    input: {
+      port: number;
+      method: string;
+      /** Path and query after the port, starting with `/`. */
+      path: string;
+      headers: Headers;
+      body: ReadableStream<Uint8Array> | null;
+    },
+    signal?: AbortSignal,
+  ): Promise<Response>;
+  /**
+   * Where and how to open the WebSocket of a program (`/forward-ws/<port>/<path>`): the computer's URL
+   * and the headers it takes (its token and the seat). The caller opens the socket, which is how the
+   * subprotocol the program picked can be read before the person's side is accepted.
+   */
+  forwardSocket(
+    seat: ComputerSeat,
+    port: number,
+    path: string,
+  ): Promise<{ url: string; headers: Record<string, string> }>;
+  /**
    * An Office file as a PDF for the preview pane: the computer converts it into the workspace's
    * hidden preview folder and this reads the result back as a stream. `unavailable` when the
    * computer has no converter. Decided and recorded as the file's download, since the bytes leave
@@ -839,6 +874,13 @@ const TURN_MARKS_PER_SEAT = 50;
 const TURN_MARKS_TOTAL = 1000;
 /** 一次记快照（含每个 mark 自己的请求）最多占多久，电脑挂住时不拖住员工的动作。 */
 const TURN_MARK_FLUSH_MS = 10_000;
+
+/** A program's port is a user port: the callers check it, and this is the last place that does. */
+function requireForwardPort(port: number): void {
+  if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+    throw new ComputerUnavailableError("That port cannot be forwarded to.");
+  }
+}
 
 export function createComputerGateway(
   options: ComputerGatewayOptions,
@@ -3317,6 +3359,70 @@ export function createComputerGateway(
           return null;
         throw error;
       }
+    },
+
+    async forwardHttp(
+      seat: ComputerSeat,
+      input: {
+        port: number;
+        method: string;
+        path: string;
+        headers: Headers;
+        body: ReadableStream<Uint8Array> | null;
+      },
+      signal?: AbortSignal,
+    ) {
+      requireForwardPort(input.port);
+      const base = await locate(seat);
+      if (isRunnerAddress(base)) {
+        throw new ComputerUnavailableError(
+          "A paired computer's programs cannot be reached from the server.",
+        );
+      }
+      const headers = new Headers(input.headers);
+      for (const [name, value] of Object.entries(
+        seatHeaders(addressOf(seat)),
+      )) {
+        headers.set(name, value);
+      }
+      const token = tokenFor(seat);
+      if (token) headers.set(HEADER.computerToken, token);
+      const hasBody =
+        input.body !== null &&
+        input.method !== "GET" &&
+        input.method !== "HEAD";
+      try {
+        return await (options.fetchImpl ?? fetch)(
+          `${base.replace(/\/$/, "")}/forward/${input.port}${input.path}`,
+          {
+            method: input.method,
+            headers,
+            redirect: "manual",
+            ...(hasBody ? { body: input.body, duplex: "half" } : {}),
+            ...(signal ? { signal } : {}),
+          } as RequestInit,
+        );
+      } catch {
+        throw new ComputerUnavailableError("The Bot's computer isn't running.");
+      }
+    },
+
+    async forwardSocket(seat: ComputerSeat, port: number, path: string) {
+      requireForwardPort(port);
+      const base = await locate(seat);
+      if (isRunnerAddress(base)) {
+        throw new ComputerUnavailableError(
+          "A paired computer's programs cannot be reached from the server.",
+        );
+      }
+      const token = tokenFor(seat);
+      return {
+        url: `${base.replace(/^http/, "ws").replace(/\/$/, "")}/forward-ws/${port}${path}`,
+        headers: {
+          ...seatHeaders(addressOf(seat)),
+          ...(token ? { [HEADER.computerToken]: token } : {}),
+        },
+      };
     },
 
     /**

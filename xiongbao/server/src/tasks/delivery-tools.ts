@@ -156,8 +156,10 @@ const deliverSchema = z.object({
     .array(
       z.object({
         kind: z.enum(DELIVERY_ITEM_KINDS),
-        ref: z.string().max(4000),
+        ref: z.string().max(4000).optional(),
         title: z.string().max(200).optional(),
+        port: z.number().optional(),
+        path: z.string().optional(),
       }),
     )
     .max(30)
@@ -399,10 +401,15 @@ export function deliveryTools(options: {
     ),
     tool(
       DELIVER_TASK,
-      "交付（规约第 2 条）：做完接下的活时调用。items 列出交付物：attachment（这个对话里的附件 id）、component（这件活里画过的组件，ref 写组件名或它那次调用的 id）、link（http(s) 地址）、workspace_file（写在你自己工作区里的文件，ref 写工作区内的相对路径，如 reports/对比.xlsx，任务卡会把它念成一行产物）、note（只有文字结论时，ref 写结论）；title 写清是什么。checks 写你怎么查过的，每条一句。验收标准写了「必需：…」时，每个必需项都要在 title 或 checks 里提到。服务器会核对，不过会被挡回并告诉你缺什么；补齐再交。交了以后等对方验收，没被验收前不要说「做完了」。" +
+      "交付（规约第 2 条）：做完接下的活时调用。items 列出交付物：attachment（这个对话里的附件 id）、component（这件活里画过的组件，ref 写组件名或它那次调用的 id）、link（http(s) 地址）、workspace_file（写在你自己工作区里的文件，ref 写工作区内的相对路径，如 reports/对比.xlsx，任务卡会把它念成一行产物）、app（运行中的程序：port、path 默认 /、title，ref 可省；服务器会请求一次首页）、note（只有文字结论时，ref 写结论）；title 写清是什么。checks 写你怎么查过的，每条一句。验收标准写了「必需：…」时，每个必需项都要在 title 或 checks 里提到。服务器会核对，不过会被挡回并告诉你缺什么；补齐再交。交了以后等对方验收，没被验收前不要说「做完了」。" +
         FILE_DELIVERY_HINT,
       deliverSchema,
       async (value) => {
+        // An app item has no ref of its own: its port and path say what it is.
+        const handedIn = value.items.map((item) => ({
+          ...item,
+          ref: item.ref ?? "",
+        }));
         const run = currentRun();
         if (!run) return OUTSIDE_A_RUN;
         const card = await cardOf(run);
@@ -429,7 +436,7 @@ export function deliveryTools(options: {
           tenantId,
           taskId: card.id,
           threadRef: card.threadRef,
-          items: value.items,
+          items: handedIn,
           checks: value.checks,
           criteria: card.criteria,
           agentId,
@@ -486,7 +493,7 @@ export function deliveryTools(options: {
         if (
           physicalGateOn() &&
           uncheckedPhysical({
-            items: value.items,
+            items: handedIn,
             criteria: card.criteria,
             title: card.title,
             messages: currentApprovalContext()?.messages ?? [],

@@ -8,6 +8,7 @@ import {
   type ArtifactAccessDeps,
   type ArtifactScope,
   resolveArtifactAccess,
+  resolveArtifactAppAccess,
 } from "../src/computer/artifact-access";
 import { createArtifactAccessDeps } from "../src/computer/artifact-access-store";
 import {
@@ -63,6 +64,9 @@ const deadRun = id("run-dead");
 const isolatedRun = id("run-isolated");
 const cardForgedRun = id("run-card-forged");
 const cardGoneRun = id("run-card-gone");
+const appsRun = id("run-apps");
+const appsOnlyRun = id("run-apps-only");
+const APPS = [{ port: 8000, path: "/", title: "Dash" }];
 
 const SPECIAL = "报告 #1?.pptx";
 const as = (actor: string): AgentActor => ({ id: actor, role: "user" });
@@ -92,6 +96,7 @@ let appPool: ReturnType<typeof createDatabase>;
 let fixtures: postgres.Sql;
 let taskId = "";
 let strangerTask = "";
+let appsTask = "";
 let forgedTask = "";
 let goneTask = "";
 
@@ -100,8 +105,10 @@ async function seedRun(
   tenant: string,
   runId: string,
   events: unknown[],
+  /** The employee that ran it: a run is only read as that employee. */
+  agent: string = bot,
 ) {
-  await fixtures`insert into thread_runs (id, tenant_id, thread_id, agent_id) values (${runId}, ${tenant}, ${thread}, ${bot})`;
+  await fixtures`insert into thread_runs (id, tenant_id, thread_id, agent_id) values (${runId}, ${tenant}, ${thread}, ${agent})`;
   let seq = 0;
   for (const event of events) {
     seq += 1;
@@ -153,6 +160,7 @@ beforeAll(async () => {
     custom("delivery.delivered", {
       taskId: randomUUID(),
       eventId: randomUUID(),
+      agentId: bot,
       deliverable: {
         kind: "deliverable",
         workspaceFiles: ["final/summary.md"],
@@ -160,18 +168,48 @@ beforeAll(async () => {
     }),
   ]);
 
+  await seedRun(ownerThread, owner, appsRun, [
+    artifacts(`person:${owner}`, []),
+    custom("delivery.delivered", {
+      taskId: randomUUID(),
+      eventId: randomUUID(),
+      agentId: bot,
+      deliverable: { kind: "deliverable", apps: APPS },
+    }),
+  ]);
+  // Only a program was delivered and no file changed, so no turn announced a seat.
+  await seedRun(ownerThread, owner, appsOnlyRun, [
+    custom("delivery.delivered", {
+      taskId: randomUUID(),
+      eventId: randomUUID(),
+      agentId: bot,
+      deliverable: { kind: "deliverable", apps: APPS },
+    }),
+  ]);
   await seedRun(ownerThread, owner, forgedRun, [
     artifacts(`person:${outsider}`, ["secret.md"]),
   ]);
-  await seedRun(ownerThread, owner, privateRun, [
-    artifacts(`person:${owner}`, ["private.md"], botPrivate),
-  ]);
-  await seedRun(ownerThread, owner, isolatedRun, [
-    artifacts(`bot:${botIsolated}`, ["iso.md"], botIsolated),
-  ]);
-  await seedRun(ownerThread, owner, goneRun, [
-    artifacts(`person:${owner}`, ["gone.md"], botGone),
-  ]);
+  await seedRun(
+    ownerThread,
+    owner,
+    privateRun,
+    [artifacts(`person:${owner}`, ["private.md"], botPrivate)],
+    botPrivate,
+  );
+  await seedRun(
+    ownerThread,
+    owner,
+    isolatedRun,
+    [artifacts(`bot:${botIsolated}`, ["iso.md"], botIsolated)],
+    botIsolated,
+  );
+  await seedRun(
+    ownerThread,
+    owner,
+    goneRun,
+    [artifacts(`person:${owner}`, ["gone.md"], botGone)],
+    botGone,
+  );
 
   // A group chat that was deleted after the run.
   await fixtures`insert into channels (id, tenant_id, name, description, deleted_at) values (${dead}, 'team', 'd', '', now())`;
@@ -233,6 +271,13 @@ beforeAll(async () => {
             ${fixtures.json({ kind: "deliverable", workspaceFiles: ["card/out.pptx"] })})
     returning id`;
   goneTask = gone?.id ?? "";
+  // A card that lists a running program and no files at all.
+  const [withApp] = await fixtures<{ id: string }[]>`
+    insert into tasks (tenant_id, title, source, executor_agent_id, run_ref, deliverable_ref)
+    values (${member}, 'app', 'chat', ${bot}, ${cardRun},
+            ${fixtures.json({ kind: "deliverable", apps: APPS })})
+    returning id`;
+  appsTask = withApp?.id ?? "";
   const [theirs] = await fixtures<{ id: string }[]>`
     insert into tasks (tenant_id, title, source, executor_agent_id, run_ref, deliverable_ref)
     values (${owner}, 'theirs', 'chat', ${bot}, ${run},
@@ -416,5 +461,39 @@ describe.skipIf(!bypass)("workspace file access, against the database", () => {
         botIsolated,
       ),
     ).toBeNull();
+  });
+
+  const askApp = (actor: string, port: number, scope: ArtifactScope) =>
+    resolveArtifactAppAccess(
+      { actor: as(actor), botId: bot, port, scope },
+      deps,
+    );
+
+  test("a card that lists a program opens that port and no other", async () => {
+    expect(await askApp(member, 8000, { task: appsTask })).not.toBeNull();
+    expect(await askApp(member, 8001, { task: appsTask })).toBeNull();
+    expect(await askApp(outsider, 8000, { task: appsTask })).toBeNull();
+    // The card lists no files, so it opens no folder either.
+    expect(await ask(member, "card/out.pptx", { task: appsTask })).toBeNull();
+  });
+
+  test("a group's run that delivered a program opens that port to a member and no other", async () => {
+    const scope = { channel: group, run: appsRun };
+    expect(await askApp(member, 8000, scope)).not.toBeNull();
+    expect(await askApp(member, 8001, scope)).toBeNull();
+    expect(await askApp(outsider, 8000, scope)).toBeNull();
+    expect(
+      await askApp(member, 8000, { channel: group, run: deliveredRun }),
+    ).toBeNull();
+  });
+
+  test("a run that delivered only a program, with no file changed, still opens that port", async () => {
+    const scope = { channel: group, run: appsOnlyRun };
+    const seat = await askApp(member, 8000, scope);
+    expect(seat?.seat.key).toEqual((await deps.seatFor(bot, owner)).key);
+    expect(await askApp(member, 8001, scope)).toBeNull();
+    expect(await askApp(outsider, 8000, scope)).toBeNull();
+    // A folder still needs a turn that listed it.
+    expect(await ask(member, "final/summary.md", scope)).toBeNull();
   });
 });

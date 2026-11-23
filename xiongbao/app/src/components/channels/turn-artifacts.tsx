@@ -19,7 +19,10 @@ import {
   writtenPathsInTurn,
 } from "@/lib/computers/artifact";
 import { callComputer } from "@/lib/computers/call";
-import { type PreviewTarget, usePreviewTarget } from "@/lib/computers/preview";
+import {
+  type FilePreviewTarget,
+  usePreviewTarget,
+} from "@/lib/computers/preview";
 import { formatBytes } from "@/lib/desktop/queries";
 import { previewKindOf } from "../../../../shared/preview-kind";
 
@@ -235,7 +238,7 @@ export const ARTIFACT_DOWNLOAD_LINK =
  *
  * 只给有预览可看的类型（svg 之类只能下载的不给）；页面没有面板可开时也不画。
  */
-export function PreviewButton({ target }: { target: PreviewTarget }) {
+export function PreviewButton({ target }: { target: FilePreviewTarget }) {
   const preview = usePreviewTarget();
   if (preview === undefined || previewKindOf(target.path) === "none")
     return null;

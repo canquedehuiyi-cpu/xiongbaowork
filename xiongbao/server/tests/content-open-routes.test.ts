@@ -90,6 +90,10 @@ function build(
           ? null
           : { seat: personSeat(actor.id, input.botId) };
       },
+      authorizeApp: async (actor, input) =>
+        over.allow === false
+          ? null
+          : { seat: personSeat(actor.id, input.botId) },
     },
     gateway: {
       statFile: (async (seat: unknown, input: { path: string }) => {
@@ -207,15 +211,14 @@ describe("POST /api/computers/:botId/open", () => {
     expect(statted).toEqual([]);
   });
 
-  test("an app kind answers a placeholder and mints nothing", async () => {
-    const { app, audits, authorized } = build();
-    const res = await open(app, { kind: "app", port: 4000, path: "x" });
-    expect(await res.json()).toEqual({
-      available: false,
-      reason: "程序转发将在后续版本提供",
-    });
-    expect(audits).toEqual([]);
+  test("an app kind is decided by the app rules, not the folder rules, and nothing is looked up on the computer", async () => {
+    const { app, audits, authorized, statted } = build();
+    const res = await open(app, { kind: "app", port: 4000, path: "/x" });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { url: string }).url).toContain("/__open/");
+    expect(audits).toHaveLength(1);
     expect(authorized).toEqual([]);
+    expect(statted).toEqual([]);
   });
 
   test("a malformed body is 400", async () => {
@@ -463,6 +466,7 @@ function realAccess(
         ? {
             threadId: "th1",
             ownerId: "owner-1",
+            agentId: "b1",
             events: setup.events ?? [artifacts(["site/index.html"])],
           }
         : null,
@@ -526,6 +530,7 @@ describe("who may open a folder", () => {
 
   test("the folder's own index.html is enough, and a delivered file counts", async () => {
     const delivered = custom("delivery.delivered", {
+      agentId: "b1",
       deliverable: { workspaceFiles: ["site/index.html"] },
     });
     const access = realAccess({ events: [artifacts(["x.txt"]), delivered] });

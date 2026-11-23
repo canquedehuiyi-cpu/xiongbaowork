@@ -14,6 +14,11 @@ import {
   handleComputerStreamUpgrade,
 } from "./computer/stream-upgrade";
 import type { DeploymentConfig } from "./config";
+import type {
+  AppSocketData,
+  ContentSockets,
+  SocketUpgrade,
+} from "./content/server";
 import type { DeviceChannel } from "./devices/channel";
 import type { DeviceScreens } from "./devices/screen";
 import {
@@ -136,7 +141,8 @@ type SocketData =
   | StreamData
   | ChannelSocket["data"]
   | RunnerSocket
-  | DeviceScreenSocketData;
+  | DeviceScreenSocketData
+  | AppSocketData;
 
 /** How every screencast frame from the computer starts: `JSON.stringify({ type: "frame", ... })`. */
 const FRAME_PREFIX = '{"type":"frame"';
@@ -214,6 +220,13 @@ function frameLetGo(stream: StreamData) {
  * What a runner's socket hands on beyond its frames: a heartbeat's desktop stop goes to the gateway,
  * whose desktop write gate holds this replica's sessions (desktop write, phase 2). No gateway, nothing.
  */
+/**
+ * Idle seconds allowed on a request forwarded to a program: a little over the computer's own 120 s
+ * between chunks, so the computer's limit decides, and not 0, which would let a connection that has
+ * gone quiet stay open for ever. Bun accepts up to 255.
+ */
+const PROGRAM_IDLE_SECONDS = 130;
+
 export function runnerMessageOptions(
   computerGateway: ComputerGateway | undefined,
 ): RunnerMessageOptions {
@@ -251,7 +264,15 @@ export function startHttpServer(deps: {
    * reached on this listener, for any `Host` under `.<domain>`; with only a port it gets a listener of
    * its own, which answers nothing but it. It is never handed the app's bindings or sockets.
    */
-  content?: { fetch(request: Request): Promise<Response> };
+  content?: {
+    fetch(
+      request: Request,
+      upgrade?: SocketUpgrade,
+      forwardingToProgram?: () => void,
+    ): Response | undefined | Promise<Response | undefined>;
+    /** The handlers of the sockets it upgrades (a program's WebSocket); without them it upgrades none. */
+    sockets?: ContentSockets;
+  };
 }): { stop(closeActiveConnections?: boolean): Promise<void> } {
   const {
     port,
@@ -321,11 +342,30 @@ export function startHttpServer(deps: {
    */
   const contentListener =
     content && contentPort !== undefined && contentDomain === undefined
-      ? serve({
+      ? serve<AppSocketData>({
           port: contentPort,
-          fetch: (request) => content.fetch(request),
+          fetch: (request, server) =>
+            content.fetch(
+              request,
+              content.sockets
+                ? (incoming, options) =>
+                    server.upgrade(incoming, {
+                      data: options.data,
+                      ...(options.headers ? { headers: options.headers } : {}),
+                    })
+                : undefined,
+              () => server.timeout(request, PROGRAM_IDLE_SECONDS),
+            ) as Response | Promise<Response>,
+          websocket: {
+            open: (ws) => content.sockets?.open(ws),
+            message: (ws, raw) => content.sockets?.message(ws, raw),
+            close: (ws, code, reason) =>
+              content.sockets?.close(ws, code, reason),
+          },
         })
       : undefined;
+  const isContentSocket = (data: SocketData): data is AppSocketData =>
+    content?.sockets?.isSocket(data) === true;
 
   // Answered so a test can stop the server it started; the deployment keeps it for its whole life.
   const main = serve<SocketData>({
@@ -342,7 +382,17 @@ export function startHttpServer(deps: {
         contentDomain !== undefined &&
         url.hostname.toLowerCase().endsWith(`.${contentDomain}`)
       ) {
-        return content.fetch(request);
+        return (await content.fetch(
+          request,
+          content.sockets
+            ? (incoming, options) =>
+                server.upgrade(incoming, {
+                  data: options.data,
+                  ...(options.headers ? { headers: options.headers } : {}),
+                })
+            : undefined,
+          () => server.timeout(request, PROGRAM_IDLE_SECONDS),
+        )) as Response;
       }
       /*
        * The connection this came on, read here because only the server that accepted it can say. Handed
@@ -448,6 +498,10 @@ export function startHttpServer(deps: {
     },
     websocket: {
       open(ws) {
+        if (isContentSocket(ws.data)) {
+          content?.sockets?.open(ws as never);
+          return;
+        }
         if (devices && isRunnerSocket(ws.data)) {
           // Alive from the moment it arrives, so the owner's screen stops spinning at once rather than
           // after the first beat — and registered as reachable, so an action can be sent to it.
@@ -516,6 +570,10 @@ export function startHttpServer(deps: {
         if (isTerminalUpstream(stream.upstream)) carryTerminal(ws, inward);
       },
       message(ws, raw) {
+        if (isContentSocket(ws.data)) {
+          content?.sockets?.message(ws as never, raw);
+          return;
+        }
         if (devices && isRunnerSocket(ws.data)) {
           void runnerMessage(
             ws as unknown as Parameters<typeof runnerMessage>[0],
@@ -562,6 +620,10 @@ export function startHttpServer(deps: {
           sendHeldFrame(ws as typeof ws & { data: StreamData });
       },
       close(ws, code, reason) {
+        if (isContentSocket(ws.data)) {
+          content?.sockets?.close(ws as never, code, reason);
+          return;
+        }
         if (devices && isRunnerSocket(ws.data)) {
           // Nothing to record for presence: a device that stops being heard from is offline a minute
           // later. The dispatch channel is different — an entry left behind would accept actions that

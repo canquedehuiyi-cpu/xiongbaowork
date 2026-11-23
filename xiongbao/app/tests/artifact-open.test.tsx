@@ -20,7 +20,7 @@ import {
   within,
 } from "@testing-library/react";
 import { ArtifactPreview } from "@/components/channels/artifact-preview";
-import { type PreviewTarget, previewHref } from "@/lib/computers/preview";
+import { type FilePreviewTarget, previewHref } from "@/lib/computers/preview";
 import { settleReactWork } from "./settle-react-work";
 
 const originalFetch = globalThis.fetch;
@@ -50,7 +50,7 @@ afterAll(async () => {
   GlobalRegistrator.unregister();
 });
 
-const target = (path: string, run = "r1"): PreviewTarget => ({
+const target = (path: string, run = "r1"): FilePreviewTarget => ({
   botId: "b1",
   path,
   scope: { channel: "c1", run },

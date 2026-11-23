@@ -1,4 +1,10 @@
 import type { ComputerGateway } from "../computer/gateway";
+import {
+  type AppGrant,
+  type AppSocketData,
+  createForwarder,
+  type SocketUpgrade,
+} from "./forward";
 import { SECURITY_HEADERS, serveStatic } from "./static";
 import {
   type ContentGrant,
@@ -59,7 +65,8 @@ const ALLOWED_CACHE_MAX = 1000;
 export type ContentServerDeps = {
   /** The deployment's encryption key (`config.keyEncryptionKey`): what every token is signed with. */
   key: string;
-  gateway: Pick<ComputerGateway, "serveFile">;
+  gateway: Pick<ComputerGateway, "serveFile"> &
+    Partial<Pick<ComputerGateway, "forwardHttp" | "forwardSocket">>;
   /**
    * Whether this grant may still be used: the person is still a member, the employee still exists,
    * the card is still visible to them. Asked on every request; this server reuses an answer for
@@ -70,7 +77,26 @@ export type ContentServerDeps = {
   domain?: string;
   /** The clock, for tests. Epoch milliseconds. */
   now?: () => number;
+  /** How often an open program socket asks `stillAllowed` again (default one minute); for tests. */
+  socketRecheckMs?: number;
 };
+
+/** What a program's socket carries once accepted, and the handlers a listener needs to serve it. */
+export type ContentSockets = {
+  isSocket(data: unknown): data is AppSocketData;
+  open(ws: import("bun").ServerWebSocket<AppSocketData>): void;
+  message(
+    ws: import("bun").ServerWebSocket<AppSocketData>,
+    raw: string | Buffer,
+  ): void;
+  close(
+    ws: import("bun").ServerWebSocket<AppSocketData>,
+    code: number,
+    reason: string,
+  ): void;
+};
+
+export type { AppSocketData, SocketUpgrade };
 
 const plain = (status: number, body: string | null, extra?: HeadersInit) =>
   new Response(body, {
@@ -113,11 +139,66 @@ function cookieHeader(value: string, maxAgeSeconds: number, secure: boolean) {
   return `${CONTENT_COOKIE}=${value}; Max-Age=${maxAgeSeconds}; Path=/; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}`;
 }
 
+/** How many path levels (the root included) a clearing goes up and down; a deeper path is cut there. */
+const CLEAR_PATH_LEVELS = 8;
+
+/** `/`, then each leading part of the path: `/a/b/c` gives `/`, `/a`, `/a/b`, `/a/b/c`. */
+function pathPrefixes(pathname: string): string[] {
+  const found = ["/"];
+  let walked = "";
+  for (const part of pathname.split("/").filter((one) => one !== "")) {
+    walked = `${walked}/${part}`;
+    // A path with `;` or a control character cannot be written into a `Set-Cookie`.
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what is refused
+    if (/[;\u0000-\u0020\u007f]/.test(walked)) break;
+    found.push(walked);
+    if (found.length >= CLEAR_PATH_LEVELS) break;
+  }
+  return found;
+}
+
+/**
+ * What clears the content cookie however it was written: host-only, with `Domain` the request's own
+ * host, and in domain mode with `Domain` the content domain too (a sibling subdomain's script may have
+ * written the cookie for the whole domain, which the browser then sends here). Each spelling is sent
+ * for every `Path` that would still match the request, since a cookie written for `/api` is cleared
+ * only by a line that names `/api`.
+ */
+function clearingEverywhere(
+  request: Request,
+  domain: string | undefined,
+  secure: boolean,
+): string[] {
+  const host = hostOf(request);
+  const domains: (string | null)[] = [null];
+  if (host !== null) domains.push(host);
+  if (domain !== undefined) domains.push(domain);
+  const lines: string[] = [];
+  for (const path of pathPrefixes(new URL(request.url).pathname)) {
+    for (const scope of domains) {
+      lines.push(
+        `${CONTENT_COOKIE}=; Max-Age=0; Path=${path}; HttpOnly; SameSite=Lax${secure ? "; Secure" : ""}${scope === null ? "" : `; Domain=${scope}`}`,
+      );
+    }
+  }
+  return lines;
+}
+
 /** The same response with one more header; a response a handler made may have frozen headers. */
 function withHeader(response: Response, name: string, value: string) {
   const headers = new Headers(response.headers);
   headers.append(name, value);
   return new Response(response.body, { status: response.status, headers });
+}
+
+function withoutHeader(response: Response, name: string) {
+  const headers = new Headers(response.headers);
+  headers.delete(name);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
 }
 
 /**
@@ -150,7 +231,23 @@ const grantKey = (grant: ContentGrant): string =>
   ]);
 
 export function createContentServer(deps: ContentServerDeps): {
+  /**
+   * Answers one request. A listener that can accept WebSockets passes its `upgrade`, and a socket
+   * request to a program is then answered with `undefined` once the upgrade has been taken.
+   */
   fetch(request: Request): Promise<Response>;
+  fetch(
+    request: Request,
+    upgrade: SocketUpgrade | undefined,
+    /**
+     * Called just before a request is forwarded to a program, so the listener can lift its own idle
+     * timeout: the computer's forwarder has its own limits (60 s for the first byte, 120 s between
+     * chunks), and the listener's default 10 s would cut a slow API or a quiet event stream first.
+     */
+    forwardingToProgram?: () => void,
+  ): Promise<Response | undefined>;
+  /** The handlers for the sockets `fetch` upgrades, for the listener's `websocket`. */
+  sockets: ContentSockets;
 } {
   const now = deps.now ?? Date.now;
   const domain = deps.domain?.toLowerCase();
@@ -202,16 +299,37 @@ export function createContentServer(deps: ContentServerDeps): {
     return lookup;
   }
 
+  const missingForwarding = () => {
+    throw new Error("This deployment cannot forward to programs.");
+  };
+  const forwarding = createForwarder({
+    gateway: {
+      forwardHttp: deps.gateway.forwardHttp ?? missingForwarding,
+      forwardSocket: deps.gateway.forwardSocket ?? missingForwarding,
+    },
+    allowed,
+    recheck: (grant) => deps.stillAllowed(grant),
+    domainMode: domain !== undefined,
+    now,
+    contentCookie: CONTENT_COOKIE,
+    ...(deps.socketRecheckMs !== undefined
+      ? { recheckMs: deps.socketRecheckMs }
+      : {}),
+  });
+
   /**
    * Serve one request of a grant that has been read from a credential (not yet trusted to be current).
-   * `fromCookie` says the grant came from the cookie: only then is it renewed or cleared.
+   * `fromCookie` says the grant came from the cookie: only then is it renewed or cleared. `undefined`
+   * is a socket that was upgraded.
    */
   async function serveGrant(
     request: Request,
     grant: ContentGrant,
     rel: string,
     fromCookie: boolean,
-  ): Promise<Response> {
+    upgrade?: SocketUpgrade,
+    forwardingToProgram?: () => void,
+  ): Promise<Response | undefined> {
     if (!hostFits(request, grant)) return notFound(request.method);
     const refused = () => {
       const gone = notFound(request.method);
@@ -230,9 +348,18 @@ export function createContentServer(deps: ContentServerDeps): {
         secureFor(request),
       );
     }
-    if (grant.target.kind !== "dir") {
-      // A forwarded web app is the next task's; until it exists there is nothing to answer with.
-      return notFound(request.method);
+    if (grant.target.kind === "app") {
+      // A program is reached by the cookie alone; a path token is only ever made for a folder.
+      if (!fromCookie) return notFound(request.method);
+      forwardingToProgram?.();
+      const answered = await forwarding.forwardToApp(
+        { ...grant, target: grant.target } as AppGrant,
+        request,
+        upgrade,
+      );
+      return answered && renewal
+        ? withHeader(answered, "Set-Cookie", renewal)
+        : answered;
     }
     const served = await serveStatic(
       { ...grant, target: grant.target },
@@ -244,13 +371,17 @@ export function createContentServer(deps: ContentServerDeps): {
     return renewal ? withHeader(served, "Set-Cookie", renewal) : served;
   }
 
-  /** The first cookie of the request that is a valid session grant, or null. */
+  /**
+   * The request's session grant, or null. Only a request with exactly one `xb_content` cookie has one:
+   * browsers keep cookies by host and path, not by who wrote them, so a second one is somebody else's
+   * (a page on another port of the same host, or a sibling subdomain, writing a cookie of its own to
+   * stand in front of the real one), and which of two a browser lists first is not something to rely on.
+   * `handle` refuses such a request before anything reads a cookie.
+   */
   function sessionOf(request: Request): ContentGrant | null {
-    for (const value of contentCookies(request)) {
-      const grant = readSessionToken(value, deps.key, now());
-      if (grant !== null) return grant;
-    }
-    return null;
+    const values = contentCookies(request);
+    const only = values.length === 1 ? values[0] : undefined;
+    return only === undefined ? null : readSessionToken(only, deps.key, now());
   }
 
   async function open(request: Request, token: string): Promise<Response> {
@@ -320,9 +451,30 @@ export function createContentServer(deps: ContentServerDeps): {
     });
   }
 
-  async function handle(request: Request): Promise<Response> {
+  async function handle(
+    request: Request,
+    upgrade: SocketUpgrade | undefined,
+    forwardingToProgram?: () => void,
+  ): Promise<Response | undefined> {
     const url = new URL(request.url);
     const { pathname } = url;
+
+    // No worker script of this origin is ever answered, whichever path it is asked for.
+    if (request.headers.has("service-worker")) {
+      return plain(403, request.method === "HEAD" ? null : "Forbidden");
+    }
+
+    if (contentCookies(request).length > 1) {
+      const refusal = notFound(request.method);
+      for (const line of clearingEverywhere(
+        request,
+        domain,
+        secureFor(request),
+      )) {
+        refusal.headers.append("Set-Cookie", line);
+      }
+      return refusal;
+    }
 
     const opening = /^\/__open\/([^/]+)$/.exec(pathname);
     if (opening) return open(request, opening[1] ?? "");
@@ -338,15 +490,39 @@ export function createContentServer(deps: ContentServerDeps): {
         return serveGrant(request, grant, pathed[2] ?? "", false);
       }
       const stale = readExpiredPathToken(pathed[1], deps.key);
-      if (stale === null) return notFound(request.method);
-      return continuePage(request, stale, `${pathed[2] ?? ""}${url.search}`);
-    }
-    if (pathname === "/u" || pathname.startsWith("/u/")) {
+      if (stale !== null) {
+        return continuePage(request, stale, `${pathed[2] ?? ""}${url.search}`);
+      }
+      // Not a path token: for a program, `/u/...` is one of its own routes.
+      if (sessionOf(request)?.target.kind !== "app") {
+        return notFound(request.method);
+      }
+    } else if (
+      (pathname === "/u" || pathname.startsWith("/u/")) &&
+      sessionOf(request)?.target.kind !== "app"
+    ) {
       return notFound(request.method);
     }
 
     /*
-     * Everything else is the browser's current target, from the one cookie this server knows, and
+     * A program is the cookie's whole target: everything the page asks for (its scripts, styles,
+     * fetches and sockets) has to reach it, so none of the folder rule below applies. That rule exists
+     * because a folder's files are fetched by pages that are sandboxed, and this is not one.
+     */
+    const session = sessionOf(request);
+    if (session?.target.kind === "app") {
+      return serveGrant(
+        request,
+        session,
+        pathname.slice(1),
+        true,
+        upgrade,
+        forwardingToProgram,
+      );
+    }
+
+    /*
+     * Everything else is the browser's current folder, from the one cookie this server knows, and
      * only for a page being opened. A sandboxed page of another tab may still make the browser send
      * this cookie with a script, style or image request; answering those would hand that page the
      * files of whatever the cookie points at (a script include reads cross-origin JavaScript). So only
@@ -361,9 +537,8 @@ export function createContentServer(deps: ContentServerDeps): {
         : dest === "document" || dest === "iframe";
     if (!navigation) return notFound(request.method);
     if (contentCookies(request).length === 0) return notFound(request.method);
-    const grant = sessionOf(request);
-    if (grant !== null) {
-      return serveGrant(request, grant, pathname.slice(1), true);
+    if (session !== null) {
+      return serveGrant(request, session, pathname.slice(1), true);
     }
     // A cookie that is expired or forged is cleared rather than kept being sent.
     return withHeader(
@@ -374,13 +549,23 @@ export function createContentServer(deps: ContentServerDeps): {
   }
 
   return {
-    async fetch(request) {
+    sockets: forwarding.socket,
+    async fetch(
+      request: Request,
+      upgrade?: SocketUpgrade,
+      forwardingToProgram?: () => void,
+    ) {
       try {
-        return await handle(request);
+        const answered = await handle(request, upgrade, forwardingToProgram);
+        // No answer of this origin, a program's included, may widen where a service worker could be
+        // registered.
+        return answered?.headers.has("service-worker-allowed")
+          ? withoutHeader(answered, "service-worker-allowed")
+          : answered;
       } catch {
         // Nothing about why: a fault here is not for the page's visitor to read.
         return plain(502, request.method === "HEAD" ? null : "Unavailable");
       }
     },
-  };
+  } as ReturnType<typeof createContentServer>;
 }

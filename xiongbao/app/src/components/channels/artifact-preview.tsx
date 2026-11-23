@@ -3,14 +3,19 @@ import { type ReactNode, useEffect, useState } from "react";
 import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
 import { artifactHref } from "@/lib/computers/artifact";
 import {
+  type AppPreviewTarget,
   CSV_ROW_LIMIT,
+  type FilePreviewTarget,
+  isAppTarget,
   type OpenBody,
   openDirOf,
   openTarget,
+  PORT_MODE_NOTICE,
   type PreviewTarget,
   parseCsv,
   previewHref,
   previewKindOfTarget,
+  REPLACED_NOTICE,
   scopeFields,
   textHref,
 } from "@/lib/computers/preview";
@@ -141,7 +146,13 @@ function useOfficeAvailable(url: string | undefined, enabled: boolean) {
 /** 打开一个网页目录的结果：还在问、内容源已打开、没配内容源、被拒绝或出错。 */
 type Opened =
   | { state: "loading" }
-  | { state: "opened"; url: string; expiresAt: string; replaces: boolean }
+  | {
+      state: "opened";
+      url: string;
+      mode: "port" | "domain";
+      expiresAt: string;
+      replaces: boolean;
+    }
   | { state: "unconfigured" }
   | { state: "refused" };
 
@@ -154,16 +165,23 @@ function openBody(dir: string, scopeJson: string): OpenBody {
   };
 }
 
+/** 运行中的程序的打开请求体。 */
+function appOpenBody(target: AppPreviewTarget): OpenBody {
+  return {
+    kind: "app",
+    port: target.app.port,
+    path: target.app.path,
+    ...scopeFields(target.scope),
+  };
+}
+
 /**
- * 向内容源要一个网页目录的打开地址。写法同上面两个取数：结果记着它属于哪个目录，旧答案不写进来。
+ * 向内容源要一个打开地址（网页目录或运行中的程序，`request` 是打开请求体的 JSON）。写法同上面两个取数：
+ * 结果记着它属于哪个请求，旧答案不写进来。
  * `reopen` 重新要一个（令牌到期后用）。
  */
-function useOpenedPage(
-  botId: string,
-  dir: string | undefined,
-  scopeJson: string,
-) {
-  const key = `${botId}\n${dir}\n${scopeJson}`;
+function useOpenedPage(botId: string, request: string | undefined) {
+  const key = `${botId}\n${request}`;
   const [keyed, setKeyed] = useState<{ key: string; result: Opened }>({
     key: "",
     result: { state: "loading" },
@@ -172,19 +190,20 @@ function useOpenedPage(
   const [expiredUrl, setExpiredUrl] = useState<string>();
   // biome-ignore lint/correctness/useExhaustiveDependencies: `tries` 只用来让「重新打开」再跑一次
   useEffect(() => {
-    if (dir === undefined) return;
+    if (request === undefined) return;
     const abort = new AbortController();
     const set = (result: Opened) => {
       if (!abort.signal.aborted) setKeyed({ key, result });
     };
     set({ state: "loading" });
-    openTarget(botId, openBody(dir, scopeJson), abort.signal).then(
+    openTarget(botId, JSON.parse(request) as OpenBody, abort.signal).then(
       (answer) =>
         set(
           answer.available
             ? {
                 state: "opened",
                 url: answer.url,
+                mode: answer.mode,
                 expiresAt: answer.expiresAt,
                 replaces: answer.replaces,
               }
@@ -193,7 +212,7 @@ function useOpenedPage(
       () => set({ state: "refused" }),
     );
     return () => abort.abort();
-  }, [botId, dir, scopeJson, key, tries]);
+  }, [botId, request, key, tries]);
   const result: Opened =
     keyed.key === key ? keyed.result : { state: "loading" };
   const openedUrl = result.state === "opened" ? result.url : undefined;
@@ -329,28 +348,29 @@ function Banner({ children }: { children: ReactNode }) {
  * 不透明源里，这个风险可以接受。拿不到新地址（不可用、出错）就关掉空白页，面板里的页面不受影响。
  * 返回 false 表示浏览器拦截了新标签页。
  */
-async function openFreshTab(
+export async function openInNewTab(
   botId: string,
-  openDir: ReturnType<typeof openDirOf>,
-  scopeJson: string,
-): Promise<boolean> {
-  if (openDir.kind !== "dir") return true;
+  body: OpenBody,
+  /** 拿到可用地址后告诉调用方这次是怎么打开的，好在按钮旁给出提示。 */
+  onAnswer?: (answer: { mode: "port" | "domain"; replaces: boolean }) => void,
+): Promise<"opened" | "blocked" | "unavailable" | "failed"> {
   const tab = window.open("", "_blank");
-  if (tab === null) return false;
+  if (tab === null) return "blocked";
   tab.opener = null;
-  let opened = false;
+  let result: "opened" | "unavailable" | "failed" = "failed";
   try {
-    const answer = await openTarget(botId, openBody(openDir.dir, scopeJson));
+    const answer = await openTarget(botId, body);
     if (answer.available) {
+      onAnswer?.({ mode: answer.mode, replaces: answer.replaces });
       tab.location.replace(answer.url);
-      opened = true;
-    }
+      result = "opened";
+    } else result = "unavailable";
   } catch {
     // 落到 finally 关掉空白页。
   } finally {
-    if (!opened) tab.close();
+    if (result !== "opened") tab.close();
   }
-  return true;
+  return result;
 }
 
 const FRAME = "min-h-0 w-full flex-1 border-0 bg-background";
@@ -362,6 +382,120 @@ export function ArtifactPreview({
   target: PreviewTarget;
   /** 在 DetailPanel 里时不传：标题栏已有关闭按钮，不再画第二个；单独使用时传，顶栏画「×」。 */
   onClose?: () => void;
+}) {
+  // 换了程序就整块重建：上一个程序的 iframe 随之卸载。
+  return isAppTarget(target) ? (
+    <AppPreview
+      key={`${target.botId}:${target.app.port}:${target.app.path}`}
+      onClose={onClose}
+      target={target}
+    />
+  ) : (
+    <FilePreview onClose={onClose} target={target} />
+  );
+}
+
+/** 单个程序的预览：通过内容源打开员工正在运行的程序。 */
+function AppPreview({
+  target,
+  onClose,
+}: {
+  target: AppPreviewTarget;
+  onClose?: (() => void) | undefined;
+}) {
+  const name = target.label ?? `端口 ${target.app.port}`;
+  const request = JSON.stringify(appOpenBody(target));
+  const page = useOpenedPage(target.botId, request);
+  const [opening, setOpening] = useState(false);
+  const [blocked, setBlocked] = useState(false);
+  const { result } = page;
+  let body: ReactNode;
+  if (result.state === "loading") body = <Note>加载中…</Note>;
+  else if (result.state === "unconfigured")
+    body = <Note>没有配置内容源，不能打开程序</Note>;
+  else if (result.state === "refused") body = <Note>打不开这个程序</Note>;
+  else
+    body = (
+      <>
+        {result.mode === "port" ? <Banner>{PORT_MODE_NOTICE}</Banner> : null}
+        {result.replaces ? <Banner>{REPLACED_NOTICE}</Banner> : null}
+        {page.expired ? (
+          <Banner>
+            <button
+              className="underline underline-offset-4 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+              onClick={page.reopen}
+              type="button"
+            >
+              已过期，重新打开
+            </button>
+          </Banner>
+        ) : null}
+        <iframe
+          className={FRAME}
+          // 程序的响应不带 CSP sandbox（端口模式下程序要能发带 cookie 的子请求，域名模式靠子域隔离），
+          // 所以这里的 allow-same-origin 让它运行在内容源的真实源里：拿不到本应用的 cookie 和存储
+          // （内容源是另一个源），但端口模式下同一浏览器里先后打开的程序共用一个主机，能互相读到内容，
+          // 面板顶部的说明已提示这一点。本应用源上的 iframe 仍永远不给 allow-same-origin。
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+          src={result.url}
+          title={name}
+        />
+      </>
+    );
+  return (
+    <section
+      aria-label={`预览 程序 ${name}`}
+      className="flex h-full min-h-0 min-w-0 flex-col bg-background"
+      data-artifact-preview=""
+    >
+      <div className="flex min-w-0 items-center gap-3 border-b border-border px-3 py-2 text-sm">
+        <span className="min-w-0 flex-1 truncate font-medium">
+          程序 · {name}
+        </span>
+        {result.state === "opened" ? (
+          <button
+            className={BAR_LINK}
+            disabled={opening}
+            onClick={() => {
+              if (opening) return;
+              setOpening(true);
+              setBlocked(false);
+              openInNewTab(target.botId, appOpenBody(target))
+                .then((answer) => setBlocked(answer === "blocked"))
+                .finally(() => setOpening(false));
+            }}
+            type="button"
+          >
+            在新标签页打开
+          </button>
+        ) : result.state === "unconfigured" ? (
+          <button className={BAR_LINK} disabled type="button">
+            打开
+          </button>
+        ) : null}
+        {onClose === undefined ? null : (
+          <button
+            aria-label="关闭预览"
+            className="shrink-0 rounded-md p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
+            onClick={onClose}
+            type="button"
+          >
+            <IconX aria-hidden className="size-4" />
+          </button>
+        )}
+      </div>
+      {blocked ? <Banner>浏览器拦截了新标签页</Banner> : null}
+      {body}
+    </section>
+  );
+}
+
+function FilePreview({
+  target,
+  onClose,
+}: {
+  target: FilePreviewTarget;
+  onClose?: (() => void) | undefined;
 }) {
   const kind = previewKindOfTarget(target);
   const textual = kind === "markdown" || kind === "csv" || kind === "text";
@@ -375,8 +509,9 @@ export function ArtifactPreview({
   const scopeJson = JSON.stringify(scopeFields(target.scope));
   const page = useOpenedPage(
     target.botId,
-    openDir.kind === "dir" ? openDir.dir : undefined,
-    scopeJson,
+    openDir.kind === "dir"
+      ? JSON.stringify(openBody(openDir.dir, scopeJson))
+      : undefined,
   );
   const [opening, setOpening] = useState(false);
   const [blocked, setBlocked] = useState(false);
@@ -532,8 +667,11 @@ export function ArtifactPreview({
               if (opening) return;
               setOpening(true);
               setBlocked(false);
-              openFreshTab(target.botId, openDir, scopeJson)
-                .then((allowed) => setBlocked(!allowed))
+              (openDir.kind === "dir"
+                ? openInNewTab(target.botId, openBody(openDir.dir, scopeJson))
+                : Promise.resolve("opened" as const)
+              )
+                .then((answer) => setBlocked(answer === "blocked"))
                 .finally(() => setOpening(false));
             }}
             type="button"

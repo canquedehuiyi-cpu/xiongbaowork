@@ -145,7 +145,7 @@ export type DeliverableComponent = {
  * The delivery loop (spec 2026-11-15-delivery-loop §4) adds four more kinds of thing a hand-in can
  * name: `links`, `diffs` (an external coworker's change summary), `notes` (a words-only conclusion)
  * and `checks` (the coworker's self-check lines). A file the coworker Bot saved in its own workspace
- * is named by `workspaceFiles`, relative to that workspace. All seven arrays are optional; a record
+ * is named by `workspaceFiles`, relative to that workspace. All eight arrays are optional; a record
  * written before this existed, with only `components` and `attachments`, is still a deliverable.
  */
 export type DeliverableRef = {
@@ -165,6 +165,10 @@ export type DeliverableRef = {
   workspaceFiles?: string[];
   /** The `workspaceFiles` the server could not check for being there (a paired personal computer, or a computer that did not answer): the card says 未核实. */
   unverifiedFiles?: string[];
+  /** Programs a coworker Bot left running on its own computer: the port, the first page and the name the card shows. */
+  apps?: { port: number; path: string; title: string }[];
+  /** The ports of `apps` the server could not request a page from (a paired personal computer): the card says 未核实. */
+  unverifiedApps?: number[];
 };
 
 /**
@@ -192,11 +196,12 @@ const DELIVERABLE_ARRAYS = [
   "notes",
   "checks",
   "workspaceFiles",
+  "apps",
 ] as const;
 
 /**
  * Whether a stored `deliverable_ref` is a run's output rather than some other record: the right
- * `kind`, at least one of the seven lists present, and every list that is present really a list.
+ * `kind`, at least one of the eight lists present, and every list that is present really a list.
  * Accepts both the original `{components, attachments}` shape and the delivery loop's.
  */
 export function isDeliverableRef(value: unknown): value is DeliverableRef {

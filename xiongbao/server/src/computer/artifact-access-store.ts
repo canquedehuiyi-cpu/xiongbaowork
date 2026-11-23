@@ -16,7 +16,7 @@ import {
   threadRuns,
 } from "../db/schema";
 import { runAsTenant } from "../tenant/context";
-import type { ArtifactAccessDeps } from "./artifact-access";
+import { type ArtifactAccessDeps, deliveredAppsOf } from "./artifact-access";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -141,7 +141,10 @@ export function createArtifactAccessDeps(
       for (const [owner, threadIds] of byOwner) {
         const found = await runAsTenant(owner, async () => {
           const [run] = await database
-            .select({ threadId: threadRuns.threadId })
+            .select({
+              threadId: threadRuns.threadId,
+              agentId: threadRuns.agentId,
+            })
             .from(threadRuns)
             .where(
               and(
@@ -154,6 +157,7 @@ export function createArtifactAccessDeps(
           return {
             threadId: run.threadId,
             ownerId: owner,
+            agentId: run.agentId,
             events: (await eventsOf([runId])).get(runId) ?? [],
           };
         });
@@ -185,7 +189,10 @@ export function createArtifactAccessDeps(
                 (path): path is string => typeof path === "string",
               )
             : [];
-        if (files.length === 0) return null;
+        const apps = isRecord(card.deliverable)
+          ? deliveredAppsOf(card.deliverable.apps)
+          : [];
+        if (files.length === 0 && apps.length === 0) return null;
 
         // The computer the files were made on is the one the card's own rounds announced for its employee.
         const logged = await database
@@ -233,6 +240,7 @@ export function createArtifactAccessDeps(
           ownerId: actor.id,
           seat: [...seats][0] as string,
           workspaceFiles: files,
+          ...(apps.length > 0 ? { apps } : {}),
         };
       }),
   };

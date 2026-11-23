@@ -44,8 +44,25 @@ import {
   startEgressFilter,
 } from "./egress";
 import { enterText, FieldValueError } from "./enter-text";
+import {
+  connectProgramSocket,
+  createForwardSockets,
+  type ForwardSocketData,
+  forwardHttp,
+  offeredProtocols,
+  socketHandshakeHeaders,
+  validForwardPath,
+} from "./forward";
 import { identity } from "./identity";
 import { createInputQueue, type InputQueue } from "./input-queue";
+import {
+  checkForwardPort,
+  type ForwardVerdict,
+  forwardOwnerUid,
+  parseDenyPorts,
+  parseForwardPort,
+  readListenTables,
+} from "./listeners";
 import { createLiveShell } from "./live-shell";
 import {
   LOOPBACK_RELAYS_ENV,
@@ -61,6 +78,7 @@ import { convertToPdf, OfficeConversionError } from "./office-preview";
 import {
   botKeyOf,
   createPerBotComputer,
+  employeeUid,
   PerBotUnavailableError,
   perBotUsersEnabled,
   usesOwnUser,
@@ -353,6 +371,9 @@ const workspaces = createWorkspaces(
  * An employee with its own Linux user gets one too, but never this process's bash, which would be
  * pwuser's: `ownUserTerminal` starts it through the root helper as the employee (`xb-bot shell`).
  */
+const forwardSockets = createForwardSockets<
+  StreamData & TerminalSocketData & ForwardSocketData
+>();
 const terminalSockets = createTerminalSockets<StreamData & TerminalSocketData>({
   shellFor: async (seat) => {
     if (runsAsOwnUser(seat)) return ownUserTerminal(seat);
@@ -392,13 +413,24 @@ const terminalSockets = createTerminalSockets<StreamData & TerminalSocketData>({
 // per-Bot upstream proxy. Started before any browser exists so nothing escapes it.
 // Only the running computer points its shell at it: a test that imports this module shares its
 // process with every later test.
-await startEgressFilter({ forShell: import.meta.main });
+const egressFilter = await startEgressFilter({ forShell: import.meta.main });
 // The deployment's loopback addresses, where a browser here is handed one (OpenBot Desktop). Before any browser exists,
 // so a Recorder never connects to an address that is not there yet. See loopback-relay.ts.
-if (import.meta.main)
-  await startLoopbackRelays(
-    parseLoopbackRelays(process.env[LOOPBACK_RELAYS_ENV]),
-  );
+const loopbackRelays = parseLoopbackRelays(process.env[LOOPBACK_RELAYS_ENV]);
+if (import.meta.main) await startLoopbackRelays(loopbackRelays);
+/**
+ * Every port this process listens on, which the forwarder (forward.ts) must never open: the API
+ * itself, both egress filter listeners and the loopback relays. Chrome is held over a pipe, not a port.
+ */
+const SELF_PORTS: readonly number[] = [
+  PORT,
+  egressFilter.port,
+  egressFilter.browserPort,
+  ...loopbackRelays.map((relay) => relay.port),
+  // Services of the platform that run as this process's own user, where a deployment has any. The
+  // image has none: its API and database run as other users, which the owner check already refuses.
+  ...parseDenyPorts(process.env.COMPUTER_FORWARD_DENY_PORTS),
+];
 const profiles = createProfiles(
   process.env.PROFILES_DIR?.trim() || "/profiles",
   async (botId) => {
@@ -504,6 +536,40 @@ const perBot = createPerBotComputer({
  */
 function runsAsOwnUser(seat: string): boolean {
   return usesOwnUser(seat, DEFAULT_BOT_ID, PER_BOT_USERS);
+}
+
+/** `/forward/<port>/<path>` or `/forward-ws/<port>/<path>`: the port text, the path after it (`/` when none), and which. */
+function forwardTargetOf(
+  pathname: string,
+): { portText: string; rest: string; socket: boolean } | null {
+  const match = /^\/(forward|forward-ws)\/([^/]*)(\/.*)?$/.exec(pathname);
+  if (!match) return null;
+  return {
+    portText: match[2] ?? "",
+    rest: match[3] ?? "/",
+    socket: match[1] === "forward-ws",
+  };
+}
+
+/**
+ * May this seat be sent to this port? Only to listeners owned by the Linux user its commands run as: its
+ * own user, or this process's user for the default employee and for computers the employees share. With no
+ * such own user found the answer is no.
+ */
+function forwardVerdict(seat: string, port: number): ForwardVerdict {
+  const own = runsAsOwnUser(seat);
+  const uid = forwardOwnerUid({
+    ownUser: own,
+    employeeUid: own ? employeeUid(seat) : null,
+    processUid: process.getuid?.() ?? null,
+  });
+  if (uid === undefined) return "not-yours";
+  return checkForwardPort({
+    port,
+    uid,
+    tables: readListenTables(),
+    selfPorts: SELF_PORTS,
+  });
 }
 
 /**
@@ -1170,7 +1236,7 @@ async function applyInput(
   }
 }
 
-serve<StreamData & TerminalSocketData>({
+serve<StreamData & TerminalSocketData & ForwardSocketData>({
   port: PORT,
   ...(RUNTIME.hostname ? { hostname: RUNTIME.hostname } : {}),
   idleTimeout: 120,
@@ -1181,121 +1247,123 @@ serve<StreamData & TerminalSocketData>({
    * page changes and input goes back over the same connection. See screencast.ts for why polling was
    * not good enough once a person had to type into this.
    */
-  websocket: terminalSockets.around({
-    async open(ws) {
-      const session = sessions.for(ws.data.botId);
-      /*
-       * Claimed before anything is awaited, and that order is the fix.
-       *
-       * Below this line the Bot's browser may have to be launched, which takes long enough for a
-       * client to connect and go away inside it. A close arriving in that window used to find nothing
-       * installed and so did nothing, while this function carried on to install a cast and a 1Hz
-       * interval for a socket that had already gone: no second close ever came, and the interval went
-       * on relaunching a browser somebody had stopped. With the claim taken first there is always
-       * something for that close to release, and everything below goes through the claim and is
-       * refused once it is gone.
-       */
-      const claim = session.viewer.claim(ws, (reason) => {
+  websocket: forwardSockets.around(
+    terminalSockets.around({
+      async open(ws) {
+        const session = sessions.for(ws.data.botId);
+        /*
+         * Claimed before anything is awaited, and that order is the fix.
+         *
+         * Below this line the Bot's browser may have to be launched, which takes long enough for a
+         * client to connect and go away inside it. A close arriving in that window used to find nothing
+         * installed and so did nothing, while this function carried on to install a cast and a 1Hz
+         * interval for a socket that had already gone: no second close ever came, and the interval went
+         * on relaunching a browser somebody had stopped. With the claim taken first there is always
+         * something for that close to release, and everything below goes through the claim and is
+         * refused once it is gone.
+         */
+        const claim = session.viewer.claim(ws, (reason) => {
+          try {
+            ws.send(JSON.stringify({ type: "error", error: reason }));
+          } catch {
+            // Best effort. The socket may already be gone, which is not a reason to stop tearing down.
+          }
+        });
         try {
-          ws.send(JSON.stringify({ type: "error", error: reason }));
-        } catch {
-          // Best effort. The socket may already be gone, which is not a reason to stop tearing down.
-        }
-      });
-      try {
-        // Says this computer listens for `FRAME_RECEIVED`. A screen from before it ignores a message it
-        // does not know, and a screen that does know sends confirmations only after hearing this, so
-        // neither side ever sends the other something it would refuse.
-        ws.send(HELLO);
-        const send = (frame: unknown) => {
-          // The newest frame, held until there is room for it; see `sendHeldFrame`.
-          ws.data.heldFrame = JSON.stringify(frame);
-          // A closed socket starts a fresh cast on the next connection.
-          sendHeldFrame(ws, () => void session.viewer.release(ws));
-        };
+          // Says this computer listens for `FRAME_RECEIVED`. A screen from before it ignores a message it
+          // does not know, and a screen that does know sends confirmations only after hearing this, so
+          // neither side ever sends the other something it would refuse.
+          ws.send(HELLO);
+          const send = (frame: unknown) => {
+            // The newest frame, held until there is room for it; see `sendHeldFrame`.
+            ws.data.heldFrame = JSON.stringify(frame);
+            // A closed socket starts a fresh cast on the next connection.
+            sendHeldFrame(ws, () => void session.viewer.release(ws));
+          };
 
-        /*
-         * The cast follows the Bot's current page. Re-checking also handles a page being closed
-         * underneath us without a listener per page.
-         */
-        let casting: Page | undefined;
-        const attach = async () => {
-          const target = await currentPage(ws.data.botId);
-          if (target === casting) return;
-          const cast = await startScreencast(target, send);
-          // The claim stops a cast it refuses, so a launch that lost the screen leaks nothing.
-          if (!(await claim.install(cast))) return;
-          casting = target;
-        };
+          /*
+           * The cast follows the Bot's current page. Re-checking also handles a page being closed
+           * underneath us without a listener per page.
+           */
+          let casting: Page | undefined;
+          const attach = async () => {
+            const target = await currentPage(ws.data.botId);
+            if (target === casting) return;
+            const cast = await startScreencast(target, send);
+            // The claim stops a cast it refuses, so a launch that lost the screen leaks nothing.
+            if (!(await claim.install(cast))) return;
+            casting = target;
+          };
 
-        await attach();
-        const follow = setInterval(() => {
-          void attach().catch(() => undefined);
-        }, FOLLOW_INTERVAL_MS);
-        if (!claim.setFollow(() => clearInterval(follow))) return;
-      } catch (error) {
-        /*
-         * Released before the socket is told, because this path is reachable in exactly the timing
-         * the claim exists for. A claim left behind here would keep the session occupied for the life
-         * of the process, and the sweep in sessions.ts could never take it: the unbounded growth that
-         * function was written to stop, reintroduced by the error path of the fix for it.
-         */
-        await session.viewer.release(ws);
-        ws.send(
-          JSON.stringify({
-            type: "error",
-            error: describe(error, "The screen could not be started."),
-          }),
-        );
-        ws.close();
-      }
-    },
-
-    /*
-     * One message at a time, in the order the person sent them. Applying one is a trip to the
-     * browser, and a message whose trip is shorter than the one before it must still land after it:
-     * applied as each was ready, a key came up before it went down (every key up of a word before
-     * any of its key downs, measured with a page busy 20 ms per key down). A move or a scroll still
-     * waiting is folded into the next one of its kind (input-queue.ts); nothing else is held, and a
-     * message refused or failed says so and lets the next one through.
-     */
-    message(ws, raw) {
-      // Not input: the screen saying a frame reached it, which goes nowhere near the input queue.
-      if (raw === FRAME_RECEIVED) {
-        frameReceived(ws);
-        return;
-      }
-      ws.data.inputs ??= createInputQueue(
-        (input) => applyInput(ws, input),
-        (error) =>
-          console.error(
+          await attach();
+          const follow = setInterval(() => {
+            void attach().catch(() => undefined);
+          }, FOLLOW_INTERVAL_MS);
+          if (!claim.setFollow(() => clearInterval(follow))) return;
+        } catch (error) {
+          /*
+           * Released before the socket is told, because this path is reachable in exactly the timing
+           * the claim exists for. A claim left behind here would keep the session occupied for the life
+           * of the process, and the sweep in sessions.ts could never take it: the unbounded growth that
+           * function was written to stop, reintroduced by the error path of the fix for it.
+           */
+          await session.viewer.release(ws);
+          ws.send(
             JSON.stringify({
-              type: "screencast-input-error",
-              error: String(error),
+              type: "error",
+              error: describe(error, "The screen could not be started."),
             }),
-          ),
-      );
-      ws.data.inputs.push(String(raw));
-    },
+          );
+          ws.close();
+        }
+      },
 
-    /** Room on the connection again: the frame held while it was busy goes now. */
-    drain(ws) {
-      // A socket that has gone is released by its close.
-      sendHeldFrame(ws, () => undefined);
-    },
+      /*
+       * One message at a time, in the order the person sent them. Applying one is a trip to the
+       * browser, and a message whose trip is shorter than the one before it must still land after it:
+       * applied as each was ready, a key came up before it went down (every key up of a word before
+       * any of its key downs, measured with a page busy 20 ms per key down). A move or a scroll still
+       * waiting is folded into the next one of its kind (input-queue.ts); nothing else is held, and a
+       * message refused or failed says so and lets the next one through.
+       */
+      message(ws, raw) {
+        // Not input: the screen saying a frame reached it, which goes nowhere near the input queue.
+        if (raw === FRAME_RECEIVED) {
+          frameReceived(ws);
+          return;
+        }
+        ws.data.inputs ??= createInputQueue(
+          (input) => applyInput(ws, input),
+          (error) =>
+            console.error(
+              JSON.stringify({
+                type: "screencast-input-error",
+                error: String(error),
+              }),
+            ),
+        );
+        ws.data.inputs.push(String(raw));
+      },
 
-    async close(ws) {
-      clearTimeout(ws.data.heldRetry);
-      ws.data.heldFrame = undefined;
-      // Names the socket, so it can only ever give up its own screen. A superseded socket closing
-      // after its replacement has started releases nothing; see viewer.ts.
-      //
-      // `get`, not `for`: a socket closing for a Bot with no session has nothing to release,
-      // and creating one here would add a map entry on a teardown path, which is the direction the
-      // map is meant to shrink in.
-      await sessions.get(ws.data.botId)?.viewer.release(ws);
-    },
-  }),
+      /** Room on the connection again: the frame held while it was busy goes now. */
+      drain(ws) {
+        // A socket that has gone is released by its close.
+        sendHeldFrame(ws, () => undefined);
+      },
+
+      async close(ws) {
+        clearTimeout(ws.data.heldRetry);
+        ws.data.heldFrame = undefined;
+        // Names the socket, so it can only ever give up its own screen. A superseded socket closing
+        // after its replacement has started releases nothing; see viewer.ts.
+        //
+        // `get`, not `for`: a socket closing for a Bot with no session has nothing to release,
+        // and creating one here would add a map entry on a teardown path, which is the direction the
+        // map is meant to shrink in.
+        await sessions.get(ws.data.botId)?.viewer.release(ws);
+      },
+    }),
+  ),
   async fetch(request, server) {
     const url = new URL(request.url);
 
@@ -1386,6 +1454,53 @@ serve<StreamData & TerminalSocketData>({
       return browserHost.handle(request, url.pathname, botId);
     if (isRealBrowserPath(url.pathname))
       return realBrowser.handle(request, url.pathname, botId);
+    /*
+     * A program an employee runs on this computer, reached through the computer (forward.ts).
+     * Behind the token and the seat checks above. Before `sessions.for`: it needs no browser, no shell and no wheel.
+     */
+    const forwardTarget = forwardTargetOf(url.pathname);
+    if (forwardTarget) {
+      const port = parseForwardPort(forwardTarget.portText);
+      const verdictNow = (): ForwardVerdict => forwardVerdict(botId, port);
+      const path = forwardTarget.rest + url.search;
+      if (forwardTarget.socket) {
+        if (verdictNow() !== "ok")
+          return json({ error: "That port cannot be opened." }, 403);
+        if (!validForwardPath(path))
+          return json({ error: "That path is not allowed." }, 400);
+        if (request.headers.get("upgrade")?.toLowerCase() !== "websocket")
+          return json({ error: "Expected a WebSocket upgrade." }, 400);
+        const program = await connectProgramSocket({
+          port,
+          path,
+          protocols: offeredProtocols(request.headers),
+          headers: socketHandshakeHeaders(request.headers),
+          recheck: verdictNow,
+        });
+        if (!program)
+          return json({ error: "The program could not be reached." }, 502);
+        const { protocol, forward } = program;
+        if (
+          server.upgrade(request, {
+            data: { botId, forward },
+            ...(protocol
+              ? { headers: { "sec-websocket-protocol": protocol } }
+              : {}),
+          })
+        )
+          return undefined as unknown as Response;
+        forward.upstream.close();
+        return json({ error: "Expected a WebSocket upgrade." }, 400);
+      }
+      server.timeout(request, 0);
+      return forwardHttp({
+        request,
+        port,
+        path,
+        verdict: verdictNow(),
+        recheck: verdictNow,
+      });
+    }
     const session = sessions.for(botId);
 
     /*

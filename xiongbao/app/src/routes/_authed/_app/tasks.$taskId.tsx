@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useState } from "react";
+import { AppOpenButton } from "@/components/channels/app-open-button";
 import { ARTIFACT_DOWNLOAD_LINK } from "@/components/channels/turn-artifacts";
 import {
   ApprovalActions,
@@ -184,6 +185,7 @@ const ROW_NOTE: Record<EvidenceRow["kind"], string> = {
   component: "组件",
   link: "链接",
   workspace_file: "工作区文件",
+  app: "程序",
   diff: "改动汇总",
   note: "文字结论",
   check: "员工自查",
@@ -230,7 +232,7 @@ export function EvidenceLine({
       row.label
     );
   return (
-    <div className="flex items-center gap-2.5 rounded-[10px] border border-(--wb-line) bg-(--wb-card) px-3 py-2.5 text-[13px]">
+    <div className="flex flex-wrap items-center gap-2.5 rounded-[10px] border border-(--wb-line) bg-(--wb-card) px-3 py-2.5 text-[13px]">
       <RowIcon kind={row.kind} />
       <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{label}</span>
       {download ? (
@@ -238,12 +240,25 @@ export function EvidenceLine({
           下载
         </a>
       ) : null}
+      {row.kind === "app" && agentId ? (
+        <AppOpenButton
+          label={row.label}
+          target={{
+            botId: agentId,
+            app: { port: row.port, path: row.path },
+            label: row.label,
+            scope: { task: taskId },
+          }}
+        />
+      ) : null}
       <span className="ml-auto shrink-0 text-(--wb-muted) text-[12px]">
         {row.kind === "diff"
           ? `${row.detail} · ${ROW_NOTE.diff}`
           : row.kind === "workspace_file" && row.unverified
             ? `${ROW_NOTE.workspace_file} · 未核实`
-            : ROW_NOTE[row.kind]}
+            : row.kind === "app"
+              ? `${ROW_NOTE.app} · 端口 ${row.port}${row.unverified ? " · 未核实" : ""}`
+              : ROW_NOTE[row.kind]}
       </span>
     </div>
   );

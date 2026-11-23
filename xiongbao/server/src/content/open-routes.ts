@@ -2,6 +2,7 @@ import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import type { AppVariables } from "../auth/guards";
 import type { ArtifactScope } from "../computer/artifact-access";
+import type { ComputerSeat } from "../computer/computer-key";
 import { computerKeyText } from "../computer/computer-key";
 import type { ComputerGateway } from "../computer/gateway";
 import type { DeploymentConfig } from "../config";
@@ -30,8 +31,6 @@ const NOT_FOUND = "There is no such folder.";
 /** Longest folder path accepted, matching the longest path the static server will resolve. */
 const MAX_PATH_LENGTH = 1024;
 
-/** What `app` kind says until forwarding to a local web app exists. */
-const APP_PLACEHOLDER = "程序转发将在后续版本提供";
 const NOT_CONFIGURED = "这个部署没有配置内容源，暂时不能直接打开网页。";
 
 export type OpenRoutesDeps = {
@@ -39,7 +38,7 @@ export type OpenRoutesDeps = {
   /** `config.content` and `config.keyEncryptionKey`. */
   content: DeploymentConfig["content"];
   key: string;
-  access: Pick<ContentAccess, "authorize">;
+  access: Pick<ContentAccess, "authorize" | "authorizeApp">;
   gateway: Pick<ComputerGateway, "statFile">;
   auditStore?: AuditStore;
   now?: () => number;
@@ -47,10 +46,29 @@ export type OpenRoutesDeps = {
 
 type Body =
   | { kind: "dir"; path: string; scope: ArtifactScope | null }
-  | { kind: "app"; port: number; path?: string };
+  | {
+      kind: "app";
+      port: number;
+      path?: string;
+      scope: ArtifactScope | null;
+    };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * Whether a program's landing path may be signed into a grant: absolute, one leading slash, no
+ * backslash and no control character, so it can only ever be a path on the content origin.
+ */
+export function validAppPath(path: string): boolean {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: control characters are what is refused
+  if (/[\\\u0000-\u001f\u007f]/.test(path)) return false;
+  return (
+    path.length <= MAX_PATH_LENGTH &&
+    path.startsWith("/") &&
+    !path.startsWith("//")
+  );
+}
 
 /** The request body as one of the two shapes, or null for anything else (a 400). */
 function parseBody(raw: unknown): Body | null {
@@ -80,7 +98,13 @@ function parseBody(raw: unknown): Body | null {
       return null;
     }
     if (path !== undefined && typeof path !== "string") return null;
-    return { kind: "app", port, ...(path !== undefined ? { path } : {}) };
+    if (path !== undefined && !validAppPath(path)) return null;
+    return {
+      kind: "app",
+      port,
+      ...(path !== undefined ? { path } : {}),
+      scope: scoped ? scope : null,
+    };
   }
   return null;
 }
@@ -108,65 +132,78 @@ export function createOpenRoutes(deps: OpenRoutesDeps) {
       if (mode === null) {
         return context.json({ available: false, reason: NOT_CONFIGURED });
       }
-      if (body.kind === "app") {
-        // The shape is checked and nothing else: forwarding is a later task, not half of one here.
-        return context.json({ available: false, reason: APP_PLACEHOLDER });
-      }
-
-      // The folder is the same safe relative path the static server resolves, so what is opened is
-      // always something it would serve: never the workspace root, never a hidden segment.
-      const index = resolveServedPath(body.path, "");
-      if (index === null || body.path.length > MAX_PATH_LENGTH) {
-        return context.json({ error: NOT_FOUND }, 404);
-      }
-      const dir = index.slice(0, -"/index.html".length);
-
       const actor = {
         id: context.var.actor.id,
         role: context.var.actor.role,
       };
-      const access = await deps.access.authorize(actor, {
-        botId,
-        dir,
-        scope: body.scope,
-      });
-      if (!access) return context.json({ error: NOT_FOUND }, 404);
 
-      // The computer's own word on it: a folder, with a page in it. A computer this server cannot
-      // look into (a paired personal one) cannot be shown, so it is refused rather than guessed at.
-      let folder: Awaited<ReturnType<typeof deps.gateway.statFile>>;
-      let page: Awaited<ReturnType<typeof deps.gateway.statFile>>;
-      try {
-        folder = await deps.gateway.statFile(access.seat, { path: dir });
-        page = await deps.gateway.statFile(access.seat, { path: index });
-      } catch {
-        return context.json(
-          { error: "The computer could not be reached." },
-          502,
-        );
-      }
-      if (
-        folder === null ||
-        folder === "absent" ||
-        folder.kind !== "folder" ||
-        page === null ||
-        page === "absent" ||
-        page.kind !== "file"
-      ) {
-        return context.json({ error: NOT_FOUND }, 404);
+      let seat: ComputerSeat;
+      let target: ContentGrant["target"];
+      if (body.kind === "app") {
+        // A running program: who may see it is the delivery's (or the person's own employee). Whether
+        // it is listening is not asked here; the computer answers for that on every request.
+        const access = await deps.access.authorizeApp(actor, {
+          botId,
+          port: body.port,
+          scope: body.scope,
+        });
+        if (!access) return context.json({ error: NOT_FOUND }, 404);
+        seat = access.seat;
+        target = { kind: "app", port: body.port, path: body.path ?? "/" };
+      } else {
+        // The folder is the same safe relative path the static server resolves, so what is opened is
+        // always something it would serve: never the workspace root, never a hidden segment.
+        const index = resolveServedPath(body.path, "");
+        if (index === null || body.path.length > MAX_PATH_LENGTH) {
+          return context.json({ error: NOT_FOUND }, 404);
+        }
+        const dir = index.slice(0, -"/index.html".length);
+
+        const access = await deps.access.authorize(actor, {
+          botId,
+          dir,
+          scope: body.scope,
+        });
+        if (!access) return context.json({ error: NOT_FOUND }, 404);
+
+        // The computer's own word on it: a folder, with a page in it. A computer this server cannot
+        // look into (a paired personal one) cannot be shown, so it is refused rather than guessed at.
+        let folder: Awaited<ReturnType<typeof deps.gateway.statFile>>;
+        let page: Awaited<ReturnType<typeof deps.gateway.statFile>>;
+        try {
+          folder = await deps.gateway.statFile(access.seat, { path: dir });
+          page = await deps.gateway.statFile(access.seat, { path: index });
+        } catch {
+          return context.json(
+            { error: "The computer could not be reached." },
+            502,
+          );
+        }
+        if (
+          folder === null ||
+          folder === "absent" ||
+          folder.kind !== "folder" ||
+          page === null ||
+          page === "absent" ||
+          page.kind !== "file"
+        ) {
+          return context.json({ error: NOT_FOUND }, 404);
+        }
+        seat = access.seat;
+        target = { kind: "dir", path: dir };
       }
 
       const issuedAt = now();
       const grant: ContentGrant = {
         person: actor.id,
         bot: botId,
-        seat: computerKeyText(access.seat.key),
+        seat: computerKeyText(seat.key),
         ...(body.scope?.channel !== undefined
           ? { channel: body.scope.channel }
           : {}),
         ...(body.scope?.run !== undefined ? { run: body.scope.run } : {}),
         ...(body.scope?.task !== undefined ? { task: body.scope.task } : {}),
-        target: { kind: "dir", path: dir },
+        target,
         exp: issuedAt + OPEN_TOKEN_TTL_MS,
         born: issuedAt,
       };
@@ -209,8 +246,9 @@ export function createOpenRoutes(deps: OpenRoutesDeps) {
           actorUserId: actor.id,
           payload: {
             bot: botId,
-            kind: "dir",
-            path: dir,
+            ...(target.kind === "dir"
+              ? { kind: "dir", path: target.path }
+              : { kind: "app", port: target.port, path: target.path }),
             scopeType:
               grant.task !== undefined
                 ? "task"
