@@ -26,6 +26,7 @@ import {
 } from "../src/content/server";
 import {
   type ContentGrant,
+  hostCodeOf,
   issueSessionToken,
   OPEN_TOKEN_TTL_MS,
 } from "../src/content/token";
@@ -164,6 +165,26 @@ describe("what the program is sent", () => {
     expect(sent?.headers.get("x-api-key")).toBe("kept");
   });
 
+  test("domain mode sends the program's own cookies and never the content cookie; port mode sends none", async () => {
+    const code = hostCodeOf(appGrant());
+    const headers = {
+      cookie: `${cookieFor(appGrant())}; sid=program-1; theme=dark`,
+    };
+    const domain = setup({ domain: "apps.example.com" });
+    await call(domain.server, `http://${code}.apps.example.com/x`, { headers });
+    expect(domain.seen[0]?.headers.get("cookie")).toBe(
+      "sid=program-1; theme=dark",
+    );
+    const only = setup({ domain: "apps.example.com" });
+    await call(only.server, `http://${code}.apps.example.com/x`, {
+      headers: { cookie: cookieFor(appGrant()) },
+    });
+    expect(only.seen[0]?.headers.has("cookie")).toBe(false);
+    const port = setup();
+    await call(port.server, "http://c/x", { headers });
+    expect(port.seen[0]?.headers.has("cookie")).toBe(false);
+  });
+
   test("Host is never sent, and Origin and Referer, when present, become the program's own origin", () => {
     const rewritten = programRequestHeaders(
       new Headers({
@@ -236,7 +257,7 @@ describe("what the person gets back", () => {
   });
 
   test("domain mode: cookies stay but become host-only, and the content cookie's name is never written by a program", async () => {
-    const code = (await import("../src/content/token")).hostCodeOf(appGrant());
+    const code = hostCodeOf(appGrant());
     const { server } = setup({
       domain: "apps.example.com",
       program: program([

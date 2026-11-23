@@ -193,8 +193,21 @@ export function validForwardPath(path: string): boolean {
 
 const originOf = (port: number) => `http://127.0.0.1:${port}`;
 
-/** The request's headers for the program: see the module comment for what is removed and rewritten. */
-export function programRequestHeaders(from: Headers, port: number): Headers {
+/**
+ * The request's headers for the program: see the module comment for what is removed and rewritten.
+ *
+ * Cookies: port mode sends none, because on a shared host the browser brings the application's own
+ * session cookie along with every request. Domain mode (`domainMode`) sends the browser's cookies
+ * except the content cookie: the content subdomain is another host than the application, whose session
+ * cookie is host-only (auth/organization.ts, no `Domain`) and so never reaches the subdomain, which
+ * leaves only the program's own cookies. If the application ever moves to a parent-domain cookie this
+ * must change with it.
+ */
+export function programRequestHeaders(
+  from: Headers,
+  port: number,
+  cookies?: { keepExcept: string },
+): Headers {
   const named = new Set(
     (from.get("connection") ?? "")
       .split(",")
@@ -224,6 +237,17 @@ export function programRequestHeaders(from: Headers, port: number): Headers {
     }
     out.append(name, value);
   });
+  if (cookies) {
+    const kept = (from.get("cookie") ?? "")
+      .split(";")
+      .map((part) => part.trim())
+      .filter(
+        (part) =>
+          part !== "" &&
+          part.slice(0, part.indexOf("=")).trim() !== cookies.keepExcept,
+      );
+    if (kept.length > 0) out.set("cookie", kept.join("; "));
+  }
   // Compression is not asked for: this server reads the answer through `fetch`, which decodes it.
   out.set("accept-encoding", "identity");
   if (from.has("origin")) out.set("origin", originOf(port));
@@ -622,7 +646,11 @@ export function createForwarder(deps: ForwardDeps & { contentCookie: string }) {
           port: g.target.port,
           method: request.method,
           path,
-          headers: programRequestHeaders(request.headers, g.target.port),
+          headers: programRequestHeaders(
+            request.headers,
+            g.target.port,
+            deps.domainMode ? { keepExcept: deps.contentCookie } : undefined,
+          ),
           body:
             request.method === "GET" || request.method === "HEAD"
               ? null
