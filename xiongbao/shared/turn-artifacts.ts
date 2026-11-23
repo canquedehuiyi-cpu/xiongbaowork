@@ -19,10 +19,13 @@ export const ARTIFACT_IGNORED_FOLDERS = [
   ".git",
 ] as const;
 
-/** True when any segment of the path is an ignored folder or starts with a dot. */
+/**
+ * True when any segment of the path is an ignored folder or starts with a dot. The path is relative
+ * with `/` separators (callers normalise); a backslash is an ordinary file-name character.
+ */
 export function isIgnoredArtifactPath(path: string): boolean {
   return path
-    .split(/[\\/]/)
+    .split("/")
     .some(
       (segment) =>
         segment.startsWith(".") ||

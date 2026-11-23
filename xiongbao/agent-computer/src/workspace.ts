@@ -916,7 +916,11 @@ export function createWorkspace(
     }
   }
 
-  /** Every file a turn could have produced, as path to "size:mtime"; links and empty files skipped. */
+  /**
+   * Every file a turn could have produced, with `/` separators; links are never followed. Empty files
+   * count towards `scanned` but are not recorded; hidden and ignored folders are not walked and so
+   * not counted.
+   */
   async function snapshotFiles(): Promise<{
     files: Map<string, { bytes: number; modifiedMs: number }>;
     scanned: number;
@@ -941,10 +945,13 @@ export function createWorkspace(
         scanned += 1;
         const bytes = entry.bytes ?? 0;
         if (bytes > 0)
-          files.set(entry.path.replace(/\\/g, "/"), {
-            bytes,
-            modifiedMs: Math.trunc(entry.modifiedMs),
-          });
+          files.set(
+            sep === "/" ? entry.path : entry.path.split(sep).join("/"),
+            {
+              bytes,
+              modifiedMs: Math.trunc(entry.modifiedMs),
+            },
+          );
         return true;
       },
     );

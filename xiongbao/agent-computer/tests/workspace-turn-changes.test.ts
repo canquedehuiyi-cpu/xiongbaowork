@@ -121,6 +121,38 @@ describe("turn changes", () => {
   });
 });
 
+describe("odd names and confined mode", () => {
+  test("paths come back exactly as written", async () => {
+    const ws = workspace();
+    await ws.mark("r1");
+    const names = [
+      "a b#c?d%e 报告.docx",
+      "out/子目录/x.txt",
+      "back\\slash.txt",
+    ];
+    for (const name of names) {
+      await mkdir(join(root, name, ".."), { recursive: true });
+      await writeFile(join(root, name), "x");
+    }
+    expect(
+      (await ws.changedSince("r1"))?.files.map((f) => f.path).sort(),
+    ).toEqual([...names].sort());
+  });
+
+  test("a link to another employee's folder is not listed, confined", async () => {
+    const theirs = join(base, "theirs");
+    await mkdir(theirs, { recursive: true });
+    await writeFile(join(theirs, "secret.txt"), "THEIR SECRET");
+    const ws = createWorkspace(root, undefined, { confineOpened: true });
+    await ws.mark("r1");
+    await symlink(theirs, join(root, "linked"));
+    await writeFile(join(root, "mine.txt"), "m");
+    expect((await ws.changedSince("r1"))?.files.map((f) => f.path)).toEqual([
+      "mine.txt",
+    ]);
+  });
+});
+
 describe("isIgnoredArtifactPath", () => {
   test("any segment in the list or starting with a dot", () => {
     expect(isIgnoredArtifactPath("tool-outputs/a.txt")).toBe(true);
