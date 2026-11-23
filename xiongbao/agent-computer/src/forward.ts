@@ -153,53 +153,72 @@ function bodyStream(
 ): ReadableStream<Uint8Array> {
   let sent = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const stop = () => {
+  let fail: () => void = () => undefined;
+  const disarm = () => {
     if (timer) clearTimeout(timer);
+    timer = undefined;
+  };
+  const arm = () => {
+    disarm();
+    timer = setTimeout(fail, idleMs);
+  };
+  const stop = () => {
+    disarm();
     incoming.destroy();
   };
   incoming.once("close", onDone);
   return new ReadableStream<Uint8Array>({
     start(controller) {
-      const arm = () => {
-        if (timer) clearTimeout(timer);
-        timer = setTimeout(() => {
+      fail = () => {
+        try {
           controller.error(new Error("The program stopped sending."));
-          incoming.destroy();
-        }, idleMs);
+        } catch {}
+        incoming.destroy();
       };
       arm();
       incoming.on("data", (chunk: Buffer) => {
         arm();
-        const room = FORWARD_MAX_RESPONSE_BYTES - sent;
-        if (chunk.byteLength >= room) {
-          if (room > 0)
-            controller.enqueue(new Uint8Array(chunk.subarray(0, room)));
-          sent = FORWARD_MAX_RESPONSE_BYTES;
-          if (timer) clearTimeout(timer);
-          controller.close();
-          incoming.destroy();
-          return;
+        try {
+          const room = FORWARD_MAX_RESPONSE_BYTES - sent;
+          if (chunk.byteLength >= room) {
+            if (room > 0)
+              controller.enqueue(new Uint8Array(chunk.subarray(0, room)));
+            sent = FORWARD_MAX_RESPONSE_BYTES;
+            disarm();
+            controller.close();
+            incoming.destroy();
+            return;
+          }
+          sent += chunk.byteLength;
+          controller.enqueue(new Uint8Array(chunk));
+          // The consumer is slower than the program: stop reading, and stop timing the program, until it asks again.
+          if ((controller.desiredSize ?? 0) <= 0) {
+            incoming.pause();
+            disarm();
+          }
+        } catch {
+          // The stream was already ended (by the idle timer or the consumer): nothing is left to feed.
+          stop();
         }
-        sent += chunk.byteLength;
-        controller.enqueue(new Uint8Array(chunk));
-        // The consumer is slower than the program: stop reading until it asks again.
-        if ((controller.desiredSize ?? 0) <= 0) incoming.pause();
       });
       incoming.on("end", () => {
-        if (timer) clearTimeout(timer);
+        disarm();
         try {
           controller.close();
         } catch {}
       });
       incoming.on("error", (error) => {
-        if (timer) clearTimeout(timer);
+        disarm();
         try {
           controller.error(error);
         } catch {}
       });
     },
     pull() {
-      incoming.resume();
+      if (incoming.isPaused()) {
+        incoming.resume();
+        arm();
+      }
     },
     cancel: stop,
   });
@@ -369,6 +388,7 @@ export type ForwardSocketData = {
     upstream: WebSocket;
     /** Messages from the program that arrived before the client's side was open. */
     pending: (string | Uint8Array)[];
+    pendingBytes: number;
     /** The program's side went away before the client's side was open. */
     upstreamClosed?: { code: number; reason: string };
     closed: boolean;
@@ -429,6 +449,7 @@ export function connectProgramSocket(input: {
     const forward: NonNullable<ForwardSocketData["forward"]> = {
       upstream,
       pending: [],
+      pendingBytes: 0,
       closed: false,
     };
     let settled = false;
@@ -458,12 +479,28 @@ export function connectProgramSocket(input: {
     };
     upstream.onmessage = (event) => {
       const data = event.data as string | ArrayBuffer;
+      const size = sizeOf(
+        typeof data === "string" ? data : new Uint8Array(data),
+      );
+      forward.pendingBytes += size;
+      if (
+        size > FORWARD_MAX_MESSAGE_BYTES ||
+        forward.pendingBytes > FORWARD_MAX_MESSAGE_BYTES
+      ) {
+        // More than the limit is waiting for the client's side to open: end both, as an oversized message would.
+        forward.pending.length = 0;
+        forward.upstreamClosed ??= { code: 1009, reason: "Message too big" };
+        try {
+          upstream.close(1009, "Message too big");
+        } catch {}
+        return;
+      }
       forward.pending.push(
         typeof data === "string" ? data : new Uint8Array(data),
       );
     };
     upstream.onclose = (event) => {
-      forward.upstreamClosed = { code: event.code, reason: event.reason };
+      forward.upstreamClosed ??= { code: event.code, reason: event.reason };
       settle(null);
     };
     upstream.onerror = () => settle(null);

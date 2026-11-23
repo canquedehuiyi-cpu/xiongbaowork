@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { connect, createServer, type Server } from "node:net";
 import { tmpdir } from "node:os";
@@ -420,6 +421,40 @@ describe.skipIf(!asked)("/forward-ws/<port>/<path>", () => {
     ]);
     wire.destroy();
     expect(closed).toBe(true);
+  }, 30_000);
+
+  test("a program that does not read is cut off when more than 16 MB waits to be written to it", async () => {
+    const stuck = createServer((socket) => {
+      socket.on("error", () => undefined);
+      socket.once("data", (head) => {
+        const key = /sec-websocket-key: (.+)\r\n/i.exec(String(head))?.[1];
+        const accept = createHash("sha1")
+          .update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`)
+          .digest("base64");
+        socket.write(
+          `HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ${accept}\r\n\r\n`,
+        );
+        socket.pause();
+      });
+    });
+    await new Promise<void>((resolve) => stuck.listen(0, "127.0.0.1", resolve));
+    try {
+      const socket = await open(
+        `/forward-ws/${(stuck.address() as { port: number }).port}/ws`,
+      );
+      const closed = new Promise<number>((resolve) => {
+        socket.onclose = (event) => resolve(event.code);
+      });
+      const chunk = new Uint8Array(2 * 1024 * 1024);
+      for (let n = 0; n < 40; n += 1) socket.send(chunk);
+      const code = await Promise.race([
+        closed,
+        Bun.sleep(15_000).then(() => -1),
+      ]);
+      expect(code).toBe(1009);
+    } finally {
+      stuck.close();
+    }
   }, 30_000);
 
   test("a message over 16 MB closes the socket", async () => {
