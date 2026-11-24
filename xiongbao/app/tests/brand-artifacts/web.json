@@ -324,6 +324,12 @@
     "note": "授权与提案标记，按原文被对端解析"
   },
   {
+    "word": "openbotTimeZone",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
     "word": "openbotUrl:_",
     "category": "peer-protocol",
     "plan": "keep",
@@ -331,6 +337,12 @@
   },
   {
     "word": "openbotVersion:_.version",
+    "category": "peer-protocol",
+    "plan": "keep",
+    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
+  },
+  {
+    "word": "openbotWaiting",
     "category": "peer-protocol",
     "plan": "keep",
     "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
