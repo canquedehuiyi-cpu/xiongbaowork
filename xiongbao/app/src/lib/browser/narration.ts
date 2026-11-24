@@ -1,5 +1,5 @@
 /*
- * NARRATION FROM THE PAGE. On hosted OpenBot the person's browser runs on a computer with no
+ * NARRATION FROM THE PAGE. On a hosted deployment the person's browser runs on a computer with no
  * microphone, so this page listens to them instead, in their own browser, with the Web Speech API, and hands each final
  * phrase to the Recorder with when they started and stopped saying it. It also says when a phrase began, as soon as its
  * first words come back, so the Recorder holds the steps taken while it is said until it arrives. In a window on the
