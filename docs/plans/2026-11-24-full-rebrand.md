@@ -265,7 +265,7 @@ git commit -m "去品牌 R0：剩余旧词报告与护栏同步工具"
 
 **范围：** `agent-*/`（14 个框架目录，含 Python）、`examples/`、`mobile/`、`runner/`、`supervisor/`、`worker/`、`toolkit/`、`agent-computer/`、`spire/`、`docker/`（环境变量与连接串不动，在保护清单里）、`desktop-device/`（`LEGACY_SIDECAR` 不动）。
 
-**特有决定：** 托管 Bot 头 `x-openbot-agent-token` 与 `forwardedProps.openbotRun/openbotModel/openbotTimeZone/openbotWaiting` 现网没有托管 Bot 镜像在跑，服务器与 14 个框架同一 PR 直接改名，不做双认（控制方裁定，见文末「裁定」1）。SPIRE 信任域 `openbot.local` 改 `xiongbao.local`。
+**特有决定：** 托管 Bot 头 `x-openbot-agent-token` 与 `forwardedProps.openbotModel` 现网没有托管 Bot 镜像在跑，服务器与 14 个框架同一 PR 直接改名，不做双认（控制方裁定，见文末「裁定」1）；本任务删除 protect.json 里 `x-openbot-agent-token` 的作用域条目。`openbotRun`、`openbotTimeZone`、`openbotWaiting` 会随审批续跑快照与 `thread_run_events` 落库，保护到 R3，由 Task 22 处理（Task 6 审查裁定）。SPIRE 信任域 `openbot.local` 改 `xiongbao.local`。
 
 ### Task 11: Helm chart
 
@@ -409,7 +409,7 @@ git commit -m "去品牌 R0：剩余旧词报告与护栏同步工具"
 ### Task 22: 对话历史里的旧名
 
 **Files:**
-- Modify: 历史读取端（`server/src/approvals/continuation-target-store.ts` 等实现者 grep 到的事件名、标记、工具 id、`openbot/ui@1`、`openbot/share_private_information` 的读取处）、写入端常量
+- Modify: 历史读取端（`server/src/approvals/continuation-target-store.ts` 等实现者 grep 到的事件名、标记、工具 id、`openbot/ui@1`、`openbot/share_private_information`，以及落库键 `openbotWaiting`（thread_run_events 的中断元数据）、`openbotTimeZone`、`openbotRun`（审批续跑快照的 forwardedProps）的读取处）、写入端常量
 - Create: 历史改写迁移（同 Task 20 的迁移目录，下一编号）
 - Test: `xiongbao/server/tests/rebrand-history.test.ts`
 
