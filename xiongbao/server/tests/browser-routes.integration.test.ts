@@ -4,7 +4,6 @@
 // the browser or its live screen. The computer is a stand-in that answers its routes exactly as the contract types them
 // (shared/openbot-browser.ts): slice 1 builds the real ones.
 import { describe, expect } from "bun:test";
-import { afterAll, beforeAll, test } from "./support/platform-frame";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -74,6 +73,7 @@ import { createRecorderExtension } from "../src/recorder/wiring";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { SESSION_LIFETIME_MS, testEnvironment } from "./support/environment";
+import { afterAll, beforeAll, test } from "./support/platform-frame";
 import { bindTestRoleWriter } from "./support/role-writer";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -171,7 +171,7 @@ let confirmOpens: {
 const recorderOf = (opened: Opened): LauncherState =>
   opened.state.recorder as LauncherState;
 
-/** The computer's routes as the contract types them: the token, a person's browser id in `x-openbot-bot-id` (400 for
+/** The computer's routes as the contract types them: the token, a person's browser id in `x-xiongbao-bot-id` (400 for
  * anything else), and each body read against the contract's schema. */
 const computer = Bun.serve<{ bot: string }>({
   hostname: "127.0.0.1",
@@ -1354,17 +1354,17 @@ describe("opening a person's own browser", () => {
       for (const path of ["/browser/state", "/egress-policy", "/control"]) {
         const asked = await fetch(`${base}${path}`, {
           headers: {
-            "x-openbot-computer-token": COMPUTER_TOKEN,
-            "x-openbot-bot-id": personBrowserId(ada.id),
+            "x-xiongbao-computer-token": COMPUTER_TOKEN,
+            "x-xiongbao-bot-id": personBrowserId(ada.id),
           },
         });
         expect(asked.status).toBe(503);
         // Named with a person too, as a seat on a computer people share is: still the person's browser, still refused.
         const seated = await fetch(`${base}${path}`, {
           headers: {
-            "x-openbot-computer-token": COMPUTER_TOKEN,
-            "x-openbot-bot-id": personBrowserId(ada.id),
-            "x-openbot-person-id": ada.id,
+            "x-xiongbao-computer-token": COMPUTER_TOKEN,
+            "x-xiongbao-bot-id": personBrowserId(ada.id),
+            "x-xiongbao-person-id": ada.id,
           },
         });
         expect(seated.status).toBe(503);
@@ -1384,8 +1384,8 @@ describe("opening a person's own browser", () => {
         (
           await fetch(`${base}/control`, {
             headers: {
-              "x-openbot-computer-token": COMPUTER_TOKEN,
-              "x-openbot-bot-id": "agent_7",
+              "x-xiongbao-computer-token": COMPUTER_TOKEN,
+              "x-xiongbao-bot-id": "agent_7",
             },
           })
         ).status,

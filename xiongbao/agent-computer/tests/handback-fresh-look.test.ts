@@ -34,8 +34,8 @@ async function call(
     method: body === undefined ? "GET" : "POST",
     headers: {
       "content-type": "application/json",
-      "x-openbot-computer-token": TOKEN,
-      "x-openbot-bot-id": BOT,
+      "x-xiongbao-computer-token": TOKEN,
+      "x-xiongbao-bot-id": BOT,
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });

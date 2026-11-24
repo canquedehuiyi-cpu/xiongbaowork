@@ -121,8 +121,8 @@ function asking(
   return fetch(`${computer.base}${path}`, {
     ...init,
     headers: {
-      "x-openbot-computer-token": token,
-      "x-openbot-bot-id": BOT,
+      "x-xiongbao-computer-token": token,
+      "x-xiongbao-bot-id": BOT,
       ...(init.body ? { "content-type": "application/json" } : {}),
     },
   });

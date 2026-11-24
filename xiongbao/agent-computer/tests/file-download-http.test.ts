@@ -24,8 +24,8 @@ function api(path: string, authenticated = true) {
   return fetch(`${base}${path}`, {
     headers: authenticated
       ? {
-          "x-openbot-bot-id": BOT,
-          "x-openbot-computer-token": TOKEN,
+          "x-xiongbao-bot-id": BOT,
+          "x-xiongbao-computer-token": TOKEN,
         }
       : {},
   });

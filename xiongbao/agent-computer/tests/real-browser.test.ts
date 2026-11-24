@@ -801,8 +801,8 @@ function callOn(
     method: options.body === undefined ? "GET" : "POST",
     headers: {
       "content-type": "application/json",
-      "x-openbot-computer-token": options.token ?? TOKEN,
-      "x-openbot-bot-id": options.botId ?? PERSON,
+      "x-xiongbao-computer-token": options.token ?? TOKEN,
+      "x-xiongbao-bot-id": options.botId ?? PERSON,
     },
     ...(options.body === undefined
       ? {}

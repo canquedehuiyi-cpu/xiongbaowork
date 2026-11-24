@@ -1,21 +1,12 @@
-import { createHash, randomUUID } from "node:crypto";
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  linkSync,
-  mkdirSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
 import { Database } from "bun:sqlite";
+import { createHash, randomUUID } from "node:crypto";
+import { chmodSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type {
   BrowserContext,
   CDPSession,
-  Page,
   chromium,
+  Page,
 } from "playwright-core";
 import {
   cutAtCodeUnits,
@@ -112,10 +103,7 @@ export const DEFAULT_BROWSER_CHANNEL = "chrome";
  * switches move saved logins out of the OS keychain and into a plaintext store in this profile
  * directory. A comment saying the sandbox stays on changes no arguments; this one does.
  */
-const KEYCHAIN_DEFAULT_ARGS = [
-  "--password-store=basic",
-  "--use-mock-keychain",
-];
+const KEYCHAIN_DEFAULT_ARGS = ["--password-store=basic", "--use-mock-keychain"];
 
 /**
  * The attribute, the placeholder and the selector, restated from `agent-computer/src/secret-masking`.
@@ -522,134 +510,21 @@ function missingCounter(file: string): never {
   );
 }
 
-/** A lock another process holds past the wait, as opposed to a file that is wrong. */
-function isBusy(error: unknown): boolean {
-  const { code, message } = (error ?? {}) as {
-    code?: unknown;
-    message?: unknown;
-  };
-  return (
-    (typeof code === "string" && code.includes("SQLITE_BUSY")) ||
-    (typeof message === "string" &&
-      /database is locked|SQLITE_BUSY/i.test(message))
-  );
-}
-
-/**
- * The counter is held by another runner right now. A refusal like a damaged one, because a number issued
- * without the lock could be a number the other runner has issued too, but it names what is true: wait and ask again.
- */
-function busyCounter(file: string): never {
-  throw new BrowserFailure(
-    `This browser's element-list counter in ${file} is in use by another runner on this machine right now, so nothing was opened. The file is fine; try again in a moment.`,
-  );
-}
-
-/** The snapshot counter's file in the profile root, and the name it had before the rename. */
+/** The snapshot counter's file in the profile root. */
 const COUNTER_FILE = "xiongbao-snapshots.sqlite";
-const LEGACY_COUNTER_FILE = "openbot-snapshots.sqlite";
+
+/** The counter file to open in `root`. */
+export const counterFileIn = (root: string): string => join(root, COUNTER_FILE);
 
 /**
- * The counter file to open in `root`, giving it its current name first when only the earlier one exists.
- *
- * COPIED, not moved, the way `readMigrated` copies a browser key: the earlier file stays, so a runner
- * rolled back to the version before the rename still finds its counter (at the value it had when this
- * copy was made) and still opens the browsers of profiles already on disk. Without it that runner would
- * start an empty counter, meet `missingCounter` for every such profile and refuse them all. Hard links
- * are no way round it: SQLite's journals are keyed by path. The earlier file is cleaned up with its
- * legacy-compat entry when that expires.
- *
- * The earlier file is a WAL database: after an unclean exit the counts committed last can still sit in
- * its `-wal`, and a copy of the main file alone would leave them behind. So it is opened exclusively and
- * checkpointed (TRUNCATE) first, and closed; only when no `-wal` or `-shm` is left beside it is it copied,
- * to a temporary name and then renamed into place, so the current name never holds half a file. Anything
- * that stops that (another process holds it, the checkpoint could not finish, a stale `-shm` that a crash
- * left behind, a volume that cannot be written, a file that is no database) keeps the earlier name, which
- * is then opened exactly as it always was, WAL recovery included. Nothing is thrown: a browser must still
- * start, and the refusals about a damaged counter come from opening it, as before.
- *
- * `earlier` names the earlier file for the whole window, a fresh root included (it is created there): the
- * counter keeps both files equal (see `openCounterStore`) so a runner rolled back at any time finds a file
- * holding every profile and the latest number. It is deleted when its legacy-compat entry expires.
- */
-export function counterFilesIn(
-  root: string,
-  busyMs = 5000,
-): { file: string; earlier?: string } {
-  const file = join(root, COUNTER_FILE);
-  const legacy = join(root, LEGACY_COUNTER_FILE);
-  // The earlier file is kept in every case for the whole window, a fresh root included: a root first used
-  // by this version would otherwise get an empty earlier file from a rolled-back runner, which then
-  // refuses every profile already on disk (`missingCounter`).
-  if (existsSync(file)) return { file, earlier: legacy };
-  if (!existsSync(legacy)) return { file, earlier: legacy };
-  // Per process and per attempt: two runners starting together must not write one temporary file.
-  const partial = `${file}.${process.pid}.${randomUUID().slice(0, 8)}.copying`;
-  try {
-    const old = new Database(legacy, { strict: true });
-    try {
-      old.exec(
-        `PRAGMA locking_mode=EXCLUSIVE; PRAGMA busy_timeout=${Math.trunc(busyMs)};`,
-      );
-      const done = old
-        .query<{ busy: number }, []>("PRAGMA wal_checkpoint(TRUNCATE)")
-        .get();
-      // Another runner holds it: it may be copying right now, so writing only the earlier file here could
-      // hand out numbers it hands out too. Not a fallback; wait was the busy timeout, and this refuses.
-      if (done?.busy !== 0) busyCounter(legacy);
-    } finally {
-      old.close();
-    }
-    if (existsSync(`${legacy}-wal`) || existsSync(`${legacy}-shm`))
-      return { file: legacy };
-    copyFileSync(legacy, partial);
-    try {
-      chmodSync(partial, 0o600);
-    } catch {
-      // A filesystem without modes: the copy is still private to the profile root.
-    }
-    try {
-      // A link fails when the current file is already there (another runner got there first): it is
-      // used as it is, never overwritten with this copy, which may be older.
-      linkSync(partial, file);
-    } catch (error) {
-      if (!existsSync(file)) throw error;
-    }
-    rmSync(partial, { force: true });
-    return { file, earlier: legacy };
-  } catch (error) {
-    try {
-      rmSync(partial, { force: true });
-    } catch {
-      // Whatever stands there is not ours to clear.
-    }
-    if (error instanceof BrowserFailure) throw error;
-    if (isBusy(error)) busyCounter(legacy);
-    return { file: legacy };
-  }
-}
-
-/** The counter file to open in `root`; see `counterFilesIn`. */
-export const counterFileIn = (root: string, busyMs = 5000): string =>
-  counterFilesIn(root, busyMs).file;
-
-/**
- * The counter store on `file`, and, while `earlier` is given, the same counters in the file this runner
- * wrote them to before the rename, kept equal to it.
+ * The counter store on `file`.
  *
  * A counter must never fall below a number already issued, or an old element list resolves to the wrong
- * page. With two files that holds only if both are read and both written: on open each profile's number
- * is the larger of the two, written back to both; every increment is one transaction over both files
- * (`ATTACH`), so a runner rolled back to the version before the rename finds the latest number in the
- * file it reads, and an upgrade after it never starts below what that runner issued. A damaged earlier
- * file refuses to open exactly as a damaged current one does, and a failed write to it fails the
- * increment: no number is issued that the other file does not hold. (Across two WAL files the commit is
- * not one atomic step; a crash between them leaves one ahead, which the next open's larger-of-two undoes.)
+ * page: every increment is one write transaction on the file, and a damaged file refuses to open.
  */
 export function openCounterStore(
   file: string,
-  earlier?: string,
-  options: { busyMs?: number; between?: () => void } = {},
+  options: { busyMs?: number } = {},
 ): CounterStore {
   const busyMs = Math.trunc(options.busyMs ?? 5000);
   mkdirSync(dirname(file) || ".", { recursive: true });
@@ -677,113 +552,8 @@ export function openCounterStore(
   const step = database.query<{ generation: number }, [string]>(
     "UPDATE snapshot_counters SET generation = generation + 1 WHERE profile = ? RETURNING generation",
   );
-  let readEarlier:
-    | ReturnType<
-        typeof database.query<{ kind: string; generation: number }, [string]>
-      >
-    | undefined;
-  let putEarlier: ReturnType<typeof database.query> | undefined;
-  if (earlier) {
-    try {
-      // Created private like the current file when it is not there yet (a fresh root).
-      writeFileSync(earlier, "", { flag: "a", mode: 0o600 });
-      try {
-        chmodSync(earlier, 0o600);
-      } catch {
-        // A filesystem without modes still got a file it created private.
-      }
-      database.run("ATTACH DATABASE ? AS earlier", [earlier]);
-      database.exec("PRAGMA earlier.synchronous=FULL;");
-      database.exec(
-        "CREATE TABLE IF NOT EXISTS earlier.snapshot_counters (profile TEXT PRIMARY KEY, generation INTEGER NOT NULL);",
-      );
-      readEarlier = database.query<
-        { kind: string; generation: number },
-        [string]
-      >(
-        "SELECT typeof(generation) AS kind, generation FROM earlier.snapshot_counters WHERE profile = ?",
-      );
-      // Only ever upward: a number is never written over a larger one, whoever wrote that.
-      putEarlier = database.query(
-        "INSERT INTO earlier.snapshot_counters(profile, generation) VALUES (?1, ?2) ON CONFLICT(profile) DO UPDATE SET generation = max(generation, excluded.generation)",
-      );
-    } catch (error) {
-      database.close();
-      if (isBusy(error)) busyCounter(earlier);
-      unusable(undefined, earlier);
-    }
-  }
-  const put = database.query(
-    "INSERT INTO snapshot_counters(profile, generation) VALUES (?1, ?2) ON CONFLICT(profile) DO UPDATE SET generation = max(generation, excluded.generation)",
-  );
-  /** The profile's number in each file that has a row, validated; reading is done under the write lock. */
-  const numbersOf = (profileKey: string): number[] => {
-    const present: number[] = [];
-    for (const [reader, where] of [
-      [read, file],
-      [readEarlier, earlier ?? file],
-    ] as const) {
-      if (!reader) continue;
-      let row: { kind: string; generation: number } | null = null;
-      try {
-        row = reader.get(profileKey);
-      } catch (error) {
-        if (isBusy(error)) busyCounter(where);
-        unusable(undefined, where);
-      }
-      if (!row) continue;
-      if (row.kind !== "integer") unusable(undefined, where);
-      present.push(unusable(row.generation, where));
-    }
-    return present;
-  };
-  /** One write transaction over both files: nothing is read before the lock is held, nothing outlives it. */
-  const exclusively = <T>(work: () => T): T => {
-    try {
-      database.exec("BEGIN IMMEDIATE");
-    } catch (error) {
-      if (isBusy(error)) busyCounter(file);
-      throw error;
-    }
-    try {
-      const result = work();
-      database.exec("COMMIT");
-      return result;
-    } catch (error) {
-      try {
-        database.exec("ROLLBACK");
-      } catch {
-        // No transaction to undo, which is the state we wanted either way.
-      }
-      throw error;
-    }
-  };
-
   return {
     open(profileKey, profileWasOnDisk) {
-      if (putEarlier) {
-        return exclusively(() => {
-          const present = numbersOf(profileKey);
-          options.between?.();
-          if (present.length === 0) {
-            if (profileWasOnDisk) missingCounter(file);
-            // Nothing in either file: both get a row, neither is overwritten if one appeared meanwhile.
-            create.run(profileKey);
-            database
-              .query(
-                "INSERT INTO earlier.snapshot_counters(profile, generation) VALUES (?, 0) ON CONFLICT(profile) DO NOTHING",
-              )
-              .run(profileKey);
-            return 0;
-          }
-          const held = Math.max(...present);
-          if (held >= MAX_SNAPSHOT_GENERATION) unusable(held + 1, file);
-          // The larger stands, written to both (upward only) before anything is issued.
-          put.run(profileKey, held);
-          putEarlier?.run(profileKey, held);
-          return held;
-        });
-      }
       let row: { kind: string; generation: number } | null = null;
       try {
         row = read.get(profileKey);
@@ -806,19 +576,6 @@ export function openCounterStore(
       return held;
     },
     next(profileKey) {
-      if (putEarlier) {
-        return exclusively(() => {
-          // Both files are read under the write lock, so a number a runner on the other side of the rename
-          // issued a moment ago is seen; the one issued is above both and is written to both, upward only.
-          const present = numbersOf(profileKey);
-          options.between?.();
-          if (present.length === 0) unusable(undefined, file);
-          const issued = unusable(Math.max(...present) + 1, file);
-          put.run(profileKey, issued);
-          putEarlier?.run(profileKey, issued);
-          return issued;
-        });
-      }
       database.exec("BEGIN IMMEDIATE");
       try {
         const row = step.get(profileKey);
@@ -857,7 +614,9 @@ async function within<T>(
     timer = setTimeout(
       () =>
         reject(
-          new BrowserFailure(`${what} did not finish within ${budgetMs / 1000} seconds.`),
+          new BrowserFailure(
+            `${what} did not finish within ${budgetMs / 1000} seconds.`,
+          ),
         ),
       budgetMs,
     );
@@ -923,7 +682,7 @@ export function createRunnerBrowser(
    */
   const channel = executablePath
     ? ""
-    : (requestedChannel || DEFAULT_BROWSER_CHANNEL);
+    : requestedChannel || DEFAULT_BROWSER_CHANNEL;
 
   /*
    * The run token, on every ref this process hands out.
@@ -951,8 +710,7 @@ export function createRunnerBrowser(
     // constructing a browser must not create anything on disk, because a runner that is only being
     // asked to run a command has no business making a browser's files.
     if (!counters) {
-      const { file, earlier } = counterFilesIn(profileRoot);
-      counters = openCounterStore(file, earlier);
+      counters = openCounterStore(counterFileIn(profileRoot));
     }
     const counter = counters;
     const generation = counter.open(

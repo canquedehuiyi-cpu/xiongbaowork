@@ -1,23 +1,19 @@
 // The headers the server puts on every call to a computer: which Bot, which person, and the computer's token.
 //
-// They are being renamed from `x-openbot-*` to `x-xiongbao-*`. The release before this one (0.2.11) taught the computer
-// to take both names; from this one the server sends only the new ones (shared/wire-headers.ts). So every way the server
-// reaches a computer is checked here for the new names and the absence of the old: the gateway's transport, the shared
-// computer's provider, the egress policy push, the question of which Bots a computer carries, and the browser routes.
+// They were renamed from `x-openbot-*` to `x-xiongbao-*`, and the computer no longer takes the old names. The server
+// sends only the new ones (shared/wire-headers.ts). So every way the server reaches a computer is checked here for the
+// new names and the absence of the old: the gateway's transport, the shared computer's provider, the egress policy
+// push, the question of which Bots a computer carries, and the browser routes.
 //
-// And the two halves together: the server's own transport, calling a real `agent-computer` whose reading of the headers
-// is the one 0.2.11 shipped (`git diff v0.2.11 -- agent-computer/src` touches only where the new names are imported
-// from), gets in with its token and reaches the seat it named.
+// And the two halves together: the server's own transport, calling a real `agent-computer`, gets in with its token and
+// reaches the seat it named.
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import {
-  disagreeingWireHeader,
-  readWireHeader,
-} from "../../agent-computer/src/wire-headers";
+import { readWireHeader } from "../../agent-computer/src/wire-headers";
 import { reservePort } from "../../tests/support/reserved-port";
 import { computerCaller } from "../src/browser/routes";
 import { createComputerTransport, seatHeaders } from "../src/computer/client";
@@ -201,7 +197,7 @@ describe("every call the server makes to a computer", () => {
 });
 
 describe("what the server sends, as the computer reads it", () => {
-  test("each header reads back as sent, and none of them disagrees with itself", async () => {
+  test("each header reads back as sent", async () => {
     const { sent, fetchImpl } = recording();
     const transport = createComputerTransport({ token: TOKEN, fetchImpl });
     await transport.call(
@@ -214,7 +210,6 @@ describe("what the server sends, as the computer reads it", () => {
     expect(readWireHeader(headers, "computerToken")).toBe(TOKEN);
     expect(readWireHeader(headers, "botId")).toBe("sales");
     expect(readWireHeader(headers, "personId")).toBe("user_ada");
-    expect(disagreeingWireHeader(headers)).toBeUndefined();
   });
 });
 

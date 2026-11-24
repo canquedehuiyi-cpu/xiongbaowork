@@ -205,7 +205,7 @@ function wheelBackOnItsOwn(id: string) {
 
 const conflict = (error: string) => Response.json({ error }, { status: 409 });
 
-/** The computer's routes as the contract types them: the token, a Bot's id in `x-openbot-bot-id` (400 for a person's
+/** The computer's routes as the contract types them: the token, a Bot's id in `x-xiongbao-bot-id` (400 for a person's
  * browser), and each body read against the contract's schema. */
 const computer = Bun.serve({
   hostname: "127.0.0.1",

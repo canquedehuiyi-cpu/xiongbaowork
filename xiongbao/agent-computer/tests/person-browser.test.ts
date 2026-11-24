@@ -250,7 +250,7 @@ function serve(host: BrowserHost) {
       host.handle(
         request,
         new URL(request.url).pathname,
-        request.headers.get("x-openbot-bot-id") ?? "",
+        request.headers.get("x-xiongbao-bot-id") ?? "",
       ),
   });
 }
@@ -276,7 +276,7 @@ for (const variant of VARIANTS) {
         method: body === undefined ? "GET" : "POST",
         headers: {
           "content-type": "application/json",
-          "x-openbot-bot-id": botId,
+          "x-xiongbao-bot-id": botId,
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
@@ -360,7 +360,7 @@ for (const variant of VARIANTS) {
             `http://127.0.0.1:${refusing.port}/browser/open`,
             {
               method: "POST",
-              headers: { "x-openbot-bot-id": PERSON },
+              headers: { "x-xiongbao-bot-id": PERSON },
               body: JSON.stringify({ connection: CONNECTION }),
             },
           );
@@ -839,7 +839,7 @@ for (const variant of VARIANTS) {
         const silent = await fetch(
           `http://127.0.0.1:${server.port}/browser/state`,
           {
-            headers: { "x-openbot-bot-id": PERSON },
+            headers: { "x-xiongbao-bot-id": PERSON },
             // Well short of OpenBot's own server closing the person's request, at 10 s.
             signal: AbortSignal.timeout(8_000),
           },
@@ -1332,7 +1332,7 @@ for (const variant of VARIANTS) {
             `http://127.0.0.1:${routes.port}/browser/open`,
             {
               method: "POST",
-              headers: { "x-openbot-bot-id": PERSON },
+              headers: { "x-xiongbao-bot-id": PERSON },
               body: JSON.stringify({ connection: CONNECTION }),
             },
           );
@@ -1342,7 +1342,7 @@ for (const variant of VARIANTS) {
             .find((call) => call.method === "connect");
           await fetch(`http://127.0.0.1:${routes.port}/browser/close`, {
             method: "POST",
-            headers: { "x-openbot-bot-id": PERSON },
+            headers: { "x-xiongbao-bot-id": PERSON },
           });
           return connect?.build;
         };
@@ -1387,13 +1387,13 @@ for (const variant of VARIANTS) {
       const openWith = (connection: LauncherConnection) =>
         fetch(`http://127.0.0.1:${server.port}/browser/open`, {
           method: "POST",
-          headers: { "x-openbot-bot-id": PERSON },
+          headers: { "x-xiongbao-bot-id": PERSON },
           body: JSON.stringify({ connection }),
         });
       const close = () =>
         fetch(`http://127.0.0.1:${server.port}/browser/close`, {
           method: "POST",
-          headers: { "x-openbot-bot-id": PERSON },
+          headers: { "x-xiongbao-bot-id": PERSON },
         });
       /** What the computer logged of `type` since the spy was last cleared. */
       const logged = (type: string) =>
@@ -1561,7 +1561,7 @@ describe.skipIf(!asked)("among Bots' browsers on one computer", () => {
       `http://127.0.0.1:${server.port}/browser/open`,
       {
         method: "POST",
-        headers: { "x-openbot-bot-id": PERSON },
+        headers: { "x-xiongbao-bot-id": PERSON },
         body: JSON.stringify({ connection: CONNECTION }),
       },
     );

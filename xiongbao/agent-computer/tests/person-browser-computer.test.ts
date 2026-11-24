@@ -92,11 +92,11 @@ function call(
     method: options.body === undefined ? "GET" : "POST",
     headers: {
       "content-type": "application/json",
-      "x-openbot-computer-token": options.token ?? TOKEN,
+      "x-xiongbao-computer-token": options.token ?? TOKEN,
       ...(options.botId === undefined
-        ? { "x-openbot-bot-id": PERSON }
+        ? { "x-xiongbao-bot-id": PERSON }
         : options.botId
-          ? { "x-openbot-bot-id": options.botId }
+          ? { "x-xiongbao-bot-id": options.botId }
           : {}),
     },
     ...(options.body === undefined
@@ -364,8 +364,8 @@ describe.skipIf(!asked)("a person's browser on the computer", () => {
     const response = await fetch(`${without.base}/browser/open`, {
       method: "POST",
       headers: {
-        "x-openbot-computer-token": TOKEN,
-        "x-openbot-bot-id": PERSON,
+        "x-xiongbao-computer-token": TOKEN,
+        "x-xiongbao-bot-id": PERSON,
       },
       body: JSON.stringify({ connection: connection() }),
     });
@@ -375,8 +375,8 @@ describe.skipIf(!asked)("a person's browser on the computer", () => {
     );
     const state = await fetch(`${without.base}/browser/state`, {
       headers: {
-        "x-openbot-computer-token": TOKEN,
-        "x-openbot-bot-id": PERSON,
+        "x-xiongbao-computer-token": TOKEN,
+        "x-xiongbao-bot-id": PERSON,
       },
     });
     expect(((await state.json()) as BrowserState).open).toBe(false);
@@ -428,8 +428,8 @@ describe("a person's browser on a computer whose browser is not installed", () =
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-openbot-computer-token": TOKEN,
-          "x-openbot-bot-id": PERSON,
+          "x-xiongbao-computer-token": TOKEN,
+          "x-xiongbao-bot-id": PERSON,
         },
         body: JSON.stringify({
           connection: {

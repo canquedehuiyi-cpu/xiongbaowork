@@ -149,7 +149,7 @@ async function bar<T = BotBrowserState>(
 ): Promise<{ status: number; json: T }> {
   const response = await fetch(`http://127.0.0.1:${server.port}${path}`, {
     method: body === undefined ? "GET" : "POST",
-    headers: { "content-type": "application/json", "x-openbot-bot-id": WITH },
+    headers: { "content-type": "application/json", "x-xiongbao-bot-id": WITH },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   return { status: response.status, json: (await response.json()) as T };
@@ -182,7 +182,7 @@ beforeAll(async () => {
       host.handle(
         request,
         new URL(request.url).pathname,
-        request.headers.get("x-openbot-bot-id") ?? "",
+        request.headers.get("x-xiongbao-bot-id") ?? "",
       ),
   });
 }, 30_000);

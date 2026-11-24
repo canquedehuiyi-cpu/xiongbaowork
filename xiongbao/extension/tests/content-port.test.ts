@@ -414,7 +414,6 @@ describe("createContentPort", () => {
 });
 
 describe("the content script entry", () => {
-  const globals = globalThis as Record<string, unknown>;
   const flags = globalThis as Record<symbol, unknown>;
   const ACTIVE = Symbol.for("xb.recorder.active");
   const CONTENT = Symbol.for("xb.recorder.content");
@@ -427,8 +426,6 @@ describe("the content script entry", () => {
     uninstall = undefined;
     Reflect.deleteProperty(flags, ACTIVE);
     Reflect.deleteProperty(flags, CONTENT);
-    Reflect.deleteProperty(globals, "__openbotRecorderActive");
-    Reflect.deleteProperty(globals, "__openbotRecorderContent");
     GlobalRegistrator.unregister();
   });
 
@@ -458,49 +455,6 @@ describe("the content script entry", () => {
       event: { name: "click", value: { target: { tag: "button" } } },
     });
     expect(flags[CONTENT]).toBe(true);
-  });
-
-  test("a frame an older build flagged with the old active name still captures before its port answers", async () => {
-    const fake = installChromeFake();
-    uninstall = () => fake.uninstall();
-    const received: ContentToBackground[] = [];
-    chrome.runtime.onConnect.addListener((port) => {
-      port.onMessage.addListener((m: ContentToBackground) => received.push(m));
-    });
-    globals.__openbotRecorderActive = "d1";
-    document.body.innerHTML = `<button id="save">Save</button>`;
-
-    await import(`../src/content/index?legacy-active=${Date.now()}`);
-    const click = new MouseEvent("click", { bubbles: true, button: 0 });
-    Object.defineProperty(click, "isTrusted", { value: true });
-    document.getElementById("save")?.dispatchEvent(click);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(
-      received.find(
-        (m) => m.type === "content.event" && m.event.name === "click",
-      ),
-    ).toMatchObject({ type: "content.event", event: { name: "click" } });
-    // Only the new name is written; the old one was read, not set by this script.
-    expect(flags[CONTENT]).toBe(true);
-    expect(globals.__openbotRecorderContent).toBeUndefined();
-  });
-
-  test("a page an older content script already runs in is not captured a second time", async () => {
-    const fake = installChromeFake();
-    uninstall = () => fake.uninstall();
-    const received: ContentToBackground[] = [];
-    chrome.runtime.onConnect.addListener((port) => {
-      port.onMessage.addListener((m: ContentToBackground) => received.push(m));
-    });
-    globals.__openbotRecorderContent = true;
-    document.body.innerHTML = `<button id="save">Save</button>`;
-
-    await import(`../src/content/index?legacy-content=${Date.now()}`);
-    await new Promise((resolve) => setTimeout(resolve, 20));
-
-    expect(received).toEqual([]);
-    expect(flags[CONTENT]).toBeUndefined();
   });
 
   function trustedClick(el: Element | null | undefined) {

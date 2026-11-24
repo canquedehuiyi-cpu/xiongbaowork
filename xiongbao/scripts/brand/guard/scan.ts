@@ -53,10 +53,7 @@ export const SIGNING_DOMAINS = [
 // Wire headers peers send and read (Global Constraints「绝对不改」).
 export const WIRE_HEADERS = [
   "x-openbot-agent-token",
-  "x-openbot-bot-id",
-  "x-openbot-computer-token",
   "x-openbot-desktop-host-token",
-  "x-openbot-egress",
 ];
 
 // The holder is the delivered tenant package's company (brand.ts copyrightLine), read from the package rather than

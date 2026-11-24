@@ -9,7 +9,7 @@
  * state machine out: if a decision matters, it does not belong next to `chromium.launch()`.
  */
 
-import { readWireHeader, wireHeaderDisagrees } from "./wire-headers";
+import { readWireHeader } from "./wire-headers";
 
 /**
  * Does this secret match?
@@ -37,9 +37,6 @@ export function offeredToken(headers: Headers, url: URL): string {
   // value in a header succeeds and the failure looks stream-specific.
   if (url.pathname === "/stream" || url.pathname === "/terminal")
     return url.searchParams.get("token")?.trim() ?? "";
-  // Two names for the header while it is renamed (wire-headers.ts). Two values that differ offer
-  // nothing, so neither the other name nor a bearer token can stand in for the one that is wrong.
-  if (wireHeaderDisagrees(headers, "computerToken")) return "";
   const header = readWireHeader(headers, "computerToken");
   if (header) return header;
   const authorization = headers.get("authorization")?.trim() ?? "";

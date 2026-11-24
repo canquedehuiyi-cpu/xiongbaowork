@@ -599,12 +599,11 @@ describe("desktop-control protocol", () => {
 describe("desktop-control: the final review's fixes", () => {
   test("C1: the device app, the runner, the desktop client and terminals are told apart by process", () => {
     // The packaged names: desktop-device/src-tauri/tauri.conf.json (productName, mainBinaryName),
-    // sidecar.rs (SIDECAR, LEGACY_SIDECAR), desktop/src-tauri (productName, the Cargo bin).
+    // sidecar.rs (SIDECAR), desktop/src-tauri (productName, the Cargo bin).
     expect([...DESKTOP_SELF_PROCESSES]).toEqual([
       "xiongbao-device",
       "熊宝数字员工 设备端",
       "xiongbao-runner",
-      "openbot-runner",
       "openbot-desktop",
       "XiongBao",
     ]);

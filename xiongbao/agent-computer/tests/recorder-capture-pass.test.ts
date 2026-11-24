@@ -131,7 +131,7 @@ describe.skipIf(!asked)(
           host.handle(
             request,
             new URL(request.url).pathname,
-            request.headers.get("x-openbot-bot-id") ?? "",
+            request.headers.get("x-xiongbao-bot-id") ?? "",
           ),
       });
     }, 30_000);
@@ -148,7 +148,7 @@ describe.skipIf(!asked)(
     const person = (path: string, body: unknown) =>
       fetch(`http://127.0.0.1:${routes.port}${path}`, {
         method: "POST",
-        headers: { "x-openbot-bot-id": PERSON },
+        headers: { "x-xiongbao-bot-id": PERSON },
         body: JSON.stringify(body),
       });
 

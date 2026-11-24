@@ -180,8 +180,8 @@ async function show(botId: string, html: string) {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-openbot-bot-id": botId,
-      "x-openbot-computer-token": TOKEN,
+      "x-xiongbao-bot-id": botId,
+      "x-xiongbao-computer-token": TOKEN,
     },
     body: JSON.stringify({ url: `http://127.0.0.1:${site?.port}${path}` }),
   });
@@ -193,8 +193,8 @@ async function stop(botId: string) {
   await fetch(`http://127.0.0.1:${computer?.port}/computers/stop`, {
     method: "POST",
     headers: {
-      "x-openbot-bot-id": botId,
-      "x-openbot-computer-token": TOKEN,
+      "x-xiongbao-bot-id": botId,
+      "x-xiongbao-computer-token": TOKEN,
     },
   }).catch(() => undefined);
 }
