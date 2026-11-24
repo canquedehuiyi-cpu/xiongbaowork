@@ -1,0 +1,370 @@
+# Copies an already published release's image to our own registry (JD Cloud JCR, say) by hand:
+# a release made before the registry was configured, or a copy that has to be done again. It runs
+# the same sign-in and copy steps as the mirror job in release.yml (the text is kept identical by
+# a test), and reads what to copy from the release's container-images.json: it changes neither the
+# Release nor its assets.
+#
+# Manual and main-only, inside the `release` Environment that holds the registry credentials: an
+# Environment secret reaches only a job that names that Environment.
+name: 补同步镜像到自有仓库
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已发布的版本标签，如 v0.2.15
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+# One copy of a tag at a time; never cancelled half way.
+concurrency:
+  group: mirror-release-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: imjasonh/setup-crane@feee3b6bb0d4c68370f256a4502498c9227e5c6b # v0.7
+        with:
+          version: v0.22.1
+      # The GHCR reference and digest of the release, from the asset it was published with (REST,
+      # with the workflow's own token). The tag is typed by a person and only reaches the script
+      # through the environment.
+      - id: record
+        name: Read container-images.json of the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          INPUT_TAG: ${{ inputs.tag }}
+          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
+        run: |
+          set -euo pipefail
+          if [ -z "$XB_REGISTRY" ]; then
+            echo "::error::XB_REGISTRY is not set in the release Environment: there is no registry to copy to."
+            exit 1
+          fi
+          if [[ ! "$INPUT_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc\.[0-9]+)?$ ]]; then
+            echo "::error::tag must look like v0.2.15 or v0.2.15-rc.1: '$INPUT_TAG'"
+            exit 1
+          fi
+          release="$(gh api "repos/$GH_REPO/releases/tags/$INPUT_TAG")"
+          asset="$(jq -r '[.assets[] | select(.name == "container-images.json")] | (first // empty) | "\(.id) \(.uploader.login)"' <<< "$release")"
+          if [ -z "$asset" ]; then
+            echo "::error::Release $INPUT_TAG has no container-images.json."
+            exit 1
+          fi
+          read -r asset_id uploader <<< "$asset"
+          # The record is only believed when the workflow itself uploaded it.
+          if [ "$uploader" != "github-actions[bot]" ]; then
+            echo "::error::container-images.json of $INPUT_TAG was uploaded by '$uploader', not by the release workflow."
+            exit 1
+          fi
+          gh api -H "Accept: application/octet-stream" "repos/$GH_REPO/releases/assets/$asset_id" \
+            > "$RUNNER_TEMP/container-images.json"
+          # images.openbot is the GHCR image in every release, whether or not a registry was set then.
+          repository="$(jq -er '.images.openbot.repository' "$RUNNER_TEMP/container-images.json")"
+          digest="$(jq -er '.images.openbot.digest' "$RUNNER_TEMP/container-images.json")"
+          # Only this repository's own image: the same name release.yml's image job pushes to.
+          if [ "$repository" != "ghcr.io/${GH_REPO,,}" ]; then
+            echo "::error::images.openbot.repository is '$repository', not ghcr.io/${GH_REPO,,}."
+            exit 1
+          fi
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          {
+            printf 'repository=%s\n' "$repository"
+            printf 'digest=%s\n' "$digest"
+            printf 'tag=%s\n' "$INPUT_TAG"
+          } >> "$GITHUB_OUTPUT"
+      # The sign-in step, and the copy step after the check below, are those of release.yml's mirror job, word for word.
+      - id: login
+        name: Sign in to GHCR and our registry
+        env:
+          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
+          XB_IMAGE_REPOSITORY: ${{ vars.XB_IMAGE_REPOSITORY }}
+          XB_REGISTRY_USERNAME: ${{ secrets.XB_REGISTRY_USERNAME }}
+          XB_REGISTRY_PASSWORD: ${{ secrets.XB_REGISTRY_PASSWORD }}
+          XB_JDCLOUD_ACCESS_KEY_ID: ${{ secrets.XB_JDCLOUD_ACCESS_KEY_ID }}
+          XB_JDCLOUD_SECRET_ACCESS_KEY: ${{ secrets.XB_JDCLOUD_SECRET_ACCESS_KEY }}
+          XB_JDCLOUD_REGION: ${{ vars.XB_JDCLOUD_REGION }}
+          XB_JDCLOUD_REGISTRY_NAME: ${{ vars.XB_JDCLOUD_REGISTRY_NAME }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Two ways to sign in to our registry, exactly one of them configured: a fixed user and
+          # password, or an AccessKey that is exchanged below for a short-lived token (JD Cloud's
+          # registry tokens last at most 24 hours, so no fixed password exists to store).
+          fixed=0
+          for name in XB_REGISTRY_USERNAME XB_REGISTRY_PASSWORD; do
+            if [ -n "${!name:-}" ]; then fixed=$((fixed + 1)); fi
+          done
+          jdcloud=0
+          for name in XB_JDCLOUD_ACCESS_KEY_ID XB_JDCLOUD_SECRET_ACCESS_KEY XB_JDCLOUD_REGION XB_JDCLOUD_REGISTRY_NAME; do
+            if [ -n "${!name:-}" ]; then jdcloud=$((jdcloud + 1)); fi
+          done
+          if [ "$fixed" -gt 0 ] && [ "$jdcloud" -gt 0 ]; then
+            echo "::error::Both XB_REGISTRY_USERNAME/XB_REGISTRY_PASSWORD and the XB_JDCLOUD_* settings are set; configure only one."
+            exit 1
+          fi
+          if [ "$jdcloud" -gt 0 ]; then
+            for name in XB_IMAGE_REPOSITORY XB_JDCLOUD_ACCESS_KEY_ID XB_JDCLOUD_SECRET_ACCESS_KEY XB_JDCLOUD_REGION XB_JDCLOUD_REGISTRY_NAME; do
+              if [ -z "${!name:-}" ]; then
+                echo "::error::XB_REGISTRY is set with the XB_JDCLOUD_* settings but $name is not."
+                exit 1
+              fi
+            done
+          else
+            for name in XB_IMAGE_REPOSITORY XB_REGISTRY_USERNAME XB_REGISTRY_PASSWORD; do
+              if [ -z "${!name:-}" ]; then
+                echo "::error::XB_REGISTRY is set but $name is not."
+                exit 1
+              fi
+            done
+          fi
+          if [[ ! "$XB_REGISTRY" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$ ]]; then
+            echo "::error::XB_REGISTRY must be a registry host (no scheme, no path): '$XB_REGISTRY'"
+            exit 1
+          fi
+          if [[ ! "$XB_IMAGE_REPOSITORY" =~ ^[a-z0-9]+([._-][a-z0-9]+)*(/[a-z0-9]+([._-][a-z0-9]+)*)*$ ]]; then
+            echo "::error::XB_IMAGE_REPOSITORY is not a lowercase repository path: '$XB_IMAGE_REPOSITORY'"
+            exit 1
+          fi
+          config="$RUNNER_TEMP/own-channel-docker"
+          mkdir -p "$config"
+          chmod 700 "$config"
+          umask 077
+          if [ "$jdcloud" -eq 0 ]; then
+            jq -n --arg registry "$XB_REGISTRY" '{auths: {
+              ($registry): {auth: ("\(env.XB_REGISTRY_USERNAME):\(env.XB_REGISTRY_PASSWORD)" | @base64)},
+              "ghcr.io": {auth: ("\(env.GHCR_USERNAME):\(env.GHCR_TOKEN)" | @base64)}
+            }}' > "$config/config.json"
+          else
+            # A six-hour token from the JD Cloud API (copying a 1 GB image across the border can take over an hour). Its user and password reach jq through files
+            # that only this step can read and that go away with it, never through an argument, and
+            # the password is masked before anything else could print it.
+            work="$RUNNER_TEMP/own-channel-jcr"
+            trap 'rm -rf "$work"' EXIT
+            rm -rf "$work"
+            mkdir -p "$work"
+            chmod 700 "$work"
+            cat > "$work/requirements.txt" <<'REQUIREMENTS'
+          requests==2.34.2 --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0
+          urllib3==2.8.0 --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3
+          idna==3.20 --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+          certifi==2026.10.23 --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
+          charset-normalizer==3.5.2 --hash=sha256:b6b751274acb69d77b3323d6b7dbaa3c7fdfc1eb829b7eb61d262f32e1af9685
+          REQUIREMENTS
+            # Everything downloaded or unpacked is handled by a shell with an empty environment, so
+            # no secret is within reach of an installer or of a file it unpacks. The SDK (pure
+            # Python, version 4.1.0) is a source archive checked against its hash and used from its
+            # directory: it is never built and its setup.py never runs. What it imports comes as
+            # wheels, which need no build either, each with its hash above.
+            env -i PATH="$PATH" HOME="$work" WORK="$work" bash -euo pipefail <<'INSTALL'
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            --output "$WORK/sdk.tar.gz" \
+            https://files.pythonhosted.org/packages/09/a0/4612b6fd360b03c1eaeb262919fdeb5fc28d71a7281bbdab288a6b2d1a4a/jdcloud_sdk-4.1.0.tar.gz
+          echo "dcb857a7bcc8bd177f4e400a09b475c83c0b44601e36bc55d6859bf120f8f65a  $WORK/sdk.tar.gz" | sha256sum --check --quiet -
+          mkdir "$WORK/sdk"
+          tar -xzf "$WORK/sdk.tar.gz" -C "$WORK/sdk" --strip-components=1
+          python3 -m venv "$WORK/venv"
+          "$WORK/venv/bin/pip" install --quiet --disable-pip-version-check --no-deps --require-hashes \
+            --only-binary :all: --target "$WORK/deps" -r "$WORK/requirements.txt"
+          INSTALL
+            PYTHONPATH="$work/sdk:$work/deps" "$work/venv/bin/python" -P - "$work" <<'PYTHON'
+          import os
+          import shlex
+          import sys
+
+          from jdcloud_sdk.core.credential import Credential
+          from jdcloud_sdk.core.logger import Logger
+          from jdcloud_sdk.services.containerregistry.apis.GetAuthorizationTokenRequest import (
+              GetAuthorizationTokenParameters,
+              GetAuthorizationTokenRequest,
+          )
+          from jdcloud_sdk.services.containerregistry.client.ContainerregistryClient import (
+              ContainerregistryClient,
+          )
+
+
+          def fail(why):
+              # Never the response, the command line or an exception text: they can hold the token.
+              print("::error::" + why)
+              sys.exit(1)
+
+
+          def find_login(node):
+              if isinstance(node, dict):
+                  if isinstance(node.get("loginCmdLine"), str):
+                      return node["loginCmdLine"]
+                  node = list(node.values())
+              if isinstance(node, list):
+                  for item in node:
+                      found = find_login(item)
+                      if found:
+                          return found
+              return None
+
+
+          def option(words, short, long):
+              for at, word in enumerate(words):
+                  if word in (short, long):
+                      return words[at + 1] if at + 1 < len(words) else None
+                  if word.startswith(long + "="):
+                      return word[len(long) + 1 :]
+              return None
+
+
+          # The SDK's default logger prints the signed headers and the response body, token included;
+          # a level below FATAL prints nothing.
+          client = ContainerregistryClient(
+              Credential(
+                  os.environ["XB_JDCLOUD_ACCESS_KEY_ID"],
+                  os.environ["XB_JDCLOUD_SECRET_ACCESS_KEY"],
+              ),
+              logger=Logger(-1),
+          )
+          parameters = GetAuthorizationTokenParameters(
+              os.environ["XB_JDCLOUD_REGION"], os.environ["XB_JDCLOUD_REGISTRY_NAME"]
+          )
+          parameters.setExpiredAfterHours(6)
+          try:
+              response = client.send(GetAuthorizationTokenRequest(parameters))
+          except Exception as error:
+              fail("GetAuthorizationToken failed (%s)." % type(error).__name__)
+          if response.error is not None:
+              fail(
+                  "GetAuthorizationToken was refused (status %s, code %s)."
+                  % (response.error.status, response.error.code)
+              )
+          # The user and password come from the docker login command the API returns, not from the
+          # base64 authorizationToken, whose content the API reference does not spell out.
+          command = find_login(response.result)
+          if command is None:
+              fail("GetAuthorizationToken returned no loginCmdLine.")
+          try:
+              words = shlex.split(command)
+          except ValueError:
+              fail("The loginCmdLine could not be split into words.")
+          # The command names the registry it is for; a token for another registry would only fail
+          # later, at the copy, with a refused sign-in.
+          hosts = [word.split("://", 1)[-1].rstrip("/") for word in words]
+          if os.environ["XB_REGISTRY"] not in hosts:
+              fail("The loginCmdLine is for another registry than XB_REGISTRY; check XB_JDCLOUD_REGISTRY_NAME and XB_JDCLOUD_REGION.")
+          user = option(words, "-u", "--username")
+          password = option(words, "-p", "--password")
+          if not user or not password or "\n" in user + password:
+              fail("The loginCmdLine holds no usable --username and --password.")
+          for name, value in (("username", user), ("password", password)):
+              descriptor = os.open(
+                  os.path.join(sys.argv[1], name), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+              )
+              with os.fdopen(descriptor, "w") as handle:
+                  handle.write(value)
+          PYTHON
+            # Only the password is secret. The user name is usually a fixed word, and masking it
+            # would blank every later output that happens to contain it, the job's outputs too.
+            # The value is escaped the way workflow commands are.
+            password="$(< "$work/password")"
+            password="${password//'%'/%25}"
+            password="${password//$'\r'/%0D}"
+            password="${password//$'\n'/%0A}"
+            echo "::add-mask::$password"
+            jq -n --arg registry "$XB_REGISTRY" \
+              --rawfile username "$work/username" --rawfile password "$work/password" '{auths: {
+              ($registry): {auth: ("\($username):\($password)" | @base64)},
+              "ghcr.io": {auth: ("\(env.GHCR_USERNAME):\(env.GHCR_TOKEN)" | @base64)}
+            }}' > "$config/config.json"
+          fi
+          printf 'DOCKER_CONFIG=%s\n' "$config" >> "$GITHUB_ENV"
+      # The record is a Release asset that anyone allowed to edit the Release can replace; the
+      # version tag on GHCR was set by the release workflow and cannot be moved. They must agree.
+      - id: verify
+        name: Check the record against the GHCR version tag
+        env:
+          REPOSITORY: ${{ steps.record.outputs.repository }}
+          DIGEST: ${{ steps.record.outputs.digest }}
+          TAG: ${{ steps.record.outputs.tag }}
+        run: |
+          set -euo pipefail
+          got="$(crane digest "$REPOSITORY:$TAG")"
+          if [ "$got" != "$DIGEST" ]; then
+            echo "::error::$REPOSITORY:$TAG is $got on GHCR, but container-images.json says $DIGEST."
+            exit 1
+          fi
+      - id: copy
+        name: Copy the linux/amd64 manifest to our registry
+        env:
+          REPOSITORY: ${{ steps.record.outputs.repository }}
+          DIGEST: ${{ steps.record.outputs.digest }}
+          TAG: ${{ steps.record.outputs.tag }}
+          XB_REGISTRY: ${{ vars.XB_REGISTRY }}
+          XB_IMAGE_REPOSITORY: ${{ vars.XB_IMAGE_REPOSITORY }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          # The pushed digest is an index: the linux/amd64 image, plus attestation manifests whose
+          # platform is unknown/unknown. Exactly one image manifest for linux/amd64 is expected.
+          platforms="$(crane manifest "$REPOSITORY@$DIGEST" | jq -c '[.manifests[]? | select(
+            .platform.os == "linux" and .platform.architecture == "amd64" and
+            (.mediaType == "application/vnd.oci.image.manifest.v1+json" or
+             .mediaType == "application/vnd.docker.distribution.manifest.v2+json")
+          ) | .digest]')"
+          if [ "$(jq length <<< "$platforms")" != 1 ]; then
+            echo "::error::$REPOSITORY@$DIGEST does not hold exactly one linux/amd64 image manifest: $platforms"
+            exit 1
+          fi
+          PLATFORM_DIGEST="$(jq -r '.[0]' <<< "$platforms")"
+          [[ "$PLATFORM_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          target="$XB_REGISTRY/$XB_IMAGE_REPOSITORY"
+          # The version tag is immutable here too (as in promote): a re-run may find its own copy,
+          # never another image. Only "not found" counts as absent.
+          if existing="$(crane digest "$target:$TAG" 2>"$RUNNER_TEMP/crane-digest.err")"; then
+            if [ "$existing" != "$PLATFORM_DIGEST" ]; then
+              echo "::error::$target:$TAG already names $existing; refusing to move it to $PLATFORM_DIGEST"
+              exit 1
+            fi
+          elif ! grep -Eqi 'MANIFEST_UNKNOWN|NAME_UNKNOWN|not found' "$RUNNER_TEMP/crane-digest.err"; then
+            cat "$RUNNER_TEMP/crane-digest.err" >&2
+            echo "::error::could not tell whether $target:$TAG exists"
+            exit 1
+          fi
+          crane copy "$REPOSITORY@$PLATFORM_DIGEST" "$target:$TAG"
+          # Read it back: the tag names that one manifest, and it is an image, not an index.
+          got="$(crane digest "$target:$TAG")"
+          if [ "$got" != "$PLATFORM_DIGEST" ]; then
+            echo "::error::$target:$TAG resolves to $got, expected $PLATFORM_DIGEST"
+            exit 1
+          fi
+          crane manifest "$target@$got" | jq -e '.mediaType | test("manifest") and (test("index|list") | not)' >/dev/null
+          {
+            printf 'repository=%s\n' "$target"
+            printf 'digest=%s\n' "$got"
+          } >> "$GITHUB_OUTPUT"
+          printf -- '- 自有仓库：`%s:%s` → `%s`（只有 linux/amd64 平台清单）\n' "$target" "$TAG" "$got" >> "$GITHUB_STEP_SUMMARY"
+      # Also after a failed step: the file holds the push credentials.
+      - id: logout
+        name: Remove the registry sign-in
+        if: ${{ always() }}
+        run: rm -rf "$RUNNER_TEMP/own-channel-docker"
+      # What the server pulls: the platform manifest by digest, which the tag cannot move away from.
+      - id: pull
+        name: Write the pull reference
+        env:
+          OWN_REPOSITORY: ${{ steps.copy.outputs.repository }}
+          OWN_DIGEST: ${{ steps.copy.outputs.digest }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### 服务器拉取的引用"
+            printf '`%s@%s`\n' "$OWN_REPOSITORY" "$OWN_DIGEST"
+          } >> "$GITHUB_STEP_SUMMARY"

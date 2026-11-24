@@ -581,6 +581,33 @@ docker image inspect "$OPENBOT_IMAGE" --format '{{json .RepoDigests}}'
 `reference` 形如 `ghcr.io/canquedehuiyi-cpu/xiongbaowork@sha256:<64 位十六进制>`；
 按标签拉取后 `RepoDigests` 应包含同一个引用。`gh attestation verify` 需要已登录的 GitHub CLI。
 
+### 7.1 从京东云镜像仓库拉取（国内服务器）
+
+服务器从 GHCR 拉镜像很慢（约 24KB/s）时，用发布流程同步到京东云容器镜像仓库（JCR）的那份。
+
+1. 在 JCR 控制台建注册表和仓库，再建一个只有该注册表 JCR 权限（取令牌、推送、拉取）的子账号和 AccessKey。
+2. 在 GitHub 仓库的 `release` Environment 里填 2 个 secret 和 4 个变量：
+
+   | 类型 | 名称 | 值 |
+   | --- | --- | --- |
+   | 变量 | `XB_REGISTRY` | 注册表 URI，如 `xiongbao-work-cn-north-1.jcr.service.jdcloud.com` |
+   | 变量 | `XB_IMAGE_REPOSITORY` | 仓库名（小写） |
+   | 变量 | `XB_JDCLOUD_REGION` | `cn-north-1` |
+   | 变量 | `XB_JDCLOUD_REGISTRY_NAME` | 注册表名，如 `xiongbao-work` |
+   | secret | `XB_JDCLOUD_ACCESS_KEY_ID` | 子账号 AccessKey ID |
+   | secret | `XB_JDCLOUD_SECRET_ACCESS_KEY` | 子账号 AccessKey Secret |
+
+   此后每次发布自动同步。京东云的登录令牌只有几小时有效，所以仓库里不存固定密码，发布时用 AccessKey 换一个 6 小时的临时令牌（拷贝 1GB 多的镜像跨境可能超过 1 小时）（用完不吊销，到期自动失效）。
+   `release` Environment 的部署规则要放行 `main`（补同步从 `main` 运行），并建议设必需审批人。配好后先用下一步的补同步对一个已发布版本（如 `v0.2.15`）实跑一次，再打下一个发布标签。
+3. 补同步已发布的旧版本：在 GitHub 的 Actions 里从 `main` 运行「补同步镜像到自有仓库」，填版本标签（如 `v0.2.15`）。步骤摘要里写着目标引用和平台清单 digest。
+4. 服务器拉取。JCR 拉取也要先登录：在京东云控制台该注册表页面点「获取临时令牌」，复制它给出的 `docker login` 命令在服务器上执行（令牌 12 小时有效，足够一次部署）；然后按 digest 拉取，digest 用步骤摘要里的平台清单 digest：
+
+```bash
+docker pull xiongbao-work-cn-north-1.jcr.service.jdcloud.com/<仓库名>@sha256:<平台清单 digest>
+```
+
+长期不登录就要自动拉取的服务器（定时升级之类），需要在服务器上定期用只有拉取权限的子账号重新取令牌并 `docker login`；令牌最长 24 小时，不能一次登录管到底。
+
 ## 8. 健康与交付断言
 
 ```bash
