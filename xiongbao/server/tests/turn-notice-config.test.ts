@@ -24,3 +24,22 @@ describe("XIONGBAO_TURN_NOTICE_WINDOW_SECONDS", () => {
       expect(() => configWith(value)).toThrow(name);
   });
 });
+
+/** How many groups one process answers at once. */
+describe("XIONGBAO_GROUP_TURN_WORKERS", () => {
+  const name = "XIONGBAO_GROUP_TURN_WORKERS";
+  const configWith = (value?: string) =>
+    loadConfig(testEnvironment(value === undefined ? {} : { [name]: value }));
+
+  test("is four when it is not set, and the number it says otherwise", () => {
+    expect(configWith().groupTurnWorkers).toBe(4);
+    expect(configWith("").groupTurnWorkers).toBe(4);
+    expect(configWith("1").groupTurnWorkers).toBe(1);
+    expect(configWith("16").groupTurnWorkers).toBe(16);
+  });
+
+  test("refuses anything else rather than quietly serialising the groups or opening a hundred turns", () => {
+    for (const value of ["0", "17", "-1", "2.5", "four", "1e1"])
+      expect(() => configWith(value)).toThrow(name);
+  });
+});

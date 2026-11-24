@@ -5859,23 +5859,29 @@ await startupLifecycle.run(async (startup) => {
     (resource) => resource.stop(),
   );
   acpGroupLine = (input) => groupConversations.acpPermission(input);
-  startup.acquireSync(
-    () =>
-      repeatAfterEach(async () => {
-        try {
-          while (await groupConversations.sweep()) {}
-        } catch (error) {
-          console.error(
-            JSON.stringify({
-              type: "group-sweep-error",
-              error: error instanceof Error ? error.message : String(error),
-              timestamp: new Date().toISOString(),
-            }),
-          );
-        }
-      }, 1_000),
-    (resource) => resource.stop(),
-  );
+  /*
+   * Several groups are answered at once (`groupTurnWorkers`): a turn with a computer can take 25
+   * minutes, and one worker would hold every other group in the process behind it. The claim keeps one
+   * group to one turn at a time (`oneAtATimeBy`), so more workers never answer one group out of order.
+   */
+  for (let worker = 0; worker < config.groupTurnWorkers; worker += 1)
+    startup.acquireSync(
+      () =>
+        repeatAfterEach(async () => {
+          try {
+            while (await groupConversations.sweep()) {}
+          } catch (error) {
+            console.error(
+              JSON.stringify({
+                type: "group-sweep-error",
+                error: error instanceof Error ? error.message : String(error),
+                timestamp: new Date().toISOString(),
+              }),
+            );
+          }
+        }, 1_000),
+      (resource) => resource.stop(),
+    );
   /*
    * 群组与群聊合一的开机升级（设计稿 group-unify 第 5 节）：在后台把已有群组转成群聊、给已有群聊补群组、自愈已挂接
    * 的镜像，不挡健康检查。一个副本跑（咨询锁），`XIONGBAO_GROUP_UPGRADE=off` 跳过。员工能不能用，与群聊服务的
