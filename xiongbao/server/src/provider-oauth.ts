@@ -5,10 +5,6 @@ import { isAbsolute } from "node:path";
 import type { Env, Hono } from "hono";
 import { z } from "zod";
 import { sameToken } from "./agents/callback-token";
-import {
-  clearDesktopConnectionFailure,
-  recordDesktopConnectionFailure,
-} from "./desktop-connection-failure";
 import { googleRequest, googleResponse } from "./google-oauth-transport";
 import {
   CredentialLockUnavailable,
@@ -253,10 +249,6 @@ export function createProviderOAuthProxy(
           503,
           "The model credential store is busy or unavailable. Try again.",
         );
-      recordDesktopConnectionFailure({
-        connection: "model",
-        code: "provider_authentication_failed",
-      });
       return refused(
         401,
         "The model sign-in could not be refreshed. Sign in again.",
@@ -331,7 +323,6 @@ export function createProviderOAuthProxy(
           `The model provider rejected the request (HTTP ${response.status}).`,
         );
       }
-      clearDesktopConnectionFailure("model");
       if (listing)
         return new Response(response.body, {
           status: response.status,
@@ -362,10 +353,6 @@ export function createProviderOAuthProxy(
           "The model credential store is busy or unavailable. Try again.",
         );
       if (error instanceof SignInRequired) {
-        recordDesktopConnectionFailure({
-          connection: "model",
-          code: "provider_authentication_failed",
-        });
         return refused(401, "The model provider needs you to sign in again.");
       }
       return refused(502, "The model provider could not be reached.");

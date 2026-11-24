@@ -7,7 +7,6 @@ import {
   mutationOptions,
   QueryClient,
 } from "@tanstack/react-query";
-import { authorizeActionMutationOptions } from "../src/lib/plugins/grants";
 import * as pluginMutations from "../src/lib/plugins/mutations";
 import {
   accountModePreview,
@@ -782,14 +781,12 @@ test("every id these writes interpolate into a URL goes through encodeURICompone
    * the call this test is named for, or a new entry here that somebody had to argue for.
    */
   /*
-   * Two more that are this module's own text and never a caller's: `desktopConsentQuery()` is the
-   * fixed `&from=desktop` (or nothing) the Desktop test below pins, and the `another` switch is a
-   * boolean choosing between `&another=1` and nothing.
+   * One more that is this module's own text and never a caller's: the `another` switch is a boolean
+   * choosing between `&another=1` and nothing.
    */
   const closedUnions = [
     "variables.kind",
     "returnTo",
-    "desktopConsentQuery()",
     'another ? "&another=1" : ""',
   ];
 
@@ -804,38 +801,4 @@ test("every id these writes interpolate into a URL goes through encodeURICompone
   );
 
   expect(raw).toEqual([]);
-});
-
-/**
- * Started in OpenBot Desktop's window, both consent starts say so (`from=desktop`), so the sign-in
- * that opens in the person's browser comes back to the page that hands them back to the window
- * (`/desktop-return`). In a browser they say nothing of the kind.
- */
-test("the consent starts say when they were pressed in OpenBot Desktop", async () => {
-  const scope = globalThis as unknown as { window?: Record<string, unknown> };
-  const hadWindow = "window" in scope;
-  const window = scope.window ?? {};
-  scope.window = window;
-  window.__TAURI_INTERNALS__ = {
-    invoke: async () => null,
-    transformCallback: () => 0,
-  };
-  try {
-    expect(
-      await requestedBy(() => connectAccountMutationOptions(), "gmail"),
-    ).toEqual([
-      "/api/plugins/servers/gmail/connect?returnTo=settings&from=desktop",
-    ]);
-    expect(
-      await requestedBy(() => authorizeActionMutationOptions(), {
-        serverId: "gmail",
-        action: "GMAIL_SEND_EMAIL",
-      }),
-    ).toEqual([
-      "/api/plugins/servers/gmail/authorize?returnTo=settings&from=desktop",
-    ]);
-  } finally {
-    delete window.__TAURI_INTERNALS__;
-    if (!hadWindow) delete scope.window;
-  }
 });

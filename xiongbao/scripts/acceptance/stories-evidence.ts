@@ -168,7 +168,7 @@ export function loadFacts(codeRoot: string = CODE_ROOT): Facts {
  * - `scripts/**\/*.test.ts` → `repository tests` 的 `bun test ./scripts/`。
  * - `scripts/ci/*.test.mjs` → `static`（显式点名那几个），也被上面那条扫到。
  * - `scripts/e2e/wakerflow-lifecycle.ts` → `e2e-wakerflow`。
- * - `scripts/ci/windows-runner-probe.ts` → `desktop-windows`（WIN1 的探针，不是测试）。
+ * - `scripts/ci/windows-runner-probe.ts` → `win1-windows`（WIN1 的探针，不是测试）。
  * - `desktop-device/tests/*` → `device shell tests` 的 `bun test`。
  * - `desktop-device/src-tauri/**` → `device shell tests` 的 `cargo test --locked`。
  * - `desktop-device/scripts/verify-*` → 发布校验脚本本身，由 `device-bundle-*` / `device-release.yml` 执行。
@@ -195,8 +195,8 @@ export function jobFor(ref: string, facts: Facts): string | null {
     return facts.workspaces.has(pkg) ? `workspace tests (${pkg})` : null;
   }
   if (ref.startsWith("tests/")) return "repository tests (xiongbao/tests)";
-  // 探针不是测试：它由 `desktop-windows`（WIN1 device CLI probe）跑。
-  if (ref === "scripts/ci/windows-runner-probe.ts") return "desktop-windows";
+  // 探针不是测试：它由 `win1-windows`（WIN1 device CLI probe）跑。
+  if (ref === "scripts/ci/windows-runner-probe.ts") return "win1-windows";
   if (ref.startsWith("scripts/ci/") && /\.test\.m?js$/.test(ref))
     return "static";
   if (ref.startsWith("scripts/") && /\.test\.[cm]?[jt]sx?$/.test(ref)) {

@@ -17,7 +17,7 @@ const ROOTS = [
   "app/tests",
   "agent-computer/src",
   "agent-computer/tests",
-  "desktop/src-tauri/src",
+  "desktop-device/src-tauri/src",
   "extension/src",
   "extension/tests",
   "server/src",

@@ -40,11 +40,6 @@
     "reason": "电脑令牌头：电脑端到服务器（设备端/服务器线上名，任务 16 处理）"
   },
   {
-    "text": "x-openbot-desktop-host-token",
-    "until": "R2",
-    "reason": "桌面宿主令牌头：桌面端到服务器（设备端/服务器线上名，任务 16 处理）"
-  },
-  {
     "text": "x-openbot-dictation",
     "until": "R2",
     "reason": "浏览器请求标记头（server/src/browser-request-marker.ts 同时认新旧两种）（设备端/服务器线上名，任务 16 处理）"
@@ -191,12 +186,6 @@
     "reason": "品牌白名单：xiongbao/server/src/plugins/shared-accounts.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "\"openbot-desktop\",",
-    "file": "xiongbao/shared/desktop-control.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/shared/desktop-control.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "\"openbot-learning-\"",
     "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
@@ -213,12 +202,6 @@
     "file": "xiongbao/server/src/routing/model.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/server/src/routing/model.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot://open\"",
-    "file": "xiongbao/app/src/components/desktop/desktop-return.tsx",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/app/src/components/desktop/desktop-return.tsx 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:%\"",
@@ -243,12 +226,6 @@
     "file": "xiongbao/server/src/learning/remote.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/server/src/learning/remote.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot:open\"",
-    "file": "xiongbao/app/src/lib/desktop/open-requests.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/app/src/lib/desktop/open-requests.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:personal-defaults\"",
@@ -327,24 +304,6 @@
     "file": "xiongbao/server/src/auth/index.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/server/src/auth/index.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"plugin:openbot-desktop\"",
-    "file": "xiongbao/app/src/lib/desktop/speech.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/app/src/lib/desktop/speech.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"plugin:openbot-desktop\"",
-    "file": "xiongbao/app/src/lib/desktop/queries.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/app/src/lib/desktop/queries.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"plugin:openbot-desktop|notify\"",
-    "file": "xiongbao/app/src/lib/notifications/show.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/app/src/lib/notifications/show.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"x-copilotkit-ei-service-token\"",

@@ -590,9 +590,7 @@ test("making a stable release Latest dispatches the sync, and nothing else does"
       {
         RELEASE_TAG: "v0.3.0",
         MAKE_LATEST: makeLatestFlag,
-        FEED_RETRY_DELAY: "0",
       },
-      // The feed check writes feed.json where it runs.
       fake.dir,
     );
   const dispatch =
@@ -674,15 +672,4 @@ test("the sync workflow runs on main only, one at a time, with the role and noth
   // The images first: a failed copy stops the job before latest/ names the release.
   expect(runs?.at(-2)).toBe("bun scripts/downloads-images.ts");
   expect(runs?.at(-1)).toBe("scripts/downloads-sync.sh");
-
-  // Both attach jobs may be the one that makes the release Latest, so both may start the sync.
-  for (const path of [
-    ".github/workflows/desktop-macos-signing.yml",
-    ".github/workflows/desktop-signing.yml",
-  ]) {
-    expect(workflow(path).jobs.publish?.permissions).toEqual({
-      contents: "write",
-      actions: "write",
-    });
-  }
 });

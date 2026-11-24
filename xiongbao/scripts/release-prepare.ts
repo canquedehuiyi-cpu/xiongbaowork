@@ -33,26 +33,10 @@ function sectionBody(changelog: string, heading: string): string {
   return body.join("\n").trim();
 }
 
-export type PrepareOptions = { npmView?: (spec: string) => string };
-
-// Asks npm for the version a spec resolves to.
-function npmViewVersion(spec: string): string {
-  const view = Bun.spawnSync(["npm", "view", spec, "version"]);
-  if (view.exitCode !== 0) {
-    throw new Error(`npm view ${spec} failed: ${view.stderr.toString()}`);
-  }
-  return view.stdout.toString().trim();
-}
-
-// Writes the version, the chart's appVersion, the Cargo files and the
+// Writes the version, the chart's appVersion, the release policy and the
 // changelog for one release, and says what the release is called, which branch
 // it is cut from, and what its notes say.
-export function prepareRelease(
-  root: string,
-  bump: Bump,
-  kind: Kind,
-  options: PrepareOptions = {},
-): Prepared {
+export function prepareRelease(root: string, bump: Bump, kind: Kind): Prepared {
   const packagePath = join(root, "package.json");
   const pkg = JSON.parse(readFileSync(packagePath, "utf8"));
   const version = nextVersion(pkg.version, bump, kind);
@@ -75,18 +59,6 @@ export function prepareRelease(
   pkg.version = version;
   writeFileSync(packagePath, `${JSON.stringify(pkg, null, 2)}\n`);
 
-  const sync = Bun.spawnSync(
-    [
-      process.execPath,
-      join(root, "desktop/scripts/desktop-version.ts"),
-      "sync",
-    ],
-    { cwd: root },
-  );
-  if (sync.exitCode !== 0) {
-    throw new Error(`desktop-version sync failed: ${sync.stderr.toString()}`);
-  }
-
   // The chart's default image tag is its appVersion, so a release that moves package.json
   // without moving this leaves a default `helm install` pulling the previous image, or an
   // image tag that was never pushed. Move them together, every time.
@@ -100,42 +72,6 @@ export function prepareRelease(
   );
 
   carryReleasePolicy(root, version);
-
-  // The final release must bundle the CLI its candidate bundled. A candidate or beta whose
-  // CLI names an npm dist-tag ("latest", "next", "alpha") would let the final pick up a newer
-  // one, so they fix the tag to the exact version now. An exact version, and a pkg.pr.new URL
-  // (cli-bundle.ts builds only the form that names a commit), already cannot move. Stable and
-  // final never touch the file.
-  if (kind === "rc" || kind === "beta") {
-    const cliPath = join(root, "desktop/intelligence-cli.json");
-    if (existsSync(cliPath)) {
-      const cliConfig = JSON.parse(readFileSync(cliPath, "utf8"));
-      const current = cliConfig.cli;
-      const immutable =
-        typeof current !== "string" ||
-        exactVersion.test(current) ||
-        current.startsWith("https://pkg.pr.new/");
-      if (!immutable) {
-        const view = options.npmView ?? npmViewVersion;
-        const cli = view(`copilotkit@${current}`);
-        if (!exactVersion.test(cli)) {
-          throw new Error(`copilotkit@${current} is not a version: '${cli}'.`);
-        }
-        // Only the `cli` string is replaced in the text, so the rest of the file, the pinned Node
-        // version and its hashes, stays byte for byte as it was reviewed.
-        const text = readFileSync(cliPath, "utf8");
-        const updated = text.replace(
-          /("cli"\s*:\s*)"(?:[^"\\]|\\.)*"/,
-          (_, key: string) => key + JSON.stringify(cli),
-        );
-        const expected = JSON.stringify({ ...cliConfig, cli });
-        if (JSON.stringify(JSON.parse(updated)) !== expected) {
-          throw new Error(`Could not rewrite the cli field of ${cliPath}.`);
-        }
-        writeFileSync(cliPath, updated);
-      }
-    }
-  }
 
   // Unreleased becomes the version, and a fresh empty Unreleased takes its place so the next
   // change has somewhere to go without anyone hand-editing a heading. A candidate or beta is
@@ -187,8 +123,6 @@ export function carryReleasePolicy(root: string, version: string): boolean {
   writeFileSync(policyPath, updated);
   return true;
 }
-
-const exactVersion = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 const bumps: Bump[] = ["patch", "minor", "major"];
 const kinds: Kind[] = ["stable", "rc", "beta", "final"];

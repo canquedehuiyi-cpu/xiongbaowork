@@ -118,7 +118,6 @@ import {
   createDeliveryRoutes,
   createDeliveryWebhookRoutes,
 } from "./delivery/routes";
-import { mountDesktopConnectionFailure } from "./desktop-connection-failure";
 import { createTranscriptionProvider } from "./dictation/provider";
 import { createDictationRoutes } from "./dictation/routes";
 import { editionHasMemory } from "./edition";
@@ -681,7 +680,6 @@ export function createApp(
   // First, in every auth mode: a page from another website changes nothing here and opens no socket.
   // See request-trust.ts for what passes and why.
   app.use("/api/*", createOriginGuard(config));
-  mountDesktopConnectionFailure(app, desktopHostToken);
   mountProviderOAuthProxy(app, modelProviderProxy);
   mountLearningModelEndpoint(app, coworker?.learningModel);
   mountAgentModelProxy(app, coworker?.agentModel);

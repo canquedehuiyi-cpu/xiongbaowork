@@ -53,7 +53,6 @@ export const SIGNING_DOMAINS = [
 // Wire headers peers send and read (Global Constraints「绝对不改」).
 export const WIRE_HEADERS = [
   "x-openbot-agent-token",
-  "x-openbot-desktop-host-token",
 ];
 
 // The holder is the delivered tenant package's company (brand.ts copyrightLine), read from the package rather than
@@ -245,10 +244,6 @@ export const EXEMPT_PATHS: {
   test: (path: string) => boolean;
   reason: string;
 }[] = [
-  {
-    test: (p) => p.startsWith("desktop/"),
-    reason: "upstream desktop app is never touched",
-  },
   {
     test: (p) => p.startsWith("server/drizzle/"),
     reason: "migrations are history",

@@ -226,29 +226,11 @@ function runLangGraphAguiModelProbe(
   }
 }
 
-function runComposeConfig(
-  env: Record<string, string>,
-  desktop = false,
-  userOverride?: string,
-) {
+function runComposeConfig(env: Record<string, string>) {
   const output = execFileSync(
     "docker",
     [
       "compose",
-      ...(desktop
-        ? [
-            "-f",
-            "docker-compose.yml",
-            "-f",
-            "desktop/src-tauri/telemetry.compose.yml",
-            ...(userOverride ? ["-f", userOverride] : []),
-            ...([env.COPILOTKIT_TELEMETRY_DISABLED, env.DO_NOT_TRACK].some(
-              (value) => value === "1" || value === "true",
-            )
-              ? ["-f", "desktop/src-tauri/telemetry-disabled.compose.yml"]
-              : []),
-          ]
-        : []),
       "--env-file",
       "/dev/null",
       "--profile",
@@ -281,7 +263,7 @@ function runComposeConfig(
   };
 }
 
-test("passes desktop identity, metadata and opt-out into the server container", () => {
+test("ordinary Compose ignores telemetry settings in the host environment", () => {
   const telemetry = {
     CPK_TELEMETRY_ID: "12345678-1234-4123-8123-123456789012",
     COPILOTKIT_TELEMETRY_SAMPLE_RATE: "1",
@@ -296,75 +278,9 @@ test("passes desktop identity, metadata and opt-out into the server container", 
     DO_NOT_TRACK: "1",
     OPENBOT_PRODUCT_TELEMETRY: "0",
   };
-  const enterprise = runComposeConfig(telemetry).services;
+  const services = runComposeConfig(telemetry).services;
   for (const key of Object.keys(telemetry)) {
-    expect(enterprise.server.environment[key]).toBeUndefined();
-  }
-  const services = runComposeConfig(
-    {
-      ...telemetry,
-      OPENBOT_ACCOUNT_EMAIL: "synthetic@example.invalid",
-      OPENBOT_PROMPT: "synthetic private content",
-    },
-    true,
-  ).services;
-  for (const [key, value] of Object.entries(telemetry)) {
-    expect(services.server.environment[key]).toBe(value);
-    expect(services["agent-computer"].environment[key]).toBeUndefined();
-  }
-  expect(services.server.environment.OPENBOT_ACCOUNT_EMAIL).toBeUndefined();
-  expect(services.server.environment.OPENBOT_PROMPT).toBeUndefined();
-  const overlay = parse(
-    readFileSync(
-      join(import.meta.dir, "../desktop/src-tauri/telemetry.compose.yml"),
-      "utf8",
-    ),
-  );
-  expect(Object.keys(overlay.services)).toEqual(["server"]);
-  expect(Object.keys(overlay.services.server.environment).sort()).toEqual(
-    Object.keys(telemetry).sort(),
-  );
-  // Telemetry configuration must not change the local server's runtime mode.
-  expect(services.server.environment.NODE_ENV).toBe("");
-});
-
-test("keeps a server opt-out from the user's Compose override", () => {
-  const dir = mkdtempSync(join(tmpdir(), "openbot-telemetry-override-"));
-  try {
-    const override = join(dir, "custom.yml");
-    writeFileSync(
-      override,
-      'services:\n  server:\n    environment:\n      DO_NOT_TRACK: "1"\n      OPENBOT_PRODUCT_TELEMETRY: "0"\n',
-    );
-    const env = runComposeConfig(
-      { OPENBOT_DISTRIBUTION: "desktop" },
-      true,
-      override,
-    ).services.server.environment;
-    expect(env.DO_NOT_TRACK).toBe("1");
-    expect(env.OPENBOT_PRODUCT_TELEMETRY).toBe("0");
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test("native opt-out wins over a Compose override that enables telemetry", () => {
-  const dir = mkdtempSync(join(tmpdir(), "openbot-native-opt-out-"));
-  try {
-    const override = join(dir, "custom.yml");
-    writeFileSync(
-      override,
-      'services:\n  server:\n    environment:\n      DO_NOT_TRACK: "0"\n      COPILOTKIT_TELEMETRY_DISABLED: "0"\n      OPENBOT_PRODUCT_TELEMETRY: "1"\n',
-    );
-    for (const key of ["DO_NOT_TRACK", "COPILOTKIT_TELEMETRY_DISABLED"]) {
-      for (const value of ["true", "1"]) {
-        const env = runComposeConfig({ [key]: value }, true, override).services
-          .server.environment;
-        expect(env.COPILOTKIT_TELEMETRY_DISABLED).toBe("1");
-      }
-    }
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
+    expect(services.server.environment[key]).toBeUndefined();
   }
 });
 

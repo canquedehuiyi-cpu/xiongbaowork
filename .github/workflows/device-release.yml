@@ -158,8 +158,8 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: xiongbao/desktop
+      - name: Install the pinned Tauri CLI from its own frozen lockfile (no lifecycle scripts)
+        working-directory: xiongbao/tools/tauri-cli
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
@@ -170,7 +170,7 @@ jobs:
         run: bun scripts/brand/third-party-notices.ts
       - name: Bundle the deb
         working-directory: xiongbao/desktop-device
-        run: ../desktop/node_modules/.bin/tauri build --ci --bundles deb --config src-tauri/tauri.bundle.conf.json
+        run: ../tools/tauri-cli/node_modules/.bin/tauri build --ci --bundles deb --config src-tauri/tauri.bundle.conf.json
       - name: Check the package and stage it under its release name
         env:
           VERSION: ${{ needs.tag-check.outputs.version }}
@@ -307,8 +307,8 @@ jobs:
           toolchain: stable
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: xiongbao/desktop
+      - name: Install the pinned Tauri CLI from its own frozen lockfile (no lifecycle scripts)
+        working-directory: xiongbao/tools/tauri-cli
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
@@ -326,7 +326,7 @@ jobs:
           set -euo pipefail
           configs=(--config src-tauri/tauri.bundle.conf.json)
           if [ "$MODE" != none ]; then configs+=(--config src-tauri/tauri.windows-signing.conf.json); fi
-          ../desktop/node_modules/.bin/tauri build --ci --bundles nsis "${configs[@]}"
+          ../tools/tauri-cli/node_modules/.bin/tauri build --ci --bundles nsis "${configs[@]}"
       - name: Verify the installer (verify-windows-signatures.ps1)
         working-directory: xiongbao/desktop-device
         shell: pwsh
@@ -480,8 +480,8 @@ jobs:
           toolchain: stable
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: xiongbao/desktop
+      - name: Install the pinned Tauri CLI from its own frozen lockfile (no lifecycle scripts)
+        working-directory: xiongbao/tools/tauri-cli
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
@@ -500,13 +500,13 @@ jobs:
           APPLE_API_KEY: ${{ vars.DEVICE_APPLE_API_KEY_ID }}
           APPLE_API_ISSUER: ${{ vars.DEVICE_APPLE_API_ISSUER }}
           APPLE_API_KEY_PATH: ${{ runner.temp }}/notary/AuthKey.p8
-        run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
+        run: ../tools/tauri-cli/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
       - name: Bundle the app and dmg (ad-hoc signature only)
         if: ${{ steps.mode.outputs.mode == 'none' }}
         working-directory: xiongbao/desktop-device
         env:
           APPLE_SIGNING_IDENTITY: "-"
-        run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
+        run: ../tools/tauri-cli/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
       - name: Sign, notarize and staple the dmg
         if: ${{ steps.mode.outputs.mode == 'developer-id' }}
         env:

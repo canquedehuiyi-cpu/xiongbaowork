@@ -1250,44 +1250,6 @@ test("a consent app's Connect leaves for the vendor's own page", async () => {
   }
 });
 
-test("in OpenBot Desktop, the page asks again once the window is back in front", async () => {
-  /*
-   * The window sends the sign-in to the person's browser and this page stays where it is, so it
-   * never arrives here again to confirm on load. The browser hands the person back to the window
-   * when the sign-in is done, and the focus that brings is when the account is asked about.
-   */
-  const server = installDeployment({
-    authScheme: "OAUTH2",
-    composioConfigured: true,
-    confirms: false,
-    recorded: false,
-  });
-  (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__ = {
-    invoke: async () => null,
-    transformCallback: () => 0,
-  };
-  const watched = watchNavigation();
-
-  try {
-    const view = renderAccountScreen(queryClient());
-    await userEvent.click(await view.findByRole("button", { name: "连接" }));
-    await waitFor(() => expect(watched.navigations).toEqual([CONSENT_URL]));
-    const before = server.confirmsAsked;
-
-    server.answer(true);
-    window.dispatchEvent(new Event("focus"));
-
-    await waitFor(() => expect(server.confirmsAsked).toBe(before + 1));
-    expect(await view.findByRole("button", { name: "断开" })).toBeTruthy();
-    // Once per sign-in: a later focus asks nothing more.
-    window.dispatchEvent(new Event("focus"));
-    expect(server.confirmsAsked).toBe(before + 1);
-  } finally {
-    watched.restore();
-    delete (window as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
-  }
-});
-
 test("a typed scheme this screen does not know is refused, not navigated to undefined", async () => {
   installDeployment({
     /*

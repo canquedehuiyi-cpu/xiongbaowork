@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import type { AuditEventInput } from "../src/audit";
 import { createHostAccessBroker } from "../src/host-access/broker";
 import { DENIED_ON_DESKTOP, hostAccessTools } from "../src/host-access/tools";
@@ -237,22 +236,15 @@ describe("host access tools", () => {
     });
   });
   /*
-   * The desktop's Deny now says "Declined in OpenBot Desktop." where it said "The local owner denied
-   * this operation.", which the person read about themselves. The server reads that sentence to
-   * record the refusal as the person's own, so Activity says they declined it; a sentence it did
-   * not know would have recorded an ordinary refusal.
+   * The folder worker's Deny says "Declined in OpenBot Desktop." where it once said "The local owner
+   * denied this operation.", which the person read about themselves. The server reads that sentence
+   * to record the refusal as the person's own, so Activity says they declined it; a sentence it did
+   * not know would have recorded an ordinary refusal. The sentence is the worker's answer as it
+   * arrives on the wire, written out here because the worker's source is no longer in this tree.
    */
   test("a Deny on the desktop is recorded as the person declining, in the desktop's words", async () => {
-    const source = readFileSync(
-      new URL(
-        "../../desktop/src-tauri/src/desktop_host_access.rs",
-        import.meta.url,
-      ),
-      "utf8",
-    );
-    const declined = source.match(/const DECLINED: &str = "([^"]+)";/)?.[1];
-    expect(declined).toBe("Declined in OpenBot Desktop.");
-    expect(DENIED_ON_DESKTOP.has(declined as string)).toBe(true);
+    const declined = "Declined in OpenBot Desktop.";
+    expect(DENIED_ON_DESKTOP.has(declined)).toBe(true);
 
     const broker = createHostAccessBroker();
     broker.rememberGrant({
@@ -283,7 +275,7 @@ describe("host access tools", () => {
     broker.resolveDesktopOperation({
       operationId: lease!.operations[0]!.operationId,
       ok: false,
-      error: declined as string,
+      error: declined,
     });
 
     expect(await answer).toBe(`Refused. ${declined}`);

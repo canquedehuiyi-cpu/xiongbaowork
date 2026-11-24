@@ -13,7 +13,6 @@ import { Route as AuthedRouteImport } from './routes/_authed'
 import { Route as SignRouteImport } from './routes/sign'
 import { Route as AuthedAppRouteImport } from './routes/_authed/_app'
 import { Route as AuthedAdminRouteRouteImport } from './routes/_authed/admin/route'
-import { Route as AuthedDesktopReturnRouteImport } from './routes/_authed/desktop-return'
 import { Route as AuthedOnboardingRouteImport } from './routes/_authed/onboarding'
 import { Route as AuthedSettingsRouteRouteImport } from './routes/_authed/settings/route'
 import { Route as AuthedAppIndexRouteImport } from './routes/_authed/_app/index'
@@ -69,7 +68,6 @@ import { Route as AuthedSettingsNotificationsRouteImport } from './routes/_authe
 import { Route as AuthedSettingsPasswordsRouteImport } from './routes/_authed/settings/passwords'
 import { Route as AuthedSettingsPlansRouteImport } from './routes/_authed/settings/plans'
 import { Route as AuthedSettingsSetupRouteImport } from './routes/_authed/settings/setup'
-import { Route as AuthedSettingsThisComputerRouteImport } from './routes/_authed/settings/this-computer'
 import { Route as AuthedSignInRequestIdRouteImport } from './routes/_authed/sign-in/$requestId'
 import { Route as AuthedAppAgentsIndexRouteImport } from './routes/_authed/_app/agents/index'
 import { Route as AuthedAppAssembleAgentIdRouteImport } from './routes/_authed/_app/assemble.$agentId'
@@ -159,11 +157,6 @@ const AuthedAppRoute = AuthedAppRouteImport.update({
 const AuthedAdminRouteRoute = AuthedAdminRouteRouteImport.update({
   id: '/admin',
   path: '/admin',
-  getParentRoute: () => AuthedRoute,
-} as any)
-const AuthedDesktopReturnRoute = AuthedDesktopReturnRouteImport.update({
-  id: '/desktop-return',
-  path: '/desktop-return',
   getParentRoute: () => AuthedRoute,
 } as any)
 const AuthedOnboardingRoute = AuthedOnboardingRouteImport.update({
@@ -443,12 +436,6 @@ const AuthedSettingsSetupRoute = AuthedSettingsSetupRouteImport.update({
   path: '/setup',
   getParentRoute: () => AuthedSettingsRouteRoute,
 } as any)
-const AuthedSettingsThisComputerRoute =
-  AuthedSettingsThisComputerRouteImport.update({
-    id: '/this-computer',
-    path: '/this-computer',
-    getParentRoute: () => AuthedSettingsRouteRoute,
-  } as any)
 const AuthedSignInRequestIdRoute = AuthedSignInRequestIdRouteImport.update({
   id: '/sign-in/$requestId',
   path: '/sign-in/$requestId',
@@ -870,7 +857,6 @@ export interface FileRoutesByFullPath {
   '/sign': typeof SignRoute
   '/admin': typeof AuthedAdminRouteRouteWithChildren
   '/settings': typeof AuthedSettingsRouteRouteWithChildren
-  '/desktop-return': typeof AuthedDesktopReturnRoute
   '/onboarding': typeof AuthedOnboardingRoute
   '/approvals': typeof AuthedAppApprovalsRoute
   '/autonomous': typeof AuthedAppAutonomousRoute
@@ -921,7 +907,6 @@ export interface FileRoutesByFullPath {
   '/settings/passwords': typeof AuthedSettingsPasswordsRoute
   '/settings/plans': typeof AuthedSettingsPlansRoute
   '/settings/setup': typeof AuthedSettingsSetupRoute
-  '/settings/this-computer': typeof AuthedSettingsThisComputerRoute
   '/sign-in/$requestId': typeof AuthedSignInRequestIdRoute
   '/admin/': typeof AuthedAdminIndexRoute
   '/settings/': typeof AuthedSettingsIndexRoute
@@ -1000,7 +985,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof AuthedAppIndexRoute
   '/sign': typeof SignRoute
-  '/desktop-return': typeof AuthedDesktopReturnRoute
   '/onboarding': typeof AuthedOnboardingRoute
   '/approvals': typeof AuthedAppApprovalsRoute
   '/autonomous': typeof AuthedAppAutonomousRoute
@@ -1051,7 +1035,6 @@ export interface FileRoutesByTo {
   '/settings/passwords': typeof AuthedSettingsPasswordsRoute
   '/settings/plans': typeof AuthedSettingsPlansRoute
   '/settings/setup': typeof AuthedSettingsSetupRoute
-  '/settings/this-computer': typeof AuthedSettingsThisComputerRoute
   '/sign-in/$requestId': typeof AuthedSignInRequestIdRoute
   '/admin': typeof AuthedAdminIndexRoute
   '/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
@@ -1133,7 +1116,6 @@ export interface FileRoutesById {
   '/_authed/admin': typeof AuthedAdminRouteRouteWithChildren
   '/_authed/settings': typeof AuthedSettingsRouteRouteWithChildren
   '/_authed/_app': typeof AuthedAppRouteWithChildren
-  '/_authed/desktop-return': typeof AuthedDesktopReturnRoute
   '/_authed/onboarding': typeof AuthedOnboardingRoute
   '/_authed/_app/approvals': typeof AuthedAppApprovalsRoute
   '/_authed/_app/autonomous': typeof AuthedAppAutonomousRoute
@@ -1185,7 +1167,6 @@ export interface FileRoutesById {
   '/_authed/settings/passwords': typeof AuthedSettingsPasswordsRoute
   '/_authed/settings/plans': typeof AuthedSettingsPlansRoute
   '/_authed/settings/setup': typeof AuthedSettingsSetupRoute
-  '/_authed/settings/this-computer': typeof AuthedSettingsThisComputerRoute
   '/_authed/sign-in/$requestId': typeof AuthedSignInRequestIdRoute
   '/_authed/_app/': typeof AuthedAppIndexRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
@@ -1269,7 +1250,6 @@ export interface FileRouteTypes {
     | '/sign'
     | '/admin'
     | '/settings'
-    | '/desktop-return'
     | '/onboarding'
     | '/approvals'
     | '/autonomous'
@@ -1320,7 +1300,6 @@ export interface FileRouteTypes {
     | '/settings/passwords'
     | '/settings/plans'
     | '/settings/setup'
-    | '/settings/this-computer'
     | '/sign-in/$requestId'
     | '/admin/'
     | '/settings/'
@@ -1399,7 +1378,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/sign'
-    | '/desktop-return'
     | '/onboarding'
     | '/approvals'
     | '/autonomous'
@@ -1450,7 +1428,6 @@ export interface FileRouteTypes {
     | '/settings/passwords'
     | '/settings/plans'
     | '/settings/setup'
-    | '/settings/this-computer'
     | '/sign-in/$requestId'
     | '/admin'
     | '/assemble/$agentId'
@@ -1531,7 +1508,6 @@ export interface FileRouteTypes {
     | '/_authed/admin'
     | '/_authed/settings'
     | '/_authed/_app'
-    | '/_authed/desktop-return'
     | '/_authed/onboarding'
     | '/_authed/_app/approvals'
     | '/_authed/_app/autonomous'
@@ -1583,7 +1559,6 @@ export interface FileRouteTypes {
     | '/_authed/settings/passwords'
     | '/_authed/settings/plans'
     | '/_authed/settings/setup'
-    | '/_authed/settings/this-computer'
     | '/_authed/sign-in/$requestId'
     | '/_authed/_app/'
     | '/_authed/admin/'
@@ -1694,13 +1669,6 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AuthedAdminRouteRouteImport
-      parentRoute: typeof AuthedRoute
-    }
-    '/_authed/desktop-return': {
-      id: '/_authed/desktop-return'
-      path: '/desktop-return'
-      fullPath: '/desktop-return'
-      preLoaderRoute: typeof AuthedDesktopReturnRouteImport
       parentRoute: typeof AuthedRoute
     }
     '/_authed/onboarding': {
@@ -2086,13 +2054,6 @@ declare module '@tanstack/react-router' {
       path: '/setup'
       fullPath: '/settings/setup'
       preLoaderRoute: typeof AuthedSettingsSetupRouteImport
-      parentRoute: typeof AuthedSettingsRouteRoute
-    }
-    '/_authed/settings/this-computer': {
-      id: '/_authed/settings/this-computer'
-      path: '/this-computer'
-      fullPath: '/settings/this-computer'
-      preLoaderRoute: typeof AuthedSettingsThisComputerRouteImport
       parentRoute: typeof AuthedSettingsRouteRoute
     }
     '/_authed/sign-in/$requestId': {
@@ -2721,7 +2682,6 @@ interface AuthedSettingsRouteRouteChildren {
   AuthedSettingsPasswordsRoute: typeof AuthedSettingsPasswordsRoute
   AuthedSettingsPlansRoute: typeof AuthedSettingsPlansRoute
   AuthedSettingsSetupRoute: typeof AuthedSettingsSetupRoute
-  AuthedSettingsThisComputerRoute: typeof AuthedSettingsThisComputerRoute
   AuthedSettingsIndexRoute: typeof AuthedSettingsIndexRoute
   AuthedSettingsComponentsGalleryNameRoute: typeof AuthedSettingsComponentsGalleryNameRoute
   AuthedSettingsConnectedAccountsKeyRoute: typeof AuthedSettingsConnectedAccountsKeyRoute
@@ -2741,7 +2701,6 @@ const AuthedSettingsRouteRouteChildren: AuthedSettingsRouteRouteChildren = {
   AuthedSettingsPasswordsRoute: AuthedSettingsPasswordsRoute,
   AuthedSettingsPlansRoute: AuthedSettingsPlansRoute,
   AuthedSettingsSetupRoute: AuthedSettingsSetupRoute,
-  AuthedSettingsThisComputerRoute: AuthedSettingsThisComputerRoute,
   AuthedSettingsIndexRoute: AuthedSettingsIndexRoute,
   AuthedSettingsComponentsGalleryNameRoute:
     AuthedSettingsComponentsGalleryNameRoute,
@@ -2928,7 +2887,6 @@ interface AuthedRouteChildren {
   AuthedAdminRouteRoute: typeof AuthedAdminRouteRouteWithChildren
   AuthedSettingsRouteRoute: typeof AuthedSettingsRouteRouteWithChildren
   AuthedAppRoute: typeof AuthedAppRouteWithChildren
-  AuthedDesktopReturnRoute: typeof AuthedDesktopReturnRoute
   AuthedOnboardingRoute: typeof AuthedOnboardingRoute
   AuthedSignInRequestIdRoute: typeof AuthedSignInRequestIdRoute
 }
@@ -2937,7 +2895,6 @@ const AuthedRouteChildren: AuthedRouteChildren = {
   AuthedAdminRouteRoute: AuthedAdminRouteRouteWithChildren,
   AuthedSettingsRouteRoute: AuthedSettingsRouteRouteWithChildren,
   AuthedAppRoute: AuthedAppRouteWithChildren,
-  AuthedDesktopReturnRoute: AuthedDesktopReturnRoute,
   AuthedOnboardingRoute: AuthedOnboardingRoute,
   AuthedSignInRequestIdRoute: AuthedSignInRequestIdRoute,
 }

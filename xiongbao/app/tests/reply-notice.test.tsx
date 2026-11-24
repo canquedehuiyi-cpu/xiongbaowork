@@ -25,7 +25,6 @@ import {
 import { useChannelEvents } from "@/lib/channels/use-channel-events";
 import { refreshNotificationPermission } from "@/lib/notifications/permission";
 import { forgetReplies, replyTiming } from "@/lib/notifications/reply-notice";
-import { closeDesktop, launchDesktop } from "./desktop-notifications.fixture";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -181,7 +180,6 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   globalThis.fetch = originalFetch;
-  closeDesktop();
   globals.Notification = originalNotification;
   refreshNotificationPermission();
 });
@@ -382,52 +380,6 @@ test("a Bot the attention list does not name is named from the Bots list, and sa
   await waitFor(() =>
     expect(shown.map((notice) => notice.title)).toEqual(["Expenses回复了"]),
   );
-});
-
-const DESKTOP_REPLY = {
-  title: "Expenses回复了",
-  body: "Categorized three expenses.",
-  // The page a click opens, from the notification centre too.
-  path: "/channel/march-receipts",
-  // The conversation's: Windows replaces a toast of the same tag rather than stacking another.
-  tag: "xiongbao-march-receipts",
-};
-
-test("in OpenBot Desktop the desktop app shows it, naming the conversation a click opens", async () => {
-  const desktop = launchDesktop({ plugin: true });
-  refreshNotificationPermission();
-  await settle();
-  const { socket } = await openPage({});
-
-  act(() => socket.say(reply()));
-
-  await waitFor(() => expect(desktop.shown()).toEqual([DESKTOP_REPLY]));
-  expect(desktop.toDesktopNotify()).toHaveLength(1);
-});
-
-test("in a desktop app from before its own notify, the plugin shows it, with the same conversation", async () => {
-  const desktop = launchDesktop({ plugin: true, notifyCommand: false });
-  refreshNotificationPermission();
-  await settle();
-  const { socket } = await openPage({});
-
-  act(() => socket.say(reply()));
-
-  await waitFor(() => expect(desktop.shown()).toEqual([DESKTOP_REPLY]));
-});
-
-test("in OpenBot Desktop no notice while the person is looking at it", async () => {
-  visibility = "visible";
-  focused = true;
-  const desktop = launchDesktop({ plugin: true });
-  refreshNotificationPermission();
-  await settle();
-  const { socket } = await openPage({});
-
-  act(() => socket.say(reply()));
-  await settle();
-
-  expect(desktop.shown()).toEqual([]);
 });
 
 /*

@@ -1,15 +1,12 @@
-import { envName } from "../../../shared/env-aliases";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";
+import { envName } from "../../../shared/env-aliases";
 import type { BotAccessCheck } from "../agents/profile-policy";
 import type { AdminScope } from "../auth/admin-scope";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
-import {
-  type AccountModeSwitch,
-  AccountModeRefusedError,
-} from "./account-mode";
+import { englishName } from "../brand";
 import { reasonWithoutStatement } from "../db/query-failure";
 import {
   appsPage,
@@ -25,6 +22,10 @@ import {
   runAsTenant,
 } from "../tenant/context";
 import { type BrokerProvider, toolkitOfFor } from "./access";
+import {
+  AccountModeRefusedError,
+  type AccountModeSwitch,
+} from "./account-mode";
 import {
   adminInputFor,
   mountAppAccessRoutes,
@@ -64,11 +65,23 @@ import {
 } from "./deployment-clients";
 import { fieldsForPerson, keyGuideFor } from "./key-guides";
 import {
+  authorizationUrlFor,
+  type ConnectOrigin,
+  challengeFor,
+  connectedAccountsUrlFor,
+  createVerifier,
+  readConnectState,
+  redeemAuthorizationCode,
+  redirectUriFor,
+  sealConnectState,
+} from "./oauth";
+import { approveOwnersSharedUse } from "./owner-grants";
+import {
   ALWAYS_ON_REFUSAL,
   alwaysOnHere,
   personalRevokeRefusalFor,
 } from "./personal-defaults";
-import { approveOwnersSharedUse } from "./owner-grants";
+import { type AccountRef, anotherArcadeAccount } from "./shared-accounts";
 import {
   asSharedUseApproval,
   exposureOf,
@@ -81,18 +94,6 @@ import {
   SharedUseNotSharedError,
   type SharedUseStore,
 } from "./shared-use-store";
-import {
-  authorizationUrlFor,
-  type ConnectOrigin,
-  challengeFor,
-  connectedAccountsUrlFor,
-  createVerifier,
-  desktopReturnUrlFor,
-  readConnectState,
-  redeemAuthorizationCode,
-  redirectUriFor,
-  sealConnectState,
-} from "./oauth";
 import {
   type AppAccessRequestRecord,
   CatalogueEntryUnknownError,
@@ -108,9 +109,7 @@ import {
   type PluginStore,
   type ServerAddress,
 } from "./store";
-import { type AccountRef, anotherArcadeAccount } from "./shared-accounts";
 import { withVendorDeadline } from "./vendor-deadline";
-import { englishName } from "../brand";
 
 /**
  * Whether the person a consent was started for still has access to this deployment.
@@ -2471,16 +2470,8 @@ export function createPluginRoutes(
            * this deployment cannot tell them anything; the guard moves it to before the link is
            * minted, where the sentence reaches an operator who can set the variable.
            */
-          /*
-           * `?from=desktop` is the press's own: the sign-in was started in OpenBot Desktop's window
-           * and runs in the person's browser, so it comes back to the page that hands them back to
-           * the window ({@link desktopReturnUrlFor}). Anybody can send it, and all it changes is which
-           * of this OpenBot's own pages the browser lands on.
-           */
           returnUrl: brokerReturnUrl(
-            context.req.query("from") === "desktop"
-              ? desktopReturnUrlFor(connect.appUrl, serverId)
-              : connectedAccountsUrlFor(connect.appUrl, { serverId }, returnTo),
+            connectedAccountsUrlFor(connect.appUrl, { serverId }, returnTo),
           ),
         }));
       } catch (error) {

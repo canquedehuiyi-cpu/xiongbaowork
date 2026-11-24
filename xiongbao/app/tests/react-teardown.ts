@@ -72,10 +72,7 @@ const sharedQueryClient = realpathSync(
   join(import.meta.dir, "../src/query-client.ts"),
 );
 
-for (const [project, required] of [
-  ["..", true],
-  ["../../desktop", false],
-] as const) {
+for (const [project, required] of [["..", true]] as const) {
   const dir = join(import.meta.dir, project);
   const resolve = (specifier: string, from = dir) =>
     realpathSync(Bun.resolveSync(specifier, from));
@@ -90,7 +87,6 @@ for (const [project, required] of [
     );
     registrator = resolve("@happy-dom/global-registrator");
   } catch (error) {
-    // The desktop app installs its own dependencies, and without them none of its DOM tests run either.
     if (required) throw error;
     continue;
   }

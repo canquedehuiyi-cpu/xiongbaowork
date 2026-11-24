@@ -7,7 +7,6 @@ import {
 } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { SelfHostBanner } from "@/components/layout/self-host-banner";
-import { UpdateBanner } from "@/components/layout/update-banner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { hasFailedStart, onFailedStart } from "@/lib/channels/pending-start";
 import { useChannelEvents } from "@/lib/channels/use-channel-events";
@@ -260,8 +259,6 @@ export function WorkbenchFrame({ children }: { children: ReactNode }) {
           hidden={phoneList}
           inert={covered}
         >
-          {/* Only inside the desktop app: the banner asks it, and draws nothing in a browser. */}
-          <UpdateBanner />
           <SelfHostBanner />
           {/* 手机上的消息入口画会话列表，首页（新对话的输入框）不挂；新对话走列表顶上的「＋」。 */}
           {phoneList ? null : children}

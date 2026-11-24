@@ -23,7 +23,6 @@ import {
   type FilePreviewTarget,
   usePreviewTarget,
 } from "@/lib/computers/preview";
-import { formatBytes } from "@/lib/desktop/queries";
 import { previewKindOf } from "../../../../shared/preview-kind";
 
 /*
@@ -429,4 +428,11 @@ export function GroupTurnArtifacts({
   return (
     <EventArtifacts channelId={channelId} groups={groups} nameOf={nameOf} />
   );
+}
+
+/** "1.2 GB", "340 MB": decimal units. */
+function formatBytes(bytes: number): string {
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+  if (bytes >= 1e6) return `${Math.round(bytes / 1e6)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1e3))} KB`;
 }

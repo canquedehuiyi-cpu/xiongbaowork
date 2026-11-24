@@ -1,5 +1,3 @@
-import { desktopShell } from "@/lib/desktop/shell";
-
 /** A notification OpenBot raises, and the page of OpenBot a click on it opens. */
 export type Notice = {
   title: string;
@@ -8,7 +6,7 @@ export type Notice = {
   tag: string;
   /** An OpenBot path: `/channel/c-1`, `/bots/expenses`. */
   path: string;
-  /** In a browser, what a click does. OpenBot Desktop opens `path` itself. */
+  /** What a click does. */
   onClick?: () => void;
 };
 
@@ -26,32 +24,8 @@ export function inSight(): boolean {
   return document.visibilityState === "visible" && document.hasFocus();
 }
 
-/**
- * Raises `notice`, if notifications may be shown (the caller asks `notificationsAllowed` first).
- *
- * IN OPENBOT DESKTOP the desktop app shows it (`notify`, desktop/src-tauri/src/notice.rs). On
- * Windows only a toast it builds can bring OpenBot back at `path` from the notification centre: an
- * app installed without a package has to be opened by a link there, which the notification plugin's
- * toasts cannot carry. A desktop app from before that command shows it through the plugin, whose
- * script stands in for `Notification`, with the page in `extra.path`.
- */
+/** Raises `notice`, if notifications may be shown (the caller asks `notificationsAllowed` first). */
 export function showNotice(notice: Notice): void {
-  const shell = desktopShell();
-  if (!shell) {
-    browserNotice(notice);
-    return;
-  }
-  shell
-    .invoke("plugin:openbot-desktop|notify", {
-      title: notice.title,
-      body: notice.body,
-      path: notice.path,
-      tag: notice.tag,
-    })
-    .catch(() => browserNotice(notice));
-}
-
-function browserNotice(notice: Notice) {
   const options: NotificationOptions & { extra: { path: string } } = {
     body: notice.body,
     tag: notice.tag,

@@ -2325,7 +2325,6 @@ describe("the final review", () => {
       "WindowsTerminal.exe",
       "xiongbao-device",
       "熊宝数字员工 设备端",
-      "XiongBao",
     ])
       for (const action of ["click", "type", "key", "focus"] as const)
         expect({

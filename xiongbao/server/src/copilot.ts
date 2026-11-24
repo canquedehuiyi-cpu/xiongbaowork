@@ -155,7 +155,6 @@ import {
 } from "./computer/turn-artifacts";
 import type { DeploymentConfig } from "./config";
 import { SYSTEM_TENANT } from "./db/schema/tenant";
-import { observeModelConnection } from "./desktop-connection-failure";
 import { desktopTelemetryProperties } from "./desktop-telemetry";
 import { currentEdition } from "./edition";
 import {
@@ -173,6 +172,7 @@ import {
 } from "./memory/tools";
 import { providerName } from "./model-billing";
 import { modelSourceFor, type RunChoice } from "./model-catalogue";
+import { observeModelConnection } from "./model-connection";
 import { contextWindowOf } from "./models/context-window";
 import {
   deepSeekLanguageModel,

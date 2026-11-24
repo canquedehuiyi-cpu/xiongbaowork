@@ -6,8 +6,7 @@ import { BILLING } from "./model-billing";
  * A provider's refusal, turned into something a person can read.
  *
  * The AI SDK signals a rejected call with `AI_APICallError`, which carries the HTTP status and the
- * provider's own response body. Until now only 401 had a branch (`desktop-connection-failure.ts`, which
- * tells the native host to open the model settings); every other refusal left the observable errored, so
+ * provider's own response body. Until now every refusal left the observable errored, so
  * the browser printed "network error", the board closed the card as failed with no reason anywhere on it,
  * and the one party that said what was wrong — the provider, in its own sentence — was thrown away. The
  * audit's first real-model attempt died exactly this way: a 400 naming the model names the endpoint does
@@ -17,9 +16,9 @@ import { BILLING } from "./model-billing";
  * the stream then closes normally, which is also what makes the task card land in `failed` rather than
  * `awaiting_review` (see `carriedFailure` in `threads/postgres-runner.ts`).
  *
- * NOT 401. That status has an owner elsewhere: the desktop host reads its signal and opens the credential
- * screen, which is the right answer for a bad key and the wrong one for a bad model name. Converting it
- * here would take that path away, so it is rethrown untouched.
+ * NOT 401. That status is a key or sign-in that no longer works, which the caller's own reader
+ * (`agents/provider-refusal.ts`) says as a credential problem. Converting it here would make a dead
+ * key read as the model's refusal, so it is rethrown untouched.
  *
  * NOT every error either. "Unable to connect" is not a refusal by anybody and inventing a provider
  * sentence for it would send the person to edit a model name that was never the problem.

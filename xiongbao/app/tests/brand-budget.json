@@ -97,7 +97,7 @@
   {
     "rule": "identifier",
     "scope": "app/src",
-    "lines": 79
+    "lines": 64
   },
   {
     "rule": "identifier",
@@ -247,7 +247,7 @@
   {
     "rule": "openbot-package",
     "scope": "app/src",
-    "lines": 127
+    "lines": 126
   },
   {
     "rule": "openbot-package",
@@ -292,7 +292,7 @@
   {
     "rule": "wire-dom",
     "scope": "server/src",
-    "lines": 11
+    "lines": 10
   },
   {
     "rule": "wire-dom",

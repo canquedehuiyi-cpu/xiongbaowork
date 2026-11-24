@@ -1,12 +1,5 @@
 [
   {
-    "file": "app/src/components/desktop/desktop-return.tsx",
-    "text": "\"openbot://open\"",
-    "reason": "persisted-identifier: URL scheme the upstream desktop app registers",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "app/src/components/admin/controls/recording-section.tsx",
     "text": "They are tagged openbot.surface.",
     "reason": "persisted-identifier: names the real OTel attribute key (Task 9 keeps openbot.* attributes)",
@@ -35,48 +28,6 @@
     "plan": "keep"
   },
   {
-    "file": "app/src/components/settings/usage-data.tsx",
-    "text": "github.com/CopilotKit/OpenBot/blob/main/desktop/TELEMETRY.md",
-    "reason": "upstream-shell-only: upstream desktop's own telemetry doc; the section is drawn only inside upstream OpenBot Desktop",
-    "category": "upstream-shell-only",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/components/settings/usage-data.tsx",
-    "text": "向 CopilotKit 发送使用数据",
-    "reason": "upstream-shell-only: truthful disclosure of who receives upstream desktop's usage data; drawn only inside upstream OpenBot Desktop",
-    "category": "upstream-shell-only",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/desktop/speech.ts",
-    "text": "\"plugin:openbot-desktop\"",
-    "reason": "persisted-identifier: Tauri plugin name the upstream desktop registers",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/desktop/queries.ts",
-    "text": "\"plugin:openbot-desktop\"",
-    "reason": "persisted-identifier: Tauri plugin name the upstream desktop registers",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/desktop/part-names.ts",
-    "text": "bots: \"OpenBot service\"",
-    "reason": "upstream-shell-only: upstream Desktop shell only, kept in sync with desktop/src/partNames.ts (desktop-part-names.test.ts holds the two equal)",
-    "category": "upstream-shell-only",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/desktop/open-requests.ts",
-    "text": "\"openbot:open\"",
-    "reason": "persisted-identifier: event name the upstream desktop emits",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "app/src/lib/voice/transcript.ts",
     "text": "\"openbot-voice-context\"",
     "reason": "persisted-identifier: context item id the agent side matches",
@@ -87,13 +38,6 @@
     "file": "app/src/lib/voice/archive.ts",
     "text": "\"openbot-voice-chat\"",
     "reason": "persisted-identifier: activity type id stored with archived voice chats",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/lib/notifications/show.ts",
-    "text": "\"plugin:openbot-desktop|notify\"",
-    "reason": "persisted-identifier: Tauri plugin command the upstream desktop registers",
     "category": "persisted-data",
     "plan": "keep"
   },
@@ -756,13 +700,6 @@
     "plan": "keep"
   },
   {
-    "file": "shared/desktop-updates.ts",
-    "text": "This version of OpenBot doesn't update itself.",
-    "reason": "upstream-shell-only: drawn only inside upstream Desktop; desktop/src/App.test.tsx (never touched) pins the exact words",
-    "category": "upstream-shell-only",
-    "plan": "keep"
-  },
-  {
     "file": "shared/learning.ts",
     "text": "AUTOMATIC_LEARNING_CONTAINER_ID = \"openbot\"",
     "reason": "persisted-identifier: Learning container id already created in Intelligence projects",
@@ -1008,7 +945,7 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/desktop-connection-failure.ts",
+    "file": "server/src/model-connection.ts",
     "text": "\"OPENBOT_MODEL_AUTH_REQUIRED\"",
     "reason": "persisted-identifier: 对端发送，服务器出口改名（Task 9）",
     "category": "peer-protocol",
@@ -1181,12 +1118,5 @@
     "reason": "developer-only: development override variable read by the device shell, L1-20 (Task 13)",
     "category": "operator-visible",
     "plan": "rewrite"
-  },
-  {
-    "file": "shared/desktop-control.ts",
-    "text": "\"openbot-desktop\",",
-    "reason": "persisted-identifier: 桌面端自己的可执行文件名（desktop/src-tauri 的 Cargo bin，Mac 和 Windows 上的进程名），用来把桌面端自己的窗口挡在员工的无询问写之外；不是旧名，不到期",
-    "category": "persisted-data",
-    "plan": "keep"
   }
 ]

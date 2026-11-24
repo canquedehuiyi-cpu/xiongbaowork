@@ -7,7 +7,7 @@ import { LEGACY_PREFIX, NEW_PREFIX } from "../../shared/env-aliases";
  *
  * Their senders are the peers: the Python harnesses, the toolkit, and the server's own wrappers
  * around a provider and a learning endpoint. They keep sending the old prefix, so a harness synced
- * from upstream never conflicts, and the server's readers (`desktop-connection-failure.ts`,
+ * from upstream never conflicts, and the server's readers (`model-connection.ts`,
  * `agents/plan-model.ts`, `agents/provider-refusal.ts`) keep reading it, because they sit before the
  * rename. The prefix changes only on the way out to the browser, which shows the code in its
  * developer tools and never branches on it.
@@ -15,7 +15,7 @@ import { LEGACY_PREFIX, NEW_PREFIX } from "../../shared/env-aliases";
  * Only these. An approval's version string (`…APPROVAL_EXACT_*_V1`, `…EXACT_INPUT_JSON_V1`) is bound
  * into ciphertext and database constraints and is never renamed, and it is not a `RUN_ERROR` code.
  *
- * `MODEL_AUTH_REQUIRED` is listed too: the desktop's own reader (`desktop-connection-failure.ts`) and
+ * `MODEL_AUTH_REQUIRED` is listed too: the model-connection observation (`model-connection.ts`) and
  * the provider wrapper (`agents/provider-refusal.ts`) read the old code before this rename, so what
  * the browser is sent can carry the new one.
  */

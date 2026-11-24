@@ -4,10 +4,6 @@ import { EventSchemas } from "@ag-ui/core/schemas";
 import type { BuiltInAgentClassicConfig } from "@copilotkit/runtime/v2";
 import { PLAN_RUN_COMPLETED } from "@openbot/toolkit/copilotkit/agents";
 import type { Subscription } from "rxjs";
-import {
-  clearDesktopConnectionFailure,
-  recordDesktopConnectionFailure,
-} from "../desktop-connection-failure";
 
 // Use the model contract of the runtime we actually ship, without a second AI SDK version.
 export type PlanLanguageModel = Extract<
@@ -444,10 +440,6 @@ export class PlanModel implements PlanLanguageModel {
                     if (event.code) Object.assign(error, { code: event.code });
                     if (event.code === "OPENBOT_MODEL_AUTH_REQUIRED") {
                       error.name = "OpenBotModelAuthenticationError";
-                      recordDesktopConnectionFailure({
-                        connection: "model",
-                        code: "provider_authentication_failed",
-                      });
                     }
                     throw error;
                   }
@@ -461,7 +453,6 @@ export class PlanModel implements PlanLanguageModel {
                     this.pendingTools = [...calls.values()].map(
                       (call) => call.name,
                     );
-                    clearDesktopConnectionFailure("model");
                     controller.enqueue({
                       type: "finish",
                       finishReason: {

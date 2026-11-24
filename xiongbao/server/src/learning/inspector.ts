@@ -1,8 +1,4 @@
 import { z } from "zod";
-import {
-  clearDesktopConnectionFailure,
-  recordDesktopConnectionFailure,
-} from "../desktop-connection-failure";
 
 /** The longest the overview waits for the Inspector panel: the runtime client's own limit. */
 const TIMEOUT_MS = 5_000;
@@ -91,18 +87,11 @@ export function createInspectorLearningReader(
   ): Promise<InspectorLearning> => {
     let response = await get(input, true);
     if (response.status === 400) response = await get(input, false);
-    // The same account of the key as every other Intelligence call (intelligence-client.ts).
-    if (response.status === 401)
-      recordDesktopConnectionFailure({
-        connection: "intelligence",
-        code: "intelligence_authentication_failed",
-      });
     if (!response.ok)
       throw new InspectorLearningError(
         `The back end's Learning inspector answered ${response.status}`,
         response.status,
       );
-    clearDesktopConnectionFailure("intelligence");
     const parsed = snapshotSchema.safeParse(
       await response.json().catch(() => null),
     );

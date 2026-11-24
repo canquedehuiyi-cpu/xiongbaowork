@@ -8,16 +8,12 @@
  * providers that answer as the real ones do: their captured listings for the right credential, and
  * a 401 for anything else. A Google or xAI sign-in goes through OpenBot's real sign-in proxy.
  */
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Hono } from "hono";
 import { runtimeModelForEnvironment } from "../src/copilot";
-import {
-  clearDesktopConnectionFailure,
-  mountDesktopConnectionFailure,
-} from "../src/desktop-connection-failure";
 import { createModelCatalogue } from "../src/model-catalogue";
 import {
   createProviderOAuthProxy,
@@ -170,10 +166,8 @@ async function providers(behaviour: Behaviour) {
 }
 
 const cleanup: (() => Promise<void>)[] = [];
-beforeEach(() => clearDesktopConnectionFailure("model"));
 afterEach(async () => {
   for (const dispose of cleanup.splice(0)) await dispose();
-  clearDesktopConnectionFailure("model");
 });
 
 /** OpenBot's sign-in proxy, as the server mounts it, over a signed-in record on disk. */
@@ -205,7 +199,6 @@ async function signInProxy(
     app,
     createProviderOAuthProxy(file, { fetch: upstream }),
   );
-  mountDesktopConnectionFailure(app, "host-token");
   return { app, file };
 }
 
@@ -243,14 +236,7 @@ async function catalogueFor(
     }) as typeof fetch,
   });
   const read = await catalogue.read();
-  const failure = proxy
-    ? await (
-        await proxy.app.request("/api/desktop/connection-failure", {
-          headers: { "x-openbot-desktop-host-token": "host-token" },
-        })
-      ).json()
-    : null;
-  return { catalogue, read, asked: web.asked, lines, failure };
+  return { catalogue, read, asked: web.asked, lines };
 }
 
 const ids = (read: { models: { id: string }[] }) =>
@@ -361,7 +347,7 @@ describe("every sign-in the Desktop offers has a model to pick", () => {
   });
 
   test("a Google sign-in: Google's own listing, through OpenBot's sign-in proxy", async () => {
-    const { read, failure } = await catalogueFor(
+    const { read } = await catalogueFor(
       {
         OPENBOT_MODEL_OAUTH_FILE: "/ignored/by/this/test",
         OPENAI_API_KEY: PROXY_TOKEN,
@@ -375,7 +361,6 @@ describe("every sign-in the Desktop offers has a model to pick", () => {
     expect(read.source).toBe("google");
     expect(read.choosable).toBe(true);
     expect(ids(read)).toContain("gemini-3.8-flash");
-    expect(failure).toBeNull();
   });
 
   test("an xAI sign-in xAI lists models for: xAI's own listing, through the proxy", async () => {
@@ -397,11 +382,10 @@ describe("every sign-in the Desktop offers has a model to pick", () => {
 
   /*
    * Nothing documents xAI listing models for the Grok sign-in's token. Refused, the catalogue had the
-   * one model the Desktop wrote and no picker, and the proxy told the Desktop the sign-in had lapsed,
-   * which asked the person to sign in again over a sign-in that chats perfectly well.
+   * one model the Desktop wrote and no picker.
    */
-  test("an xAI sign-in xAI will not list models for: the sign-in's own models, and no false sign-in failure", async () => {
-    const { read, failure } = await catalogueFor(
+  test("an xAI sign-in xAI will not list models for: the sign-in's own models", async () => {
+    const { read } = await catalogueFor(
       {
         OPENAI_API_KEY: PROXY_TOKEN,
         OPENAI_BASE_URL: `${SERVER}/api/model-provider/v1`,
@@ -416,7 +400,6 @@ describe("every sign-in the Desktop offers has a model to pick", () => {
     expect(ids(read)).toEqual(["grok-4.7", "grok-4.3"]);
     // The model the Desktop set up stays the default.
     expect(read.default).toBe("grok-4.7");
-    expect(failure).toBeNull();
   });
 
   test("a Gemini API key on Google's OpenAI-compatible endpoint", async () => {

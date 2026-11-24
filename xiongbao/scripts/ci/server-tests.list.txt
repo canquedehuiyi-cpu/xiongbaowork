@@ -394,7 +394,6 @@ tests/demoted-admin-writes.test.ts
 tests/deployment-frames.test.ts
 tests/deployment-model-metering.test.ts
 tests/deployment-route-bot-end-to-end.test.ts
-tests/desktop-connection-failure.test.ts
 tests/desktop-gateway.test.ts
 tests/desktop-session.test.ts
 tests/desktop-tools.integration.test.ts
@@ -590,6 +589,7 @@ tests/model-catalogue-frame.integration.test.ts
 tests/model-catalogue.test.ts
 tests/model-choice-harness.test.ts
 tests/model-choice.integration.test.ts
+tests/model-connection.test.ts
 tests/model-e2e-reconcile.test.ts
 tests/model-e2e-repeat-pairs-workflow.test.ts
 tests/model-e2e-workflow.test.ts
