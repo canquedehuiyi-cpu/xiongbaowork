@@ -1,15 +1,15 @@
 import {
-  LOCAL_LEARNING_SKIPPED,
-  type LocalLearningOverview,
-  type LocalSkillCandidateSummary,
-} from "@openbot/shared/local-learning";
-import {
   IconChevronRight,
   IconHistory,
   IconMessages,
   IconSparkles,
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import {
+  LOCAL_LEARNING_SKIPPED,
+  type LocalLearningOverview,
+  type LocalSkillCandidateSummary,
+} from "@xiongbao/shared/local-learning";
 import { Fragment, useId, useState } from "react";
 import {
   PageEmpty,

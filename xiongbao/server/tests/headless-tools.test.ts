@@ -6,8 +6,9 @@ import {
   HttpAgent,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { HeadlessToolsMiddleware } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolsMiddleware } from "@xiongbao/toolkit/headless-tools";
 import { Observable } from "rxjs";
+import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { parseApprovalContinuation } from "../src/approvals/types";
 import type { AuditEventInput } from "../src/audit";
 import { botSeat } from "../src/computer/computer-key";
@@ -17,7 +18,6 @@ import {
 } from "../src/computer/gateway";
 import * as headless from "../src/computer/headless-tools";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
-import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { runAsTenant } from "../src/tenant/context";
 import { fetchDouble } from "./support/fetch-double";
 

@@ -1,10 +1,3 @@
-import type {
-  LearningAutoAssignState,
-  LearningProposal,
-  LearningRunSummary,
-  LearningSettings,
-  LearningTarget,
-} from "@openbot/shared/learning";
 import {
   IconChevronRight,
   IconHistory,
@@ -12,6 +5,13 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
+import type {
+  LearningAutoAssignState,
+  LearningProposal,
+  LearningRunSummary,
+  LearningSettings,
+  LearningTarget,
+} from "@xiongbao/shared/learning";
 import { Fragment, useId, useState } from "react";
 import {
   PeopleProposalsSection,

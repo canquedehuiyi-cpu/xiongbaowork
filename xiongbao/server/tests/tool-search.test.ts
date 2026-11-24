@@ -7,14 +7,14 @@ import {
   type RunAgentInput,
 } from "@ag-ui/client";
 import { LLMock } from "@copilotkit/aimock";
-import { MODEL_TOOL_LIMIT } from "@openbot/shared/model-tool-limit";
-import { ownToolLabel } from "@openbot/shared/tool-name";
+import { MODEL_TOOL_LIMIT } from "@xiongbao/shared/model-tool-limit";
+import { ownToolLabel } from "@xiongbao/shared/tool-name";
 import {
   RUNTIME_STATE_TOOLS,
   TOOL_LIMIT_EXCEEDED,
   toolNamesSent,
-} from "@openbot/toolkit/copilotkit/agents";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+} from "@xiongbao/toolkit/copilotkit/agents";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import { lastValueFrom, toArray } from "rxjs";
 import { z } from "zod";
 import {

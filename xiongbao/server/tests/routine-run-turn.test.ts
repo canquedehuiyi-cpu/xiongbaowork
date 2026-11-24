@@ -2,20 +2,20 @@ import { describe, expect, test } from "bun:test";
 import type { Message } from "@ag-ui/client";
 import { AbstractAgent, EventType } from "@ag-ui/client";
 import {
-  HeadlessToolSuspension,
-  OPENBOT_WAITING_METADATA,
-} from "@openbot/toolkit/headless-tools";
-import {
   DECLINED_BY_PERSON,
   NOT_RUN_WHILE_WAITING,
-} from "@openbot/shared/approval-outcomes";
-import type { TurnAdmission } from "@openbot/toolkit/ports";
+} from "@xiongbao/shared/approval-outcomes";
+import {
+  HeadlessToolSuspension,
+  OPENBOT_WAITING_METADATA,
+} from "@xiongbao/toolkit/headless-tools";
+import type { TurnAdmission } from "@xiongbao/toolkit/ports";
 import {
   createTurnRunner,
   drawnComponents,
   frameFiring,
   sanitizeSeededHistory,
-} from "@openbot/toolkit/run-turn";
+} from "@xiongbao/toolkit/run-turn";
 import { EMPTY } from "rxjs";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { HEADLESS_COMPONENTS } from "../src/components/headless";

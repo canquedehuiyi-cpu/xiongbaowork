@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import type { AgentActor } from "../src/agents/profile-types";
 import type {
   AgentChannel,
   ChannelActivity,
   ChannelStore,
 } from "../src/channels/routes";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { QuotaExceeded } from "../src/quota/limits";
 import { createRoutineRunner } from "../src/routines/runner";
 import type {

@@ -28,7 +28,7 @@ import {
 import { homedir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { type Zippable, zipSync } from "fflate";
 import { verifyDist } from "./verify-dist";
 

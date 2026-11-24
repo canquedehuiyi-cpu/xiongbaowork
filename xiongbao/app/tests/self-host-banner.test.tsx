@@ -7,9 +7,9 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { UserPreferences } from "@openbot/shared/user-preferences";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import type { UserPreferences } from "@xiongbao/shared/user-preferences";
 import { SelfHostBanner } from "@/components/layout/self-host-banner";
 import { authKeys } from "@/lib/auth/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";

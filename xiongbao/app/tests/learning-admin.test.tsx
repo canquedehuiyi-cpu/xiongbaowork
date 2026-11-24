@@ -7,13 +7,6 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type {
-  LearningOverview,
-  LearningProposal,
-  LearningProposalDetail,
-  LearningRunSummary,
-  LearningSettings,
-} from "@openbot/shared/learning";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -22,6 +15,13 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import type {
+  LearningOverview,
+  LearningProposal,
+  LearningProposalDetail,
+  LearningRunSummary,
+  LearningSettings,
+} from "@xiongbao/shared/learning";
 import { queryClient } from "@/query-client";
 import { LearningPage, runPollInterval } from "@/routes/_authed/admin/learning";
 

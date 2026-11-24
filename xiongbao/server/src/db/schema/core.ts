@@ -1,4 +1,4 @@
-import type { StoredPreferences } from "@openbot/shared/user-preferences";
+import type { StoredPreferences } from "@xiongbao/shared/user-preferences";
 import { sql } from "drizzle-orm";
 import {
   boolean,

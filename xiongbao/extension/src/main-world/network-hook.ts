@@ -17,7 +17,7 @@ import {
   maskNetworkEvent,
   sanitiseForIntelligence,
   trimEvent,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import {
   type Channels,
   createChannels,

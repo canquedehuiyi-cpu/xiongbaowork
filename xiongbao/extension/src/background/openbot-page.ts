@@ -10,7 +10,7 @@ import {
   type RecorderPageMessage,
   type RecorderPageResult,
   type RecorderPageState,
-} from "@openbot/shared/recorder-page";
+} from "@xiongbao/shared/recorder-page";
 import type { ExternalToBackground, PageResponse } from "../protocol/messages";
 import { normaliseOpenBotOrigin } from "../shared/origin";
 import { currentConnection } from "./connection";

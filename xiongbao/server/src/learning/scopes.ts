@@ -1,7 +1,7 @@
 import type {
   LearningSettings,
   LearningSource,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import type { Edition } from "../edition";
 import { personalLearningContainerId } from "./personal-space";
 

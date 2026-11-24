@@ -20,10 +20,10 @@ import {
   ROLE_SCOPE_GUIDANCE,
   runModeGuidance,
   todayGuidance,
-} from "@openbot/shared/bot-prompt";
-import { defaultModelFor } from "@openbot/shared/model-providers";
-import { checklistNotice } from "@openbot/shared/run-notices";
-import { createTurnRunner } from "@openbot/toolkit/run-turn";
+} from "@xiongbao/shared/bot-prompt";
+import { defaultModelFor } from "@xiongbao/shared/model-providers";
+import { checklistNotice } from "@xiongbao/shared/run-notices";
+import { createTurnRunner } from "@xiongbao/toolkit/run-turn";
 import { EMPTY, lastValueFrom, Observable } from "rxjs";
 import { z } from "zod";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

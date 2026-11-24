@@ -6,12 +6,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { LAUNCHER_GLOBAL } from "@openbot/shared/openbot-browser";
+import { LAUNCHER_GLOBAL } from "@xiongbao/shared/openbot-browser";
 import {
   RECORDER_SIGNED_OUT,
   recorderPaths,
-} from "@openbot/shared/recorder-api";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-api";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import { installConnection } from "../src/background/connection";
 import { installLauncher } from "../src/background/launcher";

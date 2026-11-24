@@ -6,7 +6,7 @@ import {
   HttpAgent,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { Hono } from "hono";
 import { Observable } from "rxjs";
 import { serverTurnAdmission } from "../src/agents/turn-admission";

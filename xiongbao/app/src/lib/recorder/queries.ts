@@ -1,9 +1,9 @@
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type {
   RecorderConnectionsResponse,
   RecordingsPage,
-} from "@openbot/shared/recorder-api";
-import { recorderPaths } from "@openbot/shared/recorder-api";
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+} from "@xiongbao/shared/recorder-api";
+import { recorderPaths } from "@xiongbao/shared/recorder-api";
 import { BROWSER_CLOSED_POLL_MS, BROWSER_POLL_MS } from "@/lib/browser/queries";
 import { client } from "@/lib/client";
 import {

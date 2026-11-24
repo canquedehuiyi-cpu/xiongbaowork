@@ -3,7 +3,7 @@ import {
   DECLINED_BY_PERSON,
   HANDLED_BY_PERSON,
   NOT_RUN_WHILE_WAITING,
-} from "@openbot/shared/approval-outcomes";
+} from "@xiongbao/shared/approval-outcomes";
 import { browserStepDetails } from "../src/components/channels/browser-activity";
 import type { VisibleChatItem } from "../src/components/channels/chat-messages";
 import { groupToolSteps } from "../src/components/channels/tool-activity";

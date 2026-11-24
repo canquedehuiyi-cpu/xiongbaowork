@@ -7,7 +7,7 @@ import {
   type PersonalLearningSharing,
   type PersonalReview,
   type RecordingSkills,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { type AuditStore, recordAuditEvent } from "../audit";
@@ -18,6 +18,7 @@ import {
   type SkillApprovalStore,
   UnnamedSkillError,
 } from "./approvals";
+import type { LearningModelCalls } from "./model-endpoint";
 import {
   CANDIDATE_ID,
   type LearningManagement,
@@ -31,7 +32,6 @@ import {
   reviewProposal,
   runSummary,
 } from "./review";
-import type { LearningModelCalls } from "./model-endpoint";
 import type { LearningSettingsStore } from "./settings";
 import type { LearningSharingStore } from "./sharing";
 

@@ -4,7 +4,7 @@ import {
   MAX_FILE_BYTES,
   MAX_IMAGE_BYTES,
   namesNoFormat,
-} from "@openbot/shared/attachments";
+} from "@xiongbao/shared/attachments";
 import {
   and,
   eq,
@@ -19,6 +19,7 @@ import {
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AppVariables } from "../auth/guards";
+import { englishName } from "../brand";
 import type { Database } from "../db/client";
 import {
   attachments,
@@ -29,7 +30,6 @@ import {
 import { currentTenant, runAsTenant } from "../tenant/context";
 import { sniffMimeType } from "./attachment-mime";
 import type { StoredAttachment } from "./attachment-parts";
-import { englishName } from "../brand";
 
 function megabytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(0)}MB`;

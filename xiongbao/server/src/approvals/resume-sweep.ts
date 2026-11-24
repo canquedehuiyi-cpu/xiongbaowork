@@ -1,5 +1,5 @@
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { headlessTurnRefusal } from "../admin/controls";

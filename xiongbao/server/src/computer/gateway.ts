@@ -20,21 +20,21 @@
  * The refs are opaque to the caller precisely so that the server holds the mapping.
  */
 
-import { DECLINED_BY_PERSON } from "@openbot/shared/approval-outcomes";
+import { DECLINED_BY_PERSON } from "@xiongbao/shared/approval-outcomes";
 import type {
   ControlRequestInput,
   RequestHelpInput,
   RequestHelpSource,
-} from "@openbot/shared/computer-control";
+} from "@xiongbao/shared/computer-control";
 // --- desktop control (sub-project 2) ---
 import {
   type DesktopSnapshot,
   type DesktopWindow,
   desktopActionWordsOf,
   snapshotForStorage,
-} from "@openbot/shared/desktop-control";
-import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+} from "@xiongbao/shared/desktop-control";
+import { isPersonBrowserId } from "@xiongbao/shared/openbot-browser";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import type { TurnArtifact } from "../../../shared/turn-artifacts";
 import { HEADER } from "../../../shared/wire-headers";
 // --- app discovery (sub-project 3) ---

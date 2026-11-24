@@ -1,5 +1,5 @@
-import { outcomeForPerson } from "@openbot/shared/approval-outcomes";
 import { useQuery } from "@tanstack/react-query";
+import { outcomeForPerson } from "@xiongbao/shared/approval-outcomes";
 import { z } from "zod";
 import { ToolLine } from "@/components/channels/tool-line";
 import { ComputerView } from "@/components/computer/computer-view";

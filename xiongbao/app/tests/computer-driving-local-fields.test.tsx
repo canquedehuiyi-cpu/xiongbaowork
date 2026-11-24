@@ -1,12 +1,12 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  type BotBrowserApiState,
-  botBrowserApiPaths,
-} from "@openbot/shared/bot-browser";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  type BotBrowserApiState,
+  botBrowserApiPaths,
+} from "@xiongbao/shared/bot-browser";
 import { useState } from "react";
 import { BotRecordPanel } from "@/components/computer/bot-browser";
 import { LiveScreen } from "@/components/computer/live-screen";

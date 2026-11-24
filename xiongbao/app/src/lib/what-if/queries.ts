@@ -1,5 +1,5 @@
-import type { WhatIfVocabulary } from "@openbot/shared/what-if";
 import { queryOptions } from "@tanstack/react-query";
+import type { WhatIfVocabulary } from "@xiongbao/shared/what-if";
 import { client } from "@/lib/client";
 
 export const whatIfKeys = {

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { connectAppRefusal } from "@xiongbao/shared/connect-prompt";
 import {
   and,
   asc,
@@ -25,6 +26,7 @@ import {
   type AuditStore,
   recordAuditEvent,
 } from "../audit";
+import { englishName } from "../brand";
 import {
   type ActionPolicy,
   evaluateActionPolicy,
@@ -98,6 +100,8 @@ import {
   ServerUnresolvableError,
   toolkitOfFor,
 } from "./access";
+import { accountArgumentFor } from "./account-argument";
+import { appAccessMethods, type SharedAudienceCheck } from "./app-access-store";
 import { createArcadeAttempts } from "./arcade-attempts";
 import {
   type BrokerConnection,
@@ -111,6 +115,11 @@ import {
   schemeKind,
 } from "./broker";
 import {
+  type BrokeredAccountRecord,
+  createAccountBook,
+  type PinnedAccount,
+} from "./brokered-accounts";
+import {
   type CatalogueEntry,
   type CredentialPlacement,
   catalogueEntry,
@@ -122,28 +131,6 @@ import {
   resolveServerUrl,
   serverCredentialKind,
 } from "./catalogue";
-import { accountArgumentFor } from "./account-argument";
-import {
-  type AccountMode,
-  type AccountRef,
-  accountFor,
-  filedUnderPerson,
-} from "./shared-accounts";
-import { underOwnName, type VendorNameOf } from "./single-user-identity";
-import { withVendorDeadline } from "./vendor-deadline";
-import { grantedByOwner, ownerStillGives } from "./owner-grants";
-import { steeringOf } from "./shared-use";
-import {
-  canonicalBrokeredUrl,
-  type SharedUseGate,
-  sharedUseAppLockKey,
-} from "./shared-use-store";
-import { appAccessMethods, type SharedAudienceCheck } from "./app-access-store";
-import {
-  type BrokeredAccountRecord,
-  createAccountBook,
-  type PinnedAccount,
-} from "./brokered-accounts";
 import {
   asksForArguments,
   askAction as composioAskAction,
@@ -171,11 +158,24 @@ import {
 } from "./entra-access";
 import { type ListedTool, McpServerError } from "./mcp";
 import { registerDynamicClient } from "./oauth";
+import { grantedByOwner, ownerStillGives } from "./owner-grants";
 import { shareTargetOf } from "./share-target";
-import { connectAppRefusal } from "@openbot/shared/connect-prompt";
+import {
+  type AccountMode,
+  type AccountRef,
+  accountFor,
+  filedUnderPerson,
+} from "./shared-accounts";
+import { steeringOf } from "./shared-use";
+import {
+  canonicalBrokeredUrl,
+  type SharedUseGate,
+  sharedUseAppLockKey,
+} from "./shared-use-store";
+import { underOwnName, type VendorNameOf } from "./single-user-identity";
 import { withReadRetries } from "./transient";
 import { type TransportKind, transportFor } from "./transport";
-import { englishName } from "../brand";
+import { withVendorDeadline } from "./vendor-deadline";
 
 /**
  * Plugins: what this deployment has added, which Bots may use it, and the one path a call takes.

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { connectAppRefusal } from "@openbot/shared/connect-prompt";
+import { connectAppRefusal } from "@xiongbao/shared/connect-prompt";
 import type { VisibleChatItem } from "../src/components/channels/chat-messages";
 import { groupToolSteps } from "../src/components/channels/tool-activity";
 import { REFUSAL_MARKER } from "../src/lib/plugins/tool-result";

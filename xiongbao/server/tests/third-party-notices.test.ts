@@ -126,23 +126,23 @@ describe("third-party notices", () => {
 
   test("follows a workspace package's dependencies without listing the workspace itself", () => {
     const root = join(temp, "d");
-    // @openbot/shared and @openbot/toolkit are linked into node_modules from source outside it.
+    // @xiongbao/shared and @xiongbao/toolkit are linked into node_modules from source outside it.
     for (const [dir, manifest] of [
-      ["shared", { name: "@openbot/shared", dependencies: { zod: "^4" } }],
+      ["shared", { name: "@xiongbao/shared", dependencies: { zod: "^4" } }],
       [
         "toolkit",
         {
-          name: "@openbot/toolkit",
-          dependencies: { "@openbot/shared": "workspace:*", rxjs: "7" },
+          name: "@xiongbao/toolkit",
+          dependencies: { "@xiongbao/shared": "workspace:*", rxjs: "7" },
         },
       ],
     ] as const) {
       mkdirSync(join(root, dir), { recursive: true });
       writeFileSync(join(root, dir, "package.json"), JSON.stringify(manifest));
-      mkdirSync(join(root, "node_modules", "@openbot"), { recursive: true });
+      mkdirSync(join(root, "node_modules", "@xiongbao"), { recursive: true });
       symlinkSync(
         join(root, dir),
-        join(root, "node_modules", "@openbot", dir),
+        join(root, "node_modules", "@xiongbao", dir),
         "dir",
       );
     }
@@ -152,7 +152,7 @@ describe("third-party notices", () => {
 
     const notices = collectThirdPartyNotices({
       roots: [join(root, "node_modules")],
-      dependencies: ["@openbot/toolkit"],
+      dependencies: ["@xiongbao/toolkit"],
     });
 
     expect(notices.map((n) => `${n.name}@${n.version}:${n.license}`)).toEqual([

@@ -2,12 +2,12 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import {
   RECORDER_SIGNED_OUT,
   type TrajectoryGrant,
-} from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import type {
   CapturedEvent,
   JsonValue,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import {
   classifyGrantError,

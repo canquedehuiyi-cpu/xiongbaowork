@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type {
   RecordingEnded,
   RecordingRow,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import {
   createRecordings,
   fetchTrajectorySummaries,

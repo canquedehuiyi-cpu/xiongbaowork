@@ -3,7 +3,7 @@ import {
   CopilotKitIntelligence,
   LearnedSkillsError,
 } from "@copilotkit/runtime/v2";
-import type { LearningSettings } from "@openbot/shared/learning";
+import type { LearningSettings } from "@xiongbao/shared/learning";
 import {
   clearLearningRevisionFallback,
   createLearningRuntime,

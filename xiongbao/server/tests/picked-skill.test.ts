@@ -9,7 +9,7 @@ import {
 } from "bun:test";
 import { HttpAgent, type Message, type RunAgentInput } from "@ag-ui/client";
 import { LLMock } from "@copilotkit/aimock";
-import { turnInput } from "@openbot/toolkit/run-turn";
+import { turnInput } from "@xiongbao/toolkit/run-turn";
 import { of } from "rxjs";
 import { z } from "zod";
 import {

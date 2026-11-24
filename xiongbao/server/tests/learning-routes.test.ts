@@ -3,7 +3,7 @@ import type {
   LearnedSkillContent,
   LearningOverview,
   LearningProposalDetail,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import type { MiddlewareHandler } from "hono";
 import type { AuditEventInput } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";

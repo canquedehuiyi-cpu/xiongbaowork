@@ -2,7 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   RECORDER_SIGNED_OUT,
   TRAJECTORY_GATE_REFUSALS,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
+import { reservePort } from "../../tests/support/reserved-port";
 import {
   classifyGrantError,
   fetchGrant,
@@ -10,7 +11,6 @@ import {
   type GrantVerdict,
   PASS_HINTS,
 } from "../src/offscreen/grant";
-import { reservePort } from "../../tests/support/reserved-port";
 
 const BUSY = "The server is busy or unreachable. Retrying; nothing is lost.";
 const MARKETPLACE =

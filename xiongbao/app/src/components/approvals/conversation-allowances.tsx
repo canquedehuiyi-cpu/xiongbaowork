@@ -1,6 +1,6 @@
-import { approvalPhrase } from "@openbot/shared/tool-name";
 import { IconCircleCheck } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { approvalPhrase } from "@xiongbao/shared/tool-name";
 import { Button } from "@/components/ui/button";
 import {
   type ActionKind,

@@ -2,9 +2,9 @@ import { describe, expect, spyOn } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import type { AbstractAgent, BaseEvent } from "@ag-ui/client";
-import { answeredBy, answerMessageId } from "@openbot/shared/handoff-markers";
-import { IntelligenceKnowingANewThread } from "@openbot/toolkit/copilotkit/agents";
-import { createIntelligenceThreadLock } from "@openbot/toolkit/copilotkit/thread-lock";
+import { answeredBy, answerMessageId } from "@xiongbao/shared/handoff-markers";
+import { IntelligenceKnowingANewThread } from "@xiongbao/toolkit/copilotkit/agents";
+import { createIntelligenceThreadLock } from "@xiongbao/toolkit/copilotkit/thread-lock";
 import { and, eq, gte, like, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { z } from "zod";
@@ -15,11 +15,11 @@ import {
   type ThreadRunner,
 } from "../src/agents/handoff-delivery";
 import { createHandoffRunner } from "../src/agents/handoff-runner";
-import { answerGoneFrom, botNamesFrom } from "../src/agents/handoff-wiring";
 import {
   createCoordinationTools,
   handoffTool,
 } from "../src/agents/handoff-tool";
+import { answerGoneFrom, botNamesFrom } from "../src/agents/handoff-wiring";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { createAuditStore } from "../src/audit";
@@ -38,8 +38,8 @@ import {
   workItems,
 } from "../src/db/schema";
 import { observeIntelligenceAuthentication } from "../src/intelligence-client";
-import { loadTenantPackage } from "../src/tenant-package";
 import { runAsTenant } from "../src/tenant/context";
+import { loadTenantPackage } from "../src/tenant-package";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import {

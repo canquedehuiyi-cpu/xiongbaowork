@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import type {
   BrowserChallenge,
   ComputerControlState,
-} from "@openbot/shared/computer-control";
+} from "@xiongbao/shared/computer-control";
 import type { MiddlewareHandler } from "hono";
 import type { AppVariables } from "../src/auth/guards";
 import { createComputerGateway } from "../src/computer/gateway";

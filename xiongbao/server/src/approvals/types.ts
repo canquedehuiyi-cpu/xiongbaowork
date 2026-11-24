@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
-import { approvalPhrase } from "@openbot/shared/tool-name";
+import { approvalPhrase } from "@xiongbao/shared/tool-name";
 import {
   type ApprovalContinuation,
   currentApprovalContext,
   outsideApprovalContext,
   withApprovalContext,
-} from "@openbot/toolkit/continuation";
+} from "@xiongbao/toolkit/continuation";
 import type { ApprovalVia } from "../../../shared/approval-via";
 import type { AuditEventInput, AuditInitiator } from "../audit";
 import { cutAtCodeUnits } from "../channels/text";
@@ -683,7 +683,7 @@ export type ApprovalStore = {
   policy?: ApprovalPolicyStore;
 };
 /** Whether an approval may be answered with "Always allow here". Shared with the browser. */
-export { offersStandingRule } from "@openbot/shared/standing-rule";
+export { offersStandingRule } from "@xiongbao/shared/standing-rule";
 export class ApprovalRefusedError extends Error {
   constructor(message: string) {
     super(message);

@@ -1,5 +1,3 @@
-import { offersStandingRule } from "@openbot/shared/standing-rule";
-import { approvalDetails, approvalWords } from "@openbot/shared/tool-name";
 import {
   IconDots,
   IconHandStop,
@@ -8,6 +6,8 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { offersStandingRule } from "@xiongbao/shared/standing-rule";
+import { approvalDetails, approvalWords } from "@xiongbao/shared/tool-name";
 import { Fragment, type ReactNode, useState } from "react";
 import { BotOrb } from "@/components/agents/bot-orb";
 import { PageRows } from "@/components/layout/page-shell";

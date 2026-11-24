@@ -7,13 +7,13 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { environmentManager, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type {
   LocalLearningOverview,
   LocalSkillCandidateDetail,
   LocalSkillCandidateSummary,
-} from "@openbot/shared/local-learning";
-import { environmentManager, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+} from "@xiongbao/shared/local-learning";
 import { LocalLearningSection } from "@/components/settings/local-learning-section";
 import { queryClient } from "@/query-client";
 

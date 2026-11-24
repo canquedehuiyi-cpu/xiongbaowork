@@ -1,4 +1,4 @@
-import type { AuditFilters } from "@openbot/shared/audit-filters";
+import type { AuditFilters } from "@xiongbao/shared/audit-filters";
 import { client } from "@/lib/client";
 
 /** The names the server resolved for the values in a set of filters, so a chip reads as a name. */

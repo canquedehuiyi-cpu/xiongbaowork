@@ -18,7 +18,7 @@ import {
   declaredHarness,
   harnessForImage,
   OPENBOT_HARNESS_NAME,
-} from "@openbot/shared/harnesses";
+} from "@xiongbao/shared/harnesses";
 import { englishName } from "../brand";
 
 /**

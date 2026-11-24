@@ -7,10 +7,6 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type {
-  LearnedSkillDetail,
-  PersonalLearningSharing,
-} from "@openbot/shared/learning";
 import { environmentManager, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -27,6 +23,10 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import type {
+  LearnedSkillDetail,
+  PersonalLearningSharing,
+} from "@xiongbao/shared/learning";
 import { LearningSharing } from "@/components/settings/learning-sharing";
 import { readableSkillBody, skillTitle } from "@/lib/learning/display";
 import { queryClient } from "@/query-client";

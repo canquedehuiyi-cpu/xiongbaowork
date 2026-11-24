@@ -4,7 +4,7 @@ import {
   Middleware,
   type RunAgentInput,
 } from "@ag-ui/client";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import { defer, from, type Observable, switchMap } from "rxjs";
 import { z } from "zod";
 import { type Edition, editionHasMemory } from "../edition";

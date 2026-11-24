@@ -656,7 +656,7 @@ function listsName(list: unknown, name: string): boolean {
  * WHY A CALL CAN CARRY ONE AT ALL. {@link listTools} removes such a parameter from the schema a
  * model is shown, and a model that follows the schema never sends it. Nothing makes it follow the
  * schema: Gmail's leaves other properties open, the built-in runtime's `parametersFor` (in
- * `@openbot/toolkit`) passes an open property straight through to the call, and a model that has
+ * `@xiongbao/toolkit`) passes an open property straight through to the call, and a model that has
  * seen Gmail's API elsewhere knows the parameter is called `attachment`. What it would put there is
  * the one value the parameter was removed for: a staging key it made up.
  *

@@ -20,7 +20,7 @@ import {
   type AuditIntent,
   appKey,
   RULE_REFUSAL_EVENT_TYPES,
-} from "@openbot/shared/audit-filters";
+} from "@xiongbao/shared/audit-filters";
 import { and, eq, inArray, or, type SQL, sql } from "drizzle-orm";
 import { auditEvents } from "./db/schema";
 

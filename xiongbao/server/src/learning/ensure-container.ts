@@ -30,7 +30,8 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
-import { intelligenceApiKey } from "@openbot/shared/intelligence-key";
+import { intelligenceApiKey } from "@xiongbao/shared/intelligence-key";
+import { englishName } from "../brand";
 import { transientStatus } from "../intelligence-startup";
 import {
   type ContainerProbe,
@@ -39,7 +40,6 @@ import {
   probeLearningContainer,
   runtimeKeyClient,
 } from "./auto-assign";
-import { englishName } from "../brand";
 
 export const MANAGED_API = "https://api.intelligence.copilotkit.ai";
 const SERVICE_TOKEN_HEADER = "x-copilotkit-ei-service-token";

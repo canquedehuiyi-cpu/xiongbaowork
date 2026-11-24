@@ -15,8 +15,8 @@
  * Bot are bound when the tools are built.
  */
 import { randomUUID } from "node:crypto";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { AuditInitiator, AuditStore } from "../audit";
@@ -460,7 +460,7 @@ export function wakeUpInstruction(payload: WakeUpPayload): string {
 
 export type WakeUpTurn = (input: {
   telemetry?: Parameters<
-    import("@openbot/toolkit/run-turn").TurnRunner
+    import("@xiongbao/toolkit/run-turn").TurnRunner
   >[0]["telemetry"];
   ownerUserId: string;
   /** The follow-up's own tenant, as stamped when it was scheduled: see `TurnRunner`. */

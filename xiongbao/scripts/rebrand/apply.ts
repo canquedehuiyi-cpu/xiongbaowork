@@ -17,12 +17,13 @@ import {
   renamePath,
   renameText,
   scopedFiles,
+  VARIANTS,
 } from "./rename-map";
 
 /*
  * 改名工具：对仓库根下指定路径里 `git ls-files` 的文件改内容并 `git mv` 改名。
  *
- *   bun xiongbao/scripts/rebrand/apply.ts --phase <R1..R4> [--dry-run] [--review-out <文件>] <路径...>
+ *   bun xiongbao/scripts/rebrand/apply.ts --phase <R1..R4> [--dry-run] [--review-out <文件>] [--only <变体源串>]... <路径...>
  *
  * 路径一律相对仓库根（`git rev-parse --show-toplevel`），与当前目录无关。标准输出一行 JSON：
  * { files, lines, moved, collisions, review, skippedBinary, errors }。
@@ -45,7 +46,7 @@ export type Report = {
 };
 
 const USAGE =
-  "用法: bun xiongbao/scripts/rebrand/apply.ts --phase <R1|R2|R3|R4> [--dry-run] [--review-out <文件>] <路径...>";
+  "用法: bun xiongbao/scripts/rebrand/apply.ts --phase <R1|R2|R3|R4> [--dry-run] [--review-out <文件>] [--only <变体源串>]... <路径...>";
 
 function fail(message: string, code = 2): never {
   process.stderr.write(`${message}\n`);
@@ -125,6 +126,7 @@ function parseArgs(argv: string[]) {
   let phase: Phase | undefined;
   let dryRun = false;
   let reviewOut: string | undefined;
+  const only: string[] = [];
   const paths: string[] = [];
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] as string;
@@ -137,12 +139,19 @@ function parseArgs(argv: string[]) {
     else if (arg === "--review-out") {
       reviewOut = argv[++i];
       if (!reviewOut) fail(`--review-out 缺文件名\n${USAGE}`);
+    } else if (arg === "--only") {
+      const value = argv[++i];
+      if (!value || !VARIANTS.some(([from]) => from === value))
+        fail(
+          `--only 要变体源串之一：${VARIANTS.map(([from]) => from).join(" ")}\n${USAGE}`,
+        );
+      only.push(value);
     } else if (arg.startsWith("--")) fail(`不认识的参数 ${arg}\n${USAGE}`);
     else paths.push(arg);
   }
   if (!phase) fail(`缺 --phase\n${USAGE}`);
   if (paths.length === 0) fail(`缺路径\n${USAGE}`);
-  return { phase: phase as Phase, dryRun, reviewOut, paths };
+  return { phase: phase as Phase, dryRun, reviewOut, only, paths };
 }
 
 /** 中途失败：说明已做到哪一步和怎么恢复，退出 1（工作区开跑前是干净的）。 */
@@ -166,7 +175,14 @@ function reportFailure(
 }
 
 function main() {
-  const { phase, dryRun, reviewOut, paths } = parseArgs(process.argv.slice(2));
+  const { phase, dryRun, reviewOut, only, paths } = parseArgs(
+    process.argv.slice(2),
+  );
+  // 默认全部变体；--only 只应用列出的，顺序仍按 VARIANTS。
+  const variants =
+    only.length === 0
+      ? VARIANTS
+      : VARIANTS.filter(([from]) => only.includes(from));
 
   let root: string;
   try {
@@ -246,7 +262,7 @@ function main() {
     const oldLines = text.split("\n");
     for (const line of oldLines)
       for (const id of identifiers(line)) before.add(id);
-    const renamed = renameText(text, protectFor(path));
+    const renamed = renameText(text, protectFor(path), variants);
     if (renamed === text) continue;
     const newLines = renamed.split("\n");
     let changed = 0;
@@ -276,7 +292,7 @@ function main() {
   const moves: Array<[string, string]> = [];
   const targets = new Set<string>();
   for (const path of inScope) {
-    const target = renamePath(path);
+    const target = renamePath(path, variants);
     if (target === path) continue;
     if (existsSync(join(root, target)) || targets.has(target)) {
       report.errors.push(`${path} -> ${target}: 目标已存在`);

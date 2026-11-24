@@ -17,15 +17,15 @@ import {
   EventType,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { answeredBy, answerMessageId } from "@openbot/shared/handoff-markers";
-import { THREAD_LOCK_TTL_SECONDS } from "@openbot/toolkit/copilotkit/thread-lock";
-import { keepLease } from "@openbot/toolkit/lease";
-import type { ThreadLock, TurnAdmission } from "@openbot/toolkit/ports";
+import { answeredBy, answerMessageId } from "@xiongbao/shared/handoff-markers";
+import { THREAD_LOCK_TTL_SECONDS } from "@xiongbao/toolkit/copilotkit/thread-lock";
+import { keepLease } from "@xiongbao/toolkit/lease";
+import type { ThreadLock, TurnAdmission } from "@xiongbao/toolkit/ports";
 import {
   observeDetachedRun,
   type PlatformRun,
   type StopRecorder,
-} from "@openbot/toolkit/run-stop";
+} from "@xiongbao/toolkit/run-stop";
 import { from, type Observable } from "rxjs";
 import { modelNamedIn, recordHeadlessModelUsage } from "../admin/controls";
 import type { AuditInitiator } from "../audit";
@@ -566,7 +566,8 @@ export function createHandoffDelivery(options: {
            * on its own hop, under its own card and its own charge — so it is neither gated on the
            * month, nor filed as a second card for the same question, nor recorded as model usage.
            */
-          if (!spoken) await quota?.assertCapacity(work.actorId, "tasksPerMonth");
+          if (!spoken)
+            await quota?.assertCapacity(work.actorId, "tasksPerMonth");
           /*
            * A HOP IS BOARD WORK, OPENED ONLY ONCE IT IS REALLY RUNNING.
            *

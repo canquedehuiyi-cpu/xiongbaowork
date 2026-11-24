@@ -1,9 +1,9 @@
+import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import type {
   LearningPersonalReview,
   LearningSettings,
   LearningSharingMode,
-} from "@openbot/shared/learning";
-import { mutationOptions, type QueryClient } from "@tanstack/react-query";
+} from "@xiongbao/shared/learning";
 import { client } from "@/lib/client";
 import { learningKeys } from "./queries";
 

@@ -8,7 +8,7 @@ import {
   type LearningTarget,
   type PeopleProposals,
   type SharingRequest,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import { type Context, Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { type AuditStore, recordAuditEvent } from "../audit";
@@ -31,8 +31,8 @@ import {
 } from "./review";
 import { type LearningSettingsStore, parseLearningSettings } from "./settings";
 
-export type { LearningManagement, LearningModelUnavailable };
 export { learningModelUnavailable } from "./review";
+export type { LearningManagement, LearningModelUnavailable };
 
 /** The longest the settings page waits for an automatic check before answering without it. */
 const AUTO_ASSIGN_WAIT_MS = 3_000;

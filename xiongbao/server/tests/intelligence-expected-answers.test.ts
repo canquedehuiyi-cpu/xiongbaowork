@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, spyOn, test } from "bun:test";
 import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
-import { IntelligenceKnowingANewThread } from "@openbot/toolkit/copilotkit/agents";
+import { IntelligenceKnowingANewThread } from "@xiongbao/toolkit/copilotkit/agents";
 import { createThreadReader } from "../src/channels/thread-status";
 import { loadConfig } from "../src/config";
 import { createIntelligenceClient } from "../src/intelligence-client";

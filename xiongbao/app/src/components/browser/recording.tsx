@@ -1,7 +1,3 @@
-import type {
-  BrowserApiState,
-  LauncherState,
-} from "@openbot/shared/openbot-browser";
 import {
   IconAlertTriangle,
   IconCircleCheck,
@@ -10,6 +6,10 @@ import {
   IconTrash,
 } from "@tabler/icons-react";
 import { type UseMutationOptions, useMutation } from "@tanstack/react-query";
+import type {
+  BrowserApiState,
+  LauncherState,
+} from "@xiongbao/shared/openbot-browser";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -256,7 +256,7 @@ export function stoppedRecording(
 export type Stopped = NonNullable<ReturnType<typeof stoppedRecording>>;
 
 /** What a recording holds, which the person can go by next time: the browser's own pages (a new tab, its settings)
- * and the sites they leave out are never recorded (@openbot/shared/recorder-disclosure says it in full). */
+ * and the sites they leave out are never recorded (@xiongbao/shared/recorder-disclosure says it in full). */
 const WHAT_IT_RECORDS =
   "录制期间，录制器会在你用到的每个标签页里记下你打开的网页、你在那里做的操作和每一步保存的内容，以及 AI 助手对话和你的讲解；你排除的网站除外。";
 

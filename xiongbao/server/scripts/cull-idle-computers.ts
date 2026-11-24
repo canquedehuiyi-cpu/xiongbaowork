@@ -11,7 +11,7 @@
  * losing anything, and a failing CronJob that pages somebody at 3am should mean something worse.
  */
 
-import { workOwner } from "@openbot/shared/work-owner";
+import { workOwner } from "@xiongbao/shared/work-owner";
 import { createComputerProvider } from "../src/computer/provider";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";

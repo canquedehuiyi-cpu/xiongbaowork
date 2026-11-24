@@ -7,9 +7,9 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { PersonalLearningSharing } from "@openbot/shared/learning";
 import { environmentManager, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import type { PersonalLearningSharing } from "@xiongbao/shared/learning";
 import {
   LearningSharing,
   SHARING_CHOICES,

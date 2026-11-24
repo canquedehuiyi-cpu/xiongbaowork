@@ -1,9 +1,9 @@
+import { IconChevronRight, IconSparkles } from "@tabler/icons-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
   LearningProposal,
   LearningRunSummary,
-} from "@openbot/shared/learning";
-import { IconChevronRight, IconSparkles } from "@tabler/icons-react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+} from "@xiongbao/shared/learning";
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   PageEmpty,

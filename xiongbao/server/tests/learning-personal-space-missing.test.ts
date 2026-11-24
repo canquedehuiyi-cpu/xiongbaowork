@@ -1,7 +1,7 @@
 import { afterEach, expect, spyOn, test } from "bun:test";
 import type { LearnedSkillsSnapshotResult } from "@copilotkit/runtime/v2";
-import type { LearningSettings } from "@openbot/shared/learning";
-import { IntelligenceKnowingANewThread } from "@openbot/toolkit/copilotkit/agents";
+import type { LearningSettings } from "@xiongbao/shared/learning";
+import { IntelligenceKnowingANewThread } from "@xiongbao/toolkit/copilotkit/agents";
 import { observeIntelligenceAuthentication } from "../src/intelligence-client";
 import { personalLearningContainerId as space } from "../src/learning/personal-space";
 import { createLearningRuntime } from "../src/learning/runtime";

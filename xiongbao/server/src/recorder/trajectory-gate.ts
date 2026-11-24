@@ -7,7 +7,7 @@ import {
   type LearningSpaceState,
   RECORDER_SIGNED_OUT,
   TRAJECTORY_GATE_REFUSALS,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import {
   type AuditStore,
   DEPLOYMENT_INITIATOR,

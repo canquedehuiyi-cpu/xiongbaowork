@@ -9,9 +9,9 @@ import {
   CopilotKitIntelligence,
   IntelligenceAgentRunner,
 } from "@copilotkit/runtime/v2";
-import { createIntelligenceThreadLock } from "@openbot/toolkit/copilotkit/thread-lock";
-import { stopRecorder } from "@openbot/toolkit/run-stop";
-import { createTurnRunner } from "@openbot/toolkit/run-turn";
+import { createIntelligenceThreadLock } from "@xiongbao/toolkit/copilotkit/thread-lock";
+import { stopRecorder } from "@xiongbao/toolkit/run-stop";
+import { createTurnRunner } from "@xiongbao/toolkit/run-turn";
 import { Observable, type Subscriber } from "rxjs";
 import { createHandoffDelivery } from "../src/agents/handoff-delivery";
 import { createIntelligenceClient } from "../src/intelligence-client";

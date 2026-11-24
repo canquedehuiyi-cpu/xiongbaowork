@@ -1,7 +1,7 @@
-import type { RecorderActivity } from "@openbot/shared/recorder-api";
 import { IconChalkboardTeacher } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import type { RecorderActivity } from "@xiongbao/shared/recorder-api";
 import type { ReactNode } from "react";
 import { SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 import { toast } from "@/components/ui/toast";

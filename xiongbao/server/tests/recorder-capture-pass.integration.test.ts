@@ -4,14 +4,14 @@ import {
   CopilotKitIntelligence,
   LearnedSkillsError,
 } from "@copilotkit/runtime/v2";
-import type { LearningSettings } from "@openbot/shared/learning";
+import type { LearningSettings } from "@xiongbao/shared/learning";
 import {
   type ExchangeResponse,
   isAllowedGatewayUrl,
   recorderPaths,
   type TrajectoryGrant,
-} from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { eq, inArray } from "drizzle-orm";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { createApp } from "../src/app";

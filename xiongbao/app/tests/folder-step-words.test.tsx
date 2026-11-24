@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { DECLINED_BY_PERSON } from "@openbot/shared/approval-outcomes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render } from "@testing-library/react";
+import { DECLINED_BY_PERSON } from "@xiongbao/shared/approval-outcomes";
 import { subjectText } from "../src/components/audit/audit-cells";
 import type { VisibleChatItem } from "../src/components/channels/chat-messages";
 import { ServerToolLine } from "../src/components/channels/chat-transcript";

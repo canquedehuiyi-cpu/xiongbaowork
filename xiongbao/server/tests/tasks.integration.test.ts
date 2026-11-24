@@ -7,8 +7,8 @@ import {
   type Message,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import { createTurnRunner, type RunnerLike } from "@openbot/toolkit/run-turn";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import { createTurnRunner, type RunnerLike } from "@xiongbao/toolkit/run-turn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { Observable } from "rxjs";
@@ -740,7 +740,12 @@ describe("where a task stands", () => {
     // A standing rule would be ignored by the next task, so none is saved from one: once, or no.
     await expect(
       asOwner(owner, () =>
-        approvalService.decide(owner.id, waiting[0]?.id ?? "", "allow_always", "web"),
+        approvalService.decide(
+          owner.id,
+          waiting[0]?.id ?? "",
+          "allow_always",
+          "web",
+        ),
       ),
     ).rejects.toThrow(
       "Tasks started from a check-in ask before every change. Allow this once, or deny it.",

@@ -12,8 +12,8 @@ import {
   HttpAgent,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { FIRING_FRAME } from "@openbot/shared/routine-firing";
-import { createTurnRunner, type RunnerLike } from "@openbot/toolkit/run-turn";
+import { FIRING_FRAME } from "@xiongbao/shared/routine-firing";
+import { createTurnRunner, type RunnerLike } from "@xiongbao/toolkit/run-turn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import { Observable } from "rxjs";
@@ -29,9 +29,9 @@ import { deliveryOutbox } from "../src/db/schema/delivery";
 import { botLifecycle } from "../src/db/schema/lifecycle";
 import { mcpServers, mcpTools } from "../src/db/schema/plugins";
 import {
+  proactiveCheckInRuns,
   proactivePeople,
   proactivePings,
-  proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
 } from "../src/db/schema/proactive";
@@ -59,9 +59,9 @@ import {
   type ProactiveSetting,
 } from "../src/proactive/types";
 import { CHECK_IN_OPENING } from "../src/proactive/window";
+import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-import { runAsTenant } from "../src/tenant/context";
 import { afterAll } from "./support/platform-frame";
 
 /*

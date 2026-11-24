@@ -1,7 +1,7 @@
 import type { Message } from "@ag-ui/client";
-import { routineParts } from "@openbot/shared/routine-checklist";
-import { readFiring } from "@openbot/shared/routine-firing";
-import { checklistNotice } from "@openbot/shared/run-notices";
+import { routineParts } from "@xiongbao/shared/routine-checklist";
+import { readFiring } from "@xiongbao/shared/routine-firing";
+import { checklistNotice } from "@xiongbao/shared/run-notices";
 
 /**
  * The checklist a routine's run carries, read from the firing it is answering.

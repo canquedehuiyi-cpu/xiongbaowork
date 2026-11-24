@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { approvalPhrase, approvalWords } from "@openbot/shared/tool-name";
+import { approvalPhrase, approvalWords } from "@xiongbao/shared/tool-name";
 import { type ApprovalCandidate, targetSubject } from "../src/approvals/types";
 import { createHostAccessBroker } from "../src/host-access/broker";
 import { hostAccessTools } from "../src/host-access/tools";

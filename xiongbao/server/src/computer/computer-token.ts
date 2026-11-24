@@ -12,7 +12,7 @@
  * and can read what that computer's process is sent, so a call carrying the deployment's token would
  * hand the Bot the key the derivation exists to keep from it. Every call to a computer asks here.
  */
-import { computerTokenFor } from "@openbot/shared/computer-token";
+import { computerTokenFor } from "@xiongbao/shared/computer-token";
 import type { ComputerKey } from "./computer-key";
 import type { ComputerProvider } from "./provider";
 

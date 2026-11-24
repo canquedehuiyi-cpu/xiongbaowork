@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import type { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
-import type { LearningSettings } from "@openbot/shared/learning";
-import type { LearningSpaceState } from "@openbot/shared/recorder-api";
+import type { LearningSettings } from "@xiongbao/shared/learning";
+import type { LearningSpaceState } from "@xiongbao/shared/recorder-api";
 import { eq } from "drizzle-orm";
+import { englishName } from "../brand";
 import type { Database } from "../db/client";
 import { learningPersonSpaces } from "../db/schema/learning";
 import type { LearningContainerSpec } from "./ensure-container";
-import { englishName } from "../brand";
 
 /**
  * A person's own Learning space: one Intelligence Learning container per OpenBot person, which every recording they make

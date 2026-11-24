@@ -12,7 +12,7 @@ import {
   type CapturedEvent,
   normaliseSecret,
   sha256HexSync,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import type { AgentObservation } from "../src/background/agent/observation";
 import {
   createNetworkCapture,

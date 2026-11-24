@@ -742,20 +742,6 @@
     "plan": "keep"
   },
   {
-    "file": "mobile/package.json",
-    "text": "\"name\": \"openbot-mobile\"",
-    "reason": "persisted-identifier: internal package name (Global Constraints), private and never shown to users",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "mobile/package-lock.json",
-    "text": "\"name\": \"openbot-mobile\"",
-    "reason": "persisted-identifier: internal package name (Global Constraints), private and never shown to users",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "extension/src/shared/database.ts",
     "text": "\"openbot-recorder\"",
     "reason": "persisted-identifier: IndexedDB name of the recorder's kept events; installed extensions keep their data under it",

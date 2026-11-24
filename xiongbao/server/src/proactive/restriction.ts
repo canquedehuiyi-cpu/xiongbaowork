@@ -20,7 +20,7 @@
  * everybody.
  */
 
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import type { AuditInitiator } from "../audit";
 import { REFUSAL_MARKER } from "../plugins/tools";
 import { isProactiveInitiator } from "./initiator";

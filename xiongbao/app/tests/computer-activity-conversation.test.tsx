@@ -10,13 +10,13 @@ import type { Message, RunAgentInput } from "@ag-ui/core";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  DECLINED_BY_PERSON,
-  HANDLED_BY_PERSON,
-} from "@openbot/shared/approval-outcomes";
 import { type InfiniteData, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  DECLINED_BY_PERSON,
+  HANDLED_BY_PERSON,
+} from "@xiongbao/shared/approval-outcomes";
 import { ChannelChat } from "@/components/channels/channel-chat";
 import { ActivityLog } from "@/components/computer/activity-log";
 import { GALLERY as DECISIONS } from "@/components/gallery/decisions";

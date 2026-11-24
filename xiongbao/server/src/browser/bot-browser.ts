@@ -7,15 +7,15 @@ import {
   type BotBrowserState,
   botBrowserComputerPaths,
   botBrowserComputerRecordingRequestSchema,
-} from "@openbot/shared/bot-browser";
-import type { ComputerControlState } from "@openbot/shared/computer-control";
+} from "@xiongbao/shared/bot-browser";
+import type { ComputerControlState } from "@xiongbao/shared/computer-control";
 import {
   browserNavigateRequestSchema,
   browserRecordingRequestSchema,
   browserTabsRequestSchema,
-} from "@openbot/shared/openbot-browser";
-import type { RecorderConnection } from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/openbot-browser";
+import type { RecorderConnection } from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { Hono } from "hono";
 import type { z } from "zod";
 import { envName } from "../../../shared/env-aliases";

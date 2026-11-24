@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import type { ConversationSidebar } from "@openbot/shared/conversation-sidebar";
+import type { ConversationSidebar } from "@xiongbao/shared/conversation-sidebar";
 import { SQL } from "bun";
 import { inArray } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";

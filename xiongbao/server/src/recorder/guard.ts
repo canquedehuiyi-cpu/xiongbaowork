@@ -4,7 +4,7 @@ import {
   RECORDER_SIGNED_OUT,
   RECORDER_TOKEN_PREFIX,
   TRAJECTORY_GATE_REFUSALS,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import type { MiddlewareHandler } from "hono";
 import { DEV_ACTOR } from "../auth/dev-actor";
 import { emailDomainAllowed } from "../auth/email-domain";

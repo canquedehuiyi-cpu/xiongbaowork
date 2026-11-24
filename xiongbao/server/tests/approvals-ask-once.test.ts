@@ -6,8 +6,8 @@ import {
   approvalGuidance,
   BROUGHT_BOT_ASKING_GUIDANCE,
   DESTRUCTIVE_TOOL_NOTE,
-} from "@openbot/shared/bot-prompt";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+} from "@xiongbao/shared/bot-prompt";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import { z } from "zod";
 import { safetyRequirement } from "../src/approvals/policy";
 import type { ApprovalCandidate } from "../src/approvals/types";

@@ -1,12 +1,12 @@
-import type {
-  LearningEvidence,
-  LearningProposalDetail,
-} from "@openbot/shared/learning";
 import {
   type QueryKey,
   type UseQueryOptions,
   useQuery,
 } from "@tanstack/react-query";
+import type {
+  LearningEvidence,
+  LearningProposalDetail,
+} from "@xiongbao/shared/learning";
 import { SkillFiles } from "@/components/learning/skill-files";
 import { Button } from "@/components/ui/button";
 import {

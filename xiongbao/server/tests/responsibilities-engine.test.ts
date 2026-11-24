@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { createResponsibilityEngine } from "../src/responsibilities/engine";
 import {
   parseResponsibilityEvent,
@@ -321,7 +321,8 @@ test("over the month's ceiling the goal is skipped without a card and without a 
   expect(outcomes).toEqual([
     {
       status: "skipped",
-      error: "The Free plan allows 50 tasks per month; this workspace is using 50.",
+      error:
+        "The Free plan allows 50 tasks per month; this workspace is using 50.",
     },
   ]);
   // The lease is handed back like every other skip: a skipped goal must not sit claimed until expiry.

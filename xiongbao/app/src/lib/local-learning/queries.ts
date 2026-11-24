@@ -1,8 +1,8 @@
+import { queryOptions } from "@tanstack/react-query";
 import type {
   LocalLearningOverview,
   LocalSkillCandidateDetail,
-} from "@openbot/shared/local-learning";
-import { queryOptions } from "@tanstack/react-query";
+} from "@xiongbao/shared/local-learning";
 import { client } from "@/lib/client";
 
 /**

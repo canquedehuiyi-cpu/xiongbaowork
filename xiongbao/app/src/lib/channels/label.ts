@@ -1,4 +1,4 @@
-import { untitledLine } from "@openbot/shared/conversation-title";
+import { untitledLine } from "@xiongbao/shared/conversation-title";
 import { openingOf } from "@/lib/voice/cut";
 
 export { untitledLine };

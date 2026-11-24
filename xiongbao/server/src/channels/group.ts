@@ -20,8 +20,8 @@
  */
 import { createHash } from "node:crypto";
 import type { Message } from "@ag-ui/client";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { and, asc, desc, eq, inArray, isNull, min, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";

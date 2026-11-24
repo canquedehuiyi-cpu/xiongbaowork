@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import type {
   CapturedEvent,
   JsonValue,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import {
   installRecording,

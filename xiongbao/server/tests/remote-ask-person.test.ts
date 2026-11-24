@@ -5,7 +5,7 @@ import {
   HttpAgent,
   type RunAgentInput,
 } from "@ag-ui/client";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import { from } from "rxjs";
 import { z } from "zod";
 import { buildAgents } from "../src/copilot";

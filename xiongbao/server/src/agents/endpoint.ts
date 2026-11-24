@@ -1,4 +1,4 @@
-import { isLoopbackHost } from "@openbot/shared/this-machine";
+import { isLoopbackHost } from "@xiongbao/shared/this-machine";
 import {
   checkNavigationTarget,
   isNeverAllowedHostname,
@@ -442,11 +442,17 @@ export function createAgentFetch(
           ? target
           : onThisMachine(target, options.thisMachineHost);
       if (isNeverAllowedHostname(new URL(dialled).hostname)) {
-        throw refuse(dialled, `本部署不会连接 ${dialled}：这里不能放员工的服务。`);
+        throw refuse(
+          dialled,
+          `本部署不会连接 ${dialled}：这里不能放员工的服务。`,
+        );
       }
       // Under the caller's signal (the connection test's deadline, a run's abort): a resolver that
       // never answers must not hold the request past it.
-      await untilAborted(resolvesAllowed(dialled), carried?.signal ?? undefined);
+      await untilAborted(
+        resolvesAllowed(dialled),
+        carried?.signal ?? undefined,
+      );
       // `manual` is what makes this a check rather than a comment: the caller sees the redirect, and
       // the underlying fetch cannot quietly follow one on its own.
       const response = await doFetch(dialled, {

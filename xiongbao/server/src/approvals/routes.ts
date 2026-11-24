@@ -67,7 +67,7 @@ const ruleChange = z
     "Change at least one field.",
   );
 
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 
 /**
  * Whether the database refused the statement for want of privilege: row-level security's "new row

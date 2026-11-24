@@ -1,8 +1,8 @@
+import { queryOptions } from "@tanstack/react-query";
 import {
   type BotBrowserApiState,
   botBrowserApiPaths,
-} from "@openbot/shared/bot-browser";
-import { queryOptions } from "@tanstack/react-query";
+} from "@xiongbao/shared/bot-browser";
 import { BROWSER_POLL_MS } from "@/lib/browser/queries";
 import { client } from "@/lib/client";
 

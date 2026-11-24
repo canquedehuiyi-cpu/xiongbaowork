@@ -1,7 +1,7 @@
 import {
   type ResearchRole,
   researchRoleOfTool,
-} from "@openbot/shared/research";
+} from "@xiongbao/shared/research";
 import { asText, withoutUntrustedEnvelope } from "./tool-result";
 
 /** The research role of a call by its full `mcp__server__tool` name, or null when it plays none. */

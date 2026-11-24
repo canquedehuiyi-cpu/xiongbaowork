@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { installOnDeviceSpeech } from "@openbot/shared/on-device-speech";
+import { installOnDeviceSpeech } from "@xiongbao/shared/on-device-speech";
 import {
   DOWNLOAD_POLL_MS,
   FLUSH_MS,

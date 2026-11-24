@@ -21,4 +21,4 @@ export {
   mediaTypeOf,
   namesNoFormat,
   shouldClaimPaste,
-} from "@openbot/shared/attachments";
+} from "@xiongbao/shared/attachments";

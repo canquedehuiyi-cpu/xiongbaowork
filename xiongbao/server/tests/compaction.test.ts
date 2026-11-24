@@ -6,7 +6,7 @@ import {
   type Message,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { answerMessageId } from "@openbot/shared/handoff-markers";
+import { answerMessageId } from "@xiongbao/shared/handoff-markers";
 import { Observable } from "rxjs";
 import { groupTurnMessage } from "../src/channels/group";
 import {

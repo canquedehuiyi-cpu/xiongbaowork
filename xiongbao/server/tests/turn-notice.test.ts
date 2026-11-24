@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { RunEndNoticePreferences } from "@openbot/shared/user-preferences";
+import type { RunEndNoticePreferences } from "@xiongbao/shared/user-preferences";
 import { productName } from "../src/brand";
 import type { DeliveryScope } from "../src/delivery/types";
 import {

@@ -1,5 +1,5 @@
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import type { AgentActor } from "../agents/profile-types";
 import { PERSON_INITIATOR } from "../audit";
 import type { ChannelStore } from "../channels/routes";

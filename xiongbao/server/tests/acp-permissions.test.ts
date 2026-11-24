@@ -4,8 +4,8 @@ import {
   ACP_RULE_DEFAULTS,
   type AcpRuleKey,
   type AcpRuleValue,
-} from "@openbot/shared/acp";
-import { offersStandingRule } from "@openbot/shared/standing-rule";
+} from "@xiongbao/shared/acp";
+import { offersStandingRule } from "@xiongbao/shared/standing-rule";
 import {
   strictCharacters,
   strictlySafe,

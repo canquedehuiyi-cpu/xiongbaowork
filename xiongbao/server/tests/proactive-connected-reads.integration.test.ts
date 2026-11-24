@@ -2,7 +2,7 @@ import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { ChatCompletionRequest } from "@copilotkit/aimock";
 import { LLMock } from "@copilotkit/aimock";
-import { createTurnRunner, type RunnerLike } from "@openbot/toolkit/run-turn";
+import { createTurnRunner, type RunnerLike } from "@xiongbao/toolkit/run-turn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

@@ -1,9 +1,9 @@
+import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import type {
   LocalLearningOverview,
   LocalSkillCandidateDetail,
   LocalSkillCandidateSummary,
-} from "@openbot/shared/local-learning";
-import { mutationOptions, type QueryClient } from "@tanstack/react-query";
+} from "@xiongbao/shared/local-learning";
 import { client } from "@/lib/client";
 import {
   grantPlugin,

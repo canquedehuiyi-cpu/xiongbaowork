@@ -4,7 +4,7 @@ import {
   isKnownSkinInput,
   normalizeSkinId,
   SKIN_IDS,
-} from "@openbot/shared/user-preferences";
+} from "@xiongbao/shared/user-preferences";
 import { parseStoredSkin, reconcileSkin } from "../src/skins/store";
 
 describe("the default skin's old name", () => {

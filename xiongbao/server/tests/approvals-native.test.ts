@@ -1,5 +1,5 @@
 import { expect, spyOn, test } from "bun:test";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { z } from "zod";
 import { currentApprovalContext } from "../src/approvals/types";
 import { buildAgents } from "../src/copilot";

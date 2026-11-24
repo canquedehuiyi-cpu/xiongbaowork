@@ -10,10 +10,10 @@ import type { Message, RunAgentInput } from "@ag-ui/core";
 import { RunAgentInputSchema } from "@ag-ui/core/schemas";
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { ComputerControlState } from "@openbot/shared/computer-control";
 import { type InfiniteData, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComputerControlState } from "@xiongbao/shared/computer-control";
 import { ChannelChat } from "@/components/channels/channel-chat";
 import {
   type AgentChannel,

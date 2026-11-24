@@ -1,9 +1,9 @@
-import { offersStandingRule as offersStandingRuleFor } from "@openbot/shared/standing-rule";
 import {
   mutationOptions,
   type QueryClient,
   queryOptions,
 } from "@tanstack/react-query";
+import { offersStandingRule as offersStandingRuleFor } from "@xiongbao/shared/standing-rule";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
 import { client } from "@/lib/client";
 import {

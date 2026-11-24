@@ -1,7 +1,7 @@
 import {
   RECORDER_SIGNED_OUT,
   type RecorderErrorBody,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 
 export class OpenBotError extends Error {
   constructor(

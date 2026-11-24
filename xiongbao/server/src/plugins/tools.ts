@@ -1,8 +1,11 @@
-import { englishName } from "../brand";
-import { DESTRUCTIVE_TOOL_NOTE } from "@openbot/shared/bot-prompt";
-import { type GrantedTool, parametersFor } from "@openbot/toolkit/granted-tool";
+import { DESTRUCTIVE_TOOL_NOTE } from "@xiongbao/shared/bot-prompt";
+import {
+  type GrantedTool,
+  parametersFor,
+} from "@xiongbao/toolkit/granted-tool";
 import { ApprovalRefusedError } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
+import { englishName } from "../brand";
 import { HeadlessToolSuspension } from "../computer/headless-tools";
 import { markUntrusted } from "../untrusted-content";
 // M5: 上游这里还引入了 app-access（应用卡片），留给 X 系列（app-access）。
@@ -71,10 +74,10 @@ export function vendorAnswer(result: { text: string; isError: boolean }) {
 }
 
 /*
- * The tool shape and the schema conversion are the toolkit's (`@openbot/toolkit/granted-tool`), as
+ * The tool shape and the schema conversion are the toolkit's (`@xiongbao/toolkit/granted-tool`), as
  * upstream has them: one `GrantedTool` for the built-in runtime and the plugins, and one
  * `parametersFor`, which cuts every app's schema down to what the model providers accept
- * (`providerSafeSchema` in `@openbot/toolkit/tool-schema`). Re-exported for this module's callers.
+ * (`providerSafeSchema` in `@xiongbao/toolkit/tool-schema`). Re-exported for this module's callers.
  */
 export type { GrantedTool };
 export { parametersFor };

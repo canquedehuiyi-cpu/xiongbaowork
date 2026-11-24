@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import * as outcomes from "@openbot/shared/approval-outcomes";
+import * as outcomes from "@xiongbao/shared/approval-outcomes";
 import * as service from "../src/approvals/service";
 
 /**

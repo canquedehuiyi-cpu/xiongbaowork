@@ -7,9 +7,9 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { LearnedSkillContent } from "@openbot/shared/learning";
 import { environmentManager, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import type { LearnedSkillContent } from "@xiongbao/shared/learning";
 import { LearnedSkillDialog } from "@/components/learning/learned-skill-dialog";
 import type { LearnedSkillSource } from "@/lib/learning/queries";
 import { queryClient } from "@/query-client";

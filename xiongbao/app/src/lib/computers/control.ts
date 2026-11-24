@@ -11,12 +11,12 @@ import { tryClient } from "@/lib/client";
  * should say nothing, not tear down the screen the person is looking at.
  */
 
-export type { ComputerControlState as ControlState } from "@openbot/shared/computer-control";
+export type { ComputerControlState as ControlState } from "@xiongbao/shared/computer-control";
 
 import type {
   ComputerControlState as ControlState,
   RequestHelpInput,
-} from "@openbot/shared/computer-control";
+} from "@xiongbao/shared/computer-control";
 
 async function callControl(
   computerId: string,

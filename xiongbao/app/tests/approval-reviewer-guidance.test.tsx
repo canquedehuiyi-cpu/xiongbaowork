@@ -7,7 +7,6 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { auditEventWords } from "@openbot/shared/audit-words";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -19,6 +18,7 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { auditEventWords } from "@xiongbao/shared/audit-words";
 import {
   type AuditEvent,
   decisionDetails,

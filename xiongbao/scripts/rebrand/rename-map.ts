@@ -138,7 +138,11 @@ const PLACEHOLDER = new RegExp(`${NUL}(\\d+)${NUL}`, "g");
  * 先把受保护的片段换成占位符，按 VARIANTS 顺序替换，再还原占位符。
  * 保护正则的零长度命中忽略；同一个正则对象可被反复使用（每次从头匹配）。
  */
-export function renameText(text: string, protect: RegExp): string {
+export function renameText(
+  text: string,
+  protect: RegExp,
+  variants: ReadonlyArray<readonly [string, string]> = VARIANTS,
+): string {
   if (text.includes(NUL)) {
     throw new Error(
       "renameText: 输入含 NUL 字符，会与占位符冲突（二进制文件应在调用前跳过）",
@@ -151,18 +155,21 @@ export function renameText(text: string, protect: RegExp): string {
     kept.push(match);
     return `${NUL}${kept.length - 1}${NUL}`;
   });
-  for (const [from, to] of VARIANTS) out = out.replaceAll(from, to);
+  for (const [from, to] of variants) out = out.replaceAll(from, to);
   return kept.length === 0
     ? out
     : out.replace(PLACEHOLDER, (_, index: string) => kept[Number(index)] ?? "");
 }
 
 /** 对路径的每一段套变体。路径不受保护清单影响：文件名里没有需要保护的持久化名。 */
-export function renamePath(path: string): string {
+export function renamePath(
+  path: string,
+  variants: ReadonlyArray<readonly [string, string]> = VARIANTS,
+): string {
   return path
     .split("/")
     .map((segment) =>
-      VARIANTS.reduce((acc, [from, to]) => acc.replaceAll(from, to), segment),
+      variants.reduce((acc, [from, to]) => acc.replaceAll(from, to), segment),
     )
     .join("/");
 }

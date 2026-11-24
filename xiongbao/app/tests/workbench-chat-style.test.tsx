@@ -10,7 +10,6 @@ import {
 import { readFileSync } from "node:fs";
 import type { Message } from "@ag-ui/core";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { UserPreferences } from "@openbot/shared/user-preferences";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -19,6 +18,7 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { UserPreferences } from "@xiongbao/shared/user-preferences";
 import type { ReactNode } from "react";
 import { ChatTranscript } from "@/components/channels/chat-transcript";
 import { GroupChat } from "@/components/channels/group-chat";

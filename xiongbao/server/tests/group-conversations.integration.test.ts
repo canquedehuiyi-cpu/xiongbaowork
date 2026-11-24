@@ -6,8 +6,8 @@ import {
   EventType,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { and, asc, eq, inArray, like, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { STEP_LIMIT_EVENT } from "../../shared/step-limit";

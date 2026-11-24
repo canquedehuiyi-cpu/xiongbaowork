@@ -1,4 +1,4 @@
-import { OPENBOT_WAITING_METADATA } from "@openbot/shared/waiting";
+import { OPENBOT_WAITING_METADATA } from "@xiongbao/shared/waiting";
 
 /** An AG-UI interrupt as the agent holds it, as much of it as this reads. */
 type HeldInterrupt = { id: string; metadata?: Record<string, unknown> };

@@ -13,17 +13,17 @@ import {
   botBrowserComputerClearRequestSchema,
   botBrowserComputerPaths,
   botBrowserComputerRecordingRequestSchema,
-} from "@openbot/shared/bot-browser";
-import type { ComputerControlState } from "@openbot/shared/computer-control";
+} from "@xiongbao/shared/bot-browser";
+import type { ComputerControlState } from "@xiongbao/shared/computer-control";
 import {
   type BrowserNarrationRequest,
   browserNarrationRequestSchema,
   browserNavigateRequestSchema,
   browserTabsRequestSchema,
   type LauncherState,
-} from "@openbot/shared/openbot-browser";
-import type { RecorderConnectionsResponse } from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/openbot-browser";
+import type { RecorderConnectionsResponse } from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { inArray } from "drizzle-orm";
 import { createApp } from "../src/app";
 import type { AuditEventInput } from "../src/audit";

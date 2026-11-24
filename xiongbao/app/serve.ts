@@ -14,9 +14,9 @@
  */
 
 import { join, normalize, sep } from "node:path";
-import { DICTATION_HTTP_IDLE_SECONDS } from "@openbot/shared/dictation";
-import { listenPort } from "@openbot/shared/listen-port";
-import { appListenHosts } from "@openbot/shared/this-machine";
+import { DICTATION_HTTP_IDLE_SECONDS } from "@xiongbao/shared/dictation";
+import { listenPort } from "@xiongbao/shared/listen-port";
+import { appListenHosts } from "@xiongbao/shared/this-machine";
 import { file, type ServerWebSocket } from "bun";
 
 const DIST = join(import.meta.dir, "dist");

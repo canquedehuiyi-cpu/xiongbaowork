@@ -2,7 +2,7 @@
 // end to end: the real service worker and the real offscreen document over a fake Intelligence, as held-steps.test.ts
 // runs them. The service worker's step timers run on the test's clock; the document runs on the browser's timers.
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import {
   installRecording,

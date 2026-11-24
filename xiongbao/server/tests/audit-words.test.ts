@@ -5,7 +5,7 @@ import {
   auditEventWords,
   DATA_FUNCTION_WORDS,
   dataWords,
-} from "@openbot/shared/audit-words";
+} from "@xiongbao/shared/audit-words";
 import { auditEventTypes } from "../src/audit";
 import { DATA_FUNCTIONS } from "../src/components/functions";
 

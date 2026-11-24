@@ -1,10 +1,10 @@
 import type { ActivityMessage, Message } from "@ag-ui/core";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import type {
   SaveVoiceSessionInput,
   VoiceSessionPage,
   VoiceSessionRecord,
-} from "@openbot/shared/voice-session";
-import { queryOptions, useQuery } from "@tanstack/react-query";
+} from "@xiongbao/shared/voice-session";
 import { channelKeys } from "@/lib/channels/queries";
 import { client } from "@/lib/client";
 import { queryClient } from "@/query-client";

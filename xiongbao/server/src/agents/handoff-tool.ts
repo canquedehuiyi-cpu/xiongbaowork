@@ -12,8 +12,8 @@
  * else confidently. Naming the parts costs the asking model a little effort and removes most of that.
  */
 
-import { HANDED_OVER } from "@openbot/shared/handoff-markers";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import { HANDED_OVER } from "@xiongbao/shared/handoff-markers";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import {

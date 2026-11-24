@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import {
   createCoordinationTools,
   handoffTool,
 } from "../src/agents/handoff-tool";
+import { DELEGATE_EFFECT } from "../src/approvals/delegation-freed";
 import {
   appEnableReason,
   DEFAULT_SENSITIVE_PATHS,
@@ -26,7 +27,6 @@ import {
   TOOL_DISABLED,
   toolDisabled,
 } from "../src/approvals/policy";
-import { DELEGATE_EFFECT } from "../src/approvals/delegation-freed";
 import { HANDLED_BY_PERSON } from "../src/approvals/service";
 import {
   type ApprovalAction,
@@ -4365,12 +4365,14 @@ describe("upstream floors: the cases the first port missed", () => {
   test("M5: the web and mobile cards share the server's list of allow-once sources", async () => {
     // M3: the list is declared once, in shared/standing-rule.ts; the web card reads it from there and
     // the mobile app, which does not depend on the shared package, mirrors it.
-    const { ONCE_ONLY_SOURCES } = await import("@openbot/shared/standing-rule");
+    const { ONCE_ONLY_SOURCES } = await import(
+      "@xiongbao/shared/standing-rule"
+    );
     const read = (path: string) =>
       Bun.file(new URL(path, import.meta.url)).text();
     const web = await read("../../app/src/lib/approvals.ts");
     const mobile = await read("../../mobile/app/approvals.tsx");
-    expect(web).toContain('from "@openbot/shared/standing-rule"');
+    expect(web).toContain('from "@xiongbao/shared/standing-rule"');
     for (const source of ["share_access", "publish_post"])
       expect(ONCE_ONLY_SOURCES.has(source)).toBeTrue();
     for (const source of ONCE_ONLY_SOURCES) {

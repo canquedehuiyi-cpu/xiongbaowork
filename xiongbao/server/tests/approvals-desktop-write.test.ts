@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { offersStandingRule } from "@openbot/shared/standing-rule";
+import { offersStandingRule } from "@xiongbao/shared/standing-rule";
 import {
   DESKTOP_SESSION_REASON,
   DESKTOP_WRITE_TOOLS,

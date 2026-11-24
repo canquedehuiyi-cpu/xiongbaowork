@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@openbot/agent-mastra",
+      "name": "@xiongbao/agent-mastra",
       "dependencies": {
         "@ai-sdk/anthropic": "3.0.111",
         "@ai-sdk/openai": "3.0.99",

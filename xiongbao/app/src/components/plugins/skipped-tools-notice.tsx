@@ -1,4 +1,4 @@
-import { appToolName } from "@openbot/shared/tool-name";
+import { appToolName } from "@xiongbao/shared/tool-name";
 
 /**
  * The actions an app's last refresh left out because no model could be offered their names.

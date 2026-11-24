@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { MAX_TIMESTAMP_MS } from "@openbot/shared/recorder-masking";
+import { MAX_TIMESTAMP_MS } from "@xiongbao/shared/recorder-masking";
 import {
   parseContentMessage,
   parseExternalMessage,

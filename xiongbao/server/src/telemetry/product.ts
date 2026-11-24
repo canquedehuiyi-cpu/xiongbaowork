@@ -369,7 +369,7 @@ export async function createProductTelemetry(options: {
             event_id: eventId,
             occurred_at: now().toISOString(),
           },
-          packageName: "@openbot/server",
+          packageName: "@xiongbao/server",
           packageVersion: "0.2.0",
           telemetryId: env.CPK_TELEMETRY_ID ?? env.COPILOTKIT_TELEMETRY_ID,
           licenseToken: env.COPILOTKIT_LICENSE_TOKEN,

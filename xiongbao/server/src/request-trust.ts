@@ -1,8 +1,11 @@
 import {
   extensionIdFromOrigin,
   recorderExtensionIds,
-} from "@openbot/shared/recorder-extension";
-import { isAddressLiteral, isLoopbackHost } from "@openbot/shared/this-machine";
+} from "@xiongbao/shared/recorder-extension";
+import {
+  isAddressLiteral,
+  isLoopbackHost,
+} from "@xiongbao/shared/this-machine";
 import type { Context, MiddlewareHandler } from "hono";
 import type { DeploymentConfig, SingleUserAccess } from "./config";
 

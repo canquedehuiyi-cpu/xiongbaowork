@@ -9,7 +9,7 @@ import {
 import type {
   LearningSettings,
   PersonalLearningSharing,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import { eq, inArray } from "drizzle-orm";
 import { createEnterpriseStore } from "../src/admin/settings-store";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

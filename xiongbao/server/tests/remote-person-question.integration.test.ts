@@ -1,8 +1,8 @@
 import { test as bunTest, expect, spyOn } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { EventType, HttpAgent, type RunAgentInput } from "@ag-ui/client";
-import type { HeadlessWaiting } from "@openbot/toolkit/headless-tools";
-import { turnInput, turnMessages } from "@openbot/toolkit/run-turn";
+import type { HeadlessWaiting } from "@xiongbao/toolkit/headless-tools";
+import { turnInput, turnMessages } from "@xiongbao/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
 import { of } from "rxjs";
 import { wireCoordination } from "../src/agents/coordination-wiring";

@@ -1,4 +1,3 @@
-import { summaryFor, WEB_HARNESSES } from "@openbot/shared/harnesses";
 import {
   IconCheck,
   IconInfoCircle,
@@ -11,6 +10,7 @@ import {
   useMutation,
   useQuery,
 } from "@tanstack/react-query";
+import { summaryFor, WEB_HARNESSES } from "@xiongbao/shared/harnesses";
 import { MotionConfig, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { HarnessMark } from "@/components/agents/harness-mark";

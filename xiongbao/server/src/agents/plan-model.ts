@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { HttpAgent, type Message, type RunAgentInput } from "@ag-ui/client";
 import { EventSchemas } from "@ag-ui/core/schemas";
 import type { BuiltInAgentClassicConfig } from "@copilotkit/runtime/v2";
-import { PLAN_RUN_COMPLETED } from "@openbot/toolkit/copilotkit/agents";
+import { PLAN_RUN_COMPLETED } from "@xiongbao/toolkit/copilotkit/agents";
 import type { Subscription } from "rxjs";
 
 // Use the model contract of the runtime we actually ship, without a second AI SDK version.

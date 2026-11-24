@@ -6,14 +6,14 @@ import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import {
   LAUNCHER_GLOBAL,
   type LauncherApi,
-} from "@openbot/shared/openbot-browser";
+} from "@xiongbao/shared/openbot-browser";
 import {
   RECORDER_SIGNED_OUT,
   type RecorderActivity,
   recorderActivitySchema,
   recorderPaths,
-} from "@openbot/shared/recorder-api";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-api";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import { ACTIVITY_REPORT_MS } from "../src/background/activity";
 import { installConnection } from "../src/background/connection";

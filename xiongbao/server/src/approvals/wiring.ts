@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from "node:util";
-import type { HeadlessTool } from "@openbot/toolkit/headless-tools";
-import type { IntelligenceLike } from "@openbot/toolkit/run-turn";
+import type { HeadlessTool } from "@xiongbao/toolkit/headless-tools";
+import type { IntelligenceLike } from "@xiongbao/toolkit/run-turn";
 import { type RunAssertion, readRunAssertion } from "../agents/callback-token";
 import type { AgentProfileStore } from "../agents/profile-store";
 import type { AgentActor } from "../agents/profile-types";

@@ -5,8 +5,8 @@ import {
   declinedByPerson,
   doneByPerson,
   outcomeForPerson,
-} from "@openbot/shared/approval-outcomes";
-import type { DecisionToolName } from "@openbot/shared/decision-tools";
+} from "@xiongbao/shared/approval-outcomes";
+import type { DecisionToolName } from "@xiongbao/shared/decision-tools";
 import { useEffect } from "react";
 import { readCompat, writeCompat } from "@/lib/storage-compat";
 import type { ToolOutcome } from "./call";

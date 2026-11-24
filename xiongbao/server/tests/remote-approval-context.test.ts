@@ -5,7 +5,7 @@ import {
   HttpAgent,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { of } from "rxjs";
 import { z } from "zod";
 import { currentApprovalContext } from "../src/approvals/types";

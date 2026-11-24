@@ -19,17 +19,17 @@ import {
   runModeGuidance,
   todayGuidance,
   workingGuidance,
-} from "@openbot/shared/bot-prompt";
+} from "@xiongbao/shared/bot-prompt";
 import {
   defaultModelFor,
   requiresResponsesApi,
-} from "@openbot/shared/model-providers";
-import { MODEL_TOOL_LIMIT } from "@openbot/shared/model-tool-limit";
-import { runTimeZone } from "@openbot/shared/person-time-zone";
-import { type Persona, personaGuidance } from "@openbot/shared/persona";
-import { researchRoleOfToolName } from "@openbot/shared/research";
-import { checklistNotice } from "@openbot/shared/run-notices";
-import { SUBAGENT_TOOL } from "@openbot/shared/subagent";
+} from "@xiongbao/shared/model-providers";
+import { MODEL_TOOL_LIMIT } from "@xiongbao/shared/model-tool-limit";
+import { runTimeZone } from "@xiongbao/shared/person-time-zone";
+import { type Persona, personaGuidance } from "@xiongbao/shared/persona";
+import { researchRoleOfToolName } from "@xiongbao/shared/research";
+import { checklistNotice } from "@xiongbao/shared/run-notices";
+import { SUBAGENT_TOOL } from "@xiongbao/shared/subagent";
 import {
   type BuiltInAgentHooks,
   BuiltInAgentWithSaneHistory,
@@ -37,16 +37,19 @@ import {
   RUNTIME_STATE_TOOLS,
   RunBuiltAgent,
   UnavailableAgent,
-} from "@openbot/toolkit/copilotkit/agents";
-import { firingChecklist } from "@openbot/toolkit/copilotkit/firing-checklist";
-import { UNATTENDED_STEPS } from "@openbot/toolkit/copilotkit/last-step";
-import type { GrantedTool, ToolExecution } from "@openbot/toolkit/granted-tool";
-import { parametersFor } from "@openbot/toolkit/granted-tool";
-import { HeadlessToolsMiddleware } from "@openbot/toolkit/headless-tools";
-import { sanitizeSeededHistory } from "@openbot/toolkit/history-sanitize";
-import { executeNativeApprovalTool } from "@openbot/toolkit/native-approval";
-import type { ThreadLock } from "@openbot/toolkit/ports";
-import { observeDetachedRun } from "@openbot/toolkit/run-stop";
+} from "@xiongbao/toolkit/copilotkit/agents";
+import { firingChecklist } from "@xiongbao/toolkit/copilotkit/firing-checklist";
+import { UNATTENDED_STEPS } from "@xiongbao/toolkit/copilotkit/last-step";
+import type {
+  GrantedTool,
+  ToolExecution,
+} from "@xiongbao/toolkit/granted-tool";
+import { parametersFor } from "@xiongbao/toolkit/granted-tool";
+import { HeadlessToolsMiddleware } from "@xiongbao/toolkit/headless-tools";
+import { sanitizeSeededHistory } from "@xiongbao/toolkit/history-sanitize";
+import { executeNativeApprovalTool } from "@xiongbao/toolkit/native-approval";
+import type { ThreadLock } from "@xiongbao/toolkit/ports";
+import { observeDetachedRun } from "@xiongbao/toolkit/run-stop";
 import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import { defer, from, type Observable, switchMap } from "rxjs";
@@ -1587,7 +1590,7 @@ function isComputerTool(tool: { name: string }): boolean {
  *
  * M3: upstream reads this from the plugins catalogue (`holdsWebSearch` in `plugins/tools.ts`), which
  * the fork's plugins directory does not have yet. The research roles themselves live in
- * `@openbot/shared/research`, so it is read from each tool's offered name, the way `agent-bot` reads it.
+ * `@xiongbao/shared/research`, so it is read from each tool's offered name, the way `agent-bot` reads it.
  */
 function holdsWebSearch(tools: readonly GrantedTool[]): boolean {
   return tools.some((tool) => researchRoleOfToolName(tool.name) === "search");

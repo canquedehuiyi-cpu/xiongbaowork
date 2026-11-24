@@ -1,5 +1,5 @@
 /**
- * The server's headless turn: `@openbot/toolkit/run-turn` with the server's own ports filled in.
+ * The server's headless turn: `@xiongbao/toolkit/run-turn` with the server's own ports filled in.
  *
  * The turn engine itself lives in the toolkit (upstream #784). What stays here is what only this
  * server knows: the admission (pause guard and enterprise controls), the usage row that names the
@@ -11,7 +11,7 @@
  * PostgreSQL runner directly and have no counterpart upstream.
  */
 
-import type { TurnAnswered, TurnScope } from "@openbot/toolkit/ports";
+import type { TurnAnswered, TurnScope } from "@xiongbao/toolkit/ports";
 import {
   createTurnRunner as createToolkitTurnRunner,
   type DrawnComponent,
@@ -19,7 +19,7 @@ import {
   type IntelligenceLike,
   type RunnerLike,
   type TurnRunner,
-} from "@openbot/toolkit/run-turn";
+} from "@xiongbao/toolkit/run-turn";
 import { toolSegmentsFor, turnTimeoutFor } from "../../../toolkit/src/limits";
 import {
   headlessTurnRefusal,

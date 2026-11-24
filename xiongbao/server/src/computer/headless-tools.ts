@@ -5,20 +5,20 @@ import {
   DEVICE_RUN_COMMAND_DESCRIPTION,
   LINE_RANGE_DESCRIPTION,
   WORKSPACE_RUN_COMMAND_DESCRIPTION,
-} from "@openbot/shared/computer-tool-words";
+} from "@xiongbao/shared/computer-tool-words";
 import {
   type HeadlessTool,
   HeadlessToolSuspension,
   type HeadlessWaiting,
-} from "@openbot/toolkit/headless-tools";
+} from "@xiongbao/toolkit/headless-tools";
 import { z } from "zod";
+import { parallelToolsOn } from "../agents/parallel-tools";
 import {
   DESKTOP_SESSION_TOOL,
   DESKTOP_SNAPSHOT_TOOL,
   DESKTOP_WAIT_TOOL,
   DESKTOP_WRITE_TOOLS,
 } from "../approvals/desktop-policy";
-import { parallelToolsOn } from "../agents/parallel-tools";
 import { currentApprovalContext } from "../approvals/types";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import { isFinalSignIn, signInToolResult } from "../passwords/service";

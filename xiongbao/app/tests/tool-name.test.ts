@@ -3,7 +3,7 @@ import {
   approvalPhrase,
   approvalWords,
   readToolName,
-} from "@openbot/shared/tool-name";
+} from "@xiongbao/shared/tool-name";
 
 /**
  * What the person watching is told a Bot just did.

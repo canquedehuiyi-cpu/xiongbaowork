@@ -14,9 +14,10 @@ import {
   AG_UI_CHANNEL_EVENT,
   type LambdaSendOptions,
 } from "@copilotkit/shared";
-import { createIntelligenceThreadLock } from "@openbot/toolkit/copilotkit/thread-lock";
-import { createTurnRunner } from "@openbot/toolkit/run-turn";
+import { createIntelligenceThreadLock } from "@xiongbao/toolkit/copilotkit/thread-lock";
+import { createTurnRunner } from "@xiongbao/toolkit/run-turn";
 import type { ServerWebSocket } from "bun";
+import { inArray } from "drizzle-orm";
 import { Observable, type Subscriber } from "rxjs";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { createAgentFetch } from "../src/agents/endpoint";
@@ -25,7 +26,6 @@ import { createSubagents } from "../src/agents/subagent";
 import { PERSON_INITIATOR } from "../src/audit";
 import { loadConfig } from "../src/config";
 import { mountCopilotRuntime, registeredAgentFromRow } from "../src/copilot";
-import { inArray } from "drizzle-orm";
 import { createDatabase } from "../src/db/client";
 import { threads } from "../src/db/schema";
 import { createIntelligenceClient } from "../src/intelligence-client";

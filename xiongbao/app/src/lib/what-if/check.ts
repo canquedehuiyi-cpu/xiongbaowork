@@ -3,7 +3,7 @@ import type {
   WhatIfLabels,
   WhatIfRecorded,
   WhatIfResult,
-} from "@openbot/shared/what-if";
+} from "@xiongbao/shared/what-if";
 import { client } from "@/lib/client";
 
 /**

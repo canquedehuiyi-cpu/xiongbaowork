@@ -14,7 +14,7 @@ import type {
   LearningDeliveryStatus,
   LearningSettings,
   LearningTarget,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import { z } from "zod";
 import type { LearningSettingsStore } from "./settings";
 import type { OpenSkillSource } from "./sharing";

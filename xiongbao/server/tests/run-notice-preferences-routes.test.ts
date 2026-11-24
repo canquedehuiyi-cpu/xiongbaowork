@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { DEFAULT_RUN_END_NOTICE } from "@openbot/shared/user-preferences";
+import { DEFAULT_RUN_END_NOTICE } from "@xiongbao/shared/user-preferences";
 import { Hono } from "hono";
 import type {
   RunEndNoticeStore,

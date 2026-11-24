@@ -1,9 +1,9 @@
-import type { HandoffStatus } from "@openbot/shared/computer-control";
 import {
   IconAlertTriangle,
   IconCircleCheck,
   IconHandStop,
 } from "@tabler/icons-react";
+import type { HandoffStatus } from "@xiongbao/shared/computer-control";
 import { Button } from "@/components/ui/button";
 import {
   Item,

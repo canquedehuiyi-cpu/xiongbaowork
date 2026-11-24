@@ -1,17 +1,17 @@
-import { outcomeForPerson } from "@openbot/shared/approval-outcomes";
+import { outcomeForPerson } from "@xiongbao/shared/approval-outcomes";
 import {
   appToolsWords,
   auditActionWords,
   auditChangeWords,
   auditEventWords,
   dataWords,
-} from "@openbot/shared/audit-words";
+} from "@xiongbao/shared/audit-words";
 import {
   type ConnectPrompt,
   readConnectPrompt,
-} from "@openbot/shared/connect-prompt";
-import { isOpenBotActor } from "@openbot/shared/openbot-actor";
-import { connectorName, humanise, inFolder } from "@openbot/shared/tool-name";
+} from "@xiongbao/shared/connect-prompt";
+import { isOpenBotActor } from "@xiongbao/shared/openbot-actor";
+import { connectorName, humanise, inFolder } from "@xiongbao/shared/tool-name";
 import {
   Fragment,
   type ReactNode,

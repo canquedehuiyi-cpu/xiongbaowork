@@ -1,8 +1,8 @@
+import { IconMicrophone } from "@tabler/icons-react";
 import {
   joinedLearningContainer,
   type LearningSpaceState,
-} from "@openbot/shared/recorder-api";
-import { IconMicrophone } from "@tabler/icons-react";
+} from "@xiongbao/shared/recorder-api";
 import { useState } from "react";
 import { PageSection } from "@/components/layout/page-parts";
 import { Button } from "@/components/ui/button";

@@ -9,16 +9,16 @@ import {
   LAUNCHER_GLOBAL,
   type LauncherApi,
   type LauncherConnection,
-} from "@openbot/shared/openbot-browser";
+} from "@xiongbao/shared/openbot-browser";
 import {
   type LearningSpaceState,
   RECORDER_SIGNED_OUT,
   recorderPaths,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import {
   type CapturedEvent,
   sha256HexSync,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import { installConnection } from "../src/background/connection";
 import { installLauncher } from "../src/background/launcher";

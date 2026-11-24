@@ -1,7 +1,7 @@
 // The capture and the steps together, as the recording runs them: what Chrome reports about a click amid the page's
 // noise reaches Intelligence only as that click's save, on both capture paths.
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import {
   createNetworkCapture,
   type NetworkCapture,

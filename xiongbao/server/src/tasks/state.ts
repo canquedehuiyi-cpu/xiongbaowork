@@ -1,4 +1,4 @@
-import { approvalPhrase } from "@openbot/shared/tool-name";
+import { approvalPhrase } from "@xiongbao/shared/tool-name";
 import { and, desc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
 import { DECISION_KIND } from "../approvals/decision-waits";
 import type { Database } from "../db/client";

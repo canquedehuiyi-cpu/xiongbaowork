@@ -1,7 +1,7 @@
 import { expect } from "bun:test";
 import { createHash, randomUUID } from "node:crypto";
 import { LLMock } from "@copilotkit/aimock";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   saveTeamActionKinds,

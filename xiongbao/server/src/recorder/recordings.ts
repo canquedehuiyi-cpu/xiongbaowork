@@ -1,7 +1,7 @@
 import type {
   RecordingRow,
   RecordingsPage,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 
 export type TrajectorySummary = {
   trajectoryId: string;

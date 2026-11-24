@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { offersStandingRule } from "@openbot/shared/standing-rule";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { offersStandingRule } from "@xiongbao/shared/standing-rule";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   saveTeamActionKinds,
@@ -14,6 +14,7 @@ import {
   type ApprovalCandidate,
   withApprovalContext,
 } from "../src/approvals/types";
+import { setRole } from "../src/auth/roles";
 import { createDatabase } from "../src/db/client";
 import { approvalConversationGrants } from "../src/db/schema/approval-conversation-grants";
 import {
@@ -25,7 +26,6 @@ import { auditEvents, channels, users } from "../src/db/schema/core";
 import { workItems } from "../src/db/schema/work";
 import { setEdition } from "../src/edition";
 import { runAsTenant } from "../src/tenant/context";
-import { setRole } from "../src/auth/roles";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { afterAll, beforeAll, test } from "./support/platform-frame";
 import { bindTestRoleWriter } from "./support/role-writer";
@@ -288,7 +288,9 @@ describe("发送不能「总是允许」（上游：Always allow here, on a send
     const owner = await person();
     const first = await gate(owner, thread(), slackSend("Draft is up."));
     await expect(
-      as(owner, () => service.decide(owner, first?.id ?? "", "allow_always", "web")),
+      as(owner, () =>
+        service.decide(owner, first?.id ?? "", "allow_always", "web"),
+      ),
     ).rejects.toThrow(SEND_ONCE_ONLY);
     expect(await as(owner, () => store.rules(owner))).toEqual([]);
     expect(await gate(owner, thread(), slackSend("Merged."))).toMatchObject({
@@ -413,7 +415,9 @@ test("payments and a password typed on a website are the person's, with no answe
   expect(offersStandingRule(typed?.action ?? {})).toBeFalse();
   for (const id of [paying?.id, typed?.id])
     await expect(
-      as(owner, () => service.decide(owner, id ?? "", "allow_conversation", "web")),
+      as(owner, () =>
+        service.decide(owner, id ?? "", "allow_conversation", "web"),
+      ),
     ).rejects.toThrow(HANDED_TO_YOU);
   expect(
     await database

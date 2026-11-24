@@ -52,7 +52,7 @@ import {
   type JsonValue,
   REDACTED,
   trimEvent,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import { siteOf } from "../shared/sites";
 
 export const STEP_TIMING = {

@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import { listenPort } from "@openbot/shared/listen-port";
-import { appListenHosts, isLoopbackHost } from "@openbot/shared/this-machine";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
+import { listenPort } from "@xiongbao/shared/listen-port";
+import { appListenHosts, isLoopbackHost } from "@xiongbao/shared/this-machine";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
 /*

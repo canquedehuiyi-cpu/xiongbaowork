@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { readConnectPrompt } from "@openbot/shared/connect-prompt";
+import { readConnectPrompt } from "@xiongbao/shared/connect-prompt";
 import { and, eq, inArray, like } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { createAuditStore } from "../src/audit";

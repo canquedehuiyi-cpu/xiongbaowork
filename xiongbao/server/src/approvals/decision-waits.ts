@@ -1,7 +1,7 @@
 /**
  * A card a Bot asked the person with in the conversation, and is waiting on.
  *
- * The approval card, the choice card and the form (`@openbot/shared/decision-tools`) are tools the
+ * The approval card, the choice card and the form (`@xiongbao/shared/decision-tools`) are tools the
  * browser answers: the Bot calls one, its run ends, and the browser holds the call until the person
  * answers on the card. The answer goes back as the tool's result in the conversation's next run.
  * Nothing about the wait is OpenBot's own: the call and the answer are in the thread, which the
@@ -27,7 +27,7 @@ import {
   DECISION_TOOLS,
   type DecisionToolName,
   isDecisionTool,
-} from "@openbot/shared/decision-tools";
+} from "@xiongbao/shared/decision-tools";
 import { eq, isNull, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { intelligenceChannelMappings } from "../db/schema/core";

@@ -1,17 +1,17 @@
 import { createHash } from "node:crypto";
-import { applyEnvironmentAliases, envName } from "@openbot/shared/env-aliases";
-import { intelligenceApiKey } from "@openbot/shared/intelligence-key";
+import { applyEnvironmentAliases, envName } from "@xiongbao/shared/env-aliases";
+import { intelligenceApiKey } from "@xiongbao/shared/intelligence-key";
 import {
   isLearningContainerId,
   type LearningTarget,
-} from "@openbot/shared/learning";
-import { listenPort } from "@openbot/shared/listen-port";
-import { BROWSER_URL_ENV } from "@openbot/shared/openbot-browser";
+} from "@xiongbao/shared/learning";
+import { listenPort } from "@xiongbao/shared/listen-port";
+import { BROWSER_URL_ENV } from "@xiongbao/shared/openbot-browser";
 import {
   addressesBeyondThisMachine,
   deploymentAddresses,
   isLoopbackHost,
-} from "@openbot/shared/this-machine";
+} from "@xiongbao/shared/this-machine";
 /**
  * What the runtime can do, and it has exactly one answer: durable threads and memory live in this
  * deployment's own PostgreSQL. Configuration the product cannot function without belongs at the boot

@@ -1,6 +1,6 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";

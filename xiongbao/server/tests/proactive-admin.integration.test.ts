@@ -6,7 +6,7 @@ import {
   HttpAgent,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { createTurnRunner, type RunnerLike } from "@openbot/toolkit/run-turn";
+import { createTurnRunner, type RunnerLike } from "@xiongbao/toolkit/run-turn";
 import { and, eq, inArray, like, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { Observable } from "rxjs";
@@ -23,8 +23,8 @@ import { DEFAULT_ENTERPRISE_SETTINGS } from "../src/admin/settings-store";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
 import { createAuditStore } from "../src/audit";
 import type { AppVariables, AuthenticatedActor } from "../src/auth/guards";
-import { createCredentialStore } from "../src/credentials";
 import { setRole } from "../src/auth/roles";
+import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
@@ -34,9 +34,9 @@ import {
   capabilitySettings,
   enterpriseSettings,
   modelUsage,
+  proactiveCheckInRuns,
   proactivePeople,
   proactivePings,
-  proactiveCheckInRuns,
   proactiveSettings,
   proactiveSuggestions,
   users,
@@ -61,13 +61,13 @@ import type {
 import { runAsTenant } from "../src/tenant/context";
 import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-import { bindTestRoleWriter } from "./support/role-writer";
 import {
   afterAll,
   beforeAll,
   beforeEach,
   test,
 } from "./support/platform-frame";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /*
  * The admin's say over check-ins, through the real path: real Postgres, the real enterprise controls

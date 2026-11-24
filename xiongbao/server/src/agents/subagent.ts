@@ -29,10 +29,13 @@ import {
   SUBAGENTS_PER_ANSWER,
   type SubagentResult,
   subagentThreadId,
-} from "@openbot/shared/subagent";
-import type { GrantedTool, ToolExecution } from "@openbot/toolkit/granted-tool";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import { createTurnRunner } from "@openbot/toolkit/run-turn";
+} from "@xiongbao/shared/subagent";
+import type {
+  GrantedTool,
+  ToolExecution,
+} from "@xiongbao/toolkit/granted-tool";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import { createTurnRunner } from "@xiongbao/toolkit/run-turn";
 import { z } from "zod";
 import { toolSegmentsFor, turnTimeoutFor } from "../../../toolkit/src/limits";
 import { currentApprovalContext } from "../approvals/types";

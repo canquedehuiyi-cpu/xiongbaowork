@@ -14,8 +14,8 @@ import {
   RECORDER_AUTHORITY_UNAVAILABLE,
   RECORDER_SIGNED_OUT,
   recorderActivitySchema,
-} from "@openbot/shared/recorder-api";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-api";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import type {
   AgentObservation,
   CaptureObservation,

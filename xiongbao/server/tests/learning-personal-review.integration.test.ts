@@ -1,11 +1,10 @@
 import { describe, expect } from "bun:test";
-import { afterAll, afterEach, beforeAll, beforeEach, test } from "./support/platform-frame";
 import { randomUUID } from "node:crypto";
 import type {
   LearnedSkillDetail,
   LearningSettings,
   PersonalReview,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import { eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import type { AuditEventInput } from "../src/audit";
@@ -34,6 +33,13 @@ import {
   RUNTIME_KEY,
   SKILL_MD,
 } from "./support/intelligence-learning";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  test,
+} from "./support/platform-frame";
 
 /*
  * Settings, Learning: the skills proposed from a person's own recordings that wait for their decision. The routes are

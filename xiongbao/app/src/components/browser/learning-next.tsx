@@ -1,7 +1,3 @@
-import type {
-  LearningProposal,
-  LearningRunSummary,
-} from "@openbot/shared/learning";
 import {
   IconAlertTriangle,
   IconLoader2,
@@ -9,6 +5,10 @@ import {
 } from "@tabler/icons-react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import type {
+  LearningProposal,
+  LearningRunSummary,
+} from "@xiongbao/shared/learning";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {

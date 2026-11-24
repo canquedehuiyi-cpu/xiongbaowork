@@ -3,7 +3,7 @@ import {
   dictationExtension,
   dictationMediaType,
   MAX_DICTATION_BYTES,
-} from "@openbot/shared/dictation";
+} from "@xiongbao/shared/dictation";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { AppVariables } from "../auth/guards";

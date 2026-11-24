@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
-import { withApprovalContext } from "@openbot/toolkit/continuation";
+import { withApprovalContext } from "@xiongbao/toolkit/continuation";
 import {
   callTool,
   listTools,

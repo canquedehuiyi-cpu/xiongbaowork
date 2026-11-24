@@ -1,4 +1,4 @@
-import { currentApprovalContext } from "@openbot/toolkit/continuation";
+import { currentApprovalContext } from "@xiongbao/toolkit/continuation";
 import { cutAtCodeUnits } from "../channels/text";
 import { appsPage } from "../edition";
 import { runTimeZone } from "../person-time-zone";

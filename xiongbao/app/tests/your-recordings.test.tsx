@@ -7,12 +7,12 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { environmentManager, QueryClientProvider } from "@tanstack/react-query";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import type {
   RecordingRow,
   RecordingsPage,
-} from "@openbot/shared/recorder-api";
-import { environmentManager, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+} from "@xiongbao/shared/recorder-api";
 import { YourRecordings } from "@/components/browser/your-recordings";
 import {
   recordHereMutationOptions,

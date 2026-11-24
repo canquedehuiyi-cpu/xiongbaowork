@@ -1,5 +1,5 @@
-import { MAX_IMAGE_BYTES } from "@openbot/shared/attachments";
-import type { WhatIfVocabulary } from "@openbot/shared/what-if";
+import { MAX_IMAGE_BYTES } from "@xiongbao/shared/attachments";
+import type { WhatIfVocabulary } from "@xiongbao/shared/what-if";
 import type { Context, Hono as HonoApp, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";

@@ -7,7 +7,7 @@ import {
   HttpAgent,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { NOT_SHOWN } from "@openbot/shared/component-markers";
+import { NOT_SHOWN } from "@xiongbao/shared/component-markers";
 import { inArray } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { GALLERY } from "../../app/src/components/gallery/charts";
@@ -25,8 +25,8 @@ import { createDatabase } from "../src/db/client";
 import { agents, componentExclusions, components } from "../src/db/schema";
 import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
 import { runAsTenant } from "../src/tenant/context";
-import { fetchDouble } from "./support/fetch-double";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { fetchDouble } from "./support/fetch-double";
 
 /**
  * An unattended routine turn that browses a page and answers with a chart, against the real

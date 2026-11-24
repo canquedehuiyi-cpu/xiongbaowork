@@ -14,7 +14,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
   type CapturedEvent,
   sha256HexSync,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import { act, createElement, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";

@@ -1,4 +1,3 @@
-import type { LearningPersonalReview } from "@openbot/shared/learning";
 import {
   IconCheck,
   IconChevronRight,
@@ -7,6 +6,7 @@ import {
   IconUserCheck,
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import type { LearningPersonalReview } from "@xiongbao/shared/learning";
 import { Fragment, useState } from "react";
 import {
   PageEmpty,

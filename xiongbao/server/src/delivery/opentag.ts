@@ -18,7 +18,7 @@
  * `/openbot/deliver`, because a managed Channel can only post inside a live delivery.
  */
 import { timingSafeEqual } from "node:crypto";
-import { approvalDetails } from "@openbot/shared/tool-name";
+import { approvalDetails } from "@xiongbao/shared/tool-name";
 import { z } from "zod";
 import { cutAtCodeUnits } from "../channels/text";
 import { DELIVERY_REQUEST_TIMEOUT_MS } from "../timeouts";

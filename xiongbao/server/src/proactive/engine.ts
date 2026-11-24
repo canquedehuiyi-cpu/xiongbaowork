@@ -26,8 +26,8 @@
  * started and hands it over; it runs no task turns of its own.
  */
 
-import type { HeadlessTool } from "@openbot/toolkit/headless-tools";
-import { EmptyTurnError, type TurnRunner } from "@openbot/toolkit/run-turn";
+import type { HeadlessTool } from "@xiongbao/toolkit/headless-tools";
+import { EmptyTurnError, type TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { z } from "zod";
 import { recordHeadlessUsage } from "../admin/controls";
 import type { AuditInitiator } from "../audit";

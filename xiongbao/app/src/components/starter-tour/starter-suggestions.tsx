@@ -1,6 +1,6 @@
 import { CopilotChatSuggestionView } from "@copilotkit/react-core/v2";
-import { isStarterTourAgent } from "@openbot/shared/starter-tour";
 import { useQuery } from "@tanstack/react-query";
+import { isStarterTourAgent } from "@xiongbao/shared/starter-tour";
 import { useRef, useState } from "react";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";

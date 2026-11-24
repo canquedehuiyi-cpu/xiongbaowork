@@ -4,7 +4,7 @@ import {
   ACCEPTED_IMAGE_MIME,
   MAX_IMAGE_BYTES,
   mediaTypeOf,
-} from "@openbot/shared/attachments";
+} from "@xiongbao/shared/attachments";
 import { sniffMimeType } from "./channels/attachment-mime";
 
 /**

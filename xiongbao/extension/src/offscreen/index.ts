@@ -1,8 +1,8 @@
-import type { TrajectoryGrant } from "@openbot/shared/recorder-api";
+import type { TrajectoryGrant } from "@xiongbao/shared/recorder-api";
 import {
   type CapturedEvent,
   scrubTranscript,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import {
   type BackgroundToOffscreen,
   type CaptureStatus,

@@ -1,21 +1,4 @@
 import { CopilotKitContext } from "@copilotkit/react-core/v2/context";
-import { outcomeForPerson } from "@openbot/shared/approval-outcomes";
-import {
-  readConnectPrompt,
-  SHOW_APP_ACCESS_TOOL,
-} from "@openbot/shared/connect-prompt";
-import { researchRoleOfTool } from "@openbot/shared/research";
-import {
-  readSubagentResult,
-  SUBAGENT_TOOL,
-  type SubagentResult,
-} from "@openbot/shared/subagent";
-import {
-  answersTheModel,
-  connectorName,
-  ownToolAttempt,
-  readToolName,
-} from "@openbot/shared/tool-name";
 import {
   IconFileText,
   IconFolder,
@@ -25,6 +8,23 @@ import {
   IconTool,
   IconWorld,
 } from "@tabler/icons-react";
+import { outcomeForPerson } from "@xiongbao/shared/approval-outcomes";
+import {
+  readConnectPrompt,
+  SHOW_APP_ACCESS_TOOL,
+} from "@xiongbao/shared/connect-prompt";
+import { researchRoleOfTool } from "@xiongbao/shared/research";
+import {
+  readSubagentResult,
+  SUBAGENT_TOOL,
+  type SubagentResult,
+} from "@xiongbao/shared/subagent";
+import {
+  answersTheModel,
+  connectorName,
+  ownToolAttempt,
+  readToolName,
+} from "@xiongbao/shared/tool-name";
 import {
   useCallback,
   useContext,

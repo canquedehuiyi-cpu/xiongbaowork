@@ -1,8 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   RECORDER_DISCLOSURE_TITLE,
   recorderDisclosureFor,
-} from "@openbot/shared/recorder-disclosure";
-import { useQuery } from "@tanstack/react-query";
+} from "@xiongbao/shared/recorder-disclosure";
 import { useState } from "react";
 import { PageSection } from "@/components/layout/page-shell";
 import { RecorderCollectsRows } from "@/components/recorder/recorder-collects";

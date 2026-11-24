@@ -1,7 +1,7 @@
-import { ruleTitle } from "@openbot/shared/tool-name";
 import { IconLock } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { ruleTitle } from "@xiongbao/shared/tool-name";
 import { useEffect, useRef, useState } from "react";
 import {
   type AcpApprovalCard,

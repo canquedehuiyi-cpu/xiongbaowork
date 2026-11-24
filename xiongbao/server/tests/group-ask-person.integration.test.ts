@@ -1,6 +1,6 @@
 import { test as bunTest, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { wireCoordination } from "../src/agents/coordination-wiring";
@@ -36,8 +36,8 @@ import { createDeliveryRouter } from "../src/delivery/router";
 import { createDeliveryScopes } from "../src/delivery/scope";
 import { createDeliveryStore } from "../src/delivery/store";
 import { createPeopleStore } from "../src/people/store";
-import { createWorkQueue } from "../src/work/queue";
 import { runAsTenant } from "../src/tenant/context";
+import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 import { afterAll, afterEach, beforeAll } from "./support/platform-frame";

@@ -1,4 +1,4 @@
-import { normaliseOpenBotOrigin } from "@openbot/shared/recorder-api";
+import { normaliseOpenBotOrigin } from "@xiongbao/shared/recorder-api";
 import type { DeploymentConfig } from "../config";
 
 /** `http://localhost:3001` as the address the Recorder takes for it: the Recorder reaches this machine by its loopback

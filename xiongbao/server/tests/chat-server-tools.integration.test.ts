@@ -9,8 +9,8 @@ import {
 import { randomUUID } from "node:crypto";
 import type { RunAgentInput } from "@ag-ui/client";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

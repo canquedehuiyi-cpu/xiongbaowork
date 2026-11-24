@@ -1,11 +1,11 @@
 import type { BuiltInAgentClassicConfig } from "@copilotkit/runtime/v2";
-import { MODEL_TOOL_LIMIT } from "@openbot/shared/model-tool-limit";
+import { MODEL_TOOL_LIMIT } from "@xiongbao/shared/model-tool-limit";
 import {
   SEARCH_TOOLS,
   TOOLS_FOUND_LINE,
   toolsFound,
-} from "@openbot/shared/tool-search";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+} from "@xiongbao/shared/tool-search";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import { z } from "zod";
 import { markUntrusted } from "../untrusted-content";
 import {

@@ -18,7 +18,7 @@
  * answers the model with the message.
  */
 import { createHash } from "node:crypto";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import {
   type ApprovalContinuation,
   type ApprovalStore,

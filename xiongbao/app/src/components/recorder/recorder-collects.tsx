@@ -1,8 +1,4 @@
 import {
-  RECORDER_COLLECTS,
-  type RecorderCollectedKind,
-} from "@openbot/shared/recorder-disclosure";
-import {
   IconDeviceFloppy,
   IconEyeOff,
   IconMessageChatbot,
@@ -10,6 +6,10 @@ import {
   IconPointer,
   IconShieldLock,
 } from "@tabler/icons-react";
+import {
+  RECORDER_COLLECTS,
+  type RecorderCollectedKind,
+} from "@xiongbao/shared/recorder-disclosure";
 import { Fragment } from "react";
 import { PageRows } from "@/components/layout/page-parts";
 import {
@@ -31,7 +31,7 @@ const ICONS: Record<RecorderCollectedKind, typeof IconPointer> = {
 };
 
 /**
- * What a recording holds, one read-only row each (@openbot/shared/recorder-disclosure). Drawn by OpenBot's Settings,
+ * What a recording holds, one read-only row each (@xiongbao/shared/recorder-disclosure). Drawn by the app's Settings,
  * Browsers before the first Connect and by the Recorder's own setup page (the extension builds with this app's
  * components), so the person reads the same list in both before anything is collected.
  */

@@ -1,5 +1,5 @@
-import type { ConnectPrompt } from "@openbot/shared/connect-prompt";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ConnectPrompt } from "@xiongbao/shared/connect-prompt";
 import {
   AppAccessAction,
   appAccessSentence,
@@ -103,7 +103,7 @@ export function AppAccessRequestCard({ card }: { card: Card }) {
  * A work app a Bot could not use, in front of the person, with the one thing that would let it.
  *
  * WHAT DRAWS ONE. Every way an app is out of reach for a call now reaches the transcript carrying
- * the same marker (`@openbot/shared/connect-prompt`): a person who has not connected, a Shared app
+ * the same marker (`@xiongbao/shared/connect-prompt`): a person who has not connected, a Shared app
  * with no team account, an account the vendor has lost, and — with no call refused at all — the
  * `show_app_access` tool a Bot calls for an app it holds nothing for, switched off or not granted.
  * They used to end in three different places: a card with Connect, a sentence telling the person to

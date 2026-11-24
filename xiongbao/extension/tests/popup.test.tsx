@@ -7,9 +7,9 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { LearningSpaceState } from "@openbot/shared/recorder-api";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { LearningSpaceState } from "@xiongbao/shared/recorder-api";
 import { PASS_HINTS } from "../src/offscreen/grant";
 import { voiceSentence } from "../src/offscreen/voice";
 import { desktopSentence } from "../src/pages/popup/desktop-sentence";

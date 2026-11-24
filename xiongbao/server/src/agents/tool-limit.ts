@@ -1,5 +1,5 @@
 import { resolveModel } from "@copilotkit/runtime/v2";
-import { MODEL_TOOL_LIMIT } from "@openbot/shared/model-tool-limit";
+import { MODEL_TOOL_LIMIT } from "@xiongbao/shared/model-tool-limit";
 import {
   type AuditInitiator,
   type AuditStore,

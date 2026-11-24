@@ -1,9 +1,9 @@
 import {
   afterAll as bunAfterAll,
   beforeEach as bunBeforeEach,
+  test as bunTest,
   describe,
   expect,
-  test as bunTest,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
@@ -13,9 +13,9 @@ import {
   HttpAgent,
   type RunAgentInput,
 } from "@ag-ui/client";
-import { readResponsibilityTurn } from "@openbot/shared/responsibility-turn";
-import { withApprovalContext } from "@openbot/toolkit/continuation";
-import type { RunnerLike } from "@openbot/toolkit/run-turn";
+import { readResponsibilityTurn } from "@xiongbao/shared/responsibility-turn";
+import { withApprovalContext } from "@xiongbao/toolkit/continuation";
+import type { RunnerLike } from "@xiongbao/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { createActivityStore } from "../src/activity/activity";

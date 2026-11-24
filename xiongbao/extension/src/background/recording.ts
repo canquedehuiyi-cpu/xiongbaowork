@@ -8,7 +8,7 @@
 // reducer (`reduceRecorder`), persisted to storage.session after every transition so a restarted service worker finds
 // it; what must survive a browser restart lives in storage.local (`activeRecording`, `drains`) and in the document's
 // IndexedDB outbox.
-import { RECORDER_NAME } from "../shared/brand";
+
 import {
   type LearningSpaceState,
   RECORDER_AUTHORITY_UNAVAILABLE,
@@ -16,13 +16,13 @@ import {
   type RecorderMe,
   recorderPaths,
   TRAJECTORY_GATE_REFUSALS,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import {
   type CapturedEvent,
   scrubText,
   scrubTranscript,
   scrubUrl,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import type {
   BackgroundToContent,
   BackgroundToOffscreen,
@@ -39,6 +39,7 @@ import type {
   StreamSession,
 } from "../protocol/messages";
 import { IDLE_STATE, parseOffscreenSignedOut } from "../protocol/messages";
+import { RECORDER_NAME } from "../shared/brand";
 import { hasHostPermission } from "../shared/host-access";
 import {
   KEPT_FOR_PERSON_DAYS,

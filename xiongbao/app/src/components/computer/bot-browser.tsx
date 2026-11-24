@@ -1,7 +1,7 @@
-import type { BotBrowserApiState } from "@openbot/shared/bot-browser";
-import { RECORDER_COLLECTS_SHORT } from "@openbot/shared/recorder-disclosure";
 import { IconLock, IconPlayerStop } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import type { BotBrowserApiState } from "@xiongbao/shared/bot-browser";
+import { RECORDER_COLLECTS_SHORT } from "@xiongbao/shared/recorder-disclosure";
 import { type ReactNode, useId } from "react";
 import {
   AddressBar,

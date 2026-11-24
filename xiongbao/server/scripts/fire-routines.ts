@@ -13,7 +13,7 @@
  * should mean something worse than that.
  */
 
-import { workOwner } from "@openbot/shared/work-owner";
+import { workOwner } from "@xiongbao/shared/work-owner";
 import { checkRlsReadiness } from "../src/auth/role-writer-lifecycle";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
@@ -144,16 +144,16 @@ try {
     const board = createTaskProjector(database);
     const recovered = await asPlatform(() =>
       sweepAbandonedWork({
-      queue,
-      owner,
-      phases: abandonedWorkPhases({
-        routineStore,
-        reapPipelineRuns: (input) =>
-          reapAbandonedPipelineRuns(database, board, input),
-        recoverFlowRuns: (input) =>
-          recoverInterruptedFlowRuns(database, board, input),
-        board,
-      }),
+        queue,
+        owner,
+        phases: abandonedWorkPhases({
+          routineStore,
+          reapPipelineRuns: (input) =>
+            reapAbandonedPipelineRuns(database, board, input),
+          recoverFlowRuns: (input) =>
+            recoverInterruptedFlowRuns(database, board, input),
+          board,
+        }),
       }),
     );
     if (

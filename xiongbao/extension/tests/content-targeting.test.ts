@@ -8,7 +8,7 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import { startEventCapture } from "../src/content/collector";
 import { createSensitivityTracker } from "../src/content/masking-context";
 import {

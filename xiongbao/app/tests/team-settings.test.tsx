@@ -35,7 +35,7 @@ afterAll(async () => {
 const originalFetch = global.fetch;
 const sent: { path: string; method: string; body: unknown }[] = [];
 
-import { DEFAULT_DESKTOP_ACTION_WORDS } from "@openbot/shared/desktop-control";
+import { DEFAULT_DESKTOP_ACTION_WORDS } from "@xiongbao/shared/desktop-control";
 
 let saved: string[] | null = null;
 const inbox = () => ({

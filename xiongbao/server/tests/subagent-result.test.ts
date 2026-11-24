@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { LLMock } from "@copilotkit/aimock";
-import type { RunnerLike } from "@openbot/toolkit/run-turn";
+import type { RunnerLike } from "@xiongbao/toolkit/run-turn";
 import { Observable } from "rxjs";
 import { readSubagentResult } from "../../shared/subagent";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

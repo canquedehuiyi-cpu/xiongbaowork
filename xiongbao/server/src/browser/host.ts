@@ -1,7 +1,7 @@
 import {
   type BrowserWindow,
   isPersonBrowserId,
-} from "@openbot/shared/openbot-browser";
+} from "@xiongbao/shared/openbot-browser";
 import {
   botSeat,
   type ComputerKey,

@@ -1,7 +1,7 @@
 import { expect } from "bun:test";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import type { ExchangeResponse } from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+import type { ExchangeResponse } from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../src/app";
 import type { AuditEventInput } from "../src/audit";

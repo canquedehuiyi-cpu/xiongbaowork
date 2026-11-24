@@ -2,7 +2,7 @@
 // over CDP while real CopilotKit pages ran a real agent (tests/fixtures/agui; support/cdp-replay.ts says how). Every
 // stream is held to what CopilotKit's own client parsed from the same bytes (@ag-ui/client 1.0.2, phoenix.js).
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import type {
   AgentObservation,
   AgentRuntimeInfo,

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createServer } from "node:net";
 import type { Message } from "@ag-ui/client";
-import { MAX_IMAGE_BYTES } from "@openbot/shared/attachments";
+import { MAX_IMAGE_BYTES } from "@xiongbao/shared/attachments";
 import {
   inlineToolImages,
   type ToolImageDownload,

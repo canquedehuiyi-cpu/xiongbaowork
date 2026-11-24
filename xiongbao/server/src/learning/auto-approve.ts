@@ -1,4 +1,4 @@
-import type { LearningSource } from "@openbot/shared/learning";
+import type { LearningSource } from "@xiongbao/shared/learning";
 import {
   type AuditStore,
   DEPLOYMENT_INITIATOR,

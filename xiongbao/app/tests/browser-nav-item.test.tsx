@@ -7,13 +7,6 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  type BrowserApiState,
-  type BrowserWindow,
-  browserApiPaths,
-  type LauncherState,
-} from "@openbot/shared/openbot-browser";
-import type { RecorderActivity } from "@openbot/shared/recorder-api";
 import { environmentManager, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -25,6 +18,13 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  type BrowserApiState,
+  type BrowserWindow,
+  browserApiPaths,
+  type LauncherState,
+} from "@xiongbao/shared/openbot-browser";
+import type { RecorderActivity } from "@xiongbao/shared/recorder-api";
 import { StrictMode } from "react";
 import { BrowserNavItem } from "@/components/browser/browser-nav-item";
 import { SidebarMenu, SidebarProvider } from "@/components/ui/sidebar";

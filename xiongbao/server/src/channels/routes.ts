@@ -1,5 +1,5 @@
-import { readFiring } from "@openbot/shared/routine-firing";
-import { isStarterTourAgent } from "@openbot/shared/starter-tour";
+import { readFiring } from "@xiongbao/shared/routine-firing";
+import { isStarterTourAgent } from "@xiongbao/shared/starter-tour";
 import {
   and,
   asc,

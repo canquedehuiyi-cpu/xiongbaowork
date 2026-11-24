@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { workOwner } from "@openbot/shared/work-owner";
+import { workOwner } from "@xiongbao/shared/work-owner";
 import { eq, inArray } from "drizzle-orm";
 import { type AuditStore, handoffInitiator } from "../audit";
+import type { StartupScope } from "../auth/role-writer-lifecycle";
 import type { GroupConversations } from "../channels/group";
 import type { ChannelStore } from "../channels/routes";
 import type { ThreadIdentity } from "../channels/thread-identity";
@@ -15,7 +16,6 @@ import {
   groupBotThreads,
   intelligenceChannelMappings,
 } from "../db/schema";
-import type { StartupScope } from "../auth/role-writer-lifecycle";
 import type { QuotaService } from "../quota/limits";
 import type { TaskProjector } from "../tasks/projector";
 import type { ProductTelemetry } from "../telemetry/product";

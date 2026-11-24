@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { RECORDER_SIGNED_OUT } from "@openbot/shared/recorder-api";
+import { RECORDER_SIGNED_OUT } from "@xiongbao/shared/recorder-api";
 import type {
   CapturedEvent,
   JsonValue,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import { PASS_HINTS } from "../src/offscreen/grant";
 import {

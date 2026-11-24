@@ -5,7 +5,7 @@
 import type {
   CapturedEvent,
   JsonValue,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import {
   isReadableBody,
   type NetworkBody,

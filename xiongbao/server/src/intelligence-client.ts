@@ -2,7 +2,7 @@ import {
   type CopilotKitIntelligence,
   PlatformRequestError,
 } from "@copilotkit/runtime/v2";
-import { IntelligenceKnowingANewThread } from "@openbot/toolkit/copilotkit/agents";
+import { IntelligenceKnowingANewThread } from "@xiongbao/toolkit/copilotkit/agents";
 import type { IntelligenceSettings } from "./config";
 import { transientStatus } from "./intelligence-startup";
 

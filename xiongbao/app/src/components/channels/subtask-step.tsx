@@ -1,7 +1,7 @@
 import { useCopilotChatConfiguration } from "@copilotkit/react-core/v2";
-import { humanise, readToolName } from "@openbot/shared/tool-name";
 import { IconLoader2 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import { humanise, readToolName } from "@xiongbao/shared/tool-name";
 import { useContext, useState } from "react";
 import { TurnInFlightContext } from "@/components/gallery/streaming";
 import { spentOf } from "@/lib/spent-of";

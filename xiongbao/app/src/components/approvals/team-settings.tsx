@@ -17,7 +17,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { DEFAULT_DESKTOP_ACTION_WORDS } from "@openbot/shared/desktop-control";
+import { DEFAULT_DESKTOP_ACTION_WORDS } from "@xiongbao/shared/desktop-control";
 import { Fragment, useState } from "react";
 import {
   PageEmpty,

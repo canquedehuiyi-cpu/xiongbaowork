@@ -1,4 +1,4 @@
-import type { HandoffRequest } from "@openbot/shared/computer-control";
+import type { HandoffRequest } from "@xiongbao/shared/computer-control";
 import { HEADER } from "../../../shared/wire-headers";
 import type { NavigateResult } from "./schema";
 import { checkNavigationTarget } from "./target";

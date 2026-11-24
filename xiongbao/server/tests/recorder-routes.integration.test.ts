@@ -7,8 +7,8 @@ import {
   RECORDER_SIGNED_OUT,
   type RecorderConnectionsResponse,
   type RecordingsPage,
-} from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../src/app";
 import type { AuditEventInput } from "../src/audit";
@@ -20,9 +20,9 @@ import {
   recorderTrajectoryBindings,
 } from "../src/db/schema/recorder";
 import { createRecorderExtension } from "../src/recorder/wiring";
+import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { SESSION_LIFETIME_MS, testEnvironment } from "./support/environment";
-import { runAsTenant } from "../src/tenant/context";
 import { afterAll, beforeAll, test } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -655,13 +655,11 @@ describe("recordings", () => {
       ),
     );
     await runAsTenant(busy, () =>
-      database
-        .insert(recorderTrajectoryBindings)
-        .values({
-          trajectoryId: theirs,
-          userId: busy,
-          createdAt: new Date(base),
-        }),
+      database.insert(recorderTrajectoryBindings).values({
+        trajectoryId: theirs,
+        userId: busy,
+        createdAt: new Date(base),
+      }),
     );
     const asked: string[] = [];
     const intelligenceFetch = (async (input: Request | string | URL) => {

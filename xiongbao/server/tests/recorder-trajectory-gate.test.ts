@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   RECORDER_SIGNED_OUT,
   TRAJECTORY_GATE_REFUSALS,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import type { AuditEventInput } from "../src/audit";
 import type {
   RecorderActor,

@@ -14,8 +14,8 @@
  * held to the same rules. Not `report_goal_progress`: progress is recorded by the run working on a
  * goal, against that run.
  */
-import { currentApprovalContext } from "@openbot/toolkit/continuation";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import { currentApprovalContext } from "@xiongbao/toolkit/continuation";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import type { AuditInitiator } from "../audit";
 import type { ResponsibilityEngine } from "./engine";
 import { responsibilityTools } from "./tools";

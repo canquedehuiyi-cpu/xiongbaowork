@@ -1,4 +1,4 @@
-import { declaredHarness } from "@openbot/shared/harnesses";
+import { declaredHarness } from "@xiongbao/shared/harnesses";
 import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import {
   ACP_CLOUD_WORKDIR_REF,

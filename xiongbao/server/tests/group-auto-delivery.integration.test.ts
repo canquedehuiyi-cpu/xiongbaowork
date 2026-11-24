@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { type BaseEvent, EventType } from "@ag-ui/client";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { and, asc, eq, inArray, like } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";

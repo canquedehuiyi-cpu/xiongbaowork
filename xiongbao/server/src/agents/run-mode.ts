@@ -1,4 +1,4 @@
-import type { RunMode } from "@openbot/shared/bot-prompt";
+import type { RunMode } from "@xiongbao/shared/bot-prompt";
 import type { AuditInitiator } from "../audit";
 import { isProactiveInitiator } from "../proactive/initiator";
 

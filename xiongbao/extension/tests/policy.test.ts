@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { TrajectoryGrant } from "@openbot/shared/recorder-api";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+import type { TrajectoryGrant } from "@xiongbao/shared/recorder-api";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import {
   currentConnection,

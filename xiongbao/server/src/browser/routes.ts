@@ -20,17 +20,17 @@ import {
   type RealBrowserOpenResponse,
   type RealBrowserRequest,
   realBrowserComputerPaths,
-} from "@openbot/shared/openbot-browser";
+} from "@xiongbao/shared/openbot-browser";
 import {
   RECORDER_ACTIVITY_STALE_MS,
   type RecorderActivity,
   type RecorderConnection,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import {
   RECORDER_EXTENSION_ID,
   RECORDER_STORE_IDS,
   recorderStorePage,
-} from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/recorder-extension";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { z } from "zod";

@@ -1,7 +1,7 @@
-import type { LauncherState } from "@openbot/shared/openbot-browser";
-import type { RecordingRow } from "@openbot/shared/recorder-api";
 import { IconVideo } from "@tabler/icons-react";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import type { LauncherState } from "@xiongbao/shared/openbot-browser";
+import type { RecordingRow } from "@xiongbao/shared/recorder-api";
 import React, { type ReactNode } from "react";
 import {
   PageEmpty,

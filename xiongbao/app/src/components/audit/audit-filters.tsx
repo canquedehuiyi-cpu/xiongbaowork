@@ -1,3 +1,4 @@
+import { IconChevronDown, IconCirclePlus, IconX } from "@tabler/icons-react";
 import {
   AUDIT_EFFECTS,
   AUDIT_INTENTS,
@@ -6,10 +7,9 @@ import {
   type AuditIntent,
   auditFilterParams,
   hasAuditFilters,
-} from "@openbot/shared/audit-filters";
-import { auditTypeWords } from "@openbot/shared/audit-words";
-import { connectorName, humanise } from "@openbot/shared/tool-name";
-import { IconChevronDown, IconCirclePlus, IconX } from "@tabler/icons-react";
+} from "@xiongbao/shared/audit-filters";
+import { auditTypeWords } from "@xiongbao/shared/audit-words";
+import { connectorName, humanise } from "@xiongbao/shared/tool-name";
 import { type ReactElement, type ReactNode, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {

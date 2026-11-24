@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createRequire } from "node:module";
 import { join } from "node:path";
-import { NOT_SHOWN } from "@openbot/shared/component-markers";
+import { NOT_SHOWN } from "@xiongbao/shared/component-markers";
 import { z } from "zod";
 import { GALLERY as ACTIVITY } from "../../app/src/components/gallery/activity";
 import { GALLERY as CARDS } from "../../app/src/components/gallery/cards";

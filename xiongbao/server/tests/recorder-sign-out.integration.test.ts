@@ -1,6 +1,6 @@
 import { expect } from "bun:test";
 import { createHmac, randomUUID } from "node:crypto";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { eq, inArray } from "drizzle-orm";
 import { createApp } from "../src/app";
 import type { AuditEventInput, AuditStore } from "../src/audit";

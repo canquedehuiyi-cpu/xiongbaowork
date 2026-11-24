@@ -8,11 +8,6 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  type ConnectPrompt,
-  connectAppRefusal,
-  SHOW_APP_ACCESS_TOOL,
-} from "@openbot/shared/connect-prompt";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -29,6 +24,11 @@ import {
   render,
   waitFor,
 } from "@testing-library/react";
+import {
+  type ConnectPrompt,
+  connectAppRefusal,
+  SHOW_APP_ACCESS_TOOL,
+} from "@xiongbao/shared/connect-prompt";
 import type { ReactNode } from "react";
 import {
   AppAccessCard,

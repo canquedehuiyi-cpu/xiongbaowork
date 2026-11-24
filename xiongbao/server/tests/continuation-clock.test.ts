@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { TURN_LIMITS } from "../../toolkit/src/limits";
 import type { createTurnRunner } from "../src/routines/run-turn";
 import { createContinuationRunner } from "../src/threads/continuation-clock";

@@ -1,12 +1,12 @@
 import {
   isLearnedSkillName,
   type LearningProposalDetail,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { englishName } from "../brand";
 import type { Database } from "../db/client";
 import { learningSkillApprovals } from "../db/schema/learning";
 import type { ReviewSteps } from "./review";
-import { englishName } from "../brand";
 
 /**
  * The name a proposed skill's SKILL.md gives itself in its front matter, or null when it has none or an unusable one.

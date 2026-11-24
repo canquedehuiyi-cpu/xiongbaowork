@@ -5,7 +5,7 @@ import {
   LearnedSkillsError,
   type LearnedSkillsSnapshotResult,
 } from "@copilotkit/runtime/v2";
-import type { LearningSettings } from "@openbot/shared/learning";
+import type { LearningSettings } from "@xiongbao/shared/learning";
 import { personalLearningContainerId } from "../src/learning/personal-space";
 import {
   createLearningRuntime,

@@ -52,8 +52,8 @@
                   {
                     "group": [
                       "./copilotkit/**",
-                      "@openbot/toolkit/copilotkit",
-                      "@openbot/toolkit/copilotkit/**"
+                      "@xiongbao/toolkit/copilotkit",
+                      "@xiongbao/toolkit/copilotkit/**"
                     ],
                     "message": "The toolkit core does not depend on CopilotKit. Code that needs @copilotkit/runtime lives in toolkit/src/copilotkit and imports the core, not the other way round."
                   },
@@ -65,7 +65,7 @@
                       "hono",
                       "hono/**"
                     ],
-                    "message": "The toolkit core depends on @ag-ui, rxjs, zod and @openbot/shared only. CopilotKit-specific code goes in toolkit/src/copilotkit."
+                    "message": "The toolkit core depends on @ag-ui, rxjs, zod and @xiongbao/shared only. CopilotKit-specific code goes in toolkit/src/copilotkit."
                   }
                 ]
               }

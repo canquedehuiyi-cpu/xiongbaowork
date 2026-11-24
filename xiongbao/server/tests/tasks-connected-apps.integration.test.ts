@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { createTurnRunner, type RunnerLike } from "@openbot/toolkit/run-turn";
+import { createTurnRunner, type RunnerLike } from "@xiongbao/toolkit/run-turn";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { z } from "zod";

@@ -1,4 +1,4 @@
-import type { HeadlessWaiting } from "@openbot/toolkit/headless-tools";
+import type { HeadlessWaiting } from "@xiongbao/toolkit/headless-tools";
 import {
   boolean,
   index,

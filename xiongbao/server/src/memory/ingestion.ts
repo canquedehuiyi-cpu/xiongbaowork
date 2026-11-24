@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readConnectPrompt } from "@openbot/shared/connect-prompt";
+import { readConnectPrompt } from "@xiongbao/shared/connect-prompt";
 import { accessFor } from "../plugins/access";
 import { catalogueEntry } from "../plugins/catalogue";
 import { asksForArguments } from "../plugins/composio";
@@ -13,7 +13,6 @@ import {
   recordCost,
 } from "./rank";
 import { createStickyMemory } from "./sticky";
-import type { MemoryVectorsService } from "./vectors";
 import type { MemoryStore } from "./store";
 import {
   type ImportedMemory,
@@ -21,6 +20,7 @@ import {
   type MemorySource,
   parseMemorySourceInput,
 } from "./types";
+import type { MemoryVectorsService } from "./vectors";
 
 /** 挑记忆进上下文时，先取最近更新的这么多条做候选（`store.retrieve` 默认只给 40 条）。 */
 const CONTEXT_CANDIDATES = 200;

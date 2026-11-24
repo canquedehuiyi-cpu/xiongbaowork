@@ -21,8 +21,8 @@
  * implementations of the same hard thing, one of which nobody tests.
  */
 
-import { untitledLine } from "@openbot/shared/conversation-title";
-import type { HeadlessWaiting } from "@openbot/toolkit/headless-tools";
+import { untitledLine } from "@xiongbao/shared/conversation-title";
+import type { HeadlessWaiting } from "@xiongbao/toolkit/headless-tools";
 import {
   and,
   asc,

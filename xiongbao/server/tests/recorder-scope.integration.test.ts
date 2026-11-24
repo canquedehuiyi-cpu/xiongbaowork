@@ -1,9 +1,9 @@
 import { describe, expect, spyOn } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { CopilotKitIntelligence } from "@copilotkit/runtime/v2";
-import type { ExchangeResponse } from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
-import { IntelligenceKnowingANewThread } from "@openbot/toolkit/copilotkit/agents";
+import type { ExchangeResponse } from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
+import { IntelligenceKnowingANewThread } from "@xiongbao/toolkit/copilotkit/agents";
 import { count, eq, inArray } from "drizzle-orm";
 import { GATED_ROUTES, runtimeRun } from "../src/admin/gate";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

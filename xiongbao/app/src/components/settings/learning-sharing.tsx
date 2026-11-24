@@ -1,7 +1,3 @@
-import type {
-  LearningSharingMode,
-  PersonalLearningSharing,
-} from "@openbot/shared/learning";
 import {
   IconCheck,
   IconChevronRight,
@@ -11,6 +7,10 @@ import {
   IconUsersGroup,
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import type {
+  LearningSharingMode,
+  PersonalLearningSharing,
+} from "@xiongbao/shared/learning";
 import React from "react";
 import {
   PageEmpty,

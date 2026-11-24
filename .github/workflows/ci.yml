@@ -718,7 +718,7 @@ jobs:
           - pkg: shared
             own-lockfile: false
             root-install: true
-          # Root workspace (typechecked by static). Its source imports `@openbot/shared` by the
+          # Root workspace (typechecked by static). Its source imports `@xiongbao/shared` by the
           # workspace name (upstream #784), which only the root install links.
           - pkg: worker
             own-lockfile: false

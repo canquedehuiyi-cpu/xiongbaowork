@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { answerMessageId } from "@openbot/shared/handoff-markers";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
+import { answerMessageId } from "@xiongbao/shared/handoff-markers";
 import { ConversationView } from "@/components/channels/conversation-view";
 import { type AgentProfile, agentKeys } from "@/lib/agents/queries";
 import { queryClient } from "@/query-client";

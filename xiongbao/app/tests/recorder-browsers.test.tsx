@@ -7,11 +7,6 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import {
-  RECORDER_COLLECTS,
-  RECORDER_DISCLOSURE,
-} from "@openbot/shared/recorder-disclosure";
-import { RECORDER_STORE_IDS } from "@openbot/shared/recorder-extension";
 import { environmentManager, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
@@ -21,6 +16,11 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import {
+  RECORDER_COLLECTS,
+  RECORDER_DISCLOSURE,
+} from "@xiongbao/shared/recorder-disclosure";
+import { RECORDER_STORE_IDS } from "@xiongbao/shared/recorder-extension";
 import { storeTabSentence } from "@/components/browser/browser-nav-item";
 import { BrowserSections } from "@/components/settings/browsers/browser-sections";
 import { ConnectedBrowsers } from "@/components/settings/browsers/connected-browsers";
@@ -241,9 +241,7 @@ for (const [how, sentence] of [
     fireEvent.click(again);
     await view.findByText("请在刚打开的录制器标签页里确认。");
     await new Promise((resolve) => setTimeout(resolve, 1200));
-    expect(
-      view.getByText("请在刚打开的录制器标签页里确认。"),
-    ).toBeTruthy();
+    expect(view.getByText("请在刚打开的录制器标签页里确认。")).toBeTruthy();
   });
 
 test("a trusted OpenBot's connect, answered connected with no Connect page, reads Connected at once and never asks the person to confirm", async () => {
@@ -269,9 +267,7 @@ test("a trusted OpenBot's connect, answered connected with no Connect page, read
   await view.findByText("已连接", {}, { timeout: 1000 });
   watch.disconnect();
   expect(
-    said.some((text) =>
-      text.includes("请在刚打开的录制器标签页里确认。"),
-    ),
+    said.some((text) => text.includes("请在刚打开的录制器标签页里确认。")),
   ).toBe(false);
   expect(view.queryByRole("button")).toBeNull();
 });
@@ -287,9 +283,7 @@ test("a connection from another copy (Chrome connected, this is Edge) neither sh
   await view.findByText("请在刚打开的录制器标签页里确认。");
   await new Promise((resolve) => setTimeout(resolve, 2500));
   expect(view.queryByText("已连接")).toBeNull();
-  expect(
-    view.getByText("请在刚打开的录制器标签页里确认。"),
-  ).toBeTruthy();
+  expect(view.getByText("请在刚打开的录制器标签页里确认。")).toBeTruthy();
 });
 
 test("a copy that answers the ping with its install id and a matching connection reads Connected", async () => {

@@ -2,8 +2,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { HARNESSES, type Harness } from "@openbot/shared/harnesses";
-import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
+import { HARNESSES, type Harness } from "@xiongbao/shared/harnesses";
+import { isPersonBrowserId } from "@xiongbao/shared/openbot-browser";
 import {
   and,
   desc,

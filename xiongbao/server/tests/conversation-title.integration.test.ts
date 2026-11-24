@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { untitledLine } from "@openbot/shared/conversation-title";
+import { untitledLine } from "@xiongbao/shared/conversation-title";
 import { eq } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";

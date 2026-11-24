@@ -1,10 +1,10 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { connectAppRefusal } from "@openbot/shared/connect-prompt";
-import { and, eq, inArray, like } from "drizzle-orm";
-import { createBotReset } from "../src/agents/lifecycle-reset";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { connectAppRefusal } from "@xiongbao/shared/connect-prompt";
+import { and, eq, inArray, like } from "drizzle-orm";
+import { createBotReset } from "../src/agents/lifecycle-reset";
 import { createAuditStore } from "../src/audit";
 import { createCredentialStore } from "../src/credentials";
 import { createDatabase } from "../src/db/client";

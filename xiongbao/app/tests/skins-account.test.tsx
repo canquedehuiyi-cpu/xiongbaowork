@@ -7,7 +7,6 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { UserPreferences } from "@openbot/shared/user-preferences";
 import { QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -19,6 +18,7 @@ import {
 } from "@tanstack/react-router";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { UserPreferences } from "@xiongbao/shared/user-preferences";
 import { signOutMutationOptions } from "@/lib/auth/mutations";
 import { authKeys } from "@/lib/auth/queries";
 import { appConfig } from "@/lib/generated/application-config";

@@ -1,5 +1,5 @@
-import { appToolName } from "@openbot/shared/tool-name";
-import { TOOL_VERBS as VERBS } from "@openbot/shared/tool-name-words";
+import { appToolName } from "@xiongbao/shared/tool-name";
+import { TOOL_VERBS as VERBS } from "@xiongbao/shared/tool-name-words";
 
 /**
  * One of an app's tools as a person reads it in a list of tools, on the app's page and on a Bot's

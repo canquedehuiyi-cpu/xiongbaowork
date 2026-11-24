@@ -1,4 +1,4 @@
-import type { DrawnComponent } from "@openbot/toolkit/run-turn";
+import type { DrawnComponent } from "@xiongbao/toolkit/run-turn";
 import {
   resolveUpdateRoute,
   type UpdateRoute,

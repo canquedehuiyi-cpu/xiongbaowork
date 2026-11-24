@@ -1,12 +1,12 @@
+import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import {
   type BotBrowserApiState,
   botBrowserApiPaths,
-} from "@openbot/shared/bot-browser";
+} from "@xiongbao/shared/bot-browser";
 import type {
   BrowserNavigateRequest,
   BrowserTabsRequest,
-} from "@openbot/shared/openbot-browser";
-import { mutationOptions, type QueryClient } from "@tanstack/react-query";
+} from "@xiongbao/shared/openbot-browser";
 import {
   type NarrationAnswer,
   type NarrationPost,

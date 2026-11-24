@@ -1,4 +1,4 @@
-import { declaredHarness } from "@openbot/shared/harnesses";
+import { declaredHarness } from "@xiongbao/shared/harnesses";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import type { AuditEventType, AuditStore } from "../audit";
