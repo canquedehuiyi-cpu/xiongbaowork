@@ -1,0 +1,282 @@
+{
+  "generatedAt": "2026-11-24T04:56:19.056Z",
+  "runs": 5,
+  "firecrawl": {
+    "available": true,
+    "version": "firecrawl-local 0.1.1",
+    "sha256": "ee425d0fb364a154d364e835ca1f191f7dfc571ca2cdfa96743404951c495ea3"
+  },
+  "pages": {
+    "static-article": {
+      "label": "静态文章",
+      "tools": {
+        "xiongbao-web-fetch": {
+          "status": "ok",
+          "score": {
+            "chars": 689,
+            "bodyRecall": 1,
+            "factRecall": 1,
+            "noiseRate": null,
+            "cellRecall": null,
+            "rowFidelity": null,
+            "gotJsBody": null
+          },
+          "timingsMs": [
+            9,
+            5,
+            5,
+            4,
+            3
+          ],
+          "medianMs": 5
+        },
+        "firecrawl-local": {
+          "status": "ok",
+          "score": {
+            "chars": 705,
+            "bodyRecall": 1,
+            "factRecall": 1,
+            "noiseRate": null,
+            "cellRecall": null,
+            "rowFidelity": null,
+            "gotJsBody": null
+          },
+          "timingsMs": [
+            8,
+            8,
+            8,
+            9,
+            8
+          ],
+          "medianMs": 8
+        }
+      }
+    },
+    "js-article": {
+      "label": "脚本渲染页",
+      "tools": {
+        "xiongbao-web-fetch": {
+          "status": "ok",
+          "score": {
+            "chars": 23,
+            "bodyRecall": 0.002,
+            "factRecall": 0,
+            "noiseRate": 1,
+            "cellRecall": null,
+            "rowFidelity": null,
+            "gotJsBody": false
+          },
+          "timingsMs": [
+            3,
+            3,
+            3,
+            2,
+            3
+          ],
+          "medianMs": 3
+        },
+        "firecrawl-local": {
+          "status": "ok",
+          "score": {
+            "chars": 678,
+            "bodyRecall": 1,
+            "factRecall": 1,
+            "noiseRate": 0,
+            "cellRecall": null,
+            "rowFidelity": null,
+            "gotJsBody": true
+          },
+          "timingsMs": [
+            1125,
+            1167,
+            1098,
+            1132,
+            1197
+          ],
+          "medianMs": 1132
+        }
+      }
+    },
+    "long-table": {
+      "label": "长表格（80 行 x 5 列）",
+      "tools": {
+        "xiongbao-web-fetch": {
+          "status": "ok",
+          "score": {
+            "chars": 3790,
+            "bodyRecall": 1,
+            "factRecall": 1,
+            "noiseRate": null,
+            "cellRecall": 1,
+            "rowFidelity": 1,
+            "gotJsBody": null
+          },
+          "timingsMs": [
+            21,
+            24,
+            25,
+            19,
+            23
+          ],
+          "medianMs": 23
+        },
+        "firecrawl-local": {
+          "status": "ok",
+          "score": {
+            "chars": 3782,
+            "bodyRecall": 1,
+            "factRecall": 1,
+            "noiseRate": null,
+            "cellRecall": 1,
+            "rowFidelity": 1,
+            "gotJsBody": null
+          },
+          "timingsMs": [
+            12,
+            12,
+            15,
+            12,
+            16
+          ],
+          "medianMs": 12
+        }
+      }
+    },
+    "noisy-article": {
+      "label": "带导航与广告噪声的页",
+      "tools": {
+        "xiongbao-web-fetch": {
+          "status": "ok",
+          "score": {
+            "chars": 696,
+            "bodyRecall": 1,
+            "factRecall": 1,
+            "noiseRate": 0,
+            "cellRecall": null,
+            "rowFidelity": null,
+            "gotJsBody": null
+          },
+          "timingsMs": [
+            3,
+            3,
+            3,
+            2,
+            3
+          ],
+          "medianMs": 3
+        },
+        "firecrawl-local": {
+          "status": "ok",
+          "score": {
+            "chars": 806,
+            "bodyRecall": 1,
+            "factRecall": 1,
+            "noiseRate": 0.3,
+            "cellRecall": null,
+            "rowFidelity": null,
+            "gotJsBody": null
+          },
+          "timingsMs": [
+            9,
+            10,
+            9,
+            8,
+            10
+          ],
+          "medianMs": 9
+        }
+      }
+    },
+    "noisy-divs": {
+      "label": "噪声页（全是 div，无语义标签）",
+      "tools": {
+        "xiongbao-web-fetch": {
+          "status": "ok",
+          "score": {
+            "chars": 713,
+            "bodyRecall": 1,
+            "factRecall": 1,
+            "noiseRate": 0.2,
+            "cellRecall": null,
+            "rowFidelity": null,
+            "gotJsBody": null
+          },
+          "timingsMs": [
+            4,
+            9,
+            3,
+            3,
+            3
+          ],
+          "medianMs": 3
+        },
+        "firecrawl-local": {
+          "status": "ok",
+          "score": {
+            "chars": 930,
+            "bodyRecall": 1,
+            "factRecall": 1,
+            "noiseRate": 0.8,
+            "cellRecall": null,
+            "rowFidelity": null,
+            "gotJsBody": null
+          },
+          "timingsMs": [
+            9,
+            10,
+            13,
+            8,
+            10
+          ],
+          "medianMs": 10
+        }
+      }
+    },
+    "pdf-report": {
+      "label": "PDF（正文 + 12 行表）",
+      "tools": {
+        "xiongbao-web-fetch": {
+          "status": "not-returned",
+          "note": "web_fetch 对二进制内容（application/pdf）只描述、不返回正文。",
+          "score": {
+            "chars": 0,
+            "bodyRecall": 0,
+            "factRecall": 0,
+            "noiseRate": null,
+            "cellRecall": 0,
+            "rowFidelity": 0,
+            "gotJsBody": null
+          },
+          "timingsMs": [
+            0,
+            0,
+            1,
+            0,
+            0
+          ],
+          "medianMs": 0
+        },
+        "firecrawl-local": {
+          "status": "ok",
+          "score": {
+            "chars": 805,
+            "bodyRecall": 1,
+            "factRecall": 1,
+            "noiseRate": null,
+            "cellRecall": 1,
+            "rowFidelity": 1,
+            "gotJsBody": null
+          },
+          "timingsMs": [
+            25,
+            26,
+            29,
+            22,
+            25
+          ],
+          "medianMs": 25
+        }
+      }
+    }
+  }
+}
