@@ -38,11 +38,11 @@ import { createAgentRoutes } from "../../server/src/agents/routes";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * The OpenDots frame, drawn around a page the way `_authed/_app` draws it, against OpenBot's own
- * agent routes and the payloads OpenBot's endpoints send.
+ * The OpenDots frame, drawn around a page the way `_authed/_app` draws it, against XiongBao's own
+ * agent routes and the payloads XiongBao's endpoints send.
  *
- * What it holds the frame to: every OpenBot surface the default sidebar reaches is reachable from
- * it, Settings above all (it is where a skin is switched back); its Dots are OpenBot's Bots as the
+ * What it holds the frame to: every XiongBao surface the default sidebar reaches is reachable from
+ * it, Settings above all (it is where a skin is switched back); its Dots are XiongBao's Bots as the
  * agents route lists them; a Dot opens a chat with its Bot; and its computer toggle drives the
  * conversation's own computer pane rather than opening a second one.
  */
@@ -156,18 +156,18 @@ function agentRoutes() {
   });
 }
 
-/** OpenBot's endpoints, answering in the envelopes the browser reads them in. */
+/** XiongBao's endpoints, answering in the envelopes the browser reads them in. */
 async function serve(path: string, init?: RequestInit): Promise<Response> {
   const method = init?.method ?? "GET";
   requests.push({ method, path });
-  const url = new URL(path, "http://openbot.test");
+  const url = new URL(path, "http://xiongbao.test");
   if (
     url.pathname === "/api/agents" ||
     url.pathname.startsWith("/api/agents/")
   ) {
     return agentRoutes().request(
       new Request(
-        `http://openbot.test${url.pathname.slice("/api/agents".length)}${url.search}`,
+        `http://xiongbao.test${url.pathname.slice("/api/agents".length)}${url.search}`,
         init,
       ),
     );
@@ -298,12 +298,12 @@ function draw(path: string) {
   const page = createRoute({
     getParentRoute: () => root,
     path: "$",
-    component: () => <p>OpenBot page</p>,
+    component: () => <p>XiongBao page</p>,
   });
   const index = createRoute({
     getParentRoute: () => root,
     path: "/",
-    component: () => <p>OpenBot home</p>,
+    component: () => <p>XiongBao home</p>,
   });
   const router = createRouter({
     history: createMemoryHistory({ initialEntries: [path] }),
@@ -328,7 +328,7 @@ function hrefs(container: HTMLElement) {
 }
 
 describe("OpenDots frame", () => {
-  test("BOTS lists the Bots OpenBot's agent list returns, in the roster's order", async () => {
+  test("BOTS lists the Bots XiongBao's agent list returns, in the roster's order", async () => {
     const { view } = draw("/");
     const list = await view.findByRole("navigation", { name: "你的员工" });
     await waitFor(() =>
@@ -457,11 +457,11 @@ describe("OpenDots frame", () => {
     cleanup();
     // Without a chosen Bot there is no one to introduce.
     const open = draw("/channel/new");
-    await open.view.findByText("OpenBot page");
+    await open.view.findByText("XiongBao page");
     expect(open.view.queryByRole("link", { name: /编辑员工/ })).toBeNull();
   });
 
-  test("every OpenBot surface is reachable from the frame", async () => {
+  test("every XiongBao surface is reachable from the frame", async () => {
     const { view } = draw("/");
     await view.findByText("Planning the Lisbon trip");
     await view.findByText("Cass");
@@ -543,7 +543,7 @@ describe("OpenDots frame", () => {
     ["a member", person],
     ["an admin", admin],
   ])(
-    "the rail and sidebar draw OpenBot's own navigation list for %s",
+    "the rail and sidebar draw XiongBao's own navigation list for %s",
     async (_who, signedIn) => {
       actor = signedIn;
       const { view } = draw("/");
@@ -564,7 +564,7 @@ describe("OpenDots frame", () => {
           ).toBeTruthy(),
         );
       }
-      // Every destination OpenBot's sidebar offers this person, under its own label, and no others.
+      // Every destination XiongBao's sidebar offers this person, under its own label, and no others.
       for (const item of expected) {
         expect(
           within(rail)
@@ -605,7 +605,7 @@ describe("OpenDots frame", () => {
       agentsFail = true;
       channels = [];
       const { view } = draw(path);
-      await view.findByText(/OpenBot (page|home)/);
+      await view.findByText(/XiongBao (page|home)/);
       const settings = view
         .getAllByRole("link")
         .filter((link) => link.getAttribute("href") === "/settings");
@@ -636,7 +636,7 @@ describe("OpenDots frame", () => {
     );
   });
 
-  test("elsewhere, the computer toggle opens OpenBot's computer for the Bot on screen", async () => {
+  test("elsewhere, the computer toggle opens XiongBao's computer for the Bot on screen", async () => {
     const { view, user } = draw("/bots/cass");
     await waitFor(() =>
       expect(view.getByTestId("opendots-crumb").textContent).toBe("Cass"),
@@ -644,7 +644,7 @@ describe("OpenDots frame", () => {
     await user.click(view.getByRole("button", { name: "显示电脑" }));
     const pane = await view.findByTestId("opendots-computer-pane");
     expect(within(pane).getByText("Cass的电脑")).toBeTruthy();
-    // OpenBot's own panel, not a copy of it.
+    // XiongBao's own panel, not a copy of it.
     expect(within(pane).getByRole("region", { name: "电脑侧栏" })).toBeTruthy();
     await user.click(within(pane).getByRole("button", { name: "关闭电脑" }));
     expect(view.queryByTestId("opendots-computer-pane")).toBeNull();
@@ -661,13 +661,13 @@ describe("OpenDots frame", () => {
     // A page about no one Bot offers no pause, since there would be nothing to say it applies to.
     cleanup();
     const elsewhere = draw("/settings/connected-accounts");
-    await elsewhere.view.findByText("OpenBot page");
+    await elsewhere.view.findByText("XiongBao page");
     expect(elsewhere.view.queryByRole("button", { name: /^暂停/ })).toBeNull();
   });
 });
 
 describe("OpenDots screens", () => {
-  test("Routines is OpenBot's routines list under OpenDots' heading", async () => {
+  test("Routines is XiongBao's routines list under OpenDots' heading", async () => {
     const Screen = opendots.screens?.routines;
     if (!Screen) throw new Error("OpenDots has no routines screen");
     const view = render(
@@ -679,7 +679,7 @@ describe("OpenDots screens", () => {
     expect(await view.findByText("还没有定时任务")).toBeTruthy();
   });
 
-  test("Memories is OpenBot's memory list under OpenDots' heading, with 记住 a fact", async () => {
+  test("Memories is XiongBao's memory list under OpenDots' heading, with 记住 a fact", async () => {
     const Screen = opendots.screens?.memories;
     if (!Screen) throw new Error("OpenDots has no memories screen");
     const view = render(
@@ -698,7 +698,7 @@ describe("OpenDots screens", () => {
 
 /**
  * The skin is OpenDots' look, never its identity: whatever a person reads as the product is the
- * deployment's own name from `brand.yaml`, and every Bot wears OpenBot's own avatar.
+ * deployment's own name from `brand.yaml`, and every Bot wears XiongBao's own avatar.
  */
 describe("OpenDots skin wears the deployment's brand", () => {
   /** What the drawing of one avatar looks like, without the ids React gives each instance. */
@@ -733,7 +733,7 @@ describe("OpenDots skin wears the deployment's brand", () => {
     expect(view.container.querySelector('img[src*="/skins/"]')).toBeNull();
   });
 
-  test("every Bot wears OpenBot's own avatar, drawn from its avatarSeed", async () => {
+  test("every Bot wears XiongBao's own avatar, drawn from its avatarSeed", async () => {
     const { view } = draw("/channel/new?agent=ada");
     const list = await view.findByRole("navigation", { name: "你的员工" });
     await waitFor(() =>

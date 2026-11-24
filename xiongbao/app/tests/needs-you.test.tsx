@@ -34,7 +34,7 @@ import { settleReactWork } from "./settle-react-work";
 /*
  * What a Bot's check-ins found and the tasks started from them, where the person meets them: the
  * Bots page's Needs you, the Bot's own page, and the OpenDuet skin's Tasks. All three are drawn at
- * once, in one cache, against a fake of OpenBot's API that keeps state the way the real routes do:
+ * once, in one cache, against a fake of XiongBao's API that keeps state the way the real routes do:
  * Dismiss takes an item off the open list, Work on it takes it off and opens a task, and a task's actions
  * move its status. The fake answers in the shapes `server/src/proactive/contracts.ts` promises.
  */

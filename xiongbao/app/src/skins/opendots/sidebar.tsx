@@ -28,7 +28,7 @@ import {
 import { DeleteConversationDialog } from "@/components/channels/delete-conversation-dialog";
 import { LeaveGroupDialog } from "@/components/channels/leave-group-dialog";
 import { NavigationTarget } from "@/components/layout/navigation-target";
-import { OpenBotVersion } from "@/components/layout/openbot-version";
+import { XiongBaoVersion } from "@/components/layout/xiongbao-version";
 import { Button } from "@/components/ui/button";
 import {
   ContextMenu,
@@ -118,7 +118,7 @@ export function IconAction({
 
 /**
  * The deployment's own name, set in OpenDots' wordmark type, which is also the way home. The name
- * is `brand.yaml`'s, the same one OpenBot's sidebar header shows; a skin changes the look, never
+ * is `brand.yaml`'s, the same one XiongBao's sidebar header shows; a skin changes the look, never
  * whose product it is.
  */
 function Wordmark({ onNavigate }: { onNavigate: () => void }) {
@@ -236,7 +236,7 @@ function BotsSection({
                       }
                     : { to: "/channel/new", search: { agent: agent.id } })}
                 >
-                  {/* OpenBot's own avatar for the Bot; hidden so the row is named once. */}
+                  {/* XiongBao's own avatar for the Bot; hidden so the row is named once. */}
                   <span aria-hidden className="contents">
                     <AbstractAvatar
                       name={agent.name}
@@ -266,7 +266,7 @@ function BotsSection({
         </nav>
       )}
       {bots ? (
-        // OpenBot's Bots destination, from the shared list, closing the list of Bots above it.
+        // XiongBao's Bots destination, from the shared list, closing the list of Bots above it.
         <Link
           activeOptions={{ exact: true }}
           activeProps={{ className: navItemActive, "aria-current": "page" }}
@@ -489,7 +489,7 @@ function RecentChats({
             />
           ))
         )}
-        {/* OpenBot's own pager: it loads older conversations as the list scrolls to its end. */}
+        {/* XiongBao's own pager: it loads older conversations as the list scrolls to its end. */}
         <ChannelPagination
           query={channels}
           scrollRoot={scrollRoot}
@@ -531,7 +531,7 @@ function WorkspaceLinks({
   const current = (section: Place["section"]) =>
     place.section === section ? ("page" as const) : undefined;
   /*
-   * OpenDots' sidebar ends on a few rows. OpenBot's primary destinations and the person's own menu
+   * OpenDots' sidebar ends on a few rows. XiongBao's primary destinations and the person's own menu
    * are in the rail at desktop width, so they join these rows only in the phone drawer, where there
    * is no rail. Bots is the row under the list of Bots above.
    */
@@ -569,7 +569,7 @@ function WorkspaceLinks({
           <Count value={memories.data?.length} />
         </Link>
       ) : null}
-      {/* OpenBot's own destinations, from the one list every frame reads. */}
+      {/* XiongBao's own destinations, from the one list every frame reads. */}
       {navigation.map((item) => (
         <NavigationTarget
           aria-current={place.section === item.id ? "page" : undefined}
@@ -598,7 +598,7 @@ export function initialsOf(user: { name?: string | null; email: string }) {
   );
 }
 
-/** Who is signed in, and the way out. OpenBot's sidebar keeps this in its user menu. */
+/** Who is signed in, and the way out. XiongBao's sidebar keeps this in its user menu. */
 function UserRow() {
   const user = useQuery(currentUserQueryOptions());
   const navigate = useNavigate();
@@ -619,7 +619,7 @@ function UserRow() {
         <span className="truncate text-[12px] text-(--opendots-muted)">
           {name}
         </span>
-        <OpenBotVersion className="text-[10px] leading-3 text-(--opendots-icon)" />
+        <XiongBaoVersion className="text-[10px] leading-3 text-(--opendots-icon)" />
       </span>
       {signOutOffered ? (
         <IconAction
@@ -638,8 +638,8 @@ function UserRow() {
 }
 
 /**
- * OpenDots' sidebar over OpenBot's data: the Bots as Dots, the conversations as recent chats, and
- * the workspace views beneath. Every OpenBot surface the default sidebar reaches is here too.
+ * OpenDots' sidebar over XiongBao's data: the Bots as Dots, the conversations as recent chats, and
+ * the workspace views beneath. Every XiongBao surface the default sidebar reaches is here too.
  */
 export function OpenDotsSidebar({
   place,

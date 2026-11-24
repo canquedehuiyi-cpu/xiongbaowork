@@ -51,7 +51,7 @@ import {
 import { SKINS } from "@/skins/registry";
 
 /*
- * The OpenMuse frame against OpenBot's own API shapes. Every payload below is what the server's
+ * The OpenMuse frame against XiongBao's own API shapes. Every payload below is what the server's
  * route returns, envelope and all, so the frame reads it through the same query factories the rest
  * of the app uses. What is checked is what a person sees and can reach.
  */
@@ -123,7 +123,7 @@ function channel(
 }
 
 const scout = agent({ id: "scout", name: "Scout", title: "Research" });
-// OpenBot's default Bot: `defaultAgentProfile` prefers the picked harness over list order.
+// XiongBao's default Bot: `defaultAgentProfile` prefers the picked harness over list order.
 const muse = agent({
   id: "picked-harness",
   name: "Muse",
@@ -467,12 +467,12 @@ function serve(
   return calls;
 }
 
-/** The page under the frame. OpenBot's own pages are stood in for by their path. */
+/** The page under the frame. XiongBao's own pages are stood in for by their path. */
 function Page() {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
-  return <p data-testid="page">OpenBot page {pathname}</p>;
+  return <p data-testid="page">XiongBao page {pathname}</p>;
 }
 
 function renderAt(path: string) {
@@ -545,9 +545,9 @@ async function openMenu() {
 }
 
 describe("OpenMuse is a registered skin with its own frame", () => {
-  test("the registry hands OpenBot the frame and the three skin screens", () => {
+  test("the registry hands XiongBao the frame and the three skin screens", () => {
     expect(SKINS.openmuse.Frame).toBe(OpenMuseFrame);
-    // Apps is OpenBot's own Connections page, so the skin adds three screens, not four.
+    // Apps is XiongBao's own Connections page, so the skin adds three screens, not four.
     expect(Object.keys(SKINS.openmuse.screens ?? {}).sort()).toEqual([
       "activity",
       "goals",
@@ -557,7 +557,7 @@ describe("OpenMuse is a registered skin with its own frame", () => {
 });
 
 describe("the frame", () => {
-  test("centres OpenBot's default Bot, with what it is waiting on", async () => {
+  test("centres XiongBao's default Bot, with what it is waiting on", async () => {
     serve();
     renderAt("/connections");
     const centre = await page().findByRole("button", {
@@ -584,11 +584,11 @@ describe("the frame", () => {
       ),
     );
     expect(page().getByTestId("page").textContent).toBe(
-      "OpenBot page /channel/c-scout",
+      "XiongBao page /channel/c-scout",
     );
   });
 
-  test("the five tabs lead to OpenBot's chat and the skin's own screens", async () => {
+  test("the five tabs lead to XiongBao's chat and the skin's own screens", async () => {
     serve();
     renderAt("/s/goals");
     const nav = await page().findByRole("navigation", { name: PRODUCT });
@@ -639,7 +639,7 @@ describe("the frame", () => {
     ["/s/goals", "column"],
     ["/connections", "column"],
     ["/channel/c-muse", "column"],
-    // The Bot's computer open beside the conversation needs OpenBot's own width.
+    // The Bot's computer open beside the conversation needs XiongBao's own width.
     ["/channel/c-muse?watch=true", "page"],
     ["/channel/c-muse?settings=true", "page"],
     ["/bots/scout/setup", "page"],
@@ -667,7 +667,7 @@ describe("the frame", () => {
     await page().findByRole("button", { name: /^Scout，/ });
     expect(window.localStorage.getItem(chosenBotKey("u-1"))).toBe(scout.id);
     cleanup();
-    // The next person on this browser starts from OpenBot's default Bot.
+    // The next person on this browser starts from XiongBao's default Bot.
     forgetChosenBots();
     serve({ userId: "u-2" });
     renderAt("/s/activity");
@@ -745,11 +745,11 @@ describe("the frame wears the deployment's brand, not OpenMuse's", () => {
     },
   );
 
-  test("the centre Bot is drawn with its own OpenBot avatar", async () => {
+  test("the centre Bot is drawn with its own XiongBao avatar", async () => {
     serve();
     renderAt("/connections");
     const centre = await page().findByRole("button", { name: /切换员工$/ });
-    // AbstractAvatar names the drawing after the Bot, as on its OpenBot page.
+    // AbstractAvatar names the drawing after the Bot, as on its XiongBao page.
     expect(within(centre).getByRole("img", { name: "Muse" })).toBeTruthy();
     expect(capybaras()).toEqual([]);
   });
@@ -772,14 +772,14 @@ describe("the frame wears the deployment's brand, not OpenMuse's", () => {
   });
 });
 
-describe("every OpenBot surface stays reachable", () => {
+describe("every XiongBao surface stays reachable", () => {
   // A row's name is its title and then its one line of detail, so each is matched from its start.
   const surfaces: [RegExp, string][] = [
     [/^主对话/, "/channel/c-muse"],
     [/^新对话$/, "/channel/new?agent=picked-harness"],
     [/^新建群组$/, "/group/new"],
     [/^首页$/, "/"],
-    // OpenBot's own destinations, from the shared navigation list its sidebar draws.
+    // XiongBao's own destinations, from the shared navigation list its sidebar draws.
     [/^人才市场$/, "/bots"],
     [/^任务看板$/, "/tasks"],
     [/^自主工作$/, "/autonomous"],
@@ -880,7 +880,7 @@ describe("every OpenBot surface stays reachable", () => {
   });
 
   test.each(["admin", "user"] as const)(
-    "the menu draws OpenBot's whole navigation list for a %s",
+    "the menu draws XiongBao's whole navigation list for a %s",
     async (role) => {
       serve({ role });
       renderAt("/s/goals");
@@ -983,31 +983,31 @@ describe("every OpenBot surface stays reachable", () => {
   });
 });
 
-describe("each tab is OpenBot's own sections for the centre Bot", () => {
+describe("each tab is XiongBao's own sections for the centre Bot", () => {
   test("Activity shows what the Bot waits on you for, and its work", async () => {
     serve();
     renderAt("/s/activity");
-    // OpenBot's Needs you section, under the Bot's name, with its approval's details always shown.
+    // XiongBao's Needs you section, under the Bot's name, with its approval's details always shown.
     expect(await page().findByText("Open url")).toBeTruthy();
     expect(page().getAllByText("Muse").length).toBeGreaterThan(0);
-    // Labelled, as the card in OpenBot lists what it would send: the URL is the target and the value.
+    // Labelled, as the card in XiongBao lists what it would send: the URL is the target and the value.
     expect(page().getByText("URL")).toBeTruthy();
     expect(page().getAllByText("https://example.com").length).toBe(2);
-    // OpenBot's activity sections for the Bot.
+    // XiongBao's activity sections for the Bot.
     expect(await page().findByText("Morning briefing")).toBeTruthy();
     expect(page().getByText("Draft the launch post")).toBeTruthy();
     expect(page().getByRole("heading", { name: "进行中" })).toBeTruthy();
     expect(page().getByRole("heading", { name: "已完成" })).toBeTruthy();
   });
 
-  test("Ideas shows only the centre Bot's suggestions and starts one through OpenBot", async () => {
+  test("Ideas shows only the centre Bot's suggestions and starts one through XiongBao", async () => {
     const calls = serve();
     renderAt("/s/ideas");
     expect(
       await page().findByText("Book a table for Friday dinner"),
     ).toBeTruthy();
     expect(page().queryByText("Compare pricing pages")).toBeNull();
-    // OpenBot's own check-ins section for the Bot sits under the suggestions.
+    // XiongBao's own check-ins section for the Bot sits under the suggestions.
     expect(page().getByRole("heading", { name: "主动巡检" })).toBeTruthy();
     fireEvent.click(page().getByRole("button", { name: "开始处理" }));
     await waitFor(() =>
@@ -1029,7 +1029,7 @@ describe("each tab is OpenBot's own sections for the centre Bot", () => {
     expect(page().queryByText("Watch the competition")).toBeNull();
   });
 
-  test("a routine is paused from Goals through OpenBot's own switch", async () => {
+  test("a routine is paused from Goals through XiongBao's own switch", async () => {
     const calls = serve();
     renderAt("/s/goals");
     fireEvent.click(
@@ -1046,7 +1046,7 @@ describe("each tab is OpenBot's own sections for the centre Bot", () => {
     );
   });
 
-  test("the bell lists what is waiting and decides through OpenBot's approvals", async () => {
+  test("the bell lists what is waiting and decides through XiongBao's approvals", async () => {
     const calls = serve();
     renderAt("/s/goals");
     fireEvent.click(
@@ -1054,7 +1054,7 @@ describe("each tab is OpenBot's own sections for the centre Bot", () => {
     );
     const sheet = within(await page().findByRole("dialog"));
     expect(await sheet.findByText("Muse 想要 open url")).toBeTruthy();
-    // What it will send is always on screen, as in OpenBot.
+    // What it will send is always on screen, as in XiongBao.
     expect(sheet.getByText("URL")).toBeTruthy();
     expect(sheet.getAllByText("https://example.com").length).toBe(2);
     expect(sheet.queryByText(/send email/)).toBeNull();
@@ -1070,7 +1070,7 @@ describe("each tab is OpenBot's own sections for the centre Bot", () => {
 });
 
 describe("the rules the frame runs on", () => {
-  test("the centre follows the conversation, then the choice, then OpenBot's default", () => {
+  test("the centre follows the conversation, then the choice, then XiongBao's default", () => {
     const agents = [scout, muse];
     expect(centreBot(agents, null, undefined)?.id).toBe(muse.id);
     expect(centreBot(agents, scout.id, undefined)?.id).toBe(scout.id);

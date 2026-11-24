@@ -11,7 +11,7 @@ import { cleanup, fireEvent, render } from "@testing-library/react";
 import { ServerToolLine } from "@/components/channels/chat-transcript";
 import {
   AuditPage,
-  withoutOpenBotWorking,
+  withoutXiongBaoWorking,
 } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
 import { deploymentKeys } from "@/lib/deployment/queries";
@@ -139,7 +139,7 @@ async function renderAs(edition: "team" | "personal") {
   });
   seedAuditPage(
     queryClient,
-    edition === "personal" ? withoutOpenBotWorking("") : "",
+    edition === "personal" ? withoutXiongBaoWorking("") : "",
     { events: ROWS },
   );
   queryClient.setQueryData(pluginKeys.page(), {

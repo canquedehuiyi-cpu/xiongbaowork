@@ -9,7 +9,7 @@ import { settleReactWork } from "./settle-react-work";
 /*
  * FOUND IN THE 1.0 RC1 MAC PASS: under a saved rule's title, the line that says what else it matches
  * read "write on host-grant-15407-1794112361547002000 for shopper-bot": the raw kind of action, the
- * id OpenBot gave a folder, and the Bot's id. It names the folder as Settings → Computer does, the
+ * id XiongBao gave a folder, and the Bot's id. It names the folder as Settings → Computer does, the
  * Bot by its name, and the kind of action in words.
  *
  * M4: the fork's rule row lives in the approvals inbox (`/approvals`), not upstream's settings page;

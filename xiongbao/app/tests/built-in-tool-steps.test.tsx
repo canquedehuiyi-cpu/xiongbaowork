@@ -9,7 +9,7 @@ import { queryClient } from "@/query-client";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * OpenBot's own tools read as words in the conversation, never as their identifiers.
+ * XiongBao's own tools read as words in the conversation, never as their identifiers.
  *
  * Seen on a live install: the step lines of one conversation read `copilotkit_load_skill`,
  * `list_bots` and `remember_personal_fact`, between lines that read "Searched the web" and "Asked
@@ -21,7 +21,7 @@ const originalFetch = globalThis.fetch;
 
 beforeAll(() => {
   GlobalRegistrator.register({ url: "http://localhost/" });
-  // The line asks whether OpenBot is waiting on the person about this call; nothing is.
+  // The line asks whether XiongBao is waiting on the person about this call; nothing is.
   globalThis.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0]) => {
       const url = new URL(
@@ -133,7 +133,7 @@ test("while one is still running, its line says what it is doing", async () => {
 
 /*
  * A DRAWN INTERFACE IS A STEP TOO. The runtime offers `render_ui` when a conversation can draw
- * generated interfaces, so no OpenBot registration names it, and a live conversation read
+ * generated interfaces, so no XiongBao registration names it, and a live conversation read
  * "render_ui" above the trip budget its Bot had just drawn.
  */
 test("drawing an interface reads as what the Bot did, not the tool's identifier", async () => {
@@ -155,7 +155,7 @@ test("drawing an interface reads as what the Bot did, not the tool's identifier"
 test("a call to a name with no label reads in words from its first frame", async () => {
   const view = draw(
     [
-      { id: "u1", role: "user", content: "Search the web for OpenBot." },
+      { id: "u1", role: "user", content: "Search the web for XiongBao." },
       {
         id: "a1",
         role: "assistant",
@@ -177,7 +177,7 @@ test("a call to a name with no label reads in words from its first frame", async
 
 test("once a call to a name with no label is answered, it still reads in words", async () => {
   const view = draw([
-    { id: "u1", role: "user", content: "Search the web for OpenBot." },
+    { id: "u1", role: "user", content: "Search the web for XiongBao." },
     ...step("lookup_weather", "Error: no tool by that name."),
   ]);
   expect(await view.findByText("Lookup weather")).toBeTruthy();

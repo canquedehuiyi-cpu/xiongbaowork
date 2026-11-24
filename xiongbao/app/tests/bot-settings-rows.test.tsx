@@ -206,7 +206,7 @@ test("the rows for goals, reach, memory and rules say what this Bot has and open
   await row("审批与权限", "1 条规则", "approvals");
 });
 
-/** The personal starter on the harness picked at setup, as OpenBot Desktop on Windows starts it. */
+/** The personal starter on the harness picked at setup, as XiongBao Desktop on Windows starts it. */
 const ON_HARNESS: AgentProfile = {
   ...BOT,
   endpoint: "http://agent-harness:4206/ag-ui",

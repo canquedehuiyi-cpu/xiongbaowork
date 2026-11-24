@@ -50,7 +50,7 @@ beforeEach(() => {
   queryClient = new QueryClient();
   queryClient.setQueryData(authKeys.currentUser(), {
     id: ME,
-    email: "dev@openbot.local",
+    email: "dev@xiongbao.local",
     role: "admin",
     onboarding: null,
   });

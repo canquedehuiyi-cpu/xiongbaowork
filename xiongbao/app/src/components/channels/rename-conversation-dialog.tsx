@@ -24,7 +24,7 @@ const MAX_NAME_LENGTH = 60;
  *
  * A dialog, like Delete beside it in the same menu, so the row keeps its avatar, time and dots
  * while the name is typed. Enter saves, Escape or Cancel leaves the name as it was, and an empty
- * name gives the conversation back the name OpenBot chose for it.
+ * name gives the conversation back the name XiongBao chose for it.
  */
 export function RenameConversationDialog({
   channelId,

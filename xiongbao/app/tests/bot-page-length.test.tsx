@@ -79,7 +79,7 @@ test("a goal that runs only when asked is counted and listed as on demand, never
     ...(routine as ActivityItem),
     id: "responsibility:watch",
     kind: "responsibility",
-    title: "Watch OpenBot releases",
+    title: "Watch XiongBao releases",
     detail: "Runs when asked",
     status: "active",
   } as ActivityItem;
@@ -94,7 +94,7 @@ test("a goal that runs only when asked is counted and listed as on demand, never
 
   const page = glance(data);
   expect(await page.findByText("1 项已排期 · 1 项按需")).toBeTruthy();
-  expect(page.getByText("Watch OpenBot releases")).toBeTruthy();
+  expect(page.getByText("Watch XiongBao releases")).toBeTruthy();
   cleanup();
 
   const sections = glance(data, BotActivitySections);
@@ -107,7 +107,7 @@ test("a goal that runs only when asked is counted and listed as on demand, never
         ?.querySelectorAll("[data-slot=item-title]") ?? []),
     ].map((title) => title.textContent);
   expect(listedUnder(scheduled)).toEqual(["Check releases 1"]);
-  expect(listedUnder(onDemand)).toEqual(["Watch OpenBot releases"]);
+  expect(listedUnder(onDemand)).toEqual(["Watch XiongBao releases"]);
 });
 
 test("the newest three suggestions show, and the rest open in place", async () => {

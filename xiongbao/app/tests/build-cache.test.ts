@@ -20,7 +20,7 @@ const serveOrBuildScriptPath = fileURLToPath(serveOrBuildScript);
 async function withProject(
   callback: (paths: { rootDir: string; appDir: string }) => Promise<void>,
 ) {
-  const rootDir = await mkdtemp(join(tmpdir(), "openbot-build-cache-"));
+  const rootDir = await mkdtemp(join(tmpdir(), "xiongbao-build-cache-"));
   const appDir = join(rootDir, "app");
   try {
     await mkdir(join(appDir, "src/lib/generated"), { recursive: true });
@@ -64,13 +64,13 @@ describe("production build cache", () => {
     await withProject(async (paths) => {
       await writeBuildCacheManifest(paths, {
         TENANT_PACKAGE_DIR: "../examples/brand",
-        VITE_PUBLIC_NAME: "OpenBot",
+        VITE_PUBLIC_NAME: "XiongBao",
       });
 
       expect(
         await isReusableBuild(paths, {
           TENANT_PACKAGE_DIR: "../examples/brand",
-          VITE_PUBLIC_NAME: "OpenBot",
+          VITE_PUBLIC_NAME: "XiongBao",
         }),
       ).toBe(true);
     });
@@ -132,7 +132,9 @@ describe("production build cache", () => {
     const env = { TENANT_PACKAGE_DIR: "../examples/qoderwake" };
     await withProject(async (paths) => {
       const brand = join(paths.rootDir, "examples/xiongbao/brand.yaml");
-      await mkdir(join(paths.rootDir, "examples/xiongbao"), { recursive: true });
+      await mkdir(join(paths.rootDir, "examples/xiongbao"), {
+        recursive: true,
+      });
       await writeFile(brand, "name: A\n");
       expect(tenantPackageDir(paths.rootDir, env)).toBe(
         join(paths.rootDir, "examples/xiongbao"),
@@ -145,7 +147,7 @@ describe("production build cache", () => {
 
   test("rejects a build when Vite-exposed environment changes", async () => {
     await withProject(async (paths) => {
-      await writeBuildCacheManifest(paths, { VITE_PUBLIC_NAME: "OpenBot" });
+      await writeBuildCacheManifest(paths, { VITE_PUBLIC_NAME: "XiongBao" });
 
       expect(
         await isReusableBuild(paths, { VITE_PUBLIC_NAME: "Changed" }),

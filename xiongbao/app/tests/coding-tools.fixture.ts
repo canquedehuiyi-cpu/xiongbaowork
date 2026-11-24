@@ -1,7 +1,7 @@
 /**
  * A coding harness Bot's tool calls, as `agent-claude-sdk/` sends them.
  *
- * RECORDED, not written: each `recorded` entry is one call from a real run of `OpenBotClaudeAgentAdapter`
+ * RECORDED, not written: each `recorded` entry is one call from a real run of `XiongBaoClaudeAgentAdapter`
  * (ag-ui-claude-sdk 0.1.5, claude-agent-sdk 0.2.152, which bundles Claude Code 2.1.259), copied out of
  * its AG-UI event stream. `arguments` is the call's streamed arguments joined, `live` the content of
  * its TOOL_CALL_RESULT, and `history` the same result in the MESSAGES_SNAPSHOT that ends the turn,

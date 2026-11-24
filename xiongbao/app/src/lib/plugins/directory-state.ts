@@ -9,7 +9,7 @@ import {
 /**
  * Where one app in Browse apps stands for the person looking at it.
  *
- * ADDED IS NOT CONNECTED. Adding an app records it for OpenBot; a Bot still reaches the app as
+ * ADDED IS NOT CONNECTED. Adding an app records it for XiongBao; a Bot still reaches the app as
  * whoever is asking, so an app that signs in is usable only once that person has signed in. The row
  * used to read "Added" the moment the app was recorded, and a person read that as done, then met a
  * Bot telling them the app wasn't connected. So the row says "Not connected" until it is, which is

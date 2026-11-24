@@ -22,7 +22,7 @@ const shots =
   process.env.OPENBOT_APP_SHOTS ?? join(import.meta.dir, ".wp32-shots");
 
 const APP = join(import.meta.dir, "..");
-const ORIGIN = "http://openbot.test";
+const ORIGIN = "http://xiongbao.test";
 const ELAPSED = /已跑 2 分 15 秒|已进行 2 分 15 秒/;
 
 /** 每个画面：地址片段、等哪句话出现、断言哪句阶段话在。 */
@@ -172,27 +172,30 @@ async function open(hash: string, wait: string): Promise<Page> {
   return page;
 }
 
-describe.skipIf(!asked)("the working line's live elapsed time, in pictures", () => {
-  test("each scene says its stage and its seconds, and is saved dark at 2x", async () => {
-    mkdirSync(shots, { recursive: true });
-    for (const scene of SCENES) {
-      const page = await open(scene.hash, scene.wait);
-      try {
-        // 结构断言：阶段话在、秒数在，图不是白拍的。
-        expect(await page.getByText(scene.stage).count()).toBeGreaterThan(0);
-        expect(await page.getByText(ELAPSED).count()).toBeGreaterThan(0);
-        const dark = await page.evaluate(() =>
-          document.documentElement.classList.contains("dark"),
-        );
-        expect(dark).toBe(true);
-        // observed 画面说「已进行」，其余说「已跑」：限定词各就各位。
-        const qualifier =
-          scene.hash === "observed" ? "已进行 2 分 15 秒" : "已跑 2 分 15 秒";
-        expect(await page.getByText(qualifier).count()).toBe(1);
-        await page.screenshot({ path: join(shots, `${scene.hash}.png`) });
-      } finally {
-        await page.close();
+describe.skipIf(!asked)(
+  "the working line's live elapsed time, in pictures",
+  () => {
+    test("each scene says its stage and its seconds, and is saved dark at 2x", async () => {
+      mkdirSync(shots, { recursive: true });
+      for (const scene of SCENES) {
+        const page = await open(scene.hash, scene.wait);
+        try {
+          // 结构断言：阶段话在、秒数在，图不是白拍的。
+          expect(await page.getByText(scene.stage).count()).toBeGreaterThan(0);
+          expect(await page.getByText(ELAPSED).count()).toBeGreaterThan(0);
+          const dark = await page.evaluate(() =>
+            document.documentElement.classList.contains("dark"),
+          );
+          expect(dark).toBe(true);
+          // observed 画面说「已进行」，其余说「已跑」：限定词各就各位。
+          const qualifier =
+            scene.hash === "observed" ? "已进行 2 分 15 秒" : "已跑 2 分 15 秒";
+          expect(await page.getByText(qualifier).count()).toBe(1);
+          await page.screenshot({ path: join(shots, `${scene.hash}.png`) });
+        } finally {
+          await page.close();
+        }
       }
-    }
-  }, 120_000);
-});
+    }, 120_000);
+  },
+);

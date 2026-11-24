@@ -296,7 +296,7 @@ export function ReachingYou({ agentId: fixedBot }: { agentId?: string }) {
 
 /**
  * Choose the conversation, then link an account or verify a phone. Linking an account answers with a
- * one-time `link <code>` message to send to the OpenBot app; a phone answers with a text carrying a
+ * one-time `link <code>` message to send to the XiongBao app; a phone answers with a text carrying a
  * code to type back here.
  */
 function ConnectDialog({

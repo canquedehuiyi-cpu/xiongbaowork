@@ -31,7 +31,7 @@ function NameStepOnScreen({ finished }: { finished: boolean }) {
     <OnboardingWizard
       initialStepId="name"
       steps={[
-        { id: "welcome", title: "Welcome to OpenBot", intro: () => null },
+        { id: "welcome", title: "Welcome to XiongBao", intro: () => null },
         { id: "selfhost", title: "Talk to us", intro: () => null },
         name,
       ]}

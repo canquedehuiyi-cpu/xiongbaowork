@@ -9,7 +9,7 @@ import { queryClient } from "@/query-client";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * An app's tool that OpenBot asks about is decided in the conversation, where the person is.
+ * An app's tool that XiongBao asks about is decided in the conversation, where the person is.
  *
  * An app's tool runs on the server, and the server stops the turn and opens a request for the
  * person (`HeadlessToolSuspension`, server/src/approvals/service.ts). The conversation drew that
@@ -96,7 +96,7 @@ function draw() {
   );
 }
 
-test("an app's call OpenBot asks about draws its card in the conversation", async () => {
+test("an app's call XiongBao asks about draws its card in the conversation", async () => {
   inbox = [
     {
       id: "approval-1",

@@ -282,7 +282,7 @@ test("the list asks again every few seconds while a recording is still sending, 
 });
 
 test("the list asks again every few seconds while a stopped recording has not reached the back end yet", () => {
-  // A recording the Recorder holds and sends later has no row until it lands (OpenBot Desktop, 2026-11-07).
+  // A recording the Recorder holds and sends later has no row until it lands (XiongBao Desktop, 2026-11-07).
   const refetchInterval = recordingsQueryOptions({ waiting: true })
     .refetchInterval as (query: unknown) => number | false;
   expect(
@@ -294,7 +294,7 @@ test("the list asks again every few seconds while a stopped recording has not re
   ).toBe(RECORDINGS_POLL_MS);
 });
 
-test("starting or stopping a recording from OpenBot refreshes the list", async () => {
+test("starting or stopping a recording from XiongBao refreshes the list", async () => {
   const invalidated: unknown[] = [];
   const invalidate = queryClient.invalidateQueries.bind(queryClient);
   queryClient.invalidateQueries = ((filters: {

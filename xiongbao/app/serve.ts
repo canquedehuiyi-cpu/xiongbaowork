@@ -6,7 +6,7 @@
  * product failing: Vite's proxy calls `socket.destroySoon()` when an upstream response ends, bun's
  * sockets do not implement it, and the process dies with `TypeError: socket.destroySoon is not a
  * function` on the FIRST call the app makes. So the app served its page, died, and the shell's
- * window went on saying "OpenBot is running" with nothing on the port. Measured on a real install.
+ * window went on saying "XiongBao is running" with nothing on the port. Measured on a real install.
  *
  * A development server was never the right thing to run in an installed application, which is what
  * the shell's own comment about this process already said. This serves a directory and forwards one
@@ -301,12 +301,12 @@ if (import.meta.main) {
       // A machine with IPv6 switched off has no ::1 to listen on, and 127.0.0.1 is still there.
       if (hostname !== "::1") throw error;
       console.warn(
-        `OpenBot app is not answering on http://[::1]:${PORT}: ${error instanceof Error ? error.message : String(error)}`,
+        `XiongBao app is not answering on http://[::1]:${PORT}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
 
   console.log(
-    `OpenBot app on http://127.0.0.1:${PORT} and http://[::1]:${PORT}`,
+    `XiongBao app on http://127.0.0.1:${PORT} and http://[::1]:${PORT}`,
   );
 }

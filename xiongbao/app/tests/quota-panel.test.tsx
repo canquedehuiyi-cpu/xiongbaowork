@@ -145,7 +145,7 @@ function draw(role: "admin" | "user", at = "/settings/plans") {
   const queryClient = seed();
   queryClient.setQueryData(authKeys.currentUser(), {
     id: `${role}-1`,
-    email: `${role}@openbot.test`,
+    email: `${role}@xiongbao.test`,
     role,
     onboarding: null,
   });

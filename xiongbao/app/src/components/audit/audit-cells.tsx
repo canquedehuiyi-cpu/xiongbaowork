@@ -145,7 +145,7 @@ export function WhoCell({
   event,
   nameFor,
 }: {
-  /** What OpenBot itself is called here; see {@link startedByText}. */
+  /** What XiongBao itself is called here; see {@link startedByText}. */
   deployment?: string;
   event: AuditEvent;
   nameFor: NameFor;
@@ -303,7 +303,7 @@ function subjectWords(event: AuditEvent): string | undefined {
 
 /**
  * The data functions a component row names: one it read or was refused (`function`), or every one
- * OpenBot Personal gave it in one row (`functions`).
+ * XiongBao Personal gave it in one row (`functions`).
  */
 function functionsOf(
   payload: Record<string, unknown>,
@@ -438,8 +438,8 @@ export function botText(event: AuditEvent, nameFor: NameFor): string {
 }
 
 /**
- * What started a row. Two kinds of row are OpenBot's own change: a configuration row that names
- * OpenBot as its actor (`openbot:always-on`), and a component a build brought, published on arrival
+ * What started a row. Two kinds of row are XiongBao's own change: a configuration row that names
+ * XiongBao as its actor (its always-on grant marker), and a component a build brought, published on arrival
  * (the only publish row with a `note`). Rows written before the server recorded that say a person
  * started them, and the trail cannot be rewritten, so they are read that way here. A row the server
  * says something other than a person started keeps what it says.
@@ -457,7 +457,7 @@ function initiatorKindOf(event: AuditEvent): string | undefined {
 
 /**
  * Who started a row, as the row's 发起方 filter says it, and {@link startedByLine} puts in a
- * sentence under the Bot. `deployment` is what OpenBot itself is called on this screen: 「本部署」 in
+ * sentence under the Bot. `deployment` is what XiongBao itself is called on this screen: 「本部署」 in
  * Admin, and the product in the personal edition's Activity, which is anybody's page. The product
  * is said by its short name, 「熊宝」: 「熊宝数字员工」 reads as one of the person's Bots.
  */

@@ -87,7 +87,7 @@ export function managePaths(edition: "team" | "personal") {
   };
 }
 
-/** A name from these paths at the start of a sentence: "This deployment", and "OpenBot" as it is. */
+/** A name from these paths at the start of a sentence: "This deployment", and "XiongBao" as it is. */
 export function atStart(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }

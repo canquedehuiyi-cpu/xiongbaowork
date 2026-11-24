@@ -1,3 +1,4 @@
+import type { DataFunctionSummary } from "../../../src/lib/components/queries";
 import type { HostAccessStatus } from "../../../src/lib/computers/host-access";
 import type {
   ActionPolicy,
@@ -14,9 +15,8 @@ import type { IdentityProvider } from "../../../src/lib/identity-providers/queri
 import type { SavedLogin } from "../../../src/lib/passwords/queries";
 import type { PeoplePage, Person } from "../../../src/lib/people/queries";
 import type { ComposioApp } from "../../../src/lib/plugins/queries";
-import type { SandboxedRecord } from "../../../src/lib/sandboxed/queries";
-import type { DataFunctionSummary } from "../../../src/lib/components/queries";
 import type { Quota, Tier, TokenUsage } from "../../../src/lib/quota/queries";
+import type { SandboxedRecord } from "../../../src/lib/sandboxed/queries";
 import { type FixtureRoute, list, ok } from "../fixture-kit";
 
 /**
@@ -498,7 +498,7 @@ function enterprise(data: boolean): EnterpriseOverview {
     scim: {
       configured: data,
       connectionId: "scim-default",
-      baseUrl: data ? "https://openbot.example.com/api/scim/v2" : null,
+      baseUrl: data ? "https://xiongbao.example.com/api/scim/v2" : null,
       rotating: false,
     },
     otel: { configured: false },

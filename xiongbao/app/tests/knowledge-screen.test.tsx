@@ -135,7 +135,7 @@ function draw(initial: FakeNotebook[] = []) {
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
   ) => {
-    const url = new URL(String(input), "http://openbot.test");
+    const url = new URL(String(input), "http://xiongbao.test");
     const method = init?.method ?? "GET";
     const body =
       typeof init?.body === "string"

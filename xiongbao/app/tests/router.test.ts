@@ -4,7 +4,7 @@ import {
   routeBuildRollupOutputOptions,
   routeCodeSplittingOptions,
   selectedRouteSplitBehavior,
-  selectOpenBotManualChunk,
+  selectXiongBaoManualChunk,
 } from "../vite.config";
 
 test("provides the generated index route", () => {
@@ -44,27 +44,27 @@ test("splits route components without splitting loaders or providers", () => {
 test("uses explicit manual chunks for route components", () => {
   expect(routeBuildRollupOutputOptions.onlyExplicitManualChunks).toBe(true);
   expect(
-    selectOpenBotManualChunk(
+    selectXiongBaoManualChunk(
       "/repo/app/src/routes/sign.tsx?tsr-split=component",
     ),
   ).toBe("route-sign");
   expect(
-    selectOpenBotManualChunk(
+    selectXiongBaoManualChunk(
       "C:\\repo\\app\\src\\routes\\_authed\\_app\\channel\\$channelId.tsx?tsr-split=component",
     ),
   ).toBe("route-chat-core");
   expect(
-    selectOpenBotManualChunk(
+    selectXiongBaoManualChunk(
       "/repo/app/src/routes/_authed/admin/credentials.tsx?tsr-split=component",
     ),
   ).toBe("route-admin");
   expect(
-    selectOpenBotManualChunk(
+    selectXiongBaoManualChunk(
       "/repo/app/src/routes/_authed/settings/connected-accounts/index.tsx?tsr-split=component",
     ),
   ).toBe("route-settings");
   expect(
-    selectOpenBotManualChunk(
+    selectXiongBaoManualChunk(
       "/repo/app/src/routes/_authed/_app/agents/index.tsx?tsr-split=component",
     ),
   ).toBe("route-app-secondary");
@@ -72,27 +72,27 @@ test("uses explicit manual chunks for route components", () => {
 
 test("does not manually chunk lazy content or dependencies", () => {
   expect(
-    selectOpenBotManualChunk(
+    selectXiongBaoManualChunk(
       "/repo/app/src/routes/_authed/_app/channel/$channelId.tsx?tsr-split=loader",
     ),
   ).toBeUndefined();
   expect(
-    selectOpenBotManualChunk(
+    selectXiongBaoManualChunk(
       "/repo/app/src/components/markdown/lazy-mermaid.tsx",
     ),
   ).toBeUndefined();
   expect(
-    selectOpenBotManualChunk(
+    selectXiongBaoManualChunk(
       "/repo/node_modules/.bun/mermaid@11.12.1/node_modules/mermaid/dist/mermaid.core.mjs",
     ),
   ).toBeUndefined();
   expect(
-    selectOpenBotManualChunk(
+    selectXiongBaoManualChunk(
       "/repo/node_modules/.bun/@copilotkit+react-core@1.70.1/node_modules/@copilotkit/react-core/dist/index.js",
     ),
   ).toBeUndefined();
   expect(
-    selectOpenBotManualChunk(
+    selectXiongBaoManualChunk(
       "/repo/node_modules/.bun/react-dom@19.2.0/node_modules/react-dom/client.js",
     ),
   ).toBeUndefined();

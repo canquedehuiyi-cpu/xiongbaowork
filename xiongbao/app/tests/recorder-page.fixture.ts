@@ -9,16 +9,16 @@ import {
 } from "@xiongbao/shared/recorder-page";
 
 /**
- * A STAND-IN FOR THE RECORDER IN THE BROWSER OPENBOT IS OPEN IN, answering a page's `chrome.runtime.sendMessage` as
+ * A STAND-IN FOR THE RECORDER IN THE BROWSER XIONGBAO IS OPEN IN, answering a page's `chrome.runtime.sendMessage` as
  * the contract in shared/recorder-page.ts types it, while the Recorder's own side of that contract is another slice's
  * work.
  *
  * What it holds to, from the contract and from Chrome:
  * - Messages are checked with the contract's own strict schema; anything else, including any message type this
  *   Recorder does not know, is refused `{ ok: false, error: "invalid" }`, as the Recorder's router refuses one today.
- * - `xiongbao.state` tells a page that is not the connected OpenBot `{ connected: false }` and nothing more.
+ * - `xiongbao.state` tells a page that is not the connected XiongBao `{ connected: false }` and nothing more.
  * - `xiongbao.record` and `xiongbao.stop` answer `RecorderPageResult`; a refusal carries the Recorder's own sentence.
- * - `openbot.connect` connects a trusted OpenBot with no Connect page, answering `connected: true`, and leaves any
+ * - `openbot.connect` connects a trusted XiongBao with no Connect page, answering `connected: true`, and leaves any
  *   other awaiting the person's Connect click (`confirm`), answering `awaitingConfirmation` and nothing about itself,
  *   as the Recorder does.
  * - `xiongbao.connect.status` says where that connect has got to: waiting, cancelled on the Connect page (`cancel`),
@@ -29,9 +29,9 @@ import {
  */
 export class FakeRecorder {
   readonly id: string;
-  /** Connected to the OpenBot this page is. */
+  /** Connected to the XiongBao this page is. */
   connected = false;
-  /** This OpenBot is one the Recorder connects with no Connect page (policy-pinned, or OpenBot Desktop). */
+  /** This XiongBao is one the Recorder connects with no Connect page (policy-pinned, or XiongBao Desktop). */
   trusted = false;
   older = false;
   /** A connect waiting for the person's Connect click on the Recorder's page. */
@@ -40,7 +40,7 @@ export class FakeRecorder {
   private connectWait: RecorderConnectWait = "none";
   /** What `openbot.connect` is refused with, when it is. */
   refuseConnect: string | null = null;
-  /** What `xiongbao.record` is refused with, when it is: the Recorder's own sentence ("Record from OpenBot's own tab."
+  /** What `xiongbao.record` is refused with, when it is: the Recorder's own sentence ("Record from XiongBao's own tab."
    * when a frame inside another page asks). */
   refuseRecord: string | null = null;
   phase: "idle" | "starting" | "recording" | "stopping" = "idle";
@@ -136,7 +136,7 @@ export class FakeRecorder {
 
   private record(title: string): RecorderPageResult {
     if (!this.connected)
-      return { ok: false, error: "Connect the Recorder to OpenBot first." };
+      return { ok: false, error: "Connect the Recorder to XiongBao first." };
     if (this.refuseRecord) return { ok: false, error: this.refuseRecord };
     if (this.phase !== "idle")
       return { ok: false, error: "The Recorder is already recording." };
@@ -150,7 +150,7 @@ export class FakeRecorder {
 
   private stop(): RecorderPageResult {
     if (!this.connected)
-      return { ok: false, error: "Connect the Recorder to OpenBot first." };
+      return { ok: false, error: "Connect the Recorder to XiongBao first." };
     if (this.phase !== "recording")
       return { ok: false, error: "Nothing is being recorded." };
     this.recordings += 1;

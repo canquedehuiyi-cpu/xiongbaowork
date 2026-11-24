@@ -49,7 +49,7 @@ import {
 
 /**
  * The tool pattern the rule form shows as its example. It has to match real tool names, which start
- * with the app as OpenBot lists it (`composio-gmail/GMAIL_SEND_EMAIL`): the earlier example,
+ * with the app as XiongBao lists it (`composio-gmail/GMAIL_SEND_EMAIL`): the earlier example,
  * `mcp/gmail/*`, matched no tool at all, so a rule typed from it never applied.
  */
 export const TOOL_PATTERN_EXAMPLE = "composio-gmail/*";
@@ -124,12 +124,12 @@ function forBot(name: string): string | null {
   return name === GONE_BOT ? GONE_BOT : `员工 ${name}`;
 }
 
-/** A rule saved from a folder's card is on the id OpenBot gave that folder (`host-access/broker.ts`). */
+/** A rule saved from a folder's card is on the id XiongBao gave that folder (`host-access/broker.ts`). */
 const FOLDER_GRANT = "host-grant-";
 
 /**
  * A folder rule's place by the folder's name, as Settings → Computer shows it: "in share". A grant
- * ends when OpenBot stops, so a rule on one that is gone says so rather than naming its id.
+ * ends when XiongBao stops, so a rule on one that is gone says so rather than naming its id.
  */
 function folderWords(
   grantId: string,

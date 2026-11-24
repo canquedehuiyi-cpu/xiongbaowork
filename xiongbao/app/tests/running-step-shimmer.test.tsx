@@ -22,7 +22,7 @@ const originalFetch = globalThis.fetch;
 
 beforeAll(() => {
   GlobalRegistrator.register({ url: "http://localhost/" });
-  // Each line asks whether OpenBot is waiting on the person about its call; nothing is.
+  // Each line asks whether XiongBao is waiting on the person about its call; nothing is.
   globalThis.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0]) => {
       const url = new URL(

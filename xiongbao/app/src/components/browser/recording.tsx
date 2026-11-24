@@ -363,7 +363,7 @@ export function StoppedRow({
   );
 }
 
-/** The same, as a line under the bar above a browser shown in the page (hosted OpenBot). */
+/** The same, as a line under the bar above a browser shown in the page (hosted XiongBao). */
 export function StoppedNotice({ stopped }: { stopped: Stopped }) {
   return (
     <p
@@ -485,7 +485,7 @@ export function RecordingRow({
 }
 
 /**
- * The same controls for the toolbar of a browser shown in the page (hosted OpenBot). Idle, they are one Record button at
+ * The same controls for the toolbar of a browser shown in the page (hosted XiongBao). Idle, they are one Record button at
  * the toolbar's end, where a browser keeps its own actions, and Record opens a small popover with the task's name and
  * `children` (the narration switch), so the toolbar stays one line and never shows a second field beside the address.
  * While recording, the toolbar itself holds the recording's name, its time and actions, `children` and Stop.

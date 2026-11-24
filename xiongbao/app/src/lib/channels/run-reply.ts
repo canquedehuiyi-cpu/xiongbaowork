@@ -3,7 +3,7 @@ import { GALLERY_COMPONENTS } from "@/lib/copilot/gallery-registry";
 
 /**
  * What a turn told the person, as one line for the roster: the conversation's last line, and the
- * "<Bot> replied" notice a reply raises while OpenBot is out of sight.
+ * "<Bot> replied" notice a reply raises while XiongBao is out of sight.
  *
  * WORDS FIRST. The newest message of the turn that says something is the line, as it always was.
  *

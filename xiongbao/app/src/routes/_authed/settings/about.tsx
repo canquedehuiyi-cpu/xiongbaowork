@@ -20,7 +20,7 @@ type Notice = {
 /* 版本号取仓库根 package.json：应用本身没有单独的版本来源，发版时改的就是这一处。 */
 const APP_VERSION = version;
 
-/** 产品名、版本、OpenBot 的 MIT 声明，和第三方依赖清单。 */
+/** 产品名、版本、基础代码的 MIT 声明，和第三方依赖清单。 */
 export function AboutPage() {
   const { productName, companyName } = appConfig.brand;
   const copyright =
@@ -35,7 +35,7 @@ export function AboutPage() {
         <p className="text-muted-foreground text-sm">
           本产品使用了以下开源软件。
         </p>
-        <h3 className="font-medium text-[13px]">OpenBot（MIT）</h3>
+        <h3 className="font-medium text-[13px]">基础代码（MIT）</h3>
         <p className="text-[13px]">{copyright}</p>
         <pre className="whitespace-pre-wrap rounded-[9px] border border-border bg-card p-3 text-[12px] text-muted-foreground">
           {license}

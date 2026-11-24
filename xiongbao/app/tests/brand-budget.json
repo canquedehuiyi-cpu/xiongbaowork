@@ -97,7 +97,7 @@
   {
     "rule": "identifier",
     "scope": "app/src",
-    "lines": 51
+    "lines": 34
   },
   {
     "rule": "identifier",
@@ -181,11 +181,6 @@
   },
   {
     "rule": "import-path",
-    "scope": "app/src",
-    "lines": 3
-  },
-  {
-    "rule": "import-path",
     "scope": "extension/src",
     "lines": 5
   },
@@ -218,11 +213,6 @@
     "rule": "never-change",
     "scope": "toolkit/src",
     "lines": 3
-  },
-  {
-    "rule": "openbot-camel",
-    "scope": "app/src",
-    "lines": 2
   },
   {
     "rule": "runtime-path",

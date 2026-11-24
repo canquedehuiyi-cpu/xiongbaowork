@@ -22,7 +22,7 @@ import { queryClient } from "@/query-client";
 
 /**
  * Whether the person narrates their recordings: their own preference, kept on their account so every browser they
- * open OpenBot in knows it. Null until they chose, which the Record button asks before their first recording, and
+ * open XiongBao in knows it. Null until they chose, which the Record button asks before their first recording, and
  * which keeps the microphone closed. `choose` keeps a new answer, here and in every browser.
  *
  * Undefined while it is not known: the preferences still loading, or not readable. That is not "never chose": read as

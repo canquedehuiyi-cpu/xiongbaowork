@@ -2,7 +2,7 @@
  * One turn of a built-in Bot on a Claude plan that asks the person a question, as the Intelligence
  * gateway replays it to a browser joining the conversation.
  *
- * Captured from a real run (OpenBot server and app, the agent-claude-sdk harness answering for the
+ * Captured from a real run (XiongBao server and app, the agent-claude-sdk harness answering for the
  * plan, hosted Intelligence): the `ag_ui_event` frames the page received on its thread channel,
  * trimmed of the gateway's routing fields, the CUSTOM and STATE_SNAPSHOT frames and the closing
  * MESSAGES_SNAPSHOT, with the call's argument pieces joined into one. Ids, text pieces and their

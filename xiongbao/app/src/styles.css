@@ -163,11 +163,11 @@ body {
 }
 
 /*
- * OpenBot Desktop on macOS has no separate title bar over this page: the window's buttons sit over
+ * XiongBao Desktop on macOS has no separate title bar over this page: the window's buttons sit over
  * the top-left corner and the sidebar runs to the top edge, as in Mac apps with a sidebar. The
  * desktop marks the page (`data-desktop-titlebar`) and makes the sidebar's header the drag handle.
  * It draws the buttons 20px in, on the middle of the header's row (`TRAFFIC_LIGHTS` in the
- * desktop's main.rs), so here the row starts to their right: OpenBot's name and + share
+ * desktop's main.rs), so here the row starts to their right: XiongBao's name and + share
  * one line with them. With the sidebar collapsed the buttons are over the main column instead, so
  * that moves down below them. The main column is the shell's own `<main>`; the primitive's
  * `SidebarInset`, which an earlier rule aimed at, is used by no shell. Outside the desktop nothing
@@ -558,41 +558,95 @@ body {
  * （详情页、选择器预览）才动；`prefers-reduced-motion` 的用户一律看静态。
  */
 @keyframes portrait-motion-connecting {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.06); opacity: 0.85; }
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 0.85;
+  }
 }
 @keyframes portrait-motion-idle {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3%); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3%);
+  }
 }
 @keyframes portrait-motion-making-something {
-  0%, 100% { transform: rotate(-2deg) translateY(0); }
-  50% { transform: rotate(2deg) translateY(-2%); }
+  0%,
+  100% {
+    transform: rotate(-2deg) translateY(0);
+  }
+  50% {
+    transform: rotate(2deg) translateY(-2%);
+  }
 }
 @keyframes portrait-motion-milestone-level-up {
-  0%, 100% { transform: translateY(0) scale(1); }
-  30% { transform: translateY(-8%) scale(1.04); }
-  60% { transform: translateY(0) scale(0.98); }
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  30% {
+    transform: translateY(-8%) scale(1.04);
+  }
+  60% {
+    transform: translateY(0) scale(0.98);
+  }
 }
 @keyframes portrait-motion-waiting-for-subagents {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.03); }
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
 }
 @keyframes portrait-motion-waking {
-  0% { transform: translateY(4%); opacity: 0.7; }
-  100% { transform: translateY(0); opacity: 1; }
+  0% {
+    transform: translateY(4%);
+    opacity: 0.7;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 @keyframes portrait-motion-working {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4%); }
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4%);
+  }
 }
-.portrait-motion-connecting { animation: portrait-motion-connecting 1.6s ease-in-out infinite; }
-.portrait-motion-idle { animation: portrait-motion-idle 3s ease-in-out infinite; }
-.portrait-motion-making-something { animation: portrait-motion-making-something 2.4s ease-in-out infinite; }
-.portrait-motion-milestone-level-up { animation: portrait-motion-milestone-level-up 1.2s ease-in-out infinite; }
-.portrait-motion-waiting-for-subagents { animation: portrait-motion-waiting-for-subagents 4s ease-in-out infinite; }
-.portrait-motion-waking { animation: portrait-motion-waking 1.8s ease-in-out infinite; }
-.portrait-motion-working { animation: portrait-motion-working 0.9s ease-in-out infinite; }
+.portrait-motion-connecting {
+  animation: portrait-motion-connecting 1.6s ease-in-out infinite;
+}
+.portrait-motion-idle {
+  animation: portrait-motion-idle 3s ease-in-out infinite;
+}
+.portrait-motion-making-something {
+  animation: portrait-motion-making-something 2.4s ease-in-out infinite;
+}
+.portrait-motion-milestone-level-up {
+  animation: portrait-motion-milestone-level-up 1.2s ease-in-out infinite;
+}
+.portrait-motion-waiting-for-subagents {
+  animation: portrait-motion-waiting-for-subagents 4s ease-in-out infinite;
+}
+.portrait-motion-waking {
+  animation: portrait-motion-waking 1.8s ease-in-out infinite;
+}
+.portrait-motion-working {
+  animation: portrait-motion-working 0.9s ease-in-out infinite;
+}
 @media (prefers-reduced-motion: reduce) {
   .portrait-motion-connecting,
   .portrait-motion-idle,

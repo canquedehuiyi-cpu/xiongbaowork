@@ -1,10 +1,10 @@
-/** A notification OpenBot raises, and the page of OpenBot a click on it opens. */
+/** A notification XiongBao raises, and the page of XiongBao a click on it opens. */
 export type Notice = {
   title: string;
   body: string;
   /** Two tabs raising the same notice show it once. */
   tag: string;
-  /** An OpenBot path: `/channel/c-1`, `/bots/expenses`. */
+  /** An XiongBao path: `/channel/c-1`, `/bots/expenses`. */
   path: string;
   /** What a click does. */
   onClick?: () => void;
@@ -19,7 +19,7 @@ export function conversationTag(channelId: string): string {
   return `xiongbao-${channelId}`;
 }
 
-/** Whether the person can see OpenBot now, in which case what is on screen says it all. */
+/** Whether the person can see XiongBao now, in which case what is on screen says it all. */
 export function inSight(): boolean {
   return document.visibilityState === "visible" && document.hasFocus();
 }

@@ -11,7 +11,7 @@ import { cleanup, render } from "@testing-library/react";
 import type { ComponentType, ReactNode } from "react";
 import {
   AuditPage,
-  withoutOpenBotWorking,
+  withoutXiongBaoWorking,
 } from "@/components/manage/audit-page";
 import { PluginPage } from "@/components/manage/plugin-page";
 import { agentKeys } from "@/lib/agents/queries";
@@ -31,10 +31,10 @@ import { seedAuditPage } from "./seed-audit-page";
 import { settleReactWork } from "./settle-react-work";
 
 /*
- * The personal edition calls the product OpenBot. Seen on Windows: Settings > Activity said
- * "Started by this deployment" under rows OpenBot itself started, and an app's page under
+ * The personal edition calls the product XiongBao. Seen on Windows: Settings > Activity said
+ * "Started by this deployment" under rows XiongBao itself started, and an app's page under
  * Connections said what "this deployment" registers and keeps. That is Admin's word, for the person
- * who runs OpenBot for everybody; Admin keeps it.
+ * who runs XiongBao for everybody; Admin keeps it.
  */
 
 beforeAll(() => GlobalRegistrator.register({ url: "http://localhost/" }));
@@ -86,7 +86,7 @@ const page = {
   authorizesPerAction: false,
 } as unknown as PluginsPage;
 
-const startedByOpenBot = {
+const startedByXiongBao = {
   id: "e1",
   actorUserId: null,
   initiatorKind: "deployment",
@@ -132,11 +132,11 @@ function draw(edition: "team" | "personal", screen: () => ReactNode) {
   client.setQueryData(pluginKeys.connections(), { connections: [] });
   client.setQueryData(agentKeys.list(false), []);
   client.setQueryData(agentKeys.list(true), []);
-  // Activity asks without OpenBot's own working; Admin asks for everything.
+  // Activity asks without XiongBao's own working; Admin asks for everything.
   seedAuditPage(
     client,
-    edition === "personal" ? withoutOpenBotWorking("") : "",
-    { events: [startedByOpenBot] },
+    edition === "personal" ? withoutXiongBaoWorking("") : "",
+    { events: [startedByXiongBao] },
   );
   const router = createRouter({
     history: createMemoryHistory({ initialEntries: ["/"] }),
@@ -149,7 +149,7 @@ function draw(edition: "team" | "personal", screen: () => ReactNode) {
   );
 }
 
-test("Activity says OpenBot started what OpenBot started", async () => {
+test("Activity says XiongBao started what XiongBao started", async () => {
   const Activity = ActivityRoute.options.component as ComponentType;
   const view = draw("personal", () => <Activity />);
   expect(await view.findByText("由熊宝发起")).toBeTruthy();
@@ -161,7 +161,7 @@ test("Admin's Audit still says this deployment", async () => {
   expect(await view.findByText("由本部署发起")).toBeTruthy();
 });
 
-test("an app's page under Connections says what OpenBot does, not a deployment", async () => {
+test("an app's page under Connections says what XiongBao does, not a deployment", async () => {
   const view = draw("personal", () => <PluginPage pluginKey="notion" />);
   await view.findAllByText("连接");
   const text = view.container.textContent ?? "";

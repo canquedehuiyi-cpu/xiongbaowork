@@ -10,8 +10,8 @@ import {
 
 /**
  * OpenDots' workspace page: a small eyebrow, a large quiet title and one line under it, with the
- * page's primary action on the title's right. What sits beneath is OpenBot's own list, so every
- * switch, Run now, history and delete OpenBot offers is still there.
+ * page's primary action on the title's right. What sits beneath is XiongBao's own list, so every
+ * switch, Run now, history and delete XiongBao offers is still there.
  */
 function OpenDotsPage({
   eyebrow = "你的工作区",
@@ -49,7 +49,7 @@ function OpenDotsPage({
   );
 }
 
-/** Routines: what each Bot does on a schedule, as OpenBot's routines list. */
+/** Routines: what each Bot does on a schedule, as XiongBao's routines list. */
 export function RoutinesScreen() {
   return (
     <OpenDotsPage

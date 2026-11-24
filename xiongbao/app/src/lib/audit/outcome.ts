@@ -115,7 +115,7 @@ export const COMPUTER_ACTION_EVENT_TYPES = [
 ] as const;
 
 /**
- * OpenBot's own working, which the personal edition's Activity leaves out, and the rule that draws an
+ * XiongBao's own working, which the personal edition's Activity leaves out, and the rule that draws an
  * action once. Shared with the server, whose Activity report counts what this page shows.
  */
 export {

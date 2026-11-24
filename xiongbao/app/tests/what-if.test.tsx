@@ -21,7 +21,7 @@ import answers from "./what-if.fixture.json";
  * Admin > What would happen, and Audit's "Why?".
  *
  * The page through its real data functions, with `fetch` answering as the server answered for the
- * same OpenBot (`what-if.fixture.json`, captured through the functions the routes call). A question
+ * same XiongBao (`what-if.fixture.json`, captured through the functions the routes call). A question
  * becomes chips; Check draws each control in order, with the one that decides marked and the ones a
  * real action never reaches faded. On Audit, a row a control decided carries "Why?", which explains it
  * from the row alone.

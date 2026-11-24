@@ -47,7 +47,7 @@ export function fittedWidth(
  * column with a heading above the window), and the frame then has to fit only down to the window's bottom edge.
  * `below` is a part of the frame under the window that takes whatever height is left: it counts only at its CSS
  * `min-height`, so how much it holds never changes the window's size. Everything is measured rather than assumed,
- * because what the bars hold changes and a toolbar wraps on a narrow screen (and per openbot-screen-layout, a size is
+ * because what the bars hold changes and a toolbar wraps on a narrow screen (and per xiongbao-screen-layout, a size is
  * measured, never taken from a Tailwind token).
  *
  * Undefined until the first measurement, and where nothing is laid out (a test's DOM), so the frame falls back to its

@@ -13,7 +13,7 @@ import { AboutPage } from "@/routes/_authed/settings/about";
 import { settleReactWork } from "./settle-react-work";
 
 /*
- * 关于页：产品名、版本、公司名，OpenBot 的 MIT 声明，以及第三方依赖清单。真实清单有 1.8 MB，
+ * 关于页：产品名、版本、公司名，基础代码的 MIT 声明，以及第三方依赖清单。真实清单有 1.8 MB，
  * 这里换成小夹具，既快也不依赖生成步骤的输出。
  */
 mock.module("@/lib/generated/third-party-notices.json", () => ({
@@ -43,8 +43,9 @@ function open() {
   return render(<RouterProvider router={router as never} />);
 }
 
-test("关于页写明公司名、OpenBot 的版权行和 MIT 全文，且不带上游仓库链接", async () => {
+test("关于页写明公司名、基础代码的版权行和 MIT 全文，且不带上游仓库链接", async () => {
   const view = open();
+  expect(await view.findByText("基础代码（MIT）")).not.toBeNull();
   expect(await view.findByText("Copyright (c) 2026 CopilotKit")).not.toBeNull();
   expect(view.container.textContent).toContain("Permission is hereby granted");
   expect(view.container.textContent).toContain(

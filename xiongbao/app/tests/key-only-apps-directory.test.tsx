@@ -18,7 +18,7 @@ import captured from "../../server/tests/fixtures/composio-key-apps.json";
 /**
  * THE DIRECTORY SAYS WHICH APPS TAKE A KEY, BEFORE ANYBODY PRESSES ADD OR CONNECT.
  *
- * Reported from OpenBot Desktop 0.3.3: a person browsing for apps expected a sign-in and kept
+ * Reported from XiongBao Desktop 0.3.3: a person browsing for apps expected a sign-in and kept
  * meeting a key form at Connect. Most of the catalogue has no sign-in, so the form is right; the
  * surprise is the bug. A key app's row now says "需要 1Password 的密钥", and apps you sign in
  * to are listed first.

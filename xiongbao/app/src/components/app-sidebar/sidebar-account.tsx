@@ -6,7 +6,7 @@ import {
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { OpenBotVersion } from "@/components/layout/openbot-version";
+import { XiongBaoVersion } from "@/components/layout/xiongbao-version";
 import { useOptionalTheme } from "@/components/theme-provider";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -112,7 +112,7 @@ export function SidebarAccount() {
                 </span>
               ) : null}
             </span>
-            <OpenBotVersion className="text-right text-[10px] text-faint leading-3" />
+            <XiongBaoVersion className="text-right text-[10px] text-faint leading-3" />
           </span>
         </DropdownMenuTrigger>
         <DropdownMenuContent

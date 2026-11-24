@@ -24,7 +24,7 @@ import { mainChannel, tabFor } from "./model";
 import { Divider, ErrorNotice, LinkRow, MuseSheet, museText } from "./ui";
 
 /**
- * Who sits at the centre of the frame. This look has one agent; OpenBot has a roster, so this is the
+ * Who sits at the centre of the frame. This look has one agent; XiongBao has a roster, so this is the
  * one place the difference shows, and it stays a sheet behind the name rather than a fixture.
  */
 export function BotsSheet({ onClose }: { onClose: () => void }) {

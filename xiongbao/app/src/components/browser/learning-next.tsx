@@ -202,7 +202,7 @@ export function useLearningNext(stopped: Stopped) {
   };
 }
 
-/** Whether this browser lets OpenBot interrupt. Some browsers throw on the mere question. */
+/** Whether this browser lets XiongBao interrupt. Some browsers throw on the mere question. */
 function notificationsAllowed() {
   try {
     return (
@@ -422,7 +422,7 @@ export function LearningNextRow({
 }
 
 /**
- * The next step under a saved recording in the browser drawn in the page (OpenBot Desktop, hosted OpenBot), where Teach
+ * The next step under a saved recording in the browser drawn in the page (XiongBao Desktop, hosted XiongBao), where Teach
  * a Bot is one page and Record lives in the browser's toolbar: under the toolbar's line that says where the recording
  * went, what Learning does with it next, worded for who approves, and the row that follows it through Learning, with
  * See your skills beside its action. Record another is the toolbar's Record.

@@ -115,7 +115,7 @@ export function BotControls({ agent }: { agent: AgentProfile }) {
   const pause = useMutation(setBotPausedMutationOptions(queryClient));
   const notify = useMutation(setBotNotifyMutationOptions(queryClient));
   // The browser's answer, shared with the prompt a conversation offers, so a yes there shows here
-  // (upstream: one reading for the browser and OpenBot Desktop alike).
+  // (upstream: one reading for the browser and XiongBao Desktop alike).
   const permission = useNotificationPermission();
   const memory = useOffersMemory();
   const [resetOpen, setResetOpen] = useState(false);

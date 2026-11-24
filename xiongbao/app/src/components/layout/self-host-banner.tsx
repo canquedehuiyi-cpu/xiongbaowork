@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
  * A slim bar pointing at this tenant's support address, until this person closes it.
  *
  * Hidden until both answers are in, so it never flashes on and then off: the deployment has to say
- * the banner is on (a fork running OpenBot for its own people turns it off), and this person's
+ * the banner is on (a fork running XiongBao for its own people turns it off), and this person's
  * preferences have to say they have not closed it. With no `supportUrl` in the tenant package there is
  * nowhere to send anyone, so it never shows.
  */
@@ -37,7 +37,7 @@ export function SelfHostBanner() {
     >
       {/*
        * Packed from the left rather than pushing Dismiss to the far right: on localhost CopilotKit's
-       * dev inspector floats over the top-right corner, which is where somebody trying OpenBot first
+       * dev inspector floats over the top-right corner, which is where somebody trying XiongBao first
        * sees this, and a Dismiss under it cannot be clicked.
        *
        * Wraps rather than truncates, so a phone reads the whole sentence. The link and Dismiss stay

@@ -53,7 +53,7 @@ const bot: AgentProfile = {
   pinned: false,
   mine: true,
   name: "Terra Bot",
-  roleDescription: "Answers on OpenBot's model.",
+  roleDescription: "Answers on XiongBao's model.",
   systemOwned: false,
   title: "Analyst",
   visibility: "private",
@@ -270,7 +270,7 @@ test("a model and effort picked before the first message are both saved before i
   );
   const user = userEvent.setup({ document });
 
-  // OpenBot's own model, at its own default effort, until the person picks.
+  // XiongBao's own model, at its own default effort, until the person picks.
   await user.click(
     await view.findByRole("combobox", {
       name: "模型：GPT-5.5，思考强度：中",

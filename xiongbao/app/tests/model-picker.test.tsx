@@ -379,7 +379,7 @@ test("switching to a model that takes the effort keeps it", async () => {
   saved["conversation-a"] = { model: "gpt-6.1-terra", effort: "high" };
   const { view, user, popup } = await openPicker(/思考强度：高/);
   await user.click(within(popup).getByRole("option", { name: /^GPT-5\.5/ }));
-  // GPT-5.5 is OpenBot's own model, so it is saved as null; the effort goes with it.
+  // GPT-5.5 is XiongBao's own model, so it is saved as null; the effort goes with it.
   await waitFor(() =>
     expect(writes).toEqual([
       { channelId: "conversation-a", model: null, effort: "high" },

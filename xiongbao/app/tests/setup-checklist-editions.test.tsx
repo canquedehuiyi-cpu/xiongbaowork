@@ -30,7 +30,7 @@ import { settleReactWork } from "./settle-react-work";
  * sentence on the page is the one the server writes.
  *
  * The personal edition has no memory (#1233) and no admin. On Windows its Setup still said the back
- * end "Keeps your conversations and what OpenBot remembers", that people "can connect more apps
+ * end "Keeps your conversations and what XiongBao remembers", that people "can connect more apps
  * than the ones an admin adds", and linked the Admin pages by their Admin names, Credentials and
  * Computers, where its Settings call them Keys and Computer. A team deployment keeps its words.
  */
@@ -87,7 +87,7 @@ function serve(
   facts: { entitlement: RuntimeEntitlementResponse; moreApps: boolean },
 ) {
   const sources = createSetupSources({
-    productName: "OpenBot",
+    productName: "XiongBao",
     config: { singleUser: edition === "personal", edition },
     environment: {},
     model: {
@@ -116,7 +116,7 @@ function serve(
       if (!path.startsWith("/api/setup")) throw new Error(`unexpected ${path}`);
       return routes.request(
         new Request(
-          `http://openbot.test${path.slice("/api/setup".length) || "/"}`,
+          `http://xiongbao.test${path.slice("/api/setup".length) || "/"}`,
           init,
         ),
       );
@@ -159,7 +159,7 @@ test("the personal edition's Setup speaks of no memory and no admin", async () =
   ).toBeTruthy();
   expect(
     row("apps").getByText(
-      "You can connect more apps than the ones OpenBot comes with.",
+      "You can connect more apps than the ones XiongBao comes with.",
     ),
   ).toBeTruthy();
   // The pages it links are the ones its Settings sidebar names.
@@ -180,7 +180,7 @@ test("the personal edition's gaps speak of no memory and no admin either", async
   ).toBeTruthy();
   expect(
     row("apps").getByText(
-      "Without it, you can connect only the apps OpenBot comes with.",
+      "Without it, you can connect only the apps XiongBao comes with.",
     ),
   ).toBeTruthy();
   expect(view.container.textContent).not.toMatch(/remember|memory|admin/i);
@@ -192,7 +192,7 @@ test("a team deployment's Setup keeps memory, its admin, and the Admin pages", a
 
   expect(
     row("intelligence").getByText(
-      "Keeps your conversations and what OpenBot remembers.",
+      "Keeps your conversations and what XiongBao remembers.",
     ),
   ).toBeTruthy();
   expect(

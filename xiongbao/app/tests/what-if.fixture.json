@@ -118,7 +118,7 @@
           "id": "capabilities",
           "title": "Permissions",
           "verdict": "allows",
-          "summary": "\"Use Bots\" is on for Sam Lee, OpenBot's default.",
+          "summary": "\"Use Bots\" is on for Sam Lee, XiongBao's default.",
           "page": "/admin/permissions",
           "decides": false,
           "unreached": false
@@ -236,7 +236,7 @@
           "id": "capabilities",
           "title": "Permissions",
           "verdict": "allows",
-          "summary": "\"Use Bots\" is on for Sam Lee, OpenBot's default.",
+          "summary": "\"Use Bots\" is on for Sam Lee, XiongBao's default.",
           "page": "/admin/permissions",
           "decides": false,
           "unreached": false

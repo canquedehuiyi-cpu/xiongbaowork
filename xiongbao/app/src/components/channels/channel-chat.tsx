@@ -1071,7 +1071,7 @@ export function ChannelChat({
 
   const skillCommands = useSkillCommands(runtimeAgentId);
   /*
-   * The model this conversation's Bot answers on. Only a Bot that runs inside OpenBot uses OpenBot's
+   * The model this conversation's Bot answers on. Only a Bot that runs inside XiongBao uses XiongBao's
    * model, so only it gets a picker; a Bot on its own framework picks its own model.
    */
   const models = useQuery({
@@ -1167,7 +1167,7 @@ export function ChannelChat({
    * `agent.isRunning` looks like both and is neither. It reports the run on the wire, and a turn
    * that touches the browser is several runs in a row: the Bot asks for a click, the run ENDS so
    * the browser can answer it, and another run starts carrying the answer. The agent reports itself
-   * idle in every one of those gaps — the truth about the wire and a lie about the turn. OpenBot
+   * idle in every one of those gaps — the truth about the wire and a lie about the turn. XiongBao
    * registers every computer tool as a frontend tool, so the gaps open on ordinary work rather than
    * on some edge case, and anything keyed on the turn ending fires in the middle of one instead.
    *
@@ -1539,7 +1539,7 @@ export function ChannelChat({
           void queryClient.invalidateQueries({ queryKey: channelKeys.list() });
         }
         /*
-         * A run the server stopped to ask the person (an app's call OpenBot asks about) draws its
+         * A run the server stopped to ask the person (an app's call XiongBao asks about) draws its
          * card now, not on the inbox's next poll, as a computer step's does.
          */
         if (

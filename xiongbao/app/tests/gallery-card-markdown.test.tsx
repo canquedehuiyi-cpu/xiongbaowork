@@ -101,12 +101,12 @@ test("a notice's points draw a markdown link as its text, linked, with no markdo
   expect(container.textContent).toContain(BODY);
 });
 
-test("a link in a card opens outside OpenBot, as a link in a reply does", () => {
+test("a link in a card opens outside XiongBao, as a link in a reply does", () => {
   const { container } = render(
     <NoticeCard points={POINTS.slice(0, 1)} title="Unread" />,
   );
   const anchor = container.querySelector("a");
-  // A new tab with no opener: OpenBot Desktop hands exactly these to the person's own browser.
+  // A new tab with no opener: XiongBao Desktop hands exactly these to the person's own browser.
   expect(anchor?.getAttribute("target")).toBe("_blank");
   expect(anchor?.getAttribute("rel")).toContain("noreferrer");
 });

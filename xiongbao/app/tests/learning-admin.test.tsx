@@ -1175,7 +1175,7 @@ describe("reviewing proposed skills", () => {
 
   test("a sign-in Learning can't use is said on the page, before anyone presses Learn now", async () => {
     const said =
-      "Learning can't run on the model you signed in with. To use it, sign OpenBot in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan.";
+      "Learning can't run on the model you signed in with. To use it, sign XiongBao in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan.";
     intelligence({ ...noDashboard, modelProblem: said });
     const view = shared();
     expect((await view.findByText(said)).getAttribute("role")).toBe("alert");

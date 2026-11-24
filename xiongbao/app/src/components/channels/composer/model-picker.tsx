@@ -52,7 +52,7 @@ const sameChoice = (a: Choice, b: Choice) =>
     : b.kind === "effort" && a.effort === b.effort;
 
 /**
- * The word beside OpenBot's own model, and beside a model's own effort: quiet text at the row's end,
+ * The word beside XiongBao's own model, and beside a model's own effort: quiet text at the row's end,
  * in one style on every row, so it reads on the highlighted row too (a filled tag once matched the
  * highlight and vanished). The row's own right padding keeps it clear of the check.
  */
@@ -88,7 +88,7 @@ function ModelMark({ model }: { model: ModelOption }) {
  * name: the row has the send and dictation controls to fit, and a name of any length crowded them.
  * The tooltip and the button's accessible name say the model and its effort ("GPT-6.1 Terra ·
  * High"). The popup is searchable, because a provider's own list runs to dozens,
- * newest first as the server sends it, with OpenBot's own model marked.
+ * newest first as the server sends it, with XiongBao's own model marked.
  *
  * TWO COLUMNS, ONE LIST, as T3 Code lays it out: the search and the models on the left, and the
  * model in use's efforts in a "Thinking" column on the right. A listbox option cannot hold a second

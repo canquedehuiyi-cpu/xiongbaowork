@@ -532,7 +532,7 @@ test("while an admin has sharing off, Your skills says only your Bots use them, 
     const view = draw();
     await view.findByText("你的技能");
     expect(view.getByText("只有你用的员工会用到这些技能。")).toBeTruthy();
-    expect(view.queryByText(/Every Bot on OpenBot draws on these/)).toBeNull();
+    expect(view.queryByText(/Every Bot on XiongBao draws on these/)).toBeNull();
     expect(view.queryByText(/公开一项技能，熊宝上的每位员工/)).toBeNull();
     expect(view.queryByText(/所有员工都可以用它/)).toBeNull();
     if (mode === "choose")

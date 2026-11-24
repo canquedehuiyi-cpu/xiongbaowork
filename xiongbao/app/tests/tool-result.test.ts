@@ -287,7 +287,7 @@ describe("a gallery call that failed instead of drawing", () => {
  */
 test("an Entra refusal is said in the server's own Chinese sentence", () => {
   const sentence =
-    "「HR」要用你的 Microsoft 账号，但 OpenBot 还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录 OpenBot 一次，再重新提问。";
+    "「HR」要用你的 Microsoft 账号，但 XiongBao 还没有你的 Microsoft 登录。请先在浏览器里用 Microsoft 登录 XiongBao 一次，再重新提问。";
   expect(refusalOf(`Refused. ${sentence}`)).toEqual({
     reason: sentence,
     declined: false,

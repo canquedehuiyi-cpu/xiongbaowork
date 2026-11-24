@@ -60,7 +60,7 @@ let recorder:
   | {
       ping: Record<string, unknown>;
       connect: Record<string, unknown>;
-      /** What the Recorder does with OpenBot as it connects with no Connect page: exchanges the code, which makes the
+      /** What the Recorder does with XiongBao as it connects with no Connect page: exchanges the code, which makes the
        * connection on the server. */
       exchange?: () => void;
       /** Where the connect has got to on its Connect page (`xiongbao.connect.status`); waiting while unset. */
@@ -206,7 +206,7 @@ test("once the person approves on the Connect page, the install id the Recorder 
   const view = draw();
   fireEvent.click(await view.findByRole("button", { name: "连接当前浏览器" }));
   await view.findByText("请在刚打开的录制器标签页里确认。");
-  // The person clicks Connect on the Recorder's page: the connection is OpenBot's, and the Recorder's ping says which
+  // The person clicks Connect on the Recorder's page: the connection is XiongBao's, and the Recorder's ping says which
   // copy made it.
   connections = [connection()];
   recorder.ping = { ok: true, version: "1", installId: THIS_COPY };
@@ -219,7 +219,7 @@ for (const [how, sentence] of [
   ["closed", "你确认之前录制器标签页就关了，没有连接任何东西。"],
 ] as const)
   test(`once the person ${how === "cancelled" ? "cancels on" : "closes"} the Connect page, the row says so within a second, with Connect back`, async () => {
-    // After a Cancel, Settings used to go on saying "请在刚打开的 OpenBot 录制器标签页里确认。" for up to five
+    // After a Cancel, Settings used to go on saying "请在刚打开的 XiongBao 录制器标签页里确认。" for up to five
     // minutes: nothing told it the person had cancelled.
     recorder = {
       ping: { ok: true },
@@ -244,7 +244,7 @@ for (const [how, sentence] of [
     expect(view.getByText("请在刚打开的录制器标签页里确认。")).toBeTruthy();
   });
 
-test("a trusted OpenBot's connect, answered connected with no Connect page, reads Connected at once and never asks the person to confirm", async () => {
+test("a trusted XiongBao's connect, answered connected with no Connect page, reads Connected at once and never asks the person to confirm", async () => {
   recorder = {
     ping: { ok: true },
     connect: { ok: true, version: "1", installId: THIS_COPY, connected: true },
@@ -339,11 +339,11 @@ test("an answer with no sentence of its own still gets one", async () => {
   await view.findByText("录制器没有接受这个请求。请再试一次。");
 });
 
-test("the OpenBot browser's connection says it is the person's OpenBot browser", async () => {
+test("the XiongBao browser's connection says it is the person's XiongBao browser", async () => {
   connections = [
     connection({
       id: "conn-2",
-      label: "OpenBot browser",
+      label: "XiongBao browser",
       via: "openbot-browser",
       installId: "b".repeat(32),
     }),
@@ -351,7 +351,7 @@ test("the OpenBot browser's connection says it is the person's OpenBot browser",
   const view = draw(<ConnectedBrowsers />);
   // Stored under the upstream name before the rename; drawn under the name new connections get.
   await view.findByText("XiongBao Work browser");
-  expect(view.queryByText("OpenBot browser")).toBeNull();
+  expect(view.queryByText("XiongBao browser")).toBeNull();
   const at = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
     timeStyle: "short",
@@ -463,7 +463,7 @@ test("the Disconnect dialog says this browser only on this browser's row, and na
     }),
     connection({
       id: "conn-3",
-      label: "OpenBot browser",
+      label: "XiongBao browser",
       via: "openbot-browser",
       installId: "e".repeat(32),
     }),
@@ -632,7 +632,7 @@ test("in the personal edition Settings, Browsers says a recording goes to your o
   }
 });
 
-test("in the team edition Settings, Browsers still says a recording goes to your organization's OpenBot", async () => {
+test("in the team edition Settings, Browsers still says a recording goes to your organization's XiongBao", async () => {
   const view = await browsersPage("team");
   expect(view.getByText(RECORDER_DISCLOSURE)).toBeTruthy();
   expect(view.container.textContent).toContain(

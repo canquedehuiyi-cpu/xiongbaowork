@@ -33,12 +33,12 @@ export type Place = {
   botId?: string;
   channelId?: string;
   /**
-   * The page draws OpenBot's own Computer pane, opened by `?watch`. The frame's computer toggle
+   * The page draws XiongBao's own Computer pane, opened by `?watch`. The frame's computer toggle
    * drives that pane rather than opening a second one beside it.
    */
   ownsWatch: boolean;
   watching: boolean;
-  /** OpenBot's new-conversation page with its Bot already chosen: OpenDots' coworker home. */
+  /** XiongBao's new-conversation page with its Bot already chosen: OpenDots' coworker home. */
   coworkerHome: boolean;
 };
 
@@ -65,7 +65,7 @@ function under(path: string, prefix: string): boolean {
 
 /**
  * The page a pathname is, as OpenDots names its own views: a Bot's name for a chat with it,
- * "Activity" and "Memories" for its two workspace views, and OpenBot's own page names otherwise.
+ * "Activity" and "Memories" for its two workspace views, and XiongBao's own page names otherwise.
  */
 export function parsePlace(
   pathname: string,

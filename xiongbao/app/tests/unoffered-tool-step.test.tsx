@@ -26,7 +26,7 @@ const originalFetch = globalThis.fetch;
 
 beforeAll(() => {
   GlobalRegistrator.register({ url: "http://localhost/" });
-  // The line asks whether OpenBot is waiting on the person about this call; nothing is.
+  // The line asks whether XiongBao is waiting on the person about this call; nothing is.
   globalThis.fetch = Object.assign(
     async (input: Parameters<typeof fetch>[0]) => {
       const url = new URL(
@@ -90,12 +90,12 @@ function expectOneSentence(container: HTMLElement) {
 
 function lone(result: string): Message[] {
   return [
-    { id: "u1", role: "user", content: "Search the web for OpenBot." },
+    { id: "u1", role: "user", content: "Search the web for XiongBao." },
     {
       id: "a1",
       role: "assistant",
       content: "",
-      toolCalls: [call("c1", "lookup_weather", '{"query":"OpenBot"}')],
+      toolCalls: [call("c1", "lookup_weather", '{"query":"XiongBao"}')],
     },
     { id: "t1", role: "tool", toolCallId: "c1", content: result },
     { id: "a2", role: "assistant", content: "Here is what I found." },
@@ -123,13 +123,13 @@ test("LangGraph's wording, and the runtime's when the Bot has no tools at all, r
 
 test("the same call among other steps opens to the same sentence and counts as an issue", async () => {
   const view = draw([
-    { id: "u1", role: "user", content: "Search the web for OpenBot." },
+    { id: "u1", role: "user", content: "Search the web for XiongBao." },
     {
       id: "a1",
       role: "assistant",
       content: "",
       toolCalls: [
-        call("c1", "web_search", '{"query":"OpenBot"}'),
+        call("c1", "web_search", '{"query":"XiongBao"}'),
         call("c2", "list_bots"),
       ],
     },

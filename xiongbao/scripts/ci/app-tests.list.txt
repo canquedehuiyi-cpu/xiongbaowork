@@ -90,13 +90,13 @@ tests/audit-export-url.test.ts
 tests/audit-folder-actions.test.tsx
 tests/audit-grant-and-routine-rows.test.tsx
 tests/audit-grant-rows.test.tsx
-tests/audit-openbot-setup-rows.test.tsx
 tests/audit-outcome.test.ts
 tests/audit-plumbing-rows.test.tsx
 tests/audit-rule-name.test.tsx
 tests/audit-silence.test.ts
 tests/audit-table-fits.test.tsx
 tests/audit-table.test.tsx
+tests/audit-xiongbao-setup-rows.test.tsx
 tests/auth-client.test.ts
 tests/auth-queries.test.ts
 tests/authoring-tool-cards.test.tsx
@@ -411,7 +411,7 @@ tests/personal-app-page.test.tsx
 tests/personal-capabilities.test.tsx
 tests/personal-connections.test.tsx
 tests/personal-no-memory.test.tsx
-tests/personal-says-openbot.test.tsx
+tests/personal-says-xiongbao.test.tsx
 tests/personal-settings.test.tsx
 tests/pipelines-dispatch-refusal.test.tsx
 tests/pipelines-group-param.test.tsx

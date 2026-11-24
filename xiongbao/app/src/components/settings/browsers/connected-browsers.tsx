@@ -41,7 +41,7 @@ const connectedAt = new Intl.DateTimeFormat(undefined, {
   timeStyle: "short",
 });
 
-/** The browsers signed in to this OpenBot as you, each with a Disconnect that revokes its sign-in. The row of the copy
+/** The browsers signed in to this XiongBao as you, each with a Disconnect that revokes its sign-in. The row of the copy
  * in this browser (`thisInstallId`, from This browser) says so. */
 export function ConnectedBrowsers({
   thisInstallId,
@@ -125,7 +125,7 @@ function ConnectedBrowserRow({
                 ? `，来自${shortName()}网页`
                 : ""}
             ，
-            {/* A recording streams to the gateway, not to OpenBot, so its last use lags: it says so instead. */}
+            {/* A recording streams to the gateway, not to XiongBao, so its last use lags: it says so instead. */}
             {connection.recording
               ? "正在录制"
               : connection.lastUsedAt

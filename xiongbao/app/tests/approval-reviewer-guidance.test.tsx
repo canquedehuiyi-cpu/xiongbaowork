@@ -316,7 +316,7 @@ test("a guidance save reads on Audit as what was saved and how it was read, and 
     targetId: "team",
     createdAt: "2026-11-09T21:16:20.000Z",
     payload: {
-      actor: "admin@openbot.test",
+      actor: "admin@xiongbao.test",
       change: "saved",
       before: null,
       after: DEALS,
@@ -335,7 +335,7 @@ test("a guidance save reads on Audit as what was saved and how it was read, and 
     ...saveRow,
     id: "audit-2",
     payload: {
-      actor: "admin@openbot.test",
+      actor: "admin@xiongbao.test",
       change: "removed",
       before: DEALS,
       after: null,

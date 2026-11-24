@@ -18,7 +18,7 @@ import { cn } from "@/lib/utils";
 import { explainAuditEvent, type WhatIfExplained } from "@/lib/what-if/check";
 import { OUTCOMES, WhatIfResultView } from "./what-if-result";
 
-/** Whether "Why did this happen?" can answer for a row: one OpenBot's controls decided. */
+/** Whether "Why did this happen?" can answer for a row: one XiongBao's controls decided. */
 export function explainable(event: AuditEvent): boolean {
   return whatIfExplainable(event);
 }

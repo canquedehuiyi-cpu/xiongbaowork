@@ -14,7 +14,7 @@ import { z } from "zod";
 import { shortName } from "@/lib/brand";
 
 // The browser's extension messaging API, with no server traffic. The app has no @types/chrome, so the members used
-// are declared here. `webview` is not an extension's: it is how WebView2 (OpenBot Desktop's own app window on
+// are declared here. `webview` is not an extension's: it is how WebView2 (XiongBao Desktop's own app window on
 // Windows) gives a page its host, documented at
 // https://learn.microsoft.com/en-us/microsoft-edge/webview2/reference/javascript/webview
 type ExtensionMessaging = {
@@ -29,7 +29,7 @@ type ExtensionMessaging = {
   webview?: unknown;
 };
 
-/** `version` and `installId` come only when this copy is connected to this OpenBot; an unconnected copy answers `{ ok: true }`. */
+/** `version` and `installId` come only when this copy is connected to this XiongBao; an unconnected copy answers `{ ok: true }`. */
 export type DetectedRecorder = {
   id: string;
   version?: string;
@@ -38,9 +38,9 @@ export type DetectedRecorder = {
 
 /**
  * `awaitingConfirmation`: the Recorder opened its Connect page and waits for the person's click there. `connected`: it
- * connected at once, with no Connect page, as it does for a trusted OpenBot (shared/recorder-page.ts
+ * connected at once, with no Connect page, as it does for a trusted XiongBao (shared/recorder-page.ts
  * `TrustedConnectRule`). A `throttled` refusal carries `retryAfterMs`: how long until the Recorder takes a connect from
- * this OpenBot again.
+ * this XiongBao again.
  */
 type ConnectCodeAnswer =
   | {
@@ -163,14 +163,14 @@ const CONNECT_REFUSALS: Record<string, string> = {
   "pinned-elsewhere": `你的组织把录制器设成了连接另一个${shortName()}。`,
   "policy-invalid": `你的组织给录制器设的${shortName()}地址用不了。请联系你们的 IT 团队。`,
   busy: "录制器正在处理另一个连接请求。请稍后再试。",
-  // A trusted OpenBot's connect, which the Recorder completes itself with OpenBot, with no Connect page.
+  // A trusted XiongBao's connect, which the Recorder completes itself with XiongBao, with no Connect page.
   "exchange-refused": `${shortName()}没有接受录制器的连接请求。请再试一次。`,
   "openbot-unreachable": `录制器连不上${shortName()}。请检查网络后再试。`,
 };
 /** The Recorder can also answer `unreachable` or `invalid`, which have no sentence of their own. */
 const CONNECT_REFUSAL_FALLBACK = "录制器没有接受这个请求。请再试一次。";
 
-/** The Recorder takes only so many connects from one OpenBot in ten minutes; its refusal says how long is left. */
+/** The Recorder takes only so many connects from one XiongBao in ten minutes; its refusal says how long is left. */
 function throttledSentence(retryAfterMs: number | undefined): string {
   const lead = "短时间内连接请求太多。";
   if (retryAfterMs === undefined) return `${lead}请过几分钟再试。`;
@@ -187,14 +187,14 @@ export function connectRefusalSentence(
   return CONNECT_REFUSALS[error] ?? CONNECT_REFUSAL_FALLBACK;
 }
 
-/* THE RECORDER IN THE BROWSER OPENBOT IS OPEN IN (shared/recorder-page.ts). */
+/* THE RECORDER IN THE BROWSER XIONGBAO IS OPEN IN (shared/recorder-page.ts). */
 
 /**
  * Whether this page can send a message to an extension at all. Chrome and Edge give a page `chrome.runtime.sendMessage`
  * only while an extension in them lists the page in its `externally_connectable`, as the Recorder lists every site, and
  * give it to a page already open the moment such an extension is added (both proven in Chrome 156, Edge 155 and
  * Chromium 151). So in a Chrome with no such extension there is no `sendMessage`, and that is not the same as a browser
- * that cannot hold the Recorder. Never in WebView2, OpenBot Desktop's own app window on Windows.
+ * that cannot hold the Recorder. Never in WebView2, XiongBao Desktop's own app window on Windows.
  */
 export function canMessageExtensions(): boolean {
   const chrome = chromeOf();
@@ -208,7 +208,7 @@ type UserAgentData = { brands?: { brand: string }[]; mobile?: boolean };
 /**
  * The store a person adds the Recorder from in the browser this page is open in: Edge Add-ons in Microsoft Edge, the
  * Chrome Web Store in Google Chrome, from the brands the browser itself reports
- * (https://developer.mozilla.org/docs/Web/API/NavigatorUAData/brands). Null anywhere else: Safari, Firefox, OpenBot
+ * (https://developer.mozilla.org/docs/Web/API/NavigatorUAData/brands). Null anywhere else: Safari, Firefox, XiongBao
  * Desktop's own app window (a WebKit view on macOS and Linux, WebView2 on Windows, which may report Edge's brand), and
  * Chrome or Edge on a phone, which take no extensions.
  */
@@ -252,9 +252,9 @@ const pageResultSchema = z.union([
 ]) satisfies z.ZodType<RecorderPageResult>;
 
 /**
- * The Recorder in the browser OpenBot is open in, as the Browser button sees it:
- * - `connected`: it is connected to this OpenBot, and `state` is what it is doing.
- * - `unconnected`: it is here, and connected to no OpenBot or another one.
+ * The Recorder in the browser XiongBao is open in, as the Browser button sees it:
+ * - `connected`: it is connected to this XiongBao, and `state` is what it is doing.
+ * - `unconnected`: it is here, and connected to no XiongBao or another one.
  * - `older`: a Recorder from before `xiongbao.state` (it refuses the message), which XiongBao cannot drive from here.
  * - `absent`: this is Chrome or Edge, the Recorder is not in it, and `page` is its store page there.
  * - `unreachable`: this page cannot reach an extension, or the Recorder has no store page yet for this browser.
@@ -300,7 +300,7 @@ function absentHere(): RecorderHere {
 
 /**
  * Asks each of `ids` (the Recorder ids this XiongBao trusts) what it is doing, with `xiongbao.state`. The Recorder
- * answers only the OpenBot it is connected to with its state, judged by the origin the browser reports for this page,
+ * answers only the XiongBao it is connected to with its state, judged by the origin the browser reports for this page,
  * and every other page with `connected: false`. A copy connected here wins over one that is not.
  */
 export async function findRecorderHere(

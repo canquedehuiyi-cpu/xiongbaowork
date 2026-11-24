@@ -20,7 +20,7 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { KEY_FROM_OPENBOT } from "@/components/agents/callback-token-panel";
+import { KEY_FROM_XIONGBAO } from "@/components/agents/callback-token-panel";
 import { SetupSections } from "@/components/bot-profile/setup";
 import {
   ISOLATED_EXPLAINED,
@@ -68,7 +68,7 @@ afterEach(() => {
 
 /** What `scripts/start.sh` sets `MANAGED_AGENT_AG_UI_URL` to. */
 const MANAGED = "http://localhost:4201/ag-ui";
-/** The harness OpenBot Desktop runs for the personal starter, as `PICKED_HARNESS_URL` names it. */
+/** The harness XiongBao Desktop runs for the personal starter, as `PICKED_HARNESS_URL` names it. */
 const PICKED = "http://agent-harness:4212";
 
 const actor = {
@@ -173,7 +173,7 @@ function serve(
       }
       return routes.request(
         new Request(
-          `http://openbot.test${path.slice("/api/agents".length)}`,
+          `http://xiongbao.test${path.slice("/api/agents".length)}`,
           init,
         ),
       );
@@ -223,8 +223,8 @@ test("the personal edition's Setup has no Visibility or Isolated: one person, on
   serve(MANAGED);
   const view = draw("personal");
   expect(await view.findByRole("button", { name: /^名称/ })).toBeTruthy();
-  // 上游这里还有一条「OpenBot for Business」的营销链接；熊宝不卖上游的 Business 版，不收。
-  expect(view.queryByRole("link", { name: /OpenBot for Business/ })).toBeNull();
+  // 上游这里还有一条 Business 版的营销链接；熊宝不卖上游的 Business 版，不收。
+  expect(view.queryByRole("link", { name: /for Business/ })).toBeNull();
   expect(view.queryByText("可见性")).toBeNull();
   expect(view.queryByText("独立运行")).toBeNull();
 });
@@ -298,11 +298,11 @@ test("a coworker somebody hosts keeps its own endpoint when it is renamed", asyn
   });
 });
 
-test("a Bot on the harness OpenBot runs says it can use its tools, and offers no key to make", async () => {
+test("a Bot on the harness XiongBao runs says it can use its tools, and offers no key to make", async () => {
   serve(PICKED);
   const view = draw("personal");
 
-  expect(await view.findByText(KEY_FROM_OPENBOT)).toBeTruthy();
+  expect(await view.findByText(KEY_FROM_XIONGBAO)).toBeTruthy();
   expect(view.queryByText(/用不了授予它的任何工具/)).toBeNull();
   expect(view.queryByRole("button", { name: "生成令牌" })).toBeNull();
 });

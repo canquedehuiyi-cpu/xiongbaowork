@@ -246,8 +246,8 @@ function Activity({
   metrics: UseQueryResult<CheckInMetrics>;
   onDays: (days: Days) => void;
 }) {
-  const [openBot, setOpenBot] = useState<string | undefined>();
-  const bot = metrics.data?.bots.find((row) => row.agentId === openBot);
+  const [openedBotId, setOpenedBotId] = useState<string | undefined>();
+  const bot = metrics.data?.bots.find((row) => row.agentId === openedBotId);
 
   return (
     <PageSection
@@ -305,7 +305,10 @@ function Activity({
               {metrics.data.bots.map((row, index) => (
                 <Fragment key={row.agentId}>
                   {index > 0 ? <Separator /> : null}
-                  <BotRow bot={row} onOpen={() => setOpenBot(row.agentId)} />
+                  <BotRow
+                    bot={row}
+                    onOpen={() => setOpenedBotId(row.agentId)}
+                  />
                 </Fragment>
               ))}
             </PageRows>
@@ -316,7 +319,7 @@ function Activity({
         <BotDialog
           bot={bot}
           days={days}
-          onClose={() => setOpenBot(undefined)}
+          onClose={() => setOpenedBotId(undefined)}
         />
       ) : null}
     </PageSection>

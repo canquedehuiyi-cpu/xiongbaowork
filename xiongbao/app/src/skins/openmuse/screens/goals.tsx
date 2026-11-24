@@ -6,9 +6,9 @@ import { Divider, MuseScreen, museText, StatusDot } from "../ui";
 import { NoBot } from "./activity";
 
 /**
- * Goals: what the centre Bot keeps doing for the person. OpenMuse's "Tracking" is OpenBot's routines,
- * and its "Goals" are OpenBot's responsibilities, which OpenBot itself titles Goals on a Bot's page.
- * Both lists are OpenBot's own, with every switch, Run now, history and Delete they offer.
+ * Goals: what the centre Bot keeps doing for the person. OpenMuse's "Tracking" is XiongBao's routines,
+ * and its "Goals" are XiongBao's responsibilities, which XiongBao itself titles Goals on a Bot's page.
+ * Both lists are XiongBao's own, with every switch, Run now, history and Delete they offer.
  */
 export function GoalsScreen() {
   const { bot } = useMuse();

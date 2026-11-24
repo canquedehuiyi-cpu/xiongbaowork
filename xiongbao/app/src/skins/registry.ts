@@ -7,7 +7,7 @@ import type { Skin, SkinId } from "./types";
 import { WorkbenchFrame } from "./xiongbao/frame";
 
 /*
- * The default is the product as `brand.yaml` names it, so a deployment that renames OpenBot sees
+ * The default is the product as `brand.yaml` names it, so a deployment that renames XiongBao sees
  * its own name here too. The description says nothing a rename could make untrue.
  */
 const xiongbao: Skin = {

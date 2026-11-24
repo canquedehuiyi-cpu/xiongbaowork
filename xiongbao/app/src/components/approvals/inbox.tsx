@@ -756,12 +756,12 @@ const EFFECT_WORDS: Record<string, string> = {
   delegate: "转交工作",
 };
 
-/** A rule saved from a folder's card is on the id OpenBot gave that folder (`host-access/broker.ts`). */
+/** A rule saved from a folder's card is on the id XiongBao gave that folder (`host-access/broker.ts`). */
 const FOLDER_GRANT = "host-grant-";
 
 /**
  * A folder rule's place by the folder's name, as the computer settings show it: 「在 share 中」. A
- * grant ends when OpenBot stops, so a rule on one that is gone says so rather than naming its id.
+ * grant ends when XiongBao stops, so a rule on one that is gone says so rather than naming its id.
  */
 function folderWords(
   grantId: string,
@@ -782,7 +782,7 @@ function forBot(name: string): string | null {
 
 /**
  * What a saved rule matches beyond its title, in words: the kind of action, the place, the employee.
- * Never the id OpenBot gave a folder (`host-grant-…`), an employee's id, or the raw kind of action.
+ * Never the id XiongBao gave a folder (`host-grant-…`), an employee's id, or the raw kind of action.
  */
 export function useRuleMatch(rule: ApprovalRuleRow): {
   title: string;

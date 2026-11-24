@@ -92,9 +92,9 @@ function actionFrom(raw: string | undefined): WhatIfAction | null {
 }
 
 /**
- * "What would happen if…": an admin asks what OpenBot would do with one action. The model only reads
+ * "What would happen if…": an admin asks what XiongBao would do with one action. The model only reads
  * the question as the action, shown as chips the admin can change; Check then asks every control in
- * the order OpenBot asks them, and says which one decides.
+ * the order XiongBao asks them, and says which one decides.
  *
  * Under What happened in Admin, beside Audit, whose rows answer the same question about the past.
  */

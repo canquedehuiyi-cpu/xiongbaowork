@@ -1319,7 +1319,7 @@ export function PluginPage({
                       ) : (
                         <>
                           <NotConnected />
-                          {/* The arrow says this leaves OpenBot for the vendor's consent page. It does. */}
+                          {/* The arrow says this leaves XiongBao for the vendor's consent page. It does. */}
                           <Button
                             disabled={connectSelf.isPending}
                             onClick={() => {

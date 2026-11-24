@@ -226,7 +226,7 @@ test("a dropped file the screen refuses says why, in our words", async () => {
 
 /**
  * A screenshot dragged onto a conversation: the chip with its preview, and the upload that carries
- * the image to the Bot. OpenBot Desktop dropped exactly this on the floor while Tauri's own
+ * the image to the Bot. XiongBao Desktop dropped exactly this on the floor while Tauri's own
  * drag-and-drop handler took the file (see `dragDropEnabled` in `desktop/src-tauri/tauri.conf.json`
  * and `main_window_leaves_dropped_files_to_the_page`); this pins the page's half of that path.
  */

@@ -106,7 +106,7 @@ export function OnboardingFrame({
       data-onboarding-frame=""
     >
       {/*
-       * In OpenBot Desktop on macOS the window's buttons sit over the page's top-left corner, where
+       * In XiongBao Desktop on macOS the window's buttons sit over the page's top-left corner, where
        * the one-column layout puts Back (a 1000px window is one column). The desktop marks the page
        * (`data-desktop-titlebar`, macOS only), and draws them about 25–41px down, so the header then
        * starts 48px down, below them, in one column and in two.
@@ -281,7 +281,7 @@ export function OnboardingFrame({
  * reached is a button back to it, and picking one closes the list; one ahead is only its name.
  *
  * SAID, NOT ONLY DRAWN. The marks are pictures and hidden, so what they show is said in words a
- * screen reader reads with the name: "Welcome to OpenBot, done", and "Book a demo, not yet
+ * screen reader reads with the name: "Welcome to XiongBao, done", and "Book a demo, not yet
  * available" for a step ahead. The step on screen is `aria-current="step"`.
  */
 function StepMenu({

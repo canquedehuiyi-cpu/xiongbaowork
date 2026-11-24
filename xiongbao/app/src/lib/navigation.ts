@@ -17,7 +17,7 @@ import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 
 /**
- * Where a person can go in OpenBot, in one list, for the sidebar and every skin that replaces it.
+ * Where a person can go in XiongBao, in one list, for the sidebar and every skin that replaces it.
  *
  * A destination added here reaches every frame at once. One left out of a frame's own copy would
  * simply be missing from that skin, with nothing failing to say so.

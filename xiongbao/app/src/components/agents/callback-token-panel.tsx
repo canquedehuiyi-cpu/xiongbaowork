@@ -20,11 +20,11 @@ import { shortName } from "@/lib/brand";
  * A coworker with no token can still hold a conversation. What it cannot do is reach anything outside
  * one, which is the right default for a URL somebody pasted.
  *
- * A Bot OpenBot runs itself, the harness picked in setup, is handed OpenBot's key on every run and
+ * A Bot XiongBao runs itself, the harness picked in setup, is handed XiongBao's key on every run and
  * uses its tools with none of its own. The panel says so and offers nothing to generate: it used to
  * tell the personal starter it "can't use tools" while it searched the web and used the browser.
  */
-export const KEY_FROM_OPENBOT = `这位员工由${shortName()}自己运行，不需要凭据也能用授予它的工具。`;
+export const KEY_FROM_XIONGBAO = `这位员工由${shortName()}自己运行，不需要凭据也能用授予它的工具。`;
 
 export function CallbackTokenPanel({
   agentId,
@@ -53,7 +53,7 @@ export function CallbackTokenPanel({
     return (
       <section className="mt-6 grid gap-2">
         {heading}
-        <p className="text-muted-foreground text-sm">{KEY_FROM_OPENBOT}</p>
+        <p className="text-muted-foreground text-sm">{KEY_FROM_XIONGBAO}</p>
       </section>
     );
   }

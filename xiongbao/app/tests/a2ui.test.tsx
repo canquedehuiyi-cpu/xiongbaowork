@@ -70,7 +70,7 @@ function Committed() {
   return null;
 }
 
-test("the catalog draws a committed surface in OpenBot's tokens", async () => {
+test("the catalog draws a committed surface in XiongBao's tokens", async () => {
   const view = render(
     <CopilotKitProvider {...generativeUiProviderOptions(true)}>
       <Committed />

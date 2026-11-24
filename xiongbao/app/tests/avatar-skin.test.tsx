@@ -18,7 +18,7 @@ import { SKINS } from "@/skins/registry";
 import { settleReactWork } from "./settle-react-work";
 
 /*
- * Bots appear as their orb where the active skin asks for it (`botLook: "orb"`). OpenBot's own look
+ * Bots appear as their orb where the active skin asks for it (`botLook: "orb"`). XiongBao's own look
  * does; a skin that has not opted in keeps the faces it was designed with.
  */
 
@@ -68,7 +68,7 @@ describe.each(Object.entries(avatars))("%s", (_, Avatar) => {
   });
 });
 
-test("OpenBot's own look opts in to orbs and the skins do not", () => {
+test("XiongBao's own look opts in to orbs and the skins do not", () => {
   expect(SKINS.xiongbao.botLook).toBe("orb");
   for (const id of ["openduet", "opendots", "openmuse"] as const) {
     expect(SKINS[id].botLook ?? "face").toBe("face");

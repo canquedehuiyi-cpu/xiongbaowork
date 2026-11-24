@@ -32,10 +32,10 @@ describe("where a socket is opened", () => {
     expect(
       socketUrl(
         "/api/channels/events",
-        at("https:", "openbot.example", "openbot.example"),
+        at("https:", "xiongbao.example", "xiongbao.example"),
         "",
       ),
-    ).toBe("wss://openbot.example/api/channels/events");
+    ).toBe("wss://xiongbao.example/api/channels/events");
   });
 
   test("behind an ingress that only exposes 443, stays on 443, never the container port", () => {
@@ -46,19 +46,19 @@ describe("where a socket is opened", () => {
     expect(
       socketUrl(
         "/api/computers/a/stream",
-        at("https:", "openbot.example", "openbot.example"),
+        at("https:", "xiongbao.example", "xiongbao.example"),
         "",
       ),
-    ).toBe("wss://openbot.example/api/computers/a/stream");
+    ).toBe("wss://xiongbao.example/api/computers/a/stream");
   });
 
   test("follows the page's scheme, so an https page never opens an insecure socket", () => {
     expect(
       socketUrl(
         "/api/computers/a/stream",
-        at("https:", "openbot.example", "openbot.example:8443"),
+        at("https:", "xiongbao.example", "xiongbao.example:8443"),
         "3001",
       ),
-    ).toBe("wss://openbot.example:3001/api/computers/a/stream");
+    ).toBe("wss://xiongbao.example:3001/api/computers/a/stream");
   });
 });

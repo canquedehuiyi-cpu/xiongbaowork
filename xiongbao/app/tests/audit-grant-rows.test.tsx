@@ -10,7 +10,7 @@ import {
 import { cleanup, render } from "@testing-library/react";
 import {
   AuditPage,
-  withoutOpenBotWorking,
+  withoutXiongBaoWorking,
 } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
 import { OPENBOT_WORKING_EVENT_TYPES } from "@/lib/audit/outcome";
@@ -67,7 +67,7 @@ function row(
 
 /** Newest first, as the table draws them. */
 const ROWS = [
-  // What a start writes now: one row per Bot, every tool it was given, started by OpenBot.
+  // What a start writes now: one row per Bot, every tool it was given, started by XiongBao.
   row("given", 59, {
     eventType: "configuration.changed",
     targetType: "mcp_server",
@@ -123,7 +123,7 @@ const ROWS = [
     targetId: "showTable",
     initiatorKind: "person",
     payload: {
-      actor: "dev@openbot.local",
+      actor: "dev@xiongbao.local",
       note: "First seen in a build, published and available to every Bot.",
     },
   }),
@@ -141,10 +141,10 @@ async function renderAs(edition: "team" | "personal") {
     localEvaluation: edition === "personal",
     edition,
   });
-  // Activity asks without OpenBot's own working; Admin asks for everything.
+  // Activity asks without XiongBao's own working; Admin asks for everything.
   seedAuditPage(
     queryClient,
-    edition === "personal" ? withoutOpenBotWorking("") : "",
+    edition === "personal" ? withoutXiongBaoWorking("") : "",
     // What the server answers each: Activity's query leaves a build's components out.
     {
       events:
@@ -190,7 +190,7 @@ function drawn(container: HTMLElement) {
   });
 }
 
-test("Activity says what changed in words, and that OpenBot started what it did by itself", async () => {
+test("Activity says what changed in words, and that XiongBao started what it did by itself", async () => {
   const view = await renderAs("personal");
   expect(drawn(view.container)).toEqual([
     {
@@ -199,7 +199,7 @@ test("Activity says what changed in words, and that OpenBot started what it did 
       startedBy: "由熊宝发起",
     },
     {
-      // Recorded as a person's before the fix. Its own actor says it was OpenBot's.
+      // Recorded as a person's before the fix. Its own actor says it was XiongBao's.
       what: "给员工一个工具",
       on: "Complete goal（Routines）",
       startedBy: "由熊宝发起",

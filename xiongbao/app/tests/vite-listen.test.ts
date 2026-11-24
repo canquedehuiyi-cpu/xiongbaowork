@@ -35,7 +35,7 @@ import { thisMachineOnly } from "./vite.config.ts";
 
 const environment = JSON.parse(process.env.PROBE_ENVIRONMENT ?? "{}");
 // A page of its own to serve, so the server has nothing of the app's to scan before it answers.
-const root = mkdtempSync(join(tmpdir(), "openbot-vite-listen-"));
+const root = mkdtempSync(join(tmpdir(), "xiongbao-vite-listen-"));
 writeFileSync(join(root, "index.html"), "<!doctype html><title>probe</title>");
 const server = await createServer({
   configFile: false,
@@ -77,7 +77,7 @@ for (const host of ["127.0.0.1", "::1", process.env.LAN_ADDRESS])
     const text = await ask(host, path);
     answers[host + " " + path] = {
       status: Number(/^HTTP\\/1\\.1 (\\d{3})/.exec(text)?.[1] ?? 0),
-      thisMachineOnly: text.includes("This OpenBot only answers on the computer it runs on."),
+      thisMachineOnly: text.includes("This XiongBao only answers on the computer it runs on."),
     };
   }
 console.log("ANSWERS " + JSON.stringify(answers));

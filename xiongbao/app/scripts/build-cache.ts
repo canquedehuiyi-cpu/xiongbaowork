@@ -5,7 +5,7 @@ import { basename, join, relative, resolve, sep } from "node:path";
 import { resolveTenantPackageDirectory } from "../../server/src/tenant-package-path";
 
 const MANIFEST_VERSION = 1;
-const MANIFEST_NAME = ".openbot-build-cache.json";
+const MANIFEST_NAME = ".xiongbao-build-cache.json";
 
 export type BuildCachePaths = {
   rootDir: string;

@@ -43,7 +43,7 @@ export type PreviewPerson = {
 };
 
 /**
- * Each member's permissions before and after, decided on the server by the rule OpenBot enforces.
+ * Each member's permissions before and after, decided on the server by the rule XiongBao enforces.
  * `people` lists those losing a permission first, then those gaining one, then those keeping one
  * through a different switch; it is capped, and `counts` is over everybody.
  */

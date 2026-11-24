@@ -48,7 +48,7 @@ import {
 import { queryClient } from "@/query-client";
 
 /**
- * Whether this is the personal edition, where one person uses OpenBot. Nobody else has a Bots list
+ * Whether this is the personal edition, where one person uses XiongBao. Nobody else has a Bots list
  * or a conversation with a Bot there, so the rows below say nothing about other people.
  */
 function usePersonal(): boolean {

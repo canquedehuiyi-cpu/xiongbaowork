@@ -33,7 +33,7 @@ export const OTHER = "__other__";
 const COLLAPSE_SECONDS = 0.22;
 
 /**
- * A card that waits on a person's answer: a Bot's question, a Bot asking for approval, or OpenBot
+ * A card that waits on a person's answer: a Bot's question, a Bot asking for approval, or XiongBao
  * asking before a Bot uses an app.
  *
  * Laid out as T3 Code lays out its questions: the answers are rows, each with what it does under

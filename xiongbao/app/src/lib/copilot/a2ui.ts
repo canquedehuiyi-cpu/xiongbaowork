@@ -10,13 +10,13 @@ import {
   BREAKDOWN_DESCRIPTION,
   breakdownProps,
 } from "./a2ui-breakdown";
-import { A2UITextField } from "./a2ui-text-field";
 import { A2UICode, A2UIMarkdown } from "./a2ui-markdown";
+import { A2UITextField } from "./a2ui-text-field";
 
 /**
  * The standard components a Bot is not given.
  *
- * - Map needs maplibre-gl, which OpenBot does not ship. Without it the SDK draws a list of places,
+ * - Map needs maplibre-gl, which XiongBao does not ship. Without it the SDK draws a list of places,
  *   which the model would then be promising as a map.
  * - Favicon, LinkCard and Citation load site icons from Google's favicon service, which would send
  *   every linked domain to Google.
@@ -31,9 +31,9 @@ export const OMITTED_STANDARD_COMPONENTS = [
 /**
  * The components a Bot can draw an interface from: CopilotKit's standard catalog, which carries the
  * A2UI 1.0 basic components under their A2UI names, less the ones above. These are declarative
- * primitives, not the separately granted OpenBot gallery components.
+ * primitives, not the separately granted XiongBao gallery components.
  *
- * `Code` and `Markdown` are drawn by OpenBot rather than the SDK, through the renderer a reply uses,
+ * `Code` and `Markdown` are drawn by XiongBao rather than the SDK, through the renderer a reply uses,
  * so code and prose in an interface look exactly as they do in a reply; see a2ui-markdown.tsx. An
  * override replaces only the React component: the model sees the standard `Code` and `Markdown` with
  * their descriptions and props unchanged, so what a Bot already writes keeps drawing.
@@ -41,7 +41,7 @@ export const OMITTED_STANDARD_COMPONENTS = [
  * `TextField` is the standard one, except that a number field writes a number into the data model,
  * so a total a Bot computes from the fields adds rather than joins text; see a2ui-text-field.tsx.
  *
- * `Breakdown` is OpenBot's own: amounts that add up to a total, each editable and in its own colour,
+ * `Breakdown` is XiongBao's own: amounts that add up to a total, each editable and in its own colour,
  * with a bar of how the total splits; see a2ui-breakdown.tsx.
  */
 export const OPENBOT_UI = createGenerativeUI({
@@ -65,9 +65,9 @@ export const OPENBOT_UI = createGenerativeUI({
 const radius = (scale: number) => `calc(var(--radius) * ${scale})`;
 
 /**
- * OpenBot's tokens, by reference. They switch under `.dark` themselves, so one set covers both
+ * XiongBao's tokens, by reference. They switch under `.dark` themselves, so one set covers both
  * schemes, and set at the top level they outrank the SDK's built-in dark values. Status tints,
- * highlights and shadows have no OpenBot token and keep the SDK's light and dark values.
+ * highlights and shadows have no XiongBao token and keep the SDK's light and dark values.
  *
  * The font is spelled out rather than `var(--font-sans)`: that one lives in `@theme inline`, which
  * Tailwind inlines into utilities instead of emitting as a variable.

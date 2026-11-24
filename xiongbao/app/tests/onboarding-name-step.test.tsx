@@ -49,8 +49,8 @@ function client(needsName = true) {
   });
   query.setQueryData(authKeys.currentUser(), {
     id: "existing-user",
-    email: "dev@openbot.local",
-    name: needsName ? "dev@openbot.local" : "Sam",
+    email: "dev@xiongbao.local",
+    name: needsName ? "dev@xiongbao.local" : "Sam",
     needsName,
     onboarding: { completedAt: null, step: 3 },
   });
@@ -74,7 +74,7 @@ function NameOnboarding({
       steps={[
         {
           id: "welcome",
-          title: "Welcome to OpenBot",
+          title: "Welcome to XiongBao",
           intro: () => <StepIntro />,
         },
         name,
@@ -202,7 +202,7 @@ test("a completion that fails is said under the field too", async () => {
   expect(primary(view).textContent).toBe("开始使用");
 });
 
-test("the orb is OpenBot's own, listening, and settles into done when onboarding ends", () => {
+test("the orb is XiongBao's own, listening, and settles into done when onboarding ends", () => {
   const view = render(<NameOrb />);
   const orb = () =>
     view.container.querySelector<HTMLElement>("[data-orb]") as HTMLElement;

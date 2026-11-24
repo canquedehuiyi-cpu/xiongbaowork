@@ -66,7 +66,7 @@ beforeAll(() => {
   originalFetch = globalThis.fetch;
   globalThis.WebSocket = SocketDouble as unknown as typeof WebSocket;
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const path = new URL(String(input), "http://openbot.test").pathname;
+    const path = new URL(String(input), "http://xiongbao.test").pathname;
     asked.push(`${init?.method ?? "GET"} ${path}`);
     if (path.endsWith("/control/take")) holder = "human";
     if (path.endsWith("/control/release")) holder = "bot";

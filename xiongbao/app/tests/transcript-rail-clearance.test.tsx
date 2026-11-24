@@ -26,7 +26,7 @@ const asked = process.env.OPENBOT_APP_BROWSER === "1";
 const shots = process.env.OPENBOT_APP_SHOTS;
 
 const APP = join(import.meta.dir, "..");
-const ORIGIN = "http://openbot.test";
+const ORIGIN = "http://xiongbao.test";
 /** The least room between the rail's marks and the column's text. */
 const CLEARANCE = 24;
 const LAST_REPLY = "Shall I draft the summary";
