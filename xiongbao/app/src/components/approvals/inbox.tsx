@@ -220,11 +220,13 @@ export function ApprovalInbox({
                   {question.why}
                 </p>
               ) : null}
-              <InboxNotes
-                id={question.id}
-                kind="question"
-                source={() => questionCards.current[question.id] ?? null}
-              />
+              {question.plan ? null : (
+                <InboxNotes
+                  id={question.id}
+                  kind="question"
+                  source={() => questionCards.current[question.id] ?? null}
+                />
+              )}
               <Textarea
                 aria-label="你的回答"
                 placeholder="你的回答"

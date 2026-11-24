@@ -19,6 +19,7 @@ import { approvalRequests } from "../db/schema/approvals";
 import { workItems } from "../db/schema/work";
 import { WORK_OFFERED_TOPIC } from "../work/queue";
 import { type GuidedReview, guidedReview } from "./guided-review";
+import { isPlanRow } from "./plan-hold";
 import {
   type PersonQuestion,
   personQuestionSchema,
@@ -137,6 +138,9 @@ export function createInboxNotes(deps: {
         )
         .limit(1);
       if (!row || row.finishedAt) throw new ApprovalNotFoundError();
+      // A plan waiting for approval is answered, not annotated: a note would leave it undecided
+      // while the Bot revises it, and the revised plan would never reach the owner.
+      if (isPlanRow(row.payload)) throw new ApprovalNotFoundError();
       const parsed = personQuestionSchema.safeParse(row.payload);
       if (!parsed.success)
         throw new ApprovalRefusedError(

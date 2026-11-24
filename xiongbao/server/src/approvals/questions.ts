@@ -6,7 +6,7 @@ import type { Database } from "../db/client";
 import { workItems } from "../db/schema/work";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
-import { planDecisionFor } from "./plan-hold";
+import { isPlanRow, planDecisionFor } from "./plan-hold";
 import { ApprovalNotFoundError, ApprovalRefusedError } from "./types";
 
 const questionSchema = z.object({
@@ -87,6 +87,8 @@ export function listedQuestion(row: {
         question: value.data.question,
         why: value.data.why,
         parts: value.data.parts,
+        /** A plan waiting for the owner's approval: it is answered, not annotated. */
+        ...(isPlanRow(row.payload) ? { plan: true as const } : {}),
         createdAt: row.createdAt,
       }
     : null;

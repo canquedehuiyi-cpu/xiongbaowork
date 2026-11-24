@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
 import {
   createInboxNotes,
@@ -550,6 +550,47 @@ describe("a request that is not an outside employee's", () => {
     ] as [string, string, unknown?][])
       expect((await call(on, alice, method, path, body)).status).toBe(404);
     expect((await responses(alice)).length).toBe(before);
+  });
+});
+
+describe("a plan waiting for approval, with plan approval and notes both on", () => {
+  test("is not found on any notes route and nothing is written, while an ordinary question takes notes as usual", async () => {
+    const thread = `${prefix}-plan`;
+    const plan = await question(alice, thread, "计划：1. 改接口 2. 补测试");
+    await as(alice, () =>
+      database
+        .update(workItems)
+        .set({
+          payload: sql`${workItems.payload} || '{"planApproval":{"digest":"d1","steps":2}}'::jsonb`,
+        })
+        .where(eq(workItems.key, plan)),
+    );
+    const before = (await responses(alice)).length;
+    for (const [method, path, body] of [
+      ["GET", `/items/question/${plan}/notes`],
+      ["POST", `/items/question/${plan}/notes`, { text: "第 3 步先别删旧表" }],
+      ["DELETE", `/items/question/${plan}/notes/none`],
+      ["POST", `/items/question/${plan}/notes/send`],
+    ] as [string, string, unknown?][])
+      expect((await call(on, alice, method, path, body)).status).toBe(404);
+    expect((await responses(alice)).length).toBe(before);
+    const inbox = await as(alice, () => service.inbox(alice));
+    expect(
+      inbox.questions.find((item: { id: string }) => item.id === plan),
+    ).toMatchObject({ plan: true });
+
+    const plain = await question(alice, `${thread}-plain`, "要不要改成异步？");
+    expect(
+      (
+        await call(on, alice, "POST", `/items/question/${plain}/notes`, {
+          text: "先说清影响",
+        })
+      ).status,
+    ).toBe(201);
+    const listed = await as(alice, () => service.inbox(alice));
+    expect(
+      listed.questions.find((item: { id: string }) => item.id === plain),
+    ).not.toHaveProperty("plan");
   });
 });
 

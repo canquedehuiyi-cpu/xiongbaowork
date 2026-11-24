@@ -171,6 +171,8 @@ export type ApprovalInboxData = {
     why?: string;
     /** The separate decisions inside the question, each answered on its own. */
     parts?: { header: string; question: string; options?: string[] }[];
+    /** Set by the server on a plan waiting for approval: it is answered, not annotated. */
+    plan?: true;
     createdAt: string;
   }[];
 };

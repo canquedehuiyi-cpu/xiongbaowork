@@ -23,7 +23,7 @@ import { workItems } from "../db/schema/work";
  */
 export const PLAN_HOLD_KIND = "plan.hold";
 
-const isPlanRow = (payload: unknown) =>
+export const isPlanRow = (payload: unknown) =>
   typeof payload === "object" &&
   payload !== null &&
   "planApproval" in payload &&

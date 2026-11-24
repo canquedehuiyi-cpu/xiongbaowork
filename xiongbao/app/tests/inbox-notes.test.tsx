@@ -32,6 +32,7 @@ let inboxNotes = true;
 let notes: Note[] = [];
 let calls: { method: string; path: string; body: unknown }[] = [];
 let review: unknown = null;
+let planQuestion = false;
 let originalFetch: typeof fetch;
 
 const QUESTION = {
@@ -116,7 +117,7 @@ beforeAll(() => {
         requests: [],
         rules: [],
         teamRules: [],
-        questions: [QUESTION],
+        questions: [planQuestion ? { ...QUESTION, plan: true } : QUESTION],
       });
     if (path === "/api/me")
       return Response.json({
@@ -142,6 +143,7 @@ afterEach(() => {
   notes = [];
   calls = [];
   review = null;
+  planQuestion = false;
 });
 afterAll(async () => {
   await settleReactWork();
@@ -187,6 +189,21 @@ test("开关没开：问题卡上没有批注，也不向批注的地址发请�
   await waitFor(() =>
     expect(container.querySelector("textarea")).not.toBeNull(),
   );
+  expect(container.querySelector("[data-inbox-notes]")).toBeNull();
+  expect(container.textContent).not.toContain("批注");
+  expect(container.querySelectorAll("textarea")).toHaveLength(1);
+  expect(calls).toEqual([]);
+});
+
+test("开关开着，但服务器标明这是等批准的计划：问题卡上不画批注面板，仍有回答框", async () => {
+  planQuestion = true;
+  const { container, findByText } = inbox();
+  await findByText(/要不要把导出接口改成异步/);
+  await waitFor(() =>
+    expect(container.querySelector("textarea")).not.toBeNull(),
+  );
+  // 等能力读完再下结论：开关开着时普通提问会画出批注面板，计划不会。
+  await settleReactWork();
   expect(container.querySelector("[data-inbox-notes]")).toBeNull();
   expect(container.textContent).not.toContain("批注");
   expect(container.querySelectorAll("textarea")).toHaveLength(1);
