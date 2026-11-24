@@ -48,7 +48,6 @@ import { agentListQueryOptions } from "@/lib/agents/queries";
 import { client, RequestError } from "@/lib/client";
 import { componentDisplayTitle } from "@/lib/components/display-title";
 import { taskAction } from "@/lib/tasks/actions";
-import { useBoardPollMs } from "@/lib/tasks/board-push";
 import {
   canTrack,
   type FollowedFields,
@@ -855,7 +854,9 @@ export function deliverableSummary(ref: unknown): string | null {
     : [];
   const files = Array.isArray(attachments) ? attachments.length : 0;
   const linkCount = Array.isArray(links) ? links.length : 0;
-  const savedCount = Array.isArray(workspaceFiles) ? workspaceFiles.length : 0;
+  const savedCount = Array.isArray(workspaceFiles)
+    ? workspaceFiles.length
+    : 0;
   const changedFiles = Array.isArray(diffs)
     ? diffs.reduce<number>(
         (sum, diff) =>
@@ -1483,8 +1484,6 @@ function TasksPage() {
     ...(executor ? [`executor:${executor}`] : []),
     ...(group ? [`group:${group}`] : []),
   ];
-  // 5 秒，除非试点的看板推送开着且连着（lib/tasks/board-push.ts）。
-  const boardPoll = useBoardPollMs();
   const tasks = useQuery({
     queryKey: [
       "tasks",
@@ -1499,7 +1498,7 @@ function TasksPage() {
       client<Task[]>(`/api/tasks?${wire.list}`, "tasks", {
         fallback: "无法读取任务，请稍后重试。",
       }),
-    refetchInterval: boardPoll,
+    refetchInterval: 5000,
     /*
      * A new filter is a new query key, and until it answers the list would be empty -- which renders
      * the board's nothing-here sentence for a moment every time a number or pill is pressed.

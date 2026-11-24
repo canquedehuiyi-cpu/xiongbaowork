@@ -15,18 +15,14 @@ import {
   parseChannelSocketMessage,
   useChannelEvents,
 } from "@/lib/channels/use-channel-events";
-import {
-  boardPollMs,
-  isBoardPushConnected,
-  setBoardPushConnected,
-} from "@/lib/tasks/board-push";
+import { deploymentKeys } from "@/lib/deployment/queries";
 import { Route as TasksRoute } from "@/routes/_authed/_app/tasks";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * 看板实时推送（试点，开关 XIONGBAO_PILOT_BOARD_PUSH）：开关关时看板与原来一模一样（5 秒轮询），
- * 开着且推送连着时放慢轮询，推送一断就回到 5 秒；收到 STATE_DELTA 就重读看板。
- * 轮询一栏读的是 react-query 拿到的配置值，不是真等 5 秒或 30 秒。
+ * 看板实时推送（试点，开关 XIONGBAO_PILOT_BOARD_PUSH）：开关开不开，看板轮询都是 5 秒；
+ * 收到 STATE_DELTA 只当「有变化」的信号去重读，不用其中的卡片 id。
+ * 轮询一栏读的是 react-query 拿到的配置值，不是真等 5 秒。
  */
 let registeredHere = false;
 const originalFetch = globalThis.fetch;
@@ -40,7 +36,6 @@ beforeAll(() => {
 });
 afterEach(() => {
   cleanup();
-  setBoardPushConnected(false);
   globalThis.fetch = originalFetch;
   globalThis.WebSocket = originalWebSocket;
 });
@@ -48,13 +43,6 @@ afterAll(async () => {
   if (!registeredHere) return;
   await settleReactWork();
   GlobalRegistrator.unregister();
-});
-
-test("boardPollMs：开关关时无论推送连没连都是 5 秒；开着且连着才放慢", () => {
-  expect(boardPollMs({ boardPush: false, connected: true })).toBe(5000);
-  expect(boardPollMs({ boardPush: undefined, connected: true })).toBe(5000);
-  expect(boardPollMs({ boardPush: true, connected: false })).toBe(5000);
-  expect(boardPollMs({ boardPush: true, connected: true })).toBe(30000);
 });
 
 test("STATE_DELTA 能被识别，缺 delta 或不是数组的丢掉", () => {
@@ -142,28 +130,18 @@ const intervalOf = (queryClient: QueryClient, key: string) => {
   return options["refetchInterval"];
 };
 
-test("开关关：看板仍是 5 秒轮询，推送连着也不变（与 main 一致）", async () => {
+test("开关关：看板仍是 5 秒轮询，统计 30 秒", async () => {
   serve({ boardPush: false });
-  setBoardPushConnected(true);
   const queryClient = drawBoard();
   await waitFor(() => expect(intervalOf(queryClient, "tasks")).toBe(5000));
   expect(intervalOf(queryClient, "tasks-summary")).toBe(30000);
 });
 
-test("服务器没说开关（老服务器）：看板仍是 5 秒轮询", async () => {
-  serve(null);
-  setBoardPushConnected(true);
-  const queryClient = drawBoard();
-  await waitFor(() => expect(intervalOf(queryClient, "tasks")).toBe(5000));
-});
-
-test("开关开且推送连着：放慢到 30 秒；推送断开，回落 5 秒", async () => {
+test("开关开着：看板轮询也不放慢，仍是 5 秒（直接写 tasks 的地方不推送）", async () => {
   serve({ boardPush: true });
-  setBoardPushConnected(true);
   const queryClient = drawBoard();
-  await waitFor(() => expect(intervalOf(queryClient, "tasks")).toBe(30000));
-  await act(async () => setBoardPushConnected(false));
   await waitFor(() => expect(intervalOf(queryClient, "tasks")).toBe(5000));
+  expect(intervalOf(queryClient, "tasks-summary")).toBe(30000);
 });
 
 class FakeSocket extends EventTarget {
@@ -185,15 +163,18 @@ function Listener() {
   return null;
 }
 
-test("连接状态跟着频道推送的连接走；收到 STATE_DELTA 就重读看板和看板统计", async () => {
+/** 挂上频道事件 hook，预置一份看板与统计的缓存，返回假 socket 与「哪些读被标为过期」。 */
+async function listen(capabilities?: object) {
   FakeSocket.all = [];
   globalThis.WebSocket = FakeSocket as unknown as typeof WebSocket;
-  serve({ boardPush: true });
+  serve(capabilities ?? { agents: [] });
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: Infinity } },
   });
   queryClient.setQueryData(["tasks", "week"], { tasks: [] });
   queryClient.setQueryData(["tasks-summary", "week"], { tasks: [] });
+  if (capabilities)
+    queryClient.setQueryData(deploymentKeys.capabilities(), capabilities);
   const router = createRouter({
     context: {},
     history: createMemoryHistory({ initialEntries: ["/"] }),
@@ -206,26 +187,48 @@ test("连接状态跟着频道推送的连接走；收到 STATE_DELTA 就重读�
   );
   await waitFor(() => expect(FakeSocket.all).toHaveLength(1));
   const socket = FakeSocket.all[0] as FakeSocket;
-  expect(isBoardPushConnected()).toBe(false);
-
   await act(async () => socket.onopen?.());
-  expect(isBoardPushConnected()).toBe(true);
   const stale = (key: string[]) =>
     queryClient.getQueryState(key)?.isInvalidated ?? false;
-  // 重连时会重读频道名单，看板不在其中。
-  expect(stale(["tasks", "week"])).toBe(false);
+  const send = (message: unknown) =>
+    act(async () => socket.onmessage?.({ data: JSON.stringify(message) }));
+  return { stale, send };
+}
 
-  await act(async () =>
-    socket.onmessage?.({
-      data: JSON.stringify({
-        type: "STATE_DELTA",
-        delta: [{ op: "replace", path: "/tasks/c1/status", value: "done" }],
-      }),
-    }),
-  );
+const CARD_DELTA = {
+  type: "STATE_DELTA",
+  delta: [{ op: "replace", path: "/tasks/c1/status", value: "done" }],
+};
+const WHOLE_BOARD_DELTA = {
+  type: "STATE_DELTA",
+  delta: [{ op: "replace", path: "/tasks", value: null }],
+};
+
+test("推送带着具体的卡：只重读看板统计，列表留给 taskUpdated（一次变化不读两遍列表）", async () => {
+  const { stale, send } = await listen();
+  expect(stale(["tasks", "week"])).toBe(false);
+  await send(CARD_DELTA);
+  expect(stale(["tasks-summary", "week"])).toBe(true);
+  expect(stale(["tasks", "week"])).toBe(false);
+});
+
+test("整板失效（不带具体卡）：列表和统计都重读", async () => {
+  const { stale, send } = await listen();
+  await send(WHOLE_BOARD_DELTA);
   expect(stale(["tasks", "week"])).toBe(true);
   expect(stale(["tasks-summary", "week"])).toBe(true);
+});
 
-  await act(async () => socket.onclose?.());
-  expect(isBoardPushConnected()).toBe(false);
+test("开关关（服务器没说）：resync 只重读频道，看板与统计不动", async () => {
+  const { stale, send } = await listen({ boardPush: undefined });
+  await send({ resync: true });
+  expect(stale(["tasks", "week"])).toBe(false);
+  expect(stale(["tasks-summary", "week"])).toBe(false);
+});
+
+test("开关开：resync 把看板和统计也重读（断开期间丢掉的推送由此补上）", async () => {
+  const { stale, send } = await listen({ boardPush: true });
+  await send({ resync: true });
+  expect(stale(["tasks", "week"])).toBe(true);
+  expect(stale(["tasks-summary", "week"])).toBe(true);
 });

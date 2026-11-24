@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import {
   createChannelEventHub,
   startChannelActivityListener,
@@ -8,7 +8,7 @@ import {
 import { createDatabase } from "../src/db/client";
 import { users } from "../src/db/schema/core";
 import { tasks } from "../src/db/schema/tasks";
-import { createBoardPush } from "../src/tasks/board-push";
+import { createBoardPush, MAX_CARDS_PER_PUSH } from "../src/tasks/board-push";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -21,6 +21,7 @@ const db = createDatabase(databaseUrl, TEST_POOL);
 const prefix = `push-${randomUUID()}`;
 const alice = `${prefix}-alice`;
 const bob = `${prefix}-bob`;
+const dana = `${prefix}-dana`;
 const SECRET_TITLE = `${prefix}-密级标题-不许出现在推送里`;
 const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
 
@@ -38,9 +39,14 @@ async function until(done: () => boolean, ms = 4_000) {
 /** A hub on its own LISTEN connection, with one open page per person. */
 async function pages() {
   const hub = createChannelEventHub();
-  const inbox = { alice: [] as Wire[], bob: [] as Wire[] };
+  const inbox = {
+    alice: [] as Wire[],
+    bob: [] as Wire[],
+    dana: [] as Wire[],
+  };
   hub.register(alice, (raw) => inbox.alice.push(JSON.parse(raw)));
   hub.register(bob, (raw) => inbox.bob.push(JSON.parse(raw)));
+  hub.register(dana, (raw) => inbox.dana.push(JSON.parse(raw)));
   const listener = await startChannelActivityListener(databaseUrl, hub);
   return { inbox, stop: () => listener.stop() };
 }
@@ -63,15 +69,15 @@ const setStatus = (id: string, status: string) =>
   );
 
 beforeAll(async () => {
-  for (const id of [alice, bob])
+  for (const id of [alice, bob, dana])
     await runAsTenant(id, () =>
       db.insert(users).values({ id, email: `${id}@example.test` }),
     );
 });
 afterAll(async () => {
   await asPlatform(async () => {
-    await db.delete(tasks).where(inArray(tasks.tenantId, [alice, bob]));
-    await db.delete(users).where(inArray(users.id, [alice, bob]));
+    await db.delete(tasks).where(inArray(tasks.tenantId, [alice, bob, dana]));
+    await db.delete(users).where(inArray(users.id, [alice, bob, dana]));
   });
   await db.$client.end({ timeout: 5 });
 });
@@ -166,6 +172,77 @@ describe("看板推送", () => {
       await createBoardPush(db, { enabled: true }).announce(alice);
       await until(() => open.inbox.alice.length > 0);
       expect(open.inbox.alice.length).toBeGreaterThan(0);
+    } finally {
+      await open.stop();
+    }
+  });
+
+  test("system 租户的卡变了，爱丽丝收不到（行级安全放行 system 行，推送不能跟着放行）", async () => {
+    const id = randomUUID();
+    await asPlatform(() =>
+      db.execute(
+        sql`insert into tasks (id, tenant_id, title, source, status) values (${id}, 'system', ${SECRET_TITLE}, 'routine', 'running')`,
+      ),
+    );
+    const push = createBoardPush(db, { enabled: true });
+    const open = await pages();
+    try {
+      await setStatus(id, "needs_action");
+      await push.announce(alice);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(JSON.stringify(open.inbox.alice)).not.toContain(id);
+    } finally {
+      await open.stop();
+      await asPlatform(() => db.delete(tasks).where(eq(tasks.id, id)));
+    }
+  });
+
+  test("一批同时间戳的卡之后再改一张：先整板失效，再把这一张推出来（水位不卡死）", async () => {
+    const ids: string[] = [];
+    for (let at = 0; at < MAX_CARDS_PER_PUSH + 1; at += 1)
+      ids.push(await card(dana));
+    // 一条语句，同一个时间戳。
+    await asPlatform(() =>
+      db.execute(
+        sql`update tasks set updated_at = now() - interval '1 second' where tenant_id = ${dana}`,
+      ),
+    );
+    const push = createBoardPush(db, { enabled: true });
+    const open = await pages();
+    try {
+      await push.announce(dana);
+      await until(() => open.inbox.dana.length >= 1);
+      // 读满一批：只说整板变了，不点名任何一张卡。
+      expect(open.inbox.dana[0]).toEqual({
+        type: "STATE_DELTA",
+        delta: [{ op: "replace", path: "/tasks", value: null }],
+      });
+
+      const later = await card(dana);
+      await setStatus(later, "needs_action");
+      // 剩下的同时间戳卡也会陆续报出来；推到这一张为止，且次数有限。
+      for (let round = 0; round < 3; round += 1) await push.announce(dana);
+      await until(() => JSON.stringify(open.inbox.dana).includes(later));
+      expect(JSON.stringify(open.inbox.dana)).toContain(later);
+    } finally {
+      await open.stop();
+    }
+  });
+
+  test("同一批卡不会被反复读回：第二次什么也不推", async () => {
+    // 上一条留下的几十张卡还在回看窗口里，会把这一条也读成满批。
+    await asPlatform(() => db.delete(tasks).where(eq(tasks.tenantId, dana)));
+    const id = await card(dana);
+    await setStatus(id, "needs_action");
+    const push = createBoardPush(db, { enabled: true });
+    const open = await pages();
+    try {
+      await push.announce(dana);
+      await until(() => JSON.stringify(open.inbox.dana).includes(id));
+      const heard = open.inbox.dana.length;
+      await push.announce(dana);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(JSON.stringify(open.inbox.dana.slice(heard))).not.toContain(id);
     } finally {
       await open.stop();
     }

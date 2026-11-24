@@ -5,6 +5,7 @@ import {
 } from "../src/channels/events";
 import type { Database } from "../src/db/client";
 import { boardStateDelta, createBoardPush } from "../src/tasks/board-push";
+import { tenantFrame } from "../src/tenant/context";
 
 const at = (iso: string) => new Date(iso);
 
@@ -91,5 +92,29 @@ describe("with the switch off", () => {
     await createBoardPush(database, { enabled: false }).announce("user-a");
 
     expect(touched).toEqual([]);
+  });
+});
+
+describe("the tenant the cards are read in", () => {
+  test("every read runs in the frame of the person announced to", async () => {
+    const frames: (string | undefined)[] = [];
+    // A query builder that answers every call with itself, and the last one with no rows.
+    const builder: Record<string, unknown> = {
+      limit: () => Promise.resolve([]),
+    };
+    for (const name of ["from", "where", "orderBy"])
+      builder[name] = () => builder;
+    const database = {
+      select: () => {
+        frames.push(tenantFrame());
+        return builder;
+      },
+      execute: () => Promise.resolve(),
+    } as unknown as Database;
+
+    await createBoardPush(database, { enabled: true }).announce("user-a");
+
+    expect(frames.length).toBeGreaterThan(0);
+    expect(frames.every((frame) => frame === "user-a")).toBe(true);
   });
 });

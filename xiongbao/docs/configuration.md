@@ -503,7 +503,7 @@ policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guide
 
 | Variable | Meaning |
 | -------- | ------- |
-| `XIONGBAO_PILOT_BOARD_PUSH` | 默认 `off`。设为 `on` 后，任务看板的卡片状态一变，服务器就经频道连接（`/api/channels/events`）给卡片的主人发一条 AG-UI `STATE_DELTA`（JSON Patch，只含卡片 id 与状态，不含卡片正文），页面收到就重读看板；连接断了页面回到每 5 秒读一次，连着时放慢到每 30 秒读一次。只推给这张卡所属租户的本人，卡不再属于他就收不到。浏览器经 `/api/capabilities` 的 `boardPush` 得知开关。只认 `on` 和 `off`，写错了服务起不来。 |
+| `XIONGBAO_PILOT_BOARD_PUSH` | 默认 `off`。设为 `on` 后，经看板投影器写入的卡片状态一变（审批、运行、routine 的项目），服务器就经频道连接（`/api/channels/events`）给卡片所属租户的本人发一条 AG-UI `STATE_DELTA`（JSON Patch，只含卡片 id 与状态，不含卡片正文；一次变动超过 40 张时只发「整板变了」），页面收到就重读看板统计，并在整板变了时重读列表。**只有经投影器写入的变化才会推**：交付环（`tasks/delivery.ts`）、催办、恢复、简报这些直接写 `tasks` 的地方不推，所以看板轮询**不放慢**，仍是每 5 秒；推送只是更快一步。服务器订阅断开又恢复时，页面会把看板也重读一次。只推给卡片所属租户本人，卡不再属于他就收不到。浏览器经 `/api/capabilities` 的 `boardPush` 得知开关（开着才有这个字段）。只认 `on` 和 `off`，写错了服务起不来。 |
 | （试点 1，无变量） | 试点 1「OCR 预审」没有运行时开关，也没有产品代码改动。开关是：在 GitHub 上手动触发工作流 `OCR 预审（只出报告）`（只能从 `main`），加 Environment `ocr-review` 里的 secret `OCR_API_KEY`、variable `OCR_PROVIDER`（没有默认），以及这个 Environment 的**必需审阅者**（开通前提）。没配 key 或 `OCR_PROVIDER` 时运行直接跳过。细节见 `scripts/review/ocr/README.md`。 |
 
 ## Authentication

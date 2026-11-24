@@ -1,10 +1,13 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
+import {
+  type DeploymentCapabilities,
+  deploymentKeys,
+} from "@/lib/deployment/queries";
 import { noticeChannelEvent } from "@/lib/notifications/reply-notice";
 import { type RunNotice, showRunNotice } from "@/lib/notifications/run-notice";
 import { socketUrl as buildSocketUrl } from "@/lib/socket-url";
-import { setBoardPushConnected } from "@/lib/tasks/board-push";
 import {
   type AgentChannel,
   type ChannelPage,
@@ -35,6 +38,30 @@ export type BoardStateDeltaEvent = {
   type: "STATE_DELTA";
   delta: { op: string; path: string; value?: unknown }[];
 };
+
+/**
+ * A delta that names no card: the server read a full batch of moved cards and says only that the
+ * board changed (`replace /tasks`), so every board read starts over.
+ */
+export function isWholeBoardDelta(message: BoardStateDeltaEvent): boolean {
+  return message.delta.some((operation) => operation.path === "/tasks");
+}
+
+/**
+ * Whether this page knows the server pushes board changes: shown by a `STATE_DELTA` having arrived
+ * (`seen`), or said by `/api/capabilities` when that answer is already held. Asked only on a resync,
+ * which is too rare to be worth a request of its own.
+ */
+function boardPushKnown(
+  queryClient: { getQueryData: (key: readonly unknown[]) => unknown },
+  seen: boolean,
+): boolean {
+  if (seen) return true;
+  const held = queryClient.getQueryData(deploymentKeys.capabilities()) as
+    | DeploymentCapabilities
+    | undefined;
+  return held?.boardPush === true;
+}
 
 /** What arrives on the socket. `resync` is the discriminant; an activity event never carries it. */
 export type ChannelSocketMessage =
@@ -402,6 +429,8 @@ export function useChannelEvents() {
     let retryTimer: number | undefined;
     let retryDelay = FIRST_RETRY_MS;
     let stopped = false;
+    // Set by the first STATE_DELTA; see `boardPushKnown`.
+    let boardPushSeen = false;
 
     const connect = () => {
       if (stopped) return;
@@ -409,7 +438,6 @@ export function useChannelEvents() {
 
       socket.onopen = () => {
         retryDelay = FIRST_RETRY_MS;
-        setBoardPushConnected(true);
         // Recover events missed while the socket was disconnected.
         void queryClient.invalidateQueries({ queryKey: channelKeys.list() });
         void queryClient.invalidateQueries({ queryKey: channelKeys.details() });
@@ -420,13 +448,17 @@ export function useChannelEvents() {
         if (!parsed) return;
 
         /*
-         * The board's cards moved (pilot). Read the lists again and nothing more: the message names
-         * ids and statuses only, and applying them here would mean a second copy of the board's rules.
-         * The summary is a separate read, with a key the `["tasks"]` prefix does not reach.
+         * The board's cards moved (pilot). The message is only a signal that something changed: the
+         * page does not use the card ids in it, it reads again. The lists are left to the
+         * `taskUpdated` that arrives with every change (reading them here too would read the board
+         * twice per change), and the summary is read here because the `["tasks"]` prefix does not
+         * reach it. A delta naming no card (a full batch moved) reads both.
          */
         if (isStateDelta(parsed)) {
-          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          boardPushSeen = true;
           void queryClient.invalidateQueries({ queryKey: ["tasks-summary"] });
+          if (isWholeBoardDelta(parsed))
+            void queryClient.invalidateQueries({ queryKey: ["tasks"] });
           return;
         }
 
@@ -452,6 +484,12 @@ export function useChannelEvents() {
           void queryClient.invalidateQueries({
             queryKey: channelKeys.details(),
           });
+          // Pushes lost while the server's subscription was down (pilot): with them on, the board
+          // is read again too. Off, this is the code it always was.
+          if (boardPushKnown(queryClient, boardPushSeen)) {
+            void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+            void queryClient.invalidateQueries({ queryKey: ["tasks-summary"] });
+          }
           return;
         }
 
@@ -536,7 +574,6 @@ export function useChannelEvents() {
 
       // WebSocket needs explicit reconnect handling.
       socket.onclose = () => {
-        setBoardPushConnected(false);
         if (stopped) return;
         retryTimer = window.setTimeout(connect, retryDelay);
         retryDelay = Math.min(retryDelay * 2, MAX_RETRY_MS);
@@ -550,7 +587,6 @@ export function useChannelEvents() {
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       // Cleared first: the close below must not schedule a reconnect for a screen that is gone.
       if (socket) socket.onclose = null;
-      setBoardPushConnected(false);
       socket?.close();
     };
   }, [queryClient, router]);
