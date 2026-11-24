@@ -39,35 +39,37 @@
 
 ## 3. 对照：gemini-4-argon（不计入达成判定）
 
-模型：`gemini-4-argon`，经 AIHUB 中转（提供方 `aihub`）。运行链接：单聊 https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 ；群聊待回填（正在排查）。
+模型：`gemini-4-argon`，经 AIHUB 中转（提供方 `aihub`，令牌分组 gemini-anti-ultra）。运行链接：单聊 https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 （main `5c4f62f5`，2026-11-23）；群聊 https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45313661358 （main `d3996663`，2026-11-24）。
+
+群聊第一次在 main `5c4f62f5` 上跑是 0 / 7：群聊轮没给时限，用默认 5 分钟硬停，停下的轮以 RUN_ERROR 收尾，产物清单只在 RUN_FINISHED 上比对，文件在电脑上、对话里却没有下载清单。#812 修复后（群聊带电脑员工的时限对齐 25 分钟；出错、被停的轮也出清单）在 `d3996663` 上重跑，下表群聊列是重跑这次的结果。
 
 | 题目 | 单聊 结果 | 单聊 重跑 | 单聊 运行链接 | 群聊 结果 | 群聊 重跑 | 群聊 运行链接 | 人工核对（仅程序题） |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 演示文稿（deliv-pptx） | 通过 | 待回填 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 待回填 | 待回填 | 待回填 | — |
-| Word 文档（deliv-docx） | 通过 | 待回填 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 待回填 | 待回填 | 待回填 | — |
-| Excel 表格（deliv-xlsx） | 通过 | 待回填 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 待回填 | 待回填 | 待回填 | — |
-| 静态网页（deliv-web） | 通过 | 待回填 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 待回填 | 待回填 | 待回填 | — |
-| 本机运行的程序（deliv-app） | 通过 | 待回填 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 待回填 | 待回填 | 待回填 | 待回填 |
-| 图片（deliv-image） | 通过 | 待回填 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 待回填 | 待回填 | 待回填 | — |
-| 视频（deliv-video） | 通过 | 待回填 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 待回填 | 待回填 | 待回填 | — |
+| 演示文稿（deliv-pptx） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45313661358 | — |
+| Word 文档（deliv-docx） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45313661358 | — |
+| Excel 表格（deliv-xlsx） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45313661358 | — |
+| 静态网页（deliv-web） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45313661358 | — |
+| 本机运行的程序（deliv-app） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45313661358 | 无需（未重跑） |
+| 图片（deliv-image） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45313661358 | — |
+| 视频（deliv-video） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45264759326 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45313661358 | — |
 
-通过：单聊 7 / 7，群聊待回填（共 14 格，已回填 7 格）；重跑次数与程序题人工核对待回填。本表是对照，不计入达成判定。
+通过：14 / 14（单聊 7 / 7，群聊 7 / 7，重跑 0）。本表是对照，不计入达成判定。
 
 ## 4. 对照：gemini-4-hydrogen（不计入达成判定）
 
-模型：`gemini-4-hydrogen`，经 AIHUB 中转（提供方 `aihub`）。运行链接：待回填（运行中）。
+模型：`gemini-4-hydrogen`，经 AIHUB 中转（提供方 `aihub`，令牌分组 gemini-anti-ultra）。运行链接：单聊 https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302479620 ；群聊 https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302484200 。两次都在 main `5c4f62f5` 上，2026-11-24。
 
 | 题目 | 单聊 结果 | 单聊 重跑 | 单聊 运行链接 | 群聊 结果 | 群聊 重跑 | 群聊 运行链接 | 人工核对（仅程序题） |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 演示文稿（deliv-pptx） | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | — |
-| Word 文档（deliv-docx） | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | — |
-| Excel 表格（deliv-xlsx） | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | — |
-| 静态网页（deliv-web） | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | — |
-| 本机运行的程序（deliv-app） | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 |
-| 图片（deliv-image） | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | — |
-| 视频（deliv-video） | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | 待回填 | — |
+| 演示文稿（deliv-pptx） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302479620 | 通过 | 1 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302484200 | — |
+| Word 文档（deliv-docx） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302479620 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302484200 | — |
+| Excel 表格（deliv-xlsx） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302479620 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302484200 | — |
+| 静态网页（deliv-web） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302479620 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302484200 | — |
+| 本机运行的程序（deliv-app） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302479620 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302484200 | 无需（未重跑） |
+| 图片（deliv-image） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302479620 | 通过 | 1 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302484200 | — |
+| 视频（deliv-video） | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302479620 | 通过 | 0 | https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/45302484200 | — |
 
-通过：待回填 / 14。本表是对照，不计入达成判定。
+通过：14 / 14（单聊 7 / 7，群聊 7 / 7；群聊演示文稿、图片各重跑 1 次后通过）。程序题未重跑，人工核对写「无需（未重跑）」。本表是对照，不计入达成判定。
 
 ## 5. 判定
 
