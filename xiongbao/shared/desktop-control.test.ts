@@ -855,7 +855,7 @@ describe("desktop-control: the final review's fixes", () => {
 });
 
 describe("desktop-control: the product's own processes are its packaged names", () => {
-  test("C1: the device app's binary, product name and sidecars, and the desktop client's, are all listed", async () => {
+  test("C1: the device app's binary, product name and sidecar, and the desktop client's, are all listed", async () => {
     const { readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
     const read = (path: string) =>
@@ -875,7 +875,6 @@ describe("desktop-control: the product's own processes are its packaged names", 
       device.productName,
       deviceLinux.productName,
       constant("SIDECAR"),
-      constant("LEGACY_SIDECAR"),
       client.productName,
       bin,
     ])
