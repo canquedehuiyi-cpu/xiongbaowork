@@ -781,12 +781,12 @@ in the `release` Environment; then the `mirror` job in `release.yml` signs in an
 servers in China, which pull from GHCR at about 24 KB/s.
 
 JD Cloud's registry tokens last at most 24 hours, so no fixed password is stored. The job exchanges
-an AccessKey for a one-hour token (`GetAuthorizationToken` of the `jdcloud_sdk` Python package) and
+an AccessKey for a six-hour token (copying a 1 GB image across the border can take over an hour) (`GetAuthorizationToken` of the `jdcloud_sdk` Python package) and
 reads the user and password from the `docker login` command the API returns. The SDK is a source
 archive checked against a hash written in `release.yml` and used without being built, and what it
 imports is installed as hash-pinned wheels; both are installed in a shell with an empty environment,
-so no key is in reach of the installers. The token is not revoked after the job; it expires on its
-own after the hour. Only the password is masked in logs: the user name is not a secret.
+so the installers are not handed any key (a same-user process could still read the parent's environment; the installers run no downloaded code). The token is not revoked after the job; it expires on its
+own after six hours. Only the password is masked in logs: the user name is not a secret.
 
 One-time setup:
 

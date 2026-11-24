@@ -149,7 +149,7 @@ jobs:
               "ghcr.io": {auth: ("\(env.GHCR_USERNAME):\(env.GHCR_TOKEN)" | @base64)}
             }}' > "$config/config.json"
           else
-            # A one-hour token from the JD Cloud API. Its user and password reach jq through files
+            # A six-hour token from the JD Cloud API (copying a 1 GB image across the border can take over an hour). Its user and password reach jq through files
             # that only this step can read and that go away with it, never through an argument, and
             # the password is masked before anything else could print it.
             work="$RUNNER_TEMP/own-channel-jcr"
@@ -180,7 +180,7 @@ jobs:
           "$WORK/venv/bin/pip" install --quiet --disable-pip-version-check --no-deps --require-hashes \
             --only-binary :all: --target "$WORK/deps" -r "$WORK/requirements.txt"
           INSTALL
-            PYTHONPATH="$work/sdk:$work/deps" "$work/venv/bin/python" - "$work" <<'PYTHON'
+            PYTHONPATH="$work/sdk:$work/deps" "$work/venv/bin/python" -P - "$work" <<'PYTHON'
           import os
           import shlex
           import sys

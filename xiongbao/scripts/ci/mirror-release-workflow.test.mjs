@@ -416,7 +416,7 @@ test("a fixed sign-in with one half missing keeps its own error", () => {
   }
 });
 
-test("a JD Cloud AccessKey is exchanged for a one-hour token that signs in", () => {
+test("a JD Cloud AccessKey is exchanged for a six-hour token that signs in", () => {
   const result = login(JD, answer(command));
   expect(result.status).toBe(0);
   expect(result.config).toEqual({
@@ -425,7 +425,7 @@ test("a JD Cloud AccessKey is exchanged for a one-hour token that signs in", () 
       "ghcr.io": ghcrAuth,
     },
   });
-  // The API was asked for this registry's token, for one hour, with the SDK's logger silenced.
+  // The API was asked for this registry's token, for six hours, with the SDK's logger silenced.
   expect(result.api).toEqual([
     [ACCESS_KEY, "cn-north-1", "xiongbao-work", 6, -1],
   ]);
