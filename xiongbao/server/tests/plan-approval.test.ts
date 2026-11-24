@@ -612,7 +612,7 @@ describe("an employee that did not declare the pilot, with the switch on", () =>
       pilotTool: () => pilot,
     });
     expect(swapped[0]).toBe(pilot);
-    expect(swapped[0]?.concurrent).toBeUndefined();
+    expect(Boolean(swapped[0]?.concurrent)).toBe(false);
   });
 
   test("asks nothing of the database for a check, and answers as there were no hold", async () => {

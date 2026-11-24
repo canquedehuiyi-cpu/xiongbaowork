@@ -136,7 +136,7 @@ test("the model key is the ocr-review Environment's secret, in one step's env an
   expect(carriers[0]?.env?.OCR_API_KEY).toBe(expression("secrets.OCR_API_KEY"));
   // The step that holds the key runs exactly the review script, nothing before or after it.
   expect(carriers[0]?.run?.trim()).toBe(reviewScript);
-  expect(carriers[0]?.uses).toBeUndefined();
+  expect(Object.hasOwn(carriers[0] ?? {}, "uses")).toBe(false);
   // The key is named once in the whole file, in that step's env.
   expect(text.match(/OCR_API_KEY\s*:/g) ?? []).toHaveLength(1);
   expect(code.match(/secrets\./g) ?? []).toHaveLength(1);
