@@ -518,6 +518,13 @@ export type DeploymentConfig = {
    */
   pilotPlanApproval: boolean;
   /**
+   * Pilot: an item waiting in the person's inbox (a plan, a hand-in or a question) can carry several
+   * notes, each quoting a passage of it, which are sent together as the next turn of the conversation
+   * that raised it; a code change is shown in three chapters. Off unless XIONGBAO_PILOT_INBOX_NOTES
+   * is `on`; off means the routes do not exist and /api/capabilities says nothing of it.
+   */
+  pilotInboxNotes: boolean;
+  /**
    * Where the pages a Bot's employee made are served from, apart from the app and the API.
    * `port` is XIONGBAO_CONTENT_PORT (1024-65535, never the API's or the app's port) and `domain` is
    * XIONGBAO_CONTENT_DOMAIN (a bare host name; each site gets a subdomain of it). Neither set means
@@ -1865,6 +1872,15 @@ function pilotPlanApprovalEnabled(environment: Environment): boolean {
   throw new Error(`${name} must be "on" or "off"`);
 }
 
+/** XIONGBAO_PILOT_INBOX_NOTES: `on` or `off`, off when unset; anything else is refused, like the pilots above. */
+function pilotInboxNotesEnabled(environment: Environment): boolean {
+  const name = "XIONGBAO_PILOT_INBOX_NOTES";
+  const value = optional(environment, name)?.toLowerCase();
+  if (value === undefined || value === "off") return false;
+  if (value === "on") return true;
+  throw new Error(`${name} must be "on" or "off"`);
+}
+
 /**
  * The content origin settings. Refused rather than coerced, like the switches around it: a port that
  * quietly collided with the API's, or a domain with a scheme on it, would fail far from where it was
@@ -2137,6 +2153,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     chatServerComputerTools: chatServerComputerToolsEnabled(environment),
     pilotBoardPush: pilotBoardPushEnabled(environment),
     pilotPlanApproval: pilotPlanApprovalEnabled(environment),
+    pilotInboxNotes: pilotInboxNotesEnabled(environment),
     content: contentConfig(environment, [
       publicUrl,
       appUrl,

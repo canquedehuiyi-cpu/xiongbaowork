@@ -132,6 +132,7 @@ import {
 import { createApp } from "./app";
 import { createDecisionWaits } from "./approvals/decision-waits";
 import { createApprovedActionExecutor } from "./approvals/execute";
+import { createInboxNotes } from "./approvals/inbox-notes";
 import { createPersonResponseTick } from "./approvals/person-response-sweep";
 import { createPlanHold } from "./approvals/plan-hold";
 import {
@@ -6605,6 +6606,16 @@ await startupLifecycle.run(async (startup) => {
     {
       productTelemetry,
       approvals: approvalService,
+      // Pilot, absent when off: notes on inbox items, sent back to the conversation that raised them.
+      ...(config.pilotInboxNotes
+        ? {
+            inboxNotes: createInboxNotes({
+              database,
+              authorise: authoriseQuestion,
+              approval: (owner, id) => approvalService.store.get(owner, id),
+            }),
+          }
+        : {}),
       // M3: upstream also passes `shared: { modes, use }` (shared use and shared accounts); not adopted.
       ...(signInService ? { passwords: signInService } : {}),
       recorder: recorderExtension,

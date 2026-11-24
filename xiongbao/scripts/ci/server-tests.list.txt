@@ -471,6 +471,7 @@ tests/group-conversations.integration.test.ts
 tests/group-conversations.test.ts
 tests/group-delegation-freed.integration.test.ts
 tests/guards.test.ts
+tests/guided-review.test.ts
 tests/handoff-availability-prompt.test.ts
 tests/handoff-caps-defaults.test.ts
 tests/handoff-child-card.test.ts
@@ -511,6 +512,9 @@ tests/identity-routes.test.ts
 tests/identity-schema.integration.test.ts
 tests/identity-slack-redeem.test.ts
 tests/identity-store.integration.test.ts
+tests/inbox-notes-config.test.ts
+tests/inbox-notes-resume.test.ts
+tests/inbox-notes.integration.test.ts
 tests/intelligence-authentication.test.ts
 tests/intelligence-entitlement-check.test.ts
 tests/intelligence-entitlements-quiet.test.ts

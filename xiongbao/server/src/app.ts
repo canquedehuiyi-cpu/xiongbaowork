@@ -34,6 +34,7 @@ import type { BotAccessCheck } from "./agents/profile-policy";
 import type { AgentProfileStore } from "./agents/profile-store";
 import { createAgentRoutes } from "./agents/routes";
 import type { SummonServices } from "./agents/summon";
+import type { InboxNotes } from "./approvals/inbox-notes";
 import { createReviewerGuidanceRoutes } from "./approvals/reviewer-guidance";
 import { createApprovalRoutes } from "./approvals/routes";
 import { createApprovalRuleDraftRoutes } from "./approvals/rule-translate";
@@ -505,6 +506,8 @@ export function createApp(
     /** AUT3: whether an automation may target a WakerFlow (its executor is registered). */
     wakerflowAutomations?: boolean;
     approvals?: ApprovalService;
+    /** Notes on inbox items (XIONGBAO_PILOT_INBOX_NOTES). Absent, their routes are not mounted. */
+    inboxNotes?: InboxNotes;
     productTelemetry?: ProductTelemetry;
     /** The Recorder extension's routes and guards (recorder/wiring.ts). Absent, nothing about it is mounted. */
     recorder?: RecorderExtensionDeps;
@@ -798,6 +801,8 @@ export function createApp(
        * Left out entirely when off, so the answer is exactly what it was before the pilot.
        */
       ...(config.pilotBoardPush ? { boardPush: true } : {}),
+      // Pilot, left out entirely when off: the inbox draws its notes only when this says so.
+      ...(config.pilotInboxNotes ? { inboxNotes: true } : {}),
       /*
        * Whether this deployment has memory (`editionHasMemory`): both editions do, and the personal one
        * stops having it with `XIONGBAO_PERSONAL_MEMORY=off`. The browser draws its memory screens from
@@ -2375,6 +2380,7 @@ export function createApp(
         coworker.approvals,
         requireUser,
         adminScope?.adminCapability,
+        coworker.inboxNotes,
       ),
     );
   if (coworker?.passwords) {

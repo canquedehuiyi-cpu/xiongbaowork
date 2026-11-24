@@ -29,6 +29,11 @@ export async function resumePersonQuestion(input: {
   question: PersonQuestion;
   response: string;
   messageId: string;
+  /**
+   * The message is the person's notes on the item (XIONGBAO_PILOT_INBOX_NOTES), not an answer: it is
+   * handed to the conversation as it stands, and it never resumes a run that is waiting for an answer.
+   */
+  asNotes?: boolean;
   /** The ordinary headless runner: computer tools, the question's own initiator. */
   runTurn: TurnRunner;
   responsibilities?: Pick<
@@ -45,11 +50,9 @@ export async function resumePersonQuestion(input: {
   if (question.actorId !== ownerUserId)
     throw new ApprovalRefusedError("The saved question owner does not match.");
   const agentId = questionConversationBot(question);
-  const userMessage = questionResponseMessage(
-    question,
-    input.response,
-    input.messageId,
-  );
+  const userMessage = input.asNotes
+    ? { id: input.messageId, role: "user" as const, content: input.response }
+    : questionResponseMessage(question, input.response, input.messageId);
   const initiator = question.initiator ?? PERSON_INITIATOR;
   if (
     initiator.kind === "responsibility" &&
@@ -78,6 +81,7 @@ export async function resumePersonQuestion(input: {
      * complete, and its reply goes wherever a responsibility's replies go.
      */
     if (
+      !input.asNotes &&
       latest?.status === "waiting" &&
       latest.waiting?.kind === PERSON_QUESTION_WAITING
     ) {

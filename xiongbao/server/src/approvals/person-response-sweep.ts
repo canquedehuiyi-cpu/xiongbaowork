@@ -84,6 +84,8 @@ export function createPersonResponseTick(deps: {
                 // The saved question, initiator included, so the answer resumes the turn that asked.
                 question: personQuestionSchema,
                 response: z.string().min(1).max(6000),
+                // Notes on an item, queued by `inbox-notes.ts`: not an answer, so the item stays open.
+                notes: z.boolean().optional(),
               })
               .parse(item.payload);
             if (payload.ownerUserId !== payload.question.actorId)
@@ -95,6 +97,7 @@ export function createPersonResponseTick(deps: {
               ownerUserId: payload.ownerUserId,
               question: payload.question,
               response: payload.response,
+              ...(payload.notes ? { asNotes: true } : {}),
               messageId: `person-response:${item.key}`,
               runTurn: (turn) =>
                 approvalContinuationRunner({ ...turn, tenantId }),
@@ -109,7 +112,7 @@ export function createPersonResponseTick(deps: {
              * the answer started has now replied, so the card goes on to the review lane. A
              * responsibility's own run closes its own card when it finishes, so it is left to do that.
              */
-            if (!outcome.responsibilityId && deps.board)
+            if (!outcome.responsibilityId && deps.board && !payload.notes)
               await deps.board
                 .finished({
                   tenantId,

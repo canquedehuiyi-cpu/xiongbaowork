@@ -1,6 +1,7 @@
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { type AppVariables, requireAdmin } from "../auth/guards";
+import { type InboxNotes, NOTE_ITEM_KINDS } from "./inbox-notes";
 import { DEFAULT_SENSITIVE_PATHS, SENSITIVE_PATH_PATTERN } from "./policy";
 import type { ApprovalService } from "./service";
 import {
@@ -99,6 +100,11 @@ export function createApprovalRoutes(
    * so without it an admin's change is refused by the database: fail closed, never wider.
    */
   adminCapability?: MiddlewareHandler<{ Variables: AppVariables }>,
+  /**
+   * Notes on inbox items (XIONGBAO_PILOT_INBOX_NOTES). Absent, the routes below are not registered
+   * at all, so a deployment with the pilot off answers them as it answers any path it has not got.
+   */
+  inboxNotes?: InboxNotes,
 ) {
   const routes = new Hono<{ Variables: AppVariables }>();
   routes.use("*", requireUser);
@@ -147,6 +153,52 @@ export function createApprovalRoutes(
         )) === true,
     }),
   );
+  if (inboxNotes) {
+    const kind = z.enum(NOTE_ITEM_KINDS);
+    const owner = (context: { var: { actor: { id: string } } }) =>
+      context.var.actor.id;
+    routes.get("/items/:kind/:id/notes", async (context) =>
+      context.json(
+        await inboxNotes.list(
+          owner(context),
+          kind.parse(context.req.param("kind")),
+          context.req.param("id"),
+        ),
+      ),
+    );
+    routes.post("/items/:kind/:id/notes", async (context) =>
+      context.json(
+        {
+          note: await inboxNotes.add(
+            owner(context),
+            kind.parse(context.req.param("kind")),
+            context.req.param("id"),
+            await context.req.json(),
+          ),
+        },
+        201,
+      ),
+    );
+    routes.post("/items/:kind/:id/notes/send", async (context) =>
+      context.json(
+        await inboxNotes.send(
+          owner(context),
+          kind.parse(context.req.param("kind")),
+          context.req.param("id"),
+        ),
+      ),
+    );
+    routes.delete("/items/:kind/:id/notes/:noteId", async (context) =>
+      context.json(
+        await inboxNotes.remove(
+          owner(context),
+          kind.parse(context.req.param("kind")),
+          context.req.param("id"),
+          context.req.param("noteId"),
+        ),
+      ),
+    );
+  }
   routes.post("/computer/:botId", async (context) => {
     try {
       return context.json({
