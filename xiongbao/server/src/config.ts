@@ -511,6 +511,13 @@ export type DeploymentConfig = {
    */
   pilotBoardPush: boolean;
   /**
+   * Pilot: a long plan (four steps or more) from an employee whose handbook declares the pilot waits
+   * for its owner's yes before anything with a side effect runs, and a coding card gets a read-only
+   * review attached to its hand-in. Off unless XIONGBAO_PILOT_PLAN_APPROVAL is `on`; off means the
+   * prompt, the tool list and every gate behave as they did.
+   */
+  pilotPlanApproval: boolean;
+  /**
    * Where the pages a Bot's employee made are served from, apart from the app and the API.
    * `port` is XIONGBAO_CONTENT_PORT (1024-65535, never the API's or the app's port) and `domain` is
    * XIONGBAO_CONTENT_DOMAIN (a bare host name; each site gets a subdomain of it). Neither set means
@@ -1849,6 +1856,15 @@ function pilotBoardPushEnabled(environment: Environment): boolean {
   throw new Error(`${name} must be "on" or "off"`);
 }
 
+/** XIONGBAO_PILOT_PLAN_APPROVAL: `on` or `off`, off when unset; anything else is refused, like the pilot above. */
+function pilotPlanApprovalEnabled(environment: Environment): boolean {
+  const name = "XIONGBAO_PILOT_PLAN_APPROVAL";
+  const value = optional(environment, name)?.toLowerCase();
+  if (value === undefined || value === "off") return false;
+  if (value === "on") return true;
+  throw new Error(`${name} must be "on" or "off"`);
+}
+
 /**
  * The content origin settings. Refused rather than coerced, like the switches around it: a port that
  * quietly collided with the API's, or a domain with a scheme on it, would fail far from where it was
@@ -2120,6 +2136,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     selfHostBanner: selfHostBannerEnabled(environment),
     chatServerComputerTools: chatServerComputerToolsEnabled(environment),
     pilotBoardPush: pilotBoardPushEnabled(environment),
+    pilotPlanApproval: pilotPlanApprovalEnabled(environment),
     content: contentConfig(environment, [
       publicUrl,
       appUrl,

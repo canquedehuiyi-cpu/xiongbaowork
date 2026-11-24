@@ -680,6 +680,11 @@ export type ApprovalStore = {
    * where every change asks first. Absent where there are no tasks.
    */
   asksEveryChange?(ownerUserId: string, threadId: string): Promise<boolean>;
+  /**
+   * Whether this thread put a plan to its owner that is not approved yet, so changes wait (pilot,
+   * `agents/plan-approval.ts`). Absent unless the pilot is on, which leaves the gate as it was.
+   */
+  planApprovalPending?(ownerUserId: string, threadId: string): Promise<boolean>;
   policy?: ApprovalPolicyStore;
 };
 /** Whether an approval may be answered with "Always allow here". Shared with the browser. */

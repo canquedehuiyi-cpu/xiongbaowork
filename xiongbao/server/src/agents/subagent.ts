@@ -35,6 +35,7 @@ import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { createTurnRunner } from "@openbot/toolkit/run-turn";
 import { z } from "zod";
 import { toolSegmentsFor, turnTimeoutFor } from "../../../toolkit/src/limits";
+import { restrictToReads } from "../approvals/read-only-threads";
 import { currentApprovalContext } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { REFUSAL_MARKER } from "../plugins/tools";
@@ -158,8 +159,13 @@ export type SubagentModels = {
 export function createSubagents(options: {
   /** The headless turn a subagent runs, as every background turn is built. No components. */
   turn: Omit<TurnOptions, "buildAgentFor" | "components">;
-  /** The same Bot as the person's run gets, built for a subagent: no coordination, no nesting. */
-  buildAgentFor: TurnOptions["buildAgentFor"];
+  /**
+   * The same Bot as the person's run gets, built for a subagent: no coordination, no nesting. With
+   * `readOnly` (the pre-delivery reviewer) it holds none of the Bot's granted tools either.
+   */
+  buildAgentFor: (
+    input: Parameters<TurnOptions["buildAgentFor"]>[0] & { readOnly?: boolean },
+  ) => ReturnType<TurnOptions["buildAgentFor"]>;
   /** Close every approval request the subagent's run opened, without carrying that run on. */
   withdrawApprovals: (ownerUserId: string, runId: string) => Promise<unknown>;
   /**
@@ -167,6 +173,12 @@ export function createSubagents(options: {
    * kept in the conversation: a subagent's own thread is not one the gate knows to ask in that way.
    */
   asksEveryStep?: (ownerUserId: string, threadId: string) => Promise<boolean>;
+  /**
+   * Whether the conversation put a plan to its owner that is not approved yet (pilot,
+   * `agents/plan-approval.ts`). A subagent's own thread is not the one the hold is on, so none is
+   * started until the plan is approved.
+   */
+  planPending?: (ownerUserId: string, threadId: string) => Promise<boolean>;
   /**
    * 期七：`model` 参数要用的三样。不给，`model` 不起作用（子代理照旧用员工平时的模型），也不拒绝。
    */
@@ -182,7 +194,12 @@ export function createSubagents(options: {
   const perAnswer = options.perAnswer ?? SUBAGENTS_PER_ANSWER;
   return {
     /** The tool for one run. Its count of subagents is that run's, which is one answer. */
-    toolForRun(parent: SubagentParent): GrantedTool {
+    toolForRun(
+      parent: SubagentParent,
+      /** `readOnly`: the reviewer's run, held to reads (`approvals/read-only-threads.ts`). */
+      restriction: { readOnly?: boolean } = {},
+    ): GrantedTool {
+      const readOnly = restriction.readOnly === true;
       let started = 0;
       /*
        * Actions this answer has already handed back: the same action again is refused instead of
@@ -241,6 +258,11 @@ export function createSubagents(options: {
            */
           if (await options.asksEveryStep?.(parent.actorId, parent.threadId))
             return `${REFUSAL_MARKER} No subagent was started: in a task from a check-in, every step is checked with the person in this conversation. Do this part yourself.`;
+          if (
+            !readOnly &&
+            (await options.planPending?.(parent.actorId, parent.threadId))
+          )
+            return `${REFUSAL_MARKER} No subagent was started: the plan is not approved yet. Wait for the person's answer.`;
           // Checked and counted with nothing awaited between them, so calls arriving together
           // cannot all pass the cap.
           if (started >= perAnswer)
@@ -266,7 +288,9 @@ export function createSubagents(options: {
             maxToolSegments: toolSegmentsFor("subagent"),
             ...options.turn,
             buildAgentFor: async (input) => {
-              agent = await options.buildAgentFor(input);
+              agent = await options.buildAgentFor(
+                readOnly ? { ...input, readOnly: true } : input,
+              );
               return agent;
             },
           });
@@ -290,6 +314,8 @@ export function createSubagents(options: {
             pinned && options.models
               ? options.models.pin(threadId, pinned)
               : undefined;
+          // Held to reads for as long as the run lasts, whichever way it ends.
+          const release = readOnly ? restrictToReads(threadId) : undefined;
           try {
             const { replyText } = await runTurn({
               ownerUserId: parent.actorId,
@@ -385,6 +411,7 @@ export function createSubagents(options: {
              * twice, so on a run that opened nothing this costs one read.
              */
             unpin?.();
+            release?.();
             await options.withdrawApprovals(parent.actorId, runId);
           }
         },

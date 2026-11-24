@@ -382,6 +382,9 @@ tests/delivery-overdue.test.ts
 tests/delivery-prompt-files.test.ts
 tests/delivery-providers.test.ts
 tests/delivery-return-failure.test.ts
+tests/delivery-review-tools.test.ts
+tests/delivery-review.integration.test.ts
+tests/delivery-review.test.ts
 tests/delivery-router.test.ts
 tests/delivery-routes.integration.test.ts
 tests/delivery-routes.test.ts
@@ -653,6 +656,8 @@ tests/pipeline-routes.test.ts
 tests/pipeline-run.test.ts
 tests/pipeline-template-edit.test.ts
 tests/pipeline-turn-channel.test.ts
+tests/plan-approval.integration.test.ts
+tests/plan-approval.test.ts
 tests/plan-change-audit.integration.test.ts
 tests/plan-last-step.test.ts
 tests/plan-model.test.ts

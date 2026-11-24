@@ -24,6 +24,7 @@ import {
   UPDATE_PLAN_TOOL,
 } from "../../../shared/plan";
 import type { GrantedTool } from "../plugins/tools";
+import type { PlanApproval } from "./plan-approval";
 import { planWithActionOn, withToolHint } from "./step-hints";
 
 /** The spelling a rule switches it off by, as for every other tool. */
@@ -50,7 +51,16 @@ const parameters = z.object({
     ),
 });
 
-export function updatePlanTools(): GrantedTool[] {
+/**
+ * `approval` is given only for an employee under the plan-approval pilot (`plan-approval.ts`). Without
+ * it the tool is exactly what it was. With it the tool also puts a long first plan to the owner, and
+ * is not started alongside the next action: an action in the same step could run before the plan was
+ * put, and the hold would come too late for it.
+ */
+export function updatePlanTools(options?: {
+  approval?: PlanApproval;
+}): GrantedTool[] {
+  const approval = options?.approval;
   return [
     {
       name: UPDATE_PLAN_TOOL,
@@ -60,12 +70,19 @@ export function updatePlanTools(): GrantedTool[] {
         "列出或更新你这次工作的计划清单，每次都传完整清单。需要多步才能完成的任务，先用它列出计划；开始做哪一项就把它标成 in_progress，做完立刻标 done，全部 done 后再给出总结。一两步就能完成的简单问题不用列计划。",
       ),
       // 和同一步的别的调用一起开始（无头运行）；它什么都不存，不依赖也不影响同一步的其它调用。
-      ...(planWithActionOn() ? { concurrent: true as const } : {}),
+      ...(planWithActionOn() && !approval ? { concurrent: true as const } : {}),
       parameters,
       async execute(args) {
         const problem = planProblem(args);
         if (problem !== undefined) return problem;
-        return planUpdated(readPlan(args) ?? []);
+        const items = readPlan(args) ?? [];
+        const updated = planUpdated(items);
+        // A plan that cannot be put to the owner is still a plan: the failure is logged, never thrown.
+        const note = await approval?.afterPlan(items).catch((error) => {
+          console.error("plan approval failed", error);
+          return undefined;
+        });
+        return note ? `${updated}。${note}` : updated;
       },
     },
   ];

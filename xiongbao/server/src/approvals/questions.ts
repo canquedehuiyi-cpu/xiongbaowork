@@ -6,6 +6,7 @@ import type { Database } from "../db/client";
 import { workItems } from "../db/schema/work";
 import type { TaskProjector } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
+import { planDecisionFor } from "./plan-hold";
 import { ApprovalNotFoundError, ApprovalRefusedError } from "./types";
 
 const questionSchema = z.object({
@@ -208,6 +209,19 @@ export function createApprovalQuestions(
         if (row.finishedAt)
           throw new ApprovalRefusedError("You already answered this question.");
         claimedTenant = row.tenantId;
+        /*
+         * A plan put for approval keeps the owner's decision on its row, in the same transaction as
+         * the answer: the gate reads it to lift the hold on changes (`plan-hold.ts`). Any other
+         * question is untouched.
+         */
+        const planDecision = planDecisionFor(row.payload, answer);
+        if (planDecision)
+          await tx
+            .update(workItems)
+            .set({
+              payload: sql`jsonb_set(${workItems.payload}, '{planDecision}', to_jsonb(${planDecision}::text))`,
+            })
+            .where(owned(owner, id));
         if (group) {
           await tx
             .update(workItems)

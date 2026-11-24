@@ -41,6 +41,11 @@ export type AgentResolutionContext = {
    */
   subagent?: boolean;
   /**
+   * The pre-delivery reviewer's run (tasks/delivery-review.ts), a subagent that is offered none of
+   * the Bot's granted tools; its computer tools stay, and the gate holds those to reads.
+   */
+  readOnly?: boolean;
+  /**
    * Which runs on the Bots built may hold their tools. Absent means every run does. Set only for the
    * runtime's own map, which it also runs for itself (`isAskedRun` in copilot.ts).
    */
@@ -186,9 +191,11 @@ export function createActorAgentResolver(
        * what belongs to the conversation (`SUBAGENT_WITHOUT_TOOLS`): every step it takes resends the
        * definitions, and the prompt's delivery rules go with the tools they are about.
        */
-      context?.subagent && granted
-        ? async (botId) => toolsForSubagent(await granted(botId))
-        : granted,
+      context?.readOnly && granted
+        ? async () => []
+        : context?.subagent && granted
+          ? async (botId) => toolsForSubagent(await granted(botId))
+          : granted,
       deps.signRunForActor?.(actor.id, context?.initiator, context?.depth),
       // A check-in has no computer, so it is not told it has one, nor how to search with its browser.
       computerGuidanceForRun(context?.initiator, deps.computerGuidance),

@@ -98,6 +98,10 @@ import {
 } from "./agents/model-proxy/access";
 import { AGENT_MODEL_ROUTE } from "./agents/model-proxy/proxy";
 import { createAgentModelService } from "./agents/model-proxy/wiring";
+import {
+  createPlanApproval,
+  declaresPlanApproval,
+} from "./agents/plan-approval";
 import { readAgentPresence } from "./agents/presence";
 import { createAgentProfileStore } from "./agents/profile-store";
 import type { AgentActor } from "./agents/profile-types";
@@ -112,7 +116,7 @@ import { slimComputerGuidance } from "./agents/slim-guidance";
 import { createSubagents, SUBAGENT_HANDED_BACK } from "./agents/subagent";
 import { toolLimitRecorder } from "./agents/tool-limit";
 import { serverTurnAdmission } from "./agents/turn-admission";
-import { updatePlanTools } from "./agents/update-plan";
+import { UPDATE_PLAN_REF, updatePlanTools } from "./agents/update-plan";
 import {
   createWakeUpRunner,
   createWakeUpStore,
@@ -122,6 +126,7 @@ import { createApp } from "./app";
 import { createDecisionWaits } from "./approvals/decision-waits";
 import { createApprovedActionExecutor } from "./approvals/execute";
 import { createPersonResponseTick } from "./approvals/person-response-sweep";
+import { createPlanHold } from "./approvals/plan-hold";
 import {
   createApprovalQuestions,
   type PersonQuestion,
@@ -528,6 +533,7 @@ import {
 } from "./plugins/single-user-identity";
 import { createPluginStore, type PluginStore } from "./plugins/store";
 import {
+  type GrantedTool,
   grantedSkills,
   grantedTools,
   REFUSAL_MARKER,
@@ -599,6 +605,7 @@ import { createTriggerStore } from "./responsibilities/triggers";
 import type { Responsibility } from "./responsibilities/types";
 import { createServerResponsibilityEngine } from "./responsibilities/wiring";
 import { createRoleGenerator } from "./roles/generator";
+import { pilotRoleTemplate } from "./roles/pilot-handbook";
 import { createRoleTemplateRoutes } from "./roles/routes";
 import { createRoleTemplateStore, officialTemplatesFrom } from "./roles/store";
 import {
@@ -655,6 +662,7 @@ import {
   savedWorkHours,
   threadRunning,
 } from "./tasks/delivery-checker";
+import { createDeliveryReview } from "./tasks/delivery-review";
 import {
   ACCEPT_TASK_REF,
   deliveryTools,
@@ -1681,7 +1689,15 @@ await startupLifecycle.run(async (startup) => {
     boardProjector,
   );
   const taskProjector = withQuestionParking(boardProjector, approvalQuestions);
-  const storedApprovals = createApprovalStore(database, taskProjector);
+  // Pilot (agents/plan-approval.ts): the plan hold exists only while the switch is on, so the gate
+  // asks nothing extra otherwise.
+  const planHold = createPlanHold(database);
+  const storedApprovals = {
+    ...createApprovalStore(database, taskProjector),
+    ...(config.pilotPlanApproval
+      ? { planApprovalPending: planHold.pending }
+      : {}),
+  };
 
   /*
    * Restart recovery (`taskProjector.reclaimAbandoned` and the run reapers) is started below, once the
@@ -3080,8 +3096,13 @@ await startupLifecycle.run(async (startup) => {
         approvalService.disabledTools(actorId, botId),
       ]);
       // 关掉 `accept_task` 就是这位员工不走三步：交付和延期跟着不给。关掉 `generate_video` 也不给 `check_video`。
+      const offered = tools.filter((tool) => !disabled(tool.ref));
       return offeredMediaTools(
-        offeredDeliveryTools(tools.filter((tool) => !disabled(tool.ref))),
+        offeredDeliveryTools(
+          config.pilotPlanApproval
+            ? withPlanApproval(offered, actorId, initiator, botId)
+            : offered,
+        ),
       );
     };
   /**
@@ -3247,6 +3268,59 @@ await startupLifecycle.run(async (startup) => {
           connectorTools: () => appToolsFor(actorId, initiator, botId),
         })
       : [];
+  /**
+   * Whether this employee's handbook declares the plan-approval pilot, in a conversation of its owner
+   * (agents/plan-approval.ts). Read at the call, so a handbook edited since the run began counts.
+   */
+  const pilotDeclared = (actorId: string, botId: string) =>
+    runAsTenant(actorId, async () => {
+      const profile = await agentProfileStore.get(
+        await actorFor(actorId),
+        botId,
+      );
+      return (
+        profile !== null &&
+        profile.ownerUserId === actorId &&
+        declaresPlanApproval(profile.bible)
+      );
+    });
+  /**
+   * The plan tool under the pilot (agents/plan-approval.ts): the same tool with the owner's yes added.
+   * Swapped in where the granted tools are loaded for a run, so the list above stays what it was and
+   * a deployment with the switch off builds exactly the tool it always did.
+   */
+  const withPlanApproval = (
+    tools: GrantedTool[],
+    actorId: string,
+    initiator: AuditInitiator,
+    botId: string,
+  ) =>
+    tools.map((tool) =>
+      tool.ref === UPDATE_PLAN_REF
+        ? (updatePlanTools({
+            approval: createPlanApproval({
+              actorId,
+              botId,
+              initiator,
+              declared: pilotDeclared,
+              latest: planHold.latest,
+              ask: (input) =>
+                routeQuestionForPlan(
+                  {
+                    actorId: input.actorId,
+                    botId: input.botId,
+                    threadId: input.threadId,
+                    runId: input.runId,
+                    ...(input.initiator ? { initiator: input.initiator } : {}),
+                    question: input.question,
+                    why: input.why,
+                  },
+                  { planApproval: input.planApproval },
+                ),
+            }),
+          })[0] ?? tool)
+        : tool,
+    );
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -3350,6 +3424,19 @@ await startupLifecycle.run(async (startup) => {
       // A round with no browser behind it (a nudge, a hand-over) reads times on the person's saved zone.
       savedTimeZone: async () =>
         (await readWorkHours(database, actorId)).timeZone,
+      // Pilot (tasks/delivery-review.ts): a coding card's hand-in carries a read-only reviewer's opinion.
+      ...(config.pilotPlanApproval
+        ? {
+            review: createDeliveryReview({
+              declared: pilotDeclared,
+              reviewer: (parent) =>
+                subagents.toolForRun(
+                  { ...parent, initiator: initiator ?? PERSON_INITIATOR },
+                  { readOnly: true },
+                ),
+            }),
+          }
+        : {}),
     }),
     // 上游在这里给每位员工 `show_app_access`；fork 放在下面 `request_app_access` 旁边（X2）。
     /*
@@ -3721,7 +3808,11 @@ await startupLifecycle.run(async (startup) => {
    * Bots coordinating with each other and with people: handing work on, asking a person a question,
    * and the per-run tools a Bot is given for both (agents/coordination-wiring.ts).
    */
-  const { coordination, coordinationForActor } = wireCoordination({
+  const {
+    coordination,
+    coordinationForActor,
+    routeQuestion: routeQuestionForPlan,
+  } = wireCoordination({
     handoffDesk,
     config,
     approvalService,
@@ -3753,6 +3844,7 @@ await startupLifecycle.run(async (startup) => {
     initiator,
     depth,
     subagent,
+    readOnly,
   }: {
     ownerUserId: string;
     agentId: string;
@@ -3760,6 +3852,8 @@ await startupLifecycle.run(async (startup) => {
     depth?: number;
     /** A subagent's run: the same Bot with no coordination. See agents/subagent.ts. */
     subagent?: boolean;
+    /** The pre-delivery reviewer: a subagent with none of the Bot's granted tools. */
+    readOnly?: boolean;
   }) => {
     const actor = await actorFor(ownerUserId);
     let agent: AbstractAgent | undefined;
@@ -3770,6 +3864,7 @@ await startupLifecycle.run(async (startup) => {
           initiator,
           depth,
           ...(subagent ? { subagent } : {}),
+          ...(readOnly ? { readOnly } : {}),
         }),
       );
     } catch (error) {
@@ -4058,6 +4153,7 @@ await startupLifecycle.run(async (startup) => {
     asksEveryStep: async (ownerUserId, threadId) =>
       (await approvalService.store.asksEveryChange?.(ownerUserId, threadId)) ===
       true,
+    ...(config.pilotPlanApproval ? { planPending: planHold.pending } : {}),
   });
 
   /*
@@ -5925,7 +6021,10 @@ await startupLifecycle.run(async (startup) => {
     roleTemplates: createRoleTemplateStore({
       database,
       profiles: agentProfileStore,
-      official: () => officialTemplatesFrom(tenantPackage.agents),
+      official: () => [
+        ...officialTemplatesFrom(tenantPackage.agents),
+        ...(config.pilotPlanApproval ? [pilotRoleTemplate()] : []),
+      ],
     }),
     auditStore: bootAuditStore,
   });
@@ -7269,7 +7368,10 @@ await startupLifecycle.run(async (startup) => {
   );
 
   // Role templates (story ROLE1): the person's own, and the package's seed cards as read-only ones.
-  const officialRoleTemplates = officialTemplatesFrom(tenantPackage.agents);
+  const officialRoleTemplates = [
+    ...officialTemplatesFrom(tenantPackage.agents),
+    ...(config.pilotPlanApproval ? [pilotRoleTemplate()] : []),
+  ];
   app.route(
     "/api/role-templates",
     createRoleTemplateRoutes(

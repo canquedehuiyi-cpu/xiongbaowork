@@ -21,6 +21,7 @@ import { REFUSAL_MARKER } from "../plugins/tools";
 import { createPrivateShareCheck } from "../proactive/private-share";
 import { createWorkQueue } from "../work/queue";
 import { type RunAssertion, readRunAssertion } from "./callback-token";
+import type { EscalationRoute } from "./escalation";
 import { type HandoffDesk, resolveAddressedBot } from "./handoff";
 import {
   authoriseCoordinationRun,
@@ -79,6 +80,87 @@ export function wireCoordination(deps: {
     channelStore,
   } = deps;
   const personQuestions = createWorkQueue(database);
+  /**
+   * Put a question to the person in the conversation it came from: what `ask_person` calls. `extra`
+   * rides on the saved row beside the question; the plan-approval pilot marks its plan there
+   * (agents/plan-approval.ts). Without it the row is what it always was.
+   */
+  const routeQuestion = async (
+    question: Parameters<EscalationRoute>[0],
+    extra: Record<string, unknown> = {},
+  ) => {
+    const source = await sourceForCoordinationRun(question);
+    if (!source)
+      return {
+        refusal: "That question could not reach its source conversation.",
+      };
+    const key = createHash("sha256")
+      .update(
+        JSON.stringify([
+          question.actorId,
+          question.botId,
+          question.runId,
+          question.question,
+        ]),
+      )
+      .digest("hex");
+    const queued = await personQuestions.offer({
+      kind: "person.question",
+      key,
+      payload: {
+        ...question,
+        sourceBotId: source.botId,
+        channelId: source.channelId,
+        mode: "completed_question",
+        ...extra,
+        toolName: "ask_person",
+        args: {
+          question: question.question,
+          ...(question.why ? { why: question.why } : {}),
+          ...(question.parts ? { parts: question.parts } : {}),
+        },
+      },
+    });
+    if (queued === "refused")
+      return { refusal: "The question could not be saved for its person." };
+    await channelStore.recordActivity(
+      await actorFor(question.actorId),
+      source.channelId,
+      {
+        text: `A question needs your answer: ${question.question}`,
+        agentId: source.botId,
+        at: new Date(),
+      },
+      { id: `question:${key}` },
+    );
+    if (question.threadId) {
+      // A person reads this in Slack or on their phone, where "general-assistant" is an id, not a name.
+      const botName =
+        (
+          await agentProfileStore
+            .get(await actorFor(question.actorId), question.botId)
+            .catch(() => null)
+        )?.name ?? question.botId;
+      await deps.notify(
+        {
+          ownerUserId: question.actorId,
+          channelId: source.channelId,
+          agentId: source.botId,
+          threadId: question.threadId,
+        },
+        {
+          id: key,
+          text: `${botName} asks: ${question.question}`,
+          kind: "question",
+          requestId: key,
+        },
+      );
+    }
+    return {
+      reached:
+        "the person in the source conversation; the question is saved awaiting their reply",
+    };
+  };
   const coordination = createCoordinationTools({
     desk: handoffDesk,
     caps: config.handoff,
@@ -165,78 +247,7 @@ export function wireCoordination(deps: {
         sourceThread: sourceForCoordinationRun,
         delegationFor: (claim) => readCoordinationHandoffClaim(database, claim),
       }),
-    route: async (question) => {
-      const source = await sourceForCoordinationRun(question);
-      if (!source)
-        return {
-          refusal: "That question could not reach its source conversation.",
-        };
-      const key = createHash("sha256")
-        .update(
-          JSON.stringify([
-            question.actorId,
-            question.botId,
-            question.runId,
-            question.question,
-          ]),
-        )
-        .digest("hex");
-      const queued = await personQuestions.offer({
-        kind: "person.question",
-        key,
-        payload: {
-          ...question,
-          sourceBotId: source.botId,
-          channelId: source.channelId,
-          mode: "completed_question",
-          toolName: "ask_person",
-          args: {
-            question: question.question,
-            ...(question.why ? { why: question.why } : {}),
-            ...(question.parts ? { parts: question.parts } : {}),
-          },
-        },
-      });
-      if (queued === "refused")
-        return { refusal: "The question could not be saved for its person." };
-      await channelStore.recordActivity(
-        await actorFor(question.actorId),
-        source.channelId,
-        {
-          text: `A question needs your answer: ${question.question}`,
-          agentId: source.botId,
-          at: new Date(),
-        },
-        { id: `question:${key}` },
-      );
-      if (question.threadId) {
-        // A person reads this in Slack or on their phone, where "general-assistant" is an id, not a name.
-        const botName =
-          (
-            await agentProfileStore
-              .get(await actorFor(question.actorId), question.botId)
-              .catch(() => null)
-          )?.name ?? question.botId;
-        await deps.notify(
-          {
-            ownerUserId: question.actorId,
-            channelId: source.channelId,
-            agentId: source.botId,
-            threadId: question.threadId,
-          },
-          {
-            id: key,
-            text: `${botName} asks: ${question.question}`,
-            kind: "question",
-            requestId: key,
-          },
-        );
-      }
-      return {
-        reached:
-          "the person in the source conversation; the question is saved awaiting their reply",
-      };
-    },
+    route: (question) => routeQuestion(question),
   });
   const coordinationForActor =
     (
@@ -309,5 +320,5 @@ export function wireCoordination(deps: {
         },
       }));
     };
-  return { coordination, coordinationForActor };
+  return { coordination, coordinationForActor, routeQuestion };
 }
