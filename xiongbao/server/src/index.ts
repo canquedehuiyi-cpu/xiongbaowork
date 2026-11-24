@@ -639,6 +639,7 @@ import {
 import { createStaffingProposalStore } from "./staffing/store";
 import { createAppProbe } from "./tasks/app-probe";
 import { createBoardCardRoutes } from "./tasks/board-cards-routes";
+import { createBoardPush } from "./tasks/board-push";
 import {
   createBriefingRoutes,
   createBriefings,
@@ -1652,6 +1653,9 @@ await startupLifecycle.run(async (startup) => {
     )
       throw new ApprovalRefusedError("That Bot is no longer available to you.");
   };
+  const boardPush = createBoardPush(database, {
+    enabled: config.pilotBoardPush,
+  });
   // The board projector: approvals, runs and routines project into tasks.
   const boardProjector = createTaskProjector(
     database,
@@ -1660,6 +1664,8 @@ await startupLifecycle.run(async (startup) => {
       // instance's board moves too, not just this process's sockets. The helper
       // runs the lazy statement and logs its failure; it never rejects.
       void announceTaskUpdate(database, tenantId);
+      // Pilot, off by default: also say which cards moved (tasks/board-push.ts).
+      void boardPush.announce(tenantId);
     },
     quota,
   );

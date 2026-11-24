@@ -497,6 +497,14 @@ policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guide
 
 群聊里带电脑的员工，一轮的时限和单聊一样是 25 分钟（80 段）；没有电脑的员工仍是 5 分钟（30 段）。电脑是共享的（同一台电脑上有别的座位）时，这 25 分钟里别人在这台电脑上改的文件也可能被列进这一轮的清单；下载仍然只认本轮事件和本座位。
 
+## 试点开关
+
+试点功能都在开关后面，默认关；关着时服务器与页面的行为和没有这项试点时一样。
+
+| Variable | Meaning |
+| -------- | ------- |
+| `XIONGBAO_PILOT_BOARD_PUSH` | 默认 `off`。设为 `on` 后，任务看板的卡片状态一变，服务器就经频道连接（`/api/channels/events`）给卡片的主人发一条 AG-UI `STATE_DELTA`（JSON Patch，只含卡片 id 与状态，不含卡片正文），页面收到就重读看板；连接断了页面回到每 5 秒读一次，连着时放慢到每 30 秒读一次。只推给这张卡所属租户的本人，卡不再属于他就收不到。浏览器经 `/api/capabilities` 的 `boardPush` 得知开关。只认 `on` 和 `off`，写错了服务起不来。 |
+
 ## Authentication
 
 | Variable                     | Meaning                                                                                |

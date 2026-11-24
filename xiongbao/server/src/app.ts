@@ -793,6 +793,12 @@ export function createApp(
        */
       chatServerComputerTools: config.chatServerComputerTools,
       /*
+       * Whether the board is pushed card changes over the channel socket (pilot). Projected because
+       * the page holds half of it: only with this on does it slow its polling while the socket is up.
+       * Left out entirely when off, so the answer is exactly what it was before the pilot.
+       */
+      ...(config.pilotBoardPush ? { boardPush: true } : {}),
+      /*
        * Whether this deployment has memory (`editionHasMemory`): both editions do, and the personal one
        * stops having it with `XIONGBAO_PERSONAL_MEMORY=off`. The browser draws its memory screens from
        * this, not from the edition.

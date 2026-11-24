@@ -115,6 +115,7 @@ tests/avatar-sources-screens.test.tsx
 tests/background-run-list.test.tsx
 tests/background-run.test.tsx
 tests/bar-chart-long-labels.test.tsx
+tests/board-push.test.tsx
 tests/bot-access-apps.test.tsx
 tests/bot-access-skills.test.tsx
 tests/bot-access-your-apps.test.tsx

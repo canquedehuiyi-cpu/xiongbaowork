@@ -53,6 +53,11 @@ export type DeploymentCapabilities = {
    * {@link offersMemory} then reads the edition as it used to: no memory in the personal one.
    */
   memory?: boolean;
+  /**
+   * Whether the server pushes the task board's card changes over the channel socket (pilot,
+   * `XIONGBAO_PILOT_BOARD_PUSH`). Absent from a server that does not say, which reads as off.
+   */
+  boardPush?: boolean;
 };
 
 export const deploymentKeys = {
@@ -95,6 +100,7 @@ export function deploymentCapabilitiesQueryOptions() {
         voice?: boolean;
         chatServerComputerTools?: boolean;
         memory?: boolean;
+        boardPush?: boolean;
       };
 
       return {
@@ -106,6 +112,7 @@ export function deploymentCapabilitiesQueryOptions() {
         voice: body.voice === true,
         chatServerComputerTools: body.chatServerComputerTools === true,
         ...(typeof body.memory === "boolean" ? { memory: body.memory } : {}),
+        ...(body.boardPush === true ? { boardPush: true } : {}),
       };
     },
   });

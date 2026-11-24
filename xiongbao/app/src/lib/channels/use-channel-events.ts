@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { noticeChannelEvent } from "@/lib/notifications/reply-notice";
 import { type RunNotice, showRunNotice } from "@/lib/notifications/run-notice";
 import { socketUrl as buildSocketUrl } from "@/lib/socket-url";
+import { setBoardPushConnected } from "@/lib/tasks/board-push";
 import {
   type AgentChannel,
   type ChannelPage,
@@ -26,8 +27,31 @@ import {
 /** The server saying it may have missed announcements, so the roster we hold may be wrong. */
 export type ChannelResyncEvent = { resync: true };
 
+/**
+ * Which cards on the task board moved, in the AG-UI `STATE_DELTA` shape (pilot,
+ * `XIONGBAO_PILOT_BOARD_PUSH`). Only ids and changed fields; the board reads the cards again.
+ */
+export type BoardStateDeltaEvent = {
+  type: "STATE_DELTA";
+  delta: { op: string; path: string; value?: unknown }[];
+};
+
 /** What arrives on the socket. `resync` is the discriminant; an activity event never carries it. */
-export type ChannelSocketMessage = ChannelActivityEvent | ChannelResyncEvent;
+export type ChannelSocketMessage =
+  | ChannelActivityEvent
+  | ChannelResyncEvent
+  | BoardStateDeltaEvent;
+
+export function isStateDelta(
+  message: unknown,
+): message is BoardStateDeltaEvent {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    (message as BoardStateDeltaEvent).type === "STATE_DELTA" &&
+    Array.isArray((message as BoardStateDeltaEvent).delta)
+  );
+}
 
 export function isResync(message: unknown): message is ChannelResyncEvent {
   return (
@@ -70,7 +94,7 @@ export function parseChannelSocketMessage(
     return null;
   }
   if (!isChannelSocketMessage(parsed)) return null;
-  if (isResync(parsed)) return parsed;
+  if (isResync(parsed) || isStateDelta(parsed)) return parsed;
   if (typeof parsed.channelId !== "string") return null;
   return parsed;
 }
@@ -385,6 +409,7 @@ export function useChannelEvents() {
 
       socket.onopen = () => {
         retryDelay = FIRST_RETRY_MS;
+        setBoardPushConnected(true);
         // Recover events missed while the socket was disconnected.
         void queryClient.invalidateQueries({ queryKey: channelKeys.list() });
         void queryClient.invalidateQueries({ queryKey: channelKeys.details() });
@@ -393,6 +418,17 @@ export function useChannelEvents() {
       socket.onmessage = (message) => {
         const parsed = parseChannelSocketMessage(message.data);
         if (!parsed) return;
+
+        /*
+         * The board's cards moved (pilot). Read the lists again and nothing more: the message names
+         * ids and statuses only, and applying them here would mean a second copy of the board's rules.
+         * The summary is a separate read, with a key the `["tasks"]` prefix does not reach.
+         */
+        if (isStateDelta(parsed)) {
+          void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          void queryClient.invalidateQueries({ queryKey: ["tasks-summary"] });
+          return;
+        }
 
         /*
          * A turn that ended while the person was away carries a notice and nothing else, under an
@@ -500,6 +536,7 @@ export function useChannelEvents() {
 
       // WebSocket needs explicit reconnect handling.
       socket.onclose = () => {
+        setBoardPushConnected(false);
         if (stopped) return;
         retryTimer = window.setTimeout(connect, retryDelay);
         retryDelay = Math.min(retryDelay * 2, MAX_RETRY_MS);
@@ -513,6 +550,7 @@ export function useChannelEvents() {
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       // Cleared first: the close below must not schedule a reconnect for a screen that is gone.
       if (socket) socket.onclose = null;
+      setBoardPushConnected(false);
       socket?.close();
     };
   }, [queryClient, router]);
