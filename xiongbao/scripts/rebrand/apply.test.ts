@@ -121,6 +121,44 @@ describe("apply CLI", () => {
     );
   });
 
+  test("--only 只应用列出的变体，其余变体与文件名不动", () => {
+    put(
+      "xiongbao/server/src/scoped.ts",
+      'import { x } from "@openbot/shared";\nexport const openbotThing = x;\n',
+    );
+    git("add", "-A");
+    git("commit", "-q", "-m", "scoped");
+    const { code, report } = run([
+      "--phase",
+      "R1",
+      "--only",
+      "@openbot/",
+      "xiongbao/",
+    ]);
+    expect(code).toBe(0);
+    expect(report?.moved).toBe(0);
+    expect(read("xiongbao/server/src/scoped.ts")).toBe(
+      'import { x } from "@xiongbao/shared";\nexport const openbotThing = x;\n',
+    );
+    expect(read("xiongbao/server/src/model.ts")).toContain("openbotModel");
+    expect(existsSync(join(root, "xiongbao/server/src/openbot-actor.ts"))).toBe(
+      true,
+    );
+  });
+
+  test("--only 不认识的变体：退出 2 且不动文件", () => {
+    const { code, stderr } = run([
+      "--phase",
+      "R1",
+      "--only",
+      "foo",
+      "xiongbao/",
+    ]);
+    expect(code).toBe(2);
+    expect(stderr).toContain("--only");
+    expect(read("xiongbao/server/src/model.ts")).toContain("openbotModel");
+  });
+
   test("lines 只数真正改变的行", () => {
     const { report } = run(["--phase", "R1", "xiongbao/"]);
     // model.ts 1 行 + welcome.tsx 4 行（句子、标识符字符串、注释、instanceof 各一）
