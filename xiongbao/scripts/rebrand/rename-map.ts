@@ -17,6 +17,11 @@ export type Phase = "R1" | "R2" | "R3" | "R4";
 export type ProtectEntry = {
   text?: string;
   pattern?: string;
+  /**
+   * 作用域：仓库根相对路径。带 `file` 的条目只在该文件里生效（文件被改名后按新路径也认），
+   * 取自品牌白名单的 `file` 字段，避免一个短字符串冻结全仓同样的子串。不带则全仓生效。
+   */
+  file?: string;
   until: Phase | "forever";
   reason: string;
 };
@@ -69,6 +74,12 @@ export function readProtectEntries(): ProtectEntry[] {
 const isActive = (entry: ProtectEntry, phase: Phase) =>
   entry.until === "forever" || PHASE_ORDER[phase] < PHASE_ORDER[entry.until];
 
+const appliesTo = (entry: ProtectEntry, file?: string) =>
+  entry.file === undefined ||
+  (file !== undefined &&
+    (normalize(file) === entry.file ||
+      normalize(file) === renamePath(entry.file)));
+
 /**
  * 把阶段内生效的条目合成一个带 `g` 的正则：`text` 先按长度降序转义，再接 `pattern`，
  * 交替里靠前的先匹配，所以更长的精确串优先于更短的。没有生效条目时给 /$^/g（不匹配非空文本）。
@@ -76,8 +87,11 @@ const isActive = (entry: ProtectEntry, phase: Phase) =>
 export function buildProtect(
   entries: readonly ProtectEntry[],
   phase: Phase,
+  file?: string,
 ): RegExp {
-  const active = entries.filter((entry) => isActive(entry, phase));
+  const active = entries.filter(
+    (entry) => isActive(entry, phase) && appliesTo(entry, file),
+  );
   const texts = active
     .flatMap((entry) => (entry.text ? [entry.text] : []))
     .sort((a, b) => b.length - a.length)
@@ -89,8 +103,20 @@ export function buildProtect(
   return parts.length === 0 ? /$^/g : new RegExp(parts.join("|"), "g");
 }
 
-export function loadProtect(phase: Phase): RegExp {
-  return buildProtect(readProtectEntries(), phase);
+/** 不传 `file` 时只含不带作用域的条目；传了则再加上作用域是该文件的条目。 */
+export function loadProtect(phase: Phase, file?: string): RegExp {
+  return buildProtect(readProtectEntries(), phase, file);
+}
+
+/** 带作用域条目所在的文件（旧路径与改名后的路径），apply.ts 只为这些文件另建保护正则。 */
+export function scopedFiles(): Set<string> {
+  const files = new Set<string>();
+  for (const entry of readProtectEntries()) {
+    if (!entry.file) continue;
+    files.add(entry.file);
+    files.add(renamePath(entry.file));
+  }
+  return files;
 }
 
 const NUL = String.fromCharCode(0);
@@ -101,6 +127,11 @@ const PLACEHOLDER = new RegExp(`${NUL}(\\d+)${NUL}`, "g");
  * 保护正则的零长度命中忽略；同一个正则对象可被反复使用（每次从头匹配）。
  */
 export function renameText(text: string, protect: RegExp): string {
+  if (text.includes(NUL)) {
+    throw new Error(
+      "renameText: 输入含 NUL 字符，会与占位符冲突（二进制文件应在调用前跳过）",
+    );
+  }
   const kept: string[] = [];
   protect.lastIndex = 0;
   let out = text.replace(protect, (match) => {

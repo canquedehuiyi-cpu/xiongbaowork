@@ -14,6 +14,7 @@ import {
   type Phase,
   renamePath,
   renameText,
+  scopedFiles,
 } from "./rename-map";
 
 /*
@@ -58,6 +59,9 @@ function git(root: string, args: string[]): string {
   }
   return result.stdout.toString();
 }
+
+/** 新品牌词本身（及其后接下划线的片段）到处都有，列出来没有信息量。 */
+const BRAND_WORD = /^(?:xiongbao|XIONGBAO|XiongBao|Xiongbao|xiongBao)_*$/;
 
 const IDENTIFIER = /(?<![\w$])[A-Za-z_$][\w$]*/g;
 const identifiers = (line: string) => new Set(line.match(IDENTIFIER) ?? []);
@@ -139,6 +143,26 @@ function parseArgs(argv: string[]) {
   return { phase: phase as Phase, dryRun, reviewOut, paths };
 }
 
+/** 中途失败：说明已做到哪一步和怎么恢复，退出 1（工作区开跑前是干净的）。 */
+function reportFailure(
+  error: unknown,
+  done: string[],
+  pathspecs: string[],
+): never {
+  const scope = pathspecs.join(" ");
+  process.stderr.write(
+    [
+      `改名中途失败：${(error as Error).message}`,
+      `已完成 ${done.length} 步${done.length ? `，最后一步：${done[done.length - 1]}` : ""}。`,
+      "开跑前范围内是干净的，恢复到开跑前：",
+      `  git restore --source=HEAD --staged --worktree -- ${scope}`,
+      `  git clean -fd -- ${scope}`,
+      "",
+    ].join("\n"),
+  );
+  process.exit(1);
+}
+
 function main() {
   const { phase, dryRun, reviewOut, paths } = parseArgs(process.argv.slice(2));
 
@@ -162,7 +186,11 @@ function main() {
     .split("\0")
     .filter(Boolean);
 
-  const protect = loadProtect(phase);
+  // 带作用域的保护条目只在各自的文件里生效，其余文件共用一个正则。
+  const baseProtect = loadProtect(phase);
+  const scoped = scopedFiles();
+  const protectFor = (path: string) =>
+    scoped.has(path) ? loadProtect(phase, path) : baseProtect;
   const report: Report = {
     files: 0,
     lines: 0,
@@ -172,6 +200,24 @@ function main() {
     skippedBinary: 0,
     errors: [],
   };
+
+  // 真跑之前，范围内的工作区必须干净：改名是整批操作，混着别人的改动就没法回头。
+  if (!dryRun) {
+    const dirty = git(root, [
+      "status",
+      "--porcelain",
+      "--untracked-files=no",
+      "--",
+      ...pathspecs,
+    ]).trim();
+    if (dirty) {
+      report.errors.push(
+        `范围内的工作区不干净，先提交或暂存清理再跑（git status --porcelain -- ${pathspecs.join(" ")}）：\n${dirty}`,
+      );
+      process.stdout.write(`${JSON.stringify(report)}\n`);
+      process.exit(1);
+    }
+  }
 
   // 范围内的文件：已被跳过路径与工具目录排除，磁盘上不存在的（已删未提交）也不算。
   const inScope = listed.filter(
@@ -199,7 +245,7 @@ function main() {
     const oldLines = text.split("\n");
     for (const line of oldLines)
       for (const id of identifiers(line)) before.add(id);
-    const renamed = renameText(text, protect);
+    const renamed = renameText(text, protectFor(path));
     if (renamed === text) continue;
     const newLines = renamed.split("\n");
     let changed = 0;
@@ -221,7 +267,9 @@ function main() {
     writes.push([path, renamed]);
   }
   report.review = reviewLines.length;
-  report.collisions = [...produced].filter((id) => before.has(id)).sort();
+  report.collisions = [...produced]
+    .filter((id) => before.has(id) && !BRAND_WORD.test(id))
+    .sort();
 
   // 改名：全部先查，有目标已存在（磁盘上，或另一个文件也改到这里）就一个都不动。
   const moves: Array<[string, string]> = [];
@@ -243,11 +291,23 @@ function main() {
   }
 
   if (report.errors.length === 0 && !dryRun) {
-    for (const [path, content] of writes)
-      writeFileSync(join(root, path), content);
+    const done: string[] = [];
+    try {
+      for (const [path, content] of writes) {
+        writeFileSync(join(root, path), content);
+        done.push(`写 ${path}`);
+      }
+    } catch (error) {
+      reportFailure(error, done, pathspecs);
+    }
     for (const [path, target] of moves) {
-      mkdirSync(dirname(join(root, target)), { recursive: true });
-      git(root, ["mv", "--", path, target]);
+      try {
+        mkdirSync(dirname(join(root, target)), { recursive: true });
+        git(root, ["mv", "--", path, target]);
+        done.push(`移 ${path} -> ${target}`);
+      } catch (error) {
+        reportFailure(error, done, pathspecs);
+      }
       // 目录里最后一个文件搬走后，git 不会清掉留下的空目录。
       for (
         let dir = dirname(path);

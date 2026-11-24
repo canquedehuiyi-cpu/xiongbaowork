@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import {
   buildProtect,
   isSkipped,
@@ -65,6 +67,76 @@ describe("renameText", () => {
       const once = renameText(mixed, protect);
       expect(renameText(once, protect)).toBe(once);
     }
+  });
+
+  test("单独的环境变量前缀也受保护（R1 不拆开 startsWith 的前缀判断）", () => {
+    expect(renameText('upper.startsWith("OPENBOT_")', p)).toBe(
+      'upper.startsWith("OPENBOT_")',
+    );
+    expect(renameText('upper.startsWith("OPENBOT_")', loadProtect("R2"))).toBe(
+      'upper.startsWith("XIONGBAO_")',
+    );
+  });
+
+  test("计划放在 R1 改的名字在 R1 就改：扩展消息类型、K8s 标签、开发邮箱、令牌头、测试域名", () => {
+    for (const [from, to] of [
+      ['{ type: "openbot.ping" }', '{ type: "xiongbao.ping" }'],
+      ['"openbot.dev/component"', '"xiongbao.dev/component"'],
+      ["dev@openbot.local", "dev@xiongbao.local"],
+      ['"x-openbot-agent-token"', '"x-xiongbao-agent-token"'],
+      ['"https://openbot.example.com"', '"https://xiongbao.example.com"'],
+      ['"name": "openbot-mobile"', '"name": "xiongbao-mobile"'],
+    ] as const) {
+      expect(renameText(from, p)).toBe(to);
+    }
+  });
+
+  test("扩展身份到 R2 就改：带引号的写法也不再被冻结", () => {
+    const r2 = loadProtect("R2");
+    expect(renameText('"openbot-recorder"', r2)).toBe('"xiongbao-recorder"');
+    expect(renameText('"ai.copilotkit.openbot.recorder"', r2)).toBe(
+      '"ai.copilotkit.xiongbao.recorder"',
+    );
+    expect(renameText('"openbot-recorder"', p)).toBe('"openbot-recorder"');
+  });
+
+  test("连接串保护带边界：同一标识符不会改一半", () => {
+    const text = "postgres://openbot_fixture:x@h/db -U openbot_fixture";
+    expect(renameText(text, p)).toBe(
+      "postgres://xiongbao_fixture:x@h/db -U xiongbao_fixture",
+    );
+    expect(renameText("postgres://openbot:x@h/db -U openbot -d x", p)).toBe(
+      "postgres://openbot:x@h/db -U openbot -d x",
+    );
+  });
+
+  test("作用域条目只在自己的文件里生效", () => {
+    const entries: ProtectEntry[] = [
+      {
+        text: 'ID = "openbot"',
+        file: "a/openbot-x.ts",
+        until: "R3",
+        reason: "r",
+      },
+    ];
+    const line = 'const ID = "openbot";';
+    expect(
+      renameText(line, buildProtect(entries, "R1", "a/openbot-x.ts")),
+    ).toBe(line);
+    // 文件在 R1 被改名之后，再按新路径找也认。
+    expect(
+      renameText(line, buildProtect(entries, "R2", "a/xiongbao-x.ts")),
+    ).toBe(line);
+    expect(renameText(line, buildProtect(entries, "R1", "b/other.ts"))).toBe(
+      'const ID = "xiongbao";',
+    );
+    expect(renameText(line, buildProtect(entries, "R1"))).toBe(
+      'const ID = "xiongbao";',
+    );
+  });
+
+  test("输入含 NUL 时抛错，不悄悄与占位符混淆", () => {
+    expect(() => renameText(`a${String.fromCharCode(0)}b`, p)).toThrow(/NUL/);
   });
 
   test("空文本与没有任何命中的文本原样返回", () => {
@@ -224,36 +296,83 @@ describe("常量", () => {
 });
 
 describe("保护清单与源码一致", () => {
-  test("every protect text exists verbatim in the tree", async () => {
-    const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
-      cwd: import.meta.dir,
-    })
-      .stdout.toString()
-      .trim();
-    // 排除的地方都会"自证"这些文字：设计文档、归档、本工具自己、品牌护栏的白名单与产物词表。
-    const excluded = [
-      ":(exclude)archives",
-      ":(exclude)docs",
-      ":(exclude)xiongbao/scripts/rebrand",
-      ":(exclude)xiongbao/app/tests/brand-leak-allowlist.json",
-      ":(exclude)xiongbao/app/tests/brand-artifacts",
-    ];
-    const texts = readProtectEntries()
-      .map((entry) => entry.text)
-      .filter((text): text is string => typeof text === "string");
-    expect(texts.length).toBeGreaterThan(0);
-    const missing: string[] = [];
-    const queue = [...texts];
+  const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+    cwd: import.meta.dir,
+  })
+    .stdout.toString()
+    .trim();
+  // 排除的地方都会"自证"这些文字：设计文档、归档、本工具自己、品牌护栏的白名单与产物词表。
+  const excluded = [
+    ":(exclude)archives",
+    ":(exclude)docs",
+    ":(exclude)xiongbao/scripts/rebrand",
+    ":(exclude)xiongbao/app/tests/brand-leak-allowlist.json",
+    ":(exclude)xiongbao/app/tests/brand-artifacts",
+  ];
+  const textEntries = readProtectEntries().filter(
+    (entry): entry is ProtectEntry & { text: string } =>
+      typeof entry.text === "string",
+  );
+
+  // 带作用域的条目只在它的文件里找（文件被改名后也认新路径）；全仓条目在整棵树里找。
+  const scopeOf = (entry: ProtectEntry) =>
+    entry.file ? [entry.file, renamePath(entry.file)] : [];
+
+  async function grep(args: string[], scope: string[]) {
+    const proc = Bun.spawn(
+      [
+        "git",
+        "grep",
+        ...args,
+        "--",
+        ...(scope.length > 0 ? scope : [".", ...excluded]),
+      ],
+      { cwd: root, stdout: "ignore", stderr: "ignore" },
+    );
+    return (await proc.exited) === 0;
+  }
+
+  async function inParallel<T>(
+    items: T[],
+    check: (item: T) => Promise<boolean>,
+  ) {
+    const bad: T[] = [];
+    const queue = [...items];
     const worker = async () => {
-      for (let text = queue.shift(); text !== undefined; text = queue.shift()) {
-        const proc = Bun.spawn(
-          ["git", "grep", "-F", "-q", "-e", text, "--", ".", ...excluded],
-          { cwd: root, stdout: "ignore", stderr: "ignore" },
-        );
-        if ((await proc.exited) !== 0) missing.push(text);
+      for (let item = queue.shift(); item !== undefined; item = queue.shift()) {
+        if (!(await check(item))) bad.push(item);
       }
     };
     await Promise.all(Array.from({ length: 8 }, worker));
-    expect(missing).toEqual([]);
+    return bad;
+  }
+
+  test("every protect text exists verbatim in the tree", async () => {
+    expect(textEntries.length).toBeGreaterThan(0);
+    const missing = await inParallel(textEntries, (entry) =>
+      grep(["-F", "-q", "-e", entry.text], scopeOf(entry)),
+    );
+    expect(missing.map((entry) => entry.text)).toEqual([]);
   }, 120_000);
+
+  test("text 条目不拆名：以单词字符结尾的文字，树里每个命中处后面都不紧跟单词字符", async () => {
+    const ending = textEntries.filter((entry) => /\w$/.test(entry.text));
+    expect(ending.length).toBeGreaterThan(0);
+    const splitting = await inParallel(ending, async (entry) => {
+      const source = entry.text.replace(/[^\w]/g, (c) => `\\${c}`);
+      return !(await grep(["-P", "-q", "-e", `${source}\\w`], scopeOf(entry)));
+    });
+    expect(splitting.map((entry) => entry.text)).toEqual([]);
+  }, 120_000);
+
+  test("带作用域的条目指向的文件都存在", async () => {
+    const scoped = readProtectEntries().filter((entry) => entry.file);
+    expect(scoped.length).toBeGreaterThan(0);
+    const gone = await inParallel(scoped, (entry) =>
+      grep(["-q", "-e", "", "-I"], scopeOf(entry)).then(
+        (found) => found || existsSync(join(root, entry.file as string)),
+      ),
+    );
+    expect(gone.map((entry) => entry.file)).toEqual([]);
+  });
 });

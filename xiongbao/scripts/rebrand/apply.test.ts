@@ -164,6 +164,8 @@ describe("apply CLI", () => {
     expect(read("xiongbao/server/src/env.ts")).toBe(
       "const a = process.env.OPENBOT_PORT;\n",
     );
+    git("add", "-A");
+    git("commit", "-q", "-m", "r1");
     run(["--phase", "R2", "xiongbao/"]);
     expect(read("xiongbao/server/src/env.ts")).toBe(
       "const a = process.env.XIONGBAO_PORT;\n",
@@ -219,6 +221,45 @@ describe("apply CLI", () => {
     expect(read("xiongbao/scripts/rebrand/protect.json")).toBe(
       '{"text":"openbot"}\n',
     );
+  });
+
+  test("范围内工作区有未提交改动时拒绝真跑（dry-run 不受限），什么都不改", () => {
+    writeFileSync(join(root, "xiongbao/server/src/existing.ts"), "// 手改\n");
+    const refused = run(["--phase", "R1", "xiongbao/"]);
+    expect(refused.code).toBe(1);
+    expect(refused.report?.errors[0]).toContain("工作区不干净");
+    expect(read("xiongbao/server/src/model.ts")).toContain("openbotModel");
+    expect(run(["--phase", "R1", "--dry-run", "xiongbao/"]).code).toBe(0);
+    // 范围之外的改动不挡路。
+    const elsewhere = run(["--phase", "R1", "xiongbao/app/"]);
+    expect(elsewhere.code).toBe(0);
+  });
+
+  test("collisions 不列新品牌词本身，只列真正撞名的标识符", () => {
+    put(
+      "xiongbao/server/src/scope.ts",
+      'import "@openbot/x";\nexport const xiongbao = 1;\n',
+    );
+    git("add", "-A");
+    git("commit", "-q", "-m", "scope");
+    const { report } = run(["--phase", "R1", "xiongbao/"]);
+    expect(report?.collisions).toEqual(["xiongbaoModel"]);
+  });
+
+  test("带作用域的保护只在自己的文件里生效，别处同样的文字照改", () => {
+    put(
+      "xiongbao/shared/learning.ts",
+      'export const AUTOMATIC_LEARNING_CONTAINER_ID = "openbot";\n',
+    );
+    put(
+      "xiongbao/shared/elsewhere.ts",
+      'export const AUTOMATIC_LEARNING_CONTAINER_ID = "openbot";\n',
+    );
+    git("add", "-A");
+    git("commit", "-q", "-m", "scoped");
+    run(["--phase", "R1", "xiongbao/shared/"]);
+    expect(read("xiongbao/shared/learning.ts")).toContain('"openbot"');
+    expect(read("xiongbao/shared/elsewhere.ts")).toContain('"xiongbao"');
   });
 
   test("参数不合法时退出 2 并说明用法", () => {

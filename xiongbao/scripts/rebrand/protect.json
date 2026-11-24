@@ -5,7 +5,7 @@
     "reason": "扩展身份：原生宿主名/IndexedDB/策略键（任务 17 处理）"
   },
   {
-    "pattern": "OPENBOT_[A-Z0-9_]+",
+    "pattern": "OPENBOT_[A-Z0-9_]*",
     "until": "R2",
     "reason": "环境变量名与错误码（任务 15 处理）"
   },
@@ -23,11 +23,6 @@
     "text": "x-openbot-${kind}",
     "until": "R2",
     "reason": "浏览器请求标记头的模板写法（同上，新名已在前一个分支里）（设备端/服务器线上名，任务 16 处理）"
-  },
-  {
-    "text": "x-openbot-agent-token",
-    "until": "R2",
-    "reason": "智能体回调令牌头：服务器发出、电脑端/runner 回送（设备端/服务器线上名，任务 16 处理）"
   },
   {
     "text": "x-openbot-bot-id",
@@ -70,249 +65,290 @@
     "reason": "录制扩展到服务器的 Bot 头（设备端/服务器线上名，任务 16 处理）"
   },
   {
-    "text": "-U openbot",
+    "pattern": "-U openbot\\b",
     "until": "R3",
-    "reason": "品牌白名单（docker/s6/scripts/postgres-init.sh 等 2 处）：已落在存量数据或对端，随迁移改名"
+    "reason": "启动脚本里的超级用户名（带边界）"
+  },
+  {
+    "text": ":5432/openbot'",
+    "until": "R3",
+    "reason": "启动脚本连接串里的库名（postgres-init.sh）"
   },
   {
     "text": ".openbot-carried-over",
+    "file": "xiongbao/supervisor/src/docker.ts",
     "until": "R3",
-    "reason": "品牌白名单（supervisor/src/docker.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/supervisor/src/docker.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": ".openbot-carrying-",
+    "file": "xiongbao/supervisor/src/docker.ts",
     "until": "R3",
-    "reason": "品牌白名单（supervisor/src/docker.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/supervisor/src/docker.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"/etc/openbot/sandbox-template.json\"",
+    "file": "xiongbao/server/src/config.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/config.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/config.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"<<openbot:staffing-proposal>>\"",
+    "file": "xiongbao/shared/staffing-proposal.ts",
     "until": "R3",
-    "reason": "品牌白名单（shared/staffing-proposal.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"ai.copilotkit.openbot.recorder\"",
-    "until": "R3",
-    "reason": "品牌白名单（shared/recorder-extension.json）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"app.kubernetes.io/managed-by\": \"openbot\"",
-    "until": "R3",
-    "reason": "品牌白名单（server/src/computer/sandbox.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/shared/staffing-proposal.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"data-copilotkit-ignore\"",
+    "file": "xiongbao/extension/src/content/notice.ts",
     "until": "R3",
-    "reason": "品牌白名单（extension/src/content/notice.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/extension/src/content/notice.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "\"dev@openbot.local\"",
+    "text": "\"data-copilotkit-ignore\"",
+    "file": "xiongbao/extension/src/content/indicator.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/auth/dev-actor-email.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"name\": \"openbot-mobile\"",
-    "until": "R3",
-    "reason": "品牌白名单（mobile/package.json 等 2 处）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/extension/src/content/indicator.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot-browser\"",
+    "file": "xiongbao/app/src/components/settings/browsers/connected-browsers.tsx",
     "until": "R3",
-    "reason": "品牌白名单（app/src/components/settings/browsers/connected-browsers.tsx 等 6 处）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/app/src/components/settings/browsers/connected-browsers.tsx 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "\"openbot-browser\"",
+    "file": "xiongbao/server/src/browser/routes.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/server/src/browser/routes.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "\"openbot-browser\"",
+    "file": "xiongbao/shared/recorder-api.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/shared/recorder-api.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "\"openbot-browser\"",
+    "file": "xiongbao/extension/src/background/setup.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/extension/src/background/setup.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "\"openbot-browser\"",
+    "file": "xiongbao/extension/src/background/launcher.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/extension/src/background/launcher.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "\"openbot-browser\"",
+    "file": "xiongbao/extension/src/background/connection.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/extension/src/background/connection.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot-browser\":",
+    "file": "xiongbao/extension/src/pages/options/options.tsx",
     "until": "R3",
-    "reason": "品牌白名单（extension/src/pages/options/options.tsx）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/extension/src/pages/options/options.tsx 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot-component-\"",
+    "file": "xiongbao/server/src/delivery/opentag.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/delivery/opentag.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/delivery/opentag.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot-deployment:\"",
+    "file": "xiongbao/server/src/plugins/shared-accounts.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/plugins/shared-accounts.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/plugins/shared-accounts.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot-desktop\",",
+    "file": "xiongbao/shared/desktop-control.ts",
     "until": "R3",
-    "reason": "品牌白名单（shared/desktop-control.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/shared/desktop-control.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot-learning-\"",
+    "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot-learning\"",
+    "file": "xiongbao/server/src/learning/model-endpoint.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/model-endpoint.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/model-endpoint.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot-model-call\"",
+    "file": "xiongbao/server/src/routing/model.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/routing/model.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"openbot-recorder\"",
-    "until": "R3",
-    "reason": "品牌白名单（extension/src/shared/database.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"openbot-unreachable\"",
-    "until": "R3",
-    "reason": "品牌白名单（app/src/lib/recorder/bridge.ts 等 4 处）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"openbot-voice-chat\"",
-    "until": "R3",
-    "reason": "品牌白名单（app/src/lib/voice/archive.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"openbot-voice-context\"",
-    "until": "R3",
-    "reason": "品牌白名单（app/src/lib/voice/transcript.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/routing/model.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot://open\"",
+    "file": "xiongbao/app/src/components/desktop/desktop-return.tsx",
     "until": "R3",
-    "reason": "品牌白名单（app/src/components/desktop/desktop-return.tsx）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/app/src/components/desktop/desktop-return.tsx 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:%\"",
+    "file": "xiongbao/server/src/plugins/personal-defaults.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/plugins/personal-defaults.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/plugins/personal-defaults.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:always-on\"",
+    "file": "xiongbao/server/src/plugins/personal-defaults.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/plugins/personal-defaults.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/plugins/personal-defaults.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:apply-migrations\"",
+    "file": "xiongbao/server/src/db/apply-migrations.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/db/apply-migrations.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/db/apply-migrations.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:learned-skills\"",
+    "file": "xiongbao/server/src/learning/remote.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/remote.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/remote.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:open\"",
+    "file": "xiongbao/app/src/lib/desktop/open-requests.ts",
     "until": "R3",
-    "reason": "品牌白名单（app/src/lib/desktop/open-requests.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/app/src/lib/desktop/open-requests.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:personal-defaults\"",
+    "file": "xiongbao/server/src/components/routes.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/components/routes.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/components/routes.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "\"openbot:personal-defaults\"",
+    "file": "xiongbao/server/src/plugins/personal-defaults.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/server/src/plugins/personal-defaults.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:staffing-default\"",
+    "file": "xiongbao/server/src/tenant/provisioning.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/tenant/provisioning.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"openbot.",
-    "until": "R3",
-    "reason": "品牌白名单（server/src/telemetry/otel.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/tenant/provisioning.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot.carry-over\"",
+    "file": "xiongbao/supervisor/src/docker.ts",
     "until": "R3",
-    "reason": "品牌白名单（supervisor/src/docker.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"openbot.connect\"",
-    "until": "R3",
-    "reason": "品牌白名单（extension/src/protocol/messages.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"openbot.ping\"",
-    "until": "R3",
-    "reason": "品牌白名单（extension/src/protocol/messages.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/supervisor/src/docker.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot.sender\"",
+    "file": "xiongbao/server/src/delivery/opentag.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/delivery/opentag.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/delivery/opentag.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot.working\"",
+    "file": "xiongbao/server/src/delivery/opentag.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/delivery/opentag.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "\"openbot\"",
-    "until": "R3",
-    "reason": "皮肤值与学习容器 id 等带引号的字面值"
+    "reason": "品牌白名单：xiongbao/server/src/delivery/opentag.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"OpenBot\"",
+    "file": "xiongbao/server/src/agents/tool-limit.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/agents/tool-limit.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/agents/tool-limit.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "\"OpenBot\"",
+    "file": "xiongbao/shared/harnesses.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/shared/harnesses.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot/share_private_information\"",
+    "file": "xiongbao/server/src/proactive/private-share.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/proactive/private-share.ts 等 3 处）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/proactive/private-share.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "\"openbot/share_private_information\"",
+    "file": "xiongbao/server/src/approvals/rule-vocabulary.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/server/src/approvals/rule-vocabulary.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "\"openbot/share_private_information\"",
+    "file": "xiongbao/shared/audit-words.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/shared/audit-words.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot/ui@1\"",
+    "file": "xiongbao/app/src/lib/copilot/a2ui.ts",
     "until": "R3",
-    "reason": "品牌白名单（app/src/lib/copilot/a2ui.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/app/src/lib/copilot/a2ui.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbotmobile://\"",
+    "file": "xiongbao/server/src/auth/index.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/auth/index.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/auth/index.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"plugin:openbot-desktop\"",
+    "file": "xiongbao/app/src/lib/desktop/speech.ts",
     "until": "R3",
-    "reason": "品牌白名单（app/src/lib/desktop/speech.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/app/src/lib/desktop/speech.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "\"plugin:openbot-desktop\"",
+    "file": "xiongbao/app/src/lib/desktop/queries.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/app/src/lib/desktop/queries.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"plugin:openbot-desktop|notify\"",
+    "file": "xiongbao/app/src/lib/notifications/show.ts",
     "until": "R3",
-    "reason": "品牌白名单（app/src/lib/notifications/show.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/app/src/lib/notifications/show.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"x-copilotkit-ei-service-token\"",
+    "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "(?:openbot-)?(agent-",
+    "file": "xiongbao/shared/harnesses.ts",
     "until": "R3",
-    "reason": "品牌白名单（shared/harnesses.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/shared/harnesses.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "(?:openbot-)?${harness}",
+    "file": "xiongbao/server/src/agents/plan-model.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/agents/plan-model.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/agents/plan-model.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "(?:openbot-)?agent-",
+    "file": "xiongbao/server/src/agents/harness-model.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/agents/harness-model.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/agents/harness-model.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "[data-copilotkit-action]",
+    "file": "xiongbao/extension/src/content/targeting.ts",
     "until": "R3",
-    "reason": "品牌白名单（extension/src/content/targeting.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "/openbot'",
-    "until": "R3",
-    "reason": "启动脚本里的库名（任务书原文）"
+    "reason": "品牌白名单：xiongbao/extension/src/content/targeting.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "/openbot/deliver",
@@ -331,23 +367,21 @@
   },
   {
     "text": "`openbot-${config.provider}-plan`",
+    "file": "xiongbao/server/src/agents/plan-model.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/agents/plan-model.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/agents/plan-model.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "`openbot-connection-test-",
+    "file": "xiongbao/server/src/agents/connection-test.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/agents/connection-test.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/agents/connection-test.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "`openbot:defaults:",
+    "file": "xiongbao/server/src/memory/defaults.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/memory/defaults.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "`openbot.payload.",
-    "until": "R3",
-    "reason": "品牌白名单（server/src/telemetry/otel.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/memory/defaults.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "<<openbot:app-access-request>>",
@@ -356,83 +390,105 @@
   },
   {
     "text": "= \"openbot.",
+    "file": "xiongbao/supervisor/src/names.ts",
     "until": "R3",
-    "reason": "品牌白名单（supervisor/src/names.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/supervisor/src/names.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "actor.startsWith(\"openbot:\")",
+    "file": "xiongbao/shared/openbot-actor.ts",
     "until": "R3",
-    "reason": "品牌白名单（shared/openbot-actor.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/shared/openbot-actor.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "app_id: \"openbot\"",
+    "file": "xiongbao/server/src/telemetry/product.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/telemetry/product.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/telemetry/product.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "text": "app_id: \"openbot\"",
+    "file": "xiongbao/server/src/copilot.ts",
+    "until": "R3",
+    "reason": "品牌白名单：xiongbao/server/src/copilot.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "Automatic Learning: no credential here could create the openbot container",
+    "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "Automatic Learning: the openbot container is",
+    "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "AUTOMATIC_LEARNING_CONTAINER_ID = \"openbot\"",
+    "file": "xiongbao/shared/learning.ts",
     "until": "R3",
-    "reason": "品牌白名单（shared/learning.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/shared/learning.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "by.startsWith(\"openbot:\")",
+    "file": "xiongbao/server/src/plugins/store.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/plugins/store.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/plugins/store.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "client_id:'openbot-desktop'",
+    "file": "xiongbao/server/src/auth/native-browser.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/auth/native-browser.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/auth/native-browser.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "clientID: \"openbot-desktop\"",
+    "file": "xiongbao/server/src/auth/index.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/auth/index.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/auth/index.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "const LEGACY_DIRECTORY = \"qoderwake\";",
+    "file": "xiongbao/server/src/tenant-package-path.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/tenant-package-path.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/tenant-package-path.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "Created an openbot container",
+    "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "creates the openbot Learning container",
+    "file": "xiongbao/server/src/config.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/config.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/config.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "DEFAULT_NAMESPACE = \"openbot\"",
+    "file": "xiongbao/supervisor/src/names.ts",
     "until": "R3",
-    "reason": "品牌白名单（supervisor/src/names.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/supervisor/src/names.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "eq(recorderConnections.via, \"openbot-browser\")",
+    "file": "xiongbao/server/src/index.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/index.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/index.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "granted_by 以 openbot: 开头",
+    "file": "xiongbao/server/src/index.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/index.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/index.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "id: \"openbot\",",
+    "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "images.openbot",
@@ -441,18 +497,15 @@
   },
   {
     "text": "Learning container with ID \"openbot\"",
+    "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "LEGACY_CONFIG_SUFFIX = \"(OpenBot)\"",
+    "file": "xiongbao/server/src/plugins/composio-adapter.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/plugins/composio-adapter.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "LEGACY_SIDECAR: &str = \"openbot-runner\"",
-    "until": "R3",
-    "reason": "品牌白名单（desktop-device/src-tauri/src/sidecar.rs）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/plugins/composio-adapter.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "openbot computer token v1",
@@ -465,9 +518,9 @@
     "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）"
   },
   {
-    "text": "openbot_app",
     "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名",
+    "pattern": "openbot_app(?!\\w)"
   },
   {
     "text": "OPENBOT_APPROVAL_EXACT_AEAD_V1",
@@ -516,11 +569,6 @@
   },
   {
     "text": "openbot_role_writer",
-    "until": "R3",
-    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
-  },
-  {
-    "text": "openbot_team_",
     "until": "R3",
     "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
   },
@@ -591,8 +639,9 @@
   },
   {
     "text": "openbot-agent-computer:latest",
+    "file": "xiongbao/supervisor/src/index.ts",
     "until": "R3",
-    "reason": "品牌白名单（supervisor/src/index.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/supervisor/src/index.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "openbot-automation-hook-signing:v1",
@@ -611,13 +660,9 @@
   },
   {
     "text": "openbot-egress-credentials.invalid",
+    "file": "xiongbao/agent-computer/src/egress.ts",
     "until": "R3",
-    "reason": "品牌白名单（agent-computer/src/egress.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "openbot-product",
-    "until": "R3",
-    "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）"
+    "reason": "品牌白名单：xiongbao/agent-computer/src/egress.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "openbot:agent-run",
@@ -661,13 +706,14 @@
   },
   {
     "text": "openbot.audit_retention_days",
+    "file": "xiongbao/server/src/audit-retention.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/audit-retention.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/audit-retention.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "openbot.dev/",
+    "text": "openbot.audit_retention_days",
     "until": "R3",
-    "reason": "品牌白名单（server/src/computer/sandbox.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "数据库会话设置名：迁移 SQL 里读取"
   },
   {
     "text": "openbot.headless.waiting",
@@ -675,19 +721,10 @@
     "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
   },
   {
-    "text": "openbot.local",
-    "until": "R3",
-    "reason": "品牌白名单（supervisor/src/identity.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
     "text": "openbot.role-authority:",
+    "file": "xiongbao/server/src/auth/roles.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/auth/roles.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "openbot.surface 标签",
-    "until": "R3",
-    "reason": "品牌白名单（app/src/routes/_authed/admin/enterprise.tsx）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/auth/roles.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "openbot.vault.credential.v2",
@@ -695,64 +732,68 @@
     "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
   },
   {
-    "text": "oss.runtime.openbot.",
     "until": "R3",
-    "reason": "品牌白名单（server/src/telemetry/product.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）",
+    "pattern": "openbot\\-product(?!\\w)"
   },
   {
-    "text": "postgres://openbot",
+    "text": "oss.runtime.openbot.",
+    "file": "xiongbao/server/src/telemetry/product.ts",
     "until": "R3",
-    "reason": "品牌白名单（docker/s6/scripts/postgres-init.sh）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/telemetry/product.ts 里已落在存量数据或对端的名字，随迁移改名"
+  },
+  {
+    "pattern": "postgres://openbot(?=[:@/])",
+    "until": "R3",
+    "reason": "连接串里的超级用户名（带边界，不拆 openbot_app 等）"
   },
   {
     "text": "PUBLIC_DEFAULT_DATABASE_PASSWORD = \"openbot\"",
+    "file": "xiongbao/server/src/auth/role-writer-lifecycle.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/auth/role-writer-lifecycle.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/auth/role-writer-lifecycle.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "ref: `openbot/${SEARCH_TOOLS}`",
+    "file": "xiongbao/server/src/agents/tool-search.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/agents/tool-search.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/agents/tool-search.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "RESERVED_SERVERS = new Set([\"bot\", \"host\", \"openbot\", \"computer\"])",
+    "file": "xiongbao/server/src/pipeline/action-step.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/pipeline/action-step.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/pipeline/action-step.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "startsWith(\"openbot/\")",
+    "file": "xiongbao/app/src/components/approvals/describe-rules.tsx",
     "until": "R3",
-    "reason": "品牌白名单（app/src/components/approvals/describe-rules.tsx）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/app/src/components/approvals/describe-rules.tsx 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "The openbot container exists",
+    "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "the openbot Learning container with the configured runtime key",
+    "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "They are tagged openbot.surface.",
-    "until": "R3",
-    "reason": "品牌白名单（app/src/components/admin/controls/recording-section.tsx）：已落在存量数据或对端，随迁移改名"
-  },
-  {
-    "text": "type: \"openbot.",
-    "until": "R3",
-    "reason": "品牌白名单（app/src/lib/recorder/bridge.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "z.literal(\"openbot\")",
+    "file": "xiongbao/server/src/telemetry/product.ts",
     "until": "R3",
-    "reason": "品牌白名单（server/src/telemetry/product.ts）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/server/src/telemetry/product.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "名为 openbot 的容器",
+    "file": "xiongbao/app/src/routes/_authed/admin/learning.tsx",
     "until": "R3",
-    "reason": "品牌白名单（app/src/routes/_authed/admin/learning.tsx）：已落在存量数据或对端，随迁移改名"
+    "reason": "品牌白名单：xiongbao/app/src/routes/_authed/admin/learning.tsx 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "LEGACY_PREFIX = \"OPENBOT_\"",
