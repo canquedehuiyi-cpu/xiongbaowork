@@ -15,6 +15,7 @@ import { TenantContextError } from "../tenant/context";
 import { emitRunEvent } from "../threads/run-side-events";
 import type { Delivery } from "./delivery";
 import { DELIVERY_EVENTS } from "./delivery-events";
+import type { DeliveryReview } from "./delivery-review";
 import { dueRefusalText, readDueTime } from "./due-time";
 import {
   DELIVERY_ITEM_KINDS,
@@ -206,6 +207,11 @@ export function deliveryTools(options: {
   savedTimeZone?: () => Promise<string>;
   /** Where the card-drawing events go; the run's own stream by default. */
   emit?: (runId: string, event: BaseEvent) => void;
+  /**
+   * Pilot (`tasks/delivery-review.ts`): an opinion on a coding card's hand-in, attached to it as a
+   * note. Given only when the pilot is on; it never holds the hand-in back.
+   */
+  review?: DeliveryReview;
 }): GrantedTool[] {
   const { delivery, gate, board, ownerUserId: tenantId, agentId } = options;
   const now = options.now ?? (() => new Date());
@@ -513,6 +519,24 @@ export function deliveryTools(options: {
             note: "没交上：卡片没动。把产物存成文件后用 workspace_file 交付。",
           });
         }
+        /*
+         * Pilot: a coding card's hand-in carries a reviewer's opinion as one more note. It is asked
+         * only after every check above passed, so the hand-in the reviewer sees is the one that goes in,
+         * and what it says changes nothing about whether it does.
+         */
+        const opinion = await options.review?.({
+          actorId: tenantId,
+          botId: agentId,
+          card: { title: card.title, criteria: card.criteria },
+          items: handedIn,
+          checks: value.checks,
+          messages: currentApprovalContext()?.messages ?? [],
+          runId: run.runId,
+          threadId: run.threadId,
+        });
+        const deliverable = opinion
+          ? { ...verdict.ref, notes: [...(verdict.ref.notes ?? []), opinion] }
+          : verdict.ref;
         // Each hand-in its own line id: a second, identical hand-in after a 退回 is its own card.
         const deliveredLine = randomUUID();
         const merged = await delivery.delivered(tenantId, card.id, {
@@ -520,7 +544,7 @@ export function deliveryTools(options: {
           runId: run.runId,
           agentId,
           actor,
-          deliverable: verdict.ref,
+          deliverable,
         });
         if (!merged)
           return `${REFUSAL_MARKER} 这件活现在交不了：它已经结束、还在等对方处理，或已经换给别的员工。`;
@@ -528,7 +552,7 @@ export function deliveryTools(options: {
           taskId: card.id,
           eventId: deliveredLine,
           agentId,
-          deliverable: verdict.ref,
+          deliverable,
         });
         return JSON.stringify({
           delivered: true,

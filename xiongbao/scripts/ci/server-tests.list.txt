@@ -205,6 +205,9 @@ tests/baidu-netdisk-rest.test.ts
 tests/ban-freezes-execution.test.ts
 tests/batch-grants-shared-use.integration.test.ts
 tests/board-card-claim.integration.test.ts
+tests/board-push-config.test.ts
+tests/board-push.integration.test.ts
+tests/board-push.test.ts
 tests/board-turn-marker.test.ts
 tests/board-turn-self-skill.test.ts
 tests/bot-access.test.ts
@@ -379,6 +382,9 @@ tests/delivery-overdue.test.ts
 tests/delivery-prompt-files.test.ts
 tests/delivery-providers.test.ts
 tests/delivery-return-failure.test.ts
+tests/delivery-review-tools.test.ts
+tests/delivery-review.integration.test.ts
+tests/delivery-review.test.ts
 tests/delivery-router.test.ts
 tests/delivery-routes.integration.test.ts
 tests/delivery-routes.test.ts
@@ -465,6 +471,7 @@ tests/group-conversations.integration.test.ts
 tests/group-conversations.test.ts
 tests/group-delegation-freed.integration.test.ts
 tests/guards.test.ts
+tests/guided-review.test.ts
 tests/handoff-availability-prompt.test.ts
 tests/handoff-caps-defaults.test.ts
 tests/handoff-child-card.test.ts
@@ -505,6 +512,9 @@ tests/identity-routes.test.ts
 tests/identity-schema.integration.test.ts
 tests/identity-slack-redeem.test.ts
 tests/identity-store.integration.test.ts
+tests/inbox-notes-config.test.ts
+tests/inbox-notes-resume.test.ts
+tests/inbox-notes.integration.test.ts
 tests/intelligence-authentication.test.ts
 tests/intelligence-entitlement-check.test.ts
 tests/intelligence-entitlements-quiet.test.ts
@@ -605,6 +615,7 @@ tests/network-allowlist-translate.test.ts
 tests/new-bot-without-managed-bot.integration.test.ts
 tests/new-tables-grants.integration.test.ts
 tests/oauth-refresh-redirect.test.ts
+tests/ocr-review-workflow.test.ts
 tests/offboarding-retirement.integration.test.ts
 tests/onboarding-routes.test.ts
 tests/openai-compatible-endpoint.test.ts
@@ -649,6 +660,8 @@ tests/pipeline-routes.test.ts
 tests/pipeline-run.test.ts
 tests/pipeline-template-edit.test.ts
 tests/pipeline-turn-channel.test.ts
+tests/plan-approval.integration.test.ts
+tests/plan-approval.test.ts
 tests/plan-change-audit.integration.test.ts
 tests/plan-last-step.test.ts
 tests/plan-model.test.ts

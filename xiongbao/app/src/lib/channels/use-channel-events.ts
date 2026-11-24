@@ -1,6 +1,10 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
+import {
+  type DeploymentCapabilities,
+  deploymentKeys,
+} from "@/lib/deployment/queries";
 import { noticeChannelEvent } from "@/lib/notifications/reply-notice";
 import { type RunNotice, showRunNotice } from "@/lib/notifications/run-notice";
 import { socketUrl as buildSocketUrl } from "@/lib/socket-url";
@@ -26,8 +30,55 @@ import {
 /** The server saying it may have missed announcements, so the roster we hold may be wrong. */
 export type ChannelResyncEvent = { resync: true };
 
+/**
+ * Which cards on the task board moved, in the AG-UI `STATE_DELTA` shape (pilot,
+ * `XIONGBAO_PILOT_BOARD_PUSH`). Only ids and changed fields; the board reads the cards again.
+ */
+export type BoardStateDeltaEvent = {
+  type: "STATE_DELTA";
+  delta: { op: string; path: string; value?: unknown }[];
+};
+
+/**
+ * A delta that names no card: the server read a full batch of moved cards and says only that the
+ * board changed (`replace /tasks`), so every board read starts over.
+ */
+export function isWholeBoardDelta(message: BoardStateDeltaEvent): boolean {
+  return message.delta.some((operation) => operation.path === "/tasks");
+}
+
+/**
+ * Whether this page knows the server pushes board changes: shown by a `STATE_DELTA` having arrived
+ * (`seen`), or said by `/api/capabilities` when that answer is already held. Asked only on a resync,
+ * which is too rare to be worth a request of its own.
+ */
+function boardPushKnown(
+  queryClient: { getQueryData: (key: readonly unknown[]) => unknown },
+  seen: boolean,
+): boolean {
+  if (seen) return true;
+  const held = queryClient.getQueryData(deploymentKeys.capabilities()) as
+    | DeploymentCapabilities
+    | undefined;
+  return held?.boardPush === true;
+}
+
 /** What arrives on the socket. `resync` is the discriminant; an activity event never carries it. */
-export type ChannelSocketMessage = ChannelActivityEvent | ChannelResyncEvent;
+export type ChannelSocketMessage =
+  | ChannelActivityEvent
+  | ChannelResyncEvent
+  | BoardStateDeltaEvent;
+
+export function isStateDelta(
+  message: unknown,
+): message is BoardStateDeltaEvent {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    (message as BoardStateDeltaEvent).type === "STATE_DELTA" &&
+    Array.isArray((message as BoardStateDeltaEvent).delta)
+  );
+}
 
 export function isResync(message: unknown): message is ChannelResyncEvent {
   return (
@@ -70,7 +121,7 @@ export function parseChannelSocketMessage(
     return null;
   }
   if (!isChannelSocketMessage(parsed)) return null;
-  if (isResync(parsed)) return parsed;
+  if (isResync(parsed) || isStateDelta(parsed)) return parsed;
   if (typeof parsed.channelId !== "string") return null;
   return parsed;
 }
@@ -378,6 +429,8 @@ export function useChannelEvents() {
     let retryTimer: number | undefined;
     let retryDelay = FIRST_RETRY_MS;
     let stopped = false;
+    // Set by the first STATE_DELTA; see `boardPushKnown`.
+    let boardPushSeen = false;
 
     const connect = () => {
       if (stopped) return;
@@ -393,6 +446,21 @@ export function useChannelEvents() {
       socket.onmessage = (message) => {
         const parsed = parseChannelSocketMessage(message.data);
         if (!parsed) return;
+
+        /*
+         * The board's cards moved (pilot). The message is only a signal that something changed: the
+         * page does not use the card ids in it, it reads again. The lists are left to the
+         * `taskUpdated` that arrives with every change (reading them here too would read the board
+         * twice per change), and the summary is read here because the `["tasks"]` prefix does not
+         * reach it. A delta naming no card (a full batch moved) reads both.
+         */
+        if (isStateDelta(parsed)) {
+          boardPushSeen = true;
+          void queryClient.invalidateQueries({ queryKey: ["tasks-summary"] });
+          if (isWholeBoardDelta(parsed))
+            void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+          return;
+        }
 
         /*
          * A turn that ended while the person was away carries a notice and nothing else, under an
@@ -416,6 +484,12 @@ export function useChannelEvents() {
           void queryClient.invalidateQueries({
             queryKey: channelKeys.details(),
           });
+          // Pushes lost while the server's subscription was down (pilot): with them on, the board
+          // is read again too. Off, this is the code it always was.
+          if (boardPushKnown(queryClient, boardPushSeen)) {
+            void queryClient.invalidateQueries({ queryKey: ["tasks"] });
+            void queryClient.invalidateQueries({ queryKey: ["tasks-summary"] });
+          }
           return;
         }
 

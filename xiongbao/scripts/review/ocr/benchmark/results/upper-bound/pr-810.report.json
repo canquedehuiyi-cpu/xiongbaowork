@@ -1,0 +1,72 @@
+{
+  "schema": "ocr-delegate-report/1",
+  "mode": "delegation",
+  "range": {
+    "from": "660f85dd",
+    "to": "83665947",
+    "merge_base": "660f85dd58c5f85c83a33b5932e019897c40ced8"
+  },
+  "summary": {
+    "total_files": 8,
+    "reviewed_files": 8,
+    "skipped_files": 0,
+    "coverage_rate": 1,
+    "comments": 6
+  },
+  "comments": [
+    {
+      "path": "xiongbao/server/src/threads/chat-server-tools.ts",
+      "start_line": 357,
+      "end_line": 365,
+      "severity": "high",
+      "category": "bug",
+      "content": "外层 wholeTurn 的观察没有传 threadId / continues，因此没有 carry；而 turn-artifacts.ts:177 对 wholeTurn 流一律当场比对（`!turn.wholeTurn`），默认的「注释」假设是它的 RUN_FINISHED 一定是整轮结尾。但服务器执行电脑工具的单聊里，模型还可以调页面自己执行的非电脑工具（决定类、登录、组件），HeadlessToolsMiddleware 遇到不归它管的调用就结束这个 run，页面答复后再发 run-2。结果：产物事件挂在 run-1，最终 run 上一条都没有；交付若发生在 run-2，按 channel+run-2 下载找不到座位，404。修法：外层也传 threadId 和 continues，推迟条件改成「有 carry 且仍有未答复的工具调用」，不再因 wholeTurn 跳过；并给服务器审批挂起（interrupt）留一条当场比对的例外。"
+    },
+    {
+      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+      "start_line": 55,
+      "end_line": 66,
+      "severity": "low",
+      "category": "bug",
+      "content": "carryOver 替换同 key 的旧条目、或超过 CARRIED_MAX 淘汰最旧条目时，只删 Map 里的记录，网关里对应的快照标记没有清理。被丢下的轮次（停在页面工具上、页面关了、出错）留下的 pending 标记会在这个座位下次 locate 时被逐个快照，占用共享的 flush 预算，堆多了本轮的标记可能被记成失败。建议暴露 forgetTurn 并在替换/淘汰时调用。"
+    },
+    {
+      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+      "start_line": 45,
+      "end_line": 53,
+      "severity": "low",
+      "category": "security",
+      "content": "carried 条目只有数量上限，没有存活时间。一个座位的电脑被几个人共用时，被扣住很久的标记（例如等人类决定）会把这段时间里其他人在同一台电脑上的改动列到本人的 run 上，会话成员就能按 run 范围下载。建议加 TTL（例如 30 分钟），超时当新的一轮。"
+    },
+    {
+      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+      "start_line": 68,
+      "end_line": 73,
+      "severity": "low",
+      "category": "maintainability",
+      "content": "wholeTurnOf 的值只是 runId，232 行的让位也只按 runId 判断，没有带 botId。目前没找到同一个 runId 跑另一位员工的路径，但让位是个会吞掉事件的判断，建议把值改成 runId + botId，避免将来别的员工的观察被误让位。"
+    },
+    {
+      "path": "xiongbao/server/src/copilot.ts",
+      "start_line": 2873,
+      "end_line": 2874,
+      "severity": "low",
+      "category": "bug",
+      "content": "continues 用「末条消息的 role 不是 user」判断这是接着上一个 run 的一轮。客户端在人的消息后面追加 system、developer、activity 之类消息时，新的一轮会被当成续跑，沿用被丢下那一轮的标记，多列出那一轮的文件。建议改成「末条是 tool 消息，或末条 assistant 消息带着没有答复的工具调用」。"
+    },
+    {
+      "path": "xiongbao/server/src/routines/run-turn.ts",
+      "start_line": 99,
+      "end_line": 110,
+      "severity": "low",
+      "category": "other",
+      "content": "行为面变化：observeTurn 现在对所有带无头工具的无人值守轮生效（看板、例行、子代理，以及外部员工的轮），而以前只有内置员工经 copilot.ts 的观察。事件由服务器从真实电脑差异算出、座位规则不变，没看到提权，但这是比描述更大的行为面，建议在注释里写明。"
+    }
+  ],
+  "skipped": [],
+  "notes": [
+    "宿主为控制方派出的评审子智能体；delegation 模式，没有评审单元隔离与 OCR 的反思、定位模块。",
+    "审查范围 660f85dd..83665947，规则取熊宝规则模板，测试文件按 benchmark 约定排除。",
+    "污染说明：宿主在评审前已读过控制方对这三个 PR 的审查结论（金标原文），召回数字偏高，只能当管线与打分脚本的验证，不能当 OCR 真实召回率。规则模板写在读过金标之后，但只写通用主题，没有照抄具体场景。"
+  ]
+}

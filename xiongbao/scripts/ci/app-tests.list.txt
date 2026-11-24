@@ -115,6 +115,7 @@ tests/avatar-sources-screens.test.tsx
 tests/background-run-list.test.tsx
 tests/background-run.test.tsx
 tests/bar-chart-long-labels.test.tsx
+tests/board-push.test.tsx
 tests/bot-access-apps.test.tsx
 tests/bot-access-skills.test.tsx
 tests/bot-access-your-apps.test.tsx
@@ -355,6 +356,7 @@ tests/hotkey-layouts.test.ts
 tests/i18n-accessible-names.test.ts
 tests/i18n-dom-scan.test.tsx
 tests/i18n-route-coverage.test.ts
+tests/inbox-notes.test.tsx
 tests/index-boot.test.ts
 tests/join-thread.test.ts
 tests/key-only-apps-directory.test.tsx

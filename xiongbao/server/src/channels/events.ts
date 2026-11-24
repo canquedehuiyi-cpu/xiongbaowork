@@ -37,6 +37,13 @@ export type RunNoticeWire = {
   path: string;
 };
 
+/** One JSON Patch operation (RFC 6902) of the subset the board uses. */
+export type StateDeltaOperation = {
+  op: "add" | "replace";
+  path: string;
+  value: unknown;
+};
+
 export type ChannelActivityEvent = {
   channelId: string;
   /** Who may receive it. Resolved by the writer, which already had to check membership. */
@@ -101,6 +108,12 @@ export type ChannelActivityEvent = {
    * is also what the roster and the channel read return. See `working.ts`.
    */
   work?: ChannelWorkWire[];
+  /**
+   * Which cards on the task board moved, as the JSON Patch of an AG-UI `STATE_DELTA`. Alone on its
+   * event, and what a page receives is `{ type: "STATE_DELTA", delta }` and nothing of the rest.
+   * Only card ids and the fields that changed: never a card's text. Transient like `taskUpdated`.
+   */
+  stateDelta?: StateDeltaOperation[];
   /**
    * When `work` was read, by the database's clock: ISO-8601 in UTC to the microsecond, fixed width
    * so two compare as strings. Present whenever `work` is. Events
@@ -280,10 +293,16 @@ export function createChannelEventHub(): ChannelEventHub {
     },
 
     deliver(event) {
+      // A page reads a state delta in the AG-UI shape; the member list that routed it stays here.
+      const payload = JSON.stringify(
+        event.stateDelta
+          ? { type: "STATE_DELTA", delta: event.stateDelta }
+          : event,
+      );
       for (const userId of event.memberIds) {
         for (const send of connections.get(userId) ?? []) {
           try {
-            send(JSON.stringify(event));
+            send(payload);
           } catch {
             // A connection that cannot be written to is one that is closing. Its own close handler
             // detaches it; failing here would deny the event to everybody after it in the set.

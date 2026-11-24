@@ -1,0 +1,5 @@
+# 隔离网络命名空间内重跑一次（--runs 1）的 strace connect 摘录：只列非回环、非 AF_UNIX 的 AF_INET 连接尝试，已去掉 pid
+# 生成方式：isolated.sh strace -f -e trace=connect bun compare.ts run --runs 1 --firecrawl <二进制>
+# 格式：次数 | 目的地:端口 | 结果
+126 | 8.8.4.4:53 | -1 ENETUNREACH
+126 | 8.8.8.8:53 | -1 ENETUNREACH

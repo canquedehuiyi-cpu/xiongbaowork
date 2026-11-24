@@ -1,0 +1,62 @@
+{
+  "schema": "ocr-delegate-report/1",
+  "mode": "delegation",
+  "range": {
+    "from": "660f85dd",
+    "to": "83665947",
+    "merge_base": "660f85dd58c5f85c83a33b5932e019897c40ced8"
+  },
+  "summary": {
+    "total_files": 8,
+    "reviewed_files": 8,
+    "skipped_files": 0,
+    "coverage_rate": 1,
+    "comments": 5
+  },
+  "comments": [
+    {
+      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+      "start_line": 172,
+      "end_line": 187,
+      "severity": "high",
+      "category": "bug",
+      "content": "只在收到 RUN_FINISHED 时才比对并发清单：整轮流里 RUN_ERROR、流报错、被时限 abort 后不发终止事件就完成的轮都不会列清单（chat-server-tools.ts 的注释还声称『被时限或段数停掉的轮也在这条流里结束』）。文件已写在员工电脑上，对话里却没有下载清单，用户说『继续』又是新一轮补不回来；同时 carried 里的标记和网关里的快照标记也没人清理。需要在 RUN_ERROR/报错/完成无终止事件三条路径上同样比对并清标记。"
+    },
+    {
+      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+      "start_line": 45,
+      "end_line": 66,
+      "severity": "high",
+      "category": "bug",
+      "content": "跨 run 的 carried 表没有过期时间，也没有在轮被放弃时（页面不再发续跑 run、报错、标签页关闭）清除，只靠 500 条上限淘汰。下一个 run 只要 `continues` 为真（由客户端消息里最后一条不是 user 就判定）就会沿用很久以前的 markId，拿今天的文件系统和几小时前的快照比，清单里混进无关文件，或者因网关侧标记已被淘汰而静默什么也不列。应记录时间并设 TTL、轮结束/出错时清除。"
+    },
+    {
+      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+      "start_line": 73,
+      "end_line": 73,
+      "severity": "high",
+      "category": "bug",
+      "content": "wholeTurnOf 只以 runId 为键（run 处与 withConfiguredTurnArtifacts 的 getStore 比较处同），同一个 run 里被叫来的另一位员工（botId 不同、runId 相同）的各段观察也被当成『让位』给外层而跳过，它写的文件不会有清单；键应为 runId 加 botId。"
+    },
+    {
+      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+      "start_line": 175,
+      "end_line": 178,
+      "severity": "low",
+      "category": "bug",
+      "content": "只要 run 以任何未答复的工具调用结束就推迟清单，不区分是不是电脑工具（审批、组件渲染这类等人的前端工具也一样）。人不回工具结果而是直接发新消息时，messages 末条是 user，被视为新一轮，上一轮已写的文件永远不会被列出。"
+    },
+    {
+      "path": "xiongbao/server/src/threads/chat-server-tools.ts",
+      "start_line": 357,
+      "end_line": 368,
+      "severity": "low",
+      "category": "bug",
+      "content": "清单流在 runAsTenant(actor.id) 里订阅，但 personId 也同样传 actor.id；若 actor.id 不是个人租户（共享/平台身份），runAsTenant 会抛错或在错误的帧里读写，而 copilot.ts 与 run-turn.ts 里同样的取值是先判断 isPersonTenant 再用。三处取值方式不一致，容易出现某条入口静默不列清单。"
+    }
+  ],
+  "skipped": [],
+  "notes": [
+    "8 个单元全部读过；严重度映射：important 记为 high，minor 记为 low。"
+  ]
+}

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ACP_CHOICES,
   ACP_GHOST_BUTTON,
@@ -22,6 +22,7 @@ import {
 } from "@/lib/approvals";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { cn } from "@/lib/utils";
+import { GuidedReview, InboxNotes } from "./inbox-notes";
 
 /*
  * 审批详情（`/approvals?id=<审批 id>`）：手机网页上批一条「等你确认」，设计稿第 5 屏（外部员工 Task 12）。
@@ -59,6 +60,8 @@ function OneApproval({ id }: { id: string }) {
   const agents = useQuery(agentListQueryOptions());
   const me = useQuery(currentUserQueryOptions());
   const [answered, setAnswered] = useState<AcpChoice | null>(null);
+  // 请求正文所在的元素，批注从这里面选中的字取引用（试点，开关没开时不用）。
+  const body = useRef<HTMLDivElement | null>(null);
   const decision = useMutation({
     mutationFn: (choice: AcpChoice) => decideApproval(id, choice),
     onSuccess: (_, choice) => {
@@ -154,7 +157,10 @@ function OneApproval({ id }: { id: string }) {
       ) : (
         <>
           {/* 手机上按钮贴在底部，内容留出按钮那么高的空白，最后一行不会被盖住。 */}
-          <div className="flex flex-1 flex-col gap-4 px-4 pt-[18px] pb-[200px] md:pb-6">
+          <div
+            className="flex flex-1 flex-col gap-4 px-4 pt-[18px] pb-[200px] md:pb-6"
+            ref={body}
+          >
             <div className="flex items-center gap-3">
               <ChannelAvatar participantIds={[data.action.botId]} size={44} />
               <div className="flex min-w-0 flex-col gap-[3px]">
@@ -192,6 +198,8 @@ function OneApproval({ id }: { id: string }) {
               </div>
             ) : null}
 
+            {card && card.files.length > 0 ? <GuidedReview id={id} /> : null}
+
             {card?.summary ? (
               <div className={cn(PANEL, "flex flex-col gap-1.5 p-3")}>
                 <span className={LABEL}>这一轮</span>
@@ -206,6 +214,10 @@ function OneApproval({ id }: { id: string }) {
               {card?.reason || data.action.policy?.reason || ""}
               {waiting ? " 批准后只执行这一次。" : ""}
             </p>
+
+            {waiting ? (
+              <InboxNotes id={id} kind="approval" source={() => body.current} />
+            ) : null}
           </div>
 
           <div

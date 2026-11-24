@@ -1,0 +1,94 @@
+{
+  "schema": "ocr-delegate-report/1",
+  "mode": "delegation",
+  "range": {
+    "from": "f91867ab^1",
+    "to": "3cc42cc2",
+    "merge_base": "01bc780f17c2cb40a701d28c4b53b02812b8835f"
+  },
+  "summary": {
+    "total_files": 29,
+    "reviewed_files": 29,
+    "skipped_files": 0,
+    "coverage_rate": 1,
+    "comments": 9
+  },
+  "comments": [
+    {
+      "path": "xiongbao/server/src/content/access.ts",
+      "start_line": 81,
+      "end_line": 107,
+      "severity": "critical",
+      "category": "bug",
+      "content": "stillAllowed 在内容源自己的监听器上被调用（程序请求、60 秒一次的 socket 复查），不在应用的租户帧里，而它里面的 roleOf、员工档案、run 事件读取都是读库，帧外读库会被拒：授权判断要么一律抛错（请求 502、socket 以 1011 关掉），要么在没有帧的情况下得出错误结论。整个『程序转发』功能在真实部署里打不开；修法是按 grant.person 进入 runAsTenant 再判断，并且 person 不是个人租户时一律拒绝。"
+    },
+    {
+      "path": "xiongbao/server/src/computer/artifact-access-store.ts",
+      "start_line": 233,
+      "end_line": 233,
+      "severity": "high",
+      "category": "bug",
+      "content": "卡片只交付了程序、没有文件时，这一轮没有任何 computer.turn_artifacts，seats.size 为 0，这里直接 return null，cardFor 永远拿不到这张卡；artifact-access.ts 里『只有程序的卡可以没有自己的座位』的回退分支因此成了死代码，任务页/交付卡上『打开』程序一律 404。"
+    },
+    {
+      "path": "xiongbao/server/src/computer/artifact-access.ts",
+      "start_line": 219,
+      "end_line": 231,
+      "severity": "high",
+      "category": "security",
+      "content": "按 run 授权程序时，只要这个 run 里任何一条 delivery.delivered 事件的 apps 含该端口就放行，没有核对事件里的 agentId 是否就是被请求的 botId。一个 run 里有多位员工时，员工 B 交付的端口可以被用来请求员工 A（seat 取自 A 的座位）上同一端口的程序，越过了『只有这位员工交付过的程序才能打开』的边界；应按 value.agentId === botId 过滤。"
+    },
+    {
+      "path": "xiongbao/agent-computer/src/forward.ts",
+      "start_line": 180,
+      "end_line": 190,
+      "severity": "low",
+      "category": "bug",
+      "content": "程序响应超过 100MB 时在这里 controller.close() 静默截断，而 content-length 头被丢掉，对端看到的是一个『成功结束』的 200，下载的文件被截断却没有任何错误；应该 controller.error 让连接异常中断。"
+    },
+    {
+      "path": "xiongbao/server/src/content/forward.ts",
+      "start_line": 430,
+      "end_line": 430,
+      "severity": "low",
+      "category": "bug",
+      "content": "限流按（座位:员工）而不是按人，所有能打开该员工程序的人共用 600 次/分钟的桶；一个有几十个子资源或轮询的页面一个人就能耗尽，别的人（和同一个人的其它标签）被 429，页面残缺。也可以被一个人故意用来拒绝其他人访问同一个交付的程序。"
+    },
+    {
+      "path": "xiongbao/agent-computer/src/listeners.ts",
+      "start_line": 160,
+      "end_line": 169,
+      "severity": "low",
+      "category": "security",
+      "content": "没有自己 Linux 用户的员工（默认员工、共用电脑）按进程自己的 uid 放行，凡是以该 uid 跑在回环上的服务（除 SELF_PORTS 里列出的）都能被转发打开；COMPUTER_FORWARD_DENY_PORTS 默认为空，是否安全取决于部署，默认值偏开放。同时这种情况下员工之间互相能看到对方的程序。"
+    },
+    {
+      "path": "xiongbao/app/src/components/channels/artifact-preview.tsx",
+      "start_line": 434,
+      "end_line": 438,
+      "severity": "high",
+      "category": "security",
+      "content": "程序在 iframe 里以 allow-scripts allow-same-origin 运行在内容源的真实源里，端口模式下内容源与应用只差端口（同站、cookie 不分端口）：程序脚本能读写应用主机上所有非 HttpOnly 的 cookie，并能让浏览器带着 SameSite=Lax 的应用 cookie 向应用发同站请求。整个防线压在『应用的所有改状态路由都核对 Origin、会话 cookie 一定 HttpOnly』上，而程序是模型写的代码。提示条只在端口模式出现且措辞没有说明这一点；至少应在交付卡的『打开』上也提示，并确认所有改状态路由都真的拒绝外来 Origin。"
+    },
+    {
+      "path": "xiongbao/server/src/tasks/evidence-gate.ts",
+      "start_line": 711,
+      "end_line": 732,
+      "severity": "low",
+      "category": "performance",
+      "content": "交付里的程序逐个串行探测，每个最长 10 秒（APP_PROBE_TIMEOUT_MS），items 上限 30，最坏阻塞交付工具调用 5 分钟；探测用的是真正的 GET，会触发程序里 GET 带副作用的路由。应并行并设总时限。"
+    },
+    {
+      "path": "xiongbao/server/src/tasks/delivery-tools.ts",
+      "start_line": 159,
+      "end_line": 163,
+      "severity": "low",
+      "category": "bug",
+      "content": "schema 把所有 kind 的 ref 都改成了可选，并统一补成空串：attachment、link、component 漏写 ref 不再在 schema 层被拒，而是带着空 ref 走进证据门，得到含糊的报错；port 也没有 int/范围约束。应只对 kind=app 放宽（用判别联合）。"
+    }
+  ],
+  "skipped": [],
+  "notes": [
+    "29 个评审单元全部读过 diff；gateway.ts、delivery.ts 合并逻辑、projector.ts、prompt-slim.ts、physical-gate.ts、ci.yml、s6 run 脚本没有发现问题。前端为 UI 逻辑，重点看了 iframe 沙箱与授权入参。严重度映射：important 记为 high，minor 记为 low。"
+  ]
+}

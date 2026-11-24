@@ -13,6 +13,7 @@ import {
 } from "@openbot/shared/approval-outcomes";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { desktopActionWordsOf } from "../../../shared/desktop-control";
+import { REVIEW_READ_ONLY } from "../agents/plan-approval";
 import { PERSON_INITIATOR } from "../audit";
 import { currentTenant } from "../tenant/context";
 import {
@@ -36,6 +37,7 @@ import {
   toolDisabled,
 } from "./policy";
 import type { ApprovalQuestions } from "./questions";
+import { isReadOnlyThread } from "./read-only-threads";
 import {
   APPROVAL_DECISIONS,
   type ApprovalAction,
@@ -591,6 +593,21 @@ export function createApprovalService(
        */
       const policy = store.policy;
       const continuation = candidate.continuation ?? currentApprovalContext();
+      /*
+       * Pilot (agents/plan-approval.ts): a conversation that put a plan to its owner, and a reviewer's
+       * thread, may only read. Whatever else the gate would say, a change is refused here, with
+       * nothing opened to approve: the owner's yes belongs to the plan, not to each step.
+       */
+      if (candidate.effect !== "read" && continuation?.threadId) {
+        if (isReadOnlyThread(continuation.threadId))
+          throw new ApprovalRefusedError(REVIEW_READ_ONLY);
+        const held = await store.planApprovalRefusal?.(
+          candidate.actorId,
+          continuation.threadId,
+          candidate.botId,
+        );
+        if (held) throw new ApprovalRefusedError(held);
+      }
       /*
        * A TASK STARTED FROM A CHECK-IN ASKS BEFORE EVERYTHING BUT A TRUSTED READ, whatever the
        * person's own switch or rules would allow: the work came from something a Bot noticed, not

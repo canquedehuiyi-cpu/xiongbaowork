@@ -504,6 +504,27 @@ export type DeploymentConfig = {
    */
   chatServerComputerTools: boolean;
   /**
+   * Pilot: the task board is told which cards moved the moment they do, as an AG-UI `STATE_DELTA`
+   * over the channel socket, instead of being found by the page's next poll. Off unless
+   * XIONGBAO_PILOT_BOARD_PUSH is `on`; off means the server sends nothing of it and the page keeps
+   * the polling it had. Projected on /api/capabilities, because the page holds the other half.
+   */
+  pilotBoardPush: boolean;
+  /**
+   * Pilot: a long plan (four steps or more) from an employee whose handbook declares the pilot waits
+   * for its owner's yes before anything with a side effect runs, and a coding card gets a read-only
+   * review attached to its hand-in. Off unless XIONGBAO_PILOT_PLAN_APPROVAL is `on`; off means the
+   * prompt, the tool list and every gate behave as they did.
+   */
+  pilotPlanApproval: boolean;
+  /**
+   * Pilot: an item waiting in the person's inbox (a plan, a hand-in or a question) can carry several
+   * notes, each quoting a passage of it, which are sent together as the next turn of the conversation
+   * that raised it; a code change is shown in three chapters. Off unless XIONGBAO_PILOT_INBOX_NOTES
+   * is `on`; off means the routes do not exist and /api/capabilities says nothing of it.
+   */
+  pilotInboxNotes: boolean;
+  /**
    * Where the pages a Bot's employee made are served from, apart from the app and the API.
    * `port` is XIONGBAO_CONTENT_PORT (1024-65535, never the API's or the app's port) and `domain` is
    * XIONGBAO_CONTENT_DOMAIN (a bare host name; each site gets a subdomain of it). Neither set means
@@ -1831,6 +1852,36 @@ function chatServerComputerToolsEnabled(environment: Environment): boolean {
 }
 
 /**
+ * XIONGBAO_PILOT_BOARD_PUSH: `on` or `off`, and off when unset. Refused rather than coerced, so a
+ * typo does not leave a pilot quietly off while whoever set it believes it is running.
+ */
+function pilotBoardPushEnabled(environment: Environment): boolean {
+  const name = "XIONGBAO_PILOT_BOARD_PUSH";
+  const value = optional(environment, name)?.toLowerCase();
+  if (value === undefined || value === "off") return false;
+  if (value === "on") return true;
+  throw new Error(`${name} must be "on" or "off"`);
+}
+
+/** XIONGBAO_PILOT_PLAN_APPROVAL: `on` or `off`, off when unset; anything else is refused, like the pilot above. */
+function pilotPlanApprovalEnabled(environment: Environment): boolean {
+  const name = "XIONGBAO_PILOT_PLAN_APPROVAL";
+  const value = optional(environment, name)?.toLowerCase();
+  if (value === undefined || value === "off") return false;
+  if (value === "on") return true;
+  throw new Error(`${name} must be "on" or "off"`);
+}
+
+/** XIONGBAO_PILOT_INBOX_NOTES: `on` or `off`, off when unset; anything else is refused, like the pilots above. */
+function pilotInboxNotesEnabled(environment: Environment): boolean {
+  const name = "XIONGBAO_PILOT_INBOX_NOTES";
+  const value = optional(environment, name)?.toLowerCase();
+  if (value === undefined || value === "off") return false;
+  if (value === "on") return true;
+  throw new Error(`${name} must be "on" or "off"`);
+}
+
+/**
  * The content origin settings. Refused rather than coerced, like the switches around it: a port that
  * quietly collided with the API's, or a domain with a scheme on it, would fail far from where it was
  * written.
@@ -2100,6 +2151,9 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
     generativeUi: generativeUiEnabled(environment),
     selfHostBanner: selfHostBannerEnabled(environment),
     chatServerComputerTools: chatServerComputerToolsEnabled(environment),
+    pilotBoardPush: pilotBoardPushEnabled(environment),
+    pilotPlanApproval: pilotPlanApprovalEnabled(environment),
+    pilotInboxNotes: pilotInboxNotesEnabled(environment),
     content: contentConfig(environment, [
       publicUrl,
       appUrl,

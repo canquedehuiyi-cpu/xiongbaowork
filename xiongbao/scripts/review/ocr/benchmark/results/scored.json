@@ -1,0 +1,433 @@
+{
+  "tolerance": 10,
+  "perPr": [
+    {
+      "pr": "pr-807",
+      "comments": 9,
+      "items": [
+        {
+          "id": "807-I1",
+          "severity": "important",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "已建立的 HTTP 流式响应不受撤销、到期和 12 小时上限约束：被移出群的人仍能持续收到程序的实时数据。"
+        },
+        {
+          "id": "807-I2",
+          "severity": "important",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "端口模式下程序响应的缓存头原样转出：先开的程序可在之后打开的程序里通过浏览器缓存持续执行脚本。"
+        },
+        {
+          "id": "807-I3",
+          "severity": "important",
+          "found": true,
+          "inDiff": true,
+          "by": [
+            2
+          ],
+          "summary": "run 范围的程序授权不核对交付者：可打开同群另一位员工没交付的程序（越权）。"
+        },
+        {
+          "id": "807-I4",
+          "severity": "important",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "任务页（没有侧栏）打开程序时没有端口模式提示，用户要求的提示缺一条路径。"
+        },
+        {
+          "id": "807-M1",
+          "severity": "minor",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "WebSocket 周期复查走 60 秒缓存，撤销最坏约 120 秒才断开。"
+        },
+        {
+          "id": "807-M2",
+          "severity": "minor",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "内容源监听用 Bun 默认 10 秒空闲超时，慢接口与长间隔 SSE 会被提前断开。"
+        },
+        {
+          "id": "807-M3",
+          "severity": "minor",
+          "found": true,
+          "inDiff": true,
+          "by": [
+            4
+          ],
+          "summary": "限流键不含人：一个人刷请求，同一员工的其他观看者被连带 429；额度对 Vite 首屏偏低。"
+        },
+        {
+          "id": "807-M7",
+          "severity": "minor",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "首页路径长度上限不一致：证据门 2000、打开路由 1024，超过 1024 的程序能交付但打不开。"
+        },
+        {
+          "id": "807-M8",
+          "severity": "minor",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "客户端 IP 类请求头（cf-connecting-ip、true-client-ip 等）没有全清，转给了程序。"
+        },
+        {
+          "id": "807-M10",
+          "severity": "minor",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "模块注释说应用的 cookie 程序读不到，实际端口模式下程序脚本能读到同主机上所有非 HttpOnly cookie。"
+        },
+        {
+          "id": "807-M4",
+          "severity": "minor",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "域名模式下转给程序的 cookie 含父域上的 HttpOnly cookie；内容域名应是单独的可注册域（部署文档补充，未改代码）。"
+        },
+        {
+          "id": "807-M5",
+          "severity": "minor",
+          "found": false,
+          "inDiff": false,
+          "by": [],
+          "summary": "共享模式（COMPUTER_PER_BOT_USERS=off）下 uid 分不出员工，A 的交付可列出 B 的端口（部署文档补充，未改代码）。"
+        },
+        {
+          "id": "807-M6",
+          "severity": "minor",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "不带范围的 app 打开只查 canUseBot，可打开自己员工座位上的任意端口，不限交付里声明的端口（部署文档补充，未改代码）。"
+        }
+      ],
+      "recall": {
+        "found": 1,
+        "total": 4,
+        "rate": 0.25
+      },
+      "recallInDiff": {
+        "found": 1,
+        "total": 4,
+        "rate": 0.25
+      },
+      "minorRecall": {
+        "found": 1,
+        "total": 9,
+        "rate": 0.1111
+      },
+      "precision": {
+        "matched": 2,
+        "total": 9,
+        "rate": 0.2222
+      },
+      "strictPrecision": {
+        "matched": 1,
+        "total": 9,
+        "rate": 0.1111
+      },
+      "misses": [
+        "807-I1",
+        "807-I2",
+        "807-I4"
+      ],
+      "unmatched": [
+        {
+          "index": 0,
+          "path": "xiongbao/server/src/content/access.ts",
+          "lines": "81-107",
+          "severity": "critical",
+          "excerpt": "stillAllowed 在内容源自己的监听器上被调用（程序请求、60 秒一次的 socket 复查），不在应用的租户帧里，而它里面的 roleOf、员工档案、"
+        },
+        {
+          "index": 1,
+          "path": "xiongbao/server/src/computer/artifact-access-store.ts",
+          "lines": "233-233",
+          "severity": "high",
+          "excerpt": "卡片只交付了程序、没有文件时，这一轮没有任何 computer.turn_artifacts，seats.size 为 0，这里直接 return null，c"
+        },
+        {
+          "index": 3,
+          "path": "xiongbao/agent-computer/src/forward.ts",
+          "lines": "180-190",
+          "severity": "low",
+          "excerpt": "程序响应超过 100MB 时在这里 controller.close() 静默截断，而 content-length 头被丢掉，对端看到的是一个『成功结束』的 "
+        },
+        {
+          "index": 5,
+          "path": "xiongbao/agent-computer/src/listeners.ts",
+          "lines": "160-169",
+          "severity": "low",
+          "excerpt": "没有自己 Linux 用户的员工（默认员工、共用电脑）按进程自己的 uid 放行，凡是以该 uid 跑在回环上的服务（除 SELF_PORTS 里列出的）都能被"
+        },
+        {
+          "index": 6,
+          "path": "xiongbao/app/src/components/channels/artifact-preview.tsx",
+          "lines": "434-438",
+          "severity": "high",
+          "excerpt": "程序在 iframe 里以 allow-scripts allow-same-origin 运行在内容源的真实源里，端口模式下内容源与应用只差端口（同站、coo"
+        },
+        {
+          "index": 7,
+          "path": "xiongbao/server/src/tasks/evidence-gate.ts",
+          "lines": "711-732",
+          "severity": "low",
+          "excerpt": "交付里的程序逐个串行探测，每个最长 10 秒（APP_PROBE_TIMEOUT_MS），items 上限 30，最坏阻塞交付工具调用 5 分钟；探测用的是真正"
+        },
+        {
+          "index": 8,
+          "path": "xiongbao/server/src/tasks/delivery-tools.ts",
+          "lines": "159-163",
+          "severity": "low",
+          "excerpt": "schema 把所有 kind 的 ref 都改成了可选，并统一补成空串：attachment、link、component 漏写 ref 不再在 schema"
+        }
+      ]
+    },
+    {
+      "pr": "pr-810",
+      "comments": 5,
+      "items": [
+        {
+          "id": "810-I1",
+          "severity": "important",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "服务器执行电脑工具的单聊里中途调用页面工具，一轮被拆到几个 run；最终 run 上没有产物事件，后一个 run 里的交付下载 404。"
+        },
+        {
+          "id": "810-M1",
+          "severity": "minor",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "新一轮替换或淘汰旧的 carried 条目时，旧的网关标记不清理，累积后挤占本轮标记的 flush 预算。"
+        },
+        {
+          "id": "810-M2",
+          "severity": "minor",
+          "found": true,
+          "inDiff": true,
+          "by": [
+            3
+          ],
+          "summary": "run 停在因审批被扣住的服务器工具上时仍推迟比对，审批续跑后前半段改动永远不列出。"
+        },
+        {
+          "id": "810-M3",
+          "severity": "minor",
+          "found": true,
+          "inDiff": true,
+          "by": [
+            1
+          ],
+          "summary": "carried 条目没有 TTL：共享电脑时被扣住的标记会把时间窗拉长，别人的改动被列到本人 run 上。"
+        },
+        {
+          "id": "810-M6",
+          "severity": "minor",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "continues 用「末条消息不是 user」判断续跑太粗：追加 system/developer 消息会被当成续跑，多列出上一轮的文件。"
+        },
+        {
+          "id": "810-M4",
+          "severity": "minor",
+          "found": true,
+          "inDiff": true,
+          "by": [
+            2
+          ],
+          "summary": "让位只按 runId 判断，没有带 botId：将来同一个 runId 下另一位员工的观察可能被误让位。"
+        },
+        {
+          "id": "810-M8",
+          "severity": "minor",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "外层 observeTurn 现在对所有带无头工具的无人值守轮生效，包括外部员工（ACP），行为面扩大。"
+        }
+      ],
+      "recall": {
+        "found": 0,
+        "total": 1,
+        "rate": 0
+      },
+      "recallInDiff": {
+        "found": 0,
+        "total": 1,
+        "rate": 0
+      },
+      "minorRecall": {
+        "found": 3,
+        "total": 6,
+        "rate": 0.5
+      },
+      "precision": {
+        "matched": 3,
+        "total": 5,
+        "rate": 0.6
+      },
+      "strictPrecision": {
+        "matched": 0,
+        "total": 5,
+        "rate": 0
+      },
+      "misses": [
+        "810-I1"
+      ],
+      "unmatched": [
+        {
+          "index": 0,
+          "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+          "lines": "172-187",
+          "severity": "high",
+          "excerpt": "只在收到 RUN_FINISHED 时才比对并发清单：整轮流里 RUN_ERROR、流报错、被时限 abort 后不发终止事件就完成的轮都不会列清单（chat-"
+        },
+        {
+          "index": 4,
+          "path": "xiongbao/server/src/threads/chat-server-tools.ts",
+          "lines": "357-368",
+          "severity": "low",
+          "excerpt": "清单流在 runAsTenant(actor.id) 里订阅，但 personId 也同样传 actor.id；若 actor.id 不是个人租户（共享/平台身"
+        }
+      ]
+    },
+    {
+      "pr": "pr-812",
+      "comments": 4,
+      "items": [
+        {
+          "id": "812-C1",
+          "severity": "critical",
+          "found": false,
+          "inDiff": false,
+          "by": [],
+          "summary": "群聊里出错或被停的轮，回复行不记产物：run 事件有清单但群聊界面读回复行，没有任何下载链接。"
+        },
+        {
+          "id": "812-C2",
+          "severity": "critical",
+          "found": true,
+          "inDiff": true,
+          "by": [
+            0
+          ],
+          "summary": "群聊轮时限提到 25 分钟，超过队列租约 15 分钟且跑的过程中不续租：多副本下另一副本接管同一项，出现先失败后成功、抢答。"
+        },
+        {
+          "id": "812-I1",
+          "severity": "important",
+          "found": false,
+          "inDiff": false,
+          "by": [],
+          "summary": "群聊 sweep 在每个副本里串行：单个 25 分钟的慢轮会让同副本上所有群聊排队（队头阻塞）。"
+        },
+        {
+          "id": "812-I2",
+          "severity": "important",
+          "found": false,
+          "inDiff": true,
+          "by": [],
+          "summary": "时限停轮后的比对最长 15 秒，超过 5 秒 abortGrace，被 backstop 当成「停不下来」：结局误报、清单丢失。"
+        }
+      ],
+      "recall": {
+        "found": 1,
+        "total": 4,
+        "rate": 0.25
+      },
+      "recallInDiff": {
+        "found": 1,
+        "total": 2,
+        "rate": 0.5
+      },
+      "minorRecall": {
+        "found": 0,
+        "total": 0,
+        "rate": null
+      },
+      "precision": {
+        "matched": 1,
+        "total": 4,
+        "rate": 0.25
+      },
+      "strictPrecision": {
+        "matched": 1,
+        "total": 4,
+        "rate": 0.25
+      },
+      "misses": [
+        "812-C1",
+        "812-I1",
+        "812-I2"
+      ],
+      "unmatched": [
+        {
+          "index": 1,
+          "path": "xiongbao/server/src/routines/run-turn.ts",
+          "lines": "142-152",
+          "severity": "low",
+          "excerpt": "所有有电脑工具的群聊员工轮次都放宽到 25 分钟、80 段，包括员工之间互相应答（交接台）触发的轮次；这些轮次占着对话的锁，期间用户在群里的新消息被『Threa"
+        },
+        {
+          "index": 2,
+          "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+          "lines": "294-309",
+          "severity": "low",
+          "excerpt": "RUN_ERROR 之前先 await settle，最长要等 TURN_ARTIFACTS_DEADLINE_MS（15 秒），错误事件因此被推迟；若此时订阅"
+        },
+        {
+          "index": 3,
+          "path": "xiongbao/scripts/e2e/employee-eval/deliverables-server.ts",
+          "lines": "550-561",
+          "severity": "low",
+          "excerpt": "把 RUN_ERROR 的 message 前 80 个字符原样写进检查失败详情，这些文字可能来自模型供应方或服务器内部错误（含地址、请求号等），会随评测报告落"
+        }
+      ]
+    }
+  ],
+  "total": {
+    "prs": 3,
+    "recall": {
+      "found": 2,
+      "total": 9,
+      "rate": 0.2222
+    },
+    "recallInDiff": {
+      "found": 2,
+      "total": 7,
+      "rate": 0.2857
+    },
+    "minorRecall": {
+      "found": 4,
+      "total": 15,
+      "rate": 0.2667
+    },
+    "precision": {
+      "matched": 6,
+      "total": 18,
+      "rate": 0.3333
+    },
+    "strictPrecision": {
+      "matched": 2,
+      "total": 18,
+      "rate": 0.1111
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { PERSON_QUESTION_WAITING } from "../approvals/question-resume";
 import type { ApprovalService } from "../approvals/service";
 import { currentApprovalContext } from "../approvals/types";
@@ -13,7 +13,7 @@ import { groupSourceForRun } from "../channels/group";
 import type { ChannelStore } from "../channels/routes";
 import type { DeploymentConfig } from "../config";
 import type { Database } from "../db/client";
-import { channelMemberships } from "../db/schema";
+import { channelMemberships, workItems } from "../db/schema";
 import type { DeliveryScope } from "../delivery/types";
 import type { PeopleStore } from "../people/store";
 import type { PluginStore } from "../plugins/store";
@@ -21,6 +21,7 @@ import { REFUSAL_MARKER } from "../plugins/tools";
 import { createPrivateShareCheck } from "../proactive/private-share";
 import { createWorkQueue } from "../work/queue";
 import { type RunAssertion, readRunAssertion } from "./callback-token";
+import type { EscalationRoute } from "./escalation";
 import { type HandoffDesk, resolveAddressedBot } from "./handoff";
 import {
   authoriseCoordinationRun,
@@ -79,6 +80,118 @@ export function wireCoordination(deps: {
     channelStore,
   } = deps;
   const personQuestions = createWorkQueue(database);
+  /**
+   * Put a question to the person in the conversation it came from: what `ask_person` calls. `extra`
+   * rides on the saved row beside the question; the plan-approval pilot marks its plan there
+   * (agents/plan-approval.ts). Without it the row is what it always was.
+   */
+  const routeQuestion = async (
+    question: Parameters<EscalationRoute>[0],
+    extra: Record<string, unknown> = {},
+    /** A key of the caller's own, for a row `ask_person` must not be able to take the place of. */
+    ownKey?: string,
+  ) => {
+    const source = await sourceForCoordinationRun(question);
+    if (!source)
+      return {
+        refusal: "That question could not reach its source conversation.",
+      };
+    const key =
+      ownKey ??
+      createHash("sha256")
+        .update(
+          JSON.stringify([
+            question.actorId,
+            question.botId,
+            question.runId,
+            question.question,
+          ]),
+        )
+        .digest("hex");
+    const queued = await personQuestions.offer({
+      kind: "person.question",
+      key,
+      payload: {
+        ...question,
+        sourceBotId: source.botId,
+        channelId: source.channelId,
+        mode: "completed_question",
+        ...extra,
+        toolName: "ask_person",
+        args: {
+          question: question.question,
+          ...(question.why ? { why: question.why } : {}),
+          ...(question.parts ? { parts: question.parts } : {}),
+        },
+      },
+    });
+    if (queued === "refused")
+      return { refusal: "The question could not be saved for its person." };
+    /*
+     * A row of the caller's own key that was already there counts as put only if it is that
+     * caller's row: this conversation's plan, with its marker, still waiting for an answer. Anything else sitting on the key is not
+     * a question anybody was asked.
+     */
+    if (queued === "already" && ownKey && extra.planApproval) {
+      const [held] = await database
+        .select({
+          payload: workItems.payload,
+          finishedAt: workItems.finishedAt,
+        })
+        .from(workItems)
+        .where(
+          and(eq(workItems.kind, "person.question"), eq(workItems.key, key)),
+        )
+        .limit(1);
+      const row = held?.payload as
+        | { threadId?: string; actorId?: string; planApproval?: unknown }
+        | undefined;
+      if (
+        held?.finishedAt ||
+        !row?.planApproval ||
+        row.threadId !== question.threadId ||
+        row.actorId !== question.actorId
+      )
+        return { refusal: "The plan could not be saved for its person." };
+    }
+    await channelStore.recordActivity(
+      await actorFor(question.actorId),
+      source.channelId,
+      {
+        text: `A question needs your answer: ${question.question}`,
+        agentId: source.botId,
+        at: new Date(),
+      },
+      { id: `question:${key}` },
+    );
+    if (question.threadId) {
+      // A person reads this in Slack or on their phone, where "general-assistant" is an id, not a name.
+      const botName =
+        (
+          await agentProfileStore
+            .get(await actorFor(question.actorId), question.botId)
+            .catch(() => null)
+        )?.name ?? question.botId;
+      await deps.notify(
+        {
+          ownerUserId: question.actorId,
+          channelId: source.channelId,
+          agentId: source.botId,
+          threadId: question.threadId,
+        },
+        {
+          id: key,
+          text: `${botName} asks: ${question.question}`,
+          kind: "question",
+          requestId: key,
+        },
+      );
+    }
+    return {
+      reached:
+        "the person in the source conversation; the question is saved awaiting their reply",
+    };
+  };
   const coordination = createCoordinationTools({
     desk: handoffDesk,
     caps: config.handoff,
@@ -165,78 +278,7 @@ export function wireCoordination(deps: {
         sourceThread: sourceForCoordinationRun,
         delegationFor: (claim) => readCoordinationHandoffClaim(database, claim),
       }),
-    route: async (question) => {
-      const source = await sourceForCoordinationRun(question);
-      if (!source)
-        return {
-          refusal: "That question could not reach its source conversation.",
-        };
-      const key = createHash("sha256")
-        .update(
-          JSON.stringify([
-            question.actorId,
-            question.botId,
-            question.runId,
-            question.question,
-          ]),
-        )
-        .digest("hex");
-      const queued = await personQuestions.offer({
-        kind: "person.question",
-        key,
-        payload: {
-          ...question,
-          sourceBotId: source.botId,
-          channelId: source.channelId,
-          mode: "completed_question",
-          toolName: "ask_person",
-          args: {
-            question: question.question,
-            ...(question.why ? { why: question.why } : {}),
-            ...(question.parts ? { parts: question.parts } : {}),
-          },
-        },
-      });
-      if (queued === "refused")
-        return { refusal: "The question could not be saved for its person." };
-      await channelStore.recordActivity(
-        await actorFor(question.actorId),
-        source.channelId,
-        {
-          text: `A question needs your answer: ${question.question}`,
-          agentId: source.botId,
-          at: new Date(),
-        },
-        { id: `question:${key}` },
-      );
-      if (question.threadId) {
-        // A person reads this in Slack or on their phone, where "general-assistant" is an id, not a name.
-        const botName =
-          (
-            await agentProfileStore
-              .get(await actorFor(question.actorId), question.botId)
-              .catch(() => null)
-          )?.name ?? question.botId;
-        await deps.notify(
-          {
-            ownerUserId: question.actorId,
-            channelId: source.channelId,
-            agentId: source.botId,
-            threadId: question.threadId,
-          },
-          {
-            id: key,
-            text: `${botName} asks: ${question.question}`,
-            kind: "question",
-            requestId: key,
-          },
-        );
-      }
-      return {
-        reached:
-          "the person in the source conversation; the question is saved awaiting their reply",
-      };
-    },
+    route: (question) => routeQuestion(question),
   });
   const coordinationForActor =
     (
@@ -309,5 +351,5 @@ export function wireCoordination(deps: {
         },
       }));
     };
-  return { coordination, coordinationForActor };
+  return { coordination, coordinationForActor, routeQuestion };
 }

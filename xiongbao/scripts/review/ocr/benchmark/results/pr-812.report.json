@@ -1,0 +1,55 @@
+{
+  "schema": "ocr-delegate-report/1",
+  "mode": "delegation",
+  "range": {
+    "from": "5c4f62f5",
+    "to": "8a4ac553",
+    "merge_base": "5c4f62f5ad8927b6d59decbbf07fe7e14452cdb6"
+  },
+  "summary": {
+    "total_files": 5,
+    "reviewed_files": 5,
+    "skipped_files": 0,
+    "coverage_rate": 1,
+    "comments": 4
+  },
+  "comments": [
+    {
+      "path": "xiongbao/server/src/channels/group.ts",
+      "start_line": 3109,
+      "end_line": 3109,
+      "severity": "high",
+      "category": "bug",
+      "content": "群聊轮次队列的租约是 15 分钟，且只在每位员工开始前续一次（3145 行）；本次让有电脑的员工在群聊里的一轮最长 25 分钟（外加 5 秒宽限），单个轮次就可能超过租约。租约过期后另一个 sweep 会把同一轮重新领走，造成同一问题被答两遍、产物重复，原来的那轮再续租时才报『租约丢失』。需要把租约提到大于 workTurnTimeoutMs 加宽限，或在轮次执行期间按心跳续租。channels/dispatch.ts 里的 CHANNEL_DISPATCH_LEASE_MS 注释也还写着『五分钟』。",
+      "outside_diff": true
+    },
+    {
+      "path": "xiongbao/server/src/routines/run-turn.ts",
+      "start_line": 142,
+      "end_line": 152,
+      "severity": "low",
+      "category": "bug",
+      "content": "所有有电脑工具的群聊员工轮次都放宽到 25 分钟、80 段，包括员工之间互相应答（交接台）触发的轮次；这些轮次占着对话的锁，期间用户在群里的新消息被『Thread lock denied』拒绝最长 25 分钟。限时到点时给人看的提示也要核对是否已按群聊的 25 分钟说。"
+    },
+    {
+      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+      "start_line": 294,
+      "end_line": 309,
+      "severity": "low",
+      "category": "bug",
+      "content": "RUN_ERROR 之前先 await settle，最长要等 TURN_ARTIFACTS_DEADLINE_MS（15 秒），错误事件因此被推迟；若此时订阅方因超时已走开，错误与清单都丢。另外 ended 置位后若同一流再出现 RUN_FINISHED/RUN_ERROR，会第二次比对，清单可能出两份。"
+    },
+    {
+      "path": "xiongbao/scripts/e2e/employee-eval/deliverables-server.ts",
+      "start_line": 550,
+      "end_line": 561,
+      "severity": "low",
+      "category": "security",
+      "content": "把 RUN_ERROR 的 message 前 80 个字符原样写进检查失败详情，这些文字可能来自模型供应方或服务器内部错误（含地址、请求号等），会随评测报告落盘或上传；应只记错误类别。"
+    }
+  ],
+  "skipped": [],
+  "notes": [
+    "5 个单元全部读过；group.ts 是 diff 之外的调用方，评论标了 outside_diff。严重度映射：important 记为 high，minor 记为 low。"
+  ]
+}
