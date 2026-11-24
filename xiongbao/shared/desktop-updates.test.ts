@@ -13,11 +13,11 @@ test("a build that doesn't update itself says what happened and what to do", () 
 
 /**
  * The setup window and Settings › This computer said this in two spellings once, one of them
- * without "of OpenBot". Each now reads the shared sentence, so neither may write its own.
+ * without "of OpenBot". Settings now reads the shared sentence, so it may not write its own.
  */
-test("the setup window and Settings say it only through the shared sentence", async () => {
+test("Settings says it only through the shared sentence", async () => {
   const spelled: string[] = [];
-  for (const dir of ["app/src", "desktop/src"]) {
+  for (const dir of ["app/src"]) {
     for await (const file of new Glob("**/*.{ts,tsx}").scan(join(ROOT, dir))) {
       if (/\.test\.tsx?$/.test(file)) continue;
       const text = await Bun.file(join(ROOT, dir, file)).text();

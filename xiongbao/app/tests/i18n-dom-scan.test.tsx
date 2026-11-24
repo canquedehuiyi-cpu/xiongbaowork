@@ -22,62 +22,6 @@ import { CopilotProvider } from "@/lib/copilot/provider";
 import { Route as Approvals } from "@/routes/_authed/_app/approvals";
 import { Route as Autonomous } from "@/routes/_authed/_app/autonomous";
 import { Route as Bot } from "@/routes/_authed/_app/bot";
-import { Route as Bots } from "@/routes/_authed/_app/bots.index";
-import { Route as Briefing } from "@/routes/_authed/_app/briefing";
-import { Route as CapabilitiesComponents } from "@/routes/_authed/_app/capabilities.components";
-import { Route as CapabilitiesKnowledge } from "@/routes/_authed/_app/capabilities.knowledge";
-import { Route as CapabilitiesMemory } from "@/routes/_authed/_app/capabilities.memory";
-import { Route as CapabilitiesMine } from "@/routes/_authed/_app/capabilities.mine";
-import { Route as CapabilitiesModels } from "@/routes/_authed/_app/capabilities.models";
-import { Route as CapabilitiesPlugins } from "@/routes/_authed/_app/capabilities.plugins";
-import { Route as CapabilitiesProjects } from "@/routes/_authed/_app/capabilities.projects";
-import { Route as CapabilitiesRoles } from "@/routes/_authed/_app/capabilities.roles";
-import { Route as CapabilitiesSkills } from "@/routes/_authed/_app/capabilities.skills";
-import { Route as CapabilitiesWakerflows } from "@/routes/_authed/_app/capabilities.wakerflows";
-import { Route as ChannelNew } from "@/routes/_authed/_app/channel/new";
-import { Route as Connections } from "@/routes/_authed/_app/connections.index";
-import { Route as Contacts } from "@/routes/_authed/_app/contacts";
-import { Route as GroupNew } from "@/routes/_authed/_app/group/new";
-import { Route as Pipelines } from "@/routes/_authed/_app/pipelines";
-import { Route as Tasks } from "@/routes/_authed/_app/tasks";
-import { Route as TeamBots } from "@/routes/_authed/_app/team-bots";
-import { Route as WakerflowsIndex } from "@/routes/_authed/_app/wakerflows.index";
-import { Route as WakerflowsNew } from "@/routes/_authed/_app/wakerflows.new";
-import { Route as Workbench } from "@/routes/_authed/_app/workbench";
-import { Route as AdminApprovals } from "@/routes/_authed/admin/approvals";
-import { Route as AdminApprovalsDescribe } from "@/routes/_authed/admin/approvals_.describe";
-import { Route as AdminApprovalsGuidance } from "@/routes/_authed/admin/approvals_.guidance";
-import { Route as AdminBoundaries } from "@/routes/_authed/admin/boundaries";
-import { Route as AdminBoundariesNew } from "@/routes/_authed/admin/boundaries_.new";
-import { Route as AdminComponents } from "@/routes/_authed/admin/components/index";
-import { Route as AdminComputers } from "@/routes/_authed/admin/computers";
-import { Route as AdminCredentials } from "@/routes/_authed/admin/credentials";
-import { Route as AdminCredentialsNew } from "@/routes/_authed/admin/credentials_.new";
-import { Route as AdminIdentityProviders } from "@/routes/_authed/admin/identity-providers";
-import { Route as Admin } from "@/routes/_authed/admin/index";
-import { Route as AdminPermissions } from "@/routes/_authed/admin/permissions";
-import { Route as AdminPermissionsDescribe } from "@/routes/_authed/admin/permissions_.describe";
-import { Route as AdminPlatform } from "@/routes/_authed/admin/platform";
-import { Route as AdminPlayground } from "@/routes/_authed/admin/playground";
-import { Route as AdminPluginsComposio } from "@/routes/_authed/admin/plugins/composio";
-import { Route as AdminPlugins } from "@/routes/_authed/admin/plugins/index";
-import { Route as AdminProviders } from "@/routes/_authed/admin/providers";
-import { Route as AdminSkills } from "@/routes/_authed/admin/skills";
-import { Route as AdminSkillsNew } from "@/routes/_authed/admin/skills_.new";
-import { Route as DesktopReturn } from "@/routes/_authed/desktop-return";
-import { Route as SettingsComputer } from "@/routes/_authed/settings/_personal/computer";
-import { Route as SettingsCredentials } from "@/routes/_authed/settings/_personal/credentials";
-import { Route as SettingsCredentialsNew } from "@/routes/_authed/settings/_personal/credentials_.new";
-import { Route as SettingsSkills } from "@/routes/_authed/settings/_personal/skills";
-import { Route as SettingsSkillsNew } from "@/routes/_authed/settings/_personal/skills_.new";
-import { Route as SettingsApprovals } from "@/routes/_authed/settings/approvals";
-import { Route as SettingsComponentsGallery } from "@/routes/_authed/settings/components-gallery/index";
-import { Route as SettingsDevices } from "@/routes/_authed/settings/devices";
-import { Route as Settings } from "@/routes/_authed/settings/index";
-import { Route as SettingsNotifications } from "@/routes/_authed/settings/notifications";
-import { Route as SettingsPasswords } from "@/routes/_authed/settings/passwords";
-import { Route as SettingsPlans } from "@/routes/_authed/settings/plans";
-import { Route as SettingsThisComputer } from "@/routes/_authed/settings/this-computer";
 /*
  * 第四轮加进来的：地址带参数的那 33 个文件。它们与上面那批没有区别，都是从 `routes/` 里 import 的
  * 真文件路由；区别只在挂载——`update({ path })` 传的是**带 `$` 的模板**（`/bots/$agentId`），
@@ -93,20 +37,75 @@ import { Route as BotResponsibilities } from "@/routes/_authed/_app/bots.$agentI
 import { Route as BotRoutines } from "@/routes/_authed/_app/bots.$agentId.routines";
 import { Route as BotSetup } from "@/routes/_authed/_app/bots.$agentId.setup";
 import { Route as BotSharing } from "@/routes/_authed/_app/bots.$agentId.sharing";
+import { Route as Bots } from "@/routes/_authed/_app/bots.index";
+import { Route as Briefing } from "@/routes/_authed/_app/briefing";
+import { Route as CapabilitiesComponents } from "@/routes/_authed/_app/capabilities.components";
+import { Route as CapabilitiesKnowledge } from "@/routes/_authed/_app/capabilities.knowledge";
+import { Route as CapabilitiesMemory } from "@/routes/_authed/_app/capabilities.memory";
+import { Route as CapabilitiesMine } from "@/routes/_authed/_app/capabilities.mine";
+import { Route as CapabilitiesModels } from "@/routes/_authed/_app/capabilities.models";
+import { Route as CapabilitiesPlugins } from "@/routes/_authed/_app/capabilities.plugins";
+import { Route as CapabilitiesProjects } from "@/routes/_authed/_app/capabilities.projects";
+import { Route as CapabilitiesRoles } from "@/routes/_authed/_app/capabilities.roles";
+import { Route as CapabilitiesSkills } from "@/routes/_authed/_app/capabilities.skills";
+import { Route as CapabilitiesWakerflows } from "@/routes/_authed/_app/capabilities.wakerflows";
 import { Route as ChannelDetail } from "@/routes/_authed/_app/channel/$channelId";
+import { Route as ChannelNew } from "@/routes/_authed/_app/channel/new";
 import { Route as ConnectionDetail } from "@/routes/_authed/_app/connections.$key";
+import { Route as Connections } from "@/routes/_authed/_app/connections.index";
+import { Route as Contacts } from "@/routes/_authed/_app/contacts";
 import { Route as GroupDetail } from "@/routes/_authed/_app/group/$channelId";
+import { Route as GroupNew } from "@/routes/_authed/_app/group/new";
+import { Route as Pipelines } from "@/routes/_authed/_app/pipelines";
+import { Route as Tasks } from "@/routes/_authed/_app/tasks";
 import { Route as TaskDetail } from "@/routes/_authed/_app/tasks.$taskId";
+import { Route as TeamBots } from "@/routes/_authed/_app/team-bots";
 import { Route as WakerflowDetail } from "@/routes/_authed/_app/wakerflows.$flowId";
 import { Route as WakerflowImport } from "@/routes/_authed/_app/wakerflows.import.$token";
+import { Route as WakerflowsIndex } from "@/routes/_authed/_app/wakerflows.index";
+import { Route as WakerflowsNew } from "@/routes/_authed/_app/wakerflows.new";
+import { Route as Workbench } from "@/routes/_authed/_app/workbench";
+import { Route as AdminApprovals } from "@/routes/_authed/admin/approvals";
+import { Route as AdminApprovalsDescribe } from "@/routes/_authed/admin/approvals_.describe";
+import { Route as AdminApprovalsGuidance } from "@/routes/_authed/admin/approvals_.guidance";
+import { Route as AdminBoundaries } from "@/routes/_authed/admin/boundaries";
 import { Route as AdminBoundaryDetail } from "@/routes/_authed/admin/boundaries_.$index";
+import { Route as AdminBoundariesNew } from "@/routes/_authed/admin/boundaries_.new";
 import { Route as AdminComponentDetail } from "@/routes/_authed/admin/components/$name";
+import { Route as AdminComponents } from "@/routes/_authed/admin/components/index";
+import { Route as AdminComputers } from "@/routes/_authed/admin/computers";
+import { Route as AdminCredentials } from "@/routes/_authed/admin/credentials";
+import { Route as AdminCredentialsNew } from "@/routes/_authed/admin/credentials_.new";
+import { Route as AdminIdentityProviders } from "@/routes/_authed/admin/identity-providers";
+import { Route as Admin } from "@/routes/_authed/admin/index";
+import { Route as AdminPermissions } from "@/routes/_authed/admin/permissions";
+import { Route as AdminPermissionsDescribe } from "@/routes/_authed/admin/permissions_.describe";
+import { Route as AdminPlatform } from "@/routes/_authed/admin/platform";
+import { Route as AdminPlayground } from "@/routes/_authed/admin/playground";
 import { Route as AdminPluginDetail } from "@/routes/_authed/admin/plugins/$key";
 import { Route as AdminPluginBots } from "@/routes/_authed/admin/plugins/$key_.bots.$agentId";
 import { Route as AdminPluginTools } from "@/routes/_authed/admin/plugins/$key_.tools.$tool";
+import { Route as AdminPluginsComposio } from "@/routes/_authed/admin/plugins/composio";
+import { Route as AdminPlugins } from "@/routes/_authed/admin/plugins/index";
+import { Route as AdminProviders } from "@/routes/_authed/admin/providers";
+import { Route as AdminSkills } from "@/routes/_authed/admin/skills";
 import { Route as AdminSkillDetail } from "@/routes/_authed/admin/skills_.$slug";
+import { Route as AdminSkillsNew } from "@/routes/_authed/admin/skills_.new";
+import { Route as SettingsComputer } from "@/routes/_authed/settings/_personal/computer";
+import { Route as SettingsCredentials } from "@/routes/_authed/settings/_personal/credentials";
+import { Route as SettingsCredentialsNew } from "@/routes/_authed/settings/_personal/credentials_.new";
+import { Route as SettingsSkills } from "@/routes/_authed/settings/_personal/skills";
 import { Route as SettingsSkillDetail } from "@/routes/_authed/settings/_personal/skills_.$slug";
+import { Route as SettingsSkillsNew } from "@/routes/_authed/settings/_personal/skills_.new";
+import { Route as SettingsApprovals } from "@/routes/_authed/settings/approvals";
 import { Route as GalleryDetail } from "@/routes/_authed/settings/components-gallery/$name";
+import { Route as SettingsComponentsGallery } from "@/routes/_authed/settings/components-gallery/index";
+import { Route as SettingsDevices } from "@/routes/_authed/settings/devices";
+import { Route as Settings } from "@/routes/_authed/settings/index";
+import { Route as SettingsNotifications } from "@/routes/_authed/settings/notifications";
+import { Route as SettingsPasswords } from "@/routes/_authed/settings/passwords";
+import { Route as SettingsPlans } from "@/routes/_authed/settings/plans";
+import { Route as SettingsThisComputer } from "@/routes/_authed/settings/this-computer";
 import { Route as SignInDetail } from "@/routes/_authed/sign-in/$requestId";
 import {
   type RouteReport,
@@ -202,7 +201,6 @@ const ROUTES = new Map<string, unknown>([
   ["/channel/new", ChannelNew],
   ["/connections", Connections],
   ["/contacts", Contacts],
-  ["/desktop-return", DesktopReturn],
   ["/group/new", GroupNew],
   ["/pipelines", Pipelines],
   ["/settings", Settings],
@@ -594,8 +592,7 @@ function fillParams(
     if (!value) throw new Error(`${at} 的 ${name} 没有夹具值`);
     return value;
   });
-  if (filled.includes("$"))
-    throw new Error(`${at} 的 splat 没有夹具值`);
+  if (filled.includes("$")) throw new Error(`${at} 的 splat 没有夹具值`);
   return filled;
 }
 

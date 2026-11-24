@@ -515,9 +515,6 @@ export const DESKTOP_SELF_PROCESSES: readonly string[] = [
   "熊宝数字员工 设备端",
   // desktop-device/src-tauri/src/sidecar.rs: SIDECAR.
   "xiongbao-runner",
-  // desktop/src-tauri: the Cargo bin (its executable on a Mac and on Windows) and the productName.
-  "openbot-desktop",
-  "XiongBao",
 ];
 /** Terminals: what is typed or pasted there runs as a command. */
 export const DESKTOP_TERMINAL_PROCESSES: readonly string[] = [

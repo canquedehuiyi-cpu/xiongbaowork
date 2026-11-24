@@ -8,9 +8,8 @@ import ts from "typescript";
  * and the company OpenBot connects through is never named on a screen, the admin's included (see
  * .claude/skills/openbot-copy).
  *
- * Read are the string literals, template text and JSX text of the desktop window, the app, the
- * Recorder extension and the shared modules both sides render, the string literals of the
- * desktop's native side, and the server's plugin routes and plugin store, which write every
+ * Read are the string literals, template text and JSX text of the app, the Recorder extension and
+ * the shared modules both sides render, and the server's plugin routes and plugin store, which write every
  * sentence the plugin routes send to the browser. A template that interpolates the broker's
  * display name (`BROKERED_PROFILE[…].vendor`, `activeVendor`) counts as naming it.
  *
@@ -157,55 +156,9 @@ function scriptText(path: string): string[] {
   return found;
 }
 
-/**
- * Every string literal in a Rust file's own code that names Composio. Comments and every
- * `#[cfg(test)] mod … { … }` block are passed over, and a literal inside `eprintln!` or `println!`
- * is a log line.
- */
-function nativeText(path: string): string[] {
-  const text = readFileSync(path, "utf8");
-  const found: string[] = [];
-  // Strings, comments and braces in one pass, so neither a `//` nor a brace inside a string counts.
-  const token =
-    /#\[cfg\(test\)\]\s*mod \w+\s*\{|(?<!\w)b?r(#*)"[\s\S]*?"\1|"(?:\\[\s\S]|[^"\\])*"|\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\])'|[{}]/g;
-  let depth = 0;
-  // The depth a test module opened at, while inside one.
-  let tests: number | null = null;
-  for (const match of text.matchAll(token)) {
-    const literal = match[0];
-    if (literal.startsWith("#")) {
-      tests ??= depth;
-      depth += 1;
-      continue;
-    }
-    if (literal === "{") depth += 1;
-    if (literal === "}") {
-      depth -= 1;
-      if (depth === tests) tests = null;
-    }
-    if (tests !== null || !/^b?r?#*"/.test(literal)) continue;
-    if (!WORD.test(literal)) continue;
-    const before = text.slice(0, match.index);
-    const statement = before.slice(
-      Math.max(
-        before.lastIndexOf(";"),
-        before.lastIndexOf("{"),
-        before.lastIndexOf("}"),
-      ),
-    );
-    if (/\b(e?println|eprint|print|debug_assert\w*)!\s*\(/.test(statement))
-      continue;
-    const line = before.split("\n").length;
-    found.push(
-      `${relative(REPO, path)}:${line}  ${literal.replace(/\\\n\s*/g, "")}`,
-    );
-  }
-  return found;
-}
-
 function shown(): string[] {
   const found = [
-    ...["desktop/src", "app/src", "extension/src", "shared"].flatMap((root) => [
+    ...["app/src", "extension/src", "shared"].flatMap((root) => [
       ...files(join(REPO, root), /\.tsx?$/),
     ]),
     // This tree keeps the plugin routes and the plugin store as one file each, where upstream split
@@ -213,15 +166,10 @@ function shown(): string[] {
     join(REPO, "server/src/plugins/routes.ts"),
     join(REPO, "server/src/plugins/store.ts"),
   ].flatMap(scriptText);
-  found.push(
-    ...[...files(join(REPO, "desktop/src-tauri/src"), /\.rs$/)].flatMap(
-      nativeText,
-    ),
-  );
   return found;
 }
 
-test("no text a person reads in the desktop app, the app or the plugin routes says Composio", () => {
+test("no text a person reads in the app or the plugin routes says Composio", () => {
   expect(shown().filter((hit) => !isAdminOnly(hit))).toEqual([]);
 });
 

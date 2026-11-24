@@ -1,11 +1,9 @@
 import { expect, test } from "bun:test";
 import { partLabel } from "@/lib/desktop/part-names";
-import { partLabel as statusWindowLabel } from "../../desktop/src/partNames";
 
 /**
- * The name a person reads for each container This computer and the desktop app's Status window
- * list. Real names, as Compose and k3d give them on an installation, mapped to the part of OpenBot
- * each is. The two screens keep a copy each, so both are held to this one table.
+ * The name a person reads for each container the This computer page lists. Real names, as Compose
+ * and k3d give them on an installation, mapped to the part of OpenBot each is.
  */
 const NAMES: [string, "bots" | "back-end", string][] = [
   ["openbot-desktop-server-1", "bots", "Front end and Bots"],
@@ -38,7 +36,6 @@ test.each([...NAMES, ...UNKNOWN])(
   "%s under %s reads %s",
   (name, group, label) => {
     expect(partLabel(name, group)).toBe(label);
-    expect(statusWindowLabel(name, group)).toBe(label);
   },
 );
 

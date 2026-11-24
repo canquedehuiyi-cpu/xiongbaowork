@@ -276,12 +276,6 @@
     "note": "Recorder 与网页的协议值；Task 14 双认后改名"
   },
   {
-    "word": "openbot-desktop",
-    "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.12，届时一起删"
-  },
-  {
     "word": "openbot-unreachable",
     "category": "peer-protocol",
     "plan": "rewrite",
@@ -364,12 +358,6 @@
     "category": "persisted-data",
     "plan": "rewrite",
     "note": "浏览器存储键前缀；Task 7"
-  },
-  {
-    "word": "openbot://open",
-    "category": "upstream-shell-only",
-    "plan": "keep",
-    "note": "只在不交付的上游桌面里使用"
   },
   {
     "word": "openbot:app-access-request",

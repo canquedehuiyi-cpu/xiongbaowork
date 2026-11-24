@@ -1,12 +1,5 @@
 [
   {
-    "file": "app/src/components/desktop/desktop-return.tsx",
-    "text": "\"openbot://open\"",
-    "reason": "persisted-identifier: URL scheme the upstream desktop app registers",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "app/src/components/admin/controls/recording-section.tsx",
     "text": "They are tagged openbot.surface.",
     "reason": "persisted-identifier: names the real OTel attribute key (Task 9 keeps openbot.* attributes)",
@@ -65,7 +58,7 @@
   {
     "file": "app/src/lib/desktop/part-names.ts",
     "text": "bots: \"OpenBot service\"",
-    "reason": "upstream-shell-only: upstream Desktop shell only, kept in sync with desktop/src/partNames.ts (desktop-part-names.test.ts holds the two equal)",
+    "reason": "upstream-shell-only: upstream Desktop shell only (desktop-part-names.test.ts pins the names)",
     "category": "upstream-shell-only",
     "plan": "keep"
   },
@@ -758,7 +751,7 @@
   {
     "file": "shared/desktop-updates.ts",
     "text": "This version of OpenBot doesn't update itself.",
-    "reason": "upstream-shell-only: drawn only inside upstream Desktop; desktop/src/App.test.tsx (never touched) pins the exact words",
+    "reason": "upstream-shell-only: drawn only inside upstream Desktop",
     "category": "upstream-shell-only",
     "plan": "keep"
   },
@@ -1181,12 +1174,5 @@
     "reason": "developer-only: development override variable read by the device shell, L1-20 (Task 13)",
     "category": "operator-visible",
     "plan": "rewrite"
-  },
-  {
-    "file": "shared/desktop-control.ts",
-    "text": "\"openbot-desktop\",",
-    "reason": "persisted-identifier: 桌面端自己的可执行文件名（desktop/src-tauri 的 Cargo bin，Mac 和 Windows 上的进程名），用来把桌面端自己的窗口挡在员工的无询问写之外；不是旧名，不到期",
-    "category": "persisted-data",
-    "plan": "keep"
   }
 ]

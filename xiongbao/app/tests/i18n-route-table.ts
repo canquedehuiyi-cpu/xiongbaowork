@@ -283,19 +283,12 @@ export const SCANNED: readonly Scanned[] = [
    *   `.card { font: 14px }`、`"type": "object"` —— 翻成中文模板就不能用了。所以改的是量具：
    *   跳过 `spellCheck={false}` 的 textarea（写这个属性就是在声明「别当自然语言看」）。
    *   跳过之后它 16 行、0 行英文。
-   * - `/desktop-return` 是真没翻：`Back to …`、`… opens on its own. You can close this tab.`、
-   *   `Open …` 三句，翻成中文后 6 行。它同时在验一件判据的事——产品英文名是两词
-   *   `XiongBao Work`，品牌名白名单只列 `xiongbao` 会剩下一个 `Work` 被判成英文。
+   * - `/desktop-return` 页面（整栈桌面的「回到应用」中转页）已随整栈桌面删除。
    */
   {
     at: "/admin/playground",
     file: "_authed/admin/playground.tsx",
     minLines: { pending: 16, loaded: 16, failed: 16 },
-  },
-  {
-    at: "/desktop-return",
-    file: "_authed/desktop-return.tsx",
-    minLines: { pending: 6, loaded: 6, failed: 6 },
   },
 
   /*
@@ -494,7 +487,7 @@ export const SCANNED: readonly Scanned[] = [
  * 取消掉的两档，都记在这里，别再发明回来：
  * - 「不足下限」：下限改成逐路由配（`Scanned.minLines`），那 26 个文件已在扫表里。
  *   遇到「页面天生太小」，配下限，不要往台账里塞。
- * - 「待翻」：`/admin/playground` 与 `/desktop-return` 已翻完并进扫表（2026-11-16 第三轮）。
+ * - 「待翻」：`/admin/playground` 已翻完并进扫表（2026-11-16 第三轮）。
  *   遇到「有英文」，翻它；翻不动就写在这儿并说明为什么翻不动，别只写「以后补」。
  * - 「参数」：33 个带 `$id` 的文件已进扫表（2026-11-16 第四轮）。理由原本是「要真实 id」，实际是
  *   「夹具没造」——量具保留路由自己的 `$` 模板、`initialEntries` 用夹具值替换，参数就有真值了。

@@ -7,10 +7,8 @@ import ts from "typescript";
  * Guard: no text a person reads names Intelligence. To a person it is all OpenBot, and the part of
  * OpenBot they mean is the back end (see .claude/skills/openbot-copy).
  *
- * Read are the string literals, template text and JSX text of the desktop window, the app, the
- * server, the Recorder extension and the shared Recorder disclosure, and the string literals of the
- * desktop's native side, whose problems, notices, progress lines and menu items reach the window and
- * the tray.
+ * Read are the string literals, template text and JSX text of the app, the server, the Recorder
+ * extension and the shared Recorder disclosure.
  * Not read: code identifiers and env names (`intelligenceStack`, `INTELLIGENCE_API_URL`; the check
  * is for the capitalised word), comments, tests, log calls, and docs/ and charts/, which operators
  * read to configure Intelligence by name.
@@ -146,64 +144,13 @@ function scriptText(path: string): string[] {
   return found;
 }
 
-/**
- * Every string literal in a Rust file's own code that names Intelligence. Comments and every
- * `#[cfg(test)] mod … { … }` block are passed over, and a literal inside `eprintln!` or `println!`
- * is a log line.
- */
-function nativeText(path: string): string[] {
-  const text = readFileSync(path, "utf8");
-  const found: string[] = [];
-  // Strings, comments and braces in one pass, so neither a `//` nor a brace inside a string counts.
-  const token =
-    /#\[cfg\(test\)\]\s*mod \w+\s*\{|(?<!\w)b?r(#*)"[\s\S]*?"\1|"(?:\\[\s\S]|[^"\\])*"|\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\])'|[{}]/g;
-  let depth = 0;
-  // The depth a test module opened at, while inside one.
-  let tests: number | null = null;
-  for (const match of text.matchAll(token)) {
-    const literal = match[0];
-    if (literal.startsWith("#")) {
-      tests ??= depth;
-      depth += 1;
-      continue;
-    }
-    if (literal === "{") depth += 1;
-    if (literal === "}") {
-      depth -= 1;
-      if (depth === tests) tests = null;
-    }
-    if (tests !== null || !/^b?r?#*"/.test(literal)) continue;
-    if (!WORD.test(literal)) continue;
-    const before = text.slice(0, match.index);
-    const statement = before.slice(
-      Math.max(
-        before.lastIndexOf(";"),
-        before.lastIndexOf("{"),
-        before.lastIndexOf("}"),
-      ),
-    );
-    if (/\b(e?println|eprint|print|debug_assert\w*)!\s*\(/.test(statement))
-      continue;
-    const line = before.split("\n").length;
-    found.push(
-      `${relative(REPO, path)}:${line}  ${literal.replace(/\\\n\s*/g, "")}`,
-    );
-  }
-  return found;
-}
-
 function shown(): string[] {
   const found = [
-    ...["desktop/src", "app/src", "server/src", "extension/src"].flatMap(
-      (root) => [...files(join(REPO, root), /\.tsx?$/)],
-    ),
+    ...["app/src", "server/src", "extension/src"].flatMap((root) => [
+      ...files(join(REPO, root), /\.tsx?$/),
+    ]),
     join(REPO, "shared/recorder-disclosure.ts"),
   ].flatMap(scriptText);
-  found.push(
-    ...[...files(join(REPO, "desktop/src-tauri/src"), /\.rs$/)].flatMap(
-      nativeText,
-    ),
-  );
   return found;
 }
 
@@ -212,7 +159,7 @@ const isNotShown = (hit: string) =>
     (entry) => hit.startsWith(`${entry.file}:`) && hit.includes(entry.text),
   );
 
-test("no text a person reads in the desktop app, the app, the server or the Recorder says Intelligence", () => {
+test("no text a person reads in the app, the server or the Recorder says Intelligence", () => {
   expect(shown().filter((hit) => !isNotShown(hit))).toEqual([]);
 });
 
@@ -232,5 +179,4 @@ test("the scan finds what it is for", () => {
   const sample = join(import.meta.dir, "fixtures", "intelligence-copy");
   expect(scriptText(join(sample, "shown.tsx")).length).toBe(4);
   expect(scriptText(join(sample, "logged.ts"))).toEqual([]);
-  expect(nativeText(join(sample, "native.rs")).length).toBe(2);
 });

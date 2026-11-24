@@ -2,12 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  STORY_COUNT,
-  type Facts,
   checkStories,
+  type Facts,
   jobFor,
   loadFacts,
   parseStories,
+  STORY_COUNT,
 } from "./stories-evidence";
 
 const PIN = "c905e0d3";
@@ -142,7 +142,7 @@ describe("jobFor", () => {
       "e2e-wakerflow",
     );
     expect(jobFor("scripts/ci/windows-runner-probe.ts", FACTS)).toBe(
-      "desktop-windows",
+      "win1-windows",
     );
   });
 });

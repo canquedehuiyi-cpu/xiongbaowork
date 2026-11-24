@@ -1,6 +1,5 @@
 import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import { client } from "@/lib/client";
-import { desktopConsentQuery } from "@/lib/desktop/shell";
 import { pluginKeys } from "./queries";
 import type { SharedUseApproval } from "./shared-use";
 
@@ -614,8 +613,8 @@ async function startConnect(
    */
   const path =
     account && !another
-      ? `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}&account=${encodeURIComponent(account)}${desktopConsentQuery()}`
-      : `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}${another ? "&another=1" : ""}${desktopConsentQuery()}`;
+      ? `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}&account=${encodeURIComponent(account)}`
+      : `/api/plugins/servers/${encodeURIComponent(serverId)}/connect?returnTo=${returnTo}${another ? "&another=1" : ""}`;
   const response = await client(path, { method: "POST", fallback });
   // Read as `client` reads an envelope: a body that is not an object is a failed request.
   const body = (await response.json().catch(() => null)) as unknown;

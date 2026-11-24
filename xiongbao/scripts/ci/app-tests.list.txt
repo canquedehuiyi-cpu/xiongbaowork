@@ -293,7 +293,6 @@ tests/design-tokens.test.ts
 tests/desktop-notify-prompt.test.tsx
 tests/desktop-open-requests.test.tsx
 tests/desktop-part-names.test.ts
-tests/desktop-return.test.tsx
 tests/desktop-speech.test.ts
 tests/detail-panel-preview-routes.test.tsx
 tests/detail-panel-preview.test.tsx
@@ -402,7 +401,6 @@ tests/onboarding-pictures.test.tsx
 tests/onboarding-route.test.tsx
 tests/onboarding-sources.test.tsx
 tests/onboarding-window-buttons.test.tsx
-tests/onboarding-window-drag.test.tsx
 tests/orb-palette.test.ts
 tests/paced-reveal-clock.test.tsx
 tests/paced-reveal-hidden.test.tsx

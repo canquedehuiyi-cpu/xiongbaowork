@@ -54,8 +54,6 @@ jobs:
       # were already there when the check was turned on. New ones are new defects.
       - name: server/tests types (baselined)
         run: bun run typecheck:tests
-      - name: Desktop version tracks the release version
-        run: bun desktop/scripts/desktop-version.ts check
       # The chart's default image tag is its appVersion, and a release must move both together. They
       # drifted once, appVersion left pointing at a tag that was never published, and a default
       # `helm install` sat in ImagePullBackOff. This refuses a tree where package.json (the last
@@ -166,14 +164,6 @@ jobs:
       - run: |
           bun run generate:app-config
           bun test app/tests/tool-line-reduced-motion.test.tsx app/tests/onboarding-window-buttons.test.tsx app/tests/onboarding-orb-room.test.tsx app/tests/transcript-rail-clearance.test.tsx app/tests/a2ui-frame.test.tsx
-        env:
-          OPENBOT_APP_BROWSER: '1'
-      # The desktop setup window's, for the same reason: the AI step's form holding still while the
-      # install behind it comes and goes. It bundles the window from the desktop's own dependencies.
-      - run: bun install --frozen-lockfile
-        working-directory: desktop
-      - run: bun test src/setupLayout.browser.test.ts
-        working-directory: desktop
         env:
           OPENBOT_APP_BROWSER: '1'
       # Headed is the default for hosted computers, so it is tested as one: the computer starting its
@@ -507,10 +497,6 @@ jobs:
       # from that Bot's own dependency tree.
       - run: bun install --frozen-lockfile
         working-directory: agent-mastra
-      # Same for the desktop app: root test discovery imports its React tests, whose JSX runtime is
-      # pinned by the desktop lockfile rather than the root one.
-      - run: bun install --frozen-lockfile
-        working-directory: desktop
       # The same migrator a deployment runs, rather than `drizzle-kit migrate`: it is the one that
       # refuses a database holding a stamp newer than the migrations it is about to walk past
       # (server/src/db/migration-reach.ts), and a CI database that is ever reused rather than

@@ -597,15 +597,13 @@ describe("desktop-control protocol", () => {
  * The final whole-branch review (final-fix-brief.md): C1, I1, I3 and M2. Every one only asks more.
  */
 describe("desktop-control: the final review's fixes", () => {
-  test("C1: the device app, the runner, the desktop client and terminals are told apart by process", () => {
+  test("C1: the device app, the runner and terminals are told apart by process", () => {
     // The packaged names: desktop-device/src-tauri/tauri.conf.json (productName, mainBinaryName),
-    // sidecar.rs (SIDECAR), desktop/src-tauri (productName, the Cargo bin).
+    // sidecar.rs (SIDECAR).
     expect([...DESKTOP_SELF_PROCESSES]).toEqual([
       "xiongbao-device",
       "熊宝数字员工 设备端",
       "xiongbao-runner",
-      "openbot-desktop",
-      "XiongBao",
     ]);
     expect([...DESKTOP_TERMINAL_PROCESSES]).toEqual([
       "Terminal",
@@ -644,9 +642,6 @@ describe("desktop-control: the final review's fixes", () => {
       ...DESKTOP_TERMINAL_PROCESSES,
       "xiongbao-device.exe",
       "XIONGBAO-RUNNER.EXE",
-      "openbot-desktop.exe",
-      "XiongBao.app",
-      "/Applications/XiongBao.app",
       "C:\\Program Files\\Xiongbao Device\\xiongbao-device.exe",
       "/opt/xiongbao-device/xiongbao-runner",
       "POWERSHELL.EXE",
@@ -855,7 +850,7 @@ describe("desktop-control: the final review's fixes", () => {
 });
 
 describe("desktop-control: the product's own processes are its packaged names", () => {
-  test("C1: the device app's binary, product name and sidecar, and the desktop client's, are all listed", async () => {
+  test("C1: the device app's binary, product name and sidecar are all listed", async () => {
     const { readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
     const read = (path: string) =>
@@ -865,18 +860,13 @@ describe("desktop-control: the product's own processes are its packaged names", 
       read("desktop-device/src-tauri/tauri.linux.conf.json"),
     );
     const sidecar = read("desktop-device/src-tauri/src/sidecar.rs");
-    const client = JSON.parse(read("desktop/src-tauri/tauri.conf.json"));
-    const clientCargo = read("desktop/src-tauri/Cargo.toml");
     const constant = (name: string) =>
       new RegExp(`pub const ${name}: &str = "([^"]+)";`).exec(sidecar)?.[1];
-    const bin = /\[\[bin\]\]\s*name = "([^"]+)"/.exec(clientCargo)?.[1];
     for (const name of [
       device.mainBinaryName,
       device.productName,
       deviceLinux.productName,
       constant("SIDECAR"),
-      client.productName,
-      bin,
     ])
       expect({
         name,

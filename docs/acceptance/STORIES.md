@@ -8,7 +8,7 @@
 根 `tests/*` 与 `scripts/**/*.test.ts` 由 `repository tests (xiongbao/tests)` 跑；
 `desktop-device/tests/*` 与设备端 `cargo test --locked`（含 `desktop-device/src-tauri/src/roots.rs`）
 由 `device shell tests` 跑（后者带「跑了 0 个测试即报错」的守卫）；`scripts/e2e/wakerflow-lifecycle.ts`
-由 `e2e-wakerflow` 跑；`scripts/ci/windows-runner-probe.ts` 由 `desktop-windows` 跑；
+由 `e2e-wakerflow` 跑；`scripts/ci/windows-runner-probe.ts` 由 `win1-windows` 跑；
 `scripts/ci/*.test.mjs` 由 `static` 跑；`desktop-device/scripts/verify-*` 是**发布校验脚本本身**，
 不是测试，其行为由 `device-release-workflow.test.mjs` 断言。
 该提交上 `main` CI **46/46 全绿**（run [44230326398](https://github.com/canquedehuiyi-cpu/xiongbaowork/actions/runs/44230326398)）。

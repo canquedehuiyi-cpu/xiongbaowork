@@ -30,12 +30,6 @@
     "note": "设备端环境变量名，随报错文字出现；Task 13"
   },
   {
-    "word": "openbot-desktop",
-    "category": "persisted-data",
-    "plan": "keep",
-    "note": "桌面端自己的可执行文件名（desktop/src-tauri 的 Cargo bin），shared/desktop-control.ts 据此把桌面端自己的窗口挡在员工的无询问写之外；不是旧名，不到期"
-  },
-  {
     "word": "openbotUrl:_",
     "category": "peer-protocol",
     "plan": "keep",

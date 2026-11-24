@@ -1156,103 +1156,6 @@ jobs:
           name: desktop-probe-${{ matrix.os }}-log
           path: ${{ runner.temp }}/desktop-probe.log
 
-  # Desktop shell on Windows: frontend typecheck, Bun tests and build (Tauri embeds ../dist at
-  # compile time), then the Rust regression tests. Ignored live tests stay off; no secrets used.
-  desktop-windows:
-    name: desktop tests (windows-latest)
-    runs-on: windows-latest
-    timeout-minutes: 60
-    defaults:
-      run:
-        shell: pwsh
-        working-directory: xiongbao/desktop
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.4.4
-      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067
-        with:
-          toolchain: stable
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
-        with:
-          workspaces: xiongbao/desktop/src-tauri
-          key: windows
-      - name: Install desktop from its own frozen lockfile (no lifecycle scripts)
-        run: bun install --frozen-lockfile --ignore-scripts
-      - name: Typecheck
-        run: bun run typecheck
-      # Bash (Git Bash on the runner), not pwsh: Bun writes its report to stderr, and pwsh would turn
-      # each redirected stderr line into an ErrorRecord before Tee-Object formats it into the log.
-      # The release and signing scripts' tests (upstream v1.0.0) drive bash, tar and xcrun and build
-      # POSIX paths: they are for the macOS and Linux runners that publish, as upstream runs them. They
-      # run in desktop-scripts below; everything else of the desktop runs here, on Windows.
-      - name: Bun tests
-        shell: bash
-        run: >-
-          bun test
-          --path-ignore-patterns='scripts/cli-bundle.test.ts'
-          --path-ignore-patterns='scripts/prefetch-tauri-tools.test.ts'
-          --path-ignore-patterns='scripts/publish-signed-*.test.ts'
-          --path-ignore-patterns='scripts/release-cli-bundle.test.ts'
-          --path-ignore-patterns='scripts/staple-with-retry.test.ts'
-          > "$RUNNER_TEMP/desktop-bun.log" 2>&1
-      - name: Zero-fail gate (head only, no baseline counterpart)
-        if: always()
-        shell: bash
-        working-directory: xiongbao
-        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/desktop-bun.log" 'desktop Bun tests on Windows (head only)'
-      - name: Print desktop Bun test diagnostics (credentials masked)
-        if: failure()
-        shell: bash
-        working-directory: xiongbao
-        run: bash scripts/ci/print-diagnostics.sh "$RUNNER_TEMP/desktop-bun.log"
-      - name: Frontend build (frontendDist for the Tauri compile)
-        run: bun run build
-      - name: Rust regression tests (lib and bins, --locked)
-        working-directory: xiongbao/desktop/src-tauri
-        shell: bash
-        run: |
-          cargo test --locked --lib --bins 2>&1 | tee "$RUNNER_TEMP/desktop-cargo.log"
-          # cargo exits 0 when a target has no tests; require that something actually passed.
-          passed=$(sed -nE 's/^test result: ok\. ([0-9]+) passed.*/\1/p' "$RUNNER_TEMP/desktop-cargo.log" | awk '{s+=$1} END {print s+0}')
-          echo "Rust tests passed: $passed"
-          [ "$passed" -gt 0 ] || { echo '::error::cargo test ran zero tests'; exit 1; }
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
-        with:
-          name: desktop-windows-logs
-          path: ${{ runner.temp }}/desktop-*.log
-
-  desktop-scripts:
-    name: desktop release scripts (ubuntu-latest)
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: xiongbao/desktop
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.4.4
-      - name: Install desktop from its own frozen lockfile (no lifecycle scripts)
-        run: bun install --frozen-lockfile --ignore-scripts
-      - name: Release and signing script tests (POSIX)
-        run: >-
-          bun test scripts/cli-bundle.test.ts scripts/prefetch-tauri-tools.test.ts
-          scripts/publish-signed-mac.test.ts scripts/publish-signed-windows.test.ts
-          scripts/release-cli-bundle.test.ts scripts/staple-with-retry.test.ts
-          > "$RUNNER_TEMP/desktop-scripts.log" 2>&1
-      - name: Zero-fail gate (head only, no baseline counterpart)
-        if: always()
-        working-directory: xiongbao
-        run: bun scripts/ci/test-report.mjs "$RUNNER_TEMP/no-baseline.log" "$RUNNER_TEMP/desktop-scripts.log" 'desktop release scripts (head only)'
-
   # F2 stage 1: the device tray app (desktop-device/, 熊宝数字员工 设备端). The Rust supervisor,
   # process-tree and autostart tests run on both systems the stage targets; they need no runner
   # binary (the sidecar is only added to the bundle config) and no secrets.
@@ -1317,7 +1220,7 @@ jobs:
   # F2 stage 1: an UNSIGNED Linux installer of the device app, uploaded as an artifact for manual
   # install tests (the clean-VM checks are manual, gate 7). No signing, notarization, updater or
   # release here. The runner sidecar is compiled with the stage 0 flags; the Tauri CLI is the one
-  # desktop/bun.lock pins, installed from that frozen lockfile.
+  # tools/tauri-cli/bun.lock pins, installed from that frozen lockfile.
   device-bundle-linux:
     name: device app unsigned deb (ubuntu-latest)
     runs-on: ubuntu-latest
@@ -1347,8 +1250,8 @@ jobs:
       # The runner's own dependencies (playwright-core, agent-computer's yaml) for the compile.
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: xiongbao/desktop
+      - name: Install the pinned Tauri CLI from its own frozen lockfile (no lifecycle scripts)
+        working-directory: xiongbao/tools/tauri-cli
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
@@ -1359,7 +1262,7 @@ jobs:
         run: bun scripts/brand/third-party-notices.ts
       - name: Bundle the unsigned deb
         working-directory: xiongbao/desktop-device
-        run: ../desktop/node_modules/.bin/tauri build --ci --bundles deb --config src-tauri/tauri.bundle.conf.json
+        run: ../tools/tauri-cli/node_modules/.bin/tauri build --ci --bundles deb --config src-tauri/tauri.bundle.conf.json
       - name: Check the package installs and carries the runner
         working-directory: xiongbao/desktop-device/src-tauri/target/release/bundle/deb
         run: |
@@ -1414,8 +1317,8 @@ jobs:
       # The runner's own dependencies (playwright-core, agent-computer's yaml) for the compile.
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: xiongbao/desktop
+      - name: Install the pinned Tauri CLI from its own frozen lockfile (no lifecycle scripts)
+        working-directory: xiongbao/tools/tauri-cli
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
@@ -1457,7 +1360,7 @@ jobs:
         # this job on PRs that touched nothing here. Retry only that failure; any other error throws.
         run: |
           for ($attempt = 1; $attempt -le 4; $attempt++) {
-            ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json 2>&1 | Tee-Object -Variable output
+            ../tools/tauri-cli/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json 2>&1 | Tee-Object -Variable output
             if ($LASTEXITCODE -eq 0) { break }
             if ($attempt -lt 4 -and ($output | Out-String) -match 'http status: 5\d\d') {
               Write-Host "NSIS download failed with a 5xx (attempt $attempt); retrying in 30s"
@@ -1497,7 +1400,7 @@ jobs:
           DEVICE_TEST_SIGNING_THUMBPRINT: ${{ steps.rehearsal-cert.outputs.thumbprint }}
         run: |
           Remove-Item src-tauri/target/release/bundle/nsis -Recurse -Force
-          ../desktop/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.windows-signing.conf.json
+          ../tools/tauri-cli/node_modules/.bin/tauri build --ci --bundles nsis --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.windows-signing.conf.json
           if ($LASTEXITCODE -ne 0) { throw "tauri build exited $LASTEXITCODE" }
       - name: Signing rehearsal - verify, and refuse the wrong publisher and the unsigned label
         working-directory: xiongbao/desktop-device
@@ -1561,8 +1464,8 @@ jobs:
           key: device-bundle-macos
       - name: Install root workspaces from the frozen lockfile (no lifecycle scripts)
         run: bun install --frozen-lockfile --ignore-scripts
-      - name: Install the pinned Tauri CLI from desktop's frozen lockfile (no lifecycle scripts)
-        working-directory: xiongbao/desktop
+      - name: Install the pinned Tauri CLI from its own frozen lockfile (no lifecycle scripts)
+        working-directory: xiongbao/tools/tauri-cli
         run: bun install --frozen-lockfile --ignore-scripts
       - name: Compile the runner sidecar
         run: bun desktop-device/scripts/build-sidecar.ts
@@ -1575,7 +1478,7 @@ jobs:
         working-directory: xiongbao/desktop-device
         env:
           APPLE_SIGNING_IDENTITY: "-"
-        run: ../desktop/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
+        run: ../tools/tauri-cli/node_modules/.bin/tauri build --ci --bundles app,dmg --config src-tauri/tauri.bundle.conf.json --config src-tauri/tauri.agent-desktop-macos.conf.json
       - name: Check the bundle, the runner inside it, and that it is unsigned
         working-directory: xiongbao/desktop-device
         run: |

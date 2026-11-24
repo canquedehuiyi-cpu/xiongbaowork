@@ -191,12 +191,6 @@
     "reason": "品牌白名单：xiongbao/server/src/plugins/shared-accounts.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "\"openbot-desktop\",",
-    "file": "xiongbao/shared/desktop-control.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/shared/desktop-control.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "\"openbot-learning-\"",
     "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
@@ -213,12 +207,6 @@
     "file": "xiongbao/server/src/routing/model.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/server/src/routing/model.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "\"openbot://open\"",
-    "file": "xiongbao/app/src/components/desktop/desktop-return.tsx",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/app/src/components/desktop/desktop-return.tsx 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "\"openbot:%\"",

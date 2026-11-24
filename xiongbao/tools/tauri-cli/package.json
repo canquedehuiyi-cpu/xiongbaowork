@@ -1,0 +1,8 @@
+{
+  "name": "xiongbao-tauri-cli",
+  "private": true,
+  "description": "Pins the Tauri CLI that builds the device app (desktop-device/). CI installs this from its frozen lockfile and runs tools/tauri-cli/node_modules/.bin/tauri.",
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
+  }
+}

@@ -3,9 +3,7 @@
  * Docker's name for it. Docker's names stay in Copy diagnostics, where support needs them.
  *
  * Matched on the Compose service at the end of the name (`<project>-<service>-<n>`), because the
- * project is the installation's and differs between them. The same table is in the desktop app's
- * Status window (desktop/src/partNames.ts); app/tests/desktop-part-names.test.ts holds the two to one
- * answer.
+ * project is the installation's and differs between them.
  */
 
 /** Which card a container is listed under: the Bots and what serves them, or the back end. */

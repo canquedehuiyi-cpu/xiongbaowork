@@ -1163,7 +1163,6 @@ test("device jobs and the server side both use Bun 1.4.4", () => {
     "e2e-wakerflow",
     "image",
     "workspaces-test",
-    "desktop-windows",
     "device-shell",
     "device-clean-linux",
   ])
@@ -1207,6 +1206,58 @@ test("every device bundle fetches and verifies agent-desktop before tauri build"
       );
     }
   }
+});
+
+// The Tauri CLI that builds the device app comes from its own pin (tools/tauri-cli), installed from a
+// frozen lockfile, not from the removed upstream desktop shell's lockfile. Every bundle job installs
+// it, then runs that copy.
+test("every device bundle installs the pinned Tauri CLI from tools/tauri-cli and runs that copy", () => {
+  const ci = Bun.YAML.parse(readFileSync(join(workflows, "ci.yml"), "utf8"));
+  const pin = JSON.parse(
+    readFileSync(
+      join(root, "xiongbao", "tools", "tauri-cli", "package.json"),
+      "utf8",
+    ),
+  );
+  expect(pin.devDependencies["@tauri-apps/cli"]).toBe("2.11.4");
+  expect(
+    readFileSync(
+      join(root, "xiongbao", "tools", "tauri-cli", "bun.lock"),
+      "utf8",
+    ),
+  ).toContain('"@tauri-apps/cli": ["@tauri-apps/cli@2.11.4"');
+  const targets = [
+    [ci, "device-bundle-linux"],
+    [ci, "device-bundle-windows"],
+    [ci, "device-bundle-macos"],
+    [workflow, "linux"],
+    [workflow, "windows"],
+    [workflow, "macos"],
+  ];
+  for (const [doc, job] of targets) {
+    const steps = doc.jobs[job].steps;
+    const installAt = steps.findIndex(
+      (s) => s["working-directory"] === "xiongbao/tools/tauri-cli",
+    );
+    expect(installAt, `${job} installs the Tauri CLI pin`).toBeGreaterThan(-1);
+    expect(
+      steps[installAt].run,
+      `${job} installs frozen, without scripts`,
+    ).toBe("bun install --frozen-lockfile --ignore-scripts");
+    const runs = steps.map((s) => String(s.run ?? ""));
+    const builds = runs.flatMap((r, i) =>
+      r.includes("tauri build") ? [i] : [],
+    );
+    expect(builds.length, `${job} builds`).toBeGreaterThan(0);
+    for (const at of builds) {
+      expect(installAt, `${job} installs before step ${at}`).toBeLessThan(at);
+      expect(runs[at], `${job} runs the pinned copy`).toContain(
+        "../tools/tauri-cli/node_modules/.bin/tauri build",
+      );
+    }
+  }
+  expect(JSON.stringify(ci)).not.toContain("xiongbao/desktop/");
+  expect(text).not.toContain("../desktop/");
 });
 
 // macOS 13 is the floor for the device app, and the release notes say so.

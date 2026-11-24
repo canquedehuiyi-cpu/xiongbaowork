@@ -404,8 +404,7 @@ export function useBrokeredAccount(input: {
   /*
    * ASKED AGAIN WHEN OPENBOT DESKTOP'S WINDOW IS BACK IN FRONT. The window sends the sign-in to the
    * person's browser and this page stays where it is, so it never arrives on this page and the
-   * question above is never asked again. The browser hands the person back to the window when the
-   * sign-in is done (`/desktop-return`), and the focus that brings is when there is an answer.
+   * question above is never asked again. The focus the window gets back is when there is an answer.
    * Once per sign-in, and gone with the page.
    */
   const pendingReturn = useRef<(() => void) | null>(null);

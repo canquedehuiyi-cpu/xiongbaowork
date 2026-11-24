@@ -246,10 +246,6 @@ export const EXEMPT_PATHS: {
   reason: string;
 }[] = [
   {
-    test: (p) => p.startsWith("desktop/"),
-    reason: "upstream desktop app is never touched",
-  },
-  {
     test: (p) => p.startsWith("server/drizzle/"),
     reason: "migrations are history",
   },
