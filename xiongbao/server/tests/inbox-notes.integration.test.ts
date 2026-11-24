@@ -660,6 +660,116 @@ describe("an item closed while the notes were being sent", () => {
   });
 });
 
+/**
+ * The row lock, not just the second look: another connection has the item's row locked and closed
+ * but not yet committed, so a plain read in the send's transaction still sees it open. Only
+ * `FOR UPDATE` makes the send wait for that connection and then see the item closed. Three
+ * connections: the one holding the lock, the send's transaction, and its reads outside it.
+ */
+describe("an item being closed by another connection while the notes are sent", () => {
+  const HOLD_MS = 400;
+  const settle = (work: Promise<unknown>) => {
+    const state: { done: boolean; outcome?: string } = { done: false };
+    work.then(
+      () => {
+        state.done = true;
+        state.outcome = "sent";
+      },
+      (error: Error) => {
+        state.done = true;
+        state.outcome = error.name;
+      },
+    );
+    return state;
+  };
+
+  async function sendWhileLocked(
+    kind: "question" | "approval",
+    id: string,
+    close: (tx: typeof database) => Promise<unknown>,
+  ) {
+    const wide = createDatabase(testDatabaseUrl(), { max: 3 });
+    const contender = createInboxNotes({
+      database: wide,
+      authorise: async () => undefined,
+      approval: (owner, requestId) => store.get(owner, requestId),
+    });
+    let locked!: () => void;
+    const holding = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    try {
+      const holder = as(alice, () =>
+        database.transaction(async (tx) => {
+          await close(tx as unknown as typeof database);
+          locked();
+          await new Promise((resolve) => setTimeout(resolve, HOLD_MS));
+        }),
+      );
+      await holding;
+      const sending = settle(as(alice, () => contender.send(alice, kind, id)));
+      await new Promise((resolve) => setTimeout(resolve, HOLD_MS / 2));
+      // Still waiting for the lock: nothing was sent behind the closing answer or decision.
+      const waitedForTheLock = !sending.done;
+      await holder;
+      const stop = Date.now() + 4_000;
+      while (!sending.done && Date.now() < stop)
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      return { waitedForTheLock, outcome: sending.outcome };
+    } finally {
+      await wide.$client.close();
+    }
+  }
+
+  test("a question being answered holds the send until it commits, then the send is refused and the notes are kept", async () => {
+    const id = await question(alice, `${prefix}-lock`, "好吗？");
+    await call(on, alice, "POST", `/items/question/${id}/notes`, {
+      text: "留着",
+    });
+    const before = (await responses(alice)).length;
+    const result = await sendWhileLocked("question", id, (tx) =>
+      tx
+        .update(workItems)
+        .set({ finishedAt: new Date() })
+        .where(eq(workItems.key, id)),
+    );
+    expect(result.waitedForTheLock).toBe(true);
+    expect(result.outcome).toBe("ApprovalNotFoundError");
+    expect((await responses(alice)).length).toBe(before);
+    const kept = await as(alice, () =>
+      database
+        .select()
+        .from(workItems)
+        .where(eq(workItems.key, `question:${id}`)),
+    );
+    expect(JSON.stringify(kept[0]?.payload)).toContain("留着");
+  });
+
+  test("a request being decided holds the send until it commits, then the send is refused and the notes are kept", async () => {
+    const id = await approval(alice, `${prefix}-lock-a`, ["a.ts"]);
+    await call(on, alice, "POST", `/items/approval/${id}/notes`, {
+      text: "留着",
+    });
+    const before = (await responses(alice)).length;
+    const result = await sendWhileLocked("approval", id, (tx) =>
+      tx
+        .update(approvalRequests)
+        .set({ status: "approved", decision: "allow_once" })
+        .where(eq(approvalRequests.id, id)),
+    );
+    expect(result.waitedForTheLock).toBe(true);
+    expect(result.outcome).toBe("ApprovalRefusedError");
+    expect((await responses(alice)).length).toBe(before);
+    const kept = await as(alice, () =>
+      database
+        .select()
+        .from(workItems)
+        .where(eq(workItems.key, `approval:${id}`)),
+    );
+    expect(JSON.stringify(kept[0]?.payload)).toContain("留着");
+  });
+});
+
 describe("a question asked in a group", () => {
   test("the notes go into the group as the person's own words, not as an answer", async () => {
     const channelId = `${prefix}-group`;

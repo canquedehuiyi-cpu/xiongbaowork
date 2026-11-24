@@ -4,9 +4,9 @@
 # 守卫（guard.ts）在这里用一份干净的环境启动：
 #   env -i            员工在命令前缀的任何环境变量（BUN_OPTIONS、HOME、NODE_OPTIONS ...）都到不了守卫，LANG 固定；
 #   --config          用一份 root 所有的空 bunfig，工作区里放的 bunfig.toml 不会被读（里面可以写 preload，在守卫之前执行任意代码）；
-#   --tsconfig-override  用一份 root 所有的空 tsconfig，工作区里的 tsconfig.json / jsconfig.json 不会被读
-#                     （里面的 paths 可以把守卫的导入换成工作区里的任意文件）；
-#   --no-env-file     工作区里的 .env 也不会被读。
+#   --tsconfig-override  守卫用这份 root 所有的空 tsconfig。bun 仍会读到工作区里的 tsconfig.json / jsconfig.json
+#                     （也会读 package.json），但它们被这份覆盖，不生效（里面的 paths 本可以把守卫的导入换成工作区里的任意文件）；
+#   --no-env-file     工作区里的 .env 不会被读。
 # bun 运行 .ts 时自动读的当前目录文件就是这几类：bunfig、tsconfig/jsconfig、.env；守卫只导入 node: 内置模块，
 # package.json 和 node_modules 影响不到它。守卫的工作区根和真工具的路径写在 guard.ts 里，不从环境里取。
 exec /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin LANG=C.UTF-8 \

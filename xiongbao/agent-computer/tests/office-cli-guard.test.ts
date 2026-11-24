@@ -404,6 +404,79 @@ describe("a project that names files", () => {
   });
 });
 
+describe("a project that is not an ordinary file", () => {
+  const run = (args: string[]) =>
+    guardInvocation({ args, stdinText: null, root, cwd: root });
+
+  test("a named pipe is refused, not read once for the guard and again for the tool", () => {
+    const fifo = join(root, "pipe.json");
+    rmSync(fifo, { force: true });
+    expect(Bun.spawnSync(["mkfifo", fifo]).exitCode).toBe(0);
+    // Nothing writes to the pipe: reading it would block, so a refusal that comes back proves it was not read.
+    expect(() => run(["--project", "pipe.json", "document", "info"])).toThrow(
+      "普通文件",
+    );
+    expect(() => run(["document", "open", "pipe.json"])).toThrow(GuardRefusal);
+  });
+
+  test("a directory is refused for what it is", () => {
+    mkdirSync(join(root, "folder.json"), { recursive: true });
+    expect(() => run(["--project", "folder.json", "document", "info"])).toThrow(
+      "普通文件",
+    );
+  });
+
+  test("a project nested deeper than the guard can follow is refused, not left to end in a stack trace", () => {
+    // Parsing it works; walking it is what runs out of stack.
+    const depth = 300_000;
+    writeFileSync(
+      join(root, "deep.json"),
+      `${"[".repeat(depth)}${"]".repeat(depth)}`,
+    );
+    expect(() => run(["--project", "deep.json", "document", "info"])).toThrow(
+      "嵌套太深",
+    );
+  });
+
+  test("through the program the refusal is a message and an exit code, without a stack", async () => {
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), "office-cli-deep-")));
+    try {
+      const depth = 200_000;
+      writeFileSync(
+        join(dir, "deep.json"),
+        `${"[".repeat(depth)}${"]".repeat(depth)}`,
+      );
+      const runner = join(dir, "runner.ts");
+      writeFileSync(
+        runner,
+        `import { main } from ${JSON.stringify(guardPath)};
+process.exit(await main(["--project", "deep.json", "document", "info"], () => ({
+  bin: "/bin/true",
+  root: ${JSON.stringify(dir)},
+  cwd: process.cwd(),
+  readStdin: async () => "",
+})));
+`,
+      );
+      const child = Bun.spawn(["bun", runner], {
+        cwd: dir,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [code, err] = await Promise.all([
+        child.exited,
+        new Response(child.stderr).text(),
+      ]);
+      expect(code).toBe(2);
+      expect(err).toContain("xb-office-cli 拒绝执行");
+      expect(err).not.toContain("RangeError");
+      expect(err).not.toContain("    at ");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe("workspaceRoot", () => {
   test("a per-employee account's home under the bots folder is the root", () => {
     const bots = join(base, "bots");
@@ -612,13 +685,30 @@ process.exit(await main(args, () => ({
     expect(existsSync(join(outside, "x.json"))).toBe(false);
   });
 
+  /** Whether the process is still running (one that has exited and waits to be collected is not). */
+  const running = (pid: number) => {
+    try {
+      const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+      return (
+        stat.slice(stat.lastIndexOf(")") + 2, stat.lastIndexOf(")") + 3) !== "Z"
+      );
+    } catch {
+      return false;
+    }
+  };
+  const waitFor = async (done: () => boolean) => {
+    for (let waited = 0; !done() && waited < 100; waited++)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+  };
+
   test("a SIGTERM ends the tool, removes the run's HOME and reports 143", async () => {
     const slow = join(base, "slow-tool.sh");
     const homeFile = join(base, "slow-home.txt");
+    const pidFile = join(base, "slow-pid.txt");
     rmSync(homeFile, { force: true });
     writeFileSync(
       slow,
-      `#!/bin/sh\nprintf '%s' "$HOME" > "${homeFile}"\nexec sleep 30\n`,
+      `#!/bin/sh\nprintf '%s' "$$" > "${pidFile}"\nprintf '%s' "$HOME" > "${homeFile}"\nexec sleep 30\n`,
       {
         mode: 0o755,
       },
@@ -629,19 +719,70 @@ process.exit(await main(args, () => ({
       stdout: "pipe",
       stderr: "pipe",
     });
-    for (let waited = 0; !existsSync(homeFile) && waited < 100; waited++)
-      await new Promise((resolve) => setTimeout(resolve, 50));
+    await waitFor(() => existsSync(homeFile));
     const home = readFileSync(homeFile, "utf8");
+    const tool = Number(readFileSync(pidFile, "utf8"));
     expect(home).toStartWith(join(tmpdir(), "xb-office-cli-"));
     expect(existsSync(home)).toBe(true);
+    expect(running(tool)).toBe(true);
     child.kill("SIGTERM");
     expect(await child.exited).toBe(143);
     expect(existsSync(home)).toBe(false);
-    // The tool is gone with it: nothing of that run still holds the folder.
-    const left = Bun.spawnSync(["pgrep", "-f", `sleep 30`]);
-    expect(new TextDecoder().decode(left.stdout)).not.toContain(
-      String(child.pid),
+    // The tool is gone with it, and the guard waited for that before it removed the folder.
+    expect(running(tool)).toBe(false);
+  });
+
+  /** A tool that starts a child of its own, as the real one starts LibreOffice, which writes into HOME. */
+  async function stopWithGrandchild(script: string) {
+    const tool = join(
+      base,
+      `parent-tool-${Math.random().toString(36).slice(2)}.sh`,
     );
+    const homeFile = `${tool}.home`;
+    const pidFile = `${tool}.pid`;
+    writeFileSync(
+      tool,
+      `#!/bin/sh\nprintf '%s' "$HOME" > "${homeFile}"\n(${script}) &\nprintf '%s' "$!" > "${pidFile}"\nwait\n`,
+      { mode: 0o755 },
+    );
+    const child = Bun.spawn(["bun", runner, tool, root, "writer", "list"], {
+      cwd: root,
+      env: { PATH: process.env.PATH ?? "" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    await waitFor(() => existsSync(pidFile));
+    const home = readFileSync(homeFile, "utf8");
+    const grandchild = Number(readFileSync(pidFile, "utf8"));
+    expect(running(grandchild)).toBe(true);
+    const stopped = Date.now();
+    child.kill("SIGTERM");
+    const code = await child.exited;
+    const took = Date.now() - stopped;
+    const alive = running(grandchild);
+    // Left alive it would make the folder again after the guard removed it.
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    return { code, took, alive, homeLeft: existsSync(home) };
+  }
+
+  test("a SIGTERM reaches what the tool started too, instead of waiting for it to end by itself", async () => {
+    const result = await stopWithGrandchild(
+      `sleep 30; mkdir -p "$HOME/.config/late"`,
+    );
+    expect(result.code).toBe(143);
+    expect(result.alive).toBe(false);
+    // The signal itself ended it; the guard does not give up on a group and end it by force until 5 s have passed.
+    expect(result.took).toBeLessThan(3_000);
+    expect(result.homeLeft).toBe(false);
+  });
+
+  test("what the tool started and that ignores the signal is waited for before the folder is removed", async () => {
+    const result = await stopWithGrandchild(
+      `trap '' TERM; sleep 1; mkdir -p "$HOME/.config/late"`,
+    );
+    expect(result.code).toBe(143);
+    expect(result.alive).toBe(false);
+    expect(result.homeLeft).toBe(false);
   });
 
   test("a folder that cannot be removed does not replace the tool's exit code", async () => {

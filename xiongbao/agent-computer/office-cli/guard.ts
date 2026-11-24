@@ -26,6 +26,7 @@
 import {
   lstatSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -309,8 +310,16 @@ export function inspect(args: readonly string[]): {
 export function checkProject(real: string, shown: string): void {
   let size: number;
   try {
-    size = statSync(real).size;
-  } catch {
+    const found = statSync(real);
+    // A named pipe or a device gives one answer to this read and another to the tool's, and a
+    // directory has nothing to read: only a regular file is a project the guard can vouch for.
+    if (!found.isFile())
+      throw new GuardRefusal(
+        `项目文件必须是普通文件，不检查就不执行：${shown}`,
+      );
+    size = found.size;
+  } catch (error) {
+    if (error instanceof GuardRefusal) throw error;
     return; // Not there yet: the tool reports it, and there is nothing to read.
   }
   if (size > 20 * 1024 * 1024)
@@ -341,7 +350,15 @@ export function checkProject(real: string, shown: string): void {
       }
     }
   };
-  walk(data, "$");
+  try {
+    walk(data, "$");
+  } catch (error) {
+    // A file nested deeper than the stack lets the guard follow is refused like any other it cannot
+    // read, not left to end the run with a stack trace.
+    if (error instanceof RangeError)
+      throw new GuardRefusal(`项目文件嵌套太深，不检查就不执行：${shown}`);
+    throw error;
+  }
 }
 
 /** Checks the paths one invocation names, and reads the projects among them. */
@@ -444,6 +461,61 @@ export function productionOptions(
   };
 }
 
+function signalGroup(pgid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pgid, signal);
+  } catch {
+    // The group is already gone.
+  }
+}
+
+/** Whether a process other than a finished one (waiting to be collected) is left in the group. */
+function groupHasLiveMember(pgid: number): boolean {
+  let entries: string[];
+  try {
+    entries = readdirSync("/proc");
+  } catch {
+    try {
+      process.kill(-pgid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  for (const entry of entries) {
+    if (!/^\d+$/.test(entry)) continue;
+    try {
+      // "pid (name) S ppid pgrp ...": the name may hold spaces and brackets, so read after the last ")".
+      const stat = readFileSync(`/proc/${entry}/stat`, "utf8");
+      const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+      if (fields[0] !== "Z" && fields[0] !== "X" && Number(fields[2]) === pgid)
+        return true;
+    } catch {
+      // It exited while the list was being read.
+    }
+  }
+  return false;
+}
+
+const GROUP_GRACE_MS = 5_000;
+
+/**
+ * After a stop: waits for everything the tool started to exit, then ends what is still there, so
+ * the folder removed next is not written to again. The group already got the signal that stopped it.
+ */
+async function reapGroup(pgid: number): Promise<void> {
+  const wait = async (ms: number) => {
+    const until = Date.now() + ms;
+    while (groupHasLiveMember(pgid) && Date.now() < until)
+      await new Promise((resolve) => setTimeout(resolve, 25));
+  };
+  await wait(GROUP_GRACE_MS);
+  if (groupHasLiveMember(pgid)) {
+    signalGroup(pgid, "SIGKILL");
+    await wait(GROUP_GRACE_MS);
+  }
+}
+
 export async function main(
   argv: string[],
   resolveOptions: () => RunOptions = productionOptions,
@@ -475,12 +547,13 @@ export async function main(
   // this run and removed after it.
   const scratch = mkdtempSync(join(tmpdir(), "xb-office-cli-"));
   let child: ReturnType<typeof Bun.spawn> | undefined;
-  // A stop (the command's timeout sends SIGTERM) ends the tool first and then falls through to the
-  // cleanup below; the exit code is the usual 128 + signal number. SIGKILL cannot be caught.
+  // A stop (the command's timeout sends SIGTERM) goes to the tool's whole process group and the
+  // run waits for the group to be gone before it falls through to the cleanup below; the exit code
+  // is the usual 128 + signal number. SIGKILL cannot be caught.
   let stoppedBy = 0;
   const stop = (signal: "SIGTERM" | "SIGINT", number: number) => () => {
     stoppedBy = number;
-    child?.kill(signal);
+    if (child) signalGroup(child.pid, signal);
   };
   const onTerm = stop("SIGTERM", 143);
   const onInt = stop("SIGINT", 130);
@@ -493,8 +566,12 @@ export async function main(
       stdin: stdinText === null ? "inherit" : "pipe",
       stdout: "inherit",
       stderr: "inherit",
+      // Its own session and process group (the group id is the tool's pid), so that a stop reaches
+      // what the tool started too: LibreOffice runs as a child of the tool and would otherwise
+      // outlive it and put its profile back into the folder removed below.
+      detached: true,
     });
-    if (stoppedBy !== 0) child.kill("SIGTERM");
+    if (stoppedBy !== 0) signalGroup(child.pid, "SIGTERM");
     // An explicit pipe: the tool's REPL saw an empty stdin when it was handed a Blob.
     if (stdinText !== null) {
       try {
@@ -507,6 +584,7 @@ export async function main(
       }
     }
     const code = await child.exited;
+    if (stoppedBy !== 0) await reapGroup(child.pid);
     return stoppedBy !== 0 ? stoppedBy : code;
   } finally {
     process.off("SIGTERM", onTerm);

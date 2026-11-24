@@ -197,6 +197,34 @@ describe("看板推送", () => {
     }
   });
 
+  test("system 租户的卡落在回看窗口里（时间戳略早于游标），也不推给爱丽丝", async () => {
+    const mine = await card(alice);
+    await setStatus(mine, "needs_action");
+    const push = createBoardPush(db, { enabled: true });
+    const open = await pages();
+    const id = randomUUID();
+    try {
+      // 先推一次，游标停在爱丽丝这张卡的时间戳上。
+      await push.announce(alice);
+      await until(() => JSON.stringify(open.inbox.alice).includes(mine));
+      expect(JSON.stringify(open.inbox.alice)).toContain(mine);
+      const heard = open.inbox.alice.length;
+
+      // 行级安全放行 system 行；这张卡的时间戳在游标之前 1 秒，只有「回看」那条查询够得着它。
+      await asPlatform(() =>
+        db.execute(
+          sql`insert into tasks (id, tenant_id, title, source, status, updated_at) values (${id}, 'system', ${SECRET_TITLE}, 'routine', 'running', now() - interval '1 second')`,
+        ),
+      );
+      await push.announce(alice);
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      expect(JSON.stringify(open.inbox.alice.slice(heard))).not.toContain(id);
+    } finally {
+      await open.stop();
+      await asPlatform(() => db.delete(tasks).where(eq(tasks.id, id)));
+    }
+  });
+
   test("一批同时间戳的卡之后再改一张：先整板失效，再把这一张推出来（水位不卡死）", async () => {
     const ids: string[] = [];
     for (let at = 0; at < MAX_CARDS_PER_PUSH + 1; at += 1)
