@@ -769,12 +769,6 @@
     "reason": "品牌白名单：xiongbao/server/src/telemetry/product.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "PUBLIC_DEFAULT_DATABASE_PASSWORD = \"openbot\"",
-    "file": "xiongbao/server/src/auth/role-writer-lifecycle.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/auth/role-writer-lifecycle.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "ref: `openbot/${SEARCH_TOOLS}`",
     "file": "xiongbao/server/src/agents/tool-search.ts",
     "until": "R3",
@@ -827,14 +821,54 @@
     "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：-U 参数（psql、pg_isready、initdb、createdb 等）"
   },
   {
+    "pattern": "(?<![\\w.-])openbot(?=:openbot@)",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：不带协议头的 <用户>:<口令>@ 片段里的超级用户"
+  },
+  {
     "pattern": "(?<![\\w])ROLE [\"']?openbot\\b",
     "until": "R4",
     "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：ROLE / IN ROLE"
   },
   {
+    "pattern": "(?<=[\\w.%-]:)openbot(?=@)",
+    "until": "R4",
+    "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：连接串里 <用户>: 之后、@ 之前的口令"
+  },
+  {
     "pattern": "(?<=openbot_app:)openbot(?![\\w-])",
     "until": "R4",
-    "reason": "应用角色口令：0054 迁移写死 PASSWORD 'openbot'，连接串里要与之一致，R4 基线化时一起改"
+    "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：应用角色连接串里的口令"
+  },
+  {
+    "text": "`DATABASE_URL` is `openbot`",
+    "file": "xiongbao/docs/configuration.md",
+    "until": "R4",
+    "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：说明口令的句子"
+  },
+  {
+    "text": "`ROLE_WRITER_PASSWORD`, `openbot` unless set",
+    "file": "xiongbao/.env.example",
+    "until": "R4",
+    "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：说明口令的注释"
+  },
+  {
+    "file": "xiongbao/server/tests/server-readiness-gates.test.ts",
+    "pattern": "appUrl\\(\"openbot2?\"\\)",
+    "until": "R4",
+    "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：readiness 测试的口令输入（含只差一个字符的反例）"
+  },
+  {
+    "text": "authenticates with `openbot`",
+    "file": "xiongbao/server/src/auth/role-writer-lifecycle.ts",
+    "until": "R4",
+    "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：说明口令的注释"
+  },
+  {
+    "text": "compose owner `openbot`",
+    "file": "xiongbao/docs/configuration.md",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：说明超级用户的句子"
   },
   {
     "pattern": "FOR ROLE [\"']?openbot\\b",
@@ -872,10 +906,21 @@
     "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：OWNER / OWNER TO"
   },
   {
+    "pattern": "PASSWORD(?:\\s*:\\s*|=|:-)[\"']?openbot(?![\\w-])",
+    "until": "R4",
+    "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：POSTGRES_PASSWORD、*_PASSWORD:- 默认值、PGPASSWORD="
+  },
+  {
     "file": "xiongbao/scripts/ci/image-smoke.sh",
     "pattern": "PGPASSWORD=openbot\\b",
     "until": "R4",
-    "reason": "image-smoke.sh 用应用角色的口令 openbot 登录交付镜像里的库，与 0054 迁移一致"
+    "reason": "image-smoke.sh 断言用默认口令 openbot 以应用角色登录交付镜像里的库会失败（迁移后口令已重设）；改名会让这条断言恒真"
+  },
+  {
+    "file": "xiongbao/tests/update-local.test.ts",
+    "pattern": "PGUSER\\)\\.toBe\\(\"openbot\"\\)",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：断言从连接串用户名解析出的 PGUSER"
   },
   {
     "pattern": "PGUSER=[\"']?openbot\\b",
@@ -888,9 +933,38 @@
     "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：POSTGRES_USER（含引号与默认值写法）"
   },
   {
-    "pattern": "postgres(?:ql)?://openbot(?=[:@/])",
+    "pattern": "postgres(?:ql)?://openbot(?=[:@])",
     "until": "R4",
     "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：连接串里的用户"
+  },
+  {
+    "text": "PUBLIC_DEFAULT_DATABASE_PASSWORD = \"openbot\"",
+    "file": "xiongbao/server/src/auth/role-writer-lifecycle.ts",
+    "until": "R4",
+    "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：常量本身"
+  },
+  {
+    "text": "The `openbot` password above is public",
+    "file": "xiongbao/.env.example",
+    "until": "R4",
+    "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：说明口令的注释"
+  },
+  {
+    "text": "the password `openbot`",
+    "until": "R4",
+    "reason": "公开默认口令 openbot：0054 迁移写死 PASSWORD 'openbot'，开发 compose 的超级用户与 role writer 默认口令也是它；server 的 PUBLIC_DEFAULT_DATABASE_PASSWORD 据此在生产拒绝启动，R4 基线化时一起改；写法：说明口令的句子"
+  },
+  {
+    "text": "名为 `openbot` 的迁移 owner",
+    "file": "xiongbao/docs/deployment-xiongbao.md",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：说明超级用户的句子"
+  },
+  {
+    "text": "指定 owner 名 `openbot`",
+    "file": "xiongbao/docs/deployment-xiongbao.md",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：说明超级用户的句子"
   },
   {
     "text": "Copyright (c) 2026 CopilotKit",
