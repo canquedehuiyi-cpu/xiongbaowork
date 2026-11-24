@@ -86,6 +86,7 @@
 - **没抓任何真实互联网页面。** 联网抓取属于对外动作，要先过审批，本次也没有放行的主机；所以反爬、跨站编码（GBK 等）、超大页、登录态、动态加载更复杂的站点都没覆盖。
 - **测试页偏简单。** 合成页和标准答案都是我写的，除脚本页和 PDF 外正文召回几乎都是 1，说明这些页在正文完整度上分不出差别，不是说两边在真实页面上一样好；噪声页只有两个，噪声词句是我挑的。
 - 渲染脚本页的约 1.1 秒是在没有外网的命名空间里量的（Chrome 的后台外连会立刻失败），真实联网时可能更快或更慢。
+- 隔离自检的局限：`compare.ts` 的自检只判断「没有别的网卡」，不查回环（`lo`）是否 up。命名空间里 `lo` 没 up 时自检仍会通过，但那样本机 127.0.0.1 的测试页也连不上，运行只会失败、不会外连；`isolated.sh` 自己会把 `lo` 拉起来。另外，网卡列表的解析只有 `onlyLoopback` 这个纯函数有单测，读 `/proc/net/dev` 那一步没有。
 - 评分的两个局限：单元格召回对短数字（如库存「356」）是子串匹配，区分力弱；行保真只看一行的单元格是否按序出现在同一行文字里，不检查列数，所以 SKU-0012 那行被合并单元格仍算保住。本次数据上不影响结论，以后复用建议改成按整格匹配。
 - 噪声词句与页面出自同一人之手，噪声页只有两个；带语义标签页 Firecrawl 的 0.3 全部来自「猜你喜欢」那一块相关链接。
 - 熊宝一侧没有重做 `describePage` 的错误状态分支、超过内联上限后存盘只给头尾、JSON 包装与不可信提示；所有测试页输出都小于 3.8K 字，不会触发内联上限，所以不影响本次分数，但模型实际看到的比脚本测的多一层包装。
@@ -103,7 +104,7 @@
 
 ## 产品里已有的 Firecrawl 路径（不在本次比较内）
 
-产品里已经有 Firecrawl：插件目录里的 `firecrawl-keyless`（`server/src/plugins/catalogue.ts`），指向 Firecrawl 托管的 v2 MCP 服务 `https://mcp.firecrawl.dev/v2/mcp`，免 Key 档、有限速，目录里标注的工具是 `firecrawl_scrape`、`firecrawl_search`、`firecrawl_parse`，都是只读；`xiongbao/shared/research.ts` 把 `firecrawl_search` / `firecrawl_scrape` 映射成「搜索网页」「读取网页」两个角色。这是**云端服务**：员工读的网址要发给 Firecrawl 的服务器，由对方去抓。所以它与本次的 Local 版是两回事：Local 版在本机抓、不发给 Firecrawl（云端关闭时），但要自己承担 AGPL 和 Chrome 外连的问题；云端插件没有这些问题，换来的是网址与抓取请求出本机。就只读代码能判断的：云端路径同样属于对外联网，是否过审批取决于插件授权流程（把某个应用授权给员工），我没有读授权流程的细节，也没有调用它，这里不下结论。若要评估 sidecar，应当与这条已有路径对比，而不只是与 web_fetch 对比。
+产品里已经有 Firecrawl：插件目录里的 `firecrawl-keyless`（`server/src/plugins/catalogue.ts`），指向 Firecrawl 托管的 v2 MCP 服务 `https://mcp.firecrawl.dev/v2/mcp`，免 Key 档、有限速，目录里标注的工具是 `firecrawl_scrape`、`firecrawl_search`、`firecrawl_parse`，都是只读；`xiongbao/shared/research.ts` 里有 Firecrawl 工具名到角色的映射（`firecrawl_search`、`firecrawl_scrape` 对应「搜索网页」「读取网页」）；那里的服务器键是 `firecrawl` 与 `firecrawl-authenticated`，目录里的条目键是 `firecrawl-keyless`，免 Key 条目装好后是否落到那份映射上，没有追到安装时的服务器 id，**对应关系未证实**。这是**云端服务**：员工读的网址要发给 Firecrawl 的服务器，由对方去抓。所以它与本次的 Local 版是两回事：Local 版在本机抓、不发给 Firecrawl（云端关闭时），但要自己承担 AGPL 和 Chrome 外连的问题；云端插件没有这些问题，换来的是网址与抓取请求出本机。就只读代码能判断的：云端路径同样属于对外联网，是否过审批取决于插件授权流程（把某个应用授权给员工），我没有读授权流程的细节，也没有调用它，这里不下结论。若要评估 sidecar，应当与这条已有路径对比，而不只是与 web_fetch 对比。
 
 ## 复现
 
