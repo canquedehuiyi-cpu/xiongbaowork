@@ -20,7 +20,7 @@
 
 只有**手动触发**，并且只能从 `main` 触发（工作流的 job 条件是 `workflow_dispatch` 且 `github.ref == 'refs/heads/main'`，写法同 `model-e2e.yml`）。没有 `pull_request`、标签或定时触发，也没有 `pull_request_target`。原因：带 key 的那一步运行的工作流文件、脚本和规则文件都来自 main 的检出，PR 分支里改过的脚本拿不到 key；被审的范围只作为 git 对象被 `ocr review --from --to` 读取，工作流不检出、不构建、不运行其中任何东西（`ocr` 自己读取这些 git 对象时的行为，没有逐项核实）。
 
-1. 在仓库设置里新建 GitHub Environment，名字 **`ocr-review`**，并给它设**必需审阅者（开通前提，必须设；不设不要加 secret）**。key 会连同被审的代码一起发给模型提供方，每次运行由审阅者批准，才算「敏感动作进审批」。审阅者批准前看一眼要审的范围和 main 上的脚本有没有变。
+1. 在仓库设置里新建 GitHub Environment，名字 **`ocr-review`**，并给它设**必需审阅者（开通前提，必须设；不设不要加 secret）**。key 会连同被审的代码一起发给模型提供方，每次运行由审阅者批准，才算「敏感动作进审批」。审阅者批准前看一眼要审的范围和 main 上的脚本有没有变。同一个 Environment 的「部署分支」也限定为 `main`：工作流本身只在 main 上跑，再加这一层，别的分支上的工作流引用这个 Environment 也拿不到 key。
 2. 在这个 Environment 里加（密钥只放在这里，不放仓库级或组织级）：
 
    | 名字 | 类型 | 默认 | 说明 |
