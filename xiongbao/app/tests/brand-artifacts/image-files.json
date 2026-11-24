@@ -18,12 +18,6 @@
     "note": "@mastra/core 自带的文档文件名"
   },
   {
-    "word": "@openbot",
-    "category": "developer-only",
-    "plan": "keep",
-    "note": "workspace 包名 @openbot/*，规格 1.2 节不改；只出现在镜像的 node_modules 里"
-  },
-  {
     "word": "openbot-actor.ts",
     "category": "operator-visible",
     "plan": "rewrite",
