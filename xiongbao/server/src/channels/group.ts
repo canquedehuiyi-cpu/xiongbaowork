@@ -1632,13 +1632,17 @@ export function createGroupConversations(deps: {
     rowId: string;
     runId: string;
     text: string;
+    /** The turn listed files of its own, which are shown only with the row. */
+    hasFiles?: boolean;
     continuation?: ApprovalContinuation;
   }): Promise<
     | { status: "allowed" }
     | { status: "denied"; message: string }
     | { status: "pending"; details: Record<string, unknown> }
   > {
-    if (!deps.privateShare || !input.text) return { status: "allowed" };
+    if (!deps.privateShare) return { status: "allowed" };
+    // Nothing said and nothing listed has nothing of the owner's to hold back; files are held either way.
+    if (!input.text && !input.hasFiles) return { status: "allowed" };
     const recipients = await deps.store.members(input.channelId);
     const continuation: ApprovalContinuation = input.continuation ?? {
       runId: input.runId,
@@ -2368,7 +2372,10 @@ export function createGroupConversations(deps: {
         if (!heldForApproval)
           await closeCard(cardTurn, agentId, runId, false, round());
       } else {
-        const message = error instanceof Error ? error.message : String(error);
+        // An error with no message must still be a text: the share check lets an empty one through.
+        const message =
+          (error instanceof Error ? error.message : String(error)) ||
+          "这一轮没能完成。";
         const failedDetails = {
           ...withMarks(ownMarks()),
           ...withPlan(ownPlan()),
@@ -2392,6 +2399,7 @@ export function createGroupConversations(deps: {
                 rowId: id,
                 runId,
                 text: message,
+                hasFiles: true,
               }).catch(() => ({ status: "denied", message }) as const);
         if (gate.status === "pending") {
           await deps.store.finish(id, "", "waiting", {

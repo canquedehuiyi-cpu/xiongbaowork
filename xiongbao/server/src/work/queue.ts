@@ -343,10 +343,19 @@ export function createWorkQueue(database: Database): WorkQueue {
            * same moment: each would see the line free and take a different item of it. One claim of
            * this kind at a time, for the length of this short transaction.
            */
-          if (oneAtATimeBy)
-            await transaction.execute(
-              sql`select pg_advisory_xact_lock(hashtext(${`claim:${kind}`}))`,
+          if (oneAtATimeBy) {
+            // Not waited for: a claim stuck holding it would otherwise queue every worker's claim
+            // behind it. A worker that does not get it claims nothing this time and asks again soon.
+            const got = await transaction.execute(
+              sql`select pg_try_advisory_xact_lock(hashtext(${`claim:${kind}`})) as "got"`,
             );
+            const gotRows = (
+              Array.isArray(got)
+                ? got
+                : ((got as { rows?: unknown[] })?.rows ?? [])
+            ) as { got?: boolean }[];
+            if (gotRows[0]?.got !== true) return [];
+          }
           const inLine = oneAtATimeBy
             ? sql`
             and not exists (
@@ -357,7 +366,7 @@ export function createWorkQueue(database: Database): WorkQueue {
                 and "other"."payload" ->> ${oneAtATimeBy} = "work_items"."payload" ->> ${oneAtATimeBy}
                 and (
                   ("other"."lease_until" is not null and "other"."lease_until" > now())
-                  or ("other"."attempts" < ${maxAttempts} and "other"."run_at" < "work_items"."run_at")
+                  or ("other"."attempts" < ${maxAttempts} and "other"."created_at" < "work_items"."created_at")
                 )
             )`
             : sql``;

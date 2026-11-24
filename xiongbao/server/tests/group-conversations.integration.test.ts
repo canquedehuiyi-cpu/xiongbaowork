@@ -2064,10 +2064,10 @@ describe("group conversations in PostgreSQL", () => {
           [ada]: async (input) => {
             input.onText?.("From your notes: the launch slipped.");
             await new Promise((resolve) => setTimeout(resolve, 30));
-            // Meanwhile the teammate asks Grace from their own request, and another replica runs
-            // that turn (in the teammate's frame, from the queued item's stamp). That replica's
-            // worker is nobody's (`platform`), not nested in this owner's turn: a sweep running
-            // inside one person's frame may not take up another person's work (runAsClaimedTenant).
+            // Meanwhile the teammate asks Grace from their own request. The group is busy with Ada's
+            // turn, so the sweep below claims nothing (one message of a group at a time); it only shows
+            // that a worker that is nobody's (`platform`) does not run the teammate's turn inside this
+            // owner's. Grace is answered after this turn, by the sweep at the end of the test.
             await as(teammate, () =>
               conversations.send(teammate.id, channelId, {
                 id: `${prefix}-handed-teammate`,
@@ -2103,8 +2103,9 @@ describe("group conversations in PostgreSQL", () => {
       });
       // Only Ada's turn: a sweep inside the owner's frame would end the teammate's item unrun.
       await conversations.sweep();
-      // The group answers one message at a time: the teammate's message, left alone while Ada's turn
-      // ran, is taken up now, by a worker that is nobody's, and still must not see Ada's held reply.
+      // The group answers one message at a time: the sweep nested in Ada's reply found the teammate's
+      // message waiting behind her turn and took nothing. It is taken up now, by a worker that is
+      // nobody's, once Ada's reply is held, and Grace still must not be handed that held reply.
       await runAsTenant("platform", () => conversations.sweep());
       expect(graceSaw).toContain("what is the status?");
       expect(graceSaw).not.toContain("launch slipped");
@@ -3718,10 +3719,15 @@ describe("group turns that run for a long time", () => {
       });
     });
     const began = Date.now();
-    const [one, two] = await Promise.all([
-      conversations.sweep(),
-      conversations.sweep(),
-    ]);
+    // A worker that finds another claiming at that very moment claims nothing and asks again soon.
+    const sweepSoon = async () => {
+      for (let tries = 0; tries < 20; tries += 1) {
+        if (await conversations.sweep()) return true;
+        await nap(10);
+      }
+      return false;
+    };
+    const [one, two] = await Promise.all([sweepSoon(), sweepSoon()]);
     expect([one, two]).toEqual([true, true]);
     expect(mostAtOnce()).toBe(2);
     expect(Date.now() - began).toBeLessThan(1_100);
@@ -3752,5 +3758,63 @@ describe("group turns that run for a long time", () => {
     expect(started).toHaveLength(2);
     expect(started[0]).toContain("first");
     expect(started[1]).toContain("second");
+  });
+});
+
+describe("a failed turn with no message still holds its files for the owner", () => {
+  test("an error with an empty message is held like any other, and the files are not shown", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const privateShare = createPrivateShareCheck({
+      approvals: {
+        open: async () =>
+          ({ id: `${prefix}-empty-error-share`, status: "pending" }) as never,
+        list: async () => [],
+        rules: async () => [],
+      },
+    });
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: {
+              botId: ada,
+              seat: "person:private",
+              files: [leftFile("secret-plan.pptx")],
+              scanned: 1,
+              scanTruncated: false,
+              omitted: 0,
+            },
+          });
+          throw new Error("");
+        },
+      },
+      privateShare,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-empty-error`,
+        text: "做个 ppt",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    const seen = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(seen.messages.at(-1)?.status).toBe("waiting");
+    expect(JSON.stringify(seen)).not.toContain("secret-plan");
+    expect(await rawTranscript(teammate, channel.id)).not.toContain(
+      "secret-plan",
+    );
   });
 });

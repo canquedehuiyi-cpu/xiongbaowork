@@ -596,6 +596,24 @@ describe("items of one line, claimed one at a time", () => {
     expect(taken.flat()).toHaveLength(1);
   });
 
+  test("an earlier item handed back for a retry keeps its line: the later one does not go first", async () => {
+    const past = (ms: number) => new Date(Date.now() - ms);
+    await offerIn("e-1", "line-e", past(2_000));
+    await offerIn("e-2", "line-e", past(1_000));
+    expect((await claim("replica-1")).map((item) => item.key)).toEqual(["e-1"]);
+    // Handed back to be tried again later, which moves its time on past the other item's.
+    await asPlatform(() =>
+      queue.release({
+        kind,
+        key: "e-1",
+        owner: "replica-1",
+        delayMs: 10_000,
+        reason: "failed",
+      }),
+    );
+    expect(await claim("replica-2")).toEqual([]);
+  });
+
   test("without the option, a queue hands out items of one line side by side as before", async () => {
     await offerIn("d-1", "line-d");
     await offerIn("d-2", "line-d");
