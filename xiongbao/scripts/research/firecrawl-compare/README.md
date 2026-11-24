@@ -37,6 +37,8 @@ bun scripts/research/firecrawl-compare/compare.ts rescore
 bun test scripts/research/firecrawl-compare
 ```
 
+给了 `--firecrawl` 时脚本先读 `/proc/net/dev` 自检，网卡不止回环就拒绝运行（`isolation.ts`）。`results/isolation-evidence.txt` 是隔离内用 strace 重跑一次的外连尝试摘录。
+
 不给 `--firecrawl` 时只跑熊宝一侧，结果里记下 Firecrawl 不可用的原因，不会用别的工具顶替。
 
 ## 注意

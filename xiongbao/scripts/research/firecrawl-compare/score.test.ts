@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { onlyLoopback } from "./isolation";
 import { buildPages } from "./pages";
 import {
   bodyRecall,
@@ -113,5 +114,14 @@ describe("测试页与标准答案", () => {
     expect(normalize(visible)).not.toContain(
       normalize(page?.truth.paragraphs[0] ?? ""),
     );
+  });
+});
+
+describe("网络隔离自检", () => {
+  test("只有回环网卡才算隔离，多一块网卡或没有回环都不算", () => {
+    expect(onlyLoopback(["lo"])).toBe(true);
+    expect(onlyLoopback(["lo", "eth0"])).toBe(false);
+    expect(onlyLoopback(["eth0"])).toBe(false);
+    expect(onlyLoopback([])).toBe(false);
   });
 });

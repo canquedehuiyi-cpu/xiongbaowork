@@ -23,6 +23,7 @@ import {
   fetchPublicPage,
   pageKind,
 } from "../../../server/src/web/fetch-page";
+import { listInterfaces, onlyLoopback } from "./isolation";
 import { buildPages, type TestPage } from "./pages";
 import { median, type PageScore, scoreOutput } from "./score";
 
@@ -211,6 +212,12 @@ function readFlag(name: string): string | undefined {
 async function runAll() {
   const runs = Number(readFlag("--runs") ?? 5);
   const binary = readFlag("--firecrawl") ?? process.env.FIRECRAWL_BIN;
+  if (binary && !onlyLoopback(listInterfaces())) {
+    console.error(
+      "拒绝运行：当前网络里除回环网卡外还有别的网卡。Firecrawl 渲染脚本页时拉起的 Chrome 会自己联网，请改用 isolated.sh：\n  scripts/research/firecrawl-compare/isolated.sh bun scripts/research/firecrawl-compare/compare.ts run --firecrawl <二进制>",
+    );
+    process.exit(3);
+  }
   const pages = buildPages();
   const workdir = mkdtempSync(join(tmpdir(), "firecrawl-compare-"));
   mkdirSync(outputsDir, { recursive: true });
