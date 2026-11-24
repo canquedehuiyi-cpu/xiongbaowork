@@ -28,6 +28,13 @@ describe("the chapter a path falls in", () => {
     ["scripts/ci/run-tests.sh", "glue"],
     ["types/api.d.ts", "glue"],
     ["assets/logo.png", "glue"],
+    ["requirements.txt", "glue"],
+    ["tools/requirements-dev.txt", "glue"],
+    ["go.mod", "glue"],
+    ["notes.txt", "impact"],
+    ["src/doc/parser.ts", "core"],
+    ["server\\tests\\helper.ts", "impact"],
+    ["docs\\a.ts", "impact"],
   ];
   for (const [path, chapter] of table)
     test(`${path} is ${chapter}`, () => {
@@ -83,6 +90,11 @@ describe("guided review of a change", () => {
   test("repeated and blank paths are dropped", () => {
     const review = guidedReview(["a.ts", " a.ts ", "", "a.ts"]);
     expect(review?.[0]?.files).toEqual(["a.ts"]);
+  });
+
+  test("the same file under another case or separator is listed once", () => {
+    const review = guidedReview(["a/B.ts", "a\\b.ts", "A/b.ts"]);
+    expect(review?.[0]?.files).toEqual(["a/B.ts"]);
   });
 
   test("a change with no source file is not a code change", () => {

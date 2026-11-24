@@ -12,9 +12,17 @@ import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import { ApprovalRefusedError } from "../src/approvals/types";
 import type { AppVariables } from "../src/auth/guards";
+import { GROUP_TURN_KIND } from "../src/channels/group";
 import { createDatabase } from "../src/db/client";
 import { approvalRequests } from "../src/db/schema/approvals";
-import { users } from "../src/db/schema/core";
+import {
+  agents,
+  channelAgents,
+  channelMemberships,
+  channels,
+  users,
+} from "../src/db/schema/core";
+import { groupBotThreads, groupMessages } from "../src/db/schema/group";
 import { workItems } from "../src/db/schema/work";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -112,7 +120,12 @@ async function question(person: string, threadId: string, text: string) {
 }
 
 /** 一条等着主人批准的动作（外部员工带改过的文件）。 */
-async function approval(person: string, threadId: string, files: string[]) {
+async function approval(
+  person: string,
+  threadId: string,
+  files: string[],
+  toolRef = "acp/run_command",
+) {
   const id = `${prefix}-a-${randomUUID()}`;
   await as(person, () =>
     database.insert(approvalRequests).values({
@@ -124,7 +137,7 @@ async function approval(person: string, threadId: string, files: string[]) {
       action: {
         actorId: person,
         botId: bot,
-        toolRef: "acp/run_command",
+        toolRef,
         effect: "write",
         scope: "workspace",
         args: { command: "git push" },
@@ -170,10 +183,13 @@ afterAll(async () => {
           inArray(workItems.kind, [
             "person.question",
             "person.response",
+            GROUP_TURN_KIND,
             INBOX_NOTES_KIND,
           ]),
         );
       await database.delete(approvalRequests);
+      await database.delete(channels).where(eq(channels.id, `${prefix}-group`));
+      await database.delete(agents).where(eq(agents.id, bot));
       await database.delete(users).where(eq(users.id, id));
     });
   await database.$client.close();
@@ -515,6 +531,209 @@ describe("whose notes they are", () => {
     expect(await sentBy(alice)).not.toContain("乙");
     expect(await sentBy(bob)).toContain("乙");
     expect(await sentBy(bob)).not.toContain("甲");
+  });
+});
+
+describe("a request that is not an outside employee's", () => {
+  test("is not found on any route, and nothing is written", async () => {
+    const id = await approval(
+      alice,
+      `${prefix}-plain`,
+      [],
+      "computer_run_command",
+    );
+    const before = (await responses(alice)).length;
+    for (const [method, path, body] of [
+      ["GET", `/items/approval/${id}/notes`],
+      ["POST", `/items/approval/${id}/notes`, { text: "好" }],
+      ["POST", `/items/approval/${id}/notes/send`],
+    ] as [string, string, unknown?][])
+      expect((await call(on, alice, method, path, body)).status).toBe(404);
+    expect((await responses(alice)).length).toBe(before);
+  });
+});
+
+describe("the check that the item is the person's own", () => {
+  test("an owner other than the item's gets not-found from every call, whatever the frame", async () => {
+    // Called in alice's frame, where row security shows her rows, so only the owner conditions in
+    // the code can refuse bob.
+    const id = await question(alice, `${prefix}-own`, "好吗？");
+    const mine = await approval(alice, `${prefix}-own-a`, ["a.ts"]);
+    // An approval store that hands back alice's request whoever asks, as a store with a hole would.
+    const leaky = createInboxNotes({
+      database,
+      authorise,
+      approval: (_owner, requestId) => store.get(alice, requestId),
+    });
+    const refused = (work: () => Promise<unknown>) =>
+      as(alice, work).then(
+        () => "allowed",
+        (error: Error) => error.name,
+      );
+    expect(await refused(() => notes.list(bob, "question", id))).toBe(
+      "ApprovalNotFoundError",
+    );
+    expect(
+      await refused(() => notes.add(bob, "question", id, { text: "偷写" })),
+    ).toBe("ApprovalNotFoundError");
+    expect(await refused(() => notes.remove(bob, "question", id, "x"))).toBe(
+      "ApprovalNotFoundError",
+    );
+    expect(await refused(() => notes.send(bob, "question", id))).toBe(
+      "ApprovalNotFoundError",
+    );
+    expect(await refused(() => leaky.list(bob, "approval", mine))).toBe(
+      "ApprovalNotFoundError",
+    );
+    expect(
+      await refused(() => leaky.add(bob, "approval", mine, { text: "偷写" })),
+    ).toBe("ApprovalNotFoundError");
+    expect(await refused(() => leaky.send(bob, "approval", mine))).toBe(
+      "ApprovalNotFoundError",
+    );
+  });
+});
+
+describe("an item closed while the notes were being sent", () => {
+  test("a question answered after the first check takes no notes, and they are kept", async () => {
+    const id = await question(alice, `${prefix}-race`, "好吗？");
+    await call(on, alice, "POST", `/items/question/${id}/notes`, {
+      text: "留着",
+    });
+    const racing = createInboxNotes({
+      database,
+      // The answer lands between the first check and the send.
+      authorise: async () => {
+        await as(alice, () =>
+          database
+            .update(workItems)
+            .set({ finishedAt: new Date() })
+            .where(eq(workItems.key, id)),
+        );
+      },
+      approval: (owner, requestId) => store.get(owner, requestId),
+    });
+    const before = (await responses(alice)).length;
+    const outcome = await as(alice, () =>
+      racing.send(alice, "question", id),
+    ).then(
+      () => "sent",
+      (error: Error) => error.name,
+    );
+    expect(outcome).toBe("ApprovalNotFoundError");
+    expect((await responses(alice)).length).toBe(before);
+    const kept = await as(alice, () =>
+      database
+        .select()
+        .from(workItems)
+        .where(eq(workItems.key, `question:${id}`)),
+    );
+    expect(JSON.stringify(kept[0]?.payload)).toContain("留着");
+  });
+
+  test("a request decided after the first check takes no notes either", async () => {
+    const id = await approval(alice, `${prefix}-race-a`, ["a.ts"]);
+    await call(on, alice, "POST", `/items/approval/${id}/notes`, {
+      text: "留着",
+    });
+    const racing = createInboxNotes({
+      database,
+      authorise: async () => {
+        await as(alice, () =>
+          database
+            .update(approvalRequests)
+            .set({ status: "approved", decision: "allow_once" })
+            .where(eq(approvalRequests.id, id)),
+        );
+      },
+      approval: (owner, requestId) => store.get(owner, requestId),
+    });
+    const before = (await responses(alice)).length;
+    const outcome = await as(alice, () =>
+      racing.send(alice, "approval", id),
+    ).then(
+      () => "sent",
+      (error: Error) => error.name,
+    );
+    expect(outcome).toBe("ApprovalRefusedError");
+    expect((await responses(alice)).length).toBe(before);
+  });
+});
+
+describe("a question asked in a group", () => {
+  test("the notes go into the group as the person's own words, not as an answer", async () => {
+    const channelId = `${prefix}-group`;
+    const thread = `${prefix}-group-thread`;
+    await as(alice, async () => {
+      await database.insert(agents).values({
+        id: bot,
+        name: "测试员工",
+        type: "built_in",
+        configuration: { systemPrompt: "测试。" },
+      });
+      await database
+        .insert(channels)
+        .values({ id: channelId, name: "群", description: "" });
+      await database
+        .insert(channelMemberships)
+        .values({ channelId, userId: alice });
+      await database.insert(channelAgents).values({ channelId, agentId: bot });
+      await database.insert(groupBotThreads).values({
+        ownerUserId: alice,
+        channelId,
+        agentId: bot,
+        threadId: thread,
+      });
+    });
+    const id = await question(alice, thread, "要不要改成异步？");
+    await call(on, alice, "POST", `/items/question/${id}/notes`, {
+      text: "先说清影响",
+    });
+    const sent = await call(
+      on,
+      alice,
+      "POST",
+      `/items/question/${id}/notes/send`,
+    );
+    expect(sent.status).toBe(200);
+
+    const messages = await as(alice, () =>
+      database
+        .select()
+        .from(groupMessages)
+        .where(eq(groupMessages.channelId, channelId)),
+    );
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.text).toContain("1 条批注");
+    expect(messages[0]?.text).toContain("批注：先说清影响");
+    const turns = await as(alice, () =>
+      database
+        .select()
+        .from(workItems)
+        .where(eq(workItems.kind, GROUP_TURN_KIND)),
+    );
+    const turn = turns.find(
+      (row) => (row.payload as { channelId?: string }).channelId === channelId,
+    );
+    const payload = turn?.payload as {
+      text: string;
+      inResponseTo?: string;
+      agentIds: string[];
+    };
+    expect(payload.text).toBe(messages[0]?.text);
+    // Said as an answer, the group's Bot would read the question as settled.
+    expect(payload.inResponseTo).toBeUndefined();
+    expect(payload.agentIds).toEqual([bot]);
+    // Nothing went to the one-to-one queue, and the question is still open.
+    expect(
+      (await responses(alice)).filter(
+        (row) =>
+          (row.payload as { question: { threadId: string } }).question
+            .threadId === thread,
+      ),
+    ).toEqual([]);
+    const open = await as(alice, () => service.inbox(alice));
+    expect(open.questions.map((item: { id: string }) => item.id)).toContain(id);
   });
 });
 

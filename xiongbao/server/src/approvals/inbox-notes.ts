@@ -15,6 +15,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { groupSourceForRun, submitGroupTurn } from "../channels/group";
 import type { Database } from "../db/client";
+import { approvalRequests } from "../db/schema/approvals";
 import { workItems } from "../db/schema/work";
 import { WORK_OFFERED_TOPIC } from "../work/queue";
 import { type GuidedReview, guidedReview } from "./guided-review";
@@ -27,6 +28,7 @@ import {
   ApprovalNotFoundError,
   type ApprovalRecord,
   ApprovalRefusedError,
+  isAcpAction,
 } from "./types";
 
 export const INBOX_NOTES_KIND = "inbox.notes";
@@ -149,6 +151,9 @@ export function createInboxNotes(deps: {
     }
     const record = await deps.approval(owner, id);
     if (record.ownerUserId !== owner) throw new ApprovalNotFoundError();
+    // Only an outside employee's request: any other is resumed by the approval loop after its decision,
+    // and a turn of the person's own slipped in before that is not something that loop expects.
+    if (!isAcpAction(record.action)) throw new ApprovalNotFoundError();
     if (record.status !== "pending")
       throw new ApprovalRefusedError("This request was already decided.");
     const target = record.action.target as
@@ -293,8 +298,43 @@ export function createInboxNotes(deps: {
               botId: questionConversationBot(one.question),
             })
           : null;
-      return database.transaction(async (tx) =>
-        change(
+      return database.transaction(async (tx) => {
+        /*
+         * The item is read again under a lock, as `respond` reads its question: an answer or a
+         * decision that landed since the check above has closed it, and notes sent after that
+         * would arrive behind it.
+         */
+        if (kind === "question") {
+          const [row] = await tx
+            .select({ finishedAt: workItems.finishedAt })
+            .from(workItems)
+            .where(
+              and(
+                eq(workItems.kind, "person.question"),
+                eq(workItems.key, id),
+                sql`${workItems.payload}->>'actorId' = ${owner}`,
+              ),
+            )
+            .for("update")
+            .limit(1);
+          if (!row || row.finishedAt) throw new ApprovalNotFoundError();
+        } else {
+          const [row] = await tx
+            .select({ status: approvalRequests.status })
+            .from(approvalRequests)
+            .where(
+              and(
+                eq(approvalRequests.id, id),
+                eq(approvalRequests.ownerUserId, owner),
+              ),
+            )
+            .for("update")
+            .limit(1);
+          if (!row) throw new ApprovalNotFoundError();
+          if (row.status !== "pending")
+            throw new ApprovalRefusedError("This request was already decided.");
+        }
+        return change(
           owner,
           kind,
           id,
@@ -311,8 +351,8 @@ export function createInboxNotes(deps: {
                 channelId: group.channelId,
                 messageId: `inbox-notes:${key}`,
                 agentIds: [group.botId],
+                // Not `inResponseTo`: that tells the Bot the person answered its question, and notes are not an answer.
                 text,
-                inResponseTo: one.question.question,
               });
             } else {
               await tx
@@ -337,8 +377,8 @@ export function createInboxNotes(deps: {
             return { id, sent: count };
           },
           tx,
-        ),
-      );
+        );
+      });
     },
   };
 }

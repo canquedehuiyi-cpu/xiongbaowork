@@ -21,6 +21,9 @@ import {
  * 的一段话；点「发送」后合成一条消息，回到发起这件事的对话里，员工不用停下来等。开关没开时这里什么都不画。
  */
 
+/** 一条批注最多这么长；服务器也按这个收。 */
+const NOTE_MAX = 2000;
+
 /** 一条批注引用的那一段，最多这么长；服务器也按这个收。 */
 const QUOTE_MAX = 1000;
 
@@ -82,23 +85,10 @@ function Notes({
   const [quote, setQuote] = useState<NoteInput["quote"] | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [sent, setSent] = useState<number | null>(null);
-  const add = useMutation({
-    ...addNoteMutationOptions(cache, { kind, id }),
-    onSuccess: async () => {
-      setText("");
-      setQuote(null);
-      setSent(null);
-      await cache.invalidateQueries({ queryKey: ["inbox-notes", kind, id] });
-    },
-  });
+  // The factories refresh the notes; what is local to this panel is reset where each is called.
+  const add = useMutation(addNoteMutationOptions(cache, { kind, id }));
   const remove = useMutation(removeNoteMutationOptions(cache, { kind, id }));
-  const send = useMutation({
-    ...sendNotesMutationOptions(cache, { kind, id }),
-    onSuccess: async (count) => {
-      setSent(count);
-      await cache.invalidateQueries({ queryKey: ["inbox-notes", kind, id] });
-    },
-  });
+  const send = useMutation(sendNotesMutationOptions(cache, { kind, id }));
   const held = notes.data?.notes ?? [];
   const error = notes.error ?? add.error ?? remove.error ?? send.error;
 
@@ -177,6 +167,7 @@ function Notes({
         ) : null}
         <Textarea
           aria-label="写一条批注"
+          maxLength={NOTE_MAX}
           onChange={(event) => setText(event.target.value)}
           placeholder="写一条批注"
           value={text}
@@ -195,7 +186,16 @@ function Notes({
           <Button
             disabled={add.isPending || !text.trim()}
             onClick={() =>
-              add.mutate({ text: text.trim(), ...(quote ? { quote } : {}) })
+              add.mutate(
+                { text: text.trim(), ...(quote ? { quote } : {}) },
+                {
+                  onSuccess: () => {
+                    setText("");
+                    setQuote(null);
+                    setSent(null);
+                  },
+                },
+              )
             }
             size="sm"
             variant="outline"
@@ -214,7 +214,7 @@ function Notes({
         <div>
           <Button
             disabled={send.isPending || held.length === 0}
-            onClick={() => send.mutate()}
+            onClick={() => send.mutate(undefined, { onSuccess: setSent })}
           >
             {send.isPending
               ? "正在发送…"
@@ -224,11 +224,16 @@ function Notes({
           </Button>
         </div>
         <p className="m-0 text-[12px] text-muted-foreground">
-          发送后，所有批注会合成一条消息回到发起它的对话。员工不用停下来等，这条事项也还在这里等你确认。
+          {kind === "approval"
+            ? "批注会在你批准或拒绝后送到员工。"
+            : "发送后，所有批注会合成一条消息回到发起它的对话。员工不用停下来等，这条事项也还在这里等你确认。"}
         </p>
         {sent !== null ? (
           <p className="m-0 text-[13px]" role="status">
-            已发送 {sent} 条批注，员工会在对话里看到。
+            已发送 {sent} 条批注，
+            {kind === "approval"
+              ? "会在你批准或拒绝后送到员工。"
+              : "员工会在对话里看到。"}
           </p>
         ) : null}
         {error ? (

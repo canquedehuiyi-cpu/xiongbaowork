@@ -54,11 +54,18 @@ export const SOURCE_EXTENSIONS: readonly string[] = [
   ".sh",
 ];
 
+/** Dependency lists: plumbing even where the extension (`.txt`) would read as documentation. Checked first. */
+export const DEPENDENCY_PATH_PATTERNS: readonly RegExp[] = [
+  /(^|\/)requirements[^/]*\.txt$/,
+  /(^|\/)(go\.mod|gemfile|gemfile\.lock|pyproject\.toml|cargo\.toml)$/,
+];
+
 /** Matched against the whole path, lower-cased, with `/` separators. */
 export const IMPACT_PATH_PATTERNS: readonly RegExp[] = [
   /(^|\/)(tests?|__tests__|spec|specs|e2e)\//,
   /\.(test|spec)\.[a-z0-9]+$/,
-  /(^|\/)docs?\//,
+  /(^|\/)docs\//,
+  /^doc\//,
   /\.(md|mdx|rst|txt)$/,
   /(^|\/)(drizzle|migrations?)\//,
   /\.sql$/,
@@ -92,6 +99,8 @@ const isSource = (path: string) =>
  */
 export function chapterOf(path: string): ReviewChapterId {
   const clean = tidy(path);
+  if (DEPENDENCY_PATH_PATTERNS.some((pattern) => pattern.test(clean)))
+    return "glue";
   if (IMPACT_PATH_PATTERNS.some((pattern) => pattern.test(clean)))
     return "impact";
   if (GLUE_PATH_PATTERNS.some((pattern) => pattern.test(clean))) return "glue";
@@ -111,7 +120,16 @@ export type GuidedReview = {
 
 /** The three chapters, in reading order, each with its files in the order they were given. Null for a change that is not code. */
 export function guidedReview(files: readonly string[]): GuidedReview | null {
-  const unique = [...new Set(files.map((file) => file.trim()).filter(Boolean))];
+  // One file under two spellings (case, separators) is listed once, as first written.
+  const seen = new Set<string>();
+  const unique = files
+    .map((file) => file.trim())
+    .filter((file) => {
+      const key = tidy(file);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   if (!isCodeChange(unique)) return null;
   return REVIEW_CHAPTER_IDS.map((id) => ({
     id,

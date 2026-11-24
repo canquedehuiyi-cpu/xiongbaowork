@@ -198,6 +198,12 @@ test("开关开着：问题卡上可以连写几条批注，一条带引用，�
     inbox();
   const box = (await findByLabelText("写一条批注")) as HTMLTextAreaElement;
 
+  // 提问类：员工的那一轮已经结束，批注发出去员工不用停下来等；输入框限长与服务器一致。
+  expect(container.querySelector("[data-inbox-notes]")?.textContent).toContain(
+    "员工不用停下来等",
+  );
+  expect(box.maxLength).toBe(2000);
+
   // 先写不带引用的一条。
   fireEvent.change(box, { target: { value: "先说清楚影响哪些调用方" } });
   fireEvent.click(getByRole("button", { name: "添加批注" }));
@@ -368,8 +374,11 @@ test("审批页：代码改动分三章显示，每章一句说明；开关没�
   expect(chapters[0]?.textContent).toContain("第 1 章");
   expect(chapters[0]?.textContent).toContain("核心改动");
   expect(chapters[2]?.textContent).toContain("package.json");
-  // 审批页上也能写批注。
-  expect(on.container.querySelector("[data-inbox-notes]")).not.toBeNull();
+  // 审批页上也能写批注；请求要等你决定，所以说明批注什么时候送到，不说员工不用停。
+  const panel = on.container.querySelector("[data-inbox-notes]");
+  expect(panel).not.toBeNull();
+  expect(panel?.textContent).toContain("批注会在你批准或拒绝后送到员工。");
+  expect(panel?.textContent).not.toContain("员工不用停下来等");
   cleanup();
 
   inboxNotes = false;

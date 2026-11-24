@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
 import { createPersonResponseTick } from "../src/approvals/person-response-sweep";
 import {
   PERSON_QUESTION_WAITING,
   resumePersonQuestion,
 } from "../src/approvals/question-resume";
 import type { PersonQuestion } from "../src/approvals/questions";
+
+type TurnRunner = Parameters<typeof resumePersonQuestion>[0]["runTurn"];
 
 /**
  * 批注回到会话的最后一段：排队的消息怎样被续跑。批注不是答复，原样交给发起它的会话，
