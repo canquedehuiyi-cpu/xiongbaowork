@@ -1,0 +1,695 @@
+{
+  "version": 1,
+  "description": "控制方对三个 PR 的审查报告里已确认、且之后被修掉的问题。行号是被审查那个版本（range.to）里的行。",
+  "source": ".superpowers/sdd/2026-11-23-deliverables-ready/（phase5-security-review.md、p5-secfix-rereview.md、fix-artifacts-review.md、fix-artifacts-rereview.md、fix-group-turn-review.md、fix-group-turn-rereview.md）",
+  "tolerance": 10,
+  "prs": [
+    {
+      "id": "pr-807",
+      "number": 807,
+      "title": "交付即可用 第 5 期：从对话里打开员工电脑上运行的程序（整期安全审查，修复前）",
+      "range": {
+        "from": "f91867ab^1",
+        "to": "3cc42cc2",
+        "fixedBy": ["31efa251", "b4ee06fd", "ef5edc2e"]
+      },
+      "items": [
+        {
+          "id": "807-I1",
+          "severity": "important",
+          "summary": "已建立的 HTTP 流式响应不受撤销、到期和 12 小时上限约束：被移出群的人仍能持续收到程序的实时数据。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/content/forward.ts",
+              "start": 414,
+              "end": 421,
+              "inDiff": true
+            },
+            {
+              "file": "xiongbao/server/src/content/forward.ts",
+              "start": 737,
+              "end": 740,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "stream",
+            "sse",
+            "revok",
+            "revocation",
+            "recheck",
+            "expire",
+            "expiry",
+            "12 hour",
+            "12h",
+            "流式",
+            "撤销",
+            "到期",
+            "移出",
+            "上限",
+            "长连接",
+            "body"
+          ]
+        },
+        {
+          "id": "807-I2",
+          "severity": "important",
+          "summary": "端口模式下程序响应的缓存头原样转出：先开的程序可在之后打开的程序里通过浏览器缓存持续执行脚本。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/content/forward.ts",
+              "start": 365,
+              "end": 421,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "cache",
+            "cache-control",
+            "no-store",
+            "etag",
+            "immutable",
+            "缓存"
+          ]
+        },
+        {
+          "id": "807-I3",
+          "severity": "important",
+          "summary": "run 范围的程序授权不核对交付者：可打开同群另一位员工没交付的程序（越权）。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/computer/artifact-access.ts",
+              "start": 219,
+              "end": 241,
+              "inDiff": true
+            },
+            {
+              "file": "xiongbao/server/src/computer/artifact-access.ts",
+              "start": 383,
+              "end": 388,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "agentid",
+            "other employee",
+            "another employee",
+            "same group",
+            "not deliver",
+            "delivered by",
+            "越权",
+            "别的员工",
+            "另一位员工",
+            "没交付",
+            "交付者",
+            "botid",
+            "ownseat",
+            "fallback",
+            "回退"
+          ]
+        },
+        {
+          "id": "807-I4",
+          "severity": "important",
+          "summary": "任务页（没有侧栏）打开程序时没有端口模式提示，用户要求的提示缺一条路径。",
+          "locations": [
+            {
+              "file": "xiongbao/app/src/components/channels/app-open-button.tsx",
+              "start": 31,
+              "end": 46,
+              "inDiff": true
+            },
+            {
+              "file": "xiongbao/app/src/routes/_authed/_app/tasks.$taskId.tsx",
+              "start": 243,
+              "end": 252,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "port mode",
+            "notice",
+            "warning",
+            "warn",
+            "提示",
+            "端口模式",
+            "新标签",
+            "new tab",
+            "openInNewTab",
+            "preview"
+          ]
+        },
+        {
+          "id": "807-M1",
+          "severity": "minor",
+          "summary": "WebSocket 周期复查走 60 秒缓存，撤销最坏约 120 秒才断开。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/content/forward.ts",
+              "start": 510,
+              "end": 535,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "cache",
+            "recheck",
+            "60",
+            "120",
+            "撤销",
+            "缓存",
+            "allowed",
+            "stillallowed"
+          ]
+        },
+        {
+          "id": "807-M2",
+          "severity": "minor",
+          "summary": "内容源监听用 Bun 默认 10 秒空闲超时，慢接口与长间隔 SSE 会被提前断开。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/http-server.ts",
+              "start": 335,
+              "end": 357,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "timeout",
+            "idle",
+            "10 s",
+            "10s",
+            "10 秒",
+            "空闲",
+            "超时",
+            "sse"
+          ]
+        },
+        {
+          "id": "807-M3",
+          "severity": "minor",
+          "summary": "限流键不含人：一个人刷请求，同一员工的其他观看者被连带 429；额度对 Vite 首屏偏低。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/content/forward.ts",
+              "start": 425,
+              "end": 440,
+              "inDiff": true
+            }
+          ],
+          "keywords": ["rate", "limit", "429", "限流", "额度", "key"]
+        },
+        {
+          "id": "807-M7",
+          "severity": "minor",
+          "summary": "首页路径长度上限不一致：证据门 2000、打开路由 1024，超过 1024 的程序能交付但打不开。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/tasks/evidence-gate.ts",
+              "start": 80,
+              "end": 95,
+              "inDiff": true
+            },
+            {
+              "file": "xiongbao/server/src/content/open-routes.ts",
+              "start": 60,
+              "end": 75,
+              "inDiff": true
+            }
+          ],
+          "keywords": ["2000", "1024", "length", "长度", "上限", "path"]
+        },
+        {
+          "id": "807-M8",
+          "severity": "minor",
+          "summary": "客户端 IP 类请求头（cf-connecting-ip、true-client-ip 等）没有全清，转给了程序。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/content/forward.ts",
+              "start": 230,
+              "end": 260,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "x-forwarded",
+            "x-real-ip",
+            "cf-connecting-ip",
+            "true-client-ip",
+            "client ip",
+            "ip",
+            "header",
+            "请求头",
+            "隐私"
+          ]
+        },
+        {
+          "id": "807-M10",
+          "severity": "minor",
+          "summary": "模块注释说应用的 cookie 程序读不到，实际端口模式下程序脚本能读到同主机上所有非 HttpOnly cookie。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/content/forward.ts",
+              "start": 25,
+              "end": 40,
+              "inDiff": true
+            }
+          ],
+          "keywords": ["cookie", "httponly", "comment", "注释", "readable"]
+        },
+        {
+          "id": "807-M4",
+          "severity": "minor",
+          "resolution": "文档",
+          "summary": "域名模式下转给程序的 cookie 含父域上的 HttpOnly cookie；内容域名应是单独的可注册域（部署文档补充，未改代码）。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/content/forward.ts",
+              "start": 250,
+              "end": 270,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "parent domain",
+            "父域",
+            "domain mode",
+            "域名模式",
+            "cookie",
+            "sso",
+            "可注册域",
+            "subdomain",
+            "子域"
+          ]
+        },
+        {
+          "id": "807-M5",
+          "severity": "minor",
+          "resolution": "文档",
+          "summary": "共享模式（COMPUTER_PER_BOT_USERS=off）下 uid 分不出员工，A 的交付可列出 B 的端口（部署文档补充，未改代码）。",
+          "locations": [
+            {
+              "file": "xiongbao/docs/deployment-xiongbao.md",
+              "start": 170,
+              "end": 180,
+              "inDiff": false
+            }
+          ],
+          "keywords": [
+            "per_bot_users",
+            "shared mode",
+            "共享模式",
+            "uid",
+            "pwuser",
+            "另一位员工",
+            "other employee"
+          ]
+        },
+        {
+          "id": "807-M6",
+          "severity": "minor",
+          "resolution": "文档",
+          "summary": "不带范围的 app 打开只查 canUseBot，可打开自己员工座位上的任意端口，不限交付里声明的端口（部署文档补充，未改代码）。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/content/access.ts",
+              "start": 55,
+              "end": 80,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "scope",
+            "范围",
+            "canusebot",
+            "任意端口",
+            "any port",
+            "声明",
+            "delivered port",
+            "交付里"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pr-810",
+      "number": 810,
+      "title": "修复：员工一轮的产物记录在分段/跨运行时丢失；内容源请求缺租户帧（第一轮审查，修复前）",
+      "range": {
+        "from": "660f85dd",
+        "to": "83665947",
+        "fixedBy": ["ea6fe57c"]
+      },
+      "items": [
+        {
+          "id": "810-I1",
+          "severity": "important",
+          "summary": "服务器执行电脑工具的单聊里中途调用页面工具，一轮被拆到几个 run；最终 run 上没有产物事件，后一个 run 里的交付下载 404。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/threads/chat-server-tools.ts",
+              "start": 351,
+              "end": 368,
+              "inDiff": true
+            },
+            {
+              "file": "xiongbao/server/src/computer/turn-artifacts.ts",
+              "start": 164,
+              "end": 190,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "wholeturn",
+            "threadid",
+            "continue",
+            "carry",
+            "split",
+            "multiple run",
+            "several run",
+            "run-2",
+            "page tool",
+            "frontend tool",
+            "拆",
+            "跨 run",
+            "页面工具",
+            "续跑",
+            "下载",
+            "404",
+            "final run",
+            "最终 run"
+          ]
+        },
+        {
+          "id": "810-M1",
+          "severity": "minor",
+          "summary": "新一轮替换或淘汰旧的 carried 条目时，旧的网关标记不清理，累积后挤占本轮标记的 flush 预算。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/computer/turn-artifacts.ts",
+              "start": 98,
+              "end": 125,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "mark",
+            "forget",
+            "leak",
+            "evict",
+            "stale",
+            "pending",
+            "清理",
+            "标记",
+            "淘汰",
+            "泄漏",
+            "carriedover",
+            "carryover"
+          ]
+        },
+        {
+          "id": "810-M2",
+          "severity": "minor",
+          "summary": "run 停在因审批被扣住的服务器工具上时仍推迟比对，审批续跑后前半段改动永远不列出。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/computer/turn-artifacts.ts",
+              "start": 164,
+              "end": 190,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "interrupt",
+            "approval",
+            "held",
+            "waiting",
+            "审批",
+            "扣住",
+            "推迟",
+            "defer"
+          ]
+        },
+        {
+          "id": "810-M3",
+          "severity": "minor",
+          "summary": "carried 条目没有 TTL：共享电脑时被扣住的标记会把时间窗拉长，别人的改动被列到本人 run 上。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/computer/turn-artifacts.ts",
+              "start": 40,
+              "end": 80,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "ttl",
+            "expire",
+            "timeout",
+            "shared computer",
+            "共享",
+            "时间窗",
+            "过期",
+            "无限期",
+            "unbounded"
+          ]
+        },
+        {
+          "id": "810-M6",
+          "severity": "minor",
+          "summary": "continues 用「末条消息不是 user」判断续跑太粗：追加 system/developer 消息会被当成续跑，多列出上一轮的文件。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/copilot.ts",
+              "start": 2860,
+              "end": 2880,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "continues",
+            "role",
+            "last message",
+            "末条",
+            "续跑",
+            "system",
+            "developer",
+            "tool message"
+          ]
+        },
+        {
+          "id": "810-M4",
+          "severity": "minor",
+          "summary": "让位只按 runId 判断，没有带 botId：将来同一个 runId 下另一位员工的观察可能被误让位。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/computer/turn-artifacts.ts",
+              "start": 186,
+              "end": 192,
+              "inDiff": true
+            },
+            {
+              "file": "xiongbao/server/src/computer/turn-artifacts.ts",
+              "start": 228,
+              "end": 236,
+              "inDiff": true
+            },
+            {
+              "file": "xiongbao/server/src/computer/turn-artifacts.ts",
+              "start": 66,
+              "end": 75,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "runid",
+            "botid",
+            "wholeturnof",
+            "让位",
+            "yield",
+            "alslocal",
+            "asynclocalstorage",
+            "same run"
+          ]
+        },
+        {
+          "id": "810-M8",
+          "severity": "minor",
+          "summary": "外层 observeTurn 现在对所有带无头工具的无人值守轮生效，包括外部员工（ACP），行为面扩大。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/routines/run-turn.ts",
+              "start": 90,
+              "end": 126,
+              "inDiff": true
+            },
+            {
+              "file": "xiongbao/toolkit/src/run-turn.ts",
+              "start": 1010,
+              "end": 1030,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "observeturn",
+            "unattended",
+            "external",
+            "acp",
+            "behavior",
+            "behaviour",
+            "行为",
+            "外部员工",
+            "无人值守",
+            "scope",
+            "范围"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pr-812",
+      "number": 812,
+      "title": "修复：群聊被停或出错的轮没有产物清单；带电脑员工群聊时限对齐 25 分钟（第一轮审查，修复前）",
+      "range": {
+        "from": "5c4f62f5",
+        "to": "8a4ac553",
+        "fixedBy": ["33fc0be2", "a08f0d00"]
+      },
+      "items": [
+        {
+          "id": "812-C1",
+          "severity": "critical",
+          "summary": "群聊里出错或被停的轮，回复行不记产物：run 事件有清单但群聊界面读回复行，没有任何下载链接。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/channels/group.ts",
+              "start": 2356,
+              "end": 2376,
+              "inDiff": false
+            }
+          ],
+          "keywords": [
+            "reply row",
+            "回复行",
+            "finish",
+            "withturnartifacts",
+            "details",
+            "group.ts",
+            "failed",
+            "出错",
+            "被停",
+            "没有清单",
+            "界面"
+          ]
+        },
+        {
+          "id": "812-C2",
+          "severity": "critical",
+          "summary": "群聊轮时限提到 25 分钟，超过队列租约 15 分钟且跑的过程中不续租：多副本下另一副本接管同一项，出现先失败后成功、抢答。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/routines/run-turn.ts",
+              "start": 136,
+              "end": 153,
+              "inDiff": true
+            },
+            {
+              "file": "xiongbao/server/src/channels/group.ts",
+              "start": 3100,
+              "end": 3150,
+              "inDiff": false
+            }
+          ],
+          "keywords": [
+            "lease",
+            "租约",
+            "renew",
+            "续租",
+            "claim",
+            "replica",
+            "副本",
+            "15 min",
+            "15 分钟",
+            "25",
+            "takeover",
+            "接管"
+          ]
+        },
+        {
+          "id": "812-I1",
+          "severity": "important",
+          "summary": "群聊 sweep 在每个副本里串行：单个 25 分钟的慢轮会让同副本上所有群聊排队（队头阻塞）。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/index.ts",
+              "start": 5856,
+              "end": 5876,
+              "inDiff": false
+            },
+            {
+              "file": "xiongbao/server/src/channels/group.ts",
+              "start": 3096,
+              "end": 3116,
+              "inDiff": false
+            }
+          ],
+          "keywords": [
+            "sweep",
+            "serial",
+            "serialize",
+            "串行",
+            "排队",
+            "head-of-line",
+            "队头",
+            "blocking",
+            "阻塞",
+            "queue",
+            "并行",
+            "concurren"
+          ]
+        },
+        {
+          "id": "812-I2",
+          "severity": "important",
+          "summary": "时限停轮后的比对最长 15 秒，超过 5 秒 abortGrace，被 backstop 当成「停不下来」：结局误报、清单丢失。",
+          "locations": [
+            {
+              "file": "xiongbao/server/src/computer/turn-artifacts.ts",
+              "start": 250,
+              "end": 310,
+              "inDiff": true
+            },
+            {
+              "file": "xiongbao/toolkit/src/run-turn.ts",
+              "start": 1272,
+              "end": 1307,
+              "inDiff": false
+            },
+            {
+              "file": "xiongbao/toolkit/src/run-turn.ts",
+              "start": 1009,
+              "end": 1025,
+              "inDiff": true
+            }
+          ],
+          "keywords": [
+            "backstop",
+            "abortgrace",
+            "grace",
+            "15 s",
+            "15 秒",
+            "5 秒",
+            "deadline",
+            "timeout",
+            "timedout",
+            "stopturn",
+            "比对",
+            "settle",
+            "race",
+            "超时"
+          ]
+        }
+      ]
+    }
+  ]
+}

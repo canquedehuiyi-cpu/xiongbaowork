@@ -1,0 +1,87 @@
+# Pre-review of a pull request by open-code-review (https://github.com/alibaba/open-code-review, Apache-2.0).
+# REPORT ONLY: the job uploads one artifact and nothing else. It does not comment on the pull request,
+# approve, request changes, label, or touch the merge button, and it never fails the pull request's checks
+# (`continue-on-error`).
+#
+# It runs only
+#   - by hand (workflow_dispatch, with the range as two inputs), or
+#   - on a pull request from this repository that carries the label `ocr-review` (labelled, pushed to, or
+#     reopened while labelled). There is no pull_request_target: a pull request from a fork never reaches
+#     the key, and the job refuses it anyway.
+#
+# The model key is the Environment secret OCR_API_KEY of the GitHub Environment `ocr-review` (create it
+# first; give it a required reviewer, because a labelled pull request runs the script of its own merge
+# commit). Model and provider are variables of the same Environment, with defaults when unset:
+#   secret    OCR_API_KEY       the key (no repository- or organisation-level secret is named here)
+#   variable  OCR_PROVIDER      default deepseek    (`ocr llm providers` lists the built-in ones)
+#   variable  OCR_MODEL         default deepseek-v4-flash
+#   variable  OCR_TOKEN_BUDGET  default 1500000     (input + output tokens for the whole review)
+# Without the key the run is skipped and the artifact says so. How to run it by hand, how to read the report,
+# and the benchmark behind it: xiongbao/scripts/review/ocr/README.md.
+name: OCR 预审（只出报告）
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: "范围的起点（分支名或提交），按 merge-base 比较：ocr review --from <base> --to <head>"
+        type: string
+        default: origin/main
+      head:
+        description: "范围的终点（分支名或提交）"
+        type: string
+        default: HEAD
+  pull_request:
+    types: [labeled, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ocr-review-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ocr-review:
+    name: OCR 预审
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       contains(github.event.pull_request.labels.*.name, 'ocr-review') &&
+       (github.event.action != 'labeled' || github.event.label.name == 'ocr-review'))
+    runs-on: ubuntu-latest
+    environment: ocr-review
+    continue-on-error: true
+    timeout-minutes: 30
+    steps:
+      # The whole history: the range is compared from its merge-base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # Inputs and the pull request's refs reach the script as environment variables, never spliced into it.
+      - name: Pre-review the range
+        env:
+          OCR_API_KEY: ${{ secrets.OCR_API_KEY }}
+          OCR_PROVIDER: ${{ vars.OCR_PROVIDER || 'deepseek' }}
+          OCR_MODEL: ${{ vars.OCR_MODEL || 'deepseek-v4-flash' }}
+          OCR_TOKEN_BUDGET: ${{ vars.OCR_TOKEN_BUDGET || '1500000' }}
+          OCR_BASE: ${{ github.event.pull_request.base.sha || inputs.base }}
+          OCR_HEAD: ${{ github.event.pull_request.head.sha || inputs.head }}
+          OCR_OUT_DIR: ${{ runner.temp }}/ocr-report
+        run: bash xiongbao/scripts/review/ocr/run-review.sh
+      - name: Show the outcome on the run page
+        if: always()
+        env:
+          OCR_OUT_DIR: ${{ runner.temp }}/ocr-report
+        run: |
+          for file in summary.md SKIPPED.txt; do
+            if [ -f "$OCR_OUT_DIR/$file" ]; then cat "$OCR_OUT_DIR/$file" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: ocr-review-report
+          path: ${{ runner.temp }}/ocr-report
+          if-no-files-found: warn
+          retention-days: 14

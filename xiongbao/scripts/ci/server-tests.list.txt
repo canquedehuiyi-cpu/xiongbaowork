@@ -605,6 +605,7 @@ tests/network-allowlist-translate.test.ts
 tests/new-bot-without-managed-bot.integration.test.ts
 tests/new-tables-grants.integration.test.ts
 tests/oauth-refresh-redirect.test.ts
+tests/ocr-review-workflow.test.ts
 tests/offboarding-retirement.integration.test.ts
 tests/onboarding-routes.test.ts
 tests/openai-compatible-endpoint.test.ts
