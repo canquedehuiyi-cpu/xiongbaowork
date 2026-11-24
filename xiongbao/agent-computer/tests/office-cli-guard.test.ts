@@ -16,6 +16,8 @@ import {
   GuardRefusal,
   guardInvocation,
   inspect,
+  passwdHome,
+  productionOptions,
   workspaceRoot,
 } from "../office-cli/guard";
 
@@ -370,10 +372,35 @@ describe("a project that names files", () => {
     expect(run(["--project", name, "export", "render", "o.docx"])).toBe(null);
   });
 
-  test("a project that is missing, or not JSON, is left to the tool", () => {
-    writeFileSync(join(root, "not-json.json"), "{ nope");
-    expect(run(["--project", "not-json.json", "document", "info"])).toBe(null);
+  test("a project that is missing is left to the tool; one that is not standard JSON is refused", () => {
     expect(run(["--project", "absent.json", "document", "info"])).toBe(null);
+    writeFileSync(join(root, "not-json.json"), "{ nope");
+    expect(() =>
+      run(["--project", "not-json.json", "document", "info"]),
+    ).toThrow(GuardRefusal);
+  });
+
+  test("Python's json takes NaN and Infinity, JSON.parse does not, so a file with one is refused rather than skipped", () => {
+    for (const literal of ["NaN", "Infinity", "-Infinity"]) {
+      writeFileSync(
+        join(root, "nan.json"),
+        `{"type":"writer","metadata":{"x":${literal}},"content":[{"type":"image_ref","path":"${join(outside, "secret.png")}"}]}`,
+      );
+      expect(() =>
+        run(["--project", "nan.json", "export", "render", "o.pdf"]),
+      ).toThrow("不是标准 JSON");
+      expect(() => run(["repl"], "document open nan.json\nexit\n")).toThrow(
+        GuardRefusal,
+      );
+    }
+    // The same literal in an ordinary project is refused too: nothing is vouched for in a file the guard cannot read.
+    writeFileSync(
+      join(root, "nan-plain.json"),
+      '{"type":"writer","x":NaN,"content":[]}',
+    );
+    expect(() =>
+      run(["--project", "nan-plain.json", "document", "info"]),
+    ).toThrow(GuardRefusal);
   });
 });
 
@@ -428,6 +455,47 @@ describe("workspaceRoot", () => {
     } finally {
       process.env.HOME = before;
       delete process.env.XIONGBAO_OFFICE_CLI_ROOT;
+    }
+  });
+});
+
+describe("the account's home", () => {
+  test("it is read from the passwd file by uid", () => {
+    const file = join(base, "passwd");
+    writeFileSync(
+      file,
+      [
+        "root:x:0:0:root:/root:/bin/bash",
+        "xb-alice:x:20001:20001::/workspace/bots/alice:/usr/sbin/nologin",
+        "broken-line",
+        "bob:x:20002:20002::/workspace/bots/bob:/usr/sbin/nologin",
+      ].join("\n"),
+    );
+    expect(passwdHome(20001, file)).toBe("/workspace/bots/alice");
+    expect(passwdHome(20002, file)).toBe("/workspace/bots/bob");
+    expect(passwdHome(0, file)).toBe("/root");
+    expect(passwdHome(12345, file)).toBe("");
+    expect(passwdHome(1, join(base, "no-such-passwd"))).toBe("");
+  });
+
+  test("HOME in the environment does not change it, which Bun's os.userInfo() would", () => {
+    const uid = process.getuid?.() ?? 0;
+    const bots = join(base, "bots-prod");
+    mkdirSync(join(bots, "alice"), { recursive: true });
+    mkdirSync(join(bots, "bob"), { recursive: true });
+    const passwd = join(base, "passwd-prod");
+    writeFileSync(
+      passwd,
+      `me:x:${uid}:${uid}::${join(bots, "alice")}:/bin/sh\n`,
+    );
+    const savedHome = process.env.HOME;
+    process.env.HOME = join(bots, "bob");
+    try {
+      expect(
+        productionOptions({ passwdFile: passwd, bots, shared: root }).root,
+      ).toBe(join(bots, "alice"));
+    } finally {
+      process.env.HOME = savedHome;
     }
   });
 });
@@ -543,6 +611,53 @@ process.exit(await main(args, () => ({
     expect(existsSync(log)).toBe(false);
     expect(existsSync(join(outside, "x.json"))).toBe(false);
   });
+
+  test("a SIGTERM ends the tool, removes the run's HOME and reports 143", async () => {
+    const slow = join(base, "slow-tool.sh");
+    const homeFile = join(base, "slow-home.txt");
+    rmSync(homeFile, { force: true });
+    writeFileSync(
+      slow,
+      `#!/bin/sh\nprintf '%s' "$HOME" > "${homeFile}"\nexec sleep 30\n`,
+      {
+        mode: 0o755,
+      },
+    );
+    const child = Bun.spawn(["bun", runner, slow, root, "writer", "list"], {
+      cwd: root,
+      env: { PATH: process.env.PATH ?? "" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    for (let waited = 0; !existsSync(homeFile) && waited < 100; waited++)
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    const home = readFileSync(homeFile, "utf8");
+    expect(home).toStartWith(join(tmpdir(), "xb-office-cli-"));
+    expect(existsSync(home)).toBe(true);
+    child.kill("SIGTERM");
+    expect(await child.exited).toBe(143);
+    expect(existsSync(home)).toBe(false);
+    // The tool is gone with it: nothing of that run still holds the folder.
+    const left = Bun.spawnSync(["pgrep", "-f", `sleep 30`]);
+    expect(new TextDecoder().decode(left.stdout)).not.toContain(
+      String(child.pid),
+    );
+  });
+
+  test("a folder that cannot be removed does not replace the tool's exit code", async () => {
+    // The tool exits 7 and leaves its HOME read-only with something inside, which rmSync cannot delete as a non-root user;
+    // as root the removal simply works, and either way the exit code must stay 7.
+    const tool = join(base, "exit7-tool.sh");
+    writeFileSync(
+      tool,
+      `#!/bin/sh\nmkdir "$HOME/d" && : > "$HOME/d/f" && chmod 0500 "$HOME/d" 2>/dev/null\nexit 7\n`,
+      { mode: 0o755 },
+    );
+    const result = await spawn(["bun", runner, tool, root, "writer", "list"], {
+      stdin: null,
+    });
+    expect(result.code).toBe(7);
+  });
 });
 
 describe("the launcher", () => {
@@ -552,7 +667,10 @@ describe("the launcher", () => {
   );
 
   /** The launcher with its /opt and bun paths pointed at a test folder, otherwise as shipped. */
-  function installLauncher(bunfigText: string): {
+  function installLauncher(
+    bunfigText: string,
+    extra: Record<string, string> = {},
+  ): {
     launcher: string;
     folder: string;
   } {
@@ -562,10 +680,11 @@ describe("the launcher", () => {
     );
     mkdirSync(folder, { recursive: true });
     writeFileSync(join(folder, "bunfig.toml"), "");
+    writeFileSync(join(folder, "tsconfig.json"), "{}\n");
     // A guard stand-in that reports whether the workspace's bunfig ran and what environment it got.
     writeFileSync(
       join(folder, "guard.ts"),
-      `console.log("ENV:" + JSON.stringify({ root: process.env.XIONGBAO_OFFICE_CLI_ROOT ?? null, bin: process.env.XIONGBAO_OFFICE_CLI_BIN ?? null, opts: process.env.BUN_OPTIONS ?? null, dot: process.env.FROM_DOTENV ?? null }));\n`,
+      `import { existsSync } from "node:fs";\nvoid existsSync;\nconsole.log("ENV:" + JSON.stringify({ root: process.env.XIONGBAO_OFFICE_CLI_ROOT ?? null, bin: process.env.XIONGBAO_OFFICE_CLI_BIN ?? null, opts: process.env.BUN_OPTIONS ?? null, dot: process.env.FROM_DOTENV ?? null }));\n`,
     );
     const launcher = join(folder, "xb-office-cli");
     writeFileSync(
@@ -584,6 +703,8 @@ describe("the launcher", () => {
       `require("node:fs").writeFileSync(${JSON.stringify(join(folder, "PWNED"))}, "x");\n`,
     );
     writeFileSync(join(workspace, ".env"), "FROM_DOTENV=1\n");
+    for (const [name, text] of Object.entries(extra))
+      writeFileSync(join(workspace, name), text);
     return { launcher, folder };
   }
 
@@ -626,12 +747,98 @@ describe("the launcher", () => {
     expect(existsSync(join(folder, "PWNED"))).toBe(true);
   });
 
+  const hijack = {
+    // `paths` with a "*" key makes bun resolve the guard's own `node:` imports to a file of the workspace.
+    config: JSON.stringify({
+      compilerOptions: { baseUrl: ".", paths: { "*": ["./hijack.ts"] } },
+    }),
+    code: `await Bun.write(${JSON.stringify("PWNED")}.replace(/^/, process.env.PWNED_DIR ?? ""), "x");\nexport const existsSync = () => false;\n`,
+  };
+
+  for (const name of ["tsconfig.json", "jsconfig.json"]) {
+    test(`a ${name} in the workspace that redirects the guard's imports is not read`, async () => {
+      const { launcher, folder } = installLauncher("", {
+        [name]: hijack.config,
+        "hijack.ts": hijack.code,
+      });
+      const workspace = join(folder, "workspace");
+      const env = { PATH: process.env.PATH ?? "", PWNED_DIR: `${folder}/` };
+      const guarded = Bun.spawn(["sh", launcher, "writer", "list"], {
+        cwd: workspace,
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [code, out] = await Promise.all([
+        guarded.exited,
+        new Response(guarded.stdout).text(),
+      ]);
+      expect(code).toBe(0);
+      expect(out).toContain("ENV:");
+      expect(existsSync(join(folder, "PWNED"))).toBe(false);
+      // The control: started the way an unprotected launcher would, the same workspace file runs.
+      const bare = Bun.spawn([process.execPath, join(folder, "guard.ts")], {
+        cwd: workspace,
+        env,
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      await bare.exited;
+      expect(existsSync(join(folder, "PWNED"))).toBe(true);
+    });
+  }
+
+  test("a package.json, a node_modules and an .npmrc in the workspace do not reach the guard's imports", async () => {
+    // The guard imports only node: built-ins, so none of these is consulted: this pins that down.
+    const evil = `await Bun.write(${JSON.stringify("PWNED")}.replace(/^/, process.env.PWNED_DIR ?? ""), "x");\nexport const existsSync = () => false;\n`;
+    const { launcher, folder } = installLauncher("", {
+      "package.json": JSON.stringify({
+        name: "w",
+        type: "commonjs",
+        main: "./hijack.js",
+        browser: { "node:fs": "./hijack.ts" },
+        imports: { "#fs": "./hijack.ts" },
+        exports: { ".": "./hijack.ts" },
+        workspaces: ["."],
+      }),
+      ".npmrc": "registry=http://127.0.0.1:9\n",
+      "hijack.ts": evil,
+    });
+    const workspace = join(folder, "workspace");
+    for (const dir of ["node:fs", "fs", "node"]) {
+      mkdirSync(join(workspace, "node_modules", dir), { recursive: true });
+      writeFileSync(join(workspace, "node_modules", dir, "index.ts"), evil);
+      writeFileSync(
+        join(workspace, "node_modules", dir, "package.json"),
+        JSON.stringify({ name: dir, main: "index.ts" }),
+      );
+    }
+    const child = Bun.spawn(["sh", launcher, "writer", "list"], {
+      cwd: workspace,
+      env: { PATH: process.env.PATH ?? "", PWNED_DIR: `${folder}/` },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [code, out] = await Promise.all([
+      child.exited,
+      new Response(child.stdout).text(),
+    ]);
+    expect(code).toBe(0);
+    expect(out).toContain("ENV:");
+    expect(existsSync(join(folder, "PWNED"))).toBe(false);
+  });
+
   test("it starts the guard from a clean environment under a root-owned bunfig", () => {
     expect(launcherSource).toContain("env -i");
     expect(launcherSource).toContain(
       "--config=/opt/xiongbao-office-cli/bunfig.toml",
     );
     expect(launcherSource).toContain("--no-env-file");
+    expect(launcherSource).toContain(
+      "--tsconfig-override=/opt/xiongbao-office-cli/tsconfig.json",
+    );
+    expect(launcherSource).toContain("/usr/bin/env -i");
+    expect(launcherSource).toContain("LANG=C.UTF-8");
     expect(launcherSource).toContain("/opt/xiongbao-office-cli/guard.ts");
   });
 });
@@ -746,6 +953,38 @@ process.exit(await main(process.argv.slice(2), () => ({
       const attempt = await through(
         work,
         ["--project", "p.json", "export", "render", "o.pdf"],
+        null,
+      );
+      expect(attempt.code).toBe(2);
+      expect(existsSync(join(work, "o.pdf"))).toBe(false);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("an outside image behind a NaN in the project is refused too", async () => {
+    const home = realpathSync(mkdtempSync(join(tmpdir(), "office-cli-real-")));
+    const work = join(home, "work");
+    mkdirSync(work);
+    try {
+      expect(
+        (await through(work, ["document", "new", "-o", "p.json"], null)).code,
+      ).toBe(0);
+      const text = readFileSync(join(work, "p.json"), "utf8").replace(
+        '"metadata": {',
+        '"metadata": {"x": NaN,',
+      );
+      expect(text).toContain("NaN");
+      writeFileSync(
+        join(work, "p.json"),
+        text.replace(
+          '"content": []',
+          `"content": [{"type":"image_ref","path":"file://${join(home, "secret.png")}"}]`,
+        ),
+      );
+      const attempt = await through(
+        work,
+        ["--project", "p.json", "export", "render", "o.pdf", "--preset", "pdf"],
         null,
       );
       expect(attempt.code).toBe(2);

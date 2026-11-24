@@ -66,6 +66,9 @@ test("the tool's requirements are pinned with hashes and installed as wheels onl
   // The real tool is not on PATH; only the launcher that goes through the guard is.
   expect(install).toContain("/usr/local/bin/xb-office-cli");
   expect(install).not.toMatch(/ln -s.*cli-anything-libreoffice/);
+  // The launcher's protections need these root-owned files: an empty bunfig and an empty tsconfig.
+  expect(install).toContain('"$home/bunfig.toml"');
+  expect(install).toContain('"$home/tsconfig.json"');
   // The build fails on a Tab that gets through, and on a path outside the workspace.
   expect(install).toContain("xb-office-cli-escape");
 });

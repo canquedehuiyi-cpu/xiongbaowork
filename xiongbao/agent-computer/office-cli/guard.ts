@@ -31,7 +31,7 @@ import {
   rmSync,
   statSync,
 } from "node:fs";
-import { tmpdir, userInfo } from "node:os";
+import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 
 export class GuardRefusal extends Error {}
@@ -49,9 +49,9 @@ const DEFAULT_BIN =
   "/opt/xiongbao-office-cli/venv/bin/cli-anything-libreoffice";
 
 /**
- * Where the employee's own folder is, decided from the account the process runs as and a constant,
- * never from the environment: a command can prefix any variable, and the launcher cannot vouch for
- * `HOME`. With per-employee users the account's home directory is `/workspace/bots/<key>` (see
+ * Where the employee's own folder is, decided from the account the process runs as (its entry in the
+ * passwd file, see {@link passwdHome}) and a constant. The caller supplies `accountHome`; nothing
+ * here reads the environment, because a command can prefix any variable. With per-employee users the account's home directory is `/workspace/bots/<key>` (see
  * `docker/xb-bot.sh`), which is also where the command shell starts; without them every employee
  * works in `/workspace`.
  */
@@ -319,7 +319,10 @@ export function checkProject(real: string, shown: string): void {
   try {
     data = JSON.parse(readFileSync(real, "utf8"));
   } catch {
-    return; // Not JSON: the tool refuses it as an invalid project.
+    // The tool reads projects with Python's json, which also takes NaN, Infinity and -Infinity, and
+    // JSON.parse does not. A file this guard cannot read is a file whose content it cannot vouch
+    // for, so it is refused instead of being left to the tool.
+    throw new GuardRefusal(`项目文件不是标准 JSON，不检查就不执行：${shown}`);
   }
   const refuse = (where: string) => {
     throw new GuardRefusal(
@@ -405,16 +408,37 @@ export type RunOptions = {
   readStdin: () => Promise<string | null>;
 };
 
-export function productionOptions(): RunOptions {
-  let accountHome = "";
+/**
+ * The home directory the passwd file gives `uid`, or "" when there is none. Read from the file and not
+ * through `os.userInfo()`: Bun's answers with `$HOME` when it is set, and the environment is the
+ * caller's to set.
+ */
+export function passwdHome(uid: number, passwdFile = "/etc/passwd"): string {
+  let text: string;
   try {
-    accountHome = userInfo().homedir;
+    text = readFileSync(passwdFile, "utf8");
   } catch {
-    // An account without a passwd entry has no per-employee folder.
+    return "";
   }
+  for (const line of text.split("\n")) {
+    const fields = line.split(":");
+    if (fields.length >= 6 && Number(fields[2]) === uid && fields[2] !== "")
+      return fields[5] ?? "";
+  }
+  return "";
+}
+
+export function productionOptions(
+  where: { passwdFile?: string; bots?: string; shared?: string } = {},
+): RunOptions {
+  const accountHome = passwdHome(process.getuid?.() ?? -1, where.passwdFile);
   return {
     bin: DEFAULT_BIN,
-    root: workspaceRoot({ accountHome }),
+    root: workspaceRoot({
+      accountHome,
+      bots: where.bots,
+      shared: where.shared,
+    }),
     cwd: process.cwd(),
     readStdin,
   };
@@ -450,22 +474,51 @@ export async function main(
   // employee's folder (the history would be listed with their files), so both go to a folder made for
   // this run and removed after it.
   const scratch = mkdtempSync(join(tmpdir(), "xb-office-cli-"));
+  let child: ReturnType<typeof Bun.spawn> | undefined;
+  // A stop (the command's timeout sends SIGTERM) ends the tool first and then falls through to the
+  // cleanup below; the exit code is the usual 128 + signal number. SIGKILL cannot be caught.
+  let stoppedBy = 0;
+  const stop = (signal: "SIGTERM" | "SIGINT", number: number) => () => {
+    stoppedBy = number;
+    child?.kill(signal);
+  };
+  const onTerm = stop("SIGTERM", 143);
+  const onInt = stop("SIGINT", 130);
+  process.on("SIGTERM", onTerm);
+  process.on("SIGINT", onInt);
   try {
-    const child = Bun.spawn([options.bin, ...argv], {
+    child = Bun.spawn([options.bin, ...argv], {
       cwd: options.cwd,
       env: { ...process.env, HOME: scratch },
       stdin: stdinText === null ? "inherit" : "pipe",
       stdout: "inherit",
       stderr: "inherit",
     });
+    if (stoppedBy !== 0) child.kill("SIGTERM");
     // An explicit pipe: the tool's REPL saw an empty stdin when it was handed a Blob.
     if (stdinText !== null) {
-      child.stdin?.write(stdinText);
-      await child.stdin?.end();
+      try {
+        // Started with stdin "pipe" whenever there is text to hand on, so this is the sink.
+        const sink = child.stdin as Bun.FileSink;
+        sink.write(stdinText);
+        await sink.end();
+      } catch {
+        // The tool went away before reading its input (stopped, or it exited early).
+      }
     }
-    return await child.exited;
+    const code = await child.exited;
+    return stoppedBy !== 0 ? stoppedBy : code;
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    process.off("SIGTERM", onTerm);
+    process.off("SIGINT", onInt);
+    try {
+      rmSync(scratch, { recursive: true, force: true });
+    } catch (error) {
+      // Not worth replacing the tool's own exit code with.
+      console.error(
+        `xb-office-cli：临时目录 ${scratch} 没删掉：${String(error)}`,
+      );
+    }
   }
 }
 

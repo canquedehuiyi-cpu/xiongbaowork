@@ -5,7 +5,7 @@
 # 装法：真工具装进独立的 venv（/opt/xiongbao-office-cli/venv），它的命令不放进 PATH；员工从 PATH 上的
 # `xb-office-cli` 调它，这个启动器先过路径检查（guard.ts）再启动真工具。这是防误操作和防明显越界的辅助检查，
 # 不是沙箱：员工用完整路径仍能直接调真工具，边界是审批和每个员工各自的系统用户。
-# 启动器、守卫、空 bunfig 和 venv 都归 root、别的用户只读。guard.ts 由 Dockerfile 事先拷到 /opt/xiongbao-office-cli。
+# 启动器、守卫、空 bunfig、空 tsconfig 和 venv 都归 root、别的用户只读。guard.ts 由 Dockerfile 事先拷到 /opt/xiongbao-office-cli。
 set -eu
 
 home=/opt/xiongbao-office-cli
@@ -19,7 +19,8 @@ python3 -m venv "$home/venv"
 "$home/venv/bin/pip" uninstall -y --disable-pip-version-check pip >/dev/null
 
 : > "$home/bunfig.toml"
-chmod 0644 "$home/bunfig.toml"
+printf '{}\n' > "$home/tsconfig.json"
+chmod 0644 "$home/bunfig.toml" "$home/tsconfig.json"
 install -m 0755 "$launcher" /usr/local/bin/xb-office-cli
 
 # 真工具能起来、LibreOffice 真能转换：生成一份文档再导出 docx，读不到就构建失败。自检在 /workspace 里做

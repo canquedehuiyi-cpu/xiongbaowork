@@ -2,10 +2,14 @@
 # 员工用的 LibreOffice 命令行工具入口（试点，见 docker/office-cli/Dockerfile）。root 所有，员工不可写。
 #
 # 守卫（guard.ts）在这里用一份干净的环境启动：
-#   env -i        员工在命令前缀的任何环境变量（XIONGBAO_OFFICE_CLI_*、BUN_OPTIONS、HOME、NODE_OPTIONS ...）都到不了守卫；
-#   --config      用一份 root 所有的空 bunfig，工作区里放的 bunfig.toml 不会被读（里面可以写 preload，在守卫之前执行任意代码）；
-#   --no-env-file 工作区里的 .env 也不会被读。
-# 守卫的工作区根和真工具的路径写在 guard.ts 里，不从环境里取。
-exec env -i PATH=/usr/local/bin:/usr/bin:/bin LANG="${LANG:-C.UTF-8}" \
-  /usr/local/bin/bun --config=/opt/xiongbao-office-cli/bunfig.toml --no-env-file \
+#   env -i            员工在命令前缀的任何环境变量（BUN_OPTIONS、HOME、NODE_OPTIONS ...）都到不了守卫，LANG 固定；
+#   --config          用一份 root 所有的空 bunfig，工作区里放的 bunfig.toml 不会被读（里面可以写 preload，在守卫之前执行任意代码）；
+#   --tsconfig-override  用一份 root 所有的空 tsconfig，工作区里的 tsconfig.json / jsconfig.json 不会被读
+#                     （里面的 paths 可以把守卫的导入换成工作区里的任意文件）；
+#   --no-env-file     工作区里的 .env 也不会被读。
+# bun 运行 .ts 时自动读的当前目录文件就是这几类：bunfig、tsconfig/jsconfig、.env；守卫只导入 node: 内置模块，
+# package.json 和 node_modules 影响不到它。守卫的工作区根和真工具的路径写在 guard.ts 里，不从环境里取。
+exec /usr/bin/env -i PATH=/usr/local/bin:/usr/bin:/bin LANG=C.UTF-8 \
+  /usr/local/bin/bun --config=/opt/xiongbao-office-cli/bunfig.toml \
+  --tsconfig-override=/opt/xiongbao-office-cli/tsconfig.json --no-env-file \
   /opt/xiongbao-office-cli/guard.ts "$@"

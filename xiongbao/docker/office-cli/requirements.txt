@@ -1,5 +1,5 @@
 # CLI-Anything 的 LibreOffice 命令行工具（cli-anything-libreoffice，MIT，https://github.com/HKUDS/CLI-Anything）
-# 及其全部依赖，钉精确版本和哈希，由 install.sh 在可选构建参数 XIONGBAO_PILOT_OFFICE_CLI=on 时装进独立 venv。
+# 及其全部依赖，钉精确版本和哈希，由叠加 Dockerfile（docker/office-cli/Dockerfile）调用 install.sh 装进独立 venv；默认电脑镜像不涉及。
 # 只选发布满两周的版本（wcwidth 0.9.5 发布不足两周，故用 0.2.13）。
 # 直接依赖：cli-anything-libreoffice 1.0.0（MIT）、click 8.5.1（BSD-3-Clause）、prompt_toolkit 3.0.53（BSD-3-Clause）；
 # 传递依赖：wcwidth 0.2.13（MIT）。
