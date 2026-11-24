@@ -527,10 +527,14 @@ export function runListing(
 
 /** 服务器侧检查失败、而且运行里一条 `computer.turn_artifacts` 都没有时，失败详情里加的这一句。 */
 export const NO_TURN_ARTIFACTS_NOTE = "服务器没记到这一轮的产物（没放行）";
+/** 没放行、且这题运行里有 RUN_ERROR：模型慢被停、段数到顶等收尾，和「轮正常结束却没放行」分开。 */
+export const ENDED_IN_ERROR_NOTE = "这一轮以出错/被停收尾";
 
 /**
  * 区分「服务器没放行」和「电脑上没文件」：失败的检查，在这一题所有运行都没有 `computer.turn_artifacts`
- * 事件时，详情末尾注明服务器没记到产物。只改失败项的文字，不改任何一项的通过与否。
+ * 事件时，详情末尾注明服务器没记到产物；这题的运行里还有 `RUN_ERROR`（被停、段数到顶、模型报错）时再注明
+ * 这一轮以出错/被停收尾，带上错误原文前几个字，把「模型慢被停」和「轮正常结束却没放行」分开。
+ * 只改失败项的文字，不改任何一项的通过与否。
  */
 export function noteMissingRelease(
   checks: readonly Check[],
@@ -543,14 +547,24 @@ export function noteMissingRelease(
     ),
   );
   if (recorded) return [...checks];
+  const errors = runs.flatMap((run) =>
+    run.events.flatMap((event) =>
+      event.type === "RUN_ERROR"
+        ? [typeof event.message === "string" ? event.message : ""]
+        : [],
+    ),
+  );
+  const first = errors.find((message) => message !== "")?.slice(0, 80);
+  const note =
+    errors.length === 0
+      ? NO_TURN_ARTIFACTS_NOTE
+      : `${NO_TURN_ARTIFACTS_NOTE}；${ENDED_IN_ERROR_NOTE}${first ? `：${first}` : ""}`;
   return checks.map((item) =>
     item.ok
       ? item
       : {
           ...item,
-          detail: item.detail
-            ? `${item.detail}；${NO_TURN_ARTIFACTS_NOTE}`
-            : NO_TURN_ARTIFACTS_NOTE,
+          detail: item.detail ? `${item.detail}；${note}` : note,
         },
   );
 }

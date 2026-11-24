@@ -795,10 +795,23 @@ export function createTurnRunner(options: {
   turnTimeoutMs?: number;
   /** How many rounds of headless tool calls it may take (`TURN_LIMITS.toolSegments` when not said). */
   maxToolSegments?: number;
+  /**
+   * The limits of a turn whose Bot holds computer tools (`toolsForTurn` answered some): it writes files,
+   * installs, converts, and a model that is slow to answer spends the light turn's few minutes before
+   * the first file is done. A turn with none keeps `turnTimeoutMs` and `maxToolSegments`.
+   */
+  workLimits?: { turnTimeoutMs: number; maxToolSegments: number };
   lockTtlSeconds?: number;
   heartbeatMs?: number;
   /** See `TURN_LIMITS.abortGraceMs`; injectable so a test need not wait five real seconds. */
   abortGraceMs?: number;
+  /**
+   * How long `observeTurn` may keep the stream open after a stopped turn's agent is aborted: it still
+   * has the turn's last events to send (the files the turn left), and giving up on the stop before it is
+   * done would report a turn that did stop as one that could not be stopped, release its lock early and
+   * leave those events unheard. Added to `abortGraceMs`.
+   */
+  observeGraceMs?: number;
   /** Host-owned input enrichment before the runner publishes RUN_STARTED.input. */
   prepareRunInput?: (
     input: RunAgentInput,
@@ -835,11 +848,13 @@ export function createTurnRunner(options: {
     learningContainerForThread,
     toolsForTurn,
     components,
-    turnTimeoutMs = TURN_LIMITS.turnTimeoutMs,
-    maxToolSegments = TURN_LIMITS.toolSegments,
+    turnTimeoutMs: lightTurnTimeoutMs = TURN_LIMITS.turnTimeoutMs,
+    maxToolSegments: lightMaxToolSegments = TURN_LIMITS.toolSegments,
+    workLimits,
     lockTtlSeconds = TURN_LIMITS.lockTtlSeconds,
     heartbeatMs = TURN_LIMITS.heartbeatMs,
     abortGraceMs = TURN_LIMITS.abortGraceMs,
+    observeGraceMs = 0,
     modelNamedIn,
     answered,
     scope,
@@ -999,14 +1014,23 @@ export function createTurnRunner(options: {
     );
     agent.setMessages(messages);
     if (continuation) agent.setState(continuation.snapshot.state);
-    const headlessTools = [
-      ...((await toolsForTurn?.({
+    const computerTools =
+      (await toolsForTurn?.({
         ownerUserId,
         agentId,
         initiator,
         threadId,
         runId,
-      })) ?? []),
+      })) ?? [];
+    const { turnTimeoutMs, maxToolSegments } =
+      workLimits && computerTools.length > 0
+        ? workLimits
+        : {
+            turnTimeoutMs: lightTurnTimeoutMs,
+            maxToolSegments: lightMaxToolSegments,
+          };
+    const headlessTools = [
+      ...computerTools,
       ...((await components?.toolsForTurn({
         agentId,
         ownerUserId,
@@ -1278,13 +1302,16 @@ export function createTurnRunner(options: {
           stopTurn();
         }, turnTimeoutMs);
         deadline.unref?.();
-        backstop = setTimeout(() => {
-          reject(
-            new Error(
-              `The routine's turn did not finish within ${Math.round(turnTimeoutMs / 1000)}s and could not be stopped.`,
-            ),
-          );
-        }, turnTimeoutMs + abortGraceMs);
+        backstop = setTimeout(
+          () => {
+            reject(
+              new Error(
+                `The routine's turn did not finish within ${Math.round(turnTimeoutMs / 1000)}s and could not be stopped.`,
+              ),
+            );
+          },
+          turnTimeoutMs + abortGraceMs + (observeTurn ? observeGraceMs : 0),
+        );
         backstop.unref?.();
       });
 

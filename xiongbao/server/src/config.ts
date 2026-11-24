@@ -518,6 +518,12 @@ export type DeploymentConfig = {
    */
   turnNoticeWindowMs: number;
   /**
+   * How many group conversations one server process answers at the same time: 4 unless
+   * XIONGBAO_GROUP_TURN_WORKERS says otherwise (1 to 16). One group is still answered one message at a
+   * time, in order; this only keeps a slow turn in one group from holding up the others.
+   */
+  groupTurnWorkers: number;
+  /**
    * Where the built app is, when this process serves it.
    *
    * Set in a container image that carries both. Unset in development, where Vite serves the app and
@@ -1779,6 +1785,20 @@ function generativeUiEnabled(environment: Environment): boolean {
 }
 
 /**
+ * XIONGBAO_GROUP_TURN_WORKERS: a whole number from 1 to 16. Refused rather than coerced, so a typo does
+ * not quietly leave every group waiting behind one slow turn, or open a hundred model calls at once.
+ */
+function groupTurnWorkers(environment: Environment): number {
+  const name = "XIONGBAO_GROUP_TURN_WORKERS";
+  const value = optional(environment, name);
+  if (value === undefined) return 4;
+  const count = Number(value);
+  if (!/^\d+$/.test(value) || count < 1 || count > 16)
+    throw new Error(`${name} must be a whole number from 1 to 16`);
+  return count;
+}
+
+/**
  * XIONGBAO_TURN_NOTICE_WINDOW_SECONDS: a whole number of seconds, 0 to a day. Refused rather than
  * coerced, so a typo does not quietly turn the merging off or make it swallow a day of notices.
  */
@@ -2086,6 +2106,7 @@ export function loadConfig(given: Environment = process.env): DeploymentConfig {
       ...commaSeparated(environment, "TRUSTED_ORIGINS"),
     ]),
     turnNoticeWindowMs: turnNoticeWindowMs(environment),
+    groupTurnWorkers: groupTurnWorkers(environment),
     ...(optional(environment, "APP_DIST_DIR")
       ? { appDistDir: optional(environment, "APP_DIST_DIR") as string }
       : {}),

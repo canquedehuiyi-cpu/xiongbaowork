@@ -1577,6 +1577,12 @@ export function createGroupConversations(deps: {
   /** How often a running reply's partial text is written for the transcript to show. */
   progressEveryMs?: number;
   /**
+   * How long a claimed group turn is held before another worker may take it, 15 minutes when not said.
+   * A turn that holds its computer works up to 25 minutes, so the lease is renewed while it runs (every
+   * third of this). Injectable so a test need not wait for minutes.
+   */
+  leaseMs?: number;
+  /**
    * The owner's permission before a Bot's words reach other people in the group. A Bot run as this
    * person can draw on their private memory and conversations, and nothing can prove a reply did
    * not, so with anyone else in the group the owner is asked once per Bot and group (or always).
@@ -1626,13 +1632,17 @@ export function createGroupConversations(deps: {
     rowId: string;
     runId: string;
     text: string;
+    /** The turn listed files of its own, which are shown only with the row. */
+    hasFiles?: boolean;
     continuation?: ApprovalContinuation;
   }): Promise<
     | { status: "allowed" }
     | { status: "denied"; message: string }
     | { status: "pending"; details: Record<string, unknown> }
   > {
-    if (!deps.privateShare || !input.text) return { status: "allowed" };
+    if (!deps.privateShare) return { status: "allowed" };
+    // Nothing said and nothing listed has nothing of the owner's to hold back; files are held either way.
+    if (!input.text && !input.hasFiles) return { status: "allowed" };
     const recipients = await deps.store.members(input.channelId);
     const continuation: ApprovalContinuation = input.continuation ?? {
       runId: input.runId,
@@ -2362,13 +2372,62 @@ export function createGroupConversations(deps: {
         if (!heldForApproval)
           await closeCard(cardTurn, agentId, runId, false, round());
       } else {
-        const message = error instanceof Error ? error.message : String(error);
-        await deps.store.finish(id, message, "failed", {
+        // An error with no message must still be a text: the share check lets an empty one through.
+        const message =
+          (error instanceof Error ? error.message : String(error)) ||
+          "这一轮没能完成。";
+        const failedDetails = {
           ...withMarks(ownMarks()),
           ...withPlan(ownPlan()),
           ...withReasoning(ownReasoning()),
-        });
-        await closeCard(cardTurn, agentId, runId, true, round(message));
+        };
+        /*
+         * A turn the time limit stopped, or that ran out of rounds or failed, still left its files on
+         * the computer, and the group shows a reply's files only from its row. They are shown through
+         * the same share check as a finished reply: held with the row when the owner must allow it, and
+         * left off when refused. An external employee's turn lists none here.
+         */
+        const leftFiles = bot.hiredBy ? [] : artifacts;
+        const gate: Awaited<ReturnType<typeof shareGate>> =
+          leftFiles.length === 0
+            ? { status: "allowed" }
+            : await shareGate({
+                ownerUserId: turn.ownerUserId,
+                channelId: turn.channelId,
+                agentId,
+                threadId,
+                rowId: id,
+                runId,
+                text: message,
+                hasFiles: true,
+              }).catch(() => ({ status: "denied", message }) as const);
+        if (gate.status === "pending") {
+          await deps.store.finish(id, "", "waiting", {
+            ...gate.details,
+            ...chainOf(turn),
+            ...failedDetails,
+            heldTurnArtifacts: [...leftFiles],
+            // Once the owner allows it, the row ends as the failure it is, not as a reply.
+            heldFailure: true,
+          });
+          return;
+        }
+        await deps.store.finish(
+          id,
+          gate.status === "denied" ? gate.message : message,
+          "failed",
+          {
+            ...failedDetails,
+            ...(gate.status === "allowed" ? withTurnArtifacts(leftFiles) : {}),
+          },
+        );
+        await closeCard(
+          cardTurn,
+          agentId,
+          runId,
+          true,
+          round(gate.status === "denied" ? gate.message : message),
+        );
       }
     }
   }
@@ -2702,12 +2761,28 @@ export function createGroupConversations(deps: {
           );
           return { replyText: "" };
         }
-        const { privateShare: _held, heldTurnArtifacts, ...rest } = row.details;
+        const {
+          privateShare: _held,
+          heldTurnArtifacts,
+          heldFailure,
+          ...rest
+        } = row.details;
         // 主人放行了回复：扣着的文件清单随它一起放出来。
         const kept = {
           ...rest,
           ...withTurnArtifacts(storedTurnArtifacts(heldTurnArtifacts)),
         };
+        if (heldFailure === true) {
+          // A failed turn's message and files, held the same way: shown as the failure it was.
+          await deps.store.finish(row.id, held.text, "failed", kept);
+          await closeCard(
+            { ownerUserId: row.ownerUserId, channelId: row.channelId },
+            agentId,
+            runIdFor(row.id),
+            true,
+          );
+          return { replyText: "" };
+        }
         await deps.store.finish(row.id, held.text, "completed", kept);
         await closeCard(
           { ownerUserId: row.ownerUserId, channelId: row.channelId },
@@ -3103,12 +3178,15 @@ export function createGroupConversations(deps: {
     },
     /** Claim and run one queued turn. Returns whether there was one, so a caller can drain. */
     async sweep(): Promise<boolean> {
+      const leaseMs = deps.leaseMs ?? 15 * 60_000;
       const [item] = await deps.queue.claim({
         kind: GROUP_TURN_KIND,
         owner: deps.owner,
-        leaseMs: 15 * 60_000,
+        leaseMs,
         limit: 1,
         maxAttempts: 2,
+        // A group answers one message after another; different groups may be answered at once.
+        oneAtATimeBy: "channelId",
       });
       if (!item) return false;
       const turn = turnSchema.parse(item.payload);
@@ -3135,19 +3213,40 @@ export function createGroupConversations(deps: {
             await deps.busy?.(turn, true).catch(() => {});
             // The Bots whose answer could not be recorded at all; the rest still answer.
             const unrecorded: string[] = [];
-            // One Bot after another, so each later Bot reads what the earlier ones said.
-            for (const agentId of turn.agentIds) {
-              if (
-                !(await deps.queue.renew({
-                  kind: item.kind,
-                  key: item.key,
-                  owner: deps.owner,
-                  leaseMs: 15 * 60_000,
-                }))
-              )
-                throw new Error("The group turn lease was lost.");
-              const failed = await runBot(turn, agentId);
-              if (failed) unrecorded.push(failed);
+            const renewLease = () =>
+              deps.queue.renew({
+                kind: item.kind,
+                key: item.key,
+                owner: deps.owner,
+                leaseMs,
+              });
+            /*
+             * A Bot's turn may run longer than the lease, so the lease is kept while it runs. One that
+             * could not be renewed was taken by another worker: this one stops after the Bot it is on,
+             * and does not start the next, so the two never answer the same message at once.
+             */
+            let leaseLost = false;
+            const heartbeat = setInterval(
+              () => {
+                void renewLease().then(
+                  (kept) => {
+                    if (!kept) leaseLost = true;
+                  },
+                  () => undefined,
+                );
+              },
+              Math.max(1, Math.floor(leaseMs / 3)),
+            );
+            try {
+              // One Bot after another, so each later Bot reads what the earlier ones said.
+              for (const agentId of turn.agentIds) {
+                if (leaseLost || !(await renewLease()))
+                  throw new Error("The group turn lease was lost.");
+                const failed = await runBot(turn, agentId);
+                if (failed) unrecorded.push(failed);
+              }
+            } finally {
+              clearInterval(heartbeat);
             }
             /*
              * Ended either way: a place another row holds stays held, so a retry could only fail the

@@ -155,6 +155,13 @@ export type WorkQueue = {
     leaseMs: number;
     limit?: number;
     maxAttempts?: number;
+    /**
+     * The payload field whose value names a line the items of this kind must keep in order (a group
+     * conversation's id). An item is not handed out while another of the same line is held, or while an
+     * earlier one of the line is still unfinished, so several workers, in one process or in many, drain
+     * different lines at once and each line one item at a time.
+     */
+    oneAtATimeBy?: string;
   }) => Promise<WorkItem[]>;
   /** Keep a claim alive while the work runs. False means it was already taken away. */
   renew: (input: {
@@ -315,6 +322,7 @@ export function createWorkQueue(database: Database): WorkQueue {
       leaseMs,
       limit = 1,
       maxAttempts = DEFAULT_MAX_ATTEMPTS,
+      oneAtATimeBy,
     }) {
       /*
        * As `platform`, because a claim is not anybody's tenant's question. It asks "what of this
@@ -330,6 +338,38 @@ export function createWorkQueue(database: Database): WorkQueue {
            * second replica blocks on the first replica's rows and the queue serialises; with it, it
            * walks past them and takes the next free ones.
            */
+          /*
+           * A line is kept in order by looking at what is committed, so two claims must not look at the
+           * same moment: each would see the line free and take a different item of it. One claim of
+           * this kind at a time, for the length of this short transaction.
+           */
+          if (oneAtATimeBy) {
+            // Not waited for: a claim stuck holding it would otherwise queue every worker's claim
+            // behind it. A worker that does not get it claims nothing this time and asks again soon.
+            const got = await transaction.execute(
+              sql`select pg_try_advisory_xact_lock(hashtext(${`claim:${kind}`})) as "got"`,
+            );
+            const gotRows = (
+              Array.isArray(got)
+                ? got
+                : ((got as { rows?: unknown[] })?.rows ?? [])
+            ) as { got?: boolean }[];
+            if (gotRows[0]?.got !== true) return [];
+          }
+          const inLine = oneAtATimeBy
+            ? sql`
+            and not exists (
+              select 1 from "work_items" as "other"
+              where "other"."kind" = "work_items"."kind"
+                and "other"."key" <> "work_items"."key"
+                and "other"."finished_at" is null
+                and "other"."payload" ->> ${oneAtATimeBy} = "work_items"."payload" ->> ${oneAtATimeBy}
+                and (
+                  ("other"."lease_until" is not null and "other"."lease_until" > now())
+                  or ("other"."attempts" < ${maxAttempts} and "other"."created_at" < "work_items"."created_at")
+                )
+            )`
+            : sql``;
           const due = await transaction.execute(sql`
           select "kind", "key", "tenant_id"
           from "work_items"
@@ -338,6 +378,7 @@ export function createWorkQueue(database: Database): WorkQueue {
             and "attempts" < ${maxAttempts}
             and "run_at" <= now()
             and ("lease_until" is null or "lease_until" <= now())
+            ${inLine}
           order by "run_at" asc
           limit ${limit}
           for update skip locked

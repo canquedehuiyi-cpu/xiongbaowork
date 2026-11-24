@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type BaseEvent, EventType } from "@ag-ui/client";
-import { type Observable, of, Subject } from "rxjs";
+import { Observable, of, Subject } from "rxjs";
 import { TURN_ARTIFACTS_EVENT } from "../../shared/turn-artifacts";
 import type { ComputerSeat } from "../src/computer/computer-key";
 import {
@@ -144,8 +144,22 @@ describe("withTurnArtifacts", () => {
     }
   });
 
-  test("RUN_ERROR adds nothing", async () => {
+  test("a turn that ends in RUN_ERROR lists its files too, before the error, which still goes on", async () => {
     const { gateway, calls } = gw(some);
+    const out = await collect(
+      withTurnArtifacts(of(started, failed), turn(), gateway),
+    );
+    expect(out.map((e) => String(e.type))).toEqual([
+      "RUN_STARTED",
+      "CUSTOM",
+      "RUN_ERROR",
+    ]);
+    expect(out.at(-1)).toBe(failed);
+    expect(calls.some((c) => c.startsWith("changes:"))).toBe(true);
+  });
+
+  test("a turn that ends in RUN_ERROR with nothing changed lists nothing", async () => {
+    const { gateway } = gw({ ...some, files: [] });
     const out = await collect(
       withTurnArtifacts(of(started, failed), turn(), gateway),
     );
@@ -153,7 +167,40 @@ describe("withTurnArtifacts", () => {
       "RUN_STARTED",
       "RUN_ERROR",
     ]);
-    expect(calls.some((c) => c.startsWith("changes:"))).toBe(false);
+  });
+
+  test("a stream that ends with no closing event (the inner agent was aborted at the time limit) lists its files", async () => {
+    const { gateway } = gw(some);
+    const out = await collect(withTurnArtifacts(of(started), turn(), gateway));
+    expect(out.map((e) => String(e.type))).toEqual(["RUN_STARTED", "CUSTOM"]);
+  });
+
+  test("a stream that fails lists its files and then fails the same way", async () => {
+    const { gateway } = gw(some);
+    const boom = new Error("The Bot stopped before it finished answering");
+    const events: BaseEvent[] = [];
+    const error = await new Promise<unknown>((resolve) =>
+      new Observable<BaseEvent>((subscriber) => {
+        subscriber.next(started);
+        subscriber.error(boom);
+      })
+        .pipe((source) => withTurnArtifacts(source, turn(), gateway))
+        .subscribe({
+          next: (event) => events.push(event),
+          error: resolve,
+        }),
+    );
+    expect(events.map((e) => String(e.type))).toEqual([
+      "RUN_STARTED",
+      "CUSTOM",
+    ]);
+    expect(error).toBe(boom);
+  });
+
+  test("a stream that closed with RUN_FINISHED is not listed a second time when it completes", async () => {
+    const { gateway, calls } = gw(some);
+    await collect(withTurnArtifacts(of(started, finished), turn(), gateway));
+    expect(calls.filter((c) => c.startsWith("changes:"))).toHaveLength(1);
   });
 
   test("the first event is not held back by the mark", async () => {
