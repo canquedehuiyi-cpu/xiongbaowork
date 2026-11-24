@@ -51,11 +51,12 @@ afterAll(async () => {
 });
 
 /** A reviewer that answers `answer` (or fails), and remembers what it was asked. */
-function reviewer(answer: string | Error) {
+function reviewer(answer: string | Error | "hang") {
   const briefs: unknown[] = [];
   const parents: unknown[] = [];
   const review = createDeliveryReview({
     declared: async () => true,
+    timeoutMs: 100,
     reviewer: (parent) => {
       parents.push(parent);
       return {
@@ -65,6 +66,7 @@ function reviewer(answer: string | Error) {
         parameters: {} as never,
         execute: async (args: unknown) => {
           briefs.push(args);
+          if (answer === "hang") return new Promise<string>(() => undefined);
           if (answer instanceof Error) throw answer;
           return JSON.stringify({ answer, threadId: "sub", steps: 2 });
         },
@@ -175,6 +177,23 @@ describe("a coding card's hand-in", () => {
     expect(result.delivered).toBe(true);
     expect(card?.status).toBe("awaiting_review");
     expect(notes.join("\n")).toContain("没跑成：没有电脑");
+  });
+});
+
+describe("a review that never finishes", () => {
+  test("does not keep the hand-in from being written, and says it timed out", async () => {
+    const { review } = reviewer("hang");
+    const started = Date.now();
+    const { result, card, notes } = await handIn({
+      label: "hang",
+      title: "修复登录页的 bug",
+      review,
+      items: code,
+    });
+    expect(Date.now() - started).toBeLessThan(5000);
+    expect(result.delivered).toBe(true);
+    expect(card?.status).toBe("awaiting_review");
+    expect(notes.join("\n")).toContain("评审超时，未附意见");
   });
 });
 

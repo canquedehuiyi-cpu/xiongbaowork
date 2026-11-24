@@ -4,14 +4,21 @@ import { validateRoleProfile } from "../../shared/role-profile";
 import {
   approvesPlan,
   createPlanApproval,
+  declaredFor,
   declaresPlanApproval,
-  earlierPlanCalls,
+  holdMessage,
+  onlyDeclared,
   PLAN_APPROVAL_MARKER,
   PLAN_APPROVAL_MIN_STEPS,
+  PLAN_NOT_APPROVED,
+  PLAN_NOT_PUT,
+  PLAN_SENT_BACK,
   planDigest,
   planQuestion,
+  rememberedFor,
+  withPlanApproval,
 } from "../src/agents/plan-approval";
-import { updatePlanTools } from "../src/agents/update-plan";
+import { UPDATE_PLAN_REF, updatePlanTools } from "../src/agents/update-plan";
 import {
   isReadOnlyThread,
   restrictToReads,
@@ -168,6 +175,8 @@ describe("the declaration in the handbook", () => {
       "数据来源 → 口径确认 → 校验合计 → 交付文件",
     ])
       expect(PILOT_HANDBOOK).toContain(flow);
+    // The threshold is not told to the model.
+    expect(PILOT_HANDBOOK).not.toMatch(/4 步|四步/);
     // The role editor accepts it as written.
     expect(validateRoleProfile(template.profile).ok).toBe(true);
   });
@@ -212,24 +221,6 @@ describe("the plan as the owner reads it", () => {
       ]),
     ).not.toBe(planDigest(before));
   });
-
-  test("earlier plan calls are those in the conversation but not the one being answered", () => {
-    const call = (id: string, name: string) => ({
-      id,
-      type: "function",
-      function: { name, arguments: "{}" },
-    });
-    const messages = [
-      { id: "1", role: "user", content: "做个东西" },
-      { id: "2", role: "assistant", toolCalls: [call("a", "update_plan")] },
-      { id: "3", role: "assistant", toolCalls: [call("b", "web_search")] },
-      { id: "4", role: "assistant", toolCalls: [call("c", "update_plan")] },
-    ];
-    expect(earlierPlanCalls(messages, "c")).toBe(1);
-    expect(earlierPlanCalls(messages, "a")).toBe(1);
-    expect(earlierPlanCalls(messages.slice(0, 1), "a")).toBe(0);
-    expect(earlierPlanCalls(undefined, "a")).toBe(0);
-  });
 });
 
 /** The context a tool call runs in, as the approval gate and the tools read it. */
@@ -253,7 +244,11 @@ const inConversation = <T>(
     body,
   );
 
-type Row = { digest: string; decision?: "approved" | "revised" };
+type Row = {
+  digest: string;
+  decision?: "approved" | "revised";
+  failed?: true;
+};
 
 function approval(
   options: {
@@ -265,6 +260,7 @@ function approval(
   const asked: Parameters<
     Parameters<typeof createPlanApproval>[0]["ask"]
   >[0][] = [];
+  const held: { actorId: string; threadId: string; digest: string }[] = [];
   const planApproval = createPlanApproval({
     actorId: "owner",
     botId: "bot",
@@ -275,8 +271,11 @@ function approval(
       asked.push(input);
       return { reached: "the person" };
     },
+    hold: async (input) => {
+      held.push(input);
+    },
   });
-  return { planApproval, asked };
+  return { planApproval, asked, held };
 }
 
 describe("when a plan is put to its owner", () => {
@@ -332,7 +331,7 @@ describe("when a plan is put to its owner", () => {
     }
   });
 
-  test("only the first plan of the conversation is: a later one that grew to four is not", async () => {
+  test("any long plan is, while none is approved: a short first one that grew to five too", async () => {
     const { planApproval, asked } = approval();
     const earlier = [
       {
@@ -344,13 +343,26 @@ describe("when a plan is put to its owner", () => {
       },
     ];
     expect(
+      await inConversation(() => planApproval.afterPlan(items(3)), earlier),
+    ).toBeUndefined();
+    expect(
       await inConversation(
-        () => planApproval.afterPlan(items(4)),
+        () => planApproval.afterPlan(items(5)),
         earlier,
         "call-2",
       ),
-    ).toBeUndefined();
-    expect(asked).toHaveLength(0);
+    ).toContain("请主人批准");
+    expect(asked).toHaveLength(1);
+  });
+
+  test("the row is keyed in a namespace of its own, by conversation and plan", async () => {
+    const { planApproval, asked } = approval();
+    await inConversation(() => planApproval.afterPlan(items(4)));
+    await inConversation(() => planApproval.afterPlan(items(5)));
+    const [first, second] = asked.map((input) => input.key);
+    expect(first).toStartWith("plan-approval:");
+    expect(second).toStartWith("plan-approval:");
+    expect(first).not.toBe(second);
   });
 
   test("a plan already with the owner is not put twice", async () => {
@@ -377,7 +389,7 @@ describe("when a plan is put to its owner", () => {
     const same = approval({ latest: sentBack });
     expect(
       await inConversation(() => same.planApproval.afterPlan(items(4))),
-    ).toContain("没获批准");
+    ).toBe(PLAN_SENT_BACK);
     expect(same.asked).toHaveLength(0);
     // A rewritten plan goes back to the owner, even one that got shorter.
     const changed = approval({ latest: sentBack });
@@ -391,7 +403,8 @@ describe("when a plan is put to its owner", () => {
     expect(changed.asked).toHaveLength(1);
   });
 
-  test("a plan that could not be put is logged, and the model is told nothing", async () => {
+  test("a plan that could not be put holds changes, is logged, and says so", async () => {
+    const held: unknown[] = [];
     const planApproval = createPlanApproval({
       actorId: "owner",
       botId: "bot",
@@ -399,18 +412,135 @@ describe("when a plan is put to its owner", () => {
       declared: async () => true,
       latest: async () => undefined,
       ask: async () => ({ refusal: "没有对话" }),
+      hold: async (input) => {
+        held.push(input);
+      },
     });
     const logged: string[] = [];
     const warn = console.warn;
     console.warn = (line: string) => logged.push(line);
     try {
-      expect(
-        await inConversation(() => planApproval.afterPlan(items(4))),
-      ).toBeUndefined();
+      expect(await inConversation(() => planApproval.afterPlan(items(4)))).toBe(
+        PLAN_NOT_PUT,
+      );
     } finally {
       console.warn = warn;
     }
     expect(logged.join("\n")).toContain("plan-approval-not-put");
+    expect(held).toEqual([
+      { actorId: "owner", threadId: "thread-1", digest: planDigest(items(4)) },
+    ]);
+  });
+
+  test("after a plan that could not be put, the next one is tried again, however short", async () => {
+    const { planApproval, asked } = approval({
+      latest: { digest: "x", failed: true },
+    });
+    expect(
+      await inConversation(() => planApproval.afterPlan(items(2))),
+    ).toContain("请主人批准");
+    expect(asked).toHaveLength(1);
+  });
+});
+
+describe("what a held change is answered with", () => {
+  test("waiting, sent back, not put, and nothing once approved", () => {
+    expect(holdMessage(undefined)).toBeUndefined();
+    expect(holdMessage({ digest: "d", decision: "approved" })).toBeUndefined();
+    expect(holdMessage({ digest: "d" })).toBe(PLAN_NOT_APPROVED);
+    expect(holdMessage({ digest: "d", decision: "revised" })).toBe(
+      PLAN_SENT_BACK,
+    );
+    expect(holdMessage({ digest: "d", failed: true })).toBe(PLAN_NOT_PUT);
+    expect(PLAN_SENT_BACK).not.toContain("等主人回复");
+  });
+});
+
+describe("whose employee declares the pilot", () => {
+  const declared = `${PLAN_APPROVAL_MARKER}\n手册`;
+  test("only the owner's own, with the line", () => {
+    expect(
+      declaredFor("alice", { ownerUserId: "alice", bible: declared }),
+    ).toBe(true);
+    // A team's employee, talked to by somebody else.
+    expect(declaredFor("bob", { ownerUserId: "alice", bible: declared })).toBe(
+      false,
+    );
+    // A deployment's employee has no owner.
+    expect(declaredFor("alice", { ownerUserId: null, bible: declared })).toBe(
+      false,
+    );
+    expect(declaredFor("alice", { ownerUserId: "alice", bible: "手册" })).toBe(
+      false,
+    );
+    expect(declaredFor("alice", null)).toBe(false);
+  });
+
+  test("is remembered for a while, then read again", async () => {
+    let reads = 0;
+    let clock = 0;
+    const remembered = rememberedFor(
+      async () => {
+        reads += 1;
+        return true;
+      },
+      1000,
+      () => clock,
+    );
+    await remembered("a", "b");
+    await remembered("a", "b");
+    expect(reads).toBe(1);
+    clock = 1500;
+    await remembered("a", "b");
+    expect(reads).toBe(2);
+  });
+});
+
+describe("an employee that did not declare the pilot, with the switch on", () => {
+  test("keeps its plan tool as it was, the very same list", async () => {
+    const tools = updatePlanTools();
+    const swapped = await withPlanApproval(tools, {
+      planRef: UPDATE_PLAN_REF,
+      declared: false,
+      pilotTool: () => {
+        throw new Error("should not be built");
+      },
+    });
+    expect(swapped).toBe(tools);
+    expect(swapped[0]?.concurrent).toBe(true);
+  });
+
+  test("an employee that did gets the pilot's, not started beside the next action", async () => {
+    const pilot = updatePlanTools({
+      approval: { afterPlan: async () => undefined },
+    })[0];
+    const swapped = await withPlanApproval(updatePlanTools(), {
+      planRef: UPDATE_PLAN_REF,
+      declared: true,
+      pilotTool: () => pilot,
+    });
+    expect(swapped[0]).toBe(pilot);
+    expect(swapped[0]?.concurrent).toBeUndefined();
+  });
+
+  test("asks nothing of the database for a check, and answers as there were no hold", async () => {
+    let asked = 0;
+    const check = onlyDeclared<[string], string | undefined>(
+      async () => false,
+      undefined,
+      async () => {
+        asked += 1;
+        return "held";
+      },
+    );
+    expect(await check("alice", "bot", "thread")).toBeUndefined();
+    expect(asked).toBe(0);
+    const declaredCheck = onlyDeclared<[string], string | undefined>(
+      async () => true,
+      undefined,
+      async () => "held",
+    );
+    expect(await declaredCheck("alice", "bot", "thread")).toBe("held");
   });
 });
 

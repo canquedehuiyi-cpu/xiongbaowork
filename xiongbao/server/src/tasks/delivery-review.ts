@@ -36,14 +36,21 @@ export const REVIEW_CHECKLIST = [
   },
 ] as const;
 
-/** How long the opinion attached to a hand-in may be. */
-export const REVIEW_NOTE_LIMIT = 1200;
-
 /** The label the attached opinion starts with. */
 export const REVIEW_NOTE_LABEL = "交付前评审（只出意见，不挡交付）";
 
+/** How long the opinion attached to a hand-in may be, label included. */
+export const REVIEW_NOTE_LIMIT = 1000;
+
+/** How long a review may take before it is given up, and what is kept back of the round's time. */
+export const REVIEW_TIMEOUT_MS = 120_000;
+export const REVIEW_RESERVE_MS = 15_000;
+
+/** What the hand-in says when the review did not finish in time. */
+export const REVIEW_TIMED_OUT = `${REVIEW_NOTE_LABEL}：评审超时，未附意见。`;
+
 const SOURCE_FILE =
-  /\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|rb|php|cs|cpp|cc|c|h|swift|sh|sql|vue|svelte|css|scss)$/i;
+  /(?:\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|rb|php|cs|cpp|cc|c|h|swift|sh|sql|vue|svelte|css|scss|ya?ml|json|toml)|(?:^|\/)Dockerfile[^/]*)$/i;
 const CODE_WORDS =
   /代码|编码|编程|重构|修复|bug|缺陷|函数|接口|单元测试|提交|合并请求|\bPR\b|\bcommit\b|\bfix\b|\brefactor\b/i;
 
@@ -74,16 +81,20 @@ const clip = (text: string, limit: number) =>
   [...text.replace(/\s+/g, " ").trim()].slice(0, limit).join("");
 
 /**
- * The calls this round made, one line each, from the conversation's messages: the reviewer's only
- * record of what was run and what was edited.
+ * The calls this round made, one line each: those after the person's last message, so what was said
+ * and done in earlier rounds of a long conversation is not sent to the reviewer.
  */
 export function roundCalls(
   messages: readonly unknown[],
   limit = 60,
   argLimit = 300,
 ): string[] {
+  let from = 0;
+  messages.forEach((message, index) => {
+    if (record(message).role === "user") from = index + 1;
+  });
   const lines: string[] = [];
-  for (const message of messages) {
+  for (const message of messages.slice(from)) {
     const calls = record(message).toolCalls;
     if (!Array.isArray(calls)) continue;
     for (const call of calls) {
@@ -107,7 +118,7 @@ export function reviewBrief(input: {
     `- ${item.kind} ${item.title ?? ""} ${item.ref ?? ""}`.trim(),
   );
   const task = [
-    "你来评审一件编码类的活，只出意见。你没有改动任何东西的权限，也不能运行命令；需要时用只读工具读文件。",
+    "你来评审一件编码类的活，只出意见。你没有改动任何东西的权限，也不能运行命令；需要时用只读工具读文件。回答里不要引用文件原文、密钥或令牌，只写结论和依据所在的位置。",
     `卡片标题：${input.title || "（无）"}`,
     `验收标准：${input.criteria || "（无）"}`,
     `交付物：\n${items.join("\n") || "（无）"}`,
@@ -122,9 +133,10 @@ export function reviewBrief(input: {
 
 /** The opinion as it is attached to the hand-in. */
 export function reviewNote(result: SubagentResult | null): string {
+  const room = REVIEW_NOTE_LIMIT - REVIEW_NOTE_LABEL.length - 1;
   const text =
     result && "answer" in result
-      ? clip(result.answer, REVIEW_NOTE_LIMIT)
+      ? clip(result.answer, room)
       : result && "error" in result
         ? `没跑成：${clip(result.error, 200)}`
         : "没跑成：评审没有交回结果";
@@ -152,6 +164,12 @@ export function createDeliveryReview(deps: {
     runId: string;
     threadId: string;
   }): GrantedTool;
+  /** How much of the round is left, when it is known; a review is cut short to leave the hand-in room. */
+  remainingMs?: (run: {
+    actorId: string;
+    runId: string;
+  }) => Promise<number | undefined>;
+  timeoutMs?: number;
 }): DeliveryReview {
   return async (input) => {
     if (!isCodingCard({ ...input.card, items: input.items })) return undefined;
@@ -162,17 +180,39 @@ export function createDeliveryReview(deps: {
       checks: input.checks,
       calls: roundCalls(input.messages),
     });
+    const left = await deps.remainingMs?.(input).catch(() => undefined);
+    const limit = Math.min(
+      deps.timeoutMs ?? REVIEW_TIMEOUT_MS,
+      left === undefined ? Number.POSITIVE_INFINITY : left - REVIEW_RESERVE_MS,
+    );
+    if (limit <= 0) return REVIEW_TIMED_OUT;
+    const stop = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<"late">((resolve) => {
+      timer = setTimeout(() => {
+        stop.abort();
+        resolve("late");
+      }, limit);
+    });
+    const ran = deps
+      .reviewer(input)
+      .execute(brief, {
+        toolCallId: `review:${input.runId}`,
+        signal: stop.signal,
+      })
+      .then((text) => reviewNote(readSubagentResult(text)))
+      .catch((error) =>
+        reviewNote({
+          error: error instanceof Error ? error.message : String(error),
+          threadId: "",
+          steps: 0,
+        }),
+      );
     try {
-      const text = await deps
-        .reviewer(input)
-        .execute(brief, { toolCallId: `review:${input.runId}` });
-      return reviewNote(readSubagentResult(text));
-    } catch (error) {
-      return reviewNote({
-        error: error instanceof Error ? error.message : String(error),
-        threadId: "",
-        steps: 0,
-      });
+      const outcome = await Promise.race([ran, late]);
+      return outcome === "late" ? REVIEW_TIMED_OUT : outcome;
+    } finally {
+      clearTimeout(timer);
     }
   };
 }

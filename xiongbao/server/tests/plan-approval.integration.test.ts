@@ -1,18 +1,27 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
 import { HeadlessToolSuspension } from "../../toolkit/src/headless-tools";
+import { wireCoordination } from "../src/agents/coordination-wiring";
 import {
   createPlanApproval,
+  onlyDeclared,
   PLAN_NOT_APPROVED,
+  PLAN_NOT_PUT,
+  PLAN_SENT_BACK,
+  planDigest,
+  planQuestion as planQuestionOf,
   REVIEW_READ_ONLY,
 } from "../src/agents/plan-approval";
 import { createSubagents } from "../src/agents/subagent";
 import { updatePlanTools } from "../src/agents/update-plan";
-import { createPlanHold } from "../src/approvals/plan-hold";
+import { createPlanHold, PLAN_HOLD_KIND } from "../src/approvals/plan-hold";
 import { createApprovalQuestions } from "../src/approvals/questions";
-import { restrictToReads } from "../src/approvals/read-only-threads";
+import {
+  isReadOnlyThread,
+  restrictToReads,
+} from "../src/approvals/read-only-threads";
 import { createApprovalRoutes } from "../src/approvals/routes";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
@@ -38,13 +47,13 @@ const prefix = `plan-${randomUUID()}`;
 const alice = `${prefix}-alice`;
 const bob = `${prefix}-bob`;
 const bot = `${prefix}-bot`;
-const keys: string[] = [];
 
 const hold = createPlanHold(database);
 /** Built as the deployment builds it with the pilot on, and off. */
 const storeOn = {
   ...createApprovalStore(database),
-  planApprovalPending: hold.pending,
+  planApprovalRefusal: (owner: string, threadId: string) =>
+    hold.refusal(owner, threadId),
 };
 const storeOff = createApprovalStore(database);
 const serviceOn = createApprovalService(
@@ -100,32 +109,41 @@ const inThread = <T>(threadId: string, body: () => Promise<T>) =>
   );
 
 /**
- * What the deployment's `ask` does for a plan: the row `ask_person` saves, with the plan's marker.
- * Written out here because the real route needs a channel and a roster this test has no use for.
+ * What the deployment's `ask` does for a plan: the real `routeQuestion` of `wireCoordination`, the
+ * function `ask_person` is routed through, over the real database. What it never touches (the
+ * roster, the channel store, delivery) is stood in for.
  */
-const asker: Parameters<typeof createPlanApproval>[0]["ask"] = async (
-  input,
-) => {
-  const key = randomUUID();
-  keys.push(key);
-  await database.insert(workItems).values({
-    kind: "person.question",
-    key,
-    payload: {
+const { routeQuestion } = wireCoordination({
+  handoffDesk: {} as never,
+  config: { handoff: {} } as never,
+  approvalService: { gate: async () => undefined, store: {} } as never,
+  agentProfileStore: { get: async () => null, list: async () => [] } as never,
+  actorFor: async (id: string) => ({ id, role: "user" as const }),
+  channelSourceForRun: async () => null,
+  database,
+  pluginStore: {} as never,
+  bootAuditStore: {} as never,
+  peopleStore: {} as never,
+  sourceForCoordinationRun: async () => ({
+    channelId: `${prefix}-channel`,
+    botId: bot,
+  }),
+  channelStore: { recordActivity: async () => undefined } as never,
+  notify: async () => undefined,
+});
+const asker: Parameters<typeof createPlanApproval>[0]["ask"] = (input) =>
+  routeQuestion(
+    {
       actorId: input.actorId,
       botId: input.botId,
       threadId: input.threadId,
       runId: input.runId,
       question: input.question,
       why: input.why,
-      sourceBotId: input.botId,
-      channelId: `${prefix}-channel`,
-      mode: "completed_question",
-      planApproval: input.planApproval,
     },
-  });
-  return { reached: "the person" };
-};
+    { planApproval: input.planApproval },
+    input.key,
+  );
 
 /** The plan tool an employee holds under the pilot, for `person` and a declared (or not) employee. */
 const planTool = (person: string, declared = true) => {
@@ -136,6 +154,7 @@ const planTool = (person: string, declared = true) => {
       initiator: undefined,
       declared: async () => declared,
       latest: (owner, threadId) => hold.latest(owner, threadId),
+      hold: hold.fail,
       ask: asker,
     }),
   });
@@ -189,7 +208,7 @@ const rowsOf = (person: string, threadId: string) =>
     database
       .select()
       .from(workItems)
-      .where(eq(workItems.kind, "person.question")),
+      .where(inArray(workItems.kind, ["person.question", PLAN_HOLD_KIND])),
   ).then((rows) =>
     rows.filter(
       (row) =>
@@ -212,10 +231,11 @@ afterAll(async () => {
       await database
         .delete(workItems)
         .where(
-          and(
-            inArray(workItems.kind, ["person.question", "person.response"]),
-            inArray(workItems.key, keys),
-          ),
+          inArray(workItems.kind, [
+            "person.question",
+            "person.response",
+            PLAN_HOLD_KIND,
+          ]),
         );
       await database.delete(users).where(eq(users.id, id));
     });
@@ -292,7 +312,8 @@ describe("before the owner answers", () => {
         throw new Error("no subagent should be built");
       },
       withdrawApprovals: async () => undefined,
-      planPending: hold.pending,
+      planPending: (owner: string, threadId: string) =>
+        hold.pending(owner, threadId),
     });
     const tool = subagents.toolForRun({
       actorId: alice,
@@ -355,10 +376,10 @@ describe("when the owner answers", () => {
       ownerUserId: alice,
       response: "第 3 步不要删文件",
     });
-    // Still held: an opinion is not a yes.
-    expect(await call(serviceOn, alice, thread)).toBe(PLAN_NOT_APPROVED);
+    // Still held: an opinion is not a yes, and the model is told to rewrite, not to wait.
+    expect(await call(serviceOn, alice, thread)).toBe(PLAN_SENT_BACK);
     // The plan as it was is not put again; a changed one is, and a yes to it lifts the hold.
-    expect(await plan(alice, thread, steps(4))).toContain("没获批准");
+    expect(await plan(alice, thread, steps(4))).toContain(PLAN_SENT_BACK);
     expect(await rowsOf(alice, thread)).toHaveLength(1);
     expect(await plan(alice, thread, steps(4, "（不删文件）"))).toContain(
       "请主人批准",
@@ -378,7 +399,7 @@ describe("when the owner answers", () => {
     await plan(alice, thread, steps(4));
     const [row] = await rowsOf(alice, thread);
     await as(alice, () => serviceOn.dismissQuestion(alice, row?.key ?? ""));
-    expect(await call(serviceOn, alice, thread)).toBe(PLAN_NOT_APPROVED);
+    expect(await call(serviceOn, alice, thread)).toBe(PLAN_SENT_BACK);
   });
 
   test("nobody else can approve it: not another person, and not in their frame", async () => {
@@ -401,7 +422,6 @@ describe("when the owner answers", () => {
 
   test("an answer to an ordinary question leaves its row as it was", async () => {
     const key = randomUUID();
-    keys.push(key);
     await as(alice, () =>
       database.insert(workItems).values({
         kind: "person.question",
@@ -445,5 +465,215 @@ describe("a thread held to reads", () => {
     );
     release();
     expect(await call(serviceOff, alice, thread)).toBe("asked");
+  });
+});
+
+describe("a plan that is not really put holds changes all the same", () => {
+  test("a question of the same words asked first with ask_person does not stand for the plan", async () => {
+    const thread = `${prefix}-t-collide`;
+    const items = steps(4);
+    // The row ask_person would save for the very words the plan is put in, under its own key.
+    const { question } = planQuestionOf(items);
+    const runId = `run-${thread}`;
+    const key = createHash("sha256")
+      .update(JSON.stringify([alice, bot, runId, question]))
+      .digest("hex");
+    await as(alice, () =>
+      database.insert(workItems).values({
+        kind: "person.question",
+        key,
+        payload: {
+          actorId: alice,
+          botId: bot,
+          threadId: thread,
+          runId,
+          question,
+          mode: "completed_question",
+        },
+      }),
+    );
+    expect(await plan(alice, thread, items)).toContain("请主人批准");
+    expect(await call(serviceOn, alice, thread)).toBe(PLAN_NOT_APPROVED);
+    // And a yes to the plain question stamps nothing that lifts the hold.
+    await respond(alice, key, { response: "批准", inConversation: true });
+    expect(await call(serviceOn, alice, thread)).toBe(PLAN_NOT_APPROVED);
+  });
+
+  test("a row on the plan's own key that is not that conversation's plan is a failure, held and said", async () => {
+    const thread = `${prefix}-t-foreign`;
+    const items = steps(4);
+    const digest = planDigest(items);
+    const key = `plan-approval:${createHash("sha256")
+      .update(JSON.stringify([alice, thread, digest]))
+      .digest("hex")}`;
+    await as(alice, () =>
+      database.insert(workItems).values({
+        kind: "person.question",
+        key,
+        payload: { actorId: alice, botId: bot, threadId: "somewhere-else" },
+      }),
+    );
+    const logged = console.warn;
+    console.warn = () => undefined;
+    try {
+      expect(await plan(alice, thread, items)).toContain(PLAN_NOT_PUT);
+    } finally {
+      console.warn = logged;
+    }
+    expect(await call(serviceOn, alice, thread)).toBe(PLAN_NOT_PUT);
+    // Nothing is waiting on an answer, so a plan put again is tried afresh (here, on a changed plan).
+    expect(await plan(alice, thread, steps(4, "（改）"))).toContain(
+      "请主人批准",
+    );
+    expect(await call(serviceOn, alice, thread)).toBe(PLAN_NOT_APPROVED);
+  });
+
+  test("a plan nobody can be asked about (no source conversation) is held, not let through", async () => {
+    const thread = `${prefix}-t-nosource`;
+    const refused = createPlanApproval({
+      actorId: alice,
+      botId: bot,
+      initiator: undefined,
+      declared: async () => true,
+      latest: (owner, threadId) => hold.latest(owner, threadId),
+      hold: hold.fail,
+      ask: async () => ({
+        refusal: "That question could not reach its source conversation.",
+      }),
+    });
+    const [tool] = updatePlanTools({ approval: refused });
+    const logged = console.warn;
+    console.warn = () => undefined;
+    try {
+      expect(
+        await as(alice, () =>
+          inThread(
+            thread,
+            () => tool?.execute({ items: steps(5) }) as Promise<string>,
+          ),
+        ),
+      ).toContain(PLAN_NOT_PUT);
+    } finally {
+      console.warn = logged;
+    }
+    expect(await call(serviceOn, alice, thread)).toBe(PLAN_NOT_PUT);
+  });
+});
+
+describe("the hold belongs to the person the plan was put to", () => {
+  test("a plan row of somebody else on the same thread holds nothing, with row-level security out of the way", async () => {
+    const thread = `${prefix}-t-actor`;
+    // The platform frame reads every tenant's rows, so only the actor condition can tell them apart.
+    const rowKey = `plan-approval:${randomUUID()}`;
+    await runAsTenant("platform", async () => {
+      await database.insert(workItems).values({
+        kind: "person.question",
+        key: rowKey,
+        payload: {
+          actorId: bob,
+          botId: bot,
+          threadId: thread,
+          runId: "r",
+          question: "q",
+          mode: "completed_question",
+          planApproval: { digest: "d", steps: 4 },
+        },
+      });
+      expect(await hold.pending(alice, thread)).toBe(false);
+      expect(await hold.pending(bob, thread)).toBe(true);
+      await database.delete(workItems).where(eq(workItems.key, rowKey));
+    });
+  });
+});
+
+describe("an employee that did not declare the pilot, with the switch on", () => {
+  test("is held by nothing and its gate reads nothing about plans", async () => {
+    const thread = `${prefix}-t-nodecl`;
+    // A plan row exists for the thread (the person's other, declared employee put it), yet this one is free.
+    await plan(alice, thread, steps(4));
+    let reads = 0;
+    const refusalFor = onlyDeclared<[string], string | undefined>(
+      async () => false,
+      undefined,
+      async (owner, threadId) => {
+        reads += 1;
+        return hold.refusal(owner, threadId);
+      },
+    );
+    // As the deployment adapts it: the store's (owner, thread, bot) onto the check's (owner, bot, thread).
+    const gated = createApprovalService({
+      ...createApprovalStore(database),
+      planApprovalRefusal: (owner: string, threadId: string, botId: string) =>
+        refusalFor(owner, botId, threadId),
+    });
+    const candidate: ApprovalCandidate = {
+      actorId: alice,
+      botId: bot,
+      toolRef: "computer_run_command",
+      effect: "write",
+      scope: "workspace",
+      args: { target: "write" },
+    };
+    const outcome = await as(alice, () =>
+      inThread(thread, () => gated.gate(candidate)).then(
+        () => "ran",
+        (error: unknown) =>
+          error instanceof ApprovalRefusedError ? error.message : "asked",
+      ),
+    );
+    expect(outcome).not.toBe(PLAN_NOT_APPROVED);
+    expect(reads).toBe(0);
+  });
+});
+
+describe("the reviewer's thread", () => {
+  /** A subagent run that stops at once, noting whether its thread was held to reads while it ran. */
+  async function readOnlyDuring(readOnly: boolean) {
+    const seen: boolean[] = [];
+    const subagents = createSubagents({
+      turn: {} as never,
+      buildAgentFor: async () => {
+        throw new Error("stop");
+      },
+      withdrawApprovals: async () => undefined,
+      models: {
+        allowed: async () => ["m"],
+        hardModelOf: async () => undefined,
+        // Called with the run's thread before the run, and its undo after: both see the registration.
+        pin: (threadId: string) => {
+          seen.push(isReadOnlyThread(threadId));
+          return () => {
+            seen.push(isReadOnlyThread(threadId));
+          };
+        },
+      },
+    });
+    const tool = subagents.toolForRun(
+      {
+        actorId: alice,
+        botId: bot,
+        threadId: `${prefix}-t-parent`,
+        runId: "run-parent",
+        initiator: { kind: "person" },
+      },
+      { readOnly },
+    );
+    await as(alice, () =>
+      tool.execute(
+        { task: "评审", answer: "意见", model: "m" },
+        { toolCallId: `c-${randomUUID()}` },
+      ),
+    );
+    return seen;
+  }
+
+  test("is held to reads for as long as the run lasts, and let go after", async () => {
+    const seen = await readOnlyDuring(true);
+    // The undo ran inside `finally`, before the release: the thread was still held then.
+    expect(seen).toEqual([false, true]);
+  });
+
+  test("an ordinary subagent's thread is not", async () => {
+    expect(await readOnlyDuring(false)).toEqual([false, false]);
   });
 });

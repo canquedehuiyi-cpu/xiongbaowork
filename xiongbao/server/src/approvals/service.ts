@@ -13,7 +13,7 @@ import {
 } from "@openbot/shared/approval-outcomes";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
 import { desktopActionWordsOf } from "../../../shared/desktop-control";
-import { PLAN_NOT_APPROVED, REVIEW_READ_ONLY } from "../agents/plan-approval";
+import { REVIEW_READ_ONLY } from "../agents/plan-approval";
 import { PERSON_INITIATOR } from "../audit";
 import { currentTenant } from "../tenant/context";
 import {
@@ -601,13 +601,12 @@ export function createApprovalService(
       if (candidate.effect !== "read" && continuation?.threadId) {
         if (isReadOnlyThread(continuation.threadId))
           throw new ApprovalRefusedError(REVIEW_READ_ONLY);
-        if (
-          (await store.planApprovalPending?.(
-            candidate.actorId,
-            continuation.threadId,
-          )) === true
-        )
-          throw new ApprovalRefusedError(PLAN_NOT_APPROVED);
+        const held = await store.planApprovalRefusal?.(
+          candidate.actorId,
+          continuation.threadId,
+          candidate.botId,
+        );
+        if (held) throw new ApprovalRefusedError(held);
       }
       /*
        * A TASK STARTED FROM A CHECK-IN ASKS BEFORE EVERYTHING BUT A TRUSTED READ, whatever the

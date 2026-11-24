@@ -100,7 +100,10 @@ import { AGENT_MODEL_ROUTE } from "./agents/model-proxy/proxy";
 import { createAgentModelService } from "./agents/model-proxy/wiring";
 import {
   createPlanApproval,
-  declaresPlanApproval,
+  declaredFor,
+  onlyDeclared,
+  rememberedFor,
+  withPlanApproval,
 } from "./agents/plan-approval";
 import { readAgentPresence } from "./agents/presence";
 import { createAgentProfileStore } from "./agents/profile-store";
@@ -323,6 +326,7 @@ import {
   channels,
   intelligenceChannelMappings,
   recorderConnections,
+  threadRuns,
   users,
 } from "./db/schema";
 import { deliveryMessageId } from "./delivery/message-id";
@@ -533,7 +537,6 @@ import {
 } from "./plugins/single-user-identity";
 import { createPluginStore, type PluginStore } from "./plugins/store";
 import {
-  type GrantedTool,
   grantedSkills,
   grantedTools,
   REFUSAL_MARKER,
@@ -1695,7 +1698,13 @@ await startupLifecycle.run(async (startup) => {
   const storedApprovals = {
     ...createApprovalStore(database, taskProjector),
     ...(config.pilotPlanApproval
-      ? { planApprovalPending: planHold.pending }
+      ? {
+          planApprovalRefusal: (
+            owner: string,
+            threadId: string,
+            botId: string,
+          ) => planRefusalFor(owner, botId, threadId),
+        }
       : {}),
   };
 
@@ -3100,7 +3109,11 @@ await startupLifecycle.run(async (startup) => {
       return offeredMediaTools(
         offeredDeliveryTools(
           config.pilotPlanApproval
-            ? withPlanApproval(offered, actorId, initiator, botId)
+            ? await withPlanApproval(offered, {
+                planRef: UPDATE_PLAN_REF,
+                declared: pilotDeclared(actorId, botId),
+                pilotTool: () => pilotPlanTool(actorId, initiator, botId),
+              })
             : offered,
         ),
       );
@@ -3270,57 +3283,56 @@ await startupLifecycle.run(async (startup) => {
       : [];
   /**
    * Whether this employee's handbook declares the plan-approval pilot, in a conversation of its owner
-   * (agents/plan-approval.ts). Read at the call, so a handbook edited since the run began counts.
+   * (agents/plan-approval.ts). Remembered for ten seconds, so a handbook edited since counts soon.
    */
-  const pilotDeclared = (actorId: string, botId: string) =>
-    runAsTenant(actorId, async () => {
-      const profile = await agentProfileStore.get(
-        await actorFor(actorId),
-        botId,
-      );
-      return (
-        profile !== null &&
-        profile.ownerUserId === actorId &&
-        declaresPlanApproval(profile.bible)
-      );
-    });
+  const pilotDeclared = rememberedFor((actorId: string, botId: string) =>
+    runAsTenant(actorId, async () =>
+      declaredFor(
+        actorId,
+        await agentProfileStore.get(await actorFor(actorId), botId),
+      ),
+    ),
+  );
+  /** What a change is answered with while a plan holds it; no read at all for an employee that did not declare the pilot. */
+  const planRefusalFor = onlyDeclared<[string], string | undefined>(
+    pilotDeclared,
+    undefined,
+    (owner, threadId) => planHold.refusal(owner, threadId),
+  );
   /**
    * The plan tool under the pilot (agents/plan-approval.ts): the same tool with the owner's yes added.
    * Swapped in where the granted tools are loaded for a run, so the list above stays what it was and
    * a deployment with the switch off builds exactly the tool it always did.
    */
-  const withPlanApproval = (
-    tools: GrantedTool[],
+  const pilotPlanTool = (
     actorId: string,
     initiator: AuditInitiator,
     botId: string,
   ) =>
-    tools.map((tool) =>
-      tool.ref === UPDATE_PLAN_REF
-        ? (updatePlanTools({
-            approval: createPlanApproval({
-              actorId,
-              botId,
-              initiator,
-              declared: pilotDeclared,
-              latest: planHold.latest,
-              ask: (input) =>
-                routeQuestionForPlan(
-                  {
-                    actorId: input.actorId,
-                    botId: input.botId,
-                    threadId: input.threadId,
-                    runId: input.runId,
-                    ...(input.initiator ? { initiator: input.initiator } : {}),
-                    question: input.question,
-                    why: input.why,
-                  },
-                  { planApproval: input.planApproval },
-                ),
-            }),
-          })[0] ?? tool)
-        : tool,
-    );
+    updatePlanTools({
+      approval: createPlanApproval({
+        actorId,
+        botId,
+        initiator,
+        declared: pilotDeclared,
+        latest: planHold.latest,
+        hold: planHold.fail,
+        ask: (input) =>
+          routeQuestionForPlan(
+            {
+              actorId: input.actorId,
+              botId: input.botId,
+              threadId: input.threadId,
+              runId: input.runId,
+              ...(input.initiator ? { initiator: input.initiator } : {}),
+              question: input.question,
+              why: input.why,
+            },
+            { planApproval: input.planApproval },
+            input.key,
+          ),
+      }),
+    })[0];
   const loadGrantedToolsForActor = async (
     actorId: string,
     initiator: AuditInitiator,
@@ -3429,6 +3441,18 @@ await startupLifecycle.run(async (startup) => {
         ? {
             review: createDeliveryReview({
               declared: pilotDeclared,
+              // What is left of the round the hand-in is made in, read from when the run began.
+              remainingMs: ({ actorId: tenant, runId }) =>
+                runAsTenant(tenant, async () => {
+                  const [run] = await database
+                    .select({ at: threadRuns.createdAt })
+                    .from(threadRuns)
+                    .where(eq(threadRuns.id, runId))
+                    .limit(1);
+                  return run
+                    ? turnTimeoutFor("board") - (Date.now() - run.at.getTime())
+                    : undefined;
+                }),
               reviewer: (parent) =>
                 subagents.toolForRun(
                   { ...parent, initiator: initiator ?? PERSON_INITIATOR },
@@ -4153,7 +4177,12 @@ await startupLifecycle.run(async (startup) => {
     asksEveryStep: async (ownerUserId, threadId) =>
       (await approvalService.store.asksEveryChange?.(ownerUserId, threadId)) ===
       true,
-    ...(config.pilotPlanApproval ? { planPending: planHold.pending } : {}),
+    ...(config.pilotPlanApproval
+      ? {
+          planPending: async (owner: string, threadId: string, botId: string) =>
+            (await planRefusalFor(owner, botId, threadId)) !== undefined,
+        }
+      : {}),
   });
 
   /*

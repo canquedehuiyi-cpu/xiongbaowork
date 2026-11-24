@@ -178,7 +178,11 @@ export function createSubagents(options: {
    * `agents/plan-approval.ts`). A subagent's own thread is not the one the hold is on, so none is
    * started until the plan is approved.
    */
-  planPending?: (ownerUserId: string, threadId: string) => Promise<boolean>;
+  planPending?: (
+    ownerUserId: string,
+    threadId: string,
+    botId: string,
+  ) => Promise<boolean>;
   /**
    * 期七：`model` 参数要用的三样。不给，`model` 不起作用（子代理照旧用员工平时的模型），也不拒绝。
    */
@@ -260,7 +264,11 @@ export function createSubagents(options: {
             return `${REFUSAL_MARKER} No subagent was started: in a task from a check-in, every step is checked with the person in this conversation. Do this part yourself.`;
           if (
             !readOnly &&
-            (await options.planPending?.(parent.actorId, parent.threadId))
+            (await options.planPending?.(
+              parent.actorId,
+              parent.threadId,
+              parent.botId,
+            ))
           )
             return `${REFUSAL_MARKER} No subagent was started: the plan is not approved yet. Wait for the person's answer.`;
           // Checked and counted with nothing awaited between them, so calls arriving together

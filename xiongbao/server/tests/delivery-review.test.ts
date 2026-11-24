@@ -6,6 +6,9 @@ import {
   REVIEW_CHECKLIST,
   REVIEW_NOTE_LABEL,
   REVIEW_NOTE_LIMIT,
+  REVIEW_RESERVE_MS,
+  REVIEW_TIMED_OUT,
+  REVIEW_TIMEOUT_MS,
   reviewBrief,
   reviewNote,
   roundCalls,
@@ -58,6 +61,26 @@ describe("which cards are coding cards", () => {
       ).toBe(true);
   });
 
+  test("config and build files are, a note in markdown is not", () => {
+    for (const ref of [
+      "Dockerfile",
+      "docker/Dockerfile.dev",
+      "ci/build.yml",
+      "ci/build.yaml",
+      "package.json",
+      "pyproject.toml",
+    ])
+      expect(
+        isCodingCard({ ...card, items: [{ kind: "workspace_file", ref }] }),
+      ).toBe(true);
+    expect(
+      isCodingCard({
+        ...card,
+        items: [{ kind: "workspace_file", ref: "docs/说明.md" }],
+      }),
+    ).toBe(false);
+  });
+
   test("a report or a sheet is not, whatever the title says", () => {
     expect(
       isCodingCard({
@@ -107,6 +130,20 @@ describe("what the reviewer is shown of the round", () => {
     ]);
     expect(roundCalls(messages, 1)[0]).toStartWith("run ");
   });
+
+  test("only the calls after the person's last message, not the whole conversation's", () => {
+    const call = (name: string) => ({
+      toolCalls: [{ id: name, function: { name, arguments: "{}" } }],
+      role: "assistant",
+    });
+    const messages = [
+      { role: "user", content: "早先的事" },
+      call("earlier_call"),
+      { role: "user", content: "这一轮的事" },
+      call("this_round"),
+    ];
+    expect(roundCalls(messages)).toEqual(["this_round {}"]);
+  });
 });
 
 describe("the opinion as it is attached", () => {
@@ -125,7 +162,8 @@ describe("the opinion as it is attached", () => {
     expect(
       [...reviewNote({ answer: "长".repeat(5000), threadId: "t", steps: 1 })]
         .length,
-    ).toBeLessThanOrEqual(REVIEW_NOTE_LIMIT + REVIEW_NOTE_LABEL.length + 1);
+    ).toBeLessThanOrEqual(REVIEW_NOTE_LIMIT);
+    expect(REVIEW_NOTE_LIMIT).toBe(1000);
     expect(reviewNote({ error: "超时", threadId: "t", steps: 0 })).toContain(
       "没跑成：超时",
     );
@@ -206,5 +244,76 @@ describe("the review step", () => {
   test("a review that fails is a note, never an error", async () => {
     const { step } = review({ answer: new Error("没有电脑") });
     expect(await step(input())).toContain("没跑成：没有电脑");
+  });
+});
+
+describe("a review that takes too long", () => {
+  const input = {
+    actorId: "owner",
+    botId: "bot",
+    card: { title: "修复登录页的 bug", criteria: null },
+    items: [{ kind: "workspace_file", ref: "src/login.ts" }],
+    checks: [],
+    messages: [],
+    runId: "run-1",
+    threadId: "thread-1",
+  };
+  const hanging = (): GrantedTool => ({
+    name: "run_subagent",
+    ref: "bot/run_subagent",
+    description: "",
+    parameters: {} as never,
+    execute: () => new Promise<string>(() => undefined),
+  });
+
+  test("is given up inside its own time, and the hand-in is told so", async () => {
+    const step = createDeliveryReview({
+      declared: async () => true,
+      reviewer: hanging,
+      timeoutMs: 30,
+    });
+    const started = Date.now();
+    expect(await step(input)).toBe(REVIEW_TIMED_OUT);
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(REVIEW_TIMED_OUT).toContain("评审超时，未附意见");
+  });
+
+  test("is cut to what is left of the round, less a reserve, and not started with nothing left", async () => {
+    let started = 0;
+    const step = createDeliveryReview({
+      declared: async () => true,
+      reviewer: () => ({
+        ...hanging(),
+        execute: async () => {
+          started += 1;
+          return "{}";
+        },
+      }),
+      remainingMs: async () => REVIEW_RESERVE_MS - 1,
+    });
+    expect(await step(input)).toBe(REVIEW_TIMED_OUT);
+    expect(started).toBe(0);
+    const tight = createDeliveryReview({
+      declared: async () => true,
+      reviewer: hanging,
+      remainingMs: async () => REVIEW_RESERVE_MS + 40,
+    });
+    const at = Date.now();
+    expect(await tight(input)).toBe(REVIEW_TIMED_OUT);
+    expect(Date.now() - at).toBeLessThan(2000);
+    expect(REVIEW_TIMEOUT_MS).toBe(120_000);
+  });
+
+  test("a reviewer that answers in time is heard", async () => {
+    const step = createDeliveryReview({
+      declared: async () => true,
+      reviewer: () => ({
+        ...hanging(),
+        execute: async () =>
+          JSON.stringify({ answer: "总的：可以交", threadId: "s", steps: 1 }),
+      }),
+      timeoutMs: 1000,
+    });
+    expect(await step(input)).toContain("可以交");
   });
 });

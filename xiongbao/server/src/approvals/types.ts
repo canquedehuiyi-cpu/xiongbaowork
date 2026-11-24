@@ -681,10 +681,16 @@ export type ApprovalStore = {
    */
   asksEveryChange?(ownerUserId: string, threadId: string): Promise<boolean>;
   /**
-   * Whether this thread put a plan to its owner that is not approved yet, so changes wait (pilot,
-   * `agents/plan-approval.ts`). Absent unless the pilot is on, which leaves the gate as it was.
+   * What a change in this thread is answered with while a plan put to its owner is not approved
+   * (pilot, `agents/plan-approval.ts`), or undefined when nothing holds it. Absent unless the pilot
+   * is on, which leaves the gate as it was; given the Bot so an employee that did not declare the
+   * pilot costs no read.
    */
-  planApprovalPending?(ownerUserId: string, threadId: string): Promise<boolean>;
+  planApprovalRefusal?(
+    ownerUserId: string,
+    threadId: string,
+    botId: string,
+  ): Promise<string | undefined>;
   policy?: ApprovalPolicyStore;
 };
 /** Whether an approval may be answered with "Always allow here". Shared with the browser. */

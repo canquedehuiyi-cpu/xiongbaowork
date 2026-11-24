@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { PERSON_QUESTION_WAITING } from "../approvals/question-resume";
 import type { ApprovalService } from "../approvals/service";
 import { currentApprovalContext } from "../approvals/types";
@@ -13,7 +13,7 @@ import { groupSourceForRun } from "../channels/group";
 import type { ChannelStore } from "../channels/routes";
 import type { DeploymentConfig } from "../config";
 import type { Database } from "../db/client";
-import { channelMemberships } from "../db/schema";
+import { channelMemberships, workItems } from "../db/schema";
 import type { DeliveryScope } from "../delivery/types";
 import type { PeopleStore } from "../people/store";
 import type { PluginStore } from "../plugins/store";
@@ -88,22 +88,26 @@ export function wireCoordination(deps: {
   const routeQuestion = async (
     question: Parameters<EscalationRoute>[0],
     extra: Record<string, unknown> = {},
+    /** A key of the caller's own, for a row `ask_person` must not be able to take the place of. */
+    ownKey?: string,
   ) => {
     const source = await sourceForCoordinationRun(question);
     if (!source)
       return {
         refusal: "That question could not reach its source conversation.",
       };
-    const key = createHash("sha256")
-      .update(
-        JSON.stringify([
-          question.actorId,
-          question.botId,
-          question.runId,
-          question.question,
-        ]),
-      )
-      .digest("hex");
+    const key =
+      ownKey ??
+      createHash("sha256")
+        .update(
+          JSON.stringify([
+            question.actorId,
+            question.botId,
+            question.runId,
+            question.question,
+          ]),
+        )
+        .digest("hex");
     const queued = await personQuestions.offer({
       kind: "person.question",
       key,
@@ -123,6 +127,29 @@ export function wireCoordination(deps: {
     });
     if (queued === "refused")
       return { refusal: "The question could not be saved for its person." };
+    /*
+     * A row of the caller's own key that was already there counts as put only if it is that
+     * caller's row: this conversation's plan, with its marker. Anything else sitting on the key is not
+     * a question anybody was asked.
+     */
+    if (queued === "already" && ownKey && extra.planApproval) {
+      const [held] = await database
+        .select({ payload: workItems.payload })
+        .from(workItems)
+        .where(
+          and(eq(workItems.kind, "person.question"), eq(workItems.key, key)),
+        )
+        .limit(1);
+      const row = held?.payload as
+        | { threadId?: string; actorId?: string; planApproval?: unknown }
+        | undefined;
+      if (
+        !row?.planApproval ||
+        row.threadId !== question.threadId ||
+        row.actorId !== question.actorId
+      )
+        return { refusal: "The plan could not be saved for its person." };
+    }
     await channelStore.recordActivity(
       await actorFor(question.actorId),
       source.channelId,

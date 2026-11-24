@@ -16,7 +16,7 @@
  * A LEAF MODULE apart from the tiny reads below: the tool, the wiring and the tests all use it.
  */
 import { createHash } from "node:crypto";
-import { type PlanItem, UPDATE_PLAN_TOOL } from "../../../shared/plan";
+import type { PlanItem } from "../../../shared/plan";
 import { currentApprovalContext } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 
@@ -32,6 +32,14 @@ export const PLAN_APPROVE_WORD = "批准";
 /** What the gate answers a change with while the plan is not approved. Short: the model reads it. */
 export const PLAN_NOT_APPROVED =
   "计划还没获批准，批准前只能读不能改。等主人回复。";
+
+/** The same, once the owner sent the plan back or put it down: waiting would be the wrong thing to do. */
+export const PLAN_SENT_BACK =
+  "计划被退回了，按主人的意见改完再调 update_plan。";
+
+/** The same, when the plan could not be put to anybody: nothing waits on an answer. */
+export const PLAN_NOT_PUT =
+  "计划没能提交给主人，先别动手，稍后再调 update_plan。";
 
 /** What a review thread's change is answered with (see `approvals/read-only-threads.ts`). */
 export const REVIEW_READ_ONLY = "评审只读：这一步会改动东西，没有执行。";
@@ -75,35 +83,21 @@ export function planQuestion(items: readonly PlanItem[]) {
   };
 }
 
-/** The `update_plan` calls the conversation already holds, not counting the one being answered now. */
-export function earlierPlanCalls(
-  messages: readonly unknown[] | undefined,
-  currentCallId: string | undefined,
-): number {
-  let count = 0;
-  for (const message of messages ?? []) {
-    const calls = (message as { toolCalls?: unknown }).toolCalls;
-    if (!Array.isArray(calls)) continue;
-    for (const call of calls as {
-      id?: unknown;
-      function?: { name?: unknown };
-    }[]) {
-      if (
-        call?.function?.name === UPDATE_PLAN_TOOL &&
-        call.id !== currentCallId
-      )
-        count += 1;
-    }
-  }
-  return count;
-}
-
 /** The newest plan row of a conversation, as the pilot reads it. */
 export type PlanApprovalRow = {
   digest: string;
   /** Absent until the owner has answered. */
   decision?: "approved" | "revised";
+  /** The plan could not be put to anybody; the row only holds changes until a plan is put. */
+  failed?: true;
 };
+
+/** What a held change is answered with, or undefined when the row lets changes through. */
+export function holdMessage(row: PlanApprovalRow | undefined) {
+  if (!row || row.decision === "approved") return undefined;
+  if (row.failed) return PLAN_NOT_PUT;
+  return row.decision === "revised" ? PLAN_SENT_BACK : PLAN_NOT_APPROVED;
+}
 
 /** Where an unapproved plan is put to the person: what `ask_person` uses, with the plan's marker on it. */
 export type AskForPlanApproval = (input: {
@@ -115,6 +109,8 @@ export type AskForPlanApproval = (input: {
   question: string;
   why: string;
   planApproval: PlanApprovalMark;
+  /** The row's own key: a plan's, in a namespace `ask_person` cannot write into. */
+  key: string;
 }) => Promise<{ reached: string } | { refusal: string }>;
 
 /** What the plan tool is given when the pilot is on. */
@@ -153,6 +149,12 @@ export function createPlanApproval(deps: {
     threadId: string,
   ): Promise<PlanApprovalRow | undefined>;
   ask: AskForPlanApproval;
+  /** Hold changes in this conversation after a plan that could not be put. */
+  hold(input: {
+    actorId: string;
+    threadId: string;
+    digest: string;
+  }): Promise<void>;
 }): PlanApproval {
   const { actorId, botId, initiator } = deps;
   return {
@@ -165,17 +167,12 @@ export function createPlanApproval(deps: {
       const latest = await deps.latest(actorId, conversation.threadId);
       if (latest?.decision === "approved") return undefined;
       const digest = planDigest(items);
-      if (latest && latest.decision === undefined)
+      if (latest && !latest.failed && latest.decision === undefined)
         return "计划还在等主人批准，先别动手。";
-      if (latest && latest.digest === digest)
-        return "这份计划没获批准，按主人的意见改了再提交。";
-      // First plan of the conversation: only a long one is put to the owner.
-      if (
-        !latest &&
-        (items.length < PLAN_APPROVAL_MIN_STEPS ||
-          earlierPlanCalls(conversation.messages, conversation.callId) > 0)
-      )
-        return undefined;
+      if (latest && !latest.failed && latest.digest === digest)
+        return PLAN_SENT_BACK;
+      // With no plan on record only a long one is put to the owner; one the owner sent back, any.
+      if (!latest && items.length < PLAN_APPROVAL_MIN_STEPS) return undefined;
       const outcome = await deps.ask({
         actorId,
         botId,
@@ -184,12 +181,16 @@ export function createPlanApproval(deps: {
         ...(initiator ? { initiator } : {}),
         ...planQuestion(items),
         planApproval: { digest, steps: items.length },
+        key: `plan-approval:${createHash("sha256")
+          .update(JSON.stringify([actorId, conversation.threadId, digest]))
+          .digest("hex")}`,
       });
       if ("reached" in outcome)
         return "计划已请主人批准。批准前只读不改，先停下等回复。";
       /*
-       * Not put, so nothing is held. A thread no person's conversation maps to, a subagent's for one,
-       * is no place to ask: the model is told nothing, and the log says what happened.
+       * Not put: nobody can answer it, so nothing would lift a hold on an answer. Changes are held
+       * all the same, until a plan is put. The price: a long plan in a thread no person's
+       * conversation maps to, a subagent's for one, holds that thread's changes.
        */
       console.warn(
         JSON.stringify({
@@ -199,7 +200,66 @@ export function createPlanApproval(deps: {
           reason: outcome.refusal,
         }),
       );
-      return undefined;
+      await deps.hold({ actorId, threadId: conversation.threadId, digest });
+      return PLAN_NOT_PUT;
     },
   };
+}
+
+/** Whether this employee declares the pilot for this person: its owner, with the line in the handbook. */
+export function declaredFor(
+  actorId: string,
+  profile: { ownerUserId: string | null; bible?: string | null } | null,
+): boolean {
+  return (
+    profile !== null &&
+    profile.ownerUserId === actorId &&
+    declaresPlanApproval(profile.bible)
+  );
+}
+
+/** `declared`, remembered for a few seconds: asked on every tool load and every gated call. */
+export function rememberedFor(
+  declared: (actorId: string, botId: string) => Promise<boolean>,
+  ttlMs = 10_000,
+  now: () => number = Date.now,
+) {
+  const seen = new Map<string, { at: number; value: boolean }>();
+  return async (actorId: string, botId: string) => {
+    const key = JSON.stringify([actorId, botId]);
+    const hit = seen.get(key);
+    if (hit && now() - hit.at < ttlMs) return hit.value;
+    const value = await declared(actorId, botId);
+    if (seen.size > 500) seen.clear();
+    seen.set(key, { at: now(), value });
+    return value;
+  };
+}
+
+/**
+ * Swap in the pilot's plan tool for an employee that declares the pilot; any other employee's tools
+ * are returned as they were, the same array, so nothing about them changes with the switch on.
+ */
+export async function withPlanApproval<T extends { ref: string }>(
+  tools: T[],
+  options: {
+    planRef: string;
+    declared: Promise<boolean> | boolean;
+    pilotTool: () => T | undefined;
+  },
+): Promise<T[]> {
+  if (!(await options.declared)) return tools;
+  return tools.map((tool) =>
+    tool.ref === options.planRef ? (options.pilotTool() ?? tool) : tool,
+  );
+}
+
+/** A check that costs nothing for an employee that did not declare the pilot. */
+export function onlyDeclared<A extends unknown[], R>(
+  declared: (actorId: string, botId: string) => Promise<boolean>,
+  otherwise: R,
+  check: (actorId: string, ...rest: A) => Promise<R>,
+) {
+  return async (actorId: string, botId: string, ...rest: A): Promise<R> =>
+    (await declared(actorId, botId)) ? check(actorId, ...rest) : otherwise;
 }
