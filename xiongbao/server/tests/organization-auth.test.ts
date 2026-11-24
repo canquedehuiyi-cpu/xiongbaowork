@@ -3,7 +3,6 @@ import { createHash } from "node:crypto";
 import { electron } from "@better-auth/electron";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { Hono } from "hono";
 import { desktopAuthPage } from "../src/auth/native-browser";
 import {
   AuthorityUnavailable,
@@ -11,20 +10,6 @@ import {
   organizationCookieExpiresAt,
   SIGN_OUT_UNFINISHED,
 } from "../src/auth/organization";
-import {
-  clearDesktopConnectionFailure,
-  mountDesktopConnectionFailure,
-} from "../src/desktop-connection-failure";
-
-// The native status store is process-wide and survives between test files. Every kind is cleared,
-// not just the organization's: the endpoint answers with whichever failure it holds, so a model
-// failure an earlier file left behind would stand in for the one these tests expect.
-const clearDesktopFailures = () => {
-  for (const connection of ["model", "intelligence", "organization"] as const)
-    clearDesktopConnectionFailure(connection);
-};
-beforeEach(clearDesktopFailures);
-afterEach(clearDesktopFailures);
 
 const employee = {
   id: "employee-1",
@@ -34,7 +19,7 @@ const employee = {
   role: "user" as const,
 };
 
-test("missing local cookie requests focused refresh; transient authority failure and refused sign-out remain retryable", async () => {
+test("missing local cookie is no session; transient authority failure and refused sign-out remain retryable", async () => {
   const authority = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
@@ -44,21 +29,8 @@ test("missing local cookie requests focused refresh; transient authority failure
     authorityUrl: authority.url.origin,
     materializeUser: async (user) => user,
   });
-  const app = new Hono();
-  mountDesktopConnectionFailure(app, "fixture-host-token");
-  const failure = async () =>
-    (
-      await app.request("/api/desktop/connection-failure", {
-        headers: { "x-openbot-desktop-host-token": "fixture-host-token" },
-      })
-    ).json();
   try {
     expect(await auth.api.getSession({ headers: new Headers() })).toBeNull();
-    expect(await failure()).toEqual({
-      connection: "organization",
-      code: "organization_authentication_failed",
-    });
-    clearDesktopConnectionFailure("organization");
     const handoff = await auth.handler(
       new Request("http://localhost:3001/api/auth/organization/session", {
         method: "POST",
@@ -70,7 +42,6 @@ test("missing local cookie requests focused refresh; transient authority failure
       }),
     );
     expect(handoff.status).toBe(503);
-    expect(await failure()).toBeNull();
     const cookie =
       "xiongbao.organization-session=" +
       Buffer.from(
@@ -87,7 +58,6 @@ test("missing local cookie requests focused refresh; transient authority failure
     );
     expect(signout.status).toBe(503);
     expect(signout.headers.get("set-cookie")).toBeNull();
-    expect(await failure()).toBeNull();
   } finally {
     authority.stop(true);
   }

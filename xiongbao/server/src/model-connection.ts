@@ -1,52 +1,10 @@
-import { timingSafeEqual } from "node:crypto";
 import type { BaseEvent } from "@ag-ui/client";
-import type { Env, Hono } from "hono";
 import { type Observable, tap } from "rxjs";
-import { providerFailureAsRunError } from "./provider-error";
 import {
   isModelUnavailableMessage,
   reportModelRejected,
 } from "./model-rejection";
-
-export type DesktopConnectionFailure =
-  | { connection: "model"; code: "provider_authentication_failed" }
-  | { connection: "intelligence"; code: "intelligence_authentication_failed" }
-  | { connection: "organization"; code: "organization_authentication_failed" };
-
-const failures = new Map<
-  DesktopConnectionFailure["connection"],
-  DesktopConnectionFailure
->();
-
-/** Session-only signal for the native host. Never retains provider messages or credentials. */
-export function recordDesktopConnectionFailure(
-  failure: DesktopConnectionFailure,
-): void {
-  failures.set(failure.connection, failure);
-}
-
-export function clearDesktopConnectionFailure(
-  connection: DesktopConnectionFailure["connection"],
-): void {
-  failures.delete(connection);
-}
-
-export function mountDesktopConnectionFailure<T extends Env>(
-  app: Hono<T>,
-  hostToken: string | undefined,
-): void {
-  const expected = hostToken?.trim();
-  if (!expected) return;
-  app.get("/api/desktop/connection-failure", (context) => {
-    const offered = context.req.header("x-openbot-desktop-host-token") ?? "";
-    const a = Buffer.from(offered),
-      b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b))
-      return context.json({ error: "unauthorised" }, 401);
-    context.header("Cache-Control", "no-store");
-    return context.json(failures.values().next().value ?? null);
-  });
-}
+import { providerFailureAsRunError } from "./provider-error";
 
 /** Only provider SDK errors qualify; a harness HTTP 401 is a different credential.
  * A provider 403 can mean missing project/resource permission, not expired credentials.
@@ -83,8 +41,8 @@ export function observeModelConnection(
   /*
    * ONE WRAP FOR EVERY SITE THAT CALLS THIS, which is all three places an agent stream reaches the
    * runner. A provider's refusal becomes a readable `RUN_ERROR` before the observation below sees it;
-   * a 401 is passed through untouched by that wrapper, so the desktop signal here keeps answering it.
-   * Composing here rather than at each call site is what stops a fourth site from forgetting one half.
+   * a 401 is passed through untouched by that wrapper. Composing here rather than at each call site
+   * is what stops a fourth site from forgetting one half.
    */
   const said = options.refusalsSaidByCaller
     ? stream
@@ -92,16 +50,10 @@ export function observeModelConnection(
   return said.pipe(
     tap({
       next: (event) => {
+        // A sign-in that no longer works is not a model the provider withdrew.
         if (
           event.type === "RUN_ERROR" &&
-          event.code === "OPENBOT_MODEL_AUTH_REQUIRED"
-        ) {
-          recordDesktopConnectionFailure({
-            connection: "model",
-            code: "provider_authentication_failed",
-          });
-        } else if (
-          event.type === "RUN_ERROR" &&
+          event.code !== "OPENBOT_MODEL_AUTH_REQUIRED" &&
           isModelUnavailableMessage(
             String((event as { message?: unknown }).message ?? ""),
           )
@@ -109,20 +61,11 @@ export function observeModelConnection(
           // The provider no longer serves this model to this credential: read the listing again
           // now rather than at the next scheduled refresh, so the picker and the default drop it.
           reportModelRejected();
-        } else if (
-          event.type === "TEXT_MESSAGE_CONTENT" ||
-          event.type === "TOOL_CALL_START"
-        ) {
-          clearDesktopConnectionFailure("model");
         }
       },
       error: (error: unknown) => {
-        if (isModelAuthenticationError(error))
-          recordDesktopConnectionFailure({
-            connection: "model",
-            code: "provider_authentication_failed",
-          });
-        else if (
+        if (
+          !isModelAuthenticationError(error) &&
           error instanceof Error &&
           isModelUnavailableMessage(
             `${error.message} ${error.cause instanceof Error ? error.cause.message : ""}`,

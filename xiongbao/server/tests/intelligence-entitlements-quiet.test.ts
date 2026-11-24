@@ -4,7 +4,6 @@ import {
   CopilotKitIntelligence,
   createCopilotRuntimeHandler,
 } from "@copilotkit/runtime/v2";
-import { clearDesktopConnectionFailure } from "../src/desktop-connection-failure";
 import {
   createIntelligenceClient,
   observeIntelligenceAuthentication,
@@ -83,7 +82,6 @@ const telemetry = process.env.COPILOTKIT_TELEMETRY_DISABLED;
 afterEach(() => {
   for (const stop of stops.splice(0)) stop();
   mock.restore();
-  clearDesktopConnectionFailure("intelligence");
   if (telemetry === undefined) delete process.env.COPILOTKIT_TELEMETRY_DISABLED;
   else process.env.COPILOTKIT_TELEMETRY_DISABLED = telemetry;
 });

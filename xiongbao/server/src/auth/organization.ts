@@ -1,8 +1,4 @@
 import { englishName } from "../brand";
-import {
-  clearDesktopConnectionFailure,
-  recordDesktopConnectionFailure,
-} from "../desktop-connection-failure";
 import type { AuthenticatedActor, AuthService } from "./guards";
 
 export const ORGANIZATION_SESSION_COOKIE = "xiongbao.organization-session";
@@ -133,13 +129,12 @@ export function createOrganizationAuth(options: {
 
   type Verdict =
     | { kind: "actor"; actor: AuthenticatedActor }
-    | { kind: "refused"; authenticationFailed: boolean }
+    | { kind: "refused" }
     | { kind: "unexpected"; status: number };
 
-  /** Asks the organization about a cookie and reports what it said, with no side effects on Desktop's failure state. */
+  /** Asks the organization about a cookie and reports what it said. */
   async function verifyAtAuthority(cookie: string): Promise<Verdict> {
-    if (!sessionCookie(cookie))
-      return { kind: "refused", authenticationFailed: false };
+    if (!sessionCookie(cookie)) return { kind: "refused" };
     let response: Response;
     try {
       response = await fetch(`${authority}/api/me`, {
@@ -157,7 +152,7 @@ export function createOrganizationAuth(options: {
         "The organization is temporarily unavailable. Try again.",
       );
     if (response.status === 401 || response.status === 403)
-      return { kind: "refused", authenticationFailed: true };
+      return { kind: "refused" };
     if (!response.ok) return { kind: "unexpected", status: response.status };
     const user = actor(await response.json().catch(() => null));
     if (!user) return { kind: "unexpected", status: response.status };
@@ -166,17 +161,7 @@ export function createOrganizationAuth(options: {
 
   async function verify(cookie: string): Promise<AuthenticatedActor | null> {
     const verdict = await verifyAtAuthority(cookie);
-    if (verdict.kind === "refused") {
-      if (verdict.authenticationFailed)
-        recordDesktopConnectionFailure({
-          connection: "organization",
-          code: "organization_authentication_failed",
-        });
-      return null;
-    }
-    if (verdict.kind === "unexpected") return null;
-    clearDesktopConnectionFailure("organization");
-    return verdict.actor;
+    return verdict.kind === "actor" ? verdict.actor : null;
   }
 
   function cookieFrom(headers: Headers): string | null {
@@ -207,16 +192,11 @@ export function createOrganizationAuth(options: {
 
   const getSession: AuthService["api"]["getSession"] = async ({ headers }) => {
     const cookie = cookieFrom(headers);
-    if (!cookie)
-      recordDesktopConnectionFailure({
-        connection: "organization",
-        code: "organization_authentication_failed",
-      });
     const user = cookie ? await verify(cookie) : null;
     return user ? { user } : null;
   };
 
-  /** Verifies a forwarded cookie header without touching Desktop's failure state; an odd answer is unavailable, never a sign-out. */
+  /** Verifies a forwarded cookie header; an odd answer is unavailable, never a sign-out. */
   async function verifySessionQuietly(
     cookieHeader: string,
   ): Promise<AuthenticatedActor | null> {

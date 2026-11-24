@@ -68,7 +68,6 @@ import { Route as AuthedSettingsNotificationsRouteImport } from './routes/_authe
 import { Route as AuthedSettingsPasswordsRouteImport } from './routes/_authed/settings/passwords'
 import { Route as AuthedSettingsPlansRouteImport } from './routes/_authed/settings/plans'
 import { Route as AuthedSettingsSetupRouteImport } from './routes/_authed/settings/setup'
-import { Route as AuthedSettingsThisComputerRouteImport } from './routes/_authed/settings/this-computer'
 import { Route as AuthedSignInRequestIdRouteImport } from './routes/_authed/sign-in/$requestId'
 import { Route as AuthedAppAgentsIndexRouteImport } from './routes/_authed/_app/agents/index'
 import { Route as AuthedAppAssembleAgentIdRouteImport } from './routes/_authed/_app/assemble.$agentId'
@@ -437,12 +436,6 @@ const AuthedSettingsSetupRoute = AuthedSettingsSetupRouteImport.update({
   path: '/setup',
   getParentRoute: () => AuthedSettingsRouteRoute,
 } as any)
-const AuthedSettingsThisComputerRoute =
-  AuthedSettingsThisComputerRouteImport.update({
-    id: '/this-computer',
-    path: '/this-computer',
-    getParentRoute: () => AuthedSettingsRouteRoute,
-  } as any)
 const AuthedSignInRequestIdRoute = AuthedSignInRequestIdRouteImport.update({
   id: '/sign-in/$requestId',
   path: '/sign-in/$requestId',
@@ -914,7 +907,6 @@ export interface FileRoutesByFullPath {
   '/settings/passwords': typeof AuthedSettingsPasswordsRoute
   '/settings/plans': typeof AuthedSettingsPlansRoute
   '/settings/setup': typeof AuthedSettingsSetupRoute
-  '/settings/this-computer': typeof AuthedSettingsThisComputerRoute
   '/sign-in/$requestId': typeof AuthedSignInRequestIdRoute
   '/admin/': typeof AuthedAdminIndexRoute
   '/settings/': typeof AuthedSettingsIndexRoute
@@ -1043,7 +1035,6 @@ export interface FileRoutesByTo {
   '/settings/passwords': typeof AuthedSettingsPasswordsRoute
   '/settings/plans': typeof AuthedSettingsPlansRoute
   '/settings/setup': typeof AuthedSettingsSetupRoute
-  '/settings/this-computer': typeof AuthedSettingsThisComputerRoute
   '/sign-in/$requestId': typeof AuthedSignInRequestIdRoute
   '/admin': typeof AuthedAdminIndexRoute
   '/assemble/$agentId': typeof AuthedAppAssembleAgentIdRoute
@@ -1176,7 +1167,6 @@ export interface FileRoutesById {
   '/_authed/settings/passwords': typeof AuthedSettingsPasswordsRoute
   '/_authed/settings/plans': typeof AuthedSettingsPlansRoute
   '/_authed/settings/setup': typeof AuthedSettingsSetupRoute
-  '/_authed/settings/this-computer': typeof AuthedSettingsThisComputerRoute
   '/_authed/sign-in/$requestId': typeof AuthedSignInRequestIdRoute
   '/_authed/_app/': typeof AuthedAppIndexRoute
   '/_authed/admin/': typeof AuthedAdminIndexRoute
@@ -1310,7 +1300,6 @@ export interface FileRouteTypes {
     | '/settings/passwords'
     | '/settings/plans'
     | '/settings/setup'
-    | '/settings/this-computer'
     | '/sign-in/$requestId'
     | '/admin/'
     | '/settings/'
@@ -1439,7 +1428,6 @@ export interface FileRouteTypes {
     | '/settings/passwords'
     | '/settings/plans'
     | '/settings/setup'
-    | '/settings/this-computer'
     | '/sign-in/$requestId'
     | '/admin'
     | '/assemble/$agentId'
@@ -1571,7 +1559,6 @@ export interface FileRouteTypes {
     | '/_authed/settings/passwords'
     | '/_authed/settings/plans'
     | '/_authed/settings/setup'
-    | '/_authed/settings/this-computer'
     | '/_authed/sign-in/$requestId'
     | '/_authed/_app/'
     | '/_authed/admin/'
@@ -2067,13 +2054,6 @@ declare module '@tanstack/react-router' {
       path: '/setup'
       fullPath: '/settings/setup'
       preLoaderRoute: typeof AuthedSettingsSetupRouteImport
-      parentRoute: typeof AuthedSettingsRouteRoute
-    }
-    '/_authed/settings/this-computer': {
-      id: '/_authed/settings/this-computer'
-      path: '/this-computer'
-      fullPath: '/settings/this-computer'
-      preLoaderRoute: typeof AuthedSettingsThisComputerRouteImport
       parentRoute: typeof AuthedSettingsRouteRoute
     }
     '/_authed/sign-in/$requestId': {
@@ -2702,7 +2682,6 @@ interface AuthedSettingsRouteRouteChildren {
   AuthedSettingsPasswordsRoute: typeof AuthedSettingsPasswordsRoute
   AuthedSettingsPlansRoute: typeof AuthedSettingsPlansRoute
   AuthedSettingsSetupRoute: typeof AuthedSettingsSetupRoute
-  AuthedSettingsThisComputerRoute: typeof AuthedSettingsThisComputerRoute
   AuthedSettingsIndexRoute: typeof AuthedSettingsIndexRoute
   AuthedSettingsComponentsGalleryNameRoute: typeof AuthedSettingsComponentsGalleryNameRoute
   AuthedSettingsConnectedAccountsKeyRoute: typeof AuthedSettingsConnectedAccountsKeyRoute
@@ -2722,7 +2701,6 @@ const AuthedSettingsRouteRouteChildren: AuthedSettingsRouteRouteChildren = {
   AuthedSettingsPasswordsRoute: AuthedSettingsPasswordsRoute,
   AuthedSettingsPlansRoute: AuthedSettingsPlansRoute,
   AuthedSettingsSetupRoute: AuthedSettingsSetupRoute,
-  AuthedSettingsThisComputerRoute: AuthedSettingsThisComputerRoute,
   AuthedSettingsIndexRoute: AuthedSettingsIndexRoute,
   AuthedSettingsComponentsGalleryNameRoute:
     AuthedSettingsComponentsGalleryNameRoute,

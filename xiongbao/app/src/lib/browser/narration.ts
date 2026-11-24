@@ -1,12 +1,9 @@
 /*
- * NARRATION FROM THE PAGE. On hosted OpenBot and OpenBot Desktop the person's browser runs on a computer with no
+ * NARRATION FROM THE PAGE. On hosted OpenBot the person's browser runs on a computer with no
  * microphone, so this page listens to them instead, in their own browser, with the Web Speech API, and hands each final
  * phrase to the Recorder with when they started and stopped saying it. It also says when a phrase began, as soon as its
  * first words come back, so the Recorder holds the steps taken while it is said until it arrives. In a window on the
  * person's desktop none of this runs: the Recorder hears the microphone itself.
- *
- * In the OpenBot Desktop window the page is in the system's web view, which has no on-device recognition, so the
- * desktop app's own takes the browser's place (@/lib/desktop/speech, `narrationRecognition`), on the device as well.
  *
  * It is the browser's own speech recognition (`SpeechRecognition`, or the `webkitSpeechRecognition` Chrome and Safari
  * still answer to), continuous and with interim results, which is what lets a phrase be timed from its first words
@@ -23,8 +20,6 @@ import {
   type OnDeviceSpeech,
   onDeviceSpeech,
 } from "@openbot/shared/on-device-speech";
-import { desktopShell } from "@/lib/desktop/shell";
-import { desktopRecognition } from "@/lib/desktop/speech";
 
 type RecognitionAlternative = { readonly transcript: string };
 type RecognitionResult = {
@@ -66,17 +61,6 @@ export function speechRecognition(
     webkitSpeechRecognition?: RecognitionConstructor;
   };
   return speech.SpeechRecognition ?? speech.webkitSpeechRecognition ?? null;
-}
-
-/**
- * The recognition narration listens with: in the OpenBot Desktop window the desktop app's, which recognises speech on
- * the person's computer where the window's web view cannot; anywhere else the browser's own.
- */
-export function narrationRecognition(
-  scope: object = globalThis,
-): RecognitionConstructor | null {
-  const shell = desktopShell();
-  return shell ? desktopRecognition(shell) : speechRecognition(scope);
 }
 
 /** One final phrase, with when the person started and stopped saying it (epoch ms). */
@@ -476,10 +460,10 @@ export function startNarration(
   };
 }
 
-/** The recognition this page listens with (`narrationRecognition`), and the browser's clock. */
+/** The browser's own recognition (`speechRecognition`), and the browser's clock. */
 export function browserNarrationDeps(): NarrationDeps {
   return {
-    Recognition: narrationRecognition(),
+    Recognition: speechRecognition(),
     now: () => Date.now(),
     timers: {
       set: (run, ms) => setTimeout(run, ms),

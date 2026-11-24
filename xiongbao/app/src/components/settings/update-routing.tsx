@@ -27,7 +27,6 @@ import {
 import { shortName } from "@/lib/brand";
 import { deliveryQueryOptions } from "@/lib/delivery";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
-import { desktopShell } from "@/lib/desktop/shell";
 import { appConfig } from "@/lib/generated/application-config";
 import { mayOpenSetup } from "@/lib/setup/queries";
 import { cn } from "@/lib/utils";
@@ -121,11 +120,6 @@ export function UpdateRoutingSection() {
     !reach.isPending &&
     !routing.error &&
     shown.length > 0;
-  /*
-   * OpenBot Desktop runs OpenBot on this computer, and every one of these channels needs OpenBot where the internet can
-   * reach it (a phone, OpenTag, Twilio calling it). Its settings are the Desktop's own, so it gets no link to them.
-   */
-  const desktop = desktopShell() !== null;
   const setupDocs = appConfig.brand.supportUrl;
   return (
     <PageSection
@@ -144,7 +138,7 @@ export function UpdateRoutingSection() {
       ) : shown.length === 0 ? (
         <PageEmpty
           action={
-            setsUp && !desktop && setupDocs ? (
+            setsUp && setupDocs ? (
               // An anchor rather than Button: Base UI gives a rendered anchor role="button", and this is a link.
               <a
                 className={cn(
@@ -161,11 +155,9 @@ export function UpdateRoutingSection() {
           icon={IconRoute}
           title={`消息只在${shortName()}里显示`}
         >
-          {desktop
-            ? `推送、Slack、Microsoft Teams 和短信需要${shortName()}运行在服务器上。`
-            : setsUp
-              ? `在${shortName()}运行的地方设置好推送、Slack、Microsoft Teams 或短信后，就能在这里选择。`
-              : "管理员设置好推送、Slack、Microsoft Teams 或短信后，就能在这里选择。"}
+          {setsUp
+            ? `在${shortName()}运行的地方设置好推送、Slack、Microsoft Teams 或短信后，就能在这里选择。`
+            : "管理员设置好推送、Slack、Microsoft Teams 或短信后，就能在这里选择。"}
         </PageEmpty>
       ) : (
         <PageRows>

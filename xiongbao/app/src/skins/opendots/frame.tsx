@@ -21,7 +21,6 @@ import { BotsNavBadge } from "@/components/bot-profile/attention";
 import { NavigationTarget } from "@/components/layout/navigation-target";
 import { OpenBotVersion } from "@/components/layout/openbot-version";
 import { SelfHostBanner } from "@/components/layout/self-host-banner";
-import { UpdateBanner } from "@/components/layout/update-banner";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -449,7 +448,6 @@ export function OpenDotsFrame({ children }: { children: ReactNode }) {
           onToggleNav={() => setNavCollapsed((collapsed) => !collapsed)}
           place={place}
         />
-        <UpdateBanner />
         <SelfHostBanner />
         <div className="relative flex min-h-0 flex-1">
           <main

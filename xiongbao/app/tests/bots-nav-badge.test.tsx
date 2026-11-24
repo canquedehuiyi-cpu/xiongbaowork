@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
 import { BotsNavBadge } from "@/components/bot-profile/attention";
 import { botLifecycleKeys } from "@/lib/bot-lifecycle/queries";
-import { awayFromOpenBot } from "./desktop-notifications.fixture";
+import { outOfSight } from "./out-of-sight.fixture";
 import { settleReactWork } from "./settle-react-work";
 
 /**
@@ -17,7 +17,7 @@ import { settleReactWork } from "./settle-react-work";
 
 beforeAll(() => {
   GlobalRegistrator.register();
-  awayFromOpenBot();
+  outOfSight();
 });
 afterEach(cleanup);
 afterAll(async () => {
@@ -102,7 +102,7 @@ function notifications() {
         title,
         body: options?.body,
         tag: options?.tag,
-        // The page a click opens in OpenBot Desktop, which reads it from `extra`.
+        // The page the notice is about, which it carries in `extra`.
         path: options?.extra?.path,
       });
     },

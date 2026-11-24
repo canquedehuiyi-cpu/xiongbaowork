@@ -1,15 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { Hono } from "hono";
-import {
-  clearDesktopConnectionFailure,
-  mountDesktopConnectionFailure,
-  recordDesktopConnectionFailure,
-} from "../src/desktop-connection-failure";
+import { afterEach, describe, expect, test } from "bun:test";
 import { createIntelligenceClient } from "../src/intelligence-client";
 
-const hostToken = "intelligence-test-host-token";
-const desktop = new Hono();
-mountDesktopConnectionFailure(desktop, hostToken);
 const servers: ReturnType<typeof Bun.serve>[] = [];
 
 function platform() {
@@ -46,27 +37,12 @@ function platform() {
   };
 }
 
-async function failure() {
-  const response = await desktop.request("/api/desktop/connection-failure", {
-    headers: { "x-openbot-desktop-host-token": hostToken },
-  });
-  return response.json();
-}
-
-// The failure state is one per process and the endpoint answers with whichever failure it holds, so
-// every kind is cleared, including one an earlier file in the same process left behind.
-const clearDesktopFailures = () => {
-  for (const connection of ["model", "intelligence", "organization"] as const)
-    clearDesktopConnectionFailure(connection);
-};
-beforeEach(clearDesktopFailures);
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => server.stop(true)));
-  clearDesktopFailures();
 });
 
 describe("Intelligence authentication recovery", () => {
-  test("real SDK HTTP 401 preserves its error and signals focused native recovery", async () => {
+  test("real SDK HTTP 401 reaches the caller as the SDK's own error", async () => {
     const { client } = platform();
     await expect(
       client.listThreads({ userId: "employee", agentId: "bot" }),
@@ -74,32 +50,23 @@ describe("Intelligence authentication recovery", () => {
       name: "PlatformRequestError",
       status: 401,
     });
-    expect(await failure()).toEqual({
-      connection: "intelligence",
-      code: "intelligence_authentication_failed",
-    });
   });
 
-  test("permission and service failures do not request a new credential", async () => {
+  test("permission and service failures reach the caller with their own status", async () => {
     const { client, respondWith } = platform();
     for (const status of [403, 404, 429, 500]) {
       respondWith(status);
       await expect(
         client.listThreads({ userId: "employee", agentId: "bot" }),
       ).rejects.toMatchObject({ status });
-      expect(await failure()).toBeNull();
     }
   });
 
-  test("successful authenticated traffic clears only the Intelligence failure", async () => {
+  test("a call that failed with 401 answers normally once the platform accepts the key", async () => {
     const { client, respondWith } = platform();
     await expect(
       client.listThreads({ userId: "employee", agentId: "bot" }),
     ).rejects.toMatchObject({ status: 401 });
-    recordDesktopConnectionFailure({
-      connection: "model",
-      code: "provider_authentication_failed",
-    });
     respondWith(200);
     expect(
       await client.listThreads({ userId: "employee", agentId: "bot" }),
@@ -107,10 +74,6 @@ describe("Intelligence authentication recovery", () => {
       threads: [],
       nextCursor: null,
       joinCode: "fixture-join-code",
-    });
-    expect(await failure()).toEqual({
-      connection: "model",
-      code: "provider_authentication_failed",
     });
   });
 

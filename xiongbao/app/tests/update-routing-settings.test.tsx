@@ -25,7 +25,7 @@ afterEach(cleanup);
 
 /*
  * The way to set channels up is the deployment's support page (brand `support_url`). Set here so the tests that expect
- * no link (Desktop, a member) are refusing one that exists; the generated config of this delivery publishes none.
+ * no link (a member) are refusing one that exists; the generated config of this delivery publishes none.
  */
 const SUPPORT_URL = "https://support.example.com/channels";
 const publishedSupportUrl = appConfig.brand.supportUrl;
@@ -205,28 +205,6 @@ test("the section asks where updates go only above switches to choose with", asy
   const choosing = draw(ADMIN);
   await choosing.findByRole("switch", { name: "进展：Slack" });
   expect(choosing.getByText(ASK)).toBeTruthy();
-});
-
-test("in OpenBot Desktop, where these channels can't reach anyone, it says so and links no setup docs", async () => {
-  // What the Desktop window injects (`desktopShell`): the page is inside OpenBot Desktop.
-  const shell = window as { __TAURI_INTERNALS__?: unknown };
-  shell.__TAURI_INTERNALS__ = {
-    invoke: async () => undefined,
-    transformCallback: () => 0,
-  };
-  try {
-    available = { slack: false, teams: false, sms: false, push: false };
-    serving();
-    const view = draw({ role: "member", localEvaluation: true });
-    expect(
-      await view.findByText(
-        "推送、Slack、Microsoft Teams 和短信需要熊宝运行在服务器上。",
-      ),
-    ).toBeTruthy();
-    expect(view.queryByRole("link", { name: "怎么设置" })).toBeNull();
-  } finally {
-    delete shell.__TAURI_INTERNALS__;
-  }
 });
 
 test("someone running OpenBot on their own computer gets the way to set channels up too", async () => {

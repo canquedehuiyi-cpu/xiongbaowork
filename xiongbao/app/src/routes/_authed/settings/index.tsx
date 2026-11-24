@@ -6,11 +6,9 @@ import {
   PageSection,
   PageShell,
 } from "@/components/layout/page-shell";
-import { AiModelSection } from "@/components/settings/ai-connection";
 import { MessageListPreference } from "@/components/settings/message-list-preference";
 import { NameRow } from "@/components/settings/profile";
 import { StandingInstructionsRow } from "@/components/settings/standing-instructions";
-import { UsageDataSection } from "@/components/settings/usage-data";
 import { useTheme } from "@/components/theme-provider";
 import {
   Item,
@@ -57,10 +55,6 @@ function RouteComponent() {
           <StandingInstructionsRow />
         </PageRows>
       </PageSection>
-      {/* 只在熊宝桌面端出现：AI 连接由桌面端持有，并在它自己的窗口里修改。 */}
-      <AiModelSection />
-      {/* 只在熊宝桌面端出现：使用数据由桌面端发送，这个选择也由它保存。 */}
-      <UsageDataSection />
       <PageSection title="外观">
         <PageRows>
           <Item size="sm">

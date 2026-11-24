@@ -45,11 +45,6 @@ import { browserKeys } from "@/lib/browser/queries";
 import { queryClient } from "@/query-client";
 import { installChrome } from "./browser-narration.fixture";
 import {
-  type DesktopShellOptions,
-  installDesktopShell,
-  removeDesktopShell,
-} from "./desktop-shell.fixture";
-import {
   everyLanguage,
   type OnDeviceModel,
   onDeviceModel,
@@ -475,7 +470,6 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
-  removeDesktopShell();
   global.fetch = originalFetch;
   globalThis.WebSocket = originalSocket;
   delete speechGlobals.SpeechRecognition;
@@ -1571,106 +1565,47 @@ test("on hosted OpenBot the page narrates a recording, and Stop sends the phrase
   ).toBeTruthy();
 });
 
-test("in the OpenBot Desktop window the page narrates through the desktop app's on-device recognition, where the web view has none", async () => {
-  // Seen on the Mac: narration said it was on, then "讲解已关闭。" a few seconds into the recording, because the
-  // window's web view has no speech recognition that stays on the computer.
-  state = screenState();
-  openAnswer = answerFor("screen");
-  installChrome(null);
-  const { calls } = installDesktopShell({
-    heard: [
-      { type: "result", index: 0, text: "I am opening", final: false },
-      {
-        type: "result",
-        index: 0,
-        text: "I am opening the expenses page",
-        final: true,
-      },
-      { type: "result", index: 1, text: "now the", final: false },
-    ],
-    atStop: [
-      {
-        type: "result",
-        index: 1,
-        text: "Now the receipt from the taxi ride",
-        final: true,
-      },
-    ],
-  });
-  const view = draw(<BrowserPage />);
-  const user = userEvent.setup({ document });
-  await user.type(await taskField(view, user), "Submit an expense report");
-  await pressRecord(view, user);
-  // Listening starts with the recording, through the desktop app, in the language the recording was started in.
-  await waitFor(() =>
-    expect(calls.map((call) => call.command)).toContain(
-      "plugin:openbot-desktop|speech_start",
-    ),
-  );
-  expect(
-    calls.find((call) => call.command.endsWith("|speech_start"))?.args,
-  ).toMatchObject({ language: navigator.language });
-  expect(await view.findByText("讲解已开启，正在收录你的声音。")).toBeTruthy();
-  await waitFor(() =>
-    expect(
-      writes.some(
-        (write) =>
-          write.path === browserApiPaths.narration &&
-          "text" in (write.body as object),
-      ),
-    ).toBe(true),
-  );
+/**
+ * Chrome's recognition on a computer with no microphone: while `missing` is set, each start answers `audio-capture`
+ * and then ends, and never starts; plugged in, it listens as `installChrome`'s does. `starts` counts every start.
+ */
+function installChromeWithoutMicrophone() {
+  installChrome();
+  const speech = globalThis as {
+    SpeechRecognition?: new () => Recognition;
+    webkitSpeechRecognition?: new () => Recognition;
+  };
+  const Chrome = speech.SpeechRecognition as new () => Recognition;
+  const microphone = { missing: true, starts: 0 };
+  class WithoutMicrophone extends Chrome {
+    start() {
+      microphone.starts += 1;
+      if (!microphone.missing) {
+        super.start();
+        return;
+      }
+      setTimeout(() => {
+        this.onerror?.({ error: "audio-capture" });
+        this.onend?.();
+      }, 0);
+    }
+  }
+  speech.SpeechRecognition = speech.webkitSpeechRecognition = WithoutMicrophone;
+  return microphone;
+}
 
-  await user.click(view.getByRole("button", { name: "停止" }));
-  await waitFor(() =>
-    expect(writes.at(-1)).toEqual({
-      path: "/api/browser/recording",
-      method: "POST",
-      body: { action: "stop" },
-    }),
-  );
-  expect(calls.map((call) => call.command)).toContain(
-    "plugin:openbot-desktop|speech_stop",
-  );
-  // Both phrases reached the Recorder, the one being said at Stop included, before the recording was stopped, each
-  // after the word that it began.
-  const narration = writes.filter(
-    (write) => write.path === browserApiPaths.narration,
-  );
-  expect(
-    narration.map(({ body }) => {
-      const { sentAt: _sent, ...rest } = body as { sentAt: number };
-      return "text" in rest ? { text: (rest as { text: string }).text } : rest;
-    }),
-  ).toEqual([
-    { speaking: true, since: expect.any(Number) },
-    { text: "I am opening the expenses page" },
-    { speaking: false },
-    { speaking: true, since: expect.any(Number) },
-    { text: "Now the receipt from the taxi ride" },
-    { speaking: false },
-  ]);
-  expect(writes.indexOf(narration.at(-1) as Write)).toBeLessThan(
-    writes.findLastIndex((write) => write.path === "/api/browser/recording"),
-  );
-  expect(view.queryByText("讲解已关闭。")).toBeNull();
-});
-
-test("in the OpenBot Desktop window on a computer with no microphone, narration that failed stays off after Stop until the person turns it on", async () => {
-  // Windows with no microphone: the desktop answered the start with audio-capture, then its end. Narration read off
+test("on a computer with no microphone, narration that failed stays off after Stop until the person turns it on", async () => {
+  // Windows with no microphone: the recognition answered the start with audio-capture, then its end. Narration read off
   // while recording, then after Stop its switch turned itself back on and the page said "We're capturing your voice"
   // with nothing recording and no microphone to capture with.
   state = screenState();
   openAnswer = answerFor("screen");
-  installChrome(null);
-  const desktop: DesktopShellOptions = { fails: "audio-capture" };
-  const { calls } = installDesktopShell(desktop);
+  const microphone = installChromeWithoutMicrophone();
   const view = draw(<BrowserPage />);
   const user = userEvent.setup({ document });
   // In Record's popover while nothing records, which it opens, and in the bar while a recording runs.
   const toggle = () => narrationSwitch(view, user);
-  const starts = () =>
-    calls.filter((call) => call.command.endsWith("|speech_start")).length;
+  const starts = () => microphone.starts;
   const stopped = () =>
     waitFor(() =>
       expect(writes.at(-1)).toEqual({
@@ -1717,7 +1652,7 @@ test("in the OpenBot Desktop window on a computer with no microphone, narration 
   expect(view.queryByText(/正在收录你的声音/)).toBeNull();
 
   // A microphone plugged in, and narration turned on while recording: it listens, and says so.
-  desktop.fails = undefined;
+  microphone.missing = false;
   await user.click(await toggle());
   await waitFor(() => expect(starts()).toBe(3));
   expect(await view.findByText("讲解已开启，正在收录你的声音。")).toBeTruthy();
@@ -1753,13 +1688,12 @@ function installDevices(kinds: MediaDeviceKind[]) {
   return devices;
 }
 
-test("in the OpenBot Desktop window on a computer with no microphone, narration says so and reads off after a relaunch, and the choice is kept", async () => {
+test("on a computer with no microphone, narration says so and reads off after a relaunch, and the choice is kept", async () => {
   // Windows with no microphone, OpenBot relaunched after a recording fell back to off: the page read "讲解已开启。"
   // with its switch on, and nothing said there was no microphone.
   state = screenState();
   openAnswer = answerFor("screen");
-  installChrome(null);
-  installDesktopShell({ fails: "audio-capture" });
+  installChromeWithoutMicrophone();
   const devices = installDevices(["audiooutput"]);
   const user = userEvent.setup({ document });
   try {
@@ -2019,14 +1953,13 @@ test("Record asks whether to narrate before the first recording, keeps the answe
   expect(view.queryByRole("dialog")).toBeNull();
 });
 
-test("in the OpenBot Desktop window on a computer with no microphone, Record asks nothing about narration and records without it; with a microphone it still asks", async () => {
+test("on a computer with no microphone, Record asks nothing about narration and records without it; with a microphone it still asks", async () => {
   // Windows with no microphone: the page said "没找到麦克风。讲解已关闭。" with its switch off, yet Start
   // recording still asked "录制时同时讲解吗？", offering Record with narration first.
   narrationChoice = null;
   state = screenState();
   openAnswer = answerFor("screen");
-  installChrome(null);
-  installDesktopShell();
+  installChrome();
   const devices = installDevices(["audioinput", "audiooutput"]);
   try {
     const view = draw(<BrowserPage />);

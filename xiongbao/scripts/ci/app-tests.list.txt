@@ -290,10 +290,6 @@ tests/delivery-app-open.test.tsx
 tests/delivery-evidence-download.test.tsx
 tests/delivery-loop-briefing.test.tsx
 tests/design-tokens.test.ts
-tests/desktop-notify-prompt.test.tsx
-tests/desktop-open-requests.test.tsx
-tests/desktop-part-names.test.ts
-tests/desktop-speech.test.ts
 tests/detail-panel-preview-routes.test.tsx
 tests/detail-panel-preview.test.tsx
 tests/detail-panel.test.tsx
@@ -490,10 +486,8 @@ tests/server-computer-tools.test.tsx
 tests/server-run-chat.test.tsx
 tests/session-memory.test.ts
 tests/settings-about.test.tsx
-tests/settings-ai-model.test.tsx
 tests/settings-setup.test.tsx
 tests/settings-sidebar.test.ts
-tests/settings-usage-data.test.tsx
 tests/settled-args.test.ts
 tests/setup-checklist-editions.test.tsx
 tests/setup-checklist.test.tsx
@@ -582,9 +576,6 @@ tests/test-printing.test.tsx
 tests/theme-preference.test.ts
 tests/thinking-block.test.tsx
 tests/thinking-replay.test.tsx
-tests/this-computer-back-end.test.tsx
-tests/this-computer-check-for-updates.test.tsx
-tests/this-computer-log-folder.test.tsx
 tests/thread-messages.test.ts
 tests/tool-activity.test.tsx
 tests/tool-args-summary.test.tsx
@@ -618,7 +609,7 @@ tests/turn-notice.test.ts
 tests/turn-stop-chat.test.tsx
 tests/typed-reveal.test.ts
 tests/unoffered-tool-step.test.tsx
-tests/update-banner.test.tsx
+tests/update-feed-guard.test.ts
 tests/update-routing-configured.test.tsx
 tests/update-routing-settings.test.tsx
 tests/update-routing-wechat.test.tsx

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import * as fsPromises from "node:fs/promises";
 import {
   chmod,
@@ -14,32 +14,17 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
-import {
-  clearDesktopConnectionFailure,
-  mountDesktopConnectionFailure,
-} from "../src/desktop-connection-failure";
+import { createModelCatalogue } from "../src/model-catalogue";
 import {
   createProviderOAuthProxy,
   type ModelOAuthRecord,
   mountProviderOAuthProxy,
 } from "../src/provider-oauth";
 import { lockProviderCredentials } from "../src/provider-oauth-lock";
-import { createModelCatalogue } from "../src/model-catalogue";
 
 const cleanup: (() => Promise<void> | void)[] = [];
-// The failure state is one per process and the endpoint answers with whichever failure it holds, so
-// every kind is cleared before each test too, including one an earlier file left behind.
-const clearDesktopFailures = () => {
-  for (const connection of ["model", "intelligence", "organization"] as const)
-    clearDesktopConnectionFailure(connection);
-};
-beforeEach(clearDesktopFailures);
 afterEach(async () => {
-  try {
-    for (const dispose of cleanup.splice(0).reverse()) await dispose();
-  } finally {
-    clearDesktopFailures();
-  }
+  for (const dispose of cleanup.splice(0).reverse()) await dispose();
 });
 
 function record(overrides: Partial<ModelOAuthRecord> = {}): ModelOAuthRecord {
@@ -81,7 +66,6 @@ async function fixture(
       },
     }),
   );
-  mountDesktopConnectionFailure(app, "test-host-token");
   const ask = (token: string | null = current.proxyToken) =>
     app.request("/api/model-provider/v1/chat/completions", {
       method: "POST",
@@ -337,13 +321,6 @@ test("missing or malformed credential files fail closed without exposing their c
   expect(f.destinations).toEqual([]);
 });
 
-async function authenticationFailure(app: Hono) {
-  const response = await app.request("/api/desktop/connection-failure", {
-    headers: { "x-openbot-desktop-host-token": "test-host-token" },
-  });
-  return response.json();
-}
-
 test("an abandoned legacy lock directory does not consume and lose a rotated token", async () => {
   let exchanges = 0;
   const f = await fixture(record({ provider: "xai", expiresAt: 1 }), () => {
@@ -405,7 +382,7 @@ test("independent proxy instances serialize real rotating-token exchanges", asyn
   expect(exchanges).toBe(1);
 });
 
-test("an unreadable request body does not invalidate provider sign-in", async () => {
+test("an unreadable request body is refused before anything is forwarded", async () => {
   const f = await fixture(record(), () => new Response("must not be called"));
   const response = await f.app.request(
     "/api/model-provider/v1/chat/completions",
@@ -421,17 +398,15 @@ test("an unreadable request body does not invalidate provider sign-in", async ()
   );
   expect(response.status).toBe(400);
   expect(f.destinations).toEqual([]);
-  expect(await authenticationFailure(f.app)).toBeNull();
 });
 
-test("a quota-project permission denial stays 403 without invalidating sign-in", async () => {
+test("a quota-project permission denial stays 403 and keeps the provider's detail private", async () => {
   const f = await fixture(record(), () =>
     Response.json({ error: "private quota project detail" }, { status: 403 }),
   );
   const response = await f.ask();
   expect(response.status).toBe(403);
   expect(await response.text()).not.toContain("private quota project detail");
-  expect(await authenticationFailure(f.app)).toBeNull();
   expect(f.destinations).toHaveLength(1);
 });
 
@@ -493,7 +468,11 @@ async function lockOwner(file: string, mode?: "legacy") {
   try {
     // The owner says `waiting` before its attempt and `locked` once it holds the lock.
     let message = "";
-    const lines = () => message.split("\n").slice(0, -1).map((line) => line.trim());
+    const lines = () =>
+      message
+        .split("\n")
+        .slice(0, -1)
+        .map((line) => line.trim());
     while (!lines().includes("locked")) {
       const { value, done } = await reader.read();
       if (done)
@@ -562,7 +541,7 @@ test("a live lock owner prevents any provider exchange until ownership is obtain
   expect(refreshes).toBe(1);
 }, 20000);
 
-test("a lock timeout returns a retryable failure without consuming a refresh token or recording an auth failure", async () => {
+test("a lock timeout returns a retryable failure without consuming a refresh token", async () => {
   const f = await fixture(
     record({ expiresAt: 1 }),
     () => new Response("must not be called"),
@@ -571,7 +550,6 @@ test("a lock timeout returns a retryable failure without consuming a refresh tok
   try {
     expect((await f.ask()).status).toBe(503);
     expect(f.destinations).toEqual([]);
-    expect(await authenticationFailure(f.app)).toBeNull();
     expect(JSON.parse(await readFile(f.file, "utf8")).refreshToken).toBe(
       "provider-refresh-token",
     );

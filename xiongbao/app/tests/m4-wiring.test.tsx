@@ -15,8 +15,6 @@ import {
   expect,
   test,
 } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
@@ -288,18 +286,5 @@ describe("长期职责按员工筛选", () => {
     const row = (await view.findByText("盯住慢查询")).closest("a");
     expect(row?.getAttribute("href")).toBe("/bots/agent-a/responsibilities");
     expect(view.queryByText("每周对账")).toBeNull();
-  });
-});
-
-describe("桌面端更新横幅", () => {
-  test("AppShell 在自托管横幅之上画出更新横幅（只在桌面端有内容）", () => {
-    const source = readFileSync(
-      join(import.meta.dir, "../src/components/app-sidebar/app-shell.tsx"),
-      "utf8",
-    );
-    const update = source.indexOf("<UpdateBanner />");
-    const selfHost = source.indexOf("<SelfHostBanner />");
-    expect(update).toBeGreaterThan(-1);
-    expect(update).toBeLessThan(selfHost);
   });
 });

@@ -105,7 +105,6 @@ import { Route as Settings } from "@/routes/_authed/settings/index";
 import { Route as SettingsNotifications } from "@/routes/_authed/settings/notifications";
 import { Route as SettingsPasswords } from "@/routes/_authed/settings/passwords";
 import { Route as SettingsPlans } from "@/routes/_authed/settings/plans";
-import { Route as SettingsThisComputer } from "@/routes/_authed/settings/this-computer";
 import { Route as SignInDetail } from "@/routes/_authed/sign-in/$requestId";
 import {
   type RouteReport,
@@ -215,7 +214,6 @@ const ROUTES = new Map<string, unknown>([
   ["/settings/plans", SettingsPlans],
   ["/settings/skills", SettingsSkills],
   ["/settings/skills/new", SettingsSkillsNew],
-  ["/settings/this-computer", SettingsThisComputer],
   ["/tasks", Tasks],
   ["/team-bots", TeamBots],
   ["/wakerflows", WakerflowsIndex],

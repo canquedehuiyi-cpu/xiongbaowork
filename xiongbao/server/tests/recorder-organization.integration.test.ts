@@ -15,12 +15,10 @@ import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";
 import { users } from "../src/db/schema/core";
 import { recorderConnections } from "../src/db/schema/recorder";
-import { clearDesktopConnectionFailure } from "../src/desktop-connection-failure";
 import { createRecorderExtension } from "../src/recorder/wiring";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import {
   afterAll,
-  afterEach,
   beforeAll,
   beforeEach,
   test,
@@ -38,7 +36,6 @@ const person = {
 };
 const ORIGIN = `chrome-extension://${RECORDER_EXTENSION_ID}`;
 const APP = "http://127.0.0.1:3010";
-const HOST_TOKEN = "recorder-organization-host-token";
 const SESSION_COOKIE = "better-auth.session_token=fixture-session";
 
 type Answer = () => Response | Promise<Response>;
@@ -96,12 +93,6 @@ const call = (path: string, init: RequestInit & { json?: unknown } = {}) => {
   });
 };
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
-const desktopFailure = async () =>
-  (
-    await call("/api/desktop/connection-failure", {
-      headers: { "x-openbot-desktop-host-token": HOST_TOKEN },
-    })
-  ).json();
 
 /** The real handoff: the authority cookie becomes the local organization cookie. */
 async function organizationCookie() {
@@ -138,19 +129,9 @@ async function connect(cookie: string, installId: string) {
   return (await exchanged.json()) as ExchangeResponse;
 }
 
-// Every kind and not just the organization's: the failure state is one per process, the endpoint
-// answers with whichever failure it holds, and these tests assert it is empty. A file that ran
-// earlier in the same process and left a model failure behind failed them when the suite was first
-// split into shards.
-const clearDesktopFailures = () => {
-  for (const connection of ["model", "intelligence", "organization"] as const)
-    clearDesktopConnectionFailure(connection);
-};
 beforeEach(() => {
-  clearDesktopFailures();
   answer = signedIn;
 });
-afterEach(clearDesktopFailures);
 
 /** Signing in through the organization writes the person's role, which only the role writer may. */
 let releaseRoleWriter: (() => Promise<void>) | undefined;
@@ -186,7 +167,6 @@ beforeAll(async () => {
   args[1] = organizationAuth;
   args[2] = roleRepository;
   args[12] = auditStore;
-  args[27] = HOST_TOKEN;
   args[33] = { recorder };
   app = createApp(...args);
 });
@@ -303,7 +283,7 @@ test("a session the organization ended, however it ended there, ends the Recorde
   expect((await me()).status).toBe(401);
 });
 
-test("a person the organization removed is refused once the cached answer ages out, and the re-check leaves Desktop's failure state alone", async () => {
+test("a person the organization removed is refused once the cached answer ages out, with their cookie too", async () => {
   const cookie = await organizationCookie();
   const { token } = await connect(cookie, "b".repeat(32));
   const me = () => call("/api/recorder/me", { headers: bearer(token) });
@@ -313,25 +293,18 @@ test("a person the organization removed is refused once the cached answer ages o
   // Still inside the 60 s cache: the earlier answer stands.
   expect((await me()).status).toBe(200);
   pastTheCache();
-  expect(await desktopFailure()).toBeNull();
   const removed = await me();
   expect(removed.status).toBe(401);
   expect(await removed.json()).toMatchObject({
     code: RECORDER_SIGNED_OUT,
     reason: "organization",
   });
-  // The Recorder's own re-check records no Desktop connection failure.
-  expect(await desktopFailure()).toBeNull();
 
-  // The same removed person asking with their cookie is today's recorded failure, unchanged.
+  // The same removed person asking with their cookie is refused too.
   const withCookie = await call("/api/recorder/connections", {
     headers: { cookie },
   });
   expect(withCookie.status).toBe(401);
-  expect(await desktopFailure()).toEqual({
-    connection: "organization",
-    code: "organization_authentication_failed",
-  });
 });
 
 test("the stored organization session is sealed, never the raw cookie", async () => {

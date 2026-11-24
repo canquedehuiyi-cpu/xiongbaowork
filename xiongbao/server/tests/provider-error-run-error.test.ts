@@ -6,7 +6,7 @@ import { providerFailureAsRunError } from "../src/provider-error";
 /**
  * A provider's refusal has to arrive as a sentence, not as a disconnected stream (audit N3).
  *
- * Only HTTP 401 had a branch (`desktop-connection-failure.ts`), so a 400 "you passed a model name this
+ * Every refusal left the run the same way, so a 400 "you passed a model name this
  * endpoint does not have", a 402 "the account has no balance" and a 429 "slow down" all left the run
  * by way of an errored observable. The person saw "network error", the card recorded a failure with no
  * reason in it, and the one party who actually said what was wrong — the provider, in its own body —
@@ -94,8 +94,11 @@ describe("a provider's refusal becomes a readable RUN_ERROR", () => {
     );
     expect(billing.errored).toBeUndefined();
     expect(
-      (billing.events[billing.events.length - 1] as unknown as { message: string })
-        .message,
+      (
+        billing.events[billing.events.length - 1] as unknown as {
+          message: string;
+        }
+      ).message,
     ).toContain("余额");
 
     const limited = await drain(
@@ -104,8 +107,11 @@ describe("a provider's refusal becomes a readable RUN_ERROR", () => {
       ),
     );
     expect(
-      (limited.events[limited.events.length - 1] as unknown as { message: string })
-        .message,
+      (
+        limited.events[limited.events.length - 1] as unknown as {
+          message: string;
+        }
+      ).message,
     ).toContain("限流");
   });
 
@@ -121,7 +127,9 @@ describe("a provider's refusal becomes a readable RUN_ERROR", () => {
         ),
       ),
     );
-    const message = (events[events.length - 1] as unknown as { message: string }).message;
+    const message = (
+      events[events.length - 1] as unknown as { message: string }
+    ).message;
     // The card carries this into the board, and the transcript into a person's window — neither wants
     // a four-kilobyte blob, and least of all one that might contain the deployment's own credential.
     expect(Array.from(message).length).toBeLessThanOrEqual(600);
@@ -143,8 +151,8 @@ describe("a provider's refusal becomes a readable RUN_ERROR", () => {
     const { errored } = await drain(
       providerFailureAsRunError(failing(unauthorized)),
     );
-    // The existing branch (recordDesktopConnectionFailure) answers 401, and this one must not steal it:
-    // the native host reads that signal and opens the model settings for the person.
+    // A 401 is a key that no longer works, which the caller's reader (`agents/provider-refusal.ts`)
+    // says as a credential problem: this wrapper must not turn it into the model's refusal.
     expect(errored).toBe(unauthorized);
   });
 

@@ -528,17 +528,13 @@ describe("上游自有地址", () => {
     );
   });
 
-  test("真实文件：发布脚本、发布流程与用量页的上游地址在 R1 不变", () => {
+  test("真实文件：发布脚本与发布流程的上游地址在 R1 不变", () => {
     const root = join(import.meta.dir, "../../..");
     for (const [file, address] of [
       ["xiongbao/scripts/release-manifest.ts", '"CopilotKit/openbot"'],
       [
         "xiongbao/.github/workflows/publish-release.yml",
         "'CopilotKit/openbot'",
-      ],
-      [
-        "xiongbao/app/src/components/settings/usage-data.tsx",
-        "github.com/CopilotKit/OpenBot/blob/main/desktop/TELEMETRY.md",
       ],
     ] as const) {
       const text = readFileSync(join(root, file), "utf8");

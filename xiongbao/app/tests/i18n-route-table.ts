@@ -265,11 +265,6 @@ export const SCANNED: readonly Scanned[] = [
     minLines: { pending: 3, loaded: 6, failed: 4 },
   },
   {
-    at: "/settings/this-computer",
-    file: "_authed/settings/this-computer.tsx",
-    minLines: { pending: 5, loaded: 5, failed: 5 },
-  },
-  {
     at: "/wakerflows",
     file: "_authed/_app/wakerflows.index.tsx",
     minLines: { pending: 4, loaded: 7, failed: 5 },

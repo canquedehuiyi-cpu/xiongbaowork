@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-import { clearDesktopConnectionFailure } from "../src/desktop-connection-failure";
 import { createIntelligenceClient } from "../src/intelligence-client";
 import {
   entitlementWarning,
@@ -270,7 +269,6 @@ describe("the boot check on a first install, while Intelligence is still startin
   afterEach(() => {
     for (const stop of stops.splice(0)) stop();
     mock.restore();
-    clearDesktopConnectionFailure("intelligence");
   });
 
   async function boot(

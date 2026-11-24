@@ -4,10 +4,6 @@ import {
 } from "@copilotkit/runtime/v2";
 import { IntelligenceKnowingANewThread } from "@openbot/toolkit/copilotkit/agents";
 import type { IntelligenceSettings } from "./config";
-import {
-  clearDesktopConnectionFailure,
-  recordDesktopConnectionFailure,
-} from "./desktop-connection-failure";
 import { transientStatus } from "./intelligence-startup";
 
 /**
@@ -59,7 +55,10 @@ function quietUntilAnswered(client: CopilotKitIntelligence) {
   };
 }
 
-/** Observe the SDK's typed HTTP errors before runtime handlers turn them into generic 500s. */
+/**
+ * The client every caller is handed: the runtime entitlement read held back until Intelligence has
+ * answered once (`quietUntilAnswered`), every other call passed straight through.
+ */
 export function observeIntelligenceAuthentication<
   T extends CopilotKitIntelligence,
 >(client: T): T {
@@ -73,40 +72,10 @@ export function observeIntelligenceAuthentication<
         return value;
       const cached = methods.get(property);
       if (cached) return cached;
-      const observed = (...args: unknown[]): unknown => {
-        const result: unknown =
-          property === "getRuntimeEntitlements"
-            ? quiet(() => Reflect.apply(value, target, args))
-            : Reflect.apply(value, target, args);
-        if (!(result instanceof Promise)) return result;
-        return result.then(
-          (response: unknown) => {
-            // Entitlements may be cached; optional Inspector reads can succeed without authentication.
-            if (
-              property !== "getRuntimeEntitlements" &&
-              property !== "getInspectorMetadata"
-            ) {
-              clearDesktopConnectionFailure("intelligence");
-            }
-            return response;
-          },
-          (error: unknown) => {
-            // A 403 can be a permissions or entitlement decision. Only rejected authentication
-            // asks for a new credential, and only at this trusted Intelligence client boundary.
-            if (
-              error instanceof Error &&
-              "status" in error &&
-              error.status === 401
-            ) {
-              recordDesktopConnectionFailure({
-                connection: "intelligence",
-                code: "intelligence_authentication_failed",
-              });
-            }
-            throw error;
-          },
-        );
-      };
+      const observed = (...args: unknown[]): unknown =>
+        property === "getRuntimeEntitlements"
+          ? quiet(() => Reflect.apply(value, target, args))
+          : Reflect.apply(value, target, args);
       methods.set(property, observed);
       return observed;
     },
@@ -121,7 +90,7 @@ export function observeIntelligenceAuthentication<
  * (`logger.error({ status, path }, "Runtime entitlement request failed")`, and its logger is
  * `console`). That is right for a read that should have worked, and wrong for the reads expected to
  * fail while Intelligence is still starting: `quietUntilAnswered` asks this first. Rejects, marked
- * `retryable`, when nothing answered at all. A 401 is observed here as the client's would be.
+ * `retryable`, when nothing answered at all.
  */
 export async function runtimeEntitlementStatus(
   // The address the client resolved (`ɵgetApiUrl`), so never absent here.
@@ -150,12 +119,6 @@ export async function runtimeEntitlementStatus(
     );
   }
   await response.body?.cancel().catch(() => {});
-  if (response.status === 401) {
-    recordDesktopConnectionFailure({
-      connection: "intelligence",
-      code: "intelligence_authentication_failed",
-    });
-  }
   return response.status;
 }
 
