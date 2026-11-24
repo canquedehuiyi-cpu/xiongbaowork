@@ -23,8 +23,16 @@
  * changes it in memory and exits), so real editing goes through `repl` with commands on stdin. Those
  * lines name paths too, so stdin is read in full and checked line by line before it is handed on.
  */
-import { lstatSync, realpathSync } from "node:fs";
-import { isAbsolute, resolve, sep } from "node:path";
+import {
+  lstatSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import { tmpdir, userInfo } from "node:os";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 
 export class GuardRefusal extends Error {}
 
@@ -40,11 +48,33 @@ const PYTHON_WHITESPACE =
 const DEFAULT_BIN =
   "/opt/xiongbao-office-cli/venv/bin/cli-anything-libreoffice";
 
-/** The workspace root as the shell gives it to a command: `HOME` is the employee's own folder. */
-export function workspaceRoot(env: Record<string, string | undefined>): string {
-  const configured = env.XIONGBAO_OFFICE_CLI_ROOT?.trim() || env.HOME?.trim();
-  if (!configured) throw new GuardRefusal("找不到工作区根目录（HOME 为空）。");
-  const real = realpathSync(configured);
+/**
+ * Where the employee's own folder is, decided from the account the process runs as and a constant,
+ * never from the environment: a command can prefix any variable, and the launcher cannot vouch for
+ * `HOME`. With per-employee users the account's home directory is `/workspace/bots/<key>` (see
+ * `docker/xb-bot.sh`), which is also where the command shell starts; without them every employee
+ * works in `/workspace`.
+ */
+export function workspaceRoot(options: {
+  accountHome: string;
+  bots?: string;
+  shared?: string;
+}): string {
+  const bots = options.bots ?? "/workspace/bots";
+  const shared = options.shared ?? "/workspace";
+  let configured = shared;
+  try {
+    const home = realpathSync(options.accountHome);
+    if (dirname(home) === realpathSync(bots)) configured = home;
+  } catch {
+    // No such home or no bots directory: the shared workspace is the root.
+  }
+  let real: string;
+  try {
+    real = realpathSync(configured);
+  } catch {
+    throw new GuardRefusal(`找不到工作区根目录（${configured}）。`);
+  }
   if (real === sep) throw new GuardRefusal("工作区根目录不能是 /。");
   return real;
 }
@@ -111,7 +141,12 @@ const OPTIONS: Record<string, Record<string, boolean>> = {
   },
   "document open": { "--help": false },
   "document save": { "--help": false },
-  "export render": { "--preset": true, "--overwrite": false, "--help": false },
+  "export render": {
+    "--preset": true,
+    "-p": true,
+    "--overwrite": false,
+    "--help": false,
+  },
 };
 
 /** The option that carries a path in each of those commands. */
@@ -148,6 +183,8 @@ const KNOWN_COMMANDS = new Set(
 export type Inspection = {
   /** Every path argument found, in order. */
   paths: string[];
+  /** The paths among them that are read as a project (`--project`, `document open`). */
+  projects: string[];
   /** Whether the invocation ends up in the REPL, which then reads its commands from stdin. */
   repl: boolean;
 };
@@ -157,8 +194,14 @@ export type Inspection = {
  * own parser does and returns the paths it would touch. Throws {@link GuardRefusal} for a path
  * command with an option this guard does not know: failing closed beats guessing where its value goes.
  */
-export function inspect(args: readonly string[]): Inspection {
+export function inspectWithProjects(args: readonly string[]): Inspection {
   const paths: string[] = [];
+  const projects: string[] = [];
+  const addProject = (value: string) => {
+    paths.push(value);
+    projects.push(value);
+  };
+  const result = (repl: boolean): Inspection => ({ paths, projects, repl });
   let i = 0;
   // Global options come before the command group.
   for (; i < args.length; i++) {
@@ -168,17 +211,17 @@ export function inspect(args: readonly string[]): Inspection {
       const value = args[++i];
       if (value === undefined)
         throw new GuardRefusal("--project 后面缺少路径。");
-      paths.push(value);
+      addProject(value);
       continue;
     }
     if (arg.startsWith("--project=")) {
-      paths.push(arg.slice("--project=".length));
+      addProject(arg.slice("--project=".length));
       continue;
     }
     break;
   }
   const group = args[i];
-  if (group === undefined) return { paths, repl: true };
+  if (group === undefined) return result(true);
   if (group === "repl") {
     for (let j = i + 1; j < args.length; j++) {
       const arg = args[j] ?? "";
@@ -186,19 +229,19 @@ export function inspect(args: readonly string[]): Inspection {
         const value = args[++j];
         if (value === undefined)
           throw new GuardRefusal("--project 后面缺少路径。");
-        paths.push(value);
+        addProject(value);
       } else if (arg.startsWith("--project=")) {
-        paths.push(arg.slice("--project=".length));
+        addProject(arg.slice("--project=".length));
       } else if (arg !== "--help") {
         throw new GuardRefusal(`repl 不认识参数 ${arg}。`);
       }
     }
-    return { paths, repl: true };
+    return result(true);
   }
 
   const sub = args[i + 1];
   // A group on its own or asking for help opens nothing.
-  if (sub === undefined || sub === "--help") return { paths, repl: false };
+  if (sub === undefined || sub === "--help") return result(false);
   const key = `${group} ${sub}`;
   // Only the commands of the tool version this guard was written against. A newer tool may add one
   // that takes a path (upstream's next release adds `document import <file>`), and a command the
@@ -208,13 +251,16 @@ export function inspect(args: readonly string[]): Inspection {
       `不认识的命令 ${key}：守卫只放行它已核对过的命令，工具版本可能比守卫新。`,
     );
   const known = OPTIONS[key];
-  if (known === undefined) return { paths, repl: false };
+  if (known === undefined) return result(false);
 
   const pathOptions = PATH_OPTIONS[key] ?? [];
   for (let j = i + 2; j < args.length; j++) {
     const arg = args[j] ?? "";
     if (!arg.startsWith("-") || arg === "-") {
-      if (POSITIONAL_PATHS.has(key)) paths.push(arg);
+      if (POSITIONAL_PATHS.has(key)) {
+        if (key === "document open") addProject(arg);
+        else paths.push(arg);
+      }
       continue;
     }
     const equals = arg.startsWith("--") ? arg.indexOf("=") : -1;
@@ -238,7 +284,73 @@ export function inspect(args: readonly string[]): Inspection {
     if (pathOptions.includes(shortName) || pathOptions.includes(name))
       paths.push(value);
   }
-  return { paths, repl: false };
+  return result(false);
+}
+
+/**
+ * Keys that name a file or a link in a project. The tool copies `image_ref.path` into the document
+ * as a link that LibreOffice then loads (an image from outside the workspace ends up inside the PDF,
+ * or an external link inside the DOCX), and nothing else in a project is a path, so the first version
+ * refuses the whole project instead of vetting values one by one.
+ */
+const PATH_KEY =
+  /(^|[_\-.: ])(path|paths|href|src|url|file|files)($|[_\-.: ])/i;
+
+/** What {@link inspectWithProjects} finds, without the split between projects and other paths. */
+export function inspect(args: readonly string[]): {
+  paths: string[];
+  repl: boolean;
+} {
+  const { paths, repl } = inspectWithProjects(args);
+  return { paths, repl };
+}
+
+/** Throws {@link GuardRefusal} when the project file at `real` holds an image reference or a path-like field. */
+export function checkProject(real: string, shown: string): void {
+  let size: number;
+  try {
+    size = statSync(real).size;
+  } catch {
+    return; // Not there yet: the tool reports it, and there is nothing to read.
+  }
+  if (size > 20 * 1024 * 1024)
+    throw new GuardRefusal(`项目文件太大，不检查就不执行：${shown}`);
+  let data: unknown;
+  try {
+    data = JSON.parse(readFileSync(real, "utf8"));
+  } catch {
+    return; // Not JSON: the tool refuses it as an invalid project.
+  }
+  const refuse = (where: string) => {
+    throw new GuardRefusal(
+      `项目文件 ${shown} 里有图片引用或路径类字段（${where}），暂不支持；请去掉后再导出。`,
+    );
+  };
+  const walk = (node: unknown, where: string): void => {
+    if (Array.isArray(node)) {
+      for (const [index, item] of node.entries())
+        walk(item, `${where}[${index}]`);
+    } else if (node !== null && typeof node === "object") {
+      for (const [key, value] of Object.entries(node)) {
+        if (PATH_KEY.test(key)) refuse(`${where}.${key}`);
+        if (key === "type" && value === "image_ref") refuse(`${where}.type`);
+        walk(value, `${where}.${key}`);
+      }
+    }
+  };
+  walk(data, "$");
+}
+
+/** Checks the paths one invocation names, and reads the projects among them. */
+function checkInspected(
+  inspected: Inspection,
+  root: string,
+  cwd: string,
+): void {
+  for (const path of inspected.paths) {
+    const real = checkPath(path, root, cwd);
+    if (inspected.projects.includes(path)) checkProject(real, path);
+  }
 }
 
 /**
@@ -251,28 +363,31 @@ export function guardInvocation(options: {
   root: string;
   cwd: string;
 }): string | null {
-  const { args, stdinText, root, cwd } = options;
-  const first = inspect(args);
-  for (const path of first.paths) checkPath(path, root, cwd);
-  if (!first.repl) return stdinText;
-  if (stdinText === null)
+  const { args, root, cwd } = options;
+  const first = inspectWithProjects(args);
+  checkInspected(first, root, cwd);
+  if (!first.repl) return options.stdinText;
+  if (options.stdinText === null)
     throw new GuardRefusal(
       "repl 需要把命令从标准输入送进来（例如 printf '...\\nexit\\n' | xb-office-cli repl --project p.json），不支持手敲交互。",
     );
-  // The tool reads its lines through a terminal library and Python's universal newlines, which
-  // treat \r and escape sequences as input too. Only plain lines can be read the way they are checked.
+  // The tool reads its lines through a terminal library, which takes a Tab as a key press (completion)
+  // and inserts nothing: `document save .<Tab>./x` is read as `document save ../x` while a split on
+  // whitespace sees two words. Escapes and the other controls are keys too. So the only control
+  // character allowed is the line end (a CRLF is made a plain LF first), and C1 controls and the
+  // Unicode line separators go with the rest.
+  const stdinText = options.stdinText.replace(/\r\n/g, "\n");
   // biome-ignore lint/suspicious/noControlCharactersInRegex: refusing control characters is the point
-  if (/[\x00-\x08\x0b-\x1f\x7f\x85\u2028\u2029]/.test(stdinText))
+  if (/[\x00-\x09\x0b-\x1f\x7f-\x9f\u2028\u2029]/.test(stdinText))
     throw new GuardRefusal(
-      "标准输入里只能有普通文本行（不能有回车符、转义符或控制字符）。",
+      "标准输入里只能有普通文本行（不能有制表符、回车符、转义符或其他控制字符）。",
     );
   for (const line of stdinText.split("\n")) {
     const tokens = line.split(PYTHON_WHITESPACE).filter((t) => t !== "");
     const head = tokens[0]?.toLowerCase();
     if (head === undefined || ["quit", "exit", "q", "help"].includes(head))
       continue;
-    const inspected = inspect(tokens);
-    for (const path of inspected.paths) checkPath(path, root, cwd);
+    checkInspected(inspectWithProjects(tokens), root, cwd);
   }
   return stdinText;
 }
@@ -282,17 +397,48 @@ async function readStdin(): Promise<string | null> {
   return await new Response(Bun.stdin.stream()).text();
 }
 
-export async function main(argv: string[]): Promise<number> {
-  const bin = process.env.XIONGBAO_OFFICE_CLI_BIN?.trim() || DEFAULT_BIN;
-  let stdinText: string | null;
+/** What a run depends on. The program fixes them; a test passes its own. Nothing here is read from the environment. */
+export type RunOptions = {
+  bin: string;
+  root: string;
+  cwd: string;
+  readStdin: () => Promise<string | null>;
+};
+
+export function productionOptions(): RunOptions {
+  let accountHome = "";
   try {
-    const root = workspaceRoot(process.env);
-    const cwd = realpathSync(process.cwd());
-    if (!isInside(cwd, root))
-      throw new GuardRefusal(`当前目录不在工作区内（${root}）。`);
+    accountHome = userInfo().homedir;
+  } catch {
+    // An account without a passwd entry has no per-employee folder.
+  }
+  return {
+    bin: DEFAULT_BIN,
+    root: workspaceRoot({ accountHome }),
+    cwd: process.cwd(),
+    readStdin,
+  };
+}
+
+export async function main(
+  argv: string[],
+  resolveOptions: () => RunOptions = productionOptions,
+): Promise<number> {
+  let stdinText: string | null;
+  let options: RunOptions;
+  try {
+    options = resolveOptions();
+    const cwd = realpathSync(options.cwd);
+    if (!isInside(cwd, options.root))
+      throw new GuardRefusal(`当前目录不在工作区内（${options.root}）。`);
     // stdin is read only when the tool would read commands from it; a one-shot run must not wait on it.
-    stdinText = inspect(argv).repl ? await readStdin() : null;
-    stdinText = guardInvocation({ args: argv, stdinText, root, cwd });
+    stdinText = inspect(argv).repl ? await options.readStdin() : null;
+    stdinText = guardInvocation({
+      args: argv,
+      stdinText,
+      root: options.root,
+      cwd,
+    });
   } catch (error) {
     if (error instanceof GuardRefusal) {
       console.error(`xb-office-cli 拒绝执行：${error.message}`);
@@ -300,17 +446,27 @@ export async function main(argv: string[]): Promise<number> {
     }
     throw error;
   }
-  const child = Bun.spawn([bin, ...argv], {
-    stdin: stdinText === null ? "inherit" : "pipe",
-    stdout: "inherit",
-    stderr: "inherit",
-  });
-  // An explicit pipe: the tool's REPL saw an empty stdin when it was handed a Blob.
-  if (stdinText !== null) {
-    child.stdin?.write(stdinText);
-    await child.stdin?.end();
+  // The tool keeps its REPL history and LibreOffice its profile under HOME. Neither belongs in the
+  // employee's folder (the history would be listed with their files), so both go to a folder made for
+  // this run and removed after it.
+  const scratch = mkdtempSync(join(tmpdir(), "xb-office-cli-"));
+  try {
+    const child = Bun.spawn([options.bin, ...argv], {
+      cwd: options.cwd,
+      env: { ...process.env, HOME: scratch },
+      stdin: stdinText === null ? "inherit" : "pipe",
+      stdout: "inherit",
+      stderr: "inherit",
+    });
+    // An explicit pipe: the tool's REPL saw an empty stdin when it was handed a Blob.
+    if (stdinText !== null) {
+      child.stdin?.write(stdinText);
+      await child.stdin?.end();
+    }
+    return await child.exited;
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
   }
-  return await child.exited;
 }
 
 if (import.meta.main) process.exit(await main(process.argv.slice(2)));

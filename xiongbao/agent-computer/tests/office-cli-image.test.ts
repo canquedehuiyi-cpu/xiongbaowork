@@ -3,92 +3,54 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 /**
- * The computer image carries the LibreOffice command-line tool only when it is built with
- * XIONGBAO_PILOT_OFFICE_CLI=on. Without a Docker daemon in CI's unit step, what can be checked here
- * is the shape that keeps the default build the same as before: the default path ends in an empty
- * stage built on the unchanged one, and nothing about the tool appears in any stage the default
- * build runs.
+ * The computer image carries the LibreOffice command-line tool only through a separate overlay
+ * Dockerfile, built on top of an image that is already built. The computer's own Dockerfile does not
+ * know about it, so the default build and every test that reads that file are untouched. With no
+ * Docker daemon in the unit step, what can be checked here is that shape.
  */
 const root = join(import.meta.dir, "..", "..");
-const dockerfile = readFileSync(
-  join(root, "agent-computer", "Dockerfile"),
-  "utf8",
-);
+const read = (path: string) => readFileSync(join(root, path), "utf8");
 
-/** The text of each stage, keyed by its name (the last stage, which has none, is keyed "(final)"). */
-function stages(text: string): Map<string, string> {
-  const result = new Map<string, string>();
-  const parts = text
-    .split(/^(?=FROM )/m)
-    .filter((part) => part.startsWith("FROM "));
-  for (const part of parts) {
-    const name = /^FROM \S+ AS (\S+)/.exec(part)?.[1] ?? "(final)";
-    result.set(name, part);
-  }
-  return result;
-}
-
-const instructions = (stage: string) =>
-  stage
+const instructions = (text: string) =>
+  text
     .replace(/\\\n/g, " ")
     .split("\n")
     .filter((line) => line.trim() !== "" && !line.trim().startsWith("#"));
 
-test("the build argument defaults to off and is declared before the first FROM", () => {
-  const arg = dockerfile.indexOf("ARG XIONGBAO_PILOT_OFFICE_CLI=off\n");
-  expect(arg).toBeGreaterThan(-1);
-  expect(arg).toBeLessThan(dockerfile.search(/^FROM /m));
+test("the computer's own Dockerfile does not mention the tool at all", () => {
+  const dockerfile = read("agent-computer/Dockerfile");
+  // Comments may name LibreOffice (an existing one says why it is not here); nothing else may.
+  expect(instructions(dockerfile).join("\n")).not.toMatch(
+    /libreoffice|office-cli|cli-anything/i,
+  );
+  expect(dockerfile).not.toContain("XIONGBAO_PILOT_OFFICE_CLI");
+  // Still a plain multi-stage file whose last stage is the image itself.
+  expect(dockerfile).toContain("FROM ubuntu:24.04\n");
+  expect(dockerfile.trimEnd().split("\n").at(-1)).toBe(
+    'CMD ["bun", "src/index.ts"]',
+  );
 });
 
-test("the last stage picks computer-off or computer-on by that argument", () => {
-  const all = stages(dockerfile);
-  expect([...all.keys()].at(-1)).toBe("(final)");
-  expect(instructions(all.get("(final)") ?? "")).toEqual([
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: a Dockerfile variable, not a template
-    "FROM computer-${XIONGBAO_PILOT_OFFICE_CLI}",
-  ]);
-  expect(all.has("computer-off")).toBe(true);
-  expect(all.has("computer-on")).toBe(true);
+test("the overlay builds on a given image, which has no default", () => {
+  const overlay = instructions(read("docker/office-cli/Dockerfile"));
+  expect(overlay[0]).toBe("ARG BASE");
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: a Dockerfile variable, not a template
+  expect(overlay[1]).toBe("FROM ${BASE}");
+  expect(overlay.filter((line) => line.startsWith("FROM "))).toHaveLength(1);
 });
 
-test("the default stage adds no instruction to the computer stage", () => {
-  const off = stages(dockerfile).get("computer-off") ?? "";
-  expect(instructions(off)).toEqual(["FROM computer AS computer-off"]);
-});
-
-test("nothing about the tool is in a stage the default build runs", () => {
-  const all = stages(dockerfile);
-  for (const name of [
-    "node-toolchain",
-    "bun-toolchain",
-    "recorder-build",
-    "computer",
-    "computer-off",
-  ]) {
-    const stage = all.get(name);
-    expect(stage).toBeDefined();
-    // Comments may mention it (an existing one says why LibreOffice is not here); instructions may not.
-    expect(instructions(stage ?? "").join("\n")).not.toMatch(
-      /libreoffice|office-cli|cli-anything/i,
-    );
-  }
-});
-
-test("the on stage builds on the computer stage, installs the tool and the guard, and the install is checked", () => {
-  const on = stages(dockerfile).get("computer-on") ?? "";
-  expect(on).toStartWith("FROM computer AS computer-on");
-  expect(on).toContain("libreoffice-writer");
-  expect(on).toContain(
+test("the overlay installs LibreOffice, the guard and the launcher, and runs the install checks", () => {
+  const overlay = read("docker/office-cli/Dockerfile");
+  expect(overlay).toContain("libreoffice-writer");
+  expect(overlay).toContain(
     "COPY agent-computer/office-cli/guard.ts /opt/xiongbao-office-cli/guard.ts",
   );
-  expect(on).toContain("install.sh");
+  expect(overlay).toContain("install.sh");
+  expect(overlay).toContain("/opt/office-cli-install/xb-office-cli");
 });
 
-test("the tool's requirements are pinned with hashes and installed with --require-hashes", () => {
-  const requirements = readFileSync(
-    join(root, "docker", "office-cli", "requirements.txt"),
-    "utf8",
-  );
+test("the tool's requirements are pinned with hashes and installed as wheels only, with no resolution", () => {
+  const requirements = read("docker/office-cli/requirements.txt");
   const lines = requirements
     .replace(/\\\n\s*/g, " ")
     .split("\n")
@@ -98,12 +60,12 @@ test("the tool's requirements are pinned with hashes and installed with --requir
     expect(line).toMatch(
       /^[A-Za-z0-9_.-]+==\d[\w.]*\s+--hash=sha256:[0-9a-f]{64}$/,
     );
-  const install = readFileSync(
-    join(root, "docker", "office-cli", "install.sh"),
-    "utf8",
-  );
-  expect(install).toContain("--require-hashes");
+  const install = read("docker/office-cli/install.sh");
+  for (const flag of ["--require-hashes", "--only-binary :all:", "--no-deps"])
+    expect(install).toContain(flag);
   // The real tool is not on PATH; only the launcher that goes through the guard is.
   expect(install).toContain("/usr/local/bin/xb-office-cli");
   expect(install).not.toMatch(/ln -s.*cli-anything-libreoffice/);
+  // The build fails on a Tab that gets through, and on a path outside the workspace.
+  expect(install).toContain("xb-office-cli-escape");
 });

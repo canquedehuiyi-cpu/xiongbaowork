@@ -1,0 +1,11 @@
+#!/bin/sh
+# 员工用的 LibreOffice 命令行工具入口（试点，见 docker/office-cli/Dockerfile）。root 所有，员工不可写。
+#
+# 守卫（guard.ts）在这里用一份干净的环境启动：
+#   env -i        员工在命令前缀的任何环境变量（XIONGBAO_OFFICE_CLI_*、BUN_OPTIONS、HOME、NODE_OPTIONS ...）都到不了守卫；
+#   --config      用一份 root 所有的空 bunfig，工作区里放的 bunfig.toml 不会被读（里面可以写 preload，在守卫之前执行任意代码）；
+#   --no-env-file 工作区里的 .env 也不会被读。
+# 守卫的工作区根和真工具的路径写在 guard.ts 里，不从环境里取。
+exec env -i PATH=/usr/local/bin:/usr/bin:/bin LANG="${LANG:-C.UTF-8}" \
+  /usr/local/bin/bun --config=/opt/xiongbao-office-cli/bunfig.toml --no-env-file \
+  /opt/xiongbao-office-cli/guard.ts "$@"

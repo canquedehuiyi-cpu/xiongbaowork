@@ -3,11 +3,6 @@
 #
 # The image tag and Playwright dependency must be pinned to the same exact version. Bump both or
 # neither.
-#
-# 试点：员工电脑里的 LibreOffice 命令行工具（CLI-Anything），默认不装。构建参数 XIONGBAO_PILOT_OFFICE_CLI=on 才会走
-# 最后的 computer-on 阶段；默认值 off 走 computer-off，它直接就是 computer 阶段，不加任何一层，默认镜像与没有
-# 这个试点时一致。参数要声明在第一个 FROM 之前，因为最后一个 FROM 用它选阶段。
-ARG XIONGBAO_PILOT_OFFICE_CLI=off
 FROM node:24.18.1-bookworm-slim AS node-toolchain
 FROM oven/bun:1.4.3@sha256:ec06c3b6cea04192ae6770c434f668ca41d343ad19fa6472216c7b48be39c598 AS bun-toolchain
 
@@ -33,7 +28,7 @@ COPY shared shared
 COPY extension extension
 RUN bun run --cwd extension build
 
-FROM ubuntu:24.04 AS computer
+FROM ubuntu:24.04
 
 # The Bun image digest pins the amd64/arm64 release bytes, including if its tag changes.
 ARG PLAYWRIGHT_VERSION=1.62.1
@@ -147,21 +142,3 @@ HEALTHCHECK --interval=2s --timeout=3s --start-period=2s --retries=30 \
   CMD bun -e "const r = await fetch('http://localhost:4100/health'); process.exit(r.ok ? 0 : 1)"
 
 CMD ["bun", "src/index.ts"]
-
-# 默认：什么都不加。
-FROM computer AS computer-off
-
-# 试点（XIONGBAO_PILOT_OFFICE_CLI=on）：LibreOffice 和 CLI-Anything 的 LibreOffice 命令行工具。工具装进
-# /opt/xiongbao-office-cli/venv，命令不在 PATH 上；员工用 PATH 上的 `xb-office-cli`，它先检查所有路径参数
-# 都在员工自己的工作区内（guard.ts），再启动真工具。装完当场生成一份文档、导出 docx，并确认工作区外的
-# 路径被拒绝，任何一步不对就构建失败。依赖钉精确版本与哈希（docker/office-cli/requirements.txt）。
-FROM computer AS computer-on
-RUN apt-get update && apt-get install -y --no-install-recommends \
-      libreoffice-writer libreoffice-calc libreoffice-impress \
-  && rm -rf /var/lib/apt/lists/*
-COPY agent-computer/office-cli/guard.ts /opt/xiongbao-office-cli/guard.ts
-COPY docker/office-cli /opt/office-cli-install
-RUN sh /opt/office-cli-install/install.sh /opt/office-cli-install/requirements.txt \
-  && rm -rf /opt/office-cli-install /root/.cache /tmp/*
-
-FROM computer-${XIONGBAO_PILOT_OFFICE_CLI}
