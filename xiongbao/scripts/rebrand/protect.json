@@ -978,5 +978,59 @@
     "pattern": "\\bopenbotRun\\b",
     "until": "R3",
     "reason": "落库键：审批续跑快照里的 forwardedProps.openbotRun（approvals/wiring.ts、execute.ts），Task 22 迁移"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/candidate.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/conformance.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/installed.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/invalid-incompatible-recovery.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/invalid-mutable-image.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/invalid-unsupported-schema.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/provenance.sigstore.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/tests/release-manifest.test.ts",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/bot-prompt.test.ts",
+    "text": "/openbot|xiongbao/i",
+    "until": "R4",
+    "reason": "断言继续拦截上游名：模型可见文字里既不许出现旧名也不许出现新名"
   }
 ]

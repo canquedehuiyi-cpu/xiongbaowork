@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "distribution": {
-    "id": "acme.xiongbao",
-    "repository": "acme/xiongbao",
+    "id": "acme.openbot",
+    "repository": "acme/openbot",
     "channel": "stable"
   },
   "version": "v0.3.0",
@@ -14,15 +14,15 @@
   },
   "artifacts": {
     "source": {
-      "url": "https://github.com/acme/xiongbao/releases/download/v0.3.0/xiongbao-source.tar.gz",
+      "url": "https://github.com/acme/openbot/releases/download/v0.3.0/openbot-source.tar.gz",
       "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     },
     "images": {
       "server": {
-        "reference": "ghcr.io/acme/xiongbao-server@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        "reference": "ghcr.io/acme/openbot-server@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
       },
       "agent-computer": {
-        "reference": "ghcr.io/acme/xiongbao-agent-computer@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+        "reference": "ghcr.io/acme/openbot-agent-computer@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
       }
     }
   },
@@ -31,8 +31,8 @@
     "configSchema": 1,
     "extensionApi": 1,
     "database": {
-      "from": ["xiongbao-db-1"],
-      "to": "xiongbao-db-1",
+      "from": ["openbot-db-1"],
+      "to": "openbot-db-1",
       "rollbackCompatible": false
     },
     "intelligenceCapabilities": ["conversations.v1"]
