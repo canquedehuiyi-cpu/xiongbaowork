@@ -223,6 +223,42 @@ describe("apply CLI", () => {
     );
   });
 
+  test("品牌护栏的代码、数据与夹具任何阶段都不改内容和文件名，同目录别的测试照改", () => {
+    const guard = {
+      "xiongbao/scripts/brand/guard/scan.ts":
+        'export const OPENBOT = "openbot";\n',
+      "xiongbao/app/tests/brand-budget.json":
+        '[{"rule":"openbot-camel","scope":"server/src","lines":1}]\n',
+      "xiongbao/app/tests/brand-leak.test.ts": 'const text = "openbotUrl";\n',
+      "xiongbao/app/tests/brand-artifacts/openbot-web.json":
+        '[{"word":"openbot"}]\n',
+      "xiongbao/app/tests/product-name-allowlist.json":
+        '[{"file":"app/src/a.ts","text":"OpenBot"}]\n',
+    };
+    for (const [path, content] of Object.entries(guard)) put(path, content);
+    put("xiongbao/app/tests/branding.test.ts", 'const text = "openbotUrl";\n');
+    git("add", "-A");
+    git("commit", "-q", "-m", "guard");
+    for (const phase of ["R1", "R4"]) {
+      const { code, report } = run([
+        "--phase",
+        phase,
+        "--dry-run",
+        "xiongbao/",
+      ]);
+      expect(code).toBe(0);
+      // 只有 model.ts、welcome.tsx 与同目录但不属护栏的 branding.test.ts 被改。
+      expect(report?.files).toBe(3);
+    }
+    const { code } = run(["--phase", "R1", "xiongbao/app/tests/"]);
+    expect(code).toBe(0);
+    for (const [path, content] of Object.entries(guard))
+      expect(read(path)).toBe(content);
+    expect(read("xiongbao/app/tests/branding.test.ts")).toBe(
+      'const text = "xiongbaoUrl";\n',
+    );
+  });
+
   test("范围内工作区有未提交改动时拒绝真跑（dry-run 不受限），什么都不改", () => {
     writeFileSync(join(root, "xiongbao/server/src/existing.ts"), "// 手改\n");
     const refused = run(["--phase", "R1", "xiongbao/"]);

@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { TOOL_PATH } from "./apply";
 import {
   buildProtect,
+  isBinary,
+  isGuardPath,
   isSkipped,
   type Phase,
   readProtectEntries,
@@ -131,8 +133,8 @@ export function gitRoot(): string {
 }
 
 /**
- * 按验收搜索词扫文件，返回每一处命中。`files` 是相对仓库根的路径；跳过路径、工具目录、
- * 不存在的、符号链接与二进制文件不计入。依赖声明（package.json 的依赖与 overrides 键）、
+ * 按验收搜索词扫文件，返回每一处命中。`files` 是相对仓库根的路径；跳过路径、工具目录、品牌护栏
+ * （GUARD_PATHS）、不存在的、符号链接与二进制文件（与 apply 同一个 isBinary）不计入。依赖声明（package.json 的依赖与 overrides 键）、
  * 源码导入路径里的 `@copilotkit/`、许可证文件里版权行到 MIT 原文结尾（`SOFTWARE.` 行）的一段只对 copilotkit 族放行。
  * 命中是否受保护按命中所在文件取保护正则，且要整处落在保护片段里。
  */
@@ -157,11 +159,12 @@ export function findLeftovers(
   };
   const found: Leftover[] = [];
   for (const file of files) {
-    if (isSkipped(file) || file.startsWith(TOOL_PATH)) continue;
+    if (isSkipped(file) || file.startsWith(TOOL_PATH) || isGuardPath(file))
+      continue;
     const full = join(root, file);
     if (!existsSync(full) || lstatSync(full).isSymbolicLink()) continue;
     const buffer = readFileSync(full);
-    if (buffer.includes(0)) continue;
+    if (isBinary(buffer)) continue;
     const text = buffer.toString("utf8");
     const protect = protectFor(file);
     const dependencyNames = file.endsWith("package.json")

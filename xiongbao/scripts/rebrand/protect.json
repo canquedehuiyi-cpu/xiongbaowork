@@ -977,5 +977,15 @@
     "text": "Copyright (c) 2026 CopilotKit",
     "until": "forever",
     "reason": "MIT 许可证署名（只在许可证文件里）"
+  },
+  {
+    "pattern": "(?i:copilotkit/(?:charts/)?openbot[\\w.-]*)",
+    "until": "R4",
+    "reason": "上游自有地址，删除而不改名（Task 14/27）：github.com/CopilotKit/OpenBot、仓库名 CopilotKit/openbot、镜像 ghcr.io/copilotkit/openbot-…；机械改名会指向不存在的地址"
+  },
+  {
+    "pattern": "(?i:copilotkit\\.ai/(?:[\\w.-]+/)*openbot[\\w.-]*(?:\\?[\\w.=&%-]*)?)",
+    "until": "R4",
+    "reason": "上游自有地址，删除而不改名（Task 14/27）：downloads.copilotkit.ai/…/OpenBot-…、dashboard.operations.copilotkit.ai/…/openbot（含查询串）；机械改名会指向不存在的地址"
   }
 ]

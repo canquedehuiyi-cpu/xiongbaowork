@@ -111,6 +111,89 @@ test("a new budget row is reported", () => {
   expect(problems.join("\n")).toContain("env-name");
 });
 
+describe("the budget is judged per scope as a rename moves it", () => {
+  const row = (rule: string, scope: string, lines: number) => ({
+    rule,
+    scope,
+    lines,
+  });
+
+  test("a line handed from one rule to another inside a scope, the sum not growing, passes", () => {
+    expect(
+      ratchetProblems(
+        input({
+          baseBudget: [
+            row("openbot-package", "server/src", 6),
+            row("import-path", "server/src", 1),
+          ],
+          headBudget: [
+            row("import-path", "server/src", 6),
+            row("import-close", "server/src", 1),
+          ],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a renamed file keeping its allowance passes", () => {
+    expect(
+      ratchetProblems(
+        input({
+          baseBudget: [row("env-name", "shared/openbot-browser.ts", 2)],
+          headBudget: [row("env-name", "shared/xiongbao-browser.ts", 2)],
+        }),
+      ),
+    ).toEqual([]);
+  });
+
+  test("a scope whose sum grows is still reported, naming the rows that grew", () => {
+    const problems = ratchetProblems(
+      input({
+        baseBudget: [row("env-name", "shared/openbot-browser.ts", 2)],
+        headBudget: [
+          row("env-name", "shared/openbot-browser.ts", 2),
+          row("env-name", "shared/xiongbao-browser.ts", 1),
+        ],
+      }),
+    );
+    expect(problems).toEqual([
+      "预算增加：env-name/shared/xiongbao-browser.ts 2 -> 3（范围合计 2 -> 3）",
+    ]);
+  });
+
+  test("a scope that shrinks does not pay for another scope's growth", () => {
+    const problems = ratchetProblems(
+      input({
+        baseBudget: [row("identifier", "server/src", 5)],
+        headBudget: [
+          row("identifier", "server/src", 1),
+          row("identifier", "app/src", 1),
+        ],
+      }),
+    );
+    expect(problems).toEqual([
+      "预算增加：identifier/app/src 0 -> 1（范围合计 0 -> 1）",
+    ]);
+  });
+
+  test("an approval lets through its row's growth, its scope read as renamed", () => {
+    const approval: RatchetApproval = {
+      appendixRow: 1,
+      kind: "budget",
+      key: "env-name/shared/openbot-browser.ts",
+      from: 2,
+      to: 3,
+      note: "x",
+    };
+    const grown = input({
+      baseBudget: [row("env-name", "shared/openbot-browser.ts", 2)],
+      headBudget: [row("env-name", "shared/xiongbao-browser.ts", 3)],
+    });
+    expect(ratchetProblems(grown).join("\n")).toContain("2 -> 3");
+    expect(ratchetProblems({ ...grown, approvals: [approval] })).toEqual([]);
+  });
+});
+
 test("a word list that grows is reported", () => {
   const problems = ratchetProblems(
     input({ headWords: { "docs.json": ["a", "prefix:b", "c"] } }),

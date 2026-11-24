@@ -8,7 +8,7 @@ const script = join(import.meta.dir, "report.ts");
 
 let root: string;
 
-const put = (path: string, content: string) => {
+const put = (path: string, content: string | Uint8Array) => {
   const full = join(root, path);
   mkdirSync(dirname(full), { recursive: true });
   writeFileSync(full, content);
@@ -204,6 +204,33 @@ describe("findLeftovers", () => {
       root,
     );
     expect(found).toEqual([]);
+  });
+  test("品牌护栏的代码、数据与夹具不计入（与 apply 不改它们一致），同目录别的测试照计", () => {
+    const guard = [
+      "xiongbao/scripts/brand/guard/scan.ts",
+      "xiongbao/app/tests/brand-budget.json",
+      "xiongbao/app/tests/brand-leak.test.ts",
+      "xiongbao/app/tests/brand-artifacts/web.json",
+      "xiongbao/app/tests/product-name-allowlist.json",
+    ];
+    for (const path of guard) put(path, "openbot\n");
+    put("xiongbao/app/tests/branding.test.ts", "openbot\n");
+    const found = findLeftovers(
+      [...guard, "xiongbao/app/tests/branding.test.ts"],
+      "R1",
+      root,
+    );
+    expect(found.map((hit) => hit.file)).toEqual([
+      "xiongbao/app/tests/branding.test.ts",
+    ]);
+  });
+
+  test("不是合法 UTF-8 的文件与 apply 一样当作二进制，不计入", () => {
+    put(
+      "xiongbao/app/latin.txt",
+      new Uint8Array([0x6f, 0x70, 0x65, 0x6e, 0x62, 0x6f, 0x74, 0xe9]),
+    );
+    expect(findLeftovers(["xiongbao/app/latin.txt"], "R1", root)).toEqual([]);
   });
 });
 

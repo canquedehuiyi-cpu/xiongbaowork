@@ -9,6 +9,8 @@ import {
 } from "node:fs";
 import { dirname, isAbsolute, join, relative } from "node:path";
 import {
+  isBinary,
+  isGuardPath,
   isSkipped,
   loadProtect,
   type Phase,
@@ -218,11 +220,12 @@ function main() {
     }
   }
 
-  // 范围内的文件：已被跳过路径与工具目录排除，磁盘上不存在的（已删未提交）也不算。
+  // 范围内的文件：已被跳过路径、工具目录与品牌护栏排除，磁盘上不存在的（已删未提交）也不算。
   const inScope = listed.filter(
     (path) =>
       !isSkipped(path) &&
       !path.startsWith(TOOL_PATH) &&
+      !isGuardPath(path) &&
       existsSync(join(root, path)),
   );
 
@@ -235,12 +238,11 @@ function main() {
     const full = join(root, path);
     if (lstatSync(full).isSymbolicLink()) continue;
     const buffer = readFileSync(full);
-    const text = buffer.toString("utf8");
-    // 含 NUL 的是二进制；不是合法 UTF-8 的（解码再编码对不上）改了会毁字节，也一律不动内容。
-    if (buffer.includes(0) || !Buffer.from(text, "utf8").equals(buffer)) {
+    if (isBinary(buffer)) {
       report.skippedBinary++;
       continue;
     }
+    const text = buffer.toString("utf8");
     const oldLines = text.split("\n");
     for (const line of oldLines)
       for (const id of identifiers(line)) before.add(id);

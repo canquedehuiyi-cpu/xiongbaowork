@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { PATH_VARIANTS } from "../brand/guard/budget";
 import {
   buildProtect,
+  GUARD_PATHS,
+  isBinary,
+  isGuardPath,
   isSkipped,
   loadProtect,
   type Phase,
@@ -455,6 +459,95 @@ describe("isSkipped", () => {
   });
 });
 
+describe("isGuardPath", () => {
+  test("品牌护栏的代码、测试、白名单、预算与产物词表都算，按前缀匹配", () => {
+    for (const path of [
+      "xiongbao/scripts/brand/guard/ratchet.ts",
+      "xiongbao/scripts/brand/scan-artifact.ts",
+      "xiongbao/app/tests/brand-ratchet.test.ts",
+      "xiongbao/app/tests/brand-budget.json",
+      "xiongbao/app/tests/brand-leak-allowlist.json",
+      "xiongbao/app/tests/brand-artifacts/web.json",
+      "xiongbao/app/tests/product-name-allowlist.json",
+      "./xiongbao/app/tests/brand-web-copy.test.tsx",
+    ])
+      expect(isGuardPath(path)).toBe(true);
+    expect(GUARD_PATHS).toHaveLength(3);
+  });
+
+  test("同目录里不属于护栏的文件与相近的目录名不算", () => {
+    for (const path of [
+      "xiongbao/app/tests/branding.test.ts",
+      "xiongbao/app/tests/settings-usage-data.test.tsx",
+      "xiongbao/scripts/branded/x.ts",
+      "xiongbao/scripts/rebrand/apply.ts",
+      "xiongbao/app/src/brand-name.ts",
+    ])
+      expect(isGuardPath(path)).toBe(false);
+  });
+});
+
+describe("isBinary", () => {
+  test("含 NUL 或不是合法 UTF-8 的是二进制，普通 UTF-8 文本（含中文）不是", () => {
+    expect(isBinary(Buffer.from([0x6f, 0, 0x4f]))).toBe(true);
+    expect(isBinary(Buffer.from([0x6f, 0xe9, 0x4f, 0x70]))).toBe(true);
+    expect(isBinary(Buffer.from("熊宝 openbot\n", "utf8"))).toBe(false);
+    expect(isBinary(Buffer.alloc(0))).toBe(false);
+  });
+});
+
+describe("上游自有地址", () => {
+  const kept = [
+    "https://github.com/CopilotKit/OpenBot/blob/main/desktop/TELEMETRY.md",
+    "https://github.com/CopilotKit/OpenBot.git",
+    '"CopilotKit/openbot"',
+    "ghcr.io/copilotkit/openbot-server:v1",
+    "ghcr.io/copilotkit/openbot-agent-langgraph-agui",
+    "ghcr.io/copilotkit/charts/openbot",
+    "https://downloads.copilotkit.ai/latest/OpenBot-mac-arm64.dmg",
+    "https://dashboard.operations.copilotkit.ai/early-access/openbot?platform=web&utm_campaign=openbot-early-access",
+  ];
+
+  test("R1–R3 原样保留，同一行里别的旧名照改", () => {
+    for (const phase of ["R1", "R2", "R3"] as const) {
+      const protect = loadProtect(phase);
+      for (const url of kept) {
+        expect(renameText(url, protect)).toBe(url);
+        expect(renameText(`${url} openbotUrl`, protect)).toBe(
+          `${url} xiongbaoUrl`,
+        );
+      }
+    }
+  });
+
+  test("不是上游地址的同名片段不受保护", () => {
+    const protect = loadProtect("R1");
+    expect(renameText("toolkit/openbot-x", protect)).toBe("toolkit/xiongbao-x");
+    expect(renameText("copilotkit-openbot-bucket", protect)).toBe(
+      "copilotkit-xiongbao-bucket",
+    );
+  });
+
+  test("真实文件：发布脚本、发布流程与用量页的上游地址在 R1 不变", () => {
+    const root = join(import.meta.dir, "../../..");
+    for (const [file, address] of [
+      ["xiongbao/scripts/release-manifest.ts", '"CopilotKit/openbot"'],
+      [
+        "xiongbao/.github/workflows/publish-release.yml",
+        "'CopilotKit/openbot'",
+      ],
+      [
+        "xiongbao/app/src/components/settings/usage-data.tsx",
+        "github.com/CopilotKit/OpenBot/blob/main/desktop/TELEMETRY.md",
+      ],
+    ] as const) {
+      const text = readFileSync(join(root, file), "utf8");
+      expect(text).toContain(address);
+      expect(renameText(text, loadProtect("R1", file))).toContain(address);
+    }
+  });
+});
+
 describe("常量", () => {
   test("VARIANTS 顺序固定：包作用域先于大写，大写先于混合写法", () => {
     expect(VARIANTS.map(([from]) => from)).toEqual([
@@ -466,6 +559,10 @@ describe("常量", () => {
       "openbot",
     ]);
     expect(SKIP_PATHS).toContain("archives/");
+  });
+
+  test("品牌护栏内联的路径变体表与改名表一致（护栏不 import 改名工具）", () => {
+    expect(PATH_VARIANTS).toEqual(VARIANTS);
   });
 });
 

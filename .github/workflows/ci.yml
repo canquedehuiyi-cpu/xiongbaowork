@@ -60,6 +60,9 @@ jobs:
       # stale list would drop test files from every run, and neither suite would notice.
       - run: bun test test-report.test.mjs release-tag.test.mjs manual-blocks.test.mjs device-release-workflow.test.mjs mirror-release-workflow.test.mjs app-shards.test.mjs server-shards.test.mjs
         working-directory: xiongbao/scripts/ci
+      # 去品牌工具（改名表、保护清单、改名、剩余旧词报告、护栏同步）的测试：其中「每条保护文字都在树里」
+      # 「带作用域的条目指向的文件都存在」盯着整棵树，别的改动删掉或改写了被保护的文字也会在这里变红。
+      - run: bun test scripts/rebrand/
 
   # The tests sit outside `server/tsconfig.json`, so `bun run typecheck` above says nothing about them:
   # a change can type-check as a product and still leave the test that exercises it unrepresentable.

@@ -36,8 +36,8 @@ describe("refreshBudget", () => {
       [row("env-name", "server/src", 4), row("crypto-name", "app/src", 1)],
     );
     expect(grew).toEqual([
-      "crypto-name/app/src: 0 -> 1",
-      "env-name/server/src: 3 -> 4",
+      "crypto-name/app/src 0 -> 1（范围合计 0 -> 1）",
+      "env-name/server/src 3 -> 4（范围合计 3 -> 4）",
     ]);
   });
 
@@ -51,6 +51,65 @@ describe("refreshBudget", () => {
   });
 });
 
+describe("refreshBudget 按范围合计判断，与 ratchet 同一口径", () => {
+  const row = (rule: string, scope: string, lines: number) => ({
+    rule,
+    scope,
+    lines,
+  });
+
+  test("去掉包作用域后同一行从一条规则挪到另一条，范围合计不增就不算变大", () => {
+    const { next, grew } = refreshBudget(
+      [
+        row("openbot-package", "server/src", 6),
+        row("import-path", "server/src", 1),
+      ],
+      [
+        row("import-path", "server/src", 6),
+        row("import-close", "server/src", 1),
+      ],
+    );
+    expect(grew).toEqual([]);
+    expect(next).toEqual([
+      row("import-close", "server/src", 1),
+      row("import-path", "server/src", 6),
+    ]);
+  });
+
+  test("文件改名且规则挪动、合计不增：通过", () => {
+    const { grew } = refreshBudget(
+      [row("env-name", "shared/openbot-browser.ts", 2)],
+      [
+        row("env-name", "shared/xiongbao-browser.ts", 1),
+        row("identifier", "shared/xiongbao-browser.ts", 1),
+      ],
+    );
+    expect(grew).toEqual([]);
+  });
+
+  test("范围合计真增长仍报，列出增长的规则行", () => {
+    const { grew } = refreshBudget(
+      [row("openbot-package", "server/src", 6)],
+      [
+        row("import-path", "server/src", 6),
+        row("import-close", "server/src", 1),
+      ],
+    );
+    expect(grew).toEqual([
+      "import-close/server/src 0 -> 1（范围合计 6 -> 7）",
+      "import-path/server/src 0 -> 6（范围合计 6 -> 7）",
+    ]);
+  });
+
+  test("一个范围变小不能抵另一个范围的增长", () => {
+    const { grew } = refreshBudget(
+      [row("env-name", "server/src", 5), row("env-name", "app/src", 1)],
+      [row("env-name", "server/src", 1), row("env-name", "app/src", 2)],
+    );
+    expect(grew).toEqual(["env-name/app/src 1 -> 2（范围合计 1 -> 2）"]);
+  });
+});
+
 describe("refreshBudget 同一份旧额度只领一次", () => {
   test("旧文件未改名、又新建了改名后同名的文件，合计增长要报", () => {
     const { grew } = refreshBudget(
@@ -60,7 +119,9 @@ describe("refreshBudget 同一份旧额度只领一次", () => {
         { rule: "env-name", scope: "shared/xiongbao-browser.ts", lines: 2 },
       ],
     );
-    expect(grew).toEqual(["env-name/shared/xiongbao-browser.ts: 2 -> 4"]);
+    expect(grew).toEqual([
+      "env-name/shared/xiongbao-browser.ts 2 -> 4（范围合计 2 -> 4）",
+    ]);
   });
 });
 
@@ -102,17 +163,21 @@ describe("refreshAllowlist", () => {
     expect(renamed).toBe(0);
   });
 
-  test("工具目录与跳过路径下的条目原样保留", () => {
+  test("工具目录、跳过路径与品牌护栏下的条目原样保留", () => {
     const { next } = refreshAllowlist(
       [
         entry("scripts/rebrand/x.ts", "openbot"),
         entry("server/drizzle/0001.sql", "openbot"),
+        entry("scripts/brand/guard/scan.ts", "openbot"),
+        entry("app/tests/brand-leak.test.ts", "openbot"),
       ],
       () => false,
     );
     expect(next.map((e) => e.file)).toEqual([
       "scripts/rebrand/x.ts",
       "server/drizzle/0001.sql",
+      "scripts/brand/guard/scan.ts",
+      "app/tests/brand-leak.test.ts",
     ]);
   });
 });

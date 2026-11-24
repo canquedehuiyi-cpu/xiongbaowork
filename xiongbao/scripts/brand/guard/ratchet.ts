@@ -7,7 +7,12 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { AllowEntry, Category } from "./allowlist";
 import { versionless } from "./artifact-words";
-import type { BudgetRow } from "./budget";
+import {
+  type BudgetRow,
+  budgetChanges,
+  describeGrowth,
+  normalizedScope,
+} from "./budget";
 import {
   readSyncPoint,
   type SyncPoint,
@@ -73,7 +78,6 @@ export const WORD_LISTS = [
 
 const trimmed = (text: string) =>
   text.replace(/^[\s"'`,;:()[\]{}]+|[\s"'`,;:()[\]{}]+$/g, "");
-const key = (r: BudgetRow) => `${r.rule}/${r.scope}`;
 const same = (a: AllowEntry, b: AllowEntry) =>
   a.file === b.file && a.text === b.text;
 
@@ -128,20 +132,44 @@ export function ratchetProblems(input: RatchetInput): string[] {
     if (hit) used.add(hit);
     return hit !== undefined;
   };
+  // A budget approval names one row, `<rule>/<scope>`; its scope is read as renamed, like the budget's.
+  const approvalKey = (at: string) => {
+    const slash = at.indexOf("/");
+    return slash === -1
+      ? at
+      : `${at.slice(0, slash)}/${normalizedScope(at.slice(slash + 1))}`;
+  };
+  const approvedAt = (at: string, from: number, to: number): boolean => {
+    const hit = approvals.find(
+      (a) =>
+        a.kind === "budget" &&
+        approvalKey(a.key) === at &&
+        a.from === from &&
+        a.to === to,
+    );
+    if (hit) used.add(hit);
+    return hit !== undefined;
+  };
 
-  const budgetKeys = new Set([
-    ...input.headBudget.map(key),
-    ...input.baseBudget.map(key),
-  ]);
-  for (const at of budgetKeys) {
-    const was = input.baseBudget.find((b) => key(b) === at)?.lines ?? 0;
-    const row = input.headBudget.find((b) => key(b) === at);
-    const now = row?.lines ?? 0;
-    if (now === was) continue;
-    const allowed = approved("budget", at, was, now);
-    if (now <= was || allowed) continue;
-    if (syncPr) console.log(`预算增加（写进 PR 说明）：${at} ${was} -> ${now}`);
-    else problems.push(`预算增加：${at} ${was} -> ${now}`);
+  // Compared per scope as a rename moves it (budgetChanges): a renamed file keeps its allowance, and a
+  // line handed from one rule to another inside a scope is not growth. An approved row's growth is
+  // subtracted from its scope's sum before the sum is judged.
+  for (const change of budgetChanges(input.baseBudget, input.headBudget)) {
+    const allowed = change.rows.filter((row) =>
+      approvedAt(`${row.rule}/${change.scope}`, row.was, row.now),
+    );
+    const approvedGrowth = allowed.reduce(
+      (sum, row) => sum + Math.max(0, row.now - row.was),
+      0,
+    );
+    if (change.now - approvedGrowth <= change.was) continue;
+    for (const line of describeGrowth(
+      change,
+      change.rows.filter((row) => row.now > row.was && !allowed.includes(row)),
+    )) {
+      if (syncPr) console.log(`预算增加（写进 PR 说明）：${line}`);
+      else problems.push(`预算增加：${line}`);
+    }
   }
 
   for (const [name, words] of Object.entries(input.headWords)) {

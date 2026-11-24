@@ -1,45 +1,41 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { type BudgetRow, countBudget } from "../brand/guard/budget";
+import {
+  type BudgetRow,
+  budgetChanges,
+  countBudget,
+  describeGrowth,
+} from "../brand/guard/budget";
 import { codeLines, findings, REPO, scannedFiles } from "../brand/guard/scan";
 import { TOOL_PATH } from "./apply";
-import { isSkipped, renamePath } from "./rename-map";
+import { isGuardPath, isSkipped, renamePath } from "./rename-map";
 
 /*
  * 让品牌护栏跟着改名同步缩小（只许变小）：
  *
  *   bun xiongbao/scripts/rebrand/refresh-guards.ts [--tests-dir <目录>]
  *
- * ① brand-budget.json：重算；任何一行变大（或冒出新行）就退出 1 并列出，不写文件；否则写成实际值。
- *    旧表与实际值都按规则与 renamePath 后的范围归并求和再比较，文件改名前后同一份额度只算一次。
+ * ① brand-budget.json：重算；任何一个范围的合计变大就退出 1 并列出，不写文件；否则写成实际值。
+ *    范围先按改名归一，再按同一范围里各规则的合计比较（见 refreshBudget）。
  * ② brand-leak-allowlist.json 与 product-name-allowlist.json：条目的文件已改名则 file 套 renamePath，
  *    文本在文件里已不存在的条目删除。
  * 产物词表（brand-artifacts/）要构建产物才知道，不在这里改。
- * 路径相对 xiongbao/（与护栏测试一致）；工具目录与跳过路径下的条目原样保留。
+ * 路径相对 xiongbao/（与护栏测试一致）；工具目录、跳过路径与品牌护栏（GUARD_PATHS）下的条目原样保留。
  */
 
-const keyOf = (row: BudgetRow) => `${row.rule}/${row.scope}`;
-
-/** 返回写盘用的新预算与增长清单；有增长时不应写盘。 */
+/**
+ * 返回写盘用的新预算与增长清单；有增长时不应写盘。
+ * 与 ratchet（品牌护栏测试里「本分支不让预算变大」）同一口径，用的是同一个 budgetChanges：
+ * 范围先按改名归一（文件改名前后同一份额度只算一次），再按同一范围里各规则的合计判断——
+ * 去掉 `@openbot/` 后同一行会从一条规则挪到另一条，合计不增就不算变大。
+ */
 export function refreshBudget(
   old: BudgetRow[],
   actual: BudgetRow[],
 ): { next: BudgetRow[]; grew: string[] } {
-  // 旧表与实际值都按「规则 + 改名后的范围」归并求和：文件改名前后同一份额度只算一次，
-  // 改名后的同名文件与未改名的旧文件合在一起比较。
-  const merged = (rows: BudgetRow[]) => {
-    const sums = new Map<string, number>();
-    for (const row of rows) {
-      const key = keyOf({ ...row, scope: renamePath(row.scope) });
-      sums.set(key, (sums.get(key) ?? 0) + row.lines);
-    }
-    return sums;
-  };
-  const was = merged(old);
-  const grew = [...merged(actual)]
-    .filter(([key, lines]) => lines > (was.get(key) ?? 0))
-    .map(([key, lines]) => `${key}: ${was.get(key) ?? 0} -> ${lines}`)
-    .sort();
+  const grew = budgetChanges(old, actual)
+    .filter((change) => change.now > change.was)
+    .flatMap((change) => describeGrowth(change));
   const next = [...actual]
     .filter((row) => row.lines > 0)
     .sort(
@@ -50,7 +46,8 @@ export function refreshBudget(
 
 const untouched = (file: string) =>
   file.startsWith(TOOL_PATH.replace(/^xiongbao\//, "")) ||
-  isSkipped(`xiongbao/${file}`);
+  isSkipped(`xiongbao/${file}`) ||
+  isGuardPath(`xiongbao/${file}`);
 
 /** 原路径或改名后的路径上 `has(路径, 文本)` 为真的条目留下（路径改成实际存在的那个）；其余删除。 */
 export function refreshAllowlist<T extends { file: string; text: string }>(

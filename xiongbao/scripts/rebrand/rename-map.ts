@@ -49,6 +49,18 @@ export const SKIP_PATHS: readonly string[] = [
   "bun.lock",
 ];
 
+/**
+ * 品牌护栏自己的代码、数据与夹具（相对仓库根，按前缀匹配）：护栏要认出旧名，这些文件里故意写着旧名，
+ * 规则名、白名单条目、产物词表与测试夹具一改就全挂。改名工具、剩余旧词报告与护栏同步在任何阶段都
+ * 像跳过工具目录一样跳过它们；到 R4 重写护栏时一起处理。`xiongbao/app/tests/brand-` 覆盖
+ * brand-*.test.ts、brand-*.json 与 brand-artifacts/ 目录。
+ */
+export const GUARD_PATHS: readonly string[] = [
+  "xiongbao/scripts/brand/",
+  "xiongbao/app/tests/brand-",
+  "xiongbao/app/tests/product-name-allowlist.json",
+];
+
 const PHASE_ORDER: Readonly<Record<Phase, number>> = {
   R1: 1,
   R2: 2,
@@ -170,6 +182,22 @@ const skipMatchers: Array<(path: string, segments: string[]) => boolean> =
     const pattern = new RegExp(`^${source}(?:/|$)`);
     return (path) => pattern.test(path);
   });
+
+export function isGuardPath(path: string): boolean {
+  const normalized = normalize(path);
+  return GUARD_PATHS.some((prefix) => normalized.startsWith(prefix));
+}
+
+/**
+ * 含 NUL 的是二进制；不是合法 UTF-8 的（解码再编码对不上）改了会毁字节，也当二进制。
+ * 改名工具据此不动内容，剩余旧词报告据此不计入，两边口径一致。
+ */
+export function isBinary(buffer: Buffer): boolean {
+  return (
+    buffer.includes(0) ||
+    !Buffer.from(buffer.toString("utf8"), "utf8").equals(buffer)
+  );
+}
 
 export function isSkipped(path: string): boolean {
   const normalized = normalize(path);
