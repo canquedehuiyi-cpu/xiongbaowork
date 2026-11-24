@@ -28,10 +28,12 @@ case "$1" in
     shift
     case "$1" in
       ls)
-        printf 'OPENBOT_PUBLIC_URL\\nXIONGBAO_RLS_ENFORCE\\nCOPILOTKIT_REMOTE_URL\\nPATH\\nMIGRATION_DATABASE_URL\\n' ;;
+        printf 'OPENBOT_PUBLIC_URL\\nXIONGBAO_RLS_ENFORCE\\nCOPILOTKIT_REMOTE_URL\\nPATH\\nMIGRATION_DATABASE_URL\\n'
+        [ -n "\${FAKE_LS_WEB_BOT_AUTH:-}" ] && echo WEB_BOT_AUTH ;;
       df)
         printf 'Filesystem 1K-blocks Used Available Use%% Mounted on\\n/dev/vdb 1000 400 600 40%% /var/lib/postgresql\\n' ;;
       sh)
+        if [ -n "\${FAKE_REAL_SH:-}" ]; then shift; exec sh "$@"; fi
         mkdir -p "$FAKE_DIR/sql"
         n=$(ls "$FAKE_DIR/sql" | wc -l)
         n=$((n + 1))
@@ -142,9 +144,72 @@ describe("prod-inspect.sh", () => {
   test("connection string is read inside the container and never put in an argument", () => {
     run();
     const args = readFileSync(join(dir, "args.log"), "utf8");
-    expect(args).toContain("PGPASSFILE");
+    expect(args).toContain("PGPASSWORD");
+    expect(args).not.toContain("PGPASSFILE");
     expect(args).not.toContain('psql "$(cat');
     expect(args).not.toMatch(/postgres(ql)?:\/\/[^ ]*@/);
+  });
+
+  test("password reaches psql only through its environment and leaves no file behind", () => {
+    const work = join(dir, "work");
+    const tmp = join(dir, "tmp");
+    mkdirSync(work);
+    mkdirSync(tmp);
+    writeFileSync(
+      join(work, "url"),
+      "postgres://svcuser:pw-s3cret-9@db.internal:6543/appdb",
+    );
+    writeFileSync(
+      join(work, "psql"),
+      '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$FAKE_DIR/psql.argv"\nprintf \'%s\' "$PGPASSWORD" > "$FAKE_DIR/psql.pgpassword"\ncat > /dev/null\necho 5\n',
+    );
+    chmodSync(join(work, "psql"), 0o755);
+    const { code, out } = run({
+      FAKE_REAL_SH: "1",
+      PROD_INSPECT_URL_FILE: join(work, "url"),
+      PROD_INSPECT_PSQL: join(work, "psql"),
+      TMPDIR: tmp,
+    });
+    expect(code).toBe(0);
+    expect(out).toContain("approvals_pending=5");
+    const argv = readFileSync(join(dir, "psql.argv"), "utf8");
+    expect(argv).not.toContain("pw-s3cret-9");
+    expect(argv).not.toContain("postgres://");
+    expect(argv).toContain("db.internal");
+    expect(argv).toContain("6543");
+    expect(argv).toContain("svcuser");
+    expect(argv).toContain("appdb");
+    expect(readFileSync(join(dir, "psql.pgpassword"), "utf8")).toBe(
+      "pw-s3cret-9",
+    );
+    expect(out).not.toContain("pw-s3cret-9");
+    expect(readdirSync(tmp)).toEqual([]);
+  });
+
+  test("env file names tolerate leading blanks and export, and repeats count once", () => {
+    writeFileSync(
+      envFile,
+      "  OPENBOT_A=1\nexport XIONGBAO_B=2\n\texport  CPK_C=3\nCPK_C=4\nCOPILOTKIT_D=5\n#OPENBOT_COMMENTED=1\n",
+    );
+    const { out } = run();
+    const section = out.split("\n# container-env")[0] ?? "";
+    for (const name of ["OPENBOT_A", "XIONGBAO_B", "CPK_C", "COPILOTKIT_D"]) {
+      expect(section.split("\n")).toContain(name);
+    }
+    expect(section).not.toContain("export");
+    expect(section).not.toContain("COMMENTED");
+    expect(out).toContain("copilotkit_env_file=2");
+  });
+
+  test("web_bot_auth_env_named reports presence of the name only", () => {
+    expect(run().out).toContain("web_bot_auth_env_named=0");
+    writeFileSync(envFile, "WEB_BOT_AUTH=on-value-xyz\n");
+    const fromFile = run().out;
+    expect(fromFile).toContain("web_bot_auth_env_named=1");
+    expect(fromFile).not.toContain("on-value-xyz");
+    writeFileSync(envFile, "OPENBOT_X=1\n");
+    const fromContainer = run({ FAKE_LS_WEB_BOT_AUTH: "1" }).out;
+    expect(fromContainer).toContain("web_bot_auth_env_named=1");
   });
 
   test("a failing query prints n/a and never echoes the database error", () => {

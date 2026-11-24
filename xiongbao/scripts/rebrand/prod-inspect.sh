@@ -4,8 +4,8 @@
 # 用法：sh prod-inspect.sh <容器名> <.env.delivery 路径>
 #
 # 安全约束（改动本脚本时不得破坏）：
-#   - 数据库只经 `docker exec` 在容器内访问，连接串由容器内的 sh 从 s6 环境文件读出，写进 0600 的
-#     PGPASSFILE（退出即删），不进任何命令行参数，`ps` 看不到。
+#   - 数据库只经 `docker exec` 在容器内访问，连接串由容器内的 sh 从 s6 环境文件读出，口令只放进
+#     psql 进程的环境变量 PGPASSWORD（不落文件、不进命令行参数，`ps` 看不到）。
 #   - 每个会话以 `SET default_transaction_read_only = on` 开头；语句只有 count(*) 与目录名查询。
 #   - 一条查询出错时只打印 `名字=n/a`，不转发数据库的报错（报错里可能带值）。
 #   - 计数只放行纯数字；名字清单只放行 [A-Za-z0-9_.:-]。
@@ -36,13 +36,20 @@ fi
 
 NAME_RE='^(OPENBOT|XIONGBAO|COPILOTKIT|CPK)_[A-Z0-9_]*'
 
-# 容器内执行的会话脚本：读连接串、拆成 pgpass 一行、再交给 psql；SQL 来自标准输入。
-# 单引号包住，整段在宿主机侧不展开。
+# .env.delivery 里带品牌前缀的变量名（允许前导空白与 `export `），去重，只输出名字。
+env_file_names() {
+  grep -E "^[[:space:]]*(export[[:space:]]+)?(OPENBOT|XIONGBAO|COPILOTKIT|CPK)_[A-Z0-9_]*=" "$ENV_FILE" |
+    sed -E 's/^[[:space:]]*(export[[:space:]]+)?//; s/=.*//' | sort -u || true
+}
+
+# 容器内执行的会话脚本：读连接串、拆开、口令经环境变量交给 psql；SQL 来自标准输入。
+# 单引号包住，整段在宿主机侧不展开。URL 文件与 psql 路径可由容器内的环境变量覆盖（只给测试用，
+# 现网容器里这两个变量不存在，用默认值）。
 PSQL_SH='
 set -eu
-PSQL=/usr/lib/postgresql/16/bin/psql
+PSQL=${PROD_INSPECT_PSQL:-/usr/lib/postgresql/16/bin/psql}
 [ -x "$PSQL" ] || PSQL=psql
-u=$(cat /run/s6/container_environment/MIGRATION_DATABASE_URL)
+u=$(cat "${PROD_INSPECT_URL_FILE:-/run/s6/container_environment/MIGRATION_DATABASE_URL}")
 rest=${u#*://}
 user=${rest%%:*}
 rest=${rest#*:}
@@ -55,10 +62,7 @@ case $hostport in
   *:*) port=${hostport#*:} ;;
   *) port=5432 ;;
 esac
-f=$(mktemp)
-trap "rm -f \"$f\"" EXIT
-printf "%s:%s:%s:%s:%s\n" "$host" "$port" "$db" "$user" "$pw" > "$f"
-PGPASSFILE=$f "$PSQL" -X -q -A -t -v ON_ERROR_STOP=1 -h "$host" -p "$port" -U "$user" -d "$db"
+PGPASSWORD=$pw "$PSQL" -X -q -A -t -v ON_ERROR_STOP=1 -h "$host" -p "$port" -U "$user" -d "$db"
 '
 
 # 跑一条只读 SQL，原样输出结果行；出错则无输出（报错一律丢弃）。
@@ -82,7 +86,7 @@ names() {
 }
 
 echo "# env-file"
-grep -E "${NAME_RE}=" "$ENV_FILE" | sed 's/=.*//' | sort -u || true
+env_file_names
 
 echo
 echo "# container-env"
@@ -141,8 +145,14 @@ echo "plugin_grants_updated_by_old_brand=n/a"
 echo "memory_default_keys_old_brand=n/a"
 count user_skin_old_brand "SELECT count(*) FROM users WHERE preferences->>'skin' = 'openbot';"
 
+# 只看名字存在与否，不读值。
+web_named=0
+if grep -qE '^[[:space:]]*(export[[:space:]]+)?WEB_BOT_AUTH=' "$ENV_FILE"; then web_named=1; fi
+if docker exec "$CONTAINER" ls /run/s6/container_environment 2>/dev/null | grep -qx WEB_BOT_AUTH; then web_named=1; fi
+echo "web_bot_auth_env_named=$web_named"
+
 echo
 echo "# copilotkit-usage"
-echo "copilotkit_env_file=$(grep -cE '^(COPILOTKIT|CPK)_[A-Z0-9_]*=' "$ENV_FILE" || true)"
+echo "copilotkit_env_file=$(env_file_names | grep -cE '^(COPILOTKIT|CPK)_' || true)"
 echo "copilotkit_container_env=$(docker exec "$CONTAINER" ls /run/s6/container_environment 2>/dev/null | grep -cE '^(COPILOTKIT|CPK)_[A-Z0-9_]*$' || true)"
 count learning_settings_rows_again "SELECT count(*) FROM learning_settings;"
