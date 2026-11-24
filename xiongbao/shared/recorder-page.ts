@@ -1,8 +1,8 @@
 import { z } from "zod";
 
 /**
- * WHAT XIONGBAO'S OWN PAGE MAY ASK THE RECORDER IN THE SAME BROWSER, over `externally_connectable` (`xiongbao.ping` and
- * `xiongbao.connect` are older and unchanged). When XiongBao is open in a browser that holds the Recorder, its Browser
+ * WHAT XIONGBAO'S OWN PAGE MAY ASK THE RECORDER IN THE SAME BROWSER, over `externally_connectable` (the ping and connect messages
+ * are older and keep their names). When XiongBao is open in a browser that holds the Recorder, its Browser
  * button works with that browser: Record and Stop from XiongBao, and the red dot read straight from the Recorder.
  *
  * Only the XiongBao the Recorder is connected to may use these: the Recorder compares the origin Chrome reports for the
@@ -70,7 +70,7 @@ export const RECORDER_CONNECT_STATUS = "xiongbao.connect.status";
 export type RecorderConnectWait = "waiting" | "cancelled" | "closed" | "none";
 
 /**
- * Which `xiongbao.connect` requests the Recorder accepts with no Connect page (David, 2026-10-22: "only for trusted
+ * Which connect requests the Recorder accepts with no Connect page (David, 2026-10-22: "only for trusted
  * XiongBaos"): an origin the organization's policy pins (`OpenBotUrl`), or XiongBao Desktop's own loopback address on this
  * computer, exactly as XiongBao Desktop's native host confirms it (any program can serve a page on a loopback port), and
  * either only while the Recorder is connected to nothing: replacing a connection always goes through the Connect page.

@@ -13,7 +13,7 @@
  */
 
 /** The `forwardedProps` key a browser run carries the person's IANA time zone under. */
-export const PERSON_TIME_ZONE_PROP = "xiongbaoTimeZone";
+export const PERSON_TIME_ZONE_PROP = "openbotTimeZone";
 
 /** Longer than any zone the IANA database names; anything past it is not one. */
 const MAX_TIME_ZONE_LENGTH = 64;

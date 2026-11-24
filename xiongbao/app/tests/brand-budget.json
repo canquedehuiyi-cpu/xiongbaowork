@@ -146,6 +146,11 @@
   },
   {
     "rule": "identifier",
+    "scope": "shared/person-time-zone.ts",
+    "lines": 1
+  },
+  {
+    "rule": "identifier",
     "scope": "shared/tool-name.ts",
     "lines": 2
   },
@@ -162,7 +167,7 @@
   {
     "rule": "identifier",
     "scope": "toolkit/src",
-    "lines": 29
+    "lines": 30
   },
   {
     "rule": "import-close",
@@ -238,5 +243,10 @@
     "rule": "wire-dom",
     "scope": "server/src",
     "lines": 10
+  },
+  {
+    "rule": "wire-dom",
+    "scope": "shared/agent-authorisation.ts",
+    "lines": 1
   }
 ]

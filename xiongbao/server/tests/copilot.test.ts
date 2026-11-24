@@ -2011,7 +2011,7 @@ describe("what day it is", () => {
   /*
    * Seen on Desktop: a Mac in California on Friday 2026-11-06 at 16:20, which is 00:20 on Saturday
    * in UTC. Asked "what's on my Google Calendar tomorrow?", the harness Bot answered for Sunday,
-   * November 8. The browser now says the person's IANA zone on every run (`xiongbaoTimeZone`), and
+   * November 8. The browser now says the person's IANA zone on every run (`openbotTimeZone`), and
    * every Bot is told the date in it.
    */
   const FRIDAY_EVENING_IN_CALIFORNIA = new Date("2026-11-07T00:20:00Z");
@@ -2066,7 +2066,7 @@ describe("what day it is", () => {
         ];
         const forwardedProps = {
           openbotAskedRun: true,
-          ...(zone === undefined ? {} : { xiongbaoTimeZone: zone }),
+          ...(zone === undefined ? {} : { openbotTimeZone: zone }),
         };
         const ask = async (
           agents: Record<string, AbstractAgent>,

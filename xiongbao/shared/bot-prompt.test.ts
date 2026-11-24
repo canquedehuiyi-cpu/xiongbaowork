@@ -310,7 +310,7 @@ describe("brand", () => {
       frameworkGuidance("LangChain"),
     ].join("\n");
     expect(assembled.length).toBeGreaterThan(2000);
-    expect(assembled).not.toMatch(/xiongbao/i);
+    expect(assembled).not.toMatch(/openbot|xiongbao/i);
   });
 });
 

@@ -28,7 +28,7 @@ export const TRAJECTORY_GATE_REFUSALS = {
 } as const;
 
 /** How a browser was connected: Connect this browser in XiongBao (`web`), XiongBao Desktop's handoff (`desktop`), XiongBao
- * itself when it opened the person's own XiongBao browser, with no Connect step (`xiongbao-browser`), or XiongBao when the
+ * itself when it opened the person's own XiongBao browser, with no Connect step (`via` value for XiongBao's own browser), or XiongBao when the
  * person pressed Record in a Bot's browser, for that one recording (`bot-browser`, shared/bot-browser.ts). */
 export type RecorderConnectVia =
   | "web"

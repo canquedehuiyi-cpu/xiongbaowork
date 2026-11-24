@@ -108,7 +108,7 @@ export type LearningProposalDetail = LearningProposal & {
  * The container XiongBao assigns on its own when nobody has chosen one.
  *
  * The same ID `scripts/setup-learning.ts` creates, so a project set up by that helper, by hand in
- * Intelligence, or by `copilotkit learning containers create --id xiongbao` is found the same way.
+ * Intelligence, or with the learning CLI given this constant's value as the container id is found the same way.
  */
 export const AUTOMATIC_LEARNING_CONTAINER_ID = "openbot";
 
