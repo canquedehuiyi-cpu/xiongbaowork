@@ -2124,7 +2124,7 @@ describe("connecting a brokered app", () => {
     // now, and an address in it is no more a destination than any other value.
     const { authorized, connect } = brokeredApp();
 
-    await connect({}, "?from=desktop");
+    await connect({}, "?returnTo=settings&from=desktop");
     await connect({}, "?from=https%3A%2F%2Fevil.test");
 
     // M5: fork 的 broker.authorize 按 userId 记人（上游是 account，属 X 系列多账号）。

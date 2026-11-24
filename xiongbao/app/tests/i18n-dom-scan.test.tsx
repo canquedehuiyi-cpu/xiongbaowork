@@ -141,7 +141,7 @@ import { settleReactWork } from "./settle-react-work";
  *    拿它跟 `routes/` 下的文件对账。所以「主路径」不会因为某个页面没人记得加而悄悄缩小——
  *    `server-tests.list.txt` 那种「文件存在但从不运行」的坑，在 DOM 扫描这一侧有了对应的守卫。
  *
- * 数出来的账记在 `i18n-dom-budget.json`，本文件只允许它**变小**。它现在是空数组：59 条路由、173 次
+ * 数出来的账记在 `i18n-dom-budget.json`，本文件只允许它**变小**。它现在是空数组：58 条路由、173 次
  * 取样、0 行纯英文，外加一条量具自检（失败态必须真的画出兜底句）。剩下的英文只在口径豁免里（品牌名
  * `WakerFlow` / `Waker` / `XiongBao Work`、缩写 `API`、技术名词 `JavaScript`、键名 `Shift`、装饰字形
  * `N` 与 `z`），逐条列在报告末尾，可查。

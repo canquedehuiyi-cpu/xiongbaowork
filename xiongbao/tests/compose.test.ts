@@ -263,6 +263,27 @@ function runComposeConfig(env: Record<string, string>) {
   };
 }
 
+test("ordinary Compose ignores telemetry settings in the host environment", () => {
+  const telemetry = {
+    CPK_TELEMETRY_ID: "12345678-1234-4123-8123-123456789012",
+    COPILOTKIT_TELEMETRY_SAMPLE_RATE: "1",
+    COPILOTKIT_TELEMETRY_URL: "http://127.0.0.1:4321/ingest",
+    OPENBOT_DISTRIBUTION: "desktop",
+    OPENBOT_VERSION: "1.0.0",
+    OPENBOT_PLATFORM: "macos",
+    OPENBOT_ARCH: "aarch64",
+    OPENBOT_OS_VERSION: "26.0",
+    OPENBOT_ENGINE: "docker",
+    COPILOTKIT_TELEMETRY_DISABLED: "1",
+    DO_NOT_TRACK: "1",
+    OPENBOT_PRODUCT_TELEMETRY: "0",
+  };
+  const services = runComposeConfig(telemetry).services;
+  for (const key of Object.keys(telemetry)) {
+    expect(services.server.environment[key]).toBeUndefined();
+  }
+});
+
 test("leaves optional telemetry settings absent for ordinary Compose startup", () => {
   const env = runComposeConfig({}).services.server.environment;
   for (const key of [

@@ -40,7 +40,7 @@ Settings → General → Default branch，切到 `main`。
 Settings → Rules → Rulesets（或 Branches → Add rule），目标分支选 `main`：
 
 - 合并前必须通过 PR；
-- 必须通过的状态检查：`熊宝交付 CI` 的全部 job。最少要有 `static`、`app-test`、`server-test (1)`–`(6)`、`image`、各 `workspace tests (…)`、`desktop tests (windows-latest)`、`chart`、WakerFlow 生命周期 E2E；
+- 必须通过的状态检查：`熊宝交付 CI` 的全部 job。最少要有 `static`、`app-test`、`server-test (1)`–`(6)`、`image`、各 `workspace tests (…)`、`chart`、WakerFlow 生命周期 E2E；
 - 禁止 force push 和删除分支；
 - 合并方式只开 "Create a merge commit"，与目前的做法一致。
 

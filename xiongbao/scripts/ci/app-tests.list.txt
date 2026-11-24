@@ -401,6 +401,7 @@ tests/onboarding-pictures.test.tsx
 tests/onboarding-route.test.tsx
 tests/onboarding-sources.test.tsx
 tests/onboarding-window-buttons.test.tsx
+tests/onboarding-window-drag.test.tsx
 tests/orb-palette.test.ts
 tests/paced-reveal-clock.test.tsx
 tests/paced-reveal-hidden.test.tsx
