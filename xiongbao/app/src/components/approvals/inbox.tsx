@@ -43,6 +43,7 @@ import {
   type HostFolderGrant,
   hostAccessQueryOptions,
 } from "@/lib/computers/host-access";
+import { InboxNotes } from "./inbox-notes";
 import { approvalTargetName } from "./inline-approval";
 import { isShareApproval, ShareApprovalCard } from "./share-approval-card";
 import { afterChinese } from "./waiting";
@@ -101,6 +102,8 @@ export function ApprovalInbox({
     onSuccess: refresh,
   });
   const [answers, setAnswers] = useState<Record<string, string>>({});
+  // 每条提问的卡片，批注从这张卡里选中的字取引用（试点，开关没开时不用）。
+  const questionCards = useRef<Record<string, HTMLElement | null>>({});
   const answer = useMutation({
     mutationFn: ({ id, response }: { id: string; response: string }) =>
       answerPersonQuestion(id, response),
@@ -202,6 +205,9 @@ export function ApprovalInbox({
             <article
               key={question.id}
               className={`${ATTENTION_CARD} flex flex-col gap-3 p-[14px]`}
+              ref={(element) => {
+                questionCards.current[question.id] = element;
+              }}
             >
               <div className="flex items-start gap-[10px]">
                 <Tag tone="warning">提问</Tag>
@@ -214,6 +220,11 @@ export function ApprovalInbox({
                   {question.why}
                 </p>
               ) : null}
+              <InboxNotes
+                id={question.id}
+                kind="question"
+                source={() => questionCards.current[question.id] ?? null}
+              />
               <Textarea
                 aria-label="你的回答"
                 placeholder="你的回答"

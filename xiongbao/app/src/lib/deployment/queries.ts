@@ -58,6 +58,12 @@ export type DeploymentCapabilities = {
    * `XIONGBAO_PILOT_BOARD_PUSH`). Absent from a server that does not say, which reads as off.
    */
   boardPush?: boolean;
+  /**
+   * Whether the inbox lets a person write notes on what waits there and send them back to the
+   * conversation (pilot, `XIONGBAO_PILOT_INBOX_NOTES`). Absent from a server that does not say, which
+   * reads as off.
+   */
+  inboxNotes?: boolean;
 };
 
 export const deploymentKeys = {
@@ -101,6 +107,7 @@ export function deploymentCapabilitiesQueryOptions() {
         chatServerComputerTools?: boolean;
         memory?: boolean;
         boardPush?: boolean;
+        inboxNotes?: boolean;
       };
 
       return {
@@ -113,9 +120,17 @@ export function deploymentCapabilitiesQueryOptions() {
         chatServerComputerTools: body.chatServerComputerTools === true,
         ...(typeof body.memory === "boolean" ? { memory: body.memory } : {}),
         ...(body.boardPush === true ? { boardPush: true } : {}),
+        ...(body.inboxNotes === true ? { inboxNotes: true } : {}),
       };
     },
   });
+}
+
+/** Whether the inbox draws notes (pilot). False until the deployment says so, so nothing flashes in. */
+export function useInboxNotesEnabled(): boolean {
+  return (
+    useQuery(deploymentCapabilitiesQueryOptions()).data?.inboxNotes === true
+  );
 }
 
 /**
