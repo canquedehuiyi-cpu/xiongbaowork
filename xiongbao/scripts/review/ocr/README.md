@@ -79,6 +79,6 @@ bun xiongbao/scripts/review/ocr/benchmark/score.ts \
 - 精度 = 命中任何一条金标（含 Minor）的评论数 ÷ 评论总数；另给严格精度（只算命中 Critical/Important 的评论）。
 - 列出漏报（没被命中的 Critical/Important）和未命中的评论（可能是误报，也可能是金标里没有的真问题，需要人看）。
 
-重要限制：**`benchmark/results/` 里的结果是宿主智能体在读过金标之后做的评审**，召回数字偏高，只能证明管线与打分脚本可用，不能当 OCR 的真实召回率。要得到真实数字：在配了 `OCR_API_KEY` 的 Environment 里，对三个 PR 的范围手动触发（`base`/`head` 见 `gold.json` 的 `range`），把 artifact 里的 `ocr-report.json` 交给 `score.ts`。`score.ts` 能读 delegation 报告，也读 native 报告里的 `comments` 数组（字段别名 `file/path`、`line/start_line`、`message/content` 都认）；native 报告的评论字段本机没有 key 跑不出来，没核实过。
+`benchmark/results/` 里是盲审结果（delegation 模式，评审者没读过金标）：Critical/Important 召回 5/9，精度 9/18。`benchmark/results/upper-bound/` 是评审者读过金标后的一轮，数字偏高、作废，只留作对照。要得到 native 模式的数字：在配了 `OCR_API_KEY` 的 Environment 里，对三个 PR 的范围手动触发（`base`/`head` 见 `gold.json` 的 `range`），把 artifact 里的 `ocr-report.json` 交给 `score.ts`。`score.ts` 能读 delegation 报告，也读 native 报告里的 `comments` 数组（字段别名 `file/path`、`line/start_line`、`message/content` 都认）；native 报告的评论字段本机没有 key 跑不出来，没核实过。
 
 跑测试：`bun test scripts/review/ocr`（在 `xiongbao/` 下）和 `bun test server/tests/ocr-review-workflow.test.ts`。

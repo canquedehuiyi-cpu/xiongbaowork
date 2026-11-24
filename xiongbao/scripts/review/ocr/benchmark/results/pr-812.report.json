@@ -11,41 +11,33 @@
     "reviewed_files": 5,
     "skipped_files": 0,
     "coverage_rate": 1,
-    "comments": 5
+    "comments": 4
   },
   "comments": [
+    {
+      "path": "xiongbao/server/src/channels/group.ts",
+      "start_line": 3109,
+      "end_line": 3109,
+      "severity": "high",
+      "category": "bug",
+      "content": "群聊轮次队列的租约是 15 分钟，且只在每位员工开始前续一次（3145 行）；本次让有电脑的员工在群聊里的一轮最长 25 分钟（外加 5 秒宽限），单个轮次就可能超过租约。租约过期后另一个 sweep 会把同一轮重新领走，造成同一问题被答两遍、产物重复，原来的那轮再续租时才报『租约丢失』。需要把租约提到大于 workTurnTimeoutMs 加宽限，或在轮次执行期间按心跳续租。channels/dispatch.ts 里的 CHANNEL_DISPATCH_LEASE_MS 注释也还写着『五分钟』。",
+      "outside_diff": true
+    },
     {
       "path": "xiongbao/server/src/routines/run-turn.ts",
       "start_line": 142,
       "end_line": 152,
-      "severity": "high",
+      "severity": "low",
       "category": "bug",
-      "content": "群聊轮的时限从 5 分钟提到 25 分钟（turnTimeoutFor(\"unattended\")），但群聊队列的租约没跟着变：group.ts:3109 的 claim 用 leaseMs 15 分钟，3145 只在每位员工开跑前 renew 一次，跑的过程中不续租。带电脑的员工跑到第 15 分钟租约过期，另一个副本会 claim 同一项并把还在跑的回复行写成失败，随后抢着跑下一位员工。时限和租约要绑在一起：要么跑的过程中按 leaseMs/3 续租，要么把租约设成大于时限加收尾时间。"
-    },
-    {
-      "path": "xiongbao/server/src/index.ts",
-      "start_line": 5866,
-      "end_line": 5866,
-      "severity": "medium",
-      "category": "performance",
-      "content": "群聊 sweep 在每个副本里串行：`while (await groupConversations.sweep()) {}` 每次只认领一项并同步等这一项里每位员工跑完。本改动把带电脑员工的单轮上限从 5 分钟提到 25 分钟，@ 几位这样的员工就能把该副本上所有租户的群聊挡很久（队头阻塞）。至少需要说明，更好的是多群并行、同群按序。"
-    },
-    {
-      "path": "xiongbao/server/src/channels/group.ts",
-      "outside_diff": true,
-      "start_line": 2366,
-      "end_line": 2368,
-      "severity": "critical",
-      "category": "bug",
-      "content": "本改动让时限停掉或出错的轮也发出 computer.turn_artifacts，群聊 onCustom 也已经把它收进 artifacts（约 2168 行）。但 runBot 出错分支的 `deps.store.finish(id, message, \"failed\", {...})` 没有带 withTurnArtifacts(artifacts)。群聊界面只读回复行的 details.turnArtifacts，所以群聊里这一轮仍然没有下载清单，修复在最初的场景里等于没生效。另外出错路径不走 shareGate，补上时要先过私有分享闸门，不能直接把文件名写进共享行。"
+      "content": "所有有电脑工具的群聊员工轮次都放宽到 25 分钟、80 段，包括员工之间互相应答（交接台）触发的轮次；这些轮次占着对话的锁，期间用户在群里的新消息被『Thread lock denied』拒绝最长 25 分钟。限时到点时给人看的提示也要核对是否已按群聊的 25 分钟说。"
     },
     {
       "path": "xiongbao/server/src/computer/turn-artifacts.ts",
       "start_line": 294,
-      "end_line": 310,
-      "severity": "medium",
+      "end_line": 309,
+      "severity": "low",
       "category": "bug",
-      "content": "时限到点后 toolkit 的 stopTurn() 让内层流直接完成，这里在流完成后才 settle，最长等 TURN_ARTIFACTS_DEADLINE_MS（15 秒）。但 toolkit/src/run-turn.ts 的 backstop 在 turnTimeoutMs + abortGraceMs（5 秒）就 reject「could not be stopped」并释放锁、退订监听。电脑查询慢于 5 秒时，这一轮的结局被误报成「停不下来」，清单事件也到不了 onCustom。需要让 backstop 对有 observeTurn 的轮多等比对的时限，或把比对的截止压到 abortGrace 以内。"
+      "content": "RUN_ERROR 之前先 await settle，最长要等 TURN_ARTIFACTS_DEADLINE_MS（15 秒），错误事件因此被推迟；若此时订阅方因超时已走开，错误与清单都丢。另外 ended 置位后若同一流再出现 RUN_FINISHED/RUN_ERROR，会第二次比对，清单可能出两份。"
     },
     {
       "path": "xiongbao/scripts/e2e/employee-eval/deliverables-server.ts",
@@ -53,14 +45,11 @@
       "end_line": 561,
       "severity": "low",
       "category": "security",
-      "content": "把 RUN_ERROR 的原文前 80 个字符写进评测失败详情。错误文本可能带有请求头、端点或令牌片段，详情会进评测报告与 artifact。建议只记错误类别，或在写入前做一次脱敏。"
+      "content": "把 RUN_ERROR 的 message 前 80 个字符原样写进检查失败详情，这些文字可能来自模型供应方或服务器内部错误（含地址、请求号等），会随评测报告落盘或上传；应只记错误类别。"
     }
   ],
   "skipped": [],
   "notes": [
-    "宿主为控制方派出的评审子智能体；delegation 模式，没有评审单元隔离与 OCR 的反思、定位模块。",
-    "审查范围 5c4f62f5..8a4ac553，规则取熊宝规则模板，测试文件按 benchmark 约定排除（--exclude '**/tests/**,**/*.test.*'）。",
-    "有 2 条评论用到了 diff 之外的上下文（group.ts、index.ts:5866），其中 group.ts 不在 diff 里，标 outside_diff。",
-    "污染说明：宿主在评审前已读过控制方对这三个 PR 的审查结论（金标原文），召回数字偏高，只能当管线与打分脚本的验证，不能当 OCR 真实召回率。规则模板写在读过金标之后，但只写通用主题，没有照抄具体场景。"
+    "5 个单元全部读过；group.ts 是 diff 之外的调用方，评论标了 outside_diff。严重度映射：important 记为 high，minor 记为 low。"
   ]
 }

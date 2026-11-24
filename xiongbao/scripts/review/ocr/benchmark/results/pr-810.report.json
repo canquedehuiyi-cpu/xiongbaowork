@@ -11,62 +11,52 @@
     "reviewed_files": 8,
     "skipped_files": 0,
     "coverage_rate": 1,
-    "comments": 6
+    "comments": 5
   },
   "comments": [
     {
-      "path": "xiongbao/server/src/threads/chat-server-tools.ts",
-      "start_line": 357,
-      "end_line": 365,
+      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+      "start_line": 172,
+      "end_line": 187,
       "severity": "high",
       "category": "bug",
-      "content": "外层 wholeTurn 的观察没有传 threadId / continues，因此没有 carry；而 turn-artifacts.ts:177 对 wholeTurn 流一律当场比对（`!turn.wholeTurn`），默认的「注释」假设是它的 RUN_FINISHED 一定是整轮结尾。但服务器执行电脑工具的单聊里，模型还可以调页面自己执行的非电脑工具（决定类、登录、组件），HeadlessToolsMiddleware 遇到不归它管的调用就结束这个 run，页面答复后再发 run-2。结果：产物事件挂在 run-1，最终 run 上一条都没有；交付若发生在 run-2，按 channel+run-2 下载找不到座位，404。修法：外层也传 threadId 和 continues，推迟条件改成「有 carry 且仍有未答复的工具调用」，不再因 wholeTurn 跳过；并给服务器审批挂起（interrupt）留一条当场比对的例外。"
-    },
-    {
-      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
-      "start_line": 55,
-      "end_line": 66,
-      "severity": "low",
-      "category": "bug",
-      "content": "carryOver 替换同 key 的旧条目、或超过 CARRIED_MAX 淘汰最旧条目时，只删 Map 里的记录，网关里对应的快照标记没有清理。被丢下的轮次（停在页面工具上、页面关了、出错）留下的 pending 标记会在这个座位下次 locate 时被逐个快照，占用共享的 flush 预算，堆多了本轮的标记可能被记成失败。建议暴露 forgetTurn 并在替换/淘汰时调用。"
+      "content": "只在收到 RUN_FINISHED 时才比对并发清单：整轮流里 RUN_ERROR、流报错、被时限 abort 后不发终止事件就完成的轮都不会列清单（chat-server-tools.ts 的注释还声称『被时限或段数停掉的轮也在这条流里结束』）。文件已写在员工电脑上，对话里却没有下载清单，用户说『继续』又是新一轮补不回来；同时 carried 里的标记和网关里的快照标记也没人清理。需要在 RUN_ERROR/报错/完成无终止事件三条路径上同样比对并清标记。"
     },
     {
       "path": "xiongbao/server/src/computer/turn-artifacts.ts",
       "start_line": 45,
-      "end_line": 53,
-      "severity": "low",
-      "category": "security",
-      "content": "carried 条目只有数量上限，没有存活时间。一个座位的电脑被几个人共用时，被扣住很久的标记（例如等人类决定）会把这段时间里其他人在同一台电脑上的改动列到本人的 run 上，会话成员就能按 run 范围下载。建议加 TTL（例如 30 分钟），超时当新的一轮。"
+      "end_line": 66,
+      "severity": "high",
+      "category": "bug",
+      "content": "跨 run 的 carried 表没有过期时间，也没有在轮被放弃时（页面不再发续跑 run、报错、标签页关闭）清除，只靠 500 条上限淘汰。下一个 run 只要 `continues` 为真（由客户端消息里最后一条不是 user 就判定）就会沿用很久以前的 markId，拿今天的文件系统和几小时前的快照比，清单里混进无关文件，或者因网关侧标记已被淘汰而静默什么也不列。应记录时间并设 TTL、轮结束/出错时清除。"
     },
     {
       "path": "xiongbao/server/src/computer/turn-artifacts.ts",
-      "start_line": 68,
+      "start_line": 73,
       "end_line": 73,
-      "severity": "low",
-      "category": "maintainability",
-      "content": "wholeTurnOf 的值只是 runId，232 行的让位也只按 runId 判断，没有带 botId。目前没找到同一个 runId 跑另一位员工的路径，但让位是个会吞掉事件的判断，建议把值改成 runId + botId，避免将来别的员工的观察被误让位。"
+      "severity": "high",
+      "category": "bug",
+      "content": "wholeTurnOf 只以 runId 为键（run 处与 withConfiguredTurnArtifacts 的 getStore 比较处同），同一个 run 里被叫来的另一位员工（botId 不同、runId 相同）的各段观察也被当成『让位』给外层而跳过，它写的文件不会有清单；键应为 runId 加 botId。"
     },
     {
-      "path": "xiongbao/server/src/copilot.ts",
-      "start_line": 2873,
-      "end_line": 2874,
+      "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+      "start_line": 175,
+      "end_line": 178,
       "severity": "low",
       "category": "bug",
-      "content": "continues 用「末条消息的 role 不是 user」判断这是接着上一个 run 的一轮。客户端在人的消息后面追加 system、developer、activity 之类消息时，新的一轮会被当成续跑，沿用被丢下那一轮的标记，多列出那一轮的文件。建议改成「末条是 tool 消息，或末条 assistant 消息带着没有答复的工具调用」。"
+      "content": "只要 run 以任何未答复的工具调用结束就推迟清单，不区分是不是电脑工具（审批、组件渲染这类等人的前端工具也一样）。人不回工具结果而是直接发新消息时，messages 末条是 user，被视为新一轮，上一轮已写的文件永远不会被列出。"
     },
     {
-      "path": "xiongbao/server/src/routines/run-turn.ts",
-      "start_line": 99,
-      "end_line": 110,
+      "path": "xiongbao/server/src/threads/chat-server-tools.ts",
+      "start_line": 357,
+      "end_line": 368,
       "severity": "low",
-      "category": "other",
-      "content": "行为面变化：observeTurn 现在对所有带无头工具的无人值守轮生效（看板、例行、子代理，以及外部员工的轮），而以前只有内置员工经 copilot.ts 的观察。事件由服务器从真实电脑差异算出、座位规则不变，没看到提权，但这是比描述更大的行为面，建议在注释里写明。"
+      "category": "bug",
+      "content": "清单流在 runAsTenant(actor.id) 里订阅，但 personId 也同样传 actor.id；若 actor.id 不是个人租户（共享/平台身份），runAsTenant 会抛错或在错误的帧里读写，而 copilot.ts 与 run-turn.ts 里同样的取值是先判断 isPersonTenant 再用。三处取值方式不一致，容易出现某条入口静默不列清单。"
     }
   ],
   "skipped": [],
   "notes": [
-    "宿主为控制方派出的评审子智能体；delegation 模式，没有评审单元隔离与 OCR 的反思、定位模块。",
-    "审查范围 660f85dd..83665947，规则取熊宝规则模板，测试文件按 benchmark 约定排除。",
-    "污染说明：宿主在评审前已读过控制方对这三个 PR 的审查结论（金标原文），召回数字偏高，只能当管线与打分脚本的验证，不能当 OCR 真实召回率。规则模板写在读过金标之后，但只写通用主题，没有照抄具体场景。"
+    "8 个单元全部读过；严重度映射：important 记为 high，minor 记为 low。"
   ]
 }

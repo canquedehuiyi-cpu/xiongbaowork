@@ -8,127 +8,87 @@
   },
   "summary": {
     "total_files": 29,
-    "reviewed_files": 28,
-    "skipped_files": 1,
-    "coverage_rate": 0.9655,
-    "comments": 13
+    "reviewed_files": 29,
+    "skipped_files": 0,
+    "coverage_rate": 1,
+    "comments": 9
   },
   "comments": [
     {
-      "path": "xiongbao/server/src/content/forward.ts",
-      "start_line": 737,
-      "end_line": 741,
-      "severity": "high",
-      "category": "security",
-      "content": "HTTP 响应的权限只在请求开始时检查一次（allowed 还有 60 秒缓存），之后 programResponse 把 upstream.body 原样当作流返回（414-421 行）。gateway.forwardHttp 的注释也明说「没有总时限，响应体只在调用方取消或 signal 终止时结束」。WebSocket 有到期定时器和每 60 秒的复查，HTTP 流式响应（SSE、长轮询、分块推送的看板）没有对应物：群成员被移出、员工被删、卡片不再可见之后，已打开的 SSE 连接仍会无限期收到程序的实时数据，也不受 12 小时绝对上限约束；电脑端只有 120 秒空闲和 100MB 两个界，心跳存在时都不触发。建议把响应体套一层守护：到点硬切、每个复查周期调用 recheck、为 false 就取消。"
+      "path": "xiongbao/server/src/content/access.ts",
+      "start_line": 81,
+      "end_line": 107,
+      "severity": "critical",
+      "category": "bug",
+      "content": "stillAllowed 在内容源自己的监听器上被调用（程序请求、60 秒一次的 socket 复查），不在应用的租户帧里，而它里面的 roleOf、员工档案、run 事件读取都是读库，帧外读库会被拒：授权判断要么一律抛错（请求 502、socket 以 1011 关掉），要么在没有帧的情况下得出错误结论。整个『程序转发』功能在真实部署里打不开；修法是按 grant.person 进入 runAsTenant 再判断，并且 person 不是个人租户时一律拒绝。"
     },
     {
-      "path": "xiongbao/server/src/content/forward.ts",
-      "start_line": 365,
-      "end_line": 421,
+      "path": "xiongbao/server/src/computer/artifact-access-store.ts",
+      "start_line": 233,
+      "end_line": 233,
       "severity": "high",
-      "category": "security",
-      "content": "programResponse 只删了 Set-Cookie、HSTS、Clear-Site-Data、Alt-Svc 等头，程序自己的 Cache-Control、Expires、ETag、Last-Modified 全部原样转出。端口模式下所有程序共用同一个源和同一套 URL，浏览器 HTTP 缓存按 URL 记：程序 A 对 /@vite/client、/assets/index.js 这类常见路径回 max-age=31536000, immutable 和一段脚本，关掉 A 之后，打开员工 B 的程序时请求这些路径会命中 A 留下的缓存，A 的脚本就在 B 的页面里运行并读走 B 的数据（前面关掉上一个程序、撤销授权都挡不住）。有缓存反代时还会跨人串内容。建议端口模式强制 Cache-Control: no-store 并删 Expires/ETag/Last-Modified；域名模式至少补 private。"
+      "category": "bug",
+      "content": "卡片只交付了程序、没有文件时，这一轮没有任何 computer.turn_artifacts，seats.size 为 0，这里直接 return null，cardFor 永远拿不到这张卡；artifact-access.ts 里『只有程序的卡可以没有自己的座位』的回退分支因此成了死代码，任务页/交付卡上『打开』程序一律 404。"
     },
     {
       "path": "xiongbao/server/src/computer/artifact-access.ts",
-      "start_line": 224,
-      "end_line": 241,
+      "start_line": 219,
+      "end_line": 231,
       "severity": "high",
       "category": "security",
-      "content": "run 范围的程序授权没有核对是哪位员工交付的。viaRun 里 delivery.delivered 事件不看 agentId，只要这个 run 里有人交付过这个端口就算；而 241 行新加的回退在没有任何座位宣告时直接返回 run 主人在这位员工上的座位（ownSeat，386-388 行由 deps.seatFor(botId, found.ownerId) 取得，runOf 也不核对 run 是不是 botId 的）。场景：群里有员工 X、Y，X 在 run R 里交付了端口 3000；群成员直接调 /open {bot: Y, port: 3000, channel, run: R}，channelFor 只证明 Y 在群里，delivered 命中的是 X 的事件，于是返回 Y 的座位；只要 Y 的电脑上恰好有程序监听 3000（比如替别人跑的开发服务器），这个人就拿到了没交付给他的程序。修法：delivered 事件要求 agentId === botId（文件分支一起加），run 分支要求 run 的 agentId 等于 botId，并补一条 X 交付、Y 打开应当 404 的反例测试。"
-    },
-    {
-      "path": "xiongbao/app/src/components/channels/app-open-button.tsx",
-      "start_line": 31,
-      "end_line": 46,
-      "severity": "medium",
-      "category": "bug",
-      "content": "侧栏（artifact-preview.tsx）在端口模式下显示「独立端口模式下，同一浏览器里先后打开的程序能互相读到内容，只打开你信任的程序」和「已替换你之前打开的程序」，但任务页没有侧栏提示开关，AppOpenButton 走 openInNewTab 分支，answer 里不看 mode 和 replaces，按钮旁没有任何提示；任务页（tasks.$taskId.tsx:243-252）还是最容易同时开多个程序的地方，每张卡各开一个新标签页，后开的会换掉 cookie，先开的标签页里的程序就能读到后开的。要求的提示缺了一条路径。建议 openInNewTab 把 mode/replaces 回传，按钮旁显示同样的提示。"
-    },
-    {
-      "path": "xiongbao/server/src/content/forward.ts",
-      "start_line": 520,
-      "end_line": 532,
-      "severity": "low",
-      "category": "security",
-      "content": "WebSocket 周期复查调用的是 deps.allowed，也就是 server.ts 里带 60 秒缓存的 allowed（ForwardDeps 的注释写着「remembered for a minute」），所以复查间隔 60 秒加缓存 60 秒，撤销最坏约 120 秒才断开。建议周期复查绕过缓存直接问 stillAllowed，或把间隔缩短。"
-    },
-    {
-      "path": "xiongbao/server/src/http-server.ts",
-      "start_line": 335,
-      "end_line": 357,
-      "severity": "medium",
-      "category": "bug",
-      "content": "内容源监听（端口模式的独立 serve 和域名模式的主监听）都没有对转发给程序的请求调 server.timeout(request, 0)，用的是 Bun 默认的 10 秒空闲超时。电脑端允许程序 60 秒内给出响应头、120 秒内没有新数据，慢接口（>10 秒）和心跳间隔超过 10 秒的 SSE 会被服务器提前断开。建议对 app 目标的请求关掉这一层空闲超时，交给电脑端的上限管。"
-    },
-    {
-      "path": "xiongbao/server/src/content/forward.ts",
-      "start_line": 429,
-      "end_line": 430,
-      "severity": "low",
-      "category": "performance",
-      "content": "限流键是 seat:bot，不含人：一个人刷请求，同一员工的其他观看者也被 429；600 次/分钟对 Vite 开发服务器偏低（首屏常有几百个模块请求）。建议键改成 person:seat:bot，另设按 seat:bot 的总量上限并放宽突发额度。"
-    },
-    {
-      "path": "xiongbao/server/src/tasks/evidence-gate.ts",
-      "start_line": 83,
-      "end_line": 93,
-      "severity": "low",
-      "category": "bug",
-      "content": "appPathOf 允许首页路径最长 2000 字符，而 open-routes.ts 的 validAppPath 只收 1024（MAX_PATH_LENGTH）：超过 1024 的程序能交付，但「打开」会 400，用户看到的是打不开。两处上限应统一。"
-    },
-    {
-      "path": "xiongbao/server/src/content/forward.ts",
-      "start_line": 233,
-      "end_line": 249,
-      "severity": "low",
-      "category": "security",
-      "content": "请求头清理只删了 forwarded、x-real-ip、x-forwarded-* 和 proxy-*，cf-connecting-ip、true-client-ip、x-client-ip、x-original-forwarded-for 等客户端 IP 类头仍会转给程序：看的人的 IP 泄露给员工的程序（隐私）。建议加进删除名单。"
-    },
-    {
-      "path": "xiongbao/server/src/content/forward.ts",
-      "start_line": 28,
-      "end_line": 36,
-      "severity": "low",
-      "category": "documentation",
-      "content": "模块注释说「the application's cookies are not readable by it」，端口模式下 cookie 不按端口隔离，程序脚本能读到同主机上所有非 HttpOnly 的 cookie（Secure 的在 https 下也能读）。现在应用只设了一个 HttpOnly 的会话 cookie 所以没有实害，但注释应改准确，并写明「应用不得新增非 HttpOnly cookie」这个不变式。"
-    },
-    {
-      "path": "xiongbao/server/src/content/access.ts",
-      "start_line": 62,
-      "end_line": 76,
-      "severity": "medium",
-      "category": "security",
-      "content": "authorizeApp 在不带范围（scope 为 null）时只查 canUseBot 就返回自己员工的座位，不看交付里声明的端口：人可以让 /open 打开自己员工座位上任意 1024 以上、归这位员工的监听端口（开发服务器、数据库管理页等），不限于交付过的程序。每员工一个系统用户、不是每人一个，多人共用的电脑上能打开别人让员工起的程序。建议 app 目标必须带范围，或在文档里写明。"
-    },
-    {
-      "path": "xiongbao/agent-computer/src/listeners.ts",
-      "start_line": 129,
-      "end_line": 169,
-      "severity": "medium",
-      "category": "security",
-      "content": "归属检查靠 uid：forwardOwnerUid 在没有独立用户（COMPUTER_PER_BOT_USERS=off）时返回进程自己的 uid，所有员工同一个 uid，checkForwardPort 里「holders.some(row.uid !== uid)」永远为假，员工 A 的交付可以列出员工 B 的端口，把 B 的程序转给看 A 交付的人。官方镜像默认 on 所以不影响默认部署，但共享模式下应关闭程序转发或在部署文档里写明。"
+      "content": "按 run 授权程序时，只要这个 run 里任何一条 delivery.delivered 事件的 apps 含该端口就放行，没有核对事件里的 agentId 是否就是被请求的 botId。一个 run 里有多位员工时，员工 B 交付的端口可以被用来请求员工 A（seat 取自 A 的座位）上同一端口的程序，越过了『只有这位员工交付过的程序才能打开』的边界；应按 value.agentId === botId 过滤。"
     },
     {
       "path": "xiongbao/agent-computer/src/forward.ts",
-      "start_line": 182,
-      "end_line": 191,
+      "start_line": 180,
+      "end_line": 190,
       "severity": "low",
       "category": "bug",
-      "content": "响应体超过 100MB 上限时 bodyStream 直接 controller.close() 正常结束，下游看到的是一个干净结束但被截断的响应（content-length 超限时只是删掉了该头，没有报错）。大文件下载会静默损坏。建议超限时 controller.error，让浏览器看到失败。"
-    }
-  ],
-  "skipped": [
+      "content": "程序响应超过 100MB 时在这里 controller.close() 静默截断，而 content-length 头被丢掉，对端看到的是一个『成功结束』的 200，下载的文件被截断却没有任何错误；应该 controller.error 让连接异常中断。"
+    },
     {
-      "path": "xiongbao/agent-computer/src/index.ts",
-      "reason": "路由接线与限额常量的大改动（415 行 diff）没有逐行审，工作量取舍；只在审 forward.ts 时核对了它被调用的位置。"
+      "path": "xiongbao/server/src/content/forward.ts",
+      "start_line": 430,
+      "end_line": 430,
+      "severity": "low",
+      "category": "bug",
+      "content": "限流按（座位:员工）而不是按人，所有能打开该员工程序的人共用 600 次/分钟的桶；一个有几十个子资源或轮询的页面一个人就能耗尽，别的人（和同一个人的其它标签）被 429，页面残缺。也可以被一个人故意用来拒绝其他人访问同一个交付的程序。"
+    },
+    {
+      "path": "xiongbao/agent-computer/src/listeners.ts",
+      "start_line": 160,
+      "end_line": 169,
+      "severity": "low",
+      "category": "security",
+      "content": "没有自己 Linux 用户的员工（默认员工、共用电脑）按进程自己的 uid 放行，凡是以该 uid 跑在回环上的服务（除 SELF_PORTS 里列出的）都能被转发打开；COMPUTER_FORWARD_DENY_PORTS 默认为空，是否安全取决于部署，默认值偏开放。同时这种情况下员工之间互相能看到对方的程序。"
+    },
+    {
+      "path": "xiongbao/app/src/components/channels/artifact-preview.tsx",
+      "start_line": 434,
+      "end_line": 438,
+      "severity": "high",
+      "category": "security",
+      "content": "程序在 iframe 里以 allow-scripts allow-same-origin 运行在内容源的真实源里，端口模式下内容源与应用只差端口（同站、cookie 不分端口）：程序脚本能读写应用主机上所有非 HttpOnly 的 cookie，并能让浏览器带着 SameSite=Lax 的应用 cookie 向应用发同站请求。整个防线压在『应用的所有改状态路由都核对 Origin、会话 cookie 一定 HttpOnly』上，而程序是模型写的代码。提示条只在端口模式出现且措辞没有说明这一点；至少应在交付卡的『打开』上也提示，并确认所有改状态路由都真的拒绝外来 Origin。"
+    },
+    {
+      "path": "xiongbao/server/src/tasks/evidence-gate.ts",
+      "start_line": 711,
+      "end_line": 732,
+      "severity": "low",
+      "category": "performance",
+      "content": "交付里的程序逐个串行探测，每个最长 10 秒（APP_PROBE_TIMEOUT_MS），items 上限 30，最坏阻塞交付工具调用 5 分钟；探测用的是真正的 GET，会触发程序里 GET 带副作用的路由。应并行并设总时限。"
+    },
+    {
+      "path": "xiongbao/server/src/tasks/delivery-tools.ts",
+      "start_line": 159,
+      "end_line": 163,
+      "severity": "low",
+      "category": "bug",
+      "content": "schema 把所有 kind 的 ref 都改成了可选，并统一补成空串：attachment、link、component 漏写 ref 不再在 schema 层被拒，而是带着空 ref 走进证据门，得到含糊的报错；port 也没有 int/范围约束。应只对 kind=app 放宽（用判别联合）。"
     }
   ],
+  "skipped": [],
   "notes": [
-    "宿主为控制方派出的评审子智能体；delegation 模式，没有评审单元隔离与 OCR 的反思、定位模块。",
-    "审查范围 f91867ab^1..3cc42cc2（第 5 期整期，修复前），规则取熊宝规则模板，测试文件按 benchmark 约定排除。",
-    "agent-computer/src/forward.ts 与 listeners.ts 读了关键路径，没有逐个测试用例核对。",
-    "污染说明：宿主在评审前已读过控制方对这三个 PR 的审查结论（金标原文），召回数字偏高，只能当管线与打分脚本的验证，不能当 OCR 真实召回率。规则模板写在读过金标之后，但只写通用主题，没有照抄具体场景。"
+    "29 个评审单元全部读过 diff；gateway.ts、delivery.ts 合并逻辑、projector.ts、prompt-slim.ts、physical-gate.ts、ci.yml、s6 run 脚本没有发现问题。前端为 UI 逻辑，重点看了 iframe 沙箱与授权入参。严重度映射：important 记为 high，minor 记为 low。"
   ]
 }
