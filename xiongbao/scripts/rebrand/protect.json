@@ -68,31 +68,37 @@
     "file": "xiongbao/docker/s6/scripts/postgres-init.sh",
     "pattern": "-d openbot\\b",
     "until": "R3",
-    "reason": "postgres-init.sh：现网数据卷里已存在的超级用户与库名（-d）"
+    "reason": "postgres-init.sh：交付容器里现网数据卷已存在的库名（-d）"
   },
   {
     "file": "xiongbao/docker/s6/scripts/migrate.sh",
     "pattern": "-d openbot\\b",
     "until": "R3",
-    "reason": "migrate.sh：现网数据卷里已存在的超级用户与库名（-d）"
+    "reason": "migrate.sh：交付容器里现网数据卷已存在的库名（-d）"
+  },
+  {
+    "file": "xiongbao/scripts/ci/image-smoke.sh",
+    "pattern": "-d openbot\\b",
+    "until": "R3",
+    "reason": "image-smoke.sh：交付容器里现网数据卷已存在的库名（-d）"
   },
   {
     "file": "xiongbao/docker/s6/scripts/postgres-init.sh",
-    "pattern": "-U openbot(?: openbot)?\\b",
+    "pattern": "-U openbot openbot\\b",
     "until": "R3",
-    "reason": "postgres-init.sh：现网数据卷里已存在的超级用户与库名（-U 与 createdb 的库名参数）"
+    "reason": "postgres-init.sh：交付容器里现网数据卷已存在的库名（createdb 的库名参数）"
   },
   {
     "file": "xiongbao/docker/s6/scripts/migrate.sh",
-    "pattern": "-U openbot(?: openbot)?\\b",
+    "pattern": "-U openbot openbot\\b",
     "until": "R3",
-    "reason": "migrate.sh：现网数据卷里已存在的超级用户与库名（-U 与 createdb 的库名参数）"
+    "reason": "migrate.sh：交付容器里现网数据卷已存在的库名（createdb 的库名参数）"
   },
   {
     "file": "xiongbao/docker/s6/scripts/postgres-init.sh",
     "pattern": ":5432/openbot(?![\\w-])",
     "until": "R3",
-    "reason": "postgres-init.sh：现网数据卷里已存在的超级用户与库名（连接串库名）"
+    "reason": "postgres-init.sh：交付容器里现网数据卷已存在的库名（连接串库名）"
   },
   {
     "text": ".openbot-carried-over",
@@ -763,12 +769,6 @@
     "reason": "品牌白名单：xiongbao/server/src/telemetry/product.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "file": "xiongbao/docker/s6/scripts/postgres-init.sh",
-    "pattern": "postgres://openbot(?=[:@/])",
-    "until": "R3",
-    "reason": "postgres-init.sh：现网数据卷里已存在的超级用户与库名（连接串用户）"
-  },
-  {
     "text": "PUBLIC_DEFAULT_DATABASE_PASSWORD = \"openbot\"",
     "file": "xiongbao/server/src/auth/role-writer-lifecycle.ts",
     "until": "R3",
@@ -817,6 +817,31 @@
     "reason": "品牌白名单：xiongbao/app/src/routes/_authed/admin/learning.tsx 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
+    "pattern": "--username[= ][\"']?openbot\\b",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：--username 参数"
+  },
+  {
+    "pattern": "-U ?[\"']?openbot\\b",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：-U 参数（psql、pg_isready、initdb、createdb 等）"
+  },
+  {
+    "pattern": "(?<![\\w])ROLE [\"']?openbot\\b",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：ROLE / IN ROLE"
+  },
+  {
+    "pattern": "(?<=openbot_app:)openbot(?![\\w-])",
+    "until": "R4",
+    "reason": "应用角色口令：0054 迁移写死 PASSWORD 'openbot'，连接串里要与之一致，R4 基线化时一起改"
+  },
+  {
+    "pattern": "FOR ROLE [\"']?openbot\\b",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：FOR ROLE"
+  },
+  {
     "text": "LEGACY_PREFIX = \"OPENBOT_\"",
     "until": "R4",
     "reason": "shared/env-aliases.ts 的旧环境变量前缀"
@@ -840,6 +865,32 @@
     "pattern": "openbot-runner(?:\\.exe)?(?!-[a-z]+-)|OPENBOT-RUNNER(?:\\.EXE)?",
     "until": "R4",
     "reason": "desktop-device 的 LEGACY_SIDECAR 旧 runner 二进制名（含 .exe 与大写比较用例；mkdtemp 前缀 openbot-runner-xxx- 不受保护）"
+  },
+  {
+    "pattern": "OWNER(?: TO)? [\"']?openbot\\b",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：OWNER / OWNER TO"
+  },
+  {
+    "file": "xiongbao/scripts/ci/image-smoke.sh",
+    "pattern": "PGPASSWORD=openbot\\b",
+    "until": "R4",
+    "reason": "image-smoke.sh 用应用角色的口令 openbot 登录交付镜像里的库，与 0054 迁移一致"
+  },
+  {
+    "pattern": "PGUSER=[\"']?openbot\\b",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：PGUSER"
+  },
+  {
+    "pattern": "POSTGRES_USER(?:\\s*:\\s*|=|:-)[\"']?openbot\\b",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：POSTGRES_USER（含引号与默认值写法）"
+  },
+  {
+    "pattern": "postgres(?:ql)?://openbot(?=[:@/])",
+    "until": "R4",
+    "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：连接串里的用户"
   },
   {
     "text": "Copyright (c) 2026 CopilotKit",

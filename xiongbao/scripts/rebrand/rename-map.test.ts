@@ -105,58 +105,99 @@ describe("renameText", () => {
     expect(renameText(text, p)).toBe(
       "postgres://xiongbao_fixture:x@h/db -U xiongbao_fixture",
     );
-    const s6 = loadProtect("R1", "xiongbao/docker/s6/scripts/postgres-init.sh");
-    expect(
-      renameText("postgres://openbot:x@h/db -U openbot -d openbot_x", s6),
-    ).toBe("postgres://openbot:x@h/db -U openbot -d xiongbao_x");
-    // 其它文件里同样的写法不保护。
+    // 超级用户 openbot 全仓保护到 R4：用户名保留，以它为前缀的别的名字照改。
     expect(renameText("postgres://openbot:x@h/db -U openbot -d x", p)).toBe(
-      "postgres://xiongbao:x@h/db -U xiongbao -d x",
+      "postgres://openbot:x@h/db -U openbot -d x",
+    );
+    expect(
+      renameText(
+        "postgres://openbot:x@h/db -U openbot -d x",
+        loadProtect("R4"),
+      ),
+    ).toBe("postgres://xiongbao:x@h/db -U xiongbao -d x");
+    // 应用角色的口令随 0054 迁移，角色名本身是库对象；连接串里两处都不动。
+    expect(renameText("postgres://openbot_app:openbot@h/openbot_b", p)).toBe(
+      "postgres://openbot_app:openbot@h/xiongbao_b",
     );
   });
 
-  test("现网数据卷的 s6 脚本里，超级用户与库名 R1 后仍是旧名，到 R3 才一起改", () => {
-    for (const name of ["postgres-init.sh", "migrate.sh"]) {
-      const path = `xiongbao/docker/s6/scripts/${name}`;
-      const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
-        cwd: import.meta.dir,
-      })
-        .stdout.toString()
-        .trim();
+  describe("真实文件：超级用户角色 openbot 到 R4 才改，库名按文件区分", () => {
+    const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+      cwd: import.meta.dir,
+    })
+      .stdout.toString()
+      .trim();
+    const R1 = (path: string) => {
       const source = readFileSync(join(root, path), "utf8");
-      const r1 = renameText(source, loadProtect("R1", path));
-      expect(r1).not.toMatch(/-U xiongbao\b|-d xiongbao\b/);
-      expect(r1).not.toMatch(/postgres:\/\/xiongbao[:@/]|:5432\/xiongbao/);
-      expect(r1).not.toMatch(/createdb[^\n]*xiongbao/);
-      const r3 = renameText(source, loadProtect("R3", path));
-      expect(r3).not.toMatch(/-U openbot\b|-d openbot\b/);
-    }
-  });
+      return { source, out: renameText(source, loadProtect("R1", path)) };
+    };
+    const count = (text: string, pattern: RegExp) =>
+      (text.match(pattern) ?? []).length;
+    // 超级用户出现的各种写法：R1 前后条数必须一样（全部保留旧名），也不能冒出以新名为用户的写法。
+    const SUPERUSER = [
+      /POSTGRES_USER(?:\s*:\s*|=|:-)["']?openbot\b/g,
+      /-U ?["']?openbot\b/g,
+      /postgres(?:ql)?:\/\/openbot(?=[:@/])/g,
+      /OWNER(?: TO)? ["']?openbot\b/g,
+    ];
+    const NEW_SUPERUSER =
+      /POSTGRES_USER(?:\s*:\s*|=|:-)["']?xiongbao\b|-U ?["']?xiongbao\b|postgres(?:ql)?:\/\/xiongbao[:@/]|OWNER(?: TO)? ["']?xiongbao\b/;
+    // 库名：旧名不再出现在 -d、POSTGRES_DB、连接串尾部。
+    const OLD_DATABASE =
+      /-d openbot\b|POSTGRES_DB(?:\s*:\s*|=)["']?openbot\b|:5432\/openbot(?![\w-])/;
 
-  test("CI 与开发 compose 不保护：同一文件里用户名与连接串 R1 后一致", () => {
-    const ci = [
-      "          POSTGRES_USER: openbot",
-      '          --health-cmd "pg_isready -U openbot -d openbot_b_head"',
-      "      TEST_DATABASE_ADMIN_URL: postgres://openbot:ci-owner@127.0.0.1:5432/postgres",
-      "          psql -h 127.0.0.1 -U openbot -d postgres -c 'CREATE DATABASE openbot_b_base OWNER openbot'",
-      "      DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_head",
-    ].join("\n");
-    const out = renameText(ci, loadProtect("R1", ".github/workflows/ci.yml"));
-    expect(out).not.toMatch(/openbot(?!_app)/);
-    expect(out).toContain("POSTGRES_USER: xiongbao");
-    expect(out).toContain("-U xiongbao -d xiongbao_b_head");
-    expect(out).toContain("postgres://xiongbao:ci-owner@");
-    expect(out).toContain("OWNER xiongbao'");
-    // 角色名 openbot_app 是库里已有的对象，由 R3 迁移一起改，这里不动。
-    expect(out).toContain("postgres://openbot_app:ci-app@");
-    const compose = [
-      "      POSTGRES_USER: openbot",
-      '      test: ["CMD-SHELL", "pg_isready -U openbot -d openbot"]',
-      "      DATABASE_URL: postgres://openbot:openbot@postgres:5432/openbot",
-    ].join("\n");
-    expect(
-      renameText(compose, loadProtect("R1", "xiongbao/docker-compose.yml")),
-    ).not.toContain("openbot");
+    for (const path of [
+      ".github/workflows/ci.yml",
+      "xiongbao/docker-compose.yml",
+      "xiongbao/scripts/start.sh",
+    ]) {
+      test(`${path}：超级用户处处仍是 openbot，库名处处一致改成 xiongbao`, () => {
+        const { source, out } = R1(path);
+        for (const pattern of SUPERUSER) {
+          expect(count(out, pattern)).toBe(count(source, pattern));
+        }
+        expect(out).not.toMatch(NEW_SUPERUSER);
+        expect(out).not.toMatch(OLD_DATABASE);
+        // 应用角色的口令写在 0054 迁移里，连接串里要保持一致。
+        expect(count(out, /openbot_app:openbot(?![\w-])/g)).toBe(
+          count(source, /openbot_app:openbot(?![\w-])/g),
+        );
+        expect(out).not.toMatch(/openbot_app:xiongbao/);
+      });
+    }
+
+    test("开发 compose 与 start.sh 的库名互相一致，超级用户与 0054 的 FOR ROLE openbot 对得上", () => {
+      const compose = R1("xiongbao/docker-compose.yml").out;
+      const start = R1("xiongbao/scripts/start.sh").out;
+      expect(compose).toMatch(/POSTGRES_DB: xiongbao\b/);
+      expect(compose).toMatch(/POSTGRES_USER: openbot\b/);
+      expect(start).toMatch(/psql -U openbot -d xiongbao\b/);
+      const migration = readFileSync(
+        join(root, "xiongbao/server/drizzle/0054_app_role.sql"),
+        "utf8",
+      );
+      expect(migration).toContain("FOR ROLE openbot IN SCHEMA public");
+    });
+
+    for (const name of ["postgres-init.sh", "migrate.sh"]) {
+      test(`s6/${name}：R1 后与原文逐字相同；R3 起库名才改，超级用户到 R4 才改`, () => {
+        const path = `xiongbao/docker/s6/scripts/${name}`;
+        const { source, out } = R1(path);
+        expect(out).toBe(source);
+        const r3 = renameText(source, loadProtect("R3", path));
+        expect(r3).not.toMatch(OLD_DATABASE);
+        expect(r3).toMatch(/-U openbot\b/);
+        const r4 = renameText(source, loadProtect("R4", path));
+        expect(r4).not.toMatch(/-U openbot\b/);
+        expect(r4).toMatch(/-U xiongbao\b/);
+      });
+    }
+
+    test("image-smoke.sh：检查交付镜像里的库，库名与应用角色口令都不动", () => {
+      const { source, out } = R1("xiongbao/scripts/ci/image-smoke.sh");
+      expect(count(out, /-d openbot\b/g)).toBe(count(source, /-d openbot\b/g));
+      expect(out).toContain("PGPASSWORD=openbot ");
+    });
   });
 
   test("作用域条目只在自己的文件里生效", () => {
