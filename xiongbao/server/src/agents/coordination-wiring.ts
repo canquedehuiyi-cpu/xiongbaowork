@@ -129,12 +129,15 @@ export function wireCoordination(deps: {
       return { refusal: "The question could not be saved for its person." };
     /*
      * A row of the caller's own key that was already there counts as put only if it is that
-     * caller's row: this conversation's plan, with its marker. Anything else sitting on the key is not
+     * caller's row: this conversation's plan, with its marker, still waiting for an answer. Anything else sitting on the key is not
      * a question anybody was asked.
      */
     if (queued === "already" && ownKey && extra.planApproval) {
       const [held] = await database
-        .select({ payload: workItems.payload })
+        .select({
+          payload: workItems.payload,
+          finishedAt: workItems.finishedAt,
+        })
         .from(workItems)
         .where(
           and(eq(workItems.kind, "person.question"), eq(workItems.key, key)),
@@ -144,6 +147,7 @@ export function wireCoordination(deps: {
         | { threadId?: string; actorId?: string; planApproval?: unknown }
         | undefined;
       if (
+        held?.finishedAt ||
         !row?.planApproval ||
         row.threadId !== question.threadId ||
         row.actorId !== question.actorId

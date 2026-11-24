@@ -131,12 +131,46 @@ export function reviewBrief(input: {
   return { task, answer };
 }
 
+/**
+ * The conclusion and its items, without what the reviewer may have copied out of the files it read:
+ * fenced blocks and any single line longer than {@link REVIEW_LINE_LIMIT} characters are dropped.
+ */
+export const REVIEW_LINE_LIMIT = 200;
+export function withoutQuotedText(answer: string): string {
+  return answer
+    .replace(/```[\s\S]*?(?:```|$)/g, "")
+    .split("\n")
+    .filter((line) => [...line].length <= REVIEW_LINE_LIMIT)
+    .join("\n");
+}
+
+/**
+ * How long the round the hand-in is made in may run: a card's round has the working clock, any other
+ * round is taken as the light one, which a longer round never falls short of. A review is cut to what
+ * is left of it, so a round whose clock was guessed short only gets a shorter review.
+ */
+export function roundLimitMs(
+  board: boolean,
+  limits: { board: number; light: number },
+) {
+  return board ? limits.board : limits.light;
+}
+
+/** What is left of a round that began at `startedAt`; the whole limit when its start is not known. */
+export function roundRemainingMs(
+  limit: number,
+  startedAt: Date | undefined,
+  now = Date.now(),
+) {
+  return limit - (startedAt ? now - startedAt.getTime() : 0);
+}
+
 /** The opinion as it is attached to the hand-in. */
 export function reviewNote(result: SubagentResult | null): string {
   const room = REVIEW_NOTE_LIMIT - REVIEW_NOTE_LABEL.length - 1;
   const text =
     result && "answer" in result
-      ? clip(result.answer, room)
+      ? clip(withoutQuotedText(result.answer), room) || "没有可附的结论"
       : result && "error" in result
         ? `没跑成：${clip(result.error, 200)}`
         : "没跑成：评审没有交回结果";

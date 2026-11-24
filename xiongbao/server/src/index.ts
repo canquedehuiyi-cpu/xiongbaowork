@@ -9,7 +9,11 @@ import { hardModelOf } from "../../shared/hard-model";
 import { lightModelOf } from "../../shared/light-model";
 import { isPersonBrowserId } from "../../shared/openbot-browser";
 import { workOwner } from "../../shared/work-owner";
-import { toolSegmentsFor, turnTimeoutFor } from "../../toolkit/src/limits";
+import {
+  TURN_LIMITS,
+  toolSegmentsFor,
+  turnTimeoutFor,
+} from "../../toolkit/src/limits";
 import { createActivityStore } from "./activity/activity";
 import {
   auditRoutineStore,
@@ -665,7 +669,11 @@ import {
   savedWorkHours,
   threadRunning,
 } from "./tasks/delivery-checker";
-import { createDeliveryReview } from "./tasks/delivery-review";
+import {
+  createDeliveryReview,
+  roundLimitMs,
+  roundRemainingMs,
+} from "./tasks/delivery-review";
 import {
   ACCEPT_TASK_REF,
   deliveryTools,
@@ -727,6 +735,7 @@ import {
   oneToOneConversation,
   type TurnNotifier,
 } from "./threads/turn-notice";
+import { boardTurnNow } from "./threads/unattended-card";
 import { lazyWorkspaceOutputSink } from "./tool-output";
 import { createTranslationRoutes } from "./translations/routes";
 import { createTranslationStore, translatePending } from "./translations/store";
@@ -3441,18 +3450,30 @@ await startupLifecycle.run(async (startup) => {
         ? {
             review: createDeliveryReview({
               declared: pilotDeclared,
-              // What is left of the round the hand-in is made in, read from when the run began.
-              remainingMs: ({ actorId: tenant, runId }) =>
-                runAsTenant(tenant, async () => {
-                  const [run] = await database
-                    .select({ at: threadRuns.createdAt })
-                    .from(threadRuns)
-                    .where(eq(threadRuns.id, runId))
-                    .limit(1);
-                  return run
-                    ? turnTimeoutFor("board") - (Date.now() - run.at.getTime())
-                    : undefined;
-                }),
+              // What is left of the round the hand-in is made in: a card's round has the working clock,
+              // any other round is taken as the light one (five minutes), which a longer one never
+              // falls short of. Read once, as the tools are loaded, inside the turn being built.
+              remainingMs: (() => {
+                const limit = roundLimitMs(boardTurnNow(), {
+                  board: turnTimeoutFor("board"),
+                  light: TURN_LIMITS.turnTimeoutMs,
+                });
+                return ({
+                  actorId: tenant,
+                  runId,
+                }: {
+                  actorId: string;
+                  runId: string;
+                }) =>
+                  runAsTenant(tenant, async () => {
+                    const [run] = await database
+                      .select({ at: threadRuns.createdAt })
+                      .from(threadRuns)
+                      .where(eq(threadRuns.id, runId))
+                      .limit(1);
+                    return roundRemainingMs(limit, run?.at);
+                  });
+              })(),
               reviewer: (parent) =>
                 subagents.toolForRun(
                   { ...parent, initiator: initiator ?? PERSON_INITIATOR },
@@ -4179,8 +4200,8 @@ await startupLifecycle.run(async (startup) => {
       true,
     ...(config.pilotPlanApproval
       ? {
-          planPending: async (owner: string, threadId: string, botId: string) =>
-            (await planRefusalFor(owner, botId, threadId)) !== undefined,
+          planRefusal: (owner: string, threadId: string, botId: string) =>
+            planRefusalFor(owner, botId, threadId),
         }
       : {}),
   });

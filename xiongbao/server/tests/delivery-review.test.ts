@@ -12,6 +12,9 @@ import {
   reviewBrief,
   reviewNote,
   roundCalls,
+  roundLimitMs,
+  roundRemainingMs,
+  withoutQuotedText,
 } from "../src/tasks/delivery-review";
 
 /** 交付前评审：清单、判定规则、交给只读子代理的说明，和评审意见怎么附上。 */
@@ -315,5 +318,78 @@ describe("a review that takes too long", () => {
       timeoutMs: 1000,
     });
     expect(await step(input)).toContain("可以交");
+  });
+});
+
+describe("what of the answer is attached", () => {
+  test("fenced blocks and long lines are dropped, the verdict lines stay", () => {
+    const answer = [
+      "1 通过：测试跑过",
+      "```",
+      "const secret = 'abc';",
+      "```",
+      "x".repeat(300),
+      "总的：可以交",
+    ].join("\n");
+    expect(withoutQuotedText(answer)).toBe("1 通过：测试跑过\n\n总的：可以交");
+    const note = reviewNote({ answer, threadId: "t", steps: 1 });
+    expect(note).not.toContain("secret");
+    expect(note).not.toContain("xxx");
+    expect(note).toContain("可以交");
+    // An unclosed fence takes the rest with it.
+    expect(withoutQuotedText("结论\n```\n后面全是原文")).toBe("结论\n");
+    expect(
+      reviewNote({ answer: "```\n只有原文\n```", threadId: "t", steps: 1 }),
+    ).toContain("没有可附的结论");
+  });
+});
+
+describe("how long the round has", () => {
+  const limits = { board: 25 * 60_000, light: 5 * 60_000 };
+  test("a card's round has the working clock, any other the light one", () => {
+    expect(roundLimitMs(true, limits)).toBe(25 * 60_000);
+    expect(roundLimitMs(false, limits)).toBe(5 * 60_000);
+  });
+
+  test("what is left is the limit less what has run, and the whole limit when the start is unknown", () => {
+    const started = new Date(1_000_000);
+    expect(roundRemainingMs(300_000, started, 1_000_000 + 200_000)).toBe(
+      100_000,
+    );
+    expect(roundRemainingMs(300_000, started, 1_000_000 + 400_000)).toBe(
+      -100_000,
+    );
+    expect(roundRemainingMs(300_000, undefined, 5)).toBe(300_000);
+  });
+
+  test("a hand-in made late in a five-minute round is not reviewed, with the reserve kept back", async () => {
+    let started = 0;
+    const step = createDeliveryReview({
+      declared: async () => true,
+      reviewer: () => ({
+        name: "run_subagent",
+        ref: "bot/run_subagent",
+        description: "",
+        parameters: {} as never,
+        execute: async () => {
+          started += 1;
+          return "{}";
+        },
+      }),
+      remainingMs: async () =>
+        roundRemainingMs(roundLimitMs(false, limits), new Date(0), 290_000),
+    });
+    const outcome = await step({
+      actorId: "o",
+      botId: "b",
+      card: { title: "修复 bug", criteria: null },
+      items: [{ kind: "workspace_file", ref: "a.ts" }],
+      checks: [],
+      messages: [],
+      runId: "r",
+      threadId: "t",
+    });
+    expect(outcome).toBe(REVIEW_TIMED_OUT);
+    expect(started).toBe(0);
   });
 });

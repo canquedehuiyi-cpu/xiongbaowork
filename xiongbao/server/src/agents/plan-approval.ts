@@ -74,8 +74,26 @@ export function planDigest(items: readonly PlanItem[]): string {
 }
 
 /** The inbox entry for a plan: the plan itself, and how to answer it. */
+/**
+ * What the database will take: control characters (a NUL is refused outright) and unpaired
+ * surrogates (refused inside JSON) are dropped from words the employee wrote.
+ */
+export function storable(text: string): string {
+  let kept = "";
+  for (const char of text.toWellFormed()) {
+    const code = char.codePointAt(0) ?? 0;
+    // Tab, line feed and carriage return stay; every other control character goes.
+    if (code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d)
+      continue;
+    kept += char;
+  }
+  return kept;
+}
+
 export function planQuestion(items: readonly PlanItem[]) {
-  const list = items.map((item, index) => `${index + 1}. ${item.text}`);
+  const list = items.map(
+    (item, index) => `${index + 1}. ${storable(item.text)}`,
+  );
   const question = `计划需要你批准（共 ${items.length} 步）：\n${list.join("\n")}`;
   return {
     question: [...question].slice(0, 6000).join(""),
@@ -85,6 +103,8 @@ export function planQuestion(items: readonly PlanItem[]) {
 
 /** The newest plan row of a conversation, as the pilot reads it. */
 export type PlanApprovalRow = {
+  /** The row's own key, so the next plan's key can follow it. */
+  key?: string;
   digest: string;
   /** Absent until the owner has answered. */
   decision?: "approved" | "revised";
@@ -164,44 +184,55 @@ export function createPlanApproval(deps: {
       // Routines, goals and hand-offs have nobody to ask while they run.
       if (initiator && initiator.kind !== "person") return undefined;
       if (!(await deps.declared(actorId, botId))) return undefined;
-      const latest = await deps.latest(actorId, conversation.threadId);
-      if (latest?.decision === "approved") return undefined;
+      const threadId = conversation.threadId;
       const digest = planDigest(items);
-      if (latest && !latest.failed && latest.decision === undefined)
-        return "计划还在等主人批准，先别动手。";
-      if (latest && !latest.failed && latest.digest === digest)
-        return PLAN_SENT_BACK;
-      // With no plan on record only a long one is put to the owner; one the owner sent back, any.
-      if (!latest && items.length < PLAN_APPROVAL_MIN_STEPS) return undefined;
-      const outcome = await deps.ask({
-        actorId,
-        botId,
-        threadId: conversation.threadId,
-        runId: conversation.runId,
-        ...(initiator ? { initiator } : {}),
-        ...planQuestion(items),
-        planApproval: { digest, steps: items.length },
-        key: `plan-approval:${createHash("sha256")
-          .update(JSON.stringify([actorId, conversation.threadId, digest]))
-          .digest("hex")}`,
-      });
-      if ("reached" in outcome)
-        return "计划已请主人批准。批准前只读不改，先停下等回复。";
       /*
-       * Not put: nobody can answer it, so nothing would lift a hold on an answer. Changes are held
-       * all the same, until a plan is put. The price: a long plan in a thread no person's
-       * conversation maps to, a subagent's for one, holds that thread's changes.
+       * Everything from here on is the pilot's own work, and a failure in it is a plan that was not
+       * put, whatever the cause (the words the employee wrote are theirs to make the database refuse):
+       * changes are held, not let through.
        */
-      console.warn(
-        JSON.stringify({
-          type: "plan-approval-not-put",
+      try {
+        const latest = await deps.latest(actorId, threadId);
+        if (latest?.decision === "approved") return undefined;
+        if (latest && !latest.failed && latest.decision === undefined)
+          return "计划还在等主人批准，先别动手。";
+        if (latest && !latest.failed && latest.digest === digest)
+          return PLAN_SENT_BACK;
+        // With no plan on record only a long one is put to the owner; one the owner sent back, any.
+        if (!latest && items.length < PLAN_APPROVAL_MIN_STEPS) return undefined;
+        const outcome = await deps.ask({
+          actorId,
           botId,
-          threadId: conversation.threadId,
-          reason: outcome.refusal,
-        }),
-      );
-      await deps.hold({ actorId, threadId: conversation.threadId, digest });
-      return PLAN_NOT_PUT;
+          threadId,
+          runId: conversation.runId,
+          ...(initiator ? { initiator } : {}),
+          ...planQuestion(items),
+          planApproval: { digest, steps: items.length },
+          // After the plan before it, so a plan put again after others were answered is a new row.
+          key: `plan-approval:${createHash("sha256")
+            .update(
+              JSON.stringify([actorId, threadId, digest, latest?.key ?? ""]),
+            )
+            .digest("hex")}`,
+        });
+        if ("reached" in outcome)
+          return "计划已请主人批准。批准前只读不改，先停下等回复。";
+        throw new Error(outcome.refusal);
+      } catch (error) {
+        console.warn(
+          JSON.stringify({
+            type: "plan-approval-not-put",
+            botId,
+            threadId,
+            reason: error instanceof Error ? error.message : String(error),
+          }),
+        );
+        // A hold that cannot be written is the hold's own business (it keeps one in memory).
+        await deps
+          .hold({ actorId, threadId, digest })
+          .catch((failure) => console.error("plan hold failed", failure));
+        return PLAN_NOT_PUT;
+      }
     },
   };
 }

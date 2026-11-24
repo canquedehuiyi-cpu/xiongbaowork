@@ -174,15 +174,15 @@ export function createSubagents(options: {
    */
   asksEveryStep?: (ownerUserId: string, threadId: string) => Promise<boolean>;
   /**
-   * Whether the conversation put a plan to its owner that is not approved yet (pilot,
-   * `agents/plan-approval.ts`). A subagent's own thread is not the one the hold is on, so none is
-   * started until the plan is approved.
+   * What a change in this conversation is answered with while a plan put to its owner holds it
+   * (pilot, `agents/plan-approval.ts`), or undefined. A subagent's own thread is not the one the
+   * hold is on, so none is started meanwhile, with the gate's own words as the reason.
    */
-  planPending?: (
+  planRefusal?: (
     ownerUserId: string,
     threadId: string,
     botId: string,
-  ) => Promise<boolean>;
+  ) => Promise<string | undefined>;
   /**
    * 期七：`model` 参数要用的三样。不给，`model` 不起作用（子代理照旧用员工平时的模型），也不拒绝。
    */
@@ -262,15 +262,14 @@ export function createSubagents(options: {
            */
           if (await options.asksEveryStep?.(parent.actorId, parent.threadId))
             return `${REFUSAL_MARKER} No subagent was started: in a task from a check-in, every step is checked with the person in this conversation. Do this part yourself.`;
-          if (
-            !readOnly &&
-            (await options.planPending?.(
-              parent.actorId,
-              parent.threadId,
-              parent.botId,
-            ))
-          )
-            return `${REFUSAL_MARKER} No subagent was started: the plan is not approved yet. Wait for the person's answer.`;
+          const held = readOnly
+            ? undefined
+            : await options.planRefusal?.(
+                parent.actorId,
+                parent.threadId,
+                parent.botId,
+              );
+          if (held) return `${REFUSAL_MARKER} No subagent was started: ${held}`;
           // Checked and counted with nothing awaited between them, so calls arriving together
           // cannot all pass the cap.
           if (started >= perAnswer)

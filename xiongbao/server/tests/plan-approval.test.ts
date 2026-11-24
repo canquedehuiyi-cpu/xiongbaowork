@@ -16,6 +16,7 @@ import {
   planDigest,
   planQuestion,
   rememberedFor,
+  storable,
   withPlanApproval,
 } from "../src/agents/plan-approval";
 import { UPDATE_PLAN_REF, updatePlanTools } from "../src/agents/update-plan";
@@ -245,6 +246,7 @@ const inConversation = <T>(
   );
 
 type Row = {
+  key?: string;
   digest: string;
   decision?: "approved" | "revised";
   failed?: true;
@@ -443,6 +445,32 @@ describe("when a plan is put to its owner", () => {
   });
 });
 
+describe("words the database would refuse", () => {
+  test("control characters and unpaired surrogates are dropped, ordinary text is kept", () => {
+    expect(storable("第 1 步\u0000\u0007完成\tok\n")).toBe("第 1 步完成\tok\n");
+    expect(storable("坏\ud800字")).toBe("坏\ufffd字");
+    expect(
+      planQuestion(
+        items(4).map((item) => ({ ...item, text: `${item.text}\u0000` })),
+      ).question,
+    ).not.toContain("\u0000");
+  });
+});
+
+describe("the key of a plan's row", () => {
+  test("follows the row before it, so the same plan put again after others is a new row", async () => {
+    const first = approval({
+      latest: { key: "k1", digest: "other", decision: "revised" },
+    });
+    const second = approval({
+      latest: { key: "k2", digest: "other", decision: "revised" },
+    });
+    await inConversation(() => first.planApproval.afterPlan(items(4)));
+    await inConversation(() => second.planApproval.afterPlan(items(4)));
+    expect(first.asked[0]?.key).not.toBe(second.asked[0]?.key);
+  });
+});
+
 describe("what a held change is answered with", () => {
   test("waiting, sent back, not put, and nothing once approved", () => {
     expect(holdMessage(undefined)).toBeUndefined();
@@ -453,6 +481,70 @@ describe("what a held change is answered with", () => {
     );
     expect(holdMessage({ digest: "d", failed: true })).toBe(PLAN_NOT_PUT);
     expect(PLAN_SENT_BACK).not.toContain("等主人回复");
+  });
+});
+
+describe("a failure anywhere after the declaration", () => {
+  const failing = (where: "latest" | "ask" | "answer") => {
+    const held: unknown[] = [];
+    const planApproval = createPlanApproval({
+      actorId: "owner",
+      botId: "bot",
+      initiator: undefined,
+      declared: async () => true,
+      latest: async () => {
+        if (where === "latest") throw new Error("down");
+        return undefined;
+      },
+      ask: async () => {
+        if (where === "ask") throw new Error("invalid input");
+        return { refusal: "nobody" };
+      },
+      hold: async (input) => {
+        held.push(input);
+      },
+    });
+    return { planApproval, held };
+  };
+
+  for (const where of ["latest", "ask", "answer"] as const)
+    test(`${where} failing holds changes and says the plan was not put`, async () => {
+      const { planApproval, held } = failing(where);
+      const warn = console.warn;
+      console.warn = () => undefined;
+      try {
+        expect(
+          await inConversation(() => planApproval.afterPlan(items(4))),
+        ).toBe(PLAN_NOT_PUT);
+      } finally {
+        console.warn = warn;
+      }
+      expect(held).toHaveLength(1);
+    });
+
+  test("a hold that cannot be written does not turn the answer into an error", async () => {
+    const planApproval = createPlanApproval({
+      actorId: "owner",
+      botId: "bot",
+      initiator: undefined,
+      declared: async () => true,
+      latest: async () => {
+        throw new Error("down");
+      },
+      ask: async () => ({ refusal: "x" }),
+      hold: async () => {
+        throw new Error("down too");
+      },
+    });
+    const [warn, error] = [console.warn, console.error];
+    console.warn = console.error = () => undefined;
+    try {
+      expect(await inConversation(() => planApproval.afterPlan(items(4)))).toBe(
+        PLAN_NOT_PUT,
+      );
+    } finally {
+      [console.warn, console.error] = [warn, error];
+    }
   });
 });
 

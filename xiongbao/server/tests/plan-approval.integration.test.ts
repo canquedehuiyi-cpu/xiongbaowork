@@ -210,12 +210,18 @@ const rowsOf = (person: string, threadId: string) =>
       .from(workItems)
       .where(inArray(workItems.kind, ["person.question", PLAN_HOLD_KIND])),
   ).then((rows) =>
-    rows.filter(
-      (row) =>
-        (row.payload as { threadId?: string; planApproval?: unknown })
-          .threadId === threadId &&
-        (row.payload as { planApproval?: unknown }).planApproval !== undefined,
-    ),
+    rows
+      .filter(
+        (row) =>
+          (row.payload as { threadId?: string; planApproval?: unknown })
+            .threadId === threadId &&
+          (row.payload as { planApproval?: unknown }).planApproval !==
+            undefined,
+      )
+      // Oldest first, so the newest is `.at(-1)`.
+      .sort(
+        (one, other) => one.createdAt.getTime() - other.createdAt.getTime(),
+      ),
   );
 
 beforeAll(async () => {
@@ -312,8 +318,8 @@ describe("before the owner answers", () => {
         throw new Error("no subagent should be built");
       },
       withdrawApprovals: async () => undefined,
-      planPending: (owner: string, threadId: string) =>
-        hold.pending(owner, threadId),
+      planRefusal: (owner: string, threadId: string) =>
+        hold.refusal(owner, threadId),
     });
     const tool = subagents.toolForRun({
       actorId: alice,
@@ -325,7 +331,7 @@ describe("before the owner answers", () => {
     const answer = await as(alice, () =>
       tool.execute({ task: "查一下", answer: "一句话" }),
     );
-    expect(answer).toContain("plan is not approved");
+    expect(answer).toContain(PLAN_NOT_APPROVED);
   });
 });
 
@@ -504,7 +510,7 @@ describe("a plan that is not really put holds changes all the same", () => {
     const items = steps(4);
     const digest = planDigest(items);
     const key = `plan-approval:${createHash("sha256")
-      .update(JSON.stringify([alice, thread, digest]))
+      .update(JSON.stringify([alice, thread, digest, ""]))
       .digest("hex")}`;
     await as(alice, () =>
       database.insert(workItems).values({
@@ -675,5 +681,191 @@ describe("the reviewer's thread", () => {
 
   test("an ordinary subagent's thread is not", async () => {
     expect(await readOnlyDuring(false)).toEqual([false, false]);
+  });
+});
+
+describe("a subagent is refused in the gate's own words", () => {
+  test("waiting, sent back and not put each read the same as a change in the thread does", async () => {
+    const subagents = createSubagents({
+      turn: {} as never,
+      buildAgentFor: async () => {
+        throw new Error("no subagent should be built");
+      },
+      withdrawApprovals: async () => undefined,
+      planRefusal: (owner: string, threadId: string) =>
+        hold.refusal(owner, threadId),
+    });
+    const refusedIn = async (thread: string) =>
+      as(alice, () =>
+        subagents
+          .toolForRun({
+            actorId: alice,
+            botId: bot,
+            threadId: thread,
+            runId: `run-${thread}`,
+            initiator: { kind: "person" },
+          })
+          .execute({ task: "查", answer: "一句" }),
+      );
+    const thread = `${prefix}-t-words`;
+    await plan(alice, thread, steps(4));
+    expect(await refusedIn(thread)).toContain(
+      await call(serviceOn, alice, thread),
+    );
+    const [row] = await rowsOf(alice, thread);
+    await respond(alice, row?.key ?? "", {
+      response: "改一下",
+      inConversation: true,
+    });
+    expect(await refusedIn(thread)).toContain(PLAN_SENT_BACK);
+    await as(alice, () =>
+      hold.fail({ actorId: alice, threadId: thread, digest: "d" }),
+    );
+    expect(await refusedIn(thread)).toContain(PLAN_NOT_PUT);
+  });
+});
+
+describe("going back to a plan that was sent back", () => {
+  test("a plan put again after others were answered is a new row, waiting, and the model is told so", async () => {
+    const thread = `${prefix}-t-back`;
+    const answerLast = async (response: string) => {
+      const rows = (await rowsOf(alice, thread)).filter(
+        (row) => row.kind === "person.question",
+      );
+      const last = rows.at(-1);
+      await respond(alice, last?.key ?? "", { response, inConversation: true });
+    };
+    const a = steps(4, "（甲）");
+    const b = steps(4, "（乙）");
+    expect(await plan(alice, thread, a)).toContain("请主人批准");
+    await answerLast("改一下");
+    expect(await plan(alice, thread, b)).toContain("请主人批准");
+    await answerLast("还是用第一版");
+    // The first plan again: its old row is long answered, so what is put is a row of its own.
+    expect(await plan(alice, thread, a)).toContain("请主人批准");
+    const rows = (await rowsOf(alice, thread)).filter(
+      (row) => row.kind === "person.question",
+    );
+    expect(rows).toHaveLength(3);
+    expect(new Set(rows.map((row) => row.key)).size).toBe(3);
+    expect(rows.at(-1)?.finishedAt).toBeNull();
+    const inbox = await as(alice, () => serviceOn.inbox(alice));
+    expect(
+      inbox.questions.filter((question) =>
+        rows.some((row) => row.key === question.id),
+      ),
+    ).toHaveLength(1);
+    // The gate and the model say the same thing: waiting.
+    expect(await call(serviceOn, alice, thread)).toBe(PLAN_NOT_APPROVED);
+    // And a yes to that row lifts the hold.
+    await answerLast("批准");
+    expect(await call(serviceOn, alice, thread)).toBe("asked");
+  });
+
+  test("an answered row on the plan's own key is not taken for a plan put", async () => {
+    // What the key could still meet: a row of this conversation's plan that is already answered.
+    const thread = `${prefix}-t-answered`;
+    const items = steps(4);
+    expect(await plan(alice, thread, items)).toContain("请主人批准");
+    const [row] = await rowsOf(alice, thread);
+    await respond(alice, row?.key ?? "", {
+      response: "批准",
+      inConversation: true,
+    });
+    const again = await as(alice, () =>
+      routeQuestion(
+        {
+          actorId: alice,
+          botId: bot,
+          threadId: thread,
+          runId: "r",
+          question: "同一份",
+        },
+        { planApproval: { digest: "d", steps: 4 } },
+        row?.key,
+      ),
+    );
+    expect(again).toEqual({
+      refusal: "The plan could not be saved for its person.",
+    });
+  });
+});
+
+describe("words the database refuses, written into a plan", () => {
+  test("a NUL in a step is dropped, the plan is put, and the gate holds as for any plan", async () => {
+    const thread = `${prefix}-t-nul`;
+    expect(await plan(alice, thread, steps(4, "\u0000"))).toContain(
+      "请主人批准",
+    );
+    const [row] = await rowsOf(alice, thread);
+    expect(JSON.stringify(row?.payload)).not.toContain("\\u0000");
+    expect(await call(serviceOn, alice, thread)).toBe(PLAN_NOT_APPROVED);
+  });
+
+  test("a plan whose row the database refuses anyway is held as not put, never let through", async () => {
+    const thread = `${prefix}-t-refused`;
+    const broken = updatePlanTools({
+      approval: createPlanApproval({
+        actorId: alice,
+        botId: bot,
+        initiator: undefined,
+        declared: async () => true,
+        latest: (owner, threadId) => hold.latest(owner, threadId),
+        hold: hold.fail,
+        ask: async () => {
+          throw new Error("unsupported Unicode escape sequence");
+        },
+      }),
+    })[0];
+    const warn = console.warn;
+    console.warn = () => undefined;
+    try {
+      expect(
+        await as(alice, () =>
+          inThread(
+            thread,
+            () => broken?.execute({ items: steps(4) }) as Promise<string>,
+          ),
+        ),
+      ).toContain(PLAN_NOT_PUT);
+    } finally {
+      console.warn = warn;
+    }
+    expect(await call(serviceOn, alice, thread)).toBe(PLAN_NOT_PUT);
+  });
+
+  test("when not even the hold row can be written, the conversation is held from memory until a plan row is newer", async () => {
+    const thread = `${prefix}-t-memory`;
+    let failInsert = true;
+    const flaky = new Proxy(database, {
+      get(target, property) {
+        if (property === "insert" && failInsert)
+          return () => {
+            throw new Error("down");
+          };
+        const value = Reflect.get(target, property, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const memoryHold = createPlanHold(flaky);
+    const logged = console.error;
+    console.error = () => undefined;
+    try {
+      await as(alice, () =>
+        memoryHold.fail({ actorId: alice, threadId: thread, digest: "d" }),
+      );
+    } finally {
+      console.error = logged;
+    }
+    expect(await as(alice, () => memoryHold.refusal(alice, thread))).toBe(
+      PLAN_NOT_PUT,
+    );
+    // A plan put afterwards is a row newer than the mark, and takes over.
+    failInsert = false;
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(await plan(alice, thread, steps(4))).toContain("请主人批准");
+    expect(await as(alice, () => memoryHold.refusal(alice, thread))).toBe(
+      PLAN_NOT_APPROVED,
+    );
   });
 });
