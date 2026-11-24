@@ -602,6 +602,7 @@ import { createRoleGenerator } from "./roles/generator";
 import { createRoleTemplateRoutes } from "./roles/routes";
 import { createRoleTemplateStore, officialTemplatesFrom } from "./roles/store";
 import {
+  createGroupTurnRunner,
   createTurnRunner,
   type RunnerLike,
   serverTurnAnswered,
@@ -5537,7 +5538,7 @@ await startupLifecycle.run(async (startup) => {
   };
   const groupTurnRunner = routeExternalTurns({
     isExternal: async (agentId) => (await externalEmployee(agentId)) !== null,
-    normal: createTurnRunner(groupTurnOptions),
+    normal: createGroupTurnRunner(groupTurnOptions),
     external: createAcpGroupTurn({
       turns: acpTurnStore,
       relay: acpRelay,

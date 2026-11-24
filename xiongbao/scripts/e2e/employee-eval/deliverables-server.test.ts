@@ -2,6 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import {
   chromiumAvailable,
   deliveriesOf,
+  ENDED_IN_ERROR_NOTE,
   NO_TURN_ARTIFACTS_NOTE,
   noteMissingRelease,
   runDelivering,
@@ -393,6 +394,33 @@ describe("失败详情区分「没放行」和「电脑上没文件」", () => {
     expect(noted[0]?.detail).toBe(`状态 404；${NO_TURN_ARTIFACTS_NOTE}`);
     expect(noted[1]?.detail).toBe(NO_TURN_ARTIFACTS_NOTE);
     expect(noted[2]).toEqual(failing[2]);
+  });
+
+  test("没有这条事件、运行里有 RUN_ERROR：另注明这一轮以出错/被停收尾，带错误原文，判分结果不变", () => {
+    const noted = noteMissingRelease(failing, [
+      {
+        events: [
+          {
+            type: "RUN_ERROR",
+            message: "The Bot stopped before it finished answering",
+          },
+        ],
+      },
+      { events: [{ type: "RUN_FINISHED" }] },
+    ]);
+    expect(noted.map((item) => item.ok)).toEqual([false, false, true]);
+    expect(noted[0]?.detail).toBe(
+      `状态 404；${NO_TURN_ARTIFACTS_NOTE}；${ENDED_IN_ERROR_NOTE}：The Bot stopped before it finished answering`,
+    );
+    expect(noted[2]).toEqual(failing[2]);
+  });
+
+  test("有这条事件时，即使运行以 RUN_ERROR 收尾，详情也不加任何话", () => {
+    expect(
+      noteMissingRelease(failing, [
+        { events: [{ type: "RUN_ERROR", message: "x" }, ...withEvent.events] },
+      ]),
+    ).toEqual(failing);
   });
 
   test("任何一个运行有这条事件：详情原样不动", () => {

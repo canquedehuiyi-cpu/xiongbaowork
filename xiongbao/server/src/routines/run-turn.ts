@@ -20,6 +20,7 @@ import {
   type RunnerLike,
   type TurnRunner,
 } from "@openbot/toolkit/run-turn";
+import { toolSegmentsFor, turnTimeoutFor } from "../../../toolkit/src/limits";
 import {
   headlessTurnRefusal,
   modelNamedIn,
@@ -128,6 +129,24 @@ export function createTurnRunner(
     answered: serverTurnAnswered,
     scope: serverTurnScope,
     observeTurn: serverTurnObserved,
+    ...options,
+  });
+}
+
+/**
+ * A group conversation's turn runner. An employee with a computer works in the group as it does in its
+ * own chat or on a card: the light turn's five minutes and 30 rounds stop a slow model's turn before its
+ * file is written, and the stopped turn leaves nothing for the person to download. One without a
+ * computer keeps the light turn.
+ */
+export function createGroupTurnRunner(
+  options: Parameters<typeof createTurnRunner>[0],
+): TurnRunner {
+  return createTurnRunner({
+    workLimits: {
+      turnTimeoutMs: turnTimeoutFor("unattended"),
+      maxToolSegments: toolSegmentsFor("unattended"),
+    },
     ...options,
   });
 }

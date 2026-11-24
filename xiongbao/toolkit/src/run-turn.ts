@@ -795,6 +795,12 @@ export function createTurnRunner(options: {
   turnTimeoutMs?: number;
   /** How many rounds of headless tool calls it may take (`TURN_LIMITS.toolSegments` when not said). */
   maxToolSegments?: number;
+  /**
+   * The limits of a turn whose Bot holds computer tools (`toolsForTurn` answered some): it writes files,
+   * installs, converts, and a model that is slow to answer spends the light turn's few minutes before
+   * the first file is done. A turn with none keeps `turnTimeoutMs` and `maxToolSegments`.
+   */
+  workLimits?: { turnTimeoutMs: number; maxToolSegments: number };
   lockTtlSeconds?: number;
   heartbeatMs?: number;
   /** See `TURN_LIMITS.abortGraceMs`; injectable so a test need not wait five real seconds. */
@@ -835,8 +841,9 @@ export function createTurnRunner(options: {
     learningContainerForThread,
     toolsForTurn,
     components,
-    turnTimeoutMs = TURN_LIMITS.turnTimeoutMs,
-    maxToolSegments = TURN_LIMITS.toolSegments,
+    turnTimeoutMs: lightTurnTimeoutMs = TURN_LIMITS.turnTimeoutMs,
+    maxToolSegments: lightMaxToolSegments = TURN_LIMITS.toolSegments,
+    workLimits,
     lockTtlSeconds = TURN_LIMITS.lockTtlSeconds,
     heartbeatMs = TURN_LIMITS.heartbeatMs,
     abortGraceMs = TURN_LIMITS.abortGraceMs,
@@ -999,14 +1006,23 @@ export function createTurnRunner(options: {
     );
     agent.setMessages(messages);
     if (continuation) agent.setState(continuation.snapshot.state);
-    const headlessTools = [
-      ...((await toolsForTurn?.({
+    const computerTools =
+      (await toolsForTurn?.({
         ownerUserId,
         agentId,
         initiator,
         threadId,
         runId,
-      })) ?? []),
+      })) ?? [];
+    const { turnTimeoutMs, maxToolSegments } =
+      workLimits && computerTools.length > 0
+        ? workLimits
+        : {
+            turnTimeoutMs: lightTurnTimeoutMs,
+            maxToolSegments: lightMaxToolSegments,
+          };
+    const headlessTools = [
+      ...computerTools,
       ...((await components?.toolsForTurn({
         agentId,
         ownerUserId,
