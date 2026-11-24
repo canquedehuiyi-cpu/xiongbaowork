@@ -1,5 +1,5 @@
 {
-  "description": "XiongBao telemetry contract, version 1. Shared by XiongBao (producer), CopilotKit (runtime forwarding), Intelligence app-api (validation, persistence) and realtime-gateway (run summary). See Notion: XiongBao telemetry: Intelligence build.",
+  "description": "XiongBao telemetry contract, version 1. Shared by XiongBao (producer), CopilotKit (runtime forwarding), Intelligence app-api (validation, persistence) and realtime-gateway (run summary). Defined in the upstream project's design note for the Intelligence build.",
   "valid": [
     {
       "name": "human run",

@@ -43,8 +43,8 @@ export type ProductRunContext = {
   purpose: "ordinary" | "setup" | "unknown";
 };
 /**
- * What Intelligence is told about a run: the shared contract, version 1 ("XiongBao telemetry:
- * Intelligence build" in Notion). Only these fields, and only pseudonyms: no name, prompt, URL or
+ * What Intelligence is told about a run: the shared contract, version 1 (the upstream project's
+ * design note for the Intelligence build). Only these fields, and only pseudonyms: no name, prompt, URL or
  * raw identifier of a person or a task.
  */
 export type AppAnalyticsContext = {

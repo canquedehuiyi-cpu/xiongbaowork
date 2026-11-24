@@ -524,7 +524,7 @@ export function createAuth(
      *
      * The fork's own front door (ticket 004): a self-serve tenant arrives with nothing but an address
      * and a password, and the `user.create` hook below gives them a Free subscription and a 分身 the
-     * same way an OAuth arrival does. Upstream XiongBao never had this path, which is why everything
+     * same way an OAuth arrival does. The upstream project never had this path, which is why everything
      * here assumes a provider vouched for the address first — see the SSO-required refusal inside the
      * create hook, which is what keeps `ssoRequired` a wall rather than a suggestion once this is on.
      *

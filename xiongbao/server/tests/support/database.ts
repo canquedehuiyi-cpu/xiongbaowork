@@ -5,10 +5,21 @@ import { SQL } from "bun";
  * The database integration suite must never fall back to the developer's application database.
  * `createDatabase` deliberately removes `process.env.DATABASE_URL` after opening a connection so Bun
  * cannot ignore the explicit connection parts on Windows. That means a later test that reads
- * `process.env.DATABASE_URL ?? localhost/xiongbao` can silently fall into the live development DB.
+ * `process.env.DATABASE_URL ?? <the live development database>` can silently fall into it.
  * Resolve one explicit test URL before opening a test pool and make the unsafe shape impossible.
  */
 let cachedTestDatabaseUrl: string | undefined;
+
+/**
+ * The names the live development database goes by, both refused: installs made so far carry the
+ * first, and the compose file and the production rename move to the second at different times, so
+ * either one can be somebody's real data while the move is under way.
+ */
+// legacy-compat：introducedIn 0.2.16，removeIn 0.2.17
+const LIVE_DATABASE_NAMES: ReadonlySet<string> = new Set([
+  "openbot",
+  "xiongbao",
+]);
 
 export function testDatabaseUrl() {
   cachedTestDatabaseUrl ??= testDatabaseUrlFrom(process.env);
@@ -42,9 +53,9 @@ export function testDatabaseUrlFrom(
   if (!database) {
     throw new Error("TEST_DATABASE_URL must name a database.");
   }
-  if (database === "xiongbao") {
+  if (LIVE_DATABASE_NAMES.has(database)) {
     throw new Error(
-      "TEST_DATABASE_URL must not point at the live xiongbao database. Use a dedicated database such as openbot_test.",
+      `TEST_DATABASE_URL must not point at the live development database (${database}). Use a dedicated database such as openbot_test.`,
     );
   }
   return raw;
