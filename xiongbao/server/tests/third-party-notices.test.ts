@@ -139,10 +139,10 @@ describe("third-party notices", () => {
     ] as const) {
       mkdirSync(join(root, dir), { recursive: true });
       writeFileSync(join(root, dir, "package.json"), JSON.stringify(manifest));
-      mkdirSync(join(root, "node_modules", "@openbot"), { recursive: true });
+      mkdirSync(join(root, "node_modules", "@xiongbao"), { recursive: true });
       symlinkSync(
         join(root, dir),
-        join(root, "node_modules", "@openbot", dir),
+        join(root, "node_modules", "@xiongbao", dir),
         "dir",
       );
     }
