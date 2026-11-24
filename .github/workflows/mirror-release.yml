@@ -236,7 +236,7 @@ jobs:
           parameters = GetAuthorizationTokenParameters(
               os.environ["XB_JDCLOUD_REGION"], os.environ["XB_JDCLOUD_REGISTRY_NAME"]
           )
-          parameters.setExpiredAfterHours(1)
+          parameters.setExpiredAfterHours(6)
           try:
               response = client.send(GetAuthorizationTokenRequest(parameters))
           except Exception as error:

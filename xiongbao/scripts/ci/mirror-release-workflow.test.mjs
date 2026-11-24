@@ -427,7 +427,7 @@ test("a JD Cloud AccessKey is exchanged for a one-hour token that signs in", () 
   });
   // The API was asked for this registry's token, for one hour, with the SDK's logger silenced.
   expect(result.api).toEqual([
-    [ACCESS_KEY, "cn-north-1", "xiongbao-work", 1, -1],
+    [ACCESS_KEY, "cn-north-1", "xiongbao-work", 6, -1],
   ]);
   // The SDK's source archive is checked against a hash written in the step and never built; what
   // it imports is installed as wheels only, each with its hash, without dependency resolution.
