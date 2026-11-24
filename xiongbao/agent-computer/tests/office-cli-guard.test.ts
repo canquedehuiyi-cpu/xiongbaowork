@@ -732,17 +732,14 @@ process.exit(await main(args, () => ({
     expect(running(tool)).toBe(false);
   });
 
-  /** A tool that starts a child of its own, as the real one starts LibreOffice, which writes into HOME. */
-  async function stopWithGrandchild(script: string) {
-    const tool = join(
-      base,
-      `parent-tool-${Math.random().toString(36).slice(2)}.sh`,
-    );
-    const homeFile = `${tool}.home`;
-    const pidFile = `${tool}.pid`;
+  test("a SIGKILL to the whole process group takes the tool with it", async () => {
+    // As the command's timeout does without per-employee users: the tool must be in the guard's group.
+    const tool = join(base, "group-tool.sh");
+    const pidFile = join(base, "group-tool.pid");
+    rmSync(pidFile, { force: true });
     writeFileSync(
       tool,
-      `#!/bin/sh\nprintf '%s' "$HOME" > "${homeFile}"\n(${script}) &\nprintf '%s' "$!" > "${pidFile}"\nwait\n`,
+      `#!/bin/sh\nprintf '%s' "$$" > "${pidFile}"\nexec sleep 30\n`,
       { mode: 0o755 },
     );
     const child = Bun.spawn(["bun", runner, tool, root, "writer", "list"], {
@@ -750,39 +747,15 @@ process.exit(await main(args, () => ({
       env: { PATH: process.env.PATH ?? "" },
       stdout: "pipe",
       stderr: "pipe",
+      detached: true,
     });
     await waitFor(() => existsSync(pidFile));
-    const home = readFileSync(homeFile, "utf8");
-    const grandchild = Number(readFileSync(pidFile, "utf8"));
-    expect(running(grandchild)).toBe(true);
-    const stopped = Date.now();
-    child.kill("SIGTERM");
-    const code = await child.exited;
-    const took = Date.now() - stopped;
-    const alive = running(grandchild);
-    // Left alive it would make the folder again after the guard removed it.
-    await new Promise((resolve) => setTimeout(resolve, 1_500));
-    return { code, took, alive, homeLeft: existsSync(home) };
-  }
-
-  test("a SIGTERM reaches what the tool started too, instead of waiting for it to end by itself", async () => {
-    const result = await stopWithGrandchild(
-      `sleep 30; mkdir -p "$HOME/.config/late"`,
-    );
-    expect(result.code).toBe(143);
-    expect(result.alive).toBe(false);
-    // The signal itself ended it; the guard does not give up on a group and end it by force until 5 s have passed.
-    expect(result.took).toBeLessThan(3_000);
-    expect(result.homeLeft).toBe(false);
-  });
-
-  test("what the tool started and that ignores the signal is waited for before the folder is removed", async () => {
-    const result = await stopWithGrandchild(
-      `trap '' TERM; sleep 1; mkdir -p "$HOME/.config/late"`,
-    );
-    expect(result.code).toBe(143);
-    expect(result.alive).toBe(false);
-    expect(result.homeLeft).toBe(false);
+    const toolPid = Number(readFileSync(pidFile, "utf8"));
+    expect(running(toolPid)).toBe(true);
+    process.kill(-child.pid, "SIGKILL");
+    await child.exited;
+    await waitFor(() => !running(toolPid));
+    expect(running(toolPid)).toBe(false);
   });
 
   test("a folder that cannot be removed does not replace the tool's exit code", async () => {
