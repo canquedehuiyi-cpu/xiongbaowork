@@ -271,7 +271,7 @@ DEEPSEEK_THINKING=disabled
 `DEEPSEEK_THINKING=enabled` 只多一件事：辅助请求也按 DeepSeek 自己的默认思考。别的模型供应商不受这个开关影响。
 改完同样要重新创建容器。
 
-**AIHUB 中转（OpenAI 兼容）。** 模型库的提供方里有「AIHUB 中转」，接口地址留空时用 `https://aihubcc.cc/v1`，密钥填中转站发的 `sk-` 开头的密钥。员工要调工具，模型只能选 `gemini-4-argon` 或 `gemini-4-hydrogen`；带 `-app` 后缀的版本不支持工具调用，选了员工用不了电脑上的工具。其中 `gemini-4-argon` 的上下文按 1M 计，`gemini-4-hydrogen` 中转站文档没写，需要在模型库里手动填上限。思考内容经 `reasoning_content` 返回，多步工具调用在 Gemini 思考模式下是否需要回传思考内容，需要拿真实密钥验证。
+**AIHUB 中转（OpenAI 兼容）。** 模型库的提供方里有「AIHUB 中转」，接口地址留空时用 `https://aihubcc.cc/v1`，密钥填中转站发的 `sk-` 开头的密钥。员工要调工具，模型只能选 `gemini-4-argon` 或 `gemini-4-hydrogen`；带 `-app` 后缀的版本不支持工具调用，选了员工用不了电脑上的工具。其中 `gemini-4-argon` 的上下文按 1M 计，`gemini-4-hydrogen` 中转站文档没写，需要在模型库里手动填上限。思考内容经 `reasoning_content` 返回。2026-11-23 用 `gemini-4-argon`、`gemini-4-hydrogen` 和真实密钥实测（能力冒烟 `code`、`edit-grep` 通过），多步工具调用在思考模式下正常，不需要回传思考内容，也没有为它加补丁。
 
 ### 5.1 首次真实部署实测要点（2026-11-06，京东云 Ubuntu 22.04，v0.2.0）
 
