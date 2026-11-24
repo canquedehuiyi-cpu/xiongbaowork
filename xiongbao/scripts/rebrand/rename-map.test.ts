@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   buildProtect,
@@ -105,9 +105,58 @@ describe("renameText", () => {
     expect(renameText(text, p)).toBe(
       "postgres://xiongbao_fixture:x@h/db -U xiongbao_fixture",
     );
+    const s6 = loadProtect("R1", "xiongbao/docker/s6/scripts/postgres-init.sh");
+    expect(
+      renameText("postgres://openbot:x@h/db -U openbot -d openbot_x", s6),
+    ).toBe("postgres://openbot:x@h/db -U openbot -d xiongbao_x");
+    // 其它文件里同样的写法不保护。
     expect(renameText("postgres://openbot:x@h/db -U openbot -d x", p)).toBe(
-      "postgres://openbot:x@h/db -U openbot -d x",
+      "postgres://xiongbao:x@h/db -U xiongbao -d x",
     );
+  });
+
+  test("现网数据卷的 s6 脚本里，超级用户与库名 R1 后仍是旧名，到 R3 才一起改", () => {
+    for (const name of ["postgres-init.sh", "migrate.sh"]) {
+      const path = `xiongbao/docker/s6/scripts/${name}`;
+      const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+        cwd: import.meta.dir,
+      })
+        .stdout.toString()
+        .trim();
+      const source = readFileSync(join(root, path), "utf8");
+      const r1 = renameText(source, loadProtect("R1", path));
+      expect(r1).not.toMatch(/-U xiongbao\b|-d xiongbao\b/);
+      expect(r1).not.toMatch(/postgres:\/\/xiongbao[:@/]|:5432\/xiongbao/);
+      expect(r1).not.toMatch(/createdb[^\n]*xiongbao/);
+      const r3 = renameText(source, loadProtect("R3", path));
+      expect(r3).not.toMatch(/-U openbot\b|-d openbot\b/);
+    }
+  });
+
+  test("CI 与开发 compose 不保护：同一文件里用户名与连接串 R1 后一致", () => {
+    const ci = [
+      "          POSTGRES_USER: openbot",
+      '          --health-cmd "pg_isready -U openbot -d openbot_b_head"',
+      "      TEST_DATABASE_ADMIN_URL: postgres://openbot:ci-owner@127.0.0.1:5432/postgres",
+      "          psql -h 127.0.0.1 -U openbot -d postgres -c 'CREATE DATABASE openbot_b_base OWNER openbot'",
+      "      DATABASE_URL: postgres://openbot_app:ci-app@127.0.0.1:5432/openbot_b_head",
+    ].join("\n");
+    const out = renameText(ci, loadProtect("R1", ".github/workflows/ci.yml"));
+    expect(out).not.toMatch(/openbot(?!_app)/);
+    expect(out).toContain("POSTGRES_USER: xiongbao");
+    expect(out).toContain("-U xiongbao -d xiongbao_b_head");
+    expect(out).toContain("postgres://xiongbao:ci-owner@");
+    expect(out).toContain("OWNER xiongbao'");
+    // 角色名 openbot_app 是库里已有的对象，由 R3 迁移一起改，这里不动。
+    expect(out).toContain("postgres://openbot_app:ci-app@");
+    const compose = [
+      "      POSTGRES_USER: openbot",
+      '      test: ["CMD-SHELL", "pg_isready -U openbot -d openbot"]',
+      "      DATABASE_URL: postgres://openbot:openbot@postgres:5432/openbot",
+    ].join("\n");
+    expect(
+      renameText(compose, loadProtect("R1", "xiongbao/docker-compose.yml")),
+    ).not.toContain("openbot");
   });
 
   test("作用域条目只在自己的文件里生效", () => {

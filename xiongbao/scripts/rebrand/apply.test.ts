@@ -235,6 +235,14 @@ describe("apply CLI", () => {
     expect(elsewhere.code).toBe(0);
   });
 
+  test("范围内有未跟踪文件也拒绝真跑：恢复提示里的 git clean 会删掉它们", () => {
+    put("xiongbao/server/src/untracked.ts", "export const x = 1;\n");
+    const refused = run(["--phase", "R1", "xiongbao/"]);
+    expect(refused.code).toBe(1);
+    expect(refused.report?.errors[0]).toContain("untracked.ts");
+    expect(read("xiongbao/server/src/model.ts")).toContain("openbotModel");
+  });
+
   test("collisions 不列新品牌词本身，只列真正撞名的标识符", () => {
     put(
       "xiongbao/server/src/scope.ts",

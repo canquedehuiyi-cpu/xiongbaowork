@@ -206,13 +206,12 @@ function main() {
     const dirty = git(root, [
       "status",
       "--porcelain",
-      "--untracked-files=no",
       "--",
       ...pathspecs,
     ]).trim();
     if (dirty) {
       report.errors.push(
-        `范围内的工作区不干净，先提交或暂存清理再跑（git status --porcelain -- ${pathspecs.join(" ")}）：\n${dirty}`,
+        `范围内的工作区不干净（未跟踪文件也算，恢复时的 git clean 会删掉它们），先提交或暂存清理再跑（git status --porcelain -- ${pathspecs.join(" ")}）：\n${dirty}`,
       );
       process.stdout.write(`${JSON.stringify(report)}\n`);
       process.exit(1);
