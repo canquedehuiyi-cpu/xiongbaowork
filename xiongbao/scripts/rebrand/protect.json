@@ -1835,5 +1835,11 @@
     "pattern": "(?<=\\\")openbot(?=\\\")|(?<=5432/)openbot(?=\\\")",
     "until": "R4",
     "reason": "测试库护栏同时拒绝旧开发库名 openbot 与新名（开发 compose 与现网库分别在 Task 12、R3 改名，两段时间里两个名字都可能是真实库）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-mastra.test.ts",
+    "pattern": "(?<=\\}\\)\\.)openbot\\b",
+    "until": "R2",
+    "reason": "Task 10：agent-mastra 注册的 Mastra agent id（agents: { openbot }），测试按这个名字取 getLocalAgents(...) 的属性，与 agent-mastra 同一 PR 改名，届时删除本条目"
   }
 ]
