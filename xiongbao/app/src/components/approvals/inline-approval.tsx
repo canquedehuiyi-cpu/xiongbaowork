@@ -1,6 +1,6 @@
-import { offersStandingRule } from "@openbot/shared/standing-rule";
-import { approvalPhrase } from "@openbot/shared/tool-name";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { offersStandingRule } from "@xiongbao/shared/standing-rule";
+import { approvalPhrase } from "@xiongbao/shared/tool-name";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useState } from "react";
 import {

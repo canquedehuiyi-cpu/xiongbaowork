@@ -3,7 +3,7 @@ import type {
   VoiceSessionPage,
   VoiceSessionRecord,
   VoiceTranscriptEntry,
-} from "@openbot/shared/voice-session";
+} from "@xiongbao/shared/voice-session";
 import { and, asc, eq, gt, isNull, or } from "drizzle-orm";
 import type { AgentActor } from "../agents/profile-types";
 import type { ChannelStore } from "../channels/routes";

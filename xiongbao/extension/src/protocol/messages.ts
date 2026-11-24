@@ -2,16 +2,16 @@ import type {
   LearningSpaceState,
   RecorderConnectVia,
   RecorderMe,
-} from "@openbot/shared/recorder-api";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
-import { MAX_TIMESTAMP_MS } from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-api";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
+import { MAX_TIMESTAMP_MS } from "@xiongbao/shared/recorder-masking";
 import {
   RECORDER_CONNECT_STATUS,
   type RecorderConnectWait,
   type RecorderPageResult,
   type RecorderPageState,
   recorderPageMessageSchema,
-} from "@openbot/shared/recorder-page";
+} from "@xiongbao/shared/recorder-page";
 import { z } from "zod";
 import { normaliseOpenBotOrigin } from "../shared/origin";
 import type { DrainRecord, RecorderNotice } from "../shared/storage";

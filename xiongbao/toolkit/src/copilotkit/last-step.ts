@@ -3,7 +3,7 @@ import {
   type BuiltInAgentConfiguration,
   resolveModel,
 } from "@copilotkit/runtime/v2";
-import { openParts } from "@openbot/shared/routine-checklist";
+import { openParts } from "@xiongbao/shared/routine-checklist";
 import {
   COMMAND_TOOL,
   LAST_STEP_NOTICE,
@@ -18,7 +18,7 @@ import {
   UPDATE_PLAN_TOOL,
   unverifiedChanges,
   verifyNudge,
-} from "@openbot/shared/run-notices";
+} from "@xiongbao/shared/run-notices";
 import { droppedConnection } from "../network-error";
 import { withReplayedReasoning } from "./replayed-reasoning";
 import { DEFAULT_CONTEXT_WINDOW, foldEarlyResults } from "./turn-folding";

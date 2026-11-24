@@ -9,7 +9,7 @@
  * still answer to), continuous and with interim results, which is what lets a phrase be timed from its first words
  * rather than from when it was finished. It runs on the person's own computer or not at all: Chrome sends the audio to
  * its speech service unless a recognition sets `processLocally`, so every recognition here sets it, and the browser is
- * asked first whether it can recognise the language on the device (@openbot/shared/on-device-speech). Where it cannot
+ * asked first whether it can recognise the language on the device (@xiongbao/shared/on-device-speech). Where it cannot
  * (Firefox, Safari, an older Chrome, a language it has no model for), narration is off and the page says why; where the
  * language is still to be downloaded, turning narration on downloads it (a click is the only thing that may), and
  * narration waits for it. Nothing here keeps any audio, and only the words of each final phrase, and when a phrase
@@ -19,7 +19,7 @@ import {
   keepOnDevice,
   type OnDeviceSpeech,
   onDeviceSpeech,
-} from "@openbot/shared/on-device-speech";
+} from "@xiongbao/shared/on-device-speech";
 
 type RecognitionAlternative = { readonly transcript: string };
 type RecognitionResult = {

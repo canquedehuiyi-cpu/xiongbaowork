@@ -1,5 +1,5 @@
 import type { AbstractAgent } from "@ag-ui/client";
-import type { ComputerGuidance } from "@openbot/shared/bot-prompt";
+import type { ComputerGuidance } from "@xiongbao/shared/bot-prompt";
 import { toolsForSubagent } from "../../../shared/subagent";
 import type { AuditInitiator } from "../audit";
 import type { AgentFetch, StallGuard } from "../channels/stall-guard";

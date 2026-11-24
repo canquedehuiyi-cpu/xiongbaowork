@@ -1,4 +1,4 @@
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import {
   RECORDER_CONNECT_STATUS,
   RECORDER_PAGE_MESSAGES,
@@ -6,7 +6,7 @@ import {
   type RecorderPageResult,
   type RecorderPageState,
   recorderPageMessageSchema,
-} from "@openbot/shared/recorder-page";
+} from "@xiongbao/shared/recorder-page";
 
 /**
  * A STAND-IN FOR THE RECORDER IN THE BROWSER OPENBOT IS OPEN IN, answering a page's `chrome.runtime.sendMessage` as

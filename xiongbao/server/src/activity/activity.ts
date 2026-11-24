@@ -9,7 +9,7 @@
  * EVERY QUERY IS NARROWED TO THE PERSON FIRST. A public Bot works for many people; this screen shows
  * the work done in the caller's name and nothing of anybody else's.
  */
-import { approvalPhrase } from "@openbot/shared/tool-name";
+import { approvalPhrase } from "@xiongbao/shared/tool-name";
 import {
   and,
   desc,

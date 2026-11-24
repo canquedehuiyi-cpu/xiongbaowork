@@ -1,4 +1,3 @@
-import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
 import {
   IconAlertTriangle,
   IconBolt,
@@ -6,6 +5,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { isPersonBrowserId } from "@xiongbao/shared/openbot-browser";
 import { type ReactNode, useState } from "react";
 import {
   ClearBrowserDialog,

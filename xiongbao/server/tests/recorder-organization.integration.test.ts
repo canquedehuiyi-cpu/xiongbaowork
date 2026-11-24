@@ -4,8 +4,8 @@ import {
   type ExchangeResponse,
   RECORDER_AUTHORITY_UNAVAILABLE,
   RECORDER_SIGNED_OUT,
-} from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { eq } from "drizzle-orm";
 import { createApp } from "../src/app";
 import type { AuditEventInput } from "../src/audit";

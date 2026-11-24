@@ -10,8 +10,8 @@ import {
   OUTCOME_UNKNOWN,
   WITHDRAWN_APPROVALS_OFF,
   WITHDRAWN_RULE_ALLOWS,
-} from "@openbot/shared/approval-outcomes";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+} from "@xiongbao/shared/approval-outcomes";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { desktopActionWordsOf } from "../../../shared/desktop-control";
 import { PERSON_INITIATOR } from "../audit";
 import { currentTenant } from "../tenant/context";

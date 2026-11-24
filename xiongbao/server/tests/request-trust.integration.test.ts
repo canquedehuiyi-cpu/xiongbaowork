@@ -8,7 +8,7 @@ import {
 } from "bun:test";
 import { connect } from "node:net";
 import { networkInterfaces } from "node:os";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { mintRunAssertion } from "../src/agents/callback-token";
 import { createApp } from "../src/app";

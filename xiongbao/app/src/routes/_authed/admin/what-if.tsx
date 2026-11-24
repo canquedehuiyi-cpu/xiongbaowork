@@ -1,11 +1,11 @@
+import { IconSparkles } from "@tabler/icons-react";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute } from "@tanstack/react-router";
 import {
   EMPTY_WHAT_IF_ACTION,
   missingFrom,
   type WhatIfAction,
-} from "@openbot/shared/what-if";
-import { IconSparkles } from "@tabler/icons-react";
-import { useQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+} from "@xiongbao/shared/what-if";
 import { useState } from "react";
 import { z } from "zod";
 import {

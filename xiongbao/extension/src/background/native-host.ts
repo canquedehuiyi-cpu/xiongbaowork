@@ -1,4 +1,4 @@
-import { RECORDER_NATIVE_HOST } from "@openbot/shared/recorder-extension";
+import { RECORDER_NATIVE_HOST } from "@xiongbao/shared/recorder-extension";
 
 export type DesktopHandoff = { openbotUrl: string; code: string };
 /** Why OpenBot Desktop did not hand over a connect code: the host's own error code (`not-running`, `not-signed-in` and

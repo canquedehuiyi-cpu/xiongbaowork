@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { ownToolLabel, readToolName } from "@openbot/shared/tool-name";
+import { ownToolLabel, readToolName } from "@xiongbao/shared/tool-name";
 import { builtInTools } from "./support/built-in-tools";
 
 /**

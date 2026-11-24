@@ -2,7 +2,7 @@ import type {
   LocalCandidateStatus,
   LocalLearningOutcome,
   LocalLearningSkipReason,
-} from "@openbot/shared/local-learning";
+} from "@xiongbao/shared/local-learning";
 import { sql } from "drizzle-orm";
 import {
   boolean,

@@ -1,8 +1,8 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { NOT_SHOWN, NOT_SHOWN_TAIL } from "@openbot/shared/component-markers";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { NOT_SHOWN, NOT_SHOWN_TAIL } from "@xiongbao/shared/component-markers";
 import { GALLERY } from "@/components/gallery/activity";
 import {
   ArgumentsArrivingContext,

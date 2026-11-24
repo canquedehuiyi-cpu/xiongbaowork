@@ -6,8 +6,8 @@ import {
 import {
   isLearningContainerId,
   type LearningSettings,
-} from "@openbot/shared/learning";
-import type { LearningSpaceState } from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/learning";
+import type { LearningSpaceState } from "@xiongbao/shared/recorder-api";
 import type { LearningContainerSpec } from "../src/learning/ensure-container";
 import {
   classifyLearningSpaceProbe,

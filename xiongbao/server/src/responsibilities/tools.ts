@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import { z } from "zod";
 import type { ResponsibilityEngine } from "./engine";
 import {

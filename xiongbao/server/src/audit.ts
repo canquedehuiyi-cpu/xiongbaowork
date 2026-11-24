@@ -1,5 +1,5 @@
-import { currentApprovalContext } from "@openbot/toolkit/continuation";
-import type { AuditInitiator } from "@openbot/toolkit/initiator";
+import { currentApprovalContext } from "@xiongbao/toolkit/continuation";
+import type { AuditInitiator } from "@xiongbao/toolkit/initiator";
 import {
   and,
   desc,
@@ -990,7 +990,7 @@ export type AuditEventQuery = {
   excludeEventType?: string;
   /**
    * Tools whose successful calls to leave out, separated by commas: a call whose change is recorded
-   * on its own row (`CALLS_RECORDED_AS_CHANGES` in `@openbot/shared/activity-rows`). A call that
+   * on its own row (`CALLS_RECORDED_AS_CHANGES` in `@xiongbao/shared/activity-rows`). A call that
    * failed is kept.
    */
   excludeCalls?: string;

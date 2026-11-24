@@ -1,11 +1,11 @@
-import type { ConnectCodeResponse } from "@openbot/shared/recorder-api";
-import { recorderPaths } from "@openbot/shared/recorder-api";
+import { mutationOptions, type QueryClient } from "@tanstack/react-query";
+import type { ConnectCodeResponse } from "@xiongbao/shared/recorder-api";
+import { recorderPaths } from "@xiongbao/shared/recorder-api";
 import {
   RECORDER_PAGE_MESSAGES,
   type RecorderPageMessage,
   type RecorderPageState,
-} from "@openbot/shared/recorder-page";
-import { mutationOptions, type QueryClient } from "@tanstack/react-query";
+} from "@xiongbao/shared/recorder-page";
 import { client } from "@/lib/client";
 import {
   connectRefusalSentence,

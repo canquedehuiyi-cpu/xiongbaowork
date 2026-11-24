@@ -1,10 +1,8 @@
 import type {
   LearningSettings,
   LearningSharingMode,
-} from "@openbot/shared/learning";
-import {
-  sql,
-} from "drizzle-orm";
+} from "@xiongbao/shared/learning";
+import { sql } from "drizzle-orm";
 import {
   check,
   index,
@@ -16,9 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { users } from "./core";
 import { jsonb } from "./json";
-import {
-  tenantId,
-} from "./tenant";
+import { tenantId } from "./tenant";
 
 /* The two scopes every tenant table has had since 0072: the owner's frame, and the platform's. */
 const tenantScope = sql`tenant_id = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = 'platform'`;
@@ -107,16 +103,18 @@ export const learningThreadBindings = pgTable(
  * the id was already taken, or the runtime key read it. The id is derived from the person's, so the row only remembers
  * that it exists. It goes with its person; the container stays in Intelligence.
  */
-export const learningPersonSpaces = pgTable("learning_person_spaces", {
+export const learningPersonSpaces = pgTable(
+  "learning_person_spaces",
+  {
     tenantId: tenantId(),
-  userId: text("user_id")
-    .primaryKey()
-    .references(() => users.id, { onDelete: "cascade" }),
-  containerId: text("container_id").notNull().unique(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-},
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    containerId: text("container_id").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
   (table) => [
     index("learning_person_spaces_tenant_idx").on(table.tenantId),
     pgPolicy("tenant_isolation", {
@@ -144,7 +142,8 @@ export const learningPersonSpaces = pgTable("learning_person_spaces", {
       to: "public",
       using: tenantScope,
     }),
-  ],);
+  ],
+);
 
 /**
  * Who else's Bots use the Skills learned in a person's own space: `closed` (only their own Bots, and the meaning of no
@@ -244,7 +243,8 @@ export const learningOpenSkills = pgTable(
       to: "public",
       using: tenantScope,
     }),
-primaryKey({ columns: [table.userId, table.skillName] })],
+    primaryKey({ columns: [table.userId, table.skillName] }),
+  ],
 );
 
 /**

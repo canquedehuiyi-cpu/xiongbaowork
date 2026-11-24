@@ -1,5 +1,5 @@
-import { outcomeForPerson } from "@openbot/shared/approval-outcomes";
-import { ownToolLabel } from "@openbot/shared/tool-name";
+import { outcomeForPerson } from "@xiongbao/shared/approval-outcomes";
+import { ownToolLabel } from "@xiongbao/shared/tool-name";
 import { readOutcome } from "@/lib/computers/activity";
 import type { VisibleChatItem } from "./chat-messages";
 

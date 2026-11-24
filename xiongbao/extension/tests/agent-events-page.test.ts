@@ -7,7 +7,7 @@
 // context of each click. OpenBot's own chat (openbot-chat.json) goes the same way, with OpenBot connected.
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import { createAgentEvents } from "../src/background/agent/events";
 import { createNetworkCapture } from "../src/background/network";
 import { createStepAssembler } from "../src/background/steps";

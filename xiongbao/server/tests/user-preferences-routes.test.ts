@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import {
   DEFAULT_USER_PREFERENCES,
   type UserPreferences,
-} from "@openbot/shared/user-preferences";
+} from "@xiongbao/shared/user-preferences";
 import { Hono } from "hono";
 import { DEFAULT_TIME_ZONE } from "../src/tasks/delivery-tools";
 import {
@@ -39,7 +39,9 @@ function fixture() {
         ...current,
         ...preferences,
         workHours: {
-          ...(browserTimeZone === undefined ? {} : { timeZone: browserTimeZone }),
+          ...(browserTimeZone === undefined
+            ? {}
+            : { timeZone: browserTimeZone }),
           ...current.workHours,
           ...workHours,
         },
@@ -297,7 +299,10 @@ test("a page that still sends the old default skin name is refused with the skin
   // The window of that name has closed: it is no longer translated into the new one, it is simply an
   // unknown skin, and an unknown skin is refused without saving anything.
   const { appFor, state } = fixture();
-  const refused = await appFor("alice").request(path, patch({ skin: "openbot" }));
+  const refused = await appFor("alice").request(
+    path,
+    patch({ skin: "openbot" }),
+  );
   expect(refused.status).toBe(400);
   expect(((await refused.json()) as { error: string }).error).toContain(
     "xiongbao, classic, openduet, opendots, openmuse",

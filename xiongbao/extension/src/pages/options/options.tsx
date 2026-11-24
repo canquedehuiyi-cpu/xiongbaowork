@@ -1,5 +1,3 @@
-import type { RecorderConnectVia } from "@openbot/shared/recorder-api";
-import { RECORDER_NAME } from "../../shared/brand";
 import {
   IconBuildingSkyscraper,
   IconLink,
@@ -9,6 +7,7 @@ import {
   IconUser,
   IconWorldOff,
 } from "@tabler/icons-react";
+import type { RecorderConnectVia } from "@xiongbao/shared/recorder-api";
 import { Fragment, useEffect, useState } from "react";
 import {
   PageEmpty,
@@ -35,6 +34,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import type { PageStateResponse } from "../../protocol/messages";
+import { RECORDER_NAME } from "../../shared/brand";
 import { Page } from "../ui/page";
 import { ask as askBackground } from "../ui/runtime";
 

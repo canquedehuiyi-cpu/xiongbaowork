@@ -31,7 +31,7 @@
  * the screen keeps reading the thread as it always did.
  */
 import type { Message, ToolCall } from "@ag-ui/client";
-import { answeredBy } from "@openbot/shared/handoff-markers";
+import { answeredBy } from "@xiongbao/shared/handoff-markers";
 import { markUntrusted } from "../untrusted-content";
 
 /** The text of a message, whichever shape its content takes. */

@@ -1,6 +1,6 @@
-import type { BotBrowserApiState } from "@openbot/shared/bot-browser";
 import { IconLock, IconWorld, IconX } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import type { BotBrowserApiState } from "@xiongbao/shared/bot-browser";
 import {
   type ReactNode,
   useCallback,

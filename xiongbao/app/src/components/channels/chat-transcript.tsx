@@ -5,20 +5,6 @@ import {
   useRenderActivityMessage,
   useRenderToolCall,
 } from "@copilotkit/react-core/v2";
-import { outcomeForPerson } from "@openbot/shared/approval-outcomes";
-import {
-  readConnectPrompt,
-  SHOW_APP_ACCESS_TOOL,
-} from "@openbot/shared/connect-prompt";
-import { answeredBy } from "@openbot/shared/handoff-markers";
-import { SUBAGENT_TOOL } from "@openbot/shared/subagent";
-import {
-  answersTheModel,
-  ownToolAttempt,
-  ownToolSubject,
-  readToolName,
-} from "@openbot/shared/tool-name";
-import { SEARCH_TOOLS, toolsFound } from "@openbot/shared/tool-search";
 import {
   IconAlertTriangle,
   IconBox,
@@ -29,6 +15,20 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
+import { outcomeForPerson } from "@xiongbao/shared/approval-outcomes";
+import {
+  readConnectPrompt,
+  SHOW_APP_ACCESS_TOOL,
+} from "@xiongbao/shared/connect-prompt";
+import { answeredBy } from "@xiongbao/shared/handoff-markers";
+import { SUBAGENT_TOOL } from "@xiongbao/shared/subagent";
+import {
+  answersTheModel,
+  ownToolAttempt,
+  ownToolSubject,
+  readToolName,
+} from "@xiongbao/shared/tool-name";
+import { SEARCH_TOOLS, toolsFound } from "@xiongbao/shared/tool-search";
 import { motion, useReducedMotion } from "motion/react";
 import {
   createContext,

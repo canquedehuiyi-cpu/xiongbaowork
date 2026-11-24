@@ -1,4 +1,3 @@
-import { readToolName } from "@openbot/shared/tool-name";
 import {
   IconAdjustments,
   IconArrowsExchange,
@@ -11,6 +10,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { readToolName } from "@xiongbao/shared/tool-name";
 import { useState } from "react";
 import type { ZodType } from "zod";
 import { AbstractAvatar } from "@/components/agents/abstract-avatar";

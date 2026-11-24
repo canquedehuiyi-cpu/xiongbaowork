@@ -1,4 +1,4 @@
-import type { WhatIfVocabulary } from "@openbot/shared/what-if";
+import type { WhatIfVocabulary } from "@xiongbao/shared/what-if";
 import { and, eq, inArray, like, or } from "drizzle-orm";
 import { createEnterpriseStore } from "../../src/admin/settings-store";
 import { createApprovalStore } from "../../src/approvals/store";

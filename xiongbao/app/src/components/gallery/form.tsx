@@ -1,4 +1,4 @@
-import type { DecisionToolName } from "@openbot/shared/decision-tools";
+import type { DecisionToolName } from "@xiongbao/shared/decision-tools";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";

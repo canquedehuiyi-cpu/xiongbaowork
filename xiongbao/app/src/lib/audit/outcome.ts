@@ -122,7 +122,7 @@ export {
   CALLS_RECORDED_AS_CHANGES,
   OPENBOT_WORKING_EVENT_TYPES,
   oneRowPerAction,
-} from "@openbot/shared/activity-rows";
+} from "@xiongbao/shared/activity-rows";
 
 export type AuditOutcome = "refused" | "did-not-happen" | "allowed";
 

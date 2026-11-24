@@ -29,9 +29,9 @@ import {
   appKey,
   hasAuditFilters,
   RULE_REFUSAL_EVENT_TYPES,
-} from "@openbot/shared/audit-filters";
-import { auditTypeWords } from "@openbot/shared/audit-words";
-import { connectorName } from "@openbot/shared/tool-name";
+} from "@xiongbao/shared/audit-filters";
+import { auditTypeWords } from "@xiongbao/shared/audit-words";
+import { connectorName } from "@xiongbao/shared/tool-name";
 import { asc, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
@@ -43,6 +43,7 @@ import {
 } from "./audit";
 import type { AppVariables } from "./auth/guards";
 import { requireAdmin } from "./auth/guards";
+import { englishName } from "./brand";
 import type { ActionPolicy } from "./computer/policy";
 import type { Database } from "./db/client";
 import { agents, mcpServers, mcpTools, users } from "./db/schema";
@@ -51,7 +52,6 @@ import {
   type ModelCompleter,
   ModelNotConfiguredError,
 } from "./routing/model";
-import { englishName } from "./brand";
 
 /** What this deployment has that a question can name: the only values a filter may hold. */
 export type AuditVocabulary = {

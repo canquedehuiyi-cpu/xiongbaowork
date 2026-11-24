@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { AbstractAgent, BaseEvent, Message } from "@ag-ui/client";
-import { LockLapsedError } from "@openbot/toolkit/lease";
+import { LockLapsedError } from "@xiongbao/toolkit/lease";
 import { Observable } from "rxjs";
 import { createHandoffDelivery } from "../src/agents/handoff-delivery";
 import type { HandoffWork } from "../src/agents/handoff-runner";
-import { runAsTenant } from "../src/tenant/context";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
+import { runAsTenant } from "../src/tenant/context";
 
 /**
  * Turning a hop into a turn.

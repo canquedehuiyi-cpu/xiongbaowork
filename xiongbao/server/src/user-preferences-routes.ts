@@ -2,7 +2,7 @@ import {
   isKnownSkinInput,
   normalizeSkinId,
   SKIN_IDS,
-} from "@openbot/shared/user-preferences";
+} from "@xiongbao/shared/user-preferences";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "./auth/guards";

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import { z } from "zod";
 import type { ApprovalRecord } from "../src/approvals/types";
 import {

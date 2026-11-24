@@ -5,7 +5,7 @@ import {
   MAX_ATTACHMENTS_PER_MESSAGE,
   MAX_FILE_BYTES,
   MAX_IMAGE_BYTES,
-} from "@openbot/shared/attachments";
+} from "@xiongbao/shared/attachments";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
 import { wireCoordination } from "../src/agents/coordination-wiring";
 import { PUT_TO } from "../src/agents/escalation";

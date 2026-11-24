@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { DECLINED_BY_PERSON } from "@openbot/shared/approval-outcomes";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { DECLINED_BY_PERSON } from "@xiongbao/shared/approval-outcomes";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { z } from "zod";
 import {
   ApprovalAlreadyAnsweredError,

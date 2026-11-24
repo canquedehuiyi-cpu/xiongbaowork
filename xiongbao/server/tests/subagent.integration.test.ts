@@ -15,9 +15,9 @@ import {
   SUBAGENT_TOOL,
   type SubagentResult,
   subagentThreadId,
-} from "@openbot/shared/subagent";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import type { RunnerLike } from "@openbot/toolkit/run-turn";
+} from "@xiongbao/shared/subagent";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import type { RunnerLike } from "@xiongbao/toolkit/run-turn";
 import { and, eq, inArray } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { z } from "zod";

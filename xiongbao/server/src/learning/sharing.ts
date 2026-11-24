@@ -1,4 +1,4 @@
-import type { LearningSharingMode } from "@openbot/shared/learning";
+import type { LearningSharingMode } from "@xiongbao/shared/learning";
 import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {

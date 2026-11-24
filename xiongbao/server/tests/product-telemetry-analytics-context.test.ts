@@ -10,8 +10,8 @@ import {
   type CopilotKitIntelligence,
   IntelligenceAgentRunner,
 } from "@copilotkit/runtime/v2";
-import { createIntelligenceThreadLock } from "@openbot/toolkit/copilotkit/thread-lock";
-import { createTurnRunner, type TurnRunner } from "@openbot/toolkit/run-turn";
+import { createIntelligenceThreadLock } from "@xiongbao/toolkit/copilotkit/thread-lock";
+import { createTurnRunner, type TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { Observable } from "rxjs";
 import { createHandoffDelivery } from "../src/agents/handoff-delivery";
 import type { HandoffWork } from "../src/agents/handoff-runner";

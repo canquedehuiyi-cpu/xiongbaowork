@@ -1,9 +1,9 @@
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
+import { useQuery } from "@tanstack/react-query";
 import {
   deviceTimeZone,
   PERSON_TIME_ZONE_PROP,
-} from "@openbot/shared/person-time-zone";
-import { useQuery } from "@tanstack/react-query";
+} from "@xiongbao/shared/person-time-zone";
 import { type ReactNode, useMemo } from "react";
 import { deploymentCapabilitiesQueryOptions } from "@/lib/deployment/queries";
 import { generativeUiProviderOptions } from "./a2ui";

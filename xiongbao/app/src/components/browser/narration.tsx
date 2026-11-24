@@ -1,9 +1,9 @@
-import type { LauncherState } from "@openbot/shared/openbot-browser";
 import {
   IconInfoCircle,
   IconMicrophone,
   IconMicrophoneOff,
 } from "@tabler/icons-react";
+import type { LauncherState } from "@xiongbao/shared/openbot-browser";
 import { useId } from "react";
 import {
   Item,

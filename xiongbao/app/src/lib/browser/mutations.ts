@@ -1,3 +1,4 @@
+import { mutationOptions, type QueryClient } from "@tanstack/react-query";
 import {
   type BrowserApiState,
   type BrowserNarrationRequest,
@@ -7,8 +8,7 @@ import {
   browserApiPaths,
   type RealBrowser,
   type RealBrowserOpenResponse,
-} from "@openbot/shared/openbot-browser";
-import { mutationOptions, type QueryClient } from "@tanstack/react-query";
+} from "@xiongbao/shared/openbot-browser";
 import { client, tryClient } from "@/lib/client";
 import { computerKeys } from "@/lib/computers/queries";
 import { browserKeys } from "./queries";

@@ -44,7 +44,7 @@ git merge-tree --write-tree --merge-base=<上次同步点> <本仓库 xiongbao �
 
 **收进来的上游改动**
 
-- `@openbot/toolkit`：回合引擎（`run-turn`）、无界面工具、对话租约、历史清洗、CopilotKit 适配层。
+- `@xiongbao/toolkit`：回合引擎（`run-turn`）、无界面工具、对话租约、历史清洗、CopilotKit 适配层。
   toolkit 保持与上游同构，不引用服务端代码；我们的需求作为端口（`toolkit/src/ports.ts`）并入：
   `modelNamedIn`、`answered`（按租户记模型用量、交付附件，故事 H4 / A9）、`scope`（看板卡片归属，
   WP-1.2）。服务端在 `server/src/routines/run-turn.ts` 统一填好这些端口，服务端所有调用都从这里拿。

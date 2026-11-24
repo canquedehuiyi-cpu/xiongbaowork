@@ -14,7 +14,7 @@ import { TURN_ARTIFACTS_EVENT } from "../../../shared/turn-artifacts";
  * in the stored thread, and in the history a reload replays, like any other event of the run.
  *
  * KEYED BY RUN ID, NOT BY ASYNC CONTEXT. A built-in Bot's tools run from the provider stream's flush,
- * where Bun has dropped the async frame the run started in (`@openbot/toolkit/native-approval`), so a
+ * where Bun has dropped the async frame the run started in (`@xiongbao/toolkit/native-approval`), so a
  * tool finds its run by the id it was called with, and the agent's stream registers itself under that
  * id while it is open. A run id names one run, and one run is one stream.
  */

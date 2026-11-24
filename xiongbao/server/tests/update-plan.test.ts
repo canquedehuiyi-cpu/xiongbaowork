@@ -6,8 +6,8 @@ import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
 import {
   MOST_NUDGES,
   UNATTENDED_STEPS,
-} from "@openbot/toolkit/copilotkit/last-step";
-import { createTurnRunner } from "@openbot/toolkit/run-turn";
+} from "@xiongbao/toolkit/copilotkit/last-step";
+import { createTurnRunner } from "@xiongbao/toolkit/run-turn";
 import { Observable } from "rxjs";
 import { z } from "zod";
 import {

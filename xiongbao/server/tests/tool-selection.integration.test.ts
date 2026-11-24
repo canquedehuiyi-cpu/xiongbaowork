@@ -13,7 +13,10 @@ import { buildAGUITextResponse, LLMock } from "@copilotkit/aimock";
 import { AGUIMock } from "@copilotkit/aimock/agui";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotHonoHandler } from "@copilotkit/runtime/v2/hono";
-import { type GrantedTool, parametersFor } from "@openbot/toolkit/granted-tool";
+import {
+  type GrantedTool,
+  parametersFor,
+} from "@xiongbao/toolkit/granted-tool";
 import { z } from "zod";
 import {
   buildAgents,

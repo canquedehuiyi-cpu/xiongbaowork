@@ -1,4 +1,6 @@
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import { isThreadBusy } from "@xiongbao/toolkit/lease";
+import { BOT_PAUSED_REASON, isBotPaused } from "../agents/lifecycle";
 import { QuotaExceeded, type QuotaService } from "../quota/limits";
 import {
   type DeliverableComponent,
@@ -6,8 +8,6 @@ import {
   type TaskProjector,
 } from "../tasks/projector";
 import { runAsTenant } from "../tenant/context";
-import { isThreadBusy } from "@openbot/toolkit/lease";
-import { BOT_PAUSED_REASON, isBotPaused } from "../agents/lifecycle";
 import type { WorkQueue } from "../work/queue";
 import type { ResponsibilityRunContext, ResponsibilityStore } from "./types";
 

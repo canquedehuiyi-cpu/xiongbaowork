@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { approvalPhrase, approvalWords } from "@openbot/shared/tool-name";
+import { approvalPhrase, approvalWords } from "@xiongbao/shared/tool-name";
 import { and, eq, inArray } from "drizzle-orm";
 import { ruleMatches, strictestRule } from "../src/approvals/policy";
 import { equivalenceOf } from "../src/approvals/service";

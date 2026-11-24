@@ -1,4 +1,4 @@
-import type { SkinId } from "@openbot/shared/user-preferences";
+import type { SkinId } from "@xiongbao/shared/user-preferences";
 import type { ComponentType, ReactNode } from "react";
 
 /*
@@ -10,7 +10,7 @@ export {
   normalizeSkinId,
   SKIN_IDS,
   type SkinId,
-} from "@openbot/shared/user-preferences";
+} from "@xiongbao/shared/user-preferences";
 
 export type Skin = {
   id: SkinId;

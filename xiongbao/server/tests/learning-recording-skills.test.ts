@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import type { PersonalReview, RecordingSkills } from "@openbot/shared/learning";
+import type {
+  PersonalReview,
+  RecordingSkills,
+} from "@xiongbao/shared/learning";
 import type { MiddlewareHandler } from "hono";
 import type { AppVariables } from "../src/auth/guards";
 import type { SkillApprovalStore } from "../src/learning/approvals";

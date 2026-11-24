@@ -2,7 +2,7 @@ import {
   type CapturedEvent,
   type JsonValue,
   maskNetworkEvent,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 
 export type PageFallback = {
   start(tabIds: number[]): Promise<boolean>;

@@ -1,11 +1,8 @@
-import { tenantId } from "./tenant";
 import type {
   RecorderActivity,
   RecorderConnectVia,
-} from "@openbot/shared/recorder-api";
-import {
-  sql,
-} from "drizzle-orm";
+} from "@xiongbao/shared/recorder-api";
+import { sql } from "drizzle-orm";
 import {
   index,
   jsonb,
@@ -17,10 +14,10 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { users } from "./core";
+import { tenantId } from "./tenant";
 
 /* The two scopes every tenant table has had since 0072: the owner's frame, and the platform's. */
 const tenantScope = sql`tenant_id = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = 'platform'`;
-
 
 export const recorderConnectCodes = pgTable(
   "recorder_connect_codes",
@@ -70,7 +67,8 @@ export const recorderConnectCodes = pgTable(
       to: "public",
       using: tenantScope,
     }),
-index("recorder_connect_codes_user_idx").on(table.userId)],
+    index("recorder_connect_codes_user_idx").on(table.userId),
+  ],
 );
 
 export const recorderConnections = pgTable(
@@ -189,5 +187,6 @@ export const recorderTrajectoryBindings = pgTable(
       to: "public",
       using: tenantScope,
     }),
-index("recorder_trajectory_bindings_user_idx").on(table.userId)],
+    index("recorder_trajectory_bindings_user_idx").on(table.userId),
+  ],
 );

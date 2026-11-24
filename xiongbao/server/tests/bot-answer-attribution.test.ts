@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 import type { Message } from "@ag-ui/client";
-import { answerMessageId } from "@openbot/shared/handoff-markers";
+import { answerMessageId } from "@xiongbao/shared/handoff-markers";
 import {
   chooseOpenAIApi,
   normalizeModelBaseUrls,

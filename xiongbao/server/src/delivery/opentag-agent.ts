@@ -13,8 +13,8 @@
  * owner. A row stamped as nobody's is treated as no binding at all.
  */
 import { randomUUID } from "node:crypto";
-import { approvalPhrase } from "@openbot/shared/tool-name";
-import type { DrawnComponent } from "@openbot/toolkit/run-turn";
+import { approvalPhrase } from "@xiongbao/shared/tool-name";
+import type { DrawnComponent } from "@xiongbao/toolkit/run-turn";
 import { z } from "zod";
 import { acpCardOf } from "../agents/acp/permissions";
 import {

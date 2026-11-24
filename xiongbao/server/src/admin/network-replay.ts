@@ -14,7 +14,7 @@
  * page's own requests, is decided on the computer and never recorded, so it cannot be replayed. The
  * screen says so beside the answer.
  */
-import { isPersonBrowserId } from "@openbot/shared/openbot-browser";
+import { isPersonBrowserId } from "@xiongbao/shared/openbot-browser";
 import type { AuditEvent } from "../audit";
 import {
   type EgressPolicy,

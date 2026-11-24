@@ -19,14 +19,14 @@ import {
   type RealBrowserOpenResponse,
   realBrowserComputerPaths,
   realBrowserRequestSchema,
-} from "@openbot/shared/openbot-browser";
+} from "@xiongbao/shared/openbot-browser";
 import {
   type ExchangeResponse,
   RECORDER_SIGNED_OUT,
   type RecorderActivity,
   recorderPaths,
-} from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { createApp } from "../src/app";
 import type { AuditEventInput } from "../src/audit";

@@ -1,4 +1,4 @@
-import { inFolder, ownToolSubject } from "@openbot/shared/tool-name";
+import { inFolder, ownToolSubject } from "@xiongbao/shared/tool-name";
 import { createContext } from "react";
 import { shortName } from "@/lib/brand";
 

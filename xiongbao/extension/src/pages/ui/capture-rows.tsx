@@ -1,10 +1,10 @@
-import type { LearningSpaceState } from "@openbot/shared/recorder-api";
 import {
   IconMicrophone,
   IconMicrophoneOff,
   IconNetwork,
   IconSchool,
 } from "@tabler/icons-react";
+import type { LearningSpaceState } from "@xiongbao/shared/recorder-api";
 import { PageRows } from "@/components/layout/page-parts";
 import { Button } from "@/components/ui/button";
 import {

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import type { BaseEvent, RunAgentInput } from "@ag-ui/client";
 import { LLMock } from "@copilotkit/aimock";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import { z } from "zod";
 import { buildAgents, type RuntimeModel } from "../src/copilot";
 

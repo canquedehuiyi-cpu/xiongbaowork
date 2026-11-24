@@ -15,7 +15,7 @@ import { dirname, join } from "node:path";
 import {
   currentApprovalContext,
   withApprovalContext,
-} from "@openbot/toolkit/continuation";
+} from "@xiongbao/toolkit/continuation";
 import { GENERATE_IMAGE_TOOL } from "../../shared/media";
 import type { ComputerSeat } from "../src/computer/computer-key";
 import type { ActionActor } from "../src/computer/gateway";

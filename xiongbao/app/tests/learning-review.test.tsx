@@ -7,17 +7,17 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import type {
-  LearningProposal,
-  LearningProposalDetail,
-  PersonalReview,
-} from "@openbot/shared/learning";
 import {
   environmentManager,
   QueryClientProvider,
   QueryObserver,
 } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import type {
+  LearningProposal,
+  LearningProposalDetail,
+  PersonalReview,
+} from "@xiongbao/shared/learning";
 import { LearningReview } from "@/components/settings/learning-review";
 import {
   personalLearningQueryOptions,

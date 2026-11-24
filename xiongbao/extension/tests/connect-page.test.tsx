@@ -7,12 +7,12 @@ import {
   test,
 } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {
   RECORDER_DESTINATION,
   RECORDER_DISCLOSURE,
-} from "@openbot/shared/recorder-disclosure";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+} from "@xiongbao/shared/recorder-disclosure";
 import { ConnectPage } from "../src/pages/connect/connect-page";
 import { type ChromeFake, installChromeFake } from "./support/chrome-fake";
 

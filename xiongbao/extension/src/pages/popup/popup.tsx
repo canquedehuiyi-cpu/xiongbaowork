@@ -1,7 +1,6 @@
-import { installOnDeviceSpeech } from "@openbot/shared/on-device-speech";
-import { RECORDER_NAME } from "../../shared/brand";
-import type { LearningSpaceState } from "@openbot/shared/recorder-api";
 import { IconAlertTriangle } from "@tabler/icons-react";
+import { installOnDeviceSpeech } from "@xiongbao/shared/on-device-speech";
+import type { LearningSpaceState } from "@xiongbao/shared/recorder-api";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type {
@@ -9,6 +8,7 @@ import type {
   PageStateResponse,
   PageToBackground,
 } from "../../protocol/messages";
+import { RECORDER_NAME } from "../../shared/brand";
 import { narrationLanguage } from "../../shared/speech-language";
 import { Page } from "../ui/page";
 import { ask as askBackground } from "../ui/runtime";
@@ -74,7 +74,7 @@ export function Popup({ deps }: { deps?: Partial<PopupDeps> }) {
       ? deps.Recognition
       : (globalThis as { SpeechRecognition?: unknown }).SpeechRecognition;
   /** On the person's click, while it still counts: the browser downloads (or unmasks) a language for recognition on
-   * their own computer only on one (@openbot/shared/on-device-speech). Not waited for: the Voice row says while it
+   * their own computer only on one (@xiongbao/shared/on-device-speech). Not waited for: the Voice row says while it
    * downloads, and voice starts once it is there. */
   const getSpeech = (language: string) =>
     void installOnDeviceSpeech(Recognition, language);

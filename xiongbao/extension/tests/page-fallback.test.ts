@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import {
   acceptPageNetworkEvent,
   createPageFallback,
@@ -160,7 +160,7 @@ test("a page event is re-masked and marked as page captured", () => {
 
 test("a digest match in a page body is redacted", async () => {
   const { sha256HexSync, normaliseSecret } = await import(
-    "@openbot/shared/recorder-masking"
+    "@xiongbao/shared/recorder-masking"
   );
   const digest = sha256HexSync(normaliseSecret("correct-horse-battery"));
   const result = acceptPageNetworkEvent(
@@ -272,7 +272,7 @@ test("a page event whose JSON body was cut short is re-masked key by key", () =>
 });
 
 test("a page event is re-masked for one-time codes: a verification code key, a bare code of digits, and a typed code anywhere", async () => {
-  const { sha256HexSync } = await import("@openbot/shared/recorder-masking");
+  const { sha256HexSync } = await import("@xiongbao/shared/recorder-masking");
   const result = acceptPageNetworkEvent(
     event({
       method: "POST",

@@ -15,7 +15,7 @@
  * instruction; a command only chooses among what the Bot already holds, as typing it does.
  */
 import type { RunAgentInput } from "@ag-ui/client";
-import { PICKED_SKILL_PROP } from "@openbot/toolkit/run-turn";
+import { PICKED_SKILL_PROP } from "@xiongbao/toolkit/run-turn";
 import {
   FAST_PATH_CHECK_LABEL,
   FAST_PATH_HEADING,

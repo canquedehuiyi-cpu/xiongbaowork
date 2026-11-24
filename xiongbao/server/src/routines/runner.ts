@@ -22,8 +22,8 @@
  * within a firing never sees the routine that fails cleanly, once, every single night.
  */
 
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { BOT_PAUSED_REASON, isBotPaused } from "../agents/lifecycle";
 import type { AgentActor } from "../agents/profile-types";
 import type { ChannelStore } from "../channels/routes";
@@ -33,7 +33,7 @@ import { runAsClaimedTenant, runAsTenant } from "../tenant/context";
 import type { RoutineRunContext, RoutineStore } from "./store";
 
 /** The turn engine's types live in the toolkit now; re-exported for the server modules that named them here. */
-export type { DrawnComponent, TurnRunner } from "@openbot/toolkit/run-turn";
+export type { DrawnComponent, TurnRunner } from "@xiongbao/toolkit/run-turn";
 export type RoutineRunner = { run(routineRunId: string): Promise<void> };
 
 /**

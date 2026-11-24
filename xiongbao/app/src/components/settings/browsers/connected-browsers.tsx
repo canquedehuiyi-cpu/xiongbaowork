@@ -1,6 +1,6 @@
-import type { ListedRecorderConnection } from "@openbot/shared/recorder-api";
 import { IconBrowser } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import type { ListedRecorderConnection } from "@xiongbao/shared/recorder-api";
 import { Fragment, useState } from "react";
 import {
   PageEmpty,

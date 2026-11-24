@@ -1,4 +1,3 @@
-import { OPENBOT_HARNESS_NAME } from "@openbot/shared/harnesses";
 import {
   IconChevronRight,
   IconDeviceDesktop,
@@ -14,6 +13,7 @@ import {
 } from "@tabler/icons-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { OPENBOT_HARNESS_NAME } from "@xiongbao/shared/harnesses";
 import { Fragment, useState } from "react";
 import type { ZodType } from "zod";
 import { CallbackTokenPanel } from "@/components/agents/callback-token-panel";

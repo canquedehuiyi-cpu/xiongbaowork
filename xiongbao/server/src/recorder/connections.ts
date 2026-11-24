@@ -7,7 +7,7 @@ import {
   type RecorderActivity,
   type RecorderConnection,
   type RecorderConnectVia,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import {
   and,
   asc,

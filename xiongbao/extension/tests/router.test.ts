@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import * as connection from "../src/background/connection";
 import type { NetworkCaptureDeps } from "../src/background/network";

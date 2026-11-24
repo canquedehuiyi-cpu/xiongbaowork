@@ -13,7 +13,7 @@ import {
   type CapturedEvent,
   EVENT_BUDGET_BYTES,
   trimEvent,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import { acceptPageNetworkEvent } from "../src/background/network/fallback";
 import {
   CARD_AND_PIN_CLOCK,

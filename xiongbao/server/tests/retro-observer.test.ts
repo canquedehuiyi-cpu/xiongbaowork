@@ -4,7 +4,7 @@ import { EventType } from "@ag-ui/client";
 import {
   RUN_ENDED_EARLY,
   SEGMENT_LIMIT_MESSAGE,
-} from "@openbot/toolkit/headless-tools";
+} from "@xiongbao/toolkit/headless-tools";
 import {
   CARD_DELIVERED_MIN_STEPS_DEFAULT,
   createRetroObserver,

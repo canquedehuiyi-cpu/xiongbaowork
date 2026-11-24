@@ -1,4 +1,4 @@
-import type { SaveVoiceSessionInput } from "@openbot/shared/voice-session";
+import type { SaveVoiceSessionInput } from "@xiongbao/shared/voice-session";
 import { type AuthenticatedUser, authKeys } from "@/lib/auth/queries";
 import { compatSuffixes, readCompat, removeCompat } from "@/lib/storage-compat";
 import { queryClient } from "@/query-client";
@@ -35,8 +35,7 @@ export function forgetVoiceCall(
   userId = voiceCallOwner(),
 ) {
   try {
-    if (userId)
-      removeCompat(key(call, userId));
+    if (userId) removeCompat(key(call, userId));
   } catch {
     /* Storage can be disabled; the database already holds this call. */
   }

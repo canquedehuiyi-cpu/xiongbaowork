@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { AUDIT_EVENT_WORDS } from "@openbot/shared/audit-words";
+import { AUDIT_EVENT_WORDS } from "@xiongbao/shared/audit-words";
 import { CAPABILITY_ACTIVITY } from "../src/admin/capability-changes";
 import { auditEventTypes } from "../src/audit";
 

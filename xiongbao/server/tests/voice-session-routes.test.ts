@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import type { VoiceSessionRecord } from "@openbot/shared/voice-session";
+import type { VoiceSessionRecord } from "@xiongbao/shared/voice-session";
 import type { MiddlewareHandler } from "hono";
 import type { AppVariables } from "../src/auth/guards";
 import { createVoiceRoutes } from "../src/voice/routes";

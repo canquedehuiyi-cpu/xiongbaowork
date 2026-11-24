@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type {
   LearningSettings,
   LearningSource,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import { personalLearningContainerId } from "../src/learning/personal-space";
 import { learningScopes } from "../src/learning/scopes";
 

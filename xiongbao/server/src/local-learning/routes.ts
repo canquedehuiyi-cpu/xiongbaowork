@@ -2,7 +2,7 @@ import type {
   LocalLearningOverview,
   LocalSkillCandidateDetail,
   LocalSkillCandidateSummary,
-} from "@openbot/shared/local-learning";
+} from "@xiongbao/shared/local-learning";
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";

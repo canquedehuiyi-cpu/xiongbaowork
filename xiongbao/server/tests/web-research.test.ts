@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import {
   researchRoleOf,
   researchRoleOfToolName,
-} from "@openbot/shared/research";
+} from "@xiongbao/shared/research";
 import { parse } from "yaml";
 import { listTools } from "../src/plugins/mcp";
 import { selectTools } from "../src/plugins/selection";

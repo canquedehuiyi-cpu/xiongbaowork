@@ -1,6 +1,6 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { MAX_IMAGE_BYTES } from "@openbot/shared/attachments";
+import { MAX_IMAGE_BYTES } from "@xiongbao/shared/attachments";
 import { eq, sql } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";

@@ -4,13 +4,13 @@ import {
   BuiltInAgent,
   type BuiltInAgentConfiguration,
 } from "@copilotkit/runtime/v2";
-import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
-import { parametersFor } from "../src/granted-tool";
-import { answersOnLastStep, MOST_NUDGES } from "../src/copilotkit/last-step";
 import {
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
-} from "@openbot/shared/step-limit";
+} from "@xiongbao/shared/step-limit";
+import { BuiltInAgentWithSaneHistory } from "../src/copilotkit/agents";
+import { answersOnLastStep, MOST_NUDGES } from "../src/copilotkit/last-step";
+import { parametersFor } from "../src/granted-tool";
 
 /**
  * A run stops after `maxSteps` model steps. A Bot that searched once per step spent all of them on

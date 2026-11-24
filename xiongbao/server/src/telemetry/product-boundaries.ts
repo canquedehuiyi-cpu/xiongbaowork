@@ -1,5 +1,5 @@
 import type { CopilotRuntimeHooks } from "@copilotkit/runtime/v2";
-import type { createTurnRunner, TurnRunner } from "@openbot/toolkit/run-turn";
+import type { createTurnRunner, TurnRunner } from "@xiongbao/toolkit/run-turn";
 import type { IdentifyActor } from "../copilot";
 import type { DeliveryInbox } from "../delivery/types";
 import {

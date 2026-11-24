@@ -1,10 +1,10 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link, useSearch } from "@tanstack/react-router";
 import type {
   BrowserApiState,
   BrowserOpenResponse,
   RealBrowserOpenResponse,
-} from "@openbot/shared/openbot-browser";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Link, useSearch } from "@tanstack/react-router";
+} from "@xiongbao/shared/openbot-browser";
 import { useEffect, useRef } from "react";
 import { PageEmpty, PageShell } from "@/components/layout/page-shell";
 import { Button } from "@/components/ui/button";

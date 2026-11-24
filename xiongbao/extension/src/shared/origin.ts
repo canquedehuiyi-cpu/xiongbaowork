@@ -4,7 +4,7 @@
 export {
   isAllowedGatewayUrl,
   normaliseOpenBotOrigin,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 
 function parse(raw: string): URL | null {
   try {

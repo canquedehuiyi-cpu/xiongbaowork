@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { oneRowPerAction } from "../../shared/activity-rows";
 import {
   DEFAULT_DESKTOP_ACTION_WORDS,

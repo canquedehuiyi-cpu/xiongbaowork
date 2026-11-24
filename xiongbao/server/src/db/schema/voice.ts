@@ -1,4 +1,4 @@
-import type { VoiceTranscriptEntry } from "@openbot/shared/voice-session";
+import type { VoiceTranscriptEntry } from "@xiongbao/shared/voice-session";
 import { sql } from "drizzle-orm";
 import {
   check,

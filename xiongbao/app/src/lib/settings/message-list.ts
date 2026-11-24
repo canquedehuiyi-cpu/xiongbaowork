@@ -1,16 +1,19 @@
-import type { SkinId, UserPreferences } from "@openbot/shared/user-preferences";
 import {
   mutationOptions,
   type QueryClient,
   queryOptions,
   useQuery,
 } from "@tanstack/react-query";
+import type {
+  SkinId,
+  UserPreferences,
+} from "@xiongbao/shared/user-preferences";
 import { currentUserQueryOptions } from "@/lib/auth/queries";
 import { client } from "@/lib/client";
 import { getSkinId, setSkin } from "@/skins/store";
 import { settingsKeys } from "./queries";
 
-export type { MessageListEmphasis } from "@openbot/shared/user-preferences";
+export type { MessageListEmphasis } from "@xiongbao/shared/user-preferences";
 
 export function userPreferencesQueryOptions(userId: string | undefined) {
   return queryOptions({

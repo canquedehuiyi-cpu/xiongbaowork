@@ -1,6 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { DECLINED_BY_PERSON } from "@openbot/shared/approval-outcomes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   createMemoryHistory,
@@ -9,6 +8,7 @@ import {
   RouterProvider,
 } from "@tanstack/react-router";
 import { cleanup, render } from "@testing-library/react";
+import { DECLINED_BY_PERSON } from "@xiongbao/shared/approval-outcomes";
 import { AuditPage } from "@/components/manage/audit-page";
 import { agentKeys } from "@/lib/agents/queries";
 import {

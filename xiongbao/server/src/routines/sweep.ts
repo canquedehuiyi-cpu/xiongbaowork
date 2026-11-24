@@ -22,7 +22,7 @@
  * prevent.
  */
 
-import { TURN_LIMITS } from "@openbot/toolkit/limits";
+import { TURN_LIMITS } from "@xiongbao/toolkit/limits";
 import {
   assertPersonTenant,
   runAsClaimedTenant,

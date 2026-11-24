@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { AbstractAgent, BaseEvent, Message } from "@ag-ui/client";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
-import { LAST_STEP_NOTICE } from "@openbot/shared/run-notices";
+import { LAST_STEP_NOTICE } from "@xiongbao/shared/run-notices";
 import {
   STEP_LIMIT_EVENT,
   type StepLimitPayload,
-} from "@openbot/shared/step-limit";
-import { UNATTENDED_STEPS } from "@openbot/toolkit/copilotkit/last-step";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
-import type { AuditInitiator } from "@openbot/toolkit/initiator";
-import { createTurnRunner } from "@openbot/toolkit/run-turn";
+} from "@xiongbao/shared/step-limit";
+import { UNATTENDED_STEPS } from "@xiongbao/toolkit/copilotkit/last-step";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
+import type { AuditInitiator } from "@xiongbao/toolkit/initiator";
+import { createTurnRunner } from "@xiongbao/toolkit/run-turn";
 import { Observable } from "rxjs";
 import { z } from "zod";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

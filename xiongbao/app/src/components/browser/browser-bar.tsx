@@ -1,4 +1,3 @@
-import type { BrowserTab } from "@openbot/shared/openbot-browser";
 import {
   IconArrowLeft,
   IconArrowRight,
@@ -10,6 +9,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import type { UseMutationResult } from "@tanstack/react-query";
+import type { BrowserTab } from "@xiongbao/shared/openbot-browser";
 import {
   type KeyboardEvent,
   type ReactNode,

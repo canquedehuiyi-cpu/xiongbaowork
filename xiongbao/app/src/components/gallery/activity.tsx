@@ -1,4 +1,4 @@
-import { auditEventWords } from "@openbot/shared/audit-words";
+import { auditEventWords } from "@xiongbao/shared/audit-words";
 import { useContext, useEffect, useState } from "react";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";

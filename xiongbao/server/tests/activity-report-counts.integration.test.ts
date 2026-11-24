@@ -4,7 +4,7 @@ import {
   CALLS_RECORDED_AS_CHANGES,
   OPENBOT_WORKING_EVENT_TYPES,
   oneRowPerAction,
-} from "@openbot/shared/activity-rows";
+} from "@xiongbao/shared/activity-rows";
 import { sql } from "drizzle-orm";
 import {
   createAuditReader,

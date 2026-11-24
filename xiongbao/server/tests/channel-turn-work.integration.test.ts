@@ -1,7 +1,7 @@
 import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { TURN_TIME_LIMIT_MINUTES } from "@openbot/shared/turn-notices";
-import { TURN_LIMITS } from "@openbot/toolkit/limits";
+import { TURN_TIME_LIMIT_MINUTES } from "@xiongbao/shared/turn-notices";
+import { TURN_LIMITS } from "@xiongbao/toolkit/limits";
 import { eq, sql } from "drizzle-orm";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AgentActor } from "../src/agents/profile-types";

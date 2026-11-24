@@ -1,5 +1,5 @@
-import { buildResponsibilityTurn } from "@openbot/shared/responsibility-turn";
-import type { ComponentCatalog } from "@openbot/toolkit/ports";
+import { buildResponsibilityTurn } from "@xiongbao/shared/responsibility-turn";
+import type { ComponentCatalog } from "@xiongbao/toolkit/ports";
 import { z } from "zod";
 import { toolSegmentsFor, turnTimeoutFor } from "../../../toolkit/src/limits";
 import { canUseComputer } from "../agents/computer-access";

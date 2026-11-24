@@ -1,11 +1,6 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import {
-  type ConnectPrompt,
-  connectAppRefusal,
-  readConnectPrompt,
-} from "@openbot/shared/connect-prompt";
-import {
   MutationObserver,
   QueryClient,
   QueryClientProvider,
@@ -21,6 +16,11 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import {
+  type ConnectPrompt,
+  connectAppRefusal,
+  readConnectPrompt,
+} from "@xiongbao/shared/connect-prompt";
 import type { ReactNode } from "react";
 import { AppAccessCard } from "@/components/channels/app-access-card";
 import { AppAccessAction } from "@/components/plugins/app-access-action";

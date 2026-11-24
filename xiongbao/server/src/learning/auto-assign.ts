@@ -3,12 +3,13 @@ import {
   AUTOMATIC_LEARNING_CONTAINER_ID,
   type LearningAutoAssignState,
   type LearningTarget,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import {
   type AuditStore,
   DEPLOYMENT_INITIATOR,
   recordAuditEvent,
 } from "../audit";
+import { englishName } from "../brand";
 import {
   askWhileIntelligenceStarts,
   type StartupClock,
@@ -17,7 +18,6 @@ import type {
   ConfiguredLearningContainer,
   LearningSettingsStore,
 } from "./settings";
-import { englishName } from "../brand";
 
 /**
  * What asking Intelligence about one container found. `learning_off`: Intelligence answered and has

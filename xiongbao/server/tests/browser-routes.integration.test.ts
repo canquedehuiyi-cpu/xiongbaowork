@@ -21,12 +21,12 @@ import {
   isPersonBrowserId,
   type LauncherConnection,
   type LauncherState,
-} from "@openbot/shared/openbot-browser";
+} from "@xiongbao/shared/openbot-browser";
 import {
   RECORDER_SIGNED_OUT,
   type RecorderConnectionsResponse,
-} from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { eq, inArray } from "drizzle-orm";
 import { NOT_ITS_OWN_COMPUTER } from "../../agent-computer/src/person-access";
 import { NO_INSTALLED_BROWSER } from "../../agent-computer/src/person-launch";

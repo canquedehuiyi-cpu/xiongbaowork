@@ -6,8 +6,8 @@ import {
   SUBAGENT_TOOL,
   subagentGuidance,
   subagentModelGuidance,
-} from "@openbot/shared/subagent";
-import type { RunnerLike } from "@openbot/toolkit/run-turn";
+} from "@xiongbao/shared/subagent";
+import type { RunnerLike } from "@xiongbao/toolkit/run-turn";
 import { Observable } from "rxjs";
 import { hardModelOf } from "../../shared/hard-model";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

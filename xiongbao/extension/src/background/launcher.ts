@@ -15,12 +15,12 @@ import {
   type LauncherResult,
   type LauncherState,
   type Narration,
-} from "@openbot/shared/openbot-browser";
+} from "@xiongbao/shared/openbot-browser";
 import {
   joinedLearningContainer,
   type RecorderMe,
   recorderPaths,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import type { PageResponse, RecorderState } from "../protocol/messages";
 import { OpenBotError, openbotJson } from "../shared/openbot-client";
 import { normaliseOpenBotOrigin } from "../shared/origin";

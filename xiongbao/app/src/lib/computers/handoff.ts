@@ -1,7 +1,7 @@
 import type {
   BrowserChallenge,
   HandoffRequest,
-} from "@openbot/shared/computer-control";
+} from "@xiongbao/shared/computer-control";
 import { readCompat, removeCompat, writeCompat } from "@/lib/storage-compat";
 import { callComputer, type ToolOutcome } from "./call";
 import { cancelControl, readControl } from "./control";

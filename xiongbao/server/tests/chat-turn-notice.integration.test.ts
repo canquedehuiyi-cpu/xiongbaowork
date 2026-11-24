@@ -9,7 +9,7 @@ import {
 import { randomUUID } from "node:crypto";
 import type { RunAgentInput } from "@ag-ui/client";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { inArray, sql } from "drizzle-orm";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import type { AuditStore } from "../src/audit";

@@ -186,8 +186,18 @@
   },
   {
     "rule": "import-close",
+    "scope": "app/src",
+    "lines": 5
+  },
+  {
+    "rule": "import-close",
     "scope": "extension/src",
-    "lines": 1
+    "lines": 2
+  },
+  {
+    "rule": "import-close",
+    "scope": "server/src",
+    "lines": 5
   },
   {
     "rule": "import-close",
@@ -202,17 +212,17 @@
   {
     "rule": "import-path",
     "scope": "app/src",
-    "lines": 3
+    "lines": 10
   },
   {
     "rule": "import-path",
     "scope": "extension/src",
-    "lines": 5
+    "lines": 6
   },
   {
     "rule": "import-path",
     "scope": "server/src",
-    "lines": 1
+    "lines": 15
   },
   {
     "rule": "mit-attribution",
@@ -243,36 +253,6 @@
     "rule": "openbot-camel",
     "scope": "app/src",
     "lines": 2
-  },
-  {
-    "rule": "openbot-package",
-    "scope": "app/src",
-    "lines": 126
-  },
-  {
-    "rule": "openbot-package",
-    "scope": "extension/src",
-    "lines": 48
-  },
-  {
-    "rule": "openbot-package",
-    "scope": "server/src",
-    "lines": 211
-  },
-  {
-    "rule": "openbot-package",
-    "scope": "shared/package.json",
-    "lines": 1
-  },
-  {
-    "rule": "openbot-package",
-    "scope": "toolkit/src",
-    "lines": 9
-  },
-  {
-    "rule": "openbot-package",
-    "scope": "worker/src",
-    "lines": 1
   },
   {
     "rule": "runtime-path",

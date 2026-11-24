@@ -1,5 +1,5 @@
-import { OFFER_CHECK_IN_TOOL } from "@openbot/shared/check-in-offer";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
+import { OFFER_CHECK_IN_TOOL } from "@xiongbao/shared/check-in-offer";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
 import { z } from "zod";
 import type { ProactiveSetting } from "./types";
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { eq } from "drizzle-orm";
 import { PERSON_QUESTION_WAITING } from "../approvals/question-resume";
 import type { ApprovalService } from "../approvals/service";

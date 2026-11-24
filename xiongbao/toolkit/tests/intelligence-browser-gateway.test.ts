@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { isAllowedGatewayUrl } from "@openbot/shared/recorder-api";
+import { isAllowedGatewayUrl } from "@xiongbao/shared/recorder-api";
 import { IntelligenceKnowingANewThread } from "../src/copilotkit/agents";
 
 /**

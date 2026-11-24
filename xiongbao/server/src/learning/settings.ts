@@ -3,7 +3,7 @@ import {
   isLearningPersonalReview,
   type LearningSettings,
   type LearningTarget,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import { eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import {

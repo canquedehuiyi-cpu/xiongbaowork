@@ -10,7 +10,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import type { NetworkMode } from "../src/background/network";
 import {
   installRecording,

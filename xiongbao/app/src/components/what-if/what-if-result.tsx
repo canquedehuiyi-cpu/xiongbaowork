@@ -1,10 +1,3 @@
-import type {
-  WhatIfLayer,
-  WhatIfLayerId,
-  WhatIfOutcome,
-  WhatIfResult,
-  WhatIfVerdict,
-} from "@openbot/shared/what-if";
 import {
   IconBan,
   IconChecks,
@@ -20,6 +13,13 @@ import {
   IconWorld,
 } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
+import type {
+  WhatIfLayer,
+  WhatIfLayerId,
+  WhatIfOutcome,
+  WhatIfResult,
+  WhatIfVerdict,
+} from "@xiongbao/shared/what-if";
 import type * as React from "react";
 import { PageRows } from "@/components/layout/page-shell";
 import {

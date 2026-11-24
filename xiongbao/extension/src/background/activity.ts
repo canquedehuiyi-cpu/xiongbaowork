@@ -10,7 +10,7 @@
 import {
   type RecorderActivity,
   recorderPaths,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import type { RecorderState } from "../protocol/messages";
 import { OpenBotError, openbotJson } from "../shared/openbot-client";
 

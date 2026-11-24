@@ -1,3 +1,4 @@
+import { queryOptions } from "@tanstack/react-query";
 import type {
   LearnedSkillDetail,
   LearningAutoAssignState,
@@ -12,8 +13,7 @@ import type {
   PersonalReview,
   RecordingSkills,
   SharingRequest,
-} from "@openbot/shared/learning";
-import { queryOptions } from "@tanstack/react-query";
+} from "@xiongbao/shared/learning";
 import { client } from "@/lib/client";
 
 export const learningKeys = {

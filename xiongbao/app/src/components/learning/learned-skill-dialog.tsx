@@ -1,7 +1,7 @@
-import type { LearnedSkillRecording } from "@openbot/shared/learning";
 import { IconChevronRight, IconVideo } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import type { LearnedSkillRecording } from "@xiongbao/shared/learning";
 import { Fragment, type ReactNode, useRef } from "react";
 import { SkillFiles } from "@/components/learning/skill-files";
 import { Button } from "@/components/ui/button";

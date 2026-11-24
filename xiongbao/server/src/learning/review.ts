@@ -4,10 +4,10 @@ import type {
   LearningProposal,
   LearningProposalDetail,
   LearningRunSummary,
-} from "@openbot/shared/learning";
+} from "@xiongbao/shared/learning";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
-import type { LearningModelCalls } from "./model-endpoint";
 import { englishName } from "../brand";
+import type { LearningModelCalls } from "./model-endpoint";
 
 /** The runtime key's own Learning routes: a project's containers, runs and proposed Skills. */
 export type LearningManagement = Pick<

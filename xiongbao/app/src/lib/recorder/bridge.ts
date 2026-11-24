@@ -1,7 +1,7 @@
 import {
   RECORDER_STORE_IDS,
   recorderStorePage,
-} from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/recorder-extension";
 import {
   RECORDER_CONNECT_STATUS,
   RECORDER_PAGE_MESSAGES,
@@ -9,7 +9,7 @@ import {
   type RecorderPageMessage,
   type RecorderPageResult,
   type RecorderPageState,
-} from "@openbot/shared/recorder-page";
+} from "@xiongbao/shared/recorder-page";
 import { z } from "zod";
 import { shortName } from "@/lib/brand";
 

@@ -8,7 +8,7 @@ import { join } from "node:path";
 import type {
   CapturedEvent,
   JsonValue,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import type { CaptureObservation } from "../src/background/agent/observation";
 import type { NetworkCaptureDeps } from "../src/background/network";

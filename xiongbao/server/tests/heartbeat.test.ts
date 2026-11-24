@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { EmptyTurnError } from "@openbot/toolkit/run-turn";
+import { EmptyTurnError } from "@xiongbao/toolkit/run-turn";
 import {
   HEARTBEAT_OK,
   heartbeatOf,
@@ -7,12 +7,12 @@ import {
   parseHeartbeatPatch,
   publicHeartbeat,
 } from "../../shared/heartbeat";
-import type { AgentChannel } from "../src/channels/routes";
 import { isLightTurn } from "../src/agents/light-model";
+import type { AgentChannel } from "../src/channels/routes";
 import {
   createHeartbeatRunner,
-  heartbeatInitiator,
   type HeartbeatRunnerDeps,
+  heartbeatInitiator,
 } from "../src/heartbeat/runner";
 import {
   HEARTBEAT_KIND,
@@ -20,8 +20,8 @@ import {
   heartbeatKey,
   nextSlot,
 } from "../src/heartbeat/schedule";
-import { heartbeatTools } from "../src/heartbeat/tools";
 import type { HeartbeatStore } from "../src/heartbeat/store";
+import { heartbeatTools } from "../src/heartbeat/tools";
 
 /** 心跳：设置的校验、时间网格，和醒来那一轮对「没事就静默」的约定（Review Focus 3）。 */
 
@@ -120,7 +120,11 @@ function fixture(
 ) {
   const log = {
     scheduled: [] as { chain: string; at: Date }[],
-    finished: [] as { outcome: string; cardsClaimed?: number; error?: string | null }[],
+    finished: [] as {
+      outcome: string;
+      cardsClaimed?: number;
+      error?: string | null;
+    }[],
     began: 0,
     turns: [] as Record<string, unknown>[],
     activity: [] as string[],

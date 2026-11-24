@@ -35,9 +35,9 @@ describe("OpenBot workspace", () => {
       server: "server",
       worker: "worker",
       runner: "runner",
-      shared: "@openbot/shared",
-      toolkit: "@openbot/toolkit",
-      extension: "@openbot/recorder-extension",
+      shared: "@xiongbao/shared",
+      toolkit: "@xiongbao/toolkit",
+      extension: "@xiongbao/recorder-extension",
     };
 
     expect(manifest.workspaces).toEqual(Object.keys(names));

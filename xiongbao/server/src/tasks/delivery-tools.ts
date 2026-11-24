@@ -178,7 +178,7 @@ function currentRun(): { runId: string; threadId: string } | undefined {
     return { runId: scope.runId, threadId: scope.threadId };
   /*
    * A built-in Bot's tools run where Bun has dropped the model run's frame (see
-   * `@openbot/toolkit/native-approval`); the call's own context, re-entered for every native call,
+   * `@xiongbao/toolkit/native-approval`); the call's own context, re-entered for every native call,
    * names the same run.
    */
   const call = currentApprovalContext();

@@ -2,11 +2,11 @@ import {
   type ExchangeResponse,
   type RecorderMe,
   recorderPaths,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import {
   RECORDER_CONNECT_STATUS,
   type TrustedConnectRule,
-} from "@openbot/shared/recorder-page";
+} from "@xiongbao/shared/recorder-page";
 import type {
   ExternalResponse,
   ExternalToBackground,

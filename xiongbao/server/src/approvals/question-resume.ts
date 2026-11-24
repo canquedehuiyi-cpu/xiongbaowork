@@ -1,4 +1,4 @@
-import type { TurnRunner } from "@openbot/toolkit/run-turn";
+import type { TurnRunner } from "@xiongbao/toolkit/run-turn";
 import { PERSON_INITIATOR } from "../audit";
 import type {
   Responsibility,

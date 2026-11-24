@@ -1,5 +1,5 @@
 {
-  "name": "@openbot/agent-mastra",
+  "name": "@xiongbao/agent-mastra",
   "private": true,
   "type": "module",
   "dependencies": {

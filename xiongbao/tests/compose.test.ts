@@ -768,7 +768,7 @@ test("ships the worker in the server image", () => {
   const dockerfile = serverDockerfile();
 
   expect(dockerfile).toContain("COPY worker/src worker/src");
-  // The isolated install's link to `@openbot/shared`. Without it the worker's first import fails.
+  // The isolated install's link to `@xiongbao/shared`. Without it the worker's first import fails.
   expect(dockerfile).toContain(
     "COPY --from=deps /app/worker/node_modules worker/node_modules",
   );

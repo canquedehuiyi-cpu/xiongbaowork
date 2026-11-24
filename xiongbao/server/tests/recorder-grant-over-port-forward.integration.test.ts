@@ -15,8 +15,8 @@ import { randomUUID } from "node:crypto";
 import {
   type ExchangeResponse,
   recorderPaths,
-} from "@openbot/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import { eq } from "drizzle-orm";
 import { reservePort } from "../../tests/support/reserved-port";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

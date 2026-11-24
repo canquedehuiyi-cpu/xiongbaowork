@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@openbot/agent-computer",
+      "name": "@xiongbao/agent-computer",
       "dependencies": {
         "@xterm/addon-serialize": "0.14.0",
         "@xterm/headless": "6.0.0",

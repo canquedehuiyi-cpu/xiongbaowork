@@ -20,7 +20,6 @@ import {
   labelsFor,
   missingFrom,
   WHAT_IF_DETAIL_LIMIT,
-  whatIfExplainable,
   WHAT_IF_IN_THE_BROWSER,
   WHAT_IF_INITIATORS,
   WHAT_IF_INTENTS,
@@ -31,8 +30,9 @@ import {
   type WhatIfLayerId,
   type WhatIfRecorded,
   type WhatIfVocabulary,
-} from "@openbot/shared/what-if";
-import type { AuditInitiator } from "@openbot/toolkit/initiator";
+  whatIfExplainable,
+} from "@xiongbao/shared/what-if";
+import type { AuditInitiator } from "@xiongbao/toolkit/initiator";
 import { asc, eq, isNull } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
@@ -40,6 +40,7 @@ import { createEnterpriseStore } from "./admin/settings-store";
 import { type AuditEvent, type AuditStore, recordAuditEvent } from "./audit";
 import type { AppVariables } from "./auth/guards";
 import { requireAdmin } from "./auth/guards";
+import { englishName } from "./brand";
 import { contextFromAuditPayload } from "./computer/policy-dry-run";
 import type { Database } from "./db/client";
 import {
@@ -64,7 +65,6 @@ import {
   checkAction,
   type GovernanceReaders,
 } from "./what-if-check";
-import { englishName } from "./brand";
 
 /** How many of an app's tools the model is shown, and how many in all. */
 const PROMPT_TOOLS_PER_APP = 200;

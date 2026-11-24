@@ -1,11 +1,11 @@
-import type { Narration } from "@openbot/shared/openbot-browser";
+import type { Narration } from "@xiongbao/shared/openbot-browser";
 import type {
   LearningSpaceState,
   RecorderConnectVia,
   RecorderMe,
   RecorderUser,
-} from "@openbot/shared/recorder-api";
-import type { CapturedEvent } from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-api";
+import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
 import type { AgentSnapshot } from "../background/agent/events";
 import type { StepSnapshot } from "../background/steps";
 import type { RecorderState, StreamSession } from "../protocol/messages";

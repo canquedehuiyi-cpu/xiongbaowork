@@ -6,8 +6,8 @@ import {
   expect,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { buildResponsibilityTurn } from "@openbot/shared/responsibility-turn";
-import { readToolName } from "@openbot/shared/tool-name";
+import { buildResponsibilityTurn } from "@xiongbao/shared/responsibility-turn";
+import { readToolName } from "@xiongbao/shared/tool-name";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { createDatabase } from "../src/db/client";

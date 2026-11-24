@@ -3,7 +3,7 @@ import {
   RECORDER_SIGNED_OUT,
   recorderPaths,
   type TrajectoryGrant,
-} from "@openbot/shared/recorder-api";
+} from "@xiongbao/shared/recorder-api";
 import { openbotRaw } from "../shared/openbot-client";
 
 /** The table's verdicts for the pass stage (rows 1-23a). Every one keeps every queued event; signed-out keeps them for the

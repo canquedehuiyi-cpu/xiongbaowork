@@ -1,14 +1,14 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { FIRING_FRAME, frameFiring } from "@openbot/shared/routine-firing";
+import { FIRING_FRAME, frameFiring } from "@xiongbao/shared/routine-firing";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import postgres from "postgres";
+import { createAgentProfileStore } from "../src/agents/profile-store";
+import type { AgentActor } from "../src/agents/profile-types";
 import {
   CHANNEL_ACTIVITY_TOPIC,
   type ChannelActivityEvent,
 } from "../src/channels/events";
-import { createAgentProfileStore } from "../src/agents/profile-store";
-import type { AgentActor } from "../src/agents/profile-types";
 import { createChannelStore } from "../src/channels/routes";
 import {
   CHANNEL_SUMMARY_KIND,

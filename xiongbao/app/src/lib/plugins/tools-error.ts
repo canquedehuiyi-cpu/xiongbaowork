@@ -1,4 +1,4 @@
-import { readConnectPrompt } from "@openbot/shared/connect-prompt";
+import { readConnectPrompt } from "@xiongbao/shared/connect-prompt";
 
 /**
  * What an app's empty tool list says about the last time its tools were asked for.

@@ -1,6 +1,6 @@
 import { expect } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { and, eq, inArray } from "drizzle-orm";
 import { createApp } from "../src/app";
 import { loadRuleVocabulary } from "../src/approvals/rule-vocabulary";
@@ -182,7 +182,9 @@ async function asked(
   );
   expect(suspended).toBeTrue();
   const [request] = await asOwner(() => store.list(owner));
-  await asOwner(() => service.decide(owner, request?.id as string, decision, "web"));
+  await asOwner(() =>
+    service.decide(owner, request?.id as string, decision, "web"),
+  );
 }
 
 function appFor() {

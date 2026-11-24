@@ -1,4 +1,4 @@
-import { WEB_HARNESSES } from "@openbot/shared/harnesses";
+import { WEB_HARNESSES } from "@xiongbao/shared/harnesses";
 import { AnimatePresence, motion } from "motion/react";
 import type { ReactNode } from "react";
 import { HarnessMark } from "@/components/agents/harness-mark";

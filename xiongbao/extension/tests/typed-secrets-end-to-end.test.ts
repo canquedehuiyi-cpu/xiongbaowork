@@ -16,7 +16,7 @@ import {
   type CapturedEvent,
   REDACTED,
   sha256HexSync,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import {
   createNetworkCapture,
   type NetworkCaptureDeps,

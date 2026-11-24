@@ -1,8 +1,7 @@
 import { describe, expect } from "bun:test";
-import { appKey } from "@openbot/shared/audit-filters";
+import { appKey } from "@xiongbao/shared/audit-filters";
 import { sql } from "drizzle-orm";
 import { createApp } from "../src/app";
-import { appKeySql } from "../src/audit-filters";
 import {
   type AuditEvent,
   type AuditEventInput,
@@ -10,6 +9,7 @@ import {
   createAuditReader,
   createAuditStore,
 } from "../src/audit";
+import { appKeySql } from "../src/audit-filters";
 import { intentOf } from "../src/computer/gateway";
 import { loadConfig } from "../src/config";
 import { createDatabase } from "../src/db/client";

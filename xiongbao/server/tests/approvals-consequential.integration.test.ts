@@ -1,8 +1,8 @@
 import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { DESTRUCTIVE_TOOL_NOTE } from "@openbot/shared/bot-prompt";
-import { offersStandingRule } from "@openbot/shared/standing-rule";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { DESTRUCTIVE_TOOL_NOTE } from "@xiongbao/shared/bot-prompt";
+import { offersStandingRule } from "@xiongbao/shared/standing-rule";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { and, eq, inArray } from "drizzle-orm";
 import { DESTRUCTIVE_TOOL_REASON } from "../src/approvals/policy";
 import { createApprovalService } from "../src/approvals/service";
@@ -416,12 +416,13 @@ describe.each(EDITIONS)("the %s edition", (edition) => {
       reason: DESTRUCTIVE_TOOL_REASON,
     });
     expect(
-      (await service.decide(owner, allowed?.id ?? "", "allow_once", "web")).status,
+      (await service.decide(owner, allowed?.id ?? "", "allow_once", "web"))
+        .status,
     ).toBe("approved");
     const denied = await gate(owner, archive);
-    expect((await service.decide(owner, denied?.id ?? "", "deny", "web")).status).toBe(
-      "denied",
-    );
+    expect(
+      (await service.decide(owner, denied?.id ?? "", "deny", "web")).status,
+    ).toBe("denied");
   });
 
   test("Allow once lets the Bot delete, send, share or publish that one time", async () => {

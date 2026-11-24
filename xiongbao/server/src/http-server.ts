@@ -1,4 +1,4 @@
-import { DICTATION_HTTP_IDLE_SECONDS } from "@openbot/shared/dictation";
+import { DICTATION_HTTP_IDLE_SECONDS } from "@xiongbao/shared/dictation";
 import { serve } from "bun";
 import type { AcpRelay } from "./agents/acp/relay";
 import { computerAccessCheck } from "./agents/computer-access";

@@ -11,7 +11,7 @@ import {
   type JsonValue,
   maskNetworkEvent,
   scrubUrl,
-} from "@openbot/shared/recorder-masking";
+} from "@xiongbao/shared/recorder-masking";
 import { isRecordablePage } from "../../shared/origin";
 import type { CaptureObservation } from "../agent/observation";
 import type { StepCall } from "../steps";

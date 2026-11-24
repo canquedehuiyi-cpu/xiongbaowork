@@ -1,13 +1,13 @@
 import {
-  installOnDeviceSpeech,
-  type OnDeviceSpeech,
-  onDeviceSpeech,
-} from "@openbot/shared/on-device-speech";
-import {
   IconMicrophone,
   IconMicrophoneOff,
   IconWaveSine,
 } from "@tabler/icons-react";
+import {
+  installOnDeviceSpeech,
+  type OnDeviceSpeech,
+  onDeviceSpeech,
+} from "@xiongbao/shared/on-device-speech";
 import { useEffect, useRef, useState } from "react";
 import { PageRows, PageSection } from "@/components/layout/page-parts";
 import { RecorderCollectsRows } from "@/components/recorder/recorder-collects";
@@ -24,10 +24,10 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import type { PageResponse } from "../../protocol/messages";
+import { RECORDER_NAME } from "../../shared/brand";
 import { narrationLanguage } from "../../shared/speech-language";
 import { microphoneState } from "../popup/voice";
 import { DISCLOSURE, DISCLOSURE_TITLE } from "../ui/disclosure";
-import { RECORDER_NAME } from "../../shared/brand";
 import { Page } from "../ui/page";
 import { ask } from "../ui/runtime";
 
@@ -172,7 +172,7 @@ function speechSentence(
  * origin (the Recorder listens from its hidden offscreen document, which cannot show a prompt and can use only a lasting
  * grant, Chrome's "Allow while visiting the site", Edge's "Allow"; a one-time grant ends with this page and reads
  * `prompt` afterwards, which is how the page tells the two apart), and the browser's speech recognition for the
- * person's language on their own computer (@openbot/shared/on-device-speech), which the browser downloads or unmasks
+ * person's language on their own computer (@xiongbao/shared/on-device-speech), which the browser downloads or unmasks
  * only on a click. Where the browser cannot keep speech on the computer, the page says so: the Recorder never sends a
  * voice anywhere. Website access needs nothing here: the install granted it.
  */

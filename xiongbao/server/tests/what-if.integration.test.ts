@@ -4,7 +4,7 @@ import type {
   WhatIfAction,
   WhatIfLayer,
   WhatIfResult,
-} from "@openbot/shared/what-if";
+} from "@xiongbao/shared/what-if";
 import { and, eq, gte, sql } from "drizzle-orm";
 import {
   decideFromSnapshot,
@@ -31,18 +31,18 @@ import { createDatabase } from "../src/db/client";
 import { approvalRules, auditEvents } from "../src/db/schema";
 import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
 import { createModelCompleter } from "../src/routing/model";
+import { asPlatform } from "../src/tenant/context";
 import { readAuditEvent, readWhatIfVocabulary } from "../src/what-if";
 import type { GovernanceReaders } from "../src/what-if-check";
 import recorded from "./fixtures/what-if-recorded.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
-import { asPlatform } from "../src/tenant/context";
 import { testEnvironment } from "./support/environment";
-import { bindTestRoleWriter } from "./support/role-writer";
 /*
  * M5: fork 是多租户的，数据库读写都要在租户帧里（runAsTenant/asPlatform）。上游这份测试没有租户帧，
  * 所以每个钩子和用例都在平台帧里跑（tests/support/platform-frame）。
  */
 import { afterAll, afterEach, beforeAll, test } from "./support/platform-frame";
+import { bindTestRoleWriter } from "./support/role-writer";
 import {
   ADMIN,
   CASEY,

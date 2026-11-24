@@ -1,12 +1,12 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import type { RunAgentInput } from "@ag-ui/client";
-import { inArray } from "drizzle-orm";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
-import { SUBAGENT_TOOL } from "@openbot/shared/subagent";
-import { RUNTIME_STATE_TOOLS } from "@openbot/toolkit/copilotkit/agents";
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
-import type { RunnerLike } from "@openbot/toolkit/run-turn";
+import { SUBAGENT_TOOL } from "@xiongbao/shared/subagent";
+import { RUNTIME_STATE_TOOLS } from "@xiongbao/toolkit/copilotkit/agents";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
+import type { RunnerLike } from "@xiongbao/toolkit/run-turn";
+import { inArray } from "drizzle-orm";
 import { Observable } from "rxjs";
 import { z } from "zod";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";

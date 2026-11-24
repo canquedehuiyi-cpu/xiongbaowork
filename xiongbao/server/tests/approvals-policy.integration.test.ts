@@ -1,27 +1,27 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import { and, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
-import type { AppVariables } from "../src/auth/guards";
+import { TOOL_DISABLED } from "../src/approvals/policy";
 import {
   createApprovalService,
   HANDLED_BY_PERSON,
 } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
-import { TOOL_DISABLED } from "../src/approvals/policy";
 import {
   type ApprovalCandidate,
   ApprovalRefusedError,
 } from "../src/approvals/types";
 import { createAdminScope } from "../src/auth/admin-scope";
+import type { AppVariables } from "../src/auth/guards";
 import { createRoleRepository } from "../src/auth/guards";
 import { setRole } from "../src/auth/roles";
 import { createDatabase } from "../src/db/client";
 import {
   agentProfiles,
-  agents,
   agentSecuritySettings,
+  agents,
   approvalRules,
   approvalTeamRules,
   approvalTeamSettings,
@@ -70,7 +70,11 @@ const asTeam = async <T>(work: () => Promise<T>): Promise<T> => {
   app.use(
     "*",
     async (context, next) => {
-      context.set("actor", { id: admin, email: `${admin}@example.test`, role: "admin" });
+      context.set("actor", {
+        id: admin,
+        email: `${admin}@example.test`,
+        role: "admin",
+      });
       await runAsTenant(admin, () => next());
     },
     scope.adminCapability,
@@ -99,8 +103,20 @@ beforeAll(async () => {
     ]);
     // A team Bot (stamped `team`, its profile naming the owner) and one of the owner's private Bots.
     await database.insert(agents).values([
-      { id: teamBot, tenantId: "team", name: "Desk", type: "built_in", configuration: {} },
-      { id: privateBot, tenantId: owner, name: "Desk", type: "built_in", configuration: {} },
+      {
+        id: teamBot,
+        tenantId: "team",
+        name: "Desk",
+        type: "built_in",
+        configuration: {},
+      },
+      {
+        id: privateBot,
+        tenantId: owner,
+        name: "Desk",
+        type: "built_in",
+        configuration: {},
+      },
     ]);
     await database.insert(agentProfiles).values([
       {
@@ -285,7 +301,10 @@ test("'Always allow here' saves a personal allow rule that the gate then honours
   asOwner(async () => {
     await store.policy?.setPreferences(owner, { enabled: true });
     await store.setEnabled(owner, true);
-    const first = candidate({ toolRef: "mcp/drive/rename_file", scope: "drive" });
+    const first = candidate({
+      toolRef: "mcp/drive/rename_file",
+      scope: "drive",
+    });
     expect(await suspends(service.gate(first))).toBeTrue();
     const [request] = (await store.list(owner)).filter(
       (row) => row.action.toolCallId === first.continuation?.toolCallId,
@@ -300,7 +319,9 @@ test("'Always allow here' saves a personal allow rule that the gate then honours
       }),
     );
     await expect(
-      service.gate(candidate({ toolRef: "mcp/drive/rename_file", scope: "drive" })),
+      service.gate(
+        candidate({ toolRef: "mcp/drive/rename_file", scope: "drive" }),
+      ),
     ).resolves.toBeUndefined();
     await store.setEnabled(owner, false);
   }));
@@ -486,7 +507,10 @@ test("SEC1: a member using the owner's Bot is refused a tool the owner disabled,
     }),
   );
   expect(disabled.behaviour).toBe("deny");
-  const call = memberCall({ toolRef: "mcp/linear/create_issue", scope: "linear" });
+  const call = memberCall({
+    toolRef: "mcp/linear/create_issue",
+    scope: "linear",
+  });
   const refused = await asMember(() => service.gate(call)).catch(
     (error: unknown) => error,
   );
@@ -521,7 +545,9 @@ test("SEC1: a member using the owner's Bot is refused a tool the owner disabled,
   // The owner's own call is refused by the same rule, as theirs.
   await expect(
     asOwner(() =>
-      service.gate(candidate({ botId: teamBot, toolRef: "mcp/linear/create_issue" })),
+      service.gate(
+        candidate({ botId: teamBot, toolRef: "mcp/linear/create_issue" }),
+      ),
     ),
   ).rejects.toThrow(TOOL_DISABLED);
   // The member never read the owner's rule: their own frame still cannot see it.
@@ -536,7 +562,9 @@ test("SEC1: a member using the owner's Bot is refused a tool the owner disabled,
   // A rule the owner saved for another Bot does not reach this one.
   await expect(
     asMember(() =>
-      service.gate(memberCall({ botId: privateBot, toolRef: "mcp/linear/create_issue" })),
+      service.gate(
+        memberCall({ botId: privateBot, toolRef: "mcp/linear/create_issue" }),
+      ),
     ),
   ).resolves.toBeUndefined();
 });
@@ -552,10 +580,11 @@ test("SEC1: the owner's floors bind a member, and only the owner can change them
   expect(await suspends(asMember(() => service.gate(readsEnv)))).toBeTrue();
   // The member cannot switch the owner's floor off: the database refuses the row.
   await expect(
-    asMember(() =>
-      store.policy?.setEmployeeSecurity?.(member, teamBot, {
-        sensitivePaths: "off",
-      }) as Promise<unknown>,
+    asMember(
+      () =>
+        store.policy?.setEmployeeSecurity?.(member, teamBot, {
+          sensitivePaths: "off",
+        }) as Promise<unknown>,
     ),
   ).rejects.toMatchObject({
     cause: expect.objectContaining({
@@ -570,7 +599,11 @@ test("SEC1: the owner's floors bind a member, and only the owner can change them
       }) as Promise<unknown>,
   );
   await expect(
-    asMember(() => service.gate(memberCall({ ...readsEnv, continuation: candidate().continuation }))),
+    asMember(() =>
+      service.gate(
+        memberCall({ ...readsEnv, continuation: candidate().continuation }),
+      ),
+    ),
   ).resolves.toBeUndefined();
   expect(
     await asMember(() => database.select().from(agentSecuritySettings)),
@@ -610,9 +643,9 @@ test("SEC1: with the team switch on, a dangerous command still asks after the Bo
     await expect(
       asOwner(() => service.gate(runCommand("ls -la"))),
     ).resolves.toBeUndefined();
-    expect(
-      (await asOwner(() => service.inbox(owner))).team,
-    ).toMatchObject({ enforceDangerousCommands: true });
+    expect((await asOwner(() => service.inbox(owner))).team).toMatchObject({
+      enforceDangerousCommands: true,
+    });
   } finally {
     await asTeam(() =>
       service.setTeamSettings(admin, { enforceDangerousCommands: false }),
@@ -623,7 +656,13 @@ test("SEC1: with the team switch on, a dangerous command still asks after the Bo
 test("SEC1: a deny rule is saved and read back beside the four behaviours rows always had", () =>
   asOwner(async () => {
     const saved = [];
-    for (const behaviour of ["allow", "pre_approved", "ask", "hand_off", "deny"] as const)
+    for (const behaviour of [
+      "allow",
+      "pre_approved",
+      "ask",
+      "hand_off",
+      "deny",
+    ] as const)
       saved.push(
         await service.createRule(owner, {
           botId: privateBot,
@@ -639,6 +678,8 @@ test("SEC1: a deny rule is saved and read back beside the four behaviours rows a
         expect.objectContaining({ id: rule.id, behaviour: rule.behaviour }),
       );
     await expect(
-      service.gate(candidate({ botId: privateBot, toolRef: "mcp/readback/deny" })),
+      service.gate(
+        candidate({ botId: privateBot, toolRef: "mcp/readback/deny" }),
+      ),
     ).rejects.toThrow(TOOL_DISABLED);
   }));

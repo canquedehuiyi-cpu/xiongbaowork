@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { OFFER_CHECK_IN_TOOL } from "@openbot/shared/check-in-offer";
+import { OFFER_CHECK_IN_TOOL } from "@xiongbao/shared/check-in-offer";
 import { checkInOfferTools } from "../src/proactive/offer-tool";
 import type { ProactiveSetting } from "../src/proactive/types";
 import { researchInstruction } from "../src/proactive/window";

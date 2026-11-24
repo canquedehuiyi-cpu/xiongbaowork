@@ -55,9 +55,9 @@ import type {
   RunAgentInput,
 } from "@ag-ui/client";
 import { EventType } from "@ag-ui/client";
-import { NOT_RUN_WHILE_WAITING } from "@openbot/shared/approval-outcomes";
-import { NOT_SHOWN } from "@openbot/shared/component-markers";
-import { frameFiring } from "@openbot/shared/routine-firing";
+import { NOT_RUN_WHILE_WAITING } from "@xiongbao/shared/approval-outcomes";
+import { NOT_SHOWN } from "@xiongbao/shared/component-markers";
+import { frameFiring } from "@xiongbao/shared/routine-firing";
 import type { Observable } from "rxjs";
 import type { ApprovalContinuation } from "./continuation";
 import {

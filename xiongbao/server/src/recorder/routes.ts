@@ -11,8 +11,8 @@ import {
   type RecorderUser,
   type RecordingsPage,
   recorderActivitySchema,
-} from "@openbot/shared/recorder-api";
-import { extensionIdFromOrigin } from "@openbot/shared/recorder-extension";
+} from "@xiongbao/shared/recorder-api";
+import { extensionIdFromOrigin } from "@xiongbao/shared/recorder-extension";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { type AuditStore, DEPLOYMENT_INITIATOR } from "../audit";

@@ -1,4 +1,4 @@
-import type { DecisionToolName } from "@openbot/shared/decision-tools";
+import type { DecisionToolName } from "@xiongbao/shared/decision-tools";
 import { useState } from "react";
 import { z } from "zod";
 import { DecisionCard, OTHER } from "@/components/decisions/decision-card";

@@ -1,10 +1,9 @@
-import { createApprovalFixtureService } from "./helpers/approval-producer-model";
 import { expect, test } from "bun:test";
 import type { AbstractAgent } from "@ag-ui/client";
 import { LLMock } from "@copilotkit/aimock";
-import { readSubagentResult } from "@openbot/shared/subagent";
-import { HeadlessToolSuspension } from "@openbot/toolkit/headless-tools";
-import type { RunnerLike } from "@openbot/toolkit/run-turn";
+import { readSubagentResult } from "@xiongbao/shared/subagent";
+import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
+import type { RunnerLike } from "@xiongbao/toolkit/run-turn";
 import { Observable } from "rxjs";
 import { z } from "zod";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
@@ -26,6 +25,7 @@ import { createComputerGateway } from "../src/computer/gateway";
 import { createHostAccessBroker } from "../src/host-access/broker";
 import { CatalogueEntryUnknownError } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
+import { createApprovalFixtureService } from "./helpers/approval-producer-model";
 import { fetchDouble } from "./support/fetch-double";
 
 const context = {

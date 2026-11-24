@@ -102,7 +102,7 @@ export function collectThirdPartyNotices(options: {
     const manifest = readManifest(dir);
     if (!manifest) return;
 
-    // Workspace packages (@openbot/shared, @openbot/toolkit) link to source outside node_modules: they are this
+    // Workspace packages (@xiongbao/shared, @xiongbao/toolkit) link to source outside node_modules: they are this
     // product, so they are not listed, but what they depend on ships with it and is.
     if (!dir.split(sep).includes("node_modules")) {
       const own = {

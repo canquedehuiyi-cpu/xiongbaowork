@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { AbstractAgent } from "@ag-ui/client";
 import { type ChatCompletionRequest, LLMock } from "@copilotkit/aimock";
-import { HeadlessToolsMiddleware } from "@openbot/toolkit/headless-tools";
+import { HeadlessToolsMiddleware } from "@xiongbao/toolkit/headless-tools";
 import { z } from "zod";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { deepSeekLanguageModel } from "../src/models/deepseek-thinking";

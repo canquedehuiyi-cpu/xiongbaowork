@@ -9,7 +9,7 @@ import {
   type Tool,
   type ToolCall,
 } from "@ag-ui/client";
-import { OPENBOT_WAITING_METADATA } from "@openbot/shared/waiting";
+import { OPENBOT_WAITING_METADATA } from "@xiongbao/shared/waiting";
 import { Observable, type Subscription } from "rxjs";
 import { withApprovalContext } from "./continuation";
 import type { AuditInitiator } from "./initiator";

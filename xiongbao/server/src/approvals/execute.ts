@@ -1,5 +1,5 @@
-import type { GrantedTool } from "@openbot/toolkit/granted-tool";
-import type { HeadlessTool } from "@openbot/toolkit/headless-tools";
+import type { GrantedTool } from "@xiongbao/toolkit/granted-tool";
+import type { HeadlessTool } from "@xiongbao/toolkit/headless-tools";
 import { z } from "zod";
 import { GIT_LOCAL_TOOLS } from "../../../shared/git-tools";
 import type { RunAssertion } from "../agents/callback-token";

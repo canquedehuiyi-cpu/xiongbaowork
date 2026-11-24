@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { EventType, type RunAgentInput } from "@ag-ui/client";
 import type { LambdaSendOptions } from "@copilotkit/shared";
-import { CloningRemoteAgent } from "@openbot/toolkit/copilotkit/agents";
+import { CloningRemoteAgent } from "@xiongbao/toolkit/copilotkit/agents";
 import { lastValueFrom, toArray } from "rxjs";
 import { ProductFixtureAgent } from "../scripts/support/product-run";
 import { createProductTelemetry } from "../src/telemetry/product";

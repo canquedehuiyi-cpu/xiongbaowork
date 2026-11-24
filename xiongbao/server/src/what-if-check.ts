@@ -31,15 +31,15 @@
  * which one settles it. The ones a real action would never reach are marked so.
  */
 
-import { appToolName, connectorName } from "@openbot/shared/tool-name";
+import { appToolName, connectorName } from "@xiongbao/shared/tool-name";
 import type {
   WhatIfLayer,
   WhatIfLayerId,
   WhatIfOutcome,
   WhatIfResult,
   WhatIfVerdict,
-} from "@openbot/shared/what-if";
-import type { AuditInitiator } from "@openbot/toolkit/initiator";
+} from "@xiongbao/shared/what-if";
+import type { AuditInitiator } from "@xiongbao/toolkit/initiator";
 import {
   CAPABILITY_LABELS,
   type Capability,
@@ -65,6 +65,7 @@ import type {
   ApprovalRule,
   ApprovalTeamRule,
 } from "./approvals/types";
+import { englishName } from "./brand";
 import { approvalEffectOf, approvalScopeOf } from "./computer/gateway";
 import {
   type ActionPolicy,
@@ -74,7 +75,6 @@ import {
 } from "./computer/policy";
 // M5: fork 没有采用插件拆分，这两个在 plugins/store.ts。
 import { appCallPolicyContext, type PluginDecision } from "./plugins/store";
-import { englishName } from "./brand";
 
 /** Where the deciders read this OpenBot's settings from: the same stores the live path reads. */
 export type GovernanceReaders = {

@@ -1,4 +1,3 @@
-import { ruleTitle } from "@openbot/shared/tool-name";
 import {
   IconChevronRight,
   IconLock,
@@ -6,6 +5,7 @@ import {
   IconShieldCheck,
 } from "@tabler/icons-react";
 import { type UseMutationResult, useQuery } from "@tanstack/react-query";
+import { ruleTitle } from "@xiongbao/shared/tool-name";
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {

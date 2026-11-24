@@ -9,7 +9,7 @@ import {
   type StoredPreferences,
   type UserPreferences,
   type WorkHours,
-} from "@openbot/shared/user-preferences";
+} from "@xiongbao/shared/user-preferences";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "./db/client";
 import { users } from "./db/schema";

@@ -1,5 +1,5 @@
-import { subagentThreadId } from "@openbot/shared/subagent";
 import { queryOptions } from "@tanstack/react-query";
+import { subagentThreadId } from "@xiongbao/shared/subagent";
 import {
   readThreadMessages,
   type StoredThread,

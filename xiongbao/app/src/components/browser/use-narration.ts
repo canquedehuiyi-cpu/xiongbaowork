@@ -1,4 +1,4 @@
-import { installOnDeviceSpeech } from "@openbot/shared/on-device-speech";
+import { installOnDeviceSpeech } from "@xiongbao/shared/on-device-speech";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type NarrationAnswer,
@@ -131,7 +131,7 @@ export function useNarration({
 
   /**
    * Turns narration on or off. On after a failure tries again. On is always the person's click, the one thing that may
-   * ask the browser to download the language for recognition on their computer (@openbot/shared/on-device-speech), so it
+   * ask the browser to download the language for recognition on their computer (@xiongbao/shared/on-device-speech), so it
    * asks then; narration waits for the download.
    */
   const setOn = useCallback(

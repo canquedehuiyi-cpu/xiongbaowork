@@ -1,5 +1,5 @@
 import type { Message } from "@ag-ui/core";
-import { notRun } from "@openbot/shared/approval-outcomes";
+import { notRun } from "@xiongbao/shared/approval-outcomes";
 import { newId } from "../new-id";
 import { withoutWaitingPlaceholders } from "./approval-context";
 
