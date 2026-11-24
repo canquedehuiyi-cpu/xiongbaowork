@@ -1,0 +1,787 @@
+[
+  {
+    "text": "ai.copilotkit.openbot.recorder",
+    "until": "R2",
+    "reason": "扩展身份：原生宿主名/IndexedDB/策略键（任务 17 处理）"
+  },
+  {
+    "pattern": "OPENBOT_[A-Z0-9_]+",
+    "until": "R2",
+    "reason": "环境变量名与错误码（任务 15 处理）"
+  },
+  {
+    "text": "openbot-recorder",
+    "until": "R2",
+    "reason": "扩展身份：原生宿主名/IndexedDB/策略键（任务 17 处理）"
+  },
+  {
+    "text": "OpenBotUrl",
+    "until": "R2",
+    "reason": "扩展身份：原生宿主名/IndexedDB/策略键（任务 17 处理）"
+  },
+  {
+    "text": "x-openbot-${kind}",
+    "until": "R2",
+    "reason": "浏览器请求标记头的模板写法（同上，新名已在前一个分支里）（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "text": "x-openbot-agent-token",
+    "until": "R2",
+    "reason": "智能体回调令牌头：服务器发出、电脑端/runner 回送（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "text": "x-openbot-bot-id",
+    "until": "R2",
+    "reason": "电脑端请求头：Bot id（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "text": "x-openbot-build-version",
+    "until": "R2",
+    "reason": "发行站点回给服务器的构建版本头（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "text": "x-openbot-computer-token",
+    "until": "R2",
+    "reason": "电脑令牌头：电脑端到服务器（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "text": "x-openbot-desktop-host-token",
+    "until": "R2",
+    "reason": "桌面宿主令牌头：桌面端到服务器（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "text": "x-openbot-dictation",
+    "until": "R2",
+    "reason": "浏览器请求标记头（server/src/browser-request-marker.ts 同时认新旧两种）（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "text": "x-openbot-egress",
+    "until": "R2",
+    "reason": "电脑端出站过滤头（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "text": "x-openbot-person-id",
+    "until": "R2",
+    "reason": "电脑端请求头：人员 id（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "text": "x-openbot-recorder-bot",
+    "until": "R2",
+    "reason": "录制扩展到服务器的 Bot 头（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "text": "-U openbot",
+    "until": "R3",
+    "reason": "品牌白名单（docker/s6/scripts/postgres-init.sh 等 2 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": ".openbot-carried-over",
+    "until": "R3",
+    "reason": "品牌白名单（supervisor/src/docker.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": ".openbot-carrying-",
+    "until": "R3",
+    "reason": "品牌白名单（supervisor/src/docker.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"/etc/openbot/sandbox-template.json\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/config.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"<<openbot:staffing-proposal>>\"",
+    "until": "R3",
+    "reason": "品牌白名单（shared/staffing-proposal.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"ai.copilotkit.openbot.recorder\"",
+    "until": "R3",
+    "reason": "品牌白名单（shared/recorder-extension.json）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"app.kubernetes.io/managed-by\": \"openbot\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/computer/sandbox.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"data-copilotkit-ignore\"",
+    "until": "R3",
+    "reason": "品牌白名单（extension/src/content/notice.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"dev@openbot.local\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/auth/dev-actor-email.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"name\": \"openbot-mobile\"",
+    "until": "R3",
+    "reason": "品牌白名单（mobile/package.json 等 2 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-browser\"",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/components/settings/browsers/connected-browsers.tsx 等 6 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-browser\":",
+    "until": "R3",
+    "reason": "品牌白名单（extension/src/pages/options/options.tsx）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-component-\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/delivery/opentag.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-deployment:\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/plugins/shared-accounts.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-desktop\",",
+    "until": "R3",
+    "reason": "品牌白名单（shared/desktop-control.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-learning-\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-learning\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/model-endpoint.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-model-call\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/routing/model.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-recorder\"",
+    "until": "R3",
+    "reason": "品牌白名单（extension/src/shared/database.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-unreachable\"",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/lib/recorder/bridge.ts 等 4 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-voice-chat\"",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/lib/voice/archive.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot-voice-context\"",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/lib/voice/transcript.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot://open\"",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/components/desktop/desktop-return.tsx）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot:%\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/plugins/personal-defaults.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot:always-on\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/plugins/personal-defaults.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot:apply-migrations\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/db/apply-migrations.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot:learned-skills\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/remote.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot:open\"",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/lib/desktop/open-requests.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot:personal-defaults\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/components/routes.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot:staffing-default\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/tenant/provisioning.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot.",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/telemetry/otel.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot.carry-over\"",
+    "until": "R3",
+    "reason": "品牌白名单（supervisor/src/docker.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot.connect\"",
+    "until": "R3",
+    "reason": "品牌白名单（extension/src/protocol/messages.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot.ping\"",
+    "until": "R3",
+    "reason": "品牌白名单（extension/src/protocol/messages.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot.sender\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/delivery/opentag.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot.working\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/delivery/opentag.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot\"",
+    "until": "R3",
+    "reason": "皮肤值与学习容器 id 等带引号的字面值"
+  },
+  {
+    "text": "\"OpenBot\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/agents/tool-limit.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot/share_private_information\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/proactive/private-share.ts 等 3 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbot/ui@1\"",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/lib/copilot/a2ui.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"openbotmobile://\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/auth/index.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"plugin:openbot-desktop\"",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/lib/desktop/speech.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"plugin:openbot-desktop|notify\"",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/lib/notifications/show.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "\"x-copilotkit-ei-service-token\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "(?:openbot-)?(agent-",
+    "until": "R3",
+    "reason": "品牌白名单（shared/harnesses.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "(?:openbot-)?${harness}",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/agents/plan-model.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "(?:openbot-)?agent-",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/agents/harness-model.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "[data-copilotkit-action]",
+    "until": "R3",
+    "reason": "品牌白名单（extension/src/content/targeting.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "/openbot'",
+    "until": "R3",
+    "reason": "启动脚本里的库名（任务书原文）"
+  },
+  {
+    "text": "/openbot/deliver",
+    "until": "R3",
+    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+  },
+  {
+    "text": "/openbot/membership",
+    "until": "R3",
+    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+  },
+  {
+    "pattern": "\\bid: openbot\\b",
+    "until": "R3",
+    "reason": "租户 id（examples/xiongbao/brand.yaml 的 id: openbot），已落在库里"
+  },
+  {
+    "text": "`openbot-${config.provider}-plan`",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/agents/plan-model.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "`openbot-connection-test-",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/agents/connection-test.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "`openbot:defaults:",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/memory/defaults.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "`openbot.payload.",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/telemetry/otel.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "<<openbot:app-access-request>>",
+    "until": "R3",
+    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+  },
+  {
+    "text": "= \"openbot.",
+    "until": "R3",
+    "reason": "品牌白名单（supervisor/src/names.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "actor.startsWith(\"openbot:\")",
+    "until": "R3",
+    "reason": "品牌白名单（shared/openbot-actor.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "app_id: \"openbot\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/telemetry/product.ts 等 2 处）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "Automatic Learning: no credential here could create the openbot container",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "Automatic Learning: the openbot container is",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "AUTOMATIC_LEARNING_CONTAINER_ID = \"openbot\"",
+    "until": "R3",
+    "reason": "品牌白名单（shared/learning.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "by.startsWith(\"openbot:\")",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/plugins/store.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "client_id:'openbot-desktop'",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/auth/native-browser.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "clientID: \"openbot-desktop\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/auth/index.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "const LEGACY_DIRECTORY = \"qoderwake\";",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/tenant-package-path.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "Created an openbot container",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "creates the openbot Learning container",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/config.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "DEFAULT_NAMESPACE = \"openbot\"",
+    "until": "R3",
+    "reason": "品牌白名单（supervisor/src/names.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "eq(recorderConnections.via, \"openbot-browser\")",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/index.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "granted_by 以 openbot: 开头",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/index.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "id: \"openbot\",",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "images.openbot",
+    "until": "R3",
+    "reason": "发行记录里的镜像键（工作流里读取）"
+  },
+  {
+    "text": "Learning container with ID \"openbot\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "LEGACY_CONFIG_SUFFIX = \"(OpenBot)\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/plugins/composio-adapter.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "LEGACY_SIDECAR: &str = \"openbot-runner\"",
+    "until": "R3",
+    "reason": "品牌白名单（desktop-device/src-tauri/src/sidecar.rs）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "openbot computer token v1",
+    "until": "R3",
+    "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）"
+  },
+  {
+    "text": "openbot web-bot-auth ed25519 v1",
+    "until": "R3",
+    "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）"
+  },
+  {
+    "text": "openbot_app",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "OPENBOT_APPROVAL_EXACT_AEAD_V1",
+    "until": "R3",
+    "reason": "加密版本名：写进密文头与 AAD（env-names.ts CRYPTO_NAMES），须早于 R2 的环境变量正则保护"
+  },
+  {
+    "text": "OPENBOT_APPROVAL_EXACT_HEADER_V1",
+    "until": "R3",
+    "reason": "加密版本名：写进密文头与 AAD（env-names.ts CRYPTO_NAMES），须早于 R2 的环境变量正则保护"
+  },
+  {
+    "text": "OPENBOT_APPROVAL_EXACT_SOURCE_BINDING_V1",
+    "until": "R3",
+    "reason": "加密版本名：写进密文头与 AAD（env-names.ts CRYPTO_NAMES），须早于 R2 的环境变量正则保护"
+  },
+  {
+    "text": "OPENBOT_APPROVAL_EXACT_WIRE_V1",
+    "until": "R3",
+    "reason": "加密版本名：写进密文头与 AAD（env-names.ts CRYPTO_NAMES），须早于 R2 的环境变量正则保护"
+  },
+  {
+    "text": "openbot_channel_waker_group_link",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "OPENBOT_EXACT_INPUT_JSON_V1",
+    "until": "R3",
+    "reason": "加密版本名：写进密文头与 AAD（env-names.ts CRYPTO_NAMES），须早于 R2 的环境变量正则保护"
+  },
+  {
+    "text": "openbot_flow_share_guard",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_grant_stamp_guard",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_mcp_tool_stamp_guard",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_role_writer",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_bot_visible",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_channel_creator",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_channel_guard",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_channel_hand_over_core",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_channel_hand_over_write",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_channel_member",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_channel_seedable",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_person_leaves_groups",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_revoked_leaves",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_row_guard",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_team_server_secret",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_waker_group_absent",
+    "until": "R3",
+    "reason": "数据库对象名：迁移 SQL 里已创建（角色/函数/策略），随 R3 迁移改名"
+  },
+  {
+    "text": "openbot_work_offered",
+    "until": "R3",
+    "reason": "pg_notify 通道名"
+  },
+  {
+    "text": "openbot-agent-computer:latest",
+    "until": "R3",
+    "reason": "品牌白名单（supervisor/src/index.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "openbot-automation-hook-signing:v1",
+    "until": "R3",
+    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+  },
+  {
+    "text": "openbot-bearer",
+    "until": "R3",
+    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+  },
+  {
+    "text": "openbot-deployment:",
+    "until": "R3",
+    "reason": "Composio/Arcade 共享账号身份前缀：第三方已登记"
+  },
+  {
+    "text": "openbot-egress-credentials.invalid",
+    "until": "R3",
+    "reason": "品牌白名单（agent-computer/src/egress.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "openbot-product",
+    "until": "R3",
+    "reason": "签名/加密/哈希域名：改了会让存量密文与令牌失效（scan.ts SIGNING_DOMAINS）"
+  },
+  {
+    "text": "openbot:agent-run",
+    "until": "R3",
+    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+  },
+  {
+    "text": "openbot:always-on",
+    "until": "R3",
+    "reason": "plugin_grants 授权来源标记，随迁移改名"
+  },
+  {
+    "text": "openbot:apply-migrations",
+    "until": "R3",
+    "reason": "迁移锁名"
+  },
+  {
+    "text": "openbot:defaults:",
+    "until": "R3",
+    "reason": "记忆默认值键前缀"
+  },
+  {
+    "text": "openbot:personal-defaults",
+    "until": "R3",
+    "reason": "plugin_grants 授权来源标记，随迁移改名"
+  },
+  {
+    "text": "openbot:personal-memory",
+    "until": "R3",
+    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+  },
+  {
+    "text": "openbot:staffing-default",
+    "until": "R3",
+    "reason": "plugin_grants 授权来源标记，随迁移改名"
+  },
+  {
+    "text": "openbot.ap.local-terminal.v1",
+    "until": "R3",
+    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+  },
+  {
+    "text": "openbot.audit_retention_days",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/audit-retention.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "openbot.dev/",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/computer/sandbox.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "openbot.headless.waiting",
+    "until": "R3",
+    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+  },
+  {
+    "text": "openbot.local",
+    "until": "R3",
+    "reason": "品牌白名单（supervisor/src/identity.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "openbot.role-authority:",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/auth/roles.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "openbot.surface 标签",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/routes/_authed/admin/enterprise.tsx）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "openbot.vault.credential.v2",
+    "until": "R3",
+    "reason": "品牌护栏 NEVER_CHANGE：改了会损坏存量数据或对端（scan.ts）"
+  },
+  {
+    "text": "oss.runtime.openbot.",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/telemetry/product.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "postgres://openbot",
+    "until": "R3",
+    "reason": "品牌白名单（docker/s6/scripts/postgres-init.sh）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "PUBLIC_DEFAULT_DATABASE_PASSWORD = \"openbot\"",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/auth/role-writer-lifecycle.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "ref: `openbot/${SEARCH_TOOLS}`",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/agents/tool-search.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "RESERVED_SERVERS = new Set([\"bot\", \"host\", \"openbot\", \"computer\"])",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/pipeline/action-step.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "startsWith(\"openbot/\")",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/components/approvals/describe-rules.tsx）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "The openbot container exists",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "the openbot Learning container with the configured runtime key",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/learning/ensure-container.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "They are tagged openbot.surface.",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/components/admin/controls/recording-section.tsx）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "type: \"openbot.",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/lib/recorder/bridge.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "z.literal(\"openbot\")",
+    "until": "R3",
+    "reason": "品牌白名单（server/src/telemetry/product.ts）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "名为 openbot 的容器",
+    "until": "R3",
+    "reason": "品牌白名单（app/src/routes/_authed/admin/learning.tsx）：已落在存量数据或对端，随迁移改名"
+  },
+  {
+    "text": "LEGACY_PREFIX = \"OPENBOT_\"",
+    "until": "R4",
+    "reason": "shared/env-aliases.ts 的旧环境变量前缀"
+  },
+  {
+    "text": "OPENBOT_\"$1\"",
+    "until": "R4",
+    "reason": "docker/s6/scripts/env-aliases.sh 的旧前缀拼接"
+  },
+  {
+    "pattern": "OPENBOT_<[A-Za-z]+>",
+    "until": "R4",
+    "reason": "说明旧环境变量前缀的注释写法（env-aliases）"
+  },
+  {
+    "text": "OPENBOT_$suffix",
+    "until": "R4",
+    "reason": "docker/s6/scripts/env-aliases.sh 的旧前缀拼接"
+  },
+  {
+    "pattern": "openbot-runner(?:\\.exe)?(?!-[a-z]+-)|OPENBOT-RUNNER(?:\\.EXE)?",
+    "until": "R4",
+    "reason": "desktop-device 的 LEGACY_SIDECAR 旧 runner 二进制名（含 .exe 与大写比较用例；mkdtemp 前缀 openbot-runner-xxx- 不受保护）"
+  },
+  {
+    "text": "Copyright (c) 2026 CopilotKit",
+    "until": "forever",
+    "reason": "MIT 许可证署名"
+  }
+]

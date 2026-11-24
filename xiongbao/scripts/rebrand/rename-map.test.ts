@@ -1,0 +1,259 @@
+import { describe, expect, test } from "bun:test";
+import {
+  buildProtect,
+  isSkipped,
+  loadProtect,
+  type Phase,
+  type ProtectEntry,
+  readProtectEntries,
+  renamePath,
+  renameText,
+  SKIP_PATHS,
+  VARIANTS,
+} from "./rename-map";
+
+describe("renameText", () => {
+  const p = loadProtect("R1");
+
+  test("改包名、标识符与路径片段", () => {
+    expect(renameText('from "@openbot/shared"', p)).toBe(
+      'from "@xiongbao/shared"',
+    );
+    expect(renameText("normaliseOpenBotOrigin", p)).toBe(
+      "normaliseXiongBaoOrigin",
+    );
+  });
+
+  test("六个变体各自落到对应的新写法（不带保护）", () => {
+    const none = /$^/g;
+    expect(renameText("openBotRun OPENBOT_ openbotUrl", none)).toBe(
+      "xiongBaoRun XIONGBAO_ xiongbaoUrl",
+    );
+    expect(renameText("OpenBot Openbot @openbot/x", none)).toBe(
+      "XiongBao Xiongbao @xiongbao/x",
+    );
+  });
+
+  test("环境变量名在 R1 受保护，持久化的凭据标记不被误改", () => {
+    expect(renameText("OPENBOT_PUBLIC_URL", p)).toBe("OPENBOT_PUBLIC_URL");
+    expect(renameText('"openbot.vault.credential.v2", openbotUrl', p)).toBe(
+      '"openbot.vault.credential.v2", xiongbaoUrl',
+    );
+  });
+
+  test("许可证署名与依赖包名永远不动", () => {
+    expect(renameText("Copyright (c) 2026 CopilotKit", p)).toBe(
+      "Copyright (c) 2026 CopilotKit",
+    );
+    expect(renameText('import "@copilotkit/react-core"', p)).toBe(
+      'import "@copilotkit/react-core"',
+    );
+    expect(renameText("https://open.bot/errors/x", p)).toBe(
+      "https://open.bot/errors/x",
+    );
+  });
+
+  test("renaming twice equals renaming once", () => {
+    const mixed = [
+      'import { OpenBotRole } from "@openbot/shared/openbot-actor";',
+      "const openBotRun = process.env.OPENBOT_PUBLIC_URL ?? openbotUrl;",
+      'const label = "openbot.vault.credential.v2"; // Openbot',
+      "Copyright (c) 2026 CopilotKit",
+    ].join("\n");
+    for (const phase of ["R1", "R2", "R3", "R4"] as const) {
+      const protect = loadProtect(phase);
+      const once = renameText(mixed, protect);
+      expect(renameText(once, protect)).toBe(once);
+    }
+  });
+
+  test("空文本与没有任何命中的文本原样返回", () => {
+    expect(renameText("", /$^/g)).toBe("");
+    expect(renameText("nothing here", loadProtect("R1"))).toBe("nothing here");
+  });
+
+  test("保护片段按长度降序匹配，长的精确串优先于短的", () => {
+    const entries: ProtectEntry[] = [
+      { text: "openbot", until: "R3", reason: "短" },
+      { text: "openbot-keep", until: "R3", reason: "长" },
+    ];
+    const protect = buildProtect(entries, "R1");
+    expect(renameText("openbot-keep openbot-x", protect)).toBe(
+      "openbot-keep openbot-x",
+    );
+    const shortOnly = buildProtect([entries[1] as ProtectEntry], "R1");
+    expect(renameText("openbot-keep openbot-x", shortOnly)).toBe(
+      "openbot-keep xiongbao-x",
+    );
+  });
+
+  test("text 条目按字面转义，pattern 条目按正则", () => {
+    const protect = buildProtect(
+      [
+        { text: "a.b(c)", until: "forever", reason: "字面" },
+        { pattern: "ENV_[A-Z]+", until: "forever", reason: "正则" },
+      ],
+      "R1",
+    );
+    expect(renameText("a.b(c) aXb(c) ENV_FOO openbot", protect)).toBe(
+      "a.b(c) aXb(c) ENV_FOO xiongbao",
+    );
+  });
+});
+
+describe("保护清单按阶段到期", () => {
+  test("protect entries expire by phase", () => {
+    const entries: ProtectEntry[] = [
+      { text: "keep-until-r2", until: "R2", reason: "r2" },
+    ];
+    expect(buildProtect(entries, "R1").test("keep-until-r2")).toBe(true);
+    expect(buildProtect(entries, "R2").test("keep-until-r2")).toBe(false);
+    expect(buildProtect(entries, "R4").test("keep-until-r2")).toBe(false);
+  });
+
+  test("forever 条目在每个阶段都生效", () => {
+    const entries: ProtectEntry[] = [
+      { text: "forever-text", until: "forever", reason: "f" },
+    ];
+    for (const phase of ["R1", "R2", "R3", "R4"] as const) {
+      expect(buildProtect(entries, phase).test("forever-text")).toBe(true);
+    }
+  });
+
+  test("没有任何生效条目时不匹配任何文本", () => {
+    expect(buildProtect([], "R1").test("anything")).toBe(false);
+  });
+
+  test("真实清单：环境变量在 R1 受保护、R2 起改名；加密域名到 R3 才改", () => {
+    expect(renameText("OPENBOT_PUBLIC_URL", loadProtect("R1"))).toBe(
+      "OPENBOT_PUBLIC_URL",
+    );
+    expect(renameText("OPENBOT_PUBLIC_URL", loadProtect("R2"))).toBe(
+      "XIONGBAO_PUBLIC_URL",
+    );
+    const aad = '"openbot.vault.credential.v2"';
+    expect(renameText(aad, loadProtect("R2"))).toBe(aad);
+    expect(renameText(aad, loadProtect("R3"))).toBe(
+      '"xiongbao.vault.credential.v2"',
+    );
+    const copyright = "Copyright (c) 2026 CopilotKit";
+    expect(renameText(copyright, loadProtect("R4"))).toBe(copyright);
+  });
+
+  test("每个条目的 until 与 reason 合法，pattern 能编译", () => {
+    const phases = new Set(["R1", "R2", "R3", "R4", "forever"]);
+    for (const entry of readProtectEntries()) {
+      expect(phases.has(entry.until as Phase | "forever")).toBe(true);
+      expect(entry.reason.length).toBeGreaterThan(0);
+      expect(Boolean(entry.text) !== Boolean(entry.pattern)).toBe(true);
+      if (entry.pattern)
+        expect(() => new RegExp(entry.pattern as string)).not.toThrow();
+    }
+  });
+});
+
+describe("renamePath", () => {
+  test("文件名与目录名都套变体", () => {
+    expect(renamePath("xiongbao/shared/openbot-actor.ts")).toBe(
+      "xiongbao/shared/xiongbao-actor.ts",
+    );
+    expect(renamePath("xiongbao/charts/openbot/templates/_helpers.tpl")).toBe(
+      "xiongbao/charts/xiongbao/templates/_helpers.tpl",
+    );
+  });
+
+  test("按路径段处理：作用域包目录与大小写变体", () => {
+    expect(renamePath("a/@openbot/shared/OpenBotRole.ts")).toBe(
+      "a/@xiongbao/shared/XiongBaoRole.ts",
+    );
+  });
+
+  test("不含旧名的路径原样返回", () => {
+    expect(renamePath("xiongbao/server/src/app.ts")).toBe(
+      "xiongbao/server/src/app.ts",
+    );
+  });
+});
+
+describe("isSkipped", () => {
+  test("迁移、归档、依赖与锁文件任何阶段都不动", () => {
+    expect(isSkipped("xiongbao/server/drizzle/0054_app_role.sql")).toBe(true);
+    expect(isSkipped("archives/x.md")).toBe(true);
+    expect(isSkipped("xiongbao/node_modules/a/b.js")).toBe(true);
+    expect(isSkipped("xiongbao/bun.lock")).toBe(true);
+    expect(isSkipped("xiongbao/desktop/bun.lock")).toBe(true);
+  });
+
+  test("恢复目录只跳过 sql 与 meta 子目录", () => {
+    expect(
+      isSkipped("xiongbao/server/recovery/recovery-1/sql/0112_x.sql"),
+    ).toBe(true);
+    expect(
+      isSkipped("xiongbao/server/recovery/recovery-1/meta/_journal.json"),
+    ).toBe(true);
+    expect(isSkipped("xiongbao/server/recovery/recovery-1/index.ts")).toBe(
+      false,
+    );
+    expect(isSkipped("xiongbao/server/recovery/readme.ts")).toBe(false);
+  });
+
+  test("普通源码不跳过，前缀相近的目录不误判", () => {
+    expect(isSkipped("xiongbao/server/src/app.ts")).toBe(false);
+    expect(isSkipped("xiongbao/server/drizzle-extras/a.ts")).toBe(false);
+    expect(isSkipped("archives-old/a.md")).toBe(false);
+  });
+
+  test("路径写法 ./ 与反斜杠先归一", () => {
+    expect(isSkipped("./archives/x.md")).toBe(true);
+    expect(isSkipped("xiongbao\\server\\drizzle\\0001.sql")).toBe(true);
+  });
+});
+
+describe("常量", () => {
+  test("VARIANTS 顺序固定：包作用域先于大写，大写先于混合写法", () => {
+    expect(VARIANTS.map(([from]) => from)).toEqual([
+      "@openbot/",
+      "OPENBOT",
+      "OpenBot",
+      "Openbot",
+      "openBot",
+      "openbot",
+    ]);
+    expect(SKIP_PATHS).toContain("archives/");
+  });
+});
+
+describe("保护清单与源码一致", () => {
+  test("every protect text exists verbatim in the tree", async () => {
+    const root = Bun.spawnSync(["git", "rev-parse", "--show-toplevel"], {
+      cwd: import.meta.dir,
+    })
+      .stdout.toString()
+      .trim();
+    // 排除的地方都会"自证"这些文字：设计文档、归档、本工具自己、品牌护栏的白名单与产物词表。
+    const excluded = [
+      ":(exclude)archives",
+      ":(exclude)docs",
+      ":(exclude)xiongbao/scripts/rebrand",
+      ":(exclude)xiongbao/app/tests/brand-leak-allowlist.json",
+      ":(exclude)xiongbao/app/tests/brand-artifacts",
+    ];
+    const texts = readProtectEntries()
+      .map((entry) => entry.text)
+      .filter((text): text is string => typeof text === "string");
+    expect(texts.length).toBeGreaterThan(0);
+    const missing: string[] = [];
+    const queue = [...texts];
+    const worker = async () => {
+      for (let text = queue.shift(); text !== undefined; text = queue.shift()) {
+        const proc = Bun.spawn(
+          ["git", "grep", "-F", "-q", "-e", text, "--", ".", ...excluded],
+          { cwd: root, stdout: "ignore", stderr: "ignore" },
+        );
+        if ((await proc.exited) !== 0) missing.push(text);
+      }
+    };
+    await Promise.all(Array.from({ length: 8 }, worker));
+    expect(missing).toEqual([]);
+  }, 120_000);
+});
