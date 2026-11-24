@@ -10,7 +10,9 @@
           "severity": "important",
           "found": true,
           "inDiff": true,
-          "by": [0, 1, 6],
+          "by": [
+            0
+          ],
           "summary": "已建立的 HTTP 流式响应不受撤销、到期和 12 小时上限约束：被移出群的人仍能持续收到程序的实时数据。"
         },
         {
@@ -18,7 +20,9 @@
           "severity": "important",
           "found": true,
           "inDiff": true,
-          "by": [1],
+          "by": [
+            1
+          ],
           "summary": "端口模式下程序响应的缓存头原样转出：先开的程序可在之后打开的程序里通过浏览器缓存持续执行脚本。"
         },
         {
@@ -26,7 +30,9 @@
           "severity": "important",
           "found": true,
           "inDiff": true,
-          "by": [2],
+          "by": [
+            2
+          ],
           "summary": "run 范围的程序授权不核对交付者：可打开同群另一位员工没交付的程序（越权）。"
         },
         {
@@ -34,7 +40,9 @@
           "severity": "important",
           "found": true,
           "inDiff": true,
-          "by": [3],
+          "by": [
+            3
+          ],
           "summary": "任务页（没有侧栏）打开程序时没有端口模式提示，用户要求的提示缺一条路径。"
         },
         {
@@ -42,7 +50,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [4],
+          "by": [
+            4
+          ],
           "summary": "WebSocket 周期复查走 60 秒缓存，撤销最坏约 120 秒才断开。"
         },
         {
@@ -50,7 +60,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [5],
+          "by": [
+            5
+          ],
           "summary": "内容源监听用 Bun 默认 10 秒空闲超时，慢接口与长间隔 SSE 会被提前断开。"
         },
         {
@@ -58,7 +70,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [6],
+          "by": [
+            6
+          ],
           "summary": "限流键不含人：一个人刷请求，同一员工的其他观看者被连带 429；额度对 Vite 首屏偏低。"
         },
         {
@@ -66,7 +80,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [7],
+          "by": [
+            7
+          ],
           "summary": "首页路径长度上限不一致：证据门 2000、打开路由 1024，超过 1024 的程序能交付但打不开。"
         },
         {
@@ -74,7 +90,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [8],
+          "by": [
+            8
+          ],
           "summary": "客户端 IP 类请求头（cf-connecting-ip、true-client-ip 等）没有全清，转给了程序。"
         },
         {
@@ -82,7 +100,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [9],
+          "by": [
+            9
+          ],
           "summary": "模块注释说应用的 cookie 程序读不到，实际端口模式下程序脚本能读到同主机上所有非 HttpOnly cookie。"
         },
         {
@@ -106,7 +126,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [10],
+          "by": [
+            10
+          ],
           "summary": "不带范围的 app 打开只查 canUseBot，可打开自己员工座位上的任意端口，不限交付里声明的端口（部署文档补充，未改代码）。"
         }
       ],
@@ -131,9 +153,9 @@
         "rate": 0.8462
       },
       "strictPrecision": {
-        "matched": 5,
+        "matched": 4,
         "total": 13,
-        "rate": 0.3846
+        "rate": 0.3077
       },
       "misses": [],
       "unmatched": [
@@ -162,7 +184,9 @@
           "severity": "important",
           "found": true,
           "inDiff": true,
-          "by": [0],
+          "by": [
+            0
+          ],
           "summary": "服务器执行电脑工具的单聊里中途调用页面工具，一轮被拆到几个 run；最终 run 上没有产物事件，后一个 run 里的交付下载 404。"
         },
         {
@@ -186,7 +210,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [1, 2],
+          "by": [
+            2
+          ],
           "summary": "carried 条目没有 TTL：共享电脑时被扣住的标记会把时间窗拉长，别人的改动被列到本人 run 上。"
         },
         {
@@ -194,7 +220,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [4],
+          "by": [
+            4
+          ],
           "summary": "continues 用「末条消息不是 user」判断续跑太粗：追加 system/developer 消息会被当成续跑，多列出上一轮的文件。"
         },
         {
@@ -202,7 +230,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [3],
+          "by": [
+            3
+          ],
           "summary": "让位只按 runId 判断，没有带 botId：将来同一个 runId 下另一位员工的观察可能被误让位。"
         },
         {
@@ -210,7 +240,9 @@
           "severity": "minor",
           "found": true,
           "inDiff": true,
-          "by": [5],
+          "by": [
+            5
+          ],
           "summary": "外层 observeTurn 现在对所有带无头工具的无人值守轮生效，包括外部员工（ACP），行为面扩大。"
         }
       ],
@@ -230,9 +262,9 @@
         "rate": 0.6667
       },
       "precision": {
-        "matched": 6,
+        "matched": 5,
         "total": 6,
-        "rate": 1
+        "rate": 0.8333
       },
       "strictPrecision": {
         "matched": 1,
@@ -240,7 +272,15 @@
         "rate": 0.1667
       },
       "misses": [],
-      "unmatched": []
+      "unmatched": [
+        {
+          "index": 1,
+          "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+          "lines": "55-66",
+          "severity": "low",
+          "excerpt": "carryOver 替换同 key 的旧条目、或超过 CARRIED_MAX 淘汰最旧条目时，只删 Map 里的记录，网关里对应的快照标记没有清理。被丢下的轮次"
+        }
+      ]
     },
     {
       "pr": "pr-812",
@@ -251,7 +291,9 @@
           "severity": "critical",
           "found": true,
           "inDiff": false,
-          "by": [2],
+          "by": [
+            2
+          ],
           "summary": "群聊里出错或被停的轮，回复行不记产物：run 事件有清单但群聊界面读回复行，没有任何下载链接。"
         },
         {
@@ -259,7 +301,9 @@
           "severity": "critical",
           "found": true,
           "inDiff": true,
-          "by": [0],
+          "by": [
+            0
+          ],
           "summary": "群聊轮时限提到 25 分钟，超过队列租约 15 分钟且跑的过程中不续租：多副本下另一副本接管同一项，出现先失败后成功、抢答。"
         },
         {
@@ -267,7 +311,9 @@
           "severity": "important",
           "found": true,
           "inDiff": false,
-          "by": [1],
+          "by": [
+            1
+          ],
           "summary": "群聊 sweep 在每个副本里串行：单个 25 分钟的慢轮会让同副本上所有群聊排队（队头阻塞）。"
         },
         {
@@ -275,7 +321,9 @@
           "severity": "important",
           "found": true,
           "inDiff": true,
-          "by": [3],
+          "by": [
+            3
+          ],
           "summary": "时限停轮后的比对最长 15 秒，超过 5 秒 abortGrace，被 backstop 当成「停不下来」：结局误报、清单丢失。"
         }
       ],
@@ -334,14 +382,14 @@
       "rate": 0.7333
     },
     "precision": {
-      "matched": 21,
+      "matched": 20,
       "total": 24,
-      "rate": 0.875
+      "rate": 0.8333
     },
     "strictPrecision": {
-      "matched": 10,
+      "matched": 9,
       "total": 24,
-      "rate": 0.4167
+      "rate": 0.375
     }
   }
 }

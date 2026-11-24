@@ -3,21 +3,26 @@
 # approve, request changes, label, or touch the merge button, and it never fails the pull request's checks
 # (`continue-on-error`).
 #
-# It runs only
-#   - by hand (workflow_dispatch, with the range as two inputs), or
-#   - on a pull request from this repository that carries the label `ocr-review` (labelled, pushed to, or
-#     reopened while labelled). There is no pull_request_target: a pull request from a fork never reaches
-#     the key, and the job refuses it anyway.
+# It runs only by hand (workflow_dispatch) and only from main, like model-e2e.yml: the range to review is
+# two inputs, base and head (branch names or commits of this repository). There is no pull_request trigger,
+# no label trigger and no pull_request_target. The checkout is of main, so the workflow file, the review
+# script and the rule file that see the key are main's; the reviewed range is only read as git objects
+# (`ocr review --from <base> --to <head>`), never checked out, built or run by this workflow. A pull request
+# from a fork is not reachable: its commits are not in this repository.
 #
-# The model key is the Environment secret OCR_API_KEY of the GitHub Environment `ocr-review` (create it
-# first; give it a required reviewer, because a labelled pull request runs the script of its own merge
-# commit). Model and provider are variables of the same Environment, with defaults when unset:
+# The model key is the Environment secret OCR_API_KEY of the GitHub Environment `ocr-review`. Create the
+# Environment first and give it a required reviewer: that is a precondition of turning this on, not a
+# suggestion. The key leaves the repository for the provider's servers together with the reviewed code, and
+# the reviewer's approval is what makes each run a decision by a person. Provider and model are variables
+# of the same Environment:
 #   secret    OCR_API_KEY       the key (no repository- or organisation-level secret is named here)
-#   variable  OCR_PROVIDER      default deepseek    (`ocr llm providers` lists the built-in ones)
+#   variable  OCR_PROVIDER      required, no default: where the code goes (`ocr llm providers` lists the
+#                               built-in ones). Unset: the run is skipped and the artifact says so.
 #   variable  OCR_MODEL         default deepseek-v4-flash
 #   variable  OCR_TOKEN_BUDGET  default 1500000     (input + output tokens for the whole review)
-# Without the key the run is skipped and the artifact says so. How to run it by hand, how to read the report,
-# and the benchmark behind it: xiongbao/scripts/review/ocr/README.md.
+# Without the key or the provider the run is skipped and the artifact says so. Do not make this a required
+# check. How to run it by hand, how to read the report, and the benchmark behind it:
+# xiongbao/scripts/review/ocr/README.md.
 name: OCR 预审（只出报告）
 
 on:
@@ -31,43 +36,40 @@ on:
         description: "范围的终点（分支名或提交）"
         type: string
         default: HEAD
-  pull_request:
-    types: [labeled, synchronize, reopened]
 
 permissions:
   contents: read
 
 concurrency:
-  group: ocr-review-${{ github.event.pull_request.number || github.ref }}
+  group: ocr-review-${{ inputs.base }}-${{ inputs.head }}
   cancel-in-progress: true
 
 jobs:
   ocr-review:
     name: OCR 预审
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.pull_request.head.repo.full_name == github.repository &&
-       contains(github.event.pull_request.labels.*.name, 'ocr-review') &&
-       (github.event.action != 'labeled' || github.event.label.name == 'ocr-review'))
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: ocr-review
     continue-on-error: true
     timeout-minutes: 30
     steps:
-      # The whole history: the range is compared from its merge-base.
+      # Main, with the whole history so every branch is there as a git object: the range is compared from its
+      # merge-base. Nothing of the reviewed range is checked out.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      # Inputs and the pull request's refs reach the script as environment variables, never spliced into it.
+      # Inputs reach the script as environment variables, never spliced into it.
       - name: Pre-review the range
         env:
           OCR_API_KEY: ${{ secrets.OCR_API_KEY }}
-          OCR_PROVIDER: ${{ vars.OCR_PROVIDER || 'deepseek' }}
+          OCR_PROVIDER: ${{ vars.OCR_PROVIDER }}
           OCR_MODEL: ${{ vars.OCR_MODEL || 'deepseek-v4-flash' }}
           OCR_TOKEN_BUDGET: ${{ vars.OCR_TOKEN_BUDGET || '1500000' }}
-          OCR_BASE: ${{ github.event.pull_request.base.sha || inputs.base }}
-          OCR_HEAD: ${{ github.event.pull_request.head.sha || inputs.head }}
+          OCR_BASE: ${{ inputs.base }}
+          OCR_HEAD: ${{ inputs.head }}
+          # CI reads test files too: the rules ask for changed assertions to be reported.
+          OCR_INCLUDE_TESTS: "1"
           OCR_OUT_DIR: ${{ runner.temp }}/ocr-report
         run: bash xiongbao/scripts/review/ocr/run-review.sh
       - name: Show the outcome on the run page

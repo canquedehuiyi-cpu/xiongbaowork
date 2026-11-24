@@ -504,6 +504,7 @@ policies apply. See [OpenAI WebRTC](https://developers.openai.com/api/docs/guide
 | Variable | Meaning |
 | -------- | ------- |
 | `XIONGBAO_PILOT_BOARD_PUSH` | 默认 `off`。设为 `on` 后，任务看板的卡片状态一变，服务器就经频道连接（`/api/channels/events`）给卡片的主人发一条 AG-UI `STATE_DELTA`（JSON Patch，只含卡片 id 与状态，不含卡片正文），页面收到就重读看板；连接断了页面回到每 5 秒读一次，连着时放慢到每 30 秒读一次。只推给这张卡所属租户的本人，卡不再属于他就收不到。浏览器经 `/api/capabilities` 的 `boardPush` 得知开关。只认 `on` 和 `off`，写错了服务起不来。 |
+| （试点 1，无变量） | 试点 1「OCR 预审」没有运行时开关，也没有产品代码改动。开关是：在 GitHub 上手动触发工作流 `OCR 预审（只出报告）`（只能从 `main`），加 Environment `ocr-review` 里的 secret `OCR_API_KEY`、variable `OCR_PROVIDER`（没有默认），以及这个 Environment 的**必需审阅者**（开通前提）。没配 key 或 `OCR_PROVIDER` 时运行直接跳过。细节见 `scripts/review/ocr/README.md`。 |
 
 ## Authentication
 

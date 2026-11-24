@@ -4,15 +4,21 @@
 #
 #   OCR_BASE, OCR_HEAD    the range, as `ocr review --from <base> --to <head>` (merge-base mode)
 #   OCR_API_KEY           the model key. Missing or empty: the run is skipped and says why (exit 0)
-#   OCR_PROVIDER          the provider `ocr` calls (default deepseek, see `ocr llm providers`)
+#   OCR_PROVIDER          the provider `ocr` calls, see `ocr llm providers`. No default: this is where the
+#                         code goes, so the person who turns the review on names it. Missing: skipped (exit 0)
 #   OCR_MODEL             the model (default deepseek-v4-flash)
 #   OCR_OUT_DIR           where the report goes (default ./ocr-report)
 #   OCR_TOKEN_BUDGET      cap on input+output tokens for the whole review (default 1500000)
+#   OCR_INCLUDE_TESTS     1 to read test files as well (the CI workflow sets it; the default leaves them out)
 #   OCR_BIN               an ocr executable to use instead of installing the pinned version (tests)
 #
 # The installed version is OCR_VERSION below: bump it on purpose, never to "latest". It is installed
 # with --ignore-scripts, like every other install in a job that holds a key: the platform binary comes
-# from the package's own optional dependency, so the postinstall script is not needed.
+# from the package's own optional dependency, so the postinstall script is not needed. The install runs
+# without the model key in its environment.
+#
+# Every failure after the range and key checks ends in a skip (exit 0, reason in SKIPPED.txt), so the job
+# never shows a red cross on a pull request's checks. Do not make this a required check.
 set -euo pipefail
 
 OCR_VERSION="1.14.2"
@@ -21,11 +27,12 @@ RULES="$HERE/rules/xiongbao-review.rule.json"
 OUT="${OCR_OUT_DIR:-ocr-report}"
 BASE="${OCR_BASE:-}"
 HEAD_REF="${OCR_HEAD:-HEAD}"
-PROVIDER="${OCR_PROVIDER:-deepseek}"
+PROVIDER="${OCR_PROVIDER:-}"
 MODEL="${OCR_MODEL:-deepseek-v4-flash}"
 BUDGET="${OCR_TOKEN_BUDGET:-1500000}"
-# Tests are excluded from the run by default: the rules ask for them to be read, but a pre-review of a
-# large range is dominated by them. Set OCR_INCLUDE_TESTS=1 to read them as well.
+# Tests are excluded from the run by default: a pre-review of a large range is dominated by them, which
+# matters for the benchmark's cost. The rules ask for changed assertions to be reported, which needs the
+# tests, so the CI workflow sets OCR_INCLUDE_TESTS=1.
 EXCLUDE='**/node_modules/**,**/*.lock,**/bun.lock*,**/*.md'
 if [ "${OCR_INCLUDE_TESTS:-0}" != "1" ]; then
   EXCLUDE="$EXCLUDE,**/tests/**,**/*.test.*"
@@ -54,12 +61,24 @@ if [ -z "${OCR_API_KEY:-}" ] && [ -z "${OCR_BIN:-}" ]; then
   skip "no model key: the Environment secret OCR_API_KEY is not set (or this run cannot read it), so nothing was sent to a model"
 fi
 
+if [ -z "$PROVIDER" ]; then
+  skip "no provider: the Environment variable OCR_PROVIDER is not set, so nothing was sent to a model (it names where the code goes)"
+fi
+# The provider name becomes part of a config key: a plain word only.
+case "$PROVIDER" in
+  *[!A-Za-z0-9._-]*) skip "OCR_PROVIDER must be a plain provider name (letters, digits, . _ -)" ;;
+esac
+
 # Git 2.41 or newer: ocr's range mode relies on it.
 git_version="$(git --version | sed -E 's/[^0-9]*([0-9]+)\.([0-9]+).*/\1 \2/')"
 read -r git_major git_minor <<<"$git_version"
 if [ "$git_major" -lt 2 ] || { [ "$git_major" -eq 2 ] && [ "$git_minor" -lt 41 ]; }; then
   skip "git $git_major.$git_minor is older than 2.41, which open-code-review needs"
 fi
+
+# The meaning of ocr's telemetry switch is not verified (its default is unknown), so it is turned off
+# explicitly in case it is on by default.
+export OCR_ENABLE_TELEMETRY=0
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -70,17 +89,23 @@ mkdir -p "$HOME"
 if [ -n "${OCR_BIN:-}" ]; then
   OCR="$OCR_BIN"
 else
-  npm install --prefix "$WORK/ocr" --ignore-scripts --no-audit --no-fund "@alibaba-group/open-code-review@$OCR_VERSION" >"$OUT/install.log" 2>&1 \
+  env -u OCR_API_KEY npm install --prefix "$WORK/ocr" --ignore-scripts --no-audit --no-fund "@alibaba-group/open-code-review@$OCR_VERSION" >"$OUT/install.log" 2>&1 \
     || skip "could not install @alibaba-group/open-code-review@$OCR_VERSION (see install.log)"
   OCR="$WORK/ocr/node_modules/.bin/ocr"
 fi
 
-installed="$("$OCR" --version | head -n1)"
+installed="$("$OCR" --version 2>/dev/null | head -n1)" && [ -n "$installed" ] \
+  || skip "ocr --version failed: the installed open-code-review does not run on this machine"
 
+# The key reaches ocr as a command-line argument (visible in the process list while this runs, in a
+# single-tenant runner). Whether ocr can take it from the environment instead (it knows OCR_LLM_TOKEN) is
+# not verified. Output is dropped: a failing command must not echo the key into the log.
 if [ -n "${OCR_API_KEY:-}" ]; then
-  "$OCR" config set provider "$PROVIDER" >/dev/null
-  "$OCR" config set model "$MODEL" >/dev/null
-  "$OCR" config set "providers.$PROVIDER.api_key" "$OCR_API_KEY" >/dev/null
+  {
+    "$OCR" config set provider "$PROVIDER" &&
+      "$OCR" config set model "$MODEL" &&
+      "$OCR" config set "providers.$PROVIDER.api_key" "$OCR_API_KEY"
+  } >/dev/null 2>&1 || skip "ocr config set failed: provider, model or key was not accepted (nothing was reviewed)"
 fi
 
 status=0

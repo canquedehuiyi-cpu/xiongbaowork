@@ -161,27 +161,89 @@ test("an empty report finds nothing and has no precision", () => {
   expect(scored.misses).toEqual(["X-I1", "X-C1"]);
 });
 
-test("one comment may support two items, and each item counts once", () => {
-  const two: GoldPr = {
-    ...pr,
-    items: [
-      pr.items[0] as GoldPr["items"][number],
-      {
-        id: "X-I2",
-        severity: "important",
-        summary: "same place, another theme",
-        locations: [
-          { file: "src/forward.ts", start: 104, end: 106, inDiff: true },
-        ],
-        keywords: ["revoked"],
-      },
-    ],
-  };
-  const comments = commentsOf({ comments: [comment({}), comment({})] });
-  expect(matchesOf(comments, two.items, 10)).toHaveLength(4);
-  const scored = scoreReport({ comments: [comment({}), comment({})] }, two, 10);
-  expect(scored.recall).toEqual({ found: 2, total: 2, rate: 1 });
-  expect(scored.precision).toEqual({ matched: 2, total: 2, rate: 1 });
+const second: GoldPr["items"][number] = {
+  id: "X-I2",
+  severity: "important",
+  summary: "same place, another theme",
+  locations: [{ file: "src/forward.ts", start: 104, end: 106, inDiff: true }],
+  keywords: ["revoked"],
+};
+const withSecond: GoldPr = {
+  ...pr,
+  items: [pr.items[0] as GoldPr["items"][number], second],
+};
+
+test("one comment is given to one item only, even when two items fit it", () => {
+  const comments = commentsOf({ comments: [comment({})] });
+  // Both X-I1 ("stream", lines 100-110) and X-I2 ("revoked", lines 104-106) fit this comment.
+  const matches = matchesOf(comments, withSecond.items, 10);
+  expect(matches).toHaveLength(1);
+  const scored = scoreReport({ comments: [comment({})] }, withSecond, 10);
+  expect(scored.recall).toEqual({ found: 1, total: 2, rate: 0.5 });
+  expect(scored.precision).toEqual({ matched: 1, total: 1, rate: 1 });
+  expect(scored.misses).toHaveLength(1);
+});
+
+test("the item whose lines the comment covers more of gets it", () => {
+  // Both items fit the text. The comment covers all 11 lines of X-I1 but only 3 of X-I2.
+  const wide = comment({ start_line: 100, end_line: 110 });
+  const matches = matchesOf(
+    commentsOf({ comments: [wide] }),
+    withSecond.items,
+    10,
+  );
+  expect(matches.map((one) => one.item)).toEqual(["X-I1"]);
+});
+
+test("equal overlap is decided by how many of the item's keywords the comment contains", () => {
+  const items: GoldPr["items"] = [
+    {
+      id: "X-I1",
+      severity: "important",
+      summary: "a",
+      locations: [
+        { file: "src/forward.ts", start: 100, end: 110, inDiff: true },
+      ],
+      keywords: ["stream"],
+    },
+    {
+      id: "X-I2",
+      severity: "important",
+      summary: "b",
+      locations: [
+        { file: "src/forward.ts", start: 100, end: 110, inDiff: true },
+      ],
+      keywords: ["stream", "revoked", "grant"],
+    },
+  ];
+  const matches = matchesOf(commentsOf({ comments: [comment({})] }), items, 10);
+  expect(matches.map((one) => one.item)).toEqual(["X-I2"]);
+});
+
+test("an item is claimed by one comment only; the other comment goes to another item or stays unmatched", () => {
+  const scored = scoreReport(
+    {
+      comments: [
+        comment({ start_line: 100, end_line: 110 }),
+        comment({ start_line: 104, end_line: 106 }),
+      ],
+    },
+    withSecond,
+    10,
+  );
+  // The wide comment takes X-I1; the narrow one cannot also take X-I1 and goes to X-I2.
+  expect(scored.items.map((one) => [one.id, one.by])).toEqual([
+    ["X-I1", [0]],
+    ["X-I2", [1]],
+  ]);
+  const onlyFirst = scoreReport(
+    { comments: [comment({}), comment({})] },
+    pr,
+    10,
+  );
+  expect(onlyFirst.items[0]?.by).toEqual([0]);
+  expect(onlyFirst.precision).toEqual({ matched: 1, total: 2, rate: 0.5 });
+  expect(onlyFirst.unmatched.map((one) => one.index)).toEqual([1]);
 });
 
 test("commentsOf reads the delegation report and a native result with other field names", () => {

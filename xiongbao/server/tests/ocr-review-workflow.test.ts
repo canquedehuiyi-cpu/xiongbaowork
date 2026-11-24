@@ -5,8 +5,10 @@ import { parse } from "yaml";
 /**
  * The pre-review workflow is advice only. It may read the repository, run the review script with the
  * model key of its own Environment, and upload one artifact. It must not be able to comment, approve,
- * label or merge, must not run on a pull request from a fork, and must not let a model key reach any
- * other job, step or file. This reads the YAML the way the model-e2e workflow's test does.
+ * label or merge, and must not let a model key reach any other job, step or file. The key goes only to
+ * a script read from main: a pull request's own workflow file or script never runs with it, so the only
+ * trigger is a manual run on main, like the model-e2e workflow. This reads the YAML the way that
+ * workflow's test does.
  */
 
 const workflowPath = new URL(
@@ -43,7 +45,7 @@ type Job = {
   steps: Step[];
 };
 type Workflow = {
-  on: Record<string, { types?: string[]; inputs?: Record<string, unknown> }>;
+  on: Record<string, { inputs?: Record<string, unknown> }>;
   permissions: unknown;
   concurrency: { group?: string; "cancel-in-progress"?: boolean };
   jobs: Record<string, Job>;
@@ -56,16 +58,12 @@ const workflow = parse(text) as Workflow;
 const job = workflow.jobs["ocr-review"] as Job;
 const steps = Object.values(workflow.jobs).flatMap((one) => one.steps);
 
-test("it runs by hand, or on a labelled pull request, and on nothing else", () => {
-  expect(Object.keys(workflow.on).sort()).toEqual([
-    "pull_request",
-    "workflow_dispatch",
-  ]);
-  expect(workflow.on.pull_request?.types).toEqual([
-    "labeled",
-    "synchronize",
-    "reopened",
-  ]);
+const reviewScript = "bash xiongbao/scripts/review/ocr/run-review.sh";
+const expectedCondition =
+  "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'";
+
+test("it runs by hand and on nothing else", () => {
+  expect(Object.keys(workflow.on)).toEqual(["workflow_dispatch"]);
   expect(Object.keys(workflow.on.workflow_dispatch?.inputs ?? {})).toEqual([
     "base",
     "head",
@@ -73,24 +71,33 @@ test("it runs by hand, or on a labelled pull request, and on nothing else", () =
   expect(Object.keys(workflow.jobs)).toEqual(["ocr-review"]);
 });
 
-test("it never uses pull_request_target", () => {
+test("it never uses pull_request_target and has no pull_request, push or schedule trigger", () => {
   expect(code).not.toContain("pull_request_target");
-  expect(Object.keys(workflow.on)).not.toContain("pull_request_target");
+  for (const trigger of ["pull_request", "push", "schedule", "workflow_run"])
+    expect(Object.keys(workflow.on)).not.toContain(trigger);
+  expect(code).not.toMatch(
+    /^\s*(pull_request|push|schedule|workflow_run)\s*:/m,
+  );
 });
 
-test("a pull request runs it only when it carries the ocr-review label, and not from a fork", () => {
+test("the job runs only for a manual run on main, so the script that sees the key is main's", () => {
   const condition = (job.if ?? "").replace(/\s+/g, " ").trim();
-  expect(condition).toContain("github.event_name == 'workflow_dispatch'");
-  expect(condition).toContain(
-    "github.event.pull_request.head.repo.full_name == github.repository",
+  expect(condition).toBe(expectedCondition);
+});
+
+test("the review range is read as git objects: the checkout is of main and no step checks out another ref", () => {
+  const checkouts = steps.filter((step) =>
+    step.uses?.startsWith("actions/checkout@"),
   );
-  expect(condition).toContain(
-    "contains(github.event.pull_request.labels.*.name, 'ocr-review')",
-  );
-  // Adding some other label to a labelled pull request does not start another run.
-  expect(condition).toContain(
-    "github.event.action != 'labeled' || github.event.label.name == 'ocr-review'",
-  );
+  expect(checkouts).toHaveLength(1);
+  expect(Object.keys(checkouts[0]?.with ?? {}).sort()).toEqual([
+    "fetch-depth",
+    "persist-credentials",
+  ]);
+  for (const step of steps)
+    expect(step.run ?? "").not.toMatch(
+      /\bgit\s+(checkout|switch|merge|rebase|pull|worktree)\b/,
+    );
 });
 
 test("the token is read-only contents, for the workflow and the job", () => {
@@ -127,20 +134,32 @@ test("the model key is the ocr-review Environment's secret, in one step's env an
   );
   expect(carriers).toHaveLength(1);
   expect(carriers[0]?.env?.OCR_API_KEY).toBe(expression("secrets.OCR_API_KEY"));
-  expect(carriers[0]?.run).toContain(
-    "xiongbao/scripts/review/ocr/run-review.sh",
-  );
+  // The step that holds the key runs exactly the review script, nothing before or after it.
+  expect(carriers[0]?.run?.trim()).toBe(reviewScript);
+  expect(carriers[0]?.uses).toBeUndefined();
+  // The key is named once in the whole file, in that step's env.
+  expect(text.match(/OCR_API_KEY\s*:/g) ?? []).toHaveLength(1);
+  expect(code.match(/secrets\./g) ?? []).toHaveLength(1);
   for (const step of steps) {
     expect(step.run ?? "").not.toContain("secrets.");
     expect(JSON.stringify(step.with ?? {})).not.toContain("secrets.");
   }
-  // Model and provider are variables of the same Environment, with defaults when unset.
-  expect(carriers[0]?.env?.OCR_PROVIDER).toBe(
-    expression("vars.OCR_PROVIDER || 'deepseek'"),
-  );
+  // Model and provider are variables of the same Environment. The provider has no default: the person
+  // who opens the review chooses where the code goes.
+  expect(carriers[0]?.env?.OCR_PROVIDER).toBe(expression("vars.OCR_PROVIDER"));
+  expect(carriers[0]?.env?.OCR_INCLUDE_TESTS).toBe("1");
   expect(carriers[0]?.env?.OCR_MODEL).toBe(
     expression("vars.OCR_MODEL || 'deepseek-v4-flash'"),
   );
+});
+
+test("no step can send anything anywhere: curl, wget, nc and base64 do not appear", () => {
+  expect(code).not.toMatch(/\b(curl|wget|nc|ncat|netcat|base64)\b/);
+  // Only one step names the model key at all.
+  const named = steps.filter((step) =>
+    JSON.stringify(step).includes("OCR_API_KEY"),
+  );
+  expect(named).toHaveLength(1);
 });
 
 test("nothing in it can comment on, approve, label or merge a pull request", () => {
@@ -189,19 +208,15 @@ test("the checkout keeps no credentials and fetches the history the merge-base n
   expect(checkout?.with?.["fetch-depth"]).toBe(0);
 });
 
-test("dispatch inputs and the pull request's refs reach the script as env, never in a shell line", () => {
+test("dispatch inputs reach the script as env, never in a shell line", () => {
   for (const step of steps) {
     expect(step.run ?? "").not.toContain("inputs.");
     expect(step.run ?? "").not.toContain("github.event");
     expect(step.run ?? "").not.toContain("${{");
   }
   const review = steps.find((step) => step.env?.OCR_BASE !== undefined);
-  expect(review?.env?.OCR_BASE).toBe(
-    expression("github.event.pull_request.base.sha || inputs.base"),
-  );
-  expect(review?.env?.OCR_HEAD).toBe(
-    expression("github.event.pull_request.head.sha || inputs.head"),
-  );
+  expect(review?.env?.OCR_BASE).toBe(expression("inputs.base"));
+  expect(review?.env?.OCR_HEAD).toBe(expression("inputs.head"));
 });
 
 test("the review script exists, pins the ocr version, and installs it without lifecycle scripts", () => {

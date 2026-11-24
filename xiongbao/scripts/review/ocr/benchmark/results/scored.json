@@ -203,11 +203,9 @@
         {
           "id": "810-I1",
           "severity": "important",
-          "found": true,
+          "found": false,
           "inDiff": true,
-          "by": [
-            0
-          ],
+          "by": [],
           "summary": "服务器执行电脑工具的单聊里中途调用页面工具，一轮被拆到几个 run；最终 run 上没有产物事件，后一个 run 里的交付下载 404。"
         },
         {
@@ -266,14 +264,14 @@
         }
       ],
       "recall": {
-        "found": 1,
+        "found": 0,
         "total": 1,
-        "rate": 1
+        "rate": 0
       },
       "recallInDiff": {
-        "found": 1,
+        "found": 0,
         "total": 1,
-        "rate": 1
+        "rate": 0
       },
       "minorRecall": {
         "found": 3,
@@ -281,17 +279,26 @@
         "rate": 0.5
       },
       "precision": {
-        "matched": 4,
+        "matched": 3,
         "total": 5,
-        "rate": 0.8
+        "rate": 0.6
       },
       "strictPrecision": {
-        "matched": 1,
+        "matched": 0,
         "total": 5,
-        "rate": 0.2
+        "rate": 0
       },
-      "misses": [],
+      "misses": [
+        "810-I1"
+      ],
       "unmatched": [
+        {
+          "index": 0,
+          "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+          "lines": "172-187",
+          "severity": "high",
+          "excerpt": "只在收到 RUN_FINISHED 时才比对并发清单：整轮流里 RUN_ERROR、流报错、被时限 abort 后不发终止事件就完成的轮都不会列清单（chat-"
+        },
         {
           "index": 4,
           "path": "xiongbao/server/src/threads/chat-server-tools.ts",
@@ -319,41 +326,36 @@
           "found": true,
           "inDiff": true,
           "by": [
-            0,
-            1
+            0
           ],
           "summary": "群聊轮时限提到 25 分钟，超过队列租约 15 分钟且跑的过程中不续租：多副本下另一副本接管同一项，出现先失败后成功、抢答。"
         },
         {
           "id": "812-I1",
           "severity": "important",
-          "found": true,
+          "found": false,
           "inDiff": false,
-          "by": [
-            0
-          ],
+          "by": [],
           "summary": "群聊 sweep 在每个副本里串行：单个 25 分钟的慢轮会让同副本上所有群聊排队（队头阻塞）。"
         },
         {
           "id": "812-I2",
           "severity": "important",
-          "found": true,
+          "found": false,
           "inDiff": true,
-          "by": [
-            2
-          ],
+          "by": [],
           "summary": "时限停轮后的比对最长 15 秒，超过 5 秒 abortGrace，被 backstop 当成「停不下来」：结局误报、清单丢失。"
         }
       ],
       "recall": {
-        "found": 3,
+        "found": 1,
         "total": 4,
-        "rate": 0.75
+        "rate": 0.25
       },
       "recallInDiff": {
-        "found": 2,
+        "found": 1,
         "total": 2,
-        "rate": 1
+        "rate": 0.5
       },
       "minorRecall": {
         "found": 0,
@@ -361,19 +363,35 @@
         "rate": null
       },
       "precision": {
-        "matched": 3,
+        "matched": 1,
         "total": 4,
-        "rate": 0.75
+        "rate": 0.25
       },
       "strictPrecision": {
-        "matched": 3,
+        "matched": 1,
         "total": 4,
-        "rate": 0.75
+        "rate": 0.25
       },
       "misses": [
-        "812-C1"
+        "812-C1",
+        "812-I1",
+        "812-I2"
       ],
       "unmatched": [
+        {
+          "index": 1,
+          "path": "xiongbao/server/src/routines/run-turn.ts",
+          "lines": "142-152",
+          "severity": "low",
+          "excerpt": "所有有电脑工具的群聊员工轮次都放宽到 25 分钟、80 段，包括员工之间互相应答（交接台）触发的轮次；这些轮次占着对话的锁，期间用户在群里的新消息被『Threa"
+        },
+        {
+          "index": 2,
+          "path": "xiongbao/server/src/computer/turn-artifacts.ts",
+          "lines": "294-309",
+          "severity": "low",
+          "excerpt": "RUN_ERROR 之前先 await settle，最长要等 TURN_ARTIFACTS_DEADLINE_MS（15 秒），错误事件因此被推迟；若此时订阅"
+        },
         {
           "index": 3,
           "path": "xiongbao/scripts/e2e/employee-eval/deliverables-server.ts",
@@ -387,14 +405,14 @@
   "total": {
     "prs": 3,
     "recall": {
-      "found": 5,
+      "found": 2,
       "total": 9,
-      "rate": 0.5556
+      "rate": 0.2222
     },
     "recallInDiff": {
-      "found": 4,
+      "found": 2,
       "total": 7,
-      "rate": 0.5714
+      "rate": 0.2857
     },
     "minorRecall": {
       "found": 4,
@@ -402,14 +420,14 @@
       "rate": 0.2667
     },
     "precision": {
-      "matched": 9,
+      "matched": 6,
       "total": 18,
-      "rate": 0.5
+      "rate": 0.3333
     },
     "strictPrecision": {
-      "matched": 5,
+      "matched": 2,
       "total": 18,
-      "rate": 0.2778
+      "rate": 0.1111
     }
   }
 }

@@ -4,12 +4,20 @@
  *   bun scripts/review/ocr/benchmark/score.ts --report <report.json> --pr pr-807 [--gold gold.json]
  *       [--tolerance 10] [--out scored.json]
  *
- * A comment matches a gold item when all three hold:
+ * A comment can match a gold item when all three hold:
  *   file     the comment's path is the gold location's file (a leading "./" or "a/" "b/" is ignored);
  *   lines    its line range, widened by the tolerance (default ten lines) on both sides, overlaps the
  *            gold location's range; a comment with no line at all counts as a file-level comment and
  *            passes this test for every location in that file;
  *   theme    its text contains at least one of the item's keywords (case-insensitive).
+ *
+ * Matching is one to one: a comment is credited to at most one gold item, and a gold item is claimed by at
+ * most one comment. Candidate pairs are taken best first: the more lines of the gold range the comment's
+ * own (unwidened) range covers, then the more of the item's keywords the comment contains, then critical
+ * and important before minor, then the order in gold.json and in the report. A comment with no line covers
+ * none of the lines, so a line-bearing comment beats it. This greedy order is not the optimal assignment,
+ * but it is deterministic and never credits one sentence twice.
+ *
  * Recall is over the critical and important items; minor items that were also fixed are scored apart,
  * and a comment that matches only a minor item is neither a hit for recall nor a false positive.
  * Precision is the share of comments that match any gold item. Both are listed with the misses and the
@@ -147,29 +155,74 @@ function overlaps(comment: Comment, location: GoldLocation, tolerance: number) {
   );
 }
 
-function themed(comment: Comment, keywords: string[]) {
+function keywordHits(comment: Comment, keywords: string[]) {
   const text = comment.content.toLowerCase();
-  return keywords.some((word) => text.includes(word.toLowerCase()));
+  return keywords.filter((word) => text.includes(word.toLowerCase())).length;
 }
+
+/** How many lines of the gold range the comment's own range covers (0 for a file-level comment). */
+function coverage(comment: Comment, location: GoldLocation) {
+  if (comment.start === undefined) return 0;
+  const end = comment.end ?? comment.start;
+  return Math.max(
+    0,
+    Math.min(end, location.end) - Math.max(comment.start, location.start) + 1,
+  );
+}
+
+type Candidate = Match & { covered: number; hits: number; major: boolean };
 
 export function matchesOf(
   comments: Comment[],
   items: GoldItem[],
   tolerance: number,
 ): Match[] {
-  const matches: Match[] = [];
+  const candidates: Candidate[] = [];
   comments.forEach((comment, index) => {
-    for (const item of items) {
-      if (!themed(comment, item.keywords)) continue;
-      const at = item.locations.findIndex(
-        (location) =>
-          normalizePath(location.file) === comment.path &&
-          overlaps(comment, location, tolerance),
-      );
-      if (at >= 0)
-        matches.push({ comment: index, item: item.id, location: at });
-    }
+    items.forEach((item) => {
+      const hits = keywordHits(comment, item.keywords);
+      if (hits === 0) return;
+      let best: { at: number; covered: number } | undefined;
+      item.locations.forEach((location, at) => {
+        if (normalizePath(location.file) !== comment.path) return;
+        if (!overlaps(comment, location, tolerance)) return;
+        const covered = coverage(comment, location);
+        if (!best || covered > best.covered) best = { at, covered };
+      });
+      if (best)
+        candidates.push({
+          comment: index,
+          item: item.id,
+          location: best.at,
+          covered: best.covered,
+          hits,
+          major: item.severity !== "minor",
+        });
+    });
   });
+  const order = new Map(items.map((item, at) => [item.id, at]));
+  candidates.sort(
+    (left, right) =>
+      right.covered - left.covered ||
+      right.hits - left.hits ||
+      Number(right.major) - Number(left.major) ||
+      (order.get(left.item) ?? 0) - (order.get(right.item) ?? 0) ||
+      left.comment - right.comment,
+  );
+  const usedComments = new Set<number>();
+  const usedItems = new Set<string>();
+  const matches: Match[] = [];
+  for (const candidate of candidates) {
+    if (usedComments.has(candidate.comment) || usedItems.has(candidate.item))
+      continue;
+    usedComments.add(candidate.comment);
+    usedItems.add(candidate.item);
+    matches.push({
+      comment: candidate.comment,
+      item: candidate.item,
+      location: candidate.location,
+    });
+  }
   return matches;
 }
 

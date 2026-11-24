@@ -33,22 +33,18 @@
             }
           ],
           "keywords": [
-            "stream",
-            "sse",
-            "revok",
+            "streaming response",
+            "server-sent",
+            "流式响应",
+            "长连接",
+            "revoked",
             "revocation",
-            "recheck",
-            "expire",
-            "expiry",
+            "revok",
+            "撤销",
+            "移出",
             "12 hour",
             "12h",
-            "流式",
-            "撤销",
-            "到期",
-            "移出",
-            "上限",
-            "长连接",
-            "body"
+            "到期"
           ]
         },
         {
@@ -64,12 +60,13 @@
             }
           ],
           "keywords": [
-            "cache",
             "cache-control",
+            "缓存头",
             "no-store",
             "etag",
             "immutable",
-            "缓存"
+            "浏览器缓存",
+            "browser cache"
           ]
         },
         {
@@ -94,18 +91,13 @@
             "agentid",
             "other employee",
             "another employee",
-            "same group",
             "not deliver",
             "delivered by",
-            "越权",
             "别的员工",
             "另一位员工",
             "没交付",
             "交付者",
-            "botid",
-            "ownseat",
-            "fallback",
-            "回退"
+            "交付过"
           ]
         },
         {
@@ -128,15 +120,10 @@
           ],
           "keywords": [
             "port mode",
-            "notice",
-            "warning",
-            "warn",
-            "提示",
             "端口模式",
+            "openinnewtab",
             "新标签",
-            "new tab",
-            "openInNewTab",
-            "preview"
+            "new tab"
           ]
         },
         {
@@ -152,14 +139,14 @@
             }
           ],
           "keywords": [
-            "cache",
-            "recheck",
-            "60",
-            "120",
-            "撤销",
-            "缓存",
-            "allowed",
-            "stillallowed"
+            "60 秒",
+            "60 s",
+            "60s",
+            "120 秒",
+            "120s",
+            "stillallowed",
+            "周期复查",
+            "复查"
           ]
         },
         {
@@ -175,14 +162,14 @@
             }
           ],
           "keywords": [
-            "timeout",
-            "idle",
+            "idletimeout",
+            "idle timeout",
+            "空闲超时",
+            "空闲",
+            "10 秒",
             "10 s",
             "10s",
-            "10 秒",
-            "空闲",
-            "超时",
-            "sse"
+            "长间隔"
           ]
         },
         {
@@ -197,7 +184,7 @@
               "inDiff": true
             }
           ],
-          "keywords": ["rate", "limit", "429", "限流", "额度", "key"]
+          "keywords": ["rate limit", "限流", "429", "额度", "bucket", "令牌桶"]
         },
         {
           "id": "807-M7",
@@ -217,7 +204,7 @@
               "inDiff": true
             }
           ],
-          "keywords": ["2000", "1024", "length", "长度", "上限", "path"]
+          "keywords": ["路径长度", "path length", "首页路径", "路径上限"]
         },
         {
           "id": "807-M8",
@@ -237,10 +224,8 @@
             "cf-connecting-ip",
             "true-client-ip",
             "client ip",
-            "ip",
-            "header",
-            "请求头",
-            "隐私"
+            "客户端 ip",
+            "真实 ip"
           ]
         },
         {
@@ -255,7 +240,7 @@
               "inDiff": true
             }
           ],
-          "keywords": ["cookie", "httponly", "comment", "注释", "readable"]
+          "keywords": ["cookie", "httponly", "module comment", "模块注释"]
         },
         {
           "id": "807-M4",
@@ -275,7 +260,6 @@
             "父域",
             "domain mode",
             "域名模式",
-            "cookie",
             "sso",
             "可注册域",
             "subdomain",
@@ -299,10 +283,11 @@
             "per_bot_users",
             "shared mode",
             "共享模式",
-            "uid",
             "pwuser",
-            "另一位员工",
-            "other employee"
+            "同 uid",
+            "进程自己的 uid",
+            "other employee",
+            "另一位员工"
           ]
         },
         {
@@ -319,14 +304,11 @@
             }
           ],
           "keywords": [
-            "scope",
-            "范围",
             "canusebot",
             "任意端口",
             "any port",
-            "声明",
             "delivered port",
-            "交付里"
+            "交付里声明"
           ]
         }
       ]
@@ -361,23 +343,20 @@
           ],
           "keywords": [
             "wholeturn",
-            "threadid",
-            "continue",
-            "carry",
-            "split",
             "multiple run",
             "several run",
-            "run-2",
+            "across run",
+            "跨 run",
+            "多个 run",
+            "几个 run",
+            "拆到",
             "page tool",
             "frontend tool",
-            "拆",
-            "跨 run",
             "页面工具",
-            "续跑",
-            "下载",
-            "404",
+            "最终 run",
             "final run",
-            "最终 run"
+            "后一个 run",
+            "run-2"
           ]
         },
         {
@@ -393,18 +372,13 @@
             }
           ],
           "keywords": [
-            "mark",
-            "forget",
             "leak",
             "evict",
-            "stale",
-            "pending",
-            "清理",
-            "标记",
             "淘汰",
             "泄漏",
-            "carriedover",
-            "carryover"
+            "清理",
+            "旧标记",
+            "flush"
           ]
         },
         {
@@ -419,16 +393,7 @@
               "inDiff": true
             }
           ],
-          "keywords": [
-            "interrupt",
-            "approval",
-            "held",
-            "waiting",
-            "审批",
-            "扣住",
-            "推迟",
-            "defer"
-          ]
+          "keywords": ["interrupt", "approval", "审批", "扣住", "推迟", "defer"]
         },
         {
           "id": "810-M3",
@@ -445,9 +410,7 @@
           "keywords": [
             "ttl",
             "expire",
-            "timeout",
             "shared computer",
-            "共享",
             "时间窗",
             "过期",
             "无限期",
@@ -468,13 +431,10 @@
           ],
           "keywords": [
             "continues",
-            "role",
             "last message",
             "末条",
-            "续跑",
-            "system",
-            "developer",
-            "tool message"
+            "tool message",
+            "developer"
           ]
         },
         {
@@ -502,14 +462,12 @@
             }
           ],
           "keywords": [
-            "runid",
             "botid",
             "wholeturnof",
             "让位",
             "yield",
             "alslocal",
-            "asynclocalstorage",
-            "same run"
+            "asynclocalstorage"
           ]
         },
         {
@@ -530,19 +488,7 @@
               "inDiff": true
             }
           ],
-          "keywords": [
-            "observeturn",
-            "unattended",
-            "external",
-            "acp",
-            "behavior",
-            "behaviour",
-            "行为",
-            "外部员工",
-            "无人值守",
-            "scope",
-            "范围"
-          ]
+          "keywords": ["observeturn", "unattended", "外部员工", "无人值守"]
         }
       ]
     },
@@ -571,15 +517,10 @@
           "keywords": [
             "reply row",
             "回复行",
-            "finish",
             "withturnartifacts",
-            "details",
-            "group.ts",
-            "failed",
-            "出错",
-            "被停",
             "没有清单",
-            "界面"
+            "被停",
+            "下载链接"
           ]
         },
         {
@@ -605,12 +546,10 @@
             "租约",
             "renew",
             "续租",
-            "claim",
             "replica",
             "副本",
             "15 min",
             "15 分钟",
-            "25",
             "takeover",
             "接管"
           ]
@@ -634,18 +573,13 @@
             }
           ],
           "keywords": [
-            "sweep",
-            "serial",
-            "serialize",
+            "head-of-line",
+            "head of line",
+            "队头",
             "串行",
             "排队",
-            "head-of-line",
-            "队头",
-            "blocking",
-            "阻塞",
-            "queue",
-            "并行",
-            "concurren"
+            "serialize",
+            "serially"
           ]
         },
         {
@@ -676,17 +610,9 @@
             "backstop",
             "abortgrace",
             "grace",
-            "15 s",
-            "15 秒",
-            "5 秒",
-            "deadline",
-            "timeout",
-            "timedout",
-            "stopturn",
-            "比对",
-            "settle",
-            "race",
-            "超时"
+            "停不下来",
+            "结局误报",
+            "stopturn"
           ]
         }
       ]
