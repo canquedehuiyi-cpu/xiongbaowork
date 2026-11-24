@@ -198,7 +198,7 @@ export const GOAL_WRITE_TOOLS = [
 export const isGoalTool = (name: string) =>
   GOAL_TOOLS.some((tool) => tool.name === name);
 
-/** The key of OpenBot's own Routines app, which serves these (`ALWAYS_ON_APP`). */
+/** The key of XiongBao's own Routines app, which serves these (`ALWAYS_ON_APP`). */
 const ROUTINES_APP = "routines";
 
 /**

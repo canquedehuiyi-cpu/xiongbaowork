@@ -219,7 +219,7 @@ export function createRecordings(deps: {
           return row ? [row] : [];
         })
         /*
-         * By when each was made. The page is cut by when OpenBot first heard of each recording (its binding), which for
+         * By when each was made. The page is cut by when XiongBao first heard of each recording (its binding), which for
          * one the Recorder held and sent later is minutes after it was made, so a page of bindings is not in that order.
          * The sort is stable: rows made at the same moment keep the page's own order.
          */

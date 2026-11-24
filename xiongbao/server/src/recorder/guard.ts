@@ -13,7 +13,7 @@ import {
   AuthorityUnavailable,
   ORGANIZATION_SESSION_COOKIE,
 } from "../auth/organization";
-import type { OpenBotRole } from "../auth/roles";
+import type { XiongBaoRole } from "../auth/roles";
 import { reasonWithoutStatement } from "../db/query-failure";
 import { runAsTenant } from "../tenant/context";
 import type { RecorderConnectionStore } from "./connections";
@@ -64,7 +64,7 @@ export const RECORDER_BEARER_PREFIX = `Bearer ${RECORDER_TOKEN_PREFIX}`;
 /** How long the organization's verdict on one connection is trusted on this replica. */
 const ORGANIZATION_VERDICT_TTL_MS = 60_000;
 
-type OrganizationVerdict = { role: OpenBotRole } | { refused: "organization" };
+type OrganizationVerdict = { role: XiongBaoRole } | { refused: "organization" };
 /** The organization's verdicts on this replica, by connection id, oldest first. */
 export type OrganizationVerdictCache = Map<
   string,
@@ -81,7 +81,7 @@ function digestOf(header: string | undefined): string | null {
 }
 
 /** Admin beats user, exactly as `createRequireUser` decides. */
-function strongestRole(roles: OpenBotRole[]): OpenBotRole | undefined {
+function strongestRole(roles: XiongBaoRole[]): XiongBaoRole | undefined {
   if (roles.includes("admin")) return "admin";
   if (roles.includes("user")) return "user";
   return undefined;

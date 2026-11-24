@@ -52,7 +52,7 @@ export type RecorderConnectionStore = ReturnType<
  *   copy must not outlive the cookie it was taken from. That expiry is kept with the copy
  *   (`organization_session_expires_at`). A connection made before it was kept has none, and lasts `ms` (the cookie's
  *   Max-Age) from when it was made, which no cookie it could have copied outlived.
- * - `null`: never, where there is no session to take a lifetime from. A single-user OpenBot has no sign-in: every
+ * - `null`: never, where there is no session to take a lifetime from. A single-user XiongBao has no sign-in: every
  *   request to it is already its one person.
  */
 export type RecorderConnectionLifetime =
@@ -69,7 +69,7 @@ export type SealedOrganizationSession = { sealed: string; expiresAt: Date };
  * here ended: they signed out, their sessions were ended, they were removed; the row's `ending` says how) or `expired`
  * (its lifetime ran out). A Bot's browser's connection, which lasts one recording (browser/bot-browser.ts), ends
  * `stopped` (the person's Stop), `ended` (the recording ended without one, and the connection was found left behind)
- * or `not-started` (the start it was minted for did not happen). The person's own OpenBot browser's ends `cleared` when
+ * or `not-started` (the start it was minted for did not happen). The person's own XiongBao browser's ends `cleared` when
  * they clear that browser (browser/routes.ts): its token was in the profile the clear deleted.
  */
 export type RecorderRevokeReason =
@@ -485,7 +485,7 @@ export function createRecorderConnectionStore(
     },
 
     /**
-     * Ends every connection this person holds, as signing out of OpenBot does: each browser's Recorder is signed out
+     * Ends every connection this person holds, as signing out of XiongBao does: each browser's Recorder is signed out
      * with them. Their unused connect codes go too, with any sealed organization session in them, so none minted before
      * the sign-out makes a connection after it. Returns the connections it ended.
      *

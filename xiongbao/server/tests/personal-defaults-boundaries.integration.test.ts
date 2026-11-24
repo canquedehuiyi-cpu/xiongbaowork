@@ -53,7 +53,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * - 主人在 `/give` 上的收回在个人版里被拒绝，而不是答「已收回」又在下一次运行时还原。
  * - 个人默认把写工具给每位员工之前，先把这个人的「改动之前先问」打开（他自己选过的保留原样），所以默认
  *   配置下普通写操作也要本人点头。
- * - OpenBot 替人给的技能、把员工带回自动学习，轨迹上都记为部署发起。
+ * - XiongBao 替人给的技能、把员工带回自动学习，轨迹上都记为部署发起。
  * - 已删除员工的「技能已给过」记录会被清掉；从个人版换回团队版时，个人默认留下的授予能被数出来。
  */
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
@@ -332,7 +332,7 @@ describe("an owner taking back what they gave, in the personal edition", () => {
   });
 });
 
-describe("asking before changes, once OpenBot gives Bots tools that change things", () => {
+describe("asking before changes, once XiongBao gives Bots tools that change things", () => {
   const preference = () =>
     asOwner(async () => (await approvals.policy?.preferences(OWNER))?.enabled);
 
@@ -385,8 +385,8 @@ describe("asking before changes, once OpenBot gives Bots tools that change thing
   });
 });
 
-describe("the trail of what OpenBot did by itself", () => {
-  test("a skill given at startup is recorded as started by OpenBot", async () => {
+describe("the trail of what XiongBao did by itself", () => {
+  test("a skill given at startup is recorded as started by XiongBao", async () => {
     const since = new Date();
     await ensurePersonalSkills(store, deps);
     const rows = await asPlatform(() =>

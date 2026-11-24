@@ -260,7 +260,7 @@ beforeAll(async () => {
 
 async function list(search: string, limit = 100): Promise<AuditEvent[]> {
   const url = new URL(
-    `https://openbot.test/api/admin/audit-events?limit=${limit}&from=${encodeURIComponent(start)}&${search}`,
+    `https://xiongbao.test/api/admin/audit-events?limit=${limit}&from=${encodeURIComponent(start)}&${search}`,
   );
   return (await reader.list(auditQueryFromUrl(url))).events;
 }
@@ -441,7 +441,7 @@ describe("paging and export", () => {
     let pages = 0;
     do {
       const url = new URL(
-        `https://openbot.test/api/admin/audit-events?limit=4&bot=${SALES}&intent=type,activate&from=${encodeURIComponent(start)}${cursor ? `&cursor=${cursor}` : ""}`,
+        `https://xiongbao.test/api/admin/audit-events?limit=4&bot=${SALES}&intent=type,activate&from=${encodeURIComponent(start)}${cursor ? `&cursor=${cursor}` : ""}`,
       );
       const page = await reader.list(auditQueryFromUrl(url));
       seen.push(...page.events.map((event) => event.id));
@@ -459,7 +459,7 @@ describe("paging and export", () => {
         handler: () => new Response(null, { status: 204 }),
         api: {
           getSession: async () => ({
-            user: { id: "admin", email: "admin@openbot.test" },
+            user: { id: "admin", email: "admin@xiongbao.test" },
           }),
         },
       } as never,

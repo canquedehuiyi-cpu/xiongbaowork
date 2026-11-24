@@ -1,9 +1,9 @@
 import {
   afterAll,
   afterEach as bunAfterEach,
+  test as bunTest,
   describe,
   expect,
-  test as bunTest,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
@@ -175,7 +175,7 @@ async function routinesPage(owner: AgentActor) {
   };
   const app = new Hono<{ Variables: AppVariables }>();
   app.route("/", createRoutineRoutes(store, signedIn));
-  const response = await app.request("http://openbot.test/");
+  const response = await app.request("http://xiongbao.test/");
   expect(response.status).toBe(200);
   return (await response.json()) as {
     routines: Array<{ id: string; title: string | null; instruction: string }>;
@@ -285,21 +285,21 @@ describe("a routine the person names", () => {
 });
 
 /*
- * FOUND ON WINDOWS: asked to "make a goal to check the latest OpenBot release every morning and tell
- * me what changed", a Bot made the goal "Track OpenBot releases" and, with no title as its tool says,
+ * FOUND ON WINDOWS: asked to "make a goal to check the latest XiongBao release every morning and tell
+ * me what changed", a Bot made the goal "Track XiongBao releases" and, with no title as its tool says,
  * a daily routine to run it. The Bot's page and Activity listed that routine by the sentence the Bot
- * wrote for the next turn: `Run the existing goal "Track OpenBot releases" and report its result in
+ * wrote for the next turn: `Run the existing goal "Track XiongBao releases" and report its result in
  * this conversation.`
  */
 describe("a routine a Bot makes to run one of its goals", () => {
   const instruction =
-    "Run the existing goal \u201cTrack OpenBot releases\u201d and report its result in this conversation.";
+    "Run the existing goal \u201cTrack XiongBao releases\u201d and report its result in this conversation.";
 
   async function withGoal() {
     const setup = await setUp();
     const goal = await callTool(setup.connection, "create_goal", {
-      title: "Track OpenBot releases",
-      instruction: "Check the latest OpenBot release and say what changed.",
+      title: "Track XiongBao releases",
+      instruction: "Check the latest XiongBao release and say what changed.",
       successCriteria: "The person is told what changed in the latest release.",
       recurring: true,
     });
@@ -323,14 +323,17 @@ describe("a routine a Bot makes to run one of its goals", () => {
     });
 
     expect(result.isError).toBe(false);
-    expect(result.text).toContain('"Track OpenBot releases", instruction');
+    expect(result.text).toContain('"Track XiongBao releases", instruction');
     const page = await routinesPage(owner);
     expect(page.routines).toEqual([
-      expect.objectContaining({ title: "Track OpenBot releases", instruction }),
+      expect.objectContaining({
+        title: "Track XiongBao releases",
+        instruction,
+      }),
     ]);
     const scheduled = (await activity.forBot(owner.id, agentId)).scheduled;
     expect(scheduled.find((item) => item.kind === "routine")?.title).toBe(
-      "Track OpenBot releases",
+      "Track XiongBao releases",
     );
     expect(scheduled.map((item) => item.title)).not.toContain(instruction);
   });

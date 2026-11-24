@@ -591,7 +591,7 @@ test("a marker put on the wire does not stop the board from filing, or from char
             // The shape the first draft of WP-1.2 proposed. `forwardedProps` arrives in the browser's
             // own request body, so honouring a flag carried here would let a person run the month's
             // work without ever moving the counter.
-            forwardedProps: { boardOwned: true, openbotUnattended: true },
+            forwardedProps: { boardOwned: true, xiongbaoUnattended: true },
             messages: [
               {
                 id: `m-${runId}`,
@@ -612,14 +612,12 @@ test("a marker put on the wire does not stop the board from filing, or from char
 test("eight chat turns competing for the final slot call the mock agent only once", async () => {
   const { tenant, agentId } = await workspace("chat-race");
   await runAsTenant(tenant, () =>
-    database
-      .insert(usageCounters)
-      .values({
-        tenantId: tenant,
-        period: billingPeriod(),
-        metric: "tasks",
-        value: 49,
-      }),
+    database.insert(usageCounters).values({
+      tenantId: tenant,
+      period: billingPeriod(),
+      metric: "tasks",
+      value: 49,
+    }),
   );
   const runner = new PostgresAgentRunner(database, billed, quotaService);
   let calls = 0;

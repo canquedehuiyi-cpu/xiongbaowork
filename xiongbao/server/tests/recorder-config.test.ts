@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { loadConfig } from "../src/config";
 
 const environment = {
-  DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/openbot",
+  DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/xiongbao",
   KEY_ENCRYPTION_KEY: "b3BlbmJvdC1wcm9kdWN0aW9uLXRlc3Qta2V5LTMyMzI=",
   INTELLIGENCE_API_URL: "https://api.intelligence.copilotkit.ai",
   INTELLIGENCE_GATEWAY_WS_URL: "wss://realtime.intelligence.copilotkit.ai",

@@ -9,10 +9,10 @@ import {
 import { createSkillChooser } from "../src/routing/model";
 
 /**
- * Choosing a run's tools on every way OpenBot Desktop signs in: a Claude or ChatGPT plan with no key,
+ * Choosing a run's tools on every way XiongBao Desktop signs in: a Claude or ChatGPT plan with no key,
  * and the API key the person typed in setup.
  *
- * Seen on Windows (OpenBot Desktop, personal edition, Claude plan): every turn's Activity row read
+ * Seen on Windows (XiongBao Desktop, personal edition, Claude plan): every turn's Activity row read
  * "Choose tools for a run, 96 of 96 tools, Couldn't choose, so all were offered". The chooser asked
  * for the deployment's API key, a plan holds none, so it threw every time and the Bot was handed
  * every tool it held. It is asked of the plan's own harness now, as the Bots are answered. The
@@ -90,7 +90,7 @@ afterAll(() => {
   openai.stop(true);
 });
 
-/** What OpenBot Desktop writes for a Claude plan: a token, the installed harness, and no key. */
+/** What XiongBao Desktop writes for a Claude plan: a token, the installed harness, and no key. */
 const CLAUDE_PLAN = {
   CLAUDE_CODE_OAUTH_TOKEN: "plan-token-the-server-never-reads",
   PICKED_HARNESS_IMAGE: "ghcr.io/copilotkit/openbot-agent-claude-sdk:0.3.3",
@@ -156,7 +156,7 @@ test("a Claude plan with no key chooses a run's tools on the plan's harness", as
   const chosen = await selectTools({
     tools: TOOLS,
     skills: SKILLS,
-    text: "What changed in the latest OpenBot release? Look it up on the web.",
+    text: "What changed in the latest XiongBao release? Look it up on the web.",
     choose: createSkillChooser(model, async () => null),
   });
 
@@ -211,7 +211,7 @@ test("a ChatGPT plan with no key chooses too", async () => {
 
 test("the OpenAI key typed in setup chooses, read from where the desktop puts it", async () => {
   /*
-   * OpenBot Desktop writes the key the person typed in setup as OPENAI_API_KEY, for the server and
+   * XiongBao Desktop writes the key the person typed in setup as OPENAI_API_KEY, for the server and
    * the harness alike, and nothing is saved in Keys. The chooser asks OpenAI with it.
    */
   const desktop = {
@@ -235,7 +235,7 @@ test("the OpenAI key typed in setup chooses, read from where the desktop puts it
     const chosen = await selectTools({
       tools: TOOLS,
       skills: SKILLS,
-      text: "What changed in the latest OpenBot release? Look it up on the web.",
+      text: "What changed in the latest XiongBao release? Look it up on the web.",
       choose: createSkillChooser(model, () =>
         resolveModelApiKey({
           encryptionKey: "unused",

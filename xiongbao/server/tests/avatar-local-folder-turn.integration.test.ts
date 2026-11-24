@@ -1,5 +1,5 @@
-import { afterAll, describe, expect, test } from "bun:test";
 import { Database as Sqlite } from "bun:sqlite";
+import { afterAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import {
   mkdirSync,
@@ -139,7 +139,7 @@ async function call<T>(
   body?: unknown,
 ): Promise<{ status: number; body: T }> {
   const response = await app.request(
-    new Request(`http://openbot.test${path}`, {
+    new Request(`http://xiongbao.test${path}`, {
       method,
       headers:
         body === undefined ? undefined : { "content-type": "application/json" },

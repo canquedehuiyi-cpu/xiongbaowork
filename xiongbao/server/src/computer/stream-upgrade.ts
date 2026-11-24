@@ -1,4 +1,4 @@
-import type { OpenBotRole } from "../auth/roles";
+import type { XiongBaoRole } from "../auth/roles";
 import { parseRunnerAddress } from "../devices/channel";
 import type { ScreenWatch } from "../devices/screen";
 import { currentTenant, runAsTenant } from "../tenant/context";
@@ -15,10 +15,10 @@ export type ComputerStreamUpgradeDeps = {
   /** The session guard, applied by hand because middleware does not run on an upgrade. */
   resolveRequestActor: (
     request: Request,
-  ) => Promise<{ id: string; role: OpenBotRole }>;
+  ) => Promise<{ id: string; role: XiongBaoRole }>;
   /** Who may watch this Bot's screen: `computerAccessCheck(agentProfileStore)`. */
   accessCheck: (
-    actor: { id: string; role: OpenBotRole },
+    actor: { id: string; role: XiongBaoRole },
     botId: string,
   ) => Promise<boolean>;
   /**
@@ -34,7 +34,7 @@ export type ComputerStreamUpgradeDeps = {
     socket: "stream" | "terminal",
   ) => string | Promise<string>;
   /**
-   * On a single-user OpenBot, whether this request is somebody it admits at all (request-trust.ts):
+   * On a single-user XiongBao, whether this request is somebody it admits at all (request-trust.ts):
    * a sentence to refuse with, or null. Asked before the session, which admits everybody there.
    */
   refuse?: (request: Request) => string | null;
@@ -81,7 +81,7 @@ export async function handleComputerStreamUpgrade(
   if (!deps.computerConfigured) {
     return new Response("No computer is configured.", { status: 503 });
   }
-  // On a single-user OpenBot the guard below admits everybody, so first: is this somebody it may admit.
+  // On a single-user XiongBao the guard below admits everybody, so first: is this somebody it may admit.
   const notHere = deps.refuse?.(request) ?? null;
   if (notHere) return new Response(notHere, { status: 403 });
   // The session guard, applied by hand because middleware does not run on an upgrade. An
@@ -94,7 +94,7 @@ export async function handleComputerStreamUpgrade(
     // And which Bot, which the guard above does not answer. This socket carries that Bot's screen,
     // so signing in is not enough: without this, anybody signed in watches anybody's Bot work. And
     // seeing a Team Bot is not enough either: its screen is its owner's signed-in browser. A person's
-    // own OpenBot browser is that person's alone, an administrator's neither: the same check says so.
+    // own XiongBao browser is that person's alone, an administrator's neither: the same check says so.
     if (
       !(await deps.accessCheck({ id: actor.id, role: actor.role }, streamBotId))
     ) {

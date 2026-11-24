@@ -58,7 +58,7 @@ const bot: AgentProfile = {
   title: "Analyst",
   visibility: "private",
   id: BOT,
-  runsOnOpenBotModel: true,
+  runsOnXiongBaoModel: true,
 };
 
 const channel: AgentChannel = {

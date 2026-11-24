@@ -46,7 +46,7 @@ export type ChannelActivityEvent = {
   lastMessageAgentId: string | null;
   /**
    * A Bot's reply, its first line as plain text: what a notification says when the reply lands while
-   * OpenBot is out of sight. `lastMessage` runs every line into one. Only on a Bot's message.
+   * XiongBao is out of sight. `lastMessage` runs every line into one. Only on a Bot's message.
    */
   firstLine?: string;
   /**

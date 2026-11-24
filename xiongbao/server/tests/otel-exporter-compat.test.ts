@@ -37,7 +37,7 @@ mock.module("@opentelemetry/sdk-logs", () => ({
     this.config = config; state.processors.push(this);
   } },
   LoggerProvider: class { constructor(config) { state.providers.push(config); }
-    getLogger(name) { assert.equal(name, "openbot.audit"); return { emit(event) {
+    getLogger(name) { assert.equal(name, "xiongbao.audit"); return { emit(event) {
       if (state.failEmit) throw new Error("fixture emit failed");
       state.events.push(event);
     } }; }
@@ -112,8 +112,8 @@ test("wiring/unit: emit scrubs payload, classifies warnings and contains synchro
   isolated(`
 const api = createOtelEventExporter(endpoint); api.emit(event);
 assert.equal(state.events[0].severityNumber, 13);
-assert.equal(state.events[0].attributes["openbot.surface"], "bot");
-assert.equal(state.events[0].attributes["openbot.payload.command"], "export API_TOKEN=[REDACTED]");
+assert.equal(state.events[0].attributes["xiongbao.surface"], "bot");
+assert.equal(state.events[0].attributes["xiongbao.payload.command"], "export API_TOKEN=[REDACTED]");
 state.failEmit = true; assert.doesNotThrow(() => api.emit(event));
 assert.equal(JSON.parse(state.errors[0][0]).type, "otel-export-failed");
 await api.shutdown();

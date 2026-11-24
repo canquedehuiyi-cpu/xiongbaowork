@@ -174,10 +174,10 @@ async function answer(
 
 /**
  * What "Check your folders" answers when this Bot has no folder: shown on the step as it is, and
- * read by the model, which repeats it. Folder access is session-only, so after OpenBot restarts every
+ * read by the model, which repeats it. Folder access is session-only, so after XiongBao restarts every
  * Bot lands here. Found on Windows: "No host folders are granted to this Bot." read as jargon, and
  * the model, given no next step, told the person "an administrator can restore the folder grant",
- * when in the personal edition (the one OpenBot Desktop runs) nobody but the person chooses a folder.
+ * when in the personal edition (the one XiongBao Desktop runs) nobody but the person chooses a folder.
  */
 export function noFolders(): string {
   return currentEdition() === "personal"

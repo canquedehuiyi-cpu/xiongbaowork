@@ -4,7 +4,7 @@
  * The approval card, the choice card and the form (`@xiongbao/shared/decision-tools`) are tools the
  * browser answers: the Bot calls one, its run ends, and the browser holds the call until the person
  * answers on the card. The answer goes back as the tool's result in the conversation's next run.
- * Nothing about the wait is OpenBot's own: the call and the answer are in the thread, which the
+ * Nothing about the wait is XiongBao's own: the call and the answer are in the thread, which the
  * platform keeps. So the Bot was never under Needs you for it, and nobody was told.
  *
  * WATCHED WHERE THE RUNTIME HANDS A RUN TO ITS RUNNER, which every browser run passes through. A run

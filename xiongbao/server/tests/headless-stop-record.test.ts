@@ -17,7 +17,7 @@ import { createHandoffDelivery } from "../src/agents/handoff-delivery";
 import { createIntelligenceClient } from "../src/intelligence-client";
 
 /**
- * A stop OpenBot makes in a headless turn is recorded with Intelligence before the run's terminal
+ * A stop XiongBao makes in a headless turn is recorded with Intelligence before the run's terminal
  * event, so the run's summary reads `cancelled` rather than `success`.
  *
  * The Intelligence platform is the fake here, on 127.0.0.1: REST and the runner's Phoenix channel,

@@ -36,7 +36,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /**
- * Folders on the person's own machine in the personal edition, which OpenBot Desktop installs.
+ * Folders on the person's own machine in the personal edition, which XiongBao Desktop installs.
  *
  * Through the real enterprise controls, because both refusals the desktop showed came from them: the
  * gate in front of `POST /api/host-access/grants` and the guard around the broker
@@ -173,7 +173,7 @@ async function nextOperation(
   throw new Error("the desktop was never handed an operation");
 }
 
-describe("the personal edition with OpenBot Desktop", () => {
+describe("the personal edition with XiongBao Desktop", () => {
   test("choosing a folder reaches the desktop's picker and comes back granted", async () => {
     setEdition("personal");
     const broker = guardedBroker();
@@ -254,7 +254,7 @@ describe("the personal edition with OpenBot Desktop", () => {
   });
 });
 
-describe("the personal edition without OpenBot Desktop", () => {
+describe("the personal edition without XiongBao Desktop", () => {
   test("choosing a folder is refused at once, saying the desktop is what's missing", async () => {
     setEdition("personal");
     const broker = guardedBroker();
@@ -274,11 +274,11 @@ describe("the personal edition without OpenBot Desktop", () => {
   });
 
   /*
-   * Found on Windows: a folder given to a Bot, then OpenBot restarted. The step read "No host folders
+   * Found on Windows: a folder given to a Bot, then XiongBao restarted. The step read "No host folders
    * are granted to this Bot." and the Bot told the person "an administrator can restore the folder
    * grant". There is no administrator here: the person chooses the folder again themselves.
    */
-  test("after OpenBot restarts, the Bot says it has no folders and how the person gives it one", async () => {
+  test("after XiongBao restarts, the Bot says it has no folders and how the person gives it one", async () => {
     setEdition("personal");
     const before = guardedBroker();
     before.rememberGrant({
@@ -294,7 +294,7 @@ describe("the personal edition without OpenBot Desktop", () => {
       actorId: person.id,
     })[0]?.execute({});
     expect(listed).toContain('"displayName":"share"');
-    // OpenBot stops and starts again: a new broker, with none of the old session's folders.
+    // XiongBao stops and starts again: a new broker, with none of the old session's folders.
     const tools = hostAccessTools({
       broker: guardedBroker(),
       botId: bot,

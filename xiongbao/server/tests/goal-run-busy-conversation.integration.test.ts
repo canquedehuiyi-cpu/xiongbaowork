@@ -149,7 +149,7 @@ async function runNow() {
   const goal = await store.create(ownerId, {
     agentId: botId,
     channelId,
-    title: "Watch OpenBot releases",
+    title: "Watch XiongBao releases",
     instruction: "Check the releases page.",
     successCriteria: "Each new release is reported.",
   });

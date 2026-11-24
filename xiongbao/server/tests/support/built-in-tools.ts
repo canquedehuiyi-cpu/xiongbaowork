@@ -1,6 +1,6 @@
 // server/tests/support/built-in-tools.ts
 /**
- * Every tool OpenBot itself offers a model, read out of the source where each one is registered.
+ * Every tool XiongBao itself offers a model, read out of the source where each one is registered.
  *
  * WHY THE SOURCE AND NOT A LIST. The guard this feeds exists because tools shipped with no words for
  * the transcript (`copilotkit_load_skill`, `list_bots`, `remember_personal_fact`) and the person saw
@@ -56,7 +56,7 @@ export type BuiltInTools = {
   unresolved: UnnamedTool[];
 };
 
-/** Where OpenBot's own TypeScript lives: every package that can register a tool with a model. */
+/** Where XiongBao's own TypeScript lives: every package that can register a tool with a model. */
 export const BUILT_IN_TOOL_ROOTS = [
   "server/src",
   "app/src",

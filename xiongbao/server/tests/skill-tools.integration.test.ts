@@ -14,8 +14,8 @@ import {
 } from "../src/db/schema";
 import { createPluginStore, PluginRefusedError } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
-import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { credentialDouble } from "./support/credential-double";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
  * A skill saying which tools it needs, and that saying so grants nothing.
@@ -104,7 +104,7 @@ beforeAll(async () => {
       .onConflictDoNothing();
 
     // The Bot holds exactly one of the two.
-    await store.grant("mcp", heldRef, bot, "admin@openbot.local");
+    await store.grant("mcp", heldRef, bot, "admin@xiongbao.local");
   });
 });
 
@@ -127,7 +127,7 @@ async function saveSkill(tools: string[] | undefined, slug = skill) {
     instructions: "Do the thing.",
     ownerUserId: null,
     ...(tools === undefined ? {} : { tools }),
-    by: "admin@openbot.local",
+    by: "admin@xiongbao.local",
   });
 }
 
@@ -205,7 +205,7 @@ describe("declaring a tool is not granting it", () => {
        * become the way around every surface that is.
        */
       await saveSkill([heldRef, withheldRef]);
-      await store.grant("skill", skill, bot, "admin@openbot.local");
+      await store.grant("skill", skill, bot, "admin@xiongbao.local");
 
       const held = await store.listForAgent(bot);
       const callable = held.tools.map((tool) => tool.ref);
@@ -244,7 +244,7 @@ describe("a skill going away", () => {
       await saveSkill([heldRef], otherSkill);
       expect(await declaredBy(otherSkill)).toEqual([heldRef]);
 
-      await store.uninstallSkill(otherSkill, "admin@openbot.local");
+      await store.uninstallSkill(otherSkill, "admin@xiongbao.local");
 
       const left = await database
         .select()

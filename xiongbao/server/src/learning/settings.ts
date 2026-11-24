@@ -176,7 +176,7 @@ export function parseStoredLearningSettings(
  * check finds the Intelligence this server talks to has no such container.
  *
  * A name is only good on the Intelligence it was written for. One left in `.env` by a setup against
- * another Intelligence (hosted, say, before OpenBot Desktop pointed the same folder at its own) named
+ * another Intelligence (hosted, say, before XiongBao Desktop pointed the same folder at its own) named
  * a container this one does not have, so every new thread was refused ("Failed to initialize
  * thread"), and naming one also stood automatic assignment aside. Forgotten, it is as though it was
  * never set: the default is unchosen and automatic assignment picks one (learning/auto-assign.ts).

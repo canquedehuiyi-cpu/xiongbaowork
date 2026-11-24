@@ -1,6 +1,6 @@
 /**
  * The model local Intelligence's Learning agent thinks with when the person signed in to a Claude or
- * ChatGPT plan rather than giving OpenBot an API key.
+ * ChatGPT plan rather than giving XiongBao an API key.
  *
  * A plan has no key to hand over. The Bots answer on it through the plan's own harness, which holds
  * the sign-in and renews it (`agents/plan-model.ts`), and Learning is answered the same way: this is
@@ -9,7 +9,7 @@
  * each call it receives is one model-only step on that harness. The harness reads the plan's current
  * sign-in on every step, so a renewed token is used on the next call without anything restarting.
  *
- * ONLY LEARNING MAY SPEND THE PLAN HERE. OpenBot Desktop mints one secret per installation, hands it
+ * ONLY LEARNING MAY SPEND THE PLAN HERE. XiongBao Desktop mints one secret per installation, hands it
  * to the server and to the Learning agent's key (`LEARNING_AGENT_MODEL_API_KEY`), and to nothing
  * else. A call without it is refused before anything else is read. The server's port is published on
  * this machine's loopback alone, and the local cluster reaches it through the host name its engine
@@ -58,7 +58,7 @@ export function learningModelEndpointFor(
 
 /**
  * What became of one call to the endpoint. Intelligence keeps only a code for a failed run, never the
- * agent's own error, so this is how Settings can tell a Learning agent that never reached OpenBot from
+ * agent's own error, so this is how Settings can tell a Learning agent that never reached XiongBao from
  * a plan that needs signing in again.
  */
 export type LearningModelCallOutcome =
@@ -240,7 +240,7 @@ export function promptFor(messages: ChatRequest["messages"]): Prompt {
 
 function refused(status: 400 | 401 | 502, error: string): Response {
   return Response.json(
-    { error: { message: error, type: "openbot_learning_model" } },
+    { error: { message: error, type: "xiongbao_learning_model" } },
     { status, headers: { "cache-control": "no-store" } },
   );
 }
@@ -251,7 +251,7 @@ function failureOf(
   record: (outcome: LearningModelCallOutcome) => void,
 ): Response {
   const signIn =
-    error instanceof Error && error.name === "OpenBotModelAuthenticationError";
+    error instanceof Error && error.name === "XiongBaoModelAuthenticationError";
   record(signIn ? "sign-in" : "unanswered");
   if (signIn)
     return refused(

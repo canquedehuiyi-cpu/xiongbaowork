@@ -760,7 +760,7 @@ describe("the prompt", () => {
     run.setMessages([{ id: "ask", role: "user", content: "画一张图" }]);
     await run.runAgent(
       computer === "used"
-        ? { tools: [navigate], forwardedProps: { openbotAskedRun: true } }
+        ? { tools: [navigate], forwardedProps: { xiongbaoAskedRun: true } }
         : {},
     );
     const sent = asked.at(-1)?.messages ?? [];

@@ -22,8 +22,8 @@ import {
 
 /*
  * Teach a Bot, once a recording saves: which skills Learning proposed from that recording, and why Learning can't run
- * when OpenBot Desktop could give it no model. The person's routes are built directly over a fake Intelligence holding
- * their recordings space; nothing here reads OpenBot's database.
+ * when XiongBao Desktop could give it no model. The person's routes are built directly over a fake Intelligence holding
+ * their recordings space; nothing here reads XiongBao's database.
  */
 
 const ada = "recording-skills-ada";
@@ -165,7 +165,7 @@ describe("the skills learned from one recording", () => {
   });
 });
 
-describe("Learning with no model on OpenBot Desktop", () => {
+describe("Learning with no model on XiongBao Desktop", () => {
   const unsupported =
     "Learning can't run on the model you signed in with. To use it, sign XiongBao Work in with an OpenAI or Anthropic API key, or a Claude or ChatGPT plan.";
 

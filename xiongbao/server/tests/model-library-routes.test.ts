@@ -83,7 +83,7 @@ async function call<T>(
 ): Promise<{ status: number; body: T }> {
   const response = await runAsTenant(scope, () =>
     routes.request(
-      new Request(`http://openbot.test${path}`, {
+      new Request(`http://xiongbao.test${path}`, {
         method,
         ...(body === undefined
           ? {}
@@ -393,7 +393,7 @@ test("the board says which model answered each task", async () => {
   });
 
   const response = await runAsTenant(tenant, () =>
-    taskRoutes.request(new Request("http://openbot.test/")),
+    taskRoutes.request(new Request("http://xiongbao.test/")),
   );
   const body = (await response.json()) as {
     tasks: { runRef: string; model: string | null }[];
@@ -412,7 +412,7 @@ test("the board says which model answered each task", async () => {
       .returning({ id: tasks.id }),
   );
   const second = await runAsTenant(tenant, () =>
-    taskRoutes.request(new Request("http://openbot.test/")),
+    taskRoutes.request(new Request("http://xiongbao.test/")),
   );
   const secondBody = (await second.json()) as {
     tasks: { id: string; model: string | null }[];
@@ -455,7 +455,7 @@ describe("a model endpoint inside the deployment is never sent the key", () => {
   ): Promise<{ status: number; body: T }> => {
     const response = await runAsTenant(tenant, () =>
       guarded.request(
-        new Request(`http://openbot.test${path}`, {
+        new Request(`http://xiongbao.test${path}`, {
           method,
           ...(body === undefined
             ? {}
@@ -689,7 +689,7 @@ test("a DeepSeek model added through the deepseek template gets its context wind
   );
   const response = await runAsTenant(tenant, () =>
     deepseekRoutes.request(
-      new Request("http://openbot.test/", {
+      new Request("http://xiongbao.test/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({

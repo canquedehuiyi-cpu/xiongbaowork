@@ -61,7 +61,7 @@ import {
 
 /**
  * "What would happen if…": an admin's question read as one action by the deployment's model, checked
- * against this OpenBot, confirmed, and then put to the real deciders in the order the product asks
+ * against this XiongBao, confirmed, and then put to the real deciders in the order the product asks
  * them. And "Why did this happen?": the same check about an audit row the real paths wrote.
  *
  * Through the real routes in `createApp`, against a real PostgreSQL holding a real boundary, real app
@@ -140,7 +140,7 @@ beforeAll(async () => {
     createEnterpriseStore(database),
     database,
   );
-  // The enterprise controls as `installEnterpriseControls` installs them, on this OpenBot's settings,
+  // The enterprise controls as `installEnterpriseControls` installs them, on this XiongBao's settings,
   // so the real `callTool` and the real gateway decide the rows below as a running server would.
   setPolicyOverlay((context) => decideFromSnapshot(snapshot, context));
   process.env.OPENAI_BASE_URL = await mock.start();
@@ -207,7 +207,7 @@ function appFor(options: {
         resolveApiKey: async () =>
           options.key === undefined ? "test-key" : options.key,
       }),
-      // The real reader, narrowed to this file's OpenBot so the prompt is the one recorded.
+      // The real reader, narrowed to this file's XiongBao so the prompt is the one recorded.
       vocabulary: async () =>
         ownVocabulary(await asPlatform(() => readWhatIfVocabulary(database))),
       readers,

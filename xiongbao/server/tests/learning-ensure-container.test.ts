@@ -103,7 +103,7 @@ const serviceToken = { token: "synthetic-service-token", projectId: "7" };
 describe("creating the container with a service token", () => {
   test("posts the openbot container to the token's project and proves it with the key", async () => {
     const api = intelligenceFetch(201, {
-      container: { id: "openbot", projectId: 7, name: "OpenBot" },
+      container: { id: "openbot", projectId: 7, name: "XiongBao" },
     });
     const runtimeKey = key(["absent", "present"]);
     expect(
@@ -243,7 +243,7 @@ describe("with no credential that can create it", () => {
 
 describe("the CopilotKit CLI", () => {
   test("a login is found where the CLI keeps it, and only there", async () => {
-    const home = await mkdtemp(join(tmpdir(), "openbot-cli-home-"));
+    const home = await mkdtemp(join(tmpdir(), "xiongbao-cli-home-"));
     directories.push(home);
     expect(cliLoginPresent({}, "darwin", home)).toBe(false);
     await mkdir(join(home, "Library/Preferences/copilotkit-auth-nodejs"), {
@@ -269,7 +269,7 @@ describe("the CopilotKit CLI", () => {
   test("runs without this process's secrets", () => {
     const environment = cliEnvironment({
       PATH: "/usr/bin",
-      HOME: "/home/openbot",
+      HOME: "/home/xiongbao",
       COPILOTKIT_CONFIG_DIR: "/var/run/copilotkit",
       INTELLIGENCE_API_KEY: "cpk-secret",
       INTELLIGENCE_SERVICE_TOKEN: "secret",
@@ -278,7 +278,7 @@ describe("the CopilotKit CLI", () => {
     });
     expect(environment).toEqual({
       PATH: "/usr/bin",
-      HOME: "/home/openbot",
+      HOME: "/home/xiongbao",
       COPILOTKIT_CONFIG_DIR: "/var/run/copilotkit",
       COPILOTKIT_TELEMETRY_DISABLED: "1",
     });
@@ -365,7 +365,7 @@ describe("the CopilotKit CLI", () => {
   test.if(process.platform === "win32")(
     "a stopped command takes the processes under its shell with it",
     async () => {
-      const directory = await mkdtemp(join(tmpdir(), "openbot-tree-"));
+      const directory = await mkdtemp(join(tmpdir(), "xiongbao-tree-"));
       directories.push(directory);
       const marker = join(directory, "pid");
       const script = join(directory, "sleep.mjs");
@@ -494,7 +494,7 @@ describe("creating a container with the runtime key", () => {
     ]);
   });
 
-  test("ensuring the openbot default proves it with the key afterwards", async () => {
+  test("ensuring the xiongbao default proves it with the key afterwards", async () => {
     const intelligence = serve("current");
     expect(await ensureLearningContainer(credentials(intelligence))).toBe(
       "created",

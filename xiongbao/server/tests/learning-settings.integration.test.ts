@@ -137,14 +137,14 @@ describe("durable Learning settings", () => {
       expect(await replicas[0]?.saved()).toBe(false);
       const won = await Promise.all(
         replicas.map((store, index) =>
-          store.adoptDefault({ containerId: `openbot-${index}` }),
+          store.adoptDefault({ containerId: `xiongbao-${index}` }),
         ),
       );
       expect(won.filter(Boolean)).toHaveLength(1);
       const winner = won.indexOf(true);
       const assigned = {
         enabled: true,
-        defaultTarget: { containerId: `openbot-${winner}` },
+        defaultTarget: { containerId: `xiongbao-${winner}` },
         agents: {},
       };
       for (const store of replicas) {

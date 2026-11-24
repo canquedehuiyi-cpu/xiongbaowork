@@ -15,14 +15,14 @@ import {
 import { refuseExternalEmployeeWork } from "../agents/acp/external";
 import type { Database } from "../db/client";
 import { auditEvents, users } from "../db/schema/core";
+import { heartbeatRuns } from "../db/schema/heartbeat";
 import { botLifecycle } from "../db/schema/lifecycle";
 import {
-  proactivePings,
   proactiveCheckInRuns,
+  proactivePings,
   proactiveSettings,
   proactiveSuggestions,
 } from "../db/schema/proactive";
-import { heartbeatRuns } from "../db/schema/heartbeat";
 import { botTasks } from "../db/schema/tasks";
 import { workItems } from "../db/schema/work";
 import { lockDefaults, recordOptOut } from "../memory/defaults";
@@ -518,7 +518,7 @@ export function createProactiveStore(database: Database) {
      */
     update,
 
-    /** Removing research is turning it down for this Bot: OpenBot never switches it back on. */
+    /** Removing research is turning it down for this Bot: XiongBao never switches it back on. */
     async remove(owner: string, id: string) {
       const { agentId } = await get(owner, id);
       await database.transaction(async (transaction) => {
@@ -817,7 +817,8 @@ export function createProactiveStore(database: Database) {
           return true;
         });
       } catch (error) {
-        if (violates(error, "proactive_check_in_runs_one_running_idx")) return false;
+        if (violates(error, "proactive_check_in_runs_one_running_idx"))
+          return false;
         throw error;
       }
     },
@@ -844,7 +845,10 @@ export function createProactiveStore(database: Database) {
           finishedAt: sql`now()`,
         })
         .where(
-          and(eq(proactiveCheckInRuns.id, id), eq(proactiveCheckInRuns.outcome, "running")),
+          and(
+            eq(proactiveCheckInRuns.id, id),
+            eq(proactiveCheckInRuns.outcome, "running"),
+          ),
         );
     },
     /**
@@ -879,7 +883,11 @@ export function createProactiveStore(database: Database) {
         .where(
           and(
             eq(proactiveCheckInRuns.settingId, settingId),
-            inArray(proactiveCheckInRuns.outcome, ["quiet", "raised", "failed"]),
+            inArray(proactiveCheckInRuns.outcome, [
+              "quiet",
+              "raised",
+              "failed",
+            ]),
           ),
         )
         .orderBy(desc(proactiveCheckInRuns.startedAt))
@@ -905,7 +913,10 @@ export function createProactiveStore(database: Database) {
         .selectDistinctOn([proactiveCheckInRuns.settingId])
         .from(proactiveCheckInRuns)
         .where(eq(proactiveCheckInRuns.ownerUserId, owner))
-        .orderBy(proactiveCheckInRuns.settingId, desc(proactiveCheckInRuns.startedAt));
+        .orderBy(
+          proactiveCheckInRuns.settingId,
+          desc(proactiveCheckInRuns.startedAt),
+        );
       return new Map(rows.map((row) => [row.settingId, row]));
     },
     /** Whether a check-in for this setting is on the queue and has not been run yet. */

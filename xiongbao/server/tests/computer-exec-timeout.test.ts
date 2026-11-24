@@ -29,7 +29,7 @@ function appWith(calls: { timeoutMs?: number }[]) {
   ) => {
     context.set("actor", {
       id: "user-1",
-      email: "user@openbot.test",
+      email: "user@xiongbao.test",
       role: "admin",
     });
     await next();
@@ -46,7 +46,7 @@ async function postExec(
   app: ReturnType<typeof createComputerRoutes>,
   body: unknown,
 ) {
-  return app.request("http://openbot.test/bot-1/exec", {
+  return app.request("http://xiongbao.test/bot-1/exec", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),

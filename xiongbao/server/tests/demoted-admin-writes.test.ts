@@ -202,7 +202,7 @@ function build() {
     path: string,
     body?: unknown,
   ) =>
-    app.request(`http://openbot.test${path}`, {
+    app.request(`http://xiongbao.test${path}`, {
       method,
       headers: { "content-type": "application/json", "x-actor": actor },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),

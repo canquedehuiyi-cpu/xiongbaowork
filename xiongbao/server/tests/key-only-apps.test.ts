@@ -15,7 +15,7 @@ import captured from "./fixtures/composio-key-apps.json";
 /**
  * Connecting an app that only takes a key, as a person meets it.
  *
- * Reported from OpenBot Desktop 0.3.3: pressing Connect on 1Password opened a form asking for a
+ * Reported from XiongBao Desktop 0.3.3: pressing Connect on 1Password opened a form asking for a
  * "Base URL" and a "Bearer Token", worded for a developer, with nowhere to go to get either. The
  * person expected a sign-in. Composio has none for 1Password (it publishes `API_KEY` and nothing it
  * holds a client for), so the form is right; what was wrong is that nothing said so, or where the

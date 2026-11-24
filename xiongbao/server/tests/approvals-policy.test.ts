@@ -744,7 +744,7 @@ describe("auto-review", () => {
       candidate: candidate({
         toolRef: "composio/GITHUB_UPDATE_REPOSITORY_SETTINGS",
         scope: "github",
-        args: { repo: "openbot", private: false },
+        args: { repo: "xiongbao", private: false },
       }),
       autoReview: true,
       model: model(
@@ -1116,7 +1116,7 @@ describe("delegation is gated", () => {
         credentialActorFor: async (actorId) => actorId,
         coordinationCall: (input) => coordination.call(input),
         answer: (result) => result.text,
-        privateShareToolRef: "openbot/private_share",
+        privateShareToolRef: "xiongbao/private_share",
         refusalMarker: "REFUSED:",
         // No id: a person the deployment cannot name is `{ kind: "person" }` and nothing more.
         personInitiator: { kind: "person" },
@@ -2831,7 +2831,7 @@ describe("destructive tools always ask, once at a time", () => {
           personal: allowAll,
         }),
       ).toMatchObject({ behaviour: "ask", source: "destructive_tool" });
-    // OpenBot's own tools are not exempt by name either.
+    // XiongBao's own tools are not exempt by name either.
     expect(
       (
         await decideAction({

@@ -45,7 +45,7 @@ import {
   createRequestAgents,
   generativeUiMiddlewares,
   type LoadInstructions,
-  onOpenBotRunner,
+  onXiongBaoRunner,
   registeredAgentFromRow,
   resolveRuntimeAgents,
   runtimeModelForEnvironment,
@@ -765,7 +765,7 @@ describe("standing agent roles", () => {
     expect(sectionOf(message.content, "how_to_work")).toBe(
       HOW_TO_WORK_GUIDANCE,
     );
-    // Told OpenBot asks for what OpenBot gives it, and nothing about tools of its own.
+    // Told XiongBao asks for what XiongBao gives it, and nothing about tools of its own.
     expect(sectionOf(message.content, "asking")).toBe(
       BROUGHT_BOT_ASKING_GUIDANCE,
     );
@@ -982,7 +982,7 @@ describe("standing agent roles", () => {
       }),
     );
 
-    const request = new Request("http://openbot.test/api/copilotkit");
+    const request = new Request("http://xiongbao.test/api/copilotkit");
     const resolved = await factory({ request });
 
     expect(seen.request).toBe(request);
@@ -1016,7 +1016,7 @@ describe("standing agent roles", () => {
         resolveModelApiKey: async () => null,
       }),
     );
-    const request = new Request("http://openbot.test/api/copilotkit");
+    const request = new Request("http://xiongbao.test/api/copilotkit");
 
     const before = await factory({ request });
     roleDescription = "Reconcile corporate card statements.";
@@ -1438,7 +1438,7 @@ describe("what a built-in Bot is told about searching", () => {
         agent.setMessages([{ id: "ask", role: "user", content: "Hello" }]);
         await agent.runAgent({
           tools,
-          forwardedProps: { openbotAskedRun: true },
+          forwardedProps: { xiongbaoAskedRun: true },
         });
         const sent = recorder.getRequests().at(-1)?.body as {
           messages?: { role?: string; content?: unknown }[];
@@ -1694,7 +1694,7 @@ describe("when a Bot answers with a component", () => {
       /*
        * The rules a background turn has to carry: when to draw, when to share out, and how to work.
        * And, because a routine fires with nobody watching, the unattended run mode with the shape
-       * its final answer takes, on the Bot OpenBot runs and on the one it does not alike.
+       * its final answer takes, on the Bot XiongBao runs and on the one it does not alike.
        */
       // 用户 2026-11-20 批准：瘦身默认开。内置的这一路带瘦身后的原文，远端的那一路带共享的原文。
       for (const [guidance, builtIn] of [
@@ -1723,7 +1723,7 @@ describe("when a Bot answers with a component", () => {
  * Every Bot is an orchestrator by default: it gives work that needs many tool calls or a lot of
  * reading to subagents, and keeps the decisions and the answer. The rule travels the ways the
  * component rule does (a background turn is asserted with it above), and a check-in, which runs a
- * remote Bot on OpenBot's own runner, carries it once rather than twice.
+ * remote Bot on XiongBao's own runner, carries it once rather than twice.
  */
 /**
  * A Claude Agent SDK Bot is told how to work the way a built-in one is.
@@ -1732,7 +1732,7 @@ describe("when a Bot answers with a component", () => {
  * (`agent-claude-sdk/src/replay.py`), which replaces Claude Code's own, so whatever this deployment
  * does not send, the Bot does not have. Here a routine fires on one and the endpoint's request is
  * kept as `agent-claude-sdk/tests/fixtures/server-instructions.json`; the harness's own test
- * (`test_openbot_instructions.py`) runs that file through the adapter and checks Claude Code starts
+ * (`test_xiongbao_instructions.py`) runs that file through the adapter and checks Claude Code starts
  * with these sections. The two halves meet in the file, so the fixture is compared here byte for
  * byte, and a change to the prompt rewrites it with `OPENBOT_WRITE_FIXTURES=1`.
  */
@@ -1949,7 +1949,7 @@ describe("when a Bot gives work to subagents", () => {
       configuration: { endpoint: "https://risk.internal/ag-ui" },
     });
     if (!remote) throw new Error("Expected the remote Bot to register.");
-    const onOurs = onOpenBotRunner(remote);
+    const onOurs = onXiongBaoRunner(remote);
     if (onOurs.type !== "built_in") throw new Error("Expected a built-in run.");
     const configuration = builtInAgentConfiguration(onOurs, model, "key");
     const prompt =
@@ -1959,7 +1959,7 @@ describe("when a Bot gives work to subagents", () => {
     expect(prompt.split(SLIM_ANSWER_FORMAT)).toHaveLength(2);
     expect(prompt.split(SLIM_HOW_TO_WORK)).toHaveLength(2);
     expect(prompt).toStartWith("<identity>\nYou are Risk, Risk & Compliance.");
-    // On OpenBot's runner every tool it holds is OpenBot's, so it is told OpenBot asks for all of them,
+    // On XiongBao's runner every tool it holds is XiongBao's, so it is told XiongBao asks for all of them,
     // in this fork's words for its floors (M5).
     expect(sectionOf(prompt, "asking")).toBe(
       slimAskingGuidance({ apps: false, web: true }),
@@ -2065,7 +2065,7 @@ describe("what day it is", () => {
           },
         ];
         const forwardedProps = {
-          openbotAskedRun: true,
+          xiongbaoAskedRun: true,
           ...(zone === undefined ? {} : { openbotTimeZone: zone }),
         };
         const ask = async (
@@ -2507,7 +2507,7 @@ describe("a person's standing instructions", () => {
     );
 
     await factory({
-      request: new Request("http://openbot.test/api/copilotkit"),
+      request: new Request("http://xiongbao.test/api/copilotkit"),
     });
 
     /*
@@ -3713,7 +3713,7 @@ describe("each coworker runs on the model it was bound to", () => {
       );
 
       const agents = await factory({
-        request: new Request("http://openbot.test/api/copilotkit"),
+        request: new Request("http://xiongbao.test/api/copilotkit"),
       });
       await prepared(agents, developer.id).runAgent();
 

@@ -177,7 +177,7 @@ describe("a person's model pick for a conversation", () => {
     });
   });
 
-  test("a model OpenBot does not offer is refused, and nothing is saved", async () => {
+  test("a model XiongBao does not offer is refused, and nothing is saved", async () => {
     const userId = await person();
     const { channelId } = await conversation(userId);
     const store = choices();

@@ -2,8 +2,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import {
   holdsTrustedAddress,
   isConfiguredAdmin,
-  type OpenBotRole,
   setRole,
+  type XiongBaoRole,
 } from "../auth/roles";
 import type { Database } from "../db/client";
 import {
@@ -26,7 +26,7 @@ export type Person = {
   email: string;
   name: string | null;
   image: string | null;
-  role: OpenBotRole;
+  role: XiongBaoRole;
   /**
    * Which identity providers this person has arrived through. More than one is normal for a company
    * mid-migration, where the same address exists in both Entra and Okta.
@@ -76,7 +76,7 @@ export type PeopleStore = {
    * joined to their roles, accounts and sessions, on every render of the admin screen.
    */
   list: (query?: PeopleQuery) => Promise<PeoplePage>;
-  setRole: (userId: string, role: OpenBotRole) => Promise<void>;
+  setRole: (userId: string, role: XiongBaoRole) => Promise<void>;
   revoke: (userId: string, revokedBy: string) => Promise<void>;
   retireOwned: (userId: string, revokedBy: string) => Promise<void>;
   restore: (userId: string) => Promise<void>;

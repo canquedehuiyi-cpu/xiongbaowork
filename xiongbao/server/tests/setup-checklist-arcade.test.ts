@@ -25,7 +25,7 @@ const facts = (apps: SetupFacts["apps"]): SetupFacts => ({
 });
 
 const appsRow = (apps: SetupFacts["apps"]): SetupRow | undefined =>
-  setupRows(facts(apps), { productName: "OpenBot", audience: "admin" }).find(
+  setupRows(facts(apps), { productName: "XiongBao", audience: "admin" }).find(
     (row) => row.id === "apps",
   );
 

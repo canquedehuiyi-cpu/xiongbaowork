@@ -1,8 +1,8 @@
 /**
- * The OpenTag pairing: OpenBot's Slack and Microsoft Teams reachability.
+ * The OpenTag pairing: XiongBao's Slack and Microsoft Teams reachability.
  *
  * OpenTag (CopilotKit's open-source Slack/Teams front on the Channels SDK) calls one AG-UI agent at
- * `AGENT_URL` with `Authorization: AGENT_AUTH_HEADER`. OpenBot is that agent: the shared secret is
+ * `AGENT_URL` with `Authorization: AGENT_AUTH_HEADER`. XiongBao is that agent: the shared secret is
  * checked in constant time, OpenTag's structured sender context names the Slack/Teams person, and the
  * person's authenticated delivery binding decides which owner, Bot and canonical thread the turn runs
  * in. Nothing in the message text or the RunAgentInput can choose an owner.
@@ -12,9 +12,9 @@
  * `__opentag_interrupt_id__` (32 lowercase hex) and `__copilotkit_interrupt_value__`
  * `{ action: "confirm_write", args }`. A card click re-runs the agent with
  * `forwardedProps.command.resume = { [interruptId]: { confirmed, always?, by } }`. The interrupt id is
- * the OpenBot approval id without dashes, and the decision still goes through the approvals service.
+ * the XiongBao approval id without dashes, and the decision still goes through the approvals service.
  *
- * Proactive messages (no Slack turn open) go the other way: OpenBot POSTs to OpenTag's
+ * Proactive messages (no Slack turn open) go the other way: XiongBao POSTs to OpenTag's
  * `/openbot/deliver`, because a managed Channel can only post inside a live delivery.
  */
 import { timingSafeEqual } from "node:crypto";
@@ -32,7 +32,7 @@ import {
 } from "./types";
 
 export type OpenTagConfig = {
-  /** Shared both ways: OpenTag sends `Bearer <secret>`, and OpenBot sends it back on deliveries. */
+  /** Shared both ways: OpenTag sends `Bearer <secret>`, and XiongBao sends it back on deliveries. */
   secret: string;
   /** OpenTag's base URL for proactive delivery; absent means proactive Slack/Teams sends fail visibly. */
   url?: string;
@@ -326,7 +326,7 @@ const resumeSchema = z.object({
   always: z.boolean().optional(),
   by: z.string().max(512).optional(),
 });
-/** A card click answering one OpenBot approval, or null when this run is not a resume. */
+/** A card click answering one XiongBao approval, or null when this run is not a resume. */
 export function resumeFromInput(input: OpenTagRunInput) {
   const props = input.forwardedProps;
   if (!props || typeof props !== "object" || !("command" in props)) return null;
@@ -389,7 +389,7 @@ export function approvalFields(preview: unknown) {
     return preview === undefined
       ? []
       : [{ label: "Arguments", value: clip(JSON.stringify(preview)) }];
-  // Labelled as the card in OpenBot labels them, without the page handles a click carries.
+  // Labelled as the card in XiongBao labels them, without the page handles a click carries.
   return approvalDetails(preview)
     .slice(0, 10)
     .map(({ label, value }) => ({
@@ -480,7 +480,7 @@ const isPoint = (value: unknown): value is Point =>
   Number.isFinite((value as Point).value);
 
 /**
- * One of OpenBot's gallery charts as OpenTag's `render_chart` arguments, or null when it is not a
+ * One of XiongBao's gallery charts as OpenTag's `render_chart` arguments, or null when it is not a
  * chart or cannot be drawn within that component's limits (the reply text still carries it).
  */
 export function chartForOpenTag(component: {
@@ -566,7 +566,7 @@ export function chartForOpenTag(component: {
 /**
  * The line said under a chart drawn natively, saying where its figures came from, or "" when the
  * Bot said nothing about that. OpenTag's chart has no caption, so without it a Slack or Teams chart
- * would lose what the same chart says in OpenBot. Mirrors `Sources` in the app's gallery charts.
+ * would lose what the same chart says in XiongBao. Mirrors `Sources` in the app's gallery charts.
  */
 export function chartSourcesLine(args: Record<string, unknown>): string {
   const seen = new Set<string>();

@@ -32,7 +32,7 @@ import { testEnvironment } from "./support/environment";
 
 /**
  * An admin describes team approval rules in English and gets rule rows back: written by the
- * deployment's model from this OpenBot's real apps and Bots, checked against the gate's own matcher,
+ * deployment's model from this XiongBao's real apps and Bots, checked against the gate's own matcher,
  * sent back once when they don't check, and read back by a call that never sees the description.
  *
  * Through the real route in `createApp`, with the model answered by aimock serving answers recorded
@@ -44,7 +44,7 @@ const vocabulary = vocabularyFixture as RuleVocabulary;
 
 const ADMIN = {
   id: "admin-1",
-  email: "admin@openbot.test",
+  email: "admin@xiongbao.test",
   name: "An Administrator",
   image: null,
 };
@@ -188,7 +188,7 @@ describe("POST /api/approvals/team/rules/translate", () => {
     const asked = prompts();
     expect(asked).toHaveLength(2);
     expect(asked[0]).toContain(recording.text);
-    // The writer is told this OpenBot's real tools, effects and Bots.
+    // The writer is told this XiongBao's real tools, effects and Bots.
     expect(asked[0]).toContain("GMAIL_SEND_EMAIL [write]");
     expect(asked[0]).toContain("GMAIL_FETCH_EMAILS [read]");
     expect(asked[0]).toContain("Sales Assistant");

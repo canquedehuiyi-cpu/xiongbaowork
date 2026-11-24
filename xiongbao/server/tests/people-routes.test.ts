@@ -12,7 +12,7 @@ import { testEnvironment } from "./support/environment";
  */
 const ADMIN = {
   id: "admin-1",
-  email: "admin@openbot.test",
+  email: "admin@xiongbao.test",
   name: "An Administrator",
   image: null,
 };
@@ -20,7 +20,7 @@ const ADMIN = {
 function person(overrides: Partial<Person> = {}): Person {
   return {
     id: "u1",
-    email: "member@openbot.test",
+    email: "member@xiongbao.test",
     name: "A Member",
     image: null,
     role: "user",
@@ -84,7 +84,7 @@ function appWith(
     // `async`, because the declared return type says `Promise<Response>` and `app.request` is the
     // union `Response | Promise<Response>` — a handler is allowed to answer without awaiting.
     request: async (path, init) =>
-      await app.request(`http://openbot.test${path}`, init),
+      await app.request(`http://xiongbao.test${path}`, init),
     calls,
   };
 }
@@ -246,7 +246,7 @@ describe("people routes", () => {
       { rolesForUser: async () => ["admin"] },
     );
 
-    const response = await app.request("http://openbot.test/api/admin/people");
+    const response = await app.request("http://xiongbao.test/api/admin/people");
 
     expect(response.status).toBe(503);
   });

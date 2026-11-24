@@ -31,7 +31,7 @@ import {
   users,
 } from "../src/db/schema";
 import { createPeopleStore } from "../src/people/store";
-import { openBotResources } from "../src/plugins/entra-access";
+import { xiongBaoResources } from "../src/plugins/entra-access";
 import {
   CustomServerRefusedError,
   createPluginStore,
@@ -46,18 +46,18 @@ import { bindTestRoleWriter } from "./support/role-writer";
 
 /**
  * A company system behind Microsoft Entra, reached as the signed-in person: the plugin-store half
- * (上游 #931 的后半部分，X6 并入). The sign-in half, an app calling OpenBot with a person's token, is
+ * (上游 #931 的后半部分，X6 并入). The sign-in half, an app calling XiongBao with a person's token, is
  * `entra-obo.integration.test.ts`; this file stands up the same stand-in Entra and HR system on its
  * own ports and asks what a server an admin marked with an Entra scope does.
  *
- * Two doors in and one way out. A person's app calls OpenBot with their Entra token, and a routine
+ * Two doors in and one way out. A person's app calls XiongBao with their Entra token, and a routine
  * runs with nobody in the browser at all; either way a server an admin marked with an Entra scope is
  * called with a token Entra issued for that person through the on-behalf-of exchange.
  *
  * Entra is a stand-in that answers as Entra does: the published keys, the refresh grant with a
  * rotated refresh token, the on-behalf-of grant checked for its grant type, `requested_token_use`
- * and an assertion addressed to OpenBot, and the three refusals a person can meet (an expired
- * sign-in, missing consent, an API OpenBot's registration does not expose), in Entra's own error
+ * and an assertion addressed to XiongBao, and the three refusals a person can meet (an expired
+ * sign-in, missing consent, an API XiongBao's registration does not expose), in Entra's own error
  * shape. The system is a real MCP server built with the official SDK that checks the bearer it is
  * sent. Both are reached at their real addresses through `fetch`, which forwards them to 127.0.0.1.
  */
@@ -90,11 +90,11 @@ const KID = `kid-${tag}`;
 type Directory = {
   /** Live refresh tokens, by token: whose they are and whether Entra still honours them. */
   refreshTokens: Map<string, { oid: string; upn: string; expired?: boolean }>;
-  /** Whether OpenBot's app registration exposes an API, so a token to it can be issued at all. */
+  /** Whether XiongBao's app registration exposes an API, so a token to it can be issued at all. */
   apiExposed: boolean;
-  /** Whether an admin consented to OpenBot's own API, so its refresh grant may ask for it. */
+  /** Whether an admin consented to XiongBao's own API, so its refresh grant may ask for it. */
   apiConsented: boolean;
-  /** The systems an admin has granted OpenBot access to. */
+  /** The systems an admin has granted XiongBao access to. */
   consented: Set<string>;
   /** Every grant the token endpoint was asked for, in order. */
   requests: { grantType: string; scope: string; assertion?: string }[];
@@ -122,10 +122,10 @@ async function sign(
 }
 
 /**
- * A person's token to OpenBot's own API, as Entra issues one to their app: `azp` names the app it
+ * A person's token to XiongBao's own API, as Entra issues one to their app: `azp` names the app it
  * was issued to, and `azpacr` how that app proved itself (`0`, a public client such as a SPA).
  */
-const tokenToOpenBot = (
+const tokenToXiongBao = (
   person: { oid: string; upn: string },
   overrides: Record<string, unknown> = {},
   expiresIn?: number,
@@ -229,7 +229,7 @@ async function tokenEndpoint(request: Request): Promise<Response> {
         400,
         "invalid_grant",
         65001,
-        `The user or administrator has not consented to use the application with ID '${CLIENT_ID}' named 'OpenBot'. Send an interactive authorization request for this user and resource.`,
+        `The user or administrator has not consented to use the application with ID '${CLIENT_ID}' named 'XiongBao'. Send an interactive authorization request for this user and resource.`,
         { suberror: "consent_required" },
       );
     }
@@ -242,8 +242,8 @@ async function tokenEndpoint(request: Request): Promise<Response> {
       scope: `api://${CLIENT_ID}/access_as_user`,
       expires_in: 3599,
       ext_expires_in: 3599,
-      // Issued to OpenBot itself, which proved itself with its secret.
-      access_token: await tokenToOpenBot(held, {
+      // Issued to XiongBao itself, which proved itself with its secret.
+      access_token: await tokenToXiongBao(held, {
         azp: CLIENT_ID,
         azpacr: "1",
       }),
@@ -285,7 +285,7 @@ async function tokenEndpoint(request: Request): Promise<Response> {
         400,
         "invalid_grant",
         65001,
-        `The user or administrator has not consented to use the application with ID '${CLIENT_ID}' named 'OpenBot'. Send an interactive authorization request for this user and resource.`,
+        `The user or administrator has not consented to use the application with ID '${CLIENT_ID}' named 'XiongBao'. Send an interactive authorization request for this user and resource.`,
         { suberror: "consent_required" },
       );
     }
@@ -354,7 +354,7 @@ let entraServer: ReturnType<typeof Bun.serve>;
 let mcpServer: ReturnType<typeof Bun.serve>;
 const realFetch = globalThis.fetch;
 
-/* ---------------------------------------------------------------- OpenBot */
+/* ---------------------------------------------------------------- XiongBao */
 
 const config = loadConfig(
   testEnvironment({
@@ -470,7 +470,7 @@ function framed(instance: ReturnType<typeof createEntra>) {
     tokenFor: (id: string, scope: string) =>
       asPlatform(() => instance.tokenFor(id, scope)),
     resources: microsoft?.oboResources ?? [],
-    own: openBotResources(CLIENT_ID, `api://${CLIENT_ID}/.default`),
+    own: xiongBaoResources(CLIENT_ID, `api://${CLIENT_ID}/.default`),
   };
 }
 
@@ -483,7 +483,7 @@ function framed(instance: ReturnType<typeof createEntra>) {
  */
 async function signedInWithMicrosoft(who: { oid: string; upn: string }) {
   await newEntra().sessionFrom(
-    new Headers({ authorization: `Bearer ${await tokenToOpenBot(who)}` }),
+    new Headers({ authorization: `Bearer ${await tokenToXiongBao(who)}` }),
   );
   const id = await userId(who.upn);
   if (!id) throw new Error(`${who.upn} was signed in`);
@@ -647,7 +647,7 @@ describe("a server an admin marked as reached as the signed-in person", () => {
   test("an admin marks a server as reached as the signed-in person, and it is asked what it offers as them", async () => {
     const response = await api(
       "/plugins/servers/custom",
-      await tokenToOpenBot(ada),
+      await tokenToXiongBao(ada),
       {
         id: SERVER,
         title: "HR",
@@ -677,7 +677,7 @@ describe("a server an admin marked as reached as the signed-in person", () => {
     // What the app's add-by-URL request sends: no `entraScope`, which it knows nothing of.
     const response = await api(
       "/plugins/servers/custom",
-      await tokenToOpenBot(ada),
+      await tokenToXiongBao(ada),
       { id: SERVER, title: "HR", url: `https://${HR_HOST}/mcp` },
     );
     expect(response.status).toBe(200);
@@ -692,7 +692,7 @@ describe("a server an admin marked as reached as the signed-in person", () => {
   test("a scope that is not a string is refused at the door", async () => {
     const response = await api(
       "/plugins/servers/custom",
-      await tokenToOpenBot(ada),
+      await tokenToXiongBao(ada),
       {
         id: `obo-shape-${tag}`,
         title: "Shape",
@@ -707,8 +707,8 @@ describe("a server an admin marked as reached as the signed-in person", () => {
   });
 
   test("two people each reach the system as themselves, on the token their app sent", async () => {
-    const aliceToken = await tokenToOpenBot(alice);
-    const bobToken = await tokenToOpenBot(bob);
+    const aliceToken = await tokenToXiongBao(alice);
+    const bobToken = await tokenToXiongBao(bob);
     const asked = entra.requests.length;
 
     const forAlice = await api("/plugins/call", aliceToken, {
@@ -764,7 +764,7 @@ describe("a server an admin marked as reached as the signed-in person", () => {
 
   test("a second call reuses the person's token until it is close to expiring", async () => {
     const asked = entra.requests.length;
-    const response = await api("/plugins/call", await tokenToOpenBot(alice), {
+    const response = await api("/plugins/call", await tokenToXiongBao(alice), {
       ref: `${SERVER}/whoami`,
       agentId: BOT,
       args: {},
@@ -816,11 +816,11 @@ describe("a routine reaches the system as its person, with nobody in the browser
     );
   });
 
-  test("somebody who has only used OpenBot through their app is told to sign in once in the browser", async () => {
+  test("somebody who has only used XiongBao through their app is told to sign in once in the browser", async () => {
     // Signed in from their app's token alone: a user and a Microsoft account, and no refresh token.
     const ivy = person("ivy");
     await newEntra().sessionFrom(
-      new Headers({ authorization: `Bearer ${await tokenToOpenBot(ivy)}` }),
+      new Headers({ authorization: `Bearer ${await tokenToXiongBao(ivy)}` }),
     );
     const ivyId = (await userId(ivy.upn)) ?? "";
     expect((await storedRefreshToken(ivyId)).raw).toBeNull();
@@ -858,7 +858,7 @@ describe("a routine reaches the system as its person, with nobody in the browser
     );
   });
 
-  test("a system an admin has not granted OpenBot access to in Entra says so", async () => {
+  test("a system an admin has not granted XiongBao access to in Entra says so", async () => {
     // Added while access was granted, so its tools are known; then an admin withdraws it in Entra.
     entra.consented.add(PAYROLL_SCOPE);
     await store.addCustomServer({
@@ -881,7 +881,7 @@ describe("a routine reaches the system as its person, with nobody in the browser
     );
   });
 
-  test("missing consent to OpenBot's own API names OpenBot's API, not the system", async () => {
+  test("missing consent to XiongBao's own API names XiongBao's API, not the system", async () => {
     const hal = person("hal");
     const halId = await signedInWithMicrosoft(hal);
     entra.apiConsented = false;
@@ -1052,7 +1052,7 @@ describe("a scope only reaches a registered system, at its own host (review I-2)
   const refusedAdd = async (body: Record<string, unknown>) => {
     const response = await api(
       "/plugins/servers/custom",
-      await tokenToOpenBot(ada),
+      await tokenToXiongBao(ada),
       { title: "Harvest", ...body },
     );
     expect(response.status).toBe(400);
@@ -1077,7 +1077,7 @@ describe("a scope only reaches a registered system, at its own host (review I-2)
     expect(entra.requests.length).toBe(asked);
   });
 
-  test("OpenBot's own API cannot be marked, so no token that could call back in is minted", async () => {
+  test("XiongBao's own API cannot be marked, so no token that could call back in is minted", async () => {
     expect(
       await refusedAdd({
         id: `obo-self-${tag}`,
@@ -1173,7 +1173,7 @@ describe("hardening after re-review", () => {
     const id = `obo-plaintext-${tag}`;
     const response = await api(
       "/plugins/servers/custom",
-      await tokenToOpenBot(ada),
+      await tokenToXiongBao(ada),
       {
         id,
         title: "Plaintext",

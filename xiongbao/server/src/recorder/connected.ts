@@ -31,8 +31,8 @@ export function recorderAudit(
 }
 
 /**
- * What follows every new Recorder connection, however it was made (Connect this browser's exchange, or OpenBot opening
- * the person's own OpenBot browser or recording in a Bot's browser), once its rows are written with it: the person's
+ * What follows every new Recorder connection, however it was made (Connect this browser's exchange, or XiongBao opening
+ * the person's own XiongBao browser or recording in a Bot's browser), once its rows are written with it: the person's
  * Learning space made in the background.
  */
 export function recorderConnected(input: {

@@ -2,13 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { loadConfig } from "../src/config";
 
 const baseEnvironment = {
-  DATABASE_URL: "postgres://openbot:openbot@localhost:5432/openbot",
+  DATABASE_URL: "postgres://openbot:openbot@localhost:5432/xiongbao",
   KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
   GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
   BETTER_AUTH_SECRET: "a-long-enough-local-development-auth-secret",
   BETTER_AUTH_URL: "http://localhost:3001",
-  INITIAL_ADMIN_EMAILS: "admin@openbot.test",
+  INITIAL_ADMIN_EMAILS: "admin@xiongbao.test",
   INTELLIGENCE_API_URL: "http://localhost:7100",
   INTELLIGENCE_GATEWAY_WS_URL: "ws://localhost:7103",
   INTELLIGENCE_API_KEY: "tenant-api-key",
@@ -52,7 +52,7 @@ describe("GitHub App sign-in configuration", () => {
       ...baseEnvironment,
       GITHUB_APP_CLIENT_ID: "gh-id",
       GITHUB_APP_CLIENT_SECRET: "gh-secret",
-      GITHUB_APP_SLUG: "openbot",
+      GITHUB_APP_SLUG: "xiongbao",
     });
     expect(config.githubApp).toEqual({
       clientId: "gh-id",
@@ -85,7 +85,7 @@ describe("GitHub App sign-in configuration", () => {
   test("accepts a GitHub App when a public URL resolves", () => {
     const config = loadConfig({
       ...baseEnvironment,
-      OPENBOT_PUBLIC_URL: "https://openbot.example.com",
+      OPENBOT_PUBLIC_URL: "https://xiongbao.example.com",
       GITHUB_APP_CLIENT_ID: "gh-id",
       GITHUB_APP_CLIENT_SECRET: "gh-secret",
     });

@@ -5,7 +5,7 @@ import { SQL } from "bun";
  * The database integration suite must never fall back to the developer's application database.
  * `createDatabase` deliberately removes `process.env.DATABASE_URL` after opening a connection so Bun
  * cannot ignore the explicit connection parts on Windows. That means a later test that reads
- * `process.env.DATABASE_URL ?? localhost/openbot` can silently fall into the live development DB.
+ * `process.env.DATABASE_URL ?? localhost/xiongbao` can silently fall into the live development DB.
  * Resolve one explicit test URL before opening a test pool and make the unsafe shape impossible.
  */
 let cachedTestDatabaseUrl: string | undefined;
@@ -42,9 +42,9 @@ export function testDatabaseUrlFrom(
   if (!database) {
     throw new Error("TEST_DATABASE_URL must name a database.");
   }
-  if (database === "openbot") {
+  if (database === "xiongbao") {
     throw new Error(
-      "TEST_DATABASE_URL must not point at the live openbot database. Use a dedicated database such as openbot_test.",
+      "TEST_DATABASE_URL must not point at the live xiongbao database. Use a dedicated database such as openbot_test.",
     );
   }
   return raw;
@@ -97,8 +97,13 @@ function loopbackPostgresUrl(raw: string | undefined, name: string): URL {
     throw new Error(`BLOCKED_NOT_DISPOSABLE: ${name} is not configured`);
   }
   const url = new URL(raw.trim());
-  if (!/^postgres(?:ql)?:$/.test(url.protocol) || !LOOPBACK_HOSTS.has(url.hostname)) {
-    throw new Error(`BLOCKED_NOT_DISPOSABLE: ${name} must be a loopback postgres:// URL`);
+  if (
+    !/^postgres(?:ql)?:$/.test(url.protocol) ||
+    !LOOPBACK_HOSTS.has(url.hostname)
+  ) {
+    throw new Error(
+      `BLOCKED_NOT_DISPOSABLE: ${name} must be a loopback postgres:// URL`,
+    );
   }
   return url;
 }
@@ -120,23 +125,37 @@ export async function createDisposableTestDatabase(
   environment: Record<string, string | undefined> = process.env,
 ): Promise<DisposableTestDatabase> {
   const app = loopbackPostgresUrl(
-    environment === process.env ? testDatabaseUrl() : testDatabaseUrlFrom(environment),
+    environment === process.env
+      ? testDatabaseUrl()
+      : testDatabaseUrlFrom(environment),
     "TEST_DATABASE_URL",
   );
-  const admin = loopbackPostgresUrl(environment.TEST_DATABASE_ADMIN_URL, "TEST_DATABASE_ADMIN_URL");
+  const admin = loopbackPostgresUrl(
+    environment.TEST_DATABASE_ADMIN_URL,
+    "TEST_DATABASE_ADMIN_URL",
+  );
   const credentials =
     options.role === "bypass"
-      ? loopbackPostgresUrl(environment.TEST_DATABASE_BYPASS_URL, "TEST_DATABASE_BYPASS_URL")
+      ? loopbackPostgresUrl(
+          environment.TEST_DATABASE_BYPASS_URL,
+          "TEST_DATABASE_BYPASS_URL",
+        )
       : app;
   const bypass = environment.TEST_DATABASE_BYPASS_URL
-    ? loopbackPostgresUrl(environment.TEST_DATABASE_BYPASS_URL, "TEST_DATABASE_BYPASS_URL")
+    ? loopbackPostgresUrl(
+        environment.TEST_DATABASE_BYPASS_URL,
+        "TEST_DATABASE_BYPASS_URL",
+      )
     : undefined;
   const template = environment.TEST_DATABASE_TEMPLATE?.trim() ?? "";
   if (!TEMPLATE_NAME.test(template)) {
-    throw new Error("BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_TEMPLATE must be openbot_continuation_template");
+    throw new Error(
+      "BLOCKED_NOT_DISPOSABLE: TEST_DATABASE_TEMPLATE must be openbot_continuation_template",
+    );
   }
   const databaseName = `openbot_continuation_test_${randomBytes(8).toString("hex")}`;
-  if (!DISPOSABLE_NAME.test(databaseName)) throw new Error("BLOCKED_NOT_DISPOSABLE");
+  if (!DISPOSABLE_NAME.test(databaseName))
+    throw new Error("BLOCKED_NOT_DISPOSABLE");
 
   // Bun prefers $DATABASE_URL over explicit parts (see createDatabase); never let it pick the target.
   delete process.env.DATABASE_URL;
@@ -146,7 +165,8 @@ export async function createDisposableTestDatabase(
     port: admin.port ? Number(admin.port) : 5432,
     username: decodeURIComponent(admin.username),
     password: decodeURIComponent(admin.password),
-    database: decodeURIComponent(admin.pathname.replace(/^\//, "")) || "postgres",
+    database:
+      decodeURIComponent(admin.pathname.replace(/^\//, "")) || "postgres",
     max: 1,
   });
   try {
@@ -162,7 +182,7 @@ export async function createDisposableTestDatabase(
       facts.bypass !== (options.role === "bypass")
     ) {
       throw new Error(
-        "BLOCKED_NOT_DISPOSABLE: the suite role must be NOSUPERUSER, and BYPASSRLS only for role \"bypass\"",
+        'BLOCKED_NOT_DISPOSABLE: the suite role must be NOSUPERUSER, and BYPASSRLS only for role "bypass"',
       );
     }
     // The separate fixture connection, when one is configured, must itself be BYPASSRLS and never a
@@ -179,7 +199,9 @@ export async function createDisposableTestDatabase(
       }
     }
     // Both names are fixed-shape identifiers checked above; CREATE DATABASE takes no parameters.
-    await client.unsafe(`CREATE DATABASE "${databaseName}" TEMPLATE "${template}"`);
+    await client.unsafe(
+      `CREATE DATABASE "${databaseName}" TEMPLATE "${template}"`,
+    );
   } catch (error) {
     await client.close();
     throw error;
@@ -203,10 +225,15 @@ export async function createDisposableTestDatabase(
       dropped = true;
       const started = Date.now();
       try {
-        await client.unsafe(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
+        await client.unsafe(
+          `DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`,
+        );
         const ms = Date.now() - started;
         // Said only when slow, so a hook close to its timeout shows where the time went.
-        if (ms > 1_000) console.log(JSON.stringify({ type: "disposable-drop-slow", databaseName, ms }));
+        if (ms > 1_000)
+          console.log(
+            JSON.stringify({ type: "disposable-drop-slow", databaseName, ms }),
+          );
       } finally {
         await client.close();
       }

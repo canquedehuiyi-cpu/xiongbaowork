@@ -75,7 +75,7 @@ async function call(
 ) {
   return runAsTenant(actorId, () =>
     routesFor(actorId).request(
-      new Request(`http://openbot.test/${path}`, {
+      new Request(`http://xiongbao.test/${path}`, {
         method,
         ...(body === undefined
           ? {}

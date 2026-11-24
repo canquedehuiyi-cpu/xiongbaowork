@@ -37,7 +37,7 @@ function signedIn(): MiddlewareHandler<{ Variables: AppVariables }> {
   return async (context, next) => {
     context.set("actor", {
       id: "user-1",
-      email: "person@openbot.test",
+      email: "person@xiongbao.test",
       role: "user",
     } as never);
     await next();
@@ -96,7 +96,7 @@ function app(input: {
     signedIn(),
     async () => true,
     {
-      publicUrl: "https://openbot.example",
+      publicUrl: "https://xiongbao.example",
       appUrl: "https://app.example",
       encryptionKey: KEY,
       personHasAccess: input.personHasAccess ?? (async () => true),
@@ -617,7 +617,7 @@ describe("a token endpoint that is not a usable address", () => {
           clientId: "dyn-1",
           clientSecret: "",
           code: "code-1",
-          redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+          redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
           verifier: "v-1",
         }),
       ).toBeNull();

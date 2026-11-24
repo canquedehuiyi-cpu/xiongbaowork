@@ -143,7 +143,7 @@ function serverRecord(row: { id: string; url: string }): ServerRecord {
 
 const ADMIN = {
   id: "admin-1",
-  email: "admin@openbot.test",
+  email: "admin@xiongbao.test",
   name: "An Administrator",
   image: null,
 };
@@ -172,7 +172,7 @@ function appWith(
   );
 
   return (body: unknown) =>
-    app.request("http://openbot.test/api/plugins/servers", {
+    app.request("http://xiongbao.test/api/plugins/servers", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -287,7 +287,7 @@ function refreshApp(
   );
 
   return () =>
-    app.request("http://openbot.test/api/plugins/servers/notion/refresh", {
+    app.request("http://xiongbao.test/api/plugins/servers/notion/refresh", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: "{}",
@@ -445,7 +445,7 @@ describe("granting one Bot to another", () => {
     const { calls, app } = grantsApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/grants",
+      "http://xiongbao.test/api/plugins/grants",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -480,7 +480,7 @@ describe("granting one Bot to another", () => {
     const { calls, app } = grantsApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/grants?kind=bot&ref=knowledge&agentId=assistant",
+      "http://xiongbao.test/api/plugins/grants?kind=bot&ref=knowledge&agentId=assistant",
       { method: "DELETE" },
     );
 
@@ -506,7 +506,7 @@ describe("granting one Bot to another", () => {
     const { calls, app } = grantsApp("user");
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/grants",
+      "http://xiongbao.test/api/plugins/grants",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -530,7 +530,7 @@ describe("granting one Bot to another", () => {
     const { calls, app } = grantsApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/grants",
+      "http://xiongbao.test/api/plugins/grants",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -558,7 +558,7 @@ describe("granting a hop to a Bot that runs somewhere else", () => {
     const { calls, app } = grantsApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/grants",
+      "http://xiongbao.test/api/plugins/grants",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -587,7 +587,7 @@ describe("granting a hop to a Bot that runs somewhere else", () => {
     const { calls, app } = grantsApp("admin", () => undefined);
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/grants",
+      "http://xiongbao.test/api/plugins/grants",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -608,7 +608,7 @@ describe("granting a hop to a Bot that runs somewhere else", () => {
     const { calls, app } = grantsApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/grants",
+      "http://xiongbao.test/api/plugins/grants",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -651,7 +651,7 @@ describe("what a bot grant refusal reveals", () => {
   ) => {
     const { calls, app } = grantsApp(role);
     const response = await app.request(
-      "http://openbot.test/api/plugins/grants",
+      "http://xiongbao.test/api/plugins/grants",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -712,7 +712,7 @@ describe("granting a Bot itself", () => {
     const { calls, app } = grantsApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/grants",
+      "http://xiongbao.test/api/plugins/grants",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -880,7 +880,7 @@ describe("the Composio directory", () => {
     const { app } = directoryApp(null);
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
     );
 
     // 503 rather than `{ apps: [] }`. An empty directory and an absent one are different facts,
@@ -899,7 +899,7 @@ describe("the Composio directory", () => {
     const { app } = directoryApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps?q=sla",
+      "http://xiongbao.test/api/plugins/composio/apps?q=sla",
     );
 
     expect(response.status).toBe(200);
@@ -920,7 +920,7 @@ describe("the Composio directory", () => {
     const { app } = directoryApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
     );
 
     expect(response.status).toBe(200);
@@ -934,7 +934,7 @@ describe("the Composio directory", () => {
     // an administrator does to a 1540-app picker, so a term that names the unconnectable app is
     // the request most likely to hand one back.
     const searched = await app.request(
-      "http://openbot.test/api/plugins/composio/apps?q=docu",
+      "http://xiongbao.test/api/plugins/composio/apps?q=docu",
     );
     expect((await searched.json()).apps).toEqual([]);
   });
@@ -962,7 +962,7 @@ describe("the Composio directory", () => {
     ]);
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
     );
 
     const apps = (await response.json()).apps as Array<{
@@ -983,7 +983,7 @@ describe("the Composio directory", () => {
     const { added, app } = directoryApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1012,7 +1012,7 @@ describe("the Composio directory", () => {
     const { added, app } = directoryApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1033,7 +1033,7 @@ describe("the Composio directory", () => {
     const { added, app } = directoryApp();
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1063,12 +1063,12 @@ describe("the Composio directory", () => {
     const { added, app } = directoryApp(undefined, "user");
 
     expect(
-      (await app.request("http://openbot.test/api/plugins/composio/apps"))
+      (await app.request("http://xiongbao.test/api/plugins/composio/apps"))
         .status,
     ).toBe(403);
 
     const posted = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1094,10 +1094,10 @@ describe("the Composio directory", () => {
     };
 
     const listed = await directoryApp(failing).app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
     );
     const added = await directoryApp(failing).app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1124,7 +1124,7 @@ describe("the Composio directory", () => {
     });
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
     );
 
     expect(response.status).toBe(502);
@@ -1168,7 +1168,7 @@ describe("the Composio directory", () => {
 
     try {
       const response = await app.request(
-        "http://openbot.test/api/plugins/composio/apps",
+        "http://xiongbao.test/api/plugins/composio/apps",
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -1214,7 +1214,7 @@ describe("the Composio directory", () => {
     });
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1262,7 +1262,7 @@ describe("the Composio directory", () => {
 
     try {
       const response = await app.request(
-        "http://openbot.test/api/plugins/composio/apps",
+        "http://xiongbao.test/api/plugins/composio/apps",
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -1343,11 +1343,11 @@ function connectionsApp(
     store,
   );
 
-  return () => app.request("http://openbot.test/api/plugins/connections");
+  return () => app.request("http://xiongbao.test/api/plugins/connections");
 }
 
-const ASKER = { id: "user_asker", email: "asker@openbot.test" };
-const SOMEBODY_ELSE = { id: "user_other", email: "other@openbot.test" };
+const ASKER = { id: "user_asker", email: "asker@xiongbao.test" };
+const SOMEBODY_ELSE = { id: "user_other", email: "other@xiongbao.test" };
 
 /** This deployment's own OAuth grant, which is what `connectionsFor` answers and all it answers. */
 const HELD_NOTION: HeldConnection = {
@@ -1836,7 +1836,7 @@ function brokeredApp(
      */
     connectFields: (body?: unknown) =>
       app.request(
-        "http://openbot.test/api/plugins/servers/composio-firecrawl/connect",
+        "http://xiongbao.test/api/plugins/servers/composio-firecrawl/connect",
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -1851,7 +1851,7 @@ function brokeredApp(
      */
     connectNoAuth: (body?: unknown) =>
       app.request(
-        "http://openbot.test/api/plugins/servers/composio-hackernews/connect",
+        "http://xiongbao.test/api/plugins/servers/composio-hackernews/connect",
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -1868,7 +1868,7 @@ function brokeredApp(
      */
     connectAt: (serverId: string) =>
       app.request(
-        `http://openbot.test/api/plugins/servers/${serverId}/connect`,
+        `http://xiongbao.test/api/plugins/servers/${serverId}/connect`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -1888,7 +1888,7 @@ function brokeredApp(
       headers: Record<string, string> = {},
     ) =>
       app.request(
-        `http://openbot.test/api/plugins/servers/composio-linear/connect${query}`,
+        `http://xiongbao.test/api/plugins/servers/composio-linear/connect${query}`,
         {
           method: "POST",
           headers: { "content-type": "application/json", ...headers },
@@ -1903,7 +1903,7 @@ function brokeredApp(
      */
     confirm: (options: Caller = {}) =>
       app.request(
-        `http://openbot.test/api/plugins/servers/${options.serverId ?? "composio-linear"}/connection/confirm${options.query ?? ""}`,
+        `http://xiongbao.test/api/plugins/servers/${options.serverId ?? "composio-linear"}/connection/confirm${options.query ?? ""}`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -1920,7 +1920,7 @@ function brokeredApp(
      */
     recheck: (options: Caller = {}) =>
       app.request(
-        `http://openbot.test/api/plugins/servers/${options.serverId ?? "composio-linear"}/connection/recheck${options.query ?? ""}`,
+        `http://xiongbao.test/api/plugins/servers/${options.serverId ?? "composio-linear"}/connection/recheck${options.query ?? ""}`,
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -1929,7 +1929,7 @@ function brokeredApp(
       ),
     disconnect: (options: Caller = {}) =>
       app.request(
-        `http://openbot.test/api/plugins/servers/${options.serverId ?? "composio-linear"}/connection${options.query ?? ""}`,
+        `http://xiongbao.test/api/plugins/servers/${options.serverId ?? "composio-linear"}/connection${options.query ?? ""}`,
         {
           method: "DELETE",
           headers: { "content-type": "application/json" },
@@ -2092,7 +2092,7 @@ describe("connecting a brokered app", () => {
         referer: "https://evil.test",
         // The request's own origin, which is the only Origin a request that reaches the route can
         // carry (upstream v1.0.0 refuses any other first), and is not this deployment's address either.
-        origin: "http://openbot.test",
+        origin: "http://xiongbao.test",
         "x-forwarded-host": "evil.test",
       },
     );
@@ -3142,7 +3142,7 @@ function removalApp(
   );
 
   return () =>
-    app.request("http://openbot.test/api/plugins/servers/composio-slack", {
+    app.request("http://xiongbao.test/api/plugins/servers/composio-slack", {
       method: "DELETE",
     });
 }
@@ -3284,7 +3284,7 @@ describe("enabling an app whose row was written before the failure", () => {
     });
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -3334,7 +3334,7 @@ describe("the directory read that is not the vendor's", () => {
     });
 
     const response = await app.request(
-      "http://openbot.test/api/plugins/composio/apps",
+      "http://xiongbao.test/api/plugins/composio/apps",
     );
 
     expect(response.status).toBe(409);

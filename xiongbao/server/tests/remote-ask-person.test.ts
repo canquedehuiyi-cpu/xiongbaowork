@@ -69,7 +69,7 @@ async function fixture({ callsBack = false } = {}) {
         delta: JSON.stringify({ question: QUESTION }),
       },
       { type: EventType.TOOL_CALL_END, toolCallId: "ask-call" },
-      // An endpoint that calls OpenBot back for coordination answers the call itself.
+      // An endpoint that calls XiongBao back for coordination answers the call itself.
       ...(callsBack
         ? [
             {
@@ -131,7 +131,7 @@ async function fixture({ callsBack = false } = {}) {
   return { run, requests, agent, asked };
 }
 
-test("a Bot that hands its tool calls back has its question to the person put by OpenBot", async () => {
+test("a Bot that hands its tool calls back has its question to the person put by XiongBao", async () => {
   const f = await fixture();
   try {
     const result = await f.agent.runAgent({ runId: "asking-run" });

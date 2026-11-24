@@ -322,7 +322,7 @@ const asOwner: MiddlewareHandler<{ Variables: AppVariables }> = async (
 ) => {
   context.set("actor", {
     id: `person-${suite}`,
-    email: `person-${suite}@openbot.test`,
+    email: `person-${suite}@xiongbao.test`,
     role: "user",
   });
   await next();
@@ -331,7 +331,7 @@ const board = createTaskRoutes(database, asOwner, projector);
 
 const boardCard = (taskId: string) =>
   runAsTenant(tenant, async () => {
-    const response = await board.request(new Request("http://openbot.test/"));
+    const response = await board.request(new Request("http://xiongbao.test/"));
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       tasks: { id: string; status: string; archivedAt: string | null }[];

@@ -7,6 +7,7 @@ import { createDatabase } from "../src/db/client";
 import { textTranslations } from "../src/db/schema";
 import { CATALOGUE } from "../src/plugins/catalogue";
 import type { PluginStore } from "../src/plugins/store";
+import { runAsTenant } from "../src/tenant/context";
 import { createTranslationRoutes } from "../src/translations/routes";
 import {
   createTranslationStore,
@@ -18,7 +19,6 @@ import {
   createTranslator,
   parseTranslations,
 } from "../src/translations/translator";
-import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
@@ -142,14 +142,14 @@ test("the plugins read translates exactly the texts the caller can see", async (
   };
   const routes = createTranslationRoutes(framed, plugins, requireUser);
 
-  await routes.request("http://openbot.test/plugins");
+  await routes.request("http://xiongbao.test/plugins");
   expect(listSkillsActors).toEqual([{ id: `${suite}-reader`, isAdmin: false }]);
   await translatePending(
     store,
     async (texts) => texts.map((source) => `中文：${source}`),
     { batch: 100 },
   );
-  const response = await routes.request("http://openbot.test/plugins");
+  const response = await routes.request("http://xiongbao.test/plugins");
   const { zh } = (await response.json()) as { zh: Record<string, string> };
   expect(zh[toolDescription]).toBe(`中文：${toolDescription}`);
   expect(zh[skillTitle]).toBe(`中文：${skillTitle}`);
@@ -183,7 +183,7 @@ test("an administrator can look up live texts no table holds; nobody else can, a
     );
   };
   const lookup = (role: "admin" | "user", texts: unknown) =>
-    as(role).request("http://openbot.test/lookup", {
+    as(role).request("http://xiongbao.test/lookup", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ texts }),

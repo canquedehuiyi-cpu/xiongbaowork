@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { useArcadeClient } from "../src/plugins/arcade";
 import { createArcadeClient } from "../src/plugins/arcade-adapter";
-import { withVendorDeadline } from "../src/plugins/vendor-deadline";
 import type { AccountRef } from "../src/plugins/shared-accounts";
+import { withVendorDeadline } from "../src/plugins/vendor-deadline";
 
 /**
  * ONE LARGE TOOLKIT MUST BE READABLE INSIDE ITS DEADLINE: THE GRANTS SCREEN AND DISCONNECT.
@@ -119,7 +119,7 @@ function startEngine(options: EngineOptions): Engine {
                   id: "at_1",
                   connection_id: "ac_1",
                   connection_status: "active",
-                  provider_id: "github-openbot",
+                  provider_id: "github-xiongbao",
                   provider_type: "oauth2",
                   provider_user_info: { name: "person one" },
                   scopes: [],
@@ -139,7 +139,7 @@ function startEngine(options: EngineOptions): Engine {
         await sleep(latency.small);
         const items =
           offset === 0
-            ? [{ id: "github-openbot", provider_id: "github", type: "oauth2" }]
+            ? [{ id: "github-xiongbao", provider_id: "github", type: "oauth2" }]
             : [];
         return Response.json({
           items,

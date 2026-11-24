@@ -130,10 +130,10 @@ function isDatabaseHost(host: string): boolean {
  * unambiguous. `server/tests/test-network-guard.test.ts` reads it; nothing in `server/src` may.
  */
 declare global {
-  var openbotTestNetworkRefusals: string[] | undefined;
+  var xiongbaoTestNetworkRefusals: string[] | undefined;
 }
 
-globalThis.openbotTestNetworkRefusals = [];
+globalThis.xiongbaoTestNetworkRefusals = [];
 
 const explanation =
   "Tests do not use the network: stub the transport this call goes through (and stub it BEFORE " +
@@ -141,7 +141,7 @@ const explanation =
   "OPENBOT_LIVE_* variable as `bun run test:live-*` does. Guard: server/scripts/test-network-guard.ts.";
 
 function refuse(target: string): Error {
-  globalThis.openbotTestNetworkRefusals?.push(target);
+  globalThis.xiongbaoTestNetworkRefusals?.push(target);
   return new Error(`A test tried to reach ${target}. ${explanation}`);
 }
 
@@ -333,7 +333,7 @@ if (!liveRun) {
         const body = `Refused by the test network guard. ${explanation}`;
         socket.end(
           "HTTP/1.1 403 Forbidden\r\nConnection: close\r\n" +
-            "X-Openbot-Test-Network-Guard: refused\r\nContent-Type: text/plain\r\n" +
+            "X-Xiongbao-Test-Network-Guard: refused\r\nContent-Type: text/plain\r\n" +
             `Content-Length: ${Buffer.byteLength(body)}\r\n\r\n${body}`,
         );
       },

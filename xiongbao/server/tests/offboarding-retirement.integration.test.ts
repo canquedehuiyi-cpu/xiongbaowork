@@ -27,14 +27,14 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const suite = randomUUID().slice(0, 8);
 const adminId = `offboarding-admin-${suite}`;
 const memberId = `offboarding-member-${suite}`;
-const memberEmail = `${memberId}@openbot.test`;
+const memberEmail = `${memberId}@xiongbao.test`;
 
 /** The identity rows and the deny list are the deployment's: seeded, read and removed as `platform`. */
 const asPlatform = <T>(work: () => T): T => runAsTenant("platform", work);
 
 const ADMIN = {
   id: adminId,
-  email: `${adminId}@openbot.test`,
+  email: `${adminId}@xiongbao.test`,
   name: "An Administrator",
   image: null,
 };
@@ -81,7 +81,7 @@ function appFor(
   return {
     events,
     remove: () =>
-      app.request(`http://openbot.test/api/admin/people/${memberId}/access`, {
+      app.request(`http://xiongbao.test/api/admin/people/${memberId}/access`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ revoked: true }),

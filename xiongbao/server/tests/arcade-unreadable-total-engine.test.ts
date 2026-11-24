@@ -41,7 +41,7 @@ const connectionRow = (n: number) => ({
   id: `at_${n}`,
   connection_id: `ac_${n}`,
   connection_status: "active",
-  provider_id: "google-openbot",
+  provider_id: "google-xiongbao",
   provider_type: "oauth2",
   provider_user_info: { name: `person ${n}` },
   scopes: [],
@@ -99,7 +99,7 @@ function startEngine(held: number, served: number, total: unknown): Engine {
       if (url.pathname === "/v1/admin/auth_providers") {
         return Response.json({
           items: [
-            { id: "google-openbot", provider_id: "google", type: "oauth2" },
+            { id: "google-xiongbao", provider_id: "google", type: "oauth2" },
           ],
           offset: 0,
           limit,

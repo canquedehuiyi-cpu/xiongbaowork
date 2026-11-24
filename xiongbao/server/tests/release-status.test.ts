@@ -23,8 +23,8 @@ afterEach(() => {
 const identity = {
   version: "v0.3.0",
   commit: "3".repeat(40),
-  distributionId: "acme.openbot",
-  repository: "acme/openbot",
+  distributionId: "acme.xiongbao",
+  repository: "acme/xiongbao",
   channel: "stable",
 };
 function appWithBuild(env: Partial<Record<(typeof keys)[number], string>>) {

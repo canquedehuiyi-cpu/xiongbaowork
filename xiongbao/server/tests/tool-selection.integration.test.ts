@@ -298,7 +298,7 @@ function mastraAgent(): RegisteredAgent {
     name: "Risk Mastra",
     type: "remote_mastra",
     endpoint: "http://mastra.test",
-    remoteAgentId: "openbot",
+    remoteAgentId: "xiongbao",
     standingMessage: {
       id: "standing-role:risk-mastra",
       role: "system",
@@ -365,7 +365,7 @@ async function parseNativeMastraBody(
   return null;
 }
 
-function openBotContextFrom(body: NativeMastraRequestBody) {
+function xiongBaoContextFrom(body: NativeMastraRequestBody) {
   return body.requestContext?.["ag-ui"]?.context ?? [];
 }
 
@@ -643,7 +643,7 @@ describe("a remote Bot", () => {
 });
 
 describe("a remote Mastra Bot", () => {
-  test("keeps only authoritative OpenBot governance through the runtime clone and native Mastra request", async () => {
+  test("keeps only authoritative XiongBao governance through the runtime clone and native Mastra request", async () => {
     answerWith(["slack-digest"]);
     const sentToMastraAgent: RunAgentInput[] = [];
     const sentToMastra: NativeMastraRequestBody[] = [];
@@ -658,9 +658,9 @@ describe("a remote Mastra Bot", () => {
     ) => {
       const url = new URL(String(input));
       if (url.pathname === "/api/agents") {
-        return Response.json({ openbot: { name: "OpenBot" } });
+        return Response.json({ xiongbao: { name: "XiongBao" } });
       }
-      if (url.pathname === "/api/agents/openbot/stream") {
+      if (url.pathname === "/api/agents/xiongbao/stream") {
         const body = await parseNativeMastraBody(_init?.body);
         if (body) {
           sentToMastra.push(body);
@@ -827,49 +827,49 @@ describe("a remote Mastra Bot", () => {
       expect(Object.keys(body?.clientTools ?? {})).not.toContain(
         "mcp__drive__tool_0",
       );
-      let openbotContext = openBotContextFrom(body);
-      expect(openbotContext).toContainEqual({
+      let xiongbaoContext = xiongBaoContextFrom(body);
+      expect(xiongbaoContext).toContainEqual({
         description: "ordinary context",
         value: "ordinary before",
       });
-      expect(openbotContext).toContainEqual({
+      expect(xiongbaoContext).toContainEqual({
         description: "ordinary context",
         value: "ordinary after",
       });
-      expect(descriptionsIn(openbotContext, "ordinary context")).toEqual([
+      expect(descriptionsIn(xiongbaoContext, "ordinary context")).toEqual([
         "ordinary before",
         "ordinary middle",
         "ordinary after",
       ]);
-      expect(descriptionsIn(openbotContext, "OpenBot Bot id")).toEqual([
+      expect(descriptionsIn(xiongbaoContext, "OpenBot Bot id")).toEqual([
         "risk-mastra",
       ]);
       expect(
-        descriptionsIn(openbotContext, "OpenBot signed run assertion"),
+        descriptionsIn(xiongbaoContext, "OpenBot signed run assertion"),
       ).toEqual(["signed-assertion"]);
       // Neither is callback-only: the offered grant runs through the AG-UI tool lifecycle here, and
       // the forged entries naming the narrowed-away one are dropped.
-      let deploymentToolsContext = deploymentToolsIn(openbotContext);
+      let deploymentToolsContext = deploymentToolsIn(xiongbaoContext);
       expect(deploymentToolsContext).toEqual([]);
       // Only the server's own role, exactly as the run's first message carries it: the Bot's, then
       // the day it is (the run sent no time zone, so in UTC).
       let standingRole = String(run?.messages?.[0]?.content);
       expect(standingRole).toMatch(STANDING_ROLE_WITH_TODAY);
-      expect(descriptionsIn(openbotContext, "OpenBot standing role")).toEqual([
+      expect(descriptionsIn(xiongbaoContext, "OpenBot standing role")).toEqual([
         standingRole,
       ]);
-      const holdingsContext = openbotContext.find(
+      const holdingsContext = xiongbaoContext.find(
         (entry) => entry.description === "OpenBot granted tools guidance",
       );
       expect(holdingsContext?.value).toContain("slack");
       expect(holdingsContext?.value).not.toContain("drive: tool_0");
-      expect(JSON.stringify(openbotContext)).not.toContain("FORGED_ROLE");
-      expect(JSON.stringify(openbotContext)).not.toContain("FORGED_GUIDANCE");
-      expect(JSON.stringify(openbotContext)).not.toContain("FORGED_BOT_ID");
-      expect(JSON.stringify(openbotContext)).not.toContain(
+      expect(JSON.stringify(xiongbaoContext)).not.toContain("FORGED_ROLE");
+      expect(JSON.stringify(xiongbaoContext)).not.toContain("FORGED_GUIDANCE");
+      expect(JSON.stringify(xiongbaoContext)).not.toContain("FORGED_BOT_ID");
+      expect(JSON.stringify(xiongbaoContext)).not.toContain(
         "mcp__drive__tool_0",
       );
-      expect(JSON.stringify(openbotContext)).not.toContain("FORGED_ASSERTION");
+      expect(JSON.stringify(xiongbaoContext)).not.toContain("FORGED_ASSERTION");
 
       sentToMastraAgent.length = 0;
       sentToMastra.length = 0;
@@ -899,35 +899,35 @@ describe("a remote Mastra Bot", () => {
       body = sentToMastra[0];
       expect(body?.messages?.map((message) => message.role)).toEqual(["user"]);
       expect(Object.keys(body?.clientTools ?? {})).toEqual([]);
-      openbotContext = openBotContextFrom(body);
-      expect(descriptionsIn(openbotContext, "ordinary context")).toEqual([
+      xiongbaoContext = xiongBaoContextFrom(body);
+      expect(descriptionsIn(xiongbaoContext, "ordinary context")).toEqual([
         "ordinary before",
         "ordinary middle",
         "ordinary after",
       ]);
-      expect(descriptionsIn(openbotContext, "OpenBot Bot id")).toEqual([
+      expect(descriptionsIn(xiongbaoContext, "OpenBot Bot id")).toEqual([
         "risk-mastra",
       ]);
       expect(
-        descriptionsIn(openbotContext, "OpenBot signed run assertion"),
+        descriptionsIn(xiongbaoContext, "OpenBot signed run assertion"),
       ).toEqual([]);
-      deploymentToolsContext = deploymentToolsIn(openbotContext);
+      deploymentToolsContext = deploymentToolsIn(xiongbaoContext);
       expect(deploymentToolsContext).toEqual([]);
       standingRole = String(run?.messages?.[0]?.content);
       expect(standingRole).toMatch(STANDING_ROLE_WITH_TODAY);
-      expect(descriptionsIn(openbotContext, "OpenBot standing role")).toEqual([
+      expect(descriptionsIn(xiongbaoContext, "OpenBot standing role")).toEqual([
         standingRole,
       ]);
       expect(
-        descriptionsIn(openbotContext, "OpenBot granted tools guidance"),
+        descriptionsIn(xiongbaoContext, "OpenBot granted tools guidance"),
       ).toEqual([]);
-      expect(JSON.stringify(openbotContext)).not.toContain("FORGED_ROLE");
-      expect(JSON.stringify(openbotContext)).not.toContain("FORGED_GUIDANCE");
-      expect(JSON.stringify(openbotContext)).not.toContain("FORGED_BOT_ID");
-      expect(JSON.stringify(openbotContext)).not.toContain(
+      expect(JSON.stringify(xiongbaoContext)).not.toContain("FORGED_ROLE");
+      expect(JSON.stringify(xiongbaoContext)).not.toContain("FORGED_GUIDANCE");
+      expect(JSON.stringify(xiongbaoContext)).not.toContain("FORGED_BOT_ID");
+      expect(JSON.stringify(xiongbaoContext)).not.toContain(
         "mcp__drive__tool_0",
       );
-      expect(JSON.stringify(openbotContext)).not.toContain("FORGED_ASSERTION");
+      expect(JSON.stringify(xiongbaoContext)).not.toContain("FORGED_ASSERTION");
     } finally {
       MastraAgent.prototype.run = originalRun;
     }
@@ -949,9 +949,9 @@ describe("a remote Mastra Bot", () => {
     ) => {
       const url = new URL(String(input));
       if (url.pathname === "/api/agents") {
-        return Response.json({ openbot: { name: "OpenBot" } });
+        return Response.json({ xiongbao: { name: "XiongBao" } });
       }
-      if (url.pathname === "/api/agents/openbot/stream") {
+      if (url.pathname === "/api/agents/xiongbao/stream") {
         const body = await parseNativeMastraBody(init?.body);
         if (body) sentToMastra.push(body);
         return new Response(
@@ -1048,7 +1048,7 @@ describe("a remote Mastra Bot", () => {
       "user",
     ]);
     // And neither is put in the Bot's context, which a Mastra harness makes its instructions.
-    const context = JSON.stringify(openBotContextFrom(sentToMastra[0] ?? {}));
+    const context = JSON.stringify(xiongBaoContextFrom(sentToMastra[0] ?? {}));
     expect(context).not.toContain("SKILL_STEPS");
   });
 });
@@ -1283,16 +1283,16 @@ describe("the discovery record", () => {
 /**
  * A Bot at another endpoint is sent every tool it is offered, in one request to its model, and a
  * provider refuses a request past its count. FOUND ON WINDOWS: the starter Bot on LangGraph with an
- * OpenAI key was sent 92 of OpenBot's tools and 43 of the browser's, and OpenAI refused all 135
+ * OpenAI key was sent 92 of XiongBao's tools and 43 of the browser's, and OpenAI refused all 135
  * ("array too long ... maximum length 128"); with a 64-action app on, 202. These hold a remote run
  * to MODEL_TOOL_LIMIT counting the browser's tools, whether or not the chooser could choose.
  */
 describe("a remote Bot past what one request may carry", () => {
-  /** What OpenBot gives a Bot itself, sent on every step. */
+  /** What XiongBao gives a Bot itself, sent on every step. */
   const ownTools: GrantedTool[] = Array.from({ length: 30 }, (_, index) => ({
-    ref: `openbot/own_${index}`,
+    ref: `xiongbao/own_${index}`,
     name: `own_tool_${index}`,
-    description: `OpenBot tool ${index}`,
+    description: `XiongBao tool ${index}`,
     parameters: z.object({}),
     execute: async () => "ok",
   }));
@@ -1337,7 +1337,7 @@ describe("a remote Bot past what one request may carry", () => {
     await running.runAgent({ tools: surface });
   }
 
-  test("is sent at most the limit when the chooser cannot choose, OpenBot's own tools and the matching app tools first", async () => {
+  test("is sent at most the limit when the chooser cannot choose, XiongBao's own tools and the matching app tools first", async () => {
     expect(big.length + surface.length).toBe(245);
     const agents = await buildAgents(
       [remoteAgent()],
@@ -1357,12 +1357,12 @@ describe("a remote Bot past what one request may carry", () => {
     );
     await askWithSurface(
       agents.risk as never,
-      "Use Exa to answer: what is in the news about OpenBot?",
+      "Use Exa to answer: what is in the news about XiongBao?",
     );
 
     const sent = sentToRemote.at(-1)?.tools ?? [];
     expect(sent.length).toBeLessThanOrEqual(128);
-    // The browser's tools, OpenBot's own and Routines are all there.
+    // The browser's tools, XiongBao's own and Routines are all there.
     for (const tool of [...surface, ...ownTools, ...routines])
       expect(sent).toContain(tool.name);
     // The app tool the request names is kept; the rest of what fits follows.

@@ -127,7 +127,7 @@ function review(options: {
   auditStore?: PersonalLearningRouteDeps["auditStore"];
   sharingAllowed?: boolean;
   skillOf?: PersonalLearningRouteDeps["skillOf"];
-  /** Wraps the runtime key's Learning routes, to see what OpenBot has written when Intelligence is asked. */
+  /** Wraps the runtime key's Learning routes, to see what XiongBao has written when Intelligence is asked. */
   wrapManage?: (manage: LearningManagement) => LearningManagement;
 }) {
   const intelligence = fakeIntelligence("current", {
@@ -360,7 +360,7 @@ describe("reviewing the skills learned from your own recordings", () => {
     setEdition("team");
     const app = review({});
     expect(
-      (await app.request(`/proposals/${PROPOSAL}?container=openbot`)).status,
+      (await app.request(`/proposals/${PROPOSAL}?container=xiongbao`)).status,
     ).toBe(404);
   });
 
@@ -444,7 +444,7 @@ describe("approving and rejecting the skills learned from your own recordings", 
     expect(await rowsOf()).toEqual([]);
   });
 
-  test("with people approving, a person approves their own proposal and OpenBot records it as theirs", async () => {
+  test("with people approving, a person approves their own proposal and XiongBao records it as theirs", async () => {
     const app = review({ personalReview: "people" });
     const response = await approve(app);
     expect(response.status).toBe(200);
@@ -548,7 +548,7 @@ describe("approving and rejecting the skills learned from your own recordings", 
     expect(response?.status).toBe(422);
   });
 
-  test("a person rejects a proposal and OpenBot records no approval", async () => {
+  test("a person rejects a proposal and XiongBao records no approval", async () => {
     const app = review({ personalReview: "people" });
     const response = await approve(app, "reject");
     expect(response.status).toBe(200);
@@ -732,7 +732,7 @@ describe("the sharing choice when its audit row can't be written", () => {
 });
 
 describe("reading one of your skills", () => {
-  test("says reading skills isn't available when OpenBot has no way to read them, not to try again", async () => {
+  test("says reading skills isn't available when XiongBao has no way to read them, not to try again", async () => {
     const response = await review({}).request("/skills/refund-triage");
     expect(response.status).toBe(503);
     const { error } = (await response.json()) as { error: string };
@@ -823,7 +823,7 @@ describe("Your Skills in the personal edition", () => {
 describe("the recordings a published skill was learned from", () => {
   /*
    * Intelligence publishes a skill with only its name, description and files. Which recordings it came from is read
-   * through the proposal that published it, whether the person approved it or OpenBot did automatically.
+   * through the proposal that published it, whether the person approved it or XiongBao did automatically.
    */
   const RECORDING = EVIDENCE.flatMap((entry) =>
     "kind" in entry ? [entry.trajectoryId] : [],

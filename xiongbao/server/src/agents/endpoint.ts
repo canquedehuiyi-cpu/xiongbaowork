@@ -261,7 +261,7 @@ function strippedBody(body: BodyInit | null | undefined): { body?: BodyInit } {
 /**
  * Where to dial an address a person gave on their own machine, from a server in a container there.
  *
- * OpenBot Desktop runs this server in a container, where `127.0.0.1` is the container and never the
+ * XiongBao Desktop runs this server in a container, where `127.0.0.1` is the container and never the
  * person's machine, so an agent they run on their Mac at `http://127.0.0.1:8765/ag-ui` was
  * unreachable while the same agent at `http://host.docker.internal:8765/ag-ui` worked. The Desktop
  * says which name its container reaches the machine by (`OPENBOT_THIS_MACHINE_HOST`), and a loopback

@@ -24,12 +24,12 @@ describe("desktop runtime metadata", () => {
         OPENBOT_BASE_URL: "https://private.example",
       }),
     ).toEqual({
-      openbot_distribution: "desktop",
-      openbot_version: "0.0.9",
-      openbot_platform: "macos",
-      openbot_arch: "aarch64",
-      openbot_os_version: "15.6.1",
-      openbot_engine: "podman",
+      xiongbao_distribution: "desktop",
+      xiongbao_version: "0.0.9",
+      xiongbao_platform: "macos",
+      xiongbao_arch: "aarch64",
+      xiongbao_os_version: "15.6.1",
+      xiongbao_engine: "podman",
     });
   });
 
@@ -41,15 +41,15 @@ describe("desktop runtime metadata", () => {
         OPENBOT_OS_VERSION: "15.6.1-rc.5",
       }),
     ).toEqual({
-      openbot_distribution: "desktop",
-      openbot_version: "1.0.0-rc.5",
+      xiongbao_distribution: "desktop",
+      xiongbao_version: "1.0.0-rc.5",
     });
     for (const value of ["1.0.0-beta", "0.3.4", "1.0.0-canary.12"]) {
       expect(
         desktopTelemetryProperties({
           OPENBOT_DISTRIBUTION: "desktop",
           OPENBOT_VERSION: value,
-        }).openbot_version,
+        }).xiongbao_version,
       ).toBe(value);
     }
   });
@@ -75,6 +75,6 @@ describe("desktop runtime metadata", () => {
         OPENBOT_ARCH: value,
         OPENBOT_ENGINE: value,
       }),
-    ).toEqual({ openbot_distribution: "desktop" });
+    ).toEqual({ xiongbao_distribution: "desktop" });
   });
 });

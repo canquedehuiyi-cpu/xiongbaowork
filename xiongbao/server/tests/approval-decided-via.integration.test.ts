@@ -33,13 +33,13 @@ const approvalIds: string[] = [];
 const actorFor =
   (id: string): MiddlewareHandler<{ Variables: AppVariables }> =>
   async (context, next) => {
-    context.set("actor", { id, email: `${id}@openbot.test`, role: "user" });
+    context.set("actor", { id, email: `${id}@xiongbao.test`, role: "user" });
     await next();
   };
 const routes = createApprovalRoutes(service, actorFor(owner));
 const call = (path: string, init?: RequestInit) =>
   runAsTenant(owner, () =>
-    routes.request(new Request(`http://openbot.test${path}`, init)),
+    routes.request(new Request(`http://xiongbao.test${path}`, init)),
   );
 
 async function pending(label: string) {
@@ -72,7 +72,7 @@ async function pending(label: string) {
 const read = (id: string) => runAsTenant(owner, () => store.get(owner, id));
 
 await runAsTenant(owner, () =>
-  database.insert(users).values({ id: owner, email: `${owner}@openbot.test` }),
+  database.insert(users).values({ id: owner, email: `${owner}@xiongbao.test` }),
 );
 
 afterAll(async () => {

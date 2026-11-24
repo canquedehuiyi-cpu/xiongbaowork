@@ -282,7 +282,7 @@ function hostOf(url: string): string | undefined {
 
 /**
  * Who is behind the endpoint the Bots call. A plan is its own source; otherwise the base URL's host
- * says, and OpenBot's own sign-in proxy (Google or xAI, signed in to on the desktop) is told apart by
+ * says, and XiongBao's own sign-in proxy (Google or xAI, signed in to on the desktop) is told apart by
  * the model it was set up with, which is the only thing the environment says about it.
  */
 export function modelSourceFor(
@@ -395,7 +395,7 @@ function listingRequest(
   };
 }
 
-/** OpenBot's own sign-in proxy for Google and xAI, which the Desktop points `OPENAI_BASE_URL` at. */
+/** XiongBao's own sign-in proxy for Google and xAI, which the Desktop points `OPENAI_BASE_URL` at. */
 function signedInThroughProxy(
   environment: Record<string, string | undefined>,
 ): boolean {
@@ -418,7 +418,7 @@ const CLAUDE_EFFORTS = ["low", "medium", "high", "xhigh", "max"];
  * them. Fable is left out: it is never a
  * plan's default, and on many plans it draws on usage credits rather than the plan.
  *
- * xAI through OpenBot's sign-in: xAI documents `/v1/language-models` for API keys, not for the
+ * xAI through XiongBao's sign-in: xAI documents `/v1/language-models` for API keys, not for the
  * Grok sign-in's token. The Desktop's own model for that sign-in, and the model third-party Grok
  * sign-ins default to.
  *
@@ -491,7 +491,7 @@ function signInFallback(
 }
 
 /**
- * Whether a listing request would carry OpenBot's own harness token anywhere but the plan's harness.
+ * Whether a listing request would carry XiongBao's own harness token anywhere but the plan's harness.
  * `MANAGED_AGENT_TOKEN` (a plan's `token`) is what the server proves itself to the harness it
  * started with, and no provider, gateway or catalogue is ever sent it, whatever a listing asks for.
  */

@@ -287,7 +287,7 @@ function routesFor(tenantId: string, options: TaskRouteOptions = {}) {
   return (method: string, path: string, body?: unknown) =>
     runAsTenant(tenantId, async () => {
       const response = await routes.request(
-        new Request(`http://openbot.test/${path}`, {
+        new Request(`http://xiongbao.test/${path}`, {
           method,
           ...(body === undefined
             ? {}

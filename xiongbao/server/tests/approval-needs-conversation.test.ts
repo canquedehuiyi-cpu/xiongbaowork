@@ -61,7 +61,7 @@ test("a navigation a rule asks about comes back as needing its conversation, not
   });
   const actor: AuthenticatedActor = {
     id: "user-1",
-    email: "member@openbot.test",
+    email: "member@xiongbao.test",
     role: "user",
   };
   const asActor: MiddlewareHandler<{ Variables: AppVariables }> = async (
@@ -78,7 +78,7 @@ test("a navigation a rule asks about comes back as needing its conversation, not
     async () => true,
   );
 
-  const response = await app.request("http://openbot.test/bot-1/navigate", {
+  const response = await app.request("http://xiongbao.test/bot-1/navigate", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ url: "https://example.com/" }),

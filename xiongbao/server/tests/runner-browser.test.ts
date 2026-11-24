@@ -59,7 +59,7 @@ afterEach(() => {
 
 /** A profile root this test owns, so the durable counter is real without touching anybody's. */
 function profileRoot(): string {
-  const dir = mkdtempSync(join(tmpdir(), "openbot-browser-"));
+  const dir = mkdtempSync(join(tmpdir(), "xiongbao-browser-"));
   roots.push(dir);
   return dir;
 }

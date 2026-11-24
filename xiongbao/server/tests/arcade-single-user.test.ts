@@ -77,7 +77,7 @@ describe("a single-user install and Arcade", () => {
   test("a deployment that signs people in still gets Arcade, never repointing the verifier", () => {
     const f = factories();
     const wiring = selectProviderWiring(
-      { arcadeApiKey: "a", publicUrl: "https://openbot.example" },
+      { arcadeApiKey: "a", publicUrl: "https://xiongbao.example" },
       f.create,
     );
     expect(wiring.provider).toBe("arcade");

@@ -280,7 +280,7 @@ describe("when the employee holds only a few skills of its own, it is told what 
   });
 });
 
-describe("on OpenBot's own harness the list rides on the message, not on the prefix", () => {
+describe("on XiongBao's own harness the list rides on the message, not on the prefix", () => {
   const llm = new LLMock();
   const wire: string[] = [];
   let recorder: ReturnType<typeof Bun.serve> | undefined;

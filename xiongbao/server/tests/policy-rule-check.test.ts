@@ -92,7 +92,11 @@ describe("checkPolicyRule", () => {
   });
 });
 
-const ADMIN = { id: "u1", email: "admin@openbot.test", role: "admin" } as const;
+const ADMIN = {
+  id: "u1",
+  email: "admin@xiongbao.test",
+  role: "admin",
+} as const;
 const ALLOW_ALL: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 
 function app(store: PolicyStore, reader?: AuditReader) {

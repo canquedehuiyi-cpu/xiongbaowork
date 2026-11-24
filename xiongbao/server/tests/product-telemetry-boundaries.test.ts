@@ -29,7 +29,7 @@ const input: RunAgentInput = {
   context: [],
   tools: [],
   state: {},
-  forwardedProps: { openbotTelemetry: { forged: true } },
+  forwardedProps: { xiongbaoTelemetry: { forged: true } },
 };
 const events = [
   {
@@ -42,7 +42,7 @@ const events = [
 test("request boundary replaces client claims, preserves application fields and joins retries by last ask", async () => {
   const f = await fixture();
   const request = () =>
-    new Request("https://openbot.test/api/copilotkit/agent/bot/run", {
+    new Request("https://xiongbao.test/api/copilotkit/agent/bot/run", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(input),
@@ -53,10 +53,10 @@ test("request boundary replaces client claims, preserves application fields and 
   expect(first).toBeDefined();
   const body = await first!.json();
   const retry = await second!.json();
-  expect(body.forwardedProps.openbotTelemetry.forged).toBeUndefined();
-  expect(body.forwardedProps.openbotTelemetry.app_id).toBe("openbot");
-  expect(body.forwardedProps.openbotTelemetry.root_task_id).toBe(
-    retry.forwardedProps.openbotTelemetry.root_task_id,
+  expect(body.forwardedProps.xiongbaoTelemetry.forged).toBeUndefined();
+  expect(body.forwardedProps.xiongbaoTelemetry.app_id).toBe("xiongbao");
+  expect(body.forwardedProps.xiongbaoTelemetry.root_task_id).toBe(
+    retry.forwardedProps.xiongbaoTelemetry.root_task_id,
   );
   expect(body.messages).toEqual(input.messages);
 });
@@ -79,7 +79,7 @@ test("a run is counted only with the context its deployment stated for its perso
   await lastValueFrom(
     other.telemetry.middleware("actor-one")(enriched, next).pipe(toArray()),
   );
-  // A run with no context of OpenBot's, as the runtime makes to name a conversation, is not either.
+  // A run with no context of XiongBao's, as the runtime makes to name a conversation, is not either.
   await lastValueFrom(
     f.telemetry
       .middleware("actor-one")({ ...input, forwardedProps: {} }, next)

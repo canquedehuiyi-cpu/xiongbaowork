@@ -5,7 +5,7 @@ import type { AuditEventInput } from "../src/audit";
 import { DEV_ACTOR } from "../src/auth/dev-actor";
 import type { AuthenticatedActor } from "../src/auth/guards";
 import { AuthorityUnavailable } from "../src/auth/organization";
-import type { OpenBotRole } from "../src/auth/roles";
+import type { XiongBaoRole } from "../src/auth/roles";
 import {
   createRecorderResolver,
   createRequireRecorder,
@@ -40,7 +40,7 @@ type Connection = {
 
 const owner: UserRow = {
   id: "owner",
-  email: "owner@openbot.test",
+  email: "owner@xiongbao.test",
   name: "Owner Person",
   image: "https://example.test/owner.png",
 };
@@ -99,7 +99,7 @@ function fixture(
     c.json({ connectionId: c.var.recorderConnectionId }),
   );
   const call = (headers: Record<string, string> = {}, path = "/x") =>
-    app.request(`http://openbot.test${path}`, { headers });
+    app.request(`http://xiongbao.test${path}`, { headers });
   const bearer = (token = TOKEN) => ({ authorization: `Bearer ${token}` });
   return { app, call, bearer, refusals, clock, connections, users, resolve };
 }
@@ -254,7 +254,7 @@ describe("the recorder bearer guard", () => {
 
   test("a person in an allowed email domain is admitted", async () => {
     const { call, bearer } = fixture(
-      betterAuth({ allowedEmailDomains: ["openbot.test"] }),
+      betterAuth({ allowedEmailDomains: ["xiongbao.test"] }),
     );
 
     expect((await call(bearer())).status).toBe(200);
@@ -284,7 +284,7 @@ describe("the recorder bearer guard", () => {
     const blank = {
       ...owner,
       id: "blank",
-      email: "blank@openbot.test",
+      email: "blank@xiongbao.test",
       name: "   ",
     };
     const { call, bearer } = fixture(betterAuth(), {
@@ -312,10 +312,10 @@ describe("the recorder bearer guard", () => {
   test("the resolver answers null when the request carries no recorder bearer", async () => {
     const { resolve } = fixture(betterAuth());
 
-    expect(await resolve(new Request("http://openbot.test/x"))).toBeNull();
+    expect(await resolve(new Request("http://xiongbao.test/x"))).toBeNull();
     expect(
       await resolve(
-        new Request("http://openbot.test/x", {
+        new Request("http://xiongbao.test/x", {
           headers: { authorization: "Bearer someone-elses-token" },
         }),
       ),
@@ -416,7 +416,7 @@ describe("organization mode", () => {
   }
 
   const signedIn =
-    (role: OpenBotRole = "user") =>
+    (role: XiongBaoRole = "user") =>
     async () => ({
       id: owner.id,
       email: owner.email,
@@ -480,7 +480,7 @@ describe("organization mode", () => {
   test("a session that belongs to somebody else is signed out as organization", async () => {
     const { call, bearer } = organization(async () => ({
       id: "somebody-else",
-      email: "else@openbot.test",
+      email: "else@xiongbao.test",
       role: "admin",
     }));
 

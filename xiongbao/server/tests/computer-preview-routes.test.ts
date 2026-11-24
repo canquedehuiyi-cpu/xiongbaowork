@@ -17,7 +17,7 @@ import { createComputerRoutes } from "../src/computer/routes";
 
 const member: AuthenticatedActor = {
   id: "user-1",
-  email: "member@openbot.test",
+  email: "member@xiongbao.test",
   role: "user",
 };
 
@@ -119,7 +119,7 @@ function appFor(
   );
 }
 
-const base = "http://openbot.test/bot-17/files";
+const base = "http://xiongbao.test/bot-17/files";
 const encode = (path: string) => encodeURIComponent(path);
 const bytesOf = (text: string) => new TextEncoder().encode(text);
 
@@ -609,11 +609,11 @@ describe("who may preview", () => {
   });
 
   test.each([
-    "http://openbot.test/bot-17/files/preview/x",
-    "http://openbot.test/bot-17/other/files/preview",
-    "http://openbot.test/bot-17/files/previews",
-    "http://openbot.test/bot-17/status",
-    "http://openbot.test/bot-17/files/list",
+    "http://xiongbao.test/bot-17/files/preview/x",
+    "http://xiongbao.test/bot-17/other/files/preview",
+    "http://xiongbao.test/bot-17/files/previews",
+    "http://xiongbao.test/bot-17/status",
+    "http://xiongbao.test/bot-17/files/list",
   ])("the scope does not open %s", async (url) => {
     const { gateway } = gatewayWith({ files: { "notes.md": bytesOf("hi") } });
     const response = await appFor(gateway, async () => false, allowed).request(
@@ -635,7 +635,7 @@ describe("who may preview", () => {
       },
       allowed,
     ).request(
-      `http://openbot.test/bot-17/files/text/files/text?${scope}&path=notes.md`,
+      `http://xiongbao.test/bot-17/files/text/files/text?${scope}&path=notes.md`,
     );
     expect(response.status).toBe(404);
     expect(asked).toEqual(["bot-17"]);

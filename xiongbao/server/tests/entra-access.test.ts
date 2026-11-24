@@ -10,10 +10,10 @@ import {
   entraRefusalSentence,
   entraTokenFor,
   forbiddenResource,
-  openBotResources,
   parseOboResources,
   scopeBindingRefusal,
   scopeResource,
+  xiongBaoResources,
 } from "../src/plugins/entra-access";
 
 /**
@@ -26,11 +26,11 @@ import {
 
 const HR = "api://hr-api/.default";
 const HR_URL = "https://hr.example.com/mcp";
-const OPENBOT = "6e74172b-be56-4843-9ff4-e66a39bb12e3";
+const XIONGBAO = "6e74172b-be56-4843-9ff4-e66a39bb12e3";
 /** What a deployment registered: the HR API, bound to the HR system's host. */
 const BINDING = {
   resources: [{ resource: "api://hr-api", host: "hr.example.com" }],
-  own: openBotResources(OPENBOT, `api://${OPENBOT}/.default`),
+  own: xiongBaoResources(XIONGBAO, `api://${XIONGBAO}/.default`),
 };
 const refuse = (sentence: string) => new Error(sentence);
 
@@ -343,25 +343,28 @@ describe("which resources a scope may name, and where its token may go (review I
     expect(scopeResource("https://contoso.com/hr/.default")).toBe(
       "https://contoso.com/hr",
     );
-    expect(scopeResource(`${OPENBOT}/.default`)).toBe(OPENBOT);
+    expect(scopeResource(`${XIONGBAO}/.default`)).toBe(XIONGBAO);
     // What Entra reads as Microsoft Graph, and shapes with no permission at all.
     for (const named of ["User.Read", "api://hr-api", "api://hr-api/"])
       expect(scopeResource(named)).toBeNull();
   });
 
-  test("OpenBot's own API, by any of its names or under it, is never a resource", () => {
+  test("XiongBao's own API, by any of its names or under it, is never a resource", () => {
     for (const resource of [
-      OPENBOT,
-      `api://${OPENBOT}`,
-      `API://${OPENBOT.toUpperCase()}`,
-      `api://${OPENBOT}/admin`,
+      XIONGBAO,
+      `api://${XIONGBAO}`,
+      `API://${XIONGBAO.toUpperCase()}`,
+      `api://${XIONGBAO}/admin`,
     ])
       expect(forbiddenResource(resource, BINDING.own)).toBe("own");
-    // A custom API scope's resource is OpenBot's too.
+    // A custom API scope's resource is XiongBao's too.
     expect(
       forbiddenResource(
-        "api://openbot.example.com",
-        openBotResources(OPENBOT, "api://openbot.example.com/access_as_user"),
+        "api://xiongbao.example.com",
+        xiongBaoResources(
+          XIONGBAO,
+          "api://xiongbao.example.com/access_as_user",
+        ),
       ),
     ).toBe("own");
   });
@@ -404,7 +407,7 @@ describe("which resources a scope may name, and where its token may go (review I
       parseOboResources(["api://hr-api=https://hr.example.com"], BINDING.own),
     ).toThrow("写法不对");
     expect(() =>
-      parseOboResources([`api://${OPENBOT}=hr.example.com`], BINDING.own),
+      parseOboResources([`api://${XIONGBAO}=hr.example.com`], BINDING.own),
     ).toThrow("登记了熊宝数字员工自己的 API");
     expect(() =>
       parseOboResources(
@@ -420,7 +423,7 @@ describe("which resources a scope may name, and where its token may go (review I
       "没有写明资源",
     );
     expect(
-      scopeBindingRefusal(`api://${OPENBOT}/.default`, HR_URL, BINDING),
+      scopeBindingRefusal(`api://${XIONGBAO}/.default`, HR_URL, BINDING),
     ).toBe(
       "不能用熊宝数字员工自己的 API 作为 Entra scope：换出来的 token 能冒充本人调用熊宝数字员工。",
     );

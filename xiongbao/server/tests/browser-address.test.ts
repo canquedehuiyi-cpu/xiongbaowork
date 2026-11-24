@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
-import { openbotAddress } from "../src/browser/address";
+import { xiongbaoAddress } from "../src/browser/address";
 
 /**
- * OpenBot Desktop writes its app's 127.0.0.1 address as `OPENBOT_PUBLIC_URL`, so an app connected
+ * XiongBao Desktop writes its app's 127.0.0.1 address as `OPENBOT_PUBLIC_URL`, so an app connected
  * over its own OAuth has somewhere to come back to. That address now comes first for the Recorder
  * too. The Recorder runs in the one computer's browser, whose relay always listens on 127.0.0.1 and
  * on [::1] only where the container has IPv6, so a window on [::1] still hands it the address that
  * always answers there.
  */
-describe("where the Recorder reaches OpenBot Desktop", () => {
-  const desktop = openbotAddress({
+describe("where the Recorder reaches XiongBao Desktop", () => {
+  const desktop = xiongbaoAddress({
     publicUrl: "http://127.0.0.1:3010",
     appUrl: "http://localhost:3010",
   });

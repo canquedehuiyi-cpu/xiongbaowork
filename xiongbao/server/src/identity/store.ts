@@ -338,7 +338,7 @@ async function writeLinkLocked(
   );
 }
 
-/** Refuses anything that is not a code OpenBot could have issued before it reaches a query. */
+/** Refuses anything that is not a code XiongBao could have issued before it reaches a query. */
 function codeHash(code: string) {
   if (typeof code !== "string" || !UUID.test(code))
     throw new IdentityLinkError();

@@ -21,8 +21,8 @@ import {
 import { createDatabase } from "../src/db/client";
 import { credentials } from "../src/db/schema";
 import { asPlatform, runAsTenant } from "../src/tenant/context";
-import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { credentialDouble } from "./support/credential-double";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 const key = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
@@ -769,7 +769,7 @@ describe("admin credential API", () => {
         handler: () => new Response(null, { status: 204 }),
         api: {
           getSession: async () => ({
-            user: { id: "admin", email: "admin@openbot.test" },
+            user: { id: "admin", email: "admin@xiongbao.test" },
           }),
         },
       },
@@ -801,7 +801,7 @@ describe("admin credential API", () => {
     );
 
     const response = await app.request(
-      "http://openbot.local/api/admin/credentials",
+      "http://xiongbao.local/api/admin/credentials",
     );
 
     expect(response.status).toBe(200);
@@ -827,7 +827,7 @@ describe("admin credential API", () => {
         handler: () => new Response(null, { status: 204 }),
         api: {
           getSession: async () => ({
-            user: { id: "admin", email: "admin@openbot.test" },
+            user: { id: "admin", email: "admin@xiongbao.test" },
           }),
         },
       },
@@ -856,7 +856,7 @@ describe("admin credential API", () => {
     );
 
     const response = await app.request(
-      "http://openbot.local/api/admin/credentials",
+      "http://xiongbao.local/api/admin/credentials",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -901,7 +901,7 @@ describe("admin credential API", () => {
         handler: () => new Response(null, { status: 204 }),
         api: {
           getSession: async () => ({
-            user: { id: "admin", email: "admin@openbot.test" },
+            user: { id: "admin", email: "admin@xiongbao.test" },
           }),
         },
       },
@@ -931,7 +931,7 @@ describe("admin credential API", () => {
     );
 
     const rotate = await app.request(
-      "http://openbot.local/api/admin/credentials/credential-old/rotate",
+      "http://xiongbao.local/api/admin/credentials/credential-old/rotate",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -945,7 +945,7 @@ describe("admin credential API", () => {
       },
     );
     const revoke = await app.request(
-      "http://openbot.local/api/admin/credentials/credential-new/revoke",
+      "http://xiongbao.local/api/admin/credentials/credential-new/revoke",
       { method: "POST" },
     );
 

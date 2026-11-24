@@ -23,7 +23,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
  * Every word a goal's run hands the model says goal.
  *
  * Every screen calls it a goal, and the model repeats the words its tools and its turn give it. A
- * goal's run on OpenBot Desktop was handed `complete_responsibility` and "a responsibility", and its
+ * goal's run on XiongBao Desktop was handed `complete_responsibility` and "a responsibility", and its
  * reply, "I've marked the responsibility complete", is what the person read in the conversation and
  * as the goal's Activity summary. These are the tools a goal's run is built with
  * (`responsibilities/wiring.ts`), the turn it is sent, and the real store's refusals as the tool

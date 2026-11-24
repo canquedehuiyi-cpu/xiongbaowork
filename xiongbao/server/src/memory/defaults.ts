@@ -33,14 +33,14 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { type Edition, editionHasMemory } from "../edition";
 import { type DefaultFeature, defaultOptOuts } from "../db/schema/defaults";
 import { memorySources } from "../db/schema/memory";
 import { proactiveSettings } from "../db/schema/proactive";
+import { type Edition, editionHasMemory } from "../edition";
 import type { MemoryIngestion } from "./ingestion";
 
 /**
- * How often check-ins run when OpenBot switched them on, in minutes: hourly, the most often a Bot
+ * How often check-ins run when XiongBao switched them on, in minutes: hourly, the most often a Bot
  * may look. Most end silently, and the person hears at most once an hour whatever they find.
  */
 export const DEFAULT_RESEARCH_INTERVAL_MINUTES = 60;

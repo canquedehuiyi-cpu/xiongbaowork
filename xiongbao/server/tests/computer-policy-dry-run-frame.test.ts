@@ -16,7 +16,11 @@ import { currentTenant, runAsTenant } from "../src/tenant/context";
  * stays in the caller's own frame.
  */
 
-const ADMIN = { id: "u-admin", email: "admin@openbot.test", role: "admin" } as const;
+const ADMIN = {
+  id: "u-admin",
+  email: "admin@xiongbao.test",
+  role: "admin",
+} as const;
 const POLICY = { mode: "enforce", deny: [], allow: [] };
 
 function app(options: { roles?: string[]; scoped: boolean }) {

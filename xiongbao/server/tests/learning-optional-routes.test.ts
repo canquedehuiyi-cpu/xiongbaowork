@@ -12,7 +12,7 @@ describe("the learning admin routes without Intelligence", () => {
   // administrator, on a deployment that never set INTELLIGENCE_API_KEY.
   const app = createApp(
     loadConfig({
-      DATABASE_URL: "postgres://openbot:openbot@localhost:5432/openbot",
+      DATABASE_URL: "postgres://openbot:openbot@localhost:5432/xiongbao",
       KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
       OPENBOT_SINGLE_USER: "true",
     }),

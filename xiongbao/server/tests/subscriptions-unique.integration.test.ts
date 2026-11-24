@@ -65,7 +65,7 @@ async function switchPlan(id: string, planId: string) {
     quota,
     asAdmin(id),
   ).request(
-    new Request("http://openbot.test/plan", {
+    new Request("http://xiongbao.test/plan", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ planId }),

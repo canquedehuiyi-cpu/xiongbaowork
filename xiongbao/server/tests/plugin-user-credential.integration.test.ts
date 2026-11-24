@@ -301,8 +301,8 @@ async function connect(userId: string, refreshToken: string) {
 beforeAll(async () => {
   releaseAdmin = await seedAdministrator(database, adminId);
   for (const [id, email] of [
-    [askerId, `${askerId}@openbot.test`],
-    [otherId, `${otherId}@openbot.test`],
+    [askerId, `${askerId}@xiongbao.test`],
+    [otherId, `${otherId}@xiongbao.test`],
   ]) {
     await asPerson(id, () =>
       database
@@ -747,7 +747,7 @@ describe("retiring the credentials a person owns", () => {
     expect(exchanged.at(-1)).toBe(askerRefreshToken);
 
     await asPlatform(() =>
-      store.retireConnectionsFor(askerId, "admin@openbot.local"),
+      store.retireConnectionsFor(askerId, "admin@xiongbao.local"),
     );
 
     const [credential] = await asPerson(askerId, () =>
@@ -788,7 +788,7 @@ describe("retiring the credentials a person owns", () => {
     );
 
     await asPlatform(() =>
-      store.retireConnectionsFor(otherId, "admin@openbot.local"),
+      store.retireConnectionsFor(otherId, "admin@xiongbao.local"),
     );
 
     const [credential] = await asPerson(otherId, () =>
@@ -808,7 +808,7 @@ describe("retiring the credentials a person owns", () => {
     expect(
       (
         await asPlatform(() =>
-          store.retireConnectionsFor(askerId, "admin@openbot.local"),
+          store.retireConnectionsFor(askerId, "admin@xiongbao.local"),
         )
       ).retired,
     ).toBeGreaterThan(0);
@@ -816,7 +816,7 @@ describe("retiring the credentials a person owns", () => {
     expect(
       (
         await asPlatform(() =>
-          store.retireConnectionsFor(askerId, "admin@openbot.local"),
+          store.retireConnectionsFor(askerId, "admin@xiongbao.local"),
         )
       ).retired,
     ).toBe(0);
@@ -824,7 +824,7 @@ describe("retiring the credentials a person owns", () => {
     expect(
       (
         await asPlatform(() =>
-          store.retireConnectionsFor("", "admin@openbot.local"),
+          store.retireConnectionsFor("", "admin@xiongbao.local"),
         )
       ).retired,
     ).toBe(0);

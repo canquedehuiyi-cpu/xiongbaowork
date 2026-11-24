@@ -46,7 +46,7 @@ async function openByTask(who: string): Promise<Map<string, Open>> {
   const routes = createTaskRoutes(database, asActor(who), projector);
   return runAsTenant(who, async () => {
     const response = await routes.request(
-      new Request(`http://openbot.test/?q=${encodeURIComponent(TITLE)}`),
+      new Request(`http://xiongbao.test/?q=${encodeURIComponent(TITLE)}`),
     );
     expect(response.status).toBe(200);
     const body = (await response.json()) as {

@@ -5,7 +5,7 @@
  * WHY THIS ROUTE. It is the one established inbound-mail path that works identically on AWS and on a
  * self-hosted deployment (SES receiving only needs an AWS account and an MX record, not AWS
  * hosting), needs no mailbox credentials, and is authenticated by AWS's own published signature
- * scheme rather than a secret we would have to distribute. OpenBot has no Gmail/Outlook push
+ * scheme rather than a secret we would have to distribute. XiongBao has no Gmail/Outlook push
  * connector to watch a mailbox with (the Workspace MCP servers are request/response only).
  *
  * Each email trigger gets its own address, `trigger-<triggerId>@<OPENBOT_INBOUND_EMAIL_DOMAIN>`; the

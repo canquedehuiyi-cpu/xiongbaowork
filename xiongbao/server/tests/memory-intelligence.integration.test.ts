@@ -14,8 +14,8 @@ import {
   MemoryRefusedError,
   MemoryUnavailableError,
 } from "../src/memory/types";
-import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { runAsTenant } from "../src/tenant/context";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 // Fixtures read and write rows directly, so the harness runs as `platform`; see the helper.
 import {
   afterAll,
@@ -379,7 +379,7 @@ test("a memory only Intelligence holds is the person's own: recalled, edited and
   expect(fake.live(ada)).toEqual([]);
 });
 
-test("a memory OpenBot describes cannot be forgotten through its Intelligence id", async () => {
+test("a memory XiongBao describes cannot be forgotten through its Intelligence id", async () => {
   const memory = await store.create(ada, { content: "Has a dog" });
   const linked = (await rowOf(memory.id))?.intelligenceMemoryId;
   await expect(

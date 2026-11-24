@@ -84,7 +84,7 @@ const adminCapability: MiddlewareHandler<{ Variables: AppVariables }> = async (
   await next();
 };
 const connectOptions = {
-  publicUrl: "https://openbot.example",
+  publicUrl: "https://xiongbao.example",
   appUrl: "https://app.example",
   encryptionKey: `${"A".repeat(43)}=`,
   personHasAccess: async () => true,

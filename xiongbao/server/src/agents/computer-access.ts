@@ -46,7 +46,7 @@ export function canUseComputer(
 /**
  * The access check the computer routes and the live screen use, read from the profile store.
  *
- * A person's own OpenBot browser is a computer too, named for its person rather than a Bot (browser/person.ts), and only
+ * A person's own XiongBao browser is a computer too, named for its person rather than a Bot (browser/person.ts), and only
  * that person reaches it: there is no profile to read, and an administrator who may watch any Bot's screen may not watch
  * a person's own browser.
  *

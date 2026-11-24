@@ -6,11 +6,11 @@
  *
  * `no-sign-in`: the person has no Microsoft sign-in stored and no token from their app to stand in.
  * `sign-in-expired`: Entra no longer honours their sign-in (`invalid_grant`, or a sign-in it wants
- * repeated). `no-consent`: an admin has not granted OpenBot access to the system (`AADSTS65001` from
+ * repeated). `no-consent`: an admin has not granted XiongBao access to the system (`AADSTS65001` from
  * the on-behalf-of exchange). `no-api-consent`: the same code one step earlier, from the refresh
- * grant for OpenBot's own API, so what is missing is consent to OpenBot's API and not to the system.
- * `no-api`: OpenBot's app registration exposes no API, so there is no token to OpenBot to exchange
- * (`AADSTS500011`). `not-admitted`: OpenBot itself no longer lets the person in (an admin removed
+ * grant for XiongBao's own API, so what is missing is consent to XiongBao's API and not to the system.
+ * `no-api`: XiongBao's app registration exposes no API, so there is no token to XiongBao to exchange
+ * (`AADSTS500011`). `not-admitted`: XiongBao itself no longer lets the person in (an admin removed
  * them, or the SSO or domain rules changed), so nothing is asked of Entra at all. `refused`:
  * anything else, which the operator's log line names.
  */

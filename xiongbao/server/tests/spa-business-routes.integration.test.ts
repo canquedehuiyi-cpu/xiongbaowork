@@ -35,7 +35,7 @@ const prefix = `spa-${randomUUID()}`;
 const tenantA = `${prefix}-a`;
 const tenantB = `${prefix}-b`;
 const agentId = `${prefix}-agent`;
-const dist = mkdtempSync(join(tmpdir(), "openbot-spa-"));
+const dist = mkdtempSync(join(tmpdir(), "xiongbao-spa-"));
 const html = "<!doctype html><title>Delivery SPA fixture</title>";
 writeFileSync(join(dist, "index.html"), html);
 // A static file at a real API path must never shadow its authenticated JSON route.
@@ -145,7 +145,7 @@ const paths = [
   `/api/agents/${agentId}/autonomous`,
 ];
 const request = (path: string, tenant?: string) =>
-  app.request(`http://openbot.test${path}`, {
+  app.request(`http://xiongbao.test${path}`, {
     headers: tenant ? { "x-test-session": tenant } : {},
   });
 

@@ -74,7 +74,7 @@ const read = (
   frameTenant: string = actorId,
 ) =>
   routesFor(actorId, frameTenant).request(
-    new Request(`http://openbot.test/${id}`, {
+    new Request(`http://xiongbao.test/${id}`, {
       ...(etag ? { headers: { "if-none-match": etag } } : {}),
     }),
   );

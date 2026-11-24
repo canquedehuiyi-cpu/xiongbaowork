@@ -61,7 +61,7 @@ async function call(
     "content-type": "application/json",
   };
   if (user) headers["x-test-user"] = user;
-  const response = await routes.request(`http://openbot.test${path}`, {
+  const response = await routes.request(`http://xiongbao.test${path}`, {
     method,
     headers,
     ...(raw !== undefined
@@ -517,7 +517,7 @@ describe("a WakerFlow target with inputs (WF8)", () => {
     requireUser,
   );
   const post = async (user: string, body: unknown) => {
-    const response = await flowRoutes.request("http://openbot.test/", {
+    const response = await flowRoutes.request("http://xiongbao.test/", {
       method: "POST",
       headers: { "content-type": "application/json", "x-test-user": user },
       body: JSON.stringify(body),
@@ -562,7 +562,7 @@ describe("a WakerFlow target with inputs (WF8)", () => {
       inputs: { topic: "发布" },
     });
     const read = await flowRoutes.request(
-      `http://openbot.test/${automation.id}`,
+      `http://xiongbao.test/${automation.id}`,
       { headers: { "x-test-user": alice } },
     );
     expect(

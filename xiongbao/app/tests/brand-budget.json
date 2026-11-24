@@ -97,7 +97,7 @@
   {
     "rule": "identifier",
     "scope": "app/src",
-    "lines": 62
+    "lines": 51
   },
   {
     "rule": "identifier",
@@ -127,7 +127,7 @@
   {
     "rule": "identifier",
     "scope": "server/src",
-    "lines": 174
+    "lines": 104
   },
   {
     "rule": "identifier",

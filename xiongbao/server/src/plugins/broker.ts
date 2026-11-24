@@ -4,7 +4,7 @@ import type { DeploymentClient } from "./deployment-clients";
 import type { AccountRef } from "./shared-accounts";
 
 /**
- * What openbot needs of Composio the BROKER, as against Composio the transport.
+ * What xiongbao needs of Composio the BROKER, as against Composio the transport.
  *
  * `./composio` is about calling an action once an app is connected. This file is about everything
  * that has to be true before that: which apps exist to choose from, which of them this deployment
@@ -465,7 +465,7 @@ export type ComposioBroker = {
      *
      * AND `string` IS THE WHOLE OF WHAT THE TYPE CAN PROMISE, WHICH IS WHY
      * {@link brokerReturnUrl} EXISTS. "Required" above means "not optional", and `""`, `"   "` and
-     * `openbot.example.com/settings/...` are all required values: they satisfy this field and
+     * `xiongbao.example.com/settings/...` are all required values: they satisfy this field and
      * reach the vendor as a callback nobody returns through. Nor can a narrower type fix it — the
      * address is assembled at run time from an environment variable, so the caller holds a
      * `string` and every type an ordinary `string` is assignable to admits the empty one too. The
@@ -728,7 +728,7 @@ export class BrokerReturnUrlError extends BrokerRefusalError {
  * TWO REFUSALS, BECAUSE THEY ARE TWO DIFFERENT MISTAKES. An empty address is a caller that built
  * none — the guard in front of this one did not run, or ran against the wrong value. An address that
  * is not a web page is a configured one that cannot work: `OPENBOT_APP_URL` set to
- * `openbot.example.com`, which no browser can resolve from Composio's origin, or to `localhost:3001`,
+ * `xiongbao.example.com`, which no browser can resolve from Composio's origin, or to `localhost:3001`,
  * where `localhost:` is read as the scheme. Both are reachable from the settings this deployment
  * actually ships — the variable is an environment string and nothing between it and the vendor looks
  * at it — and both end with the same person on the same hosted page with nowhere to go.
@@ -739,7 +739,7 @@ export class BrokerReturnUrlError extends BrokerRefusalError {
  *
  * WHAT COMES BACK IS THE ADDRESS THAT WAS CHECKED, WHICH IS NOT ALWAYS THE STRING THAT WENT IN. The
  * check reads a parsed address: the emptiness test trims, and parsing drops the spaces and control
- * characters a URL cannot contain — so ` https://openbot.test/…`, an address ending in a newline and
+ * characters a URL cannot contain — so ` https://xiongbao.test/…`, an address ending in a newline and
  * one with a tab inside its host all satisfy this guard while denoting something else entirely. A
  * version that approved the parsed address and returned the raw one approved nothing: the padding
  * travelled on to Composio as part of the callback, which is the person stranded on a vendor page

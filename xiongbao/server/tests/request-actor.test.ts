@@ -1,7 +1,7 @@
 // server/tests/request-actor.test.ts
 import { describe, expect, test } from "bun:test";
 import { DEV_ACTOR } from "../src/auth/dev-actor";
-import type { OpenBotRole } from "../src/auth/roles";
+import type { XiongBaoRole } from "../src/auth/roles";
 import type { RecorderResolver } from "../src/recorder/guard";
 import { actorName, createRequestActor } from "../src/request-actor";
 
@@ -9,13 +9,13 @@ type User = {
   id: string;
   email?: string | null;
   name?: string | null;
-  role?: OpenBotRole | null;
+  role?: XiongBaoRole | null;
 };
 
 function actorFor(options: {
   singleUser?: boolean;
   user?: User;
-  roles?: OpenBotRole[];
+  roles?: XiongBaoRole[];
   resolveRecorder?: RecorderResolver;
 }) {
   const calls = { getSession: 0, rolesForUser: 0 };

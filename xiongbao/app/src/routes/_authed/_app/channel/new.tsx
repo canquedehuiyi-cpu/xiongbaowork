@@ -205,7 +205,9 @@ function NewConversation({ composition }: { composition: string }) {
    * on OpenBot's own model. The pick is saved with the conversation, before the message runs.
    */
   const pickable =
-    !group && selected.length === 1 && selected[0]?.runsOnOpenBotModel === true;
+    !group &&
+    selected.length === 1 &&
+    selected[0]?.runsOnXiongBaoModel === true;
   const models = useQuery({
     ...modelCatalogueQueryOptions(),
     enabled: pickable,

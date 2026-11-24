@@ -115,7 +115,7 @@ const fixture = join(
   "fixtures",
   "fake-acp-agent.ts",
 );
-const scratch = mkdtempSync(join(tmpdir(), "openbot-acp-e2e-"));
+const scratch = mkdtempSync(join(tmpdir(), "xiongbao-acp-e2e-"));
 const work = join(scratch, "work");
 mkdirSync(work, { recursive: true });
 

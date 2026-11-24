@@ -40,14 +40,14 @@ import { bindTestRoleWriter } from "./support/role-writer";
 /**
  * A company system behind Microsoft Entra, reached as the signed-in person.
  *
- * Two doors in and one way out. A person's app calls OpenBot with their Entra token, and a routine
+ * Two doors in and one way out. A person's app calls XiongBao with their Entra token, and a routine
  * runs with nobody in the browser at all; either way a server an admin marked with an Entra scope is
  * called with a token Entra issued for that person through the on-behalf-of exchange.
  *
  * Entra is a stand-in that answers as Entra does: the published keys, the refresh grant with a
  * rotated refresh token, the on-behalf-of grant checked for its grant type, `requested_token_use`
- * and an assertion addressed to OpenBot, and the three refusals a person can meet (an expired
- * sign-in, missing consent, an API OpenBot's registration does not expose), in Entra's own error
+ * and an assertion addressed to XiongBao, and the three refusals a person can meet (an expired
+ * sign-in, missing consent, an API XiongBao's registration does not expose), in Entra's own error
  * shape. The system is a real MCP server built with the official SDK that checks the bearer it is
  * sent. Both are reached at their real addresses through `fetch`, which forwards them to 127.0.0.1.
  */
@@ -79,11 +79,11 @@ const KID = `kid-${tag}`;
 type Directory = {
   /** Live refresh tokens, by token: whose they are and whether Entra still honours them. */
   refreshTokens: Map<string, { oid: string; upn: string; expired?: boolean }>;
-  /** Whether OpenBot's app registration exposes an API, so a token to it can be issued at all. */
+  /** Whether XiongBao's app registration exposes an API, so a token to it can be issued at all. */
   apiExposed: boolean;
-  /** Whether an admin consented to OpenBot's own API, so its refresh grant may ask for it. */
+  /** Whether an admin consented to XiongBao's own API, so its refresh grant may ask for it. */
   apiConsented: boolean;
-  /** The systems an admin has granted OpenBot access to. */
+  /** The systems an admin has granted XiongBao access to. */
   consented: Set<string>;
   /** Every grant the token endpoint was asked for, in order. */
   requests: { grantType: string; scope: string; assertion?: string }[];
@@ -111,10 +111,10 @@ async function sign(
 }
 
 /**
- * A person's token to OpenBot's own API, as Entra issues one to their app: `azp` names the app it
+ * A person's token to XiongBao's own API, as Entra issues one to their app: `azp` names the app it
  * was issued to, and `azpacr` how that app proved itself (`0`, a public client such as a SPA).
  */
-const tokenToOpenBot = (
+const tokenToXiongBao = (
   person: { oid: string; upn: string },
   overrides: Record<string, unknown> = {},
   expiresIn?: number,
@@ -218,7 +218,7 @@ async function tokenEndpoint(request: Request): Promise<Response> {
         400,
         "invalid_grant",
         65001,
-        `The user or administrator has not consented to use the application with ID '${CLIENT_ID}' named 'OpenBot'. Send an interactive authorization request for this user and resource.`,
+        `The user or administrator has not consented to use the application with ID '${CLIENT_ID}' named 'XiongBao'. Send an interactive authorization request for this user and resource.`,
         { suberror: "consent_required" },
       );
     }
@@ -231,8 +231,8 @@ async function tokenEndpoint(request: Request): Promise<Response> {
       scope: `api://${CLIENT_ID}/access_as_user`,
       expires_in: 3599,
       ext_expires_in: 3599,
-      // Issued to OpenBot itself, which proved itself with its secret.
-      access_token: await tokenToOpenBot(held, {
+      // Issued to XiongBao itself, which proved itself with its secret.
+      access_token: await tokenToXiongBao(held, {
         azp: CLIENT_ID,
         azpacr: "1",
       }),
@@ -274,7 +274,7 @@ async function tokenEndpoint(request: Request): Promise<Response> {
         400,
         "invalid_grant",
         65001,
-        `The user or administrator has not consented to use the application with ID '${CLIENT_ID}' named 'OpenBot'. Send an interactive authorization request for this user and resource.`,
+        `The user or administrator has not consented to use the application with ID '${CLIENT_ID}' named 'XiongBao'. Send an interactive authorization request for this user and resource.`,
         { suberror: "consent_required" },
       );
     }
@@ -341,7 +341,7 @@ let entraServer: ReturnType<typeof Bun.serve>;
 let mcpServer: ReturnType<typeof Bun.serve>;
 const realFetch = globalThis.fetch;
 
-/* ---------------------------------------------------------------- OpenBot */
+/* ---------------------------------------------------------------- XiongBao */
 
 const config = loadConfig(
   testEnvironment({
@@ -531,9 +531,9 @@ afterAll(async () => {
 
 /* ---------------------------------------------------------------- the tests */
 
-describe("an app calls OpenBot with a person's Entra token", () => {
+describe("an app calls XiongBao with a person's Entra token", () => {
   test("a valid token runs as that person, signed in the way the sign-in screen signs them in", async () => {
-    const response = await api("/me", await tokenToOpenBot(ada));
+    const response = await api("/me", await tokenToXiongBao(ada));
     expect(response.status).toBe(200);
     const { user } = (await response.json()) as {
       user: { email: string; role: string };
@@ -543,7 +543,7 @@ describe("an app calls OpenBot with a person's Entra token", () => {
     expect(user.role).toBe("admin");
 
     // And the second request finds her rather than signing her in again.
-    const again = await api("/me", await tokenToOpenBot(ada));
+    const again = await api("/me", await tokenToXiongBao(ada));
     expect(again.status).toBe(200);
     // Signing her in left no session behind: the token is what each request runs on.
     const adminId = (await userId(ADMIN)) ?? "";
@@ -583,7 +583,7 @@ describe("an app calls OpenBot with a person's Entra token", () => {
     const actor = await resolveRequestActor(
       new Request("http://127.0.0.1:7480/api/copilotkit", {
         method: "POST",
-        headers: { authorization: `Bearer ${await tokenToOpenBot(ada)}` },
+        headers: { authorization: `Bearer ${await tokenToXiongBao(ada)}` },
       }),
     );
     expect(actor).toEqual({
@@ -613,7 +613,7 @@ describe("an app calls OpenBot with a person's Entra token", () => {
     ],
     ["a token that names no app", { azp: undefined }, undefined],
     [
-      // What Entra issues when OpenBot's registration asks for v1.0 tokens: the app is in `appid`.
+      // What Entra issues when XiongBao's registration asks for v1.0 tokens: the app is in `appid`.
       "a v1.0 token, even from a listed app",
       {
         ver: "1.0",
@@ -631,7 +631,7 @@ describe("an app calls OpenBot with a person's Entra token", () => {
     const stranger = person(`stranger-${randomUUID().slice(0, 8)}`);
     const response = await api(
       "/me",
-      await tokenToOpenBot(stranger, overrides, expiresIn),
+      await tokenToXiongBao(stranger, overrides, expiresIn),
     );
     expect(response.status).toBe(401);
     // Nobody was signed in on its strength.
@@ -641,7 +641,7 @@ describe("an app calls OpenBot with a person's Entra token", () => {
   test("a deployment that lists no app takes no app's token", async () => {
     const unlisted = newEntra({ ...microsoft, allowedClients: [] });
     const stranger = person("unlisted");
-    const token = await tokenToOpenBot(stranger);
+    const token = await tokenToXiongBao(stranger);
     // As the request guard asks it: as `platform`, before anybody is known.
     expect(
       await asPlatform(() =>
@@ -660,7 +660,7 @@ describe("an app calls OpenBot with a person's Entra token", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           provider: "microsoft",
-          idToken: { token: await tokenToOpenBot(person("door")) },
+          idToken: { token: await tokenToXiongBao(person("door")) },
         }),
       },
     );

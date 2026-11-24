@@ -55,7 +55,11 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
 ) => {
-  context.set("actor", { id: tenant, email: `${tenant}@example.test`, role: "user" as const });
+  context.set("actor", {
+    id: tenant,
+    email: `${tenant}@example.test`,
+    role: "user" as const,
+  });
   // As createRequireUser does: the whole request runs inside its tenant, so a transaction a route
   // opens is scoped to it rather than to the context-free default.
   await runAsTenant(tenant, () => next());
@@ -90,7 +94,11 @@ const requireAdminUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
 ) => {
-  context.set("actor", { id: tenant, email: `${tenant}@example.test`, role: "admin" as const });
+  context.set("actor", {
+    id: tenant,
+    email: `${tenant}@example.test`,
+    role: "admin" as const,
+  });
   // As createRequireUser does: the whole request runs inside its tenant, so a transaction a route
   // opens is scoped to it rather than to the context-free default.
   await runAsTenant(tenant, () => next());
@@ -105,7 +113,7 @@ async function call<T>(
   body?: unknown,
 ): Promise<{ status: number; body: T }> {
   const response = await app.request(
-    new Request(`http://openbot.test${path}`, {
+    new Request(`http://xiongbao.test${path}`, {
       method,
       headers:
         body === undefined ? undefined : { "content-type": "application/json" },
@@ -479,12 +487,16 @@ test("a workspace with no subscription is held to the Free ceilings, not left un
     database,
     quota,
     async (context, next) => {
-      context.set("actor", { id: stranger, email: `${stranger}@example.test`, role: "user" as const });
+      context.set("actor", {
+        id: stranger,
+        email: `${stranger}@example.test`,
+        role: "user" as const,
+      });
       await next();
     },
   );
   const response = await runAsTenant(stranger, () =>
-    panelRoutes.request(new Request("http://openbot.test/")),
+    panelRoutes.request(new Request("http://xiongbao.test/")),
   );
   const body = (await response.json()) as {
     plan: { id: string } | null;

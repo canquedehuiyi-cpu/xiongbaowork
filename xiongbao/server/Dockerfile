@@ -55,8 +55,8 @@ FROM oven/bun:1.4.3 AS runtime
 
 # Not root. The API opens a socket and talks to Postgres; neither needs privileges, and a Chromium
 # container is a separate image with its own reasons.
-RUN groupadd --system --gid 1001 openbot \
-  && useradd --system --uid 1001 --gid openbot openbot
+RUN groupadd --system --gid 1001 xiongbao \
+  && useradd --system --uid 1001 --gid xiongbao xiongbao
 
 WORKDIR /app
 
@@ -95,7 +95,7 @@ COPY worker/src worker/src
 COPY --from=app-build /app/app/dist app/dist
 ENV APP_DIST_DIR=/app/app/dist
 
-USER openbot:openbot
+USER xiongbao:xiongbao
 
 # Public release identity is baked into the final image, independently of installation sidecars.
 ARG OPENBOT_BUILD_VERSION
@@ -109,7 +109,7 @@ ENV OPENBOT_BUILD_VERSION=${OPENBOT_BUILD_VERSION} \
     OPENBOT_BUILD_REPOSITORY=${OPENBOT_BUILD_REPOSITORY} \
     OPENBOT_BUILD_CHANNEL=${OPENBOT_BUILD_CHANNEL}
 
-# Where this server runs, said by the image so no deployment has to. On a single-user OpenBot outside a
+# Where this server runs, said by the image so no deployment has to. On a single-user XiongBao outside a
 # container only callers on this machine are the administrator; in here every caller arrives through
 # the container engine's network, so that rule would refuse everybody. See `singleUserAccess` in
 # server/src/config.ts.

@@ -97,7 +97,7 @@ using System;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
-public static class OpenBotCredentialLock {
+public static class XiongBaoCredentialLock {
   [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)]
   static extern SafeFileHandle CreateFileW(string path, uint access, uint share, IntPtr security, uint creation, uint flags, IntPtr template);
   [DllImport("kernel32.dll", SetLastError=true)]
@@ -118,7 +118,7 @@ public static class OpenBotCredentialLock {
 $deadline=[DateTime]::UtcNow.AddSeconds(5)
 $file=$null
 while ($null -eq $file) {
-  try { $file=[OpenBotCredentialLock]::Open($env:OPENBOT_CREDENTIAL_LOCK) }
+  try { $file=[XiongBaoCredentialLock]::Open($env:OPENBOT_CREDENTIAL_LOCK) }
   catch {
     $cause=$_.Exception.GetBaseException()
     if ($cause -isnot [System.ComponentModel.Win32Exception] -or $cause.NativeErrorCode -ne 32 -or [DateTime]::UtcNow -ge $deadline) { exit 1 }

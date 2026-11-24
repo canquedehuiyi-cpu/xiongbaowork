@@ -230,7 +230,7 @@ export function parseAgentInput(
 
   /*
    * The framework a person named for an agent they run themselves, by its id in the harness list.
-   * Kept only with an address: a Bot with none runs here, on OpenBot. See `frameworkOf`.
+   * Kept only with an address: a Bot with none runs here, on XiongBao. See `frameworkOf`.
    */
   let harness: string | undefined;
   if (input.harness !== undefined && input.harness !== "") {
@@ -657,18 +657,18 @@ export function createAgentRoutes(
     /*
      * Whether it runs on this deployment's model, so a person can pick the model and effort per
      * conversation: a `built_in` Bot (no endpoint), or the harness picked in setup when it is one of
-     * OpenBot's own that takes the choice. A Bot on any other framework picks its own model.
+     * XiongBao's own that takes the choice. A Bot on any other framework picks its own model.
      * So does an external employee: no endpoint, but its agent runs on its hirer's own computer.
      */
-    runsOnOpenBotModel:
+    runsOnXiongBaoModel:
       !agent.externalRun &&
       (agent.endpoint === null || takesModelChoice(agent.endpoint)),
     /*
-     * Whether OpenBot gives it a key on every run, as it does at every address it runs itself: the
+     * Whether XiongBao gives it a key on every run, as it does at every address it runs itself: the
      * Bot in the box and the harness picked in setup (see runtime-agents.ts). Such a Bot uses its
      * tools with no key of its own, so its Setup page must not say it can't.
      */
-    keyFromOpenBot:
+    keyFromXiongBao:
       typeof agent.endpoint === "string" &&
       managedRun !== undefined &&
       isManagedEndpoint(agent.endpoint, managedRun.endpoints),

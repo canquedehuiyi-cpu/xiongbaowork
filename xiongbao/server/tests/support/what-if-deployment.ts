@@ -19,12 +19,12 @@ import {
 } from "../../src/db/schema";
 
 /**
- * One small OpenBot for "What would happen if…": two Bots, three people, two apps, and a setting on
+ * One small XiongBao for "What would happen if…": two Bots, three people, two apps, and a setting on
  * every control, written through the stores the admin screens write through.
  *
  * The ids are fixed rather than random, because the model's answers in `fixtures/what-if-recorded.json`
  * were recorded naming them. Every row starts with `whatif-` so the test's vocabulary can be narrowed
- * to this OpenBot whatever else the test database holds, and the prompt is the one recorded.
+ * to this XiongBao whatever else the test database holds, and the prompt is the one recorded.
  */
 export const ADMIN = {
   id: "whatif-admin",
@@ -226,7 +226,7 @@ export async function clearWhatIf(database: Database): Promise<void> {
   await database.delete(users).where(like(users.id, "whatif-%"));
 }
 
-/** The vocabulary narrowed to this OpenBot, so the prompt is the one the answers were recorded for. */
+/** The vocabulary narrowed to this XiongBao, so the prompt is the one the answers were recorded for. */
 export function ownVocabulary(vocabulary: WhatIfVocabulary): WhatIfVocabulary {
   const own = (id: string) => id.startsWith("whatif-");
   return {

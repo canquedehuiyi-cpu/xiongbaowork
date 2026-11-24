@@ -46,11 +46,11 @@ export type LearningAdminDependencies = {
   /** Review and publish here, which an Intelligence with no dashboard of its own needs. */
   manage?: LearningManagement;
   /**
-   * Why OpenBot Desktop could not give its local Intelligence's Learning agent a model, from
+   * Why XiongBao Desktop could not give its local Intelligence's Learning agent a model, from
    * `OPENBOT_LEARNING_MODEL_UNAVAILABLE`. See `learningModelUnavailable`.
    */
   modelUnavailable?: LearningModelUnavailable;
-  /** What admins decided about skills people learned, kept by OpenBot. */
+  /** What admins decided about skills people learned, kept by XiongBao. */
   approvals?: SkillApprovalStore;
   /** The people whose recordings are learned from, each with their own Learning space. */
   people?: () => Promise<
@@ -700,7 +700,7 @@ export function createLearningRoutes(
     );
   }
   /**
-   * Approve or reject a proposal learned from a person's recordings. On approve, OpenBot records the skill as
+   * Approve or reject a proposal learned from a person's recordings. On approve, XiongBao records the skill as
    * admin-approved before Intelligence is asked, and takes that record back if Intelligence refuses.
    */
   for (const action of ["approve", "reject"] as const) {
@@ -802,7 +802,7 @@ export function createLearningRoutes(
   }
   /**
    * Approve (which publishes it to every Bot on the container) or reject a proposal. Intelligence
-   * records the runtime key as the reviewer, so OpenBot's own audit records which admin it was.
+   * records the runtime key as the reviewer, so XiongBao's own audit records which admin it was.
    */
   for (const action of ["approve", "reject"] as const) {
     routes.post(`/proposals/:candidateId/${action}`, async (context) => {

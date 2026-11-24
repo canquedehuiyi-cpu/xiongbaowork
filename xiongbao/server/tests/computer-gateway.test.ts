@@ -1534,7 +1534,7 @@ describe("resolving a computer's address", () => {
 /**
  * The snapshot a ref resolves against is shared between servers, not held in one process.
  *
- * OpenBot runs several server processes behind a load balancer, and the process that answers a
+ * XiongBao runs several server processes behind a load balancer, and the process that answers a
  * snapshot is rarely the one that answers the click that uses its refs. If the mapping from ref to
  * element lives in a `Map`, it is missing on every replica but the one that snapshotted: the policy
  * decides with no element in front of it, and the deny rule the deployment is relying on does not
@@ -2210,7 +2210,7 @@ describe("seats on a person's computer", () => {
 
   // Teach a Bot's browser is a computer named by a hash of its person's id, which no Bot has. Settings > Computer
   // listed it as "A Bot no longer here"; the list now says whose browser it is.
-  test("the admin list says whose OpenBot browser a person's browser is", async () => {
+  test("the admin list says whose XiongBao browser a person's browser is", async () => {
     const browser = `person-${"a".repeat(32)}`;
     const stranger = `person-${"b".repeat(32)}`;
     const computer = fakeComputer({

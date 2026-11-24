@@ -86,7 +86,7 @@ function deployment() {
       signedIn,
       async () => true,
       {
-        publicUrl: "https://openbot.example",
+        publicUrl: "https://xiongbao.example",
         appUrl: "https://app.example",
         encryptionKey: `${"A".repeat(43)}=`,
         personHasAccess: async () => true,
@@ -94,7 +94,7 @@ function deployment() {
       { broker },
     ),
   );
-  const url = "http://openbot.test/api/plugins/composio/apps";
+  const url = "http://xiongbao.test/api/plugins/composio/apps";
   return {
     broker,
     slugs: async (query = "") => {

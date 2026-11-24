@@ -13,6 +13,7 @@
  *   own recent use of it, where the trail records that use ({@link CAPABILITY_ACTIVITY}).
  */
 import type { AuditEvent, AuditEventQuery, AuditReader } from "../audit";
+import { englishName } from "../brand";
 import {
   CAPABILITIES,
   CAPABILITY_LABELS,
@@ -23,7 +24,6 @@ import {
   type Member,
   resolveCapability,
 } from "./capabilities";
-import { englishName } from "../brand";
 
 export const ROLES = ["admin", "user"] as const;
 export type Role = (typeof ROLES)[number];
@@ -56,7 +56,7 @@ export type CapabilityChangesCheck =
   | { ok: false; error: string; problems: CapabilityChangeProblem[] };
 
 /**
- * Changes from one description. Enough to take three permissions from one group in an OpenBot with
+ * Changes from one description. Enough to take three permissions from one group in an XiongBao with
  * thirty groups; more is not one sentence's worth.
  */
 export const MAX_CAPABILITY_CHANGES = 100;

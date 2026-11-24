@@ -208,7 +208,7 @@ async function call<T>(
 ): Promise<{ status: number; body: T }> {
   const routes = createWakerFlowRoutes({ store, requireUser: actor(person) });
   const response = await routes.request(
-    new Request(`http://openbot.test${path}`, {
+    new Request(`http://xiongbao.test${path}`, {
       method,
       headers:
         body === undefined ? undefined : { "content-type": "application/json" },

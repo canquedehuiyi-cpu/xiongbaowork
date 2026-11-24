@@ -14,7 +14,7 @@ import captured from "./fixtures/composio-gmail-messages.json";
  * I can't guarantee they're the top two across every email in the past 24 hours". A model asks
  * GMAIL_FETCH_EMAILS for that with `max_results: 50, include_payload: true, verbose: true` (a
  * model's own arguments for the prompt, asked on 2026-11-07), every message then carries its
- * raw MIME tree, and OpenBot cut the answer at 20,000 characters: inside the first message's base64
+ * raw MIME tree, and XiongBao cut the answer at 20,000 characters: inside the first message's base64
  * HTML, before the page token, ending "[truncated]". The Bot could not read its inbox and could not
  * page to the rest.
  *
@@ -157,7 +157,7 @@ async function readTheDay(): Promise<{
       // A cut list never offers the token past it, which would skip what was left out, and
       // neither does the listing's own note, which names it.
       expect(data.nextPageToken).toBeUndefined();
-      expect(data.openbot_note).toBeUndefined();
+      expect(data.xiongbao_note).toBeUndefined();
       args = { ...args, max_results: Number(resized[1]) };
       continue;
     }
@@ -262,14 +262,14 @@ describe("a day of a busy inbox, read the way a Bot reads it", () => {
     const { data } = read(result.text);
     expect(result.truncated).toBe(false);
     expect(data.nextPageToken).toBe("token-20");
-    expect(String(data.openbot_note)).toContain(
+    expect(String(data.xiongbao_note)).toContain(
       "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID",
     );
     // A page that is not the last says so in counts, and names the token to the next one.
-    expect(String(data.openbot_note)).toContain(
+    expect(String(data.xiongbao_note)).toContain(
       "This page holds 20 of about 140 that match, so it is not the whole answer",
     );
-    expect(String(data.openbot_note)).toContain('page_token "token-20"');
+    expect(String(data.xiongbao_note)).toContain('page_token "token-20"');
     // The last page does not ask for another.
     const last = read(
       (
@@ -285,7 +285,7 @@ describe("a day of a busy inbox, read the way a Bot reads it", () => {
       ).text,
     ).data;
     expect(last.nextPageToken).toBe("");
-    expect(String(last.openbot_note)).not.toContain("page_token");
+    expect(String(last.xiongbao_note)).not.toContain("page_token");
     // The raw MIME tree and the repeated subject are gone; what a person triages by is not.
     const first = (data.messages as Message[])[0] as Message;
     expect(Object.keys(first).sort()).toEqual([
@@ -329,7 +329,7 @@ describe("one message read by its id", () => {
     // Who else it went to survives the MIME tree.
     expect(Object.keys(data.headers as object)).toEqual(["CC"]);
     // A body that came through needs no note.
-    expect(data.openbot_note).toBeUndefined();
+    expect(data.xiongbao_note).toBeUndefined();
   });
 
   test("a body Composio did not decode is said to be left out, not silently missing", async () => {
@@ -350,7 +350,7 @@ describe("one message read by its id", () => {
     const data = JSON.parse(result.text) as Message;
     expect(data.payload).toBeUndefined();
     expect(data.messageText).toBeUndefined();
-    expect(String(data.openbot_note)).toContain("正文未能解码，已省略");
+    expect(String(data.xiongbao_note)).toContain("正文未能解码，已省略");
   });
 });
 
@@ -413,7 +413,7 @@ describe("a thread read whole", () => {
 
 describe("any action's list over the cap", () => {
   test("is cut between its records, drops the token past them, and says how to read the rest", async () => {
-    // An action OpenBot does not shape: its answer is read as it came, and only the cut changes.
+    // An action XiongBao does not shape: its answer is read as it came, and only the cut changes.
     const threads = Array.from({ length: 60 }, (_, index) => ({
       id: `thread-${index}`,
       snippet: `${"y".repeat(900)} ${index}`,

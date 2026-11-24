@@ -34,12 +34,12 @@ export function requestFailure(error: unknown): {
   };
 }
 
-/** Why Learning has no model on this machine, as OpenBot Desktop recorded it. */
+/** Why Learning has no model on this machine, as XiongBao Desktop recorded it. */
 export type LearningModelUnavailable = "unsupported";
 
 /**
  * Desktop's reason, from `OPENBOT_LEARNING_MODEL_UNAVAILABLE`, or undefined. Only Desktop writes the
- * setting, so an OpenBot whose Learning runs on an organization's Intelligence keeps the message for
+ * setting, so an XiongBao whose Learning runs on an organization's Intelligence keeps the message for
  * whoever runs that back end.
  */
 export function learningModelUnavailable(
@@ -132,7 +132,7 @@ const BACK_END_FAILURES = new Set([
  * Intelligence records a code, never the Learning agent's own error (`learning-agent-client.ts` wraps
  * it "without exposing response text"). Where Learning thinks on the person's plan through this
  * server (`calls`), what reached the endpoint while the run went says the rest: nothing at all is a
- * Learning agent that could not reach OpenBot, which is what "Connection error." was on every call.
+ * Learning agent that could not reach XiongBao, which is what "Connection error." was on every call.
  */
 export function runFailure(
   run: Pick<
@@ -366,7 +366,7 @@ export async function readSkillRecordings(
   return [...recordings].map(([id, available]) => ({ id, available }));
 }
 
-/** Logs a failure while taking OpenBot's own record back, or while finishing it. */
+/** Logs a failure while taking XiongBao's own record back, or while finishing it. */
 function logRecordFailure(type: string, candidateId: string, error: unknown) {
   console.error(
     JSON.stringify({
@@ -389,7 +389,7 @@ function surelyRefused(error: unknown): boolean {
 }
 
 /**
- * What a `before` step hands `reviewProposal`: OpenBot's own record of the review, in two halves. A bare function is
+ * What a `before` step hands `reviewProposal`: XiongBao's own record of the review, in two halves. A bare function is
  * the `undo` alone.
  */
 export type ReviewSteps = {
@@ -400,7 +400,7 @@ export type ReviewSteps = {
 };
 
 /**
- * Approves or rejects a proposal. `before` runs once the proposal is read and before Intelligence is asked, so OpenBot
+ * Approves or rejects a proposal. `before` runs once the proposal is read and before Intelligence is asked, so XiongBao
  * can write its own record first (callers pass it only on approve). Its `undo` takes that record back only when
  * Intelligence surely refused, with a 4xx; on any other failure the record stays, since the skill may be published
  * after all, and a record of a skill that never appears only holds it back. Its `after` runs once Intelligence has

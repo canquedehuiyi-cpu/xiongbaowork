@@ -1,10 +1,10 @@
 /**
  * Asking Intelligence something at boot, while Intelligence may still be starting.
  *
- * Installed together from OpenBot's Helm chart, OpenBot's server is up before Intelligence can
+ * Installed together from XiongBao's Helm chart, XiongBao's server is up before Intelligence can
  * answer, by design. Helm runs Intelligence's migrations (post-install, weight 5) and then its
  * bootstrap (weight 10), which stores this deployment's runtime key and creates the `openbot`
- * Learning container, only once every Deployment in the release is ready, OpenBot's included. Until
+ * Learning container, only once every Deployment in the release is ready, XiongBao's included. Until
  * both have run, Intelligence refuses connections, then answers 500 (`relation ... does not exist`),
  * then 401 (the key is not stored yet). A question asked once at boot gets one of those, and the
  * operator is told about a problem that is gone a few seconds later.

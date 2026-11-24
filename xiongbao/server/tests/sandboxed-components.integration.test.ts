@@ -2,9 +2,9 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
-import type { AppVariables } from "../src/auth/guards";
 import { createAuditStore } from "../src/audit";
 import { createAdminScope } from "../src/auth/admin-scope";
+import type { AppVariables } from "../src/auth/guards";
 import { createRoleRepository } from "../src/auth/guards";
 import { setRole } from "../src/auth/roles";
 import {
@@ -61,7 +61,11 @@ async function asAdministrator<T>(work: () => Promise<T>): Promise<T> {
   app.use(
     "*",
     async (context, next) => {
-      context.set("actor", { id: administrator, email: `${administrator}@example.test`, role: "admin" });
+      context.set("actor", {
+        id: administrator,
+        email: `${administrator}@example.test`,
+        role: "admin",
+      });
       await runAsTenant(administrator, () => next());
     },
     scope.adminCapability,
@@ -73,7 +77,7 @@ async function asAdministrator<T>(work: () => Promise<T>): Promise<T> {
     );
     return context.body(null, 204);
   });
-  await app.request("http://openbot.test/");
+  await app.request("http://xiongbao.test/");
   if (!outcome) throw new Error("The admin request never ran its work.");
   if ("error" in outcome) throw outcome.error;
   return outcome.value;
@@ -87,7 +91,7 @@ beforeAll(async () => {
   await asDeployment(() =>
     database
       .insert(users)
-      .values({ id: administrator, email: `${administrator}@openbot.test` }),
+      .values({ id: administrator, email: `${administrator}@xiongbao.test` }),
   );
   await asPlatform(() => setRole(database, administrator, "admin"));
 });
@@ -116,7 +120,7 @@ describe("authoring a component without a rebuild", () => {
         jsFunctions: "",
         argumentSchema: { type: "object" },
         sampleArguments: { a: 1 },
-        by: "admin@openbot.local",
+        by: "admin@xiongbao.local",
       });
 
       expect(saved.name).toBe(name);
@@ -139,7 +143,7 @@ describe("authoring a component without a rebuild", () => {
 
   test("publishing releases the source and the description together", () =>
     asAdministrator(async () => {
-      const published = await store.publish(name, "admin@openbot.local");
+      const published = await store.publish(name, "admin@xiongbao.local");
       expect(published.published).toBe(true);
       expect(published.publishedHtml).toBe("<p>draft</p>");
       expect(published.revision).toBe(1);
@@ -179,7 +183,7 @@ describe("authoring a component without a rebuild", () => {
         jsFunctions: "",
         argumentSchema: { type: "object" },
         sampleArguments: { a: 1 },
-        by: "admin@openbot.local",
+        by: "admin@xiongbao.local",
       });
 
       const drawable = await store.published();
@@ -204,14 +208,14 @@ describe("authoring a component without a rebuild", () => {
           jsFunctions: "",
           argumentSchema: {},
           sampleArguments: {},
-          by: "admin@openbot.local",
+          by: "admin@xiongbao.local",
         }),
       ).rejects.toThrow();
     }));
 
   test("deleting takes the governance row with it", () =>
     asAdministrator(async () => {
-      await store.remove(name, "admin@openbot.local");
+      await store.remove(name, "admin@xiongbao.local");
       const [governance] = await database
         .select()
         .from(components)
@@ -255,12 +259,12 @@ describe("deleting a name this surface does not own", () => {
       await database.insert(componentExclusions).values({
         componentName: compiled,
         agentId: bot,
-        withheldBy: "admin@openbot.local",
+        withheldBy: "admin@xiongbao.local",
       });
       await database.insert(componentFunctions).values({
         componentName: compiled,
         functionName: "listRecentOrders",
-        grantedBy: "admin@openbot.local",
+        grantedBy: "admin@xiongbao.local",
       });
     }),
   );
@@ -275,7 +279,7 @@ describe("deleting a name this surface does not own", () => {
   test("refuses a compiled component's name instead of deleting its governance", () =>
     asAdministrator(async () => {
       await expect(
-        store.remove(compiled, "admin@openbot.local"),
+        store.remove(compiled, "admin@xiongbao.local"),
       ).rejects.toThrow(SandboxedNotFoundError);
 
       const [governance] = await database
@@ -315,7 +319,7 @@ describe("deleting a name this surface does not own", () => {
       // Answered rather than reported as success. `{ ok: true }` for a name that was never there reads
       // as "the thing you named is gone", which is the one thing it does not establish.
       await expect(
-        store.remove(`custom_never_${suite}`, "admin@openbot.local"),
+        store.remove(`custom_never_${suite}`, "admin@xiongbao.local"),
       ).rejects.toThrow(SandboxedNotFoundError);
     }));
 
@@ -336,10 +340,10 @@ describe("deleting a name this surface does not own", () => {
         kind: "sandboxed",
         draftDescription: "Authored here.",
         published: false,
-        updatedBy: "admin@openbot.local",
+        updatedBy: "admin@xiongbao.local",
       });
 
-      await store.remove(orphan, "admin@openbot.local");
+      await store.remove(orphan, "admin@xiongbao.local");
 
       const [gone] = await database
         .select()

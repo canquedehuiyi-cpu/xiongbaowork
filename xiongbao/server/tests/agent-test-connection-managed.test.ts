@@ -23,7 +23,7 @@ describe("testing an address this deployment runs", () => {
   ) => {
     context.set("actor", {
       id: "user-1",
-      email: "user@openbot.test",
+      email: "user@xiongbao.test",
       role: "user",
     });
     await next();
@@ -64,7 +64,7 @@ describe("testing an address this deployment runs", () => {
     app: ReturnType<typeof createAgentRoutes>,
     endpoint: string,
   ) {
-    const response = await app.request("http://openbot.test/test-connection", {
+    const response = await app.request("http://xiongbao.test/test-connection", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ endpoint }),

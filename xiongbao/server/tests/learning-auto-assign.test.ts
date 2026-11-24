@@ -536,7 +536,7 @@ describe("what an Intelligence that is up but not learning says, read through th
 });
 
 /*
- * Kink 17 of the Helm bundle build. OpenBot's server is up before Intelligence's migrations and
+ * Kink 17 of the Helm bundle build. XiongBao's server is up before Intelligence's migrations and
  * bootstrap run, by design. The boot check asked once, logged "Intelligence could not be asked about
  * the Learning container" on every first install, and looked again only ten minutes later or when
  * something read the settings. Real HTTP and the real runtime client, on a clock that moves only
@@ -641,7 +641,7 @@ describe("the boot check on a first install, while Intelligence is still startin
 });
 
 /*
- * OpenBot Desktop 1.0.0 on a Mac: every message failed with `REST run request failed:
+ * XiongBao Desktop 1.0.0 on a Mac: every message failed with `REST run request failed:
  * {"error":"Failed to initialize thread"}`. The folder's `.env` still said
  * `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID="openbot"` from an earlier setup against hosted
  * Intelligence, Desktop pointed the server at its own local Intelligence, whose project had no
@@ -759,8 +759,8 @@ describe("a Learning container the environment names", () => {
 });
 
 /*
- * The same failure from OpenBot's own database. A default container saved while the server talked to
- * hosted Intelligence (by Admin, or by automatic assignment there) still won once OpenBot Desktop
+ * The same failure from XiongBao's own database. A default container saved while the server talked to
+ * hosted Intelligence (by Admin, or by automatic assignment there) still won once XiongBao Desktop
  * pointed it at its own local Intelligence, which has no such container, and every message failed
  * with "Failed to initialize thread". Real HTTP and the real runtime client.
  */

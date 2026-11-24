@@ -39,7 +39,11 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
 ) => {
-  context.set("actor", { id: tenantA, email: `${tenantA}@example.test`, role: "user" as const });
+  context.set("actor", {
+    id: tenantA,
+    email: `${tenantA}@example.test`,
+    role: "user" as const,
+  });
   await next();
 };
 const routes = createAutonomousRoutes(store, requireUser);
@@ -152,7 +156,7 @@ test("the route answers under the signed-in person's own tenant", async () => {
   await seed();
 
   const response = await runAsTenant(tenantA, () =>
-    routes.request(new Request(`http://openbot.test/${agentId}/autonomous`)),
+    routes.request(new Request(`http://xiongbao.test/${agentId}/autonomous`)),
   );
   expect(response.status).toBe(200);
   const body = (await response.json()) as {
@@ -162,7 +166,7 @@ test("the route answers under the signed-in person's own tenant", async () => {
   expect(body.autonomous.routines).toHaveLength(1);
 
   const stranger = await runAsTenant(tenantB, () =>
-    routes.request(new Request(`http://openbot.test/${agentId}/autonomous`)),
+    routes.request(new Request(`http://xiongbao.test/${agentId}/autonomous`)),
   );
   expect(stranger.status).toBe(404);
   expect(await stranger.json()).toEqual({ error: "No such coworker." });
@@ -274,12 +278,16 @@ test("an unfinished routine keeps its newest start, schedule order and activity 
       context,
       next,
     ) => {
-      context.set("actor", { id: fixture.owner, email: `${fixture.owner}@example.test`, role: "user" });
+      context.set("actor", {
+        id: fixture.owner,
+        email: `${fixture.owner}@example.test`,
+        role: "user",
+      });
       await next();
     };
     const response = await runAsTenant(fixture.owner, () =>
       createAutonomousRoutes(store, auth).request(
-        `http://openbot.test/${fixture.bot}/autonomous`,
+        `http://xiongbao.test/${fixture.bot}/autonomous`,
       ),
     );
     expect(response.status).toBe(200);
@@ -372,12 +380,16 @@ test("the new in-flight projection does not expose another owner's routine or st
       context,
       next,
     ) => {
-      context.set("actor", { id: fixture.foreign, email: `${fixture.foreign}@example.test`, role: "user" });
+      context.set("actor", {
+        id: fixture.foreign,
+        email: `${fixture.foreign}@example.test`,
+        role: "user",
+      });
       await next();
     };
     const response = await runAsTenant(fixture.foreign, () =>
       createAutonomousRoutes(store, auth).request(
-        `http://openbot.test/${fixture.bot}/autonomous`,
+        `http://xiongbao.test/${fixture.bot}/autonomous`,
       ),
     );
     expect(response.status).toBe(404);
@@ -554,12 +566,16 @@ test("summaryForAll answers every coworker of this tenant, and nobody else's", a
       const as =
         (actor: string): MiddlewareHandler<{ Variables: AppVariables }> =>
         async (context, next) => {
-          context.set("actor", { id: actor, email: `${actor}@example.test`, role: "user" });
+          context.set("actor", {
+            id: actor,
+            email: `${actor}@example.test`,
+            role: "user",
+          });
           await next();
         };
       const mine = await runAsTenant(fixture.owner, () =>
         createAutonomousRoutes(store, as(fixture.owner)).request(
-          "http://openbot.test/autonomous/all",
+          "http://xiongbao.test/autonomous/all",
         ),
       );
       expect(mine.status).toBe(200);
@@ -578,7 +594,7 @@ test("summaryForAll answers every coworker of this tenant, and nobody else's", a
       ]);
       const theirs = await runAsTenant(fixture.foreign, () =>
         createAutonomousRoutes(store, as(fixture.foreign)).request(
-          "http://openbot.test/autonomous/all",
+          "http://xiongbao.test/autonomous/all",
         ),
       );
       expect(theirs.status).toBe(200);

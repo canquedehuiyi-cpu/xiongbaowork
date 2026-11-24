@@ -24,6 +24,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import { type AuditReader, recordAuditEvent } from "../audit";
 import { type AppVariables, requireAdmin } from "../auth/guards";
+import { englishName } from "../brand";
 import {
   ask,
   objectIn,
@@ -55,7 +56,6 @@ import {
   previewCapabilityChanges,
 } from "./capability-changes";
 import { type EnterpriseControls, enterpriseControls } from "./controls";
-import { englishName } from "../brand";
 
 /** What a change can name: the switches set now, and every group with how many people are in it. */
 export type CapabilityVocabulary = {
@@ -366,7 +366,7 @@ export async function translateCapabilityChanges(input: {
     notes = answer.data.notes?.trim() ?? "";
     /*
      * No changes is the model saying the description names nothing it can change, such as a group
-     * this OpenBot doesn't have. Asked again it would only be pressed to invent one, so its own
+     * this XiongBao doesn't have. Asked again it would only be pressed to invent one, so its own
      * reason is the answer.
      */
     if (written.length === 0) {
@@ -476,7 +476,7 @@ const changeInput = z.strictObject({
   capability: z.string().max(100),
   allowed: z.boolean().nullable(),
 });
-/** Changes as the screen sends them: checked against the rule and this OpenBot, not refused for being wrong. */
+/** Changes as the screen sends them: checked against the rule and this XiongBao, not refused for being wrong. */
 const changesInput = z
   .array(changeInput)
   .min(1, "Add at least one change.")

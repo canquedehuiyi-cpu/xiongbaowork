@@ -7,7 +7,7 @@ import { createRoutineRunner } from "../src/routines/runner";
 import { RoutineRefusedError, type RoutineStore } from "../src/routines/store";
 import { isTenantFramed, requireTenant } from "../src/tenant/context";
 
-const actor = { id: "user-1", email: "m@openbot.test", role: "user" } as const;
+const actor = { id: "user-1", email: "m@xiongbao.test", role: "user" } as const;
 const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
@@ -45,7 +45,7 @@ test("Run now opens a run as the caller, hands it to the real runner, and audits
     },
     ran,
     audits,
-  ).request("http://openbot.test/routine-1/run", { method: "POST" });
+  ).request("http://xiongbao.test/routine-1/run", { method: "POST" });
   expect(response.status).toBe(202);
   expect(await response.json()).toEqual({
     accepted: true,
@@ -70,7 +70,7 @@ test("Run now on a paused routine is refused and nothing runs", async () => {
       },
     },
     ran,
-  ).request("http://openbot.test/routine-1/run", { method: "POST" });
+  ).request("http://xiongbao.test/routine-1/run", { method: "POST" });
   expect(response.status).toBe(400);
   expect(ran).toEqual([]);
 });
@@ -100,7 +100,7 @@ test("run history maps an open run to running and serializes times", async () =>
       },
     },
     [],
-  ).request("http://openbot.test/routine-1/runs");
+  ).request("http://xiongbao.test/routine-1/runs");
   expect(await response.json()).toEqual({
     runs: [
       {

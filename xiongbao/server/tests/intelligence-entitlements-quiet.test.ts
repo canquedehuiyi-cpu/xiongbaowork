@@ -15,7 +15,7 @@ import {
 } from "../src/self-host-banner";
 
 const RUNTIME_KEY =
-  "cpk-openbot_abcdefgh12345678_abcdefghijklmnopqrstuvwxyz012345";
+  "cpk-xiongbao_abcdefgh12345678_abcdefghijklmnopqrstuvwxyz012345";
 
 /**
  * `resolveSelfHostedEntitlements` (apps/app-api/src/routes/entitlements-routes.ts) for a valid
@@ -34,7 +34,7 @@ const READY: RuntimeEntitlementResponse = {
 };
 
 /**
- * Intelligence over real HTTP, as a first install of OpenBot's Helm bundle meets it: until `up`,
+ * Intelligence over real HTTP, as a first install of XiongBao's Helm bundle meets it: until `up`,
  * every request fails on a table its migrations have not made yet, and Express answers 500 with
  * `createErrorResponseBody` (apps/app-api/src/errors/http-error-response.ts); then the entitlement
  * route answers, and memory has nothing stored.
@@ -87,7 +87,7 @@ afterEach(() => {
 });
 
 /*
- * Kink 17 of the Helm bundle build, after the boot check was made to wait. OpenBot's server is up
+ * Kink 17 of the Helm bundle build, after the boot check was made to wait. XiongBao's server is up
  * before Intelligence's migrations finish, and the runtime client prints every failed entitlement
  * read as a multi-line `Runtime entitlement request failed` object. The boot check no longer asked
  * the client too early, but every other reader still did: the setup checklist reads at boot through

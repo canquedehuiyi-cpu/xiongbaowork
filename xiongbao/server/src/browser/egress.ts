@@ -14,9 +14,9 @@ import type { EgressPolicy, EgressRule } from "../computer/policy-network";
  *   service that must reach any public address: allow what is public, refuse private and reserved space. Written as
  *   the public ranges, because a policy here can only allow; the computer's filter checks every address a name
  *   resolves to and connects to the address it checked, so a name that points inside is refused too.
- * - Plus OpenBot itself and the Intelligence gateway, wherever they resolve: the Recorder reaches OpenBot for its capture
+ * - Plus XiongBao itself and the Intelligence gateway, wherever they resolve: the Recorder reaches XiongBao for its capture
  *   passes and streams to the gateway, and either can sit on a private address inside the cluster. Their origins only,
- *   host and port: OpenBot and the gateway often share an address with other services (the Intelligence UI, a
+ *   host and port: XiongBao and the gateway often share an address with other services (the Intelligence UI, a
  *   database, every other port on 127.0.0.1), and a person's browser is let in to these two, not to their neighbours.
  *
  * A deployment that lets Bots reach private addresses (AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS, local development only) lets a
@@ -26,8 +26,8 @@ export function personBrowserEgressPolicy(input: {
   /** The browser is a window on the person's own desktop. */
   native: boolean;
   allowPrivateHosts: boolean;
-  /** This OpenBot's addresses (its public URL and its app's). */
-  openbotUrls: readonly (string | undefined)[];
+  /** This XiongBao's addresses (its public URL and its app's). */
+  xiongbaoUrls: readonly (string | undefined)[];
   /** INTELLIGENCE_GATEWAY_WS_URL. */
   gatewayUrl: string;
 }): EgressPolicy {
@@ -45,17 +45,17 @@ export function personBrowserEgressPolicy(input: {
 }
 
 /**
- * What the Recorder in a browser must reach, as rules: OpenBot itself, for its capture passes, and the Intelligence
+ * What the Recorder in a browser must reach, as rules: XiongBao itself, for its capture passes, and the Intelligence
  * gateway, which it streams to. Their origins only, host and port, for the reason given above.
  */
 export function recorderOriginRules(input: {
-  /** This OpenBot's addresses (its public URL and its app's). */
-  openbotUrls: readonly (string | undefined)[];
+  /** This XiongBao's addresses (its public URL and its app's). */
+  xiongbaoUrls: readonly (string | undefined)[];
   /** INTELLIGENCE_GATEWAY_WS_URL. */
   gatewayUrl: string;
 }): EgressRule[] {
   return uniqueRules(
-    [...input.openbotUrls, input.gatewayUrl].flatMap((raw) => {
+    [...input.xiongbaoUrls, input.gatewayUrl].flatMap((raw) => {
       const origin = originOf(raw);
       return origin ? rulesFor(origin) : [];
     }),

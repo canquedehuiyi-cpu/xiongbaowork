@@ -17,8 +17,8 @@ import { createModelCompleter } from "../src/routing/model";
 import recorded from "./fixtures/who-can-recorded.json";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
-import { bindTestRoleWriter } from "./support/role-writer";
 import { afterAll, afterEach, beforeAll, test } from "./support/platform-frame";
+import { bindTestRoleWriter } from "./support/role-writer";
 
 /**
  * Who can do what, described in English: "Contractors can't use their own computer" written as switch
@@ -297,7 +297,7 @@ describe("POST /api/admin/enterprise/capabilities/translate", () => {
     const asked = prompts();
     expect(asked).toHaveLength(2);
     expect(asked[0]).toContain(recording.text);
-    // The writer is told this OpenBot's real groups and the rule a group can only widen.
+    // The writer is told this XiongBao's real groups and the rule a group can only widen.
     expect(asked[0]).toContain('- "Contractors": 2 people');
     expect(asked[0]).toContain('- "Field Sales (EMEA)": 1 person');
     expect(asked[0]).toContain("There is no off for a group.");

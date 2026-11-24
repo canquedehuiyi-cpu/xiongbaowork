@@ -267,7 +267,7 @@ describe("remote Automatic Learning delivery", () => {
   });
 
   test("a Bot whose stream ends with no answer and no error is told in words", async () => {
-    // Seen on OpenBot Desktop as "Remote agent ended without a terminal event." in red: the
+    // Seen on XiongBao Desktop as "Remote agent ended without a terminal event." in red: the
     // LangGraph harness died on a provider refusal and its stream just stopped after RUN_STARTED.
     const remote = new Remote(() => of(start));
     const output = await events(

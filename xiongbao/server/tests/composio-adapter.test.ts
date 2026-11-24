@@ -140,7 +140,7 @@ const WHOLE_LISTING = 1000;
 const PAGES_BEFORE_REFUSING = 200;
 
 /** The page this deployment sends somebody back to once the consent screen is done with them. */
-const RETURN_URL = "https://openbot.test/connections/x";
+const RETURN_URL = "https://xiongbao.test/connections/x";
 
 /**
  * What Composio answers a withdrawal it actually performed, returned by every double that performs
@@ -901,7 +901,7 @@ describe("beginning one person's connection", () => {
     const begun = await broker.authorize({
       userId: "user_1",
       toolkit: "linear",
-      returnUrl: "https://openbot.test/connections/composio-linear",
+      returnUrl: "https://xiongbao.test/connections/composio-linear",
     });
 
     // The config this deployment already holds for the app — and no `authConfigs.create`, which
@@ -915,7 +915,7 @@ describe("beginning one person's connection", () => {
         "user_1",
         "ac_this_deployments",
         {
-          callbackUrl: "https://openbot.test/connections/composio-linear",
+          callbackUrl: "https://xiongbao.test/connections/composio-linear",
         },
       ],
     ]);
@@ -948,7 +948,7 @@ describe("beginning one person's connection", () => {
     const refused = broker.authorize({
       userId: "user_1",
       toolkit: "linear",
-      returnUrl: "https://openbot.test/connections/composio-linear",
+      returnUrl: "https://xiongbao.test/connections/composio-linear",
     });
 
     const refusal = await failureOf(refused);
@@ -1007,7 +1007,7 @@ describe("telling this deployment's auth configs from anybody else's", () => {
     await broker.authorize({
       userId: "user_1",
       toolkit: "linear",
-      returnUrl: "https://openbot.test/connections/x",
+      returnUrl: "https://xiongbao.test/connections/x",
     });
 
     // A connection is a lasting attachment to whatever config it was made against: scopes, tool
@@ -1017,7 +1017,7 @@ describe("telling this deployment's auth configs from anybody else's", () => {
       [
         "user_1",
         "ac_ours",
-        { callbackUrl: "https://openbot.test/connections/x" },
+        { callbackUrl: "https://xiongbao.test/connections/x" },
       ],
     ]);
   });
@@ -1041,7 +1041,7 @@ describe("telling this deployment's auth configs from anybody else's", () => {
     const refused = broker.authorize({
       userId: "user_1",
       toolkit: "linear",
-      returnUrl: "https://openbot.test/connections/x",
+      returnUrl: "https://xiongbao.test/connections/x",
     });
 
     const refusal = await failureOf(refused);
@@ -1545,7 +1545,7 @@ describe("telling this deployment's auth configs from anybody else's", () => {
     const refused = broker.authorize({
       userId: "user_1",
       toolkit: "linear",
-      returnUrl: "https://openbot.test/connections/x",
+      returnUrl: "https://xiongbao.test/connections/x",
     });
 
     // Sending somebody to consent against a disabled config spends their consent and attaches
@@ -2653,7 +2653,7 @@ describe("refusals a route can tell from an outage", () => {
       .authorize({
         userId: "user_1",
         toolkit: "linear",
-        returnUrl: "https://openbot.test/connections/x",
+        returnUrl: "https://xiongbao.test/connections/x",
       })
       .catch((raised: unknown) => raised);
 
@@ -2684,7 +2684,7 @@ describe("refusals a route can tell from an outage", () => {
       .authorize({
         userId: "user_1",
         toolkit: "linear",
-        returnUrl: "https://openbot.test/connections/x",
+        returnUrl: "https://xiongbao.test/connections/x",
       })
       .catch((raised: unknown) => raised);
 

@@ -130,7 +130,7 @@ describe("tenant package skill blocked reasons (R18)", () => {
     "      source: xiongbao-package",
     "      runnable: blocked",
     "      reason: shell-command-prose",
-    '      reason_ref: "正文给出可执行的 shell 命令；openbot 员工没有本地运行时。 ← \\"git init -q t\\"（共 1 处）"',
+    '      reason_ref: "正文给出可执行的 shell 命令；xiongbao 员工没有本地运行时。 ← \\"git init -q t\\"（共 1 处）"',
   ].join("\n");
 
   test("reason and citation ride along with a blocked grade", () => {

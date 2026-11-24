@@ -1,19 +1,5 @@
 [
   {
-    "file": "app/src/components/admin/controls/recording-section.tsx",
-    "text": "They are tagged openbot.surface.",
-    "reason": "persisted-identifier: names the real OTel attribute key (Task 9 keeps openbot.* attributes)",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "app/src/routes/_authed/admin/enterprise.tsx",
-    "text": "openbot.surface 标签",
-    "reason": "persisted-identifier: names the real OTel attribute key (Task 9 keeps openbot.* attributes)",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "app/src/components/approvals/describe-rules.tsx",
     "text": "startsWith(\"openbot/\")",
     "reason": "persisted-identifier: prefix of built-in tool refs stored in rules",
@@ -392,41 +378,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/telemetry/product.ts",
-    "text": "app_id: \"openbot\"",
-    "reason": "persisted-identifier: telemetry schema value; consumers key on it",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/telemetry/product.ts",
-    "text": "z.literal(\"openbot\")",
-    "reason": "persisted-identifier: telemetry schema value; consumers key on it",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/telemetry/product.ts",
-    "text": "oss.runtime.openbot.",
-    "reason": "persisted-identifier: telemetry event name",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/telemetry/otel.ts",
-    "text": "\"openbot.",
-    "reason": "persisted-identifier: OTel logger and attribute names admins filter on (Task 9 keeps them)",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/telemetry/otel.ts",
-    "text": "`openbot.payload.",
-    "reason": "persisted-identifier: OTel attribute names admins filter on (Task 9 keeps them)",
-    "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/computer/sandbox.ts",
     "text": "openbot.dev/",
     "reason": "persisted-identifier: Kubernetes labels/annotations on live sandboxes",
@@ -480,13 +431,6 @@
     "text": "\"OpenBot learned skills\"",
     "reason": "parsed-exact-text: context heading the agents parse verbatim",
     "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "app_id: \"openbot\"",
-    "reason": "persisted-identifier: telemetry schema value; consumers key on it",
-    "category": "persisted-data",
     "plan": "keep"
   },
   {

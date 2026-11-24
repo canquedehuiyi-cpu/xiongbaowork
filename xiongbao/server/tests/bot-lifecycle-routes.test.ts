@@ -9,10 +9,14 @@ import type {
   AuditEventInput,
 } from "../src/audit";
 import { createAdminScope } from "../src/auth/admin-scope";
-import type { OpenBotRole } from "../src/auth/roles";
+import type { XiongBaoRole } from "../src/auth/roles";
 import { currentTenant, runAsTenant } from "../src/tenant/context";
 
-const ACTOR = { id: "u1", email: "person@openbot.test", role: "user" } as const;
+const ACTOR = {
+  id: "u1",
+  email: "person@xiongbao.test",
+  role: "user",
+} as const;
 
 type Actor = { id: string; email: string; role: "admin" | "user" };
 
@@ -21,7 +25,7 @@ function app(
     actor?: Actor;
     auditTrail?: AgentTrailReader | null;
     /** The roles the admin scope re-reads for the actor; absent means no admin scope is wired. */
-    roles?: OpenBotRole[];
+    roles?: XiongBaoRole[];
   } = {},
 ) {
   const rows: AuditEventInput[] = [];
@@ -335,7 +339,7 @@ describe("an agent's audit trail route", () => {
   test("the owner sees everyone's rows, and the page it asked for is forwarded", async () => {
     const { queries, frames, reader } = trail();
     const { hono } = app({
-      actor: { id: "owner-1", email: "owner@openbot.test", role: "user" },
+      actor: { id: "owner-1", email: "owner@xiongbao.test", role: "user" },
       auditTrail: reader,
     });
     const response = await hono.request(
@@ -361,7 +365,7 @@ describe("an agent's audit trail route", () => {
   test("an administrator holding the capability sees everyone's rows on a Bot they do not own, as platform", async () => {
     const { queries, frames, reader } = trail();
     const { hono } = app({
-      actor: { id: "admin-1", email: "admin@openbot.test", role: "admin" },
+      actor: { id: "admin-1", email: "admin@xiongbao.test", role: "admin" },
       auditTrail: reader,
       roles: ["admin"],
     });
@@ -379,7 +383,7 @@ describe("an agent's audit trail route", () => {
   test("an administrator holding the capability reads the trail of another person's private Bot", async () => {
     const { queries, frames, reader } = trail();
     const { hono } = app({
-      actor: { id: "admin-1", email: "admin@openbot.test", role: "admin" },
+      actor: { id: "admin-1", email: "admin@xiongbao.test", role: "admin" },
       auditTrail: reader,
       roles: ["admin"],
     });
@@ -405,15 +409,15 @@ describe("an agent's audit trail route", () => {
       {
         actor: {
           id: "admin-1",
-          email: "admin@openbot.test",
+          email: "admin@xiongbao.test",
           role: "admin",
         } as Actor,
-        roles: ["user"] as OpenBotRole[],
+        roles: ["user"] as XiongBaoRole[],
       },
       {
         actor: {
           id: "admin-1",
-          email: "admin@openbot.test",
+          email: "admin@xiongbao.test",
           role: "admin",
         } as Actor,
       },
@@ -431,7 +435,7 @@ describe("an agent's audit trail route", () => {
   test("an administrator whose role was removed since sign-in is answered as anyone", async () => {
     const { queries, frames, reader } = trail();
     const { hono } = app({
-      actor: { id: "admin-1", email: "admin@openbot.test", role: "admin" },
+      actor: { id: "admin-1", email: "admin@xiongbao.test", role: "admin" },
       auditTrail: reader,
       roles: ["user"],
     });
@@ -444,7 +448,7 @@ describe("an agent's audit trail route", () => {
   test("with no admin scope wired an administrator is answered as anyone, in their own frame", async () => {
     const { queries, frames, reader } = trail();
     const { hono } = app({
-      actor: { id: "admin-1", email: "admin@openbot.test", role: "admin" },
+      actor: { id: "admin-1", email: "admin@xiongbao.test", role: "admin" },
       auditTrail: reader,
     });
     const response = await hono.request("http://t/api/bots/bot-1/audit");

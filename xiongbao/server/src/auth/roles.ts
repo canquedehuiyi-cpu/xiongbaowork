@@ -2,7 +2,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { accounts, ssoProviders, userRoles, users } from "../db/schema";
 
-export type OpenBotRole = "admin" | "user";
+export type XiongBaoRole = "admin" | "user";
 
 /** A binding is installed only after both actual database roles have been inspected. */
 type RoleWriterState = {
@@ -241,7 +241,7 @@ export function isConfiguredAdmin(
 export function roleForEmail(
   email: string,
   initialAdminEmails: readonly string[],
-): OpenBotRole {
+): XiongBaoRole {
   return isConfiguredAdmin(email, initialAdminEmails) ? "admin" : "user";
 }
 
@@ -256,8 +256,8 @@ export function roleForEmail(
 export async function setRole(
   database: Database,
   userId: string,
-  role: OpenBotRole,
-): Promise<OpenBotRole> {
+  role: XiongBaoRole,
+): Promise<XiongBaoRole> {
   await writeRole(database, userId, role, true);
   return role;
 }
@@ -269,7 +269,7 @@ export async function setRole(
 async function writeRole(
   database: Database,
   userId: string,
-  role: OpenBotRole,
+  role: XiongBaoRole,
   exclusive: boolean,
 ): Promise<void> {
   const state = roleWriters.get(database);
@@ -341,7 +341,7 @@ export async function seedRole(
   email: string,
   emailVerified: boolean,
   initialAdminEmails: readonly string[],
-): Promise<OpenBotRole> {
+): Promise<XiongBaoRole> {
   if (emailVerified === true && isConfiguredAdmin(email, initialAdminEmails)) {
     return setRole(database, userId, "admin");
   }

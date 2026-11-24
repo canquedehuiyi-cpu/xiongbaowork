@@ -14,11 +14,11 @@ import { tenantId } from "./tenant";
 /* The two scopes every tenant table has had since 0072: the owner's frame, and the platform's. */
 const tenantScope = sql`tenant_id = current_setting('app.tenant_id', true) OR current_setting('app.tenant_id', true) = 'platform'`;
 
-/** What a person can switch off that OpenBot otherwise switches on for them. */
+/** What a person can switch off that XiongBao otherwise switches on for them. */
 export type DefaultFeature = "memory_source" | "proactive_research";
 
 /**
- * A default a person turned down, so OpenBot never switches it back on.
+ * A default a person turned down, so XiongBao never switches it back on.
  *
  * Memory sources and background research are on by default (see `memory/defaults.ts`): a person who
  * talks to one of their Bots gets research from it, and each app they connected that the Bot can read

@@ -3,7 +3,7 @@ import { ownerTenantOfBot } from "../agents/bot-owner";
 import type { AuditEventInput, AuditInitiator } from "../audit";
 import { type AuditStore, recordAuditEvent } from "../audit";
 import { createRoleRepository } from "../auth/guards";
-import type { OpenBotRole } from "../auth/roles";
+import type { XiongBaoRole } from "../auth/roles";
 import type { Database } from "../db/client";
 import { agents, users } from "../db/schema/core";
 import { agentProfiles } from "../db/schema/coworker";
@@ -23,11 +23,7 @@ import {
   teamBotPublications,
 } from "../db/schema/team-bots";
 import { currentTenant, runAsTenant } from "../tenant/context";
-import {
-  BROKER_PROVIDERS,
-  BROKERED_PROFILE,
-  toolkitOfFor,
-} from "./access";
+import { BROKER_PROVIDERS, BROKERED_PROFILE, toolkitOfFor } from "./access";
 import { ownerStillGives } from "./owner-grants";
 import {
   type ActorFacts,
@@ -586,7 +582,7 @@ export function createSharedUseStore(database: Database) {
       .limit(1);
     const held = await roles
       .rolesForUser(actorId)
-      .catch((): OpenBotRole[] => []);
+      .catch((): XiongBaoRole[] => []);
     return {
       actorId,
       isAdmin: held.includes("admin"),

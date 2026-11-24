@@ -72,7 +72,7 @@ describe("asComposioBroker", () => {
     const answer = await asComposioBroker(arcade).authorize({
       userId: "user_a",
       toolkit: "Gmail",
-      returnUrl: "https://openbot.test/back",
+      returnUrl: "https://xiongbao.test/back",
     });
     expect(answer).toEqual({ redirectUrl: "https://consent" });
   });

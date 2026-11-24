@@ -797,7 +797,7 @@ function parseAgents(
         `${source}: agent.id "${id}" is reserved for a deployment route and cannot name a Bot`,
       );
     }
-    // Nor after a person's own OpenBot browser, which is a computer named the same way a Bot's is: a Bot with that id
+    // Nor after a person's own XiongBao browser, which is a computer named the same way a Bot's is: a Bot with that id
     // would share its computer with the person whose browser it is.
     if (isPersonBrowserId(id)) {
       throw new Error(
@@ -1411,7 +1411,7 @@ const PERSONAL_ASSISTANT = "personal-assistant";
 const PICKED_HARNESS = "picked-harness";
 
 /**
- * Every `system_prompt` an earlier OpenBot shipped for the Personal Assistant, newest first, as YAML
+ * Every `system_prompt` an earlier XiongBao shipped for the Personal Assistant, newest first, as YAML
  * folds it. A personal starter still holding one of these exactly moves to the package's current
  * text; see `synchronizeTenantPackage`.
  */
@@ -1497,7 +1497,7 @@ function personalStarterSeed(
         ({ name, image }) => image !== null && name === picked.name,
       );
     // Starter copy is ordinary editable profile text, written only on the first seed.
-    // A Bot that runs here is powered by OpenBot itself, as examples/personal/agents.yaml says.
+    // A Bot that runs here is powered by XiongBao itself, as examples/personal/agents.yaml says.
     const harnessName = picked
       ? harness
         ? harness.name
@@ -2017,12 +2017,12 @@ export async function synchronizeTenantPackage(
         }
 
         /*
-         * A personal starter still running on instructions an earlier OpenBot shipped, word for word.
+         * A personal starter still running on instructions an earlier XiongBao shipped, word for word.
          *
          * The starter's instructions are seeded once and then belong to the person, so a fix to the
          * package's `system_prompt` reached only fresh installs. The earlier wording told the Bot to ask
          * whenever something was ambiguous, which stopped it short of finishing, and to ask the person
-         * to sign in and wait, which contradicted OpenBot's own rule that a sign-in is handed over with
+         * to sign in and wait, which contradicted XiongBao's own rule that a sign-in is handed over with
          * a tool call. A starter that still carries one of those texts exactly has never been edited, so
          * it moves to the current one. One that somebody changed, by a single word, is theirs and stays.
          */

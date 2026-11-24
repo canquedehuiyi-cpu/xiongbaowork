@@ -43,7 +43,11 @@ beforeAll(async () => {
 const actor =
   (id: string): MiddlewareHandler<{ Variables: AppVariables }> =>
   async (context, next) => {
-    context.set("actor", { id, email: `${id}@example.test`, role: "user" as const });
+    context.set("actor", {
+      id,
+      email: `${id}@example.test`,
+      role: "user" as const,
+    });
     await next();
   };
 
@@ -58,7 +62,7 @@ async function call<T>(
   options: { body?: unknown; token?: string } = {},
 ): Promise<{ status: number; body: T }> {
   const response = await app.request(
-    new Request(`http://openbot.test${path}`, {
+    new Request(`http://xiongbao.test${path}`, {
       method,
       headers: {
         ...(options.body === undefined
@@ -175,7 +179,7 @@ test("a missing or wrong required field is a refusal, not a half-registration", 
   });
   expect(noName.status).toBe(400);
   const notJson = await runner.request(
-    new Request("http://openbot.test/register", {
+    new Request("http://xiongbao.test/register", {
       method: "POST",
       body: "code",
     }),

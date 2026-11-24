@@ -4,7 +4,7 @@ import catalogue from "../fixtures/composio-gmail-catalogue.json";
 
 /**
  * Composio's own Gmail listing (`fixtures/composio-gmail-catalogue.json`) as the app's page has it:
- * every action, with the effect and destructive flag OpenBot records from Composio's labels
+ * every action, with the effect and destructive flag XiongBao records from Composio's labels
  * (`effectOf`). The app id and title are the ones `fixtures/app-grants-recorded.json` was recorded
  * against.
  */

@@ -236,7 +236,7 @@ const appKeyOf = (ref: string): string => ref.split("/")[0] ?? ref;
 /**
  * 把这些应用里员工还没有的工具全部给它们。都已持有时一行都不写，所以每次运行都问一遍只花读、不进轨迹。
  * 轨迹写明原因：Routines 的授予记为常开，别的应用记为 `by`。每位员工每个应用只写一行轨迹，列出给了的
- * 全部动作，由 OpenBot 发起（见 `store.grantTools`）。
+ * 全部动作，由 XiongBao 发起（见 `store.grantTools`）。
  */
 async function grantEveryTool(
   store: Pick<Store, "grantTools">,
@@ -328,8 +328,8 @@ export async function ensurePersonalAskBeforeChanges(
  * 个人版的设置 › 技能和管理 › 技能是同一个页面，保存时带 `global`，路由把这样的技能存成了部署的，于是员工
  * 的「你的技能」里一个都没有。路由现在把它给这个人（`routes.ts` 的 POST /skills）；这里补上之前写的。
  *
- * 只认这个人自己装的：`installed_by` 是他的邮箱，`origin` 是 `yours`。OpenBot 自带的技能没有安装人，被他编辑
- * 过的自带技能保留原来的主人，都仍是 OpenBot 的。一个都没有时什么也不写；有时写一行由 OpenBot 发起的轨迹。
+ * 只认这个人自己装的：`installed_by` 是他的邮箱，`origin` 是 `yours`。XiongBao 自带的技能没有安装人，被他编辑
+ * 过的自带技能保留原来的主人，都仍是 XiongBao 的。一个都没有时什么也不写；有时写一行由 XiongBao 发起的轨迹。
  * 在他自己的帧里改，所以只碰得到他的行。
  *
  * @returns 给了他的技能 slug
@@ -372,7 +372,7 @@ export async function ensurePersonalSkillsOwned(
  * 所以被排除在外的员工——只有同一个库里团队版存下的设置能做到——被带回来。启动时对已有的员工做一次；
  * 每位员工第一次被列出或运行时再查一次（见 `withPersonalDefaults`）。之后建的员工没有映射，本来就跟随默认。
  *
- * 只在有员工被排除时才写，并写一行由 OpenBot 发起、列出这些员工的轨迹。
+ * 只在有员工被排除时才写，并写一行由 XiongBao 发起、列出这些员工的轨迹。
  */
 export async function ensurePersonalLearning(
   deps: Pick<PersonalDefaultsDeps, "includeEveryBotInLearning" | "asPerson">,
@@ -398,7 +398,7 @@ async function everyBotApps(deps: PersonalDefaultsDeps): Promise<string[]> {
 }
 
 /**
- * 个人版启动时：Routines 还没添加就添加，把工具清单就是 OpenBot 自己代码的应用（Routines、Drive、百度网盘）
+ * 个人版启动时：Routines 还没添加就添加，把工具清单就是 XiongBao 自己代码的应用（Routines、Drive、百度网盘）
  * 刷新到这一版（见 `refreshOwnListings`），然后把每个应用的全部工具给每位员工。会改东西的也给：排程本来就
  * 是它的用处。给之前先把这个人的「改动之前先问」打开（他自己关掉过的除外），所以默认配置下员工每次改东西
  * 之前都先问。

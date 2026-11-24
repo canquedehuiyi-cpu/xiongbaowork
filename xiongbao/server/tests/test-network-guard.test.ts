@@ -34,7 +34,7 @@ const FAR = "example.com";
 async function plant(
   call: () => unknown,
 ): Promise<{ outcome: string; refused: string[] }> {
-  const record = globalThis.openbotTestNetworkRefusals;
+  const record = globalThis.xiongbaoTestNetworkRefusals;
   if (!record) throw new Error("the network guard did not install its record");
   const before = record.length;
   let outcome: string;
@@ -42,7 +42,7 @@ async function plant(
     const value = await call();
     outcome =
       value instanceof Response
-        ? `response ${value.status} ${value.headers.get("x-openbot-test-network-guard") ?? "unguarded"}`
+        ? `response ${value.status} ${value.headers.get("x-xiongbao-test-network-guard") ?? "unguarded"}`
         : "returned";
   } catch (error) {
     outcome = `threw: ${error instanceof Error ? error.message : String(error)}`;
@@ -269,12 +269,12 @@ describe("the test network guard lets the suite reach what the suite owns", () =
   test("the configured database host, through a raw socket", async () => {
     const configured = process.env.TEST_DATABASE_URL;
     process.env.TEST_DATABASE_URL =
-      "postgres://u:p@db.openbot.home.arpa:5432/x";
+      "postgres://u:p@db.xiongbao.home.arpa:5432/x";
     try {
       const { outcome, refused } = await plant(
         () =>
           new Promise<void>((_resolve, reject) => {
-            net.connect(5432, "db.openbot.home.arpa").on("error", reject);
+            net.connect(5432, "db.xiongbao.home.arpa").on("error", reject);
           }),
       );
 
@@ -429,7 +429,7 @@ test("the test network guard is in force for a vendor SDK that binds its own tra
     broker.authorize({
       userId: "u",
       toolkit: "linear",
-      returnUrl: "https://openbot.test/connections/x",
+      returnUrl: "https://xiongbao.test/connections/x",
     }),
   );
 

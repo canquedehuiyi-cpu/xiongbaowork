@@ -21,7 +21,7 @@ import {
 export const PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
 
 /**
- * The server half of every ref OpenBot's own memory tools carry (`memory/recall_personal_memory`).
+ * The server half of every ref XiongBao's own memory tools carry (`memory/recall_personal_memory`).
  *
  * M3: upstream keeps this in plugins/plugin-store/model.ts, where adding a custom server under it is
  * refused; the fork's plugins have no such module yet, so it is spelled here.

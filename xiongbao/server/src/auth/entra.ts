@@ -2,6 +2,7 @@ import { decryptOAuthToken, setTokenUtil } from "better-auth/oauth2";
 import { eq } from "drizzle-orm";
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
 import { createEnterpriseStore } from "../admin/settings-store";
+import { englishName } from "../brand";
 import {
   type AuthConfig,
   type MicrosoftAuthConfig,
@@ -14,23 +15,22 @@ import { emailDomainAllowed } from "./email-domain";
 import { type EntraRefusal, EntraTokenRefusedError } from "./entra-refusal";
 import type { AuthService } from "./guards";
 import { type createAuth, decideSignInMethod } from "./index";
-import { englishName } from "../brand";
 
 /**
- * Microsoft Entra on both sides of OpenBot: a person's own app calling OpenBot with their Entra
- * token, and OpenBot calling a company's Entra-protected system as that person.
+ * Microsoft Entra on both sides of XiongBao: a person's own app calling XiongBao with their Entra
+ * token, and XiongBao calling a company's Entra-protected system as that person.
  *
- * INBOUND. An app that signed somebody in with Entra asks for a token to OpenBot's own API
+ * INBOUND. An app that signed somebody in with Entra asks for a token to XiongBao's own API
  * (`MICROSOFT_OAUTH_API_SCOPE`) and sends it as `Authorization: Bearer`. It is checked against the
  * directory's published keys, its issuer, its audience and its expiry, the app it was issued to must
  * be one `MICROSOFT_OAUTH_ALLOWED_CLIENTS` lists, and the request then runs as that person exactly
- * as a signed-in browser does. Somebody OpenBot has not seen before is signed in
+ * as a signed-in browser does. Somebody XiongBao has not seen before is signed in
  * the way the sign-in screen signs them in, through Better Auth's own Microsoft provider, so the
  * admission, domain and deny rules and the user it creates are the ones every sign-in gets.
  *
  * DOWNSTREAM. A server an admin marked as reached as the signed-in person is called with a token
  * Entra issues for that person through the on-behalf-of exchange (`requested_token_use=on_behalf_of`)
- * with the system's own scope. The assertion is a token to OpenBot's API for the same person: the one
+ * with the system's own scope. The assertion is a token to XiongBao's API for the same person: the one
  * their app sent, while it lasts, or one minted from their stored Microsoft sign-in, which is what
  * lets a routine or a check-in nobody is watching reach the system as them. Either way the system
  * sees the real person, with only their access.
@@ -73,7 +73,7 @@ type Held = { token: string; expiresAt: number };
  *
  * A plain Map here was only ever overwritten, so it held a row for every person and system the
  * process had seen since it started. Each write now drops the expired ones first, at most once a
- * minute, so what is held is bounded by who used OpenBot within one token's lifetime (60 to 90
+ * minute, so what is held is bounded by who used XiongBao within one token's lifetime (60 to 90
  * minutes, as Entra issues them) by design. `now` is the clock, a parameter so the rule can be
  * pinned without waiting an hour.
  */
@@ -226,7 +226,7 @@ export function createEntra(options: {
     /*
      * And the app it was issued to must be one this company listed.
      *
-     * Entra issues a token for OpenBot's API to any app a person or an admin consents to, multi-
+     * Entra issues a token for XiongBao's API to any app a person or an admin consents to, multi-
      * tenant apps included, so a valid token says who the person is and nothing about whether the
      * app holding it is one this company meant to let act as them. `azp` names that app. It is the
      * v2.0 claim (v1.0 tokens carry `appid` instead), and the issuer pinned above admits v2.0 tokens
@@ -251,7 +251,7 @@ export function createEntra(options: {
       }
     } else {
       /*
-       * Somebody OpenBot has not seen before, signed in by Better Auth's own Microsoft provider from
+       * Somebody XiongBao has not seen before, signed in by Better Auth's own Microsoft provider from
        * this token, as the sign-in screen does with the one Entra hands a browser. Everything a
        * sign-in decides is decided there, by the same hooks: SSO, the domain list, the deny list,
        * the user row and its role. A refusal is a request with nobody signed in.
@@ -348,8 +348,8 @@ export function createEntra(options: {
       );
       /*
        * Missing consent is answered the same way at both steps, and means a different thing at
-       * each. At the on-behalf-of step it is the system's: nobody granted OpenBot access to it. At
-       * the sign-in step, the refresh grant for OpenBot's own API, it is OpenBot's API itself, and
+       * each. At the on-behalf-of step it is the system's: nobody granted XiongBao access to it. At
+       * the sign-in step, the refresh grant for XiongBao's own API, it is XiongBao's API itself, and
        * telling the person an admin never granted access to the system would send that admin to
        * the wrong place.
        */
@@ -410,7 +410,7 @@ export function createEntra(options: {
   }
 
   /**
-   * A token to OpenBot's own API for this person: what the on-behalf-of exchange takes as its
+   * A token to XiongBao's own API for this person: what the on-behalf-of exchange takes as its
    * assertion.
    *
    * The token their app sent comes first, because that is the token this request arrived on. With
@@ -468,7 +468,7 @@ export function createEntra(options: {
      * arrives with none: it runs as its owner, and nothing on that path asks whether an admin has
      * since removed them. Without this, somebody removed kept reaching the system as themselves,
      * on a token held here until it expired and then on fresh ones minted from their stored sign-in,
-     * for as long as Entra still honoured it. Removal in OpenBot has to mean OpenBot stops acting as
+     * for as long as Entra still honoured it. Removal in XiongBao has to mean XiongBao stops acting as
      * them, whatever Entra thinks of the person.
      */
     const person = await (await context()).internalAdapter.findUserById(userId);

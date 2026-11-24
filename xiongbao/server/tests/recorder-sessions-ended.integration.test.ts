@@ -37,7 +37,7 @@ import {
 } from "./support/platform-frame";
 
 /*
- * The two ways OpenBot itself ends people's sessions, outside Better Auth's own routes, end their Recorders too:
+ * The two ways XiongBao itself ends people's sessions, outside Better Auth's own routes, end their Recorders too:
  * an administrator removing somebody (People), and SSO-required being turned on (Admin, Enterprise). Each through its
  * real route, on the real database, with the Recorder wired as index.ts wires it.
  */
@@ -107,7 +107,7 @@ const peopleStore = createPeopleStore(database, [], (userId) =>
   }),
 );
 
-/** OpenBot's own app, signed in as the administrator by a test cookie. */
+/** XiongBao's own app, signed in as the administrator by a test cookie. */
 function appAsAdmin() {
   const args = new Array(createApp.length) as unknown as Parameters<
     typeof createApp
@@ -209,7 +209,7 @@ async function connect(userId: string, installId: string) {
 }
 const me = async (token: string) =>
   (
-    await app.request("http://openbot.test/api/recorder/me", {
+    await app.request("http://xiongbao.test/api/recorder/me", {
       headers: { authorization: `Bearer ${token}` },
     })
   ).status;
@@ -223,7 +223,7 @@ const signedInSession = (userId: string) => ({
 test("removing somebody ends their browsers' Recorders with their sessions, and a removal that could not end them is finished by removing them again", async () => {
   const chrome = await connect(leaving.id, "a".repeat(32));
   const remove = () =>
-    app.request(`http://openbot.test/api/admin/people/${leaving.id}/access`, {
+    app.request(`http://xiongbao.test/api/admin/people/${leaving.id}/access`, {
       method: "POST",
       headers: {
         cookie: "test-session=admin",

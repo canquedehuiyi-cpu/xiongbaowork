@@ -175,7 +175,7 @@ describe("a catalogue entry says whether connecting needs nothing typed first", 
     expect(keyed.map((entry) => entry.oneStep)).toEqual(keyed.map(() => false));
   });
 
-  test("OpenBot's own built-in apps are one step", async () => {
+  test("XiongBao's own built-in apps are one step", async () => {
     const page = await pageFor(undefined);
     const builtin = page.catalogue.filter((entry) => entry.auth === "builtin");
     expect(builtin.length).toBeGreaterThan(0);

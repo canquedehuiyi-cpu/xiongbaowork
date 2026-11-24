@@ -93,7 +93,7 @@ app.route(
 );
 
 const request = (actor: string, path: string, body: unknown = {}) =>
-  app.request(`http://openbot.test${path}`, {
+  app.request(`http://xiongbao.test${path}`, {
     method: "POST",
     headers: { "content-type": "application/json", "x-actor": actor },
     body: JSON.stringify(body),
@@ -225,7 +225,7 @@ describe("a role change", () => {
 
 describe("the list of tenants the levers are pulled from", () => {
   const list = (actor: string) =>
-    app.request("http://openbot.test/api/platform/tenants", {
+    app.request("http://xiongbao.test/api/platform/tenants", {
       headers: { "x-actor": actor },
     });
 

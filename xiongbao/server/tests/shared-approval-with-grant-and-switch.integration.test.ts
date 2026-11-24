@@ -190,7 +190,7 @@ function as(actorId: string) {
       session,
       async () => true,
       {
-        publicUrl: "https://openbot.example",
+        publicUrl: "https://xiongbao.example",
         appUrl: "https://app.example",
         encryptionKey: `${"A".repeat(43)}=`,
         personHasAccess: async () => true,

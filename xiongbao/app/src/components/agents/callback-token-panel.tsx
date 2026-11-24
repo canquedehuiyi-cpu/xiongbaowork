@@ -29,11 +29,11 @@ export const KEY_FROM_OPENBOT = `这位员工由${shortName()}自己运行，不
 export function CallbackTokenPanel({
   agentId,
   hasToken,
-  fromOpenBot = false,
+  fromXiongBao = false,
 }: {
   agentId: string;
   hasToken: boolean;
-  fromOpenBot?: boolean;
+  fromXiongBao?: boolean;
 }) {
   const queryClient = useQueryClient();
   const issue = useMutation(issueCallbackTokenMutationOptions(queryClient));
@@ -49,7 +49,7 @@ export function CallbackTokenPanel({
     </h2>
   );
 
-  if (fromOpenBot) {
+  if (fromXiongBao) {
     return (
       <section className="mt-6 grid gap-2">
         {heading}

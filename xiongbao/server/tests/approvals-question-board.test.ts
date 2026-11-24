@@ -48,7 +48,7 @@ const questionKeys: string[] = [];
 const actorFor =
   (id: string): MiddlewareHandler<{ Variables: AppVariables }> =>
   async (context, next) => {
-    context.set("actor", { id, email: `${id}@openbot.test`, role: "user" });
+    context.set("actor", { id, email: `${id}@xiongbao.test`, role: "user" });
     await next();
   };
 
@@ -60,7 +60,7 @@ const as = (tenant: string) => {
       runAsTenant(tenant, () =>
         approvals.request(
           new Request(
-            `http://openbot.test/questions/${encodeURIComponent(questionId)}/respond`,
+            `http://xiongbao.test/questions/${encodeURIComponent(questionId)}/respond`,
             {
               method: "POST",
               headers: { "content-type": "application/json" },
@@ -72,7 +72,7 @@ const as = (tenant: string) => {
     inbox: () =>
       runAsTenant(tenant, async () => {
         const response = await approvals.request(
-          new Request("http://openbot.test/"),
+          new Request("http://xiongbao.test/"),
         );
         expect(response.status).toBe(200);
         return (await response.json()) as {
@@ -82,7 +82,7 @@ const as = (tenant: string) => {
     cards: () =>
       runAsTenant(tenant, async () => {
         const response = await boardRoutes.request(
-          new Request("http://openbot.test/"),
+          new Request("http://xiongbao.test/"),
         );
         expect(response.status).toBe(200);
         const body = (await response.json()) as {

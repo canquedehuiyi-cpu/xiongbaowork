@@ -1,6 +1,6 @@
 /**
  * What an approval rule can name: every tool the approval gate is asked about, the kinds of action
- * each reaches it with, the targets it is asked about, and the Bots. Read from this OpenBot's own
+ * each reaches it with, the targets it is asked about, and the Bots. Read from this XiongBao's own
  * apps and Bots, so a rule written from a description names tools that exist here, and a rule that
  * names one that does not is caught before anybody saves it.
  *
@@ -29,7 +29,7 @@ import { mcpServers, mcpTools } from "../db/schema/plugins";
 import { catalogueEntry, classifyTool } from "../plugins/catalogue";
 
 export type RuleVocabulary = {
-  /** The apps set up in OpenBot, with every tool they list and the effect the gate sees for it. */
+  /** The apps set up in XiongBao, with every tool they list and the effect the gate sees for it. */
   apps: {
     id: string;
     title: string;
@@ -110,7 +110,7 @@ export const COMPUTER_APPROVAL_TOOLS: readonly {
   },
 ];
 
-/** A folder on the person's own computer, shared with OpenBot Desktop. */
+/** A folder on the person's own computer, shared with XiongBao Desktop. */
 export const HOST_APPROVAL_TOOLS: readonly {
   ref: string;
   effects: readonly ("read" | "write")[];
@@ -151,7 +151,7 @@ export const PRIVATE_SHARE_APPROVAL_TOOL = {
     "share the person's private information in a conversation other people read",
 } as const;
 
-/** Every tool a rule can name, the apps' and OpenBot's own. */
+/** Every tool a rule can name, the apps' and XiongBao's own. */
 export function vocabularyTools(vocabulary: RuleVocabulary): VocabularyTool[] {
   return [
     ...vocabulary.apps.flatMap((app) =>
@@ -219,7 +219,7 @@ export function vocabularyText(vocabulary: RuleVocabulary): string {
 }
 
 /**
- * This OpenBot's apps and Bots, from its own tables. An app's tools are the ones it listed, each
+ * This XiongBao's apps and Bots, from its own tables. An app's tools are the ones it listed, each
  * with the effect `classifyTool` gives it, which is the effect a call to it reaches the gate with.
  */
 export async function loadRuleVocabulary(

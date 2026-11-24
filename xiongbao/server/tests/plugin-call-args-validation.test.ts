@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { MiddlewareHandler } from "hono";
 import { Hono } from "hono";
-import type { AppVariables } from "../src/auth/guards";
 import type { BotAccessCheck } from "../src/agents/profile-policy";
+import type { AppVariables } from "../src/auth/guards";
 import { createPluginRoutes } from "../src/plugins/routes";
 import type { PluginStore } from "../src/plugins/store";
 
@@ -12,7 +12,7 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
 ) => {
   context.set("actor", {
     id: "user-1",
-    email: "user@openbot.test",
+    email: "user@xiongbao.test",
     role: "admin",
   });
   await next();
@@ -43,7 +43,7 @@ describe("POST /api/plugins/call args", () => {
   ])("refuses %s with 400 and never reaches the store", async (_n, args) => {
     const calls: unknown[] = [];
     const body = { ref: "s/t", agentId: "bot-1", args };
-    const response = await appWith(calls).request("http://openbot.test/call", {
+    const response = await appWith(calls).request("http://xiongbao.test/call", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -63,7 +63,7 @@ describe("POST /api/plugins/call args", () => {
       { ref: "s/t", agentId: "bot-1", args: { q: "hi" } },
       { ref: "s/t", agentId: "bot-1" },
     ]) {
-      const response = await app.request("http://openbot.test/call", {
+      const response = await app.request("http://xiongbao.test/call", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -98,7 +98,7 @@ describe("POST /api/components/:name/call args", () => {
     );
 
     for (const args of ["oops", 42, [1]]) {
-      const response = await app.request("http://openbot.test/widget/call", {
+      const response = await app.request("http://xiongbao.test/widget/call", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ function: "f", agentId: "bot-1", args }),

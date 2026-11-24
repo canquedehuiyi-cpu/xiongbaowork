@@ -21,7 +21,7 @@ const other = `recorder-single-${randomUUID()}-other`;
 const ORIGIN = `chrome-extension://${RECORDER_EXTENSION_ID}`;
 
 const config = loadConfig({
-  DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/openbot",
+  DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/xiongbao",
   KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   INTELLIGENCE_API_URL: "http://127.0.0.1:7100",
   INTELLIGENCE_GATEWAY_WS_URL: "ws://127.0.0.1:7103",
@@ -62,7 +62,7 @@ const app = createApp(...args);
 
 const call = (path: string, init: RequestInit & { json?: unknown } = {}) => {
   const { json, headers, ...rest } = init;
-  return app.request(`http://openbot.test${path}`, {
+  return app.request(`http://xiongbao.test${path}`, {
     ...rest,
     headers: {
       ...(json === undefined ? {} : { "content-type": "application/json" }),

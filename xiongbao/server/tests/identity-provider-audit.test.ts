@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { createApp } from "../src/app";
 import type { AuditEventInput, AuditStore } from "../src/audit";
-import type { OpenBotRole } from "../src/auth/roles";
+import type { XiongBaoRole } from "../src/auth/roles";
 import { loadConfig } from "../src/config";
 import { testEnvironment } from "./support/environment";
 
-const ADMIN = { id: "admin", email: "admin@openbot.test" };
+const ADMIN = { id: "admin", email: "admin@xiongbao.test" };
 
-// `OpenBotRole`, not the `string` a default parameter infers: `rolesForUser` answers roles, and
+// `XiongBaoRole`, not the `string` a default parameter infers: `rolesForUser` answers roles, and
 // widening the parameter moved the failure to the call that hands them over.
-function app(role: OpenBotRole = "admin") {
+function app(role: XiongBaoRole = "admin") {
   const rows: AuditEventInput[] = [];
   const auditStore: AuditStore = {
     insert: async (event) => void rows.push(event),

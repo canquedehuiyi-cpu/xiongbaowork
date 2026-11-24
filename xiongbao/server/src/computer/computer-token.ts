@@ -5,7 +5,7 @@
  * derived from the deployment's `COMPUTER_TOKEN` and whose computer it is (shared/computer-token.ts),
  * so a Bot that reads its own computer's token off its own process opens no other computer. The
  * supervisor and the sandbox provider make computers that way and say so (`tokenFor`). The one
- * computer everybody shares holds the deployment's token, as does OpenBot Desktop's host-side
+ * computer everybody shares holds the deployment's token, as does XiongBao Desktop's host-side
  * browser computer, which runs people's own browsers and no Bot.
  *
  * NEVER THE DEPLOYMENT'S TOKEN TO A COMPUTER THAT HOLDS ITS OWN. A Bot is root on its own computer

@@ -43,7 +43,7 @@ const adminId = `user_connect_tools_admin_${suite}`;
 const personId = `user_connect_tools_${suite}`;
 const toolNames = [`figma-fetch-${suite}`, `figma-search-${suite}`];
 const ENCRYPTION_KEY = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
-const PUBLIC_URL = "https://openbot.test";
+const PUBLIC_URL = "https://xiongbao.test";
 const REFRESH_TOKEN = `rt-${suite}`;
 /** MCP 端点唯一肯列工具的 token。 */
 const ACCESS_TOKEN = `at-${suite}`;
@@ -185,7 +185,7 @@ beforeAll(async () => {
       .insert(users)
       .values({
         id: personId,
-        email: `${personId}@openbot.test`,
+        email: `${personId}@xiongbao.test`,
         name: personId,
       })
       .onConflictDoNothing(),

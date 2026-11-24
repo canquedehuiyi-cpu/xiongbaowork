@@ -89,7 +89,7 @@ async function click(baseUrl: string) {
   });
   const actor: AuthenticatedActor = {
     id: "user-1",
-    email: "member@openbot.test",
+    email: "member@xiongbao.test",
     role: "user",
   };
   const asActor: MiddlewareHandler<{ Variables: AppVariables }> = async (
@@ -105,7 +105,7 @@ async function click(baseUrl: string) {
     asActor,
     async () => true,
   );
-  const response = await app.request("http://openbot.test/bot-1/click", {
+  const response = await app.request("http://xiongbao.test/bot-1/click", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ ref: "f1e13", snapshotId: 1 }),

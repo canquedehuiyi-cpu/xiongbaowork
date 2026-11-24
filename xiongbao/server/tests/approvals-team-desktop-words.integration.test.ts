@@ -252,7 +252,7 @@ function client(id: string, role: "user" | "admin") {
   );
   return async (method: string, path: string, body?: unknown) => {
     const response = await app.request(
-      `http://openbot.test/api/approvals${path}`,
+      `http://xiongbao.test/api/approvals${path}`,
       {
         method,
         ...(body === undefined

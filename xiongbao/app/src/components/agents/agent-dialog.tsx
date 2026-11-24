@@ -789,7 +789,7 @@ function ConnectionSection({
       {profile.canManage ? (
         <CallbackTokenPanel
           agentId={agentId}
-          fromOpenBot={profile.keyFromOpenBot === true}
+          fromXiongBao={profile.keyFromXiongBao === true}
           hasToken={profile.hasCallbackToken}
         />
       ) : null}

@@ -834,7 +834,7 @@ describe("applying a staffing proposal as the person", () => {
           id: serverId,
           tenantId: "team",
           title: "定时任务",
-          vendor: "OpenBot",
+          vendor: "XiongBao",
           url: "builtin://routines",
           provenance: "first-party",
           catalogueKey: "routines",

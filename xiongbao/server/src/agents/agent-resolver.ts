@@ -13,7 +13,7 @@ import {
   type LoadInstructions,
   type LoadToolsForBot,
   type MarkAttachmentsSent,
-  onOpenBotRunner,
+  onXiongBaoRunner,
   type PickedModel,
   type RecordToolLimitRefusal,
   type RuntimeModel,
@@ -134,7 +134,7 @@ export type ActorAgentResolverDependencies = {
 };
 
 /**
- * Resolves the coworkers available to one OpenBot actor.
+ * Resolves the coworkers available to one XiongBao actor.
  *
  * Every surface enters through this boundary so it shares the same visibility, grants, assertions,
  * skill selection, and endpoint dial policy for a person.
@@ -165,16 +165,16 @@ export function createActorAgentResolver(
       ? (agentId, signal) => acquire(agentId, signal, actor.id)
       : undefined;
     /*
-     * A CHECK-IN RUNS EVERY BOT ON OPENBOT'S OWN RUNNER, and offers it everything it may read.
+     * A CHECK-IN RUNS EVERY BOT ON XIONGBAO'S OWN RUNNER, and offers it everything it may read.
      *
-     * A Bot on another framework is built as OpenBot would build it (`onOpenBotRunner`), so its own
-     * endpoint, and any tool that endpoint holds out of OpenBot's sight, is never called while nobody
+     * A Bot on another framework is built as XiongBao would build it (`onXiongBaoRunner`), so its own
+     * endpoint, and any tool that endpoint holds out of XiongBao's sight, is never called while nobody
      * is watching. And its tools are not narrowed by skill: narrowing picks tools from the latest
-     * message, which for a check-in is OpenBot's own instruction, and its reads are already only what
+     * message, which for a check-in is XiongBao's own instruction, and its reads are already only what
      * the person connected (`proactive/scope.ts`), so a narrowing could only drop an app.
      */
     const checkIn = isProactiveInitiator(context?.initiator);
-    const runnable = checkIn ? registered.map(onOpenBotRunner) : registered;
+    const runnable = checkIn ? registered.map(onXiongBaoRunner) : registered;
     const granted = deps.loadToolsForActor?.(actor.id, context?.initiator);
     return resolveRuntimeAgents(
       () => Promise.resolve(runnable),

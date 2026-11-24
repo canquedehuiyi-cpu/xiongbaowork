@@ -5,7 +5,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { computerAccessCheck } from "../src/agents/computer-access";
 import { createAgentProfileStore } from "../src/agents/profile-store";
 import type { AppVariables } from "../src/auth/guards";
-import type { OpenBotRole } from "../src/auth/roles";
+import type { XiongBaoRole } from "../src/auth/roles";
 import { createComputerRoutes } from "../src/computer/routes";
 import {
   type ComputerStreamSocketData,
@@ -33,7 +33,7 @@ const bot = `${prefix}-bot`;
 const external = `${prefix}-external`;
 const profiles = createAgentProfileStore(database, undefined);
 
-const roles: Record<string, OpenBotRole> = {
+const roles: Record<string, XiongBaoRole> = {
   [owner]: "user",
   [stranger]: "user",
 };
@@ -68,7 +68,7 @@ function fakeServer() {
 
 function streamRequest(user: string, botId = bot): Request {
   return new Request(
-    `http://openbot.example.test/api/computers/${encodeURIComponent(botId)}/stream`,
+    `http://xiongbao.example.test/api/computers/${encodeURIComponent(botId)}/stream`,
     { headers: { upgrade: "websocket", "x-test-user": user } },
   );
 }

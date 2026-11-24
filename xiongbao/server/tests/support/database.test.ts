@@ -9,10 +9,10 @@ describe("TEST_DATABASE_URL", () => {
   test("refuses the live development database even when DATABASE_URL names it", () => {
     expect(() =>
       testDatabaseUrlFrom({
-        TEST_DATABASE_URL: "postgres://openbot:openbot@localhost:5432/openbot",
+        TEST_DATABASE_URL: "postgres://openbot:openbot@localhost:5432/xiongbao",
         DATABASE_URL: "postgres://openbot:openbot@localhost:5432/openbot_test",
       }),
-    ).toThrow(/live openbot database/);
+    ).toThrow(/live xiongbao database/);
   });
 
   test("does not read DATABASE_URL as a fallback", () => {

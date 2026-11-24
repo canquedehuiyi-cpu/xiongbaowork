@@ -56,7 +56,7 @@ const config = loadConfig(
   testEnvironment({
     INTELLIGENCE_API_URL: "http://127.0.0.1:7100",
     INTELLIGENCE_GATEWAY_WS_URL: "ws://127.0.0.1:7103",
-    // As OpenBot Desktop writes it: the browser's address for a local gateway names localhost, which the Recorder
+    // As XiongBao Desktop writes it: the browser's address for a local gateway names localhost, which the Recorder
     // refuses to open (Decision 21), so the pass must name it at 127.0.0.1.
     INTELLIGENCE_BROWSER_GATEWAY_WS_URL: "ws://localhost:7103",
   }),
@@ -77,7 +77,7 @@ const getSession = async ({ headers }: { headers: Headers }) => {
 };
 const learning: LearningSettings = {
   enabled: true,
-  defaultTarget: { containerId: "openbot" },
+  defaultTarget: { containerId: "xiongbao" },
   agents: {},
 };
 const audits: AuditEventInput[] = [];
@@ -169,7 +169,7 @@ const app = createApp(...args);
 
 const call = (path: string, init: RequestInit & { json?: unknown } = {}) => {
   const { json, headers, ...rest } = init;
-  return app.request(`http://openbot.test${path}`, {
+  return app.request(`http://xiongbao.test${path}`, {
     ...rest,
     headers: {
       ...(json === undefined ? {} : { "content-type": "application/json" }),
@@ -277,7 +277,7 @@ describe("the capture pass", () => {
 
   /*
    * The fork's runtime keeps its threads in the local runner, whose own handler refuses every pass;
-   * with Intelligence configured OpenBot answers the pass itself (recorder/trajectory-connect.ts), so
+   * with Intelligence configured XiongBao answers the pass itself (recorder/trajectory-connect.ts), so
    * upstream's grant is asserted again, joined to the person's own Learning space.
    */
   test("a connected browser gets a pass with no Bot named, joined to the person's own Learning space", async () => {
@@ -304,7 +304,7 @@ describe("the capture pass", () => {
     expect(await bindingOf(mine)).toEqual([{ userId: owner }]);
   });
 
-  test("the person's space was made once, on first need, and OpenBot remembers it", async () => {
+  test("the person's space was made once, on first need, and XiongBao remembers it", async () => {
     expect(created.filter((spec) => spec.id === OWNER_SPACE)).toHaveLength(1);
     expect(
       await database

@@ -343,9 +343,9 @@ export class UnnamedSkillError extends Error {
 }
 
 /**
- * The approval hook: records who approved a proposal in OpenBot before Intelligence is asked to publish it, and hands
+ * The approval hook: records who approved a proposal in XiongBao before Intelligence is asked to publish it, and hands
  * `reviewProposal` the undo to run when Intelligence refuses. A person can't approve a skill without a usable name, since
- * OpenBot could not record it; an admin's approval of one records nothing, since an admin's skill needs no row.
+ * XiongBao could not record it; an admin's approval of one records nothing, since an admin's skill needs no row.
  *
  * A removal is the other way round: the row stays until Intelligence has removed the skill, and only `after` deletes
  * it. While the skill is published its row keeps it held back from other people's Bots, so deleting the row first

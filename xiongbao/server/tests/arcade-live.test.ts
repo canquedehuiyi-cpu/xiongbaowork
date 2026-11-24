@@ -592,13 +592,13 @@ describe.skipIf(!live)("Arcade, for real", () => {
    *
    * - on a TOOL LISTING, `requirements.authorization.provider_id` is the provider TYPE: `"google"`;
    * - on a USER CONNECTION ROW, `provider_id` is the provider INSTANCE id — an operator's
-   *   configuration of a type: `"google-openbot"`, `"cpk-poc"`, `"arcade-google"`;
+   *   configuration of a type: `"google-xiongbao"`, `"cpk-poc"`, `"arcade-google"`;
    * - on an AUTH-PROVIDER CONFIG (`admin.authProviders.list()`), `id` is the INSTANCE and
    *   `provider_id` is the TYPE, which is the only bridge between the two. Verbatim:
    *
    * ```
    * {"id":"cpk-poc",        "provider_id":"github", "type":"oauth2", "status":"active"}
-   * {"id":"google-openbot", "provider_id":"google", "type":"oauth2", "status":"active"}
+   * {"id":"google-xiongbao", "provider_id":"google", "type":"oauth2", "status":"active"}
    * {"id":"arcade-google",  "provider_id":"google", "type":"oauth2", "status":"active"}
    * ```
    *

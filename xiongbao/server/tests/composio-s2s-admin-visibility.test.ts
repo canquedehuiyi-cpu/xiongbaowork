@@ -13,7 +13,7 @@ import { testEnvironment } from "./support/environment";
 
 const ADMIN = {
   id: "admin-1",
-  email: "admin@openbot.test",
+  email: "admin@xiongbao.test",
   name: "An Administrator",
   image: null,
 };
@@ -97,7 +97,7 @@ function appFor(role: "admin" | "user", held: string[] = []) {
 }
 
 const get = (app: ReturnType<typeof appFor>, path: string) =>
-  app.request(`http://openbot.test/api/plugins${path}`);
+  app.request(`http://xiongbao.test/api/plugins${path}`);
 
 describe("目录带出在等客户端的应用", () => {
   test("没保存客户端时，应用不在 apps 里，但出现在 awaitingClient 里", async () => {

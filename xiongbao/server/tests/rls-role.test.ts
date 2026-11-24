@@ -34,13 +34,13 @@ test("an ordinary role is governed by the policy", () => {
 
 test("a superuser is not, and says so with the fix", () => {
   const verdict = judgeRlsEnforcement({
-    role: "openbot",
+    role: "xiongbao",
     super: true,
     bypassesRls: false,
   });
   expect(verdict.enforced).toBeFalse();
   if (verdict.enforced) return;
-  expect(verdict.reason).toContain("openbot is a superuser");
+  expect(verdict.reason).toContain("xiongbao is a superuser");
   expect(verdict.fix).toContain("openbot_app");
 });
 

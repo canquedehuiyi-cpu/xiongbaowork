@@ -85,7 +85,7 @@ export type PersonalLearningRouteDeps = {
     ids: string[],
   ) => Promise<Map<string, string | null>>;
   /**
-   * Why OpenBot Desktop could not give its local Intelligence's Learning agent a model, from
+   * Why XiongBao Desktop could not give its local Intelligence's Learning agent a model, from
    * `OPENBOT_LEARNING_MODEL_UNAVAILABLE`. See `learningModelUnavailable`.
    */
   modelUnavailable?: LearningModelUnavailable;
@@ -478,7 +478,7 @@ export function createPersonalLearningRoutes(
   });
 
   /**
-   * Approve or reject a proposal from one of the person's spaces. On approving a skill from their recordings, OpenBot
+   * Approve or reject a proposal from one of the person's spaces. On approving a skill from their recordings, XiongBao
    * writes its own record of who approved it before Intelligence is asked, and takes it back if Intelligence refuses.
    */
   for (const action of ["approve", "reject"] as const) {

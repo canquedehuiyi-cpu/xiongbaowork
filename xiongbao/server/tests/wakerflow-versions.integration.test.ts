@@ -311,7 +311,7 @@ describe("whose versions they are", () => {
     };
     const routes = createWakerFlowRoutes({ store: f.store, requireUser });
     const call = (user: string, method: string, path: string, body?: unknown) =>
-      routes.request(`http://openbot.test/${f.flow.id}${path}`, {
+      routes.request(`http://xiongbao.test/${f.flow.id}${path}`, {
         method,
         headers: { "content-type": "application/json", "x-test-user": user },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),

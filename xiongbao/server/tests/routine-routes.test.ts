@@ -13,7 +13,7 @@ import {
 
 const actor = {
   id: "user-1",
-  email: "member@openbot.test",
+  email: "member@xiongbao.test",
   role: "user",
 } as const;
 
@@ -135,7 +135,7 @@ async function json(response: Response) {
 describe("GET /", () => {
   test("lists the caller's own routines as words, not cron", async () => {
     const store = fakeStore();
-    const response = await appFor(store).request("http://openbot.test/");
+    const response = await appFor(store).request("http://xiongbao.test/");
 
     expect(response.status).toBe(200);
     const body = (await json(response)) as Record<string, unknown>;
@@ -167,7 +167,7 @@ describe("GET /", () => {
     const store = fakeStore({
       listFor: async () => [summary({ lastRun: null })],
     });
-    const response = await appFor(store).request("http://openbot.test/");
+    const response = await appFor(store).request("http://xiongbao.test/");
 
     expect((await json(response)).routines[0].lastRun).toBeNull();
   });
@@ -178,7 +178,7 @@ describe("GET /", () => {
         summary({ lastRun: { status: null, finishedAt: null } }),
       ],
     });
-    const response = await appFor(store).request("http://openbot.test/");
+    const response = await appFor(store).request("http://xiongbao.test/");
 
     expect((await json(response)).routines[0].lastRun).toEqual({
       status: null,
@@ -196,7 +196,7 @@ describe("GET /", () => {
         }),
       ],
     });
-    const response = await appFor(store).request("http://openbot.test/");
+    const response = await appFor(store).request("http://xiongbao.test/");
 
     expect((await json(response)).routines[0].channel).toEqual({
       id: "channel-1",
@@ -208,7 +208,7 @@ describe("GET /", () => {
 
   test("the DTO carries the schedule as words and never a cron field", async () => {
     const store = fakeStore();
-    const response = await appFor(store).request("http://openbot.test/");
+    const response = await appFor(store).request("http://xiongbao.test/");
     const body = await json(response);
 
     expect(body.routines[0].schedule).toBe("Weekdays at 09:00");
@@ -218,7 +218,7 @@ describe("GET /", () => {
   test("refuses without a session, before the store is asked", async () => {
     const store = fakeStore();
     const response = await appFor(store, denied).request(
-      "http://openbot.test/",
+      "http://xiongbao.test/",
     );
 
     expect(response.status).toBe(401);
@@ -230,7 +230,7 @@ describe("PUT /:id/enabled", () => {
   test("switches a routine on or off through the authenticated actor", async () => {
     const store = fakeStore();
     const response = await appFor(store).request(
-      "http://openbot.test/routine-1/enabled",
+      "http://xiongbao.test/routine-1/enabled",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -251,7 +251,7 @@ describe("PUT /:id/enabled", () => {
   ])("rejects a malformed body: %p", async (body, error) => {
     const store = fakeStore();
     const response = await appFor(store).request(
-      "http://openbot.test/routine-1/enabled",
+      "http://xiongbao.test/routine-1/enabled",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -277,7 +277,7 @@ describe("PUT /:id/enabled", () => {
     });
 
     const notMine = await appFor(store).request(
-      "http://openbot.test/somebody-elses-routine/enabled",
+      "http://xiongbao.test/somebody-elses-routine/enabled",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -285,7 +285,7 @@ describe("PUT /:id/enabled", () => {
       },
     );
     const missing = await appFor(missingStore).request(
-      "http://openbot.test/no-such-routine/enabled",
+      "http://xiongbao.test/no-such-routine/enabled",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -309,7 +309,7 @@ describe("PUT /:id/enabled", () => {
       },
     });
     const response = await appFor(store).request(
-      "http://openbot.test/routine-1/enabled",
+      "http://xiongbao.test/routine-1/enabled",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -338,7 +338,7 @@ describe("PUT /:id/enabled", () => {
       },
     });
     const response = await appFor(store).request(
-      "http://openbot.test/routine-1/enabled",
+      "http://xiongbao.test/routine-1/enabled",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -356,7 +356,7 @@ describe("PUT /:id/enabled", () => {
   test("refuses without a session, before the store is asked", async () => {
     const store = fakeStore();
     const response = await appFor(store, denied).request(
-      "http://openbot.test/routine-1/enabled",
+      "http://xiongbao.test/routine-1/enabled",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -373,7 +373,7 @@ describe("DELETE /:id", () => {
   test("stops a routine through the authenticated actor", async () => {
     const store = fakeStore();
     const response = await appFor(store).request(
-      "http://openbot.test/routine-1",
+      "http://xiongbao.test/routine-1",
       { method: "DELETE" },
     );
 
@@ -394,11 +394,11 @@ describe("DELETE /:id", () => {
     });
 
     const notMine = await appFor(notMineStore).request(
-      "http://openbot.test/somebody-elses-routine",
+      "http://xiongbao.test/somebody-elses-routine",
       { method: "DELETE" },
     );
     const missing = await appFor(missingStore).request(
-      "http://openbot.test/no-such-routine",
+      "http://xiongbao.test/no-such-routine",
       { method: "DELETE" },
     );
 
@@ -412,7 +412,7 @@ describe("DELETE /:id", () => {
   test("refuses without a session, before the store is asked", async () => {
     const store = fakeStore();
     const response = await appFor(store, denied).request(
-      "http://openbot.test/routine-1",
+      "http://xiongbao.test/routine-1",
       { method: "DELETE" },
     );
 

@@ -92,7 +92,7 @@ const app = (createApp as (...given: never[]) => ReturnType<typeof createApp>)(
 );
 
 const request = (actor: string, method: string, path: string, body?: unknown) =>
-  app.request(`http://openbot.test/api/admin/enterprise${path}`, {
+  app.request(`http://xiongbao.test/api/admin/enterprise${path}`, {
     method,
     headers: { "content-type": "application/json", "x-actor": actor },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),

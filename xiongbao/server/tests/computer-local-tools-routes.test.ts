@@ -58,12 +58,12 @@ const NOTEPAD = {
 
 const owner: AuthenticatedActor = {
   id: OWNER,
-  email: "owner@openbot.test",
+  email: "owner@xiongbao.test",
   role: "user",
 };
 const teammate: AuthenticatedActor = {
   id: "teammate-1",
-  email: "teammate@openbot.test",
+  email: "teammate@xiongbao.test",
   role: "user",
 };
 
@@ -171,7 +171,7 @@ function harness(
     async () => true,
   );
   const send = (path: string, body: unknown) =>
-    routes.request(`http://openbot.test/bot-1${path}`, {
+    routes.request(`http://xiongbao.test/bot-1${path}`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -379,7 +379,7 @@ describe("the desktop from a plain route", () => {
 describe("whether the browser offers the five tools", () => {
   test("yes to the owner of a Bot on a paired machine", async () => {
     const response = await harness().routes.request(
-      "http://openbot.test/bot-1/local-tools",
+      "http://xiongbao.test/bot-1/local-tools",
     );
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
@@ -390,7 +390,7 @@ describe("whether the browser offers the five tools", () => {
 
   test("no to anyone else", async () => {
     const response = await harness({ actor: teammate }).routes.request(
-      "http://openbot.test/bot-1/local-tools",
+      "http://xiongbao.test/bot-1/local-tools",
     );
     expect(await response.json()).toEqual({
       allowed: false,
@@ -401,7 +401,7 @@ describe("whether the browser offers the five tools", () => {
   test("no where the deployment has no paired machines at all", async () => {
     const h = harness({ device: false });
     const response = await h.routes.request(
-      "http://openbot.test/bot-1/local-tools",
+      "http://xiongbao.test/bot-1/local-tools",
     );
     expect(await response.json()).toEqual({
       allowed: false,
@@ -427,7 +427,7 @@ describe("whether the browser offers the five tools", () => {
       async () => true,
     );
     const response = await routes.request(
-      "http://openbot.test/bot-1/local-tools",
+      "http://xiongbao.test/bot-1/local-tools",
     );
     expect(await response.json()).toEqual({
       allowed: false,

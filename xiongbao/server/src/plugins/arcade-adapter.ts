@@ -5,6 +5,7 @@
  * 这里的英文句子只给运维/管理员看；会到达普通成员的句子在路由里换成不点名提供商的中文（#1223）。
  */
 import Arcade, { APIError } from "@arcadeai/arcadejs";
+import { englishName, productName } from "../brand";
 import {
   type ArcadeActions,
   type ArcadeFailure,
@@ -25,7 +26,6 @@ import {
   type GrantState,
 } from "./broker";
 import { personAccount } from "./shared-accounts";
-import { englishName, productName } from "../brand";
 
 /**
  * THE VENDOR'S ONLY DOOR INTO THE SERVER. This is the one file under `server/src` that imports
@@ -779,16 +779,16 @@ const CONNECTION_MAX_PAGES = 100;
  * THERE ARE THREE THINGS AND THEY NEED THREE WORDS. `provider` in this codebase is the BROKER
  * (`arcade`); `authProvider` is the vendor's OAuth provider TYPE (`google`); and this is the third,
  * the provider INSTANCE — an operator's configuration OF a type, which Arcade keys by its own id
- * (`google-openbot`, `arcade-google`, `cpk-poc`). On an auth-provider config `id` is the INSTANCE
+ * (`google-xiongbao`, `arcade-google`, `cpk-poc`). On an auth-provider config `id` is the INSTANCE
  * and `provider_id` is the TYPE. Verbatim from the live project:
  *
  * ```
  * {"id":"cpk-poc",        "provider_id":"github", "type":"oauth2", "status":"active"}
- * {"id":"google-openbot", "provider_id":"google", "type":"oauth2", "status":"active"}
+ * {"id":"google-xiongbao", "provider_id":"google", "type":"oauth2", "status":"active"}
  * {"id":"arcade-google",  "provider_id":"google", "type":"oauth2", "status":"active"}
  * ```
  *
- * A SET AND NEVER ONE ID: `arcade-google` and `google-openbot` are both of type `google`, and a
+ * A SET AND NEVER ONE ID: `arcade-google` and `google-xiongbao` are both of type `google`, and a
  * person may hold a connection under either. Reducing to one would drop real connections.
  *
  * PAGED, AND A MALFORMED LISTING THROWS, on `listApps`' argument and with its guards: a truncated
@@ -848,13 +848,13 @@ async function authProviderInstances(
  * - on a tool listing, `requirements.authorization.provider_id` — what `authProviderOf` reads — is
  *   the provider TYPE: `"google"`;
  * - on a user-connection row, `provider_id` is the provider INSTANCE id, the operator's
- *   configuration: `"google-openbot"`, `"arcade-google"`, `"cpk-poc"`.
+ *   configuration: `"google-xiongbao"`, `"arcade-google"`, `"cpk-poc"`.
  *
  * A connection row's full key set, verbatim, carries NO vendor-type field at all: `id`,
  * `provider_type`, `connection_id`, `connection_status`, `scopes`, `user_id`, `provider_id`,
  * `provider_description`, `provider_user_info` — and `provider_type` is `"oauth2"`, the auth SCHEME
  * rather than the vendor. The instance id is the ONLY link to the vendor. So `"google"` never
- * equals `"google-openbot"`, a direct comparison matches nothing on any real deployment — with
+ * equals `"google-xiongbao"`, a direct comparison matches nothing on any real deployment — with
  * Arcade's own default providers too, which are `arcade-google` and `arcade-github` and never the
  * bare type — and `isConnected` reads false, `accountName` null, and `revoke` false WITHOUT
  * SPENDING A DELETE, so nothing is ever revoked at the vendor. Do not "simplify" this back: every
@@ -1702,7 +1702,7 @@ const verifierNotTaken = (subject: string, address: string, cause: unknown) =>
  * would send another deployment's people to this one. So it only reads, goes ahead when the project
  * already names it, and otherwise refuses with the exact address an admin sets in the dashboard.
  *
- * ON EVERY MINT AND NOT ONCE AT BOOT. Several single-user OpenBots can run on one key at different
+ * ON EVERY MINT AND NOT ONCE AT BOOT. Several single-user XiongBaos can run on one key at different
  * addresses, and the verifier has to name whichever of them is about to send somebody to a consent
  * screen. Read first, and written only when it names somewhere else, so a deployment that already
  * holds it costs one read.

@@ -18,7 +18,7 @@ import { ControlsSection } from "./controls-section";
 export function RecordingSection() {
   return (
     <ControlsSection
-      description="Set OTEL_EXPORTER_OTLP_ENDPOINT to stream audit events and Bot actions to your OpenTelemetry collector or SIEM. They are tagged openbot.surface."
+      description="Set OTEL_EXPORTER_OTLP_ENDPOINT to stream audit events and Bot actions to your OpenTelemetry collector or SIEM. They are tagged xiongbao.surface."
       title="Recording and export"
     >
       {({ data, setSetting, saving }) => (

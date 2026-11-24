@@ -83,7 +83,7 @@ export const recorderConnections = pgTable(
     label: text("label").notNull(),
     via: text("via").$type<RecorderConnectVia>().notNull(),
     extensionId: text("extension_id").notNull(),
-    /** The connecting copy's install id for this OpenBot. */
+    /** The connecting copy's install id for this XiongBao. */
     installId: text("install_id").notNull(),
     /** Organization mode only, copied from the connect code: re-verified against the authority. Cleared on revoke. */
     organizationSession: text("organization_session"),

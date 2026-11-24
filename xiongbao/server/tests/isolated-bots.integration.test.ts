@@ -157,7 +157,7 @@ const call = (
   body?: unknown,
   available = true,
 ) =>
-  appFor(actor, available).request(`http://openbot.test${path}`, {
+  appFor(actor, available).request(`http://xiongbao.test${path}`, {
     method,
     headers: { "content-type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),

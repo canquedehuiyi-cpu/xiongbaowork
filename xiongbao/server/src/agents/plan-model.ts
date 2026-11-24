@@ -439,7 +439,7 @@ export class PlanModel implements PlanLanguageModel {
                     // `provider-refusal.ts`.
                     if (event.code) Object.assign(error, { code: event.code });
                     if (event.code === "OPENBOT_MODEL_AUTH_REQUIRED") {
-                      error.name = "OpenBotModelAuthenticationError";
+                      error.name = "XiongBaoModelAuthenticationError";
                     }
                     throw error;
                   }

@@ -10,6 +10,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { createEnterpriseStore } from "../admin/settings-store";
 import type { AuditEventInput, AuditStore } from "../audit";
 import { recordPersonAuditEvent, recordPlatformAuditEvent } from "../audit";
+import { englishName } from "../brand";
 import type { DeploymentConfig } from "../config";
 import type { Database } from "../db/client";
 import {
@@ -32,7 +33,6 @@ import { encryptSsoConfig } from "./encrypt-sso-config";
 import { SIGN_OUT_UNFINISHED } from "./organization";
 import { applyConfiguredAdmin, isConfiguredAdmin, seedRole } from "./roles";
 import { recordProvisioned, scimOptions } from "./scim";
-import { englishName } from "../brand";
 
 /** Answered when a provider sign-in would join an unverified password account with the same address. */
 export const LINK_REFUSAL_MESSAGE =
@@ -142,7 +142,7 @@ export async function stampSignIn(
  * configuration. `common`, the default tenant here, is multi-tenant.
  *
  * Better Auth maps `email` straight through with no fallback, so on those deployments it is
- * undefined. That matters more here than in most products: every authorization decision OpenBot
+ * undefined. That matters more here than in most products: every authorization decision XiongBao
  * makes about a person is keyed on their address. `INITIAL_ADMIN_EMAILS`, the role, the deny list
  * and the People screen all read it, so an absent address is not a cosmetic gap. Somebody would
  * sign in successfully, match no administrator, and land as a plain user with nothing on any screen
@@ -207,7 +207,7 @@ export function createAuth(
     signOutRecorders?: (userId: string, ending: string) => Promise<void>;
     /**
      * Whether `auth/entra.ts` has just verified this Entra token, for the one sign-in it starts with
-     * one: somebody arriving from their app's token whom OpenBot has not seen before.
+     * one: somebody arriving from their app's token whom XiongBao has not seen before.
      *
      * Better Auth's own check of a Microsoft token cannot pass against Entra's real keys, which
      * publish no `alg`, so its id-token sign-in is answered here instead. Only a token verified a
@@ -524,7 +524,7 @@ export function createAuth(
      *
      * The fork's own front door (ticket 004): a self-serve tenant arrives with nothing but an address
      * and a password, and the `user.create` hook below gives them a Free subscription and a 分身 the
-     * same way an OAuth arrival does. Upstream OpenBot never had this path, which is why everything
+     * same way an OAuth arrival does. Upstream XiongBao never had this path, which is why everything
      * here assumes a provider vouched for the address first — see the SSO-required refusal inside the
      * create hook, which is what keeps `ssoRequired` a wall rather than a suggestion once this is on.
      *
@@ -845,7 +845,7 @@ export function createAuth(
 
 /**
  * How long a session here lasts unused, in milliseconds: Better Auth's `session.expiresIn` as this instance resolved it.
- * OpenBot sets none, so it is Better Auth's own default, and it is read rather than restated so the two cannot drift.
+ * XiongBao sets none, so it is Better Auth's own default, and it is read rather than restated so the two cannot drift.
  * Better Auth moves a session's expiry to this long from now whenever it is used (at most once per `updateAge`).
  */
 export async function sessionLifetimeMs(

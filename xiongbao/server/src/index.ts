@@ -206,7 +206,7 @@ import {
   createAvatarSourceStore,
 } from "./avatar-sources";
 import { englishName, setBrand } from "./brand";
-import { openbotAddress } from "./browser/address";
+import { xiongbaoAddress } from "./browser/address";
 import { botBrowserNetwork } from "./browser/bot-browser";
 import { originRules, personBrowserEgressPolicy } from "./browser/egress";
 import {
@@ -494,7 +494,7 @@ import {
   brokerWithAccounts,
   createComposioClient,
 } from "./plugins/composio-adapter";
-import { openBotResources } from "./plugins/entra-access";
+import { xiongBaoResources } from "./plugins/entra-access";
 import { backfillComposioLogos } from "./plugins/logos";
 import { redirectUriFor } from "./plugins/oauth";
 import {
@@ -1474,7 +1474,7 @@ await startupLifecycle.run(async (startup) => {
         )
       : undefined;
   /*
-   * Microsoft Entra on both sides: a person's app calling OpenBot with their Entra token, and a server
+   * Microsoft Entra on both sides: a person's app calling XiongBao with their Entra token, and a server
    * an admin marked as reached as the signed-in person called with a token Entra issues for them.
    * Built on Better Auth's sign-in, so only where Microsoft sign-in is what this deployment runs.
    *
@@ -1530,13 +1530,13 @@ await startupLifecycle.run(async (startup) => {
         (await asPlatform(() => auth?.api.getSession({ headers }))) ?? null,
       rolesForUser: (id) => asPlatform(() => roleRepository.rolesForUser(id)),
     });
-  // Where a person's own OpenBot browser may go: not where Bots may, but where their browser on their
+  // Where a person's own XiongBao browser may go: not where Bots may, but where their browser on their
   // own laptop would (browser/egress.ts). On a host-side computer of people's browsers that is their
   // own desktop, so everywhere.
   const personBrowserPolicy = personBrowserEgressPolicy({
     native: config.browser !== undefined,
     allowPrivateHosts: config.computer?.allowPrivateHosts ?? false,
-    openbotUrls: [config.publicUrl, config.appUrl],
+    xiongbaoUrls: [config.publicUrl, config.appUrl],
     // Without the optional Intelligence there is no gateway for the Recorder to stream to.
     gatewayUrl: config.intelligence?.gatewayWsUrl ?? "",
   });
@@ -1884,7 +1884,7 @@ await startupLifecycle.run(async (startup) => {
             ).map((row) => [row.id, { name: row.name, email: row.email }]),
           ),
         /*
-         * Whose OpenBot browser each one is: the server minted its Recorder connection under the
+         * Whose XiongBao browser each one is: the server minted its Recorder connection under the
          * browser's own install id. Every person's connections, so as `platform`.
          */
         browserOwners: async (computerIds) => {
@@ -2261,7 +2261,7 @@ await startupLifecycle.run(async (startup) => {
      * Entra on-behalf-of, for a server an admin marked as reached as the signed-in person (上游
      * #931). The framed door above: the person's sign-in and the tokens minted from it are identity
      * rows read as `platform`, while the call that asks runs in the person's own frame. With it go
-     * the resources the deployment registered (MICROSOFT_OAUTH_OBO_RESOURCES) and OpenBot's own API,
+     * the resources the deployment registered (MICROSOFT_OAUTH_OBO_RESOURCES) and XiongBao's own API,
      * so a scope is only ever minted for a registered resource and sent to its host (X6, I-2).
      */
     ...(entra && config.auth?.microsoft
@@ -2269,7 +2269,7 @@ await startupLifecycle.run(async (startup) => {
           entra: {
             tokenFor: entra.tokenFor,
             resources: config.auth.microsoft.oboResources ?? [],
-            own: openBotResources(
+            own: xiongBaoResources(
               config.auth.microsoft.clientId,
               config.auth.microsoft.apiScope,
             ),
@@ -2845,7 +2845,7 @@ await startupLifecycle.run(async (startup) => {
   // server-dispatched: the selected Bot and the signed-in owner are bound here, then the desktop worker
   // receives only opaque grant ids and relative paths.
   // Memory lives in CopilotKit Intelligence when this deployment is connected and entitled to it, and in
-  // OpenBot's own tables when it is not; see memory/store.ts.
+  // XiongBao's own tables when it is not; see memory/store.ts.
   const personalMemoryStore = createMemoryStore(
     database,
     intelligenceClient
@@ -2859,7 +2859,7 @@ await startupLifecycle.run(async (startup) => {
   // A person's knowledge base (D08): read by their bound Wakers through two tools, edited at /api/knowledge.
   const knowledgeStore = createKnowledgeStore(database);
   /*
-   * The Recorder extension (recorder/wiring.ts): a person's browser connected to OpenBot, its capture
+   * The Recorder extension (recorder/wiring.ts): a person's browser connected to XiongBao, its capture
    * pass and its routes. Each person's recordings join their own Learning space (above).
    */
   const recorderExtension = createRecorderExtension({
@@ -4475,7 +4475,7 @@ await startupLifecycle.run(async (startup) => {
       ]),
     // What this person has told every coworker of theirs, in every channel. See user-instructions.ts.
     loadInstructionsForActor,
-    // What a Bot calls the person, once they have told OpenBot their name.
+    // What a Bot calls the person, once they have told XiongBao their name.
     loadNameForActor: async (actorId) => {
       const profile = await profileStore.read(actorId);
       return profile.needsName ? null : profile.name;
@@ -6199,11 +6199,11 @@ await startupLifecycle.run(async (startup) => {
         personBrowserPolicy,
         // An external employee's agent on its computer reaches the model proxy, whatever the list says.
         alwaysAllowed: originRules([agentModelComputerUrl]),
-        // While a person records in a Bot's browser, the Recorder there reaches OpenBot and the
+        // While a person records in a Bot's browser, the Recorder there reaches XiongBao and the
         // gateway; the Bot does not.
         duringRecording: botBrowserNetwork({
           connections: recorderExtension.connections,
-          openbotUrls: [config.publicUrl, config.appUrl],
+          xiongbaoUrls: [config.publicUrl, config.appUrl],
           gatewayUrl: config.intelligence?.gatewayWsUrl ?? "",
         }),
         ...(computerProvider ? { provider: computerProvider } : {}),
@@ -6459,7 +6459,7 @@ await startupLifecycle.run(async (startup) => {
         ? {
             botBrowser: {
               recorder: recorderExtension,
-              openbotUrl: openbotAddress(config),
+              openbotUrl: xiongbaoAddress(config),
               /*
                * The Bot's policy, which `botBrowserNetwork` widens while a recording runs, to the
                * computer of the seat the recording is on: the person's own, or the isolated Bot's.
@@ -6516,8 +6516,8 @@ await startupLifecycle.run(async (startup) => {
                       }),
               }),
               recorder: recorderExtension,
-              openbotUrl: openbotAddress(config),
-              // On a single-user OpenBot the person is its admin: a setup failure is theirs to see to.
+              openbotUrl: xiongbaoAddress(config),
+              // On a single-user XiongBao the person is its admin: a setup failure is theirs to see to.
               singleUser: config.singleUser,
             },
           }

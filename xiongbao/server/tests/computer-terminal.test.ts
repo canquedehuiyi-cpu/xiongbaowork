@@ -89,7 +89,7 @@ async function until(check: () => boolean, ms = 15_000) {
 }
 
 beforeAll(async () => {
-  dir = await mkdtemp(join(tmpdir(), "openbot-terminal-"));
+  dir = await mkdtemp(join(tmpdir(), "xiongbao-terminal-"));
   await Promise.all(
     ["profiles", "workspace", "recorder"].map((name) => mkdir(join(dir, name))),
   );

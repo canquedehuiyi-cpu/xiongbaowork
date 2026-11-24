@@ -9,10 +9,10 @@ import { learningPersonSpaces } from "../db/schema/learning";
 import type { LearningContainerSpec } from "./ensure-container";
 
 /**
- * A person's own Learning space: one Intelligence Learning container per OpenBot person, which every recording they make
+ * A person's own Learning space: one Intelligence Learning container per XiongBao person, which every recording they make
  * joins, whichever Bot they later use, and whose published Skills reach every Bot they run (learning/runtime.ts).
  *
- * Its id is derived from the person's: `user-` and the first 32 hex digits of the SHA-256 of their OpenBot user id. A
+ * Its id is derived from the person's: `user-` and the first 32 hex digits of the SHA-256 of their XiongBao user id. A
  * user id is any text (mixed case, a better-auth id, `dev-local-user`), and Intelligence takes 1 to 64 lowercase letters,
  * digits and single hyphens, so the id is hashed rather than copied: the same person always gets the same space, on
  * every replica, with nothing to look up, and two people never share one.
@@ -21,8 +21,8 @@ export function personalLearningContainerId(userId: string): string {
   return `user-${personDigest(userId)}`;
 }
 
-/** The first 32 hex digits of the SHA-256 of an OpenBot user id: what every id derived from a person is built on (their
- * Learning space here, and their OpenBot browser, browser/person.ts). */
+/** The first 32 hex digits of the SHA-256 of an XiongBao user id: what every id derived from a person is built on (their
+ * Learning space here, and their XiongBao browser, browser/person.ts). */
 export function personDigest(userId: string): string {
   return createHash("sha256").update(userId).digest("hex").slice(0, 32);
 }
@@ -59,7 +59,7 @@ function errorCode(error: unknown): string {
   return typeof code === "string" ? code : "";
 }
 
-/** The rows that remember which people's spaces OpenBot has seen exist. */
+/** The rows that remember which people's spaces XiongBao has seen exist. */
 export function createPersonSpaceStore(database: Database) {
   return {
     async confirmed(userId: string): Promise<boolean> {

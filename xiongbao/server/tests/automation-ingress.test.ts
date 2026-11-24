@@ -80,7 +80,7 @@ function harness(hook: AutomationHook | null, answer: "queued" | "already") {
     body: string,
     headers: Record<string, string> = {},
   ) =>
-    routes.request(`http://openbot.test/${id}`, {
+    routes.request(`http://xiongbao.test/${id}`, {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body,

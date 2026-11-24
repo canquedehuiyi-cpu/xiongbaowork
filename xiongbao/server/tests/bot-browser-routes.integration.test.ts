@@ -27,7 +27,7 @@ import {
 import { inArray } from "drizzle-orm";
 import { createApp } from "../src/app";
 import type { AuditEventInput } from "../src/audit";
-import { openbotAddress } from "../src/browser/address";
+import { xiongbaoAddress } from "../src/browser/address";
 import {
   botBrowserInstallId,
   botBrowserNetwork,
@@ -84,20 +84,20 @@ const BOT_NAME = "Sales Bot";
 /** A Bot that runs on each person's own seat, where BOT runs on a computer of its own (isolated) everyone shares. */
 const PERSONAL = `${prefix}-notes`;
 const COMPUTER_TOKEN = "bot-browser-computer-token";
-const PUBLIC = "https://openbot.example.com";
+const PUBLIC = "https://xiongbao.example.com";
 const GATEWAY = "wss://gateway.example.com/socket";
 /** The stand-in computer's own port. */
 const COMPUTER_PORT = 7893;
-/** OpenBot's own HTTP server, where a case needs what `Bun.serve` itself does to a request (its 10 s idle close). */
+/** XiongBao's own HTTP server, where a case needs what `Bun.serve` itself does to a request (its 10 s idle close). */
 const SERVER_PORT = 7894;
 /** Where the Bot's owner lets it go: its own policy, which a recording widens and nothing else does. */
 const OWN_POLICY: EgressPolicy = {
   mode: "allowlist_only",
   rules: [{ type: "domain", value: "example.org" }],
 };
-/** What the Recorder in the Bot's browser must reach: OpenBot and the gateway, host and port. */
+/** What the Recorder in the Bot's browser must reach: XiongBao and the gateway, host and port. */
 const RECORDER_RULES = [
-  { type: "domain", value: "openbot.example.com", ports: "443" },
+  { type: "domain", value: "xiongbao.example.com", ports: "443" },
   { type: "domain", value: "gateway.example.com", ports: "443" },
 ];
 
@@ -120,7 +120,7 @@ const pushed = new Map<string, EgressPolicy[]>();
 const asked: string[] = [];
 /** How the computer answers the next start instead of starting, when a test says so. */
 let refuseNextStart: { status: number; error: string } | null = null;
-/** The next hand-back happens on the computer, but its answer never reaches OpenBot, as a timeout leaves it. */
+/** The next hand-back happens on the computer, but its answer never reaches XiongBao, as a timeout leaves it. */
 let loseNextRelease = false;
 /** How long the computer takes over the next request to each of its Bot's browser routes, when a test says so: a page
  * slow to load, the last of a recording slow to reach Intelligence. */
@@ -195,7 +195,7 @@ function endRecording(bot: Bot) {
   bot.startedBy = undefined;
 }
 
-/** The wheel going back on the computer alone, as a restart or a stop does it, without OpenBot being told. */
+/** The wheel going back on the computer alone, as a restart or a stop does it, without XiongBao being told. */
 function wheelBackOnItsOwn(id: string) {
   const bot = botOf(id);
   const { heldBy: _gone, ...control } = bot.control;
@@ -409,7 +409,7 @@ const computer = Bun.serve({
   },
 });
 
-// ---- OpenBot, as index.ts builds it ------------------------------------------------------------
+// ---- XiongBao, as index.ts builds it ------------------------------------------------------------
 
 const audits: AuditEventInput[] = [];
 /** An audit row that cannot be written, as when the trail is down: the store throws for this event. */
@@ -453,7 +453,7 @@ const config = loadConfig(
 // `duringRecording`, which index.ts sets to this).
 const duringRecording = botBrowserNetwork({
   connections,
-  openbotUrls: [config.publicUrl, config.appUrl],
+  xiongbaoUrls: [config.publicUrl, config.appUrl],
   gatewayUrl: config.intelligence?.gatewayWsUrl ?? "",
 });
 const policyForBot = (botId: string) => duringRecording(botId, OWN_POLICY);
@@ -503,7 +503,7 @@ args[33] = {
   recorder,
   botBrowser: {
     recorder,
-    openbotUrl: openbotAddress(config),
+    openbotUrl: xiongbaoAddress(config),
     // As index.ts pushes it: the Bot's policy, to the computer of the seat the recording is on, under its token.
     pushPolicy: async (seat) => {
       const policy = await policyForBot(seat.botId);
@@ -514,7 +514,7 @@ args[33] = {
   },
 };
 const app = createApp(...args);
-/** The same OpenBot where every Bot shares the one computer, as index.ts builds it: Record refused in every Bot's browser. */
+/** The same XiongBao where every Bot shares the one computer, as index.ts builds it: Record refused in every Bot's browser. */
 const refusingArgs = [...args] as typeof args;
 refusingArgs[33] = {
   ...(args[33] as object),
@@ -530,7 +530,7 @@ const call = (
   init: RequestInit & { json?: unknown; as?: keyof typeof PEOPLE } = {},
 ) => {
   const { json, headers, as, ...rest } = init;
-  return app.request(`http://openbot.test${path}`, {
+  return app.request(`http://xiongbao.test${path}`, {
     ...rest,
     headers: {
       ...(json === undefined ? {} : { "content-type": "application/json" }),
@@ -553,7 +553,7 @@ const lastPushed = () => pushed.get(BOT)?.at(-1);
 const auditsOf = (eventType: string) =>
   audits.filter((audit) => audit.eventType === eventType);
 
-/** The person asks for the wheel and takes it, through OpenBot, as the Bot's screen does. */
+/** The person asks for the wheel and takes it, through XiongBao, as the Bot's screen does. */
 async function takeWheel(as: keyof typeof PEOPLE) {
   const asked = await call(
     `/api/computers/${encodeURIComponent(BOT)}/control/request`,
@@ -722,7 +722,7 @@ describe("the bar", () => {
   });
 });
 
-describe("through OpenBot's own HTTP server", () => {
+describe("through XiongBao's own HTTP server", () => {
   /*
    * `Bun.serve` closes a request that has sent nothing for 10 s, its default idle timeout, while the handler is still at
    * work, and the person gets an empty reply instead of the answer or a sentence. A Bot's browser routes wait on its
@@ -1022,7 +1022,7 @@ describe("recording in a Bot's browser", () => {
     const [left] = await held();
     expect(left?.userId).toBe(ben.id);
 
-    // The computer hands the wheel back on its own (a restart, say) and the recording ends with it. OpenBot is not told.
+    // The computer hands the wheel back on its own (a restart, say) and the recording ends with it. XiongBao is not told.
     wheelBackOnItsOwn(BOT);
     expect(await held()).toHaveLength(1);
 
@@ -1038,7 +1038,7 @@ describe("recording in a Bot's browser", () => {
     });
   });
 
-  test("handing the wheel back through OpenBot revokes the recording's connection at once", async () => {
+  test("handing the wheel back through XiongBao revokes the recording's connection at once", async () => {
     const requestId = await takeWheel("ada");
     expect((await record("ada", "Approve the invoice")).status).toBe(200);
     expect(await held()).toHaveLength(1);
@@ -1050,7 +1050,7 @@ describe("recording in a Bot's browser", () => {
     });
   });
 
-  test("the Bot's pushed policy carries OpenBot and the gateway only while a recording runs", async () => {
+  test("the Bot's pushed policy carries XiongBao and the gateway only while a recording runs", async () => {
     const widened: EgressPolicy = {
       mode: "allowlist_only",
       rules: [...OWN_POLICY.rules, ...RECORDER_RULES] as EgressPolicy["rules"],
@@ -1067,7 +1067,7 @@ describe("recording in a Bot's browser", () => {
 
     await takeWheel("ada");
     expect((await record("ada", "Book travel")).status).toBe(200);
-    // Pushed before the computer was asked to start: the Recorder asks OpenBot whether its connection stands as it
+    // Pushed before the computer was asked to start: the Recorder asks XiongBao whether its connection stands as it
     // takes it.
     const history = asked.filter((line) => line.endsWith(` ${BOT}`));
     const start = history.lastIndexOf(
@@ -1103,7 +1103,7 @@ describe("recording in a Bot's browser", () => {
     await stateFor("ben");
     expect(lastPushed()).toEqual(OWN_POLICY);
 
-    // And a hand back through OpenBot narrows it before the Bot acts again.
+    // And a hand back through XiongBao narrows it before the Bot acts again.
     const again = await takeWheel("ada");
     expect((await record("ada", "One more")).status).toBe(200);
     expect(lastPushed()).toEqual(widened);
@@ -1152,7 +1152,7 @@ describe("recording in a Bot's browser", () => {
     } finally {
       auditFails = null;
     }
-    // Not ended without its row: it stands until OpenBot next finds it left behind.
+    // Not ended without its row: it stands until XiongBao next finds it left behind.
     expect((await held()).map((each) => each.id)).toEqual([connection?.id]);
     await handBack("ada", requestId);
     expect(await held()).toEqual([]);
@@ -1208,7 +1208,7 @@ describe("recording in a Bot's browser", () => {
       line.includes(botBrowserComputerPaths.recording),
     ).length;
     const refused = await refusingApp.request(
-      `http://openbot.test${browser("/recording")}`,
+      `http://xiongbao.test${browser("/recording")}`,
       {
         method: "POST",
         headers: {
@@ -1226,7 +1226,7 @@ describe("recording in a Bot's browser", () => {
     ).toHaveLength(startsBefore);
 
     const shown = (await (
-      await refusingApp.request(`http://openbot.test${browser()}`, {
+      await refusingApp.request(`http://xiongbao.test${browser()}`, {
         headers: { cookie: "test-session=ada" },
       })
     ).json()) as BotBrowserApiState;

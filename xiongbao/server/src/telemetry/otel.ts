@@ -12,7 +12,7 @@
  * nothing is exported and nothing is loaded. `OPENBOT_OTEL_EXPORT=off` turns it off with an endpoint
  * still configured.
  *
- * Every record carries `openbot.surface`, the counterpart of Grok Bot's `cursor.surface=grok_bot`:
+ * Every record carries `xiongbao.surface`, the counterpart of Grok Bot's `cursor.surface=grok_bot`:
  * `bot` for something a Bot did (computer actions, tool calls, handoffs), `identity` for sign-in and
  * people, `control_plane` for everything an administrator or member configured.
  *
@@ -106,7 +106,7 @@ function flatten(
   const out: Record<string, string | number | boolean> = {};
   for (const [key, value] of Object.entries(payload)) {
     if (value === undefined || value === null) continue;
-    out[`openbot.payload.${key}`] =
+    out[`xiongbao.payload.${key}`] =
       typeof value === "string" ||
       typeof value === "number" ||
       typeof value === "boolean"
@@ -165,7 +165,7 @@ export function createOtelEventExporter(
     }),
     processors: [new BatchLogRecordProcessor({ exporter })],
   });
-  const logger = provider.getLogger("openbot.audit");
+  const logger = provider.getLogger("xiongbao.audit");
 
   return {
     emit(event) {
@@ -179,16 +179,16 @@ export function createOtelEventExporter(
           body: event.eventType,
           eventName: event.eventType,
           attributes: {
-            "openbot.surface": event.surface ?? surfaceOf(event.eventType),
-            "openbot.event_type": event.eventType,
-            "openbot.target_type": event.targetType,
-            ...(event.targetId ? { "openbot.target_id": event.targetId } : {}),
+            "xiongbao.surface": event.surface ?? surfaceOf(event.eventType),
+            "xiongbao.event_type": event.eventType,
+            "xiongbao.target_type": event.targetType,
+            ...(event.targetId ? { "xiongbao.target_id": event.targetId } : {}),
             ...(event.actorUserId
-              ? { "openbot.actor_user_id": event.actorUserId }
+              ? { "xiongbao.actor_user_id": event.actorUserId }
               : {}),
-            "openbot.initiator_kind": event.initiatorKind,
+            "xiongbao.initiator_kind": event.initiatorKind,
             ...(event.initiatorId
-              ? { "openbot.initiator_id": event.initiatorId }
+              ? { "xiongbao.initiator_id": event.initiatorId }
               : {}),
             ...flatten(scrubCommands(event.payload) as Record<string, unknown>),
           },

@@ -124,7 +124,7 @@ async function clean() {
 const recordingBot = `ent-recording-${suite}`;
 const RECORDER_RULE = {
   type: "domain" as const,
-  value: "openbot.acme.test",
+  value: "xiongbao.acme.test",
   ports: "443",
 };
 
@@ -1209,7 +1209,7 @@ describe("action recording", () => {
 });
 
 describe("OpenTelemetry export", () => {
-  test("audit rows reach an OTLP/HTTP collector tagged with openbot.surface", async () => {
+  test("audit rows reach an OTLP/HTTP collector tagged with xiongbao.surface", async () => {
     const received: string[] = [];
     const collector = Bun.serve({
       hostname: "127.0.0.1",
@@ -1240,7 +1240,7 @@ describe("OpenTelemetry export", () => {
     collector.stop(true);
     expect(received.length).toBeGreaterThan(0);
     expect(received[0]).toContain("/v1/logs");
-    expect(received.join("")).toContain("openbot.surface");
+    expect(received.join("")).toContain("xiongbao.surface");
     expect(received.join("")).toContain("computer.action_refused");
   });
 });

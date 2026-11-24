@@ -143,7 +143,7 @@ const call = (
   init: RequestInit & { json?: unknown } = {},
 ) => {
   const { json, headers, ...rest } = init;
-  return app.request(`http://openbot.test${path}`, {
+  return app.request(`http://xiongbao.test${path}`, {
     ...rest,
     headers: {
       ...(json === undefined ? {} : { "content-type": "application/json" }),
@@ -517,7 +517,7 @@ describe("using the bearer", () => {
 
   test("the connections list says which browser is recording now, from its Recorder's own recent report", async () => {
     // End-to-end run: a browser recording right now read "last used 49 seconds ago", since a recording streams to the
-    // gateway and reaches OpenBot only with its activity reports.
+    // gateway and reaches XiongBao only with its activity reports.
     const h = build();
     const made = await connect(h, "5".repeat(32));
     const recordingNow = async () => {
@@ -607,7 +607,7 @@ describe("using the bearer", () => {
       new File([new Uint8Array(8)], "recording.webm", { type: "audio/webm" }),
     );
     const answer = await h.app.request(
-      "http://openbot.test/api/audio/transcriptions",
+      "http://xiongbao.test/api/audio/transcriptions",
       {
         method: "POST",
         headers: { ...bearer(made.token), "x-xiongbao-dictation": "1" },
@@ -619,7 +619,7 @@ describe("using the bearer", () => {
     expect(transcribed).toBe(0);
   });
 
-  test("OpenBot takes no recording from the Recorder, not even with its bearer", async () => {
+  test("XiongBao takes no recording from the Recorder, not even with its bearer", async () => {
     const h = build();
     const made = await connect(h, "6".repeat(32));
     for (const [method, path] of [

@@ -6,9 +6,11 @@
  * `mcp/...`), one written as a regular expression (`composio-gmail/.*`, which looks for a dot and a
  * star), or one naming a tool, a kind of action or a Bot that does not exist here. Saved, each reads
  * as protection and protects nothing. This checks every row against the matcher the gate itself uses
- * ({@link globMatches}) and the tools, effects and Bots this OpenBot has, and says what is wrong with
+ * ({@link globMatches}) and the tools, effects and Bots this XiongBao has, and says what is wrong with
  * each in words a model can act on and an admin can read.
  */
+
+import { englishName } from "../brand";
 import { globMatches } from "./policy";
 import {
   type RuleVocabulary,
@@ -16,7 +18,6 @@ import {
   vocabularyTools,
 } from "./rule-vocabulary";
 import { type ApprovalRuleInput, RULE_BEHAVIOURS } from "./types";
-import { englishName } from "../brand";
 
 export type RuleRowProblem = {
   /** Which row, counted from 1 as the screen counts them. */

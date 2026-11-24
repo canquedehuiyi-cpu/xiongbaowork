@@ -18,13 +18,13 @@ function appWith(calls: { deltaY?: number }[]) {
       calls.push({
         ...(input.deltaY !== undefined ? { deltaY: input.deltaY } : {}),
       });
-      return { action: "scroll", url: "https://openbot.test/" };
+      return { action: "scroll", url: "https://xiongbao.test/" };
     },
     humanInput: async (_botId: string, input: { deltaY?: number }) => {
       calls.push({
         ...(input.deltaY !== undefined ? { deltaY: input.deltaY } : {}),
       });
-      return { action: "human_scroll", url: "https://openbot.test/" };
+      return { action: "human_scroll", url: "https://xiongbao.test/" };
     },
   } as unknown as ComputerGateway;
   const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
@@ -33,7 +33,7 @@ function appWith(calls: { deltaY?: number }[]) {
   ) => {
     context.set("actor", {
       id: "user-1",
-      email: "user@openbot.test",
+      email: "user@xiongbao.test",
       role: "admin",
     });
     await next();
@@ -58,7 +58,7 @@ async function postScroll(
   path: string,
   body: string,
 ) {
-  return app.request(`http://openbot.test/bot-1${path}`, {
+  return app.request(`http://xiongbao.test/bot-1${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body,

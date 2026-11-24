@@ -138,7 +138,7 @@ export function createComputerRoutes(
   adminScope?: Pick<AdminScope, "adminCapability" | "asAdminPlatform">,
   /**
    * The bar above a Bot's screen and Record, for the person holding its wheel (browser/bot-browser.ts), at
-   * `/:botId/browser`. Absent where this OpenBot has no Recorder: nothing about it is mounted.
+   * `/:botId/browser`. Absent where this XiongBao has no Recorder: nothing about it is mounted.
    */
   botBrowser?: BotBrowser,
   /**
@@ -211,7 +211,7 @@ export function createComputerRoutes(
     }
 
     /*
-     * A person's own OpenBot browser, named for the person (browser/person.ts), answers here only what its live screen
+     * A person's own XiongBao browser, named for the person (browser/person.ts), answers here only what its live screen
      * reads, and only to that person: who holds the wheel, whether it is up, and a picture of the page. Asked here and
      * not of `canUseBot`, which a deployment with no profile store answers yes to for everybody. Nothing that acts as a
      * Bot (a click through the boundary, a command, a file) reaches a person's browser: no Bot uses one yet.

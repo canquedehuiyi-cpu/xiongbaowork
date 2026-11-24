@@ -92,7 +92,7 @@ test("a return whose card write throws lets the claim go, stops the started turn
   const logged = spyOn(console, "error").mockImplementation(() => {});
   const response = await runAsTenant(tenantId, () =>
     routes.request(
-      new Request(`http://openbot.test/${taskId}/return`, {
+      new Request(`http://xiongbao.test/${taskId}/return`, {
         method: "POST",
         body: JSON.stringify({ reason: "补 C 家" }),
         headers: { "content-type": "application/json" },

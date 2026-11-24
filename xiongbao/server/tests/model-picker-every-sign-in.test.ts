@@ -2,11 +2,11 @@
  * THE CONVERSATION'S MODEL PICKER, FOR EVERY WAY THE DESKTOP SIGNS IN.
  *
  * The picker shows when the catalogue says `choosable`: more than one model a run may use. Each test
- * here starts from the environment OpenBot Desktop writes for one row of its model screen
+ * here starts from the environment XiongBao Desktop writes for one row of its model screen
  * (`desktop/src-tauri/src/env.rs`), turns it into the deployment's model the way the server does at
  * boot (`runtimeModelForEnvironment`, `planModelForEnvironment`), and reads the catalogue against
  * providers that answer as the real ones do: their captured listings for the right credential, and
- * a 401 for anything else. A Google or xAI sign-in goes through OpenBot's real sign-in proxy.
+ * a 401 for anything else. A Google or xAI sign-in goes through XiongBao's real sign-in proxy.
  */
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -170,7 +170,7 @@ afterEach(async () => {
   for (const dispose of cleanup.splice(0)) await dispose();
 });
 
-/** OpenBot's sign-in proxy, as the server mounts it, over a signed-in record on disk. */
+/** XiongBao's sign-in proxy, as the server mounts it, over a signed-in record on disk. */
 async function signInProxy(
   provider: "google" | "xai",
   upstream: (
@@ -178,7 +178,7 @@ async function signInProxy(
     init?: RequestInit,
   ) => Promise<Response>,
 ) {
-  const root = await mkdtemp(join(tmpdir(), "openbot-picker-sign-in-"));
+  const root = await mkdtemp(join(tmpdir(), "xiongbao-picker-sign-in-"));
   cleanup.push(() => rm(root, { recursive: true, force: true }));
   const file = join(root, "model-oauth.json");
   const record: ModelOAuthRecord = {
@@ -267,7 +267,7 @@ describe("every sign-in the Desktop offers has a model to pick", () => {
 
   test("a ChatGPT plan: what the plan's harness lists", async () => {
     const { read, asked } = await catalogueFor({
-      CHATGPT_AUTH_FILE: "/run/openbot/chatgpt-auth.json",
+      CHATGPT_AUTH_FILE: "/run/xiongbao/chatgpt-auth.json",
       PICKED_HARNESS_IMAGE:
         "ghcr.io/copilotkit/openbot-agent-langgraph-agui:1.0.0",
       PICKED_HARNESS_URL: HARNESS,
@@ -346,7 +346,7 @@ describe("every sign-in the Desktop offers has a model to pick", () => {
     });
   });
 
-  test("a Google sign-in: Google's own listing, through OpenBot's sign-in proxy", async () => {
+  test("a Google sign-in: Google's own listing, through XiongBao's sign-in proxy", async () => {
     const { read } = await catalogueFor(
       {
         OPENBOT_MODEL_OAUTH_FILE: "/ignored/by/this/test",

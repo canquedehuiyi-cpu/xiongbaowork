@@ -71,7 +71,7 @@ const call = (
   body?: unknown,
 ) =>
   appFor(actorId).request(
-    new Request(`http://openbot.test/${path}`, {
+    new Request(`http://xiongbao.test/${path}`, {
       method,
       ...(body === undefined
         ? {}

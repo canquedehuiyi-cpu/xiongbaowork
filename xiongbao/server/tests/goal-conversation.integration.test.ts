@@ -1,4 +1,4 @@
-import { describe, expect, test as bunTest } from "bun:test";
+import { test as bunTest, describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import { createAuditStore } from "../src/audit";
@@ -49,7 +49,7 @@ const CONVERSATIONS = [
   {
     id: `goal-conversation-releases-${suite}`,
     threadId: `goal-conversation-releases-thread-${suite}`,
-    title: "CopilotKit OpenBot release tracking",
+    title: "CopilotKit XiongBao release tracking",
   },
   {
     id: `goal-conversation-other-${suite}`,
@@ -247,7 +247,7 @@ describe("a goal asked for in a conversation", () => {
     const made = await call(
       "create_goal",
       {
-        title: "Watch OpenBot releases",
+        title: "Watch XiongBao releases",
         instruction:
           "Check github.com/CopilotKit/OpenBot/releases and report any tag newer than the last one.",
         successCriteria: "The person hears about each new release.",
@@ -271,7 +271,7 @@ describe("a goal asked for in a conversation", () => {
       agentId: BOT,
       channelId: ASKED_IN.id,
       threadId: ASKED_IN.threadId,
-      title: "Watch OpenBot releases",
+      title: "Watch XiongBao releases",
       status: "active",
       subscriptions: [],
     });
@@ -283,11 +283,11 @@ describe("a goal asked for in a conversation", () => {
     // A field left blank in a change is left as it was.
     const changed = await call("update_goal", {
       id: goal?.id,
-      patch: { title: "Watch every OpenBot release", instruction: "" },
+      patch: { title: "Watch every XiongBao release", instruction: "" },
     });
     expect(changed.isError).toBe(false);
     expect(await goalStore.get(OWNER, goal?.id ?? "")).toMatchObject({
-      title: "Watch every OpenBot release",
+      title: "Watch every XiongBao release",
       instruction: goal?.instruction,
     });
 
@@ -329,7 +329,7 @@ describe("a goal asked for in a conversation", () => {
 
   test("with no conversation to go on, the Bot is told the ones to ask about", async () => {
     const made = await call("create_goal", {
-      title: "Watch OpenBot releases",
+      title: "Watch XiongBao releases",
       instruction: "Check the releases page.",
       successCriteria: "Each new release is reported.",
     });

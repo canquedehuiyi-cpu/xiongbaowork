@@ -12,7 +12,7 @@ import { markUntrusted } from "../src/untrusted-content";
 /** Where Composio stages a tool's file; the one host a tool's image link may be on. */
 const STORAGE = "https://storage.composio.dev/projects/pr_test/requests/gmail";
 
-/** Gmail's attachment, as Composio answers it and OpenBot hands it to the model. */
+/** Gmail's attachment, as Composio answers it and XiongBao hands it to the model. */
 function attachmentResult(url: string, mimetype = "image/jpeg"): string {
   return markUntrusted(
     JSON.stringify(

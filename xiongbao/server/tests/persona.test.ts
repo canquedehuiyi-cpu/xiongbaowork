@@ -226,7 +226,7 @@ test("the persona routes refuse an empty persona and answer with the saved one",
 
   const empty = await runAsTenant(tenantA, () =>
     routes.request(
-      new Request("http://openbot.test/", {
+      new Request("http://xiongbao.test/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -240,7 +240,7 @@ test("the persona routes refuse an empty persona and answer with the saved one",
 
   const created = await runAsTenant(tenantA, () =>
     routes.request(
-      new Request("http://openbot.test/", {
+      new Request("http://xiongbao.test/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ name: "Via route", persona }),
@@ -252,7 +252,7 @@ test("the persona routes refuse an empty persona and answer with the saved one",
   expect(body.template.name).toBe("Via route");
 
   const listed = await runAsTenant(tenantA, () =>
-    routes.request(new Request("http://openbot.test/")),
+    routes.request(new Request("http://xiongbao.test/")),
   );
   const names = (
     (await listed.json()) as {

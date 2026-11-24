@@ -204,7 +204,7 @@ describe("a deployment whose Bots run on Anthropic", () => {
 
 describe("a deployment signed in to a model plan instead of a key", () => {
   /*
-   * OpenBot Desktop signed in to a Claude plan writes CLAUDE_CODE_OAUTH_TOKEN and no model key, and a
+   * XiongBao Desktop signed in to a Claude plan writes CLAUDE_CODE_OAUTH_TOKEN and no model key, and a
    * ChatGPT plan writes CHATGPT_AUTH_FILE and none either. The built-in Bots answer through the
    * plan's own harness, but the titler only ever asked a provider with a key, found none, and named
    * nothing: every conversation in the sidebar kept the start of its first message as its name.
@@ -217,7 +217,7 @@ describe("a deployment signed in to a model plan instead of a key", () => {
         hostname: "127.0.0.1",
         port: 0,
         async fetch(request) {
-          // The harness OpenBot installed for the plan, on its model-only route, with its token.
+          // The harness XiongBao installed for the plan, on its model-only route, with its token.
           expect(new URL(request.url).pathname).toBe(
             provider === "claude" ? "/model" : "/",
           );

@@ -206,7 +206,7 @@ function boardAs(tenant: string) {
   } as unknown as TaskProjector);
   return async () => {
     const response = await runAsTenant(tenant, () =>
-      routes.request(new Request("http://openbot.test/")),
+      routes.request(new Request("http://xiongbao.test/")),
     );
     expect(response.status).toBe(200);
     return (

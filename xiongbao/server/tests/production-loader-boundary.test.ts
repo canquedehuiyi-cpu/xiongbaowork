@@ -1,6 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { createServer, type AddressInfo } from "node:net";
+import { type AddressInfo, createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -43,14 +43,16 @@ async function runProductionEntry(withRoleWriter: boolean) {
   const port = (boundary.address() as AddressInfo).port;
   let proofDir: string | undefined;
   try {
-    proofDir = await mkdtemp(`${tmpdir()}${sep}openbot-loader-boundary-`);
+    proofDir = await mkdtemp(`${tmpdir()}${sep}xiongbao-loader-boundary-`);
     const envPath = `${proofDir}${sep}synthetic.env`;
     await writeFile(
       envPath,
       [
-        `DATABASE_URL=postgres://application_fixture:synthetic@127.0.0.1:${port}/openbot`,
+        `DATABASE_URL=postgres://application_fixture:synthetic@127.0.0.1:${port}/xiongbao`,
         ...(withRoleWriter
-          ? [`ROLE_WRITER_DATABASE_URL=postgres://writer_fixture:synthetic@127.0.0.1:${port}/openbot`]
+          ? [
+              `ROLE_WRITER_DATABASE_URL=postgres://writer_fixture:synthetic@127.0.0.1:${port}/xiongbao`,
+            ]
           : []),
         "KEY_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
         "OPENBOT_SINGLE_USER=true",
@@ -70,7 +72,11 @@ async function runProductionEntry(withRoleWriter: boolean) {
       ].join("\n"),
     );
     const proc = Bun.spawn({
-      cmd: [process.execPath, envFileArgument(envPath), "src/production-entry.ts"],
+      cmd: [
+        process.execPath,
+        envFileArgument(envPath),
+        "src/production-entry.ts",
+      ],
       cwd: serverRoot,
       env: {
         PATH: process.env.PATH ?? "",

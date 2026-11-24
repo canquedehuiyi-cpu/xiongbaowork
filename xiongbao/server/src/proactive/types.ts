@@ -3,7 +3,7 @@ import type { ProactiveSkipReason } from "./contracts";
 
 export type ProactiveRunStatus = "idle" | "running" | "succeeded" | "error";
 /**
- * `superseded` is OpenBot's, never the person's: a later check-in cleared this one as no longer
+ * `superseded` is XiongBao's, never the person's: a later check-in cleared this one as no longer
  * needed (`clear_next_step`). Kept apart from `dismissed` (Hide) so that list stays a record of the
  * person's own decisions, which is what later check-ins learn from.
  */

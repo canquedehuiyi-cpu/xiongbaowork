@@ -29,7 +29,7 @@ export type ProductOutcome =
   | "unknown";
 export type ProductRunContext = {
   schema_version: 1;
-  app_id: "openbot";
+  app_id: "xiongbao";
   deployment_id: string;
   user_id: string;
   root_task_id: string | null;
@@ -43,13 +43,13 @@ export type ProductRunContext = {
   purpose: "ordinary" | "setup" | "unknown";
 };
 /**
- * What Intelligence is told about a run: the shared contract, version 1 ("OpenBot telemetry:
+ * What Intelligence is told about a run: the shared contract, version 1 ("XiongBao telemetry:
  * Intelligence build" in Notion). Only these fields, and only pseudonyms: no name, prompt, URL or
  * raw identifier of a person or a task.
  */
 export type AppAnalyticsContext = {
   app_context_version: 1;
-  app_id: "openbot";
+  app_id: "xiongbao";
   deployment_id: string;
   app_user_hash: string;
   trigger: ProductTrigger;
@@ -358,10 +358,10 @@ export async function createProductTelemetry(options: {
     const send = Promise.resolve()
       .then(() =>
         (options.send ?? lambdaClient.send)({
-          event: `oss.runtime.openbot.${name}`,
+          event: `oss.runtime.xiongbao.${name}`,
           properties: {
             schema_version: 1,
-            app_id: "openbot",
+            app_id: "xiongbao",
             deployment_id: deploymentId,
             environment,
             deployment_environment: environment,
@@ -392,7 +392,7 @@ export async function createProductTelemetry(options: {
     const userId = user(input.actorUserId);
     return {
       schema_version: 1,
-      app_id: "openbot",
+      app_id: "xiongbao",
       deployment_id: deploymentId,
       user_id: userId,
       root_task_id:
@@ -428,7 +428,7 @@ export async function createProductTelemetry(options: {
     return (input, next) =>
       defer(async () => {
         const parsed = contextSchema.safeParse(
-          input.forwardedProps?.openbotTelemetry,
+          input.forwardedProps?.xiongbaoTelemetry,
         );
         return parsed.success &&
           parsed.data.user_id === user(actorUserId) &&
@@ -512,7 +512,7 @@ export async function createProductTelemetry(options: {
             const observed = { outcome, failure };
             const duration = Math.max(0, now().getTime() - started.getTime());
             /*
-             * Decided a tick later, for a run OpenBot stopped. A stopped run's stream can end before
+             * Decided a tick later, for a run XiongBao stopped. A stopped run's stream can end before
              * the stop is known here: the runner aborts the agent, which can end its stream on the
              * spot, and only then detaches it, which is what says it was a stop. A run that finished
              * before it was stopped keeps its finish; a lost lock is never marked, and stays as seen.
@@ -595,7 +595,7 @@ export async function createProductTelemetry(options: {
   /**
    * The root task and surface of the run whose forwardedProps these are, when this deployment stated
    * them there for this same person: what a subagent or a resumed turn carries on. Read from
-   * `openbotTelemetry`, which stays on the run's input wherever the run goes; the analytics key is
+   * `xiongbaoTelemetry`, which stays on the run's input wherever the run goes; the analytics key is
    * taken off before the agent sees it.
    */
   function lineageOf(
@@ -603,7 +603,7 @@ export async function createProductTelemetry(options: {
     forwardedProps: unknown,
   ): { rootTaskId?: string; surface?: ProductSurface } {
     if (!enabled || !isRecord(forwardedProps)) return {};
-    const parsed = contextSchema.safeParse(forwardedProps.openbotTelemetry);
+    const parsed = contextSchema.safeParse(forwardedProps.xiongbaoTelemetry);
     if (
       !parsed.success ||
       parsed.data.user_id !== user(actorUserId) ||
@@ -625,13 +625,13 @@ export async function createProductTelemetry(options: {
     recordAudit,
     enabled: () => enabled,
     /*
-     * What CopilotKit's own runtime events carry for OpenBot. The app always, so OpenBot's traffic
+     * What the runtime's own usage events carry for XiongBao. The app always, so XiongBao's traffic
      * is separable; this deployment's ID only while product telemetry is on.
      */
-    deploymentProperties: (): { app_id: "openbot"; deployment_id?: string } =>
+    deploymentProperties: (): { app_id: "xiongbao"; deployment_id?: string } =>
       enabled
-        ? { app_id: "openbot", deployment_id: deploymentId }
-        : { app_id: "openbot" },
+        ? { app_id: "xiongbao", deployment_id: deploymentId }
+        : { app_id: "xiongbao" },
     flush: async () => {
       await Promise.allSettled([...pending]);
     },
@@ -688,7 +688,7 @@ export function appAnalyticsContext(
 }
 /**
  * A run's forwardedProps carrying this deployment's own context, and nothing a client sent under
- * the same two keys. `openbotTelemetry` is read back by the product middleware; the analytics key
+ * the same two keys. `xiongbaoTelemetry` is read back by the product middleware; the analytics key
  * is for the thread lock. With telemetry off there is no context, and neither key is present.
  */
 export function productRunForwardedProps(
@@ -697,13 +697,13 @@ export function productRunForwardedProps(
 ): Record<string, unknown> {
   const own = Object.fromEntries(
     Object.entries(isRecord(forwardedProps) ? forwardedProps : {}).filter(
-      ([key]) => key !== "openbotTelemetry" && key !== ANALYTICS_CONTEXT_KEY,
+      ([key]) => key !== "xiongbaoTelemetry" && key !== ANALYTICS_CONTEXT_KEY,
     ),
   );
   const analytics = appAnalyticsContext(context);
   return {
     ...own,
-    ...(context ? { openbotTelemetry: context } : {}),
+    ...(context ? { xiongbaoTelemetry: context } : {}),
     ...(analytics ? { [ANALYTICS_CONTEXT_KEY]: analytics } : {}),
   };
 }
@@ -718,7 +718,7 @@ export function triggerForInitiator(
 }
 const contextSchema = z.strictObject({
   schema_version: z.literal(1),
-  app_id: z.literal("openbot"),
+  app_id: z.literal("xiongbao"),
   deployment_id: z.string(),
   user_id: z.string(),
   root_task_id: z.string().nullable(),

@@ -2,7 +2,7 @@ import type { ListShape } from "./result-fit";
 
 /**
  * Composio actions whose call, as a model writes it, brings back more than a model can read, and
- * how OpenBot asks for and hands back each one instead.
+ * how XiongBao asks for and hands back each one instead.
  *
  * WHAT THIS IS FOR. Composio's `beforeExecute` and `afterExecute` modifiers exist for this: an
  * action's own defaults are the vendor's, and some of them assume a caller who wants everything.
@@ -132,7 +132,7 @@ export const BODY_LEFT_OUT =
   "正文未能解码，已省略：Composio 没有给出这封邮件解码后的正文，原始 MIME 也已去掉，这里只有摘要（snippet）和邮件头。不要据此推断正文内容。";
 
 /**
- * 按 id 或整串读一封邮件时的样子：{@link leanMessage} 之后，正文缺失就加一句 `openbot_note` 说明。
+ * 按 id 或整串读一封邮件时的样子：{@link leanMessage} 之后，正文缺失就加一句 `xiongbao_note` 说明。
  * 列表不加，因为列表本来就不要正文。
  */
 function readMessage(message: unknown): unknown {
@@ -140,7 +140,7 @@ function readMessage(message: unknown): unknown {
   if (!lean || typeof lean !== "object" || Array.isArray(lean)) return lean;
   const record = lean as Record<string, unknown>;
   return record.messageText === undefined
-    ? { openbot_note: BODY_LEFT_OUT, ...record }
+    ? { xiongbao_note: BODY_LEFT_OUT, ...record }
     : record;
 }
 
@@ -156,7 +156,7 @@ const SHAPES: Record<string, ActionShape> = {
     answer: (data) =>
       Array.isArray(data.messages)
         ? {
-            openbot_note: gmailListingNote(data),
+            xiongbao_note: gmailListingNote(data),
             ...data,
             messages: data.messages.map(leanMessage),
           }
@@ -164,7 +164,7 @@ const SHAPES: Record<string, ActionShape> = {
     list: {
       key: "messages",
       // The note names the token too, so it goes with it; the cut's own note says how to go on.
-      dropWhenCut: ["nextPageToken", "openbot_note"],
+      dropWhenCut: ["nextPageToken", "xiongbao_note"],
       rest: (shown) =>
         `call GMAIL_FETCH_EMAILS again with the same arguments and max_results set to ${shown}, then follow nextPageToken until it comes back empty`,
     },
@@ -203,7 +203,7 @@ const SHAPES: Record<string, ActionShape> = {
   },
 };
 
-/** How OpenBot asks for and reads one action, or null for an action it passes through as it is. */
+/** How XiongBao asks for and reads one action, or null for an action it passes through as it is. */
 export function shapeOf(toolName: string): ActionShape | null {
   return Object.hasOwn(SHAPES, toolName)
     ? (SHAPES[toolName] as ActionShape)

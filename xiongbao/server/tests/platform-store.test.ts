@@ -18,12 +18,12 @@ import {
   subscriptions,
   users,
 } from "../src/db/schema";
+import { createPlatformRoutes } from "../src/platform/routes";
 import {
   listTenants,
   restoreTenant,
   suspendTenant,
 } from "../src/platform/store";
-import { createPlatformRoutes } from "../src/platform/routes";
 import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
@@ -285,7 +285,7 @@ describe("per-tenant token usage and audit (J5)", () => {
       `/api/platform/usage?period=${period}`,
       `/api/platform/tenants/${tenantB.id}/audit`,
     ]) {
-      const response = await app.request(`http://openbot.local${path}`);
+      const response = await app.request(`http://xiongbao.local${path}`);
       expect(response.status).toBe(403);
     }
   });
@@ -295,7 +295,7 @@ describe("per-tenant token usage and audit (J5)", () => {
     roles.set(admin.id, "user");
     try {
       const response = await platformApp(admin).request(
-        `http://openbot.local/api/platform/usage?period=${period}`,
+        `http://xiongbao.local/api/platform/usage?period=${period}`,
       );
       expect(response.status).toBe(403);
     } finally {
@@ -322,7 +322,7 @@ describe("per-tenant token usage and audit (J5)", () => {
     let offset: number | null = 0;
     for (let page = 0; offset !== null && page < 200; page += 1) {
       const response = await app.request(
-        `http://openbot.local/api/platform/usage?period=${period}&limit=100&offset=${offset}`,
+        `http://xiongbao.local/api/platform/usage?period=${period}&limit=100&offset=${offset}`,
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {
@@ -372,7 +372,7 @@ describe("per-tenant token usage and audit (J5)", () => {
     const app = platformApp(admin);
     const first = (await (
       await app.request(
-        `http://openbot.local/api/platform/usage?period=${period}&limit=1`,
+        `http://xiongbao.local/api/platform/usage?period=${period}&limit=1`,
       )
     ).json()) as { tenants: unknown[]; nextOffset: number | null };
     expect(first.tenants).toHaveLength(1);
@@ -384,7 +384,7 @@ describe("per-tenant token usage and audit (J5)", () => {
       "limit=abc",
     ]) {
       const response = await app.request(
-        `http://openbot.local/api/platform/usage?${query}`,
+        `http://xiongbao.local/api/platform/usage?${query}`,
       );
       expect(response.status).toBe(400);
     }
@@ -394,7 +394,7 @@ describe("per-tenant token usage and audit (J5)", () => {
     const app = platformApp(admin);
     for (const tenant of [tenantA, tenantB]) {
       const response = await app.request(
-        `http://openbot.local/api/platform/tenants/${tenant.id}/audit?targetType=platform_j5_test`,
+        `http://xiongbao.local/api/platform/tenants/${tenant.id}/audit?targetType=platform_j5_test`,
       );
       expect(response.status).toBe(200);
       const body = (await response.json()) as {

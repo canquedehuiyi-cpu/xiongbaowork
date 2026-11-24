@@ -33,7 +33,7 @@ export const APPROVAL_DECISIONS = [
 /** 本人在哪里决定的：`web` / `wechat` / `slack` / `teams`（`shared/approval-via.ts`，审批表 `decided_via`）。 */
 export type { ApprovalVia };
 /**
- * The kinds of action OpenBot recognises by name and asks about whatever the person's own switch
+ * The kinds of action XiongBao recognises by name and asks about whatever the person's own switch
  * says (`safetyRequirement` in ./policy). An admin can close each kind further
  * (`ApprovalTeamSettings.actionKinds`).
  *
@@ -168,7 +168,7 @@ export type ApprovalPolicyOutcome = {
     | "acp_rule";
   reason: string;
   ruleId?: string;
-  /** The kind of action OpenBot recognised this as, where it is one (see `ActionKind`). */
+  /** The kind of action XiongBao recognised this as, where it is one (see `ActionKind`). */
   kind?: ActionKind;
   /**
    * The admin closed this kind to standing answers: it asks every time, so the card offers Allow

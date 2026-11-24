@@ -463,7 +463,7 @@ describe("a routine asked for by a Bot running its own loop", () => {
     parameters[14] = pluginStore;
 
     const response = await createApp(...parameters).request(
-      "http://openbot.local/api/agent-tools/call",
+      "http://xiongbao.local/api/agent-tools/call",
       {
         method: "POST",
         headers: {

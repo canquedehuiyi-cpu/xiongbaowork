@@ -503,7 +503,7 @@ function EnterpriseSections({
       </PageSection>
 
       <PageSection
-        description="设置 OTEL_EXPORTER_OTLP_ENDPOINT 后，审计事件和员工动作会推送到你的 OpenTelemetry 收集器或 SIEM，并带上 openbot.surface 标签。"
+        description="设置 OTEL_EXPORTER_OTLP_ENDPOINT 后，审计事件和员工动作会推送到你的 OpenTelemetry 收集器或 SIEM，并带上 xiongbao.surface 标签。"
         title="记录与导出"
       >
         <PageRows>
