@@ -597,7 +597,8 @@ docker image inspect "$OPENBOT_IMAGE" --format '{{json .RepoDigests}}'
    | secret | `XB_JDCLOUD_ACCESS_KEY_ID` | 子账号 AccessKey ID |
    | secret | `XB_JDCLOUD_SECRET_ACCESS_KEY` | 子账号 AccessKey Secret |
 
-   此后每次发布自动同步。京东云的登录令牌只有几小时有效，所以仓库里不存固定密码，发布时用 AccessKey 换两小时的临时令牌。
+   此后每次发布自动同步。京东云的登录令牌只有几小时有效，所以仓库里不存固定密码，发布时用 AccessKey 换一小时的临时令牌（用完不吊销，到期自动失效）。
+   `release` Environment 的部署规则要放行 `main`（补同步从 `main` 运行），并建议设必需审批人。配好后先用下一步的补同步对一个已发布版本（如 `v0.2.15`）实跑一次，再打下一个发布标签。
 3. 补同步已发布的旧版本：在 GitHub 的 Actions 里从 `main` 运行「补同步镜像到自有仓库」，填版本标签（如 `v0.2.15`）。步骤摘要里写着目标引用和平台清单 digest。
 4. 服务器拉取。JCR 拉取也要先登录：在京东云控制台该注册表页面点「获取临时令牌」，复制它给出的 `docker login` 命令在服务器上执行（令牌 12 小时有效，足够一次部署）；然后按 digest 拉取，digest 用步骤摘要里的平台清单 digest：
 

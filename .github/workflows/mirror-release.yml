@@ -57,19 +57,26 @@ jobs:
             echo "::error::tag must look like v0.2.15 or v0.2.15-rc.1: '$INPUT_TAG'"
             exit 1
           fi
-          asset="$(gh api "repos/$GH_REPO/releases/tags/$INPUT_TAG" \
-            --jq '[.assets[] | select(.name == "container-images.json") | .id] | first // empty')"
+          release="$(gh api "repos/$GH_REPO/releases/tags/$INPUT_TAG")"
+          asset="$(jq -r '[.assets[] | select(.name == "container-images.json")] | (first // empty) | "\(.id) \(.uploader.login)"' <<< "$release")"
           if [ -z "$asset" ]; then
             echo "::error::Release $INPUT_TAG has no container-images.json."
             exit 1
           fi
-          gh api -H "Accept: application/octet-stream" "repos/$GH_REPO/releases/assets/$asset" \
+          read -r asset_id uploader <<< "$asset"
+          # The record is only believed when the workflow itself uploaded it.
+          if [ "$uploader" != "github-actions[bot]" ]; then
+            echo "::error::container-images.json of $INPUT_TAG was uploaded by '$uploader', not by the release workflow."
+            exit 1
+          fi
+          gh api -H "Accept: application/octet-stream" "repos/$GH_REPO/releases/assets/$asset_id" \
             > "$RUNNER_TEMP/container-images.json"
           # images.openbot is the GHCR image in every release, whether or not a registry was set then.
           repository="$(jq -er '.images.openbot.repository' "$RUNNER_TEMP/container-images.json")"
           digest="$(jq -er '.images.openbot.digest' "$RUNNER_TEMP/container-images.json")"
-          if [[ ! "$repository" =~ ^ghcr\.io/[a-z0-9._/-]+$ ]]; then
-            echo "::error::images.openbot.repository is not a GHCR repository: '$repository'"
+          # Only this repository's own image: the same name release.yml's image job pushes to.
+          if [ "$repository" != "ghcr.io/${GH_REPO,,}" ]; then
+            echo "::error::images.openbot.repository is '$repository', not ghcr.io/${GH_REPO,,}."
             exit 1
           fi
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
@@ -78,7 +85,7 @@ jobs:
             printf 'digest=%s\n' "$digest"
             printf 'tag=%s\n' "$INPUT_TAG"
           } >> "$GITHUB_OUTPUT"
-      # The next two steps are the sign-in and copy steps of release.yml's mirror job, word for word.
+      # The sign-in step, and the copy step after the check below, are those of release.yml's mirror job, word for word.
       - id: login
         name: Sign in to GHCR and our registry
         env:
@@ -99,11 +106,11 @@ jobs:
           # registry tokens last at most 24 hours, so no fixed password exists to store).
           fixed=0
           for name in XB_REGISTRY_USERNAME XB_REGISTRY_PASSWORD; do
-            if [ -n "${!name}" ]; then fixed=$((fixed + 1)); fi
+            if [ -n "${!name:-}" ]; then fixed=$((fixed + 1)); fi
           done
           jdcloud=0
           for name in XB_JDCLOUD_ACCESS_KEY_ID XB_JDCLOUD_SECRET_ACCESS_KEY XB_JDCLOUD_REGION XB_JDCLOUD_REGISTRY_NAME; do
-            if [ -n "${!name}" ]; then jdcloud=$((jdcloud + 1)); fi
+            if [ -n "${!name:-}" ]; then jdcloud=$((jdcloud + 1)); fi
           done
           if [ "$fixed" -gt 0 ] && [ "$jdcloud" -gt 0 ]; then
             echo "::error::Both XB_REGISTRY_USERNAME/XB_REGISTRY_PASSWORD and the XB_JDCLOUD_* settings are set; configure only one."
@@ -111,14 +118,14 @@ jobs:
           fi
           if [ "$jdcloud" -gt 0 ]; then
             for name in XB_IMAGE_REPOSITORY XB_JDCLOUD_ACCESS_KEY_ID XB_JDCLOUD_SECRET_ACCESS_KEY XB_JDCLOUD_REGION XB_JDCLOUD_REGISTRY_NAME; do
-              if [ -z "${!name}" ]; then
+              if [ -z "${!name:-}" ]; then
                 echo "::error::XB_REGISTRY is set with the XB_JDCLOUD_* settings but $name is not."
                 exit 1
               fi
             done
           else
             for name in XB_IMAGE_REPOSITORY XB_REGISTRY_USERNAME XB_REGISTRY_PASSWORD; do
-              if [ -z "${!name}" ]; then
+              if [ -z "${!name:-}" ]; then
                 echo "::error::XB_REGISTRY is set but $name is not."
                 exit 1
               fi
@@ -142,33 +149,51 @@ jobs:
               "ghcr.io": {auth: ("\(env.GHCR_USERNAME):\(env.GHCR_TOKEN)" | @base64)}
             }}' > "$config/config.json"
           else
-            # A two-hour token from the JD Cloud API. Its user and password reach jq through files
+            # A one-hour token from the JD Cloud API. Its user and password reach jq through files
             # that only this step can read and that go away with it, never through an argument, and
-            # they are masked before anything else could print them.
+            # the password is masked before anything else could print it.
             work="$RUNNER_TEMP/own-channel-jcr"
             trap 'rm -rf "$work"' EXIT
             rm -rf "$work"
             mkdir -p "$work"
             chmod 700 "$work"
             cat > "$work/requirements.txt" <<'REQUIREMENTS'
-          jdcloud_sdk==4.4.4 --hash=sha256:066d4e3af1a7532f647d8e4eda0a85f9849ad80bd3a5df96e53ea187c1867e28
+          requests==2.34.2 --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0
+          urllib3==2.8.0 --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3
+          idna==3.20 --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+          certifi==2026.10.23 --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
+          charset-normalizer==3.5.2 --hash=sha256:b6b751274acb69d77b3323d6b7dbaa3c7fdfc1eb829b7eb61d262f32e1af9685
           REQUIREMENTS
-            # The runner's own requests is used (--no-deps), so only the SDK itself is hash-pinned.
-            python3 -m venv --system-site-packages "$work/venv"
-            "$work/venv/bin/pip" install --quiet --disable-pip-version-check --no-deps \
-              --require-hashes -r "$work/requirements.txt"
-            "$work/venv/bin/python" - "$work" <<'PYTHON'
+            # Everything downloaded or unpacked is handled by a shell with an empty environment, so
+            # no secret is within reach of an installer or of a file it unpacks. The SDK (pure
+            # Python, version 4.1.0) is a source archive checked against its hash and used from its
+            # directory: it is never built and its setup.py never runs. What it imports comes as
+            # wheels, which need no build either, each with its hash above.
+            env -i PATH="$PATH" HOME="$work" WORK="$work" bash -euo pipefail <<'INSTALL'
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+            --output "$WORK/sdk.tar.gz" \
+            https://files.pythonhosted.org/packages/09/a0/4612b6fd360b03c1eaeb262919fdeb5fc28d71a7281bbdab288a6b2d1a4a/jdcloud_sdk-4.1.0.tar.gz
+          echo "dcb857a7bcc8bd177f4e400a09b475c83c0b44601e36bc55d6859bf120f8f65a  $WORK/sdk.tar.gz" | sha256sum --check --quiet -
+          mkdir "$WORK/sdk"
+          tar -xzf "$WORK/sdk.tar.gz" -C "$WORK/sdk" --strip-components=1
+          python3 -m venv "$WORK/venv"
+          "$WORK/venv/bin/pip" install --quiet --disable-pip-version-check --no-deps --require-hashes \
+            --only-binary :all: --target "$WORK/deps" -r "$WORK/requirements.txt"
+          INSTALL
+            PYTHONPATH="$work/sdk:$work/deps" "$work/venv/bin/python" - "$work" <<'PYTHON'
           import os
           import shlex
           import sys
 
           from jdcloud_sdk.core.credential import Credential
           from jdcloud_sdk.core.logger import Logger
-          from jdcloud_sdk.services.cr.apis.GetAuthorizationTokenRequest import (
+          from jdcloud_sdk.services.containerregistry.apis.GetAuthorizationTokenRequest import (
               GetAuthorizationTokenParameters,
               GetAuthorizationTokenRequest,
           )
-          from jdcloud_sdk.services.cr.client.CrClient import CrClient
+          from jdcloud_sdk.services.containerregistry.client.ContainerregistryClient import (
+              ContainerregistryClient,
+          )
 
 
           def fail(why):
@@ -201,7 +226,7 @@ jobs:
 
           # The SDK's default logger prints the signed headers and the response body, token included;
           # a level below FATAL prints nothing.
-          client = CrClient(
+          client = ContainerregistryClient(
               Credential(
                   os.environ["XB_JDCLOUD_ACCESS_KEY_ID"],
                   os.environ["XB_JDCLOUD_SECRET_ACCESS_KEY"],
@@ -211,7 +236,7 @@ jobs:
           parameters = GetAuthorizationTokenParameters(
               os.environ["XB_JDCLOUD_REGION"], os.environ["XB_JDCLOUD_REGISTRY_NAME"]
           )
-          parameters.setExpiredAfterHours(2)
+          parameters.setExpiredAfterHours(1)
           try:
               response = client.send(GetAuthorizationTokenRequest(parameters))
           except Exception as error:
@@ -230,6 +255,11 @@ jobs:
               words = shlex.split(command)
           except ValueError:
               fail("The loginCmdLine could not be split into words.")
+          # The command names the registry it is for; a token for another registry would only fail
+          # later, at the copy, with a refused sign-in.
+          hosts = [word.split("://", 1)[-1].rstrip("/") for word in words]
+          if os.environ["XB_REGISTRY"] not in hosts:
+              fail("The loginCmdLine is for another registry than XB_REGISTRY; check XB_JDCLOUD_REGISTRY_NAME and XB_JDCLOUD_REGION.")
           user = option(words, "-u", "--username")
           password = option(words, "-p", "--password")
           if not user or not password or "\n" in user + password:
@@ -241,8 +271,14 @@ jobs:
               with os.fdopen(descriptor, "w") as handle:
                   handle.write(value)
           PYTHON
-            echo "::add-mask::$(< "$work/username")"
-            echo "::add-mask::$(< "$work/password")"
+            # Only the password is secret. The user name is usually a fixed word, and masking it
+            # would blank every later output that happens to contain it, the job's outputs too.
+            # The value is escaped the way workflow commands are.
+            password="$(< "$work/password")"
+            password="${password//'%'/%25}"
+            password="${password//$'\r'/%0D}"
+            password="${password//$'\n'/%0A}"
+            echo "::add-mask::$password"
             jq -n --arg registry "$XB_REGISTRY" \
               --rawfile username "$work/username" --rawfile password "$work/password" '{auths: {
               ($registry): {auth: ("\($username):\($password)" | @base64)},
@@ -250,6 +286,21 @@ jobs:
             }}' > "$config/config.json"
           fi
           printf 'DOCKER_CONFIG=%s\n' "$config" >> "$GITHUB_ENV"
+      # The record is a Release asset that anyone allowed to edit the Release can replace; the
+      # version tag on GHCR was set by the release workflow and cannot be moved. They must agree.
+      - id: verify
+        name: Check the record against the GHCR version tag
+        env:
+          REPOSITORY: ${{ steps.record.outputs.repository }}
+          DIGEST: ${{ steps.record.outputs.digest }}
+          TAG: ${{ steps.record.outputs.tag }}
+        run: |
+          set -euo pipefail
+          got="$(crane digest "$REPOSITORY:$TAG")"
+          if [ "$got" != "$DIGEST" ]; then
+            echo "::error::$REPOSITORY:$TAG is $got on GHCR, but container-images.json says $DIGEST."
+            exit 1
+          fi
       - id: copy
         name: Copy the linux/amd64 manifest to our registry
         env:

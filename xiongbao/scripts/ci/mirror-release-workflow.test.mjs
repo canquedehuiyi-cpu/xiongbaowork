@@ -105,25 +105,34 @@ test("secrets appear only in the sign-in step's environment, and an input never 
   );
 });
 
-test("the sign-in and copy steps are the same text as release.yml's mirror job", () => {
-  for (const id of ["login", "copy", "logout"]) {
+test("the sign-in, copy and logout steps are the same text as release.yml's mirror job", () => {
+  for (const id of ["login", "logout"]) {
     const here = stepOf(mirrorDoc, id);
     const there = stepOf(releaseDoc, id);
     expect([id, here.run]).toEqual([id, there.run]);
-    expect([id, Object.keys(here.env ?? {})]).toEqual([
-      id,
-      Object.keys(there.env ?? {}),
-    ]);
+    // Keys and values: swapping which secret feeds which variable would not go unnoticed.
+    expect([id, here.env ?? {}]).toEqual([id, there.env ?? {}]);
   }
+  const here = stepOf(mirrorDoc, "copy");
+  const there = stepOf(releaseDoc, "copy");
+  expect(here.run).toEqual(there.run);
+  expect(Object.keys(here.env)).toEqual(Object.keys(there.env));
   // The values reaching the copy step come from the release record read just before it.
-  const env = stepOf(mirrorDoc, "copy").env;
-  expect(env.REPOSITORY).toBe(expression("steps.record.outputs.repository"));
-  expect(env.DIGEST).toBe(expression("steps.record.outputs.digest"));
-  expect(env.TAG).toBe(expression("steps.record.outputs.tag"));
+  expect(here.env.REPOSITORY).toBe(
+    expression("steps.record.outputs.repository"),
+  );
+  expect(here.env.DIGEST).toBe(expression("steps.record.outputs.digest"));
+  expect(here.env.TAG).toBe(expression("steps.record.outputs.tag"));
+  expect(here.env.XB_REGISTRY).toBe(there.env.XB_REGISTRY);
+  expect(here.env.XB_IMAGE_REPOSITORY).toBe(there.env.XB_IMAGE_REPOSITORY);
   // And the sign-in step has the same job in release.yml: still gated by XB_REGISTRY there.
   expect(stepOf(releaseDoc, "login").if).toBe(
     expression("vars.XB_REGISTRY != ''"),
   );
+  // The record is checked against GHCR between signing in and copying.
+  const order = job.steps.map((s) => s.id);
+  expect(order.indexOf("login")).toBeLessThan(order.indexOf("verify"));
+  expect(order.indexOf("verify")).toBeLessThan(order.indexOf("copy"));
 });
 
 // ---- running steps ----
@@ -170,10 +179,10 @@ function fakeSdk(root) {
             print(message)
 `,
     "jdcloud_sdk/services/__init__.py": "",
-    "jdcloud_sdk/services/cr/__init__.py": "",
-    "jdcloud_sdk/services/cr/apis/__init__.py": "",
-    "jdcloud_sdk/services/cr/client/__init__.py": "",
-    "jdcloud_sdk/services/cr/apis/GetAuthorizationTokenRequest.py": `class GetAuthorizationTokenRequest(object):
+    "jdcloud_sdk/services/containerregistry/__init__.py": "",
+    "jdcloud_sdk/services/containerregistry/apis/__init__.py": "",
+    "jdcloud_sdk/services/containerregistry/client/__init__.py": "",
+    "jdcloud_sdk/services/containerregistry/apis/GetAuthorizationTokenRequest.py": `class GetAuthorizationTokenRequest(object):
     def __init__(self, parameters):
         self.parameters = parameters
 
@@ -188,7 +197,7 @@ class GetAuthorizationTokenParameters(object):
         self.expiredAfterHours = expiredAfterHours
 `,
     // Like the real client, it logs the response body at INFO level; the response comes from a file.
-    "jdcloud_sdk/services/cr/client/CrClient.py": `import json
+    "jdcloud_sdk/services/containerregistry/client/ContainerregistryClient.py": `import json
 import os
 
 
@@ -206,7 +215,7 @@ class _Response(object):
         self.result = None
 
 
-class CrClient(object):
+class ContainerregistryClient(object):
     def __init__(self, credential, config=None, logger=None):
         self.credential = credential
         self.logger = logger
@@ -252,7 +261,7 @@ const JD = {
 };
 
 /** Runs the sign-in step. `response` is what the fake API answers, as JSON. */
-function login(env, response) {
+function login(env, response, options = {}) {
   const temp = scratch();
   const bin = join(temp, "bin");
   mkdirSync(bin);
@@ -260,6 +269,16 @@ function login(env, response) {
   fakeSdk(sdk);
   const calls = join(temp, "pip-calls");
   writeFileSync(calls, "");
+  // Every command of the install records the environment it ran in.
+  const envs = join(temp, "install-envs");
+  writeFileSync(envs, "");
+  const archive = join(temp, "sdk.tgz");
+  mkdirSync(join(temp, "pkg", "jdcloud_sdk-4.1.0"), { recursive: true });
+  writeFileSync(join(temp, "pkg", "jdcloud_sdk-4.1.0", "README"), "sdk");
+  spawnSync("tar", ["-czf", archive, "-C", join(temp, "pkg"), "."]);
+  const sha = join(temp, "sha-input");
+  const downloads = join(temp, "downloads");
+  writeFileSync(downloads, "");
   const jdCalls = join(temp, "jd-calls");
   writeFileSync(jdCalls, "");
   const responseFile = join(temp, "response.json");
@@ -272,8 +291,8 @@ function login(env, response) {
 if [ "$1" = -m ] && [ "$2" = venv ]; then
   dir="\${@: -1}"
   mkdir -p "$dir/bin"
-  printf '#!/usr/bin/env bash\\nprintf "%%s\\\\n" "$*" >> ${JSON.stringify(calls)}\\n' > "$dir/bin/pip"
-  printf '#!/usr/bin/env bash\\nPYTHONPATH=${JSON.stringify(sdk)} exec ${JSON.stringify(PYTHON)} "$@"\\n' > "$dir/bin/python"
+  printf '#!/usr/bin/env bash\\nprintf "%%s\\\\n" "$*" >> ${JSON.stringify(calls)}\\nenv >> ${JSON.stringify(envs)}\\n' > "$dir/bin/pip"
+  printf '#!/usr/bin/env bash\\nPYTHONPATH=${JSON.stringify(sdk)}:\\$PYTHONPATH exec ${JSON.stringify(PYTHON)} "$@"\\n' > "$dir/bin/python"
   chmod +x "$dir/bin/pip" "$dir/bin/python"
   exit 0
 fi
@@ -281,35 +300,64 @@ exec ${JSON.stringify(PYTHON)} "$@"
 `,
   );
   chmodSync(join(bin, "python3"), 0o755);
+  // curl copies a source archive to --output; sha256sum records what it was asked to check and
+  // fails when the test says the hash does not match.
+  writeFileSync(
+    join(bin, "curl"),
+    `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> ${JSON.stringify(downloads)}
+env >> ${JSON.stringify(envs)}
+while [ $# -gt 0 ]; do
+  if [ "$1" = --output ]; then cp ${JSON.stringify(archive)} "$2"; fi
+  shift
+done
+`,
+  );
+  writeFileSync(
+    join(bin, "sha256sum"),
+    `#!/usr/bin/env bash
+env >> ${JSON.stringify(envs)}
+cat > ${JSON.stringify(sha)}
+[ ! -e ${JSON.stringify(join(temp, "hash-mismatch"))} ]
+`,
+  );
+  chmodSync(join(bin, "curl"), 0o755);
+  chmodSync(join(bin, "sha256sum"), 0o755);
+  if (options.hashMismatch) writeFileSync(join(temp, "hash-mismatch"), "");
   const github = join(temp, "github-env");
   writeFileSync(github, "");
-  const result = run(
-    mirrorDoc,
-    "login",
-    {
-      XB_REGISTRY: REGISTRY,
-      XB_IMAGE_REPOSITORY: "xb/app",
-      XB_REGISTRY_USERNAME: "",
-      XB_REGISTRY_PASSWORD: "",
-      XB_JDCLOUD_ACCESS_KEY_ID: "",
-      XB_JDCLOUD_SECRET_ACCESS_KEY: "",
-      XB_JDCLOUD_REGION: "",
-      XB_JDCLOUD_REGISTRY_NAME: "",
-      GHCR_USERNAME: "someone",
-      GHCR_TOKEN: "ghcr-token-e5f6",
-      RUNNER_TEMP: temp,
-      GITHUB_ENV: github,
-      FAKE_JD_CALLS: jdCalls,
-      FAKE_JD_RESPONSE: responseFile,
-      ...env,
-    },
-    { path: `${bin}:${process.env.PATH}` },
-  );
+  const environment = {
+    XB_REGISTRY: REGISTRY,
+    XB_IMAGE_REPOSITORY: "xb/app",
+    XB_REGISTRY_USERNAME: "",
+    XB_REGISTRY_PASSWORD: "",
+    XB_JDCLOUD_ACCESS_KEY_ID: "",
+    XB_JDCLOUD_SECRET_ACCESS_KEY: "",
+    XB_JDCLOUD_REGION: "",
+    XB_JDCLOUD_REGISTRY_NAME: "",
+    GHCR_USERNAME: "someone",
+    GHCR_TOKEN: "ghcr-token-e5f6",
+    RUNNER_TEMP: temp,
+    GITHUB_ENV: github,
+    FAKE_JD_CALLS: jdCalls,
+    FAKE_JD_RESPONSE: responseFile,
+    ...env,
+  };
+  for (const name of options.omit ?? []) delete environment[name];
+  const result = run(mirrorDoc, "login", environment, {
+    path: `${bin}:${process.env.PATH}`,
+  });
   const config = join(temp, "own-channel-docker", "config.json");
   return {
     ...result,
     temp,
     pip: readFileSync(calls, "utf8").trim().split("\n").filter(Boolean),
+    envs: readFileSync(envs, "utf8"),
+    downloads: readFileSync(downloads, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean),
+    sha: existsSync(sha) ? readFileSync(sha, "utf8") : null,
     api: readFileSync(jdCalls, "utf8")
       .trim()
       .split("\n")
@@ -368,7 +416,7 @@ test("a fixed sign-in with one half missing keeps its own error", () => {
   }
 });
 
-test("a JD Cloud AccessKey is exchanged for a two-hour token that signs in", () => {
+test("a JD Cloud AccessKey is exchanged for a one-hour token that signs in", () => {
   const result = login(JD, answer(command));
   expect(result.status).toBe(0);
   expect(result.config).toEqual({
@@ -377,18 +425,49 @@ test("a JD Cloud AccessKey is exchanged for a two-hour token that signs in", () 
       "ghcr.io": ghcrAuth,
     },
   });
-  // The API was asked for this registry's token, for two hours, with the SDK's logger silenced.
+  // The API was asked for this registry's token, for one hour, with the SDK's logger silenced.
   expect(result.api).toEqual([
-    [ACCESS_KEY, "cn-north-1", "xiongbao-work", 2, -1],
+    [ACCESS_KEY, "cn-north-1", "xiongbao-work", 1, -1],
   ]);
-  // The SDK is installed by hash, without its dependencies.
-  expect(result.pip).toHaveLength(1);
-  expect(result.pip[0]).toContain("--require-hashes");
-  expect(result.pip[0]).toContain("--no-deps");
-  const script = stepOf(mirrorDoc, "login").run;
-  expect(script).toMatch(
-    /jdcloud_sdk==\d+\.\d+\.\d+ --hash=sha256:[0-9a-f]{64}/,
+  // The SDK's source archive is checked against a hash written in the step and never built; what
+  // it imports is installed as wheels only, each with its hash, without dependency resolution.
+  expect(result.downloads).toHaveLength(1);
+  expect(result.downloads[0]).toMatch(
+    /--proto =https .*https:\/\/files\.pythonhosted\.org\/.*jdcloud_sdk-4\.1\.0\.tar\.gz$/,
   );
+  expect(result.sha).toMatch(/^[0-9a-f]{64} {2}.*sdk\.tar\.gz\n$/);
+  expect(result.pip).toHaveLength(1);
+  for (const flag of [
+    "--require-hashes",
+    "--no-deps",
+    "--only-binary :all:",
+    "--target",
+  ])
+    expect(result.pip[0]).toContain(flag);
+  const script = stepOf(mirrorDoc, "login").run;
+  expect(script).not.toMatch(/pip install[^\n]*jdcloud/);
+  const pins = script.match(
+    /^[a-z0-9-]+==[\d.]+ --hash=sha256:[0-9a-f]{64}$/gm,
+  );
+  expect(pins?.map((pin) => pin.split("==")[0])).toEqual([
+    "requests",
+    "urllib3",
+    "idna",
+    "certifi",
+    "charset-normalizer",
+  ]);
+  expect(script).toContain(result.sha.slice(0, 64));
+  // No installer, and nothing it unpacked, ran with a secret in its environment.
+  expect(result.envs).toContain("WORK=");
+  for (const secret of [
+    ACCESS_KEY,
+    SECRET_KEY,
+    "ghcr-token-e5f6",
+    "XB_JDCLOUD",
+    "GHCR_TOKEN",
+    "XB_REGISTRY_PASSWORD",
+  ])
+    expect(result.envs).not.toContain(secret);
   // Nothing of it is left behind, and the config directory is private.
   expect(existsSync(join(result.temp, "own-channel-jcr"))).toBe(false);
   expect(statSync(join(result.temp, "own-channel-docker")).mode & 0o077).toBe(
@@ -408,9 +487,7 @@ test("the token and the AccessKey stay out of every output, and the token is mas
   const naming = result.log
     .split("\n")
     .filter((line) => line.includes(USER) || line.includes(PASSWORD));
-  expect(naming.sort()).toEqual(
-    [`::add-mask::${PASSWORD}`, `::add-mask::${USER}`].sort(),
-  );
+  expect(naming).toEqual([`::add-mask::${PASSWORD}`]);
   expect(result.log).not.toContain("not-the-source-of-the-login");
   // Not as an argument either: the script puts none of them on a command line.
   const script = stepOf(mirrorDoc, "login").run;
@@ -499,22 +576,87 @@ test("a registry host or repository path that is not valid is refused before any
   expect(host.api).toEqual([]);
 });
 
+test("unset variables are not an error before the sign-in is chosen", () => {
+  // GitHub sets every listed variable, to an empty string at least; set -u must not matter either way.
+  const fixed = login(FIXED, undefined, {
+    omit: Object.keys(JD),
+  });
+  expect(fixed.status).toBe(0);
+  const none = login({}, undefined, {
+    omit: [...Object.keys(JD), "XB_REGISTRY_USERNAME", "XB_REGISTRY_PASSWORD"],
+  });
+  expect(none.status).not.toBe(0);
+  expect(none.log).toContain(
+    "XB_REGISTRY is set but XB_REGISTRY_USERNAME is not.",
+  );
+  const jd = login(JD, answer(command), {
+    omit: ["XB_REGISTRY_USERNAME", "XB_REGISTRY_PASSWORD"],
+  });
+  expect(jd.status).toBe(0);
+});
+
+test("a source archive that does not match its hash stops the step before any key is used", () => {
+  const result = login(JD, answer(command), { hashMismatch: true });
+  expect(result.status).not.toBe(0);
+  expect(result.api).toEqual([]);
+  expect(result.pip).toEqual([]);
+  expect(result.config).toBeNull();
+  expect(existsSync(join(result.temp, "own-channel-jcr"))).toBe(false);
+});
+
+test("only the password is masked, and it is escaped the way workflow commands are", () => {
+  // A user name that is a part of the registry host would blank the job's outputs if it were masked.
+  const result = login(
+    JD,
+    answer(`docker login -u jdcloud -p 'a%b' ${REGISTRY}`),
+  );
+  expect(result.status).toBe(0);
+  const masks = result.log
+    .split("\n")
+    .filter((l) => l.startsWith("::add-mask::"));
+  expect(masks).toEqual(["::add-mask::a%25b"]);
+  expect(result.config.auths[REGISTRY].auth).toBe(basic("jdcloud", "a%b"));
+});
+
+test("a login command for another registry than XB_REGISTRY is refused without printing it", () => {
+  const result = login(
+    JD,
+    answer(`docker login -u ${USER} -p '${PASSWORD}' other-registry.example`),
+  );
+  expect(result.status).not.toBe(0);
+  expect(result.log).toContain("another registry than XB_REGISTRY");
+  expect(result.log).not.toContain(PASSWORD);
+  expect(result.log).not.toContain(USER);
+  expect(result.config).toBeNull();
+});
+
 // ---- the release record ----
 
-function record(env, release) {
+const OWNER = { login: "github-actions[bot]" };
+
+function record(env, release, uploader = OWNER) {
   const temp = scratch();
   const bin = join(temp, "bin");
   mkdirSync(bin);
   const calls = join(temp, "calls");
   writeFileSync(calls, "");
   writeFileSync(join(temp, "fixture.json"), JSON.stringify(release));
-  // gh api <path> [--jq ...]: the asset list answers with an id, the asset itself with the file.
+  writeFileSync(
+    join(temp, "release.json"),
+    JSON.stringify({
+      assets: [
+        { name: "other.txt", id: 7, uploader },
+        { name: "container-images.json", id: 42, uploader },
+      ],
+    }),
+  );
+  // gh api <path>: the release answers with its assets, the asset itself with the file.
   writeFileSync(
     join(bin, "gh"),
     `#!/usr/bin/env bash
 printf 'gh %s\\n' "$*" >> ${JSON.stringify(calls)}
 case "$*" in
-  *releases/tags/v0.2.15*) echo 42 ;;
+  *releases/tags/v0.2.15*) cat ${JSON.stringify(join(temp, "release.json"))} ;;
   *releases/tags/*) exit 1 ;;
   *releases/assets/42*) cat ${JSON.stringify(join(temp, "fixture.json"))} ;;
   *) exit 2 ;;
@@ -527,7 +669,7 @@ esac
     "record",
     {
       GH_TOKEN: "t",
-      GH_REPO: "o/r",
+      GH_REPO: "O/r",
       INPUT_TAG: "v0.2.15",
       XB_REGISTRY: REGISTRY,
       RUNNER_TEMP: temp,
@@ -546,9 +688,10 @@ const release = (openbot) => ({
   version: "0.2.15",
   images: { xiongbao: { repository: "x" }, openbot },
 });
+const OWN_IMAGE = { repository: "ghcr.io/o/r", digest: DIGEST };
 
-test("the release record names the GHCR image to copy, read through the REST API", () => {
-  const ok = record({}, release({ repository: "ghcr.io/o/r", digest: DIGEST }));
+test("the release record names this repository's GHCR image, read through the REST API", () => {
+  const ok = record({}, release(OWN_IMAGE));
   expect(ok.status).toBe(0);
   expect(ok.outputs).toEqual({
     repository: "ghcr.io/o/r",
@@ -557,28 +700,55 @@ test("the release record names the GHCR image to copy, read through the REST API
   });
   expect(ok.calls.join("\n")).not.toContain("graphql");
   const refused = [
-    record(
-      { INPUT_TAG: "main" },
-      release({ repository: "ghcr.io/o/r", digest: DIGEST }),
-    ),
-    record(
-      { INPUT_TAG: "v0.2.15; id" },
-      release({ repository: "ghcr.io/o/r", digest: DIGEST }),
-    ),
-    record(
-      { INPUT_TAG: "v9.9.9" },
-      release({ repository: "ghcr.io/o/r", digest: DIGEST }),
-    ),
-    record(
-      { XB_REGISTRY: "" },
-      release({ repository: "ghcr.io/o/r", digest: DIGEST }),
-    ),
-    record({}, release({ repository: "evil.example/o/r", digest: DIGEST })),
-    record({}, release({ repository: "ghcr.io/o/r", digest: "latest" })),
+    record({ INPUT_TAG: "main" }, release(OWN_IMAGE)),
+    record({ INPUT_TAG: "v0.2.15; id" }, release(OWN_IMAGE)),
+    record({ INPUT_TAG: "v9.9.9" }, release(OWN_IMAGE)),
+    record({ XB_REGISTRY: "" }, release(OWN_IMAGE)),
+    record({}, release({ ...OWN_IMAGE, repository: "evil.example/o/r" })),
+    // Another owner's image on GHCR is as good as any other as far as the registry is concerned.
+    record({}, release({ ...OWN_IMAGE, repository: "ghcr.io/other/repo" })),
+    record({}, release({ ...OWN_IMAGE, repository: "ghcr.io/o/r/extra" })),
+    record({}, release({ ...OWN_IMAGE, digest: "latest" })),
     record({}, { images: {} }),
+    // A record somebody else attached to the Release is not believed.
+    record({}, release(OWN_IMAGE), { login: "someone" }),
   ];
   for (const result of refused) {
     expect(result.status).not.toBe(0);
     expect(result.outputs).toEqual({});
   }
+});
+
+test("the record is checked against the version tag on GHCR before anything is copied", () => {
+  const verify = (digestOnGhcr) => {
+    const temp = scratch();
+    const bin = join(temp, "bin");
+    mkdirSync(bin);
+    const calls = join(temp, "calls");
+    writeFileSync(calls, "");
+    writeFileSync(
+      join(bin, "crane"),
+      `#!/usr/bin/env bash
+printf 'crane %s\\n' "$*" >> ${JSON.stringify(calls)}
+echo ${digestOnGhcr}
+`,
+    );
+    chmodSync(join(bin, "crane"), 0o755);
+    const result = run(
+      mirrorDoc,
+      "verify",
+      { REPOSITORY: "ghcr.io/o/r", DIGEST, TAG: "v0.2.15" },
+      { path: `${bin}:${process.env.PATH}` },
+    );
+    return {
+      ...result,
+      calls: readFileSync(calls, "utf8").trim().split("\n").filter(Boolean),
+    };
+  };
+  const ok = verify(DIGEST);
+  expect(ok.status).toBe(0);
+  expect(ok.calls).toEqual(["crane digest ghcr.io/o/r:v0.2.15"]);
+  const moved = verify(`sha256:${"b".repeat(64)}`);
+  expect(moved.status).not.toBe(0);
+  expect(moved.log).toContain("::error::");
 });

@@ -781,9 +781,12 @@ in the `release` Environment; then the `mirror` job in `release.yml` signs in an
 servers in China, which pull from GHCR at about 24 KB/s.
 
 JD Cloud's registry tokens last at most 24 hours, so no fixed password is stored. The job exchanges
-an AccessKey for a two-hour token (`GetAuthorizationToken` of the `jdcloud_sdk` Python package,
-pinned by version and hash) and reads the user and password from the `docker login` command the
-API returns.
+an AccessKey for a one-hour token (`GetAuthorizationToken` of the `jdcloud_sdk` Python package) and
+reads the user and password from the `docker login` command the API returns. The SDK is a source
+archive checked against a hash written in `release.yml` and used without being built, and what it
+imports is installed as hash-pinned wheels; both are installed in a shell with an empty environment,
+so no key is in reach of the installers. The token is not revoked after the job; it expires on its
+own after the hour. Only the password is masked in logs: the user name is not a secret.
 
 One-time setup:
 
@@ -807,9 +810,21 @@ Set either these four JD Cloud settings or the fixed `XB_REGISTRY_USERNAME` and
 `XB_REGISTRY_PASSWORD` secrets (for another registry), never both and never half of one: the
 sign-in step stops with an error.
 
+Two more things to set up on the GitHub side:
+
+- The `release` Environment's deployment rules (branches and tags) must allow `main`, because
+  `mirror-release.yml` runs from `main`; `release.yml` runs from a release tag, so tags stay allowed.
+  Give the Environment required reviewers: it is what stands between a dispatch and the registry
+  credentials, since the `main` condition in the workflow only concerns the ref that was dispatched.
+- Before the next release tag, run `mirror-release.yml` once for a version that is already
+  published (for example `v0.2.15`). It exercises the AccessKey, the SDK install and the push
+  without touching a release: a first real call during a release would fail after the GHCR version
+  tags have been set.
+
 **Copying an older release.** Run **补同步镜像到自有仓库** (`mirror-release.yml`) from `main`, with the
-tag, for example `v0.2.15`. It reads `container-images.json` of that Release (the GHCR digest under
-`images.openbot`), copies its linux/amd64 manifest to `<XB_REGISTRY>/<XB_IMAGE_REPOSITORY>:<tag>`
+tag, for example `v0.2.15`. It reads `container-images.json` of that Release, which must have been uploaded by the release
+workflow, and takes the GHCR image under `images.openbot`, which must be this repository's own. The
+digest in it must be the one the GHCR version tag has: the run stops otherwise. It then copies its linux/amd64 manifest to `<XB_REGISTRY>/<XB_IMAGE_REPOSITORY>:<tag>`
 with the same sign-in and copy steps as `release.yml` (a test keeps their text identical), and writes
 the target and the platform manifest's digest in the step summary. The Release and its assets are not
 changed, so `container-images.json` keeps pointing at what it pointed at. A tag that already names a

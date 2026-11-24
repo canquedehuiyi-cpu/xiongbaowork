@@ -1994,6 +1994,8 @@ test("credentials never appear on a command line", () => {
   expect(xbSecrets(containerRelease).sort()).toEqual([
     "github-release.steps.3.env.AWS_ACCESS_KEY_ID",
     "github-release.steps.3.env.AWS_SECRET_ACCESS_KEY",
+    "mirror.steps.1.env.XB_JDCLOUD_ACCESS_KEY_ID",
+    "mirror.steps.1.env.XB_JDCLOUD_SECRET_ACCESS_KEY",
     "mirror.steps.1.env.XB_REGISTRY_PASSWORD",
     "mirror.steps.1.env.XB_REGISTRY_USERNAME",
   ]);
