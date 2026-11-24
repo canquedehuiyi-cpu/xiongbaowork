@@ -773,6 +773,51 @@ Until signing is approved, a stable release has no installers and is not Latest,
 ad-hoc Mac installer and unsigned Windows installer, like every ordinary CI build, once they are
 built.
 
+## Our own registry: JD Cloud JCR
+
+A release can copy its verified linux/amd64 image manifest to our own registry. The index around it,
+with its provenance and SBOM attestations, stays on GHCR. Nothing happens until `XB_REGISTRY` is set
+in the `release` Environment; then the `mirror` job in `release.yml` signs in and copies. This is for
+servers in China, which pull from GHCR at about 24 KB/s.
+
+JD Cloud's registry tokens last at most 24 hours, so no fixed password is stored. The job exchanges
+an AccessKey for a two-hour token (`GetAuthorizationToken` of the `jdcloud_sdk` Python package,
+pinned by version and hash) and reads the user and password from the `docker login` command the
+API returns.
+
+One-time setup:
+
+1. In the JD Cloud console, create a registry (here `xiongbao-work`, region cn-north-1, URI
+   `xiongbao-work-cn-north-1.jcr.service.jdcloud.com`) and a repository in it.
+2. Create a sub-account whose policy allows only that registry's JCR actions: getting an
+   authorization token, and pushing and pulling images. Create an AccessKey for it. Check the exact
+   action names against the console's policy editor; they were not verified when this was written.
+3. In the `release` Environment (Settings, Environments), set:
+
+| Kind | Name | Value |
+| --- | --- | --- |
+| variable | `XB_REGISTRY` | the registry URI, no scheme and no path |
+| variable | `XB_IMAGE_REPOSITORY` | the repository name, lowercase |
+| variable | `XB_JDCLOUD_REGION` | `cn-north-1` |
+| variable | `XB_JDCLOUD_REGISTRY_NAME` | `xiongbao-work` |
+| secret | `XB_JDCLOUD_ACCESS_KEY_ID` | the sub-account's AccessKey ID |
+| secret | `XB_JDCLOUD_SECRET_ACCESS_KEY` | its secret |
+
+Set either these four JD Cloud settings or the fixed `XB_REGISTRY_USERNAME` and
+`XB_REGISTRY_PASSWORD` secrets (for another registry), never both and never half of one: the
+sign-in step stops with an error.
+
+**Copying an older release.** Run **补同步镜像到自有仓库** (`mirror-release.yml`) from `main`, with the
+tag, for example `v0.2.15`. It reads `container-images.json` of that Release (the GHCR digest under
+`images.openbot`), copies its linux/amd64 manifest to `<XB_REGISTRY>/<XB_IMAGE_REPOSITORY>:<tag>`
+with the same sign-in and copy steps as `release.yml` (a test keeps their text identical), and writes
+the target and the platform manifest's digest in the step summary. The Release and its assets are not
+changed, so `container-images.json` keeps pointing at what it pointed at. A tag that already names a
+different image is never moved; a re-run over the same copy succeeds.
+
+The server pulls by digest, `<XB_REGISTRY>/<XB_IMAGE_REPOSITORY>@<platform manifest digest>`; see
+[the deployment manual](deployment-xiongbao.md), section 7.
+
 ## Deploying a release
 
 `container-images.json` pins a digest for every image the release published. Deploy those, not tags:

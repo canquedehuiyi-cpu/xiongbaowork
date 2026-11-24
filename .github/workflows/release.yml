@@ -405,16 +405,44 @@ jobs:
           XB_IMAGE_REPOSITORY: ${{ vars.XB_IMAGE_REPOSITORY }}
           XB_REGISTRY_USERNAME: ${{ secrets.XB_REGISTRY_USERNAME }}
           XB_REGISTRY_PASSWORD: ${{ secrets.XB_REGISTRY_PASSWORD }}
+          XB_JDCLOUD_ACCESS_KEY_ID: ${{ secrets.XB_JDCLOUD_ACCESS_KEY_ID }}
+          XB_JDCLOUD_SECRET_ACCESS_KEY: ${{ secrets.XB_JDCLOUD_SECRET_ACCESS_KEY }}
+          XB_JDCLOUD_REGION: ${{ vars.XB_JDCLOUD_REGION }}
+          XB_JDCLOUD_REGISTRY_NAME: ${{ vars.XB_JDCLOUD_REGISTRY_NAME }}
           GHCR_USERNAME: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          for name in XB_IMAGE_REPOSITORY XB_REGISTRY_USERNAME XB_REGISTRY_PASSWORD; do
-            if [ -z "${!name}" ]; then
-              echo "::error::XB_REGISTRY is set but $name is not."
-              exit 1
-            fi
+          # Two ways to sign in to our registry, exactly one of them configured: a fixed user and
+          # password, or an AccessKey that is exchanged below for a short-lived token (JD Cloud's
+          # registry tokens last at most 24 hours, so no fixed password exists to store).
+          fixed=0
+          for name in XB_REGISTRY_USERNAME XB_REGISTRY_PASSWORD; do
+            if [ -n "${!name}" ]; then fixed=$((fixed + 1)); fi
           done
+          jdcloud=0
+          for name in XB_JDCLOUD_ACCESS_KEY_ID XB_JDCLOUD_SECRET_ACCESS_KEY XB_JDCLOUD_REGION XB_JDCLOUD_REGISTRY_NAME; do
+            if [ -n "${!name}" ]; then jdcloud=$((jdcloud + 1)); fi
+          done
+          if [ "$fixed" -gt 0 ] && [ "$jdcloud" -gt 0 ]; then
+            echo "::error::Both XB_REGISTRY_USERNAME/XB_REGISTRY_PASSWORD and the XB_JDCLOUD_* settings are set; configure only one."
+            exit 1
+          fi
+          if [ "$jdcloud" -gt 0 ]; then
+            for name in XB_IMAGE_REPOSITORY XB_JDCLOUD_ACCESS_KEY_ID XB_JDCLOUD_SECRET_ACCESS_KEY XB_JDCLOUD_REGION XB_JDCLOUD_REGISTRY_NAME; do
+              if [ -z "${!name}" ]; then
+                echo "::error::XB_REGISTRY is set with the XB_JDCLOUD_* settings but $name is not."
+                exit 1
+              fi
+            done
+          else
+            for name in XB_IMAGE_REPOSITORY XB_REGISTRY_USERNAME XB_REGISTRY_PASSWORD; do
+              if [ -z "${!name}" ]; then
+                echo "::error::XB_REGISTRY is set but $name is not."
+                exit 1
+              fi
+            done
+          fi
           if [[ ! "$XB_REGISTRY" =~ ^[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$ ]]; then
             echo "::error::XB_REGISTRY must be a registry host (no scheme, no path): '$XB_REGISTRY'"
             exit 1
@@ -427,10 +455,119 @@ jobs:
           mkdir -p "$config"
           chmod 700 "$config"
           umask 077
-          jq -n --arg registry "$XB_REGISTRY" '{auths: {
-            ($registry): {auth: ("\(env.XB_REGISTRY_USERNAME):\(env.XB_REGISTRY_PASSWORD)" | @base64)},
-            "ghcr.io": {auth: ("\(env.GHCR_USERNAME):\(env.GHCR_TOKEN)" | @base64)}
-          }}' > "$config/config.json"
+          if [ "$jdcloud" -eq 0 ]; then
+            jq -n --arg registry "$XB_REGISTRY" '{auths: {
+              ($registry): {auth: ("\(env.XB_REGISTRY_USERNAME):\(env.XB_REGISTRY_PASSWORD)" | @base64)},
+              "ghcr.io": {auth: ("\(env.GHCR_USERNAME):\(env.GHCR_TOKEN)" | @base64)}
+            }}' > "$config/config.json"
+          else
+            # A two-hour token from the JD Cloud API. Its user and password reach jq through files
+            # that only this step can read and that go away with it, never through an argument, and
+            # they are masked before anything else could print them.
+            work="$RUNNER_TEMP/own-channel-jcr"
+            trap 'rm -rf "$work"' EXIT
+            rm -rf "$work"
+            mkdir -p "$work"
+            chmod 700 "$work"
+            cat > "$work/requirements.txt" <<'REQUIREMENTS'
+          jdcloud_sdk==4.4.4 --hash=sha256:066d4e3af1a7532f647d8e4eda0a85f9849ad80bd3a5df96e53ea187c1867e28
+          REQUIREMENTS
+            # The runner's own requests is used (--no-deps), so only the SDK itself is hash-pinned.
+            python3 -m venv --system-site-packages "$work/venv"
+            "$work/venv/bin/pip" install --quiet --disable-pip-version-check --no-deps \
+              --require-hashes -r "$work/requirements.txt"
+            "$work/venv/bin/python" - "$work" <<'PYTHON'
+          import os
+          import shlex
+          import sys
+
+          from jdcloud_sdk.core.credential import Credential
+          from jdcloud_sdk.core.logger import Logger
+          from jdcloud_sdk.services.cr.apis.GetAuthorizationTokenRequest import (
+              GetAuthorizationTokenParameters,
+              GetAuthorizationTokenRequest,
+          )
+          from jdcloud_sdk.services.cr.client.CrClient import CrClient
+
+
+          def fail(why):
+              # Never the response, the command line or an exception text: they can hold the token.
+              print("::error::" + why)
+              sys.exit(1)
+
+
+          def find_login(node):
+              if isinstance(node, dict):
+                  if isinstance(node.get("loginCmdLine"), str):
+                      return node["loginCmdLine"]
+                  node = list(node.values())
+              if isinstance(node, list):
+                  for item in node:
+                      found = find_login(item)
+                      if found:
+                          return found
+              return None
+
+
+          def option(words, short, long):
+              for at, word in enumerate(words):
+                  if word in (short, long):
+                      return words[at + 1] if at + 1 < len(words) else None
+                  if word.startswith(long + "="):
+                      return word[len(long) + 1 :]
+              return None
+
+
+          # The SDK's default logger prints the signed headers and the response body, token included;
+          # a level below FATAL prints nothing.
+          client = CrClient(
+              Credential(
+                  os.environ["XB_JDCLOUD_ACCESS_KEY_ID"],
+                  os.environ["XB_JDCLOUD_SECRET_ACCESS_KEY"],
+              ),
+              logger=Logger(-1),
+          )
+          parameters = GetAuthorizationTokenParameters(
+              os.environ["XB_JDCLOUD_REGION"], os.environ["XB_JDCLOUD_REGISTRY_NAME"]
+          )
+          parameters.setExpiredAfterHours(2)
+          try:
+              response = client.send(GetAuthorizationTokenRequest(parameters))
+          except Exception as error:
+              fail("GetAuthorizationToken failed (%s)." % type(error).__name__)
+          if response.error is not None:
+              fail(
+                  "GetAuthorizationToken was refused (status %s, code %s)."
+                  % (response.error.status, response.error.code)
+              )
+          # The user and password come from the docker login command the API returns, not from the
+          # base64 authorizationToken, whose content the API reference does not spell out.
+          command = find_login(response.result)
+          if command is None:
+              fail("GetAuthorizationToken returned no loginCmdLine.")
+          try:
+              words = shlex.split(command)
+          except ValueError:
+              fail("The loginCmdLine could not be split into words.")
+          user = option(words, "-u", "--username")
+          password = option(words, "-p", "--password")
+          if not user or not password or "\n" in user + password:
+              fail("The loginCmdLine holds no usable --username and --password.")
+          for name, value in (("username", user), ("password", password)):
+              descriptor = os.open(
+                  os.path.join(sys.argv[1], name), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+              )
+              with os.fdopen(descriptor, "w") as handle:
+                  handle.write(value)
+          PYTHON
+            echo "::add-mask::$(< "$work/username")"
+            echo "::add-mask::$(< "$work/password")"
+            jq -n --arg registry "$XB_REGISTRY" \
+              --rawfile username "$work/username" --rawfile password "$work/password" '{auths: {
+              ($registry): {auth: ("\($username):\($password)" | @base64)},
+              "ghcr.io": {auth: ("\(env.GHCR_USERNAME):\(env.GHCR_TOKEN)" | @base64)}
+            }}' > "$config/config.json"
+          fi
           printf 'DOCKER_CONFIG=%s\n' "$config" >> "$GITHUB_ENV"
       - id: copy
         name: Copy the linux/amd64 manifest to our registry
