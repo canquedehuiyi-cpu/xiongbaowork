@@ -62,7 +62,7 @@ function bounded(
  * Helper 45" beside an Activity page listing 23 of its rows; the other 22 were choosing tools for a
  * run, which the page leaves out.
  *
- * The same rows the page asks for (`@xiongbao/shared/activity-rows`): none of OpenBot's own working,
+ * The same rows the page asks for (`@xiongbao/shared/activity-rows`): none of the app's own working,
  * each action once (the first row of an action that then failed, was stopped or was refused is not
  * counted, nor a Routines call whose routine change has its own row), and a Bot's rows as its Bot
  * column reads them: the Bot it names, the Bot a row was about (an `agent` target), the Bot an older
