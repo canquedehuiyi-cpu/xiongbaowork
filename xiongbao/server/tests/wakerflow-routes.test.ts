@@ -158,7 +158,7 @@ async function fixture() {
     body?: unknown,
   ) =>
     routes.request(
-      new Request(`http://openbot.test${path}`, {
+      new Request(`http://xiongbao.test${path}`, {
         method,
         ...(body === undefined
           ? {}

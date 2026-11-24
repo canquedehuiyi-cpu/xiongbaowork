@@ -123,7 +123,7 @@ beforeAll(async () => {
   });
 });
 
-/** The page's own query for this Bot, as `withoutOpenBotWorking` writes it. */
+/** The page's own query for this Bot, as `withoutXiongBaoWorking` writes it. */
 async function shownOnActivity() {
   const { events } = await reader.list({
     limit: ACTIONS + 100,

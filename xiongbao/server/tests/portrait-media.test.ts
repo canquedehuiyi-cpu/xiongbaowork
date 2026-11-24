@@ -11,10 +11,7 @@ import {
   createPortraitRoutes,
 } from "../src/portraits/routes";
 import { createPortraitStore } from "../src/portraits/store";
-import {
-  PORTRAIT_VIDEO_MAX_BYTES,
-  sniffVideo,
-} from "../src/portraits/video";
+import { PORTRAIT_VIDEO_MAX_BYTES, sniffVideo } from "../src/portraits/video";
 import { runAsTenant } from "../src/tenant/context";
 import { createWakerGroupStore } from "../src/waker-groups/store";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -66,7 +63,7 @@ const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 
 function call(tenant: string, method: string, path: string, body?: unknown) {
   return runAsTenant(tenant, () =>
-    routes.request(`http://openbot.test${path}`, {
+    routes.request(`http://xiongbao.test${path}`, {
       method,
       ...(body === undefined
         ? {}
@@ -162,13 +159,11 @@ test("only a short enough MP4 or WebM is accepted, and refusals change nothing",
 });
 
 test("clearing a video keeps its poster; clearing the face clears the video too", async () => {
-  const cleared = await call(
-    tenantA,
-    "DELETE",
-    `/group/${groupOfA.id}/video`,
-  );
+  const cleared = await call(tenantA, "DELETE", `/group/${groupOfA.id}/video`);
   expect(cleared.status).toBe(200);
-  expect((await list(tenantA)).find((row) => row.id === groupOfA.id)).toMatchObject({
+  expect(
+    (await list(tenantA)).find((row) => row.id === groupOfA.id),
+  ).toMatchObject({
     preset: "happy",
     videoUrl: null,
   });

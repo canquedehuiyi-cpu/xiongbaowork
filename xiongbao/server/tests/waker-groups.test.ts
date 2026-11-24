@@ -60,7 +60,7 @@ const board = createTaskRoutes(database, requireUser, {
 } as unknown as TaskProjector);
 
 const post = (body: unknown) =>
-  new Request("http://openbot.test/", {
+  new Request("http://xiongbao.test/", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -220,7 +220,7 @@ test("a crew cannot be pointed at another workspace's coworker", async () => {
     tenantA,
     async () =>
       await routes.request(
-        new Request(`http://openbot.test/${created.group.id}/members`, {
+        new Request(`http://xiongbao.test/${created.group.id}/members`, {
           method: "PUT",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ agentIds: [ownedByB[0]] }),
@@ -292,7 +292,7 @@ test("the routes carry the same rules as the store", async () => {
 
   const members = await runAsTenant(tenantA, () =>
     routes.request(
-      new Request(`http://openbot.test/${body.group.id}/members`, {
+      new Request(`http://xiongbao.test/${body.group.id}/members`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ agentIds: ["agent-1", "agent-1", "agent-2"] }),
@@ -310,7 +310,7 @@ test("the routes carry the same rules as the store", async () => {
 
   const stranger = await runAsTenant(tenantB, () =>
     routes.request(
-      new Request(`http://openbot.test/${body.group.id}/members`, {
+      new Request(`http://xiongbao.test/${body.group.id}/members`, {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ agentIds: [] }),
@@ -321,7 +321,9 @@ test("the routes carry the same rules as the store", async () => {
 
   const retired = await runAsTenant(tenantA, () =>
     routes.request(
-      new Request(`http://openbot.test/${body.group.id}`, { method: "DELETE" }),
+      new Request(`http://xiongbao.test/${body.group.id}`, {
+        method: "DELETE",
+      }),
     ),
   );
   expect(retired.status).toBe(200);
@@ -356,7 +358,7 @@ test("the board answers to a crew's name, not only to one coworker", async () =>
 
   const titles = async (path: string) => {
     const response = await runAsTenant(tenantA, () =>
-      board.request(new Request(`http://openbot.test/${path}`)),
+      board.request(new Request(`http://xiongbao.test/${path}`)),
     );
     const body = (await response.json()) as { tasks: { title: string }[] };
     return body.tasks.map((task) => task.title).sort();

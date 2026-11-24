@@ -17,8 +17,8 @@ import { builtInAgentConfiguration, standingRoleMessage } from "../src/copilot";
  * One ask for one consequential action.
  *
  * The person was asked twice for one delete: once by the Bot, on its own approval card, and again by
- * OpenBot's safety policy, which asks whatever came before. The policy's card names the exact action,
- * so it is the one that stays, and a Bot OpenBot runs is told not to ask first. That is safe only for
+ * XiongBao's safety policy, which asks whatever came before. The policy's card names the exact action,
+ * so it is the one that stays, and a Bot XiongBao runs is told not to ask first. That is safe only for
  * as long as the policy really asks about every action the Bot is told it asks about, which is what
  * the second half pins.
  *
@@ -82,8 +82,8 @@ const promptHolding = (tools: GrantedTool[] = []) => {
 
 const flat = (text: string) => text.replace(/\s+/g, " ");
 
-describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
-  test("it is told OpenBot asks before consequential actions, and not to ask first", () => {
+describe("a Bot XiongBao runs leaves the asking to XiongBao", () => {
+  test("it is told XiongBao asks before consequential actions, and not to ask first", () => {
     expect(APPROVAL_GUIDANCE).toContain("所以你不要先问");
     // With a connected app's tool, the whole guidance, the app-tools bullet included.
     expect(promptHolding([tool("mcp__acme-crm__delete_contact")])).toContain(
@@ -97,7 +97,7 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     }
   });
 
-  test("a remote Bot is told so only for what OpenBot gives it: its own tools don't go through OpenBot's gate", () => {
+  test("a remote Bot is told so only for what XiongBao gives it: its own tools don't go through XiongBao's gate", () => {
     const role = standingRoleMessage({
       id: "risk",
       name: "Risk",
@@ -139,7 +139,7 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     ["发布", "发布", "publish_post"],
     ["转发", "转发", "publish_post"],
   ] as const)(
-    "the guidance says OpenBot asks before you click %s (%s), and it does",
+    "the guidance says XiongBao asks before you click %s (%s), and it does",
     (said, button, source) => {
       expect(APPROVAL_GUIDANCE).toContain(said);
       expect(safetyRequirement(click(button))).toMatchObject({
@@ -238,7 +238,7 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     );
   });
 
-  test("the guidance says OpenBot asks before an app tool named to delete or archive, and it does", () => {
+  test("the guidance says XiongBao asks before an app tool named to delete or archive, and it does", () => {
     expect(APPROVAL_GUIDANCE_APPS).toContain("名字表明会删除或归档的");
     for (const name of [
       "GOOGLEDRIVE_DELETE_FILE",
@@ -251,7 +251,7 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
       });
   });
 
-  test("a tool its app marks destructive says so on itself, as the guidance names it, and OpenBot asks", () => {
+  test("a tool its app marks destructive says so on itself, as the guidance names it, and XiongBao asks", () => {
     expect(APPROVAL_GUIDANCE_APPS).toContain(
       "应用标为破坏性的（会删除或覆盖内容）",
     );
@@ -281,7 +281,7 @@ describe("a Bot OpenBot runs leaves the asking to OpenBot", () => {
     ["发帖", "LINKEDIN_CREATE_POST"],
     ["公开发布", "publish_release"],
   ] as const)(
-    "the guidance says OpenBot asks before an app tool named to %s (%s), and it does",
+    "the guidance says XiongBao asks before an app tool named to %s (%s), and it does",
     (said, name) => {
       expect(APPROVAL_GUIDANCE_APPS).toContain(said);
       const requirement = safetyRequirement(app(name));

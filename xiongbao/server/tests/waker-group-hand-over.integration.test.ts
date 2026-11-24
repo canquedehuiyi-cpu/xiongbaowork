@@ -516,7 +516,7 @@ const board = createTaskRoutes(
 
 async function boardTitles(who: AgentActor, groupId: string) {
   const response = await board.request(
-    new Request(`http://openbot.test/?group=${groupId}`, {
+    new Request(`http://xiongbao.test/?group=${groupId}`, {
       headers: { "x-actor": who.id },
     }),
   );

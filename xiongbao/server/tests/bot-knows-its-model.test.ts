@@ -27,7 +27,7 @@ import { loadTenantPackage } from "../src/tenant-package";
  * Asked "which AI model and which agent framework do you run on", the starter on the LangGraph
  * harness named LangGraph (its standing role says "Powered by LangChain (LangGraph)") and said it
  * had no access to its model's name, while the picker under its answer read GPT-6.1 Terra. Every
- * Bot whose model this deployment chooses is now told it, on OpenBot's own harness, on the
+ * Bot whose model this deployment chooses is now told it, on XiongBao's own harness, on the
  * LangGraph and Claude Agent SDK harnesses, on an API key and on a ChatGPT or Claude plan, and told
  * again when the person picks another model. Built through `buildAgents`, the path a person's run
  * takes, with the real catalogue answering the pick.
@@ -59,7 +59,7 @@ function catalogueFor(
       if (at.startsWith("https://api.openai.com/"))
         return Promise.resolve(Response.json(openAIListing));
       if (at.startsWith("https://api.anthropic.com/")) {
-        // Anthropic takes a key or a plan's OAuth token, never OpenBot's harness token.
+        // Anthropic takes a key or a plan's OAuth token, never XiongBao's harness token.
         const headers = (init?.headers ?? {}) as Record<string, string>;
         const accepted =
           headers["x-api-key"] === "synthetic-key" ||
@@ -150,7 +150,7 @@ async function builtInBot(
   await agent.runAgent();
 }
 
-describe("a Bot on OpenBot's own harness, on an API key", () => {
+describe("a Bot on XiongBao's own harness, on an API key", () => {
   const llm = new LLMock();
   /** Every request body as it went to the provider. */
   const wire: string[] = [];
@@ -227,7 +227,7 @@ describe("a Bot on OpenBot's own harness, on an API key", () => {
 
   /*
    * The starter that ships in the personal edition runs here, and its subtitle says so ("Powered
-   * by OpenBot"). A Bot on LangGraph is told its framework in its standing role; one here was told
+   * by XiongBao"). A Bot on LangGraph is told its framework in its standing role; one here was told
    * only its name, so asked which framework it ran on it had nothing to go by. Read from the package
    * and through `registeredAgentFromRow`, as the runtime loader reads it back from its row.
    */
@@ -308,7 +308,7 @@ function instructions(runs: RunAgentInput[]): string {
   return (runs.at(-1)?.context ?? []).map((entry) => entry.value).join("\n");
 }
 
-describe("a Bot on OpenBot's own harness, on a plan", () => {
+describe("a Bot on XiongBao's own harness, on a plan", () => {
   test.each([
     [
       "chatgpt",

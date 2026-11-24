@@ -14,11 +14,11 @@ import {
 import { defaultPushTitle } from "../src/delivery/router";
 import { createTwilioTransport } from "../src/delivery/twilio";
 import { PROVIDERS } from "../src/identity/providers";
+import { brokerReturnUrl } from "../src/plugins/broker";
 import {
   connectorApprovalGuidance,
   grantedToolGuidance,
 } from "../src/plugins/tools";
-import { brokerReturnUrl } from "../src/plugins/broker";
 import { type SetupFacts, setupRows } from "../src/setup/checklist";
 import { createVoiceProvider } from "../src/voice/provider";
 
@@ -190,12 +190,12 @@ describe("server copy a customer can read takes its name from the brand", () => 
   test("broker return-address hint uses a neutral example host", () => {
     let message = "";
     try {
-      brokerReturnUrl("openbot-app");
+      brokerReturnUrl("xiongbao-app");
     } catch (error) {
       message = (error as Error).message;
     }
     expect(message).toContain("https://example.com rather than example.com");
-    expect(message).not.toContain("openbot.example.com");
+    expect(message).not.toContain("xiongbao.example.com");
   });
 
   test("setup checklist guide links go to the deployment's support page, or are left out", () => {

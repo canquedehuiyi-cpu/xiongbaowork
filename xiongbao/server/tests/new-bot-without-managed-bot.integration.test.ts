@@ -15,7 +15,7 @@ import { afterAll, beforeAll } from "./support/platform-frame";
 /**
  * Making a Bot with your own instructions on a deployment with no Bot in the box.
  *
- * OpenBot Desktop's personal edition writes `MANAGED_AGENT_AG_UI_URL` empty: its Personal Assistant
+ * XiongBao Desktop's personal edition writes `MANAGED_AGENT_AG_UI_URL` empty: its Personal Assistant
  * runs inside the server. The New Bot sheet asks `/api/agents/capabilities` whether a Bot can run
  * here, and the answer was "is there a managed Bot", so on the Desktop it said no. The sheet then
  * printed "An admin must enable built-in hosting before you can run a Bot here." to the only person,
@@ -33,7 +33,7 @@ const made: string[] = [];
 const config = loadConfig(
   testEnvironment({
     DATABASE_URL: testDatabaseUrl(),
-    // As OpenBot Desktop writes it: the personal edition, with no Bot in the box.
+    // As XiongBao Desktop writes it: the personal edition, with no Bot in the box.
     OPENBOT_EDITION: "personal",
     GOOGLE_OAUTH_CLIENT_ID: undefined,
     GOOGLE_OAUTH_CLIENT_SECRET: undefined,
@@ -80,7 +80,7 @@ test("the deployment has no Bot in the box", () => {
 
 test("the New Bot sheet is told a Bot can run here", async () => {
   const response = await app.request(
-    "http://openbot.test/api/agents/capabilities",
+    "http://xiongbao.test/api/agents/capabilities",
   );
   expect(response.status).toBe(200);
   const body = (await response.json()) as {
@@ -93,7 +93,7 @@ test("a Bot made with no address runs here, on the person's instructions", async
   const instructions =
     "Always answer in exactly three bullet points and end with the word DONE.";
   // What the sheet sends for a Bot that runs here: no endpoint, the instructions as its role.
-  const response = await app.request("http://openbot.test/api/agents", {
+  const response = await app.request("http://xiongbao.test/api/agents", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({

@@ -1,5 +1,5 @@
 /**
- * What each of OpenBot's controls decides about one action, in the order the product applies them.
+ * What each of XiongBao's controls decides about one action, in the order the product applies them.
  *
  * Deterministic: no model is asked anything here. "What would happen if…" (`what-if.ts`) hands this an
  * action an admin confirmed, and "Why did this happen?" hands it the facts an audit row recorded.
@@ -76,7 +76,7 @@ import {
 // M5: fork 没有采用插件拆分，这两个在 plugins/store.ts。
 import { appCallPolicyContext, type PluginDecision } from "./plugins/store";
 
-/** Where the deciders read this OpenBot's settings from: the same stores the live path reads. */
+/** Where the deciders read this XiongBao's settings from: the same stores the live path reads. */
 export type GovernanceReaders = {
   /** The boundary policy in force. */
   policy: () => ActionPolicy | null | undefined;
@@ -399,7 +399,7 @@ async function approvalLayers(
 ): Promise<{ safety: Layer; approvals: Layer }> {
   const safety = safetyRequirement(candidate);
   const words = safety ? (SAFETY_WORDS[safetyKind(safety.id)] ?? "this") : "";
-  // Before the approvals are read: a kind OpenBot always hands to the person, or none at all.
+  // Before the approvals are read: a kind XiongBao always hands to the person, or none at all.
   const fixedSafety: Layer | undefined = !safety
     ? layer(
         "safety",
@@ -422,7 +422,7 @@ async function approvalLayers(
    */
   /*
    * M5: whether the safety floor settled it. Upstream's open-by-default kinds answer with `safety`;
-   * in this OpenBot deleting, sending, sharing and posting are a floor that only offers Allow once
+   * in this XiongBao deleting, sending, sharing and posting are a floor that only offers Allow once
    * (the user's decision, #398), and the gate answers with that floor's own source
    * (`outbound_send`, …), whatever a rule or a saved allow says.
    */

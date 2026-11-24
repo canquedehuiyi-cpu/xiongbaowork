@@ -20,7 +20,7 @@ import type { LearningSettingsStore } from "./settings";
 import type { OpenSkillSource } from "./sharing";
 
 // This published internal export is pinned with @copilotkit/runtime in server/package.json. Keep its use here: the SDK owns
-// archive verification, refresh, revocation and stale-cache policy for every OpenBot framework.
+// archive verification, refresh, revocation and stale-cache policy for every XiongBao framework.
 export type LearnedSkillInvocation = {
   readonly catalog: string;
   readonly tools: readonly Tool[];

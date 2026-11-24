@@ -52,9 +52,9 @@ function fakeSupervisor(startedAt: () => string, known: string[] = []) {
   const describe = (botId: string) => ({
     kind: "bot",
     id: botId,
-    container: `openbot-computer-bot-${botId}`,
+    container: `xiongbao-computer-bot-${botId}`,
     status: "running",
-    url: "http://openbot-computer:4100",
+    url: "http://xiongbao-computer:4100",
     startedAt: startedAt(),
   });
   return (async (url: string) => {

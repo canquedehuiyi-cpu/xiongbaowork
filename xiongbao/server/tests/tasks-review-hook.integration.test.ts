@@ -60,7 +60,7 @@ afterAll(async () => {
 const post = (path: string) =>
   runAsTenant(tenant, () =>
     routes.request(
-      new Request(`http://openbot.test/${path}`, { method: "POST" }),
+      new Request(`http://xiongbao.test/${path}`, { method: "POST" }),
     ),
   );
 

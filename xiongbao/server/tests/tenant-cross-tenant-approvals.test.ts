@@ -2,7 +2,6 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { MiddlewareHandler } from "hono";
-import type { AppVariables } from "../src/auth/guards";
 import { createApprovalRoutes } from "../src/approvals/routes";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
@@ -18,6 +17,7 @@ import {
   initializeDevActorUser,
   seedDevActorRole,
 } from "../src/auth/dev-actor";
+import type { AppVariables } from "../src/auth/guards";
 import { createRoleRepository } from "../src/auth/guards";
 import { setRole } from "../src/auth/roles";
 import { HeadlessToolSuspension } from "../src/computer/headless-tools";
@@ -113,7 +113,7 @@ const call = (
   body?: unknown,
 ) =>
   routesFor(actorId).request(
-    new Request(`http://openbot.test/${path}`, {
+    new Request(`http://xiongbao.test/${path}`, {
       method,
       ...(body === undefined
         ? {}
@@ -450,7 +450,7 @@ test("an admin with the capability cannot re-stamp a team rule into their own te
   expect(
     (
       await restamp.request(
-        new Request("http://openbot.test/team/restamp", { method: "POST" }),
+        new Request("http://xiongbao.test/team/restamp", { method: "POST" }),
       )
     ).status,
   ).toBe(200);
@@ -522,7 +522,7 @@ test("the single-user actor holds its admin role in `user_roles`, so it can chan
   );
   const send = (path: string, method: "POST" | "PATCH", body: unknown) =>
     routes.request(
-      new Request(`http://openbot.test/${path}`, {
+      new Request(`http://xiongbao.test/${path}`, {
         method,
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
@@ -578,7 +578,7 @@ test("an admin the database does not know as one gets 403 on a team write, not a
     ["team", "PATCH", { enforceAutoReview: true }],
   ] as const) {
     const response = await routes.request(
-      new Request(`http://openbot.test/${path}`, {
+      new Request(`http://xiongbao.test/${path}`, {
         method,
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

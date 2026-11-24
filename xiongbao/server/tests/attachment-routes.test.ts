@@ -207,7 +207,7 @@ function attachmentApp(
  * query rejects in about 2ms.
  */
 const unreachableDatabase = createDatabase(
-  "postgres://openbot:openbot@127.0.0.1:1/openbot",
+  "postgres://openbot:openbot@127.0.0.1:1/xiongbao",
   { max: 1 },
 );
 
@@ -1407,7 +1407,7 @@ describe("POST /:channelId/attachments", () => {
    * A REFUSAL WITH NOTHING TO NAME MUST NOT PRINT AN EMPTY PAIR OF BRACKETS.
    *
    * `sniffMimeType` hands the claim back when the bytes corroborate nothing and the claim names no
-   * format, and the refusal interpolated it: `'archive' isn't a file type OpenBot can read ().`
+   * format, and the refusal interpolated it: `'archive' isn't a file type XiongBao can read ().`
    * The composer shows that sentence verbatim, so it is the only explanation anybody gets, and an
    * empty parenthetical is worse than the generic sentence it replaced.
    *
@@ -2692,7 +2692,7 @@ describe("attachment route composition", () => {
       );
 
       const unauthenticated = await app.request(
-        `http://openbot.test/api/attachments/${id}`,
+        `http://xiongbao.test/api/attachments/${id}`,
       );
       expect(unauthenticated.status).toBe(401);
 
@@ -2700,13 +2700,13 @@ describe("attachment route composition", () => {
         user: {
           id: memberId,
           email: `${memberId}@example.test`,
-          name: "OpenBot Member",
+          name: "XiongBao Member",
           image: "https://example.test/member.png",
         },
       };
 
       const authenticated = await app.request(
-        `http://openbot.test/api/attachments/${id}`,
+        `http://xiongbao.test/api/attachments/${id}`,
       );
       expect(authenticated.status).toBe(200);
 
@@ -2723,7 +2723,7 @@ describe("attachment route composition", () => {
         ),
       );
       const uploadResponse = await app.request(
-        `http://openbot.test/api/channels/${channelId}/attachments`,
+        `http://xiongbao.test/api/channels/${channelId}/attachments`,
         { method: "POST", body: uploadFormData },
       );
       expect(uploadResponse.status).toBe(201);
@@ -2734,12 +2734,12 @@ describe("attachment route composition", () => {
     const app = createApp(loadConfig(testEnvironment()));
 
     const fetchResponse = await app.request(
-      "http://openbot.test/api/attachments/not-a-uuid",
+      "http://xiongbao.test/api/attachments/not-a-uuid",
     );
     expect(fetchResponse.status).toBe(404);
 
     const uploadResponse = await app.request(
-      "http://openbot.test/api/channels/some-channel/attachments",
+      "http://xiongbao.test/api/channels/some-channel/attachments",
       { method: "POST" },
     );
     expect(uploadResponse.status).toBe(404);
@@ -2817,7 +2817,7 @@ describe("the upload route's body limit", () => {
       new File([new Uint8Array(byteLength)], "huge.png", { type: "image/png" }),
     );
     return app.request(
-      `http://openbot.test/api/channels/${channelId}/attachments`,
+      `http://xiongbao.test/api/channels/${channelId}/attachments`,
       { method: "POST", body: formData },
     );
   }

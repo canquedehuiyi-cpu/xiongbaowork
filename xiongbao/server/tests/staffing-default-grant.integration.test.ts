@@ -398,7 +398,7 @@ describe("the grant reaches the avatar's run", () => {
     expect(await staffingRows(avatarAgentId(userId))).toHaveLength(
       STAFFING_TOOL_NAMES.length,
     );
-    // 别的测试可能在共用的库里留着别的 openbot: 授予，所以比较的是有它之前与之后：它不改变答案。
+    // 别的测试可能在共用的库里留着别的 xiongbao: 授予，所以比较的是有它之前与之后：它不改变答案。
     expect(await asPlatform(() => personalGrantsLeftInTeam(database))).toBe(
       leftBefore,
     );

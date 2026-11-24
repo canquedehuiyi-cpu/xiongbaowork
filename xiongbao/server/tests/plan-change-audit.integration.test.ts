@@ -44,7 +44,7 @@ async function switchPlan(id: string, role: "admin" | "user", planId: string) {
     quota,
     as(id, role),
   ).request(
-    new Request("http://openbot.test/plan", {
+    new Request("http://xiongbao.test/plan", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ planId }),
@@ -213,7 +213,7 @@ test("through the route, a trail that cannot be written answers 500 and leaves t
     quota,
     as(neighbour, "admin"),
   ).request(
-    new Request("http://openbot.test/plan", {
+    new Request("http://xiongbao.test/plan", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ planId: "pro" }),

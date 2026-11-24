@@ -30,7 +30,7 @@ import type { RuntimeEntitlementResponse } from "../self-host-banner";
  * definite refusal is not asked again by a read: asking would hear the same refusal, and every
  * signed-in person's read would start a round at Intelligence, the provider and the computers.
  *
- * WHO READS IT DECIDES WHAT IT SAYS. An admin, and somebody trying OpenBot alone on their own
+ * WHO READS IT DECIDES WHAT IT SAYS. An admin, and somebody trying XiongBao alone on their own
  * machine, is told how to fix each gap: the page to open, or the variable to set. Everybody else is
  * told whether it works and that their admin sets it up, and the response they receive carries no
  * variable name at all. That is the copy rule's line ("Admin is allowed exact names") drawn by the
@@ -179,7 +179,7 @@ export function setupRows(
   /*
    * THE PERSONAL EDITION HAS NO MEMORY AND NO ADMIN. Its one person is told what the back end keeps
    * there (conversations and skills, as This computer and the Desktop status window say), what
-   * "more apps" adds to the apps OpenBot comes with, and the Settings pages it calls Keys and
+   * "more apps" adds to the apps XiongBao comes with, and the Settings pages it calls Keys and
    * Computer. A team deployment's rows are unchanged.
    */
   const personal = options.edition === "personal";
@@ -270,7 +270,7 @@ export function setupRows(
     }),
   ];
   /*
-   * NO SLACK AND TEAMS ROW ON THE PERSONAL EDITION. Its one person installed OpenBot Desktop and
+   * NO SLACK AND TEAMS ROW ON THE PERSONAL EDITION. Its one person installed XiongBao Desktop and
    * has no server environment to set variables in, so "Set OPENTAG_SHARED_SECRET and OPENTAG_URL,
    * then restart" was an instruction nobody there can follow, and it kept "1 needs setup" in the
    * Settings sidebar for good. A team deployment's admin still gets the row.

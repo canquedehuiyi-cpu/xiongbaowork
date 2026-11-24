@@ -962,7 +962,7 @@ describe("a Bot gives part of its work to a subagent", () => {
           message.content.startsWith("You are a subagent"),
       ),
     );
-    // Both parts ran on OpenBot, at the same time, as the same remote Bot with no nesting.
+    // Both parts ran on XiongBao, at the same time, as the same remote Bot with no nesting.
     expect(subs).toHaveLength(2);
     expect(remoteSubagents.most).toBe(2);
     for (const body of subs)

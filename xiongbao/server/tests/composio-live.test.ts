@@ -35,7 +35,7 @@ const key = process.env.COMPOSIO_API_KEY?.trim();
 const live = process.env.OPENBOT_LIVE_COMPOSIO === "1" && Boolean(key);
 
 /** A user id nobody has connected, so no call below can reach an account that belongs to somebody. */
-const NOBODY = "openbot-live-test-nobody";
+const NOBODY = "xiongbao-live-test-nobody";
 
 /**
  * The vendor's own no-auth example action, and a record it cannot find.
@@ -46,7 +46,7 @@ const NOBODY = "openbot-live-test-nobody";
  * calls, so a toolkit that stops being no-auth says so instead of quietly asking for a connection.
  */
 const NO_AUTH_ACTION = "HACKERNEWS_GET_USER";
-const NO_SUCH_RECORD = "openbot-live-test-no-such-hacker-news-user";
+const NO_SUCH_RECORD = "xiongbao-live-test-no-such-hacker-news-user";
 
 describe.skipIf(!live)("Composio, for real", () => {
   // Constructed inside each test rather than here, because Bun evaluates the body of a skipped

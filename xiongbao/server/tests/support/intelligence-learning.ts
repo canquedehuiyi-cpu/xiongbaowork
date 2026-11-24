@@ -1,7 +1,7 @@
 /**
  * Intelligence's project-key Learning routes, answering as Intelligence answers, over real HTTP.
  *
- * Every body here is the one Intelligence's own code writes, so the runtime client and OpenBot read
+ * Every body here is the one Intelligence's own code writes, so the runtime client and XiongBao read
  * them exactly as they would read the real thing:
  *  - errors: `createErrorResponseBody` (apps/app-api/src/errors/http-error-response.ts), with the
  *    code, status, message, category and retryable flag from apps/app-api/src/errors/registry.ts;
@@ -26,7 +26,7 @@
  * and `rollout-closed` (Learning on with `globalEnabled: false` and no rollout entry, where every
  * Learning route answers LEARNING_NOT_ENABLED: learning-availability-guard.ts).
  *
- * Any of them can be met still starting, as a first install of OpenBot's Helm bundle meets it
+ * Any of them can be met still starting, as a first install of XiongBao's Helm bundle meets it
  * (`starting`): while the migrations Job runs every request fails on a table that is not there yet
  * (500 INTERNAL_SERVER_ERROR), and until the bootstrap Job stores the runtime key it is not found
  * (401 AUTH_UNAUTHENTICATED).
@@ -98,7 +98,7 @@ export function intelligenceError(code: IntelligenceErrorCode): Response {
 const NOW = "2026-11-04T12:00:00.000Z";
 export const PROJECT_ID = 7;
 export const RUNTIME_KEY =
-  "cpk-openbot_abcdefgh12345678_abcdefghijklmnopqrstuvwxyz012345";
+  "cpk-xiongbao_abcdefgh12345678_abcdefghijklmnopqrstuvwxyz012345";
 
 export function container(id: string, name: string) {
   return {
@@ -252,7 +252,7 @@ export function run(status = "queued") {
 }
 
 /**
- * `GET /api/inspector/learning?runtimeContainerId=openbot` on an Intelligence with no dashboard, as its
+ * `GET /api/inspector/learning?runtimeContainerId=xiongbao` on an Intelligence with no dashboard, as its
  * real route answered it to a call with `dashboardLinksOptional=true`
  * (inspector-learning-routes.integration.spec.ts, Intelligence 5bcb27075): a
  * conversation waiting for a run, a published Skill, an Insight and a proposed Skill to review. No
@@ -265,7 +265,7 @@ export const INSPECTOR_NO_DASHBOARD = {
     "8d9694e76b7274d4647e6bcbb96c6d7fd63dfa8d5c933e3c0a46b27623a1a90b",
   configuration: {
     state: "configured",
-    container: { id: "openbot", name: "OpenBot" },
+    container: { id: "openbot", name: "XiongBao" },
   },
   pendingThreadCount: 1,
   run: {

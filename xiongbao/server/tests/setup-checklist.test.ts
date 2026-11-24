@@ -49,7 +49,7 @@ import { testEnvironment } from "./support/environment";
  * sets it up, and no response ever carries a secret, whoever asks.
  */
 
-const PRODUCT = "OpenBot";
+const PRODUCT = "XiongBao";
 
 const READY: SetupFacts = {
   intelligence: { state: "ready" },
@@ -133,7 +133,7 @@ describe("setup rows", () => {
 
     const model = row(rows, "model");
     expect(model.ready).toBe(false);
-    expect(model.detail).toBe("Without a model key, OpenBot can't answer.");
+    expect(model.detail).toBe("Without a model key, XiongBao can't answer.");
     expect(model.fix).toEqual({
       kind: "env",
       names: ["OPENAI_API_KEY"],
@@ -198,7 +198,7 @@ describe("setup rows", () => {
     );
     expect(row(key, "model").status).toBe("needs_setup");
     expect(row(key, "model").detail).toBe(
-      "OpenAI refused the model key, so OpenBot can't answer.",
+      "OpenAI refused the model key, so XiongBao can't answer.",
     );
 
     const model = setupRows(
@@ -206,7 +206,7 @@ describe("setup rows", () => {
       { productName: PRODUCT, audience: "admin" },
     );
     expect(row(model, "model").detail).toBe(
-      "The model key can't use gpt-5.6-terra, so OpenBot can't answer.",
+      "The model key can't use gpt-5.6-terra, so XiongBao can't answer.",
     );
   });
 
@@ -229,7 +229,7 @@ describe("setup rows", () => {
     );
     expect(row(custom, "model")).toMatchObject({
       status: "not_checked",
-      detail: "The key is set. OpenBot can't check a custom endpoint.",
+      detail: "The key is set. XiongBao can't check a custom endpoint.",
     });
 
     const member = setupRows(
@@ -276,7 +276,8 @@ describe("setup rows", () => {
     );
     expect(row(rows, "intelligence")).toMatchObject({
       status: "needs_setup",
-      detail: "OpenBot couldn't reach its back end. Check its address and key.",
+      detail:
+        "XiongBao couldn't reach its back end. Check its address and key.",
       fix: {
         kind: "env",
         names: [
@@ -463,7 +464,7 @@ const PEOPLE = {
   member: {
     user: {
       id: "member-1",
-      email: "member@openbot.test",
+      email: "member@xiongbao.test",
       name: "A Member",
       image: null,
     },
@@ -472,7 +473,7 @@ const PEOPLE = {
   admin: {
     user: {
       id: "admin-1",
-      email: "admin@openbot.test",
+      email: "admin@xiongbao.test",
       name: "An Admin",
       image: null,
     },
@@ -567,8 +568,8 @@ async function checklistFrom(
 ) {
   const response = await app.request(
     method === "GET"
-      ? "http://openbot.local/api/setup"
-      : "http://openbot.local/api/setup/check",
+      ? "http://xiongbao.local/api/setup"
+      : "http://xiongbao.local/api/setup/check",
     { method },
   );
   expect(response.status).toBe(200);
@@ -582,7 +583,7 @@ async function checklistFrom(
 describe("GET /api/setup", () => {
   test("asks who is signed in", async () => {
     const app = appWith({ environment: {}, who: "member", signedIn: false });
-    const response = await app.request("http://openbot.local/api/setup");
+    const response = await app.request("http://xiongbao.local/api/setup");
     expect(response.status).toBe(401);
   });
 
@@ -687,7 +688,7 @@ describe("GET /api/setup", () => {
     const after = await checklistFrom(app);
     expect(row(after.checklist.rows, "model")).toMatchObject({
       status: "needs_setup",
-      detail: "OpenAI refused the model key, so OpenBot can't answer.",
+      detail: "OpenAI refused the model key, so XiongBao can't answer.",
     });
 
     // Check again inside the interval is answered from that ask, with no second call out.
@@ -720,9 +721,12 @@ describe("GET /api/setup", () => {
 
   test("Check again asks who is signed in", async () => {
     const app = appWith({ environment: {}, who: "member", signedIn: false });
-    const response = await app.request("http://openbot.local/api/setup/check", {
-      method: "POST",
-    });
+    const response = await app.request(
+      "http://xiongbao.local/api/setup/check",
+      {
+        method: "POST",
+      },
+    );
     expect(response.status).toBe(401);
   });
 
@@ -745,7 +749,7 @@ describe("GET /api/setup", () => {
     );
     expect(row(checklist.rows, "model")).toMatchObject({
       ready: false,
-      detail: "OpenAI refused the model key, so OpenBot can't answer.",
+      detail: "OpenAI refused the model key, so XiongBao can't answer.",
     });
   });
 
@@ -813,7 +817,7 @@ describe("GET /api/setup", () => {
 
 /*
  * The answers that need another service are kept between reads, and a read asks again for any
- * that failed or are old. Without that, an Intelligence slower to start than OpenBot read red until
+ * that failed or are old. Without that, an Intelligence slower to start than XiongBao read red until
  * somebody pressed Check again, and a key refused days after boot still read Ready.
  */
 describe("answers a read asks again for", () => {
@@ -1360,7 +1364,7 @@ test("a computer list that never answers holds back the next check for a minute,
   }
 });
 
-/** OpenBot Desktop's configuration: the personal edition, one person, nobody signing in. */
+/** XiongBao Desktop's configuration: the personal edition, one person, nobody signing in. */
 const PERSONAL = {
   GOOGLE_OAUTH_CLIENT_ID: undefined,
   GOOGLE_OAUTH_CLIENT_SECRET: undefined,
@@ -1375,8 +1379,8 @@ const PERSONAL = {
 
 describe("Slack and Teams on the personal edition", () => {
   /*
-   * On the Mac, Settings › Setup in OpenBot Desktop said "Slack and Teams: Needs setup. Set
-   * OPENTAG_SHARED_SECRET and OPENTAG_URL, then restart OpenBot", which nobody running the Desktop
+   * On the Mac, Settings › Setup in XiongBao Desktop said "Slack and Teams: Needs setup. Set
+   * OPENTAG_SHARED_SECRET and OPENTAG_URL, then restart XiongBao", which nobody running the Desktop
    * app can do, and the sidebar counted it as "1 needs setup" for good.
    */
   test("the personal edition has no Slack and Teams row, and nothing names its variables", async () => {
@@ -1418,7 +1422,7 @@ describe("Slack and Teams on the personal edition", () => {
 });
 
 /*
- * The personal edition's one computer, the real agent-computer, as OpenBot Desktop runs it. The
+ * The personal edition's one computer, the real agent-computer, as XiongBao Desktop runs it. The
  * computer is always up; what starts and stops on it is each Bot's browser, which closes after it
  * sits idle. On Windows, after the Personal Assistant had browsed Google Maps, Settings › Setup said
  * "Bot computer: Not checked. It's set up. A computer starts when a Bot first needs one."
@@ -1432,7 +1436,7 @@ describe("the personal edition's one computer", () => {
   let child: ReturnType<typeof Bun.spawn> | undefined;
 
   beforeAll(async () => {
-    dir = await mkdtemp(join(tmpdir(), "openbot-setup-computer-"));
+    dir = await mkdtemp(join(tmpdir(), "xiongbao-setup-computer-"));
     await Promise.all(
       ["profiles", "workspace", "recorder"].map((name) =>
         mkdir(join(dir, name)),

@@ -529,7 +529,7 @@ function ConnectionSection({ agent }: { agent: AgentProfile }) {
         <CallbackTokenPanel
           agentId={agent.id}
           hasToken={agent.hasCallbackToken}
-          fromOpenBot={agent.keyFromOpenBot === true}
+          fromXiongBao={agent.keyFromXiongBao === true}
         />
       ) : null}
     </PageSection>

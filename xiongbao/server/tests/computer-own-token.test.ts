@@ -73,7 +73,7 @@ const started: Computer[] = [];
 async function startComputer(
   environment: Record<string, string>,
 ): Promise<Computer> {
-  const dir = await mkdtemp(join(tmpdir(), "openbot-own-token-"));
+  const dir = await mkdtemp(join(tmpdir(), "xiongbao-own-token-"));
   await Promise.all(
     ["profiles", "workspace", "recorder"].map((name) => mkdir(join(dir, name))),
   );
@@ -362,7 +362,7 @@ describe("the server calling a person's computer", () => {
 });
 
 describe("the computers that keep the deployment's token", () => {
-  test("the one shared computer, and OpenBot Desktop's host-side browser computer, are sent the deployment's token", () => {
+  test("the one shared computer, and XiongBao Desktop's host-side browser computer, are sent the deployment's token", () => {
     // Neither is a boundary between people: the shared computer is documented as one computer for everybody, and
     // Desktop's runs the person's own browsers, and no Bot, on their own machine. Both are started with it.
     const audit = { insert: async () => undefined };

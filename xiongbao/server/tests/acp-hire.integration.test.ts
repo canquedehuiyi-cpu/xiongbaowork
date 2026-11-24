@@ -520,7 +520,7 @@ describe("an external employee's configuration", () => {
     expect(read.status).toBe(200);
     expect(await read.json()).toMatchObject({
       agent: {
-        runsOnOpenBotModel: false,
+        runsOnXiongBaoModel: false,
         external: {
           harness: "codex",
           deviceId: device.deviceId,

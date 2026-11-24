@@ -194,7 +194,7 @@ test.each(["claude", "chatgpt"] as const)(
 test.each(["google", "xai"] as const)(
   "voice summaries reuse the authenticated native %s OAuth proxy",
   async (provider) => {
-    const root = await mkdtemp(join(tmpdir(), "openbot-voice-summary-"));
+    const root = await mkdtemp(join(tmpdir(), "xiongbao-voice-summary-"));
     const file = join(root, "oauth.json");
     const record: ModelOAuthRecord = {
       version: 1,

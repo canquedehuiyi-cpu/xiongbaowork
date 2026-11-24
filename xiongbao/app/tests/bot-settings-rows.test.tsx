@@ -211,7 +211,7 @@ const ON_HARNESS: AgentProfile = {
   ...BOT,
   endpoint: "http://agent-harness:4206/ag-ui",
   builtIn: false,
-  keyFromOpenBot: true,
+  keyFromXiongBao: true,
   framework: "LangChain",
 };
 

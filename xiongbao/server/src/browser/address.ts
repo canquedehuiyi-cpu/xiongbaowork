@@ -15,7 +15,7 @@ function asRecorderTakesIt(raw: string): string | null {
   return checked.ok ? checked.origin : null;
 }
 
-/** An address on this machine itself: 127.0.0.1 or [::1], over http with a port, as only OpenBot on this machine has. */
+/** An address on this machine itself: 127.0.0.1 or [::1], over http with a port, as only XiongBao on this machine has. */
 function isThisMachine(origin: string): boolean {
   try {
     const url = new URL(origin);
@@ -29,16 +29,16 @@ function isThisMachine(origin: string): boolean {
 }
 
 /**
- * Where the person's OpenBot browser reaches this OpenBot: its public origin, the address people's browsers use, in a
+ * Where the person's XiongBao browser reaches this XiongBao: its public origin, the address people's browsers use, in a
  * form the Recorder accepts (https, or http on a loopback address with a port).
  *
- * In order: the configured public URL (`OPENBOT_PUBLIC_URL`, else `BETTER_AUTH_URL`); then, for OpenBot running on this
- * machine, the address the person's own window is using, which OpenBot Desktop finds at runtime (127.0.0.1 or [::1],
+ * In order: the configured public URL (`OPENBOT_PUBLIC_URL`, else `BETTER_AUTH_URL`); then, for XiongBao running on this
+ * machine, the address the person's own window is using, which XiongBao Desktop finds at runtime (127.0.0.1 or [::1],
  * whichever its app answered on) and so never configures; then the app's own address (`OPENBOT_APP_URL`, else the first
  * of `TRUSTED_ORIGINS`). The request's address is taken only when it is this machine's: never another site's, which
  * would hand the person's Recorder token to whoever sent the request. Null when none of them is one the Recorder takes.
  */
-export function openbotAddress(
+export function xiongbaoAddress(
   config: Pick<DeploymentConfig, "publicUrl" | "appUrl">,
 ): (requestOrigin: string | undefined) => string | null {
   return (requestOrigin) => {

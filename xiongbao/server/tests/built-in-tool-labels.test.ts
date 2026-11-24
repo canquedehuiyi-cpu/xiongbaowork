@@ -4,7 +4,7 @@ import { ownToolLabel, readToolName } from "@xiongbao/shared/tool-name";
 import { builtInTools } from "./support/built-in-tools";
 
 /**
- * Every tool OpenBot offers a Bot has words for the transcript.
+ * Every tool XiongBao offers a Bot has words for the transcript.
  *
  * A step line names a tool from `OWN_TOOLS` in `shared/tool-name.ts`, and a tool with no entry there
  * falls through to its identifier. That is how a live conversation came to read
@@ -43,10 +43,10 @@ const DECIDED_AT_RUN_TIME: Record<string, string> = {
   "app/src/lib/copilot/sandboxed-tools.tsx: component.name":
     "A component somebody wrote in the browser. It draws itself and is named by whoever wrote it.",
   "agent-bot/src/index.ts: tool.name":
-    "The tools OpenBot sends a run, handed to the model provider unchanged.",
+    "The tools XiongBao sends a run, handed to the model provider unchanged.",
 };
 
-describe("the tools OpenBot offers a Bot", () => {
+describe("the tools XiongBao offers a Bot", () => {
   test("are found by reading every way a tool is registered", () => {
     const names = new Set(scan.named.map((tool) => tool.name));
     // One per way a name is written, so a scan that stopped reading one of them cannot pass quietly.

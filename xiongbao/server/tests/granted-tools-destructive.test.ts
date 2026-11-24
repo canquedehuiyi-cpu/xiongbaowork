@@ -50,7 +50,7 @@ test("a tool its app marks destructive is offered with the note at the end of it
   expect(DESTRUCTIVE_TOOL_NOTE).toContain("asks the person before it runs");
 });
 
-test("a Bot holding connected-app tools is told OpenBot asks before their deletes, archives and destructive tools", async () => {
+test("a Bot holding connected-app tools is told XiongBao asks before their deletes, archives and destructive tools", async () => {
   const tools = await grantedTools({
     store: storeWith([
       { ref: "crm/list_deals", description: "List deals.", destructive: false },
@@ -69,7 +69,7 @@ test("a Bot holding connected-app tools is told OpenBot asks before their delete
   expect(grantedToolGuidance([], ["gmail"])).not.toContain(
     CONNECTOR_APPROVAL_GUIDANCE,
   );
-  // 只持有 OpenBot 自己的记忆等内部工具时也不说：它们不经审批门，说了反而让 Bot 不再自己确认。
+  // 只持有 XiongBao 自己的记忆等内部工具时也不说：它们不经审批门，说了反而让 Bot 不再自己确认。
   const internal = [
     "recall_personal_memory",
     "forget_personal_memory",
@@ -88,6 +88,6 @@ test("a Bot holding connected-app tools is told OpenBot asks before their delete
   for (const search of [false, true])
     for (const personal of [false, true])
       expect(computerGuidance({ search, personal })).not.toContain(
-        "OpenBot itself asks",
+        "XiongBao itself asks",
       );
 });

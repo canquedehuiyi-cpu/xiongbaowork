@@ -423,7 +423,7 @@ export function createDeliveryStore(database: Database) {
     },
     /**
      * Twilio Advanced Opt-Out. The binding stays connected (START clears it); outbound sends see the
-     * mark and record `opted_out`. A person who disconnects in OpenBot still disables it outright.
+     * mark and record `opted_out`. A person who disconnects in XiongBao still disables it outright.
      */
     async setSmsOptOut(realm: string, identity: string, optedOut: boolean) {
       return database

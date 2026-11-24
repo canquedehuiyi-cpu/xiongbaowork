@@ -2,13 +2,14 @@ import {
   afterAll as bunAfterAll,
   beforeAll as bunBeforeAll,
   beforeEach as bunBeforeEach,
+  test as bunTest,
   describe,
   expect,
-  test as bunTest,
 } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { Hono } from "hono";
+import { notificationDestination } from "../../mobile/src/links";
 import {
   configureBotLifecycle,
   createBotLifecycleStore,
@@ -47,9 +48,8 @@ import type {
 import type { AttentionPing } from "../src/proactive/contracts";
 import { createProactiveStore } from "../src/proactive/store";
 import type { ProactiveSetting } from "../src/proactive/types";
-import { createWorkQueue } from "../src/work/queue";
-import { notificationDestination } from "../../mobile/src/links";
 import { runAsTenant } from "../src/tenant/context";
+import { createWorkQueue } from "../src/work/queue";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /*
@@ -89,7 +89,8 @@ const threadOf = (channelId: string) => `${channelId}-thread`;
 const asOwner = (body: () => unknown) => async () => {
   await runAsTenant(owner, body);
 };
-const test = (name: string, body: () => unknown) => bunTest(name, asOwner(body));
+const test = (name: string, body: () => unknown) =>
+  bunTest(name, asOwner(body));
 const beforeAll = (body: () => unknown) => bunBeforeAll(asOwner(body));
 const beforeEach = (body: () => unknown) => bunBeforeEach(asOwner(body));
 const afterAll = (body: () => unknown) => bunAfterAll(asOwner(body));
@@ -484,7 +485,7 @@ describe("a ping", () => {
     // Each phone once.
     expect(new Set(pushSends.map((push) => push.to as string)).size).toBe(2);
 
-    // A Bot's reply still pushes as it always has: titled OpenBot, opening its conversation.
+    // A Bot's reply still pushes as it always has: titled XiongBao, opening its conversation.
     pushSends.length = 0;
     await router.notify(
       {

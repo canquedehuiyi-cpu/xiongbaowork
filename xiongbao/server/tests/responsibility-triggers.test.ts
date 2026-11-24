@@ -45,7 +45,7 @@ const NOW = 1_790_000_000_000;
  * Two of this file's blocks use it as an ORACLE rather than as a tool: an implementation of HMAC-SHA256
  * that is not ours, and an X.509 certificate only it can mint. Substituting `node:crypto` for the oracle
  * would have this project checking itself against itself and calling that a cross-check, so when the
- * binary is absent the honest answer is a skip. `openbot-dev` does not ship OpenSSL, which is why this
+ * binary is absent the honest answer is a skip. `xiongbao-dev` does not ship OpenSSL, which is why this
  * file has carried one red name plus one load-time error ever since the suite moved into the container.
  * The skip is printed, because a silent skip is how a covered path becomes an uncovered one.
  */
@@ -221,7 +221,7 @@ function ingress(resolved: ResolvedTrigger | null) {
   });
   const post = (body: string, headers: Record<string, string>) =>
     routes.fetch(
-      new Request(`https://openbot.test/${TRIGGER_ID}`, {
+      new Request(`https://xiongbao.test/${TRIGGER_ID}`, {
         method: "POST",
         headers: { "content-type": "application/json", ...headers },
         body,
@@ -437,7 +437,7 @@ describe("provider ingress", () => {
     const secret = "gh-secret";
     const { events, post } = ingress(
       trigger(
-        parseTriggerConfig({ kind: "github", repository: "openbot/demo" }),
+        parseTriggerConfig({ kind: "github", repository: "xiongbao/demo" }),
         { secret },
       ),
     );
@@ -452,7 +452,7 @@ describe("provider ingress", () => {
         "x-github-delivery": `g-${repository}`,
       });
     };
-    expect((await send("openbot/demo")).status).toBe(200);
+    expect((await send("xiongbao/demo")).status).toBe(200);
     expect((await send("someone/else")).status).toBe(403);
     expect(events.map((event) => event.type)).toEqual(["issues.opened"]);
   });
@@ -692,7 +692,7 @@ describeWithOpenssl("inbound email via SES -> SNS", () => {
     minted.status === 0 ? readFileSync(join(dir, "key.pem"), "utf8") : "";
   const cert =
     minted.status === 0 ? readFileSync(join(dir, "cert.pem"), "utf8") : "";
-  const TOPIC = "arn:aws:sns:us-east-1:123456789012:openbot-inbound";
+  const TOPIC = "arn:aws:sns:us-east-1:123456789012:xiongbao-inbound";
   const CERT_URL =
     "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-fixture.pem";
   function signed(
@@ -737,7 +737,7 @@ describeWithOpenssl("inbound email via SES -> SNS", () => {
         commonHeaders: { from: [from], to: ["x"], subject: "Disk full" },
       },
       receipt: {
-        recipients: [`trigger-${TRIGGER_ID}@in.openbot.test`],
+        recipients: [`trigger-${TRIGGER_ID}@in.xiongbao.test`],
         spamVerdict: { status: "PASS" },
         virusVerdict: { status: "PASS" },
         dkimVerdict: { status: dkim },
@@ -764,7 +764,7 @@ describeWithOpenssl("inbound email via SES -> SNS", () => {
         events.push(event);
         return { eventId: "e", duplicate: false, runIds: ["r"] };
       },
-      config: { domain: "in.openbot.test", topicArns: [TOPIC] },
+      config: { domain: "in.xiongbao.test", topicArns: [TOPIC] },
       verify: createSnsVerifier(async (url) => {
         fetched.push(url);
         return cert;
@@ -773,7 +773,7 @@ describeWithOpenssl("inbound email via SES -> SNS", () => {
     });
     const post = (message: unknown) =>
       routes.fetch(
-        new Request("https://openbot.test/sns", {
+        new Request("https://xiongbao.test/sns", {
           method: "POST",
           body: JSON.stringify(message),
         }),

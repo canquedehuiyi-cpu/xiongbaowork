@@ -1663,7 +1663,7 @@ export const IDENTITY_ACTION =
   /(_GET_ME|_PROFILE|_CURRENT_USER|_USER_INFO|_WHOAMI|_GET_SHOP_DETAILS)$/;
 
 /**
- * The server half of every ref OpenBot's own memory tools carry (`memory/recall_personal_memory`,
+ * The server half of every ref XiongBao's own memory tools carry (`memory/recall_personal_memory`,
  * see `memory/tools.ts`). No server may be added under it: see `addCustomServer`.
  */
 export const MEMORY_TOOLS_SERVER = "memory";
@@ -1800,7 +1800,7 @@ export type PluginStoreOptions = {
    * the signed-in person (`auth/entra.ts`, 上游 #931). Absent on a deployment with no Microsoft
    * sign-in, where such a server cannot be added and a call to one already stored is refused.
    * Carries the resources the deployment registered for it (`MICROSOFT_OAUTH_OBO_RESOURCES`) and
-   * OpenBot's own API, which no scope may name; see `plugins/entra-access.ts`.
+   * XiongBao's own API, which no scope may name; see `plugins/entra-access.ts`.
    */
   entra?: EntraOnBehalf;
   /**
@@ -4674,7 +4674,7 @@ export function createPluginStore(options: PluginStoreOptions) {
       }
 
       /*
-       * Nor the name OpenBot's own memory tools are spelled under. Their refs are `memory/<tool>`
+       * Nor the name XiongBao's own memory tools are spelled under. Their refs are `memory/<tool>`
        * (`memory/tools.ts`), so a server at `memory` would list `memory/recall_personal_memory` beside
        * them: two tools one name, and the one an admin typed could be taken for the person's own
        * memory by anything that reads a ref.
@@ -7586,7 +7586,7 @@ export function createPluginStore(options: PluginStoreOptions) {
         eventType: "configuration.changed",
         targetType: grantTargetType(kind),
         targetId: ref,
-        // OpenBot 自己替人做的授予（`openbot:` 开头，见 `./personal-defaults`）记为部署发起，不读成有人按了按钮。
+        // XiongBao 自己替人做的授予（granted_by 带系统前缀，见 `./personal-defaults`）记为部署发起，不读成有人按了按钮。
         ...(by.startsWith("openbot:")
           ? { initiator: { kind: "deployment" } as AuditInitiator }
           : {}),
@@ -7637,9 +7637,9 @@ export function createPluginStore(options: PluginStoreOptions) {
     /**
      * 一次给员工同一个应用的几个动作，轨迹上只写一行：目标是应用，payload 里列出 `refs`（上游 #1315）。
      *
-     * 给 OpenBot 自己替人做的授予用（个人版里每个应用的全部动作，见 `./personal-defaults`）：逐个调用
+     * 给 XiongBao 自己替人做的授予用（个人版里每个应用的全部动作，见 `./personal-defaults`）：逐个调用
      * {@link grant} 时，一次升级给三位员工各加七个动作，Activity 上就是二十一行「有人改了设置」。`by` 是
-     * OpenBot 自己的名字（`openbot:` 开头）时，这一行记为部署发起。
+     * XiongBao 自己的名字（带 `./personal-defaults` 写下的系统前缀）时，这一行记为部署发起。
      *
      * 只写还没有的：同一个动作已有授予（管理员的、主人的或平台的）时一行都不动，所以主人的授予不会被改成
      * 管理员的，平台的 `system` 行也不会被这一帧碰到。Team Bot 的授予照 {@link grant} 记成 `team`。

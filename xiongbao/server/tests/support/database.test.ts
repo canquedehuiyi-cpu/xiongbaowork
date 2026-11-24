@@ -6,14 +6,18 @@ describe("TEST_DATABASE_URL", () => {
     expect(() => testDatabaseUrlFrom({})).toThrow(/TEST_DATABASE_URL/);
   });
 
-  test("refuses the live development database even when DATABASE_URL names it", () => {
-    expect(() =>
-      testDatabaseUrlFrom({
-        TEST_DATABASE_URL: "postgres://openbot:openbot@localhost:5432/openbot",
-        DATABASE_URL: "postgres://openbot:openbot@localhost:5432/openbot_test",
-      }),
-    ).toThrow(/live openbot database/);
-  });
+  test.each(["openbot", "xiongbao"])(
+    "refuses the live development database %s even when DATABASE_URL names a test one",
+    (name) => {
+      expect(() =>
+        testDatabaseUrlFrom({
+          TEST_DATABASE_URL: `postgres://openbot:openbot@localhost:5432/${name}`,
+          DATABASE_URL:
+            "postgres://openbot:openbot@localhost:5432/openbot_test",
+        }),
+      ).toThrow(`live development database (${name})`);
+    },
+  );
 
   test("does not read DATABASE_URL as a fallback", () => {
     expect(() =>

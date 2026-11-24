@@ -4,7 +4,7 @@
  *
  * The model never answers the question. It only names the action: which Bot, whose account, what
  * started the run, and either an app's tool or something on the Bot's computer. That action is checked
- * against what this OpenBot has (its Bots, people, groups, apps and tools), sent back once with what
+ * against what this XiongBao has (its Bots, people, groups, apps and tools), sent back once with what
  * was wrong when it fails, and refused rather than guessed at when it fails twice, as an audit question
  * is (`audit-ask.ts`). The admin sees it as chips, changes any of them, and asks for the check, which
  * is deterministic (`what-if-check.ts`).
@@ -72,7 +72,7 @@ const PROMPT_TOOLS = 2000;
 const PROMPT_PEOPLE = 300;
 
 /**
- * What this OpenBot has that an action can name, read from the database: its Bots with their owners,
+ * What this XiongBao has that an action can name, read from the database: its Bots with their owners,
  * its people, its groups as the Permissions page lists them, and its apps with their tools, each
  * tool classified as `callTool` classifies it. Ordered so a prompt built from it is the same twice.
  */
@@ -308,7 +308,7 @@ export function parsePrompt(
 }
 
 /**
- * The model's answer as an action this OpenBot can check, or what is wrong with it. Pure, so the
+ * The model's answer as an action this XiongBao can check, or what is wrong with it. Pure, so the
  * checks are tested on their own and against the model's real answers.
  *
  * What the question leaves out stays empty, for the admin to fill in on the chips, except whose

@@ -6,7 +6,7 @@ import { hostAccessTools } from "../src/host-access/tools";
 import { waitingLine } from "../src/tasks/state";
 
 /*
- * A folder on the person's computer is named by its name, never by the id OpenBot gave the grant.
+ * A folder on the person's computer is named by its name, never by the id XiongBao gave the grant.
  *
  * FOUND ON THE MAC (main 3b400d2c1): with "Ask before making changes" on, the conversation's card for
  * a folder edit read "Write file on host-grant-15407-1794112361547002000", the command's "Run command

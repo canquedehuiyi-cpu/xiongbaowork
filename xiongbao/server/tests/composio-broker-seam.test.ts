@@ -38,7 +38,7 @@ describe("brokerSentence", () => {
  * The return address, which is the one value on this seam a type cannot settle.
  *
  * `authorize`'s `returnUrl` is documented as required and spelled `string`, and `""`, `"   "` and
- * `openbot.example.com/settings/...` all satisfy that: they reach Composio as a callback nobody
+ * `xiongbao.example.com/settings/...` all satisfy that: they reach Composio as a callback nobody
  * returns through, and the person who finds out is the one who has just granted a third party
  * access to their mailbox. The route assembles the address at run time from `OPENBOT_APP_URL`, an
  * unvalidated environment string, so `string` really is the strongest promise it can make and the
@@ -58,7 +58,7 @@ describe("brokerReturnUrl", () => {
 
   test("refuses an address no browser could come back through", () => {
     for (const unusable of [
-      "openbot.example.com/connections/x",
+      "xiongbao.example.com/connections/x",
       "localhost:3001/connections/x",
       "/connections/x",
       "javascript:alert(1)",
@@ -71,9 +71,9 @@ describe("brokerReturnUrl", () => {
    * THE ADDRESS HANDED IN WAS BUILT ON THE HOST THE REFUSAL QUOTES ON PURPOSE, which left this
    * assertion verifying one segment of it.
    *
-   * The sentence names `openbot.example.com` in its own example of the fix — "https://
-   * openbot.example.com rather than openbot.example.com" — and the value this test passed was
-   * `openbot.example.com/settings/...`. So `not.toContain` could only ever have been answered by
+   * The sentence names `xiongbao.example.com` in its own example of the fix — "https://
+   * xiongbao.example.com rather than xiongbao.example.com" — and the value this test passed was
+   * `xiongbao.example.com/settings/...`. So `not.toContain` could only ever have been answered by
    * the path: a refusal that echoed the host back would have matched the message's own example and
    * looked, to this test, exactly like one that had not.
    *
@@ -86,7 +86,7 @@ describe("brokerReturnUrl", () => {
    * reasons.
    */
   test("says which setting fixes it, and never quotes the address", () => {
-    const address = "openbot-tenant-42.internal.corp/connections/9f3c";
+    const address = "xiongbao-tenant-42.internal.corp/connections/9f3c";
 
     let thrown: unknown;
     try {
@@ -98,13 +98,13 @@ describe("brokerReturnUrl", () => {
     const sentence = brokerSentence(thrown);
     expect(sentence).toContain("XIONGBAO_APP_URL");
     expect(sentence).not.toContain(address);
-    expect(sentence).not.toContain("openbot-tenant-42.internal.corp");
+    expect(sentence).not.toContain("xiongbao-tenant-42.internal.corp");
     expect(sentence).not.toContain("/connections/9f3c");
   });
 
   test("hands back the address a configured deployment built", () => {
-    expect(brokerReturnUrl("https://openbot.test/connections/x")).toBe(
-      "https://openbot.test/connections/x",
+    expect(brokerReturnUrl("https://xiongbao.test/connections/x")).toBe(
+      "https://xiongbao.test/connections/x",
     );
     expect(brokerReturnUrl("http://localhost:3001/admin/plugins/x")).toBe(
       "http://localhost:3001/admin/plugins/x",
@@ -128,15 +128,15 @@ describe("brokerReturnUrl", () => {
    * trimmed would pass the first half of this table and strand somebody on the second.
    */
   test("hands back the address it checked rather than the padding around it", () => {
-    const intended = "https://openbot.test/connections/x";
+    const intended = "https://xiongbao.test/connections/x";
 
     for (const disguised of [
-      " https://openbot.test/connections/x",
-      "https://openbot.test/connections/x\n",
-      "\thttps://openbot.test/connections/x ",
-      "https://openbot\n.test/connections/x",
-      "https://openbot.test/conn\tections/x",
-      "https://openbot.test/connections\r/x",
+      " https://xiongbao.test/connections/x",
+      "https://xiongbao.test/connections/x\n",
+      "\thttps://xiongbao.test/connections/x ",
+      "https://xiongbao\n.test/connections/x",
+      "https://xiongbao.test/conn\tections/x",
+      "https://xiongbao.test/connections\r/x",
     ]) {
       expect(brokerReturnUrl(disguised)).toBe(intended);
     }

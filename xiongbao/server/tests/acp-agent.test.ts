@@ -30,7 +30,7 @@ import { TurnWatchdog } from "../src/channels/turn-watchdog";
 import {
   ASKED_RUN,
   isAskedRun,
-  onOpenBotRunner,
+  onXiongBaoRunner,
   type RegisteredAgent,
   registeredAgentFromRow,
   resolveRuntimeAgents,
@@ -963,8 +963,8 @@ describe("device_acp in the runtime", () => {
         ),
       ),
     ).toBeNull();
-    // A check-in or a title runs it on OpenBot's own runner, as itself.
-    expect(onOpenBotRunner(built as RegisteredAgent)).toMatchObject({
+    // A check-in or a title runs it on XiongBao's own runner, as itself.
+    expect(onXiongBaoRunner(built as RegisteredAgent)).toMatchObject({
       id: "agent-1",
       type: "built_in",
     });

@@ -288,7 +288,7 @@ type RegisteredBuiltInAgent = {
    * name (`identityGuidance`), as a remote Bot's standing role tells it.
    */
   title?: string;
-  /** What runs it, which for a Bot here is OpenBot (`frameworkOf`). Told with its name too. */
+  /** What runs it, which for a Bot here is XiongBao (`frameworkOf`). Told with its name too. */
   framework?: string;
   /** Who this coworker is, as its owner wrote it. Absent or empty sends no section. See ticket 014. */
   persona?: Persona | null;
@@ -422,7 +422,7 @@ export function accessibilityTitle(): string {
  * is called.
  *
  * Then the subtitle under its name, the way a remote Bot's standing role says it
- * (`standingRoleMessage`), and the framework it runs on, which is OpenBot's own whatever the
+ * (`standingRoleMessage`), and the framework it runs on, which is XiongBao's own whatever the
  * subtitle says (`frameworkOf`).
  */
 export function identityGuidance(
@@ -507,11 +507,11 @@ export function standingRoleMessage(
 }
 
 /**
- * The working rules every brought Bot is sent after its role, the same ones a Bot OpenBot runs is
+ * The working rules every brought Bot is sent after its role, the same ones a Bot XiongBao runs is
  * given (`workingGuidance`): how to work, when to ask, where answers come from, how to answer, when
  * to use subagents, and what untrusted content is.
  *
- * Shared by every remote Bot, whatever runs it. Its own role describes the work, and OpenBot adds
+ * Shared by every remote Bot, whatever runs it. Its own role describes the work, and XiongBao adds
  * these to the same message, the one every framework reads as its instructions. The compliance Bot
  * that answered a filing question with thresholds and deadlines and no source was a `remote-ag-ui`
  * agent whose entire prompt was "Investigate policies, transaction monitoring, and control
@@ -520,7 +520,7 @@ export function standingRoleMessage(
  * how-to-work and asking sections a Claude SDK Bot lost "act when you have enough" and "report what
  * you skipped" along with it.
  *
- * Left off a role run on OpenBot's own runner (`onOpenBotRunner`), which is given the built-in
+ * Left off a role run on XiongBao's own runner (`onXiongBaoRunner`), which is given the built-in
  * version instead, so it is not said twice.
  */
 const BROUGHT_BOT_GUIDANCE = `\n\n${workingGuidance({
@@ -545,19 +545,19 @@ function deviceAcpAnsweredHere(
 }
 
 /**
- * A Bot as OpenBot's own runner builds it, whatever it runs on elsewhere: what a check-in runs.
+ * A Bot as XiongBao's own runner builds it, whatever it runs on elsewhere: what a check-in runs.
  *
  * A CHECK-IN NEVER CALLS A BOT'S OWN ENDPOINT. A Bot on another framework (a harness, an agent an
- * admin registered) holds tools of its own there, and OpenBot cannot see them, so it cannot hold them
+ * admin registered) holds tools of its own there, and XiongBao cannot see them, so it cannot hold them
  * to reads; a check-in that called the endpoint could act through them with nobody watching. Run
  * here instead, as that Bot (its name and role, from the same standing role it is sent), on the
- * deployment's model, with the person's connected tools through OpenBot's own dispatcher, every tool
- * a check-in can touch is one OpenBot can refuse. The check-in's job is set by OpenBot's own
+ * deployment's model, with the person's connected tools through XiongBao's own dispatcher, every tool
+ * a check-in can touch is one XiongBao can refuse. The check-in's job is set by XiongBao's own
  * instruction, so little of the framework's own logic is lost.
  *
- * A built-in Bot, or one OpenBot cannot run at all, is returned as it is.
+ * A built-in Bot, or one XiongBao cannot run at all, is returned as it is.
  */
-export function onOpenBotRunner(agent: RegisteredAgent): RegisteredAgent {
+export function onXiongBaoRunner(agent: RegisteredAgent): RegisteredAgent {
   if (agent.type === "device_acp") return deviceAcpAnsweredHere(agent);
   if (agent.type !== "remote_ag_ui" && agent.type !== "remote_mastra")
     return agent;
@@ -593,7 +593,7 @@ function runByThisDeployment(agent: RegisteredAgent): boolean {
  * retries up to three times when the answer is not a short title. On an agent somebody registered
  * by its address, that was three runs nobody asked for: answered as if the person had said it,
  * spending their model and written into their agent's own history. So those runs are answered on
- * OpenBot's own runner instead, as the Bot (`onOpenBotRunner`) on the deployment's model, the way a
+ * XiongBao's own runner instead, as the Bot (`onXiongBaoRunner`) on the deployment's model, the way a
  * built-in Bot names its conversations and a check-in runs. A harness this deployment runs is its
  * own, and keeps naming on its own model.
  */
@@ -621,7 +621,7 @@ export type RuntimeModel = {
   /**
    * What the composer's model picker calls `defaultModel`, for a run whose model the catalogue
    * chose (`modelForRun`). The Bot is told it (`modelGuidance`). Absent where nothing chose it: a
-   * plan whose own listing was not read leaves its harness to its own model, which OpenBot can't name.
+   * plan whose own listing was not read leaves its harness to its own model, which XiongBao can't name.
    */
   label?: string;
   /**
@@ -868,7 +868,7 @@ function isHttpUrl(value: string) {
 /**
  * What the person asking has said they want, in every channel, from every coworker.
  *
- * The OpenBot equivalent of a CLAUDE.md, and the third instruction carrier beside the two that
+ * The XiongBao equivalent of a CLAUDE.md, and the third instruction carrier beside the two that
  * already existed. A role is the coworker's and reads the same to everybody who talks to it; a skill
  * is pulled in for one task. This is the person's, and it is true of every task they ever ask for —
  * how they want to be written to, what their company is called, what it is not to be called.
@@ -1324,7 +1324,7 @@ export function builtInAgentConfiguration(
      */
     prompt: [
       /*
-       * Who it is, first. A remote Bot run here for a check-in (`onOpenBotRunner`) carries its
+       * Who it is, first. A remote Bot run here for a check-in (`onXiongBaoRunner`) carries its
        * standing role, which is already in sections and names it the same way.
        */
       ...(agent.systemPrompt.startsWith("<identity>")
@@ -1351,13 +1351,13 @@ export function builtInAgentConfiguration(
       // Where its files and commands run (RES2): the person's choice, so beside who it works for.
       ...promptSection("project", project),
       /*
-       * Unconditional: how to work, when to ask (OpenBot asks before consequential actions, so the
+       * Unconditional: how to work, when to ask (XiongBao asks before consequential actions, so the
        * Bot does not ask as well), where answers come from (a Bot with no tools needs that most: all
        * it says is its own knowledge), when to draw a component, when to use subagents, and how to
        * read the untrusted-content envelope every outside result arrives in.
        */
       /*
-       * The asking section is this fork's: OpenBot asks the person before consequential actions, so
+       * The asking section is this fork's: XiongBao asks the person before consequential actions, so
        * the Bot does not ask as well. Worded for this fork's floors (approvals/policy.ts), and the
        * connected-app bullet only for a run that holds a connected-app tool, as
        * `CONNECTOR_APPROVAL_GUIDANCE` is; then upstream's closed test. See `builtInAskingGuidance`.
@@ -2472,7 +2472,7 @@ async function buildAgent(
       answersOwnRunsHere(agent, holdsTools)
         ? () =>
             buildAgent(
-              onOpenBotRunner(agent),
+              onXiongBaoRunner(agent),
               model,
               apiKey,
               stallGuard,
@@ -2596,7 +2596,7 @@ async function buildAgent(
    *
    * Two limits. Chat Completions refuses a 129th tool, so a run headed there is held to that. Where a
    * run searches, it is held to `MODEL_TOOL_LIMIT` on every provider, because that is the most
-   * `toolsForStep` will send; that number is OpenBot's, and the refusal says so rather than putting
+   * `toolsForStep` will send; that number is XiongBao's, and the refusal says so rather than putting
    * it in the provider's mouth. A run on any other path with search off has no count to meet.
    *
    * The refusal is the person's answer; the log line and the audit row are the admin's, because a Bot
@@ -3223,7 +3223,7 @@ function withoutForgedServerEvents(transport: AbstractAgent): AbstractAgent {
  * the run reaches this transport, turns it into the `render_ui` tool and the generative UI guide in
  * `context`, and checks every `render_ui` call against it on the way back. The endpoint gets that
  * tool and that guide either way, so the envelope was the same catalog a second time, on every turn,
- * and was most of what a turn sent. No agent OpenBot runs reads it. The rest of `copilotkit` stays.
+ * and was most of what a turn sent. No agent XiongBao runs reads it. The rest of `copilotkit` stays.
  */
 function withoutGenerativeUIEnvelope(transport: AbstractAgent): AbstractAgent {
   const run = transport.run.bind(transport);
@@ -3253,7 +3253,7 @@ function withoutGenerativeUIEnvelope(transport: AbstractAgent): AbstractAgent {
  * A run as an endpoint is sent it, never with more tools than one request to a model may carry.
  *
  * The last word, after every middleware has added what it adds, so the count is what reaches the
- * endpoint and, through it, the model: a harness OpenBot installs binds exactly the tools it is sent
+ * endpoint and, through it, the model: a harness XiongBao installs binds exactly the tools it is sent
  * (`agent-langgraph-agui`'s `bind_tools`; `agent-claude-sdk` adds Claude Code's own only on a
  * provider that documents no count). The Bot's grants are fitted first, where its chosen skills are
  * known (`remoteAgentWithStandingRole`), so this cuts nothing unless that left too little room. What
@@ -3315,7 +3315,7 @@ const CONVERSATION_ROW_LABEL =
  *
  * `@ag-ui/mastra` converts user, assistant, developer and tool messages and drops every `system`
  * row. The server's own two, the standing role and the granted-tools summary, reach a Mastra Bot as
- * context instead (`mastraOpenBotContext`), where its harness makes them its instructions, so those
+ * context instead (`mastraXiongBaoContext`), where its harness makes them its instructions, so those
  * are left for the bridge to drop. Every other system row is conversation, not instruction: one a
  * browser inserted (a picked skill's instructions reach the Bot in its standing role instead, see
  * `picked-skill.ts`), the personal-memory records the server quotes as untrusted data. Each now goes where it sat, labelled and quoted as JSON the way
@@ -3445,7 +3445,7 @@ function remoteAgentWithStandingRole(
    * The model and effort this run answers on, for a harness this deployment runs that takes them
    * (`takesModelChoice`). Sent as `forwardedProps.openbotModel`, and the model's `label` named in
    * the standing role (`modelGuidance`). Absent for every other remote Bot, which picks its own
-   * model, so OpenBot names none.
+   * model, so XiongBao names none.
    */
   chooseModel?: (input: RunAgentInput) => Promise<
     | {
@@ -3459,7 +3459,7 @@ function remoteAgentWithStandingRole(
   /** Who answered, by Bot id, for another Bot's answer in this one's thread. See {@link buildAgents}. */
   botNames: ReadonlyMap<string, string> = new Map(),
   /**
-   * The Bot on OpenBot's own runner, which answers every run the runtime makes for itself instead of
+   * The Bot on XiongBao's own runner, which answers every run the runtime makes for itself instead of
    * the endpoint. Absent, those runs go to the endpoint holding nothing. See `answersOwnRunsHere`.
    */
   answerOwnRuns?: () => Promise<AbstractAgent>,
@@ -3682,7 +3682,7 @@ function remoteAgentWithStandingRole(
             ...promptSection("skills_held", heldSkills),
             /*
              * A routine firing on a Bot that runs elsewhere is unattended too, and told so the way
-             * a built-in Bot is. A check-in never reaches here: it runs on OpenBot's own runner.
+             * a built-in Bot is. A check-in never reaches here: it runs on XiongBao's own runner.
              */
             ...promptSection("run_mode", runModeGuidance(runModeOf(initiator))),
             /*
@@ -3735,7 +3735,7 @@ function remoteAgentWithStandingRole(
             agent.type === "remote_mastra"
               ? [
                   ...callerMastraContext(input.context ?? []),
-                  ...mastraOpenBotContext({
+                  ...mastraXiongBaoContext({
                     standingMessage,
                     holdingsMessage,
                     botId: agent.id,
@@ -3873,7 +3873,7 @@ function callerMastraContext(context: AgentContext[]): AgentContext[] {
   );
 }
 
-function mastraOpenBotContext({
+function mastraXiongBaoContext({
   standingMessage,
   holdingsMessage,
   botId,
@@ -4267,7 +4267,7 @@ export type HoldsTools = (input: RunAgentInput) => boolean;
  * either. And always written, unlike the product telemetry context a run may also carry, which is
  * absent whenever that telemetry is off.
  */
-export const ASKED_RUN = "openbotAskedRun";
+export const ASKED_RUN = "xiongbaoAskedRun";
 
 /** A run somebody asked for, as {@link ASKED_RUN} says. No other run holds the Bot's tools. */
 export function isAskedRun(input: RunAgentInput): boolean {
@@ -4628,10 +4628,10 @@ export function mountCopilotRuntime(
     // returns, so omitting it puts every person in the deployment in the same thread space and one
     // person's conversations become another's.
     identifyUser,
-    // Carried on the events the runtime already sends, so OpenBot's traffic is separable from any
+    // Carried on the events the runtime already sends, so XiongBao's traffic is separable from any
     // other deployment's. Adds no events of its own.
     telemetryProperties: {
-      app_id: "openbot",
+      app_id: "xiongbao",
       ...options.productTelemetry?.deploymentProperties(),
       ...(config.accessibility
         ? { accessibility_title: accessibilityTitle() }
@@ -4662,7 +4662,7 @@ export function mountCopilotRuntime(
      * Left unset, the runtime copies `authorization` and every `x-*` header from the request that
      * started a run onto the agent it runs, and a remote Bot's agent is a POST to whatever address
      * its author registered. Anyone allowed to publish a Bot can register their own, so a colleague
-     * signed in with an Entra bearer would hand that author a token OpenBot itself accepts.
+     * signed in with an Entra bearer would hand that author a token XiongBao itself accepts.
      *
      * No Bot reads anything from the person's request. A Bot's key and the deployment's token are
      * the Bot's own headers, set on the server when the Bot is loaded, and the signed run travels in

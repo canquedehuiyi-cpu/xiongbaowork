@@ -431,7 +431,7 @@ describe("the MCP market's second batch", () => {
         authorizationUrlFor({
           auth,
           clientId: "client-1",
-          redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+          redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
           state: "sealed",
           codeChallenge: "challenge",
         }),
@@ -512,7 +512,7 @@ describe("token requests ask for JSON", () => {
         clientId: "c-1",
         clientSecret: "s-1",
         code: "code-1",
-        redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+        redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
         verifier: "verifier-1",
       });
       expect(grant?.refreshToken).toBe("rt-1");

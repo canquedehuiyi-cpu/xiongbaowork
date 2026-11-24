@@ -138,7 +138,7 @@ const routes = new Hono().route(
     session,
     async () => true,
     {
-      publicUrl: "https://openbot.example",
+      publicUrl: "https://xiongbao.example",
       appUrl: APP_URL,
       encryptionKey: `${"A".repeat(43)}=`,
       personHasAccess: async () => true,

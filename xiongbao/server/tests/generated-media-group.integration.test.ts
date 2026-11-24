@@ -37,12 +37,12 @@ const threadId = `thread-${suite}`;
 const signedInAs =
   (id: string): MiddlewareHandler<{ Variables: AppVariables }> =>
   async (context, next) => {
-    context.set("actor", { id, email: `${id}@openbot.test`, role: "user" });
+    context.set("actor", { id, email: `${id}@xiongbao.test`, role: "user" });
     await runAsTenant(id, () => next());
   };
 const get = (as: string, id: string) =>
   createMediaRoutes(store, signedInAs(as)).request(
-    new Request(`http://openbot.test/${id}`),
+    new Request(`http://xiongbao.test/${id}`),
   );
 
 const PNG = Buffer.from(

@@ -443,7 +443,7 @@ const foreignToolkit = `foreign-${suite}`;
  * its actions go out with the server rows in {@link clean}.
  */
 const probeAppId = `probe-${suite}`;
-const admin = "admin@openbot.local";
+const admin = "admin@xiongbao.local";
 /**
  * THE SECRET A PERSON TYPES, which the test below looks for everywhere it must not be.
  *

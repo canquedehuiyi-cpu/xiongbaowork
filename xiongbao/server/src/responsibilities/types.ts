@@ -145,7 +145,7 @@ export type ResponsibilityContinuation = {
  * Why a goal runs again and again, so that no run of it is the last: it was made `recurring`, an
  * enabled routine of its Bot names it, or an event wakes it (a subscription or an enabled trigger).
  *
- * FOUND ON WINDOWS: asked to "check the latest OpenBot release every morning and tell me what
+ * FOUND ON WINDOWS: asked to "check the latest XiongBao release every morning and tell me what
  * changed, and run it now", a Bot made a goal and a daily routine that runs it. The goal's first run
  * met its success criteria, as every run of it would, and completed the goal. The next morning's
  * routine would have found nothing to run. A goal that repeats is ended by the person, never by one
@@ -182,7 +182,7 @@ export type RoutineGoalLink = {
  * titled "Email" was run by any routine that mentioned email. Its runs could then never complete it,
  * and Activity listed it with somebody else's schedule. A routine made before routines recorded their
  * goal (`goalByTitle`) is still read from its instruction, but only by the goal's id or its whole
- * title, exactly, between quotes: `Run the goal "Track OpenBot releases"`, never a word inside a
+ * title, exactly, between quotes: `Run the goal "Track XiongBao releases"`, never a word inside a
  * sentence.
  */
 export function routineRunsGoal(

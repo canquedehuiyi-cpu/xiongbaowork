@@ -99,7 +99,7 @@ export const learningThreadBindings = pgTable(
 
 /**
  * A person's own Learning space: the Intelligence Learning container every recording they make joins
- * (learning/personal-space.ts). A row means OpenBot saw the container exist, because it created it, Intelligence said
+ * (learning/personal-space.ts). A row means XiongBao saw the container exist, because it created it, Intelligence said
  * the id was already taken, or the runtime key read it. The id is derived from the person's, so the row only remembers
  * that it exists. It goes with its person; the container stays in Intelligence.
  */
@@ -248,7 +248,7 @@ export const learningOpenSkills = pgTable(
 );
 
 /**
- * One row per person and Skill they or an admin approved in the person's space. No row means it was approved before OpenBot recorded approvals (or in the Intelligence dashboard), and is treated as admin-approved.
+ * One row per person and Skill they or an admin approved in the person's space. No row means it was approved before XiongBao recorded approvals (or in the Intelligence dashboard), and is treated as admin-approved.
  * `sharing` follows the request to open the Skill to every Bot.
  */
 export const learningSkillApprovals = pgTable(

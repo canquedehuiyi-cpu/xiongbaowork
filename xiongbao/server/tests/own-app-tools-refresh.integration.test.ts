@@ -16,7 +16,7 @@ import { runAsTenant } from "../src/tenant/context";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
- * 每次启动，把 OpenBot 自带应用（工具清单就是本仓库代码的应用）保存的工具刷新到这一版（上游 #1130）。
+ * 每次启动，把 XiongBao 自带应用（工具清单就是本仓库代码的应用）保存的工具刷新到这一版（上游 #1130）。
  *
  * Routines、Google Drive 和百度网盘的工具就是代码本身，可部署里保存的是添加应用那一版的清单，过去
  * 只有管理员按「刷新工具」才会替换。所以某一版改了工具名或描述，已有部署永远收不到。
@@ -126,7 +126,7 @@ beforeAll(async () => {
         id: ROUTINES,
         catalogueKey: "routines",
         title: "Routines",
-        vendor: "OpenBot",
+        vendor: "XiongBao",
         url: "builtin://routines/",
         provenance: "first-party",
       },

@@ -20,6 +20,7 @@ import { z } from "zod";
 import { type AuditReader, type AuditStore, recordAuditEvent } from "../audit";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
+import { englishName } from "../brand";
 import {
   ask,
   objectIn,
@@ -50,7 +51,6 @@ import {
   type ApprovalRuleInput,
   RULE_BEHAVIOURS,
 } from "./types";
-import { englishName } from "../brand";
 
 /** How the gate matches a rule, said once and given to the writer and the reader alike. */
 const MATCHING = [
@@ -413,7 +413,7 @@ const BACKTEST_MAX = 1_000;
 export function createApprovalRuleDraftRoutes(options: {
   requireUser: MiddlewareHandler<{ Variables: AppVariables }>;
   service: ApprovalService;
-  /** This OpenBot's apps, their tools and its Bots (./rule-vocabulary.ts). */
+  /** This XiongBao's apps, their tools and its Bots (./rule-vocabulary.ts). */
   vocabulary: () => Promise<RuleVocabulary>;
   /** The deployment's own model, via `createModelCompleter`. Absent, `/translate` says one is needed. */
   complete?: ModelCompleter;

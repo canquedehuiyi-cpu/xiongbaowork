@@ -11,7 +11,7 @@
  * - whether this person connected it is `ownConnections`, one answer across every table a person's
  *   own connection is kept in.
  * An admin's key used for everybody (a server added by URL, web search with the deployment's key),
- * a Shared app's team account, a public endpoint and OpenBot's own built-in tools are not the
+ * a Shared app's team account, a public endpoint and XiongBao's own built-in tools are not the
  * person's, so a check-in never reads them.
  *
  * WHAT IN THEM. Only a tool that says it only reads (`labelledRead`, see `plugins/catalogue.ts`).

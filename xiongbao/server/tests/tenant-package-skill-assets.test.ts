@@ -206,7 +206,7 @@ describe("skill attachments in a tenant package", () => {
   });
 
   test("loading refuses a declared asset path that escapes its skill", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "openbot-assets-escape-"));
+    const directory = await mkdtemp(join(tmpdir(), "xiongbao-assets-escape-"));
     try {
       const write = async (filename: string, contents: string) => {
         await writeFile(join(directory, filename), contents, "utf8");

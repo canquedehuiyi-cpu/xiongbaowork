@@ -431,7 +431,7 @@ export type ComputerGatewayOptions = {
     ids: string[],
   ) => Promise<Map<string, { name: string | null; email: string }>>;
   /**
-   * Whose OpenBot browser each of these computers is (`person-` ids, browser/person.ts), as user ids. A person's browser
+   * Whose XiongBao browser each of these computers is (`person-` ids, browser/person.ts), as user ids. A person's browser
    * is a computer of its own named by a hash, so without this the admin screen cannot say whose it is.
    */
   browserOwners?: (computerIds: string[]) => Promise<Map<string, string>>;
@@ -444,7 +444,7 @@ export type FleetComputer = {
   kind: ComputerKey["kind"];
   /** The person it belongs to, on a person's computer. */
   personId?: string;
-  /** That person's name and address; on a person's own OpenBot browser, whose browser it is. */
+  /** That person's name and address; on a person's own XiongBao browser, whose browser it is. */
   person?: { name: string | null; email: string };
   /** The Bot: an isolated Bot's own computer, or one Bot's seat on the shared computer. */
   botId?: string;
@@ -908,7 +908,7 @@ export function createComputerGateway(
    * Where the snapshot a ref is resolved against lives.
    *
    * Not a `Map` in this process. It describes the live contents of a browser window, and the process
-   * that took it is rarely the one that resolves a ref from it: OpenBot is several servers behind a
+   * that took it is rarely the one that resolves a ref from it: XiongBao is several servers behind a
    * load balancer, and consecutive calls on one conversation land on different ones. Kept in memory,
    * the mapping is absent on every replica but the one that snapshotted, so the ref resolves to
    * nothing, the policy decides with no element in front of it, and the audit row cannot name what
@@ -2811,7 +2811,7 @@ export function createComputerGateway(
       const botIdOf = (computer: (typeof computers)[number]) =>
         computer.botId ??
         (computer.key.kind === "bot" ? computer.key.botId : undefined);
-      // A person's own OpenBot browser (Teach a Bot's) is listed under its own id, which is no Bot's: say whose it is.
+      // A person's own XiongBao browser (Teach a Bot's) is listed under its own id, which is no Bot's: say whose it is.
       const browserIds = computers.flatMap((computer) => {
         const id = botIdOf(computer);
         return id && isPersonBrowserId(id) ? [id] : [];

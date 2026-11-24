@@ -1,5 +1,4 @@
 import { describe, expect } from "bun:test";
-import { afterAll, afterEach, beforeAll, test } from "./support/platform-frame";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
@@ -11,9 +10,10 @@ import { createDatabase } from "../src/db/client";
 import { auditEvents, components } from "../src/db/schema";
 import { setEdition } from "../src/edition";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, afterEach, beforeAll, test } from "./support/platform-frame";
 
 /**
- * The Activity report in OpenBot Personal. Seen locally: asked for one, a Bot answered "Not shown:
+ * The Activity report in XiongBao Personal. Seen locally: asked for one, a Bot answered "Not shown:
  * Activity report. showActivityReport can't use the function botActivity. An admin has to give it
  * to this component." In the team edition an admin gives a component the data it reads; the
  * personal edition has no admin, so nothing ever did, and the report was refused in every install.
@@ -46,7 +46,7 @@ const person: MiddlewareHandler<{ Variables: AppVariables }> = async (
 ) => {
   context.set("actor", {
     id: "dev-local-user",
-    email: "person@openbot.test",
+    email: "person@xiongbao.test",
     role: "admin",
   });
   await next();
@@ -131,8 +131,8 @@ afterAll(async () => {
   await database.$client.end({ timeout: 5 });
 });
 
-describe("the Activity report in OpenBot Personal", () => {
-  test("a Bot draws it with real figures, OpenBot having given it the data on the first page load", async () => {
+describe("the Activity report in XiongBao Personal", () => {
+  test("a Bot draws it with real figures, XiongBao having given it the data on the first page load", async () => {
     setEdition("personal");
     await pageLoad();
 
@@ -150,7 +150,7 @@ describe("the Activity report in OpenBot Personal", () => {
     });
 
     /*
-     * Given by OpenBot, once, whatever page loads follow, in one row naming both. Seen on Windows: a
+     * Given by XiongBao, once, whatever page loads follow, in one row naming both. Seen on Windows: a
      * row per function drew two identical "Let a component read data / Activity report" rows.
      */
     await pageLoad();

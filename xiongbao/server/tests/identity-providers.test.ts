@@ -12,11 +12,11 @@ import { IdentityInputError } from "../src/identity/types";
 test("slackRealm keeps connection, installation and workspace", () => {
   expect(
     slackRealm({
-      connectionId: "openbot",
+      connectionId: "xiongbao",
       installationId: "I1",
       workspaceId: "T1",
     }),
-  ).toBe("openbot:I1:T1");
+  ).toBe("xiongbao:I1:T1");
 });
 
 test("slackRealm cannot be confused by a colon", () => {

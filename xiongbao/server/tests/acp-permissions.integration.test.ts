@@ -126,7 +126,7 @@ const call = (actorId: string, path: string, body?: unknown) => {
     await runAsTenant(actorId, () => next());
   };
   return createApprovalRoutes(service, requireUser).request(
-    new Request(`http://openbot.test/${path}`, {
+    new Request(`http://xiongbao.test/${path}`, {
       method: body === undefined ? "GET" : "POST",
       ...(body === undefined
         ? {}

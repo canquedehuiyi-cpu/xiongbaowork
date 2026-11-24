@@ -66,7 +66,7 @@ afterAll(() => {
   harness.stop(true);
 });
 
-/** What OpenBot Desktop writes for a Claude plan: a token, the installed harness, and no key. */
+/** What XiongBao Desktop writes for a Claude plan: a token, the installed harness, and no key. */
 const model = runtimeModelForEnvironment(
   { provider: "openai", defaultModel: "gpt-5.6-terra" },
   {
@@ -144,7 +144,7 @@ test("the router on a plan picks the Bot the message is for, not the default", a
   hang = false;
   requests.length = 0;
   const decision = await createIntentRouter({ complete }).route(
-    "Look up the latest OpenBot release on the web.",
+    "Look up the latest XiongBao release on the web.",
     [
       {
         id: "assistant",

@@ -292,7 +292,7 @@ function uploadRequest(
   formData.set("file", file);
   formData.set("uploadGroup", randomUUID());
   return app.request(
-    `http://openbot.test/api/channels/${channelId}/attachments`,
+    `http://xiongbao.test/api/channels/${channelId}/attachments`,
     { method: "POST", body: formData },
   );
 }

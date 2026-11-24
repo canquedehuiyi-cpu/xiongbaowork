@@ -119,7 +119,7 @@ function hook(
   body: string,
   headers: Record<string, string> = {},
 ) {
-  return hooks.request(`http://openbot.test/${triggerId}`, {
+  return hooks.request(`http://xiongbao.test/${triggerId}`, {
     method: "POST",
     headers: { "content-type": "application/json", ...headers },
     body,
@@ -132,7 +132,7 @@ function run(
   body: string,
   headers: Record<string, string> = {},
 ) {
-  return api.request(`http://openbot.test/${automationId}/run`, {
+  return api.request(`http://xiongbao.test/${automationId}/run`, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -327,7 +327,7 @@ describe("the public hook (AUT2)", () => {
     );
     createdPush(alice, owned.id);
     const added = await api.request(
-      `http://openbot.test/${owned.id}/triggers`,
+      `http://xiongbao.test/${owned.id}/triggers`,
       {
         method: "POST",
         headers: { "content-type": "application/json", "x-test-user": alice },

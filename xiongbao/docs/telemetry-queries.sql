@@ -14,7 +14,7 @@ SELECT event, properties.environment AS environment,
                OR properties.deployment_id='unknown') AS unknown_scope_copies,
        max(timestamp) AS newest_received_utc
 FROM events
-WHERE event LIKE 'oss.runtime.openbot.%' AND properties.app_id='openbot'
+WHERE event LIKE 'oss.runtime.xiongbao.%' AND properties.app_id='xiongbao'
   AND timestamp >= toDateTime('2026-11-03 00:00:00', 'UTC')
   AND timestamp < toDateTime('2026-11-04 00:00:00', 'UTC')
 GROUP BY event,environment,deployment_id;
@@ -28,7 +28,7 @@ WITH records AS (
         any(properties.outcome) AS outcome,
         min(parseDateTimeBestEffort(properties.occurred_at)) AS observed_utc
  FROM events
- WHERE event IN ('oss.runtime.openbot.run_accepted','oss.runtime.openbot.run_terminal')
+ WHERE event IN ('oss.runtime.xiongbao.run_accepted','oss.runtime.xiongbao.run_terminal')
    AND properties.environment='production' AND properties.event_id IS NOT NULL
    AND timestamp >= toDateTime('2026-11-03 00:00:00', 'UTC')
  GROUP BY event_id
@@ -39,8 +39,8 @@ SELECT a.trigger,t.outcome,count() AS accepted_attempts,
 FROM records a LEFT JOIN records t
  ON a.deployment_id=t.deployment_id AND a.user_id=t.user_id
  AND a.thread_id=t.thread_id AND a.run_id=t.run_id
- AND t.name='oss.runtime.openbot.run_terminal'
-WHERE a.name='oss.runtime.openbot.run_accepted'
+ AND t.name='oss.runtime.xiongbao.run_terminal'
+WHERE a.name='oss.runtime.xiongbao.run_accepted'
 GROUP BY a.trigger,t.outcome;
 -- Failed-run rate uses observed error/(success+error+cancelled+timeout).
 -- Report unknown and missing separately. Child outcomes do not determine roots.
@@ -53,7 +53,7 @@ WITH successes AS (
         any(properties.user_id) AS user_id,
         min(parseDateTimeBestEffort(properties.occurred_at)) AS observed_utc
  FROM events
- WHERE event='oss.runtime.openbot.run_terminal'
+ WHERE event='oss.runtime.xiongbao.run_terminal'
    AND properties.trigger='human' AND properties.purpose='ordinary'
    AND properties.is_root=true AND properties.outcome='success'
    AND properties.environment='production' AND properties.event_id IS NOT NULL
@@ -74,7 +74,7 @@ WITH capability AS (
         any(properties.capability) AS capability,any(properties.stage) AS stage,
         any(properties.outcome) AS outcome,any(properties.source_event) AS source_event
  FROM events
- WHERE event='oss.runtime.openbot.capability'
+ WHERE event='oss.runtime.xiongbao.capability'
    AND properties.environment='production' AND properties.event_id IS NOT NULL
    AND timestamp >= toDateTime('2026-11-03 00:00:00', 'UTC')
    AND timestamp < toDateTime('2026-11-04 00:00:00', 'UTC')
@@ -94,7 +94,7 @@ WITH terminals AS (
         any(properties.run_id) AS run_id,any(properties.outcome) AS outcome,
         any(properties.result_message_ids) AS result_message_ids
  FROM events
- WHERE event='oss.runtime.openbot.run_terminal'
+ WHERE event='oss.runtime.xiongbao.run_terminal'
    AND properties.environment='production' AND properties.event_id IS NOT NULL
    AND timestamp >= toDateTime('2026-11-03 00:00:00', 'UTC')
  GROUP BY event_id
@@ -110,7 +110,7 @@ WITH terminals AS (
         any(properties.consumption_surface) AS surface,
         min(parseDateTimeBestEffort(properties.occurred_at)) AS observed_utc
  FROM events
- WHERE event IN ('oss.runtime.openbot.result_viewed','oss.runtime.openbot.result_copied')
+ WHERE event IN ('oss.runtime.xiongbao.result_viewed','oss.runtime.xiongbao.result_copied')
    AND properties.environment='production' AND properties.event_id IS NOT NULL
    AND timestamp >= toDateTime('2026-11-03 00:00:00', 'UTC')
  GROUP BY event_id

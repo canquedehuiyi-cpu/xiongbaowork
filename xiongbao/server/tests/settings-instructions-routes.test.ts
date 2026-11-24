@@ -11,14 +11,14 @@ import { testEnvironment } from "./support/environment";
 
 const MEMBER = {
   id: "member-1",
-  email: "member@openbot.test",
+  email: "member@xiongbao.test",
   name: "A Member",
   image: null,
 };
 
 const OTHER = {
   id: "member-2",
-  email: "other@openbot.test",
+  email: "other@xiongbao.test",
   name: "Another Member",
   image: null,
 };
@@ -92,7 +92,7 @@ describe("standing instruction routes", () => {
     const app = appWith(store);
 
     const response = await app.request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
     );
 
     expect(response.status).toBe(200);
@@ -104,7 +104,7 @@ describe("standing instruction routes", () => {
     const app = appWith(store);
 
     const response = await app.request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -123,14 +123,14 @@ describe("standing instruction routes", () => {
     const { store } = memoryStore();
     const app = appWith(store);
 
-    await app.request("http://openbot.local/api/settings/instructions", {
+    await app.request("http://xiongbao.local/api/settings/instructions", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ instructions: "Never say we are a team." }),
     });
 
     const response = await app.request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
     );
 
     await expect(response.json()).resolves.toEqual({
@@ -145,7 +145,7 @@ describe("standing instruction routes", () => {
     const app = appWith(store);
 
     const response = await app.request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -165,7 +165,7 @@ describe("standing instruction routes", () => {
     const app = appWith(store);
 
     const response = await app.request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -190,7 +190,7 @@ describe("standing instruction routes", () => {
       const app = appWith(store);
 
       const response = await app.request(
-        "http://openbot.local/api/settings/instructions",
+        "http://xiongbao.local/api/settings/instructions",
         {
           method: "PUT",
           headers: { "content-type": "application/json" },
@@ -214,7 +214,7 @@ describe("standing instruction routes", () => {
     const { store, state } = memoryStore();
 
     await appWith(store, { as: MEMBER }).request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -222,7 +222,7 @@ describe("standing instruction routes", () => {
       },
     );
     await appWith(store, { as: OTHER }).request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },
@@ -231,13 +231,13 @@ describe("standing instruction routes", () => {
     );
 
     const memberView = await appWith(store, { as: MEMBER }).request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
     );
     expect(await memberView.json()).toEqual({
       instructions: "Write in British English.",
     });
     const otherView = await appWith(store, { as: OTHER }).request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
     );
     expect(await otherView.json()).toEqual({
       instructions: "Answer in one paragraph.",
@@ -253,7 +253,7 @@ describe("standing instruction routes", () => {
     const audit = memoryAudit();
     const app = appWith(store, { auditStore: audit.store });
 
-    await app.request("http://openbot.local/api/settings/instructions", {
+    await app.request("http://xiongbao.local/api/settings/instructions", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ instructions: "Write in British English." }),
@@ -280,7 +280,7 @@ describe("standing instruction routes", () => {
     const audit = memoryAudit();
     const app = appWith(store, { auditStore: audit.store });
 
-    await app.request("http://openbot.local/api/settings/instructions", {
+    await app.request("http://xiongbao.local/api/settings/instructions", {
       method: "PUT",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ instructions: "" }),
@@ -302,11 +302,11 @@ describe("standing instruction routes", () => {
     const app = appWith(undefined);
 
     const read = await app.request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
     );
     expect(read.status).toBe(503);
     const write = await app.request(
-      "http://openbot.local/api/settings/instructions",
+      "http://xiongbao.local/api/settings/instructions",
       {
         method: "PUT",
         headers: { "content-type": "application/json" },

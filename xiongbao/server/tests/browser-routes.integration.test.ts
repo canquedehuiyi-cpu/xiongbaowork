@@ -1,4 +1,4 @@
-// A person's own OpenBot browser, through the real routes and the real database: opening it mints the person's Recorder
+// A person's own XiongBao browser, through the real routes and the real database: opening it mints the person's Recorder
 // connection with no Connect step, the connection resolves through the Recorder guard as that person, each open
 // replaces the last, organization mode seals the session from the request, and nobody else (an admin included) reaches
 // the browser or its live screen. The computer is a stand-in that answers its routes exactly as the contract types them
@@ -35,7 +35,7 @@ import type { AuditEventInput } from "../src/audit";
 import { DEV_ACTOR, initializeDevActorUser } from "../src/auth/dev-actor";
 import { createOrganizationAuth } from "../src/auth/organization";
 import { organizationUserStore } from "../src/auth/organization-store";
-import { openbotAddress } from "../src/browser/address";
+import { xiongbaoAddress } from "../src/browser/address";
 import { personBrowserEgressPolicy } from "../src/browser/egress";
 import {
   gatewayBrowserComputers,
@@ -95,7 +95,7 @@ const admin = {
 };
 const PEOPLE = { ada, ben, admin } as const;
 const COMPUTER_TOKEN = "browser-routes-computer-token";
-const PUBLIC = "https://openbot.example.com";
+const PUBLIC = "https://xiongbao.example.com";
 const GATEWAY = "wss://gateway.example.com/socket";
 // Their own ports: the stand-in computer, the server the live screen is proxied through, the organization's sign-in
 // server, and a port nothing listens on.
@@ -107,10 +107,10 @@ const NOTHING_PORT = 7764;
 const REAL_COMPUTER_PORT = 7815;
 /** The real shared computer another runs. */
 const SHARED_COMPUTER_PORT = 7816;
-/** What the person is told when their browser cannot open for OpenBot's own setup. */
+/** What the person is told when their browser cannot open for XiongBao's own setup. */
 const NOT_SET_UP =
   "Your browser can't open right now. Ask an admin to check the setup.";
-/** The same, on a single-user OpenBot (OpenBot Desktop), where the person is the admin. */
+/** The same, on a single-user XiongBao (XiongBao Desktop), where the person is the admin. */
 const NOT_SET_UP_SINGLE_USER =
   "Your browser can't open right now. Quit the app, open it again, and try once more.";
 
@@ -155,16 +155,16 @@ let refuseNextDisconnect: { status: number } | { never: Promise<void> } | null =
 let silentState: { answers: true } | { never: Promise<void> } | null = null;
 /** What the real computer answers when the browser did not answer (agent-computer's NOT_ANSWERING). */
 const COMPUTER_NOT_ANSWERING = "The browser did not answer within 5 s.";
-/** The window an open shows its browser in: a screen (hosted OpenBot) unless a test opens a native one (Desktop). */
+/** The window an open shows its browser in: a screen (hosted XiongBao) unless a test opens a native one (Desktop). */
 let openAs: "screen" | "native" = "screen";
 /**
  * When a test says so, the Recorder takes a connection as the real one does (extension/src/background/launcher.ts): it
- * asks OpenBot who the connection is for, `askMs` after it was handed it, and refuses one OpenBot answers is signed out,
+ * asks XiongBao who the connection is for, `askMs` after it was handed it, and refuses one XiongBao answers is signed out,
  * with its own sentence, which the computer answers as a Recorder that could not be connected.
  */
 let confirmOpens: {
   askMs: number;
-  /** OpenBot's status for `/api/recorder/me` with this token. */
+  /** XiongBao's status for `/api/recorder/me` with this token. */
   me: (token: string) => Promise<number>;
 } | null = null;
 
@@ -242,7 +242,7 @@ const computer = Bun.serve<{ bot: string }>({
             return Response.json(
               {
                 error:
-                  "The Recorder could not be connected: OpenBot did not accept this browser's connection. Open the browser from OpenBot again.",
+                  "The Recorder could not be connected: XiongBao did not accept this browser's connection. Open the browser from XiongBao again.",
               },
               { status: 502 },
             );
@@ -289,7 +289,7 @@ const computer = Bun.serve<{ bot: string }>({
           // The Recorder's own refusals, in its words (extension/src/background/launcher.ts, recording.ts).
           if (!recorder.connected)
             return Response.json(
-              { error: "Connect this browser to OpenBot first." },
+              { error: "Connect this browser to XiongBao first." },
               { status: 409 },
             );
           if (recorder.phase !== "idle")
@@ -360,7 +360,7 @@ const computer = Bun.serve<{ bot: string }>({
         return Response.json(opened.state);
       }
       case "/browser/disconnect": {
-        // A POST with no body. The Recorder forgets its connection as it does when OpenBot answers that its token is
+        // A POST with no body. The Recorder forgets its connection as it does when XiongBao answers that its token is
         // gone, and reports what it reports then (extension/src/background/launcher.ts): a recording under it stopped.
         if (request.method !== "POST" || sent !== "")
           return Response.json({ error: "Bad request." }, { status: 400 });
@@ -393,7 +393,7 @@ const computer = Bun.serve<{ bot: string }>({
       case "/browser/clear":
         // A POST with no body. As the computer clears it (agent-computer's browser-host.ts): the browser closed and its
         // whole profile deleted, the Recorder's storage with it, so the connection the Recorder kept goes too. It stays
-        // closed: only OpenBot can hand the Recorder a connection again.
+        // closed: only XiongBao can hand the Recorder a connection again.
         if (request.method !== "POST" || sent !== "")
           return Response.json({ error: "Bad request." }, { status: 400 });
         browsers.delete(id);
@@ -410,7 +410,7 @@ const computer = Bun.serve<{ bot: string }>({
   },
 });
 
-// ---- OpenBot, as index.ts builds it ------------------------------------------------------------
+// ---- XiongBao, as index.ts builds it ------------------------------------------------------------
 
 const audits: AuditEventInput[] = [];
 const auditStore = {
@@ -444,14 +444,14 @@ const better = {
   },
 };
 
-/** One OpenBot: the Bots' computer provider carrying people's browsers, the gateway over it, and the browser routes. */
+/** One XiongBao: the Bots' computer provider carrying people's browsers, the gateway over it, and the browser routes. */
 function build(
   environment: Record<string, string | undefined> = {},
   options: {
     auth?: typeof better | ReturnType<typeof createOrganizationAuth>;
     organizationAuth?: ReturnType<typeof createOrganizationAuth>;
     computers?: false;
-    /** The deployment's computer token as this OpenBot was given it, in place of the right one. */
+    /** The deployment's computer token as this XiongBao was given it, in place of the right one. */
     token?: string;
     /** The Bots' computer provider, in place of the stand-in computer as a computer of each one's own. */
     provider?: ComputerProvider;
@@ -472,7 +472,7 @@ function build(
   const config = loadConfig(
     options.organizationAuth
       ? {
-          DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/openbot",
+          DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/xiongbao",
           KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
           INTELLIGENCE_API_URL: "http://127.0.0.1:7100",
           INTELLIGENCE_API_KEY: "tenant-api-key",
@@ -484,7 +484,7 @@ function build(
   const personPolicy = personBrowserEgressPolicy({
     native: config.browser !== undefined,
     allowPrivateHosts: false,
-    openbotUrls: [config.publicUrl, config.appUrl],
+    xiongbaoUrls: [config.publicUrl, config.appUrl],
     gatewayUrl: config.intelligence?.gatewayWsUrl ?? "",
   });
   const provider = withPolicyPushOnWake(
@@ -533,7 +533,7 @@ function build(
     browser: {
       ...(options.computers === false ? {} : place),
       recorder,
-      openbotUrl: openbotAddress(config),
+      openbotUrl: xiongbaoAddress(config),
       singleUser: config.singleUser,
       ...(options.callTimeoutMs
         ? { callTimeoutMs: options.callTimeoutMs }
@@ -544,7 +544,7 @@ function build(
   return { app: createApp(...args), gateway, config };
 }
 
-type OpenBot = ReturnType<typeof build>;
+type XiongBao = ReturnType<typeof build>;
 
 /**
  * The stand-in computer as a provider that gives every computer named its own, as a supervisor or a Sandbox does: where
@@ -562,12 +562,12 @@ function ownComputers(): ComputerProvider {
 }
 
 const call = (
-  { app }: OpenBot,
+  { app }: XiongBao,
   path: string,
   init: RequestInit & { json?: unknown; as?: keyof typeof PEOPLE } = {},
 ) => {
   const { json, headers, as, ...rest } = init;
-  return app.request(`http://openbot.test${path}`, {
+  return app.request(`http://xiongbao.test${path}`, {
     ...rest,
     headers: {
       ...(json === undefined ? {} : { "content-type": "application/json" }),
@@ -588,11 +588,11 @@ const handed = (userId: string) =>
   };
 
 async function open(
-  openbot: OpenBot,
+  xiongbao: XiongBao,
   as: keyof typeof PEOPLE,
   headers: Record<string, string> = {},
 ) {
-  const response = await call(openbot, "/api/browser/open", {
+  const response = await call(xiongbao, "/api/browser/open", {
     method: "POST",
     as,
     headers,
@@ -601,10 +601,10 @@ async function open(
   return (await response.json()) as BrowserOpenResponse;
 }
 
-let openbot: OpenBot;
+let xiongbao: XiongBao;
 beforeAll(async () => {
   await database.insert(users).values([ada, ben, admin]);
-  openbot = build();
+  xiongbao = build();
 });
 afterAll(async () => {
   computer.stop(true);
@@ -622,7 +622,7 @@ describe("opening a person's own browser", () => {
     const computerId = personBrowserId(ada.id);
     expect(isPersonBrowserId(computerId)).toBe(true);
     expect(computerId).not.toBe(personBrowserId(ben.id));
-    const state = await call(openbot, "/api/browser", { as: "ada" });
+    const state = await call(xiongbao, "/api/browser", { as: "ada" });
     expect(state.status).toBe(200);
     expect(await state.json()).toEqual({
       available: true,
@@ -631,8 +631,8 @@ describe("opening a person's own browser", () => {
       open: false,
       tabs: [],
     } satisfies BrowserApiState);
-    expect((await call(openbot, "/api/browser")).status).toBe(401);
-    // An OpenBot with no way to run a person's browser says so, and the app hides the button.
+    expect((await call(xiongbao, "/api/browser")).status).toBe(401);
+    // An XiongBao with no way to run a person's browser says so, and the app hides the button.
     const without = build({}, { computers: false });
     expect(
       await (await call(without, "/api/browser", { as: "ada" })).json(),
@@ -791,14 +791,14 @@ describe("opening a person's own browser", () => {
             testEnvironment({ OPENBOT_BROWSER_URL: "http://127.0.0.1:4101" }),
           ).browser !== undefined,
         allowPrivateHosts: false,
-        openbotUrls: [],
+        xiongbaoUrls: [],
         gatewayUrl: GATEWAY,
       }),
     ).toEqual({ mode: "allow_all", rules: [] });
   });
 
   test("open mints the person's Recorder connection, which resolves through the Recorder guard as them and shows in Settings, Browsers", async () => {
-    const opened = await open(openbot, "ada");
+    const opened = await open(xiongbao, "ada");
     const computerId = personBrowserId(ada.id);
     expect(opened).toEqual({
       ok: true,
@@ -817,7 +817,7 @@ describe("opening a person's own browser", () => {
     expect(connection.token).toMatch(/^obr_/);
 
     // The Recorder guard takes the token as Ada's, on the Recorder's own routes.
-    const me = await call(openbot, "/api/recorder/me", {
+    const me = await call(xiongbao, "/api/recorder/me", {
       headers: bearer(connection.token),
     });
     expect(me.status).toBe(200);
@@ -828,7 +828,7 @@ describe("opening a person's own browser", () => {
 
     // One more connected browser, as any other.
     const listed = (await (
-      await call(openbot, "/api/recorder/connections", { as: "ada" })
+      await call(xiongbao, "/api/recorder/connections", { as: "ada" })
     ).json()) as RecorderConnectionsResponse;
     const mine = listed.connections.filter(
       (row) => row.id === connection.connectionId,
@@ -849,7 +849,7 @@ describe("opening a person's own browser", () => {
       )?.payload,
     ).toMatchObject({ via: "openbot-browser", label: "XiongBao Work browser" });
 
-    // The browser's network policy went to its computer ahead of the browser: the open web and this OpenBot and the
+    // The browser's network policy went to its computer ahead of the browser: the open web and this XiongBao and the
     // Intelligence gateway by name on their own ports, nothing inside the deployment.
     const policy = policies.get(computerId) as {
       mode: string;
@@ -858,7 +858,7 @@ describe("opening a person's own browser", () => {
     expect(policy.mode).toBe("allowlist_only");
     expect(policy.rules).toContainEqual({
       type: "domain",
-      value: "openbot.example.com",
+      value: "xiongbao.example.com",
       ports: "443",
     });
     expect(policy.rules).toContainEqual({
@@ -878,7 +878,7 @@ describe("opening a person's own browser", () => {
 
     // The state now shows the open browser, with its Recorder.
     expect(
-      await (await call(openbot, "/api/browser", { as: "ada" })).json(),
+      await (await call(xiongbao, "/api/browser", { as: "ada" })).json(),
     ).toMatchObject({
       available: true,
       computerId,
@@ -893,7 +893,7 @@ describe("opening a person's own browser", () => {
   test("opening it again keeps the connection that stands: no new token, and nothing on the trail", async () => {
     // The end-to-end run: every open, and many a Record, revoked the browser's connection and made another, a
     // `recorder.revoked` and a `recorder.connected` row each time.
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const first = handed(ada.id);
     const trail = () =>
       audits.filter(
@@ -905,15 +905,15 @@ describe("opening a person's own browser", () => {
     const rows = trail();
 
     // Again while it is open, and again after it was closed: its Recorder kept the connection in its profile.
-    await open(openbot, "ada");
-    await call(openbot, "/api/browser/close", { method: "POST", as: "ada" });
-    const reopened = await open(openbot, "ada");
+    await open(xiongbao, "ada");
+    await call(xiongbao, "/api/browser/close", { method: "POST", as: "ada" });
+    const reopened = await open(xiongbao, "ada");
     expect(reopened.narration).toBe("external");
     expect(handed(ada.id).token).toBe(first.token);
     expect(trail()).toBe(rows);
     expect(
       (
-        await call(openbot, "/api/recorder/me", {
+        await call(xiongbao, "/api/recorder/me", {
           headers: bearer(first.token),
         })
       ).status,
@@ -928,20 +928,20 @@ describe("opening a person's own browser", () => {
   });
 
   test("a Recorder that does not hold the connection that stands is handed a new one, which replaces it", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const first = handed(ada.id);
-    // The Recorder in the open browser holds some other connection than the one OpenBot holds for it.
+    // The Recorder in the open browser holds some other connection than the one XiongBao holds for it.
     const opened = browsers.get(personBrowserId(ada.id));
     if (!opened?.state.recorder) throw new Error("Ada's browser is open.");
     opened.state.recorder = {
       ...opened.state.recorder,
       connectionId: "another-connection",
     };
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const second = handed(ada.id);
     expect(second.token).not.toBe(first.token);
 
-    const before = await call(openbot, "/api/recorder/me", {
+    const before = await call(xiongbao, "/api/recorder/me", {
       headers: bearer(first.token),
     });
     expect(before.status).toBe(401);
@@ -950,7 +950,7 @@ describe("opening a person's own browser", () => {
     );
     expect(
       (
-        await call(openbot, "/api/recorder/me", {
+        await call(xiongbao, "/api/recorder/me", {
           headers: bearer(second.token),
         })
       ).status,
@@ -976,18 +976,22 @@ describe("opening a person's own browser", () => {
   });
 
   test("a connection that no longer stands is not kept: the next open makes a new one", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const first = handed(ada.id);
     // Disconnected in Settings, Browsers, which also tells the browser to forget it.
     expect(
       (
-        await call(openbot, `/api/recorder/connections/${first.connectionId}`, {
-          method: "DELETE",
-          as: "ada",
-        })
+        await call(
+          xiongbao,
+          `/api/recorder/connections/${first.connectionId}`,
+          {
+            method: "DELETE",
+            as: "ada",
+          },
+        )
       ).status,
     ).toBe(204);
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const next = handed(ada.id);
     expect(next.token).not.toBe(first.token);
     expect(
@@ -999,18 +1003,18 @@ describe("opening a person's own browser", () => {
     ).toHaveLength(1);
   });
 
-  test("the OpenBot browser's connection is disconnected from Settings, Browsers like any other", async () => {
-    await open(openbot, "ada");
+  test("the XiongBao browser's connection is disconnected from Settings, Browsers like any other", async () => {
+    await open(xiongbao, "ada");
     const connection = handed(ada.id);
     const removed = await call(
-      openbot,
+      xiongbao,
       `/api/recorder/connections/${connection.connectionId}`,
       { method: "DELETE", as: "ada" },
     );
     expect(removed.status).toBe(204);
     expect(
       (
-        await call(openbot, "/api/recorder/me", {
+        await call(xiongbao, "/api/recorder/me", {
           headers: bearer(connection.token),
         })
       ).status,
@@ -1018,10 +1022,10 @@ describe("opening a person's own browser", () => {
   });
 
   test("record, narrate, tabs, navigate and close reach the person's browser and answer its state", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const computerId = personBrowserId(ada.id);
     const post = (path: string, json: unknown) =>
-      call(openbot, path, { method: "POST", as: "ada", json });
+      call(xiongbao, path, { method: "POST", as: "ada", json });
 
     const started = await post("/api/browser/recording", {
       action: "start",
@@ -1099,7 +1103,7 @@ describe("opening a person's own browser", () => {
     expect(((await stopped.json()) as BrowserApiState).recorder?.phase).toBe(
       "idle",
     );
-    const closed = await call(openbot, "/api/browser/close", {
+    const closed = await call(xiongbao, "/api/browser/close", {
       method: "POST",
       as: "ada",
     });
@@ -1111,7 +1115,7 @@ describe("opening a person's own browser", () => {
     // A form from another site cannot send any of these.
     expect(
       (
-        await call(openbot, "/api/browser/recording", {
+        await call(xiongbao, "/api/browser/recording", {
           method: "POST",
           as: "ada",
           headers: { "content-type": "text/plain" },
@@ -1122,15 +1126,15 @@ describe("opening a person's own browser", () => {
   });
 
   test("the computer's refusals reach the person as theirs, and its own failings never read as the person's", async () => {
-    // No Chrome or Edge here, in the computer's own words (agent-computer's browser-host.ts answers it 503): OpenBot's
+    // No Chrome or Edge here, in the computer's own words (agent-computer's browser-host.ts answers it 503): XiongBao's
     // setup, which the person is told is why their browser cannot open, and who can see to it.
     refuseNextOpen = { status: 503, error: NO_INSTALLED_BROWSER };
     const { result: unavailable, warned } = await logged(() =>
-      call(openbot, "/api/browser/open", { method: "POST", as: "ada" }),
+      call(xiongbao, "/api/browser/open", { method: "POST", as: "ada" }),
     );
     expect(unavailable.status).toBe(503);
     expect(await unavailable.json()).toEqual({ error: NOT_SET_UP });
-    // The computer's sentence is in the server's log, for whoever runs OpenBot.
+    // The computer's sentence is in the server's log, for whoever runs XiongBao.
     expect(
       warned
         .map((line) => JSON.parse(line) as Record<string, unknown>)
@@ -1147,9 +1151,9 @@ describe("opening a person's own browser", () => {
     refuseNextOpen = {
       status: 409,
       error:
-        "Your organization's Recorder policy does not allow this OpenBot. Ask your IT team.",
+        "Your organization's Recorder policy does not allow this XiongBao. Ask your IT team.",
     };
-    const refused = await call(openbot, "/api/browser/open", {
+    const refused = await call(xiongbao, "/api/browser/open", {
       method: "POST",
       as: "ada",
     });
@@ -1159,7 +1163,7 @@ describe("opening a person's own browser", () => {
       status: 502,
       error: "The Recorder in your browser does not offer its launcher.",
     };
-    const failed = await call(openbot, "/api/browser/open", {
+    const failed = await call(xiongbao, "/api/browser/open", {
       method: "POST",
       as: "ada",
     });
@@ -1167,7 +1171,7 @@ describe("opening a person's own browser", () => {
     expect(await failed.json()).toEqual({
       error: "The Recorder in your browser does not offer its launcher.",
     });
-    // OpenBot calling its computer with the wrong token is not the person signed out.
+    // XiongBao calling its computer with the wrong token is not the person signed out.
     const misconfigured = build({}, { token: "not-the-computer-token" });
     const wrong = await call(misconfigured, "/api/browser/open", {
       method: "POST",
@@ -1182,7 +1186,7 @@ describe("opening a person's own browser", () => {
   test("a computer with no built Recorder: the person is told their browser cannot open, and the setup sentence stays in both logs", async () => {
     // The fourth end-to-end run: with the Recorder missing on the computer, the Browser page showed the computer's
     // sentence naming OPENBOT_RECORDER_DIR and a build command. The real computer, its Recorder directory empty.
-    const dir = await mkdtemp(join(tmpdir(), "openbot-no-recorder-"));
+    const dir = await mkdtemp(join(tmpdir(), "xiongbao-no-recorder-"));
     await Promise.all(
       ["recorder", "profiles", "workspace"].map((name) =>
         mkdir(join(dir, name)),
@@ -1242,7 +1246,7 @@ describe("opening a person's own browser", () => {
       expect(result.status).toBe(503);
       expect(await result.json()).toEqual({ error: NOT_SET_UP });
 
-      // The computer's own sentence, for whoever runs OpenBot, in the server's log and in the computer's.
+      // The computer's own sentence, for whoever runs XiongBao, in the server's log and in the computer's.
       const failures = warned
         .map((line) => JSON.parse(line) as Record<string, unknown>)
         .filter((line) => line.type === "browser-computer-failed");
@@ -1285,7 +1289,7 @@ describe("opening a person's own browser", () => {
     // The computer's half of keeping a person's browser off the computer Bots share: a server configured to think the
     // shared computer is a computer of its own (a provider that says per-bot, a stray OPENBOT_BROWSER_URL) still cannot
     // open a person's browser beside Bots.
-    const dir = await mkdtemp(join(tmpdir(), "openbot-shared-computer-"));
+    const dir = await mkdtemp(join(tmpdir(), "xiongbao-shared-computer-"));
     await Promise.all(
       ["profiles", "workspace"].map((name) => mkdir(join(dir, name))),
     );
@@ -1403,7 +1407,7 @@ describe("opening a person's own browser", () => {
       "The Recorder could not be connected: The Recorder did not answer in time.";
     refuseNextOpen = { status: 502, error: sentence };
     const { result, warned } = await logged(() =>
-      call(openbot, "/api/browser/open", { method: "POST", as: "ada" }),
+      call(xiongbao, "/api/browser/open", { method: "POST", as: "ada" }),
     );
     expect(result.status).toBe(502);
     expect(
@@ -1426,16 +1430,16 @@ describe("opening a person's own browser", () => {
     confirmOpens = {
       askMs: 200,
       me: async (token) =>
-        (await call(openbot, "/api/recorder/me", { headers: bearer(token) }))
+        (await call(xiongbao, "/api/recorder/me", { headers: bearer(token) }))
           .status,
     };
     try {
-      const first = call(openbot, "/api/browser/open", {
+      const first = call(xiongbao, "/api/browser/open", {
         method: "POST",
         as: "ada",
       });
       await Bun.sleep(50);
-      const second = call(openbot, "/api/browser/open", {
+      const second = call(xiongbao, "/api/browser/open", {
         method: "POST",
         as: "ada",
       });
@@ -1457,7 +1461,7 @@ describe("opening a person's own browser", () => {
     // The connection the Recorder holds is the one that stands.
     expect(
       (
-        await call(openbot, "/api/recorder/me", {
+        await call(xiongbao, "/api/recorder/me", {
           headers: bearer(handed(ada.id).token),
         })
       ).status,
@@ -1474,7 +1478,7 @@ describe("opening a person's own browser", () => {
       for (let index = 0; index < 10; index += 1) {
         expect(await asBen(() => codes.mintCode(ben.id, "web"))).not.toBeNull();
       }
-      const refused = await call(openbot, "/api/browser/open", {
+      const refused = await call(xiongbao, "/api/browser/open", {
         method: "POST",
         as: "ben",
       });
@@ -1505,8 +1509,8 @@ describe("opening a person's own browser", () => {
   });
 
   test("each person reaches only their own browser", async () => {
-    await open(openbot, "ada");
-    const benOpened = await open(openbot, "ben");
+    await open(xiongbao, "ada");
+    const benOpened = await open(xiongbao, "ben");
     expect(benOpened.computerId).toBe(personBrowserId(ben.id));
     expect(handed(ben.id).user.id).toBe(ben.id);
     expect(
@@ -1515,7 +1519,7 @@ describe("opening a person's own browser", () => {
     // Ben's token is Ben's, never Ada's.
     expect(
       await (
-        await call(openbot, "/api/recorder/me", {
+        await call(xiongbao, "/api/recorder/me", {
           headers: bearer(handed(ben.id).token),
         })
       ).json(),
@@ -1525,7 +1529,7 @@ describe("opening a person's own browser", () => {
 
 describe("clearing a person's own browser", () => {
   const clear = (as?: keyof typeof PEOPLE) =>
-    call(openbot, "/api/browser/clear", {
+    call(xiongbao, "/api/browser/clear", {
       method: "POST",
       ...(as ? { as } : {}),
     });
@@ -1546,7 +1550,7 @@ describe("clearing a person's own browser", () => {
       .map((event) => event.payload?.reason);
 
   test("wipes the person's browser, says who did it on the trail, and opens it again fresh with its Recorder connected anew", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const before = handed(ada.id);
     const rows = clearedRows().length;
     const cleared = await clear("ada");
@@ -1563,7 +1567,7 @@ describe("clearing a person's own browser", () => {
     expect(after.connectionId).not.toBe(before.connectionId);
     expect(
       (
-        await call(openbot, "/api/recorder/me", {
+        await call(xiongbao, "/api/recorder/me", {
           headers: bearer(before.token),
         })
       ).status,
@@ -1572,7 +1576,7 @@ describe("clearing a person's own browser", () => {
     expect(revokedAs(before.connectionId)).toEqual(["cleared"]);
     expect(
       await (
-        await call(openbot, "/api/recorder/me", {
+        await call(xiongbao, "/api/recorder/me", {
           headers: bearer(after.token),
         })
       ).json(),
@@ -1589,13 +1593,16 @@ describe("clearing a person's own browser", () => {
   });
 
   test("a closed browser is cleared and left closed, its Recorder connection ended with it, and nobody signed out reaches it", async () => {
-    await open(openbot, "ben");
+    await open(xiongbao, "ben");
     const held = handed(ben.id);
-    await call(openbot, "/api/browser/close", { method: "POST", as: "ben" });
-    // Closed, the browser keeps its connection in its profile, and OpenBot keeps it live for the next open.
+    await call(xiongbao, "/api/browser/close", { method: "POST", as: "ben" });
+    // Closed, the browser keeps its connection in its profile, and XiongBao keeps it live for the next open.
     expect(
-      (await call(openbot, "/api/recorder/me", { headers: bearer(held.token) }))
-        .status,
+      (
+        await call(xiongbao, "/api/recorder/me", {
+          headers: bearer(held.token),
+        })
+      ).status,
     ).toBe(200);
     const opensBefore = asked.filter((line) =>
       line.startsWith("POST /browser/open "),
@@ -1609,8 +1616,11 @@ describe("clearing a person's own browser", () => {
     ).toBe(opensBefore);
     // The token went with the profile, so nothing stands for it here either: ended, and on the trail as the clear's.
     expect(
-      (await call(openbot, "/api/recorder/me", { headers: bearer(held.token) }))
-        .status,
+      (
+        await call(xiongbao, "/api/recorder/me", {
+          headers: bearer(held.token),
+        })
+      ).status,
     ).toBe(401);
     expect(revokedAs(held.connectionId)).toEqual(["cleared"]);
     expect(
@@ -1661,7 +1671,7 @@ const typesOf = (lines: string[]) =>
 
 describe("narration on the server's clock", () => {
   const post = (json: unknown) =>
-    call(openbot, "/api/browser/narration", {
+    call(xiongbao, "/api/browser/narration", {
       method: "POST",
       as: "ada",
       json,
@@ -1675,7 +1685,7 @@ describe("narration on the server's clock", () => {
   const SKEW_MS = -3_600_000;
 
   test("a phrase is moved onto the server's clock by how far the page's clock is from it, and reaches the Recorder so", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const pageNow = Date.now() + SKEW_MS;
     const before = Date.now();
     const answer = await post({
@@ -1700,7 +1710,7 @@ describe("narration on the server's clock", () => {
   });
 
   test("the person starting and stopping a phrase reaches the Recorder on the server's clock too", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const pageNow = Date.now() + SKEW_MS;
     const before = Date.now();
     expect(
@@ -1724,7 +1734,7 @@ describe("narration on the server's clock", () => {
   });
 
   test("times no phrase sent now could have are refused, and nothing reaches the Recorder", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const computerId = personBrowserId(ada.id);
     const pageNow = Date.now() + SKEW_MS;
     const count = () => browsers.get(computerId)?.narrated.length;
@@ -1777,7 +1787,7 @@ describe("narration on the server's clock", () => {
 });
 
 describe("a slow page, and a browser that cannot be reached", () => {
-  test("OpenBot waits longer for its computer than the computer waits for a page", async () => {
+  test("XiongBao waits longer for its computer than the computer waits for a page", async () => {
     // The computer's own navigation timeout, as it sets it (agent-computer/src/index.ts).
     const source = await Bun.file(
       new URL("../../agent-computer/src/index.ts", import.meta.url),
@@ -1866,19 +1876,19 @@ describe("a slow page, and a browser that cannot be reached", () => {
     expect(STATE_TIMEOUT_MS).toBeLessThan(10_000);
   });
 
-  test("a slow open and a slow page answer through OpenBot's own server, never with an empty reply", async () => {
+  test("a slow open and a slow page answer through XiongBao's own server, never with an empty reply", async () => {
     // Bun.serve closes a request that has sent nothing for 10 s, and these waited on the computer for up to 45 s, or 90
     // for an open: a cold open or a slow page reached the person as an empty reply, and the app said only its fallback.
-    await call(openbot, "/api/browser/close", { method: "POST", as: "ada" });
+    await call(xiongbao, "/api/browser/close", { method: "POST", as: "ada" });
     const server = startHttpServer({
       port: SERVER_PORT,
-      config: openbot.config,
+      config: xiongbao.config,
       resolveRequestActor: async () => {
         throw new Error("Only the live screen asks this.");
       },
       agentProfileStore: { get: async () => null } as never,
-      computerGateway: openbot.gateway,
-      app: openbot.app,
+      computerGateway: xiongbao.gateway,
+      app: xiongbao.app,
     });
     const post = (path: string, json?: unknown) =>
       fetch(`http://127.0.0.1:${SERVER_PORT}${path}`, {
@@ -1998,7 +2008,7 @@ describe("a slow page, and a browser that cannot be reached", () => {
 });
 
 describe("a browser that is open and not answering", () => {
-  /** What the person is told, on an OpenBot with sign-in. */
+  /** What the person is told, on an XiongBao with sign-in. */
   const NOT_ANSWERING =
     "Your browser isn't answering. If it doesn't come back soon, ask an admin for help.";
   /** How many requests the computer took that start with `line` (`<method> <path>`). */
@@ -2006,11 +2016,11 @@ describe("a browser that is open and not answering", () => {
     asked.filter((entry) => entry.startsWith(line)).length;
 
   test("the state says so in a sentence, the Browser button stays, and it shows again once the browser answers", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     silentState = { answers: true };
     try {
       const { result: asked, warned } = await logged(() =>
-        call(openbot, "/api/browser", { as: "ada" }),
+        call(xiongbao, "/api/browser", { as: "ada" }),
       );
       // Not logged as a failure at every ask: the page asks every second, and the computer says it once.
       expect(typesOf(warned)).toEqual([]);
@@ -2023,7 +2033,7 @@ describe("a browser that is open and not answering", () => {
       });
       // Record is told the same at once, and never reaches the browser to wait on it.
       const recordsBefore = timesAsked("POST /browser/recording");
-      const record = await call(openbot, "/api/browser/recording", {
+      const record = await call(xiongbao, "/api/browser/recording", {
         method: "POST",
         as: "ada",
         json: { action: "start", title: "Pay the invoice" },
@@ -2035,16 +2045,16 @@ describe("a browser that is open and not answering", () => {
       silentState = null;
     }
     const back = (await (
-      await call(openbot, "/api/browser", { as: "ada" })
+      await call(xiongbao, "/api/browser", { as: "ada" })
     ).json()) as BrowserApiState;
     expect(back.open).toBe(true);
     expect(back.problem).toBeUndefined();
   });
 
-  test("a computer that does not answer at all still gets the person an answer, before OpenBot's own server would close the request", async () => {
+  test("a computer that does not answer at all still gets the person an answer, before XiongBao's own server would close the request", async () => {
     // The end-to-end run: the state waited 45 s, Bun.serve closed the person's request with an empty reply at 10, the
     // Browser page had nothing to say and the sidebar lost its Browser button.
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     let release = () => {};
     silentState = {
       never: new Promise<void>((resolve) => {
@@ -2053,13 +2063,13 @@ describe("a browser that is open and not answering", () => {
     };
     const server = startHttpServer({
       port: SERVER_PORT,
-      config: openbot.config,
+      config: xiongbao.config,
       resolveRequestActor: async () => {
         throw new Error("Only the live screen asks this.");
       },
       agentProfileStore: { get: async () => null } as never,
-      computerGateway: openbot.gateway,
-      app: openbot.app,
+      computerGateway: xiongbao.gateway,
+      app: xiongbao.app,
     });
     try {
       const asking = Date.now();
@@ -2084,15 +2094,15 @@ describe("a browser that is open and not answering", () => {
   }, 30_000);
 });
 
-describe("Record after the OpenBot browser is disconnected", () => {
+describe("Record after the XiongBao browser is disconnected", () => {
   const record = (title: string) =>
-    call(openbot, "/api/browser/recording", {
+    call(xiongbao, "/api/browser/recording", {
       method: "POST",
       as: "ada",
       json: { action: "start", title },
     });
   const stop = () =>
-    call(openbot, "/api/browser/recording", {
+    call(xiongbao, "/api/browser/recording", {
       method: "POST",
       as: "ada",
       json: { action: "stop" },
@@ -2100,7 +2110,7 @@ describe("Record after the OpenBot browser is disconnected", () => {
   const disconnect = async (connectionId: string) =>
     expect(
       (
-        await call(openbot, `/api/recorder/connections/${connectionId}`, {
+        await call(xiongbao, `/api/recorder/connections/${connectionId}`, {
           method: "DELETE",
           as: "ada",
         })
@@ -2112,13 +2122,13 @@ describe("Record after the OpenBot browser is disconnected", () => {
       .length;
   const disconnects = (id = computerId()) =>
     asked.filter((line) => line === `POST /browser/disconnect ${id}`).length;
-  const state = async (on: OpenBot = openbot, as: "ada" | "ben" = "ada") =>
+  const state = async (on: XiongBao = xiongbao, as: "ada" | "ben" = "ada") =>
     (await (await call(on, "/api/browser", { as })).json()) as BrowserApiState;
 
   test("Disconnect in Settings, Browsers tells the person's open browser at once, and its Recorder and the state say it is signed out", async () => {
     // The second end-to-end run: after Disconnect the Recorder went on saying it was connected for minutes (90 s on
-    // Desktop, 125 s hosted, before the run stopped looking), until its next call to OpenBot.
-    await open(openbot, "ada");
+    // Desktop, 125 s hosted, before the run stopped looking), until its next call to XiongBao.
+    await open(xiongbao, "ada");
     const revoked = handed(ada.id);
     expect((await state()).recorder).toMatchObject({
       connected: true,
@@ -2155,7 +2165,7 @@ describe("Record after the OpenBot browser is disconnected", () => {
   });
 
   test("a Recorder the revoke did not reach is never reported connected, and Record connects it again first", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const revoked = handed(ada.id);
     // An older computer, with no disconnect route: the revoke stands, and the Recorder has not heard.
     refuseNextDisconnect = { status: 404 };
@@ -2170,7 +2180,7 @@ describe("Record after the OpenBot browser is disconnected", () => {
     expect(reported.recorder).toMatchObject({ connected: false });
     expect(reported.recorder).not.toHaveProperty("userId");
     // Every answer that carries the state says so, not only the state route's.
-    const tabs = await call(openbot, "/api/browser/tabs", {
+    const tabs = await call(xiongbao, "/api/browser/tabs", {
       method: "POST",
       as: "ada",
       json: { action: "new" },
@@ -2193,9 +2203,9 @@ describe("Record after the OpenBot browser is disconnected", () => {
 
   test("a closed, stopped, unreachable or slow browser never fails the revoke", async () => {
     // Closed: the computer has nothing to tell, and says so.
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const closedOne = handed(ada.id);
-    await call(openbot, "/api/browser/close", { method: "POST", as: "ada" });
+    await call(xiongbao, "/api/browser/close", { method: "POST", as: "ada" });
     const { warned: closedWarned } = await logged(() =>
       disconnect(closedOne.connectionId),
     );
@@ -2224,7 +2234,7 @@ describe("Record after the OpenBot browser is disconnected", () => {
         } satisfies ComputerProvider,
       },
     );
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const before = disconnects();
     expect(
       (
@@ -2256,7 +2266,7 @@ describe("Record after the OpenBot browser is disconnected", () => {
         } satisfies ComputerProvider,
       },
     );
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const { result: unreachable, failed } = await logged(() =>
       call(gone, `/api/recorder/connections/${handed(ada.id).connectionId}`, {
         method: "DELETE",
@@ -2266,9 +2276,9 @@ describe("Record after the OpenBot browser is disconnected", () => {
     expect(unreachable.status).toBe(204);
     expect(typesOf(failed)).toEqual(["browser-computer-unreachable"]);
 
-    // A computer that takes the request and does not answer: the revoke answers once OpenBot stops waiting.
+    // A computer that takes the request and does not answer: the revoke answers once XiongBao stops waiting.
     const impatient = build({}, { callTimeoutMs: 300 });
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const slow = handed(ada.id);
     let release = () => {};
     refuseNextDisconnect = {
@@ -2293,27 +2303,27 @@ describe("Record after the OpenBot browser is disconnected", () => {
     for (const connection of [closedOne, slow])
       expect(
         (
-          await call(openbot, "/api/recorder/me", {
+          await call(xiongbao, "/api/recorder/me", {
             headers: bearer(connection.token),
           })
         ).status,
       ).toBe(401);
   });
 
-  test("only the OpenBot browser's own connection reaches it: not another browser's, and not the Recorder's own Disconnect", async () => {
-    await open(openbot, "ada");
+  test("only the XiongBao browser's own connection reaches it: not another browser's, and not the Recorder's own Disconnect", async () => {
+    await open(xiongbao, "ada");
     const browser = handed(ada.id);
     const before = disconnects();
 
     // Ada's Chrome on her laptop, connected through the Recorder's own Connect, disconnected in Settings, Browsers.
     const code = (await (
-      await call(openbot, "/api/recorder/connect-codes", {
+      await call(xiongbao, "/api/recorder/connect-codes", {
         method: "POST",
         as: "ada",
         json: { via: "web" },
       })
     ).json()) as { code: string };
-    const exchanged = await call(openbot, "/api/recorder/connections", {
+    const exchanged = await call(xiongbao, "/api/recorder/connections", {
       method: "POST",
       headers: { origin: `chrome-extension://${RECORDER_EXTENSION_ID}` },
       json: {
@@ -2332,11 +2342,11 @@ describe("Record after the OpenBot browser is disconnected", () => {
       userId: ada.id,
     });
 
-    // The Recorder in the OpenBot browser disconnecting itself from its own popup: it forgets the connection itself, as
+    // The Recorder in the XiongBao browser disconnecting itself from its own popup: it forgets the connection itself, as
     // the person's own Disconnect, so it is not told it was signed out.
     expect(
       (
-        await call(openbot, "/api/recorder/connections/current", {
+        await call(xiongbao, "/api/recorder/connections/current", {
           method: "DELETE",
           headers: bearer(browser.token),
         })
@@ -2346,10 +2356,10 @@ describe("Record after the OpenBot browser is disconnected", () => {
   });
 
   test("Disconnect in Settings, Browsers, then Record: the browser is connected again first, and records under a connection that stands", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const revoked = handed(ada.id);
     await disconnect(revoked.connectionId);
-    // OpenBot told the Recorder at once, and it says it is signed out.
+    // XiongBao told the Recorder at once, and it says it is signed out.
     expect(browsers.get(computerId())?.state.recorder?.connected).toBe(false);
 
     const started = await record("Look up Charles Babbage");
@@ -2361,15 +2371,15 @@ describe("Record after the OpenBot browser is disconnected", () => {
     expect(now.connectionId).not.toBe(revoked.connectionId);
     const recordedUnder = browsers.get(computerId())?.recordedUnder as string;
     expect(recordedUnder).toBe(now.token);
-    // Its capture passes carry a token OpenBot takes as the person's.
-    const me = await call(openbot, "/api/recorder/me", {
+    // Its capture passes carry a token XiongBao takes as the person's.
+    const me = await call(xiongbao, "/api/recorder/me", {
       headers: bearer(recordedUnder),
     });
     expect(me.status).toBe(200);
     expect(await me.json()).toMatchObject({ user: { id: ada.id } });
-    // One OpenBot browser in Settings, Browsers again, the new one.
+    // One XiongBao browser in Settings, Browsers again, the new one.
     const listed = (await (
-      await call(openbot, "/api/recorder/connections", { as: "ada" })
+      await call(xiongbao, "/api/recorder/connections", { as: "ada" })
     ).json()) as RecorderConnectionsResponse;
     expect(
       listed.connections
@@ -2380,7 +2390,7 @@ describe("Record after the OpenBot browser is disconnected", () => {
   });
 
   test("a Recorder that holds no connection of its own is connected again too", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const opened = browsers.get(computerId()) as Opened;
     opened.state.recorder = {
       connected: false,
@@ -2397,7 +2407,7 @@ describe("Record after the OpenBot browser is disconnected", () => {
   });
 
   test("a connection that stands is not made again for every recording", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     const held = handed(ada.id);
     const before = opens();
     expect((await record("Refund order 1043")).status).toBe(200);
@@ -2407,10 +2417,10 @@ describe("Record after the OpenBot browser is disconnected", () => {
   });
 
   test("when the Recorder refuses to connect again, Record says why and nothing is recorded", async () => {
-    await open(openbot, "ada");
+    await open(xiongbao, "ada");
     await disconnect(handed(ada.id).connectionId);
     const sentence =
-      "The Recorder could not be connected: Your organization's Recorder policy does not allow this OpenBot. Ask your IT team.";
+      "The Recorder could not be connected: Your organization's Recorder policy does not allow this XiongBao. Ask your IT team.";
     refuseNextOpen = { status: 502, error: sentence };
     const recordings = () =>
       asked.filter((line) => line === `POST /browser/recording ${computerId()}`)
@@ -2437,11 +2447,11 @@ describe("who hears the person, as every answer says it", () => {
   };
   const state = async () =>
     (await (
-      await call(openbot, "/api/browser", { as: "ada" })
+      await call(xiongbao, "/api/browser", { as: "ada" })
     ).json()) as BrowserApiState;
   const newTab = async () =>
     (await (
-      await call(openbot, "/api/browser/tabs", {
+      await call(xiongbao, "/api/browser/tabs", {
         method: "POST",
         as: "ada",
         json: { action: "new" },
@@ -2453,11 +2463,11 @@ describe("who hears the person, as every answer says it", () => {
       openAs = window;
       try {
         // Closed first, so it opens in this window: an open browser keeps the window it has.
-        await call(openbot, "/api/browser/close", {
+        await call(xiongbao, "/api/browser/close", {
           method: "POST",
           as: "ada",
         });
-        const opened = await open(openbot, "ada");
+        const opened = await open(xiongbao, "ada");
         expect(opened.narration).toBe(expected[window].narration);
         const signedIn: LauncherState = {
           connected: true,
@@ -2477,7 +2487,7 @@ describe("who hears the person, as every answer says it", () => {
         // its own default narration, `own` with a voice, whatever window it is in (the third end-to-end run's hosted
         // Disconnect).
         const removed = await call(
-          openbot,
+          xiongbao,
           `/api/recorder/connections/${handed(ada.id).connectionId}`,
           { method: "DELETE", as: "ada" },
         );
@@ -2600,7 +2610,7 @@ describe("a person's browser on the computer routes and the live screen", () => 
 
   test("its person reads who holds the wheel; nobody else does, an admin included, and nothing that acts as a Bot answers", async () => {
     const control = await call(
-      openbot,
+      xiongbao,
       `/api/computers/${adaBrowser()}/control`,
       {
         as: "ada",
@@ -2613,7 +2623,7 @@ describe("a person's browser on the computer routes and the live screen", () => 
     });
     for (const as of ["ben", "admin"] as const) {
       const refused = await call(
-        openbot,
+        xiongbao,
         `/api/computers/${adaBrowser()}/control`,
         { as },
       );
@@ -2628,7 +2638,7 @@ describe("a person's browser on the computer routes and the live screen", () => 
       ["GET", "files/download"],
     ] as const) {
       const refused = await call(
-        openbot,
+        xiongbao,
         `/api/computers/${adaBrowser()}/${path}`,
         { method, as: "ada", json: method === "POST" ? {} : undefined },
       );
@@ -2639,7 +2649,7 @@ describe("a person's browser on the computer routes and the live screen", () => 
   test("the live screen streams to its person and refuses everyone else, an admin included", async () => {
     const server = startHttpServer({
       port: SERVER_PORT,
-      config: openbot.config,
+      config: xiongbao.config,
       resolveRequestActor: async (request) => {
         const person = personOf(request.headers.get("cookie"));
         if (!person) throw new Error("Sign in first.");
@@ -2650,8 +2660,8 @@ describe("a person's browser on the computer routes and the live screen", () => 
         };
       },
       agentProfileStore: { get: async () => null } as never,
-      computerGateway: openbot.gateway,
-      app: openbot.app,
+      computerGateway: xiongbao.gateway,
+      app: xiongbao.app,
     });
     try {
       const watch = (as: keyof typeof PEOPLE, id = adaBrowser()) =>
@@ -2687,17 +2697,17 @@ describe("a person's browser on the computer routes and the live screen", () => 
   });
 });
 
-describe("where the browser reaches this OpenBot", () => {
+describe("where the browser reaches this XiongBao", () => {
   test("the configured public origin, else this machine's own window, else the app's address; never another site", () => {
     const at = (environment: { publicUrl?: string; appUrl?: string }) =>
-      openbotAddress({
+      xiongbaoAddress({
         publicUrl: environment.publicUrl,
         appUrl: environment.appUrl,
       });
-    expect(at({ publicUrl: "https://openbot.example.com/" })(undefined)).toBe(
-      "https://openbot.example.com",
+    expect(at({ publicUrl: "https://xiongbao.example.com/" })(undefined)).toBe(
+      "https://xiongbao.example.com",
     );
-    // OpenBot Desktop: no public URL, and its window found its own loopback address.
+    // XiongBao Desktop: no public URL, and its window found its own loopback address.
     const desktop = at({ appUrl: "http://localhost:3010" });
     expect(desktop("http://[::1]:3010")).toBe("http://[::1]:3010");
     expect(desktop("http://127.0.0.1:3010")).toBe("http://127.0.0.1:3010");
@@ -2709,16 +2719,16 @@ describe("where the browser reaches this OpenBot", () => {
     ).toBe("https://app.example.com");
     // An address the Recorder would refuse is no answer: plain http to another machine.
     expect(
-      at({ publicUrl: "http://openbot.internal:3001" })(undefined),
+      at({ publicUrl: "http://xiongbao.internal:3001" })(undefined),
     ).toBeNull();
   });
 
   test("with no address the Recorder would connect to, the person is told their browser cannot open, and the setting to fix is in the log", async () => {
-    // The person used to be told to set OPENBOT_PUBLIC_URL, which only whoever runs OpenBot can do.
+    // The person used to be told to set OPENBOT_PUBLIC_URL, which only whoever runs XiongBao can do.
     const nowhere = build({
-      OPENBOT_PUBLIC_URL: "http://openbot.internal:3001",
-      BETTER_AUTH_URL: "http://openbot.internal:3001",
-      TRUSTED_ORIGINS: "http://openbot.internal:3010",
+      OPENBOT_PUBLIC_URL: "http://xiongbao.internal:3001",
+      BETTER_AUTH_URL: "http://xiongbao.internal:3001",
+      TRUSTED_ORIGINS: "http://xiongbao.internal:3010",
     });
     const { result: refused, warned } = await logged(() =>
       call(nowhere, "/api/browser/open", {
@@ -2742,7 +2752,7 @@ describe("where the browser reaches this OpenBot", () => {
   });
 });
 
-describe("a single-user OpenBot, where the person is its admin", () => {
+describe("a single-user XiongBao, where the person is its admin", () => {
   /** One person and no sign-in, and no address anybody else reaches. */
   const SINGLE_USER = {
     OPENBOT_SINGLE_USER: "true",
@@ -2762,11 +2772,11 @@ describe("a single-user OpenBot, where the person is its admin", () => {
       ...SINGLE_USER,
       OPENBOT_BROWSER_URL: `http://127.0.0.1:${COMPUTER_PORT}`,
     });
-  /** The address OpenBot Desktop's window uses, which the Recorder is handed. */
+  /** The address XiongBao Desktop's window uses, which the Recorder is handed. */
   const WINDOW = { origin: "http://127.0.0.1:3010" };
 
-  test("OpenBot Desktop's personal edition shows the person's browser in the page, on its one computer", async () => {
-    // David, 2026-11-06: Teach a Bot on OpenBot Desktop opened a separate Chrome window, because Desktop pointed the
+  test("XiongBao Desktop's personal edition shows the person's browser in the page, on its one computer", async () => {
+    // David, 2026-11-06: Teach a Bot on XiongBao Desktop opened a separate Chrome window, because Desktop pointed the
     // server at a host-side Chrome (OPENBOT_BROWSER_URL). Desktop now runs the personal edition's one computer and no
     // host-side browser, and the person's browser runs on that computer and shows in the page, as a hosted one does.
     const personal = build(
@@ -2816,9 +2826,9 @@ describe("a single-user OpenBot, where the person is its admin", () => {
   test("a Recorder kept at the app's old port is handed a connection at the new one", async () => {
     // David, 2026-11-07: a new Desktop build installed while port 3010 was held moved APP_PORT to 58092
     // (desktop/src-tauri/src/env.rs, `Ports::available`). The Recorder in the person's browser still held its
-    // connection at 3010, OpenBot kept that connection as one that stands, and every capture pass went to a port
+    // connection at 3010, XiongBao kept that connection as one that stands, and every capture pass went to a port
     // nothing relayed any more, so no recording was saved.
-    /** OpenBot as one Desktop Start runs it: the personal edition, with its app on `port`. */
+    /** XiongBao as one Desktop Start runs it: the personal edition, with its app on `port`. */
     const startedOn = (port: number) =>
       build(
         {
@@ -2835,16 +2845,16 @@ describe("a single-user OpenBot, where the person is its admin", () => {
       );
     const computerId = personBrowserId(DEV_ACTOR.id);
     /** Browser in the window at `port`, then the connection the Recorder holds and whether it was handed a new one. */
-    const browseAt = async (openbot: OpenBot, port: number) => {
+    const browseAt = async (xiongbao: XiongBao, port: number) => {
       const before = recorderKeeps.get(computerId);
       const origin = `http://127.0.0.1:${port}`;
-      const opening = await call(openbot, "/api/browser/open", {
+      const opening = await call(xiongbao, "/api/browser/open", {
         method: "POST",
         headers: { origin },
       });
       expect(opening.status).toBe(200);
       const holds = recorderKeeps.get(computerId) as LauncherConnection;
-      await call(openbot, "/api/browser/close", {
+      await call(xiongbao, "/api/browser/close", {
         method: "POST",
         headers: { origin },
       });
@@ -2873,8 +2883,8 @@ describe("a single-user OpenBot, where the person is its admin", () => {
       .where(eq(recorderConnections.userId, DEV_ACTOR.id));
   });
 
-  test("a browser the computer cannot run is OpenBot's setup, which the person is told to check themselves, not to ask an admin about", async () => {
-    // Run 7, on OpenBot Desktop: the person was told to ask an admin, and on Desktop there is nobody else.
+  test("a browser the computer cannot run is XiongBao's setup, which the person is told to check themselves, not to ask an admin about", async () => {
+    // Run 7, on XiongBao Desktop: the person was told to ask an admin, and on Desktop there is nobody else.
     const single = desktop();
     expect(single.config.singleUser).toBe(true);
     expect(
@@ -2900,10 +2910,10 @@ describe("a single-user OpenBot, where the person is its admin", () => {
       },
     ]);
 
-    // On an OpenBot with sign-in, the same refusal still sends the person to an admin.
+    // On an XiongBao with sign-in, the same refusal still sends the person to an admin.
     refuseNextOpen = { status: 503, error: NO_INSTALLED_BROWSER };
     const { result: multi } = await logged(() =>
-      call(openbot, "/api/browser/open", { method: "POST", as: "ada" }),
+      call(xiongbao, "/api/browser/open", { method: "POST", as: "ada" }),
     );
     expect(multi.status).toBe(503);
     expect(await multi.json()).toEqual({ error: NOT_SET_UP });
@@ -2930,7 +2940,7 @@ describe("a single-user OpenBot, where the person is its admin", () => {
   });
 
   test("with no address the Recorder would connect to, the single person is told the same, and the setting is in the log", async () => {
-    // A request with no Origin, and nothing configured: OpenBot has no address to hand the Recorder.
+    // A request with no Origin, and nothing configured: XiongBao has no address to hand the Recorder.
     const { result: refused, warned } = await logged(() =>
       call(desktop(), "/api/browser/open", { method: "POST" }),
     );

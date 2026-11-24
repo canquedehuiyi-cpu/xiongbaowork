@@ -36,8 +36,8 @@ export type RecorderRouteDeps = {
   learningSpace: (actor: AuthenticatedActor) => Promise<LearningSpaceState>;
   /** A browser connected as this person: make their Learning space in the background. Never throws or waits. */
   onConnected?: (userId: string) => void;
-  /** The person revoked one of their connections from OpenBot (Settings, Browsers): the browser holding it is told, where
-   * OpenBot can reach it (their own OpenBot browser, browser/routes.ts). Awaited, briefly; never throws. */
+  /** The person revoked one of their connections from XiongBao (Settings, Browsers): the browser holding it is told, where
+   * XiongBao can reach it (their own XiongBao browser, browser/routes.ts). Awaited, briefly; never throws. */
   onRevoked?: (userId: string, connection: RecorderConnection) => Promise<void>;
   /** The name falls back to the email, never empty. */
   user: (userId: string) => Promise<RecorderUser | null>;
@@ -236,7 +236,7 @@ export function createRecorderRoutes(deps: RecorderRouteDeps) {
 
   // Settings, Browsers, which asks again while it is open: each live connection, and whether its Recorder is recording
   // now by its own latest report, which a recording sends every 30 s. Its last use cannot say so: a recording streams to
-  // the gateway, and reaches OpenBot only with those reports.
+  // the gateway, and reaches XiongBao only with those reports.
   routes.get("/connections", deps.requireUser, async (context) => {
     const now = Date.now();
     const answer: RecorderConnectionsResponse = {
@@ -352,7 +352,7 @@ export function createRecorderRoutes(deps: RecorderRouteDeps) {
 
   // What this browser's Recorder is doing now, which it says whenever its recording phase changes and every 30 s while
   // one runs: the Browser button's red dot reads it (browser/routes.ts), so the dot follows a recording in the person's
-  // everyday browser as well as in the OpenBot browser. Kept against the connection, in place of the last report, and
+  // everyday browser as well as in the XiongBao browser. Kept against the connection, in place of the last report, and
   // never audited: it is a heartbeat, not a decision.
   routes.post(
     "/activity",

@@ -34,7 +34,7 @@ const adminAuth = {
   handler: () => new Response(null, { status: 204 }),
   api: {
     getSession: async () => ({
-      user: { id: "admin", email: "admin@openbot.test" },
+      user: { id: "admin", email: "admin@xiongbao.test" },
     }),
   },
 };
@@ -55,7 +55,7 @@ function cursorOf(page: unknown): string {
 describe("a cursor the trail's own columns have to parse", () => {
   test("an id no uuid column can read answers 400, not 500", async () => {
     const response = await adminApp().request(
-      `http://openbot.local/api/admin/audit-events?cursor=${cursorOf({
+      `http://xiongbao.local/api/admin/audit-events?cursor=${cursorOf({
         id: "event-1",
         createdAt: "2026-08-13T12:00:00.000Z",
       })}`,
@@ -70,7 +70,7 @@ describe("a cursor the trail's own columns have to parse", () => {
   test("an id that is not a string at all answers 400, not 500", async () => {
     // Truthy, which is all the guard used to ask of it, and bound into a uuid comparison unchanged.
     const response = await adminApp().request(
-      `http://openbot.local/api/admin/audit-events?cursor=${cursorOf({
+      `http://xiongbao.local/api/admin/audit-events?cursor=${cursorOf({
         id: 7,
         createdAt: "2026-08-13T12:00:00.000Z",
       })}`,
@@ -86,7 +86,7 @@ describe("a cursor the trail's own columns have to parse", () => {
      * of a row — still reaches the database and answers a page.
      */
     const response = await adminApp().request(
-      `http://openbot.local/api/admin/audit-events?cursor=${cursorOf({
+      `http://xiongbao.local/api/admin/audit-events?cursor=${cursorOf({
         id: "6f1b7f28-6b2d-4d1b-9a2a-1c0b4b2c8a11",
         createdAt: "2026-08-13T12:00:00.000Z",
       })}&limit=1`,

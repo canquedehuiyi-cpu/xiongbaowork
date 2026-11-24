@@ -100,7 +100,6 @@ import {
   createStepLimitTracker,
   type StepLimitTracker,
 } from "@/lib/channels/step-limit";
-import { useTurnArtifactEvents } from "@/lib/channels/use-turn-artifact-events";
 import {
   createTurnStopTracker,
   type TurnStopTracker,
@@ -109,6 +108,7 @@ import {
   onTurnFinishedAway,
   turnFinishedAway,
 } from "@/lib/channels/turns-finished-away";
+import { useTurnArtifactEvents } from "@/lib/channels/use-turn-artifact-events";
 import { useConversationActivity } from "@/lib/computers/activity";
 import {
   createStreamActivity,
@@ -1076,11 +1076,11 @@ export function ChannelChat({
    */
   const models = useQuery({
     ...modelCatalogueQueryOptions(),
-    enabled: botProfile?.runsOnOpenBotModel === true,
+    enabled: botProfile?.runsOnXiongBaoModel === true,
   });
   const runModel = useConversationModel(
     channel.id,
-    botProfile?.runsOnOpenBotModel ? models.data : undefined,
+    botProfile?.runsOnXiongBaoModel ? models.data : undefined,
   );
   /*
    * History is the snapshot, the stored thread AND the voice archive. The transcript shows none of
@@ -1948,7 +1948,7 @@ export function ChannelChat({
             modelPicker={
               <ModelPicker
                 catalogue={
-                  botProfile?.runsOnOpenBotModel ? models.data : undefined
+                  botProfile?.runsOnXiongBaoModel ? models.data : undefined
                 }
                 disabled={!channel.active}
                 onChange={runModel.choose}

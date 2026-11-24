@@ -86,7 +86,7 @@ const asTeam = async <T>(work: () => Promise<T>): Promise<T> => {
     );
     return context.body(null, 204);
   });
-  await app.request("http://openbot.test/");
+  await app.request("http://xiongbao.test/");
   if (!outcome) throw new Error("The admin request never ran its work.");
   if ("error" in outcome) throw outcome.error;
   return outcome.value;

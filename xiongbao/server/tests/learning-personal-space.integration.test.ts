@@ -19,7 +19,7 @@ import { skillSnapshot } from "./fixtures/learned-skills";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /*
- * Several OpenBot replicas making the same person's Learning space at once, against one database and one Intelligence.
+ * Several XiongBao replicas making the same person's Learning space at once, against one database and one Intelligence.
  * Intelligence is faked as it behaves: a container id is unique per project, a second create answers 409
  * LEARNING_CONTAINER_ALREADY_EXISTS, and the runtime key's skills read says whether a container exists. Each replica
  * creates through the real service-token path in learning/ensure-container.ts.

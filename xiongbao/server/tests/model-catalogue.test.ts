@@ -456,7 +456,7 @@ describe("the default and the thinking levels, from the providers' own data", ()
   });
 
   /*
-   * The environment OpenBot Desktop writes for a Claude plan, turned into the plan the way the server
+   * The environment XiongBao Desktop writes for a Claude plan, turned into the plan the way the server
    * does at boot. `plan.token` is MANAGED_AGENT_TOKEN, the harness's own secret: sent to Anthropic as
    * the bearer, the listing came back 401 and no Claude plan ever had a model picker.
    */
@@ -523,7 +523,7 @@ describe("the default and the thinking levels, from the providers' own data", ()
     }
   });
 
-  test("OpenBot's harness token never leaves for Anthropic, even where it is all there is", async () => {
+  test("XiongBao's harness token never leaves for Anthropic, even where it is all there is", async () => {
     // A mis-written environment whose only token is the harness's own: nothing is asked at all.
     const environment = {
       ...claudePlanEnvironment,

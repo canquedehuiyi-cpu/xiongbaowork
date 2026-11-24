@@ -12,7 +12,7 @@ import type { ResponsibilityEvent, ResponsibilityEventResult } from "./types";
 
 /**
  * GitHub sends whole objects: a `pull_request` delivery repeats the repository under `head` and
- * `base`, and for OpenBot's own pull requests measured 26–57 KB. Matches the trigger ingress, which
+ * `base`, and for XiongBao's own pull requests measured 26–57 KB. Matches the trigger ingress, which
  * takes the same provider payloads; the ledger's own 32 KiB cap is met by `fitPayload` below.
  */
 export const GITHUB_BODY_LIMIT = 256 * 1024;

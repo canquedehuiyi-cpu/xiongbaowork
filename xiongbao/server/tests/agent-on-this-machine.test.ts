@@ -19,7 +19,7 @@ import { testEnvironment } from "./support/environment";
 /**
  * An agent a person runs on their own machine, registered at its loopback address.
  *
- * OpenBot Desktop runs this server in a container, where `127.0.0.1` is the container. A person who
+ * XiongBao Desktop runs this server in a container, where `127.0.0.1` is the container. A person who
  * registered `http://127.0.0.1:8765/ag-ui` was told "This server could not reach that address",
  * while `http://host.docker.internal:8765/ag-ui` worked. The Desktop now tells the server the name
  * its container reaches the machine by (`OPENBOT_THIS_MACHINE_HOST`), and a loopback address is
@@ -180,7 +180,11 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
 ) => {
-  context.set("actor", { id: "person", email: "p@openbot.test", role: "user" });
+  context.set("actor", {
+    id: "person",
+    email: "p@xiongbao.test",
+    role: "user",
+  });
   await next();
 };
 
@@ -208,11 +212,14 @@ async function testConnection(
       ? { thisMachineHost: config.thisMachineHost }
       : undefined,
   );
-  const response = await routes.request("http://openbot.test/test-connection", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ endpoint }),
-  });
+  const response = await routes.request(
+    "http://xiongbao.test/test-connection",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ endpoint }),
+    },
+  );
   return (await response.json()) as { ok: boolean; reason?: string };
 }
 
@@ -232,7 +239,7 @@ describe("testing an agent on the person's own machine", () => {
     // nowhere, so reaching it would mean the address went out as typed.
     hosts.length = 0;
     const result = await testConnection(
-      "openbot-this-machine.invalid",
+      "xiongbao-this-machine.invalid",
       `http://127.0.0.1:${agent.port}/ag-ui`,
     );
     expect(result.ok).toBe(false);

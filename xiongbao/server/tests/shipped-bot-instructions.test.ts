@@ -5,12 +5,12 @@ import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
 
 /**
- * The words every Bot OpenBot ships runs on, read from the files that ship them.
+ * The words every Bot XiongBao ships runs on, read from the files that ship them.
  *
- * A Bot's own instructions sit beside OpenBot's prompt in the same run, and two kinds of sentence in
+ * A Bot's own instructions sit beside XiongBao's prompt in the same run, and two kinds of sentence in
  * them undo it. Capitals for emphasis: a model applies an emphatic rule further than it was meant,
  * and picks it over the plain one it contradicts. And a sign-in asked for in words ("ask the person
- * to sign in, and wait for them"), which the starter Personal Assistant carried for months: OpenBot
+ * to sign in, and wait for them"), which the starter Personal Assistant carried for months: XiongBao
  * hands a sign-in to the person with a tool call, so a Bot told to ask and wait stops with nothing
  * handed over, and the page stays where it was.
  *
@@ -71,26 +71,119 @@ function shippedBots(): ShippedBot[] {
 }
 
 /** Words in capitals that are names, not emphasis. */
-const ACRONYMS = new Set([
-  // 原有
-  "AI", "API", "CSV", "ID", "PDF", "URL",
-  // 领域与角色缩写（2026-11-13 用户批准扩充：P2 落位员工正文的技术词）
-  "QA", "PPT", "PRD", "HTML", "CEO", "CI", "CD", "DX", "CSS", "UI", "UX",
-  "LLM", "OWASP", "AST", "STRIDE", "SOP", "PR", "IP", "ISO", "CLI", "MUI",
-  "DNS", "CSO", "ADR", "MIT", "XSS", "IDOR", "SKILL", "JS",
-  "ARIA", "FID", "CLS", "REST", "CRUD", "DRY", "CVE", "SQL", "MVP", "WCAG",
-  "AA", "LCP", "CDN", "UTF", "ASCII", "CORS", "RPC", "AVIF", "NVDA", "JAWS",
-  "RUM", "HEX", "GPT", "MVDP", "JSON", "TRIM", "DHCP", "LSP", "CPU", "SMART",
-  "CMD", "IT", "FAQ", "JWT", "UTC", "MVC", "MVVM", "PHP", "DDD", "ML", "TLS",
-  "CSP", "HSTS", "PII", "SSRF", "HTTP", "RSA",
-  // 专名与文件名（模板引用的 VERSION/CHANGELOG/README 等是文件名，不是强调）
-  "README", "VERSION", "ARCHITECTURE", "CHANGELOG", "TODOS", "TODO",
-  "DESIGN", "BEGIN", "PRIVATE",
-  // 日期与占位格式
-  "YYYY", "MM", "DD", "HHMMSS", "YYYYMMDD", "XX", "YY", "TL", "DR",
-  // 其他专名
-  "QQ", "MAC", "SVG", "YC",
-].filter(Boolean));
+const ACRONYMS = new Set(
+  [
+    // 原有
+    "AI",
+    "API",
+    "CSV",
+    "ID",
+    "PDF",
+    "URL",
+    // 领域与角色缩写（2026-11-13 用户批准扩充：P2 落位员工正文的技术词）
+    "QA",
+    "PPT",
+    "PRD",
+    "HTML",
+    "CEO",
+    "CI",
+    "CD",
+    "DX",
+    "CSS",
+    "UI",
+    "UX",
+    "LLM",
+    "OWASP",
+    "AST",
+    "STRIDE",
+    "SOP",
+    "PR",
+    "IP",
+    "ISO",
+    "CLI",
+    "MUI",
+    "DNS",
+    "CSO",
+    "ADR",
+    "MIT",
+    "XSS",
+    "IDOR",
+    "SKILL",
+    "JS",
+    "ARIA",
+    "FID",
+    "CLS",
+    "REST",
+    "CRUD",
+    "DRY",
+    "CVE",
+    "SQL",
+    "MVP",
+    "WCAG",
+    "AA",
+    "LCP",
+    "CDN",
+    "UTF",
+    "ASCII",
+    "CORS",
+    "RPC",
+    "AVIF",
+    "NVDA",
+    "JAWS",
+    "RUM",
+    "HEX",
+    "GPT",
+    "MVDP",
+    "JSON",
+    "TRIM",
+    "DHCP",
+    "LSP",
+    "CPU",
+    "SMART",
+    "CMD",
+    "IT",
+    "FAQ",
+    "JWT",
+    "UTC",
+    "MVC",
+    "MVVM",
+    "PHP",
+    "DDD",
+    "ML",
+    "TLS",
+    "CSP",
+    "HSTS",
+    "PII",
+    "SSRF",
+    "HTTP",
+    "RSA",
+    // 专名与文件名（模板引用的 VERSION/CHANGELOG/README 等是文件名，不是强调）
+    "README",
+    "VERSION",
+    "ARCHITECTURE",
+    "CHANGELOG",
+    "TODOS",
+    "TODO",
+    "DESIGN",
+    "BEGIN",
+    "PRIVATE",
+    // 日期与占位格式
+    "YYYY",
+    "MM",
+    "DD",
+    "HHMMSS",
+    "YYYYMMDD",
+    "XX",
+    "YY",
+    "TL",
+    "DR",
+    // 其他专名
+    "QQ",
+    "MAC",
+    "SVG",
+    "YC",
+  ].filter(Boolean),
+);
 
 /** Any word of two or more capital letters that is not a known acronym. */
 function shouting(text: string): string[] {
@@ -129,7 +222,7 @@ test("the rules catch the wording the starter shipped with", () => {
   expect(shouting("Read the PDF at the URL.")).toEqual([]);
 });
 
-test("OpenBot ships the Bots this reads", () => {
+test("XiongBao ships the Bots this reads", () => {
   const ids = shippedBots().map(({ id }) => id);
   for (const id of [
     "personal-assistant",
@@ -141,7 +234,7 @@ test("OpenBot ships the Bots this reads", () => {
     expect(ids).toContain(id);
 });
 
-test("no Bot OpenBot ships is told anything in capitals for emphasis", () => {
+test("no Bot XiongBao ships is told anything in capitals for emphasis", () => {
   const found = shippedBots().flatMap(({ file, id, texts }) =>
     texts.flatMap((text) =>
       shouting(text).map((word) => `${file} ${id}: ${word}`),
@@ -150,7 +243,7 @@ test("no Bot OpenBot ships is told anything in capitals for emphasis", () => {
   expect(found).toEqual([]);
 });
 
-test("no Bot OpenBot ships is told to ask for a sign-in and wait", () => {
+test("no Bot XiongBao ships is told to ask for a sign-in and wait", () => {
   const found = shippedBots().flatMap(({ file, id, texts }) =>
     texts.flatMap((text) =>
       asksToSignInAndWait(text).map((sentence) => `${file} ${id}: ${sentence}`),

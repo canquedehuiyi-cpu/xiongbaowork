@@ -45,7 +45,7 @@ function routes(role: "admin" | "user" = "admin") {
         },
       },
       requireUser,
-      ["https://openbot.example.com"],
+      ["https://xiongbao.example.com"],
     ),
   };
 }
@@ -54,14 +54,17 @@ test("only administrators can read or write learning settings", async () => {
   const { app } = routes("user");
   expect((await app.request("/settings")).status).toBe(403);
   // Same-origin JSON, so the refusal is the admin guard and not the origin check.
-  const sameOrigin = await app.request("https://openbot.example.com/settings", {
-    method: "PUT",
-    headers: {
-      "content-type": "application/json",
-      origin: "https://openbot.example.com",
+  const sameOrigin = await app.request(
+    "https://xiongbao.example.com/settings",
+    {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://xiongbao.example.com",
+      },
+      body: JSON.stringify({ enabled: true, agents: {} }),
     },
-    body: JSON.stringify({ enabled: true, agents: {} }),
-  });
+  );
   expect(sameOrigin.status).toBe(403);
   expect(await sameOrigin.json()).toEqual({
     error: "Only an admin can do this.",
@@ -89,7 +92,7 @@ test("rejects cross-origin and non-JSON writes before changing settings", async 
   for (const headers of attempts) {
     expect(
       (
-        await app.request("https://openbot.example.com/settings", {
+        await app.request("https://xiongbao.example.com/settings", {
           method: "PUT",
           headers,
           body: JSON.stringify({
@@ -111,11 +114,11 @@ test("validates and persists a same-origin admin save", async () => {
     defaultTarget: { containerId: "support" },
     agents: { excluded: null },
   };
-  const response = await app.request("https://openbot.example.com/settings", {
+  const response = await app.request("https://xiongbao.example.com/settings", {
     method: "PUT",
     headers: {
       "content-type": "application/json",
-      origin: "https://openbot.example.com",
+      origin: "https://xiongbao.example.com",
     },
     body: JSON.stringify(settings),
   });
@@ -141,11 +144,11 @@ test("a settings save keeps who approves and automatic approval when it leaves t
     personalReview: "people",
     autoApprove: false,
   });
-  const response = await app.request("https://openbot.example.com/settings", {
+  const response = await app.request("https://xiongbao.example.com/settings", {
     method: "PUT",
     headers: {
       "content-type": "application/json",
-      origin: "https://openbot.example.com",
+      origin: "https://xiongbao.example.com",
     },
     body: JSON.stringify({
       enabled: true,
@@ -178,15 +181,15 @@ test("an admin switches who approves, and a later settings save keeps it", async
   const app = createLearningRoutes(
     { store },
     requireUser,
-    ["https://openbot.example.com"],
+    ["https://xiongbao.example.com"],
     { insert: async (event) => void events.push(event) },
   );
   const put = (
     path: string,
     body: unknown,
-    origin = "https://openbot.example.com",
+    origin = "https://xiongbao.example.com",
   ) =>
-    app.request(`https://openbot.example.com${path}`, {
+    app.request(`https://xiongbao.example.com${path}`, {
       method: "PUT",
       headers: {
         "content-type": "application/json",
@@ -305,17 +308,17 @@ test("an administrator creates the container with the deployment's credential, s
       await next();
     }) as MiddlewareHandler<{ Variables: AppVariables }>;
   const post = (app: ReturnType<typeof createLearningRoutes>, origin: string) =>
-    app.request("https://openbot.example.com/container", {
+    app.request("https://xiongbao.example.com/container", {
       method: "POST",
       headers: { "content-type": "application/json", origin },
       body: "{}",
     });
   const member = createLearningRoutes({ store, autoAssign }, actor("user"));
-  expect((await post(member, "https://openbot.example.com")).status).toBe(403);
+  expect((await post(member, "https://xiongbao.example.com")).status).toBe(403);
   const admin = createLearningRoutes({ store, autoAssign }, actor("admin"));
   expect((await post(admin, "https://evil.example")).status).toBe(403);
   expect(creates).toBe(1);
-  const response = await post(admin, "https://openbot.example.com");
+  const response = await post(admin, "https://xiongbao.example.com");
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({
     automatic: { state: "assigned", containerId: "openbot" },
@@ -377,17 +380,17 @@ describe("reviewing proposed skills in Admin, against Intelligence's project-key
           : {}),
       },
       requireUser,
-      ["https://openbot.example.com"],
+      ["https://xiongbao.example.com"],
       { insert: async (event) => void events.push(event) },
     );
     return { app, store, events, intelligence };
   }
   const post = (app: ReturnType<typeof createLearningRoutes>, path: string) =>
-    app.request(`https://openbot.example.com${path}`, {
+    app.request(`https://xiongbao.example.com${path}`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
-        origin: "https://openbot.example.com",
+        origin: "https://xiongbao.example.com",
       },
       body: "{}",
     });
@@ -499,7 +502,7 @@ describe("reviewing proposed skills in Admin, against Intelligence's project-key
     expect(intelligence.requests).toEqual([]);
   });
 
-  test("an admin reads the SKILL.md and evidence, approves it, and OpenBot's audit names them", async () => {
+  test("an admin reads the SKILL.md and evidence, approves it, and XiongBao's audit names them", async () => {
     const { app, store, events, intelligence } = admin();
     await useDefault(store);
     expect(await (await app.request("/proposals")).json()).toMatchObject({
@@ -585,7 +588,7 @@ describe("reviewing proposed skills in Admin, against Intelligence's project-key
     const { app, store, intelligence } = admin();
     await useDefault(store);
     const response = await app.request(
-      `https://openbot.example.com/proposals/${PROPOSAL}/approve`,
+      `https://xiongbao.example.com/proposals/${PROPOSAL}/approve`,
       {
         method: "POST",
         headers: {
@@ -631,7 +634,7 @@ describe("reviewing proposed skills in Admin, against Intelligence's project-key
     expect(overview.overview.modelProblem).toBe(said);
   });
 
-  test("an Intelligence OpenBot Desktop did not set up keeps telling its admin to give it a model", async () => {
+  test("an Intelligence XiongBao Desktop did not set up keeps telling its admin to give it a model", async () => {
     const { app, store } = admin("current", "admin", "no-dashboard", {
       noModel: true,
       modelUnavailable: learningModelUnavailable({}),
@@ -657,7 +660,7 @@ describe("reviewing proposed skills in Admin, against Intelligence's project-key
     expect(await response.json()).toEqual({
       overview: {
         configuration: "configured",
-        container: { id: "openbot", name: "OpenBot" },
+        container: { id: "openbot", name: "XiongBao" },
         pendingThreadCount: 1,
         pendingCandidateCount: 1,
         publishedSkillCount: 1,

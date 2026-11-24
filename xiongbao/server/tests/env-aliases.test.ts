@@ -68,7 +68,7 @@ describe("applyEnvironmentAliases", () => {
  */
 describe("loadConfig reads the XIONGBAO_ names", () => {
   const base = {
-    DATABASE_URL: "postgres://openbot:openbot@localhost:5432/openbot",
+    DATABASE_URL: "postgres://openbot:openbot@localhost:5432/xiongbao",
     KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     BETTER_AUTH_SECRET: "a-long-enough-local-development-auth-secret",
     BETTER_AUTH_URL: "http://localhost:3001",

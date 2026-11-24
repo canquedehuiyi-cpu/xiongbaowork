@@ -391,18 +391,6 @@
     "reason": "品牌白名单：xiongbao/shared/openbot-actor.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
-    "text": "app_id: \"openbot\"",
-    "file": "xiongbao/server/src/telemetry/product.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/telemetry/product.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "app_id: \"openbot\"",
-    "file": "xiongbao/server/src/copilot.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/copilot.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "Automatic Learning: no credential here could create the openbot container",
     "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
@@ -727,12 +715,6 @@
     "pattern": "openbot\\-product(?!\\w)"
   },
   {
-    "text": "oss.runtime.openbot.",
-    "file": "xiongbao/server/src/telemetry/product.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/telemetry/product.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
     "text": "ref: `openbot/${SEARCH_TOOLS}`",
     "file": "xiongbao/server/src/agents/tool-search.ts",
     "until": "R3",
@@ -761,12 +743,6 @@
     "file": "xiongbao/server/src/learning/ensure-container.ts",
     "until": "R3",
     "reason": "品牌白名单：xiongbao/server/src/learning/ensure-container.ts 里已落在存量数据或对端的名字，随迁移改名"
-  },
-  {
-    "text": "z.literal(\"openbot\")",
-    "file": "xiongbao/server/src/telemetry/product.ts",
-    "until": "R3",
-    "reason": "品牌白名单：xiongbao/server/src/telemetry/product.ts 里已落在存量数据或对端的名字，随迁移改名"
   },
   {
     "text": "名为 openbot 的容器",
@@ -1032,5 +1008,838 @@
     "text": "/openbot|xiongbao/i",
     "until": "R4",
     "reason": "断言继续拦截上游名：模型可见文字里既不许出现旧名也不许出现新名"
+  },
+  {
+    "file": "xiongbao/server/src/agents/callback-token.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/agents/harness-model.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/agents/plan-model.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/agents/routes.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/agents/runtime-agents.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/app.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/copilot.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/learning/remote.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/memory/tools.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/model-catalogue.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/agent-callback-frame.integration.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/agent-callback-token.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/agent-endpoint.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/agent-handoff-endtoend.integration.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/agent-test-connection-managed.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/bot-knows-its-framework.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/bot-knows-its-model.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/channel-titler.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/context-usage.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/copilot-forwarded-headers.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/host-access-callback-route.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-langgraph.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-model-endpoint.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-remote.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/memory-runtime.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/model-catalogue.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/model-choice-harness.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/model-picker-every-sign-in.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/personal-local-folders.integration.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/picked-harness-auth.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/picked-skill.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/plan-last-step.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/plan-model.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/plan-reviewer-router.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/provider-refusal.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/remote-approval-context.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/remote-ask-person.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/remote-coordination.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/request-trust.integration.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/routine-conversation.integration.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/run-model-built-in.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/run-model.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/runtime-agents.integration.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/runtime-own-runs.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/tool-chooser-sign-in.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/tool-selection.integration.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/voice-summary-model.test.ts",
+    "pattern": "x-openbot-agent-token|\\bopenbot(?:Model(?:Only)?|BotId|AnswerOnly|DeploymentTools)\\b|OpenBot (?:standing role|granted tools guidance|Bot id|deployment tools|signed run assertion|learned skills|personal memory)",
+    "until": "R2",
+    "reason": "Task 10：托管 Bot 线上名（服务器发、14 个框架收：鉴权头、forwardedProps 键、上下文标题），与框架同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/computer/sandbox.ts",
+    "pattern": "openbot\\.dev/|\\\"app\\.kubernetes\\.io/managed-by\\\": \\\"openbot\\\"",
+    "until": "R2",
+    "reason": "Task 11：电脑 pod 的 K8s 标签/注解，与 chart 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/computer-sandbox.test.ts",
+    "pattern": "openbot\\.dev/|\\\"app\\.kubernetes\\.io/managed-by\\\": \\\"openbot\\\"",
+    "until": "R2",
+    "reason": "Task 11：电脑 pod 的 K8s 标签/注解，与 chart 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/scripts/reset-test-database.ts",
+    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
+    "until": "R2",
+    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/approval-continuation-preparation-transaction.integration.test.ts",
+    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
+    "until": "R2",
+    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/approval-continuation-store.integration.test.ts",
+    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
+    "until": "R2",
+    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/approval-open-transaction.integration.test.ts",
+    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
+    "until": "R2",
+    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/approval-recovery-port.integration.test.ts",
+    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
+    "until": "R2",
+    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/continuation-target-store.integration.test.ts",
+    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
+    "until": "R2",
+    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/plugin-store.integration.test.ts",
+    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
+    "until": "R2",
+    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/support/database.test.ts",
+    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
+    "until": "R2",
+    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/support/database.ts",
+    "pattern": "openbot_continuation_(?:test_|template)|\\bopenbot_test\\b",
+    "until": "R2",
+    "reason": "Task 12：CI 测试库与模板库名（.github/workflows/ci.yml、scripts/test-server-sharded.ts 同名），与 CI 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/host-access/tools.ts",
+    "pattern": "Declined in OpenBot Desktop\\.",
+    "until": "R4",
+    "reason": "旧版桌面端回给服务器的拒绝原文，DENIED_ON_DESKTOP 逐字匹配（legacy-compat，随兼容代码删除）"
+  },
+  {
+    "file": "xiongbao/server/tests/host-access-tools.test.ts",
+    "pattern": "Declined in OpenBot Desktop\\.",
+    "until": "R4",
+    "reason": "旧版桌面端回给服务器的拒绝原文，DENIED_ON_DESKTOP 逐字匹配（legacy-compat，随兼容代码删除）"
+  },
+  {
+    "file": "xiongbao/server/src/tenant-package.ts",
+    "pattern": "OpenBot asks the person before it happens",
+    "until": "R4",
+    "reason": "EARLIER_STARTER_INSTRUCTIONS：库里未改过的旧版个人助理指令逐字匹配（legacy-compat，随兼容代码删除）"
+  },
+  {
+    "file": "xiongbao/server/tests/tenant-package.test.ts",
+    "pattern": "OpenBot asks the person before it happens",
+    "until": "R4",
+    "reason": "EARLIER_STARTER_INSTRUCTIONS：库里未改过的旧版个人助理指令逐字匹配（legacy-compat，随兼容代码删除）"
+  },
+  {
+    "file": "xiongbao/server/src/auth/dev-actor-email.ts",
+    "pattern": "(?i:dev@openbot\\.local)",
+    "until": "R4",
+    "reason": "演示账号旧邮箱：升级上来的库里仍有这一行，LEGACY_DEV_ACTOR_EMAILS 识别后改写（legacy-compat，随兼容代码删除）"
+  },
+  {
+    "file": "xiongbao/server/tests/dev-actor-email.test.ts",
+    "pattern": "(?i:dev@openbot\\.local)",
+    "until": "R4",
+    "reason": "演示账号旧邮箱：升级上来的库里仍有这一行，LEGACY_DEV_ACTOR_EMAILS 识别后改写（legacy-compat，随兼容代码删除）"
+  },
+  {
+    "file": "xiongbao/server/tests/dev-actor.integration.test.ts",
+    "pattern": "(?i:dev@openbot\\.local)",
+    "until": "R4",
+    "reason": "演示账号旧邮箱：升级上来的库里仍有这一行，LEGACY_DEV_ACTOR_EMAILS 识别后改写（legacy-compat，随兼容代码删除）"
+  },
+  {
+    "file": "xiongbao/server/tests/personal-local-folders.integration.test.ts",
+    "pattern": "(?i:dev@openbot\\.local)",
+    "until": "R4",
+    "reason": "演示账号旧邮箱：升级上来的库里仍有这一行，LEGACY_DEV_ACTOR_EMAILS 识别后改写（legacy-compat，随兼容代码删除）"
+  },
+  {
+    "file": "xiongbao/server/tests/delivery-providers.test.ts",
+    "pattern": "openbot-component-|openbot\\.sender|openbot\\.working",
+    "until": "R3",
+    "reason": "测试引用 delivery/opentag.ts 已保护的对端名（OpenTag 上下文键、事件名、工具调用 id 前缀）"
+  },
+  {
+    "file": "xiongbao/server/tests/delivery-routes.test.ts",
+    "pattern": "openbot-component-|openbot\\.sender|openbot\\.working",
+    "until": "R3",
+    "reason": "测试引用 delivery/opentag.ts 已保护的对端名（OpenTag 上下文键、事件名、工具调用 id 前缀）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-remote.test.ts",
+    "pattern": "openbot:learned-skills",
+    "until": "R3",
+    "reason": "测试引用 learning/remote.ts 已保护的目录 id（存于 Intelligence）"
+  },
+  {
+    "file": "xiongbao/server/tests/memory-runtime.test.ts",
+    "pattern": "openbot:learned-skills",
+    "until": "R3",
+    "reason": "测试引用 learning/remote.ts 已保护的目录 id（存于 Intelligence）"
+  },
+  {
+    "file": "xiongbao/server/tests/delivery-routes.test.ts",
+    "pattern": "openbot/share_private_information|\\[\\\"openbot\\\", \\\"share_private_information\\\"\\]",
+    "until": "R3",
+    "reason": "测试引用已保护的内置工具 ref（存于规则与审计行）"
+  },
+  {
+    "file": "xiongbao/server/tests/private-share-group.test.ts",
+    "pattern": "openbot/share_private_information|\\[\\\"openbot\\\", \\\"share_private_information\\\"\\]",
+    "until": "R3",
+    "reason": "测试引用已保护的内置工具 ref（存于规则与审计行）"
+  },
+  {
+    "file": "xiongbao/server/tests/proactive.test.ts",
+    "pattern": "openbot/share_private_information|\\[\\\"openbot\\\", \\\"share_private_information\\\"\\]",
+    "until": "R3",
+    "reason": "测试引用已保护的内置工具 ref（存于规则与审计行）"
+  },
+  {
+    "file": "xiongbao/server/tests/wakerflow-action-step.integration.test.ts",
+    "pattern": "openbot/share_private_information|\\[\\\"openbot\\\", \\\"share_private_information\\\"\\]",
+    "until": "R3",
+    "reason": "测试引用已保护的内置工具 ref（存于规则与审计行）"
+  },
+  {
+    "file": "xiongbao/server/tests/wakerflow-plan-graph.test.ts",
+    "pattern": "openbot/share_private_information|\\[\\\"openbot\\\", \\\"share_private_information\\\"\\]",
+    "until": "R3",
+    "reason": "测试引用已保护的内置工具 ref（存于规则与审计行）"
+  },
+  {
+    "file": "xiongbao/server/tests/runtime-own-runs.test.ts",
+    "pattern": "openbot/ui@1",
+    "until": "R3",
+    "reason": "测试引用已保护的 A2UI 目录 id（对话历史里落库）"
+  },
+  {
+    "file": "xiongbao/server/tests/auth-mobile-scheme.integration.test.ts",
+    "pattern": "openbotmobile",
+    "until": "R3",
+    "reason": "测试引用 auth/index.ts 已保护的旧移动端回调 scheme（双认）"
+  },
+  {
+    "file": "xiongbao/server/tests/organization-auth.test.ts",
+    "pattern": "openbot-desktop",
+    "until": "R3",
+    "reason": "测试引用 auth 已保护的桌面端 OAuth client id"
+  },
+  {
+    "file": "xiongbao/server/tests/browser-routes.integration.test.ts",
+    "pattern": "\\\"openbot-browser\\\"",
+    "until": "R3",
+    "reason": "测试引用已保护的录制连接 via 值（recorder_connections.via 落库）"
+  },
+  {
+    "file": "xiongbao/server/tests/brand-third-party.test.ts",
+    "pattern": "\\((?:OpenBot)\\)",
+    "until": "R3",
+    "reason": "测试引用 composio-adapter.ts 已保护的旧 auth config 名后缀（已登记在 Composio）"
+  },
+  {
+    "file": "xiongbao/server/tests/brokered-multiple-accounts.integration.test.ts",
+    "pattern": "\\((?:OpenBot)\\)",
+    "until": "R3",
+    "reason": "测试引用 composio-adapter.ts 已保护的旧 auth config 名后缀（已登记在 Composio）"
+  },
+  {
+    "file": "xiongbao/server/tests/composio-adapter.test.ts",
+    "pattern": "\\((?:OpenBot)\\)",
+    "until": "R3",
+    "reason": "测试引用 composio-adapter.ts 已保护的旧 auth config 名后缀（已登记在 Composio）"
+  },
+  {
+    "file": "xiongbao/server/tests/composio-deployment-client.test.ts",
+    "pattern": "\\((?:OpenBot)\\)",
+    "until": "R3",
+    "reason": "测试引用 composio-adapter.ts 已保护的旧 auth config 名后缀（已登记在 Composio）"
+  },
+  {
+    "file": "xiongbao/server/tests/roles.test.ts",
+    "pattern": "openbot\\.role-authority:",
+    "until": "R3",
+    "reason": "测试引用 auth/roles.ts 已保护的咨询锁键"
+  },
+  {
+    "file": "xiongbao/server/tests/thread-identity.test.ts",
+    "pattern": "openbot-connection-test-|openbot-model-call",
+    "until": "R3",
+    "reason": "测试引用已保护的内部 run/线程 id"
+  },
+  {
+    "file": "xiongbao/server/tests/plugins-mcp-admin.integration.test.ts",
+    "pattern": "openbot_grant_stamp_admissible",
+    "until": "R3",
+    "reason": "测试检查迁移里已删除的数据库函数旧名（迁移 SQL 名，R3 随迁移改名）"
+  },
+  {
+    "pattern": "openbot(?=(?:\\\\)*_(?:team(?:\\\\)*_|flow(?:\\\\)*_share))",
+    "until": "R3",
+    "reason": "数据库函数名前缀 openbot_team_* / openbot_flow_share_*（迁移 SQL 已创建，测试按前缀查 pg_proc），R3 随迁移改名"
+  },
+  {
+    "file": "xiongbao/server/tests/goal-conversation.integration.test.ts",
+    "pattern": "\\\"openbot:test\\\"",
+    "until": "R3",
+    "reason": "测试里用 openbot: 前缀充当系统授权来源标记（plugins/store.ts 按已保护的 openbot: 前缀识别），随 R3 迁移一起改"
+  },
+  {
+    "file": "xiongbao/server/tests/routine-conversation.integration.test.ts",
+    "pattern": "\\\"openbot:test\\\"",
+    "until": "R3",
+    "reason": "测试里用 openbot: 前缀充当系统授权来源标记（plugins/store.ts 按已保护的 openbot: 前缀识别），随 R3 迁移一起改"
+  },
+  {
+    "file": "xiongbao/server/tests/staffing-gates.integration.test.ts",
+    "pattern": "\\\"openbot:test\\\"",
+    "until": "R3",
+    "reason": "测试里用 openbot: 前缀充当系统授权来源标记（plugins/store.ts 按已保护的 openbot: 前缀识别），随 R3 迁移一起改"
+  },
+  {
+    "file": "xiongbao/server/tests/intelligence-expected-answers.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-auto-assign.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-ensure-container.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-model-endpoint.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-personal-skills.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-personal-space-missing.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-personal-space.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-review.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-routes.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-runtime.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-settings.integration.test.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/support/intelligence-learning.ts",
+    "pattern": "\\\"openbot\\\"|containers/openbot\\b|learning/openbot\\b|openbot container",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（shared/learning.ts、learning/ensure-container.ts，已在 Intelligence 项目里创建）"
+  },
+  {
+    "file": "xiongbao/server/tests/tenant-package-brand-fields.test.ts",
+    "pattern": "tenantId: \\\"openbot\\\"|toBe\\(\\\"openbot\\\"\\)|former_ids: \\[openbot\\]|former_ids names \\\"openbot\\\"",
+    "until": "R3",
+    "reason": "测试引用已保护的租户 id openbot（examples/xiongbao/brand.yaml 的 id: openbot）"
+  },
+  {
+    "file": "xiongbao/server/tests/tenant-package.test.ts",
+    "pattern": "tenantId: \\\"openbot\\\"|toBe\\(\\\"openbot\\\"\\)|former_ids: \\[openbot\\]|former_ids names \\\"openbot\\\"",
+    "until": "R3",
+    "reason": "测试引用已保护的租户 id openbot（examples/xiongbao/brand.yaml 的 id: openbot）"
+  },
+  {
+    "file": "xiongbao/server/tests/user-preferences-routes.test.ts",
+    "pattern": "skin: \\\"openbot\\\"|\\\"skin\\\":\\\"openbot\\\"",
+    "until": "R3",
+    "reason": "测试里库中旧皮肤值 openbot（旧默认皮肤名，读取时归一为默认皮肤；Task 20 迁数据）"
+  },
+  {
+    "file": "xiongbao/server/tests/user-preferences.integration.test.ts",
+    "pattern": "skin: \\\"openbot\\\"|\\\"skin\\\":\\\"openbot\\\"",
+    "until": "R3",
+    "reason": "测试里库中旧皮肤值 openbot（旧默认皮肤名，读取时归一为默认皮肤；Task 20 迁数据）"
+  },
+  {
+    "file": "xiongbao/server/src/approvals/rule-vocabulary.ts",
+    "pattern": "openbot/share_private_information",
+    "until": "R3",
+    "reason": "注释里写的是已保护的内置工具 ref 原值"
+  },
+  {
+    "file": "xiongbao/server/tests/bot-knows-its-framework.test.ts",
+    "pattern": "(?<!copilotkit/)openbot-agent-(?!token)",
+    "until": "R3",
+    "reason": "测试里的托管 Bot 镜像名：agents/harness-model.ts 已保护的镜像名正则 (?:openbot-)?agent- 只认这个前缀"
+  },
+  {
+    "file": "xiongbao/server/tests/channel-titler.test.ts",
+    "pattern": "(?<!copilotkit/)openbot-agent-(?!token)",
+    "until": "R3",
+    "reason": "测试里的托管 Bot 镜像名：agents/harness-model.ts 已保护的镜像名正则 (?:openbot-)?agent- 只认这个前缀"
+  },
+  {
+    "file": "xiongbao/server/tests/computer-wire-headers.test.ts",
+    "pattern": "x-openbot-",
+    "until": "R4",
+    "reason": "断言服务器发往电脑端的头不再带旧前缀 x-openbot-（旧名就是被测对象）"
+  },
+  {
+    "file": "xiongbao/server/tests/bot-knows-its-model.test.ts",
+    "pattern": "Powered by OpenBot",
+    "until": "R2",
+    "reason": "断言 examples/personal/agents.yaml 里出厂 Bot 的 subtitle 原文，随 Task 10（examples/）同一 PR 改"
+  },
+  {
+    "file": "xiongbao/server/tests/tenant-package-personal.test.ts",
+    "pattern": "Powered by OpenBot",
+    "until": "R2",
+    "reason": "断言 examples/personal/agents.yaml 里出厂 Bot 的 subtitle 原文，随 Task 10（examples/）同一 PR 改"
+  },
+  {
+    "file": "xiongbao/server/tests/brand-third-party.test.ts",
+    "pattern": "frameworkLabel\\(\\\"OpenBot\\\"\\)|framework: \\\"OpenBot\\\"",
+    "until": "R3",
+    "reason": "测试引用 shared/harnesses.ts 已保护的框架名 OpenBot（Bot 运行在本产品上时的框架值）"
+  },
+  {
+    "file": "xiongbao/server/tests/copilot.test.ts",
+    "pattern": "frameworkLabel\\(\\\"OpenBot\\\"\\)|framework: \\\"OpenBot\\\"",
+    "until": "R3",
+    "reason": "测试引用 shared/harnesses.ts 已保护的框架名 OpenBot（Bot 运行在本产品上时的框架值）"
+  },
+  {
+    "file": "xiongbao/server/src/browser/egress.ts",
+    "pattern": "charts/openbot",
+    "until": "R2",
+    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/src/channels/attachments.ts",
+    "pattern": "charts/openbot",
+    "until": "R2",
+    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/attachment-routes.test.ts",
+    "pattern": "charts/openbot",
+    "until": "R2",
+    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/handoff-caps-defaults.test.ts",
+    "pattern": "charts/openbot",
+    "until": "R2",
+    "reason": "Task 11：chart 目录 charts/openbot 与 chart 同一 PR 改名，届时删除本条目"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-personal-skills.test.ts",
+    "pattern": "(?<![\\w.-])openbot(?=: )",
+    "until": "R3",
+    "reason": "测试引用已保护的 Learning 容器 id openbot（按容器 id 分组的发布表）"
+  },
+  {
+    "file": "xiongbao/server/tests/dev-actor-email.test.ts",
+    "pattern": "admin@openbot\\.local",
+    "until": "R4",
+    "reason": "断言旧域名下的其它地址不算演示账号（与 dev@openbot.local 成对）"
+  },
+  {
+    "file": "xiongbao/server/tests/config.test.ts",
+    "pattern": "openbot-dev-worker-secret",
+    "until": "R2",
+    "reason": "Task 12：scripts/start.sh 的公开默认 WORKER_SHARED_SECRET，config.ts 存的是它的 SHA-256，须与 start.sh 同一 PR 改"
+  },
+  {
+    "file": "xiongbao/server/tests/brand-server-copy.test.ts",
+    "pattern": "\\\"OpenBot\\\"",
+    "until": "R4",
+    "reason": "断言非默认品牌的服务器文案里不出现上游名"
+  },
+  {
+    "file": "xiongbao/server/tests/xiongbao-package.test.ts",
+    "pattern": "/openbot/i",
+    "until": "R4",
+    "reason": "断言出厂人设里不出现上游名"
+  },
+  {
+    "file": "xiongbao/server/tests/delivery-routes.test.ts",
+    "pattern": "/openbot\\|acp",
+    "until": "R3",
+    "reason": "断言卡片文字不泄露内部 ref（含已保护的 openbot/share_private_information）"
+  },
+  {
+    "file": "xiongbao/server/src/config.ts",
+    "pattern": "(?<=`)openbot(?=`)",
+    "until": "R3",
+    "reason": "注释里写的是已保护的 Learning 容器 id openbot 原值"
+  },
+  {
+    "file": "xiongbao/server/src/index.ts",
+    "pattern": "(?<=`)openbot(?=`)",
+    "until": "R3",
+    "reason": "注释里写的是已保护的 Learning 容器 id openbot 原值"
+  },
+  {
+    "file": "xiongbao/server/src/intelligence-startup.ts",
+    "pattern": "(?<=`)openbot(?=`)",
+    "until": "R3",
+    "reason": "注释里写的是已保护的 Learning 容器 id openbot 原值"
+  },
+  {
+    "file": "xiongbao/server/src/learning/auto-assign.ts",
+    "pattern": "(?<=`)openbot(?=`)",
+    "until": "R3",
+    "reason": "注释里写的是已保护的 Learning 容器 id openbot 原值"
+  },
+  {
+    "file": "xiongbao/server/src/learning/ensure-container.ts",
+    "pattern": "(?<=`)openbot(?=`)",
+    "until": "R3",
+    "reason": "注释里写的是已保护的 Learning 容器 id openbot 原值"
+  },
+  {
+    "file": "xiongbao/server/src/plugins/personal-defaults.ts",
+    "pattern": "(?<=`)openbot:(?=`)",
+    "until": "R3",
+    "reason": "注释里写的是已保护的 granted_by 标记前缀 openbot: 原值"
+  },
+  {
+    "file": "xiongbao/server/src/plugins/store.ts",
+    "pattern": "(?<=`)openbot:(?=`)",
+    "until": "R3",
+    "reason": "注释里写的是已保护的 granted_by 标记前缀 openbot: 原值"
+  },
+  {
+    "file": "xiongbao/server/src/browser-request-marker.ts",
+    "text": "`x-openbot-*`",
+    "until": "R2",
+    "reason": "注释里写的是仍被认的旧浏览器标记头前缀（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
+    "file": "xiongbao/server/src/agents/profile-types.ts",
+    "text": "(\"LangChain\", \"OpenBot\")",
+    "until": "R3",
+    "reason": "注释里举的是 shared/harnesses.ts 已保护的框架名 OpenBot"
+  },
+  {
+    "file": "xiongbao/server/src/copilot.ts",
+    "text": "Powered by OpenBot",
+    "until": "R2",
+    "reason": "注释里引用 examples/personal/agents.yaml 的出厂 subtitle 原文，随 Task 10（examples/）同改"
+  },
+  {
+    "file": "xiongbao/server/src/plugins/composio-adapter.ts",
+    "text": "\"Linear (OpenBot)\"",
+    "until": "R3",
+    "reason": "注释里举的是已保护的旧 auth config 名后缀（LEGACY_CONFIG_SUFFIX）"
+  },
+  {
+    "file": "xiongbao/server/tests/support/database.ts",
+    "pattern": "(?<=\\\")openbot(?=\\\")|(?<=5432/)openbot(?=\\\")",
+    "until": "R4",
+    "reason": "测试库护栏同时拒绝旧开发库名 openbot 与新名（开发 compose 与现网库分别在 Task 12、R3 改名，两段时间里两个名字都可能是真实库）"
+  },
+  {
+    "file": "xiongbao/server/tests/support/database.test.ts",
+    "pattern": "(?<=\\\")openbot(?=\\\")|(?<=5432/)openbot(?=\\\")",
+    "until": "R4",
+    "reason": "测试库护栏同时拒绝旧开发库名 openbot 与新名（开发 compose 与现网库分别在 Task 12、R3 改名，两段时间里两个名字都可能是真实库）"
+  },
+  {
+    "file": "xiongbao/server/tests/test-database-url.integration.test.ts",
+    "pattern": "(?<=\\\")openbot(?=\\\")|(?<=5432/)openbot(?=\\\")",
+    "until": "R4",
+    "reason": "测试库护栏同时拒绝旧开发库名 openbot 与新名（开发 compose 与现网库分别在 Task 12、R3 改名，两段时间里两个名字都可能是真实库）"
+  },
+  {
+    "file": "xiongbao/server/tests/learning-mastra.test.ts",
+    "pattern": "(?<=\\}\\)\\.)openbot\\b",
+    "until": "R2",
+    "reason": "Task 10：agent-mastra 注册的 Mastra agent id（agents: { openbot }），测试按这个名字取 getLocalAgents(...) 的属性，与 agent-mastra 同一 PR 改名，届时删除本条目"
   }
 ]

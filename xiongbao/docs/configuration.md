@@ -946,7 +946,7 @@ them, including a saved off. See [automatic-learning.md](automatic-learning.md).
 
 Every audit row is also sent as an OTLP log record over HTTP, so a SIEM or an OpenTelemetry
 Collector receives the same events the **Audit** page shows, as they happen. Each record carries
-`openbot.surface`: `bot`, `identity` or `control_plane`. Export never stops a request: when the
+`xiongbao.surface`: `bot`, `identity` or `control_plane`. Export never stops a request: when the
 collector cannot be reached, records are dropped after the SDK's retries, and the row in PostgreSQL
 is still the record.
 

@@ -507,7 +507,7 @@ export function createApp(
     productTelemetry?: ProductTelemetry;
     /** The Recorder extension's routes and guards (recorder/wiring.ts). Absent, nothing about it is mounted. */
     recorder?: RecorderExtensionDeps;
-    /** A person's own OpenBot browser, with the Recorder in it already connected (browser/routes.ts). Absent, nothing
+    /** A person's own XiongBao browser, with the Recorder in it already connected (browser/routes.ts). Absent, nothing
      * about it is mounted and the app shows no Browser button. */
     browser?: Omit<BrowserRouteDeps, "requireUser" | "auditStore">;
     /** A Bot's browser worked by a person: its bar and Record (browser/bot-browser.ts), under the computer routes. Absent,
@@ -612,7 +612,7 @@ export function createApp(
      */
     boundaryWriter?: ModelCompleter;
     /**
-     * What a team approval rule can name: this OpenBot's apps, their tools and its Bots
+     * What a team approval rule can name: this XiongBao's apps, their tools and its Bots
      * (approvals/rule-vocabulary.ts). Absent, `/api/approvals/team/rules/{translate,backtest,batch}`
      * are not mounted.
      */
@@ -716,7 +716,7 @@ export function createApp(
        * the WakerFlow target, so the form never offers a target the store would refuse.
        */
       wakerflowAutomations: coworker?.wakerflowAutomations === true,
-      // Whether to offer help self-hosting OpenBot. A fork running it for its own people turns it off,
+      // Whether to offer help self-hosting XiongBao. A fork running it for its own people turns it off,
       // and a deployment that pays for Intelligence never sees it. See self-host-banner.ts.
       // Never in the personal edition: one person running it for themselves is not the audience.
       selfHostBanner:
@@ -726,8 +726,8 @@ export function createApp(
             ? await selfHostBanner.shown()
             : config.selfHostBanner,
       /*
-       * Whether this is somebody trying OpenBot on their own machine, not an organization's
-       * deployment. Onboarding reads it to explain where OpenBot can run, which only the person
+       * Whether this is somebody trying XiongBao on their own machine, not an organization's
+       * deployment. Onboarding reads it to explain where XiongBao can run, which only the person
        * evaluating it needs and an organization's employees should never be pitched.
        *
        * Single-user mode, not a new switch: it is already true only with no identity provider and
@@ -842,7 +842,7 @@ export function createApp(
     }
     if (!auth) {
       /*
-       * One person and no sign-in (OpenBot Desktop): there is no session for Sign out to end, so
+       * One person and no sign-in (XiongBao Desktop): there is no session for Sign out to end, so
        * ending it has already happened. The app no longer offers Sign out here; a page loaded
        * before that change still could, and a 503 left the person staring at "No identity provider
        * is configured." for a button that cannot fail.
@@ -1110,7 +1110,7 @@ export function createApp(
           : null,
       },
       /*
-       * The OpenBot release this server runs, drawn small under the person's name. Here rather than
+       * The XiongBao release this server runs, drawn small under the person's name. Here rather than
        * on /api/capabilities, which anybody can read: as with /release, the exact version is not
        * handed to whoever can reach the port. Null when the build has none, such as in development.
        */
@@ -1903,7 +1903,7 @@ export function createApp(
     });
   }
   // The CopilotKit runtime, behind the same session guard as every other API route. Mounted last so
-  // its own routing under /api/copilotkit cannot shadow an OpenBot route declared above.
+  // its own routing under /api/copilotkit cannot shadow an XiongBao route declared above.
   if (copilotHandler) {
     /*
      * The runtime admits the single-user administrator by itself (`resolveRequestActor`), from a
@@ -2070,7 +2070,7 @@ export function createApp(
         // Whether a Bot made with no address can run here. Always: with a managed Bot it runs there,
         // and without one `create` makes a `built_in` Bot that runs in this server on the person's
         // instructions, as the personal edition's Personal Assistant does. Answering "is there a
-        // managed Bot" told OpenBot Desktop, which has none, that nobody could make a Bot at all.
+        // managed Bot" told XiongBao Desktop, which has none, that nobody could make a Bot at all.
         true,
         // The managed Bot's address, so a coworker created without an endpoint — which creation
         // stores as running at this address — can be told apart from one a person hosts.
@@ -2248,7 +2248,7 @@ export function createApp(
       "/api/recorder",
       createRecorderRoutes({
         ...coworker.recorder,
-        // A Disconnect in Settings, Browsers reaches the person's own OpenBot browser at once.
+        // A Disconnect in Settings, Browsers reaches the person's own XiongBao browser at once.
         ...(coworker.browser
           ? { onRevoked: browserConnectionRevoked(coworker.browser) }
           : {}),

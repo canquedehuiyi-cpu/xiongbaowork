@@ -25,7 +25,7 @@ function signedIn(): MiddlewareHandler<{ Variables: AppVariables }> {
   return async (context, next) => {
     context.set("actor", {
       id: "user-1",
-      email: "person@openbot.test",
+      email: "person@xiongbao.test",
       role: "user",
     } as never);
     await next();
@@ -55,7 +55,7 @@ function app(store: {
     signedIn(),
     async () => true,
     {
-      publicUrl: "https://openbot.example",
+      publicUrl: "https://xiongbao.example",
       appUrl: "https://app.example",
       encryptionKey: ENCRYPTION_KEY,
       // Only the callback asks this. Every test here stops at the authorization URL.
@@ -83,7 +83,7 @@ describe("connecting a dynamically registered vendor", () => {
 
     expect(response.status).toBe(200);
     expect(ensureCalls).toEqual([
-      { serverId: "notion", by: "person@openbot.test" },
+      { serverId: "notion", by: "person@xiongbao.test" },
     ]);
 
     const body = (await response.json()) as { authorizationUrl: string };
@@ -216,7 +216,7 @@ describe("connecting a curated vendor by its team row id", () => {
 
     expect(response.status).toBe(200);
     expect(ensureCalls).toEqual([
-      { serverId: "team:notion", by: "person@openbot.test" },
+      { serverId: "team:notion", by: "person@xiongbao.test" },
     ]);
     const body = (await response.json()) as { authorizationUrl: string };
     const url = new URL(body.authorizationUrl);

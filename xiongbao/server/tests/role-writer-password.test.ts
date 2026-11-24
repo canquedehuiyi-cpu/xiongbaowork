@@ -13,8 +13,8 @@ import { roleWriterPasswordStatement } from "../scripts/role-writer-password";
 
 describe("the role writer's password statement", () => {
   test("is the chart's own ALTER ROLE, with the password in its literal", () => {
-    expect(roleWriterPasswordStatement("openbot")).toBe(
-      "ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD 'openbot'",
+    expect(roleWriterPasswordStatement("xiongbao")).toBe(
+      "ALTER ROLE openbot_role_writer WITH LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS PASSWORD 'xiongbao'",
     );
   });
 

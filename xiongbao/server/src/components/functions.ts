@@ -182,9 +182,9 @@ export const DATA_FUNCTIONS: DataFunction[] = [
  * What a component is told, and the person reads on its card, when it may not read a function.
  *
  * In the team edition an admin gives a component its data, so the refusal says so. The personal
- * edition has no admin: the person owns everything these read, and OpenBot gives its own components
+ * edition has no admin: the person owns everything these read, and XiongBao gives its own components
  * what they read when they arrive (`PERSONAL_GRANTED_BY` in `routes.ts`). There a refusal is
- * OpenBot's fault, and it never sends the person to an admin they don't have.
+ * XiongBao's fault, and it never sends the person to an admin they don't have.
  */
 export function functionRefusal(
   component: string,

@@ -128,7 +128,7 @@ function httpsOrigin(url: string | undefined): string | undefined {
  * The deployment's Web Bot Auth identity, or undefined when it is off.
  *
  * Off unless `WEB_BOT_AUTH=on`. A signed request names the deployment's URL to every site a Bot
- * visits, and an OpenBot deployment is private by design, so signing is the operator's deliberate
+ * visits, and an XiongBao deployment is private by design, so signing is the operator's deliberate
  * choice, never inferred from the address. `on` needs an https `OPENBOT_PUBLIC_URL` (else
  * `BETTER_AUTH_URL`) that is not this machine, because that is where verifiers fetch the key; it is
  * refused for plain http or loopback rather than signing with a directory nobody can read.

@@ -5,13 +5,13 @@ import { configuredAuthProviders, loadConfig } from "../src/config";
 // The base environment is what a deployment of this shape needs to boot: its own database, a key
 // vault, and somebody to sign in. No platform address appears here, because nothing reads one.
 const baseEnvironment = {
-  DATABASE_URL: "postgres://openbot:openbot@localhost:5432/openbot",
+  DATABASE_URL: "postgres://openbot:openbot@localhost:5432/xiongbao",
   KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   GOOGLE_OAUTH_CLIENT_ID: "google-client-id",
   GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
   BETTER_AUTH_SECRET: "a-long-enough-local-development-auth-secret",
   BETTER_AUTH_URL: "http://localhost:3001",
-  INITIAL_ADMIN_EMAILS: "admin@openbot.test",
+  INITIAL_ADMIN_EMAILS: "admin@xiongbao.test",
   MANAGED_AGENT_AG_UI_URL: " http://localhost:4200/ag-ui ",
   MANAGED_AGENT_TOKEN: "managed-agent-token",
 };
@@ -74,11 +74,11 @@ describe("deployment configuration", () => {
     const config = loadConfig({
       ...withoutSignIn,
       OPENBOT_SINGLE_USER: "true",
-      OPENBOT_ORGANIZATION_AUTH_URL: "https://openbot.company.example",
+      OPENBOT_ORGANIZATION_AUTH_URL: "https://xiongbao.company.example",
     });
     expect(config.singleUser).toBe(false);
     expect(config.auth).toBeUndefined();
-    expect(config.organizationAuthUrl).toBe("https://openbot.company.example");
+    expect(config.organizationAuthUrl).toBe("https://xiongbao.company.example");
   });
   /*
    * 期 1·1.4：轮次之间的自动压缩默认打开（规格子项目 1）。回退开关 `XIONGBAO_AUTO_COMPACTION=off`；
@@ -379,7 +379,7 @@ describe("deployment configuration", () => {
       GOOGLE_OAUTH_CLIENT_SECRET: "google-client-secret",
       BETTER_AUTH_SECRET: "a-long-enough-local-development-auth-secret",
       BETTER_AUTH_URL: "http://localhost:3001",
-      INITIAL_ADMIN_EMAILS: "admin@openbot.test, owner@openbot.test",
+      INITIAL_ADMIN_EMAILS: "admin@xiongbao.test, owner@xiongbao.test",
     });
 
     expect(config.auth).toEqual({
@@ -394,7 +394,7 @@ describe("deployment configuration", () => {
         "http://[::1]:3010",
         "http://localhost:3010",
       ],
-      initialAdminEmails: ["admin@openbot.test", "owner@openbot.test"],
+      initialAdminEmails: ["admin@xiongbao.test", "owner@xiongbao.test"],
       // Nothing set, so no opinion and everybody is admitted: the shape a deployment that has not
       // heard of SIGNIN_ALLOWED_EMAIL_DOMAINS has, which is every deployment running today.
       allowedEmailDomains: [],
@@ -486,7 +486,7 @@ describe("deployment configuration", () => {
   const SESSION = {
     BETTER_AUTH_SECRET: "a-long-enough-local-development-auth-secret",
     BETTER_AUTH_URL: "http://localhost:3001",
-    INITIAL_ADMIN_EMAILS: "admin@openbot.test",
+    INITIAL_ADMIN_EMAILS: "admin@xiongbao.test",
   };
 
   /** What a deployment with no provider has to say before it is allowed to come up. */
@@ -507,7 +507,7 @@ describe("deployment configuration", () => {
       clientSecret: "entra-client-secret",
       tenantId: "common",
       apiScope: "api://entra-client-id/.default",
-      // No app may call OpenBot with a person's token until one is named.
+      // No app may call XiongBao with a person's token until one is named.
       allowedClients: [],
     });
     expect(configuredAuthProviders(config.auth)).toEqual(["microsoft"]);
@@ -711,14 +711,14 @@ describe("deployment configuration", () => {
   // NODE_ENV: the image and the chart both set it to production for every deployment, the local
   // trial included, so it says nothing about who can reach this.
   test.each([
-    ["a public URL", { OPENBOT_PUBLIC_URL: "https://openbot.example.com" }],
-    ["an app URL", { OPENBOT_APP_URL: "https://openbot.example.com" }],
-    ["a trusted origin", { TRUSTED_ORIGINS: "https://openbot.example.com" }],
+    ["a public URL", { OPENBOT_PUBLIC_URL: "https://xiongbao.example.com" }],
+    ["an app URL", { OPENBOT_APP_URL: "https://xiongbao.example.com" }],
+    ["a trusted origin", { TRUSTED_ORIGINS: "https://xiongbao.example.com" }],
     [
       "one published origin among loopback ones",
-      { TRUSTED_ORIGINS: "http://localhost:3010,https://openbot.example.com" },
+      { TRUSTED_ORIGINS: "http://localhost:3010,https://xiongbao.example.com" },
     ],
-    ["an address that is not a URL at all", { OPENBOT_PUBLIC_URL: "openbot" }],
+    ["an address that is not a URL at all", { OPENBOT_PUBLIC_URL: "xiongbao" }],
     [
       "a public URL missing its scheme",
       { OPENBOT_PUBLIC_URL: "example.com:3010" },
@@ -745,7 +745,7 @@ describe("deployment configuration", () => {
     ["a 172.16/12 address", { OPENBOT_PUBLIC_URL: "http://172.20.1.4:3001" }],
     ["a Tailscale address", { OPENBOT_PUBLIC_URL: "http://100.101.102.103" }],
     ["a unique-local IPv6 address", { OPENBOT_PUBLIC_URL: "http://[fd00::1]" }],
-    ["an mDNS name", { TRUSTED_ORIGINS: "http://openbot.local:3010" }],
+    ["an mDNS name", { TRUSTED_ORIGINS: "http://xiongbao.local:3010" }],
     ["a single-label LAN name", { TRUSTED_ORIGINS: "http://nas:3010" }],
   ])("still runs with no sign-in on %s", (_label, reachable) => {
     expect(() =>
@@ -1604,7 +1604,7 @@ describe("edition", () => {
     expect(config.computer?.provider).toBe("shared");
   });
 
-  // What OpenBot Desktop writes, so an app connected over its own OAuth has an address to come
+  // What XiongBao Desktop writes, so an app connected over its own OAuth has an address to come
   // back to. Loopback is this machine, so single-user mode stays on and stays this machine's.
   test("personal edition takes the app's own loopback address as its public URL", () => {
     const config = loadConfig({

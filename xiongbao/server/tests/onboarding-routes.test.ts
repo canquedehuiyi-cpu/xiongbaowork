@@ -6,7 +6,7 @@ import { testEnvironment } from "./support/environment";
 
 const MEMBER = {
   id: "member-1",
-  email: "member@openbot.test",
+  email: "member@xiongbao.test",
   name: "A Member",
   image: null,
 };
@@ -58,7 +58,7 @@ describe("onboarding routes", () => {
     const { store } = memoryStore({ step: 1, completedAt: null });
     const app = appWith(store);
 
-    const response = await app.request("http://openbot.local/api/me");
+    const response = await app.request("http://xiongbao.local/api/me");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -70,17 +70,17 @@ describe("onboarding routes", () => {
   test("/api/me reports null onboarding when the deployment has no store", async () => {
     const app = appWith(undefined);
 
-    const response = await app.request("http://openbot.local/api/me");
+    const response = await app.request("http://xiongbao.local/api/me");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { user: { onboarding: null } };
     expect(body.user.onboarding).toBeNull();
   });
 
-  test("/api/me carries the OpenBot release the server runs, beside the person", async () => {
+  test("/api/me carries the XiongBao release the server runs, beside the person", async () => {
     const app = appWith(undefined, { OPENBOT_BUILD_VERSION: "v0.3.1" });
 
-    const response = await app.request("http://openbot.local/api/me");
+    const response = await app.request("http://xiongbao.local/api/me");
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -98,7 +98,7 @@ describe("onboarding routes", () => {
     ];
     for (const environment of builds) {
       const response = await appWith(undefined, environment).request(
-        "http://openbot.local/api/me",
+        "http://xiongbao.local/api/me",
       );
       expect(response.status).toBe(200);
       expect(((await response.json()) as { version: unknown }).version).toBe(
@@ -112,7 +112,7 @@ describe("onboarding routes", () => {
     const app = appWith(store);
 
     const response = await app.request(
-      "http://openbot.local/api/me/onboarding",
+      "http://xiongbao.local/api/me/onboarding",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -132,7 +132,7 @@ describe("onboarding routes", () => {
     const app = appWith(store);
 
     const response = await app.request(
-      "http://openbot.local/api/me/onboarding",
+      "http://xiongbao.local/api/me/onboarding",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -161,7 +161,7 @@ describe("onboarding routes", () => {
     const app = appWith(store);
 
     const response = await app.request(
-      "http://openbot.local/api/me/onboarding",
+      "http://xiongbao.local/api/me/onboarding",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -177,7 +177,7 @@ describe("onboarding routes", () => {
     const app = appWith(undefined);
 
     const response = await app.request(
-      "http://openbot.local/api/me/onboarding",
+      "http://xiongbao.local/api/me/onboarding",
       {
         method: "POST",
         headers: { "content-type": "application/json" },

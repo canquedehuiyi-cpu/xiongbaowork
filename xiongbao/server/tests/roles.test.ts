@@ -14,13 +14,13 @@ import type { Database } from "../src/db/client";
 
 describe("roleForEmail", () => {
   test("assigns an admin role to allowlisted addresses without case sensitivity", () => {
-    expect(roleForEmail("Admin@OpenBot.test", ["admin@openbot.test"])).toBe(
+    expect(roleForEmail("Admin@XiongBao.test", ["admin@xiongbao.test"])).toBe(
       "admin",
     );
   });
 
   test("assigns the user role to addresses outside the initial admin allowlist", () => {
-    expect(roleForEmail("member@openbot.test", ["admin@openbot.test"])).toBe(
+    expect(roleForEmail("member@xiongbao.test", ["admin@xiongbao.test"])).toBe(
       "user",
     );
   });
@@ -287,10 +287,10 @@ function databaseWithUser(
 
 describe("applyConfiguredAdmin", () => {
   test("promotes an address the deployment names", async () => {
-    const { database, written } = databaseWithUser("admin@openbot.test");
+    const { database, written } = databaseWithUser("admin@xiongbao.test");
     await initializeRecordingRoleWriter(database);
 
-    await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]);
+    await applyConfiguredAdmin(database, "u1", ["admin@xiongbao.test"]);
 
     expect(written).toEqual(["admin"]);
   });
@@ -304,34 +304,34 @@ describe("applyConfiguredAdmin", () => {
    * every administrator would produce one and the row would say nothing.
    */
   test("says so when this sign-in is what granted the role", async () => {
-    const { database } = databaseWithUser("admin@openbot.test");
+    const { database } = databaseWithUser("admin@xiongbao.test");
     await initializeRecordingRoleWriter(database);
 
     expect(
-      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+      await applyConfiguredAdmin(database, "u1", ["admin@xiongbao.test"]),
     ).toBe(true);
   });
 
   test("says nothing when they were already an administrator", async () => {
-    const { database } = databaseWithUser("admin@openbot.test", true);
+    const { database } = databaseWithUser("admin@xiongbao.test", true);
     await initializeRecordingRoleWriter(database);
 
     expect(
-      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+      await applyConfiguredAdmin(database, "u1", ["admin@xiongbao.test"]),
     ).toBe(false);
   });
 
   test("says nothing for somebody the configuration does not name", async () => {
-    const { database } = databaseWithUser("member@openbot.test");
+    const { database } = databaseWithUser("member@xiongbao.test");
     await initializeRecordingRoleWriter(database);
 
     expect(
-      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+      await applyConfiguredAdmin(database, "u1", ["admin@xiongbao.test"]),
     ).toBe(false);
   });
 
   test("says nothing when nothing is configured", async () => {
-    const { database } = databaseWithUser("admin@openbot.test");
+    const { database } = databaseWithUser("admin@xiongbao.test");
     await initializeRecordingRoleWriter(database);
 
     expect(await applyConfiguredAdmin(database, "u1", [])).toBe(false);
@@ -344,16 +344,16 @@ describe("applyConfiguredAdmin", () => {
    * silently undo that promotion the next time they signed in.
    */
   test("leaves everybody else exactly as the admin screen set them", async () => {
-    const { database, written } = databaseWithUser("member@openbot.test");
+    const { database, written } = databaseWithUser("member@xiongbao.test");
     await initializeRecordingRoleWriter(database);
 
-    await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]);
+    await applyConfiguredAdmin(database, "u1", ["admin@xiongbao.test"]);
 
     expect(written).toEqual([]);
   });
 
   test("writes nothing when the deployment names nobody", async () => {
-    const { database, written } = databaseWithUser("admin@openbot.test");
+    const { database, written } = databaseWithUser("admin@xiongbao.test");
     await initializeRecordingRoleWriter(database);
 
     await applyConfiguredAdmin(database, "u1", []);
@@ -367,14 +367,14 @@ describe("applyConfiguredAdmin", () => {
    */
   test("does not promote a listed address that is not verified", async () => {
     const { database, written } = databaseWithUser(
-      "admin@openbot.test",
+      "admin@xiongbao.test",
       false,
       false,
     );
     await initializeRecordingRoleWriter(database);
 
     expect(
-      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+      await applyConfiguredAdmin(database, "u1", ["admin@xiongbao.test"]),
     ).toBe(false);
     expect(written).toEqual([]);
   });
@@ -387,7 +387,7 @@ describe("applyConfiguredAdmin", () => {
    */
   test("does not promote a verified row that also holds a password", async () => {
     const { database, written } = databaseWithUser(
-      "admin@openbot.test",
+      "admin@xiongbao.test",
       false,
       true,
       [
@@ -398,7 +398,7 @@ describe("applyConfiguredAdmin", () => {
     await initializeRecordingRoleWriter(database);
 
     expect(
-      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+      await applyConfiguredAdmin(database, "u1", ["admin@xiongbao.test"]),
     ).toBe(false);
     expect(written).toEqual([]);
   });
@@ -409,7 +409,7 @@ describe("applyConfiguredAdmin", () => {
    */
   test("promotes an unverified row that arrived through a vouching provider", async () => {
     const { database, written } = databaseWithUser(
-      "admin@openbot.test",
+      "admin@xiongbao.test",
       false,
       false,
       [{ providerId: "microsoft", registered: null }],
@@ -420,7 +420,7 @@ describe("applyConfiguredAdmin", () => {
       await applyConfiguredAdmin(
         database,
         "u1",
-        ["admin@openbot.test"],
+        ["admin@xiongbao.test"],
         ["microsoft"],
       ),
     ).toBe(true);
@@ -429,7 +429,7 @@ describe("applyConfiguredAdmin", () => {
 
   test("promotes an unverified row that arrived through a registered identity provider", async () => {
     const { database, written } = databaseWithUser(
-      "admin@openbot.test",
+      "admin@xiongbao.test",
       false,
       false,
       [{ providerId: "acme-saml", registered: "acme-saml" }],
@@ -437,14 +437,14 @@ describe("applyConfiguredAdmin", () => {
     await initializeRecordingRoleWriter(database);
 
     expect(
-      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+      await applyConfiguredAdmin(database, "u1", ["admin@xiongbao.test"]),
     ).toBe(true);
     expect(written).toEqual(["admin"]);
   });
 
   test("does not trust a multi-tenant provider it was not told to", async () => {
     const { database, written } = databaseWithUser(
-      "admin@openbot.test",
+      "admin@xiongbao.test",
       false,
       false,
       [{ providerId: "microsoft", registered: null }],
@@ -452,7 +452,7 @@ describe("applyConfiguredAdmin", () => {
     await initializeRecordingRoleWriter(database);
 
     expect(
-      await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]),
+      await applyConfiguredAdmin(database, "u1", ["admin@xiongbao.test"]),
     ).toBe(false);
     expect(written).toEqual([]);
   });
@@ -461,7 +461,7 @@ describe("applyConfiguredAdmin", () => {
     const { database, written } = databaseWithUser(null);
     await initializeRecordingRoleWriter(database);
 
-    await applyConfiguredAdmin(database, "u1", ["admin@openbot.test"]);
+    await applyConfiguredAdmin(database, "u1", ["admin@xiongbao.test"]);
 
     expect(written).toEqual([]);
   });
@@ -469,22 +469,22 @@ describe("applyConfiguredAdmin", () => {
 
 describe("seedRole", () => {
   test("starts an address on the list as an administrator", async () => {
-    const { database, written } = databaseWithUser("admin@openbot.test");
+    const { database, written } = databaseWithUser("admin@xiongbao.test");
     await initializeRecordingRoleWriter(database);
 
-    await seedRole(database, "u1", "admin@openbot.test", true, [
-      "admin@openbot.test",
+    await seedRole(database, "u1", "admin@xiongbao.test", true, [
+      "admin@xiongbao.test",
     ]);
 
     expect(written).toEqual(["admin"]);
   });
 
   test("starts an unverified address on the list as a user", async () => {
-    const { database, written } = databaseWithUser("admin@openbot.test");
+    const { database, written } = databaseWithUser("admin@xiongbao.test");
     await initializeRecordingRoleWriter(database);
 
-    await seedRole(database, "u1", "admin@openbot.test", false, [
-      "admin@openbot.test",
+    await seedRole(database, "u1", "admin@xiongbao.test", false, [
+      "admin@xiongbao.test",
     ]);
 
     expect(written).toEqual(["user"]);
@@ -496,7 +496,7 @@ describe("seedRole", () => {
    */
   test("never takes a role away from somebody who already holds one", async () => {
     const { database, written } = databaseWithUser(
-      "admin@openbot.test",
+      "admin@xiongbao.test",
       true,
       false,
       undefined,
@@ -504,19 +504,19 @@ describe("seedRole", () => {
     );
     await initializeRecordingRoleWriter(database);
 
-    await seedRole(database, "u1", "admin@openbot.test", false, [
-      "admin@openbot.test",
+    await seedRole(database, "u1", "admin@xiongbao.test", false, [
+      "admin@xiongbao.test",
     ]);
 
     expect(written).toEqual([]);
   });
 
   test("starts everybody else as a user", async () => {
-    const { database, written } = databaseWithUser("member@openbot.test");
+    const { database, written } = databaseWithUser("member@xiongbao.test");
     await initializeRecordingRoleWriter(database);
 
-    await seedRole(database, "u1", "member@openbot.test", true, [
-      "admin@openbot.test",
+    await seedRole(database, "u1", "member@xiongbao.test", true, [
+      "admin@xiongbao.test",
     ]);
 
     expect(written).toEqual(["user"]);
@@ -526,7 +526,7 @@ describe("seedRole", () => {
 describe("isConfiguredAdmin", () => {
   test("ignores case and surrounding space, on both sides", () => {
     expect(
-      isConfiguredAdmin("  Admin@OpenBot.test ", [" admin@openbot.TEST "]),
+      isConfiguredAdmin("  Admin@XiongBao.test ", [" admin@xiongbao.TEST "]),
     ).toBe(true);
   });
 });

@@ -1,28 +1,28 @@
 /**
- * The Intelligence gateway's client socket, served from OpenBot's own address.
+ * The Intelligence gateway's client socket, served from XiongBao's own address.
  *
  * The browser opens the gateway itself: the runtime hands it the socket address in `/info` and with
  * every run, and the conversation streams over it. That is fine where the gateway has an address of
  * its own that the browser can reach, as managed Intelligence does. It is not fine where Intelligence
- * runs inside the cluster beside OpenBot and the only way in is OpenBot's address: a `kubectl
+ * runs inside the cluster beside XiongBao and the only way in is XiongBao's address: a `kubectl
  * port-forward` to the server, or one Ingress host. There the browser would be told a Service name it
  * cannot resolve, every conversation would sit waiting for a socket that never opens, and nothing on
  * the screen would say why.
  *
  * With `INTELLIGENCE_GATEWAY_PROXY=on` the browser is told {@link INTELLIGENCE_CLIENT_SOCKET_PATH}
- * instead, on OpenBot, and this carries each socket on to the gateway's `/client` unchanged. The
+ * instead, on XiongBao, and this carries each socket on to the gateway's `/client` unchanged. The
  * gateway still authorizes every connection with the join token the runtime issued, which travels in
- * the query exactly as it would have; nothing here reads it. What this adds is OpenBot's own front
+ * the query exactly as it would have; nothing here reads it. What this adds is XiongBao's own front
  * door in front of it (the cross-site and single-user checks every socket gets, and a session).
  *
  * Phoenix, which the browser's client is, appends `/websocket` to the address it is given, and a
  * path-only address is resolved against the page, so `ws://` or `wss://` and the port come from
- * wherever the person reached OpenBot.
+ * wherever the person reached XiongBao.
  *
  * The Recorder is the one thing handed that address that is not on the page: its capture pass names
  * the socket it streams a recording on. It has no page to resolve a path against, and the runtime
  * refuses to hand a path out as that pass at all. So with no public URL, as over a port-forward, the
- * pass is answered inside {@link createCapturePassOrigin}, which makes the address whole on OpenBot's
+ * pass is answered inside {@link createCapturePassOrigin}, which makes the address whole on XiongBao's
  * origin as the Recorder reached it.
  */
 
@@ -52,12 +52,12 @@ export function proxiedClientSocketUrl(publicUrl: string | undefined): string {
   return `${base.replace(/^http/, "ws")}${INTELLIGENCE_CLIENT_SOCKET_PATH}`;
 }
 
-/** OpenBot's own origin while a capture pass is answered, where it is one that may be named. */
+/** XiongBao's own origin while a capture pass is answered, where it is one that may be named. */
 const capturePass = new AsyncLocalStorage<string>();
 
 /**
  * In front of the runtime: answers the Recorder's capture pass (`trajectory/connect`) knowing
- * OpenBot's own origin as the Recorder reached it, so the gateway address the pass names is one the
+ * XiongBao's own origin as the Recorder reached it, so the gateway address the pass names is one the
  * Recorder can open (see {@link capturePassOrigin}).
  *
  * Only the capture pass. The page is still told a path, which it resolves against itself, and that
@@ -84,7 +84,7 @@ export function createCapturePassOrigin(
 }
 
 /**
- * OpenBot's own origin, while a capture pass that may name it is being answered, and otherwise
+ * XiongBao's own origin, while a capture pass that may name it is being answered, and otherwise
  * undefined. The platform client makes a path-only gateway address whole on it (toolkit
  * `IntelligenceKnowingANewThread`).
  */

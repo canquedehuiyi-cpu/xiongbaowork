@@ -68,7 +68,7 @@ const routes = createTaskRoutes(database, requireUser, projector);
 const get = (query: string) =>
   runAsTenant(tenant, async () => {
     const response = await routes.request(
-      new Request(`http://openbot.test/${query}`),
+      new Request(`http://xiongbao.test/${query}`),
     );
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -134,7 +134,7 @@ test("executors answers to a crew, and an empty crew is an answer rather than no
 test("archiving a card goes through the projector and answers the lane", async () => {
   const response = await runAsTenant(tenant, () =>
     routes.request(
-      new Request(`http://openbot.test/${ids[0]}/archive`, { method: "POST" }),
+      new Request(`http://xiongbao.test/${ids[0]}/archive`, { method: "POST" }),
     ),
   );
   expect(response.status).toBe(200);
@@ -318,7 +318,7 @@ test("source takes a comma list: 自主工作 is routine and responsibility, in 
   const theirView = await runAsTenant(neighbour, async () => {
     const response = await neighbourRoutes.request(
       new Request(
-        `http://openbot.test/?executors=${steward}&source=routine,responsibility`,
+        `http://xiongbao.test/?executors=${steward}&source=routine,responsibility`,
       ),
     );
     expect(response.status).toBe(200);

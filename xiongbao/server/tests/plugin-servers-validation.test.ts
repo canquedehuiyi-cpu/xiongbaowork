@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { MiddlewareHandler } from "hono";
-import type { AppVariables } from "../src/auth/guards";
 import type { BotAccessCheck } from "../src/agents/profile-policy";
+import type { AppVariables } from "../src/auth/guards";
 import { createPluginRoutes } from "../src/plugins/routes";
 import type { PluginStore } from "../src/plugins/store";
 
@@ -32,7 +32,7 @@ function appWith(calls: { addServer: unknown[]; addCustomServer: unknown[] }) {
   ) => {
     context.set("actor", {
       id: "user-1",
-      email: "user@openbot.test",
+      email: "user@xiongbao.test",
       role: "admin",
     });
     await next();
@@ -66,7 +66,7 @@ describe("POST /api/plugins/servers", () => {
   ])("refuses %s with 400 and never reaches the store", async (_n, body) => {
     const seen = calls();
     const response = await appWith(seen).request(
-      "http://openbot.test/servers",
+      "http://xiongbao.test/servers",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -85,7 +85,7 @@ describe("POST /api/plugins/servers", () => {
   test("trims the key and optional fields on the happy path", async () => {
     const seen = calls();
     const response = await appWith(seen).request(
-      "http://openbot.test/servers",
+      "http://xiongbao.test/servers",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -130,7 +130,7 @@ describe("POST /api/plugins/servers/custom", () => {
   ])("refuses %s with 400 and never reaches the store", async (_n, body) => {
     const seen = calls();
     const response = await appWith(seen).request(
-      "http://openbot.test/servers/custom",
+      "http://xiongbao.test/servers/custom",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -163,7 +163,7 @@ describe("POST /api/plugins/servers/:id/oauth-client", () => {
     ) => {
       context.set("actor", {
         id: "user-1",
-        email: "user@openbot.test",
+        email: "user@xiongbao.test",
         role: "admin",
       });
       await next();
@@ -174,7 +174,7 @@ describe("POST /api/plugins/servers/:id/oauth-client", () => {
 
   const send = (registered: unknown[], body: unknown) =>
     oauthApp(registered).request(
-      "http://openbot.test/servers/github/oauth-client",
+      "http://xiongbao.test/servers/github/oauth-client",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -214,7 +214,7 @@ describe("POST /api/plugins/servers/:id/oauth-client", () => {
       {
         serverId: "github",
         client: { clientId: "id", clientSecret: "secret" },
-        by: "user@openbot.test",
+        by: "user@xiongbao.test",
       },
     ]);
   });
@@ -240,7 +240,7 @@ describe("POST /api/plugins/servers/:id/token", () => {
     ) => {
       context.set("actor", {
         id: "user-1",
-        email: "user@openbot.test",
+        email: "user@xiongbao.test",
         role: "admin",
       });
       await next();
@@ -250,7 +250,7 @@ describe("POST /api/plugins/servers/:id/token", () => {
   }
 
   const send = (replaced: unknown[], body: unknown) =>
-    tokenApp(replaced).request("http://openbot.test/servers/collector/token", {
+    tokenApp(replaced).request("http://xiongbao.test/servers/collector/token", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
@@ -283,7 +283,7 @@ describe("POST /api/plugins/servers/:id/token", () => {
       {
         serverId: "collector",
         token: "fixture-token",
-        by: "user@openbot.test",
+        by: "user@xiongbao.test",
       },
     ]);
   });

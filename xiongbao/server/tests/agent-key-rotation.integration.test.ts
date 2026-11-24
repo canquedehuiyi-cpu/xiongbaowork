@@ -82,7 +82,7 @@ beforeAll(async () => {
   await asActor(async () => {
     await database.insert(users).values({
       id: actor.id,
-      email: `${actor.id}@openbot.test`,
+      email: `${actor.id}@xiongbao.test`,
       name: "Key rotation tester",
       emailVerified: true,
     });

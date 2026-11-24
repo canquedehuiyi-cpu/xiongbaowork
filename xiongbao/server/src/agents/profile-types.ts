@@ -115,7 +115,7 @@ export type AgentProfile = {
   instructions?: string | null;
   /**
    * What runs it, by the name a person reads ("LangChain", "OpenBot"), or absent when
-   * OpenBot doesn't know, such as an agent connected by address with no framework named. Read from
+   * XiongBao doesn't know, such as an agent connected by address with no framework named. Read from
    * what runs it, never its subtitle (`frameworkOf`).
    */
   framework?: string;

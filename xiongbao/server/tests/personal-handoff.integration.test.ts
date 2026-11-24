@@ -1,4 +1,4 @@
-import { describe, expect, test as bunTest } from "bun:test";
+import { test as bunTest, describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import { wireCoordination } from "../src/agents/coordination-wiring";
@@ -25,7 +25,7 @@ import { afterAll, afterEach, beforeEach } from "./support/platform-frame";
 /**
  * In the personal edition one person's Bot hands work to another of that person's Bots.
  *
- * Found on OpenBot Desktop: asked to "ask the Claude Agent SDK bot for three short bullet points",
+ * Found on XiongBao Desktop: asked to "ask the Claude Agent SDK bot for three short bullet points",
  * Personal Assistant answered that it had no tool to message another Bot. Nobody had granted it one,
  * and in the personal edition there is nobody to grant it: there is one person and every Bot is
  * theirs, as every app they connect already is.

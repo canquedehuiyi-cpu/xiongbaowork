@@ -1,11 +1,11 @@
 {
-  "description": "OpenBot telemetry contract, version 1. Shared by OpenBot (producer), CopilotKit (runtime forwarding), Intelligence app-api (validation, persistence) and realtime-gateway (run summary). See Notion: OpenBot telemetry: Intelligence build.",
+  "description": "XiongBao telemetry contract, version 1. Shared by XiongBao (producer), CopilotKit (runtime forwarding), Intelligence app-api (validation, persistence) and realtime-gateway (run summary). Defined in the upstream project's design note for the Intelligence build.",
   "valid": [
     {
       "name": "human run",
       "context": {
         "app_context_version": 1,
-        "app_id": "openbot",
+        "app_id": "xiongbao",
         "deployment_id": "dep_fixture_01",
         "app_user_hash": "ob_1111111111111111111111111111111111111111111111111111111111111111",
         "trigger": "human",
@@ -20,7 +20,7 @@
       "name": "retry of the same task",
       "context": {
         "app_context_version": 1,
-        "app_id": "openbot",
+        "app_id": "xiongbao",
         "deployment_id": "dep_fixture_01",
         "app_user_hash": "ob_1111111111111111111111111111111111111111111111111111111111111111",
         "trigger": "human",
@@ -35,7 +35,7 @@
       "name": "subagent run under the same task",
       "context": {
         "app_context_version": 1,
-        "app_id": "openbot",
+        "app_id": "xiongbao",
         "deployment_id": "dep_fixture_01",
         "app_user_hash": "ob_1111111111111111111111111111111111111111111111111111111111111111",
         "trigger": "subagent",
@@ -66,17 +66,17 @@
   "invalid": [
     {
       "name": "unknown version",
-      "context": { "app_context_version": 2, "app_id": "openbot" }
+      "context": { "app_context_version": 2, "app_id": "xiongbao" }
     },
     {
       "name": "app id with capitals and punctuation",
-      "context": { "app_context_version": 1, "app_id": "OpenBot!" }
+      "context": { "app_context_version": 1, "app_id": "XiongBao!" }
     },
     {
       "name": "extra field not in the contract",
       "context": {
         "app_context_version": 1,
-        "app_id": "openbot",
+        "app_id": "xiongbao",
         "email": "person@example.com"
       }
     },
@@ -84,7 +84,7 @@
       "name": "user hash that is not a pseudonym",
       "context": {
         "app_context_version": 1,
-        "app_id": "openbot",
+        "app_id": "xiongbao",
         "app_user_hash": "person@example.com"
       }
     },
@@ -92,14 +92,18 @@
       "name": "trigger outside the allowed values",
       "context": {
         "app_context_version": 1,
-        "app_id": "openbot",
+        "app_id": "xiongbao",
         "trigger": "admin"
       }
     },
     {
       "name": "attempt out of range",
-      "context": { "app_context_version": 1, "app_id": "openbot", "attempt": 0 }
+      "context": {
+        "app_context_version": 1,
+        "app_id": "xiongbao",
+        "attempt": 0
+      }
     },
-    { "name": "not an object", "context": "openbot" }
+    { "name": "not an object", "context": "xiongbao" }
   ]
 }

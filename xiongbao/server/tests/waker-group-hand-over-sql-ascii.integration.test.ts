@@ -42,7 +42,7 @@ async function onAdmin<T>(work: (admin: postgres.Sql) => Promise<T>) {
 
 /** A new database of `encoding`, migrated the way every deployment migrates (`scripts/migrate.ts`). */
 async function migratedDatabase(encoding: "UTF8" | "SQL_ASCII") {
-  const name = `openbot_encoding_${encoding.toLowerCase()}_${randomUUID().slice(0, 8)}`;
+  const name = `xiongbao_encoding_${encoding.toLowerCase()}_${randomUUID().slice(0, 8)}`;
   await onAdmin((admin) =>
     admin.unsafe(
       `CREATE DATABASE "${name}" ENCODING '${encoding}' LC_COLLATE 'C' LC_CTYPE 'C' TEMPLATE template0`,

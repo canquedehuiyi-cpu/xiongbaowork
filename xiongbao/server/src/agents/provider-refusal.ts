@@ -1,7 +1,7 @@
 /**
  * A model provider refusing a run, said in words a person can act on.
  *
- * Seen on OpenBot Desktop: a Bot on the LangGraph harness ended its turn in red with "Error code: 400
+ * Seen on XiongBao Desktop: a Bot on the LangGraph harness ended its turn in red with "Error code: 400
  * - Invalid 'tools': array too long. Expected an array with maximum length 128, but got an array with
  * length 202 instead." That is the OpenAI SDK's text for the provider's answer, passed through as the
  * RUN_ERROR both surfaces draw. Every harness has its own spelling of the same refusals: the Python
@@ -19,6 +19,7 @@
  */
 import type { BaseEvent } from "@ag-ui/client";
 import { Observable } from "rxjs";
+import { currentEdition } from "../edition";
 import {
   BILLING,
   billingMessage,
@@ -26,7 +27,6 @@ import {
   bodyMessage,
   chain,
 } from "../model-billing";
-import { currentEdition } from "../edition";
 import { isModelUnavailableMessage } from "../model-rejection";
 
 /** What went wrong, as far as a person needs to know. */
@@ -166,7 +166,7 @@ export function readRefusalText(
 export function readRefusal(error: unknown): Refusal | undefined {
   const links = chain(error);
   for (const link of links) {
-    if (link.name === "OpenBotModelAuthenticationError")
+    if (link.name === "XiongBaoModelAuthenticationError")
       return { kind: "key", said: String(link.message ?? "") };
     if (link.name === "AI_LoadAPIKeyError")
       return { kind: "key", said: String(link.message ?? "") };

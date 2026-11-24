@@ -53,7 +53,7 @@ beforeAll(async () => {
   });
   const url = `http://127.0.0.1:${recorder.port}`;
   process.env.OPENAI_BASE_URL = url;
-  // The Anthropic SDK appends only `/messages`; OpenBot's own base always ends in its version.
+  // The Anthropic SDK appends only `/messages`; XiongBao's own base always ends in its version.
   process.env.ANTHROPIC_BASE_URL = `${url}/v1`;
   llm.onMessage(/.*/, { content: "Answered." });
 });

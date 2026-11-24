@@ -158,7 +158,7 @@ describe("proactive read-only restriction", () => {
   });
 
   /*
-   * The person's memory is OpenBot's own tool, reached by its bare name. A ref under `memory/` is a
+   * The person's memory is XiongBao's own tool, reached by its bare name. A ref under `memory/` is a
    * connector's (a server sitting at that id, as a hand edit or an older build left it), and is only
    * a read if the catalogue says so, like any other connector tool.
    */
@@ -193,7 +193,7 @@ describe("proactive read-only restriction", () => {
         )
       )?.text,
     ).toStartWith("Refused.");
-    // The person's own memory, by the name OpenBot gives it, still reads.
+    // The person's own memory, by the name XiongBao gives it, still reads.
     expect(
       await guardProactiveCallback(
         { name: "recall_personal_memory", run, ...who },

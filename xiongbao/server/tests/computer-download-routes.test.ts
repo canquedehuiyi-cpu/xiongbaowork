@@ -19,7 +19,7 @@ import { createComputerRoutes } from "../src/computer/routes";
 
 const member: AuthenticatedActor = {
   id: "user-1",
-  email: "member@openbot.test",
+  email: "member@xiongbao.test",
   role: "user",
 };
 
@@ -73,7 +73,7 @@ describe("the public computer file download route", () => {
     const bytes = Uint8Array.from([0, 1, 2, 255]);
     const { gateway, calls } = gatewayThatReturns("report.pdf", bytes);
     const response = await appFor(gateway).request(
-      "http://openbot.test/bot-17/files/download?path=%20reports%2Freport.pdf%20",
+      "http://xiongbao.test/bot-17/files/download?path=%20reports%2Freport.pdf%20",
     );
 
     expect(response.status).toBe(200);
@@ -98,7 +98,7 @@ describe("the public computer file download route", () => {
       Uint8Array.from([1]),
     );
     const response = await appFor(gateway).request(
-      "http://openbot.test/bot-17/files/download?path=evil.txt",
+      "http://xiongbao.test/bot-17/files/download?path=evil.txt",
     );
 
     expect(response.status).toBe(200);
@@ -109,7 +109,7 @@ describe("the public computer file download route", () => {
   test("refuses a missing path before asking the gateway", async () => {
     const { gateway, calls } = gatewayThatReturns("x", Uint8Array.from([1]));
     const response = await appFor(gateway).request(
-      "http://openbot.test/bot-17/files/download",
+      "http://xiongbao.test/bot-17/files/download",
     );
 
     expect(response.status).toBe(400);
@@ -122,7 +122,7 @@ describe("the public computer file download route", () => {
   test("applies Bot ownership before asking the gateway", async () => {
     const { gateway, calls } = gatewayThatReturns("x", Uint8Array.from([1]));
     const response = await appFor(gateway, async () => false).request(
-      "http://openbot.test/somebody-elses-bot/files/download?path=x",
+      "http://xiongbao.test/somebody-elses-bot/files/download?path=x",
     );
 
     expect(response.status).toBe(404);
@@ -157,7 +157,7 @@ describe("the public computer file download route", () => {
       },
     } as unknown as ComputerGateway;
     const response = await appFor(gateway).request(
-      "http://openbot.test/bot-17/files/download?path=x",
+      "http://xiongbao.test/bot-17/files/download?path=x",
     );
 
     expect(response.status).toBe(status);
@@ -190,7 +190,7 @@ describe("the public computer file download route", () => {
     async (_name, path, wire) => {
       const { gateway, calls } = gatewayThatReturns("x", Uint8Array.from([1]));
       const response = await appFor(gateway).request(
-        `http://openbot.test/bot-17/files/download?path=${wire}`,
+        `http://xiongbao.test/bot-17/files/download?path=${wire}`,
       );
 
       expect(response.status).toBe(200);
@@ -201,11 +201,11 @@ describe("the public computer file download route", () => {
   test("探不出部署里有谁：别人的员工和不归这边的浏览器员工答得逐字一样", async () => {
     const { gateway, calls } = gatewayThatReturns("x", Uint8Array.from([1]));
     const notYours = await appFor(gateway, async () => false).request(
-      "http://openbot.test/somebody-elses-bot/files/download?path=x",
+      "http://xiongbao.test/somebody-elses-bot/files/download?path=x",
     );
     // 一个人的浏览器只答它自己的那三条读，下载不在其中：它走的是另一条 404 分支，不是 `canUseBot`。
     const browserBot = await appFor(gateway).request(
-      `http://openbot.test/person-${"a".repeat(32)}/files/download?path=x`,
+      `http://xiongbao.test/person-${"a".repeat(32)}/files/download?path=x`,
     );
 
     expect(notYours.status).toBe(404);
@@ -232,7 +232,7 @@ describe("the public computer file download route", () => {
         },
       } as unknown as ComputerGateway;
       const response = await appFor(gateway).request(
-        "http://openbot.test/bot-17/files/download?path=x",
+        "http://xiongbao.test/bot-17/files/download?path=x",
       );
 
       expect(response.status).toBe(status);
@@ -262,7 +262,7 @@ describe("the public computer file download route", () => {
     } as unknown as ComputerGateway;
     const controller = new AbortController();
     const response = await appFor(gateway).request(
-      "http://openbot.test/bot-17/files/download?path=x",
+      "http://xiongbao.test/bot-17/files/download?path=x",
       { signal: controller.signal },
     );
 
@@ -275,7 +275,7 @@ describe("the public computer file download route", () => {
     for (const name of ["季度报告.pdf", "报告(1).md", "a b·c.txt"]) {
       const { gateway } = gatewayThatReturns(name, Uint8Array.from([1]));
       const response = await appFor(gateway).request(
-        "http://openbot.test/bot-17/files/download?path=x",
+        "http://xiongbao.test/bot-17/files/download?path=x",
       );
       const header = response.headers.get("content-disposition") ?? "";
       const encoded = /filename\*=UTF-8''([^;]*)$/.exec(header)?.[1];
@@ -300,7 +300,7 @@ describe("the public computer file download route", () => {
       Uint8Array.from([1]),
     );
     const response = await appFor(gateway).request(
-      "http://openbot.test/bot-17/files/download?path=x",
+      "http://xiongbao.test/bot-17/files/download?path=x",
     );
     expect(response.headers.get("content-disposition")).toBe(
       `attachment; filename="____.pdf"; filename*=UTF-8''${encodeURIComponent(
@@ -361,7 +361,7 @@ describe("a download that names where its file was announced", () => {
   }
 
   const url = (query: string) =>
-    `http://openbot.test/bot-17/files/download?${query}`;
+    `http://xiongbao.test/bot-17/files/download?${query}`;
   const named = encodeURIComponent("报告 #1?.pptx");
 
   test("a name with a percent sign or a plus sign reaches the gateway as written", async () => {
@@ -489,7 +489,7 @@ describe("a download that names where its file was announced", () => {
   test("the scope does not open any other route under the Bot", async () => {
     const { gateway } = gatewayThatReturns("x", Uint8Array.from([1]));
     const response = await scopedApp(gateway, async () => false).request(
-      "http://openbot.test/bot-17/status?channel=channel-1&run=run-1",
+      "http://xiongbao.test/bot-17/status?channel=channel-1&run=run-1",
     );
     expect(response.status).toBe(404);
   });

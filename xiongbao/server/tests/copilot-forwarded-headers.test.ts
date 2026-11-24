@@ -25,13 +25,13 @@ import { testEnvironment } from "./support/environment";
  * onto the agent it runs, unless it is told otherwise. For a remote Bot that is a POST to whatever
  * address the Bot's author registered, and anyone allowed to publish a Bot can register their own.
  * A colleague signed in with an Entra bearer who chats with that Bot would hand the author their
- * token, which OpenBot itself accepts for as long as it lives.
+ * token, which XiongBao itself accepts for as long as it lives.
  *
  * Driven through the real path: the handler `mountCopilotRuntime` returns, a Bot built from a stored
- * row with its key read out of the vault the way the runtime loader reads it, OpenBot's own guarded
+ * row with its key read out of the vault the way the runtime loader reads it, XiongBao's own guarded
  * fetch, and a real AG-UI endpoint on a socket that writes down every header it was sent. The
  * Intelligence platform underneath is a small fake on the same terms, REST and the runner's Phoenix
- * channel, acknowledging what a healthy platform acknowledges, because a run in OpenBot only starts
+ * channel, acknowledging what a healthy platform acknowledges, because a run in XiongBao only starts
  * once the platform has locked the thread and the runner has joined.
  */
 

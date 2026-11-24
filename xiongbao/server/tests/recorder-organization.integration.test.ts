@@ -63,7 +63,7 @@ const pastTheCache = () => {
 };
 
 const config = loadConfig({
-  DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/openbot",
+  DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/xiongbao",
   KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   INTELLIGENCE_API_URL: "http://127.0.0.1:7100",
   INTELLIGENCE_GATEWAY_WS_URL: "ws://127.0.0.1:7103",

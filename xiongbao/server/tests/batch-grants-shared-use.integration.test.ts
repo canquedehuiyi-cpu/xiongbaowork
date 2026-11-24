@@ -105,7 +105,7 @@ function as(actorId: string) {
       async (actor, botId) =>
         botId !== OTHERS_BOT || (actor as { id: string }).id === STRANGER,
       {
-        publicUrl: "https://openbot.example",
+        publicUrl: "https://xiongbao.example",
         appUrl: "https://app.example",
         encryptionKey: `${"A".repeat(43)}=`,
         personHasAccess: async () => true,

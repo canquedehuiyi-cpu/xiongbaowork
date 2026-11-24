@@ -31,8 +31,8 @@ import { type Edition, parseEdition } from "./edition";
 import type { BrokerProvider } from "./plugins/access";
 import {
   type OboResource,
-  openBotResources,
   parseOboResources,
+  xiongBaoResources,
 } from "./plugins/entra-access";
 import { type VoiceConfig, voiceConfig } from "./voice/config";
 import { type WebBotAuth, webBotAuthFromEnv } from "./web-bot-auth";
@@ -105,8 +105,8 @@ export type MicrosoftAuthConfig = OAuthClient & {
   /**
    * The company systems a server may be reached on as the signed-in person, each bound to the one
    * host its tokens may go to, from MICROSOFT_OAUTH_OBO_RESOURCES (`<resource>=<host>`, X6). Absent
-   * when unset, and then no server can be marked: an OpenBot admin does not decide alone which
-   * resource everybody's delegated token is minted for and where it is sent. OpenBot's own API and
+   * when unset, and then no server can be marked: an XiongBao admin does not decide alone which
+   * resource everybody's delegated token is minted for and where it is sent. XiongBao's own API and
    * Microsoft's first-party resources are refused here at start-up. See `plugins/entra-access.ts`.
    */
   oboResources?: OboResource[];
@@ -135,13 +135,13 @@ export type AuthConfig = {
    * account including personal ones, `organizations` any work or school account anywhere, and a GUID
    * admits one directory. A deployment that wants only its own company needs the GUID.
    *
-   * `apiScope` is OpenBot's own API in Entra, as a scope: what a person's app asks for a token to
-   * OpenBot with, and what OpenBot asks for from a person's stored sign-in before exchanging it on
+   * `apiScope` is XiongBao's own API in Entra, as a scope: what a person's app asks for a token to
+   * XiongBao with, and what XiongBao asks for from a person's stored sign-in before exchanging it on
    * their behalf (`auth/entra.ts`). `api://<client id>/.default` unless MICROSOFT_OAUTH_API_SCOPE says
    * otherwise.
    *
-   * `allowedClients` is which apps may call OpenBot with a person's token, by application (client)
-   * id, lower-cased: a token's `azp` must be one of them. Entra issues a token for OpenBot's API to
+   * `allowedClients` is which apps may call XiongBao with a person's token, by application (client)
+   * id, lower-cased: a token's `azp` must be one of them. Entra issues a token for XiongBao's API to
    * any app a person or an admin consents to, so the token alone does not say the app is one this
    * company meant. Empty, from MICROSOFT_OAUTH_ALLOWED_CLIENTS unset, no app's token is taken.
    */
@@ -241,7 +241,7 @@ export type IntelligenceSettings = {
 /**
  * Which requests a single-user deployment admits as its one administrator.
  *
- * `thisMachineOnly` is true for a server running on the person's own machine (OpenBot Desktop,
+ * `thisMachineOnly` is true for a server running on the person's own machine (XiongBao Desktop,
  * `scripts/start.sh`, `bun run dev`) with no address beyond it configured: only a caller connecting
  * from this machine's loopback is the administrator. False in a container, where every caller arrives
  * through the engine's network and none of them is on loopback, and wherever the operator named an
@@ -260,12 +260,12 @@ export type SingleUserAccess = {
 
 export type DeploymentConfig = {
   /**
-   * Browser extension ids OpenBot trusts as the Recorder besides its own fixed id, for a fork or a
+   * Browser extension ids XiongBao trusts as the Recorder besides its own fixed id, for a fork or a
    * build signed with another key. From OPENBOT_RECORDER_EXTRA_EXTENSION_IDS, never from NODE_ENV.
    */
   recorder: { extraExtensionIds: string[] };
   /**
-   * Whether OpenBot assigns the Intelligence project's `openbot` Learning container as the default
+   * Whether XiongBao assigns the Intelligence project's shipped Learning container (AUTOMATIC_LEARNING_CONTAINER_ID) as the default
    * when nobody has chosen one (learning/auto-assign.ts). Only with {@link DeploymentConfig.intelligence}:
    * without the optional Intelligence there is no container to assign. On unless OPENBOT_LEARNING_AUTO_ASSIGN is
    * "false" or "0". A container CPK_INTELLIGENCE_LEARNING_CONTAINER_ID names stands it aside once
@@ -285,7 +285,7 @@ export type DeploymentConfig = {
    */
   learningSetup?: { serviceToken: string; projectId: string };
   /**
-   * Memory sources and background research OpenBot switches on for each person (memory/defaults.ts).
+   * Memory sources and background research XiongBao switches on for each person (memory/defaults.ts).
    * Both on unless OPENBOT_MEMORY_SOURCE_DEFAULTS or OPENBOT_PROACTIVE_DEFAULTS is "false" or "0".
    * Switching either off stops new defaults and leaves every existing row as it is.
    */
@@ -322,7 +322,7 @@ export type DeploymentConfig = {
   agentEndpointAllowedHosts: ReadonlySet<string>;
   /**
    * The name this server's container reaches the person's machine by, from
-   * `OPENBOT_THIS_MACHINE_HOST`. OpenBot Desktop sets it (`host.docker.internal`), because there the
+   * `OPENBOT_THIS_MACHINE_HOST`. XiongBao Desktop sets it (`host.docker.internal`), because there the
    * server runs in a container and `127.0.0.1` is the container, so an agent the person registers on
    * their own loopback is dialled through this name (`onThisMachine` in agents/endpoint.ts). Absent
    * wherever the server is a host process or hosted, and nothing is translated.
@@ -336,8 +336,8 @@ export type DeploymentConfig = {
    */
   deploymentId: string | undefined;
   /**
-   * The OpenBot release this server runs, such as `v0.3.1`, from OPENBOT_BUILD_VERSION: release CI
-   * bakes it into the image, and OpenBot Desktop sets it from the release it installed. Absent in
+   * The XiongBao release this server runs, such as `v0.3.1`, from OPENBOT_BUILD_VERSION: release CI
+   * bakes it into the image, and XiongBao Desktop sets it from the release it installed. Absent in
    * development and in a local image build.
    */
   version?: string;
@@ -432,7 +432,7 @@ export type DeploymentConfig = {
     google?: { clientId: string; clientSecret: string };
   };
   auth?: AuthConfig;
-  /** Customer OpenBot authority for employee desktop sessions, separate from Intelligence. */
+  /** Customer XiongBao authority for employee desktop sessions, separate from Intelligence. */
   organizationAuthUrl?: string;
   /**
    * Admit everybody as one fixed administrator instead of requiring sign-in.
@@ -460,7 +460,7 @@ export type DeploymentConfig = {
   browserOrigins: string[];
   /** Which product this is. `personal` requires single-user mode and the one shared computer. */
   edition: Edition;
-  /** Names OpenBot on the analytics the runtime already sends. Off with OPENBOT_ACCESSIBILITY_DISABLED. */
+  /** Names XiongBao on the analytics the runtime already sends. Off with OPENBOT_ACCESSIBILITY_DISABLED. */
   accessibility: boolean;
   /**
    * Whether a Bot may answer with an interface it wrote itself.
@@ -487,7 +487,7 @@ export type DeploymentConfig = {
    */
   generativeUi: boolean;
   /**
-   * Whether the signed-in app shows the banner offering help self-hosting OpenBot.
+   * Whether the signed-in app shows the banner offering help self-hosting XiongBao.
    *
    * Off by default: the bar links to a support address, and a deployment that never set one has
    * nowhere honest to send people. An operator turns it on with OPENBOT_SELF_HOST_BANNER=true, and
@@ -566,7 +566,7 @@ export type DeploymentConfig = {
    */
   tenantRuntimeReason: string;
   /**
-   * The computer that runs people's own OpenBot browsers here when it is not the Bots' (`OPENBOT_BROWSER_URL`): a
+   * The computer that runs people's own XiongBao browsers here when it is not the Bots' (`OPENBOT_BROWSER_URL`): a
    * host-side local Chrome computer (`scripts/start-local-chrome-computer.ts`), so a person's browser is a window on
    * their own desktop while Bots' computers stay where they are. Called with the same COMPUTER_TOKEN as every computer.
    * Absent, the Bots' computer provider runs people's browsers too, shown in the page.
@@ -792,7 +792,7 @@ function warnOnInertModelConfiguration(environment: Environment): void {
  * the flag cannot answer, which is not "is this production" but "can anybody else reach it".
  *
  * NOT `NODE_ENV`. It looks like the signal and is not one here: `Dockerfile` sets
- * `NODE_ENV=production` for every container and `openbot.commonEnv` sets it for every chart
+ * `NODE_ENV=production` for every container and `xiongbao.commonEnv` sets it for every chart
  * install, including the local trial the chart's own `validation.yaml` offers. Gating on it would
  * refuse a mode the chart advertises and would fail the image-boot job in CI, which runs exactly
  * this combination on purpose.
@@ -850,7 +850,7 @@ function singleUserAllowed(
  * one-container `Dockerfile` through its defaults file (`docker/defaults.env`, which the s6
  * env-aliases oneshot writes into every service's environment unless the deployment set the name
  * itself). So every container gets it without anybody writing it down, and every
- * other way of starting the server (OpenBot Desktop, `scripts/start.sh`, `bun run dev`) does not.
+ * other way of starting the server (XiongBao Desktop, `scripts/start.sh`, `bun run dev`) does not.
  * The default is the strict one: a server nobody said is in a container admits only this machine.
  * Inside a container that would refuse everybody, because the engine's proxy is the peer of every
  * request, which is the one place the flag is needed and the one place it is always present.
@@ -877,7 +877,7 @@ function singleUserAccess(environment: Environment): SingleUserAccess {
  * The origins this deployment's own pages are served from. See {@link DeploymentConfig.browserOrigins}.
  *
  * In single-user mode the app's port as well, on all three loopback names, whatever else is configured,
- * because that is where OpenBot Desktop and `scripts/start.sh` open it, and on the host of every configured
+ * because that is where XiongBao Desktop and `scripts/start.sh` open it, and on the host of every configured
  * address, because that is where another machine opens it once one is configured
  * (`OPENBOT_PUBLIC_URL=http://192.168.1.10:3001` puts the app at `http://192.168.1.10:3010`). The app's
  * servers proxy API calls to this one, so the browser's `Origin` names the app's port and the request's
@@ -932,7 +932,7 @@ function browserOrigins(
  *
  * Not two answers but three, because the middle one is most of the deployments this flag exists
  * for. "No sign-in, one administrator" is a thing people run on a home server at `192.168.1.10`,
- * over Tailscale at `100.something`, on a VPN, or at `openbot.local`. None of those is loopback and
+ * over Tailscale at `100.something`, on a VPN, or at `xiongbao.local`. None of those is loopback and
  * none of them is a stranger's to reach, so refusing them would refuse the feature's own audience
  * while the operator's only recourse is to turn off the flag that describes what they are doing.
  *
@@ -1236,7 +1236,7 @@ function authConfig(
   /*
    * A list this deployment cannot enforce is worse than no list.
    *
-   * `common` is multi-tenant, and OpenBot never sets `requireEmailVerification` or reads
+   * `common` is multi-tenant, and XiongBao never sets `requireEmailVerification` or reads
    * `users.emailVerified`, so the address a rule is applied to is one the signing-in tenant's own
    * administrator wrote. Anybody may create a tenant. So an allowlist under `common` refuses the
    * honest and admits the rest, while reading on the Boundaries page as though it were a control.
@@ -1303,7 +1303,7 @@ function microsoftAuth(
     `api://${client.clientId}/.default`;
   const oboResources = parseOboResources(
     commaSeparated(environment, "MICROSOFT_OAUTH_OBO_RESOURCES"),
-    openBotResources(client.clientId, apiScope),
+    xiongBaoResources(client.clientId, apiScope),
   );
   return {
     ...client,
@@ -1319,7 +1319,7 @@ const ENTRA_CLIENT_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /**
- * The apps whose tokens OpenBot takes, from MICROSOFT_OAUTH_ALLOWED_CLIENTS.
+ * The apps whose tokens XiongBao takes, from MICROSOFT_OAUTH_ALLOWED_CLIENTS.
  *
  * Refused at start-up when an entry is not a client id, because the likely mistake is pasting the
  * app's `api://` URI or its name, which no token's `azp` will ever equal: every app would then be
@@ -1339,9 +1339,9 @@ function allowedEntraClients(
     );
   }
   /*
-   * Never OpenBot itself (X6, review I-2). A token OpenBot mints on somebody's behalf names OpenBot
-   * as `azp`; listed here, any server that ever received one could call back into OpenBot as that
-   * person. OpenBot's own browser signs in with a session, so it never needs to be listed.
+   * Never XiongBao itself (X6, review I-2). A token XiongBao mints on somebody's behalf names XiongBao
+   * as `azp`; listed here, any server that ever received one could call back into XiongBao as that
+   * person. XiongBao's own browser signs in with a session, so it never needs to be listed.
    */
   if (
     named.some(

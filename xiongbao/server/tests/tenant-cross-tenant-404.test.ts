@@ -59,7 +59,7 @@ const owned = await runAsTenant(owner, async () => {
 const post = (actorId: string, path: string) =>
   runAsTenant(actorId, () =>
     routesFor(actorId).request(
-      new Request(`http://openbot.test/${path}`, { method: "POST" }),
+      new Request(`http://xiongbao.test/${path}`, { method: "POST" }),
     ),
   );
 
@@ -85,7 +85,7 @@ afterAll(async () => {
 test("a stranger cannot see the card in the list at all", async () => {
   const visible = await runAsTenant(stranger, async () => {
     const response = await routesFor(stranger).request(
-      new Request("http://openbot.test/"),
+      new Request("http://xiongbao.test/"),
     );
     return (await response.json()) as { tasks: { id: string }[] };
   });

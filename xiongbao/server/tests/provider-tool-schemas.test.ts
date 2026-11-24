@@ -22,7 +22,7 @@ import { providerSchemaFaults } from "./support/provider-schema-rules";
  * the reason: the Codex backend had refused the request with "Invalid JSON schema: regex lookaround
  * is not supported. Found at $.properties.email_address.pattern." The schema it refused was not one
  * any app wrote. HubSpot's HUBSPOT_GET_EMAIL_SUBSCRIPTION_STATUS, one of the tools a search for
- * "email" finds, says `email_address: {"type": "string", "format": "email"}`; OpenBot read that as
+ * "email" finds, says `email_address: {"type": "string", "format": "email"}`; XiongBao read that as
  * `z.email()` and wrote it back out for the harness with zod's email regex, which opens with two
  * negative lookaheads.
  *

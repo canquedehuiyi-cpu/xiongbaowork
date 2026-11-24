@@ -22,7 +22,7 @@ const asSignedIn: MiddlewareHandler<{ Variables: AppVariables }> = async (
 ) => {
   context.set("actor", {
     id: "u1",
-    email: "someone@openbot.test",
+    email: "someone@xiongbao.test",
     role: "user",
   });
   return next();
@@ -58,7 +58,7 @@ function harness(refreshed: string[] = []) {
     followed,
     trail,
     announce: (components: unknown[]) =>
-      app.request("http://openbot.local/components/catalogue", {
+      app.request("http://xiongbao.local/components/catalogue", {
         method: "PUT",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ components }),
@@ -125,7 +125,7 @@ describe("a build announcing what it can draw", () => {
     expect(published).toEqual([]);
   });
 
-  test("records a component a build brought as published by OpenBot, not by whoever's page announced it", async () => {
+  test("records a component a build brought as published by XiongBao, not by whoever's page announced it", async () => {
     // A first start, or an upgrade with a new component, filled Activity with "Publish a component,
     // Started by a person" the first time anybody opened a page.
     const { trail, announce } = harness();
@@ -145,7 +145,7 @@ describe("a build announcing what it can draw", () => {
     ]);
   });
 
-  test("records a description brought up to the build's as OpenBot's own change", async () => {
+  test("records a description brought up to the build's as XiongBao's own change", async () => {
     // Only what the store says it changed is recorded, so a page load that changed nothing adds nothing.
     const { trail, announce } = harness(["weatherPanel"]);
     await announce([entry()]);

@@ -25,12 +25,12 @@ const stranger = `media-${suite}-stranger`;
 const signedInAs =
   (id: string): MiddlewareHandler<{ Variables: AppVariables }> =>
   async (context, next) => {
-    context.set("actor", { id, email: `${id}@openbot.test`, role: "user" });
+    context.set("actor", { id, email: `${id}@xiongbao.test`, role: "user" });
     await runAsTenant(id, () => next());
   };
 const get = (as: string, path: string, headers: Record<string, string> = {}) =>
   createMediaRoutes(store, signedInAs(as)).request(
-    new Request(`http://openbot.test${path}`, { headers }),
+    new Request(`http://xiongbao.test${path}`, { headers }),
   );
 
 const PNG = Buffer.from(

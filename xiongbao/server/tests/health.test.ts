@@ -13,7 +13,7 @@ const app = createApp(
 
 describe("health endpoint", () => {
   test("reports the server as healthy", async () => {
-    const response = await app.request("http://openbot.local/health");
+    const response = await app.request("http://xiongbao.local/health");
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ status: "ok" });
@@ -69,7 +69,7 @@ describe("runtime capabilities", () => {
     args[18] = identityProviders;
     const withProviders = createApp(...args);
     const response = await withProviders.request(
-      "http://openbot.local/api/capabilities",
+      "http://xiongbao.local/api/capabilities",
     );
     expect(response.status).toBe(200);
     expect(
@@ -79,7 +79,7 @@ describe("runtime capabilities", () => {
   });
 
   test("offers WakerFlow automations only where the WakerFlow target is registered (AUT3)", async () => {
-    const plain = await app.request("http://openbot.local/api/capabilities");
+    const plain = await app.request("http://xiongbao.local/api/capabilities");
     expect(
       ((await plain.json()) as { wakerflowAutomations: boolean })
         .wakerflowAutomations,
@@ -92,7 +92,7 @@ describe("runtime capabilities", () => {
     args[33] = { wakerflowAutomations: true };
     const withFlows = createApp(...args);
     const offered = await withFlows.request(
-      "http://openbot.local/api/capabilities",
+      "http://xiongbao.local/api/capabilities",
     );
     expect(
       ((await offered.json()) as { wakerflowAutomations: boolean })
@@ -101,7 +101,9 @@ describe("runtime capabilities", () => {
   });
 
   test("reports the local runtime without exposing configuration secrets", async () => {
-    const response = await app.request("http://openbot.local/api/capabilities");
+    const response = await app.request(
+      "http://xiongbao.local/api/capabilities",
+    );
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
@@ -138,7 +140,9 @@ describe("runtime capabilities", () => {
   // The runtime object holds the Intelligence API key and licence token. This endpoint has no
   // authentication, so a projection bug here publishes deployment secrets to anyone who asks.
   test("never serves the Intelligence credentials", async () => {
-    const response = await app.request("http://openbot.local/api/capabilities");
+    const response = await app.request(
+      "http://xiongbao.local/api/capabilities",
+    );
     const body = await response.text();
     const parsed = (await new Response(body).json()) as Record<string, unknown>;
 
@@ -180,7 +184,7 @@ describe("runtime capabilities", () => {
     );
 
     const response = await disabled.request(
-      "http://openbot.local/api/capabilities",
+      "http://xiongbao.local/api/capabilities",
     );
 
     expect(response.status).toBe(200);
@@ -194,7 +198,7 @@ describe("runtime capabilities", () => {
     );
 
     const response = await enabled.request(
-      "http://openbot.local/api/capabilities",
+      "http://xiongbao.local/api/capabilities",
     );
 
     expect(response.status).toBe(200);
@@ -210,7 +214,7 @@ describe("runtime capabilities", () => {
     );
 
     const response = await enabled.request(
-      "http://openbot.local/api/capabilities",
+      "http://xiongbao.local/api/capabilities",
     );
 
     expect(response.status).toBe(200);
@@ -226,7 +230,7 @@ describe("runtime capabilities", () => {
     );
 
     const response = await disabled.request(
-      "http://openbot.local/api/capabilities",
+      "http://xiongbao.local/api/capabilities",
     );
 
     expect(response.status).toBe(200);
@@ -251,7 +255,7 @@ describe("runtime capabilities", () => {
     );
 
     const body = await (
-      await personal.request("http://openbot.local/api/capabilities")
+      await personal.request("http://xiongbao.local/api/capabilities")
     ).json();
     expect(body.edition).toBe("personal");
     expect(body.selfHostBanner).toBe(false);
@@ -260,7 +264,7 @@ describe("runtime capabilities", () => {
 
 describe("authentication availability", () => {
   test("a single-person install answers Sign out as done, since it has no sign-in to end", async () => {
-    // OpenBot Desktop: one person, no identity provider, no sessions. A page that still offers Sign
+    // XiongBao Desktop: one person, no identity provider, no sessions. A page that still offers Sign
     // out must not be told "No identity provider is configured." for a button that cannot fail.
     const single = createApp(
       loadConfig(
@@ -290,7 +294,7 @@ describe("authentication availability", () => {
 
   test("fails loudly when no identity provider has been configured", async () => {
     const response = await app.request(
-      "http://openbot.local/api/auth/sign-in/social",
+      "http://xiongbao.local/api/auth/sign-in/social",
       { method: "POST" },
     );
 
@@ -316,7 +320,7 @@ describe("authentication availability", () => {
     );
 
     const response = await authenticatedApp.request(
-      "http://openbot.local/api/auth/callback/google",
+      "http://xiongbao.local/api/auth/callback/google",
     );
 
     expect(response.status).toBe(204);
@@ -336,7 +340,7 @@ describe("authentication availability", () => {
     );
 
     const response = await authenticatedApp.request(
-      "http://openbot.local/api/auth/sign-out",
+      "http://xiongbao.local/api/auth/sign-out",
       { method: "POST" },
     );
 
@@ -363,7 +367,7 @@ describe("identity provider registration", () => {
         },
         api: {
           getSession: async () =>
-            signedIn ? { user: { id: "u1", email: "u1@openbot.test" } } : null,
+            signedIn ? { user: { id: "u1", email: "u1@xiongbao.test" } } : null,
         },
       } as never,
       { rolesForUser: async () => roles },
@@ -380,7 +384,7 @@ describe("identity provider registration", () => {
   test.each(routes)("refuses %s to a plain user", async (route) => {
     const { app, reached } = appFor(["user"]);
 
-    const response = await app.request(`http://openbot.test${route}`, {
+    const response = await app.request(`http://xiongbao.test${route}`, {
       method: "POST",
     });
 
@@ -392,7 +396,7 @@ describe("identity provider registration", () => {
   test.each(routes)("refuses %s to somebody signed out", async (route) => {
     const { app, reached } = appFor([], false);
 
-    const response = await app.request(`http://openbot.test${route}`, {
+    const response = await app.request(`http://xiongbao.test${route}`, {
       method: "POST",
     });
 
@@ -403,7 +407,7 @@ describe("identity provider registration", () => {
   test.each(routes)("lets an administrator through to %s", async (route) => {
     const { app, reached } = appFor(["admin"]);
 
-    await app.request(`http://openbot.test${route}`, { method: "POST" });
+    await app.request(`http://xiongbao.test${route}`, { method: "POST" });
 
     expect(reached()).toBe(true);
   });
@@ -413,7 +417,7 @@ describe("identity provider registration", () => {
   test("leaves the rest of the auth routes alone", async () => {
     const { app, reached } = appFor([], false);
 
-    await app.request("http://openbot.test/api/auth/sign-in/social", {
+    await app.request("http://xiongbao.test/api/auth/sign-in/social", {
       method: "POST",
     });
 

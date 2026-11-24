@@ -1,6 +1,6 @@
 /**
  * The Learning agent of local Intelligence, thinking on the person's Claude or ChatGPT plan through
- * OpenBot (`learning/model-endpoint.ts`).
+ * XiongBao (`learning/model-endpoint.ts`).
  *
  * The caller is the real client: `@earendil-works/pi-ai` 1.4.0, the version the Learning agent
  * pins, registered exactly as Intelligence registers a compatible endpoint
@@ -82,8 +82,8 @@ function planHarness(steps: Record<string, unknown>[][]) {
   return { runs, url: server.url };
 }
 
-/** OpenBot's server with the Learning endpoint, on the plan whose harness is at `harness`. */
-function openBot(
+/** XiongBao's server with the Learning endpoint, on the plan whose harness is at `harness`. */
+function xiongBao(
   provider: "chatgpt" | "claude",
   harness: URL,
   calls?: LearningModelCalls,
@@ -187,7 +187,7 @@ for (const provider of ["chatgpt", "claude"] as const) {
       ],
     ]);
     const ask = learningAgent(
-      openBot(provider, harness.url),
+      xiongBao(provider, harness.url),
       LEARNING_SECRET,
       `${provider}-plan`,
     );
@@ -264,7 +264,7 @@ test("a caller without the Learning secret spends nothing of the plan", async ()
       { type: "TEXT_MESSAGE_END", messageId: "m" },
     ],
   ]);
-  const base = openBot("chatgpt", harness.url);
+  const base = xiongBao("chatgpt", harness.url);
 
   const wrong = (await learningAgent(
     base,
@@ -323,7 +323,7 @@ test("a plan that needs signing in again is said as that, not as a broken stream
     ],
   ]);
   const answer = await learningAgent(
-    openBot("chatgpt", harness.url),
+    xiongBao("chatgpt", harness.url),
     LEARNING_SECRET,
     "chatgpt-plan",
   )(context());
@@ -338,7 +338,7 @@ test("a plan that needs signing in again is said as that, not as a broken stream
  * run failed from the code and from what reached this endpoint while it ran. The codes are the ones
  * Intelligence's `learning-agent-client.ts` and planner record.
  */
-test("a failed run says why, from what reached OpenBot while it ran", async () => {
+test("a failed run says why, from what reached XiongBao while it ran", async () => {
   const run = {
     status: "failed" as const,
     failureCode: "BatchInsightAgentFailed",
@@ -356,7 +356,7 @@ test("a failed run says why, from what reached OpenBot while it ran", async () =
   };
 
   // What the live check met: the agent's every call failed with "Connection error." and none
-  // reached OpenBot.
+  // reached XiongBao.
   expect(runFailure(run, record())).toBe(
     "Learning couldn't reach XiongBao Work to use your model plan. Quit XiongBao Work and open it again, then choose Learn now.",
   );
@@ -376,7 +376,7 @@ test("a failed run says why, from what reached OpenBot while it ran", async () =
   earlier.record("sign-in");
   expect(runFailure(run, earlier)).toContain("couldn't reach XiongBao Work");
 
-  // On a key, Learning never calls OpenBot.
+  // On a key, Learning never calls XiongBao.
   expect(runFailure(run)).toBe(
     "Learning's model didn't finish. Check that your model key works and has credit, then choose Learn now.",
   );
@@ -404,7 +404,7 @@ test("the endpoint records what became of each call", async () => {
     ],
   ]);
   const calls = createLearningModelCalls();
-  const base = openBot("chatgpt", harness.url, calls);
+  const base = xiongBao("chatgpt", harness.url, calls);
   await learningAgent(base, LEARNING_SECRET, "chatgpt-plan")(context());
   await learningAgent(base, LEARNING_SECRET, "chatgpt-plan")(context());
   await learningAgent(base, "a-guess", "chatgpt-plan")(context());

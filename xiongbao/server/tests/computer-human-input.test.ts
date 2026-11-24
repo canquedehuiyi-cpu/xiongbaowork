@@ -18,7 +18,7 @@ import { createComputerRoutes } from "../src/computer/routes";
 
 const member = {
   id: "u1",
-  email: "member@openbot.test",
+  email: "member@xiongbao.test",
   role: "user",
 } as const;
 
@@ -55,7 +55,7 @@ function recordingGateway() {
 async function send(body: unknown, kind: string) {
   const { app, calls } = recordingGateway();
   const response = await app.request(
-    `http://openbot.test/bot-1/human/${kind}`,
+    `http://xiongbao.test/bot-1/human/${kind}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },

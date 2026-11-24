@@ -116,7 +116,7 @@ const MAIL = `composio-mail-${suite}`;
 const MAIL_APP = `mail-${suite}`;
 /** Web search on this deployment's own key. */
 const EXA = "exa-authenticated";
-/** A server added under the id OpenBot's memory tools are spelled with. */
+/** A server added under the id XiongBao's memory tools are spelled with. */
 const MEMORY = "memory";
 
 const modelName = (ref: string) => `mcp__${ref.replace("/", "__")}`;
@@ -825,7 +825,7 @@ describe("a check-in reads what the person connected, through the tools that say
     // (`proactive/scope.ts`), at load, before each call and at the remote callback door.
   });
 
-  test("a Bot on another framework checks in on OpenBot's own runner, as itself, with the person's tools, and its endpoint is never called", async () => {
+  test("a Bot on another framework checks in on XiongBao's own runner, as itself, with the person's tools, and its endpoint is never called", async () => {
     script = {
       read: modelName(ref(MAIL, "MAIL_FETCH_EMAILS")),
       title: "Answer the supplier",
@@ -836,14 +836,14 @@ describe("a check-in reads what the person connected, through the tools that say
     expect(connectorsOffered(asked[0])).toEqual([
       modelName(ref(MAIL, "MAIL_FETCH_EMAILS")),
     ]);
-    // The role it is sent at its endpoint, as the instructions OpenBot's own runner gives a model.
+    // The role it is sent at its endpoint, as the instructions XiongBao's own runner gives a model.
     const system = (asked[0]?.messages ?? [])
       .filter((message) => message.role !== "user" && message.role !== "tool")
       .map((message) => textOf(message.content))
       .join("\n");
     expect(system).toContain("You are Harness Bot, Planner.");
     expect(system).toContain("Plans the person's week.");
-    // Said once: the guidance its standing role ends with is the guidance OpenBot gives every Bot.
+    // Said once: the guidance its standing role ends with is the guidance XiongBao gives every Bot.
     // 用户 2026-11-20 批准：瘦身默认开，数的是瘦身后的来源段，仍是只说一次。
     expect(system.split(SLIM_SOURCES)).toHaveLength(2);
     expect(system.split(SLIM_ANSWER_FORMAT)).toHaveLength(2);
@@ -906,7 +906,7 @@ describe("the memory tools' own id", () => {
         )
       )?.text,
     ).toStartWith("Refused.");
-    // The person's own memory, by the name OpenBot gives it, still reads.
+    // The person's own memory, by the name XiongBao gives it, still reads.
     expect(
       await guardProactiveCallback(
         {

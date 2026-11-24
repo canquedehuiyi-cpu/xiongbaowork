@@ -125,7 +125,7 @@ export type OpenTagAgentDeps = {
   /** Slack trigger ingest; defaults to the responsibilities lane's `ingestSlackEvent`. */
   ingestSlack?: (event: SlackTriggerEvent) => Promise<unknown>;
   /**
-   * OpenBot linked-account codes (Connections) from a Slack sender. Reachability
+   * XiongBao linked-account codes (Connections) from a Slack sender. Reachability
    * codes are checked first; this is used for any code that is not a live one (an expired or used
    * Reachability code falls through too, matches no account code, and gets the usual expired reply).
    * An account code is redeemed only in a direct message. One posted in a shared conversation is
@@ -348,7 +348,7 @@ async function answer(
   if (code) return link(deps, sender, code.toLowerCase());
 
   // One event per Slack message: a mention is `app_mention` only, never also a `message`. Fed
-  // whether or not the author linked OpenBot: owners' triggers are decided by their own access.
+  // whether or not the author linked XiongBao: owners' triggers are decided by their own access.
   await feedSlackTriggers(deps, sender, {
     type: sender.mentioned ? "app_mention" : "message",
     text: message.text,
@@ -616,7 +616,7 @@ async function approvalCard(
   const bot = await deps.store.botIdentity(record.action.botId);
   return confirmWriteInterrupt({
     approvalId,
-    // In the words the approval card in OpenBot uses, never the tool's id ("Your Bot: computer_click").
+    // In the words the approval card in XiongBao uses, never the tool's id ("Your Bot: computer_click").
     action: wantsTo(bot?.name ?? YOUR_BOT, record.action),
     approver: `${binding.transport}:${binding.identity}`,
     effect: record.action.effect,
@@ -666,7 +666,7 @@ async function decideFromCard(
       text: `这张审批卡片没有说明是谁回答的，所以什么都没有决定。请升级 OpenTag，或者到${shortName()}的员工页上决定。`,
     };
   // The clicker is mapped exactly like a message sender; OpenTag already refused anyone but the
-  // named approver, and OpenBot then decides only as that binding's owner.
+  // named approver, and XiongBao then decides only as that binding's owner.
   const owned = await ownedBinding(deps, person);
   if (!owned)
     return {

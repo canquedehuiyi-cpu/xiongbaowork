@@ -41,7 +41,11 @@ const suite = randomUUID().slice(0, 8);
 const tenant = `open-${suite}`;
 const stranger = `open-stranger-${suite}`;
 
-const actor = { id: tenant, email: `${tenant}@example.test`, role: "user" as const };
+const actor = {
+  id: tenant,
+  email: `${tenant}@example.test`,
+  role: "user" as const,
+};
 const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
@@ -59,7 +63,7 @@ type Open = { kind: string; id: string } | null;
 async function openByTask(): Promise<Map<string, Open>> {
   return runAsTenant(tenant, async () => {
     const response = await routes.request(
-      new Request("http://openbot.test/?q=open-target"),
+      new Request("http://xiongbao.test/?q=open-target"),
     );
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
@@ -118,15 +122,13 @@ async function makeAgent(name: string): Promise<string> {
   const id = `${suite}-${name}`;
   created.agentIds.push(id);
   await runAsTenant(tenant, async () => {
-    await database
-      .insert(agents)
-      .values({
-        id,
-        tenantId: tenant,
-        name,
-        type: "built_in",
-        configuration: {},
-      });
+    await database.insert(agents).values({
+      id,
+      tenantId: tenant,
+      name,
+      type: "built_in",
+      configuration: {},
+    });
   });
   return id;
 }
@@ -237,15 +239,13 @@ test("a hand-off card opens the group conversation whose coworker thread it ran 
     `thread_${randomUUID()}`,
   );
   await runAsTenant(tenant, async () => {
-    await database
-      .insert(groupBotThreads)
-      .values({
-        ownerUserId: tenant,
-        tenantId: tenant,
-        channelId,
-        agentId: bot,
-        threadId: thread,
-      });
+    await database.insert(groupBotThreads).values({
+      ownerUserId: tenant,
+      tenantId: tenant,
+      channelId,
+      agentId: bot,
+      threadId: thread,
+    });
   });
   const id = await openCard({ source: "handoff", channelRef: thread });
 

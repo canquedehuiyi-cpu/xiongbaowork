@@ -100,7 +100,7 @@ function pluginStore(calls: { ref: string; botId: string }[]) {
 /** A tool every Bot holds whatever it was granted, standing in for memory and its kin. */
 const remember: GrantedTool = {
   name: "remember",
-  ref: "openbot/remember",
+  ref: "xiongbao/remember",
   description: "Save something to remember about the person.",
   parameters: z.object({ fact: z.string() }),
   execute: async () => "saved",
@@ -463,7 +463,7 @@ describe.each(PROVIDERS)("a Bot holding 279 tools, on $name", (current) => {
       expect((seen[1] as { code?: string }).code).toBe(TOOL_LIMIT_EXCEEDED);
       expect(llm.sent).toEqual([]);
       expect(recorded).toHaveLength(1);
-      // Chat Completions' limit is the provider's; anywhere else 128 is OpenBot's own.
+      // Chat Completions' limit is the provider's; anywhere else 128 is XiongBao's own.
       expect(recorded[0]?.[1].provider).toBe(
         current.wire === "chat" ? "OpenAI" : OPENBOT_TOOL_LIMIT,
       );
@@ -607,7 +607,7 @@ describe("which tools wait behind search", () => {
   const tools = (count: number, searchable: boolean): GrantedTool[] =>
     Array.from({ length: count }, (_, index) => ({
       name: `${searchable ? "APP" : "OWN"}_${index}`,
-      ref: `${searchable ? "app" : "openbot"}/${index}`,
+      ref: `${searchable ? "app" : "xiongbao"}/${index}`,
       description: "",
       parameters: z.object({}),
       execute: async () => "ok",

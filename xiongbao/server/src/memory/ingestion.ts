@@ -527,7 +527,7 @@ export function createMemoryIngestion(options: {
       });
     },
     /**
-     * The memory source OpenBot would switch on by itself for each app this person connected that the
+     * The memory source XiongBao would switch on by itself for each app this person connected that the
      * Bot can read: one per app, and only for apps reached in the person's own account.
      *
      * An app the deployment shares, or one that needs no account, is not "an app the person

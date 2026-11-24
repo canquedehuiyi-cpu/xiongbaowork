@@ -24,7 +24,7 @@ type Transaction = (
 /**
  * One percent-decoded part of the address, or a refusal that names it.
  *
- * A password is where this bites. `postgres://openbot:100%pure@host:5432/openbot` is a string
+ * A password is where this bites. `postgres://app:100%pure@host:5432/xiongbao` is a string
  * `new URL` accepts without complaint, and `decodeURIComponent` then rejects with `URIError: URI
  * error` -- a message that names neither `DATABASE_URL` nor which part of it was wrong, thrown out
  * of the one function whose whole job is to make a connection failure legible. A `%` that starts no
@@ -120,8 +120,8 @@ function tlsOf(params: URLSearchParams, bunVersion: string) {
 /**
  * The address, taken apart, because Bun will not take it whole on every platform.
  *
- * `new SQL("postgres://user:pass@host:5432/openbot")` works on macOS and Linux and cannot work on
- * Windows: Bun reads the URL's path, `/openbot`, as the path of a unix socket, ignores the host and
+ * `new SQL("postgres://user:pass@host:5432/xiongbao")` works on macOS and Linux and cannot work on
+ * Windows: Bun reads the URL's path, `/xiongbao`, as the path of a unix socket, ignores the host and
  * the port, and fails to open a socket that Windows does not have (oven-sh/bun#27713). The server
  * then cannot reach Postgres at all there, while `psql` inside the container and a plain TCP
  * connection from the same machine both succeed, which is what makes it look like a network fault

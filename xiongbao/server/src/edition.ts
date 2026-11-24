@@ -1,7 +1,7 @@
 /**
  * Which product this deployment is.
  *
- * `team` is OpenBot as an organization runs it. `personal` is one person on their own machine: no
+ * `team` is XiongBao as an organization runs it. `personal` is one person on their own machine: no
  * sign-in, one shared computer, and none of the screens that govern other people. The governance
  * itself (the gateway, its policy, approvals and the audit trail) runs the same in both; the edition
  * only fixes what feeds it.
@@ -20,9 +20,9 @@ export type Edition = "team" | "personal";
  * else stays on, including the password manager, whose saved logins are only ever used after the
  * person picks one in the private sign-in form.
  *
- * Local computer access is on: folders on the person's own machine, through OpenBot Desktop. The
+ * Local computer access is on: folders on the person's own machine, through XiongBao Desktop. The
  * person picks each folder in the desktop's native picker, a folder is read-only, the desktop asks
- * before each write or command, every call leaves an audit row, and access ends when OpenBot stops
+ * before each write or command, every call leaves an audit row, and access ends when XiongBao stops
  * (`host-access/`, `desktop/src-tauri/src/desktop_host_access.rs`). Without the desktop there is no
  * host to reach: the folder routes refuse and Settings → Computer says it needs the desktop.
  */

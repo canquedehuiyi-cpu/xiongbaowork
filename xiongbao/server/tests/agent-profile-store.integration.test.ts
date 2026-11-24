@@ -1,10 +1,7 @@
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import {
-  Hono,
-  type MiddlewareHandler,
-} from "hono";
+import { Hono, type MiddlewareHandler } from "hono";
 import { authFromConfiguration } from "../src/agents/auth-header";
 import {
   AgentNotFoundError,
@@ -23,9 +20,9 @@ import type {
 } from "../src/agents/profile-types";
 import { createAgentRoutes } from "../src/agents/routes";
 import { createRuntimeAgentLoader } from "../src/agents/runtime-agents";
-import { type AppVariables, createRoleRepository } from "../src/auth/guards";
 import { createAuditStore } from "../src/audit";
 import { createAdminScope } from "../src/auth/admin-scope";
+import { type AppVariables, createRoleRepository } from "../src/auth/guards";
 import { setRole } from "../src/auth/roles";
 import { DEPLOYMENT_ROUTES } from "../src/computer/deployment-routes";
 import { createDatabase } from "../src/db/client";
@@ -395,39 +392,44 @@ describe("agent profile store integration", () => {
   test("editing a duplicate replaces its copied standing instructions", async () => {
     const owner = await createUser();
     await as(owner, async () => {
-    const source = await createProfileFixture({ owner });
-    await database
-      .update(agents)
-      .set({
-        configuration: {
-          endpoint: "https://seed.example.test/ag-ui",
-          standingInstructions: "Handle email and calendars.",
-        },
-      })
-      .where(eq(agents.id, source.agentId));
-    const copy = await store.duplicate(owner, source.agentId);
-    createdAgentIds.push(copy.id);
-    const runtime = createRuntimeAgentLoader(database);
-    const before = (await runtime(owner)).find((agent) => agent.id === copy.id);
-    if (before?.type !== "remote_ag_ui")
-      throw new Error("Expected remote copy");
-    expect(before.standingMessage.content).toContain(
-      "Handle email and calendars.",
-    );
-    await store.update(owner, copy.id, {
-      name: "Research Bot",
-      title: "Research",
-      roleDescription: "Only research public sources.",
-      visibility: "private",
-    });
-    const after = (await runtime(owner)).find((agent) => agent.id === copy.id);
-    if (after?.type !== "remote_ag_ui") throw new Error("Expected remote copy");
-    expect(after.standingMessage.content).toContain(
-      "Only research public sources.",
-    );
-    expect(after.standingMessage.content).not.toContain(
-      "Handle email and calendars.",
-    );
+      const source = await createProfileFixture({ owner });
+      await database
+        .update(agents)
+        .set({
+          configuration: {
+            endpoint: "https://seed.example.test/ag-ui",
+            standingInstructions: "Handle email and calendars.",
+          },
+        })
+        .where(eq(agents.id, source.agentId));
+      const copy = await store.duplicate(owner, source.agentId);
+      createdAgentIds.push(copy.id);
+      const runtime = createRuntimeAgentLoader(database);
+      const before = (await runtime(owner)).find(
+        (agent) => agent.id === copy.id,
+      );
+      if (before?.type !== "remote_ag_ui")
+        throw new Error("Expected remote copy");
+      expect(before.standingMessage.content).toContain(
+        "Handle email and calendars.",
+      );
+      await store.update(owner, copy.id, {
+        name: "Research Bot",
+        title: "Research",
+        roleDescription: "Only research public sources.",
+        visibility: "private",
+      });
+      const after = (await runtime(owner)).find(
+        (agent) => agent.id === copy.id,
+      );
+      if (after?.type !== "remote_ag_ui")
+        throw new Error("Expected remote copy");
+      expect(after.standingMessage.content).toContain(
+        "Only research public sources.",
+      );
+      expect(after.standingMessage.content).not.toContain(
+        "Handle email and calendars.",
+      );
     });
   });
 
@@ -1859,7 +1861,7 @@ describe("a coworker's chosen avatar seed", () => {
 
   /*
    * The personal starter on the harness picked at setup sits at the address of the container
-   * OpenBot started for it, "agent-harness:4206" on OpenBot Desktop. Its Bot page names the
+   * XiongBao started for it, "agent-harness:4206" on XiongBao Desktop. Its Bot page names the
    * framework instead, so the profile it reads says which one runs it, by what runs it.
    */
   test("serves the framework a Bot runs on, read from what runs it, for its Bot page", async () => {
@@ -1875,30 +1877,33 @@ describe("a coworker's chosen avatar seed", () => {
     try {
       const owner = await createUser();
       await as(owner, async () => {
-      const picked = await createProfileFixture({
-        owner,
-        title: "Everyday life.",
-        configuration: { endpoint: "http://agent-harness:4206" },
-      });
-      const unnamed = await createProfileFixture({ owner });
-      const app = new Hono<{ Variables: AppVariables }>();
-      app.route(
-        "/",
-        createAgentRoutes(store, async (context, next) => {
-          context.set("actor", { ...owner, email: `${owner.id}@example.test` });
-          await next();
-        }),
-      );
-      const detail = async (agentId: string) =>
-        (
-          (await (
-            await app.request(`http://openbot.test/${agentId}`)
-          ).json()) as { agent: Record<string, unknown> }
-        ).agent;
+        const picked = await createProfileFixture({
+          owner,
+          title: "Everyday life.",
+          configuration: { endpoint: "http://agent-harness:4206" },
+        });
+        const unnamed = await createProfileFixture({ owner });
+        const app = new Hono<{ Variables: AppVariables }>();
+        app.route(
+          "/",
+          createAgentRoutes(store, async (context, next) => {
+            context.set("actor", {
+              ...owner,
+              email: `${owner.id}@example.test`,
+            });
+            await next();
+          }),
+        );
+        const detail = async (agentId: string) =>
+          (
+            (await (
+              await app.request(`http://xiongbao.test/${agentId}`)
+            ).json()) as { agent: Record<string, unknown> }
+          ).agent;
 
-      expect((await detail(picked.agentId)).framework).toBe("LangChain");
-      // An agent connected by address with no framework named: OpenBot doesn't know, so it says none.
-      expect(await detail(unnamed.agentId)).not.toHaveProperty("framework");
+        expect((await detail(picked.agentId)).framework).toBe("LangChain");
+        // An agent connected by address with no framework named: XiongBao doesn't know, so it says none.
+        expect(await detail(unnamed.agentId)).not.toHaveProperty("framework");
       });
     } finally {
       for (const [name, value] of Object.entries(saved)) {

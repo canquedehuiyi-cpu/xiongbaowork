@@ -2,7 +2,7 @@
  * M4: upstream v1.0.0's pieces wired into this fork's own screens.
  *
  * - The connection section of an employee's settings says it needs no key when 熊宝 runs it
- *   (`keyFromOpenBot`), instead of offering a token it does not need.
+ *   (`keyFromXiongBao`), instead of offering a token it does not need.
  * - Admin › 技能: each skill's name opens its own page, and writing one is a page of its own.
  * - 长期职责 opens narrowed to one employee (`?agent=`), as an employee's own sections link to it.
  * - The desktop update bar sits in the app shell, above the self-host bar.
@@ -153,7 +153,7 @@ describe("员工设置的连接分区", () => {
   }
 
   test("熊宝自己运行的员工说明不需要凭据，也不给生成凭据的按钮", async () => {
-    const view = await connection({ ...remote, keyFromOpenBot: true });
+    const view = await connection({ ...remote, keyFromXiongBao: true });
     expect(await view.findByText(KEY_FROM_OPENBOT)).toBeTruthy();
     expect(view.queryByRole("button", { name: /生成/ })).toBeNull();
   });

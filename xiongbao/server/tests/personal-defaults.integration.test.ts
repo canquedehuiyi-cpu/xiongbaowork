@@ -269,10 +269,10 @@ describe("Parallel Search in the personal edition", () => {
   });
 
   /*
-   * fork 的租户：OpenBot 替这个人做的授予是这个人自己的行，不是平台的；轨迹上每位员工一行，列出全部动作，
+   * fork 的租户：XiongBao 替这个人做的授予是这个人自己的行，不是平台的；轨迹上每位员工一行，列出全部动作，
    * 记为部署发起，不是谁按了按钮。
    */
-  test("the grants are the person's own rows, with one trail row per Bot started by OpenBot", async () => {
+  test("the grants are the person's own rows, with one trail row per Bot started by XiongBao", async () => {
     const since = new Date();
     await restart();
     const rows = await asPlatform(() =>
@@ -539,7 +539,7 @@ describe("a skill the person writes in the personal edition is theirs", () => {
         title: SHIPPED,
         summary: "",
         instructions: "Shipped.",
-        origin: "openbot",
+        origin: "xiongbao",
         ownerUserId: null,
         by: `${OWNER}@example.test`,
       }),

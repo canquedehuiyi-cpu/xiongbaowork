@@ -5,16 +5,16 @@ export function desktopTelemetryProperties(
   if (env.OPENBOT_DISTRIBUTION !== "desktop") return {};
 
   const properties: Record<string, string> = {
-    openbot_distribution: "desktop",
+    xiongbao_distribution: "desktop",
   };
   for (const [input, output, allowed] of [
     [
       "OPENBOT_PLATFORM",
-      "openbot_platform",
+      "xiongbao_platform",
       ["macos", "windows", "linux", "other"],
     ],
-    ["OPENBOT_ARCH", "openbot_arch", ["aarch64", "x86_64", "other"]],
-    ["OPENBOT_ENGINE", "openbot_engine", ["docker", "podman", "none"]],
+    ["OPENBOT_ARCH", "xiongbao_arch", ["aarch64", "x86_64", "other"]],
+    ["OPENBOT_ENGINE", "xiongbao_engine", ["docker", "podman", "none"]],
   ] as const) {
     const value = env[input];
     if (value && allowed.some((item) => item === value))
@@ -23,8 +23,8 @@ export function desktopTelemetryProperties(
   for (const [input, output, pattern] of [
     // The app's own version keeps a release candidate's label, as `1.0.0-rc.5`: a closed word and
     // at most one number, never free text.
-    ["OPENBOT_VERSION", "openbot_version", APP_VERSION],
-    ["OPENBOT_OS_VERSION", "openbot_os_version", NUMERIC_VERSION],
+    ["OPENBOT_VERSION", "xiongbao_version", APP_VERSION],
+    ["OPENBOT_OS_VERSION", "xiongbao_os_version", NUMERIC_VERSION],
   ] as const) {
     const value = env[input];
     if (

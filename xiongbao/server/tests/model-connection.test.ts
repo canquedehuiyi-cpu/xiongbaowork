@@ -14,7 +14,7 @@ function providerError(statusCode: number, cause?: Error) {
 
 function explicitAuthenticationError() {
   return Object.assign(new Error("provider authentication failed"), {
-    name: "OpenBotModelAuthenticationError",
+    name: "XiongBaoModelAuthenticationError",
   });
 }
 

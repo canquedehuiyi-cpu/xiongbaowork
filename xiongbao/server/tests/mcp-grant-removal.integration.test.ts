@@ -9,8 +9,8 @@ import { useComposioClient } from "../src/plugins/composio";
 import { createPluginStore } from "../src/plugins/store";
 import { runAsTenant } from "../src/tenant/context";
 import { createAdminRequest, seedAdministrator } from "./support/admin-request";
-import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { credentialDouble } from "./support/credential-double";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 
@@ -154,10 +154,10 @@ test("removing an app takes its grants with it, and adding it back grants nothin
     await store.addBrokeredApp({
       slug,
       title: `Removed ${suite}`,
-      by: "admin@openbot.test",
+      by: "admin@xiongbao.test",
       connection: { kind: "consent" },
     });
-    await store.grant("mcp", ref, botId, "admin@openbot.test");
+    await store.grant("mcp", ref, botId, "admin@xiongbao.test");
     expect(
       (await store.listForAgent(botId)).tools.map((tool) => tool.ref),
     ).toContain(ref);
@@ -166,14 +166,14 @@ test("removing an app takes its grants with it, and adding it back grants nothin
     await store.addBrokeredApp({
       slug: keptSlug,
       title: `Kept ${suite}`,
-      by: "admin@openbot.test",
+      by: "admin@xiongbao.test",
       connection: { kind: "consent" },
     });
-    await store.grant("mcp", keptRef, botId, "admin@openbot.test");
+    await store.grant("mcp", keptRef, botId, "admin@xiongbao.test");
 
     events.length = 0;
     useComposioClient(listing(actionName));
-    await store.removeServer(serverId, "admin@openbot.test");
+    await store.removeServer(serverId, "admin@xiongbao.test");
 
     const left = await database
       .select({ ref: pluginGrants.ref })
@@ -198,7 +198,7 @@ test("removing an app takes its grants with it, and adding it back grants nothin
     await store.addBrokeredApp({
       slug,
       title: `Removed ${suite}`,
-      by: "admin@openbot.test",
+      by: "admin@xiongbao.test",
       connection: { kind: "consent" },
     });
 
@@ -226,10 +226,10 @@ test("a re-added app a Bot was never granted again refuses the call", () =>
       await store.addBrokeredApp({
         slug: noAuthSlug,
         title: `No auth ${suite}`,
-        by: "admin@openbot.test",
+        by: "admin@xiongbao.test",
         connection: { kind: "no-auth" },
       });
-      await store.grant("mcp", noAuthRef, botId, "admin@openbot.test");
+      await store.grant("mcp", noAuthRef, botId, "admin@xiongbao.test");
 
       const before = await store.callTool({
         ref: noAuthRef,
@@ -239,11 +239,11 @@ test("a re-added app a Bot was never granted again refuses the call", () =>
       });
       expect(before.isError).toBe(false);
 
-      await store.removeServer(noAuthServerId, "admin@openbot.test");
+      await store.removeServer(noAuthServerId, "admin@xiongbao.test");
       await store.addBrokeredApp({
         slug: noAuthSlug,
         title: `No auth ${suite}`,
-        by: "admin@openbot.test",
+        by: "admin@xiongbao.test",
         connection: { kind: "no-auth" },
       });
 

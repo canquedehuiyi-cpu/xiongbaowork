@@ -1,5 +1,4 @@
 import { expect } from "bun:test";
-import { afterAll, test } from "./support/platform-frame";
 import {
   auditEventsToCsv,
   auditQueryFromUrl,
@@ -9,6 +8,7 @@ import {
 } from "../src/audit";
 import { createDatabase } from "../src/db/client";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
+import { afterAll, test } from "./support/platform-frame";
 
 const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const store = createAuditStore(database);
@@ -62,7 +62,7 @@ test("the trail narrowed to one Bot holds its actions and what was done to it, a
   });
 
   const query = auditQueryFromUrl(
-    new URL(`https://openbot.test/audit?bot=${encodeURIComponent(bot)}`),
+    new URL(`https://xiongbao.test/audit?bot=${encodeURIComponent(bot)}`),
   );
   const { events } = await reader.list(query);
   expect(events.map((event) => event.eventType).sort()).toEqual([
@@ -76,7 +76,7 @@ test("the trail narrowed to one Bot holds its actions and what was done to it, a
   const refused = await reader.list(
     auditQueryFromUrl(
       new URL(
-        `https://openbot.test/audit?eventType=computer.action_refused,computer.action_allowed&bot=${encodeURIComponent(bot)}`,
+        `https://xiongbao.test/audit?eventType=computer.action_refused,computer.action_allowed&bot=${encodeURIComponent(bot)}`,
       ),
     ),
   );

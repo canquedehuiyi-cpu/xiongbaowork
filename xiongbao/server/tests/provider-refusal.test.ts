@@ -22,7 +22,7 @@ import { testEnvironment } from "./support/environment";
 /**
  * A model provider refusing a run, as the person reading the conversation is told.
  *
- * Seen on OpenBot Desktop: a Bot on the LangGraph harness ended its turn in red with "Error code: 400
+ * Seen on XiongBao Desktop: a Bot on the LangGraph harness ended its turn in red with "Error code: 400
  * - Invalid 'tools': array too long. Expected an array with maximum length 128, but got an array with
  * length 202 instead." Each run here goes through the real runtime to a fake Intelligence, and the
  * RUN_ERROR that reaches it is what both surfaces draw and what a reload replays.
@@ -52,7 +52,7 @@ const OPENAI = {
     body: {
       error: {
         message:
-          "Incorrect API key provided: openbot-*****************0000. You can find your API key at https://platform.openai.com/account/api-keys.",
+          "Incorrect API key provided: xiongbao-*****************0000. You can find your API key at https://platform.openai.com/account/api-keys.",
         type: "invalid_request_error",
         param: null,
         code: "invalid_api_key",
@@ -644,7 +644,7 @@ test("the Claude Agent SDK harness out of credit gets the billing sentence, nami
 test("a Bot's own failure is not a provider's refusal, and keeps its words", async () => {
   for (const message of [
     "The model requested a tool that was not offered for this run.",
-    "This Bot couldn't start, so it didn't answer. Send your message again, and restart OpenBot if it keeps happening.",
+    "This Bot couldn't start, so it didn't answer. Send your message again, and restart XiongBao if it keeps happening.",
   ]) {
     const failure = await harnessRefusedWith({ message });
     expect(failure.message).toBe(message);
@@ -664,7 +664,7 @@ test("a refusal with no particular reason says what the person can do, in each e
     return [harness.message, builtIn.message];
   };
   try {
-    // A team has an admin who runs OpenBot for everybody.
+    // A team has an admin who runs XiongBao for everybody.
     setEdition("team");
     expect(await both()).toEqual([said.other("OpenAI"), said.other(UNNAMED)]);
     // The personal edition is one person on their own machine: no admin to ask.

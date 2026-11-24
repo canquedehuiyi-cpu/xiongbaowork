@@ -20,7 +20,7 @@ const createdUserIds: string[] = [];
 async function person() {
   const id = `user-instructions-${randomUUID()}`;
   await runAsTenant(id, () =>
-    database.insert(users).values({ id, email: `${id}@openbot.test` }),
+    database.insert(users).values({ id, email: `${id}@xiongbao.test` }),
   );
   createdUserIds.push(id);
   return id;

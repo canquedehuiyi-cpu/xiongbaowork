@@ -15,7 +15,7 @@ function request(
   body: string,
   signature = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`,
 ) {
-  return new Request("https://openbot.test/binding-1", {
+  return new Request("https://xiongbao.test/binding-1", {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -36,7 +36,7 @@ function fixture(tenantId = "owner-1") {
         ? {
             tenantId,
             ownerUserId: "owner-1",
-            repository: "openbot/demo",
+            repository: "xiongbao/demo",
             secret,
           }
         : null;
@@ -57,7 +57,7 @@ test("signed GitHub event binds actor from owned repository registration", async
       JSON.stringify({
         action: "opened",
         ownerUserId: "attacker",
-        repository: { full_name: "openbot/demo" },
+        repository: { full_name: "xiongbao/demo" },
         issue: { number: 6 },
       }),
     ),
@@ -73,7 +73,7 @@ test("wrong signature cannot enqueue GitHub work", async () => {
     (
       await routes.fetch(
         request(
-          JSON.stringify({ repository: { full_name: "openbot/demo" } }),
+          JSON.stringify({ repository: { full_name: "xiongbao/demo" } }),
           "sha256=0000",
         ),
       )
@@ -96,7 +96,7 @@ test("the same signed event replayed with a fresh X-GitHub-Delivery dedupes", as
   const { routes, events } = fixture();
   const body = JSON.stringify({
     action: "opened",
-    repository: { full_name: "openbot/demo" },
+    repository: { full_name: "xiongbao/demo" },
   });
   for (const delivery of ["delivery-1", "delivery-2"]) {
     const replay = request(body);
@@ -113,7 +113,7 @@ test("the binding is read as platform and the event ingested in the binding's ow
       JSON.stringify({
         action: "opened",
         tenantId: "attacker",
-        repository: { full_name: "openbot/demo" },
+        repository: { full_name: "xiongbao/demo" },
       }),
     ),
   );
@@ -128,7 +128,7 @@ test("a binding stamped as nobody's, or with somebody other than its owner, is u
       request(
         JSON.stringify({
           action: "opened",
-          repository: { full_name: "openbot/demo" },
+          repository: { full_name: "xiongbao/demo" },
         }),
       ),
     );
@@ -138,13 +138,13 @@ test("a binding stamped as nobody's, or with somebody other than its owner, is u
 });
 test("a pull request event larger than 32 KiB is accepted and fitted to the ledger cap", async () => {
   const { routes, events } = fixture();
-  // A real `pull_request` delivery for an OpenBot PR is 26–57 KB: the PR object alone repeats the
+  // A real `pull_request` delivery for an XiongBao PR is 26–57 KB: the PR object alone repeats the
   // repository under `head` and `base`. Before, every one over 32 KiB was answered 503.
   const body = JSON.stringify({
     action: "synchronize",
     number: 949,
     pull_request: { title: "A change", body: "x".repeat(40_000) },
-    repository: { full_name: "openbot/demo" },
+    repository: { full_name: "xiongbao/demo" },
   });
   expect(body.length).toBeGreaterThan(32_768);
   const delivery = request(body);
@@ -162,7 +162,7 @@ test("a pull request event larger than 32 KiB is accepted and fitted to the ledg
 test("a body over the route limit is refused as too large, not as an outage", async () => {
   const { routes, events } = fixture();
   const body = JSON.stringify({
-    repository: { full_name: "openbot/demo" },
+    repository: { full_name: "xiongbao/demo" },
     pull_request: { body: "x".repeat(300 * 1024) },
   });
   expect((await routes.fetch(request(body))).status).toBe(413);
@@ -174,7 +174,7 @@ test("a pull request event under 32 KiB is handed on whole", async () => {
     action: "opened",
     number: 7,
     pull_request: { title: "Small", body: "x".repeat(20_000) },
-    repository: { full_name: "openbot/demo" },
+    repository: { full_name: "xiongbao/demo" },
   };
   expect((await routes.fetch(request(JSON.stringify(payload)))).status).toBe(
     202,

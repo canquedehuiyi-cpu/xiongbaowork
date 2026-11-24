@@ -248,7 +248,7 @@ describe("the address the person is sent to", () => {
     authorizationUrlFor({
       auth: googleAuth,
       clientId: "client-id",
-      redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+      redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
       state: "signed-state",
       codeChallenge: "challenge",
     }),
@@ -292,7 +292,7 @@ describe("the address the person is sent to", () => {
       authorizationUrlFor({
         auth: notionAuth,
         clientId: "client-id",
-        redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+        redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
         state: "signed-state",
         codeChallenge: "challenge",
       }),
@@ -323,7 +323,7 @@ describe("the address the person is sent to", () => {
       authorizationUrlFor({
         auth: hostileAuth,
         clientId: "client-id",
-        redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+        redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
         state: "signed-state",
         codeChallenge: "challenge",
       }),
@@ -343,7 +343,7 @@ describe("the address the person is sent to", () => {
       authorizationUrlFor({
         auth: audienceAuth,
         clientId: "client-id",
-        redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+        redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
         state: "signed-state",
         codeChallenge: "challenge",
       }),
@@ -354,16 +354,16 @@ describe("the address the person is sent to", () => {
 
 describe("the address the vendor sends them back to", () => {
   test("is one path, built from the deployment's own public URL", () => {
-    expect(redirectUriFor("https://openbot.example")).toBe(
-      "https://openbot.example/api/plugins/oauth/callback",
+    expect(redirectUriFor("https://xiongbao.example")).toBe(
+      "https://xiongbao.example/api/plugins/oauth/callback",
     );
   });
 
   test("does not double a slash when the public URL has a trailing one", () => {
     // A redirect URI has to match what was registered with the vendor character for character, so a
     // stray slash is not cosmetic: it fails at the vendor, with a message that does not name us.
-    expect(redirectUriFor("https://openbot.example/")).toBe(
-      "https://openbot.example/api/plugins/oauth/callback",
+    expect(redirectUriFor("https://xiongbao.example/")).toBe(
+      "https://xiongbao.example/api/plugins/oauth/callback",
     );
   });
 });
@@ -464,12 +464,12 @@ describe("registering this deployment as an OAuth client", () => {
     try {
       const client = await registerDynamicClient({
         registrationUrl: "https://vendor.example/register",
-        redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+        redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
       });
       expect(client).toEqual({ clientId: "dyn-123", clientSecret: "" });
       expect(seen[0]?.url).toBe("https://vendor.example/register");
       expect(seen[0]?.body).toEqual({
-        redirect_uris: ["https://openbot.example/api/plugins/oauth/callback"],
+        redirect_uris: ["https://xiongbao.example/api/plugins/oauth/callback"],
         grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],
         token_endpoint_auth_method: "none",
@@ -488,7 +488,7 @@ describe("registering this deployment as an OAuth client", () => {
       expect(
         await registerDynamicClient({
           registrationUrl: "https://vendor.example/register",
-          redirectUri: "https://openbot.example/cb",
+          redirectUri: "https://xiongbao.example/cb",
         }),
       ).toBeNull();
     } finally {
@@ -516,7 +516,7 @@ describe("registering this deployment as an OAuth client", () => {
       expect(
         await registerDynamicClient({
           registrationUrl: "https://vendor.example/register",
-          redirectUri: "https://openbot.example/cb",
+          redirectUri: "https://xiongbao.example/cb",
         }),
       ).toBeNull();
     } finally {
@@ -546,7 +546,7 @@ describe("registering this deployment as an OAuth client", () => {
       expect(
         await registerDynamicClient({
           registrationUrl: "https://vendor.example/register",
-          redirectUri: "https://openbot.example/cb",
+          redirectUri: "https://xiongbao.example/cb",
         }),
       ).toBeNull();
       expect(seen[0]?.redirect).toBe("manual");
@@ -574,7 +574,7 @@ describe("registering this deployment as an OAuth client", () => {
       expect(
         await registerDynamicClient({
           registrationUrl: "https://vendor.example/register",
-          redirectUri: "https://openbot.example/cb",
+          redirectUri: "https://xiongbao.example/cb",
         }),
       ).toBeNull();
     } finally {
@@ -599,7 +599,7 @@ describe("registering this deployment as an OAuth client", () => {
       expect(
         await registerDynamicClient({
           registrationUrl: "https://vendor.example/register",
-          redirectUri: "https://openbot.example/cb",
+          redirectUri: "https://xiongbao.example/cb",
         }),
       ).toBeNull();
     } finally {
@@ -627,7 +627,7 @@ describe("redeeming an authorization code", () => {
         clientId: "client-id",
         clientSecret: "",
         code: "code-1",
-        redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+        redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
         verifier: "verifier-1",
       });
       expect(seen[0]?.params.has("client_secret")).toBe(false);
@@ -652,7 +652,7 @@ describe("redeeming an authorization code", () => {
         clientId: "client-id",
         clientSecret: "secret-1",
         code: "code-1",
-        redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+        redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
         verifier: "verifier-1",
       });
       expect(seen[0]?.params.get("client_secret")).toBe("secret-1");
@@ -683,7 +683,7 @@ describe("redeeming an authorization code", () => {
           clientId: "client-id",
           clientSecret: "",
           code: "code-1",
-          redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+          redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
           verifier: "verifier-1",
         }),
       ).toBeNull();
@@ -710,7 +710,7 @@ describe("redeeming an authorization code", () => {
           clientId: "client-id",
           clientSecret: "",
           code: "code-1",
-          redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+          redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
           verifier: "verifier-1",
         }),
       ).toBeNull();
@@ -741,7 +741,7 @@ describe("redeeming an authorization code", () => {
         clientId: "client-id",
         clientSecret: "",
         code: "code-1",
-        redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+        redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
         verifier: "verifier-1",
       });
       expect(grant?.scope.length).toBe(512);
@@ -773,7 +773,7 @@ describe("redeeming an authorization code", () => {
           clientId: "client-id",
           clientSecret: "",
           code: "code-1",
-          redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+          redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
           verifier: "verifier-1",
         }),
       ).toBeNull();
@@ -797,7 +797,7 @@ describe("redeeming an authorization code", () => {
           clientId: "client-id",
           clientSecret: "",
           code: "code-1",
-          redirectUri: "https://openbot.example/api/plugins/oauth/callback",
+          redirectUri: "https://xiongbao.example/api/plugins/oauth/callback",
           verifier: "verifier-1",
         }),
       ).toBeNull();

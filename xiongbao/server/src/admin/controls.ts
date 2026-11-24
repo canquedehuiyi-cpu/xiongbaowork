@@ -97,12 +97,12 @@ export type EnterpriseDeps = {
   auditStore: AuditStore;
   provider?: ComputerProvider;
   computerToken?: string;
-  /** Where a person's own OpenBot browser may go (browser/egress.ts): pushed to it instead of a Bot's policy, which says
+  /** Where a person's own XiongBao browser may go (browser/egress.ts): pushed to it instead of a Bot's policy, which says
    * where Bots may go. Absent, a person's browser is pushed `deny_all`, the answer for a computer with no policy. */
   personBrowserPolicy?: EgressPolicy;
   /**
    * A Bot's policy as it must be for now, from the one its owner is under: wider while a person records in the Bot's
-   * browser, so the Recorder there reaches OpenBot and the gateway (browser/bot-browser.ts), and the Bot's own once
+   * browser, so the Recorder there reaches XiongBao and the gateway (browser/bot-browser.ts), and the Bot's own once
    * nobody does. Applied to every push of a Bot's policy, the periodic one and the push on wake, so neither takes the
    * Recorder's way out away mid-recording, and neither leaves it to the Bot afterwards. Absent: the owner's policy.
    */

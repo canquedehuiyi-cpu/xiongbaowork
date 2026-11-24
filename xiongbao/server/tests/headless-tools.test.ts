@@ -601,7 +601,7 @@ test("remote backend tool results are persisted without executing the client too
   ).toHaveLength(1);
 });
 
-test("a computer tool the caller offers is left to the caller when OpenBot adds plugin tools beside it", async () => {
+test("a computer tool the caller offers is left to the caller when XiongBao adds plugin tools beside it", async () => {
   const remote = remoteTurn((input) =>
     lifecycle(
       input,

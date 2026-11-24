@@ -379,7 +379,10 @@ describe("the RLS enforcement mode a deployment runs with", () => {
 
   test("an empty value is the same as unset", () => {
     expect(
-      resolveRlsEnforcementMode({ NODE_ENV: "production", OPENBOT_RLS_ENFORCE: "  " }),
+      resolveRlsEnforcementMode({
+        NODE_ENV: "production",
+        OPENBOT_RLS_ENFORCE: "  ",
+      }),
     ).toBe("refuse");
   });
 
@@ -403,12 +406,12 @@ describe("the RLS enforcement mode a deployment runs with", () => {
  */
 describe("the public default database password", () => {
   const appUrl = (password: string) =>
-    `postgres://openbot_app:${password}@db.example.com:5432/openbot`;
+    `postgres://openbot_app:${password}@db.example.com:5432/xiongbao`;
 
   test.each([
     appUrl("openbot"),
-    "postgres://openbot:openbot@db.example.com:5432/openbot",
-    "postgresql://openbot_app:%6Fpenbot@db.example.com/openbot",
+    "postgres://openbot:openbot@db.example.com:5432/xiongbao",
+    "postgresql://openbot_app:%6Fpenbot@db.example.com/xiongbao",
   ])("is recognised in %p", (url) => {
     expect(usesPublicDefaultDatabasePassword(url)).toBeTrue();
   });
@@ -416,7 +419,7 @@ describe("the public default database password", () => {
   test.each([
     appUrl("a-real-secret"),
     appUrl("openbot2"),
-    "postgres://openbot_app@db.example.com/openbot",
+    "postgres://openbot_app@db.example.com/xiongbao",
     "not a url",
     undefined,
   ])("is not claimed for %p", (url) => {
@@ -472,7 +475,7 @@ describe("the public default database password", () => {
  */
 describe("the public default role writer password", () => {
   const writerUrl =
-    "postgres://openbot_role_writer:openbot@postgres:5432/openbot";
+    "postgres://openbot_role_writer:openbot@postgres:5432/xiongbao";
 
   test("production refuses it, naming the role writer's setting", () => {
     const diagnostics: ReadinessDiagnostic[] = [];

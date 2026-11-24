@@ -25,7 +25,7 @@ import { DEFAULT_MAX_ATTEMPTS } from "../work/queue";
  * queue unfinished, with its count and its last error, which is the queue's own terminal state
  * (work/queue.ts). That row is the failure and its reason; nothing else records it.
  *
- * Ported from OpenDuet's task store, less what OpenBot does differently: a person replies in a
+ * Ported from OpenDuet's task store, less what XiongBao does differently: a person replies in a
  * task's conversation as an ordinary chat turn, not as a queued turn of the task's, so nothing here
  * reads queued replies or answers to question cards.
  */

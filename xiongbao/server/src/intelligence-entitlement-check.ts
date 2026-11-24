@@ -11,9 +11,9 @@ import type { RuntimeEntitlementResponse } from "./self-host-banner";
  *
  * A self-hosted Intelligence without a licence answers every runtime entitlement read with
  * `RUNTIME_ENTITLEMENTS_SELF_HOSTED_MISCONFIGURED`, and the features it gates, memory first, are
- * then refused quietly: conversations still run, nothing fails loudly, and nothing in OpenBot's own
+ * then refused quietly: conversations still run, nothing fails loudly, and nothing in XiongBao's own
  * log says why recall is empty. The licence belongs to Intelligence's own deployment rather than to
- * OpenBot's, which is the part that is easy to miss, so the line says where it goes.
+ * XiongBao's, which is the part that is easy to miss, so the line says where it goes.
  *
  * Read at boot and never blocks start-up; an Intelligence still starting is waited out first (see
  * `reportIntelligenceEntitlement`). The self-host banner reads the same answer on page loads, but

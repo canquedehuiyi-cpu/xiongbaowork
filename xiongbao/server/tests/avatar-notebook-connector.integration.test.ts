@@ -98,7 +98,7 @@ async function call<T>(
   body?: unknown,
 ): Promise<{ status: number; body: T }> {
   const response = await createAvatarSourceRoutes(store, actor(person)).request(
-    new Request(`http://openbot.test${path}`, {
+    new Request(`http://xiongbao.test${path}`, {
       method,
       headers:
         body === undefined ? undefined : { "content-type": "application/json" },
@@ -764,7 +764,7 @@ describe("the limit and the kinds", () => {
       plain,
       actor(personA),
     ).request(
-      new Request("http://openbot.test/", {
+      new Request("http://xiongbao.test/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ kind: "notebook", notebookId: randomUUID() }),

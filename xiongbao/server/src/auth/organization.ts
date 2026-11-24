@@ -52,7 +52,7 @@ export function organizationCookieExpiresAt(
   );
 }
 
-/** Explicit customer OpenBot authority, never inferred from an Intelligence endpoint. */
+/** Explicit customer XiongBao authority, never inferred from an Intelligence endpoint. */
 export function organizationAuthority(value: string): string {
   const url = new URL(value);
   const loopback = ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);

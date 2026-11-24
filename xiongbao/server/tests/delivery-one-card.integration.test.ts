@@ -1226,7 +1226,7 @@ describe("one tracked piece of work, one card", () => {
     );
     const response = await runAsTenant(tenantId, () =>
       routes.request(
-        new Request(`http://openbot.test/${id}/archive`, { method: "POST" }),
+        new Request(`http://xiongbao.test/${id}/archive`, { method: "POST" }),
       ),
     );
     expect(response.status).toBe(200);
@@ -1240,7 +1240,7 @@ describe("one tracked piece of work, one card", () => {
     // A second archive of the now-done card is refused, and logs nothing.
     const again = await runAsTenant(tenantId, () =>
       routes.request(
-        new Request(`http://openbot.test/${id}/archive`, { method: "POST" }),
+        new Request(`http://xiongbao.test/${id}/archive`, { method: "POST" }),
       ),
     );
     expect(again.status).toBe(409);
@@ -1278,7 +1278,7 @@ test("reviewing a tracked awaiting_review card logs reviewed", async () => {
   const review = () =>
     runAsTenant(tenantId, () =>
       routes.request(
-        new Request(`http://openbot.test/${id}/review`, { method: "POST" }),
+        new Request(`http://xiongbao.test/${id}/review`, { method: "POST" }),
       ),
     );
   expect((await review()).status).toBe(200);

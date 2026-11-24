@@ -8,7 +8,7 @@ import {
   type AuthenticatedActor,
   createRoleRepository,
 } from "../src/auth/guards";
-import type { OpenBotRole } from "../src/auth/roles";
+import type { XiongBaoRole } from "../src/auth/roles";
 import { setRole } from "../src/auth/roles";
 import {
   CredentialRefusedError,
@@ -103,7 +103,7 @@ beforeAll(async () => {
       })),
     ),
   );
-  const roles: [string, OpenBotRole][] = [
+  const roles: [string, XiongBaoRole][] = [
     [admin, "admin"],
     [demoted, "admin"],
     [member, "user"],

@@ -19,7 +19,15 @@
  * refuses a database holding a stamp newer than a migration it is about to walk past. See
  * `src/db/migration-reach`.
  */
-import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdir,
+  mkdtemp,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import postgres, { type Sql } from "postgres";
@@ -47,29 +55,40 @@ interface Journal {
   entries: JournalEntry[];
 }
 
-async function readJournal(path: string): Promise<{ raw: string; journal: Journal }> {
+async function readJournal(
+  path: string,
+): Promise<{ raw: string; journal: Journal }> {
   const raw = await readFile(path, "utf8");
   return { raw, journal: JSON.parse(raw) as Journal };
 }
 
 async function mergedMigrationsFolder(): Promise<string> {
   const base = await readJournal(join(baseFolder, "meta", "_journal.json"));
-  const overlay = await readJournal(join(overlayFolder, "meta", "_journal.json"));
+  const overlay = await readJournal(
+    join(overlayFolder, "meta", "_journal.json"),
+  );
   const prefix = overlay.journal.entries.slice(0, base.journal.entries.length);
   if (
     overlay.journal.entries.length < base.journal.entries.length ||
     JSON.stringify(prefix) !== JSON.stringify(base.journal.entries)
   ) {
-    throw new Error("recovery migration journal does not extend drizzle/meta/_journal.json");
+    throw new Error(
+      "recovery migration journal does not extend drizzle/meta/_journal.json",
+    );
   }
-  const folder = await mkdtemp(join(tmpdir(), "openbot-migrations-"));
+  const folder = await mkdtemp(join(tmpdir(), "xiongbao-migrations-"));
   await mkdir(join(folder, "meta"));
   await writeFile(join(folder, "meta", "_journal.json"), overlay.raw);
-  const baseSql = new Set((await readdir(baseFolder)).filter((name) => name.endsWith(".sql")));
+  const baseSql = new Set(
+    (await readdir(baseFolder)).filter((name) => name.endsWith(".sql")),
+  );
   const overlaySql = join(overlayFolder, "sql");
   for (const entry of overlay.journal.entries) {
     const name = `${entry.tag}.sql`;
-    await copyFile(join(baseSql.has(name) ? baseFolder : overlaySql, name), join(folder, name));
+    await copyFile(
+      join(baseSql.has(name) ? baseFolder : overlaySql, name),
+      join(folder, name),
+    );
   }
   return folder;
 }

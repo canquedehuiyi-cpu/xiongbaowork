@@ -4,6 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { Hono, type MiddlewareHandler } from "hono";
 import { createAuditStore } from "../src/audit";
 import type { AppVariables } from "../src/auth/guards";
+import { setRole } from "../src/auth/roles";
 import { createDatabase } from "../src/db/client";
 import {
   agents,
@@ -25,7 +26,6 @@ import {
   PluginRefusedError,
   storableTools,
 } from "../src/plugins/store";
-import { setRole } from "../src/auth/roles";
 import { runAsTenant, withCapability } from "../src/tenant/context";
 import { arcadeDouble, consented, reasonOf } from "./support/arcade-double";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
@@ -107,7 +107,7 @@ const routes = new Hono().route(
     session,
     async () => true,
     {
-      publicUrl: "https://openbot.example",
+      publicUrl: "https://xiongbao.example",
       appUrl: "https://app.example",
       encryptionKey: `${"A".repeat(43)}=`,
       personHasAccess: async () => true,

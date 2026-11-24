@@ -986,14 +986,14 @@ const ALLOW: Allowed[] = [
       '"what a check-in may read"',
       '"a tool nothing labelled is not a check-in read, even where chat infers a read"',
     ],
-    expression: 'expect(linear?.readTools).toBeUndefined()',
+    expression: "expect(linear?.readTools).toBeUndefined()",
     finding: "NEW (round 2 did not find this)",
   },
   {
     file: "server/tests/plugin-store.integration.test.ts",
     shape: "b",
     context: [
-      '"a tool carrying no label at all is not in a check-in\'s tools, and the store refuses a check-in\'s call to it, though chat still reads it"',
+      "\"a tool carrying no label at all is not in a check-in's tools, and the store refuses a check-in's call to it, though chat still reads it\"",
     ],
     expression: 'expect(catalogueEntry("linear")?.readTools).toBeUndefined()',
     finding: "NEW (round 2 did not find this)",
@@ -1024,7 +1024,7 @@ const ALLOW: Allowed[] = [
     shape: "b",
     context: [
       '"a remote Mastra Bot"',
-      '"keeps only authoritative OpenBot governance through the runtime clone and native Mastra request"',
+      '"keeps only authoritative XiongBao governance through the runtime clone and native Mastra request"',
     ],
     expression: "expect(run?.forwardedProps?.openbotRun).toBeUndefined()",
     finding: "NEW (round 2 did not find this)",

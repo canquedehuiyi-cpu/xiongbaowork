@@ -131,7 +131,7 @@ async function goal() {
 }
 const post = (id: string, body: string, headers: Record<string, string>) =>
   routes.fetch(
-    new Request(`https://openbot.test/${id}`, {
+    new Request(`https://xiongbao.test/${id}`, {
       method: "POST",
       headers: { "content-type": "application/json", ...headers },
       body,
@@ -492,8 +492,8 @@ test("an unframed inbound email is delivered in each addressed trigger's own ten
     triggers.create(ownerId, responsibility.id, { config: { kind: "email" } }),
   );
   await stampTrigger(legacy.trigger.id, "system");
-  const domain = "in.openbot.test";
-  const topic = "arn:aws:sns:us-east-1:000000000000:openbot-inbound";
+  const domain = "in.xiongbao.test";
+  const topic = "arn:aws:sns:us-east-1:000000000000:xiongbao-inbound";
   const email = createEmailTriggerRoutes({
     directory: triggers.directory,
     ingest: (event) => store.ingestEvent(event),
@@ -505,7 +505,7 @@ test("an unframed inbound email is delivered in each addressed trigger's own ten
   });
   const messageId = `${prefix}-mail-${randomUUID()}`;
   const response = await email.fetch(
-    new Request("https://openbot.test/sns", {
+    new Request("https://xiongbao.test/sns", {
       method: "POST",
       body: JSON.stringify({
         Type: "Notification",
@@ -575,7 +575,7 @@ test("an unframed inbound email is delivered in each addressed trigger's own ten
 });
 
 test("the legacy GitHub binding ingests in the binding's tenant, and a binding naming nobody is unknown", async () => {
-  const repository = "openbot/frames";
+  const repository = "xiongbao/frames";
   const secret = "fixture-only-github-binding-secret";
   const created = await asOwner(() =>
     bindings.create(ownerId, { repository, secret }),
@@ -586,7 +586,7 @@ test("the legacy GitHub binding ingests in the binding's tenant, and a binding n
   });
   const send = (body: string) =>
     github.fetch(
-      new Request(`https://openbot.test/${created.id}`, {
+      new Request(`https://xiongbao.test/${created.id}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -669,7 +669,7 @@ test("migration 0121 restamps GitHub source bindings of nobody's, and the secret
     created.push(
       await asOwner(() =>
         bindings.create(ownerId, {
-          repository: `openbot/restamp-${index}`,
+          repository: `xiongbao/restamp-${index}`,
           secret: "fixture-only-restamp-secret",
         }),
       ),

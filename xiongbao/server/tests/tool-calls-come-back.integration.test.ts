@@ -40,7 +40,7 @@ const database = createDatabase(testDatabaseUrl(), TEST_POOL);
 const suite = randomUUID().slice(0, 8);
 const botId = `tool_calls_${suite}`;
 const serverId = `tracker_${suite}`;
-const ACTOR = "planner@openbot.test";
+const ACTOR = "planner@xiongbao.test";
 const model: RuntimeModel = { provider: "openai", defaultModel: "gpt-5.5" };
 const policy: ActionPolicy = { mode: "enforce", deny: [], allow: ["true"] };
 

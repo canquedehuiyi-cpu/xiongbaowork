@@ -44,7 +44,11 @@ const stranger = `rc-stranger-${suite}`;
 const mine = `${suite}-my-bot`;
 const theirs = `${suite}-their-bot`;
 
-const actor = { id: tenant, email: `${tenant}@example.test`, role: "user" as const };
+const actor = {
+  id: tenant,
+  email: `${tenant}@example.test`,
+  role: "user" as const,
+};
 const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
   context,
   next,
@@ -75,7 +79,7 @@ type Answer = {
 async function post(body: Record<string, unknown>) {
   return runAsTenant(tenant, async () => {
     const response = await routes.request(
-      new Request("http://openbot.test/", {
+      new Request("http://xiongbao.test/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),

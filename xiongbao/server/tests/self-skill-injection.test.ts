@@ -156,7 +156,7 @@ describe("what goes into the context", () => {
   });
 });
 
-describe("on OpenBot's own harness, the model is sent it", () => {
+describe("on XiongBao's own harness, the model is sent it", () => {
   const llm = new LLMock();
   const wire: string[] = [];
   let recorder: ReturnType<typeof Bun.serve> | undefined;

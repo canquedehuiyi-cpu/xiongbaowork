@@ -26,7 +26,7 @@ import { testEnvironment } from "./support/environment";
 
 const ADMIN = {
   id: "admin-1",
-  email: "admin@openbot.test",
+  email: "admin@xiongbao.test",
   name: "An Administrator",
   image: null,
 };

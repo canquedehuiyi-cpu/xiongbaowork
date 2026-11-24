@@ -175,7 +175,7 @@ async function callBack(
   via = app,
 ) {
   const response = await via.request(
-    "http://openbot.local/api/agent-tools/call",
+    "http://xiongbao.local/api/agent-tools/call",
     {
       method: "POST",
       headers: {
@@ -469,7 +469,7 @@ describe("a `team` Bot's callback reaches the account its in-process turn would 
     vendorAccounts.length = 0;
 
     const response = await app.request(
-      "http://openbot.local/api/agent-tools/call",
+      "http://xiongbao.local/api/agent-tools/call",
       {
         method: "POST",
         headers: {

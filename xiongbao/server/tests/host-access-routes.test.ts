@@ -119,7 +119,7 @@ describe("host access routes", () => {
     });
   });
 
-  test("status says whether this OpenBot has a desktop host at all", async () => {
+  test("status says whether this XiongBao has a desktop host at all", async () => {
     expect(
       await (await appFor().app.request("/api/host-access")).json(),
     ).toMatchObject({ desktop: true, connected: false });
@@ -128,7 +128,7 @@ describe("host access routes", () => {
     ).toMatchObject({ desktop: false, connected: false });
   });
 
-  // A server not started by OpenBot Desktop (scripts/start.sh, a container) has no host to ask. The
+  // A server not started by XiongBao Desktop (scripts/start.sh, a container) has no host to ask. The
   // request used to be queued for a desktop that could never poll, and failed two minutes later.
   test("a folder request without a desktop host is refused at once, and nothing is queued", async () => {
     const { app, broker } = appFor(null);

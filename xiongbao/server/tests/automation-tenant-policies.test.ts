@@ -188,7 +188,7 @@ describe("0117 automation tenant policies", () => {
       ),
     ).toEqual([]);
     expect(statements.join("\n")).not.toMatch(
-      /\bDROP\b|\bBYPASSRLS\b|\bTO\s+openbot\b/i,
+      /\bDROP\b|\bBYPASSRLS\b|\bTO\s+xiongbao\b/i,
     );
   });
 

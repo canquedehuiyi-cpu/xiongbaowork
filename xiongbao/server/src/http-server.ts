@@ -3,7 +3,7 @@ import { serve } from "bun";
 import type { AcpRelay } from "./agents/acp/relay";
 import { computerAccessCheck } from "./agents/computer-access";
 import type { AgentProfileStore } from "./agents/profile-store";
-import type { OpenBotRole } from "./auth/roles";
+import type { XiongBaoRole } from "./auth/roles";
 import { botBrowserRequestSeconds } from "./browser/bot-browser";
 import { browserRequestSeconds } from "./browser/routes";
 import { websocket as channelSocket } from "./channels/socket";
@@ -239,7 +239,7 @@ export function startHttpServer(deps: {
   config: DeploymentConfig;
   resolveRequestActor: (
     request: Request,
-  ) => Promise<{ id: string; name: string; role: OpenBotRole }>;
+  ) => Promise<{ id: string; name: string; role: XiongBaoRole }>;
   agentProfileStore: AgentProfileStore;
   computerGateway: ComputerGateway | undefined;
   /**

@@ -6,7 +6,7 @@
  * an ordinary headless AG-UI turn through the same turn runner routines use, so governance, audit and
  * Automatic Learning apply unchanged. The restriction is the initiator (see `restriction.ts`), which
  * the turn runner's `buildAgentFor` narrows on; this module adds three tools of its own and nothing
- * that can write outside OpenBot.
+ * that can write outside XiongBao.
  *
  * A CHECK-IN IS USUALLY SILENT. It reads only what is new (`window.ts`) in a thread of its own, and
  * most end with nothing raised: one ledger row, no message, no second turn. Before any of that, the

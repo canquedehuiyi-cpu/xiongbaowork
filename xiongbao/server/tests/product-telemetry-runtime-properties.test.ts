@@ -15,7 +15,7 @@ import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
 
 /**
- * CopilotKit's own runtime events, not OpenBot's product events, are silenced unconditionally
+ * CopilotKit's own runtime events, not XiongBao's product events, are silenced unconditionally
  * (see runtime-telemetry.ts): whether product telemetry is off or on, none is handed to the runtime's
  * telemetry transport.
  *

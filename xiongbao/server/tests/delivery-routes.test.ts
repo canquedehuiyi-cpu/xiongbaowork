@@ -836,7 +836,7 @@ test("a Teams card's decision is recorded as made in Teams (Task 11)", async () 
 /*
  * FOUND IN THE 1.0 RC1 MAC PASS: a click waiting in Slack read "Research Bot: computer_click" over
  * "ref" and "snapshotId" fields, and denying it said "will not run computer_click". Both are said in
- * the words the approval card in OpenBot uses, and the click's page handles are left out.
+ * the words the approval card in XiongBao uses, and the click's page handles are left out.
  */
 test("a click waiting in Slack is named in words, with no tool id or page handles", async () => {
   const f = fixture({
@@ -1307,7 +1307,7 @@ test("a chart drawn natively in Slack or Teams says where its figures came from"
 });
 test("a channel message from a colleague who never linked still reaches the owners' Slack triggers", async () => {
   // Whose triggers fire is decided by each owner's channel membership in the ingest, never by the
-  // author's own link: the author here has no OpenBot binding at all.
+  // author's own link: the author here has no XiongBao binding at all.
   const f = fixture({ bound: false });
   const observed = await run(f, {
     context: [

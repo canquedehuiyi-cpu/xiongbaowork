@@ -5,7 +5,7 @@
  * Bot told only that could name its framework only while the subtitle happened to. So the answer is
  * read from the Bot itself:
  *
- * - a Bot that runs here runs on OpenBot;
+ * - a Bot that runs here runs on XiongBao;
  * - the harness picked in setup runs the image this deployment started for it (`PICKED_HARNESS_IMAGE`),
  *   unless somebody brought it themselves (`PICKED_HARNESS_SOURCE=byo`);
  * - an agent somebody runs at their own address runs on the framework they named when they connected

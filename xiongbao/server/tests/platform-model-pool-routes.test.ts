@@ -168,7 +168,7 @@ async function call<T>(
   signedIn = { id: tenant, role: "user" };
   const response = await runAsTenant(tenant, () =>
     routes.request(
-      new Request(`http://openbot.test${path}`, {
+      new Request(`http://xiongbao.test${path}`, {
         method,
         ...(body === undefined
           ? {}

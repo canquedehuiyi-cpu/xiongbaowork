@@ -31,7 +31,7 @@ function harness() {
   ) => {
     context.set("actor", {
       id: "u1",
-      email: "someone@openbot.test",
+      email: "someone@xiongbao.test",
       role: "user",
     });
     return next();

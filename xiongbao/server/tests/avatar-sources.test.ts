@@ -94,7 +94,7 @@ async function call<T>(
   body?: unknown,
 ): Promise<{ status: number; body: T }> {
   const response = await routesFor(person).request(
-    new Request(`http://openbot.test${path}`, {
+    new Request(`http://xiongbao.test${path}`, {
       method,
       headers:
         body === undefined ? undefined : { "content-type": "application/json" },
@@ -674,7 +674,7 @@ describe("what the router is told the 分身 is for", () => {
       requireUserFor(personB),
     );
     const answer = await routes.request(
-      new Request("http://openbot.test/", {
+      new Request("http://xiongbao.test/", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ text: "帮我整理一下这周的周报" }),

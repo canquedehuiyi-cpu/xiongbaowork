@@ -219,7 +219,7 @@ describe("real HTTP provider adapters", () => {
     expect(
       await push.send({
         token: "ExpoPushToken[abc]",
-        title: "OpenBot",
+        title: "XiongBao",
         body: "Question",
         channelId: "ch1",
         kind: "question",

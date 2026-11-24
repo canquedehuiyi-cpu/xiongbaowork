@@ -10,7 +10,7 @@ import { createProductTelemetry } from "../src/telemetry/product";
 
 const canaryId =
   process.env.OPENBOT_CANARY_ID ??
-  `openbot-canary-${new Date().toISOString().slice(0, 10)}`;
+  `xiongbao-canary-${new Date().toISOString().slice(0, 10)}`;
 if (!/^[A-Za-z0-9_-]{1,100}$/.test(canaryId))
   throw new Error(
     "OPENBOT_CANARY_ID must be 1-100 letters, digits, underscores or hyphens",
@@ -63,7 +63,7 @@ const input: RunAgentInput = {
   state: {},
   tools: [],
   context: [],
-  forwardedProps: { openbotTelemetry: context },
+  forwardedProps: { xiongbaoTelemetry: context },
 };
 await lastValueFrom(
   telemetry.middleware(actor)(input, new CanaryAgent()).pipe(toArray()),

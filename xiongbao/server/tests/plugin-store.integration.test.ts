@@ -84,8 +84,8 @@ import {
 import { checkInCatalogue, createCheckInScope } from "../src/proactive/scope";
 import { runAsTenant } from "../src/tenant/context";
 import fileActions from "./fixtures/composio-file-actions.json";
-import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { credentialDouble } from "./support/credential-double";
+import { TEST_POOL, testDatabaseUrl } from "./support/database";
 
 /**
  * The two questions a tool call has to pass, and the row each answer leaves behind.
@@ -558,7 +558,7 @@ afterAll(() =>
 describe("a grant is the permission", () => {
   test("a Bot that was never granted a tool is refused, and the refusal is recorded", () =>
     asPlatform(async () => {
-      const actorId = `audit-call-${randomUUID()}@openbot.local`;
+      const actorId = `audit-call-${randomUUID()}@xiongbao.local`;
       await expect(
         store.callTool({
           ref,
@@ -582,7 +582,7 @@ describe("a grant is the permission", () => {
 
   test("a refusal names the routine that asked, not only the person it ran as", () =>
     asPlatform(async () => {
-      const actorId = `audit-call-${randomUUID()}@openbot.local`;
+      const actorId = `audit-call-${randomUUID()}@xiongbao.local`;
       await expect(
         store.callTool({
           ref,
@@ -606,7 +606,7 @@ describe("a grant is the permission", () => {
 
   test("a call nobody said anything about is still filed as a person's", () =>
     asPlatform(async () => {
-      const actorId = `audit-call-${randomUUID()}@openbot.local`;
+      const actorId = `audit-call-${randomUUID()}@xiongbao.local`;
       await expect(
         store.callTool({
           ref,
@@ -629,22 +629,22 @@ describe("a grant is the permission", () => {
 
   test("granting lets the same Bot past the grant check", () =>
     asPlatform(async () => {
-      await store.grant("mcp", ref, holderId, "admin@openbot.local");
+      await store.grant("mcp", ref, holderId, "admin@xiongbao.local");
       const decision = await store.decide("mcp", ref, holderId);
       expect(decision.allowed).toBe(true);
     }));
 
   test("revoking takes it away again", () =>
     asPlatform(async () => {
-      await store.grant("mcp", ref, holderId, "admin@openbot.local");
-      await store.revoke("mcp", ref, holderId, "admin@openbot.local");
+      await store.grant("mcp", ref, holderId, "admin@xiongbao.local");
+      await store.revoke("mcp", ref, holderId, "admin@xiongbao.local");
       const decision = await store.decide("mcp", ref, holderId);
       expect(decision.allowed).toBe(false);
     }));
 
   test("a Bot is offered exactly what it holds", () =>
     asPlatform(async () => {
-      await store.grant("mcp", ref, holderId, "admin@openbot.local");
+      await store.grant("mcp", ref, holderId, "admin@xiongbao.local");
       const held = await store.listForAgent(holderId);
       expect(held.tools.map((tool) => tool.ref)).toEqual([ref]);
       // The name the model is offered, which may not contain a slash.
@@ -663,7 +663,7 @@ describe("a grant is the permission", () => {
        * would pass every other test in this file: the Bot would still be offered what it holds, and the
        * stranger would still be offered nothing.
        */
-      await store.grant("mcp", ref, holderId, "admin@openbot.local");
+      await store.grant("mcp", ref, holderId, "admin@xiongbao.local");
       const held = await store.listForAgent(holderId);
 
       expect(held.tools.map((tool) => tool.ref)).toEqual([ref]);
@@ -676,8 +676,8 @@ describe("a grant is the permission", () => {
 describe("the policy is asked as well as the grant", () => {
   test("credential material is refused and never copied into the audit trail", () =>
     asPlatform(async () => {
-      const actorId = `audit-call-${randomUUID()}@openbot.local`;
-      await store.grant("mcp", ref, holderId, "admin@openbot.local");
+      const actorId = `audit-call-${randomUUID()}@xiongbao.local`;
+      await store.grant("mcp", ref, holderId, "admin@xiongbao.local");
       const secret = `sk-${"z".repeat(32)}`;
 
       await expect(
@@ -711,8 +711,8 @@ describe("the policy is asked as well as the grant", () => {
 
   test("a granted tool is still refused by a deny rule, and the rule is named", () =>
     asPlatform(async () => {
-      const actorId = `audit-call-${randomUUID()}@openbot.local`;
-      await store.grant("mcp", ref, holderId, "admin@openbot.local");
+      const actorId = `audit-call-${randomUUID()}@xiongbao.local`;
+      await store.grant("mcp", ref, holderId, "admin@xiongbao.local");
       policy = {
         mode: "enforce",
         deny: ['mcp.server == "google-drive"'],
@@ -751,7 +751,7 @@ describe("the policy is asked as well as the grant", () => {
 
   test("a rule can speak about effect rather than about tool names", () =>
     asPlatform(async () => {
-      await store.grant("mcp", ref, holderId, "admin@openbot.local");
+      await store.grant("mcp", ref, holderId, "admin@xiongbao.local");
       // `search_files` is advertised and is not in the vendor's write list, so it is a read and
       // this deny rule must NOT catch it. The assertion is that the call gets past the policy, which
       // it proves by failing at the network instead of as a refusal.
@@ -767,7 +767,7 @@ describe("the policy is asked as well as the grant", () => {
           ref,
           args: {},
           botId: holderId,
-          actorId: "someone@openbot.local",
+          actorId: "someone@xiongbao.local",
         });
       } catch (error) {
         thrown = error;
@@ -788,8 +788,8 @@ describe("the policy is asked as well as the grant", () => {
 
   test("a dry-run refusal is recorded, even though the call is let through", () =>
     asPlatform(async () => {
-      const actorId = `audit-call-${randomUUID()}@openbot.local`;
-      await store.grant("mcp", ref, holderId, "admin@openbot.local");
+      const actorId = `audit-call-${randomUUID()}@xiongbao.local`;
+      await store.grant("mcp", ref, holderId, "admin@xiongbao.local");
       /*
        * The mode an operator switches on to size a rule before enforcing it, and the only mode in
        * which the policy refuses and the call still goes out. Its whole value is the row: without one
@@ -855,8 +855,8 @@ describe("the trail says what happened, not what was permitted", () => {
    */
   test("a call that is permitted and then fails is recorded as failed, not as succeeded", () =>
     asPlatform(async () => {
-      await store.grant("mcp", ref, holderId, "admin@openbot.local");
-      const actorId = `audit-call-${randomUUID()}@openbot.local`;
+      await store.grant("mcp", ref, holderId, "admin@xiongbao.local");
+      const actorId = `audit-call-${randomUUID()}@xiongbao.local`;
 
       await expect(
         store.callTool({ ref, args: {}, botId: holderId, actorId }),
@@ -882,7 +882,7 @@ describe("the trail says what happened, not what was permitted", () => {
 describe("a boundary written about the browser does not refuse tool calls", () => {
   test("an unguarded rule about a page element does not refuse a tool call", () =>
     asPlatform(async () => {
-      await store.grant("mcp", ref, holderId, "admin@openbot.local");
+      await store.grant("mcp", ref, holderId, "admin@xiongbao.local");
       /**
        * This engine treats an expression it cannot evaluate as a MATCH, which is right for a browser
        * action on an element the server could not resolve and catastrophic for a tool call: with
@@ -906,7 +906,7 @@ describe("a boundary written about the browser does not refuse tool calls", () =
           ref,
           args: {},
           botId: holderId,
-          actorId: "someone@openbot.local",
+          actorId: "someone@xiongbao.local",
         });
       } catch (error) {
         thrown = error;
@@ -953,7 +953,7 @@ describe("removing an MCP server", () => {
         provenance: "custom",
       });
 
-      await store.removeServer(removalServerId, "admin@openbot.local");
+      await store.removeServer(removalServerId, "admin@xiongbao.local");
 
       expect(revokedCredentialIds).toEqual([credentialId]);
       const [row] = await database
@@ -1002,7 +1002,7 @@ describe("removing an MCP server", () => {
         .insert(users)
         .values({
           id: connectedUserId,
-          email: `${connectedUserId}@openbot.test`,
+          email: `${connectedUserId}@xiongbao.test`,
           name: connectedUserId,
           emailVerified: false,
         })
@@ -1041,7 +1041,7 @@ describe("removing an MCP server", () => {
       );
 
       try {
-        await store.removeServer(removalServerId, "admin@openbot.local");
+        await store.removeServer(removalServerId, "admin@xiongbao.local");
 
         expect(revokedCredentialIds).toEqual([grantId]);
         const [row] = await database
@@ -1121,7 +1121,7 @@ describe("removing an MCP server", () => {
         provenance: "custom",
       });
 
-      await store.removeServer(removalServerId, "admin@openbot.local");
+      await store.removeServer(removalServerId, "admin@xiongbao.local");
 
       // Not asked, because the row already says it is retired.
       expect(revokedCredentialIds).toEqual([]);
@@ -1161,7 +1161,7 @@ describe("removing an MCP server", () => {
         provenance: "custom",
       });
 
-      await store.removeServer(removalServerId, "admin@openbot.local");
+      await store.removeServer(removalServerId, "admin@xiongbao.local");
 
       expect(revokedCredentialIds).toEqual([]);
     }));
@@ -1170,7 +1170,7 @@ describe("removing an MCP server", () => {
 describe("the trail can be read by a second reader", () => {
   test("a refusal names the bot, the server and the tool in queryable JSON", () =>
     asPlatform(async () => {
-      const actorId = `audit-payload-${randomUUID()}@openbot.local`;
+      const actorId = `audit-payload-${randomUUID()}@xiongbao.local`;
       await expect(
         store.callTool({
           ref,
@@ -1255,7 +1255,7 @@ describe("a grant on a tool the vendor no longer lists", () => {
           description: "Listed by the vendor when the grant was made.",
         })
         .onConflictDoNothing();
-      await store.grant("mcp", withdrawnRef, holderId, "admin@openbot.local");
+      await store.grant("mcp", withdrawnRef, holderId, "admin@xiongbao.local");
 
       // Then withdrawn. A refresh replaces the tool list wholesale, so this is what one does to a name
       // the vendor has stopped offering.
@@ -1585,7 +1585,7 @@ describe("refresh token rotation", () => {
         .insert(users)
         .values({
           id: rotationUserId,
-          email: `${rotationUserId}@openbot.test`,
+          email: `${rotationUserId}@xiongbao.test`,
           name: rotationUserId,
           emailVerified: false,
         })
@@ -1622,7 +1622,7 @@ describe("refresh token rotation", () => {
         "mcp",
         rotationRef,
         rotationBotId,
-        "admin@openbot.local",
+        "admin@xiongbao.local",
       );
       await registerClient();
     }),
@@ -2405,7 +2405,7 @@ describe("a dynamic client the vendor has evicted", () => {
   /** What registering again gets. No secret: a DCR client proves itself with PKCE. */
   const FRESH: OAuthClient = { clientId: "dyn-2", clientSecret: "" };
   /** Built the way the callback route builds it, so the vendor is offered the real thing. */
-  const REDIRECT_URI = redirectUriFor("https://openbot.test");
+  const REDIRECT_URI = redirectUriFor("https://xiongbao.test");
   /** The pinned endpoint, read from the entry rather than copied, so the two cannot drift. */
   const REGISTRATION_URL = (() => {
     const entry = catalogueEntry(dynamicServerId);
@@ -2664,7 +2664,7 @@ describe("a dynamic client the vendor has evicted", () => {
         .insert(users)
         .values({
           id: dynamicUserId,
-          email: `${dynamicUserId}@openbot.test`,
+          email: `${dynamicUserId}@xiongbao.test`,
           name: dynamicUserId,
           emailVerified: false,
         })
@@ -2699,7 +2699,7 @@ describe("a dynamic client the vendor has evicted", () => {
         "mcp",
         dynamicRef,
         dynamicBotId,
-        "admin@openbot.local",
+        "admin@xiongbao.local",
       );
     }),
   );
@@ -2941,7 +2941,7 @@ describe("a dynamic client the vendor has evicted", () => {
       expect(
         await dynamicStore.ensureOAuthClient(
           dynamicServerId,
-          "someone@openbot.test",
+          "someone@xiongbao.test",
         ),
       ).toEqual(EVICTED);
       // Nothing was asked of the vendor: this is the path every connect takes once, and it must not
@@ -2978,7 +2978,7 @@ describe("a dynamic client the vendor has evicted", () => {
       async (context, next) => {
         context.set("actor", {
           id: dynamicUserId,
-          email: "person@openbot.test",
+          email: "person@xiongbao.test",
           role: "user",
         } as never);
         // The suite's server row and client are planted in the platform frame, so that is the frame
@@ -2988,8 +2988,8 @@ describe("a dynamic client the vendor has evicted", () => {
       async () => false,
       {
         encryptionKey: DYNAMIC_KEY,
-        publicUrl: "https://openbot.test",
-        appUrl: "https://openbot.test",
+        publicUrl: "https://xiongbao.test",
+        appUrl: "https://xiongbao.test",
         personHasAccess: async () => true,
       },
     );
@@ -2999,9 +2999,12 @@ describe("a dynamic client the vendor has evicted", () => {
       return new Response("escaped", { status: 500 });
     });
     const press = () =>
-      routes.request(`http://openbot.test/servers/${dynamicServerId}/connect`, {
-        method: "POST",
-      });
+      routes.request(
+        `http://xiongbao.test/servers/${dynamicServerId}/connect`,
+        {
+          method: "POST",
+        },
+      );
     return { press, escaped };
   }
 
@@ -3182,7 +3185,7 @@ describe("a dynamic client the vendor has evicted", () => {
         console.error = () => {};
         try {
           const outcome = await wrongKeyStore
-            .ensureOAuthClient(dynamicServerId, "someone@openbot.test")
+            .ensureOAuthClient(dynamicServerId, "someone@xiongbao.test")
             .then(
               () => "returned",
               (error: unknown) =>
@@ -3289,7 +3292,7 @@ describe("a dynamic client the vendor has evicted", () => {
         expect(
           await dynamicStore.ensureOAuthClient(
             dynamicServerId,
-            "someone@openbot.test",
+            "someone@xiongbao.test",
           ),
         ).toEqual(FRESH);
         console.error = realError;
@@ -3371,7 +3374,7 @@ describe("a dynamic client the vendor has evicted", () => {
       expect(
         await dynamicStore.ensureOAuthClient(
           dynamicServerId,
-          "someone@openbot.test",
+          "someone@xiongbao.test",
         ),
       ).toEqual(FRESH);
       expect(registrations).toEqual([
@@ -3383,10 +3386,13 @@ describe("a dynamic client the vendor has evicted", () => {
       expect(registered.length).toBe(registeredBefore.length + 1);
       // Whoever pressed Connect, because for a first registration that IS the act that caused it.
       expect(
-        registeredBy(registered, "someone@openbot.test", FRESH.clientId),
+        registeredBy(registered, "someone@xiongbao.test", FRESH.clientId),
       ).toBe(
-        registeredBy(registeredBefore, "someone@openbot.test", FRESH.clientId) +
-          1,
+        registeredBy(
+          registeredBefore,
+          "someone@xiongbao.test",
+          FRESH.clientId,
+        ) + 1,
       );
     }));
 
@@ -3431,7 +3437,7 @@ describe("a dynamic client the vendor has evicted", () => {
         expect(
           await storeWithRealRegistration.ensureOAuthClient(
             dynamicServerId,
-            "someone@openbot.test",
+            "someone@xiongbao.test",
           ),
         ).toBeNull();
       } finally {
@@ -3470,7 +3476,7 @@ describe("a dynamic client the vendor has evicted", () => {
         expect(
           await dynamicStore.ensureOAuthClient(
             serverId,
-            "someone@openbot.test",
+            "someone@xiongbao.test",
           ),
         ).toBeNull();
         expect(registrations).toEqual([]);
@@ -3490,7 +3496,7 @@ describe("a dynamic client the vendor has evicted", () => {
       expect(
         await storeWithNoRedirect.ensureOAuthClient(
           dynamicServerId,
-          "someone@openbot.test",
+          "someone@xiongbao.test",
         ),
       ).toBeNull();
       expect(registrations).toEqual([]);
@@ -3526,8 +3532,8 @@ describe("a dynamic client the vendor has evicted", () => {
       };
 
       const [first, second] = await Promise.all([
-        dynamicStore.ensureOAuthClient(dynamicServerId, "one@openbot.test"),
-        dynamicStore.ensureOAuthClient(dynamicServerId, "two@openbot.test"),
+        dynamicStore.ensureOAuthClient(dynamicServerId, "one@xiongbao.test"),
+        dynamicStore.ensureOAuthClient(dynamicServerId, "two@xiongbao.test"),
       ]);
 
       // Neither raised, and neither got null: both people can be sent to consent.
@@ -4028,7 +4034,7 @@ describe("a dynamic client the vendor has evicted", () => {
         expect(
           await dynamicStore.ensureOAuthClient(
             dynamicServerId,
-            "admin@openbot.test",
+            "admin@xiongbao.test",
           ),
         ).toEqual(FRESH);
       }));
@@ -4104,7 +4110,7 @@ describe("a custom server may not be named after one of the app's own screens", 
 });
 
 /*
- * Nor the id OpenBot's own memory tools are spelled under (upstream proactive-connected-reads).
+ * Nor the id XiongBao's own memory tools are spelled under (upstream proactive-connected-reads).
  * Their refs are `memory/<tool>`, so a server at `memory` would list a second
  * `memory/recall_personal_memory` beside the person's own.
  */
@@ -5447,7 +5453,7 @@ test("an identity a model puts in the arguments does not change whose account th
         // not read from arguments at all.
         userId: "user_asker",
         // Passed through whole, minus nothing: the reserved version key is the only thing the call
-        // path removes, and the model sent none. The last three are OpenBot's own settings for a
+        // path removes, and the model sent none. The last three are XiongBao's own settings for a
         // Gmail listing (`plugins/composio-shapes.ts`), added beside the model's, never read from them.
         args: {
           userId: "user_stranger",
@@ -6337,7 +6343,7 @@ test("list_triggers is not available to a check-in, though list_routines is", ()
       id: routinesRow,
       catalogueKey: "routines",
       title: "Routines",
-      vendor: "OpenBot",
+      vendor: "XiongBao",
       url: "builtin://routines/",
       provenance: "first-party",
     });
@@ -9324,7 +9330,7 @@ describe("a vault read that fails on a query of this deployment's own", () => {
   const faultToolName = "do_something";
   const faultRef = `${faultServerId}/${faultToolName}`;
   const faultBotId = `agent_vault_fault_${suite}`;
-  const faultActorId = "someone@openbot.local";
+  const faultActorId = "someone@xiongbao.local";
   /** The sentence a withdrawn credential earns, and the one a query fault must never be given. */
   const WITHDRAWN = "An administrator has to add it again.";
 
@@ -9419,7 +9425,7 @@ describe("a vault read that fails on a query of this deployment's own", () => {
         "mcp",
         faultRef,
         faultBotId,
-        "admin@openbot.local",
+        "admin@xiongbao.local",
       );
     }),
   );

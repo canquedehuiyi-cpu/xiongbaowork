@@ -237,7 +237,7 @@ const as = (person: string | null) =>
 
 async function info(person: string | null) {
   const response = await app.request(
-    "http://openbot.local/api/copilotkit/info",
+    "http://xiongbao.local/api/copilotkit/info",
     {
       headers: as(person),
     },
@@ -269,7 +269,7 @@ async function post(
   body: unknown,
   on: ReturnType<typeof createApp> = app,
 ) {
-  const response = await on.request(`http://openbot.local${path}`, {
+  const response = await on.request(`http://xiongbao.local${path}`, {
     method: "POST",
     headers: { "content-type": "application/json", ...as(person) },
     body: JSON.stringify(body),
@@ -282,7 +282,7 @@ async function get(
   person: string | null,
   on: ReturnType<typeof createApp> = app,
 ) {
-  const response = await on.request(`http://openbot.local${path}`, {
+  const response = await on.request(`http://xiongbao.local${path}`, {
     headers: as(person),
   });
   return {

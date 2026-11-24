@@ -145,7 +145,7 @@ function appFor(owner: AgentActor, runTurn: TurnRunner) {
 }
 
 function post(app: Hono<{ Variables: AppVariables }>, body: unknown) {
-  return app.request("http://openbot.test/api/routines", {
+  return app.request("http://xiongbao.test/api/routines", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -165,7 +165,7 @@ type ListedRoutine = {
 };
 
 async function listed(app: Hono<{ Variables: AppVariables }>) {
-  const response = await app.request("http://openbot.test/api/routines");
+  const response = await app.request("http://xiongbao.test/api/routines");
   expect(response.status).toBe(200);
   return ((await response.json()) as { routines: ListedRoutine[] }).routines;
 }
@@ -212,7 +212,7 @@ describe("New routine from the Routines page", () => {
 
     // Run now: the real runner, the real run row, the reply recorded in the conversation.
     const ran = await app.request(
-      `http://openbot.test/api/routines/${routine.id}/run`,
+      `http://xiongbao.test/api/routines/${routine.id}/run`,
       { method: "POST" },
     );
     expect(ran.status).toBe(202);
@@ -220,7 +220,7 @@ describe("New routine from the Routines page", () => {
     let status: string | null = null;
     while (status !== "succeeded" && Date.now() < deadline) {
       const runs = await app.request(
-        `http://openbot.test/api/routines/${routine.id}/runs`,
+        `http://xiongbao.test/api/routines/${routine.id}/runs`,
       );
       status =
         ((await runs.json()) as { runs: { status: string }[] }).runs[0]

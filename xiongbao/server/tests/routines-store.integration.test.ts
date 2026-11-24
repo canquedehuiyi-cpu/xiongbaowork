@@ -629,7 +629,7 @@ describe("resolving the channel to post into", () => {
       await database
         .update(channels)
         .set({
-          lastMessage: "Reverse the string\n  'openbot' for me",
+          lastMessage: "Reverse the string\n  'xiongbao' for me",
           lastMessageAt: minutesAgo(5),
           createdAt: minutesAgo(90),
         })
@@ -650,7 +650,7 @@ describe("resolving the channel to post into", () => {
       expect(message).not.toContain("General Assistant");
       // In the sidebar's order: the latest activity first.
       expect(message).toContain(
-        `"15-Minute EKS UTC Routine" (id: ${named.id}), "Reverse the string 'openbot' for me" (id: ${spokenIn.id}), "New conversation" (id: ${untouched.id})`,
+        `"15-Minute EKS UTC Routine" (id: ${named.id}), "Reverse the string 'xiongbao' for me" (id: ${spokenIn.id}), "New conversation" (id: ${untouched.id})`,
       );
     });
   });

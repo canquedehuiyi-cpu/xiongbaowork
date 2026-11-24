@@ -1406,7 +1406,7 @@ describe("conversation sidebar", () => {
         timeZone: zoneOf,
       },
     );
-    const edited = await board.request(`http://openbot.test/${taskId}`, {
+    const edited = await board.request(`http://xiongbao.test/${taskId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ dueAt: "15:00" }),

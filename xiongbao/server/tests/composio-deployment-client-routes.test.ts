@@ -16,7 +16,7 @@ import { testEnvironment } from "./support/environment";
 
 const ADMIN = {
   id: "admin-1",
-  email: "admin@openbot.test",
+  email: "admin@xiongbao.test",
   name: "An Administrator",
   image: null,
 };
@@ -183,7 +183,7 @@ const request = (
   path: string,
   init: RequestInit = {},
 ) =>
-  app.request(`http://openbot.test/api/plugins${path}`, {
+  app.request(`http://xiongbao.test/api/plugins${path}`, {
     headers: { "content-type": "application/json" },
     ...init,
   });

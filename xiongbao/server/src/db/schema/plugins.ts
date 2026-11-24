@@ -136,7 +136,7 @@ export const mcpServers = pgTable(
      * 这台应用的工具是按哪一版的清单读法存下的：每次存下工具的刷新都写 `plugins/store.ts` 里的
      * `LISTING_REVISION`，这一列出现之前存的行是 0（迁移 0152，上游 0080）。
      *
-     * 同一份 vendor 清单，OpenBot 记下的东西会随版本变：0146 开始把 Composio 什么标签都没给的动作
+     * 同一份 vendor 清单，XiongBao 记下的东西会随版本变：0146 开始把 Composio 什么标签都没给的动作
      * 记为 `unclassified`，之前记的是普通写操作。存下的行分不清这两种，所以不改写，而是重新列：
      * 每次启动，配置了 Composio 的部署把落后的 broker 应用重新列一次（`relistOutdatedBrokeredApps`），
      * 升级上来的部署就记下和全新安装一样的东西，不需要谁去按「刷新工具」。

@@ -214,7 +214,7 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   "src/devices/store.ts": { 'runAsTenant("platform"': 4 },
   // The third is the background translator (migration 0145): it reads and writes only
   // `text_translations`, a deployment-wide cache with no tenant column and no row security, and
-  // touches no tenant's rows. The fourth is the boot refresh of OpenBot's own apps' saved tools
+  // touches no tenant's rows. The fourth is the boot refresh of XiongBao's own apps' saved tools
   // (`refreshOwnListings`, upstream #1130): not awaited, it reads every `mcp_servers` row and rewrites
   // the `mcp_tools` of a Routines, Google Drive or 百度网盘 row whose saved list differs from this
   // build's code, each stamped with its own server's tenant. No request reaches it. The fifth is each
@@ -230,11 +230,11 @@ const SRC_DOORS: Record<string, Record<string, number>> = {
   // and the GitHub callback's "is this person still active" reads the deployment's people table.
   // M3: upstream's wiring adds "who is this" reads, each commented where it is made: the session,
   // roles and Entra token of a request not yet framed, a Bot's isolation switch and owner for its
-  // computer seat, people's names and their OpenBot browsers for the admin computer list, Learning's
+  // computer seat, people's names and their XiongBao browsers for the admin computer list, Learning's
   // open sources, withheld skills and people, every live Recorder connection, the boot-time model
   // check; and the background translator of `text_translations` (no tenant column).
   // The three `runAsTenant("platform")` are that translator and, from main, the boot refresh of
-  // OpenBot's own apps' saved tools (`refreshOwnListings`) and the broker relist rounds
+  // XiongBao's own apps' saved tools (`refreshOwnListings`) and the broker relist rounds
   // (`relistOutdatedBrokeredApps`), described above.
   // M5: the nineteenth `asPlatform` is `adminRead`, the reads behind upstream's admin drafting
   // routes (audit questions, what-if, grant decisions), taken only while the capability is held.

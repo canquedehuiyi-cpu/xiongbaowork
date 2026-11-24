@@ -14,7 +14,7 @@ const requireUser: MiddlewareHandler<{ Variables: AppVariables }> = async (
 ) => {
   context.set("actor", {
     id: "user-1",
-    email: "user@openbot.test",
+    email: "user@xiongbao.test",
     role: "admin",
   });
   await next();
@@ -78,7 +78,7 @@ describe("POST /api/plugins/skills tools/global", () => {
   ])("refuses tools with %s and installs nothing", async (_n, tools) => {
     const calls = { skills: [] as unknown[] };
     const response = await pluginAppWith(calls).request(
-      "http://openbot.test/skills",
+      "http://xiongbao.test/skills",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -98,7 +98,7 @@ describe("POST /api/plugins/skills tools/global", () => {
   ])("refuses %s and installs nothing", async (_n, global) => {
     const calls = { skills: [] as unknown[] };
     const response = await pluginAppWith(calls).request(
-      "http://openbot.test/skills",
+      "http://xiongbao.test/skills",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -112,7 +112,7 @@ describe("POST /api/plugins/skills tools/global", () => {
   test("trims tool refs on the happy path", async () => {
     const calls = { skills: [] as unknown[] };
     const response = await pluginAppWith(calls).request(
-      "http://openbot.test/skills",
+      "http://xiongbao.test/skills",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -140,7 +140,7 @@ describe("component grants/functions", () => {
       revokeFunctions: unknown[];
     };
     const response = await componentAppWith(calls).request(
-      "http://openbot.test/widget/grants",
+      "http://xiongbao.test/widget/grants",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -162,7 +162,7 @@ describe("component grants/functions", () => {
       revokeFunctions: unknown[];
     };
     const response = await componentAppWith(calls).request(
-      "http://openbot.test/widget/grants",
+      "http://xiongbao.test/widget/grants",
       {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -184,7 +184,7 @@ describe("component grants/functions", () => {
       revokeFunctions: unknown[];
     };
     const response = await componentAppWith(calls).request(
-      "http://openbot.test/widget/grants/%20%20%20",
+      "http://xiongbao.test/widget/grants/%20%20%20",
       { method: "DELETE" },
     );
     expect(response.status).toBe(400);
@@ -230,7 +230,7 @@ describe("DELETE /:name/functions/:function", () => {
     const { app, audited, revoked } = appWithComponents(["widget"]);
 
     const response = await app.request(
-      "http://openbot.test/nothing/functions/botActivity",
+      "http://xiongbao.test/nothing/functions/botActivity",
       { method: "DELETE" },
     );
 
@@ -246,7 +246,7 @@ describe("DELETE /:name/functions/:function", () => {
     const { app, audited, revoked } = appWithComponents(["widget"]);
 
     const response = await app.request(
-      "http://openbot.test/widget/functions/botActivity",
+      "http://xiongbao.test/widget/functions/botActivity",
       { method: "DELETE" },
     );
 

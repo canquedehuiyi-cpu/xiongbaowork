@@ -83,12 +83,12 @@ export type { GrantedTool };
 export { parametersFor };
 
 /**
- * 谁在删除前问主人：OpenBot，不是 Bot。
+ * 谁在删除前问主人：XiongBao，不是 Bot。
  *
  * 应用工具的删除、归档，以及应用标为破坏性的工具，删除类底线总是先问（approvals/policy.ts 的
- * `destructiveFloor`）。Bot 自己再问一遍，主人就要为一次删除回答两次；OpenBot 的卡片写明了具体
+ * `destructiveFloor`）。Bot 自己再问一遍，主人就要为一次删除回答两次；XiongBao 的卡片写明了具体
  * 动作，留它就够了。只在 Bot 至少持有一个经插件调用路径的应用工具（`mcp__` 开头）时才说，并且
- * 只说应用工具：记忆等 OpenBot 内部工具不经审批门，`computer_*` 和主人电脑上的命令也不归这条
+ * 只说应用工具：记忆等 XiongBao 内部工具不经审批门，`computer_*` 和主人电脑上的命令也不归这条
  * 底线管，Bot 对它们该怎么确认还怎么确认。
  */
 export function connectorApprovalGuidance(): string {
@@ -107,7 +107,7 @@ export { DESTRUCTIVE_TOOL_NOTE };
 
 /**
  * 这次运行是否至少持有一个经插件调用路径的应用工具（`mcp__` 开头）。{@link CONNECTOR_APPROVAL_GUIDANCE}
- * 和内置员工审批引导里「已连接应用的工具」那一条都按它决定说不说：记忆等 OpenBot 内部工具不经审批门。
+ * 和内置员工审批引导里「已连接应用的工具」那一条都按它决定说不说：记忆等 XiongBao 内部工具不经审批门。
  */
 export function holdsAppTools(tools: readonly { name: string }[]): boolean {
   return tools.some((tool) => refFromToolName(tool.name) !== null);
@@ -346,7 +346,7 @@ export async function grantedTools(options: {
     searchable: true as const,
     ...(tool.read ? { reads: true as const } : {}),
     initiator,
-    // 应用标为破坏性的工具，名字不一定看得出来：在描述末尾写明 OpenBot 会先问，Bot 不必再问。
+    // 应用标为破坏性的工具，名字不一定看得出来：在描述末尾写明 XiongBao 会先问，Bot 不必再问。
     description: tool.destructive
       ? [tool.description.trim(), DESTRUCTIVE_TOOL_NOTE]
           .filter(Boolean)

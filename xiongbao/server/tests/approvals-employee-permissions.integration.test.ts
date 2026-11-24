@@ -2,13 +2,13 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
-import type { AppVariables } from "../src/auth/guards";
 import { TOOL_DISABLED } from "../src/approvals/policy";
 import { createApprovalRoutes } from "../src/approvals/routes";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import type { ApprovalCandidate } from "../src/approvals/types";
 import { createAdminScope } from "../src/auth/admin-scope";
+import type { AppVariables } from "../src/auth/guards";
 import { createRoleRepository } from "../src/auth/guards";
 import { setRole } from "../src/auth/roles";
 import { createDatabase } from "../src/db/client";
@@ -55,16 +55,22 @@ function client(id: string, role: "user" | "admin" = "user") {
     ),
   );
   return async (method: string, path: string, body?: unknown) => {
-    const response = await app.request(`http://openbot.test/api/approvals${path}`, {
-      method,
-      ...(body === undefined
-        ? {}
-        : {
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify(body),
-          }),
-    });
-    return { status: response.status, body: (await response.json()) as Record<string, unknown> };
+    const response = await app.request(
+      `http://xiongbao.test/api/approvals${path}`,
+      {
+        method,
+        ...(body === undefined
+          ? {}
+          : {
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify(body),
+            }),
+      },
+    );
+    return {
+      status: response.status,
+      body: (await response.json()) as Record<string, unknown>,
+    };
   };
 }
 const asOwner = client(owner);
@@ -74,9 +80,14 @@ const asAdmin = client(admin, "admin");
 beforeAll(async () => {
   releaseRoleWriter = await bindTestRoleWriter(database);
   await asPlatform(async () => {
-    await database.insert(users).values(
-      [owner, member, admin].map((id) => ({ id, email: `${id}@example.test` })),
-    );
+    await database
+      .insert(users)
+      .values(
+        [owner, member, admin].map((id) => ({
+          id,
+          email: `${id}@example.test`,
+        })),
+      );
     [priorTeam] = await database
       .select()
       .from(approvalTeamSettings)
@@ -121,9 +132,14 @@ afterAll(async () => {
     await database
       .delete(approvalTeamSettings)
       .where(eq(approvalTeamSettings.id, "team"));
-    if (priorTeam) await database.insert(approvalTeamSettings).values(priorTeam);
-    await database.delete(agents).where(inArray(agents.id, [teamBot, privateBot]));
-    await database.delete(users).where(inArray(users.id, [owner, member, admin]));
+    if (priorTeam)
+      await database.insert(approvalTeamSettings).values(priorTeam);
+    await database
+      .delete(agents)
+      .where(inArray(agents.id, [teamBot, privateBot]));
+    await database
+      .delete(users)
+      .where(inArray(users.id, [owner, member, admin]));
   });
   await releaseRoleWriter?.();
   await database.$client.close();
@@ -176,7 +192,9 @@ test("the owner sets a tool to 禁用, a teammate using the Bot is refused and s
     behaviour: "deny",
   });
   await expect(
-    runAsTenant(member, () => service.gate(call(member, "computer_run_command"))),
+    runAsTenant(member, () =>
+      service.gate(call(member, "computer_run_command")),
+    ),
   ).rejects.toThrow(TOOL_DISABLED);
 
   const seen = await asMember("GET", `/employees/${teamBot}`);
@@ -192,7 +210,9 @@ test("the owner sets a tool to 禁用, a teammate using the Bot is refused and s
   expect(refused.status).toBe(400);
   expect(String(refused.body.error)).toContain("owner");
   await expect(
-    runAsTenant(member, () => service.gate(call(member, "computer_run_command"))),
+    runAsTenant(member, () =>
+      service.gate(call(member, "computer_run_command")),
+    ),
   ).rejects.toThrow(TOOL_DISABLED);
 });
 
@@ -215,7 +235,8 @@ test("changing a mode replaces the rule; 默认 removes it", async () => {
   });
   expect(
     (await runAsTenant(owner, () => store.rules(owner))).filter(
-      (rule) => rule.botId === teamBot && rule.toolRef === "computer_write_file",
+      (rule) =>
+        rule.botId === teamBot && rule.toolRef === "computer_write_file",
     ),
   ).toEqual([]);
   expect(
@@ -272,16 +293,17 @@ test("the floors: defaults can be switched off but not removed, added paths are 
 
 test("only an administrator changes the team's 强制危险命令审批 switch, and it shows on the Bot's page", async () => {
   expect(
-    (await asMember("PATCH", "/team", { enforceDangerousCommands: true })).status,
+    (await asMember("PATCH", "/team", { enforceDangerousCommands: true }))
+      .status,
   ).toBe(403);
   const changed = await asAdmin("PATCH", "/team", {
     enforceDangerousCommands: true,
   });
   expect(changed.status).toBe(200);
   expect(changed.body).toMatchObject({ enforceDangerousCommands: true });
-  expect(
-    (await asOwner("GET", `/employees/${teamBot}`)).body,
-  ).toMatchObject({ enforceDangerousCommands: true });
+  expect((await asOwner("GET", `/employees/${teamBot}`)).body).toMatchObject({
+    enforceDangerousCommands: true,
+  });
   await asAdmin("PATCH", "/team", { enforceDangerousCommands: false });
 });
 
@@ -305,7 +327,9 @@ test("with custom rules off, a tool can still be asked about or disabled, but no
       ).status,
     ).toBe(200);
     await expect(
-      runAsTenant(member, () => service.gate(call(member, "mcp/gmail/send_email"))),
+      runAsTenant(member, () =>
+        service.gate(call(member, "mcp/gmail/send_email")),
+      ),
     ).rejects.toThrow(TOOL_DISABLED);
   } finally {
     await asAdmin("PATCH", "/team", { customRulesEnabled: true });
@@ -317,12 +341,16 @@ test("another person's private Bot is not found, and its settings are not read o
     toolRef: "computer_click",
     mode: "disabled",
   });
-  expect((await asOwner("GET", `/employees/${privateBot}`)).body).toMatchObject({
-    editable: true,
-    modes: [{ toolRef: "computer_click", behaviour: "deny" }],
-  });
+  expect((await asOwner("GET", `/employees/${privateBot}`)).body).toMatchObject(
+    {
+      editable: true,
+      modes: [{ toolRef: "computer_click", behaviour: "deny" }],
+    },
+  );
   const stranger = await asMember("GET", `/employees/${privateBot}`);
   expect(stranger.status).toBe(404);
   expect(JSON.stringify(stranger.body)).not.toContain("computer_click");
-  expect((await asMember("GET", `/employees/${prefix}-nobody`)).status).toBe(404);
+  expect((await asMember("GET", `/employees/${prefix}-nobody`)).status).toBe(
+    404,
+  );
 });

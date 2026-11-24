@@ -22,6 +22,7 @@ import { Hono, type MiddlewareHandler } from "hono";
 import { z } from "zod";
 import type { AppVariables } from "../auth/guards";
 import { requireAdmin } from "../auth/guards";
+import { englishName } from "../brand";
 import {
   ask,
   objectIn,
@@ -38,19 +39,18 @@ import {
   type ReviewModel,
   type ReviewVerdict,
   requestOf,
-  reviewable,
   reviewAction,
+  reviewable,
   safetyRequirement,
   strictestRule,
 } from "./policy";
 import type { ApprovalService } from "./service";
 import {
   type ApprovalRecord,
-  type ApprovalRule,
   ApprovalRefusedError,
+  type ApprovalRule,
   targetSubject,
 } from "./types";
-import { englishName } from "../brand";
 
 /** Longer than this is not guidance for one reviewer, and every review would carry it. */
 export const GUIDANCE_LIMIT = 2_000;
@@ -136,7 +136,7 @@ const UNREACHABLE =
   "Couldn't reach the model to check the guidance. Try again.";
 
 /**
- * Why words that aren't guidance are refused, in OpenBot's own sentence. The model decides which kind
+ * Why words that aren't guidance are refused, in XiongBao's own sentence. The model decides which kind
  * they are, and its reading says what they would change; the sentence beside it is fixed, so it says
  * the same true thing every time.
  */

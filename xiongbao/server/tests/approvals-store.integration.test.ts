@@ -2,7 +2,6 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { Hono } from "hono";
-import type { AppVariables } from "../src/auth/guards";
 import { createApprovalService } from "../src/approvals/service";
 import { createApprovalStore } from "../src/approvals/store";
 import {
@@ -11,6 +10,7 @@ import {
   approvalAction,
 } from "../src/approvals/types";
 import { createAdminScope } from "../src/auth/admin-scope";
+import type { AppVariables } from "../src/auth/guards";
 import { createRoleRepository } from "../src/auth/guards";
 import { setRole } from "../src/auth/roles";
 import { createDatabase } from "../src/db/client";
@@ -210,7 +210,7 @@ async function asAdminRequest<T>(id: string, work: () => Promise<T>) {
     );
     return context.body(null, 204);
   });
-  await app.request("http://openbot.test/");
+  await app.request("http://xiongbao.test/");
   if (!outcome) throw new Error("The admin request never ran its work.");
   if ("error" in outcome) throw outcome.error;
   return outcome.value;

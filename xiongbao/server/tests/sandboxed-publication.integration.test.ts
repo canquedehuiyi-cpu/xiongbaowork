@@ -83,19 +83,19 @@ const testWithTrigger = canInstallTrigger ? test : test.skip;
 
 const ADMIN = {
   id: `user_${randomUUID().slice(0, 8)}`,
-  email: "admin@openbot.test",
+  email: "admin@xiongbao.test",
   role: "admin",
 } as const;
 /** A second administrator: the source rows are the team's, so they can edit what ADMIN saved. */
 const ADMIN_B = {
   id: `user_${randomUUID().slice(0, 8)}`,
-  email: "admin-b@openbot.test",
+  email: "admin-b@xiongbao.test",
   role: "admin",
 } as const;
 /** A member: reads what is published, never a draft, and writes nothing. */
 const MEMBER = {
   id: `user_${randomUUID().slice(0, 8)}`,
-  email: "member@openbot.test",
+  email: "member@xiongbao.test",
   role: "user",
 } as const;
 const people = [ADMIN, ADMIN_B, MEMBER];
@@ -162,7 +162,7 @@ async function asAdminRequest<T>(
     );
     return context.body(null, 204);
   });
-  await app.request("http://openbot.test/");
+  await app.request("http://xiongbao.test/");
   if (!outcome) throw new Error("The admin request never ran its work.");
   if ("error" in outcome) throw outcome.error;
   return outcome.value;

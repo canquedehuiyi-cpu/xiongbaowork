@@ -31,9 +31,9 @@ import {
 } from "../src/db/schema";
 import { withinModelRun } from "../src/models/token-metering";
 import { REFUSAL_MARKER } from "../src/plugins/tools";
-import { createBriefings } from "../src/tasks/briefing";
 import { createQuotaService } from "../src/quota/limits";
 import { createTurnRunner } from "../src/routines/run-turn";
+import { createBriefings } from "../src/tasks/briefing";
 import {
   CardTurnRefused,
   createCardTurns,
@@ -43,8 +43,8 @@ import { createDelivery, type Delivery } from "../src/tasks/delivery";
 import {
   type DeliveryCheckDeps,
   type DeliveryNotice,
-  savedWorkHours,
   runDeliveryCheck,
+  savedWorkHours,
   threadRunning,
   type WorkHours,
 } from "../src/tasks/delivery-checker";
@@ -390,7 +390,7 @@ function routesFor(tenantId: string, options: TaskRouteOptions = {}) {
   return (method: string, path: string, body?: unknown) =>
     runAsTenant(tenantId, async () => {
       const response = await routes.request(
-        new Request(`http://openbot.test/${path}`, {
+        new Request(`http://xiongbao.test/${path}`, {
           method,
           ...(body === undefined
             ? {}

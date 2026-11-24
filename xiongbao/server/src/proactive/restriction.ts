@@ -35,7 +35,7 @@ export {
 } from "./initiator";
 
 /**
- * OpenBot's own reads a proactive run may call, by the bare name OpenBot gives them. Writing memory
+ * XiongBao's own reads a proactive run may call, by the bare name XiongBao gives them. Writing memory
  * goes through the check-in's own tool.
  *
  * BY NAME AND NEVER BY REF. A connector tool's name is always `mcp__<server>__<tool>` and its ref
@@ -48,7 +48,7 @@ export const PROACTIVE_OWN_READS: ReadonlySet<string> = new Set([
   "recall_personal_memory",
 ]);
 
-/** Whether a tool OpenBot built itself may be called by a check-in. Never true for a connector. */
+/** Whether a tool XiongBao built itself may be called by a check-in. Never true for a connector. */
 const ownRead = (name: string) => PROACTIVE_OWN_READS.has(name);
 
 function refused(name: string) {
@@ -59,7 +59,7 @@ function refused(name: string) {
  * The loader a run's granted tools come from, narrowed for a proactive run.
  *
  * Unchanged for every other initiator. For a proactive one, only the person's check-in reads (and
- * OpenBot's own) are offered, and each is checked again when it executes, so a connection withdrawn
+ * XiongBao's own) are offered, and each is checked again when it executes, so a connection withdrawn
  * or a tool relabelled mid-run is refused on its next call.
  */
 export function restrictToolsForRun(
@@ -114,8 +114,8 @@ export function restrictCoordinationForRun<A extends unknown[], R>(
  *
  * Called before anything else in the callback dispatch, so coordination, memory writes, host tools
  * and connector writes are all refused for a proactive run in one place. A check-in no longer calls
- * a remote Bot's endpoint at all (it runs on OpenBot's own runner), so this door is the second line.
- * A connector arrives here by its ref, and OpenBot's own tools by their bare name.
+ * a remote Bot's endpoint at all (it runs on XiongBao's own runner), so this door is the second line.
+ * A connector arrives here by its ref, and XiongBao's own tools by their bare name.
  */
 export async function guardProactiveCallback(
   input: {

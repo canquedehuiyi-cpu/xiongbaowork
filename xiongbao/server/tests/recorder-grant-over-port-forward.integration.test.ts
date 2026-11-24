@@ -1,7 +1,7 @@
-// The Recorder's capture pass on an OpenBot whose only address is a `kubectl port-forward`.
+// The Recorder's capture pass on an XiongBao whose only address is a `kubectl port-forward`.
 //
-// The Helm chart that installs Intelligence beside OpenBot turns INTELLIGENCE_GATEWAY_PROXY on, so
-// the gateway's client socket is reached through OpenBot's own address, and a vanilla install has no
+// The Helm chart that installs Intelligence beside XiongBao turns INTELLIGENCE_GATEWAY_PROXY on, so
+// the gateway's client socket is reached through XiongBao's own address, and a vanilla install has no
 // public URL: the person opens it at http://127.0.0.1:<port> over a port-forward, single-user. The page
 // is told the socket as a path and resolves it against itself. The Recorder is not on the page, and
 // was handed the same path in its capture pass, which the runtime refuses as no URL at all: every
@@ -58,7 +58,7 @@ let refuseNextJoin = false;
 
 let intelligence: ReturnType<typeof Bun.serve>;
 let intelligencePort: number;
-let openbot: { stop(closeActiveConnections?: boolean): Promise<void> };
+let xiongbao: { stop(closeActiveConnections?: boolean): Promise<void> };
 let port: number;
 let token: string;
 const trajectories: string[] = [];
@@ -113,9 +113,9 @@ beforeAll(async () => {
 
   port = await reservePort();
   // As the chart writes it for a bundled Intelligence: in a container, single-user, the gateway
-  // carried by OpenBot, and no public URL anywhere.
+  // carried by XiongBao, and no public URL anywhere.
   const config = loadConfig({
-    DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/openbot",
+    DATABASE_URL: "postgres://openbot:openbot@127.0.0.1:5432/xiongbao",
     KEY_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
     INTELLIGENCE_API_URL: `http://127.0.0.1:${intelligencePort}`,
     INTELLIGENCE_GATEWAY_WS_URL: `ws://127.0.0.1:${intelligencePort}`,
@@ -189,7 +189,7 @@ beforeAll(async () => {
   args[12] = auditStore;
   // M3: the fork's createApp takes `coworker` at 33 (upstream's `learning` comes later here).
   args[33] = { recorder };
-  openbot = startHttpServer({
+  xiongbao = startHttpServer({
     port,
     config,
     resolveRequestActor,
@@ -199,7 +199,7 @@ beforeAll(async () => {
   });
 
   await initializeDevActorUser(database, true);
-  // Connected as the person connects it: a code minted on OpenBot's page, exchanged by the Recorder.
+  // Connected as the person connects it: a code minted on XiongBao's page, exchanged by the Recorder.
   const minted = await fetch(
     `http://127.0.0.1:${port}${recorderPaths.connectCodes}`,
     {
@@ -233,7 +233,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await openbot?.stop(true);
+  await xiongbao?.stop(true);
   intelligence?.stop(true);
   guard.stop();
   for (const trajectoryId of trajectories)
@@ -266,10 +266,10 @@ function pass(headers: Record<string, string> = {}) {
   );
 }
 
-describe("the Recorder's capture pass, answered by OpenBot with Intelligence configured", () => {
+describe("the Recorder's capture pass, answered by XiongBao with Intelligence configured", () => {
   /*
    * The runtime here keeps its threads in its own runner, and the runtime's handler refuses every
-   * pass on such a runtime (INTELLIGENCE_RUNTIME_REQUIRED). OpenBot answers the pass itself
+   * pass on such a runtime (INTELLIGENCE_RUNTIME_REQUIRED). XiongBao answers the pass itself
    * (recorder/trajectory-connect.ts), and this is that answer end to end: the person's recording joins
    * their own Learning space, and nothing else does.
    */
@@ -346,7 +346,7 @@ describe("the Recorder's capture pass, answered by OpenBot with Intelligence con
 });
 
 describe("the Recorder's capture pass over a port-forward, with no public URL", () => {
-  // M3: "names the gateway socket as a whole address on OpenBot" and "that address carries the
+  // M3: "names the gateway socket as a whole address on XiongBao" and "that address carries the
   // Recorder's socket through to the gateway" are not kept: they need the Intelligence gateway proxy
   // (INTELLIGENCE_GATEWAY_PROXY), which the fork does not adopt.
   /*
@@ -356,7 +356,7 @@ describe("the Recorder's capture pass over a port-forward, with no public URL", 
    * and the name the request carried appears nowhere in it.
    */
   test("never makes the address out of a name this machine does not answer to", async () => {
-    const answer = await pass({ host: "openbot.attacker.example" });
+    const answer = await pass({ host: "xiongbao.attacker.example" });
 
     const text = await answer.text();
     expect(text).not.toContain("attacker");
@@ -371,7 +371,7 @@ describe("the Recorder's capture pass over a port-forward, with no public URL", 
   // Intelligence gateway proxy, which the fork does not adopt.
 });
 
-describe("OpenBot's own origin, as a caller on this machine reached it", () => {
+describe("XiongBao's own origin, as a caller on this machine reached it", () => {
   const singleUser = {
     singleUser: true,
     singleUserAccess: { thisMachineOnly: false, hosts: [] },
@@ -398,7 +398,7 @@ describe("OpenBot's own origin, as a caller on this machine reached it", () => {
 
   test("is nothing for a caller on another machine, whatever Host it sends", () => {
     for (const address of ["10.0.12.7", "192.168.1.20", "2001:db8::7"]) {
-      for (const host of ["127.0.0.1:3101", "10.0.0.5:3001", "openbot.test"])
+      for (const host of ["127.0.0.1:3101", "10.0.0.5:3001", "xiongbao.test"])
         expect(
           ownOriginOnThisMachine(request(host), { address }, singleUser),
         ).toBeNull();
@@ -407,7 +407,7 @@ describe("OpenBot's own origin, as a caller on this machine reached it", () => {
 
   test("is nothing for a name this machine does not answer to, or a caller nobody can name", () => {
     for (const host of [
-      "openbot.attacker.example",
+      "xiongbao.attacker.example",
       "127.0.0.1.attacker.example",
       "10.0.0.5:3001",
     ])

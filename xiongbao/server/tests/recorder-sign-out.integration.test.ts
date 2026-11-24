@@ -187,7 +187,7 @@ const endings = (...connectionIds: string[]) =>
     ])
     .sort();
 
-test("signing out of OpenBot signs every Recorder connected as that person out, and nobody else's", async () => {
+test("signing out of XiongBao signs every Recorder connected as that person out, and nobody else's", async () => {
   const chrome = await connect(person, "c".repeat(32));
   const edge = await connect(person, "e".repeat(32));
   const theirs = await connect(other, "c".repeat(32));
@@ -323,6 +323,6 @@ test("a session that ends by itself, or is found expired, does not sign the Reco
   expect(await me(chrome.token)).toBe(200);
 });
 
-test("a Recorder connection lasts as long as an OpenBot session: Better Auth's own lifetime, read from the auth", async () => {
+test("a Recorder connection lasts as long as an XiongBao session: Better Auth's own lifetime, read from the auth", async () => {
   expect(await sessionLifetimeMs(auth)).toBe(SESSION_LIFETIME_MS);
 });

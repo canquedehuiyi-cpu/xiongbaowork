@@ -62,7 +62,7 @@ const base64 = (bytes: Uint8Array) => Buffer.from(bytes).toString("base64");
 
 function call(tenant: string, method: string, path: string, body?: unknown) {
   return runAsTenant(tenant, () =>
-    routes.request(`http://openbot.test${path}`, {
+    routes.request(`http://xiongbao.test${path}`, {
       method,
       ...(body === undefined
         ? {}

@@ -30,8 +30,8 @@ import {
   users,
 } from "../src/db/schema/core";
 import { agentProfiles, routines } from "../src/db/schema/coworker";
-import { groupMessages } from "../src/db/schema/group";
 import { defaultOptOuts } from "../src/db/schema/defaults";
+import { groupMessages } from "../src/db/schema/group";
 import { memorySources, personalMemories } from "../src/db/schema/memory";
 import {
   proactiveSettings,
@@ -602,7 +602,7 @@ describe("Activity and attention", () => {
   ownerTest(
     "a goal run's summary is the Bot's reply as plain text, the way the sidebar draws a reply",
     async () => {
-      // The reply a goal run gave on OpenBot Desktop, which the row drew with its backticks and asterisks.
+      // The reply a goal run gave on XiongBao Desktop, which the row drew with its backticks and asterisks.
       await database.insert(responsibilityEvents).values({
         id: `${prefix}-goal-event`,
         ownerUserId: owner,

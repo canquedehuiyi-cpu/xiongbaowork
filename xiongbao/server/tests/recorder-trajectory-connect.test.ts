@@ -2,14 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { createTrajectoryConnect } from "../src/recorder/trajectory-connect";
 
 /*
- * The Recorder's capture pass as OpenBot answers it (recorder/trajectory-connect.ts): the gate in front,
+ * The Recorder's capture pass as XiongBao answers it (recorder/trajectory-connect.ts): the gate in front,
  * then the person, then Intelligence, each answered in the runtime's own contract.
  */
 
 const ID = "11111111-2222-4333-8444-555555555555";
 const settings = { apiUrl: "http://intelligence.test", apiKey: "k" };
 const request = () =>
-  new Request(`http://openbot.test/api/copilotkit/trajectory/${ID}/connect`, {
+  new Request(`http://xiongbao.test/api/copilotkit/trajectory/${ID}/connect`, {
     method: "POST",
   });
 
@@ -43,7 +43,7 @@ function connect(overrides: {
   return { answer, joined };
 }
 
-describe("the capture pass OpenBot answers itself", () => {
+describe("the capture pass XiongBao answers itself", () => {
   test("a refusal the gate wrote is the answer, and Intelligence is not asked", async () => {
     const refusal = Response.json(
       { code: "IDENTITY_REQUIRED" },

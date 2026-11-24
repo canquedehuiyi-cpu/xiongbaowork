@@ -62,7 +62,7 @@ const bot: AgentProfile = {
   title: "Clerk",
   visibility: "private",
   id: BOT,
-  runsOnOpenBotModel: true,
+  runsOnXiongBaoModel: true,
 };
 
 const channel: AgentChannel = {

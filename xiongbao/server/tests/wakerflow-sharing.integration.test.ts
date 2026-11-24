@@ -156,7 +156,7 @@ async function call<T>(
     ? path.slice("/api/wakerflow-shares".length)
     : path.slice("/api/wakerflows".length);
   const response = await routes.request(
-    new Request(`http://openbot.test${local}`, {
+    new Request(`http://xiongbao.test${local}`, {
       method,
       headers:
         body === undefined ? undefined : { "content-type": "application/json" },

@@ -132,7 +132,7 @@ export async function productHandoffInput<
   );
   return {
     ...input,
-    forwardedProps: { ...input.forwardedProps, openbotTelemetry: context },
+    forwardedProps: { ...input.forwardedProps, xiongbaoTelemetry: context },
   };
 }
 /**

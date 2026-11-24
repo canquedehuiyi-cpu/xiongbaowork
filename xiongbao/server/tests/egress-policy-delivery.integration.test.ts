@@ -95,7 +95,7 @@ const BASE = `http://127.0.0.1:${COMPUTER_PORT}`;
 
 /** The real agent-computer, started the way the chart's shared mode starts it: for nobody in particular. */
 async function startComputer(options: { seats?: string[] } = {}) {
-  const dir = await mkdtemp(join(tmpdir(), "openbot-egress-delivery-"));
+  const dir = await mkdtemp(join(tmpdir(), "xiongbao-egress-delivery-"));
   await Promise.all(
     ["profiles", "workspace"].map((name) => mkdir(join(dir, name))),
   );

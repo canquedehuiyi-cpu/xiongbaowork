@@ -438,7 +438,7 @@ test("briefing numbers match the board", async () => {
   });
   const list = async (query = "") => {
     const response = await runAsTenant(bea.id, () =>
-      board.request(`http://openbot.test/${query}`),
+      board.request(`http://xiongbao.test/${query}`),
     );
     return (
       (await response.json()) as {

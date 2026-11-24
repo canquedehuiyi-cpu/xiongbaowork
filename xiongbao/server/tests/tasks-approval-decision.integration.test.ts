@@ -44,7 +44,7 @@ const actorFor =
   async (context, next) => {
     context.set("actor", {
       id,
-      email: `${id}@openbot.test`,
+      email: `${id}@xiongbao.test`,
       role: "user",
     });
     await next();
@@ -59,7 +59,7 @@ const as = (tenant: string) => {
       runAsTenant(tenant, () =>
         approvals.request(
           new Request(
-            `http://openbot.test/${encodeURIComponent(approvalId)}/decision`,
+            `http://xiongbao.test/${encodeURIComponent(approvalId)}/decision`,
             {
               method: "POST",
               headers: { "content-type": "application/json" },
@@ -71,13 +71,13 @@ const as = (tenant: string) => {
     request: (approvalId: string) =>
       runAsTenant(tenant, () =>
         approvals.request(
-          new Request(`http://openbot.test/${encodeURIComponent(approvalId)}`),
+          new Request(`http://xiongbao.test/${encodeURIComponent(approvalId)}`),
         ),
       ),
     cards: () =>
       runAsTenant(tenant, async () => {
         const response = await board.request(
-          new Request("http://openbot.test/"),
+          new Request("http://xiongbao.test/"),
         );
         expect(response.status).toBe(200);
         const body = (await response.json()) as {

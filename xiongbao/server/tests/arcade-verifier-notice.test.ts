@@ -13,14 +13,14 @@ import {
  */
 describe("arcadeVerifierAddress", () => {
   test("is the public origin followed by the verify route", () => {
-    expect(arcadeVerifierAddress("https://openbot.example.com")).toBe(
-      "https://openbot.example.com/api/plugins/arcade/verify",
+    expect(arcadeVerifierAddress("https://xiongbao.example.com")).toBe(
+      "https://xiongbao.example.com/api/plugins/arcade/verify",
     );
   });
 
   test("a trailing slash on the origin does not double the separator", () => {
-    expect(arcadeVerifierAddress("https://openbot.example.com/")).toBe(
-      "https://openbot.example.com/api/plugins/arcade/verify",
+    expect(arcadeVerifierAddress("https://xiongbao.example.com/")).toBe(
+      "https://xiongbao.example.com/api/plugins/arcade/verify",
     );
   });
 
@@ -33,18 +33,18 @@ describe("arcadeVerifierAddress", () => {
 describe("arcadeVerifierNotice", () => {
   test("says nothing when the install owns its project and knows its origin", () => {
     expect(
-      arcadeVerifierNotice("https://openbot.example.com", {
+      arcadeVerifierNotice("https://xiongbao.example.com", {
         ownsProject: true,
       }),
     ).toBeNull();
   });
 
   test("a deployment that signs people in names the exact address an admin sets", () => {
-    const notice = arcadeVerifierNotice("https://openbot.example.com", {
+    const notice = arcadeVerifierNotice("https://xiongbao.example.com", {
       ownsProject: false,
     });
     expect(notice).toContain(
-      "https://openbot.example.com/api/plugins/arcade/verify",
+      "https://xiongbao.example.com/api/plugins/arcade/verify",
     );
     expect(notice).toContain("从不修改项目的用户验证地址");
     expect(notice).toContain("Auth → Settings");

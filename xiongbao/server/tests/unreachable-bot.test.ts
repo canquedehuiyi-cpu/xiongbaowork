@@ -17,7 +17,7 @@ import { testEnvironment } from "./support/environment";
 /**
  * A Bot whose address answers nothing, as the person reading the conversation is told.
  *
- * Seen on OpenBot Desktop: the personal starter was left pointing at a harness that had stopped, and
+ * Seen on XiongBao Desktop: the personal starter was left pointing at a harness that had stopped, and
  * every message ended in red with "ECONNREFUSED: Unable to connect. Is the computer able to access
  * the url?". The run here goes through the real runtime and the fetch index.ts builds, to an address
  * where nothing listens, and the RUN_ERROR that reaches the platform is what both surfaces draw.

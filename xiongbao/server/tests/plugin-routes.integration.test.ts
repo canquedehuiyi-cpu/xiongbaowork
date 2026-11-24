@@ -9,9 +9,9 @@ import { createDatabase } from "../src/db/client";
 import { credentials, mcpServers, mcpTools } from "../src/db/schema";
 import { atServerAddress, createPluginStore } from "../src/plugins/store";
 import { createAdminRequest, seedAdministrator } from "./support/admin-request";
+import { credentialDouble } from "./support/credential-double";
 import { TEST_POOL, testDatabaseUrl } from "./support/database";
 import { testEnvironment } from "./support/environment";
-import { credentialDouble } from "./support/credential-double";
 
 /**
  * The whole path an administrator's request actually takes, with nothing stubbed between the request
@@ -51,7 +51,7 @@ const ADMIN = {
   // An administrator in `user_roles` (G01-E P10): the admin routes hold the capability, and row
   // security asks that table whether the frame is an administrator's.
   id: `admin-route-${randomUUID().slice(0, 8)}`,
-  email: "admin@openbot.test",
+  email: "admin@xiongbao.test",
   name: "An Administrator",
   image: null,
 };
@@ -90,7 +90,7 @@ function request(
     store as never,
   );
 
-  return app.request(`http://openbot.test${path}`, {
+  return app.request(`http://xiongbao.test${path}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),

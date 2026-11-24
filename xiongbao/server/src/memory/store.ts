@@ -36,8 +36,8 @@ import {
 } from "./types";
 
 /**
- * The id a memory gets in OpenBot when only Intelligence holds it. Prefixed so the routes can tell
- * it from an OpenBot row id without a lookup, and so it can never collide with one.
+ * The id a memory gets in XiongBao when only Intelligence holds it. Prefixed so the routes can tell
+ * it from an XiongBao row id without a lookup, and so it can never collide with one.
  */
 const INTELLIGENCE_ID_PREFIX = "intelligence:";
 // Shown to the person on the memory screen ("来自 …"), so it is the product's name, read per call.
@@ -49,7 +49,7 @@ const digestOf = (content: string) =>
 /**
  * What Intelligence should hold: a live, switched-on memory the person has accepted.
  *
- * A Bot-formed or imported memory waits for the person's review before it leaves OpenBot, and a
+ * A Bot-formed or imported memory waits for the person's review before it leaves XiongBao, and a
  * paused or forgotten one is retired from Intelligence, because Intelligence has no field for
  * "paused" and anything else reading the person's Intelligence memory would otherwise see it.
  */
@@ -95,11 +95,11 @@ function fromIntelligence(
 }
 
 /**
- * A person's memory: CopilotKit Intelligence when this deployment is entitled to it, OpenBot's own
+ * A person's memory: the hosted Intelligence service when this deployment is entitled to it, XiongBao's own
  * tables when it is not.
  *
  * When Intelligence memory is available, it holds the content and does the recall, and every memory
- * the person has accepted is mirrored there. The OpenBot row stays as the record of what Intelligence
+ * the person has accepted is mirrored there. The XiongBao row stays as the record of what Intelligence
  * has no field for: where a memory came from, whether it is reviewed or paused, which Bot formed it
  * and which source it was imported from. Those decide which Bot may see a memory, so every rule a
  * Bot's recall obeys is still applied here, over the rows, before anything Intelligence returns
@@ -269,7 +269,7 @@ export function createMemoryStore(
     return new Set(rows.map((row) => row.intelligenceMemoryId as string));
   }
 
-  /** The person's Intelligence memories that no OpenBot row describes. */
+  /** The person's Intelligence memories that no XiongBao row describes. */
   async function intelligenceOnly(
     ownerUserId: string,
     memories: IntelligenceMemoryRecord[],
@@ -648,7 +648,7 @@ export function createMemoryStore(
         )
         .limit(1);
       if (!source) throw new MemoryNotFoundError();
-      // Removing a source is turning that app down for this Bot: OpenBot never adds it back.
+      // Removing a source is turning that app down for this Bot: XiongBao never adds it back.
       await database.transaction(async (transaction) => {
         await lockDefaults(transaction, ownerUserId, source.agentId);
         const [row] = await transaction

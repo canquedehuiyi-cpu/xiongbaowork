@@ -581,7 +581,7 @@ export function externalField(row: {
   };
 }
 
-/** What runs it, by name, when OpenBot knows. See `AgentProfile.framework`. */
+/** What runs it, by name, when XiongBao knows. See `AgentProfile.framework`. */
 function frameworkField(row: {
   type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp";
   configuration: unknown;
@@ -592,7 +592,7 @@ function frameworkField(row: {
 
 /**
  * Where a personal starter keeps its instructions: the prompt a Bot that runs here runs on, or the
- * instructions OpenBot sends a remote one in its standing role, after what it does.
+ * instructions XiongBao sends a remote one in its standing role, after what it does.
  */
 export function starterInstructionsKey(
   type: "built_in" | "remote_ag_ui" | "remote_mastra" | "device_acp",

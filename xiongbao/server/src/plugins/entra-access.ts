@@ -5,12 +5,12 @@
  * 写一次。token 本身由 `auth/entra.ts` 换取和缓存，这里不碰 token，也不碰登录。
  *
  * fork 比上游多的一条底线：token 的受众和发送地址必须对得上（评审 I-2）。上游允许管理员给任意地址标任意
- * scope，于是 OpenBot 管理员只要填一个 Microsoft Graph 或 OpenBot 自己 API 的 scope，就能把每个人的委托
+ * scope，于是 XiongBao 管理员只要填一个 Microsoft Graph 或 XiongBao 自己 API 的 scope，就能把每个人的委托
  * token 收到自己的服务器上。这里要求：
  * - scope 的资源必须登记在部署设置 `MICROSOFT_OAUTH_OBO_RESOURCES` 里，并写明这个资源的 token 只发往哪个
  *   主机（`<资源>=<主机>`）。登记由能改部署配置的人做，不由应用里的管理员做；不设置就不能标记任何服务器。
  * - 服务器地址的主机名必须和登记的主机一字不差。
- * - OpenBot 自己的 API（client id、`api://<client id>` 及其子路径、`MICROSOFT_OAUTH_API_SCOPE` 的资源）和
+ * - XiongBao 自己的 API（client id、`api://<client id>` 及其子路径、`MICROSOFT_OAUTH_API_SCOPE` 的资源）和
  *   Microsoft 第一方资源（Graph 等）永远拒绝，登记了也不行：启动时就拒绝这样的登记。
  * - 每次调用前再核对一遍（登记可能已经改了），对不上就不发。
  *
@@ -34,7 +34,7 @@ export type OboResource = { resource: string; host: string };
 export type EntraBinding = {
   /** `MICROSOFT_OAUTH_OBO_RESOURCES` 登记的资源；空就是谁都不能标记。 */
   resources: readonly OboResource[];
-  /** OpenBot 自己 API 的资源标识（小写），见 {@link openBotResources}。 */
+  /** XiongBao 自己 API 的资源标识（小写），见 {@link xiongBaoResources}。 */
   own: readonly string[];
 };
 
@@ -66,8 +66,11 @@ export function scopeResource(scope: string): string | null {
   return resource || null;
 }
 
-/** OpenBot 自己 API 的资源标识：client id、`api://<client id>`、以及 API scope 的资源。 */
-export function openBotResources(clientId: string, apiScope: string): string[] {
+/** XiongBao 自己 API 的资源标识：client id、`api://<client id>`、以及 API scope 的资源。 */
+export function xiongBaoResources(
+  clientId: string,
+  apiScope: string,
+): string[] {
   const id = normalized(clientId);
   return [
     ...new Set(
@@ -111,7 +114,7 @@ const MICROSOFT_FIRST_PARTY_HOSTS = [
   "microsoft.us",
 ];
 
-/** 这个资源是不是不允许的那两类之一：OpenBot 自己，或 Microsoft 第一方。 */
+/** 这个资源是不是不允许的那两类之一：XiongBao 自己，或 Microsoft 第一方。 */
 export function forbiddenResource(
   resource: string,
   own: readonly string[],
@@ -146,7 +149,7 @@ const HOSTNAME =
   /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*$/;
 
 /**
- * 解析 `MICROSOFT_OAUTH_OBO_RESOURCES` 的各项 `<资源>=<主机>`。写错的、指向 OpenBot 自己的、指向
+ * 解析 `MICROSOFT_OAUTH_OBO_RESOURCES` 的各项 `<资源>=<主机>`。写错的、指向 XiongBao 自己的、指向
  * Microsoft 第一方资源的，都在启动时拒绝：这类登记留着只会在某天被人用上。
  */
 export function parseOboResources(

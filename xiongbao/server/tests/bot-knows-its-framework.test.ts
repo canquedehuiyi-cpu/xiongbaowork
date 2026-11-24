@@ -25,7 +25,7 @@ import { createModelCatalogue } from "../src/model-catalogue";
  *
  * The subtitle is the person's to write. A Bot told only that could name its framework only while
  * the subtitle said "Powered by ...": one called "Everyday Work" on LangGraph, on the Claude Agent
- * SDK, or on OpenBot itself had nothing to go by. Each Bot here has that subtitle and is registered
+ * SDK, or on XiongBao itself had nothing to go by. Each Bot here has that subtitle and is registered
  * from its row by `registeredAgentFromRow`, as the runtime loader does, then run through
  * `buildAgents`, the path a person's run takes.
  */
@@ -112,7 +112,7 @@ async function run(
   await built.runAgent();
 }
 
-describe("a Bot that runs on OpenBot", () => {
+describe("a Bot that runs on XiongBao", () => {
   const llm = new LLMock();
   const wire: string[] = [];
   let recorder: ReturnType<typeof Bun.serve> | undefined;
@@ -147,7 +147,7 @@ describe("a Bot that runs on OpenBot", () => {
     await llm.stop();
   });
 
-  test("is told OpenBot and its model, with a subtitle that names neither", async () => {
+  test("is told XiongBao and its model, with a subtitle that names neither", async () => {
     const agent = registeredAgentFromRow(
       row("built_in", { systemPrompt: "Help with everyday work." }),
     );
@@ -255,7 +255,7 @@ describe("a Bot at an address", () => {
       { provider: "openai", defaultModel: "gpt-5.5" },
     );
     expect(role).toContain(framework("CrewAI"));
-    // Its model is its own, which OpenBot cannot name.
+    // Its model is its own, which XiongBao cannot name.
     expect(role).not.toContain("The AI model you are running on");
   });
 
@@ -293,13 +293,13 @@ describe("the framework New Bot sends", () => {
     ).toMatchObject({ ok: true, value: { harness: "crewai" } });
   });
 
-  test("is not kept for a Bot that runs here, which runs on OpenBot", () => {
+  test("is not kept for a Bot that runs here, which runs on XiongBao", () => {
     const parsed = parseAgentInput({ ...input, harness: "crewai" });
     expect(parsed.ok).toBe(true);
     expect(parsed.ok && parsed.value).not.toHaveProperty("harness");
   });
 
-  test("is refused when OpenBot doesn't know it, or names no framework", () => {
+  test("is refused when XiongBao doesn't know it, or names no framework", () => {
     for (const harness of ["not-a-framework", "byo-url", 7])
       expect(
         parseAgentInput({ ...input, endpoint: THEIRS, harness }),

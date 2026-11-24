@@ -11,7 +11,7 @@ import { providerFailureAsRunError } from "./provider-error";
  */
 export function isModelAuthenticationError(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
-  if (error.name === "OpenBotModelAuthenticationError") return true;
+  if (error.name === "XiongBaoModelAuthenticationError") return true;
   if (
     error.name === "AI_APICallError" &&
     "statusCode" in error &&

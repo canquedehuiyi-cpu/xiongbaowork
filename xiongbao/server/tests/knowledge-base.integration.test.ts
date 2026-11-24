@@ -53,7 +53,7 @@ async function call(
 ) {
   const routes = createKnowledgeRoutes(store, guardFor(actorId));
   const response = await routes.request(
-    new Request(`http://openbot.test${path}`, {
+    new Request(`http://xiongbao.test${path}`, {
       method,
       ...(body === undefined
         ? {}

@@ -50,7 +50,7 @@ const store = createPipelineStore({
 const routes = createPipelineRoutes(store, createDevRequireUser());
 
 const request = (path: string, init?: RequestInit) =>
-  routes.request(new Request(`http://openbot.test${path}`, init));
+  routes.request(new Request(`http://xiongbao.test${path}`, init));
 const post = (path: string, body: unknown) =>
   request(path, {
     method: "POST",
@@ -215,7 +215,7 @@ test("running a template with a coworker the person may not use is a 403 naming 
   });
   const refusingRoutes = createPipelineRoutes(refusing, createDevRequireUser());
   const created = await refusingRoutes.request(
-    new Request("http://openbot.test/templates", {
+    new Request("http://xiongbao.test/templates", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ groupId, name: "含越权员工", steps: STEPS }),
@@ -235,7 +235,7 @@ test("running a template with a coworker the person may not use is a 403 naming 
   expect(await cardsForPress()).toEqual([]);
 
   const pressed = await refusingRoutes.request(
-    new Request(`http://openbot.test/templates/${templateId}/runs`, {
+    new Request(`http://xiongbao.test/templates/${templateId}/runs`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ task: "越权的派活" }),

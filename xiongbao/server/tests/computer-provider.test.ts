@@ -555,7 +555,7 @@ describe("building the sandbox provider", () => {
     try {
       const provider = createComputerProvider({
         provider: "sandbox",
-        namespace: "openbot",
+        namespace: "xiongbao",
         idleAfterMs: 60_000,
         templateFile: "/nowhere/sandbox-template.json",
         // `allowPrivateHosts` is not optional in a sandbox config, and its absence here was the

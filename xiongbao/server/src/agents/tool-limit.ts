@@ -55,7 +55,7 @@ export function toolLimitFor(
 }
 
 /**
- * The `provider` of a limit that is OpenBot's own: the most tools tool search sends in one step,
+ * The `provider` of a limit that is XiongBao's own: the most tools tool search sends in one step,
  * on a provider that documents no count. Recorded under this name so an admin reading the row is not
  * told a provider refused something it never saw.
  */

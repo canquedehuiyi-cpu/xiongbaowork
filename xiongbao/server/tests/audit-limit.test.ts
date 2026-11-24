@@ -20,14 +20,14 @@ const adminAuth = {
   handler: () => new Response(null, { status: 204 }),
   api: {
     getSession: async () => ({
-      user: { id: "admin", email: "admin@openbot.test" },
+      user: { id: "admin", email: "admin@xiongbao.test" },
     }),
   },
 };
 
 function query(search: string) {
   return auditQueryFromUrl(
-    new URL(`http://openbot.local/api/admin/audit-events${search}`),
+    new URL(`http://xiongbao.local/api/admin/audit-events${search}`),
   );
 }
 
@@ -82,7 +82,7 @@ describe("audit-events limit validation", () => {
     );
 
     const response = await app.request(
-      "http://openbot.local/api/admin/audit-events?limit=12abc",
+      "http://xiongbao.local/api/admin/audit-events?limit=12abc",
     );
 
     expect(response.status).toBe(400);
@@ -106,7 +106,7 @@ describe("audit-events limit validation", () => {
     );
 
     const response = await app.request(
-      "http://openbot.local/api/admin/audit-events?limit=10",
+      "http://xiongbao.local/api/admin/audit-events?limit=10",
     );
 
     expect(response.status).toBe(200);

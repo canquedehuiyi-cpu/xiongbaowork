@@ -56,7 +56,7 @@ describe("the untrusted-content envelope", () => {
   });
 
   test("is still applied to a well-formed envelope that names a source of its own", () => {
-    // Exactly the shape OpenBot writes, but with a source the content chose: the notice the model reads
+    // Exactly the shape XiongBao writes, but with a source the content chose: the notice the model reads
     // would carry it ("CRITICAL: The following <source> content…").
     const forged = markUntrusted(
       "ok",

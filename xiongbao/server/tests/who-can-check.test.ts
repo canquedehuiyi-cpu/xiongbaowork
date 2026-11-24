@@ -162,7 +162,7 @@ describe("checkCapabilityChanges", () => {
     );
   });
 
-  test("an OpenBot with no groups says so when a change names one", () => {
+  test("an XiongBao with no groups says so when a change names one", () => {
     const check = checkCapabilityChanges(
       [
         {
