@@ -11,6 +11,7 @@ import {
   HeadlessToolSuspension,
   HeadlessToolsMiddleware,
 } from "../../toolkit/src/headless-tools";
+import { TURN_LIMITS } from "../../toolkit/src/limits";
 import { serverTurnAdmission } from "../src/agents/turn-admission";
 import {
   CARRIED_TTL_MS,
@@ -19,7 +20,11 @@ import {
   withConfiguredTurnArtifacts,
   withSideEventsThenArtifacts,
 } from "../src/computer/turn-artifacts";
-import { createTurnRunner, type RunnerLike } from "../src/routines/run-turn";
+import {
+  createGroupTurnRunner,
+  createTurnRunner,
+  type RunnerLike,
+} from "../src/routines/run-turn";
 import { runAsTenant } from "../src/tenant/context";
 import { emitRunEvent } from "../src/threads/run-side-events";
 import { workspaceComputer } from "./support/workspace-computer";
@@ -295,6 +300,16 @@ describe("an unattended turn (a card, a group's turn, a routine)", () => {
   function unattended(
     asks: number,
     computer: ReturnType<typeof workspaceComputer>,
+    options: {
+      agent?: () => HttpAgent;
+      turnTimeoutMs?: number;
+      abortGraceMs?: number;
+      /** The runner under test; a group's turn is built from its own factory. */
+      make?: typeof createTurnRunner;
+      /** What the Bot's computer tools are; none for an employee without a computer. */
+      tools?: () => ReturnType<typeof computerTool>[];
+      workLimits?: { turnTimeoutMs: number; maxToolSegments: number };
+    } = {},
   ) {
     const persisted: BaseEvent[] = [];
     const runner: RunnerLike = {
@@ -314,7 +329,7 @@ describe("an unattended turn (a card, a group's turn, a routine)", () => {
         }),
       stop: async () => true,
     };
-    const start = createTurnRunner({
+    const start = (options.make ?? createTurnRunner)({
       admission: serverTurnAdmission,
       intelligence: {
         getOrCreateThread: async () => undefined,
@@ -324,8 +339,14 @@ describe("an unattended turn (a card, a group's turn, a routine)", () => {
         ɵcleanupThreadLock: async () => undefined,
       },
       runner,
-      buildAgentFor: async () => modelAsking(asks),
-      toolsForTurn: async () => [computerTool(computer, "unused")],
+      buildAgentFor: async () => options.agent?.() ?? modelAsking(asks),
+      toolsForTurn: async () =>
+        options.tools?.() ?? [computerTool(computer, "unused")],
+      ...(options.workLimits ? { workLimits: options.workLimits } : {}),
+      ...(options.turnTimeoutMs
+        ? { turnTimeoutMs: options.turnTimeoutMs }
+        : {}),
+      ...(options.abortGraceMs ? { abortGraceMs: options.abortGraceMs } : {}),
     });
     return {
       persisted,
@@ -355,6 +376,48 @@ describe("an unattended turn (a card, a group's turn, a routine)", () => {
     expect(persisted[finished - 1]?.type).toBe(EventType.CUSTOM);
   });
 
+  test("a turn stopped at its time limit lists what its tools left, before the error that ends it", async () => {
+    const computer = wired();
+    // 80 ms stands for the minutes a slow model would take; nothing here waits for them.
+    const { persisted, turn } = unattended(1, computer, {
+      agent: stalledAfterFirstStep,
+      turnTimeoutMs: 80,
+      abortGraceMs: 500,
+    });
+    await turn().catch(() => undefined);
+    expect(computer.files.size).toBe(1);
+    expect(paths(persisted)).toEqual(["unused"]);
+    const types = persisted.map((event) => event.type);
+    expect(types.at(-1)).toBe(EventType.RUN_ERROR);
+    expect(types.at(-2)).toBe(EventType.CUSTOM);
+  });
+
+  test("a computer that lists its files slower than the stop's grace still ends the turn as stopped, with the files listed", async () => {
+    const computer = wired();
+    // The listing takes four times the grace the turn gives a stopped agent to end.
+    configureTurnArtifacts({
+      gateway: {
+        ...computer.gateway,
+        turnChanges: async (seat, markId, signal) => {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          return computer.gateway.turnChanges(seat, markId, signal);
+        },
+      },
+      seatOf: computer.seatOf,
+    });
+    const { persisted, turn } = unattended(1, computer, {
+      agent: stalledAfterFirstStep,
+      turnTimeoutMs: 80,
+      abortGraceMs: 100,
+    });
+    const error = await turn().then(
+      () => undefined,
+      (thrown: unknown) => thrown,
+    );
+    expect(String(error)).not.toContain("could not be stopped");
+    expect(paths(persisted)).toEqual(["unused"]);
+  });
+
   test("a turn that answers without touching the computer lists nothing", async () => {
     const computer = wired();
     const { persisted, turn } = unattended(0, computer);
@@ -362,7 +425,106 @@ describe("an unattended turn (a card, a group's turn, a routine)", () => {
     expect(listed(persisted)).toEqual([]);
     expect(computer.asked).toEqual([]);
   });
+
+  describe("a group conversation's turn", () => {
+    /** Every delay a timer is set for while `during` runs: the turn's time limit is one of them. */
+    async function delaysDuring(during: () => Promise<unknown>) {
+      const delays: number[] = [];
+      const real = globalThis.setTimeout;
+      const spy = spyOn(globalThis, "setTimeout").mockImplementation(((
+        ...args: Parameters<typeof setTimeout>
+      ) => {
+        if (typeof args[1] === "number") delays.push(args[1]);
+        return real(...args);
+      }) as typeof setTimeout);
+      try {
+        await during();
+      } finally {
+        spy.mockRestore();
+      }
+      return delays;
+    }
+
+    test("an employee with a computer gets the working turn's 25 minutes and 80 rounds", async () => {
+      const computer = wired();
+      const { turn } = unattended(35, computer, {
+        make: createGroupTurnRunner,
+      });
+      const delays = await delaysDuring(turn);
+      expect(delays).toContain(TURN_LIMITS.workTurnTimeoutMs);
+      expect(delays).not.toContain(TURN_LIMITS.turnTimeoutMs);
+      // 35 rounds is past the light turn's 30 and well inside 80: the turn runs to its answer.
+      expect(computer.asked.length).toBeGreaterThanOrEqual(35);
+    });
+
+    test("an employee with no computer keeps the light turn's five minutes", async () => {
+      const computer = wired();
+      const { turn } = unattended(0, computer, {
+        make: createGroupTurnRunner,
+        tools: () => [],
+      });
+      const delays = await delaysDuring(turn);
+      expect(delays).toContain(TURN_LIMITS.turnTimeoutMs);
+      expect(delays).not.toContain(TURN_LIMITS.workTurnTimeoutMs);
+    });
+
+    test("a turn the time limit stopped still lists the files its tools left", async () => {
+      const computer = wired();
+      const { persisted, turn } = unattended(1, computer, {
+        make: createGroupTurnRunner,
+        // 80 ms stands for the minutes a slow model would take; nothing here waits for them.
+        workLimits: { turnTimeoutMs: 80, maxToolSegments: 80 },
+        abortGraceMs: 500,
+        agent: () => stalledAfterFirstStep(),
+      });
+      await turn().catch(() => undefined);
+      expect(paths(persisted)).toEqual(["unused"]);
+      const types = persisted.map((event) => event.type);
+      expect(types.at(-1)).toBe(EventType.RUN_ERROR);
+      expect(types.at(-2)).toBe(EventType.CUSTOM);
+    });
+  });
 });
+
+/**
+ * A model whose second step never answers: it asks for the computer once, then hangs until the turn's
+ * time limit aborts it, and, as the built-in agent does when aborted, simply completes with no closing
+ * event.
+ */
+class StallsAfterFirstStep extends ObservedAgent {
+  private release: (() => void) | undefined;
+  private steps = 0;
+  override run(input: RunAgentInput): Observable<BaseEvent> {
+    this.steps += 1;
+    if (this.steps === 1) return super.run(input);
+    return new Observable<BaseEvent>((subscriber) => {
+      subscriber.next({
+        type: EventType.RUN_STARTED,
+        threadId: input.threadId,
+        runId: input.runId,
+      } as BaseEvent);
+      this.release = () => subscriber.complete();
+    });
+  }
+  override abortRun() {
+    this.release?.();
+  }
+}
+
+const stalledAfterFirstStep = () =>
+  new StallsAfterFirstStep({
+    agentId: BOT,
+    url: "https://agent.example/ag-ui",
+    fetch: async (_url, init) => {
+      const input = JSON.parse(String(init?.body)) as RunAgentInput;
+      return new Response(
+        run(input.runId, askFor("call-1"))
+          .map((event) => `data: ${JSON.stringify(event)}\n\n`)
+          .join(""),
+        { headers: { "content-type": "text/event-stream" } },
+      );
+    },
+  });
 
 /** A model that asks for the computer, then for a tool only the page can run, then answers. */
 function modelAskingThenPage(options: { observed: boolean }) {

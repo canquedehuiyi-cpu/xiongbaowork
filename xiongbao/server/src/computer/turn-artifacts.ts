@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { type BaseEvent, EventType } from "@ag-ui/client";
-import { defer, from, Observable, of } from "rxjs";
-import { concatMap } from "rxjs/operators";
+import { concat, defer, EMPTY, from, Observable, of, throwError } from "rxjs";
+import { catchError, concatMap } from "rxjs/operators";
 import {
   TURN_ARTIFACTS_EVENT,
   type TurnArtifactsValue,
@@ -13,6 +13,10 @@ import type { ComputerGateway } from "./gateway";
 /**
  * 每一轮首尾记员工电脑上的文件：一轮开始时让电脑记快照，结束时问它「这一轮新建、改过哪些文件」，
  * 有就在 `RUN_FINISHED` 前插一条给人看的 `CUSTOM` 事件，对话里据此画下载清单。
+ *
+ * 以 `RUN_ERROR` 收尾、流报错、流没有终止事件就结束（时限到点被停的轮，内层不发终止事件）的轮同样比对：
+ * 文件已经写在电脑上，对话里没有清单就下载不到，用户再说「继续」是新一轮，补不回来。清单插在 `RUN_ERROR` 前，
+ * `RUN_ERROR` 照常往后传。
  *
  * 这是锦上添花：记快照、查变化出任何问题（电脑连不上、重启后快照丢了、设备上的电脑）都只打日志，
  * 这一轮照常结束，不多不少。
@@ -243,12 +247,29 @@ export function withTurnArtifacts(
       if (event.type === EventType.TOOL_CALL_START) unanswered.add(id);
       else if (event.type === EventType.TOOL_CALL_RESULT) unanswered.delete(id);
     };
+    /** 这一轮在这里结束了：比对，清掉跨 run 的标记，答要发的事件。 */
+    const settle = async (): Promise<BaseEvent[]> => {
+      const events = await artifactsBefore();
+      if (carry && carried.get(carry.key)?.markId === markId)
+        carried.delete(carry.key);
+      return events;
+    };
+    /** 流已经给过终止事件（`RUN_FINISHED`，或已在 `RUN_ERROR` 上比对过）。 */
+    let ended = false;
     const subscribeInside = () =>
-      stream
-        .pipe(
+      concat(
+        stream.pipe(
           concatMap((event) => {
             track(event);
+            if (event.type === EventType.RUN_ERROR) {
+              // 出错的轮不会有页面续跑的 run，不推迟：文件已经在电脑上了。
+              ended = true;
+              return defer(settle).pipe(
+                concatMap((events) => from([...events, event])),
+              );
+            }
             if (event.type !== EventType.RUN_FINISHED) return of(event);
+            ended = true;
             /*
              * 这个 run 停在待执行的工具调用上：页面执行完会再发一个 run，这一轮在那里结束。服务器执行过的工具
              * 都有结果事件，剩下没答复的就是页面要执行的调用。服务器自己接着办的等待（审批）不会有页面续跑，
@@ -266,15 +287,27 @@ export function withTurnArtifacts(
               if (own?.markId === markId) own.at = Date.now();
               return of(event);
             }
-            return defer(async () => {
-              const events = await artifactsBefore();
-              if (carry && carried.get(carry.key)?.markId === markId)
-                carried.delete(carry.key);
-              return [...events, event];
-            }).pipe(concatMap((events) => from(events)));
+            return defer(settle).pipe(
+              concatMap((events) => from([...events, event])),
+            );
           }),
-        )
-        .subscribe(subscriber);
+          // 流报错（被时限停掉后下层抛出的「没答完就结束了」）：先列清单，错误照常往后传。
+          catchError((error) =>
+            ended
+              ? throwError(() => error)
+              : concat(
+                  defer(settle).pipe(concatMap((events) => from(events))),
+                  throwError(() => error),
+                ),
+          ),
+        ),
+        // 流没有终止事件就结束了：内层被时限 abort 时只是完成，不发 RUN_FINISHED。
+        defer(() =>
+          ended
+            ? EMPTY
+            : defer(settle).pipe(concatMap((events) => from(events))),
+        ),
+      ).subscribe(subscriber);
     const subscription = turn.wholeTurn
       ? wholeTurnOf.run(`${turn.runId}\u0000${turn.botId}`, subscribeInside)
       : subscribeInside();

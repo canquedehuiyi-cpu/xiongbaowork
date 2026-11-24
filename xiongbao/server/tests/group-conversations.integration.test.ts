@@ -204,13 +204,18 @@ function service(options: {
   runTurn?: TurnRunner;
   /** Bots that are someone's external employees (`hiredBy`), as the production roster marks them. */
   hiredBy?: Record<string, string>;
+  /** Another replica of the same deployment (its own queue owner). */
+  owner?: string;
+  /** How long a claimed turn is held before another worker may take it. */
+  leaseMs?: number;
 }) {
   const calls: Parameters<TurnRunner>[0][] = [];
   const audit: AuditEventInput[] = [];
   const conversations = createGroupConversations({
     store: createGroupStore(database, () => threadIdentity.mint()),
     queue: createWorkQueue(database),
-    owner: `${prefix}-replica`,
+    owner: options.owner ?? `${prefix}-replica`,
+    ...(options.leaseMs ? { leaseMs: options.leaseMs } : {}),
     // The production wiring's roster, against the real channel and profile stores.
     roster: async (ownerUserId, channelId) => {
       const actor: AgentActor = { id: ownerUserId, role: "user" };
@@ -2059,10 +2064,10 @@ describe("group conversations in PostgreSQL", () => {
           [ada]: async (input) => {
             input.onText?.("From your notes: the launch slipped.");
             await new Promise((resolve) => setTimeout(resolve, 30));
-            // Meanwhile the teammate asks Grace from their own request, and another replica runs
-            // that turn (in the teammate's frame, from the queued item's stamp). That replica's
-            // worker is nobody's (`platform`), not nested in this owner's turn: a sweep running
-            // inside one person's frame may not take up another person's work (runAsClaimedTenant).
+            // Meanwhile the teammate asks Grace from their own request. The group is busy with Ada's
+            // turn, so the sweep below claims nothing (one message of a group at a time); it only shows
+            // that a worker that is nobody's (`platform`) does not run the teammate's turn inside this
+            // owner's. Grace is answered after this turn, by the sweep at the end of the test.
             await as(teammate, () =>
               conversations.send(teammate.id, channelId, {
                 id: `${prefix}-handed-teammate`,
@@ -2096,7 +2101,12 @@ describe("group conversations in PostgreSQL", () => {
         text: "status?",
         agentId: ada,
       });
-      await drain(conversations);
+      // Only Ada's turn: a sweep inside the owner's frame would end the teammate's item unrun.
+      await conversations.sweep();
+      // The group answers one message at a time: the sweep nested in Ada's reply found the teammate's
+      // message waiting behind her turn and took nothing. It is taken up now, by a worker that is
+      // nobody's, once Ada's reply is held, and Grace still must not be handed that held reply.
+      await runAsTenant("platform", () => conversations.sweep());
       expect(graceSaw).toContain("what is the status?");
       expect(graceSaw).not.toContain("launch slipped");
     });
@@ -3469,5 +3479,342 @@ describe("group conversations in PostgreSQL", () => {
         expect((await cards(owner.id, channel.id)).length).toBe(before);
       });
     });
+  });
+});
+
+const nap = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+const leftFile = (path: string) => ({
+  path,
+  bytes: 2048,
+  modifiedMs: 5,
+  change: "new" as const,
+});
+
+describe("a group turn that ends in an error still shows the files it left", () => {
+  test("the row is failed and carries the files, under the run the download is asked by, for every member", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const { conversations, calls } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: {
+              botId: ada,
+              seat: "person:private",
+              files: [leftFile("out/report.docx")],
+              scanned: 1,
+              scanTruncated: false,
+              omitted: 0,
+            },
+          });
+          // As a turn the time limit stopped fails.
+          throw new Error("The Bot stopped before it finished answering");
+        },
+      },
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-stopped-files`,
+        text: "做个报告",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    for (const reader of [owner, teammate]) {
+      const seen = await as(reader, () =>
+        conversations.list(reader.id, channel.id),
+      );
+      const row = seen.messages.at(-1);
+      expect(row?.status).toBe("failed");
+      expect(row?.turnArtifacts).toHaveLength(1);
+      expect(row?.turnArtifacts?.[0]?.value.files[0]?.path).toBe(
+        "out/report.docx",
+      );
+      expect(row?.turnArtifacts?.[0]?.runId).toBe(calls[0]?.runId);
+      expect(JSON.stringify(seen)).not.toContain("person:private");
+    }
+  });
+
+  test("a failed turn's files wait for the owner's permission like a reply's, and are dropped when refused", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    let decision: "pending" | "approved" | "denied" = "pending";
+    const privateShare = createPrivateShareCheck({
+      approvals: {
+        open: async () =>
+          ({ id: `${prefix}-failed-share`, status: decision }) as never,
+        list: async () => [],
+        rules: async () => [],
+      },
+    });
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: {
+              botId: ada,
+              seat: "person:private",
+              files: [leftFile("secret-plan.pptx")],
+              scanned: 1,
+              scanTruncated: false,
+              omitted: 0,
+            },
+          });
+          throw new Error("The Bot stopped before it finished answering");
+        },
+      },
+      privateShare,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-failed-held`,
+        text: "做个 ppt",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    const held = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(held.messages.at(-1)?.status).toBe("waiting");
+    expect(JSON.stringify(held)).not.toContain("secret-plan");
+    expect(await rawTranscript(teammate, channel.id)).not.toContain(
+      "secret-plan",
+    );
+
+    decision = "approved";
+    await as(owner, () =>
+      conversations.continueWaiting(`${prefix}-failed-share`, async () => {
+        throw new Error("a held failure is shown, not re-run");
+      }),
+    );
+    const after = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    const released = after.messages.at(-1);
+    expect(released?.status).toBe("failed");
+    expect(released?.turnArtifacts?.[0]?.value.files[0]?.path).toBe(
+      "secret-plan.pptx",
+    );
+  });
+});
+
+describe("group turns that run for a long time", () => {
+  test("a turn longer than its lease is not taken over by another replica while it runs", async () => {
+    const owner = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    // 300 ms stands for the quarter of an hour; the turn runs four times as long.
+    const slow = service({
+      replies: {
+        [ada]: async () => {
+          await nap(1_200);
+          return "Done.";
+        },
+      },
+      leaseMs: 300,
+      owner: `${prefix}-replica-a`,
+    });
+    const other = service({
+      replies: { [ada]: () => "taken over" },
+      leaseMs: 300,
+      owner: `${prefix}-replica-b`,
+    });
+    const channel = await as(owner, () =>
+      slow.conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, () =>
+      slow.conversations.send(owner.id, channel.id, {
+        id: `${prefix}-long-turn`,
+        text: "Take your time",
+        agentId: ada,
+      }),
+    );
+    const running = slow.conversations.sweep();
+    await nap(700);
+    expect(await other.conversations.sweep()).toBe(false);
+    await nap(700);
+    expect(await other.conversations.sweep()).toBe(false);
+    await running;
+    expect(other.calls).toHaveLength(0);
+    const seen = await as(owner, () =>
+      slow.conversations.list(owner.id, channel.id),
+    );
+    expect(seen.messages.at(-1)).toMatchObject({
+      status: "completed",
+      text: "Done.",
+    });
+  });
+
+  /** Two groups of the same owner, each asked a question the Bot takes `ms` to answer. */
+  async function twoGroups(ms: number) {
+    const owner = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    let active = 0;
+    let most = 0;
+    const started: string[] = [];
+    const { conversations } = service({
+      replies: {
+        [ada]: async (input) => {
+          started.push(input.instruction);
+          active += 1;
+          most = Math.max(most, active);
+          await nap(ms);
+          active -= 1;
+          return "Done.";
+        },
+      },
+    });
+    const first = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    const second = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    return {
+      owner,
+      conversations,
+      first,
+      second,
+      ada,
+      started,
+      mostAtOnce: () => most,
+    };
+  }
+
+  test("two groups each with a slow turn are answered at the same time", async () => {
+    const { owner, conversations, first, second, ada, mostAtOnce } =
+      await twoGroups(600);
+    await as(owner, async () => {
+      await conversations.send(owner.id, first.id, {
+        id: `${prefix}-par-a`,
+        text: "A",
+        agentId: ada,
+      });
+      await conversations.send(owner.id, second.id, {
+        id: `${prefix}-par-b`,
+        text: "B",
+        agentId: ada,
+      });
+    });
+    const began = Date.now();
+    // A worker that finds another claiming at that very moment claims nothing and asks again soon.
+    const sweepSoon = async () => {
+      for (let tries = 0; tries < 20; tries += 1) {
+        if (await conversations.sweep()) return true;
+        await nap(10);
+      }
+      return false;
+    };
+    const [one, two] = await Promise.all([sweepSoon(), sweepSoon()]);
+    expect([one, two]).toEqual([true, true]);
+    expect(mostAtOnce()).toBe(2);
+    expect(Date.now() - began).toBeLessThan(1_100);
+  });
+
+  test("two messages in one group are still answered one after the other", async () => {
+    const { owner, conversations, first, ada, started, mostAtOnce } =
+      await twoGroups(500);
+    await as(owner, async () => {
+      await conversations.send(owner.id, first.id, {
+        id: `${prefix}-ser-a`,
+        text: "first",
+        agentId: ada,
+      });
+      await conversations.send(owner.id, first.id, {
+        id: `${prefix}-ser-b`,
+        text: "second",
+        agentId: ada,
+      });
+    });
+    const running = conversations.sweep();
+    await nap(100);
+    // The group is being answered: the second message is not handed to a second worker.
+    expect(await conversations.sweep()).toBe(false);
+    await running;
+    expect(await conversations.sweep()).toBe(true);
+    expect(mostAtOnce()).toBe(1);
+    expect(started).toHaveLength(2);
+    expect(started[0]).toContain("first");
+    expect(started[1]).toContain("second");
+  });
+});
+
+describe("a failed turn with no message still holds its files for the owner", () => {
+  test("an error with an empty message is held like any other, and the files are not shown", async () => {
+    const owner = await person();
+    const teammate = await person();
+    const ada = await as(owner, () => bot(owner, "Ada"));
+    const grace = await as(owner, () => bot(owner, "Grace"));
+    const privateShare = createPrivateShareCheck({
+      approvals: {
+        open: async () =>
+          ({ id: `${prefix}-empty-error-share`, status: "pending" }) as never,
+        list: async () => [],
+        rules: async () => [],
+      },
+    });
+    const { conversations } = service({
+      replies: {
+        [ada]: (input) => {
+          input.onCustom?.({
+            name: TURN_ARTIFACTS_EVENT,
+            value: {
+              botId: ada,
+              seat: "person:private",
+              files: [leftFile("secret-plan.pptx")],
+              scanned: 1,
+              scanTruncated: false,
+              omitted: 0,
+            },
+          });
+          throw new Error("");
+        },
+      },
+      privateShare,
+    });
+    const channel = await as(owner, () =>
+      conversations.create(owner.id, { agentIds: [ada, grace] }),
+    );
+    await as(owner, async () => {
+      await conversations.addMember(owner.id, channel.id, {
+        email: await emailOf(teammate),
+      });
+      await conversations.send(owner.id, channel.id, {
+        id: `${prefix}-empty-error`,
+        text: "做个 ppt",
+        agentId: ada,
+      });
+      await drain(conversations);
+    });
+    const seen = await as(teammate, () =>
+      conversations.list(teammate.id, channel.id),
+    );
+    expect(seen.messages.at(-1)?.status).toBe("waiting");
+    expect(JSON.stringify(seen)).not.toContain("secret-plan");
+    expect(await rawTranscript(teammate, channel.id)).not.toContain(
+      "secret-plan",
+    );
   });
 });

@@ -551,3 +551,79 @@ describe("offering at most so many under one prefix", () => {
     expect(results.every((result) => result === "queued")).toBe(true);
   });
 });
+
+describe("items of one line, claimed one at a time", () => {
+  const offerIn = (key: string, line: string, runAt?: Date) =>
+    asPlatform(() =>
+      queue.offer({
+        kind,
+        key,
+        payload: { channelId: line },
+        ...(runAt ? { runAt } : {}),
+      }),
+    );
+  const claim = (owner: string) =>
+    asPlatform(() =>
+      queue.claim({
+        kind,
+        owner,
+        leaseMs: 30_000,
+        oneAtATimeBy: "channelId",
+      }),
+    );
+
+  test("another line is handed out while the first is held, the held line's next item is not", async () => {
+    const past = (ms: number) => new Date(Date.now() - ms);
+    await offerIn("a-1", "line-a", past(3_000));
+    await offerIn("a-2", "line-a", past(2_000));
+    await offerIn("b-1", "line-b", past(1_000));
+
+    expect((await claim("replica-1")).map((item) => item.key)).toEqual(["a-1"]);
+    expect((await claim("replica-2")).map((item) => item.key)).toEqual(["b-1"]);
+    expect(await claim("replica-3")).toEqual([]);
+
+    await asPlatform(() =>
+      queue.finish({ kind, key: "a-1", owner: "replica-1" }),
+    );
+    expect((await claim("replica-3")).map((item) => item.key)).toEqual(["a-2"]);
+  });
+
+  test("two claims made at the same moment do not take two items of one line", async () => {
+    const past = (ms: number) => new Date(Date.now() - ms);
+    await offerIn("c-1", "line-c", past(2_000));
+    await offerIn("c-2", "line-c", past(1_000));
+    const taken = await Promise.all([claim("replica-1"), claim("replica-2")]);
+    expect(taken.flat()).toHaveLength(1);
+  });
+
+  test("an earlier item handed back for a retry keeps its line: the later one does not go first", async () => {
+    const past = (ms: number) => new Date(Date.now() - ms);
+    await offerIn("e-1", "line-e", past(2_000));
+    await offerIn("e-2", "line-e", past(1_000));
+    expect((await claim("replica-1")).map((item) => item.key)).toEqual(["e-1"]);
+    // Handed back to be tried again later, which moves its time on past the other item's.
+    await asPlatform(() =>
+      queue.release({
+        kind,
+        key: "e-1",
+        owner: "replica-1",
+        delayMs: 10_000,
+        reason: "failed",
+      }),
+    );
+    expect(await claim("replica-2")).toEqual([]);
+  });
+
+  test("without the option, a queue hands out items of one line side by side as before", async () => {
+    await offerIn("d-1", "line-d");
+    await offerIn("d-2", "line-d");
+    const first = await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-1", leaseMs: 30_000 }),
+    );
+    const second = await asPlatform(() =>
+      queue.claim({ kind, owner: "replica-2", leaseMs: 30_000 }),
+    );
+    expect(first).toHaveLength(1);
+    expect(second).toHaveLength(1);
+  });
+});
