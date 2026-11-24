@@ -1,7 +1,7 @@
 import { type IncomingMessage, request } from "node:http";
 import type { ServerWebSocket, WebSocketHandler } from "bun";
 import type { ForwardVerdict } from "./listeners";
-import { HEADER, LEGACY_HEADER } from "./wire-headers";
+import { HEADER } from "./wire-headers";
 
 /**
  * Forwarding a request to a program an employee runs on this computer's loopback.
@@ -33,7 +33,6 @@ const HOP_BY_HOP = new Set([
 const COMPUTER_ONLY = new Set<string>([
   "authorization",
   ...Object.values(HEADER),
-  ...Object.values(LEGACY_HEADER),
 ]);
 
 function isHopByHop(name: string): boolean {

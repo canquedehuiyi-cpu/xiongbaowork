@@ -1517,7 +1517,7 @@ describe("the personal edition's one computer", () => {
     // What the real computer says: the Bot's seat is there, and no browser is running on it.
     const listed = (await (
       await fetch(`${base}/computers`, {
-        headers: { "x-openbot-computer-token": token },
+        headers: { "x-xiongbao-computer-token": token },
       })
     ).json()) as { computers: { botId: string; running: boolean }[] };
     expect(listed.computers).toEqual([

@@ -88,8 +88,8 @@ function call(
   return fetch(`${computer.base}${path}`, {
     method: options.method ?? (options.body === undefined ? "GET" : "POST"),
     headers: {
-      "x-openbot-computer-token": TOKEN,
-      ...(options.bot ? { "x-openbot-bot-id": options.bot } : {}),
+      "x-xiongbao-computer-token": TOKEN,
+      ...(options.bot ? { "x-xiongbao-bot-id": options.bot } : {}),
       ...(options.body === undefined
         ? {}
         : { "content-type": "application/json" }),

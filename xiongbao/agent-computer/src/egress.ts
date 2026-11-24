@@ -23,7 +23,7 @@ import {
 } from "node:http";
 import { BlockList, connect, isIP, type Socket } from "node:net";
 import { isPersonBrowserId } from "../../shared/openbot-browser";
-import { HEADER, LEGACY_HEADER } from "./wire-headers";
+import { HEADER } from "./wire-headers";
 
 /** A proxy as Playwright wants it: credentials separated from the URL. */
 export type Egress = {
@@ -828,12 +828,12 @@ function upstreamAddress(upstream: Egress): { host: string; port: number } {
 }
 
 /*
- * A refusal says so under both names of the header while it is renamed (wire-headers.ts). Nothing
- * reads it; it is for whoever opens the Bot browser's developer tools.
+ * A refusal says so in a header. Nothing reads it; it is for whoever opens the Bot browser's
+ * developer tools.
  */
 function refuse(socket: Socket, reason: string) {
   socket.end(
-    `HTTP/1.1 403 Forbidden\r\ncontent-type: text/plain\r\n${HEADER.egress}: refused\r\n${LEGACY_HEADER.egress}: refused\r\ncontent-length: ${Buffer.byteLength(reason)}\r\n\r\n${reason}`,
+    `HTTP/1.1 403 Forbidden\r\ncontent-type: text/plain\r\n${HEADER.egress}: refused\r\ncontent-length: ${Buffer.byteLength(reason)}\r\n\r\n${reason}`,
   );
 }
 
@@ -1018,7 +1018,6 @@ export async function startEgressFilter(
         .writeHead(403, {
           "content-type": "text/plain",
           [HEADER.egress]: "refused",
-          [LEGACY_HEADER.egress]: "refused",
         })
         .end(decision.reason);
       return;

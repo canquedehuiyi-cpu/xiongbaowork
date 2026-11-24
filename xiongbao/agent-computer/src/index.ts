@@ -131,7 +131,7 @@ import {
 } from "./terminal-socket";
 import { startVirtualDisplay } from "./virtual-display";
 import { applyWebBotAuthPush } from "./web-bot-auth";
-import { disagreeingWireHeader, readWireHeader } from "./wire-headers";
+import { readWireHeader } from "./wire-headers";
 import {
   WorkspaceFileError,
   WorkspaceFileNotFoundError,
@@ -1385,15 +1385,6 @@ serve<StreamData & TerminalSocketData & ForwardSocketData>({
       // Says nothing about what is here. A refusal that describes the endpoint it is protecting is a
       // directory listing for whoever is knocking.
       return json({ error: "Not authorised." }, 401);
-    }
-
-    // The server's headers have two names while they are renamed (wire-headers.ts). A request that
-    // names one Bot or person under the new name and another under the old one is refused, not
-    // resolved: either answer would act for somebody the other name did not mean. Two token headers
-    // that disagree are already a 401 above (`offeredToken`) everywhere but `/stream` and `/terminal`,
-    // which take their token from the query; there this check is what refuses them, with a 400.
-    if (!isOpenPath(url.pathname) && disagreeingWireHeader(request.headers)) {
-      return json({ error: "Conflicting request headers." }, 400);
     }
 
     // Resolved once per request. Everything below that touches a browser, a takeover or a snapshot

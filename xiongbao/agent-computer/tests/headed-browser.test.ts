@@ -66,8 +66,8 @@ function api(path: string, init?: RequestInit) {
     ...init,
     headers: {
       "content-type": "application/json",
-      "x-openbot-bot-id": BOT,
-      "x-openbot-computer-token": TOKEN,
+      "x-xiongbao-bot-id": BOT,
+      "x-xiongbao-computer-token": TOKEN,
       ...(init?.headers ?? {}),
     },
   });

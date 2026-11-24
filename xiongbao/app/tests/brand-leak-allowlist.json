@@ -672,17 +672,6 @@
     "plan": "keep"
   },
   {
-    "file": "runner/src/browser.ts",
-    "text": "\"openbot-snapshots.sqlite\"",
-    "reason": "persisted-identifier: 旧快照计数文件名；启动时先 checkpoint 再改名为 xiongbao-snapshots.sqlite，改名失败仍读旧名（L1-18，附录 A 第 10 行）。用户 2026-11-17 批准：延期到 0.2.14（推荐）；用户 2026-11-22 批准：再延期到 0.2.15（推荐）",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.15",
-    "notBefore": "0.2.15",
-    "device": true
-  },
-  {
     "file": "desktop-device/src-tauri/src/sidecar.rs",
     "text": "LEGACY_SIDECAR: &str = \"openbot-runner\"",
     "reason": "persisted-identifier: old sidecar name the cleanup looks for on upgraded machines",
@@ -1195,24 +1184,9 @@
   },
   {
     "file": "shared/desktop-control.ts",
-    "text": "\"openbot-runner\",",
-    "reason": "persisted-identifier: 识别旧版安装包的进程名（C1），把旧版设备端自己的窗口也当成本机界面挡住",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.10",
-    "removeIn": "0.2.15",
-    "notBefore": "0.2.15",
-    "device": true
-  },
-  {
-    "file": "shared/desktop-control.ts",
     "text": "\"openbot-desktop\",",
-    "reason": "persisted-identifier: 识别旧版安装包的进程名（C1），把旧版设备端自己的窗口也当成本机界面挡住",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "introducedIn": "0.2.10",
-    "removeIn": "0.2.15",
-    "notBefore": "0.2.15",
-    "device": true
+    "reason": "persisted-identifier: 桌面端自己的可执行文件名（desktop/src-tauri 的 Cargo bin，Mac 和 Windows 上的进程名），用来把桌面端自己的窗口挡在员工的无询问写之外；不是旧名，不到期",
+    "category": "persisted-data",
+    "plan": "keep"
   }
 ]

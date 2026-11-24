@@ -122,7 +122,7 @@
   {
     "rule": "identifier",
     "scope": "extension/src",
-    "lines": 193
+    "lines": 189
   },
   {
     "rule": "identifier",
@@ -288,11 +288,6 @@
     "rule": "runtime-path",
     "scope": "shared/recorder-api.ts",
     "lines": 1
-  },
-  {
-    "rule": "wire-dom",
-    "scope": "agent-computer/src",
-    "lines": 4
   },
   {
     "rule": "wire-dom",

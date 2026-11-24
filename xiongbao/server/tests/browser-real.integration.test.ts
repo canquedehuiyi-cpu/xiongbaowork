@@ -93,7 +93,7 @@ const STORE_HOSTS = [
   "microsoftedge.microsoft.com",
 ];
 
-/** The computer's routes as the contract types them: the token, a person's browser id in `x-openbot-bot-id` (400 for
+/** The computer's routes as the contract types them: the token, a person's browser id in `x-xiongbao-bot-id` (400 for
  * anything else), and each body read against the contract's schema. The real-browser routes refuse what OpenBot
  * Desktop's host-side computer refuses: a front with a url, and a store url that is not an https store page. */
 const computer = Bun.serve({

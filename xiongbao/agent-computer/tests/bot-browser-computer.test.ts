@@ -125,8 +125,8 @@ async function call<T = Record<string, unknown>>(
     method: options.body === undefined ? "GET" : "POST",
     headers: {
       "content-type": "application/json",
-      "x-openbot-computer-token": TOKEN,
-      "x-openbot-bot-id": options.botId ?? BOT,
+      "x-xiongbao-computer-token": TOKEN,
+      "x-xiongbao-bot-id": options.botId ?? BOT,
     },
     ...(options.body === undefined
       ? {}

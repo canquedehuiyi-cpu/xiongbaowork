@@ -286,8 +286,8 @@ describe.skipIf(!asked)("/forward/<port>/<path>", () => {
     const response = await forward(`/forward/${programPort}/echo`, {
       headers: {
         authorization: `Bearer ${TOKEN}`,
-        "x-openbot-computer-token": TOKEN,
-        "x-openbot-bot-id": BOT,
+        "x-xiongbao-computer-token": TOKEN,
+        "x-xiongbao-bot-id": BOT,
         "x-xiongbao-person-id": "somebody",
         "x-custom": "kept",
         "proxy-authorization": "Basic abc",
@@ -304,8 +304,8 @@ describe.skipIf(!asked)("/forward/<port>/<path>", () => {
       "x-xiongbao-computer-token",
       "x-xiongbao-bot-id",
       "x-xiongbao-person-id",
-      "x-openbot-computer-token",
-      "x-openbot-bot-id",
+      "x-xiongbao-computer-token",
+      "x-xiongbao-bot-id",
       "proxy-authorization",
       "keep-alive",
     ])

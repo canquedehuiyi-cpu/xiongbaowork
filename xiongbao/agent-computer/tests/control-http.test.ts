@@ -16,8 +16,8 @@ async function post(path: string, body: unknown) {
   return fetch(`${base}${path}`, {
     method: "POST",
     headers: {
-      "x-openbot-computer-token": token,
-      "x-openbot-bot-id": "bot-http",
+      "x-xiongbao-computer-token": token,
+      "x-xiongbao-bot-id": "bot-http",
       "content-type": "application/json",
     },
     body: JSON.stringify(body),
@@ -28,8 +28,8 @@ async function control(requestId?: string): Promise<ComputerControlState> {
     `${base}/control${requestId ? `?requestId=${requestId}` : ""}`,
     {
       headers: {
-        "x-openbot-computer-token": token,
-        "x-openbot-bot-id": "bot-http",
+        "x-xiongbao-computer-token": token,
+        "x-xiongbao-bot-id": "bot-http",
       },
     },
   );

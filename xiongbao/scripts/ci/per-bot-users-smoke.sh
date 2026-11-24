@@ -44,7 +44,7 @@ call() {
   printf '%s' "$body" | docker exec -i "$name" sh -c '
     bot=$1; path=$2; shift 2
     token=$(cat /run/s6/container_environment/COMPUTER_TOKEN)
-    if [ "$bot" != - ]; then set -- "$@" -H "x-openbot-bot-id: $bot"; fi
+    if [ "$bot" != - ]; then set -- "$@" -H "x-xiongbao-bot-id: $bot"; fi
     exec curl -sS -w "\n%{http_code}" -X POST "$@" \
       -H "authorization: Bearer $token" -H "content-type: application/json" \
       --data-binary @- "http://127.0.0.1:4100$path"

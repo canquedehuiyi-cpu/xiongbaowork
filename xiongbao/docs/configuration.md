@@ -1132,7 +1132,7 @@ With `COMPUTER_PER_BOT_USERS=on`, every Bot other than the default one (`COMPUTE
 `shared`) gets a Linux user of its own, `xb-<botKey>` (`botKey` is the first 12 hex digits of
 `sha256(botId)`), and a directory of its own, `/workspace/bots/<botKey>`. Its commands run as that
 user and its file tools are rooted in that directory, so one Bot cannot read another's files. The
-default Bot and calls without an `x-openbot-bot-id` header keep `/workspace` and run as `pwuser`,
+default Bot and calls without an `x-xiongbao-bot-id` header keep `/workspace` and run as `pwuser`,
 as before. Users are created through the root helper `/usr/local/sbin/xb-bot`; at start the
 `computer-users` oneshot restores them from `/workspace/.xb-users`, so a Bot keeps its uid and its
 files across a recreated container.
@@ -1143,7 +1143,7 @@ then `.venv/bin/pip install`), and system packages belong in the image, which ca
 python3 and python3-venv for that reason.
 
 Files already in `/workspace` before the upgrade stay there, for the default Bot (calls without an
-`x-openbot-bot-id` header); real employees start from their own empty directory and do not see
+`x-xiongbao-bot-id` header); real employees start from their own empty directory and do not see
 them. To hand some of them to one employee, move them into `/workspace/bots/<botKey>/` as root and
 `chown` them to `xb-<botKey>:xbcomp` (see `docs/acceptance/HUMAN-STEPS.md`, section 17).
 

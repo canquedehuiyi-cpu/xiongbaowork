@@ -165,7 +165,7 @@ async function fetchFromComputer(seat: ComputerSeat, port: number) {
     method: "POST",
     headers: {
       ...sharedSeatHeaders(seat),
-      "x-openbot-computer-token": TOKEN,
+      "x-xiongbao-computer-token": TOKEN,
       "content-type": "application/json",
     },
     body: JSON.stringify({

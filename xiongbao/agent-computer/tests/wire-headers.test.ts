@@ -12,64 +12,63 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { matchesToken, offeredToken } from "../src/authorisation";
 import { startEgressFilter, stopEgressFilter } from "../src/egress";
-import {
-  disagreeingWireHeader,
-  HEADER,
-  LEGACY_HEADER,
-  readWireHeader,
-} from "../src/wire-headers";
+import { HEADER, readWireHeader } from "../src/wire-headers";
 
 /**
- * The headers the server sends a computer, under their new names and their old ones.
- *
- * A computer is upgraded before the server that talks to it, so for a release it has to take both.
- * Taking both is where a check can open: a request carrying a wrong token under one name and the right
- * one under the other must never get in because one of the two matched. So the rule is one value per
- * header. The new name is read when it has one, the old name otherwise, and a request whose two names
- * carry different values is refused rather than resolved.
+ * The headers the server sends a computer. Only the `x-xiongbao-*` names count: the `x-openbot-*`
+ * names the computer took for a few releases are gone, so a request that carries only those has no
+ * token, no Bot and no person.
  */
+
+// The names this computer used to take, written out so the tests can show they grant nothing.
+const OLD = {
+  botId: "x-openbot-bot-id",
+  personId: "x-openbot-person-id",
+  computerToken: "x-openbot-computer-token",
+  egress: "x-openbot-egress",
+} as const;
 
 const SECRET = "a-long-development-secret";
 const OTHER = "a-different-long-secret!!";
 const url = new URL("http://computer.test/snapshot");
 
-describe("reading a header under either name", () => {
-  test("only the new header", () => {
+describe("reading a header", () => {
+  test("the header is read", () => {
     const headers = new Headers({ [HEADER.botId]: "sales" });
     expect(readWireHeader(headers, "botId")).toBe("sales");
   });
 
-  test("only the old header", () => {
-    const headers = new Headers({ [LEGACY_HEADER.botId]: "sales" });
-    expect(readWireHeader(headers, "botId")).toBe("sales");
+  test("an old name is not read, with or without the new one", () => {
+    expect(
+      readWireHeader(new Headers({ [OLD.botId]: "sales" }), "botId"),
+    ).toBeUndefined();
+    expect(
+      readWireHeader(new Headers({ [OLD.personId]: "person-old" }), "personId"),
+    ).toBeUndefined();
+    expect(
+      readWireHeader(
+        new Headers({
+          [HEADER.personId]: "person-new",
+          [OLD.personId]: "person-old",
+        }),
+        "personId",
+      ),
+    ).toBe("person-new");
+    expect(
+      readWireHeader(
+        new Headers({ [HEADER.botId]: "   ", [OLD.botId]: " sales " }),
+        "botId",
+      ),
+    ).toBeUndefined();
   });
 
-  test("both, new wins", () => {
-    const headers = new Headers({
-      [HEADER.personId]: "person-new",
-      [LEGACY_HEADER.personId]: "person-old",
-    });
-    expect(readWireHeader(headers, "personId")).toBe("person-new");
-  });
-
-  test("blank new falls back to old", () => {
-    const headers = new Headers({
-      [HEADER.botId]: "   ",
-      [LEGACY_HEADER.botId]: " sales ",
-    });
-    expect(readWireHeader(headers, "botId")).toBe("sales");
-  });
-
-  test("whitespace is trimmed, and nothing under either name is undefined", () => {
+  test("whitespace is trimmed, and nothing is undefined", () => {
     expect(
       readWireHeader(new Headers({ [HEADER.botId]: "  sales  " }), "botId"),
     ).toBe("sales");
     expect(readWireHeader(new Headers(), "botId")).toBeUndefined();
     expect(
-      readWireHeader(
-        new Headers({ [HEADER.botId]: " ", [LEGACY_HEADER.botId]: "" }),
-        "botId",
-      ),
+      readWireHeader(new Headers({ [HEADER.botId]: " " }), "botId"),
     ).toBeUndefined();
   });
 
@@ -80,93 +79,29 @@ describe("reading a header under either name", () => {
       computerToken: "x-xiongbao-computer-token",
       egress: "x-xiongbao-egress",
     });
-    expect(Object.keys(LEGACY_HEADER)).toEqual(Object.keys(HEADER));
   });
 });
 
-describe("two names that disagree", () => {
-  test("different values under the two names are named", () => {
-    const headers = new Headers({
-      [HEADER.botId]: "sales",
-      [LEGACY_HEADER.botId]: "research",
-    });
-    expect(disagreeingWireHeader(headers)).toBe("botId");
-  });
-
-  test("the same value under both, once trimmed, is not a disagreement", () => {
-    const headers = new Headers({
-      [HEADER.botId]: "sales",
-      [LEGACY_HEADER.botId]: " sales ",
-      [HEADER.personId]: "p1",
-      [LEGACY_HEADER.personId]: "p1",
-    });
-    expect(disagreeingWireHeader(headers)).toBeUndefined();
-  });
-
-  test("a blank name next to a filled one is not a disagreement", () => {
-    expect(
-      disagreeingWireHeader(
-        new Headers({ [HEADER.botId]: " ", [LEGACY_HEADER.botId]: "sales" }),
-      ),
-    ).toBeUndefined();
-    expect(
-      disagreeingWireHeader(new Headers({ [HEADER.personId]: "p1" })),
-    ).toBeUndefined();
-  });
-});
-
-describe("the computer token under either name", () => {
+describe("the computer token", () => {
   const accepted = (init: Record<string, string>) =>
     matchesToken(SECRET, offeredToken(new Headers(init), url));
 
-  test("the new header alone is accepted", () => {
+  test("the header is accepted", () => {
     expect(accepted({ [HEADER.computerToken]: SECRET })).toBeTrue();
   });
 
-  test("the old header alone is still accepted", () => {
-    expect(accepted({ [LEGACY_HEADER.computerToken]: SECRET })).toBeTrue();
+  test("the old header alone is not accepted", () => {
+    expect(accepted({ [OLD.computerToken]: SECRET })).toBeFalse();
   });
 
-  test("the same token under both names is accepted", () => {
-    expect(
-      accepted({
-        [HEADER.computerToken]: SECRET,
-        [LEGACY_HEADER.computerToken]: SECRET,
-      }),
-    ).toBeTrue();
-  });
-
-  test("a request with a wrong new token and a right old token is refused", () => {
+  test("a wrong token is not rescued by a right old header or a right bearer token", () => {
     expect(OTHER).toHaveLength(SECRET.length);
     expect(
       accepted({
         [HEADER.computerToken]: OTHER,
-        [LEGACY_HEADER.computerToken]: SECRET,
+        [OLD.computerToken]: SECRET,
       }),
     ).toBeFalse();
-  });
-
-  test("a request with a right new token and a wrong old token is refused too", () => {
-    // Either way round, two tokens that differ are one forged and one not, and nothing says which.
-    expect(
-      accepted({
-        [HEADER.computerToken]: SECRET,
-        [LEGACY_HEADER.computerToken]: OTHER,
-      }),
-    ).toBeFalse();
-  });
-
-  test("a disagreement is not rescued by a right bearer token", () => {
-    expect(
-      accepted({
-        [HEADER.computerToken]: OTHER,
-        [LEGACY_HEADER.computerToken]: OTHER.toUpperCase(),
-        authorization: `Bearer ${SECRET}`,
-      }),
-    ).toBeFalse();
-  });
-
-  test("a wrong new token is not rescued by a right bearer token", () => {
     expect(
       accepted({
         [HEADER.computerToken]: OTHER,
@@ -196,7 +131,7 @@ describe("egress refusal", () => {
     });
   }
 
-  test("egress refusal carries both header names", async () => {
+  test("an egress refusal carries the header", async () => {
     // Nothing pushed, so the filter refuses everything: a tunnel and a plain request each take their
     // own refusal path.
     const filter = await startEgressFilter({ env: {} });
@@ -213,7 +148,7 @@ describe("egress refusal", () => {
       expect(head).toStartWith("HTTP/1.1 403");
       const lower = head.toLowerCase();
       expect(lower).toContain(`\r\n${HEADER.egress}: refused`);
-      expect(lower).toContain(`\r\n${LEGACY_HEADER.egress}: refused`);
+      expect(lower).not.toContain(`\r\n${OLD.egress}:`);
     }
   });
 });
@@ -222,7 +157,7 @@ describe("egress refusal", () => {
  * The same rules on a real computer, where the dispatcher is what applies them. Separate workspaces,
  * so which Bot a request named shows up as which folder it reached.
  */
-describe("a computer taking both names", () => {
+describe("a computer reading the headers", () => {
   const TOKEN = "wire-headers-test-token";
   let base = "";
   let root = "";
@@ -298,34 +233,28 @@ describe("a computer taking both names", () => {
     return body.entries.map((entry) => entry.path);
   }
 
-  test("a right new token gets in, and so does a right old one", async () => {
+  test("a right token gets in, and the old name alone does not", async () => {
     expect(
       (await post("/files/list", { [HEADER.computerToken]: TOKEN }, {})).status,
     ).toBe(200);
     expect(
-      (await post("/files/list", { [LEGACY_HEADER.computerToken]: TOKEN }, {}))
-        .status,
-    ).toBe(200);
+      (await post("/files/list", { [OLD.computerToken]: TOKEN }, {})).status,
+    ).toBe(401);
   });
 
-  test("tokens that disagree are a 401, whichever name holds the right one", async () => {
-    for (const [fresh, legacy] of [
-      ["wrong-token", TOKEN],
-      [TOKEN, "wrong-token"],
-    ]) {
-      const response = await post(
-        "/files/list",
-        {
-          [HEADER.computerToken]: fresh as string,
-          [LEGACY_HEADER.computerToken]: legacy as string,
-        },
-        {},
-      );
-      expect(response.status).toBe(401);
-    }
+  test("a wrong token is a 401, even beside a right old name", async () => {
+    const response = await post(
+      "/files/list",
+      {
+        [HEADER.computerToken]: "wrong-token",
+        [OLD.computerToken]: TOKEN,
+      },
+      {},
+    );
+    expect(response.status).toBe(401);
   });
 
-  test("the Bot named under the new name is the one the old name reaches", async () => {
+  test("the Bot is the one the new header names, and the old name names none", async () => {
     const write = await post(
       "/files/write",
       { [HEADER.computerToken]: TOKEN, [HEADER.botId]: "bot-a" },
@@ -333,44 +262,15 @@ describe("a computer taking both names", () => {
     );
     expect(write.status).toBe(200);
     expect(
-      await listed({
-        [LEGACY_HEADER.computerToken]: TOKEN,
-        [LEGACY_HEADER.botId]: "bot-a",
-      }),
+      await listed({ [HEADER.computerToken]: TOKEN, [HEADER.botId]: "bot-a" }),
     ).toContain("a.txt");
     expect(
       await listed({ [HEADER.computerToken]: TOKEN, [HEADER.botId]: "bot-b" }),
     ).not.toContain("a.txt");
-  });
-
-  test("Bots or people that disagree are a 400 and reach no folder", async () => {
-    for (const name of ["botId", "personId"] as const) {
-      const response = await post(
-        "/files/write",
-        {
-          [HEADER.computerToken]: TOKEN,
-          [HEADER[name]]: "bot-a",
-          [LEGACY_HEADER[name]]: "bot-b",
-        },
-        { path: `disagreed-${name}.txt`, contents: "x" },
-      );
-      expect(response.status).toBe(400);
-      // The conflict check's own refusal, not some other 400 further down.
-      expect(((await response.json()) as { error: string }).error).toBe(
-        "Conflicting request headers.",
-      );
-    }
-    // Neither file landed in any seat either name could have meant.
-    for (const seat of [
-      { [HEADER.botId]: "bot-a" },
-      { [HEADER.botId]: "bot-b" },
-      { [HEADER.personId]: "bot-a" },
-      { [HEADER.personId]: "bot-b" },
-    ]) {
-      const paths = await listed({ [HEADER.computerToken]: TOKEN, ...seat });
-      expect(paths).not.toContain("disagreed-botId.txt");
-      expect(paths).not.toContain("disagreed-personId.txt");
-    }
+    // The old name is not read: the request reaches the default Bot's folder, not bot-a's.
+    expect(
+      await listed({ [HEADER.computerToken]: TOKEN, [OLD.botId]: "bot-a" }),
+    ).not.toContain("a.txt");
   });
 
   /** A request written by hand, so a header can appear twice: fetch would join them first. */
@@ -400,7 +300,7 @@ describe("a computer taking both names", () => {
     });
   }
 
-  test("a new token header sent twice, wrong then right, next to a right old one is a 401", async () => {
+  test("a token header sent twice, wrong then right, is a 401", async () => {
     // Control: the same hand-written request with one right token gets in.
     expect(await raw([`${HEADER.computerToken}: ${TOKEN}`])).toStartWith(
       "HTTP/1.1 200",
@@ -409,7 +309,6 @@ describe("a computer taking both names", () => {
       await raw([
         `${HEADER.computerToken}: wrong-token`,
         `${HEADER.computerToken}: ${TOKEN}`,
-        `${LEGACY_HEADER.computerToken}: ${TOKEN}`,
       ]),
     ).toStartWith("HTTP/1.1 401");
   });

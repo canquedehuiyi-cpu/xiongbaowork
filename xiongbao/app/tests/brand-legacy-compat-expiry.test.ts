@@ -87,21 +87,6 @@ describe("the tree", () => {
     readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
   ) as { version: string };
 
-  test("the internal headers' window is recorded where they are read", () => {
-    const source = readFileSync(
-      new URL("../../agent-computer/src/wire-headers.ts", import.meta.url),
-      "utf8",
-    );
-    const line = source.split("\n").find((l) => COMPAT_COMMENT.test(l));
-    expect(line).toBeDefined();
-    expect(COMPAT_COMMENT.exec(line as string)?.slice(1)).toEqual([
-      "0.2.11",
-      "0.2.15",
-    ]);
-    for (const name of ["botId", "personId", "computerToken", "egress"])
-      expect(line).toContain(name);
-  });
-
   // Reads every source file in the tree: ~1.7 s alone, past Bun's five-second default once the whole
   // shard has run before it.
   test("no legacy-compat comment is past its window or malformed", () => {

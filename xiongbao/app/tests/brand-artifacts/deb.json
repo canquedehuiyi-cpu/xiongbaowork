@@ -50,22 +50,14 @@
   {
     "word": "openbot-desktop",
     "category": "persisted-data",
-    "plan": "rewrite",
-    "note": "识别旧版安装包进程名（shared/desktop-control.ts，C1），把旧版设备端自己的窗口也当成本机界面挡住；源码白名单里是 legacy-compat、removeIn 0.2.15（PR4 已推窗口），届时一起删"
+    "plan": "keep",
+    "note": "桌面端自己的可执行文件名（desktop/src-tauri 的 Cargo bin），shared/desktop-control.ts 据此把桌面端自己的窗口挡在员工的无询问写之外；不是旧名，不到期"
   },
   {
     "word": "openbot-runner",
     "category": "persisted-data",
     "plan": "keep",
     "note": "旧版 sidecar 的文件名（sidecar.rs LEGACY_SIDECAR），启动时据此停掉旧版残留进程；兼容已安装的旧版，随 N+2 到期清理（Task 21）"
-  },
-  {
-    "word": "openbot-snapshots.sqlite",
-    "category": "legacy-compat",
-    "plan": "remove",
-    "note": "旧快照计数文件名；启动时先 checkpoint 再改名为 xiongbao-snapshots.sqlite，改名失败仍读旧名（附录 A 第 10 行，Task 19）",
-    "introducedIn": "0.2.11",
-    "removeIn": "0.2.15"
   },
   {
     "word": "openbotUrl:_",

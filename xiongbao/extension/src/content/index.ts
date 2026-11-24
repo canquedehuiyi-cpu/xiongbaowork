@@ -7,11 +7,7 @@ import { contentHello, createContentPort } from "./port";
 
 /**
  * The two flags the service worker and this script share in the page's isolated world. Symbol keys, so they are not
- * properties anyone lists with `Object.keys`. An older build of the extension still on the same page used string
- * properties with the old names: those are read too (never written), so a page an older content script already
- * captures is not captured twice, and a frame an older service worker flagged still starts capturing at once.
- *
- * legacy-compat：introducedIn 0.2.11，removeIn 0.2.15，reads of the old flags __openbotRecorderContent and __openbotRecorderActive below
+ * properties anyone lists with `Object.keys`.
  */
 const CONTENT_FLAG = Symbol.for("xb.recorder.content");
 const ACTIVE_FLAG = Symbol.for("xb.recorder.active");
@@ -19,8 +15,6 @@ const ACTIVE_FLAG = Symbol.for("xb.recorder.active");
 type RecorderGlobals = typeof globalThis & {
   [CONTENT_FLAG]?: boolean;
   [ACTIVE_FLAG]?: string;
-  __openbotRecorderContent?: boolean;
-  __openbotRecorderActive?: string;
 };
 
 /**
@@ -31,8 +25,7 @@ type RecorderGlobals = typeof globalThis & {
  */
 function startContentScript() {
   const flags = globalThis as RecorderGlobals;
-  // legacy-compat：introducedIn 0.2.11，removeIn 0.2.15，old flag __openbotRecorderContent
-  if (flags[CONTENT_FLAG] || flags.__openbotRecorderContent) return;
+  if (flags[CONTENT_FLAG]) return;
   flags[CONTENT_FLAG] = true;
 
   const port = createContentPort();
@@ -114,8 +107,7 @@ function startContentScript() {
     stopCapture();
     removeMark();
   });
-  // legacy-compat：introducedIn 0.2.11，removeIn 0.2.15，old flag __openbotRecorderActive
-  if (flags[ACTIVE_FLAG] || flags.__openbotRecorderActive) startCapture();
+  if (flags[ACTIVE_FLAG]) startCapture();
   port.onMessage((message) => {
     if (message.type === "background.capture") {
       if (message.active) startCapture();

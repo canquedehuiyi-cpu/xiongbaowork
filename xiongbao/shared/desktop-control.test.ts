@@ -599,12 +599,11 @@ describe("desktop-control protocol", () => {
 describe("desktop-control: the final review's fixes", () => {
   test("C1: the device app, the runner, the desktop client and terminals are told apart by process", () => {
     // The packaged names: desktop-device/src-tauri/tauri.conf.json (productName, mainBinaryName),
-    // sidecar.rs (SIDECAR, LEGACY_SIDECAR), desktop/src-tauri (productName, the Cargo bin).
+    // sidecar.rs (SIDECAR), desktop/src-tauri (productName, the Cargo bin).
     expect([...DESKTOP_SELF_PROCESSES]).toEqual([
       "xiongbao-device",
       "熊宝数字员工 设备端",
       "xiongbao-runner",
-      "openbot-runner",
       "openbot-desktop",
       "XiongBao",
     ]);
@@ -856,7 +855,7 @@ describe("desktop-control: the final review's fixes", () => {
 });
 
 describe("desktop-control: the product's own processes are its packaged names", () => {
-  test("C1: the device app's binary, product name and sidecars, and the desktop client's, are all listed", async () => {
+  test("C1: the device app's binary, product name and sidecar, and the desktop client's, are all listed", async () => {
     const { readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
     const read = (path: string) =>
@@ -876,7 +875,6 @@ describe("desktop-control: the product's own processes are its packaged names", 
       device.productName,
       deviceLinux.productName,
       constant("SIDECAR"),
-      constant("LEGACY_SIDECAR"),
       client.productName,
       bin,
     ])
