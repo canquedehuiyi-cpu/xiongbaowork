@@ -37,6 +37,7 @@
 - 中文提交，结尾两行：`Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`、`Claude-Session: https://claude.ai/code/session_01MJUqVcFToyopKbNJ4sEoWY`。
 - 品牌护栏的预算 `app/tests/brand-budget.json` 与白名单 `app/tests/brand-leak-allowlist.json`、产物词表 `app/tests/brand-artifacts/*.json` 只许变少；每个改名任务用 Task 3 的 `refresh-guards` 同步它们，不手写数字。
 - 迁移前备份路径（容器内，落在数据库卷上）：`/var/lib/postgresql/backup/pre-rebrand-<UTC 时间 YYYYMMDDTHHMMSSZ>.dump`，权限 0600，属主 postgres。
+- 超级用户角色名 `openbot` 在 R4 基线化（Task 26）之前全仓不改（历史迁移 0054 引用它）；交付容器里已有卷的超级用户与库在 v0.2.16 迁移后改名（Task 19）。
 - 新名字：数据库超级用户与库 `xiongbao`、角色 `xiongbao_app`/`xiongbao_role_writer`、凭据 kid `k2` 的 AAD `xiongbao.vault.credential.v2`、扩展原生宿主 `xiongbao.recorder`、扩展 IndexedDB `xiongbao-recorder`、发布记录键 `images.xiongbao`（已有）、Helm 目录 `charts/xiongbao`、K8s 标签前缀 `xiongbao.dev/`。
 
 ## Review Focus
@@ -211,12 +212,14 @@ git commit -m "去品牌 R0：剩余旧词报告与护栏同步工具"
 每个 R1 任务都按同一套步骤做（下面每个任务只写它的范围、特有决定与特有测试）：
 
 1. `bun xiongbao/scripts/rebrand/apply.ts --phase R1 --review-out <台账目录>/task-N-review.txt <范围>`；
-2. 处理 `collisions`：同义的合并成一个声明，不同义的给新名加区分词（在报告里逐个写理由）；
-3. 处理 review 文件：界面句子改走品牌出口，开发者可见的英文句子写 `XiongBao`；
-4. `bun install`（凡动了 `package.json`）、`bun xiongbao/scripts/rebrand/refresh-guards.ts`；
-5. 构建受影响的产物并更新词表：`app` → `bun run --cwd app build` 后 `bun scripts/brand/scan-artifact.ts --kind web …`；`extension` 同理；镜像类词表（image-files、image-config、image-logs）以 CI 输出的「已经没了」为准删除；
-6. 验证：`bun xiongbao/scripts/rebrand/report.ts --phase R1 --scope <范围> --fail-on-unprotected` 退出 0；Global Constraints 里的 lint、typecheck、typecheck:tests 通过；范围内的测试全部通过（server 用分片命令或按目录 `bun test`）；
-7. 提交（`去品牌 R1：<范围>`），开 PR，CI 全绿合入。
+2. 改其它目录里的引用：本范围改了导出名、文件名或包内路径时，全仓 `bun run typecheck` 报出的其它目录里的导入方（只改引用行），在本任务一并改掉，以 typecheck 报错清单为准；
+3. 处理 `collisions`：同义的合并成一个声明，不同义的给新名加区分词（在报告里逐个写理由）；
+4. 处理 review 文件：界面句子改走品牌出口，开发者可见的英文句子写 `XiongBao`；
+5. `bun install`（凡动了 `package.json`）、`bun xiongbao/scripts/rebrand/refresh-guards.ts`；
+6. 构建受影响的产物并更新词表：`app` → `bun run --cwd app build` 后 `bun scripts/brand/scan-artifact.ts --kind web …`；`extension` 同理；镜像类词表（image-files、image-config、image-logs）以 CI 输出的「已经没了」为准删除；
+7. 手工处理工具不改的：`open.bot`、`open-bot`、`open_bot` 等写法（变体表不含，按语义改写或删除）；上游自有地址（`github.com/CopilotKit/OpenBot`、`ghcr.io/copilotkit/openbot-*` 等，保护清单冻结到 R4）不改名，属于本范围且不再需要的删除；`brand-new-lines` 报出的「被改名改到、但行里仍有上游词」的行（多为注释），把该行的上游词一并去掉或改写；测试里漏保护的持久化/兼容旧名，给 `protect.json` 补带文件作用域的条目。
+8. 验证：`bun xiongbao/scripts/rebrand/report.ts --phase R1 --scope <范围> --families openbot --fail-on-unprotected` 退出 0（`--scope` 相对仓库根；护栏自身文件 `GUARD_PATHS` 与工具目录已自动跳过）；`cd xiongbao && bun test scripts/rebrand/` 通过；Global Constraints 里的 lint、typecheck、typecheck:tests 通过；范围内的测试全部通过（server 用分片命令或按目录 `bun test`）；
+9. 提交（`去品牌 R1：<范围>`），开 PR，CI 全绿合入。
 
 ### Task 4: 删除上游整栈桌面 `desktop/`
 
@@ -254,6 +257,8 @@ git commit -m "去品牌 R0：剩余旧词报告与护栏同步工具"
 
 ### Task 9: `xiongbao/extension/`（代码层）
 
+**提醒：** 全仓保护的 `openbot-recorder` 会顺带冻结注入页面的 DOM id（`openbot-recorder-mark`、`-notice`、`-stall-`），它们随 Task 17 一起改。
+
 **特有决定：** 扩展 id、签名密钥、原生宿主名、IndexedDB 库名、策略键在保护清单里，留给 Task 17。消息类型 `openbot.ping/connect/state/record/stop/connect.status` 与网页那一侧同一个 PR 一起改（扩展会整体换新）。`openbot-client.ts`、`openbot-page.ts` 改名。
 
 ### Task 10: 其余代码目录
@@ -270,11 +275,15 @@ git commit -m "去品牌 R0：剩余旧词报告与护栏同步工具"
 
 ### Task 12: 脚本、CI 与仓库配置
 
+**提醒：** `xiongbao/docker-compose.yml:29` 注释「as `openbot` on `openbot`」改名后用户名会被错改，手工修正（超级用户仍是 `openbot`）。
+
 **范围：** `xiongbao/scripts/`（不含 `scripts/brand/` 与 `scripts/rebrand/`）、根 `.github/`、`xiongbao/.github/`、`xiongbao/tools/`、`xiongbao/tests/`、`xiongbao/patches/`（只改补丁文件名与说明，不改补丁内容里第三方代码）、`Dockerfile` 注释、`capability-*.yaml`、`release-policy.json`、`renovate.json`、`xiongbao/.claude/skills/openbot-*`（目录改名）、CI 测试库名 `openbot_test`、`openbot:ci-owner`、`openbot-release:dry-run`。
 
 **特有决定：** `xiongbao/.github/workflows/upstream-upgrade.yml`、`scripts/integrate-upstream.ts`、`UPSTREAM.md`、`upstream-sync.json` 不在本任务（Task 27/28 搬走）。`release.yml` 里 `images.openbot` 在保护清单里（Task 23）。
 
 ### Task 13: 文档
+
+**提醒：** `xiongbao/docs/deployment.md:123`「0054's public `openbot`」讲的是口令，给它加作用域保护条目（until R4）；`xiongbao/README.md:233` 的版权说明句改写，不再引用版权行原文。
 
 **范围：** `xiongbao/docs/`、`xiongbao/README.md`、`xiongbao/**/*.md`（不含 `CHANGELOG.md`、`UPSTREAM.md`、`NOTICE`、`LICENSE`、`THIRD-PARTY-NOTICES.md`、跳过路径）、`docs/assets/openbot-stack-*.svg`。
 
@@ -288,7 +297,7 @@ git commit -m "去品牌 R0：剩余旧词报告与护栏同步工具"
 
 **特有决定：** 现网报告显示没在用的：删除整条接入（代码、配置、设置页入口、测试、文档）。在用的：改中性名字（如 `XIONGBAO_LEARNING_*`），旧环境变量名并入 Task 15 的双认，并在 PR 描述列出给用户。删除功能前在 PR 描述列出受影响的界面入口，有界面变化截图给用户确认。
 
-**特有测试：** `bun xiongbao/scripts/rebrand/report.ts --phase R1 --fail-on-unprotected` 全仓退出 0（R1 收尾检查）。
+**特有测试：** R1 收尾检查 `bun xiongbao/scripts/rebrand/report.ts --phase R1 --fail-on-unprotected --scope xiongbao .github`，并排除留给 R4 的路径：`xiongbao/CHANGELOG.md`、`xiongbao/UPSTREAM.md`、`xiongbao/NOTICE`、`xiongbao/upstream-sync.json`、`xiongbao/scripts/integrate-upstream.ts`、`xiongbao/.github/workflows/upstream-upgrade.yml`、`xiongbao/docs/upstream-upgrades.md`（若 `report.ts` 不支持排除 pathspec，本任务给它加 `--exclude <路径>` 选项并配测试）；根 `docs/` 不进新仓库，不在检查范围。退出 0。
 
 ---
 
@@ -362,9 +371,9 @@ git commit -m "去品牌 R0：剩余旧词报告与护栏同步工具"
 - Test: `xiongbao/docker/tests/rebrand-superuser.test.sh`
 
 **Interfaces:**
-- Produces: 新装库直接 `initdb -U xiongbao`、`createdb xiongbao`；已有库在 Task 18 备份之后，连 `postgres` 库执行 `ALTER ROLE openbot RENAME TO xiongbao`、`ALTER DATABASE openbot RENAME TO xiongbao`（库上不能有其它连接：在服务进程启动前执行），然后写新连接串文件。SCRAM 口令不重设。
+- Produces: 历史迁移 `server/drizzle/0054_app_role.sql` 有 `ALTER DEFAULT PRIVILEGES FOR ROLE openbot`，R4 基线化之前空库跑迁移必须有 `openbot` 角色。因此新装卷仍 `initdb -U openbot`、`createdb openbot`、跑完迁移；然后新装卷与已有卷走同一段改名：（已有卷先经 Task 18 备份）连 `postgres` 库执行 `ALTER ROLE openbot RENAME TO xiongbao`、`ALTER DATABASE openbot RENAME TO xiongbao`（库上不能有其它连接：迁移之后、服务进程启动之前执行），然后写新连接串文件。SCRAM 口令不重设。之后每次启动，迁移以 `xiongbao` 连接。
 
-- [ ] **Step 1: 写失败测试**：`fresh volume initialises with the new names`、`existing volume is renamed and the old password still works`、`second start after rename is a no-op`、`rename failure keeps the old names and stops`。
+- [ ] **Step 1: 写失败测试**：`fresh volume ends with the new names after migrations`、`existing volume is renamed and the old password still works`、`second start after rename is a no-op`、`rename failure keeps the old names and stops`。
 - [ ] **Step 2–4:** 失败 → 实现 → 通过
 - [ ] **Step 5: 提交**
 
@@ -456,7 +465,7 @@ git commit -m "去品牌 R0：剩余旧词报告与护栏同步工具"
 - Test: `xiongbao/server/tests/migration-baseline.test.ts`
 
 **Interfaces:**
-- Produces: 启动时若迁移表里是旧记录：导出当前 `--schema-only`，与基线预期逐项比对；完全一致则在单事务里把 `drizzle.__drizzle_migrations` 改写为基线一条记录；不一致拒绝启动并打印差异。新装库直接跑基线。
+- Produces: 基线里不再出现 `openbot` 角色；新装卷与 CI、开发 compose、测试辅助的超级用户此后直接用 `xiongbao`（R1–R3 期间它们保持 `openbot`，见保护清单 `until: "R4"` 条目），本任务一并改掉并删除这些保护条目。启动时若迁移表里是旧记录：导出当前 `--schema-only`，与基线预期逐项比对；完全一致则在单事务里把 `drizzle.__drizzle_migrations` 改写为基线一条记录；不一致拒绝启动并打印差异。新装库直接跑基线。
 - [ ] **Step 1: 写失败测试**：`fresh database from baseline equals database migrated from v0.2.16 history`（CI 里用 v0.2.16 的迁移链建一个库，与基线库 `--schema-only` 归一化后完全相同）、`production schema dump matches the baseline`（用户提供的结构文件作夹具，归一化后比对；夹具里不含数据）、`mismatched schema refuses to start and prints the difference`、`migration ledger is rewritten once`。
 - [ ] **Step 2–4:** 失败 → 实现 → 通过
 - [ ] **Step 5: 提交**
