@@ -17,7 +17,7 @@ export const PILOT_TEMPLATE_ID = "official:pilot-plan-approval";
 export const PILOT_HANDBOOK = [
   PLAN_APPROVAL_MARKER,
   "",
-  "## 熊宝版做事流程",
+  "## 做事流程（试点）",
   "先判断这件活属于哪一类，再按那一类的步骤做。每一步做完再进下一步，不跳步。",
   "",
   "### 编码",
@@ -54,7 +54,7 @@ export function pilotRoleTemplate(): OfficialRoleTemplate {
     throw new Error("The pilot handbook is longer than a handbook may be.");
   return {
     id: PILOT_TEMPLATE_ID,
-    name: "熊宝版流程（试点）",
+    name: "按流程做事（试点）",
     profile: {
       identity: {
         title: "按流程做事的员工",
