@@ -392,6 +392,32 @@ describe("an unattended turn (a card, a group's turn, a routine)", () => {
     expect(types.at(-2)).toBe(EventType.CUSTOM);
   });
 
+  test("a computer that lists its files slower than the stop's grace still ends the turn as stopped, with the files listed", async () => {
+    const computer = wired();
+    // The listing takes four times the grace the turn gives a stopped agent to end.
+    configureTurnArtifacts({
+      gateway: {
+        ...computer.gateway,
+        turnChanges: async (seat, markId, signal) => {
+          await new Promise((resolve) => setTimeout(resolve, 400));
+          return computer.gateway.turnChanges(seat, markId, signal);
+        },
+      },
+      seatOf: computer.seatOf,
+    });
+    const { persisted, turn } = unattended(1, computer, {
+      agent: stalledAfterFirstStep,
+      turnTimeoutMs: 80,
+      abortGraceMs: 100,
+    });
+    const error = await turn().then(
+      () => undefined,
+      (thrown: unknown) => thrown,
+    );
+    expect(String(error)).not.toContain("could not be stopped");
+    expect(paths(persisted)).toEqual(["unused"]);
+  });
+
   test("a turn that answers without touching the computer lists nothing", async () => {
     const computer = wired();
     const { persisted, turn } = unattended(0, computer);

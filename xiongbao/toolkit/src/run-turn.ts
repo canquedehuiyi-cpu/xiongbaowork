@@ -805,6 +805,13 @@ export function createTurnRunner(options: {
   heartbeatMs?: number;
   /** See `TURN_LIMITS.abortGraceMs`; injectable so a test need not wait five real seconds. */
   abortGraceMs?: number;
+  /**
+   * How long `observeTurn` may keep the stream open after a stopped turn's agent is aborted: it still
+   * has the turn's last events to send (the files the turn left), and giving up on the stop before it is
+   * done would report a turn that did stop as one that could not be stopped, release its lock early and
+   * leave those events unheard. Added to `abortGraceMs`.
+   */
+  observeGraceMs?: number;
   /** Host-owned input enrichment before the runner publishes RUN_STARTED.input. */
   prepareRunInput?: (
     input: RunAgentInput,
@@ -847,6 +854,7 @@ export function createTurnRunner(options: {
     lockTtlSeconds = TURN_LIMITS.lockTtlSeconds,
     heartbeatMs = TURN_LIMITS.heartbeatMs,
     abortGraceMs = TURN_LIMITS.abortGraceMs,
+    observeGraceMs = 0,
     modelNamedIn,
     answered,
     scope,
@@ -1294,13 +1302,16 @@ export function createTurnRunner(options: {
           stopTurn();
         }, turnTimeoutMs);
         deadline.unref?.();
-        backstop = setTimeout(() => {
-          reject(
-            new Error(
-              `The routine's turn did not finish within ${Math.round(turnTimeoutMs / 1000)}s and could not be stopped.`,
-            ),
-          );
-        }, turnTimeoutMs + abortGraceMs);
+        backstop = setTimeout(
+          () => {
+            reject(
+              new Error(
+                `The routine's turn did not finish within ${Math.round(turnTimeoutMs / 1000)}s and could not be stopped.`,
+              ),
+            );
+          },
+          turnTimeoutMs + abortGraceMs + (observeTurn ? observeGraceMs : 0),
+        );
         backstop.unref?.();
       });
 

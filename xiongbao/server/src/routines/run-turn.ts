@@ -29,7 +29,10 @@ import {
 import { guardBotTurn } from "../agents/lifecycle";
 import { serverTurnAdmission } from "../agents/turn-admission";
 import { createLocalContinuationTarget } from "../approvals/continuation-target-local";
-import { withConfiguredTurnArtifacts } from "../computer/turn-artifacts";
+import {
+  TURN_ARTIFACTS_DEADLINE_MS,
+  withConfiguredTurnArtifacts,
+} from "../computer/turn-artifacts";
 import { producedAttachments } from "../tasks/projector";
 import {
   currentTenant,
@@ -129,6 +132,8 @@ export function createTurnRunner(
     answered: serverTurnAnswered,
     scope: serverTurnScope,
     observeTurn: serverTurnObserved,
+    // The stopped turn's files are listed after its stop, and that wait may take as long as the lister does.
+    observeGraceMs: TURN_ARTIFACTS_DEADLINE_MS,
     ...options,
   });
 }
