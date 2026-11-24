@@ -32,8 +32,8 @@ describe("renameText", () => {
 
   test("六个变体各自落到对应的新写法（不带保护）", () => {
     const none = /$^/g;
-    expect(renameText("openBotRun OPENBOT_ openbotUrl", none)).toBe(
-      "xiongBaoRun XIONGBAO_ xiongbaoUrl",
+    expect(renameText("openBotRun OPENBOT_ openbotRoot", none)).toBe(
+      "xiongBaoRun XIONGBAO_ xiongbaoRoot",
     );
     expect(renameText("OpenBot Openbot @openbot/x", none)).toBe(
       "XiongBao Xiongbao @xiongbao/x",
@@ -42,8 +42,8 @@ describe("renameText", () => {
 
   test("环境变量名在 R1 受保护，持久化的凭据标记不被误改", () => {
     expect(renameText("OPENBOT_PUBLIC_URL", p)).toBe("OPENBOT_PUBLIC_URL");
-    expect(renameText('"openbot.vault.credential.v2", openbotUrl', p)).toBe(
-      '"openbot.vault.credential.v2", xiongbaoUrl',
+    expect(renameText('"openbot.vault.credential.v2", openbotRoot', p)).toBe(
+      '"openbot.vault.credential.v2", xiongbaoRoot',
     );
   });
 
@@ -62,7 +62,7 @@ describe("renameText", () => {
   test("renaming twice equals renaming once", () => {
     const mixed = [
       'import { OpenBotRole } from "@openbot/shared/openbot-actor";',
-      "const openBotRun = process.env.OPENBOT_PUBLIC_URL ?? openbotUrl;",
+      "const openBotRun = process.env.OPENBOT_PUBLIC_URL ?? openbotRoot;",
       'const label = "openbot.vault.credential.v2"; // Openbot',
       "Copyright (c) 2026 CopilotKit",
     ].join("\n");
@@ -513,8 +513,8 @@ describe("上游自有地址", () => {
       const protect = loadProtect(phase);
       for (const url of kept) {
         expect(renameText(url, protect)).toBe(url);
-        expect(renameText(`${url} openbotUrl`, protect)).toBe(
-          `${url} xiongbaoUrl`,
+        expect(renameText(`${url} openbotRoot`, protect)).toBe(
+          `${url} xiongbaoRoot`,
         );
       }
     }

@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 import {
   type BrowserApiState,
   browserApiPaths,
-} from "@xiongbao/shared/openbot-browser";
+} from "@xiongbao/shared/xiongbao-browser";
 import { client } from "@/lib/client";
 
 export const browserKeys = {

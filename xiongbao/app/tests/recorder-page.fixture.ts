@@ -16,12 +16,12 @@ import {
  * What it holds to, from the contract and from Chrome:
  * - Messages are checked with the contract's own strict schema; anything else, including any message type this
  *   Recorder does not know, is refused `{ ok: false, error: "invalid" }`, as the Recorder's router refuses one today.
- * - `openbot.state` tells a page that is not the connected OpenBot `{ connected: false }` and nothing more.
- * - `openbot.record` and `openbot.stop` answer `RecorderPageResult`; a refusal carries the Recorder's own sentence.
+ * - `xiongbao.state` tells a page that is not the connected OpenBot `{ connected: false }` and nothing more.
+ * - `xiongbao.record` and `xiongbao.stop` answer `RecorderPageResult`; a refusal carries the Recorder's own sentence.
  * - `openbot.connect` connects a trusted OpenBot with no Connect page, answering `connected: true`, and leaves any
  *   other awaiting the person's Connect click (`confirm`), answering `awaitingConfirmation` and nothing about itself,
  *   as the Recorder does.
- * - `openbot.connect.status` says where that connect has got to: waiting, cancelled on the Connect page (`cancel`),
+ * - `xiongbao.connect.status` says where that connect has got to: waiting, cancelled on the Connect page (`cancel`),
  *   that tab closed without a choice (`closeTab`), or none.
  * - Chrome answers an id with no extension behind it with `lastError` set and no answer, and answers asynchronously.
  *
@@ -36,11 +36,11 @@ export class FakeRecorder {
   older = false;
   /** A connect waiting for the person's Connect click on the Recorder's page. */
   awaitingConfirmation = false;
-  /** Where the last connect from this page has got to, as `openbot.connect.status` answers it. */
+  /** Where the last connect from this page has got to, as `xiongbao.connect.status` answers it. */
   private connectWait: RecorderConnectWait = "none";
   /** What `openbot.connect` is refused with, when it is. */
   refuseConnect: string | null = null;
-  /** What `openbot.record` is refused with, when it is: the Recorder's own sentence ("Record from OpenBot's own tab."
+  /** What `xiongbao.record` is refused with, when it is: the Recorder's own sentence ("Record from OpenBot's own tab."
    * when a frame inside another page asks). */
   refuseRecord: string | null = null;
   phase: "idle" | "starting" | "recording" | "stopping" = "idle";

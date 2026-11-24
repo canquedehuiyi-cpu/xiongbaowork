@@ -3,10 +3,17 @@
 // newest live one from any of the person's Recorders, and on OpenBot Desktop the state lists the person's own browsers
 // and whether a Recorder in one is connected through Desktop (`real`), while Browser brings that browser forward, or
 // opens the Recorder's store page in it, or (before the Recorder is published) opens the OpenBot browser as before.
-// The computer is a stand-in that answers its routes exactly as the contract types them (shared/openbot-browser.ts):
+// The computer is a stand-in that answers its routes exactly as the contract types them (shared/xiongbao-browser.ts):
 // the real-browser routes are OpenBot Desktop's host-side computer's, another slice's work.
 import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
+import {
+  type ExchangeResponse,
+  RECORDER_SIGNED_OUT,
+  type RecorderActivity,
+  recorderPaths,
+} from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import {
   type BrowserApiState,
   type BrowserOpenResponse,
@@ -19,14 +26,7 @@ import {
   type RealBrowserOpenResponse,
   realBrowserComputerPaths,
   realBrowserRequestSchema,
-} from "@xiongbao/shared/openbot-browser";
-import {
-  type ExchangeResponse,
-  RECORDER_SIGNED_OUT,
-  type RecorderActivity,
-  recorderPaths,
-} from "@xiongbao/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
+} from "@xiongbao/shared/xiongbao-browser";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { createApp } from "../src/app";
 import type { AuditEventInput } from "../src/audit";

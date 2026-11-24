@@ -1,6 +1,6 @@
 import { IconSearch } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
-import type { BrowserApiState } from "@xiongbao/shared/openbot-browser";
+import type { BrowserApiState } from "@xiongbao/shared/xiongbao-browser";
 import { type ReactNode, type RefObject, useId, useRef, useState } from "react";
 import {
   LiveScreen,

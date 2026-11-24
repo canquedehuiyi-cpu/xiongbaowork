@@ -15,15 +15,15 @@ import {
   botBrowserComputerRecordingRequestSchema,
 } from "@xiongbao/shared/bot-browser";
 import type { ComputerControlState } from "@xiongbao/shared/computer-control";
+import type { RecorderConnectionsResponse } from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import {
   type BrowserNarrationRequest,
   browserNarrationRequestSchema,
   browserNavigateRequestSchema,
   browserTabsRequestSchema,
   type LauncherState,
-} from "@xiongbao/shared/openbot-browser";
-import type { RecorderConnectionsResponse } from "@xiongbao/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
+} from "@xiongbao/shared/xiongbao-browser";
 import { inArray } from "drizzle-orm";
 import { createApp } from "../src/app";
 import type { AuditEventInput } from "../src/audit";

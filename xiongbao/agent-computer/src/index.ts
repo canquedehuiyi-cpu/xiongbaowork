@@ -10,7 +10,7 @@ import { downloadHeaders } from "../../shared/file-download";
 import {
   isPersonBrowserId,
   RECORDER_DIR_ENV,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 import { createCloudAcp, isAcpPath } from "./acp-cloud";
 import { unfinishedAction } from "./action-failure";
 import {

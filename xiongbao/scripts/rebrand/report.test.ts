@@ -54,7 +54,7 @@ beforeEach(() => {
   put("THIRD-PARTY-NOTICES.md", NOTICES);
   put(
     "xiongbao/server/src/a.ts",
-    'export const openbotUrl = "x";\nconst aad = "openbot.vault.credential.v2";\n',
+    'export const openbotRoot = "x";\nconst aad = "openbot.vault.credential.v2";\n',
   );
 });
 

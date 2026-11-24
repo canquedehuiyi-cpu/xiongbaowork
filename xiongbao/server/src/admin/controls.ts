@@ -18,7 +18,7 @@
  * never loaded refuses everything it is asked about. Every async check reads the database fresh.
  */
 
-import { isPersonBrowserId } from "@xiongbao/shared/openbot-browser";
+import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import postgres from "postgres";
 import { ownerTenantOfBot } from "../agents/bot-owner";

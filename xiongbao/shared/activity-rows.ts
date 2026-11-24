@@ -8,7 +8,7 @@
  */
 
 /**
- * OpenBot's own working, which the personal edition's Activity leaves out. None of it is something
+ * XiongBao's own working, which the personal edition's Activity leaves out. None of it is something
  * a Bot did or a person can act on, and Admin keeps all of it.
  */
 export const OPENBOT_WORKING_EVENT_TYPES = [
@@ -25,8 +25,8 @@ export const OPENBOT_WORKING_EVENT_TYPES = [
    */
   "channel.routed",
   /*
-   * A build's components, published as OpenBot first sees them. The personal edition has no way for
-   * a person to publish or withdraw one, so every such row is OpenBot setting itself up.
+   * A build's components, published as XiongBao first sees them. The personal edition has no way for
+   * a person to publish or withdraw one, so every such row is XiongBao setting itself up.
    */
   "component.published",
   // The same build's newer wording for a description nobody had edited.

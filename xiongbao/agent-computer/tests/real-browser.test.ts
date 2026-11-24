@@ -2,11 +2,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { recorderStorePage } from "../../shared/recorder-extension";
 import {
   type RealBrowser,
   realBrowserComputerPaths,
-} from "../../shared/openbot-browser";
-import { recorderStorePage } from "../../shared/recorder-extension";
+} from "../../shared/xiongbao-browser";
 import { reservePort } from "../../tests/support/reserved-port";
 import { runnable } from "../src/person-launch";
 import {

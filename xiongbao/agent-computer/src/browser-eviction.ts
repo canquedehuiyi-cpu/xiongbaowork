@@ -20,7 +20,7 @@
 import {
   type BrowserWindow,
   isPersonBrowserId,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 
 /** Enough of a live entry for either decision. Keeps this file independent of what else is on one. */
 export type Evictable = { usedAt: number };

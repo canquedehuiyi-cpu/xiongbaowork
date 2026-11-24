@@ -286,7 +286,7 @@ export class HeadlessToolsMiddleware extends Middleware {
                         toolCallId: call.id,
                         reason: "human_input",
                         message: failure.message,
-                        metadata: { openbotWaiting: failure.waiting },
+                        metadata: { xiongbaoWaiting: failure.waiting },
                       },
                     ],
                   },

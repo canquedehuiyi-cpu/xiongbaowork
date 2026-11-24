@@ -1,4 +1,4 @@
-import { isPersonBrowserId } from "@xiongbao/shared/openbot-browser";
+import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import { ownsPersonBrowser } from "../browser/person";
 import { TenantContextError } from "../tenant/context";
 import type { AgentProfileStore } from "./profile-store";

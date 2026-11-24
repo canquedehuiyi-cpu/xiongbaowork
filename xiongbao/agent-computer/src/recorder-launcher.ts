@@ -2,7 +2,7 @@
  * The Recorder's launcher API, called inside its service worker over this process's DevTools pipe.
  *
  * WHY THROUGH THE WORKER. The Recorder takes its connection and its commands only from whoever
- * launched the browser: `globalThis.openbotLauncher` in its service worker, with no message route to
+ * launched the browser: `globalThis.xiongbaoLauncher` in its service worker, with no message route to
  * it from a web page or another extension. Only this process holds the browser's DevTools pipe, so
  * only this process can call it.
  *
@@ -31,7 +31,7 @@ import {
   type LauncherApi,
   type LauncherResult,
   type LauncherState,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 
 /** The Recorder did not answer: not loaded, not started, or without the launcher. */
 export class RecorderUnavailableError extends Error {

@@ -6,7 +6,7 @@ import {
 import type {
   BrowserNavigateRequest,
   BrowserTabsRequest,
-} from "@xiongbao/shared/openbot-browser";
+} from "@xiongbao/shared/xiongbao-browser";
 import {
   type NarrationAnswer,
   type NarrationPost,

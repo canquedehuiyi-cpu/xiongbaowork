@@ -8,7 +8,7 @@ import {
   browserApiPaths,
   type RealBrowser,
   type RealBrowserOpenResponse,
-} from "@xiongbao/shared/openbot-browser";
+} from "@xiongbao/shared/xiongbao-browser";
 import { client, tryClient } from "@/lib/client";
 import { computerKeys } from "@/lib/computers/queries";
 import { browserKeys } from "./queries";

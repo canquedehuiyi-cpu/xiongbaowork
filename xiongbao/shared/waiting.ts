@@ -9,4 +9,4 @@
  * interrupt it replayed is one it must never try to resume (see `serverOwnedInterrupt` in
  * app/src/lib/copilot/server-owned-interrupts.ts).
  */
-export const OPENBOT_WAITING_METADATA = "openbotWaiting";
+export const OPENBOT_WAITING_METADATA = "xiongbaoWaiting";

@@ -22,7 +22,7 @@ import {
   browserRecordingRequestSchema,
   browserTabsRequestSchema,
   type LauncherState,
-} from "@xiongbao/shared/openbot-browser";
+} from "@xiongbao/shared/xiongbao-browser";
 import { StrictMode } from "react";
 import { ComputerChatControls } from "@/components/computer/computer-controls";
 import { ComputerView } from "@/components/computer/computer-view";

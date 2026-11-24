@@ -63,7 +63,7 @@ let recorder:
       /** What the Recorder does with OpenBot as it connects with no Connect page: exchanges the code, which makes the
        * connection on the server. */
       exchange?: () => void;
-      /** Where the connect has got to on its Connect page (`openbot.connect.status`); waiting while unset. */
+      /** Where the connect has got to on its Connect page (`xiongbao.connect.status`); waiting while unset. */
       wait?: "waiting" | "cancelled" | "closed" | "none";
     }
   | undefined;
@@ -115,7 +115,7 @@ beforeEach(() => {
         }
         const type = (message as { type: string }).type;
         if (type === "openbot.connect") recorder.exchange?.();
-        if (type === "openbot.connect.status") {
+        if (type === "xiongbao.connect.status") {
           reply({ ok: true, connect: recorder.wait ?? "waiting" });
           return;
         }

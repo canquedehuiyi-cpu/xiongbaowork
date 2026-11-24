@@ -5,7 +5,7 @@ import { join } from "node:path";
 import type {
   BrowserState,
   LauncherConnection,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 import { reservePort } from "../../tests/support/reserved-port";
 import { NOT_ITS_OWN_COMPUTER, ONLY_THE_PERSONS } from "../src/person-access";
 

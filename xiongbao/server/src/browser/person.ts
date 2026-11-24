@@ -1,7 +1,7 @@
 import {
   isPersonBrowserId,
   PERSON_BROWSER_PREFIX,
-} from "@xiongbao/shared/openbot-browser";
+} from "@xiongbao/shared/xiongbao-browser";
 import { personDigest } from "../learning/personal-space";
 
 /**

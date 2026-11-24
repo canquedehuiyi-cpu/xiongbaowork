@@ -1,7 +1,7 @@
 import catalogue from "./harnesses.json";
 
 /**
- * The agent harnesses OpenBot knows by name, read from the one file every language reads.
+ * The agent harnesses XiongBao knows by name, read from the one file every language reads.
  *
  * WHY A SHARED FILE. The list began in `desktop/src-tauri/src/harness.rs`, where it decides which
  * image the setup window runs. The web app's New Bot dialog needs the same names, summaries and
@@ -38,7 +38,7 @@ export type Harness = {
    * installs nothing. Null means `summary` is true everywhere and is used as-is.
    */
   webSummary: string | null;
-  /** The directory a release builds `openbot-<directory>` from, not the id. Null when none. */
+  /** The directory a release builds `xiongbao-<directory>` from, not the id. Null when none. */
   image: string | null;
   port: number | null;
   healthPath: string | null;
@@ -120,7 +120,7 @@ export function declaredHarness(id: unknown): Harness | undefined {
 /**
  * The harness an image reference runs, by the directory a release builds it from:
  * `ghcr.io/copilotkit/openbot-agent-langgraph-agui@sha256:…` is LangChain. Undefined for
- * an image OpenBot does not publish.
+ * an image XiongBao does not publish.
  */
 export function harnessForImage(reference: string): Harness | undefined {
   const name = /(?:^|\/)(?:openbot-)?(agent-[a-z0-9-]+)(?::|@|$)/.exec(

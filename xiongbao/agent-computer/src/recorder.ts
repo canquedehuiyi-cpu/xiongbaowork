@@ -14,7 +14,7 @@
 import { createHash } from "node:crypto";
 import { readFile, stat } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
-import { RECORDER_DIR_ENV } from "../../shared/openbot-browser";
+import { RECORDER_DIR_ENV } from "../../shared/xiongbao-browser";
 
 export type Recorder = {
   /** The built Recorder, absolute. */

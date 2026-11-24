@@ -21,6 +21,7 @@ import type {
   PersonalReview,
   RecordingSkills,
 } from "@xiongbao/shared/learning";
+import type { RecordingRow } from "@xiongbao/shared/recorder-api";
 import {
   type BrowserApiState,
   type BrowserOpenResponse,
@@ -30,8 +31,7 @@ import {
   browserRecordingRequestSchema,
   browserTabsRequestSchema,
   type LauncherState,
-} from "@xiongbao/shared/openbot-browser";
-import type { RecordingRow } from "@xiongbao/shared/recorder-api";
+} from "@xiongbao/shared/xiongbao-browser";
 import { type ReactNode, StrictMode } from "react";
 import { BrowserPage } from "@/components/browser/browser-page";
 import { NARRATION_EXPLAINED } from "@/components/browser/narration";
@@ -53,7 +53,7 @@ import {
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * The Browser page, against the server's Browser routes as the contract in shared/openbot-browser.ts defines them.
+ * The Browser page, against the server's Browser routes as the contract in shared/xiongbao-browser.ts defines them.
  * Those routes are another slice's work, so they are stood in for here: every body this page sends is parsed with the
  * contract's own schemas, and every answer is a contract type. The sidebar's Browser button has its own file
  * (browser-nav-item.test.tsx).

@@ -18,13 +18,13 @@ import {
 } from "@tanstack/react-router";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { RecorderActivity } from "@xiongbao/shared/recorder-api";
 import {
   type BrowserApiState,
   type BrowserWindow,
   browserApiPaths,
   type LauncherState,
-} from "@xiongbao/shared/openbot-browser";
-import type { RecorderActivity } from "@xiongbao/shared/recorder-api";
+} from "@xiongbao/shared/xiongbao-browser";
 import { StrictMode } from "react";
 import { BrowserNavItem } from "@/components/browser/browser-nav-item";
 import { SidebarMenu, SidebarProvider } from "@/components/ui/sidebar";
@@ -33,7 +33,7 @@ import { queryClient } from "@/query-client";
 import { settleReactWork } from "./settle-react-work";
 
 /**
- * The sidebar's Teach a Bot link, against the server's Browser routes as the contract in shared/openbot-browser.ts types
+ * The sidebar's Teach a Bot link, against the server's Browser routes as the contract in shared/xiongbao-browser.ts types
  * them: one click takes the person to the Teach a Bot page, wherever their browser shows, and opens nothing itself.
  * While any of the person's Recorders records (the server's `activity`), the link carries a red dot named for it.
  */

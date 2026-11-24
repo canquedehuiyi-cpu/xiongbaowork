@@ -33,7 +33,7 @@ import {
   browserTabsRequestSchema,
   isPersonBrowserId,
   type LauncherState,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 import { parseBody } from "./browser-host";
 import { createTabBar, type TabbedBrowser } from "./browser-tabs";
 import { type Control, TAKE_CONTROL_FIRST } from "./control";

@@ -1,5 +1,15 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
+  RECORDER_ACTIVITY_STALE_MS,
+  type RecorderActivity,
+  type RecorderConnection,
+} from "@xiongbao/shared/recorder-api";
+import {
+  RECORDER_EXTENSION_ID,
+  RECORDER_STORE_IDS,
+  recorderStorePage,
+} from "@xiongbao/shared/recorder-extension";
+import {
   type BrowserApiState,
   type BrowserNarrationRequest,
   type BrowserOpenRequest,
@@ -20,17 +30,7 @@ import {
   type RealBrowserOpenResponse,
   type RealBrowserRequest,
   realBrowserComputerPaths,
-} from "@xiongbao/shared/openbot-browser";
-import {
-  RECORDER_ACTIVITY_STALE_MS,
-  type RecorderActivity,
-  type RecorderConnection,
-} from "@xiongbao/shared/recorder-api";
-import {
-  RECORDER_EXTENSION_ID,
-  RECORDER_STORE_IDS,
-  recorderStorePage,
-} from "@xiongbao/shared/recorder-extension";
+} from "@xiongbao/shared/xiongbao-browser";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { z } from "zod";
@@ -579,7 +579,7 @@ function keeps(
  * there. OpenBot's own address can move under it: OpenBot Desktop gives the app another port when the one it had is
  * held at Start (desktop/src-tauri/src/env.rs, `Ports::available`), and the computer then relays only the new one. A
  * Recorder kept on the old port reached nothing, and every recording made in that browser stayed in it. Compared as
- * origins, the form the Recorder stores (`normaliseOpenBotOrigin`).
+ * origins, the form the Recorder stores (`normaliseXiongBaoOrigin`).
  */
 function reachesAt(recorder: LauncherState, openbotUrl: string): boolean {
   if (recorder.openbotUrl === undefined) return false;

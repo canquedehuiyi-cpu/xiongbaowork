@@ -20,6 +20,11 @@
     "reason": "扩展身份：原生宿主名/IndexedDB/策略键（任务 17 处理）"
   },
   {
+    "pattern": "\\bopenbotUrl\\b",
+    "until": "R2",
+    "reason": "打开浏览器请求体 connection.openbotUrl 与录制扩展状态 LauncherState.openbotUrl：服务器与电脑端（旧版可能仍在跑）之间传输的字段名（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
     "text": "x-openbot-${kind}",
     "until": "R2",
     "reason": "浏览器请求标记头的模板写法（同上，新名已在前一个分支里）（设备端/服务器线上名，任务 16 处理）"

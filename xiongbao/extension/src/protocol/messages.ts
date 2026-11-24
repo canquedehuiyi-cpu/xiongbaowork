@@ -13,7 +13,7 @@ import {
   recorderPageMessageSchema,
 } from "@xiongbao/shared/recorder-page";
 import { z } from "zod";
-import { normaliseOpenBotOrigin } from "../shared/origin";
+import { normaliseXiongBaoOrigin } from "../shared/origin";
 import type { DrainRecord, RecorderNotice } from "../shared/storage";
 
 export const PORT_CONTENT = "recorder:content";
@@ -277,7 +277,7 @@ export type OffscreenToBackground =
   | OffscreenSignedOut; // a pass came back RECORDER_SIGNED_OUT, with the guard's reason; its events stay kept (Decision 19)
 
 /** The connect page's Connect or Cancel. `origin` is the one the page showed (its page.connect.pending answer), in the
- * form a pending connect stores (normaliseOpenBotOrigin's): the service worker refuses a decide whose origin is not the
+ * form a pending connect stores (normaliseXiongBaoOrigin's): the service worker refuses a decide whose origin is not the
  * pending connect's, so a connect tab only ever confirms the site it shows. */
 const pageConnectDecideSchema = z
   .object({
@@ -285,7 +285,7 @@ const pageConnectDecideSchema = z
     approve: z.boolean(),
     label: z.string(),
     origin: z.string().refine((value) => {
-      const checked = normaliseOpenBotOrigin(value);
+      const checked = normaliseXiongBaoOrigin(value);
       return checked.ok && checked.origin === value;
     }),
   })
@@ -417,8 +417,8 @@ const externalToBackgroundSchema = z.discriminatedUnion("type", [
       observation: pageAgentObservation,
     })
     .strict(),
-  // What OpenBot's own page asks the Recorder in the same browser (shared/recorder-page.ts): openbot.state,
-  // openbot.record and openbot.stop, answered only for the OpenBot this copy is connected to (openbot-page.ts).
+  // What XiongBao's own page asks the Recorder in the same browser (shared/recorder-page.ts): xiongbao.state,
+  // xiongbao.record and xiongbao.stop, answered only for the XiongBao this copy is connected to (the page handler in background/).
   ...recorderPageMessageSchema.options,
 ]);
 export type ExternalToBackground = z.infer<typeof externalToBackgroundSchema>;
@@ -450,7 +450,7 @@ export type ExternalResponse =
         | "openbot-unreachable";
     }
   | { ok: false; error: "throttled"; retryAfterMs: number }; // too many connects from this origin lately, and how long until it may ask again
-/** Every answer onMessageExternal gives: openbot.state's is a RecorderPageState, openbot.record's and openbot.stop's a
+/** Every answer onMessageExternal gives: xiongbao.state's is a RecorderPageState, xiongbao.record's and xiongbao.stop's a
  * RecorderPageResult. */
 export type ExternalAnswer =
   | ExternalResponse

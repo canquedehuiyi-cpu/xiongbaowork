@@ -1,6 +1,6 @@
-import { isAllowedGatewayUrl, normaliseOpenBotOrigin } from "./origin";
+import { isAllowedGatewayUrl, normaliseXiongBaoOrigin } from "./origin";
 
-/** `openbotUrlInvalid`: the policy names an address normaliseOpenBotOrigin refuses; every connect is then refused. */
+/** `openbotUrlInvalid`: the policy names an address normaliseXiongBaoOrigin refuses; every connect is then refused. */
 export type RecorderPolicy = {
   openbotUrl: string | null;
   openbotUrlInvalid: boolean;
@@ -13,7 +13,7 @@ function openbotUrlFrom(
   if (value === undefined)
     return { openbotUrl: null, openbotUrlInvalid: false };
   const checked =
-    typeof value === "string" ? normaliseOpenBotOrigin(value.trim()) : null;
+    typeof value === "string" ? normaliseXiongBaoOrigin(value.trim()) : null;
   // The bad string is dropped here, so no surface can show or parse it.
   return checked?.ok
     ? { openbotUrl: checked.origin, openbotUrlInvalid: false }
@@ -52,7 +52,7 @@ export async function readPolicy(): Promise<RecorderPolicy> {
 export function allowsOpenBot(policy: RecorderPolicy, origin: string): boolean {
   if (policy.openbotUrlInvalid) return false;
   if (policy.openbotUrl === null) return true;
-  const checked = normaliseOpenBotOrigin(origin);
+  const checked = normaliseXiongBaoOrigin(origin);
   return checked.ok && checked.origin === policy.openbotUrl;
 }
 

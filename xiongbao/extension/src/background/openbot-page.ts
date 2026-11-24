@@ -12,7 +12,7 @@ import {
   type RecorderPageState,
 } from "@xiongbao/shared/recorder-page";
 import type { ExternalToBackground, PageResponse } from "../protocol/messages";
-import { normaliseOpenBotOrigin } from "../shared/origin";
+import { normaliseXiongBaoOrigin } from "../shared/origin";
 import { currentConnection } from "./connection";
 import { lastStopped } from "./launcher";
 import type { LauncherSide } from "./recording";
@@ -45,7 +45,7 @@ async function fromConnectedOpenBot(
   sender: chrome.runtime.MessageSender,
 ): Promise<boolean> {
   if (!sender.origin) return false;
-  const checked = normaliseOpenBotOrigin(sender.origin);
+  const checked = normaliseXiongBaoOrigin(sender.origin);
   if (!checked.ok) return false;
   return (await currentConnection())?.openbotUrl === checked.origin;
 }
@@ -66,7 +66,7 @@ async function connectedState(
   };
 }
 
-/** openbot.state, openbot.record and openbot.stop. Every answer resolves; a refusal carries the Recorder's sentence. */
+/** xiongbao.state, xiongbao.record and xiongbao.stop. Every answer resolves; a refusal carries the Recorder's sentence. */
 export async function answerOpenBotPage(
   message: RecorderPageMessage,
   sender: chrome.runtime.MessageSender,

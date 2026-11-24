@@ -48,15 +48,15 @@ export type UserPreferences = {
   /** Set by profile saves so choosing a name finishes the first-run prompt. */
   profileNameSet?: boolean;
   messageListEmphasis: MessageListEmphasis;
-  /** Whether this person closed the banner offering help self-hosting OpenBot. */
+  /** Whether this person closed the banner offering help self-hosting XiongBao. */
   selfHostBannerDismissed: boolean;
   /**
-   * Whether this person narrates their recordings in OpenBot's Browser: the page listens to their microphone (hosted
-   * OpenBot), or the Recorder in their browser does (OpenBot Desktop), only when it is `on`. Null until they chose, which
+   * Whether this person narrates their recordings in XiongBao's Browser: the page listens to their microphone (hosted
+   * XiongBao), or the Recorder in their browser does (XiongBao Desktop), only when it is `on`. Null until they chose, which
    * the Browser page asks before their first recording; the microphone stays closed until then.
    */
   narration: NarrationPreference | null;
-  /** How OpenBot looks for this person, on every device they sign in from. */
+  /** How XiongBao looks for this person, on every device they sign in from. */
   skin: SkinId;
   /**
    * Check-ins for all of this person's Bots. On by default; `off` stops every Bot's background

@@ -10,8 +10,8 @@ import {
   type ConnectPrompt,
   readConnectPrompt,
 } from "@xiongbao/shared/connect-prompt";
-import { isOpenBotActor } from "@xiongbao/shared/openbot-actor";
 import { connectorName, humanise, inFolder } from "@xiongbao/shared/tool-name";
+import { isXiongBaoActor } from "@xiongbao/shared/xiongbao-actor";
 import {
   Fragment,
   type ReactNode,
@@ -449,7 +449,7 @@ function initiatorKindOf(event: AuditEvent): string | undefined {
     return event.initiatorKind;
   const ownChange =
     (event.eventType === "configuration.changed" &&
-      isOpenBotActor(event.payload?.actor)) ||
+      isXiongBaoActor(event.payload?.actor)) ||
     (event.eventType === "component.published" &&
       typeof event.payload?.note === "string");
   return ownChange ? "deployment" : event.initiatorKind;

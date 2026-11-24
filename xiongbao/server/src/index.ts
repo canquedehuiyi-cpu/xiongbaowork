@@ -7,8 +7,8 @@ import { computerGuidance } from "../../shared/bot-prompt";
 import { commandTimeoutMs } from "../../shared/computer-tool-words";
 import { hardModelOf } from "../../shared/hard-model";
 import { lightModelOf } from "../../shared/light-model";
-import { isPersonBrowserId } from "../../shared/openbot-browser";
 import { workOwner } from "../../shared/work-owner";
+import { isPersonBrowserId } from "../../shared/xiongbao-browser";
 import { toolSegmentsFor, turnTimeoutFor } from "../../toolkit/src/limits";
 import { createActivityStore } from "./activity/activity";
 import {

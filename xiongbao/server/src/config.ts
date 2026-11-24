@@ -6,12 +6,12 @@ import {
   type LearningTarget,
 } from "@xiongbao/shared/learning";
 import { listenPort } from "@xiongbao/shared/listen-port";
-import { BROWSER_URL_ENV } from "@xiongbao/shared/openbot-browser";
 import {
   addressesBeyondThisMachine,
   deploymentAddresses,
   isLoopbackHost,
 } from "@xiongbao/shared/this-machine";
+import { BROWSER_URL_ENV } from "@xiongbao/shared/xiongbao-browser";
 /**
  * What the runtime can do, and it has exactly one answer: durable threads and memory live in this
  * deployment's own PostgreSQL. Configuration the product cannot function without belongs at the boot

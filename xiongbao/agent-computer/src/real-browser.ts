@@ -33,7 +33,7 @@ import {
   type RealBrowser,
   realBrowserComputerPaths,
   realBrowserRequestSchema,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 import type { BrowserRuntime } from "./browser-runtime";
 import {
   browserExecutableCandidates,

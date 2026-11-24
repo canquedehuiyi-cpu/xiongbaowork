@@ -7,6 +7,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import { reservePort } from "../../tests/support/reserved-port";
 import {
   type ConnectionLoss,
   connectThroughDesktop,
@@ -24,7 +25,6 @@ import {
   readSession,
   writeLocal,
 } from "../src/shared/storage";
-import { reservePort } from "../../tests/support/reserved-port";
 import { type ChromeFake, installChromeFake } from "./support/chrome-fake";
 
 type Exchange = { code: string; label: string; installId: string };
@@ -506,7 +506,7 @@ test("rejecting clears the pending connect and exchanges nothing", async () => {
 
 const connectStatus = (from = origin) =>
   handleExternalConnect(
-    { type: "openbot.connect.status" },
+    { type: "xiongbao.connect.status" },
     { origin: from },
     deps(),
   );

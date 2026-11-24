@@ -150,7 +150,7 @@ const connectWaitSchema = z.object({
   connect: z.enum(["waiting", "cancelled", "closed", "none"]),
 }) satisfies z.ZodType<{ ok: true; connect: RecorderConnectWait }>;
 
-/** Asks the Recorder `id` where the connect this page asked for has got to (`openbot.connect.status`). */
+/** Asks the Recorder `id` where the connect this page asked for has got to (`xiongbao.connect.status`). */
 export async function askConnectWait(id: string): Promise<ConnectWait> {
   const answer = connectWaitSchema.safeParse(
     await ask(id, { type: RECORDER_CONNECT_STATUS }),
@@ -225,7 +225,7 @@ export function recorderStoreHere(): RecorderStore | null {
 
 type ConnectedPageState = Extract<RecorderPageState, { connected: true }>;
 
-/** The Recorder's answer to `openbot.state`, checked against the contract's type before anything reads it. */
+/** The Recorder's answer to `xiongbao.state`, checked against the contract's type before anything reads it. */
 const pageStateSchema = z.union([
   z.object({ connected: z.literal(false) }),
   z.object({
@@ -255,7 +255,7 @@ const pageResultSchema = z.union([
  * The Recorder in the browser OpenBot is open in, as the Browser button sees it:
  * - `connected`: it is connected to this OpenBot, and `state` is what it is doing.
  * - `unconnected`: it is here, and connected to no OpenBot or another one.
- * - `older`: a Recorder from before `openbot.state` (it refuses the message), which OpenBot cannot drive from here.
+ * - `older`: a Recorder from before `xiongbao.state` (it refuses the message), which XiongBao cannot drive from here.
  * - `absent`: this is Chrome or Edge, the Recorder is not in it, and `page` is its store page there.
  * - `unreachable`: this page cannot reach an extension, or the Recorder has no store page yet for this browser.
  */
@@ -299,7 +299,7 @@ function absentHere(): RecorderHere {
 }
 
 /**
- * Asks each of `ids` (the Recorder ids this OpenBot trusts) what it is doing, with `openbot.state`. The Recorder
+ * Asks each of `ids` (the Recorder ids this XiongBao trusts) what it is doing, with `xiongbao.state`. The Recorder
  * answers only the OpenBot it is connected to with its state, judged by the origin the browser reports for this page,
  * and every other page with `connected: false`. A copy connected here wins over one that is not.
  */
@@ -331,7 +331,7 @@ export async function findRecorderHere(
 }
 
 /**
- * `openbot.record` or `openbot.stop` to the Recorder `id`: its answer, a refusal carrying its own sentence, or
+ * `xiongbao.record` or `xiongbao.stop` to the Recorder `id`: its answer, a refusal carrying its own sentence, or
  * `undefined` when it did not answer (it was removed or turned off since it was asked).
  */
 export async function sendRecorderPage(

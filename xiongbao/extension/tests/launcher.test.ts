@@ -6,11 +6,6 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  LAUNCHER_GLOBAL,
-  type LauncherApi,
-  type LauncherConnection,
-} from "@xiongbao/shared/openbot-browser";
-import {
   type LearningSpaceState,
   RECORDER_SIGNED_OUT,
   recorderPaths,
@@ -19,6 +14,11 @@ import {
   type CapturedEvent,
   sha256HexSync,
 } from "@xiongbao/shared/recorder-masking";
+import {
+  LAUNCHER_GLOBAL,
+  type LauncherApi,
+  type LauncherConnection,
+} from "@xiongbao/shared/xiongbao-browser";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import { installConnection } from "../src/background/connection";
 import { installLauncher } from "../src/background/launcher";
@@ -1424,7 +1424,7 @@ test("no runtime message reaches the launcher API: not from a page, a content sc
       narration: "own",
     },
     { type: LAUNCHER_GLOBAL, method: "connect", args: [connection()] },
-    { type: "openbotLauncher.connect", connection: connection() },
+    { type: "xiongbaoLauncher.connect", connection: connection() },
     { type: "launcher.record", action: "start", title: "x" },
   ];
   for (const message of asks) {
