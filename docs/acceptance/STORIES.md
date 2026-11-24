@@ -172,6 +172,20 @@ DoD-6 的签字层。每条写明缺什么、为什么接受、什么时候补�
 | WIN1 | D16 | 原生Windows设备CLI可以实际执行命令，启动错误可见；中止取消整棵子进程树并清理 | implemented | canquedehuiyi-cpu/xiongbaowork#13<br>canquedehuiyi-cpu/xiongbaowork#152<br>canquedehuiyi-cpu/xiongbaowork#155 | G3、G7 | `scripts/ci/windows-runner-probe.ts` | accepted (main c905e0d3) | CI job `WIN1 device CLI probe (windows-latest)` |
 | DEV1 | D11 | 设备动作结果不明时持久暂停后续自动写入；新工具编号/跨实例/重启均不能绕过，所有者能核查详情并明确恢复 | implemented | 基线（main 上已有） | G3、G5 | `server/tests/device-safety.integration.test.ts`<br>`server/tests/devices.test.ts`<br>`app/tests/my-devices.test.tsx` | accepted (main c905e0d3) | 持久暂停在 `devices/queue.ts`（`outcome_unknown`） |
 
+## 外部员工故事（待真机验收）
+
+招入外部智能体（Codex、Claude Code）的故事。代码和自动测试在期一至期三已合入 `main`（设计 `docs/specs/2026-11-15-external-agents.md`，计划 `docs/plans/2026-11-15-external-agents.md`），但设备端和适配器（`codex-acp`、`claude-agent-acp`）还没有在真机上跑过，所以这几行**不算在上面 77 行里**，也不进 `stories:check` 的计数；真机验收步骤见 `HUMAN-STEPS.md` 第 20 节，通过后再并入上表。
+
+| 故事 | 原始需求（摘要） | 真机步骤 | 状态 | 备注 |
+| --- | --- | --- | --- | --- |
+| EXT1 | 在「招一位新同事 > 从我的电脑招」里，列出这台电脑上装好的 Codex、Claude Code，点「招进来」后成为带「外部员工 · Codex」标记的员工 | 第 20 节 20.5 第 1、2 步 | 待真机验收 | 需要电脑上装有 Node.js 与对应命令行，否则「招进来」不可点 |
+| EXT2 | 外部员工能单聊，对话里实时看到进度、改动（文件与加减行数）、测试结果 | 第 20 节 20.5 第 3 步 | 待真机验收 | |
+| EXT3 | 外部员工请求许可（如 `git push`）进「等你确认」，在手机网页 `/approvals` 批准后继续，推送成功 | 第 20 节 20.5 第 4、5 步 | 待真机验收 | 目前没有自动推送到手机，要自己打开网页 |
+| EXT4 | Claude Code 把「运行位置」切到「本机」后在自己的电脑上干活，同样完成「改代码、跑测试、请求推送、批准、推送成功」 | 第 20 节 20.6 | 待真机验收 | 默认跑在云电脑里，验设备端必须切到本机 |
+| EXT5 | 电脑离线时派给外部员工的活排队，显示「离线 · N 件排队中」，可取消；恢复后自动继续，许可请求不重复 | 第 20 节 20.7 | 待真机验收 | |
+| EXT6 | 外部员工的模型走熊宝模型代理，用户不用在本机登录；没绑定模型时用租户默认模型 | 第 20 节 20.1、20.5 | 待真机验收 | 默认模型必须是 DeepSeek、OpenAI、Anthropic 这类；其他模型会返回中文提示 |
+| EXT7 | macOS 设备端上同样可以招入并完成上述流程 | 第 20 节 20.8 | 待真机验收（可选，有 Mac 再做） | 需要 `DEVICE_RELEASE_MACOS=true` 才会出 dmg |
+
 测试路径都相对于 `xiongbao/`。
 
 ## 7 道最终门

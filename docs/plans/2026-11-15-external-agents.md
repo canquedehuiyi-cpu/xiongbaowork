@@ -294,9 +294,9 @@
 ### Task 13: 设备端发版与真机验收
 
 **Files:**
-- Modify: `openbot/desktop-device` 版本号与发布说明；`docs/acceptance/STORIES.md`（新增「外部员工」故事与验收记录）
+- Modify: `docs/acceptance/STORIES.md`（新增「外部员工」故事与验收记录）、`docs/acceptance/HUMAN-STEPS.md`（第 20 节真机验收）；设备端版本号读自 `xiongbao/package.json`，不用改 `xiongbao/desktop-device`
 
-- [ ] **Step 1:** 合入期一至期三后准备设备端发版 PR（版本号、发布说明）。
-- [ ] **Step 2:** 请用户推设备端标签；盯发布流水线。
-- [ ] **Step 3:** 给用户一份真机验收清单：Windows 与 macOS 各一台，分别招 Codex、Claude Code，各完成「改代码 → 跑测试 → 请求推送 → 手机网页批准 → 推送成功」；断网再恢复，排队的活继续。
-- [ ] **Step 4:** 按用户回报更新 `STORIES.md`；问题另开修复任务。
+- [ ] **Step 1:** 不需要单独的设备端版本 PR：设备端版本号读自 `xiongbao/package.json` 的 `version`（`xiongbao/desktop-device/src-tauri/tauri.conf.json` 引用它），发布说明由工作流自己生成。期一至期三合入后，直接在 `origin/main` 上打 `device-v0.2.15-rc.1`（`package.json` 版本必须等于标签的 X.Y.Z）。
+- [ ] **Step 2:** 请用户推设备端标签 `device-v0.2.15-rc.1`（`git fetch origin main`、`git tag device-v0.2.15-rc.1 origin/main`、`git push origin device-v0.2.15-rc.1`）；盯发布流水线 `device-release.yml`。
+- [ ] **Step 3:** 给用户一份真机验收清单（`HUMAN-STEPS.md` 第 20 节）：Windows 一台，分别招 Codex、Claude Code，各完成「改代码 → 跑测试 → 请求推送 → 手机网页批准 → 推送成功」；断网再恢复，排队的活继续。macOS 改为「有 Mac 再做」（需要仓库变量 `DEVICE_RELEASE_MACOS=true` 才出 dmg）。注意 Claude Code 默认跑在云电脑里（#722），验设备端必须把「运行位置」切到「本机」；Codex 只能在本机。
+- [ ] **Step 4:** 按用户回报更新 `docs/acceptance/STORIES.md`；问题另开修复任务。
