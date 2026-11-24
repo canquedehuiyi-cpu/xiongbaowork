@@ -11,7 +11,7 @@ import { isSkipped, renamePath } from "./rename-map";
  *   bun xiongbao/scripts/rebrand/refresh-guards.ts [--tests-dir <目录>]
  *
  * ① brand-budget.json：重算；任何一行变大（或冒出新行）就退出 1 并列出，不写文件；否则写成实际值。
- *    旧行的范围同时按 renamePath 后的写法认，文件改名后不会被当成新增。
+ *    旧表与实际值都按规则与 renamePath 后的范围归并求和再比较，文件改名前后同一份额度只算一次。
  * ② brand-leak-allowlist.json 与 product-name-allowlist.json：条目的文件已改名则 file 套 renamePath，
  *    文本在文件里已不存在的条目删除。
  * 产物词表（brand-artifacts/）要构建产物才知道，不在这里改。
@@ -25,17 +25,20 @@ export function refreshBudget(
   old: BudgetRow[],
   actual: BudgetRow[],
 ): { next: BudgetRow[]; grew: string[] } {
-  const was = new Map<string, number>();
-  // 文件可能已改名也可能还没改：旧行按原范围与改名后的范围各记一份，实际行落在哪边都认。
-  for (const row of old) {
-    for (const scope of new Set([row.scope, renamePath(row.scope)])) {
-      const key = keyOf({ ...row, scope });
-      was.set(key, (was.get(key) ?? 0) + row.lines);
+  // 旧表与实际值都按「规则 + 改名后的范围」归并求和：文件改名前后同一份额度只算一次，
+  // 改名后的同名文件与未改名的旧文件合在一起比较。
+  const merged = (rows: BudgetRow[]) => {
+    const sums = new Map<string, number>();
+    for (const row of rows) {
+      const key = keyOf({ ...row, scope: renamePath(row.scope) });
+      sums.set(key, (sums.get(key) ?? 0) + row.lines);
     }
-  }
-  const grew = actual
-    .filter((row) => row.lines > (was.get(keyOf(row)) ?? 0))
-    .map((row) => `${keyOf(row)}: ${was.get(keyOf(row)) ?? 0} -> ${row.lines}`)
+    return sums;
+  };
+  const was = merged(old);
+  const grew = [...merged(actual)]
+    .filter(([key, lines]) => lines > (was.get(key) ?? 0))
+    .map(([key, lines]) => `${key}: ${was.get(key) ?? 0} -> ${lines}`)
     .sort();
   const next = [...actual]
     .filter((row) => row.lines > 0)

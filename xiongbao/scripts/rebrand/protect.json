@@ -967,8 +967,15 @@
     "reason": "超级用户角色名 openbot：0054 迁移写死 FOR ROLE openbot，R4 基线化前所有从空库迁移的库都需要它；写法：说明超级用户的句子"
   },
   {
+    "file": "xiongbao/LICENSE",
     "text": "Copyright (c) 2026 CopilotKit",
     "until": "forever",
-    "reason": "MIT 许可证署名"
+    "reason": "MIT 许可证署名（只在许可证文件里）"
+  },
+  {
+    "file": "xiongbao/NOTICE",
+    "text": "Copyright (c) 2026 CopilotKit",
+    "until": "forever",
+    "reason": "MIT 许可证署名（只在许可证文件里）"
   }
 ]

@@ -51,6 +51,19 @@ describe("refreshBudget", () => {
   });
 });
 
+describe("refreshBudget 同一份旧额度只领一次", () => {
+  test("旧文件未改名、又新建了改名后同名的文件，合计增长要报", () => {
+    const { grew } = refreshBudget(
+      [{ rule: "env-name", scope: "shared/openbot-browser.ts", lines: 2 }],
+      [
+        { rule: "env-name", scope: "shared/openbot-browser.ts", lines: 2 },
+        { rule: "env-name", scope: "shared/xiongbao-browser.ts", lines: 2 },
+      ],
+    );
+    expect(grew).toEqual(["env-name/shared/xiongbao-browser.ts: 2 -> 4"]);
+  });
+});
+
 describe("refreshAllowlist", () => {
   const entry = (file: string, text: string) => ({
     file,

@@ -1,7 +1,13 @@
 import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { TOOL_PATH } from "./apply";
-import { isSkipped, loadProtect, type Phase, scopedFiles } from "./rename-map";
+import {
+  buildProtect,
+  isSkipped,
+  type Phase,
+  readProtectEntries,
+  scopedFiles,
+} from "./rename-map";
 
 /*
  * 剩余旧词报告：数仓库里还有多少旧品牌词，哪些受保护清单保护、哪些还没改。
@@ -29,6 +35,8 @@ const WORDS: Readonly<Record<Family, RegExp>> = {
   openbot: /openbot|open-bot|open_bot|open\.bot/gi,
   copilotkit: /copilotkit/gi,
 };
+
+const ANY_WORD = /openbot|open-bot|open_bot|open\.bot|copilotkit/i;
 
 const USAGE =
   "用法: bun xiongbao/scripts/rebrand/report.ts --phase <R1|R2|R3|R4> [--scope <路径>]... [--families <openbot|copilotkit|openbot,copilotkit>] [--fail-on-unprotected] [--fail-on-any]";
@@ -72,7 +80,11 @@ const COPILOTKIT_PATH = /(["'`])(@copilotkit\/[^"'`]*)\1/g;
 const IMPORT_PREFIX =
   /(?:\bfrom\s*|\bimport\s*\(?\s*|\brequire\s*\(\s*|\b(?:vi|jest)\.(?:mock|doMock|importActual)\s*\(\s*|\bmock\.module\s*\(\s*)$/;
 const NOTICE_COPYRIGHT = /Copyright \(c\) 2026 CopilotKit/;
-const NOTICE_FILE = /(?:^|\/)THIRD-PARTY-NOTICES\.md$/;
+/** 许可证文件：构建产物 THIRD-PARTY-NOTICES.md（任意目录）与随仓库提交的 xiongbao/LICENSE、xiongbao/NOTICE。 */
+const NOTICE_FILE =
+  /(?:^|\/)THIRD-PARTY-NOTICES\.md$|^xiongbao\/(?:LICENSE|NOTICE)$/;
+/** MIT 原文的最后一行：放行段到此为止。 */
+const LICENSE_END = /^SOFTWARE\.\s*$/;
 
 /** copilotkit 族里放行的片段（只对 copilotkit 族生效）。 */
 function exemptSpans(
@@ -121,7 +133,7 @@ export function gitRoot(): string {
 /**
  * 按验收搜索词扫文件，返回每一处命中。`files` 是相对仓库根的路径；跳过路径、工具目录、
  * 不存在的、符号链接与二进制文件不计入。依赖声明（package.json 的依赖与 overrides 键）、
- * 源码导入路径里的 `@copilotkit/`、许可证文件版权行起的正文只对 copilotkit 族放行。
+ * 源码导入路径里的 `@copilotkit/`、许可证文件里版权行到 MIT 原文结尾（`SOFTWARE.` 行）的一段只对 copilotkit 族放行。
  * 命中是否受保护按命中所在文件取保护正则，且要整处落在保护片段里。
  */
 export function findLeftovers(
@@ -129,8 +141,20 @@ export function findLeftovers(
   phase: Phase,
   root: string = gitRoot(),
 ): Leftover[] {
-  const baseProtect = loadProtect(phase);
+  const entries = readProtectEntries();
+  const baseProtect = buildProtect(entries, phase);
   const scoped = scopedFiles();
+  // 保护正则只按文件建一次：重复读 protect.json 会让全仓扫描慢到几十秒。
+  const perFile = new Map<string, RegExp>();
+  const protectFor = (file: string) => {
+    if (!scoped.has(file)) return baseProtect;
+    let regex = perFile.get(file);
+    if (!regex) {
+      regex = buildProtect(entries, phase, file);
+      perFile.set(file, regex);
+    }
+    return regex;
+  };
   const found: Leftover[] = [];
   for (const file of files) {
     if (isSkipped(file) || file.startsWith(TOOL_PATH)) continue;
@@ -139,7 +163,7 @@ export function findLeftovers(
     const buffer = readFileSync(full);
     if (buffer.includes(0)) continue;
     const text = buffer.toString("utf8");
-    const protect = scoped.has(file) ? loadProtect(phase, file) : baseProtect;
+    const protect = protectFor(file);
     const dependencyNames = file.endsWith("package.json")
       ? copilotkitDependencyNames(text)
       : new Set<string>();
@@ -147,8 +171,12 @@ export function findLeftovers(
     let inLicense = false;
     text.split("\n").forEach((line, index) => {
       if (isNotice && NOTICE_COPYRIGHT.test(line)) inLicense = true;
+      const licenseLine = inLicense;
+      if (inLicense && LICENSE_END.test(line)) inLicense = false;
+      // 绝大多数行没有任何旧词：先一次判断，省掉逐行的正则构造。
+      if (!ANY_WORD.test(line)) return;
       const kept = spansOf(protect, line);
-      const exempt = exemptSpans(file, line, inLicense, dependencyNames);
+      const exempt = exemptSpans(file, line, licenseLine, dependencyNames);
       for (const family of FAMILIES) {
         for (const match of line.matchAll(WORDS[family])) {
           const at = match.index ?? 0;
@@ -255,6 +283,15 @@ function main() {
   );
   const root = gitRoot();
   if (!root) fail("不在 git 仓库里");
+  for (const scope of scopes) {
+    const tracked = Bun.spawnSync(["git", "ls-files", "-z", "--", scope], {
+      cwd: root,
+    }).stdout.toString();
+    if (!tracked.includes("\0"))
+      fail(
+        `--scope ${scope} 在仓库根 ${root} 下没有匹配到被跟踪的文件（路径一律相对仓库根，如 xiongbao/shared）`,
+      );
+  }
   const listed = Bun.spawnSync(["git", "ls-files", "-z", "--", ...scopes], {
     cwd: root,
   })

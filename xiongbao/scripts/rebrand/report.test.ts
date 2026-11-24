@@ -32,6 +32,7 @@ const NOTICES = [
   "",
   "Permission is hereby granted, free of charge, to any person obtaining a copy",
   "of this software, to deal in the Software without restriction.",
+  "SOFTWARE.",
   "",
 ].join("\n");
 
@@ -154,6 +155,29 @@ describe("findLeftovers", () => {
     expect(found.map((hit) => hit.line)).toEqual([9, 11]);
   });
 
+  test("放行段在 SOFTWARE. 行收住：段后再出现 CopilotKit 不放行", () => {
+    put("xiongbao/THIRD-PARTY-NOTICES.md", `${NOTICES}\n后记 CopilotKit\n`);
+    const found = findLeftovers(
+      ["xiongbao/THIRD-PARTY-NOTICES.md"],
+      "R1",
+      root,
+    );
+    expect(found.map((hit) => hit.line)).toEqual([11]);
+  });
+
+  test("xiongbao/NOTICE 里版权段放行，段外的旧名仍计入", () => {
+    put("xiongbao/NOTICE", `OpenBot 的说明\n${NOTICES}`);
+    const found = findLeftovers(["xiongbao/NOTICE"], "R1", root);
+    expect(found.map((hit) => [hit.line, hit.family])).toEqual([
+      [1, "openbot"],
+    ]);
+  });
+
+  test("xiongbao/LICENSE 里的版权行由放行处理，R4 的 --fail-on-any 也不会因它失败", () => {
+    put("xiongbao/LICENSE", `MIT License\n\n${NOTICES}`);
+    expect(findLeftovers(["xiongbao/LICENSE"], "R4", root)).toEqual([]);
+  });
+
   test("版权行及其后的正文放行，之前的同名提及不放行", () => {
     put("xiongbao/THIRD-PARTY-NOTICES.md", `前言提到 CopilotKit\n${NOTICES}`);
     const found = findLeftovers(
@@ -248,6 +272,19 @@ describe("report.ts 命令行", () => {
     expect(result.code).toBe(0);
     expect(result.out).toMatch(/xiongbao\/server\s+\|?\s*1\s+\|?\s*1/);
     expect(result.out).toMatch(/合计/);
+  });
+
+  test("--scope 匹配不到被跟踪文件时退出 2 并说明，不会空过", () => {
+    gitAdd();
+    const result = run([
+      "--phase",
+      "R1",
+      "--scope",
+      "xiongbao/no-such-dir",
+      "--fail-on-unprotected",
+    ]);
+    expect(result.code).toBe(2);
+    expect(result.err).toContain("xiongbao/no-such-dir");
   });
 
   test("不认识的族名退出 2", () => {
