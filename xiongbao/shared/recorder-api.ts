@@ -8,7 +8,7 @@ export const RECORDER_SIGNED_OUT = "RECORDER_SIGNED_OUT";
 /** The `code` on the 503 the recorder guard and the trajectory gate answer when the organization's sign-in server could not
  * answer for now (Decision 19): transient, never a sign-out; the caller retries. */
 export const RECORDER_AUTHORITY_UNAVAILABLE = "RECORDER_AUTHORITY_UNAVAILABLE";
-/** The refusals OpenBot's trajectory gate shares with the Recorder's pass table (rows 1, 3 and 4a). */
+/** The refusals XiongBao's trajectory gate shares with the Recorder's pass table (rows 1, 3 and 4a). */
 export const TRAJECTORY_GATE_REFUSALS = {
   invalidId: {
     status: 400,
@@ -27,8 +27,8 @@ export const TRAJECTORY_GATE_REFUSALS = {
   },
 } as const;
 
-/** How a browser was connected: Connect this browser in OpenBot (`web`), OpenBot Desktop's handoff (`desktop`), OpenBot
- * itself when it opened the person's own OpenBot browser, with no Connect step (`openbot-browser`), or OpenBot when the
+/** How a browser was connected: Connect this browser in XiongBao (`web`), XiongBao Desktop's handoff (`desktop`), XiongBao
+ * itself when it opened the person's own XiongBao browser, with no Connect step (`via` value for XiongBao's own browser), or XiongBao when the
  * person pressed Record in a Bot's browser, for that one recording (`bot-browser`, shared/bot-browser.ts). */
 export type RecorderConnectVia =
   | "web"
@@ -41,7 +41,7 @@ export type RecorderConnection = {
   label: string;
   via: RecorderConnectVia;
   extensionId: string;
-  /** The connecting copy's install id for this OpenBot origin (Decision 18): 32 lowercase hex digits. */
+  /** The connecting copy's install id for this XiongBao origin (Decision 18): 32 lowercase hex digits. */
   installId: string;
   createdAt: string;
   lastUsedAt: string | null;
@@ -52,7 +52,7 @@ export type ConnectCodeResponse = { code: string; expiresAt: string };
 export type ListedRecorderConnection = RecorderConnection & {
   /**
    * Its Recorder said it is recording, in a report recent enough to stand (`RECORDER_ACTIVITY_STALE_MS`): a browser
-   * recording now, whose last use says nothing useful, since a recording streams to the gateway rather than OpenBot.
+   * recording now, whose last use says nothing useful, since a recording streams to the gateway rather than XiongBao.
    */
   recording: boolean;
 };
@@ -130,7 +130,7 @@ export type RecorderErrorBody = {
   reason?: "revoked" | "removed" | "organization";
 };
 
-/** Only `web` and `desktop` are asked for: OpenBot mints an OpenBot browser's connection itself, with no code anybody
+/** Only `web` and `desktop` are asked for: XiongBao mints an XiongBao browser's connection itself, with no code anybody
  * could ask for. */
 export const connectCodeRequestSchema = z
   .object({ via: z.enum(["web", "desktop"]) })
@@ -147,10 +147,10 @@ type OriginCheck = { ok: true; origin: string } | { ok: false; reason: string };
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "[::1]"]);
 
-/** https:// any host; http:// only for a loopback address with a port, 127.0.0.1 or [::1] (OpenBot Desktop's local stack,
+/** https:// any host; http:// only for a loopback address with a port, 127.0.0.1 or [::1] (XiongBao Desktop's local stack,
  * Decision 21; never a name such as localhost); no userinfo, path other than "/", query or fragment. The Recorder's rule
- * for every OpenBot it connects to, here so the server never hands the Recorder an address it would refuse. */
-export function normaliseOpenBotOrigin(raw: string): OriginCheck {
+ * for every XiongBao it connects to, here so the server never hands the Recorder an address it would refuse. */
+export function normaliseXiongBaoOrigin(raw: string): OriginCheck {
   let url: URL;
   try {
     url = new URL(raw);
@@ -224,9 +224,9 @@ export const recorderPaths = {
 } as const;
 
 /**
- * What a connected Recorder is doing, as it tells OpenBot whenever its recording phase changes and every 30 s while a
- * recording runs, so OpenBot can show it (the Browser button's red dot) wherever the person recorded: their own
- * everyday browser or the OpenBot browser. Best effort on the Recorder's side; OpenBot treats one older than 90 s as
+ * What a connected Recorder is doing, as it tells XiongBao whenever its recording phase changes and every 30 s while a
+ * recording runs, so XiongBao can show it (the Browser button's red dot) wherever the person recorded: their own
+ * everyday browser or the XiongBao browser. Best effort on the Recorder's side; XiongBao treats one older than 90 s as
  * stale.
  */
 /**

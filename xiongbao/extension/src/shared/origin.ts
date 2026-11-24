@@ -3,7 +3,7 @@
 // gateway).
 export {
   isAllowedGatewayUrl,
-  normaliseOpenBotOrigin,
+  normaliseXiongBaoOrigin,
 } from "@xiongbao/shared/recorder-api";
 
 function parse(raw: string): URL | null {

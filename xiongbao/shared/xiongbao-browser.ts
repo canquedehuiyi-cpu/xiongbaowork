@@ -1,20 +1,20 @@
 import { z } from "zod";
 
 /**
- * THE OPENBOT BROWSER: a real browser a person opens from OpenBot and uses as their own, with the OpenBot Recorder
+ * THE XIONGBAO BROWSER: a real browser a person opens from XiongBao and uses as their own, with the XiongBao Recorder
  * already in it and already connected. This file is the contract between the four places that build it: the computer
  * that launches the browser (`agent-computer`), the server that opens it for a signed-in person, the Recorder that
- * records in it, and the app's Browser page. Design: Notion "OpenBot Browser: BUILD (2026-10-21)".
+ * records in it, and the app's Browser page. Design: Notion "XiongBao Browser: BUILD (2026-10-21)".
  *
  * One browser per person. It is a computer named for that person, so every way of reaching a computer that gives it a
- * computer of its own (a supervisor container, a Kubernetes Sandbox, or the host-side local Chrome computer on OpenBot
+ * computer of its own (a supervisor container, a Kubernetes Sandbox, or the host-side local Chrome computer on XiongBao
  * Desktop) carries it unchanged: the id goes in `x-xiongbao-bot-id` as a Bot's does. Never the one computer every Bot
  * shares: a Bot there runs a shell beside the browser's profile, and the profile holds what the person signed in to by
  * hand. The server refuses it there, and so does the computer (`PEOPLE_ONLY_ENV`, `COMPUTER_BOT_ID`).
  */
 export const PERSON_BROWSER_PREFIX = "person-";
 
-/** A person's browser id: the prefix and 32 lowercase hex digits the server derives from the OpenBot user id. */
+/** A person's browser id: the prefix and 32 lowercase hex digits the server derives from the XiongBao user id. */
 const PERSON_BROWSER_ID = /^person-[0-9a-f]{32}$/;
 
 export function isPersonBrowserId(id: string): boolean {
@@ -23,11 +23,11 @@ export function isPersonBrowserId(id: string): boolean {
 
 /**
  * Where the browser shows. `native`: a window on the person's own desktop (a host-side computer, the person's installed
- * Chrome or Edge). `screen`: a browser on a computer the app shows through the live screen (hosted OpenBot and OpenBot
+ * Chrome or Edge). `screen`: a browser on a computer the app shows through the live screen (hosted XiongBao and XiongBao
  * Desktop, bundled Chromium).
  */
 export type BrowserWindow = "native" | "screen";
-/** The person's own everyday browsers OpenBot Desktop can put the Recorder in and bring forward. */
+/** The person's own everyday browsers XiongBao Desktop can put the Recorder in and bring forward. */
 export type RealBrowser = "chrome" | "msedge";
 export type BrowserProduct = "chrome" | "msedge" | "chromium";
 
@@ -43,10 +43,10 @@ export type Narration = "own" | "external";
  * What the process that launched the browser, and alone holds its DevTools pipe, calls inside the Recorder's service
  * worker as `globalThis[LAUNCHER_GLOBAL]`. No web page and no other extension can reach it: there is no message route
  * to it from outside the Recorder. Every method resolves; a refusal is `{ ok: false, error }`, never a throw. */
-export const LAUNCHER_GLOBAL = "openbotLauncher";
+export const LAUNCHER_GLOBAL = "xiongbaoLauncher";
 
 export type LauncherConnection = {
-  /** The OpenBot this browser belongs to: an https origin, or http on a loopback IP with a port (OpenBot Desktop). */
+  /** The XiongBao this browser belongs to: an https origin, or http on a loopback IP with a port (XiongBao Desktop). */
   openbotUrl: string;
   /** A Recorder bearer (`obr_…`) the server minted for this person and this browser. */
   token: string;
@@ -59,13 +59,13 @@ export type LauncherState = {
   /** The connected person, when there is one. */
   userId?: string;
   /**
-   * The connection it holds (`LauncherConnection.connectionId`), when there is one: OpenBot keeps a connection that
+   * The connection it holds (`LauncherConnection.connectionId`), when there is one: XiongBao keeps a connection that
    * stands for this browser rather than making another each time the browser is opened.
    */
   connectionId?: string;
   /**
-   * The address it reaches OpenBot at (`LauncherConnection.openbotUrl`, as an origin), when it holds a connection:
-   * OpenBot keeps that connection only while it is still the address OpenBot hands out, which moves on OpenBot Desktop
+   * The address it reaches XiongBao at (`LauncherConnection.openbotUrl`, as an origin), when it holds a connection:
+   * XiongBao keeps that connection only while it is still the address XiongBao hands out, which moves on XiongBao Desktop
    * when its app is given another port.
    */
   openbotUrl?: string;
@@ -83,7 +83,7 @@ export type LauncherState = {
    */
   voice?: "off" | "listening" | "muted" | "unavailable";
   /**
-   * The recording Stop ended last, so OpenBot can confirm it went to the person's Learning space: how many of the
+   * The recording Stop ended last, so XiongBao can confirm it went to the person's Learning space: how many of the
    * person's actions it held (as the badge counted them) and how many narrated phrases. Both 0: nothing was recorded.
    */
   lastStopped?: {
@@ -100,9 +100,9 @@ export type LauncherState = {
      */
     sending?: boolean;
     /**
-     * While `sending`, why none of it is going out right now: the Recorder keeps retrying (OpenBot or its back end is
+     * While `sending`, why none of it is going out right now: the Recorder keeps retrying (XiongBao or its back end is
      * busy or unreachable) and says so in its own sentence. Absent while it goes out, and once it is kept or sent.
-     * OpenBot then says the recording is not saved yet, and why, rather than that it is being saved.
+     * XiongBao then says the recording is not saved yet, and why, rather than that it is being saved.
      */
     retrying?: string;
     /**
@@ -110,7 +110,7 @@ export type LauncherState = {
      * - `refused`: Intelligence turned the recording's capture pass away (a stop (hold) or stop (park) row, such as an
      *   Intelligence with Trajectories turned off), and the Recorder tries again later.
      * - `signed-out`: the browser was signed out, and it waits for its person to connect this browser again.
-     * Absent when nothing of it is kept. OpenBot never says such a recording was saved to the Learning space.
+     * Absent when nothing of it is kept. XiongBao never says such a recording was saved to the Learning space.
      */
     kept?: "refused" | "signed-out";
     /** The person discarded it from the Recorder's mark in the browser rather than saving it. */
@@ -153,8 +153,8 @@ export type LauncherApi = {
    */
   speaking(input: { since: number | null }): Promise<LauncherResult>;
   /**
-   * OpenBot revoked this browser's connection (the person disconnected it in Settings, Browsers): forget it now and
-   * report signed out, as the Recorder does when OpenBot answers that its token is gone. A recording in progress ends
+   * XiongBao revoked this browser's connection (the person disconnected it in Settings, Browsers): forget it now and
+   * report signed out, as the Recorder does when XiongBao answers that its token is gone. A recording in progress ends
    * the way a sign-out ends one. Idempotent.
    */
   disconnect(): Promise<LauncherResult>;
@@ -182,7 +182,7 @@ export const browserComputerPaths = {
 
 /**
  * An open. With `connection`, the Recorder is handed it. Without one, the browser opens (or comes forward) and its
- * Recorder keeps the connection it holds, which the answer's `recorder` names: OpenBot opens it so when it holds a
+ * Recorder keeps the connection it holds, which the answer's `recorder` names: XiongBao opens it so when it holds a
  * connection that stands for this browser, and hands it a new one only when the Recorder turns out not to hold that
  * one. Minting one at every open revoked the last each time, and wrote a `recorder.revoked` and a `recorder.connected`
  * row for every visit to the Browser page.
@@ -230,7 +230,7 @@ export const browserRecordingRequestSchema = z.discriminatedUnion("action", [
       action: z.literal("start"),
       title: z.string().trim().min(1).max(200),
       language: z.string().max(35).optional(),
-      /** Whether the person narrates this recording, as OpenBot's Record form asked them: the Recorder opens the
+      /** Whether the person narrates this recording, as XiongBao's Record form asked them: the Recorder opens the
        * microphone only when it is true. Absent: the choice made in the Recorder itself, and none is no. */
       narrate: z.boolean().optional(),
     })
@@ -309,9 +309,9 @@ export const browserApiPaths = {
   clear: "/api/browser/clear",
 } as const;
 
-/* THE PERSON'S REAL BROWSER (OpenBot Desktop). Where the person's own everyday Chrome or Edge can hold the Recorder,
- * the Browser button works with that browser instead of a separate one: OpenBot Desktop registers the Recorder with it
- * (from the store), the Recorder connects through OpenBot Desktop's native host with no Connect page, and the host-side
+/* THE PERSON'S REAL BROWSER (XiongBao Desktop). Where the person's own everyday Chrome or Edge can hold the Recorder,
+ * the Browser button works with that browser instead of a separate one: XiongBao Desktop registers the Recorder with it
+ * (from the store), the Recorder connects through XiongBao Desktop's native host with no Connect page, and the host-side
  * computer brings that browser forward, or opens the Recorder's store page in it while the Recorder is not there yet.
  * These computer routes act on the person's desktop and exist only on the local Chrome backend. */
 export const realBrowserComputerPaths = {
@@ -331,7 +331,7 @@ export const realBrowserRequestSchema = z
   .strict();
 export type RealBrowserRequest = z.infer<typeof realBrowserRequestSchema>;
 
-/** What `POST /api/browser/open` did on OpenBot Desktop when the person's own browser is the Browser button's. */
+/** What `POST /api/browser/open` did on XiongBao Desktop when the person's own browser is the Browser button's. */
 export type RealBrowserOpenResponse = {
   ok: true;
   /** `real`: brought their browser forward, its Recorder connected. `store`: opened the Recorder's store page in it. */
@@ -350,16 +350,16 @@ export type BrowserOpenResponse = {
 
 export type BrowserApiState = BrowserState & {
   /**
-   * On OpenBot Desktop: the person's own browsers installed on this computer, and whether a Recorder in one of them is
-   * connected to this OpenBot as this person (a live connection made through OpenBot Desktop). Absent elsewhere.
+   * On XiongBao Desktop: the person's own browsers installed on this computer, and whether a Recorder in one of them is
+   * connected to this XiongBao as this person (a live connection made through XiongBao Desktop). Absent elsewhere.
    */
   real?: { connected: boolean; browsers: RealBrowser[] };
   /** What the person's own Recorders are doing, wherever they record (the newest live report): the red dot. */
   activity?: import("./recorder-api").RecorderActivity;
-  /** False when this OpenBot has no way to run a person's browser; the app then hides the Browser button. */
+  /** False when this XiongBao has no way to run a person's browser; the app then hides the Browser button. */
   available: boolean;
   /**
-   * Why this OpenBot cannot run the person's browser at all (with `available` false), in one plain sentence for them.
+   * Why this XiongBao cannot run the person's browser at all (with `available` false), in one plain sentence for them.
    * Absent when there is nothing to explain.
    */
   note?: string;
@@ -369,7 +369,7 @@ export type BrowserApiState = BrowserState & {
    */
   problem?: string;
   /**
-   * Where this OpenBot shows the person's browser, known before it is opened, so the sidebar's Browser button knows
+   * Where this XiongBao shows the person's browser, known before it is opened, so the sidebar's Browser button knows
    * what one click does: `native` opens (or brings forward) a window on the person's desktop and leaves them where
    * they are; `screen` takes them to the browser in the page. Present whenever `available` is.
    */

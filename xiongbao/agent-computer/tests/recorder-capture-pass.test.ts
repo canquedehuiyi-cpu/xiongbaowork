@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { BrowserState } from "../../shared/openbot-browser";
+import type { BrowserState } from "../../shared/xiongbao-browser";
 import type { BrowserRuntime } from "../src/browser-runtime";
 import {
   setEgressPolicy,

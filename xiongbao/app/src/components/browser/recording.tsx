@@ -9,7 +9,7 @@ import { type UseMutationOptions, useMutation } from "@tanstack/react-query";
 import type {
   BrowserApiState,
   LauncherState,
-} from "@xiongbao/shared/openbot-browser";
+} from "@xiongbao/shared/xiongbao-browser";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

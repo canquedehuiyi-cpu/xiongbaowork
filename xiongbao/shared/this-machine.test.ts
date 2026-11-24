@@ -42,13 +42,13 @@ describe("this machine's own addresses", () => {
   test("an address typed as one, which no DNS answer stands in for", () => {
     expect(isAddressLiteral("192.168.4.164")).toBe(true);
     expect(isAddressLiteral("[fe80::1]")).toBe(true);
-    expect(isAddressLiteral("openbot.local")).toBe(false);
+    expect(isAddressLiteral("xiongbao.local")).toBe(false);
     expect(isAddressLiteral("1.2.3.4.evil.example")).toBe(false);
   });
 });
 
 describe("a deployment reached from beyond this machine", () => {
-  test("is not what .env.example or OpenBot Desktop write", () => {
+  test("is not what .env.example or XiongBao Desktop write", () => {
     // .env.example
     expect(
       addressesBeyondThisMachine({
@@ -78,7 +78,7 @@ describe("a deployment reached from beyond this machine", () => {
       "https://box.tailnet.ts.net",
     ]);
     expect(
-      appListenHosts({ BETTER_AUTH_URL: "https://openbot.example.com" }),
+      appListenHosts({ BETTER_AUTH_URL: "https://xiongbao.example.com" }),
     ).toEqual(["::"]);
   });
 });

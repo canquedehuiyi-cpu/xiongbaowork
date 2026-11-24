@@ -1,7 +1,7 @@
 /*
  * The OpenBot Recorder's launcher API, standing in for the Recorder in agent-computer's tests while
  * the Recorder's own is built alongside it. It answers exactly as `LauncherApi` in
- * shared/openbot-browser.ts types it, and keeps what it holds in `chrome.storage.local` as the
+ * shared/xiongbao-browser.ts types it, and keeps what it holds in `chrome.storage.local` as the
  * Recorder does, so it survives its worker being stopped and started again.
  *
  * Like the Recorder, it attaches `chrome.debugger` to the tab it records for as long as it records:
@@ -21,7 +21,7 @@
  * time keeps the rest for the person's next connection, as the Recorder does, so it is sending no longer; every report
  * says whether it was still sending when the call came.
  */
-const LAUNCHER_GLOBAL = "openbotLauncher";
+const LAUNCHER_GLOBAL = "xiongbaoLauncher";
 /**
  * Which build of this script is running, sent with every call. A test copies the fixture, changes this
  * line, and reads back which build answered, as a person's browser would run a Recorder rebuilt since.

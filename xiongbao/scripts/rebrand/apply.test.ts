@@ -267,14 +267,14 @@ describe("apply CLI", () => {
         'export const OPENBOT = "openbot";\n',
       "xiongbao/app/tests/brand-budget.json":
         '[{"rule":"openbot-camel","scope":"server/src","lines":1}]\n',
-      "xiongbao/app/tests/brand-leak.test.ts": 'const text = "openbotUrl";\n',
+      "xiongbao/app/tests/brand-leak.test.ts": 'const text = "openbotRoot";\n',
       "xiongbao/app/tests/brand-artifacts/openbot-web.json":
         '[{"word":"openbot"}]\n',
       "xiongbao/app/tests/product-name-allowlist.json":
         '[{"file":"app/src/a.ts","text":"OpenBot"}]\n',
     };
     for (const [path, content] of Object.entries(guard)) put(path, content);
-    put("xiongbao/app/tests/branding.test.ts", 'const text = "openbotUrl";\n');
+    put("xiongbao/app/tests/branding.test.ts", 'const text = "openbotRoot";\n');
     git("add", "-A");
     git("commit", "-q", "-m", "guard");
     for (const phase of ["R1", "R4"]) {
@@ -293,7 +293,7 @@ describe("apply CLI", () => {
     for (const [path, content] of Object.entries(guard))
       expect(read(path)).toBe(content);
     expect(read("xiongbao/app/tests/branding.test.ts")).toBe(
-      'const text = "xiongbaoUrl";\n',
+      'const text = "xiongbaoRoot";\n',
     );
   });
 

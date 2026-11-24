@@ -14,7 +14,7 @@ import type {
   BrowserTab,
   BrowserTabsRequest,
   BrowserWindow,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 import { navigationFailure } from "./navigation";
 import { addressFrom } from "./request-validation";
 

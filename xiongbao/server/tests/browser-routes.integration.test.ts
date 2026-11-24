@@ -2,13 +2,18 @@
 // connection with no Connect step, the connection resolves through the Recorder guard as that person, each open
 // replaces the last, organization mode seals the session from the request, and nobody else (an admin included) reaches
 // the browser or its live screen. The computer is a stand-in that answers its routes exactly as the contract types them
-// (shared/openbot-browser.ts): slice 1 builds the real ones.
+// (shared/xiongbao-browser.ts): slice 1 builds the real ones.
 import { describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  RECORDER_SIGNED_OUT,
+  type RecorderConnectionsResponse,
+} from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import {
   type BrowserApiState,
   type BrowserOpenResponse,
@@ -21,12 +26,7 @@ import {
   isPersonBrowserId,
   type LauncherConnection,
   type LauncherState,
-} from "@xiongbao/shared/openbot-browser";
-import {
-  RECORDER_SIGNED_OUT,
-  type RecorderConnectionsResponse,
-} from "@xiongbao/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
+} from "@xiongbao/shared/xiongbao-browser";
 import { eq, inArray } from "drizzle-orm";
 import { NOT_ITS_OWN_COMPUTER } from "../../agent-computer/src/person-access";
 import { NO_INSTALLED_BROWSER } from "../../agent-computer/src/person-launch";
@@ -2429,7 +2429,7 @@ describe("Record after the OpenBot browser is disconnected", () => {
 });
 
 describe("who hears the person, as every answer says it", () => {
-  // The window decides (shared/openbot-browser.ts): a native window's Recorder hears the person itself and says whether
+  // The window decides (shared/xiongbao-browser.ts): a native window's Recorder hears the person itself and says whether
   // it does (`voice`); a screen's browser has no microphone, the app hears the person, and there is no `voice`.
   const expected = {
     screen: { narration: "external" as const },

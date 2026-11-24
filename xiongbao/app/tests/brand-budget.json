@@ -81,12 +81,12 @@
   },
   {
     "rule": "env-name",
-    "scope": "shared/openbot-browser.ts",
+    "scope": "shared/this-machine.ts",
     "lines": 2
   },
   {
     "rule": "env-name",
-    "scope": "shared/this-machine.ts",
+    "scope": "shared/xiongbao-browser.ts",
     "lines": 2
   },
   {
@@ -97,7 +97,7 @@
   {
     "rule": "identifier",
     "scope": "app/src",
-    "lines": 64
+    "lines": 62
   },
   {
     "rule": "identifier",
@@ -122,12 +122,12 @@
   {
     "rule": "identifier",
     "scope": "extension/src",
-    "lines": 189
+    "lines": 174
   },
   {
     "rule": "identifier",
     "scope": "server/src",
-    "lines": 176
+    "lines": 174
   },
   {
     "rule": "identifier",
@@ -146,22 +146,7 @@
   },
   {
     "rule": "identifier",
-    "scope": "shared/openbot-actor.ts",
-    "lines": 1
-  },
-  {
-    "rule": "identifier",
-    "scope": "shared/openbot-browser.ts",
-    "lines": 4
-  },
-  {
-    "rule": "identifier",
     "scope": "shared/person-time-zone.ts",
-    "lines": 1
-  },
-  {
-    "rule": "identifier",
-    "scope": "shared/recorder-api.ts",
     "lines": 1
   },
   {
@@ -176,53 +161,38 @@
   },
   {
     "rule": "identifier",
+    "scope": "shared/xiongbao-browser.ts",
+    "lines": 3
+  },
+  {
+    "rule": "identifier",
     "scope": "toolkit/src",
     "lines": 30
   },
   {
     "rule": "import-close",
-    "scope": "agent-computer/src",
-    "lines": 11
-  },
-  {
-    "rule": "import-close",
-    "scope": "app/src",
-    "lines": 5
-  },
-  {
-    "rule": "import-close",
     "scope": "extension/src",
-    "lines": 2
+    "lines": 1
   },
   {
     "rule": "import-close",
     "scope": "server/src",
-    "lines": 5
-  },
-  {
-    "rule": "import-close",
-    "scope": "shared/bot-browser.ts",
     "lines": 1
   },
   {
     "rule": "import-path",
-    "scope": "agent-computer/src",
-    "lines": 2
-  },
-  {
-    "rule": "import-path",
     "scope": "app/src",
-    "lines": 10
+    "lines": 3
   },
   {
     "rule": "import-path",
     "scope": "extension/src",
-    "lines": 6
+    "lines": 5
   },
   {
     "rule": "import-path",
     "scope": "server/src",
-    "lines": 15
+    "lines": 6
   },
   {
     "rule": "mit-attribution",

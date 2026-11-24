@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Page } from "playwright";
 import type { BotBrowserState } from "../../shared/bot-browser";
-import type { LauncherConnection } from "../../shared/openbot-browser";
+import type { LauncherConnection } from "../../shared/xiongbao-browser";
 import { type BotBrowserHost, SENDING_WAIT_MS } from "../src/bot-browser-host";
 import type { BrowserRuntime } from "../src/browser-runtime";
 import { createControl } from "../src/control";

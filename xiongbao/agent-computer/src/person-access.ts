@@ -20,7 +20,7 @@ import {
   isPersonBrowserId,
   PEOPLE_ONLY_ENV,
   realBrowserComputerPaths,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 
 /** Why a Bot route is refused for a person's browser id. */
 export const PERSONS_OWN_BROWSER =

@@ -25,7 +25,7 @@ import { createHmac } from "node:crypto";
  * sandbox provider then treat as stale, rather than reinterpreting old ones.
  *
  * The one computer everybody shares (no supervisor, `AGENT_COMPUTER_URL`) is not a tenant boundary
- * and is documented as not being one; it keeps the deployment's token. So does OpenBot Desktop's
+ * and is documented as not being one; it keeps the deployment's token. So does XiongBao Desktop's
  * host-side browser computer, which runs a person's own browsers and no Bot.
  *
  * In `shared/` so the server and the supervisor run one implementation: the supervisor's image copies

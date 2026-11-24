@@ -1,5 +1,5 @@
 // The Recorder's launcher API: what the process that launched this browser, and alone holds its DevTools pipe, calls in
-// this service worker as `globalThis[LAUNCHER_GLOBAL]` (shared/openbot-browser.ts). OpenBot opens a person's own
+// this service worker as `globalThis[LAUNCHER_GLOBAL]` (shared/xiongbao-browser.ts). XiongBao opens a person's own
 // browser with the Recorder in it, and hands it its connection and its Record, Stop and narration through here.
 //
 // Reachable only by code running in this service worker itself: the launcher evaluates it over the DevTools protocol
@@ -8,6 +8,12 @@
 // of them is its own global scope. A connection taken here is checked as a Connect would check it (the OpenBot address
 // rule and the organization's policy), and every command goes through the same paths the popup's own do. A revoke
 // OpenBot tells it of goes through the path a signed-out answer from OpenBot takes.
+
+import {
+  joinedLearningContainer,
+  type RecorderMe,
+  recorderPaths,
+} from "@xiongbao/shared/recorder-api";
 import {
   LAUNCHER_GLOBAL,
   type LauncherApi,
@@ -15,15 +21,10 @@ import {
   type LauncherResult,
   type LauncherState,
   type Narration,
-} from "@xiongbao/shared/openbot-browser";
-import {
-  joinedLearningContainer,
-  type RecorderMe,
-  recorderPaths,
-} from "@xiongbao/shared/recorder-api";
+} from "@xiongbao/shared/xiongbao-browser";
 import type { PageResponse, RecorderState } from "../protocol/messages";
 import { OpenBotError, openbotJson } from "../shared/openbot-client";
-import { normaliseOpenBotOrigin } from "../shared/origin";
+import { normaliseXiongBaoOrigin } from "../shared/origin";
 import { allowsOpenBot, readPolicy } from "../shared/policy";
 import { narrationLanguage } from "../shared/speech-language";
 import {
@@ -332,7 +333,7 @@ export function createLauncher(
         const narration = input.narration;
         if (!connection || !NARRATIONS.includes(narration as Narration))
           return refuse(SENTENCES.invalid);
-        const checked = normaliseOpenBotOrigin(connection.openbotUrl);
+        const checked = normaliseXiongBaoOrigin(connection.openbotUrl);
         if (!checked.ok) return refuse(SENTENCES.address);
         const policy = await deps.readPolicy();
         if (policy.openbotUrlInvalid) return refuse(SENTENCES.policyInvalid);

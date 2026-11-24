@@ -33,7 +33,7 @@ import {
 import type {
   BrowserProduct,
   BrowserWindow,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 import type { BrowserRuntime } from "./browser-runtime";
 import type { Egress } from "./egress";
 import { launchNativeBrowser } from "./native-browser";

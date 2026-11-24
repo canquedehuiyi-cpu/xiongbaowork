@@ -1,4 +1,4 @@
-import { normaliseOpenBotOrigin } from "@xiongbao/shared/recorder-api";
+import { normaliseXiongBaoOrigin } from "@xiongbao/shared/recorder-api";
 import type { DeploymentConfig } from "../config";
 
 /** `http://localhost:3001` as the address the Recorder takes for it: the Recorder reaches this machine by its loopback
@@ -11,7 +11,7 @@ function asRecorderTakesIt(raw: string): string | null {
     return null;
   }
   if (url.hostname === "localhost") url.hostname = "127.0.0.1";
-  const checked = normaliseOpenBotOrigin(url.origin);
+  const checked = normaliseXiongBaoOrigin(url.origin);
   return checked.ok ? checked.origin : null;
 }
 

@@ -20,6 +20,11 @@
     "reason": "扩展身份：原生宿主名/IndexedDB/策略键（任务 17 处理）"
   },
   {
+    "pattern": "\\bopenbotUrl\\b",
+    "until": "R2",
+    "reason": "打开浏览器请求体 connection.openbotUrl 与录制扩展状态 LauncherState.openbotUrl：服务器与电脑端（旧版可能仍在跑）之间传输的字段名（设备端/服务器线上名，任务 16 处理）"
+  },
+  {
     "text": "x-openbot-${kind}",
     "until": "R2",
     "reason": "浏览器请求标记头的模板写法（同上，新名已在前一个分支里）（设备端/服务器线上名，任务 16 处理）"
@@ -946,5 +951,86 @@
     "pattern": "(?i:copilotkit\\.ai/(?:[\\w.-]+/)*openbot[\\w.-]*(?:\\?[\\w.=&%-]*)?)",
     "until": "R4",
     "reason": "上游自有地址，删除而不改名（Task 14/27）：downloads.copilotkit.ai/…/OpenBot-…、dashboard.operations.copilotkit.ai/…/openbot（含查询串）；机械改名会指向不存在的地址"
+  },
+  {
+    "file": "xiongbao/shared/agent-authorisation.ts",
+    "text": "x-openbot-agent-token",
+    "until": "R2",
+    "reason": "托管 Bot 鉴权头：服务器发送端与 14 个框架同名，Task 10 删除本条目，与发送端、框架同一 PR 改名"
+  },
+  {
+    "file": "xiongbao/shared/agent-authorisation.test.ts",
+    "text": "x-openbot-agent-token",
+    "until": "R2",
+    "reason": "托管 Bot 鉴权头：服务器发送端与 14 个框架同名，Task 10 删除本条目，与发送端、框架同一 PR 改名"
+  },
+  {
+    "text": "openbotWaiting",
+    "until": "R3",
+    "reason": "落库键：thread_run_events 里中断的 metadata，网页重放时读取，Task 22 迁移"
+  },
+  {
+    "text": "openbotTimeZone",
+    "until": "R3",
+    "reason": "落库键：审批续跑快照里的 forwardedProps，Task 22 迁移"
+  },
+  {
+    "pattern": "\\bopenbotRun\\b",
+    "until": "R3",
+    "reason": "落库键：审批续跑快照里的 forwardedProps.openbotRun（approvals/wiring.ts、execute.ts），Task 22 迁移"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/candidate.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/conformance.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/installed.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/invalid-incompatible-recovery.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/invalid-mutable-image.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/invalid-unsupported-schema.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/fixtures/releases/provenance.sigstore.json",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/tests/release-manifest.test.ts",
+    "pattern": "(?i:openbot)",
+    "until": "R3",
+    "reason": "发布/分发夹具与其断言须与 release-policy、promote 脚本里的期望值同一 PR 改名，归 Task 12"
+  },
+  {
+    "file": "xiongbao/shared/bot-prompt.test.ts",
+    "text": "/openbot|xiongbao/i",
+    "until": "R4",
+    "reason": "断言继续拦截上游名：模型可见文字里既不许出现旧名也不许出现新名"
   }
 ]

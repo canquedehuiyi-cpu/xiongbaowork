@@ -421,14 +421,14 @@ const DELIVERY_GUIDANCE_LINES = [
 export const DELIVERY_GUIDANCE = asParagraphs(DELIVERY_GUIDANCE_LINES);
 
 /**
- * When a Bot asks the person anything: OpenBot's own cards first, then a closed test for the rest.
+ * When a Bot asks the person anything: XiongBao's own cards first, then a closed test for the rest.
  *
- * OpenBot puts a card in front of the person before the actions named here, whatever their settings
+ * XiongBao puts a card in front of the person before the actions named here, whatever their settings
  * (`server/src/approvals/policy.ts`: the delete, send, share and publish floors on app tools, the
  * delete, send and keyboard-send floors on web pages), and hands any payment, purchase or change to
  * a password, two-step verification, security or sharing setting to the person. A Bot told by its
  * approval card's description to ask "before sending a message" asked too, so the person was asked
- * twice for one delete. The card OpenBot shows names the exact action, so it is the one that stays.
+ * twice for one delete. The card XiongBao shows names the exact action, so it is the one that stays.
  *
  * WORDED NARROWLY ON PURPOSE. Each bullet names only what the policy really asks about, as the
  * policy recognises it: an app tool by its name, its destructive label or an address in its
@@ -436,18 +436,18 @@ export const DELIVERY_GUIDANCE = asParagraphs(DELIVERY_GUIDANCE_LINES);
  * may not be recognised, so for one that sends, deletes, publishes or pays the Bot still asks first.
  * Telling a Bot not to ask about something the gate does not ask about would let it run unasked.
  *
- * Only for a Bot OpenBot runs, whose every tool goes through that gate: a remote Bot's own tools do
+ * Only for a Bot XiongBao runs, whose every tool goes through that gate: a remote Bot's own tools do
  * not, and nothing here is said to one. The app-tools bullet only for a Bot holding at least one
  * connected-app tool (`mcp__`), the condition `CONNECTOR_APPROVAL_GUIDANCE` is sent under
  * (`server/src/plugins/tools.ts`); see {@link approvalGuidance}. The Bot's own computer is its
- * scratch space and OpenBot's own tools (memory) do not go through the gate, which the last
+ * scratch space and XiongBao's own tools (memory) do not go through the gate, which the last
  * paragraph says.
  *
  * A tool marked destructive can be called anything ("reset pipeline"), so the Bot can't tell it from
  * its name. Its description carries {@link DESTRUCTIVE_TOOL_NOTE}, and the app-tools bullet names
  * that label.
  *
- * M5: this fork keeps its own wording of OpenBot's cards for a Bot OpenBot runs ({@link approvalGuidance},
+ * M5: this fork keeps its own wording of XiongBao's cards for a Bot XiongBao runs ({@link approvalGuidance},
  * worded for this fork's approval floors, which no setting turns off), and takes upstream's closed
  * test for everything else ({@link builtInAskingGuidance}). Upstream's {@link ASKING_GUIDANCE} and
  * {@link BROUGHT_BOT_ASKING_GUIDANCE} are kept as upstream wrote them; a brought Bot is told the
@@ -538,9 +538,9 @@ export const ASKING_GUIDANCE = asParagraphs(ASKING_GUIDANCE_LINES);
  * The same, for a Bot that runs somewhere else (the Claude Agent SDK harness, LangGraph, an agent an
  * admin registered by its address).
  *
- * Only the apps and tools OpenBot hands it pass OpenBot's gate. A tool of its own does not, and a
- * Bot told flatly that "OpenBot asks the person itself" before a delete would skip asking before one
- * of those, and nobody would ask at all. So it is told OpenBot asks for what OpenBot gives it, and to
+ * Only the apps and tools XiongBao hands it pass XiongBao's gate. A tool of its own does not, and a
+ * Bot told flatly that "XiongBao asks the person itself" before a delete would skip asking before one
+ * of those, and nobody would ask at all. So it is told XiongBao asks for what XiongBao gives it, and to
  * ask itself before anything of its own that cannot be undone. Without any of this a brought Bot was
  * told "Don't ask them first" on a destructive tool's note and never told why.
  */
@@ -700,8 +700,8 @@ export function promptSection(
  * where answers come from, how to answer, when to use subagents, what untrusted content is, and what
  * makes a finished job delivered.
  *
- * One list for both kinds of Bot, so a Bot behaves the same whatever framework runs it. A Bot OpenBot
- * runs and one somewhere else differ only in what OpenBot's gate covers (see
+ * One list for both kinds of Bot, so a Bot behaves the same whatever framework runs it. A Bot XiongBao
+ * runs and one somewhere else differ only in what XiongBao's gate covers (see
  * {@link BROUGHT_BOT_ASKING_GUIDANCE}). The untrusted-content line is the server's
  * (`untrusted-content.ts`), passed in so this module stays free of server code.
  */
@@ -709,7 +709,7 @@ export function workingGuidance(options: {
   brought?: boolean;
   untrusted: string;
   /**
-   * The asking section, when the caller words it itself. A Bot OpenBot runs here is told
+   * The asking section, when the caller words it itself. A Bot XiongBao runs here is told
    * {@link builtInAskingGuidance}, this fork's floors plus the closed test; absent, upstream's.
    */
   asking?: string;
@@ -730,7 +730,7 @@ export function workingGuidance(options: {
 }
 
 /**
- * The asking section for a Bot OpenBot runs: this fork's wording of OpenBot's cards
+ * The asking section for a Bot XiongBao runs: this fork's wording of XiongBao's cards
  * ({@link approvalGuidance}, the connected-app bullet only for a run that holds a connected-app tool),
  * then upstream's closed test for every other question.
  */
@@ -740,7 +740,7 @@ export function builtInAskingGuidance(holding: { apps: boolean }): string {
 
 /**
  * Added to the description of an app tool its app marks destructive (MCP's `destructiveHint`, a
- * broker's destructive flag), where the Bot is offered it. OpenBot always asks before one runs (the
+ * broker's destructive flag), where the Bot is offered it. XiongBao always asks before one runs (the
  * delete floor in `server/src/approvals/policy.ts`), so the Bot is told so on the tool itself, as
  * {@link APPROVAL_GUIDANCE} says of a tool its app marks destructive, in the words
  * {@link ASKING_GUIDANCE} names.
@@ -772,7 +772,7 @@ export function modelGuidance(label: string): string {
 }
 
 /**
- * Which agent framework the Bot runs on, by the name the app gives it ("OpenBot", "LangChain
+ * Which agent framework the Bot runs on, by the name the app gives it ("XiongBao", "LangChain
  * (LangGraph)", "Claude Agent SDK").
  *
  * Decided by what runs the Bot, never by its subtitle: a subtitle is the person's to write, and the

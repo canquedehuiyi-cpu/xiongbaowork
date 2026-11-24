@@ -29,11 +29,11 @@ import {
 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, posix, win32 } from "node:path";
+import { RECORDER_NATIVE_HOST } from "../../shared/recorder-extension";
 import type {
   BrowserProduct,
   BrowserWindow,
-} from "../../shared/openbot-browser";
-import { RECORDER_NATIVE_HOST } from "../../shared/recorder-extension";
+} from "../../shared/xiongbao-browser";
 import type { BrowserRuntime } from "./browser-runtime";
 
 type Environment = Record<string, string | undefined>;

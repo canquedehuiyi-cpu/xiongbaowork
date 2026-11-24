@@ -49,7 +49,7 @@ describe("recorder constants and paths", () => {
     );
   });
 
-  test("only the capture pass leaves /api/recorder: OpenBot serves the Recorder nothing else", () => {
+  test("only the capture pass leaves /api/recorder: XiongBao serves the Recorder nothing else", () => {
     const samples: Record<string, string> = {
       connectCodes: recorderPaths.connectCodes,
       connections: recorderPaths.connections,
@@ -85,7 +85,7 @@ describe("joinedLearningContainer", () => {
       string | null,
     ][] = [
       [{ state: "assigned", containerId: "c1" }, "c1"],
-      // OpenBot could not check (Learning delivery off, or Intelligence not answering): the pass still names it.
+      // XiongBao could not check (Learning delivery off, or Intelligence not answering): the pass still names it.
       [{ state: "learning-off", containerId: "c1" }, "c1"],
       [{ state: "unverified", containerId: "c1" }, "c1"],
       [{ state: "unverified", containerId: null }, null],

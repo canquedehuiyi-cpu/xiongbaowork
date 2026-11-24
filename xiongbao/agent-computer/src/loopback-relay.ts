@@ -1,7 +1,7 @@
 /**
  * This machine's loopback addresses, carried into the computer's container.
  *
- * WHY. The Recorder reaches OpenBot only at an https address or at a loopback one (`normaliseOpenBotOrigin`), so on a
+ * WHY. The Recorder reaches XiongBao only at an https address or at a loopback one (`normaliseXiongBaoOrigin`), so on a
  * laptop it is handed `http://127.0.0.1:<port>`, the address the person's own window uses, and the Intelligence gateway
  * at `ws://localhost:<port>` where Intelligence runs on the laptop too. A browser in this container that is handed
  * those addresses reaches the container, where nothing answers: OpenBot is another container and Intelligence is on the

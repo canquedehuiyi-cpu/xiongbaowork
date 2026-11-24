@@ -387,7 +387,7 @@ test("a trusted OpenBot's connect, made with no Connect page, is followed up as 
   expect(seen.order).toEqual(["connection", "connected", "connection"]);
 });
 
-test("openbot.state, openbot.record and openbot.stop are answered for OpenBot's page and never reach the connect handler or the page-network entry", async () => {
+test("xiongbao.state, xiongbao.record and xiongbao.stop are answered for OpenBot's page and never reach the connect handler or the page-network entry", async () => {
   const spy = spyOn(connection, "handleExternalConnect");
   restore.push(() => spy.mockRestore());
   installRouter(handlers);
@@ -398,12 +398,12 @@ test("openbot.state, openbot.record and openbot.stop are answered for OpenBot's 
     frameId: 0,
   };
   // Nothing is connected: the page is told so, and nothing records.
-  expect(await fake.sendExternal({ type: "openbot.state" }, sender)).toEqual({
+  expect(await fake.sendExternal({ type: "xiongbao.state" }, sender)).toEqual({
     connected: false,
   });
   for (const message of [
-    { type: "openbot.record", title: "Archive order 1043" },
-    { type: "openbot.stop" },
+    { type: "xiongbao.record", title: "Archive order 1043" },
+    { type: "xiongbao.stop" },
   ])
     expect(await fake.sendExternal(message, sender)).toEqual({
       ok: false,
@@ -411,10 +411,10 @@ test("openbot.state, openbot.record and openbot.stop are answered for OpenBot's 
     });
   // Malformed: answered invalid before anything reads it.
   for (const message of [
-    { type: "openbot.record", title: "   " },
-    { type: "openbot.record", title: "x".repeat(201) },
-    { type: "openbot.record", title: "x", tabId: 9 },
-    { type: "openbot.state", origin: "https://openbot.example.test" },
+    { type: "xiongbao.record", title: "   " },
+    { type: "xiongbao.record", title: "x".repeat(201) },
+    { type: "xiongbao.record", title: "x", tabId: 9 },
+    { type: "xiongbao.state", origin: "https://openbot.example.test" },
   ])
     expect(await fake.sendExternal(message, sender)).toEqual({
       ok: false,

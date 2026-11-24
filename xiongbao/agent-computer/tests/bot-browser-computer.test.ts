@@ -14,7 +14,7 @@ import type { ComputerProvider } from "../../server/src/computer/provider";
 import { createComputerRoutes } from "../../server/src/computer/routes";
 import type { BotBrowserState } from "../../shared/bot-browser";
 import type { ComputerControlState } from "../../shared/computer-control";
-import type { LauncherConnection } from "../../shared/openbot-browser";
+import type { LauncherConnection } from "../../shared/xiongbao-browser";
 import { reservePort } from "../../tests/support/reserved-port";
 import {
   NOT_ITS_OWN_COMPUTER,

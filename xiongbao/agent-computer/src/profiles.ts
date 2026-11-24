@@ -44,7 +44,7 @@ import {
 import {
   isPersonBrowserId,
   RECORDER_DIR_ENV,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 import { profileDirectoryFor, seatParts } from "./bot-id";
 import {
   chooseEvictions,

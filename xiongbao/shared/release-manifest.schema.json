@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "OpenBot release manifest v1",
+  "title": "XiongBao release manifest v1",
   "type": "object",
   "additionalProperties": false,
   "required": [

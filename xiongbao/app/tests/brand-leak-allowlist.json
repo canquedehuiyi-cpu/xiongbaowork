@@ -665,27 +665,6 @@
     "plan": "keep"
   },
   {
-    "file": "shared/release-policy.schema.json",
-    "text": "\"OpenBot release policy\"",
-    "reason": "developer-only: JSON Schema title read only by the release tooling",
-    "category": "developer-only",
-    "plan": "keep"
-  },
-  {
-    "file": "shared/release-manifest.schema.json",
-    "text": "\"OpenBot release manifest v1\"",
-    "reason": "developer-only: JSON Schema title read only by the release tooling",
-    "category": "developer-only",
-    "plan": "keep"
-  },
-  {
-    "file": "shared/harnesses.json",
-    "text": "the agent harnesses OpenBot knows by name",
-    "reason": "developer-only: `_readme` key for developers; no program reads it",
-    "category": "developer-only",
-    "plan": "keep"
-  },
-  {
     "file": "shared/recorder-api.ts",
     "text": "\"openbot-browser\"",
     "reason": "persisted-identifier: recorder connection `via` value stored in the database",
@@ -707,7 +686,7 @@
     "plan": "keep"
   },
   {
-    "file": "shared/openbot-actor.ts",
+    "file": "shared/xiongbao-actor.ts",
     "text": "actor.startsWith(\"openbot:\")",
     "reason": "persisted-identifier: stored actor id prefix",
     "category": "persisted-data",
@@ -725,13 +704,6 @@
     "text": "\"openbot/share_private_information\"",
     "reason": "persisted-identifier: built-in tool ref used as a lookup key",
     "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "shared/recorder-page.ts",
-    "text": "\"openbot.",
-    "reason": "persisted-identifier: message type in the Recorder page protocol",
-    "category": "peer-protocol",
     "plan": "keep"
   },
   {

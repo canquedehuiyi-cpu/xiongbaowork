@@ -25,7 +25,7 @@
  * standard, where a person's Bots share their browser sessions too. A Bot that must be kept apart is
  * made Isolated.
  */
-import { isPersonBrowserId } from "@xiongbao/shared/openbot-browser";
+import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { agentProfiles } from "../db/schema";

@@ -1,14 +1,14 @@
 /**
- * "What would happen if…": one action a Bot might take, and what each of OpenBot's controls decides
+ * "What would happen if…": one action a Bot might take, and what each of XiongBao's controls decides
  * about it.
  *
  * One shape for both ends. The server reads an admin's question into a {@link WhatIfAction} with the
- * deployment's model, checks it against what this OpenBot has, and runs the real deciders on it in the
+ * deployment's model, checks it against what this XiongBao has, and runs the real deciders on it in the
  * order the product applies them (`server/src/what-if-check.ts`). The Admin page draws the action as
  * chips the admin can change, and the answer as one row per control.
  */
 
-/** What started the run. The kinds a person can ask about: `deployment` is OpenBot itself. */
+/** What started the run. The kinds a person can ask about: `deployment` is XiongBao itself. */
 export const WHAT_IF_INITIATORS = [
   "person",
   "routine",
@@ -67,7 +67,7 @@ export type WhatIfAction = {
   group: string;
   initiator: WhatIfInitiator;
   surface: "app" | "computer";
-  /** The app's id on this OpenBot. App calls only. */
+  /** The app's id on this XiongBao. App calls only. */
   app: string;
   /** The tool's own name. App calls only. */
   tool: string;
@@ -176,7 +176,7 @@ export type WhatIfLabels = {
   app?: string;
 };
 
-/** What this OpenBot has that an action can name: the only values a chip may hold. */
+/** What this XiongBao has that an action can name: the only values a chip may hold. */
 export type WhatIfVocabulary = {
   bots: { id: string; name: string; owner: string | null }[];
   people: { id: string; name: string | null; email: string }[];

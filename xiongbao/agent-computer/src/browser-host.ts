@@ -5,7 +5,7 @@
  * Under the computer token like every other route, with the person's browser id in
  * `x-xiongbao-bot-id`; `index.ts` checks the token, this checks the id. The server is the only caller:
  * it decides who the signed-in person is, mints their Recorder connection, and forwards here. The
- * shapes are the contract in `shared/openbot-browser.ts`, which every slice builds against.
+ * shapes are the contract in `shared/xiongbao-browser.ts`, which every slice builds against.
  *
  * Every answer but narration's is the browser's state, so the caller never has to ask twice to show
  * what a change did.
@@ -26,7 +26,7 @@ import {
   isPersonBrowserId,
   type LauncherState,
   type Narration,
-} from "../../shared/openbot-browser";
+} from "../../shared/xiongbao-browser";
 import { createTabBar } from "./browser-tabs";
 import { BROWSER_NOT_OPEN, BrowserNotOpenError } from "./person-access";
 import {

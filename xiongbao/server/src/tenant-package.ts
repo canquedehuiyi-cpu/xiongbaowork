@@ -3,7 +3,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HARNESSES, type Harness } from "@xiongbao/shared/harnesses";
-import { isPersonBrowserId } from "@xiongbao/shared/openbot-browser";
+import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import {
   and,
   desc,

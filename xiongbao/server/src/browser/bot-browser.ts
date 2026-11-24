@@ -9,13 +9,13 @@ import {
   botBrowserComputerRecordingRequestSchema,
 } from "@xiongbao/shared/bot-browser";
 import type { ComputerControlState } from "@xiongbao/shared/computer-control";
+import type { RecorderConnection } from "@xiongbao/shared/recorder-api";
+import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
 import {
   browserNavigateRequestSchema,
   browserRecordingRequestSchema,
   browserTabsRequestSchema,
-} from "@xiongbao/shared/openbot-browser";
-import type { RecorderConnection } from "@xiongbao/shared/recorder-api";
-import { RECORDER_EXTENSION_ID } from "@xiongbao/shared/recorder-extension";
+} from "@xiongbao/shared/xiongbao-browser";
 import { Hono } from "hono";
 import type { z } from "zod";
 import { envName } from "../../../shared/env-aliases";

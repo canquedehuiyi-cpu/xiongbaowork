@@ -9,7 +9,7 @@ import {
   IconX,
 } from "@tabler/icons-react";
 import type { UseMutationResult } from "@tanstack/react-query";
-import type { BrowserTab } from "@xiongbao/shared/openbot-browser";
+import type { BrowserTab } from "@xiongbao/shared/xiongbao-browser";
 import {
   type KeyboardEvent,
   type ReactNode,

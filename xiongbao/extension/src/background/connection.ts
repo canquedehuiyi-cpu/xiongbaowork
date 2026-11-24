@@ -15,7 +15,7 @@ import type {
 } from "../protocol/messages";
 import { defaultBrowserName } from "../shared/browser-name";
 import { OpenBotError, openbotJson } from "../shared/openbot-client";
-import { normaliseOpenBotOrigin } from "../shared/origin";
+import { normaliseXiongBaoOrigin } from "../shared/origin";
 import {
   allowsOpenBot,
   onPolicyChanged,
@@ -481,7 +481,7 @@ export async function handleExternalConnect(
   if (message.type !== "openbot.connect")
     return { ok: false, error: "invalid" };
   if (!origin) return { ok: false, error: "invalid" };
-  const checked = normaliseOpenBotOrigin(origin);
+  const checked = normaliseXiongBaoOrigin(origin);
   if (!checked.ok) return { ok: false, error: "not-https" };
 
   const policy = await resolved.readPolicy();
@@ -527,12 +527,12 @@ export function trustedConnectRule(
   origin: string,
   desktop: string | null,
 ): TrustedConnectRule | null {
-  const checked = normaliseOpenBotOrigin(origin);
+  const checked = normaliseXiongBaoOrigin(origin);
   if (!checked.ok || !allowsOpenBot(policy, checked.origin)) return null;
   if (policy.openbotUrl === checked.origin) return "policy-pinned";
   if (new URL(checked.origin).protocol !== "http:" || desktop === null)
     return null;
-  const confirmed = normaliseOpenBotOrigin(desktop);
+  const confirmed = normaliseXiongBaoOrigin(desktop);
   return confirmed.ok && confirmed.origin === checked.origin
     ? "loopback-desktop"
     : null;
@@ -709,7 +709,7 @@ async function ping(origin: string | undefined): Promise<ExternalResponse> {
 async function connectStatus(
   origin: string | undefined,
 ): Promise<ExternalResponse> {
-  const checked = origin ? normaliseOpenBotOrigin(origin) : null;
+  const checked = origin ? normaliseXiongBaoOrigin(origin) : null;
   if (!checked?.ok) return { ok: true, connect: "none" };
   const pending = await readSession("pendingConnect");
   if (pending?.via === "web" && pending.origin === checked.origin)
@@ -737,7 +737,7 @@ async function connectStatus(
 }
 
 function sameOrigin(raw: string, origin: string): boolean {
-  const checked = normaliseOpenBotOrigin(raw);
+  const checked = normaliseXiongBaoOrigin(raw);
   return checked.ok && checked.origin === origin;
 }
 
@@ -823,7 +823,7 @@ async function desktopConnect(
   const handoff = await deps.askDesktop();
   if (!handoff) return refused("no-answer");
   if ("error" in handoff) return refused(handoff.error);
-  const checked = normaliseOpenBotOrigin(handoff.openbotUrl);
+  const checked = normaliseXiongBaoOrigin(handoff.openbotUrl);
   if (!checked.ok) return refused("invalid-address");
   if (!allowsOpenBot(policy, checked.origin))
     return refused("pinned-elsewhere");

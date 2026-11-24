@@ -1,4 +1,3 @@
-import type { Narration } from "@xiongbao/shared/openbot-browser";
 import type {
   LearningSpaceState,
   RecorderConnectVia,
@@ -6,6 +5,7 @@ import type {
   RecorderUser,
 } from "@xiongbao/shared/recorder-api";
 import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
+import type { Narration } from "@xiongbao/shared/xiongbao-browser";
 import type { AgentSnapshot } from "../background/agent/events";
 import type { StepSnapshot } from "../background/steps";
 import type { RecorderState, StreamSession } from "../protocol/messages";
@@ -121,7 +121,7 @@ type SessionState = {
   /** openbot.connect requests per origin in the last 10 minutes (timestamps), for Decision 22's limit (Task 8). */
   connectRequests?: Record<string, number[]>;
   /** The last web connect the person cancelled on the Connect page, so the page that asked hears so
-   * (`openbot.connect.status`); gone once that origin asks to connect again. */
+   * (`xiongbao.connect.status`); gone once that origin asks to connect again. */
   cancelledConnect?: { origin: string; at: number };
   /** The setup tab the install opened (setup.ts), so the launcher's connection can close it: a browser OpenBot opened
    * has its microphone granted already and is never shown a setup step. */

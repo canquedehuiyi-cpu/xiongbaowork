@@ -4,16 +4,16 @@
 // an OpenBot browser's launcher made. Every report is read as OpenBot's route reads it (`recorderActivitySchema`).
 import { afterEach, beforeEach, expect, spyOn, test } from "bun:test";
 import {
-  LAUNCHER_GLOBAL,
-  type LauncherApi,
-} from "@xiongbao/shared/openbot-browser";
-import {
   RECORDER_SIGNED_OUT,
   type RecorderActivity,
   recorderActivitySchema,
   recorderPaths,
 } from "@xiongbao/shared/recorder-api";
 import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
+import {
+  LAUNCHER_GLOBAL,
+  type LauncherApi,
+} from "@xiongbao/shared/xiongbao-browser";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import { ACTIVITY_REPORT_MS } from "../src/background/activity";
 import { installConnection } from "../src/background/connection";

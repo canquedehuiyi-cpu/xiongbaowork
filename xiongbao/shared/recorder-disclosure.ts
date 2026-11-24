@@ -1,31 +1,31 @@
 /**
  * WHAT A RECORDING HOLDS, in the one set of sentences every place that describes it reads: the Recorder's setup page and
- * Record form, OpenBot's Settings, Browsers (before the first Connect) and its Browser page. A recording is more than the
+ * Record form, XiongBao's Settings, Browsers (before the first Connect) and its Browser page. A recording is more than the
  * person's clicks and typing: a step that saves something carries the request it sent and the answer that came back
  * (extension/src/background/steps.ts), a page whose AI assistant speaks AG-UI has its conversation recorded, the person's
  * own messages included (extension/src/background/agent/events.ts), and narration is kept as text. Saying less than
  * that would be a disclosure that understates what is collected, which the Chrome Web Store's User Data policy forbids:
  * https://developer.chrome.com/docs/webstore/program-policies/user-data-faq
  *
- * Plain strings rather than markup, so the Recorder's pages and OpenBot's draw them with their own components.
+ * Plain strings rather than markup, so the Recorder's pages and XiongBao's draw them with their own components.
  */
 
 export const RECORDER_DISCLOSURE_TITLE = "What the Recorder collects";
 
 /**
  * Where a recording goes, in the one sentence every place that says it reads. The Recorder streams it from the browser
- * straight to the organization's own Intelligence, with a pass the organization's OpenBot hands out for each recording
- * (extension/src/offscreen/grant.ts, streamer.ts); OpenBot itself only hears what the Recorder is doing, for its Browser
+ * straight to the organization's own Intelligence, with a pass the organization's XiongBao hands out for each recording
+ * (extension/src/offscreen/grant.ts, streamer.ts); XiongBao itself only hears what the Recorder is doing, for its Browser
  * button (`recorderActivitySchema` in recorder-api.ts: the phase, the recording's name, when it started and how many
- * steps). "Through OpenBot" would say the recording passes through it, which it never does.
+ * steps). "Through XiongBao" would say the recording passes through it, which it never does.
  */
 export const RECORDER_DESTINATION =
   "What you record goes straight from your browser to the learning part of your organization's back end, with a pass from the part of the system that runs your Bots. That part is told that you are recording, the task's name, when it started and how many steps it has, and when you record in a browser shown inside the app, your narration passes through it to the Recorder without being stored.";
 
 /**
- * {@link RECORDER_DESTINATION} in the personal edition, where OpenBot is one person's and there is no organization:
- * the recording goes to that person's own Learning space (docs/personal-edition.md, Teach a Bot). It says OpenBot's
- * back end and not "this computer": OpenBot Desktop runs its back end on the person's machine, but a personal edition
+ * {@link RECORDER_DESTINATION} in the personal edition, where XiongBao is one person's and there is no organization:
+ * the recording goes to that person's own Learning space (docs/personal-edition.md, Teach a Bot). It says XiongBao's
+ * back end and not "this computer": XiongBao Desktop runs its back end on the person's machine, but a personal edition
  * started with scripts/start.sh may use one that runs somewhere else.
  */
 export const RECORDER_DESTINATION_PERSONAL =
@@ -49,7 +49,7 @@ export const RECORDER_DISCLOSURE_PERSONAL = disclosure(
 );
 
 /**
- * The lead for the edition OpenBot runs as, for a page of OpenBot's that knows it. The Recorder's own pages don't, and
+ * The lead for the edition XiongBao runs as, for a page of XiongBao's that knows it. The Recorder's own pages don't, and
  * say the team edition's.
  */
 export function recorderDisclosureFor(

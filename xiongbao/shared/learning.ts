@@ -105,10 +105,10 @@ export type LearningProposalDetail = LearningProposal & {
 };
 
 /**
- * The container OpenBot assigns on its own when nobody has chosen one.
+ * The container XiongBao assigns on its own when nobody has chosen one.
  *
  * The same ID `scripts/setup-learning.ts` creates, so a project set up by that helper, by hand in
- * Intelligence, or by `copilotkit learning containers create --id openbot` is found the same way.
+ * Intelligence, or with the learning CLI given this constant's value as the container id is found the same way.
  */
 export const AUTOMATIC_LEARNING_CONTAINER_ID = "openbot";
 
@@ -158,7 +158,7 @@ export function isLearningContainerId(value: unknown): value is string {
 
 /**
  * Who else's Bots use the Skills learned in a person's own Learning space. `closed`, the default: only their own Bots.
- * `open`: every Bot in this OpenBot. `choose`: every Bot, for the Skills the person opens one by one.
+ * `open`: every Bot in this XiongBao. `choose`: every Bot, for the Skills the person opens one by one.
  */
 export const LEARNING_SHARING_MODES = ["closed", "open", "choose"] as const;
 export type LearningSharingMode = (typeof LEARNING_SHARING_MODES)[number];
@@ -221,7 +221,7 @@ export type PersonalLearningSharing = {
   /** The Skills published in the person's own space, read the way a run reads them (none yet is an empty list), or null
    * when they could not be read, and then `unavailable` says why. */
   skills: PersonalLearnedSkill[] | null;
-  /** `off`: Automatic Learning is off in this OpenBot. `unavailable`: Intelligence did not deliver them (its Learning
+  /** `off`: Automatic Learning is off in this XiongBao. `unavailable`: Intelligence did not deliver them (its Learning
    * delivery is off, the space does not exist yet, or it could not be reached). */
   unavailable?: "off" | "unavailable";
 };
@@ -292,7 +292,7 @@ export type PersonalReview = {
    */
   approved?: number;
   /**
-   * Why Learning can't run on this machine at all, in a sentence for the person (OpenBot Desktop signed in with a model
+   * Why Learning can't run on this machine at all, in a sentence for the person (XiongBao Desktop signed in with a model
    * Learning can't use). Absent when nothing is known to be wrong.
    */
   modelProblem?: string;

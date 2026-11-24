@@ -22,7 +22,7 @@ import {
   type Server,
 } from "node:http";
 import { BlockList, connect, isIP, type Socket } from "node:net";
-import { isPersonBrowserId } from "../../shared/openbot-browser";
+import { isPersonBrowserId } from "../../shared/xiongbao-browser";
 import { HEADER } from "./wire-headers";
 
 /** A proxy as Playwright wants it: credentials separated from the URL. */

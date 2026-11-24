@@ -2,7 +2,7 @@ import {
   DESKTOP_REF,
   DESKTOP_WINDOW_ID,
 } from "@xiongbao/shared/desktop-control";
-import { isPersonBrowserId } from "@xiongbao/shared/openbot-browser";
+import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import type { Context, MiddlewareHandler } from "hono";
 import { Hono } from "hono";
 import { z } from "zod";

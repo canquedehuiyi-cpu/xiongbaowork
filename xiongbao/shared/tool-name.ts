@@ -79,7 +79,7 @@ export function readToolName(name: string, running = false): ToolName {
 
   const [, rawServer, ...rest] = parts;
   /*
-   * OpenBot's own Routines app also carries a goal's tools for a conversation. They are the tools a
+   * XiongBao's own Routines app also carries a goal's tools for a conversation. They are the tools a
    * goal's run holds, so they read in its words, 「创建了目标」, and not "Create goal" beside
    * "routines".
    */
@@ -90,7 +90,7 @@ export function readToolName(name: string, running = false): ToolName {
   return appToolName(rawServer ?? "", rest.join("__"));
 }
 
-/** The key of OpenBot's own Routines app (`ALWAYS_ON_APP` on the server). */
+/** The key of XiongBao's own Routines app (`ALWAYS_ON_APP` on the server). */
 const ROUTINES_APP = "routines";
 
 /**
@@ -183,7 +183,7 @@ export function connectorName(server: string): string {
 /**
  * 给人看的「动作 + 地点」怎么拼成中文。这个文件里所有把动作和地点放在一起的地方都按这几条写：
  *
- * 1. 动作是中文（OpenBot 自己的动作，浏览器、电脑、文件夹）：地点在前，「在 {地点} 上{动作}」——
+ * 1. 动作是中文（XiongBao 自己的动作，浏览器、电脑、文件夹）：地点在前，「在 {地点} 上{动作}」——
  *    「在 en.wikipedia.org 上点击链接「Python」」「在 en.wikipedia.org 上打开页面」。
  * 2. 动作是英文：第三方应用的工具名由 `appToolName`/`humanise` 从厂商标识符生成，本来就是英文，
  *    不翻；从标识符拼出来的其他动作名也一样。英文动作不塞进「在…上」里（「在 Gmail 上send email」
@@ -351,7 +351,7 @@ function approvalParts(action: {
     : action.toolRef.replace(/^computer_|^host\//, "").replaceAll("_", " ");
   /*
    * A folder on the person's computer by the name Settings > Computer shows. Its scope is the id
-   * OpenBot gave the grant, which kept a rule saved from the card on that grant, and read on the
+   * XiongBao gave the grant, which kept a rule saved from the card on that grant, and read on the
    * card as "write file on host-grant-15407-1794112361547002000".
    */
   if (action.toolRef.startsWith("host/")) {
@@ -595,7 +595,7 @@ function goalTools(names: {
 }
 
 /**
- * The tools OpenBot itself offers a Bot, named in words somebody chose.
+ * The tools XiongBao itself offers a Bot, named in words somebody chose.
  *
  * These are not MCP names, so nothing above rewrites them, and the bare identifier is what a line
  * would otherwise say: "show_app_access", shimmering, while the Bot works out what an app is for the
@@ -605,7 +605,7 @@ function goalTools(names: {
  * EVERY ONE OF THEM, including those the app draws a card for. A card is the usual picture, but the
  * same call is also a step inside a subtask, a line in a conversation opened where its card is not
  * registered, and a line in a run with no browser at all. `server/tests/built-in-tool-labels.test.ts`
- * reads every tool OpenBot registers and fails on one missing here.
+ * reads every tool XiongBao registers and fails on one missing here.
  *
  * 中文时态：`running` 用进行时（「正在保存文件」），`done` 用完成时（「保存了文件」），`attempted`
  * 写尝试做什么（「保存文件」），被拦下时拼成「已拦截：保存文件」。术语跟 app 一致：Bot 叫员工，
@@ -704,7 +704,7 @@ const OWN_TOOLS: Record<string, OwnTool> = {
   save_skill: { running: "正在提议新技能", done: "提议了新技能" },
 
   /*
-   * Drawing a generated interface in the conversation. The runtime offers it, not an OpenBot
+   * Drawing a generated interface in the conversation. The runtime offers it, not an XiongBao
    * registration, so `built-in-tool-labels.test.ts` cannot find it; its words go here by hand.
    */
   render_ui: { running: "正在绘制界面", done: "绘制了界面" },
@@ -939,7 +939,7 @@ const OWN_TOOLS: Record<string, OwnTool> = {
   },
 };
 
-/** One of OpenBot's own tools in words, or null for any other name. */
+/** One of XiongBao's own tools in words, or null for any other name. */
 export function ownToolLabel(name: string, running = false): string | null {
   const own = Object.hasOwn(OWN_TOOLS, name) ? OWN_TOOLS[name] : undefined;
   if (!own) return null;
@@ -947,7 +947,7 @@ export function ownToolLabel(name: string, running = false): string | null {
 }
 
 /**
- * What one of OpenBot's own steps asked for, for a step that was blocked and so did not happen, or
+ * What one of XiongBao's own steps asked for, for a step that was blocked and so did not happen, or
  * null when it has no words of its own for that.
  */
 export function ownToolAttempt(name: string): string | null {
@@ -956,7 +956,7 @@ export function ownToolAttempt(name: string): string | null {
 }
 
 /**
- * What one of OpenBot's own steps acted on, read from its arguments (a JSON string while it streams,
+ * What one of XiongBao's own steps acted on, read from its arguments (a JSON string while it streams,
  * or already parsed): the file a file step read or saved. Undefined for any other step, and for
  * arguments not yet complete.
  */

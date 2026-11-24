@@ -160,40 +160,10 @@
     "note": "Recorder 与网页的协议值；Task 14 双认后改名"
   },
   {
-    "word": "openbot.connect.status",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
     "word": "openbot.ping",
     "category": "peer-protocol",
     "plan": "rewrite",
     "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
-    "word": "openbot.record",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
-    "word": "openbot.state",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
-    "word": "openbot.stop",
-    "category": "peer-protocol",
-    "plan": "rewrite",
-    "note": "Recorder 与网页的协议值；Task 14 双认后改名"
-  },
-  {
-    "word": "openbotLauncher",
-    "category": "peer-protocol",
-    "plan": "keep",
-    "note": "JSON 字段名与内部符号，已持久化或与对端共享（规格 2.10）"
   },
   {
     "word": "openbotUrl:",

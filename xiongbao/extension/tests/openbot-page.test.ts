@@ -6,12 +6,12 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { LAUNCHER_GLOBAL } from "@xiongbao/shared/openbot-browser";
 import {
   RECORDER_SIGNED_OUT,
   recorderPaths,
 } from "@xiongbao/shared/recorder-api";
 import type { CapturedEvent } from "@xiongbao/shared/recorder-masking";
+import { LAUNCHER_GLOBAL } from "@xiongbao/shared/xiongbao-browser";
 import { IDBKeyRange as FakeIDBKeyRange, IDBFactory } from "fake-indexeddb";
 import { installConnection } from "../src/background/connection";
 import { installLauncher } from "../src/background/launcher";
@@ -337,7 +337,7 @@ afterEach(async () => {
 }, 15_000);
 
 test("OpenBot's page connects with no Connect page, records its own tab and then a tab the person switches to, and stops", async () => {
-  expect(await ask({ type: "openbot.state" })).toEqual({ connected: false });
+  expect(await ask({ type: "xiongbao.state" })).toEqual({ connected: false });
   await connectFromOpenBot();
   expect(exchanged).toEqual(["obc_from-openbot"]);
   expect(fake.opened).toEqual([]);
@@ -346,7 +346,7 @@ test("OpenBot's page connects with no Connect page, records its own tab and then
     token: TOKEN,
     via: "web",
   });
-  expect(await ask({ type: "openbot.state" })).toEqual({
+  expect(await ask({ type: "xiongbao.state" })).toEqual({
     connected: true,
     phase: "idle",
     actions: 0,
@@ -354,7 +354,7 @@ test("OpenBot's page connects with no Connect page, records its own tab and then
 
   const startedAt = clock;
   expect(
-    await ask({ type: "openbot.record", title: "  Archive order 1043  " }),
+    await ask({ type: "xiongbao.record", title: "  Archive order 1043  " }),
   ).toEqual({
     ok: true,
     state: {
@@ -390,7 +390,7 @@ test("OpenBot's page connects with no Connect page, records its own tab and then
   clock = click.timestamp;
   port.postMessage({ type: "content.event", event: click });
   await settle();
-  expect(await ask({ type: "openbot.state" })).toEqual({
+  expect(await ask({ type: "xiongbao.state" })).toEqual({
     connected: true,
     phase: "recording",
     title: "Archive order 1043",
@@ -398,14 +398,14 @@ test("OpenBot's page connects with no Connect page, records its own tab and then
     actions: 1,
   });
   // A second Record while one runs is refused with the Recorder's own sentence, and changes nothing.
-  expect(await ask({ type: "openbot.record", title: "Again" })).toEqual({
+  expect(await ask({ type: "xiongbao.record", title: "Again" })).toEqual({
     ok: false,
     error: "A recording is already running.",
   });
 
   await advanceTo(click.timestamp + 5_000);
   const stoppedAt = clock;
-  expect(await ask({ type: "openbot.stop" })).toEqual({
+  expect(await ask({ type: "xiongbao.stop" })).toEqual({
     ok: true,
     state: {
       connected: true,
@@ -443,11 +443,11 @@ test("OpenBot's page connects with no Connect page, records its own tab and then
     phase: "succeeded",
   });
   // State after Stop says the same, and Stop again changes nothing.
-  expect(await ask({ type: "openbot.state" })).toMatchObject({
+  expect(await ask({ type: "xiongbao.state" })).toMatchObject({
     phase: "idle",
     lastStopped: { recordingId: active.recordingId, actions: 1 },
   });
-  expect(await ask({ type: "openbot.stop" })).toMatchObject({
+  expect(await ask({ type: "xiongbao.stop" })).toMatchObject({
     ok: true,
     state: { phase: "idle", lastStopped: { recordingId: active.recordingId } },
   });
@@ -458,9 +458,9 @@ test("any other page gets not connected and a refusal, the same whether this cop
     const all: unknown[] = [];
     for (const sender of others())
       for (const message of [
-        { type: "openbot.state" },
-        { type: "openbot.record", title: "Steal it" },
-        { type: "openbot.stop" },
+        { type: "xiongbao.state" },
+        { type: "xiongbao.record", title: "Steal it" },
+        { type: "xiongbao.stop" },
       ])
         all.push(await ask(message, sender));
     return all;
@@ -476,13 +476,13 @@ test("any other page gets not connected and a refusal, the same whether this cop
   // Connected to OpenBot, and recording from it.
   await connectFromOpenBot();
   expect(
-    await ask({ type: "openbot.record", title: "Archive order 1043" }),
+    await ask({ type: "xiongbao.record", title: "Archive order 1043" }),
   ).toMatchObject({ ok: true, state: { phase: "recording" } });
   const active = fake.storage.local.get("activeRecording") as DrainRecord;
   expect(await answers()).toEqual(expected);
   // The recording OpenBot started runs on, untouched, and no other started.
   expect(fake.storage.local.get("activeRecording")).toEqual(active);
-  expect(await ask({ type: "openbot.state" })).toMatchObject({
+  expect(await ask({ type: "xiongbao.state" })).toMatchObject({
     connected: true,
     phase: "recording",
     title: "Archive order 1043",
@@ -497,12 +497,12 @@ test("OpenBot's origin in a frame of another page may read the state and stop, b
     tab: { id: 9, url: "https://evil.example/" } as chrome.tabs.Tab,
     frameId: 4,
   });
-  expect(await ask({ type: "openbot.record", title: "x" }, framed)).toEqual({
+  expect(await ask({ type: "xiongbao.record", title: "x" }, framed)).toEqual({
     ok: false,
     error: "Record from XiongBao Work's own tab.",
   });
   expect(fake.storage.local.get("activeRecording")).toBeUndefined();
-  expect(await ask({ type: "openbot.state" }, framed)).toEqual({
+  expect(await ask({ type: "xiongbao.state" }, framed)).toEqual({
     connected: true,
     phase: "idle",
     actions: 0,
@@ -518,8 +518,8 @@ test("once the person disconnects this browser, OpenBot's page is told it is not
     ),
   ).toEqual({ ok: true });
   expect(revokedTokens).toEqual([TOKEN]);
-  expect(await ask({ type: "openbot.state" })).toEqual({ connected: false });
-  expect(await ask({ type: "openbot.record", title: "x" })).toEqual({
+  expect(await ask({ type: "xiongbao.state" })).toEqual({ connected: false });
+  expect(await ask({ type: "xiongbao.record", title: "x" })).toEqual({
     ok: false,
     error: NOT_CONNECTED,
   });
@@ -539,7 +539,7 @@ test("Record from OpenBot's page carries the person's narration choice from thei
     );
     const heard = await voice();
     await advanceTo(clock + 5_000);
-    expect(await ask({ type: "openbot.stop" })).toMatchObject({ ok: true });
+    expect(await ask({ type: "xiongbao.stop" })).toMatchObject({ ok: true });
     await until(
       async () => (await recorderState()).phase === "idle",
       "the recording stopped",
@@ -549,7 +549,7 @@ test("Record from OpenBot's page carries the person's narration choice from thei
   // Nothing chosen in the Recorder, which is no microphone, while the account says to narrate.
   expect(
     await recordAndStop({
-      type: "openbot.record",
+      type: "xiongbao.record",
       title: "Archive order 1043",
       narrate: true,
     }),
@@ -558,7 +558,7 @@ test("Record from OpenBot's page carries the person's narration choice from thei
   fake.storage.local.set("narration", "on");
   expect(
     await recordAndStop({
-      type: "openbot.record",
+      type: "xiongbao.record",
       title: "Archive order 1044",
       narrate: false,
     }),
@@ -566,7 +566,7 @@ test("Record from OpenBot's page carries the person's narration choice from thei
   // No choice from the account: the Recorder's own.
   expect(
     await recordAndStop({
-      type: "openbot.record",
+      type: "xiongbao.record",
       title: "Archive order 1045",
     }),
   ).not.toBe("muted");

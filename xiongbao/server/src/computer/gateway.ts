@@ -33,7 +33,7 @@ import {
   desktopActionWordsOf,
   snapshotForStorage,
 } from "@xiongbao/shared/desktop-control";
-import { isPersonBrowserId } from "@xiongbao/shared/openbot-browser";
+import { isPersonBrowserId } from "@xiongbao/shared/xiongbao-browser";
 import { HeadlessToolSuspension } from "@xiongbao/toolkit/headless-tools";
 import type { TurnArtifact } from "../../../shared/turn-artifacts";
 import { HEADER } from "../../../shared/wire-headers";

@@ -242,7 +242,7 @@ export const AUDIT_EVENT_WORDS: Readonly<Record<string, string>> = {
 /**
  * An action as a row names it: a computer's or this computer's (`computer_write_file`,
  * `host/write_file`, the bare `click` one older row records), an app's tool (`gmail/send_email`),
- * one of OpenBot's own (`bot/message_bot`), or an app's whole account (`gmail/*`). A name this has
+ * one of XiongBao's own (`bot/message_bot`), or an app's whole account (`gmail/*`). A name this has
  * no words for is split into words, never shown as stored.
  */
 export function auditActionWords(action: string): string {
@@ -264,7 +264,7 @@ export function auditActionWords(action: string): string {
 
 /**
  * A configuration row's change in words, read from the `change` its payload names: the plugin
- * store's own changes, which OpenBot makes by itself as well as a person does (it gives every Bot
+ * store's own changes, which XiongBao makes by itself as well as a person does (it gives every Bot
  * Routines' tools at every start, and in the personal edition every app's tools). Any other change
  * answers nothing, and the row keeps "修改设置".
  */
@@ -299,7 +299,7 @@ const CHANGES: Readonly<Record<string, string>> = {
   host_folder_granted: "给员工一个文件夹",
   host_folder_revoked: "从员工收回文件夹",
   host_access_stopped: "停止文件夹访问",
-  // OpenBot choosing the Learning space every Bot learns into, at its first start.
+  // XiongBao choosing the Learning space every Bot learns into, at its first start.
   default_container_assigned_automatically: "设置学习",
 };
 
