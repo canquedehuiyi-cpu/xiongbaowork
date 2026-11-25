@@ -379,7 +379,6 @@ const serverEnv: Record<string, string> = {
   // is one more call to the same mock after the answer, whose prompt quotes the person's message and so can
   // read as a scripted call. It is not what this gate measures, so it pins `off`.
   XIONGBAO_MEMORY_EXTRACT: "off",
-  COPILOTKIT_TELEMETRY_DISABLED: "true",
   DO_NOT_TRACK: "1",
 };
 

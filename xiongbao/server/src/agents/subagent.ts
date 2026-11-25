@@ -41,7 +41,6 @@ import { toolSegmentsFor, turnTimeoutFor } from "../../../toolkit/src/limits";
 import { currentApprovalContext } from "../approvals/types";
 import type { AuditInitiator } from "../audit";
 import { REFUSAL_MARKER } from "../plugins/tools";
-import type { ProductSurface } from "../telemetry/product";
 import { type OutputSink, spill } from "../tool-output";
 import { resolveSubagentModel } from "./subagent-model";
 
@@ -93,10 +92,6 @@ export const SUBAGENT_HANDED_BACK =
 /** The run asking, as this deployment knows it. */
 export type SubagentParent = {
   runId?: string;
-  /** The asking run's root task, as its analytics context states it; the subagent works for it. */
-  rootTaskId?: string;
-  /** Where the asking run's person is: the subagent's work reaches them there. */
-  surface?: ProductSurface;
   actorId: string;
   botId: string;
   threadId: string;
@@ -296,12 +291,6 @@ export function createSubagents(options: {
           try {
             const { replyText } = await runTurn({
               ownerUserId: parent.actorId,
-              telemetry: {
-                trigger: "subagent",
-                surface: parent.surface,
-                parentRunId: parent.runId,
-                inheritedRootTaskId: parent.rootTaskId,
-              },
               routineId: SUBAGENT_TOOL,
               agentId: parent.botId,
               threadId,

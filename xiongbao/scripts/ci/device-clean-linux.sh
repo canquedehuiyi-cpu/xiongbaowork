@@ -157,7 +157,7 @@ phase_server() {
     # this address: the person under test is an ordinary sign-up, as a customer would be.
     export INITIAL_ADMIN_EMAILS=device-clean-admin@example.test
     export NODE_ENV=test TENANT_PACKAGE_DIR=../examples/xiongbao INTELLIGENCE_MODE=local
-    export COPILOTKIT_TELEMETRY_DISABLED=true DO_NOT_TRACK=1
+    export DO_NOT_TRACK=1
     nohup bun src/index.ts > "$LOG_DIR/server.log" 2>&1 &
     echo "$!" > "$pidfile"
   )

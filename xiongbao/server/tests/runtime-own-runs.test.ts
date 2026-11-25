@@ -432,13 +432,13 @@ beforeAll(async () => {
   environmentBefore = {
     OPENAI_BASE_URL: process.env.OPENAI_BASE_URL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-    COPILOTKIT_TELEMETRY_DISABLED: process.env.COPILOTKIT_TELEMETRY_DISABLED,
+    DO_NOT_TRACK: process.env.DO_NOT_TRACK,
     MANAGED_AGENT_TOKEN: process.env.MANAGED_AGENT_TOKEN,
   };
   process.env.MANAGED_AGENT_TOKEN = MANAGED_AGENT_TOKEN;
   process.env.OPENAI_BASE_URL = `http://127.0.0.1:${relay.port}/v1`;
   process.env.OPENAI_API_KEY = "test-key";
-  process.env.COPILOTKIT_TELEMETRY_DISABLED = "true";
+  process.env.DO_NOT_TRACK = "true";
 
   roster.push({
     id: BUILT_IN,

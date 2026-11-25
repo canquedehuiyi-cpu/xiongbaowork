@@ -198,7 +198,6 @@ export type ThreadTurnOrigin = {
   /** The followed card the turn is a round of (`turnForCard`). */
   taskId?: string;
   initiator: AuditInitiator;
-  telemetry: Parameters<TurnRunner>[0]["telemetry"];
   /** The message id's prefix, so the stored message says who put it there. */
   messagePrefix: string;
 };
@@ -266,7 +265,6 @@ export async function startThreadTurn(
             runId,
             tenantId,
             initiator: origin.initiator,
-            telemetry: origin.telemetry,
             onStarted: () => {
               began = true;
               started();
@@ -392,7 +390,6 @@ export function createCardTurns(deps: CardTurnsDeps): CardTurns {
         source: options?.source ?? "task-card",
         ...(options?.taskId ? { taskId: options.taskId } : {}),
         initiator: PERSON_INITIATOR,
-        telemetry: { trigger: "human" },
         messagePrefix: "card-user",
       });
       return { runId, groupMessageId: null };

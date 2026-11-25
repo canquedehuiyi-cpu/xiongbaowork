@@ -24,7 +24,6 @@ import {
   type RunnerLike,
 } from "../routines/run-turn";
 import type { TaskProjector } from "../tasks/projector";
-import { productHeadlessBoundary } from "../telemetry/product-boundaries";
 import { markUntrusted } from "../untrusted-content";
 import { createWorkQueue } from "../work/queue";
 import {
@@ -49,7 +48,6 @@ import { type ResponsibilityStore, whyItRepeats } from "./types";
  * its usage row and card ports are always filled in.
  */
 export function createServerResponsibilityEngine(deps: {
-  productTelemetry?: import("../telemetry/product").ProductTelemetry;
   database: Database;
   responsibilityStore: ResponsibilityStore;
   routineIntelligence: IntelligenceLike;
@@ -134,12 +132,6 @@ export function createServerResponsibilityEngine(deps: {
           // A responsibility's patrol is a light turn and keeps the light clock (期五).
           turnTimeoutMs: turnTimeoutFor("patrol"),
           maxToolSegments: toolSegmentsFor("patrol"),
-          ...(deps.productTelemetry
-            ? {
-                prepareRunInput: productHeadlessBoundary(deps.productTelemetry),
-                onKnownStop: deps.productTelemetry.stopKnown,
-              }
-            : {}),
           admission: serverTurnAdmission,
           intelligence: routineIntelligence,
           runner: routineAgentRunner,

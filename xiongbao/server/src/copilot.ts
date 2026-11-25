@@ -49,7 +49,6 @@ import { HeadlessToolsMiddleware } from "@xiongbao/toolkit/headless-tools";
 import { sanitizeSeededHistory } from "@xiongbao/toolkit/history-sanitize";
 import { executeNativeApprovalTool } from "@xiongbao/toolkit/native-approval";
 import type { ThreadLock } from "@xiongbao/toolkit/ports";
-import { observeDetachedRun } from "@xiongbao/toolkit/run-stop";
 import type { LanguageModel } from "ai";
 import { Hono } from "hono";
 import { defer, from, type Observable, switchMap } from "rxjs";
@@ -225,8 +224,6 @@ import { corsOrigin } from "./request-trust";
 import { acceptedDelivery, deliverEndsTurnOn } from "./tasks/delivery-end";
 import { deliveryProtocolGuidance } from "./tasks/delivery-tools";
 import { noteAttachedFastPath } from "./tasks/fastpath-gate";
-import type { ProductTelemetry } from "./telemetry/product";
-import { productRuntimeHook } from "./telemetry/product-boundaries";
 import {
   disableRuntimeTelemetryByDefault,
   runtimeTelemetryOptions,
@@ -4468,7 +4465,6 @@ export function mountCopilotRuntime(
   identifyUser: IdentifyUser,
   identifyActor: IdentifyActor,
   options: {
-    productTelemetry?: ProductTelemetry;
     /**
      * Where the cards a Bot asks with in the conversation are saved while they wait on the person,
      * so the Bot is under Needs you for them. See approvals/decision-waits.ts.
@@ -4632,7 +4628,6 @@ export function mountCopilotRuntime(
     // other deployment's. Adds no events of its own.
     telemetryProperties: {
       app_id: "xiongbao",
-      ...options.productTelemetry?.deploymentProperties(),
       ...(config.accessibility
         ? { accessibility_title: accessibilityTitle() }
         : {}),
@@ -4691,48 +4686,6 @@ export function mountCopilotRuntime(
     runner: runtimeRunner,
   });
 
-  /*
-   * A person's Stop on a browser run, as this server learns of it: the runner detaches the run's
-   * agent for a stop it is asked for (`observeDetachedRun`; a run whose agent is never detached is
-   * simply never marked). Marked, so the run's product terminal reads cancelled rather than as a run
-   * that ended with no outcome. A run starts through `runWithStartupBoundary` where the runner has
-   * it, `run` otherwise, so each run's agent is observed at both as the runner is handed it.
-   */
-  const productTelemetry = options.productTelemetry;
-  if (productTelemetry) {
-    type RunRequest = Parameters<typeof runtimeRunner.run>[0];
-    const watched = runtimeRunner as typeof runtimeRunner & {
-      runWithStartupBoundary?: (request: RunRequest) => unknown;
-    };
-    const observed = (request: RunRequest) => {
-      const stopped = () =>
-        productTelemetry.markStopped(request.input.runId, "cancelled");
-      observeDetachedRun(request.agent, () => false, stopped);
-      /*
-       * M3: the fork's runner is the local one (`PostgresAgentRunner`), which stops a run by aborting
-       * its agent rather than detaching it, so the abort is the Stop it learns of.
-       */
-      const agent = request.agent as { abortRun?: () => void };
-      const abort = agent.abortRun;
-      if (typeof abort === "function")
-        agent.abortRun = () => {
-          stopped();
-          abort.call(agent);
-        };
-    };
-    const run = watched.run.bind(watched);
-    watched.run = (request) => {
-      observed(request);
-      return run(request);
-    };
-    const startup = watched.runWithStartupBoundary?.bind(watched);
-    if (startup)
-      watched.runWithStartupBoundary = (request) => {
-        observed(request);
-        return startup(request);
-      };
-  }
-
   if (options.decisionWaits)
     watchDecisionWaits(runtimeRunner, options.decisionWaits);
   options.chatServerTools?.watch(runtimeRunner);
@@ -4753,13 +4706,7 @@ export function mountCopilotRuntime(
     cors: { origin: corsOrigin(config) },
     hooks: {
       onBeforeHandler: async (context) => {
-        const gated = await trajectoryCapture?.gate(context);
-        const prepared = productTelemetry
-          ? ((await productRuntimeHook(
-              productTelemetry,
-              actorOf,
-            )({ ...context, request: gated ?? context.request })) ?? gated)
-          : gated;
+        const prepared = await trajectoryCapture?.gate(context);
         // Last, so nothing after it can drop the mark. See `isAskedRun`.
         return (
           (await markAskedRun(prepared ?? context.request, context.route)) ??

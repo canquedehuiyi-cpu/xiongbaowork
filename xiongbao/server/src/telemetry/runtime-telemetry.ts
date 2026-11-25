@@ -3,8 +3,8 @@ import type { CopilotRuntimeOptions } from "@copilotkit/runtime/v2";
 /**
  * The CopilotKit runtime reports usage to its vendor by default: every runtime builds a capture
  * scope over `lambdaClient.send` (`@copilotkit/runtime` 1.85.0,
- * `dist/v2/runtime/telemetry/telemetry-client.mjs:61-80`), and the only switches it reads are the
- * `COPILOTKIT_TELEMETRY_DISABLED` / `DO_NOT_TRACK` environment variables (same file, line 8).
+ * `dist/v2/runtime/telemetry/telemetry-client.mjs:61-80`), and the only switches it reads are two
+ * environment variables (same file, line 8), one of them the common `DO_NOT_TRACK`, which is the one set here.
  *
  * DECISION (product owner): what this fork ships sends no usage data to any third party, so the
  * capture scope is replaced UNCONDITIONALLY. That deliberately also overrides the desktop app's
@@ -21,12 +21,12 @@ export const runtimeTelemetryOptions = {
 } satisfies Pick<CopilotRuntimeOptions, "ɵtelemetry">;
 
 /**
- * Sets the runtime's own opt-out variable when nobody chose, before a runtime is constructed. Without
- * it a non-Docker run still logs "telemetry enabled" at construction and records global properties
- * on the vendor client even though nothing is sent.
+ * Sets `DO_NOT_TRACK` when nobody chose, before a runtime is constructed. The runtime reads it as its
+ * opt-out; without it a non-Docker run still logs "telemetry enabled" at construction and records
+ * global properties on the vendor client even though nothing is sent.
  */
 export function disableRuntimeTelemetryByDefault(
   env: Record<string, string | undefined> = process.env,
 ): void {
-  env.COPILOTKIT_TELEMETRY_DISABLED ??= "1";
+  env.DO_NOT_TRACK ??= "1";
 }

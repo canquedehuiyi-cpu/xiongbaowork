@@ -189,8 +189,7 @@ export function createRoutineRunner(options: {
       return;
     }
 
-    const { routineId, ownerUserId, agentId, channelId, instruction, source } =
-      context;
+    const { routineId, ownerUserId, agentId, channelId, instruction } = context;
     // Everything below is done AS the owner: their channel, their thread, their grants.
     const owner: AgentActor = { id: ownerUserId, role: "user" };
 
@@ -340,11 +339,6 @@ export function createRoutineRunner(options: {
       try {
         ({ replyText, ...produced } = await runTurn({
           ownerUserId,
-          telemetry: {
-            trigger: source === "run_now" ? "human" : "routine",
-            surface: source === "run_now" ? "web" : "unknown",
-            rootTaskId: routineRunId,
-          },
           routineId,
           agentId,
           threadId,

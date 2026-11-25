@@ -140,7 +140,6 @@ import {
 import { createServerApprovalService } from "./approvals/wiring";
 import {
   type AuditInitiator,
-  addAuditTap,
   auditSink,
   createAgentTrailReader,
   createAuditReader,
@@ -443,8 +442,8 @@ import { createMemoryDefaults } from "./memory/defaults";
 import { createEmbeddingStore } from "./memory/embeddings-store";
 import { createMemoryExtractor, memoryExtractEnabled } from "./memory/extract";
 import { createMemoryIngestion } from "./memory/ingestion";
-import { createIntelligenceMemory } from "./memory/intelligence";
 import { createMemoryRuntime } from "./memory/runtime";
+import { createIntelligenceMemory } from "./memory/intelligence";
 import { createMemoryStore } from "./memory/store";
 import { offeredMemoryTools } from "./memory/tools";
 import { createMemoryVectors } from "./memory/vectors";
@@ -667,11 +666,6 @@ import { createTaskRunner } from "./tasks/runner";
 import { createTaskStore } from "./tasks/store";
 import { createTaskTurn } from "./tasks/turn";
 import { createTeamBots } from "./team-bots/team-bots";
-import { createProductTelemetry } from "./telemetry/product";
-import {
-  deliveryLineage,
-  productHeadlessBoundary,
-} from "./telemetry/product-boundaries";
 import { isAccessRevoked } from "./tenant/access";
 import {
   asPlatform,
@@ -846,20 +840,6 @@ await startupLifecycle.run(async (startup) => {
   await startup.step(() =>
     provisionDevActorTenant(database, config.singleUser),
   );
-  /*
-   * Product analytics (telemetry/product.ts): off unless the operator turned the export on, and never
-   * anything a person wrote. Every audit row passes it a copy of its event type.
-   */
-  const productTelemetry = await createProductTelemetry({
-    privacyKey: config.keyEncryptionKey,
-    deploymentId: config.deploymentId,
-  });
-  addAuditTap(productTelemetry.recordAudit);
-  startup.acquireSync(
-    () => productTelemetry,
-    (telemetry) => telemetry.flush(),
-  );
-  const prepareProductRunInput = productHeadlessBoundary(productTelemetry);
   // A person's name and their own details, for /api/me and for what their Bots call them.
   const profileStore = createProfileStore(database);
   // The vault, built before the agent store because a customer's agent may sit behind a key and that
@@ -3907,8 +3887,6 @@ await startupLifecycle.run(async (startup) => {
     // A routine, a card's round, an automation: real work, given the working turn's clock (期五).
     turnTimeoutMs: turnTimeoutFor("unattended"),
     maxToolSegments: toolSegmentsFor("unattended"),
-    prepareRunInput: prepareProductRunInput,
-    onKnownStop: productTelemetry.stopKnown,
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
     components: headlessComponents,
@@ -4024,8 +4002,6 @@ await startupLifecycle.run(async (startup) => {
       },
     },
     turn: {
-      prepareRunInput: prepareProductRunInput,
-      onKnownStop: productTelemetry.stopKnown,
       admission: serverTurnAdmission,
       // The server's own ports, as every other headless turn has them (routines/run-turn.ts).
       modelNamedIn,
@@ -4371,7 +4347,6 @@ await startupLifecycle.run(async (startup) => {
   };
 
   const actorAgentResolver = createActorAgentResolver({
-    productTelemetry,
     loadAgents: runtimeAgentsForActor,
     model: runtimeModel,
     resolveModelApiKey: resolveRuntimeModelApiKey,
@@ -4467,8 +4442,6 @@ await startupLifecycle.run(async (startup) => {
           botId,
           threadId: input.threadId,
           runId: input.runId,
-          // The subagent carries on the asking run's task, on the asking run's surface.
-          ...productTelemetry.lineageOf(actorId, input.forwardedProps),
           initiator: initiator ?? PERSON_INITIATOR,
           ...(depth ? { depth } : {}),
         }),
@@ -4516,7 +4489,6 @@ await startupLifecycle.run(async (startup) => {
     identifyUser,
     identifyActor,
     {
-      productTelemetry,
       // The cards a Bot asks with in the conversation, saved while they wait on the person.
       decisionWaits: createDecisionWaits(database),
       // A run started or ended on a thread; light the channel it belongs to. Fire-and-forget.
@@ -4555,7 +4527,6 @@ await startupLifecycle.run(async (startup) => {
    */
   const quietUntil = createQuietUntil(database);
   const responsibilityEngine = createServerResponsibilityEngine({
-    productTelemetry,
     database,
     responsibilityStore,
     routineIntelligence,
@@ -4607,8 +4578,6 @@ await startupLifecycle.run(async (startup) => {
       // A responsibility's patrol is a light turn and keeps the light clock (期五).
       turnTimeoutMs: turnTimeoutFor("patrol"),
       maxToolSegments: toolSegmentsFor("patrol"),
-      prepareRunInput: prepareProductRunInput,
-      onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
       components: headlessComponents,
@@ -4721,8 +4690,6 @@ await startupLifecycle.run(async (startup) => {
     executors: automationTargets,
   });
   const approvalContinuationOptions: Parameters<typeof createTurnRunner>[0] = {
-    prepareRunInput: prepareProductRunInput,
-    onKnownStop: productTelemetry.stopKnown,
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
     components: headlessComponents,
@@ -4910,7 +4877,6 @@ await startupLifecycle.run(async (startup) => {
             content: input.text,
           },
           initiator: PERSON_INITIATOR,
-          telemetry: deliveryLineage(input.source, input.runId),
           signal: input.signal,
         });
         if (result.replyText)
@@ -5018,8 +4984,6 @@ await startupLifecycle.run(async (startup) => {
     // Only a check-in that raises something files a card and counts against the month.
     quota,
     runTurn: createTurnRunner({
-      prepareRunInput: prepareProductRunInput,
-      onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
       buildAgentFor,
@@ -5332,8 +5296,6 @@ await startupLifecycle.run(async (startup) => {
       // A follow-up a Bot scheduled for itself runs unattended, on the working turn's clock (期五).
       turnTimeoutMs: turnTimeoutFor("unattended"),
       maxToolSegments: toolSegmentsFor("unattended"),
-      prepareRunInput: prepareProductRunInput,
-      onKnownStop: productTelemetry.stopKnown,
       intelligence: routineIntelligence,
       runner: routineAgentRunner,
       components: headlessComponents,
@@ -5428,8 +5390,6 @@ await startupLifecycle.run(async (startup) => {
       store: heartbeatStore,
       owner: workOwner("heartbeat"),
       runTurn: createTurnRunner({
-        prepareRunInput: prepareProductRunInput,
-        onKnownStop: productTelemetry.stopKnown,
         intelligence: routineIntelligence,
         runner: routineAgentRunner,
         components: headlessComponents,
@@ -5512,8 +5472,6 @@ await startupLifecycle.run(async (startup) => {
   const canUseGroupBot = async (ownerUserId: string, agentId: string) =>
     Boolean(await agentProfileStore.get(await actorFor(ownerUserId), agentId));
   const groupTurnOptions: Parameters<typeof createTurnRunner>[0] = {
-    prepareRunInput: prepareProductRunInput,
-    onKnownStop: productTelemetry.stopKnown,
     intelligence: routineIntelligence,
     runner: routineAgentRunner,
     components: headlessComponents,
@@ -6041,7 +5999,6 @@ await startupLifecycle.run(async (startup) => {
     // The runner, its delivery, and the loop and queue wake-up that drive them (agents/handoff-wiring.ts),
     // owned by the startup scope so a stopped server gives their connection back.
     await startHandoffDelivery({
-      productTelemetry,
       config,
       database,
       bootAuditStore,
@@ -6448,7 +6405,6 @@ await startupLifecycle.run(async (startup) => {
       channels: channelStore,
     },
     {
-      productTelemetry,
       approvals: approvalService,
       // M3: upstream also passes `shared: { modes, use }` (shared use and shared accounts); not adopted.
       ...(signInService ? { passwords: signInService } : {}),

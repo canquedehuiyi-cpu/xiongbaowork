@@ -1,21 +1,21 @@
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { AbstractAgent, EventType, type RunAgentInput } from "@ag-ui/client";
-import { of } from "rxjs";
 import { LLMock } from "@copilotkit/aimock";
 import { eq, inArray, sql } from "drizzle-orm";
+import { of } from "rxjs";
 import { createActorAgentResolver } from "../src/agents/agent-resolver";
 import { loadConfig } from "../src/config";
 import { mountCopilotRuntime, type RegisteredAgent } from "../src/copilot";
 import { createDatabase } from "../src/db/client";
 import { threadRunEvents, threadRuns, threads } from "../src/db/schema";
+import { serverTurnScope } from "../src/routines/run-turn";
 import { replyTextOf } from "../src/tasks/delivery";
 import { currentTenant, runAsTenant } from "../src/tenant/context";
 import {
   type FinishedTurn,
   PostgresAgentRunner,
 } from "../src/threads/postgres-runner";
-import { serverTurnScope } from "../src/routines/run-turn";
 import {
   asPersonChat,
   clearPersonChat,
@@ -94,11 +94,11 @@ beforeAll(async () => {
   environmentBefore = {
     OPENAI_BASE_URL: process.env.OPENAI_BASE_URL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
-    COPILOTKIT_TELEMETRY_DISABLED: process.env.COPILOTKIT_TELEMETRY_DISABLED,
+    DO_NOT_TRACK: process.env.DO_NOT_TRACK,
   };
   process.env.OPENAI_BASE_URL = `${model}/v1`;
   process.env.OPENAI_API_KEY = "test-key";
-  process.env.COPILOTKIT_TELEMETRY_DISABLED = "true";
+  process.env.DO_NOT_TRACK = "true";
   roster.push({
     id: BOT,
     name: "Worker",

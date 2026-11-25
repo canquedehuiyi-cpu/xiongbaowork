@@ -223,8 +223,6 @@ import type { TaskRunner } from "./tasks/runner";
 import type { TaskStore } from "./tasks/store";
 import { createTeamBotRoutes } from "./team-bots/routes";
 import type { TeamBots } from "./team-bots/team-bots";
-import type { ProductTelemetry } from "./telemetry/product";
-import { createProductTelemetryRoutes } from "./telemetry/product-routes";
 import { capabilityFor, currentTenant, runAsTenant } from "./tenant/context";
 import type { PackageStatusReader } from "./tenant-package";
 import {
@@ -504,7 +502,6 @@ export function createApp(
     /** AUT3: whether an automation may target a WakerFlow (its executor is registered). */
     wakerflowAutomations?: boolean;
     approvals?: ApprovalService;
-    productTelemetry?: ProductTelemetry;
     /** The Recorder extension's routes and guards (recorder/wiring.ts). Absent, nothing about it is mounted. */
     recorder?: RecorderExtensionDeps;
     /** A person's own XiongBao browser, with the Recorder in it already connected (browser/routes.ts). Absent, nothing
@@ -967,11 +964,6 @@ export function createApp(
   // Enterprise controls: capability switches and the model allowlist in front of the routes they
   // govern, the admin screen's API, and the SCIM verbs the GET/POST auth handler above does not take.
   app.use("/api/*", createEnterpriseGate(requireUser));
-  if (coworker?.productTelemetry)
-    app.route(
-      "/api/telemetry",
-      createProductTelemetryRoutes(requireUser, coworker.productTelemetry),
-    );
   /*
    * M5: upstream's admin routes that replay a draft over the trail (#1381, #1398, #1399) read it with
    * the reader they are handed. Signed in through `requireAdminUser`, an administrator holds the

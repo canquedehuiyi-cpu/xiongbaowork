@@ -333,7 +333,6 @@ const serverEnv: Record<string, string> = {
   AGENT_COMPUTER_URL: COMPUTER_URL,
   COMPUTER_TOKEN,
   AGENT_COMPUTER_ALLOW_PRIVATE_HOSTS: "true",
-  COPILOTKIT_TELEMETRY_DISABLED: "true",
   DO_NOT_TRACK: "1",
 };
 

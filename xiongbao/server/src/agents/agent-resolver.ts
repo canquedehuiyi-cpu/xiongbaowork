@@ -27,7 +27,6 @@ import type { AgentModelResolver } from "../models/runtime-resolver";
 import { NameContextMiddleware } from "../people/name-context";
 import { isProactiveInitiator } from "../proactive/initiator";
 import { computerGuidanceForRun } from "../proactive/restriction";
-import type { ProductTelemetry } from "../telemetry/product";
 import type { RunCompaction } from "../threads/compaction";
 import type { RecordContextBreakdown } from "../threads/context-usage";
 import type { AgentActor } from "./profile-types";
@@ -62,7 +61,6 @@ export type ActorAgentResolver = {
 };
 
 export type ActorAgentResolverDependencies = {
-  productTelemetry?: Pick<ProductTelemetry, "middleware">;
   loadNameForActor?: (actorId: string) => Promise<string | null>;
   loadAgents: LoadAgentsForActor;
   model: RuntimeModel;
@@ -224,10 +222,6 @@ export function createActorAgentResolver(
           );
         }
       }
-      if (deps.productTelemetry)
-        for (const agent of Object.values(agents)) {
-          agent.use(deps.productTelemetry.middleware(actor.id));
-        }
       return agents;
     });
   };

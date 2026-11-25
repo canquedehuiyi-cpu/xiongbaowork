@@ -2181,11 +2181,6 @@ export function createGroupConversations(deps: {
             if (mark) marks.push(mark);
           },
           ownerUserId: turn.ownerUserId,
-          telemetry: {
-            trigger: turn.fromAgentId ? "subagent" : "human",
-            surface: "web",
-            rootTaskId: `group:${turn.channelId}:${turn.messageId}`,
-          },
           routineId: `group:${turn.channelId}`,
           runId,
           // `openCard` above filed this answer under the same run id (or the turn hangs on a followed card),

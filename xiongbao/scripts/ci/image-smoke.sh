@@ -46,7 +46,7 @@ docker volume create "$volume" >/dev/null
 key=$(bun -e 'console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("base64"))')
 docker run -d --name "$name" -p 127.0.0.1:3772:3001 \
   -v "$volume:/var/lib/postgresql" \
-  -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e COPILOTKIT_TELEMETRY_DISABLED=true \
+  -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e DO_NOT_TRACK=1 \
   -e TENANT_PACKAGE_DIR=../examples/xiongbao \
   -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL=http://localhost:3772 \
   -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
@@ -90,7 +90,7 @@ if [ "$healthy" = true ]; then
   docker rm "$name" >/dev/null
   docker run -d --name "$name" -p 127.0.0.1:3772:3001 \
     -v "$volume:/var/lib/postgresql" \
-    -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e COPILOTKIT_TELEMETRY_DISABLED=true \
+    -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e DO_NOT_TRACK=1 \
     -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL=http://localhost:3772 \
     -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
   check wait_health "$name"
@@ -104,7 +104,7 @@ if [ "$healthy" = true ]; then
   auth_secret=$(bun -e 'console.log(Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString("hex"))')
   docker run -d --name "$auth" -p 127.0.0.1:3772:3001 \
     -v "$volume:/var/lib/postgresql" \
-    -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e COPILOTKIT_TELEMETRY_DISABLED=true \
+    -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e DO_NOT_TRACK=1 \
     -e OPENBOT_SINGLE_USER=false -e OPENBOT_PUBLIC_URL=http://127.0.0.1:3772 \
     -e BETTER_AUTH_URL=http://127.0.0.1:3772 -e BETTER_AUTH_SECRET="$auth_secret" \
     -e INITIAL_ADMIN_EMAILS=delivery-admin@example.test \
@@ -123,7 +123,7 @@ if [ "$healthy" = true ]; then
   docker stop "$auth" >/dev/null
   docker run -d --name "$bad" --env-file "$secret_env_native" \
     -v "$volume:/var/lib/postgresql" \
-    -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e COPILOTKIT_TELEMETRY_DISABLED=true \
+    -e EMBEDDED_POSTGRES=on -e EMBEDDED_COMPUTER=off -e DO_NOT_TRACK=1 \
     -e TENANT_PACKAGE_DIR=../examples/xiongbao \
     -e OPENBOT_SINGLE_USER=true -e OPENBOT_PUBLIC_URL=http://localhost:3772 \
     -e KEY_ENCRYPTION_KEY="$key" "$image" >/dev/null
