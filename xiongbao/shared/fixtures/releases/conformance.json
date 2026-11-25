@@ -30,8 +30,8 @@
     "installed": "installed.json",
     "candidate": "candidate.json",
     "policy": {
-      "distributionId": "acme.openbot",
-      "repository": "acme/openbot",
+      "distributionId": "acme.xiongbao",
+      "repository": "acme/xiongbao",
       "channel": "stable"
     },
     "sourceKind": "extended",

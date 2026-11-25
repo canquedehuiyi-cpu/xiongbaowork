@@ -331,7 +331,7 @@ describe("negation guard removal", () => {
   test("Bash (shell)（半角括号散文形态）判 blocked，这是有意接受，不要放宽", () => {
     // Deliberate: loosening the half-width-paren form also stops matching `Bash(npm install)`, the real
     // call rule A exists for. Chinese prose uses the full-width `（`, which does not match anyway.
-    expect(judge("Bash (shell) 在 openbot 上不可用").level).toBe("blocked");
+    expect(judge("Bash (shell) 在 xiongbao 上不可用").level).toBe("blocked");
   });
 });
 

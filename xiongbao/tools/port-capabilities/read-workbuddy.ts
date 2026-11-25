@@ -7,9 +7,9 @@
  *   <home>/plugins/marketplaces/experts/plugins/<package>/
  *     .codebuddy-plugin/plugin.json     metadata: expertType, agents[], skills[], members[]
  *     .downloaded_at                    ISO8601, when the package was fetched
- *     agents/<id>.md                    the persona and workflow, becomes openbot's system_prompt
+ *     agents/<id>.md                    the persona and workflow, becomes xiongbao's system_prompt
  *     skills/<name>/SKILL.md            bundled skills, only the ones plugin.json declares
- *     avatars/*.png                     not portable: openbot has no image avatars
+ *     avatars/*.png                     not portable: xiongbao has no image avatars
  *
  *   <home>/skills/<dir>/SKILL.md        user-level skills; <dir> may carry a __<source> suffix
  *   <home>/connectors-marketplace/connectors/<id>/mcp.json
@@ -69,7 +69,7 @@ export type SkillTier = "user" | "package";
 
 /** One `agents/<id>.md` inside an expert package. */
 export interface RawAgentDoc {
-  /** File name without `.md`; also the openbot agent id. */
+  /** File name without `.md`; also the xiongbao agent id. */
   id: string;
   file: SourceFile;
 }
@@ -126,7 +126,7 @@ export interface RawExpertPackage {
 
 /** One `mcpServers` entry read from a connector's `mcp.json`. */
 export interface RawConnector {
-  /** Connector id — also `mcpServers` key and openbot's `serverId` (tool-ref prefix). */
+  /** Connector id — also `mcpServers` key and xiongbao's `serverId` (tool-ref prefix). */
   id: string;
   dirName: string;
   mcpJson: SourceFile;
@@ -154,7 +154,7 @@ export interface MarketplaceEntry {
   /** Chinese title. */
   name?: string;
   nameEn?: string;
-  /** WorkBuddy's credential model for this connector; decides whether openbot can carry it at all. */
+  /** WorkBuddy's credential model for this connector; decides whether xiongbao can carry it at all. */
   authMode?: string;
   /** `mcp` for a server this file describes, `cli` for one that has no `mcp.json` at all. */
   type?: string;
@@ -545,7 +545,7 @@ export function readConnectorIndex(sourceRoot: string): Map<string, MarketplaceE
 /**
  * Read one connector.
  *
- * A connector whose only spec is a local `command` is not portable: openbot connects to remote MCP
+ * A connector whose only spec is a local `command` is not portable: xiongbao connects to remote MCP
  * servers by URL and has no way to run a stdio child process per employee. Those are returned with
  * `transport: "command"` so the caller can drop them with a reason instead of silently skipping.
  */

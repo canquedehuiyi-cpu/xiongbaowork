@@ -26,7 +26,7 @@ const url = new URL(raw);
 const databaseName = decodeURIComponent(url.pathname.slice(1));
 if (
   !["localhost", "127.0.0.1", "[::1]", "::1"].includes(url.hostname) ||
-  !/^openbot_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
+  !/^xiongbao_continuation_test_[0-9a-f]{16}$/.test(databaseName) ||
   disposable.databaseName !== databaseName
 )
   throw new Error("BLOCKED_NOT_DISPOSABLE: explicit one-time PG17 fixture required");

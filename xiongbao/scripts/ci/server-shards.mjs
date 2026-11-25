@@ -37,7 +37,7 @@ export function shardFiles(files, shard) {
 export function listShard(action, root = defaultRoot) {
   if (!new RegExp(`^[1-${SHARD_COUNT}]$`).test(action ?? "")) {
     throw new Error(
-      `Usage: bun scripts/ci/server-shards.mjs <1..${SHARD_COUNT}|--write> [head openbot root]`,
+      `Usage: bun scripts/ci/server-shards.mjs <1..${SHARD_COUNT}|--write> [head xiongbao root]`,
     );
   }
   try {

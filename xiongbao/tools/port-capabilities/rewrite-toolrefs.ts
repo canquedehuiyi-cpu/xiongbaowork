@@ -2,7 +2,7 @@
  * P3 改写层：把审计判为 blocked / degraded 的技能正文改写成「本环境能读懂」的版本。
  *
  * 方案 §5.2 的两个动作，缺一不可：
- * 1. **映射改写**：`Read(/Write(/Edit(/MultiEdit(` 这四个括号形态是 openbot 有近似物的工具，
+ * 1. **映射改写**：`Read(/Write(/Edit(/MultiEdit(` 这四个括号形态是 xiongbao 有近似物的工具，
  *    改写成 `computer_read_file(` / `computer_write_file(`。Glob/Grep/WebFetch/Task 没有等价物，
  *    **保留原文**——伪造一个「grep 函数」只会让模型以为自己在 Linux 上（方案 §5.2 的 shim 裁定）。
  * 2. **环境事实段**：正文首部插入一段散文，说明 shell 不存在、文件读写走 computer_*、
@@ -23,7 +23,7 @@
 /** 环境事实段标题；也是幂等标记——正文里已有这段就不再插入。 */
 export const ENVIRONMENT_FACTS_HEADING = "## 环境事实（移植时改写）";
 
-/** openbot 有近似物、值得做名字映射的源环境工具 → openbot 工具名。 */
+/** xiongbao 有近似物、值得做名字映射的源环境工具 → xiongbao 工具名。 */
 export const TOOL_REF_REWRITES: Readonly<Record<string, string>> =
   Object.freeze({
     Read: "computer_read_file",

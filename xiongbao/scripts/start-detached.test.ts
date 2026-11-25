@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { runCommand } from "./update-local";
 
 test("startup closes updater pipes while its background services remain live", async () => {
-  const root = await mkdtemp(join(tmpdir(), "openbot-start-detached-"));
+  const root = await mkdtemp(join(tmpdir(), "xiongbao-start-detached-"));
   const bin = join(root, "bin");
   const pids: number[] = [];
   let invocation: Promise<string> | undefined;
@@ -89,7 +89,7 @@ test("startup closes updater pipes while its background services remain live", a
     printf '{"licenseStatus":"valid","mode":"test","agents":{"test":{}}}' ;;
   *"http://localhost:3010/"*)
     [ -f "$TEST_ROOT/app.pid" ] || exit 7
-    printf '<title>OpenBot</title>' ;;
+    printf '<title>XiongBao</title>' ;;
 esac`,
   );
   await executable(

@@ -1,4 +1,4 @@
-# OpenBot, whole, in one container.
+# XiongBao, whole, in one container.
 #
 # WHAT THIS IS FOR. Everything a laptop runs, minus the database, in one image on one port. Deploy it
 # anywhere that runs a container and you get what `scripts/start.sh` gives you locally: the app, the
@@ -521,7 +521,7 @@ RUN set -eu; \
 # So it reaches the s6 services (the server among them, which also silences it itself), not a process
 # started by hand with `docker exec`.
 
-# Where this server runs, said by the image so no deployment has to. On a single-user OpenBot outside a
+# Where this server runs, said by the image so no deployment has to. On a single-user XiongBao outside a
 # container only callers on this machine are the administrator; in here every caller arrives through
 # the container engine's network, so that rule would refuse everybody. See `singleUserAccess` in
 # server/src/config.ts. It is IN_CONTAINER=true in docker/defaults.env (above).

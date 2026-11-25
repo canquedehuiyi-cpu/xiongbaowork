@@ -246,9 +246,9 @@ jobs:
               --api-versions agents.x-k8s.io/v1beta1/Sandbox \
               --api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate \
               --set-string database.existingSecret= \
-              --set-string database.url=postgres://openbot_app:x@db.internal:5432/openbot \
-              --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/openbot \
-              --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/openbot \
+              --set-string database.url=postgres://openbot_app:x@db.internal:5432/xiongbao \
+              --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/xiongbao \
+              --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/xiongbao \
               | grep -A1 'name: ROLE_WRITER_DATABASE_URL' | grep -q 'openbot_role_writer:y@db.internal' || {
               echo "::error::An inline database.roleWriterUrl did not reach the API."
               exit 1
@@ -274,7 +274,7 @@ jobs:
             --set-string secrets.keyEncryptionKey="$(openssl rand -base64 32)" \
             --api-versions agents.x-k8s.io/v1beta1/Sandbox \
             --api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate \
-            --set-string config.learning.setup.cliLoginSecret.name=openbot-copilotkit-cli \
+            --set-string config.learning.setup.cliLoginSecret.name=xiongbao-copilotkit-cli \
             --set-string config.learning.setup.serviceTokenSecret.name=intelligence-service-token \
             --set-string config.learning.setup.projectId=7 \
             > rendered-learning.yaml
@@ -351,12 +351,12 @@ jobs:
           if ! grep -qE '^ *enabled: true' <(sed -n '/^postgresql:/,/^[a-z]/p' charts/xiongbao/ci/${{ matrix.target }}-values.yaml); then
             refuses "an external database URL with no role-writer URL" \
               --set-string database.existingSecret= \
-              --set-string database.url=postgres://openbot_app:x@db.internal:5432/openbot \
-              --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/openbot
+              --set-string database.url=postgres://openbot_app:x@db.internal:5432/xiongbao \
+              --set-string database.migrationUrl=postgres://openbot:o@db.internal:5432/xiongbao
             refuses "an external database URL with no owner URL for migrations" \
               --set-string database.existingSecret= \
-              --set-string database.url=postgres://openbot_app:x@db.internal:5432/openbot \
-              --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/openbot
+              --set-string database.url=postgres://openbot_app:x@db.internal:5432/xiongbao \
+              --set-string database.roleWriterUrl=postgres://openbot_role_writer:y@db.internal:5432/xiongbao
           else
             echo "skipped: the role-writer refusal is only armed for an external database"
           fi
@@ -386,8 +386,8 @@ jobs:
             refuses "the bundled Intelligence with no licence for it" \
               --set intelligence.enabled=true \
               --set-string secrets.licenseToken= \
-              --set-string intelligence.appApi.licenseSecret.existingSecret=openbot-intel-license
-            refuses "the bundled Intelligence with no project key for OpenBot" \
+              --set-string intelligence.appApi.licenseSecret.existingSecret=xiongbao-intel-license
+            refuses "the bundled Intelligence with no project key for XiongBao" \
               --set intelligence.enabled=true \
               --set intelligence.bootstrap.projects=null
           else
@@ -578,10 +578,10 @@ jobs:
 
   python-harness:
     name: python harness regressions
-    # CPU-bound: runs on a 16-core larger runner (org runner group openbot-larger, billed per
+    # CPU-bound: runs on a 16-core larger runner (org runner group xiongbao-larger, billed per
     # minute) for main, releases and pull requests from this repository. Pull requests from forks
     # stay on the free standard runner.
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || 'openbot-ubuntu-16core' }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || 'xiongbao-ubuntu-16core' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -680,7 +680,7 @@ jobs:
       - run: bun test tests/compose.test.ts
       - run: docker compose --env-file /dev/null --profile harness config --format json >/dev/null
         env:
-          PICKED_HARNESS_IMAGE: openbot-agent-langgraph-agui:test
+          PICKED_HARNESS_IMAGE: xiongbao-agent-langgraph-agui:test
 
   build:
     name: build
@@ -703,7 +703,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # drizzle.config.ts refuses to load without it. Nothing here connects.
-      DATABASE_URL: postgres://openbot:openbot@localhost:5432/openbot
+      DATABASE_URL: postgres://openbot:openbot@localhost:5432/xiongbao
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -733,7 +733,7 @@ jobs:
   # them typecheck, lint and test perfectly.
   image:
     name: image
-    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || 'openbot-ubuntu-16core' }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || 'xiongbao-ubuntu-16core' }}
     # The only slow job: it builds the container and boots it, ~14 minutes. The four checks above are
     # seconds and stay on every push, because they catch most things cheaply. This one is the cost, so
     # on a pull request it runs only when an admin adds the `full-ci` label — the point at which the PR
@@ -755,7 +755,7 @@ jobs:
         with:
           context: .
           load: true
-          tags: openbot:ci
+          tags: xiongbao:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max,ignore-error=true
       # Building it says the layers resolve. Running it says the supervision tree comes up and stays
@@ -774,26 +774,26 @@ jobs:
           # Since the platform runtime went there is no licence for CI to be unable to hold; one used
           # to be bound to the machine it was issued for, which is why this step never had it. Whether
           # a Bot actually answers is what the smoke journey checks, on a real deployment.
-          docker run -d --name openbot-ci -p 3001:3001 \
+          docker run -d --name xiongbao-ci -p 3001:3001 \
             -e EMBEDDED_POSTGRES=on \
             -e KEY_ENCRYPTION_KEY="$(openssl rand -base64 32)" \
             -e TRUSTED_ORIGINS=http://localhost:3001 \
              -e OPENBOT_SINGLE_USER=true \
-            openbot:ci
+            xiongbao:ci
           for attempt in $(seq 1 150); do
             if curl -fsS http://localhost:3001/api/capabilities >/dev/null 2>&1; then
               echo "answered after ${attempt}s"
               exit 0
             fi
-            if [ -z "$(docker ps -q -f name=openbot-ci)" ]; then
+            if [ -z "$(docker ps -q -f name=xiongbao-ci)" ]; then
               echo "::error::The container exited before it answered."
-              docker logs openbot-ci
+              docker logs xiongbao-ci
               exit 1
             fi
             sleep 1
           done
           echo "::error::No answer on /api/capabilities within 150s."
-          docker logs openbot-ci
+          docker logs xiongbao-ci
           exit 1
       - name: Supervision tree is stable, not respawning
         run: |
@@ -801,14 +801,14 @@ jobs:
           # A supervised service that exits is restarted forever. That looks healthy from outside for
           # as long as something else is answering, so the log is where it shows.
           sleep 15
-          if docker logs openbot-ci 2>&1 | grep -Eic 'restarting|respawn' | grep -qv '^0$'; then
+          if docker logs xiongbao-ci 2>&1 | grep -Eic 'restarting|respawn' | grep -qv '^0$'; then
             echo "::error::A supervised service is restarting."
-            docker logs openbot-ci 2>&1 | grep -Ei 'restarting|respawn' | head -20
+            docker logs xiongbao-ci 2>&1 | grep -Ei 'restarting|respawn' | head -20
             exit 1
           fi
-          test -n "$(docker ps -q -f name=openbot-ci)" || {
+          test -n "$(docker ps -q -f name=xiongbao-ci)" || {
             echo "::error::The container is no longer running after 15s."
-            docker logs openbot-ci
+            docker logs xiongbao-ci
             exit 1
           }
       # Reading a secret is one way to reach it, and the checks below the first two are the others.
@@ -821,7 +821,7 @@ jobs:
           failed=0
           # As a Bot's shell runs: `pwuser`, with an environment of its own rather than the image's.
           bot() {
-            docker exec -u pwuser openbot-ci env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+            docker exec -u pwuser xiongbao-ci env -i PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
               HOME=/workspace sh -c "$1"
           }
 
@@ -839,8 +839,8 @@ jobs:
           # sudo runs the package helper and nothing else, with the environment reset.
           granted="$(bot 'sudo -n -l' 2>&1)"
           commands="$(printf '%s\n' "$granted" | sed -n '/may run the following/,$p' | sed '1d; s/^ *//')"
-          if [ "$commands" != "(root) NOPASSWD: /usr/local/sbin/openbot-apt" ]; then
-            echo "::error::sudo grants pwuser more than openbot-apt: $commands"
+          if [ "$commands" != "(root) NOPASSWD: /usr/local/sbin/xiongbao-apt" ]; then
+            echo "::error::sudo grants pwuser more than xiongbao-apt: $commands"
             failed=1
           fi
           if ! printf '%s\n' "$granted" | grep -q 'env_reset'; then
@@ -850,26 +850,26 @@ jobs:
 
           # Each attempt below is a documented way to make apt-get or dpkg run a command as root
           # (https://gtfobins.org/gtfobins/apt-get/), and each command it would run is the same
-          # one: create /tmp/openbot-ran-as-root. So the check is both that sudo or the helper said
+          # one: create /tmp/xiongbao-ran-as-root. So the check is both that sudo or the helper said
           # no, and that the file is not there afterwards. `x.deb` is a real package whose
           # postinst does the same thing, and `apt.conf` sets both hooks.
-          bot 'set -e; rm -rf /tmp/openbot-probe; mkdir -p /tmp/openbot-probe/pkg/DEBIAN
-            cd /tmp/openbot-probe
-            printf "%s\n" "Package: openbot-probe" "Version: 1.0" "Architecture: all" \
-              "Maintainer: OpenBot CI <ci@example.invalid>" "Description: runs a command as root" \
+          bot 'set -e; rm -rf /tmp/xiongbao-probe; mkdir -p /tmp/xiongbao-probe/pkg/DEBIAN
+            cd /tmp/xiongbao-probe
+            printf "%s\n" "Package: xiongbao-probe" "Version: 1.0" "Architecture: all" \
+              "Maintainer: XiongBao CI <ci@example.invalid>" "Description: runs a command as root" \
               > pkg/DEBIAN/control
-            printf "#!/bin/sh\ntouch /tmp/openbot-ran-as-root\n" > pkg/DEBIAN/postinst
+            printf "#!/bin/sh\ntouch /tmp/xiongbao-ran-as-root\n" > pkg/DEBIAN/postinst
             chmod 0755 pkg/DEBIAN/postinst
             dpkg-deb --root-owner-group --build pkg x.deb >/dev/null
-            printf "%s\n" "APT::Update::Pre-Invoke { \"touch /tmp/openbot-ran-as-root\"; };" \
-              "DPkg::Pre-Invoke { \"touch /tmp/openbot-ran-as-root\"; };" > apt.conf' \
+            printf "%s\n" "APT::Update::Pre-Invoke { \"touch /tmp/xiongbao-ran-as-root\"; };" \
+              "DPkg::Pre-Invoke { \"touch /tmp/xiongbao-ran-as-root\"; };" > apt.conf' \
             || { echo "::error::Could not build the probe package as pwuser."; failed=1; }
           ran_as_root() {
-            docker exec openbot-ci test -e /tmp/openbot-ran-as-root
+            docker exec xiongbao-ci test -e /tmp/xiongbao-ran-as-root
           }
           refused() {
-            docker exec openbot-ci rm -f /tmp/openbot-ran-as-root
-            if bot "cd /tmp/openbot-probe && $1" >/dev/null 2>&1; then
+            docker exec xiongbao-ci rm -f /tmp/xiongbao-ran-as-root
+            if bot "cd /tmp/xiongbao-probe && $1" >/dev/null 2>&1; then
               echo "::error::Allowed as pwuser: $1"
               failed=1
             fi
@@ -878,41 +878,41 @@ jobs:
               failed=1
             fi
           }
-          refused 'sudo -n apt-get update -o APT::Update::Pre-Invoke::="touch /tmp/openbot-ran-as-root"'
+          refused 'sudo -n apt-get update -o APT::Update::Pre-Invoke::="touch /tmp/xiongbao-ran-as-root"'
           refused 'sudo -n apt-get install -y -c apt.conf jq'
           refused 'sudo -n dpkg -i x.deb'
-          refused 'sudo -n /usr/local/sbin/openbot-apt update -o APT::Update::Pre-Invoke::="touch /tmp/openbot-ran-as-root"'
-          refused 'sudo -n openbot-apt update extra'
-          refused 'sudo -n openbot-apt install -o DPkg::Pre-Invoke::="touch /tmp/openbot-ran-as-root" jq'
-          refused 'sudo -n openbot-apt install -y -o DPkg::Pre-Invoke::="touch /tmp/openbot-ran-as-root" jq'
-          refused 'sudo -n openbot-apt install -yo DPkg::Pre-Invoke::="touch /tmp/openbot-ran-as-root" jq'
-          refused 'sudo -n openbot-apt install -c apt.conf jq'
-          refused 'sudo -n openbot-apt install --allow-unauthenticated jq'
-          refused 'sudo -n openbot-apt install ./x.deb'
-          refused 'sudo -n openbot-apt install /tmp/openbot-probe/x.deb'
-          refused 'sudo -n openbot-apt install x.deb'
-          refused 'sudo -n openbot-apt install jq=1.0'
-          refused 'sudo -n openbot-apt install sudo-'
-          refused 'sudo -n openbot-apt changelog apt'
-          refused 'sudo -n APT_CONFIG=/tmp/openbot-probe/apt.conf openbot-apt update'
+          refused 'sudo -n /usr/local/sbin/xiongbao-apt update -o APT::Update::Pre-Invoke::="touch /tmp/xiongbao-ran-as-root"'
+          refused 'sudo -n xiongbao-apt update extra'
+          refused 'sudo -n xiongbao-apt install -o DPkg::Pre-Invoke::="touch /tmp/xiongbao-ran-as-root" jq'
+          refused 'sudo -n xiongbao-apt install -y -o DPkg::Pre-Invoke::="touch /tmp/xiongbao-ran-as-root" jq'
+          refused 'sudo -n xiongbao-apt install -yo DPkg::Pre-Invoke::="touch /tmp/xiongbao-ran-as-root" jq'
+          refused 'sudo -n xiongbao-apt install -c apt.conf jq'
+          refused 'sudo -n xiongbao-apt install --allow-unauthenticated jq'
+          refused 'sudo -n xiongbao-apt install ./x.deb'
+          refused 'sudo -n xiongbao-apt install /tmp/xiongbao-probe/x.deb'
+          refused 'sudo -n xiongbao-apt install x.deb'
+          refused 'sudo -n xiongbao-apt install jq=1.0'
+          refused 'sudo -n xiongbao-apt install sudo-'
+          refused 'sudo -n xiongbao-apt changelog apt'
+          refused 'sudo -n APT_CONFIG=/tmp/xiongbao-probe/apt.conf xiongbao-apt update'
           # Exported rather than set through sudo, which sudo allows and then resets. The update may
           # succeed; what must not happen is the hook.
-          docker exec openbot-ci rm -f /tmp/openbot-ran-as-root
-          bot 'APT_CONFIG=/tmp/openbot-probe/apt.conf sudo -n openbot-apt update' >/dev/null 2>&1
+          docker exec xiongbao-ci rm -f /tmp/xiongbao-ran-as-root
+          bot 'APT_CONFIG=/tmp/xiongbao-probe/apt.conf sudo -n xiongbao-apt update' >/dev/null 2>&1
           if ran_as_root; then
             echo "::error::APT_CONFIG from a Bot's shell reached apt-get as root."
             failed=1
           fi
 
           # And the feature itself, which is the reason sudo is here at all.
-          if ! output="$(bot 'sudo -n openbot-apt update && sudo -n openbot-apt install jq && jq --version' 2>&1)"; then
-            echo "::error::sudo openbot-apt install jq did not install jq."
+          if ! output="$(bot 'sudo -n xiongbao-apt update && sudo -n xiongbao-apt install jq && jq --version' 2>&1)"; then
+            echo "::error::sudo xiongbao-apt install jq did not install jq."
             printf '%s\n' "$output" | tail -20
             failed=1
           fi
           # The way a model writes it out of habit, with `-y`, which the helper always answers anyway.
-          if ! output="$(bot 'sudo -n openbot-apt install -y tree && tree --version' 2>&1)"; then
-            echo "::error::sudo openbot-apt install -y tree did not install tree."
+          if ! output="$(bot 'sudo -n xiongbao-apt install -y tree && tree --version' 2>&1)"; then
+            echo "::error::sudo xiongbao-apt install -y tree did not install tree."
             printf '%s\n' "$output" | tail -20
             failed=1
           fi
@@ -922,7 +922,7 @@ jobs:
             echo "::error::A pwuser shell can write /app/app/dist/index.html, which the API serves."
             failed=1
           fi
-          if bot 'touch /app/server/src/openbot-probe.ts' 2>/dev/null; then
+          if bot 'touch /app/server/src/xiongbao-probe.ts' 2>/dev/null; then
             echo "::error::A pwuser shell can write under /app/server, which the API runs."
             failed=1
           fi
@@ -947,23 +947,23 @@ jobs:
       - name: A Bot's computer starts as the chart runs it, with nothing from the X server
         run: |
           set -euo pipefail
-          docker run -d --name openbot-ci-computer --user 1001 \
+          docker run -d --name xiongbao-ci-computer --user 1001 \
             -e PORT=4100 -e WORKSPACE_DIR=/workspace -e PROFILES_DIR=/profiles \
             -e HOME=/home/pwuser -e BUN_INSTALL=/home/pwuser/.bun \
             -e COMPUTER_TOKEN=ci-not-a-real-token -e COMPUTER_SEPARATE_WORKSPACES=on \
-            --entrypoint /usr/local/bin/bun openbot:ci /app/agent-computer/src/index.ts
+            --entrypoint /usr/local/bin/bun xiongbao:ci /app/agent-computer/src/index.ts
           for attempt in $(seq 1 60); do
-            if docker logs openbot-ci-computer 2>&1 | grep -q "agent-computer listening"; then
+            if docker logs xiongbao-ci-computer 2>&1 | grep -q "agent-computer listening"; then
               break
             fi
-            if [ -z "$(docker ps -q -f name=openbot-ci-computer)" ] || [ "$attempt" -eq 60 ]; then
+            if [ -z "$(docker ps -q -f name=xiongbao-ci-computer)" ] || [ "$attempt" -eq 60 ]; then
               echo "::error::The computer did not start."
-              docker logs openbot-ci-computer
+              docker logs xiongbao-ci-computer
               exit 1
             fi
             sleep 1
           done
-          logs="$(docker logs openbot-ci-computer 2>&1)"
+          logs="$(docker logs xiongbao-ci-computer 2>&1)"
           if printf '%s\n' "$logs" | grep -Eq '_XSERVTrans|xkbcomp|Could not resolve keysym|ERROR'; then
             echo "::error::The X server printed at the computer's start."
             printf '%s\n' "$logs"
@@ -971,12 +971,12 @@ jobs:
           fi
           echo "the computer started headed as 1001 with nothing from the X server"
       - if: always()
-        run: docker rm -f openbot-ci openbot-ci-computer >/dev/null 2>&1 || true
+        run: docker rm -f xiongbao-ci xiongbao-ci-computer >/dev/null 2>&1 || true
 
   # The five images the release publishes alongside the one above. Nothing else here builds them:
   # they are built by `docker compose up --build`, which only the smoke journey runs and which
   # cannot run in CI. So a broken `supervisor/Dockerfile` used to surface during a release, after
-  # the `openbot` image had already been pushed, which is the one failure this repository calls out
+  # the `xiongbao` image had already been pushed, which is the one failure this repository calls out
   # as leaving a published image with nothing pointing at it.
   #
   # Built, not pushed, and one architecture: this answers whether the Dockerfile resolves. Whether
@@ -1029,9 +1029,9 @@ jobs:
         run: |
           set -euo pipefail
           docker buildx build --file agent-computer/Dockerfile --platform linux/amd64 --load \
-            --tag openbot-agent-computer:ci .
+            --tag xiongbao-agent-computer:ci .
           docker run -d --name computer-ci -e COMPUTER_TOKEN=ci-token-0123456789abcdef \
-            -p 127.0.0.1:4100:4100 openbot-agent-computer:ci
+            -p 127.0.0.1:4100:4100 xiongbao-agent-computer:ci
           for _ in $(seq 1 60); do
             if curl -fsS http://127.0.0.1:4100/health >/dev/null; then
               echo "agent-computer answered /health"

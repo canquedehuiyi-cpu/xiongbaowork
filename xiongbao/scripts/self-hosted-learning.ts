@@ -333,7 +333,7 @@ export async function setupSelfHostedLearning(options: {
     ) {
       container = await request(containers, "POST", {
         id: "openbot",
-        name: "OpenBot",
+        name: "XiongBao",
       });
       if (
         container.status === 409 &&
@@ -361,7 +361,7 @@ export async function setupSelfHostedLearning(options: {
       };
     }
     const key = await request(`/api/projects/${projectId}/api-keys`, "POST", {
-      name: "OpenBot",
+      name: "XiongBao",
     });
     if (
       key.status !== 201 ||

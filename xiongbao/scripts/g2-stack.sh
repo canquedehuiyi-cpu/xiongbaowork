@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 一条命令起"单用户全栈"（G2），并把它踩过的两个坑变成机器检查。
 #
-# 为什么不用 `docker compose up`：compose 会**重建本机正在用的 `openbot-postgres-1`**。
-# 这里只创建自己的容器，一律 `openbot-g2-*` / `openbot-echo-bot` 前缀，绝不碰别人的栈。
+# 为什么不用 `docker compose up`：compose 会**重建本机正在用的 `xiongbao-postgres-1`**。
+# 这里只创建自己的容器，一律 `xiongbao-g2-*` / `xiongbao-echo-bot` 前缀，绝不碰别人的栈。
 #
 # 用法：
 #   xiongbao/scripts/g2-stack.sh up       # 起 server + app + computer(+ echo)
@@ -15,13 +15,13 @@ set -euo pipefail
 command="${1:-up}"
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 B="$repo_root/xiongbao"
-IMAGE=openbot-dev
-COMPUTER_IMAGE=openbot-agent-computer:latest
-DB_URL="postgres://openbot_app:openbot@host.docker.internal:5433/openbot"
-SERVER=openbot-g2-server
-APP=openbot-g2-app
-COMPUTER=openbot-g2-computer
-ECHO=openbot-echo-bot
+IMAGE=xiongbao-dev
+COMPUTER_IMAGE=xiongbao-agent-computer:latest
+DB_URL="postgres://openbot_app:openbot@host.docker.internal:5433/xiongbao"
+SERVER=xiongbao-g2-server
+APP=xiongbao-g2-app
+COMPUTER=xiongbao-g2-computer
+ECHO=xiongbao-echo-bot
 COMPUTER_TOKEN="g2-dev-$$"
 
 die() {
@@ -66,7 +66,7 @@ up() {
 
   # app / computer / echo 都寄生在 server 的网络命名空间上：vite 的代理目标是字面量
   # `http://localhost:${SERVER_PORT}`，server 找电脑是字面量 `localhost:4100`。
-  # 因此**不能 `docker restart openbot-g2-server`**：重启换命名空间，三个寄生容器集体失联，
+  # 因此**不能 `docker restart xiongbao-g2-server`**：重启换命名空间，三个寄生容器集体失联，
   # 表现为 vite 代理 ECONNREFUSED、`/api/computers/.../control` 503、`computer` 显示 healthy
   # 却挂在已死沙箱上。改代码后要重起就整组重建（本脚本的 up 是幂等的）。
   recreate "$APP" \

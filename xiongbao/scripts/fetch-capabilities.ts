@@ -659,7 +659,7 @@ export function collectConnectorChannel(
 // lock document assembly
 // ---------------------------------------------------------------------------
 
-/** Resolve the openbot root: this script lives one level below it, and the lock + cache belong there. */
+/** Resolve the xiongbao root: this script lives one level below it, and the lock + cache belong there. */
 export function repoRoot(): string {
   return resolve(import.meta.dir, "..");
 }

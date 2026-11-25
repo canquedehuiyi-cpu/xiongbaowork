@@ -153,7 +153,7 @@ function row(id: string): CensusRow {
 }
 
 describe("auth_mode mapping", () => {
-  test("every mapping in the table is one of openbot's three models or the explicit unknown", () => {
+  test("every mapping in the table is one of xiongbao's three models or the explicit unknown", () => {
     for (const [raw, mapped] of Object.entries(AUTH_MODE_MAP)) {
       expect(["none", "user-oauth", "deployment-bearer", "unknown"]).toContain(
         mapped,

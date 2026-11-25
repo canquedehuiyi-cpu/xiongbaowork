@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Start the local OpenBot stack and verify each service answers as OpenBot.
+# Start the local XiongBao stack and verify each service answers as XiongBao.
 # Safe to rerun: matching services are left running, and unrelated port holders are reported.
 
 # Before anything else, and before the `set` line below, which is itself bash-only: this file is
@@ -76,8 +76,8 @@ SUPERVISOR_PORT="$(setting SUPERVISOR_PORT 4500)"
 # was ignored: the supervisor was still started and the server still told to use it.
 ONE_COMPUTER_EACH="$(setting OPENBOT_ONE_COMPUTER_EACH true)"
 export APP_PORT SERVER_PORT
-SUPERVISOR_TOKEN="$(setting SUPERVISOR_TOKEN openbot-dev-supervisor-token)"
-COMPUTER_TOKEN="$(setting COMPUTER_TOKEN openbot-dev-computer-token)"
+SUPERVISOR_TOKEN="$(setting SUPERVISOR_TOKEN xiongbao-dev-supervisor-token)"
+COMPUTER_TOKEN="$(setting COMPUTER_TOKEN xiongbao-dev-computer-token)"
 # A fixed default is fine here, unlike `AGENT_TOOL_TOKEN` below, but not because of where the server
 # listens — it binds no hostname, so this port is reachable from the network like any other. It is
 # fine because this is a dev-only default on a machine's own dev stack, and the endpoint it guards
@@ -86,7 +86,7 @@ COMPUTER_TOKEN="$(setting COMPUTER_TOKEN openbot-dev-computer-token)"
 # the fixed default gates nothing sensitive here. That is also why it is generated fresh and
 # persisted for AGENT_TOOL_TOKEN (see the SECRETS_ROTATED block) but not for this one — production
 # must set a real WORKER_SHARED_SECRET.
-WORKER_SHARED_SECRET="$(setting WORKER_SHARED_SECRET openbot-dev-worker-secret)"
+WORKER_SHARED_SECRET="$(setting WORKER_SHARED_SECRET xiongbao-dev-worker-secret)"
 
 # The secret the server sends to a managed Bot, generated and written back on first run.
 #
@@ -170,7 +170,7 @@ green() { printf '\033[32m%s\033[0m\n' "$1"; }
 red()   { printf '\033[31m%s\033[0m\n' "$1"; }
 info()  { printf '\033[2m%s\033[0m\n' "$1"; }
 
-# Does whatever holds this port answer as OpenBot, rather than merely answer?
+# Does whatever holds this port answer as XiongBao, rather than merely answer?
 #
 # `curl -f` proves something is listening and returned 2xx. That is not the same claim, and the gap
 # between them is not academic: any single-page app serves its own index.html for every path it does
@@ -183,7 +183,7 @@ info()  { printf '\033[2m%s\033[0m\n' "$1"; }
 # a JSON parse error standing in for "that port belongs to something else".
 #
 # So each surface is asked for something only it can produce.
-identifies_as_openbot() {
+identifies_as_xiongbao() {
   local port="$1" name="$2"
   case "$name" in
     # A field of this server's own payload. A stray 200 does not carry it.
@@ -194,7 +194,7 @@ identifies_as_openbot() {
     # The app is static HTML with nothing to interrogate, so its title is the identity available.
     app)
       curl -fsS --max-time 3 "http://localhost:$port/" 2>/dev/null \
-        | grep -qi '<title>[^<]*OpenBot'
+        | grep -qi '<title>[^<]*XiongBao'
       ;;
     # Compose services on dedicated loopback ports, answering a route named for this stack.
     *)
@@ -207,25 +207,25 @@ require_free_or_ours() {
   local port="$1" name="$2" who
   who="$(holder "$port")"
   [ -z "$who" ] && return 0
-  if identifies_as_openbot "$port" "$name"; then
+  if identifies_as_xiongbao "$port" "$name"; then
     info "  $name: already up on $port ($who)"
     return 0
   fi
-  red "  $name: port $port is held by something that is not OpenBot: $who"
+  red "  $name: port $port is held by something that is not XiongBao: $who"
   # `tr`, not `${name^^}`, which is bash 4. macOS ships bash 3.2, where that expansion is a "bad
   # substitution" and the run ended on it instead of on this hint.
   red "  Re-run with $(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')_PORT=<free port>, or stop that process yourself."
   exit 1
 }
 
-# As wait_for, but satisfied only by OpenBot answering, not by anything answering.
-wait_for_openbot() {
+# As wait_for, but satisfied only by XiongBao answering, not by anything answering.
+wait_for_xiongbao() {
   local port="$1" name="$2" tries="${3:-40}"
   for _ in $(seq 1 "$tries"); do
-    identifies_as_openbot "$port" "$name" && { green "  $name ready"; return 0; }
+    identifies_as_xiongbao "$port" "$name" && { green "  $name ready"; return 0; }
     sleep 1
   done
-  red "  $name never answered as OpenBot on port $port"
+  red "  $name never answered as XiongBao on port $port"
   red "  Either it failed to start, or that port belongs to another process."
   red "  Log: $LOGS/${name}.log"
   exit 1
@@ -248,7 +248,7 @@ stop_server_processes_for_restart() {
 }
 
 echo
-echo "OpenBot"
+echo "XiongBao"
 echo "======="
 
 # Provision the installation's Composio project with the existing CLI sign-in, independently of
@@ -259,7 +259,7 @@ echo "======="
 # Best-effort, like Learning below. It used to run bare under `set -e`, so a checkout with no key
 # could not start at all while offline, signed out of the CLI, on a CLI without
 # `integrations composio provision`, or against an Ops without the provisioning service. A failure
-# is now the helper's one-line reason, and OpenBot starts with apps unavailable.
+# is now the helper's one-line reason, and XiongBao starts with apps unavailable.
 if [[ "${COMPOSIO_API_KEY:-}" != *[![:space:]]* ]]; then
   unset COMPOSIO_API_KEY
 fi
@@ -338,7 +338,7 @@ fi
 
 for table in agent_profiles agent_preferences; do
   if ! docker compose exec -T postgres \
-       psql -U openbot -d openbot -tAc "select to_regclass('public.$table')" 2>/dev/null \
+       psql -U openbot -d xiongbao -tAc "select to_regclass('public.$table')" 2>/dev/null \
        | grep -q "^$table$"; then
     red "  $table is missing. Run: bun run --cwd server db:migrate"
     exit 1
@@ -376,10 +376,10 @@ fi
 
 # The personal edition's own browser: the person's installed Chrome or Edge, as a window on their
 # desktop with the Recorder in it (docs/personal-edition.md). It runs on the host and runs nobody
-# else's (`COMPUTER_PEOPLE_ONLY=on`). OpenBot Desktop does not do this: it shows the person's browser
+# else's (`COMPUTER_PEOPLE_ONLY=on`). The desktop app does not do this: it shows the person's browser
 # in the page, on the one computer. The server finds it through `OPENBOT_BROWSER_URL`, exported so the
 # server started below reads it over .env. Never fatal: without Chrome or Edge, or with a Recorder
-# that will not build, OpenBot starts without the person's browser and the line says why.
+# that will not build, XiongBao starts without the person's browser and the line says why.
 if [ "$EDITION" = "personal" ]; then
   BROWSER_PORT="$(setting BROWSER_PORT 4101)"
   if [ ! -f extension/dist/manifest.json ]; then
@@ -389,7 +389,7 @@ if [ "$EDITION" = "personal" ]; then
   fi
   if [ ! -f extension/dist/manifest.json ]; then
     :
-  elif identifies_as_openbot "$BROWSER_PORT" browser; then
+  elif identifies_as_xiongbao "$BROWSER_PORT" browser; then
     info "  your browser: already up on $BROWSER_PORT"
   else
     (cd "$ROOT" && COMPUTER_TOKEN="$COMPUTER_TOKEN" \
@@ -398,11 +398,11 @@ if [ "$EDITION" = "personal" ]; then
       PORT="$BROWSER_PORT" \
       bun scripts/start-local-chrome-computer.ts >"$LOGS/browser.log" 2>&1 &)
     for _ in $(seq 1 20); do
-      identifies_as_openbot "$BROWSER_PORT" browser && break
+      identifies_as_xiongbao "$BROWSER_PORT" browser && break
       sleep 1
     done
   fi
-  if identifies_as_openbot "$BROWSER_PORT" browser; then
+  if identifies_as_xiongbao "$BROWSER_PORT" browser; then
     export OPENBOT_BROWSER_URL="http://127.0.0.1:$BROWSER_PORT"
     green "  your browser: Chrome or Edge on this computer, with the Recorder"
   else
@@ -426,7 +426,7 @@ if [ "$SECRETS_ROTATED" = "true" ]; then
   sleep 1
 fi
 #
-# A server that answers as OpenBot can still be one no worker can hand a routine to. The worker
+# A server that answers as XiongBao can still be one no worker can hand a routine to. The worker
 # below is started unconditionally with this run's WORKER_SHARED_SECRET, and every dispatch it makes
 # is one POST to this server's /internal/routines/run — a door that a server started from an older
 # checkout does not have (404), and that a server started before this secret existed in its
@@ -440,7 +440,7 @@ fi
 # predates the route. Both are cured by a restart into this run's environment, so fall through to
 # the launch below. Anything else — including a probe that could not connect at all — keeps the
 # philosophy of leaving an answering server alone.
-if identifies_as_openbot "$SERVER_PORT" server; then
+if identifies_as_xiongbao "$SERVER_PORT" server; then
   HANDOFF_STATUS="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 \
     -X POST "http://localhost:$SERVER_PORT/internal/routines/run" \
     -H "Authorization: Bearer $WORKER_SHARED_SECRET" \
@@ -471,7 +471,7 @@ if identifies_as_openbot "$SERVER_PORT" server; then
 fi
 # Redirect the whole background group. Redirecting only Bun inside `(command &)` leaves its
 # waiting Bash wrapper holding the updater's captured stdout/stderr open after this script exits.
-if ! identifies_as_openbot "$SERVER_PORT" server; then
+if ! identifies_as_xiongbao "$SERVER_PORT" server; then
   if [ "$ONE_COMPUTER_EACH" = "true" ]; then
     (cd server && PORT="$SERVER_PORT" \
       COMPUTER_SUPERVISOR_URL="http://localhost:$SUPERVISOR_PORT" \
@@ -485,7 +485,7 @@ if ! identifies_as_openbot "$SERVER_PORT" server; then
       bun --env-file=../.env src/production-entry.ts) >"$LOGS/server.log" 2>&1 &
   fi
 fi
-wait_for_openbot "$SERVER_PORT" server
+wait_for_xiongbao "$SERVER_PORT" server
 
 # The worker: a local stand-in for the routines CronJob, looping the same sweep
 # (`offerDueRoutines`/`dispatchClaimedRoutines`) a cluster would run on a schedule instead. Started
@@ -510,7 +510,7 @@ if [ "$worker_running" = false ]; then
   # The application role, as `.env.example` gives the server: the worker runs the server's tenant
   # isolation preflight before its first tick and refuses the owner, a superuser. It decides with the
   # mode the server reads from .env (either spelling) and the same NODE_ENV, so the two agree.
-  WORKER_DATABASE_URL="$(setting DATABASE_URL postgres://openbot_app:openbot@localhost:5432/openbot)"
+  WORKER_DATABASE_URL="$(setting DATABASE_URL postgres://openbot_app:openbot@localhost:5432/xiongbao)"
   WORKER_RLS_ENFORCE="$(setting XIONGBAO_RLS_ENFORCE "$(setting OPENBOT_RLS_ENFORCE "")")"
   WORKER_NODE_ENV="$(setting NODE_ENV "")"
   (cd "$ROOT" && \
@@ -568,10 +568,10 @@ JS
 
 info "4/4  App"
 require_free_or_ours "$APP_PORT" app
-if ! identifies_as_openbot "$APP_PORT" app; then
+if ! identifies_as_xiongbao "$APP_PORT" app; then
   (cd app && bun run dev --port "$APP_PORT" --strictPort) >"$LOGS/app.log" 2>&1 &
 fi
-wait_for_openbot "$APP_PORT" app
+wait_for_xiongbao "$APP_PORT" app
 
 cat <<EOF
 

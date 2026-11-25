@@ -1,5 +1,5 @@
 ---
-name: openbot-copy
+name: xiongbao-copy
 description: The words and the voice for every piece of text a person reads in OpenBot: screen headings and descriptions, buttons, empty states, notices, chat cards, the server's error and refusal messages that reach the browser, and OpenBot Desktop's setup window, Status window and menus. Holds the glossary (Bot, app, admin, OpenBot, and the parts of OpenBot: front end, back end, database) and the style rules. Use when writing or changing any text that is shown to a person, naming a screen, a section, a button or a state, writing an error or refusal message, or reviewing a diff that adds user-facing strings under app/src, server/src, desktop/src or desktop/src-tauri. Don't use for text written for the model (tool descriptions, standing instructions, system prompts), for code comments, or for the docs under docs/.
 ---
 

@@ -47,7 +47,7 @@ function git(cwd: string, ...args: string[]): string {
 const BUNDLE = "release-provenance.sigstore.json";
 /** Every file a .tgz unpacks to, with its content, read with tar rather than the code under test. */
 function unpacked(archive: string): Record<string, string> {
-  const directory = scratch("openbot-unpacked-");
+  const directory = scratch("xiongbao-unpacked-");
   execFileSync("tar", ["-xzf", archive, "-C", directory]);
   const files: Record<string, string> = {};
   const walk = (path: string, prefix: string) => {
@@ -65,7 +65,7 @@ const sha256 = (path: string) =>
 
 /** A fork release commit with a real chart and its reviewed policy. */
 function release() {
-  const repo = scratch("openbot-rerun-");
+  const repo = scratch("xiongbao-rerun-");
   git(repo, "init", "-b", "main");
   writeFileSync(join(repo, "core.txt"), "original\n");
   git(repo, "add", ".");
@@ -83,7 +83,7 @@ function release() {
   mkdirSync(join(repo, "charts/xiongbao/templates"), { recursive: true });
   writeFileSync(
     join(repo, "charts/xiongbao/Chart.yaml"),
-    'apiVersion: v2\nname: openbot\nversion: 0.1.4\nappVersion: "0.3.0"\n',
+    'apiVersion: v2\nname: xiongbao\nversion: 0.1.4\nappVersion: "0.3.0"\n',
   );
   writeFileSync(join(repo, "charts/xiongbao/values.yaml"), "replicas: 1\n");
   writeFileSync(
@@ -126,7 +126,7 @@ function packageChart(repo: string, stamp: number) {
     "--destination",
     join(repo, "release-assets"),
   ]);
-  return join(repo, "release-assets/openbot-0.1.4.tgz");
+  return join(repo, "release-assets/xiongbao-0.1.4.tgz");
 }
 /** One attempt of the "Archive exact source and write release manifest" step. */
 function attempt(
@@ -137,12 +137,12 @@ function attempt(
     cwd: rel.repo,
     env: {
       ...process.env,
-      GITHUB_REPOSITORY: "acme/openbot",
+      GITHUB_REPOSITORY: "acme/xiongbao",
       GITHUB_SHA: rel.commit,
       VERSION: "v0.3.0",
-      OPENBOT_DISTRIBUTION_ID: "acme.openbot",
+      OPENBOT_DISTRIBUTION_ID: "acme.xiongbao",
       OPENBOT_UPSTREAM_COMMIT: rel.upstream,
-      OPENBOT_CHART_PATH: "release-assets/openbot-0.1.4.tgz",
+      OPENBOT_CHART_PATH: "release-assets/xiongbao-0.1.4.tgz",
       OPENBOT_CHART_VERSION: "0.1.4",
       ...(published ? { OPENBOT_PUBLISHED_ASSETS: published } : {}),
     },
@@ -153,7 +153,7 @@ function attempt(
 }
 /** What the first attempt managed to upload before it failed: everything but the given assets. */
 function publish(repo: string, missing: string[]) {
-  const published = scratch("openbot-published-");
+  const published = scratch("xiongbao-published-");
   for (const name of readdirSync(join(repo, "release-assets")))
     if (!missing.includes(name))
       copyFileSync(join(repo, "release-assets", name), join(published, name));
@@ -183,14 +183,14 @@ describe("rerunning a half-published release", () => {
     await Bun.sleep(1100);
     const rebuilt = packageChart(rel.repo, first + 60);
     expect(sha256(rebuilt)).not.toBe(
-      sha256(join(published, "openbot-0.1.4.tgz")),
+      sha256(join(published, "xiongbao-0.1.4.tgz")),
     );
     expect(unpacked(rebuilt)).toEqual(
-      unpacked(join(published, "openbot-0.1.4.tgz")),
+      unpacked(join(published, "xiongbao-0.1.4.tgz")),
     );
 
     expect(attempt(rel, published)).toEqual({ exitCode: 0, stderr: "" });
-    for (const name of ["openbot-0.1.4.tgz", "openbot-source.tar.gz"])
+    for (const name of ["xiongbao-0.1.4.tgz", "xiongbao-source.tar.gz"])
       expect(sha256(join(rel.repo, "release-assets", name))).toBe(
         sha256(join(published, name)),
       );
@@ -203,10 +203,10 @@ describe("rerunning a half-published release", () => {
       ),
     );
     expect(manifest.artifacts.chart?.sha256).toBe(
-      sha256(join(published, "openbot-0.1.4.tgz")),
+      sha256(join(published, "xiongbao-0.1.4.tgz")),
     );
     expect(manifest.artifacts.source.sha256).toBe(
-      sha256(join(published, "openbot-source.tar.gz")),
+      sha256(join(published, "xiongbao-source.tar.gz")),
     );
     // The manifest the first attempt never uploaded is the one it would have uploaded.
     expect(
@@ -241,19 +241,19 @@ describe("rerunning a half-published release", () => {
     [
       "a chart whose templates changed",
       (repo: string, published: string) => {
-        const changed = scratch("openbot-changed-");
-        cpSync(join(repo, "charts/xiongbao"), join(changed, "openbot"), {
+        const changed = scratch("xiongbao-changed-");
+        cpSync(join(repo, "charts/xiongbao"), join(changed, "xiongbao"), {
           recursive: true,
         });
-        writeFileSync(join(changed, "openbot/values.yaml"), "replicas: 2\n");
+        writeFileSync(join(changed, "xiongbao/values.yaml"), "replicas: 2\n");
         execFileSync("helm", [
           "package",
-          join(changed, "openbot"),
+          join(changed, "xiongbao"),
           "--destination",
           published,
         ]);
       },
-      "openbot-0.1.4.tgz has different content",
+      "xiongbao-0.1.4.tgz has different content",
     ],
     [
       "images rebuilt under new digests",
@@ -310,7 +310,7 @@ describe("the provenance bundle on a rerun", () => {
     return JSON.stringify(parsed);
   }
   function directoryWith(contents: string) {
-    const directory = scratch("openbot-provenance-");
+    const directory = scratch("xiongbao-provenance-");
     writeFileSync(join(directory, BUNDLE), contents);
     return directory;
   }
@@ -338,7 +338,7 @@ describe("the provenance bundle on a rerun", () => {
     const published = directoryWith(real);
     const replacement = bundle((statement) => {
       statement.subject.push({
-        name: "openbot-0.1.4.tgz",
+        name: "xiongbao-0.1.4.tgz",
         digest: { sha256: "a".repeat(64) },
       });
     });

@@ -20,7 +20,7 @@
 
 ## 本地证据
 
-测试使用普通 openbot_app 角色、新建独立库 openbot_flow_quota。
+测试使用普通 openbot_app 角色、新建独立库 xiongbao_flow_quota。
 设备/真实文件/跨队列实例/独立 runner OS 进程崩溃/真实 WebSocket 撤销/治理/HTTP 配额
 共 8 文件两轮均 **54 pass / 0 fail / 0 error / exit 0**，279 断言。
 server/app/runner typecheck 均 exit 0。原始日志在

@@ -13,7 +13,7 @@ describe("TEST_DATABASE_URL", () => {
         testDatabaseUrlFrom({
           TEST_DATABASE_URL: `postgres://openbot:openbot@localhost:5432/${name}`,
           DATABASE_URL:
-            "postgres://openbot:openbot@localhost:5432/openbot_test",
+            "postgres://openbot:openbot@localhost:5432/xiongbao_test",
         }),
       ).toThrow(`live development database (${name})`);
     },
@@ -22,7 +22,7 @@ describe("TEST_DATABASE_URL", () => {
   test("does not read DATABASE_URL as a fallback", () => {
     expect(() =>
       testDatabaseUrlFrom({
-        DATABASE_URL: "postgres://openbot:openbot@localhost:5432/openbot_test",
+        DATABASE_URL: "postgres://openbot:openbot@localhost:5432/xiongbao_test",
       }),
     ).toThrow(/TEST_DATABASE_URL/);
   });
@@ -31,8 +31,8 @@ describe("TEST_DATABASE_URL", () => {
     expect(
       testDatabaseUrlFrom({
         TEST_DATABASE_URL:
-          "postgres://openbot:openbot@localhost:5432/openbot_test",
+          "postgres://openbot:openbot@localhost:5432/xiongbao_test",
       }),
-    ).toBe("postgres://openbot:openbot@localhost:5432/openbot_test");
+    ).toBe("postgres://openbot:openbot@localhost:5432/xiongbao_test");
   });
 });

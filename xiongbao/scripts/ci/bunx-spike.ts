@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { createHash } from "node:crypto";
 /**
  * Can the compiled runner stand in for `bun x`? (device app discovery, sub-project 3, PR-0)
  *
@@ -41,7 +42,6 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, resolve, win32 } from "node:path";
 import { compileArgs } from "../../desktop-device/scripts/build-sidecar.ts";
@@ -532,7 +532,7 @@ if (import.meta.main) {
       package: SPIKE_PACKAGE,
     }),
   );
-  const scratch = mkdtempSync(join(tmpdir(), "openbot-bunx-spike-"));
+  const scratch = mkdtempSync(join(tmpdir(), "xiongbao-bunx-spike-"));
   let failed = true;
   try {
     const runner = await compileRunner(join(scratch, "bin"));

@@ -28,7 +28,7 @@ afterEach(async () => {
 async function fixture(
   content = "COMPOSIO_API_KEY=\n# Other settings\nOPENAI_API_KEY=synthetic-model\n",
 ) {
-  const directory = await mkdtemp(join(tmpdir(), "openbot-composio-setup-"));
+  const directory = await mkdtemp(join(tmpdir(), "xiongbao-composio-setup-"));
   directories.push(directory);
   const envPath = join(directory, ".env");
   const identityPath = join(directory, ".env.openbot-installation-id");

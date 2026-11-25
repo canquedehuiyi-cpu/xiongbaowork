@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Only disposable B containers and a new B volume. No env file or real provider key.
 set -euo pipefail
-image=${1:-openbot:trackb}
-name="openbot-trackb-${GITHUB_RUN_ID:-local}-$$"
+image=${1:-xiongbao:trackb}
+name="xiongbao-trackb-${GITHUB_RUN_ID:-local}-$$"
 bad="$name-owner"
 auth="$name-auth"
 volume="$name-data"

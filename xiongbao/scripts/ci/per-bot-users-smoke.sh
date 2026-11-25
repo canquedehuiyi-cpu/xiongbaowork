@@ -3,14 +3,14 @@
 # the default employee still runs as pwuser, an employee cannot sudo, and a stopped command (the
 # HTTP request aborted) ends within 10 seconds although it runs under sudo as another user.
 #
-#   bash scripts/ci/per-bot-users-smoke.sh openbot:trackb
+#   bash scripts/ci/per-bot-users-smoke.sh xiongbao:trackb
 #
 # One disposable container and volume, started the way image-smoke.sh starts them, with the embedded
 # computer on (the image default). Every call goes to the computer on 127.0.0.1:4100 from inside the
 # container, with the token s6 generated (computer-token.sh). Any failed check exits 1.
 set -euo pipefail
-image=${1:-openbot:trackb}
-name="openbot-perbot-${GITHUB_RUN_ID:-local}-$$"
+image=${1:-xiongbao:trackb}
+name="xiongbao-perbot-${GITHUB_RUN_ID:-local}-$$"
 volume="$name-data"
 port=3773
 evidence=${EVIDENCE_DIR:-$PWD/.delivery-evidence}

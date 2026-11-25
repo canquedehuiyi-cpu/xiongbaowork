@@ -4,9 +4,9 @@ import { join, relative } from "node:path";
 import ts from "typescript";
 
 /**
- * Guard: no text a person reads names Composio. A person connects their work apps through OpenBot,
- * and the company OpenBot connects through is never named on a screen, the admin's included (see
- * .claude/skills/openbot-copy).
+ * Guard: no text a person reads names Composio. A person connects their work apps through XiongBao,
+ * and the company XiongBao connects through is never named on a screen, the admin's included (see
+ * .claude/skills/xiongbao-copy).
  *
  * Read are the string literals, template text and JSX text of the app, the Recorder extension and
  * the shared modules both sides render, and the server's plugin routes and plugin store, which write every
@@ -28,7 +28,7 @@ const VENDOR_NAME =
 
 /**
  * Text that names Composio and is answered only to an administrator. Upstream counts the admin's
- * screens in (the header above); this tree's copy rule lets an admin read exact names (.claude/skills/openbot-copy, "Admin is allowed exact names"), and its brand
+ * screens in (the header above); this tree's copy rule lets an admin read exact names (.claude/skills/xiongbao-copy, "Admin is allowed exact names"), and its brand
  * allowlist keeps third-party names an admin has to act on (app/tests/brand-leak-allowlist.json,
  * category third-party-name). Each entry is a route behind `requireAdmin` in
  * server/src/plugins/routes.ts, and must still match, so one that goes stale is removed rather than

@@ -28,7 +28,7 @@ HTTP 必须为设备所有者，外租户 GET/POST 均 404；缺少明确核查�
 
 ## 本地回归
 
-自己的普通应用角色与 openbot_windows_final 测试库：
+自己的普通应用角色与 xiongbao_windows_final 测试库：
 
 - `d4-safety.log`：29 pass / 0 fail / 4 文件，177 断言。真实 append 丢回执之后，
   换编号、重建队列、离线入队均拒绝；只有一帧动作和一次追加；迟到回复不能解除暂停。

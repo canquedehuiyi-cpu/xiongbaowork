@@ -89,7 +89,7 @@ function publisher(
     migration = policy.compatibility.database.to,
   } = {},
 ) {
-  const repo = mkdtempSync(join(tmpdir(), "openbot-policy-"));
+  const repo = mkdtempSync(join(tmpdir(), "xiongbao-policy-"));
   directories.push(repo);
   git(repo, "init", "-b", "main");
   for (const [version, last] of Object.entries(tags)) {

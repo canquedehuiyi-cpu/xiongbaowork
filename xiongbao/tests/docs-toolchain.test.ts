@@ -84,7 +84,7 @@ describe("the documents toolchain's install", () => {
   test("CI's image job runs the self-check again, as the default employee", () => {
     const ci = read(root, "..", ".github", "workflows", "ci.yml");
     expect(ci).toContain(
-      "docker run --rm --user pwuser --entrypoint python3 openbot:trackb /opt/docs-toolchain/selfcheck.py --require-pandoc --require-soffice",
+      "docker run --rm --user pwuser --entrypoint python3 xiongbao:trackb /opt/docs-toolchain/selfcheck.py --require-pandoc --require-soffice",
     );
   });
 });

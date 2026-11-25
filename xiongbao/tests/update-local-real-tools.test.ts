@@ -76,7 +76,7 @@ function directory(prefix: string) {
 /** A checkout on its accepted commit, with the candidate one commit ahead, both carrying this
  * repository's real docker-compose.yml. */
 function installation(dotenv: string) {
-  const root = directory("openbot-real-update-");
+  const root = directory("xiongbao-real-update-");
   const git = (...args: string[]) =>
     execFileSync("git", args, { cwd: root, encoding: "utf8" }).trim();
   git("init", "--quiet");
@@ -115,8 +115,8 @@ function options(
     root: f.root,
     candidate: f.candidate,
     policy: {
-      distributionId: "acme.openbot",
-      repository: "acme/openbot",
+      distributionId: "acme.xiongbao",
+      repository: "acme/xiongbao",
       channel: "stable",
     },
     topology,
@@ -201,13 +201,13 @@ describe.skipIf(!docker)(
       ]);
       cleanup.push(() => sh(["docker", "rm", "-f", name]));
       registry = `127.0.0.1:${port}`;
-      const context = directory("openbot-real-image-");
+      const context = directory("xiongbao-real-image-");
       writeFileSync(join(context, "payload"), randomBytes(16).toString("hex"));
       writeFileSync(
         join(context, "Dockerfile"),
         "FROM scratch\nCOPY payload /payload\n",
       );
-      const tag = `${registry}/openbot-update-test/server:${id}`;
+      const tag = `${registry}/xiongbao-update-test/server:${id}`;
       sh(["docker", "build", "--quiet", "--tag", tag, context]);
       cleanup.push(() => sh(["docker", "image", "rm", "-f", tag]));
       for (let attempt = 0; ; attempt++) {
@@ -233,7 +233,7 @@ describe.skipIf(!docker)(
     });
 
     test("the update pulls the pinned server image before it stops anything", async () => {
-      const f = installation("COMPOSE_PROFILES=openbot\n");
+      const f = installation("COMPOSE_PROFILES=xiongbao\n");
       f.candidate.artifacts.images.server = { reference };
       const calls: string[] = [];
       const result = await applyLocalUpdate(
@@ -250,9 +250,9 @@ describe.skipIf(!docker)(
     });
 
     test("a pinned digest the registry does not have refuses before stopping anything", async () => {
-      const f = installation("COMPOSE_PROFILES=openbot\n");
+      const f = installation("COMPOSE_PROFILES=xiongbao\n");
       f.candidate.artifacts.images.server = {
-        reference: `${registry}/openbot-update-test/server@sha256:${"0".repeat(64)}`,
+        reference: `${registry}/xiongbao-update-test/server@sha256:${"0".repeat(64)}`,
       };
       const calls: string[] = [];
       await expect(
@@ -274,12 +274,12 @@ describe.skipIf(!docker)(
   () => {
     test("start.sh's build gets the source's own image names, never the release's digests", async () => {
       const f = installation(
-        "DATABASE_URL=postgres://openbot_app:openbot@127.0.0.1:5432/openbot\nMIGRATION_DATABASE_URL=postgres://openbot:openbot@127.0.0.1:5432/openbot\n",
+        "DATABASE_URL=postgres://openbot_app:openbot@127.0.0.1:5432/xiongbao\nMIGRATION_DATABASE_URL=postgres://openbot:openbot@127.0.0.1:5432/xiongbao\n",
       );
       // start.sh runs `up --build` and `run --build migrate` on the real Compose file. Each service is
       // pointed at a one-file Dockerfile, and its default tag is made unique so no real local
-      // `openbot-*:latest` image is replaced; the `${VARIABLE:-...}` each one reads stays the real one.
-      const project = directory("openbot-real-build-");
+      // `xiongbao-*:latest` image is replaced; the `${VARIABLE:-...}` each one reads stays the real one.
+      const project = directory("xiongbao-real-build-");
       writeFileSync(join(project, "docker-compose.yml"), composeFile);
       writeFileSync(join(project, "payload"), id);
       writeFileSync(
@@ -288,7 +288,7 @@ describe.skipIf(!docker)(
       );
       writeFileSync(
         join(project, "compose.fixture.yml"),
-        `services:\n  migrate:\n    build: { context: ., dockerfile: fixture.Dockerfile }\n    image: \${SERVER_IMAGE:-openbot-update-test-server:${id}}\n  agent-computer:\n    build: { context: ., dockerfile: fixture.Dockerfile }\n    image: \${COMPUTER_IMAGE:-openbot-update-test-computer:${id}}\n`,
+        `services:\n  migrate:\n    build: { context: ., dockerfile: fixture.Dockerfile }\n    image: \${SERVER_IMAGE:-xiongbao-update-test-server:${id}}\n  agent-computer:\n    build: { context: ., dockerfile: fixture.Dockerfile }\n    image: \${COMPUTER_IMAGE:-xiongbao-update-test-computer:${id}}\n`,
       );
       cleanup.push(() =>
         sh([
@@ -296,8 +296,8 @@ describe.skipIf(!docker)(
           "image",
           "rm",
           "-f",
-          `openbot-update-test-server:${id}`,
-          `openbot-update-test-computer:${id}`,
+          `xiongbao-update-test-server:${id}`,
+          `xiongbao-update-test-computer:${id}`,
         ]),
       );
       const run: CommandRunner = async (command, commandOptions) => {
@@ -333,7 +333,7 @@ describe.skipIf(!docker)(
           "docker",
           "image",
           "inspect",
-          `openbot-update-test-computer:${id}`,
+          `xiongbao-update-test-computer:${id}`,
         ]),
       ).toBe(true);
     });
@@ -454,7 +454,7 @@ describe.skipIf(!docker)("image migration with real Docker Compose", () => {
     async (exitCode) => {
       const project = `fix979-migrate-${id}-${exitCode}`;
       const f = installation(
-        `COMPOSE_PROJECT_NAME=${project}\nCOMPOSE_PROFILES=openbot\n`,
+        `COMPOSE_PROJECT_NAME=${project}\nCOMPOSE_PROFILES=xiongbao\n`,
       );
       const reference = sh([
         "docker",

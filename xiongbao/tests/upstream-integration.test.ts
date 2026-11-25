@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -10,7 +11,6 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createHash } from "node:crypto";
 import { integrateUpstream } from "../scripts/integrate-upstream";
 import {
   createReleaseArtifacts,
@@ -32,7 +32,7 @@ function git(cwd: string, ...args: string[]): string {
   }).trim();
 }
 function repository() {
-  const root = mkdtempSync(join(tmpdir(), "openbot-upstream-"));
+  const root = mkdtempSync(join(tmpdir(), "xiongbao-upstream-"));
   directories.push(root);
   git(root, "init", "-b", "main");
   git(root, "config", "user.name", "Upgrade Test");
@@ -175,8 +175,8 @@ function releaseOptions(repo: ReturnType<typeof repository>) {
   return {
     repositoryRoot: repo.root,
     outputDirectory: join(repo.root, "release"),
-    repository: "acme/openbot",
-    distributionId: "acme.openbot",
+    repository: "acme/xiongbao",
+    distributionId: "acme.xiongbao",
     channel: "stable",
     version: "v0.3.0",
     commit: git(repo.root, "rev-parse", "HEAD"),
@@ -198,24 +198,24 @@ describe("release source artifacts", () => {
   test("publishes an exact chart artifact beside the source with a release-specific URL", () => {
     const repo = repository();
     const options = releaseOptions(repo);
-    mkdirSync(join(repo.root, "openbot"));
+    mkdirSync(join(repo.root, "xiongbao"));
     writeFileSync(
-      join(repo.root, "openbot", "Chart.yaml"),
-      "apiVersion: v2\nname: openbot\nversion: 0.1.4\n",
+      join(repo.root, "xiongbao", "Chart.yaml"),
+      "apiVersion: v2\nname: xiongbao\nversion: 0.1.4\n",
     );
-    const chart = join(repo.root, "openbot-0.1.4.tgz");
-    execFileSync("tar", ["-czf", chart, "-C", repo.root, "openbot"]);
+    const chart = join(repo.root, "xiongbao-0.1.4.tgz");
+    execFileSync("tar", ["-czf", chart, "-C", repo.root, "xiongbao"]);
     const release = createReleaseArtifacts({
       ...options,
       chart: { path: chart, version: "0.1.4" },
     });
     expect(release.artifacts.chart).toEqual({
       version: "0.1.4",
-      url: "https://github.com/acme/openbot/releases/download/v0.3.0/openbot-0.1.4.tgz",
+      url: "https://github.com/acme/xiongbao/releases/download/v0.3.0/xiongbao-0.1.4.tgz",
       sha256: createHash("sha256").update(readFileSync(chart)).digest("hex"),
     });
     expect(
-      readFileSync(join(options.outputDirectory, "openbot-0.1.4.tgz")),
+      readFileSync(join(options.outputDirectory, "xiongbao-0.1.4.tgz")),
     ).toEqual(readFileSync(chart));
   });
   test("the publication CLI emits the fork's exact source and manifest without dependencies", () => {
@@ -268,7 +268,7 @@ describe("release source artifacts", () => {
           ),
         ),
       ).distribution.id,
-    ).toBe("acme.openbot");
+    ).toBe("acme.xiongbao");
   });
   test("archives exact committed source and hashes fork-owned metadata", () => {
     const repo = repository();
@@ -276,22 +276,22 @@ describe("release source artifacts", () => {
     const options = releaseOptions(repo);
     const release = createReleaseArtifacts(options);
     const archive = readFileSync(
-      join(options.outputDirectory, "openbot-source.tar.gz"),
+      join(options.outputDirectory, "xiongbao-source.tar.gz"),
     );
     expect(release.source.modified).toBe(true);
     expect(release.artifacts.source.sha256).toBe(
       createHash("sha256").update(archive).digest("hex"),
     );
     expect(release.artifacts.source.url).toBe(
-      "https://github.com/acme/openbot/releases/download/v0.3.0/openbot-source.tar.gz",
+      "https://github.com/acme/xiongbao/releases/download/v0.3.0/xiongbao-source.tar.gz",
     );
     expect(
       execFileSync(
         "tar",
         [
           "-xzOf",
-          join(options.outputDirectory, "openbot-source.tar.gz"),
-          "openbot/core.txt",
+          join(options.outputDirectory, "xiongbao-source.tar.gz"),
+          "xiongbao/core.txt",
         ],
         { encoding: "utf8" },
       ),
@@ -330,7 +330,7 @@ describe("release source artifacts", () => {
     const repo = repository();
     const options = releaseOptions(repo);
     const env = {
-      GITHUB_REPOSITORY: "acme/openbot",
+      GITHUB_REPOSITORY: "acme/xiongbao",
       GITHUB_SHA: options.commit,
       VERSION: "v0.3.0",
     };
@@ -381,7 +381,7 @@ describe("release workflow invariants", () => {
       "run: bun scripts/release-manifest.ts --validate-policy",
     );
     expect(source).toContain("release-assets/release-manifest.json");
-    expect(source).toContain("release-assets/openbot-source.tar.gz");
+    expect(source).toContain("release-assets/xiongbao-source.tar.gz");
     expect(source).toContain(
       "container-images.json desktop-images.json release-assets/*",
     );

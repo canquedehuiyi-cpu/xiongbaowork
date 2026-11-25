@@ -87,12 +87,12 @@ async function readEnvironment(path: string) {
     return parseEnv(await readFile(path, "utf8"));
   } catch {
     throw new SetupComposioError(
-      "Could not read .env. Run this helper from the OpenBot root after copying .env.example to .env, and check file permissions.",
+      "Could not read .env. Run this helper from the XiongBao root after copying .env.example to .env, and check file permissions.",
     );
   }
 }
 
-/** Uses only the CLI login; no parent Composio organization credential reaches OpenBot. */
+/** Uses only the CLI login; no parent Composio organization credential reaches XiongBao. */
 export async function setupComposio(
   options: {
     directory?: string;

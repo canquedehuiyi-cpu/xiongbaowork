@@ -27,7 +27,7 @@
 
 ## 本地证据
 
-仅使用自己创建的 `codex-wp35-postgres-022d/openbot_flow_quota`，普通 `openbot_app` 执行测试。
+仅使用自己创建的 `codex-wp35-postgres-022d/xiongbao_flow_quota`，普通 `openbot_app` 执行测试。
 迁移以该容器测试库 owner 应用，原版、共享库、客户数据和真实 key 均未使用。
 
 - `quota-focused-final.log`：**67 pass / 0 fail / 0 error / 9 files**，包含 6 条并发配额探针、

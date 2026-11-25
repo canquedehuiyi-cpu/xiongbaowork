@@ -402,8 +402,8 @@ jobs:
           mkdir -p release-assets
           helm package charts/xiongbao --destination release-assets
           chart_version="$(helm show chart charts/xiongbao | sed -n 's/^version: //p')"
-          test -f "release-assets/openbot-$chart_version.tgz"
-          echo "OPENBOT_CHART_PATH=release-assets/openbot-$chart_version.tgz" >> "$GITHUB_ENV"
+          test -f "release-assets/xiongbao-$chart_version.tgz"
+          echo "OPENBOT_CHART_PATH=release-assets/xiongbao-$chart_version.tgz" >> "$GITHUB_ENV"
           echo "OPENBOT_CHART_VERSION=$chart_version" >> "$GITHUB_ENV"
       # A rerun of a half-published release. `helm package` stamps the time it ran and the provenance
       # bundle is signed again on every run, so this run's bytes never equal the published ones even
@@ -434,8 +434,8 @@ jobs:
         with:
           subject-path: |
             release-assets/release-manifest.json
-            release-assets/openbot-source.tar.gz
-            release-assets/openbot-*.tgz
+            release-assets/xiongbao-source.tar.gz
+            release-assets/xiongbao-*.tgz
             container-images.json
       - name: Save portable provenance bundle
         env:
@@ -629,7 +629,7 @@ jobs:
       # One folder per platform under `installers/`.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: openbot-desktop-*
+          pattern: xiongbao-desktop-*
           path: installers
       - name: Attach what the release does not have yet
         env:

@@ -530,7 +530,7 @@ if (!baseline.out.includes("name: COMPUTER_SEPARATE_WORKSPACES")) {
     `${valuesFile} runs no shared computer, so its settings are not checked here`,
   );
 } else {
-  const scratch = await mkdtemp(join(tmpdir(), "openbot-values-"));
+  const scratch = await mkdtemp(join(tmpdir(), "xiongbao-values-"));
   try {
     for (const { path, variable, whole } of computerSettings) {
       const zero = render(["--set", `${path}=0`]);

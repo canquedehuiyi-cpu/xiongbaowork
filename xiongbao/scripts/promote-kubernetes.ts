@@ -95,14 +95,14 @@ function selectedImage(manifest: ReleaseManifest) {
   const image = manifest.artifacts.images.openbot;
   if (!image)
     throw new Error(
-      "Kubernetes requires the monolithic 'openbot' image; the desktop server image does not contain every chart component",
+      "Kubernetes requires the monolithic 'xiongbao' image; the desktop server image does not contain every chart component",
     );
   return image.reference;
 }
 function imageParts(reference: string) {
   const [repository, digest] = reference.split("@");
   if (!repository || !digest)
-    throw new Error("Expected a digest-pinned OpenBot image");
+    throw new Error("Expected a digest-pinned XiongBao image");
   // Repository names can carry a registry port; only a colon after the final slash is a tag.
   const tagPosition = repository.lastIndexOf(":");
   return {
@@ -118,7 +118,9 @@ async function requireRenderedMigration(
   values: PromotionValues,
   previousValues: Record<string, unknown> | undefined,
 ) {
-  const directory = mkdtempSync(join(tmpdir(), "openbot-migration-preflight-"));
+  const directory = mkdtempSync(
+    join(tmpdir(), "xiongbao-migration-preflight-"),
+  );
   try {
     const file = join(directory, "release-values.json");
     atomicJson(file, values);
@@ -318,9 +320,9 @@ export async function planKubernetesPromotion(
   )
     reasons.push("Timeout must be an integer between 1 and 3600 seconds");
   const annotations = {
-    "openbot.ai/distribution": candidate.distribution.id,
-    "openbot.ai/release": candidate.version,
-    "openbot.ai/source-commit": candidate.source.commit,
+    "xiongbao.ai/distribution": candidate.distribution.id,
+    "xiongbao.ai/release": candidate.version,
+    "xiongbao.ai/source-commit": candidate.source.commit,
   };
   const values: PromotionValues = {
     image,
@@ -390,16 +392,16 @@ function verifyDeployment(
   const annotations = deployment.spec.template.metadata?.annotations;
   if (
     requireIdentity &&
-    (annotations?.["openbot.ai/distribution"] !== manifest.distribution.id ||
-      annotations?.["openbot.ai/release"] !== manifest.version ||
-      annotations?.["openbot.ai/source-commit"] !== manifest.source.commit)
+    (annotations?.["xiongbao.ai/distribution"] !== manifest.distribution.id ||
+      annotations?.["xiongbao.ai/release"] !== manifest.version ||
+      annotations?.["xiongbao.ai/source-commit"] !== manifest.source.commit)
   )
     throw new Error(
       "Server Deployment release identity does not match the candidate",
     );
   if (
-    annotations?.["openbot.ai/distribution"] &&
-    annotations["openbot.ai/distribution"] !== manifest.distribution.id
+    annotations?.["xiongbao.ai/distribution"] &&
+    annotations["xiongbao.ai/distribution"] !== manifest.distribution.id
   )
     throw new Error("Existing Deployment belongs to another distribution");
 }
@@ -859,7 +861,7 @@ export async function writeGitOpsPromotion(
   );
   writeFileSync(
     join(options.outputDirectory, "ORDERING.md"),
-    `# Proposed OpenBot promotion\n\nStatus: proposed; no cluster was changed.\n\n1. Verify chart archive SHA-256 ${options.candidate.artifacts.chart?.sha256}; keep customer values and Secret references separate.\n2. For maintenance transitions, stop write admission and scheduled API dispatch, wait for old work to finish or explicitly interrupt it, then create the matching backup (${options.backupReference}).\n3. Run the target image's guarded migration Job and require successful completion before replacing server replicas. Preserve existing database advisory locking and migration-history refusal.\n4. Apply the pinned server/computer workloads and wait for readiness and rollout, then verify image digest and release annotations.\n5. Resume routines and perform the customer browser/graph workflow before accepting the promotion.\n\nHelm's existing pre-upgrade hook supplies step 3 only when Helm owns execution. A renderer/controller that ignores Helm hooks must define its own ordered migration phase. First installation with bundled PostgreSQL intentionally uses an ordinary migration Job; it must not be converted into a pre-install hook. No Argo CD or Flux execution integration is claimed by these generated files. A Git revert does not undo database changes.\n`,
+    `# Proposed XiongBao promotion\n\nStatus: proposed; no cluster was changed.\n\n1. Verify chart archive SHA-256 ${options.candidate.artifacts.chart?.sha256}; keep customer values and Secret references separate.\n2. For maintenance transitions, stop write admission and scheduled API dispatch, wait for old work to finish or explicitly interrupt it, then create the matching backup (${options.backupReference}).\n3. Run the target image's guarded migration Job and require successful completion before replacing server replicas. Preserve existing database advisory locking and migration-history refusal.\n4. Apply the pinned server/computer workloads and wait for readiness and rollout, then verify image digest and release annotations.\n5. Resume routines and perform the customer browser/graph workflow before accepting the promotion.\n\nHelm's existing pre-upgrade hook supplies step 3 only when Helm owns execution. A renderer/controller that ignores Helm hooks must define its own ordered migration phase. First installation with bundled PostgreSQL intentionally uses an ordinary migration Job; it must not be converted into a pre-install hook. No Argo CD or Flux execution integration is claimed by these generated files. A Git revert does not undo database changes.\n`,
     { mode: 0o600 },
   );
   return {

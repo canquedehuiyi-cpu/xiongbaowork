@@ -4,9 +4,9 @@ import { join } from "node:path";
 import conformance from "../fixtures/releases/conformance.json";
 import {
   classifySource,
+  type InstalledRelease,
   parseReleaseManifest,
   planUpgrade,
-  type InstalledRelease,
   type ReleaseManifest,
 } from "../release-manifest";
 
@@ -22,8 +22,8 @@ function fixture(name = "candidate"): ReleaseManifest {
 }
 
 const policy = {
-  distributionId: "acme.openbot",
-  repository: "acme/openbot",
+  distributionId: "acme.xiongbao",
+  repository: "acme/xiongbao",
   channel: "stable",
 };
 function installed(
@@ -49,7 +49,7 @@ describe("release manifest v1", () => {
     else expect(() => parseReleaseManifest(input)).toThrow();
   });
   test("accepts an exact source and digest-pinned fork release", () => {
-    expect(fixture().distribution.repository).toBe("acme/openbot");
+    expect(fixture().distribution.repository).toBe("acme/xiongbao");
     expect(planUpgrade(installed(), fixture(), policy).allowed).toBe(true);
   });
   test.each([
@@ -71,7 +71,7 @@ describe("release manifest v1", () => {
         ...m,
         artifacts: {
           ...m.artifacts,
-          images: { server: { reference: "ghcr.io/acme/openbot:latest" } },
+          images: { server: { reference: "ghcr.io/acme/xiongbao:latest" } },
         },
       }),
     ],
@@ -109,7 +109,7 @@ describe("upgrade preflight", () => {
       "distribution",
       (m: ReleaseManifest) => ({
         ...m,
-        distribution: { ...m.distribution, id: "upstream.openbot" },
+        distribution: { ...m.distribution, id: "upstream.xiongbao" },
       }),
     ],
     [
@@ -203,7 +203,7 @@ describe("upgrade preflight", () => {
   });
   test("blocks an installed distribution that does not match policy", () => {
     const current = installed();
-    current.manifest.distribution.repository = "untrusted/openbot";
+    current.manifest.distribution.repository = "untrusted/xiongbao";
     expect(planUpgrade(current, fixture(), policy).allowed).toBe(false);
   });
 });

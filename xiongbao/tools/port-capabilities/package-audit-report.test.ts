@@ -27,8 +27,8 @@ import {
   buildPackageReport,
   main,
   PackageReportError,
-  renderPackageAuditReport,
   REPORT_FILE,
+  renderPackageAuditReport,
 } from "./package-audit-report";
 
 const REPO = join(import.meta.dir, "..", "..");
@@ -58,7 +58,7 @@ const SKILLS = `skills:
     _porting:
       runnable: blocked
       reason: shell-command-prose
-      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；openbot 员工没有本地运行时。 ← \\"bash scripts/deploy.sh prod\\""
+      reason_ref: "正文给出可执行的 shell 命令（带实参/heredoc/管道）；xiongbao 员工没有本地运行时。 ← \\"bash scripts/deploy.sh prod\\""
       dropped:
         - scripts/
   - slug: ledger-downgraded

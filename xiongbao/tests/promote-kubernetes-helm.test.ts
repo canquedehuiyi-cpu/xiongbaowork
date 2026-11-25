@@ -37,7 +37,7 @@ import { parseReleaseManifest } from "../shared/release-manifest";
 setDefaultTimeout(120_000);
 const helm = Bun.which("helm") !== null;
 const digest = `sha256:${"b".repeat(64)}`;
-const mirror = "registry.internal/mirror/openbot";
+const mirror = "registry.internal/mirror/xiongbao";
 const chartSource = join(import.meta.dir, "../charts/xiongbao");
 
 type Values = Record<string, unknown>;
@@ -296,13 +296,13 @@ async function cluster(options: {
         image.endsWith(`@${digest}`)
           ? {
               version:
-                state.template.metadata?.annotations?.["openbot.ai/release"],
+                state.template.metadata?.annotations?.["xiongbao.ai/release"],
               commit:
                 state.template.metadata?.annotations?.[
-                  "openbot.ai/source-commit"
+                  "xiongbao.ai/source-commit"
                 ],
-              distributionId: "acme.openbot",
-              repository: "acme/openbot",
+              distributionId: "acme.xiongbao",
+              repository: "acme/xiongbao",
               channel: "stable",
             }
           : {},
@@ -322,22 +322,22 @@ function promotion(run: CommandRunner): KubernetesPromotionOptions {
   const current = parseReleaseManifest(structuredClone(currentFixture));
   const candidate = parseReleaseManifest(structuredClone(targetFixture));
   current.artifacts.images.openbot = {
-    reference: `ghcr.io/acme/openbot@${digest}`,
+    reference: `ghcr.io/acme/xiongbao@${digest}`,
   };
   candidate.artifacts.images.openbot = {
-    reference: `ghcr.io/acme/openbot@${digest}`,
+    reference: `ghcr.io/acme/xiongbao@${digest}`,
   };
   candidate.artifacts.chart = {
     version: "0.1.4",
-    url: "https://github.com/acme/openbot/releases/download/v0.3.0/openbot.tgz",
+    url: "https://github.com/acme/xiongbao/releases/download/v0.3.0/xiongbao.tgz",
     sha256: createHash("sha256").update(readFileSync(chart)).digest("hex"),
   };
   return {
     current,
     candidate,
     policy: {
-      distributionId: "acme.openbot",
-      repository: "acme/openbot",
+      distributionId: "acme.xiongbao",
+      repository: "acme/xiongbao",
       channel: "stable",
     },
     namespace: "customer",
@@ -356,7 +356,7 @@ function promotion(run: CommandRunner): KubernetesPromotionOptions {
  * with `--set` at install that no customer file carries. */
 const installSets = {
   server: { replicaCount: 3 },
-  image: { repository: "ghcr.io/acme/openbot", tag: "v0.2.0", digest },
+  image: { repository: "ghcr.io/acme/xiongbao", tag: "v0.2.0", digest },
 };
 function journal(options: KubernetesPromotionOptions) {
   const path = join(options.outputDirectory, "promotion-journal.json");
@@ -425,7 +425,7 @@ describe.skipIf(!helm)("Helm promotion of the real chart", () => {
     const { state, run } = await cluster({ applyMethod: "csa", installSets });
     const options = promotion(run);
     options.current.artifacts.images.openbot = {
-      reference: `ghcr.io/acme/openbot@sha256:${"e".repeat(64)}`,
+      reference: `ghcr.io/acme/xiongbao@sha256:${"e".repeat(64)}`,
     };
     await expect(promoteKubernetes(options)).rejects.toThrow("does not match");
     expect(journal(options)).toBeUndefined();

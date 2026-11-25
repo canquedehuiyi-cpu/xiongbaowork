@@ -44,7 +44,7 @@ function fixture({ version = "0.2.0", changelog = CHANGELOG } = {}) {
   dirs.push(dir);
   writeFileSync(
     join(dir, "package.json"),
-    JSON.stringify({ name: "openbot", version }),
+    JSON.stringify({ name: "xiongbao", version }),
   );
   if (changelog !== null) writeFileSync(join(dir, "CHANGELOG.md"), changelog);
   return dir;

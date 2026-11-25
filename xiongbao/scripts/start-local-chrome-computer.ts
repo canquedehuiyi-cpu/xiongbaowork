@@ -19,7 +19,7 @@ export function localChromeConfiguration(
 ) {
   if (!env.COMPUTER_TOKEN?.trim()) {
     throw new Error(
-      "COMPUTER_TOKEN is required. Use the same secret as the local OpenBot API.",
+      "COMPUTER_TOKEN is required. Use the same secret as the local XiongBao API.",
     );
   }
   if (

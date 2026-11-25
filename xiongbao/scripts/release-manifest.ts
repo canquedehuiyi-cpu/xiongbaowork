@@ -112,10 +112,10 @@ function manifest(
     const { path, version } = options.chart;
     if (
       !/^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/.test(version) ||
-      basename(path) !== `openbot-${version}.tgz`
+      basename(path) !== `xiongbao-${version}.tgz`
     )
       throw new Error(
-        "Chart artifact filename must match its exact openbot chart version",
+        "Chart artifact filename must match its exact xiongbao chart version",
       );
     chart = {
       version,
@@ -139,7 +139,7 @@ function manifest(
     },
     artifacts: {
       source: {
-        url: `https://github.com/${options.repository}/releases/download/${options.version}/openbot-source.tar.gz`,
+        url: `https://github.com/${options.repository}/releases/download/${options.version}/xiongbao-source.tar.gz`,
         sha256: sourceSha256,
       },
       images: options.images,
@@ -333,12 +333,12 @@ export function createReleaseArtifacts(
   manifest(options, "0".repeat(64)); // Complete preflight before output mutation.
   mkdirSync(options.outputDirectory, { recursive: true });
   const published = options.publishedDirectory;
-  const archive = resolve(options.outputDirectory, "openbot-source.tar.gz");
+  const archive = resolve(options.outputDirectory, "xiongbao-source.tar.gz");
   git(
     options.repositoryRoot,
     "archive",
     "--format=tar.gz",
-    "--prefix=openbot/",
+    "--prefix=xiongbao/",
     `--output=${archive}`,
     options.commit,
   );
@@ -389,7 +389,7 @@ function placeholderManifest(
     },
     artifacts: {
       source: {
-        url: `https://github.com/${configuration.repository}/releases/download/${configuration.version}/openbot-source.tar.gz`,
+        url: `https://github.com/${configuration.repository}/releases/download/${configuration.version}/xiongbao-source.tar.gz`,
         sha256: "0".repeat(64),
       },
       images: {

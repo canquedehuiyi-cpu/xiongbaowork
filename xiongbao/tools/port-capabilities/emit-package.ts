@@ -105,7 +105,7 @@ export function renderAgentsYaml(capabilities: NormalizedCapabilities): string {
  * `skills.yaml` — instructions plus the `_porting` block.
  *
  * `tools` is always `[]` in P0. A WorkBuddy `allowed-tools` entry such as `Bash(git:*)` has no mechanical
- * equivalent in openbot's `<serverId>/<toolName>` namespace, and emitting a guess would create a tool
+ * equivalent in xiongbao's `<serverId>/<toolName>` namespace, and emitting a guess would create a tool
  * reference that resolves to nothing at turn time. The raw declarations are preserved under
  * `_porting.declared_tools` so P3's mapping layer has the input it needs.
  */
@@ -176,7 +176,7 @@ export function renderSkillsYaml(
           : {}),
         dropped: [...skill.dropped],
         /**
-         * Bytes under `references/`. Not an openbot field: it is the number that decides whether P2 can
+         * Bytes under `references/`. Not an xiongbao field: it is the number that decides whether P2 can
          * inline the references into `instructions` (the 24KB threshold in §4c) or has to ship the
          * `skill_assets` + `skills/read` channel first.
          */

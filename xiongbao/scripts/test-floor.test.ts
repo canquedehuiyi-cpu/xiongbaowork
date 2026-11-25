@@ -225,7 +225,7 @@ async function run(
 }
 
 async function projectWithTests(files: Record<string, number>) {
-  const directory = await temporaryDirectory("openbot-test-shard-");
+  const directory = await temporaryDirectory("xiongbao-test-shard-");
   await writeFile(
     join(directory, "package.json"),
     JSON.stringify({ scripts: { test: "bun test" } }),
@@ -427,7 +427,7 @@ describe("scripts/test-ci-aggregate.ts", () => {
     shardsResult: string,
     records: { name: string; text: string }[],
   ) {
-    const directory = await temporaryDirectory("openbot-test-counts-");
+    const directory = await temporaryDirectory("xiongbao-test-counts-");
     for (const { name, text } of records)
       await writeFile(join(directory, name), text);
     return run(
@@ -459,7 +459,7 @@ describe("scripts/test-ci-aggregate.ts", () => {
       [
         "bun",
         join(import.meta.dir, "test-ci-aggregate.ts"),
-        join(tmpdir(), "openbot-no-such-counts-directory"),
+        join(tmpdir(), "xiongbao-no-such-counts-directory"),
       ],
       tmpdir(),
       cleanEnvironment({ SHARDS_RESULT: "success" }),

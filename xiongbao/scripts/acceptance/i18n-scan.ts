@@ -77,7 +77,7 @@ const ALLOWED: readonly { readonly why: string; readonly pattern: RegExp }[] = [
   {
     why: "品牌名",
     pattern:
-      /\b(?:openai|anthropic|google|microsoft|apple|amazon|meta|github|gitlab|gmail|slack|notion|linear|jira|figma|asana|trello|discord|telegram|wechat|wecom|zoom|dropbox|salesforce|hubspot|stripe|vercel|cloudflare|sentry|datadog|postgresql|postgres|docker|kubernetes|playwright|browserbase|composio|arcade|copilotkit|copilot|mcp|wakerflow|waker|openbot|xiongbao(?:\s+work)?)\b/gi,
+      /\b(?:openai|anthropic|google|microsoft|apple|amazon|meta|github|gitlab|gmail|slack|notion|linear|jira|figma|asana|trello|discord|telegram|wechat|wecom|zoom|dropbox|salesforce|hubspot|stripe|vercel|cloudflare|sentry|datadog|postgresql|postgres|docker|kubernetes|playwright|browserbase|composio|arcade|copilotkit|copilot|mcp|wakerflow|waker|xiongbao(?:\s+work)?)\b/gi,
   },
   /*
    * 格式、单位、协议缩写：`PDF`、`CSV`、`JSON`、`MB`、`CPU`。**白名单，不是「全大写就算」**：后者会把

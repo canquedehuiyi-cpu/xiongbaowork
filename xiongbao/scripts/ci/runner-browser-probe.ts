@@ -79,7 +79,7 @@ console.log(
 );
 
 const requests: string[] = [];
-const page = `<!doctype html><meta charset="utf-8"><title>OpenBot fixture</title>
+const page = `<!doctype html><meta charset="utf-8"><title>XiongBao fixture</title>
 <h1>Disposable fixture</h1><p>Sentinel sentence for the read check.</p>
 <p id="jar">jar=unread</p><p id="keystroke">key=none</p>
 <form method="get" action="/submitted">
@@ -252,7 +252,7 @@ try {
     "browser",
   );
   assert(
-    String(landed.title) === "OpenBot fixture",
+    String(landed.title) === "XiongBao fixture",
     "the real page's title comes back",
     "browser",
   );
