@@ -22,6 +22,15 @@ import type { AcquireLearnedSkills, LearnedSkillInvocation } from "./runtime";
 
 const CATALOG_ID = "openbot:learned-skills";
 const CATALOG_CONTEXT = "XiongBao learned skills";
+/**
+ * The same entry's description before the rename. An approval's continuation snapshot keeps the
+ * run's context and replays it, so the filters below drop this one too, or a resumed run would carry
+ * the stale catalog beside the fresh one.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，审批续跑快照里改名前的技能目录条目
+ */
+export const LEGACY_CATALOG_CONTEXT = "OpenBot learned skills";
+const isCatalogContext = (description: string) =>
+  description === CATALOG_CONTEXT || description === LEGACY_CATALOG_CONTEXT;
 const RESERVED_TOOLS = new Set([
   "copilotkit_load_skill",
   "copilotkit_read_skill_file",
@@ -58,7 +67,7 @@ export class RemoteLearnedSkillsMiddleware extends Middleware {
           (message) => message.id !== CATALOG_ID,
         ),
         context: originalInput.context.filter(
-          (entry) => entry.description !== CATALOG_CONTEXT,
+          (entry) => !isCatalogContext(entry.description),
         ),
       };
       const controller = new AbortController();
@@ -105,7 +114,7 @@ export class RemoteLearnedSkillsMiddleware extends Middleware {
           ],
           context: [
             ...input.context.filter(
-              (entry) => entry.description !== CATALOG_CONTEXT,
+              (entry) => !isCatalogContext(entry.description),
             ),
             ...(invocation.catalog
               ? [{ description: CATALOG_CONTEXT, value: invocation.catalog }]

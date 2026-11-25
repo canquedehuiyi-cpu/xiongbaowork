@@ -21,6 +21,21 @@ import {
 export const PERSONAL_MEMORY_CONTEXT = "XiongBao personal memory";
 
 /**
+ * 改名前同一条的描述。审批续跑快照存着当时的 context，续跑时原样带回（toolkit/src/run-turn.ts），
+ * 所以过滤与识别都要认它，否则旧条目留在里面、记忆出现两份。
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，审批续跑快照里改名前的记忆条目
+ */
+export const LEGACY_PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
+
+/** 这一条是不是个人记忆中间件放进去的（新旧两种描述都算）。 */
+export function isPersonalMemoryContext(description: string): boolean {
+  return (
+    description === PERSONAL_MEMORY_CONTEXT ||
+    description === LEGACY_PERSONAL_MEMORY_CONTEXT
+  );
+}
+
+/**
  * The server half of every ref XiongBao's own memory tools carry (`memory/recall_personal_memory`).
  *
  * M3: upstream keeps this in plugins/plugin-store/model.ts, where adding a custom server under it is
@@ -96,7 +111,7 @@ export class PersonalMemoryMiddleware extends Middleware {
             ],
             context: [
               ...input.context.filter(
-                (entry) => entry.description !== PERSONAL_MEMORY_CONTEXT,
+                (entry) => !isPersonalMemoryContext(entry.description),
               ),
               ...(content
                 ? [{ description: PERSONAL_MEMORY_CONTEXT, value: content }]

@@ -162,6 +162,7 @@ import { desktopTelemetryProperties } from "./desktop-telemetry";
 import { currentEdition } from "./edition";
 import {
   LEARNED_SKILL_TOOL_COUNT,
+  LEGACY_CATALOG_CONTEXT,
   RemoteLearnedSkillsMiddleware,
 } from "./learning/remote";
 import {
@@ -170,6 +171,7 @@ import {
   type LearnedSkillInvocation,
 } from "./learning/runtime";
 import {
+  LEGACY_PERSONAL_MEMORY_CONTEXT,
   type LoadPersonalMemory,
   PersonalMemoryMiddleware,
 } from "./memory/tools";
@@ -3867,9 +3869,28 @@ const RESERVED_MASTRA_CONTEXT_DESCRIPTIONS = new Set([
   "XiongBao learned skills",
 ]);
 
-function callerMastraContext(context: AgentContext[]): AgentContext[] {
+/**
+ * What this server called the same entries before the rename. An approval's continuation snapshot
+ * keeps the run's context and replays it, so an entry under one of these is a stale copy of what
+ * this run sends afresh, and a Mastra harness that only knows the current names would take it as the
+ * caller's own instruction. Dropped, never forwarded.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，审批续跑快照里改名前的上下文标题
+ */
+const LEGACY_MASTRA_CONTEXT_DESCRIPTIONS = new Set([
+  "OpenBot standing role",
+  "OpenBot granted tools guidance",
+  "OpenBot Bot id",
+  "OpenBot deployment tools",
+  "OpenBot signed run assertion",
+  LEGACY_CATALOG_CONTEXT,
+  LEGACY_PERSONAL_MEMORY_CONTEXT,
+]);
+
+export function callerMastraContext(context: AgentContext[]): AgentContext[] {
   return context.filter(
-    (entry) => !RESERVED_MASTRA_CONTEXT_DESCRIPTIONS.has(entry.description),
+    (entry) =>
+      !RESERVED_MASTRA_CONTEXT_DESCRIPTIONS.has(entry.description) &&
+      !LEGACY_MASTRA_CONTEXT_DESCRIPTIONS.has(entry.description),
   );
 }
 

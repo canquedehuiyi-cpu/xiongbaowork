@@ -25,9 +25,9 @@ import {
  * root on the host, a supervisor that forwarded arbitrary calls would hand that straight back
  * through a politer door. Four verbs, expressed in whose computer it is, and nothing else.
  *
- * Every write is scoped by ownership. Containers are created carrying `xiongbao.supervisor`, and
- * stop, reset and inspect refuse anything without it. A container whose name happens to match but
- * lacks the label is treated as absent.
+ * Every write is scoped by ownership. Containers are created carrying the owner label
+ * (`OWNER_LABEL`), and stop, reset and inspect refuse anything without it. A container whose name
+ * happens to match but lacks the label is treated as absent.
  */
 
 const docker = new Docker(

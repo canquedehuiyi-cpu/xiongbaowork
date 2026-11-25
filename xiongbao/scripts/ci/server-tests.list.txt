@@ -554,6 +554,7 @@ tests/local-learning-outcomes.test.ts
 tests/local-learning-propose.test.ts
 tests/local-learning.integration.test.ts
 tests/local-threads.test.ts
+tests/mastra-legacy-context.test.ts
 tests/mastra-roster.test.ts
 tests/mcp-grant-removal.integration.test.ts
 tests/mcp-listing.test.ts

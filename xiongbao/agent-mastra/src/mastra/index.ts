@@ -137,6 +137,19 @@ function isUsableEntry(entry: unknown): entry is ContextEntry {
  * used to be dropped here altogether, although the server forwards it and every other harness puts
  * it in front of the model.
  */
+/**
+ * Whether an entry is the server's own rather than the caller's. The prefix the server wrote before
+ * the rename counts too: an approval's continuation snapshot keeps a run's context and the server
+ * replays it, and an old entry taken as the caller's would put a stale role, a credential or quoted
+ * memory into the instructions.
+ * legacy-compat：introducedIn 0.2.16，removeIn 0.2.17，审批续跑快照里改名前的上下文标题前缀
+ */
+function isServerEntry(description: string): boolean {
+  return (
+    description.startsWith("XiongBao ") || description.startsWith("OpenBot ")
+  );
+}
+
 export function buildXiongBaoInstructions({
   requestContext,
 }: XiongBaoInstructionArgs = {}) {
@@ -149,7 +162,7 @@ export function buildXiongBaoInstructions({
         .map((entry) => entry.value.trim()),
   );
   const callerInstructions = contextEntries
-    .filter((entry) => !entry.description.startsWith("XiongBao "))
+    .filter((entry) => !isServerEntry(entry.description))
     .map((entry) =>
       entry.description.trim()
         ? `${entry.description.trim()}: ${entry.value.trim()}`

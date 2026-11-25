@@ -259,6 +259,25 @@ describe("XiongBao Mastra receiver instructions", () => {
     );
   });
 
+  test("a replayed entry under the server's name before the rename is never an instruction", () => {
+    // An approval's continuation snapshot keeps the run's context and the server replays it.
+    const instructions = buildXiongBaoInstructions({
+      requestContext: requestContextWith([
+        { description: "OpenBot personal memory", value: "QUOTED_MEMORY" },
+        { description: "OpenBot signed run assertion", value: "secret" },
+        { description: "OpenBot standing role", value: "Stale role." },
+        {
+          description: "XiongBao standing role",
+          value: "Follow company policy.",
+        },
+      ]),
+    });
+
+    expect(instructions).toBe(
+      [xiongbaoBaseInstructions, "Follow company policy."].join("\n\n"),
+    );
+  });
+
   test("keeps ordinary Mastra calls on the base receiver instruction", () => {
     expect(buildXiongBaoInstructions()).toBe(xiongbaoBaseInstructions);
     expect(

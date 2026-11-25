@@ -49,7 +49,7 @@ describe("the worker's readiness gate", () => {
   });
 
   test.each([
-    ["a superuser", facts("xiongbao", true, false), "xiongbao is a superuser"],
+    ["a superuser", facts("openbot", true, false), "openbot is a superuser"],
     [
       "a BYPASSRLS role",
       facts("fixture", false, true),
@@ -72,7 +72,7 @@ describe("the worker's readiness gate", () => {
   test("an unset NODE_ENV refuses too, as the server's does", async () => {
     await expect(
       checkRlsReadiness({
-        database: database(facts("xiongbao", true, false)).database,
+        database: database(facts("openbot", true, false)).database,
         environment: {},
         report: () => {},
       }),
@@ -82,7 +82,7 @@ describe("the worker's readiness gate", () => {
   test("a written-down warn reports the superuser and lets the worker run", async () => {
     const diagnostics: ReadinessDiagnostic[] = [];
     await checkRlsReadiness({
-      database: database(facts("xiongbao", true, false)).database,
+      database: database(facts("openbot", true, false)).database,
       environment: { NODE_ENV: "production", OPENBOT_RLS_ENFORCE: "warn" },
       report: (event) => diagnostics.push(event),
     });

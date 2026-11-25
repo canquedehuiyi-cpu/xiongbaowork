@@ -56,7 +56,7 @@ import { reasoningByToolCall } from "./replayed-reasoning";
 import { FOLD_BUDGET_ENV, foldBudgetFrom } from "./turn-folding";
 
 /**
- * The CopilotKit agents XiongBao runs its Bots as: a built-in Bot that will not send a broken
+ * The agents XiongBao runs its Bots as: a built-in Bot that will not send a broken
  * conversation, one whose tools are chosen when its run starts, a remote Bot that survives being
  * cloned, a Bot that is no longer there, and the platform client with its expected answers kept quiet.
  *
