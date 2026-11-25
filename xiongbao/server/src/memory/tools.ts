@@ -18,7 +18,7 @@ import {
 } from "./types";
 
 /** 个人记忆中间件放进 `RunAgentInput.context` 的那一条的描述；对话侧栏按它把这部分算作「记忆」。 */
-export const PERSONAL_MEMORY_CONTEXT = "OpenBot personal memory";
+export const PERSONAL_MEMORY_CONTEXT = "XiongBao personal memory";
 
 /**
  * The server half of every ref XiongBao's own memory tools carry (`memory/recall_personal_memory`).

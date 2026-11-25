@@ -37,7 +37,7 @@ def _run(monkeypatch, environment, body):
 
         main = importlib.reload(main)
         response = TestClient(main.app).post(
-            "/agui", json=body, headers={"x-openbot-agent-token": TOKEN}
+            "/agui", json=body, headers={"x-xiongbao-agent-token": TOKEN}
         )
     assert response.status_code == 200
     assert [e["type"] for e in run_events(response.text) if e["type"].startswith("RUN_")] == [
@@ -141,7 +141,7 @@ def test_the_runs_context_still_reaches_the_model_on_the_newest_question(monkeyp
     messages would drop it. It goes where Agno put it before: on the newest question.
     """
     run = conversation()
-    run["context"] = [{"description": "OpenBot personal memory", "value": "RUN_CONTEXT_7f3a"}]
+    run["context"] = [{"description": "XiongBao personal memory", "value": "RUN_CONTEXT_7f3a"}]
     body = _run(monkeypatch, environment, run)
     assert missing_from(body) == []
     users = [m for m in body["messages"] if m["role"] == "user"]

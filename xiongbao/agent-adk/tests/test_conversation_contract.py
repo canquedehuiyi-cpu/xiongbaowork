@@ -63,7 +63,7 @@ def _session_manager(main):
 
 
 async def _post(client, body):
-    response = await client.post("/", json=body, headers={"x-openbot-agent-token": TOKEN})
+    response = await client.post("/", json=body, headers={"x-xiongbao-agent-token": TOKEN})
     assert response.status_code == 200
     events = run_events(response.text)
     assert [e["type"] for e in events if e["type"].startswith("RUN_")] == [

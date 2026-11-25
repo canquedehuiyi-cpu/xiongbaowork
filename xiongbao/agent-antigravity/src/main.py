@@ -44,7 +44,7 @@ from google.antigravity.models import GeminiAPIEndpoint
 
 from .whole_thread import OpenBotAntigravityAgent
 
-TOKEN_HEADER = "x-openbot-agent-token"
+TOKEN_HEADER = "x-xiongbao-agent-token"
 
 #: The Gemini row this Bot is pinned to. Both variable names come from it.
 _GOOGLE = SPEC["providers"]["google"]

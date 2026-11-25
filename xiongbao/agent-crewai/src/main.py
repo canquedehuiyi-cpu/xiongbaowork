@@ -32,7 +32,7 @@ from litellm import acompletion
 
 # The one header OpenBot's server sends when it calls a managed Bot. Same name the TypeScript Bots
 # check, because a Bot is a Bot whatever it is written in.
-TOKEN_HEADER = "x-openbot-agent-token"
+TOKEN_HEADER = "x-xiongbao-agent-token"
 
 
 def _expected_token() -> str:

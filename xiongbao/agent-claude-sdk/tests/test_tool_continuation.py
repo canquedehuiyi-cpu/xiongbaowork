@@ -56,7 +56,7 @@ def request(thread="thread-a", run="run-1", results=(), tool_count=1, tool_name=
                     "parameters": {"type": "object", "properties": {}},
                 }
             ],
-            "context": [{"description": "OpenBot learned skills", "value": "LEARNED_CATALOG_MARKER"}],
+            "context": [{"description": "XiongBao learned skills", "value": "LEARNED_CATALOG_MARKER"}],
             "forwardedProps": {},
         }
     )
@@ -597,7 +597,7 @@ def test_model_last_step_replaces_pending_query_with_tool_free_replay(sdk):
             assert any(event.type == "TOOL_CALL_END" for event in first)
             final = request(run="final", results=[("thread-a-tool-0", "Collected source")])
             final.tools = []
-            final.forwarded_props = {"openbotAnswerOnly": True}
+            final.forwarded_props = {"xiongbaoAnswerOnly": True}
             answer = await events(adapter, final)
             assert len(sdk) == 2
             assert sdk[0].interrupted

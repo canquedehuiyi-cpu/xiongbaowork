@@ -128,13 +128,13 @@ def not_started(error):
 def run_model(forwarded_props):
     """The `(model, effort)` the server chose for this run, or `None` when it chose none.
 
-    The server sends `openbotModel: {"model": ..., "reasoningEffort": ...}` on both of this
+    The server sends `xiongbaoModel: {"model": ..., "reasoningEffort": ...}` on both of this
     harness's paths and strips any a browser supplied, so it is the deployment's decision. A value
     of another shape is ignored. An effort the SDK does not take is not sent, and no effort means
     the model's own default.
     """
     props = forwarded_props if isinstance(forwarded_props, dict) else {}
-    choice = props.get("openbotModel")
+    choice = props.get("xiongbaoModel")
     if not isinstance(choice, dict):
         return None
     model = choice.get("model")
@@ -868,7 +868,7 @@ class OpenBotClaudeAgentAdapter(ClaudeAgentAdapter):
         async with lock:
             answer_only = (
                 self._model_only
-                and (input_data.forwarded_props or {}).get("openbotAnswerOnly") is True
+                and (input_data.forwarded_props or {}).get("xiongbaoAnswerOnly") is True
             )
             turn = self._turns.get(thread_id)
             if turn is not None and turn.task.done():

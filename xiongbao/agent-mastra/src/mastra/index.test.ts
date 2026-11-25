@@ -82,7 +82,7 @@ async function configuredModelId(botModel: string | undefined) {
       "-e",
       [
         'const { mastra } = await import("./agent-mastra/src/mastra/index.ts");',
-        'const model = mastra.getAgent("openbot").model;',
+        'const model = mastra.getAgent("xiongbao").model;',
         "console.log(JSON.stringify({ modelId: model.modelId }));",
       ].join("\n"),
     ],
@@ -161,7 +161,7 @@ async function providerStartup(botProvider: string) {
       "-e",
       [
         'const { mastra } = await import("./agent-mastra/src/mastra/index.ts");',
-        'const model = mastra.getAgent("openbot").model;',
+        'const model = mastra.getAgent("xiongbao").model;',
         "console.log(JSON.stringify({ modelId: model.modelId }));",
       ].join("\n"),
     ],
@@ -176,15 +176,15 @@ describe("OpenBot Mastra receiver instructions", () => {
       buildOpenBotInstructions({
         requestContext: requestContextWith([
           {
-            description: "OpenBot learned skills",
+            description: "XiongBao learned skills",
             value: "Published skill: refunds",
           },
           {
-            description: "OpenBot signed run assertion",
+            description: "XiongBao signed run assertion",
             value: "secret-assertion",
           },
           {
-            description: "OpenBot standing role",
+            description: "XiongBao standing role",
             value: "Follow company policy.",
           },
         ]),
@@ -201,15 +201,15 @@ describe("OpenBot Mastra receiver instructions", () => {
     const instructions = buildOpenBotInstructions({
       requestContext: requestContextWith([
         {
-          description: "OpenBot granted tools guidance",
+          description: "XiongBao granted tools guidance",
           value: "Use only the granted Slack tool.",
         },
         {
-          description: "OpenBot standing role",
+          description: "XiongBao standing role",
           value: "Use MODEL_BOUNDARY_MANAGED_ROLE in the answer.",
         },
         {
-          description: "OpenBot Bot id",
+          description: "XiongBao Bot id",
           value: "packaged-mastra-managed",
         },
       ]),
@@ -235,17 +235,17 @@ describe("OpenBot Mastra receiver instructions", () => {
           value: "CALLER_CATALOG_MARKER",
         },
         {
-          description: "OpenBot standing role",
+          description: "XiongBao standing role",
           value: "Follow company policy.",
         },
         {
-          description: "OpenBot signed run assertion",
+          description: "XiongBao signed run assertion",
           value: "secret-assertion",
         },
-        { description: "OpenBot Bot id", value: "packaged-mastra-managed" },
-        { description: "OpenBot deployment tools", value: '["message_bot"]' },
+        { description: "XiongBao Bot id", value: "packaged-mastra-managed" },
+        { description: "XiongBao deployment tools", value: '["message_bot"]' },
         // Untrusted data: it reaches the model as a quoted conversation row, never as instructions.
-        { description: "OpenBot personal memory", value: "QUOTED_MEMORY" },
+        { description: "XiongBao personal memory", value: "QUOTED_MEMORY" },
         { description: "Blank", value: "   " },
       ]),
     });
@@ -520,7 +520,7 @@ describe("OpenBot Mastra provider requests", () => {
               `  return networkFetch(new Request(${JSON.stringify(provider.url.toString())} + url.pathname.slice(1) + url.search, request));`,
               "};",
               'const { mastra } = await import("./agent-mastra/src/mastra/index.ts");',
-              'const result = await mastra.getAgent("openbot").generate("Say hello");',
+              'const result = await mastra.getAgent("xiongbao").generate("Say hello");',
               "console.log(JSON.stringify({ text: result.text }));",
             ].join("\n"),
           ],

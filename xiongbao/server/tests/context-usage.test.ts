@@ -315,7 +315,7 @@ describe("prompt shares", () => {
           { id: "m3", role: "tool", content: "result", toolCallId: "c1" },
         ],
         context: [
-          { description: "OpenBot personal memory", value: "likes tea" },
+          { description: "XiongBao personal memory", value: "likes tea" },
           { description: "Name", value: "Ann" },
         ],
         state: {},

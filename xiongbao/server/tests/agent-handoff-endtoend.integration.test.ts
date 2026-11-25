@@ -746,7 +746,7 @@ describe("G01: whose work a sweep is doing", () => {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          "x-openbot-agent-token": TOKEN,
+          "x-xiongbao-agent-token": TOKEN,
         },
         body: JSON.stringify({
           name,

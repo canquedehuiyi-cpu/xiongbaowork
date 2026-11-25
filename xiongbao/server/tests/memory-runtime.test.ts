@@ -93,7 +93,7 @@ test("disabled or deleted memory removes stale replayed context", async () => {
     content: "deleted fact",
   });
   request.context.push({
-    description: "OpenBot personal memory",
+    description: "XiongBao personal memory",
     value: "deleted fact",
   });
   const next = await run(async () => "", request);

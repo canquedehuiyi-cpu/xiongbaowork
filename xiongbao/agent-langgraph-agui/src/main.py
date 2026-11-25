@@ -36,7 +36,7 @@ from .tool_runtime import (
     provider_refusal,
 )
 
-TOKEN_HEADER = "x-openbot-agent-token"
+TOKEN_HEADER = "x-xiongbao-agent-token"
 
 # Provider names supported by LangChain's public init_chat_model contract. A colon in an opaque
 # compatible model ID (for example qwen2.5:1.5b) is not a provider separator.
@@ -169,7 +169,7 @@ def _chatgpt_auth_file(store: str) -> Path:
 def _model(plan_models=None):
     """The model this Bot thinks with, chosen by which credential the deployment gave it.
 
-    THE SERVER CHOOSES FIRST. A run that carries `openbotModel` (`current_tools().model` and
+    THE SERVER CHOOSES FIRST. A run that carries `xiongbaoModel` (`current_tools().model` and
     `.effort`) answers on that model, at that effort, on whichever credential the deployment has;
     the server only sends a model that credential offers. A run without one answers on the
     deployment's configuration below, as every run did before the server chose.

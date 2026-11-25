@@ -939,7 +939,7 @@ export function createAgentRoutes(
       typeof body?.endpoint === "string" &&
       isManagedEndpoint(body.endpoint, managedRun.endpoints);
     const headers = {
-      ...(ours ? { "x-openbot-agent-token": managedRun.token } : {}),
+      ...(ours ? { "x-xiongbao-agent-token": managedRun.token } : {}),
       ...parsed.value,
     };
     const result = await testAgentConnection(body?.endpoint, {

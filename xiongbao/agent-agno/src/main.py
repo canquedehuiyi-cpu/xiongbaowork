@@ -25,7 +25,7 @@ from fastapi.responses import JSONResponse
 from .conversation import PausedRunsDb, add_run_context
 from .conversation import install as answer_from_the_whole_thread
 
-TOKEN_HEADER = "x-openbot-agent-token"
+TOKEN_HEADER = "x-xiongbao-agent-token"
 
 
 def _model_id() -> str:

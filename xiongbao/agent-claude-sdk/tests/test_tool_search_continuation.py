@@ -91,7 +91,7 @@ def step(run, tools, search_result=None):
                 for name in tools
             ],
             "context": [],
-            "forwardedProps": {"openbotModelOnly": True},
+            "forwardedProps": {"xiongbaoModelOnly": True},
         }
     )
 

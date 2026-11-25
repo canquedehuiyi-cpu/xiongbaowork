@@ -21,7 +21,7 @@ import { map, Observable, type Subscription } from "rxjs";
 import type { AcquireLearnedSkills, LearnedSkillInvocation } from "./runtime";
 
 const CATALOG_ID = "openbot:learned-skills";
-const CATALOG_CONTEXT = "OpenBot learned skills";
+const CATALOG_CONTEXT = "XiongBao learned skills";
 const RESERVED_TOOLS = new Set([
   "copilotkit_load_skill",
   "copilotkit_read_skill_file",

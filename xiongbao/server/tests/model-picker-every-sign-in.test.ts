@@ -112,7 +112,7 @@ async function providers(behaviour: Behaviour) {
       return unauthorised("invalid x-api-key");
     }
     if (url === `${HARNESS}/models`)
-      return headers.get("x-openbot-agent-token") === MANAGED
+      return headers.get("x-xiongbao-agent-token") === MANAGED
         ? Response.json({
             object: "list",
             data: [

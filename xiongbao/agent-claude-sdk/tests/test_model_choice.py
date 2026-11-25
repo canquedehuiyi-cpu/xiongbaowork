@@ -1,6 +1,6 @@
 """The server's choice of model and effort reaches the Claude Code process, on both paths.
 
-The server sends `forwardedProps.openbotModel` on every run: to `/model` for its built-in Bots on a
+The server sends `forwardedProps.xiongbaoModel` on every run: to `/model` for its built-in Bots on a
 Claude plan, and to `/` when this harness is the Bot a person chats with. What the choice must
 reach is the command the SDK starts Claude Code with (`--model`, `--effort`), so that is what is
 checked, built by the SDK's own transport from the options this adapter makes. Queries run against
@@ -58,7 +58,7 @@ def flag(cmd, name):
 )
 def test_the_servers_choice_reaches_claude_code(model_only, choice, model, effort):
     adapter = OpenBotClaudeAgentAdapter(name="choice", model_only=model_only)
-    options = adapter.build_options(run_input({"openbotModel": choice}), "thread")
+    options = adapter.build_options(run_input({"xiongbaoModel": choice}), "thread")
 
     assert (options.model, options.effort) == (model, effort)
     cmd = command(options)
@@ -69,7 +69,7 @@ def test_the_servers_choice_reaches_claude_code(model_only, choice, model, effor
 
 @pytest.mark.parametrize("model_only", [True, False])
 @pytest.mark.parametrize(
-    "props", [{}, {"openbotModel": {"model": 5}}, {"openbotModel": "claude-opus-5-5"}]
+    "props", [{}, {"xiongbaoModel": {"model": 5}}, {"xiongbaoModel": "claude-opus-5-5"}]
 )
 def test_without_a_choice_claude_code_keeps_its_own_model(model_only, props):
     adapter = OpenBotClaudeAgentAdapter(name="choice", model_only=model_only)
@@ -83,7 +83,7 @@ def test_without_a_choice_claude_code_keeps_its_own_model(model_only, props):
 def test_the_servers_choice_wins_over_a_forwarded_model():
     adapter = OpenBotClaudeAgentAdapter(name="choice")
     options = adapter.build_options(
-        run_input({"model": "claude-haiku-4-5", "openbotModel": {"model": "claude-opus-5-5"}}),
+        run_input({"model": "claude-haiku-4-5", "xiongbaoModel": {"model": "claude-opus-5-5"}}),
         "thread",
     )
 
@@ -97,13 +97,13 @@ def test_a_choice_changed_between_runs_starts_the_next_query_on_it(sdk, model_on
         adapter = OpenBotClaudeAgentAdapter(name="choice", model_only=model_only)
         try:
             first = request(run="run-1", tool_count=0)
-            first.forwarded_props = {"openbotModel": {"model": "claude-sonnet-5", "reasoningEffort": "high"}}
+            first.forwarded_props = {"xiongbaoModel": {"model": "claude-sonnet-5", "reasoningEffort": "high"}}
             assert (await events(adapter, first))[-1].type == "RUN_FINISHED"
             second = request(run="run-2", tool_count=0)
-            second.forwarded_props = {"openbotModel": {"model": "claude-opus-5-5", "reasoningEffort": "low"}}
+            second.forwarded_props = {"xiongbaoModel": {"model": "claude-opus-5-5", "reasoningEffort": "low"}}
             assert (await events(adapter, second))[-1].type == "RUN_FINISHED"
             third = request(run="run-3", tool_count=0)
-            third.forwarded_props = {"openbotModel": {"model": "claude-opus-5-5"}}
+            third.forwarded_props = {"xiongbaoModel": {"model": "claude-opus-5-5"}}
             assert (await events(adapter, third))[-1].type == "RUN_FINISHED"
 
             assert [(client.options.model, client.options.effort) for client in sdk] == [
@@ -123,11 +123,11 @@ def test_a_tool_result_sent_with_another_model_moves_the_running_query_to_it(sdk
         adapter = OpenBotClaudeAgentAdapter(name="choice", model_only=model_only)
         try:
             first = request(run="run-1")
-            first.forwarded_props = {"openbotModel": {"model": "claude-sonnet-5"}}
+            first.forwarded_props = {"xiongbaoModel": {"model": "claude-sonnet-5"}}
             assert any(event.type == "TOOL_CALL_END" for event in await events(adapter, first))
 
             same = request(run="run-2", results=[("thread-a-tool-0", "page title")])
-            same.forwarded_props = {"openbotModel": {"model": "claude-opus-5-5"}}
+            same.forwarded_props = {"xiongbaoModel": {"model": "claude-opus-5-5"}}
             resumed = await events(adapter, same)
 
             assert resumed[-1].type == "RUN_FINISHED"
@@ -146,10 +146,10 @@ def test_a_tool_result_on_the_same_model_leaves_the_query_alone(sdk, model_only)
         adapter = OpenBotClaudeAgentAdapter(name="choice", model_only=model_only)
         try:
             first = request(run="run-1")
-            first.forwarded_props = {"openbotModel": {"model": "claude-sonnet-5"}}
+            first.forwarded_props = {"xiongbaoModel": {"model": "claude-sonnet-5"}}
             await events(adapter, first)
             same = request(run="run-2", results=[("thread-a-tool-0", "page title")])
-            same.forwarded_props = {"openbotModel": {"model": "claude-sonnet-5"}}
+            same.forwarded_props = {"xiongbaoModel": {"model": "claude-sonnet-5"}}
             assert (await events(adapter, same))[-1].type == "RUN_FINISHED"
 
             assert sdk[0].models_set == []

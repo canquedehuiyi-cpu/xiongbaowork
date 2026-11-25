@@ -218,7 +218,7 @@ def plan(monkeypatch, tmp_path):
 def run_body(*, model=None, tools=(), content="Say hello."):
     props = {"openbotRun": "synthetic-run-assertion"}
     if model is not None:
-        props["openbotModel"] = model
+        props["xiongbaoModel"] = model
     return {
         "threadId": str(uuid4()),
         "runId": str(uuid4()),
@@ -241,7 +241,7 @@ async def run(body):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=main.app), base_url="http://harness"
     ) as client:
-        response = await client.post("/", json=body, headers={"x-openbot-agent-token": TOKEN})
+        response = await client.post("/", json=body, headers={"x-xiongbao-agent-token": TOKEN})
     assert response.status_code == 200
     return [
         json.loads(line[6:]) for line in response.text.splitlines() if line.startswith("data: ")
@@ -260,7 +260,7 @@ async def get(path, token=TOKEN):
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=main.app), base_url="http://harness"
     ) as client:
-        headers = {"x-openbot-agent-token": token} if token else {}
+        headers = {"x-xiongbao-agent-token": token} if token else {}
         return await client.get(path, headers=headers)
 
 
@@ -311,7 +311,7 @@ async def test_the_servers_model_and_effort_reach_the_codex_backend(plan, choice
     body = plan.answers[0]["body"]
     assert body["model"] == "gpt-5.6-terra"
     assert body.get("reasoning") == reasoning
-    assert "openbotModel" not in json.dumps(events), "server props never reach the snapshot"
+    assert "xiongbaoModel" not in json.dumps(events), "server props never reach the snapshot"
 
 
 @pytest.mark.asyncio

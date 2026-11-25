@@ -347,7 +347,7 @@ export function parseAgentToolCallInput(
  * an agent may only act as the Bot its token was issued for. Everything unclear is a refusal.
  */
 export async function authoriseAgentCall(options: {
-  /** The `x-openbot-agent-token` header, as presented. */
+  /** The `x-xiongbao-agent-token` header, as presented. */
   presented: string;
   /** The `run` field from the body, as presented. */
   run: unknown;

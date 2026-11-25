@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 
 from .adapter import OpenBotClaudeAgentAdapter
 
-TOKEN_HEADER = "x-openbot-agent-token"
+TOKEN_HEADER = "x-xiongbao-agent-token"
 
 
 def _refuse_both_credentials() -> None:

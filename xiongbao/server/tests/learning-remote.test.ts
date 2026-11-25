@@ -27,7 +27,7 @@ const input: RunAgentInput = {
   tools: [],
   context: [],
   forwardedProps: {
-    openbotDeploymentTools: ["governed_action"],
+    xiongbaoDeploymentTools: ["governed_action"],
     openbotRun: "signed",
   },
 };
@@ -102,7 +102,7 @@ describe("remote Automatic Learning delivery", () => {
     expect(remote.inputs).toHaveLength(2);
     for (const request of remote.inputs) {
       expect(request.context).toContainEqual({
-        description: "OpenBot learned skills",
+        description: "XiongBao learned skills",
         value: "catalog revision-one",
       });
       expect(
@@ -440,7 +440,7 @@ test("disabled delivery removes a catalog replayed in a remote message snapshot"
       ],
       context: [
         {
-          description: "OpenBot learned skills",
+          description: "XiongBao learned skills",
           value: "old published catalog",
         },
       ],

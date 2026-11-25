@@ -260,7 +260,7 @@ async function callTool(
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "x-openbot-agent-token": TOOL_TOKEN,
+        "x-xiongbao-agent-token": TOOL_TOKEN,
       },
       /*
        * The deployment's own statement, handed straight back.
@@ -301,9 +301,9 @@ function runAssertionOf(input: RunAgentInput): string {
  */
 function deploymentToolsOf(input: RunAgentInput): Set<string> {
   const props = input.forwardedProps as
-    | { openbotDeploymentTools?: unknown }
+    | { xiongbaoDeploymentTools?: unknown }
     | undefined;
-  const names = props?.openbotDeploymentTools;
+  const names = props?.xiongbaoDeploymentTools;
   return new Set(
     Array.isArray(names)
       ? names.filter((name) => typeof name === "string")

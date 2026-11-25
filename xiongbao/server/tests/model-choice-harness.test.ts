@@ -7,7 +7,7 @@ import { createModelCatalogue } from "../src/model-catalogue";
 /*
  * The model and effort reach the harness that answers: a built-in Bot on a ChatGPT plan, through the
  * plan's harness, and the harness picked in setup when a person talks to it directly. Both are sent
- * `forwardedProps.openbotModel`, decided on the server from the plan's own listing.
+ * `forwardedProps.xiongbaoModel`, decided on the server from the plan's own listing.
  *
  * The plan case is the failure that started this: the harness was left to run `BOT_MODEL=gpt-5.5`,
  * which a ChatGPT plan refuses ("not supported when using Codex with a ChatGPT account"), so every
@@ -26,7 +26,7 @@ function planHarness() {
     hostname: "127.0.0.1",
     port: 0,
     fetch: async (request) => {
-      if (request.headers.get("x-openbot-agent-token") !== "managed-token")
+      if (request.headers.get("x-xiongbao-agent-token") !== "managed-token")
         return Response.json({ error: "unauthorised" }, { status: 401 });
       if (
         request.method === "GET" &&
@@ -139,8 +139,8 @@ test("a built-in Bot on a ChatGPT plan tells the plan's harness a model the plan
     await agent.runAgent();
     expect(harness.runs).toHaveLength(1);
     expect(harness.runs[0]?.forwardedProps).toMatchObject({
-      openbotModelOnly: true,
-      openbotModel: { model: "gpt-6.1-terra" },
+      xiongbaoModelOnly: true,
+      xiongbaoModel: { model: "gpt-6.1-terra" },
     });
     expect(JSON.stringify(harness.runs[0]?.forwardedProps)).not.toContain(
       "gpt-5.5",
@@ -159,7 +159,7 @@ test("a person's model and effort on a plan reach its harness", async () => {
   try {
     await agent.runAgent();
     expect(harness.runs[0]?.forwardedProps).toMatchObject({
-      openbotModel: { model: "gpt-6-luna", reasoningEffort: "high" },
+      xiongbaoModel: { model: "gpt-6-luna", reasoningEffort: "high" },
     });
   } finally {
     harness.server.stop(true);
@@ -211,7 +211,7 @@ async function remoteRuns(
           name: "LangGraph",
           type: "remote_ag_ui",
           endpoint,
-          headers: { "x-openbot-agent-token": "managed-token" },
+          headers: { "x-xiongbao-agent-token": "managed-token" },
           standingMessage: {
             id: "standing-role:picked-harness",
             role: "system",
@@ -252,28 +252,28 @@ async function remoteRuns(
 test("the harness picked in setup is told the person's model and effort", async () => {
   const requests = await remoteRuns(PICKED, {});
   expect(requests[0]?.forwardedProps).toMatchObject({
-    openbotModel: { model: "gpt-6.1-sol", reasoningEffort: "xhigh" },
+    xiongbaoModel: { model: "gpt-6.1-sol", reasoningEffort: "xhigh" },
   });
 });
 
 test("a model the browser names is never what the harness is told", async () => {
   const requests = await remoteRuns(PICKED, {
-    openbotModel: { model: "gpt-6-astra", reasoningEffort: "max" },
+    xiongbaoModel: { model: "gpt-6-astra", reasoningEffort: "max" },
   });
   expect(requests[0]?.forwardedProps).toMatchObject({
-    openbotModel: { model: "gpt-6.1-sol", reasoningEffort: "xhigh" },
+    xiongbaoModel: { model: "gpt-6.1-sol", reasoningEffort: "xhigh" },
   });
 });
 
 test("a Bot on someone else's framework picks its own model and is told nothing", async () => {
   const requests = await remoteRuns("https://their-bot.test/ag-ui", {
-    openbotModel: { model: "gpt-6-astra" },
+    xiongbaoModel: { model: "gpt-6-astra" },
   });
-  expect(requests[0]?.forwardedProps).not.toHaveProperty("openbotModel");
+  expect(requests[0]?.forwardedProps).not.toHaveProperty("xiongbaoModel");
 });
 
 test("a harness somebody brought themselves is told nothing", async () => {
   process.env.PICKED_HARNESS_SOURCE = "byo";
   const requests = await remoteRuns(PICKED, {});
-  expect(requests[0]?.forwardedProps).not.toHaveProperty("openbotModel");
+  expect(requests[0]?.forwardedProps).not.toHaveProperty("xiongbaoModel");
 });

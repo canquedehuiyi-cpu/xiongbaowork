@@ -266,13 +266,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/learning/remote.ts",
-    "text": "\"OpenBot learned skills\"",
-    "reason": "parsed-exact-text: context heading copilot.ts and the agents match verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/plugins/composio-adapter.ts",
     "text": "LEGACY_CONFIG_SUFFIX = \"(OpenBot)\"",
     "reason": "persisted-identifier: suffix of auth configs already created at Composio, still matched (Task 9)",
@@ -322,13 +315,6 @@
     "plan": "keep"
   },
   {
-    "file": "server/src/memory/tools.ts",
-    "text": "\"OpenBot personal memory\"",
-    "reason": "parsed-exact-text: memory context entry the agents match verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
     "file": "server/src/host-access/tools.ts",
     "text": "\"Declined in OpenBot Desktop.\"",
     "reason": "parsed-exact-text: reply an older desktop sends; matched verbatim",
@@ -347,48 +333,6 @@
     "text": "\"app.kubernetes.io/managed-by\": \"openbot\"",
     "reason": "persisted-identifier: Kubernetes label on live sandboxes",
     "category": "persisted-data",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot standing role\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot granted tools guidance\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot Bot id\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot deployment tools\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot signed run assertion\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
-    "plan": "keep"
-  },
-  {
-    "file": "server/src/copilot.ts",
-    "text": "\"OpenBot learned skills\"",
-    "reason": "parsed-exact-text: context heading the agents parse verbatim",
-    "category": "parsed-exact-text",
     "plan": "keep"
   },
   {

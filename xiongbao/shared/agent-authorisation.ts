@@ -15,6 +15,6 @@ export function hasManagedAgentToken(
 ): boolean {
   return matchesToken(
     expected,
-    request.headers.get("x-openbot-agent-token")?.trim() ?? "",
+    request.headers.get("x-xiongbao-agent-token")?.trim() ?? "",
   );
 }

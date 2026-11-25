@@ -25,7 +25,7 @@ type HarnessBody = {
   runId: string;
   tools: unknown[];
   messages: unknown[];
-  forwardedProps: { openbotModelOnly?: boolean };
+  forwardedProps: { xiongbaoModelOnly?: boolean };
 };
 const requests: { path: string; token: string | null; body: HarnessBody }[] =
   [];
@@ -38,7 +38,7 @@ const harness = Bun.serve({
     const body = (await request.json()) as HarnessBody;
     requests.push({
       path: new URL(request.url).pathname,
-      token: request.headers.get("x-openbot-agent-token"),
+      token: request.headers.get("x-xiongbao-agent-token"),
       body,
     });
     const events = [
@@ -174,7 +174,7 @@ test("a Claude plan with no key chooses a run's tools on the plan's harness", as
   expect(requests[0]?.path).toBe("/model");
   expect(requests[0]?.token).toBe("deployment-harness-token");
   expect(requests[0]?.body.tools).toEqual([]);
-  expect(requests[0]?.body.forwardedProps.openbotModelOnly).toBe(true);
+  expect(requests[0]?.body.forwardedProps.xiongbaoModelOnly).toBe(true);
   expect(JSON.stringify(requests[0]?.body.messages)).toContain(
     "You choose which capabilities to load",
   );

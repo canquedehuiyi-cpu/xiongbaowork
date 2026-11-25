@@ -42,7 +42,7 @@ def _app(monkeypatch, environment, base):
 
 
 def _post(client, body):
-    response = client.post("/", json=body, headers={"x-openbot-agent-token": TOKEN})
+    response = client.post("/", json=body, headers={"x-xiongbao-agent-token": TOKEN})
     assert response.status_code == 200
     assert [e["type"] for e in run_events(response.text) if e["type"].startswith("RUN_")] == [
         "RUN_STARTED",
@@ -181,7 +181,7 @@ def test_a_row_the_run_also_sends_as_context_is_said_once(monkeypatch):
     records = f"Personal memory. {memory}"
     body = conversation()
     body["messages"].insert(0, {"id": "openbot:personal-memory", "role": "system", "content": records})
-    body["context"] = [{"description": "OpenBot personal memory", "value": records}]
+    body["context"] = [{"description": "XiongBao personal memory", "value": records}]
 
     with fake_provider() as (base, bodies):
         _post(TestClient(_app(monkeypatch, openai_environment, base)), body)

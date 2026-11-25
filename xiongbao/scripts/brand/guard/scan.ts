@@ -50,10 +50,8 @@ export const SIGNING_DOMAINS = [
   "openbot computer token v1",
 ];
 
-// Wire headers peers send and read (Global Constraints「绝对不改」).
-export const WIRE_HEADERS = [
-  "x-openbot-agent-token",
-];
+// Wire headers peers send and read: the server and every managed Bot image must spell them the same.
+export const WIRE_HEADERS = ["x-xiongbao-agent-token"];
 
 // The holder is the delivered tenant package's company (brand.ts copyrightLine), read from the package rather than
 // spelled here, so renaming the company moves the expected line with it instead of failing on a stale literal.

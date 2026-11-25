@@ -671,7 +671,7 @@ services:
       # there either way; this variable is what tells the harness to read it.
       CHATGPT_AUTH_FILE: ${CHATGPT_AUTH_FILE:-}
       # Empty when nobody named one, never a stand-in that looks like a choice. The server sends the
-      # model on every run (`forwardedProps.openbotModel`): the one named here when the credential
+      # model on every run (`forwardedProps.xiongbaoModel`): the one named here when the credential
       # lists it, otherwise the middle of the provider's line. A stand-in here was how a ChatGPT
       # plan ran gpt-5.5, which it refuses.
       BOT_MODEL: ${BOT_MODEL:-}

@@ -444,7 +444,7 @@ describe("the default and the thinking levels, from the providers' own data", ()
     });
     expect(
       calls.find((call) => call.url.includes("agent-harness"))?.headers[
-        "x-openbot-agent-token"
+        "x-xiongbao-agent-token"
       ],
     ).toBe("managed-token");
     // A run on the default is sent the plan's model, never the stale configured one.

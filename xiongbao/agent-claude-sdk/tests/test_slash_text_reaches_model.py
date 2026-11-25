@@ -134,7 +134,7 @@ def _run(app, path, body):
         ) as client:
             return await client.post(
                 path,
-                headers={"x-openbot-agent-token": TOKEN, "accept": "text/event-stream"},
+                headers={"x-xiongbao-agent-token": TOKEN, "accept": "text/event-stream"},
                 json=body,
             )
 
@@ -178,7 +178,7 @@ def test_a_built_in_bot_on_a_claude_plan_is_answered_by_the_model(app, messages_
                     "value": f"You are Personal Assistant.\n\n{GUIDANCE}",
                 }
             ],
-            "forwardedProps": {"openbotModelOnly": True, "openbotBotId": "personal-assistant"},
+            "forwardedProps": {"xiongbaoModelOnly": True, "xiongbaoBotId": "personal-assistant"},
         },
     )
     assert "Unknown command" not in answer

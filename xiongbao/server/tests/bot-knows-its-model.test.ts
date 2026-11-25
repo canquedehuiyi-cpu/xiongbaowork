@@ -271,7 +271,7 @@ function planHarness() {
     hostname: "127.0.0.1",
     port: 0,
     fetch: async (request) => {
-      if (request.headers.get("x-openbot-agent-token") !== "managed-token")
+      if (request.headers.get("x-xiongbao-agent-token") !== "managed-token")
         return Response.json({ error: "unauthorised" }, { status: 401 });
       if (
         request.method === "GET" &&
@@ -419,7 +419,7 @@ describe("a Bot on a harness this deployment runs", () => {
               name: "Personal Assistant",
               type: "remote_ag_ui",
               endpoint,
-              headers: { "x-openbot-agent-token": "managed-token" },
+              headers: { "x-xiongbao-agent-token": "managed-token" },
               standingMessage: {
                 id: "standing-role:picked-harness",
                 role: "system",

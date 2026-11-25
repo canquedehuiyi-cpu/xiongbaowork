@@ -44,13 +44,13 @@ def _post(app, path, headers):
 
 
 def test_the_correct_token_reaches_the_route(app):
-    response = _post(app, "/model/cancel", {"x-openbot-agent-token": TOKEN})
+    response = _post(app, "/model/cancel", {"x-xiongbao-agent-token": TOKEN})
     assert response.status_code == 200
     assert response.json() == {"ok": True}
 
 
 def test_a_wrong_token_is_rejected(app):
-    response = _post(app, "/model/cancel", {"x-openbot-agent-token": "wrong-token"})
+    response = _post(app, "/model/cancel", {"x-xiongbao-agent-token": "wrong-token"})
     assert response.status_code == 401
 
 
@@ -61,11 +61,11 @@ def test_a_missing_token_is_rejected(app):
 
 def test_a_non_ascii_token_is_rejected_not_a_server_error(app):
     """`hmac.compare_digest` raises on a non-ASCII `str`; comparing bytes never does."""
-    response = _post(app, "/model/cancel", {"x-openbot-agent-token": b"\xe9\xe9\xe9\xe9"})
+    response = _post(app, "/model/cancel", {"x-xiongbao-agent-token": b"\xe9\xe9\xe9\xe9"})
     assert response.status_code == 401
 
 
-@pytest.mark.parametrize("headers", [{}, {"x-openbot-agent-token": "wrong-token"}])
+@pytest.mark.parametrize("headers", [{}, {"x-xiongbao-agent-token": "wrong-token"}])
 def test_health_stays_exempt_regardless_of_token(app, headers):
     async def send():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://harness") as client:

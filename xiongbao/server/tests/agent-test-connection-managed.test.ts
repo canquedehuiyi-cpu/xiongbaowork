@@ -36,7 +36,7 @@ describe("testing an address this deployment runs", () => {
     return Bun.serve({
       port: 0,
       fetch: (request: Request) =>
-        request.headers.get("x-openbot-agent-token") === TOKEN
+        request.headers.get("x-xiongbao-agent-token") === TOKEN
           ? new Response('data: {"type":"RUN_STARTED"}\n\n', {
               headers: { "content-type": "text/event-stream" },
             })
@@ -119,7 +119,7 @@ describe("testing an address this deployment runs", () => {
     const agent = Bun.serve({
       port: 0,
       fetch: (request: Request) => {
-        offered = request.headers.get("x-openbot-agent-token");
+        offered = request.headers.get("x-xiongbao-agent-token");
         return new Response('data: {"type":"RUN_STARTED"}\n\n', {
           headers: { "content-type": "text/event-stream" },
         });
@@ -140,7 +140,7 @@ describe("testing an address this deployment runs", () => {
     const agent = Bun.serve({
       port: 0,
       fetch: (request: Request) => {
-        offered = request.headers.get("x-openbot-agent-token");
+        offered = request.headers.get("x-xiongbao-agent-token");
         return new Response('data: {"type":"RUN_STARTED"}\n\n', {
           headers: { "content-type": "text/event-stream" },
         });

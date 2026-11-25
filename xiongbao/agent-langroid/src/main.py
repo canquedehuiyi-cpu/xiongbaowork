@@ -18,7 +18,7 @@ from langroid.language_models import OpenAIGPTConfig
 
 from .frontend_tools import FrontendToolsAgent
 
-TOKEN_HEADER = "x-openbot-agent-token"
+TOKEN_HEADER = "x-xiongbao-agent-token"
 
 
 def _model_id() -> str:

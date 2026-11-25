@@ -467,7 +467,7 @@ beforeAll(async () => {
   if (harness?.type !== "remote_ag_ui")
     throw new Error("The harness Bot did not register.");
   // What `runtime-agents.ts` attaches to an endpoint this deployment runs.
-  harness.headers = { "x-openbot-agent-token": MANAGED_AGENT_TOKEN };
+  harness.headers = { "x-xiongbao-agent-token": MANAGED_AGENT_TOKEN };
   roster.push(harness);
 
   runtime = mountCopilotRuntime(

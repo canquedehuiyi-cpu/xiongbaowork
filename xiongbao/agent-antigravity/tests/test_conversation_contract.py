@@ -121,7 +121,7 @@ def fresh_bot(monkeypatch, tmp_path, replies=(), slow=None):
         with TestClient(main.app) as client:
 
             def post(body):
-                response = client.post("/", json=body, headers={"x-openbot-agent-token": TOKEN})
+                response = client.post("/", json=body, headers={"x-xiongbao-agent-token": TOKEN})
                 assert response.status_code == 200
                 return run_events(response.text)
 

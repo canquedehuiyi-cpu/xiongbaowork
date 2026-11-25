@@ -16,7 +16,7 @@ from ag2.config import AnthropicConfig, OpenAIConfig
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-TOKEN_HEADER = "x-openbot-agent-token"
+TOKEN_HEADER = "x-xiongbao-agent-token"
 
 
 def _config() -> AnthropicConfig | OpenAIConfig:

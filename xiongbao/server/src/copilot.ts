@@ -582,7 +582,7 @@ function runByThisDeployment(agent: RegisteredAgent): boolean {
   return (
     (agent.type === "remote_ag_ui" || agent.type === "remote_mastra") &&
     !!token &&
-    agent.headers?.["x-openbot-agent-token"] === token
+    agent.headers?.["x-xiongbao-agent-token"] === token
   );
 }
 
@@ -2449,7 +2449,7 @@ async function buildAgent(
       pickedModel &&
         takesModelChoice(agent.endpoint) &&
         process.env.MANAGED_AGENT_TOKEN &&
-        agent.headers?.["x-openbot-agent-token"] ===
+        agent.headers?.["x-xiongbao-agent-token"] ===
           process.env.MANAGED_AGENT_TOKEN
         ? async (input) => {
             const choice = await pickedModel(input, agent.id);
@@ -3443,7 +3443,7 @@ function remoteAgentWithStandingRole(
   holdsTools?: HoldsTools,
   /**
    * The model and effort this run answers on, for a harness this deployment runs that takes them
-   * (`takesModelChoice`). Sent as `forwardedProps.openbotModel`, and the model's `label` named in
+   * (`takesModelChoice`). Sent as `forwardedProps.xiongbaoModel`, and the model's `label` named in
    * the standing role (`modelGuidance`). Absent for every other remote Bot, which picks its own
    * model, so XiongBao names none.
    */
@@ -3451,7 +3451,7 @@ function remoteAgentWithStandingRole(
     | {
         model: string;
         reasoningEffort?: string;
-        /** What the composer's model picker calls it. Never sent on `openbotModel`. */
+        /** What the composer's model picker calls it. Never sent on `xiongbaoModel`. */
         label?: string;
       }
     | undefined
@@ -3564,7 +3564,7 @@ function remoteAgentWithStandingRole(
     );
     const forwardedProps = {
       ...(isPlainObject(input.forwardedProps) ? input.forwardedProps : {}),
-      openbotBotId: agent.id,
+      xiongbaoBotId: agent.id,
       /*
        * Which of those tools this deployment runs, as opposed to the surface.
        *
@@ -3574,7 +3574,7 @@ function remoteAgentWithStandingRole(
        * could not, and then apologised to the person for not showing the chart that was on screen
        * in front of them. Only this side knows which is which, so only this side can say.
        */
-      openbotDeploymentTools: deploymentTools,
+      xiongbaoDeploymentTools: deploymentTools,
       /*
        * This deployment's own statement of what this run is.
        *
@@ -3596,7 +3596,7 @@ function remoteAgentWithStandingRole(
     // Nor one it carried in: a statement copied from another run would still be accepted.
     if (!held) delete forwardedProps.openbotRun;
     // The model is this deployment's decision, never the request's. Set below when it applies.
-    delete (forwardedProps as Record<string, unknown>).openbotModel;
+    delete (forwardedProps as Record<string, unknown>).xiongbaoModel;
     /*
      * The same guard a built-in Bot gets in `BuiltInAgentWithSaneHistory`, applied here because a
      * remote Bot never passes through it: this middleware is the last thing between the browser's
@@ -3746,7 +3746,7 @@ function remoteAgentWithStandingRole(
               : input.context,
           // Who the Bot is calling back as, so the audit row names it rather than "an agent".
           forwardedProps: chosenModel
-            ? { ...forwardedProps, openbotModel: chosenModel }
+            ? { ...forwardedProps, xiongbaoModel: chosenModel }
             : forwardedProps,
         };
         if (answeredHere.length === 0) return next.run(prepared);
@@ -3824,7 +3824,7 @@ function remoteAgentWithStandingRole(
       );
       const owned =
         !!process.env.MANAGED_AGENT_TOKEN &&
-        agent.headers?.["x-openbot-agent-token"] ===
+        agent.headers?.["x-xiongbao-agent-token"] ===
           process.env.MANAGED_AGENT_TOKEN &&
         [
           process.env.PICKED_HARNESS_URL,
@@ -3859,12 +3859,12 @@ function remoteAgentWithStandingRole(
 }
 
 const RESERVED_MASTRA_CONTEXT_DESCRIPTIONS = new Set([
-  "OpenBot standing role",
-  "OpenBot granted tools guidance",
-  "OpenBot Bot id",
-  "OpenBot deployment tools",
-  "OpenBot signed run assertion",
-  "OpenBot learned skills",
+  "XiongBao standing role",
+  "XiongBao granted tools guidance",
+  "XiongBao Bot id",
+  "XiongBao deployment tools",
+  "XiongBao signed run assertion",
+  "XiongBao learned skills",
 ]);
 
 function callerMastraContext(context: AgentContext[]): AgentContext[] {
@@ -3888,29 +3888,29 @@ function mastraXiongBaoContext({
 }): AgentContext[] {
   return [
     {
-      description: "OpenBot standing role",
+      description: "XiongBao standing role",
       value: standingMessage.content,
     },
     ...(holdingsMessage
       ? [
           {
-            description: "OpenBot granted tools guidance",
+            description: "XiongBao granted tools guidance",
             value: holdingsMessage.content,
           },
         ]
       : []),
     {
-      description: "OpenBot Bot id",
+      description: "XiongBao Bot id",
       value: botId,
     },
     {
-      description: "OpenBot deployment tools",
+      description: "XiongBao deployment tools",
       value: JSON.stringify(deploymentTools),
     },
     ...(runAssertion
       ? [
           {
-            description: "OpenBot signed run assertion",
+            description: "XiongBao signed run assertion",
             value: runAssertion,
           },
         ]
@@ -4182,7 +4182,7 @@ function logRunModel(
 }
 
 /**
- * What a harness is told to run on: the model and effort, as `forwardedProps.openbotModel`. Only
+ * What a harness is told to run on: the model and effort, as `forwardedProps.xiongbaoModel`. Only
  * for a model that came from a listing, so the harness's own fallback applies otherwise.
  */
 export function planChoice(

@@ -84,9 +84,9 @@ export const openbotBaseInstructions =
   "Answer the question you are asked, briefly and correctly.";
 
 const OPENBOT_CONTEXT_DESCRIPTIONS = [
-  "OpenBot standing role",
-  "OpenBot granted tools guidance",
-  "OpenBot learned skills",
+  "XiongBao standing role",
+  "XiongBao granted tools guidance",
+  "XiongBao learned skills",
 ] as const;
 
 type OpenBotInstructionArgs = {
@@ -131,7 +131,7 @@ function isUsableEntry(entry: unknown): entry is ContextEntry {
  * Every other `OpenBot …` entry is for this process, not the model: the Bot id, the deployment's
  * tool list, and the signed run assertion, which is a credential. The server keeps callers out of
  * that namespace (`RESERVED_MASTRA_CONTEXT_DESCRIPTIONS` in server/src/copilot.ts), so the prefix
- * is a safe line to draw. `OpenBot personal memory` is for the model, but as untrusted data, not
+ * is a safe line to draw. `XiongBao personal memory` is for the model, but as untrusted data, not
  * as an instruction: the server sends the same records as a quoted conversation row
  * (`quotedConversationRow` in server/src/copilot.ts), so it stays out of here too. Caller context
  * used to be dropped here altogether, although the server forwards it and every other harness puts
@@ -149,7 +149,7 @@ export function buildOpenBotInstructions({
         .map((entry) => entry.value.trim()),
   );
   const callerInstructions = contextEntries
-    .filter((entry) => !entry.description.startsWith("OpenBot "))
+    .filter((entry) => !entry.description.startsWith("XiongBao "))
     .map((entry) =>
       entry.description.trim()
         ? `${entry.description.trim()}: ${entry.value.trim()}`
@@ -161,9 +161,9 @@ export function buildOpenBotInstructions({
   return [openbotBaseInstructions, ...instructions].join("\n\n");
 }
 
-const openbot = new Agent({
-  id: "openbot",
-  name: "openbot",
+const xiongbao = new Agent({
+  id: "xiongbao",
+  name: "xiongbao",
   instructions: buildOpenBotInstructions,
   model: await buildModel(),
 });
@@ -171,7 +171,7 @@ const openbot = new Agent({
 /** The one header OpenBot's server sends, compared without leaking length through timing. */
 function carriesTheServerToken(request: Request): boolean {
   const expected = (process.env.MANAGED_AGENT_TOKEN ?? "").trim();
-  const offered = (request.headers.get("x-openbot-agent-token") ?? "").trim();
+  const offered = (request.headers.get("x-xiongbao-agent-token") ?? "").trim();
   // Unset means unconfigured, not open.
   if (!expected || offered.length !== expected.length) return false;
   let difference = 0;
@@ -182,7 +182,7 @@ function carriesTheServerToken(request: Request): boolean {
 }
 
 export const mastra = new Mastra({
-  agents: { openbot },
+  agents: { xiongbao },
   server: {
     port: port.port,
     host: "0.0.0.0",

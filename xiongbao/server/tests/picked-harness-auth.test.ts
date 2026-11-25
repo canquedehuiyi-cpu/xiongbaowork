@@ -47,12 +47,12 @@ async function runPicked(options: {
         (path.replace(/\/+$/, "") === "/bundled/ag-ui" ||
           (path.replace(/\/+$/, "") === "/picked/ag-ui" && options.installed));
       const authorized = managed
-        ? request.headers.get("x-openbot-agent-token") === fixtureToken
+        ? request.headers.get("x-xiongbao-agent-token") === fixtureToken
         : options.customerAuth
           ? request.headers.get("Authorization") ===
               "Bearer synthetic-customer-key" &&
-            !request.headers.has("x-openbot-agent-token")
-          : !request.headers.has("x-openbot-agent-token");
+            !request.headers.has("x-xiongbao-agent-token")
+          : !request.headers.has("x-xiongbao-agent-token");
       const status = authorized ? 200 : 401;
       requests.push({
         path,
@@ -319,7 +319,7 @@ test.each([false, true])(
     });
     expect(result.requests.map((request) => request.status)).toEqual([200]);
     expect(result.requests[0]?.headerNames).not.toContain(
-      "x-openbot-agent-token",
+      "x-xiongbao-agent-token",
     );
     expect(result.requests[0]?.headerNames).toContain("authorization");
     expect(result.credentialReads).toBe(1);
@@ -335,7 +335,7 @@ test("an unrelated customer endpoint receives no deployment token", async () => 
   });
   expect(result.requests.map((request) => request.status)).toEqual([200]);
   expect(result.requests[0]?.headerNames).not.toContain(
-    "x-openbot-agent-token",
+    "x-xiongbao-agent-token",
   );
 });
 
@@ -418,7 +418,7 @@ test.each([
     });
     expect(result.requests.map((request) => request.status)).toEqual([200]);
     expect(result.requests[0]?.headerNames).not.toContain(
-      "x-openbot-agent-token",
+      "x-xiongbao-agent-token",
     );
     expect(result.requests[0]?.headerNames).toContain("authorization");
     expect(result.credentialReads).toBe(1);
@@ -435,7 +435,7 @@ test("uppercase BYO endpoints keep customer auth without a deployment token", as
   });
   expect(result.requests.map((request) => request.status)).toEqual([200]);
   expect(result.requests[0]?.headerNames).not.toContain(
-    "x-openbot-agent-token",
+    "x-xiongbao-agent-token",
   );
   expect(result.failed).toBe(false);
 });

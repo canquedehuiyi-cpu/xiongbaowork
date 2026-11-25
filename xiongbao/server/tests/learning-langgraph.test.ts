@@ -114,7 +114,7 @@ for (const framework of ["langgraph", "bot"]) {
       expect(ready).toBe(true);
       const remote = new HttpAgent({
         url: `${endpoint}/ag-ui`,
-        headers: { "x-openbot-agent-token": "synthetic-managed-token" },
+        headers: { "x-xiongbao-agent-token": "synthetic-managed-token" },
       });
       const middleware = new RemoteLearnedSkillsMiddleware("bot", async () => ({
         catalog,
@@ -136,7 +136,7 @@ for (const framework of ["langgraph", "bot"]) {
         tools: [],
         context: [],
         state: {},
-        forwardedProps: { openbotDeploymentTools: [] },
+        forwardedProps: { xiongbaoDeploymentTools: [] },
       };
       const events = await lastValueFrom(
         middleware.run(input, remote).pipe(toArray()),

@@ -92,7 +92,7 @@ def test_crewai_endpoint_preserves_leading_bot_role_for_provider(monkeypatch):
     client = TestClient(main.app)
     response = client.post(
         "/",
-        headers={"x-openbot-agent-token": "test-token"},
+        headers={"x-xiongbao-agent-token": "test-token"},
         json=run_input(
             [
                 {

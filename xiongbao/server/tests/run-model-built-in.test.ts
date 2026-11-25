@@ -170,7 +170,7 @@ test("a run asks the provider for the model the person picked", async () => {
 });
 
 test("a model the request names is not the one asked for", async () => {
-  await run({ openbotModel: "gpt-4o", model: "openai/gpt-4o" }, undefined);
+  await run({ xiongbaoModel: "gpt-4o", model: "openai/gpt-4o" }, undefined);
   expect(modelsAsked()).toEqual(["gpt-5.5"]);
 });
 

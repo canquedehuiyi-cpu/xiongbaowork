@@ -216,7 +216,7 @@ test("the original built-in executes its granted tool and sends the actual match
     port: 0,
     fetch: async (request) => {
       const body = await request.json();
-      expect(request.headers.get("x-openbot-agent-token")).toBe("owned-token");
+      expect(request.headers.get("x-xiongbao-agent-token")).toBe("owned-token");
       requests.push(body);
       const events =
         requests.length === 1
@@ -313,8 +313,8 @@ test("the original built-in executes its granted tool and sends the actual match
       }),
     );
     expect(requests[0]?.forwardedProps).toEqual({
-      openbotModelOnly: true,
-      openbotBotId: "knowledge",
+      xiongbaoModelOnly: true,
+      xiongbaoBotId: "knowledge",
     });
     expect(agent.messages.at(-1)).toMatchObject({
       content: "Policy 42 [source].",
