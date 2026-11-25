@@ -31,4 +31,4 @@ while IFS= read -r line; do
 done < "$ROOT/.env.personal.example"
 
 printf '\033[32m%s\033[0m\n' "Set .env up for the personal edition."
-printf '%s\n' "Fill in OPENAI_API_KEY and the Intelligence settings in .env, then run: bash scripts/start.sh"
+printf '%s\n' "Fill in OPENAI_API_KEY in .env, then run: bash scripts/start.sh"

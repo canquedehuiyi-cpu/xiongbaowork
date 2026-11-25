@@ -265,21 +265,6 @@ jobs:
             --values charts/xiongbao/ci/vanilla-values.yaml \
             > rendered-generated.yaml
           bun scripts/check-rendered-chart.ts rendered-generated.yaml
-      # No target names a Learning credential, so the setup Job renders nowhere above. Render it with
-      # one of each, and hold it to the same coherence check.
-      - name: Learning setup Job renders
-        run: |
-          helm template ci charts/xiongbao \
-            --values charts/xiongbao/ci/${{ matrix.target }}-values.yaml \
-            --set-string secrets.keyEncryptionKey="$(openssl rand -base64 32)" \
-            --api-versions agents.x-k8s.io/v1beta1/Sandbox \
-            --api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate \
-            --set-string config.learning.setup.cliLoginSecret.name=xiongbao-copilotkit-cli \
-            --set-string config.learning.setup.serviceTokenSecret.name=intelligence-service-token \
-            --set-string config.learning.setup.projectId=7 \
-            > rendered-learning.yaml
-          grep -q 'app.kubernetes.io/component: learning-setup' rendered-learning.yaml
-          bun scripts/check-rendered-chart.ts rendered-learning.yaml
       # And that the refusals are load-bearing rather than decorative. A chart full of `fail`
       # messages nothing ever triggers is a chart that has never been shown to refuse anything, and
       # every one of these describes a state that shipped in a values file at some point.
@@ -364,8 +349,6 @@ jobs:
             --set config.opentag.enabled=true
           refuses "SCIM switched on with no bearer token" \
             --set config.scim.enabled=true
-          refuses "a Learning service token with no project to create the container in" \
-            --set-string config.learning.setup.serviceTokenSecret.name=intelligence-service-token
           # The rest are refusals the server makes at boot, mirrored so the value is named at install.
           refuses "an OpenTag URL with the pairing switched off" \
             --set-string config.opentag.url=https://opentag.example.com
@@ -376,40 +359,6 @@ jobs:
             --set-string config.push.projectId=not-a-uuid
           refuses "a delivery public URL that is not http(s)" \
             --set-string config.deliveryPublicUrl=hooks.example.com
-          # The bundled Intelligence beside one somebody named, and without the licence a self-hosted
-          # Intelligence needs. This fork leaves the bundled one off by default (Intelligence is
-          # optional, R0), so it is switched on here, on the targets that do not name one of their own.
-          if ! grep -qE '^ *enabled: false' <(sed -n '/^intelligence:/,/^[a-z]/p' charts/xiongbao/ci/${{ matrix.target }}-values.yaml); then
-            refuses "the bundled Intelligence beside an Intelligence address of your own" \
-              --set intelligence.enabled=true \
-              --set-string config.intelligence.apiUrl=https://api.intelligence.copilotkit.ai
-            refuses "the bundled Intelligence with no licence for it" \
-              --set intelligence.enabled=true \
-              --set-string secrets.licenseToken= \
-              --set-string intelligence.appApi.licenseSecret.existingSecret=xiongbao-intel-license
-            refuses "the bundled Intelligence with no project key for XiongBao" \
-              --set intelligence.enabled=true \
-              --set intelligence.bootstrap.projects=null
-          else
-            echo "skipped: the bundled-Intelligence refusals are armed only where the target does not name its own"
-          fi
-          # No Intelligence at all is a deployment this fork supports (threads stay in PostgreSQL), so
-          # it must render rather than be refused.
-          if ! helm template ci charts/xiongbao \
-               --values charts/xiongbao/ci/${{ matrix.target }}-values.yaml \
-               --set-string secrets.keyEncryptionKey="$(openssl rand -base64 32)" \
-               --api-versions agents.x-k8s.io/v1beta1/Sandbox \
-               --api-versions extensions.agents.x-k8s.io/v1beta1/SandboxTemplate \
-               --set intelligence.enabled=false \
-               --set-string config.intelligence.apiUrl= --set-string config.intelligence.gatewayWsUrl= \
-               --set-string secrets.intelligenceApiKey= >/dev/null; then
-            echo "::error::The chart refused a deployment with no Intelligence, which this fork supports."
-            exit 1
-          fi
-          echo "rendered: no Intelligence at all"
-          # A release from before the bundled Intelligence, upgraded with --reuse-values: refused by
-          # name rather than installing a second Intelligence on that chart's bare defaults.
-          refuses "a release with no intelligence.enabled" --set intelligence=null
           # A warm pool nothing claims from. Only meaningful where the target asks for per-Bot
           # computers; on the others the mode is not sandbox and the refusal is not armed.
           if grep -qE '^ *mode: sandbox' charts/xiongbao/ci/${{ matrix.target }}-values.yaml; then

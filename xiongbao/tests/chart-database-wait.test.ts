@@ -5,7 +5,7 @@
  * What must not regress, seen on a fresh vanilla install: the server pods started five seconds after
  * the release did, fifteen seconds before the bundled PostgreSQL was Ready and half a minute before
  * the migrations Job finished. Every first install logged `Failed query: insert into "users"`,
- * `PostgresError: Failed to connect` and a Learning auto-assign error before the server's own retries
+ * `PostgresError: Failed to connect` and the server's own boot errors before its retries
  * recovered, and nothing stopped a server from running against a schema the migrations had not
  * reached yet.
  *  - every workload of this chart that carries DATABASE_URL, on every shipped `ci/` target, is held by
@@ -101,7 +101,7 @@ const TARGETS = ["vanilla", "self-hosted", "eks", "eks-sandbox", "gke", "aks"];
 
 const component = (doc: Doc) =>
   doc.metadata.labels?.["app.kubernetes.io/component"];
-/** This chart's own objects, not the bundled Intelligence's or PostgreSQL's. */
+/** This chart's own objects, not the bundled PostgreSQL's. */
 const own = (doc: Doc) =>
   doc.metadata.labels?.["helm.sh/chart"]?.startsWith("xiongbao-") === true;
 

@@ -60,11 +60,6 @@ vendor's key. With both set, the variable has to say which one is live: both set
 unset stops the server at startup rather than coming up with no broker at all. A key that is empty
 or all whitespace — `ARCADE_API_KEY=` with nothing after it — is no key.
 
-**`scripts/start.sh` and `bun run setup:composio` leave an Arcade deployment alone.** The helper
-provisions a Composio project only where Composio is what the deployment would use: it skips where
-`OPENBOT_BROKER_PROVIDER=arcade` is set, or `ARCADE_API_KEY` is set with no provider named, so
-starting an Arcade deployment that way does not add a Composio key beside Arcade's.
-
 **Connections already made are still read as their own provider's while nothing is active.** A
 deployment whose broker key has been withdrawn afterwards names the provider it reads from the rows
 it actually holds (people's rows in `composio_connections`, and Shared apps whose team account is

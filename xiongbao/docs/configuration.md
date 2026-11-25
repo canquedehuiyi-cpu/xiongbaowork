@@ -76,35 +76,9 @@ Threads and memory live in the PostgreSQL above, through the runtime's SSE-mode 
 `DATABASE_URL` is the whole contract for a conversation's life. `INTELLIGENCE_MODE` is read only to be
 refused: set it to `local` or leave it unset, and naming `managed` stops startup with the reason.
 
-CopilotKit Intelligence is **optional** (R0). `INTELLIGENCE_API_KEY` (or `CPK_INTELLIGENCE_API_KEY`,
-the name the CopilotKit CLI writes, preferred when both are set) connects one, and Admin → 自动学习
-then delivers the skills published in it; managed Intelligence needs only the key, a self-hosted one
-also `INTELLIGENCE_API_URL` (and `INTELLIGENCE_GATEWAY_WS_URL`) and its licence in
-`COPILOTKIT_LICENSE_TOKEN`. A URL or licence set without the key stops startup as half-configured.
-Conversations are not sent to Intelligence as learning evidence; see
-[automatic-learning.md](automatic-learning.md).
-
-The browser opens the Intelligence gateway's socket itself, at the address the server gives it. Where
-the server reaches the gateway somewhere a browser cannot, two variables cover it.
-`INTELLIGENCE_BROWSER_GATEWAY_WS_URL` names a second address for the same gateway (XiongBao Work Desktop's
-container uses it). `INTELLIGENCE_GATEWAY_PROXY=on` has the server carry the socket itself, at
-`/api/intelligence/client` on its own address, for an Intelligence nobody outside the cluster can
-reach: the Helm chart sets it when it installs Intelligence itself (`intelligence.enabled`, off by
-default), so one port-forward or one Ingress host is enough. The socket needs a signed-in session, and the gateway still checks the join token on
-it. Set one of the two, not both; `off` or unset is neither. With the proxy on and no
-`OPENBOT_PUBLIC_URL`, the page is told the socket as a path and resolves it against itself. The
-XiongBao Work Recorder is not on the page, so its capture pass names the socket on the address the
-Recorder reached XiongBao Work at, and only where that is this machine's loopback, as over
-`kubectl port-forward`. A Recorder that reaches XiongBao Work any other way needs `OPENBOT_PUBLIC_URL`.
-
-With Intelligence connected, `COPILOTKIT_LICENSE_TOKEN` is optional: managed Intelligence issues no
-licence token, and a self-hosted Intelligence that has one sets this and has it forwarded to the runtime. That
-Intelligence needs the same licence on its own deployment as well, or it refuses memory and the
-other licensed features while conversations carry on. XiongBao Work asks Intelligence at boot and logs
-`intelligence-entitlement-not-ready`, naming the fix, when the answer is not ready. An
-Intelligence still starting, as one installed beside XiongBao Work is while its migrations run, is asked
-again for up to ten minutes, with one `intelligence-entitlement-waiting` line; only one still not
-answering then is logged as `intelligence-entitlement-unreadable`. A refused key is logged at once.
+The XiongBao Work Recorder's optional back end is named by `INTELLIGENCE_API_KEY`,
+`INTELLIGENCE_API_URL` and `INTELLIGENCE_GATEWAY_WS_URL`; Task 14b removes it with the Recorder.
+A URL set without the key stops startup as half-configured.
 
 `MANAGED_AGENT_AG_UI_URL` names the Bot in the box: the default endpoint for coworkers created in
 the product. It needs `MANAGED_AGENT_TOKEN` beside it, or the server refuses to start. Unset, the
@@ -147,7 +121,7 @@ and still open wherever they are pasted. They keep working until you finish the 
 | `OPENBOT_EDITION`    | `team`                             | `personal` runs XiongBao Work for one person with no sign-in, one computer and no Admin. See [personal-edition.md](personal-edition.md). Any value other than `team` or `personal` refuses to start. |
 | `NODE_ENV`           | unset                              | `production` refuses the example `KEY_ENCRYPTION_KEY`. It does not decide whether sign-in is required; see `OPENBOT_SINGLE_USER`. |
 | `TENANT_PACKAGE_DIR` | `../examples/xiongbao`            | Tenant package directory, resolved from `server/`.                  |
-| `DEPLOYMENT_ID`      | the tenant package's id            | Names this deployment inside a shared database (and a shared Intelligence project, when one is connected). |
+| `DEPLOYMENT_ID`      | the tenant package's id            | Names this deployment inside a shared database. |
 | `OPENAI_API_KEY`     | unset                              | Default model key for built-in agents and both shipped Bots.        |
 | `OPENAI_BASE_URL`    | unset                              | OpenAI-compatible endpoint that key is spent against. See below.    |
 | `COPILOTKIT_OPENAI_API` | unset                          | Which OpenAI API the built-in Bots call behind an `OPENAI_BASE_URL` that is not OpenAI or Azure: `responses` or `chat`. Unset, the model decides. See [OpenAI-compatible endpoints](#openai-compatible-endpoints). |
@@ -173,7 +147,6 @@ and still open wherever they are pasted. They keep working until you finish the 
 | `OPENBOT_ACCESSIBILITY_DISABLED` | unset | `true` or `1` stops naming XiongBao Work on the analytics the runtime already sends. |
 | `COMPOSIO_API_KEY`   | provisioned during desktop sign-in or local setup when no broker is configured | One project key for the whole deployment. Desktop sign-in saves a provisioned key in native protected storage and supplies it on Start/restart. A key in `.env` or the environment always wins and is never moved. `start.sh` / `bun run setup:composio` uses the existing CLI login; supplied keys are preserved. Direct server/container launches still need the prepared key. See [Composio](plugins/composio.md). |
 | `COMPOSIO_<SLUG>_CLIENT_ID`, `COMPOSIO_<SLUG>_CLIENT_SECRET` | unset | This deployment's own OAuth client for one Composio app that connects with a server-to-server grant (`S2S_OAUTH2`), such as `COMPOSIO_SHOPIFY_CLIENT_ID`. Both or neither. Set, the app can be enabled and connected as one shared account; unset, it stays hidden. Read only when the app is enabled; see [rotating the client](#rotating-a-composio-apps-own-client). See [Composio](plugins/composio.md#the-56-that-are-not-offered). |
-| `OPENBOT_INSTALLATION_ID` | a fresh private UUID in `.env.openbot-installation-id` | Stable Composio provisioning identity, persisted before a request. Optional explicit UUID for first setup; later values must match the saved file. Retain it for retries and restarts, and generate a fresh identity for a new installation. It never falls back to `DEPLOYMENT_ID`. |
 | `ARCADE_API_KEY`     | unset                              | The Arcade project key, for a deployment that brokers apps through Arcade instead of Composio. See [Arcade](plugins/arcade.md). |
 | `OPENBOT_BROKER_PROVIDER` | unset (chosen by which key is set) | `composio` or `arcade`: which broker is live when both `COMPOSIO_API_KEY` and `ARCADE_API_KEY` are set. Any other value refuses to start, and so does naming a provider whose key is unset, or setting both keys with this unset. See [Choosing the provider](plugins/arcade.md#choosing-the-provider). |
 
@@ -626,10 +599,7 @@ does not happen: the person is told to try again, still signed in, and a `record
 row goes on the audit trail.
 
 **Recordings cannot be deleted from XiongBao Work yet.** A recording goes from the person's browser to
-Intelligence, into their own Learning space (see [Automatic Learning](automatic-learning.md));
-XiongBao Work keeps only which recordings are whose. Intelligence has no API a server credential can call
-to delete a recording, or a Learning space that still holds one, so nobody can delete a recording
-from XiongBao Work, and a person's recordings stay in Intelligence after they are removed from XiongBao Work.
+the Recorder's back end; XiongBao Work keeps only which recordings are whose.
 
 **Any one provider turns sign-in on**, and several may be configured at once. Each provider's id and
 secret must be set together, Okta additionally needs its issuer, and any of them requires
@@ -801,7 +771,7 @@ then is a row nothing will read.
 
 ## Slack and Microsoft Teams (OpenTag pairing)
 
-XiongBao Work reaches people in Slack and Teams through [OpenTag](https://github.com/CopilotKit/OpenTag),
+XiongBao Work reaches people in Slack and Teams through the OpenTag project,
 the open-source Channels SDK front. OpenTag calls XiongBao Work as its AG-UI agent; XiongBao Work does not hold a
 Slack app of its own.
 
@@ -924,21 +894,10 @@ SNS asks.
 Both are needed. With either missing, the email route is not mounted, and an email trigger has no
 address: its page and the Bot both say inbound email is not configured on this deployment.
 
-## Automatic Learning (optional, with a connected Intelligence)
-
-Without `INTELLIGENCE_API_KEY` none of this applies. With it, learning is on by default; with no container assigned, nothing is collected or delivered and the
-deployment still starts and chats. Until something is saved, the server assigns its Intelligence
-project's `openbot` container as the default by itself once that container exists. The variables
-below are optional; an administrator's saved settings under **Admin → Automatic Learning** override
-them, including a saved off. See [automatic-learning.md](automatic-learning.md).
+## Memory sources and check-ins
 
 | Variable                                 | Meaning                                                                                       |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` | Default Learning container for this deployment's Bots. 1 to 64 lowercase letters, digits and single hyphens, or the server refuses to start. Checked at start: a container the configured Intelligence does not have is logged (`configured_absent`) and ignored, and automatic assignment runs as though it was unset. |
-| `CPK_INTELLIGENCE_SKILLS_REVISION`       | An exact published skills revision to pin. Read only beside a container id. Unset follows the latest. |
-| `OPENBOT_LEARNING_AUTO_ASSIGN`           | `false` or `0` stops the server assigning the project's `openbot` container automatically. On otherwise. Stands aside for a `CPK_INTELLIGENCE_LEARNING_CONTAINER_ID` the configured Intelligence has. |
-| `INTELLIGENCE_SERVICE_TOKEN`             | An Intelligence service token that creates the `openbot` Learning container (local evaluation installs only; see [Creating the container](automatic-learning.md#creating-the-container)). Requires `INTELLIGENCE_PROJECT_ID`. |
-| `INTELLIGENCE_PROJECT_ID`                | The numeric ID of the runtime key's Intelligence project, where the service token creates the container. Set both or neither, or the server refuses to start. |
 | `OPENBOT_MEMORY_SOURCE_DEFAULTS`         | `false` or `0` stops XiongBao Work making each app a person connected into a memory source for the Bots they talk to. On otherwise. Existing sources are left as they are. |
 | `OPENBOT_PROACTIVE_DEFAULTS`             | `true` or `1` switches on an hourly check-in on everything a Bot can read the first time a person talks to it alone, as XiongBao Work did before. Off otherwise: a Bot offers a check-in on one thing in the conversation, and it runs only once the person accepts. Existing settings are left as they are. |
 
@@ -1370,20 +1329,18 @@ useful answer is that the image could not be fetched. Somewhere that must never 
 ## Setup checklist
 
 **Settings → Setup** shows admins one row each for
-CopilotKit Intelligence, the AI model, the Bot computer, more apps (Composio) and Slack and
-Teams. They are read from `GET /api/setup`, and `POST /api/setup/check` asks again.
+the AI model, the Bot computer, more apps (Composio) and Slack and Teams. They are read from `GET /api/setup`, and `POST /api/setup/check` asks again.
 
-- **Ready means it works.** Intelligence is read from its own entitlement answer and the model from
-  the provider's answer for the key in use now. A computer is Ready when every running one took its
+- **Ready means it works.** The model is read from the provider's answer for the key in use now. A computer is Ready when every running one took its
   network policy; with none running it reads "not checked". More apps and Slack and Teams read Ready
   when they are configured.
 - **Who reads it decides what it says.** An admin, and somebody running XiongBao Work alone
   (`OPENBOT_SINGLE_USER`), is shown the page or the variable that closes each gap. Everybody else sees
   whether it works and "Your admin sets this up.", and their response carries no variable name.
   Only those who can act on it get the Settings page.
-- **What it costs.** Both routes need a signed-in person. Answers from Intelligence, the provider and
-  the computers are kept for five minutes. A read asks again sooner only when one of them could not
-  be had (Intelligence did not answer, or the provider was never asked about the key in use); a
+- **What it costs.** Both routes need a signed-in person. Answers from the provider and the
+  computers are kept for five minutes. A read asks again sooner only when the provider was never
+  asked about the key in use; a
   refusal waits for Check again or for the five minutes. Asking again, by a read or by Check again,
   happens at most once every ten seconds for the whole server, and never wakes a stopped computer.
 

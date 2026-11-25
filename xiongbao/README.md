@@ -45,18 +45,17 @@ workspace.
 
 ## Architecture
 
-XiongBao Work has three parts, and the third, CopilotKit Intelligence, is optional. On your laptop, setup runs the backend for you. For a team, the Helm chart deploys it on Kubernetes in your own infrastructure, with Intelligence beside it if you want one.
+XiongBao Work has two parts. On your laptop, setup runs the backend for you. For a team, the Helm chart deploys it on Kubernetes in your own infrastructure.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architecture-overview-dark.svg">
-  <img src="docs/assets/architecture-overview-light.svg" alt="Mac, Windows, web, iOS, Android, Slack, and Teams connect to the XiongBao Work backend. Built-in Bots in the server and your agents on any execution platform share an AG-UI lane. Computer execution uses Kubernetes by default or a compatible sandbox provider; tools use MCP and adapters. CopilotKit Intelligence can run alongside XiongBao Work on your infrastructure; it is optional." width="100%">
+  <img src="docs/assets/architecture-overview-light.svg" alt="Mac, Windows, web, iOS, Android, Slack, and Teams connect to the XiongBao Work backend. Built-in Bots in the server and your agents on any execution platform share an AG-UI lane. Computer execution uses Kubernetes by default or a compatible sandbox provider; tools use MCP and adapters." width="100%">
 </picture>
 
 | Part | What it does |
 | --- | --- |
 | **XiongBao Work frontends** | Mac, Windows, web, iOS, Android, Slack, and Teams connect people to the same workspace. Conversations, interactive results, computer view, and approvals adapt to each surface. [Choose a frontend](#getting-started). |
 | **XiongBao Work backend** | Runs the workspace API and built-in Bots, connects external agents and tools, manages Bot computers, and enforces identity, permissions, action policies, and audit. Deploys on Kubernetes with PostgreSQL and persistent storage. |
-| **CopilotKit Intelligence** (optional) | Automatic Learning's published skills. Durable conversations and memory stay in XiongBao Work's own PostgreSQL, so the workspace runs without it. Separately licensed when self-hosted; can run on Kubernetes alongside XiongBao Work. |
 
 XiongBao Work enforces sign-in, tool permissions, action policies, and audit at its API. Built-in Bots run in the XiongBao Work server; your own agents can run alongside XiongBao Work or on any agent execution platform. Both use AG-UI and can share the same workspace.
 
@@ -66,23 +65,17 @@ Computer execution is pluggable: use the default Kubernetes setup or connect a c
 
 ## Open source, local operation, and licensing
 
-**The XiongBao Work application template is open source under the [MIT license](LICENSE).** You can modify and white-label it. It can use **CopilotKit Intelligence**, which is separately licensed and can run entirely on your own machine or infrastructure. Intelligence is optional: without it, no Intelligence licence is needed, and the table below applies only when you connect one.
+**The XiongBao Work application template is open source under the [MIT license](LICENSE).** You can modify and white-label it.
 
-| Where you run it | CopilotKit Intelligence license |
-| --- | --- |
-| **Your laptop, for personal use and experimentation** | Requires a free local Intelligence license. See [Intelligence on your own machine](#intelligence-on-your-own-machine). |
-| **Kubernetes evaluation** | Requires a free Intelligence trial license. |
-| **Kubernetes / production** | Requires a production Intelligence license beyond evaluation. |
-
-**Fully local is an option.** Run XiongBao Work (and, if you want it, Intelligence) and a compatible model locally. A cloud model or connected online app still sends requests to that service. Initial downloads, account sign-in, and local license renewal need internet access.
+**Fully local is an option.** Run XiongBao Work and a compatible model locally. A cloud model or connected online app still sends requests to that service. Initial downloads and account sign-in need internet access.
 
 ---
 
 ## Deploy on Kubernetes
 
-Deploy XiongBao Work on **AWS EKS, Azure AKS, Google GKE, or your own Kubernetes cluster**. The chart can install CopilotKit Intelligence beside it (`intelligence.enabled=true` with a licence); that is off by default and nothing else needs it.
+Deploy XiongBao Work on **AWS EKS, Azure AKS, Google GKE, or your own Kubernetes cluster**.
 
-For a first evaluation, you need a cluster with **amd64 nodes**, a **default StorageClass**, `kubectl`, Helm, and a model key. The commands below use an OpenAI key. For Anthropic, a model router, cluster sizing, or an existing Intelligence deployment, use the [full Helm guide](charts/xiongbao/README.md).
+For a first evaluation, you need a cluster with **amd64 nodes**, a **default StorageClass**, `kubectl`, Helm, and a model key. The commands below use an OpenAI key. For Anthropic, a model router, or cluster sizing, use the [full Helm guide](charts/xiongbao/README.md).
 
 > **Setting up with an AI assistant?** Give it this README and [the Helm guide](charts/xiongbao/README.md). The guide covers cloud-specific values, storage, secrets, sign-in, networking, upgrades, and troubleshooting. Use the evaluation below only through a local port-forward; configure sign-in and TLS before sharing a deployment.
 
@@ -124,13 +117,13 @@ For a first evaluation, you need a cluster with **amd64 nodes**, a **default Sto
 
    Open <http://127.0.0.1:3001>. This configuration is single-user: anyone who can reach it is an administrator. Keep the port-forward local.
 
-The chart creates the runtime credentials, installs the database, and sets up the scheduled jobs. With the bundled Intelligence switched on it also bootstraps Intelligence and its Learning container, whose Learning agent uses your model key too.
+The chart creates the runtime credentials, installs the database, and sets up the scheduled jobs.
 
 For a team deployment, follow the [Helm guide](charts/xiongbao/README.md) to configure authentication, TLS, your database, secrets, persistent storage, and network policies. For a single-container alternative, see [Deploy it](#deploy-it).
 
 ## Run from source
 
-Use the template to customize the workspace, branding, Bots, and skills. The source setup below runs without Intelligence; connecting managed or [local Intelligence](#intelligence-on-your-own-machine) is optional.
+Use the template to customize the workspace, branding, Bots, and skills.
 
 ```sh
 git clone https://github.com/canquedehuiyi-cpu/xiongbaowork.git
@@ -147,11 +140,11 @@ To run the open-source template locally, you’ll need the following.
 
 ### Quick start
 
-The example configuration sets `OPENBOT_SINGLE_USER=true`, so you can try the app as a local administrator. Configure [sign-in](#sign-in) before giving anyone else access. Intelligence is optional; on a Mac, the free Developer plan also covers [running Intelligence locally](#intelligence-on-your-own-machine) with Docker.
+The example configuration sets `OPENBOT_SINGLE_USER=true`, so you can try the app as a local administrator. Configure [sign-in](#sign-in) before giving anyone else access.
 
 > **Setting up with an AI assistant?** Paste [`prompt.txt`](prompt.txt) into it first. It carries the
 > same steps as below plus the things that are easy to get wrong: which of the blank keys in
-> `.env.example` are actually yours to fill (the CopilotKit key and a model key), which the start
+> `.env.example` are actually yours to fill (a model key), which the start
 > script fills for you, and what each start-up refusal means. Every claim in it is checked against
 > this repository.
 
@@ -162,46 +155,7 @@ The example configuration sets `OPENBOT_SINGLE_USER=true`, so you can try the ap
    bun install
    ```
 
-2. Optionally, connect CopilotKit Intelligence for Automatic Learning. Skip this step and
-   everything else runs on the PostgreSQL above ([docs](docs/automatic-learning.md)):
-
-   ```sh
-   npx --yes copilotkit@latest login
-   npx --yes copilotkit@latest project select
-   bun scripts/setup-learning.ts
-   ```
-
-   The helper provisions the selected project's runtime key, creates or reuses its
-   `openbot` Learning container, then writes both settings to `.env`. It preserves
-   custom container assignments and never replaces an existing XiongBao Work key; with one
-   set, it only creates `openbot` in that key's project if it is missing.
-   For fresh self-hosted setup, set `INTELLIGENCE_API_URL` to that deployment's
-   HTTPS API origin (or `http://localhost` for a local one) and run the helper
-   without the two `npx` commands. It opens an isolated Chrome or Edge window for
-   your usual sign-in and project choice; install either browser first. For CLI-managed
-   local evaluation installs, it discovers the matching dashboard with the newest installed or
-   cached CopilotKit CLI and uses that dashboard for login and session requests. Discovery
-   runs offline with Bun, without downloading the CLI or requiring `npx` on your PATH.
-   If no CLI is available, manually hosted deployments use their API origin for sign-in. Complete the local auth
-   approval shown in the browser when prompted. The runtime API URL stays unchanged. It writes
-   the API URL, the key and the container, not `INTELLIGENCE_GATEWAY_WS_URL`, so
-   set that one to the same deployment yourself. Once `openbot` exists, the server assigns it
-   as the default by itself unless [Admin → Automatic Learning](docs/automatic-learning.md)
-   has a saved setting.
-   Managed Intelligence needs no separate licence token.
-
-   The same CopilotKit CLI sign-in provisions Composio automatically when you run
-   `bash scripts/start.sh`. If that cannot complete, XiongBao Work still starts, with apps
-   unavailable. You can run `bun run setup:composio` first to prepare it separately, or
-   later to retry; it does not need a Learning container. The helper creates or reuses one
-   isolated Composio project for this installation and saves its project key to `.env`.
-   Existing Composio keys are preserved. Keep the private
-   `.env.openbot-installation-id` file across restarts and interrupted setup attempts;
-   do not copy it into a new installation. This needs a published CopilotKit CLI with
-   `integrations composio provision` and the hosted provisioning service enabled.
-   See [Composio setup](docs/plugins/composio.md#automatic-project-setup) for deployment preparation.
-
-3. Fill the remaining required values:
+2. Fill the remaining required values:
 
    - `OPENAI_API_KEY`
 
@@ -213,13 +167,13 @@ The example configuration sets `OPENBOT_SINGLE_USER=true`, so you can try the ap
    openssl rand -base64 32
    ```
 
-4. Run:
+3. Run:
 
    ```sh
    bash scripts/start.sh
    ```
 
-5. Open <http://localhost:3010>.
+4. Open <http://localhost:3010>.
 
 `scripts/start.sh` starts Docker services, applies migrations, starts the API server on port 3001, starts the routine worker, starts the app on port 3010, and checks that the services answer their own health routes before printing next steps.
 
@@ -231,25 +185,6 @@ Run the clone inside WSL 2 with Ubuntu, and run every step above from an Ubuntu 
 [Windows (WSL 2)](docs/development.md#windows-wsl-2) lists what to install in Ubuntu first. Keep an
 Ubuntu terminal open while you use XiongBao Work, and open the app from your Windows browser at
 <http://127.0.0.1:3010>.
-
-### Intelligence on your own machine
-
-Intelligence is optional. To try it on one Mac instead of the managed service, follow
-[Evaluate Intelligence locally](https://docs.copilotkit.ai/intelligence/self-hosting-local). The free
-[Developer plan](https://www.copilotkit.ai/pricing) qualifies. The local licence lasts 30 days and
-`npx copilotkit@latest local renew` renews it as often as you need, while your account is in good
-standing. It is a preview for macOS with Docker Desktop,
-not a production installation. Run its
-`npx copilotkit@latest local connect` from the `xiongbao/` directory, where `.env` is.
-
-That command writes `INTELLIGENCE_API_URL`, `INTELLIGENCE_GATEWAY_WS_URL` and
-`CPK_INTELLIGENCE_API_KEY` to `.env`. XiongBao Work reads those settings directly; no key
-copying or renaming is needed. `INTELLIGENCE_API_KEY` remains supported for older
-configurations. When both are set, the non-empty CLI key takes precedence so
-reconnecting uses the new project's key.
-
-To give the Bots a Learning container on that stack, see
-[Automatic Learning](docs/automatic-learning.md).
 
 ## Deploy it
 
@@ -396,10 +331,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/coworkers.md](docs/
 - `KEY_ENCRYPTION_KEY`
 
 Sign-in adds `BETTER_AUTH_SECRET` and `BETTER_AUTH_URL`, which are needed as soon as
-`OPENBOT_SINGLE_USER` is off. CopilotKit Intelligence is optional: threads, memory and skills live in
-the PostgreSQL above, and `INTELLIGENCE_API_KEY` (with `INTELLIGENCE_API_URL` and
-`COPILOTKIT_LICENSE_TOKEN` for a self-hosted one) only adds Automatic Learning's skill delivery.
-A self-hosted Intelligence also needs the licence on its own deployment.
+`OPENBOT_SINGLE_USER` is off. Threads, memory and skills live in the PostgreSQL above.
 
 Settings worth knowing:
 
@@ -576,4 +508,4 @@ Use `bash scripts/start.sh` for the whole stack and `bash scripts/stop.sh` to ta
 
 ## License
 
-XiongBao Work includes open-source code released under the MIT license; its copyright notice and the full licence text are in [LICENSE](./LICENSE). CopilotKit Intelligence is separately licensed.
+XiongBao Work includes open-source code released under the MIT license; its copyright notice and the full licence text are in [LICENSE](./LICENSE).

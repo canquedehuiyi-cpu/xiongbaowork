@@ -12,7 +12,7 @@ bash scripts/use-personal-edition.sh
 
 That writes the settings in `.env.personal.example` into `.env` (starting from `.env.example` when
 there is no `.env`), replacing any line for the same key. Then fill in `OPENAI_API_KEY` (or the key
-for your `BOT_PROVIDER`) and the Intelligence settings, and start it:
+for your `BOT_PROVIDER`), and start it:
 
 ```sh
 bash scripts/start.sh
@@ -112,8 +112,7 @@ variable to change:
 
 Settings an admin changes in the team edition are fixed here. Values left in the database by a team
 deployment are not read: capability switches, enterprise settings, network policies, team approval
-settings and team rules, and a paused Automatic Learning. Every Bot takes part in Automatic
-Learning: a Bot those settings left out is taken back in at the next start, or its first run.
+settings and team rules.
 
 | | Personal edition |
 | --- | --- |
@@ -204,22 +203,12 @@ An old
 `/admin/...` or `/settings/plugins/...` address opens the same page where it is now. There is no Sharing, Visibility, Isolated, or Reaching you, which are
 all about other people, other computers or Slack and Teams.
 
-**Settings → Learning** is where the skills XiongBao Work learns from your recordings and conversations
-wait for your review. You approve or reject them yourself, under **Waiting for your review**, and
-**Learn now** starts a run on demand. **Your skills** lists the skills learned from your recordings and conversations,
-and a row opens one to read. A skill from your recordings reaches every Bot. A skill from
-conversations reaches the Bots that share its Learning container, which is every Bot unless one
-has a container of its own. There is no one to share with, so **Ask to share** is not offered here.
-
-**Approve new skills automatically** is on from the start, so you don't have to review each one. It
-approves what XiongBao Work proposes from your recordings and conversations. It runs when Learning opens,
-every 15 minutes, and when you switch it on. Turn it off in Settings → Learning to review each skill
-yourself. **Your recordings** on Teach a Bot lists what you have recorded, which needs Intelligence
-0.16 with recordings switched on. Recordings can't be deleted from XiongBao Work.
+**Settings → Learning** is where the skills XiongBao Work learns from your conversations wait for
+your review.
 
 The server answers `404` for the API behind the team-only screens: people, identity providers,
-enterprise controls (except `/api/admin/enterprise/me`, which any page may ask), the admin learning
-and check-in settings, and SCIM and SSO registration. See `server/src/edition-routes.ts`.
+enterprise controls (except `/api/admin/enterprise/me`, which any page may ask), the check-in
+settings, and SCIM and SSO registration. See `server/src/edition-routes.ts`.
 
 ## Web search is on from the start
 

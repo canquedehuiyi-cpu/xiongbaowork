@@ -31,9 +31,6 @@ externalSecrets:
     - secretKey: computer-token
       remoteRef:
         key: xiongbao/computer-token
-    - secretKey: license-token
-      remoteRef:
-        key: xiongbao-license-token
 # Gateway API rather than an Ingress, which the same chart supports without a second code path.
 ingress:
   enabled: false
@@ -47,7 +44,3 @@ httpRoute:
 
 computers:
   mode: shared
-
-# Managed Intelligence, named in config.intelligence above, rather than the one the chart installs.
-intelligence:
-  enabled: false
