@@ -169,7 +169,7 @@ describe("the public computer file download route", () => {
   });
 
   /*
-   * WP-0.4 补的五条：下载路由上「谁也不许顺手改」的几件事，逐条钉住。
+   * WP-0.4 补的几条：下载路由上「谁也不许顺手改」的几件事，逐条钉住。
    *
    * 这里没有新行为，全是既有行为的护栏。`..` 的处置权在员工那台电脑的工作区根上，路由做一次归一化那道
    * 墙就等不到它了；「没有这个员工」和「这个员工不归你」答得逐字一样，这条路由才探不出部署里有谁；被
@@ -197,23 +197,6 @@ describe("the public computer file download route", () => {
       expect(calls).toEqual([{ botId: "bot-17", actorId: "user-1", path }]);
     },
   );
-
-  test("探不出部署里有谁：别人的员工和不归这边的浏览器员工答得逐字一样", async () => {
-    const { gateway, calls } = gatewayThatReturns("x", Uint8Array.from([1]));
-    const notYours = await appFor(gateway, async () => false).request(
-      "http://xiongbao.test/somebody-elses-bot/files/download?path=x",
-    );
-    // 一个人的浏览器只答它自己的那三条读，下载不在其中：它走的是另一条 404 分支，不是 `canUseBot`。
-    const browserBot = await appFor(gateway).request(
-      `http://xiongbao.test/person-${"a".repeat(32)}/files/download?path=x`,
-    );
-
-    expect(notYours.status).toBe(404);
-    expect(browserBot.status).toBe(404);
-    // 逐字相等：两条分支除了这句话没有别的，长度、键、顺序都一样，探的人分不出是哪种。
-    expect(await browserBot.text()).toBe(await notYours.text());
-    expect(calls).toHaveLength(0);
-  });
 
   test.each([
     ["被边界挡下", new WorkspaceRefusedError("Outside."), 403],

@@ -891,8 +891,7 @@ export async function startEgressFilter(
   /*
    * TWO LISTENERS, ONE FOR BROWSERS. A browser's connection carries its owner only if the proxy asks
    * for it, and this filter used to ask nobody, so every browser's connections arrived anonymous and
-   * were judged by every policy on the computer, strictest first: on a computer shared by Bots, or by
-   * a Bot and a person's browser, a Bot allowed to reach an internal service was refused because
+   * were judged by every policy on the computer, strictest first: on a computer shared by Bots, a Bot allowed to reach an internal service was refused because
    * another browser on the computer was not. The browsers' listener therefore asks every connection
    * for its credentials, and each browser's connections are judged by its own policy alone. The
    * shell's commands keep a listener of their own that asks for nothing, judged as before: their

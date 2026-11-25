@@ -89,8 +89,7 @@ const panelId = (ids: string) => `${ids}-panel`;
  * alone, and a button inside a tab is lost to it.
  *
  * Delete on the tab that shows puts the focus on the tab the browser shows next, which only the browser knows: its
- * computer brings forward the newest tab (agent-computer's profiles.ts, `retarget`, for the person's browser and a
- * Bot's alike), not the neighbour the pattern suggests. Focus went to the neighbour while another tab showed, so Enter
+ * computer brings forward the newest tab (agent-computer's profiles.ts, `retarget`), not the neighbour the pattern suggests. Focus went to the neighbour while another tab showed, so Enter
  * there switched the browser again. Delete on another tab leaves the one that shows as it is, and the focus moves to a
  * neighbour, as the pattern has it.
  *
@@ -417,7 +416,7 @@ export function AddressBar({
   );
 }
 
-/** The browser's own clear (the person's browser's or a Bot's), as `useMutation` gives it. */
+/** A Bot's browser's clear, as `useMutation` gives it. */
 type ClearMutation = Pick<
   UseMutationResult<unknown, Error, void>,
   "mutate" | "isPending" | "error" | "reset"

@@ -25,8 +25,8 @@
  * v1. Inside a container, the machine's own memory is the VM's, and that is what actually runs out,
  * so the limit is the smaller of the cgroup's and the machine's.
  *
- * NO CGROUP, NO READING. A computer that is not in a container (the one XiongBao Desktop runs on a
- * person's Mac for their own browser, or one started by hand on a Linux desktop, whose view of
+ * NO CGROUP, NO READING. A computer that is not in a container (the local Chrome helper on a
+ * person's own machine, or one started by hand on a Linux desktop, whose view of
  * `/sys/fs/cgroup` is the root, where these files do not exist) has nothing here to read, and closes
  * nothing for memory. The count cap is still there.
  *

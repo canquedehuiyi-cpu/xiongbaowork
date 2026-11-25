@@ -146,7 +146,7 @@ function installHomeRoutingFetch(options: {
   );
 }
 
-// Teach a Bot's Try it, once a Bot learned a task from a recording: a new conversation with the task in the box.
+// A link that hands over a task: a new conversation with the task in the box.
 test("/ starts the box with the words a link hands over, and sends them only when the person does", async () => {
   const own = agent({
     id: "own-public",

@@ -272,7 +272,7 @@ function BrowserWindow({
         style={width === undefined ? undefined : { width }}
       >
         <BotBrowserBar botId={botId} state={bar} onNavigated={onNavigated}>
-          {/* The page flush under the bar, as in the person's own browser (browser-screen.tsx). */}
+          {/* The page flush under the bar. */}
           <div className="bg-background">{children}</div>
         </BotBrowserBar>
       </div>

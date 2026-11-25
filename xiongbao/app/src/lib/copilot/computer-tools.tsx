@@ -1295,7 +1295,7 @@ function useLocalTools(): {
     /*
      * Whether the server has ANSWERED `workspace`, which is not the same as `machine` above: that one
      * stands in for the old words while no answer has arrived, and here a wrong yes is a link that
-     * 404s. No answer, a refused read (a person's own browser answers only its three reads) and a
+     * 404s. No answer, a refused read and a
      * paired machine are all the same thing to a download: nothing to promise.
      */
     onWorkspace: isWorkspaceScope(data?.machine),
