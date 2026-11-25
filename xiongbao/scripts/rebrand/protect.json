@@ -1964,5 +1964,11 @@
     "text": "\"openbot-dev-worker-secret\"",
     "until": "R4",
     "reason": "改名前 scripts/start.sh 的公开默认 WORKER_SHARED_SECRET：server/src/config.ts 仍按 SHA-256 在生产拒绝它，测试证明这一点，旧值就是被测对象"
+  },
+  {
+    "file": "xiongbao/server/tests/helpers/recovery-lint-source.ts",
+    "text": "\"openbot_continuation_test_\"",
+    "until": "R4",
+    "reason": "按字节冻结的恢复测试：逆变换把改名后的一次性测试库前缀还原成冻结时的原文，原文就是旧前缀；R4 基线化时随冻结清单一起处理"
   }
 ]
