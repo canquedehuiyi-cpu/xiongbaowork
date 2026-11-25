@@ -14,7 +14,10 @@ import { viteConfigs } from "../scripts/build";
  */
 
 const ROOT = path.resolve(import.meta.dir, "..", "..");
-const BRANDED = /xiongbao|recorder/i;
+const BRANDED = new RegExp(
+  `${["open", "bot"].join("")}|xiongbao|recorder`,
+  "i",
+);
 
 /**
  * What content.js may leave on its window under a branded name. The two flags it shares with the service worker are
